@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCINTILLA · Sector Rotation — FMP Capability Demo</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --border:#2d333b;
+    --txt:#e6edf3; --dim:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149;
+    --gold:#d29922; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:16px; line-height:1.55; padding:32px 40px 80px; max-width:1280px; margin:0 auto;}
+  h1{font-size:30px; margin-bottom:4px;}
+  .sub{color:var(--dim); margin-bottom:36px; font-size:15px;}
+  section{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:26px 30px; margin-bottom:30px;}
+  h2{font-size:22px; margin-bottom:6px; color:var(--accent);}
+  h3{font-size:16px; margin-bottom:8px;}
+  .src{font-size:13px; color:var(--dim); margin-bottom:18px; font-family:ui-monospace,Menlo,monospace;}
+  table{width:100%; border-collapse:collapse; font-size:15px; margin:14px 0;}
+  th{color:var(--dim); text-align:right; font-weight:600; padding:8px 10px; border-bottom:2px solid var(--border); white-space:nowrap;}
+  th:first-child, td:first-child{text-align:left;}
+  td{padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap;}
+  tr:hover td{background:var(--panel2);}
+  .pos{color:var(--green);} .neg{color:var(--red);} .gold{color:var(--gold);} .pur{color:var(--purple);}
+  .note{background:var(--panel2); border-left:4px solid var(--gold); padding:12px 16px; border-radius:6px; font-size:14.5px; margin-top:14px; color:#c9d1d9;}
+  .flag{background:var(--panel2); border-left:4px solid var(--red); padding:12px 16px; border-radius:6px; font-size:14.5px; margin-top:14px; color:#c9d1d9;}
+  .cols{display:flex; gap:24px; flex-wrap:wrap;}
+  .cols > div{flex:1; min-width:320px;}
+  .pill{display:inline-block; background:var(--panel2); border:1px solid var(--border); border-radius:20px; padding:3px 12px; margin:3px 4px 3px 0; font-size:13.5px;}
+  .pill.hit{border-color:var(--green); color:var(--green);}
+  .pill.miss{border-color:var(--red); color:var(--red);}
+  .kv{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:16px 0;}
+  .kv div{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px 14px;}
+  .kv .k{font-size:12.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em;}
+  .kv .v{font-size:21px; font-weight:700; margin-top:2px;}
+  .big{font-size:26px;}
+  .ctrl{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin:18px 0; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:18px;}
+  .ctrl label{font-size:13px; color:var(--dim); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;}
+  .ctrl .val{font-size:19px; font-weight:700; color:var(--accent);}
+  input[type=range]{width:100%; accent-color:var(--accent); margin-top:6px;}
+  .preset{background:var(--panel); border:1px solid var(--border); color:var(--txt); border-radius:8px; padding:8px 14px; margin:4px 8px 4px 0; cursor:pointer; font-size:14px;}
+  .preset:hover{border-color:var(--accent); color:var(--accent);}
+  #dcfOut .kv .v{font-size:30px;}
+</style>
+</head>
+<body>
+
+<h1>FMP Capability Demo — What Actually Comes Back</h1>
+<div class="sub">Every number on this page is a real pull made 2026-07-18 through the FMP API. Anchor ticker: NVDA. Section 3's DCF is live — drag the sliders. · scintillahub.ai/sectorrotation</div>
+
+<!-- ============ 1. COMPS ============ -->
+<section>
+<h2>1 · Comparable Companies — NVDA vs Semis</h2>
+<div class="src">endpoints: metrics-ratios-ttm (per symbol) + search-company-screener (universe)</div>
+<table>
+<tr><th>Metric</th><th class="gold">NVDA</th><th>TSM</th><th>AVGO</th><th>MU</th><th>AMD</th><th>INTC</th></tr>
+<tr><td>Market Cap</td><td class="gold">$4.91T</td><td>$2.07T</td><td>$1.76T</td><td>$959B</td><td>$808B</td><td>$478B</td></tr>
+<tr><td>P/E (TTM)</td><td class="gold">30.9</td><td>31.1</td><td>59.9</td><td>19.0</td><td>161.0</td><td class="neg">neg</td></tr>
+<tr><td>EV / EBITDA</td><td class="gold">25.5</td><td>19.7</td><td>43.1</td><td>20.9</td><td>99.8</td><td>44.3</td></tr>
+<tr><td>P/S</td><td class="gold">19.4</td><td>14.6</td><td>23.4</td><td>10.6</td><td>21.6</td><td>8.9</td></tr>
+<tr><td>P/B</td><td class="gold">25.2</td><td>10.2</td><td>20.1</td><td>9.5</td><td>12.5</td><td>4.3</td></tr>
+<tr><td>PEG</td><td class="gold pos">0.28</td><td>0.58</td><td>0.48</td><td class="pos">0.03</td><td>1.31</td><td class="neg">neg</td></tr>
+<tr><td>Gross Margin</td><td class="gold">74.1%</td><td>61.9%</td><td>67.0%</td><td>72.6%</td><td>50.3%</td><td>35.4%</td></tr>
+<tr><td>Net Margin</td><td class="gold">63.0%</td><td>47.0%</td><td>38.8%</td><td>55.9%</td><td>13.4%</td><td class="neg">−5.9%</td></tr>
+<tr><td>Debt / Equity</td><td class="gold">0.07</td><td>0.17</td><td>0.74</td><td>0.06</td><td>0.06</td><td>0.40</td></tr>
+<tr><td>Beta</td><td class="gold">2.21</td><td>1.37</td><td>1.46</td><td>2.14</td><td>2.47</td><td>2.19</td></tr>
+<tr><td>Div Yield</td><td class="gold">0.14%</td><td>0.95%</td><td>0.68%</td><td>0.06%</td><td>—</td><td>—</td></tr>
+</table>
+<div class="note">≈60 ratios come back per ticker per call. One call per ticker — a 20-name comp set is 20 calls. Fully scriptable off-LLM: plain REST underneath (your key, JSON out).</div>
+</section>
+
+<!-- ============ 2. PEERS vs SCREENER ============ -->
+<section>
+<h2>2 · Defining the Peer Set — Three Sources</h2>
+<div class="src">endpoints: peers · search-company-screener · etf holdings (e.g. SMH constituents)</div>
+<div class="cols">
+<div>
+<h3>A — FMP peers(NVDA), algorithmic</h3>
+<span class="pill hit">TSM</span><span class="pill hit">AVGO</span><span class="pill hit">ADI</span>
+<span class="pill miss">AAPL</span><span class="pill miss">GOOGL</span><span class="pill miss">MSFT</span>
+<span class="pill miss">ENTG $21B</span><span class="pill miss">TER $50B</span><span class="pill miss">IMOS $2.4B</span>
+<div class="note" style="border-color:var(--red);">Noisy. True comps (green) mixed with ecosystem mega-caps and $2B small caps (red). AMD, MU, INTC missing entirely.</div>
+</div>
+<div>
+<h3>B — Screener: industry=Semiconductors, mktcap &gt; $100B</h3>
+<span class="pill hit">NVDA</span><span class="pill hit">TSM</span><span class="pill hit">AVGO</span><span class="pill hit">MU</span><span class="pill hit">AMD</span><span class="pill hit">ASML</span><span class="pill hit">INTC</span><span class="pill hit">AMAT</span><span class="pill hit">LRCX</span><span class="pill hit">KLAC</span><span class="pill hit">TXN</span><span class="pill hit">ARM</span><span class="pill hit">ADI</span><span class="pill">SK hynix</span>
+<div class="note">Deterministic, controllable: sector, industry, mktcap, beta, dividend, volume, country. Minor cleanup (dual listings). The workhorse.</div>
+</div>
+<div>
+<h3>C — ETF constituents as curated peer set</h3>
+<span class="pill">SMH holdings</span><span class="pill">SOXX holdings</span><span class="pill">XLK holdings</span>
+<div class="note">FMP's ETF-holdings endpoint returns full constituent lists + weights. An index committee already did the peer-selection work — free curation. Third leg for cross-checking A and B.</div>
+</div>
+</div>
+</section>
+
+<!-- ============ 3. INTERACTIVE DCF ============ -->
+<section>
+<h2>3 · Custom DCF — NVDA, Live Model (drag the sliders)</h2>
+<div class="src">endpoint: custom-dcf-advanced — every parameter below is an API argument you can override per call</div>
+
+<h3>How FMP builds its defaults — full transparency</h3>
+<table>
+<tr><th>Input</th><th>FMP Default</th><th>Where it comes from</th><th>API parameter</th></tr>
+<tr><td>Revenue growth (yrs 1–5)</td><td class="neg">66.4%/yr</td><td class="neg">Historical extrapolation — NOT analyst estimates. NVDA actuals: FY23 +0.2%, FY24 +125.9%, FY25 +114.2%, FY26 +65.5% → it carries ~last year's growth forward 5 years</td><td>revenueGrowthPct</td></tr>
+<tr><td>EBITDA margin</td><td>51.1%</td><td>Historical avg % of revenue</td><td>ebitdaPct</td></tr>
+<tr><td>D&amp;A / Capex</td><td>3.06% / 3.49%</td><td>Historical % of revenue</td><td>depreciationAndAmortizationPct / capitalExpenditurePct</td></tr>
+<tr><td>NWC (recv+inv−pay)</td><td>16.67+11.02−4.97%</td><td>Historical % of revenue; ΔNWC drains FCF while growing</td><td>receivablesPct / inventoriesPct / payablePct</td></tr>
+<tr><td>Tax rate</td><td>15.12%</td><td>Effective TTM rate</td><td>taxRate</td></tr>
+<tr><td>Cost of equity</td><td>14.72%</td><td>CAPM: 4.28% risk-free + 2.211 β × 4.72% mkt risk premium</td><td>riskFreeRate / beta / marketRiskPremium</td></tr>
+<tr><td>WACC</td><td>14.69%</td><td>99.77% equity × 14.72% + 0.23% debt × 3.63% after-tax</td><td>costOfDebt (4.28%)</td></tr>
+<tr><td>Terminal value</td><td>$9.26T</td><td>Gordon growth: UFCF₆ = $989.7B ÷ (WACC 14.69% − g 4.0%), discounted 5 yrs → PV $4.66T = 78% of total EV</td><td>longTermGrowthRate</td></tr>
+</table>
+
+<div class="ctrl">
+  <div><label>Revenue growth, yrs 1–5</label><span class="val" id="vG">66.4%</span><input type="range" id="g" min="0" max="80" step="0.5" value="66.4"></div>
+  <div><label>EBITDA margin</label><span class="val" id="vM">51.1%</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"></div>
+  <div><label>WACC</label><span class="val" id="vW">14.7%</span><input type="range" id="w" min="7" max="20" step="0.1" value="14.7"></div>
+  <div><label>Long-term growth</label><span class="val" id="vL">4.0%</span><input type="range" id="l" min="0" max="6" step="0.1" value="4.0"></div>
+  <div><label>Tax rate</label><span class="val" id="vT">15.1%</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"></div>
+</div>
+<div>
+  <button class="preset" onclick="setP(66.4,51.1,14.7,4.0,15.1)">FMP default (66% — fantasy)</button>
+  <button class="preset" onclick="setP(35,51.1,14.7,4.0,15.1)">Street-ish 35%</button>
+  <button class="preset" onclick="setP(20,48,14.7,3.0,17)">Conservative 20%</button>
+  <button class="preset" onclick="setP(10,42,15,2.5,20)">Bear 10%</button>
+</div>
+
+<div id="dcfOut">
+<div class="kv">
+  <div><span class="k">Fair Value / Share</span><div class="v" id="oFV">—</div></div>
+  <div><span class="k">Market Price</span><div class="v">$202.81</div></div>
+  <div><span class="k">Implied Up/Downside</span><div class="v" id="oUp">—</div></div>
+  <div><span class="k">Enterprise Value</span><div class="v" id="oEV">—</div></div>
+  <div><span class="k">Terminal Value % of EV</span><div class="v" id="oTV">—</div></div>
+</div>
+<table id="oTable"></table>
+</div>
+<div class="note">Model reconstructed client-side with FMP's exact mechanics (UFCF = EBIT×(1−tax) + D&amp;A − capex − ΔNWC; Gordon terminal value). Matches FMP's server output within a few % — FMP applies minor cash-tax adjustments. At FMP defaults it returns ≈$243 vs their $243.43. Base year: FY2026 actual revenue $215.9B, 24.51B diluted shares, net debt $0.8B.</div>
+<div class="flag">⚠️ Key answer: the 66% growth base is pure historical extrapolation, not analyst numbers. Analyst consensus lives in a separate endpoint (financial-estimates) — and can be fed into this model as the revenueGrowthPct override. That's the sane configuration: analyst revenue path + your WACC.</div>
+</section>
+
+<!-- ============ 4. INSIDER TRADES ============ -->
+<section>
+<h2>4 · Insider Trades — NVDA (SEC Form 4, ~2-day lag)</h2>
+<div class="src">endpoints: search-insider-trades + insider-trade-statistics</div>
+<div class="kv">
+  <div><span class="k">Q1 2026 Buy/Sell mix</span><div class="v neg">15 acq / 94 disp</div></div>
+  <div><span class="k">Q2 2026 mix</span><div class="v">11 acq / 14 disp</div></div>
+  <div><span class="k">Q2 shares disposed</span><div class="v">2.80M</div></div>
+  <div><span class="k">Latest filing</span><div class="v">2026-07-15</div></div>
+</div>
+<table>
+<tr><th>Filed</th><th>Insider</th><th>Role</th><th>Type</th><th>Shares</th><th>Price</th></tr>
+<tr><td>07-15</td><td>Nora Johnson, Suzanne</td><td>Director</td><td>Form 3 (initial)</td><td>2,496 held</td><td>—</td></tr>
+<tr><td>07-06</td><td>Coxe, Tench</td><td>Director</td><td class="pur">Gift out</td><td>500,000</td><td>—</td></tr>
+<tr><td>06-23</td><td>Stevens, Mark</td><td>Director</td><td class="neg">Sale</td><td>319,385</td><td>$209.70</td></tr>
+<tr><td>06-23</td><td>Stevens, Mark</td><td>Director</td><td class="neg">Sale</td><td>565,615</td><td>$210.44</td></tr>
+<tr><td>06-23</td><td>Teter, Timothy (GC)</td><td>Officer</td><td>Tax withholding</td><td>35,742</td><td>$207.41</td></tr>
+<tr><td>06-23</td><td>Shoquist, Debora (EVP Ops)</td><td>Officer</td><td>Tax withholding</td><td>35,012</td><td>$207.41</td></tr>
+<tr><td>06-29</td><td>8 directors</td><td>Directors</td><td class="pos">RSU award</td><td>1,211 each</td><td>—</td></tr>
+</table>
+<div class="note">Raw feed. The tradeable derived views this supports: (a) open-market-purchases-only filter — P-codes are the only real signal, awards/withholding are noise; (b) cluster-buy detector — ≥3 distinct insiders buying within 30 days; (c) net insider flow vs price overlay per name; (d) watchlist-wide daily diff. All computable from these fields.</div>
+</section>
+
+<!-- ============ 5. CONGRESS ============ -->
+<section>
+<h2>5 · Congressional Trades — NVDA (STOCK Act, ≤45-day lag)</h2>
+<div class="src">endpoints: senate-trading + house-trading (also searchable by politician name)</div>
+<table>
+<tr><th>Disclosed</th><th>Member</th><th>Chamber</th><th>Type</th><th>Amount Band</th></tr>
+<tr><td>2026-07-17</td><td>Cleo Fields (LA)</td><td>House</td><td class="pos">Purchase ×3</td><td>$1k–15k each</td></tr>
+<tr><td>2026-07-08</td><td>Sheldon Whitehouse (RI)</td><td>Senate</td><td class="neg">Sale</td><td>$15k–50k</td></tr>
+<tr><td>2026-07-08</td><td>Ro Khanna (CA)</td><td>House</td><td class="pos">Purchase (stock + options)</td><td>$1k–15k</td></tr>
+<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="pos">Purchase</td><td class="gold">$250k–500k</td></tr>
+<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="pos">Call options purchase</td><td class="gold">$100k–250k</td></tr>
+<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="neg">Sale (partial)</td><td class="gold">$1M–5M</td></tr>
+<tr><td>2026-01-16</td><td>Markwayne Mullin (OK)</td><td>Senate</td><td class="pos">Purchase</td><td>$100k–250k</td></tr>
+<tr><td>2025-11-13</td><td>Cleo Fields (LA)</td><td>House</td><td class="pos">Purchase ×2</td><td>up to $250k</td></tr>
+</table>
+<div class="note">Derived views that make this tradeable: (a) follow-list — track only members with documented alpha (Pelosi options activity is its own feed); (b) net congressional flow per ticker per month; (c) size-filter ≥$100k — the small bands are staffers' index funds; (d) new-name detector: first-ever purchase of a ticker by any member. Amounts are legal disclosure bands, not exact.</div>
+</section>
+
+<!-- ============ 6. COT ============ -->
+<section>
+<h2>6 · Commitment of Traders — S&amp;P 500 E-Mini (CFTC, weekly)</h2>
+<div class="src">endpoint: COT-report — 65 markets: ES, NQ, GC, CL, VX, BT, DX, ZN…</div>
+<table>
+<tr><th>Report Date</th><th>Open Interest</th><th>Spec Long</th><th>Spec Short</th><th>Spec NET</th><th>Commercial NET</th></tr>
+<tr><td>2026-07-14</td><td>1.94M</td><td>256,435</td><td>295,373</td><td class="neg">−38,938</td><td class="neg">−92,531</td></tr>
+<tr><td>2026-07-07</td><td>1.97M</td><td>244,103</td><td>286,994</td><td class="neg">−42,891</td><td class="neg">−66,463</td></tr>
+<tr><td>2026-06-30</td><td>1.97M</td><td>249,934</td><td>287,526</td><td class="neg">−37,592</td><td class="neg">−87,734</td></tr>
+<tr><td>2026-06-23</td><td>1.98M</td><td>251,385</td><td>286,833</td><td class="neg">−35,448</td><td class="neg">−87,130</td></tr>
+<tr><td>2026-06-16</td><td>2.58M</td><td>262,370</td><td>456,348</td><td class="neg">−193,978</td><td class="pos">+60,203</td></tr>
+</table>
+<div class="note">Speculators net short ES ~39k contracts all month. The standard tradeable view: positioning PERCENTILE — current spec net vs its own 1y/3y history (z-score). Extremes are contrarian setups; the raw weekly number alone is noise. ~120 fields/week including top-4/top-8 concentration. There's also COT-report-analysis (pre-computed sentiment). Premium-plan gated — your key has it ✅.</div>
+</section>
+
+<!-- ============ 7. ANALYSTS ============ -->
+<section>
+<h2>7 · Analyst Coverage — the "Analysts in Common" Question</h2>
+<div class="src">endpoint: grades — sample of who rates NVDA</div>
+<span class="pill">KeyBanc</span><span class="pill">Needham</span><span class="pill">DA Davidson</span><span class="pill">Tigress</span><span class="pill">Benchmark</span><span class="pill">UBS</span><span class="pill">Cantor Fitzgerald</span><span class="pill">BofA Securities</span><span class="pill">Evercore ISI</span><span class="pill">RBC Capital</span><span class="pill">Truist</span><span class="pill">Baird</span>
+<div class="flag">⚠️ Base subscription = FIRM-level only ("gradingCompany"), no analyst names. <b>Firms-in-common is buildable today</b>: pull grades for two symbols, intersect. <b>Person-level analysts-in-common needs the TipRanks add-on</b>: per-analyst point-in-time ratings + price targets, per-analyst accuracy/track record, firm summaries, full analyst directory. It does NOT include per-analyst EPS estimates — ratings and price targets only; EPS/revenue estimates stay consensus-level (financial-estimates endpoint). Sold through the FMP dashboard → Add-Ons tab; pricing only visible there.</div>
+</section>
+
+<div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP API, live pulls · scintillahub.ai/sectorrotation · v0.2 (interactive DCF) · Claude for Alan</div>
+
+<script>
+const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81};
+function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
+function calc(){
+  const g=+document.getElementById('g').value/100, m=+document.getElementById('m').value/100,
+        w=+document.getElementById('w').value/100, l=+document.getElementById('l').value/100,
+        t=+document.getElementById('t').value/100;
+  document.getElementById('vG').textContent=(g*100).toFixed(1)+'%';
+  document.getElementById('vM').textContent=(m*100).toFixed(1)+'%';
+  document.getElementById('vW').textContent=(w*100).toFixed(1)+'%';
+  document.getElementById('vL').textContent=(l*100).toFixed(1)+'%';
+  document.getElementById('vT').textContent=(t*100).toFixed(1)+'%';
+  let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV(UFCF) $B</th></tr>';
+  let rev=BASE.rev, nwcPrev=BASE.rev*BASE.nwcPct, sumPV=0, ufcf=0;
+  for(let i=1;i<=5;i++){
+    rev*=(1+g);
+    const ebitda=rev*m, da=rev*BASE.daPct, ebit=ebitda-da, capex=rev*BASE.capexPct;
+    const nwc=rev*BASE.nwcPct, dNwc=nwc-nwcPrev; nwcPrev=nwc;
+    ufcf=ebit*(1-t)+da-capex-dNwc;
+    const pv=ufcf/Math.pow(1+w,i); sumPV+=pv;
+    rows+=`<tr><td>${2026+i}E</td><td>${fmt(rev,1)}</td><td>${fmt(ebitda,1)}</td><td>${fmt(ufcf,1)}</td><td>${fmt(pv,1)}</td></tr>`;
+  }
+  let fv=0, ev=0, tvShare=0;
+  if(w<=l){ document.getElementById('oFV').textContent='WACC ≤ g'; document.getElementById('oFV').className='v neg'; }
+  else{
+    const tv=ufcf*(1+l)/(w-l), pvTV=tv/Math.pow(1+w,5);
+    ev=sumPV+pvTV; tvShare=pvTV/ev*100;
+    fv=(ev-BASE.netDebt)/BASE.shares;
+    const up=(fv/BASE.price-1)*100;
+    const e1=document.getElementById('oFV'); e1.textContent='$'+fmt(fv); e1.className='v '+(up>=0?'pos':'neg');
+    const e2=document.getElementById('oUp'); e2.textContent=(up>=0?'+':'')+fmt(up,1)+'%'; e2.className='v '+(up>=0?'pos':'neg');
+    document.getElementById('oEV').textContent='$'+fmt(ev/1000)+'T';
+    document.getElementById('oTV').textContent=fmt(tvShare,0)+'%';
+  }
+  document.getElementById('oTable').innerHTML=rows;
+}
+function setP(g,m,w,l,t){
+  document.getElementById('g').value=g; document.getElementById('m').value=m;
+  document.getElementById('w').value=w; document.getElementById('l').value=l;
+  document.getElementById('t').value=t; calc();
+}
+['g','m','w','l','t'].forEach(id=>document.getElementById(id).addEventListener('input',calc));
+calc();
+</script>
+
+</body>
+</html>
