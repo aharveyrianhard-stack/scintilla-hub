@@ -148,7 +148,37 @@
     <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',2.211)">FMP raw: 2.21</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',1.81)">Blume-adj: 1.81</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',2.14)">Peer median: 2.14</button></div></div>
   <div><label>Market risk premium</label><span class="val" id="vMrp">4.72%</span><input type="range" id="mrp" min="3" max="8" step="0.05" value="4.72">
     <div class="sub">Extra return stocks as an asset class must pay over Treasuries. ⚠️ FMP sends this RAW: a fixed house constant (4.72%, same for every ticker), no underlying inputs exposed. The proper source is external: <b>Damodaran (NYU), monthly, free — July 2026: 4.45% US, 4.17% mature markets</b>. <b>The sub-components inside an implied ERP</b> (his machine, all observable — these become our four dials when we build our own module): ① today's S&amp;P 500 index level · ② expected cash returned to shareholders (dividends + buybacks, next 12m and growing) · ③ analyst growth expectations for ~5 years · ④ terminal growth = the 10Y treasury. Solve for the discount rate that makes those cash flows worth today's index level → that's the market's expected return (right now ≈ 8.7% = 4.28% rf + 4.45% ERP); subtract the 10Y → ERP. So when stocks rally with no cash-flow change, implied ERP FALLS — it's a live market price of risk, not a constant.</div>
-    <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.72)">FMP: 4.72</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.45)">Damodaran US (Jul-26): 4.45</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',5.50)">Conservative: 5.50</button></div></div>
+    <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.72)">FMP: 4.72</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.45)">Damodaran US (Jul-26): 4.45</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',5.50)">Conservative: 5.50</button></div>
+
+    <div style="border:1px dashed var(--gold); border-radius:10px; padding:16px; margin-top:14px; background:rgba(210,153,34,0.04);">
+      <div style="color:var(--gold); font-weight:700; font-size:14px; margin-bottom:4px;">▾ BUILD THE MRP YOURSELF — implied ERP from its subcomponents (live)</div>
+      <div class="sub" style="margin-bottom:12px;">FMP hides these; here they are as dials. The model discounts the S&amp;P's expected cash flows back to today's index level and solves for the return the market is pricing. ERP = that return − risk-free. Change any subcomponent → ERP recomputes → click "Use →" to push it into CAPM above.</div>
+      <div class="ctrl" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+        <div><label>① S&amp;P 500 index level</label><span class="val" id="vSpx">7457.7</span><input type="range" id="spx" min="5000" max="9000" step="10" value="7457.7">
+          <div class="sub">Live via FMP quote(^GSPC), 2026-07-20. Higher index, same cash flows → lower ERP.</div></div>
+        <div><label>② Dividend yield</label><span class="val" id="vDy">1.30%</span><input type="range" id="dy" min="0.5" max="3" step="0.05" value="1.30">
+          <div class="sub">Trailing S&amp;P dividend yield. Source: FMP index fundamentals / S&amp;P.</div></div>
+        <div><label>③ Buyback yield</label><span class="val" id="vBy">2.20%</span><input type="range" id="by" min="0" max="4" step="0.05" value="2.20">
+          <div class="sub">Net buybacks ÷ index. The bigger, often-ignored half of shareholder cash. Source: S&amp;P buyback report.</div></div>
+        <div><label>④ Expected growth, yrs 1–5</label><span class="val" id="vGg">8.50%</span><input type="range" id="gg" min="0" max="20" step="0.25" value="8.50">
+          <div class="sub">Bottom-up analyst earnings-growth consensus (aggregate of financial-estimates). The big soft input.</div></div>
+        <div><label>⑤ Terminal growth (= risk-free)</label><span class="val" id="vTg">4.28%</span><input type="range" id="tg" min="2" max="7" step="0.05" value="4.28">
+          <div class="sub">Locked to the 10Y by convention — nothing grows faster than the economy forever.</div></div>
+        <div style="display:flex;flex-direction:column;justify-content:center;">
+          <label>→ IMPLIED EXPECTED RETURN</label><span class="val" id="oRet" style="font-size:24px;">—</span>
+          <label style="margin-top:8px;">→ IMPLIED ERP (return − rf)</label><span class="val pos" id="oErp" style="font-size:24px;">—</span>
+          <button class="preset" style="font-size:13px;padding:6px 12px;margin-top:8px;border-color:var(--gold);color:var(--gold);" onclick="useErp()">Use this ERP → CAPM ↑</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <span class="sub" style="display:block;margin-bottom:4px;">Presets set the whole subcomponent set at once:</span>
+        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,2.20,8.50,4.28)">Live consensus</button>
+        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,2.20,6.00,4.28)">Cautious growth 6%</button>
+        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,1.00,8.50,4.28)">Buybacks fade 1%</button>
+        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(6800,1.45,2.20,8.50,4.28)">−10% selloff</button>
+      </div>
+      <div class="note" id="erpNote" style="margin-top:10px;"></div>
+    </div></div>
   <div><label>→ Cost of Equity = rf + β×MRP</label><span class="val" id="vCoe">14.72%</span></div>
   <div><label>→ WACC = 99.77% eq × CoE + 0.23% debt × 3.63%</label><span class="val" id="vW">14.69%</span></div>
 </div>
@@ -226,6 +256,41 @@ function calc(){
   document.getElementById('oTable').innerHTML=rows;
 }
 function setV(id,v){document.getElementById(id).value=v; calc();}
+// --- Implied ERP subcomponent solver (2-stage Gordon) ---
+function pvAt(r,spx,cash0,g,tg){
+  let cf=cash0, pv=0;
+  for(let i=1;i<=5;i++){ cf=cf*(1+g); pv+=cf/Math.pow(1+r,i); }
+  const cf6=cf*(1+tg), tv=cf6/(r-tg);          // terminal value at yr5
+  pv+=tv/Math.pow(1+r,5);
+  return pv;                                     // want pv === spx
+}
+function calcERP(){
+  const spx=+document.getElementById('spx').value, dy=+document.getElementById('dy').value/100,
+        by=+document.getElementById('by').value/100, g=+document.getElementById('gg').value/100,
+        tg=+document.getElementById('tg').value/100;
+  document.getElementById('vSpx').textContent=spx.toFixed(1);
+  document.getElementById('vDy').textContent=(dy*100).toFixed(2)+'%';
+  document.getElementById('vBy').textContent=(by*100).toFixed(2)+'%';
+  document.getElementById('vGg').textContent=(g*100).toFixed(2)+'%';
+  document.getElementById('vTg').textContent=(tg*100).toFixed(2)+'%';
+  const cash0=spx*(dy+by);
+  // bisection for r in (tg+0.0001, 0.30)
+  let lo=tg+0.0002, hi=0.30, r=0;
+  for(let k=0;k<80;k++){ r=(lo+hi)/2; const pv=pvAt(r,spx,cash0,g,tg); if(pv>spx) lo=r; else hi=r; }
+  const erp=(r-tg)*100, ret=r*100;
+  document.getElementById('oRet').textContent=ret.toFixed(2)+'%';
+  document.getElementById('oErp').textContent=erp.toFixed(2)+'%';
+  document.getElementById('erpNote').innerHTML='Cash returned next 12m = index × (div '+(dy*100).toFixed(2)+'% + buyback '+(by*100).toFixed(2)+'%) = <b>'+cash0.toFixed(1)+'</b> pts, grown '+(g*100).toFixed(1)+'%/yr for 5 yrs, terminal '+(tg*100).toFixed(2)+'%. Solved return that prices the index = <b>'+ret.toFixed(2)+'%</b> → ERP <b>'+erp.toFixed(2)+'%</b>. FMP hard-codes 4.72%; Damodaran Jul-26 = 4.45%.';
+  return erp;
+}
+function setERP(spx,dy,by,g,tg){
+  document.getElementById('spx').value=spx; document.getElementById('dy').value=dy;
+  document.getElementById('by').value=by; document.getElementById('gg').value=g;
+  document.getElementById('tg').value=tg; calcERP();
+}
+function useErp(){ const e=calcERP(); document.getElementById('mrp').value=e.toFixed(2); calc(); }
+['spx','dy','by','gg','tg'].forEach(id=>document.getElementById(id).addEventListener('input',calcERP));
+window.addEventListener('DOMContentLoaded',calcERP);
 function setP(g,m,b,l,t){
   document.getElementById('g').value=g; document.getElementById('m').value=m;
   document.getElementById('b').value=b; document.getElementById('l').value=l;

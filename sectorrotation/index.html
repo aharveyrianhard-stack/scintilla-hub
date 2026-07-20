@@ -149,7 +149,7 @@ const SECTORS = [   // colors = SCINTILLA design-system tokens only
 ];
 const BENCH='SPY';
 const REFRESH_MIN=5;
-const RRG_WIN=14, TAIL_PTS=10, TAIL_STEP=1;   // weekly, JdK-style
+const RRG_WIN=14, TAIL_PTS=6, TAIL_STEP=1;   // weekly, JdK-style
 
 /* ============ STATE ============ */
 let DS={daily:{},intra:{},intra1:{},weekly:{}}; let ACTIVE='daily';
@@ -233,7 +233,8 @@ function rrgSeries(t){
   for(let i=0;i<rs.length;i++){const m=sma(rs,i);ratio.push(100+(rs[i]-m)/sdv(rs,i,m));}
   const roc=ratio.map((v,i)=>i?((v/ratio[i-1])-1)*100:0);
   for(let i=0;i<roc.length;i++){const m=sma(roc,i);mom.push(100+(roc[i]-m)/sdv(roc,i,m));}
-  return {ratio,mom};
+  const sm=(a,n)=>{const k=2/(n+1);let e=a[0];const o=[e];for(let i=1;i<a.length;i++){e=a[i]*k+e*(1-k);o.push(e);}return o;};
+  return {ratio:sm(ratio,3),mom:sm(mom,3)};   // mild EMA(3) — smooth curves, spread preserved
 }
 function quadrant(x,y){
   if(x>=100&&y>=100) return ['LEADING','b-lead'];
@@ -440,10 +441,14 @@ function renderRRG(){
     const n=rr.ratio.length;
     const pts=[];
     for(let k=TAIL_PTS-1;k>=0;k--){ const i=n-1-k*TAIL_STEP; if(i>=0) pts.push([rr.ratio[i],rr.mom[i]]); }
-    ctx.strokeStyle=s.c; ctx.lineWidth=1.5; ctx.globalAlpha=.55; ctx.beginPath();
-    pts.forEach((p,i)=>{ const px=X(p[0]),py=Y(p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
-    ctx.stroke(); ctx.globalAlpha=1;
-    pts.slice(0,-1).forEach(p=>{ ctx.fillStyle=s.c; ctx.globalAlpha=.4; ctx.beginPath(); ctx.arc(X(p[0]),Y(p[1]),2.4,0,7); ctx.fill(); ctx.globalAlpha=1; });
+    for(let i=1;i<pts.length;i++){       // tail fades: oldest faint -> head bright
+      ctx.strokeStyle=s.c; ctx.lineWidth=1.6;
+      ctx.globalAlpha=0.10+0.55*(i/(pts.length-1));
+      ctx.beginPath(); ctx.moveTo(X(pts[i-1][0]),Y(pts[i-1][1])); ctx.lineTo(X(pts[i][0]),Y(pts[i][1])); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    pts.slice(0,-1).forEach((p,i)=>{ ctx.fillStyle=s.c; ctx.globalAlpha=0.15+0.4*(i/Math.max(1,pts.length-2)); ctx.beginPath(); ctx.arc(X(p[0]),Y(p[1]),2.2,0,7); ctx.fill(); });
+    ctx.globalAlpha=1;
     const last=pts[pts.length-1];
     ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(X(last[0]),Y(last[1]),5.5,0,7); ctx.fill();
     ctx.fillStyle='#F2F2F8'; ctx.font='700 10px "SF Mono",Menlo,monospace'; ctx.fillText(s.t,X(last[0])+8,Y(last[1])+3);
