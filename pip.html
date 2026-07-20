@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCINTILLA · float</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#f{position:fixed;top:0;left:0;right:0;bottom:34px;width:100%;border:0;height:calc(100% - 34px)}
+.bar{position:fixed;left:0;right:0;bottom:0;height:34px;display:flex;background:#0A0A0F;border-top:1px solid rgba(0,212,255,.14)}
+.bar button{flex:1 1 0;background:transparent;border:0;border-right:1px solid rgba(0,212,255,.14);color:#A6AAC4;font:13px ui-monospace,Menlo,monospace;cursor:pointer}
+.bar button:last-child{border-right:0}.bar button:hover{color:#00D4FF}
+#st{position:fixed;left:8px;bottom:40px;color:#6A6C86;font:10px ui-monospace,Menlo,monospace;z-index:9;pointer-events:none}
+</style>
+</head>
+<body>
+<iframe id="f" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+<div id="st"></div>
+<div class="bar">
+  <button id="mut" onclick="mut()">🔊</button>
+  <button id="wl" onclick="star()">★</button>
+  <button onclick="seek(-30)">⟲30</button>
+  <button onclick="nav(-1)">◀◀</button>
+  <button onclick="nav(1)">▶▶</button>
+  <button onclick="seek(30)">30⟳</button>
+  <button id="sb" onclick="sub()">＋Sub</button>
+  <button onclick="shut()">✕</button>
+</div>
+<script>
+/* LIB-FREE float player v7 — NO automatic mute, ever. Sound state changes ONLY when
+   the 🔊 button is clicked. If the browser blocks sound-on autoplay, the video shows
+   YouTube's own ▶ — one tap starts it WITH sound. */
+if(location.search.indexOf("harness=1")>=0){
+  document.body.innerHTML="<div style='color:#8f8;font:12px monospace;padding:6px'>HARNESS: float simulation (pip.html inside an iframe)</div>"+
+    "<iframe src='"+location.pathname+"?inner=1&_="+Date.now()+"' style='width:480px;height:320px;border:2px solid #0ff;display:block;margin:20px'></iframe>";
+}else{
+var Q={ids:[],i:0,t:0}, MUTED=false, LISTEN=null, TIME=0, PLAYED=false, HINT=null, HUBT=-1, HUBV="", STARTED=false;
+/* the hub keeps playing until we ACTUALLY start — it streams its live position here */
+window.addEventListener("storage",function(e){
+  if(e.key==="sc_pip_sync"&&e.newValue){ try{var o=JSON.parse(e.newValue); HUBT=o.t; HUBV=o.vid||"";}catch(x){} }
+});
+try{ Q=JSON.parse(localStorage.getItem("sc_pip_queue")||"{}")||Q; }catch(e){}
+if(!Q.ids) Q.ids=[];
+var ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZGlueHFwbHJnZ2Fna3ZyZGFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NDk0MTYsImV4cCI6MjA5NjEyNTQxNn0.1UKKUb_fY-xOy33vNUszDzxGECqQxdcwaxb9kN7KY-g";
+function st(x){document.getElementById("st").textContent=x;}
+function post(o){try{document.getElementById("f").contentWindow.postMessage(JSON.stringify(o),"*");}catch(e){}}
+function cmd(f,a){post({event:"command",func:f,args:a||[]});}
+function yta(body){return fetch("https://wadinxqplrggagkvrdag.supabase.co/functions/v1/yt-act",{method:"POST",
+  headers:{apikey:ANON,Authorization:"Bearer "+ANON,"Content-Type":"application/json"},
+  body:JSON.stringify(body)});}
+function load(k,start){
+  Q.i=k; PLAYED=false;
+  try{ localStorage.setItem("sc_pip_queue",JSON.stringify(Q)); }catch(e){}
+  st("loading "+(k+1)+"/"+Q.ids.length+"…");
+  document.getElementById("sb").textContent="＋Sub";
+  /* mute in the URL ONLY mirrors the user's own 🔊 click — never set automatically */
+  document.getElementById("f").src="https://www.youtube.com/embed/"+Q.ids[k]+
+    "?enablejsapi=1&autoplay=1&mute="+(MUTED?1:0)+"&playsinline=1&rel=0&start="+(start||0)+
+    "&origin="+encodeURIComponent(location.origin);
+  if(HINT) clearTimeout(HINT);
+  HINT=setTimeout(function(){ if(!PLAYED) st("click anywhere to start — sound is on"); },2600);
+}
+/* Chrome may veto sound-on AUTOstart in a fresh float window (no interaction credit yet).
+   Belt-and-braces: the user's FIRST click anywhere in the float — any button, any pixel —
+   doubles as the play gesture. Never mutes, never blocks a button's own job. */
+document.addEventListener("pointerdown",function(){ if(!PLAYED){ if(HUBT>0&&HUBV===Q.ids[Q.i||0]) cmd("seekTo",[Math.floor(HUBT),true]); cmd("playVideo"); } },true);
+function seek(d){ cmd("seekTo",[Math.max(0,TIME+d),true]); cmd("playVideo"); }
+function nav(d){var k=(Q.i||0)+d; if(k>=0&&k<Q.ids.length) load(k,0);}
+function shut(){try{window.parent.close();}catch(e){} try{window.close();}catch(e){}}
+function mut(){ MUTED=!MUTED; cmd(MUTED?"mute":"unMute"); document.getElementById("mut").textContent=MUTED?"🔇":"🔊"; }
+function star(){
+  try{
+    var id=Q.ids[Q.i||0];
+    var a=JSON.parse(localStorage.getItem("sc_yt_wl_v1")||"[]");
+    var k=a.indexOf(id); if(k>=0)a.splice(k,1); else a.push(id);
+    localStorage.setItem("sc_yt_wl_v1",JSON.stringify(a));
+    document.getElementById("wl").style.color = k>=0 ? "#A6AAC4" : "#00D4FF";
+    yta({action:(k>=0?"unstar":"star"),videoId:id}).catch(function(){});
+  }catch(e){}
+}
+function sub(){
+  var ch=(Q.chs||[])[Q.i||0];
+  if(!ch){ st("no channel info — sub from the hub player"); return; }
+  document.getElementById("sb").textContent="…";
+  yta({action:"sub",channelId:ch}).then(function(r){return r.json();}).then(function(d){
+    document.getElementById("sb").textContent=(d&&d.ok)?"✓Sub":"＋Sub";
+  }).catch(function(){ document.getElementById("sb").textContent="＋Sub"; });
+}
+window.addEventListener("message",function(ev){
+  var d=null; try{d=JSON.parse(ev.data);}catch(e){return;}
+  if(!d)return;
+  if(d.event==="onReady"){ cmd("playVideo"); if(MUTED) cmd("mute"); }
+  if(d.info&&typeof d.info.currentTime==="number"){ TIME=d.info.currentTime;
+    /* cross-device resume: push position to the server, throttled to every 10s */
+    var nw=Date.now(); if(TIME>5&&(!window.__pp||nw-window.__pp>10000)){ window.__pp=nw;
+      fetch("https://wadinxqplrggagkvrdag.supabase.co/rest/v1/yt_positions",{method:"POST",
+        headers:{apikey:ANON,Authorization:"Bearer "+ANON,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
+        body:JSON.stringify({video_id:Q.ids[Q.i||0],t:Math.floor(TIME),updated:new Date().toISOString()})}).catch(function(){}); } }
+  var s=(d.info&&typeof d.info.playerState==="number")?d.info.playerState:(d.event==="onStateChange"?d.info:null);
+  if(s===1){ st(""); PLAYED=true;
+    if(!STARTED){ STARTED=true; try{localStorage.setItem("sc_pip_started",String(Date.now()));}catch(x){} } }
+  if(s===0){ if((Q.i||0)+1<Q.ids.length) load(Q.i+1,0); }
+  if(d.event==="onError"){ st("video blocked — skipping"); if((Q.i||0)+1<Q.ids.length) setTimeout(function(){load(Q.i+1,0);},700); }
+});
+document.getElementById("f").addEventListener("load",function(){
+  if(LISTEN) clearInterval(LISTEN);
+  var tries=0;
+  LISTEN=setInterval(function(){ tries++;
+    post({event:"listening",id:"scpip",channel:"widget"});
+    cmd("addEventListener",["onReady"]); cmd("addEventListener",["onStateChange"]); cmd("addEventListener",["onError"]);
+    cmd("playVideo");
+    if(tries>20){clearInterval(LISTEN);LISTEN=null;}
+  },500);
+});
+if(!Q.ids.length){ st("no queue — open a video in the hub, hit Mini"); } else { load(Q.i||0, Q.t||0); }
+}
+</script>
+</body>
+</html>
