@@ -563,14 +563,14 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ern__days{ font-size:10.5px; color:var(--dim); }
 .sc-ern__days b{ color:var(--crk); font-weight:400; }
 .sc-ern__body{ display:grid; grid-template-columns:1fr 104px; gap:14px; margin-top:9px; align-items:center; flex:1 1 auto; }
-.sc-ern__metrics{ display:grid; grid-template-columns:34px auto auto auto auto; gap:5px 15px; align-items:baseline; align-content:center; }
+.sc-ern__metrics{ display:grid; grid-template-columns:30px repeat(4, minmax(0,1fr)); gap:5px 7px; align-items:baseline; align-content:center; }   /* R39 — fluid columns: never overflow/collide in the narrow today-card */
 /* inline beat/miss word next to each row — replaces the old dashed square box */
 .sc-ern__bm{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; text-align:left; }
 .sc-ern__bm.beat{ color:var(--bull); }
 .sc-ern__bm.miss{ color:var(--bear); }
 .sc-ern__k{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
 .sc-ern__ch{ font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#5a5c76; }
-.sc-ern__v{ font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums; font-weight:600; text-align:right; }
+.sc-ern__v{ font-size:11.5px; color:var(--ink); font-variant-numeric:tabular-nums; font-weight:600; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sc-ern__v.est{ color:var(--ink2); font-weight:400; }
 .sc-ern__v.dash{ color:var(--dim); font-weight:400; }
 .sc-ern__v.sp{ font-weight:700; }
@@ -586,7 +586,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 @media(max-width:680px){ .sc-ern__metrics{ grid-template-columns:32px auto auto auto auto; gap:4px 11px; } .sc-ern__body{ grid-template-columns:1fr; } .sc-ern__foot{ gap:16px; } }
 @media(max-width:380px){ .sc-ern__body{ grid-template-columns:1fr 76px; gap:10px; } }
 /* TICKER page only — upcoming (half width, tight) beside AI READ (half); frees the page so PAST EARNINGS rises. */
-.sc-evtop2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch; margin-bottom:8px; }
+.sc-evtop2{ display:grid; grid-template-columns:1fr; gap:12px; align-items:stretch; margin-bottom:8px; }   /* R39 — today card FULL WIDTH (renders clean like the past cards); AI READ placeholder stacks below */
 .sc-evtop2 .sc-ern{ min-height:0; margin-bottom:0; }                 /* tight, and stretches to match the AI box height */
 .sc-evtop2__ai{ display:flex; }
 .sc-evtop2__ai .sc-airead{ flex:1 1 auto; margin:0; border:.8px solid var(--hair); border-radius:0; background:transparent; padding:10px 12px; }   /* match the upcoming box exactly: solid border, no fill, same pad */
@@ -964,7 +964,7 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 /* COHORT ▾ — tab-bar chip that behaves like the logo menu; looks like a normal tab */
 .sc-cohwrap{ position:relative; display:inline-flex; align-items:center; }
 .sc-cohwrap.is-open > .sc-it{ color:var(--crk); }
-.sc-cohmenu{ position:absolute; top:calc(100% + 6px); right:0; min-width:170px; z-index:40;
+.sc-cohmenu{ position:fixed; min-width:170px; z-index:9999;   /* R40 — FIXED + JS-placed so the tab-strip overflow:auto can't clip it */
   background:#0B0B12; border:1px solid rgba(0,212,255,.4); border-radius:6px; padding:4px;
   box-shadow:0 8px 26px rgba(0,0,0,.6),0 0 14px rgba(0,212,255,.14); display:none; }
 .sc-cohwrap.is-open .sc-cohmenu{ display:block; }
@@ -2644,7 +2644,7 @@ async function fetchCompanyData(t) {
     pg("analyst_ratings?ticker=eq." + e + "&select=consensus,strong_buy,buy,hold,sell,strong_sell"),
     pg("price_target_consensus?ticker=eq." + e + "&select=target_high,target_low,target_avg,target_median,num_analysts"),   // EST PORT — median for the 02 CONVICTION subline
     pg("news?ticker=eq." + e + "&select=ticker,title,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=30"),
-    pg("earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed&order=date.desc&limit=16"),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
+    pg("earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics&order=date.desc&limit=16"),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
     pg("ticker_context?ticker=eq." + e + "&select=ticker,narrative,business_now,catalysts,watch_notes&limit=1"),   // FIX 3 — dossier, pulled once on open
     pg("fundamentals_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 3 — period values are FY/Q1–Q4, not 'annual'
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
@@ -3274,7 +3274,13 @@ const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], [
 const rb = (v) => (v < 0.8 ? 1 : v < 1.2 ? 2 : v < 1.8 ? 3 : v < 2.5 ? 4 : 5);
 
 /* FIX G — search matches tickers, not letters: prefix only (exact match still jumps via doSearch) */
-function shownRows() { return S.tq ? S.rows.filter((r) => r.t.startsWith(S.tq)) : S.rows; }
+let ALLROWS = [];
+function shownRows() {
+  if (!S.tq) return S.rows;
+  const q = S.tq;
+  const src = (ALLROWS && ALLROWS.length) ? ALLROWS : S.rows;   /* R39 — search spans the WHOLE universe, not just the active cohort tab */
+  return src.filter((r) => (r.t && r.t.startsWith(q)) || (r.name && r.name.toUpperCase().indexOf(q) >= 0));
+}
 
 function boardHeaderHTML() {
   return '<div class="ch hdr">' + BOARD_COLS.map(([label, key]) =>
@@ -3321,14 +3327,22 @@ function sortBoardBy(key) {
    order are seeded via computeBoardOrder(); any that still slip in (feed added a row)
    are appended at the end so nothing above them moves. Filtered by the search prefix. */
 function orderedShownRows() {
+  /* R40 — SEARCH SPANS THE WHOLE UNIVERSE. When a query is active the board renders
+     matches from ALLROWS (every ticker), ignoring the active cohort + frozen order —
+     this is THE render path (boardRowsHTML calls this, not shownRows). Ticker-prefix
+     OR company-name match. Empty ALLROWS falls back to the current cohort. */
+  if (S.tq) {
+    const q = S.tq;
+    const src = (ALLROWS && ALLROWS.length) ? ALLROWS : (S.rows || []);
+    return src.filter((r) => (r.t && r.t.startsWith(q)) || (r.name && r.name.toUpperCase().indexOf(q) >= 0));
+  }
   const byT = {}; for (const r of (S.rows || [])) byT[r.t] = r;
   if (!S.boardOrder || !S.boardOrder.length) S.boardOrder = computeBoardOrder();
   const order = S.boardOrder.filter((t) => t in byT);          // drop tickers no longer present
   const inOrder = new Set(order);
   for (const r of (S.rows || [])) if (!inOrder.has(r.t)) order.push(r.t);   // append newcomers, preserve existing positions
   S.boardOrder = order;                                        // persist the reconciled order
-  const rows = order.map((t) => byT[t]);
-  return S.tq ? rows.filter((r) => r.t.startsWith(S.tq)) : rows;
+  return order.map((t) => byT[t]);
 }
 function boardRowsHTML() {
   const rows = orderedShownRows();
@@ -3990,7 +4004,7 @@ function ytWLToggle(id) {
 }
 function ytPosMapGet() { try { return JSON.parse(localStorage.getItem(YT_POS_KEY) || "{}"); } catch (_) { return {}; } }
 function ytPosGet(id) { return ytPosMapGet()[id] || 0; }
-function ytPosSet(id, sec) { const m = ytPosMapGet(); if (sec > 5) m[id] = Math.floor(sec); else delete m[id]; try { localStorage.setItem(YT_POS_KEY, JSON.stringify(m)); } catch (_) {} ytPosPush(id, sec); }
+function ytPosSet(id, sec) { const m = ytPosMapGet(); if (sec > 5) { m[id] = Math.floor(sec); try { localStorage.setItem("sc_yt_last", JSON.stringify({ id: id, ts: Date.now() })); } catch (_) {} } else delete m[id]; try { localStorage.setItem(YT_POS_KEY, JSON.stringify(m)); } catch (_) {} ytPosPush(id, sec); }
 /* CROSS-DEVICE resume: positions live in yt_positions on the server. Writes are
    throttled (10s per video); every feed load pulls the server map and merges it in. */
 let YT_POS_PUSHED = {};
@@ -4096,6 +4110,7 @@ function ytFiltHTML() {
     const on = S.ytFilt === ("$" + t) ? " is-on" : "";
     h += '<button class="sc-ytf' + on + '" data-act="ytfilt" data-f="$' + t + '">$' + t + '<span class="sc-ytf__c">' + tks[t] + "</span></button>";
   });
+  h += '<button class="sc-ytf" data-act="ytrefresh" title="reload the feed from the database — shows what the 5-min cadence already pulled (subs + ticker searches); does NOT call YouTube, no quota used">↻ Refresh</button>';
   return h;
 }
 function ytFeedHTML() {   // no title line — the active YOUTUBE sub-tab is the label; Edit lives in the sub-tab row
@@ -4125,6 +4140,22 @@ function ytCardHTML(r, i) {
     (chips ? '<div class="sc-ytc__chips">' + chips + "</div>" : "") +
     '<div class="sc-ytc__meta"><span>' + esc(r.channel || "") + "</span><span>" + esc(ytAgo(r.published_at)) + "</span></div></div></div>";
 }
+/* CONTINUE WATCHING — YouTube tab only (never the whole-hub launch). If the last video
+   we made progress on is in the current view and has a saved position, show a resume banner
+   at the top of the grid. Resume position is already cross-device (yt_positions). */
+function ytContinueHTML() {
+  let last = null; try { last = JSON.parse(localStorage.getItem("sc_yt_last") || "null"); } catch (_) {}
+  if (!last || !last.id) return "";
+  const pos = ytPosGet(last.id); if (!(pos > 5)) return "";
+  const idx = YT_VIEW.findIndex((r) => r.video_id === last.id); if (idx < 0) return "";
+  const r = YT_VIEW[idx];
+  const mm = Math.floor(pos / 60), ss = String(Math.floor(pos % 60)).padStart(2, "0");
+  return '<div data-act="ytcontinue" data-i="' + idx + '" style="grid-column:1/-1;flex-basis:100%;width:100%;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:10px;background:linear-gradient(90deg,rgba(0,212,255,.12),rgba(0,212,255,.02));border:1px solid rgba(0,212,255,.30);border-radius:8px;cursor:pointer">' +
+    '<span style="font-size:20px;color:#00D4FF;line-height:1">▶</span>' +
+    '<div style="flex:1;min-width:0"><div style="color:#00D4FF;font-size:11px;letter-spacing:1px;text-transform:uppercase">Continue watching · ' + mm + ':' + ss + '</div>' +
+    '<div style="color:#C8CCE0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(r.title || "") + '</div></div>' +
+    '<span data-act="ytcontdismiss" style="color:#6A6C86;font-size:16px;padding:0 6px;cursor:pointer">✕</span></div>';
+}
 function renderYT() {
   const grid = el("ytGrid"); if (!grid) return;
   if (!YT_LOADED) return;                                 // keep "loading…" until the pull resolves
@@ -4134,7 +4165,7 @@ function renderYT() {
     return;
   }
   YT_VIEW = YT_FEED.filter(ytMatch);                     // freeze the rendered order = player nav list
-  grid.innerHTML = YT_VIEW.length ? YT_VIEW.map(ytCardHTML).join("")
+  grid.innerHTML = YT_VIEW.length ? (ytContinueHTML() + YT_VIEW.map(ytCardHTML).join(""))
     : '<div class="sc-yt__empty">no videos in <b>' + esc(S.ytFilt) + "</b>.</div>";
 }
 
@@ -4316,11 +4347,12 @@ document.addEventListener("keydown", (e) => {
 });
 function fillYT() {
   renderYT();                                             // paint whatever we have (loading/awaiting/data)
-  if (YT_LOADED && (Date.now() - YT_FETCHED_AT) < 600000) return;   /* stale after 10 min → re-pull on tab entry; no quit-and-reopen needed */
+  if (!window.__ytPoll) { window.__ytPoll = setInterval(function(){ if (S.sec === "SOCIAL" && S.socTab === "YOUTUBE" && YT_IDX < 0) { YT_LOADED = false; fillYT(); } }, 120000); }   /* live poll: feed refreshes every 2 min while viewing (only when no player is open) — no app quit needed */
+  if (YT_LOADED && (Date.now() - YT_FETCHED_AT) < 90000) return;   /* re-pull on tab entry after 90s */
   pg("youtube_feed?select=video_id,title,channel,channel_id,tickers,duration,is_short,is_sub,watch_later,thumb_url,published_at&order=published_at.desc&limit=200")
     .then((rows) => {
       YT_LOADED = true; YT_FETCHED_AT = Date.now(); ytPosPull();
-      if (Array.isArray(rows) && rows.length) { const wl = ytWLGet(); YT_FEED.length = 0; rows.forEach((r) => { r.watch_later = wl.has(r.video_id); YT_FEED.push(r); }); }
+      if (Array.isArray(rows) && rows.length) { const wl = ytWLGet(); YT_FEED.length = 0; const _seen = new Set(); rows.forEach((r) => { const _k = (r.channel_id || "") + "|" + String(r.title || "").toLowerCase().replace(/\s+/g, " ").trim(); if (_seen.has(r.video_id) || _seen.has(_k)) return; _seen.add(r.video_id); _seen.add(_k); r.watch_later = wl.has(r.video_id); YT_FEED.push(r); }); }
       ytWarm();   // prime the hidden player so the first tap plays with sound (iPhone included)
       /* two-way stars: the SCINTILLA · Watch Later playlist on YouTube is the source of truth */
       ytAct("list").then((d) => {
@@ -4567,14 +4599,18 @@ async function fillEvents() {
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const today = todayISO();
-    const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
+    const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
     const [up, past] = await Promise.all([
       pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
     ]);
     if (!el("evList")) return;
     const inU = (ev) => UNIVERSE.has(ev.ticker);
-    EV_CACHE = { up: up.filter(inU), past: past.filter(inU) };
+    /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
+       move it into the reported/past list so it stops showing as the next upcoming. */
+    const upPending = up.filter((e) => e.eps_actual == null);
+    const reportedToday = up.filter((e) => e.eps_actual != null);
+    EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
     renderEvents(S.coh);
   } catch (err) { if (!EV_CACHE) list.innerHTML = '<div class="soon">events pull failed — check connection.</div>'; }
 }
@@ -6193,7 +6229,9 @@ function earningsBlockHTML(d) {
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">◹ Release · 8-K Ex 99.1</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
-        (d.transcriptUrl ? '<a class="sc-ern__lnk" href="' + esc(d.transcriptUrl) + '" target="_blank" rel="noopener">◹ Transcript</a>' : '<span class="sc-ern__lnk pending">◹ Transcript pending</span>') +
+        (d.transcriptUrl ? '<a class="sc-ern__lnk" href="' + esc(d.transcriptUrl) + '" target="_blank" rel="noopener">◹ Transcript</a>' : '') +
+        (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
+        (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>' : '') +
       "</div>"
     : "";
   return '<div class="sc-ern">' +
@@ -6215,7 +6253,7 @@ function earningsRowToBlock(row) {
     confirmed: (row.confirmed != null ? row.confirmed : null),
     eps:     { est: num(row.eps_estimate),     actual: num(row.eps_actual) },
     revenue: { est: num(row.revenue_estimate), actual: num(row.revenue_actual) },
-    releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, sample: false,
+    releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, metrics: row.release_metrics || null, sample: false,
   };
 }
 const SAMPLE_EARNINGS = [
@@ -6311,9 +6349,9 @@ function transcriptBubbleHTML(data) {
   const sum = String(tr.ai_summary || "").trim();
   const when = tr.call_date ? fmtRelDate(tr.call_date) : "";
   const q = tr.quarter ? String(tr.quarter) : "";
-  const link = tr.url ? '<a href="' + esc(tr.url) + '" target="_blank" rel="noopener">◹ full transcript</a>' : "";
+  const link = '<button class="sc-trbubble__full" data-act="fulltranscript" data-t="' + esc(data.t) + '" data-q="' + esc(String(tr.quarter || "")) + '">◹ read full transcript</button>';
   const bodyHTML = sum ? esc(sum)
-    : (tr.url ? "No AI summary yet — open the full transcript." : "Transcript on file — no summary or link yet.");
+    : "AI summary generating — open the full transcript below.";
   return '<div class="sc-trbubble' + (sum ? "" : " empty") + '" id="trbubble-' + esc(data.t) + '" style="display:none">' +
     '<div class="sc-trbubble__hd"><span>◹ earnings call</span>' +
       (q || when ? '<span class="q">' + esc([q, when].filter(Boolean).join(" · ")) + "</span>" : "") + link + "</div>" +
@@ -6808,9 +6846,16 @@ function toggleFav(t) {   // FIX F — add/remove, repaint stars NOW, feed the F
   else if (S.sec === "EVENTS") renderEvents(S.coh);   // …and the events room
   restartFeed();          // effect dep on fav
 }
-/* R38 — search spans the WHOLE universe: exact ticker jumps from ANY cohort tab. */
+/* R38/R39 — search spans the WHOLE universe: the live board filter (shownRows→ALLROWS)
+   and the exact-ticker jump both read from the full set, independent of the active tab. */
 let ALLTK = new Set();
 pg("all_tickers?select=ticker").then((rows) => { (rows || []).forEach((r) => ALLTK.add(r.ticker)); }).catch(() => {});
+function refreshAllRows() {
+  try { fetchBoardRows("ALL", []).then((rows) => {
+    if (Array.isArray(rows) && rows.length) { ALLROWS = rows; rows.forEach((r) => ALLTK.add(r.t)); }
+  }).catch(() => {}); } catch (_) {}
+}
+refreshAllRows(); setInterval(refreshAllRows, 300000);   /* universe cache refreshed every 5 min */
 function doSearch(tq) {                        // FIX #16: search acts
   if (!tq) { S.tq = ""; sync(); return; }
   /* FIX 7 — NEWS and EVENTS rooms: search FILTERS the list (ticker prefix) — the
@@ -6967,6 +7012,23 @@ document.addEventListener("click", (e) => {
       const r = YT_VIEW[YT_IDX]; if (r && r.video_id) window.open("https://www.youtube.com/watch?v=" + encodeURIComponent(r.video_id), "_blank", "noopener");
       break;
     }
+    case "ytrefresh": {   // manual reload from the DB (what the cadence pulled) — never calls YouTube, no quota
+      const b = a; const old = b.textContent; b.textContent = "↻ …";
+      YT_LOADED = false; YT_FETCHED_AT = 0; fillYT();
+      setTimeout(() => { const nb = document.querySelector('[data-act="ytrefresh"]'); if (nb) nb.textContent = old || "↻ Refresh"; }, 1500);
+      break;
+    }
+    case "ytcontinue": {   // resume the last-watched video at its saved position (YouTube tab banner)
+      e.preventDefault(); e.stopPropagation();
+      ytOpen(+a.dataset.i);
+      break;
+    }
+    case "ytcontdismiss": {   // clear the continue-watching banner
+      e.preventDefault(); e.stopPropagation();
+      try { localStorage.removeItem("sc_yt_last"); } catch (_) {}
+      renderYT();
+      break;
+    }
     case "ytedit": ytCfgOpen(); break;   // pick the 8 searched tickers — saved server-side via yt-config
     case "ytupnext": {   // collapse/expand the Up-Next strip (remembered across videos + reloads)
       const w = el("ytUpNext"); if (!w) break;
@@ -7046,6 +7108,55 @@ document.addEventListener("click", (e) => {
       if (bub) bub.style.display = (bub.style.display === "none" || !bub.style.display) ? "block" : "none";
       break;
     }
+    case "fulltranscript": {   // open the full earnings-call transcript in a modal (fetched on demand from earnings_call_transcripts)
+      e.preventDefault(); e.stopPropagation();
+      const tk = a.dataset.t, qq = a.dataset.q || "", dd = a.dataset.d || "";
+      let host = el("trFullHost"); if (!host) { host = document.createElement("div"); host.id = "trFullHost"; document.body.appendChild(host); }
+      host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
+        '<div data-act="trfullclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
+        '<div style="position:relative;width:min(860px,92vw);max-height:86vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">◹ ' + esc(tk) + ' ' + esc(qq) + ' · EARNINGS CALL' +
+            '<button data-act="trfullclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
+          '<div id="trFullBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap">loading transcript…</div>' +
+        '</div></div>';
+      pg("earnings_call_transcripts?ticker=eq." + encodeURIComponent(tk) + "&select=transcript,quarter,call_date&order=call_date.desc&limit=24").then((rows) => {
+        const b = el("trFullBody"); if (!b) return;
+        let tr = null;
+        if (Array.isArray(rows) && rows.length) {
+          if (qq) tr = rows.find((r) => String(r.quarter || "") === qq);
+          if (!tr && dd) { let best = 1e18; rows.forEach((r) => { const g = Math.abs(new Date(r.call_date) - new Date(dd)); if (g < best) { best = g; tr = r; } }); }
+          if (!tr) tr = rows[0];
+        }
+        b.textContent = (tr && tr.transcript) ? tr.transcript : "transcript not available for this quarter yet.";
+      }).catch(() => { const b = el("trFullBody"); if (b) b.textContent = "failed to load transcript."; });
+      break;
+    }
+    case "trfullclose": { e.preventDefault(); e.stopPropagation(); const h = el("trFullHost"); if (h) h.innerHTML = ""; break; }
+    case "ernsum": {   // newswire release summary + key metrics + call link (from the fast-primary catch)
+      e.preventDefault(); e.stopPropagation();
+      const tk = a.dataset.t, dd = a.dataset.d || "";
+      let host = el("ernSumHost"); if (!host) { host = document.createElement("div"); host.id = "ernSumHost"; document.body.appendChild(host); }
+      host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
+        '<div data-act="ernsumclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
+        '<div style="position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + ' · RELEASE SUMMARY<button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
+          '<div id="ernSumBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace">loading…</div>' +
+        '</div></div>';
+      pg("earnings_events?ticker=eq." + encodeURIComponent(tk) + "&date=eq." + encodeURIComponent(dd) + "&select=release_summary,release_metrics,call_url,release_link&limit=1").then((rows) => {
+        const b = el("ernSumBody"); if (!b) return; const r = rows && rows[0]; if (!r) { b.textContent = "no summary on file."; return; }
+        let h = "";
+        if (r.release_summary) h += '<div style="white-space:pre-wrap;margin-bottom:14px">' + esc(r.release_summary) + '</div>';
+        const m = r.release_metrics || {};
+        const fmtB = (v) => v == null ? "—" : (Math.abs(v) >= 1e9 ? "$" + (v / 1e9).toFixed(2) + "B" : "$" + (v / 1e6).toFixed(0) + "M");
+        const rowsM = [["Net sales", m.net_sales], ["Net income", m.net_income], ["Operating income", m.operating_income], ["Adj. EBITDA", m.adjusted_ebitda], ["Operating cash flow", m.operating_cash_flow]].filter((x) => x[1] != null);
+        if (rowsM.length) h += '<div style="border-top:1px solid rgba(0,212,255,.14);padding-top:10px">' + rowsM.map((x) => '<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#8A8EA8">' + esc(x[0]) + '</span><span style="color:#7FE8A8">' + fmtB(x[1]) + '</span></div>').join("") + '</div>';
+        const links = [r.call_url ? '<a href="' + esc(r.call_url) + '" target="_blank" rel="noopener" style="color:#00D4FF">◹ earnings call / webcast</a>' : "", r.release_link ? '<a href="' + esc(r.release_link) + '" target="_blank" rel="noopener" style="color:#00D4FF">◹ full release</a>' : ""].filter(Boolean).join(" · ");
+        if (links) h += '<div style="margin-top:12px">' + links + '</div>';
+        b.innerHTML = h || "no summary on file.";
+      }).catch(() => { const b = el("ernSumBody"); if (b) b.textContent = "failed to load."; });
+      break;
+    }
+    case "ernsumclose": { e.preventDefault(); e.stopPropagation(); const h = el("ernSumHost"); if (h) h.innerHTML = ""; break; }
     case "row":        openCo(a.dataset.t); break;
     case "back":       go("DASHBOARD"); break;
     case "cotab": {    // soft swap — left-panel body only; board untouched
@@ -8371,11 +8482,16 @@ function filesWire(){
      ticker between COHSETS sets → restartFeed repaints the board), with the honest
      revert-on-fail. The COHORT ▾ chip lives ONLY in the company tab bar. -->
 <script>
+/* R39 — WRAP-SCOPED cohort controller. cohortChipHTML renders in TWO places (left rail
+   + company tab bar), so #cohWrap/#cohChip/#cohMenu are DUPLICATED. getElementById always
+   returned the FIRST (hidden) one, so clicking the visible chip toggled nothing. Every
+   operation now targets the CLICKED chip's own .sc-cohwrap. */
 (function(){
-  function wrap(){ return document.getElementById("cohWrap"); }
-  function closeCoh(){ var w=wrap(); if(w){ w.classList.remove("is-open"); var c=document.getElementById("cohChip"); if(c) c.setAttribute("aria-expanded","false"); } }
-  function renderMenu(){
-    var w=wrap(), menu=document.getElementById("cohMenu"); if(!w||!menu) return;
+  function menuOf(w){ return w && w.querySelector(".sc-cohmenu"); }
+  function savedOf(w){ return w && w.querySelector(".sc-cohsaved"); }
+  function closeAll(){ var ws=document.querySelectorAll(".sc-cohwrap"); for(var i=0;i<ws.length;i++){ ws[i].classList.remove("is-open"); var c=ws[i].querySelector("[aria-haspopup]"); if(c) c.setAttribute("aria-expanded","false"); } }
+  function renderMenu(w){
+    var menu=menuOf(w); if(!menu) return;
     var t=w.getAttribute("data-t"); if(!t) return;
     var html="";
     try{
@@ -8388,41 +8504,44 @@ function filesWire(){
     }catch(_){ }
     menu.innerHTML=html;
   }
-  function openCoh(){ var w=wrap(); if(w){ renderMenu(); w.classList.add("is-open"); var c=document.getElementById("cohChip"); if(c) c.setAttribute("aria-expanded","true"); } }
-  function toggleCoh(){ var w=wrap(); if(!w) return; w.classList.contains("is-open")?closeCoh():openCoh(); }
-
   document.addEventListener("click",function(e){
-    var chip=e.target.closest && e.target.closest("#cohChip");
-    if(chip){ e.stopPropagation(); toggleCoh(); return; }
+    var chip=e.target.closest && e.target.closest(".sc-cohwrap [aria-haspopup], #cohChip");
+    if(chip){
+      e.stopPropagation();
+      var w=chip.closest(".sc-cohwrap"); if(!w) return;
+      var open=w.classList.contains("is-open");
+      closeAll();
+      if(!open){ renderMenu(w); w.classList.add("is-open"); chip.setAttribute("aria-expanded","true");
+        var menu=menuOf(w);
+        if(menu){ var cr=chip.getBoundingClientRect(); var mw=menu.offsetWidth||180;
+          var left=Math.max(8, Math.min(cr.right-mw, window.innerWidth-mw-8));
+          menu.style.top=(cr.bottom+6)+"px"; menu.style.left=left+"px"; menu.style.right="auto"; } }
+      return;
+    }
     var opt=e.target.closest && e.target.closest(".sc-cohopt");
     if(opt){
       e.stopPropagation();
-      var nv=opt.getAttribute("data-cohopt");
-      if(!nv){ closeCoh(); return; }
-      /* R38 — EDITOR RESTORED: the chip sits in a TICKER's tab bar, so picking a
-         cohort SAVES that ticker's cohort via the sanctioned operator-write path
-         (same as the legacy cohsel select R22-FIX5). R35 had silently downgraded
-         this to board navigation with no backend call — that regression is dead. */
-      var w=wrap(); var t=w&&w.getAttribute("data-t");
-      if(t&&typeof operatorWrite==="function"){
+      var w2=opt.closest(".sc-cohwrap"); if(!w2){ closeAll(); return; }
+      var nv=opt.getAttribute("data-cohopt"); var t=w2.getAttribute("data-t"); var sv=savedOf(w2);
+      if(nv&&t&&typeof operatorWrite==="function"){
         operatorWrite({action:"cohort_set", ticker:t, cohort:nv, is_primary:true}).then(function(){
           try{
             if(COHSETS){ for(var k in COHSETS){ if(COHSETS[k]&&COHSETS[k].delete) COHSETS[k].delete(t); }
               (COHSETS[nv]=COHSETS[nv]||new Set()).add(t); }
-            var sv=document.getElementById("cohSaved");
+            if(typeof ALLROWS!=="undefined"&&ALLROWS){ for(var a=0;a<ALLROWS.length;a++){ if(ALLROWS[a].t===t) ALLROWS[a].cohort=nv; } }
             if(sv){ sv.textContent="saved ✓ "+nv; sv.style.opacity="1"; setTimeout(function(){ sv.style.opacity=""; },1800); }
+            if(typeof restartFeed==="function") restartFeed();
           }catch(_){ }
         }).catch(function(){
-          var sv=document.getElementById("cohSaved");
           if(sv){ sv.textContent="save failed"; sv.style.opacity="1"; setTimeout(function(){ sv.style.opacity=""; },1800); }
         });
       }
-      closeCoh();
+      closeAll();
       return;
     }
-    if(!(e.target.closest && e.target.closest("#cohWrap"))) closeCoh();
+    if(!(e.target.closest && e.target.closest(".sc-cohwrap"))) closeAll();
   });
-  document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeCoh(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeAll(); });
 })();
 </script>
 </body>
