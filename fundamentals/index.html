@@ -45,18 +45,6 @@
 <h1>FMP Capability Demo — What Actually Comes Back</h1>
 <div class="sub">Every number on this page is a real pull made 2026-07-18 through the FMP connector. Anchor ticker: NVDA. No mockups.</div>
 
-<details style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin-bottom:22px;">
-<summary style="cursor:pointer; color:var(--accent); font-weight:700; font-size:15px; list-style:none;">▸ How this works — model spec, wiring &amp; sources (read me)</summary>
-<div style="margin-top:12px; font-size:14px; line-height:1.65; color:#c9d1d9;">
-<p><b>What it is.</b> A live, connected equity workbench on the FMP API. The seven DCF sliders (growth, EBITDA margin, tax, risk-free, beta, MRP, perpetuity g) are the single source of truth — everything else (formulas, DCF, value split, sensitivity, reverse-DCF) recomputes together on every change.</p>
-<p style="margin-top:8px;"><b>The math.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base: FY26 rev $215.9B, 24.51B shares, net debt $0.8B; D&amp;A 3.06%, capex 3.49%, NWC 22.7% of revenue.</p>
-<p style="margin-top:8px;"><b>Wiring rules.</b> (1) Modes/chips are quick-sets of a slider — they highlight only when the slider matches, never hold a hidden value. (2) Tabs &amp; default axes order by impact ranking everywhere. (3) Every data table freezes its top row + left column (Excel-style). (4) Each "read" feeds the step below it (comps growth band → reverse-DCF reasonableness; beta peer context → beta verdict).</p>
-<p style="margin-top:8px;"><b>Sources.</b> Comps <span class="mono2">metrics-ratios-ttm</span> + <span class="mono2">screener</span> · DCF mechanics <span class="mono2">custom-dcf-advanced</span> · forward estimates <span class="mono2">financial-estimates</span> (analyst consensus) · insider <span class="mono2">insiderTrades</span> · congress <span class="mono2">senate/house</span> · COT <span class="mono2">commitmentOfTraders</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
-<p style="margin-top:8px;"><b>How to use.</b> Set a scenario → pick beta/MRP methods (watch CAPM/WACC recompute) → read the value-split bar (how much rides on the perpetuity) → check the projected-path CAGR &amp; source tab → use the tornado to find what matters, then the 2-var matrix on those two → flip to Reverse-DCF to see what the price assumes and whether it's reasonable vs the modes &amp; peer betas.</p>
-<p style="margin-top:8px; color:var(--dim);"><b>Roadmap:</b> ticker-driven at top · §3.5 consensus fully wired into DCF · range-width as confidence score · reverse-DCF backtest · insider/congress/COT signal views.</p>
-</div>
-</details>
-
 <!-- ============ 1. COMPS ============ -->
 <section>
 <h2>1 · Comparable Companies — NVDA vs Semis</h2>
@@ -90,9 +78,10 @@
 <!-- COMPS SCORE -->
 <div class="subttl" style="margin-top:16px;">Comps scorecard — a single measurable, peer-ranked (1 = best in group)</div>
 <div class="fcard">
+  <div id="scoreFormula" style="margin-bottom:12px;"></div>
   <div id="scoreBox" style="display:flex; gap:34px; flex-wrap:wrap; align-items:baseline; margin-bottom:10px;"></div>
   <div class="scrollx"><table class="sensi stickytbl" id="scoreTable" style="min-width:640px;"></table></div>
-  <div class="foot" style="margin-top:8px;">VALUE = average peer-percentile across the five multiples (cheap = high). QUALITY = average peer-percentile across margins, growth and low leverage. All of it <b>computed live from the comps data object</b> (ranks, medians, football-field ranges, scores) — swap the object for another ticker and the whole engine recomputes. This is the comps equivalent of your technicals Geiger score.</div>
+  <div class="foot" style="margin-top:8px;">All of it <b>computed live from the comps data object</b> (ranks, medians, football-field ranges, scores) — swap the object for another ticker and the whole engine recomputes. This is the comps equivalent of your technicals Geiger score.</div>
 </div>
 </section>
 
@@ -144,6 +133,17 @@
   const qAvg=mean(qualM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))*100;
   const comp=(vAvg+qAvg)/2, grade=comp>=85?'A':comp>=75?'A−':comp>=65?'B+':comp>=55?'B':comp>=45?'B−':comp>=35?'C':'D';
   const col=s=>s>=66?'var(--green)':s>=45?'var(--gold)':'var(--red)';
+  // ---- VISUAL FORMULA STRIP — how VALUE/QUALITY/grade are actually built, in icons not paragraphs ----
+  const fnode=(icon,lbl,val,color)=>'<div style="display:flex;flex-direction:column;align-items:center;min-width:64px;"><div style="font-size:20px;">'+icon+'</div><div class="foot" style="margin-top:2px;text-align:center;">'+lbl+'</div>'+(val!=null?'<div style="font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:13px;color:'+(color||'var(--txt)')+';margin-top:1px;">'+val+'</div>':'')+'</div>';
+  const op=(sym)=>'<div style="font-size:18px;color:var(--dim);align-self:center;padding:0 2px;">'+sym+'</div>';
+  document.getElementById('scoreFormula').innerHTML=
+    '<div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:2px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'+
+      fnode('📊','P/E · EV/EBITDA<br>P/S · P/B · PEG',null)+op('→')+fnode('%ile','peer rank<br>(cheap=high)',null)+op('=')+fnode('💰','VALUE',vAvg.toFixed(0),col(vAvg))+
+      '<div style="width:22px;"></div>'+
+      fnode('📈','margins · CAGR<br>low leverage',null)+op('→')+fnode('%ile','peer rank<br>(better=high)',null)+op('=')+fnode('🏆','QUALITY',qAvg.toFixed(0),col(qAvg))+
+      '<div style="width:22px;"></div>'+
+      fnode('💰','VALUE '+vAvg.toFixed(0),null)+op('+')+fnode('🏆','QUALITY '+qAvg.toFixed(0),null)+op('÷2 =')+fnode('🎓','GRADE',grade+' ('+comp.toFixed(0)+')',col(comp))+
+    '</div>';
   document.getElementById('scoreBox').innerHTML=
     '<div><span class="foot">VALUE score (cheap vs peers)</span><br><b style="font-size:26px;color:'+col(vAvg)+'">'+vAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
     '<div><span class="foot">QUALITY score (margins·growth·balance sheet)</span><br><b style="font-size:26px;color:'+col(qAvg)+'">'+qAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
@@ -216,22 +216,78 @@
 <h2>2.5 · Projected Path — does this trajectory look reasonable?</h2>
 <div class="src">the assumptions you set in the DCF below drive this · sanity-check the shape before trusting any valuation</div>
 <div style="border:1px solid var(--border); border-radius:12px; padding:15px 20px; background:var(--panel2);">
-  <div class="subttl">Projection source — how the 5-yr revenue path is built (we don't know which is "right", so pick)</div>
-  <div style="display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; align-items:center;">
-    <button class="mbtn" id="pm_const" onclick="setPM('const')">Constant growth (your slider)</button>
-    <button class="mbtn" id="pm_consensus" onclick="setPM('consensus')">Analyst consensus path (§3.5)</button>
-    <span class="foot" id="pmNote" style="align-self:center;"></span></div>
+  <div class="subttl">Projected path — how does the growth path you picked below (§3A) actually look?</div>
   <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center;">
     <span style="font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:6px;">chart:</span>
     <button class="mbtn" id="pc_rev" onclick="setPC('rev')">Revenue</button>
     <button class="mbtn" id="pc_ebitda" onclick="setPC('ebitda')">EBITDA</button>
     <button class="mbtn" id="pc_ufcf" onclick="setPC('ufcf')">Free cash flow</button>
     <button class="mbtn" id="pc_pv" onclick="setPC('pv')">PV of FCF</button></div>
-  <div id="barchart" style="margin:6px 0 4px;"></div>
-  <div style="font-size:11.5px; color:var(--dim);">Bars = the 5 projected years left→right. Eyeball whether the trajectory is believable before trusting the valuation. Updates live with the DCF sliders.</div>
-  <div class="scrollx" style="margin-top:12px;"><table id="oTable"></table></div>
+  <div id="barchart" style="margin:6px 0 4px; position:relative;"></div>
+  <div style="font-size:11.5px; color:var(--dim);">Bars = the 5 projected years left→right; the dotted line traces the CAGR trend. Eyeball whether the trajectory is believable before trusting the valuation. Updates live with the DCF sliders and the projection-source toggle (§3A).</div>
+  <div id="cagrCompare" class="fcard" style="margin-top:14px;"></div>
+  <div class="scrollx" style="margin-top:12px;"><table class="sensi stickytbl" id="oTable"></table></div>
+  <div class="foot" style="margin-top:6px;">CAGR column = compound annual growth rate across the 5 projected years for $ metrics. All rows here are dollar figures, so all use CAGR (a margin % row would use a simple point-change instead — no % rows in this table).</div>
   <div class="note" style="margin-top:12px;"><b>Methodology — where these numbers come from.</b> The DCF's free cash flow is <i>built</i>, not pulled: FMP's custom-dcf-advanced projects revenue at your growth rate, applies your EBITDA margin, then subtracts D&amp;A, capex (3.49% of revenue) and the change in working capital (22.7% of revenue) to get unlevered FCF — so operating margin and capex are <i>assumptions</i>, not analyst figures. Separately, the analyst consensus in §3.5 (financial-estimates) gives revenue, EBITDA, EBIT, SG&amp;A, net income and EPS with low/avg/high and analyst counts — but NOT capex or operating cash flow, which is why a "pure analyst FCF" still needs a capex bridge from history. <b>Who's behind the estimates:</b> NVDA's near-year lines carry 30–40 analysts (KeyBanc, Needham, UBS, BofA, Evercore, RBC, Morgan Stanley-tier houses); coverage thins to ~7 by FY2031. See §3.5 for the full count-by-year.</div>
 </div>
+</section>
+
+<!-- ============ 2.7 ANALYST COVERAGE (moved before the DCF — it's the source everything else reads against) ============ -->
+<section>
+<h2>2.7 · Analyst Coverage — who's covering NVDA, and what are they saying</h2>
+<div class="src">endpoints: grades-summary + price-target-consensus + price-target-summary (real pull, frozen at fetch time — not live-refreshing)</div>
+<style>.abadge{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:6px 14px 6px 6px;font-size:13.5px;color:var(--txt);} .abadge .av{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#0d1117;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}</style>
+
+<div class="resultbar">
+  <div class="rb"><span class="rk">Analysts rating NVDA</span><span class="rv">79</span></div>
+  <div class="rb"><span class="rk">Consensus</span><span class="rv pos">Buy</span></div>
+  <div class="rb"><span class="rk">Price target (avg)</span><span class="rv">$319</span></div>
+  <div class="rb"><span class="rk">Target range</span><span class="rv">$218 – $500</span></div>
+  <div class="rb"><span class="rk">Implied vs $202.81</span><span class="rv pos">+57.6%</span></div>
+</div>
+
+<div class="cols">
+<div class="fcard">
+  <div class="subttl">Rating mix (79 analysts, grades-summary)</div>
+  <div style="display:flex;height:30px;border-radius:7px;overflow:hidden;margin:8px 0;">
+    <div style="width:2.5%;background:#1f8f3f;" title="Strong Buy 2"></div>
+    <div style="width:73.4%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;">Buy 58</div>
+    <div style="width:20.3%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;">Hold 16</div>
+    <div style="width:3.8%;background:var(--red);"></div>
+  </div>
+  <div class="foot">2 Strong Buy · 58 Buy · 16 Hold · 3 Sell · 0 Strong Sell</div>
+</div>
+<div class="fcard">
+  <div class="subttl">Price-target activity (price-target-summary)</div>
+  <table style="margin:6px 0 0;">
+    <tr><th>Window</th><th># analysts</th><th>Avg target</th></tr>
+    <tr><td>Last month</td><td>1</td><td>$330.00</td></tr>
+    <tr><td>Last quarter</td><td>27</td><td>$317.96</td></tr>
+    <tr><td>Last year</td><td>85</td><td>$278.22</td></tr>
+    <tr><td>All-time</td><td>318</td><td>$138.80</td></tr>
+  </table>
+  <div class="foot" style="margin-top:6px;">Targets keep climbing as the stock does — all-time avg $138.80 vs last-quarter avg $317.96.</div>
+</div>
+</div>
+
+<div class="subttl" style="margin-top:18px;">Sample of firms currently covering NVDA</div>
+<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+  <div class="abadge"><span class="av">KB</span>KeyBanc</div>
+  <div class="abadge"><span class="av">ND</span>Needham</div>
+  <div class="abadge"><span class="av">DD</span>DA Davidson</div>
+  <div class="abadge"><span class="av">TG</span>Tigress</div>
+  <div class="abadge"><span class="av">BM</span>Benchmark</div>
+  <div class="abadge"><span class="av">UB</span>UBS</div>
+  <div class="abadge"><span class="av">CF</span>Cantor Fitzgerald</div>
+  <div class="abadge"><span class="av">BA</span>BofA Securities</div>
+  <div class="abadge"><span class="av">EV</span>Evercore ISI</div>
+  <div class="abadge"><span class="av">RC</span>RBC Capital</div>
+  <div class="abadge"><span class="av">TR</span>Truist</div>
+  <div class="abadge"><span class="av">BD</span>Baird</div>
+</div>
+<div class="foot" style="margin-top:6px;">Partial sample — 12 of the ~40 firms in NVDA's near-term coverage (see § 3.5's analyst-count-by-year for the full cliff). Deliberately styled as plain badges, not buttons — nothing here is clickable/settable.</div>
+
+<div class="flag" style="margin-top:14px;">⚠️ Base FMP subscription = <b>FIRM-level</b> only ("gradingCompany"), no analyst names. <b>Firms-in-common</b> (Barclays rates both WMT and COST) is buildable TODAY: pull grades for both symbols, intersect. <b>Person-level analysts-in-common needs the TipRanks add-on: 💰 $69/month confirmed</b> (FMP dashboard → Data Usage Boosts → Partner Integrations; monthly or annual). Per FMP's official card it includes: per-analyst point-in-time ratings &amp; price targets, upgrades/downgrades, consensus trends, analyst performance metrics, analyst rankings, historical success rates, average return performance. <b>Firm summaries</b> = a research house's aggregate track record (e.g. Barclays as a firm: total ratings issued, success rate, avg return across all its analysts) — how you weight firms by quality. <b>Per-analyst EPS estimates: NOT included</b> — the add-on exposes exactly 7 endpoints (ratings search, point-in-time by symbol/analyst, symbol/analyst/firm summaries, analyst directory); none carry EPS. Per-analyst price targets yes; per-analyst EPS is IBES/Visible Alpha territory, not TipRanks-via-FMP.</div>
 </section>
 
 <!-- ============ 3. INTERACTIVE DCF ============ -->
@@ -319,20 +375,26 @@
 
 <!-- ASSUMPTIONS -->
 <div class="dcfh">A · Business assumptions</div>
-<div class="srow"><span class="slab">Revenue growth <small>yrs 1–5, compounding</small></span><input type="range" id="g" min="0" max="80" step="0.5" value="36"><span class="sval" id="sv_g"></span></div>
+<div class="srow" id="growthRow"><span class="slab">Revenue growth <small>yrs 1–5, compounding</small></span><input type="range" id="g" min="0" max="80" step="0.5" value="36"><span class="sval" id="sv_g"></span></div>
+<div class="fcard" style="margin:6px 0 12px;"><div class="fname">Projection source — which growth path actually drives the DCF</div>
+  <div style="display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 6px; align-items:center;">
+    <button class="mbtn" id="pm_consensus" onclick="setPM('consensus')">📈 Analyst consensus path (Street's $B by year)</button>
+    <button class="mbtn" id="pm_const" onclick="setPM('const')">🎚️ Fixed rate — use the slider above</button></div>
+  <div class="foot" id="pmNote"></div></div>
 <div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
 <div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
-<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">bearish → bullish:</span>
+<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">bearish → bullish (sets the slider above, only used in Fixed-rate mode):</span>
   <button class="chip" data-g="10" data-m="42" data-tx="20" onclick="setScen(10,42,20)">Bear 10%</button>
   <button class="chip" data-g="20" data-m="48" data-tx="17" onclick="setScen(20,48,17)">Conservative 20%</button>
-  <button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Consensus 36%</button>
+  <button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Street Y1 pace 36%</button>
+  <button class="chip" data-g="50" data-m="53" data-tx="15.1" onclick="setScen(50,53,15.1)">Bull 50%</button>
   <button class="chip" data-g="66.4" data-m="51.1" data-tx="15.1" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button></div>
 
 <!-- DISCOUNT RATE -->
 <div class="dcfh">B · Discount rate — CAPM → WACC</div>
 <div class="srow"><span class="slab">Risk-free rate rᶠ <small>10Y Treasury — distinct input</small></span><input type="range" id="rf" min="2" max="7" step="0.05" value="4.28"><span class="sval" id="sv_rf"></span></div>
 <div class="chips"><button class="chip" data-s="rf" data-v="4.28" onclick="setSlider('rf',4.28)">10Y 4.28%</button></div>
-<div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr</small></span><input type="range" id="bt" min="0.5" max="3" step="0.01" value="2.211"><span class="sval" id="sv_bt"></span></div>
+<div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr — default: peer median</small></span><input type="range" id="bt" min="0.5" max="3" step="0.01" value="2.14"><span class="sval" id="sv_bt"></span></div>
 <div class="chips">
   <button class="chip" data-s="bt" data-v="2.211" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
   <button class="chip" data-s="bt" data-v="2.14" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
@@ -341,7 +403,7 @@
   <button class="chip" data-s="bt" data-v="1.3" onclick="setSlider('bt',1.30)">Bull mean-revert 1.30</button></div>
 <div class="fcard"><div class="fname">Beta — active method</div>
   <div class="fg" id="fgBeta"></div>
-  <div class="foot" id="betaCtx" style="margin-top:8px;"></div></div>
+  <div id="betaCtx" style="margin-top:10px; font-size:14px; line-height:1.6; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px;"></div></div>
 <div class="srow"><span class="slab">Market risk premium <small>excess of stocks over rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
 <div class="chips">
   <button class="chip" data-s="mrpS" data-v="4.72" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
@@ -350,6 +412,31 @@
   <button class="chip" onclick="applyBuiltChip()">Built <span id="builtLbl">4.65</span></button></div>
 <div class="fcard"><div class="fname">Market risk premium = E(R_market) − risk-free</div>
   <div class="fg" id="fgMrp"></div></div>
+
+<!-- MRP BUILDER — lives right next to the MRP it feeds, not buried at the bottom -->
+<details class="build" style="margin:4px 0 14px;"><summary>▸ Build your own MRP from subcomponents (optional — collapsed)</summary>
+  <div class="sub" style="margin:8px 0;"><b>MRP = ERP = equity risk premium over the risk-free.</b> FMP hard-codes 4.72%; this reconstructs it from parts: discount the S&amp;P's expected cash (div + buybacks, grown 5y, terminal = rf) back to today's index level, solve for the return, subtract rf. Add a revenue-weighted country premium on top. Click "Apply" to feed it into the MRP mode above.</div>
+  <div class="ctrl" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
+    <div><label>① S&amp;P 500 level <span class="foot">(^GSPC = its ticker; live ~7,460)</span></label><span class="val" id="vSpx">7457.7</span><input type="range" id="spx" min="5000" max="9000" step="10" value="7457.7"></div>
+    <div><label>② Dividend yield <span class="foot">(divs ÷ index)</span></label><span class="val" id="vDy">1.30%</span><input type="range" id="dy" min="0.5" max="3" step="0.05" value="1.30"></div>
+    <div><label>③ Buyback yield <span class="foot">(buybacks ÷ index)</span></label><span class="val" id="vBy">2.20%</span><input type="range" id="by" min="0" max="4" step="0.05" value="2.20"></div>
+    <div><label>④ Expected 5y growth <span class="foot">(S&amp;P earnings/yr)</span></label><span class="val" id="vGg">8.50%</span><input type="range" id="gg" min="0" max="20" step="0.25" value="8.50"></div>
+    <div><label>⑤ Terminal growth <span class="foot">(= 10Y)</span></label><span class="val" id="vTg">4.28%</span><input type="range" id="tg" min="2" max="7" step="0.05" value="4.28"></div>
+    <div><label>⑥ Country premium <span class="foot">(rev-weighted; NVDA ≈0.2%)</span></label><span class="val" id="vCrp">0.20%</span><input type="range" id="crp" min="0" max="6" step="0.05" value="0.20"></div>
+  </div>
+  <div class="frow" style="margin-top:6px;">
+    <span class="val pos" id="oTot" style="font-size:22px;">—</span>
+    <button class="mbtn gold" onclick="applyBuilt()">Apply this MRP → mode above ↑</button>
+  </div>
+  <div class="foot" id="erpNote"></div>
+  <div style="margin-top:6px;">
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,0.20)">Live consensus</button>
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,6.00,4.28,0.20)">Cautious 6%</button>
+    <button class="mbtn" onclick="setERP(6800,1.45,2.20,8.50,4.28,0.20)">−10% selloff</button>
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,1.50)">EM-heavy 1.5%</button>
+  </div>
+</details>
+
 <div class="fcard"><div class="fname">Cost of equity (CAPM)</div>
   <div class="fg" id="fgCoE"></div></div>
 <div class="fcard"><div class="fname">WACC</div>
@@ -408,48 +495,35 @@
 <!-- REVERSE DCF -->
 <div class="dcfh">E · Reverse DCF — what is today's $202.81 price assuming?</div>
 <div class="fcard">
-  <div style="font-size:13px; color:var(--txt); margin-bottom:8px;">Lock everything at your current selections except ONE input, then solve for the value of that input that makes fair value = the market price. That solved number is what the market is implicitly betting on — compare it to what's realistic.</div>
-  <div class="chips" style="margin:0 0 10px 0;"><span class="foot" style="align-self:center;margin-right:6px;">solve for:</span>
+  <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:13.5px; color:var(--txt); margin-bottom:10px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
+    <div><span style="font-size:17px;">🔒</span> <b>Lock</b> — every input stays at your current slider</div>
+    <div><span style="font-size:17px;">🎯</span> <b>Solve</b> — except the ONE you pick below, which we solve for</div>
+    <div><span style="font-size:17px;">⚖️</span> <b>Target</b> — the value that makes fair value = $202.81 (today's price)</div>
+  </div>
+  <div class="subttl">① Which input matters most? (same tornado as §D — pick the biggest lever to solve for)</div>
+  <div id="revTornado" style="margin:6px 0 12px;"></div>
+  <div class="chips" style="margin:0 0 4px 0;"><span class="foot" style="align-self:center;margin-right:6px;">🎯 solve for (ordered by impact, biggest lever first):</span>
+    <button class="mbtn" id="rv_beta" onclick="setRV('beta')">Beta</button>
     <button class="mbtn" id="rv_g" onclick="setRV('g')">Revenue growth</button>
     <button class="mbtn" id="rv_m" onclick="setRV('m')">EBITDA margin</button>
-    <button class="mbtn" id="rv_beta" onclick="setRV('beta')">Beta</button>
     <button class="mbtn" id="rv_mrp" onclick="setRV('mrp')">MRP</button>
     <button class="mbtn" id="rv_tg" onclick="setRV('tg')">Perpetuity g</button></div>
-  <div id="revout" style="font-family:ui-monospace,Menlo,monospace; font-size:15px; line-height:1.9;"></div>
-  <div style="margin-top:16px; font-size:13px; color:var(--txt); font-weight:600;">Implied <span id="rvName">growth</span> across two locked inputs — pick the axes (default = the two that matter most)</div>
+  <div class="foot" id="rvGDisabledNote" style="margin-bottom:10px;"></div>
+  <div id="revout"></div>
+  <div id="revAction" class="fcard" style="margin-top:12px; border-color:var(--accent);"></div>
+
+  <div class="subttl" style="margin-top:20px;">② Two-variable version — what if TWO inputs move together, not one?</div>
+  <div style="font-size:13px; color:var(--txt); margin-bottom:8px;">Same idea as above, but now <b>both</b> the row axis and column axis are 🔒 locked at the value shown (overriding your slider for those two only) — everything else stays at your current sliders — and we 🎯 solve for <span id="rvName">growth</span> at each combo. Read it like a what-if grid: "if beta were X <i>and</i> MRP were Y, what growth would the price imply?"</div>
+  <div style="font-size:13px; color:var(--txt); font-weight:600; margin-bottom:4px;">Implied <span id="rvName3">growth</span> — pick the two axes (default = the two biggest levers, excluding whatever you're solving for above)</div>
   <div class="chips" id="rvYchips" style="margin:6px 0 3px;"></div>
   <div class="chips" id="rvXchips" style="margin:0 0 8px;"></div>
   <div class="scrollx"><table class="sensi stickytbl" id="revGrid"></table></div>
-  <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify $202.81 at that axis combo. Center cell (outlined) = your current sliders. This is where you see, e.g., "even at a bullish 1.3 beta the price still implies 45% growth."</div>
+  <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify $202.81 at that row×column combo. Center cell (outlined) = your current sliders for both axes — should roughly match the ① answer. This is where you see, e.g., "even at a bullish 1.3 beta the price still implies 45% growth."</div>
 </div>
-
-<!-- MRP BUILDER (collapsed — no more savage scrolling) -->
-<details class="build" style="margin-top:10px;"><summary>▸ Build your own MRP from subcomponents (optional — collapsed)</summary>
-  <div class="sub" style="margin:8px 0;"><b>MRP = ERP = equity risk premium over the risk-free.</b> FMP hard-codes 4.72%; this reconstructs it from parts: discount the S&amp;P's expected cash (div + buybacks, grown 5y, terminal = rf) back to today's index level, solve for the return, subtract rf. Add a revenue-weighted country premium on top. Click "Apply" to feed it into the MRP mode above.</div>
-  <div class="ctrl" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
-    <div><label>① S&amp;P 500 level <span class="foot">(^GSPC = its ticker; live ~7,460)</span></label><span class="val" id="vSpx">7457.7</span><input type="range" id="spx" min="5000" max="9000" step="10" value="7457.7"></div>
-    <div><label>② Dividend yield <span class="foot">(divs ÷ index)</span></label><span class="val" id="vDy">1.30%</span><input type="range" id="dy" min="0.5" max="3" step="0.05" value="1.30"></div>
-    <div><label>③ Buyback yield <span class="foot">(buybacks ÷ index)</span></label><span class="val" id="vBy">2.20%</span><input type="range" id="by" min="0" max="4" step="0.05" value="2.20"></div>
-    <div><label>④ Expected 5y growth <span class="foot">(S&amp;P earnings/yr)</span></label><span class="val" id="vGg">8.50%</span><input type="range" id="gg" min="0" max="20" step="0.25" value="8.50"></div>
-    <div><label>⑤ Terminal growth <span class="foot">(= 10Y)</span></label><span class="val" id="vTg">4.28%</span><input type="range" id="tg" min="2" max="7" step="0.05" value="4.28"></div>
-    <div><label>⑥ Country premium <span class="foot">(rev-weighted; NVDA ≈0.2%)</span></label><span class="val" id="vCrp">0.20%</span><input type="range" id="crp" min="0" max="6" step="0.05" value="0.20"></div>
-  </div>
-  <div class="frow" style="margin-top:6px;">
-    <span class="val pos" id="oTot" style="font-size:22px;">—</span>
-    <button class="mbtn gold" onclick="applyBuilt()">Apply this MRP → mode above ↑</button>
-  </div>
-  <div class="foot" id="erpNote"></div>
-  <div style="margin-top:6px;">
-    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,0.20)">Live consensus</button>
-    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,6.00,4.28,0.20)">Cautious 6%</button>
-    <button class="mbtn" onclick="setERP(6800,1.45,2.20,8.50,4.28,0.20)">−10% selloff</button>
-    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,1.50)">EM-heavy 1.5%</button>
-  </div>
-</details>
 
 <script>
 const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,kd:0.0363,eqW:0.9977,debtW:0.0023};
-let builtMRP=4.65, PC='rev', PM='const';
+let builtMRP=4.65, PC='rev', PM='consensus';
 const CONS_REV=[393.3,562.3,686.6,774.2,1005.0]; // NVDA analyst consensus revenue $B, FY2027→FY2031 (financial-estimates)
 function setPM(k){PM=k;render();}
 let S1='g', SX='g', SY='rf';
@@ -500,8 +574,11 @@ function render(){
   const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
   document.getElementById('oEV').textContent='$'+fmt(r.ev/1000)+'T';
   document.getElementById('oTV').textContent=fmt(r.tvShare,0)+'%';
-  let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV $B</th></tr>';
-  r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
+  // transposed: metric rows × year columns (matches §3.5 EST convention) + a CAGR column per row
+  const yrCagr=arr=>{const a=arr[0],b=arr[arr.length-1];return(a>0&&b>0)?(Math.pow(b/a,1/(arr.length-1))-1)*100:null;};
+  let rows='<tr><th>Metric</th>'+r.rows.map(x=>'<th>FY'+x[0]+'E</th>').join('')+'<th style="color:var(--gold)">CAGR</th></tr>';
+  const oRow=(lbl,ci)=>{const arr=r.rows.map(x=>x[ci]);const cg=yrCagr(arr);return '<tr><td>'+lbl+'</td>'+arr.map(v=>'<td>'+fmt(v,1)+'</td>').join('')+'<td style="color:var(--gold);font-weight:700;">'+(cg==null?'—':cg.toFixed(1)+'%')+'</td></tr>';};
+  rows+=oRow('Revenue $B',1)+oRow('EBITDA $B',2)+oRow('UFCF $B',3)+oRow('PV of FCF $B',4);
   document.getElementById('oTable').innerHTML=rows;
 
   // chip highlight (selected mode)
@@ -521,7 +598,7 @@ function render(){
   fg('fgBeta',bp);
   const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};
   const pct = bt>=PB.max?'above the entire peer set':bt>=PB.med?'top quartile of peers':bt>=PB.mean?'above the peer mean':bt>=PB.min?'within the peer range':'below the entire peer set';
-  document.getElementById('betaCtx').innerHTML='Peer set β (live, from §1 comps): <b>min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b>. Your β '+bt.toFixed(2)+' is <span style="color:var(--gold)">'+pct+'</span>. NVDA\'s raw '+PB.nvda.toFixed(2)+' is an outlier-high beta — a compounder "up and to the right" arguably deserves a lower one.';
+  document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. NVDA\'s raw '+PB.nvda.toFixed(2)+' is an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.';
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
   fg('fgWACC',[['(  wₑ','(  0.998','v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  0.002','v'],['×','×',O],['k_d',KDPRE.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
@@ -531,16 +608,53 @@ function render(){
   document.getElementById('pm_const').classList.toggle('on',PM==='const');
   document.getElementById('pm_consensus').classList.toggle('on',PM==='consensus');
   document.getElementById('pmNote').innerHTML= PM==='consensus'
-    ? '← using the Street\'s FY27–31 revenue ($393→$1,005B); your growth slider is ignored'
-    : '← revenue compounds at your growth slider ('+rd('g').toFixed(0)+'%/yr)';
-  // BAR CHART — projected metric, years left→right
+    ? '📈 Active: the Street\'s FY27–31 revenue path ($393B→$1,005B, 36.0% CAGR). The growth slider above is <b style="color:var(--gold)">disabled/ignored</b> in this mode — switch to Fixed rate to use it.'
+    : '🎚️ Active: revenue compounds at a flat <b style="color:var(--accent)">'+rd('g').toFixed(1)+'%/yr</b> off your slider above, ignoring the Street\'s actual (non-flat) path.';
+  const gRow=document.getElementById('growthRow'); gRow.style.opacity=(PM==='consensus'?'0.4':'1'); gRow.style.pointerEvents=(PM==='consensus'?'none':'auto');
+  document.getElementById('g').disabled = (PM==='consensus');
+  // BAR CHART — projected metric, years left→right, with a CAGR trend line overlay
   ['rev','ebitda','ufcf','pv'].forEach(k=>document.getElementById('pc_'+k).classList.toggle('on',PC===k));
   const idx=PCMAP[PC].i, vals=r.rows.map(x=>x[idx]), mx=Math.max.apply(null,vals.map(Math.abs))||1;
-  let bc='<div style="display:flex;align-items:flex-end;gap:12px;height:150px;">';
-  r.rows.forEach((x,j)=>{const v=vals[j],h=Math.max(2,Math.abs(v)/mx*120);bc+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;"><div class="foot" style="margin-bottom:4px;">$'+fmt(v,0)+'</div><div style="width:64%;height:'+h+'px;background:linear-gradient(180deg,var(--accent),#2b6fc0);border-radius:5px 5px 0 0;"></div><div class="foot" style="margin-top:5px;">FY'+(27+j)+'</div></div>';});
+  const H=150,BARMAX=120;
+  let bc='<div style="display:flex;align-items:flex-end;gap:12px;height:'+H+'px;position:relative;">';
+  const pts=[];
+  r.rows.forEach((x,j)=>{const v=vals[j],h=Math.max(2,Math.abs(v)/mx*BARMAX);pts.push(h);bc+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;"><div class="foot" style="margin-bottom:4px;">$'+fmt(v,0)+'</div><div style="width:64%;height:'+h+'px;background:linear-gradient(180deg,var(--accent),#2b6fc0);border-radius:5px 5px 0 0;"></div><div class="foot" style="margin-top:5px;">FY'+(27+j)+'</div></div>';});
   const cagr=(vals[0]>0&&vals[vals.length-1]>0)?(Math.pow(vals[vals.length-1]/vals[0],1/(vals.length-1))-1)*100:null;
-  bc+='</div><div style="margin-top:6px;font-size:13px;"><span class="foot">'+PCMAP[PC].lbl+' · FY2027→FY2031 &nbsp;·&nbsp; </span><b style="color:var(--gold)">CAGR '+(cagr==null?'n/m':cagr.toFixed(1)+'%')+'</b> <span class="foot">per year</span></div>';
+  // SVG trend line connecting the top-center of each bar, plus a CAGR label pinned at the last point
+  const n=pts.length, colW=100/n;
+  const xAt=i=>colW*i+colW/2, yAt=h=>H-24-h; // 24px ≈ the value-label + gap above bars
+  let poly=pts.map((h,i)=>xAt(i).toFixed(2)+'%,'+yAt(h).toFixed(0)+'px').join(' ');
+  let svgPts=pts.map((h,i)=>'<circle cx="'+xAt(i)+'%" cy="'+yAt(h)+'" r="3" fill="var(--gold)"/>').join('');
+  bc+='<svg style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;" preserveAspectRatio="none">'+
+      '<polyline points="'+pts.map((h,i)=>(xAt(i))+'%,'+yAt(h)).join(' ')+'" fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="4,3" opacity="0.9"/>'+
+      pts.map((h,i)=>'<circle cx="'+xAt(i)+'%" cy="'+yAt(h)+'" r="3.5" fill="var(--gold)"/>').join('')+
+      '</svg>';
+  bc+='</div><div style="margin-top:6px;font-size:13px;"><span style="color:var(--gold);">┄┄●</span> <span class="foot">'+PCMAP[PC].lbl+' trend · FY2027→FY2031 &nbsp;·&nbsp; </span><b style="color:var(--gold)">CAGR '+(cagr==null?'n/m':cagr.toFixed(1)+'%')+'</b> <span class="foot">per year</span></div>';
   document.getElementById('barchart').innerHTML=bc;
+
+  // HISTORICAL vs FORWARD CAGR — wired conclusion (does the Street expect acceleration or deceleration?)
+  (function(){
+    const cc=document.getElementById('cagrCompare'); if(!cc) return;
+    const dsp=cell=>{const m=(''+cell).match(/(-?[\d,\.]+)/);return m?parseFloat(m[1].replace(/,/g,'')):null;};
+    let histCagr=null, fwdCagr=null;
+    if(typeof EST!=='undefined' && EST.NVDA){
+      const revs=EST.NVDA.rev.map(dsp); // FY22..FY31 avg revenue, $B
+      const h0=revs[0], h1=revs[4]; // FY22 → FY26, 4 years of ACTUAL history
+      if(h0>0&&h1>0) histCagr=(Math.pow(h1/h0,1/4)-1)*100;
+      const f0=revs[5], f1=revs[9]; // FY27 → FY31, 4 years — same horizon length as history, and matches the bar chart above
+      if(f0>0&&f1>0) fwdCagr=(Math.pow(f1/f0,1/4)-1)*100;
+    }
+    if(histCagr==null||fwdCagr==null){cc.innerHTML=''; return;}
+    const decel=fwdCagr<histCagr;
+    cc.innerHTML='<div class="fname">📉📈 Historical vs. forward — is the Street underwriting acceleration or deceleration?</div>'+
+      '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
+      '<div><span class="foot">Historical CAGR (FY22→FY26, actual)</span><br><b style="font-size:22px;color:var(--txt)">'+histCagr.toFixed(0)+'%</b></div>'+
+      '<div style="font-size:22px;color:var(--dim);align-self:center;">→</div>'+
+      '<div><span class="foot">Forward consensus CAGR (FY27→FY31, Street)</span><br><b style="font-size:22px;color:'+(decel?'var(--gold)':'var(--green)')+'">'+fwdCagr.toFixed(0)+'%</b></div></div>'+
+      '<div class="foot" style="margin-top:8px;">'+(decel
+        ?'The Street is modeling <b>deceleration</b>: '+histCagr.toFixed(0)+'% historical growth (the AI-buildout boom years) slowing to '+fwdCagr.toFixed(0)+'% forward. That\'s the analyst base case pricing in a normalization, not more acceleration — worth knowing before you drag the growth slider above the Street\'s own number.'
+        :'The Street is modeling <b>acceleration</b> above the recent historical pace — an aggressive assumption worth stress-testing.')+'</div>';
+  })();
 
   // VALUE BREAKDOWN — explicit vs perpetuity, as a stacked bar
   const pe=r.pvExplicit, pt=r.pvTerm, ev=r.ev, peP=pe/ev*100, ptP=pt/ev*100;
@@ -559,7 +673,7 @@ function render(){
 }
 function fg(id,pairs){document.getElementById(id).innerHTML=pairs.map(p=>'<div class="sym '+(p[2]==='op'?'op':'')+'">'+p[0]+'</div><div class="num '+(p[2]||'')+'">'+p[1]+'</div>').join('');}
 // --- Reverse DCF: solve for one input that makes fair value = market price ---
-let RV='g';
+let RV=null; // null = not yet bootstrapped; first render() picks the highest-impact variable
 function setRV(k){RV=k;autoRVaxis=true;render();}
 function solveFor(key,c){
   const incr={g:true,m:true,tg:true,beta:false,mrp:false}[key];
@@ -576,39 +690,74 @@ function solveFor(key,c){
 let RVY='beta', RVX='mrp', autoRVaxis=true;
 function fmtImp(k,x){return SV[k].sc===1 ? x.toFixed(2) : (x*100).toFixed(1)+'%';}
 function renderReverse(c){
-  ['g','m','beta','mrp','tg'].forEach(k=>document.getElementById('rv_'+k).classList.toggle('on',RV===k));
-  document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl;
-  if(PM==='consensus'&&RV==='g'){RV='beta';document.getElementById('rv_g').classList.remove('on');}
-  const x=solveFor(RV,c); let disp,ref,verdict,color;
-  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='modes → Bear 10 · Conservative 20 · Consensus 36 · FMP 66';
-    if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';}
-    else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';}
-    else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';}
-    else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';}}
+  const impAll=topImpact(c,null); // full impact ranking, nothing excluded — used for bootstrap + tornado + button order
+  if(RV===null) RV=impAll[0].k; // bootstrap: default to the single biggest lever, not a hardcoded guess
+  if(PM==='consensus'&&RV==='g'){RV=impAll.find(x=>x.k!=='g').k;} // growth isn't solvable in consensus mode — reroute to next-biggest lever
+
+  // mini tornado — same ranking driving the button order & the default above, made visible so the default is explicable
+  const maxSw=Math.max.apply(null,impAll.map(x=>x.swing))||1;
+  document.getElementById('revTornado').innerHTML=impAll.map(x=>'<div class="tor"><span class="torlbl">'+SV[x.k].lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px;'+(x.k===RV?'background:var(--gold);':'')+'"></span><span class="torval">Δ$'+fmt(x.swing,0)+(x.k===RV?' ← solving for this':'')+'</span></div>').join('');
+
+  // reorder + toggle the solve-for buttons by impact (same rule as §D's sensitivity tabs)
+  const rvKeys=['g','m','beta','mrp','tg'];
+  const firstBtn=document.getElementById('rv_'+impAll.find(x=>rvKeys.includes(x.k)).k);
+  if(firstBtn){const p=firstBtn.parentNode; impAll.filter(x=>rvKeys.includes(x.k)).forEach(x=>{const b=document.getElementById('rv_'+x.k); if(b) p.appendChild(b);});}
+  rvKeys.forEach(k=>document.getElementById('rv_'+k).classList.toggle('on',RV===k));
+  const gBtn=document.getElementById('rv_g');
+  gBtn.style.opacity=(PM==='consensus'?'0.4':'1'); gBtn.style.pointerEvents=(PM==='consensus'?'none':'auto');
+  document.getElementById('rvGDisabledNote').innerHTML = PM==='consensus' ? '🚫 "Revenue growth" can\'t be solved for right now — §3A is set to the Analyst consensus path, so growth is fixed to the Street\'s numbers, not a free variable. Switch §3A to Fixed rate to solve for growth.' : '';
+
+  document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl; document.getElementById('rvName3').textContent=SV[RV].lbl;
+  const x=solveFor(RV,c); let disp,ref,verdict,color,icon;
+  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='modes → Bear 10 · Conservative 20 · Street Y1 36 · Bull 50 · FMP 66';
+    if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
+    else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';icon='✅';}
+    else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';icon='⚠️';}
+    else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';icon='🚨';}}
   else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='modes → 42 · 48 · 51';
-    if(p<48){verdict='below current margins → undemanding';color='var(--green)';}
-    else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';}
-    else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';}}
-  else if(RV==='beta'){disp=x.toFixed(2);const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};ref='peers (live, §1) → min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' (NVDA raw '+PB.nvda.toFixed(2)+')';
-    if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';}
-    else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';}
-    else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';}}
+    if(p<48){verdict='below current margins → undemanding';color='var(--green)';icon='✅';}
+    else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';icon='⚠️';}
+    else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';icon='🚨';}}
+  else if(RV==='beta'){disp=x.toFixed(2);const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' (NVDA raw '+PB.nvda.toFixed(2)+')';
+    if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
+    else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';icon='⚠️';}
+    else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}}
   else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='modes → Bull 4.0 · Damodaran 4.45 · FMP 4.72';
-    if(p<4.0){verdict='thinner premium than the bull case → rich pricing';color='var(--red)';}
-    else if(p<=4.72){verdict='within the standard MRP range → reasonable';color='var(--gold)';}
-    else{verdict='fatter premium than FMP → conservative pricing (looks cheap)';color='var(--green)';}}
+    if(p<4.0){verdict='thinner premium than the bull case → rich pricing';color='var(--red)';icon='🚨';}
+    else if(p<=4.72){verdict='within the standard MRP range → reasonable';color='var(--gold)';icon='⚠️';}
+    else{verdict='fatter premium than FMP → conservative pricing (looks cheap)';color='var(--green)';icon='✅';}}
   else{const p=x*100;disp=p.toFixed(2)+'%';ref='modes → Conservative 3.0 · FMP 4.0 · rf 4.28 · Bull 6.0';
-    if(p<3){verdict='very conservative perpetuity → undemanding';color='var(--green)';}
-    else if(p<=6){verdict='within the mode range (up to GDP-plus) → reasonable';color='var(--gold)';}
-    else{verdict='perpetual growth above the bull case → demanding';color='var(--red)';}}
-  document.getElementById('revout').innerHTML='To justify <span style="color:var(--accent);font-weight:700">$202.81</span>, holding everything else at your sliders, the market implies<br><b style="color:var(--gold);font-size:20px">'+SV[RV].lbl+' = '+disp+'</b><br><span class="foot">'+ref+'</span><br><span style="color:'+color+';font-weight:600">→ '+verdict+'</span>';
+    if(p<3){verdict='very conservative perpetuity → undemanding';color='var(--green)';icon='✅';}
+    else if(p<=6){verdict='within the mode range (up to GDP-plus) → reasonable';color='var(--gold)';icon='⚠️';}
+    else{verdict='perpetual growth above the bull case → demanding';color='var(--red)';icon='🚨';}}
+  document.getElementById('revout').innerHTML=
+    '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">'+
+    '<div style="font-size:13px;color:var(--txt);">🔒 Holding everything else at your sliders, to justify <b style="color:var(--accent)">$202.81</b> the market implies:</div>'+
+    '<div style="font-size:26px;font-weight:700;color:var(--gold);margin:6px 0;">'+icon+' '+SV[RV].lbl+' = '+disp+'</div>'+
+    '<div style="font-size:14px;color:var(--txt);">📏 reference range: '+ref+'</div>'+
+    '<div style="font-size:16px;font-weight:700;color:'+color+';margin-top:6px;">'+icon+' '+verdict+'</div></div>';
+
+  // ACTIONABLE RECOMMENDATION — a defensible, peer/analyst-anchored fair value, not just a qualitative read
+  (function(){
+    const PB=window.PEER&&window.PEER.beta||{med:2.14}, PG=window.PEER&&window.PEER.cagr||{med:38.6};
+    const defensible={g:PG.med/100, m:c.m, t:c.t, rf:c.rf, beta:PB.med, mrp:0.0445, tg:0.04};
+    const rr=fvFrom(defensible);
+    const upD=rr.bad?null:(rr.fv/BASE.price-1)*100;
+    document.getElementById('revAction').innerHTML = rr.bad ? '' :
+      '<div class="fname">💡 Recommended defensible inputs (peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'% · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
+      '<div><span class="foot">Defensible fair value</span><br><b style="font-size:24px;color:'+(upD>=0?'var(--green)':'var(--red)')+'">$'+fmt(rr.fv,0)+'</b></div>'+
+      '<div><span class="foot">vs market $202.81</span><br><b style="font-size:24px;color:'+(upD>=0?'var(--green)':'var(--red)')+'">'+(upD>=0?'+':'')+fmt(upD,0)+'%</b></div>'+
+      '<button class="mbtn gold" onclick="applyDefensible()">Apply these inputs to the sliders ↑</button></div>';
+  })();
+
   // 2-var reverse grid
   const cand=topImpact(c,RV).map(o=>o.k);   // impact-ranked, RV excluded
   if(autoRVaxis){RVY=cand[0]; RVX=cand[1];}
   if(!cand.includes(RVY)) RVY=cand[0];
   if(!cand.includes(RVX)||RVX===RVY) RVX=cand.find(k=>k!==RVY);
-  document.getElementById('rvYchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">rows Y:</span>'+cand.map(k=>'<button class="mbtn'+(RVY===k?' on':'')+'" onclick="setRVY(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
-  document.getElementById('rvXchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">cols X:</span>'+cand.map(k=>'<button class="mbtn'+(RVX===k?' on':'')+'" onclick="setRVX(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
+  document.getElementById('rvYchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">🔒 rows Y:</span>'+cand.map(k=>'<button class="mbtn'+(RVY===k?' on':'')+'" onclick="setRVY(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
+  document.getElementById('rvXchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">🔒 cols X:</span>'+cand.map(k=>'<button class="mbtn'+(RVX===k?' on':'')+'" onclick="setRVX(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
   const vy=SV[RVY], vx=SV[RVX], ry=centerRange(RVY), rx=centerRange(RVX), uy=(vy.sc===1?'':'%'), ux=(vx.sc===1?'':'%');
   let h='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+rx.map((xx,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+xx+ux+'</th>').join('')+'</tr>';
   ry.forEach((yv,iy)=>{h+='<tr><td'+(iy===3?' style="color:var(--accent)"':'')+'><b>'+yv+uy+'</b></td>'+rx.map((xv,ix)=>{const o={...c};applyVar(o,RVY,yv);applyVar(o,RVX,xv);const sx=solveFor(RV,o);const ctr=(iy===3&&ix===3);return '<td class="gold"'+(ctr?' style="outline:2px solid var(--accent)"':'')+'>'+fmtImp(RV,sx)+'</td>';}).join('')+'</tr>';});
@@ -616,6 +765,15 @@ function renderReverse(c){
 }
 function setRVY(k){RVY=k;autoRVaxis=false;render();}
 function setRVX(k){RVX=k;autoRVaxis=false;render();}
+function applyDefensible(){
+  const PB=window.PEER&&window.PEER.beta||{med:2.14}, PG=window.PEER&&window.PEER.cagr||{med:38.6};
+  document.getElementById('g').value=PG.med.toFixed(1);
+  document.getElementById('bt').value=PB.med.toFixed(2);
+  document.getElementById('mrpS').value='4.45';
+  document.getElementById('termg').value='4.0';
+  if(PM==='consensus'){PM='const';}
+  render();
+}
 let autoAxis=true;
 function topImpact(c,exclude){
   return ['g','m','t','rf','beta','mrp','tg'].filter(k=>k!==exclude).map(k=>{const lo={...c};applyVar(lo,k,SV[k].min);const hi={...c};applyVar(hi,k,SV[k].max);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;return{k,lo:av,hi:bv,swing:(av!=null&&bv!=null)?Math.abs(bv-av):0};}).sort((a,b)=>b.swing-a.swing);
@@ -752,13 +910,17 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <div class="src">endpoints: search-insider-trades + insider-trade-statistics</div>
 <div class="fcard" style="border-color:var(--gold);">
   <div class="subttl">📡 Derived signal — computed from the transaction rows below, not typed</div>
-  <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">
-    <div><span class="foot">Open-market BUYS (P-code)</span><br><b style="font-size:20px;color:var(--dim)" id="ins_buys">—</b></div>
-    <div><span class="foot">Cluster buys (≥3 insiders/30d)</span><br><b style="font-size:20px;color:var(--dim)" id="ins_cluster">—</b></div>
-    <div><span class="foot">Net $ flow (discretionary only)</span><br><b style="font-size:20px;color:var(--red)" id="ins_flow">—</b></div>
-    <div><span class="foot">Signal</span><br><b style="font-size:20px;color:var(--gold)" id="ins_signal">—</b></div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
+    <div id="ins_buys_card" style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px;">🛒</div><div class="foot" style="margin-top:4px;">Open-market BUYS</div><div style="font-size:19px;font-weight:700;margin-top:2px;" id="ins_buys">—</div></div>
+    <div id="ins_cluster_card" style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px;">👥</div><div class="foot" style="margin-top:4px;">Cluster buys (≥3/30d)</div><div style="font-size:19px;font-weight:700;margin-top:2px;" id="ins_cluster">—</div></div>
+    <div id="ins_flow_card" style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px;">💵</div><div class="foot" style="margin-top:4px;">Net $ flow (discretionary)</div><div style="font-size:19px;font-weight:700;margin-top:2px;" id="ins_flow">—</div></div>
+    <div id="ins_signal_card" style="background:var(--panel); border:2px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px;" id="ins_signal_icon">🔔</div><div class="foot" style="margin-top:4px;">Signal</div><div style="font-size:19px;font-weight:700;margin-top:2px;" id="ins_signal">—</div></div>
   </div>
-  <div class="foot" style="margin-top:6px;" id="ins_note"></div>
+  <div class="foot" style="margin-top:10px;" id="ins_note"></div>
 </div>
 <div class="kv">
   <div><span class="k">Q1 2026 Buy/Sell mix</span><div class="v neg">15 acq / 94 disp</div></div>
@@ -797,19 +959,18 @@ window.addEventListener('DOMContentLoaded',renderEst);
   let cluster=false;
   for(let i=0;i<buys.length;i++){const w=buys.filter(b=>Math.abs(days(b.date)-days(buys[i].date))<=30);if(new Set(w.map(b=>b.insider)).size>=3){cluster=true;break;}}
   const sellInsiders=new Set(sells.map(t=>t.insider));
-  let signal,color,note;
-  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';note='≥3 distinct insiders bought in a 30-day window — the highest-conviction insider signal there is.';}
-  else if(buys.length>0){signal='WEAK BULLISH';color='var(--green)';note=buys.length+' open-market purchase(s), but not a cluster (fewer than 3 distinct buyers in 30 days).';}
-  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';note=sellInsiders.size+' distinct insiders sold on the open market — broader than a single 10b5-1 exit.';}
-  else if(sells.length>0){signal='NEUTRAL (noise)';color='var(--gold)';note='Zero open-market buys, and the only discretionary sale(s) came from '+[...sellInsiders].join(', ')+' — one insider, likely a pre-set 10b5-1 plan. The rest ('+TX.filter(t=>t.type==='neutral').length+' rows: '+[...new Set(TX.filter(t=>t.type==='neutral').map(t=>t.label))].join(', ')+') are mechanical comp events, not conviction. This scoring is the template for turning §5 congress and §6 COT into signals too.';}
-  else{signal='NEUTRAL (no activity)';color='var(--dim)';note='No open-market buys or sells this window.';}
-  document.getElementById('ins_buys').textContent=buys.length;
-  document.getElementById('ins_buys').style.color=buys.length>0?'var(--green)':'var(--dim)';
-  document.getElementById('ins_cluster').textContent=cluster?'YES ('+new Set(buys.map(b=>b.insider)).size+' insiders)':'none';
-  document.getElementById('ins_cluster').style.color=cluster?'var(--green)':'var(--dim)';
-  document.getElementById('ins_flow').textContent=(net>=0?'+$':'−$')+(Math.abs(net)/1e6).toFixed(1)+'M '+(net>=0?'net buying':'net selling');
-  document.getElementById('ins_flow').style.color=net>=0?'var(--green)':'var(--red)';
-  const se=document.getElementById('ins_signal'); se.textContent=signal; se.style.color=color;
+  let signal,color,note,icon;
+  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';icon='✅';note='≥3 distinct insiders bought in a 30-day window — the highest-conviction insider signal there is.';}
+  else if(buys.length>0){signal='WEAK BULLISH';color='var(--green)';icon='✅';note=buys.length+' open-market purchase(s), but not a cluster (fewer than 3 distinct buyers in 30 days).';}
+  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';icon='🚨';note=sellInsiders.size+' distinct insiders sold on the open market — broader than a single 10b5-1 exit.';}
+  else if(sells.length>0){signal='NEUTRAL (noise)';color='var(--gold)';icon='⚠️';note='Zero open-market buys, and the only discretionary sale(s) came from '+[...sellInsiders].join(', ')+' — one insider, likely a pre-set 10b5-1 plan. The rest ('+TX.filter(t=>t.type==='neutral').length+' rows: '+[...new Set(TX.filter(t=>t.type==='neutral').map(t=>t.label))].join(', ')+') are mechanical comp events, not conviction. This scoring is the template for turning §5 congress and §6 COT into signals too.';}
+  else{signal='NEUTRAL (no activity)';color='var(--dim)';icon='⚪';note='No open-market buys or sells this window.';}
+  const setCard=(cardId,valId,val,col)=>{document.getElementById(valId).textContent=val;document.getElementById(valId).style.color=col;document.getElementById(cardId).style.borderColor=col;};
+  setCard('ins_buys_card','ins_buys',buys.length,buys.length>0?'var(--green)':'var(--dim)');
+  setCard('ins_cluster_card','ins_cluster',cluster?'YES ('+new Set(buys.map(b=>b.insider)).size+' insiders)':'none',cluster?'var(--green)':'var(--dim)');
+  setCard('ins_flow_card','ins_flow',(net>=0?'+$':'−$')+(Math.abs(net)/1e6).toFixed(1)+'M '+(net>=0?'net buying':'net selling'),net>=0?'var(--green)':'var(--red)');
+  setCard('ins_signal_card','ins_signal',signal,color);
+  document.getElementById('ins_signal_icon').textContent=icon;
   document.getElementById('ins_note').innerHTML=note;
 })();
 </script>
@@ -848,14 +1009,6 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <div class="note">Read: speculators (non-commercials) are net short ES ~39k contracts and have been all month. Full report has ~120 fields per week — trader counts, concentration ratios (top-4/top-8 holders), week-over-week changes. There's also a COT-report-analysis endpoint that pre-computes sentiment. Requires Premium plan or above — your key has it ✅.</div>
 </section>
 
-<!-- ============ 7. ANALYSTS ============ -->
-<section>
-<h2>7 · Analyst Coverage — the "Analysts in Common" Question</h2>
-<div class="src">endpoint: grades — sample of who rates NVDA</div>
-<span class="pill">KeyBanc</span><span class="pill">Needham</span><span class="pill">DA Davidson</span><span class="pill">Tigress</span><span class="pill">Benchmark</span><span class="pill">UBS</span><span class="pill">Cantor Fitzgerald</span><span class="pill">BofA Securities</span><span class="pill">Evercore ISI</span><span class="pill">RBC Capital</span><span class="pill">Truist</span><span class="pill">Baird</span>
-<div class="flag">⚠️ Base FMP subscription = <b>FIRM-level</b> only ("gradingCompany"), no analyst names. <b>Firms-in-common</b> (Barclays rates both WMT and COST) is buildable TODAY: pull grades for both symbols, intersect. <b>Person-level analysts-in-common needs the TipRanks add-on: 💰 $69/month confirmed</b> (FMP dashboard → Data Usage Boosts → Partner Integrations; monthly or annual). Per FMP's official card it includes: per-analyst point-in-time ratings &amp; price targets, upgrades/downgrades, consensus trends, analyst performance metrics, analyst rankings, historical success rates, average return performance. <b>Firm summaries</b> = a research house's aggregate track record (e.g. Barclays as a firm: total ratings issued, success rate, avg return across all its analysts) — how you weight firms by quality. <b>"Wall Street sentiment"</b> in their blurb = the aggregate buy/hold/sell distribution &amp; consensus-trend metrics, marketing language for consensus data. <b>Per-analyst EPS estimates: NOT included</b> — the add-on exposes exactly 7 endpoints (ratings search, point-in-time by symbol/analyst, symbol/analyst/firm summaries, analyst directory); none carry EPS. Per-analyst price targets yes; per-analyst EPS is IBES/Visible Alpha territory, not TipRanks-via-FMP.</div>
-</section>
-
 <div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP connector, live pulls · File: FMP_CAPABILITY_DEMO.html · Author: Claude for Alan</div>
 
 <script>
@@ -883,6 +1036,34 @@ window.addEventListener('DOMContentLoaded',renderEst);
   });
 })();
 </script>
+
+<!-- ============ SPEC — moved to bottom per Alan: read after, not before ============ -->
+<details style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:30px 0;">
+<summary style="cursor:pointer; color:var(--accent); font-weight:700; font-size:15px; list-style:none;">▸ How this works — what's actually wired vs. still static (read me)</summary>
+<div style="margin-top:14px; font-size:14px; line-height:1.7; color:#c9d1d9;">
+
+<p style="font-size:15px;"><b style="color:var(--gold);">🔌 WIRED — computed live from a data object, recomputes on change:</b></p>
+<table class="wraptable" style="margin:8px 0 18px;">
+<tr><th style="width:18%;">Where</th><th>What's wired</th></tr>
+<tr><td class="pur">§1 Comps</td><td>One <span class="mono2">COMPS</span> object (6 companies × 10 metrics) drives: the Median/Mean/Min/Max/Delta summary row, both narrative notes, the football-field ranges, and the VALUE/QUALITY/composite score. It also exposes <span class="mono2">window.PEER</span> — the same peer beta/CAGR stats get <i>reused</i> (not retyped) by §3's beta context and reverse-DCF beta verdict.</td></tr>
+<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass.</td></tr>
+<tr><td class="pur">§3.5 Estimates</td><td>Consensus dispersion (range-width ÷ avg) is computed per year from the raw "avg (low–high)" cells into a HIGH/MODERATE/LOW confidence badge. <b>Not yet</b> feeding back into the DCF or reverse-DCF math — it's a read, not an input, today.</td></tr>
+<tr><td class="pur">§4 Insider</td><td>A real transaction array is classified (buy/sell/neutral), checked for 30-day cluster buys, and netted into a $ discretionary flow — the signal badge is a verdict of that computation, not a typed guess.</td></tr>
+</table>
+
+<p style="font-size:15px;"><b style="color:var(--red);">🧵 NOT WIRED — static pulls / typed content, same every time regardless of anything else on the page:</b></p>
+<table class="wraptable" style="margin:8px 0 18px;">
+<tr><th style="width:18%;">Where</th><th>What's still static</th></tr>
+<tr><td class="pur">Everywhere</td><td><b>The whole page is hardcoded to NVDA.</b> Base financials, the comps set, peer beta stats, the consensus revenue path, insider transactions — none of it swaps if you typed a different ticker in, because there's no ticker input. "Ticker-flexible" would mean querying the Supabase tables that already ingest per-ticker fundamentals (see below), not a small tweak.</td></tr>
+<tr><td class="pur">§2.7 Analysts</td><td>Price targets &amp; grade mix below are one real pull, frozen at fetch time — they don't refresh, and they don't feed the DCF (e.g. the $319 consensus target isn't compared against the DCF fair value anywhere yet).</td></tr>
+<tr><td class="pur">§5 Congress / §6 COT</td><td>Raw tables, no derived signal — the insider-signal classifier in §4 is the template for these; not yet built for these two.</td></tr>
+</table>
+
+<p style="font-size:15px;"><b>The math, for reference.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base: FY26 rev $215.9B, 24.51B shares, net debt $0.8B; D&amp;A 3.06%, capex 3.49%, NWC 22.7% of revenue — all fixed constants, not per-ticker.</p>
+<p style="margin-top:8px;"><b>Sources.</b> Comps <span class="mono2">metrics-ratios-ttm</span> + <span class="mono2">screener</span> · DCF mechanics <span class="mono2">custom-dcf-advanced</span> · forward estimates <span class="mono2">financial-estimates</span> · analyst grades/targets <span class="mono2">grades-summary, price-target-consensus, price-target-summary</span> · insider <span class="mono2">insiderTrades</span> · congress <span class="mono2">senate/house</span> · COT <span class="mono2">commitmentOfTraders</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
+<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) feed §3.5 confidence into the reverse-DCF verdict strength, (2) build congress/COT derived signals off the §4 template, (3) make the page ticker-driven via the existing Supabase per-ticker tables (fundamentals/analyst_estimates), which already avoids exposing the FMP key client-side.</p>
+</div>
+</details>
 
 </body>
 </html>
