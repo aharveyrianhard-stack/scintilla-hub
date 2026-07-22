@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCINTILLA · Fundamentals — System & Design Spec</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#2d333b;--txt:#e6edf3;--dim:#8b949e;--accent:#58a6ff;--green:#3fb950;--gold:#d29922;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;padding:32px 40px 90px;max-width:1080px;margin:0 auto;}
+  h1{font-size:30px;margin-bottom:2px;} .sub{color:var(--dim);margin-bottom:30px;font-size:14px;}
+  h2{font-size:20px;color:var(--accent);margin:30px 0 8px;border-bottom:1px solid var(--border);padding-bottom:6px;}
+  h3{font-size:15px;color:var(--gold);margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  p{margin:6px 0;} code{font-family:ui-monospace,Menlo,monospace;background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:13.5px;color:#c9d1d9;}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0;}
+  th{text-align:left;color:var(--dim);border-bottom:2px solid var(--border);padding:7px 9px;}
+  td{border-bottom:1px solid var(--border);padding:7px 9px;vertical-align:top;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:12px 0;}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:13.5px;color:#c9d1d9;line-height:1.9;}
+  .tag{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:12px;margin:2px 3px;}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+<h1>SCINTILLA · Fundamentals</h1>
+<div class="sub">System &amp; Design Spec · v1.0 · 2026-07-22 · governs scintillahub.ai/fundamentals</div>
+
+<div class="card">
+<b>Purpose.</b> A live, connected equity-fundamentals workbench built entirely on the FMP API. Anchor ticker NVDA. Every number is a real pull, not a mockup. The page is a <i>model</i>: inputs (sliders/modes) drive formulas, which drive a DCF, which drives sensitivity and a reverse-DCF — all wired to recompute together on every change.
+</div>
+
+<h2>1 · Page map</h2>
+<table>
+<tr><th>#</th><th>Section</th><th>What it does</th><th>Primary FMP source</th></tr>
+<tr><td>1</td><td>Comparable companies</td><td>NVDA vs semis, ~60 ratios; conditional formatting flags cheap/expensive and IQR outliers</td><td><code>metrics-ratios-ttm</code>, <code>search-company-screener</code></td></tr>
+<tr><td>2</td><td>Peer set</td><td>FMP algorithmic peers vs screener vs ETF constituents</td><td><code>peers</code>, <code>search-company-screener</code></td></tr>
+<tr><td>2.5</td><td>Projected path</td><td>Bar charts + CAGR of the DCF's projected lines; reasonableness check; methodology note</td><td>derived from §3 model</td></tr>
+<tr><td>3</td><td>DCF</td><td>Sliders + modes → CAPM → WACC → terminal value → fair value + value breakdown</td><td><code>custom-dcf-advanced</code> (mechanics replicated client-side)</td></tr>
+<tr><td>3.5</td><td>Analyst consensus matrix</td><td>Full financial-estimates matrix, years × line items, analyst counts, coverage cliff; ticker dropdown (NVDA/PLTR/RKLB)</td><td><code>financial-estimates</code></td></tr>
+<tr><td>D</td><td>Sensitivity</td><td>Impact ranking (tornado) + 1-var + 2-var matrix, axes auto-default to top-2 impact, centered on selection</td><td>derived</td></tr>
+<tr><td>E</td><td>Reverse DCF</td><td>Solve one input to hit market price; 2-var implied grid; reasonableness vs modes &amp; comps</td><td>derived</td></tr>
+<tr><td>4–7</td><td>Insider / Congress / COT / Analyst coverage</td><td>Raw feeds (roadmap: derived signal views)</td><td><code>insiderTrades</code>, <code>senate</code>, <code>commitmentOfTraders</code>, <code>analyst/grades</code></td></tr>
+</table>
+
+<h2>2 · Methodology — the model math</h2>
+<div class="card mono">
+CoE (CAPM) = rᶠ + ( β × MRP )<br>
+WACC = ( wₑ × CoE ) + ( w_d × k_d × ( 1 − t ) ) &nbsp;<span style="color:var(--dim)">// NVDA wₑ=99.8%, w_d=0.2%</span><br>
+UFCFₜ = EBITₜ × (1 − t) + D&amp;Aₜ − capexₜ − ΔNWCₜ<br>
+Terminal value = ( FCF₅ × ( 1 + g ) ) ÷ ( WACC − g ) &nbsp;<span style="color:var(--dim)">// g = perpetuity growth, distinct from rᶠ, must be &lt; WACC</span><br>
+EV = Σ PV(UFCF₁…₅) + PV(terminal) &nbsp;·&nbsp; Fair value = ( EV − net debt ) ÷ diluted shares
+</div>
+<p><b>Base facts (NVDA):</b> FY2026 revenue $215.9B · 24.51B diluted shares · net debt $0.8B · fixed-from-history: D&amp;A 3.06%, capex 3.49%, NWC 22.7% of revenue.</p>
+<h3>Reverse DCF</h3>
+<p>Lock every input at the current selection except one; bisection-solve that one so fair value = market price ($202.81). The result is the market's <i>implied</i> assumption. The 2-var grid does this across two locked axes. Reasonableness is judged against the mode presets and, for beta, the peer distribution.</p>
+<h3>Mode references (defensible ranges)</h3>
+<p><span class="tag">growth: Bear 10 · Conservative 20 · Consensus 36 · FMP 66</span><span class="tag">beta: raw 2.21 · median 2.14 · mean 1.93 · Blume 1.81 · bull 1.30 · peers 1.37–2.47</span><span class="tag">MRP: FMP 4.72 · Damodaran 4.45 · bull 4.0</span><span class="tag">perpetuity g: 3.0 · FMP 4.0 · rf 4.28 · bull 6.0</span></p>
+
+<h2>3 · Wiring model (the connectedness contract)</h2>
+<p>Single source of truth: the seven slider inputs (<code>g, m, t, rf, bt, mrpS, termg</code>). Everything else is derived on every <code>render()</code>:</p>
+<div class="card mono" style="font-size:13px;">
+sliders ─▶ cur() ─▶ modelFull() ─▶ { fair value, EV, value split, projection, CAGR }<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─▶ formula grids (β, MRP, CoE, WACC, TV) — numbers light up in place<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─▶ tornado impact ranking ─▶ sets sensitivity + reverse default axes (top-2)<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─▶ sensitivity 1-var / 2-var (centered on selection)<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─▶ reverse DCF (implied value + 2-var grid + reasonableness)<br>
+modes/chips are just quick-sets of the sliders → highlight when the slider matches
+</div>
+<p><b>Rules.</b> (1) Modes never hold a value independent of a slider — clicking a chip sets the slider; the chip highlights only when the slider matches. (2) Tab/axis order follows impact ranking everywhere. (3) All data tables freeze the top row and left column (Excel-style). (4) Any "read" (a conclusion) is designed to feed the step below it — the beta context feeds the reverse-DCF beta verdict, etc.</p>
+
+<h2>4 · Data sources &amp; refresh</h2>
+<p>All values pulled live from FMP on the build date shown in each section header. The page is served from git (<code>github.com/aharveyrianhard-stack/scintilla-hub</code> → Vercel <code>scintilla-cockpit</code>). Durable URL that survives hub-wide deploys: <code>scintilla-cockpit-git-main-…vercel.app/fundamentals</code>. Production alias: <code>scintillahub.ai/fundamentals</code>.</p>
+
+<h2>5 · Instructions for use</h2>
+<p>1. Set a scenario (or drag the three business sliders). 2. Choose beta &amp; MRP methods — watch the CAPM/WACC formulas recompute. 3. Read the value-breakdown bar: how much rides on the perpetuity. 4. Check the projected-path CAGR for believability. 5. Use the tornado to see what matters, then the 2-var matrix on those two. 6. Flip to Reverse DCF to see what the current price is assuming and whether that's reasonable vs the modes and the peer betas.</p>
+
+<h2>6 · Known limitations / roadmap</h2>
+<p><span class="tag">page is NVDA-hardcoded → make ticker-driven at top</span><span class="tag">wire §3.5 consensus path directly into the DCF</span><span class="tag">range-width (low–high) as a confidence score across tickers</span><span class="tag">true reverse-DCF backtest vs realized results</span><span class="tag">insider/congress/COT → derived signal views</span></p>
+
+<div style="color:var(--dim);font-size:12px;margin-top:24px;">Author: Claude for Alan · living document · update on every material change to /fundamentals.</div>
+</body>
+</html>

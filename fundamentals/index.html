@@ -50,7 +50,7 @@
 <h2>1 · Comparable Companies — NVDA vs Semis</h2>
 <div class="src">endpoints: metrics-ratios-ttm (per symbol) + search-company-screener (universe)</div>
 <div class="scrollx">
-<table id="compsTable" class="compsT">
+<table id="compsTable" class="compsT stickytbl">
 <tr><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>EV/EBITDA</th><th>P/S</th><th>P/B</th><th>PEG</th><th>Gross M</th><th>Net M</th><th>D/E</th><th>Beta</th><th>Div Yld</th></tr>
 <tr><td class="gold">NVDA</td><td class="gold">$4.91T</td><td class="gold">30.9</td><td class="gold">25.5</td><td class="gold">19.4</td><td class="gold">25.2</td><td class="gold">0.28</td><td class="gold">74.1%</td><td class="gold">63.0%</td><td class="gold">0.07</td><td class="gold">2.21</td><td class="gold">0.14%</td></tr>
 <tr><td>TSM</td><td>$2.07T</td><td>31.1</td><td>19.7</td><td>14.6</td><td>10.2</td><td>0.58</td><td>61.9%</td><td>47.0%</td><td>0.17</td><td>1.37</td><td>0.95%</td></tr>
@@ -102,6 +102,7 @@
   <div id="barchart" style="margin:6px 0 4px;"></div>
   <div style="font-size:11.5px; color:var(--dim);">Bars = the 5 projected years left→right. Eyeball whether the trajectory is believable before trusting the valuation. Updates live with the DCF sliders.</div>
   <div class="scrollx" style="margin-top:12px;"><table id="oTable"></table></div>
+  <div class="note" style="margin-top:12px;"><b>Methodology — where these numbers come from.</b> The DCF's free cash flow is <i>built</i>, not pulled: FMP's custom-dcf-advanced projects revenue at your growth rate, applies your EBITDA margin, then subtracts D&amp;A, capex (3.49% of revenue) and the change in working capital (22.7% of revenue) to get unlevered FCF — so operating margin and capex are <i>assumptions</i>, not analyst figures. Separately, the analyst consensus in §3.5 (financial-estimates) gives revenue, EBITDA, EBIT, SG&amp;A, net income and EPS with low/avg/high and analyst counts — but NOT capex or operating cash flow, which is why a "pure analyst FCF" still needs a capex bridge from history. <b>Who's behind the estimates:</b> NVDA's near-year lines carry 30–40 analysts (KeyBanc, Needham, UBS, BofA, Evercore, RBC, Morgan Stanley-tier houses); coverage thins to ~7 by FY2031. See §3.5 for the full count-by-year.</div>
 </div>
 </section>
 
@@ -152,8 +153,16 @@
   .fg .num{grid-row:2; font-size:18px; font-weight:700; text-align:center; color:#e6edf3;}
   .fg .num.v{color:var(--accent);} .fg .num.out{color:var(--green);} .fg .num.outn{color:var(--red);}
   .fg .op{color:#586069; font-weight:400;}
-  .compsT td.cheap{color:var(--green);} .compsT td.exp{color:var(--red);}
-  .compsT td.out{font-weight:800; border:1px dashed currentColor;}
+  .compsT td{border:1px solid rgba(255,255,255,0.05);}
+  .compsT td.cheap{background:rgba(63,185,80,0.14);} .compsT td.exp{background:rgba(248,81,73,0.14);}
+  .compsT td.cheapX{background:rgba(63,185,80,0.36); color:#c9f7cf; font-weight:700;} .compsT td.expX{background:rgba(248,81,73,0.34); color:#ffd7d3; font-weight:700;}
+  /* LOCK RULE: freeze top row + left column on all data tables */
+  .stickytbl td:first-child, .stickytbl th:first-child{position:sticky; left:0; background:var(--panel); z-index:1;}
+  .stickytbl tr:first-child th{position:sticky; top:0; background:var(--panel); z-index:2;}
+  .stickytbl tr:first-child th:first-child{z-index:3;}
+  .sensi td, .sensi th{min-width:66px; max-width:120px;}
+  .sensi td:first-child, .sensi th:first-child{min-width:150px; max-width:220px; white-space:normal;}
+  .subttl{font-size:13.5px; color:var(--txt); font-weight:700; letter-spacing:.01em; margin-bottom:6px;}
   .fcard{background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:13px 18px; margin:9px 0;}
   .fname{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;}
   .fsym{font-family:ui-monospace,Menlo,monospace; font-size:13.5px; color:var(--dim);}
@@ -197,10 +206,12 @@
 <div class="chips">
   <button class="chip" data-s="bt" data-v="2.211" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
   <button class="chip" data-s="bt" data-v="2.14" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
+  <button class="chip" data-s="bt" data-v="1.93" onclick="setSlider('bt',1.93)">Peer mean 1.93</button>
   <button class="chip" data-s="bt" data-v="1.81" onclick="setSlider('bt',1.81)">Blume 1.81</button>
   <button class="chip" data-s="bt" data-v="1.3" onclick="setSlider('bt',1.30)">Bull mean-revert 1.30</button></div>
-<div class="fcard"><div class="fname">Beta — Blume adjustment (drift toward 1.0)</div>
-  <div class="fg" id="fgBeta"></div></div>
+<div class="fcard"><div class="fname">Beta — active method</div>
+  <div class="fg" id="fgBeta"></div>
+  <div class="foot" id="betaCtx" style="margin-top:8px;"></div></div>
 <div class="srow"><span class="slab">Market risk premium <small>excess of stocks over rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
 <div class="chips">
   <button class="chip" data-s="mrpS" data-v="4.72" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
@@ -229,11 +240,11 @@
 
 <!-- SENSITIVITY -->
 <div class="dcfh">D · Sensitivity</div>
-<div class="fcard"><div class="fname">Impact ranking — which input moves value most (full-range swing)</div>
+<div class="fcard"><div class="subttl">Impact ranking — which input moves value most (full-range swing)</div>
   <div id="tornado" style="margin-top:8px;"></div>
   <div class="foot">Each bar = the fair-value swing when that ONE input runs across its entire range, others held at current. Longest bar = biggest lever.</div></div>
 
-<div class="fcard"><div class="fname">① One variable — full range, with $ and up/downside</div>
+<div class="fcard"><div class="subttl">① One variable — full range, with $ and up/downside</div>
   <div class="chips" style="margin:2px 0 8px 0;"><span class="foot" style="align-self:center;margin-right:6px;">sweep:</span>
     <button class="mbtn" id="s1_g" onclick="setS1('g')">Growth</button>
     <button class="mbtn" id="s1_m" onclick="setS1('m')">Margin</button>
@@ -242,9 +253,9 @@
     <button class="mbtn" id="s1_beta" onclick="setS1('beta')">Beta</button>
     <button class="mbtn" id="s1_mrp" onclick="setS1('mrp')">MRP</button>
     <button class="mbtn" id="s1_tg" onclick="setS1('tg')">Terminal g</button></div>
-  <div class="scrollx"><table class="sensi" id="sens1"></table></div></div>
+  <div class="scrollx"><table class="sensi stickytbl" id="sens1"></table></div></div>
 
-<div class="fcard"><div class="fname">② Two-variable matrix — pick the two axes</div>
+<div class="fcard"><div class="subttl">② Two-variable matrix — pick the two axes</div>
   <div class="chips" style="margin:2px 0 4px 0;"><span class="foot" style="align-self:center;margin-right:6px;">rows Y:</span>
     <button class="mbtn" id="sy_g" onclick="setSY('g')">Growth</button>
     <button class="mbtn" id="sy_m" onclick="setSY('m')">Margin</button>
@@ -261,7 +272,7 @@
     <button class="mbtn" id="sx_beta" onclick="setSX('beta')">Beta</button>
     <button class="mbtn" id="sx_mrp" onclick="setSX('mrp')">MRP</button>
     <button class="mbtn" id="sx_tg" onclick="setSX('tg')">Terminal g</button></div>
-  <div class="scrollx"><table class="sensi" id="sens2"></table></div>
+  <div class="scrollx"><table class="sensi stickytbl" id="sens2"></table></div>
   <div class="foot">Each cell: fair value on top, up/downside vs $202.81 below. Green above price, red below. Ranges cover the full slider span (incl. FMP's 66% growth).</div></div>
 
 <!-- REVERSE DCF -->
@@ -278,7 +289,7 @@
   <div style="margin-top:16px; font-size:13px; color:var(--txt); font-weight:600;">Implied <span id="rvName">growth</span> across two locked inputs — pick the axes (default = the two that matter most)</div>
   <div class="chips" id="rvYchips" style="margin:6px 0 3px;"></div>
   <div class="chips" id="rvXchips" style="margin:0 0 8px;"></div>
-  <div class="scrollx"><table class="sensi" id="revGrid"></table></div>
+  <div class="scrollx"><table class="sensi stickytbl" id="revGrid"></table></div>
   <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify $202.81 at that axis combo. Center cell (outlined) = your current sliders. This is where you see, e.g., "even at a bullish 1.3 beta the price still implies 45% growth."</div>
 </div>
 
@@ -368,7 +379,16 @@ function render(){
   // FORMULAS — two-row aligned grids (symbol row + number row, matched columns)
   const rf=c.rf*100, bt=c.beta, mp=c.mrp*100, coe=r.coe*100, w=r.w*100, tg=c.tg, t=c.t, denom=w-tg*100;
   const O='op';
-  fg('fgBeta',[['0.67 × βᵣ','0.67 × 2.21','v'],['+','+',O],['0.33','0.33','v'],['=','=',O],['βₐ (Blume)','1.81','out'],['','',O],['your β',bt.toFixed(2),'v']]);
+  const near=(a,b)=>Math.abs(a-b)<0.02; let bp;
+  if(near(bt,1.81)) bp=[['βₐ (Blume)',bt.toFixed(2),'out'],['=','=',O],['0.67 × βᵣ','0.67 × 2.21','v'],['+','+',O],['0.33','0.33','v']];
+  else if(near(bt,2.211)) bp=[['β (raw)',bt.toFixed(2),'out'],['=','=',O],['regression','5-yr vs S&P','v']];
+  else if(near(bt,2.14)) bp=[['β (peer median)',bt.toFixed(2),'out'],['=','=',O],['median(peers)','2.14','v']];
+  else if(near(bt,1.93)) bp=[['β (peer mean)',bt.toFixed(2),'out'],['=','=',O],['mean(peers)','1.93','v']];
+  else if(near(bt,1.30)) bp=[['β (bull)',bt.toFixed(2),'out'],['=','=',O],['mean-revert','→ 1.0','v']];
+  else bp=[['β (custom)',bt.toFixed(2),'out'],['','',O],['off-preset','slider','v']];
+  fg('fgBeta',bp);
+  const pct = bt>=2.47?'above the entire peer set':bt>=2.14?'top quartile of peers':bt>=1.93?'above the peer mean':bt>=1.37?'within the peer range':'below the entire peer set';
+  document.getElementById('betaCtx').innerHTML='Peer set β: <b>min 1.37 · mean 1.93 · median 2.14 · max 2.47</b>. Your β '+bt.toFixed(2)+' is <span style="color:var(--gold)">'+pct+'</span>. NVDA\'s raw 2.21 is an outlier-high beta — a compounder "up and to the right" arguably deserves a lower one.';
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
   fg('fgWACC',[['(  wₑ','(  0.998','v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  0.002','v'],['×','×',O],['k_d',KDPRE.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
@@ -379,7 +399,8 @@ function render(){
   const idx=PCMAP[PC].i, vals=r.rows.map(x=>x[idx]), mx=Math.max.apply(null,vals.map(Math.abs))||1;
   let bc='<div style="display:flex;align-items:flex-end;gap:12px;height:150px;">';
   r.rows.forEach((x,j)=>{const v=vals[j],h=Math.max(2,Math.abs(v)/mx*120);bc+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;"><div class="foot" style="margin-bottom:4px;">$'+fmt(v,0)+'</div><div style="width:64%;height:'+h+'px;background:linear-gradient(180deg,var(--accent),#2b6fc0);border-radius:5px 5px 0 0;"></div><div class="foot" style="margin-top:5px;">FY'+(27+j)+'</div></div>';});
-  bc+='</div><div class="foot" style="margin-top:4px;">'+PCMAP[PC].lbl+' · FY2027→FY2031</div>';
+  const cagr=(vals[0]>0&&vals[vals.length-1]>0)?(Math.pow(vals[vals.length-1]/vals[0],1/(vals.length-1))-1)*100:null;
+  bc+='</div><div style="margin-top:6px;font-size:13px;"><span class="foot">'+PCMAP[PC].lbl+' · FY2027→FY2031 &nbsp;·&nbsp; </span><b style="color:var(--gold)">CAGR '+(cagr==null?'n/m':cagr.toFixed(1)+'%')+'</b> <span class="foot">per year</span></div>';
   document.getElementById('barchart').innerHTML=bc;
 
   // VALUE BREAKDOWN — explicit vs perpetuity, as a stacked bar
@@ -418,16 +439,32 @@ function fmtImp(k,x){return SV[k].sc===1 ? x.toFixed(2) : (x*100).toFixed(1)+'%'
 function renderReverse(c){
   ['g','m','beta','mrp','tg'].forEach(k=>document.getElementById('rv_'+k).classList.toggle('on',RV===k));
   document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl;
-  const x=solveFor(RV,c); let disp,ref,note;
-  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='consensus 36% · FMP 66%';note=p<36?'BELOW consensus — the price implies less growth than the Street expects → looks cheap on growth':'ABOVE consensus — the price already bakes in aggressive growth';}
-  else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='current 51%';note=p<51?'below current margins — undemanding':'requires margin expansion to hold';}
-  else if(RV==='beta'){disp=x.toFixed(2);ref='raw 2.21 · market 1.0';note=x>2.21?'needs risk HIGHER than the raw beta to justify the price → i.e. the market is discounting it cheaply':'the market is pricing LOWER risk than the raw beta';}
-  else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='Damodaran 4.45%';note=p>4.45?'fatter risk premium than Damodaran → conservative pricing':'thinner premium than Damodaran → rich pricing';}
-  else{const p=x*100;disp=p.toFixed(2)+'%';ref='GDP ~4.5% · rf 4.28%';note=p>4.5?'perpetual growth above GDP → demanding':'modest perpetual growth → undemanding';}
-  document.getElementById('revout').innerHTML='To justify <span style="color:var(--accent);font-weight:700">$202.81</span>, holding everything else at your sliders, the market implies<br><b style="color:var(--gold);font-size:20px">'+SV[RV].lbl+' = '+disp+'</b> &nbsp;<span class="foot">(reference: '+ref+')</span><br><span style="color:#c9d1d9;">→ '+note+'</span>';
+  const x=solveFor(RV,c); let disp,ref,verdict,color;
+  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='modes → Bear 10 · Conservative 20 · Consensus 36 · FMP 66';
+    if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';}
+    else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';}
+    else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';}
+    else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';}}
+  else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='modes → 42 · 48 · 51';
+    if(p<48){verdict='below current margins → undemanding';color='var(--green)';}
+    else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';}
+    else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';}}
+  else if(RV==='beta'){disp=x.toFixed(2);ref='peers → min 1.37 · mean 1.93 · median 2.14 · max 2.47 (NVDA raw 2.21)';
+    if(x<1.37){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';}
+    else if(x<=2.47){verdict='within the peer beta range → reasonable';color='var(--gold)';}
+    else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';}}
+  else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='modes → Bull 4.0 · Damodaran 4.45 · FMP 4.72';
+    if(p<4.0){verdict='thinner premium than the bull case → rich pricing';color='var(--red)';}
+    else if(p<=4.72){verdict='within the standard MRP range → reasonable';color='var(--gold)';}
+    else{verdict='fatter premium than FMP → conservative pricing (looks cheap)';color='var(--green)';}}
+  else{const p=x*100;disp=p.toFixed(2)+'%';ref='modes → Conservative 3.0 · FMP 4.0 · rf 4.28 · Bull 6.0';
+    if(p<3){verdict='very conservative perpetuity → undemanding';color='var(--green)';}
+    else if(p<=6){verdict='within the mode range (up to GDP-plus) → reasonable';color='var(--gold)';}
+    else{verdict='perpetual growth above the bull case → demanding';color='var(--red)';}}
+  document.getElementById('revout').innerHTML='To justify <span style="color:var(--accent);font-weight:700">$202.81</span>, holding everything else at your sliders, the market implies<br><b style="color:var(--gold);font-size:20px">'+SV[RV].lbl+' = '+disp+'</b><br><span class="foot">'+ref+'</span><br><span style="color:'+color+';font-weight:600">→ '+verdict+'</span>';
   // 2-var reverse grid
-  const cand=['g','m','t','rf','beta','mrp','tg'].filter(k=>k!==RV);
-  if(autoRVaxis){const imp=topImpact(c,RV); RVY=imp[0].k; RVX=imp[1].k;}
+  const cand=topImpact(c,RV).map(o=>o.k);   // impact-ranked, RV excluded
+  if(autoRVaxis){RVY=cand[0]; RVX=cand[1];}
   if(!cand.includes(RVY)) RVY=cand[0];
   if(!cand.includes(RVX)||RVX===RVY) RVX=cand.find(k=>k!==RVY);
   document.getElementById('rvYchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">rows Y:</span>'+cand.map(k=>'<button class="mbtn'+(RVY===k?' on':'')+'" onclick="setRVY(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
@@ -447,6 +484,7 @@ function renderSens(c){
   const keys=['g','m','t','rf','beta','mrp','tg'];
   const imp=topImpact(c,null);
   if(autoAxis){SY=imp[0].k; SX=imp[1].k;}
+  ['s1','sy','sx'].forEach(pfx=>{const first=document.getElementById(pfx+'_'+imp[0].k); if(first){const p=first.parentNode; imp.forEach(x=>{const b=document.getElementById(pfx+'_'+x.k); if(b)p.appendChild(b);});}});
   keys.forEach(k=>{document.getElementById('s1_'+k).classList.toggle('on',S1===k);document.getElementById('sy_'+k).classList.toggle('on',SY===k);document.getElementById('sx_'+k).classList.toggle('on',SX===k);});
   const maxSw=Math.max.apply(null,imp.map(x=>x.swing))||1;
   document.getElementById('tornado').innerHTML=imp.map(x=>'<div class="tor"><span class="torlbl">'+SV[x.k].lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px"></span><span class="torval">$'+(x.lo==null?'—':fmt(x.lo,0))+' → $'+(x.hi==null?'—':fmt(x.hi,0))+' &nbsp;(Δ$'+fmt(x.swing,0)+')</span></div>').join('');
@@ -620,25 +658,26 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP connector, live pulls · File: FMP_CAPABILITY_DEMO.html · Author: Claude for Alan</div>
 
 <script>
-// Comps conditional formatting — highlight cheap/expensive vs peer median
+// Comps conditional formatting — cheap/expensive by column, outliers via IQR (statistical, not arbitrary)
 (function(){
   const tbl=document.getElementById('compsTable'); if(!tbl) return;
   const rows=[...tbl.querySelectorAll('tr')];
   const companies=['NVDA','TSM','AVGO','MU','AMD','INTC'];
-  // col index → {median, lowerIsCheap}
-  const cols={2:{med:45.5,cheapLow:true},3:{med:43.1,cheapLow:true},4:{med:14.6,cheapLow:true},5:{med:10.2,cheapLow:true},6:{med:0.53,cheapLow:true},7:{med:61.9,cheapLow:false},8:{med:38.8,cheapLow:false}};
-  rows.forEach(tr=>{
-    const c0=tr.children[0]; if(!c0) return;
-    if(!companies.includes(c0.textContent.trim())) return;
-    Object.keys(cols).forEach(ci=>{
-      const cell=tr.children[ci]; if(!cell) return;
-      const raw=cell.textContent.replace('%','').replace('−','-').trim();
-      const v=parseFloat(raw); if(isNaN(v)) return;
-      const {med,cheapLow}=cols[ci];
-      const dev=(v-med)/Math.abs(med);
-      const good = cheapLow ? v<med : v>med;              // cheap (val multiples) or better (margins)
-      cell.classList.add(good?'cheap':'exp');             // green text = cheap/better, red = expensive/worse
-      if(Math.abs(dev)>0.25) cell.classList.add('out');   // outlier → bold + dashed outline
+  const cols={2:true,3:true,4:true,5:true,6:true,7:false,8:false}; // ci → cheapLow? (multiples true, margins false)
+  const parse=s=>{const v=parseFloat(s.replace('%','').replace('−','-').trim());return isNaN(v)?null:v;};
+  const median=a=>{const b=[...a].sort((x,y)=>x-y),n=b.length;return n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2;};
+  const quart=(a,q)=>{const b=[...a].sort((x,y)=>x-y),pos=(b.length-1)*q,base=Math.floor(pos),rest=pos-base;return b[base+1]!==undefined?b[base]+rest*(b[base+1]-b[base]):b[base];};
+  const dataRows=rows.filter(tr=>tr.children[0]&&companies.includes(tr.children[0].textContent.trim()));
+  Object.keys(cols).forEach(ci=>{
+    const cheapLow=cols[ci];
+    const vals=dataRows.map(tr=>parse(tr.children[ci].textContent)).filter(v=>v!=null);
+    if(vals.length<3) return;
+    const med=median(vals), q1=quart(vals,0.25), q3=quart(vals,0.75), iqr=(q3-q1)||1;
+    dataRows.forEach(tr=>{
+      const cell=tr.children[ci], v=parse(cell.textContent); if(v==null) return;
+      const good=cheapLow?v<med:v>med;
+      const outlier=(v<q1-1.5*iqr)||(v>q3+1.5*iqr);   // Tukey fences — real statistical outlier
+      cell.classList.add(good?(outlier?'cheapX':'cheap'):(outlier?'expX':'exp'));
     });
   });
 })();
