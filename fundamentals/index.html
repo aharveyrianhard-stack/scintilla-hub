@@ -50,7 +50,7 @@
 <h2>1 · Comparable Companies — NVDA vs Semis</h2>
 <div class="src">endpoints: metrics-ratios-ttm (per symbol) + search-company-screener (universe)</div>
 <div class="scrollx">
-<table>
+<table id="compsTable">
 <tr><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>EV/EBITDA</th><th>P/S</th><th>P/B</th><th>PEG</th><th>Gross M</th><th>Net M</th><th>D/E</th><th>Beta</th><th>Div Yld</th></tr>
 <tr><td class="gold">NVDA</td><td class="gold">$4.91T</td><td class="gold">30.9</td><td class="gold">25.5</td><td class="gold">19.4</td><td class="gold">25.2</td><td class="gold">0.28</td><td class="gold">74.1%</td><td class="gold">63.0%</td><td class="gold">0.07</td><td class="gold">2.21</td><td class="gold">0.14%</td></tr>
 <tr><td>TSM</td><td>$2.07T</td><td>31.1</td><td>19.7</td><td>14.6</td><td>10.2</td><td>0.58</td><td>61.9%</td><td>47.0%</td><td>0.17</td><td>1.37</td><td>0.95%</td></tr>
@@ -152,14 +152,13 @@
 <!-- ASSUMPTIONS -->
 <div class="dcfh">A · Business assumptions</div>
 <div class="srow"><span class="slab">Revenue growth <small>yrs 1–5, compounding</small></span><input type="range" id="g" min="0" max="80" step="0.5" value="36"><span class="sval" id="sv_g"></span></div>
-<div class="chips">
+<div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
+<div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
+<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">quick-set all three:</span>
   <button class="chip" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button>
   <button class="chip" onclick="setScen(36,51.1,15.1)">Consensus 36%</button>
   <button class="chip" onclick="setScen(20,48,17)">Conservative 20%</button>
-  <button class="chip" onclick="setScen(10,42,20)">Bear 10%</button>
-  <span class="foot" style="align-self:center;">← these set growth + margin + tax together</span></div>
-<div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
-<div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
+  <button class="chip" onclick="setScen(10,42,20)">Bear 10%</button></div>
 
 <!-- DISCOUNT RATE -->
 <div class="dcfh">B · Discount rate — CAPM → WACC</div>
@@ -169,30 +168,56 @@
 <div class="chips">
   <button class="chip" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
   <button class="chip" onclick="setSlider('bt',1.81)">Blume 1.81</button>
-  <button class="chip" onclick="setSlider('bt',2.14)">Peer median 2.14</button></div>
-<div class="fcard"><div class="fname">Beta method</div><div class="fsym">raw = regression slope vs S&amp;P · Blume βₐ = 0.67·β + 0.33 · peer = median(comps)</div><div class="fnum" id="numBeta"></div></div>
-<div class="srow"><span class="slab">Market risk premium <small>MRP = E(R_mkt) − rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
+  <button class="chip" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
+  <button class="chip" onclick="setSlider('bt',1.30)">Bull · mean-revert 1.30</button></div>
+<div class="fcard"><div class="fname">Beta — adjustment methods</div>
+  <div class="fsym">βₐ = ( 0.67 × β_raw ) + ( 0.33 × 1.0 )</div>
+  <div class="fnum" id="numBeta"></div></div>
+<div class="srow"><span class="slab">Market risk premium <small>excess of stocks over rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
 <div class="chips">
   <button class="chip" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
   <button class="chip" onclick="setSlider('mrpS',4.45)">Damodaran 4.45</button>
+  <button class="chip" onclick="setSlider('mrpS',4.0)">Bull 4.0</button>
   <button class="chip" onclick="applyBuiltChip()">Built <span id="builtLbl">4.65</span></button></div>
-<div class="fcard"><div class="fname">Market risk premium</div><div class="fsym">MRP = E(R_market) − rᶠ</div><div class="fnum" id="numMrp"></div></div>
-<div class="fcard"><div class="fname">Cost of equity</div><div class="fsym">CoE = rᶠ + β × MRP</div><div class="fnum" id="numCoE"></div></div>
-<div class="fcard"><div class="fname">WACC</div><div class="fsym">WACC = w_e·CoE + w_d·k_d(1−t)</div><div class="fnum" id="numWACC"></div><div class="foot">NVDA ~all-equity (debt 0.2%) → WACC ≈ CoE. Leveraged names: debt weight matters.</div></div>
+<div class="fcard"><div class="fname">Market risk premium</div>
+  <div class="fsym">MRP = E(R_market) − rᶠ</div>
+  <div class="fnum" id="numMrp"></div></div>
+<div class="fcard"><div class="fname">Cost of equity (CAPM)</div>
+  <div class="fsym">CoE = rᶠ + ( β × MRP )</div>
+  <div class="fnum" id="numCoE"></div></div>
+<div class="fcard"><div class="fname">WACC</div>
+  <div class="fsym">WACC = ( wₑ × CoE ) + ( w_d × k_d × ( 1 − t ) )</div>
+  <div class="fnum" id="numWACC"></div>
+  <div class="foot">NVDA ~all-equity (debt 0.2%) → WACC ≈ CoE. Leveraged names: debt weight matters.</div></div>
 
 <!-- TERMINAL -->
 <div class="dcfh">C · Terminal value</div>
-<div class="srow"><span class="slab">Terminal growth g <small>perpetuity — separate from rᶠ</small></span><input type="range" id="termg" min="0" max="6" step="0.1" value="3.0"><span class="sval" id="sv_termg"></span></div>
+<div class="srow"><span class="slab">Terminal growth g <small>perpetuity, after yr 5 — distinct from rᶠ</small></span><input type="range" id="termg" min="0" max="8" step="0.1" value="4.28"><span class="sval" id="sv_termg"></span></div>
 <div class="chips">
-  <button class="chip" onclick="setSlider('termg',0)">Zero 0%</button>
   <button class="chip" onclick="setSlider('termg',3.0)">Conservative 3.0%</button>
   <button class="chip" onclick="setSlider('termg',4.0)">FMP default 4.0%</button>
-  <button class="chip" onclick="setSlider('termg',4.5)">Long-run GDP 4.5%</button></div>
-<div class="fcard"><div class="fname">Terminal value (Gordon growth)</div><div class="fsym">TV = FCF₅ × (1 + g) ÷ (WACC − g)</div><div class="fnum" id="numTV"></div>
-  <div class="foot"><b>g is a growth rate, not the discount rate — a distinct input from rᶠ.</b> Rule of thumb (Damodaran): cap g at or below the risk-free rate as a <i>ceiling</i>, because nothing outgrows the economy forever — NOT "equal to rᶠ." Must stay below WACC.</div></div>
+  <button class="chip" onclick="setSlider('termg',4.28)">= risk-free 4.28%</button>
+  <button class="chip" onclick="setSlider('termg',6.0)">Bull 6.0%</button></div>
+<div class="fcard"><div class="fname">Terminal value (Gordon growth)</div>
+  <div class="fsym">TV = ( FCF₅ × ( 1 + g ) ) ÷ ( WACC − g )</div>
+  <div class="fnum" id="numTV"></div>
+  <div class="foot"><b>g is a growth rate (perpetuity), distinct from rᶠ.</b> The risk-free is a common <i>reference ceiling</i> (Damodaran), not a hard cap — a durable moat can out-earn GDP for a long time, so a higher g is defensible. Only hard rule: g &lt; WACC.</div></div>
+
+<!-- PROJECTION + REASONABILITY (before sensitivity — critical visual check) -->
+<div class="dcfh">D · Projected path — does this look reasonable?</div>
+<div class="fcard">
+  <div class="chips" style="margin:0 0 10px 0;"><span class="foot" style="align-self:center;margin-right:6px;">chart:</span>
+    <button class="mbtn" id="pc_rev" onclick="setPC('rev')">Revenue</button>
+    <button class="mbtn" id="pc_ebitda" onclick="setPC('ebitda')">EBITDA</button>
+    <button class="mbtn" id="pc_ufcf" onclick="setPC('ufcf')">Free cash flow</button>
+    <button class="mbtn" id="pc_pv" onclick="setPC('pv')">PV of FCF</button></div>
+  <div id="barchart" style="margin:6px 0 4px;"></div>
+  <div class="foot">Bars = the 5 projected years left→right. Eyeball whether the trajectory your sliders imply is believable before trusting the valuation.</div>
+  <div class="scrollx" style="margin-top:12px;"><table id="oTable"></table></div>
+</div>
 
 <!-- SENSITIVITY -->
-<div class="dcfh">D · Sensitivity</div>
+<div class="dcfh">E · Sensitivity</div>
 <div class="fcard"><div class="fname">Impact ranking — which input moves value most (full-range swing)</div>
   <div id="tornado" style="margin-top:8px;"></div>
   <div class="foot">Each bar = the fair-value swing when that ONE input runs across its entire range, others held at current. Longest bar = biggest lever.</div></div>
@@ -228,12 +253,6 @@
   <div class="scrollx"><table class="sensi" id="sens2"></table></div>
   <div class="foot">Each cell: fair value on top, up/downside vs $202.81 below. Green above price, red below. Ranges cover the full slider span (incl. FMP's 66% growth).</div></div>
 
-<!-- PROJECTION (collapsed) -->
-<details style="margin-top:14px;"><summary style="cursor:pointer;color:var(--accent);font-size:14px;">▸ 5-year cash-flow projection (table)</summary>
-<div class="scrollx"><table id="oTable"></table></div>
-<div class="foot">UFCF = EBIT×(1−tax) + D&amp;A − capex − ΔNWC; then discounted at WACC; terminal by Gordon growth. Base: FY2026 rev $215.9B, 24.51B shares, net debt $0.8B. Matches FMP's server DCF within a few %.</div>
-</details>
-
 <!-- MRP BUILDER (collapsed — no more savage scrolling) -->
 <details class="build" style="margin-top:10px;"><summary>▸ Build your own MRP from subcomponents (optional — collapsed)</summary>
   <div class="sub" style="margin:8px 0;"><b>MRP = ERP = equity risk premium over the risk-free.</b> FMP hard-codes 4.72%; this reconstructs it from parts: discount the S&amp;P's expected cash (div + buybacks, grown 5y, terminal = rf) back to today's index level, solve for the return, subtract rf. Add a revenue-weighted country premium on top. Click "Apply" to feed it into the MRP mode above.</div>
@@ -260,39 +279,42 @@
 
 <script>
 const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,kd:0.0363,eqW:0.9977,debtW:0.0023};
-let builtMRP=4.65;
-let S1='g', SX='g', SY='rf';   // sensitivity picks (defaults: growth × risk-free)
+let builtMRP=4.65, PC='rev';
+let S1='g', SX='g', SY='rf';
+const KDPRE=4.28;   // pre-tax cost of debt (%)
 const SV={
-  g:{lbl:'Revenue growth',id:'g',sc:100,fld:'g',r:[5,10,20,36,50,66]},
-  m:{lbl:'EBITDA margin',id:'m',sc:100,fld:'m',r:[35,42,48,51,60,70]},
-  t:{lbl:'Tax rate',id:'t',sc:100,fld:'t',r:[10,15,21,30]},
-  rf:{lbl:'Risk-free',id:'rf',sc:100,fld:'rf',r:[3,4,4.28,5,6]},
-  beta:{lbl:'Beta',id:'bt',sc:1,fld:'beta',r:[1.0,1.5,1.81,2.14,2.21,2.5]},
-  mrp:{lbl:'MRP',id:'mrpS',sc:100,fld:'mrp',r:[4.0,4.45,4.72,5.5,6.5]},
-  tg:{lbl:'Terminal g',id:'termg',sc:100,fld:'tg',r:[0,2,3,4,5]}
+  g:{lbl:'Revenue growth',id:'g',sc:100,fld:'g',min:0,max:80,step:10},
+  m:{lbl:'EBITDA margin',id:'m',sc:100,fld:'m',min:20,max:75,step:5},
+  t:{lbl:'Tax rate',id:'t',sc:100,fld:'t',min:5,max:35,step:5},
+  rf:{lbl:'Risk-free',id:'rf',sc:100,fld:'rf',min:2,max:7,step:0.5},
+  beta:{lbl:'Beta',id:'bt',sc:1,fld:'beta',min:0.5,max:3,step:0.3},
+  mrp:{lbl:'MRP',id:'mrpS',sc:100,fld:'mrp',min:3,max:8,step:0.5},
+  tg:{lbl:'Terminal g',id:'termg',sc:100,fld:'tg',min:0,max:8,step:1}
 };
+const PCMAP={rev:{i:1,lbl:'Revenue $B'},ebitda:{i:2,lbl:'EBITDA $B'},ufcf:{i:3,lbl:'Free cash flow $B'},pv:{i:4,lbl:'PV of FCF $B'}};
 function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
 function rd(id){return +document.getElementById(id).value;}
 function cur(){return{g:rd('g')/100,m:rd('m')/100,t:rd('t')/100,rf:rd('rf')/100,beta:rd('bt'),mrp:rd('mrpS')/100,tg:rd('termg')/100};}
 function setSlider(id,v){document.getElementById(id).value=v;render();}
 function setScen(g,m,t){document.getElementById('g').value=g;document.getElementById('m').value=m;document.getElementById('t').value=t;render();}
 function applyBuiltChip(){document.getElementById('mrpS').value=builtMRP.toFixed(2);render();}
+function setPC(k){PC=k;render();}
 
 function modelFull(g,m,t,rf,beta,mrp,tg){
-  const coe=rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*BASE.kd;
+  const coe=rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*(KDPRE/100)*(1-t);
   let rev=BASE.rev,nwcPrev=BASE.rev*BASE.nwcPct,sumPV=0,ufcf=0,rows=[];
   for(let i=1;i<=5;i++){rev*=(1+g);const eb=rev*m,da=rev*BASE.daPct,ebit=eb-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,eb,ufcf,pv]);}
   if(w<=tg)return{bad:true,coe,w};
   const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
-  return{coe,w,ev,fv,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
+  return{coe,w,ev,fv,ufcf5:ufcf,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
 }
-function fvFrom(o){const r=modelFull(o.g,o.m,o.t,o.rf,o.beta,o.mrp,o.tg);return r;}
+function fvFrom(o){return modelFull(o.g,o.m,o.t,o.rf,o.beta,o.mrp,o.tg);}
 function applyVar(o,key,val){o[SV[key].fld]= SV[key].sc===1 ? val : val/100;}
+// dynamic range centered on the CURRENT slider value, clamped to bounds
+function centerRange(key){const s=SV[key],cv=rd(s.id);let a=[];for(let i=-3;i<=3;i++){let v=cv+i*s.step;v=Math.max(s.min,Math.min(s.max,v));a.push(Math.round(v*100)/100);}return a;}
 
 function render(){
-  const c=cur();
-  const r=modelFull(c.g,c.m,c.t,c.rf,c.beta,c.mrp,c.tg);
-  // slider value labels
+  const c=cur(), r=modelFull(c.g,c.m,c.t,c.rf,c.beta,c.mrp,c.tg);
   document.getElementById('sv_g').textContent=rd('g').toFixed(1)+'%';
   document.getElementById('sv_m').textContent=rd('m').toFixed(1)+'%';
   document.getElementById('sv_t').textContent=rd('t').toFixed(1)+'%';
@@ -301,44 +323,52 @@ function render(){
   document.getElementById('sv_mrpS').textContent=rd('mrpS').toFixed(2)+'%';
   document.getElementById('sv_termg').textContent=rd('termg').toFixed(1)+'%';
   document.getElementById('builtLbl').textContent=builtMRP.toFixed(2);
-  // hero
-  if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';document.getElementById('oFV').className='rv neg';document.getElementById('oUp').textContent='—';document.getElementById('oEV').textContent='—';document.getElementById('oTV').textContent='—';}
-  else{
-    const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
-    const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
-    document.getElementById('oEV').textContent='$'+fmt(r.ev/1000)+'T';
-    document.getElementById('oTV').textContent=fmt(r.tvShare,0)+'%';
-    let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV $B</th></tr>';
-    r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
-    document.getElementById('oTable').innerHTML=rows;
-  }
-  // numeric formula lines (symbols are static in HTML above each)
-  document.getElementById('numBeta').innerHTML='current β = <span class="n">'+c.beta.toFixed(2)+'</span> &nbsp;·&nbsp; raw 2.21 · Blume 1.81 · peer 2.14';
-  document.getElementById('numMrp').innerHTML='current MRP = <span class="n">'+(c.mrp*100).toFixed(2)+'%</span> &nbsp;·&nbsp; FMP 4.72 · Damodaran 4.45 · built '+builtMRP.toFixed(2);
-  document.getElementById('numCoE').innerHTML='= r<sub>f</sub> <span class="n">'+(c.rf*100).toFixed(2)+'%</span> + β <span class="n">'+c.beta.toFixed(2)+'</span> × MRP <span class="n">'+(c.mrp*100).toFixed(2)+'%</span> = <span class="out">'+(r.coe*100).toFixed(2)+'%</span>';
-  document.getElementById('numWACC').innerHTML='= 99.8% × <span class="n">'+(r.coe*100).toFixed(2)+'%</span> + 0.2% × 3.63% = <span class="out">'+(r.w*100).toFixed(2)+'%</span>';
-  const denom=(r.w-c.tg)*100;
-  document.getElementById('numTV').innerHTML='= FCF₅ × (1 + g <span class="g">'+(c.tg*100).toFixed(1)+'%</span>) ÷ ( WACC <span class="n">'+(r.w*100).toFixed(2)+'%</span> − g <span class="g">'+(c.tg*100).toFixed(1)+'%</span> = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> )'+(r.bad?'':' &nbsp;→&nbsp; terminal = <span class="n">'+fmt(r.tvShare,0)+'%</span> of value');
+  if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';document.getElementById('oFV').className='rv neg';document.getElementById('oUp').textContent='—';document.getElementById('oEV').textContent='—';document.getElementById('oTV').textContent='—';document.getElementById('barchart').innerHTML='<div class="foot">WACC ≤ terminal g — model breaks. Lower g or raise WACC.</div>';document.getElementById('oTable').innerHTML='';return renderSens(c);}
+  const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
+  const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
+  document.getElementById('oEV').textContent='$'+fmt(r.ev/1000)+'T';
+  document.getElementById('oTV').textContent=fmt(r.tvShare,0)+'%';
+  let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV $B</th></tr>';
+  r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
+  document.getElementById('oTable').innerHTML=rows;
+
+  // FORMULAS — numeric line is numbers-only, full formula with parentheses
+  const rf=c.rf*100, bt=c.beta, mp=c.mrp*100, coe=r.coe*100, w=r.w*100, tg=c.tg, t=c.t;
+  document.getElementById('numBeta').innerHTML='= ( 0.67 × 2.21 ) + ( 0.33 × 1.0 ) = <span class="n">1.81</span> &nbsp;·&nbsp; peer 2.14 &nbsp;·&nbsp; <span class="out">current '+bt.toFixed(2)+'</span>';
+  document.getElementById('numMrp').innerHTML='= ( '+rf.toFixed(2)+'% + '+mp.toFixed(2)+'% ) − '+rf.toFixed(2)+'% = <span class="out">'+mp.toFixed(2)+'%</span>';
+  document.getElementById('numCoE').innerHTML='= '+rf.toFixed(2)+'% + ( '+bt.toFixed(2)+' × '+mp.toFixed(2)+'% ) = <span class="out">'+coe.toFixed(2)+'%</span>';
+  document.getElementById('numWACC').innerHTML='= ( 0.998 × '+coe.toFixed(2)+'% ) + ( 0.002 × '+KDPRE.toFixed(2)+'% × ( 1 − '+t.toFixed(3)+' ) ) = <span class="out">'+w.toFixed(2)+'%</span>';
+  const denom=w-tg*100;
+  document.getElementById('numTV').innerHTML='= ( '+fmt(r.ufcf5,0)+' × ( 1 + '+(tg*100).toFixed(1)+'% ) ) ÷ ( '+w.toFixed(2)+'% − '+(tg*100).toFixed(1)+'% = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> ) &nbsp;→&nbsp; terminal = <span class="n">'+fmt(r.tvShare,0)+'%</span> of value';
+
+  // BAR CHART — projected metric, years left→right
+  ['rev','ebitda','ufcf','pv'].forEach(k=>document.getElementById('pc_'+k).classList.toggle('on',PC===k));
+  const idx=PCMAP[PC].i, vals=r.rows.map(x=>x[idx]), mx=Math.max.apply(null,vals.map(Math.abs))||1;
+  let bc='<div style="display:flex;align-items:flex-end;gap:12px;height:150px;">';
+  r.rows.forEach((x,j)=>{const v=vals[j],h=Math.max(2,Math.abs(v)/mx*120);bc+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;"><div class="foot" style="margin-bottom:4px;">$'+fmt(v,0)+'</div><div style="width:64%;height:'+h+'px;background:linear-gradient(180deg,var(--accent),#2b6fc0);border-radius:5px 5px 0 0;"></div><div class="foot" style="margin-top:5px;">FY'+(27+j)+'</div></div>';});
+  bc+='</div><div class="foot" style="margin-top:4px;">'+PCMAP[PC].lbl+' · FY2027→FY2031</div>';
+  document.getElementById('barchart').innerHTML=bc;
+
   renderSens(c);
 }
 function renderSens(c){
   const keys=['g','m','t','rf','beta','mrp','tg'];
   keys.forEach(k=>{document.getElementById('s1_'+k).classList.toggle('on',S1===k);document.getElementById('sy_'+k).classList.toggle('on',SY===k);document.getElementById('sx_'+k).classList.toggle('on',SX===k);});
-  // tornado — full-range swing per variable
-  let sw=keys.map(k=>{const lo={...c};applyVar(lo,k,SV[k].r[0]);const hi={...c};applyVar(hi,k,SV[k].r[SV[k].r.length-1]);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;const swing=(av!=null&&bv!=null)?Math.abs(bv-av):0;return{k,lbl:SV[k].lbl,lo:av,hi:bv,swing};});
+  // tornado — FULL slider range per variable
+  let sw=keys.map(k=>{const lo={...c};applyVar(lo,k,SV[k].min);const hi={...c};applyVar(hi,k,SV[k].max);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;const swing=(av!=null&&bv!=null)?Math.abs(bv-av):0;return{lbl:SV[k].lbl,lo:av,hi:bv,swing};});
   const maxSw=Math.max.apply(null,sw.map(x=>x.swing))||1;
   sw.sort((a,b)=>b.swing-a.swing);
   document.getElementById('tornado').innerHTML=sw.map(x=>'<div class="tor"><span class="torlbl">'+x.lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px"></span><span class="torval">$'+(x.lo==null?'—':fmt(x.lo,0))+' → $'+(x.hi==null?'—':fmt(x.hi,0))+' &nbsp;(Δ$'+fmt(x.swing,0)+')</span></div>').join('');
-  // 1-variable
-  const v1=SV[S1];
-  let h1='<tr><th>'+v1.lbl+' →</th>'+v1.r.map(x=>'<th>'+x+(v1.sc===1?'':'%')+'</th>').join('')+'</tr>';
-  h1+='<tr><td>fair value</td>'+v1.r.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'">$'+fmt(rr.fv,0)+'</td>';}).join('')+'</tr>';
-  h1+='<tr><td>up/downside</td>'+v1.r.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.up>=0?'pos':'neg')+'">'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</td>';}).join('')+'</tr>';
+  // 1-variable — centered on current selection, spreads lower/higher
+  const v1=SV[S1], r1=centerRange(S1), u1=(v1.sc===1?'':'%');
+  let h1='<tr><th>'+v1.lbl+' →</th>'+r1.map((x,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+x+u1+(i===3?' •':'')+'</th>').join('')+'</tr>';
+  h1+='<tr><td>fair value</td>'+r1.map((x,i)=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'"'+(i===3?' style="outline:1px solid var(--accent)"':'')+'>$'+fmt(rr.fv,0)+'</td>';}).join('')+'</tr>';
+  h1+='<tr><td>up/downside</td>'+r1.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.up>=0?'pos':'neg')+'">'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</td>';}).join('')+'</tr>';
   document.getElementById('sens1').innerHTML=h1;
-  // 2-variable
-  const vy=SV[SY], vx=SV[SX];
-  let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+vx.r.map(x=>'<th>'+x+(vx.sc===1?'':'%')+'</th>').join('')+'</tr>';
-  vy.r.forEach(yv=>{h2+='<tr><td><b>'+yv+(vy.sc===1?'':'%')+'</b></td>'+vx.r.map(xv=>{const o={...c};applyVar(o,SY,yv);applyVar(o,SX,xv);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'">$'+fmt(rr.fv,0)+'<br><small>'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</small></td>';}).join('')+'</tr>';});
+  // 2-variable — both axes centered on current selections
+  const vy=SV[SY], vx=SV[SX], ry=centerRange(SY), rx=centerRange(SX), uy=(vy.sc===1?'':'%'), ux=(vx.sc===1?'':'%');
+  let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+rx.map((x,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+x+ux+'</th>').join('')+'</tr>';
+  ry.forEach((yv,iy)=>{h2+='<tr><td'+(iy===3?' style="color:var(--accent)"':'')+'><b>'+yv+uy+'</b></td>'+rx.map((xv,ix)=>{const o={...c};applyVar(o,SY,yv);applyVar(o,SX,xv);const rr=fvFrom(o);const ctr=(iy===3&&ix===3);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'"'+(ctr?' style="outline:2px solid var(--accent)"':'')+'>$'+fmt(rr.fv,0)+'<br><small>'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</small></td>';}).join('')+'</tr>';});
   document.getElementById('sens2').innerHTML=h2;
 }
 function setS1(k){S1=k;render();}
@@ -499,6 +529,32 @@ window.addEventListener('DOMContentLoaded',renderEst);
 </section>
 
 <div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP connector, live pulls · File: FMP_CAPABILITY_DEMO.html · Author: Claude for Alan</div>
+
+<script>
+// Comps conditional formatting — highlight cheap/expensive vs peer median
+(function(){
+  const tbl=document.getElementById('compsTable'); if(!tbl) return;
+  const rows=[...tbl.querySelectorAll('tr')];
+  const companies=['NVDA','TSM','AVGO','MU','AMD','INTC'];
+  // col index → {median, lowerIsCheap}
+  const cols={2:{med:45.5,cheapLow:true},3:{med:43.1,cheapLow:true},4:{med:14.6,cheapLow:true},5:{med:10.2,cheapLow:true},6:{med:0.53,cheapLow:true},7:{med:61.9,cheapLow:false},8:{med:38.8,cheapLow:false}};
+  rows.forEach(tr=>{
+    const c0=tr.children[0]; if(!c0) return;
+    if(!companies.includes(c0.textContent.trim())) return;
+    Object.keys(cols).forEach(ci=>{
+      const cell=tr.children[ci]; if(!cell) return;
+      const raw=cell.textContent.replace('%','').replace('−','-').trim();
+      const v=parseFloat(raw); if(isNaN(v)) return;
+      const {med,cheapLow}=cols[ci];
+      const dev=(v-med)/Math.abs(med);
+      const good = cheapLow ? v<med : v>med;              // cheap (val multiples) or better (margins)
+      const strong = Math.abs(dev)>0.25;                   // outlier threshold
+      cell.style.background = good ? (strong?'rgba(63,185,80,0.22)':'rgba(63,185,80,0.10)')
+                                   : (strong?'rgba(248,81,73,0.20)':'rgba(248,81,73,0.09)');
+    });
+  });
+})();
+</script>
 
 </body>
 </html>
