@@ -43,7 +43,28 @@
 <body>
 
 <h1>FMP Capability Demo — What Actually Comes Back</h1>
-<div class="sub">Every number on this page is a real pull made 2026-07-18 through the FMP connector. Anchor ticker: NVDA. No mockups.</div>
+<div class="sub">Every number on this page is a real pull through the FMP connector. §3 DCF below is wired live across 10 tickers — pick one. No mockups.</div>
+
+<div id="tickerBar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; padding:14px 18px; background:var(--panel); border:1px solid var(--border); border-radius:12px;">
+  <span style="font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:2px;">Ticker <small style="text-transform:none;">(drives §3 DCF live)</small>:</span>
+  <button class="tbtn" id="tbtn_NVDA" onclick="setTicker('NVDA')">NVDA</button>
+  <button class="tbtn" id="tbtn_MU" onclick="setTicker('MU')">MU</button>
+  <button class="tbtn" id="tbtn_GOOGL" onclick="setTicker('GOOGL')">GOOGL</button>
+  <button class="tbtn" id="tbtn_NBIS" onclick="setTicker('NBIS')">NBIS</button>
+  <button class="tbtn" id="tbtn_AVGO" onclick="setTicker('AVGO')">AVGO</button>
+  <button class="tbtn" id="tbtn_TSM" onclick="setTicker('TSM')">TSM</button>
+  <button class="tbtn" id="tbtn_AAPL" onclick="setTicker('AAPL')">AAPL</button>
+  <button class="tbtn" id="tbtn_MSFT" onclick="setTicker('MSFT')">MSFT</button>
+  <button class="tbtn" id="tbtn_TSLA" onclick="setTicker('TSLA')">TSLA</button>
+  <button class="tbtn" id="tbtn_IREN" onclick="setTicker('IREN')">IREN</button>
+  <span id="tickerStat" style="margin-left:auto; font-size:13.5px; color:var(--txt);"></span>
+</div>
+<div id="tickerFlag" class="flag" style="display:none; margin-bottom:26px;"></div>
+<style>
+  .tbtn{background:var(--panel2); border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:7px 15px; cursor:pointer; font-size:14px; font-weight:600; font-family:ui-monospace,Menlo,monospace;}
+  .tbtn:hover{border-color:var(--accent); color:var(--accent);}
+  .tbtn.on{border-color:var(--gold); color:var(--gold); background:rgba(210,153,34,0.12);}
+</style>
 
 <!-- ============ 1. COMPS ============ -->
 <section>
@@ -357,13 +378,13 @@
   .tor{display:flex; align-items:center; gap:10px; margin:5px 0; font-size:12.5px;}
   .torlbl{width:120px; color:var(--txt); flex-shrink:0;} .torbar{height:15px; border-radius:4px; background:var(--accent); opacity:.85;} .torval{color:var(--dim); font-family:ui-monospace,Menlo,monospace; font-size:11.5px; white-space:nowrap;}
 </style>
-<h2>3 · DCF — NVDA · sliders + modes, formulas update live</h2>
+<h2 id="dcfTitle">3 · DCF — NVDA · sliders + modes, formulas update live</h2>
 <div class="src">endpoint: custom-dcf-advanced · every input is a slider (drag it) with quick-set chips · formulas below show symbols then numbers</div>
 
 <!-- RESULT BAR -->
 <div class="resultbar">
   <div class="rb"><span class="rk">Fair value / share</span><span class="rv" id="oFV">—</span></div>
-  <div class="rb"><span class="rk">Market price</span><span class="rv">$202.81</span></div>
+  <div class="rb"><span class="rk">Market price</span><span class="rv" id="oMktPrice">$202.81</span></div>
   <div class="rb"><span class="rk">Up / downside</span><span class="rv" id="oUp">—</span></div>
   <div class="rb"><span class="rk">Enterprise value</span><span class="rv" id="oEV">—</span></div>
   <div class="rb"><span class="rk">Perpetuity = % of value</span><span class="rv" id="oTV">—</span></div>
@@ -383,19 +404,15 @@
   <div class="foot" id="pmNote"></div></div>
 <div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
 <div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
-<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">bearish → bullish (sets the slider above, only used in Fixed-rate mode):</span>
-  <button class="chip" data-g="10" data-m="42" data-tx="20" onclick="setScen(10,42,20)">Bear 10%</button>
-  <button class="chip" data-g="20" data-m="48" data-tx="17" onclick="setScen(20,48,17)">Conservative 20%</button>
-  <button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Street Y1 pace 36%</button>
-  <button class="chip" data-g="50" data-m="53" data-tx="15.1" onclick="setScen(50,53,15.1)">Bull 50%</button>
-  <button class="chip" data-g="66.4" data-m="51.1" data-tx="15.1" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button></div>
+<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">bearish → bullish (sets the slider above, only used in Fixed-rate mode):</span><span id="scenChips" style="display:contents;"></span></div>
+<div class="foot" id="tickerCaveat" style="margin-top:6px;"></div>
 
 <!-- DISCOUNT RATE -->
 <div class="dcfh">B · Discount rate — CAPM → WACC</div>
 <div class="srow"><span class="slab">Risk-free rate rᶠ <small>10Y Treasury — distinct input</small></span><input type="range" id="rf" min="2" max="7" step="0.05" value="4.28"><span class="sval" id="sv_rf"></span></div>
 <div class="chips"><button class="chip" data-s="rf" data-v="4.28" onclick="setSlider('rf',4.28)">10Y 4.28%</button></div>
-<div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr — default: peer median</small></span><input type="range" id="bt" min="0.5" max="3" step="0.01" value="2.14"><span class="sval" id="sv_bt"></span></div>
-<div class="chips">
+<div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr — default: peer median</small></span><input type="range" id="bt" min="0.5" max="5" step="0.01" value="2.14"><span class="sval" id="sv_bt"></span></div>
+<div class="chips" id="betaChips">
   <button class="chip" data-s="bt" data-v="2.211" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
   <button class="chip" data-s="bt" data-v="2.14" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
   <button class="chip" data-s="bt" data-v="1.93" onclick="setSlider('bt',1.93)">Peer mean 1.93</button>
@@ -490,15 +507,15 @@
     <button class="mbtn" id="sx_mrp" onclick="setSX('mrp')">MRP</button>
     <button class="mbtn" id="sx_tg" onclick="setSX('tg')">Terminal g</button></div>
   <div class="scrollx"><table class="sensi stickytbl" id="sens2"></table></div>
-  <div class="foot">Each cell: fair value on top, up/downside vs $202.81 below. Green above price, red below. Ranges cover the full slider span (incl. FMP's 66% growth).</div></div>
+  <div class="foot">Each cell: fair value on top, up/downside vs <span id="rvPriceLbl4">$202.81</span> below. Green above price, red below. Ranges cover the full slider span.</div></div>
 
 <!-- REVERSE DCF -->
-<div class="dcfh">E · Reverse DCF — what is today's $202.81 price assuming?</div>
+<div class="dcfh">E · Reverse DCF — what is today's <span id="rvPriceLbl1">$202.81</span> price assuming?</div>
 <div class="fcard">
   <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:13.5px; color:var(--txt); margin-bottom:10px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
     <div><span style="font-size:17px;">🔒</span> <b>Lock</b> — every input stays at your current slider</div>
     <div><span style="font-size:17px;">🎯</span> <b>Solve</b> — except the ONE you pick below, which we solve for</div>
-    <div><span style="font-size:17px;">⚖️</span> <b>Target</b> — the value that makes fair value = $202.81 (today's price)</div>
+    <div><span style="font-size:17px;">⚖️</span> <b>Target</b> — the value that makes fair value = <span id="rvPriceLbl2">$202.81</span> (today's price)</div>
   </div>
   <div class="subttl">① Which input matters most? (same tornado as §D — pick the biggest lever to solve for)</div>
   <div id="revTornado" style="margin:6px 0 12px;"></div>
@@ -518,16 +535,113 @@
   <div class="chips" id="rvYchips" style="margin:6px 0 3px;"></div>
   <div class="chips" id="rvXchips" style="margin:0 0 8px;"></div>
   <div class="scrollx"><table class="sensi stickytbl" id="revGrid"></table></div>
-  <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify $202.81 at that row×column combo. Center cell (outlined) = your current sliders for both axes — should roughly match the ① answer above. Scan a row/column for combos where the solved number goes from plausible to absurd — that's where the market's story stops holding up.</div>
+  <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify <span id="rvPriceLbl3">$202.81</span> at that row×column combo. Center cell (outlined) = your current sliders for both axes — should roughly match the ① answer above. Scan a row/column for combos where the solved number goes from plausible to absurd — that's where the market's story stops holding up.</div>
 </div>
 
 <script>
-const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,kd:0.0363,eqW:0.9977,debtW:0.0023};
+// ---- TICKERS: real per-ticker DCF base data, pulled live (custom-dcf-advanced + profile-symbol) ----
+// rev/shares/netDebt in $B, from the last ACTUAL year in custom-dcf-advanced; daPct/capexPct/nwcPct/ebitda%/growth%
+// from the constant 5-yr PROJECTED rows of that same endpoint; beta/price from profile-symbol (canonical — the
+// DCF endpoint's own beta field is unreliable for at least one name here, see MU's flag below).
+const TICKERS={
+  NVDA:{name:'NVIDIA', rev:215.938, shares:24.514, netDebt:0.807, daPct:0.0306, capexPct:0.0349, nwcPct:0.2272,
+    price:213.57, beta:2.14, costOfDebt:4.28, rf:4.28, mrp:4.45, debtW:0.0023, eqW:0.9977,
+    gDefault:36, mDefault:51.1, tDefault:15.1, termgDefault:4.28,
+    consensus:[393.3,562.3,686.6,774.2,1005.0], // Street FY27→31 revenue $B, financial-estimates
+    flags:[]},
+  MU:{name:'Micron', rev:37.378, shares:1.125, netDebt:5.636, daPct:0.2947, capexPct:0.12, nwcPct:0.4172,
+    price:974.49, beta:2.142, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
+    gDefault:48.9, mDefault:50.0, tDefault:11.6, termgDefault:4.0, gFmp5yr:70.0, consensus:null,
+    flags:["FMP's own custom-dcf-advanced beta field returns 4.0 for MU — inconsistent with its canonical 5-yr regression beta (2.14, profile-symbol), which is what's used here instead."]},
+  GOOGL:{name:'Alphabet', rev:402.963, shares:12.23, netDebt:28.583, daPct:0.0462, capexPct:0.1378, nwcPct:0.1303,
+    price:348.48, beta:1.247, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
+    gDefault:15.1, mDefault:37.1, tDefault:16.8, termgDefault:4.0, gFmp5yr:11.9, consensus:null, flags:[]},
+  NBIS:{name:'Nebius', rev:0.53, shares:0.253, netDebt:1.295, daPct:0.6962, capexPct:0.8251, nwcPct:0.3618,
+    price:226.30, beta:1.402, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0802, eqW:0.9198,
+    gDefault:38.8, gActualRaw:350.89, mDefault:20, tDefault:21.0, termgDefault:4.0, gFmp5yr:38.8, consensus:null,
+    flags:["Loss-making growth-stage name: FMP's DCF tax-rate field is negative (−208%, defaulted to 21% statutory instead) and its projected EBITDA margin is −40% (clamped to this model's 20% floor — treat the fair value here as illustrative, not load-bearing).","Trailing (most recent actual) revenue growth is actually 351%, off a tiny $530M base — that's a small-base distortion, not a durable run-rate, so the default here uses FMP's own smoothed 5-yr growth assumption (38.8%) instead; the 351% figure is available via the growth slider if you want to stress-test it."]},
+  AVGO:{name:'Broadcom', rev:63.887, shares:4.853, netDebt:48.958, daPct:0.1617, capexPct:0.0124, nwcPct:0.1267,
+    price:394.69, beta:1.462, costOfDebt:4.93, rf:4.37, mrp:4.45, debtW:0.0329, eqW:0.9671,
+    gDefault:23.9, mDefault:53.9, tDefault:21.0, termgDefault:4.0, gFmp5yr:24.2, consensus:null,
+    flags:["FMP's own DCF tax-rate field is negative (−1.75%) for AVGO — defaulted to the 21% US statutory rate instead."]},
+  TSM:{name:'TSMC', rev:118.991, shares:5.186, netDebt:-52.663, daPct:0.223, capexPct:0.4245, nwcPct:0.0987,
+    price:423.00, beta:1.246, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0148, eqW:0.9852,
+    gDefault:33.0, mDefault:69.9, tDefault:15.9, termgDefault:4.0, gFmp5yr:26.2, consensus:null, flags:[]},
+  AAPL:{name:'Apple', rev:416.161, shares:15.005, netDebt:76.443, daPct:0.0293, capexPct:0.0282, nwcPct:0.0389,
+    price:324.89, beta:1.097, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0225, eqW:0.9775,
+    gDefault:6.4, mDefault:36.1, tDefault:15.6, termgDefault:4.0, gFmp5yr:4.1, consensus:null, flags:[]},
+  MSFT:{name:'Microsoft', rev:281.724, shares:7.465, netDebt:81.942, daPct:0.084, capexPct:0.1573, nwcPct:0.151,
+    price:388.97, beta:1.13, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0372, eqW:0.9628,
+    gDefault:14.9, mDefault:52.4, tDefault:17.6, termgDefault:4.0, gFmp5yr:13.9, consensus:null, flags:[]},
+  TSLA:{name:'Tesla', rev:94.827, shares:3.528, netDebt:-8.137, daPct:0.0798, capexPct:0.107, nwcPct:0.0435,
+    price:377.16, beta:1.802, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0062, eqW:0.9938,
+    gDefault:0, gActualRaw:-2.93, mDefault:20, tDefault:28.1, termgDefault:4.0, gFmp5yr:0.0, consensus:null,
+    flags:["TSLA's most recent actual revenue growth was NEGATIVE (−2.9%) — clamped to the growth slider's 0% floor.","TTM EBITDA margin (16.5%) sits below this model's 20% slider floor — clamped up, which slightly overstates near-term profitability."]},
+  IREN:{name:'IREN', rev:0.501, shares:0.223, netDebt:0.4, daPct:0.2654, capexPct:0.9837, nwcPct:-0.0171,
+    price:42.33, beta:4.279, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0924, eqW:0.9076,
+    gDefault:80, gActualRaw:167.65, mDefault:20, tDefault:7.0, termgDefault:4.0, gFmp5yr:82.0, consensus:null,
+    flags:["Loss-making hypergrowth crypto/AI-infra miner: trailing growth is 168% off a tiny $501M base, clamped to the slider's 80% ceiling. FMP's own projected EBITDA margin is −20% (clamped to this model's 20% floor) — treat this DCF as illustrative only, same caveat as NBIS."]}
+};
+let CURTICK='NVDA';
+let BASE=TICKERS[CURTICK];
 let builtMRP=4.65, PC='rev', PM='consensus';
-const CONS_REV=[393.3,562.3,686.6,774.2,1005.0]; // NVDA analyst consensus revenue $B, FY2027→FY2031 (financial-estimates)
-function setPM(k){PM=k;render();}
+function setPM(k){ if(k==='consensus' && !BASE.consensus) return; PM=k; render(); }
+function chipsHTML_scenario(){
+  if(CURTICK==='NVDA'){
+    return '<button class="chip" data-g="10" data-m="42" data-tx="20" onclick="setScen(10,42,20)">Bear 10%</button>'+
+    '<button class="chip" data-g="20" data-m="48" data-tx="17" onclick="setScen(20,48,17)">Conservative 20%</button>'+
+    '<button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Street Y1 pace 36%</button>'+
+    '<button class="chip" data-g="50" data-m="53" data-tx="15.1" onclick="setScen(50,53,15.1)">Bull 50%</button>'+
+    '<button class="chip" data-g="66.4" data-m="51.1" data-tx="15.1" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button>';
+  }
+  const b=BASE, g=b.gDefault, m=b.mDefault, t=b.tDefault;
+  const bear=Math.max(0,Math.round(g*0.4*10)/10), bull=Math.min(80,Math.round(g*1.4*10)/10);
+  const fmp=(b.gFmp5yr!=null?b.gFmp5yr:g);
+  const actualRaw=(b.gActualRaw!=null?b.gActualRaw:g), actualClamped=Math.max(0,Math.min(80,Math.round(actualRaw*10)/10));
+  const actualLbl='Recent actual '+actualRaw.toFixed(1)+'%'+(actualRaw!==actualClamped?' (clamped)':'');
+  return '<button class="chip" data-g="'+bear+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bear+','+m+','+t+')">Bear</button>'+
+    '<button class="chip" data-g="'+actualClamped+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+actualClamped+','+m+','+t+')">'+actualLbl+'</button>'+
+    '<button class="chip" data-g="'+bull+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bull+','+m+','+t+')">Bull</button>'+
+    '<button class="chip" data-g="'+fmp+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+fmp+','+m+','+t+')">FMP 5yr extrap '+fmp.toFixed(1)+'% (often unrealistic)</button>';
+}
+function chipsHTML_beta(){
+  if(CURTICK==='NVDA'){
+    return '<button class="chip" data-s="bt" data-v="2.211" onclick="setSlider(\'bt\',2.211)">FMP raw 2.21</button>'+
+    '<button class="chip" data-s="bt" data-v="2.14" onclick="setSlider(\'bt\',2.14)">Peer median 2.14</button>'+
+    '<button class="chip" data-s="bt" data-v="1.93" onclick="setSlider(\'bt\',1.93)">Peer mean 1.93</button>'+
+    '<button class="chip" data-s="bt" data-v="1.81" onclick="setSlider(\'bt\',1.81)">Blume 1.81</button>'+
+    '<button class="chip" data-s="bt" data-v="1.3" onclick="setSlider(\'bt\',1.30)">Bull mean-revert 1.30</button>';
+  }
+  const bv=BASE.beta.toFixed(2);
+  return '<button class="chip" data-s="bt" data-v="'+bv+'" onclick="setSlider(\'bt\','+bv+')">Canonical β '+bv+'</button>'+
+    '<button class="chip" data-s="bt" data-v="1.0" onclick="setSlider(\'bt\',1.0)">Mean-revert 1.00</button>'+
+    '<div class="foot" style="width:100%;margin-top:2px;">No peer-comps universe built for '+CURTICK+' yet (§1 stays NVDA/semis) — this is FMP\'s canonical 5-yr regression beta, not a peer median.</div>';
+}
+function setTicker(sym){
+  CURTICK=sym; BASE=TICKERS[sym];
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('on', b.id==='tbtn_'+sym));
+  document.getElementById('g').value=Math.max(0,Math.min(80,BASE.gDefault));
+  document.getElementById('m').value=Math.max(20,Math.min(75,BASE.mDefault));
+  document.getElementById('t').value=Math.max(5,Math.min(35,BASE.tDefault));
+  document.getElementById('rf').value=BASE.rf;
+  document.getElementById('bt').value=BASE.beta;
+  document.getElementById('mrpS').value=BASE.mrp;
+  document.getElementById('termg').value=BASE.termgDefault;
+  PM = BASE.consensus ? 'consensus' : 'const';
+  document.getElementById('pm_consensus').style.opacity = BASE.consensus ? '1' : '0.35';
+  document.getElementById('pm_consensus').style.pointerEvents = BASE.consensus ? 'auto' : 'none';
+  document.getElementById('scenChips').innerHTML = chipsHTML_scenario();
+  document.getElementById('betaChips').innerHTML = chipsHTML_beta();
+  document.getElementById('tickerCaveat').innerHTML = BASE.flags.length ? ('⚠️ '+BASE.flags.join(' ')) : '';
+  document.getElementById('dcfTitle').textContent = '3 · DCF — '+sym+' · sliders + modes, formulas update live';
+  const tf=document.getElementById('tickerFlag');
+  if(sym!=='NVDA'){ tf.style.display='block'; tf.innerHTML='⚠️ Showing <b>'+sym+'\'s own DCF (§3)</b> with real fundamentals (custom-dcf-advanced) and canonical beta (profile-symbol). Sections 1 (comps), 2.7 (analyst coverage), 4 (insider), 5 (congress) and 6 (COT) below still show <b>NVDA</b> — no peer-comps universe or analyst-consensus path built for '+sym+' yet.'; }
+  else{ tf.style.display='none'; }
+  document.getElementById('tickerStat').textContent = BASE.name+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2);
+  RV=null; autoAxis=true; autoRVaxis=true;
+  render();
+}
 let S1='g', SX='g', SY='rf';
-const KDPRE=4.28;   // pre-tax cost of debt (%)
 const SV={
   g:{lbl:'Revenue growth',id:'g',sc:100,fld:'g',min:0,max:80,step:10},
   m:{lbl:'EBITDA margin',id:'m',sc:100,fld:'m',min:20,max:75,step:5},
@@ -547,9 +661,9 @@ function applyBuiltChip(){document.getElementById('mrpS').value=builtMRP.toFixed
 function setPC(k){PC=k;render();}
 
 function modelFull(g,m,t,rf,beta,mrp,tg){
-  const coe=rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*(KDPRE/100)*(1-t);
+  const coe=rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*(BASE.costOfDebt/100)*(1-t);
   let rev=BASE.rev,nwcPrev=BASE.rev*BASE.nwcPct,sumPV=0,ufcf=0,rows=[];
-  for(let i=1;i<=5;i++){rev = PM==='consensus' ? CONS_REV[i-1] : rev*(1+g);const eb=rev*m,da=rev*BASE.daPct,ebit=eb-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,eb,ufcf,pv]);}
+  for(let i=1;i<=5;i++){rev = (PM==='consensus'&&BASE.consensus) ? BASE.consensus[i-1] : rev*(1+g);const eb=rev*m,da=rev*BASE.daPct,ebit=eb-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,eb,ufcf,pv]);}
   if(w<=tg)return{bad:true,coe,w};
   const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
   return{coe,w,ev,fv,ufcf5:ufcf,pvExplicit:sumPV,pvTerm:pvTV,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
@@ -569,6 +683,9 @@ function render(){
   document.getElementById('sv_mrpS').textContent=rd('mrpS').toFixed(2)+'%';
   document.getElementById('sv_termg').textContent=rd('termg').toFixed(1)+'%';
   document.getElementById('builtLbl').textContent=builtMRP.toFixed(2);
+  const pxStr='$'+fmt(BASE.price,2);
+  document.getElementById('oMktPrice').textContent=pxStr;
+  ['rvPriceLbl1','rvPriceLbl2','rvPriceLbl3','rvPriceLbl4'].forEach(id=>{const e=document.getElementById(id); if(e)e.textContent=pxStr;});
   if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';document.getElementById('oFV').className='rv neg';document.getElementById('oUp').textContent='—';document.getElementById('oEV').textContent='—';document.getElementById('oTV').textContent='—';document.getElementById('barchart').innerHTML='<div class="foot">WACC ≤ terminal g — model breaks. Lower g or raise WACC.</div>';document.getElementById('oTable').innerHTML='';return renderSens(c);}
   const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
   const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
@@ -596,20 +713,26 @@ function render(){
   else if(near(bt,1.30)) bp=[['β (bull)',bt.toFixed(2),'out'],['=','=',O],['mean-revert','→ 1.0','v']];
   else bp=[['β (custom)',bt.toFixed(2),'out'],['','',O],['off-preset','slider','v']];
   fg('fgBeta',bp);
-  const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};
-  const pct = bt>=PB.max?'above the entire peer set':bt>=PB.med?'top quartile of peers':bt>=PB.mean?'above the peer mean':bt>=PB.min?'within the peer range':'below the entire peer set';
-  document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. NVDA\'s raw '+PB.nvda.toFixed(2)+' is an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.';
+  if(CURTICK==='NVDA'){
+    const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};
+    const pct = bt>=PB.max?'above the entire peer set':bt>=PB.med?'top quartile of peers':bt>=PB.mean?'above the peer mean':bt>=PB.min?'within the peer range':'below the entire peer set';
+    document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. NVDA\'s raw '+PB.nvda.toFixed(2)+' is an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.';
+  } else {
+    document.getElementById('betaCtx').innerHTML='📊 <b>'+CURTICK+'\'s canonical β (profile-symbol, 5-yr regression): '+BASE.beta.toFixed(2)+'</b><br>No peer-comps universe is built for '+CURTICK+' yet (§1 stays NVDA/semis-only), so there\'s no peer median/range to compare your slider against here — this is a single-company reference point, not a percentile.';
+  }
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
-  fg('fgWACC',[['(  wₑ','(  0.998','v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  0.002','v'],['×','×',O],['k_d',KDPRE.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
+  fg('fgWACC',[['(  wₑ','(  '+BASE.eqW.toFixed(3),'v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  '+BASE.debtW.toFixed(3),'v'],['×','×',O],['k_d',BASE.costOfDebt.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
   fg('fgTV',[['(  FCF₅',' (  '+fmt(r.ufcf5,0),'v'],['×','×',O],['(1+g)  )','(1+'+(tg*100).toFixed(1)+'%)  )','v'],['÷','÷',O],['(  WACC−g  )','(  '+denom.toFixed(2)+'%  )',denom>0?'v':'outn'],['→','→',O],['terminal',fmt(r.tvShare,0)+'% of val','out']]);
 
   // projection-source toggle
   document.getElementById('pm_const').classList.toggle('on',PM==='const');
   document.getElementById('pm_consensus').classList.toggle('on',PM==='consensus');
-  document.getElementById('pmNote').innerHTML= PM==='consensus'
-    ? '📈 Active: the Street\'s FY27–31 revenue path ($393B→$1,005B, 36.0% CAGR). The growth slider above is <b style="color:var(--gold)">disabled/ignored</b> in this mode — switch to Fixed rate to use it.'
-    : '🎚️ Active: revenue compounds at a flat <b style="color:var(--accent)">'+rd('g').toFixed(1)+'%/yr</b> off your slider above, ignoring the Street\'s actual (non-flat) path.';
+  document.getElementById('pmNote').innerHTML= PM==='consensus'&&BASE.consensus
+    ? '📈 Active: the Street\'s FY27–31 revenue path ($'+BASE.consensus[0].toFixed(0)+'B→$'+BASE.consensus[4].toFixed(0)+'B). The growth slider above is <b style="color:var(--gold)">disabled/ignored</b> in this mode — switch to Fixed rate to use it.'
+    : (BASE.consensus
+      ? '🎚️ Active: revenue compounds at a flat <b style="color:var(--accent)">'+rd('g').toFixed(1)+'%/yr</b> off your slider above, ignoring the Street\'s actual (non-flat) path.'
+      : '🎚️ Active (only option for '+CURTICK+'): revenue compounds at a flat <b style="color:var(--accent)">'+rd('g').toFixed(1)+'%/yr</b> off your slider above. No analyst-consensus $B path has been built for '+CURTICK+' in this demo — only NVDA has one.');
   const gRow=document.getElementById('growthRow'); gRow.style.opacity=(PM==='consensus'?'0.4':'1'); gRow.style.pointerEvents=(PM==='consensus'?'none':'auto');
   document.getElementById('g').disabled = (PM==='consensus');
   // BAR CHART — projected metric, years left→right, with a CAGR trend line overlay
@@ -635,6 +758,7 @@ function render(){
   // HISTORICAL vs FORWARD CAGR — wired conclusion (does the Street expect acceleration or deceleration?)
   (function(){
     const cc=document.getElementById('cagrCompare'); if(!cc) return;
+    if(CURTICK!=='NVDA'){ cc.innerHTML='<div class="foot">No FY-by-FY consensus history loaded for '+CURTICK+' in this demo (only NVDA has one built, §3.5) — historical-vs-forward CAGR compare isn\'t available here yet.</div>'; return; }
     const dsp=cell=>{const m=(''+cell).match(/(-?[\d,\.]+)/);return m?parseFloat(m[1].replace(/,/g,'')):null;};
     let histCagr=null, fwdCagr=null;
     if(typeof EST!=='undefined' && EST.NVDA){
@@ -709,19 +833,47 @@ function renderReverse(c){
 
   document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl; document.getElementById('rvName3').textContent=SV[RV].lbl;
   const x=solveFor(RV,c); let disp,ref,verdict,color,icon;
-  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='modes → Bear 10 · Conservative 20 · Street Y1 36 · Bull 50 · FMP 66';
-    if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
-    else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';icon='✅';}
-    else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';icon='⚠️';}
-    else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';icon='🚨';}}
-  else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='modes → 42 · 48 · 51';
-    if(p<48){verdict='below current margins → undemanding';color='var(--green)';icon='✅';}
-    else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';icon='⚠️';}
-    else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';icon='🚨';}}
-  else if(RV==='beta'){disp=x.toFixed(2);const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' (NVDA raw '+PB.nvda.toFixed(2)+')';
-    if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
-    else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';icon='⚠️';}
-    else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}}
+  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';
+    if(CURTICK==='NVDA'){
+      ref='modes → Bear 10 · Conservative 20 · Street Y1 36 · Bull 50 · FMP 66';
+      if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
+      else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';icon='✅';}
+      else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';icon='⚠️';}
+      else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';icon='🚨';}
+    } else {
+      const gd=BASE.gDefault, fmp=(BASE.gFmp5yr!=null?BASE.gFmp5yr:gd*1.4);
+      ref='modes → Bear · Recent actual '+gd+'% · Bull · FMP 5yr '+fmp.toFixed(0)+'%';
+      if(p<gd*0.4){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
+      else if(p<=gd){verdict='at or below '+CURTICK+'\'s own recent actual pace → undemanding';color='var(--green)';icon='✅';}
+      else if(p<=Math.max(fmp,gd*1.4)){verdict='above recent actual pace, within FMP\'s own extrapolation → demanding';color='var(--gold)';icon='⚠️';}
+      else{verdict='ABOVE even FMP\'s own 5-yr extrapolation → the price assumes the implausible';color='var(--red)';icon='🚨';}
+    }}
+  else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';
+    if(CURTICK==='NVDA'){
+      ref='modes → 42 · 48 · 51';
+      if(p<48){verdict='below current margins → undemanding';color='var(--green)';icon='✅';}
+      else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';icon='⚠️';}
+      else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';icon='🚨';}
+    } else {
+      const md=BASE.mDefault;
+      ref=CURTICK+'\'s own FMP-projected margin ~'+md.toFixed(0)+'%';
+      if(p<md*0.9){verdict='below '+CURTICK+'\'s own projected margin → undemanding';color='var(--green)';icon='✅';}
+      else if(p<=md*1.15){verdict='close to '+CURTICK+'\'s own projected margin → plausible';color='var(--gold)';icon='⚠️';}
+      else{verdict='needs materially more margin expansion than FMP itself projects → demanding';color='var(--red)';icon='🚨';}
+    }}
+  else if(RV==='beta'){disp=x.toFixed(2);
+    if(CURTICK==='NVDA'){
+      const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' (NVDA raw '+PB.nvda.toFixed(2)+')';
+      if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
+      else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';icon='⚠️';}
+      else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}
+    } else {
+      ref=CURTICK+'\'s own canonical β '+BASE.beta.toFixed(2)+' (no peer set built — see §1 note)';
+      const d=x-BASE.beta;
+      if(Math.abs(d)<0.15){verdict='in line with '+CURTICK+'\'s own canonical beta → reasonable';color='var(--gold)';icon='⚠️';}
+      else if(d<0){verdict='BELOW '+CURTICK+'\'s own beta → implies the market treats it as safer than its own risk profile suggests (price looks cheap)';color='var(--green)';icon='✅';}
+      else{verdict='ABOVE '+CURTICK+'\'s own beta → implies the market treats it as riskier than its own profile (price looks cheap)';color='var(--green)';icon='✅';}
+    }}
   else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='modes → Bull 4.0 · Damodaran 4.45 · FMP 4.72';
     if(p<4.0){verdict='thinner premium than the bull case → rich pricing';color='var(--red)';icon='🚨';}
     else if(p<=4.72){verdict='within the standard MRP range → reasonable';color='var(--gold)';icon='⚠️';}
@@ -732,22 +884,25 @@ function renderReverse(c){
     else{verdict='perpetual growth above the bull case → demanding';color='var(--red)';icon='🚨';}}
   document.getElementById('revout').innerHTML=
     '<div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">'+
-    '<div style="font-size:13px;color:var(--txt);">🔒 Holding everything else at your sliders, to justify <b style="color:var(--accent)">$202.81</b> the market implies:</div>'+
+    '<div style="font-size:13px;color:var(--txt);">🔒 Holding everything else at your sliders, to justify <b style="color:var(--accent)">$'+fmt(BASE.price,2)+'</b> the market implies:</div>'+
     '<div style="font-size:26px;font-weight:700;color:var(--gold);margin:6px 0;">'+icon+' '+SV[RV].lbl+' = '+disp+'</div>'+
     '<div style="font-size:14px;color:var(--txt);">📏 reference range: '+ref+'</div>'+
     '<div style="font-size:16px;font-weight:700;color:'+color+';margin-top:6px;">'+icon+' '+verdict+'</div></div>';
 
   // ACTIONABLE RECOMMENDATION — a defensible, peer/analyst-anchored fair value, not just a qualitative read
   (function(){
-    const PB=window.PEER&&window.PEER.beta||{med:2.14}, PG=window.PEER&&window.PEER.cagr||{med:38.6};
+    const isNvda=CURTICK==='NVDA';
+    const PB=isNvda ? (window.PEER&&window.PEER.beta||{med:2.14}) : {med:BASE.beta};
+    const PG=isNvda ? (window.PEER&&window.PEER.cagr||{med:38.6}) : {med:BASE.gDefault};
     const defensible={g:PG.med/100, m:c.m, t:c.t, rf:c.rf, beta:PB.med, mrp:0.0445, tg:0.04};
     const rr=fvFrom(defensible);
     const upD=rr.bad?null:(rr.fv/BASE.price-1)*100;
+    const srcLbl=isNvda ? ('peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'%') : (CURTICK+'\'s own canonical beta '+PB.med.toFixed(2)+' · its own trailing growth '+PG.med.toFixed(0)+'% — no peer set built, see §1 note');
     document.getElementById('revAction').innerHTML = rr.bad ? '' :
-      '<div class="fname">💡 Recommended defensible inputs (peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'% · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
+      '<div class="fname">💡 Recommended defensible inputs ('+srcLbl+' · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
       '<div><span class="foot">Defensible fair value</span><br><b style="font-size:24px;color:'+(upD>=0?'var(--green)':'var(--red)')+'">$'+fmt(rr.fv,0)+'</b></div>'+
-      '<div><span class="foot">vs market $202.81</span><br><b style="font-size:24px;color:'+(upD>=0?'var(--green)':'var(--red)')+'">'+(upD>=0?'+':'')+fmt(upD,0)+'%</b></div>'+
+      '<div><span class="foot">vs market $'+fmt(BASE.price,2)+'</span><br><b style="font-size:24px;color:'+(upD>=0?'var(--green)':'var(--red)')+'">'+(upD>=0?'+':'')+fmt(upD,0)+'%</b></div>'+
       '<button class="mbtn gold" onclick="applyDefensible()">Apply these inputs to the sliders ↑</button></div>';
   })();
 
@@ -766,7 +921,9 @@ function renderReverse(c){
 function setRVY(k){RVY=k;autoRVaxis=false;render();}
 function setRVX(k){RVX=k;autoRVaxis=false;render();}
 function applyDefensible(){
-  const PB=window.PEER&&window.PEER.beta||{med:2.14}, PG=window.PEER&&window.PEER.cagr||{med:38.6};
+  const isNvda=CURTICK==='NVDA';
+  const PB=isNvda ? (window.PEER&&window.PEER.beta||{med:2.14}) : {med:BASE.beta};
+  const PG=isNvda ? (window.PEER&&window.PEER.cagr||{med:38.6}) : {med:BASE.gDefault};
   document.getElementById('g').value=PG.med.toFixed(1);
   document.getElementById('bt').value=PB.med.toFixed(2);
   document.getElementById('mrpS').value='4.45';
@@ -815,7 +972,7 @@ function calcERP(){
 function setERP(spx,dy,by,g,tg,crp){document.getElementById('spx').value=spx;document.getElementById('dy').value=dy;document.getElementById('by').value=by;document.getElementById('gg').value=g;document.getElementById('tg').value=tg;document.getElementById('crp').value=crp;calcERP();}
 function applyBuilt(){builtMRP=calcERP();document.getElementById('mrpS').value=builtMRP.toFixed(2);render();}
 ['spx','dy','by','gg','tg','crp'].forEach(id=>document.getElementById(id).addEventListener('input',calcERP));
-window.addEventListener('DOMContentLoaded',function(){calcERP();render();});
+window.addEventListener('DOMContentLoaded',function(){calcERP();setTicker('NVDA');});
 </script>
 </section>
 
@@ -1045,8 +1202,9 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <p style="font-size:15px;"><b style="color:var(--gold);">🔌 WIRED — computed live from a data object, recomputes on change:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's wired</th></tr>
-<tr><td class="pur">§1 Comps</td><td>One <span class="mono2">COMPS</span> object (6 companies × 10 metrics) drives: the Median/Mean/Min/Max/Delta summary row, both narrative notes, the football-field ranges, and the VALUE/QUALITY/composite score. It also exposes <span class="mono2">window.PEER</span> — the same peer beta/CAGR stats get <i>reused</i> (not retyped) by §3's beta context and reverse-DCF beta verdict.</td></tr>
-<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass.</td></tr>
+<tr><td class="pur">§1 Comps</td><td>One <span class="mono2">COMPS</span> object (6 companies × 10 metrics) drives: the Median/Mean/Min/Max/Delta summary row, both narrative notes, the football-field ranges, and the VALUE/QUALITY/composite score. It also exposes <span class="mono2">window.PEER</span> — the same peer beta/CAGR stats get <i>reused</i> (not retyped) by §3's beta context and reverse-DCF beta verdict. <b>NVDA/semis only</b> — see the ticker-switcher row below.</td></tr>
+<tr><td class="pur">Ticker switcher (top of page)</td><td>A <span class="mono2">TICKERS</span> object holds real per-ticker DCF base data for <b>10 names</b> (NVDA, MU, GOOGL, NBIS, AVGO, TSM, AAPL, MSFT, TSLA, IREN) — revenue/shares/net-debt/D&amp;A%/capex%/NWC% from <span class="mono2">custom-dcf-advanced</span>'s actual + projected rows, beta/price from <span class="mono2">profile-symbol</span> (the DCF endpoint's own beta field is unreliable for at least MU — flagged live on the page when you pick it). Clicking a ticker calls <span class="mono2">setTicker()</span>: swaps <span class="mono2">BASE</span>, resets every slider to that company's own real defaults, regenerates the scenario/beta chip rows, and re-renders §3 end-to-end — same engine, real numbers, no placeholder ticker text.</td></tr>
+<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass. Now driven by whichever ticker is selected above, not a hardcoded NVDA constant.</td></tr>
 <tr><td class="pur">§3.5 Estimates</td><td>Consensus dispersion (range-width ÷ avg) is computed per year from the raw "avg (low–high)" cells into a HIGH/MODERATE/LOW confidence badge. <b>Not yet</b> feeding back into the DCF or reverse-DCF math — it's a read, not an input, today.</td></tr>
 <tr><td class="pur">§4 Insider</td><td>A real transaction array is classified (buy/sell/neutral), checked for 30-day cluster buys, and netted into a $ discretionary flow — the signal badge is a verdict of that computation, not a typed guess.</td></tr>
 </table>
@@ -1054,9 +1212,8 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <p style="font-size:15px;"><b style="color:var(--red);">🧵 NOT WIRED — static pulls / typed content, same every time regardless of anything else on the page:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's still static</th></tr>
-<tr><td class="pur">Everywhere</td><td><b>The whole page is hardcoded to NVDA.</b> Base financials, the comps set, peer beta stats, the consensus revenue path, insider transactions — none of it swaps if you typed a different ticker in, because there's no ticker input. "Ticker-flexible" would mean querying the Supabase tables that already ingest per-ticker fundamentals (see below), not a small tweak.</td></tr>
-<tr><td class="pur">§2.7 Analysts</td><td>Price targets &amp; grade mix below are one real pull, frozen at fetch time — they don't refresh, and they don't feed the DCF (e.g. the $319 consensus target isn't compared against the DCF fair value anywhere yet).</td></tr>
-<tr><td class="pur">§5 Congress / §6 COT</td><td>Raw tables, no derived signal — the insider-signal classifier in §4 is the template for these; not yet built for these two.</td></tr>
+<tr><td class="pur">§1 Comps / §2.7 Analysts / §4 Insider / §5 Congress / §6 COT</td><td>These five sections are <b>still NVDA-only</b> regardless of the ticker you pick at the top — there's no built peer-comps universe, analyst-consensus revenue path, insider transaction set, congressional trades, or COT data for the other 9 names yet. The banner that appears when you select a non-NVDA ticker says exactly this. §2.7's price targets &amp; grade mix are also a single real pull frozen at fetch time — they don't refresh, and the $319 consensus target isn't compared against the DCF fair value anywhere yet. §5/§6 have no derived signal (§4's insider classifier is the template, not yet built for these two).</td></tr>
+<tr><td class="pur">Analyst-consensus growth path (§3A toggle)</td><td>Only NVDA has a real Street $B-by-year path loaded. Every other ticker's projection-source toggle is locked to Fixed-rate — the button is visibly dimmed with a note explaining why, not silently disabled.</td></tr>
 </table>
 
 <p style="font-size:15px;"><b>The math, for reference.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base: FY26 rev $215.9B, 24.51B shares, net debt $0.8B; D&amp;A 3.06%, capex 3.49%, NWC 22.7% of revenue — all fixed constants, not per-ticker.</p>
