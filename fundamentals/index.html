@@ -120,17 +120,27 @@
   .sensi td, .sensi th{text-align:center; padding:7px 9px; font-size:13px;} .sensi td:first-child, .sensi th:first-child{text-align:left;}
   details.build summary{cursor:pointer; color:var(--gold); font-weight:700; font-size:14px; padding:8px 0; list-style:none;}
   details.build summary::-webkit-details-marker{display:none;}
-  .fblock{background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:15px 20px; margin:11px 0;}
-  .feq{font-family:ui-monospace,Menlo,monospace; font-size:16px; line-height:1.75; color:#aeb6bf;}
-  .feq .n{color:var(--accent); font-weight:700;} .feq .g{color:var(--gold); font-weight:700;} .feq .out{color:var(--green); font-weight:700; font-size:19px;} .feq .outn{color:var(--red); font-weight:700; font-size:19px;}
-  .fctrls{margin-top:11px; display:flex; align-items:center; flex-wrap:wrap; gap:3px;}
-  .ftag{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:7px;}
-  .ftag2{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin:0 8px 0 16px;}
+  .dcfh{font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--gold); font-weight:700; margin:22px 0 10px; border-bottom:1px solid var(--border); padding-bottom:6px;}
+  .srow{display:flex; align-items:center; gap:14px; margin:9px 0; flex-wrap:wrap;}
+  .slab{width:200px; font-size:13.5px; color:var(--txt); flex-shrink:0;}
+  .slab small{display:block; color:var(--dim); font-size:11px;}
+  .srow input[type=range]{flex:1; min-width:150px; accent-color:var(--accent);}
+  .sval{width:64px; text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:700; color:var(--accent);}
+  .chips{margin:0 0 12px 214px; display:flex; flex-wrap:wrap; gap:6px;}
+  .chip{background:var(--panel); border:1px solid var(--border); color:var(--dim); border-radius:14px; padding:3px 12px; font-size:12px; cursor:pointer;}
+  .chip:hover{border-color:var(--accent); color:var(--accent);}
+  .fcard{background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:13px 18px; margin:9px 0;}
+  .fname{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;}
+  .fsym{font-family:ui-monospace,Menlo,monospace; font-size:13.5px; color:var(--dim);}
+  .fnum{font-family:ui-monospace,Menlo,monospace; font-size:15px; color:#c9d1d9; margin-top:4px;}
+  .fnum .n{color:var(--accent); font-weight:700;} .fnum .out{color:var(--green); font-weight:700; font-size:17px;} .fnum .outn{color:var(--red); font-weight:700; font-size:17px;} .fnum .g{color:var(--gold); font-weight:700;}
+  .tor{display:flex; align-items:center; gap:10px; margin:5px 0; font-size:12.5px;}
+  .torlbl{width:120px; color:var(--txt); flex-shrink:0;} .torbar{height:15px; border-radius:4px; background:var(--accent); opacity:.85;} .torval{color:var(--dim); font-family:ui-monospace,Menlo,monospace; font-size:11.5px; white-space:nowrap;}
 </style>
-<h2>3 · DCF — NVDA · pick a mode, the math updates</h2>
-<div class="src">endpoint: custom-dcf-advanced · every lever is an API argument · switch modes below, watch the formulas and valuation move</div>
+<h2>3 · DCF — NVDA · sliders + modes, formulas update live</h2>
+<div class="src">endpoint: custom-dcf-advanced · every input is a slider (drag it) with quick-set chips · formulas below show symbols then numbers</div>
 
-<!-- RESULT BAR (always at top) -->
+<!-- RESULT BAR -->
 <div class="resultbar">
   <div class="rb"><span class="rk">Fair value / share</span><span class="rv" id="oFV">—</span></div>
   <div class="rb"><span class="rk">Market price</span><span class="rv">$202.81</span></div>
@@ -139,73 +149,84 @@
   <div class="rb"><span class="rk">Terminal = % of value</span><span class="rv" id="oTV">—</span></div>
 </div>
 
-<!-- SCENARIO block -->
-<div class="fblock">
-  <div class="feq" id="eqScen"></div>
-  <div class="fctrls"><span class="ftag">Scenario</span>
-    <button class="mbtn" id="sc_fmp" onclick="setScen('fmp')">FMP 66% (fantasy)</button>
-    <button class="mbtn" id="sc_cons" onclick="setScen('cons')">Consensus 36%</button>
-    <button class="mbtn" id="sc_conserv" onclick="setScen('conserv')">Conservative 20%</button>
-    <button class="mbtn" id="sc_bear" onclick="setScen('bear')">Bear 10%</button></div>
-</div>
+<!-- ASSUMPTIONS -->
+<div class="dcfh">A · Business assumptions</div>
+<div class="srow"><span class="slab">Revenue growth <small>yrs 1–5, compounding</small></span><input type="range" id="g" min="0" max="80" step="0.5" value="36"><span class="sval" id="sv_g"></span></div>
+<div class="chips">
+  <button class="chip" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button>
+  <button class="chip" onclick="setScen(36,51.1,15.1)">Consensus 36%</button>
+  <button class="chip" onclick="setScen(20,48,17)">Conservative 20%</button>
+  <button class="chip" onclick="setScen(10,42,20)">Bear 10%</button>
+  <span class="foot" style="align-self:center;">← these set growth + margin + tax together</span></div>
+<div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
+<div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
 
-<!-- CAPM formula block: controls sit UNDER the formula they drive -->
-<div class="fblock">
-  <div class="feq" id="eqCoE"></div>
-  <div class="fctrls"><span class="ftag">β</span>
-    <button class="mbtn" id="b_fmp" onclick="setBeta('fmp')">FMP 2.21</button>
-    <button class="mbtn" id="b_blume" onclick="setBeta('blume')">Blume 1.81</button>
-    <button class="mbtn" id="b_peer" onclick="setBeta('peer')">Peer 2.14</button>
-    <span class="ftag2">MRP</span>
-    <button class="mbtn" id="mr_fmp" onclick="setMrp('fmp')">FMP 4.72</button>
-    <button class="mbtn" id="mr_dam" onclick="setMrp('dam')">Damodaran 4.45</button>
-    <button class="mbtn gold" id="mr_built" onclick="setMrp('built')">Built <span id="builtLbl">—</span></button></div>
-</div>
+<!-- DISCOUNT RATE -->
+<div class="dcfh">B · Discount rate — CAPM → WACC</div>
+<div class="srow"><span class="slab">Risk-free rate rᶠ <small>10Y Treasury — distinct input</small></span><input type="range" id="rf" min="2" max="7" step="0.05" value="4.28"><span class="sval" id="sv_rf"></span></div>
+<div class="chips"><button class="chip" onclick="setSlider('rf',4.28)">10Y 4.28%</button></div>
+<div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr</small></span><input type="range" id="bt" min="0.5" max="3" step="0.01" value="2.211"><span class="sval" id="sv_bt"></span></div>
+<div class="chips">
+  <button class="chip" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
+  <button class="chip" onclick="setSlider('bt',1.81)">Blume 1.81</button>
+  <button class="chip" onclick="setSlider('bt',2.14)">Peer median 2.14</button></div>
+<div class="fcard"><div class="fname">Beta method</div><div class="fsym">raw = regression slope vs S&amp;P · Blume βₐ = 0.67·β + 0.33 · peer = median(comps)</div><div class="fnum" id="numBeta"></div></div>
+<div class="srow"><span class="slab">Market risk premium <small>MRP = E(R_mkt) − rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
+<div class="chips">
+  <button class="chip" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
+  <button class="chip" onclick="setSlider('mrpS',4.45)">Damodaran 4.45</button>
+  <button class="chip" onclick="applyBuiltChip()">Built <span id="builtLbl">4.65</span></button></div>
+<div class="fcard"><div class="fname">Market risk premium</div><div class="fsym">MRP = E(R_market) − rᶠ</div><div class="fnum" id="numMrp"></div></div>
+<div class="fcard"><div class="fname">Cost of equity</div><div class="fsym">CoE = rᶠ + β × MRP</div><div class="fnum" id="numCoE"></div></div>
+<div class="fcard"><div class="fname">WACC</div><div class="fsym">WACC = w_e·CoE + w_d·k_d(1−t)</div><div class="fnum" id="numWACC"></div><div class="foot">NVDA ~all-equity (debt 0.2%) → WACC ≈ CoE. Leveraged names: debt weight matters.</div></div>
 
-<!-- WACC block -->
-<div class="fblock">
-  <div class="feq" id="eqWACC"></div>
-  <div class="foot">NVDA is ~all-equity (debt 0.2% of capital) → WACC ≈ Cost of Equity. For a leveraged name the debt weight bites.</div>
-</div>
+<!-- TERMINAL -->
+<div class="dcfh">C · Terminal value</div>
+<div class="srow"><span class="slab">Terminal growth g <small>perpetuity — separate from rᶠ</small></span><input type="range" id="termg" min="0" max="6" step="0.1" value="3.0"><span class="sval" id="sv_termg"></span></div>
+<div class="chips">
+  <button class="chip" onclick="setSlider('termg',0)">Zero 0%</button>
+  <button class="chip" onclick="setSlider('termg',3.0)">Conservative 3.0%</button>
+  <button class="chip" onclick="setSlider('termg',4.0)">FMP default 4.0%</button>
+  <button class="chip" onclick="setSlider('termg',4.5)">Long-run GDP 4.5%</button></div>
+<div class="fcard"><div class="fname">Terminal value (Gordon growth)</div><div class="fsym">TV = FCF₅ × (1 + g) ÷ (WACC − g)</div><div class="fnum" id="numTV"></div>
+  <div class="foot"><b>g is a growth rate, not the discount rate — a distinct input from rᶠ.</b> Rule of thumb (Damodaran): cap g at or below the risk-free rate as a <i>ceiling</i>, because nothing outgrows the economy forever — NOT "equal to rᶠ." Must stay below WACC.</div></div>
 
-<!-- TERMINAL block: shows the WACC − g subtraction explicitly -->
-<div class="fblock">
-  <div class="feq" id="eqTV"></div>
-  <div class="fctrls"><span class="ftag">terminal g</span>
-    <button class="mbtn" id="tg_10y" onclick="setTg('t10y')">= 10Y 4.28%</button>
-    <button class="mbtn" id="tg_cons" onclick="setTg('cons')">Conservative 3.0%</button>
-    <button class="mbtn" id="tg_gdp" onclick="setTg('gdp')">GDP 4.5%</button></div>
-  <div class="foot"><b>g is the perpetuity growth</b> — how fast cash grows forever after year 5, a GROWTH rate (NOT the discount rate, separate from risk-free). It sits in the denominator as (WACC − g): a higher g shrinks the denominator → bigger terminal value. Must stay below WACC.</div>
-</div>
+<!-- SENSITIVITY -->
+<div class="dcfh">D · Sensitivity</div>
+<div class="fcard"><div class="fname">Impact ranking — which input moves value most (full-range swing)</div>
+  <div id="tornado" style="margin-top:8px;"></div>
+  <div class="foot">Each bar = the fair-value swing when that ONE input runs across its entire range, others held at current. Longest bar = biggest lever.</div></div>
 
-<!-- SENSITIVITY: 1-variable first, then pick 2 axes for the matrix -->
-<h4 style="color:var(--gold); font-size:15px; margin:20px 0 4px;">SENSITIVITY</h4>
+<div class="fcard"><div class="fname">① One variable — full range, with $ and up/downside</div>
+  <div class="chips" style="margin:2px 0 8px 0;"><span class="foot" style="align-self:center;margin-right:6px;">sweep:</span>
+    <button class="mbtn" id="s1_g" onclick="setS1('g')">Growth</button>
+    <button class="mbtn" id="s1_m" onclick="setS1('m')">Margin</button>
+    <button class="mbtn" id="s1_t" onclick="setS1('t')">Tax</button>
+    <button class="mbtn" id="s1_rf" onclick="setS1('rf')">Risk-free</button>
+    <button class="mbtn" id="s1_beta" onclick="setS1('beta')">Beta</button>
+    <button class="mbtn" id="s1_mrp" onclick="setS1('mrp')">MRP</button>
+    <button class="mbtn" id="s1_tg" onclick="setS1('tg')">Terminal g</button></div>
+  <div class="scrollx"><table class="sensi" id="sens1"></table></div></div>
 
-<div class="fblock">
-  <div style="font-size:13px; color:var(--txt); font-weight:600; margin-bottom:8px;">① One variable at a time — sweep it, watch fair value</div>
-  <div class="fctrls" style="margin-top:0;"><span class="ftag">Sweep</span>
-    <button class="mbtn" id="s1_growth" onclick="setS1('growth')">Revenue growth</button>
-    <button class="mbtn" id="s1_wacc" onclick="setS1('wacc')">WACC</button>
-    <button class="mbtn" id="s1_termg" onclick="setS1('termg')">Terminal g</button>
-    <button class="mbtn" id="s1_margin" onclick="setS1('margin')">EBITDA margin</button></div>
-  <div class="scrollx" style="margin-top:10px;"><table class="sensi" id="sens1"></table></div>
-</div>
-
-<div class="fblock">
-  <div style="font-size:13px; color:var(--txt); font-weight:600; margin-bottom:8px;">② Two-variable matrix — pick the axes</div>
-  <div class="fctrls" style="margin-top:0;"><span class="ftag">Rows (Y)</span>
-    <button class="mbtn" id="sy_growth" onclick="setSY('growth')">growth</button>
-    <button class="mbtn" id="sy_wacc" onclick="setSY('wacc')">WACC</button>
-    <button class="mbtn" id="sy_termg" onclick="setSY('termg')">term g</button>
-    <button class="mbtn" id="sy_margin" onclick="setSY('margin')">margin</button></div>
-  <div class="fctrls" style="margin-top:6px;"><span class="ftag">Cols (X)</span>
-    <button class="mbtn" id="sx_growth" onclick="setSX('growth')">growth</button>
-    <button class="mbtn" id="sx_wacc" onclick="setSX('wacc')">WACC</button>
-    <button class="mbtn" id="sx_termg" onclick="setSX('termg')">term g</button>
-    <button class="mbtn" id="sx_margin" onclick="setSX('margin')">margin</button></div>
-  <div class="scrollx" style="margin-top:10px;"><table class="sensi" id="sens2"></table></div>
-  <div class="foot">Green = fair value above today's $202.81 · red = below. Everything not on an axis is held at your current selections above.</div>
-</div>
+<div class="fcard"><div class="fname">② Two-variable matrix — pick the two axes</div>
+  <div class="chips" style="margin:2px 0 4px 0;"><span class="foot" style="align-self:center;margin-right:6px;">rows Y:</span>
+    <button class="mbtn" id="sy_g" onclick="setSY('g')">Growth</button>
+    <button class="mbtn" id="sy_m" onclick="setSY('m')">Margin</button>
+    <button class="mbtn" id="sy_t" onclick="setSY('t')">Tax</button>
+    <button class="mbtn" id="sy_rf" onclick="setSY('rf')">Risk-free</button>
+    <button class="mbtn" id="sy_beta" onclick="setSY('beta')">Beta</button>
+    <button class="mbtn" id="sy_mrp" onclick="setSY('mrp')">MRP</button>
+    <button class="mbtn" id="sy_tg" onclick="setSY('tg')">Terminal g</button></div>
+  <div class="chips" style="margin:2px 0 8px 0;"><span class="foot" style="align-self:center;margin-right:6px;">cols X:</span>
+    <button class="mbtn" id="sx_g" onclick="setSX('g')">Growth</button>
+    <button class="mbtn" id="sx_m" onclick="setSX('m')">Margin</button>
+    <button class="mbtn" id="sx_t" onclick="setSX('t')">Tax</button>
+    <button class="mbtn" id="sx_rf" onclick="setSX('rf')">Risk-free</button>
+    <button class="mbtn" id="sx_beta" onclick="setSX('beta')">Beta</button>
+    <button class="mbtn" id="sx_mrp" onclick="setSX('mrp')">MRP</button>
+    <button class="mbtn" id="sx_tg" onclick="setSX('tg')">Terminal g</button></div>
+  <div class="scrollx"><table class="sensi" id="sens2"></table></div>
+  <div class="foot">Each cell: fair value on top, up/downside vs $202.81 below. Green above price, red below. Ranges cover the full slider span (incl. FMP's 66% growth).</div></div>
 
 <!-- PROJECTION (collapsed) -->
 <details style="margin-top:14px;"><summary style="cursor:pointer;color:var(--accent);font-size:14px;">▸ 5-year cash-flow projection (table)</summary>
@@ -238,46 +259,50 @@
 </details>
 
 <script>
-const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,rf:0.0428,kd:0.0363,eqW:0.9977,debtW:0.0023};
-const SCEN={fmp:{g:66.4,m:51.1,t:15.1,lbl:'FMP 66%'},cons:{g:36,m:51.1,t:15.1,lbl:'Consensus 36%'},conserv:{g:20,m:48,t:17,lbl:'Conservative 20%'},bear:{g:10,m:42,t:20,lbl:'Bear 10%'}};
-const BETA={fmp:{v:2.211,f:'5-yr regression slope vs S&P'},blume:{v:1.81,f:'0.67 × 2.21 + 0.33'},peer:{v:2.14,f:'median(TSM,AVGO,MU,AMD,INTC)'}};
-const MRP={fmp:{v:4.72,f:'fixed constant (no inputs)'},dam:{v:4.45,f:'Damodaran implied ERP, Jul-26'},built:{v:4.65,f:'your subcomponent build'}};
-const TG={t10y:4.28,cons:3.0,gdp:4.5};
-let S={scen:'cons',beta:'fmp',mrp:'dam',tg:'t10y',s1:'growth',sy:'growth',sx:'wacc'};
-const SVARS={
-  growth:{lbl:'Growth',range:[5,10,20,30,36,50,66],set:(o,v)=>o.g=v/100},
-  wacc:{lbl:'WACC',range:[8,10,12,14,16,18],set:(o,v)=>o.w=v/100},
-  termg:{lbl:'Terminal g',range:[2,3,4,4.28,5,6],set:(o,v)=>o.tg=v/100},
-  margin:{lbl:'EBITDA margin',range:[35,42,48,51,60,70],set:(o,v)=>o.m=v/100}
+const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,kd:0.0363,eqW:0.9977,debtW:0.0023};
+let builtMRP=4.65;
+let S1='g', SX='g', SY='rf';   // sensitivity picks (defaults: growth × risk-free)
+const SV={
+  g:{lbl:'Revenue growth',id:'g',sc:100,fld:'g',r:[5,10,20,36,50,66]},
+  m:{lbl:'EBITDA margin',id:'m',sc:100,fld:'m',r:[35,42,48,51,60,70]},
+  t:{lbl:'Tax rate',id:'t',sc:100,fld:'t',r:[10,15,21,30]},
+  rf:{lbl:'Risk-free',id:'rf',sc:100,fld:'rf',r:[3,4,4.28,5,6]},
+  beta:{lbl:'Beta',id:'bt',sc:1,fld:'beta',r:[1.0,1.5,1.81,2.14,2.21,2.5]},
+  mrp:{lbl:'MRP',id:'mrpS',sc:100,fld:'mrp',r:[4.0,4.45,4.72,5.5,6.5]},
+  tg:{lbl:'Terminal g',id:'termg',sc:100,fld:'tg',r:[0,2,3,4,5]}
 };
 function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
+function rd(id){return +document.getElementById(id).value;}
+function cur(){return{g:rd('g')/100,m:rd('m')/100,t:rd('t')/100,rf:rd('rf')/100,beta:rd('bt'),mrp:rd('mrpS')/100,tg:rd('termg')/100};}
+function setSlider(id,v){document.getElementById(id).value=v;render();}
+function setScen(g,m,t){document.getElementById('g').value=g;document.getElementById('m').value=m;document.getElementById('t').value=t;render();}
+function applyBuiltChip(){document.getElementById('mrpS').value=builtMRP.toFixed(2);render();}
 
-// core model → returns fair value etc for explicit inputs
-function model(g,m,t,w,tg){
+function modelFull(g,m,t,rf,beta,mrp,tg){
+  const coe=rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*BASE.kd;
   let rev=BASE.rev,nwcPrev=BASE.rev*BASE.nwcPct,sumPV=0,ufcf=0,rows=[];
-  for(let i=1;i<=5;i++){rev*=(1+g);const ebitda=rev*m,da=rev*BASE.daPct,ebit=ebitda-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,ebitda,ufcf,pv]);}
-  if(w<=tg)return{bad:true};
+  for(let i=1;i<=5;i++){rev*=(1+g);const eb=rev*m,da=rev*BASE.daPct,ebit=eb-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,eb,ufcf,pv]);}
+  if(w<=tg)return{bad:true,coe,w};
   const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
-  return{ev,fv,pvTV,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
+  return{coe,w,ev,fv,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
 }
-function fvOf(o){const r=model(o.g,o.m,o.t,o.w,o.tg);return r.bad?null:r.fv;}
+function fvFrom(o){const r=modelFull(o.g,o.m,o.t,o.rf,o.beta,o.mrp,o.tg);return r;}
+function applyVar(o,key,val){o[SV[key].fld]= SV[key].sc===1 ? val : val/100;}
+
 function render(){
-  ['fmp','cons','conserv','bear'].forEach(k=>document.getElementById('sc_'+k).classList.toggle('on',S.scen===k));
-  ['fmp','blume','peer'].forEach(k=>document.getElementById('b_'+k).classList.toggle('on',S.beta===k));
-  document.getElementById('mr_fmp').classList.toggle('on',S.mrp==='fmp');
-  document.getElementById('mr_dam').classList.toggle('on',S.mrp==='dam');
-  document.getElementById('mr_built').classList.toggle('on',S.mrp==='built');
-  document.getElementById('tg_10y').classList.toggle('on',S.tg==='t10y');
-  document.getElementById('tg_cons').classList.toggle('on',S.tg==='cons');
-  document.getElementById('tg_gdp').classList.toggle('on',S.tg==='gdp');
-  document.getElementById('builtLbl').textContent=MRP.built.v.toFixed(2);
-
-  const sc=SCEN[S.scen], g=sc.g/100, m=sc.m/100, t=sc.t/100;
-  const beta=BETA[S.beta].v, mrp=MRP[S.mrp].v/100, tg=TG[S.tg]/100;
-  const coe=BASE.rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*BASE.kd;
-  const r=model(g,m,t,w,tg);
-
-  if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';}
+  const c=cur();
+  const r=modelFull(c.g,c.m,c.t,c.rf,c.beta,c.mrp,c.tg);
+  // slider value labels
+  document.getElementById('sv_g').textContent=rd('g').toFixed(1)+'%';
+  document.getElementById('sv_m').textContent=rd('m').toFixed(1)+'%';
+  document.getElementById('sv_t').textContent=rd('t').toFixed(1)+'%';
+  document.getElementById('sv_rf').textContent=rd('rf').toFixed(2)+'%';
+  document.getElementById('sv_bt').textContent=rd('bt').toFixed(2);
+  document.getElementById('sv_mrpS').textContent=rd('mrpS').toFixed(2)+'%';
+  document.getElementById('sv_termg').textContent=rd('termg').toFixed(1)+'%';
+  document.getElementById('builtLbl').textContent=builtMRP.toFixed(2);
+  // hero
+  if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';document.getElementById('oFV').className='rv neg';document.getElementById('oUp').textContent='—';document.getElementById('oEV').textContent='—';document.getElementById('oTV').textContent='—';}
   else{
     const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
     const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
@@ -287,41 +312,39 @@ function render(){
     r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
     document.getElementById('oTable').innerHTML=rows;
   }
-
-  // FORMULA BLOCKS — numbers light up in place
-  document.getElementById('eqScen').innerHTML='<span class="g">'+sc.lbl+'</span> → revenue growth <span class="n">'+sc.g+'%</span> · EBITDA margin <span class="n">'+sc.m+'%</span> · tax <span class="n">'+sc.t+'%</span>';
-  document.getElementById('eqCoE').innerHTML='Cost of Equity = r<sub>f</sub> <span class="n">'+(BASE.rf*100).toFixed(2)+'%</span> + β <span class="n">'+beta.toFixed(2)+'</span> × MRP <span class="n">'+(mrp*100).toFixed(2)+'%</span> = <span class="'+(1?'out':'')+'">'+(coe*100).toFixed(2)+'%</span>';
-  document.getElementById('eqWACC').innerHTML='WACC = 99.8% × CoE <span class="n">'+(coe*100).toFixed(2)+'%</span> + 0.2% × 3.63% = <span class="out">'+(w*100).toFixed(2)+'%</span>';
-  const denom=(w-tg)*100;
-  document.getElementById('eqTV').innerHTML='Terminal Value = FCF₅ × (1 + g <span class="g">'+(tg*100).toFixed(2)+'%</span>) ÷ ( WACC <span class="n">'+(w*100).toFixed(2)+'%</span> − g <span class="g">'+(tg*100).toFixed(2)+'%</span> = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> ) &nbsp;→&nbsp; terminal = <span class="n">'+(r.bad?'—':fmt(r.tvShare,0)+'%')+'</span> of total value';
-
-  renderSens(g,m,t,w,tg);
+  // numeric formula lines (symbols are static in HTML above each)
+  document.getElementById('numBeta').innerHTML='current β = <span class="n">'+c.beta.toFixed(2)+'</span> &nbsp;·&nbsp; raw 2.21 · Blume 1.81 · peer 2.14';
+  document.getElementById('numMrp').innerHTML='current MRP = <span class="n">'+(c.mrp*100).toFixed(2)+'%</span> &nbsp;·&nbsp; FMP 4.72 · Damodaran 4.45 · built '+builtMRP.toFixed(2);
+  document.getElementById('numCoE').innerHTML='= r<sub>f</sub> <span class="n">'+(c.rf*100).toFixed(2)+'%</span> + β <span class="n">'+c.beta.toFixed(2)+'</span> × MRP <span class="n">'+(c.mrp*100).toFixed(2)+'%</span> = <span class="out">'+(r.coe*100).toFixed(2)+'%</span>';
+  document.getElementById('numWACC').innerHTML='= 99.8% × <span class="n">'+(r.coe*100).toFixed(2)+'%</span> + 0.2% × 3.63% = <span class="out">'+(r.w*100).toFixed(2)+'%</span>';
+  const denom=(r.w-c.tg)*100;
+  document.getElementById('numTV').innerHTML='= FCF₅ × (1 + g <span class="g">'+(c.tg*100).toFixed(1)+'%</span>) ÷ ( WACC <span class="n">'+(r.w*100).toFixed(2)+'%</span> − g <span class="g">'+(c.tg*100).toFixed(1)+'%</span> = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> )'+(r.bad?'':' &nbsp;→&nbsp; terminal = <span class="n">'+fmt(r.tvShare,0)+'%</span> of value');
+  renderSens(c);
 }
-function renderSens(g,m,t,w,tg){
-  const base={g,m,t,w,tg};
-  ['growth','wacc','termg','margin'].forEach(k=>{
-    document.getElementById('s1_'+k).classList.toggle('on',S.s1===k);
-    document.getElementById('sy_'+k).classList.toggle('on',S.sy===k);
-    document.getElementById('sx_'+k).classList.toggle('on',S.sx===k);
-  });
+function renderSens(c){
+  const keys=['g','m','t','rf','beta','mrp','tg'];
+  keys.forEach(k=>{document.getElementById('s1_'+k).classList.toggle('on',S1===k);document.getElementById('sy_'+k).classList.toggle('on',SY===k);document.getElementById('sx_'+k).classList.toggle('on',SX===k);});
+  // tornado — full-range swing per variable
+  let sw=keys.map(k=>{const lo={...c};applyVar(lo,k,SV[k].r[0]);const hi={...c};applyVar(hi,k,SV[k].r[SV[k].r.length-1]);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;const swing=(av!=null&&bv!=null)?Math.abs(bv-av):0;return{k,lbl:SV[k].lbl,lo:av,hi:bv,swing};});
+  const maxSw=Math.max.apply(null,sw.map(x=>x.swing))||1;
+  sw.sort((a,b)=>b.swing-a.swing);
+  document.getElementById('tornado').innerHTML=sw.map(x=>'<div class="tor"><span class="torlbl">'+x.lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px"></span><span class="torval">$'+(x.lo==null?'—':fmt(x.lo,0))+' → $'+(x.hi==null?'—':fmt(x.hi,0))+' &nbsp;(Δ$'+fmt(x.swing,0)+')</span></div>').join('');
   // 1-variable
-  const v1=SVARS[S.s1];
-  let h1='<tr><th>'+v1.lbl+' →</th>'+v1.range.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
-  h1+='<tr><td>fair value</td>'+v1.range.map(x=>{const o={...base};v1.set(o,x);const fv=fvOf(o);return fv==null?'<td class="dim2">—</td>':'<td class="'+(fv>=BASE.price?'pos':'neg')+'">$'+fmt(fv,0)+'</td>';}).join('')+'</tr>';
+  const v1=SV[S1];
+  let h1='<tr><th>'+v1.lbl+' →</th>'+v1.r.map(x=>'<th>'+x+(v1.sc===1?'':'%')+'</th>').join('')+'</tr>';
+  h1+='<tr><td>fair value</td>'+v1.r.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'">$'+fmt(rr.fv,0)+'</td>';}).join('')+'</tr>';
+  h1+='<tr><td>up/downside</td>'+v1.r.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.up>=0?'pos':'neg')+'">'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</td>';}).join('')+'</tr>';
   document.getElementById('sens1').innerHTML=h1;
   // 2-variable
-  const vy=SVARS[S.sy], vx=SVARS[S.sx];
-  let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+vx.range.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
-  vy.range.forEach(yv=>{h2+='<tr><td><b>'+yv+'%</b></td>'+vx.range.map(xv=>{const o={...base};vy.set(o,yv);vx.set(o,xv);const fv=fvOf(o);return fv==null?'<td class="dim2">—</td>':'<td class="'+(fv>=BASE.price?'pos':'neg')+'">$'+fmt(fv,0)+'</td>';}).join('')+'</tr>';});
+  const vy=SV[SY], vx=SV[SX];
+  let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+vx.r.map(x=>'<th>'+x+(vx.sc===1?'':'%')+'</th>').join('')+'</tr>';
+  vy.r.forEach(yv=>{h2+='<tr><td><b>'+yv+(vy.sc===1?'':'%')+'</b></td>'+vx.r.map(xv=>{const o={...c};applyVar(o,SY,yv);applyVar(o,SX,xv);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'">$'+fmt(rr.fv,0)+'<br><small>'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</small></td>';}).join('')+'</tr>';});
   document.getElementById('sens2').innerHTML=h2;
 }
-function setScen(k){S.scen=k;render();}
-function setBeta(k){S.beta=k;render();}
-function setMrp(k){S.mrp=k;render();}
-function setTg(k){S.tg=k;render();}
-function setS1(k){S.s1=k;render();}
-function setSY(k){S.sy=k; if(S.sx===k)S.sx=(k==='wacc'?'growth':'wacc'); render();}
-function setSX(k){S.sx=k; if(S.sy===k)S.sy=(k==='wacc'?'growth':'wacc'); render();}
+function setS1(k){S1=k;render();}
+function setSY(k){SY=k; if(SX===k)SX=(k==='g'?'rf':'g'); render();}
+function setSX(k){SX=k; if(SY===k)SY=(k==='g'?'rf':'g'); render();}
+['g','m','t','rf','bt','mrpS','termg'].forEach(id=>document.getElementById(id).addEventListener('input',render));
 
 // --- MRP builder solver ---
 function pvAt(r,spx,cash0,g,tg){let cf=cash0,pv=0;for(let i=1;i<=5;i++){cf*=(1+g);pv+=cf/Math.pow(1+r,i);}pv+=(cf*(1+tg)/(r-tg))/Math.pow(1+r,5);return pv;}
@@ -335,7 +358,7 @@ function calcERP(){
   return tot;
 }
 function setERP(spx,dy,by,g,tg,crp){document.getElementById('spx').value=spx;document.getElementById('dy').value=dy;document.getElementById('by').value=by;document.getElementById('gg').value=g;document.getElementById('tg').value=tg;document.getElementById('crp').value=crp;calcERP();}
-function applyBuilt(){MRP.built.v=calcERP();S.mrp='built';render();}
+function applyBuilt(){builtMRP=calcERP();document.getElementById('mrpS').value=builtMRP.toFixed(2);render();}
 ['spx','dy','by','gg','tg','crp'].forEach(id=>document.getElementById(id).addEventListener('input',calcERP));
 window.addEventListener('DOMContentLoaded',function(){calcERP();render();});
 </script>
