@@ -90,50 +90,70 @@
 <!-- COMPS SCORE -->
 <div class="subttl" style="margin-top:16px;">Comps scorecard — a single measurable, peer-ranked (1 = best in group)</div>
 <div class="fcard">
-  <div style="display:flex; gap:34px; flex-wrap:wrap; align-items:baseline; margin-bottom:10px;">
-    <div><span class="foot">VALUE score (cheap vs peers)</span><br><b style="font-size:26px;color:var(--gold)">52<span style="font-size:15px;color:var(--dim)">/100</span></b></div>
-    <div><span class="foot">QUALITY score (margins·growth·balance sheet)</span><br><b style="font-size:26px;color:var(--green)">95<span style="font-size:15px;color:var(--dim)">/100</span></b></div>
-    <div><span class="foot">Composite grade</span><br><b style="font-size:26px;color:var(--green)">B+</b> <span class="foot">elite quality, fair earnings price, rich on assets</span></div>
-  </div>
-  <div class="scrollx"><table class="sensi stickytbl" style="min-width:640px;">
-    <tr><th>Metric</th><th>NVDA</th><th>Peer median</th><th>Rank /6</th><th>Verdict</th></tr>
-    <tr><td>P/E</td><td>30.9</td><td>45.5</td><td class="pos">2</td><td class="pos">cheap</td></tr>
-    <tr><td>EV/EBITDA</td><td>25.5</td><td>43.1</td><td class="pos">3</td><td class="pos">cheap</td></tr>
-    <tr><td>PEG</td><td>0.28</td><td>0.53</td><td class="pos">2</td><td class="pos">cheap</td></tr>
-    <tr><td>P/S</td><td>19.4</td><td>14.6</td><td>4</td><td>mid/rich</td></tr>
-    <tr><td>P/B</td><td>25.2</td><td>10.2</td><td class="neg">6</td><td class="neg">most expensive</td></tr>
-    <tr><td>Gross margin</td><td>74.1%</td><td>61.9%</td><td class="pos">1</td><td class="pos">best</td></tr>
-    <tr><td>Net margin</td><td>63.0%</td><td>38.8%</td><td class="pos">1</td><td class="pos">best</td></tr>
-    <tr><td>Rev CAGR 3yF</td><td>47.6%</td><td>38.6%</td><td class="pos">1</td><td class="pos">fastest</td></tr>
-    <tr><td>Debt/Equity</td><td>0.07</td><td>0.17</td><td class="pos">2</td><td class="pos">cleanest</td></tr>
-  </table></div>
-  <div class="foot" style="margin-top:8px;">VALUE = average peer-percentile across the five multiples (cheap = high). QUALITY = average peer-percentile across margins, growth and low leverage. The one-line takeaway: <b>the best business in the group at a below-median earnings multiple — the only thing you overpay for is the balance sheet.</b> This is the comps equivalent of your technicals Geiger score; it recomputes per ticker once the page goes live.</div>
+  <div id="scoreBox" style="display:flex; gap:34px; flex-wrap:wrap; align-items:baseline; margin-bottom:10px;"></div>
+  <div class="scrollx"><table class="sensi stickytbl" id="scoreTable" style="min-width:640px;"></table></div>
+  <div class="foot" style="margin-top:8px;">VALUE = average peer-percentile across the five multiples (cheap = high). QUALITY = average peer-percentile across margins, growth and low leverage. All of it <b>computed live from the comps data object</b> (ranks, medians, football-field ranges, scores) — swap the object for another ticker and the whole engine recomputes. This is the comps equivalent of your technicals Geiger score.</div>
 </div>
 </section>
 
 <script>
+// ============ COMPS COMPUTATION ENGINE (ticker-swappable data object → all derived analytics) ============
 (function(){
-  const AX=420, px=202.81; // $ axis max, current price
-  const rows=[
-    ['P/E',124.7,393.1,298.6],['EV/EBITDA',156.7,352.3,342.8],['P/S',93.0,244.6,152.6],
-    ['P/B',34.6,161.8,82.1],['DCF (live model)',103.7,243.0,150.0]
-  ];
-  const pct=v=>Math.max(0,Math.min(100,v/AX*100));
+  const PX=202.81;
+  // one data object; index 0 = the subject (NVDA), 1..5 = peers. null = n/m (negative).
+  const COMPS={
+    names:['NVDA','TSM','AVGO','MU','AMD','INTC'],
+    pe:[30.9,31.1,59.9,19.0,161.0,null], ev:[25.5,19.7,43.1,20.9,99.8,44.3],
+    ps:[19.4,14.6,23.4,10.6,21.6,8.9],   pb:[25.2,10.2,20.1,9.5,12.5,4.3],
+    peg:[0.28,0.58,0.48,0.03,1.31,null], gm:[74.1,61.9,67.0,72.6,50.3,35.4],
+    nm:[63.0,47.0,38.8,55.9,13.4,-5.9],  de:[0.07,0.17,0.74,0.06,0.06,0.40],
+    cagr:[47.6,29.4,40.3,38.6,41.2,16.2]
+  };
+  const clean=a=>a.filter(v=>v!=null);
+  const med=a=>{const b=[...a].sort((x,y)=>x-y),n=b.length;return n?(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2):null;};
+  const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+  const q=(a,p)=>{const b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,lo=Math.floor(i);return b[lo]+(b[lo+1]!==undefined?(i-lo)*(b[lo+1]-b[lo]):0);};
+  const tukey=a=>{const b=clean(a),q1=q(b,.25),q3=q(b,.75),k=1.5*(q3-q1);return b.filter(v=>v>=q1-k&&v<=q3+k);};
+  // percentile rank of NVDA vs ALL valid (0=worst,1=best); cheapGood → low value is best
+  const pctl=(arr,cheapGood)=>{const v=arr[0];if(v==null)return null;const all=clean(arr);const better=all.filter(x=>cheapGood?x>v:x<v).length;return all.length>1?better/(all.length-1):0.5;};
+  const rank=(arr,cheapGood)=>{const v=arr[0];if(v==null)return clean(arr).length;const all=clean(arr).slice().sort((a,b)=>cheapGood?a-b:b-a);return all.indexOf(v)+1;};
+
+  // ---- FOOTBALL FIELD: implied price = PX × peerMultiple / nvdaMultiple, peers outlier-cleaned ----
+  const rob=a=>{const b=clean(a),mm=med(b);return b.filter(v=>v>=0.35*mm&&v<=2.5*mm);}; // drop extreme multiples (few-comp safe)
+  const ffRow=(lbl,key)=>{const nv=COMPS[key][0],peers=rob(COMPS[key].slice(1));const lo=PX*Math.min(...peers)/nv,hi=PX*Math.max(...peers)/nv,mid=PX*med(peers)/nv;return [lbl,lo,hi,mid];};
+  const rows=[ffRow('P/E','pe'),ffRow('EV/EBITDA','ev'),ffRow('P/S','ps'),ffRow('P/B','pb'),['DCF (live model)',103.7,243.0,150.0]];
+  const AX=Math.max(420,...rows.map(r=>r[2]))*1.02, pf=v=>Math.max(0,Math.min(100,v/AX*100));
   let h='';
-  rows.forEach(r=>{
-    const l=pct(r[1]),w=pct(r[2])-pct(r[1]),m=pct(r[3]),pl=pct(px);
-    h+='<div style="display:flex;align-items:center;margin:9px 0;">'+
-       '<span style="width:130px;font-size:13px;color:var(--txt);">'+r[0]+'</span>'+
+  rows.forEach(r=>{const l=pf(r[1]),w=pf(r[2])-pf(r[1]),m=pf(r[3]),pl=pf(PX);
+    h+='<div style="display:flex;align-items:center;margin:9px 0;"><span style="width:130px;font-size:13px;color:var(--txt);">'+r[0]+'</span>'+
        '<div style="position:relative;flex:1;height:24px;background:var(--panel);border-radius:6px;">'+
-         '<div style="position:absolute;left:'+l+'%;width:'+w+'%;top:0;bottom:0;background:linear-gradient(90deg,rgba(63,185,80,.55),rgba(88,166,255,.55));border-radius:6px;"></div>'+
-         '<div style="position:absolute;left:'+m+'%;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.85;"></div>'+
-         '<div style="position:absolute;left:'+pl+'%;top:-5px;bottom:-5px;width:2px;background:var(--gold);"></div>'+
-       '</div>'+
-       '<span style="width:120px;text-align:right;font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace;">$'+r[1].toFixed(0)+'–$'+r[2].toFixed(0)+'</span></div>';
-  });
-  h+='<div style="display:flex;margin-top:4px;"><span style="width:130px;"></span><div style="flex:1;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);"><span>$0</span><span>$105</span><span>$210</span><span>$315</span><span>$420</span></div><span style="width:120px;"></span></div>';
-  h+='<div class="foot" style="margin-top:6px;"><span style="color:var(--gold);font-weight:700;">│</span> = today\'s price $202.81 &nbsp;·&nbsp; white tick = peer median</div>';
+       '<div style="position:absolute;left:'+l+'%;width:'+w+'%;top:0;bottom:0;background:linear-gradient(90deg,rgba(63,185,80,.55),rgba(88,166,255,.55));border-radius:6px;"></div>'+
+       '<div style="position:absolute;left:'+m+'%;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.85;"></div>'+
+       '<div style="position:absolute;left:'+pl+'%;top:-5px;bottom:-5px;width:2px;background:var(--gold);"></div></div>'+
+       '<span style="width:120px;text-align:right;font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace;">$'+r[1].toFixed(0)+'–$'+r[2].toFixed(0)+'</span></div>';});
+  const ax4=[0,.25,.5,.75,1].map(f=>'$'+(AX*f).toFixed(0)).map(s=>'<span>'+s+'</span>').join('');
+  h+='<div style="display:flex;margin-top:4px;"><span style="width:130px;"></span><div style="flex:1;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);">'+ax4+'</div><span style="width:120px;"></span></div>';
+  h+='<div class="foot" style="margin-top:6px;"><span style="color:var(--gold);font-weight:700;">│</span> = today\'s price $'+PX+' · white tick = peer median · ranges outlier-cleaned (Tukey)</div>';
   document.getElementById('ffield').innerHTML=h;
+
+  // ---- SCORE: value = cheapness percentile across multiples; quality = margins/growth/low-leverage ----
+  const valM=[['pe',1],['ev',1],['ps',1],['pb',1],['peg',1]];      // cheapGood=1
+  const qualM=[['gm',0],['nm',0],['cagr',0],['de',1]];             // high good (de cheapGood=1 → low debt best)
+  const vAvg=mean(valM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))*100;
+  const qAvg=mean(qualM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))*100;
+  const comp=(vAvg+qAvg)/2, grade=comp>=85?'A':comp>=75?'A−':comp>=65?'B+':comp>=55?'B':comp>=45?'B−':comp>=35?'C':'D';
+  const col=s=>s>=66?'var(--green)':s>=45?'var(--gold)':'var(--red)';
+  document.getElementById('scoreBox').innerHTML=
+    '<div><span class="foot">VALUE score (cheap vs peers)</span><br><b style="font-size:26px;color:'+col(vAvg)+'">'+vAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
+    '<div><span class="foot">QUALITY score (margins·growth·balance sheet)</span><br><b style="font-size:26px;color:'+col(qAvg)+'">'+qAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
+    '<div><span class="foot">Composite grade</span><br><b style="font-size:26px;color:'+col(comp)+'">'+grade+'</b> <span class="foot">'+comp.toFixed(0)+'/100</span></div>';
+  const N=COMPS.names.length, verdict=(rk,cheapGood)=>{const top=rk<=2, bot=rk>=N-1; return cheapGood?(top?['cheap','pos']:bot?['expensive','neg']:['mid','']):(top?['best','pos']:bot?['worst','neg']:['mid','']);};
+  const srow=(lbl,key,cheapGood,fmt)=>{const rk=rank(COMPS[key],cheapGood),vd=verdict(rk,cheapGood);return '<tr><td>'+lbl+'</td><td>'+fmt(COMPS[key][0])+'</td><td>'+fmt(med(clean(COMPS[key].slice(1))))+'</td><td class="'+vd[1]+'">'+rk+'</td><td class="'+vd[1]+'">'+vd[0]+'</td></tr>';};
+  const f2=v=>v==null?'—':(+v).toFixed(2), fp=v=>v==null?'—':(+v).toFixed(1)+'%';
+  let st='<tr><th>Metric</th><th>NVDA</th><th>Peer median</th><th>Rank /'+N+'</th><th>Verdict</th></tr>';
+  st+=srow('P/E','pe',1,f2)+srow('EV/EBITDA','ev',1,f2)+srow('PEG','peg',1,f2)+srow('P/S','ps',1,f2)+srow('P/B','pb',1,f2)
+    +srow('Gross margin','gm',0,fp)+srow('Net margin','nm',0,fp)+srow('Rev CAGR 3yF','cagr',0,fp)+srow('Debt/Equity','de',1,f2);
+  document.getElementById('scoreTable').innerHTML=st;
 })();
 </script>
 
