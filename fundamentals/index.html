@@ -563,7 +563,8 @@ window.addEventListener('DOMContentLoaded',function(){calcERP();render();});
     <option value="RKLB">RKLB — small-cap, broken consensus</option>
   </select>
 </div>
-<div class="scrollx"><table id="estTable"></table></div>
+<div id="estConf" class="fcard" style="margin:4px 0 12px;"></div>
+<div class="scrollx"><table id="estTable" class="stickytbl"></table></div>
 <script>
 const EST={
 NVDA:{years:["FY22","FY23","FY24","FY25","FY26","FY27","FY28","FY29","FY30","FY31"],
@@ -611,7 +612,21 @@ function renderEst(){
   h+=row('SG&A',d.sga,'');
   h+=row('Net Income',d.ni,'');
   h+=row('EPS ($)',d.eps,'');
+  // CONFIDENCE — consensus dispersion (range width ÷ avg) per year + summary
+  const dsp=cell=>{const m=(''+cell).match(/(-?[\d,\.]+)\s*\(\s*(-?[\d,\.]+)\s*[–\-−]\s*(-?[\d,\.]+)\s*\)/);if(!m)return null;const a=parseFloat(m[1].replace(/,/g,'')),lo=parseFloat(m[2].replace(/,/g,'')),hi=parseFloat(m[3].replace(/,/g,''));return a?Math.abs(hi-lo)/Math.abs(a):null;};
+  const dispRow=d.rev.map(dsp), epsRow=d.eps.map(dsp);
+  const dcell=v=>v==null?'<td class="dim2">—</td>':'<td class="'+(v<0.10?'pos':v>0.30?'neg':'')+'">'+(v*100).toFixed(0)+'%</td>';
+  h+='<tr><td class="pur">Range width — Rev</td>'+dispRow.map(dcell).join('')+bl.map(()=>'<td class="neg">—</td>').join('')+'</tr>';
   document.getElementById('estTable').innerHTML=h;
+  const avg=a=>{const f=a.filter(x=>x!=null);return f.length?f.reduce((s,x)=>s+x,0)/f.length:null;};
+  const dr=avg(dispRow), de=avg(epsRow), sc=(dr!=null&&de!=null)?(dr*0.5+de*0.5):(dr||de);
+  const band=sc==null?['—','var(--dim)']:sc<0.10?['HIGH','var(--green)']:sc<0.22?['MODERATE','var(--gold)']:['LOW','var(--red)'];
+  document.getElementById('estConf').innerHTML='<div class="subttl">Consensus confidence — how tightly analysts agree (range width ÷ average)</div>'+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
+    '<div><span class="foot">Revenue dispersion</span><br><b style="font-size:19px">'+(dr==null?'—':(dr*100).toFixed(0)+'%')+'</b></div>'+
+    '<div><span class="foot">EPS dispersion</span><br><b style="font-size:19px">'+(de==null?'—':(de*100).toFixed(0)+'%')+'</b></div>'+
+    '<div><span class="foot">DCF confidence</span><br><b style="font-size:22px;color:'+band[1]+'">'+band[0]+'</b></div></div>'+
+    '<div class="foot" style="margin-top:6px;">Wide analyst ranges = the market itself disagrees on the future = <b>lower confidence in ANY DCF</b> on this name. Tight ranges (e.g. NVDA near years ~10%) = high conviction; blow-out ranges (a broken small-cap) = treat the fair value as a wide cone, not a point. This is your cross-ticker trust dial.</div>';
 }
 window.addEventListener('DOMContentLoaded',renderEst);
 </script>
@@ -624,6 +639,16 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <section>
 <h2>4 · Insider Trades — NVDA (SEC Form 4, ~2-day lag)</h2>
 <div class="src">endpoints: search-insider-trades + insider-trade-statistics</div>
+<div class="fcard" style="border-color:var(--gold);">
+  <div class="subttl">📡 Derived signal (roadmap ③ — first cut)</div>
+  <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">
+    <div><span class="foot">Open-market BUYS, last 4q</span><br><b style="font-size:20px;color:var(--dim)">0</b></div>
+    <div><span class="foot">Cluster buys (≥3 insiders/30d)</span><br><b style="font-size:20px;color:var(--dim)">none</b></div>
+    <div><span class="foot">Net flow (last 4q)</span><br><b style="font-size:20px;color:var(--red)">net SELLING</b></div>
+    <div><span class="foot">Signal</span><br><b style="font-size:20px;color:var(--gold)">NEUTRAL (noise)</b></div>
+  </div>
+  <div class="foot" style="margin-top:6px;">The raw feed below is ~all sells — but nearly all are RSU vesting, option exercises and 10b5-1 planned sales, <b>not</b> open-market conviction. The tradeable signal is the opposite: filter to <b>P-code open-market purchases only</b> (there are zero here) and flag <b>cluster buys</b>. For NVDA that's a clean neutral — insiders aren't buying, but the selling is mechanical comp, not a bearish tell. This scoring is the template for turning §5 congress and §6 COT into signals too.</div>
+</div>
 <div class="kv">
   <div><span class="k">Q1 2026 Buy/Sell mix</span><div class="v neg">15 acq / 94 disp</div></div>
   <div><span class="k">Q2 2026 mix</span><div class="v">11 acq / 14 disp</div></div>
