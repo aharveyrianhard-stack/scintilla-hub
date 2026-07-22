@@ -50,7 +50,7 @@
 <h2>1 · Comparable Companies — NVDA vs Semis</h2>
 <div class="src">endpoints: metrics-ratios-ttm (per symbol) + search-company-screener (universe)</div>
 <div class="scrollx">
-<table id="compsTable">
+<table id="compsTable" class="compsT">
 <tr><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>EV/EBITDA</th><th>P/S</th><th>P/B</th><th>PEG</th><th>Gross M</th><th>Net M</th><th>D/E</th><th>Beta</th><th>Div Yld</th></tr>
 <tr><td class="gold">NVDA</td><td class="gold">$4.91T</td><td class="gold">30.9</td><td class="gold">25.5</td><td class="gold">19.4</td><td class="gold">25.2</td><td class="gold">0.28</td><td class="gold">74.1%</td><td class="gold">63.0%</td><td class="gold">0.07</td><td class="gold">2.21</td><td class="gold">0.14%</td></tr>
 <tr><td>TSM</td><td>$2.07T</td><td>31.1</td><td>19.7</td><td>14.6</td><td>10.2</td><td>0.58</td><td>61.9%</td><td>47.0%</td><td>0.17</td><td>1.37</td><td>0.95%</td></tr>
@@ -85,6 +85,23 @@
 <span class="pill hit">NVDA</span><span class="pill hit">TSM</span><span class="pill hit">AVGO</span><span class="pill hit">MU</span><span class="pill hit">AMD</span><span class="pill hit">ASML</span><span class="pill hit">INTC</span><span class="pill hit">AMAT</span><span class="pill hit">LRCX</span><span class="pill hit">KLAC</span><span class="pill hit">TXN</span><span class="pill hit">ARM</span><span class="pill hit">ADI</span><span class="pill">SK hynix</span>
 <div class="note">Deterministic and controllable — filter by sector, industry, mktcap, beta, dividend, volume, country. Minor cleanup needed (dual listings like MU.TO). This is the better peer-set engine; "peers" is a lazy fallback.</div>
 </div>
+</div>
+</section>
+
+<!-- ============ 2.5 PROJECTED PATH (before the DCF) ============ -->
+<section>
+<h2>2.5 · Projected Path — does this trajectory look reasonable?</h2>
+<div class="src">the assumptions you set in the DCF below drive this · sanity-check the shape before trusting any valuation</div>
+<div style="border:1px solid var(--border); border-radius:12px; padding:15px 20px; background:var(--panel2);">
+  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center;">
+    <span style="font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:6px;">chart:</span>
+    <button class="mbtn" id="pc_rev" onclick="setPC('rev')">Revenue</button>
+    <button class="mbtn" id="pc_ebitda" onclick="setPC('ebitda')">EBITDA</button>
+    <button class="mbtn" id="pc_ufcf" onclick="setPC('ufcf')">Free cash flow</button>
+    <button class="mbtn" id="pc_pv" onclick="setPC('pv')">PV of FCF</button></div>
+  <div id="barchart" style="margin:6px 0 4px;"></div>
+  <div style="font-size:11.5px; color:var(--dim);">Bars = the 5 projected years left→right. Eyeball whether the trajectory is believable before trusting the valuation. Updates live with the DCF sliders.</div>
+  <div class="scrollx" style="margin-top:12px;"><table id="oTable"></table></div>
 </div>
 </section>
 
@@ -129,6 +146,14 @@
   .chips{margin:0 0 12px 214px; display:flex; flex-wrap:wrap; gap:6px;}
   .chip{background:var(--panel); border:1px solid var(--border); color:var(--dim); border-radius:14px; padding:3px 12px; font-size:12px; cursor:pointer;}
   .chip:hover{border-color:var(--accent); color:var(--accent);}
+  .chip.on{border-color:var(--accent); color:var(--accent); background:rgba(88,166,255,0.14); font-weight:700;}
+  .fg{display:grid; grid-template-rows:auto auto; grid-auto-flow:column; gap:2px 16px; align-items:center; width:max-content; font-family:ui-monospace,Menlo,monospace; margin-top:2px;}
+  .fg .sym{grid-row:1; font-size:14px; text-align:center; color:#8b949e;}
+  .fg .num{grid-row:2; font-size:18px; font-weight:700; text-align:center; color:#e6edf3;}
+  .fg .num.v{color:var(--accent);} .fg .num.out{color:var(--green);} .fg .num.outn{color:var(--red);}
+  .fg .op{color:#586069; font-weight:400;}
+  .compsT td.cheap{color:var(--green);} .compsT td.exp{color:var(--red);}
+  .compsT td.out{font-weight:800; border:1px dashed currentColor;}
   .fcard{background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:13px 18px; margin:9px 0;}
   .fname{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:5px;}
   .fsym{font-family:ui-monospace,Menlo,monospace; font-size:13.5px; color:var(--dim);}
@@ -154,70 +179,52 @@
 <div class="srow"><span class="slab">Revenue growth <small>yrs 1–5, compounding</small></span><input type="range" id="g" min="0" max="80" step="0.5" value="36"><span class="sval" id="sv_g"></span></div>
 <div class="srow"><span class="slab">EBITDA margin</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1"><span class="sval" id="sv_m"></span></div>
 <div class="srow"><span class="slab">Effective tax rate</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1"><span class="sval" id="sv_t"></span></div>
-<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">quick-set all three:</span>
-  <button class="chip" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button>
-  <button class="chip" onclick="setScen(36,51.1,15.1)">Consensus 36%</button>
-  <button class="chip" onclick="setScen(20,48,17)">Conservative 20%</button>
-  <button class="chip" onclick="setScen(10,42,20)">Bear 10%</button></div>
+<div class="chips" style="margin-left:0;"><span class="foot" style="align-self:center;margin-right:6px;">bearish → bullish:</span>
+  <button class="chip" data-g="10" data-m="42" data-tx="20" onclick="setScen(10,42,20)">Bear 10%</button>
+  <button class="chip" data-g="20" data-m="48" data-tx="17" onclick="setScen(20,48,17)">Conservative 20%</button>
+  <button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Consensus 36%</button>
+  <button class="chip" data-g="66.4" data-m="51.1" data-tx="15.1" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button></div>
 
 <!-- DISCOUNT RATE -->
 <div class="dcfh">B · Discount rate — CAPM → WACC</div>
 <div class="srow"><span class="slab">Risk-free rate rᶠ <small>10Y Treasury — distinct input</small></span><input type="range" id="rf" min="2" max="7" step="0.05" value="4.28"><span class="sval" id="sv_rf"></span></div>
-<div class="chips"><button class="chip" onclick="setSlider('rf',4.28)">10Y 4.28%</button></div>
+<div class="chips"><button class="chip" data-s="rf" data-v="4.28" onclick="setSlider('rf',4.28)">10Y 4.28%</button></div>
 <div class="srow"><span class="slab">Beta β <small>vs S&amp;P, 5-yr</small></span><input type="range" id="bt" min="0.5" max="3" step="0.01" value="2.211"><span class="sval" id="sv_bt"></span></div>
 <div class="chips">
-  <button class="chip" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
-  <button class="chip" onclick="setSlider('bt',1.81)">Blume 1.81</button>
-  <button class="chip" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
-  <button class="chip" onclick="setSlider('bt',1.30)">Bull · mean-revert 1.30</button></div>
-<div class="fcard"><div class="fname">Beta — adjustment methods</div>
-  <div class="fsym">βₐ = ( 0.67 × β_raw ) + ( 0.33 × 1.0 )</div>
-  <div class="fnum" id="numBeta"></div></div>
+  <button class="chip" data-s="bt" data-v="2.211" onclick="setSlider('bt',2.211)">FMP raw 2.21</button>
+  <button class="chip" data-s="bt" data-v="2.14" onclick="setSlider('bt',2.14)">Peer median 2.14</button>
+  <button class="chip" data-s="bt" data-v="1.81" onclick="setSlider('bt',1.81)">Blume 1.81</button>
+  <button class="chip" data-s="bt" data-v="1.3" onclick="setSlider('bt',1.30)">Bull mean-revert 1.30</button></div>
+<div class="fcard"><div class="fname">Beta — Blume adjustment (drift toward 1.0)</div>
+  <div class="fg" id="fgBeta"></div></div>
 <div class="srow"><span class="slab">Market risk premium <small>excess of stocks over rᶠ</small></span><input type="range" id="mrpS" min="3" max="8" step="0.05" value="4.45"><span class="sval" id="sv_mrpS"></span></div>
 <div class="chips">
-  <button class="chip" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
-  <button class="chip" onclick="setSlider('mrpS',4.45)">Damodaran 4.45</button>
-  <button class="chip" onclick="setSlider('mrpS',4.0)">Bull 4.0</button>
+  <button class="chip" data-s="mrpS" data-v="4.72" onclick="setSlider('mrpS',4.72)">FMP 4.72</button>
+  <button class="chip" data-s="mrpS" data-v="4.45" onclick="setSlider('mrpS',4.45)">Damodaran 4.45</button>
+  <button class="chip" data-s="mrpS" data-v="4" onclick="setSlider('mrpS',4.0)">Bull 4.0</button>
   <button class="chip" onclick="applyBuiltChip()">Built <span id="builtLbl">4.65</span></button></div>
-<div class="fcard"><div class="fname">Market risk premium</div>
-  <div class="fsym">MRP = E(R_market) − rᶠ</div>
-  <div class="fnum" id="numMrp"></div></div>
+<div class="fcard"><div class="fname">Market risk premium = E(R_market) − risk-free</div>
+  <div class="fg" id="fgMrp"></div></div>
 <div class="fcard"><div class="fname">Cost of equity (CAPM)</div>
-  <div class="fsym">CoE = rᶠ + ( β × MRP )</div>
-  <div class="fnum" id="numCoE"></div></div>
+  <div class="fg" id="fgCoE"></div></div>
 <div class="fcard"><div class="fname">WACC</div>
-  <div class="fsym">WACC = ( wₑ × CoE ) + ( w_d × k_d × ( 1 − t ) )</div>
-  <div class="fnum" id="numWACC"></div>
-  <div class="foot">NVDA ~all-equity (debt 0.2%) → WACC ≈ CoE. Leveraged names: debt weight matters.</div></div>
+  <div class="fg" id="fgWACC"></div>
+  <div class="foot" style="margin-top:8px;">NVDA ~all-equity (debt 0.2%) → WACC ≈ CoE. Leveraged names: debt weight matters.</div></div>
 
 <!-- TERMINAL -->
 <div class="dcfh">C · Terminal value</div>
 <div class="srow"><span class="slab">Terminal growth g <small>perpetuity, after yr 5 — distinct from rᶠ</small></span><input type="range" id="termg" min="0" max="8" step="0.1" value="4.28"><span class="sval" id="sv_termg"></span></div>
 <div class="chips">
-  <button class="chip" onclick="setSlider('termg',3.0)">Conservative 3.0%</button>
-  <button class="chip" onclick="setSlider('termg',4.0)">FMP default 4.0%</button>
-  <button class="chip" onclick="setSlider('termg',4.28)">= risk-free 4.28%</button>
-  <button class="chip" onclick="setSlider('termg',6.0)">Bull 6.0%</button></div>
+  <button class="chip" data-s="termg" data-v="3" onclick="setSlider('termg',3.0)">Conservative 3.0%</button>
+  <button class="chip" data-s="termg" data-v="4" onclick="setSlider('termg',4.0)">FMP default 4.0%</button>
+  <button class="chip" data-s="termg" data-v="4.28" onclick="setSlider('termg',4.28)">= risk-free 4.28%</button>
+  <button class="chip" data-s="termg" data-v="6" onclick="setSlider('termg',6.0)">Bull 6.0%</button></div>
 <div class="fcard"><div class="fname">Terminal value (Gordon growth)</div>
-  <div class="fsym">TV = ( FCF₅ × ( 1 + g ) ) ÷ ( WACC − g )</div>
-  <div class="fnum" id="numTV"></div>
-  <div class="foot"><b>g is a growth rate (perpetuity), distinct from rᶠ.</b> The risk-free is a common <i>reference ceiling</i> (Damodaran), not a hard cap — a durable moat can out-earn GDP for a long time, so a higher g is defensible. Only hard rule: g &lt; WACC.</div></div>
-
-<!-- PROJECTION + REASONABILITY (before sensitivity — critical visual check) -->
-<div class="dcfh">D · Projected path — does this look reasonable?</div>
-<div class="fcard">
-  <div class="chips" style="margin:0 0 10px 0;"><span class="foot" style="align-self:center;margin-right:6px;">chart:</span>
-    <button class="mbtn" id="pc_rev" onclick="setPC('rev')">Revenue</button>
-    <button class="mbtn" id="pc_ebitda" onclick="setPC('ebitda')">EBITDA</button>
-    <button class="mbtn" id="pc_ufcf" onclick="setPC('ufcf')">Free cash flow</button>
-    <button class="mbtn" id="pc_pv" onclick="setPC('pv')">PV of FCF</button></div>
-  <div id="barchart" style="margin:6px 0 4px;"></div>
-  <div class="foot">Bars = the 5 projected years left→right. Eyeball whether the trajectory your sliders imply is believable before trusting the valuation.</div>
-  <div class="scrollx" style="margin-top:12px;"><table id="oTable"></table></div>
-</div>
+  <div class="fg" id="fgTV"></div>
+  <div class="foot" style="margin-top:8px;"><b>g is a growth rate (perpetuity), distinct from rᶠ.</b> The risk-free is a common <i>reference ceiling</i> (Damodaran), not a hard cap — a durable moat can out-earn GDP for a long time, so a higher g is defensible. Only hard rule: g &lt; WACC.</div></div>
 
 <!-- SENSITIVITY -->
-<div class="dcfh">E · Sensitivity</div>
+<div class="dcfh">D · Sensitivity</div>
 <div class="fcard"><div class="fname">Impact ranking — which input moves value most (full-range swing)</div>
   <div id="tornado" style="margin-top:8px;"></div>
   <div class="foot">Each bar = the fair-value swing when that ONE input runs across its entire range, others held at current. Longest bar = biggest lever.</div></div>
@@ -252,6 +259,20 @@
     <button class="mbtn" id="sx_tg" onclick="setSX('tg')">Terminal g</button></div>
   <div class="scrollx"><table class="sensi" id="sens2"></table></div>
   <div class="foot">Each cell: fair value on top, up/downside vs $202.81 below. Green above price, red below. Ranges cover the full slider span (incl. FMP's 66% growth).</div></div>
+
+<!-- REVERSE DCF -->
+<div class="dcfh">E · Reverse DCF — what is today's $202.81 price assuming?</div>
+<div class="fcard">
+  <div style="font-size:13px; color:var(--txt); margin-bottom:8px;">Lock everything at your current selections except ONE input, then solve for the value of that input that makes fair value = the market price. That solved number is what the market is implicitly betting on — compare it to what's realistic.</div>
+  <div class="chips" style="margin:0 0 10px 0;"><span class="foot" style="align-self:center;margin-right:6px;">solve for:</span>
+    <button class="mbtn" id="rv_g" onclick="setRV('g')">Revenue growth</button>
+    <button class="mbtn" id="rv_m" onclick="setRV('m')">EBITDA margin</button>
+    <button class="mbtn" id="rv_beta" onclick="setRV('beta')">Beta</button>
+    <button class="mbtn" id="rv_mrp" onclick="setRV('mrp')">MRP</button>
+    <button class="mbtn" id="rv_tg" onclick="setRV('tg')">Terminal g</button></div>
+  <div id="revout" style="font-family:ui-monospace,Menlo,monospace; font-size:15px; line-height:1.9;"></div>
+  <div class="foot" style="margin-top:6px;">Everything else stays at the sliders above. This is "implied expectations" — a moat looks cheap if the market's implied growth is well below what the company can plausibly do, and vice versa.</div>
+</div>
 
 <!-- MRP BUILDER (collapsed — no more savage scrolling) -->
 <details class="build" style="margin-top:10px;"><summary>▸ Build your own MRP from subcomponents (optional — collapsed)</summary>
@@ -332,14 +353,18 @@ function render(){
   r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
   document.getElementById('oTable').innerHTML=rows;
 
-  // FORMULAS — numeric line is numbers-only, full formula with parentheses
-  const rf=c.rf*100, bt=c.beta, mp=c.mrp*100, coe=r.coe*100, w=r.w*100, tg=c.tg, t=c.t;
-  document.getElementById('numBeta').innerHTML='= ( 0.67 × 2.21 ) + ( 0.33 × 1.0 ) = <span class="n">1.81</span> &nbsp;·&nbsp; peer 2.14 &nbsp;·&nbsp; <span class="out">current '+bt.toFixed(2)+'</span>';
-  document.getElementById('numMrp').innerHTML='= ( '+rf.toFixed(2)+'% + '+mp.toFixed(2)+'% ) − '+rf.toFixed(2)+'% = <span class="out">'+mp.toFixed(2)+'%</span>';
-  document.getElementById('numCoE').innerHTML='= '+rf.toFixed(2)+'% + ( '+bt.toFixed(2)+' × '+mp.toFixed(2)+'% ) = <span class="out">'+coe.toFixed(2)+'%</span>';
-  document.getElementById('numWACC').innerHTML='= ( 0.998 × '+coe.toFixed(2)+'% ) + ( 0.002 × '+KDPRE.toFixed(2)+'% × ( 1 − '+t.toFixed(3)+' ) ) = <span class="out">'+w.toFixed(2)+'%</span>';
-  const denom=w-tg*100;
-  document.getElementById('numTV').innerHTML='= ( '+fmt(r.ufcf5,0)+' × ( 1 + '+(tg*100).toFixed(1)+'% ) ) ÷ ( '+w.toFixed(2)+'% − '+(tg*100).toFixed(1)+'% = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> ) &nbsp;→&nbsp; terminal = <span class="n">'+fmt(r.tvShare,0)+'%</span> of value';
+  // chip highlight (selected mode)
+  document.querySelectorAll('.chip[data-s]').forEach(ch=>ch.classList.toggle('on',Math.abs(rd(ch.dataset.s)-parseFloat(ch.dataset.v))<0.02));
+  document.querySelectorAll('.chip[data-g]').forEach(ch=>ch.classList.toggle('on',Math.abs(rd('g')-parseFloat(ch.dataset.g))<0.06&&Math.abs(rd('m')-parseFloat(ch.dataset.m))<0.06&&Math.abs(rd('t')-parseFloat(ch.dataset.tx))<0.06));
+
+  // FORMULAS — two-row aligned grids (symbol row + number row, matched columns)
+  const rf=c.rf*100, bt=c.beta, mp=c.mrp*100, coe=r.coe*100, w=r.w*100, tg=c.tg, t=c.t, denom=w-tg*100;
+  const O='op';
+  fg('fgBeta',[['0.67 × βᵣ','0.67 × 2.21','v'],['+','+',O],['0.33','0.33','v'],['=','=',O],['βₐ (Blume)','1.81','out'],['','',O],['your β',bt.toFixed(2),'v']]);
+  fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
+  fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
+  fg('fgWACC',[['(  wₑ','(  0.998','v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  0.002','v'],['×','×',O],['k_d',KDPRE.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
+  fg('fgTV',[['(  FCF₅',' (  '+fmt(r.ufcf5,0),'v'],['×','×',O],['(1+g)  )','(1+'+(tg*100).toFixed(1)+'%)  )','v'],['÷','÷',O],['(  WACC−g  )','(  '+denom.toFixed(2)+'%  )',denom>0?'v':'outn'],['→','→',O],['terminal',fmt(r.tvShare,0)+'% of val','out']]);
 
   // BAR CHART — projected metric, years left→right
   ['rev','ebitda','ufcf','pv'].forEach(k=>document.getElementById('pc_'+k).classList.toggle('on',PC===k));
@@ -350,6 +375,33 @@ function render(){
   document.getElementById('barchart').innerHTML=bc;
 
   renderSens(c);
+  renderReverse(c);
+}
+function fg(id,pairs){document.getElementById(id).innerHTML=pairs.map(p=>'<div class="sym '+(p[2]==='op'?'op':'')+'">'+p[0]+'</div><div class="num '+(p[2]||'')+'">'+p[1]+'</div>').join('');}
+// --- Reverse DCF: solve for one input that makes fair value = market price ---
+let RV='g';
+function setRV(k){RV=k;render();}
+function solveFor(key,c){
+  const incr={g:true,m:true,tg:true,beta:false,mrp:false}[key];
+  let lo,hi;
+  if(key==='g'){lo=-0.6;hi=3.5;}else if(key==='m'){lo=0.02;hi=0.98;}else if(key==='tg'){lo=-0.2;hi=0.30;}else if(key==='beta'){lo=0.05;hi=5;}else{lo=0.002;hi=0.30;}
+  const f=x=>{const o={...c};o[SV[key].fld]=x;const r=fvFrom(o);return r.bad?null:r.fv;};
+  for(let k2=0;k2<90;k2++){const mid=(lo+hi)/2,v=f(mid);
+    if(v==null){ if(incr) hi=mid; else lo=mid; continue; }
+    const above=v>=BASE.price;
+    if(incr){ if(above) hi=mid; else lo=mid; } else { if(above) lo=mid; else hi=mid; }
+  }
+  return (lo+hi)/2;
+}
+function renderReverse(c){
+  ['g','m','beta','mrp','tg'].forEach(k=>document.getElementById('rv_'+k).classList.toggle('on',RV===k));
+  const x=solveFor(RV,c); let disp,ref,note;
+  if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='consensus 36% · FMP 66%';note=p<36?'BELOW consensus — the price implies less growth than the Street expects → looks cheap on growth':'ABOVE consensus — the price already bakes in aggressive growth';}
+  else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='current 51%';note=p<51?'below current margins — undemanding':'requires margin expansion to hold';}
+  else if(RV==='beta'){disp=x.toFixed(2);ref='raw 2.21 · market 1.0';note=x>2.21?'needs risk HIGHER than the raw beta to justify the price → i.e. the market is discounting it cheaply':'the market is pricing LOWER risk than the raw beta';}
+  else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='Damodaran 4.45%';note=p>4.45?'fatter risk premium than Damodaran → conservative pricing':'thinner premium than Damodaran → rich pricing';}
+  else{const p=x*100;disp=p.toFixed(2)+'%';ref='GDP ~4.5% · rf 4.28%';note=p>4.5?'perpetual growth above GDP → demanding':'modest perpetual growth → undemanding';}
+  document.getElementById('revout').innerHTML='To justify <span style="color:var(--accent);font-weight:700">$202.81</span>, holding everything else at your sliders, the market implies<br><b style="color:var(--gold);font-size:20px">'+SV[RV].lbl+' = '+disp+'</b> &nbsp;<span class="foot">(reference: '+ref+')</span><br><span style="color:#c9d1d9;">→ '+note+'</span>';
 }
 function renderSens(c){
   const keys=['g','m','t','rf','beta','mrp','tg'];
@@ -548,9 +600,8 @@ window.addEventListener('DOMContentLoaded',renderEst);
       const {med,cheapLow}=cols[ci];
       const dev=(v-med)/Math.abs(med);
       const good = cheapLow ? v<med : v>med;              // cheap (val multiples) or better (margins)
-      const strong = Math.abs(dev)>0.25;                   // outlier threshold
-      cell.style.background = good ? (strong?'rgba(63,185,80,0.22)':'rgba(63,185,80,0.10)')
-                                   : (strong?'rgba(248,81,73,0.20)':'rgba(248,81,73,0.09)');
+      cell.classList.add(good?'cheap':'exp');             // green text = cheap/better, red = expensive/worse
+      if(Math.abs(dev)>0.25) cell.classList.add('out');   // outlier → bold + dashed outline
     });
   });
 })();
