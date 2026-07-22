@@ -171,8 +171,12 @@
   <div class="rb"><span class="rk">Market price</span><span class="rv">$202.81</span></div>
   <div class="rb"><span class="rk">Up / downside</span><span class="rv" id="oUp">—</span></div>
   <div class="rb"><span class="rk">Enterprise value</span><span class="rv" id="oEV">—</span></div>
-  <div class="rb"><span class="rk">Terminal = % of value</span><span class="rv" id="oTV">—</span></div>
+  <div class="rb"><span class="rk">Perpetuity = % of value</span><span class="rv" id="oTV">—</span></div>
 </div>
+
+<!-- VALUE BREAKDOWN -->
+<div class="fcard"><div class="fname">Where the value comes from — explicit 5-yr cash vs the perpetuity</div>
+  <div id="npvSplit"></div></div>
 
 <!-- ASSUMPTIONS -->
 <div class="dcfh">A · Business assumptions</div>
@@ -213,7 +217,7 @@
 
 <!-- TERMINAL -->
 <div class="dcfh">C · Terminal value</div>
-<div class="srow"><span class="slab">Terminal growth g <small>perpetuity, after yr 5 — distinct from rᶠ</small></span><input type="range" id="termg" min="0" max="8" step="0.1" value="4.28"><span class="sval" id="sv_termg"></span></div>
+<div class="srow"><span class="slab">Perpetuity growth g <small>forever after yr 5 — distinct from rᶠ</small></span><input type="range" id="termg" min="0" max="8" step="0.1" value="4.28"><span class="sval" id="sv_termg"></span></div>
 <div class="chips">
   <button class="chip" data-s="termg" data-v="3" onclick="setSlider('termg',3.0)">Conservative 3.0%</button>
   <button class="chip" data-s="termg" data-v="4" onclick="setSlider('termg',4.0)">FMP default 4.0%</button>
@@ -269,9 +273,13 @@
     <button class="mbtn" id="rv_m" onclick="setRV('m')">EBITDA margin</button>
     <button class="mbtn" id="rv_beta" onclick="setRV('beta')">Beta</button>
     <button class="mbtn" id="rv_mrp" onclick="setRV('mrp')">MRP</button>
-    <button class="mbtn" id="rv_tg" onclick="setRV('tg')">Terminal g</button></div>
+    <button class="mbtn" id="rv_tg" onclick="setRV('tg')">Perpetuity g</button></div>
   <div id="revout" style="font-family:ui-monospace,Menlo,monospace; font-size:15px; line-height:1.9;"></div>
-  <div class="foot" style="margin-top:6px;">Everything else stays at the sliders above. This is "implied expectations" — a moat looks cheap if the market's implied growth is well below what the company can plausibly do, and vice versa.</div>
+  <div style="margin-top:16px; font-size:13px; color:var(--txt); font-weight:600;">Implied <span id="rvName">growth</span> across two locked inputs — pick the axes (default = the two that matter most)</div>
+  <div class="chips" id="rvYchips" style="margin:6px 0 3px;"></div>
+  <div class="chips" id="rvXchips" style="margin:0 0 8px;"></div>
+  <div class="scrollx"><table class="sensi" id="revGrid"></table></div>
+  <div class="foot" style="margin-top:4px;">Each cell = the <span id="rvName2">growth</span> that would justify $202.81 at that axis combo. Center cell (outlined) = your current sliders. This is where you see, e.g., "even at a bullish 1.3 beta the price still implies 45% growth."</div>
 </div>
 
 <!-- MRP BUILDER (collapsed — no more savage scrolling) -->
@@ -310,7 +318,7 @@ const SV={
   rf:{lbl:'Risk-free',id:'rf',sc:100,fld:'rf',min:2,max:7,step:0.5},
   beta:{lbl:'Beta',id:'bt',sc:1,fld:'beta',min:0.5,max:3,step:0.3},
   mrp:{lbl:'MRP',id:'mrpS',sc:100,fld:'mrp',min:3,max:8,step:0.5},
-  tg:{lbl:'Terminal g',id:'termg',sc:100,fld:'tg',min:0,max:8,step:1}
+  tg:{lbl:'Perpetuity g',id:'termg',sc:100,fld:'tg',min:0,max:8,step:1}
 };
 const PCMAP={rev:{i:1,lbl:'Revenue $B'},ebitda:{i:2,lbl:'EBITDA $B'},ufcf:{i:3,lbl:'Free cash flow $B'},pv:{i:4,lbl:'PV of FCF $B'}};
 function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
@@ -327,7 +335,7 @@ function modelFull(g,m,t,rf,beta,mrp,tg){
   for(let i=1;i<=5;i++){rev*=(1+g);const eb=rev*m,da=rev*BASE.daPct,ebit=eb-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,eb,ufcf,pv]);}
   if(w<=tg)return{bad:true,coe,w};
   const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
-  return{coe,w,ev,fv,ufcf5:ufcf,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
+  return{coe,w,ev,fv,ufcf5:ufcf,pvExplicit:sumPV,pvTerm:pvTV,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
 }
 function fvFrom(o){return modelFull(o.g,o.m,o.t,o.rf,o.beta,o.mrp,o.tg);}
 function applyVar(o,key,val){o[SV[key].fld]= SV[key].sc===1 ? val : val/100;}
@@ -374,13 +382,25 @@ function render(){
   bc+='</div><div class="foot" style="margin-top:4px;">'+PCMAP[PC].lbl+' · FY2027→FY2031</div>';
   document.getElementById('barchart').innerHTML=bc;
 
+  // VALUE BREAKDOWN — explicit vs perpetuity, as a stacked bar
+  const pe=r.pvExplicit, pt=r.pvTerm, ev=r.ev, peP=pe/ev*100, ptP=pt/ev*100;
+  document.getElementById('npvSplit').innerHTML=
+    '<div style="display:flex;height:34px;border-radius:7px;overflow:hidden;margin:4px 0 10px;">'+
+    '<div style="width:'+peP+'%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;color:#0d1117;font-size:13px;">'+peP.toFixed(0)+'%</div>'+
+    '<div style="width:'+ptP+'%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;color:#0d1117;font-size:13px;">'+ptP.toFixed(0)+'%</div></div>'+
+    '<div style="display:flex;gap:30px;flex-wrap:wrap;font-size:14px;">'+
+    '<div><span style="color:var(--accent);font-weight:700;">■ PV of 5-yr FCF</span> &nbsp;$'+fmt(pe/1000,2)+'T</div>'+
+    '<div><span style="color:var(--gold);font-weight:700;">■ PV of perpetuity</span> &nbsp;$'+fmt(pt/1000,2)+'T</div>'+
+    '<div><span class="foot">= Enterprise value</span> &nbsp;<b>$'+fmt(ev/1000,2)+'T</b></div></div>'+
+    '<div class="foot" style="margin-top:6px;">The perpetuity (gold) is '+ptP.toFixed(0)+'% of the whole valuation — the further right that bar runs, the more the answer rests on the single perpetuity assumption rather than the 5 years you can actually forecast.</div>';
+
   renderSens(c);
   renderReverse(c);
 }
 function fg(id,pairs){document.getElementById(id).innerHTML=pairs.map(p=>'<div class="sym '+(p[2]==='op'?'op':'')+'">'+p[0]+'</div><div class="num '+(p[2]||'')+'">'+p[1]+'</div>').join('');}
 // --- Reverse DCF: solve for one input that makes fair value = market price ---
 let RV='g';
-function setRV(k){RV=k;render();}
+function setRV(k){RV=k;autoRVaxis=true;render();}
 function solveFor(key,c){
   const incr={g:true,m:true,tg:true,beta:false,mrp:false}[key];
   let lo,hi;
@@ -393,8 +413,11 @@ function solveFor(key,c){
   }
   return (lo+hi)/2;
 }
+let RVY='beta', RVX='mrp', autoRVaxis=true;
+function fmtImp(k,x){return SV[k].sc===1 ? x.toFixed(2) : (x*100).toFixed(1)+'%';}
 function renderReverse(c){
   ['g','m','beta','mrp','tg'].forEach(k=>document.getElementById('rv_'+k).classList.toggle('on',RV===k));
+  document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl;
   const x=solveFor(RV,c); let disp,ref,note;
   if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';ref='consensus 36% · FMP 66%';note=p<36?'BELOW consensus — the price implies less growth than the Street expects → looks cheap on growth':'ABOVE consensus — the price already bakes in aggressive growth';}
   else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';ref='current 51%';note=p<51?'below current margins — undemanding':'requires margin expansion to hold';}
@@ -402,30 +425,44 @@ function renderReverse(c){
   else if(RV==='mrp'){const p=x*100;disp=p.toFixed(2)+'%';ref='Damodaran 4.45%';note=p>4.45?'fatter risk premium than Damodaran → conservative pricing':'thinner premium than Damodaran → rich pricing';}
   else{const p=x*100;disp=p.toFixed(2)+'%';ref='GDP ~4.5% · rf 4.28%';note=p>4.5?'perpetual growth above GDP → demanding':'modest perpetual growth → undemanding';}
   document.getElementById('revout').innerHTML='To justify <span style="color:var(--accent);font-weight:700">$202.81</span>, holding everything else at your sliders, the market implies<br><b style="color:var(--gold);font-size:20px">'+SV[RV].lbl+' = '+disp+'</b> &nbsp;<span class="foot">(reference: '+ref+')</span><br><span style="color:#c9d1d9;">→ '+note+'</span>';
+  // 2-var reverse grid
+  const cand=['g','m','t','rf','beta','mrp','tg'].filter(k=>k!==RV);
+  if(autoRVaxis){const imp=topImpact(c,RV); RVY=imp[0].k; RVX=imp[1].k;}
+  if(!cand.includes(RVY)) RVY=cand[0];
+  if(!cand.includes(RVX)||RVX===RVY) RVX=cand.find(k=>k!==RVY);
+  document.getElementById('rvYchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">rows Y:</span>'+cand.map(k=>'<button class="mbtn'+(RVY===k?' on':'')+'" onclick="setRVY(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
+  document.getElementById('rvXchips').innerHTML='<span class="foot" style="align-self:center;margin-right:6px;">cols X:</span>'+cand.map(k=>'<button class="mbtn'+(RVX===k?' on':'')+'" onclick="setRVX(\''+k+'\')">'+SV[k].lbl+'</button>').join('');
+  const vy=SV[RVY], vx=SV[RVX], ry=centerRange(RVY), rx=centerRange(RVX), uy=(vy.sc===1?'':'%'), ux=(vx.sc===1?'':'%');
+  let h='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+rx.map((xx,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+xx+ux+'</th>').join('')+'</tr>';
+  ry.forEach((yv,iy)=>{h+='<tr><td'+(iy===3?' style="color:var(--accent)"':'')+'><b>'+yv+uy+'</b></td>'+rx.map((xv,ix)=>{const o={...c};applyVar(o,RVY,yv);applyVar(o,RVX,xv);const sx=solveFor(RV,o);const ctr=(iy===3&&ix===3);return '<td class="gold"'+(ctr?' style="outline:2px solid var(--accent)"':'')+'>'+fmtImp(RV,sx)+'</td>';}).join('')+'</tr>';});
+  document.getElementById('revGrid').innerHTML=h;
+}
+function setRVY(k){RVY=k;autoRVaxis=false;render();}
+function setRVX(k){RVX=k;autoRVaxis=false;render();}
+let autoAxis=true;
+function topImpact(c,exclude){
+  return ['g','m','t','rf','beta','mrp','tg'].filter(k=>k!==exclude).map(k=>{const lo={...c};applyVar(lo,k,SV[k].min);const hi={...c};applyVar(hi,k,SV[k].max);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;return{k,lo:av,hi:bv,swing:(av!=null&&bv!=null)?Math.abs(bv-av):0};}).sort((a,b)=>b.swing-a.swing);
 }
 function renderSens(c){
   const keys=['g','m','t','rf','beta','mrp','tg'];
+  const imp=topImpact(c,null);
+  if(autoAxis){SY=imp[0].k; SX=imp[1].k;}
   keys.forEach(k=>{document.getElementById('s1_'+k).classList.toggle('on',S1===k);document.getElementById('sy_'+k).classList.toggle('on',SY===k);document.getElementById('sx_'+k).classList.toggle('on',SX===k);});
-  // tornado — FULL slider range per variable
-  let sw=keys.map(k=>{const lo={...c};applyVar(lo,k,SV[k].min);const hi={...c};applyVar(hi,k,SV[k].max);const a=fvFrom(lo),b=fvFrom(hi);const av=a.bad?null:a.fv,bv=b.bad?null:b.fv;const swing=(av!=null&&bv!=null)?Math.abs(bv-av):0;return{lbl:SV[k].lbl,lo:av,hi:bv,swing};});
-  const maxSw=Math.max.apply(null,sw.map(x=>x.swing))||1;
-  sw.sort((a,b)=>b.swing-a.swing);
-  document.getElementById('tornado').innerHTML=sw.map(x=>'<div class="tor"><span class="torlbl">'+x.lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px"></span><span class="torval">$'+(x.lo==null?'—':fmt(x.lo,0))+' → $'+(x.hi==null?'—':fmt(x.hi,0))+' &nbsp;(Δ$'+fmt(x.swing,0)+')</span></div>').join('');
-  // 1-variable — centered on current selection, spreads lower/higher
+  const maxSw=Math.max.apply(null,imp.map(x=>x.swing))||1;
+  document.getElementById('tornado').innerHTML=imp.map(x=>'<div class="tor"><span class="torlbl">'+SV[x.k].lbl+'</span><span class="torbar" style="width:'+Math.max(4,x.swing/maxSw*280)+'px"></span><span class="torval">$'+(x.lo==null?'—':fmt(x.lo,0))+' → $'+(x.hi==null?'—':fmt(x.hi,0))+' &nbsp;(Δ$'+fmt(x.swing,0)+')</span></div>').join('');
   const v1=SV[S1], r1=centerRange(S1), u1=(v1.sc===1?'':'%');
-  let h1='<tr><th>'+v1.lbl+' →</th>'+r1.map((x,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+x+u1+(i===3?' •':'')+'</th>').join('')+'</tr>';
+  let h1='<tr><th>'+v1.lbl+' →</th>'+r1.map((x,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+x+u1+'</th>').join('')+'</tr>';
   h1+='<tr><td>fair value</td>'+r1.map((x,i)=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'"'+(i===3?' style="outline:1px solid var(--accent)"':'')+'>$'+fmt(rr.fv,0)+'</td>';}).join('')+'</tr>';
   h1+='<tr><td>up/downside</td>'+r1.map(x=>{const o={...c};applyVar(o,S1,x);const rr=fvFrom(o);return rr.bad?'<td>—</td>':'<td class="'+(rr.up>=0?'pos':'neg')+'">'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</td>';}).join('')+'</tr>';
   document.getElementById('sens1').innerHTML=h1;
-  // 2-variable — both axes centered on current selections
   const vy=SV[SY], vx=SV[SX], ry=centerRange(SY), rx=centerRange(SX), uy=(vy.sc===1?'':'%'), ux=(vx.sc===1?'':'%');
   let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+rx.map((x,i)=>'<th'+(i===3?' style="color:var(--accent)"':'')+'>'+x+ux+'</th>').join('')+'</tr>';
   ry.forEach((yv,iy)=>{h2+='<tr><td'+(iy===3?' style="color:var(--accent)"':'')+'><b>'+yv+uy+'</b></td>'+rx.map((xv,ix)=>{const o={...c};applyVar(o,SY,yv);applyVar(o,SX,xv);const rr=fvFrom(o);const ctr=(iy===3&&ix===3);return rr.bad?'<td>—</td>':'<td class="'+(rr.fv>=BASE.price?'pos':'neg')+'"'+(ctr?' style="outline:2px solid var(--accent)"':'')+'>$'+fmt(rr.fv,0)+'<br><small>'+(rr.up>=0?'+':'')+fmt(rr.up,0)+'%</small></td>';}).join('')+'</tr>';});
   document.getElementById('sens2').innerHTML=h2;
 }
 function setS1(k){S1=k;render();}
-function setSY(k){SY=k; if(SX===k)SX=(k==='g'?'rf':'g'); render();}
-function setSX(k){SX=k; if(SY===k)SY=(k==='g'?'rf':'g'); render();}
+function setSY(k){SY=k;autoAxis=false; if(SX===k)SX=(k==='g'?'rf':'g'); render();}
+function setSX(k){SX=k;autoAxis=false; if(SY===k)SY=(k==='g'?'rf':'g'); render();}
 ['g','m','t','rf','bt','mrpS','termg'].forEach(id=>document.getElementById(id).addEventListener('input',render));
 
 // --- MRP builder solver ---
