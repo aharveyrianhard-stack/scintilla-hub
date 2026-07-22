@@ -106,203 +106,176 @@
   .scrollx table{min-width:900px;}
   #dcfOut .kv .v{font-size:30px;}
 </style>
-<h2>3 · Custom DCF — NVDA, Live Model (drag the sliders)</h2>
-<div class="src">endpoint: custom-dcf-advanced — every parameter below is an API argument you can override per call</div>
+<style>
+  .mbtn{background:var(--panel); border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:6px 12px; margin:3px 5px 3px 0; cursor:pointer; font-size:13px;}
+  .mbtn.on{border-color:var(--accent); color:var(--accent); background:rgba(88,166,255,0.10); font-weight:600;}
+  .mbtn.gold.on{border-color:var(--gold); color:var(--gold); background:rgba(210,153,34,0.10);}
+  .frow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:9px 0;}
+  .flabel{font-size:11.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; width:74px; flex-shrink:0;}
+  .math{font-family:ui-monospace,Menlo,monospace; font-size:13.5px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px 15px; line-height:2; color:#c9d1d9; margin:8px 0;}
+  .math .hl{color:var(--accent); font-weight:600;} .math .g{color:var(--gold);} .math .dim2{color:var(--dim);}
+  .foot{font-size:11.5px; color:var(--dim); margin-top:3px;}
+  .resultbar{display:flex; gap:20px; flex-wrap:wrap; align-items:baseline; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:14px;}
+  .resultbar .rb{display:flex; flex-direction:column;} .resultbar .rk{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em;} .resultbar .rv{font-size:26px; font-weight:700;}
+  .sensi td, .sensi th{text-align:center; padding:7px 9px; font-size:13px;} .sensi td:first-child, .sensi th:first-child{text-align:left;}
+  details.build summary{cursor:pointer; color:var(--gold); font-weight:700; font-size:14px; padding:8px 0; list-style:none;}
+  details.build summary::-webkit-details-marker{display:none;}
+</style>
+<h2>3 · DCF — NVDA · pick a mode, the math updates</h2>
+<div class="src">endpoint: custom-dcf-advanced · every lever is an API argument · switch modes below, watch the formulas and valuation move</div>
 
-<h3 style="font-size:16px; margin-bottom:8px;">How FMP builds its defaults — full transparency</h3>
-<table class="wraptable">
-<tr><th>Input</th><th>FMP Default</th><th>Where it comes from</th><th>API parameter</th></tr>
-<tr><td>Revenue growth (yrs 1–5)</td><td class="neg">66.4%/yr</td><td class="neg">Historical extrapolation — NOT analyst estimates. NVDA actuals: FY23 +0.2%, FY24 +125.9%, FY25 +114.2%, FY26 +65.5% → it carries ~last year's growth forward 5 years</td><td>revenueGrowthPct</td></tr>
-<tr><td>EBITDA margin</td><td>51.1%</td><td>Historical avg % of revenue</td><td>ebitdaPct</td></tr>
-<tr><td>D&amp;A / Capex</td><td>3.06% / 3.49%</td><td>Historical % of revenue</td><td>depreciationAndAmortizationPct / capitalExpenditurePct</td></tr>
-<tr><td>NWC (recv+inv−pay)</td><td>16.67+11.02−4.97%</td><td>Historical % of revenue; ΔNWC drains FCF while growing</td><td>receivablesPct / inventoriesPct / payablePct</td></tr>
-<tr><td>Tax rate</td><td>15.12%</td><td>Effective TTM rate</td><td>taxRate</td></tr>
-<tr><td>Cost of equity</td><td>14.72%</td><td>CAPM: 4.28% risk-free + 2.211 β × 4.72% mkt risk premium</td><td>riskFreeRate / beta / marketRiskPremium</td></tr>
-<tr><td>WACC</td><td>14.69%</td><td>99.77% equity × 14.72% + 0.23% debt × 3.63% after-tax</td><td>costOfDebt (4.28%)</td></tr>
-<tr><td>Terminal value</td><td>$9.26T</td><td>Gordon growth: UFCF₆ = $989.7B ÷ (WACC 14.69% − g 4.0%), discounted 5 yrs → PV $4.66T = 78% of total EV</td><td>longTermGrowthRate</td></tr>
-</table>
-
-<div class="grp">
-<h4>A · BUSINESS ASSUMPTIONS — what the company earns</h4>
-<p class="exp">These three set the cash the business generates before any discounting.</p>
-<div class="ctrl">
-  <div><label>Revenue growth, yrs 1–5</label><span class="val" id="vG">66.4%</span><input type="range" id="g" min="0" max="80" step="0.5" value="66.4">
-    <div class="sub">Compounds off FY2026's actual $215.9B for 5 years — the single biggest driver of the answer. FMP's default (66.4%) just repeats last year's growth; the Street's consensus path implies ≈36%/yr.</div></div>
-  <div><label>EBITDA margin</label><span class="val" id="vM">51.1%</span><input type="range" id="m" min="20" max="75" step="0.5" value="51.1">
-    <div class="sub">Cents of profit (before depreciation) kept from each revenue dollar. Default = NVDA's historical 51.1%.</div></div>
-  <div><label>Effective tax rate</label><span class="val" id="vT">15.1%</span><input type="range" id="t" min="5" max="35" step="0.5" value="15.1">
-    <div class="sub">What NVDA actually paid TTM (15.1%) — the EFFECTIVE rate, not the 21% US statutory rate.</div></div>
-</div>
-<p class="exp" style="margin-top:12px;">Fixed from history (no sliders): D&amp;A 3.06%, capex 3.49%, <b>NWC 22.7% of revenue</b>. NWC (net working capital) = receivables + inventory − payables — cash tied up just running the business. When revenue grows, NWC grows with it, silently eating ~22.7¢ of every NEW revenue dollar of free cash flow.</p>
+<!-- RESULT BAR (always at top) -->
+<div class="resultbar">
+  <div class="rb"><span class="rk">Fair value / share</span><span class="rv" id="oFV">—</span></div>
+  <div class="rb"><span class="rk">Market price</span><span class="rv">$202.81</span></div>
+  <div class="rb"><span class="rk">Up / downside</span><span class="rv" id="oUp">—</span></div>
+  <div class="rb"><span class="rk">Enterprise value</span><span class="rv" id="oEV">—</span></div>
+  <div class="rb"><span class="rk">Terminal = % of value</span><span class="rv" id="oTV">—</span></div>
 </div>
 
-<div class="grp">
-<h4>B · DISCOUNT RATE — CAPM → WACC, what a dollar tomorrow is worth today</h4>
-<p class="exp">Cost of Equity = Risk-free + β × Market-risk-premium; WACC blends it with after-tax cost of debt by market-value weights.</p>
-<div class="ctrl">
-  <div><label>Risk-free rate (10Y Treasury)</label><span class="val" id="vRf">4.28%</span><input type="range" id="rf" min="2" max="7" step="0.05" value="4.28">
-    <div class="sub">The zero-risk baseline. FMP defaults to the US 10-Year Treasury yield on pull date (4.28%). We can also source this live ourselves via FMP's treasury-rates endpoint.</div>
-    <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('rf',4.28)">FMP / 10Y: 4.28</button></div></div>
-  <div><label>Beta (vol vs market)</label><span class="val" id="vB">2.21</span><input type="range" id="b" min="0.5" max="3" step="0.01" value="2.211">
-    <div class="sub">How violently the stock swings vs the market. NVDA 2.21 = over twice the market's moves → investors demand extra return. <b>"Regression"</b> in plain words: fit a line through ~5 years of the stock's weekly moves vs the S&amp;P's moves; the slope is beta. Purely backward-looking. <b>The three options:</b> FMP raw = exactly that history. Blume-adjusted = 0.67×raw + 0.33 — because extreme betas empirically fade toward 1.0 as companies mature ("drift"), so raw beta OVERSTATES future risk for high-beta names; Blume is the forecast correction, not a different measurement. Peer median = the comps set's middle beta (TSM/AVGO/MU/AMD/INTC → 2.14) — "price NVDA's risk like its industry's." None is 'right': raw = what happened, Blume = best single forecast, peer = industry anchor.</div>
-    <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',2.211)">FMP raw: 2.21</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',1.81)">Blume-adj: 1.81</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('b',2.14)">Peer median: 2.14</button></div></div>
-  <div><label>Market risk premium</label><span class="val" id="vMrp">4.72%</span><input type="range" id="mrp" min="3" max="8" step="0.05" value="4.72">
-    <div class="sub">Extra return stocks as an asset class must pay over Treasuries. ⚠️ FMP sends this RAW: a fixed house constant (4.72%, same for every ticker), no underlying inputs exposed. The proper source is external: <b>Damodaran (NYU), monthly, free — July 2026: 4.45% US, 4.17% mature markets</b>. <b>The sub-components inside an implied ERP</b> (his machine, all observable — these become our four dials when we build our own module): ① today's S&amp;P 500 index level · ② expected cash returned to shareholders (dividends + buybacks, next 12m and growing) · ③ analyst growth expectations for ~5 years · ④ terminal growth = the 10Y treasury. Solve for the discount rate that makes those cash flows worth today's index level → that's the market's expected return (right now ≈ 8.7% = 4.28% rf + 4.45% ERP); subtract the 10Y → ERP. So when stocks rally with no cash-flow change, implied ERP FALLS — it's a live market price of risk, not a constant.</div>
-    <div><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.72)">FMP: 4.72</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',4.45)">Damodaran US (Jul-26): 4.45</button><button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setV('mrp',5.50)">Conservative: 5.50</button></div>
+<!-- MODE SELECTORS -->
+<div class="frow"><span class="flabel">Scenario</span>
+  <button class="mbtn" id="sc_fmp"    onclick="setScen('fmp')">FMP 66% <span class="dim2">(fantasy)</span></button>
+  <button class="mbtn" id="sc_cons"   onclick="setScen('cons')">Consensus 36%</button>
+  <button class="mbtn" id="sc_conserv" onclick="setScen('conserv')">Conservative 20%</button>
+  <button class="mbtn" id="sc_bear"   onclick="setScen('bear')">Bear 10%</button></div>
+<div class="foot">Sets revenue growth + EBITDA margin + tax together. FMP just repeats last year's growth; Consensus = the Street's actual path (financial-estimates).</div>
 
-    <div style="border:1px dashed var(--gold); border-radius:10px; padding:16px; margin-top:14px; background:rgba(210,153,34,0.04);">
-      <div style="color:var(--gold); font-weight:700; font-size:14px; margin-bottom:4px;">▾ BUILD THE MRP YOURSELF — implied ERP from its subcomponents (live)</div>
-      <div class="sub" style="margin-bottom:12px;"><b>MRP = ERP = "equity risk premium in excess of the risk-free rate"</b> — all the same thing: the extra annual return investors demand for holding stocks instead of Treasuries. FMP hides how it's built; here are the parts as dials. The model discounts the S&amp;P 500's expected cash flows back to today's index level and solves for the return the market is pricing; ERP = that return − risk-free. Then a <b>country-risk premium</b> is added on top, weighted by where THIS company earns revenue (Damodaran's method — FMP gives us the geography). Change any part → recomputes → "Use →" pushes it into CAPM above.</div>
-      <div class="ctrl" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-        <div><label>① S&amp;P 500 index level</label><span class="val" id="vSpx">7457.7</span><input type="range" id="spx" min="5000" max="9000" step="10" value="7457.7">
-          <div class="sub">The price level of the S&amp;P 500 index itself (^GSPC is just its ticker symbol) — today ≈7,460, live from FMP quote. It's the "price" the whole model solves against: higher index for the same cash flows → lower implied ERP (you're paying more for the same future dollars).</div></div>
-        <div><label>② Dividend yield</label><span class="val" id="vDy">1.30%</span><input type="range" id="dy" min="0.5" max="3" step="0.05" value="1.30">
-          <div class="sub">Cash paid as dividends this year ÷ index level (~1.3%). Source: S&amp;P / FMP index fundamentals.</div></div>
-        <div><label>③ Buyback yield</label><span class="val" id="vBy">2.20%</span><input type="range" id="by" min="0" max="4" step="0.05" value="2.20">
-          <div class="sub">Value of shares companies BUY BACK per year ÷ index (~2.2%). Buybacks return cash to owners just like dividends — for the S&amp;P they're the bigger half, and most naive models wrongly ignore them.</div></div>
-        <div><label>④ Expected growth, yrs 1–5</label><span class="val" id="vGg">8.50%</span><input type="range" id="gg" min="0" max="20" step="0.25" value="8.50">
-          <div class="sub">How fast analysts expect total S&amp;P earnings/cash flows to GROW per year over the next 5 years (bottom-up consensus). The big judgment call — nudge it and watch ERP swing.</div></div>
-        <div><label>⑤ Terminal growth (= risk-free)</label><span class="val" id="vTg">4.28%</span><input type="range" id="tg" min="2" max="7" step="0.05" value="4.28">
-          <div class="sub">Growth after year 5, forever. Pinned to the 10Y Treasury by convention — nothing outgrows the economy indefinitely.</div></div>
-        <div><label>⑥ Country-risk premium (rev-weighted)</label><span class="val" id="vCrp">0.20%</span><input type="range" id="crp" min="0" max="6" step="0.05" value="0.20">
-          <div class="sub">Extra premium for earning revenue in riskier countries. NVDA FY26 mix (FMP geography): US 69% (0 premium), Taiwan 20%, China 9% → blended ≈0.20%. For an emerging-markets-heavy company this is LARGE. Damodaran publishes per-country premiums; we weight by FMP revenue-by-geography.</div></div>
-        <div style="display:flex;flex-direction:column;justify-content:center;">
-          <label>→ IMPLIED MARKET RETURN</label><span class="val" id="oRet" style="font-size:22px;">—</span>
-          <label style="margin-top:6px;">→ BASE ERP (US mature)</label><span class="val" id="oErp" style="font-size:22px;">—</span>
-          <label style="margin-top:6px;">→ TOTAL MRP (+ country)</label><span class="val pos" id="oTot" style="font-size:24px;">—</span>
-          <button class="preset" style="font-size:13px;padding:6px 12px;margin-top:8px;border-color:var(--gold);color:var(--gold);" onclick="useErp()">Use TOTAL MRP → CAPM ↑</button>
-        </div>
-      </div>
-      <div style="margin-top:8px;">
-        <span class="sub" style="display:block;margin-bottom:4px;">Presets set the whole subcomponent set at once:</span>
-        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,0.20)">Live consensus</button>
-        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,2.20,6.00,4.28,0.20)">Cautious growth 6%</button>
-        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,1.00,8.50,4.28,0.20)">Buybacks fade 1%</button>
-        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(6800,1.45,2.20,8.50,4.28,0.20)">−10% selloff</button>
-        <button class="preset" style="font-size:12px;padding:4px 10px;" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,1.50)">EM-heavy company (CRP 1.5%)</button>
-      </div>
-      <div class="note" id="erpNote" style="margin-top:10px;"></div>
-    </div></div>
-  <div><label>→ Cost of Equity = rf + β×MRP</label><span class="val" id="vCoe">14.72%</span></div>
-  <div><label>→ WACC = 99.77% eq × CoE + 0.23% debt × 3.63%</label><span class="val" id="vW">14.69%</span></div>
-</div>
-<p class="exp" style="margin-top:12px;"><b>Cost of debt</b> (no slider): FMP defaults it to the risk-free rate — 4.28%, or 3.63% after tax. For NVDA it barely matters: debt is 0.23% of total capital ($11.4B debt vs $4.97T equity market value), so WACC ≈ cost of equity. For a leveraged company this weighting bites hard. Weights are market values, not book.</p>
-</div>
+<div class="frow"><span class="flabel">Beta</span>
+  <button class="mbtn" id="b_fmp"  onclick="setBeta('fmp')">FMP raw 2.21</button>
+  <button class="mbtn" id="b_blume" onclick="setBeta('blume')">Blume-adj 1.81</button>
+  <button class="mbtn" id="b_peer" onclick="setBeta('peer')">Peer median 2.14</button></div>
 
-<div class="grp">
-<h4>C · TERMINAL VALUE — everything after year 5</h4>
-<p class="exp">The model only projects 5 years; all value beyond is the terminal value.</p>
-<div class="ctrl">
-  <div><label>Long-term (perpetual) growth</label><span class="val" id="vL">4.0%</span><input type="range" id="l" min="0" max="6" step="0.1" value="4.0">
-    <div class="sub">Year-5 cash flow grown at this rate forever, divided by (WACC − growth). Must stay below WACC or the formula breaks. At the 4% default the terminal value is ~78% of the ENTIRE valuation — quietly the model's biggest lever. 4% ≈ long-run nominal GDP; above that, the company outgrows the economy forever.</div></div>
-</div>
-</div>
+<div class="frow"><span class="flabel">MRP</span>
+  <button class="mbtn" id="mr_fmp"  onclick="setMrp('fmp')">FMP 4.72</button>
+  <button class="mbtn" id="mr_dam"  onclick="setMrp('dam')">Damodaran 4.45</button>
+  <button class="mbtn gold" id="mr_built" onclick="setMrp('built')">Built <span id="builtLbl">—</span></button></div>
 
-<div>
-  <button class="preset" onclick="setP(66.4,51.1,2.211,4.0,15.1)">FMP default (66% — fantasy)</button>
-  <button class="preset" onclick="setP(36,51.1,2.211,4.0,15.1)">Analyst consensus ≈36% (real FMP estimates)</button>
-  <button class="preset" onclick="setP(20,48,2.211,3.0,17)">Conservative 20%</button>
-  <button class="preset" onclick="setP(10,42,2.4,2.5,20)">Bear 10%</button>
-</div>
+<div class="frow"><span class="flabel">Terminal g</span>
+  <button class="mbtn" id="tg_10y"  onclick="setTg('t10y')">= 10Y 4.28%</button>
+  <button class="mbtn" id="tg_cons" onclick="setTg('cons')">Conservative 3.0%</button>
+  <button class="mbtn" id="tg_gdp"  onclick="setTg('gdp')">Long-run GDP 4.5%</button></div>
+<div class="foot">Terminal g = the company's growth forever after year 5. Convention pins it to the risk-free (10Y = 4.28%) as a ceiling — it EQUALS the risk-free, it is not "risk-free minus" anything. Nothing outgrows the economy indefinitely.</div>
 
-<div id="dcfOut">
-<div class="kv">
-  <div><span class="k">Fair Value / Share</span><div class="v" id="oFV">—</div></div>
-  <div><span class="k">Market Price</span><div class="v">$202.81</div></div>
-  <div><span class="k">Implied Up/Downside</span><div class="v" id="oUp">—</div></div>
-  <div><span class="k">Enterprise Value</span><div class="v" id="oEV">—</div></div>
-  <div><span class="k">Terminal Value % of EV</span><div class="v" id="oTV">—</div></div>
-</div>
-<table id="oTable"></table>
-</div>
-<div class="note">Model reconstructed client-side with FMP's exact mechanics (UFCF = EBIT×(1−tax) + D&amp;A − capex − ΔNWC; Gordon terminal value). Matches FMP's server output within a few % — FMP applies minor cash-tax adjustments. At FMP defaults it returns ≈$243 vs their $243.43. Base year: FY2026 actual revenue $215.9B, 24.51B diluted shares, net debt $0.8B.</div>
-<div class="flag">⚠️ Key answer: the 66% growth base is pure historical extrapolation, not analyst numbers. Analyst consensus lives in a separate endpoint (financial-estimates) — and can be fed into this model as the revenueGrowthPct override. That's the sane configuration: analyst revenue path + your WACC.</div>
+<!-- LIVE MATH -->
+<div class="math" id="mathBox"></div>
+
+<!-- SENSITIVITY -->
+<h4 style="color:var(--gold); font-size:14px; margin:16px 0 4px;">SENSITIVITY — fair value across ranges (green = above price, red = below)</h4>
+<div class="foot" style="margin-bottom:6px;">Rows = revenue growth · columns = WACC. Everything else held at the current scenario. This is the football-field: where does the valuation hold up.</div>
+<div class="scrollx"><table class="sensi" id="sensiTable"></table></div>
+
+<!-- PROJECTION (collapsed) -->
+<details style="margin-top:14px;"><summary style="cursor:pointer;color:var(--accent);font-size:14px;">▸ 5-year cash-flow projection (table)</summary>
+<div class="scrollx"><table id="oTable"></table></div>
+<div class="foot">UFCF = EBIT×(1−tax) + D&amp;A − capex − ΔNWC; then discounted at WACC; terminal by Gordon growth. Base: FY2026 rev $215.9B, 24.51B shares, net debt $0.8B. Matches FMP's server DCF within a few %.</div>
+</details>
+
+<!-- MRP BUILDER (collapsed — no more savage scrolling) -->
+<details class="build" style="margin-top:10px;"><summary>▸ Build your own MRP from subcomponents (optional — collapsed)</summary>
+  <div class="sub" style="margin:8px 0;"><b>MRP = ERP = equity risk premium over the risk-free.</b> FMP hard-codes 4.72%; this reconstructs it from parts: discount the S&amp;P's expected cash (div + buybacks, grown 5y, terminal = rf) back to today's index level, solve for the return, subtract rf. Add a revenue-weighted country premium on top. Click "Apply" to feed it into the MRP mode above.</div>
+  <div class="ctrl" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
+    <div><label>① S&amp;P 500 level <span class="foot">(^GSPC = its ticker; live ~7,460)</span></label><span class="val" id="vSpx">7457.7</span><input type="range" id="spx" min="5000" max="9000" step="10" value="7457.7"></div>
+    <div><label>② Dividend yield <span class="foot">(divs ÷ index)</span></label><span class="val" id="vDy">1.30%</span><input type="range" id="dy" min="0.5" max="3" step="0.05" value="1.30"></div>
+    <div><label>③ Buyback yield <span class="foot">(buybacks ÷ index)</span></label><span class="val" id="vBy">2.20%</span><input type="range" id="by" min="0" max="4" step="0.05" value="2.20"></div>
+    <div><label>④ Expected 5y growth <span class="foot">(S&amp;P earnings/yr)</span></label><span class="val" id="vGg">8.50%</span><input type="range" id="gg" min="0" max="20" step="0.25" value="8.50"></div>
+    <div><label>⑤ Terminal growth <span class="foot">(= 10Y)</span></label><span class="val" id="vTg">4.28%</span><input type="range" id="tg" min="2" max="7" step="0.05" value="4.28"></div>
+    <div><label>⑥ Country premium <span class="foot">(rev-weighted; NVDA ≈0.2%)</span></label><span class="val" id="vCrp">0.20%</span><input type="range" id="crp" min="0" max="6" step="0.05" value="0.20"></div>
+  </div>
+  <div class="frow" style="margin-top:6px;">
+    <span class="val pos" id="oTot" style="font-size:22px;">—</span>
+    <button class="mbtn gold" onclick="applyBuilt()">Apply this MRP → mode above ↑</button>
+  </div>
+  <div class="foot" id="erpNote"></div>
+  <div style="margin-top:6px;">
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,0.20)">Live consensus</button>
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,6.00,4.28,0.20)">Cautious 6%</button>
+    <button class="mbtn" onclick="setERP(6800,1.45,2.20,8.50,4.28,0.20)">−10% selloff</button>
+    <button class="mbtn" onclick="setERP(7457.7,1.30,2.20,8.50,4.28,1.50)">EM-heavy 1.5%</button>
+  </div>
+</details>
+
 <script>
-const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81};
+const BASE={rev:215.938,shares:24.514,netDebt:0.807,daPct:0.0306,capexPct:0.0349,nwcPct:0.2272,price:202.81,rf:0.0428,kd:0.0363,eqW:0.9977,debtW:0.0023};
+const SCEN={fmp:{g:66.4,m:51.1,t:15.1,lbl:'FMP 66%'},cons:{g:36,m:51.1,t:15.1,lbl:'Consensus 36%'},conserv:{g:20,m:48,t:17,lbl:'Conservative 20%'},bear:{g:10,m:42,t:20,lbl:'Bear 10%'}};
+const BETA={fmp:{v:2.211,f:'5-yr regression slope vs S&P'},blume:{v:1.81,f:'0.67 × 2.21 + 0.33'},peer:{v:2.14,f:'median(TSM,AVGO,MU,AMD,INTC)'}};
+const MRP={fmp:{v:4.72,f:'fixed constant (no inputs)'},dam:{v:4.45,f:'Damodaran implied ERP, Jul-26'},built:{v:4.65,f:'your subcomponent build'}};
+const TG={t10y:4.28,cons:3.0,gdp:4.5};
+let S={scen:'cons',beta:'fmp',mrp:'dam',tg:'t10y'};
 function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
-function calc(){
-  const g=+document.getElementById('g').value/100, m=+document.getElementById('m').value/100,
-        l=+document.getElementById('l').value/100, t=+document.getElementById('t').value/100,
-        rf=+document.getElementById('rf').value/100, b=+document.getElementById('b').value,
-        mrp=+document.getElementById('mrp').value/100;
-  const coe=rf+b*mrp;                                  // CAPM cost of equity
-  const w=0.9977*coe+0.0023*0.0428*(1-t);              // WACC: mktcap-weighted, after-tax cost of debt
-  document.getElementById('vG').textContent=(g*100).toFixed(1)+'%';
-  document.getElementById('vM').textContent=(m*100).toFixed(1)+'%';
-  document.getElementById('vRf').textContent=(rf*100).toFixed(2)+'%';
-  document.getElementById('vB').textContent=b.toFixed(2);
-  document.getElementById('vMrp').textContent=(mrp*100).toFixed(2)+'%';
-  document.getElementById('vCoe').textContent=(coe*100).toFixed(2)+'%';
-  document.getElementById('vW').textContent=(w*100).toFixed(2)+'%';
-  document.getElementById('vL').textContent=(l*100).toFixed(1)+'%';
-  document.getElementById('vT').textContent=(t*100).toFixed(1)+'%';
-  let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV(UFCF) $B</th></tr>';
-  let rev=BASE.rev, nwcPrev=BASE.rev*BASE.nwcPct, sumPV=0, ufcf=0;
-  for(let i=1;i<=5;i++){
-    rev*=(1+g);
-    const ebitda=rev*m, da=rev*BASE.daPct, ebit=ebitda-da, capex=rev*BASE.capexPct;
-    const nwc=rev*BASE.nwcPct, dNwc=nwc-nwcPrev; nwcPrev=nwc;
-    ufcf=ebit*(1-t)+da-capex-dNwc;
-    const pv=ufcf/Math.pow(1+w,i); sumPV+=pv;
-    rows+=`<tr><td>${2026+i}E</td><td>${fmt(rev,1)}</td><td>${fmt(ebitda,1)}</td><td>${fmt(ufcf,1)}</td><td>${fmt(pv,1)}</td></tr>`;
-  }
-  if(w<=l){ document.getElementById('oFV').textContent='WACC ≤ g'; document.getElementById('oFV').className='v neg'; }
+
+// core model → returns fair value etc for explicit inputs
+function model(g,m,t,w,tg){
+  let rev=BASE.rev,nwcPrev=BASE.rev*BASE.nwcPct,sumPV=0,ufcf=0,rows=[];
+  for(let i=1;i<=5;i++){rev*=(1+g);const ebitda=rev*m,da=rev*BASE.daPct,ebit=ebitda-da,capex=rev*BASE.capexPct,nwc=rev*BASE.nwcPct,dN=nwc-nwcPrev;nwcPrev=nwc;ufcf=ebit*(1-t)+da-capex-dN;const pv=ufcf/Math.pow(1+w,i);sumPV+=pv;rows.push([2026+i,rev,ebitda,ufcf,pv]);}
+  if(w<=tg)return{bad:true};
+  const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
+  return{ev,fv,pvTV,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
+}
+function render(){
+  ['fmp','cons','conserv','bear'].forEach(k=>document.getElementById('sc_'+k).classList.toggle('on',S.scen===k));
+  document.getElementById('b_fmp').classList.toggle('on',S.beta==='fmp');
+  document.getElementById('b_blume').classList.toggle('on',S.beta==='blume');
+  document.getElementById('b_peer').classList.toggle('on',S.beta==='peer');
+  document.getElementById('mr_fmp').classList.toggle('on',S.mrp==='fmp');
+  document.getElementById('mr_dam').classList.toggle('on',S.mrp==='dam');
+  document.getElementById('mr_built').classList.toggle('on',S.mrp==='built');
+  document.getElementById('tg_10y').classList.toggle('on',S.tg==='t10y');
+  document.getElementById('tg_cons').classList.toggle('on',S.tg==='cons');
+  document.getElementById('tg_gdp').classList.toggle('on',S.tg==='gdp');
+  document.getElementById('builtLbl').textContent=MRP.built.v.toFixed(2);
+
+  const sc=SCEN[S.scen], g=sc.g/100, m=sc.m/100, t=sc.t/100;
+  const beta=BETA[S.beta].v, mrp=MRP[S.mrp].v/100, tg=TG[S.tg]/100;
+  const coe=BASE.rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*BASE.kd;
+  const r=model(g,m,t,w,tg);
+
+  // result bar
+  if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';}
   else{
-    const tv=ufcf*(1+l)/(w-l), pvTV=tv/Math.pow(1+w,5);
-    const ev=sumPV+pvTV, tvShare=pvTV/ev*100;
-    const fv=(ev-BASE.netDebt)/BASE.shares;
-    const up=(fv/BASE.price-1)*100;
-    const e1=document.getElementById('oFV'); e1.textContent='$'+fmt(fv); e1.className='v '+(up>=0?'pos':'neg');
-    const e2=document.getElementById('oUp'); e2.textContent=(up>=0?'+':'')+fmt(up,1)+'%'; e2.className='v '+(up>=0?'pos':'neg');
-    document.getElementById('oEV').textContent='$'+fmt(ev/1000)+'T';
-    document.getElementById('oTV').textContent=fmt(tvShare,0)+'%';
+    const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
+    const e2=document.getElementById('oUp');e2.textContent=(r.up>=0?'+':'')+fmt(r.up,1)+'%';e2.className='rv '+(r.up>=0?'pos':'neg');
+    document.getElementById('oEV').textContent='$'+fmt(r.ev/1000)+'T';
+    document.getElementById('oTV').textContent=fmt(r.tvShare,0)+'%';
+    let rows='<tr><th>FY</th><th>Revenue $B</th><th>EBITDA $B</th><th>UFCF $B</th><th>PV $B</th></tr>';
+    r.rows.forEach(x=>rows+=`<tr><td>${x[0]}E</td><td>${fmt(x[1],1)}</td><td>${fmt(x[2],1)}</td><td>${fmt(x[3],1)}</td><td>${fmt(x[4],1)}</td></tr>`);
+    document.getElementById('oTable').innerHTML=rows;
   }
-  document.getElementById('oTable').innerHTML=rows;
+
+  // live math (formula → symbols → numbers), formula shown for the SELECTED beta & mrp mode
+  document.getElementById('mathBox').innerHTML=
+    '<span class="g">β</span> ('+S.beta+') = <span class="dim2">'+BETA[S.beta].f+'</span> = <span class="hl">'+beta.toFixed(2)+'</span><br>'+
+    '<span class="g">MRP</span> ('+S.mrp+') = <span class="dim2">'+MRP[S.mrp].f+'</span> = <span class="hl">'+(mrp*100).toFixed(2)+'%</span><br>'+
+    'Cost of Equity = r<sub>f</sub> + β × MRP = '+(BASE.rf*100).toFixed(2)+'% + '+beta.toFixed(2)+' × '+(mrp*100).toFixed(2)+'% = <span class="hl">'+(coe*100).toFixed(2)+'%</span><br>'+
+    'WACC = 99.8% × CoE + 0.2% × 3.63% = <span class="hl">'+(w*100).toFixed(2)+'%</span> <span class="dim2">(NVDA is ~all-equity → WACC ≈ CoE)</span><br>'+
+    'Terminal g = <span class="hl">'+(tg*100).toFixed(2)+'%</span> <span class="dim2">('+(S.tg==='t10y'?'= 10-yr Treasury':S.tg==='cons'?'conservative':'long-run GDP')+')</span>';
+
+  // sensitivity grid: rows = growth, cols = WACC
+  const gs=[10,20,36,50], ws=[11,13,15,17];
+  let h='<tr><th>growth ↓ / WACC →</th>'+ws.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
+  gs.forEach(gg=>{ h+='<tr><td><b>'+gg+'%</b></td>'; ws.forEach(ww=>{ const rr=model(gg/100,m,t,ww/100,tg); if(rr.bad){h+='<td class="dim2">—</td>';} else {const cls=rr.fv>=BASE.price?'pos':'neg'; h+='<td class="'+cls+'">$'+fmt(rr.fv,0)+'</td>';} }); h+='</tr>'; });
+  document.getElementById('sensiTable').innerHTML=h;
 }
-function setV(id,v){document.getElementById(id).value=v; calc();}
-// --- Implied ERP subcomponent solver (2-stage Gordon) ---
-function pvAt(r,spx,cash0,g,tg){
-  let cf=cash0, pv=0;
-  for(let i=1;i<=5;i++){ cf=cf*(1+g); pv+=cf/Math.pow(1+r,i); }
-  const cf6=cf*(1+tg), tv=cf6/(r-tg);          // terminal value at yr5
-  pv+=tv/Math.pow(1+r,5);
-  return pv;                                     // want pv === spx
-}
+function setScen(k){S.scen=k;render();}
+function setBeta(k){S.beta=k;render();}
+function setMrp(k){S.mrp=k;render();}
+function setTg(k){S.tg=k;render();}
+
+// --- MRP builder solver ---
+function pvAt(r,spx,cash0,g,tg){let cf=cash0,pv=0;for(let i=1;i<=5;i++){cf*=(1+g);pv+=cf/Math.pow(1+r,i);}pv+=(cf*(1+tg)/(r-tg))/Math.pow(1+r,5);return pv;}
 function calcERP(){
-  const spx=+document.getElementById('spx').value, dy=+document.getElementById('dy').value/100,
-        by=+document.getElementById('by').value/100, g=+document.getElementById('gg').value/100,
-        tg=+document.getElementById('tg').value/100, crp=+document.getElementById('crp').value/100;
-  document.getElementById('vSpx').textContent=spx.toFixed(1);
-  document.getElementById('vDy').textContent=(dy*100).toFixed(2)+'%';
-  document.getElementById('vBy').textContent=(by*100).toFixed(2)+'%';
-  document.getElementById('vGg').textContent=(g*100).toFixed(2)+'%';
-  document.getElementById('vTg').textContent=(tg*100).toFixed(2)+'%';
-  document.getElementById('vCrp').textContent=(crp*100).toFixed(2)+'%';
-  const cash0=spx*(dy+by);
-  let lo=tg+0.0002, hi=0.30, r=0;
-  for(let k=0;k<80;k++){ r=(lo+hi)/2; const pv=pvAt(r,spx,cash0,g,tg); if(pv>spx) lo=r; else hi=r; }
-  const erp=(r-tg)*100, ret=r*100, tot=erp+crp*100;
-  document.getElementById('oRet').textContent=ret.toFixed(2)+'%';
-  document.getElementById('oErp').textContent=erp.toFixed(2)+'%';
-  document.getElementById('oTot').textContent=tot.toFixed(2)+'%';
-  document.getElementById('erpNote').innerHTML='Cash returned next 12m = index × (div '+(dy*100).toFixed(2)+'% + buyback '+(by*100).toFixed(2)+'%) = <b>'+cash0.toFixed(1)+'</b> pts, grown '+(g*100).toFixed(1)+'%/yr 5 yrs, terminal '+(tg*100).toFixed(2)+'%. Solved market return = <b>'+ret.toFixed(2)+'%</b> → base ERP <b>'+erp.toFixed(2)+'%</b> + country '+(crp*100).toFixed(2)+'% = <b>total MRP '+tot.toFixed(2)+'%</b>. (FMP hard-codes 4.72%; Damodaran US Jul-26 = 4.45%.)';
+  const spx=+document.getElementById('spx').value,dy=+document.getElementById('dy').value/100,by=+document.getElementById('by').value/100,g=+document.getElementById('gg').value/100,tg=+document.getElementById('tg').value/100,crp=+document.getElementById('crp').value/100;
+  document.getElementById('vSpx').textContent=spx.toFixed(1);document.getElementById('vDy').textContent=(dy*100).toFixed(2)+'%';document.getElementById('vBy').textContent=(by*100).toFixed(2)+'%';document.getElementById('vGg').textContent=(g*100).toFixed(2)+'%';document.getElementById('vTg').textContent=(tg*100).toFixed(2)+'%';document.getElementById('vCrp').textContent=(crp*100).toFixed(2)+'%';
+  const cash0=spx*(dy+by);let lo=tg+0.0002,hi=0.30,r=0;for(let k=0;k<80;k++){r=(lo+hi)/2;if(pvAt(r,spx,cash0,g,tg)>spx)lo=r;else hi=r;}
+  const erp=(r-tg)*100,tot=erp+crp*100;
+  document.getElementById('oTot').textContent='MRP '+tot.toFixed(2)+'%';
+  document.getElementById('erpNote').innerHTML='Solved market return <b>'+(r*100).toFixed(2)+'%</b> − rf → base ERP <b>'+erp.toFixed(2)+'%</b> + country '+(crp*100).toFixed(2)+'% = <b>total '+tot.toFixed(2)+'%</b>.';
   return tot;
 }
-function setERP(spx,dy,by,g,tg,crp){
-  document.getElementById('spx').value=spx; document.getElementById('dy').value=dy;
-  document.getElementById('by').value=by; document.getElementById('gg').value=g;
-  document.getElementById('tg').value=tg; document.getElementById('crp').value=(crp==null?0.20:crp); calcERP();
-}
-function useErp(){ const e=calcERP(); document.getElementById('mrp').value=e.toFixed(2); calc(); }
+function setERP(spx,dy,by,g,tg,crp){document.getElementById('spx').value=spx;document.getElementById('dy').value=dy;document.getElementById('by').value=by;document.getElementById('gg').value=g;document.getElementById('tg').value=tg;document.getElementById('crp').value=crp;calcERP();}
+function applyBuilt(){MRP.built.v=calcERP();S.mrp='built';render();}
 ['spx','dy','by','gg','tg','crp'].forEach(id=>document.getElementById(id).addEventListener('input',calcERP));
-window.addEventListener('DOMContentLoaded',calcERP);
-function setP(g,m,b,l,t){
-  document.getElementById('g').value=g; document.getElementById('m').value=m;
-  document.getElementById('b').value=b; document.getElementById('l').value=l;
-  document.getElementById('t').value=t; calc();
-}
-['g','m','rf','b','mrp','l','t'].forEach(id=>document.getElementById(id).addEventListener('input',calc));
-window.addEventListener('DOMContentLoaded',calc);
+window.addEventListener('DOMContentLoaded',function(){calcERP();render();});
 </script>
 </section>
 
