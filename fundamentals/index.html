@@ -59,7 +59,6 @@
   <button class="tbtn" id="tbtn_IREN" onclick="setTicker('IREN')">IREN</button>
   <span id="tickerStat" style="margin-left:auto; font-size:13.5px; color:var(--txt);"></span>
 </div>
-<div id="tickerFlag" class="flag" style="display:none; margin-bottom:26px;"></div>
 <style>
   .tbtn{background:var(--panel2); border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:7px 15px; cursor:pointer; font-size:14px; font-weight:600; font-family:ui-monospace,Menlo,monospace;}
   .tbtn:hover{border-color:var(--accent); color:var(--accent);}
@@ -68,32 +67,22 @@
 
 <!-- ============ 1. COMPS ============ -->
 <section>
-<h2>1 · Comparable Companies — NVDA vs Semis</h2>
-<div class="src">endpoints: metrics-ratios-ttm (per symbol) + search-company-screener (universe)</div>
+<h2 id="compsTitle">1 · Comparable Companies — NVDA vs Semis</h2>
+<div class="src">endpoints: metrics-ratios-ttm (per symbol) + custom-dcf-advanced (growth) + search-company-screener (universe) — peer group switches with the ticker bar above</div>
 <div class="scrollx">
 <table id="compsTable" class="compsT stickytbl">
-<tr><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>EV/EBITDA</th><th>P/S</th><th>P/B</th><th>PEG</th><th>Gross M</th><th>Net M</th><th>D/E</th><th>Beta</th><th>Div Yld</th><th>Rev CAGR 3yF</th></tr>
-<tr><td class="gold">NVDA</td><td class="gold">$4.91T</td><td class="gold">30.9</td><td class="gold">25.5</td><td class="gold">19.4</td><td class="gold">25.2</td><td class="gold">0.28</td><td class="gold">74.1%</td><td class="gold">63.0%</td><td class="gold">0.07</td><td class="gold">2.21</td><td class="gold">0.14%</td><td class="gold">47.6%</td></tr>
-<tr><td>TSM</td><td>$2.07T</td><td>31.1</td><td>19.7</td><td>14.6</td><td>10.2</td><td>0.58</td><td>61.9%</td><td>47.0%</td><td>0.17</td><td>1.37</td><td>0.95%</td><td>29.4%</td></tr>
-<tr><td>AVGO</td><td>$1.76T</td><td>59.9</td><td>43.1</td><td>23.4</td><td>20.1</td><td>0.48</td><td>67.0%</td><td>38.8%</td><td>0.74</td><td>1.46</td><td>0.68%</td><td>40.3%</td></tr>
-<tr><td>MU</td><td>$959B</td><td>19.0</td><td>20.9</td><td>10.6</td><td>9.5</td><td>0.03</td><td>72.6%</td><td>55.9%</td><td>0.06</td><td>2.14</td><td>0.06%</td><td>38.6%</td></tr>
-<tr><td>AMD</td><td>$808B</td><td>161.0</td><td>99.8</td><td>21.6</td><td>12.5</td><td>1.31</td><td>50.3%</td><td>13.4%</td><td>0.06</td><td>2.47</td><td>—</td><td>41.2%</td></tr>
-<tr><td>INTC</td><td>$478B</td><td class="neg">neg</td><td>44.3</td><td>8.9</td><td>4.3</td><td class="neg">neg</td><td>35.4%</td><td class="neg">−5.9%</td><td>0.40</td><td>2.19</td><td>—</td><td>16.2%</td></tr>
-<tr><td class="pur">Median (peers)</td><td class="pur">$959B</td><td class="pur" id="s_med_pe"></td><td class="pur" id="s_med_ev"></td><td class="pur" id="s_med_ps"></td><td class="pur" id="s_med_pb"></td><td class="pur" id="s_med_peg"></td><td class="pur" id="s_med_gm"></td><td class="pur" id="s_med_nm"></td><td class="pur" id="s_med_de"></td><td class="pur" id="s_med_beta"></td><td class="pur">0.06%</td><td class="pur" id="s_med_cagr"></td></tr>
-<tr><td class="pur">Mean</td><td class="pur">$1.21T</td><td class="pur" id="s_mean_pe"></td><td class="pur" id="s_mean_ev"></td><td class="pur" id="s_mean_ps"></td><td class="pur" id="s_mean_pb"></td><td class="pur" id="s_mean_peg"></td><td class="pur" id="s_mean_gm"></td><td class="pur" id="s_mean_nm"></td><td class="pur" id="s_mean_de"></td><td class="pur" id="s_mean_beta"></td><td class="pur">0.34%</td><td class="pur" id="s_mean_cagr"></td></tr>
-<tr><td class="pur">Min</td><td class="pur">$478B</td><td class="pur" id="s_min_pe"></td><td class="pur" id="s_min_ev"></td><td class="pur" id="s_min_ps"></td><td class="pur" id="s_min_pb"></td><td class="pur" id="s_min_peg"></td><td class="pur" id="s_min_gm"></td><td class="pur" id="s_min_nm"></td><td class="pur" id="s_min_de"></td><td class="pur" id="s_min_beta"></td><td class="pur">0</td><td class="pur" id="s_min_cagr"></td></tr>
-<tr><td class="pur">Max</td><td class="pur">$2.07T</td><td class="pur" id="s_max_pe"></td><td class="pur" id="s_max_ev"></td><td class="pur" id="s_max_ps"></td><td class="pur" id="s_max_pb"></td><td class="pur" id="s_max_peg"></td><td class="pur" id="s_max_gm"></td><td class="pur" id="s_max_nm"></td><td class="pur" id="s_max_de"></td><td class="pur" id="s_max_beta"></td><td class="pur">0.95%</td><td class="pur" id="s_max_cagr"></td></tr>
-<tr><td class="gold">NVDA vs Median</td><td class="gold">5.1×</td><td class="gold" id="s_d_pe"></td><td class="gold" id="s_d_ev"></td><td class="gold" id="s_d_ps"></td><td class="gold" id="s_d_pb"></td><td class="gold" id="s_d_peg"></td><td class="gold" id="s_d_gm"></td><td class="gold" id="s_d_nm"></td><td class="gold" id="s_d_de"></td><td class="gold" id="s_d_beta"></td><td class="gold">above</td><td class="gold" id="s_d_cagr"></td></tr>
+<tr><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>EV/EBITDA</th><th>P/S</th><th>P/B</th><th>PEG</th><th>Gross M</th><th>Net M</th><th>D/E</th><th>Beta</th><th>Div Yld</th><th>Rev CAGR (DCF assump.)</th></tr>
+<tbody id="compsBody"></tbody>
 </table>
 </div>
-<div class="note">🥇 The crux: NVDA has the <b>HIGHEST forward revenue growth in the group (<span id="n_cagrNvda"></span> vs <span id="n_cagrMed"></span> peer median)</b> yet trades at a <b>discount on every earnings multiple</b> (P/E <span id="n_pe"></span>, EV/EBITDA <span id="n_ev"></span>, PEG <span id="n_peg"></span>) with the best margins — but a <b>premium on sales &amp; book</b> (P/S <span id="n_ps"></span>, P/B <span id="n_pb"></span>). Fastest grower + cheapest on earnings is the whole bull case in one row; the market pays up for the balance sheet but prices the earnings as if the growth won't last. Cells shaded green = cheap/better, red = expensive/worse vs the column; bold outliers are Tukey 1.5×IQR. Stats exclude negative multiples (INTC). <span style="color:var(--dim)">— computed live from the COMPS data object, not typed.</span></div>
-<div class="note" style="border-color:var(--accent);">📐 Grade vs peers → this CAGR column is the bridge to the DCF: <b>the reasonable range for your DCF growth slider is the peer band <span id="n_cagrBand"></span></b>, median <span id="n_cagrMed2"></span>. NVDA's own <span id="n_cagrNvda2"></span> consensus sits just above the group — so a DCF growth assumption much above <span id="n_cagrCap"></span> is pricing NVDA beyond even the fastest semis. Used directly in the Reverse-DCF verdicts below (same numbers, one source).</div>
+<div class="note" id="compsNote1">🥇 <span id="cn1"></span></div>
+<div class="note" style="border-color:var(--accent);" id="compsNote2">📐 <span id="cn2"></span></div>
 
 <!-- FOOTBALL FIELD -->
-<div class="subttl" style="margin-top:22px;">Valuation football field — what each method says NVDA is worth, vs the $202.81 price</div>
+<div class="subttl" style="margin-top:22px;" id="ffieldTitle">Valuation football field — what each method says the price is worth</div>
 <div class="fcard">
   <div id="ffield"></div>
-  <div class="foot" style="margin-top:8px;">Each bar = the implied share price if NVDA traded at the peer <b>min→max</b> of that multiple (white tick = peer median); gold line = today's $202.81. Read: NVDA sits in the <b>cheap third on earnings (P/E, EV/EBITDA)</b>, mid on sales, and <b>above the entire peer range on book (P/B)</b> — the market pays a huge asset premium while pricing the earnings conservatively. The DCF bar is your live model's demonstrated bear→bull span.</div>
+  <div class="foot" style="margin-top:8px;" id="ffieldFoot"></div>
 </div>
 
 <!-- COMPS SCORE -->
@@ -107,33 +96,88 @@
 </section>
 
 <script>
-// ============ COMPS COMPUTATION ENGINE (ticker-swappable data object → all derived analytics) ============
-(function(){
-  const PX=202.81;
-  // one data object; index 0 = the subject (NVDA), 1..5 = peers. null = n/m (negative).
-  const COMPS={
-    names:['NVDA','TSM','AVGO','MU','AMD','INTC'],
+// ============ COMPS COMPUTATION ENGINE (ticker-swappable peer sets → all derived analytics, per ticker) ============
+// Four real peer universes (screener method, not FMP's noisy "peers" endpoint — see §2):
+//   semis: NVDA/MU/AVGO/TSM vs TSM/AVGO/MU/AMD/INTC (whichever 4 aren't the subject)
+//   megatech: GOOGL/MSFT/AAPL vs GOOGL/MSFT/AAPL/AMZN/META
+//   auto: TSLA vs RIVN/LCID/F/GM
+//   aicompute: NBIS/IREN vs CRWV/APLD/MARA/RIOT (+ each other)
+// price/sharesB → market cap is COMPUTED (price × diluted shares), never typed as a string.
+// cagr = each company's own 5yr revenue growth assumption from custom-dcf-advanced (same field/method
+// already used for AMD/INTC in the original NVDA table) — labeled "DCF assump." not "consensus" so it's
+// not confused with analyst estimates. pe/peg=null where earnings are negative (n/m), not fabricated.
+const PEERSETS = {
+  semis: { label:'Semis', names:['NVDA','TSM','AVGO','MU','AMD','INTC'],
+    price:[213.57,423.00,394.69,192.11,208.86,37.02], sharesB:[24.51,5.186,4.853,1.09,1.617,4.19],
     pe:[30.9,31.1,59.9,19.0,161.0,null], ev:[25.5,19.7,43.1,20.9,99.8,44.3],
     ps:[19.4,14.6,23.4,10.6,21.6,8.9],   pb:[25.2,10.2,20.1,9.5,12.5,4.3],
     peg:[0.28,0.58,0.48,0.03,1.31,null], gm:[74.1,61.9,67.0,72.6,50.3,35.4],
     nm:[63.0,47.0,38.8,55.9,13.4,-5.9],  de:[0.07,0.17,0.74,0.06,0.06,0.40],
-    beta:[2.21,1.37,1.46,2.14,2.47,2.19],
-    cagr:[47.6,29.4,40.3,38.6,41.2,16.2]
-  };
+    beta:[2.211,1.246,1.462,2.14,2.47,2.19], div:[0.14,0.95,0.68,0.06,null,null],
+    cagr:[47.6,29.4,24.2,38.6,41.2,16.2] },
+  megatech: { label:'Mega-cap Tech', names:['GOOGL','MSFT','AAPL','AMZN','META'],
+    price:[348.48,388.97,324.89,243.89,629.80], sharesB:[12.23,7.465,15.005,10.827,2.574],
+    pe:[26.3,23.1,39.1,28.7,22.5], ev:[19.49,14.85,30.0,14.5,14.6],
+    ps:[9.97,9.08,10.55,3.53,7.43], pb:[8.80,6.98,44.78,5.93,6.54],
+    peg:[0.57,0.78,1.35,0.81,3.61], gm:[60.4,68.3,47.9,50.6,81.9],
+    nm:[37.9,39.3,27.2,12.2,32.8],  de:[0.189,0.303,0.795,0.475,0.356],
+    beta:[1.247,1.13,1.097,1.461,1.246], div:[0.24,0.91,0.32,null,0.33],
+    cagr:[11.9,13.9,4.1,11.15,14.67] },
+  auto: { label:'Auto / EV', names:['TSLA','RIVN','LCID','F','GM'],
+    price:[377.16,17.27,6.95,14.47,82.90], sharesB:[3.528,1.186,0.31168,3.979,0.973],
+    pe:[314.1,null,null,null,41.5], ev:[117.1,-10.0,-1.68,269.7,6.94],
+    ps:[14.51,3.78,1.57,0.298,0.403], pb:[14.54,4.89,1.12,1.54,1.23],
+    peg:[null,null,null,null,null], gm:[19.1,-1.7,-95.6,9.2,5.7],
+    nm:[4.0,-63.6,-239.8,-3.2,1.0], de:[0.110,1.49,1.55,4.20,0.597],
+    beta:[1.802,1.602,0.831,1.828,1.309], div:[0,null,null,null,null],
+    cagr:[0.0,55.12,50.29,-3.5,-0.5] },
+  aicompute: { label:'AI-Infra / Crypto-Compute', names:['NBIS','IREN','CRWV','APLD','MARA','RIOT'],
+    price:[226.30,42.33,83.72,30.30,12.47,23.27], sharesB:[0.253,0.223,0.436,0.2012,0.3552,0.3407],
+    pe:[66.6,1048.6,null,null,null,null], ev:[38.9,35.1,25.4,-104.6,-56.0,-102.2],
+    ps:[61.7,19.77,7.31,24.4,5.49,13.4], pb:[8.06,3.41,9.24,5.21,2.13,3.36],
+    peg:[null,null,null,null,null,null], gm:[47.9,53.6,69.4,27.1,0.3,-23.8],
+    nm:[95.3,10.16,-25.6,-52.4,-234.8,-132.8], de:[1.32,1.49,7.39,1.79,1.10,0.366],
+    beta:[1.402,4.279,7.131,5.68,5.371,3.812], div:[0,0,0,0,0,0],
+    cagr:[38.8,82.0,100,64.44,45.39,33.98] }
+};
+const TICKER_GROUP = {NVDA:'semis',MU:'semis',AVGO:'semis',TSM:'semis',
+  GOOGL:'megatech',MSFT:'megatech',AAPL:'megatech',
+  TSLA:'auto', NBIS:'aicompute', IREN:'aicompute'};
+const COMPS_QUALITY_FLAGS = {
+  NBIS:'NBIS net margin (95%) and P/S (61.7×) are real TTM figures but distorted by a tiny revenue base plus one-time gains — treat as noisy, not a clean read.',
+  IREN:'IREN P/E (1048×) is a real but meaningless multiple off near-zero trailing earnings — the peer table leans on EV/EBITDA and P/S instead.',
+  TSLA:'TSLA P/E (314×) and EV/EBITDA (117×) are real TTM multiples inflated by thin trailing earnings — treat as a growth/optionality story, not an earnings-multiple one.',
+  F:'Ford EV/EBITDA (270×) is a real but distorted multiple — EBITDA is near zero this TTM period.',
+  AAPL:'AAPL P/B (44.8×) is real — Apple\'s book value is structurally tiny after years of buybacks, not a data error.'
+};
+function fmtCap(px,shB){ const v=px*shB*1e9; return v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B'; }
+function renderComps(sym){
+  const group = TICKER_GROUP[sym] || 'semis';
+  const G = PEERSETS[group];
+  const subjIdx = G.names.indexOf(sym);
+  const order = [subjIdx].concat(G.names.map((_,i)=>i).filter(i=>i!==subjIdx));
+  const pick = arr => order.map(i=>arr[i]);
+  const COMPS = { names:pick(G.names), price:pick(G.price), sharesB:pick(G.sharesB),
+    pe:pick(G.pe), ev:pick(G.ev), ps:pick(G.ps), pb:pick(G.pb), peg:pick(G.peg),
+    gm:pick(G.gm), nm:pick(G.nm), de:pick(G.de), beta:pick(G.beta), div:pick(G.div), cagr:pick(G.cagr) };
+  const PX = COMPS.price[0];
+  document.getElementById('compsTitle').textContent = '1 · Comparable Companies — '+sym+' vs '+G.label;
+  document.getElementById('ffieldTitle').textContent = 'Valuation football field — what each method says '+sym+' is worth, vs the $'+PX.toFixed(2)+' price';
+
   const clean=a=>a.filter(v=>v!=null);
   const med=a=>{const b=[...a].sort((x,y)=>x-y),n=b.length;return n?(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2):null;};
   const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
   const q=(a,p)=>{const b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,lo=Math.floor(i);return b[lo]+(b[lo+1]!==undefined?(i-lo)*(b[lo+1]-b[lo]):0);};
-  const tukey=a=>{const b=clean(a),q1=q(b,.25),q3=q(b,.75),k=1.5*(q3-q1);return b.filter(v=>v>=q1-k&&v<=q3+k);};
-  // percentile rank of NVDA vs ALL valid (0=worst,1=best); cheapGood → low value is best
+  // percentile rank of subject vs ALL valid (0=worst,1=best); cheapGood → low value is best
   const pctl=(arr,cheapGood)=>{const v=arr[0];if(v==null)return null;const all=clean(arr);const better=all.filter(x=>cheapGood?x>v:x<v).length;return all.length>1?better/(all.length-1):0.5;};
   const rank=(arr,cheapGood)=>{const v=arr[0];if(v==null)return clean(arr).length;const all=clean(arr).slice().sort((a,b)=>cheapGood?a-b:b-a);return all.indexOf(v)+1;};
+  const f2=v=>v==null?'—':(+v).toFixed(2), fp=v=>v==null?'—':(+v).toFixed(1)+'%';
 
-  // ---- FOOTBALL FIELD: implied price = PX × peerMultiple / nvdaMultiple, peers outlier-cleaned ----
-  const rob=a=>{const b=clean(a),mm=med(b);return b.filter(v=>v>=0.35*mm&&v<=2.5*mm);}; // drop extreme multiples (few-comp safe)
-  const ffRow=(lbl,key)=>{const nv=COMPS[key][0],peers=rob(COMPS[key].slice(1));const lo=PX*Math.min(...peers)/nv,hi=PX*Math.max(...peers)/nv,mid=PX*med(peers)/nv;return [lbl,lo,hi,mid];};
-  const rows=[ffRow('P/E','pe'),ffRow('EV/EBITDA','ev'),ffRow('P/S','ps'),ffRow('P/B','pb'),['DCF (live model)',103.7,243.0,150.0]];
-  const AX=Math.max(420,...rows.map(r=>r[2]))*1.02, pf=v=>Math.max(0,Math.min(100,v/AX*100));
+  // ---- FOOTBALL FIELD: implied price = PX × peerMultiple / subjectMultiple, peers outlier-cleaned ----
+  const rob=a=>{const b=clean(a),mm=med(b);return mm?b.filter(v=>v>=0.35*mm&&v<=2.5*mm):b;};
+  const ffRow=(lbl,key)=>{const nv=COMPS[key][0],peers=rob(COMPS[key].slice(1));if(nv==null||!peers.length)return null;const lo=PX*Math.min(...peers)/nv,hi=PX*Math.max(...peers)/nv,mid=PX*med(peers)/nv;return [lbl,lo,hi,mid];};
+  const rows=[ffRow('P/E','pe'),ffRow('EV/EBITDA','ev'),ffRow('P/S','ps'),ffRow('P/B','pb')].filter(r=>r&&isFinite(r[1])&&isFinite(r[2]));
+  const AX=Math.max(PX*1.4,...rows.map(r=>r[2]))*1.02, pf=v=>Math.max(0,Math.min(100,v/AX*100));
   let h='';
   rows.forEach(r=>{const l=pf(r[1]),w=pf(r[2])-pf(r[1]),m=pf(r[3]),pl=pf(PX);
     h+='<div style="display:flex;align-items:center;margin:9px 0;"><span style="width:130px;font-size:13px;color:var(--txt);">'+r[0]+'</span>'+
@@ -144,19 +188,19 @@
        '<span style="width:120px;text-align:right;font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace;">$'+r[1].toFixed(0)+'–$'+r[2].toFixed(0)+'</span></div>';});
   const ax4=[0,.25,.5,.75,1].map(f=>'$'+(AX*f).toFixed(0)).map(s=>'<span>'+s+'</span>').join('');
   h+='<div style="display:flex;margin-top:4px;"><span style="width:130px;"></span><div style="flex:1;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);">'+ax4+'</div><span style="width:120px;"></span></div>';
-  h+='<div class="foot" style="margin-top:6px;"><span style="color:var(--gold);font-weight:700;">│</span> = today\'s price $'+PX+' · white tick = peer median · ranges outlier-cleaned (Tukey)</div>';
+  h+='<div class="foot" style="margin-top:6px;"><span style="color:var(--gold);font-weight:700;">│</span> = today\'s price $'+PX.toFixed(2)+' · white tick = peer median · ranges outlier-cleaned (Tukey-style) · pull up §3 below for this ticker\'s live DCF bear→bull span (not merged into this bar yet)</div>';
   document.getElementById('ffield').innerHTML=h;
+  document.getElementById('ffieldFoot').textContent = 'Each bar = the implied share price if '+sym+' traded at the peer min→max of that multiple (white tick = peer median); gold line = today\'s $'+PX.toFixed(2)+'.';
 
   // ---- SCORE: value = cheapness percentile across multiples; quality = margins/growth/low-leverage ----
-  const valM=[['pe',1],['ev',1],['ps',1],['pb',1],['peg',1]];      // cheapGood=1
-  const qualM=[['gm',0],['nm',0],['cagr',0],['de',1]];             // high good (de cheapGood=1 → low debt best)
-  const vAvg=mean(valM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))*100;
-  const qAvg=mean(qualM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))*100;
+  const valM=[['pe',1],['ev',1],['ps',1],['pb',1],['peg',1]];
+  const qualM=[['gm',0],['nm',0],['cagr',0],['de',1]];
+  const vAvg=(mean(valM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))||0)*100;
+  const qAvg=(mean(qualM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))||0)*100;
   const comp=(vAvg+qAvg)/2, grade=comp>=85?'A':comp>=75?'A−':comp>=65?'B+':comp>=55?'B':comp>=45?'B−':comp>=35?'C':'D';
   const col=s=>s>=66?'var(--green)':s>=45?'var(--gold)':'var(--red)';
-  // ---- VISUAL FORMULA STRIP — how VALUE/QUALITY/grade are actually built, in icons not paragraphs ----
   const fnode=(icon,lbl,val,color)=>'<div style="display:flex;flex-direction:column;align-items:center;min-width:64px;"><div style="font-size:20px;">'+icon+'</div><div class="foot" style="margin-top:2px;text-align:center;">'+lbl+'</div>'+(val!=null?'<div style="font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:13px;color:'+(color||'var(--txt)')+';margin-top:1px;">'+val+'</div>':'')+'</div>';
-  const op=(sym)=>'<div style="font-size:18px;color:var(--dim);align-self:center;padding:0 2px;">'+sym+'</div>';
+  const op=(s2)=>'<div style="font-size:18px;color:var(--dim);align-self:center;padding:0 2px;">'+s2+'</div>';
   document.getElementById('scoreFormula').innerHTML=
     '<div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:2px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'+
       fnode('📊','P/E · EV/EBITDA<br>P/S · P/B · PEG',null)+op('→')+fnode('%ile','peer rank<br>(cheap=high)',null)+op('=')+fnode('💰','VALUE',vAvg.toFixed(0),col(vAvg))+
@@ -171,45 +215,67 @@
     '<div><span class="foot">Composite grade</span><br><b style="font-size:26px;color:'+col(comp)+'">'+grade+'</b> <span class="foot">'+comp.toFixed(0)+'/100</span></div>';
   const N=COMPS.names.length, verdict=(rk,cheapGood)=>{const top=rk<=2, bot=rk>=N-1; return cheapGood?(top?['cheap','pos']:bot?['expensive','neg']:['mid','']):(top?['best','pos']:bot?['worst','neg']:['mid','']);};
   const srow=(lbl,key,cheapGood,fmt)=>{const rk=rank(COMPS[key],cheapGood),vd=verdict(rk,cheapGood);return '<tr><td>'+lbl+'</td><td>'+fmt(COMPS[key][0])+'</td><td>'+fmt(med(clean(COMPS[key].slice(1))))+'</td><td class="'+vd[1]+'">'+rk+'</td><td class="'+vd[1]+'">'+vd[0]+'</td></tr>';};
-  const f2=v=>v==null?'—':(+v).toFixed(2), fp=v=>v==null?'—':(+v).toFixed(1)+'%';
-  let st='<tr><th>Metric</th><th>NVDA</th><th>Peer median</th><th>Rank /'+N+'</th><th>Verdict</th></tr>';
+  let st='<tr><th>Metric</th><th>'+sym+'</th><th>Peer median</th><th>Rank /'+N+'</th><th>Verdict</th></tr>';
   st+=srow('P/E','pe',1,f2)+srow('EV/EBITDA','ev',1,f2)+srow('PEG','peg',1,f2)+srow('P/S','ps',1,f2)+srow('P/B','pb',1,f2)
-    +srow('Gross margin','gm',0,fp)+srow('Net margin','nm',0,fp)+srow('Rev CAGR 3yF','cagr',0,fp)+srow('Debt/Equity','de',1,f2);
+    +srow('Gross margin','gm',0,fp)+srow('Net margin','nm',0,fp)+srow('Rev CAGR (DCF assump.)','cagr',0,fp)+srow('Debt/Equity','de',1,f2);
   document.getElementById('scoreTable').innerHTML=st;
 
-  // ---- SUMMARY ROWS (Median/Mean/Min/Max/Delta) — computed straight from COMPS, fills the id'd cells ----
-  const put=(id,txt)=>{const e=document.getElementById(id); if(e) e.textContent=txt;};
-  const MFMT={pe:v=>f2(v),ev:v=>f2(v),ps:v=>f2(v),pb:v=>f2(v),peg:v=>f2(v),gm:v=>fp(v),nm:v=>fp(v),de:v=>f2(v),beta:v=>f2(v),cagr:v=>fp(v)};
-  const cheapGoodM={pe:1,ev:1,ps:1,pb:1,peg:1,de:1,beta:0,gm:0,nm:0,cagr:0}; // 0 = higher is "more" not "cheap/exp" framed, handled below
-  const PP=new Set(['gm','nm','cagr']); // percentage-point delta metrics
-  const MULT=new Set(['pe','ev','ps','pb','peg','de']); // relative % delta metrics (cheap-low)
+  // ---- TABLE BODY: company rows + Median/Mean/Min/Max/Delta summary rows, all generated live ----
+  const capArr = COMPS.price.map((p,i)=>p*COMPS.sharesB[i]*1e9);
+  const peerVals=k=>clean((k==='cap'?capArr:COMPS[k]).slice(1));
+  const medCap=med(peerVals('cap')), meanCap=mean(peerVals('cap')), minCap=Math.min(...peerVals('cap')), maxCap=Math.max(...peerVals('cap'));
+  const capFmt=v=>v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B';
+  let tbody = document.getElementById('compsBody');
+  let rowsHtml='';
+  COMPS.names.forEach((nm,i)=>{
+    const cls = i===0?'gold':'';
+    rowsHtml += '<tr><td class="'+cls+'">'+nm+'</td><td class="'+cls+'">'+fmtCap(COMPS.price[i],COMPS.sharesB[i])+'</td>'+
+      '<td class="'+cls+'">'+f2(COMPS.pe[i])+'</td><td class="'+cls+'">'+f2(COMPS.ev[i])+'</td>'+
+      '<td class="'+cls+'">'+f2(COMPS.ps[i])+'</td><td class="'+cls+'">'+f2(COMPS.pb[i])+'</td>'+
+      '<td class="'+cls+'">'+f2(COMPS.peg[i])+'</td><td class="'+cls+'">'+fp(COMPS.gm[i])+'</td>'+
+      '<td class="'+cls+'">'+fp(COMPS.nm[i])+'</td><td class="'+cls+'">'+f2(COMPS.de[i])+'</td>'+
+      '<td class="'+cls+'">'+f2(COMPS.beta[i])+'</td><td class="'+cls+'">'+(COMPS.div[i]==null?'—':COMPS.div[i].toFixed(2)+'%')+'</td>'+
+      '<td class="'+cls+'">'+fp(COMPS.cagr[i])+'</td></tr>';
+  });
   const stats={};
-  Object.keys(MFMT).forEach(k=>{const peers=clean(COMPS[k].slice(1));stats[k]={med:med(peers),mean:mean(peers),min:Math.min(...peers),max:Math.max(...peers),nvda:COMPS[k][0]};
-    put('s_med_'+k, MFMT[k](stats[k].med)); put('s_mean_'+k, MFMT[k](stats[k].mean));
-    put('s_min_'+k, MFMT[k](stats[k].min));  put('s_max_'+k, MFMT[k](stats[k].max));
+  ['pe','ev','ps','pb','peg','gm','nm','de','beta','cagr'].forEach(k=>{
+    const peers=clean(COMPS[k].slice(1));
+    stats[k]={med:med(peers),mean:mean(peers),min:peers.length?Math.min(...peers):null,max:peers.length?Math.max(...peers):null,subj:COMPS[k][0]};
   });
-  Object.keys(MFMT).forEach(k=>{
-    const s=stats[k], nv=s.nvda, m=s.med, el=document.getElementById('s_d_'+k); if(!el||nv==null||m==null) return;
-    if(MULT.has(k)){ const pct=(nv-m)/m*100; el.textContent=(pct>=0?'+':'')+pct.toFixed(0)+'%'; el.classList.add(pct<0?'pos':'neg'); }
-    else if(PP.has(k)){ const pp=nv-m; el.textContent=(pp>=0?'+':'')+pp.toFixed(1)+'pp'+(k==='cagr'&&nv>=Math.max(...clean(COMPS.cagr.slice(1)))?' (highest)':''); el.classList.add(pp>=0?'pos':'neg'); }
-    else if(k==='beta'){ const rel=Math.abs(nv-m)/m; el.textContent= rel<0.15?'in line':(nv>m?'above peers':'below peers'); }
-  });
+  const simpleRow=(lbl,pick2)=>'<tr><td class="pur">'+lbl+'</td><td class="pur">'+capFmt(pick2('cap'))+'</td>'+
+    '<td class="pur">'+f2(pick2('pe'))+'</td><td class="pur">'+f2(pick2('ev'))+'</td><td class="pur">'+f2(pick2('ps'))+'</td><td class="pur">'+f2(pick2('pb'))+'</td>'+
+    '<td class="pur">'+f2(pick2('peg'))+'</td><td class="pur">'+fp(pick2('gm'))+'</td><td class="pur">'+fp(pick2('nm'))+'</td><td class="pur">'+f2(pick2('de'))+'</td>'+
+    '<td class="pur">'+f2(pick2('beta'))+'</td><td class="pur">—</td><td class="pur">'+fp(pick2('cagr'))+'</td></tr>';
+  rowsHtml += simpleRow('Median (peers)', k=>k==='cap'?medCap:stats[k].med);
+  rowsHtml += simpleRow('Mean', k=>k==='cap'?meanCap:stats[k].mean);
+  rowsHtml += simpleRow('Min', k=>k==='cap'?minCap:stats[k].min);
+  rowsHtml += simpleRow('Max', k=>k==='cap'?maxCap:stats[k].max);
+  // delta row (subject vs median), with real +/- coloring
+  const dCell=(k)=>{const s=stats[k],nv=s.subj,m=s.med; if(nv==null||m==null) return '<td class="gold">—</td>';
+    if(k==='gm'||k==='nm'||k==='cagr'){const pp=nv-m;return '<td class="gold '+(pp>=0?'pos':'neg')+'">'+(pp>=0?'+':'')+pp.toFixed(1)+'pp</td>';}
+    if(k==='beta'){const rel=Math.abs(nv-m)/(m||1);return '<td class="gold">'+(rel<0.15?'in line':(nv>m?'above peers':'below peers'))+'</td>';}
+    const pct=(nv-m)/m*100; return '<td class="gold '+(pct<0?'pos':'neg')+'">'+(pct>=0?'+':'')+pct.toFixed(0)+'%</td>';};
+  const subjCap=capArr[0], capMult = medCap? (subjCap/medCap) : null;
+  rowsHtml += '<tr><td class="gold">'+sym+' vs Median</td><td class="gold">'+(capMult?capMult.toFixed(1)+'×':'—')+'</td>'+
+    dCell('pe')+dCell('ev')+dCell('ps')+dCell('pb')+dCell('peg')+dCell('gm')+dCell('nm')+dCell('de')+dCell('beta')+'<td class="gold">—</td>'+dCell('cagr')+'</tr>';
+  tbody.innerHTML = rowsHtml;
 
-  // ---- NARRATIVE SPANS — same numbers as the table, computed once ----
-  const pf1=v=>v.toFixed(1)+'%', ppf=v=>(v>=0?'+':'')+v.toFixed(0)+'%';
-  put('n_cagrNvda', pf1(stats.cagr.nvda)); put('n_cagrMed', pf1(stats.cagr.med));
-  put('n_pe', ppf((stats.pe.nvda-stats.pe.med)/stats.pe.med*100));
-  put('n_ev', ppf((stats.ev.nvda-stats.ev.med)/stats.ev.med*100));
-  put('n_peg',ppf((stats.peg.nvda-stats.peg.med)/stats.peg.med*100));
-  put('n_ps', ppf((stats.ps.nvda-stats.ps.med)/stats.ps.med*100));
-  put('n_pb', ppf((stats.pb.nvda-stats.pb.med)/stats.pb.med*100));
-  put('n_cagrBand', stats.cagr.min.toFixed(0)+'–'+stats.cagr.max.toFixed(0)+'%');
-  put('n_cagrMed2', pf1(stats.cagr.med)); put('n_cagrNvda2', pf1(stats.cagr.nvda));
-  put('n_cagrCap', '~'+Math.round(stats.cagr.nvda+0.5)+'%');
+  // ---- NARRATIVE — same numbers as the table, rebuilt in prose for this ticker ----
+  const pf1=v=>v==null?'n/m':v.toFixed(1)+'%', ppf=v=>v==null?'n/m':(v>=0?'+':'')+v.toFixed(0)+'%';
+  const peH=stats.pe.subj!=null&&stats.pe.med!=null?ppf((stats.pe.subj-stats.pe.med)/stats.pe.med*100):'n/m',
+        evH=stats.ev.subj!=null&&stats.ev.med!=null?ppf((stats.ev.subj-stats.ev.med)/stats.ev.med*100):'n/m',
+        pegH=stats.peg.subj!=null&&stats.peg.med!=null?ppf((stats.peg.subj-stats.peg.med)/stats.peg.med*100):'n/m',
+        psH=stats.ps.subj!=null&&stats.ps.med!=null?ppf((stats.ps.subj-stats.ps.med)/stats.ps.med*100):'n/m',
+        pbH=stats.pb.subj!=null&&stats.pb.med!=null?ppf((stats.pb.subj-stats.pb.med)/stats.pb.med*100):'n/m';
+  const growthLead = stats.cagr.subj!=null && stats.cagr.med!=null && stats.cagr.subj>=stats.cagr.med;
+  const flag = COMPS_QUALITY_FLAGS[sym];
+  document.getElementById('cn1').innerHTML = sym+' grows revenue at <b>'+pf1(stats.cagr.subj)+'</b> vs a peer median of <b>'+pf1(stats.cagr.med)+'</b> ('+(growthLead?'above':'below')+' the group), and trades at P/E '+peH+' · EV/EBITDA '+evH+' · PEG '+pegH+' vs peer median, with P/S '+psH+' and P/B '+pbH+' vs peer median. Cells shaded green = cheap/better, red = expensive/worse vs the column; bold outliers are Tukey-style. '+(flag?('<span style="color:var(--gold);">⚠️ '+flag+'</span> '):'')+'<span style="color:var(--dim)">— computed live from the peer data object, not typed.</span>';
+  document.getElementById('cn2').innerHTML = 'This CAGR column is the bridge to the DCF: the reasonable range for the growth slider is the peer band <b>'+pf1(stats.cagr.min)+'–'+pf1(stats.cagr.max)+'</b>, median '+pf1(stats.cagr.med)+'. '+sym+'\'s own '+pf1(stats.cagr.subj)+' sits '+(growthLead?'at or above':'below')+' the group — a DCF growth assumption far outside that band is pricing '+sym+' beyond its own peer set.';
 
   // ---- expose peer stats for the DCF section (§3) to consume — single source of truth, no re-typing ----
   window.PEER = { beta: stats.beta, cagr: stats.cagr, pe: stats.pe, ev: stats.ev, ps: stats.ps, pb: stats.pb, peg: stats.peg, gm: stats.gm, nm: stats.nm, de: stats.de };
-})();
+}
+renderComps('NVDA');
 </script>
 
 <!-- ============ 2. PEERS vs SCREENER ============ -->
@@ -255,61 +321,99 @@
 
 <!-- ============ 2.7 ANALYST COVERAGE (moved before the DCF — it's the source everything else reads against) ============ -->
 <section>
-<h2>2.7 · Analyst Coverage — who's covering NVDA, and what are they saying</h2>
-<div class="src">endpoints: grades-summary + price-target-consensus + price-target-summary (real pull, frozen at fetch time — not live-refreshing)</div>
-<style>.abadge{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:6px 14px 6px 6px;font-size:13.5px;color:var(--txt);} .abadge .av{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#0d1117;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}</style>
+<h2 id="analystTitle">2.7 · Analyst Coverage — who's covering NVDA, and what are they saying</h2>
+<div class="src">endpoints: grades-summary + price-target-consensus + price-target-summary (real pull per ticker, frozen at fetch time — not live-refreshing)</div>
 
-<div class="resultbar">
-  <div class="rb"><span class="rk">Analysts rating NVDA</span><span class="rv">79</span></div>
-  <div class="rb"><span class="rk">Consensus</span><span class="rv pos">Buy</span></div>
-  <div class="rb"><span class="rk">Price target (avg)</span><span class="rv">$319</span></div>
-  <div class="rb"><span class="rk">Target range</span><span class="rv">$218 – $500</span></div>
-  <div class="rb"><span class="rk">Implied vs $202.81</span><span class="rv pos">+57.6%</span></div>
-</div>
+<div class="resultbar" id="analystBar"></div>
 
 <div class="cols">
 <div class="fcard">
-  <div class="subttl">Rating mix (79 analysts, grades-summary)</div>
-  <div style="display:flex;height:30px;border-radius:7px;overflow:hidden;margin:8px 0;">
-    <div style="width:2.5%;background:#1f8f3f;" title="Strong Buy 2"></div>
-    <div style="width:73.4%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;">Buy 58</div>
-    <div style="width:20.3%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;">Hold 16</div>
-    <div style="width:3.8%;background:var(--red);"></div>
-  </div>
-  <div class="foot">2 Strong Buy · 58 Buy · 16 Hold · 3 Sell · 0 Strong Sell</div>
+  <div class="subttl" id="ratingMixTitle"></div>
+  <div id="ratingMixBar" style="display:flex;height:30px;border-radius:7px;overflow:hidden;margin:8px 0;"></div>
+  <div class="foot" id="ratingMixFoot"></div>
 </div>
 <div class="fcard">
   <div class="subttl">Price-target activity (price-target-summary)</div>
-  <table style="margin:6px 0 0;">
-    <tr><th>Window</th><th># analysts</th><th>Avg target</th></tr>
-    <tr><td>Last month</td><td>1</td><td>$330.00</td></tr>
-    <tr><td>Last quarter</td><td>27</td><td>$317.96</td></tr>
-    <tr><td>Last year</td><td>85</td><td>$278.22</td></tr>
-    <tr><td>All-time</td><td>318</td><td>$138.80</td></tr>
-  </table>
-  <div class="foot" style="margin-top:6px;">Targets keep climbing as the stock does — all-time avg $138.80 vs last-quarter avg $317.96.</div>
+  <table style="margin:6px 0 0;" id="ptSummaryTable"></table>
+  <div class="foot" style="margin-top:6px;" id="ptSummaryFoot"></div>
 </div>
 </div>
 
-<div class="subttl" style="margin-top:18px;">Sample of firms currently covering NVDA</div>
-<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
-  <div class="abadge"><span class="av">KB</span>KeyBanc</div>
-  <div class="abadge"><span class="av">ND</span>Needham</div>
-  <div class="abadge"><span class="av">DD</span>DA Davidson</div>
-  <div class="abadge"><span class="av">TG</span>Tigress</div>
-  <div class="abadge"><span class="av">BM</span>Benchmark</div>
-  <div class="abadge"><span class="av">UB</span>UBS</div>
-  <div class="abadge"><span class="av">CF</span>Cantor Fitzgerald</div>
-  <div class="abadge"><span class="av">BA</span>BofA Securities</div>
-  <div class="abadge"><span class="av">EV</span>Evercore ISI</div>
-  <div class="abadge"><span class="av">RC</span>RBC Capital</div>
-  <div class="abadge"><span class="av">TR</span>Truist</div>
-  <div class="abadge"><span class="av">BD</span>Baird</div>
-</div>
-<div class="foot" style="margin-top:6px;">Partial sample — 12 of the ~40 firms in NVDA's near-term coverage (see § 3.5's analyst-count-by-year for the full cliff). Deliberately styled as plain badges, not buttons — nothing here is clickable/settable.</div>
+<div class="subttl" style="margin-top:18px;" id="publishersTitle">Publishers this price-target data is sourced from</div>
+<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;" id="publisherBadges"></div>
+<div class="foot" style="margin-top:6px;" id="publisherFoot"></div>
 
 <div class="flag" style="margin-top:14px;">⚠️ Base FMP subscription = <b>FIRM-level</b> only ("gradingCompany"), no analyst names. <b>Firms-in-common</b> (Barclays rates both WMT and COST) is buildable TODAY: pull grades for both symbols, intersect. <b>Person-level analysts-in-common needs the TipRanks add-on: 💰 $69/month confirmed</b> (FMP dashboard → Data Usage Boosts → Partner Integrations; monthly or annual). Per FMP's official card it includes: per-analyst point-in-time ratings &amp; price targets, upgrades/downgrades, consensus trends, analyst performance metrics, analyst rankings, historical success rates, average return performance. <b>Firm summaries</b> = a research house's aggregate track record (e.g. Barclays as a firm: total ratings issued, success rate, avg return across all its analysts) — how you weight firms by quality. <b>Per-analyst EPS estimates: NOT included</b> — the add-on exposes exactly 7 endpoints (ratings search, point-in-time by symbol/analyst, symbol/analyst/firm summaries, analyst directory); none carry EPS. Per-analyst price targets yes; per-analyst EPS is IBES/Visible Alpha territory, not TipRanks-via-FMP.</div>
 </section>
+<script>
+// ============ ANALYST DATA (real pulls: grades-summary + price-target-consensus + price-target-summary), per ticker ============
+const ANALYST = {
+  NVDA:{sb:2,buy:58,hold:16,sell:0,strongsell:3,consensus:'Buy',high:500,low:218,avg:319,median:319,
+    pt:{m1:[1,330.00],q1:[27,317.96],y1:[85,278.22],all:[318,138.80]},
+    publishers:['TheFly','StreetInsider','Benzinga','TipRanks Contributor','MarketWatch','Pulse 2.0']},
+  MU:{sb:0,buy:57,hold:11,sell:2,strongsell:0,consensus:'Buy',high:2200,low:1100,avg:1575.91,median:1512.50,
+    pt:{m1:[19,1614.21],q1:[41,1412.93],y1:[104,750.14],all:[257,365.72]},
+    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0','TipRanks Contributor','Barrons']},
+  GOOGL:{sb:2,buy:69,hold:11,sell:1,strongsell:0,consensus:'Buy',high:460,low:360,avg:420.14,median:422.50,
+    pt:{m1:[5,424.80],q1:[24,426.63],y1:[100,355.28],all:[261,239.56]},
+    publishers:['TheFly','StreetInsider','Benzinga','TipRanks Contributor','MarketWatch','Pulse 2.0','Investing','TheStreet']},
+  NBIS:{sb:0,buy:8,hold:1,sell:0,strongsell:0,consensus:'Buy',high:410,low:129,avg:226.86,median:250,
+    pt:{m1:[2,330],q1:[6,259.50],y1:[16,185.38],all:[20,159.05]},
+    publishers:['TheFly','StreetInsider']},
+  AVGO:{sb:0,buy:51,hold:8,sell:0,strongsell:0,consensus:'Buy',high:582,low:400,avg:499.40,median:515,
+    pt:{m1:[0,0],q1:[16,504.13],y1:[57,446.00],all:[144,264.38]},
+    publishers:['TheFly','Benzinga','StreetInsider','Pulse 2.0','TipRanks Contributor']},
+  TSM:{sb:0,buy:18,hold:7,sell:0,strongsell:0,consensus:'Buy',high:700,low:480,avg:586,median:600,
+    pt:{m1:[4,593.75],q1:[6,608.33],y1:[16,471.25],all:[29,332.90]},
+    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0']},
+  AAPL:{sb:1,buy:70,hold:32,sell:8,strongsell:0,consensus:'Buy',high:400,low:253,avg:337.58,median:330,
+    pt:{m1:[5,345.20],q1:[18,333.44],y1:[64,304.40],all:[251,229.50]},
+    publishers:['StreetInsider','TheFly','Benzinga','Pulse 2.0','TipRanks Contributor','MarketWatch','Investing','Barrons',"Investor's Business Daily"]},
+  MSFT:{sb:0,buy:66,hold:16,sell:0,strongsell:0,consensus:'Buy',high:680,low:400,avg:551.04,median:550,
+    pt:{m1:[8,512.50],q1:[20,537.80],y1:[76,584.70],all:[258,444.15]},
+    publishers:['StreetInsider','TheFly','Benzinga','TipRanks Contributor','Pulse 2.0','MarketWatch','Barrons','TheStreet']},
+  TSLA:{sb:0,buy:32,hold:34,sell:15,strongsell:0,consensus:'Hold',high:540,low:360,avg:441.70,median:436,
+    pt:{m1:[5,437.80],q1:[8,434.75],y1:[44,441.61],all:[258,307.24]},
+    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0','TipRanks Contributor','Investing','Barrons','MarketWatch']},
+  IREN:{sb:0,buy:10,hold:3,sell:1,strongsell:0,consensus:'Buy',high:99,low:50,avg:83.29,median:90,
+    pt:{m1:[1,90],q1:[8,78.38],y1:[28,70.21],all:[41,52.35]},
+    publishers:['StreetInsider','TheFly','Benzinga']}
+};
+function renderAnalyst(sym){
+  const A=ANALYST[sym]; if(!A) return;
+  const price = (window.TICKERS && TICKERS[sym] ? TICKERS[sym].price : A.median);
+  const total = A.sb+A.buy+A.hold+A.sell+A.strongsell;
+  const impliedPct = ((A.avg-price)/price*100);
+  document.getElementById('analystTitle').textContent = '2.7 · Analyst Coverage — who\'s covering '+sym+', and what are they saying';
+  document.getElementById('analystBar').innerHTML =
+    '<div class="rb"><span class="rk">Analysts rating '+sym+'</span><span class="rv">'+total+'</span></div>'+
+    '<div class="rb"><span class="rk">Consensus</span><span class="rv '+(A.consensus==='Buy'?'pos':A.consensus==='Sell'?'neg':'')+'">'+A.consensus+'</span></div>'+
+    '<div class="rb"><span class="rk">Price target (avg)</span><span class="rv">$'+A.avg.toFixed(2)+'</span></div>'+
+    '<div class="rb"><span class="rk">Target range</span><span class="rv">$'+A.low+' – $'+A.high+'</span></div>'+
+    '<div class="rb"><span class="rk">Implied vs $'+price.toFixed(2)+'</span><span class="rv '+(impliedPct>=0?'pos':'neg')+'">'+(impliedPct>=0?'+':'')+impliedPct.toFixed(1)+'%</span></div>';
+  document.getElementById('ratingMixTitle').textContent = 'Rating mix ('+total+' analysts, grades-summary)';
+  const segs=[['Strong Buy',A.sb,'#1f8f3f'],['Buy',A.buy,'var(--green)'],['Hold',A.hold,'var(--gold)'],['Sell',A.sell,'var(--red)'],['Strong Sell',A.strongsell,'#8b1a1a']];
+  document.getElementById('ratingMixBar').innerHTML = segs.map(s=>{
+    const pct = total? (s[1]/total*100):0; if(pct<=0) return '';
+    const showLbl = pct>10;
+    return '<div style="width:'+pct+'%;background:'+s[2]+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;" title="'+s[0]+' '+s[1]+'">'+(showLbl?(s[0]+' '+s[1]):'')+'</div>';
+  }).join('');
+  document.getElementById('ratingMixFoot').textContent = segs.map(s=>s[1]+' '+s[0]).join(' · ');
+  document.getElementById('ptSummaryTable').innerHTML =
+    '<tr><th>Window</th><th># analysts</th><th>Avg target</th></tr>'+
+    '<tr><td>Last month</td><td>'+A.pt.m1[0]+'</td><td>'+(A.pt.m1[1]?'$'+A.pt.m1[1].toFixed(2):'—')+'</td></tr>'+
+    '<tr><td>Last quarter</td><td>'+A.pt.q1[0]+'</td><td>$'+A.pt.q1[1].toFixed(2)+'</td></tr>'+
+    '<tr><td>Last year</td><td>'+A.pt.y1[0]+'</td><td>$'+A.pt.y1[1].toFixed(2)+'</td></tr>'+
+    '<tr><td>All-time</td><td>'+A.pt.all[0]+'</td><td>$'+A.pt.all[1].toFixed(2)+'</td></tr>';
+  const trend = A.pt.all[1]<A.pt.q1[1]?'climbed':'fallen';
+  document.getElementById('ptSummaryFoot').textContent = 'Targets have '+trend+' over time — all-time avg $'+A.pt.all[1].toFixed(2)+' vs last-quarter avg $'+A.pt.q1[1].toFixed(2)+'.';
+  document.getElementById('publishersTitle').textContent = 'Publishers '+sym+'\'s price-target data is sourced from (price-target-summary)';
+  document.getElementById('publisherBadges').innerHTML = A.publishers.map(p=>'<div class="abadge">'+p+'</div>').join('');
+  document.getElementById('publisherFoot').textContent = A.publishers.length+' outlets contributing to the '+total+'-analyst sample above — real per-ticker field from price-target-summary, not a fixed badge list.';
+}
+renderAnalyst('NVDA');
+</script>
+<style>.abadge{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:6px 14px;font-size:13.5px;color:var(--txt);}</style>
 
 <!-- ============ 3. INTERACTIVE DCF ============ -->
 <section>
@@ -615,7 +719,7 @@ function chipsHTML_beta(){
   const bv=BASE.beta.toFixed(2);
   return '<button class="chip" data-s="bt" data-v="'+bv+'" onclick="setSlider(\'bt\','+bv+')">Canonical β '+bv+'</button>'+
     '<button class="chip" data-s="bt" data-v="1.0" onclick="setSlider(\'bt\',1.0)">Mean-revert 1.00</button>'+
-    '<div class="foot" style="width:100%;margin-top:2px;">No peer-comps universe built for '+CURTICK+' yet (§1 stays NVDA/semis) — this is FMP\'s canonical 5-yr regression beta, not a peer median.</div>';
+    '<div class="foot" style="width:100%;margin-top:2px;">This is FMP\'s canonical 5-yr regression beta for '+CURTICK+' — see the §1 peer-set beta context below the DCF for the peer median/mean instead.</div>';
 }
 function setTicker(sym){
   CURTICK=sym; BASE=TICKERS[sym];
@@ -634,10 +738,11 @@ function setTicker(sym){
   document.getElementById('betaChips').innerHTML = chipsHTML_beta();
   document.getElementById('tickerCaveat').innerHTML = BASE.flags.length ? ('⚠️ '+BASE.flags.join(' ')) : '';
   document.getElementById('dcfTitle').textContent = '3 · DCF — '+sym+' · sliders + modes, formulas update live';
-  const tf=document.getElementById('tickerFlag');
-  if(sym!=='NVDA'){ tf.style.display='block'; tf.innerHTML='⚠️ Showing <b>'+sym+'\'s own DCF (§3)</b> with real fundamentals (custom-dcf-advanced) and canonical beta (profile-symbol). Sections 1 (comps), 2.7 (analyst coverage), 4 (insider), 5 (congress) and 6 (COT) below still show <b>NVDA</b> — no peer-comps universe or analyst-consensus path built for '+sym+' yet.'; }
-  else{ tf.style.display='none'; }
   document.getElementById('tickerStat').textContent = BASE.name+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2);
+  renderComps(sym);
+  renderAnalyst(sym);
+  renderInsider(sym);
+  renderCongress(sym);
   RV=null; autoAxis=true; autoRVaxis=true;
   render();
 }
@@ -713,12 +818,12 @@ function render(){
   else if(near(bt,1.30)) bp=[['β (bull)',bt.toFixed(2),'out'],['=','=',O],['mean-revert','→ 1.0','v']];
   else bp=[['β (custom)',bt.toFixed(2),'out'],['','',O],['off-preset','slider','v']];
   fg('fgBeta',bp);
-  if(CURTICK==='NVDA'){
-    const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};
+  if(window.PEER&&window.PEER.beta){
+    const PB=window.PEER.beta;
     const pct = bt>=PB.max?'above the entire peer set':bt>=PB.med?'top quartile of peers':bt>=PB.mean?'above the peer mean':bt>=PB.min?'within the peer range':'below the entire peer set';
-    document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. NVDA\'s raw '+PB.nvda.toFixed(2)+' is an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.';
+    document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. '+CURTICK+'\'s raw '+(PB.subj!=null?PB.subj.toFixed(2):BASE.beta.toFixed(2))+' is '+(PB.subj>=PB.max?'an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.':'within the peer set\'s own spread.');
   } else {
-    document.getElementById('betaCtx').innerHTML='📊 <b>'+CURTICK+'\'s canonical β (profile-symbol, 5-yr regression): '+BASE.beta.toFixed(2)+'</b><br>No peer-comps universe is built for '+CURTICK+' yet (§1 stays NVDA/semis-only), so there\'s no peer median/range to compare your slider against here — this is a single-company reference point, not a percentile.';
+    document.getElementById('betaCtx').innerHTML='📊 <b>'+CURTICK+'\'s canonical β (profile-symbol, 5-yr regression): '+BASE.beta.toFixed(2)+'</b><br>No peer-comps universe is built for '+CURTICK+' yet, so there\'s no peer median/range to compare your slider against here — this is a single-company reference point, not a percentile.';
   }
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
@@ -862,13 +967,13 @@ function renderReverse(c){
       else{verdict='needs materially more margin expansion than FMP itself projects → demanding';color='var(--red)';icon='🚨';}
     }}
   else if(RV==='beta'){disp=x.toFixed(2);
-    if(CURTICK==='NVDA'){
-      const PB=window.PEER&&window.PEER.beta||{min:1.37,mean:1.93,med:2.14,max:2.47,nvda:2.21};ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' (NVDA raw '+PB.nvda.toFixed(2)+')';
-      if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats NVDA as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
+    if(window.PEER&&window.PEER.beta){
+      const PB=window.PEER.beta;ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' ('+CURTICK+' raw '+(PB.subj!=null?PB.subj.toFixed(2):BASE.beta.toFixed(2))+')';
+      if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats '+CURTICK+' as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
       else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';icon='⚠️';}
-      else{verdict='ABOVE every peer\'s beta → only makes sense if NVDA is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}
+      else{verdict='ABOVE every peer\'s beta → only makes sense if '+CURTICK+' is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}
     } else {
-      ref=CURTICK+'\'s own canonical β '+BASE.beta.toFixed(2)+' (no peer set built — see §1 note)';
+      ref=CURTICK+'\'s own canonical β '+BASE.beta.toFixed(2)+' (no peer set built)';
       const d=x-BASE.beta;
       if(Math.abs(d)<0.15){verdict='in line with '+CURTICK+'\'s own canonical beta → reasonable';color='var(--gold)';icon='⚠️';}
       else if(d<0){verdict='BELOW '+CURTICK+'\'s own beta → implies the market treats it as safer than its own risk profile suggests (price looks cheap)';color='var(--green)';icon='✅';}
@@ -891,13 +996,13 @@ function renderReverse(c){
 
   // ACTIONABLE RECOMMENDATION — a defensible, peer/analyst-anchored fair value, not just a qualitative read
   (function(){
-    const isNvda=CURTICK==='NVDA';
-    const PB=isNvda ? (window.PEER&&window.PEER.beta||{med:2.14}) : {med:BASE.beta};
-    const PG=isNvda ? (window.PEER&&window.PEER.cagr||{med:38.6}) : {med:BASE.gDefault};
+    const hasPeer=!!(window.PEER&&window.PEER.beta&&window.PEER.cagr);
+    const PB=hasPeer ? window.PEER.beta : {med:BASE.beta};
+    const PG=hasPeer ? window.PEER.cagr : {med:BASE.gDefault};
     const defensible={g:PG.med/100, m:c.m, t:c.t, rf:c.rf, beta:PB.med, mrp:0.0445, tg:0.04};
     const rr=fvFrom(defensible);
     const upD=rr.bad?null:(rr.fv/BASE.price-1)*100;
-    const srcLbl=isNvda ? ('peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'%') : (CURTICK+'\'s own canonical beta '+PB.med.toFixed(2)+' · its own trailing growth '+PG.med.toFixed(0)+'% — no peer set built, see §1 note');
+    const srcLbl=hasPeer ? ('peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'%') : (CURTICK+'\'s own canonical beta '+PB.med.toFixed(2)+' · its own trailing growth '+PG.med.toFixed(0)+'% — no peer set built');
     document.getElementById('revAction').innerHTML = rr.bad ? '' :
       '<div class="fname">💡 Recommended defensible inputs ('+srcLbl+' · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
@@ -921,9 +1026,9 @@ function renderReverse(c){
 function setRVY(k){RVY=k;autoRVaxis=false;render();}
 function setRVX(k){RVX=k;autoRVaxis=false;render();}
 function applyDefensible(){
-  const isNvda=CURTICK==='NVDA';
-  const PB=isNvda ? (window.PEER&&window.PEER.beta||{med:2.14}) : {med:BASE.beta};
-  const PG=isNvda ? (window.PEER&&window.PEER.cagr||{med:38.6}) : {med:BASE.gDefault};
+  const hasPeer=!!(window.PEER&&window.PEER.beta&&window.PEER.cagr);
+  const PB=hasPeer ? window.PEER.beta : {med:BASE.beta};
+  const PG=hasPeer ? window.PEER.cagr : {med:BASE.gDefault};
   document.getElementById('g').value=PG.med.toFixed(1);
   document.getElementById('bt').value=PB.med.toFixed(2);
   document.getElementById('mrpS').value='4.45';
@@ -1063,8 +1168,8 @@ window.addEventListener('DOMContentLoaded',renderEst);
 
 <!-- ============ 4. INSIDER TRADES ============ -->
 <section>
-<h2>4 · Insider Trades — NVDA (SEC Form 4, ~2-day lag)</h2>
-<div class="src">endpoints: search-insider-trades + insider-trade-statistics</div>
+<h2 id="insiderTitle">4 · Insider Trades — NVDA (SEC Form 4, ~2-day lag)</h2>
+<div class="src">endpoints: search-insider-trades + insider-trade-statistics — real per-ticker Form 4 pull, switches with the ticker bar above</div>
 <div class="fcard" style="border-color:var(--gold);">
   <div class="subttl">📡 Derived signal — computed from the transaction rows below, not typed</div>
   <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
@@ -1079,27 +1184,15 @@ window.addEventListener('DOMContentLoaded',renderEst);
   </div>
   <div class="foot" style="margin-top:10px;" id="ins_note"></div>
 </div>
-<div class="kv">
-  <div><span class="k">Q1 2026 Buy/Sell mix</span><div class="v neg">15 acq / 94 disp</div></div>
-  <div><span class="k">Q2 2026 mix</span><div class="v">11 acq / 14 disp</div></div>
-  <div><span class="k">Q2 shares disposed</span><div class="v">2.80M</div></div>
-  <div><span class="k">Latest filing</span><div class="v">2026-07-15</div></div>
-</div>
 <table>
 <tr><th>Filed</th><th>Insider</th><th>Role</th><th>Type</th><th>Shares</th><th>Price</th></tr>
-<tr><td>07-15</td><td>Nora Johnson, Suzanne</td><td>Director</td><td>Form 3 (initial)</td><td>2,496 held</td><td>—</td></tr>
-<tr><td>07-06</td><td>Coxe, Tench</td><td>Director</td><td class="pur">Gift out</td><td>500,000</td><td>—</td></tr>
-<tr><td>06-23</td><td>Stevens, Mark</td><td>Director</td><td class="neg">Sale</td><td>319,385</td><td>$209.70</td></tr>
-<tr><td>06-23</td><td>Stevens, Mark</td><td>Director</td><td class="neg">Sale</td><td>565,615</td><td>$210.44</td></tr>
-<tr><td>06-23</td><td>Teter, Timothy (GC)</td><td>Officer</td><td>Tax withholding</td><td>35,742</td><td>$207.41</td></tr>
-<tr><td>06-23</td><td>Shoquist, Debora (EVP Ops)</td><td>Officer</td><td>Tax withholding</td><td>35,012</td><td>$207.41</td></tr>
-<tr><td>06-29</td><td>8 directors</td><td>Directors</td><td class="pos">RSU award</td><td>1,211 each</td><td>—</td></tr>
+<tbody id="insiderBody"></tbody>
 </table>
-<div class="note">Each row carries transaction type codes (S-Sale, P-Purchase, A-Award, G-Gift, F-InKind), direct/indirect ownership, resulting position, and the SEC filing URL. Stats endpoint aggregates by quarter back to 1999. Every field is machine-readable — trivially filterable to "open-market purchases only," the signal that matters.</div>
+<div class="note">Each row carries transaction type codes (S-Sale, P-Purchase, A-Award, G-Gift, F-InKind, M-Exempt), direct/indirect ownership, resulting position, and the SEC filing URL. Every field is machine-readable — trivially filterable to "open-market purchases only," the signal that matters. Rows shown are a curated real subset (most recent per insider) of what search-insider-trades returns.</div>
 <script>
-// ---- INSIDER DERIVED SIGNAL — computed from the actual rows in the table above, not typed ----
-(function(){
-  const TX=[ // mirrors the table rows: {insider, type, shares, price(or null), date}
+// ============ INSIDER TX (real search-insider-trades pulls, curated to the most recent/representative rows per ticker) ============
+const INSIDER_TX = {
+  NVDA:[
     {insider:'Nora Johnson, Suzanne', type:'neutral', label:'Form 3 (initial)', shares:2496,  price:null,  date:'2026-07-15'},
     {insider:'Coxe, Tench',           type:'neutral', label:'Gift out',        shares:500000, price:null,  date:'2026-07-06'},
     {insider:'Stevens, Mark',         type:'sell',    label:'Sale',            shares:319385, price:209.70,date:'2026-06-23'},
@@ -1107,21 +1200,90 @@ window.addEventListener('DOMContentLoaded',renderEst);
     {insider:'Teter, Timothy',        type:'neutral', label:'Tax withholding', shares:35742,  price:207.41,date:'2026-06-23'},
     {insider:'Shoquist, Debora',      type:'neutral', label:'Tax withholding', shares:35012,  price:207.41,date:'2026-06-23'},
     {insider:'8 directors',           type:'neutral', label:'RSU award',       shares:1211,   price:null,  date:'2026-06-29'}
-  ];
+  ],
+  MU:[
+    {insider:'Allen, Scott R.',   role:'CAO',       type:'neutral', label:'Tax withholding (F-InKind)', shares:663,   price:983.12, date:'2026-07-15'},
+    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:4279,  price:1077.05,date:'2026-07-01'},
+    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:10497, price:1079.99,date:'2026-07-01'},
+    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:3572,  price:1080.96,date:'2026-07-01'},
+    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale (10 more tranches, same day)', shares:12046, price:1085.6,date:'2026-07-01'}
+  ],
+  GOOGL:[
+    {insider:'7 directors',       role:'Directors', type:'neutral', label:'RSU award (Class C GSUs)', shares:980,  price:null, date:'2026-07-01'},
+    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'neutral', label:'Gift out', shares:8998, price:null, date:'2026-06-30'},
+    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale', shares:760, price:345.18, date:'2026-06-29'},
+    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale', shares:920, price:346.13, date:'2026-06-29'},
+    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale (2 more tranches)', shares:1200, price:347.75, date:'2026-06-29'}
+  ],
+  NBIS:[
+    {insider:'Boynton, John Wilson IV', role:'Director', type:'sell', label:'Sale (11 tranches, same week)', shares:7358, price:196.5, date:'2026-07-15'},
+    {insider:'Volozh, Arkadiy', role:'CEO, 10% owner', type:'sell', label:'Sale', shares:46627, price:235.45, date:'2026-07-01'},
+    {insider:'Korolenko, Andrey', role:'Chief Infrastructure Officer', type:'sell', label:'Sale', shares:33871, price:235.45, date:'2026-07-01'},
+    {insider:'Shtan, Danila', role:'CTO', type:'sell', label:'Sale', shares:16937, price:235.45, date:'2026-07-01'}
+  ],
+  AVGO:[
+    {insider:'Brazeal, Mark David', role:'Chief Legal & Corp Affairs Ofc', type:'sell', label:'Sale', shares:25000, price:401.33, date:'2026-07-10'},
+    {insider:'Brazeal, Mark David', role:'Chief Legal & Corp Affairs Ofc', type:'sell', label:'Sale', shares:25000, price:379.19, date:'2026-07-08'},
+    {insider:'Delly, Gayla J.', role:'Director', type:'sell', label:'Sale', shares:1890, price:385.38, date:'2026-07-08'},
+    {insider:'Page, Justine', role:'Director', type:'sell', label:'Sale', shares:1602, price:373.86, date:'2026-06-29'},
+    {insider:'Samueli, Henry', role:'Director', type:'sell', label:'Sale (9 tranches, same day)', shares:300000, price:381.0, date:'2026-06-24'}
+  ],
+  TSM:[
+    {insider:'Wei, Che-Chia', role:'Chairman & CEO', type:'buy', label:'Purchase', shares:146, price:76.62, date:'2026-07-07'},
+    {insider:'Chang, Tzonz-Sheng', role:'SVP', type:'buy', label:'Purchase', shares:52, price:76.62, date:'2026-07-07'},
+    {insider:'Lin, Chris Horng-Dar', role:'VP & CIO', type:'buy', label:'Purchase', shares:46, price:76.62, date:'2026-07-07'},
+    {insider:'8 more VPs/SVPs', role:'Officers', type:'buy', label:'Purchase (same day, same $76.62 price)', shares:340, price:76.62, date:'2026-07-07'},
+    {insider:'Lin, Shyue-Shyh', role:'VP', type:'buy', label:'Purchase (5 tranches, Jul 19–22)', shares:5000, price:72.6, date:'2026-07-21'}
+  ],
+  AAPL:[
+    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:50000, price:311.02, date:'2026-05-27'},
+    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:149527, price:284.57, date:'2026-05-06'},
+    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:100473, price:285.04, date:'2026-05-06'},
+    {insider:'Borders, Ben', role:'Principal Accounting Officer', type:'sell', label:'Sale', shares:116, price:295.14, date:'2026-06-16'},
+    {insider:'Parekh, Kevan', role:'CFO', type:'sell', label:'Sale', shares:1534, price:275.0, date:'2026-04-23'}
+  ],
+  MSFT:[
+    {insider:'Numoto, Takeshi', role:'EVP, Chief Marketing Officer', type:'sell', label:'Sale', shares:4500, price:402.84, date:'2026-06-10'},
+    {insider:'Coleman, Amy', role:'EVP, Chief HR Officer', type:'neutral', label:'Tax withholding (F-InKind)', shares:32,  price:384.93, date:'2026-07-15'},
+    {insider:'Jolla, Alice L.', role:'Chief Accounting Officer', type:'neutral', label:'RSU award', shares:5004, price:null, date:'2026-06-15'},
+    {insider:'9 directors', role:'Directors', type:'neutral', label:'RSU award (annual grant)', shares:33, price:null, date:'2026-06-11'}
+  ],
+  TSLA:[
+    {insider:'Musk, Elon', role:'CEO, 10% owner', type:'neutral', label:'Option exercise (M-Exempt)', shares:303960630, price:23.34, date:'2026-06-16'},
+    {insider:'Musk, Elon', role:'CEO, 10% owner', type:'neutral', label:'Tax withholding (F-InKind)', shares:17531857, price:404.66, date:'2026-06-16'},
+    {insider:'Taneja, Vaibhav', role:'CFO', type:'sell', label:'Sale', shares:2605.5, price:402.20, date:'2026-06-08'},
+    {insider:'Taneja, Vaibhav', role:'CFO', type:'sell', label:'Sale', shares:3000, price:450.0, date:'2026-05-13'},
+    {insider:'Wilson-Thompson, Kathleen', role:'Director', type:'sell', label:'Sale (3 tranches)', shares:3635, price:370.0, date:'2026-04-30'}
+  ],
+  IREN:[
+    {insider:'Roberts, Daniel John', role:'Co-CEO', type:'neutral', label:'RSU/equity award', shares:9651525, price:null, date:'2026-07-01'},
+    {insider:'Roberts, William Gregory', role:'Co-CEO', type:'neutral', label:'RSU/equity award', shares:9651525, price:null, date:'2026-07-01'},
+    {insider:'Lewis, Anthony J.', role:'CFO', type:'neutral', label:'RSU/equity award', shares:26968, price:null, date:'2026-07-01'},
+    {insider:'4 directors', role:'Directors', type:'neutral', label:'RSU/equity award', shares:6657, price:null, date:'2026-07-01'}
+  ]
+};
+function renderInsider(sym){
+  const TX = INSIDER_TX[sym] || [];
+  document.getElementById('insiderTitle').textContent = '4 · Insider Trades — '+sym+' (SEC Form 4, ~2-day lag)';
+  document.getElementById('insiderBody').innerHTML = TX.map(t=>{
+    const d=new Date(t.date); const md=(d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0');
+    const cls = t.type==='sell'?'neg':t.type==='buy'?'pos':'pur';
+    return '<tr><td>'+md+'</td><td>'+t.insider+'</td><td>'+(t.role||'—')+'</td><td class="'+cls+'">'+t.label+'</td><td>'+t.shares.toLocaleString()+'</td><td>'+(t.price?'$'+t.price.toFixed(2):'—')+'</td></tr>';
+  }).join('');
   const buys=TX.filter(t=>t.type==='buy'), sells=TX.filter(t=>t.type==='sell');
   const $ = t=>(t.price||0)*t.shares;
   const buyVal=buys.reduce((s,t)=>s+$(t),0), sellVal=sells.reduce((s,t)=>s+$(t),0), net=buyVal-sellVal;
-  // cluster check: ≥3 DISTINCT insiders with buy-type txns inside any 30-day window
   const days=d=>new Date(d).getTime()/86400000;
   let cluster=false;
   for(let i=0;i<buys.length;i++){const w=buys.filter(b=>Math.abs(days(b.date)-days(buys[i].date))<=30);if(new Set(w.map(b=>b.insider)).size>=3){cluster=true;break;}}
   const sellInsiders=new Set(sells.map(t=>t.insider));
+  const neutralLabels=[...new Set(TX.filter(t=>t.type==='neutral').map(t=>t.label))];
   let signal,color,note,icon;
-  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';icon='✅';note='≥3 distinct insiders bought in a 30-day window — the highest-conviction insider signal there is.';}
+  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';icon='✅';note=new Set(buys.map(b=>b.insider)).size+' distinct insiders bought in a tight window (often the same day, same price — consistent with an internal purchase program, still a real broad-buy signal) — the highest-conviction insider signal there is.';}
   else if(buys.length>0){signal='WEAK BULLISH';color='var(--green)';icon='✅';note=buys.length+' open-market purchase(s), but not a cluster (fewer than 3 distinct buyers in 30 days).';}
-  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';icon='🚨';note=sellInsiders.size+' distinct insiders sold on the open market — broader than a single 10b5-1 exit.';}
-  else if(sells.length>0){signal='NEUTRAL (noise)';color='var(--gold)';icon='⚠️';note='Zero open-market buys, and the only discretionary sale(s) came from '+[...sellInsiders].join(', ')+' — one insider, likely a pre-set 10b5-1 plan. The rest ('+TX.filter(t=>t.type==='neutral').length+' rows: '+[...new Set(TX.filter(t=>t.type==='neutral').map(t=>t.label))].join(', ')+') are mechanical comp events, not conviction. This scoring is the template for turning §5 congress and §6 COT into signals too.';}
-  else{signal='NEUTRAL (no activity)';color='var(--dim)';icon='⚪';note='No open-market buys or sells this window.';}
+  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';icon='🚨';note=sellInsiders.size+' distinct insiders ('+[...sellInsiders].slice(0,4).join(', ')+') sold on the open market — broader than a single 10b5-1 exit.';}
+  else if(sellInsiders.size>0){signal='NEUTRAL (noise)';color='var(--gold)';icon='⚠️';note='Zero open-market buys, and the discretionary sale(s) came from just '+sellInsiders.size+' insider'+(sellInsiders.size>1?'s':'')+' ('+[...sellInsiders].join(', ')+') — below the 3-insider bar for a "broad selling" call, likely a pre-set 10b5-1 plan.'+(neutralLabels.length?' The rest ('+neutralLabels.join(', ')+') are mechanical comp events, not conviction.':'');}
+  else{signal='NEUTRAL (no activity)';color='var(--dim)';icon='⚪';note='No open-market buys or sells in this window — recent filings are all '+(neutralLabels.join(', ')||'grants/awards')+'.';}
   const setCard=(cardId,valId,val,col)=>{document.getElementById(valId).textContent=val;document.getElementById(valId).style.color=col;document.getElementById(cardId).style.borderColor=col;};
   setCard('ins_buys_card','ins_buys',buys.length,buys.length>0?'var(--green)':'var(--dim)');
   setCard('ins_cluster_card','ins_cluster',cluster?'YES ('+new Set(buys.map(b=>b.insider)).size+' insiders)':'none',cluster?'var(--green)':'var(--dim)');
@@ -1129,26 +1291,109 @@ window.addEventListener('DOMContentLoaded',renderEst);
   setCard('ins_signal_card','ins_signal',signal,color);
   document.getElementById('ins_signal_icon').textContent=icon;
   document.getElementById('ins_note').innerHTML=note;
-})();
+}
+renderInsider('NVDA');
 </script>
 </section>
 
 <!-- ============ 5. CONGRESS ============ -->
 <section>
-<h2>5 · Congressional Trades — NVDA (STOCK Act, ≤45-day lag)</h2>
-<div class="src">endpoints: senate-trading + house-trading</div>
+<h2 id="congressTitle">5 · Congressional Trades — NVDA (STOCK Act, ≤45-day lag)</h2>
+<div class="src">endpoints: senate-trading + house-trading — real per-ticker pull, switches with the ticker bar above</div>
 <table>
 <tr><th>Disclosed</th><th>Member</th><th>Chamber</th><th>Type</th><th>Amount Band</th></tr>
-<tr><td>2026-07-17</td><td>Cleo Fields (LA)</td><td>House</td><td class="pos">Purchase ×3</td><td>$1k–15k each</td></tr>
-<tr><td>2026-07-08</td><td>Sheldon Whitehouse (RI)</td><td>Senate</td><td class="neg">Sale</td><td>$15k–50k</td></tr>
-<tr><td>2026-07-08</td><td>Ro Khanna (CA)</td><td>House</td><td class="pos">Purchase (stock + options)</td><td>$1k–15k</td></tr>
-<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="pos">Purchase</td><td class="gold">$250k–500k</td></tr>
-<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="pos">Call options purchase</td><td class="gold">$100k–250k</td></tr>
-<tr><td>2026-01-23</td><td class="gold">Nancy Pelosi (spouse)</td><td>House</td><td class="neg">Sale (partial)</td><td class="gold">$1M–5M</td></tr>
-<tr><td>2026-01-16</td><td>Markwayne Mullin (OK)</td><td>Senate</td><td class="pos">Purchase</td><td>$100k–250k</td></tr>
-<tr><td>2025-11-13</td><td>Cleo Fields (LA)</td><td>House</td><td class="pos">Purchase ×2</td><td>up to $250k</td></tr>
+<tbody id="congressBody"></tbody>
 </table>
-<div class="note">Searchable by symbol OR by politician name (e.g. everything Pelosi has traded). Amounts are disclosed bands, not exact figures — that's a legal limitation, not FMP's. Links go to the actual disclosure PDFs.</div>
+<div class="note" id="congressNote">Searchable by symbol OR by politician name (e.g. everything Pelosi has traded). Amounts are disclosed bands, not exact figures — that's a legal limitation, not FMP's. Links go to the actual disclosure PDFs.</div>
+<script>
+// ============ CONGRESS (real senate-trading + house-trading pulls, curated to ~5-6 representative rows per ticker) ============
+const CONGRESS_TX = {
+  NVDA:[
+    {date:'2026-07-17', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×3', band:'$1k–15k each'},
+    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'neg', label:'Sale', band:'$15k–50k'},
+    {date:'2026-07-08', member:'Ro Khanna (CA)', chamber:'House', type:'pos', label:'Purchase (stock + options)', band:'$1k–15k'},
+    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$250k–500k', gold:true},
+    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Call options purchase', band:'$100k–250k', gold:true},
+    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'neg', label:'Sale (partial)', band:'$1M–5M', gold:true},
+    {date:'2026-01-16', member:'Markwayne Mullin (OK)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'},
+    {date:'2025-11-13', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×2', band:'up to $250k'}
+  ],
+  MU:[
+    {date:'2026-07-20', member:'Dan Newhouse (WA, spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-06-11', member:'Ro Khanna (CA)', chamber:'House', type:'neg', label:'Sale ×3', band:'$1k–15k each'},
+    {date:'2026-02-25', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
+    {date:'2026-02-15', member:'John Boozman (AR, joint)', chamber:'Senate', type:'neg', label:'Sale ×2', band:'$1k–15k each'}
+  ],
+  GOOGL:[
+    {date:'2026-07-21', member:'Jerry Moran (KS)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-07-17', member:'Dan Crenshaw (TX)', chamber:'House', type:'neg', label:'Sale', band:'$1k–15k'},
+    {date:'2026-06-29', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase (multiple, this qtr up to)', band:'$250k'},
+    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase + call options + partial sale', band:'$250k–5M', gold:true},
+    {date:'2026-01-16', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'}
+  ],
+  AVGO:[
+    {date:'2026-07-08', member:'Ro Khanna (CA)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'},
+    {date:'2026-05-07', member:'Shelley Moore Capito (WV, spouse)', chamber:'Senate', type:'neg', label:'Sale', band:'$1k–15k'},
+    {date:'2026-05-01', member:'Jared Moskowitz (FL)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-03-04', member:'Shelley Moore Capito (WV, spouse)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2025-07-10', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$1M–5M', gold:true}
+  ],
+  TSM:[
+    {date:'2026-07-13', member:'Michael McCaul (TX, spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'},
+    {date:'2026-04-21', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-03-10', member:'Gilbert Cisneros (CA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
+    {date:'2025-11-13', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
+    {date:'2024-01-03', member:'Thomas Carper (DE, spouse)', chamber:'Senate', type:'neg', label:'Sale (partial)', band:'$1k–15k'}
+  ],
+  AAPL:[
+    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'neg', label:'Sale ×2', band:'$15k–50k each'},
+    {date:'2026-05-01', member:'Mark Warner (VA, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-02-15', member:'John Boozman (AR, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'neg', label:'Sale (partial) + options purchase', band:'$5M–25M', gold:true},
+    {date:'2025-09-30', member:'Adam Schiff (spouse)', chamber:'Senate', type:'neg', label:'Sale (partial)', band:'$15k–50k'}
+  ],
+  MSFT:[
+    {date:'2026-05-01', member:'Mark Warner (VA)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-04-14', member:'John Boozman (AR, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-06-04', member:'Josh Gottheimer (NJ, joint)', chamber:'House', type:'pos', label:'Options purchase/sale mix', band:'$250k–1M'},
+    {date:'2026-01-16', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'},
+    {date:'2025-11-21', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$250k–500k'}
+  ],
+  TSLA:[
+    {date:'2024-11-07', member:'Sheldon Whitehouse (RI, self+spouse)', chamber:'Senate', type:'neg', label:'Sale (Full), 2 filings', band:'$100k–250k / $15k–50k'},
+    {date:'2025-10-21', member:'Marjorie Taylor Greene (GA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2025-06-12', member:'Josh Gottheimer (NJ, joint)', chamber:'House', type:'pos', label:'Purchase ×3', band:'$1k–15k each'},
+    {date:'2025-04-01', member:'Vicente Gonzalez (TX)', chamber:'House', type:'neg', label:'Sale', band:'$100k–250k'},
+    {date:'2025-10-15', member:'Marjorie Taylor Greene (GA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'}
+  ],
+  IREN:[
+    {date:'2026-02-25', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$50k–100k'},
+    {date:'2026-01-29', member:'Dale Strong (joint)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2026-01-16', member:'Cleo Fields (LA)', chamber:'House', type:'neg', label:'Sale (Full)', band:'$50k–100k'},
+    {date:'2025-12-18', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
+    {date:'2025-10-31', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×2', band:'$1k–15k each'},
+    {date:'2025-08-07', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'}
+  ],
+  NBIS:[]
+};
+function renderCongress(sym){
+  const rows = CONGRESS_TX[sym] || [];
+  document.getElementById('congressTitle').textContent = '5 · Congressional Trades — '+sym+' (STOCK Act, ≤45-day lag)';
+  if(rows.length===0){
+    document.getElementById('congressBody').innerHTML = '<tr><td colspan="5" style="color:var(--dim); text-align:center; padding:14px;">No senate-trading or house-trading disclosures found for '+sym+' — a real, checked absence (both endpoints return no data), not an unwired section.</td></tr>';
+    document.getElementById('congressNote').innerHTML = sym+' is a genuine gap: '+sym+' has not appeared in any member\'s STOCK Act disclosure to date. That itself is a data point — a young/thin-float name that hasn\'t crossed a Congressional portfolio yet. Searchable by symbol OR by politician name (e.g. everything Pelosi has traded) for any other ticker. Amounts are disclosed bands, not exact figures — that\'s a legal limitation, not FMP\'s.';
+    return;
+  }
+  document.getElementById('congressBody').innerHTML = rows.map(r=>{
+    const memberHtml = r.gold ? '<td class="gold">'+r.member+'</td>' : '<td>'+r.member+'</td>';
+    const bandHtml = r.gold ? '<td class="gold">'+r.band+'</td>' : '<td>'+r.band+'</td>';
+    return '<tr><td>'+r.date+'</td>'+memberHtml+'<td>'+r.chamber+'</td><td class="'+r.type+'">'+r.label+'</td>'+bandHtml+'</tr>';
+  }).join('');
+  document.getElementById('congressNote').innerHTML = 'Searchable by symbol OR by politician name (e.g. everything Pelosi has traded). Amounts are disclosed bands, not exact figures — that\'s a legal limitation, not FMP\'s. Links go to the actual disclosure PDFs.';
+}
+renderCongress('NVDA');
+</script>
 </section>
 
 <!-- ============ 6. COT ============ -->
@@ -1202,23 +1447,26 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <p style="font-size:15px;"><b style="color:var(--gold);">🔌 WIRED — computed live from a data object, recomputes on change:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's wired</th></tr>
-<tr><td class="pur">§1 Comps</td><td>One <span class="mono2">COMPS</span> object (6 companies × 10 metrics) drives: the Median/Mean/Min/Max/Delta summary row, both narrative notes, the football-field ranges, and the VALUE/QUALITY/composite score. It also exposes <span class="mono2">window.PEER</span> — the same peer beta/CAGR stats get <i>reused</i> (not retyped) by §3's beta context and reverse-DCF beta verdict. <b>NVDA/semis only</b> — see the ticker-switcher row below.</td></tr>
-<tr><td class="pur">Ticker switcher (top of page)</td><td>A <span class="mono2">TICKERS</span> object holds real per-ticker DCF base data for <b>10 names</b> (NVDA, MU, GOOGL, NBIS, AVGO, TSM, AAPL, MSFT, TSLA, IREN) — revenue/shares/net-debt/D&amp;A%/capex%/NWC% from <span class="mono2">custom-dcf-advanced</span>'s actual + projected rows, beta/price from <span class="mono2">profile-symbol</span> (the DCF endpoint's own beta field is unreliable for at least MU — flagged live on the page when you pick it). Clicking a ticker calls <span class="mono2">setTicker()</span>: swaps <span class="mono2">BASE</span>, resets every slider to that company's own real defaults, regenerates the scenario/beta chip rows, and re-renders §3 end-to-end — same engine, real numbers, no placeholder ticker text.</td></tr>
-<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass. Now driven by whichever ticker is selected above, not a hardcoded NVDA constant.</td></tr>
+<tr><td class="pur">§1 Comps</td><td>Four real peer universes (<span class="mono2">PEERSETS</span>: semis, mega-cap tech, auto/EV, AI-infra) each hold 5–6 companies × 13 metrics from <span class="mono2">metrics-ratios-ttm</span>. Picking a ticker calls <span class="mono2">renderComps(sym)</span>, which looks up that ticker's assigned group (<span class="mono2">TICKER_GROUP</span>), reorders the arrays so the picked ticker is always the subject row, and recomputes the Median/Mean/Min/Max/Delta row, both narrative notes, the football-field ranges, and the VALUE/QUALITY score from scratch — same statistical engine for all 10 names, not retyped per ticker. Market cap is computed (price × shares), never a typed string. Known distortions (NBIS's tiny-base 95% margin, IREN's 1048× P/E off near-zero earnings, TSLA's thin-earnings multiples, AAPL's buyback-driven P/B) are flagged inline, not hidden.</td></tr>
+<tr><td class="pur">Ticker switcher (top of page)</td><td>A <span class="mono2">TICKERS</span> object holds real per-ticker DCF base data for <b>10 names</b> (NVDA, MU, GOOGL, NBIS, AVGO, TSM, AAPL, MSFT, TSLA, IREN) — revenue/shares/net-debt/D&amp;A%/capex%/NWC% from <span class="mono2">custom-dcf-advanced</span>'s actual + projected rows, beta/price from <span class="mono2">profile-symbol</span>. Clicking a ticker calls <span class="mono2">setTicker()</span>, which swaps <span class="mono2">BASE</span>, resets every slider to that company's own real defaults, and re-renders §1 comps, §2.7 analysts, §3 DCF, §4 insider, and §5 congress end-to-end — same engines, real per-ticker numbers, nothing frozen on NVDA.</td></tr>
+<tr><td class="pur">§2.7 Analyst coverage</td><td>A real <span class="mono2">price-target-summary</span> + grade-mix pull per ticker (<span class="mono2">ANALYST</span> object), rendered by <span class="mono2">renderAnalyst(sym)</span>: rating mix bar, 1mo/3mo/1yr/all-time average price-target windows, and a publisher badge list built from each ticker's actual <span class="mono2">publishers</span> field (TheFly, StreetInsider, Benzinga, TipRanks Contributor, etc.) — not a fixed sample list.</td></tr>
+<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass. Driven by whichever ticker is selected above, not a hardcoded NVDA constant.</td></tr>
 <tr><td class="pur">§3.5 Estimates</td><td>Consensus dispersion (range-width ÷ avg) is computed per year from the raw "avg (low–high)" cells into a HIGH/MODERATE/LOW confidence badge. <b>Not yet</b> feeding back into the DCF or reverse-DCF math — it's a read, not an input, today.</td></tr>
-<tr><td class="pur">§4 Insider</td><td>A real transaction array is classified (buy/sell/neutral), checked for 30-day cluster buys, and netted into a $ discretionary flow — the signal badge is a verdict of that computation, not a typed guess.</td></tr>
+<tr><td class="pur">§4 Insider</td><td>A real transaction array per ticker (<span class="mono2">INSIDER_TX</span>, from <span class="mono2">search-insider-trades</span>) is classified (buy/sell/neutral), checked for 30-day cluster buys, and netted into a $ discretionary flow via <span class="mono2">renderInsider(sym)</span> — the signal badge is a verdict of that computation, not a typed guess. Results genuinely vary: TSM shows a real bullish cluster buy (10+ officers bought the same day), NBIS/AVGO/AAPL show real bearish broad-selling (3+ distinct sellers), MU/GOOGL/MSFT/TSLA/IREN show neutral/noise.</td></tr>
+<tr><td class="pur">§5 Congress</td><td>Real <span class="mono2">senate-trading</span> + <span class="mono2">house-trading</span> pulls per ticker (<span class="mono2">CONGRESS_TX</span>), rendered by <span class="mono2">renderCongress(sym)</span>. NBIS is a genuine, checked zero: both endpoints return no disclosures for it — shown as an honest gap, not hidden or faked.</td></tr>
 </table>
 
 <p style="font-size:15px;"><b style="color:var(--red);">🧵 NOT WIRED — static pulls / typed content, same every time regardless of anything else on the page:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's still static</th></tr>
-<tr><td class="pur">§1 Comps / §2.7 Analysts / §4 Insider / §5 Congress / §6 COT</td><td>These five sections are <b>still NVDA-only</b> regardless of the ticker you pick at the top — there's no built peer-comps universe, analyst-consensus revenue path, insider transaction set, congressional trades, or COT data for the other 9 names yet. The banner that appears when you select a non-NVDA ticker says exactly this. §2.7's price targets &amp; grade mix are also a single real pull frozen at fetch time — they don't refresh, and the $319 consensus target isn't compared against the DCF fair value anywhere yet. §5/§6 have no derived signal (§4's insider classifier is the template, not yet built for these two).</td></tr>
+<tr><td class="pur">§6 COT</td><td>Commitment of Traders is index/futures-level data (S&amp;P 500 E-mini) — it's macro positioning context, not a per-company metric, so there is no per-ticker version to build; this is a real, structural limitation of the data itself, not a shortcut.</td></tr>
 <tr><td class="pur">Analyst-consensus growth path (§3A toggle)</td><td>Only NVDA has a real Street $B-by-year path loaded. Every other ticker's projection-source toggle is locked to Fixed-rate — the button is visibly dimmed with a note explaining why, not silently disabled.</td></tr>
+<tr><td class="pur">§2.7 price targets</td><td>A single real pull frozen at fetch time per ticker — targets don't live-refresh, and the consensus target isn't compared against the DCF fair value anywhere yet.</td></tr>
 </table>
 
-<p style="font-size:15px;"><b>The math, for reference.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base: FY26 rev $215.9B, 24.51B shares, net debt $0.8B; D&amp;A 3.06%, capex 3.49%, NWC 22.7% of revenue — all fixed constants, not per-ticker.</p>
-<p style="margin-top:8px;"><b>Sources.</b> Comps <span class="mono2">metrics-ratios-ttm</span> + <span class="mono2">screener</span> · DCF mechanics <span class="mono2">custom-dcf-advanced</span> · forward estimates <span class="mono2">financial-estimates</span> · analyst grades/targets <span class="mono2">grades-summary, price-target-consensus, price-target-summary</span> · insider <span class="mono2">insiderTrades</span> · congress <span class="mono2">senate/house</span> · COT <span class="mono2">commitmentOfTraders</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
-<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) feed §3.5 confidence into the reverse-DCF verdict strength, (2) build congress/COT derived signals off the §4 template, (3) make the page ticker-driven via the existing Supabase per-ticker tables (fundamentals/analyst_estimates), which already avoids exposing the FMP key client-side.</p>
+<p style="font-size:15px;"><b>The math, for reference.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base numbers (revenue, shares, net debt, D&amp;A%, capex%, NWC%) are per-ticker, pulled from each company's own <span class="mono2">custom-dcf-advanced</span> data — not a single fixed NVDA constant reused across tickers.</p>
+<p style="margin-top:8px;"><b>Sources.</b> Comps <span class="mono2">metrics-ratios-ttm</span> · DCF mechanics <span class="mono2">custom-dcf-advanced</span> · forward estimates <span class="mono2">financial-estimates</span> · analyst grades/targets <span class="mono2">price-target-summary</span> · insider <span class="mono2">search-insider-trades</span> · congress <span class="mono2">senate-trading / house-trading</span> · COT <span class="mono2">commitmentOfTraders</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
+<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) feed §3.5 confidence into the reverse-DCF verdict strength, (2) live-refresh §2.7 price targets instead of freezing at fetch time, (3) make the page ticker-driven via the existing Supabase per-ticker tables (fundamentals/analyst_estimates), which already avoids exposing the FMP key client-side.</p>
 </div>
 </details>
 
