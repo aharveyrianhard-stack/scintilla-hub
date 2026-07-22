@@ -120,6 +120,12 @@
   .sensi td, .sensi th{text-align:center; padding:7px 9px; font-size:13px;} .sensi td:first-child, .sensi th:first-child{text-align:left;}
   details.build summary{cursor:pointer; color:var(--gold); font-weight:700; font-size:14px; padding:8px 0; list-style:none;}
   details.build summary::-webkit-details-marker{display:none;}
+  .fblock{background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:15px 20px; margin:11px 0;}
+  .feq{font-family:ui-monospace,Menlo,monospace; font-size:16px; line-height:1.75; color:#aeb6bf;}
+  .feq .n{color:var(--accent); font-weight:700;} .feq .g{color:var(--gold); font-weight:700;} .feq .out{color:var(--green); font-weight:700; font-size:19px;} .feq .outn{color:var(--red); font-weight:700; font-size:19px;}
+  .fctrls{margin-top:11px; display:flex; align-items:center; flex-wrap:wrap; gap:3px;}
+  .ftag{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:7px;}
+  .ftag2{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin:0 8px 0 16px;}
 </style>
 <h2>3 · DCF — NVDA · pick a mode, the math updates</h2>
 <div class="src">endpoint: custom-dcf-advanced · every lever is an API argument · switch modes below, watch the formulas and valuation move</div>
@@ -133,37 +139,73 @@
   <div class="rb"><span class="rk">Terminal = % of value</span><span class="rv" id="oTV">—</span></div>
 </div>
 
-<!-- MODE SELECTORS -->
-<div class="frow"><span class="flabel">Scenario</span>
-  <button class="mbtn" id="sc_fmp"    onclick="setScen('fmp')">FMP 66% <span class="dim2">(fantasy)</span></button>
-  <button class="mbtn" id="sc_cons"   onclick="setScen('cons')">Consensus 36%</button>
-  <button class="mbtn" id="sc_conserv" onclick="setScen('conserv')">Conservative 20%</button>
-  <button class="mbtn" id="sc_bear"   onclick="setScen('bear')">Bear 10%</button></div>
-<div class="foot">Sets revenue growth + EBITDA margin + tax together. FMP just repeats last year's growth; Consensus = the Street's actual path (financial-estimates).</div>
+<!-- SCENARIO block -->
+<div class="fblock">
+  <div class="feq" id="eqScen"></div>
+  <div class="fctrls"><span class="ftag">Scenario</span>
+    <button class="mbtn" id="sc_fmp" onclick="setScen('fmp')">FMP 66% (fantasy)</button>
+    <button class="mbtn" id="sc_cons" onclick="setScen('cons')">Consensus 36%</button>
+    <button class="mbtn" id="sc_conserv" onclick="setScen('conserv')">Conservative 20%</button>
+    <button class="mbtn" id="sc_bear" onclick="setScen('bear')">Bear 10%</button></div>
+</div>
 
-<div class="frow"><span class="flabel">Beta</span>
-  <button class="mbtn" id="b_fmp"  onclick="setBeta('fmp')">FMP raw 2.21</button>
-  <button class="mbtn" id="b_blume" onclick="setBeta('blume')">Blume-adj 1.81</button>
-  <button class="mbtn" id="b_peer" onclick="setBeta('peer')">Peer median 2.14</button></div>
+<!-- CAPM formula block: controls sit UNDER the formula they drive -->
+<div class="fblock">
+  <div class="feq" id="eqCoE"></div>
+  <div class="fctrls"><span class="ftag">β</span>
+    <button class="mbtn" id="b_fmp" onclick="setBeta('fmp')">FMP 2.21</button>
+    <button class="mbtn" id="b_blume" onclick="setBeta('blume')">Blume 1.81</button>
+    <button class="mbtn" id="b_peer" onclick="setBeta('peer')">Peer 2.14</button>
+    <span class="ftag2">MRP</span>
+    <button class="mbtn" id="mr_fmp" onclick="setMrp('fmp')">FMP 4.72</button>
+    <button class="mbtn" id="mr_dam" onclick="setMrp('dam')">Damodaran 4.45</button>
+    <button class="mbtn gold" id="mr_built" onclick="setMrp('built')">Built <span id="builtLbl">—</span></button></div>
+</div>
 
-<div class="frow"><span class="flabel">MRP</span>
-  <button class="mbtn" id="mr_fmp"  onclick="setMrp('fmp')">FMP 4.72</button>
-  <button class="mbtn" id="mr_dam"  onclick="setMrp('dam')">Damodaran 4.45</button>
-  <button class="mbtn gold" id="mr_built" onclick="setMrp('built')">Built <span id="builtLbl">—</span></button></div>
+<!-- WACC block -->
+<div class="fblock">
+  <div class="feq" id="eqWACC"></div>
+  <div class="foot">NVDA is ~all-equity (debt 0.2% of capital) → WACC ≈ Cost of Equity. For a leveraged name the debt weight bites.</div>
+</div>
 
-<div class="frow"><span class="flabel">Terminal g</span>
-  <button class="mbtn" id="tg_10y"  onclick="setTg('t10y')">= 10Y 4.28%</button>
-  <button class="mbtn" id="tg_cons" onclick="setTg('cons')">Conservative 3.0%</button>
-  <button class="mbtn" id="tg_gdp"  onclick="setTg('gdp')">Long-run GDP 4.5%</button></div>
-<div class="foot">Terminal g = the company's growth forever after year 5. Convention pins it to the risk-free (10Y = 4.28%) as a ceiling — it EQUALS the risk-free, it is not "risk-free minus" anything. Nothing outgrows the economy indefinitely.</div>
+<!-- TERMINAL block: shows the WACC − g subtraction explicitly -->
+<div class="fblock">
+  <div class="feq" id="eqTV"></div>
+  <div class="fctrls"><span class="ftag">terminal g</span>
+    <button class="mbtn" id="tg_10y" onclick="setTg('t10y')">= 10Y 4.28%</button>
+    <button class="mbtn" id="tg_cons" onclick="setTg('cons')">Conservative 3.0%</button>
+    <button class="mbtn" id="tg_gdp" onclick="setTg('gdp')">GDP 4.5%</button></div>
+  <div class="foot"><b>g is the perpetuity growth</b> — how fast cash grows forever after year 5, a GROWTH rate (NOT the discount rate, separate from risk-free). It sits in the denominator as (WACC − g): a higher g shrinks the denominator → bigger terminal value. Must stay below WACC.</div>
+</div>
 
-<!-- LIVE MATH -->
-<div class="math" id="mathBox"></div>
+<!-- SENSITIVITY: 1-variable first, then pick 2 axes for the matrix -->
+<h4 style="color:var(--gold); font-size:15px; margin:20px 0 4px;">SENSITIVITY</h4>
 
-<!-- SENSITIVITY -->
-<h4 style="color:var(--gold); font-size:14px; margin:16px 0 4px;">SENSITIVITY — fair value across ranges (green = above price, red = below)</h4>
-<div class="foot" style="margin-bottom:6px;">Rows = revenue growth · columns = WACC. Everything else held at the current scenario. This is the football-field: where does the valuation hold up.</div>
-<div class="scrollx"><table class="sensi" id="sensiTable"></table></div>
+<div class="fblock">
+  <div style="font-size:13px; color:var(--txt); font-weight:600; margin-bottom:8px;">① One variable at a time — sweep it, watch fair value</div>
+  <div class="fctrls" style="margin-top:0;"><span class="ftag">Sweep</span>
+    <button class="mbtn" id="s1_growth" onclick="setS1('growth')">Revenue growth</button>
+    <button class="mbtn" id="s1_wacc" onclick="setS1('wacc')">WACC</button>
+    <button class="mbtn" id="s1_termg" onclick="setS1('termg')">Terminal g</button>
+    <button class="mbtn" id="s1_margin" onclick="setS1('margin')">EBITDA margin</button></div>
+  <div class="scrollx" style="margin-top:10px;"><table class="sensi" id="sens1"></table></div>
+</div>
+
+<div class="fblock">
+  <div style="font-size:13px; color:var(--txt); font-weight:600; margin-bottom:8px;">② Two-variable matrix — pick the axes</div>
+  <div class="fctrls" style="margin-top:0;"><span class="ftag">Rows (Y)</span>
+    <button class="mbtn" id="sy_growth" onclick="setSY('growth')">growth</button>
+    <button class="mbtn" id="sy_wacc" onclick="setSY('wacc')">WACC</button>
+    <button class="mbtn" id="sy_termg" onclick="setSY('termg')">term g</button>
+    <button class="mbtn" id="sy_margin" onclick="setSY('margin')">margin</button></div>
+  <div class="fctrls" style="margin-top:6px;"><span class="ftag">Cols (X)</span>
+    <button class="mbtn" id="sx_growth" onclick="setSX('growth')">growth</button>
+    <button class="mbtn" id="sx_wacc" onclick="setSX('wacc')">WACC</button>
+    <button class="mbtn" id="sx_termg" onclick="setSX('termg')">term g</button>
+    <button class="mbtn" id="sx_margin" onclick="setSX('margin')">margin</button></div>
+  <div class="scrollx" style="margin-top:10px;"><table class="sensi" id="sens2"></table></div>
+  <div class="foot">Green = fair value above today's $202.81 · red = below. Everything not on an axis is held at your current selections above.</div>
+</div>
 
 <!-- PROJECTION (collapsed) -->
 <details style="margin-top:14px;"><summary style="cursor:pointer;color:var(--accent);font-size:14px;">▸ 5-year cash-flow projection (table)</summary>
@@ -201,7 +243,13 @@ const SCEN={fmp:{g:66.4,m:51.1,t:15.1,lbl:'FMP 66%'},cons:{g:36,m:51.1,t:15.1,lb
 const BETA={fmp:{v:2.211,f:'5-yr regression slope vs S&P'},blume:{v:1.81,f:'0.67 × 2.21 + 0.33'},peer:{v:2.14,f:'median(TSM,AVGO,MU,AMD,INTC)'}};
 const MRP={fmp:{v:4.72,f:'fixed constant (no inputs)'},dam:{v:4.45,f:'Damodaran implied ERP, Jul-26'},built:{v:4.65,f:'your subcomponent build'}};
 const TG={t10y:4.28,cons:3.0,gdp:4.5};
-let S={scen:'cons',beta:'fmp',mrp:'dam',tg:'t10y'};
+let S={scen:'cons',beta:'fmp',mrp:'dam',tg:'t10y',s1:'growth',sy:'growth',sx:'wacc'};
+const SVARS={
+  growth:{lbl:'Growth',range:[5,10,20,30,36,50,66],set:(o,v)=>o.g=v/100},
+  wacc:{lbl:'WACC',range:[8,10,12,14,16,18],set:(o,v)=>o.w=v/100},
+  termg:{lbl:'Terminal g',range:[2,3,4,4.28,5,6],set:(o,v)=>o.tg=v/100},
+  margin:{lbl:'EBITDA margin',range:[35,42,48,51,60,70],set:(o,v)=>o.m=v/100}
+};
 function fmt(x,d=2){return x.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});}
 
 // core model → returns fair value etc for explicit inputs
@@ -212,11 +260,10 @@ function model(g,m,t,w,tg){
   const tv=ufcf*(1+tg)/(w-tg),pvTV=tv/Math.pow(1+w,5),ev=sumPV+pvTV,fv=(ev-BASE.netDebt)/BASE.shares;
   return{ev,fv,pvTV,tvShare:pvTV/ev*100,rows,up:(fv/BASE.price-1)*100};
 }
+function fvOf(o){const r=model(o.g,o.m,o.t,o.w,o.tg);return r.bad?null:r.fv;}
 function render(){
   ['fmp','cons','conserv','bear'].forEach(k=>document.getElementById('sc_'+k).classList.toggle('on',S.scen===k));
-  document.getElementById('b_fmp').classList.toggle('on',S.beta==='fmp');
-  document.getElementById('b_blume').classList.toggle('on',S.beta==='blume');
-  document.getElementById('b_peer').classList.toggle('on',S.beta==='peer');
+  ['fmp','blume','peer'].forEach(k=>document.getElementById('b_'+k).classList.toggle('on',S.beta===k));
   document.getElementById('mr_fmp').classList.toggle('on',S.mrp==='fmp');
   document.getElementById('mr_dam').classList.toggle('on',S.mrp==='dam');
   document.getElementById('mr_built').classList.toggle('on',S.mrp==='built');
@@ -230,7 +277,6 @@ function render(){
   const coe=BASE.rf+beta*mrp, w=BASE.eqW*coe+BASE.debtW*BASE.kd;
   const r=model(g,m,t,w,tg);
 
-  // result bar
   if(r.bad){document.getElementById('oFV').textContent='WACC ≤ g';}
   else{
     const e1=document.getElementById('oFV');e1.textContent='$'+fmt(r.fv);e1.className='rv '+(r.up>=0?'pos':'neg');
@@ -242,24 +288,40 @@ function render(){
     document.getElementById('oTable').innerHTML=rows;
   }
 
-  // live math (formula → symbols → numbers), formula shown for the SELECTED beta & mrp mode
-  document.getElementById('mathBox').innerHTML=
-    '<span class="g">β</span> ('+S.beta+') = <span class="dim2">'+BETA[S.beta].f+'</span> = <span class="hl">'+beta.toFixed(2)+'</span><br>'+
-    '<span class="g">MRP</span> ('+S.mrp+') = <span class="dim2">'+MRP[S.mrp].f+'</span> = <span class="hl">'+(mrp*100).toFixed(2)+'%</span><br>'+
-    'Cost of Equity = r<sub>f</sub> + β × MRP = '+(BASE.rf*100).toFixed(2)+'% + '+beta.toFixed(2)+' × '+(mrp*100).toFixed(2)+'% = <span class="hl">'+(coe*100).toFixed(2)+'%</span><br>'+
-    'WACC = 99.8% × CoE + 0.2% × 3.63% = <span class="hl">'+(w*100).toFixed(2)+'%</span> <span class="dim2">(NVDA is ~all-equity → WACC ≈ CoE)</span><br>'+
-    'Terminal g = <span class="hl">'+(tg*100).toFixed(2)+'%</span> <span class="dim2">('+(S.tg==='t10y'?'= 10-yr Treasury':S.tg==='cons'?'conservative':'long-run GDP')+')</span>';
+  // FORMULA BLOCKS — numbers light up in place
+  document.getElementById('eqScen').innerHTML='<span class="g">'+sc.lbl+'</span> → revenue growth <span class="n">'+sc.g+'%</span> · EBITDA margin <span class="n">'+sc.m+'%</span> · tax <span class="n">'+sc.t+'%</span>';
+  document.getElementById('eqCoE').innerHTML='Cost of Equity = r<sub>f</sub> <span class="n">'+(BASE.rf*100).toFixed(2)+'%</span> + β <span class="n">'+beta.toFixed(2)+'</span> × MRP <span class="n">'+(mrp*100).toFixed(2)+'%</span> = <span class="'+(1?'out':'')+'">'+(coe*100).toFixed(2)+'%</span>';
+  document.getElementById('eqWACC').innerHTML='WACC = 99.8% × CoE <span class="n">'+(coe*100).toFixed(2)+'%</span> + 0.2% × 3.63% = <span class="out">'+(w*100).toFixed(2)+'%</span>';
+  const denom=(w-tg)*100;
+  document.getElementById('eqTV').innerHTML='Terminal Value = FCF₅ × (1 + g <span class="g">'+(tg*100).toFixed(2)+'%</span>) ÷ ( WACC <span class="n">'+(w*100).toFixed(2)+'%</span> − g <span class="g">'+(tg*100).toFixed(2)+'%</span> = <span class="'+(denom>0?'out':'outn')+'">'+denom.toFixed(2)+'%</span> ) &nbsp;→&nbsp; terminal = <span class="n">'+(r.bad?'—':fmt(r.tvShare,0)+'%')+'</span> of total value';
 
-  // sensitivity grid: rows = growth, cols = WACC
-  const gs=[10,20,36,50], ws=[11,13,15,17];
-  let h='<tr><th>growth ↓ / WACC →</th>'+ws.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
-  gs.forEach(gg=>{ h+='<tr><td><b>'+gg+'%</b></td>'; ws.forEach(ww=>{ const rr=model(gg/100,m,t,ww/100,tg); if(rr.bad){h+='<td class="dim2">—</td>';} else {const cls=rr.fv>=BASE.price?'pos':'neg'; h+='<td class="'+cls+'">$'+fmt(rr.fv,0)+'</td>';} }); h+='</tr>'; });
-  document.getElementById('sensiTable').innerHTML=h;
+  renderSens(g,m,t,w,tg);
+}
+function renderSens(g,m,t,w,tg){
+  const base={g,m,t,w,tg};
+  ['growth','wacc','termg','margin'].forEach(k=>{
+    document.getElementById('s1_'+k).classList.toggle('on',S.s1===k);
+    document.getElementById('sy_'+k).classList.toggle('on',S.sy===k);
+    document.getElementById('sx_'+k).classList.toggle('on',S.sx===k);
+  });
+  // 1-variable
+  const v1=SVARS[S.s1];
+  let h1='<tr><th>'+v1.lbl+' →</th>'+v1.range.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
+  h1+='<tr><td>fair value</td>'+v1.range.map(x=>{const o={...base};v1.set(o,x);const fv=fvOf(o);return fv==null?'<td class="dim2">—</td>':'<td class="'+(fv>=BASE.price?'pos':'neg')+'">$'+fmt(fv,0)+'</td>';}).join('')+'</tr>';
+  document.getElementById('sens1').innerHTML=h1;
+  // 2-variable
+  const vy=SVARS[S.sy], vx=SVARS[S.sx];
+  let h2='<tr><th>'+vy.lbl+' ↓ / '+vx.lbl+' →</th>'+vx.range.map(x=>'<th>'+x+'%</th>').join('')+'</tr>';
+  vy.range.forEach(yv=>{h2+='<tr><td><b>'+yv+'%</b></td>'+vx.range.map(xv=>{const o={...base};vy.set(o,yv);vx.set(o,xv);const fv=fvOf(o);return fv==null?'<td class="dim2">—</td>':'<td class="'+(fv>=BASE.price?'pos':'neg')+'">$'+fmt(fv,0)+'</td>';}).join('')+'</tr>';});
+  document.getElementById('sens2').innerHTML=h2;
 }
 function setScen(k){S.scen=k;render();}
 function setBeta(k){S.beta=k;render();}
 function setMrp(k){S.mrp=k;render();}
 function setTg(k){S.tg=k;render();}
+function setS1(k){S.s1=k;render();}
+function setSY(k){S.sy=k; if(S.sx===k)S.sx=(k==='wacc'?'growth':'wacc'); render();}
+function setSX(k){S.sx=k; if(S.sy===k)S.sy=(k==='wacc'?'growth':'wacc'); render();}
 
 // --- MRP builder solver ---
 function pvAt(r,spx,cash0,g,tg){let cf=cash0,pv=0;for(let i=1;i<=5;i++){cf*=(1+g);pv+=cf/Math.pow(1+r,i);}pv+=(cf*(1+tg)/(r-tg))/Math.pow(1+r,5);return pv;}
