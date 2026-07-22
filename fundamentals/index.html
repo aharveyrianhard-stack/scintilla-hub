@@ -108,7 +108,7 @@
 // not confused with analyst estimates. pe/peg=null where earnings are negative (n/m), not fabricated.
 const PEERSETS = {
   semis: { label:'Semis', names:['NVDA','TSM','AVGO','MU','AMD','INTC'],
-    price:[213.57,423.00,394.69,192.11,208.86,37.02], sharesB:[24.51,5.186,4.853,1.09,1.617,4.19],
+    price:[213.57,423.00,394.69,972.66,208.86,37.02], sharesB:[24.51,5.186,4.853,1.1295,1.617,4.19],
     pe:[30.9,31.1,59.9,19.0,161.0,null], ev:[25.5,19.7,43.1,20.9,99.8,44.3],
     ps:[19.4,14.6,23.4,10.6,21.6,8.9],   pb:[25.2,10.2,20.1,9.5,12.5,4.3],
     peg:[0.28,0.58,0.48,0.03,1.31,null], gm:[74.1,61.9,67.0,72.6,50.3,35.4],
@@ -655,7 +655,7 @@ const TICKERS={
     consensus:[393.3,562.3,686.6,774.2,1005.0], // Street FY27→31 revenue $B, financial-estimates
     flags:[]},
   MU:{name:'Micron', rev:37.378, shares:1.125, netDebt:5.636, daPct:0.2947, capexPct:0.12, nwcPct:0.4172,
-    price:192.11, beta:2.142, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
+    price:972.66, beta:2.142, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
     gDefault:48.9, mDefault:50.0, tDefault:11.6, termgDefault:4.0, gFmp5yr:70.0, consensus:null,
     flags:["FMP's own custom-dcf-advanced beta field returns 4.0 for MU — inconsistent with its canonical 5-yr regression beta (2.14, profile-symbol), which is what's used here instead."]},
   GOOGL:{name:'Alphabet', rev:402.963, shares:12.23, netDebt:28.583, daPct:0.0462, capexPct:0.1378, nwcPct:0.1303,
@@ -777,7 +777,15 @@ function modelFull(g,m,t,rf,beta,mrp,tg){
 function fvFrom(o){return modelFull(o.g,o.m,o.t,o.rf,o.beta,o.mrp,o.tg);}
 function applyVar(o,key,val){o[SV[key].fld]= SV[key].sc===1 ? val : val/100;}
 // dynamic range centered on the CURRENT slider value, clamped to bounds
-function centerRange(key){const s=SV[key],cv=rd(s.id);let a=[];for(let i=-3;i<=3;i++){let v=cv+i*s.step;v=Math.max(s.min,Math.min(s.max,v));a.push(Math.round(v*100)/100);}return a;}
+function centerRange(key){
+  const s=SV[key], cv=rd(s.id), span=6*s.step;
+  let lo = cv - 3*s.step;
+  if (lo + span > s.max) lo = s.max - span;   // slide window down if it overflows the top
+  if (lo < s.min) lo = s.min;                  // slide window up if it overflows the bottom (or range is narrower than span)
+  let a=[];
+  for(let i=0;i<=6;i++){ let v=lo+i*s.step; v=Math.max(s.min,Math.min(s.max,v)); a.push(Math.round(v*100)/100); }
+  return a;
+}
 
 function render(){
   const c=cur(), r=modelFull(c.g,c.m,c.t,c.rf,c.beta,c.mrp,c.tg);
@@ -970,7 +978,7 @@ function renderReverse(c){
   else if(RV==='beta'){disp=x.toFixed(2);
     if(window.PEER&&window.PEER.beta){
       const PB=window.PEER.beta;ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' ('+CURTICK+' raw '+(PB.subj!=null?PB.subj.toFixed(2):BASE.beta.toFixed(2))+')';
-      if(x<PB.min){verdict='BELOW the lowest-beta peer → not reasonable; implies the market treats '+CURTICK+' as safer than any comp (price looks cheap)';color='var(--green)';icon='✅';}
+      if(x<PB.min){verdict='BELOW the lowest-beta peer → an unusually optimistic assumption; implies the market treats '+CURTICK+' as safer than any comp, which is why the stock looks cheap on this read';color='var(--green)';icon='✅';}
       else if(x<=PB.max){verdict='within the peer beta range → reasonable';color='var(--gold)';icon='⚠️';}
       else{verdict='ABOVE every peer\'s beta → only makes sense if '+CURTICK+' is riskier than all comps (price looks cheap)';color='var(--green)';icon='✅';}
     } else {
