@@ -59,10 +59,19 @@
   <button class="tbtn" id="tbtn_IREN" onclick="setTicker('IREN')">IREN</button>
   <span id="tickerStat" style="margin-left:auto; font-size:13.5px; color:var(--txt);"></span>
 </div>
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+  <button id="auditBtn" onclick="runAudit()" style="background:var(--panel2); border:1px solid var(--border); color:var(--txt); border-radius:8px; padding:8px 16px; cursor:pointer; font-size:13px; font-weight:700;">🔍 Run Full Audit — every ticker, every toggle, every slider extreme</button>
+  <span style="font-size:12px; color:var(--dim);">A mechanical consistency check (like a balance sheet that must foot to zero) — not a screenshot, a real re-render + comparison of every ticker against itself, catches wiring bugs automatically.</span>
+</div>
+<div id="auditPanel" style="display:none; margin-bottom:14px; padding:14px 18px; background:var(--panel); border:2px solid var(--border); border-radius:12px; font-size:13.5px;">
+  <div id="auditSummary" style="font-weight:700; font-size:15px;"></div>
+  <div id="auditDetail" style="margin-top:8px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; line-height:1.7;"></div>
+</div>
 <style>
   .tbtn{background:var(--panel2); border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:7px 15px; cursor:pointer; font-size:14px; font-weight:600; font-family:ui-monospace,Menlo,monospace;}
   .tbtn:hover{border-color:var(--accent); color:var(--accent);}
   .tbtn.on{border-color:var(--gold); color:var(--gold); background:rgba(210,153,34,0.12);}
+  #auditBtn:hover{border-color:var(--accent); color:var(--accent);}
 </style>
 
 <!-- ============ 1. COMPS ============ -->
@@ -1478,6 +1487,105 @@ renderCongress('NVDA');
 <p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) feed §3.5 confidence into the reverse-DCF verdict strength, (2) live-refresh §2.7 price targets instead of freezing at fetch time, (3) make the page ticker-driven via the existing Supabase per-ticker tables (fundamentals/analyst_estimates), which already avoids exposing the FMP key client-side.</p>
 </div>
 </details>
+
+<script>
+// ============ SELF-AUDIT — mechanical consistency checker, not a manual QA pass ============
+// Runs the SAME code paths a person clicking around would trigger (setTicker, centerRange) for
+// EVERY ticker and EVERY sensitivity slider at its default/min/max, then diffs values that must
+// agree with each other (e.g. the price shown in the comps table vs the price used by the DCF).
+// A clean run prints "0 issues" — like a trial balance footing to zero. Anything mis-wired shows
+// up as a specific, addressable line, not a vague "something feels off."
+function runAudit(){
+  const origTicker = CURTICK;
+  const allTickers = Object.keys(TICKERS);
+  let issues = [], checks = 0;
+
+  allTickers.forEach(sym=>{
+    setTicker(sym); // real render path — not a simulation of one
+
+    // A — single source of truth: the price used in §1 comps (PEERSETS) must equal the price
+    // used to drive the DCF/header (TICKERS). This exact mismatch was the MU bug (192.11 vs 974.49).
+    checks++;
+    const group = TICKER_GROUP[sym];
+    const G = group ? PEERSETS[group] : null;
+    const idx = G ? G.names.indexOf(sym) : -1;
+    if(!G || idx===-1){
+      issues.push('['+sym+'] not present in its own assigned peer set ("'+group+'") — comps table has no subject row for it.');
+    } else if(Math.abs(G.price[idx]-TICKERS[sym].price)>0.02){
+      issues.push('['+sym+'] PRICE MISMATCH — comps/peer-set price $'+G.price[idx].toFixed(2)+' vs DCF/header price $'+TICKERS[sym].price.toFixed(2)+'. These must be the same quote.');
+    }
+
+    // B — cross-section consistency on the rendered page itself: header price vs the DCF's own
+    // "market price" box. If these ever disagree, some section is reading stale/wrong state.
+    checks++;
+    const hdrM = (document.getElementById('tickerStat').textContent||'').match(/\$([\d,.]+)/);
+    const dcfM = (document.getElementById('oMktPrice').textContent||'').match(/\$([\d,.]+)/);
+    if(hdrM && dcfM){
+      const a=parseFloat(hdrM[1].replace(/,/g,'')), b=parseFloat(dcfM[1].replace(/,/g,''));
+      if(Math.abs(a-b)>0.02) issues.push('['+sym+'] header price $'+a+' ≠ DCF market-price box $'+b+' on the rendered page.');
+    } else {
+      issues.push('['+sym+'] could not read header/DCF price text to compare — DOM ids may have changed.');
+    }
+
+    // C — analyst object exists with a sane positive average target (implied-upside math divides by this)
+    checks++;
+    const A = (typeof ANALYST!=='undefined') ? ANALYST[sym] : null;
+    if(!A) issues.push('['+sym+'] no ANALYST entry — §2.7 will silently render nothing.');
+    else if(!(A.avg>0)) issues.push('['+sym+'] ANALYST avg price target is not a positive number ('+A.avg+').');
+
+    // D — insider/congress sections actually re-titled for this ticker (catches leftover stale DOM
+    // from the previous ticker, which is exactly what a shared/contaminated session would produce)
+    checks++;
+    const insT = document.getElementById('insiderTitle');
+    if(!insT || !insT.textContent.includes(sym)) issues.push('['+sym+'] §4 insider title does not mention '+sym+' — got "'+(insT?insT.textContent:'MISSING ELEMENT')+'".');
+    const conT = document.getElementById('congressTitle');
+    if(!conT || !conT.textContent.includes(sym)) issues.push('['+sym+'] §5 congress title does not mention '+sym+' — got "'+(conT?conT.textContent:'MISSING ELEMENT')+'".');
+
+    // E — peer-table beta roughly agrees with the DCF's own beta (soft check — NVDA intentionally
+    // defaults its DCF slider to the peer MEDIAN rather than its own raw beta, so allow real slack)
+    checks++;
+    if(window.PEER && window.PEER.beta && window.PEER.beta.subj!=null){
+      const diff = Math.abs(window.PEER.beta.subj - TICKERS[sym].beta);
+      if(diff > 0.5) issues.push('['+sym+'] peer-table beta ('+window.PEER.beta.subj.toFixed(2)+') is far from the DCF beta ('+TICKERS[sym].beta.toFixed(2)+') — diff '+diff.toFixed(2)+'.');
+    }
+
+    // F — fair value doesn't render as NaN/undefined at this ticker's own defaults
+    checks++;
+    const fvTxt = document.getElementById('oFV') ? document.getElementById('oFV').textContent : '';
+    if(/NaN|undefined/.test(fvTxt)) issues.push('['+sym+'] fair value renders as "'+fvTxt+'" at default sliders — broken formula for this ticker.');
+
+    // G — sensitivity axis: no duplicate values, for EVERY slider, at its default position AND
+    // both extremes (min/max). This is the exact class of bug centerRange() used to have.
+    Object.keys(SV).forEach(key=>{
+      checks++;
+      const s=SV[key], el=document.getElementById(s.id);
+      [s.min, s.max, +el.value].forEach(tv=>{
+        el.value = tv;
+        const arr = centerRange(key);
+        if(new Set(arr).size !== arr.length){
+          issues.push('['+sym+'] "'+s.lbl+'" sensitivity axis has duplicate values at slider='+tv+' → ['+arr.join(', ')+']');
+        }
+      });
+    });
+  });
+
+  setTicker(origTicker); // leave the page exactly where the user had it
+
+  const panel = document.getElementById('auditPanel');
+  panel.style.display = 'block';
+  const summary = document.getElementById('auditSummary');
+  const detail = document.getElementById('auditDetail');
+  if(issues.length===0){
+    summary.innerHTML = '✅ ALL CHECKS PASS — '+checks+' checks across '+allTickers.length+' tickers, 0 issues.';
+    summary.style.color = 'var(--green)';
+    detail.innerHTML = '';
+  } else {
+    summary.innerHTML = '🔴 '+issues.length+' ISSUE(S) FOUND — out of '+checks+' checks across '+allTickers.length+' tickers.';
+    summary.style.color = 'var(--red)';
+    detail.innerHTML = issues.map(i=>'• '+i).join('<br>');
+  }
+}
+</script>
 
 </body>
 </html>

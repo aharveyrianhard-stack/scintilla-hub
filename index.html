@@ -412,8 +412,12 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* R43 — EVENTS tab enrichment: compact company header + section headings + headline rows */
 .sc-evhead{ padding:2px 0 8px; border-bottom:.5px solid var(--line); margin-bottom:4px; }
 .sc-evhead .co{ font-size:11px; font-weight:700; color:var(--ink); line-height:1.2; }
-.sc-evhead .ir{ font-size:9px; color:var(--crk); text-decoration:none; margin-left:8px;
-  letter-spacing:.03em; white-space:nowrap; font-weight:600; }
+/* UNIFIED (R2026-07-22) — every EVENTS action link (website/IR/transcript/release/
+   summary/call) now shares ONE visual: plain 10.5px bold cyan text, underline on
+   hover, no border/chip/background. Alan: "no consistency... all of these links
+   need to be on all of them everywhere, in the same format." One look, everywhere. */
+.sc-evhead .ir{ font-size:10.5px; color:var(--crk); text-decoration:none; margin-left:8px;
+  letter-spacing:normal; white-space:nowrap; font-weight:600; }
 .sc-evhead .ir:hover{ text-decoration:underline; }
 .sc-evhead .desc{ font-size:9px; color:var(--ink2); line-height:1.35; margin-top:4px;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -583,6 +587,8 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ern__lnk{ font-size:10.5px; color:var(--crk); text-decoration:none; font-weight:600; }
 .sc-ern__lnk:hover{ text-decoration:underline; }
 .sc-ern__lnk.pending{ color:var(--dim); font-weight:400; cursor:default; pointer-events:none; }
+/* REVERTED (R2026-07-22) — Alan wants ▤ Summary IDENTICAL to Release/Transcript/Call,
+   not a distinct pill. Consistency > standalone emphasis. sumbtn pill removed. */
 @media(max-width:680px){ .sc-ern__metrics{ grid-template-columns:32px auto auto auto auto; gap:4px 11px; } .sc-ern__body{ grid-template-columns:1fr; } .sc-ern__foot{ gap:16px; } }
 @media(max-width:380px){ .sc-ern__body{ grid-template-columns:1fr 76px; gap:10px; } }
 /* TICKER page only — upcoming (half width, tight) beside AI READ (half); frees the page so PAST EARNINGS rises. */
@@ -633,17 +639,16 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   border-bottom:.5px solid rgba(255,255,255,.045); }
 .sc-relrow .gly{ color:var(--dim); font-size:9px; margin-top:1px; }
 .sc-relrow .lbl{ flex:1; min-width:0; font-size:9px; color:var(--ink2); line-height:1.3; }
-.sc-relrow .lbl a{ color:var(--ink2); text-decoration:none; }
-.sc-relrow .lbl a:hover{ color:var(--crk); }
+.sc-relrow .lbl a{ color:var(--crk); text-decoration:none; font-size:10.5px; font-weight:600; }
+.sc-relrow .lbl a:hover{ text-decoration:underline; }
 .sc-reldate{ flex:0 0 auto; font-size:8px; color:var(--dim); letter-spacing:.03em;
   font-variant-numeric:tabular-nums; margin-top:1px; }
 .sc-relempty{ font-size:9px; color:var(--dim); font-style:italic; padding:4px 2px; }
 /* transcript button + bubble */
-.sc-trbtn{ display:inline-flex; align-items:center; gap:4px; font-size:8.5px; letter-spacing:.04em;
-  color:var(--crk); background:none; border:.5px solid rgba(0,212,255,.35); border-radius:3px;
-  padding:1px 7px; cursor:pointer; margin-left:8px; vertical-align:middle; }
-.sc-trbtn:hover{ background:rgba(0,212,255,.08); }
-.sc-trbtn.empty{ color:var(--dim); border-color:var(--line); cursor:default; }
+.sc-trbtn{ display:inline; font-size:10.5px; letter-spacing:normal; font-weight:600;
+  color:var(--crk); background:none; border:0; padding:0; cursor:pointer; margin-left:8px; vertical-align:middle; }
+.sc-trbtn:hover{ text-decoration:underline; }
+.sc-trbtn.empty{ color:var(--dim); cursor:default; font-weight:400; }
 .sc-trbubble{ margin:6px 0 2px; border:.8px solid rgba(0,212,255,.28); border-radius:var(--radius);
   background:var(--panel2); padding:8px 10px; }
 .sc-trbubble__hd{ display:flex; align-items:center; gap:8px; font-size:8px; letter-spacing:.12em;
@@ -2240,7 +2245,7 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
          document-level delegated submit/input handlers keep working unchanged. -->
     <button class="sc-head__btn" aria-label="Search ticker" data-act="headsearch" id="headSearchBtn">⌕</button>
     <form class="sc-headsearch" id="cohSearchForm">
-      <input id="cohSearchInput" placeholder="search ticker…" aria-label="Search ticker" autocomplete="off">
+      <input id="cohSearchInput" placeholder="search ticker…" aria-label="Search ticker" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     </form>
     <!-- R27 — SYSTEMS moved into the logo menu (Systems Operation) -->
   </div>
@@ -2634,7 +2639,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
 
 async function fetchCompanyData(t) {
   const e = encodeURIComponent(t);
-  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds] = await Promise.all([
+  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,structure,updated_ts&order=updated_ts.desc&limit=1"),
@@ -2659,6 +2664,8 @@ async function fetchCompanyData(t) {
     pg("earnings_call_transcripts?ticker=eq." + e + "&select=ticker,quarter,call_date,url,ai_summary&order=call_date.desc&limit=1").catch(() => []),
     pg("company_releases?ticker=eq." + e + "&select=ticker,release_date,title,url&order=release_date.desc&limit=8").catch(() => []),
     pg("analyst_grades?ticker=eq." + e + "&select=ticker,date,firm,action,from_grade,to_grade,price_target&order=date.desc&limit=12").catch(() => []),
+    pg("etf_info?ticker=eq." + e + "&select=ticker,name,description,website,etf_company,expense_ratio,aum,avg_volume,inception_date,nav,holdings_count,sectors").catch(() => []),   // NEW — ETF/fund overview stats (honest empty if not an ETF)
+    pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
   ]);
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
@@ -2689,6 +2696,8 @@ async function fetchCompanyData(t) {
     _transcript: (tran && tran[0]) || null,                                     // NEW — last earnings_call_transcripts row (or null → honest empty)
     _releases: rels || [],                                                      // NEW — company_releases rows (empty → honest empty)
     _grades: grds || [],                                                        // NEW — analyst_grades rows (empty → honest empty)
+    _etf: (etfi && etfi[0]) || null,                                            // NEW — etf_info row (null → not an ETF / not backfilled yet)
+    _etfh: etfh || [],                                                          // NEW — etf_holdings rows (empty → honest empty)
   };
 }
 
@@ -3690,7 +3699,7 @@ function startAutoBar() {
 let COHSETS = null;          // cohort → Set(tickers) — the ONE full map
 let cohSetsReady = null;
 function loadCohSets() {
-  if (!cohSetsReady) cohSetsReady = pg("cohorts?select=ticker,cohort").then((ms) => {
+  if (!cohSetsReady) cohSetsReady = pg("ticker_cohorts?select=ticker,cohort").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
     COHSETS = buildCohSets(ms);
     return COHSETS;
   }).catch((e) => { cohSetsReady = null; throw e; });   // retry on next call if the pull failed
@@ -4482,6 +4491,7 @@ function parkedRoomHTML(sec) {
 
 /* ---- Room 8 · EVENTS (wired: earnings_events — cohort-scoped, upcoming first) --- */
 let EV_CACHE = null;   // { up:[], past:[] } universe rows — scope applied at RENDER time (cohort is an argument)
+let TRANSCRIPT_IDX = new Map();   // ticker -> [call_date,...] — real-content index (earnings_call_transcripts.transcript_url is never written; content lives here, matched by nearest date). Fixes the dead "Transcript" link in earnings blocks.
 let EV_PROFILE = null;  // FIX 3 (R46) — lazily-pulled company_profile for the currently single-ticker-scoped master EVENTS feed (website + IR links)
 let EV_EXTRA = null;    // AREA B — lazily-pulled { t, releases:[], transcript } for the single-ticker-scoped master feed (empty → honest empty)
 /* pull the profile + releases + transcript for a single-ticker-scoped master events
@@ -4542,7 +4552,7 @@ function renderEvents(cohort) {
      layout as the company EVENTS tab, wide variant (master has more room). When the
      feed is scoped to a single ticker via search, show that company's website + IR
      links up top (profile pulled lazily; header omitted gracefully if absent). */
-  const scopedTk = (S.tq && rows.length && rows.every((r) => r.ticker === rows[0].ticker)) ? rows[0].ticker : null;
+  const scopedTk = (rows.length && rows.every((r) => r.ticker === rows[0].ticker)) ? rows[0].ticker : null;   // FIX (R2026-07-22) — was gated to S.tq (search-only); now ANY natural single-ticker narrowing (search, cohort-of-one, favorites-of-one) surfaces the SAME website/IR header + releases section the ticker-specific EVENTS tab uses (coEvHeaderHTML / releasesSectionHTML — one source, both views)
   const headHTML = scopedTk && EV_PROFILE && EV_PROFILE.ticker === scopedTk
     ? coEvHeaderHTML({ t: scopedTk, name: EV_PROFILE.name, _profile: EV_PROFILE }, true) : "";
   /* AREA B — a single-ticker scope also shows the transcript button + bubble up top */
@@ -4600,11 +4610,19 @@ async function fillEvents() {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const today = todayISO();
     const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
-    const [up, past] = await Promise.all([
+    const [up, past, tridx] = await Promise.all([
       pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
+      pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => []),   // REAL FIX — transcript_url column is dead (never written); this table is the real content index
     ]);
     if (!el("evList")) return;
+    TRANSCRIPT_IDX = new Map();
+    (tridx || []).forEach((r) => {
+      if (!r.ticker || !r.call_date) return;
+      const k = String(r.ticker).toUpperCase();
+      if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
+      TRANSCRIPT_IDX.get(k).push(r.call_date);
+    });
     const inU = (ev) => UNIVERSE.has(ev.ticker);
     /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
        move it into the reported/past list so it stops showing as the next upcoming. */
@@ -6229,7 +6247,7 @@ function earningsBlockHTML(d) {
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">◹ Release · 8-K Ex 99.1</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
-        (d.transcriptUrl ? '<a class="sc-ern__lnk" href="' + esc(d.transcriptUrl) + '" target="_blank" rel="noopener">◹ Transcript</a>' : '') +
+        (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">◹ Transcript</button>' : '') +
         (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
         (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>' : '') +
       "</div>"
@@ -6254,7 +6272,20 @@ function earningsRowToBlock(row) {
     eps:     { est: num(row.eps_estimate),     actual: num(row.eps_actual) },
     revenue: { est: num(row.revenue_estimate), actual: num(row.revenue_actual) },
     releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, metrics: row.release_metrics || null, sample: false,
+    hasTranscript: transcriptExists(row.ticker, row.date),   // REAL FIX — row.transcript_url is a dead column; check the real content index instead
   };
+}
+/* REAL FIX — earnings_events.transcript_url is never written by the backend (earnings-transcript
+   stores content in earnings_call_transcripts with url:null, nothing syncs it back). The ticker-page
+   transcript bubble already reads earnings_call_transcripts directly and works; this makes the
+   EARNINGS-BLOCK "Transcript" link (master + ticker EVENTS) do the same instead of trusting the dead
+   column. Matches by nearest call_date within 3 days (a call can land a day either side of the print). */
+function transcriptExists(ticker, date) {
+  if (!ticker || !date) return false;
+  const arr = TRANSCRIPT_IDX.get(String(ticker).toUpperCase());
+  if (!arr || !arr.length) return false;
+  const d0 = new Date(date + "T00:00:00").getTime();
+  return arr.some((cd) => Math.abs(new Date(cd + "T00:00:00").getTime() - d0) <= 3 * 86400000);
 }
 const SAMPLE_EARNINGS = [
   { sample:true, ticker:"NVDA", date:"2026-08-27", session:"AMC", confirmed:true,
@@ -6443,6 +6474,58 @@ function nonOpTabHTML(data) {
     "</div>";
 }
 
+/* ---- ETF/FUND HOLDINGS PANEL --------------------------------------------------
+   Replaces the honest-empty nonOpTabHTML stub on the FINANCIALS tab for anything
+   with company_profile.is_etf = true. Reads etf_info (overview stats + sector
+   weights + description) and etf_holdings (full weighted holdings list). Both
+   are catch-wrapped upstream — an ETF with no backfilled row yet shows an honest
+   "pending backfill" line instead of a crash. Raw/functional per Alan 2026-07-22
+   ("throw that shit on ticker specific like raw we figure out front later"). */
+function etfPanelHTML(data) {
+  const e = data._etf, h = data._etfh || [];
+  if (!e && !h.length)
+    return '<div class="sc-senttxt">No ETF/fund data for $' + esc(data.t) + " yet — holdings/AUM pending backfill.</div>";
+  const tile = (lbl, v) => '<div style="flex:1;min-width:108px;padding:8px 10px;border:1px solid rgba(0,212,255,.15);border-radius:6px">' +
+    '<div style="font-size:10px;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px">' + lbl + "</div>" +
+    '<div style="font-size:15px;color:var(--ink);margin-top:2px">' + v + "</div></div>";
+  const stats = e ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
+      tile("AUM", e.aum != null ? fmtRev(e.aum) : "—") +
+      tile("NAV", e.nav != null ? "$" + Number(e.nav).toFixed(2) : "—") +
+      tile("Expense Ratio", e.expense_ratio != null ? Number(e.expense_ratio).toFixed(2) + "%" : "—") +
+      tile("Holdings", e.holdings_count != null ? String(e.holdings_count) : String(h.length || "—")) +
+      tile("Inception", e.inception_date ? esc(e.inception_date) : "—") +
+      tile("Issuer", e.etf_company ? esc(e.etf_company) : "—") +
+    "</div>" : "";
+  const sectors = (e && Array.isArray(e.sectors) && e.sectors.length) ?
+    '<div class="estsec">sector allocation</div>' +
+    e.sectors.slice().sort((a, b) => (Number(b.exposure) || 0) - (Number(a.exposure) || 0)).map((s) => {
+      const pct = Number(s.exposure) || 0;
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:2px 0">' +
+        '<span style="width:150px;color:var(--ink2)">' + esc(s.industry) + "</span>" +
+        '<div style="flex:1;height:6px;background:rgba(0,212,255,.08);border-radius:3px;overflow:hidden">' +
+          '<div style="height:100%;width:' + Math.max(0, Math.min(100, pct)).toFixed(1) + '%;background:var(--cyan,#22D3EE)"></div></div>' +
+        '<span style="width:44px;text-align:right;color:var(--ink)">' + pct.toFixed(1) + "%</span></div>";
+    }).join("") : "";
+  const holdRows = h.map((r) => {
+    const w = Number(r.weight_pct) || 0;
+    return "<tr><td>" + (r.asset ? esc(r.asset) : '<span style="color:var(--ink2)">— private/other —</span>') + "</td>" +
+      "<td>" + esc(r.name || "") + "</td>" +
+      '<td style="text-align:right">' + (r.weight_pct != null ? w.toFixed(2) + "%" : "—") + "</td>" +
+      '<td><div style="height:6px;width:80px;background:rgba(0,212,255,.08);border-radius:3px;overflow:hidden">' +
+        '<div style="height:100%;width:' + Math.max(0, Math.min(100, w)).toFixed(1) + '%;background:var(--cyan,#22D3EE)"></div></div></td>' +
+      "</tr>";
+  }).join("");
+  const holdTable = h.length ?
+    '<div class="estsec">holdings (' + h.length + ")</div>" +
+    '<div style="max-height:340px;overflow:auto">' +
+      '<table class="mytab"><tr><th>ticker</th><th>name</th><th style="text-align:right">weight</th><th>bar</th></tr>' + holdRows + "</table>" +
+    "</div>" :
+    '<div class="seccap">No etf_holdings rows for $' + esc(data.t) + " yet.</div>";
+  const desc = (e && e.description) ? '<div class="readtxt" style="padding:8px 0 0">' + esc(e.description) + "</div>" : "";
+  const website = (e && e.website) ? '<div class="finnote"><a href="' + esc(e.website) + '" target="_blank" rel="noopener">' + esc(e.website) + "</a></div>" : "";
+  return stats + sectors + holdTable + desc + website;
+}
+
 /* per-tab content — wired where the table exists; honest gates where it doesn't */
 function coTabHTML(data) {
   const nonOp = isNonOp(data);                           // GO-LIVE FIX 3
@@ -6451,7 +6534,7 @@ function coTabHTML(data) {
     case "CHART":      return companyChartPanelHTML(data.t);   // native scChart panel — slot id #coSlot, wired when CHART is active
     case "STATS":      return statsTabHTML(data);
     case "ESTIMATES":  return nonOp ? nonOpTabHTML(data) : estimatesTabHTML(data);
-    case "FINANCIALS": return nonOp ? nonOpTabHTML(data) : financialsTabHTML(data);   // FIX 4 — wired from fundamentals_history
+    case "FINANCIALS": return (data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")) ? etfPanelHTML(data) : (nonOp ? nonOpTabHTML(data) : financialsTabHTML(data));   // FIX 4 — wired from fundamentals_history; ETF/fund → real holdings+AUM panel, not the honest-empty stub
     case "NEWS":       return (data.news && data.news.length)
                          ? dedupeNews(data.news).map((n) => newsArtHTML(n)).join("")   // R21 FIX 5 — company tab deduped too
                          : '<div class="sc-senttxt">No recent headlines for $' + esc(data.t) + ".</div>";
@@ -6605,9 +6688,10 @@ function companyHTML() {
      (coTabHTML). The CHART tab re-mounts the native scChart panel (slot #coSlot).
      The cohort board markup is reused verbatim from dashboardHTML so the board
      stays live — tapping another row re-opens a different company. */
+  const isEtfTicker = !!(data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true"));
   const tabbar = CO_TABS.map((x) =>
     '<button role="tab" aria-selected="' + (x === S.coTab) + '" class="sc-it ' + (x === S.coTab ? "on" : "") +
-    '" data-act="cotab" data-tab="' + x + '">' + x + "</button>").join("");
+    '" data-act="cotab" data-tab="' + x + '">' + (x === "FINANCIALS" && isEtfTicker ? "HOLDINGS" : x) + "</button>").join("");
   return '<div class="cwrap">' + identBarHTML(data) +
     '<div class="cscroll">' +
       '<section class="sc-body2 coview" aria-label="Company · ' + esc(data.t) + '">' +
