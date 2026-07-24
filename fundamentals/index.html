@@ -1425,11 +1425,16 @@ async function renderEarnings(sym){
   } else {
     h += '<table style="margin-top:8px;"><tr><th>Date</th><th>EPS act/est</th><th>Rev act/est</th><th>Surprise</th><th>Result</th></tr>' +
       ev.map(r=>{
-        const beatCls = r.beat==='Beat'?'pos':r.beat==='Miss'?'neg':'';
+        // real column values are 'beat'/'true'/'false'/null, not 'Beat'/'Miss' — map them, don't print raw
+        const beatRaw = (r.beat||'').toLowerCase();
+        const isBeat = beatRaw==='true' || beatRaw==='beat';
+        const isMiss = beatRaw==='false' || beatRaw==='miss';
+        const beatCls = isBeat?'pos':isMiss?'neg':'';
+        const beatLbl = isBeat?'Beat':isMiss?'Miss':'—';
         return '<tr><td>'+r.date+'</td><td>'+(r.eps_actual!=null?r.eps_actual.toFixed(2):'—')+' / '+(r.eps_estimate!=null?r.eps_estimate.toFixed(2):'—')+'</td>'+
           '<td>'+fmtM(r.revenue_actual)+' / '+fmtM(r.revenue_estimate)+'</td>'+
           '<td class="'+(r.surprise_pct>=0?'pos':'neg')+'">'+(r.surprise_pct!=null?(r.surprise_pct>=0?'+':'')+r.surprise_pct.toFixed(1)+'%':'—')+'</td>'+
-          '<td class="'+beatCls+'">'+(r.beat||'—')+'</td></tr>';
+          '<td class="'+beatCls+'">'+beatLbl+'</td></tr>';
       }).join('') + '</table>';
     if(ev[0].release_summary) h += '<div class="foot" style="margin-top:8px;">📝 Latest release: '+ev[0].release_summary.slice(0,280)+(ev[0].release_summary.length>280?'…':'')+'</div>';
     h += '<div class="foot" style="margin-top:6px;">'+freshTag(ev[0].updated_ts)+'</div>';
@@ -1460,7 +1465,10 @@ async function renderEarnings(sym){
 async function renderNews(sym){
   document.getElementById('newsTitle').textContent = '8 · News & Sentiment — '+sym+' (news + news_sentiment)';
   const [articles, sent] = await Promise.all([
-    sb('news?select=title,site,url,published_ts,snippet&ticker=eq.'+sym+'&order=published_ts.desc&limit=8'),
+    // .desc.nullslast — Postgres/PostgREST default for DESC is NULLS FIRST, which would surface the
+    // ~0.7% of rows with a null published_ts ahead of genuinely recent ones. Caught by checking NVDA's
+    // "most recent" headlines and finding they were all null-dated.
+    sb('news?select=title,site,url,published_ts,snippet&ticker=eq.'+sym+'&order=published_ts.desc.nullslast&limit=8'),
     sb('news_sentiment?select=*&ticker=eq.'+sym)
   ]);
   if(articles._sbError || sent._sbError){
