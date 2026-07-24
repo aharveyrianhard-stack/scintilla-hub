@@ -845,6 +845,8 @@ async function setTicker(sym){
   await renderAnalyst(sym);
   await renderInsider(sym);
   await renderCongress(sym);
+  await renderEarnings(sym);
+  await renderNews(sym);
   RV=null; autoAxis=true; autoRVaxis=true;
   render();
 }
@@ -1394,6 +1396,105 @@ renderCOT();
 </script>
 </section>
 
+<!-- ============ 7. EARNINGS ============ -->
+<section>
+<h2 id="earningsTitle">7 · Earnings — NVDA (earnings_events + earnings_call_transcripts)</h2>
+<div class="src">tables: earnings_events (177/211 tickers) + earnings_call_transcripts (151/211 tickers) — real per-ticker pull, switches with the ticker bar above</div>
+<div id="earningsBody"></div>
+<script>
+// ============ EARNINGS — Move 2: live per-ticker read of earnings_events + earnings_call_transcripts ============
+async function renderEarnings(sym){
+  document.getElementById('earningsTitle').textContent = '7 · Earnings — '+sym+' (earnings_events + earnings_call_transcripts)';
+  const [ev, tr] = await Promise.all([
+    sb('earnings_events?select=*&ticker=eq.'+sym+'&order=date.desc&limit=4'),
+    sb('earnings_call_transcripts?select=*&ticker=eq.'+sym+'&order=call_date.desc&limit=1')
+  ]);
+  if(ev._sbError || tr._sbError){
+    document.getElementById('earningsBody').innerHTML = gapBanner('earnings query failed for '+sym, 'HTTP '+((ev._sbError?ev._sbStatus:tr._sbStatus))+' — a query/schema error, not a confirmed empty result.');
+    return;
+  }
+  if(!ev.length && !tr.length){
+    document.getElementById('earningsBody').innerHTML = gapBanner('No earnings_events or earnings_call_transcripts rows for '+sym, 'A real per-ticker gap — '+sym+' is one of the 34 universe tickers earnings_events hasn\'t covered yet (177/211 have it), or is simply too new/thin to have a call transcript (151/211 have one). Not fabricated, not pulled from FMP directly.');
+    return;
+  }
+  const fmtM = v => v==null?'—':(Math.abs(v)>=1e9?'$'+(v/1e9).toFixed(2)+'B':'$'+(v/1e6).toFixed(1)+'M');
+  let h = '<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">';
+  h += '<div class="fcard"><div class="subttl">📅 Earnings history (last '+ev.length+')</div>';
+  if(!ev.length){
+    h += gapBanner('No earnings_events rows for '+sym, '177/211 universe tickers have this table populated — '+sym+' isn\'t one of them yet.');
+  } else {
+    h += '<table style="margin-top:8px;"><tr><th>Date</th><th>EPS act/est</th><th>Rev act/est</th><th>Surprise</th><th>Result</th></tr>' +
+      ev.map(r=>{
+        const beatCls = r.beat==='Beat'?'pos':r.beat==='Miss'?'neg':'';
+        return '<tr><td>'+r.date+'</td><td>'+(r.eps_actual!=null?r.eps_actual.toFixed(2):'—')+' / '+(r.eps_estimate!=null?r.eps_estimate.toFixed(2):'—')+'</td>'+
+          '<td>'+fmtM(r.revenue_actual)+' / '+fmtM(r.revenue_estimate)+'</td>'+
+          '<td class="'+(r.surprise_pct>=0?'pos':'neg')+'">'+(r.surprise_pct!=null?(r.surprise_pct>=0?'+':'')+r.surprise_pct.toFixed(1)+'%':'—')+'</td>'+
+          '<td class="'+beatCls+'">'+(r.beat||'—')+'</td></tr>';
+      }).join('') + '</table>';
+    if(ev[0].release_summary) h += '<div class="foot" style="margin-top:8px;">📝 Latest release: '+ev[0].release_summary.slice(0,280)+(ev[0].release_summary.length>280?'…':'')+'</div>';
+    h += '<div class="foot" style="margin-top:6px;">'+freshTag(ev[0].updated_ts)+'</div>';
+  }
+  h += '</div>';
+  h += '<div class="fcard"><div class="subttl">🎙️ Latest earnings call</div>';
+  if(!tr.length){
+    h += gapBanner('No earnings_call_transcripts row for '+sym, '151/211 universe tickers have a transcript — '+sym+' isn\'t one of them yet.');
+  } else {
+    const t = tr[0];
+    h += '<div style="margin-top:8px; font-size:14px; color:var(--txt);"><b>'+(t.quarter||'—')+'</b> · '+(t.call_date||'—')+'</div>';
+    h += '<div class="foot" style="margin-top:6px; line-height:1.6;">'+(t.ai_summary?t.ai_summary.slice(0,420)+(t.ai_summary.length>420?'…':''):'No AI summary on this row — raw transcript only.')+'</div>';
+    h += '<div class="foot" style="margin-top:6px;">'+freshTag(t.updated_ts)+'</div>';
+  }
+  h += '</div></div>';
+  document.getElementById('earningsBody').innerHTML = h;
+}
+</script>
+</section>
+
+<!-- ============ 8. NEWS & SENTIMENT ============ -->
+<section>
+<h2 id="newsTitle">8 · News &amp; Sentiment — NVDA (news + news_sentiment)</h2>
+<div class="src">tables: news (204/211 tickers, 187,803 rows) + news_sentiment (195/211 tickers) — real per-ticker pull, switches with the ticker bar above</div>
+<div id="newsBody"></div>
+<script>
+// ============ NEWS — Move 2: live per-ticker read of news + news_sentiment ============
+async function renderNews(sym){
+  document.getElementById('newsTitle').textContent = '8 · News & Sentiment — '+sym+' (news + news_sentiment)';
+  const [articles, sent] = await Promise.all([
+    sb('news?select=title,site,url,published_ts,snippet&ticker=eq.'+sym+'&order=published_ts.desc&limit=8'),
+    sb('news_sentiment?select=*&ticker=eq.'+sym)
+  ]);
+  if(articles._sbError || sent._sbError){
+    document.getElementById('newsBody').innerHTML = gapBanner('news query failed for '+sym, 'HTTP '+((articles._sbError?articles._sbStatus:sent._sbStatus))+' — a query/schema error, not a confirmed empty result.');
+    return;
+  }
+  const s = sent[0];
+  let h = '';
+  if(s){
+    const col = s.score>0.15?'var(--green)':s.score<-0.15?'var(--red)':'var(--gold)';
+    const lbl = s.score>0.15?'Positive':s.score<-0.15?'Negative':'Neutral';
+    h += '<div class="fcard" style="border-color:'+col+';"><div class="subttl">📊 Sentiment score (news_sentiment)</div>'+
+      '<div style="display:flex; gap:24px; align-items:baseline; margin-top:8px;">'+
+      '<div><span class="foot">Score</span><br><b style="font-size:24px;color:'+col+';">'+s.score.toFixed(2)+' — '+lbl+'</b></div>'+
+      '<div><span class="foot">Articles scored</span><br><b style="font-size:24px;color:var(--txt);">'+(s.n_articles!=null?s.n_articles:'—')+'</b></div>'+
+      '</div><div class="foot" style="margin-top:6px;">'+freshTag(s.updated_ts)+'</div></div>';
+  } else {
+    h += gapBanner('No news_sentiment row for '+sym, '195/211 universe tickers have a sentiment score — '+sym+' isn\'t one of them yet.');
+  }
+  if(!articles.length){
+    h += gapBanner('No news rows for '+sym, '204/211 universe tickers have news coverage — '+sym+' isn\'t one of them yet (or genuinely has none recent).');
+  } else {
+    h += '<table style="margin-top:12px;"><tr><th>Date</th><th>Headline</th><th>Source</th></tr>' +
+      articles.map(a=>{
+        const d = a.published_ts ? new Date(tsToSec(a.published_ts)*1000) : null;
+        const dLbl = d ? (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0') : '—';
+        return '<tr><td>'+dLbl+'</td><td>'+(a.url?'<a href="'+a.url+'" target="_blank" style="color:var(--txt);">'+a.title+'</a>':a.title)+'</td><td class="foot">'+(a.site||'—')+'</td></tr>';
+      }).join('') + '</table>';
+  }
+  document.getElementById('newsBody').innerHTML = h;
+}
+</script>
+</section>
+
 <div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP connector, live pulls · File: FMP_CAPABILITY_DEMO.html · Author: Claude for Alan</div>
 
 <script>
@@ -1439,6 +1540,8 @@ renderCOT();
 <tr><td class="pur">§3 DCF risk-free rate</td><td><span class="mono2">loadRiskFree()</span> reads <span class="mono2">treasury_rates.y10</span> — one macro rate shared across all tickers, replacing the old per-ticker hardcoded <span class="mono2">rf</span>.</td></tr>
 <tr><td class="pur">§4 Insider</td><td>Live query against <span class="mono2">insider_trades</span> per ticker — 33,256 real rows across the universe (corrected; this table was NOT actually empty). The buy/sell classifier, 30-day cluster-buy detector, and net-flow signal run on live rows for most tickers; a genuine per-ticker zero still shows an honest gap banner.</td></tr>
 <tr><td class="pur">§6 COT</td><td>Live query against <span class="mono2">cot_history</span>, symbol=ES — 5,397 real rows across ~9 futures symbols (corrected; also not actually empty — the first version queried a column name that doesn't exist in this table and silently rendered a false "empty" gap until caught).</td></tr>
+<tr><td class="pur">§7 Earnings</td><td>Live query against <span class="mono2">earnings_events</span> (177/211 tickers) for the last 4 reports (EPS/revenue actual vs estimate, surprise%, beat/miss, release summary) and <span class="mono2">earnings_call_transcripts</span> (151/211 tickers) for the latest call's AI summary. Genuine per-ticker gaps for the ~34 and ~60 tickers respectively without coverage, flagged not faked.</td></tr>
+<tr><td class="pur">§8 News &amp; Sentiment</td><td>Live query against <span class="mono2">news</span> (204/211 tickers, 187,803 rows — last 8 headlines with links) and <span class="mono2">news_sentiment</span> (195/211 tickers — a single score + article count per ticker). Same per-ticker-gap treatment for the tickers not yet covered.</td></tr>
 <tr><td class="pur">Freshness everywhere</td><td><span class="mono2">updated_ts</span> is read per row and shown as "last true Xm/h/d ago" (red "missing" if null) via <span class="mono2">freshTag()</span> — confidence is disclosed, not assumed.</td></tr>
 </table>
 
@@ -1447,14 +1550,13 @@ renderCOT();
 <tr><th style="width:18%;">Where</th><th>What's missing and why</th></tr>
 <tr><td class="pur">Beta, per-ticker</td><td>195 of 211 universe tickers have a real <span class="mono2">company_profile.beta</span> row; ~16 don't yet. Those default the DCF slider to 1.0 with a visible gap note and show "—" in §1 comps — not page-wide, not estimated, not silently defaulted.</td></tr>
 <tr><td class="pur">§5 Congress</td><td>No senate-trading/house-trading equivalent table exists in Supabase at all (not even empty) — unconditional gap banner, not a per-ticker query. This is the one genuinely unbuilt category from the original Move 1 spec.</td></tr>
+<tr><td class="pur">The "tail" — ~50 tickers</td><td>Roughly 50 of 211 universe tickers lack full history coverage (<span class="mono2">fundamentals_history</span>/<span class="mono2">ratios_history</span>/<span class="mono2">analyst_estimates</span> sit at ~161/211). Comps/CAGR/consensus-path sections for these show "—" or fall back to a flagged default rather than guessing.</td></tr>
 <tr><td class="pur">Publisher/outlet attribution (§2.7)</td><td>No DB field carries which analyst desk (TheFly, Benzinga, etc.) issued a rating — flagged inline where it would have appeared.</td></tr>
 </table>
 
-<p style="font-size:15px;"><b>Not yet built this pass:</b> a dedicated News section (<span class="mono2">news</span> + <span class="mono2">news_sentiment</span>, 187,803 + 196 rows respectively) and an Earnings/transcripts section (<span class="mono2">earnings_events</span> + <span class="mono2">earnings_call_transcripts</span>, 9,567 + 1,189 rows) — both tables have real data and are readable, just not surfaced on this page yet.</p>
-
 <p style="font-size:15px;"><b>The math, for reference — unchanged by Move 1.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Only the data feeding these formulas moved from a hardcoded 10-name object to live per-ticker Supabase reads — the formulas themselves were not changed.</p>
-<p style="margin-top:8px;"><b>Sources.</b> Financials <span class="mono2">fundamentals + fundamentals_history + ratios_history + balance_history + cashflow_history</span> · estimates/ratings/targets <span class="mono2">analyst_estimates + analyst_ratings + price_target_consensus</span> · quote/DCF price <span class="mono2">live_quotes</span> · beta <span class="mono2">company_profile</span> · peer grouping <span class="mono2">ticker_cohorts</span> · universe <span class="mono2">composite_staged</span> · risk-free <span class="mono2">treasury_rates</span> · insider <span class="mono2">insider_trades</span> · COT <span class="mono2">cot_history</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
-<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) build News and Earnings/transcripts sections from the tables that already exist and are unused, (2) once master ingests a congress-equivalent table, the page can pick it up with the same query pattern used everywhere else, (3) feed §3.5 estimate-confidence into the reverse-DCF verdict strength, (4) backfill the remaining ~16 tickers' missing beta.</p>
+<p style="margin-top:8px;"><b>Sources.</b> Financials <span class="mono2">fundamentals + fundamentals_history + ratios_history + balance_history + cashflow_history</span> · estimates/ratings/targets <span class="mono2">analyst_estimates + analyst_ratings + price_target_consensus</span> · quote/DCF price <span class="mono2">live_quotes</span> · beta <span class="mono2">company_profile</span> · peer grouping <span class="mono2">ticker_cohorts</span> · universe <span class="mono2">composite_staged</span> · risk-free <span class="mono2">treasury_rates</span> · insider <span class="mono2">insider_trades</span> · COT <span class="mono2">cot_history</span> · earnings <span class="mono2">earnings_events + earnings_call_transcripts</span> · news <span class="mono2">news + news_sentiment</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
+<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) once master ingests a congress-equivalent table, the page can pick it up with the same query pattern used everywhere else — the last genuinely unbuilt category, (2) feed §3.5 estimate-confidence into the reverse-DCF verdict strength, (3) backfill beta for the remaining ~16 tickers and full history for the ~50-ticker tail.</p>
 </div>
 </details>
 
@@ -1522,6 +1624,10 @@ async function runAudit(){
     if(!insT || !insT.textContent.includes(sym)) issues.push('['+sym+'] §4 insider title does not mention '+sym+' — got "'+(insT?insT.textContent:'MISSING ELEMENT')+'".');
     const conT = document.getElementById('congressTitle');
     if(!conT || !conT.textContent.includes(sym)) issues.push('['+sym+'] §5 congress title does not mention '+sym+' — got "'+(conT?conT.textContent:'MISSING ELEMENT')+'".');
+    const earnT = document.getElementById('earningsTitle');
+    if(!earnT || !earnT.textContent.includes(sym)) issues.push('['+sym+'] §7 earnings title does not mention '+sym+' — got "'+(earnT?earnT.textContent:'MISSING ELEMENT')+'".');
+    const newsT = document.getElementById('newsTitle');
+    if(!newsT || !newsT.textContent.includes(sym)) issues.push('['+sym+'] §8 news title does not mention '+sym+' — got "'+(newsT?newsT.textContent:'MISSING ELEMENT')+'".');
 
     // D — §5 Congress is a genuine page-wide DB gap (no senate/house table exists at all) — it
     // must ALWAYS render the gap banner. If it ever doesn't, some stale/fabricated HTML leaked in.
