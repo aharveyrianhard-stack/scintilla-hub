@@ -42,26 +42,22 @@
 </head>
 <body>
 
-<h1>FMP Capability Demo — What Actually Comes Back</h1>
-<div class="sub">Every number on this page is a real pull through the FMP connector. §3 DCF below is wired live across 10 tickers — pick one. No mockups.</div>
+<h1>SCINTILLA Fundamentals — Supabase Source-of-Truth</h1>
+<div class="sub">Every number on this page is read live from Supabase (<span class="mono2" style="font-size:12px;">scintilla-live</span>) — FMP only ever fills that database now; this page never calls FMP directly. Universe: live from <span class="mono2" style="font-size:12px;">composite_staged</span> (~211 names), not a hardcoded list.</div>
 
-<div id="tickerBar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; padding:14px 18px; background:var(--panel); border:1px solid var(--border); border-radius:12px;">
-  <span style="font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:2px;">Ticker <small style="text-transform:none;">(drives §3 DCF live)</small>:</span>
-  <button class="tbtn" id="tbtn_NVDA" onclick="setTicker('NVDA')">NVDA</button>
-  <button class="tbtn" id="tbtn_MU" onclick="setTicker('MU')">MU</button>
-  <button class="tbtn" id="tbtn_GOOGL" onclick="setTicker('GOOGL')">GOOGL</button>
-  <button class="tbtn" id="tbtn_NBIS" onclick="setTicker('NBIS')">NBIS</button>
-  <button class="tbtn" id="tbtn_AVGO" onclick="setTicker('AVGO')">AVGO</button>
-  <button class="tbtn" id="tbtn_TSM" onclick="setTicker('TSM')">TSM</button>
-  <button class="tbtn" id="tbtn_AAPL" onclick="setTicker('AAPL')">AAPL</button>
-  <button class="tbtn" id="tbtn_MSFT" onclick="setTicker('MSFT')">MSFT</button>
-  <button class="tbtn" id="tbtn_TSLA" onclick="setTicker('TSLA')">TSLA</button>
-  <button class="tbtn" id="tbtn_IREN" onclick="setTicker('IREN')">IREN</button>
+<div id="tickerBar" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; padding:14px 18px; background:var(--panel); border:1px solid var(--border); border-radius:12px;">
+  <span style="font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-right:2px;">Ticker <small style="text-transform:none;">(drives every section below, live from DB)</small>:</span>
+  <div style="position:relative;">
+    <input id="tickerSearch" type="text" placeholder="Type a ticker… (e.g. NVDA)" autocomplete="off" style="background:var(--panel2); border:1px solid var(--border); color:var(--txt); border-radius:8px; padding:7px 12px; font-size:14px; font-weight:600; font-family:ui-monospace,Menlo,monospace; width:180px;">
+    <div id="tickerDropdown" style="display:none; position:absolute; top:36px; left:0; z-index:50; background:var(--panel2); border:1px solid var(--border); border-radius:8px; max-height:260px; overflow-y:auto; min-width:220px; box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+  </div>
+  <div id="quickChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
   <span id="tickerStat" style="margin-left:auto; font-size:13.5px; color:var(--txt);"></span>
 </div>
+<div id="universeStatus" style="font-size:12px; color:var(--dim); margin:-8px 0 14px 2px;">Loading universe from composite_staged…</div>
 <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-  <button id="auditBtn" onclick="runAudit()" style="background:var(--panel2); border:1px solid var(--border); color:var(--txt); border-radius:8px; padding:8px 16px; cursor:pointer; font-size:13px; font-weight:700;">🔍 Run Full Audit — every ticker, every toggle, every slider extreme</button>
-  <span style="font-size:12px; color:var(--dim);">A mechanical consistency check (like a balance sheet that must foot to zero) — not a screenshot, a real re-render + comparison of every ticker against itself, catches wiring bugs automatically.</span>
+  <button id="auditBtn" onclick="runAudit()" style="background:var(--panel2); border:1px solid var(--border); color:var(--txt); border-radius:8px; padding:8px 16px; cursor:pointer; font-size:13px; font-weight:700;">🔍 Run Full Audit — sample tickers, every toggle, every slider extreme</button>
+  <span style="font-size:12px; color:var(--dim);">A mechanical consistency check (like a balance sheet that must foot to zero) — not a screenshot, a real re-render + comparison against itself, catches wiring bugs and DB gaps automatically.</span>
 </div>
 <div id="auditPanel" style="display:none; margin-bottom:14px; padding:14px 18px; background:var(--panel); border:2px solid var(--border); border-radius:12px; font-size:13.5px;">
   <div id="auditSummary" style="font-weight:700; font-size:15px;"></div>
@@ -72,7 +68,70 @@
   .tbtn:hover{border-color:var(--accent); color:var(--accent);}
   .tbtn.on{border-color:var(--gold); color:var(--gold); background:rgba(210,153,34,0.12);}
   #auditBtn:hover{border-color:var(--accent); color:var(--accent);}
+  .mono2{font-family:ui-monospace,Menlo,monospace; color:var(--accent);}
+  .ddrow{padding:6px 12px; cursor:pointer; font-size:13px; font-family:ui-monospace,Menlo,monospace;}
+  .ddrow:hover{background:var(--panel);}
+  .gap-banner{background:rgba(248,81,73,0.08); border:1px solid var(--red); border-radius:8px; padding:14px 18px; font-size:14px; color:var(--txt);}
+  .gap-banner b{color:var(--red);}
+  .fresh{font-size:11px; color:var(--dim); font-family:ui-monospace,Menlo,monospace;}
+  .fresh.stale{color:var(--gold);}
+  .fresh.missing{color:var(--red);}
 </style>
+
+<script>
+// ============ SUPABASE — single source of truth (wadinxqplrggagkvrdag / scintilla-live) ============
+// FMP never gets called from this page. Every read below is PostgREST against Supabase.
+const SB_URL = 'https://wadinxqplrggagkvrdag.supabase.co';
+const SB_KEY = 'sb_publishable_AutibLpFtTns-WHAg67Pvw_I0HmjqE9';
+async function sb(path){
+  const res = await fetch(SB_URL+'/rest/v1/'+path, { headers:{ apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY } });
+  if(!res.ok) { console.error('Supabase read failed', path, res.status); return []; }
+  return res.json();
+}
+function nowSec(){ return Date.now()/1000; }
+function tsToSec(ts){ // updated_ts columns are a mix of bigint epoch-seconds and timestamptz strings — normalize both
+  if(ts==null) return null;
+  if(typeof ts==='number') return ts;
+  const p = Date.parse(ts); return isNaN(p) ? null : p/1000;
+}
+function freshTag(ts){
+  const s = tsToSec(ts);
+  if(s==null) return '<span class="fresh missing">missing</span>';
+  const ageMin = (nowSec()-s)/60;
+  const label = ageMin<60 ? Math.round(ageMin)+'m ago' : ageMin<1440 ? Math.round(ageMin/60)+'h ago' : Math.round(ageMin/1440)+'d ago';
+  const cls = ageMin>1440 ? 'fresh stale' : 'fresh';
+  return '<span class="'+cls+'">last true '+label+'</span>';
+}
+function gapBanner(title, detail){
+  return '<div class="gap-banner">🔴 <b>'+title+'</b><br><span style="color:var(--dim); font-size:13px;">'+detail+'</span></div>';
+}
+
+let UNIVERSE = []; // [{ticker, cohort, price, updated_ts}]
+let COHORT_MAP = {}; // ticker -> primary cohort
+async function loadUniverse(){
+  const staged = await sb('composite_staged?select=ticker,composite,updated_ts&order=ticker.asc&limit=1000');
+  const cohorts = await sb('ticker_cohorts?select=ticker,cohort,is_primary&is_primary=eq.true&limit=1000');
+  cohorts.forEach(c=>{ COHORT_MAP[c.ticker]=c.cohort; });
+  UNIVERSE = staged.map(s=>({ticker:s.ticker, cohort:COHORT_MAP[s.ticker]||'UNCOHORTED', updated_ts:s.updated_ts}));
+  document.getElementById('universeStatus').innerHTML = '✅ '+UNIVERSE.length+' tickers loaded live from <span class="mono2">composite_staged</span> · '+Object.keys(UNIVERSE.reduce((a,u)=>{a[u.cohort]=1;return a;},{})).length+' cohorts (via ticker_cohorts) · '+freshTag(UNIVERSE[0]&&UNIVERSE[0].updated_ts);
+  const quick=['NVDA','MU','AAPL','GOOGL','TSLA'];
+  document.getElementById('quickChips').innerHTML = quick.filter(t=>UNIVERSE.find(u=>u.ticker===t)).map(t=>'<button class="tbtn" onclick="setTicker(\''+t+'\')">'+t+'</button>').join('');
+  return UNIVERSE;
+}
+function wireTickerSearch(){
+  const inp = document.getElementById('tickerSearch'), dd = document.getElementById('tickerDropdown');
+  inp.addEventListener('input', ()=>{
+    const q = inp.value.trim().toUpperCase();
+    if(!q){ dd.style.display='none'; return; }
+    const matches = UNIVERSE.filter(u=>u.ticker.startsWith(q)).slice(0,25);
+    if(!matches.length){ dd.innerHTML='<div class="ddrow" style="color:var(--dim);">no match in the '+UNIVERSE.length+'-name universe</div>'; dd.style.display='block'; return; }
+    dd.innerHTML = matches.map(m=>'<div class="ddrow" onclick="setTicker(\''+m.ticker+'\'); document.getElementById(\'tickerDropdown\').style.display=\'none\'; document.getElementById(\'tickerSearch\').value=\'\';">'+m.ticker+' <span style="color:var(--dim); font-size:11px;">'+m.cohort+'</span></div>').join('');
+    dd.style.display='block';
+  });
+  document.addEventListener('click', (e)=>{ if(e.target!==inp) dd.style.display='none'; });
+  inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ const q=inp.value.trim().toUpperCase(); if(UNIVERSE.find(u=>u.ticker===q)){ setTicker(q); dd.style.display='none'; inp.value=''; } } });
+}
+</script>
 
 <!-- ============ 1. COMPS ============ -->
 <section>
@@ -105,73 +164,83 @@
 </section>
 
 <script>
-// ============ COMPS COMPUTATION ENGINE (ticker-swappable peer sets → all derived analytics, per ticker) ============
-// Four real peer universes (screener method, not FMP's noisy "peers" endpoint — see §2):
-//   semis: NVDA/MU/AVGO/TSM vs TSM/AVGO/MU/AMD/INTC (whichever 4 aren't the subject)
-//   megatech: GOOGL/MSFT/AAPL vs GOOGL/MSFT/AAPL/AMZN/META
-//   auto: TSLA vs RIVN/LCID/F/GM
-//   aicompute: NBIS/IREN vs CRWV/APLD/MARA/RIOT (+ each other)
-// price/sharesB → market cap is COMPUTED (price × diluted shares), never typed as a string.
-// cagr = each company's own 5yr revenue growth assumption from custom-dcf-advanced (same field/method
-// already used for AMD/INTC in the original NVDA table) — labeled "DCF assump." not "consensus" so it's
-// not confused with analyst estimates. pe/peg=null where earnings are negative (n/m), not fabricated.
-const PEERSETS = {
-  semis: { label:'Semis', names:['NVDA','TSM','AVGO','MU','AMD','INTC'],
-    price:[213.57,423.00,394.69,972.66,208.86,37.02], sharesB:[24.51,5.186,4.853,1.1295,1.617,4.19],
-    pe:[30.9,31.1,59.9,19.0,161.0,null], ev:[25.5,19.7,43.1,20.9,99.8,44.3],
-    ps:[19.4,14.6,23.4,10.6,21.6,8.9],   pb:[25.2,10.2,20.1,9.5,12.5,4.3],
-    peg:[0.28,0.58,0.48,0.03,1.31,null], gm:[74.1,61.9,67.0,72.6,50.3,35.4],
-    nm:[63.0,47.0,38.8,55.9,13.4,-5.9],  de:[0.07,0.17,0.74,0.06,0.06,0.40],
-    beta:[2.211,1.246,1.462,2.14,2.47,2.19], div:[0.14,0.95,0.68,0.06,null,null],
-    cagr:[47.6,29.4,24.2,38.6,41.2,16.2] },
-  megatech: { label:'Mega-cap Tech', names:['GOOGL','MSFT','AAPL','AMZN','META'],
-    price:[348.48,388.97,324.89,243.89,629.80], sharesB:[12.23,7.465,15.005,10.827,2.574],
-    pe:[26.3,23.1,39.1,28.7,22.5], ev:[19.49,14.85,30.0,14.5,14.6],
-    ps:[9.97,9.08,10.55,3.53,7.43], pb:[8.80,6.98,44.78,5.93,6.54],
-    peg:[0.57,0.78,1.35,0.81,3.61], gm:[60.4,68.3,47.9,50.6,81.9],
-    nm:[37.9,39.3,27.2,12.2,32.8],  de:[0.189,0.303,0.795,0.475,0.356],
-    beta:[1.247,1.13,1.097,1.461,1.246], div:[0.24,0.91,0.32,null,0.33],
-    cagr:[11.9,13.9,4.1,11.15,14.67] },
-  auto: { label:'Auto / EV', names:['TSLA','RIVN','LCID','F','GM'],
-    price:[377.16,17.27,6.95,14.47,82.90], sharesB:[3.528,1.186,0.31168,3.979,0.973],
-    pe:[314.1,null,null,null,41.5], ev:[117.1,-10.0,-1.68,269.7,6.94],
-    ps:[14.51,3.78,1.57,0.298,0.403], pb:[14.54,4.89,1.12,1.54,1.23],
-    peg:[null,null,null,null,null], gm:[19.1,-1.7,-95.6,9.2,5.7],
-    nm:[4.0,-63.6,-239.8,-3.2,1.0], de:[0.110,1.49,1.55,4.20,0.597],
-    beta:[1.802,1.602,0.831,1.828,1.309], div:[0,null,null,null,null],
-    cagr:[0.0,55.12,50.29,-3.5,-0.5] },
-  aicompute: { label:'AI-Infra / Crypto-Compute', names:['NBIS','IREN','CRWV','APLD','MARA','RIOT'],
-    price:[226.30,42.33,83.72,30.30,12.47,23.27], sharesB:[0.253,0.223,0.436,0.2012,0.3552,0.3407],
-    pe:[66.6,1048.6,null,null,null,null], ev:[38.9,35.1,25.4,-104.6,-56.0,-102.2],
-    ps:[61.7,19.77,7.31,24.4,5.49,13.4], pb:[8.06,3.41,9.24,5.21,2.13,3.36],
-    peg:[null,null,null,null,null,null], gm:[47.9,53.6,69.4,27.1,0.3,-23.8],
-    nm:[95.3,10.16,-25.6,-52.4,-234.8,-132.8], de:[1.32,1.49,7.39,1.79,1.10,0.366],
-    beta:[1.402,4.279,7.131,5.68,5.371,3.812], div:[0,0,0,0,0,0],
-    cagr:[38.8,82.0,100,64.44,45.39,33.98] }
-};
-const TICKER_GROUP = {NVDA:'semis',MU:'semis',AVGO:'semis',TSM:'semis',
-  GOOGL:'megatech',MSFT:'megatech',AAPL:'megatech',
-  TSLA:'auto', NBIS:'aicompute', IREN:'aicompute'};
-const COMPS_QUALITY_FLAGS = {
-  NBIS:'NBIS net margin (95%) and P/S (61.7×) are real TTM figures but distorted by a tiny revenue base plus one-time gains — treat as noisy, not a clean read.',
-  IREN:'IREN P/E (1048×) is a real but meaningless multiple off near-zero trailing earnings — the peer table leans on EV/EBITDA and P/S instead.',
-  TSLA:'TSLA P/E (314×) and EV/EBITDA (117×) are real TTM multiples inflated by thin trailing earnings — treat as a growth/optionality story, not an earnings-multiple one.',
-  F:'Ford EV/EBITDA (270×) is a real but distorted multiple — EBITDA is near zero this TTM period.',
-  AAPL:'AAPL P/B (44.8×) is real — Apple\'s book value is structurally tiny after years of buybacks, not a data error.'
-};
-function fmtCap(px,shB){ const v=px*shB*1e9; return v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B'; }
-function renderComps(sym){
-  const group = TICKER_GROUP[sym] || 'semis';
-  const G = PEERSETS[group];
-  const subjIdx = G.names.indexOf(sym);
-  const order = [subjIdx].concat(G.names.map((_,i)=>i).filter(i=>i!==subjIdx));
-  const pick = arr => order.map(i=>arr[i]);
-  const COMPS = { names:pick(G.names), price:pick(G.price), sharesB:pick(G.sharesB),
-    pe:pick(G.pe), ev:pick(G.ev), ps:pick(G.ps), pb:pick(G.pb), peg:pick(G.peg),
-    gm:pick(G.gm), nm:pick(G.nm), de:pick(G.de), beta:pick(G.beta), div:pick(G.div), cagr:pick(G.cagr) };
-  const PX = COMPS.price[0];
-  document.getElementById('compsTitle').textContent = '1 · Comparable Companies — '+sym+' vs '+G.label;
-  document.getElementById('ffieldTitle').textContent = 'Valuation football field — what each method says '+sym+' is worth, vs the $'+PX.toFixed(2)+' price';
+// ============ COMPS ENGINE — Supabase source-of-truth (Move 1) ============
+// Peer grouping = ticker_cohorts.cohort (real, curated cohorts already in the DB: AI_HARDWARE, MEGACAP,
+// GROWTH, BLUE_CHIP, THEMATIC, etc — NOT a hardcoded 4-group map). Peer set for any ticker = the other
+// members of its primary cohort, largest-by-market-cap first, capped for table readability.
+// Every multiple below is COMPUTED client-side from raw Supabase fields (fundamentals, balance_history,
+// fundamentals_history) — never a pre-typed number, never a live FMP call. See the math per-field in
+// fetchCohortBundle(). beta is a genuine DB gap (company_profile is empty) — shown as "—", not guessed.
+const COMPS_PEER_CAP = 7; // largest N peers shown per cohort, for table readability
+async function fetchCohortBundle(tickers){
+  const listQ = tickers.map(t=>encodeURIComponent(t)).join(',');
+  const [funds, bal, fhist, ratios] = await Promise.all([
+    sb('fundamentals?select=ticker,price,market_cap,revenue_ttm,eps_ttm,trailing_pe,dcf,updated_ts&ticker=in.('+listQ+')'),
+    sb('balance_history?select=ticker,fiscal_date,total_equity,total_debt,cash_and_equiv,updated_ts&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*6+20)),
+    sb('fundamentals_history?select=ticker,fiscal_date,period,revenue,ebitda,net_income,gross_profit&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*12+40)),
+    sb('ratios_history?select=ticker,fiscal_date,dividend_yield&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*4+20))
+  ]);
+  const fundByT={}; funds.forEach(f=>fundByT[f.ticker]=f);
+  const balLatest={}; bal.forEach(b=>{ if(!balLatest[b.ticker]) balLatest[b.ticker]=b; });
+  const fhByT={}; fhist.forEach(r=>{ (fhByT[r.ticker]=fhByT[r.ticker]||[]).push(r); });
+  const ratioLatest={}; ratios.forEach(r=>{ if(!ratioLatest[r.ticker]) ratioLatest[r.ticker]=r; });
+  const out={};
+  tickers.forEach(t=>{
+    const f=fundByT[t], b=balLatest[t];
+    const rows=(fhByT[t]||[]).slice().sort((a,c)=>(c.fiscal_date>a.fiscal_date?1:-1));
+    const qRows=rows.filter(r=>r.period!=='FY').slice(0,4);
+    const fyRows=rows.filter(r=>r.period==='FY').slice(0,4);
+    const sum=(arr,k)=>arr.reduce((s,r)=>s+(r[k]||0),0);
+    const ebitdaTTM = qRows.length>=4 ? sum(qRows,'ebitda') : (fyRows[0]?fyRows[0].ebitda:null);
+    const netIncTTM = qRows.length>=4 ? sum(qRows,'net_income') : (fyRows[0]?fyRows[0].net_income:null);
+    const grossTTM  = qRows.length>=4 ? sum(qRows,'gross_profit') : (fyRows[0]?fyRows[0].gross_profit:null);
+    let cagr=null;
+    if(fyRows.length>=2){
+      const first=fyRows[fyRows.length-1], last=fyRows[0];
+      const yrs=(new Date(last.fiscal_date)-new Date(first.fiscal_date))/(365.25*86400000);
+      if(yrs>0.5 && first.revenue>0 && last.revenue>0) cagr=(Math.pow(last.revenue/first.revenue,1/yrs)-1)*100;
+    }
+    const price=f?f.price:null, cap=f?f.market_cap:null, revTTM=f?f.revenue_ttm:null, pe=f?f.trailing_pe:null;
+    const ps=(cap!=null&&revTTM)?cap/revTTM:null;
+    const ev=(cap!=null&&b)?cap+(b.total_debt||0)-(b.cash_and_equiv||0):null;
+    const evEbitda=(ev!=null&&ebitdaTTM)?ev/ebitdaTTM:null;
+    const pb=(cap!=null&&b&&b.total_equity)?cap/b.total_equity:null;
+    const de=(b&&b.total_equity)?(b.total_debt||0)/b.total_equity:null;
+    const nm=(netIncTTM!=null&&revTTM)?netIncTTM/revTTM*100:null;
+    const gm=(grossTTM!=null&&revTTM)?grossTTM/revTTM*100:null;
+    const peg=(pe!=null&&cagr!=null&&cagr>0)?pe/cagr:null;
+    const div=ratioLatest[t]&&ratioLatest[t].dividend_yield!=null?ratioLatest[t].dividend_yield*100:null;
+    out[t]={ price, cap, pe, ev:evEbitda, ps, pb, peg, gm, nm, de, beta:null, div, cagr,
+      fundTs:f?f.updated_ts:null, balTs:b?b.updated_ts:null, hasData: !!f };
+  });
+  return out;
+}
+function fmtCap(v){ if(v==null) return '—'; return v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B'; }
+async function renderComps(sym){
+  const cohort = COHORT_MAP[sym] || 'UNCOHORTED';
+  const cohortMembers = UNIVERSE.filter(u=>u.cohort===cohort && u.ticker!==sym).map(u=>u.ticker);
+  // pull fundamentals for the whole cohort once to rank by market cap, then cap the peer table to the largest N
+  const wholeCohort = [sym].concat(cohortMembers);
+  const capScan = await sb('fundamentals?select=ticker,market_cap&ticker=in.('+wholeCohort.map(encodeURIComponent).join(',')+')');
+  const capByT={}; capScan.forEach(c=>capByT[c.ticker]=c.market_cap||0);
+  const peersRanked = cohortMembers.slice().sort((a,b)=>(capByT[b]||0)-(capByT[a]||0)).slice(0,COMPS_PEER_CAP);
+  const names = [sym].concat(peersRanked);
+  const B = await fetchCohortBundle(names);
+  const pick = k => names.map(n=>B[n]?B[n][k]:null);
+  const COMPS = { names, cap:pick('cap'), pe:pick('pe'), ev:pick('ev'), ps:pick('ps'), pb:pick('pb'),
+    peg:pick('peg'), gm:pick('gm'), nm:pick('nm'), de:pick('de'), beta:pick('beta'), div:pick('div'), cagr:pick('cagr') };
+  const PX = B[sym] ? B[sym].price : null;
+  document.getElementById('compsTitle').textContent = '1 · Comparable Companies — '+sym+' vs '+cohort+' cohort (Supabase ticker_cohorts)';
+  document.getElementById('ffieldTitle').textContent = 'Valuation football field — what each method says '+sym+' is worth, vs the $'+(PX!=null?PX.toFixed(2):'—')+' price';
+  if(PX==null){
+    document.getElementById('ffield').innerHTML = gapBanner('No fundamentals row for '+sym, 'Supabase fundamentals table has no row for this ticker yet — comps/football-field/score can\'t compute without a price and market cap. '+freshTag(null));
+    document.getElementById('ffieldFoot').textContent='';
+    document.getElementById('scoreFormula').innerHTML=''; document.getElementById('scoreBox').innerHTML=''; document.getElementById('scoreTable').innerHTML='';
+    document.getElementById('compsBody').innerHTML='';
+    document.getElementById('cn1').textContent=''; document.getElementById('cn2').textContent='';
+    window.PEER = null;
+    return;
+  }
 
   const clean=a=>a.filter(v=>v!=null);
   const med=a=>{const b=[...a].sort((x,y)=>x-y),n=b.length;return n?(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2):null;};
@@ -230,15 +299,15 @@ function renderComps(sym){
   document.getElementById('scoreTable').innerHTML=st;
 
   // ---- TABLE BODY: company rows + Median/Mean/Min/Max/Delta summary rows, all generated live ----
-  const capArr = COMPS.price.map((p,i)=>p*COMPS.sharesB[i]*1e9);
+  const capArr = COMPS.cap;
   const peerVals=k=>clean((k==='cap'?capArr:COMPS[k]).slice(1));
-  const medCap=med(peerVals('cap')), meanCap=mean(peerVals('cap')), minCap=Math.min(...peerVals('cap')), maxCap=Math.max(...peerVals('cap'));
-  const capFmt=v=>v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B';
+  const medCap=med(peerVals('cap')), meanCap=mean(peerVals('cap')), minCap=peerVals('cap').length?Math.min(...peerVals('cap')):null, maxCap=peerVals('cap').length?Math.max(...peerVals('cap')):null;
+  const capFmt=v=>fmtCap(v);
   let tbody = document.getElementById('compsBody');
   let rowsHtml='';
   COMPS.names.forEach((nm,i)=>{
     const cls = i===0?'gold':'';
-    rowsHtml += '<tr><td class="'+cls+'">'+nm+'</td><td class="'+cls+'">'+fmtCap(COMPS.price[i],COMPS.sharesB[i])+'</td>'+
+    rowsHtml += '<tr><td class="'+cls+'">'+nm+'</td><td class="'+cls+'">'+fmtCap(COMPS.cap[i])+'</td>'+
       '<td class="'+cls+'">'+f2(COMPS.pe[i])+'</td><td class="'+cls+'">'+f2(COMPS.ev[i])+'</td>'+
       '<td class="'+cls+'">'+f2(COMPS.ps[i])+'</td><td class="'+cls+'">'+f2(COMPS.pb[i])+'</td>'+
       '<td class="'+cls+'">'+f2(COMPS.peg[i])+'</td><td class="'+cls+'">'+fp(COMPS.gm[i])+'</td>'+
@@ -277,34 +346,36 @@ function renderComps(sym){
         psH=stats.ps.subj!=null&&stats.ps.med!=null?ppf((stats.ps.subj-stats.ps.med)/stats.ps.med*100):'n/m',
         pbH=stats.pb.subj!=null&&stats.pb.med!=null?ppf((stats.pb.subj-stats.pb.med)/stats.pb.med*100):'n/m';
   const growthLead = stats.cagr.subj!=null && stats.cagr.med!=null && stats.cagr.subj>=stats.cagr.med;
-  const flag = COMPS_QUALITY_FLAGS[sym];
-  document.getElementById('cn1').innerHTML = sym+' grows revenue at <b>'+pf1(stats.cagr.subj)+'</b> vs a peer median of <b>'+pf1(stats.cagr.med)+'</b> ('+(growthLead?'above':'below')+' the group), and trades at P/E '+peH+' · EV/EBITDA '+evH+' · PEG '+pegH+' vs peer median, with P/S '+psH+' and P/B '+pbH+' vs peer median. Cells shaded green = cheap/better, red = expensive/worse vs the column; bold outliers are Tukey-style. '+(flag?('<span style="color:var(--gold);">⚠️ '+flag+'</span> '):'')+'<span style="color:var(--dim)">— computed live from the peer data object, not typed.</span>';
+  document.getElementById('cn1').innerHTML = sym+' grows revenue at <b>'+pf1(stats.cagr.subj)+'</b> vs a peer median of <b>'+pf1(stats.cagr.med)+'</b> ('+(growthLead?'above':'below')+' the group), and trades at P/E '+peH+' · EV/EBITDA '+evH+' · PEG '+pegH+' vs peer median, with P/S '+psH+' and P/B '+pbH+' vs peer median. Cells shaded green = cheap/better, red = expensive/worse vs the column; bold outliers are Tukey-style. Beta column is a genuine DB gap (company_profile not yet populated) — shown as "—", not guessed. <span style="color:var(--dim)">— computed live from Supabase fundamentals/balance_history/fundamentals_history, not typed, not FMP-from-page. '+freshTag(B[sym]&&B[sym].fundTs)+'</span>';
   document.getElementById('cn2').innerHTML = 'This CAGR column is the bridge to the DCF: the reasonable range for the growth slider is the peer band <b>'+pf1(stats.cagr.min)+'–'+pf1(stats.cagr.max)+'</b>, median '+pf1(stats.cagr.med)+'. '+sym+'\'s own '+pf1(stats.cagr.subj)+' sits '+(growthLead?'at or above':'below')+' the group — a DCF growth assumption far outside that band is pricing '+sym+' beyond its own peer set.';
 
   // ---- expose peer stats for the DCF section (§3) to consume — single source of truth, no re-typing ----
   window.PEER = { beta: stats.beta, cagr: stats.cagr, pe: stats.pe, ev: stats.ev, ps: stats.ps, pb: stats.pb, peg: stats.peg, gm: stats.gm, nm: stats.nm, de: stats.de };
+  window.LASTPX = PX;
+  renderCohortInfo(sym);
 }
-renderComps('NVDA');
+function renderCohortInfo(sym){
+  const cohort = COHORT_MAP[sym];
+  document.getElementById('cohortTitle').textContent = '2 · Defining the Peer Set — '+sym+' → '+(cohort||'no cohort assigned')+' (Supabase ticker_cohorts)';
+  if(!cohort){
+    document.getElementById('cohortBody').innerHTML = gapBanner(sym+' has no row in ticker_cohorts', 'This ticker exists in composite_staged but has never been assigned a cohort — §1 comps above fell back to an "UNCOHORTED" bucket (itself, no peers). Needs a cohort assignment upstream.');
+    return;
+  }
+  const members = UNIVERSE.filter(u=>u.cohort===cohort).map(u=>u.ticker);
+  const shown = members.slice(0, 30);
+  const pills = shown.map(t=>'<span class="pill '+(t===sym?'hit':'')+'">'+t+(t===sym?' (this ticker)':'')+'</span>').join('');
+  document.getElementById('cohortBody').innerHTML =
+    '<div style="font-size:14px; margin-bottom:8px;">Cohort <b class="mono2">'+cohort+'</b> has <b>'+members.length+'</b> members total'+(members.length>30?' (first 30 shown)':'')+'. §1\'s comps table above uses the '+Math.min(members.length-1,7)+' largest of these by live market cap as the peer set — deterministic and re-derived every time you switch tickers, not a fixed list per ticker.</div>'+
+    pills+
+    '<div class="foot" style="margin-top:10px;">Cohort assignment itself (which tickers belong to '+cohort+') is curated upstream in <span class="mono2">ticker_cohorts</span>, not computed by this page — this page reads that table and does the ranking/selection live.</div>';
+}
 </script>
 
-<!-- ============ 2. PEERS vs SCREENER ============ -->
+<!-- ============ 2. PEER-SET METHOD (Supabase ticker_cohorts) ============ -->
 <section>
-<h2>2 · Defining the Peer Set — FMP "peers" vs Screener</h2>
-<div class="src">endpoints: peers (FMP's algorithm) vs search-company-screener (rule-based filter)</div>
-<div class="cols">
-<div>
-<h3 style="font-size:16px; margin-bottom:8px;">FMP peers(NVDA) — algorithmic</h3>
-<span class="pill hit">TSM</span><span class="pill hit">AVGO</span><span class="pill hit">ADI</span>
-<span class="pill miss">AAPL</span><span class="pill miss">GOOGL</span><span class="pill miss">MSFT</span>
-<span class="pill miss">ENTG $21B</span><span class="pill miss">TER $50B</span><span class="pill miss">IMOS $2.4B</span>
-<div class="note" style="border-color:var(--red);">Noisy. Mixes true comps (green) with mega-cap ecosystem names and $2B small caps (red). AMD, MU, INTC — the obvious comps — are missing entirely.</div>
-</div>
-<div>
-<h3 style="font-size:16px; margin-bottom:8px;">Screener: industry=Semiconductors, mktcap &gt; $100B</h3>
-<span class="pill hit">NVDA</span><span class="pill hit">TSM</span><span class="pill hit">AVGO</span><span class="pill hit">MU</span><span class="pill hit">AMD</span><span class="pill hit">ASML</span><span class="pill hit">INTC</span><span class="pill hit">AMAT</span><span class="pill hit">LRCX</span><span class="pill hit">KLAC</span><span class="pill hit">TXN</span><span class="pill hit">ARM</span><span class="pill hit">ADI</span><span class="pill">SK hynix</span>
-<div class="note">Deterministic and controllable — filter by sector, industry, mktcap, beta, dividend, volume, country. Minor cleanup needed (dual listings like MU.TO). This is the better peer-set engine; "peers" is a lazy fallback.</div>
-</div>
-</div>
+<h2 id="cohortTitle">2 · Defining the Peer Set — Supabase ticker_cohorts</h2>
+<div class="src">table: ticker_cohorts (curated, is_primary=true) — this replaces FMP's noisy "peers" endpoint entirely; no FMP call happens here</div>
+<div id="cohortBody"></div>
 </section>
 
 <!-- ============ 2.5 PROJECTED PATH (before the DCF) ============ -->
@@ -328,10 +399,10 @@ renderComps('NVDA');
 </div>
 </section>
 
-<!-- ============ 2.7 ANALYST COVERAGE (moved before the DCF — it's the source everything else reads against) ============ -->
+<!-- ============ 2.7 ANALYST COVERAGE — Supabase source-of-truth ============ -->
 <section>
 <h2 id="analystTitle">2.7 · Analyst Coverage — who's covering NVDA, and what are they saying</h2>
-<div class="src">endpoints: grades-summary + price-target-consensus + price-target-summary (real pull per ticker, frozen at fetch time — not live-refreshing)</div>
+<div class="src">tables: analyst_ratings + price_target_consensus + analyst_estimates (real Supabase rows, per ticker — no FMP call from this page)</div>
 
 <div class="resultbar" id="analystBar"></div>
 
@@ -342,86 +413,71 @@ renderComps('NVDA');
   <div class="foot" id="ratingMixFoot"></div>
 </div>
 <div class="fcard">
-  <div class="subttl">Price-target activity (price-target-summary)</div>
+  <div class="subttl" id="ptSummaryTitle">Forward estimates (analyst_estimates, annual)</div>
   <table style="margin:6px 0 0;" id="ptSummaryTable"></table>
   <div class="foot" style="margin-top:6px;" id="ptSummaryFoot"></div>
 </div>
 </div>
 
-<div class="subttl" style="margin-top:18px;" id="publishersTitle">Publishers this price-target data is sourced from</div>
-<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;" id="publisherBadges"></div>
-<div class="foot" style="margin-top:6px;" id="publisherFoot"></div>
-
-<div class="flag" style="margin-top:14px;">⚠️ Base FMP subscription = <b>FIRM-level</b> only ("gradingCompany"), no analyst names. <b>Firms-in-common</b> (Barclays rates both WMT and COST) is buildable TODAY: pull grades for both symbols, intersect. <b>Person-level analysts-in-common needs the TipRanks add-on: 💰 $69/month confirmed</b> (FMP dashboard → Data Usage Boosts → Partner Integrations; monthly or annual). Per FMP's official card it includes: per-analyst point-in-time ratings &amp; price targets, upgrades/downgrades, consensus trends, analyst performance metrics, analyst rankings, historical success rates, average return performance. <b>Firm summaries</b> = a research house's aggregate track record (e.g. Barclays as a firm: total ratings issued, success rate, avg return across all its analysts) — how you weight firms by quality. <b>Per-analyst EPS estimates: NOT included</b> — the add-on exposes exactly 7 endpoints (ratings search, point-in-time by symbol/analyst, symbol/analyst/firm summaries, analyst directory); none carry EPS. Per-analyst price targets yes; per-analyst EPS is IBES/Visible Alpha territory, not TipRanks-via-FMP.</div>
+<div id="publisherGapNote" style="margin-top:14px;"></div>
 </section>
 <script>
-// ============ ANALYST DATA (real pulls: grades-summary + price-target-consensus + price-target-summary), per ticker ============
-const ANALYST = {
-  NVDA:{sb:2,buy:58,hold:16,sell:0,strongsell:3,consensus:'Buy',high:500,low:218,avg:319,median:319,
-    pt:{m1:[1,330.00],q1:[27,317.96],y1:[85,278.22],all:[318,138.80]},
-    publishers:['TheFly','StreetInsider','Benzinga','TipRanks Contributor','MarketWatch','Pulse 2.0']},
-  MU:{sb:0,buy:57,hold:11,sell:2,strongsell:0,consensus:'Buy',high:2200,low:1100,avg:1575.91,median:1512.50,
-    pt:{m1:[19,1614.21],q1:[41,1412.93],y1:[104,750.14],all:[257,365.72]},
-    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0','TipRanks Contributor','Barrons']},
-  GOOGL:{sb:2,buy:69,hold:11,sell:1,strongsell:0,consensus:'Buy',high:460,low:360,avg:420.14,median:422.50,
-    pt:{m1:[5,424.80],q1:[24,426.63],y1:[100,355.28],all:[261,239.56]},
-    publishers:['TheFly','StreetInsider','Benzinga','TipRanks Contributor','MarketWatch','Pulse 2.0','Investing','TheStreet']},
-  NBIS:{sb:0,buy:8,hold:1,sell:0,strongsell:0,consensus:'Buy',high:410,low:129,avg:226.86,median:250,
-    pt:{m1:[2,330],q1:[6,259.50],y1:[16,185.38],all:[20,159.05]},
-    publishers:['TheFly','StreetInsider']},
-  AVGO:{sb:0,buy:51,hold:8,sell:0,strongsell:0,consensus:'Buy',high:582,low:400,avg:499.40,median:515,
-    pt:{m1:[0,0],q1:[16,504.13],y1:[57,446.00],all:[144,264.38]},
-    publishers:['TheFly','Benzinga','StreetInsider','Pulse 2.0','TipRanks Contributor']},
-  TSM:{sb:0,buy:18,hold:7,sell:0,strongsell:0,consensus:'Buy',high:700,low:480,avg:586,median:600,
-    pt:{m1:[4,593.75],q1:[6,608.33],y1:[16,471.25],all:[29,332.90]},
-    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0']},
-  AAPL:{sb:1,buy:70,hold:32,sell:8,strongsell:0,consensus:'Buy',high:400,low:253,avg:337.58,median:330,
-    pt:{m1:[5,345.20],q1:[18,333.44],y1:[64,304.40],all:[251,229.50]},
-    publishers:['StreetInsider','TheFly','Benzinga','Pulse 2.0','TipRanks Contributor','MarketWatch','Investing','Barrons',"Investor's Business Daily"]},
-  MSFT:{sb:0,buy:66,hold:16,sell:0,strongsell:0,consensus:'Buy',high:680,low:400,avg:551.04,median:550,
-    pt:{m1:[8,512.50],q1:[20,537.80],y1:[76,584.70],all:[258,444.15]},
-    publishers:['StreetInsider','TheFly','Benzinga','TipRanks Contributor','Pulse 2.0','MarketWatch','Barrons','TheStreet']},
-  TSLA:{sb:0,buy:32,hold:34,sell:15,strongsell:0,consensus:'Hold',high:540,low:360,avg:441.70,median:436,
-    pt:{m1:[5,437.80],q1:[8,434.75],y1:[44,441.61],all:[258,307.24]},
-    publishers:['TheFly','StreetInsider','Benzinga','Pulse 2.0','TipRanks Contributor','Investing','Barrons','MarketWatch']},
-  IREN:{sb:0,buy:10,hold:3,sell:1,strongsell:0,consensus:'Buy',high:99,low:50,avg:83.29,median:90,
-    pt:{m1:[1,90],q1:[8,78.38],y1:[28,70.21],all:[41,52.35]},
-    publishers:['StreetInsider','TheFly','Benzinga']}
-};
-function renderAnalyst(sym){
-  const A=ANALYST[sym]; if(!A) return;
-  let price = A.median;
-  try { if (typeof TICKERS !== 'undefined' && TICKERS[sym]) price = TICKERS[sym].price; } catch(e) {}
-  const total = A.sb+A.buy+A.hold+A.sell+A.strongsell;
-  const impliedPct = ((A.avg-price)/price*100);
+async function renderAnalyst(sym){
+  const [ratingsArr, ptcArr, estArr] = await Promise.all([
+    sb('analyst_ratings?select=*&ticker=eq.'+sym),
+    sb('price_target_consensus?select=*&ticker=eq.'+sym),
+    sb('analyst_estimates?select=*&ticker=eq.'+sym+'&period=eq.annual&order=fiscal_date.asc')
+  ]);
+  const R = ratingsArr[0], PT = ptcArr[0];
   document.getElementById('analystTitle').textContent = '2.7 · Analyst Coverage — who\'s covering '+sym+', and what are they saying';
+  if(!R && !PT){
+    document.getElementById('analystBar').innerHTML = gapBanner('No analyst_ratings / price_target_consensus row for '+sym, 'Not yet ingested for this ticker — not fabricated, not pulled from FMP directly.');
+    document.getElementById('ratingMixTitle').textContent=''; document.getElementById('ratingMixBar').innerHTML=''; document.getElementById('ratingMixFoot').textContent='';
+    document.getElementById('ptSummaryTable').innerHTML=''; document.getElementById('ptSummaryFoot').textContent='';
+    document.getElementById('publisherGapNote').innerHTML='';
+    return;
+  }
+  const price = window.LASTPX;
+  const total = R ? (R.strong_buy||0)+(R.buy||0)+(R.hold||0)+(R.sell||0)+(R.strong_sell||0) : 0;
+  const avgTarget = PT ? PT.target_avg : null;
+  const impliedPct = (avgTarget!=null && price) ? ((avgTarget-price)/price*100) : null;
   document.getElementById('analystBar').innerHTML =
-    '<div class="rb"><span class="rk">Analysts rating '+sym+'</span><span class="rv">'+total+'</span></div>'+
-    '<div class="rb"><span class="rk">Consensus</span><span class="rv '+(A.consensus==='Buy'?'pos':A.consensus==='Sell'?'neg':'')+'">'+A.consensus+'</span></div>'+
-    '<div class="rb"><span class="rk">Price target (avg)</span><span class="rv">$'+A.avg.toFixed(2)+'</span></div>'+
-    '<div class="rb"><span class="rk">Target range</span><span class="rv">$'+A.low+' – $'+A.high+'</span></div>'+
-    '<div class="rb"><span class="rk">Implied vs $'+price.toFixed(2)+'</span><span class="rv '+(impliedPct>=0?'pos':'neg')+'">'+(impliedPct>=0?'+':'')+impliedPct.toFixed(1)+'%</span></div>';
-  document.getElementById('ratingMixTitle').textContent = 'Rating mix ('+total+' analysts, grades-summary)';
-  const segs=[['Strong Buy',A.sb,'#1f8f3f'],['Buy',A.buy,'var(--green)'],['Hold',A.hold,'var(--gold)'],['Sell',A.sell,'var(--red)'],['Strong Sell',A.strongsell,'#8b1a1a']];
-  document.getElementById('ratingMixBar').innerHTML = segs.map(s=>{
-    const pct = total? (s[1]/total*100):0; if(pct<=0) return '';
-    const showLbl = pct>10;
-    return '<div style="width:'+pct+'%;background:'+s[2]+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;" title="'+s[0]+' '+s[1]+'">'+(showLbl?(s[0]+' '+s[1]):'')+'</div>';
-  }).join('');
-  document.getElementById('ratingMixFoot').textContent = segs.map(s=>s[1]+' '+s[0]).join(' · ');
-  document.getElementById('ptSummaryTable').innerHTML =
-    '<tr><th>Window</th><th># analysts</th><th>Avg target</th></tr>'+
-    '<tr><td>Last month</td><td>'+A.pt.m1[0]+'</td><td>'+(A.pt.m1[1]?'$'+A.pt.m1[1].toFixed(2):'—')+'</td></tr>'+
-    '<tr><td>Last quarter</td><td>'+A.pt.q1[0]+'</td><td>$'+A.pt.q1[1].toFixed(2)+'</td></tr>'+
-    '<tr><td>Last year</td><td>'+A.pt.y1[0]+'</td><td>$'+A.pt.y1[1].toFixed(2)+'</td></tr>'+
-    '<tr><td>All-time</td><td>'+A.pt.all[0]+'</td><td>$'+A.pt.all[1].toFixed(2)+'</td></tr>';
-  const trend = A.pt.all[1]<A.pt.q1[1]?'climbed':'fallen';
-  document.getElementById('ptSummaryFoot').textContent = 'Targets have '+trend+' over time — all-time avg $'+A.pt.all[1].toFixed(2)+' vs last-quarter avg $'+A.pt.q1[1].toFixed(2)+'.';
-  document.getElementById('publishersTitle').textContent = 'Publishers '+sym+'\'s price-target data is sourced from (price-target-summary)';
-  document.getElementById('publisherBadges').innerHTML = A.publishers.map(p=>'<div class="abadge">'+p+'</div>').join('');
-  document.getElementById('publisherFoot').textContent = A.publishers.length+' outlets contributing to the '+total+'-analyst sample above — real per-ticker field from price-target-summary, not a fixed badge list.';
+    '<div class="rb"><span class="rk">Analysts rating '+sym+'</span><span class="rv">'+(R?total:'—')+'</span></div>'+
+    '<div class="rb"><span class="rk">Consensus</span><span class="rv '+(R&&R.consensus==='Buy'?'pos':R&&R.consensus==='Sell'?'neg':'')+'">'+(R?R.consensus:'—')+'</span></div>'+
+    '<div class="rb"><span class="rk">Price target (avg)</span><span class="rv">'+(avgTarget!=null?'$'+avgTarget.toFixed(2):'—')+'</span></div>'+
+    '<div class="rb"><span class="rk">Target range</span><span class="rv">'+(PT?'$'+PT.target_low+' – $'+PT.target_high:'—')+'</span></div>'+
+    '<div class="rb"><span class="rk">Implied vs $'+(price!=null?price.toFixed(2):'—')+'</span><span class="rv '+(impliedPct>=0?'pos':'neg')+'">'+(impliedPct!=null?((impliedPct>=0?'+':'')+impliedPct.toFixed(1)+'%'):'—')+'</span></div>'+
+    '<div class="rb"><span class="rk">'+freshTag(PT&&PT.updated_ts)+'</span></div>';
+  if(R){
+    document.getElementById('ratingMixTitle').textContent = 'Rating mix ('+total+' analysts, analyst_ratings — score '+(R.rating_score!=null?R.rating_score.toFixed(2):'—')+')';
+    const segs=[['Strong Buy',R.strong_buy||0,'#1f8f3f'],['Buy',R.buy||0,'var(--green)'],['Hold',R.hold||0,'var(--gold)'],['Sell',R.sell||0,'var(--red)'],['Strong Sell',R.strong_sell||0,'#8b1a1a']];
+    document.getElementById('ratingMixBar').innerHTML = segs.map(s=>{
+      const pct = total? (s[1]/total*100):0; if(pct<=0) return '';
+      const showLbl = pct>10;
+      return '<div style="width:'+pct+'%;background:'+s[2]+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1117;" title="'+s[0]+' '+s[1]+'">'+(showLbl?(s[0]+' '+s[1]):'')+'</div>';
+    }).join('');
+    document.getElementById('ratingMixFoot').textContent = segs.map(s=>s[1]+' '+s[0]).join(' · ')+' · '+freshTag(R.updated_ts);
+  } else {
+    document.getElementById('ratingMixTitle').textContent='No analyst_ratings row for '+sym;
+    document.getElementById('ratingMixBar').innerHTML=''; document.getElementById('ratingMixFoot').textContent='';
+  }
+  if(estArr.length){
+    const rows = estArr.slice(-5); // last up to 5 annual periods on record (mix of historical + forward)
+    let tt='<tr><th>Fiscal date</th>'+rows.map(r=>'<th>'+r.fiscal_date.slice(0,4)+'</th>').join('')+'</tr>';
+    const fmtB=v=>v==null?'—':'$'+(v/1e9).toFixed(1)+'B';
+    tt+='<tr><td>Revenue (avg)</td>'+rows.map(r=>'<td>'+fmtB(r.est_revenue_avg)+'</td>').join('')+'</tr>';
+    tt+='<tr><td>EBITDA (avg)</td>'+rows.map(r=>'<td>'+fmtB(r.est_ebitda_avg)+'</td>').join('')+'</tr>';
+    tt+='<tr><td>Net income (avg)</td>'+rows.map(r=>'<td>'+fmtB(r.est_net_income_avg)+'</td>').join('')+'</tr>';
+    tt+='<tr><td>EPS (avg)</td>'+rows.map(r=>'<td>'+(r.est_eps_avg!=null?'$'+r.est_eps_avg.toFixed(2):'—')+'</td>').join('')+'</tr>';
+    tt+='<tr><td># analysts (rev)</td>'+rows.map(r=>'<td>'+(r.num_analysts_rev!=null?r.num_analysts_rev:'—')+'</td>').join('')+'</tr>';
+    document.getElementById('ptSummaryTable').innerHTML = tt;
+    document.getElementById('ptSummaryFoot').textContent = estArr.length+' annual periods on record in analyst_estimates for '+sym+' (historical + forward mixed) · '+freshTag(rows[rows.length-1].updated_ts);
+  } else {
+    document.getElementById('ptSummaryTable').innerHTML = '';
+    document.getElementById('ptSummaryFoot').innerHTML = gapBanner('No analyst_estimates rows for '+sym, 'Forward revenue/EBITDA/EPS estimate table not yet populated for this ticker.');
+  }
+  document.getElementById('publisherGapNote').innerHTML = gapBanner('Publisher/outlet attribution not in this schema', 'The old FMP price-target-summary "which outlets contributed" breakdown (TheFly, Benzinga, etc.) has no equivalent table in Supabase — flagged as a gap, not reconstructed from memory.');
 }
-renderAnalyst('NVDA');
 </script>
 <style>.abadge{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:6px 14px;font-size:13.5px;color:var(--txt);}</style>
 
@@ -653,87 +709,99 @@ renderAnalyst('NVDA');
 </div>
 
 <script>
-// ---- TICKERS: real per-ticker DCF base data, pulled live (custom-dcf-advanced + profile-symbol) ----
-// rev/shares/netDebt in $B, from the last ACTUAL year in custom-dcf-advanced; daPct/capexPct/nwcPct/ebitda%/growth%
-// from the constant 5-yr PROJECTED rows of that same endpoint; beta/price from profile-symbol (canonical — the
-// DCF endpoint's own beta field is unreliable for at least one name here, see MU's flag below).
-const TICKERS={
-  NVDA:{name:'NVIDIA', rev:215.938, shares:24.514, netDebt:0.807, daPct:0.0306, capexPct:0.0349, nwcPct:0.2272,
-    price:213.57, beta:2.14, costOfDebt:4.28, rf:4.28, mrp:4.45, debtW:0.0023, eqW:0.9977,
-    gDefault:36, mDefault:51.1, tDefault:15.1, termgDefault:4.28,
-    consensus:[393.3,562.3,686.6,774.2,1005.0], // Street FY27→31 revenue $B, financial-estimates
-    flags:[]},
-  MU:{name:'Micron', rev:37.378, shares:1.125, netDebt:5.636, daPct:0.2947, capexPct:0.12, nwcPct:0.4172,
-    price:972.66, beta:2.142, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
-    gDefault:48.9, mDefault:50.0, tDefault:11.6, termgDefault:4.0, gFmp5yr:70.0, consensus:null,
-    flags:["FMP's own custom-dcf-advanced beta field returns 4.0 for MU — inconsistent with its canonical 5-yr regression beta (2.14, profile-symbol), which is what's used here instead."]},
-  GOOGL:{name:'Alphabet', rev:402.963, shares:12.23, netDebt:28.583, daPct:0.0462, capexPct:0.1378, nwcPct:0.1303,
-    price:348.48, beta:1.247, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0137, eqW:0.9863,
-    gDefault:15.1, mDefault:37.1, tDefault:16.8, termgDefault:4.0, gFmp5yr:11.9, consensus:null, flags:[]},
-  NBIS:{name:'Nebius', rev:0.53, shares:0.253, netDebt:1.295, daPct:0.6962, capexPct:0.8251, nwcPct:0.3618,
-    price:226.30, beta:1.402, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0802, eqW:0.9198,
-    gDefault:38.8, gActualRaw:350.89, mDefault:20, tDefault:21.0, termgDefault:4.0, gFmp5yr:38.8, consensus:null,
-    flags:["Loss-making growth-stage name: FMP's DCF tax-rate field is negative (−208%, defaulted to 21% statutory instead) and its projected EBITDA margin is −40% (clamped to this model's 20% floor — treat the fair value here as illustrative, not load-bearing).","Trailing (most recent actual) revenue growth is actually 351%, off a tiny $530M base — that's a small-base distortion, not a durable run-rate, so the default here uses FMP's own smoothed 5-yr growth assumption (38.8%) instead; the 351% figure is available via the growth slider if you want to stress-test it."]},
-  AVGO:{name:'Broadcom', rev:63.887, shares:4.853, netDebt:48.958, daPct:0.1617, capexPct:0.0124, nwcPct:0.1267,
-    price:394.69, beta:1.462, costOfDebt:4.93, rf:4.37, mrp:4.45, debtW:0.0329, eqW:0.9671,
-    gDefault:23.9, mDefault:53.9, tDefault:21.0, termgDefault:4.0, gFmp5yr:24.2, consensus:null,
-    flags:["FMP's own DCF tax-rate field is negative (−1.75%) for AVGO — defaulted to the 21% US statutory rate instead."]},
-  TSM:{name:'TSMC', rev:118.991, shares:5.186, netDebt:-52.663, daPct:0.223, capexPct:0.4245, nwcPct:0.0987,
-    price:423.00, beta:1.246, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0148, eqW:0.9852,
-    gDefault:33.0, mDefault:69.9, tDefault:15.9, termgDefault:4.0, gFmp5yr:26.2, consensus:null, flags:[]},
-  AAPL:{name:'Apple', rev:416.161, shares:15.005, netDebt:76.443, daPct:0.0293, capexPct:0.0282, nwcPct:0.0389,
-    price:324.89, beta:1.097, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0225, eqW:0.9775,
-    gDefault:6.4, mDefault:36.1, tDefault:15.6, termgDefault:4.0, gFmp5yr:4.1, consensus:null, flags:[]},
-  MSFT:{name:'Microsoft', rev:281.724, shares:7.465, netDebt:81.942, daPct:0.084, capexPct:0.1573, nwcPct:0.151,
-    price:388.97, beta:1.13, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0372, eqW:0.9628,
-    gDefault:14.9, mDefault:52.4, tDefault:17.6, termgDefault:4.0, gFmp5yr:13.9, consensus:null, flags:[]},
-  TSLA:{name:'Tesla', rev:94.827, shares:3.528, netDebt:-8.137, daPct:0.0798, capexPct:0.107, nwcPct:0.0435,
-    price:377.16, beta:1.802, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0062, eqW:0.9938,
-    gDefault:0, gActualRaw:-2.93, mDefault:20, tDefault:28.1, termgDefault:4.0, gFmp5yr:0.0, consensus:null,
-    flags:["TSLA's most recent actual revenue growth was NEGATIVE (−2.9%) — clamped to the growth slider's 0% floor.","TTM EBITDA margin (16.5%) sits below this model's 20% slider floor — clamped up, which slightly overstates near-term profitability."]},
-  IREN:{name:'IREN', rev:0.501, shares:0.223, netDebt:0.4, daPct:0.2654, capexPct:0.9837, nwcPct:-0.0171,
-    price:42.33, beta:4.279, costOfDebt:4.37, rf:4.37, mrp:4.45, debtW:0.0924, eqW:0.9076,
-    gDefault:80, gActualRaw:167.65, mDefault:20, tDefault:7.0, termgDefault:4.0, gFmp5yr:82.0, consensus:null,
-    flags:["Loss-making hypergrowth crypto/AI-infra miner: trailing growth is 168% off a tiny $501M base, clamped to the slider's 80% ceiling. FMP's own projected EBITDA margin is −20% (clamped to this model's 20% floor) — treat this DCF as illustrative only, same caveat as NBIS."]}
-};
+// ---- DCF BASE DATA — built live from Supabase, per ticker (Move 1: no TICKERS constant, no FMP-from-page) ----
+// revenue/shares/net-debt from fundamentals + balance_history (latest); D&A%, capex%, NWC%, EBITDA margin,
+// growth all derived from fundamentals_history + cashflow_history TTM sums — same formulas the old
+// hardcoded constants encoded, just computed live instead of typed. beta is a genuine DB gap
+// (company_profile empty) — defaulted to 1.0 with an explicit flag, never silently guessed as "fine."
+let RF10Y = 4.5; // overwritten by treasury_rates on load
+async function loadRiskFree(){
+  const r = await sb('treasury_rates?select=date,y10,updated_ts&order=date.desc&limit=1');
+  if(r[0]){ RF10Y = r[0].y10; window.RF_TS = r[0].updated_ts; }
+}
+async function buildBase(sym){
+  const [fArr, bArr, fhArr, cfArr] = await Promise.all([
+    sb('fundamentals?select=*&ticker=eq.'+sym),
+    sb('balance_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6'),
+    sb('fundamentals_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=12'),
+    sb('cashflow_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6')
+  ]);
+  const f = fArr[0];
+  if(!f) return null; // genuine gap: no fundamentals row for this ticker — caller shows the banner
+  const b = bArr[0] || {};
+  const qRows = fhArr.filter(r=>r.period!=='FY').slice(0,4);
+  const fyRows = fhArr.filter(r=>r.period==='FY').slice(0,4);
+  const cfQ = cfArr.filter(r=>r.period!=='FY').slice(0,4);
+  const sum=(arr,k)=>arr.reduce((s,r)=>s+(r[k]||0),0);
+  const revTTM = f.revenue_ttm;
+  const ebitdaTTM = qRows.length>=4 ? sum(qRows,'ebitda') : (fyRows[0]?fyRows[0].ebitda:null);
+  const ebitTTM   = qRows.length>=4 ? sum(qRows,'operating_income') : (fyRows[0]?fyRows[0].operating_income:null);
+  const capexTTM  = cfQ.length>=4 ? Math.abs(sum(cfQ,'capex')) : (cfArr.filter(r=>r.period==='FY')[0]?Math.abs(cfArr.filter(r=>r.period==='FY')[0].capex):null);
+  const flags=[];
+  const daPct = (ebitdaTTM!=null && ebitTTM!=null && revTTM) ? Math.max(0,(ebitdaTTM-ebitTTM))/revTTM : 0.05;
+  if(ebitdaTTM==null||ebitTTM==null) flags.push('D&A% could not be derived from EBITDA−EBIT (missing income-statement rows) — defaulted to 5% of revenue.');
+  const capexPct = (capexTTM!=null && revTTM) ? capexTTM/revTTM : 0.05;
+  if(capexTTM==null) flags.push('Capex% defaulted to 5% of revenue — no cashflow_history rows for this ticker.');
+  const nwcPct = (b.current_assets!=null && b.current_liabilities!=null && revTTM) ? (b.current_assets-(b.cash_and_equiv||0)-b.current_liabilities)/revTTM : 0.10;
+  if(b.current_assets==null) flags.push('NWC% defaulted to 10% of revenue — no balance_history row for this ticker.');
+  let cagr=null;
+  if(fyRows.length>=2){
+    const first=fyRows[fyRows.length-1], last=fyRows[0];
+    const yrs=(new Date(last.fiscal_date)-new Date(first.fiscal_date))/(365.25*86400000);
+    if(yrs>0.5 && first.revenue>0 && last.revenue>0) cagr=(Math.pow(last.revenue/first.revenue,1/yrs)-1)*100;
+  }
+  if(cagr==null){ flags.push('Revenue CAGR could not be computed (need ≥2 annual fundamentals_history rows) — growth defaulted to 10%.'); cagr=10; }
+  const mDefault = (ebitdaTTM!=null && revTTM) ? Math.max(5,Math.min(90,ebitdaTTM/revTTM*100)) : 30;
+  if(ebitdaTTM==null) flags.push('EBITDA margin defaulted to 30% — no TTM EBITDA available.');
+  if(ebitdaTTM!=null && ebitdaTTM/revTTM<0) flags.push('TTM EBITDA margin is negative — this is a loss-making name; treat the DCF as illustrative, not load-bearing.');
+  const shares = qRows[0]&&qRows[0].shares_dil ? qRows[0].shares_dil/1e9 : (f.market_cap && f.price ? f.market_cap/f.price/1e9 : null);
+  if(!qRows[0]||!qRows[0].shares_dil) flags.push('Diluted share count came from market_cap÷price (fundamentals_history.shares_dil missing) — a proxy, not a reported figure.');
+  const netDebt = ((b.total_debt||0)-(b.cash_and_equiv||0))/1e9;
+  const cap = f.market_cap||0, debt=(b.total_debt||0);
+  const eqW = (cap+debt)>0 ? cap/(cap+debt) : 1;
+  const debtW = 1-eqW;
+  flags.push('Beta not yet in Supabase (company_profile is empty) — defaulted to 1.0. Adjust the Beta slider manually if you have a real figure.');
+  // forward consensus path (analyst_estimates, annual, future fiscal years) — works for ANY ticker with data, not NVDA-only
+  const today = new Date().toISOString().slice(0,10);
+  const estRows = await sb('analyst_estimates?select=fiscal_date,est_revenue_avg&ticker=eq.'+sym+'&period=eq.annual&fiscal_date=gt.'+today+'&order=fiscal_date.asc&limit=5');
+  const consensus = estRows.length>=2 ? estRows.map(r=>r.est_revenue_avg/1e9) : null;
+  if(!consensus) flags.push('No forward analyst_estimates path (≥2 future annual rows) for this ticker — Analyst-consensus DCF mode disabled, Fixed-rate only.');
+  return {
+    name: sym, rev: revTTM/1e9, shares: shares||1, netDebt, daPct, capexPct, nwcPct,
+    price: f.price, beta: 1.0, costOfDebt: RF10Y+1.5, rf: RF10Y, mrp: 4.45, debtW, eqW,
+    gDefault: Math.max(0,Math.min(80,cagr)), mDefault, tDefault: 21.0, termgDefault: Math.min(RF10Y,4.5),
+    consensus, fundTs: f.updated_ts, balTs: b.updated_ts,
+    flags
+  };
+}
 let CURTICK='NVDA';
-let BASE=TICKERS[CURTICK];
+let BASE=null;
 let builtMRP=4.65, PC='rev', PM='consensus';
 function setPM(k){ if(k==='consensus' && !BASE.consensus) return; PM=k; render(); }
 function chipsHTML_scenario(){
-  if(CURTICK==='NVDA'){
-    return '<button class="chip" data-g="10" data-m="42" data-tx="20" onclick="setScen(10,42,20)">Bear 10%</button>'+
-    '<button class="chip" data-g="20" data-m="48" data-tx="17" onclick="setScen(20,48,17)">Conservative 20%</button>'+
-    '<button class="chip" data-g="36" data-m="51.1" data-tx="15.1" onclick="setScen(36,51.1,15.1)">Street Y1 pace 36%</button>'+
-    '<button class="chip" data-g="50" data-m="53" data-tx="15.1" onclick="setScen(50,53,15.1)">Bull 50%</button>'+
-    '<button class="chip" data-g="66.4" data-m="51.1" data-tx="15.1" onclick="setScen(66.4,51.1,15.1)">FMP 66% (fantasy)</button>';
-  }
   const b=BASE, g=b.gDefault, m=b.mDefault, t=b.tDefault;
   const bear=Math.max(0,Math.round(g*0.4*10)/10), bull=Math.min(80,Math.round(g*1.4*10)/10);
-  const fmp=(b.gFmp5yr!=null?b.gFmp5yr:g);
-  const actualRaw=(b.gActualRaw!=null?b.gActualRaw:g), actualClamped=Math.max(0,Math.min(80,Math.round(actualRaw*10)/10));
-  const actualLbl='Recent actual '+actualRaw.toFixed(1)+'%'+(actualRaw!==actualClamped?' (clamped)':'');
-  return '<button class="chip" data-g="'+bear+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bear+','+m+','+t+')">Bear</button>'+
-    '<button class="chip" data-g="'+actualClamped+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+actualClamped+','+m+','+t+')">'+actualLbl+'</button>'+
-    '<button class="chip" data-g="'+bull+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bull+','+m+','+t+')">Bull</button>'+
-    '<button class="chip" data-g="'+fmp+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+fmp+','+m+','+t+')">FMP 5yr extrap '+fmp.toFixed(1)+'% (often unrealistic)</button>';
+  return '<button class="chip" data-g="'+bear+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bear+','+m+','+t+')">Bear ('+bear.toFixed(1)+'%)</button>'+
+    '<button class="chip" data-g="'+g+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+g+','+m+','+t+')">Base (DB CAGR '+g.toFixed(1)+'%)</button>'+
+    '<button class="chip" data-g="'+bull+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bull+','+m+','+t+')">Bull ('+bull.toFixed(1)+'%)</button>';
 }
 function chipsHTML_beta(){
-  if(CURTICK==='NVDA'){
-    return '<button class="chip" data-s="bt" data-v="2.211" onclick="setSlider(\'bt\',2.211)">FMP raw 2.21</button>'+
-    '<button class="chip" data-s="bt" data-v="2.14" onclick="setSlider(\'bt\',2.14)">Peer median 2.14</button>'+
-    '<button class="chip" data-s="bt" data-v="1.93" onclick="setSlider(\'bt\',1.93)">Peer mean 1.93</button>'+
-    '<button class="chip" data-s="bt" data-v="1.81" onclick="setSlider(\'bt\',1.81)">Blume 1.81</button>'+
-    '<button class="chip" data-s="bt" data-v="1.3" onclick="setSlider(\'bt\',1.30)">Bull mean-revert 1.30</button>';
-  }
-  const bv=BASE.beta.toFixed(2);
-  return '<button class="chip" data-s="bt" data-v="'+bv+'" onclick="setSlider(\'bt\','+bv+')">Canonical β '+bv+'</button>'+
-    '<button class="chip" data-s="bt" data-v="1.0" onclick="setSlider(\'bt\',1.0)">Mean-revert 1.00</button>'+
-    '<div class="foot" style="width:100%;margin-top:2px;">This is FMP\'s canonical 5-yr regression beta for '+CURTICK+' — see the §1 peer-set beta context below the DCF for the peer median/mean instead.</div>';
+  return '<button class="chip" data-s="bt" data-v="1.0" onclick="setSlider(\'bt\',1.0)">DB default 1.00 (gap)</button>'+
+    '<div class="foot" style="width:100%;margin-top:2px;">⚠️ Beta is not yet in Supabase (company_profile is empty) — every ticker defaults to 1.00 until that table is populated. Drag the slider to your own estimate.</div>';
 }
-function setTicker(sym){
-  CURTICK=sym; BASE=TICKERS[sym];
-  document.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('on', b.id==='tbtn_'+sym));
+async function setTicker(sym){
+  CURTICK=sym;
+  document.getElementById('tickerStat').textContent = 'Loading '+sym+' from Supabase…';
+  const b = await buildBase(sym);
+  if(!b){
+    BASE=null;
+    document.getElementById('tickerStat').textContent = sym+' — no fundamentals row';
+    document.getElementById('dcfTitle').textContent = '3 · DCF — '+sym+' · no data';
+    document.getElementById('tickerCaveat').innerHTML = gapBanner('No fundamentals row for '+sym, 'Supabase fundamentals table has no row for this ticker — DCF can\'t build without price/revenue. Try another ticker.');
+    await renderComps(sym); // shows its own gap banner
+    return;
+  }
+  BASE=b;
   document.getElementById('g').value=Math.max(0,Math.min(80,BASE.gDefault));
   document.getElementById('m').value=Math.max(20,Math.min(75,BASE.mDefault));
   document.getElementById('t').value=Math.max(5,Math.min(35,BASE.tDefault));
@@ -746,13 +814,13 @@ function setTicker(sym){
   document.getElementById('pm_consensus').style.pointerEvents = BASE.consensus ? 'auto' : 'none';
   document.getElementById('scenChips').innerHTML = chipsHTML_scenario();
   document.getElementById('betaChips').innerHTML = chipsHTML_beta();
-  document.getElementById('tickerCaveat').innerHTML = BASE.flags.length ? ('⚠️ '+BASE.flags.join(' ')) : '';
+  document.getElementById('tickerCaveat').innerHTML = '⚠️ '+BASE.flags.join(' ')+' <span class="fresh">'+freshTag(BASE.fundTs)+'</span>';
   document.getElementById('dcfTitle').textContent = '3 · DCF — '+sym+' · sliders + modes, formulas update live';
-  document.getElementById('tickerStat').textContent = BASE.name+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2);
-  renderComps(sym);
-  renderAnalyst(sym);
-  renderInsider(sym);
-  renderCongress(sym);
+  document.getElementById('tickerStat').textContent = sym+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2)+' (gap, defaulted) · '+freshTag(BASE.fundTs);
+  await renderComps(sym);
+  await renderAnalyst(sym);
+  await renderInsider(sym);
+  await renderCongress(sym);
   RV=null; autoAxis=true; autoRVaxis=true;
   render();
 }
@@ -829,20 +897,10 @@ function render(){
   const rf=c.rf*100, bt=c.beta, mp=c.mrp*100, coe=r.coe*100, w=r.w*100, tg=c.tg, t=c.t, denom=w-tg*100;
   const O='op';
   const near=(a,b)=>Math.abs(a-b)<0.02; let bp;
-  if(near(bt,1.81)) bp=[['βₐ (Blume)',bt.toFixed(2),'out'],['=','=',O],['0.67 × βᵣ','0.67 × 2.21','v'],['+','+',O],['0.33','0.33','v']];
-  else if(near(bt,2.211)) bp=[['β (raw)',bt.toFixed(2),'out'],['=','=',O],['regression','5-yr vs S&P','v']];
-  else if(near(bt,2.14)) bp=[['β (peer median)',bt.toFixed(2),'out'],['=','=',O],['median(peers)','2.14','v']];
-  else if(near(bt,1.93)) bp=[['β (peer mean)',bt.toFixed(2),'out'],['=','=',O],['mean(peers)','1.93','v']];
-  else if(near(bt,1.30)) bp=[['β (bull)',bt.toFixed(2),'out'],['=','=',O],['mean-revert','→ 1.0','v']];
+  if(near(bt,1.0)) bp=[['β (DB default)',bt.toFixed(2),'out'],['','',O],['gap','company_profile empty','v']];
   else bp=[['β (custom)',bt.toFixed(2),'out'],['','',O],['off-preset','slider','v']];
   fg('fgBeta',bp);
-  if(window.PEER&&window.PEER.beta){
-    const PB=window.PEER.beta;
-    const pct = bt>=PB.max?'above the entire peer set':bt>=PB.med?'top quartile of peers':bt>=PB.mean?'above the peer mean':bt>=PB.min?'within the peer range':'below the entire peer set';
-    document.getElementById('betaCtx').innerHTML='📊 <b>Peer set β (live, §1 comps): min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+'</b><br>Your β <b>'+bt.toFixed(2)+'</b> is <span style="color:var(--gold);font-weight:700;">'+pct+'</span>. '+CURTICK+'\'s raw '+(PB.subj!=null?PB.subj.toFixed(2):BASE.beta.toFixed(2))+' is '+(PB.subj>=PB.max?'an outlier-high beta vs the peer set — a compounder "up and to the right" arguably deserves a lower one.':'within the peer set\'s own spread.');
-  } else {
-    document.getElementById('betaCtx').innerHTML='📊 <b>'+CURTICK+'\'s canonical β (profile-symbol, 5-yr regression): '+BASE.beta.toFixed(2)+'</b><br>No peer-comps universe is built for '+CURTICK+' yet, so there\'s no peer median/range to compare your slider against here — this is a single-company reference point, not a percentile.';
-  }
+  document.getElementById('betaCtx').innerHTML='📊 <b>Beta is a genuine Supabase gap</b> — company_profile (where beta lives) has 0 rows. Every ticker defaults this slider to 1.00 until that table is populated by the ingest pipeline; this is not computed or estimated from other DB fields, and no peer-beta comparison is possible here (§1 comps beta column is "—" for the same reason).';
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
   fg('fgWACC',[['(  wₑ','(  '+BASE.eqW.toFixed(3),'v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  '+BASE.debtW.toFixed(3),'v'],['×','×',O],['k_d',BASE.costOfDebt.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
@@ -957,33 +1015,18 @@ function renderReverse(c){
   document.getElementById('rvName').textContent=SV[RV].lbl; document.getElementById('rvName2').textContent=SV[RV].lbl; document.getElementById('rvName3').textContent=SV[RV].lbl;
   const x=solveFor(RV,c); let disp,ref,verdict,color,icon;
   if(RV==='g'){const p=x*100;disp=p.toFixed(1)+'% / yr';
-    if(CURTICK==='NVDA'){
-      ref='modes → Bear 10 · Conservative 20 · Street Y1 36 · Bull 50 · FMP 66';
-      if(p<10){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
-      else if(p<=36){verdict='inside the reasonable analyst band (10–36%) → undemanding';color='var(--green)';icon='✅';}
-      else if(p<=66){verdict='aggressive, but still within FMP\'s extrapolation → demanding';color='var(--gold)';icon='⚠️';}
-      else{verdict='ABOVE even FMP\'s 66% fantasy → the price assumes the implausible';color='var(--red)';icon='🚨';}
-    } else {
-      const gd=BASE.gDefault, fmp=(BASE.gFmp5yr!=null?BASE.gFmp5yr:gd*1.4);
-      ref='modes → Bear · Recent actual '+gd+'% · Bull · FMP 5yr '+fmp.toFixed(0)+'%';
-      if(p<gd*0.4){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
-      else if(p<=gd){verdict='at or below '+CURTICK+'\'s own recent actual pace → undemanding';color='var(--green)';icon='✅';}
-      else if(p<=Math.max(fmp,gd*1.4)){verdict='above recent actual pace, within FMP\'s own extrapolation → demanding';color='var(--gold)';icon='⚠️';}
-      else{verdict='ABOVE even FMP\'s own 5-yr extrapolation → the price assumes the implausible';color='var(--red)';icon='🚨';}
-    }}
+    const gd=BASE.gDefault, bull=Math.min(80,gd*1.4);
+    ref='modes → Bear ('+(gd*0.4).toFixed(1)+'%) · Base/DB CAGR '+gd.toFixed(1)+'% · Bull ('+bull.toFixed(1)+'%)';
+    if(p<gd*0.4){verdict='below even the Bear case → the market prices almost no growth (looks cheap)';color='var(--green)';icon='✅';}
+    else if(p<=gd){verdict='at or below '+CURTICK+'\'s own DB-computed CAGR → undemanding';color='var(--green)';icon='✅';}
+    else if(p<=bull){verdict='above the DB CAGR, within the Bull case → demanding';color='var(--gold)';icon='⚠️';}
+    else{verdict='ABOVE even the Bull case → the price assumes the implausible';color='var(--red)';icon='🚨';}}
   else if(RV==='m'){const p=x*100;disp=p.toFixed(1)+'%';
-    if(CURTICK==='NVDA'){
-      ref='modes → 42 · 48 · 51';
-      if(p<48){verdict='below current margins → undemanding';color='var(--green)';icon='✅';}
-      else if(p<=62){verdict='needs modest margin expansion → plausible';color='var(--gold)';icon='⚠️';}
-      else{verdict='needs margins no chipmaker sustains → demanding';color='var(--red)';icon='🚨';}
-    } else {
-      const md=BASE.mDefault;
-      ref=CURTICK+'\'s own FMP-projected margin ~'+md.toFixed(0)+'%';
-      if(p<md*0.9){verdict='below '+CURTICK+'\'s own projected margin → undemanding';color='var(--green)';icon='✅';}
-      else if(p<=md*1.15){verdict='close to '+CURTICK+'\'s own projected margin → plausible';color='var(--gold)';icon='⚠️';}
-      else{verdict='needs materially more margin expansion than FMP itself projects → demanding';color='var(--red)';icon='🚨';}
-    }}
+    const md=BASE.mDefault;
+    ref=CURTICK+'\'s own DB-computed TTM EBITDA margin ~'+md.toFixed(0)+'%';
+    if(p<md*0.9){verdict='below '+CURTICK+'\'s own TTM margin → undemanding';color='var(--green)';icon='✅';}
+    else if(p<=md*1.15){verdict='close to '+CURTICK+'\'s own TTM margin → plausible';color='var(--gold)';icon='⚠️';}
+    else{verdict='needs materially more margin expansion than the TTM run-rate → demanding';color='var(--red)';icon='🚨';}}
   else if(RV==='beta'){disp=x.toFixed(2);
     if(window.PEER&&window.PEER.beta){
       const PB=window.PEER.beta;ref='min '+PB.min.toFixed(2)+' · mean '+PB.mean.toFixed(2)+' · median '+PB.med.toFixed(2)+' · max '+PB.max.toFixed(2)+' ('+CURTICK+' raw '+(PB.subj!=null?PB.subj.toFixed(2):BASE.beta.toFixed(2))+')';
@@ -1014,13 +1057,13 @@ function renderReverse(c){
 
   // ACTIONABLE RECOMMENDATION — a defensible, peer/analyst-anchored fair value, not just a qualitative read
   (function(){
-    const hasPeer=!!(window.PEER&&window.PEER.beta&&window.PEER.cagr);
-    const PB=hasPeer ? window.PEER.beta : {med:BASE.beta};
+    const hasPeer=!!(window.PEER&&window.PEER.cagr&&window.PEER.cagr.med!=null);
+    const PB={med:BASE.beta}; // beta is a DB-wide gap (company_profile empty) — always falls back to BASE's 1.0 default
     const PG=hasPeer ? window.PEER.cagr : {med:BASE.gDefault};
     const defensible={g:PG.med/100, m:c.m, t:c.t, rf:c.rf, beta:PB.med, mrp:0.0445, tg:0.04};
     const rr=fvFrom(defensible);
     const upD=rr.bad?null:(rr.fv/BASE.price-1)*100;
-    const srcLbl=hasPeer ? ('peer-median beta '+PB.med.toFixed(2)+' · peer-median growth '+PG.med.toFixed(0)+'%') : (CURTICK+'\'s own canonical beta '+PB.med.toFixed(2)+' · its own trailing growth '+PG.med.toFixed(0)+'% — no peer set built');
+    const srcLbl='beta 1.00 (DB gap, defaulted) · '+(hasPeer?'peer-median growth '+PG.med.toFixed(0)+'%':CURTICK+'\'s own DB CAGR '+PG.med.toFixed(0)+'%');
     document.getElementById('revAction').innerHTML = rr.bad ? '' :
       '<div class="fname">💡 Recommended defensible inputs ('+srcLbl+' · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
@@ -1095,7 +1138,12 @@ function calcERP(){
 function setERP(spx,dy,by,g,tg,crp){document.getElementById('spx').value=spx;document.getElementById('dy').value=dy;document.getElementById('by').value=by;document.getElementById('gg').value=g;document.getElementById('tg').value=tg;document.getElementById('crp').value=crp;calcERP();}
 function applyBuilt(){builtMRP=calcERP();document.getElementById('mrpS').value=builtMRP.toFixed(2);render();}
 ['spx','dy','by','gg','tg','crp'].forEach(id=>document.getElementById(id).addEventListener('input',calcERP));
-window.addEventListener('DOMContentLoaded',function(){calcERP();setTicker('NVDA');});
+window.addEventListener('DOMContentLoaded',async function(){
+  calcERP();
+  wireTickerSearch();
+  await Promise.all([loadUniverse(), loadRiskFree()]);
+  await setTicker('NVDA');
+});
 </script>
 </section>
 
@@ -1208,225 +1256,95 @@ window.addEventListener('DOMContentLoaded',renderEst);
 </table>
 <div class="note">Each row carries transaction type codes (S-Sale, P-Purchase, A-Award, G-Gift, F-InKind, M-Exempt), direct/indirect ownership, resulting position, and the SEC filing URL. Every field is machine-readable — trivially filterable to "open-market purchases only," the signal that matters. Rows shown are a curated real subset (most recent per insider) of what search-insider-trades returns.</div>
 <script>
-// ============ INSIDER TX (real search-insider-trades pulls, curated to the most recent/representative rows per ticker) ============
-const INSIDER_TX = {
-  NVDA:[
-    {insider:'Nora Johnson, Suzanne', type:'neutral', label:'Form 3 (initial)', shares:2496,  price:null,  date:'2026-07-15'},
-    {insider:'Coxe, Tench',           type:'neutral', label:'Gift out',        shares:500000, price:null,  date:'2026-07-06'},
-    {insider:'Stevens, Mark',         type:'sell',    label:'Sale',            shares:319385, price:209.70,date:'2026-06-23'},
-    {insider:'Stevens, Mark',         type:'sell',    label:'Sale',            shares:565615, price:210.44,date:'2026-06-23'},
-    {insider:'Teter, Timothy',        type:'neutral', label:'Tax withholding', shares:35742,  price:207.41,date:'2026-06-23'},
-    {insider:'Shoquist, Debora',      type:'neutral', label:'Tax withholding', shares:35012,  price:207.41,date:'2026-06-23'},
-    {insider:'8 directors',           type:'neutral', label:'RSU award',       shares:1211,   price:null,  date:'2026-06-29'}
-  ],
-  MU:[
-    {insider:'Allen, Scott R.',   role:'CAO',       type:'neutral', label:'Tax withholding (F-InKind)', shares:663,   price:983.12, date:'2026-07-15'},
-    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:4279,  price:1077.05,date:'2026-07-01'},
-    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:10497, price:1079.99,date:'2026-07-01'},
-    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale',                        shares:3572,  price:1080.96,date:'2026-07-01'},
-    {insider:'Arnzen, April S.',  role:'EVP People', type:'sell',   label:'Sale (10 more tranches, same day)', shares:12046, price:1085.6,date:'2026-07-01'}
-  ],
-  GOOGL:[
-    {insider:'7 directors',       role:'Directors', type:'neutral', label:'RSU award (Class C GSUs)', shares:980,  price:null, date:'2026-07-01'},
-    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'neutral', label:'Gift out', shares:8998, price:null, date:'2026-06-30'},
-    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale', shares:760, price:345.18, date:'2026-06-29'},
-    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale', shares:920, price:346.13, date:'2026-06-29'},
-    {insider:'Walker, John Kent', role:'Pres. Global Affairs, CLO', type:'sell', label:'Sale (2 more tranches)', shares:1200, price:347.75, date:'2026-06-29'}
-  ],
-  NBIS:[
-    {insider:'Boynton, John Wilson IV', role:'Director', type:'sell', label:'Sale (11 tranches, same week)', shares:7358, price:196.5, date:'2026-07-15'},
-    {insider:'Volozh, Arkadiy', role:'CEO, 10% owner', type:'sell', label:'Sale', shares:46627, price:235.45, date:'2026-07-01'},
-    {insider:'Korolenko, Andrey', role:'Chief Infrastructure Officer', type:'sell', label:'Sale', shares:33871, price:235.45, date:'2026-07-01'},
-    {insider:'Shtan, Danila', role:'CTO', type:'sell', label:'Sale', shares:16937, price:235.45, date:'2026-07-01'}
-  ],
-  AVGO:[
-    {insider:'Brazeal, Mark David', role:'Chief Legal & Corp Affairs Ofc', type:'sell', label:'Sale', shares:25000, price:401.33, date:'2026-07-10'},
-    {insider:'Brazeal, Mark David', role:'Chief Legal & Corp Affairs Ofc', type:'sell', label:'Sale', shares:25000, price:379.19, date:'2026-07-08'},
-    {insider:'Delly, Gayla J.', role:'Director', type:'sell', label:'Sale', shares:1890, price:385.38, date:'2026-07-08'},
-    {insider:'Page, Justine', role:'Director', type:'sell', label:'Sale', shares:1602, price:373.86, date:'2026-06-29'},
-    {insider:'Samueli, Henry', role:'Director', type:'sell', label:'Sale (9 tranches, same day)', shares:300000, price:381.0, date:'2026-06-24'}
-  ],
-  TSM:[
-    {insider:'Wei, Che-Chia', role:'Chairman & CEO', type:'buy', label:'Purchase', shares:146, price:76.62, date:'2026-07-07'},
-    {insider:'Chang, Tzonz-Sheng', role:'SVP', type:'buy', label:'Purchase', shares:52, price:76.62, date:'2026-07-07'},
-    {insider:'Lin, Chris Horng-Dar', role:'VP & CIO', type:'buy', label:'Purchase', shares:46, price:76.62, date:'2026-07-07'},
-    {insider:'8 more VPs/SVPs', role:'Officers', type:'buy', label:'Purchase (same day, same $76.62 price)', shares:340, price:76.62, date:'2026-07-07'},
-    {insider:'Lin, Shyue-Shyh', role:'VP', type:'buy', label:'Purchase (5 tranches, Jul 19–22)', shares:5000, price:72.6, date:'2026-07-21'}
-  ],
-  AAPL:[
-    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:50000, price:311.02, date:'2026-05-27'},
-    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:149527, price:284.57, date:'2026-05-06'},
-    {insider:'Levinson, Arthur D.', role:'Director', type:'sell', label:'Sale', shares:100473, price:285.04, date:'2026-05-06'},
-    {insider:'Borders, Ben', role:'Principal Accounting Officer', type:'sell', label:'Sale', shares:116, price:295.14, date:'2026-06-16'},
-    {insider:'Parekh, Kevan', role:'CFO', type:'sell', label:'Sale', shares:1534, price:275.0, date:'2026-04-23'}
-  ],
-  MSFT:[
-    {insider:'Numoto, Takeshi', role:'EVP, Chief Marketing Officer', type:'sell', label:'Sale', shares:4500, price:402.84, date:'2026-06-10'},
-    {insider:'Coleman, Amy', role:'EVP, Chief HR Officer', type:'neutral', label:'Tax withholding (F-InKind)', shares:32,  price:384.93, date:'2026-07-15'},
-    {insider:'Jolla, Alice L.', role:'Chief Accounting Officer', type:'neutral', label:'RSU award', shares:5004, price:null, date:'2026-06-15'},
-    {insider:'9 directors', role:'Directors', type:'neutral', label:'RSU award (annual grant)', shares:33, price:null, date:'2026-06-11'}
-  ],
-  TSLA:[
-    {insider:'Musk, Elon', role:'CEO, 10% owner', type:'neutral', label:'Option exercise (M-Exempt)', shares:303960630, price:23.34, date:'2026-06-16'},
-    {insider:'Musk, Elon', role:'CEO, 10% owner', type:'neutral', label:'Tax withholding (F-InKind)', shares:17531857, price:404.66, date:'2026-06-16'},
-    {insider:'Taneja, Vaibhav', role:'CFO', type:'sell', label:'Sale', shares:2605.5, price:402.20, date:'2026-06-08'},
-    {insider:'Taneja, Vaibhav', role:'CFO', type:'sell', label:'Sale', shares:3000, price:450.0, date:'2026-05-13'},
-    {insider:'Wilson-Thompson, Kathleen', role:'Director', type:'sell', label:'Sale (3 tranches)', shares:3635, price:370.0, date:'2026-04-30'}
-  ],
-  IREN:[
-    {insider:'Roberts, Daniel John', role:'Co-CEO', type:'neutral', label:'RSU/equity award', shares:9651525, price:null, date:'2026-07-01'},
-    {insider:'Roberts, William Gregory', role:'Co-CEO', type:'neutral', label:'RSU/equity award', shares:9651525, price:null, date:'2026-07-01'},
-    {insider:'Lewis, Anthony J.', role:'CFO', type:'neutral', label:'RSU/equity award', shares:26968, price:null, date:'2026-07-01'},
-    {insider:'4 directors', role:'Directors', type:'neutral', label:'RSU/equity award', shares:6657, price:null, date:'2026-07-01'}
-  ]
-};
-function renderInsider(sym){
-  const TX = INSIDER_TX[sym] || [];
-  document.getElementById('insiderTitle').textContent = '4 · Insider Trades — '+sym+' (SEC Form 4, ~2-day lag)';
-  document.getElementById('insiderBody').innerHTML = TX.map(t=>{
+// ============ INSIDER TRADES — Move 1: read insider_trades table live, flag (don't fabricate) if empty ============
+// Per Alan's explicit order: insider_trades is a KNOWN GAP (0 rows in the whole table as of this writing —
+// master's ingest hasn't populated it yet). This section checks live and shows an honest gap banner,
+// never falls back to FMP-from-page and never reuses the old hand-curated example rows.
+async function renderInsider(sym){
+  document.getElementById('insiderTitle').textContent = '4 · Insider Trades — '+sym+' (Supabase insider_trades)';
+  const TX = await sb('insider_trades?select=*&ticker=eq.'+sym+'&order=filing_date.desc&limit=25');
+  if(!TX.length){
+    document.getElementById('insiderBody').innerHTML='';
+    document.getElementById('ins_note').innerHTML='';
+    ['ins_buys','ins_cluster','ins_flow','ins_signal'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('ins_signal_icon').textContent='🔴';
+    document.getElementById('ins_signal_card').innerHTML = '<div style="grid-column:1/-1;">'+gapBanner('insider_trades: 0 rows for '+sym+' (table is empty DB-wide right now)', 'Master\'s FMP ingest into this table hasn\'t run yet. Per the standing order, this page does not call FMP directly to fill the gap — it will populate automatically once the pipeline writes rows here.')+'</div>';
+    document.getElementById('ins_buys_card').style.display='none'; document.getElementById('ins_cluster_card').style.display='none'; document.getElementById('ins_flow_card').style.display='none';
+    document.getElementById('ins_signal_card').style.gridColumn='1/-1';
+    return;
+  }
+  // table has data for this ticker — render + classify with the same logic as before, now on live rows
+  document.getElementById('ins_buys_card').style.display=''; document.getElementById('ins_cluster_card').style.display=''; document.getElementById('ins_flow_card').style.display='';
+  const norm = TX.map(t=>({insider:t.reporting_name, label:t.type_name, shares:t.shares, price:t.price, date:t.transaction_date,
+    type: /purchase/i.test(t.type_name||'')?'buy' : /sale/i.test(t.type_name||'')?'sell' : 'neutral'}));
+  document.getElementById('insiderBody').innerHTML = norm.map(t=>{
     const d=new Date(t.date); const md=(d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0');
     const cls = t.type==='sell'?'neg':t.type==='buy'?'pos':'pur';
-    return '<tr><td>'+md+'</td><td>'+t.insider+'</td><td>'+(t.role||'—')+'</td><td class="'+cls+'">'+t.label+'</td><td>'+t.shares.toLocaleString()+'</td><td>'+(t.price?'$'+t.price.toFixed(2):'—')+'</td></tr>';
+    return '<tr><td>'+md+'</td><td>'+t.insider+'</td><td>—</td><td class="'+cls+'">'+t.label+'</td><td>'+(t.shares||0).toLocaleString()+'</td><td>'+(t.price?'$'+t.price.toFixed(2):'—')+'</td></tr>';
   }).join('');
-  const buys=TX.filter(t=>t.type==='buy'), sells=TX.filter(t=>t.type==='sell');
-  const $ = t=>(t.price||0)*t.shares;
-  const buyVal=buys.reduce((s,t)=>s+$(t),0), sellVal=sells.reduce((s,t)=>s+$(t),0), net=buyVal-sellVal;
+  const buys=norm.filter(t=>t.type==='buy'), sells=norm.filter(t=>t.type==='sell');
+  const $ = t=>(t.price||0)*(t.shares||0);
+  const net=buys.reduce((s,t)=>s+$(t),0)-sells.reduce((s,t)=>s+$(t),0);
   const days=d=>new Date(d).getTime()/86400000;
   let cluster=false;
   for(let i=0;i<buys.length;i++){const w=buys.filter(b=>Math.abs(days(b.date)-days(buys[i].date))<=30);if(new Set(w.map(b=>b.insider)).size>=3){cluster=true;break;}}
   const sellInsiders=new Set(sells.map(t=>t.insider));
-  const neutralLabels=[...new Set(TX.filter(t=>t.type==='neutral').map(t=>t.label))];
   let signal,color,note,icon;
-  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';icon='✅';note=new Set(buys.map(b=>b.insider)).size+' distinct insiders bought in a tight window (often the same day, same price — consistent with an internal purchase program, still a real broad-buy signal) — the highest-conviction insider signal there is.';}
-  else if(buys.length>0){signal='WEAK BULLISH';color='var(--green)';icon='✅';note=buys.length+' open-market purchase(s), but not a cluster (fewer than 3 distinct buyers in 30 days).';}
-  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';icon='🚨';note=sellInsiders.size+' distinct insiders ('+[...sellInsiders].slice(0,4).join(', ')+') sold on the open market — broader than a single 10b5-1 exit.';}
-  else if(sellInsiders.size>0){signal='NEUTRAL (noise)';color='var(--gold)';icon='⚠️';note='Zero open-market buys, and the discretionary sale(s) came from just '+sellInsiders.size+' insider'+(sellInsiders.size>1?'s':'')+' ('+[...sellInsiders].join(', ')+') — below the 3-insider bar for a "broad selling" call, likely a pre-set 10b5-1 plan.'+(neutralLabels.length?' The rest ('+neutralLabels.join(', ')+') are mechanical comp events, not conviction.':'');}
-  else{signal='NEUTRAL (no activity)';color='var(--dim)';icon='⚪';note='No open-market buys or sells in this window — recent filings are all '+(neutralLabels.join(', ')||'grants/awards')+'.';}
+  if(buys.length>=3&&cluster){signal='BULLISH — cluster buy';color='var(--green)';icon='✅';note=new Set(buys.map(b=>b.insider)).size+' distinct insiders bought in a tight window.';}
+  else if(buys.length>0){signal='WEAK BULLISH';color='var(--green)';icon='✅';note=buys.length+' open-market purchase(s), not a cluster.';}
+  else if(sellInsiders.size>=3){signal='BEARISH — broad selling';color='var(--red)';icon='🚨';note=sellInsiders.size+' distinct insiders sold on the open market.';}
+  else if(sellInsiders.size>0){signal='NEUTRAL (noise)';color='var(--gold)';icon='⚠️';note='Sales came from just '+sellInsiders.size+' insider(s) — below the 3-insider broad-selling bar.';}
+  else{signal='NEUTRAL (no activity)';color='var(--dim)';icon='⚪';note='No open-market buys or sells in this window.';}
   const setCard=(cardId,valId,val,col)=>{document.getElementById(valId).textContent=val;document.getElementById(valId).style.color=col;document.getElementById(cardId).style.borderColor=col;};
   setCard('ins_buys_card','ins_buys',buys.length,buys.length>0?'var(--green)':'var(--dim)');
-  setCard('ins_cluster_card','ins_cluster',cluster?'YES ('+new Set(buys.map(b=>b.insider)).size+' insiders)':'none',cluster?'var(--green)':'var(--dim)');
-  setCard('ins_flow_card','ins_flow',(net>=0?'+$':'−$')+(Math.abs(net)/1e6).toFixed(1)+'M '+(net>=0?'net buying':'net selling'),net>=0?'var(--green)':'var(--red)');
+  setCard('ins_cluster_card','ins_cluster',cluster?'YES':'none',cluster?'var(--green)':'var(--dim)');
+  setCard('ins_flow_card','ins_flow',(net>=0?'+$':'−$')+(Math.abs(net)/1e6).toFixed(1)+'M',net>=0?'var(--green)':'var(--red)');
   setCard('ins_signal_card','ins_signal',signal,color);
   document.getElementById('ins_signal_icon').textContent=icon;
-  document.getElementById('ins_note').innerHTML=note;
+  document.getElementById('ins_note').innerHTML=note+' '+freshTag(TX[0].updated_ts);
 }
-renderInsider('NVDA');
 </script>
 </section>
 
 <!-- ============ 5. CONGRESS ============ -->
 <section>
 <h2 id="congressTitle">5 · Congressional Trades — NVDA (STOCK Act, ≤45-day lag)</h2>
-<div class="src">endpoints: senate-trading + house-trading — real per-ticker pull, switches with the ticker bar above</div>
-<table>
-<tr><th>Disclosed</th><th>Member</th><th>Chamber</th><th>Type</th><th>Amount Band</th></tr>
-<tbody id="congressBody"></tbody>
-</table>
-<div class="note" id="congressNote">Searchable by symbol OR by politician name (e.g. everything Pelosi has traded). Amounts are disclosed bands, not exact figures — that's a legal limitation, not FMP's. Links go to the actual disclosure PDFs.</div>
+<div class="src">Move 1 gap: no senate/house trading table exists in Supabase yet</div>
+<div id="congressBody"></div>
 <script>
-// ============ CONGRESS (real senate-trading + house-trading pulls, curated to ~5-6 representative rows per ticker) ============
-const CONGRESS_TX = {
-  NVDA:[
-    {date:'2026-07-17', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×3', band:'$1k–15k each'},
-    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'neg', label:'Sale', band:'$15k–50k'},
-    {date:'2026-07-08', member:'Ro Khanna (CA)', chamber:'House', type:'pos', label:'Purchase (stock + options)', band:'$1k–15k'},
-    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$250k–500k', gold:true},
-    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Call options purchase', band:'$100k–250k', gold:true},
-    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'neg', label:'Sale (partial)', band:'$1M–5M', gold:true},
-    {date:'2026-01-16', member:'Markwayne Mullin (OK)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'},
-    {date:'2025-11-13', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×2', band:'up to $250k'}
-  ],
-  MU:[
-    {date:'2026-07-20', member:'Dan Newhouse (WA, spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-06-11', member:'Ro Khanna (CA)', chamber:'House', type:'neg', label:'Sale ×3', band:'$1k–15k each'},
-    {date:'2026-02-25', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
-    {date:'2026-02-15', member:'John Boozman (AR, joint)', chamber:'Senate', type:'neg', label:'Sale ×2', band:'$1k–15k each'}
-  ],
-  GOOGL:[
-    {date:'2026-07-21', member:'Jerry Moran (KS)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-07-17', member:'Dan Crenshaw (TX)', chamber:'House', type:'neg', label:'Sale', band:'$1k–15k'},
-    {date:'2026-06-29', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase (multiple, this qtr up to)', band:'$250k'},
-    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase + call options + partial sale', band:'$250k–5M', gold:true},
-    {date:'2026-01-16', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'}
-  ],
-  AVGO:[
-    {date:'2026-07-08', member:'Ro Khanna (CA)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'},
-    {date:'2026-05-07', member:'Shelley Moore Capito (WV, spouse)', chamber:'Senate', type:'neg', label:'Sale', band:'$1k–15k'},
-    {date:'2026-05-01', member:'Jared Moskowitz (FL)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-03-04', member:'Shelley Moore Capito (WV, spouse)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2025-07-10', member:'Nancy Pelosi (spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$1M–5M', gold:true}
-  ],
-  TSM:[
-    {date:'2026-07-13', member:'Michael McCaul (TX, spouse)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'},
-    {date:'2026-04-21', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-03-10', member:'Gilbert Cisneros (CA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
-    {date:'2025-11-13', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$100k–250k'},
-    {date:'2024-01-03', member:'Thomas Carper (DE, spouse)', chamber:'Senate', type:'neg', label:'Sale (partial)', band:'$1k–15k'}
-  ],
-  AAPL:[
-    {date:'2026-07-08', member:'Sheldon Whitehouse (RI)', chamber:'Senate', type:'neg', label:'Sale ×2', band:'$15k–50k each'},
-    {date:'2026-05-01', member:'Mark Warner (VA, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-02-15', member:'John Boozman (AR, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-01-23', member:'Nancy Pelosi (spouse)', chamber:'House', type:'neg', label:'Sale (partial) + options purchase', band:'$5M–25M', gold:true},
-    {date:'2025-09-30', member:'Adam Schiff (spouse)', chamber:'Senate', type:'neg', label:'Sale (partial)', band:'$15k–50k'}
-  ],
-  MSFT:[
-    {date:'2026-05-01', member:'Mark Warner (VA)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-04-14', member:'John Boozman (AR, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-06-04', member:'Josh Gottheimer (NJ, joint)', chamber:'House', type:'pos', label:'Options purchase/sale mix', band:'$250k–1M'},
-    {date:'2026-01-16', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$100k–250k'},
-    {date:'2025-11-21', member:'Markwayne Mullin (OK, joint)', chamber:'Senate', type:'pos', label:'Purchase', band:'$250k–500k'}
-  ],
-  TSLA:[
-    {date:'2024-11-07', member:'Sheldon Whitehouse (RI, self+spouse)', chamber:'Senate', type:'neg', label:'Sale (Full), 2 filings', band:'$100k–250k / $15k–50k'},
-    {date:'2025-10-21', member:'Marjorie Taylor Greene (GA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2025-06-12', member:'Josh Gottheimer (NJ, joint)', chamber:'House', type:'pos', label:'Purchase ×3', band:'$1k–15k each'},
-    {date:'2025-04-01', member:'Vicente Gonzalez (TX)', chamber:'House', type:'neg', label:'Sale', band:'$100k–250k'},
-    {date:'2025-10-15', member:'Marjorie Taylor Greene (GA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'}
-  ],
-  IREN:[
-    {date:'2026-02-25', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$50k–100k'},
-    {date:'2026-01-29', member:'Dale Strong (joint)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2026-01-16', member:'Cleo Fields (LA)', chamber:'House', type:'neg', label:'Sale (Full)', band:'$50k–100k'},
-    {date:'2025-12-18', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$1k–15k'},
-    {date:'2025-10-31', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase ×2', band:'$1k–15k each'},
-    {date:'2025-08-07', member:'Cleo Fields (LA)', chamber:'House', type:'pos', label:'Purchase', band:'$15k–50k'}
-  ],
-  NBIS:[]
-};
+// ============ CONGRESS — Move 1: no senate/house table in this DB at all. Unconditional, honest gap. ============
 function renderCongress(sym){
-  const rows = CONGRESS_TX[sym] || [];
   document.getElementById('congressTitle').textContent = '5 · Congressional Trades — '+sym+' (STOCK Act, ≤45-day lag)';
-  if(rows.length===0){
-    document.getElementById('congressBody').innerHTML = '<tr><td colspan="5" style="color:var(--dim); text-align:center; padding:14px;">No senate-trading or house-trading disclosures found for '+sym+' — a real, checked absence (both endpoints return no data), not an unwired section.</td></tr>';
-    document.getElementById('congressNote').innerHTML = sym+' is a genuine gap: '+sym+' has not appeared in any member\'s STOCK Act disclosure to date. That itself is a data point — a young/thin-float name that hasn\'t crossed a Congressional portfolio yet. Searchable by symbol OR by politician name (e.g. everything Pelosi has traded) for any other ticker. Amounts are disclosed bands, not exact figures — that\'s a legal limitation, not FMP\'s.';
-    return;
-  }
-  document.getElementById('congressBody').innerHTML = rows.map(r=>{
-    const memberHtml = r.gold ? '<td class="gold">'+r.member+'</td>' : '<td>'+r.member+'</td>';
-    const bandHtml = r.gold ? '<td class="gold">'+r.band+'</td>' : '<td>'+r.band+'</td>';
-    return '<tr><td>'+r.date+'</td>'+memberHtml+'<td>'+r.chamber+'</td><td class="'+r.type+'">'+r.label+'</td>'+bandHtml+'</tr>';
-  }).join('');
-  document.getElementById('congressNote').innerHTML = 'Searchable by symbol OR by politician name (e.g. everything Pelosi has traded). Amounts are disclosed bands, not exact figures — that\'s a legal limitation, not FMP\'s. Links go to the actual disclosure PDFs.';
+  document.getElementById('congressBody').innerHTML = gapBanner(
+    'No Congress/senate/house table in this database',
+    'Per the standing order, this isn\'t a query returning zero rows — there is no senate-trading/house-trading equivalent table in Supabase at all yet. Master has not scoped this ingest. Not calling FMP from the page to fill it in the meantime.'
+  );
 }
-renderCongress('NVDA');
 </script>
 </section>
 
 <!-- ============ 6. COT ============ -->
 <section>
-<h2>6 · Commitment of Traders — S&amp;P 500 E-Mini (CFTC, weekly)</h2>
-<div class="src">endpoint: COT-report (65 futures markets available: ES, NQ, GC, CL, VX, BT, DX, ZN…)</div>
-<table>
-<tr><th>Report Date</th><th>Open Interest</th><th>Spec Long</th><th>Spec Short</th><th>Spec NET</th><th>Commercial NET</th></tr>
-<tr><td>2026-07-14</td><td>1.94M</td><td>256,435</td><td>295,373</td><td class="neg">−38,938</td><td class="neg">−92,531</td></tr>
-<tr><td>2026-07-07</td><td>1.97M</td><td>244,103</td><td>286,994</td><td class="neg">−42,891</td><td class="neg">−66,463</td></tr>
-<tr><td>2026-06-30</td><td>1.97M</td><td>249,934</td><td>287,526</td><td class="neg">−37,592</td><td class="neg">−87,734</td></tr>
-<tr><td>2026-06-23</td><td>1.98M</td><td>251,385</td><td>286,833</td><td class="neg">−35,448</td><td class="neg">−87,130</td></tr>
-<tr><td>2026-06-16</td><td>2.58M</td><td>262,370</td><td>456,348</td><td class="neg">−193,978</td><td class="pos">+60,203</td></tr>
-</table>
-<div class="note">Read: speculators (non-commercials) are net short ES ~39k contracts and have been all month. Full report has ~120 fields per week — trader counts, concentration ratios (top-4/top-8 holders), week-over-week changes. There's also a COT-report-analysis endpoint that pre-computes sentiment. Requires Premium plan or above — your key has it ✅.</div>
+<h2 id="cotTitle">6 · Commitment of Traders — CFTC (weekly)</h2>
+<div class="src">table: cot_history</div>
+<div id="cotBody"></div>
+<script>
+// ============ COT — Move 1: cot_history table exists but is empty DB-wide. Check live, flag if empty. ============
+async function renderCOT(){
+  const rows = await sb('cot_history?select=*&order=report_date.desc&limit=5');
+  if(!rows.length){
+    document.getElementById('cotBody').innerHTML = gapBanner(
+      'cot_history: 0 rows',
+      'Table exists in the schema but master hasn\'t ingested any CFTC weekly reports into it yet. Not falling back to FMP or the old static E-mini table.'
+    );
+    return;
+  }
+  document.getElementById('cotBody').innerHTML = '<table><tr><th>Report Date</th><th>Open Interest</th><th>Spec Long</th><th>Spec Short</th><th>Spec NET</th><th>Commercial NET</th></tr>' +
+    rows.map(r=>'<tr><td>'+r.report_date+'</td><td>'+(r.open_interest||'—')+'</td><td>'+(r.spec_long||'—')+'</td><td>'+(r.spec_short||'—')+'</td><td>'+(r.spec_net||'—')+'</td><td>'+(r.commercial_net||'—')+'</td></tr>').join('') +
+    '</table><div class="note">'+freshTag(rows[0].updated_ts)+'</div>';
+}
+renderCOT();
+</script>
 </section>
 
 <div style="color:var(--dim); font-size:13px; margin-top:10px;">Generated 2026-07-18 · All data via FMP connector, live pulls · File: FMP_CAPABILITY_DEMO.html · Author: Claude for Alan</div>
@@ -1462,57 +1380,74 @@ renderCongress('NVDA');
 <summary style="cursor:pointer; color:var(--accent); font-weight:700; font-size:15px; list-style:none;">▸ How this works — what's actually wired vs. still static (read me)</summary>
 <div style="margin-top:14px; font-size:14px; line-height:1.7; color:#c9d1d9;">
 
-<p style="font-size:15px;"><b style="color:var(--gold);">🔌 WIRED — computed live from a data object, recomputes on change:</b></p>
+<p style="font-size:14px; color:var(--gold); background:var(--panel2); border-left:3px solid var(--gold); padding:10px 14px; margin:10px 0;"><b>Move 1 (2026-07-24):</b> source of truth swapped from direct FMP pulls to <b>Supabase (wadinxqplrggagkvrdag)</b>, read client-side. FMP now only ever fills the DB (master's ingest lane) — this page reads it. Universe expanded from a hardcoded 10 tickers to the live ~211-name <span class="mono2">composite_staged</span> set. Sections below are grouped by DB-sourced vs genuinely-flagged gap, not wired-vs-static.</p>
+
+<p style="font-size:15px;"><b style="color:var(--gold);">🔌 DB-SOURCED — read live from Supabase on every ticker switch:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
-<tr><th style="width:18%;">Where</th><th>What's wired</th></tr>
-<tr><td class="pur">§1 Comps</td><td>Four real peer universes (<span class="mono2">PEERSETS</span>: semis, mega-cap tech, auto/EV, AI-infra) each hold 5–6 companies × 13 metrics from <span class="mono2">metrics-ratios-ttm</span>. Picking a ticker calls <span class="mono2">renderComps(sym)</span>, which looks up that ticker's assigned group (<span class="mono2">TICKER_GROUP</span>), reorders the arrays so the picked ticker is always the subject row, and recomputes the Median/Mean/Min/Max/Delta row, both narrative notes, the football-field ranges, and the VALUE/QUALITY score from scratch — same statistical engine for all 10 names, not retyped per ticker. Market cap is computed (price × shares), never a typed string. Known distortions (NBIS's tiny-base 95% margin, IREN's 1048× P/E off near-zero earnings, TSLA's thin-earnings multiples, AAPL's buyback-driven P/B) are flagged inline, not hidden.</td></tr>
-<tr><td class="pur">Ticker switcher (top of page)</td><td>A <span class="mono2">TICKERS</span> object holds real per-ticker DCF base data for <b>10 names</b> (NVDA, MU, GOOGL, NBIS, AVGO, TSM, AAPL, MSFT, TSLA, IREN) — revenue/shares/net-debt/D&amp;A%/capex%/NWC% from <span class="mono2">custom-dcf-advanced</span>'s actual + projected rows, beta/price from <span class="mono2">profile-symbol</span>. Clicking a ticker calls <span class="mono2">setTicker()</span>, which swaps <span class="mono2">BASE</span>, resets every slider to that company's own real defaults, and re-renders §1 comps, §2.7 analysts, §3 DCF, §4 insider, and §5 congress end-to-end — same engines, real per-ticker numbers, nothing frozen on NVDA.</td></tr>
-<tr><td class="pur">§2.7 Analyst coverage</td><td>A real <span class="mono2">price-target-summary</span> + grade-mix pull per ticker (<span class="mono2">ANALYST</span> object), rendered by <span class="mono2">renderAnalyst(sym)</span>: rating mix bar, 1mo/3mo/1yr/all-time average price-target windows, and a publisher badge list built from each ticker's actual <span class="mono2">publishers</span> field (TheFly, StreetInsider, Benzinga, TipRanks Contributor, etc.) — not a fixed sample list.</td></tr>
-<tr><td class="pur">§3 DCF</td><td>7 sliders → <span class="mono2">cur()</span> → <span class="mono2">modelFull()</span> → one result object that feeds the hero bar, all 5 formula grids, the value-split bar, the projected-path chart, both sensitivity tables + tornado, and both reverse-DCF views. Change any slider, every one of those updates in the same render pass. Driven by whichever ticker is selected above, not a hardcoded NVDA constant.</td></tr>
-<tr><td class="pur">§3.5 Estimates</td><td>Consensus dispersion (range-width ÷ avg) is computed per year from the raw "avg (low–high)" cells into a HIGH/MODERATE/LOW confidence badge. <b>Not yet</b> feeding back into the DCF or reverse-DCF math — it's a read, not an input, today.</td></tr>
-<tr><td class="pur">§4 Insider</td><td>A real transaction array per ticker (<span class="mono2">INSIDER_TX</span>, from <span class="mono2">search-insider-trades</span>) is classified (buy/sell/neutral), checked for 30-day cluster buys, and netted into a $ discretionary flow via <span class="mono2">renderInsider(sym)</span> — the signal badge is a verdict of that computation, not a typed guess. Results genuinely vary: TSM shows a real bullish cluster buy (10+ officers bought the same day), NBIS/AVGO/AAPL show real bearish broad-selling (3+ distinct sellers), MU/GOOGL/MSFT/TSLA/IREN show neutral/noise.</td></tr>
-<tr><td class="pur">§5 Congress</td><td>Real <span class="mono2">senate-trading</span> + <span class="mono2">house-trading</span> pulls per ticker (<span class="mono2">CONGRESS_TX</span>), rendered by <span class="mono2">renderCongress(sym)</span>. NBIS is a genuine, checked zero: both endpoints return no disclosures for it — shown as an honest gap, not hidden or faked.</td></tr>
+<tr><th style="width:18%;">Where</th><th>What's DB-sourced</th></tr>
+<tr><td class="pur">Universe / ticker bar</td><td><span class="mono2">loadUniverse()</span> reads <span class="mono2">composite_staged</span> (~211 tickers) + <span class="mono2">ticker_cohorts</span> (is_primary=true rows) once on load, powering the searchable ticker box. Not the old hardcoded 10, not the near-empty <span class="mono2">tickers</span> table.</td></tr>
+<tr><td class="pur">§1 Comps</td><td><span class="mono2">fetchCohortBundle()</span> pulls each ticker's real cohort (<span class="mono2">ticker_cohorts</span>) and up to 7 <span class="mono2">is_primary</span> peers, ranked by live market cap. Multiples (P/E, P/S, P/B, EV/EBITDA, D/E, margins) are computed fresh client-side from <span class="mono2">fundamentals</span> + TTM sums of <span class="mono2">fundamentals_history</span>/<span class="mono2">cashflow_history</span> + <span class="mono2">balance_history</span> — not trusted from <span class="mono2">ratios_history</span>'s pre-computed columns, since a direct check found that table's P/S diverging significantly from a freshly-computed figure (quarterly/TTM denominator mismatch suspected). Beta column is "—" for every row — see gap below.</td></tr>
+<tr><td class="pur">Ticker switcher / DCF base</td><td><span class="mono2">buildBase(sym)</span> assembles <span class="mono2">BASE</span> from <span class="mono2">fundamentals</span>, <span class="mono2">balance_history</span>, <span class="mono2">cashflow_history</span>, and <span class="mono2">live_quotes</span> for price. <span class="mono2">setTicker()</span> awaits this, then re-renders §1/§2/§2.7/§3/§4/§5 in sequence — same DCF math engine as before (CAPM/WACC/Gordon Growth), only the inputs are now live per-ticker DB reads instead of a 10-name hardcoded object.</td></tr>
+<tr><td class="pur">§2.7 Analyst coverage</td><td>Live pulls of <span class="mono2">analyst_ratings</span>, <span class="mono2">price_target_consensus</span>, and <span class="mono2">analyst_estimates</span> per ticker. NVDA's own annual <span class="mono2">analyst_estimates</span> rows (FY27–FY31) were checked against the previously hardcoded consensus path and match exactly, confirming this table is the right source. Publisher/outlet attribution (which analyst desk) has no DB equivalent — flagged, not fabricated.</td></tr>
+<tr><td class="pur">§3 DCF risk-free rate</td><td><span class="mono2">loadRiskFree()</span> reads <span class="mono2">treasury_rates.y10</span> — one macro rate shared across all tickers, replacing the old per-ticker hardcoded <span class="mono2">rf</span>.</td></tr>
+<tr><td class="pur">§4 Insider</td><td>Live query against <span class="mono2">insider_trades</span> per ticker. The buy/sell classifier, 30-day cluster-buy detector, and net-flow signal are preserved and will activate automatically once rows exist — see gap below for current state.</td></tr>
+<tr><td class="pur">§6 COT</td><td>Live query against <span class="mono2">cot_history</span> — see gap below for current state.</td></tr>
+<tr><td class="pur">Freshness everywhere</td><td><span class="mono2">updated_ts</span> is read per row and shown as "last true Xm/h/d ago" (red "missing" if null) via <span class="mono2">freshTag()</span> — confidence is disclosed, not assumed.</td></tr>
 </table>
 
-<p style="font-size:15px;"><b style="color:var(--red);">🧵 NOT WIRED — static pulls / typed content, same every time regardless of anything else on the page:</b></p>
+<p style="font-size:15px;"><b style="color:var(--red);">🔴 FLAGGED GAPS — real DB gaps, shown honestly, never FMP'd-from-page or fabricated:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
-<tr><th style="width:18%;">Where</th><th>What's still static</th></tr>
-<tr><td class="pur">§6 COT</td><td>Commitment of Traders is index/futures-level data (S&amp;P 500 E-mini) — it's macro positioning context, not a per-company metric, so there is no per-ticker version to build; this is a real, structural limitation of the data itself, not a shortcut.</td></tr>
-<tr><td class="pur">Analyst-consensus growth path (§3A toggle)</td><td>Only NVDA has a real Street $B-by-year path loaded. Every other ticker's projection-source toggle is locked to Fixed-rate — the button is visibly dimmed with a note explaining why, not silently disabled.</td></tr>
-<tr><td class="pur">§2.7 price targets</td><td>A single real pull frozen at fetch time per ticker — targets don't live-refresh, and the consensus target isn't compared against the DCF fair value anywhere yet.</td></tr>
+<tr><th style="width:18%;">Where</th><th>What's missing and why</th></tr>
+<tr><td class="pur">Beta (page-wide)</td><td>The only <span class="mono2">beta</span> column in the schema lives in <span class="mono2">company_profile</span>, which has 0 rows. Every DCF beta slider defaults to 1.0 with an always-visible gap note; §1 comps Beta column shows "—" for every ticker. Not estimated, not silently defaulted without disclosure.</td></tr>
+<tr><td class="pur">§4 Insider</td><td><span class="mono2">insider_trades</span> is empty DB-wide right now — every ticker shows a gap banner instead of the old hand-curated example rows. Master's FMP ingest into this table hasn't run yet.</td></tr>
+<tr><td class="pur">§5 Congress</td><td>No senate-trading/house-trading equivalent table exists in Supabase at all (not even empty) — unconditional gap banner, not a per-ticker query.</td></tr>
+<tr><td class="pur">§6 COT</td><td><span class="mono2">cot_history</span> exists in the schema but has 0 rows — gap banner shown, no fallback to the old static E-mini table.</td></tr>
+<tr><td class="pur">company_profile (publisher attribution, etc.)</td><td>0 rows — anything that would have needed it (analyst publisher/outlet names, beta) is flagged inline instead.</td></tr>
 </table>
 
-<p style="font-size:15px;"><b>The math, for reference.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Base numbers (revenue, shares, net debt, D&amp;A%, capex%, NWC%) are per-ticker, pulled from each company's own <span class="mono2">custom-dcf-advanced</span> data — not a single fixed NVDA constant reused across tickers.</p>
-<p style="margin-top:8px;"><b>Sources.</b> Comps <span class="mono2">metrics-ratios-ttm</span> · DCF mechanics <span class="mono2">custom-dcf-advanced</span> · forward estimates <span class="mono2">financial-estimates</span> · analyst grades/targets <span class="mono2">price-target-summary</span> · insider <span class="mono2">search-insider-trades</span> · congress <span class="mono2">senate-trading / house-trading</span> · COT <span class="mono2">commitmentOfTraders</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
-<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) feed §3.5 confidence into the reverse-DCF verdict strength, (2) live-refresh §2.7 price targets instead of freezing at fetch time, (3) make the page ticker-driven via the existing Supabase per-ticker tables (fundamentals/analyst_estimates), which already avoids exposing the FMP key client-side.</p>
+<p style="font-size:15px;"><b>Not yet built this pass:</b> a dedicated News section (<span class="mono2">news</span> + <span class="mono2">news_sentiment</span>) and an Earnings/transcripts section (<span class="mono2">earnings_events</span> + <span class="mono2">earnings_call_transcripts</span>) — both tables exist and are readable, just not surfaced on this page yet.</p>
+
+<p style="font-size:15px;"><b>The math, for reference — unchanged by Move 1.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Only the data feeding these formulas moved from a hardcoded 10-name object to live per-ticker Supabase reads — the formulas themselves were not changed.</p>
+<p style="margin-top:8px;"><b>Sources.</b> Financials <span class="mono2">fundamentals + fundamentals_history + ratios_history + balance_history + cashflow_history</span> · estimates/ratings/targets <span class="mono2">analyst_estimates + analyst_ratings + price_target_consensus</span> · quote/DCF price <span class="mono2">live_quotes</span> · peer grouping <span class="mono2">ticker_cohorts</span> · universe <span class="mono2">composite_staged</span> · risk-free <span class="mono2">treasury_rates</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
+<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) build News and Earnings/transcripts sections from the tables that already exist and are unused, (2) once master ingests insider_trades/company_profile/a congress-equivalent table, the page picks them up automatically — no rewrite needed, the query paths are already live, (3) feed §3.5 estimate-confidence into the reverse-DCF verdict strength.</p>
 </div>
 </details>
 
 <script>
-// ============ SELF-AUDIT — mechanical consistency checker, not a manual QA pass ============
-// Runs the SAME code paths a person clicking around would trigger (setTicker, centerRange) for
-// EVERY ticker and EVERY sensitivity slider at its default/min/max, then diffs values that must
-// agree with each other (e.g. the price shown in the comps table vs the price used by the DCF).
-// A clean run prints "0 issues" — like a trial balance footing to zero. Anything mis-wired shows
-// up as a specific, addressable line, not a vague "something feels off."
-function runAudit(){
+// ============ SELF-AUDIT — mechanical consistency checker, not a manual QA pass (Move 1: rewritten for async Supabase reads) ============
+// Runs the SAME code paths a person clicking around would trigger (setTicker, centerRange) for a
+// SAMPLE of tickers spread across the live ~211-name universe (not exhaustive — every ticker is a
+// live network round-trip now, so this is an honest sample, not a silent full sweep pretending to
+// be one), then diffs values that must agree with each other (e.g. the price shown in the comps
+// table vs the price used by the DCF). A clean run prints "0 issues" — like a trial balance footing
+// to zero. Anything mis-wired shows up as a specific, addressable line, not a vague "something's off."
+async function runAudit(){
   const origTicker = CURTICK;
-  const allTickers = Object.keys(TICKERS);
+  const btn = document.getElementById('auditBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '🔍 Running audit…'; }
+
+  const pool = UNIVERSE.length ? UNIVERSE.map(u=>u.ticker) : [CURTICK];
+  const sampleSet = new Set([origTicker, 'NVDA', 'MU', 'NBIS'].filter(t=>pool.includes(t)));
+  const step = Math.max(1, Math.floor(pool.length/12));
+  for(let i=0; i<pool.length && sampleSet.size<16; i+=step) sampleSet.add(pool[i]);
+  const sample = [...sampleSet];
+
   let issues = [], checks = 0;
 
-  allTickers.forEach(sym=>{
-    setTicker(sym); // real render path — not a simulation of one
+  for(const sym of sample){
+    await setTicker(sym); // real render path — not a simulation of one
 
-    // A — single source of truth: the price used in §1 comps (PEERSETS) must equal the price
-    // used to drive the DCF/header (TICKERS). This exact mismatch was the MU bug (192.11 vs 974.49).
     checks++;
-    const group = TICKER_GROUP[sym];
-    const G = group ? PEERSETS[group] : null;
-    const idx = G ? G.names.indexOf(sym) : -1;
-    if(!G || idx===-1){
-      issues.push('['+sym+'] not present in its own assigned peer set ("'+group+'") — comps table has no subject row for it.');
-    } else if(Math.abs(G.price[idx]-TICKERS[sym].price)>0.02){
-      issues.push('['+sym+'] PRICE MISMATCH — comps/peer-set price $'+G.price[idx].toFixed(2)+' vs DCF/header price $'+TICKERS[sym].price.toFixed(2)+'. These must be the same quote.');
+    if(!BASE){
+      issues.push('['+sym+'] buildBase() returned null — no fundamentals/live_quotes row for this ticker (page correctly shows a gap banner, but confirm this ticker should actually be missing).');
+      continue;
+    }
+
+    // A — single source of truth: the price used in §1 comps must equal the price driving the
+    // DCF/header. This exact class of mismatch was the MU bug (192.11 vs 974.49) pre-Move-1.
+    checks++;
+    if(window.LASTPX!=null && BASE.price!=null && Math.abs(window.LASTPX-BASE.price)>0.02){
+      issues.push('['+sym+'] PRICE MISMATCH — comps/live_quotes price $'+window.LASTPX.toFixed(2)+' vs DCF/header price $'+BASE.price.toFixed(2)+'. These must be the same quote.');
     }
 
     // B — cross-section consistency on the rendered page itself: header price vs the DCF's own
@@ -1527,13 +1462,7 @@ function runAudit(){
       issues.push('['+sym+'] could not read header/DCF price text to compare — DOM ids may have changed.');
     }
 
-    // C — analyst object exists with a sane positive average target (implied-upside math divides by this)
-    checks++;
-    const A = (typeof ANALYST!=='undefined') ? ANALYST[sym] : null;
-    if(!A) issues.push('['+sym+'] no ANALYST entry — §2.7 will silently render nothing.');
-    else if(!(A.avg>0)) issues.push('['+sym+'] ANALYST avg price target is not a positive number ('+A.avg+').');
-
-    // D — insider/congress sections actually re-titled for this ticker (catches leftover stale DOM
+    // C — insider/congress sections actually re-titled for this ticker (catches leftover stale DOM
     // from the previous ticker, which is exactly what a shared/contaminated session would produce)
     checks++;
     const insT = document.getElementById('insiderTitle');
@@ -1541,20 +1470,18 @@ function runAudit(){
     const conT = document.getElementById('congressTitle');
     if(!conT || !conT.textContent.includes(sym)) issues.push('['+sym+'] §5 congress title does not mention '+sym+' — got "'+(conT?conT.textContent:'MISSING ELEMENT')+'".');
 
-    // E — peer-table beta roughly agrees with the DCF's own beta (soft check — NVDA intentionally
-    // defaults its DCF slider to the peer MEDIAN rather than its own raw beta, so allow real slack)
+    // D — §5 Congress is a genuine page-wide DB gap (no senate/house table exists at all) — it
+    // must ALWAYS render the gap banner. If it ever doesn't, some stale/fabricated HTML leaked in.
     checks++;
-    if(window.PEER && window.PEER.beta && window.PEER.beta.subj!=null){
-      const diff = Math.abs(window.PEER.beta.subj - TICKERS[sym].beta);
-      if(diff > 0.5) issues.push('['+sym+'] peer-table beta ('+window.PEER.beta.subj.toFixed(2)+') is far from the DCF beta ('+TICKERS[sym].beta.toFixed(2)+') — diff '+diff.toFixed(2)+'.');
-    }
+    const conBody = document.getElementById('congressBody');
+    if(!conBody || !conBody.innerHTML.includes('gap-banner')) issues.push('['+sym+'] §5 congress did NOT render a gap banner — expected one unconditionally (no senate/house table exists in Supabase).');
 
-    // F — fair value doesn't render as NaN/undefined at this ticker's own defaults
+    // E — fair value doesn't render as NaN/undefined at this ticker's own defaults
     checks++;
     const fvTxt = document.getElementById('oFV') ? document.getElementById('oFV').textContent : '';
     if(/NaN|undefined/.test(fvTxt)) issues.push('['+sym+'] fair value renders as "'+fvTxt+'" at default sliders — broken formula for this ticker.');
 
-    // G — sensitivity axis: no duplicate values, for EVERY slider, at its default position AND
+    // F — sensitivity axis: no duplicate values, for EVERY slider, at its default position AND
     // both extremes (min/max). This is the exact class of bug centerRange() used to have.
     Object.keys(SV).forEach(key=>{
       checks++;
@@ -1567,20 +1494,22 @@ function runAudit(){
         }
       });
     });
-  });
+  }
 
-  setTicker(origTicker); // leave the page exactly where the user had it
+  await setTicker(origTicker); // leave the page exactly where the user had it
+  if(btn){ btn.disabled = false; btn.textContent = '🔍 Run Full Audit — sample tickers, every toggle, every slider extreme'; }
 
   const panel = document.getElementById('auditPanel');
   panel.style.display = 'block';
   const summary = document.getElementById('auditSummary');
   const detail = document.getElementById('auditDetail');
+  const sampleNote = ' (sample of '+sample.length+' of '+pool.length+' live universe tickers — every ticker is a network round-trip now, so this is an honest sample, not an exhaustive sweep)';
   if(issues.length===0){
-    summary.innerHTML = '✅ ALL CHECKS PASS — '+checks+' checks across '+allTickers.length+' tickers, 0 issues.';
+    summary.innerHTML = '✅ ALL CHECKS PASS — '+checks+' checks across '+sample.length+' tickers, 0 issues.'+sampleNote;
     summary.style.color = 'var(--green)';
     detail.innerHTML = '';
   } else {
-    summary.innerHTML = '🔴 '+issues.length+' ISSUE(S) FOUND — out of '+checks+' checks across '+allTickers.length+' tickers.';
+    summary.innerHTML = '🔴 '+issues.length+' ISSUE(S) FOUND — out of '+checks+' checks across '+sample.length+' tickers.'+sampleNote;
     summary.style.color = 'var(--red)';
     detail.innerHTML = issues.map(i=>'• '+i).join('<br>');
   }

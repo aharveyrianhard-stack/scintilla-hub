@@ -567,6 +567,15 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ern__days{ font-size:10.5px; color:var(--dim); }
 .sc-ern__days b{ color:var(--crk); font-weight:400; }
 .sc-ern__body{ display:grid; grid-template-columns:1fr 104px; gap:14px; margin-top:9px; align-items:center; flex:1 1 auto; }
+/* R48 — flat computed tag filling the 104px column that used to sit empty.
+   Deliberately NOT a sentence: one short uppercase word/phrase, colored like the
+   rest of the beat/miss language already on the card. */
+.sc-ern__tag{ font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+  text-align:center; border:.6px solid var(--hair); padding:6px 4px; line-height:1.3; }
+.sc-ern__tag.beat{ color:var(--bull); border-color:rgba(0,255,150,.3); }
+.sc-ern__tag.miss{ color:var(--bear); border-color:rgba(255,45,85,.3); }
+.sc-ern__tag.mixed{ color:var(--ink2); }
+.sc-ern__tag.streak{ color:var(--crk); border-color:rgba(0,212,255,.3); }
 .sc-ern__metrics{ display:grid; grid-template-columns:30px repeat(4, minmax(0,1fr)); gap:5px 7px; align-items:baseline; align-content:center; }   /* R39 — fluid columns: never overflow/collide in the narrow today-card */
 /* inline beat/miss word next to each row — replaces the old dashed square box */
 .sc-ern__bm{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; text-align:left; }
@@ -584,7 +593,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ern__sq.miss{ border:1px dashed var(--bear); color:var(--bear); }
 .sc-ern__sq.await{ border:1px dashed var(--line); color:var(--dim); font-size:10.5px; font-weight:600; }
 .sc-ern__foot{ display:flex; gap:26px; flex-wrap:wrap; margin-top:10px; padding-top:8px; border-top:.5px solid var(--line); }
-.sc-ern__lnk{ font-size:10.5px; color:var(--crk); text-decoration:none; font-weight:600; }
+.sc-ern__lnk{ font-size:10.5px; color:var(--crk); text-decoration:none; font-weight:600;
+  /* FIX (R2026-07-23) — this class sits on real <button> elements (Summary always did; Transcript
+     now does too), not just <a> tags. Without a full reset, browsers paint their own default button
+     chrome (white/gray rounded pill) on top — that's the "white bubble" Alan keeps flagging. Reset it
+     exactly like .sc-trbtn (the ticker-page transcript button) so <a> and <button> render identically. */
+  background:none; border:0; padding:0; margin:0; cursor:pointer; -webkit-appearance:none; appearance:none;
+  font-family:inherit; display:inline; letter-spacing:normal; vertical-align:middle; }
 .sc-ern__lnk:hover{ text-decoration:underline; }
 .sc-ern__lnk.pending{ color:var(--dim); font-weight:400; cursor:default; pointer-events:none; }
 /* REVERTED (R2026-07-22) — Alan wants ▤ Summary IDENTICAL to Release/Transcript/Call,
@@ -632,6 +647,19 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* compact variant for the company EVENTS tab (tighter) */
 .sc-airead.mini{ padding:6px 8px; }
 .sc-airead.mini .sc-airead__body{ font-size:8.5px; margin-top:4px; }
+/* R48 — real (deterministic, zero-cost) hashtag/flag extraction filling the
+   previously-always-empty NEWS AI READ slot. .live replaces the dim "coming"
+   badge once there's an actual computed theme in scope. */
+.sc-airead__tag.live{ color:var(--crk); border-color:rgba(0,212,255,.4); }
+.sc-airead__body.tags{ display:flex; flex-wrap:wrap; gap:5px 8px; margin-top:6px; }
+.sc-aitag{ font-size:8.5px; letter-spacing:.06em; color:var(--ink2); border:.6px solid var(--hair); border-radius:3px; padding:2px 6px; white-space:nowrap; }
+.sc-aitag b{ color:var(--crk); font-weight:700; margin-left:3px; }
+/* R48 — FMP activity panel inside the existing SYSTEMS sheet */
+.sc-fmpact{ margin-top:14px; padding-top:12px; border-top:.6px solid var(--line2); }
+.sc-fmpact__ttl{ font-size:8px; letter-spacing:.2em; color:var(--crk); text-transform:uppercase; margin-bottom:7px; }
+.sc-fmpact__row{ font-size:10px; color:var(--ink2); padding:4px 0; border-bottom:.4px solid var(--line); }
+.sc-fmpact__row b{ color:var(--ink); }
+.sc-fmpact__row .dim, .sc-fmpact .dim{ color:var(--dim); font-size:9px; }
 
 /* ── AREA B+E extras · RELEASES mini-section, transcript button + bubble, grades ── */
 .sc-relsec{ margin-top:8px; }
@@ -710,7 +738,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    its own override, so only the 481–1180 coarse band — iPad — suffered). Header
    buttons are now excluded from that rule; no child grows, no min-widths. */
 .sc-head{ display:flex; justify-content:flex-start; flex-wrap:nowrap; align-items:center;
-  gap:14px; border:.8px solid var(--hair); padding:11px 18px;
+  gap:12px; border:.8px solid var(--hair); padding:8px 18px;   /* R48 — height trimmed to what the log/wordmark actually need (was 11px vert) */
   /* FIX (R52 item 1) — HARD FRAME LIMIT: box-sizing so the padding+border are
      counted INSIDE the width, so the right-hand controls (● LIVE / ● CLOSED badge
      + icons) sit against the inner edge of the border, never past it. We do NOT
@@ -782,7 +810,8 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
   font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--ink);
   transition:width .18s ease, opacity .16s ease, padding .18s ease; }
 .sc-head__ctrls.search-open .sc-headsearch input{ width:min(120px,26vw); opacity:1;
-  padding:3px 8px; border-bottom:.8px solid var(--line2); }
+  padding:3px 8px; border:1px solid var(--crk); border-radius:3px;
+  background:rgba(0,212,255,.07); box-shadow:0 0 9px rgba(0,212,255,.4); }   /* R48 — was a flat line-bottom, didn't read as "open"; now a real cyan pop matching the rest of the system */
 #headSearchBtn{ font-size:15px; }
 .sc-head__ctrls.search-open #headSearchBtn{ color:var(--crk); }
 /* FIX 2 — header decongestion: ONLY trefoil · wordmark · LIVE · ⛶ · ⌕ · SYSTEMS live here.
@@ -917,10 +946,10 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    row inside the board header (.sc-ihead.cohtabs), and the AUTO-ROTATE control.
    ============================================================================ */
 /* two-zone company tab header: tabs own the left, controls own a separate zone */
-.sc-ihead.ptabs{ gap:0; padding:0 6px; align-items:stretch; }
-.sc-ihead.ptabs .tabstrip{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:2px; overflow-x:auto; }   /* FIX C — gap 2px + overflow-x safety so tabs scroll rather than hard-clip on very narrow windows */
+.sc-ihead.ptabs{ gap:0; padding:0 6px; align-items:stretch; flex-wrap:nowrap; }   /* R48 — explicit nowrap: Alan saw COHORT ▾ split onto its own row above GEIGER/CHART/... on his phone/iPad; couldn't reproduce it in desktop Chrome and found no wrap-inducing rule in the sheet, so hardening this defensively rather than leaving it to the default */
+.sc-ihead.ptabs .tabstrip{ flex:1 1 auto; min-width:0; display:flex; flex-wrap:nowrap; align-items:center; gap:2px; overflow-x:auto; }   /* FIX C — gap 2px + overflow-x safety so tabs scroll rather than hard-clip on very narrow windows */
 .sc-ihead.ptabs .tabstrip::-webkit-scrollbar{ display:none; }
-.sc-ihead.ptabs .hctrls{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding-left:12px; }
+.sc-ihead.ptabs .hctrls{ flex:0 0 auto; display:flex; flex-wrap:nowrap; align-items:center; gap:8px; padding-left:12px; }
 .sc-ihead.ptabs .sc-it{ flex:0 0 auto; font-size:7px; letter-spacing:.02em; padding:9px 4px; }   /* FIX C — smaller/tighter so GEIGER…READ + COHORT ▾ all stay visible with AUTO+⛶ at a normal laptop width */
 .sc-ihead.ptabs .sc-it.on{ color:var(--crk); border-bottom:2px solid var(--crk); }
 .sc-ihead.ptabs .sc-fsico{ /* STD: base 10px inset (was padding-left:6px) */ }
@@ -966,6 +995,32 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-rotsel{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim);
   cursor:pointer; white-space:nowrap; flex:none; padding:2px 3px; user-select:none; }
 .sc-rotsel:hover{ color:var(--crk); }
+/* #133 — HEATMAP mode toggle (left-panel alt view when no ticker is pinned; cohort-scoped).
+   Same compact chip look as .sc-rotsel so it reads as one control family. */
+.sc-heatbtn{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim);
+  cursor:pointer; white-space:nowrap; flex:none; padding:2px 5px; user-select:none; border:1px solid var(--hair); border-radius:2px; }
+.sc-heatbtn:hover{ color:var(--crk); border-color:var(--crk); }
+.sc-heatbtn.on{ color:var(--bg); background:var(--crk); border-color:var(--crk); }
+.sc-heathead{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-bottom:1px solid var(--line); }
+.sc-heathead__lbl{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+.sc-heathead__lbl b{ color:var(--crk); }
+.sc-heathead__ctrls{ display:flex; align-items:center; gap:8px; flex:none; }
+/* FIX (report: "heatmap has no data") — .sc-heatgrid is a direct child of the .sc-chartpanel
+   flex column (#leftPanel) alongside .sc-chartpanel__slot, which claims space via flex:1 1 0.
+   The grid had no flex property (defaulted to 0 1 auto = auto-height → 0 against its
+   ancestor chain), so height:100% resolved to 0 and every tile was clipped invisible.
+   Match .sc-chartpanel__slot's own proven rule instead of a bare height:100%. */
+.sc-heatgrid{ flex:1 1 0; min-height:340px; display:grid; grid-template-columns:repeat(6, 1fr); grid-auto-rows:52px; gap:3px; padding:8px; overflow-y:auto; align-content:start; }
+.sc-heattile{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-radius:3px; cursor:pointer; overflow:hidden; padding:2px; border:1px solid rgba(255,255,255,.04); }
+.sc-heattile:hover{ outline:1px solid var(--crk); }
+.sc-heattile.lg{ grid-column:span 2; grid-row:span 2; }
+.sc-heattile.md{ grid-column:span 2; }
+.sc-heattile__t{ font-family:var(--mono); font-weight:700; font-size:10px; letter-spacing:.03em; color:var(--ink); line-height:1.1; }
+.sc-heattile.lg .sc-heattile__t{ font-size:13px; }
+.sc-heattile__c{ font-family:var(--mono); font-size:8px; color:var(--ink3); margin-top:2px; }
+.sc-heatgrid__empty{ padding:24px; text-align:center; color:var(--dim); font-family:var(--mono); font-size:9px; }
+@media(max-width:640px){ .sc-heatgrid{ grid-template-columns:repeat(4,1fr); grid-auto-rows:44px; } }
 /* COHORT ▾ — tab-bar chip that behaves like the logo menu; looks like a normal tab */
 .sc-cohwrap{ position:relative; display:inline-flex; align-items:center; }
 .sc-cohwrap.is-open > .sc-it{ color:var(--crk); }
@@ -1340,6 +1395,14 @@ html{ font-size:16px; }
     max-height:none; flex-wrap:nowrap; }
   .sc-mtab{ flex:0 0 auto; padding:12px 13px; min-height:40px; }
   .sc-coh{ flex:0 0 auto; min-height:40px; padding:12px 10px; }
+  /* FIX (R37) — the EVENTS/NEWS cohort strip (.sc-ihead.cohtabs .sc-coh, base rule
+     at line ~941) is a higher-specificity override that was NOT covered by the
+     plain .sc-coh mobile rule above, so on phones it stayed ~18px tall while its
+     sibling tab rows (.sc-mtab above it, .ct ALL/EARNINGS/DIVIDENDS below it) both
+     got bumped to a 40px tap target — Alan: "cohort boards is not on the same
+     height as the other tabs in their section." Re-declared here at equal
+     specificity + later in the cascade so it wins and matches. */
+  .sc-ihead.cohtabs .sc-coh{ min-height:40px; padding:12px 4px; }
   .sc-cohsearch{ flex:0 0 auto; }
   /* COMPANY = FULL-SCREEN SHEET: chrome out (header stays), 1-col cgrid (≤900 rule),
      big visible ← back */
@@ -1414,6 +1477,7 @@ html{ font-size:16px; }
   .sc-mtabs, .sc-cohrow{ overflow-x:auto; -webkit-overflow-scrolling:touch;
     max-height:none; flex-wrap:nowrap; }
   .sc-mtab, .sc-coh{ flex:0 0 auto; min-height:40px; }
+  .sc-ihead.cohtabs .sc-coh{ min-height:40px; padding:12px 4px; }   /* FIX (R37) — see max-width:640px twin rule above */
   .ch{ min-height:40px; }                           /* board rows = real tap targets */
   .sc-star{ width:28px; min-height:40px; font-size:14px; }
   /* R23 FIX 1 — .rt removed from the 40px tap rule: it inflated the read-tab
@@ -1424,17 +1488,13 @@ html{ font-size:16px; }
      spread the ctrls cluster leftward. Vertical tap target kept; width natural. */
   .sc-fsico, .sc-addchart{ min-width:40px; min-height:40px; }
   .sc-head__btn{ min-width:0; min-height:40px; }
-  /* R21 FIX 1 — touch header ctrls = 2-row stack: ● LIVE on top (right-aligned,
-     tiny), ⛶ ⌕ SYSTEMS tight beneath. Cluster stays ≈ 3 small buttons wide;
-     header is a flex child so any extra height self-accommodates (no hardcoded
-     header-height offsets exist). Desktop (fine pointer) unchanged. */
-  .sc-head__ctrls{ display:grid; grid-template-columns:repeat(3,auto);
-    gap:2px 4px; justify-items:end; align-items:center; }
-  .sc-head__live{ grid-column:1/-1; font-size:8px; letter-spacing:.08em; }
-  /* FIX 3 (R37) — on coarse/touch the revealed header search spans the full ctrls
-     row so its input never squeezes the grid buttons. */
-  .sc-head__ctrls.search-open .sc-headsearch{ grid-column:1/-1; justify-self:end; }
-  .sc-head__ctrls.search-open .sc-headsearch input{ width:min(150px,44vw); }
+  /* R48 — Alan: "live notifications search and fullscreen go left to right, live
+     is on top, dont like." Killed the R21 2-row grid stack (● LIVE top, ⛶⌕ SYSTEMS
+     beneath) — it was what made the header taller than it needs to be on touch.
+     Single row now, same order as desktop: LIVE · bell · ⛶ · ⌕, all left-to-right. */
+  .sc-head__ctrls{ display:flex; flex-wrap:nowrap; align-items:center; gap:8px; }
+  .sc-head__live{ font-size:8px; letter-spacing:.08em; }
+  .sc-head__ctrls.search-open .sc-headsearch input{ width:min(120px,32vw); }
   /* R23 FIX 1 — coarse .rtabs{flex-wrap:wrap} deleted: the base rule now scrolls
      sideways instead of wrapping (WATCH no longer orphans onto a second line). */
   /* R19 — TAP-HEADER TOGGLE (touch only): body.tapshow forces the tab strips
@@ -2286,28 +2346,29 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 .sc-menu{display:none;position:fixed;top:0;left:0;bottom:0;z-index:91;width:300px;max-width:88vw;background:var(--panel);border-right:.8px solid rgba(0,212,255,.3);box-shadow:0 0 40px rgba(0,0,0,.6);flex-direction:column;overflow-y:auto}
 .sc-menu.is-open{display:flex;animation:scMenuIn .28s ease}
 @keyframes scMenuIn{from{transform:translateX(-26px);opacity:.4}to{transform:none;opacity:1}}
-.sc-menu__head{display:flex;align-items:center;gap:12px;padding:16px 20px 15px;border-bottom:.6px solid var(--line)}
-.sc-menu__tre{filter:drop-shadow(0 0 5px var(--crk)) drop-shadow(0 0 14px rgba(0,212,255,.35));flex:none}
-.sc-menu__word{flex:1;font-weight:200;letter-spacing:.5em;font-size:13px;color:var(--ink)}
-.sc-menu__x{font-size:12px;color:var(--dim);cursor:pointer;background:none;border:0;padding:2px 6px}
+.sc-menu__head{display:flex;align-items:center;gap:12px;padding:20px 20px 18px;border-bottom:1px solid var(--line)}
+.sc-menu__tre{filter:drop-shadow(0 0 6px rgba(0,212,255,.55));flex:none}
+.sc-menu__word{flex:1;font-family:var(--mono);font-weight:400;letter-spacing:.34em;font-size:13px;color:var(--ink);text-indent:.34em}
+.sc-menu__x{font-size:13px;color:var(--dim);cursor:pointer;background:none;border:0;padding:2px 6px}
 .sc-menu__x:hover{color:var(--crk)}
-.sc-menu__sec{font-family:var(--mono);font-size:7.5px;letter-spacing:.36em;color:var(--dim);text-transform:uppercase;padding:18px 20px 8px;display:flex;align-items:center;gap:10px}
-.sc-menu__sec::after{content:"";flex:1;height:.5px;background:var(--line)}
-.sc-menu__item{display:flex;align-items:center;gap:13px;padding:9px 20px;cursor:pointer;border-left:1.5px solid transparent;background:none;border-top:0;border-right:0;border-bottom:0;width:100%;text-align:left;font:inherit;color:inherit}
-.sc-menu__item:hover{background:rgba(0,212,255,.04)}
-.sc-menu__item.is-on{background:rgba(0,212,255,.06);border-left-color:var(--crk)}
+.sc-menu__sec{font-family:var(--mono);font-size:8.5px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;padding:22px 22px 6px}
+.sc-menu__item{display:flex;align-items:center;gap:15px;padding:13px 22px;cursor:pointer;border-left:2px solid transparent;background:none;border-top:0;border-right:0;border-bottom:0;width:100%;text-align:left;font:inherit;color:inherit}
+.sc-menu__item:hover{background:rgba(255,255,255,.02)}
+.sc-menu__item.is-on{background:rgba(0,212,255,.05);border-left-color:var(--crk)}
 .sc-menu__item:disabled{cursor:default}
-.sc-menu__ico{width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center}
-.sc-menu__ico svg{width:15px;height:15px;fill:none;stroke:var(--crk);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.72}
-.sc-menu__item:hover .sc-menu__ico svg{opacity:.9}
+.sc-menu__ico{width:20px;height:20px;flex:none;display:flex;align-items:center;justify-content:center}
+.sc-menu__ico svg{width:19px;height:19px;fill:none;stroke:var(--ink3);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.sc-menu__item:hover .sc-menu__ico svg{stroke:var(--ink2)}
+.sc-menu__item.is-on .sc-menu__ico svg{stroke:var(--crk)}
 .sc-menu__itxt{flex:1;min-width:0}
-.sc-menu__iname{display:block;font-weight:300;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
-.sc-menu__ob{color:var(--mute);letter-spacing:.12em;margin-left:5px}
-.sc-menu__idesc{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
-.sc-menu__state{display:inline-flex;align-items:center;gap:5px;flex:none;font-family:var(--mono);font-size:6.5px;letter-spacing:.16em;text-transform:uppercase}
-.sc-menu__sd{width:4px;height:4px;border-radius:50%;background:currentColor}
+.sc-menu__iname{display:block;font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);line-height:1.2}
+.sc-menu__item.is-on .sc-menu__iname{color:var(--crk)}
+.sc-menu__ob{display:none}
+.sc-menu__idesc{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.03em;color:var(--dim);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
+.sc-menu__state{display:none}
+.sc-menu__sd{width:5px;height:5px;border-radius:50%;background:currentColor}
 .sc-menu__state--live{color:var(--bull)}.sc-menu__state--prev{color:var(--crk)}.sc-menu__state--wire{color:var(--dim)}
-.sc-menu__foot{margin-top:auto;padding:13px 20px;border-top:.6px solid var(--line);font-family:var(--mono);font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);line-height:1.9}
+.sc-menu__foot{margin-top:auto;padding:16px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);line-height:1.8}
 .sc-menu__foot b{color:var(--ink2);font-weight:500}
 .sc-sheet__scrim{display:none;position:fixed;inset:0;z-index:95;background:rgba(3,5,9,.6);align-items:center;justify-content:center;padding:24px}
 .sc-sheet__scrim.is-open{display:flex}
@@ -2372,7 +2433,7 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 <aside class="sc-menu" id="scMenu" aria-label="SCINTILLA menu">
   <div class="sc-menu__head">
     <svg class="sc-menu__tre" width="24" height="24" viewBox="0 0 96 96" fill="none" stroke="var(--crk)" stroke-width="5" stroke-linecap="round"><path d="M 32.5 27.8 A 22 22 0 0 1 63.5 27.8"/><path d="M 32.5 27.8 A 22 22 0 0 1 63.5 27.8" opacity=".85" transform="rotate(120 48 48)"/><path d="M 32.5 27.8 A 22 22 0 0 1 63.5 27.8" opacity=".7" transform="rotate(240 48 48)"/><circle cx="48" cy="48" r="4" fill="var(--crk)" stroke="none"/></svg>
-    <span class="sc-menu__word">MENU</span>
+    <span class="sc-menu__word">SCINTILLA</span>
     <button class="sc-menu__x" data-act="menuClose" aria-label="Close menu">✕</button>
   </div>
   <div class="sc-menu__sec">Chat</div>
@@ -2558,7 +2619,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     pg("cohorts?select=ticker,cohort" + (scopeAll ? "" : "&cohort=eq." + encodeURIComponent(cohort))),
     pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,volume"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("composite_staged?select=ticker,composite,trend,momentum,structure,updated_ts&tf=eq.D&order=updated_ts.desc"),
-    pg("company_profile?select=ticker,name,exchange,avg_volume"),
+    pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
     pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"),
     /* R26 FIX 6 — ONE batch: every future annual estimate row, first per ticker kept client-side */
     pg("analyst_estimates?select=ticker,est_eps_avg,fiscal_date&period=eq.annual&fiscal_date=gte." + todayISO() + "&order=ticker.asc,fiscal_date.asc").catch(() => []),
@@ -2630,6 +2691,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
                  const av = pf[m.ticker] && Number(pf[m.ticker].avg_volume);
                  return (lqv != null && lqv > 0 && av > 0) ? lqv / av : null;
                })(),
+        mc:    num(pf[m.ticker] && pf[m.ticker].market_cap),   // #133 (fix) — real market cap, feeds heatmap tile size
       };
     });
   if (cohort === "FAV") rows = rows.filter((r) => fav.includes(r.t));
@@ -2750,7 +2812,7 @@ const COHORTS = [
   ["MACRO", "MACRO"], ["INDEXES", "INDEXES"], ["THEMATIC", "THEMATIC"],
 ];   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
 const CO_TABS = ["GEIGER","CHART","STATS","ESTIMATES","FINANCIALS","NEWS","SOCIAL","EVENTS","READ"];
-const READ_TABS = ["VERDICT", "BUSINESS", "CATALYSTS", "WATCH"];
+const READ_TABS = ["BUSINESS", "VERDICT", "CATALYSTS", "WATCH"];   // R48 — Alan: business first, left-most
 
 /* ---- helpers --------------------------------------------------------------- */
 const esc = (s) => String(s == null ? "" : s)
@@ -3257,6 +3319,32 @@ document.addEventListener("input", (e) => {
   else if (S.sec === "SOCIAL") renderSocial();   // AREA A — repaint scope from SOCSENT on every keystroke
   else renderEvents(S.coh);
 });
+/* R48 — Alan: "search must expand left to right, things should move to give room,
+   and it should reduce after a bit of no typing and drop the mouse." The reveal
+   never auto-closed before (only the ⌕ button toggling it off did). Idle timer
+   resets on every keystroke; a blur (mouse/finger leaves the field) also arms it
+   with a short grace period so clicking a live-filter result doesn't yank it shut
+   mid-click. Collapsing here only hides the input (CSS width:0) — it does NOT
+   clear S.tq/the value, same as before; only the explicit ⌕ toggle-off clears. */
+let _searchIdleT = null;
+function _armSearchAutoClose(ms) {
+  clearTimeout(_searchIdleT);
+  _searchIdleT = setTimeout(() => {
+    const ctrls = document.querySelector(".sc-head__ctrls.search-open");
+    if (ctrls) ctrls.classList.remove("search-open");
+  }, ms);
+}
+document.addEventListener("input", (e) => {
+  if (!e.target || e.target.id !== "cohSearchInput") return;
+  _armSearchAutoClose(4500);
+});
+document.addEventListener("focusout", (e) => {
+  if (!e.target || e.target.id !== "cohSearchInput") return;
+  _armSearchAutoClose(1200);
+});
+document.addEventListener("focusin", (e) => {
+  if (e.target && e.target.id === "cohSearchInput") clearTimeout(_searchIdleT);
+});
 function updateCohrow() {
   /* DASHBOARD MODEL — cohort tabs live in the board header now */
   document.querySelectorAll("#cohTabsHead .sc-coh").forEach((b) =>
@@ -3489,6 +3577,56 @@ let LEFT_TIMER = null;                  // the ONE rotate timer; null when stopp
 let ROT_INDEX = 0;                      // which FAV ticker is on the left right now
 let ROT_TOKEN = 0;                      // bumped every swap; stale async paints are dropped
 let LEFT_T = null;                      // the ticker currently shown on the left
+/* #133 — HEATMAP mode: an alternate left-panel view (no single ticker), showing every
+   ticker in the CURRENT board scope (shownRows() — same cohort tab + search the board
+   itself is showing) as a color/size-coded tile. Fully independent of LEFT_STATE/AUTO —
+   toggling it off restores the exact prior rotate/pinned view untouched. Repaints for
+   free on every board feed tick (restartFeed's onRows already calls sync()). */
+let LEFT_HEAT = false;
+/* #133 (fix, per Alan: "sizes cant be right spy is tiny") — a market heatmap sizes each
+   box by WEIGHT (market cap: the thing that makes SPY/AAPL huge and a small-cap tiny) and
+   colors it by the day's % move (green up / red down) — two different signals, not one.
+   The first cut conflated both onto |composite|, which is why SPY (huge cap, small geiger
+   reading that day) rendered as a tiny tile. Fixed: size = market_cap RANK within the
+   current scope (percentile-based, so it works whether the scope is 8 tickers or 190 —
+   no hardcoded dollar thresholds); color = chg%, capped at +/-5% for full saturation
+   (typical heatmap convention), tickers with no market_cap on file fall to the smallest
+   tier rather than being dropped (honest — still shown, just not oversized on a guess). */
+function heatColorChg(c) {
+  const v = num(c);
+  if (v == null) return "rgba(140,140,160,.10)";
+  const a = 0.12 + Math.min(1, Math.abs(v) / 5) * 0.6;
+  return v >= 0 ? "rgba(0,255,163," + a.toFixed(2) + ")" : "rgba(255,45,85," + a.toFixed(2) + ")";
+}
+function heatmapHTML() {
+  const all = shownRows();
+  if (!all.length) return '<div class="sc-heatgrid__empty">no tickers in this scope</div>';
+  const byCap = all.slice().sort((a, b) => (num(b.mc) || 0) - (num(a.mc) || 0));
+  const n = byCap.length;
+  const rankOf = {}; byCap.forEach((r, i) => { rankOf[r.t] = i; });
+  const lgCut = Math.max(1, Math.ceil(n * 0.12));
+  const mdCut = Math.max(lgCut, Math.ceil(n * 0.4));
+  const rows = all.slice().sort((a, b) => (rankOf[a.t] ?? n) - (rankOf[b.t] ?? n));
+  const tiles = rows.map((r) => {
+    const rk = rankOf[r.t] ?? n;
+    const hasCap = num(r.mc) != null;
+    const sizeCls = (hasCap && rk < lgCut) ? " lg" : (hasCap && rk < mdCut) ? " md" : "";
+    return '<div class="sc-heattile' + sizeCls + '" style="background:' + heatColorChg(r.c) + '" data-act="row" data-t="' + esc(r.t) + '">' +
+      '<span class="sc-heattile__t">' + esc(r.t) + "</span>" +
+      '<span class="sc-heattile__c">' + (r.c != null ? fmtC(r.c) : "—") + "</span>" +
+    "</div>";
+  }).join("");
+  return '<div class="sc-heatgrid" id="heatGrid">' + tiles + "</div>";
+}
+function heatHeadHTML() {
+  return '<div class="sc-heathead">' +
+    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · size = mkt cap · color = %chg</span>' +
+    '<span class="sc-heathead__ctrls">' +
+      '<span class="sc-heatbtn on" data-act="heattoggle" title="back to single-ticker view">HEAT ▸ OFF</span>' +
+      SECFS_BTN0 +
+    "</span>" +
+  "</div>";
+}
 
 function favList() { return (S.fav && S.fav.length) ? S.fav.slice() : []; }
 
@@ -3513,9 +3651,12 @@ function leftHeadHTML(t) {
      interval and persists to localStorage. Kept tiny so it doesn't re-clip the tabs. */
   const rotSel = '<span class="sc-rotsel" id="scRotSel" data-act="rotcycle" title="rotation interval — click to change">' +
     (LEFT_ROT_MS / 1000) + 's ▾</span>';
+  /* #133 — HEAT toggle: swaps the left panel to a whole-scope heatmap. Sits beside AUTO
+     so it's discoverable from the normal rotate/pinned view, not just a hidden mode. */
+  const heatBtn = '<span class="sc-heatbtn" data-act="heattoggle" title="heatmap of the current cohort scope">HEAT</span>';
   return '<div class="sc-ihead ptabs" id="leftHead">' +
     '<div class="tabstrip" role="tablist">' + tabs + cohortChipHTML(t) + "</div>" +
-    '<div class="hctrls">' + autoBox + rotSel + SECFS_BTN0 + "</div>" +
+    '<div class="hctrls">' + heatBtn + autoBox + rotSel + SECFS_BTN0 + "</div>" +
   "</div>";
 }
 
@@ -3534,6 +3675,7 @@ function leftBodyHTML() {
    50/50 row (see dashboardHTML / identBarData). The left panel now starts at the
    company tab header. */
 function leftPanelInnerHTML() {
+  if (LEFT_HEAT) return heatHeadHTML() + heatmapHTML();   // #133 — whole-scope heatmap replaces the single-ticker view
   return leftHeadHTML(LEFT_T) + leftBodyHTML();
 }
 /* ident line for the left panel — like identBarHTML but without a ← back button
@@ -3812,7 +3954,7 @@ function renderNews(cohort) {                            // paints from the per-
   list.innerHTML = shown.length ? shown.map((n) => newsArtHTML(n)).join("")
     : '<div class="soon">No headlines for <b>' + esc(S.tq || cohort) + "</b> yet.</div>";
   const rail = el("newsRail");                           // PULSE RAIL — recomputed from the SAME per-cohort result on every paint
-  if (rail) rail.innerHTML = AIREAD_SLOT("news · " + esc(S.tq || cohort)) + newsRailHTML(shown, S.tq || cohort);   // AREA D — AI-read slot persists across repaints
+  if (rail) rail.innerHTML = newsAiReadHTML(shown, S.tq || cohort) + newsRailHTML(shown, S.tq || cohort);   // R48 — real hashtag/flag read, was a static placeholder
   const sl = el("newsScopeLbl");
   if (sl) sl.textContent = S.tq || cohort;
 }
@@ -3884,6 +4026,35 @@ async function fillNews() {
    just the styled, correctly-placed empty area. Dropped into NEWS, SOCIAL and the
    EVENTS area. `scopeLbl` optional dim sub-label (e.g. the ticker/cohort scope).
    ============================================================================ */
+/* R48 — Alan: "the ai read in news is empty. that should have something." and
+   "making flags/hashtags out of the news feed, put below most-mentioned — much
+   stronger than most mentioned." Deterministic (zero API cost): tokenize the
+   SAME deduped headlines the list/rail already show, drop stopwords/short/pure-
+   numeric tokens, count each surviving word once per headline (so one very
+   wordy headline can't dominate), keep anything mentioned in 2+ headlines. */
+const NEWS_STOP = new Set(["this","that","with","from","have","will","been","were","their","about","after","over","into","more","than","said","says","which","what","when","where","also","some","such","only","even","just","could","would","should","there","these","those","while","during","among","across","amid","being","still","other","first","second","third","before","between","under","above","again","further","once","here","both","most","much","many","very","were","does","doing","having","because","until","against","through","itself","yourself","company","companies","stock","stocks","shares","share","market","markets","today","week","year","years","month","new","inc","corp","ltd","llc"]);
+function extractNewsTags(items) {
+  const freq = {};
+  for (const n of (items || [])) {
+    const raw = ((n && n.title) || "") + " " + ((n && n.snippet) || "");
+    const words = raw.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/)
+      .filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !NEWS_STOP.has(w.toLowerCase()));
+    const seen = new Set();
+    for (const w of words) { if (seen.has(w)) continue; seen.add(w); freq[w] = (freq[w] || 0) + 1; }
+  }
+  return Object.entries(freq).filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 6);
+}
+function newsAiReadHTML(shown, scopeLbl) {
+  const tags = extractNewsTags(dedupeNews(shown || []));
+  const tagBadge = tags.length ? '<span class="sc-airead__tag live">live</span>' : '<span class="sc-airead__tag">coming</span>';
+  const body = tags.length
+    ? '<div class="sc-airead__body tags">' + tags.map(([w, c]) => '<span class="sc-aitag">#' + esc(w) + "<b>" + c + "</b></span>").join("") + "</div>"
+    : '<div class="sc-airead__body">Agent summary reserved' + (scopeLbl ? " · <b>" + esc(scopeLbl) + "</b>" : "") + " — no repeating theme in this scope's headlines yet.</div>";
+  return '<div class="sc-airead" role="note" aria-label="AI read — news flags">' +
+    '<div class="sc-airead__hd"><span class="sc-airead__gly">◆</span><span class="sc-airead__ttl">AI READ</span>' + tagBadge + "</div>" +
+    body + "</div>";
+}
 function AIREAD_SLOT(scopeLbl) {
   return '<div class="sc-airead" role="note" aria-label="AI read placeholder">' +
     '<div class="sc-airead__hd"><span class="sc-airead__gly">◆</span><span class="sc-airead__ttl">AI READ</span>' +
@@ -6244,6 +6415,28 @@ function earningsBlockHTML(d) {
         '<span class="sc-ern__k">EPS</span>' + fxEst(epsEst, false) +
         '<span class="sc-ern__k">REV</span>' + fxEst(revEst, true) +
       "</div>";
+  /* R48 — Alan: ".sc-ern__body is a 1fr/104px grid but only 1 child ever gets
+     placed, so that 104px column has been dead space on every card since the
+     grid was written. Fill it with a flat computed tag, never a sentence:
+     REPORTED cards → this quarter's own beat/miss magnitude (zero extra data,
+     already have epsSp/revSp right here). UPCOMING cards → the ticker's last
+     up-to-3-quarter streak, passed in as d.streakTag by the caller (coEventsHTML
+     wires this from the same evs history it already has; the master board path
+     doesn't wire it yet — renders nothing there until it does, no breakage). */
+  function pastHighlightTag() {
+    const known = [epsSp, revSp].filter((x) => x != null);
+    if (!known.length) return "";
+    const mag = Math.max.apply(null, known.map((x) => Math.abs(x)));
+    const allBeat = known.every((x) => x >= 0), allMiss = known.every((x) => x < 0);
+    if (allBeat) return mag >= 20 ? "STRONG BEAT" : (mag >= 5 ? "BEAT" : "INLINE");
+    if (allMiss) return mag >= 20 ? "STRONG MISS" : (mag >= 5 ? "MISS" : "INLINE");
+    return "MIXED";   // one metric beat, the other missed
+  }
+  const tagTxt = reported ? pastHighlightTag() : (d.streakTag || "");
+  const tagCls = reported
+    ? (/BEAT/.test(tagTxt) ? "beat" : (/MISS/.test(tagTxt) ? "miss" : "mixed"))
+    : "streak";
+  const tag = tagTxt ? '<div class="sc-ern__tag ' + tagCls + '">' + esc(tagTxt) + "</div>" : "";
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">◹ Release · 8-K Ex 99.1</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
@@ -6256,7 +6449,7 @@ function earningsBlockHTML(d) {
     '<div class="sc-ern__top"><span class="sc-ern__tk" data-tkopen="' + esc(d.ticker || "") + '">' + esc(d.ticker || "—") + "</span>" +
       '<span class="sc-ern__date">' + dstr + "</span>" + pill +
       '<span class="sc-ern__days">' + rel + "</span></div>" +
-    '<div class="sc-ern__body">' + metrics + "</div>" +
+    '<div class="sc-ern__body">' + metrics + tag + "</div>" +
     foot +
   "</div>";
 }
@@ -6425,11 +6618,32 @@ function coEventsHTML(data) {
   const today0 = todayISO();
   const upEvs = evs.filter((e) => e && e.date && String(e.date) >= today0)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const nextBlock = upEvs.length                                    // (1) — UPCOMING earnings block (no label; sits beside AI READ)
-    ? upEvs.map(earningsRowToBlock).map(earningsBlockHTML).join("")
-    : "";
   const pastEvs = evs.filter((e) => e && e.date && String(e.date) < today0)
     .sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 24);
+  /* R48 — streak tag for UPCOMING cards: classify the ticker's own last up-to-3
+     REPORTED quarters (already sitting right here in pastEvs, zero extra fetch)
+     as beat/miss/mixed, same logic earningsBlockHTML uses for a single quarter.
+     Attached as .streakTag so earningsBlockHTML can render it in the empty
+     104px column — flat tag, no sentence, no model call. */
+  const streakClass = pastEvs.slice(0, 3).map(earningsRowToBlock).map((b) => {
+    const eSp = surprisePct(num(b.eps && b.eps.actual), num(b.eps && b.eps.est));
+    const rSp = surprisePct(num(b.revenue && b.revenue.actual), num(b.revenue && b.revenue.est));
+    const known = [eSp, rSp].filter((x) => x != null);
+    if (!known.length) return null;
+    const beats = known.filter((x) => x >= 0).length;
+    return beats === known.length ? "beat" : (beats === 0 ? "miss" : "mixed");
+  }).filter(Boolean);
+  let streakTag = "";
+  if (streakClass.length) {
+    const beatN = streakClass.filter((x) => x === "beat").length;
+    const missN = streakClass.filter((x) => x === "miss").length;
+    if (beatN === streakClass.length) streakTag = "BEAT" + (streakClass.length > 1 ? "×" + streakClass.length : "");
+    else if (missN === streakClass.length) streakTag = "MISS" + (streakClass.length > 1 ? "×" + streakClass.length : "");
+    else streakTag = "MIXED " + beatN + "-" + missN;
+  }
+  const nextBlock = upEvs.length                                    // (1) — UPCOMING earnings block (no label; sits beside AI READ)
+    ? upEvs.map(earningsRowToBlock).map((b) => { b.streakTag = streakTag; return b; }).map(earningsBlockHTML).join("")
+    : "";
   const pastHTML = evs.length
     ? '<div class="sc-evsec">PAST EARNINGS</div>' + (pastEvs.length   // (4) — real earnings_events rows as blocks
         ? pastEvs.map(earningsRowToBlock).map(earningsBlockHTML).join("")
@@ -6782,8 +6996,10 @@ function sync() {
   }
   /* DASHBOARD MODEL — same mount ("DASH"): a cohort switch repaints ONLY the board
      rows (left panel untouched). The left panel is driven separately by the rotate
-     timer / row-click swap. */
-  else if (S.sec === "DASHBOARD" || S.sec === "COMPANY") updateBoard();
+     timer / row-click swap — EXCEPT #133's HEATMAP, which IS the current board
+     scope rendered a different way (per Alan: "heatmap needs to change according
+     to cohort board tab selection"), so it must repaint on every cohort switch too. */
+  else if (S.sec === "DASHBOARD" || S.sec === "COMPANY") { updateBoard(); if (LEFT_HEAT) renderLeftPanel(); }
 }
 /* wired rooms pull their tables right after mount (honest "loading…" → data/empty) */
 function afterMount() {
@@ -7127,7 +7343,7 @@ document.addEventListener("click", (e) => {
        another room's mount, fall back to sync() to build the DASH frame. */
     case "coh": {
       S.coh = a.dataset.key; S.tq = "";
-      if (mountedKey === "DASH") { updateBoard(); }
+      if (mountedKey === "DASH") { updateBoard(); if (LEFT_HEAT) renderLeftPanel(); }   // #133 — heatmap tracks the cohort tab too
       else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); }
       restartFeed();
       break;
@@ -7241,7 +7457,13 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ernsumclose": { e.preventDefault(); e.stopPropagation(); const h = el("ernSumHost"); if (h) h.innerHTML = ""; break; }
-    case "row":        openCo(a.dataset.t); break;
+    case "row":        LEFT_HEAT = false; openCo(a.dataset.t); break;   // #133 — a heatmap tile is also a board row; opening a company always exits heat mode
+    case "heattoggle": {   // #133 — flip the left panel between single-ticker (rotate/pinned) and whole-scope heatmap
+      LEFT_HEAT = !LEFT_HEAT;
+      if (LEFT_HEAT) clearRotate(); else if (LEFT_STATE === "AUTO") { scheduleNextTick(); startAutoBar(); }
+      renderLeftPanel();
+      break;
+    }
     case "back":       go("DASHBOARD"); break;
     case "cotab": {    // soft swap — left-panel body only; board untouched
       /* DASHBOARD MODEL — interacting with a tab stops the auto-rotate (pins the
@@ -7824,10 +8046,20 @@ async function favLoad() {
   try {
     const rows = await pg("hub_favorites?select=ticker");
     const server = Array.isArray(rows) ? rows.map((r) => String(r.ticker).toUpperCase()) : [];
-    const local  = S.fav.slice();
-    // MIGRATE: push any local-only favorite up to the server so nothing is stranded device-local
-    for (const t of local) { if (!server.includes(t)) operatorWrite({ action: "fav_add", ticker: t }).catch((e) => console.error("fav migrate", t, e)); }
-    S.fav = Array.from(new Set([...server, ...local]));             // union — no favorite is ever lost
+    /* BUGFIX (Alan: "stubborn favorite keeps coming back after I remove it") — this used
+       to UNION server+local and re-push any local-only ticker to the server on EVERY boot.
+       Any stale localStorage copy (another tab, another device, or this same browser a
+       moment before a removal round-tripped) would resurrect a just-deleted favorite
+       forever, since union can never express "I removed this on purpose." Server is the
+       authoritative cross-device store (R29): once it has ANY rows, trust it completely —
+       replace local, don't merge back in. Only the true first-ever-boot case (server
+       genuinely empty, nothing synced yet) migrates the local seed up, once. */
+    if (server.length) {
+      S.fav = server;
+    } else {
+      const local = S.fav.slice();
+      for (const t of local) operatorWrite({ action: "fav_add", ticker: t }).catch((e) => console.error("fav migrate", t, e));
+    }
     lsSet("sc_fav", JSON.stringify(S.fav));
     NEWS_CACHE.delete("FAV");
     restartFeed();
@@ -8174,7 +8406,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-07-16T0315";
+window.SC_BUILD = "2026-07-16T0330";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
@@ -8458,7 +8690,72 @@ function filesWire(){
   function closeSheet(id){ E(id+"Scrim").classList.remove("is-open"); }
   function openChat(){ var c=E("chatPop"); if(!c) return; c.classList.add("open");
     try{ if(typeof chatPosition==="function")chatPosition(); if(typeof chatScopeFill==="function")chatScopeFill(); if(typeof chatPaint==="function")chatPaint(); }catch(_){ } }
-  function openSys(){ var b=E("sysSheetBody"), h=E("healthStrip"); if(b) b.innerHTML=(h&&h.innerHTML.trim())?('<span class="sc-hpills">'+h.innerHTML+'</span>'):'<div class="sc-menu__empty">feed-health is initializing…</div>'; openSheet("sys"); }
+  function openSys(){
+    var b=E("sysSheetBody"), h=E("healthStrip");
+    if(b) b.innerHTML=(h&&h.innerHTML.trim())?('<span class="sc-hpills">'+h.innerHTML+'</span>'):'<div class="sc-menu__empty">feed-health is initializing…</div>';
+    openSheet("sys");
+    /* R48 — Alan wanted FMP call/activity visibility somewhere in the logo menu
+       (task: "fmp tracking in logo menu"). v1: surface the app_config result rows
+       the FMP-calling functions ALREADY write on every run — no new backend, just
+       making existing telemetry visible. */
+    if(b) b.insertAdjacentHTML("beforeend",'<div class="sc-fmpact" id="fmpActBox"><div class="sc-fmpact__ttl">FMP ACTIVITY</div><div class="sc-fmpact__body">loading…</div></div>');
+    pg("app_config?key=in.(lqbatch_result,earnings_sweep_result,earnings_date_verify_result)&select=key,value").then(function(rows){
+      var box=E("fmpActBox"); if(!box) return;
+      var m={}; (rows||[]).forEach(function(r){ try{ m[r.key]=JSON.parse(r.value); }catch(_){ m[r.key]=null; } });
+      var tstr=function(iso){ try{ return iso?new Date(iso).toLocaleTimeString():""; }catch(_){ return ""; } };
+      var lines=[];
+      var lq=m.lqbatch_result;
+      if(lq) lines.push('<div class="sc-fmpact__row"><b>live-quote-batch</b> '+(lq.marketWindow===false?'skipped (off-hours)':(lq.updated!=null?lq.updated+' updated / '+(lq.skippedNoChange||0)+' unchanged':'—'))+' <span class="dim">'+tstr(lq.at)+'</span></div>');
+      var sw=m.earnings_sweep_result;
+      if(sw) lines.push('<div class="sc-fmpact__row"><b>earnings-sweep</b> mode '+(sw.mode||'idle')+', '+(sw.processing!=null?sw.processing:0)+' in flight <span class="dim">'+tstr(sw.at)+'</span></div>');
+      var dv=m.earnings_date_verify_result;
+      if(dv) lines.push('<div class="sc-fmpact__row"><b>earnings-date-verify</b> checked '+(dv.checked||0)+', corrected '+((dv.corrected||[]).length)+' <span class="dim">'+tstr(dv.at)+'</span></div>');
+      box.querySelector(".sc-fmpact__body").innerHTML = lines.length ? lines.join("") : '<div class="dim">no recent activity logged.</div>';
+    }).catch(function(){ var box=E("fmpActBox"); if(box) box.querySelector(".sc-fmpact__body").innerHTML='<div class="dim">pull failed.</div>'; });
+    /* #138 — REAL bandwidth trend (per Alan: "i dont see fmp bandwidth... something feels off,
+       doesnt say anything to u"). Prior telemetry (above) was a single OVERWRITTEN snapshot —
+       no way to ever prove rising/falling. live-quote-batch v7 now APPENDS to fmp_bandwidth_log
+       every run; this pulls the last ~2h of rows and shows last-60-min vs prior-60-min bytes so
+       a real trend is visible, not a feeling. Starts accumulating from this deploy forward — no
+       history exists before it, stated plainly rather than faked. */
+    if(b) b.insertAdjacentHTML("beforeend",'<div class="sc-fmpact" id="fmpTrendBox"><div class="sc-fmpact__ttl">FMP BANDWIDTH TREND · live-quote-batch</div><div class="sc-fmpact__body">loading…</div></div>');
+    pg("fmp_bandwidth_log?fn=eq.live-quote-batch&select=calls,bytes,at&order=at.desc&limit=130").then(function(rows){
+      var box=E("fmpTrendBox"); if(!box) return;
+      rows=rows||[];
+      if(!rows.length){ box.querySelector(".sc-fmpact__body").innerHTML='<div class="dim">no rows yet — logging starts fresh from this deploy, check back in ~1-2h for a real trend.</div>'; return; }
+      var now=Date.now();
+      var sum=function(mins0,mins1){ var b=0,c=0; rows.forEach(function(r){ var age=(now-new Date(r.at).getTime())/60000; if(age>=mins0&&age<mins1){ b+=(r.bytes||0); c+=(r.calls||0); } }); return {b:b,c:c}; };
+      var last=sum(0,60), prev=sum(60,120);
+      var fmtKB=function(n){ return (n/1024).toFixed(1)+'KB'; };
+      var trend = (prev.b>0) ? (((last.b-prev.b)/prev.b*100).toFixed(0)+'%') : '—';
+      box.querySelector(".sc-fmpact__body").innerHTML =
+        '<div class="sc-fmpact__row"><b>last 60min</b> '+fmtKB(last.b)+' / '+last.c+' calls</div>' +
+        '<div class="sc-fmpact__row"><b>prior 60min</b> '+fmtKB(prev.b)+' / '+prev.c+' calls</div>' +
+        '<div class="sc-fmpact__row"><b>trend</b> '+trend+' <span class="dim">('+rows.length+' rows logged)</span></div>';
+    }).catch(function(){ var box=E("fmpTrendBox"); if(box) box.querySelector(".sc-fmpact__body").innerHTML='<div class="dim">pull failed.</div>'; });
+    /* per-topic breakdown (per Alan: "i want all this on hub in operator stuff on logo
+       menu, kept current, daily is fine"). fmp-fundamentals/fmp-analyst/fmp-events/
+       mcap-refresh were just instrumented to append real per-run rows (same pattern as
+       live-quote-batch) — this groups the last 24h of ALL logged fn's into a real,
+       measured topic breakdown. REAL numbers only: rows accumulate as each cron actually
+       fires (fundamentals every 6h, analyst every 4h, events every 6h, quotes every
+       minute) — a topic with no rows yet just hasn't fired since this went live, shown
+       honestly rather than guessed. */
+    if(b) b.insertAdjacentHTML("beforeend",'<div class="sc-fmpact" id="fmpTopicBox"><div class="sc-fmpact__ttl">FMP USAGE BY TOPIC · last 24h</div><div class="sc-fmpact__body">loading…</div></div>');
+    pg("fmp_bandwidth_log?select=fn,calls,bytes,at&at=gte."+encodeURIComponent(new Date(Date.now()-86400000).toISOString())+"&order=at.desc&limit=2000").then(function(rows){
+      var box=E("fmpTopicBox"); if(!box) return;
+      rows=rows||[];
+      if(!rows.length){ box.querySelector(".sc-fmpact__body").innerHTML='<div class="dim">no rows in the last 24h yet — instrumentation just went live, check back after each fn\'s next natural cron fire.</div>'; return; }
+      var byFn={};
+      rows.forEach(function(r){ var k=r.fn||'?'; if(!byFn[k]) byFn[k]={calls:0,bytes:0,runs:0}; byFn[k].calls+=(r.calls||0); byFn[k].bytes+=(r.bytes||0); byFn[k].runs++; });
+      var keys=Object.keys(byFn).sort(function(a,b){ return byFn[b].bytes-byFn[a].bytes; });
+      var fmtKB=function(n){ return n>1024*1024 ? (n/1024/1024).toFixed(2)+'MB' : (n/1024).toFixed(1)+'KB'; };
+      box.querySelector(".sc-fmpact__body").innerHTML = keys.map(function(k){
+        var v=byFn[k];
+        return '<div class="sc-fmpact__row"><b>'+k+'</b> '+fmtKB(v.bytes)+' / '+v.calls+' calls / '+v.runs+' runs <span class="dim">(24h)</span></div>';
+      }).join("");
+    }).catch(function(){ var box=E("fmpTopicBox"); if(box) box.querySelector(".sc-fmpact__body").innerHTML='<div class="dim">pull failed.</div>'; });
+  }
   /* Files menu shortcut → switch the hub to the FILES room (a real page/tab). */
   function goSec(sec){ try{ if(typeof S!=="undefined"&&S){ S.sec=sec; if(typeof sync==="function") sync(); } }catch(_){ } }
   /* R34 — switch the board to a cohort using the EXACT same path a data-act="coh" tab click uses */
