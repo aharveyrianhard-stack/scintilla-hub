@@ -85,7 +85,15 @@ const SB_URL = 'https://wadinxqplrggagkvrdag.supabase.co';
 const SB_KEY = 'sb_publishable_AutibLpFtTns-WHAg67Pvw_I0HmjqE9';
 async function sb(path){
   const res = await fetch(SB_URL+'/rest/v1/'+path, { headers:{ apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY } });
-  if(!res.ok) { console.error('Supabase read failed', path, res.status); return []; }
+  if(!res.ok) {
+    const body = await res.text().catch(()=>'');
+    console.error('Supabase read failed', path, res.status, body);
+    // Mark the empty array so callers can tell "query/schema error" apart from "table genuinely has
+    // 0 rows" — these must never be conflated into the same gap-banner message. A 400 here is usually
+    // a wrong column/table name, not a real data gap, and reporting it as one would be dishonest in
+    // the other direction (hiding a bug behind a "master hasn't ingested this yet" excuse).
+    const empty = []; empty._sbError = true; empty._sbStatus = res.status; return empty;
+  }
   return res.json();
 }
 function nowSec(){ return Date.now()/1000; }
@@ -170,20 +178,23 @@ function wireTickerSearch(){
 // members of its primary cohort, largest-by-market-cap first, capped for table readability.
 // Every multiple below is COMPUTED client-side from raw Supabase fields (fundamentals, balance_history,
 // fundamentals_history) — never a pre-typed number, never a live FMP call. See the math per-field in
-// fetchCohortBundle(). beta is a genuine DB gap (company_profile is empty) — shown as "—", not guessed.
+// fetchCohortBundle(). beta is read live from company_profile.beta (195/211 universe tickers have it) —
+// shown as "—" only for the ~16 tickers where that table genuinely has no beta row, not guessed.
 const COMPS_PEER_CAP = 7; // largest N peers shown per cohort, for table readability
 async function fetchCohortBundle(tickers){
   const listQ = tickers.map(t=>encodeURIComponent(t)).join(',');
-  const [funds, bal, fhist, ratios] = await Promise.all([
+  const [funds, bal, fhist, ratios, profiles] = await Promise.all([
     sb('fundamentals?select=ticker,price,market_cap,revenue_ttm,eps_ttm,trailing_pe,dcf,updated_ts&ticker=in.('+listQ+')'),
     sb('balance_history?select=ticker,fiscal_date,total_equity,total_debt,cash_and_equiv,updated_ts&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*6+20)),
     sb('fundamentals_history?select=ticker,fiscal_date,period,revenue,ebitda,net_income,gross_profit&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*12+40)),
-    sb('ratios_history?select=ticker,fiscal_date,dividend_yield&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*4+20))
+    sb('ratios_history?select=ticker,fiscal_date,dividend_yield&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*4+20)),
+    sb('company_profile?select=ticker,beta,updated_ts&ticker=in.('+listQ+')')
   ]);
   const fundByT={}; funds.forEach(f=>fundByT[f.ticker]=f);
   const balLatest={}; bal.forEach(b=>{ if(!balLatest[b.ticker]) balLatest[b.ticker]=b; });
   const fhByT={}; fhist.forEach(r=>{ (fhByT[r.ticker]=fhByT[r.ticker]||[]).push(r); });
   const ratioLatest={}; ratios.forEach(r=>{ if(!ratioLatest[r.ticker]) ratioLatest[r.ticker]=r; });
+  const profByT={}; profiles.forEach(p=>profByT[p.ticker]=p);
   const out={};
   tickers.forEach(t=>{
     const f=fundByT[t], b=balLatest[t];
@@ -210,7 +221,8 @@ async function fetchCohortBundle(tickers){
     const gm=(grossTTM!=null&&revTTM)?grossTTM/revTTM*100:null;
     const peg=(pe!=null&&cagr!=null&&cagr>0)?pe/cagr:null;
     const div=ratioLatest[t]&&ratioLatest[t].dividend_yield!=null?ratioLatest[t].dividend_yield*100:null;
-    out[t]={ price, cap, pe, ev:evEbitda, ps, pb, peg, gm, nm, de, beta:null, div, cagr,
+    const beta = profByT[t] && profByT[t].beta!=null ? profByT[t].beta : null;
+    out[t]={ price, cap, pe, ev:evEbitda, ps, pb, peg, gm, nm, de, beta, div, cagr,
       fundTs:f?f.updated_ts:null, balTs:b?b.updated_ts:null, hasData: !!f };
   });
   return out;
@@ -720,11 +732,12 @@ async function loadRiskFree(){
   if(r[0]){ RF10Y = r[0].y10; window.RF_TS = r[0].updated_ts; }
 }
 async function buildBase(sym){
-  const [fArr, bArr, fhArr, cfArr] = await Promise.all([
+  const [fArr, bArr, fhArr, cfArr, cpArr] = await Promise.all([
     sb('fundamentals?select=*&ticker=eq.'+sym),
     sb('balance_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6'),
     sb('fundamentals_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=12'),
-    sb('cashflow_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6')
+    sb('cashflow_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6'),
+    sb('company_profile?select=beta,updated_ts&ticker=eq.'+sym)
   ]);
   const f = fArr[0];
   if(!f) return null; // genuine gap: no fundamentals row for this ticker — caller shows the banner
@@ -760,7 +773,10 @@ async function buildBase(sym){
   const cap = f.market_cap||0, debt=(b.total_debt||0);
   const eqW = (cap+debt)>0 ? cap/(cap+debt) : 1;
   const debtW = 1-eqW;
-  flags.push('Beta not yet in Supabase (company_profile is empty) — defaulted to 1.0. Adjust the Beta slider manually if you have a real figure.');
+  const cp = cpArr[0];
+  const beta = (cp && cp.beta!=null) ? cp.beta : null;
+  const betaTs = cp ? cp.updated_ts : null;
+  if(beta==null) flags.push('No company_profile.beta row for '+sym+' — defaulted to 1.0 (this specific ticker\'s gap, not page-wide: 195 of 211 universe tickers have a real beta). Adjust the slider manually if you have a real figure.');
   // forward consensus path (analyst_estimates, annual, future fiscal years) — works for ANY ticker with data, not NVDA-only
   const today = new Date().toISOString().slice(0,10);
   const estRows = await sb('analyst_estimates?select=fiscal_date,est_revenue_avg&ticker=eq.'+sym+'&period=eq.annual&fiscal_date=gt.'+today+'&order=fiscal_date.asc&limit=5');
@@ -772,7 +788,7 @@ async function buildBase(sym){
   else if(!consensus) flags.push('No forward analyst_estimates path for this ticker — Analyst-consensus DCF mode disabled, Fixed-rate only.');
   return {
     name: sym, rev: revTTM/1e9, shares: shares||1, netDebt, daPct, capexPct, nwcPct,
-    price: f.price, beta: 1.0, costOfDebt: RF10Y+1.5, rf: RF10Y, mrp: 4.45, debtW, eqW,
+    price: f.price, beta: beta!=null?beta:1.0, betaIsGap: beta==null, betaTs, costOfDebt: RF10Y+1.5, rf: RF10Y, mrp: 4.45, debtW, eqW,
     gDefault: Math.max(0,Math.min(80,cagr)), mDefault, tDefault: 21.0, termgDefault: Math.min(RF10Y,4.5),
     consensus, fundTs: f.updated_ts, balTs: b.updated_ts,
     flags
@@ -790,8 +806,12 @@ function chipsHTML_scenario(){
     '<button class="chip" data-g="'+bull+'" data-m="'+m+'" data-tx="'+t+'" onclick="setScen('+bull+','+m+','+t+')">Bull ('+bull.toFixed(1)+'%)</button>';
 }
 function chipsHTML_beta(){
+  if(BASE && !BASE.betaIsGap){
+    return '<button class="chip" data-s="bt" data-v="'+BASE.beta.toFixed(2)+'" onclick="setSlider(\'bt\','+BASE.beta.toFixed(2)+')">company_profile β '+BASE.beta.toFixed(2)+'</button>'+
+      '<div class="foot" style="width:100%;margin-top:2px;">📊 Real beta from Supabase company_profile · '+freshTag(BASE.betaTs)+'.</div>';
+  }
   return '<button class="chip" data-s="bt" data-v="1.0" onclick="setSlider(\'bt\',1.0)">DB default 1.00 (gap)</button>'+
-    '<div class="foot" style="width:100%;margin-top:2px;">⚠️ Beta is not yet in Supabase (company_profile is empty) — every ticker defaults to 1.00 until that table is populated. Drag the slider to your own estimate.</div>';
+    '<div class="foot" style="width:100%;margin-top:2px;">⚠️ No company_profile.beta row for '+(BASE?BASE.name:'this ticker')+' — defaults to 1.00. Not a page-wide gap (195 of 211 universe tickers have a real beta) — just missing for this one. Drag the slider to your own estimate.</div>';
 }
 async function setTicker(sym){
   CURTICK=sym;
@@ -820,7 +840,7 @@ async function setTicker(sym){
   document.getElementById('betaChips').innerHTML = chipsHTML_beta();
   document.getElementById('tickerCaveat').innerHTML = '⚠️ '+BASE.flags.join(' ')+' <span class="fresh">'+freshTag(BASE.fundTs)+'</span>';
   document.getElementById('dcfTitle').textContent = '3 · DCF — '+sym+' · sliders + modes, formulas update live';
-  document.getElementById('tickerStat').textContent = sym+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2)+' (gap, defaulted) · '+freshTag(BASE.fundTs);
+  document.getElementById('tickerStat').textContent = sym+' · $'+BASE.price.toFixed(2)+' · β '+BASE.beta.toFixed(2)+(BASE.betaIsGap?' (gap, defaulted)':' (company_profile)')+' · '+freshTag(BASE.fundTs);
   await renderComps(sym);
   await renderAnalyst(sym);
   await renderInsider(sym);
@@ -904,7 +924,9 @@ function render(){
   if(near(bt,1.0)) bp=[['β (DB default)',bt.toFixed(2),'out'],['','',O],['gap','company_profile empty','v']];
   else bp=[['β (custom)',bt.toFixed(2),'out'],['','',O],['off-preset','slider','v']];
   fg('fgBeta',bp);
-  document.getElementById('betaCtx').innerHTML='📊 <b>Beta is a genuine Supabase gap</b> — company_profile (where beta lives) has 0 rows. Every ticker defaults this slider to 1.00 until that table is populated by the ingest pipeline; this is not computed or estimated from other DB fields, and no peer-beta comparison is possible here (§1 comps beta column is "—" for the same reason).';
+  document.getElementById('betaCtx').innerHTML = (BASE && !BASE.betaIsGap)
+    ? '📊 <b>Real beta</b> — '+BASE.name+'\'s β ('+BASE.beta.toFixed(2)+') is read live from Supabase <span class="mono2">company_profile</span> ('+freshTag(BASE.betaTs)+'). §1 comps shows the same figure in its Beta column and peer Median/Min/Max stats.'
+    : '📊 <b>Beta gap for '+(BASE?BASE.name:'this ticker')+'</b> — no company_profile.beta row for this specific ticker (195 of 211 universe tickers do have one; this isn\'t a page-wide gap). Defaults the slider to 1.00 until ingest fills it in; not computed or estimated from other DB fields.';
   fg('fgMrp',[['E(Rₘ)',(rf+mp).toFixed(2)+'%','v'],['−','−',O],['rᶠ',rf.toFixed(2)+'%','v'],['=','=',O],['MRP',mp.toFixed(2)+'%','out']]);
   fg('fgCoE',[['rᶠ',rf.toFixed(2)+'%','v'],['+','+',O],['(  β','(  '+bt.toFixed(2),'v'],['×','×',O],['MRP  )',mp.toFixed(2)+'%  )','v'],['=','=',O],['CoE',coe.toFixed(2)+'%','out']]);
   fg('fgWACC',[['(  wₑ','(  '+BASE.eqW.toFixed(3),'v'],['×','×',O],['CoE  )',coe.toFixed(2)+'%  )','v'],['+','+',O],['(  w_d','(  '+BASE.debtW.toFixed(3),'v'],['×','×',O],['k_d',BASE.costOfDebt.toFixed(2)+'%','v'],['×','×',O],['(1−t)  )','(1−'+t.toFixed(2)+')  )','v'],['=','=',O],['WACC',w.toFixed(2)+'%','out']]);
@@ -1062,12 +1084,13 @@ function renderReverse(c){
   // ACTIONABLE RECOMMENDATION — a defensible, peer/analyst-anchored fair value, not just a qualitative read
   (function(){
     const hasPeer=!!(window.PEER&&window.PEER.cagr&&window.PEER.cagr.med!=null);
-    const PB={med:BASE.beta}; // beta is a DB-wide gap (company_profile empty) — always falls back to BASE's 1.0 default
+    const hasPeerBeta=!!(window.PEER&&window.PEER.beta&&window.PEER.beta.med!=null);
+    const PB=hasPeerBeta ? window.PEER.beta : {med:BASE.beta};
     const PG=hasPeer ? window.PEER.cagr : {med:BASE.gDefault};
     const defensible={g:PG.med/100, m:c.m, t:c.t, rf:c.rf, beta:PB.med, mrp:0.0445, tg:0.04};
     const rr=fvFrom(defensible);
     const upD=rr.bad?null:(rr.fv/BASE.price-1)*100;
-    const srcLbl='beta 1.00 (DB gap, defaulted) · '+(hasPeer?'peer-median growth '+PG.med.toFixed(0)+'%':CURTICK+'\'s own DB CAGR '+PG.med.toFixed(0)+'%');
+    const srcLbl=(hasPeerBeta?'peer-median β '+PB.med.toFixed(2):BASE.betaIsGap?'β 1.00 (DB gap, defaulted)':CURTICK+'\'s own β '+PB.med.toFixed(2))+' · '+(hasPeer?'peer-median growth '+PG.med.toFixed(0)+'%':CURTICK+'\'s own DB CAGR '+PG.med.toFixed(0)+'%');
     document.getElementById('revAction').innerHTML = rr.bad ? '' :
       '<div class="fname">💡 Recommended defensible inputs ('+srcLbl+' · Damodaran MRP 4.45% · FMP perpetuity g 4.0%, your margin/tax held)</div>'+
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline;margin-top:4px;">'+
@@ -1091,8 +1114,9 @@ function renderReverse(c){
 function setRVY(k){RVY=k;autoRVaxis=false;render();}
 function setRVX(k){RVX=k;autoRVaxis=false;render();}
 function applyDefensible(){
-  const hasPeer=!!(window.PEER&&window.PEER.beta&&window.PEER.cagr);
-  const PB=hasPeer ? window.PEER.beta : {med:BASE.beta};
+  const hasPeerBeta=!!(window.PEER&&window.PEER.beta&&window.PEER.beta.med!=null);
+  const hasPeer=!!(window.PEER&&window.PEER.cagr&&window.PEER.cagr.med!=null);
+  const PB=hasPeerBeta ? window.PEER.beta : {med:BASE.beta};
   const PG=hasPeer ? window.PEER.cagr : {med:BASE.gDefault};
   document.getElementById('g').value=PG.med.toFixed(1);
   document.getElementById('bt').value=PB.med.toFixed(2);
@@ -1261,19 +1285,27 @@ window.addEventListener('DOMContentLoaded',renderEst);
 </table>
 <div class="note">Each row carries transaction type codes (S-Sale, P-Purchase, A-Award, G-Gift, F-InKind, M-Exempt), direct/indirect ownership, resulting position, and the SEC filing URL. Every field is machine-readable — trivially filterable to "open-market purchases only," the signal that matters. Rows shown are a curated real subset (most recent per insider) of what search-insider-trades returns.</div>
 <script>
-// ============ INSIDER TRADES — Move 1: read insider_trades table live, flag (don't fabricate) if empty ============
-// Per Alan's explicit order: insider_trades is a KNOWN GAP (0 rows in the whole table as of this writing —
-// master's ingest hasn't populated it yet). This section checks live and shows an honest gap banner,
-// never falls back to FMP-from-page and never reuses the old hand-curated example rows.
+// ============ INSIDER TRADES — Move 1: read insider_trades table live ============
+// insider_trades has 33,256 real rows across the universe (verified via direct count — not the empty
+// table it was originally scoped as; master's ingest has since caught up). Most tickers have real rows;
+// a genuine per-ticker zero still gets an honest gap banner rather than being hidden or padded.
 async function renderInsider(sym){
   document.getElementById('insiderTitle').textContent = '4 · Insider Trades — '+sym+' (Supabase insider_trades)';
   const TX = await sb('insider_trades?select=*&ticker=eq.'+sym+'&order=filing_date.desc&limit=25');
+  if(TX._sbError){
+    document.getElementById('insiderBody').innerHTML='';
+    document.getElementById('ins_note').innerHTML='';
+    document.getElementById('ins_cards_grid').style.display='none';
+    document.getElementById('ins_gap').style.display='block';
+    document.getElementById('ins_gap').innerHTML = gapBanner('insider_trades query failed for '+sym+' (HTTP '+TX._sbStatus+')', 'This is a query error, not a confirmed empty result — the table has 33,256+ rows overall. Needs an engineering look.');
+    return;
+  }
   if(!TX.length){
     document.getElementById('insiderBody').innerHTML='';
     document.getElementById('ins_note').innerHTML='';
     document.getElementById('ins_cards_grid').style.display='none';
     document.getElementById('ins_gap').style.display='block';
-    document.getElementById('ins_gap').innerHTML = gapBanner('insider_trades: 0 rows for '+sym+' (table is empty DB-wide right now)', 'Master\'s FMP ingest into this table hasn\'t run yet. Per the standing order, this page does not call FMP directly to fill the gap — it will populate automatically once the pipeline writes rows here.');
+    document.getElementById('ins_gap').innerHTML = gapBanner('No insider_trades rows for '+sym, 'A real, checked per-ticker absence — the table itself is well populated (33,256 rows across the universe), just none filed for '+sym+' in the window covered so far.');
     return;
   }
   // table has data for this ticker — render + classify with the same logic as before, now on live rows.
@@ -1333,23 +1365,30 @@ function renderCongress(sym){
 
 <!-- ============ 6. COT ============ -->
 <section>
-<h2 id="cotTitle">6 · Commitment of Traders — CFTC (weekly)</h2>
-<div class="src">table: cot_history</div>
+<h2 id="cotTitle">6 · Commitment of Traders — S&amp;P 500 E-Mini, symbol=ES (CFTC, weekly)</h2>
+<div class="src">table: cot_history (real columns: symbol, date, name, net_position, prev_net_position, market_situation, market_sentiment, reversal_trend — 5,397 rows across ~9 futures symbols: ES, NQ, GC, SI, CL, NG, DX, ZN and more)</div>
 <div id="cotBody"></div>
 <script>
-// ============ COT — Move 1: cot_history table exists but is empty DB-wide. Check live, flag if empty. ============
+// ============ COT — Move 1: cot_history has real data (5,397 rows). Query the real column names. ============
 async function renderCOT(){
-  const rows = await sb('cot_history?select=*&order=report_date.desc&limit=5');
-  if(!rows.length){
+  const rows = await sb('cot_history?select=*&symbol=eq.ES&order=date.desc&limit=8');
+  if(rows._sbError){
     document.getElementById('cotBody').innerHTML = gapBanner(
-      'cot_history: 0 rows',
-      'Table exists in the schema but master hasn\'t ingested any CFTC weekly reports into it yet. Not falling back to FMP or the old static E-mini table.'
+      'cot_history query failed (HTTP '+rows._sbStatus+')',
+      'This is a query/schema error, not a confirmed empty table — cot_history has real rows in it. Needs an engineering fix, not a wait for ingest.'
     );
     return;
   }
-  document.getElementById('cotBody').innerHTML = '<table><tr><th>Report Date</th><th>Open Interest</th><th>Spec Long</th><th>Spec Short</th><th>Spec NET</th><th>Commercial NET</th></tr>' +
-    rows.map(r=>'<tr><td>'+r.report_date+'</td><td>'+(r.open_interest||'—')+'</td><td>'+(r.spec_long||'—')+'</td><td>'+(r.spec_short||'—')+'</td><td>'+(r.spec_net||'—')+'</td><td>'+(r.commercial_net||'—')+'</td></tr>').join('') +
-    '</table><div class="note">'+freshTag(rows[0].updated_ts)+'</div>';
+  if(!rows.length){
+    document.getElementById('cotBody').innerHTML = gapBanner(
+      'cot_history: 0 rows for symbol=ES',
+      'The table has data for other futures symbols but none for ES right now — a real, checked gap for this specific symbol, not the whole table.'
+    );
+    return;
+  }
+  document.getElementById('cotBody').innerHTML = '<table><tr><th>Report Date</th><th>Net Position</th><th>Prev Net Position</th><th>Situation</th><th>Sentiment</th><th>Reversal</th></tr>' +
+    rows.map(r=>'<tr><td>'+r.date+'</td><td>'+(r.net_position!=null?Math.round(r.net_position).toLocaleString():'—')+'</td><td>'+(r.prev_net_position!=null?Math.round(r.prev_net_position).toLocaleString():'—')+'</td><td class="'+(r.market_situation==='Bullish'?'pos':r.market_situation==='Bearish'?'neg':'')+'">'+(r.market_situation||'—')+'</td><td>'+(r.market_sentiment||'—')+'</td><td>'+(r.reversal_trend==='true'?'YES':'no')+'</td></tr>').join('') +
+    '</table><div class="note">'+rows[0].name+' · '+freshTag(rows[0].updated_ts)+' — CFTC COT reporting itself lags ~1 week at the source, independent of this page\'s freshness. cot_history covers other futures too (NQ, GC, SI, CL, NG, DX, ZN…) — ES shown here to match this section\'s original framing.</div>';
 }
 renderCOT();
 </script>
@@ -1388,36 +1427,34 @@ renderCOT();
 <summary style="cursor:pointer; color:var(--accent); font-weight:700; font-size:15px; list-style:none;">▸ How this works — what's actually wired vs. still static (read me)</summary>
 <div style="margin-top:14px; font-size:14px; line-height:1.7; color:#c9d1d9;">
 
-<p style="font-size:14px; color:var(--gold); background:var(--panel2); border-left:3px solid var(--gold); padding:10px 14px; margin:10px 0;"><b>Move 1 (2026-07-24):</b> source of truth swapped from direct FMP pulls to <b>Supabase (wadinxqplrggagkvrdag)</b>, read client-side. FMP now only ever fills the DB (master's ingest lane) — this page reads it. Universe expanded from a hardcoded 10 tickers to the live ~211-name <span class="mono2">composite_staged</span> set. Sections below are grouped by DB-sourced vs genuinely-flagged gap, not wired-vs-static.</p>
+<p style="font-size:14px; color:var(--gold); background:var(--panel2); border-left:3px solid var(--gold); padding:10px 14px; margin:10px 0;"><b>Move 1 (2026-07-24):</b> source of truth swapped from direct FMP pulls to <b>Supabase (wadinxqplrggagkvrdag)</b>, read client-side. FMP now only ever fills the DB (master's ingest lane) — this page reads it. Universe expanded from a hardcoded 10 tickers to the live ~211-name <span class="mono2">composite_staged</span> set. During build-out, two tables assumed empty from an earlier schema check (<span class="mono2">insider_trades</span>, <span class="mono2">company_profile</span>) turned out to have real data — master's ingest had caught up since. Corrected below; the running audit checker (§ top of page) is what caught the resulting rendering bugs before this went live.</p>
 
 <p style="font-size:15px;"><b style="color:var(--gold);">🔌 DB-SOURCED — read live from Supabase on every ticker switch:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's DB-sourced</th></tr>
 <tr><td class="pur">Universe / ticker bar</td><td><span class="mono2">loadUniverse()</span> reads <span class="mono2">composite_staged</span> (~211 tickers) + <span class="mono2">ticker_cohorts</span> (is_primary=true rows) once on load, powering the searchable ticker box. Not the old hardcoded 10, not the near-empty <span class="mono2">tickers</span> table.</td></tr>
-<tr><td class="pur">§1 Comps</td><td><span class="mono2">fetchCohortBundle()</span> pulls each ticker's real cohort (<span class="mono2">ticker_cohorts</span>) and up to 7 <span class="mono2">is_primary</span> peers, ranked by live market cap. Multiples (P/E, P/S, P/B, EV/EBITDA, D/E, margins) are computed fresh client-side from <span class="mono2">fundamentals</span> + TTM sums of <span class="mono2">fundamentals_history</span>/<span class="mono2">cashflow_history</span> + <span class="mono2">balance_history</span> — not trusted from <span class="mono2">ratios_history</span>'s pre-computed columns, since a direct check found that table's P/S diverging significantly from a freshly-computed figure (quarterly/TTM denominator mismatch suspected). Beta column is "—" for every row — see gap below.</td></tr>
-<tr><td class="pur">Ticker switcher / DCF base</td><td><span class="mono2">buildBase(sym)</span> assembles <span class="mono2">BASE</span> from <span class="mono2">fundamentals</span>, <span class="mono2">balance_history</span>, <span class="mono2">cashflow_history</span>, and <span class="mono2">live_quotes</span> for price. <span class="mono2">setTicker()</span> awaits this, then re-renders §1/§2/§2.7/§3/§4/§5 in sequence — same DCF math engine as before (CAPM/WACC/Gordon Growth), only the inputs are now live per-ticker DB reads instead of a 10-name hardcoded object.</td></tr>
-<tr><td class="pur">§2.7 Analyst coverage</td><td>Live pulls of <span class="mono2">analyst_ratings</span>, <span class="mono2">price_target_consensus</span>, and <span class="mono2">analyst_estimates</span> per ticker. NVDA's own annual <span class="mono2">analyst_estimates</span> rows (FY27–FY31) were checked against the previously hardcoded consensus path and match exactly, confirming this table is the right source. Publisher/outlet attribution (which analyst desk) has no DB equivalent — flagged, not fabricated.</td></tr>
+<tr><td class="pur">§1 Comps</td><td><span class="mono2">fetchCohortBundle()</span> pulls each ticker's real cohort (<span class="mono2">ticker_cohorts</span>) and up to 7 <span class="mono2">is_primary</span> peers, ranked by live market cap. Multiples (P/E, P/S, P/B, EV/EBITDA, D/E, margins) are computed fresh client-side from <span class="mono2">fundamentals</span> + TTM sums of <span class="mono2">fundamentals_history</span>/<span class="mono2">cashflow_history</span> + <span class="mono2">balance_history</span> — not trusted from <span class="mono2">ratios_history</span>'s pre-computed columns, since a direct check found that table's P/S diverging significantly from a freshly-computed figure (quarterly/TTM denominator mismatch suspected). Beta column reads live from <span class="mono2">company_profile.beta</span> — see gap note below for the ~16 tickers still missing it.</td></tr>
+<tr><td class="pur">Ticker switcher / DCF base</td><td><span class="mono2">buildBase(sym)</span> assembles <span class="mono2">BASE</span> from <span class="mono2">fundamentals</span>, <span class="mono2">balance_history</span>, <span class="mono2">cashflow_history</span>, <span class="mono2">company_profile</span> (beta), and <span class="mono2">live_quotes</span> for price. <span class="mono2">setTicker()</span> awaits this, then re-renders §1/§2/§2.7/§3/§4/§5 in sequence — same DCF math engine as before (CAPM/WACC/Gordon Growth), only the inputs are now live per-ticker DB reads instead of a 10-name hardcoded object.</td></tr>
+<tr><td class="pur">§2.7 Analyst coverage</td><td>Live pulls of <span class="mono2">analyst_ratings</span>, <span class="mono2">price_target_consensus</span>, and <span class="mono2">analyst_estimates</span> per ticker. NVDA's own annual <span class="mono2">analyst_estimates</span> rows (FY27–FY31) were checked against the previously hardcoded consensus path and match exactly, confirming this table is the right source. A consensus DCF path needs a full 5-year run of forward estimates to avoid a broken projection — tickers with 1-4 available years fall back to Fixed-rate, flagged. Publisher/outlet attribution (which analyst desk) has no DB equivalent — flagged, not fabricated.</td></tr>
 <tr><td class="pur">§3 DCF risk-free rate</td><td><span class="mono2">loadRiskFree()</span> reads <span class="mono2">treasury_rates.y10</span> — one macro rate shared across all tickers, replacing the old per-ticker hardcoded <span class="mono2">rf</span>.</td></tr>
-<tr><td class="pur">§4 Insider</td><td>Live query against <span class="mono2">insider_trades</span> per ticker. The buy/sell classifier, 30-day cluster-buy detector, and net-flow signal are preserved and will activate automatically once rows exist — see gap below for current state.</td></tr>
-<tr><td class="pur">§6 COT</td><td>Live query against <span class="mono2">cot_history</span> — see gap below for current state.</td></tr>
+<tr><td class="pur">§4 Insider</td><td>Live query against <span class="mono2">insider_trades</span> per ticker — 33,256 real rows across the universe (corrected; this table was NOT actually empty). The buy/sell classifier, 30-day cluster-buy detector, and net-flow signal run on live rows for most tickers; a genuine per-ticker zero still shows an honest gap banner.</td></tr>
+<tr><td class="pur">§6 COT</td><td>Live query against <span class="mono2">cot_history</span>, symbol=ES — 5,397 real rows across ~9 futures symbols (corrected; also not actually empty — the first version queried a column name that doesn't exist in this table and silently rendered a false "empty" gap until caught).</td></tr>
 <tr><td class="pur">Freshness everywhere</td><td><span class="mono2">updated_ts</span> is read per row and shown as "last true Xm/h/d ago" (red "missing" if null) via <span class="mono2">freshTag()</span> — confidence is disclosed, not assumed.</td></tr>
 </table>
 
 <p style="font-size:15px;"><b style="color:var(--red);">🔴 FLAGGED GAPS — real DB gaps, shown honestly, never FMP'd-from-page or fabricated:</b></p>
 <table class="wraptable" style="margin:8px 0 18px;">
 <tr><th style="width:18%;">Where</th><th>What's missing and why</th></tr>
-<tr><td class="pur">Beta (page-wide)</td><td>The only <span class="mono2">beta</span> column in the schema lives in <span class="mono2">company_profile</span>, which has 0 rows. Every DCF beta slider defaults to 1.0 with an always-visible gap note; §1 comps Beta column shows "—" for every ticker. Not estimated, not silently defaulted without disclosure.</td></tr>
-<tr><td class="pur">§4 Insider</td><td><span class="mono2">insider_trades</span> is empty DB-wide right now — every ticker shows a gap banner instead of the old hand-curated example rows. Master's FMP ingest into this table hasn't run yet.</td></tr>
-<tr><td class="pur">§5 Congress</td><td>No senate-trading/house-trading equivalent table exists in Supabase at all (not even empty) — unconditional gap banner, not a per-ticker query.</td></tr>
-<tr><td class="pur">§6 COT</td><td><span class="mono2">cot_history</span> exists in the schema but has 0 rows — gap banner shown, no fallback to the old static E-mini table.</td></tr>
-<tr><td class="pur">company_profile (publisher attribution, etc.)</td><td>0 rows — anything that would have needed it (analyst publisher/outlet names, beta) is flagged inline instead.</td></tr>
+<tr><td class="pur">Beta, per-ticker</td><td>195 of 211 universe tickers have a real <span class="mono2">company_profile.beta</span> row; ~16 don't yet. Those default the DCF slider to 1.0 with a visible gap note and show "—" in §1 comps — not page-wide, not estimated, not silently defaulted.</td></tr>
+<tr><td class="pur">§5 Congress</td><td>No senate-trading/house-trading equivalent table exists in Supabase at all (not even empty) — unconditional gap banner, not a per-ticker query. This is the one genuinely unbuilt category from the original Move 1 spec.</td></tr>
+<tr><td class="pur">Publisher/outlet attribution (§2.7)</td><td>No DB field carries which analyst desk (TheFly, Benzinga, etc.) issued a rating — flagged inline where it would have appeared.</td></tr>
 </table>
 
-<p style="font-size:15px;"><b>Not yet built this pass:</b> a dedicated News section (<span class="mono2">news</span> + <span class="mono2">news_sentiment</span>) and an Earnings/transcripts section (<span class="mono2">earnings_events</span> + <span class="mono2">earnings_call_transcripts</span>) — both tables exist and are readable, just not surfaced on this page yet.</p>
+<p style="font-size:15px;"><b>Not yet built this pass:</b> a dedicated News section (<span class="mono2">news</span> + <span class="mono2">news_sentiment</span>, 187,803 + 196 rows respectively) and an Earnings/transcripts section (<span class="mono2">earnings_events</span> + <span class="mono2">earnings_call_transcripts</span>, 9,567 + 1,189 rows) — both tables have real data and are readable, just not surfaced on this page yet.</p>
 
 <p style="font-size:15px;"><b>The math, for reference — unchanged by Move 1.</b> <span class="mono2">CoE = rᶠ + (β×MRP)</span> · <span class="mono2">WACC = (wₑ·CoE)+(w_d·k_d·(1−t))</span> · <span class="mono2">UFCF = EBIT(1−t)+D&amp;A−capex−ΔNWC</span> · <span class="mono2">TV = FCF₅(1+g)/(WACC−g)</span> · Fair value = (ΣPV(FCF)+PV(TV)−net debt)/shares. Only the data feeding these formulas moved from a hardcoded 10-name object to live per-ticker Supabase reads — the formulas themselves were not changed.</p>
-<p style="margin-top:8px;"><b>Sources.</b> Financials <span class="mono2">fundamentals + fundamentals_history + ratios_history + balance_history + cashflow_history</span> · estimates/ratings/targets <span class="mono2">analyst_estimates + analyst_ratings + price_target_consensus</span> · quote/DCF price <span class="mono2">live_quotes</span> · peer grouping <span class="mono2">ticker_cohorts</span> · universe <span class="mono2">composite_staged</span> · risk-free <span class="mono2">treasury_rates</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
-<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) build News and Earnings/transcripts sections from the tables that already exist and are unused, (2) once master ingests insider_trades/company_profile/a congress-equivalent table, the page picks them up automatically — no rewrite needed, the query paths are already live, (3) feed §3.5 estimate-confidence into the reverse-DCF verdict strength.</p>
+<p style="margin-top:8px;"><b>Sources.</b> Financials <span class="mono2">fundamentals + fundamentals_history + ratios_history + balance_history + cashflow_history</span> · estimates/ratings/targets <span class="mono2">analyst_estimates + analyst_ratings + price_target_consensus</span> · quote/DCF price <span class="mono2">live_quotes</span> · beta <span class="mono2">company_profile</span> · peer grouping <span class="mono2">ticker_cohorts</span> · universe <span class="mono2">composite_staged</span> · risk-free <span class="mono2">treasury_rates</span> · insider <span class="mono2">insider_trades</span> · COT <span class="mono2">cot_history</span>. Served from git → auto-deploy; durable URL survives hub deploys.</p>
+<p style="margin-top:8px; color:var(--dim);"><b>Real next steps, in order of value:</b> (1) build News and Earnings/transcripts sections from the tables that already exist and are unused, (2) once master ingests a congress-equivalent table, the page can pick it up with the same query pattern used everywhere else, (3) feed §3.5 estimate-confidence into the reverse-DCF verdict strength, (4) backfill the remaining ~16 tickers' missing beta.</p>
 </div>
 </details>
 
@@ -1456,6 +1493,14 @@ async function runAudit(){
     checks++;
     if(window.LASTPX!=null && BASE.price!=null && Math.abs(window.LASTPX-BASE.price)>0.02){
       issues.push('['+sym+'] PRICE MISMATCH — comps/live_quotes price $'+window.LASTPX.toFixed(2)+' vs DCF/header price $'+BASE.price.toFixed(2)+'. These must be the same quote.');
+    }
+
+    // A2 — beta single source of truth: §1 comps fetches company_profile.beta independently from
+    // buildBase()'s own company_profile fetch — both must agree, same class of bug as price above.
+    checks++;
+    if(window.PEER && window.PEER.beta && window.PEER.beta.subj!=null && !BASE.betaIsGap){
+      const bd = Math.abs(window.PEER.beta.subj - BASE.beta);
+      if(bd>0.02) issues.push('['+sym+'] BETA MISMATCH — comps subject beta '+window.PEER.beta.subj.toFixed(2)+' vs DCF beta '+BASE.beta.toFixed(2)+'.');
     }
 
     // B — cross-section consistency on the rendered page itself: header price vs the DCF's own
