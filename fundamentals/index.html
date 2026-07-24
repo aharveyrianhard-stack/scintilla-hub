@@ -764,8 +764,12 @@ async function buildBase(sym){
   // forward consensus path (analyst_estimates, annual, future fiscal years) — works for ANY ticker with data, not NVDA-only
   const today = new Date().toISOString().slice(0,10);
   const estRows = await sb('analyst_estimates?select=fiscal_date,est_revenue_avg&ticker=eq.'+sym+'&period=eq.annual&fiscal_date=gt.'+today+'&order=fiscal_date.asc&limit=5');
-  const consensus = estRows.length>=2 ? estRows.map(r=>r.est_revenue_avg/1e9) : null;
-  if(!consensus) flags.push('No forward analyst_estimates path (≥2 future annual rows) for this ticker — Analyst-consensus DCF mode disabled, Fixed-rate only.');
+  // The DCF's projected path is fixed at 5 years (i=1..5) — a consensus path shorter than that would
+  // leave later years undefined and crash the render. Require the full 5 to enable consensus mode;
+  // 2-4 rows is a real but incomplete gap, flagged honestly rather than silently truncated/padded.
+  const consensus = estRows.length>=5 ? estRows.map(r=>r.est_revenue_avg/1e9) : null;
+  if(!consensus && estRows.length>0) flags.push('Only '+estRows.length+' of 5 forward analyst_estimates years available for this ticker — Analyst-consensus DCF mode needs a full 5-year path, disabled here, Fixed-rate only.');
+  else if(!consensus) flags.push('No forward analyst_estimates path for this ticker — Analyst-consensus DCF mode disabled, Fixed-rate only.');
   return {
     name: sym, rev: revTTM/1e9, shares: shares||1, netDebt, daPct, capexPct, nwcPct,
     price: f.price, beta: 1.0, costOfDebt: RF10Y+1.5, rf: RF10Y, mrp: 4.45, debtW, eqW,
