@@ -1238,7 +1238,8 @@ window.addEventListener('DOMContentLoaded',renderEst);
 <div class="src">endpoints: search-insider-trades + insider-trade-statistics — real per-ticker Form 4 pull, switches with the ticker bar above</div>
 <div class="fcard" style="border-color:var(--gold);">
   <div class="subttl">📡 Derived signal — computed from the transaction rows below, not typed</div>
-  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
+  <div id="ins_gap" style="display:none; margin-top:10px;"></div>
+  <div id="ins_cards_grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:10px;">
     <div id="ins_buys_card" style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
       <div style="font-size:28px;">🛒</div><div class="foot" style="margin-top:4px;">Open-market BUYS</div><div style="font-size:19px;font-weight:700;margin-top:2px;" id="ins_buys">—</div></div>
     <div id="ins_cluster_card" style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
@@ -1266,15 +1267,18 @@ async function renderInsider(sym){
   if(!TX.length){
     document.getElementById('insiderBody').innerHTML='';
     document.getElementById('ins_note').innerHTML='';
-    ['ins_buys','ins_cluster','ins_flow','ins_signal'].forEach(id=>document.getElementById(id).textContent='—');
-    document.getElementById('ins_signal_icon').textContent='🔴';
-    document.getElementById('ins_signal_card').innerHTML = '<div style="grid-column:1/-1;">'+gapBanner('insider_trades: 0 rows for '+sym+' (table is empty DB-wide right now)', 'Master\'s FMP ingest into this table hasn\'t run yet. Per the standing order, this page does not call FMP directly to fill the gap — it will populate automatically once the pipeline writes rows here.')+'</div>';
-    document.getElementById('ins_buys_card').style.display='none'; document.getElementById('ins_cluster_card').style.display='none'; document.getElementById('ins_flow_card').style.display='none';
-    document.getElementById('ins_signal_card').style.gridColumn='1/-1';
+    document.getElementById('ins_cards_grid').style.display='none';
+    document.getElementById('ins_gap').style.display='block';
+    document.getElementById('ins_gap').innerHTML = gapBanner('insider_trades: 0 rows for '+sym+' (table is empty DB-wide right now)', 'Master\'s FMP ingest into this table hasn\'t run yet. Per the standing order, this page does not call FMP directly to fill the gap — it will populate automatically once the pipeline writes rows here.');
     return;
   }
-  // table has data for this ticker — render + classify with the same logic as before, now on live rows
-  document.getElementById('ins_buys_card').style.display=''; document.getElementById('ins_cluster_card').style.display=''; document.getElementById('ins_flow_card').style.display='';
+  // table has data for this ticker — render + classify with the same logic as before, now on live rows.
+  // NOTE: #ins_gap/#ins_cards_grid are toggled here (never innerHTML-replaced in the empty branch above)
+  // so the ins_buys/ins_cluster/ins_flow/ins_signal child elements always survive across ticker switches —
+  // an earlier version destroyed them via innerHTML replacement, which the audit caught (setCard crashed
+  // on the next ticker with real data because its target span no longer existed in the DOM).
+  document.getElementById('ins_gap').style.display='none';
+  document.getElementById('ins_cards_grid').style.display='grid';
   const norm = TX.map(t=>({insider:t.reporting_name, label:t.type_name, shares:t.shares, price:t.price, date:t.transaction_date,
     type: /purchase/i.test(t.type_name||'')?'buy' : /sale/i.test(t.type_name||'')?'sell' : 'neutral'}));
   document.getElementById('insiderBody').innerHTML = norm.map(t=>{
