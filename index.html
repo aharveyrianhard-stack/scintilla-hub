@@ -11367,6 +11367,8 @@ body.gwx-on .sc-board__row{padding-right:26px}
 <script>
 (function(){
   var ASOF=null, DATES=[], CACHE={}, LIVE_G=null, PREV={}, TIMER=null, MOUNTED=false;
+  var NEXT_D=null, BLEND=0;   /* the day being eased toward, and how far */
+  var SUB=20;                 /* slider stops per trading day - the finger moves in 1/20ths */
   function E(id){return document.getElementById(id);}
   /* use the page's OWN pg() — it already carries the 503/504/429 retry + jitter that
      every other read on this hub depends on. Rolling a second fetch here would quietly
@@ -11400,11 +11402,21 @@ body.gwx-on .sc-board__row{padding-right:26px}
        repaint, so a fast drag stacked dozens of them and the rows visibly fought each
        other. Alan: "it gets stuck in moments... they struggle to separate." Only the
        position the finger actually rests on is drawn. */
+    /* ★ SMOOTH, NOT STEPPY. Alan: "it's like in levels. You scroll it a little bit and then
+       bang, it goes to the next and it switches super hard."
+       Two causes, both real:
+       (1) the scrubber had one stop PER DAY, so dragging jumped a whole day at a time; and
+       (2) the fan is a COUNT of relationships in order out of 78, so it can only ever take
+           79 discrete values - consecutive days often differ by a visible chunk.
+       The slider now has 20 sub-steps per day and the value is INTERPOLATED between the two
+       neighbouring days, so the bars glide instead of snapping. The date label still shows
+       the real trading day; nothing invents data, it only eases between two measured points. */
     E("gwxSc").oninput=function(){
-      stop(); var v=+this.value;
-      E("gwxDt").textContent=DATES[v]||"";      // the date tracks instantly, so it feels live
+      stop(); var raw=+this.value/SUB, i=Math.floor(raw), f=raw-i;
+      i=Math.max(0,Math.min(DATES.length-1,i));
+      E("gwxDt").textContent=DATES[i]||"";
       clearTimeout(window.__gwxSeek);
-      window.__gwxSeek=setTimeout(function(){ seek(DATES[v]); }, 90);
+      window.__gwxSeek=setTimeout(function(){ seek(DATES[i], DATES[i+1], f); }, 60);
     };
     if(!DATES.length) loadDates();
     MOUNTED=true;
@@ -11412,13 +11424,15 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function loadDates(){
     api("fan_daily?select=asof&ticker=eq.SPY&asof=gte."+yearAgo()+"&order=asof.asc&limit=400").then(function(rows){
       DATES=rows.map(function(r){return r.asof;});
-      var sc=E("gwxSc"); if(sc&&DATES.length){sc.max=DATES.length-1;sc.value=DATES.length-1;sc.disabled=false;}
+      var sc=E("gwxSc"); if(sc&&DATES.length){sc.max=(DATES.length-1)*SUB;sc.value=sc.max;sc.disabled=false;}
     });
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
 
-  function seek(d){
+  function seek(d, dNext, frac){
     if(!d)return;
+    NEXT_D = (frac && frac > 0.01 && dNext) ? dNext : null;
+    BLEND  = NEXT_D ? frac : 0;
     ASOF=d; document.body.classList.add("gwx-on");
     E("gwxDt").textContent=d; liveChip(true);
     if(CACHE[d]) return apply(CACHE[d]);
@@ -11443,6 +11457,20 @@ body.gwx-on .sc-board__row{padding-right:26px}
       res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
       m.__mom = mo;                                  // carried alongside, keyed off the map
       CACHE[d]=m; if(ASOF===d) apply(m);
+      if(dNext && !CACHE[dNext]) seekFetch(dNext);   /* warm the next day for the blend */
+    });
+  }
+  function seekFetch(d){            /* fetch a day into CACHE without displaying it */
+    var ts=tickers(); if(!ts.length||CACHE[d])return;
+    var CH=35, parts=[]; for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
+    Promise.all([
+      Promise.all(parts.map(function(p){return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");})),
+      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
+    ]).then(function(res){
+      var m={},mo={};
+      res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
+      m.__mom=mo; CACHE[d]=m;
     });
   }
   function apply(m){
@@ -11455,11 +11483,15 @@ body.gwx-on .sc-board__row{padding-right:26px}
        board simply ranked today against last spring. g=null is how this page already
        says "no reading"; cohortGeigerHTML filters on g!=null and the row renders "—". */
     var mo = m.__mom || {};
+    /* ease toward the next day's reading when the scrubber sits between two days */
+    var nx = (NEXT_D && CACHE[NEXT_D]) ? CACHE[NEXT_D] : null;
+    var nxm = nx ? (nx.__mom || {}) : null;
+    var mix = function(a,b){ return (b==null||!nx||!BLEND) ? a : a + (b-a)*BLEND; };
     /* composite = (wt*trend + wm*momentum)/(wt+wm), the same blend refresh_geiger uses.
        Falls back to trend alone if that day has no momentum row, and to null if neither. */
     var wt=(GWX_W&&GWX_W.trend!=null)?GWX_W.trend:0.5, wm=(GWX_W&&GWX_W.mom!=null)?GWX_W.mom:0.5;
     (S.rows||[]).forEach(function(r){
-      var tr=m[r.t], mm=mo[r.t];
+      var tr=mix(m[r.t], nx?nx[r.t]:null), mm=mix(mo[r.t], nxm?nxm[r.t]:null);
       if(tr==null){ r.g=null; }
       else if(mm==null){ r.g=tr; }
       else { r.g = (wt*tr + wm*mm)/((wt+wm)||1); }
@@ -11569,11 +11601,15 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function play(){
     if(TIMER)return stop();
     var sc=E("gwxSc"); if(!sc||!DATES.length)return;
-    if(+sc.value>=DATES.length-1) sc.value=Math.max(0,DATES.length-40);
+    if(+sc.value>=+sc.max) sc.value=Math.max(0,(DATES.length-40)*SUB);
     E("gwxPlay").innerHTML="&#10073;&#10073; PAUSE"; E("gwxPlay").classList.add("is-on");
+    /* playback advances a whole trading day per tick and lets the FLIP animation carry the
+       rows across; the sub-steps exist for the finger on the scrubber, not for the player. */
     TIMER=setInterval(function(){
-      var i=+sc.value+1; if(i>=DATES.length){stop();return;}
-      sc.value=i; seek(DATES[i]);
+      var i=+sc.value+SUB; if(i>+sc.max){stop();return;}
+      sc.value=i; var d=Math.floor(i/SUB);
+      E("gwxDt").textContent=DATES[d]||"";
+      seek(DATES[d]);
     },700);
   }
   function stop(){ if(TIMER){clearInterval(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
@@ -11811,22 +11847,46 @@ body.gwx-on .sc-board__row{padding-right:26px}
      "when I reload it shows me the version of the table that did not have the trend and
      momentum, and then it goes over to the other one." BOARD_COLS exists at parse time,
      so registering here makes the very first render the correct one. */
-  try{ addCols(); loadTM(); }catch(e){}
+  try{ addCols(); loadTM(); watchBoard(); watchStrip(); }catch(e){}
 
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
   /* the housekeeping tick used to run every 900ms REGARDLESS - straight through a FLIP
      transition, doing DOM work on every row while 17-40 of them were still travelling.
      MEASURED: 8 rebuilds in 6s with rows mid-flight on almost every sample. It now sits
      out entirely while the player is running; a frame already repaints everything. */
-  /* The tick is a WATCHDOG, not a painter. It re-mounts things the page destroyed on a
-     room change and nothing else. Repainting on a timer is what made the board flash once
-     a second; values are painted by repaint(), which runs when something actually moves. */
+  /* ★ THE REAL FLASH. Alan: "it switches to the version of the table that doesn't have the
+     columns for trend and momentum. It's like a little flash and it pops back."
+     Exactly right, and a timer can never fix it: the page rebuilds #boardScroll on its own
+     (cohort switch, poll, room change), which DESTROYS the three columns, and they only
+     came back when an interval next fired - so the old table was visibly on screen for up
+     to a second and a half. Making the interval smarter made the gap LONGER, not shorter.
+     A MutationObserver fires as soon as the DOM changes, before the browser paints, so the
+     columns are restored in the same frame and the old table is never shown at all. */
+  var boardObs=null;
+  function watchBoard(){
+    var bs=E("boardScroll"); if(!bs || bs.__gwxWatched) return;
+    bs.__gwxWatched=true;
+    boardObs=new MutationObserver(function(){
+      if(TIMER) return;                            // playing - repaint() owns the frame
+      if(!bs.querySelector(".gwx-tm") && bs.querySelector(".sc-board__row")) paintTM();
+    });
+    boardObs.observe(bs,{childList:true});
+  }
+  /* same for the compare strip, which the page also rebuilds under us */
+  function watchStrip(){
+    var cc=E("cohCompare"); if(!cc || cc.__gwxWatched) return;
+    cc.__gwxWatched=true;
+    new MutationObserver(function(){
+      if(!cc.querySelector(".gwx-cmp")) cmpToggle();
+    }).observe(cc,{childList:true,subtree:true});
+  }
+
+  /* the tick now only handles things an observer cannot see: a whole room being replaced */
   setInterval(function(){
-    if(TIMER) return;                       // playing - repaint() already owns the frame
+    if(TIMER) return;
     if(E("cohGeiger")&&!E("gwxBar")) mount();
-    if(!document.querySelector(".sc-cohstrip__hd .gwx-cmp")) cmpToggle();
-    loadTM();                               // no-ops unless the cohort changed
-    if(!document.querySelector(".sc-board__row .gwx-tm")) paintTM();   // only if wiped
+    watchBoard(); watchStrip();
+    loadTM();                                      // no-ops unless the cohort changed
   }, 1500);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
