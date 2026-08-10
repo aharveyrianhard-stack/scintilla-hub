@@ -11396,7 +11396,16 @@ body.gwx-on .sc-board__row{padding-right:26px}
     var host=E("cohGeiger"); if(!host||E("gwxBar"))return;
     host.insertAdjacentHTML("afterend", bar());
     E("gwxPlay").onclick=play;
-    E("gwxSc").oninput=function(){stop();seek(DATES[+this.value]);};
+    /* ★ COALESCE. Dragging fires oninput per pixel; each one queued a fetch and a full
+       repaint, so a fast drag stacked dozens of them and the rows visibly fought each
+       other. Alan: "it gets stuck in moments... they struggle to separate." Only the
+       position the finger actually rests on is drawn. */
+    E("gwxSc").oninput=function(){
+      stop(); var v=+this.value;
+      E("gwxDt").textContent=DATES[v]||"";      // the date tracks instantly, so it feels live
+      clearTimeout(window.__gwxSeek);
+      window.__gwxSeek=setTimeout(function(){ seek(DATES[v]); }, 90);
+    };
     if(!DATES.length) loadDates();
     MOUNTED=true;
   }
@@ -11516,7 +11525,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
       });
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
-      paintTM();
+      paintTM();   /* same breath - never leave a frame with the columns missing */
       badges(before);
     }catch(e){}
   }
@@ -11606,7 +11615,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
      The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
      colour already means direction here and must not be overloaded.
      ========================================================================== */
-  var TM={}, TM_AT=null;
+  var TM={}, TM_AT=null, TM_ASOF=null;
   function fmt2(v){ return (v>=0?"+":"") + v.toFixed(2); }
   function addCols(){
     if(typeof BOARD_COLS==="undefined") return;
@@ -11647,6 +11656,15 @@ body.gwx-on .sc-board__row{padding-right:26px}
     var rows=document.querySelectorAll(".sc-board__row"); if(!rows.length)return;
     [].forEach.call(rows,function(r){
       var t=r.getAttribute("data-t"), d=TM[t];
+      /* ★ WHILE REWOUND the component columns must show THAT DAY, not today.
+         TREND can: fan_daily holds it per date, and CACHE[ASOF] already has it.
+         MOMENTUM cannot: ribbon_signals is current-state only, so there is no March
+         momentum to show. It shows an em-dash. A dash is honest; today's number sitting
+         on a March row is the same defect that had ESUSD ranked on an August value. */
+      if(ASOF){
+        var fanv=(CACHE[ASOF]||{})[t];
+        d = (fanv==null) ? null : {tr:fanv, mo:null};
+      }
       /* UPDATE, never skip. The first paint runs before the fetch lands, so the cells
          are born as em-dashes; skipping rows that already had cells left them dashed
          for ever once the data arrived. */
@@ -11655,8 +11673,12 @@ body.gwx-on .sc-board__row{padding-right:26px}
       if(ex.length>=2){ tr=ex[0]; mo=ex[1]; mo.innerHTML=""; }
       else { tr=document.createElement("span"); mo=document.createElement("span"); fresh=true; }
       tr.className="gwx-tm"; mo.className="gwx-tm";
-      if(!d||d.tr==null||d.mo==null){ tr.textContent="—"; mo.textContent="—";
+      if(!d||d.tr==null){ tr.textContent="—"; mo.textContent="—";
         tr.style.color="var(--mute)"; mo.style.color="var(--mute)"; }
+      else if(d.mo==null){                       // rewound: trend is real, momentum has no history
+        tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
+        mo.textContent="—"; mo.style.color="var(--mute)"; mo.title="momentum has no history yet";
+      }
       else{
         tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
         mo.textContent=fmt2(d.mo); mo.style.color=d.mo>=0?"var(--bull)":"var(--bear)";
@@ -11677,7 +11699,9 @@ body.gwx-on .sc-board__row{padding-right:26px}
          Both agreeing is the quiet case. */
       var rd=r.querySelector(".gwx-read");
       if(!rd){ rd=document.createElement("span"); rd.className="gwx-read"; }
-      if(!d||d.tr==null||d.mo==null){ rd.textContent="—"; rd.style.color="var(--mute)"; }
+      if(!d||d.tr==null){ rd.textContent="—"; rd.style.color="var(--mute)"; }
+      else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
+        rd.title="rewound - momentum has no history to compare against"; }
       else {
         var T=d.tr, M=d.mo, txt, col;
         if(T>=0.5&&M>=0.4){ txt="aligned bull";      col="var(--bull)"; }
