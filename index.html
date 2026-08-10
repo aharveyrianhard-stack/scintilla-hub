@@ -11543,6 +11543,9 @@ body.gwx-on .sc-board__row{padding-right:26px}
       });
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
+      var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
+        cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
+      }
       paintTM();   /* same breath - never leave a frame with the columns missing */
       badges(before);
     }catch(e){}
@@ -11591,11 +11594,37 @@ body.gwx-on .sc-board__row{padding-right:26px}
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
     var _rows=cohortCompareRows;
+    /* ★ THE COMPARE STRIP MUST REWIND TOO. Alan, live on the hub: "the cohort compare and
+       sector compare thing is not moving with the rewind bar." Correct - it read GCOMP,
+       the LIVE geiger map, so while the board showed March the strip underneath it still
+       showed today. Same two-dates-on-one-screen defect as the columns had.
+       While rewound it now blends fan_daily and momentum_daily for the as-of date with the
+       family weights, exactly as the board rows do. */
+    function gAt(t){
+      if(!ASOF) return (typeof GCOMP!=="undefined" && GCOMP[t]!=null) ? GCOMP[t] : null;
+      var cd=CACHE[ASOF]||{}, tr=cd[t], mm=(cd.__mom||{})[t];
+      if(tr==null) return null;
+      if(mm==null) return tr;
+      var wt=(GWX_W&&GWX_W.trend!=null)?GWX_W.trend:0.5, wm=(GWX_W&&GWX_W.mom!=null)?GWX_W.mom:0.5;
+      return (wt*tr + wm*mm)/((wt+wm)||1);
+    }
     window.cohortCompareRows=function(){
-      if(CMP_MODE!=="SECTORS") return _rows.apply(this,arguments);
-      return SECT.map(function(p){
-        var v = (typeof GCOMP!=="undefined" && GCOMP[p[1]]!=null) ? GCOMP[p[1]] : null;
-        return {key:p[1], label:p[0], mean:v, n:1};
+      if(CMP_MODE==="SECTORS"){
+        return SECT.map(function(p){ return {key:p[1], label:p[0], mean:gAt(p[1]), n:1}; })
+                   .sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
+      }
+      if(!ASOF) return _rows.apply(this,arguments);
+      /* COHORTS while rewound: average that day's members rather than today's */
+      var buckets={};
+      if(typeof COHORT_OF!=="undefined") for(var t in COHORT_OF){
+        var v=gAt(t); if(v==null) continue;
+        (buckets[COHORT_OF[t]]=buckets[COHORT_OF[t]]||[]).push(v);
+      }
+      var src=(typeof COHORTS!=="undefined")?COHORTS:[];
+      return src.map(function(c){
+        var vals=buckets[c[1]]||[];
+        return {key:c[1], label:c[0], n:vals.length,
+                mean: vals.length ? vals.reduce(function(s,v){return s+v;},0)/vals.length : null};
       }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
     };
   }
