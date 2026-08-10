@@ -1339,6 +1339,13 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    "correct" this back to 0 in a later pass. */
 .sc-heattile{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   border-radius:5px; cursor:pointer; overflow:hidden; padding:2px; border:1px solid rgba(255,255,255,.07); min-width:0; }
+.sc-heattile{ background:var(--panel); }
+/* the level. Pure --bull / --bear, rising from the bottom; its HEIGHT is the move size.
+   Alan: "I want my fucking green and red, only those tones" - so the colour is a constant
+   and the magnitude is this height. */
+.sc-heattile__fill{ position:absolute; left:0; right:0; bottom:0; z-index:0; display:block;
+  transition:height .35s cubic-bezier(.32,0,.18,1); }
+.sc-heattile__t, .sc-heattile__c{ position:relative; z-index:1; }
 .sc-heattile:hover{ outline:1px solid var(--crk); outline-offset:1px; }
 /* R42 §1 — .lg/.md span rules RETIRED (uniform squares); heatmapHTML no longer
    assigns these classes. Kept as harmless no-ops in case of stale cached markup. */
@@ -4319,95 +4326,53 @@ let LEFT_HEAT = false;
    no hardcoded dollar thresholds); color = chg%, capped at +/-5% for full saturation
    (typical heatmap convention), tickers with no market_cap on file fall to the smallest
    tier rather than being dropped (honest — still shown, just not oversized on a guess). */
-/* Alan: "the green and red of the heat map and all of that stuff in that square should be
-   the Geiger green. I don't think we should be playing with the tone of green. We should
-   stay consistent. What we should play with is opacity, because opacity can be zero to a
-   hundred - it's not like these arbitrary levels. We highlight the opacity of the bigger
-   move, of the ones that moved more percentage-wise, which is the important part."
+/* ★ ONLY TWO COLOURS. Alan, four times: "I want my fucking green and red. Only those tones."
+   Both earlier attempts missed the point in the same way.
+     Attempt 1 used rgba() over a blue-black ground, which composited into murky dark greens.
+     Attempt 2 scaled the RGB triple, which held the hue exactly - but a dark green and a
+     bright green are still two tones, which is still not what he asked for.
+   The error both times was putting MAGNITUDE IN THE COLOUR. It does not belong there.
 
-   The two hues were already the Geiger pair (--bull #00FFA3, --bear #FF2D55) and they do
-   not move. What was wrong was the RANGE: opacity ran 0.12 to 0.72 and saturated at a
-   hard-coded 5%, so every big mover looked identical and the whole grid sat in a narrow
-   band of half-tones - the "arbitrary levels" exactly.
-
-   Now opacity spans effectively the whole scale, and the top of that scale is set by what
-   is actually on screen (HEAT_SCALE), not by a constant. The biggest mover in view is
-   full strength; everything else is its honest fraction of that. One green, one red,
-   magnitude entirely in opacity.
-
-   Used by the tiles, the FOCUS canvas, the MAP bubbles and the scene cards - one function,
-   so every surface in that space speaks the same language. */
-let HEAT_SCALE = 3;                                   /* percent that reads as full strength */
-function heatSetScale(values) {
-  const a = (values || []).map((v) => Math.abs(num(v) ?? 0)).filter((v) => isFinite(v) && v > 0).sort((x, y) => x - y);
-  if (!a.length) { HEAT_SCALE = 2; return HEAT_SCALE; }
-  /* 85th percentile. The 90th let a couple of runaway movers set the top of the scale, which
-     pushed an ordinary day into the 0.05-0.2 band - the grid went FAINTER than before and
-     Alan, correctly, said nothing had changed. */
-  const p85 = a[Math.min(a.length - 1, Math.floor(a.length * 0.85))];
-  HEAT_SCALE = Math.max(0.4, Math.min(8, p85));
-  return HEAT_SCALE;
-}
-/* Alan: "green is Geiger green, and whatever is happening in the tones is more see-through
-   Geiger green. Brighter, less see-through is a big percentage change; more see-through is
-   a lesser percentage change."
-   The hue never moves. What was wrong was that a LINEAR ramp spends most of its range on
-   moves that almost never happen: with the top of the scale at 6%, a 0.4% move landed at
-   0.11 opacity and a 2.5% move at 0.44, so a normal grid was a wash of near-invisible
-   tiles. The curve below is gamma 0.6, which lifts the ordinary moves into a band the eye
-   can actually separate while still reserving full strength for the genuine outlier:
-   at a 6% scale, 0.4% now reads 0.24 and 2.5% reads 0.61. Same rule, visible range. */
-/* Alan: "it's not about a single green, it's GEIGER green - like the Geiger bars. And Geiger
-   red. Single, but the RIGHT one."
-   The two hues are read straight off --bull and --bear, the same custom properties the
-   Geiger bars paint with, instead of being hard-coded here. They happened to match today,
-   but a hard-coded copy is a divergence waiting to happen: restyle the Geiger and the heat
-   map would quietly keep the old colour. Resolved once and cached. */
+   The colour is now a constant: exactly --bull or exactly --bear, the values the Geiger bars
+   paint with, never modified. Magnitude is HOW MUCH OF THE TILE IS FILLED - a level rising
+   from the bottom, the same language the Geiger bar already speaks. A 3% mover is a nearly
+   full tile of pure Geiger green; a 0.1% mover is a sliver of the identical green.
+   One green, one red; the size of the move is a height, not a shade. */
 let HEAT_RGB = null;
 function heatRGB() {
   if (HEAT_RGB) return HEAT_RGB;
   const cs = getComputedStyle(document.documentElement);
-  const toRGB = (hex, fallback) => {
+  const toRGB = (hex, fb) => {
     const h = (hex || "").trim().replace("#", "");
-    if (!/^[0-9a-fA-F]{6}$/.test(h)) return fallback;
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return fb;
     return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)].join(",");
   };
-  HEAT_RGB = {
-    bull: toRGB(cs.getPropertyValue("--bull"), "0,255,163"),
-    bear: toRGB(cs.getPropertyValue("--bear"), "255,45,85"),
-  };
+  HEAT_RGB = { bull: toRGB(cs.getPropertyValue("--bull"), "0,255,163"),
+               bear: toRGB(cs.getPropertyValue("--bear"), "255,45,85") };
   return HEAT_RGB;
 }
-/* ★ WHY THIS IS NOT rgba(). Alan, three times: "the green is not Geiger green... I see this
-   dark green that is weird... I don't want different tones."
-   He was right and I kept answering the wrong question. Transparency was the bug, not the
-   fix. The page ground is rgb(10,10,15) - a BLUE-tinted near-black - so painting
-   rgba(0,255,163,0.24) over it makes the browser composite rgb(8,70,51): the blue bleeds in
-   and the hue drifts. Every low-magnitude tile became a murky, slightly different green.
-   That is literally a different tone, which is exactly what he said he was seeing.
-
-   So no alpha, and no background blending. The colour is the Geiger triple SCALED:
-   rgb(0, 255k, 163k). Scaling all three channels by the same k leaves the ratio between
-   them - the hue - mathematically identical at every k. Only brightness moves. k runs from
-   0.34 for the smallest move to 1.00 for the largest, so the weakest tile is unmistakably
-   the same green, just dimmer, and the strongest is exactly --bull.
-
-   One green, one red, magnitude in brightness alone. Nothing to composite, nothing to drift. */
+let HEAT_SCALE = 2;
+function heatSetScale(values) {
+  const a = (values || []).map((v) => Math.abs(num(v) ?? 0)).filter((v) => isFinite(v) && v > 0).sort((x, y) => x - y);
+  if (!a.length) { HEAT_SCALE = 2; return HEAT_SCALE; }
+  const p85 = a[Math.min(a.length - 1, Math.floor(a.length * 0.85))];
+  HEAT_SCALE = Math.max(0.4, Math.min(8, p85));
+  return HEAT_SCALE;
+}
+/* the constant colour - this is all any surface gets */
 function heatColorChg(c) {
   const v = num(c);
-  if (v == null) return "rgba(140,140,160,.08)";
-  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
-  const k = 0.34 + Math.pow(r, 0.55) * 0.66;
-  const base = (v >= 0 ? heatRGB().bull : heatRGB().bear).split(",").map(Number);
-  return "rgb(" + base.map((ch) => Math.round(ch * k)).join(",") + ")";
+  if (v == null) return "rgba(140,140,160,.10)";
+  return "rgb(" + (v >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
 }
-/* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
-   coloured and labelled by. Called with no argument (the standalone #133 heat view,
-   every pre-R49 call site) it falls back to the board row's session %chg, so the grid
-   is byte-identical to before. Layer 0's MAP passes l0MapChg, which returns the
-   selected timeframe's % change when the batched ohlcv pull has the bars for that
-   ticker and the session %chg when it does not. Nothing else about the renderer —
-   the cap-ordering, the tile markup, the 5px corners, sizeHeatTiles() — moved. */
+/* how much of the tile that colour occupies: 8% for nothing, 100% for the biggest move on
+   screen. Gamma 0.55 so ordinary moves are still readable rather than all hugging the floor. */
+function heatFillPct(c) {
+  const v = num(c);
+  if (v == null) return 0;
+  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
+  return Math.round((0.08 + Math.pow(r, 0.55) * 0.92) * 100);
+}
 function heatmapHTML(chgOf) {
   const chgAt = (typeof chgOf === "function") ? chgOf : (r) => num(r.c);
   const all = shownRows();
@@ -4422,7 +4387,8 @@ function heatmapHTML(chgOf) {
   heatSetScale(rows.map(chgAt));        /* full opacity = the biggest move actually on screen */
   const tiles = rows.map((r) => {
     const cv = chgAt(r);
-    return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" style="background:' + heatColorChg(cv) + '" data-act="row" data-t="' + esc(r.t) + '">' +
+    return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) + '">' +
+      '<i class="sc-heattile__fill" style="height:' + heatFillPct(cv) + '%;background:' + heatColorChg(cv) + '"></i>' +
       '<span class="sc-heattile__t">' + esc(r.t) + "</span>" +
       '<span class="sc-heattile__c" id="htc_' + esc(r.t) + '">' + (cv != null && isFinite(cv) ? fmtC(cv) : "—") + "</span>" +
     "</div>";
@@ -10458,7 +10424,10 @@ function patch(t, price) {
     const onTf = !!(L0_MAP_NOW && L0_MAP_NOW.pct && L0_MAP_NOW.pct[t] != null && el("layer0"));
     if ((htTile || htTxt) && !onTf) {
       const hc = c != null ? c : (r ? r.c : null);
-      if (htTile && hc != null) htTile.style.background = heatColorChg(hc);
+      if (htTile && hc != null) {
+        const f = htTile.querySelector(".sc-heattile__fill");
+        if (f) { f.style.height = heatFillPct(hc) + "%"; f.style.background = heatColorChg(hc); }
+      }
       if (htTxt && hc != null) htTxt.textContent = fmtC(hc);
     }
   }
