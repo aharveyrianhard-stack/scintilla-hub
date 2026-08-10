@@ -11349,7 +11349,13 @@ function filesWire(){
 /* on-brand: reuses .sc-l0chip / .sc-l0asof / .sc-l0rng__lbl from the RRG transport row,
    so the rewind reads as the same control the rotation graph already uses. */
 .gwx{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:.4px solid var(--line)}
-.gwx__sc{flex:1;accent-color:var(--crk,#00d4ff);cursor:pointer;min-width:60px;height:2px}
+.gwx__sc{flex:1;cursor:pointer;min-width:60px;height:14px;background:transparent;
+  -webkit-appearance:none;appearance:none;outline:none}
+.gwx__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a);border-radius:0}
+.gwx__sc::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
+.gwx__sc::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;
+  background:var(--crk,#00d4ff);margin-top:-3.5px;border:none}
+.gwx__sc::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--crk,#00d4ff);border:none}
 /* rank badge — fixed column, hard right of every board row */
 .sc-board__row{position:relative}
 .gwx-rk{position:absolute;right:2px;top:50%;transform:translateY(-50%);
@@ -11447,27 +11453,60 @@ body.gwx-on .sc-board__row{padding-right:26px}
      coming through." Correct - there was none. So: record where every row IS, let the page
      rebuild as it always does, then put each row back where it was and release it. The rows
      travel to their new rank instead of teleporting. */
+  /* ★ NO REBUILD. Alan: "sounds like black and then bang."
+     That was innerHTML = boardRowsHTML() wiping all 210 rows and refilling them - for
+     one frame the board is EMPTY, which reads as a black flash before everything
+     reappears. And a destroyed row cannot animate, so the FLIP was fighting it too.
+
+     Instead the rows are never removed. Their geiger bar is rewritten in place, and the
+     row itself is MOVED to its new rank with a transform. Nothing disappears, so there
+     is nothing to flash. */
   function repaint(before){
     try{
-      var bs=E("boardScroll");
-      var was={};
-      if(bs) [].forEach.call(bs.querySelectorAll(".sc-board__row"),function(r){
-        var t=r.getAttribute("data-t"); if(t) was[t]=r.getBoundingClientRect().top; });
+      var bs=E("boardScroll"); if(!bs) return;
+      var rows=[].slice.call(bs.querySelectorAll(".sc-board__row"));
+      if(!rows.length) return;
+      var byT={}; rows.forEach(function(r){ byT[r.getAttribute("data-t")]=r; });
 
+      var was={}; rows.forEach(function(r){ was[r.getAttribute("data-t")]=r.getBoundingClientRect().top; });
+
+      // value in place — the same bipolar bar the page draws, just rewritten
+      var vals={}; (S.rows||[]).forEach(function(r){ vals[r.t]=r.g; });
+      var mx=0.0001; for(var t in vals) if(vals[t]!=null) mx=Math.max(mx,Math.abs(vals[t]));
+      rows.forEach(function(r){
+        var t=r.getAttribute("data-t"), v=vals[t];
+        var cell=r.querySelector(".sc-gmini");
+        if(!cell) return;
+        var bar=cell.querySelector("i");
+        if(v==null){ if(bar){bar.style.width="0%";bar.style.boxShadow="none";} return; }
+        if(!bar){ bar=document.createElement("i"); cell.appendChild(bar); }
+        var bull=v>=0, w=(Math.min(Math.abs(v)/mx,1)*50)+"%";
+        var col=bull?"var(--bull)":"var(--bear)";
+        bar.style.left = bull?"50%":""; bar.style.right = bull?"":"50%";
+        bar.style.width=w; bar.style.background=col; bar.style.boxShadow="0 0 5px "+col;
+      });
+
+      // order in place — move the nodes, never recreate them
       S.boardOrder=computeBoardOrder();
-      if(bs) bs.innerHTML=boardRowsHTML();
-      var cg=E("cohGeiger"); if(cg) cg.innerHTML=cohortGeigerHTML();
+      var frag=document.createDocumentFragment();
+      (S.boardOrder||[]).forEach(function(t){ if(byT[t]) frag.appendChild(byT[t]); });
+      rows.forEach(function(r){ if(!r.parentNode) return; });
+      bs.appendChild(frag);
 
-      if(bs) [].forEach.call(bs.querySelectorAll(".sc-board__row"),function(r){
-        var t=r.getAttribute("data-t"); if(!t||was[t]==null)return;
+      // play them from where they were to where they now are
+      rows.forEach(function(r){
+        var t=r.getAttribute("data-t"); if(was[t]==null) return;
         var dy=was[t]-r.getBoundingClientRect().top;
-        if(!dy)return;
+        if(!dy) return;
         r.style.transition="none";
         r.style.transform="translateY("+dy+"px)";
-        r.getBoundingClientRect();                 // force the browser to accept the start
-        r.style.transition="transform .62s cubic-bezier(.32,0,.18,1)";
+        r.getBoundingClientRect();
+        r.style.transition="transform .42s cubic-bezier(.32,0,.18,1)";
         r.style.transform="translateY(0)";
       });
+
+      var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
+      paintTM();
       badges(before);
     }catch(e){}
   }
@@ -11663,7 +11702,15 @@ body.gwx-on .sc-board__row{padding-right:26px}
   }
 
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
-  setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); cmpToggle(); loadTM(); paintTM(); }, 900);
+  /* the housekeeping tick used to run every 900ms REGARDLESS - straight through a FLIP
+     transition, doing DOM work on every row while 17-40 of them were still travelling.
+     MEASURED: 8 rebuilds in 6s with rows mid-flight on almost every sample. It now sits
+     out entirely while the player is running; a frame already repaints everything. */
+  setInterval(function(){
+    if(TIMER) return;                       // playing - do not touch the DOM
+    if(E("cohGeiger")&&!E("gwxBar")) mount();
+    cmpToggle(); loadTM(); paintTM();
+  }, 1100);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
 })();
