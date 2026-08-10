@@ -4373,22 +4373,44 @@ function heatSetScale(values) {
                        Built while chasing the wrong idea; Alan: "it's not bad, I'd save this
                        type of view." Kept as a mode rather than thrown away.
    Either way the HUE is a constant: exactly --bull or exactly --bear, never recomputed. */
-let HEAT_MODE = "FILL";
+let HEAT_MODE = "GRAIN";
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.10)";
   const rgb = v >= 0 ? heatRGB().bull : heatRGB().bear;
-  if (HEAT_MODE === "LEVEL") return "rgb(" + rgb + ")";      /* level mode: full strength */
+  if (HEAT_MODE !== "FILL") return "rgb(" + rgb + ")";       /* GRAIN and LEVEL: full strength */
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
   const a = 0.22 + Math.pow(r, 0.55) * 0.78;
   return "rgba(" + rgb + "," + a.toFixed(3) + ")";
+}
+/* ★ GRAIN — Alan: "I'm fine with it going darker by opacity, by that the COLOURS MIX, not
+   that it just goes darker... I don't know if you want to make it like a grainy see-through."
+   That is the idea both of my earlier attempts were groping for. Flat alpha does not mix
+   anything: it just dims one colour toward the ground behind it, which is why every quiet
+   tile read as a darker square rather than a lighter green.
+   Grain does mix, the way a halftone does. The tile is painted with DOTS of the Geiger
+   colour at FULL strength, and the size of the move sets how big the dots are. Small move =
+   fine sparse grain over the dark panel. Big move = the dots swell until they merge into a
+   solid sheet of pure --bull or --bear. Every coloured pixel on screen is exactly the Geiger
+   colour at every level; only how much of the surface it covers changes.
+   Returns a CSS background shorthand: a dot grid, or a solid fill once the dots would meet. */
+function heatGrain(c) {
+  const v = num(c);
+  if (v == null) return "transparent";
+  const rgb = "rgb(" + (v >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
+  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
+  const CELL = 5;                                  // px between dot centres
+  const rad = 0.55 + Math.pow(r, 0.5) * 3.15;      // 0.55px sparse -> 3.7px, past the point they merge
+  if (rad >= 3.55) return rgb;                     // dots would overlap completely: just paint it solid
+  return "radial-gradient(circle at center, " + rgb + " " + rad.toFixed(2) + "px, transparent " +
+         (rad + 0.5).toFixed(2) + "px) 0 0 / " + CELL + "px " + CELL + "px";
 }
 /* how much of the tile that colour occupies: 8% for nothing, 100% for the biggest move on
    screen. Gamma 0.55 so ordinary moves are still readable rather than all hugging the floor. */
 function heatFillPct(c) {
   const v = num(c);
   if (v == null) return 0;
-  if (HEAT_MODE === "FILL") return 100;          /* the whole square is the colour */
+  if (HEAT_MODE !== "LEVEL") return 100;         /* FILL and GRAIN both cover the whole square */
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
   return Math.round((0.08 + Math.pow(r, 0.55) * 0.92) * 100);
 }
@@ -4407,7 +4429,8 @@ function heatmapHTML(chgOf) {
   const tiles = rows.map((r) => {
     const cv = chgAt(r);
     return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) + '">' +
-      '<i class="sc-heattile__fill" style="height:' + heatFillPct(cv) + '%;background:' + heatColorChg(cv) + '"></i>' +
+      '<i class="sc-heattile__fill" style="height:' + heatFillPct(cv) + '%;background:' +
+        (HEAT_MODE === "GRAIN" ? heatGrain(cv) : heatColorChg(cv)) + '"></i>' +
       '<span class="sc-heattile__t">' + esc(r.t) + "</span>" +
       '<span class="sc-heattile__c" id="htc_' + esc(r.t) + '">' + (cv != null && isFinite(cv) ? fmtC(cv) : "—") + "</span>" +
     "</div>";
@@ -4472,7 +4495,7 @@ function wireHeatSizing() {
 function heatHeadHTML() {
   return '<div class="sc-heathead">' +
     '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · ' +
-      (HEAT_MODE === "FILL" ? "opacity" : "level") + ' = %chg</span>' +
+      (HEAT_MODE === "FILL" ? "opacity" : HEAT_MODE === "GRAIN" ? "grain density" : "level") + ' = %chg</span>' +
     '<span class="sc-heathead__ctrls">' +
       '<span class="sc-heatbtn' + (HEAT_MODE === "FILL" ? " on" : "") + '" data-act="heatmode" data-mode="FILL" title="whole square, opacity carries the move">FILL</span>' +
       '<span class="sc-heatbtn' + (HEAT_MODE === "LEVEL" ? " on" : "") + '" data-act="heatmode" data-mode="LEVEL" title="rising level of full-strength colour">LEVEL</span>' +
@@ -5678,6 +5701,8 @@ function l0BodyHTML() {
          the rest of the Layer-0 controls, and the label states which rule is active so the
          encoding is never ambiguous. */
       const modeRow = '<div class="sc-l0rng" style="padding:4px 10px 6px">' +
+        '<button class="sc-l0chip' + (HEAT_MODE === "GRAIN" ? " is-on" : "") + '" data-act="heatmode" data-mode="GRAIN" ' +
+          'title="dots of the Geiger colour at full strength; the move sets how dense they are">GRAIN</button>' +
         '<button class="sc-l0chip' + (HEAT_MODE === "FILL" ? " is-on" : "") + '" data-act="heatmode" data-mode="FILL" ' +
           'title="whole square in the Geiger colour; opacity carries the size of the move">FILL &middot; OPACITY</button>' +
         '<button class="sc-l0chip' + (HEAT_MODE === "LEVEL" ? " is-on" : "") + '" data-act="heatmode" data-mode="LEVEL" ' +
@@ -10473,7 +10498,8 @@ function patch(t, price) {
       const hc = c != null ? c : (r ? r.c : null);
       if (htTile && hc != null) {
         const f = htTile.querySelector(".sc-heattile__fill");
-        if (f) { f.style.height = heatFillPct(hc) + "%"; f.style.background = heatColorChg(hc); }
+        if (f) { f.style.height = heatFillPct(hc) + "%";
+                 f.style.background = HEAT_MODE === "GRAIN" ? heatGrain(hc) : heatColorChg(hc); }
       }
       if (htTxt && hc != null) htTxt.textContent = fmtC(hc);
     }
