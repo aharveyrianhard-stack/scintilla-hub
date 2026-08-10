@@ -11435,6 +11435,10 @@ body.gwx-on .sc-board__row{padding-right:26px}
     BLEND  = NEXT_D ? frac : 0;
     ASOF=d; document.body.classList.add("gwx-on");
     E("gwxDt").textContent=d; liveChip(true);
+    /* the neighbour must be warmed on EVERY seek, not only on a cache miss - the early
+       return below used to skip it, so the blend had nothing to interpolate toward and
+       each sub-step rendered the day flat. */
+    if(NEXT_D && !CACHE[NEXT_D]) seekFetch(NEXT_D);
     if(CACHE[d]) return apply(CACHE[d]);
     var ts=tickers(); if(!ts.length)return;
     /* CHUNK 35 — the DB 500s on huge in.() lists. This page already learned that the hard
@@ -11471,6 +11475,8 @@ body.gwx-on .sc-board__row{padding-right:26px}
       res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
       res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
       m.__mom=mo; CACHE[d]=m;
+      /* it landed after the frame that needed it - repaint so the ease is visible */
+      if(NEXT_D===d && ASOF && CACHE[ASOF]) apply(CACHE[ASOF]);
     });
   }
   function apply(m){
