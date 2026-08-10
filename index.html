@@ -4359,17 +4359,36 @@ function heatSetScale(values) {
   HEAT_SCALE = Math.max(0.4, Math.min(8, p85));
   return HEAT_SCALE;
 }
-/* the constant colour - this is all any surface gets */
+/* ★ HOW THE HEAT IS EXPRESSED — two modes, because Alan wanted the first one and I kept
+   trying to solve a problem he did not have.
+     FILL  (default) - the whole square is the Geiger colour, and OPACITY carries the move.
+                       Alan: "my idea was magnitude to show up in the opacity. Then you were
+                       saying that opacity makes it darker, but no - it's just a darker
+                       square." Exactly. Over a dark ground a lower opacity DOES read darker
+                       and that is fine; it is the same colour, more see-through, the way a
+                       TradingView line is made more transparent. What was actually wrong the
+                       first time was the RANGE: ordinary moves sat at 0.05-0.20, so the grid
+                       looked washed out rather than see-through. It now runs 0.22 to 1.00.
+     LEVEL           - the square holds a rising level of the pure colour at full strength.
+                       Built while chasing the wrong idea; Alan: "it's not bad, I'd save this
+                       type of view." Kept as a mode rather than thrown away.
+   Either way the HUE is a constant: exactly --bull or exactly --bear, never recomputed. */
+let HEAT_MODE = "FILL";
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.10)";
-  return "rgb(" + (v >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
+  const rgb = v >= 0 ? heatRGB().bull : heatRGB().bear;
+  if (HEAT_MODE === "LEVEL") return "rgb(" + rgb + ")";      /* level mode: full strength */
+  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
+  const a = 0.22 + Math.pow(r, 0.55) * 0.78;
+  return "rgba(" + rgb + "," + a.toFixed(3) + ")";
 }
 /* how much of the tile that colour occupies: 8% for nothing, 100% for the biggest move on
    screen. Gamma 0.55 so ordinary moves are still readable rather than all hugging the floor. */
 function heatFillPct(c) {
   const v = num(c);
   if (v == null) return 0;
+  if (HEAT_MODE === "FILL") return 100;          /* the whole square is the colour */
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
   return Math.round((0.08 + Math.pow(r, 0.55) * 0.92) * 100);
 }
@@ -4452,8 +4471,11 @@ function wireHeatSizing() {
 }
 function heatHeadHTML() {
   return '<div class="sc-heathead">' +
-    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · color = %chg</span>' +
+    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · ' +
+      (HEAT_MODE === "FILL" ? "opacity" : "level") + ' = %chg</span>' +
     '<span class="sc-heathead__ctrls">' +
+      '<span class="sc-heatbtn' + (HEAT_MODE === "FILL" ? " on" : "") + '" data-act="heatmode" data-mode="FILL" title="whole square, opacity carries the move">FILL</span>' +
+      '<span class="sc-heatbtn' + (HEAT_MODE === "LEVEL" ? " on" : "") + '" data-act="heatmode" data-mode="LEVEL" title="rising level of full-strength colour">LEVEL</span>' +
       '<span class="sc-heatbtn on" data-act="heattoggle" title="back to single-ticker view">HEAT ▸ OFF</span>' +
       SECFS_BTN0 +
     "</span>" +
@@ -9969,6 +9991,12 @@ document.addEventListener("click", (e) => {
     }
     /* R42 §6 — heattoggle now UNREACHABLE from the company header (button removed);
        case kept harmless for the heat-view's own "HEAT ▸ OFF" chip / stale markup. */
+    /* FILL vs LEVEL — two ways of expressing the same two colours. See heatColorChg. */
+    case "heatmode": {
+      const m = a.getAttribute("data-mode");   /* the delegated element is `a` in this switch */
+      if (m && m !== HEAT_MODE) { HEAT_MODE = m; renderLeftPanel(); }
+      break;
+    }
     case "heattoggle": {   // #133 — flip the left panel between single-ticker (rotate/pinned) and whole-scope heatmap
       LEFT_HEAT = !LEFT_HEAT;
       if (LEFT_HEAT) clearRotate(); else if (LEFT_STATE === "AUTO") { scheduleNextTick(); startAutoBar(); }
