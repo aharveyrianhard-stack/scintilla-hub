@@ -243,11 +243,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-cohstrip__lbl{ font-size:8px; letter-spacing:.06em; color:var(--dim); text-transform:uppercase;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .sc-cohstrip__col.is-active .sc-cohstrip__lbl{ color:var(--ink2); }
-/* label follows the ink: bull reads label-bar-value top to bottom, bear reads
-   value-bar-label, so the name always sits beside the filled half of the track. */
-.sc-cohstrip__col.is-bear .sc-cohstrip__lbl{ order:3; }
-.sc-cohstrip__col.is-bear .sc-vmini{ order:2; }
-.sc-cohstrip__col.is-bear .sc-cohstrip__val{ order:1; }
+/* Fixed top and bottom slots. Both are always present and always claim their height even
+   when empty, which is what keeps every bar - and therefore every centre zero line - at the
+   same vertical position across the strip. Bull fills the top slot (name outermost, value
+   just inside it, against the bar); bear fills the bottom slot in mirror order. */
+.sc-cohstrip__slot{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+  gap:1px; height:24px; flex:0 0 24px; overflow:hidden; width:100%; }
+.sc-cohstrip__col.is-bear .sc-cohstrip__slot:last-child{ justify-content:flex-start; }
 /* vertical bipolar bar — fixed 54px track, zero line dead center, grows up (bull) /
    down (bear) to at most 50% of the track; same ±1 composite scale + glow as .sc-gmini */
 /* R46 (Alan: "needs to be much taller so that the scale is there — we need to see
@@ -4145,19 +4147,33 @@ function cohortCompareStripHTML() {
     const lbl = r.short || COH_ABBR[r.key] || r.label;   /* r.short = SPDR ticker in SECTORS mode */
     const ttl = r.full || r.label;
     if (r.mean == null) {
+      /* same three-part skeleton, so a column with no data does not shift its neighbours' bars */
       return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
-        '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" + vminiHTML(null, span) +
-        '<span class="sc-cohstrip__val">—</span></button>';
+        '<span class="sc-cohstrip__slot"><span class="sc-cohstrip__lbl">' + esc(lbl) + '</span>' +
+          '<span class="sc-cohstrip__val">—</span></span>' +
+        vminiHTML(null, span) +
+        '<span class="sc-cohstrip__slot"></span></button>';
     }
     const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
     /* Alan: "the green label should be at the top of the green and the red labels at the
        bottom of the red." The bar is a centre-zero track: bull ink rises above the middle,
        bear ink falls below it. is-bear flips the column order so the label always sits on
        the side the ink is actually on, instead of floating above empty track. */
-    return '<button class="sc-cohstrip__col' + (r.mean < 0 ? " is-bear" : "") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
-      '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" +
+    /* Alan: "names at the top and bottom, and then inside of those, the labels at the top
+       and bottom." So the NAME sits on the outer edge of the side the ink is on, with the
+       VALUE just inside it, next to the bar.
+       Both slots are always rendered and always reserve their height even when empty. That
+       is the whole trick: the bar therefore sits at an identical vertical position in every
+       column, so the centre zero lines still form one straight line across the strip. Move
+       the bar itself and the fan stops being a fan. */
+    const bull = r.mean >= 0;
+    const name = '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>";
+    const val  = '<span class="sc-cohstrip__val" style="color:' + color + '">' +
+                 (bull ? "+" : "") + r.mean.toFixed(2) + "</span>";
+    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+      '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
       vminiHTML(r.mean, span) +
-      '<span class="sc-cohstrip__val" style="color:' + color + '">' + (r.mean >= 0 ? "+" : "") + r.mean.toFixed(2) + "</span>" +
+      '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
     "</button>";
   }).join("");
   return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
@@ -4324,16 +4340,28 @@ let LEFT_HEAT = false;
 let HEAT_SCALE = 3;                                   /* percent that reads as full strength */
 function heatSetScale(values) {
   const a = (values || []).map((v) => Math.abs(num(v) ?? 0)).filter((v) => isFinite(v) && v > 0).sort((x, y) => x - y);
-  if (!a.length) { HEAT_SCALE = 3; return HEAT_SCALE; }
-  /* 90th percentile, not the max: one runaway mover must not flatten everything else */
-  const p90 = a[Math.min(a.length - 1, Math.floor(a.length * 0.9))];
-  HEAT_SCALE = Math.max(0.5, Math.min(12, p90));      /* floored so a flat tape still reads */
+  if (!a.length) { HEAT_SCALE = 2; return HEAT_SCALE; }
+  /* 85th percentile. The 90th let a couple of runaway movers set the top of the scale, which
+     pushed an ordinary day into the 0.05-0.2 band - the grid went FAINTER than before and
+     Alan, correctly, said nothing had changed. */
+  const p85 = a[Math.min(a.length - 1, Math.floor(a.length * 0.85))];
+  HEAT_SCALE = Math.max(0.4, Math.min(8, p85));
   return HEAT_SCALE;
 }
+/* Alan: "green is Geiger green, and whatever is happening in the tones is more see-through
+   Geiger green. Brighter, less see-through is a big percentage change; more see-through is
+   a lesser percentage change."
+   The hue never moves. What was wrong was that a LINEAR ramp spends most of its range on
+   moves that almost never happen: with the top of the scale at 6%, a 0.4% move landed at
+   0.11 opacity and a 2.5% move at 0.44, so a normal grid was a wash of near-invisible
+   tiles. The curve below is gamma 0.6, which lifts the ordinary moves into a band the eye
+   can actually separate while still reserving full strength for the genuine outlier:
+   at a 6% scale, 0.4% now reads 0.24 and 2.5% reads 0.61. Same rule, visible range. */
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.08)";
-  const a = 0.05 + Math.min(1, Math.abs(v) / (HEAT_SCALE || 3)) * 0.95;
+  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
+  const a = 0.06 + Math.pow(r, 0.6) * 0.94;
   return v >= 0 ? "rgba(0,255,163," + a.toFixed(3) + ")" : "rgba(255,45,85," + a.toFixed(3) + ")";
 }
 /* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
