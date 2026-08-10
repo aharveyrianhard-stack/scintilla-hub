@@ -243,6 +243,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-cohstrip__lbl{ font-size:8px; letter-spacing:.06em; color:var(--dim); text-transform:uppercase;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .sc-cohstrip__col.is-active .sc-cohstrip__lbl{ color:var(--ink2); }
+/* label follows the ink: bull reads label-bar-value top to bottom, bear reads
+   value-bar-label, so the name always sits beside the filled half of the track. */
+.sc-cohstrip__col.is-bear .sc-cohstrip__lbl{ order:3; }
+.sc-cohstrip__col.is-bear .sc-vmini{ order:2; }
+.sc-cohstrip__col.is-bear .sc-cohstrip__val{ order:1; }
 /* vertical bipolar bar — fixed 54px track, zero line dead center, grows up (bull) /
    down (bear) to at most 50% of the track; same ±1 composite scale + glow as .sc-gmini */
 /* R46 (Alan: "needs to be much taller so that the scale is there — we need to see
@@ -4075,14 +4080,19 @@ function cohortCompareStripHTML() {
   const list = cohortCompareRows();
   const span = cohortCompareSpan(list);
   const cols = list.map((r) => {
-    const lbl = COH_ABBR[r.key] || r.label;
+    const lbl = r.short || COH_ABBR[r.key] || r.label;   /* r.short = SPDR ticker in SECTORS mode */
+    const ttl = r.full || r.label;
     if (r.mean == null) {
-      return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(r.label) + ' — no data">' +
+      return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
         '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" + vminiHTML(null, span) +
         '<span class="sc-cohstrip__val">—</span></button>';
     }
     const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
-    return '<button class="sc-cohstrip__col' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(r.label) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+    /* Alan: "the green label should be at the top of the green and the red labels at the
+       bottom of the red." The bar is a centre-zero track: bull ink rises above the middle,
+       bear ink falls below it. is-bear flips the column order so the label always sits on
+       the side the ink is actually on, instead of floating above empty track. */
+    return '<button class="sc-cohstrip__col' + (r.mean < 0 ? " is-bear" : "") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
       '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" +
       vminiHTML(r.mean, span) +
       '<span class="sc-cohstrip__val" style="color:' + color + '">' + (r.mean >= 0 ? "+" : "") + r.mean.toFixed(2) + "</span>" +
@@ -11507,7 +11517,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function goLive(){
     stop(); ASOF=null; document.body.classList.remove("gwx-on");
     E("gwxDt").textContent="live"; liveChip(false);
-    var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=DATES.length-1;
+    var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
     if(LIVE_G){var before={};(S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
       (S.rows||[]).forEach(function(r){ if(LIVE_G[r.t]!=null) r.g=LIVE_G[r.t]; });
       repaint(before);}
@@ -11609,16 +11619,22 @@ body.gwx-on .sc-board__row{padding-right:26px}
     var sc=E("gwxSc"); if(!sc||!DATES.length)return;
     if(+sc.value>=+sc.max) sc.value=Math.max(0,(DATES.length-40)*SUB);
     E("gwxPlay").innerHTML="&#10073;&#10073; PAUSE"; E("gwxPlay").classList.add("is-on");
-    /* playback advances a whole trading day per tick and lets the FLIP animation carry the
-       rows across; the sub-steps exist for the finger on the scrubber, not for the player. */
-    TIMER=setInterval(function(){
-      var i=+sc.value+SUB; if(i>+sc.max){stop();return;}
-      sc.value=i; var d=Math.floor(i/SUB);
-      E("gwxDt").textContent=DATES[d]||"";
-      seek(DATES[d]);
-    },700);
+    /* The thumb is animated, the data is not. Moving both on the same 700ms tick is what
+       made the bar hop. A requestAnimationFrame loop slides the thumb continuously; each
+       time it crosses into a new trading day the board seeks once. Rows keep their FLIP
+       animation across the whole day, so nothing is repainted mid-flight. */
+    var msPerDay=700, startVal=+sc.value, t0=performance.now(), lastDay=Math.floor(startVal/SUB);
+    TIMER=requestAnimationFrame(function step(now){
+      var v=startVal + ((now-t0)/msPerDay)*SUB;
+      if(v>=+sc.max){ sc.value=sc.max; stop(); return; }
+      sc.value=v;
+      var d=Math.floor(v/SUB);
+      if(d!==lastDay){ lastDay=d; E("gwxDt").textContent=DATES[d]||""; seek(DATES[d]); }
+      TIMER=requestAnimationFrame(step);
+    });
   }
-  function stop(){ if(TIMER){clearInterval(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
+  /* TIMER now holds a requestAnimationFrame handle, not an interval id */
+  function stop(){ if(TIMER){cancelAnimationFrame(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
 
   /* ==========================================================================
      SECTOR COMPARE — toggle the compare strip between COHORTS and the eleven
@@ -11652,7 +11668,13 @@ body.gwx-on .sc-board__row{padding-right:26px}
     }
     window.cohortCompareRows=function(){
       if(CMP_MODE==="SECTORS"){
-        return SECT.map(function(p){ return {key:p[1], label:p[0], mean:gAt(p[1]), n:1}; })
+        /* Alan: "I don't like the cropping of the health care energy, this stuff. Just use
+           the State Street thingies, and maybe a hover that expands and says the full name."
+           So the column shows the SPDR ticker - which never crops - and the title carries
+           the sector in full. */
+        return SECT.map(function(p){ return {key:p[1], label:p[0], short:p[1],
+                                             full:p[0].replace(/\b\w/g,function(c){return c;})+" \u00b7 "+p[1],
+                                             mean:gAt(p[1]), n:1}; })
                    .sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
       }
       if(!ASOF) return _rows.apply(this,arguments);
@@ -11896,6 +11918,118 @@ body.gwx-on .sc-board__row{padding-right:26px}
   }, 1500);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
+})();
+</script>
+
+<!-- SYSTEMS · CONSUMPTION + FACTS -----------------------------------------------
+     Alan: "I'd like the FMP consumption added to the logo menu button... this seems
+     like the right place for it. I think schemas and shit should be there just
+     forever. Important contexts and overs. I like to be able to see it."
+
+     Two additions to the existing SYSTEMS sheet, both pure appends:
+
+     1. FMP CONSUMPTION - the headline number. FMP does not expose usage on our key
+        (measured: no rate-limit headers, no account route, /api/v3 and /api/v4 both
+        403 as legacy), so these come from OUR OWN meter: every function that calls
+        FMP appends its call count and byte count to fmp_bandwidth_log, and the
+        fmp_usage_now view rolls that into calls/minute and GB/day.
+
+     2. SYSTEM FACTS - what has already been established and should never be
+        re-derived by a future session. Each row carries the evidence that proved
+        it. This is the "important context" surface: it reads from system_facts,
+        so adding a fact is an INSERT, not a redeploy.
+     ------------------------------------------------------------------------------>
+<style>
+.sc-sysfact{ margin-top:14px; padding-top:12px; border-top:.6px solid var(--line2); }
+.sc-sysfact__ttl{ font-size:8px; letter-spacing:.2em; color:var(--crk); text-transform:uppercase; margin-bottom:7px; }
+.sc-sysbig{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:9px; }
+.sc-sysbig__c{ min-width:74px; }
+.sc-sysbig__n{ font-family:var(--mono); font-size:16px; font-weight:700; color:var(--ink); line-height:1.05;
+  font-variant-numeric:tabular-nums; }
+.sc-sysbig__n.warn{ color:var(--bear); }
+.sc-sysbig__l{ font-size:7.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--dim); margin-top:3px; }
+.sc-sysf{ padding:6px 0; border-bottom:.4px solid var(--line); }
+.sc-sysf__h{ display:flex; gap:6px; align-items:baseline; }
+.sc-sysf__d{ flex:0 0 auto; width:5px; height:5px; border-radius:50%; margin-top:4px; }
+.sc-sysf__d.limit{ background:var(--bear); }
+.sc-sysf__d.capability{ background:var(--bull); }
+.sc-sysf__d.open_question{ background:var(--crk); }
+.sc-sysf__t{ flex:1; font-size:10px; color:var(--ink); line-height:1.35; }
+.sc-sysf__x{ font-size:9px; color:var(--ink2); line-height:1.4; margin:3px 0 0 11px; }
+.sc-sysf__e{ font-size:8px; color:var(--dim); line-height:1.45; margin:3px 0 0 11px; display:none; }
+.sc-sysf.open .sc-sysf__e{ display:block; }
+.sc-sysf__b{ background:none;border:0;padding:0;margin:3px 0 0 11px;cursor:pointer;
+  font-family:var(--mono); font-size:7.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--crk); }
+</style>
+<script>
+(function(){
+  function E(id){return document.getElementById(id);}
+  function api(p){ try{ return pg(p).catch(function(){return [];}); }catch(e){ return Promise.resolve([]); } }
+  function esc2(t){ return String(t==null?"":t).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function paintUsage(){
+    var b=E("sysSheetBody"); if(!b || E("sysUseBox")) return;
+    b.insertAdjacentHTML("beforeend",
+      '<div class="sc-sysfact" id="sysUseBox"><div class="sc-sysfact__ttl">FMP CONSUMPTION &middot; our own meter</div>'+
+      '<div class="sc-sysfact__body">loading&hellip;</div></div>');
+    api("fmp_usage_now?select=*").then(function(rows){
+      var box=E("sysUseBox"); if(!box) return;
+      var r=(rows&&rows[0])||null;
+      if(!r){ box.querySelector(".sc-sysfact__body").innerHTML='<div class="dim">no meter rows yet.</div>'; return; }
+      var gbDay=+r.gb_per_day_at_current_rate;
+      box.querySelector(".sc-sysfact__body").innerHTML =
+        '<div class="sc-sysbig">'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.calls_per_minute_avg_1h).toFixed(0)+'</div>'+
+            '<div class="sc-sysbig__l">calls / min</div></div>'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.gb_last_24h).toFixed(2)+'</div>'+
+            '<div class="sc-sysbig__l">GB last 24h</div></div>'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+gbDay.toFixed(1)+'</div>'+
+            '<div class="sc-sysbig__l">GB/day at this rate</div></div>'+
+        '</div>'+
+        '<div class="sc-fmpact__row"><span class="dim">'+(+r.calls_last_hour).toLocaleString()+
+          ' calls and '+(+r.mb_last_hour).toFixed(0)+' MB in the last hour &middot; '+
+          (+r.calls_last_24h).toLocaleString()+' calls in 24h</span></div>'+
+        '<div class="sc-fmpact__row"><span class="dim">FMP publishes no usage figure for this key, '+
+          'so these are counted on our side: every function that calls FMP logs its own calls and bytes.</span></div>';
+    });
+  }
+
+  function paintFacts(){
+    var b=E("sysSheetBody"); if(!b || E("sysFactBox")) return;
+    b.insertAdjacentHTML("beforeend",
+      '<div class="sc-sysfact" id="sysFactBox"><div class="sc-sysfact__ttl">ESTABLISHED FACTS &middot; measured, with evidence</div>'+
+      '<div class="sc-sysfact__body">loading&hellip;</div></div>');
+    api("system_facts?select=area,headline,detail,status,evidence,measured_on&order=area.asc,id.asc").then(function(rows){
+      var box=E("sysFactBox"); if(!box) return;
+      if(!rows.length){ box.querySelector(".sc-sysfact__body").innerHTML='<div class="dim">none recorded.</div>'; return; }
+      box.querySelector(".sc-sysfact__body").innerHTML = rows.map(function(f,i){
+        return '<div class="sc-sysf" id="sysf'+i+'">'+
+          '<div class="sc-sysf__h"><span class="sc-sysf__d '+esc2(f.status)+'"></span>'+
+            '<span class="sc-sysf__t">'+esc2(f.headline)+'</span></div>'+
+          (f.detail?'<div class="sc-sysf__x">'+esc2(f.detail)+'</div>':'')+
+          '<button class="sc-sysf__b" data-sysf="'+i+'" type="button">evidence &middot; '+esc2(f.measured_on)+'</button>'+
+          '<div class="sc-sysf__e">'+esc2(f.evidence)+'</div>'+
+        '</div>';
+      }).join("");
+      box.addEventListener("click",function(e){
+        var t=e.target.closest("[data-sysf]"); if(!t) return;
+        var row=E("sysf"+t.getAttribute("data-sysf")); if(row) row.classList.toggle("open");
+      });
+    });
+  }
+
+  /* the sheet body is built when SYSTEMS is opened, so watch for it rather than
+     racing it on a timer - same reason the board columns use an observer. */
+  var sheet=document.getElementById("sysSheetBody");
+  if(sheet){
+    new MutationObserver(function(){
+      if(sheet.children.length && !E("sysUseBox")){ paintUsage(); paintFacts(); }
+    }).observe(sheet,{childList:true});
+  }
+  document.addEventListener("click",function(e){
+    if(e.target.closest('[data-act="systems"]')) setTimeout(function(){ paintUsage(); paintFacts(); }, 260);
+  }, true);
 })();
 </script>
 </body>
