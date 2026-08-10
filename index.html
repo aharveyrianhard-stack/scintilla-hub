@@ -11451,9 +11451,14 @@ function filesWire(){
   var ASOF=null, DATES=[], CACHE={}, LIVE_G=null, PREV={}, TIMER=null, MOUNTED=false;
   var NEXT_D=null, BLEND=0;   /* the day being eased toward, and how far */
   var SUB=20;                 /* slider stops per trading day - the finger moves in 1/20ths */
-  /* the second input: how far back the rewind reaches. label, calendar days, row cap. */
+  /* The second input: how far back the rewind reaches. label, calendar days, row cap.
+     The list is TRIMMED at runtime to what fan_daily actually holds - offering a 5Y chip
+     that quietly returns 14 months is worse than not offering it. The deepest option is
+     relabelled MAX and carries the true first date in its tooltip, so the control always
+     tells the truth about the history behind it and widens by itself as the fill deepens. */
   var BACK_DEF=[["1M",31,60],["3M",93,140],["6M",186,260],["1Y",365,400],["2Y",730,760],["5Y",1826,1500]];
   var BACK_I=3;               /* 1Y - what the bar has always silently used */
+  var BACK_FLOOR=null;        /* oldest asof that exists, once we have asked */
   function E(id){return document.getElementById(id);}
   /* use the page's OWN pg() — it already carries the 503/504/429 retry + jitter that
      every other read on this hub depends on. Rolling a second fetch here would quietly
@@ -11520,8 +11525,26 @@ function filesWire(){
       var sc=E("gwxSc"); if(sc){sc.disabled=true;sc.max=0;sc.value=0;}
       loadDates();
     };
-    if(!DATES.length) loadDates();
+    if(!DATES.length) trimBack().then(loadDates);
     MOUNTED=true;
+  }
+  function trimBack(){
+    if(BACK_FLOOR!==null) return Promise.resolve();
+    return api("fan_daily?select=asof&ticker=eq.SPY&order=asof.asc&limit=1").then(function(rows){
+      BACK_FLOOR=(rows&&rows[0]&&rows[0].asof)||null;
+      if(!BACK_FLOOR) return;
+      var have=Math.round((Date.now()-Date.parse(BACK_FLOOR))/864e5);
+      var keep=BACK_DEF.filter(function(d,i){ return i===0 || d[1]<=have; });
+      if(!keep.length) keep=[BACK_DEF[0]];
+      /* the deepest kept option becomes MAX and reaches the true floor */
+      var last=keep[keep.length-1].slice(); last[0]="MAX"; last[1]=have; last[2]=2000;
+      keep[keep.length-1]=last;
+      BACK_DEF=keep; BACK_I=Math.min(BACK_I,BACK_DEF.length-1);
+      var bk=E("gwxBack");
+      if(bk){ bk.textContent=BACK_DEF[BACK_I][0];
+              bk.title="how far back the rewind reaches - the point you measure change from. "+
+                       "History begins "+BACK_FLOOR+"."; }
+    });
   }
   function loadDates(){
     var w=BACK_DEF[BACK_I], from=new Date(Date.now()-w[1]*864e5).toISOString().slice(0,10);
