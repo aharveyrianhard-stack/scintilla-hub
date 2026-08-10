@@ -111,7 +111,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   /* R23 FIX 3 — 8th track (5fr) = MKT trading-state dot, after chart(+). */
   /* R26 FIX 6 — 9th track (9fr) = FPE (fwd P/E), inserted after CHG. */
   /* FIX 4 — 9-track now: RSI (8fr) inserted after FPE, before Geiger (Geiger 33→28fr). */
-  grid-template-columns:minmax(0,4fr) minmax(0,11fr) minmax(0,14fr) minmax(0,12fr) minmax(0,9fr) minmax(0,8fr) minmax(0,28fr) minmax(0,16fr) minmax(0,5fr);
+  /* R42 §3 — 10-track: MKT CAP (11fr) inserted between FPE and RSI. Paid for by the
+     R42 §2 wider board column (1.45fr), so nothing else was shaved. */
+  grid-template-columns:minmax(0,4fr) minmax(0,11fr) minmax(0,14fr) minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,8fr) minmax(0,28fr) minmax(0,16fr) minmax(0,5fr);
   align-items:center; gap:9px; padding:6px 0;
   font-family:var(--mono); font-size:10px;
   border-bottom:.4px solid var(--line);
@@ -125,6 +127,14 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   z-index:5;   /* FIX 2 — solid header above row content (geiger mids/bars are z≤1) */
 }
 .ch > *{ min-width:0; overflow:hidden; }
+/* FIX (Alan: "something crops the (parenthesis) of chg% on cmd +/- zoom") — the blanket
+   overflow:hidden above is correct for the ticker/name cell (real ellipsis truncation),
+   but the Chg/RSI/F P/E cells are short fixed-format numbers ("(1.60%)") that should
+   NEVER be allowed to lose a character. At certain zoom %, font metrics can round the
+   rendered text a px or two wider than its minmax(0,Nfr) track, and overflow:hidden was
+   silently eating the trailing ")". These 3 cells now render in full even if that means
+   overlapping their own cell's edge slightly — never a clipped character. */
+.ch > .sc-chg, .ch > .sc-rsi, .ch > .sc-fpe{ overflow:visible; white-space:nowrap; }
 
 /* SCINTILLA · Room 2 · ChartPanel — left panel mount   [APPROVED 2026-06-10] */
 .sc-chartpanel{ display:flex; flex-direction:column; min-height:0;
@@ -163,11 +173,283 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 .sc-rsi{ text-align:center; font-family:var(--mono); font-size:10px;   /* FIX 4 — RSI cell, centered like FPE */
   font-variant-numeric:tabular-nums; color:var(--ink2); }
+/* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
+.sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
+  font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
 
 /* SCINTILLA · Room 2 · CohortBoard — assembly frame   [APPROVED 2026-06-10] */
 .sc-board{ display:flex; flex-direction:column; min-height:0;
   border:.8px solid rgba(0,212,255,.20); overflow-x:hidden; }   /* FIX 4 — panel never side-scrolls */
 .sc-board__scroll{ flex:1 1 0; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 12px 11px; }
+/* Cohort-level aggregate Geiger — R37 hero arc dial, front-and-center at the top of
+   the board, above the ticker rows. Mean composite across the active cohort's full
+   scope drives the headline arc; tap the header to reveal median/min/max. */
+/* R40 — NO ring. Collapsed = one flat bipolar geiger line (the mean); expanded =
+   four flat lines (Mean/Median/Max/Min), each the SAME .sc-gmini bar the board rows
+   use, on the fixed ±1 composite scale. */
+.sc-cohgeiger{ border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+.sc-cohgeiger__hd{ display:flex; align-items:center; gap:10px; width:100%; padding:8px 14px 4px;
+  background:transparent; border:0; cursor:pointer; text-align:left; }
+.sc-cohgeiger__lbl{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); white-space:nowrap; }
+.sc-cohgeiger__n{ font-size:9px; color:var(--dim); white-space:nowrap; margin-left:auto; }
+.sc-cohgeiger__car{ font-size:8px; color:var(--dim); }
+.sc-cohgeiger__lines{ display:flex; flex-direction:column; gap:5px; padding:2px 14px 10px; }
+.sc-cohgeiger__line{ display:flex; align-items:center; gap:10px; }
+.sc-cohgeiger__line .sc-gmini{ flex:1 1 auto; }
+.sc-cohgeiger__k{ font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); width:46px; flex:0 0 auto; }
+.sc-cohgeiger__v{ font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums; width:44px; flex:0 0 auto; text-align:right; }
+.sc-cohgeiger__t{ font-size:8.5px; color:var(--dim); width:38px; flex:0 0 auto; text-align:right; }
+/* R39 — COHORT COMPARE: the cross-cohort fan (Geiger composite, NOT price — the
+   HEAT toggle already owns price/%chg, this is a separate, distinctly-labeled
+   feature). Collapsed by default (thin header only) so it never eats board row
+   space uninvited; tap to unfold every cohort sorted bullish → bearish. */
+.sc-cohcmp{ border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+.sc-cohcmp__hd{ display:flex; align-items:center; gap:10px; width:100%; padding:8px 14px;
+  background:transparent; border:0; cursor:pointer; text-align:left; }
+.sc-cohcmp__hd .sc-cohcmp__lbl{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+.sc-cohcmp__car{ font-size:8px; color:var(--dim); margin-left:auto; }
+.sc-cohcmp__body{ display:none; flex-direction:column; padding:2px 14px 12px; gap:5px; }
+.sc-cohcmp.is-open .sc-cohcmp__body{ display:flex; }
+.sc-cohcmp__row{ display:flex; align-items:center; gap:10px; background:transparent; border:0;
+  padding:4px 2px; cursor:pointer; width:100%; text-align:left; }
+.sc-cohcmp__row:hover{ background:rgba(0,212,255,.05); }
+.sc-cohcmp__row.is-active{ outline:1px solid var(--crk); }
+.sc-cohcmp__row .sc-cohcmp__lbl{ font-size:9.5px; color:var(--ink2); width:64px; flex:0 0 auto; white-space:nowrap; text-transform:none; letter-spacing:0; }
+.sc-cohcmp__row .sc-gmini{ flex:1 1 auto; }
+.sc-cohcmp__val{ font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums; width:44px; flex:0 0 auto; text-align:right; }
+.sc-cohcmp__n{ font-size:8.5px; color:var(--dim); width:24px; flex:0 0 auto; text-align:right; }
+.sc-cohcmp__row.is-empty .sc-cohcmp__mute{ font-size:9px; color:var(--mute); margin-left:auto; }
+/* R41 — dashboard layers: Layer-0 home (compare fan + heatmap in the right pane),
+   MEAN emphasis in the cohort geiger fan, and the gsum parent/child stacks. */
+.sc-cohgeiger__line.is-mean .sc-cohgeiger__k{ color:var(--ink2); }
+.sc-cohgeiger__line.is-mean .sc-gmini{ height:16px; }
+/* R43 §4 — Layer 0 is a STRICT vertical flex column: strip (flex:none) → tab row
+   (flex:none) → tab body (flex:1 1 0). The body claims every remaining pixel of the
+   right pane, so the heatmap / RRG / relative chart is the big section and the
+   cohort compare strip is the short one (owner: "heatmap should be the bigger"). */
+.sc-layer0{ display:flex; flex-direction:column; min-height:0; overflow:hidden; font-family:var(--mono); flex:1 1 0; }
+.sc-layer0 .sc-cohcmp{ border-bottom:.6px solid var(--line2); }
+/* R43 §2 — HORIZONTAL cohort compare strip: one narrow column per cohort, laid
+   left→right most-bullish → most-bearish (the sort IS the fan). ~100px tall vs the
+   ~300px the vertical fan used to eat. */
+.sc-cohstrip{ flex:0 0 auto; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;
+  padding:6px 8px 7px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+.sc-cohstrip__hd{ flex:0 0 auto; padding:7px 10px 3px; font-size:8px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--dim); font-family:var(--mono); }
+.sc-cohstrip__col{ display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:transparent; border:0; border-radius:0; padding:3px 1px 4px; cursor:pointer; min-width:0; }
+.sc-cohstrip__col:hover{ background:rgba(0,212,255,.05); }
+.sc-cohstrip__col.is-active{ outline:1px solid var(--crk); }
+.sc-cohstrip__lbl{ font-size:8px; letter-spacing:.06em; color:var(--dim); text-transform:uppercase;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.sc-cohstrip__col.is-active .sc-cohstrip__lbl{ color:var(--ink2); }
+/* vertical bipolar bar — fixed 54px track, zero line dead center, grows up (bull) /
+   down (bear) to at most 50% of the track; same ±1 composite scale + glow as .sc-gmini */
+/* R46 (Alan: "needs to be much taller so that the scale is there — we need to see
+   the green up and the red down clearly, the fan") — the 54px track gave each side
+   only 27px, so a +0.41 and a +0.05 looked nearly identical. 132px track = 66px per
+   side, so the fan reads as an actual scale. */
+/* R50 §1 — the R46 quarter-tick gridlines (.sc-vmini__gr) are DELETED, class and all.
+   Alan: "I don't like those lines, that shading in the tickers — it's not necessary,
+   the visuals say everything." What remains is the track, the CENTRE ZERO LINE (kept:
+   above it is bull, below it is bear — that one rule carries meaning) and the bar. The
+   magnitude is stated once, in words, in the strip header ("scale ±0.41"). */
+.sc-vmini{ position:relative; width:15px; height:132px; background:var(--panel); border-radius:0; overflow:hidden; }
+.sc-vmini__mid{ position:absolute; top:50%; left:0; right:0; height:1.3px; background:var(--dim); z-index:2; }
+.sc-vmini i{ position:absolute; left:2px; right:2px; border-radius:0; max-height:50%; z-index:1; }
+.sc-cohstrip__val{ font-size:9px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
+.sc-cohstrip__col.is-empty .sc-cohstrip__val{ color:var(--mute); font-weight:400; }
+/* 5×2 wrap — never scrolls sideways. R50 §5 RAISED this breakpoint 640 → 820 (the
+   authoritative rule now lives in the R50 small-screen block further down the sheet);
+   this one is kept as the floor so the wrap can never be lost. */
+@media(max-width:820px){ .sc-cohstrip{ grid-template-columns:repeat(5,1fr); } }
+/* R43 §3 → R44 §3 (Alan: "the tabs are also not consistent with our design theme").
+   The row still REUSES the .sc-soctabs markup, but inside .sc-layer0 it is scoped to
+   the hub's CANONICAL tab law — .sc-mtab (§1.3, ~line 1200): mono / 10px / .18em /
+   uppercase / --dim, hover --ink2, and ACTIVE = cyan colour + inset cyan underline
+   with NO background fill ("colour is emissive — glows, never fills"). The container
+   takes .sc-mtabs' .8px --hair hairline (bottom only, to sit flush in the pane) with
+   per-tab right dividers instead of the heavier 1px --line .sc-soctabs frame. */
+.sc-layer0 .sc-soctabs{ margin:0; flex:0 0 auto; flex-wrap:nowrap;
+  border:0; border-bottom:.8px solid var(--hair); }
+/* R45 (Alan: "these new tabs are still inconsistent in terms of size") — measured
+   live: the L0 tabs were cloning .sc-mtab (10px / .18em / 31px tall), but .sc-mtab
+   is TOP-CHROME scale. Layer 0 sits in a PANEL, directly beside the cohort strip
+   (.sc-coh = 9px / .14em / 9px 10px pad). Panel-level tabs must read at panel
+   scale, so these now match .sc-coh exactly — one hierarchy: chrome tabs big,
+   panel tabs small. Active state stays the canonical inset cyan underline. */
+.sc-layer0 .sc-soctab{ flex:1 1 0; text-align:center; padding:9px 10px;
+  font-size:9px; letter-spacing:.14em; color:var(--dim); line-height:1;
+  border-right:.8px solid var(--hair); background:none; border-radius:0; }
+.sc-layer0 .sc-soctab:last-child{ border-right:0; }
+.sc-layer0 .sc-soctab:hover{ color:var(--ink2); }
+.sc-layer0 .sc-soctab.is-on{ color:var(--crk); background:none; box-shadow:inset 0 -2px 0 var(--crk); }
+.sc-l0body{ flex:1 1 0; min-height:0; overflow:auto; display:flex; flex-direction:column; position:relative; }
+.sc-l0body .sc-heatgrid{ flex:1 1 auto; min-height:0; }
+/* R45c — the canvas pane claims all remaining height and never letterboxes: an RRG
+   read in a 100px strip is useless. 360px floor on desktop keeps the quadrants
+   legible even when the right pane is short. */
+/* R48 (Alan: "the RRG and other thing are either gone or its not scrolling there")
+   — neither: they were OVERFLOWING and getting clipped. R45c set a 360px floor on
+   this canvas, but the Layer-0 body is only ~332px tall in the right pane, so
+   header(30) + chips(28) + 360 = 418px of content in a 332px box. The bottom third
+   of the RRG/RELATIVE chart was simply cut off below the fold, and because the
+   overflow lived on an inner flex child the wheel did not obviously scroll it —
+   so it read as "gone".
+   FIX: the canvas FITS the pane instead of forcing it to overflow — flex:1 with a
+   min-height (180px) that is comfortably under the available space, so the chart is
+   always fully visible with no scrolling needed at all. It still grows to fill any
+   taller pane (fullscreen ⛶, bigger window). Never re-raise this floor above the
+   pane height: that is exactly what clipped it. */
+.sc-l0cv{ flex:1 1 0; min-height:180px; position:relative; }
+.sc-l0cv canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+/* R47 — FOCUS canvas: the whole surface is clickable (a hit-tested cell/bubble routes
+   to the same openCo() a board row click does), so the pointer cursor is honest. */
+#l0foc{ cursor:pointer; touch-action:manipulation; }
+/* R47 — TILT mode is real DOM (CSS 3D beats a canvas fake here). ONE pointermove
+   handler on the grid drives every card's transform; no per-element listeners. */
+.sc-l0tilt{ position:absolute; inset:0; overflow:auto; display:grid; gap:6px; padding:6px;
+  grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); grid-auto-rows:76px;
+  perspective:600px; perspective-origin:50% 50%; }
+.sc-l0card{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; border:.8px solid var(--hair); border-radius:0; cursor:pointer; will-change:transform;
+  transform:perspective(600px); transform-style:preserve-3d;
+  transition:box-shadow .12s linear, border-color .12s linear; }
+.sc-l0card.is-hot{ border-color:var(--crk); box-shadow:0 0 0 1px var(--crk), 0 10px 26px rgba(0,0,0,.55); z-index:3; }
+.sc-l0card__t{ font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--ink); }
+.sc-l0card__c{ font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.sc-l0card__m{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim); font-variant-numeric:tabular-nums; }
+@media(prefers-reduced-motion:reduce){ .sc-l0card{ transition:none; } }
+.sc-l0note{ padding:18px 12px; text-align:center; font-family:var(--mono); font-size:9px;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+.sc-l0note.is-err{ color:var(--bear); }
+/* R44 §3 — the chip row speaks the same quiet-until-active language as the tabs:
+   dim mono, DASHED hairline while off, cyan text + SOLID cyan hairline when on,
+   never a fill. Square corners throughout. */
+.sc-l0rng{ flex:0 0 auto; display:flex; align-items:center; flex-wrap:wrap; gap:5px; padding:8px 10px 4px; }
+.sc-l0rng__lbl{ font-family:var(--mono); font-size:8px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--dim); opacity:.75; margin-right:1px; }
+.sc-l0rng__sep{ width:.8px; height:13px; background:var(--hair); margin:0 5px; flex:none; }
+.sc-l0chip{ font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--dim); border:.8px dashed var(--hair); border-radius:0; padding:4px 9px;
+  cursor:pointer; background:none; }
+.sc-l0chip:hover{ color:var(--ink2); border-color:var(--line2); }
+.sc-l0chip.is-on{ color:var(--crk); border:.8px solid var(--crk); background:none; }
+/* R45 — RRG "as of" stamp: the honest bar the tail ends on while playing/scrubbing */
+.sc-l0asof{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--dim); margin-left:6px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* R49 §2 — THE ONE CONTROL ROW. It sits BETWEEN the tab row and the body (outside
+   #l0body), so it is rendered once, always in the same place, and applies to
+   whichever tab is active. Hairline underneath so it reads as chrome belonging to
+   the tabs above rather than content belonging to the view below. Square, tokens
+   only, no fills — the .sc-l0chip language is unchanged. */
+.sc-l0ctlwrap{ flex:0 0 auto; border-bottom:.8px solid var(--hair); }
+.sc-l0ctlwrap .sc-l0rng{ padding:7px 10px; }
+/* mobile / coarse: .sc-chartpanel goes flex:0 0 auto there, so Layer 0 has no
+   parent height to claim — give the body an honest explicit floor instead. */
+@media(max-width:900px){ .sc-layer0{ flex:0 0 auto; } .sc-l0body{ min-height:60vh; } }
+/* R49 §5 — SCENES (Alan: the dashboard right pane is ~330px tall, too small for
+   these visuals). Same renderers, same markup, same shared TF row — mounted in a
+   full-width, full-height container instead of the cramped pane. Every renderer
+   already sizes to its container, so this is layout only: no drawing code exists
+   twice. Square corners, hairline frame, tokens only. */
+.sc-scenes{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.sc-scenes .sc-layer0{ flex:1 1 auto; min-height:0; border:.8px solid var(--hair); }
+/* the canvas floor is raised HERE only — this room genuinely has the height for it,
+   which is the whole point. Never raise it on .sc-l0cv globally: in the right pane
+   that is exactly what clipped the RRG in R48. */
+.sc-scenes .sc-l0cv{ min-height:380px; }
+.sc-scenes .sc-l0tilt{ grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); grid-auto-rows:92px; }
+/* R50 §5 FIX A — SCENES HEADER ROW SPILLED 13px AT EVERY WIDTH.
+   .sc-newscohrow is `width:100%` with a .8px border, and .sc-ihead.cohtabs adds
+   `padding:0 6px`. There is no global border-box rule (only `*{min-width:0}`), so the
+   row's BORDER-BOX came out at content + 12px padding + 1.6px border = 13px wider than
+   its own container: measured 809px inside a 796px .sc-scenes at BOTH 820 and 1100.
+   Scoped to SCENES only — the same latent rule exists in NEWS / SOCIAL / EVENTS /
+   ECONOMIC and is deliberately left alone, as those rooms are outside this pass. */
+.sc-scenes > .sc-newscohrow{ box-sizing:border-box; width:100%; max-width:100%; }
+@media(max-width:900px){
+  .sc-scenes .sc-layer0{ flex:0 0 auto; }
+  /* R50 §5 FIX B — THE SCENES VIEW WAS INVISIBLE BELOW 900px.
+     .sc-l0body is `flex:1 1 0`, i.e. flex-basis ZERO plus a share of the FREE SPACE.
+     Inside a `flex:0 0 auto` (content-sized) .sc-layer0 there IS no free space, so the
+     body resolved to a height of literally 0: measured clientHeight 0 against a
+     scrollHeight of 44 at 820px wide — MAP, ROTATION and RELATIVE all rendered into a
+     zero-height box in the SCENES room on a laptop or tablet. Size the body to its
+     CONTENT here instead, and let the view's own floors below set the real height. */
+  .sc-scenes .sc-l0body{ flex:0 0 auto; min-height:0; }
+  .sc-scenes .sc-l0cv{ min-height:300px; }
+  .sc-scenes .sc-l0body .sc-heatgrid{ flex:0 0 auto; min-height:300px; }
+}
+/* ============================================================================
+   R50 §3 — LAYER 0 FULLSCREEN. The ⛶ in every Layer-0 view header pins .sc-layer0
+   itself through the hub's ONE mechanism (data-act="secfs" → toggleSecFs → .sc-secfs).
+   .sc-secfs already supplies the fixed frame, the cyan hairline, the flex column and
+   overflow:hidden; all this block does is spell out the fill for THIS stack's children
+   so the strip / tabs / control row stay put at the top and the view claims the rest.
+   ============================================================================ */
+.sc-layer0.sc-secfs > #cohCompare,
+.sc-layer0.sc-secfs > .sc-soctabs,
+.sc-layer0.sc-secfs > .sc-l0ctlwrap{ flex:0 0 auto; }
+.sc-layer0.sc-secfs > .sc-l0body{ flex:1 1 0; min-height:0; overflow:auto; }
+/* the fullscreen frame is tall by definition — flex:1 already fills it, and any
+   min-height floor here would push the surface past the frame and force a scroll
+   (exactly the R48 clipping bug). Floors are DROPPED in fullscreen, never raised. */
+.sc-layer0.sc-secfs .sc-l0cv{ min-height:0; }
+.sc-layer0.sc-secfs .sc-heatgrid{ min-height:0; }
+.sc-layer0.sc-secfs .sc-heathead{ flex:0 0 auto; }
+/* ============================================================================
+   R50 §5 — SMALL-SCREEN PASS, LAYER 0 / SCENES ONLY (Alan: "the size of all of this
+   is really good on my big screens but on the small screens it's very tough").
+   Every selector below is scoped to .sc-layer0 or .sc-scenes — the cohort board and
+   the company rooms are deliberately untouched. Two steps down, ≤1100 and ≤820, and
+   the compare strip's 5×2 wrap moves off the old 640 breakpoint up to 820 so it wraps
+   BEFORE the ten columns get too narrow to read rather than after.
+   ============================================================================ */
+@media(max-width:1100px){
+  .sc-layer0 .sc-soctab{ font-size:8.5px; letter-spacing:.11em; padding:8px 6px; }
+  .sc-layer0 .sc-l0chip{ font-size:8.5px; letter-spacing:.11em; padding:4px 7px; }
+  .sc-layer0 .sc-l0rng{ gap:4px; padding:7px 8px 4px; }
+  .sc-layer0 .sc-l0rng__lbl{ font-size:7.5px; letter-spacing:.14em; }
+  .sc-layer0 .sc-cohstrip{ gap:2px; padding:5px 6px 6px; }
+  .sc-layer0 .sc-vmini{ width:13px; height:104px; }
+  .sc-scenes .sc-l0tilt{ grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); grid-auto-rows:84px; }
+}
+@media(max-width:820px){
+  /* the strip wraps to 5×2 HERE now (was 640) — ten columns under ~820px put the
+     labels into ellipsis and the bars under 10px wide. */
+  .sc-cohstrip{ grid-template-columns:repeat(5,1fr); }
+  .sc-layer0 .sc-soctab{ font-size:8px; letter-spacing:.09em; padding:7px 4px; }
+  .sc-layer0 .sc-l0chip{ font-size:8px; letter-spacing:.09em; padding:3px 6px; }
+  .sc-layer0 .sc-l0rng{ gap:3px; padding:6px 7px 3px; }
+  .sc-layer0 .sc-l0rng__sep{ margin:0 3px; }
+  .sc-layer0 .sc-cohstrip__lbl{ font-size:7.5px; letter-spacing:.04em; }
+  .sc-layer0 .sc-cohstrip__val{ font-size:8.5px; }
+  .sc-layer0 .sc-vmini{ width:12px; height:88px; }
+  .sc-layer0 .sc-heathead{ padding:6px 8px; }
+  .sc-layer0 .sc-heathead__lbl{ font-size:7.5px; letter-spacing:.07em; }
+  .sc-layer0 .sc-l0asof{ font-size:7.5px; }
+  /* MAP keeps a USABLE cell: the canvas gets a real floor instead of collapsing, and
+     TILT's cards stop shrinking at 72px (heatCols() does the same job for GRID in JS
+     — it drops a column rather than letting the tile fall under ~64px). */
+  .sc-layer0 .sc-l0cv{ min-height:260px; }
+  .sc-scenes .sc-l0cv{ min-height:300px; }
+  .sc-layer0 .sc-l0tilt,
+  .sc-scenes .sc-l0tilt{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); grid-auto-rows:72px; }
+  /* nothing may spill: the chip row and the tab row wrap/scroll inside their own box
+     rather than pushing the panel wider (the R48 overflow bug). */
+  .sc-layer0 .sc-soctabs{ min-width:0; }
+  .sc-layer0 .sc-soctab{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .sc-layer0 .sc-l0rng{ flex-wrap:wrap; min-width:0; }
+  .sc-layer0 .sc-l0chip{ flex:0 0 auto; }
+}
+.gsum .gs-comp[data-act]{ cursor:pointer; }
+.gsum .gs-ih[data-act]{ cursor:pointer; }
+.gsum .gs-kids{ flex-direction:column; gap:4px; padding:4px 8px 0; }
+.gsum .gs-kidrow{ display:flex; align-items:center; gap:8px; }
+.gsum .gs-kidrow .sc-gmini{ flex:1 1 auto; }
+.gsum .gs-kidk{ font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); width:46px; flex:0 0 auto; text-align:left; }
+.gsum .gs-kidv{ font-size:9.5px; font-variant-numeric:tabular-nums; width:44px; flex:0 0 auto; text-align:right; }
 .sc-board__row{ cursor:pointer; }
 .sc-board__row:hover{ background:rgba(0,212,255,.05); }
 /* DASHBOARD MODEL — the row whose ticker is shown in the LEFT panel (pinned or
@@ -245,10 +527,12 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-identfull .sc-cpx{ font-size:15px; }
 .sc-identfull .sc-cchg{ font-size:11px; }
 .sc-identfull .sc-clive{ font-size:9px; }
+/* R42 §2 (Alan: "kill the 50/50") — board-favored split: LEFT board ≈59%, right
+   pane ≈41% (1.45fr/1fr). Desktop only; the ≤900px stack (below) is untouched. */
 .sc-body2{ flex:1 1 auto; min-height:0; display:grid;
-  grid-template-columns:1fr 1fr; gap:12px; align-items:stretch; }   /* 50 / 50 */
-/* company study view: 50/50 — company panel replaces the chart, cohort board stays same width */
-.sc-body2.coview{ grid-template-columns:1fr 1fr; flex:0 0 auto; height:72vh; min-height:520px; }
+  grid-template-columns:1.45fr 1fr; gap:12px; align-items:stretch; }
+/* company study view keeps the same board-favored split */
+.sc-body2.coview{ grid-template-columns:1.45fr 1fr; flex:0 0 auto; height:72vh; min-height:520px; }
 
 /* SCINTILLA · ESTIMATES TAB — ported 1:1 from SCINTILLA_ANALYST_ESTIMATES reference
    (Alan, 2026-06-12). Classes prefixed sc-est to avoid collisions; colors mapped to
@@ -576,7 +860,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ern__tag.miss{ color:var(--bear); border-color:rgba(255,45,85,.3); }
 .sc-ern__tag.mixed{ color:var(--ink2); }
 .sc-ern__tag.streak{ color:var(--crk); border-color:rgba(0,212,255,.3); }
-.sc-ern__metrics{ display:grid; grid-template-columns:30px repeat(4, minmax(0,1fr)); gap:5px 7px; align-items:baseline; align-content:center; }   /* R39 — fluid columns: never overflow/collide in the narrow today-card */
+/* FIX (Alan, 29 Jul: "decimals are getting scrunched up on Microsoft") — was 4 fluid
+   columns (est · actual · surprise · beat-word). The beat-word column is gone, so the
+   three number columns get 1/3 more room each; that alone stops big revenue figures
+   like MSFT's 90.0B from ellipsis-truncating. Body grid also reclaims the 104px tag
+   column on reported cards, since the chip no longer renders there. */
+.sc-ern__metrics{ display:grid; grid-template-columns:30px repeat(3, minmax(0,1fr)); gap:5px 9px; align-items:baseline; align-content:center; }
+.sc-ern__body:not(:has(.sc-ern__tag)){ grid-template-columns:1fr; }
 /* inline beat/miss word next to each row — replaces the old dashed square box */
 .sc-ern__bm{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; text-align:left; }
 .sc-ern__bm.beat{ color:var(--bull); }
@@ -997,6 +1287,12 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-rotsel:hover{ color:var(--crk); }
 /* #133 — HEATMAP mode toggle (left-panel alt view when no ticker is pinned; cohort-scoped).
    Same compact chip look as .sc-rotsel so it reads as one control family. */
+/* R42 §7 — "◂ COHORT" back button (pinned company header, left of the tabs):
+   square corners, mono, dim ink → cyan on hover. */
+.sc-backcoh{ font-family:var(--mono); font-size:8px; letter-spacing:.08em; color:var(--dim);
+  background:transparent; border:1px solid var(--line2); border-radius:0; padding:3px 7px;
+  cursor:pointer; white-space:nowrap; align-self:center; }
+.sc-backcoh:hover{ color:#00D4FF; border-color:rgba(0,212,255,.5); }
 .sc-heatbtn{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim);
   cursor:pointer; white-space:nowrap; flex:none; padding:2px 5px; user-select:none; border:1px solid var(--hair); border-radius:2px; }
 .sc-heatbtn:hover{ color:var(--crk); border-color:var(--crk); }
@@ -1010,17 +1306,45 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    The grid had no flex property (defaulted to 0 1 auto = auto-height → 0 against its
    ancestor chain), so height:100% resolved to 0 and every tile was clipped invisible.
    Match .sc-chartpanel__slot's own proven rule instead of a bare height:100%. */
-.sc-heatgrid{ flex:1 1 0; min-height:340px; display:grid; grid-template-columns:repeat(6, 1fr); grid-auto-rows:52px; gap:3px; padding:8px; overflow-y:auto; align-content:start; }
-.sc-heattile{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  border-radius:3px; cursor:pointer; overflow:hidden; padding:2px; border:1px solid rgba(255,255,255,.04); }
-.sc-heattile:hover{ outline:1px solid var(--crk); }
-.sc-heattile.lg{ grid-column:span 2; grid-row:span 2; }
-.sc-heattile.md{ grid-column:span 2; }
-.sc-heattile__t{ font-family:var(--mono); font-weight:700; font-size:10px; letter-spacing:.03em; color:var(--ink); line-height:1.1; }
-.sc-heattile.lg .sc-heattile__t{ font-size:13px; }
-.sc-heattile__c{ font-family:var(--mono); font-size:8px; color:var(--ink3); margin-top:2px; }
+/* R43 §1 (Alan: tiles "bunch" vertically at browser zoom) — ROOT CAUSE: every CSS
+   square trick (aspect-ratio, then the padding-top:100% ::before) yields a FRACTIONAL
+   tile height that rounds independently of the grid's own row track at non-100% zoom,
+   so rows drift and overlap. FIX: deterministic JS sizing (sizeHeatTiles()) writes
+   INTEGER px into grid-template-columns AND grid-auto-rows inline on #heatGrid, and
+   the tile is a plain flex-centered box that exactly fills its fixed cell. No CSS
+   square hack survives here — column/row tracks below are only a pre-paint fallback. */
+/* R44 §1+§2 (Alan: "the text on the heatmap is not visible like at all" · "the little
+   cards were nicer before") — TWO fixes on one element:
+   §1 TYPE SCALES WITH THE TILE. Tiles render ~105 CSS px; a fixed 10px ticker + 8px
+      --ink3 change read as empty colored boxes. sizeHeatTiles() now publishes the
+      integer tile edge as --htile on #heatGrid and both labels are driven off it
+      (105px → ~16px ticker / ~11px change). The %change is var(--ink) at .85 alpha —
+      never the dim --ink3 again.
+   §2 CARD PRESENCE WITHOUT VARIABLE SIZING. Uniform squares stay (owner asked for
+      symmetry); what came back is the hairline that makes each tile read as a
+      discrete card instead of one continuous colour field, plus a 5px gap so they
+      breathe. sizeHeatTiles() reads the REAL computed columnGap, so the gap change
+      is picked up by the sizing math with no JS edit. */
+.sc-heatgrid{ flex:1 1 0; min-height:340px; display:grid; grid-template-columns:repeat(6, 1fr); gap:5px; padding:8px; overflow-y:auto; align-content:start; justify-content:center; }
+/* R45 (Alan: "the cards u had with curved border were nicer for this") — the heat
+   tiles are the ONE documented exception to the hub's square-corner law. Owner
+   preference, stated directly, twice. Everything else stays square; do not
+   "correct" this back to 0 in a later pass. */
+.sc-heattile{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  border-radius:5px; cursor:pointer; overflow:hidden; padding:2px; border:1px solid rgba(255,255,255,.07); min-width:0; }
+.sc-heattile:hover{ outline:1px solid var(--crk); outline-offset:1px; }
+/* R42 §1 — .lg/.md span rules RETIRED (uniform squares); heatmapHTML no longer
+   assigns these classes. Kept as harmless no-ops in case of stale cached markup. */
+.sc-heattile.lg{ }
+.sc-heattile.md{ }
+.sc-heattile__t{ display:block; max-width:100%; text-align:center; font-family:var(--mono); font-weight:700;
+  font-size:clamp(11px, calc(var(--htile,105px) * .155), 20px); letter-spacing:.03em; color:var(--ink);
+  line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-heattile__c{ display:block; text-align:center; font-family:var(--mono);
+  font-size:clamp(9px, calc(var(--htile,105px) * .105), 14px); color:var(--ink); opacity:.85;
+  line-height:1.15; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .sc-heatgrid__empty{ padding:24px; text-align:center; color:var(--dim); font-family:var(--mono); font-size:9px; }
-@media(max-width:640px){ .sc-heatgrid{ grid-template-columns:repeat(4,1fr); grid-auto-rows:44px; } }
+@media(max-width:640px){ .sc-heatgrid{ grid-template-columns:repeat(4,1fr); } }   /* fallback only — sizeHeatTiles() overrides inline with 4 cols at ≤640px */
 /* COHORT ▾ — tab-bar chip that behaves like the logo menu; looks like a normal tab */
 .sc-cohwrap{ position:relative; display:inline-flex; align-items:center; }
 .sc-cohwrap.is-open > .sc-it{ color:var(--crk); }
@@ -1445,7 +1769,8 @@ html{ font-size:16px; }
   /* R27 (Alan) — VOL cell stacks VERTICALLY on phones (horizontal dots icon on
      top, smaller number under) → VOL track 12→8fr, GEIGER gets it back 16→20fr. */
   /* FIX 4 — 9-track on phones too: RSI (7fr) after FPE, GEIGER shaved 20→13fr to pay for it. */
-  .ch{ grid-template-columns:minmax(0,4fr) minmax(0,12fr) minmax(0,14fr) minmax(0,12fr) minmax(0,9fr) minmax(0,7fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr); gap:6px; }
+  /* R42 §3 — MKT CAP track (10fr) between FPE and RSI on phones too. */
+  .ch{ grid-template-columns:minmax(0,4fr) minmax(0,12fr) minmax(0,14fr) minmax(0,12fr) minmax(0,9fr) minmax(0,10fr) minmax(0,7fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr); gap:6px; }
   /* R27b (Alan) — the BATTERY goes vertical: wide flat cells stacked up-down,
      filling bottom-up (column-reverse), number below. The cells are the wide
      part — turning them is what actually frees the width. */
@@ -1900,6 +2225,11 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
   color:var(--gs-dim); text-transform:uppercase; margin-top:2px; }
 /* MTF (mock .mtf/.mhd/.mr/.mb) */
 .gsum .gs-mtf{ flex:1; display:flex; flex-direction:column; margin-top:4px; min-height:0; }
+/* R42 §4/§5 — collapsed-state caret affordance ("▾ +7 tfs" / "▾ full ladder"):
+   small, dim, mono, cyan on hover — makes the collapsed tiles read as expandable. */
+.gsum .gs-more{ font-family:var(--gs-mono, var(--mono)); font-size:8px; letter-spacing:.12em;
+  color:var(--dim); cursor:pointer; padding:3px 0 1px; user-select:none; }
+.gsum .gs-more:hover{ color:#00D4FF; }
 .gsum .gs-mhd{ position:relative; height:9px; margin:0 20px 2px 26px; flex:none; }
 .gsum .gs-mhd span{ position:absolute; transform:translateX(-50%); font-family:var(--gs-mono);
   font-size:calc(var(--gt-label) - .5px); color:var(--gs-dim); }
@@ -2047,6 +2377,31 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 .sc-chartpanel__slot.cot-GEIGER .gsum .gs-zI{ background:var(--gs-line); }
 
 /* ============================================================================
+   R50 §4 — THE MTF LADDER MUST NEVER CLIP WILLIAMS.
+   Alan: "the Geiger ring and the RSIs — they always hide the Williams. They have to be
+   a bar like the Geigers." Both tiles now open EXPANDED (GS_RSI_OPEN / GS_WPR_OPEN),
+   which means the 2×2 indicator zone can be asked to hold two full ladders. The old
+   layout let that fail SILENTLY: .gs-mrow was flex:1 / min-height:0 inside a
+   .gs-mtf that was itself min-height:0 inside a .gs-ip with overflow:hidden — so
+   extra rows were squashed toward zero and then cut off, and Williams (bottom-right of
+   the reading order) was the tile that lost them.
+   THREE rules, in escalation order, so nothing is ever clipped:
+     1. rows keep a readable floor and may GROW but never SHRINK (flex:1 0 auto),
+     2. the tile's ladder scrolls if a 17-timeframe equalizer really is configured,
+     3. the whole indicator ZONE scrolls if the panel is shorter than the two tiles.
+   Desktop only for the row floor: ≤900px keeps R47's deliberate compact 3×2 glance.
+   ============================================================================ */
+.gsum .gs-zI{ overflow:auto; -webkit-overflow-scrolling:touch; }
+.gsum .gs-mtf{ overflow-y:auto; overflow-x:hidden; }
+.gsum .gs-mtf::-webkit-scrollbar{ width:4px; }
+.gsum .gs-mtf::-webkit-scrollbar-thumb{ background:var(--gs-line); }
+@media (min-width:901px){
+  .gsum .gs-ip{ min-height:190px; }               /* fits ~11 ladder rows outright */
+  .gsum .gs-mrow{ flex:1 0 auto; min-height:12px; }
+  .gsum .gs-mrow.gs-day{ flex:1.35 0 auto; min-height:15px; }
+}
+
+/* ============================================================================
    SOCIAL sub-tabs (SENTIMENT · YOUTUBE · X · STOCKTWITS) + YouTube feed.
    Front shell only — YOUTUBE reads youtube_feed (DB, master-filled); empty =
    honest awaiting state, lights up with zero code change. No side accent bars.
@@ -2084,6 +2439,45 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 .sc-yt__grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 @media(min-width:1180px){ .sc-yt__grid{ grid-template-columns:1fr 1fr 1fr; } }
 @media(max-width:680px){ .sc-yt__grid{ grid-template-columns:1fr; } }
+.sc-yt__grid.is-raw{ display:block; }
+/* Cards/Raw toggle — FIX (Alan couldn't find it): was margin-left:auto'd onto the
+   wrapping ticker-chip filter strip, so it landed wherever that row happened to wrap —
+   invisible in practice. Now its own full-width, high-contrast bar, always the FIRST
+   thing under the YOUTUBE sub-tab, before any ticker chips. */
+.sc-ytmodebar{ display:flex; align-items:center; gap:10px; border:1px solid var(--crk); border-radius:4px;
+  background:rgba(0,212,255,.05); padding:8px 12px; margin-bottom:10px; }
+.sc-ytmodebar__lbl{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--dim); margin-right:2px; }
+.sc-ytmode__b{ font-family:var(--mono); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink2);
+  border:1px solid var(--line); border-radius:3px; background:transparent; padding:6px 14px; cursor:pointer; white-space:nowrap; }
+.sc-ytmode__b:hover{ border-color:var(--crk); color:var(--crk); }
+.sc-ytmode__b.is-on{ color:#000; background:var(--crk); border-color:var(--crk); font-weight:700; }
+/* RAW TABLE — StockTwits/Twitter-style clean feed, one row per video (#137/step1) */
+.sc-ytraw__sum{ display:flex; flex-wrap:wrap; gap:14px; font-family:var(--mono); font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink2); padding:8px 4px 12px; }
+.sc-ytraw__sum .bull{ color:var(--bull); } .sc-ytraw__sum .bear{ color:var(--bear); } .sc-ytraw__sum .und{ color:var(--dim); }
+.sc-ytraw__sum .tags{ color:#9A7BE0; text-transform:none; letter-spacing:0; }
+/* FIX (Alan: "I see a few titles, not all of them") — all 195 rows WERE rendering,
+   but as one un-capped ~6900px block dumped into the page, so the feed read as a
+   handful of rows plus endless page-scroll. Now it's a real feed pane: capped
+   height, scrolls internally, header stays pinned while you scroll it. */
+.sc-ytraw{ font-family:var(--mono); font-size:11px; border:1px solid var(--line); border-radius:4px;
+  max-height:68vh; overflow-y:auto; overflow-x:hidden; }
+.sc-ytraw__head{ position:sticky; top:0; z-index:3; background:var(--panel); }
+.sc-ytraw__head, .sc-ytraw__row{ display:grid; grid-template-columns:52px 120px 1fr 140px 160px 90px; gap:10px; align-items:center; padding:7px 10px; }
+.sc-ytraw__head{ color:var(--dim); letter-spacing:.08em; font-size:9.5px; text-transform:uppercase; border-bottom:1px solid var(--line); background:rgba(255,255,255,.02); }
+.sc-ytraw__row{ border-bottom:1px solid rgba(255,255,255,.05); cursor:pointer; }
+.sc-ytraw__row:hover{ background:rgba(0,212,255,.05); }
+.sc-ytraw__row:last-child{ border-bottom:0; }
+.sc-ytraw__c{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-ytraw__c.ttl{ color:var(--ink); white-space:normal; }
+.sc-ytraw__c.auth{ color:var(--ink2); }
+.sc-ytraw__c.ts{ color:var(--dim); }
+.sc-ytraw__c.tks{ color:var(--crk); }
+.sc-ytraw__c.tags{ color:#9A7BE0; }
+.sc-ytraw__c.sent.bull{ color:var(--bull); }
+.sc-ytraw__c.sent.bear{ color:var(--bear); }
+.sc-ytraw__c.sent.und{ color:var(--dim); }
+@media(max-width:900px){ .sc-ytraw{ overflow-x:auto; } .sc-ytraw__head, .sc-ytraw__row{ min-width:640px; } }
 /* FIX — the YT feed scrolls INSIDE its own pane (desktop) so the page never grows.
    With body scroll pinned, hover-to-top always reveals the master tabs IN VIEW —
    same behaviour as every other room. Touch keeps natural page scroll. */
@@ -2593,6 +2987,13 @@ const EPSTTM = {};   // ticker → fundamentals.eps_ttm (basis guard input)
 const SOCSENT = {};
 const BOARDVOL = {};
 const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_ntm) — IBKR-style forward basis
+/* R39 — COHORT COMPARE: persists ACROSS cohort switches so the fan can show every
+   cohort's Geiger read, not just the one currently active. GCOMP = ticker → daily
+   composite (mirrors gg inside fetchBoardRows, kept globally). COHORT_OF = ticker →
+   DB cohort key, filled from an UNSCOPED cohorts pull (every ticker's membership,
+   regardless of which single cohort tab is active) — cheap, small table. */
+const GCOMP = {};
+const COHORT_OF = {};
 /* R26 FIX 6 — "—" when no estimate, est ≤ 0, crypto, or the estimate fails the
    basis guard vs eps_ttm (KLAC's pre-split estimate rows would otherwise print
    a fake-plausible multiple). ETFs have no analyst_estimates rows → "—" too. */
@@ -2614,9 +3015,13 @@ function fpeVal(t, price) {
 }
 
 async function fetchBoardRows(cohort = "ALL", fav = []) {
-  const scopeAll = cohort === "ALL" || cohort === "FAV";
+  /* R39 — COMPARE fix: this pull is now ALWAYS unscoped (every ticker's cohort tag,
+     not just the active one) so cohortCompareRows() can read every cohort's
+     membership regardless of which single cohort tab is on screen. Cheap: it's just
+     ticker+cohort, no price/composite payload. Per-cohort row filtering below still
+     narrows the BOARD's own rows to the active cohort client-side. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
-    pg("cohorts?select=ticker,cohort" + (scopeAll ? "" : "&cohort=eq." + encodeURIComponent(cohort))),
+    pg("cohorts?select=ticker,cohort"),
     pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,volume"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("composite_staged?select=ticker,composite,trend,momentum,structure,updated_ts&tf=eq.D&order=updated_ts.desc"),
     pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
@@ -2646,6 +3051,14 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   for (const r of fpeTtm) EPSTTM[r.ticker] = num(r.eps_ttm);
   const px = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
   const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
+  /* R39 — feed the global COMPARE stores every board load, regardless of which
+     single cohort is active, so cohortCompareRows() always has the full picture.
+     geiger[] is already ordered updated_ts desc, so gg (built above) already holds
+     the newest row per ticker for THIS pass — mirror it straight into GCOMP so the
+     store still refreshes on every subsequent load instead of freezing at first-load
+     values. */
+  for (const t in gg) { const c = num(gg[t].composite); if (c != null) GCOMP[t] = c; }
+  for (const m of members) if (m.cohort) COHORT_OF[m.ticker] = m.cohort;
   const pf = Object.fromEntries(profiles.map((p) => [p.ticker, p]));
   for (const r of ribbons) (RIB[r.ticker] = RIB[r.ticker] || {})[r.family] = r;   // fan cards / VOLUME read
   /* NEW — index the just-created bulk tables by ticker (empty now → maps stay empty
@@ -2657,8 +3070,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      for the board's Vol× column; the live_quotes/avg_volume ratio below stays as-is
      until then (no fake data, no premature switch). */
   const seen = new Set();
+  const scopeAll = cohort === "ALL" || cohort === "FAV";
   let rows = members
     .filter((m) => !seen.has(m.ticker) && seen.add(m.ticker))
+    .filter((m) => scopeAll || m.cohort === cohort)   // R39 — members is now UNSCOPED (always full universe); narrow to the active cohort client-side, same result the old server-side filter gave
     .filter((m) => gg[m.ticker])   // FIX 1 — board universe = composite_staged tf=D only (drops DX/NKD/NQ/TNX/TYX/VIX proxies with no pipeline data)
     .map((m) => {
       const dbPx = num(px[m.ticker] && px[m.ticker].price);
@@ -2803,9 +3218,12 @@ const S = {
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
   socTab: "YOUTUBE",                            // SOCIAL sub-tab — defaults to YOUTUBE (live feed); SENTIMENT · X · STOCKTWITS await feeds
   ytFilt: "ALL",                                // YouTube feed filter — ALL · SUBS · SHORTS · WATCH · $TICKER
+  ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
 };
 
-const SECTIONS = ["DASHBOARD", "NEWS", "SOCIAL", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"];   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
+/* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
+   full size, so it belongs beside the room whose cramped right pane it relieves. */
+const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"];   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
 const COHORTS = [
   ["AI HW", "AI_HARDWARE"], ["AI SW", "AI_SOFTWARE"], ["MEGACAP", "MEGACAP"],
   ["BLUE CHIP", "BLUE_CHIP"], ["GROWTH", "GROWTH"], ["CRYPTO", "CRYPTO"], ["INTL", "INTL"],
@@ -3311,6 +3729,15 @@ document.addEventListener("input", (e) => {
      ONLY the rows container (never a remount, never a company jump). shownRows()
      already prefix-filters on S.tq. */
   if (S.sec === "DASHBOARD" || S.sec === "COMPANY") { updateBoard(); return; }
+  /* R49 §5 — SCENES filters in place too: repaint the compare strip + the active
+     Layer-0 view, and keep mountedKey in step so sync() does not remount the room
+     out from under the keystroke. */
+  if (S.sec === "SCENES") {
+    mountedKey = viewKey();
+    const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+    paintL0Body();
+    return;
+  }
   /* FIX 7 — live filtering while typing in NEWS/EVENTS: repaint from cache on every
      keystroke (no remount, no refetch, never a company jump). */
   if (S.sec !== "NEWS" && S.sec !== "EVENTS" && S.sec !== "SOCIAL") return;
@@ -3367,7 +3794,24 @@ function updateLive() {
 const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 L8 13 L12 15 L20 5"/><path d="M4 5 v14 h16" opacity=".4"/></svg>';
 /* R23 FIX 3 — 8th col MKT: per-row trading-state dot (chart label stays blank, as ever). */
 /* R26 FIX 6 — FPE col (fwd P/E) between CHG and GEIGER, sortable like the rest. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["RSI","rsi"], ["Geiger","g"], ["Vol×","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE; FPE label → "F P/E"
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Vol×","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* R42 §3 — compact market-cap formatter: $3.1T / $412B / $8.7B / $612M
+   (one decimal under 100 in-unit, none at/above).
+   R49 §4 (Alan: "market cap needs commas") — the NUMERIC part is comma-grouped via
+   toLocaleString("en-US"), so anything with 4+ digits before the decimal reads
+   $1,437B instead of $1437B. Values under 1000 in-unit gain no separator (there is
+   none to add), so the common $3.1T / $412B / $8.7B forms are byte-identical to
+   before. ONE formatter — every fmtCap() call site (board MKT CAP column, FOCUS
+   cell tier-3 text, TILT cards) picks the commas up for free. */
+function fmtCap(v) {
+  const n = num(v);
+  if (n == null || n <= 0) return "—";
+  const u = n >= 1e12 ? [n / 1e12, "T"] : n >= 1e9 ? [n / 1e9, "B"] : n >= 1e6 ? [n / 1e6, "M"] : [n, ""];
+  const s = u[0] < 100
+    ? u[0].toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    : Math.round(u[0]).toLocaleString("en-US");
+  return "$" + s + u[1];
+}
 const rb = (v) => (v < 0.8 ? 1 : v < 1.2 ? 2 : v < 1.8 ? 3 : v < 2.5 ? 4 : 5);
 
 /* FIX G — search matches tickers, not letters: prefix only (exact match still jumps via doSearch) */
@@ -3457,7 +3901,8 @@ function boardRowsHTML() {
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">—</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple */
-      '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? (d.rsi <= 30 ? ' style="color:var(--bull)"' : d.rsi >= 70 ? ' style="color:var(--bear)"' : "") : "") + ">" +   /* FIX 4 — daily RSI, ≤30 green / ≥70 red / else dim; id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-mcap" id="lmc_' + esc(d.t) + '">' + fmtCap(d.mc) + "</span>" +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) */
+      '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
       geigerMiniHTML(d.g, gMax) +
       volCellHTML(d.rv) +
@@ -3483,9 +3928,176 @@ const SECFS_BTN0 = '<button class="sc-fsico" aria-label="Section fullscreen" dat
    default and swaps to a ticker's COMPANY view on row-click — the board DOM /
    scroll never re-render on a row click (only the .sel class flips). The COMPANY
    room shares this exact mount so opening a company never rebuilds the board. */
+/* FIX (Alan: "Geiger for each cohort, at the top of the board") — a real aggregate,
+   not per-ticker: mean composite across every row currently in S.rows (the active
+   cohort's full scope, BEFORE any search filter — a search query narrowing the
+   visible list shouldn't skew what's meant to be a whole-cohort read), same bull/bear
+   coloring convention as the per-row geiger bars. Honest "—" if nothing has resolved yet.
+   R40 (Alan: "no ring — flat geiger lines, same as every other one on the board, and
+   the scale is the fixed ±1 the composite lives on, center = 0") — the arc dial is
+   GONE. Collapsed = ONE flat bipolar line (the mean). Expanded = the same line
+   becomes FOUR flat lines: Mean · Median · Max · Min, each rendered with the exact
+   same .sc-gmini bipolar bar the board rows use, all on the FIXED ±1 composite
+   scale (geigerMiniHTML(v, 1) — no per-cohort max normalization, so a +0.42 here
+   fills exactly as far as a +0.42 on any board row). Max/Min name their ticker. */
+function cohortGeigerHTML() {
+  const open = !!S.cohGeigerOpen;
+  const rows = (S.rows || []).filter((r) => r.g != null);
+  if (!rows.length) {
+    return '<div class="sc-cohgeiger"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span></div>' +
+      '<div class="sc-cohgeiger__big" style="color:var(--mute)">—<span class="sc-cohgeiger__st">awaiting data</span></div></div>';
+  }
+  const vals = rows.map((r) => r.g).sort((a, b) => a - b);
+  const n = vals.length;
+  const avg = vals.reduce((s, v) => s + v, 0) / n;
+  const median = n % 2 ? vals[(n - 1) / 2] : (vals[n / 2 - 1] + vals[n / 2]) / 2;
+  const minV = vals[0], maxV = vals[n - 1];
+  const minRow = rows.reduce((a, b) => (b.g < a.g ? b : a));
+  const maxRow = rows.reduce((a, b) => (b.g > a.g ? b : a));
+  const tone = (v) => v >= 0 ? "var(--bull)" : "var(--bear)";
+  const line = (label, v, tick, mean) =>
+    '<div class="sc-cohgeiger__line' + (mean ? " is-mean" : "") + '">' +
+      '<span class="sc-cohgeiger__k">' + label + "</span>" +
+      geigerMiniHTML(v, 1) +
+      '<span class="sc-cohgeiger__v" style="color:' + tone(v) + '">' + (v >= 0 ? "+" : "") + v.toFixed(2) + "</span>" +
+      '<span class="sc-cohgeiger__t">' + (tick ? esc(tick) : "") + "</span>" +
+    "</div>";
+  return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '">' +
+    '<button class="sc-cohgeiger__hd" data-act="cohgeigertoggle" aria-expanded="' + (open ? "true" : "false") + '">' +
+      '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      '<span class="sc-cohgeiger__n">' + n + " tickers</span>" +
+      '<span class="sc-cohgeiger__car">' + (open ? "▲" : "▼") + "</span>" +
+    "</button>" +
+    (open
+      /* R41 §4 — expanded order is MAX → MEDIAN → MEAN → MIN; MEAN stays the
+         visually emphasized line (is-mean: taller bar + brighter label). */
+      ? '<div class="sc-cohgeiger__lines">' +
+          line("MAX", maxV, maxRow.t) + line("MEDIAN", median) +
+          line("MEAN", avg, null, true) + line("MIN", minV, minRow.t) +
+        "</div>"
+      : '<div class="sc-cohgeiger__lines">' + line("MEAN", avg, null, true) + "</div>") +
+  "</div>";
+}
+/* R39 (Alan: "cross-cohort compare, a fan of green to red, NOT the heatmap — the
+   heatmap colors by price %chg, this has to be the Geiger composite") — one row
+   per cohort in COHORTS, mean daily composite across every ticker DB-tagged to
+   that cohort (GCOMP/COHORT_OF are filled on every board load regardless of which
+   single cohort is active — see fetchBoardRows). Sorted bullish → bearish, i.e.
+   literally green at the top fading to red at the bottom. */
+function cohortCompareRows() {
+  const buckets = {};
+  for (const t in COHORT_OF) {
+    const key = COHORT_OF[t], v = GCOMP[t];
+    if (v == null) continue;
+    (buckets[key] = buckets[key] || []).push(v);
+  }
+  return COHORTS.map(([label, key]) => {
+    const vals = buckets[key] || [];
+    const mean = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+    return { key, label, mean, n: vals.length };
+  }).sort((a, b) => (b.mean ?? -99) - (a.mean ?? -99));
+}
+function cohortCompareHTML() {
+  const list = cohortCompareRows();
+  const rowsHTML = list.map((r) => {
+    if (r.mean == null) return '<div class="sc-cohcmp__row is-empty"><span class="sc-cohcmp__lbl">' + esc(r.label) + '</span><span class="sc-cohcmp__mute">no data</span></div>';
+    const bull = r.mean >= 0, color = bull ? "var(--bull)" : "var(--bear)";
+    return '<button class="sc-cohcmp__row' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '">' +
+      '<span class="sc-cohcmp__lbl">' + esc(r.label) + "</span>" +
+      geigerMiniHTML(r.mean, 1) +   /* R40 — fixed ±1 composite scale, same as the cohort geiger lines */
+      '<span class="sc-cohcmp__val" style="color:' + color + '">' + (r.mean >= 0 ? "+" : "") + r.mean.toFixed(2) + "</span>" +
+      '<span class="sc-cohcmp__n">' + r.n + "</span>" +
+    "</button>";
+  }).join("");
+  /* R41 §1 — the fan now lives in the right pane's LAYER 0 home, ALWAYS OPEN:
+     no collapse chrome (the cohcmptoggle delegation case is kept but harmless —
+     nothing dispatches it any more). Full list, bull → bear, rows switch cohorts. */
+  return '<div class="sc-cohcmp is-open">' +
+    '<div class="sc-cohcmp__hd">' +
+      '<span class="sc-cohcmp__lbl">COHORT COMPARE · geiger, bull → bear</span>' +
+    "</div>" +
+    '<div class="sc-cohcmp__body">' + rowsHTML + "</div>" +
+  "</div>";
+}
+/* R43 §2 (Alan: "the compare fan eats too much vertical height — it should read
+   left-to-right") — the HORIZONTAL strip. Same cohortCompareRows() data, same
+   bull → bear sort, but laid out as one narrow column per cohort in a single row:
+   left = most bullish, right = most bearish. Sorting left-to-right IS the fan.
+   Each column = tiny label + a VERTICAL bipolar bar (.sc-vmini, fixed 54px track,
+   zero line dead center, ±1 composite scale → |v| clamped to 1 = 50% of the track,
+   same glow convention as geigerMiniHTML) + the signed value. The whole column is
+   the data-act="coh" cohort-switch button; active cohort keeps the is-active
+   outline. Total height ≈100px vs ~300px for the old vertical fan.
+   NOTE: cohortCompareHTML() (the old vertical fan) is deliberately KEPT and left
+   UNUSED — nothing calls it after R43 (grep-verified). Not deleted: it is the
+   fallback presentation if the strip ever has to be reverted. */
+const COH_ABBR = { AI_HARDWARE:"AI HW", AI_SOFTWARE:"AI SW", MEGACAP:"MEGA", BLUE_CHIP:"BLUE",
+                   GROWTH:"GROWTH", CRYPTO:"CRYPTO", INTL:"INTL", MACRO:"MACRO",
+                   INDEXES:"INDEX", THEMATIC:"THEME" };
+/* R46 added quarter-scale gridlines to this track. R50 §1 REMOVES them (Alan: "I don't
+   like those lines, that shading in the tickers — it's not necessary, the visuals say
+   everything"). The CENTRE ZERO LINE stays: it is the one rule that carries meaning —
+   above it is bullish, below it is bearish. Everything else was decoration. */
+function vminiHTML(v, max) {
+  if (v == null) return '<span class="sc-vmini"><span class="sc-vmini__mid"></span></span>';
+  const bull = v >= 0;
+  const h = (Math.min(Math.abs(v) / max, 1) * 50) + "%";
+  const color = bull ? "var(--bull)" : "var(--bear)";
+  return '<span class="sc-vmini sc-clip"><span class="sc-vmini__mid"></span>' +
+    '<i style="' + (bull ? "bottom" : "top") + ':50%;height:' + h + ';background:' + color +
+    ';box-shadow:0 0 5px ' + color + '"></i></span>';
+}
+/* R49 §3 — AUTOSCALE THE COMPARE STRIP (Alan: "the most green bar is the top range
+   and the most red bar is the bottom range. There is no need for the extra black
+   space. I want maximum Geiger visuals.")
+   The strip used to pass a FIXED max of 1 into vminiHTML, so with real composites
+   living around ±0.4 every bar occupied under half of its half-track and the rest of
+   the 132px column was dead black. The scale is now the live range: span =
+   max(|mean|) across the cohorts, floored at L0_CMP_MIN_SPAN so a dead-flat market
+   cannot divide by ~0. The most bullish cohort therefore reaches the TOP of the
+   track and the most bearish the BOTTOM, every time.
+   The centre zero line stays (R50 §1 removed the quarter gridlines), and the span is
+   printed once in the strip header ("scale ±0.41"): an axis that moves must say where
+   it is, and now the printed span is the ONLY place it says it.
+   SCOPE: this is the compare strip ONLY. The per-ticker board bars and the cohort
+   geiger lines keep their fixed ±1 composite scale — those are read against each
+   other across cohorts and must not breathe. */
+const L0_CMP_MIN_SPAN = 0.05;
+function cohortCompareSpan(list) {
+  let m = 0;
+  for (const r of list) {
+    const v = (r && r.mean != null && isFinite(r.mean)) ? Math.abs(r.mean) : 0;
+    if (v > m) m = v;
+  }
+  return Math.max(L0_CMP_MIN_SPAN, m);
+}
+function cohortCompareStripHTML() {
+  const list = cohortCompareRows();
+  const span = cohortCompareSpan(list);
+  const cols = list.map((r) => {
+    const lbl = COH_ABBR[r.key] || r.label;
+    if (r.mean == null) {
+      return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(r.label) + ' — no data">' +
+        '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" + vminiHTML(null, span) +
+        '<span class="sc-cohstrip__val">—</span></button>';
+    }
+    const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
+    return '<button class="sc-cohstrip__col' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(r.label) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+      '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" +
+      vminiHTML(r.mean, span) +
+      '<span class="sc-cohstrip__val" style="color:' + color + '">' + (r.mean >= 0 ? "+" : "") + r.mean.toFixed(2) + "</span>" +
+    "</button>";
+  }).join("");
+  return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
+           span.toFixed(2) + "</div>" +
+         '<div class="sc-cohstrip" id="cohStrip">' + cols + "</div>";
+}
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
     cohTabsHTML() +
+    /* R41 §2 — cohCompare moved OUT of the board into the right pane's Layer 0
+       (layer0HTML). The left board keeps tabs + cohort geiger + rows only. */
+    '<div id="cohGeiger">' + cohortGeigerHTML() + "</div>" +
     '<div class="sc-board__scroll" id="boardScroll">' + boardRowsHTML() + "</div>" +
   "</div>";
 }
@@ -3499,11 +4111,16 @@ function dashboardHTML() {
      The 50/50 row lives below it, unchanged. */
   return '<section class="sc-dashwrap" aria-label="Dashboard">' +
     '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>" +
-    '<section class="sc-body2">' +
+    /* FIX (Alan: "flip the dashboard — cohort board on the LEFT, Geiger/chart/stats/
+       estimates/financials on the RIGHT") — straight DOM-order swap of the 2 panels
+       inside the existing sc-body2 grid; the grid's own column tracks (sc-body2 CSS)
+       flip alongside via .is-flipped so each panel keeps a sane width in its new slot
+       instead of inheriting the other panel's old fr share. */
+    '<section class="sc-body2 is-flipped">' +
+      boardPanelHTML() +
       '<section class="sc-chartpanel sc-leftpanel" id="leftPanel" aria-label="Left panel">' +
         leftPanelInnerHTML() +
       "</section>" +
-      boardPanelHTML() +
     "</section>" +
   "</section>";
 }
@@ -3512,6 +4129,16 @@ function dashboardHTML() {
 function updateBoard() {
   const bs = el("boardScroll");
   if (bs) bs.innerHTML = boardRowsHTML();
+  const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
+  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
+  /* R49 §2 — a cohort/scope change moves the MAP's ticker set, so re-resolve which
+     batched (tf, cohort) series is on screen BEFORE the grid is rebuilt. Inside
+     Layer 0 the tiles read through l0MapChg (TF-aware); the standalone #133 heat
+     view has no #layer0 and keeps the session %chg exactly as before. */
+  const inL0 = !!el("layer0");
+  if (inL0 && LAYER0_TAB === "MAP") l0MapSync();
+  const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(inL0 ? l0MapChg : null); wireHeatSizing(); }   // R41 — Layer-0 / heat-view grid tracks feed ticks too (R43 §1: re-measure after the swap)
+  l0FocusTick();                        // R47 — MAP's TILT cards track the same feed tick (canvas modes repaint themselves)
   updateCohrow();                       // keep the cohort-tab underline in sync
   syncBoardSel();                       // re-apply the current selection highlight after a rows repaint
   loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill the RSI column for the shown tickers (idempotent)
@@ -3547,12 +4174,24 @@ async function loadBoardRsi(tickers) {
     }
   }
 }
-/* FIX A — patch one RSI cell: set the number + the ≤30 green / ≥70 red / else dim color */
+/* FIX (Alan: "gradated color, not a binary flip at 29") — the old rule was a hard
+   cutoff (green at <=30, red at >=70, nothing between): a stock at RSI 31 looked
+   identical to one at RSI 69. Now a continuous gradient centered on 50 (neutral) —
+   opacity scales with distance from center, same convention as the heatmap's
+   heatColorChg(), so the whole hub reads color intensity the same way. */
+function rsiGradColor(v) {
+  const n = num(v); if (n == null) return "";
+  const d = (n - 50) / 50;                       // -1 (RSI 0, oversold) .. +1 (RSI 100, overbought)
+  const a = Math.min(1, Math.abs(d));
+  const alpha = (0.15 + a * 0.75).toFixed(2);
+  if (Math.abs(d) < 0.04) return "var(--ink3)";  // dead-center 48-52 stays neutral dim
+  return d < 0 ? "rgba(0,255,163," + alpha + ")" : "rgba(255,45,85," + alpha + ")";
+}
 function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
-  cell.style.color = v <= 30 ? "var(--bull)" : v >= 70 ? "var(--bear)" : "";
+  cell.style.color = rsiGradColor(v);
 }
 
 /* ============================================================================
@@ -3598,29 +4237,91 @@ function heatColorChg(c) {
   const a = 0.12 + Math.min(1, Math.abs(v) / 5) * 0.6;
   return v >= 0 ? "rgba(0,255,163," + a.toFixed(2) + ")" : "rgba(255,45,85," + a.toFixed(2) + ")";
 }
-function heatmapHTML() {
+/* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
+   coloured and labelled by. Called with no argument (the standalone #133 heat view,
+   every pre-R49 call site) it falls back to the board row's session %chg, so the grid
+   is byte-identical to before. Layer 0's MAP passes l0MapChg, which returns the
+   selected timeframe's % change when the batched ohlcv pull has the bars for that
+   ticker and the session %chg when it does not. Nothing else about the renderer —
+   the cap-ordering, the tile markup, the 5px corners, sizeHeatTiles() — moved. */
+function heatmapHTML(chgOf) {
+  const chgAt = (typeof chgOf === "function") ? chgOf : (r) => num(r.c);
   const all = shownRows();
   if (!all.length) return '<div class="sc-heatgrid__empty">no tickers in this scope</div>';
+  /* R42 §1 (Alan: symmetry) — cap-weighted lg/md tile SIZING removed: every tile is
+     an identical square now. Market cap still drives the ORDER (biggest first) so the
+     scan reads top-left = heaviest, but no tile is visually privileged. */
   const byCap = all.slice().sort((a, b) => (num(b.mc) || 0) - (num(a.mc) || 0));
   const n = byCap.length;
   const rankOf = {}; byCap.forEach((r, i) => { rankOf[r.t] = i; });
-  const lgCut = Math.max(1, Math.ceil(n * 0.12));
-  const mdCut = Math.max(lgCut, Math.ceil(n * 0.4));
   const rows = all.slice().sort((a, b) => (rankOf[a.t] ?? n) - (rankOf[b.t] ?? n));
   const tiles = rows.map((r) => {
-    const rk = rankOf[r.t] ?? n;
-    const hasCap = num(r.mc) != null;
-    const sizeCls = (hasCap && rk < lgCut) ? " lg" : (hasCap && rk < mdCut) ? " md" : "";
-    return '<div class="sc-heattile' + sizeCls + '" style="background:' + heatColorChg(r.c) + '" data-act="row" data-t="' + esc(r.t) + '">' +
+    const cv = chgAt(r);
+    return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" style="background:' + heatColorChg(cv) + '" data-act="row" data-t="' + esc(r.t) + '">' +
       '<span class="sc-heattile__t">' + esc(r.t) + "</span>" +
-      '<span class="sc-heattile__c">' + (r.c != null ? fmtC(r.c) : "—") + "</span>" +
+      '<span class="sc-heattile__c" id="htc_' + esc(r.t) + '">' + (cv != null && isFinite(cv) ? fmtC(cv) : "—") + "</span>" +
     "</div>";
   }).join("");
   return '<div class="sc-heatgrid" id="heatGrid">' + tiles + "</div>";
 }
+/* R43 §1 — ZOOM-PROOF SQUARES, sized in JS. At browser zoom (cmd +/-) any CSS square
+   (aspect-ratio, padding-top:100%) resolves to a fractional height that rounds
+   independently of the grid row track, so rows drift/overlap ("bunching"). Here we
+   measure the grid, compute an INTEGER tile edge, and write BOTH the column track and
+   grid-auto-rows as that same integer px — zero rounding drift at any zoom level.
+   R44 §1 — the same integer is ALSO published as the --htile custom property so the
+   tile labels can scale off the real tile edge (see .sc-heattile__t/__c). The gap is
+   read from the COMPUTED columnGap, so the R44 §2 3px→5px CSS gap bump is picked up
+   here automatically — no hard-coded gap exists in this function. */
+let HEAT_RO = null, HEAT_WIN = null;
+/* R50 §5 — MINIMUM USABLE CELL. The column count used to be a pure media-query read
+   (4 under 640px, 6 above), which meant a 6-column grid inside a ~560px Layer-0 pane on
+   an 1100px laptop produced ~86px tiles, and inside a narrow SCENES column produced
+   tiles small enough that the ticker label was the only thing that fit. Cols are now
+   derived from the grid's OWN width against a HEAT_MIN_TILE floor: drop a column rather
+   than shrink the cell into unreadability. The 4-column phone rule is preserved as the
+   hard bottom, and the count never exceeds the old 6. */
+const HEAT_MIN_TILE = 64;                         // px — below this the tile stops being readable
+function heatCols(inner, gap) {
+  if (window.matchMedia && window.matchMedia("(max-width:640px)").matches) return 4;
+  if (!(inner > 0)) return 6;
+  let cols = 6;
+  while (cols > 3 && (inner - gap * (cols - 1)) / cols < HEAT_MIN_TILE) cols--;
+  return cols;
+}
+function sizeHeatTiles() {
+  const g = el("heatGrid");
+  if (!g) return;
+  const cs = getComputedStyle(g);
+  const padL = parseFloat(cs.paddingLeft) || 0, padR = parseFloat(cs.paddingRight) || 0;
+  const gap = parseFloat(cs.columnGap) || 0;
+  const box = g.clientWidth - padL - padR;
+  const cols = heatCols(box, gap);
+  const inner = box - gap * (cols - 1);
+  if (!(inner > 0)) return;                       // not laid out yet — the observer will fire again
+  const tile = Math.max(28, Math.floor(inner / cols));
+  g.style.gridTemplateColumns = "repeat(" + cols + ", " + tile + "px)";
+  g.style.gridAutoRows = tile + "px";
+  g.style.setProperty("--htile", tile + "px");   // R44 §1 — drives the label type scale
+}
+/* observers are torn down and rebuilt on every Layer-0 / heat-view render so they
+   never leak across re-renders (renderLeftPanel blows the subtree away each time). */
+function wireHeatSizing() {
+  if (HEAT_RO) { try { HEAT_RO.disconnect(); } catch (e) {} HEAT_RO = null; }
+  if (HEAT_WIN) { window.removeEventListener("resize", HEAT_WIN); HEAT_WIN = null; }
+  const g = el("heatGrid");
+  if (!g) return;
+  sizeHeatTiles();
+  HEAT_WIN = () => sizeHeatTiles();
+  window.addEventListener("resize", HEAT_WIN);
+  if (window.ResizeObserver) {
+    HEAT_RO = new ResizeObserver(() => sizeHeatTiles());
+    HEAT_RO.observe(g.parentNode || g);           // observe the PARENT: sizing the grid itself would re-trigger
+  }
+}
 function heatHeadHTML() {
   return '<div class="sc-heathead">' +
-    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · size = mkt cap · color = %chg</span>' +
+    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · color = %chg</span>' +
     '<span class="sc-heathead__ctrls">' +
       '<span class="sc-heatbtn on" data-act="heattoggle" title="back to single-ticker view">HEAT ▸ OFF</span>' +
       SECFS_BTN0 +
@@ -3651,12 +4352,17 @@ function leftHeadHTML(t) {
      interval and persists to localStorage. Kept tiny so it doesn't re-clip the tabs. */
   const rotSel = '<span class="sc-rotsel" id="scRotSel" data-act="rotcycle" title="rotation interval — click to change">' +
     (LEFT_ROT_MS / 1000) + 's ▾</span>';
-  /* #133 — HEAT toggle: swaps the left panel to a whole-scope heatmap. Sits beside AUTO
-     so it's discoverable from the normal rotate/pinned view, not just a hidden mode. */
-  const heatBtn = '<span class="sc-heatbtn" data-act="heattoggle" title="heatmap of the current cohort scope">HEAT</span>';
+  /* R42 §6 — HEAT button REMOVED from the pinned company header: Layer 0 owns the
+     heatmap now (it's simply on screen when nothing is pinned), so a second toggle
+     here was a stray. The heattoggle case handler is kept harmless (see clicks). */
+  /* R42 §7 — explicit back affordance: "◂ COHORT" unpins and returns to Layer 0
+     (data-act=unpin — the exact same path as re-clicking the active board row).
+     An auto-timeout return was floated and deliberately SKIPPED: it would yank
+     the view out from under the operator mid-read. */
+  const backBtn = '<button class="sc-backcoh" data-act="unpin" title="back to cohort view (Layer 0)">◂ COHORT</button>';
   return '<div class="sc-ihead ptabs" id="leftHead">' +
-    '<div class="tabstrip" role="tablist">' + tabs + cohortChipHTML(t) + "</div>" +
-    '<div class="hctrls">' + heatBtn + autoBox + rotSel + SECFS_BTN0 + "</div>" +
+    '<div class="tabstrip" role="tablist">' + backBtn + tabs + cohortChipHTML(t) + "</div>" +
+    '<div class="hctrls">' + autoBox + rotSel + SECFS_BTN0 + "</div>" +
   "</div>";
 }
 
@@ -3674,8 +4380,1318 @@ function leftBodyHTML() {
 /* FIX 4 (R36) — the ident bar moved OUT of #leftPanel to a FULL-WIDTH bar above the
    50/50 row (see dashboardHTML / identBarData). The left panel now starts at the
    company tab header. */
+/* R41 §1 — LAYER 0: the right pane's no-ticker home. Stacked vertically:
+   (a) the cohort-compare fan, ALWAYS OPEN (full list, bull → bear, rows are the
+       same data-act="coh" cohort-switch buttons), then
+   (b) the existing whole-scope heatmap, scoped to the active cohort exactly as
+       the #133 heat view (shownRows()).
+   This REPLACES the FAV auto-rotate as the no-ticker default (see startRotate).
+   NOTE on heattoggle: the HEAT button only exists in the pinned company header
+   (leftHeadHTML) and still works there — LEFT_HEAT takes precedence below. With
+   no ticker pinned the heatmap is simply already on screen, so Layer 0 renders
+   its own header WITHOUT a heattoggle button (no conflicting toggle shown). */
+/* ============================================================================
+   R43 §3 — LAYER-0 SUB-TABS: HEATMAP · ROTATION · RELATIVE
+   ROTATION and RELATIVE are PORTED from SECTOR_ROTATION.html (the standalone sector
+   app): the same 11 sector ETFs vs SPY, the same JdK-style RRG approximation
+   (RS = 100×sector/SPY → EMA(4); RS-Ratio = 100 + z-score over a 14-BAR window;
+   momentum = the 4-bar change of that ratio, z-scored the same way; both finished
+   with an EMA(2)), the same four quadrants and faded tails, and the same per-sector
+   palette. Two things were ADAPTED, honestly noted:
+     · the sector app draws its relative-performance lines with the lightweight-charts
+       library, which the hub does not load — so RELATIVE is re-implemented as a plain
+       canvas multi-line renderer over the identical maths (each ETF rebased to 0% at
+       the left edge of the selected window, aligned to SPY's timeline).
+     · R44 §4 (Alan: "i dont want this executed with yahoo. i want it based on db info
+       so it has intraday") — the Yahoo relay is GONE from Layer 0. Closes now
+       come from the hub's OWN Supabase table public.ohlcv_history via pg(), which
+       carries intraday timeframes, so BOTH tabs gained a TIMEFRAME selector:
+       60m · 4H · 1D · 1W → tf '60' / '240' / 'D' / 'W'. The RRG maths is
+       timeframe-agnostic — it is simply fed the selected tf's closes.
+       "timestamp" in that table is UNIX SECONDS (bigint), so ×1000 for Date.
+       ROW-CAP NOTE: PostgREST caps a response (Supabase default 1000 rows), so the
+       loader issues ONE REQUEST PER SYMBOL with an explicit limit well under the cap
+       (220–460 bars) and order=timestamp.desc, then reverses to ascending in JS. No
+       paging is needed and no symbol can be silently truncated by another's rows.
+       Per-timeframe results are cached in L0_CACHE so switching back and forth never
+       refetches. Nothing is ever synthesised: a symbol without enough bars on the
+       chosen tf is DROPPED from the render and named in the panel subtitle.
+   ========================================================================= */
+const L0_SECTORS = [   // ticker, name, series color — the sector app's own palette
+  { t:"XLK",  n:"Technology",          c:"#00D4FF" },
+  { t:"XLC",  n:"Communications",      c:"#8B5CF6" },
+  { t:"XLY",  n:"Cons. Discretionary", c:"#FF3DBE" },
+  { t:"XLF",  n:"Financials",          c:"#00FFA3" },
+  { t:"XLI",  n:"Industrials",         c:"#FFD400" },
+  { t:"XLB",  n:"Materials",           c:"#C8FF00" },
+  { t:"XLE",  n:"Energy",              c:"#FF8A00" },
+  { t:"XLV",  n:"Healthcare",          c:"#2D9CFF" },
+  { t:"XLP",  n:"Cons. Staples",       c:"#F2F2F8" },
+  { t:"XLU",  n:"Utilities",           c:"#868AAA" },
+  { t:"XLRE", n:"Real Estate",         c:"#FF2D55" },
+];
+const L0_BENCH = "SPY";
+const L0_RRG_WIN = 14, L0_TAIL_STEP = 1, L0_TAIL_PTS = 8;
+/* R44 §4 — the timeframe menu shared by ROTATION and RELATIVE. `k` is the literal
+   ohlcv_history.tf value; `bars` is the per-symbol row limit (kept far below the
+   PostgREST row cap so one request per symbol is always complete). Verified
+   coverage 2026-07-30: tf 60 → 1.6k bars/sym back to 2025-07 (newest 09:30 ET
+   today) · 240 → 1.4k back to 2024-04 · D → 4.5k back to 2006 · W → 950 back to 2006. */
+const L0_TF_DEF = [
+  { k:"60",  l:"60M", bars:460 },
+  { k:"240", l:"4H",  bars:320 },
+  { k:"D",   l:"1D",  bars:320 },
+  { k:"W",   l:"1W",  bars:220 },
+];
+/* RELATIVE window options per timeframe — [label, bar count]. Every count is ≤ that
+   tf's `bars` above, so the window can never ask for bars that were never fetched. */
+const L0_REL_WIN = {
+  "60":  [["1W", 35], ["1M", 140], ["3M", 420]],
+  "240": [["1M", 44], ["3M", 130], ["6M", 260]],
+  "D":   [["1M", 21], ["3M", 63],  ["6M", 126]],
+  "W":   [["6M", 26], ["1Y", 52],  ["3Y", 156]],
+};
+const L0_MIN_BARS = 40;                  // RRG needs 14-bar window + 4-bar momentum lag + 8-bar tail
+/* R49 §1 — THREE TABS. Alan: "it's weird, it's scattered — there's tabs where
+   heatmap/rotation/relative and within them there's more sub and there's more and
+   there's more. Let's consolidate. The features of one are useful for the others."
+   The heatmap IS a focus view, so HEATMAP + FOCUS were never two rooms: they are one
+   room, MAP, with five ways of drawing the same cohort (GRID · FISHEYE · DOCK ·
+   BUBBLES · TILT). The FOCUS tab is gone; nothing about the heat renderer moved. */
+let LAYER0_TAB = "MAP";                  // "MAP" | "ROTATION" | "RELATIVE"  (no persistence — a plain JS flag)
+let L0_TF = "240";                       // active ohlcv_history.tf — intraday by default (the whole point of R44 §4); R49 §2: now shared by ALL THREE tabs
+let L0_REL_I = 1;                        // index into L0_REL_WIN[L0_TF] (an INDEX, so it survives tf switches)
+const L0_CACHE = {};                     // tf → { closes:{sym:{times,closes}}, thin:[sym…] } — per-tf, never refetched
+const L0_LOADING = {}, L0_ERR = {};      // tf → in-flight flag / last honest error string
+let L0_RO = null, L0_WIN = null;
+/* R45 (Alan: "rrg has no play button") — RRG time scrubbing. L0_RRG_AT is the bar
+   index the tail ENDS on; null = live (newest bar). Play walks it forward across
+   L0_PLAY_SPAN bars so you watch the sectors actually rotate through the quadrants,
+   then parks back on live. Timer handle kept so a re-render/stop can always kill it. */
+let L0_RRG_AT = null, L0_PLAY = null, L0_FIX = null;
+const L0_PLAY_SPAN = 40, L0_PLAY_MS = 90;
+
+function l0TfDef() { return L0_TF_DEF.find((d) => d.k === L0_TF) || L0_TF_DEF[1]; }
+function l0Ds() { return L0_CACHE[L0_TF] || null; }
+function l0RelWin() {
+  const a = L0_REL_WIN[L0_TF] || L0_REL_WIN.D;
+  return a[Math.min(Math.max(0, L0_REL_I), a.length - 1)];
+}
+/* R44 §4 — THE DB PULL. One pg() per symbol against public.ohlcv_history:
+     ohlcv_history?select=timestamp,close&ticker=eq.XLK&tf=eq.240
+       &order=timestamp.desc&limit=320
+   PostgREST caps a single response (Supabase default 1000 rows), so batching all 12
+   symbols into one ticker=in.(…) call would silently truncate the tail symbols; a
+   per-symbol limit of 220–460 is unconditionally under the cap, needs no paging, and
+   makes a single symbol's failure a DROPPED symbol rather than a broken panel.
+   Rows come back newest-first and are reversed to ascending here.
+   Honest loading / error: nothing is ever synthesised — a failure leaves this tf
+   uncached with its error recorded, so the next click retries for real. */
+async function l0LoadData(tf) {
+  tf = tf || L0_TF;
+  if (L0_CACHE[tf] || L0_LOADING[tf]) return;
+  L0_LOADING[tf] = true; L0_ERR[tf] = null;
+  const def = L0_TF_DEF.find((d) => d.k === tf) || L0_TF_DEF[1];
+  const syms = L0_SECTORS.map((s) => s.t).concat([L0_BENCH]);
+  try {
+    const res = await Promise.all(syms.map((sym) =>
+      pg("ohlcv_history?select=timestamp,close&ticker=eq." + encodeURIComponent(sym) +
+         "&tf=eq." + encodeURIComponent(tf) +
+         "&order=timestamp.desc&limit=" + def.bars)
+        .then((rows) => ({ sym, rows: Array.isArray(rows) ? rows : [] }))
+        .catch(() => ({ sym, rows: [] }))
+    ));
+    const out = {}, thin = [];
+    for (const r of res) {
+      const times = [], closes = [];
+      for (let i = r.rows.length - 1; i >= 0; i--) {                 // desc → asc
+        const ts = +r.rows[i].timestamp, cl = +r.rows[i].close;      // "timestamp" is UNIX SECONDS
+        if (!isFinite(ts) || !isFinite(cl) || cl <= 0) continue;
+        if (times.length && ts === times[times.length - 1]) continue; // de-dupe identical stamps
+        times.push(ts); closes.push(cl);
+      }
+      if (closes.length >= L0_MIN_BARS) out[r.sym] = { times, closes };
+      else thin.push(r.sym);
+    }
+    if (!out[L0_BENCH]) throw new Error("no " + L0_BENCH + " bars on tf=" + tf);
+    L0_CACHE[tf] = { closes: out, thin };
+  } catch (e) {
+    L0_ERR[tf] = String((e && e.message) || e);
+  }
+  L0_LOADING[tf] = false;
+  if (LAYER0_TAB === "ROTATION" || LAYER0_TAB === "RELATIVE") paintL0Body();   // R49 §1 — MAP never waits on this pull (it has its own batched read)
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   R49 §2 — THE MAP'S TIMEFRAME.  Alan: "the timeframes on the rotation — we should
+   be able to apply them on ALL of them; it's scattered."  So the shared TF row now
+   drives the MAP as well: a tile's colour and its printed number are the % change
+   over the SELECTED timeframe window, not only the session %chg.
+
+   THE READ — one batched PostgREST request per (tf, cohort):
+     ohlcv_history?select=ticker,timestamp,close
+       &ticker=in.("AAPL","MSFT",…)&tf=eq.240
+       &timestamp=gte.<cutoff>&order=timestamp.desc&limit=<budget>
+
+   ORDER IS DESCENDING, DELIBERATELY. Supabase caps a single response at 1000 rows.
+   Ascending order means a truncated response loses the NEWEST bars — the exact bars
+   the change is measured from — and the panel would lie. Descending means truncation
+   can only cost history, which the lookback already has slack for. The cohort is
+   ALSO chunked so chunk × barsPerTicker ≤ L0_MAP_BUDGET, i.e. the cap cannot bite on
+   any real cohort (the largest in the DB is 47 tickers → one request); only a
+   whole-universe ticker search splits into two or three.
+
+   LOOKBACK — bars back from the newest close, sized against THIS db's real bar
+   density (extended-hours bars: ~16 per session on tf=60, ~4 on tf=240):
+     60  → 7 bars  ≈ one regular session (6.5h)
+     240 → 6 bars  ≈ a day and a half
+     D   → 1 bar   = previous daily close → last close (one day)
+     W   → 1 bar   = previous weekly close (one week)
+
+   HONESTY — a ticker without enough bars keeps its board-row session %chg, and the
+   MAP header always names the basis actually on screen ("color = 4H %chg · 6 bars"
+   / "…on 38/40 · session %chg on the rest" / "color = session %chg"). Nothing is
+   ever synthesised, and a failed pull simply leaves the session basis in place. */
+const L0_MAP_BACK   = { "60": 7, "240": 6, "D": 1, "W": 1 };
+const L0_MAP_SPAN   = { "60": "≈1 session", "240": "≈1.5 days", "D": "1 day", "W": "1 week" };
+const L0_MAP_PAD    = { "60": 12, "240": 6, "D": 4, "W": 3 };            // slack bars pulled per ticker to absorb holidays / halts / thin symbols
+const L0_MAP_CUT    = { "60": 86400 * 7, "240": 86400 * 16, "D": 86400 * 18, "W": 86400 * 75 };
+const L0_MAP_BUDGET = 950;               // rows per request — unconditionally under the 1000-row cap
+const L0_MAP_TTL    = 90000;             // ms a resolved (tf,cohort) result stays authoritative before it is re-pulled
+const L0_MAP_CACHE = {};                 // key → { pct:{ticker:%}, hit, n, tf, at }
+const L0_MAP_LOADING = {}, L0_MAP_ERR = {};
+let L0_MAP_NOW = null;                   // the resolved entry for what is CURRENTLY on screen (null → session basis)
+let L0_MAP_NOWK = "";
+/* the ticker list is SORTED into the key so the same cohort always hashes the same
+   way, no matter what order market cap happened to put it in this render. */
+function l0MapKey(tf, ts) { return tf + "|" + ts.slice().sort().join(","); }
+/* resolve (and if needed kick off) the batched series for the CURRENT tf + cohort.
+   Cheap and idempotent: called once per MAP render / board repaint, never per tile.
+   A cached result older than L0_MAP_TTL is refreshed in the background — the stale
+   one keeps rendering until the new one lands, so the tiles never blank or flicker. */
+function l0MapSync() {
+  const ts = l0FocRows().map((r) => r.t);
+  if (!ts.length) { L0_MAP_NOW = null; L0_MAP_NOWK = ""; return null; }
+  const k = l0MapKey(L0_TF, ts);
+  L0_MAP_NOWK = k;
+  const e = L0_MAP_CACHE[k] || null;
+  L0_MAP_NOW = e;
+  const stale = !e || (Date.now() - (e.at || 0)) > L0_MAP_TTL;
+  if (stale && !L0_MAP_LOADING[k]) l0MapLoad(L0_TF, ts, k);
+  return L0_MAP_NOW;
+}
+async function l0MapLoad(tf, tickers, key) {
+  L0_MAP_LOADING[key] = true; L0_MAP_ERR[key] = null;
+  const back = L0_MAP_BACK[tf] != null ? L0_MAP_BACK[tf] : 1;
+  const per   = back + 1 + (L0_MAP_PAD[tf] || 4);
+  const chunk = Math.max(1, Math.floor(L0_MAP_BUDGET / per));
+  const cut   = Math.floor(Date.now() / 1000) - (L0_MAP_CUT[tf] || 86400 * 20);
+  const series = {};                     // ticker → Map(timestamp → close), de-duped by stamp
+  try {
+    for (let i = 0; i < tickers.length; i += chunk) {
+      const part = tickers.slice(i, i + chunk);
+      /* values are double-quoted so a ticker carrying a reserved character
+         (BRK.A, BRK-B) can never break the in.() list */
+      const list = part.map((t) => '"' + String(t).replace(/"/g, "") + '"').join(",");
+      const rows = await pg("ohlcv_history?select=ticker,timestamp,close" +
+        "&ticker=in.(" + encodeURIComponent(list) + ")" +
+        "&tf=eq." + encodeURIComponent(tf) +
+        "&timestamp=gte." + cut +
+        "&order=timestamp.desc&limit=" + (part.length * per));
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        const t = row.ticker, ts = +row.timestamp, cl = +row.close;
+        if (!t || !isFinite(ts) || !isFinite(cl) || cl <= 0) continue;
+        (series[t] = series[t] || new Map()).set(ts, cl);
+      }
+    }
+    const pct = {}; let hit = 0;
+    for (const t in series) {
+      const a = Array.from(series[t].entries()).sort((x, y) => y[0] - x[0]);   // newest first
+      if (a.length < back + 1) continue;                                        // too few bars → session %chg stands
+      const last = a[0][1], base = a[back][1];
+      if (!(base > 0) || !isFinite(last)) continue;
+      pct[t] = (last / base - 1) * 100;
+      hit++;
+    }
+    L0_MAP_CACHE[key] = { pct: pct, hit: hit, n: tickers.length, tf: tf, at: Date.now() };
+  } catch (e) {
+    /* honest AND terminating: the failure is CACHED as an empty result, so the header
+       says "session %chg (4H series unavailable)" and the next repaint reads the
+       cache instead of re-firing the request. Without this the repaint that follows a
+       failure would re-arm the pull and spin. pg() already retries 3× with backoff
+       before it ever throws, so one failure here is a real one. */
+    L0_MAP_ERR[key] = String((e && e.message) || e);
+    L0_MAP_CACHE[key] = { pct: {}, hit: 0, n: tickers.length, tf: tf, err: L0_MAP_ERR[key], at: Date.now() };
+  }
+  L0_MAP_LOADING[key] = false;
+  if (key === L0_MAP_NOWK && LAYER0_TAB === "MAP" && el("l0body")) {
+    L0_MAP_NOW = L0_MAP_CACHE[key] || null;
+    paintL0Body();
+  }
+}
+/* THE ONE PLACE either basis is chosen. Every MAP renderer — GRID tiles, FISHEYE /
+   DOCK cells, BUBBLES, TILT cards, the live tick patch — reads through this. */
+function l0MapChg(r) {
+  if (!r) return null;
+  const m = L0_MAP_NOW;
+  if (m && m.pct && m.pct[r.t] != null) return m.pct[r.t];
+  return num(r.c);
+}
+function l0MapBasis(n) {
+  const m = L0_MAP_NOW, def = l0TfDef();
+  const err = L0_MAP_ERR[L0_MAP_NOWK];
+  if (!m || !m.hit) {
+    return "color = session %chg" +
+      (err ? " (" + esc(def.l) + " series unavailable)" : " (" + esc(def.l) + " series loading…)");
+  }
+  const win = esc(def.l) + " %chg · " + (L0_MAP_BACK[L0_TF] || 1) + " bars " + (L0_MAP_SPAN[L0_TF] || "");
+  return (m.hit >= n)
+    ? "color = " + win
+    : "color = " + win + " on " + m.hit + "/" + n + " · session %chg on the rest";
+}
+/* align a symbol onto the benchmark's timeline (forward-fill), exactly as the app does */
+function l0Aligned(t, ds) {
+  const b = ds[L0_BENCH], s = ds[t];
+  if (!s || !b) return null;
+  const map = new Map(); s.times.forEach((tm, i) => map.set(tm, s.closes[i]));
+  const closes = []; let last = null;
+  for (const tm of b.times) { const v = map.get(tm); last = (v != null) ? v : last; closes.push(last); }
+  /* ADAPTED from the sector app: back-fill any LEADING nulls (a symbol whose history
+     starts after the benchmark's) with its first real close, so the z-score maths
+     never sees NaN. The app tolerated the nulls because its chart dropped them. */
+  let f = 0; while (f < closes.length && closes[f] == null) f++;
+  if (f >= closes.length) return null;
+  for (let i = 0; i < f; i++) closes[i] = closes[f];
+  return closes;
+}
+function l0Ema(a, n) { const k = 2 / (n + 1); let e = a[0]; const o = [e]; for (let i = 1; i < a.length; i++) { e = a[i] * k + e * (1 - k); o.push(e); } return o; }
+/* JdK-style approximation — verbatim port of rrgSeries(), now BAR-agnostic: it runs on
+   whatever series L0_TF selected (60m / 4H / 1D / 1W closes from ohlcv_history). The
+   maths is unchanged; only the source series changed. */
+function l0RrgSeries(t) {
+  const D = l0Ds(); const Wd = D && D.closes;
+  if (!Wd || !Wd[L0_BENCH] || !Wd[t]) return null;
+  const b = Wd[L0_BENCH].closes, s = l0Aligned(t, Wd); if (!s) return null;
+  const rs = l0Ema(s.map((v, i) => 100 * v / b[i]), 4);   // 4-bar EMA on relative strength
+  const N = L0_RRG_WIN;
+  const sma = (a, i) => { const st = Math.max(0, i - N + 1); let m = 0; for (let k = st; k <= i; k++) m += a[k]; return m / (i - st + 1); };
+  const sdv = (a, i, m) => { const st = Math.max(0, i - N + 1); let v = 0; for (let k = st; k <= i; k++) v += (a[k] - m) * (a[k] - m); return Math.sqrt(v / (i - st + 1)) || 1e-9; };
+  const ratio = [], mom = [];
+  for (let i = 0; i < rs.length; i++) { const m = sma(rs, i); ratio.push(100 + (rs[i] - m) / sdv(rs, i, m)); }
+  const chg = ratio.map((v, i) => i >= 4 ? v - ratio[i - 4] : 0);   // momentum = 4-BAR ratio change
+  for (let i = 0; i < chg.length; i++) { const m = sma(chg, i); mom.push(100 + (chg[i] - m) / sdv(chg, i, m)); }
+  return { ratio: l0Ema(ratio, 2), mom: l0Ema(mom, 2) };
+}
+/* shared canvas setup — sizes the BACKING STORE to the container × devicePixelRatio.
+   R44 (observed live: the RRG canvas sat at the 300×150 HTML default while its CSS box
+   was 661×346 → blurry/clipped) — the sizing pass had run once before the element had
+   a box and never re-ran. Two guards now: measure with getBoundingClientRect (survives
+   fractional/zoomed layout) and return null when the box is still 0 so the caller can
+   re-arm on the next frame; and re-apply width/height on EVERY draw, so a resize or a
+   dpr change is picked up rather than baked in at first paint. */
+function l0Canvas(id) {
+  const cv = el(id); if (!cv) return null;
+  const wrap = cv.parentNode; if (!wrap) return null;
+  const r = wrap.getBoundingClientRect();
+  const W = Math.round(r.width || wrap.clientWidth || 0);
+  const H = Math.round(r.height || wrap.clientHeight || 0);
+  if (!(W > 0 && H > 0)) return null;          // not laid out yet — caller retries on rAF / RO
+  const dpr = window.devicePixelRatio || 1;
+  const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+  if (cv.width !== pw) cv.width = pw;
+  if (cv.height !== ph) cv.height = ph;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);      // draw in CSS px, render at device px
+  ctx.clearRect(0, 0, W, H);
+  return { ctx, W, H };
+}
+/* both renderers return TRUE once the canvas had a real box (drawn or honestly empty)
+   and FALSE only when the element is not laid out yet — that is the retry signal. */
+function renderL0RRG() {
+  const c = l0Canvas("l0rrg"); if (!c) return false;
+  const ctx = c.ctx, W = c.W, H = c.H;
+  /* R45c — THE "so small" FIX. The plot was a SQUARE inscribed in the panel
+     (S0 = min(W,H)), so in a 661×315 pane it could only ever use 315×315 — under
+     half the width, permanently framed by dead space. That, not the backing store,
+     is why it read as tiny. The plot now fills the WHOLE box on both axes: X spans
+     the full width, Y the full height, each mapping the same ±R z-range. Aspect is
+     a display choice (StockCharts/TradingView RRGs are routinely wider than tall);
+     the quadrant structure, the 100/100 crosshair and every reading are unchanged —
+     only the pixels-per-z differs per axis, which is what lets it fill its home. */
+  const padL = 34, padR = 16, padT = 14, padB = 26;                  // room for axis labels
+  const PW = Math.max(10, W - padL - padR), PH = Math.max(10, H - padT - padB);
+  const R = 3.2;                                                     // z-range shown
+  const loX = padL, hiX = padL + PW, loY = padT, hiY = padT + PH;    // plot rect edges
+  const cx = padL + PW / 2, cy = padT + PH / 2;                      // the 100/100 crosshair
+  const X = (v) => padL + ((v - (100 - R)) / (2 * R)) * PW;
+  const Y = (v) => padT + PH - ((v - (100 - R)) / (2 * R)) * PH;
+  ctx.globalAlpha = .06;                                             // quadrant fills
+  ctx.fillStyle = "#00FFA3"; ctx.fillRect(cx, loY, hiX - cx, cy - loY);                   // LEADING
+  ctx.fillStyle = "#FFE500"; ctx.fillRect(cx, cy, hiX - cx, hiY - cy);                    // WEAKENING
+  ctx.fillStyle = "#FF2D55"; ctx.fillRect(loX, cy, cx - loX, hiY - cy);                   // LAGGING
+  ctx.fillStyle = "#00D4FF"; ctx.fillRect(loX, loY, cx - loX, cy - loY);                  // IMPROVING
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#252538"; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.moveTo(loX, cy); ctx.lineTo(hiX, cy); ctx.moveTo(cx, loY); ctx.lineTo(cx, hiY); ctx.stroke();
+  ctx.strokeStyle = "#1A1A2A"; ctx.strokeRect(loX, loY, PW, PH);     // plot frame — makes the fill obvious
+  ctx.fillStyle = "#868AAA"; ctx.font = '9px "SF Mono",Menlo,monospace';
+  ctx.fillText("LEADING", hiX - 52, loY + 12);   ctx.fillText("WEAKENING", hiX - 64, hiY - 5);
+  ctx.fillText("LAGGING", loX + 5, hiY - 5);     ctx.fillText("IMPROVING", loX + 5, loY + 12);
+  ctx.fillText("RS-RATIO →", cx + 6, hiY + 17);
+  ctx.save(); ctx.translate(loX - 10, cy - 8); ctx.rotate(-Math.PI / 2); ctx.fillText("RS-MOM →", 0, 0); ctx.restore();
+  for (const s of L0_SECTORS) {                                      // tails + heads
+    const rr = l0RrgSeries(s.t); if (!rr) continue;
+    const n = rr.ratio.length, pts = [];
+    /* R45 — the tail ends on L0_RRG_AT while scrubbing/playing, on the newest bar
+       when live. Clamped so a short series can never index out of range. */
+    const end = (L0_RRG_AT == null) ? n - 1 : Math.max(0, Math.min(L0_RRG_AT, n - 1));
+    for (let k = L0_TAIL_PTS - 1; k >= 0; k--) { const i = end - k * L0_TAIL_STEP; if (i >= 0) pts.push([rr.ratio[i], rr.mom[i]]); }
+    if (!pts.length) continue;
+    for (let i = 1; i < pts.length; i++) {                           // oldest faint → head bright
+      ctx.strokeStyle = s.c; ctx.lineWidth = 1.6;
+      ctx.globalAlpha = 0.10 + 0.55 * (i / (pts.length - 1));
+      ctx.beginPath(); ctx.moveTo(X(pts[i - 1][0]), Y(pts[i - 1][1])); ctx.lineTo(X(pts[i][0]), Y(pts[i][1])); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    pts.slice(0, -1).forEach((p, i) => { ctx.fillStyle = s.c; ctx.globalAlpha = 0.15 + 0.4 * (i / Math.max(1, pts.length - 2)); ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 2.2, 0, 7); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    const last = pts[pts.length - 1];
+    ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(X(last[0]), Y(last[1]), 5.5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#F2F2F8"; ctx.font = '700 10px "SF Mono",Menlo,monospace'; ctx.fillText(s.t, X(last[0]) + 8, Y(last[1]) + 3);
+  }
+  return true;
+}
+/* RELATIVE — every sector ETF rebased to 0% at the LEFT EDGE of the window, plotted
+   as multi-line canvas over the benchmark's timeline on the SELECTED timeframe (same
+   rebase maths as the sector app's rebaseLines(), re-implemented on raw canvas — see
+   the header note). The window is a BAR COUNT chosen per timeframe (L0_REL_WIN). */
+function renderL0Rel() {
+  const c = l0Canvas("l0rel"); if (!c) return false;
+  const ctx = c.ctx, W = c.W, H = c.H;
+  const D = l0Ds(); const ds = D && D.closes;
+  if (!ds || !ds[L0_BENCH]) return true;
+  const n = ds[L0_BENCH].times.length;
+  const from = Math.max(0, n - Math.min(l0RelWin()[1], n));
+  const series = [];
+  let lo = 0, hi = 0;
+  for (const s of L0_SECTORS) {
+    const closes = l0Aligned(s.t, ds); if (!closes) continue;
+    const base = closes[from]; if (!base) continue;
+    const pts = [];
+    for (let i = from; i < n; i++) { if (closes[i] == null) continue; const v = (closes[i] / base - 1) * 100; pts.push(v); if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (pts.length > 1) series.push({ s, pts });
+  }
+  if (!series.length) return true;
+  const padL = 8, padR = 48, padT = 10, padB = 18;
+  const span = Math.max(1e-6, hi - lo), padY = span * 0.08;
+  lo -= padY; hi += padY;
+  const X = (i, len) => padL + (i / Math.max(1, len - 1)) * (W - padL - padR);
+  const Y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  ctx.strokeStyle = "#14141F"; ctx.lineWidth = 1;                     // gridlines
+  for (let g = 0; g <= 4; g++) { const y = padT + g * (H - padT - padB) / 4; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); }
+  ctx.strokeStyle = "#252538"; ctx.beginPath();                       // the 0% baseline
+  const y0 = Y(0); ctx.moveTo(padL, y0); ctx.lineTo(W - padR, y0); ctx.stroke();
+  ctx.fillStyle = "#868AAA"; ctx.font = '9px "SF Mono",Menlo,monospace';
+  ctx.fillText("0%", W - padR + 4, y0 + 3);
+  ctx.fillText(hi.toFixed(1) + "%", padL + 2, padT + 8);
+  ctx.fillText(lo.toFixed(1) + "%", padL + 2, H - padB - 2);
+  const ends = [];
+  for (const g of series) {
+    ctx.strokeStyle = g.s.c; ctx.lineWidth = 1.5; ctx.globalAlpha = .92;
+    ctx.beginPath();
+    g.pts.forEach((v, i) => { const x = X(i, g.pts.length), y = Y(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ends.push({ c: g.s.c, t: g.s.t, v: g.pts[g.pts.length - 1], y: Y(g.pts[g.pts.length - 1]) });
+  }
+  ctx.globalAlpha = 1;
+  ends.sort((a, b) => a.y - b.y);                                     // de-overlap the right-edge labels
+  let prev = -99;
+  for (const e of ends) {
+    const y = Math.max(prev + 10, e.y);
+    prev = y;
+    ctx.fillStyle = e.c; ctx.font = '700 9px "SF Mono",Menlo,monospace';
+    ctx.fillText(e.t + " " + (e.v >= 0 ? "+" : "") + e.v.toFixed(1), W - padR + 3, Math.min(y + 3, H - 2));
+  }
+  return true;
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   R47 — FOCUS. A FOURTH Layer-0 tab, purely additive: the heatmap is untouched.
+   It draws the SAME live cohort the heatmap draws — shownRows(), market-cap
+   descending, exactly heatmapHTML()'s selection — through four cursor-driven
+   focus+context techniques. Every number on screen comes off the board row
+   (t / c / mc / rsi); a null field renders "—" and is never invented, and the
+   fill is heatColorChg() so FOCUS speaks the heatmap's colour language.
+
+     FISHEYE  Sarkar–Brown cartesian distortion (the d3-fisheye technique),
+              implemented natively — no CDN. Cells near the cursor expand,
+              distant ones compress, and the FULL SET stays on screen.
+     DOCK     macOS-Dock proximity scaling: Gaussian falloff, spring-eased.
+   R50 §2 — BOTH are now (a) roughly half as strong as R47 shipped them and (b) gated
+   by an ENGAGEMENT scalar that eases 0→1 over ~300 ms on pointer-enter and back to 0
+   over ~200 ms on leave, with the focus point itself lerped toward the cursor. The
+   effect no longer snaps on the instant the pointer crosses the canvas edge — it lags,
+   ramps, and stays. See L0_FOC_ENG / l0FocEngStep().
+     BUBBLES  force-packed circles, radius ∝ √mktcap (so AREA ∝ mktcap),
+              cursor repels within L0_FOC_REPEL px.
+     TILT     CSS-3D parallax cards, one pointermove handler for the whole grid.
+
+   Discipline: ONE pointermove listener and ONE rAF loop per render, both stored
+   and torn down by mountL0Body() (see l0FocusStop) — a leaked rAF redrawing a
+   dead canvas is a bug. prefers-reduced-motion → no loop, no springs, static
+   paint on demand. pointer:coarse → no listeners at all, plain static grid. */
+/* R49 §1 — these four are now MODES of the MAP tab, not a tab of their own, and GRID
+   (the untouched heatmap renderer) joins them as the default. Five modes, one room. */
+const L0_MAP_MODES = ["GRID", "FISHEYE", "DOCK", "BUBBLES", "TILT"];
+const L0_MAP_TIP = {
+  GRID:    "the heatmap — uniform squares, market-cap order",
+  FISHEYE: "focus+context distortion — the whole cohort stays visible",
+  DOCK:    "macOS-dock proximity scaling with spring easing",
+  BUBBLES: "force-packed circles — area is market cap; the cursor pushes",
+  TILT:    "3D parallax cards — the card under the cursor lifts",
+};
+let L0_MAP_MODE = "GRID";
+/* R50 §2a — MAGNITUDE HALVED. Alan: "the zoom is too hard, tone it down… it also zooms
+   in too much." The fisheye magnification at the focus is g'(0) = k+1, so k = 3.6 gave
+   4.6× at the cursor — violent. k = 1.9 gives 2.9×, and measured against the OLD peak
+   the new peak is ~0.63 of it (harness §2). DOCK's amplitude drops 1.1 → 0.65 (max
+   scale 2.10 → 1.65 before the mean give-back) and sigma WIDENS 90 → 110 px so the
+   falloff is gentler and reaches more cells with less force per cell. */
+const L0_FOC_K       = 1.9;    // fisheye distortion k        (R50: was 3.6)
+const L0_FOC_A       = 0.65;   // dock bump amplitude          (R50: was 1.1)
+const L0_FOC_SIG     = 110;    // dock gaussian sigma, px      (R50: was 90)
+const L0_FOC_DIP     = 0.06;   // max fraction neighbours give back (see l0DockScale)
+const L0_FOC_EASE    = 0.22;   // dock spring: cur += (target-cur)*EASE
+/* R50 §2b — ENGAGEMENT RAMP. Alan: "it's very abrupt when you get onto the space, it
+   just jumps. Give it a little bit of a lag, on a ramp up, and then it stays."
+   L0_FOC_ENG is a 0→1 scalar that MULTIPLIES the distortion strength (k for FISHEYE,
+   A for DOCK). It eases in on pointer-enter and back out on pointer-leave, so the lens
+   FADES up instead of snapping on, and fades down in place instead of vanishing.
+   Rates are per-frame at the 60 fps reference and dt-normalised in l0FocEngStep(), so
+   a 120 Hz display gets the same wall-clock ramp:
+       IN  0.15/frame → 0.95 at ~307 ms   (the requested 260–320 ms window)
+       OUT 0.22/frame → 0.05 at ~200 ms
+   L0_FOC_LENS additionally lerps the FOCUS POINT toward the (predicted) pointer, so
+   the lens glides across the board rather than teleporting cell to cell. */
+const L0_FOC_ENG_IN  = 0.15;   // ease-in  rate per 60 fps frame
+const L0_FOC_ENG_OUT = 0.22;   // ease-out rate per 60 fps frame
+const L0_FOC_LENS    = 0.18;   // focus lerp: fx += (tx - fx) * LENS
+const L0_FOC_ENG_EPS = 0.002;  // below this the lens is simply off (no distortion at all)
+const L0_FOC_LEAD    = 110;    // ms of kinematic endpoint prediction
+const L0_FOC_SPD_MIN = 0.35;   // px/ms below which prediction is off entirely
+const L0_FOC_SPD_RNG = 1.20;   // px/ms of ramp from no-prediction to full
+const L0_FOC_REPEL   = 120;    // bubble cursor repulsion radius, px
+const L0_FOC_TILT_MAX = 10;    // max card rotation, degrees
+const L0_FOC_TILT_R   = 220;   // px beyond which cards stay flat
+const L0_FOC_D1 = 34, L0_FOC_D2 = 70;   // semantic-zoom thresholds (cell px)
+/* live wiring handles — every one of these is nulled by l0FocusStop() */
+let L0_FOC_RAF = null, L0_FOC_MOVE = null, L0_FOC_OUT = null, L0_FOC_CLICK = null, L0_FOC_EL = null;
+let L0_FOC_CELLS = [];          // hit-test geometry from the last paint
+let L0_FOC_SC = {};             // ticker → eased dock scale (survives frames, not renders)
+let L0_FOC_BUB = null, L0_FOC_BUBKEY = "";
+let L0_FOC_TILT = null;         // cached tilt card centres (content-space)
+/* x/y = raw pointer · tx/ty = the PREDICTED target (kinematic lead) · fx/fy = the
+   SMOOTHED lens the painters actually read. R50 §2b split tx/ty out of fx/fy: before,
+   the move handler wrote the lens directly and it teleported. */
+const L0_FOC_P = { x: null, y: null, tx: null, ty: null, fx: null, fy: null, vx: 0, vy: 0, t: 0, in: false };
+let L0_FOC_ENG = 0;             // R50 §2b — 0→1 distortion strength (the ramp)
+let L0_FOC_ENGT = 0;            // last engagement-step timestamp, ms
+/* ONE step of the engagement ramp + the lens glide. dt-normalised against a 60 fps
+   frame so the constants above read as "per frame" and still hold on any refresh rate;
+   at exactly 60 fps this reduces to `eng += (target - eng) * RATE`. */
+function l0FocEngStep(now) {
+  const prev = L0_FOC_ENGT || now;
+  const dt = Math.max(1, Math.min(100, now - prev));
+  L0_FOC_ENGT = now;
+  const f = Math.min(3, dt / (1000 / 60));                     // frames elapsed at the reference rate
+  const target = L0_FOC_P.in ? 1 : 0;
+  const rate = L0_FOC_P.in ? L0_FOC_ENG_IN : L0_FOC_ENG_OUT;
+  L0_FOC_ENG += (target - L0_FOC_ENG) * (1 - Math.pow(1 - rate, f));
+  if (L0_FOC_ENG < 0.0008) L0_FOC_ENG = 0;
+  if (L0_FOC_ENG > 0.9995) L0_FOC_ENG = 1;
+  if (L0_FOC_P.tx != null) {
+    if (L0_FOC_P.fx == null) { L0_FOC_P.fx = L0_FOC_P.tx; L0_FOC_P.fy = L0_FOC_P.ty; }
+    else {
+      const l = 1 - Math.pow(1 - L0_FOC_LENS, f);
+      L0_FOC_P.fx += (L0_FOC_P.tx - L0_FOC_P.fx) * l;
+      L0_FOC_P.fy += (L0_FOC_P.ty - L0_FOC_P.fy) * l;
+    }
+  }
+  return L0_FOC_ENG;
+}
+
+/* the cohort, selected EXACTLY as heatmapHTML() selects it (read-only) */
+function l0FocRows() {
+  const all = shownRows();
+  return all.slice().sort((a, b) => (num(b.mc) || 0) - (num(a.mc) || 0));
+}
+function l0FocCoarse()  { return !!(window.matchMedia && window.matchMedia("(pointer:coarse)").matches); }
+function l0FocReduced() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+/* token reader — canvas needs literals, but the literals must BE the tokens */
+const L0_TOKC = {};
+function l0Tok(n, fb) {
+  if (L0_TOKC[n]) return L0_TOKC[n];
+  let v = "";
+  try { v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); } catch (e) {}
+  return (L0_TOKC[n] = v || fb);
+}
+/* near-square grid for n cells in a W×H box — minimises aspect error, penalises
+   wasted slots in the last row. */
+function l0FocGrid(n, W, H) {
+  let best = 1, bs = Infinity;
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c);
+    const s = Math.abs((W / c) / (H / r) - 1) + ((c * r - n) / n) * 0.35;
+    if (s < bs) { bs = s; best = c; }
+  }
+  return { cols: best, rows: Math.ceil(n / best) };
+}
+/* ── FISHEYE: Sarkar–Brown / d3-fisheye cartesian magnification ──────────────
+   On [lo,hi] with focus f, the normalised distance t ∈ [0,1] maps through
+       g(t) = t*(k+1) / (t*k + 1)
+   which is strictly increasing, fixes g(0)=0 and g(1)=1 — so the focus stays
+   put, BOTH DOMAIN EDGES MAP TO THEMSELVES (no cell can escape the box, the
+   whole set stays visible) and g'(0)=k+1 is the magnification at the focus.
+   Applied independently to x and y, to both edges of each cell, so the grid
+   stays perfectly tiled with no gaps and no overlap. */
+function l0Fish(x, f, lo, hi, k) {
+  if (!(hi > lo)) return x;
+  if (f < lo) f = lo; else if (f > hi) f = hi;
+  if (x >= f) {
+    const s = hi - f; if (!(s > 0)) return f;
+    const t = (x - f) / s;
+    return f + s * (t * (k + 1) / (t * k + 1));
+  }
+  const s = f - lo; if (!(s > 0)) return f;
+  const t = (f - x) / s;
+  return f - s * (t * (k + 1) / (t * k + 1));
+}
+/* ── DOCK: gaussian proximity bump, mean-compensated so the layout stays stable ─
+   raw bump  b = exp(-dist² / (2σ²))                (1 at the cursor, →0 far away)
+   scale     s = 1 + A·b − min(A·mean(b), DIP)
+   The compensation term is what makes neighbours give ground instead of the grid
+   inflating — but it must be CLAMPED. The harness caught this: on a dense grid
+   (40px pitch vs σ=90) mean(b) reaches .17, so an uncompensated A·mean(b) pushed
+   every distant cell down to .815 — an 18% shrink, which is a visible collapse of
+   the whole board, not "slightly". L0_FOC_DIP caps the give-back at 12%.
+   R50 §2 — A is now passed in ALREADY MULTIPLIED by the engagement scalar, so at
+   eng = 0 this returns exactly 1 for every cell and the grid is undistorted. The
+   wider σ (110) raises mean(b), which is precisely why the DIP clamp exists. */
+function l0DockScale(dist, A, sig, meanB) {
+  const b = Math.exp(-(dist * dist) / (2 * sig * sig));
+  const comp = Math.min(A * (meanB || 0), L0_FOC_DIP);
+  return Math.max(0.72, 1 + A * b - comp);
+}
+/* ── BUBBLES: radius ∝ √cap so AREA ∝ cap. Null cap → the minimum radius, and
+   drawn dimmer, because there is no size signal to show. ─────────────────── */
+function l0BubR(cap, maxCap, rmax, rmin) {
+  if (cap == null || !(cap > 0) || !(maxCap > 0)) return rmin;
+  return rmax * Math.sqrt(cap / maxCap);
+}
+/* honest cell text — SEMANTIC ZOOM: what is drawn depends on the cell's size.
+   <34px ticker · 34-70px ticker+%chg · >70px ticker+%chg+mkt cap+RSI. */
+function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
+  if (!(w > 0 && h > 0)) return;
+  const cv0 = l0MapChg(r);                     // R49 §2 — the shared TF's %chg when it exists, session %chg otherwise
+  ctx.fillStyle = heatColorChg(cv0);
+  ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = hot ? 1.4 : 0.8;
+  ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.07)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const m = Math.min(w, h);
+  if (m < 13) return;
+  const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
+  const chg = (cv != null) ? fmtC(cv) : "—";
+  const col = (cv == null || !isFinite(cv)) ? l0Tok("--dim", "#7a8090")
+            : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.textAlign = "center";
+  const cx = x + w / 2, cy = y + h / 2;
+  const ts = Math.max(7, Math.min(20, m * 0.21));
+  ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
+  ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+  if (m < L0_FOC_D1) {                       // tier 1 — ticker only
+    ctx.textBaseline = "middle";
+    ctx.fillText(r.t, cx, cy);
+    ctx.restore(); return;
+  }
+  if (m < L0_FOC_D2) {                       // tier 2 — ticker + %chg
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(r.t, cx, cy - 1);
+    ctx.font = '600 ' + (ts * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    ctx.fillStyle = col;
+    ctx.fillText(chg, cx, cy + ts * 0.92);
+    ctx.restore(); return;
+  }
+  /* tier 3 — ticker + %chg + mkt cap + RSI (detail on demand) */
+  const rv = num(r.rsi);
+  const rsi = (r.rsi != null && rv != null && isFinite(rv)) ? "RSI " + rv.toFixed(0) : "RSI —";
+  const line = ts * 1.02;
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(r.t, cx, cy - line);
+  ctx.font = '600 ' + (ts * 0.80).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+  ctx.fillStyle = col;
+  ctx.fillText(chg, cx, cy + line * 0.08);
+  ctx.font = '500 ' + (ts * 0.64).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+  ctx.fillStyle = l0Tok("--ink2", "#b9c0cc");
+  ctx.fillText(fmtCap(r.mc), cx, cy + line * 0.95);
+  ctx.fillStyle = l0Tok("--dim", "#7a8090");
+  ctx.fillText(rsi, cx, cy + line * 1.72);
+  ctx.restore();
+}
+function l0FocPaintFisheye(ctx, W, H, rows) {
+  const pad = 6, n = rows.length;
+  const g = l0FocGrid(n, W - pad * 2, H - pad * 2);
+  const cw = (W - pad * 2) / g.cols, ch = (H - pad * 2) / g.rows;
+  /* R50 §2b — the lens is live while the ENGAGEMENT scalar is above zero, not while the
+     pointer happens to be inside. That is the whole point: on enter it ramps 0→k, on
+     leave it ramps k→0 IN PLACE instead of snapping back to a flat grid. */
+  const eng = L0_FOC_ENG;
+  const live = L0_FOC_P.fx != null && eng > L0_FOC_ENG_EPS;
+  const k = L0_FOC_K * eng;
+  const fx = live ? Math.max(pad, Math.min(W - pad, L0_FOC_P.fx)) : 0;
+  const fy = live ? Math.max(pad, Math.min(H - pad, L0_FOC_P.fy)) : 0;
+  for (let i = 0; i < n; i++) {
+    const c = i % g.cols, rw = (i / g.cols) | 0;
+    let x0 = pad + c * cw, x1 = x0 + cw, y0 = pad + rw * ch, y1 = y0 + ch;
+    if (live) {
+      x0 = l0Fish(x0, fx, pad, W - pad, k); x1 = l0Fish(x1, fx, pad, W - pad, k);
+      y0 = l0Fish(y0, fy, pad, H - pad, k); y1 = l0Fish(y1, fy, pad, H - pad, k);
+    }
+    const w = Math.max(0, x1 - x0 - 1.2), h = Math.max(0, y1 - y0 - 1.2);
+    L0_FOC_CELLS.push({ t: rows[i].t, x: x0, y: y0, w: w, h: h });
+    const hot = live && L0_FOC_P.in && fx >= x0 && fx <= x1 && fy >= y0 && fy <= y1;
+    l0FocCellDraw(ctx, rows[i], x0, y0, w, h, hot);
+  }
+}
+function l0FocPaintDock(ctx, W, H, rows) {
+  const pad = 6, n = rows.length;
+  const g = l0FocGrid(n, W - pad * 2, H - pad * 2);
+  const cw = (W - pad * 2) / g.cols, ch = (H - pad * 2) / g.rows;
+  const base = Math.min(cw, ch);
+  /* R50 §2b — same engagement ramp as FISHEYE, applied to the bump AMPLITUDE. eng = 0
+     ⇒ A = 0 ⇒ every scale is exactly 1, i.e. the plain grid, with no branch needed. */
+  const eng = L0_FOC_ENG;
+  const live = L0_FOC_P.fx != null && eng > L0_FOC_ENG_EPS, rm = l0FocReduced();
+  const A = L0_FOC_A * eng;
+  const dist = new Array(n); let sumB = 0;
+  for (let i = 0; i < n; i++) {
+    const c = i % g.cols, rw = (i / g.cols) | 0;
+    const cx = pad + c * cw + cw / 2, cy = pad + rw * ch + ch / 2;
+    let d = Infinity;
+    if (live) { const dx = L0_FOC_P.fx - cx, dy = L0_FOC_P.fy - cy; d = Math.sqrt(dx * dx + dy * dy); }
+    dist[i] = d;
+    sumB += live ? Math.exp(-(d * d) / (2 * L0_FOC_SIG * L0_FOC_SIG)) : 0;
+  }
+  const meanB = sumB / n;
+  const order = [];
+  for (let i = 0; i < n; i++) {
+    const t = rows[i].t;
+    const target = live ? l0DockScale(dist[i], A, L0_FOC_SIG, meanB) : 1;
+    let cur = L0_FOC_SC[t]; if (cur == null || !isFinite(cur)) cur = 1;
+    cur = rm ? target : cur + (target - cur) * L0_FOC_EASE;   // spring toward target
+    L0_FOC_SC[t] = cur;
+    const c = i % g.cols, rw = (i / g.cols) | 0;
+    order.push({ i: i, cur: cur, cx: pad + c * cw + cw / 2, cy: pad + rw * ch + ch / 2, s: base * cur });
+  }
+  order.sort((a, b) => a.cur - b.cur);          // biggest last → drawn on top
+  for (const o of order) {
+    const w = Math.max(0, o.s - 1.5), h = w;
+    const x = o.cx - w / 2, y = o.cy - h / 2;
+    L0_FOC_CELLS.push({ t: rows[o.i].t, x: x, y: y, w: w, h: h });
+    /* R50 §2a — the hot threshold is derived from the CONSTANT amplitude, not the
+       eng-scaled one: keying it off A would make every cell "hot" mid-ramp. */
+    l0FocCellDraw(ctx, rows[o.i], x, y, w, h, L0_FOC_P.in && o.cur > 1 + L0_FOC_A * 0.45);
+  }
+}
+/* one force step: weak pull to centre, pairwise collision resolution, cursor
+   repulsion inside L0_FOC_REPEL, velocity damping, box clamp. */
+function l0FocBubStep(B, W, H, px, py) {
+  const n = B.length, cx = W / 2, cy = H / 2;
+  for (let i = 0; i < n; i++) {
+    const b = B[i];
+    b.vx += (cx - b.x) * 0.0016; b.vy += (cy - b.y) * 0.0016;
+    if (px != null) {
+      const dx = b.x - px, dy = b.y - py;
+      const d = Math.sqrt(dx * dx + dy * dy) || 0.001;
+      if (d < L0_FOC_REPEL) {
+        const f = (1 - d / L0_FOC_REPEL) * 3.2;
+        b.vx += (dx / d) * f; b.vy += (dy / d) * f;
+      }
+    }
+  }
+  /* TWO relaxation passes per step. The harness caught one pass leaving ~2.8px of
+     residual overlap on a settled 12-bubble pack — resolving a pair can push a
+     circle back into a third, so a single sweep never fully converges. */
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < n; i++) {
+      const a = B[i];
+      for (let j = i + 1; j < n; j++) {
+        const b = B[j];
+        const dx = b.x - a.x, dy = b.y - a.y, md = a.r + b.r + 1.2;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= md * md || d2 <= 0) continue;
+        const d = Math.sqrt(d2);
+        const k = ((md - d) / d) * 0.5;
+        a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k;
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const b = B[i];
+    b.vx *= 0.86; b.vy *= 0.86;
+    b.x += b.vx; b.y += b.vy;
+    b.x = Math.max(b.r + 1, Math.min(W - b.r - 1, b.x));
+    b.y = Math.max(b.r + 1, Math.min(H - b.r - 1, b.y));
+  }
+}
+function l0FocBubBuild(rows, W, H) {
+  const n = rows.length;
+  const caps = rows.map((r) => { const v = num(r.mc); return (v != null && isFinite(v) && v > 0) ? v : null; });
+  let mx = 0; for (const c of caps) if (c != null && c > mx) mx = c;
+  /* pick rmax so the circles cover ~48% of the pane: Σπr² = .48·W·H with
+     r_i = rmax·√(cap_i/mx) and nulls at rmin = .12·rmax. */
+  let share = 0;
+  for (const c of caps) share += (c != null && mx > 0) ? (c / mx) : (0.12 * 0.12);
+  let rmax = Math.sqrt((0.48 * W * H) / (Math.PI * Math.max(1e-9, share)));
+  rmax = Math.max(8, Math.min(rmax, Math.min(W, H) / 4));
+  /* the null-cap radius must never READ as a size claim: it is pinned to the
+     SMALLEST real radius in the cohort (or 12% of rmax, whichever is smaller),
+     so a ticker with no market cap on file can never out-size a real small cap.
+     The harness caught the naive .12·rmax version doing exactly that. */
+  let minReal = Infinity;
+  for (const c of caps) if (c != null && mx > 0) minReal = Math.min(minReal, rmax * Math.sqrt(c / mx));
+  const rmin = Math.max(2.5, Math.min(rmax * 0.12, isFinite(minReal) ? minReal : rmax * 0.12));
+  const B = rows.map((r, i) => {
+    const a = (i / Math.max(1, n)) * Math.PI * 2 * 5.3;          // phyllotaxis-ish seed
+    const rr = Math.min(W, H) * 0.42 * Math.sqrt((i + 0.5) / n);
+    return {
+      t: r.t, r: l0BubR(caps[i], mx, rmax, rmin), known: caps[i] != null,
+      x: W / 2 + Math.cos(a) * rr, y: H / 2 + Math.sin(a) * rr, vx: 0, vy: 0,
+    };
+  });
+  for (let k = 0; k < 320; k++) l0FocBubStep(B, W, H, null, null);   // settle before first paint
+  return B;
+}
+function l0FocPaintBubbles(ctx, W, H, rows) {
+  const key = W + "x" + H + "|" + rows.map((r) => r.t).join(",");
+  if (!L0_FOC_BUB || L0_FOC_BUBKEY !== key) { L0_FOC_BUB = l0FocBubBuild(rows, W, H); L0_FOC_BUBKEY = key; }
+  const B = L0_FOC_BUB;
+  const live = L0_FOC_P.in && L0_FOC_P.x != null;
+  if (!l0FocReduced()) l0FocBubStep(B, W, H, live ? L0_FOC_P.x : null, live ? L0_FOC_P.y : null);
+  const ink = l0Tok("--ink", "#e9ecf2"), dim = l0Tok("--dim", "#7a8090");
+  for (let i = 0; i < B.length; i++) {
+    const b = B[i], r = rows[i]; if (!r) continue;
+    const hot = live && Math.hypot(L0_FOC_P.x - b.x, L0_FOC_P.y - b.y) <= b.r;
+    L0_FOC_CELLS.push({ t: b.t, cx: b.x, cy: b.y, r: b.r });
+    ctx.globalAlpha = b.known ? 1 : 0.45;      // no market cap on file → drawn dimmer, honestly
+    ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0.5, b.r), 0, Math.PI * 2);
+    ctx.fillStyle = heatColorChg(l0MapChg(r)); ctx.fill();   // R49 §2 — same TF-aware value as every other MAP mode
+    ctx.lineWidth = hot ? 1.4 : 0.8;
+    ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.10)";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (b.r < 9) continue;                     // too small for text — skip the label, never overflow
+    const fs = Math.max(7, Math.min(15, b.r * 0.5));
+    ctx.textAlign = "center";
+    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    if (ctx.measureText(r.t).width > b.r * 2 - 6) continue;
+    const cv0 = l0MapChg(r);
+    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
+    const chg = (cv != null) ? fmtC(cv) : "—";
+    ctx.fillStyle = b.known ? ink : dim;
+    if (b.r >= 26) {
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(r.t, b.x, b.y - 1);
+      ctx.font = '600 ' + (fs * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      if (ctx.measureText(chg).width <= b.r * 2 - 6) {
+        ctx.fillStyle = (cv == null || !isFinite(cv)) ? dim
+          : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
+        ctx.fillText(chg, b.x, b.y + fs * 0.95);
+      }
+    } else {
+      ctx.textBaseline = "middle";
+      ctx.fillText(r.t, b.x, b.y);
+    }
+  }
+}
+/* TILT is DOM — every card carries data-act="row", so a click pins through the
+   EXACT board-row path with no synthetic routing at all. */
+function l0FocTiltHTML(rows) {
+  return '<div class="sc-l0tilt" id="l0tilt">' + rows.map((r) => {
+    const cv0 = l0MapChg(r);                                   // R49 §2 — TF-aware, exactly like the other four modes
+    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
+    const chg = (cv != null) ? fmtC(cv) : "—";
+    return '<div class="sc-l0card" id="l0tc_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) +
+      '" style="background:' + heatColorChg(cv0) + '" title="' + esc(r.t) + '">' +
+      '<span class="sc-l0card__t">' + esc(r.t) + "</span>" +
+      '<span class="sc-l0card__c" id="l0tcc_' + esc(r.t) + '">' + esc(chg) + "</span>" +
+      '<span class="sc-l0card__m">' + esc(fmtCap(r.mc)) + "</span>" +
+    "</div>";
+  }).join("") + "</div>";
+}
+/* cache each card's centre in CONTENT space (scroll-independent) so the move
+   handler never re-measures — one pass per render, not one per pointer event. */
+function l0FocTiltScan() {
+  const g = el("l0tilt"); if (!g) return null;
+  const gr = g.getBoundingClientRect();
+  if (!(gr.width > 0 && gr.height > 0)) return null;
+  const cards = Array.prototype.slice.call(g.querySelectorAll(".sc-l0card"));
+  L0_FOC_TILT = { g: g, cards: cards.map((c) => {
+    const r = c.getBoundingClientRect();
+    return { e: c,
+      cx: (r.left - gr.left) + g.scrollLeft + r.width / 2,
+      cy: (r.top - gr.top) + g.scrollTop + r.height / 2,
+      hw: Math.max(1, r.width / 2), hh: Math.max(1, r.height / 2) };
+  }) };
+  return L0_FOC_TILT;
+}
+function l0FocTiltApply() {
+  const T = L0_FOC_TILT || l0FocTiltScan(); if (!T) return;
+  if (!T.g || !T.g.parentNode) { L0_FOC_TILT = null; return; }
+  const on = L0_FOC_P.in && L0_FOC_P.x != null;
+  const sx = T.g.scrollLeft, sy = T.g.scrollTop;
+  for (const c of T.cards) {
+    if (!on) { c.e.style.transform = "perspective(600px)"; c.e.classList.remove("is-hot"); continue; }
+    const dx = L0_FOC_P.x - (c.cx - sx), dy = L0_FOC_P.y - (c.cy - sy);
+    const inf = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / L0_FOC_TILT_R);   // neighbours stay flat
+    const ry = Math.max(-1, Math.min(1, dx / c.hw)) * L0_FOC_TILT_MAX * inf;
+    const rx = -Math.max(-1, Math.min(1, dy / c.hh)) * L0_FOC_TILT_MAX * inf;
+    const over = Math.abs(dx) <= c.hw && Math.abs(dy) <= c.hh;
+    const sc = over ? 1.09 : 1 + 0.05 * inf * inf;
+    c.e.style.transform = "perspective(600px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" +
+      ry.toFixed(2) + "deg) scale(" + sc.toFixed(3) + ")";
+    c.e.classList.toggle("is-hot", over);
+  }
+}
+/* THE PAINT. Returns true once the surface had a real box (same contract as
+   renderL0RRG/renderL0Rel), false while it is still 0×0 so the caller retries. */
+function renderL0Focus() {
+  if (L0_MAP_MODE === "TILT") {
+    const g = el("l0tilt"); if (!g) return false;
+    return !!l0FocTiltScan();
+  }
+  const c = l0Canvas("l0foc"); if (!c) return false;
+  const rows = l0FocRows();
+  L0_FOC_CELLS = [];
+  if (!rows.length) return true;                     // the note state lives in l0BodyHTML
+  if (L0_MAP_MODE === "BUBBLES") l0FocPaintBubbles(c.ctx, c.W, c.H, rows);
+  else if (L0_MAP_MODE === "DOCK") l0FocPaintDock(c.ctx, c.W, c.H, rows);
+  else l0FocPaintFisheye(c.ctx, c.W, c.H, rows);
+  return true;
+}
+function l0FocHit(x, y) {
+  if (L0_MAP_MODE === "BUBBLES") {
+    let best = null, bd = Infinity;
+    for (const b of L0_FOC_CELLS) {
+      const d = Math.hypot(x - b.cx, y - b.cy);
+      if (d <= b.r && d < bd) { bd = d; best = b.t; }
+    }
+    return best;
+  }
+  for (let i = L0_FOC_CELLS.length - 1; i >= 0; i--) {   // last drawn = topmost
+    const c = L0_FOC_CELLS[i];
+    if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) return c.t;
+  }
+  return null;
+}
+/* CLICK-TO-PIN. A canvas has no elements to delegate from, so the hit-tested
+   ticker is routed through a throwaway [data-act="row"] node — the click lands
+   on the SAME document-level handler a board row / heat tile uses, so pinning,
+   the re-click-to-unpin rule and every side effect are byte-identical. */
+function l0FocPin(t) {
+  if (!t) return;
+  const p = document.createElement("span");
+  p.setAttribute("data-act", "row");
+  p.setAttribute("data-t", t);
+  p.style.cssText = "position:fixed;left:-9999px;top:0;width:0;height:0;";
+  document.body.appendChild(p);
+  try { p.click(); } finally { if (p.parentNode) p.parentNode.removeChild(p); }
+}
+/* teardown — called unconditionally at the top of mountL0Body(). Nothing about
+   FOCUS may survive a re-render: not the rAF, not the listeners, not the sim. */
+function l0FocusStop() {
+  if (L0_FOC_RAF) { cancelAnimationFrame(L0_FOC_RAF); L0_FOC_RAF = null; }
+  if (L0_FOC_EL) {
+    if (L0_FOC_MOVE)  L0_FOC_EL.removeEventListener("pointermove", L0_FOC_MOVE);
+    if (L0_FOC_OUT)   L0_FOC_EL.removeEventListener("pointerleave", L0_FOC_OUT);
+    if (L0_FOC_CLICK) L0_FOC_EL.removeEventListener("click", L0_FOC_CLICK);
+  }
+  L0_FOC_MOVE = L0_FOC_OUT = L0_FOC_CLICK = L0_FOC_EL = null;
+  L0_FOC_TILT = null; L0_FOC_CELLS = [];
+  L0_FOC_P.in = false; L0_FOC_P.x = L0_FOC_P.y = L0_FOC_P.fx = L0_FOC_P.fy = null;
+  L0_FOC_P.tx = L0_FOC_P.ty = null;
+  L0_FOC_P.vx = L0_FOC_P.vy = 0; L0_FOC_P.t = 0;
+  L0_FOC_ENG = 0; L0_FOC_ENGT = 0;      // R50 §2b — the ramp resets with everything else
+}
+/* per-render wiring: ONE pointermove, ONE rAF, both stored above. */
+function l0FocusWire() {
+  const wrap = document.querySelector("#l0body .sc-l0cv");
+  if (!wrap) return;
+  if (l0FocCoarse()) return;      // touch device: cursor effects are meaningless — static grid, zero listeners
+  const rm = l0FocReduced();
+  L0_FOC_EL = wrap;
+  /* TRAJECTORY INFERENCE — kinematic endpoint prediction. Velocity is smoothed
+     exponentially across frames; above L0_FOC_SPD_MIN px/ms the focus point is
+     projected L0_FOC_LEAD ms ahead, blended in by speed so slow, precise
+     movement is completely unaffected. The UI leads the cursor, not lags it. */
+  L0_FOC_MOVE = (e) => {
+    const r = wrap.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+    /* R50 §2b — a FRESH entry (pointer arriving with the ramp fully decayed) snaps the
+       lens to where the cursor actually is, so the ramp-up happens in place instead of
+       sliding in from wherever the cursor left last time. */
+    const fresh = !L0_FOC_P.in && L0_FOC_ENG <= L0_FOC_ENG_EPS;
+    if (L0_FOC_P.x != null && L0_FOC_P.t) {
+      const dt = Math.max(1, Math.min(120, now - L0_FOC_P.t));
+      L0_FOC_P.vx += (((x - L0_FOC_P.x) / dt) - L0_FOC_P.vx) * 0.35;
+      L0_FOC_P.vy += (((y - L0_FOC_P.y) / dt) - L0_FOC_P.vy) * 0.35;
+    }
+    L0_FOC_P.x = x; L0_FOC_P.y = y; L0_FOC_P.t = now; L0_FOC_P.in = true;
+    const lead = (rm || L0_MAP_MODE === "BUBBLES" || L0_MAP_MODE === "TILT") ? 0 : 1;
+    const sp = Math.sqrt(L0_FOC_P.vx * L0_FOC_P.vx + L0_FOC_P.vy * L0_FOC_P.vy);
+    const blend = lead * Math.max(0, Math.min(1, (sp - L0_FOC_SPD_MIN) / L0_FOC_SPD_RNG));
+    L0_FOC_P.tx = x + L0_FOC_P.vx * L0_FOC_LEAD * blend;
+    L0_FOC_P.ty = y + L0_FOC_P.vy * L0_FOC_LEAD * blend;
+    if (fresh) { L0_FOC_P.fx = null; L0_FOC_P.fy = null; }   // next step seeds the lens here
+    if (L0_MAP_MODE === "TILT") l0FocTiltApply();
+    else if (rm) {                       // reduced motion: no loop, no ramp — paint on demand
+      L0_FOC_ENG = 1; L0_FOC_P.fx = L0_FOC_P.tx; L0_FOC_P.fy = L0_FOC_P.ty;
+      renderL0Focus();
+    }
+  };
+  wrap.addEventListener("pointermove", L0_FOC_MOVE);
+  L0_FOC_OUT = () => {
+    /* fx/fy are DELIBERATELY kept: the ramp-out fades the distortion away at the last
+       focus point. Nulling them (pre-R50) is exactly what made the exit snap. */
+    L0_FOC_P.in = false; L0_FOC_P.vx = L0_FOC_P.vy = 0;
+    if (L0_MAP_MODE === "TILT") l0FocTiltApply();
+    else if (rm) { L0_FOC_ENG = 0; L0_FOC_P.fx = L0_FOC_P.fy = null; renderL0Focus(); }
+  };
+  wrap.addEventListener("pointerleave", L0_FOC_OUT);
+  if (L0_MAP_MODE !== "TILT") {          // TILT cards carry data-act themselves
+    L0_FOC_CLICK = (e) => {
+      const r = wrap.getBoundingClientRect();
+      l0FocPin(l0FocHit(e.clientX - r.left, e.clientY - r.top));
+    };
+    wrap.addEventListener("click", L0_FOC_CLICK);
+  }
+  if (rm || L0_MAP_MODE === "TILT") return;   // no springs, no loop
+  L0_FOC_ENG = 0; L0_FOC_ENGT = 0;            // R50 §2b — every render starts disengaged
+  const loop = (ts) => {
+    L0_FOC_RAF = null;
+    if (LAYER0_TAB !== "MAP" || L0_MAP_MODE === "GRID" || !el("l0foc")) return;   // tab/mode left / element gone → the loop ENDS
+    /* R50 §2b — ONE engagement/lens step per frame, in the ONE existing rAF loop. */
+    l0FocEngStep(ts || ((window.performance && performance.now) ? performance.now() : Date.now()));
+    renderL0Focus();
+    L0_FOC_RAF = requestAnimationFrame(loop);
+  };
+  L0_FOC_RAF = requestAnimationFrame(loop);
+}
+/* feed tick: canvas modes repaint themselves 60×/s off the live rows, so only
+   TILT's DOM needs patching — and it is patched in place, never rebuilt, so the
+   cards never jump out from under the cursor. */
+function l0FocusTick() {
+  if (LAYER0_TAB !== "MAP" || L0_MAP_MODE !== "TILT") return;
+  for (const r of l0FocRows()) {
+    const card = el("l0tc_" + r.t); if (!card) continue;
+    const v = l0MapChg(r);
+    card.style.background = heatColorChg(v);
+    const cc = el("l0tcc_" + r.t);
+    if (cc) cc.textContent = (v != null && isFinite(v)) ? fmtC(v) : "—";
+  }
+}
+/* R49 §1 — the cursor-mode hint, now a tail on the ONE shared control row. GRID has
+   no cursor behaviour, so it says nothing rather than something untrue. */
+function l0MapHint() {
+  if (L0_MAP_MODE === "GRID") return "";
+  return l0FocCoarse() ? "touch · static grid (cursor effects need a pointer)"
+    : l0FocReduced() ? "reduced motion · static" : "move the cursor · click to pin";
+}
+const L0_TABS = ["MAP", "ROTATION", "RELATIVE"];
+function l0TabsHTML() {
+  return '<div class="sc-soctabs" role="tablist">' + L0_TABS.map((k) =>
+    '<button class="sc-soctab' + (k === LAYER0_TAB ? " is-on" : "") + '" role="tab" aria-selected="' +
+    (k === LAYER0_TAB) + '" data-act="l0tab" data-tab="' + k + '">' + k + "</button>").join("") + "</div>";
+}
+/* R49 §2 — THE ONE CONTROL ROW.  Alan: "the timeframes on the rotation — we should
+   be able to apply them on ALL of them; it's scattered."
+   The TF chips used to be built INSIDE each tab's body, so they moved, duplicated
+   and disappeared depending on where you were. They are now hoisted out and rendered
+   ONCE, in #l0ctl, directly under the tab row and above the body — one row, always
+   in the same place, driving whichever tab is active (MAP colours by it, ROTATION
+   and RELATIVE run their series off it).
+   Everything after the separator is the ACTIVE TAB's own control and nothing else:
+     MAP       Mode  · GRID FISHEYE DOCK BUBBLES TILT (+ the cursor hint)
+     RELATIVE  Window · window LENGTH in bars — not a timeframe, which is exactly why
+               it stays with RELATIVE instead of being hoisted
+     ROTATION  the ▶/⏸/⟲ transport + the honest "as of" stamp
+   So there is exactly ONE chip row on screen at any time — never a chip row nested
+   inside a chip row. Same .sc-l0chip language, no inline onclick — data-act only. */
+function l0CtrlRowHTML() {
+  let h = '<div class="sc-l0rng"><span class="sc-l0rng__lbl">TF</span>' +
+    L0_TF_DEF.map((d) => '<button class="sc-l0chip' + (d.k === L0_TF ? " is-on" : "") +
+      '" data-act="l0tf" data-tf="' + esc(d.k) + '" title="apply ' + esc(d.l) + ' to every Layer-0 view">' + d.l + "</button>").join("");
+  if (LAYER0_TAB === "MAP") {
+    const hint = l0MapHint();
+    h += '<span class="sc-l0rng__sep"></span><span class="sc-l0rng__lbl">Mode</span>' +
+      L0_MAP_MODES.map((m) => '<button class="sc-l0chip' + (m === L0_MAP_MODE ? " is-on" : "") +
+        '" data-act="l0fmode" data-m="' + m + '" title="' + esc(L0_MAP_TIP[m] || "") + '">' + m + "</button>").join("") +
+      (hint ? '<span class="sc-l0asof">' + esc(hint) + "</span>" : "");
+  }
+  if (LAYER0_TAB === "RELATIVE") {
+    const a = L0_REL_WIN[L0_TF] || L0_REL_WIN.D;
+    h += '<span class="sc-l0rng__sep"></span><span class="sc-l0rng__lbl">Window</span>' +
+      a.map((w, i) => '<button class="sc-l0chip' + (i === Math.min(L0_REL_I, a.length - 1) ? " is-on" : "") +
+        '" data-act="l0rng" data-i="' + i + '">' + w[0] + "</button>").join("");
+  }
+  /* R45 — RRG transport: ▶ plays the rotation forward across the last L0_PLAY_SPAN
+     bars, ⏸ stops where it is, ⟲ returns to live. The "as of" stamp is the honest
+     bar the tail currently ends on — never hidden while scrubbing. */
+  if (LAYER0_TAB === "ROTATION") {
+    h += '<span class="sc-l0rng__sep"></span>' +
+      '<button class="sc-l0chip' + (L0_PLAY ? " is-on" : "") + '" data-act="l0play" title="play the rotation">' +
+        (L0_PLAY ? "&#10073;&#10073; PAUSE" : "&#9654; PLAY") + "</button>" +
+      (L0_RRG_AT != null ? '<button class="sc-l0chip" data-act="l0live" title="back to the newest bar">&#8635; LIVE</button>' : "") +
+      '<span class="sc-l0asof" id="l0asof">' + esc(l0AsOfLabel()) + "</span>";
+  }
+  return h + "</div>";
+}
+/* R45 — RRG transport. Play walks the tail end forward one bar at a time and
+   redraws ONLY the canvas (never the whole body — that would rebuild the chip row
+   under the cursor mid-animation). The stamp is patched in place. On reaching the
+   newest bar it stops and parks on live. */
+function l0PlayStop() {
+  if (L0_PLAY) { clearInterval(L0_PLAY); L0_PLAY = null; }
+}
+function l0PlayToggle() {
+  if (L0_PLAY) { l0PlayStop(); paintL0Body(); return; }
+  const D = l0Ds(), ds = D && D.closes, b = ds && ds[L0_BENCH];
+  if (!b || !b.times || b.times.length < 4) return;           // honest no-op without data
+  const n = b.times.length;
+  if (L0_RRG_AT == null || L0_RRG_AT >= n - 1) L0_RRG_AT = Math.max(0, n - 1 - L0_PLAY_SPAN);
+  L0_PLAY = setInterval(() => {
+    L0_RRG_AT++;
+    const stamp = el("l0asof"); if (stamp) stamp.textContent = l0AsOfLabel();
+    renderL0RRG();
+    if (L0_RRG_AT >= n - 1) { l0PlayStop(); L0_RRG_AT = null; paintL0Body(); }
+  }, L0_PLAY_MS);
+  paintL0Body();
+}
+/* the timestamp of the bar the RRG tail currently ends on (or "live") */
+function l0AsOfLabel() {
+  const D = l0Ds(), ds = D && D.closes, b = ds && ds[L0_BENCH];
+  if (!b || !b.times || !b.times.length) return "";
+  const n = b.times.length;
+  if (L0_RRG_AT == null) return "live · " + l0Stamp(b.times[n - 1]);
+  const i = Math.max(0, Math.min(L0_RRG_AT, n - 1));
+  return "as of " + l0Stamp(b.times[i]) + " · −" + (n - 1 - i) + " bars";
+}
+function l0Stamp(sec) {
+  if (sec == null) return "—";
+  const d = new Date(sec * 1000);
+  const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return (L0_TF === "D" || L0_TF === "W") ? day
+    : day + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+/* R50 §3 — FULLSCREEN ON THE VISUALS (Alan: "none of this has a fullscreen thing").
+   EVERY Layer-0 view header now carries the hub's ONE fullscreen control — the same
+   data-act="secfs" button every other panel uses (SECFS_BTN0 → toggleSecFs). No second
+   mechanism was invented: the only change on the JS side is that .sc-layer0 joined the
+   closest() list in the secfs handler, so the panel that pins is the whole Layer-0
+   stack (compare strip → tabs → control row → body). Because the button lives in the
+   BODY header and SECFS holds the STACK, switching MAP/ROTATION/RELATIVE or a mode chip
+   while fullscreen keeps the fullscreen — the node holding .sc-secfs is never rebuilt.
+   Works identically in the dashboard pane and in the full-width SCENES room. */
+function l0BodyHTML() {
+  const head = (lbl) => '<div class="sc-heathead"><span class="sc-heathead__lbl">' + lbl + "</span>" +
+    '<span class="sc-heathead__ctrls">' + SECFS_BTN0 + "</span></div>";
+  /* R49 §1 — MAP. One room, five ways of drawing the SAME cohort: GRID is the
+     untouched heatmap renderer (heatmapHTML + sizeHeatTiles, 5px tile corners — the
+     one deliberate exception to the square-corner law); the other four are R47's
+     cursor-driven focus+context views. All five run off the LIVE BOARD ROWS, so the
+     room renders immediately and never sits in a loading state; only the TF colour
+     basis arrives asynchronously, and until it does the header says "session %chg". */
+  if (LAYER0_TAB === "MAP") {
+    l0MapSync();
+    const rows = l0FocRows();
+    const h = head("MAP · <b>" + esc(L0_MAP_MODE) + "</b> · " + rows.length + " tickers · <b>" +
+      esc(S.tq ? "search" : S.coh) + "</b> · sorted by mkt cap · " + l0MapBasis(rows.length));
+    if (!rows.length) return h + '<div class="sc-l0note">no tickers in this scope</div>';
+    if (L0_MAP_MODE === "GRID") return h + heatmapHTML(l0MapChg);
+    const body = (L0_MAP_MODE === "TILT") ? l0FocTiltHTML(rows) : '<canvas id="l0foc"></canvas>';
+    return h + '<div class="sc-l0cv">' + body + "</div>";
+  }
+  const def = l0TfDef(), D = l0Ds();
+  /* honest states — the shared control row above stays live so the timeframe can be
+     changed while a pull is in flight or after one failed. Nothing is synthesised. */
+  if (!D) {
+    const h = (LAYER0_TAB === "ROTATION")
+      ? "ROTATION · <b>RRG</b> · 11 sectors vs " + L0_BENCH + " · " + def.l
+      : "RELATIVE · <b>% change</b> · rebased to 0% at the left edge · " + def.l;
+    const note = L0_ERR[L0_TF]
+      ? '<div class="sc-l0note is-err">db series unavailable on ' + esc(def.l) + " — " + esc(L0_ERR[L0_TF]) + "</div>"
+      : '<div class="sc-l0note">loading ' + esc(def.l) + " closes from ohlcv_history…</div>";
+    return head(h) + note;
+  }
+  const kept = L0_SECTORS.filter((s) => D.closes[s.t]).length;
+  const drop = (D.thin || []).filter((x) => x !== L0_BENCH);
+  const dropNote = drop.length
+    ? " · <b>" + drop.length + " dropped</b> (thin " + esc(def.l) + " history: " + esc(drop.join(" ")) + ")"
+    : "";
+  if (LAYER0_TAB === "ROTATION") {
+    return head("ROTATION · <b>RRG</b> · " + kept + " sectors vs " + L0_BENCH + " · " + esc(def.l) +
+        " · " + L0_TAIL_PTS + "-bar tail" + dropNote) +
+      '<div class="sc-l0cv"><canvas id="l0rrg"></canvas></div>';
+  }
+  const w = l0RelWin();
+  return head("RELATIVE · <b>% change</b> · " + kept + " sectors vs " + L0_BENCH + " · rebased to 0% at the left edge · " +
+      esc(def.l) + " · last " + w[1] + " bars (" + esc(w[0]) + ")" + dropNote) +
+    '<div class="sc-l0cv"><canvas id="l0rel"></canvas></div>';
+}
+/* repaint the Layer-0 surface (tab switch / tf switch / window switch / data arrival).
+   R49 §2 — the shared control row lives OUTSIDE #l0body, so it is repainted here as
+   its own node: one row, rebuilt in place, never duplicated into a tab body. */
+function paintL0Body() {
+  const c = el("l0ctl"); if (c) c.innerHTML = l0CtrlRowHTML();
+  const b = el("l0body"); if (!b) return;
+  b.innerHTML = l0BodyHTML();
+  mountL0Body();
+}
+/* per-render wiring: heat sizing OR canvas draw + a resize observer that is always
+   torn down first, so nothing accumulates across the many Layer-0 re-renders. */
+function mountL0Body() {
+  l0FocusStop();      // R47 — MAP's cursor rAF + pointermove/leave/click die FIRST, every single render
+  if (L0_RO) { try { L0_RO.disconnect(); } catch (e) {} L0_RO = null; }
+  if (L0_WIN) { window.removeEventListener("resize", L0_WIN); L0_WIN = null; }
+  /* R45 — leaving ROTATION (tab switch, tf switch, pin a ticker) always kills the
+     transport; a timer redrawing a canvas that no longer exists is a leak. */
+  if (LAYER0_TAB !== "ROTATION") { l0PlayStop(); L0_RRG_AT = null; }
+  if (L0_FIX) { clearInterval(L0_FIX); L0_FIX = null; }        // R45b — never stack watchdogs
+  if (LAYER0_TAB === "MAP") {
+    l0MapSync();                                                          // R49 §2 — resolve/kick the batched TF series for this cohort
+    if (L0_MAP_MODE === "GRID") { wireHeatSizing(); return; }             // R49 §1 — the heat path, unchanged
+    if (!l0FocRows().length) return;                                      // honest note state — no surface to mount
+  } else if (!l0Ds()) { l0LoadData(L0_TF); return; }                      // no canvas in the DOM while loading/failed
+  /* R44 canvas-sizing fix — NEVER size synchronously during innerHTML assembly. The
+     first pass runs on rAF (element in the DOM, layout settled); if the box is still
+     0×0 the renderer reports false and we re-arm for up to ~20 frames. After that the
+     ResizeObserver + window resize keep width/height honest for the element's life. */
+  /* R45 FIX (Alan: "its like tiny doesnt fill its home … i believe it is a lie") —
+     the RRG was real (DB-wired, math verified) but NEVER got its first successful
+     draw: the rAF chain ran while the pane was still 0-height mid-swap, burned all
+     20 frames in ~330 ms, and the ResizeObserver's initial callback fired at 0 too,
+     so the canvas kept its 300×150 default attrs stretched into a 661×315 box —
+     a tiny, blurry, half-empty chart that reads as fake. Calling renderL0RRG() by
+     hand on the live page returned true and snapped it to 1454×693, proving the
+     renderer/data were fine and only the retry gave up too early.
+     Fix: retry on a TIMER (not frames) until the box is genuinely non-zero, up to
+     ~4 s, and let the ResizeObserver re-arm the countdown on any real size change. */
+  let tries = 0, timer = null;
+  const draw = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    const ok = (LAYER0_TAB === "ROTATION") ? renderL0RRG()
+             : (LAYER0_TAB === "MAP")      ? renderL0Focus()
+             : renderL0Rel();
+    if (!ok && tries++ < 80) timer = setTimeout(draw, 50);   // 80 × 50 ms ≈ 4 s of patience
+    return ok;
+  };
+  requestAnimationFrame(draw);
+  /* R45b WATCHDOG — the honest fix. Chasing the exact re-render race cost two passes:
+     the draw provably works when invoked (canvas snaps 300×150 → 1454×693) but some
+     later repaint swaps in a fresh <canvas> that misses its draw, leaving the default
+     300×150 attrs stretched across a 661×315 box — the "tiny, doesn't fill its home"
+     chart. So instead of guessing which repaint, we assert the invariant: a canvas
+     whose backing store does not match its CSS box is WRONG, and gets redrawn. Cheap
+     (one cadence tick, compares two numbers, acts only on mismatch) and immune to
+     whatever future repaint path appears.
+     R50 §3 FIX — the watchdog asserted the WIDTH ONLY. That hole was invisible until
+     Layer 0 got its own ⛶: fullscreening the SCENES room changes the canvas HEIGHT by
+     ~40% while leaving the width essentially untouched, so the invariant it claims to
+     protect ("backing store matches the box") was never actually checked on the axis
+     that moved. Measured live at 966px wide: box 380px → 273px tall, backing store left
+     at 836 device px against a wanted 601. The rAF loop and the ResizeObserver both fix
+     this within a frame in a VISIBLE tab — but the watchdog exists precisely for when
+     they do not fire, so it now asserts BOTH dimensions. */
+  if (L0_FIX) { clearInterval(L0_FIX); L0_FIX = null; }
+  L0_FIX = setInterval(() => {
+    /* R49 §5 — Layer 0 now lives in TWO places (the dashboard right pane and the
+       full-width SCENES room). Whichever one armed this watchdog, the moment its
+       body leaves the DOM the watchdog must die — otherwise leaving the room leaves
+       a 400 ms timer running forever. */
+    if (!el("l0body")) { clearInterval(L0_FIX); L0_FIX = null; return; }
+    if (LAYER0_TAB === "MAP" && L0_MAP_MODE === "GRID") { clearInterval(L0_FIX); L0_FIX = null; return; }
+    const cv = el(LAYER0_TAB === "ROTATION" ? "l0rrg" : LAYER0_TAB === "MAP" ? "l0foc" : "l0rel");
+    if (!cv || !cv.parentNode) return;
+    const r = cv.parentNode.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;                    // pane collapsed — nothing to assert
+    const dpr = window.devicePixelRatio || 1;
+    const wantW = Math.round(r.width * dpr), wantH = Math.round(r.height * dpr);
+    if (Math.abs(cv.width - wantW) > 2 || Math.abs(cv.height - wantH) > 2) { tries = 0; draw(); }
+  }, 400);
+  L0_WIN = () => { tries = 0; draw(); };
+  window.addEventListener("resize", L0_WIN);
+  const wrap = document.querySelector("#l0body .sc-l0cv");
+  if (wrap && window.ResizeObserver) {
+    L0_RO = new ResizeObserver((ents) => {
+      const r = ents && ents[0] && ents[0].contentRect;
+      if (r && (r.width < 1 || r.height < 1)) return;        // ignore the 0×0 initial fire
+      tries = 0; draw();
+    });
+    L0_RO.observe(wrap);
+  }
+  if (LAYER0_TAB === "MAP" && L0_MAP_MODE !== "GRID") l0FocusWire();   // R47 — ONE pointermove + ONE rAF, both killed by l0FocusStop() above
+}
+/* R49 §5 — FULL TEARDOWN. Layer 0 is mounted in two places now, and either one can be
+   blown away wholesale (a room switch replaces #main; renderLeftPanel replaces the
+   right pane). mountL0Body() only tears down when it is about to re-mount, so this is
+   the explicit "Layer 0 is going away entirely" path: every rAF, interval, observer
+   and window listener it ever installed is dropped here. */
+function l0Stop() {
+  l0FocusStop();
+  l0PlayStop(); L0_RRG_AT = null;
+  if (L0_FIX) { clearInterval(L0_FIX); L0_FIX = null; }
+  if (L0_RO)  { try { L0_RO.disconnect(); } catch (e) {} L0_RO = null; }
+  if (L0_WIN) { window.removeEventListener("resize", L0_WIN); L0_WIN = null; }
+  if (HEAT_RO)  { try { HEAT_RO.disconnect(); } catch (e) {} HEAT_RO = null; }
+  if (HEAT_WIN) { window.removeEventListener("resize", HEAT_WIN); HEAT_WIN = null; }
+}
+/* THE LAYER-0 STACK, identical wherever it is mounted (dashboard right pane OR the
+   full-width SCENES room): cohort compare strip → three tabs → the ONE shared
+   control row → the active tab's body. Every id inside is unique per mount and only
+   one mount is ever in the DOM at a time, so the renderers need no awareness of
+   which room they are in — they size to their container, as they always have. */
+function layer0HTML() {
+  return '<div class="sc-layer0" id="layer0">' +
+    '<div id="cohCompare">' + cohortCompareStripHTML() + "</div>" +
+    l0TabsHTML() +
+    '<div class="sc-l0ctlwrap" id="l0ctl">' + l0CtrlRowHTML() + "</div>" +
+    '<div class="sc-l0body" id="l0body">' + l0BodyHTML() + "</div>" +
+  "</div>";
+}
+/* R49 §5 — SCENES. Alan: the dashboard right pane is only ~330px tall, which is too
+   small for these visuals. This room is the SAME three views at full width / full
+   height — the exact same renderers, the exact same shared TF row, zero duplicated
+   drawing logic. It adds only the cohort strip (so the room tracks the active cohort
+   the way NEWS and EVENTS do) and a container that is the whole screen. */
+function scenesRoomHTML() {
+  return '<section class="sc-scenes" aria-label="Scenes">' +
+    '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
+    layer0HTML() +
+  "</section>";
+}
+/* the SCENES room's live tick — the job updateBoard() does for the dashboard pane,
+   minus the board (there isn't one here). */
+function scenesTick() {
+  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+  if (LAYER0_TAB !== "MAP") return;
+  l0MapSync();
+  const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(l0MapChg); wireHeatSizing(); }
+  l0FocusTick();          // TILT's cards are patched in place; the canvas modes repaint themselves
+}
 function leftPanelInnerHTML() {
   if (LEFT_HEAT) return heatHeadHTML() + heatmapHTML();   // #133 — whole-scope heatmap replaces the single-ticker view
+  if (LEFT_STATE !== "PINNED" || !LEFT_T) return layer0HTML();   // R41 — Layer 0 is the no-ticker default
   return leftHeadHTML(LEFT_T) + leftBodyHTML();
 }
 /* ident line for the left panel — like identBarHTML but without a ← back button
@@ -3700,9 +5716,19 @@ function renderLeftPanel() {
   const ib = el("coIdentBar");
   if (ib) ib.innerHTML = leftIdentHTML(identBarData());
   lp.innerHTML = leftPanelInnerHTML();
+  /* R50 §3 — this line just destroyed the subtree, and .sc-layer0 can be the node
+     currently holding .sc-secfs. A detached fullscreen target leaves body.secfs stuck
+     on with nothing pinned, so drop it here the same way the room mount does. */
+  if (SECFS && !SECFS.isConnected) clearSecFs();
   /* COHORT ▾ open/close + SAVE are handled by the self-contained document-level
      controller at the foot of the file (delegated on #cohChip / .sc-cohopt) —
      no per-render binding needed here. */
+  /* R43 §1/§3 — post-paint wiring for the right pane's non-company views:
+     Layer 0 mounts its active tab (heat sizing OR the RRG/relative canvas), and the
+     standalone #133 heat view gets the same deterministic tile sizing. */
+  if (el("l0body")) mountL0Body();
+  else if (LEFT_HEAT) wireHeatSizing();
+  else l0Stop();     // R49 §5 — pinning a company blows Layer 0 out of the pane: kill its rAF/interval/observers
   if (S.coTab === "GEIGER" && S.coData && S.coData.t === LEFT_T) geigerSummaryMount();
   else if (S.coTab === "CHART" && S.coData && S.coData.t === LEFT_T) scChartWire(el("coSlot"));
   if (LEFT_STATE === "AUTO") startAutoBar();
@@ -3792,14 +5818,16 @@ function rotateTick() {
   scheduleNextTick();
 }
 function startRotate() {
+  /* R41 §1 — the no-ticker default is now LAYER 0 (compare fan + heatmap), which
+     KILLS the auto-rotate default: this entry point no longer schedules the FAV
+     rotation. rotateTick/scheduleNextTick above are kept intact (unused) for a
+     future re-enable — Layer 0 simply never starts the timer. */
   clearRotate();
   LEFT_STATE = "AUTO";
-  const favs = favList();
-  if (!favs.length) { renderLeftPanel(); return; }  // no favorites → static empty AUTO panel
-  if (ROT_INDEX >= favs.length) ROT_INDEX = 0;
+  LEFT_T = null; S.focusT = null;
   S.coTab = "GEIGER";
-  loadLeft(favs[ROT_INDEX]);
-  scheduleNextTick();
+  syncBoardSel();                                   // drop the .sel row highlight
+  renderLeftPanel();                                // paints layer0HTML
 }
 /* pin the left panel to a ticker: stop motion, no re-render of the board. */
 function pinLeft(t) {
@@ -4293,10 +6321,127 @@ function ytFiltHTML() {
   h += '<button class="sc-ytf" data-act="ytrefresh" title="reload the feed from the database — shows what the 5-min cadence already pulled (subs + ticker searches); does NOT call YouTube, no quota used">↻ Refresh</button>';
   return h;
 }
+function ytModeBarHTML() {   // FIX (Alan: "what's the cards/raw toggle, I don't see it") — was
+  // margin-left:auto'd onto the END of the wrapping ticker-chip filter row (sc-yt__filt),
+  // so on any real ticker-chip count it wrapped onto its own line or got buried after
+  // $TSM/REFRESH — invisible, not "cached". Now its own full-width labeled bar, always
+  // the first thing under the sub-tab strip, before the ticker filter chips.
+  const raw = S.ytView === "RAW";
+  return '<div class="sc-ytmodebar" id="ytModeBar"><span class="sc-ytmodebar__lbl">VIEW</span>' +
+    '<button class="sc-ytmode__b' + (raw ? "" : " is-on") + '" data-act="ytviewmode" data-v="CARDS">Cards</button>' +
+    '<button class="sc-ytmode__b' + (raw ? " is-on" : "") + '" data-act="ytviewmode" data-v="RAW">Raw (sentiment table)</button></div>';
+}
 function ytFeedHTML() {   // no title line — the active YOUTUBE sub-tab is the label; Edit lives in the sub-tab row
+  const raw = S.ytView === "RAW";
   return '<div class="sc-yt">' +
+    ytModeBarHTML() +
     '<div class="sc-yt__filt" id="ytFilt">' + ytFiltHTML() + "</div>" +
-    '<div class="sc-yt__grid" id="ytGrid"><div class="soon">loading youtube feed…</div></div></div>';
+    '<div class="sc-yt__grid' + (raw ? " is-raw" : "") + '" id="ytGrid"><div class="soon">loading youtube feed…</div></div></div>';
+}
+/* RAW TABLE — StockTwits/Twitter-style raw feed of the YOUTUBE table itself (Alan: "raw
+   material style but clean"). YouTube titles don't contain literal #hashtags (that's an
+   X/Twitter convention) — Alan's correction: WE derive them from the title text ourselves.
+   So this is a topic extractor, not a regex for "#": (1) every real ticker already tagged
+   on the row becomes a $TICKER-style hashtag for free, (2) a curated finance-topic keyword
+   list is matched against the title and any hit becomes a hashtag. Both bullish/bearish and
+   this are plain keyword heuristics on the title text, explicitly flagged as that — not an
+   AI read. */
+/* FIX (29 Jul, seen live): YouTube titles arrive HTML-ENTITY-ENCODED from the feed
+   ("Apple &amp; More"). esc() then escaped the & a second time, so the raw table
+   literally printed "&amp;". Decode once on the way in, escape once on the way out. */
+function ytDecode(s) {
+  return String(s == null ? "" : s)
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");   // MUST be last — otherwise "&amp;lt;" double-decodes
+}
+function ytTitle(r) { return ytDecode(r && r.title); }
+const YT_TOPIC_WORDS = ["IPO", "EARNINGS", "GUIDANCE", "FED", "RATE CUT", "RATE HIKE", "INFLATION", "RECESSION",
+  "AI", "CHIPS", "SEMICONDUCTOR", "MERGER", "ACQUISITION", "BUYOUT", "LAYOFFS", "RECALL", "LAWSUIT", "BUYBACK",
+  "DIVIDEND", "STOCK SPLIT", "SHORT SQUEEZE", "SEC", "FDA", "TARIFF", "CHINA", "CRYPTO", "BITCOIN", "OPTIONS",
+  "DEBT", "BANKRUPTCY", "SPINOFF", "PARTNERSHIP", "OUTAGE", "HACK", "DATA BREACH",
+  /* added after reading the real feed: these actually occur in titles */
+  "PREMARKET", "PRE-MARKET", "LIVE STREAM", "DAY TRADING", "PORTFOLIO", "ETF", "DIVIDENDS",
+  "BUBBLE", "SELLOFF", "CRASH", "RALLY", "BREAKOUT", "SUPPORT", "RESISTANCE", "VALUATION",
+  "NASDAQ", "S&P", "DOW", "JOBS REPORT", "CPI", "GDP", "POWELL", "TREASURY", "YIELD",
+  "DATA CENTER", "CLOUD", "ROBOTAXI", "EV", "QUANTUM", "NUCLEAR", "URANIUM", "GOLD", "OIL"];
+/* Alan's rule: WE derive the tags from the text. But some creators DO put literal
+   #hashtags in the title (seen live: "#stocks #market #nvidia #bitcoin #investing").
+   Throwing those away was wasteful — they are the creator's own labelling, free signal.
+   So: literal #tags in the text + tickers on the row + curated topic hits, merged. */
+function ytExtractHashtags(r) {
+  const title = ytTitle(r);
+  const up = title.toUpperCase();
+  const tags = new Set();
+  ytTickers(r).forEach((t) => tags.add(t));                                  // real tickers → free hashtags
+  (title.match(/#[A-Za-z][A-Za-z0-9_]{1,24}/g) || [])                        // creator's own literal hashtags
+    .forEach((h) => tags.add(h.slice(1).toUpperCase()));
+  YT_TOPIC_WORDS.forEach((w) => { if (up.indexOf(w) !== -1) tags.add(w.replace(/[\s-]+/g, "")); });
+  return Array.from(tags);
+}
+/* Widened after reading the real feed: 145 of 195 rows scored "—" because the old
+   12-word lists missed the vocabulary these channels actually use. Still an honest
+   keyword heuristic — NOT an AI read — and still returns "—" when genuinely mixed
+   or neutral (a headline like "July 29 Post Market Recap" SHOULD be undetermined). */
+const YT_BULL_WORDS = ["buy", "breakout", "rally", "surge", "moon", "upgrade", "bullish", "long", "squeeze",
+  "beat", "soar", "rip", "boom", "explode", "skyrocket", "undervalued", "opportunity", "accumulate",
+  "strong", "record high", "all-time high", "outperform", "winner", "gains", "up big", "recovery",
+  "rebound", "comeback", "momentum", "green", "pump", "double", "best stock", "top pick", "load up"];
+const YT_BEAR_WORDS = ["sell", "crash", "dump", "downgrade", "bearish", "short", "warning", "plunge",
+  "miss", "collapse", "tank", "bubble", "overvalued", "selloff", "sell-off", "drop", "fall", "falls",
+  "danger", "risk", "trouble", "worst", "loser", "losses", "down big", "correction", "bear market",
+  "avoid", "trap", "red flag", "disaster", "panic", "fear", "slump", "sinks", "plummet", "wrong"];
+function ytHeuristicSentiment(title) {
+  const t = ytDecode(title).toLowerCase();
+  let bull = 0, bear = 0;
+  YT_BULL_WORDS.forEach((w) => { if (t.indexOf(w) !== -1) bull++; });
+  YT_BEAR_WORDS.forEach((w) => { if (t.indexOf(w) !== -1) bear++; });
+  if (bull > bear) return "BULLISH";
+  if (bear > bull) return "BEARISH";
+  return "—";                                     // tie or no hit = honestly undetermined
+}
+function ytRawRowHTML(r) {
+  const tags = ytExtractHashtags(r);
+  const tks = ytTickers(r);
+  const sent = ytHeuristicSentiment(r.title);
+  const ttl = ytTitle(r);   // entity-decoded — no more literal "&amp;" in the feed
+  const sentCls = sent === "BULLISH" ? "bull" : sent === "BEARISH" ? "bear" : "und";
+  return '<div class="sc-ytraw__row" data-act="ytopenraw" data-vid="' + esc(r.video_id) + '">' +
+    '<span class="sc-ytraw__c ts">' + esc(ytAgo(r.published_at)) + "</span>" +
+    '<span class="sc-ytraw__c auth">' + esc(r.channel || "") + "</span>" +
+    '<span class="sc-ytraw__c ttl">' + esc(ttl) + "</span>" +
+    '<span class="sc-ytraw__c tks">' + (tks.length ? tks.map((t) => "$" + esc(t)).join(" ") : "—") + "</span>" +
+    '<span class="sc-ytraw__c tags">' + (tags.length ? tags.map((h) => "#" + esc(h)).join(" ") : "—") + "</span>" +
+    '<span class="sc-ytraw__c sent ' + sentCls + '">' + sent + "</span></div>";
+}
+/* SUMMARY strip above the raw table — cheap rollup of the same heuristic, real counts,
+   no fake precision (Alan: "little YouTube feed sentiment, whatever you wanna call it"). */
+function ytRawSummaryHTML(rows) {
+  let bull = 0, bear = 0, und = 0; const tagCounts = {};
+  rows.forEach((r) => {
+    const s = ytHeuristicSentiment(r.title);
+    if (s === "BULLISH") bull++; else if (s === "BEARISH") bear++; else und++;
+    ytExtractHashtags(r).forEach((h) => { tagCounts[h] = (tagCounts[h] || 0) + 1; });
+  });
+  const topTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]).slice(0, 6);
+  return '<div class="sc-ytraw__sum">' +
+    '<span>' + rows.length + ' videos</span>' +
+    '<span class="bull">' + bull + ' bullish</span>' +
+    '<span class="bear">' + bear + ' bearish</span>' +
+    '<span class="und">' + und + ' undetermined</span>' +
+    (topTags.length ? '<span class="tags">top tags: ' + topTags.map((t) => "#" + esc(t)).join(" ") + "</span>" : "") +
+    "</div>";
+}
+function ytRawTableHTML(rows) {
+  if (!rows.length) return '<div class="sc-yt__empty">no videos in <b>' + esc(S.ytFilt) + "</b>.</div>";
+  return ytRawSummaryHTML(rows) + '<div class="sc-ytraw"><div class="sc-ytraw__head">' +
+    '<span class="sc-ytraw__c ts">TIME</span><span class="sc-ytraw__c auth">AUTHOR</span>' +
+    '<span class="sc-ytraw__c ttl">TITLE</span><span class="sc-ytraw__c tks">TICKERS</span>' +
+    '<span class="sc-ytraw__c tags">HASHTAGS</span><span class="sc-ytraw__c sent">SENTIMENT</span></div>' +
+    rows.map(ytRawRowHTML).join("") + "</div>";
 }
 function ytMatch(r) {
   const f = S.ytFilt;
@@ -4345,6 +6490,7 @@ function renderYT() {
     return;
   }
   YT_VIEW = YT_FEED.filter(ytMatch);                     // freeze the rendered order = player nav list
+  if (S.ytView === "RAW") { grid.innerHTML = ytRawTableHTML(YT_VIEW); return; }
   grid.innerHTML = YT_VIEW.length ? (ytContinueHTML() + YT_VIEW.map(ytCardHTML).join(""))
     : '<div class="sc-yt__empty">no videos in <b>' + esc(S.ytFilt) + "</b>.</div>";
 }
@@ -5038,9 +7184,12 @@ function geigerSummaryHTML() {
   return '<div class="gsum"><div class="gs-body">' +
     /* GEIGER composite */
     '<div class="gs-zG">' +
-      '<div class="gs-comp"><span class="gs-lab">Geiger Composite</span>' +
+      /* R41 §5a — the composite zone is a clickable PARENT (data-act=gscompkids):
+         it toggles the stacked per-family lines in .gs-kids just below. */
+      '<div class="gs-comp" data-act="gscompkids" title="toggle family breakdown"><span class="gs-lab">Geiger Composite</span>' +
         '<div class="gs-cgr" data-gs="cgr"></div>' +
         '<span class="gs-big" data-gs="comp"></span><span class="gs-st" data-gs="compst"></span></div>' +
+      '<div class="gs-kids" data-gs="compkids" style="display:none"></div>' +
       '<div class="gs-meterwrap">' +
         '<svg width="100%" height="100%" viewBox="0 0 340 240" preserveAspectRatio="xMidYMid meet" fill="none" style="max-height:150px">' +
           '<path d="M53.09,267.50 A135,135,0,1,1,286.91,267.50" stroke="rgba(255,255,255,.06)" stroke-width="10" stroke-linecap="round"/>' +
@@ -5058,15 +7207,27 @@ function geigerSummaryHTML() {
       '</div>' +
     '</div>' +
     /* TREND ladder */
+    /* R42 §5 — the ladder header is a PARENT toggle (data-act=gsladtoggle):
+       collapsed (default) = COMPACT ladder (price + 2 MAs above + 2 below +
+       compression band); expanded = the full ladder exactly as before. */
     '<div class="gs-zT">' +
-      '<div class="gs-zh"><span class="gs-d" style="background:var(--gs-trend)"></span><h2 style="color:var(--gs-trend)">Trend · daily ladder</h2></div>' +
+      '<div class="gs-zh" data-act="gsladtoggle" style="cursor:pointer" title="toggle compact / full ladder"><span class="gs-d" style="background:var(--gs-trend)"></span><h2 style="color:var(--gs-trend)"><span data-gs="ladcar">▸</span> Trend · daily ladder</h2></div>' +
       '<div class="gs-tv" data-gs="tv"></div>' +
+      '<div class="gs-more" data-act="gsladtoggle" data-gs="ladmore">▾ full ladder</div>' +
     '</div>' +
     /* INDICATORS 2x2 */
     '<div class="gs-zI">' +
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)">RSI · MTF</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="rsitable"></div></div>' +
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)">Williams %R</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="wprtable"></div></div>' +
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)">MACD · daily</div><div class="gs-hist" data-gs="macd"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span>22d</span></div></div>' +
+      /* R41 §5b — RSI/Williams headers are PARENT toggles: collapsed = 1D row only,
+         expanded = the full ladder (same table, filtered in buildGeigerSummary).
+         R50 §4 — the DEFAULT is now EXPANDED (GS_RSI_OPEN / GS_WPR_OPEN start true), so
+         the seed caret is ▾ and the ladder is on screen from the first paint. Both tiles
+         are byte-for-byte the same markup and both render through the same gsMtf() /
+         gs-mbar · gs-mfill · gs-mth bar language — Williams is never a lesser tile. */
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="rsi"><span data-gs="rsicar">▾</span> RSI · MTF</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="rsitable"></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="wpr"><span data-gs="wprcar">▾</span> Williams %R</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="wprtable"></div></div>' +
+      /* R41 §5c — MACD starts COLLAPSED: header + "now …" foot line only; the
+         histogram body shows on toggle (session-only JS flag, no persistence). */
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmacdtoggle"><span data-gs="macdcar">▸</span> MACD · daily</div><div class="gs-hist" data-gs="macd" style="display:none"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span data-gs="macd22">22d</span></div></div>' +
       '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-vol)">Volume</div><div class="gs-sub">3-ring · at-time / cum / session</div><div class="gs-volp" data-gs="vol"></div></div>' +
     '</div>' +
   '</div></div>';
@@ -5186,6 +7347,30 @@ function gsTrend(node, PRICE, MA){ if (!node) return; node.innerHTML = "";
 }
 
 let GS_BOUND = false;
+/* R41 §5 — parent/child stack flags (session-only, no persistence).
+   R50 §4 — RSI·MTF AND WILLIAMS %R NOW DEFAULT TO **EXPANDED**. Alan: "the Geiger ring
+   and the RSIs — they always hide the Williams … without the extra timeframes it's not
+   telling me anything more valuable than an actual chart. The info of the extra
+   timeframes was exactly the important thing."
+   R42 collapsed both tiles to their 1D row and called it "the preferred spec default".
+   That inverted the value: the multi-timeframe LADDER is the product. Both tiles now
+   open with every equalizer-active timeframe visible. The caret STAYS — the tile header
+   (and the "▾ +N tfs" line when collapsed) still toggles, so nothing was removed, only
+   the default flipped. Williams gets the identical treatment to RSI so it can never be
+   the one that quietly loses its rows. */
+let GS_KIDS = false, GS_RSI_OPEN = true, GS_WPR_OPEN = true, GS_MACD_OPEN = false;
+/* R42 §5 — trend-ladder parent/child (session-only, no persistence).
+   CHOSEN PATH: default = COMPACT (price + 2 nearest MAs above + 2 below). We did
+   NOT surgically edit gsTrend — it stays byte-identical and simply receives a
+   pre-filtered MA list, so the full-ladder render path carries zero new risk.
+   (Compression band still frames whatever tight levels survive the filter.) */
+let GS_LAD_OPEN = false;
+function gsCompactMAs(price, mas) {
+  if (price == null || !mas || mas.length <= 4) return mas;
+  const above = mas.filter((m) => m.v >= price).sort((a, b) => a.v - b.v).slice(0, 2);
+  const below = mas.filter((m) => m.v <  price).sort((a, b) => b.v - a.v).slice(0, 2);
+  return above.concat(below);
+}
 function buildGeigerSummary(d) {
   const root = document.querySelector("#coRailContent .gsum");
   if (!root || !d) return;
@@ -5208,20 +7393,62 @@ function buildGeigerSummary(d) {
   if (lm) lm.textContent = d.momentum == null ? "—" : gsSgn(d.momentum);
   if (lsr) lsr.textContent = d.structure == null ? "—" : gsSgn(d.structure);
 
-  /* RSI / Williams MTF — equalizer activeTfs filter · purple bars, green/red tips */
+  /* R41 §5a — composite children. Per-timeframe COMPOSITE data is NOT fetched
+     client-side (every composite_staged pull is tf=eq.D only), so per spec the
+     stack falls back to the three FAMILY lines (Trend/Mom/Struct — the values
+     already on d), each a flat geigerMiniHTML(v,1) fixed ±1 bar. No invented
+     numbers. TODO(data feed): per-TF composite rows would replace these. */
+  const kids = q("compkids");
+  if (kids) {
+    const krow = (k, v) => '<div class="gs-kidrow"><span class="gs-kidk">' + k + "</span>" + geigerMiniHTML(v, 1) +
+      '<span class="gs-kidv" style="color:' + (v != null ? gsTone(v) : "var(--mute)") + '">' + (v != null ? gsSgn(v) : "—") + "</span></div>";
+    kids.innerHTML = krow("TREND", d.trend) + krow("MOM", d.momentum) + krow("STRUCT", d.structure);
+    kids.style.display = GS_KIDS ? "flex" : "none";
+  }
+
+  /* RSI / Williams MTF — equalizer activeTfs filter · purple bars, green/red tips.
+     R41 §5b — collapsed shows ONLY the 1D row; expanded = full ladder.
+     R50 §4 — EXPANDED is now the DEFAULT for BOTH tiles. The two lines below are
+     deliberately identical in shape: whatever RSI does, Williams does. */
   const active = new Set(d.activeTfs && d.activeTfs.length ? d.activeTfs : GS_LADDER);
-  const rsiRows = (d.rsiMtf || []).filter(([tf]) => active.has(tf));
-  const wprRows = (d.wprMtf || []).filter(([tf]) => active.has(tf));
+  const only1D = (rows) => { const dd = rows.filter(([tf]) => tf === "1D"); return dd.length ? dd : rows.slice(0, 1); };
+  const rsiAll = (d.rsiMtf || []).filter(([tf]) => active.has(tf));
+  const wprAll = (d.wprMtf || []).filter(([tf]) => active.has(tf));
+  const rsiRows = GS_RSI_OPEN ? rsiAll : only1D(rsiAll);
+  const wprRows = GS_WPR_OPEN ? wprAll : only1D(wprAll);
+  const rcar = q("rsicar"); if (rcar) rcar.textContent = GS_RSI_OPEN ? "▾" : "▸";
+  const wcar = q("wprcar"); if (wcar) wcar.textContent = GS_WPR_OPEN ? "▾" : "▸";
   gsMtf(q("rsitable"), rsiRows, { mn:0, mx:100, lo:30, hi:70, loL:"30", hiL:"70" }, gsTipR, (v) => Math.round(v));
   gsMtf(q("wprtable"), wprRows, { mn:-100, mx:0, lo:-80, hi:-20, loL:"−80", hiL:"−20" }, gsTipW, (v) => Math.round(v));
+  /* R42 §4 (Alan thought the lines were DELETED) — collapsed still shows the live 1D
+     row, but now with an explicit "▾ +N tfs" caret under it so it reads as expandable,
+     not removed. The caret shares data-act=gsmtfkids with the tile header.
+     R50 §4 — this only renders once the operator has CHOSEN to collapse a tile; the
+     default is expanded, so on first paint hid === 0 for both and no caret is emitted. */
+  const gsMore = (node, open, allN, shownN, k) => { if (!node) return;
+    node.querySelectorAll(".gs-more").forEach((x) => x.remove());
+    const hid = allN - shownN;
+    if (!open && hid > 0) node.insertAdjacentHTML("beforeend",
+      '<div class="gs-more" data-act="gsmtfkids" data-k="' + k + '" title="expand all timeframes">▾ +' + hid + " tfs</div>");
+  };
+  gsMore(q("rsitable"), GS_RSI_OPEN, rsiAll.length, rsiRows.length, "rsi");
+  gsMore(q("wprtable"), GS_WPR_OPEN, wprAll.length, wprRows.length, "wpr");
 
-  /* MACD now-label */
+  /* MACD now-label. R41 §5c — collapsed = header + this "now … bearish/bullish"
+     line only (the one-liner); expanded shows the existing histogram. */
   const mn = q("macdnow");
   if (mn){ if (d.macd && d.macd.length){ const last = d.macd[d.macd.length-1]; mn.textContent = "now " + Math.round(last) + (last < 0 ? " · bearish" : " · bullish"); } else mn.textContent = ""; }
+  const mh = q("macd"); if (mh) mh.style.display = GS_MACD_OPEN ? "" : "none";
+  const m22 = q("macd22"); if (m22) m22.style.display = GS_MACD_OPEN ? "" : "none";
+  const mcar = q("macdcar"); if (mcar) mcar.textContent = GS_MACD_OPEN ? "▾" : "▸";
 
   /* draw the size-dependent SVGs once the rail has real dimensions */
+  /* R42 §5 — ladder caret + compact/full state */
+  const lcar = q("ladcar"); if (lcar) lcar.textContent = GS_LAD_OPEN ? "▾" : "▸";
+  const lmore = q("ladmore"); if (lmore) { lmore.textContent = GS_LAD_OPEN ? "▴ compact ladder" : "▾ full ladder";
+    lmore.style.display = (d.mas && d.mas.length > 4) ? "" : "none"; }
   const draw = () => {
-    gsTrend(q("tv"), d.price, d.mas);
+    gsTrend(q("tv"), d.price, GS_LAD_OPEN ? d.mas : gsCompactMAs(d.price, d.mas));
     gsMacdHist(q("macd"), d.macd);
     gsVolume(q("vol"), d);   // AREA C — pass full record (session rvol + board_volume rings)
   };
@@ -6401,14 +8628,16 @@ function earningsBlockHTML(d) {
   const fxAct = (v, isRev) => v == null ? '<span class="sc-ern__v dash">—</span>' : '<span class="sc-ern__v">' + esc(isRev ? fmtRev(v) : v.toFixed(2)) + "</span>";
   const spCell = (p) => p == null ? '<span class="sc-ern__v dash">—</span>'
     : '<span class="sc-ern__v sp" style="color:' + beatColor(p) + '">' + fmtSigned(p) + "</span>";
-  /* inline beat/miss word per row (green/red) — replaces the old dashed square */
-  const bmCell = (p) => p == null ? '<span class="sc-ern__bm"></span>'
-    : '<span class="sc-ern__bm ' + (p >= 0 ? "beat" : "miss") + '">' + (p >= 0 ? "beat" : "miss") + "</span>";
+  /* FIX (Alan, 29 Jul): the per-row "beat/beat" word column is GONE. It repeated the
+     information the surprise % already carries (which is colored green/red by
+     beatColor), twice per card, and it was eating a whole grid column — which is
+     what scrunched the decimals on wide numbers like MSFT's revenue. Card is now
+     exactly: EPS/REV × est · actual · surprise. Nothing else. */
   const metrics = reported
     ? '<div class="sc-ern__metrics">' +
-        '<span class="sc-ern__k"></span><span class="sc-ern__ch">est</span><span class="sc-ern__ch">actual</span><span class="sc-ern__ch">surprise</span><span class="sc-ern__ch"></span>' +
-        '<span class="sc-ern__k">EPS</span>' + fxEst(epsEst, false) + fxAct(epsAct, false) + spCell(epsSp) + bmCell(epsSp) +
-        '<span class="sc-ern__k">REV</span>' + fxEst(revEst, true) + fxAct(revAct, true) + spCell(revSp) + bmCell(revSp) +
+        '<span class="sc-ern__k"></span><span class="sc-ern__ch">est</span><span class="sc-ern__ch">actual</span><span class="sc-ern__ch">surprise</span>' +
+        '<span class="sc-ern__k">EPS</span>' + fxEst(epsEst, false) + fxAct(epsAct, false) + spCell(epsSp) +
+        '<span class="sc-ern__k">REV</span>' + fxEst(revEst, true) + fxAct(revAct, true) + spCell(revSp) +
       "</div>"
     : '<div class="sc-ern__metrics sc-ern__metrics--up">' +   // upcoming: estimates only — actual/surprise don't exist yet
         '<span class="sc-ern__k"></span><span class="sc-ern__ch">estimate</span>' +
@@ -6432,11 +8661,13 @@ function earningsBlockHTML(d) {
     if (allMiss) return mag >= 20 ? "STRONG MISS" : (mag >= 5 ? "MISS" : "INLINE");
     return "MIXED";   // one metric beat, the other missed
   }
-  const tagTxt = reported ? pastHighlightTag() : (d.streakTag || "");
-  const tagCls = reported
-    ? (/BEAT/.test(tagTxt) ? "beat" : (/MISS/.test(tagTxt) ? "miss" : "mixed"))
-    : "streak";
-  const tag = tagTxt ? '<div class="sc-ern__tag ' + tagCls + '">' + esc(tagTxt) + "</div>" : "";
+  /* FIX (Alan, 29 Jul): the STRONG BEAT / BEAT / MIXED / INLINE chip is removed from
+     REPORTED cards — it restated the surprise % that is already on the card, colored.
+     The streak tag on UPCOMING cards is kept: that one carries information the card
+     does NOT otherwise have (prior quarters' record). pastHighlightTag() is left
+     defined but unused so the streak path and its CSS stay intact. */
+  const tagTxt = reported ? "" : (d.streakTag || "");
+  const tag = tagTxt ? '<div class="sc-ern__tag streak">' + esc(tagTxt) + "</div>" : "";
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">◹ Release · 8-K Ex 99.1</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
@@ -6954,6 +9185,9 @@ function viewKey() {
        cohort board DOM/scroll persists across a company open; only #leftPanel
        is swapped (renderLeftPanel), never the whole #main. */
     case "DASHBOARD": case "COMPANY": return "DASH";
+    /* R49 §5 — SCENES keys on the scope like NEWS/EVENTS, so switching cohort (or
+       typing a ticker search) remounts the room against the new cohort. */
+    case "SCENES": return "SCENES|" + scope;
     case "NEWS": case "SOCIAL": return S.sec + "|" + scope;
     case "EVENTS": return "EVENTS|" + scope + "|" + S.calType;
     case "ECONOMIC": return "ECON";
@@ -6968,6 +9202,7 @@ function roomHTML() {
        swappable #leftPanel). afterMount() then loads the focused company into
        the left panel; the board is already live. */
     case "DASHBOARD": case "COMPANY": return dashboardHTML();
+    case "SCENES":    return scenesRoomHTML();   // R49 §5 — the same Layer-0 renderers, full width / full height
     case "NEWS":      return newsRoomHTML();
     case "SOCIAL":    return socialRoomHTML();   // AREA A — wired to social_sentiment (honest empty)
     case "ALERTS":    return parkedRoomHTML("ALERTS");
@@ -6991,6 +9226,7 @@ function sync() {
   updateMtabs(); updateCohrow(); updateLive();
   const key = viewKey();
   if (key !== mountedKey) {
+    l0Stop();          // R49 §5 — #main is about to be replaced: whatever Layer 0 had running stops HERE
     mountedKey = key; el("main").innerHTML = roomHTML(); afterMount();
     if (SECFS && !SECFS.isConnected) clearSecFs();   // R21 FIX B — defensive reset on remount
   }
@@ -7000,9 +9236,14 @@ function sync() {
      scope rendered a different way (per Alan: "heatmap needs to change according
      to cohort board tab selection"), so it must repaint on every cohort switch too. */
   else if (S.sec === "DASHBOARD" || S.sec === "COMPANY") { updateBoard(); if (LEFT_HEAT) renderLeftPanel(); }
+  else if (S.sec === "SCENES") scenesTick();   // R49 §5 — the SCENES room tracks the same feed
 }
 /* wired rooms pull their tables right after mount (honest "loading…" → data/empty) */
 function afterMount() {
+  /* R49 §5 — SCENES mounts the SAME Layer-0 surface the dashboard pane mounts; the
+     board feed is section-independent, so the rows are already live. RSI is lazily
+     filled because MAP's tier-3 cells print it. */
+  if (S.sec === "SCENES") { mountL0Body(); loadBoardRsi(shownRows().map((r) => r.t)); return; }
   if (S.sec === "NEWS") fillNews();
   else if (S.sec === "SOCIAL") {               // AREA A — dispatch by SOCIAL sub-tab
     if (S.socTab === "YOUTUBE") fillYT();
@@ -7047,6 +9288,16 @@ function mergeBoardRows(fresh, replace) {
     if (nr.rsi == null && savedRsi != null) old.rsi = savedRsi;
   }
   S.rows = S.rows.filter((r) => freshSet.has(r.t));   // drop tickers no longer in the cohort
+  /* FIX (Alan, 2026-08-03: "amazon is at top of a list ranked by percentage change
+     with a negative 2.06 percent"). R36 froze the board order so rows never jump —
+     correct for reading, WRONG for a ranked column. Sorting by CHG put AMZN on top at
+     +20%, then the value corrected to -2% and it stayed pinned at the top, because the
+     order was computed once and never again. A list ranked by a live number has to be
+     re-ranked when that number changes.
+     Balance: we re-rank on the ~45s DATA REFRESH only, never on the ~3s price tick, so
+     the board is still readable and rows do not dance while you look at them. Sorting
+     by TICKER stays fully frozen — it's alphabetical, it cannot go stale. */
+  if (S.sort && S.sort.key && S.sort.key !== "t") S.boardOrder = computeBoardOrder();
 }
 /* CACHE-FIRST BOARD — seed S.rows from localStorage["sc_board_<cohort>"] so the
    board paints INSTANTLY on boot / cohort switch, then the live feed refreshes and
@@ -7058,6 +9309,19 @@ function seedBoardFromCache(cohort, fav) {
   let rows = env.rows;
   if (cohort === "FAV") rows = rows.filter((r) => r && fav.includes(r.t));   // FAV membership may have changed since cache
   if (!rows.length) return false;
+  /* FIX (Alan, 2026-08-03: "it lies for a while"). This cache is deliberately staleOk
+     so the board paints instantly — good. But it was painting the CACHED PRICE AND
+     CHANGE as if they were live, so on every load you saw yesterday's numbers (AMZN at
+     +20%) presented identically to real ones, until the first pull landed ~1-2s later.
+     A wrong number shown confidently is worse than no number.
+     Now: the instant paint keeps everything STATIC (ticker, name, geiger, market cap,
+     structure) and BLANKS the two volatile fields unless the cache is under 2 minutes
+     old. You get the layout immediately and a dash where a live value belongs, which
+     fills in the moment the feed answers. */
+  const ageMs = Date.now() - (env.ts || 0);
+  if (ageMs > 120000) {
+    rows = rows.map((r) => Object.assign({}, r, { price: null, c: null }));
+  }
   mergeBoardRows(rows, true);   // wholesale seed → computes the frozen order from cache
   return true;
 }
@@ -7253,6 +9517,37 @@ document.addEventListener("click", (e) => {
   if (!a) return;
   switch (a.dataset.act) {
     case "mtab":       go(a.dataset.sec); break;
+    case "cohgeigertoggle": {   // R37 — expand the hero cohort geiger to show median/min/max
+      S.cohGeigerOpen = !S.cohGeigerOpen;
+      const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();
+      break;
+    }
+    case "cohcmptoggle": {   // R39 — expand the cross-cohort compare fan (R41: fan is always open in Layer 0; nothing dispatches this any more — kept harmless)
+      S.cohCompareOpen = !S.cohCompareOpen;
+      const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 — #cohCompare holds the horizontal strip now
+      break;
+    }
+    case "gscompkids": {   // R41 §5a — composite parent toggles the stacked family lines below it
+      GS_KIDS = !GS_KIDS;
+      const kn = document.querySelector('#coRailContent [data-gs="compkids"]');
+      if (kn) kn.style.display = GS_KIDS ? "flex" : "none";
+      break;
+    }
+    case "gsmtfkids": {   // R41 §5b — RSI·MTF / Williams tile header toggles 1D-only ⇄ full ladder
+      if (a.dataset.k === "rsi") GS_RSI_OPEN = !GS_RSI_OPEN; else GS_WPR_OPEN = !GS_WPR_OPEN;
+      if (S.coData && S.coData._gsum) buildGeigerSummary(S.coData._gsum);
+      break;
+    }
+    case "gsmacdtoggle": {   // R41 §5c — MACD tile collapsed header ⇄ full histogram
+      GS_MACD_OPEN = !GS_MACD_OPEN;
+      if (S.coData && S.coData._gsum) buildGeigerSummary(S.coData._gsum);
+      break;
+    }
+    case "gsladtoggle": {   // R42 §5 — trend ladder compact (price ± 2 MAs) ⇄ full ladder
+      GS_LAD_OPEN = !GS_LAD_OPEN;
+      if (S.coData && S.coData._gsum) buildGeigerSummary(S.coData._gsum);
+      break;
+    }
     /* SOCIAL sub-tab switch — repaint #socPane in place (no room remount), then
        run the tab's own fill. SENTIMENT/YOUTUBE pull; X/STOCKTWITS are static. */
     case "soctab": {
@@ -7312,6 +9607,18 @@ document.addEventListener("click", (e) => {
       const r = YT_VIEW[YT_IDX]; if (r && r.video_id) window.open("https://www.youtube.com/watch?v=" + encodeURIComponent(r.video_id), "_blank", "noopener");
       break;
     }
+    case "ytviewmode": {   // Cards <-> Raw table (StockTwits-style raw feed of the youtube_feed rows)
+      S.ytView = a.dataset.v === "RAW" ? "RAW" : "CARDS";
+      const bar = el("ytModeBar"); if (bar) bar.outerHTML = ytModeBarHTML();
+      const grid = el("ytGrid"); if (grid) grid.classList.toggle("is-raw", S.ytView === "RAW");
+      renderYT();
+      break;
+    }
+    case "ytopenraw": {   // raw-table row click opens the same player modal as a card
+      const vid = a.dataset.vid; const i = YT_VIEW.findIndex((r) => r.video_id === vid);
+      if (i !== -1) ytOpen(i);
+      break;
+    }
     case "ytrefresh": {   // manual reload from the DB (what the cadence pulled) — never calls YouTube, no quota
       const b = a; const old = b.textContent; b.textContent = "↻ …";
       YT_LOADED = false; YT_FETCHED_AT = 0; fillYT();
@@ -7343,11 +9650,58 @@ document.addEventListener("click", (e) => {
        another room's mount, fall back to sync() to build the DASH frame. */
     case "coh": {
       S.coh = a.dataset.key; S.tq = "";
-      if (mountedKey === "DASH") { updateBoard(); if (LEFT_HEAT) renderLeftPanel(); }   // #133 — heatmap tracks the cohort tab too
+      if (mountedKey === "DASH") { updateBoard(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
       else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); }
       restartFeed();
       break;
     }
+    /* R43 §3 — Layer-0 sub-tabs. Tab state is a plain JS flag (no persistence); only
+       the ACTIVE tab's grid/canvas is in the DOM, so the pane stays light. */
+    case "l0tab": {
+      const t = a.dataset.tab;
+      if (!t || t === LAYER0_TAB || L0_TABS.indexOf(t) < 0) break;
+      LAYER0_TAB = t;
+      document.querySelectorAll('#layer0 .sc-soctab').forEach((b) => {
+        const on = b.dataset.tab === t;
+        b.classList.toggle("is-on", on); b.setAttribute("aria-selected", String(on));
+      });
+      if (t !== "MAP" && !L0_CACHE[L0_TF]) l0LoadData(L0_TF);   // R49 §1 — MAP runs off board rows + its own batched read, no per-sector ohlcv pull
+      paintL0Body();
+      break;
+    }
+    /* R44 §4 → R49 §2 — THE SHARED TIMEFRAME chips (60M · 4H · 1D · 1W →
+       ohlcv_history.tf). One row, applied to whichever tab is active: ROTATION and
+       RELATIVE re-run their sector series off it (cached per tf in L0_CACHE, so
+       flipping back to one already pulled repaints instantly with zero network) and
+       MAP recolours off its own batched per-cohort read (cached per tf+cohort). */
+    case "l0tf": {
+      const k = a.dataset.tf;
+      if (!k || k === L0_TF) break;
+      L0_TF = k;
+      if (LAYER0_TAB !== "MAP" && !L0_CACHE[k]) l0LoadData(k);   // on MAP the pull is l0MapSync()'s job, not this one
+      paintL0Body();
+      break;
+    }
+    case "l0rng": {   // RELATIVE window chips — an INDEX into L0_REL_WIN[L0_TF]
+      const i = parseInt(a.dataset.i, 10);
+      if (!isFinite(i) || i === L0_REL_I) break;
+      L0_REL_I = i;
+      paintL0Body();
+      break;
+    }
+    /* R47 → R49 §1 — MAP mode chips (GRID · FISHEYE · DOCK · BUBBLES · TILT). Only
+       the active mode renders; switching resets the eased dock scales and the bubble
+       sim so the new mode starts honest. */
+    case "l0fmode": {
+      const m = a.dataset.m;
+      if (!m || m === L0_MAP_MODE || L0_MAP_MODES.indexOf(m) < 0) break;
+      L0_MAP_MODE = m;
+      L0_FOC_SC = {}; L0_FOC_BUB = null; L0_FOC_BUBKEY = "";
+      paintL0Body();
+      break;
+    }
+    case "l0play": { l0PlayToggle(); break; }              // R45 — RRG transport
+    case "l0live": { l0PlayStop(); L0_RRG_AT = null; paintL0Body(); break; }
     case "fullscreen": toggleFull(); break;
     case "headsearch": {   // FIX 3 (R37) — reveal/hide the compact header ticker search
       const ctrls = a.closest(".sc-head__ctrls");
@@ -7457,7 +9811,19 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ernsumclose": { e.preventDefault(); e.stopPropagation(); const h = el("ernSumHost"); if (h) h.innerHTML = ""; break; }
-    case "row":        LEFT_HEAT = false; openCo(a.dataset.t); break;   // #133 — a heatmap tile is also a board row; opening a company always exits heat mode
+    case "row": {   // #133 — a heatmap tile is also a board row; opening a company always exits heat mode
+      /* R41 §3 LAYER 1 — re-clicking the ACTIVE board row (not a heat tile) returns
+         the right pane to Layer 0 instead of re-opening the same company. */
+      if (!LEFT_HEAT && LEFT_STATE === "PINNED" && LEFT_T === a.dataset.t) {
+        S.sec = "DASHBOARD"; updateMtabs(); startRotate(); break;
+      }
+      LEFT_HEAT = false; openCo(a.dataset.t); break;
+    }
+    case "unpin": {   // R42 §7 — "◂ COHORT" back button: unpin → Layer 0 (identical to re-clicking the active row)
+      S.sec = "DASHBOARD"; updateMtabs(); startRotate(); break;
+    }
+    /* R42 §6 — heattoggle now UNREACHABLE from the company header (button removed);
+       case kept harmless for the heat-view's own "HEAT ▸ OFF" chip / stale markup. */
     case "heattoggle": {   // #133 — flip the left panel between single-ticker (rotate/pinned) and whole-scope heatmap
       LEFT_HEAT = !LEFT_HEAT;
       if (LEFT_HEAT) clearRotate(); else if (LEFT_STATE === "AUTO") { scheduleNextTick(); startAutoBar(); }
@@ -7510,7 +9876,18 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "secfs": {   // R21 FIX B — per-section fullscreen (replaces coexpand everywhere)
-      toggleSecFs(a.closest(".panel, .sc-copanel, .sc-board, .sc-chartpanel, .sc-readbox"));
+      /* R50 §3 — .sc-layer0 added FIRST so a ⛶ inside the Layer-0 stack pins the STACK
+         (dashboard pane AND the SCENES room) instead of climbing to the whole
+         .sc-chartpanel around it. Everything else is untouched: ONE mechanism. */
+      toggleSecFs(a.closest(".sc-layer0, .panel, .sc-copanel, .sc-board, .sc-chartpanel, .sc-readbox"));
+      /* R50 §3 — the canvases size to their BOX and the box just changed by a factor of
+         several. The ResizeObserver and the L0_FIX watchdog both catch this on their
+         own, but the watchdog can take up to 400 ms — and a fullscreen toggle is an
+         instant the operator is looking at. Re-mount on the next frame (idempotent:
+         mountL0Body tears down its own rAF/observers first) so the surface is correct
+         immediately. Verified for MAP-GRID (wireHeatSizing), the four canvas MAP modes,
+         ROTATION and RELATIVE, entering AND leaving. */
+      if (el("l0body")) requestAnimationFrame(() => { if (el("l0body")) mountL0Body(); });
       break;
     }
     case "secfsclose": {   // R45 FIX 4 — global ✕: always exit fullscreen, restore master tabs
@@ -7886,6 +10263,25 @@ function patch(t, price) {
     const lc = el("lc_" + t);
     const cc = c != null ? c : (r ? r.c : null);
     if (lc && cc != null) { lc.textContent = fmtC(cc); lc.className = "sc-chg " + (cc >= 0 ? "up" : "dn"); }
+  }
+  /* FIX (Alan: "heatmap doesn't match cohort board") — heatmapHTML() is a static
+     string, only rebuilt on cohort switch / 45s poll / HEAT toggle. Every OTHER
+     live number on the hub (board row, ident bar) gets patched every ~3s right
+     here in patch() — the heat tiles never did, so during a fast move the
+     heatmap could show stale color/% for up to 45s while the board was correct.
+     Live-patch the tile too, if it's currently on screen. */
+  /* R49 §2 — the tile patch is no longer gated on the standalone #133 view: Layer 0's
+     MAP/GRID is a heat grid too and deserves the same live number. It is SKIPPED
+     when the tile is currently coloured by the shared TIMEFRAME rather than the
+     session %chg — a live session tick must never overwrite a 4H/1D/1W reading. */
+  {
+    const htTile = el("ht_" + t), htTxt = el("htc_" + t);
+    const onTf = !!(L0_MAP_NOW && L0_MAP_NOW.pct && L0_MAP_NOW.pct[t] != null && el("layer0"));
+    if ((htTile || htTxt) && !onTf) {
+      const hc = c != null ? c : (r ? r.c : null);
+      if (htTile && hc != null) htTile.style.background = heatColorChg(hc);
+      if (htTxt && hc != null) htTxt.textContent = fmtC(hc);
+    }
   }
   /* R26 FIX 6 — FPE rides the price tick: cheap textContent set, never a rebuild */
   const fv = fpeVal(t, price);
@@ -8406,7 +10802,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-07-16T0330";
+window.SC_BUILD = "2026-08-03T1536";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
