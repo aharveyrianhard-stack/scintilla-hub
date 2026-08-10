@@ -3229,6 +3229,7 @@ const S = {
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
    full size, so it belongs beside the room whose cramped right pane it relieves. */
 const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"];   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
+const STATION_PUBLIC_URL = "https://station.scintillahub.ai/";
 const COHORTS = [
   ["AI HW", "AI_HARDWARE"], ["AI SW", "AI_SOFTWARE"], ["MEGACAP", "MEGACAP"],
   ["BLUE CHIP", "BLUE_CHIP"], ["GROWTH", "GROWTH"], ["CRYPTO", "CRYPTO"], ["INTL", "INTL"],
@@ -3682,7 +3683,9 @@ function scChartLive(t, price) {
 /* ---- shell ------------------------------------------------------------------ */
 function buildMtabs() {
   el("mtabs").innerHTML = SECTIONS.map((s) =>
-    '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + s + "</button>").join("");
+    s === "SCENES"
+      ? '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_PUBLIC_URL + '" target="_blank" rel="noopener">STATION</a>'
+      : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + s + "</button>").join("");
 }
 function updateMtabs() {
   const active = S.sec === "COMPANY" ? "DASHBOARD" : S.sec;
@@ -6307,6 +6310,20 @@ function ytTickers(r) {                                   // normalise tickers �
   const arr = Array.isArray(v) ? v : String(v).replace(/[{}"]/g, "").split(",");
   return arr.map((s) => String(s).trim().toUpperCase().replace(/^\$/, "")).filter(Boolean);
 }
+function ytAccounts(r) {
+  const v = r && r.subscription_accounts;
+  if (!v) return [];
+  const arr = Array.isArray(v) ? v : String(v).replace(/[{}\[\]"]/g, "").split(",");
+  return arr.map((s) => String(s).trim().toLowerCase()).filter(Boolean);
+}
+function ytHasAccount(r, account) { return ytAccounts(r).includes(String(account).toLowerCase()); }
+function ytHubAllowed(r) {
+  const accounts = ytAccounts(r);
+  return !accounts.length || accounts.includes("scintilla");
+}
+function ytProvenance(r) {
+  return ytHasAccount(r, "scintilla") ? "SCINTILLA subscription" : "unscoped search";
+}
 function ytAgo(iso) {
   if (!iso) return "";
   const t = new Date(iso).getTime(); if (isNaN(t)) return "";
@@ -6419,7 +6436,7 @@ function ytRawRowHTML(r) {
   const sent = ytHeuristicSentiment(r.title);
   const ttl = ytTitle(r);   // entity-decoded — no more literal "&amp;" in the feed
   const sentCls = sent === "BULLISH" ? "bull" : sent === "BEARISH" ? "bear" : "und";
-  return '<div class="sc-ytraw__row" data-act="ytopenraw" data-vid="' + esc(r.video_id) + '">' +
+  return '<div class="sc-ytraw__row" data-act="ytopenraw" data-vid="' + esc(r.video_id) + '" title="YouTube source: ' + esc(ytProvenance(r)) + '">' +
     '<span class="sc-ytraw__c ts">' + esc(ytAgo(r.published_at)) + "</span>" +
     '<span class="sc-ytraw__c auth">' + esc(r.channel || "") + "</span>" +
     '<span class="sc-ytraw__c ttl">' + esc(ttl) + "</span>" +
@@ -6456,7 +6473,7 @@ function ytRawTableHTML(rows) {
 function ytMatch(r) {
   const f = S.ytFilt;
   if (f === "ALL") return true;
-  if (f === "SUBS") return !!r.is_sub;
+  if (f === "SUBS") return ytHasAccount(r, "scintilla");
   if (f === "SHORTS") return !!r.is_short;
   if (f === "WATCH") return !!r.watch_later;
   if (f[0] === "$") return ytTickers(r).indexOf(f.slice(1)) !== -1;
@@ -6469,11 +6486,11 @@ function ytCardHTML(r, i) {
   const dur = r.duration ? '<span class="sc-ytc__dur">' + esc(r.duration) + "</span>" : "";
   const chips = ytTickers(r).map((t) => '<span class="sc-ytc__tk">$' + esc(t) + "</span>").join("");
   /* whole thumb opens the SCINTILLA player modal (data-i indexes YT_VIEW) */
-  return '<div class="sc-ytc"><div class="sc-ytc__thumb"' + thumb + ' data-act="ytopen" data-i="' + i + '">' +
+  return '<div class="sc-ytc" title="YouTube source: ' + esc(ytProvenance(r)) + '"><div class="sc-ytc__thumb"' + thumb + ' data-act="ytopen" data-i="' + i + '">' +
     '<div class="sc-ytc__play"></div>' + short + star + dur + "</div>" +
     '<div class="sc-ytc__body"><div class="sc-ytc__ttl">' + esc(r.title || "") + "</div>" +
     (chips ? '<div class="sc-ytc__chips">' + chips + "</div>" : "") +
-    '<div class="sc-ytc__meta"><span>' + esc(r.channel || "") + "</span><span>" + esc(ytAgo(r.published_at)) + "</span></div></div></div>";
+    '<div class="sc-ytc__meta"><span>' + esc(r.channel || "") + ' · ' + esc(ytProvenance(r)) + "</span><span>" + esc(ytAgo(r.published_at)) + "</span></div></div></div>";
 }
 /* CONTINUE WATCHING — YouTube tab only (never the whole-hub launch). If the last video
    we made progress on is in the current view and has a saved position, show a resume banner
@@ -6685,10 +6702,10 @@ function fillYT() {
   renderYT();                                             // paint whatever we have (loading/awaiting/data)
   if (!window.__ytPoll) { window.__ytPoll = setInterval(function(){ if (S.sec === "SOCIAL" && S.socTab === "YOUTUBE" && YT_IDX < 0) { YT_LOADED = false; fillYT(); } }, 120000); }   /* live poll: feed refreshes every 2 min while viewing (only when no player is open) — no app quit needed */
   if (YT_LOADED && (Date.now() - YT_FETCHED_AT) < 90000) return;   /* re-pull on tab entry after 90s */
-  pg("youtube_feed?select=video_id,title,channel,channel_id,tickers,duration,is_short,is_sub,watch_later,thumb_url,published_at&order=published_at.desc&limit=200")
+  pg("youtube_feed?select=video_id,title,channel,channel_id,tickers,duration,is_short,is_sub,subscription_accounts,watch_later,thumb_url,published_at&order=published_at.desc&limit=400")
     .then((rows) => {
       YT_LOADED = true; YT_FETCHED_AT = Date.now(); ytPosPull();
-      if (Array.isArray(rows) && rows.length) { const wl = ytWLGet(); YT_FEED.length = 0; const _seen = new Set(); rows.forEach((r) => { const _k = (r.channel_id || "") + "|" + String(r.title || "").toLowerCase().replace(/\s+/g, " ").trim(); if (_seen.has(r.video_id) || _seen.has(_k)) return; _seen.add(r.video_id); _seen.add(_k); r.watch_later = wl.has(r.video_id); YT_FEED.push(r); }); }
+      if (Array.isArray(rows) && rows.length) { const wl = ytWLGet(); YT_FEED.length = 0; const _seen = new Set(); rows.forEach((r) => { if (!ytHubAllowed(r)) return; const _k = (r.channel_id || "") + "|" + String(r.title || "").toLowerCase().replace(/\s+/g, " ").trim(); if (_seen.has(r.video_id) || _seen.has(_k)) return; _seen.add(r.video_id); _seen.add(_k); r.watch_later = wl.has(r.video_id); YT_FEED.push(r); }); }
       ytWarm();   // prime the hidden player so the first tap plays with sound (iPhone included)
       /* two-way stars: the SCINTILLA · Watch Later playlist on YouTube is the source of truth */
       ytAct("list").then((d) => {
