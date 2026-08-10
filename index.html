@@ -11395,7 +11395,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
     MOUNTED=true;
   }
   function loadDates(){
-    api("fan_daily?select=asof&ticker=eq.SPY&order=asof.asc&limit=800").then(function(rows){
+    api("fan_daily?select=asof&ticker=eq.SPY&asof=gte."+yearAgo()+"&order=asof.asc&limit=400").then(function(rows){
       DATES=rows.map(function(r){return r.asof;});
       var sc=E("gwxSc"); if(sc&&DATES.length){sc.max=DATES.length-1;sc.value=DATES.length-1;sc.disabled=false;}
     });
@@ -11435,11 +11435,33 @@ body.gwx-on .sc-board__row{padding-right:26px}
       (S.rows||[]).forEach(function(r){ if(LIVE_G[r.t]!=null) r.g=LIVE_G[r.t]; });
       repaint(before);}
   }
+  function yearAgo(){var d=new Date(Date.now()-365*864e5);return d.toISOString().slice(0,10);}
+  /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
+     animate between and every re-sort SNAPS. Alan, watching it: "I don't see the movement
+     coming through." Correct - there was none. So: record where every row IS, let the page
+     rebuild as it always does, then put each row back where it was and release it. The rows
+     travel to their new rank instead of teleporting. */
   function repaint(before){
     try{
+      var bs=E("boardScroll");
+      var was={};
+      if(bs) [].forEach.call(bs.querySelectorAll(".sc-board__row"),function(r){
+        var t=r.getAttribute("data-t"); if(t) was[t]=r.getBoundingClientRect().top; });
+
       S.boardOrder=computeBoardOrder();
-      var bs=E("boardScroll"); if(bs) bs.innerHTML=boardRowsHTML();
-      var cg=E("cohGeiger");   if(cg) cg.innerHTML=cohortGeigerHTML();
+      if(bs) bs.innerHTML=boardRowsHTML();
+      var cg=E("cohGeiger"); if(cg) cg.innerHTML=cohortGeigerHTML();
+
+      if(bs) [].forEach.call(bs.querySelectorAll(".sc-board__row"),function(r){
+        var t=r.getAttribute("data-t"); if(!t||was[t]==null)return;
+        var dy=was[t]-r.getBoundingClientRect().top;
+        if(!dy)return;
+        r.style.transition="none";
+        r.style.transform="translateY("+dy+"px)";
+        r.getBoundingClientRect();                 // force the browser to accept the start
+        r.style.transition="transform .62s cubic-bezier(.32,0,.18,1)";
+        r.style.transform="translateY(0)";
+      });
       badges(before);
     }catch(e){}
   }
