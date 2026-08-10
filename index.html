@@ -4378,13 +4378,28 @@ function heatRGB() {
   };
   return HEAT_RGB;
 }
+/* ★ WHY THIS IS NOT rgba(). Alan, three times: "the green is not Geiger green... I see this
+   dark green that is weird... I don't want different tones."
+   He was right and I kept answering the wrong question. Transparency was the bug, not the
+   fix. The page ground is rgb(10,10,15) - a BLUE-tinted near-black - so painting
+   rgba(0,255,163,0.24) over it makes the browser composite rgb(8,70,51): the blue bleeds in
+   and the hue drifts. Every low-magnitude tile became a murky, slightly different green.
+   That is literally a different tone, which is exactly what he said he was seeing.
+
+   So no alpha, and no background blending. The colour is the Geiger triple SCALED:
+   rgb(0, 255k, 163k). Scaling all three channels by the same k leaves the ratio between
+   them - the hue - mathematically identical at every k. Only brightness moves. k runs from
+   0.34 for the smallest move to 1.00 for the largest, so the weakest tile is unmistakably
+   the same green, just dimmer, and the strongest is exactly --bull.
+
+   One green, one red, magnitude in brightness alone. Nothing to composite, nothing to drift. */
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.08)";
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
-  const a = 0.06 + Math.pow(r, 0.6) * 0.94;
-  const rgb = heatRGB();
-  return "rgba(" + (v >= 0 ? rgb.bull : rgb.bear) + "," + a.toFixed(3) + ")";
+  const k = 0.34 + Math.pow(r, 0.55) * 0.66;
+  const base = (v >= 0 ? heatRGB().bull : heatRGB().bear).split(",").map(Number);
+  return "rgb(" + base.map((ch) => Math.round(ch * k)).join(",") + ")";
 }
 /* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
    coloured and labelled by. Called with no argument (the standalone #133 heat view,
