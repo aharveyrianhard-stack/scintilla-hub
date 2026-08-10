@@ -11424,7 +11424,13 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function apply(m){
     if(LIVE_G===null){LIVE_G={};(S.rows||[]).forEach(function(r){LIVE_G[r.t]=r.g;});}
     var before={}; (S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
-    (S.rows||[]).forEach(function(r){ if(m[r.t]!=null) r.g=m[r.t]; });
+    /* A ticker with no fan history for this date must DROP OUT, not keep its live value.
+       MEASURED on the ALL tab: 19 of 210 rows (the crypto/futures set plus a few thin
+       names) have no fan_daily row, and ESUSD was ranking inside the top 20 of a MARCH
+       board using its AUGUST number. Nothing errored and nothing looked wrong - the
+       board simply ranked today against last spring. g=null is how this page already
+       says "no reading"; cohortGeigerHTML filters on g!=null and the row renders "—". */
+    (S.rows||[]).forEach(function(r){ r.g = (m[r.t]!=null) ? m[r.t] : null; });
     repaint(before);
   }
   function goLive(){
