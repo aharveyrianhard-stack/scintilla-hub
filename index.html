@@ -11503,6 +11503,16 @@ body.gwx-on .sc-board__row{padding-right:26px}
         r.getBoundingClientRect();
         r.style.transition="transform .42s cubic-bezier(.32,0,.18,1)";
         r.style.transform="translateY(0)";
+        /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
+           compositing layer. Holding a transform on 200+ rows exhausts layer memory and
+           Safari flushes them - which is seen as the board going BLACK and snapping back.
+           Alan saw it on iPad while desktop, with far more headroom, never did.
+           Clearing transform+transition once the move lands drops the row back to a plain
+           painted element and keeps the live layer count near zero. */
+        clearTimeout(r.__gwxT);
+        r.__gwxT=setTimeout(function(){
+          r.style.transition=""; r.style.transform=""; r.style.willChange="";
+        }, 460);
       });
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
