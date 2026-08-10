@@ -11346,15 +11346,10 @@ function filesWire(){
      never touches the live pipeline; pressing LIVE restores composite_staged exactly.
      ============================================================================ -->
 <style>
-.gwx{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:.4px solid var(--line);
-     font-family:var(--mono);font-size:10px;color:var(--mute)}
-.gwx__btn{background:var(--panel2,#0f0f1a);border:.6px solid var(--line);color:var(--ink2);
-     border-radius:0;font-family:var(--mono);font-size:10px;padding:4px 8px;cursor:pointer;flex:none}
-.gwx__btn:hover{border-color:var(--crk,#00d4ff);color:var(--ink)}
-.gwx__btn.is-on{border-color:var(--crk,#00d4ff);color:var(--crk,#00d4ff)}
-.gwx__sc{flex:1;accent-color:var(--crk,#00d4ff);cursor:pointer;min-width:60px}
-.gwx__dt{font-variant-numeric:tabular-nums;color:var(--ink2);flex:none;min-width:78px;text-align:right}
-.gwx__lbl{letter-spacing:.14em;flex:none}
+/* on-brand: reuses .sc-l0chip / .sc-l0asof / .sc-l0rng__lbl from the RRG transport row,
+   so the rewind reads as the same control the rotation graph already uses. */
+.gwx{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:.4px solid var(--line)}
+.gwx__sc{flex:1;accent-color:var(--crk,#00d4ff);cursor:pointer;min-width:60px;height:2px}
 /* rank badge — fixed column, hard right of every board row */
 .sc-board__row{position:relative}
 .gwx-rk{position:absolute;right:2px;top:50%;transform:translateY(-50%);
@@ -11373,18 +11368,27 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function api(p){ try{ return pg(p).catch(function(){return [];}); }
                    catch(e){ return Promise.resolve([]); } }
 
+  /* Matches the RRG transport row exactly (see l0RangeHTML, LAYER0_TAB==="ROTATION"):
+     PLAY/PAUSE chip, an "as of" stamp that is never hidden while scrubbing, and a
+     RETURN-TO-LIVE chip that DOES NOT EXIST until you have actually rewound.
+     Alan: "I don't think I need a live button" — correct, and neither does the RRG. */
   function bar(){
     return '<div class="gwx" id="gwxBar">'+
-      '<span class="gwx__lbl">REWIND</span>'+
-      '<button class="gwx__btn is-on" id="gwxLive">LIVE</button>'+
-      '<button class="gwx__btn" id="gwxPlay">&#9654;</button>'+
+      '<span class="sc-l0rng__lbl">Rewind</span>'+
+      '<button class="sc-l0chip" data-act="gwxplay" id="gwxPlay">&#9654; PLAY</button>'+
       '<input type="range" class="gwx__sc" id="gwxSc" min="0" max="0" value="0" disabled>'+
-      '<span class="gwx__dt" id="gwxDt">live</span></div>';
+      '<span id="gwxLiveSlot"></span>'+
+      '<span class="sc-l0asof" id="gwxDt">live</span></div>';
+  }
+  function liveChip(on){
+    var slot=E("gwxLiveSlot"); if(!slot)return;
+    slot.innerHTML = on ? '<button class="sc-l0chip" data-act="gwxlive" id="gwxLive" '+
+      'title="back to the newest bar">&#8635; LIVE</button>' : "";
+    var b=E("gwxLive"); if(b) b.onclick=goLive;
   }
   function mount(){
     var host=E("cohGeiger"); if(!host||E("gwxBar"))return;
     host.insertAdjacentHTML("afterend", bar());
-    E("gwxLive").onclick=goLive;
     E("gwxPlay").onclick=play;
     E("gwxSc").oninput=function(){stop();seek(DATES[+this.value]);};
     if(!DATES.length) loadDates();
@@ -11401,7 +11405,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function seek(d){
     if(!d)return;
     ASOF=d; document.body.classList.add("gwx-on");
-    E("gwxDt").textContent=d; E("gwxLive").classList.remove("is-on");
+    E("gwxDt").textContent=d; liveChip(true);
     if(CACHE[d]) return apply(CACHE[d]);
     var ts=tickers(); if(!ts.length)return;
     /* CHUNK 35 — the DB 500s on huge in.() lists. This page already learned that the hard
@@ -11425,7 +11429,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
   }
   function goLive(){
     stop(); ASOF=null; document.body.classList.remove("gwx-on");
-    E("gwxDt").textContent="live"; E("gwxLive").classList.add("is-on");
+    E("gwxDt").textContent="live"; liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=DATES.length-1;
     if(LIVE_G){var before={};(S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
       (S.rows||[]).forEach(function(r){ if(LIVE_G[r.t]!=null) r.g=LIVE_G[r.t]; });
@@ -11459,13 +11463,13 @@ body.gwx-on .sc-board__row{padding-right:26px}
     if(TIMER)return stop();
     var sc=E("gwxSc"); if(!sc||!DATES.length)return;
     if(+sc.value>=DATES.length-1) sc.value=Math.max(0,DATES.length-40);
-    E("gwxPlay").innerHTML="&#10074;&#10074;";
+    E("gwxPlay").innerHTML="&#10073;&#10073; PAUSE"; E("gwxPlay").classList.add("is-on");
     TIMER=setInterval(function(){
       var i=+sc.value+1; if(i>=DATES.length){stop();return;}
       sc.value=i; seek(DATES[i]);
     },700);
   }
-  function stop(){ if(TIMER){clearInterval(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p)p.innerHTML="&#9654;"; }
+  function stop(){ if(TIMER){clearInterval(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
 
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
   setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); }, 900);
