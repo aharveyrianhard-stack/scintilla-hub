@@ -4024,11 +4024,30 @@ function cohortGeigerHTML() {
    single cohort is active — see fetchBoardRows). Sorted bullish → bearish, i.e.
    literally green at the top fading to red at the bottom. */
 function cohortCompareRows() {
+  /* Buckets are built from MEMBERSHIP, not from each ticker's single home cohort.
+     COHORT_OF is one cohort per ticker, so CAT (home BLUE_CHIP) never landed in
+     INDUSTRIAL and every sector tab read "—" while showing 39 members in the DB.
+     COHSETS is cohort -> Set(tickers) built from ticker_cohorts, which is now a view over
+     ticker_membership and therefore carries BOTH kinds - Alan's editorial cohorts and the
+     factual sector membership. A name counts in every group it genuinely belongs to, which
+     is the whole point of "things can belong to multiple cohorts and sectors".
+     COHORT_OF stays as the fallback so a failed COHSETS pull degrades to the old behaviour
+     rather than to an empty strip. */
   const buckets = {};
-  for (const t in COHORT_OF) {
-    const key = COHORT_OF[t], v = GCOMP[t];
-    if (v == null) continue;
-    (buckets[key] = buckets[key] || []).push(v);
+  if (COHSETS) {
+    for (const key in COHSETS) {
+      for (const t of COHSETS[key]) {
+        const v = GCOMP[t];
+        if (v == null) continue;
+        (buckets[key] = buckets[key] || []).push(v);
+      }
+    }
+  } else {
+    for (const t in COHORT_OF) {
+      const key = COHORT_OF[t], v = GCOMP[t];
+      if (v == null) continue;
+      (buckets[key] = buckets[key] || []).push(v);
+    }
   }
   return COHORTS.map(([label, key]) => {
     const vals = buckets[key] || [];
@@ -11811,9 +11830,20 @@ function filesWire(){
       if(!ASOF) return _rows.apply(this,arguments);
       /* COHORTS while rewound: average that day's members rather than today's */
       var buckets={};
-      if(typeof COHORT_OF!=="undefined") for(var t in COHORT_OF){
-        var v=gAt(t); if(v==null) continue;
-        (buckets[COHORT_OF[t]]=buckets[COHORT_OF[t]]||[]).push(v);
+      /* same membership basis as the live strip - otherwise the strip would silently change
+         what it means the moment you scrubbed */
+      if(typeof COHSETS!=="undefined" && COHSETS){
+        for(var key in COHSETS){
+          COHSETS[key].forEach(function(t){
+            var v=gAt(t); if(v==null) return;
+            (buckets[key]=buckets[key]||[]).push(v);
+          });
+        }
+      } else if(typeof COHORT_OF!=="undefined"){
+        for(var t in COHORT_OF){
+          var v=gAt(t); if(v==null) continue;
+          (buckets[COHORT_OF[t]]=buckets[COHORT_OF[t]]||[]).push(v);
+        }
       }
       var src=(typeof COHORTS!=="undefined")?COHORTS:[];
       return src.map(function(c){
