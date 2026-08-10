@@ -4042,8 +4042,15 @@ function cohortCompareRows() {
      rather than to an empty strip. */
   const buckets = {};
   if (COHSETS) {
-    for (const key in COHSETS) {
-      for (const t of COHSETS[key]) {
+    /* Only the DECLARED cohorts. COHSETS is built from ticker_cohorts, which carries the
+       sector membership too, so iterating its keys leaked MATERIALS, UTILITIES, STAPLES,
+       REAL_ESTATE and COMMS straight back into the cohort strip - 17 tabs where there
+       should be 12. That is the bleed-through Alan named; the sectors have their own
+       toggle and belong only there. */
+    for (const [, key] of COHORTS) {
+      const set = COHSETS[key];
+      if (!set) continue;
+      for (const t of set) {
         const v = GCOMP[t];
         if (v == null) continue;
         (buckets[key] = buckets[key] || []).push(v);
@@ -11855,13 +11862,15 @@ function filesWire(){
       var buckets={};
       /* same membership basis as the live strip - otherwise the strip would silently change
          what it means the moment you scrubbed */
-      if(typeof COHSETS!=="undefined" && COHSETS){
-        for(var key in COHSETS){
-          COHSETS[key].forEach(function(t){
+      if(typeof COHSETS!=="undefined" && COHSETS && typeof COHORTS!=="undefined"){
+        /* declared cohorts only - same reason as the live builder above */
+        COHORTS.forEach(function(c){
+          var set=COHSETS[c[1]]; if(!set) return;
+          set.forEach(function(t){
             var v=gAt(t); if(v==null) return;
-            (buckets[key]=buckets[key]||[]).push(v);
+            (buckets[c[1]]=buckets[c[1]]||[]).push(v);
           });
-        }
+        });
       } else if(typeof COHORT_OF!=="undefined"){
         for(var t in COHORT_OF){
           var v=gAt(t); if(v==null) continue;
