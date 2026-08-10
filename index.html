@@ -11576,6 +11576,16 @@ body.gwx-on .sc-board__row{padding-right:26px}
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
+      /* ONE ROW, ALWAYS. Alan: "what I like is the left to right, green to red. No rows."
+         The strip was repeat(10,1fr) with 11 sectors, so the eleventh wrapped; under
+         820px it dropped to repeat(5,1fr) and became two rows of five. Auto-flow column
+         keeps every member on one line and lets the columns narrow instead of wrapping. */
+      ".sc-cohstrip{grid-template-columns:none !important;grid-auto-flow:column !important;"+
+      "grid-auto-columns:minmax(0,1fr) !important;gap:2px !important}"+
+      "@media(max-width:820px){.sc-cohstrip{grid-template-columns:none !important;"+
+      "grid-auto-flow:column !important;grid-auto-columns:minmax(0,1fr) !important}}"+
+      ".sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;"+
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
       ".gwx-div{color:var(--warn,#e0a24a);margin-left:3px}";
     document.head.appendChild(st);
@@ -11642,6 +11652,10 @@ body.gwx-on .sc-board__row{padding-right:26px}
   function loadTM(){
     var key=(S.rows||[]).length+"|"+(S.coh||"");
     if(TM_AT===key)return; TM_AT=key;
+    /* Alan, 2026-08-10: "the template should read regardless of my scoring. My scoring
+       feeds the combined Geiger" - so the COMPONENT columns must stay raw. composite_staged
+       .trend is now equalizer-weighted (it is what feeds the composite); fan_daily carries
+       the same fan, and the raw structural read is what belongs in a component column. */
     api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
       (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
       paintTM();
