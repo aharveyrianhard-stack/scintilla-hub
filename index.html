@@ -11662,7 +11662,7 @@ body.gwx-on .sc-board__row{padding-right:26px}
      The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
      colour already means direction here and must not be overloaded.
      ========================================================================== */
-  var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null;
+  var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null, prevPainted={};
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
   api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
@@ -11730,6 +11730,19 @@ body.gwx-on .sc-board__row{padding-right:26px}
       if(ex.length>=2){ tr=ex[0]; mo=ex[1]; mo.innerHTML=""; }
       else { tr=document.createElement("span"); mo=document.createElement("span"); fresh=true; }
       tr.className="gwx-tm"; mo.className="gwx-tm";
+      /* ★ FLASH FIX. Alan sent a screen recording; differencing the frames showed a
+         baseline ~1% change (the ticker tape, normal) with 8.3% SPIKES exactly one second
+         apart, in the band where the board rows sit. That was this function: it rewrote
+         every cell on every row every 1100ms whether or not anything had changed, and each
+         write repaints. Now it computes the strings first and returns early if they match
+         what is already on screen. */
+      var wantT, wantM, wantR;
+      if(!d||d.tr==null){ wantT="—"; wantM="—"; }
+      else if(d.mo==null){ wantT=fmt2(d.tr); wantM="—"; }
+      else { wantT=fmt2(d.tr); wantM=fmt2(d.mo); }
+      if(!fresh && tr.textContent===wantT && mo.firstChild && mo.firstChild.nodeValue===wantM){
+        prevPainted[t]=1; return;          // nothing changed for this row - do not touch it
+      }
       if(!d||d.tr==null){ tr.textContent="—"; mo.textContent="—";
         tr.style.color="var(--mute)"; mo.style.color="var(--mute)"; }
       else if(d.mo==null){                       // rewound: trend is real, momentum has no history
@@ -11805,11 +11818,16 @@ body.gwx-on .sc-board__row{padding-right:26px}
      transition, doing DOM work on every row while 17-40 of them were still travelling.
      MEASURED: 8 rebuilds in 6s with rows mid-flight on almost every sample. It now sits
      out entirely while the player is running; a frame already repaints everything. */
+  /* The tick is a WATCHDOG, not a painter. It re-mounts things the page destroyed on a
+     room change and nothing else. Repainting on a timer is what made the board flash once
+     a second; values are painted by repaint(), which runs when something actually moves. */
   setInterval(function(){
-    if(TIMER) return;                       // playing - do not touch the DOM
+    if(TIMER) return;                       // playing - repaint() already owns the frame
     if(E("cohGeiger")&&!E("gwxBar")) mount();
-    cmpToggle(); loadTM(); paintTM();
-  }, 1100);
+    if(!document.querySelector(".sc-cohstrip__hd .gwx-cmp")) cmpToggle();
+    loadTM();                               // no-ops unless the cohort changed
+    if(!document.querySelector(".sc-board__row .gwx-tm")) paintTM();   // only if wiped
+  }, 1500);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
 })();
