@@ -11540,8 +11540,90 @@ body.gwx-on .sc-board__row{padding-right:26px}
     });
   }
 
+  /* ==========================================================================
+     TREND · MOM — split the two halves of Geiger back apart.
+
+     Alan: "the momentum part is faster... there's a little bit of an inconsistency
+     between the balance I have for the moving averages and the balance I have for
+     momentum." He is right, and this makes it visible instead of averaged away:
+
+       the FAN is DAILY-LOCKED - one slow instrument, thirteen daily lines.
+       MOMENTUM is weighted onto 6h / 12h / 1D - a fast instrument.
+       composite blends the two 50/50, so a slow uptrend with a fast pullback and a
+       genuine top produce the SAME middling number. XLE today: trend +0.67,
+       momentum -0.40, composite +0.14. Its 2W momentum is +0.41 and 1M is +0.53 -
+       the slow push is intact; only the fast frames rolled over.
+
+     The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
+     colour already means direction here and must not be overloaded.
+     ========================================================================== */
+  var TM={}, TM_AT=null;
+  function fmt2(v){ return (v>=0?"+":"") + v.toFixed(2); }
+  function addCols(){
+    if(typeof BOARD_COLS==="undefined") return;
+    if(BOARD_COLS.some(function(c){return c[0]==="Trend";})) return;
+    var gi=BOARD_COLS.findIndex(function(c){return c[1]==="g";});
+    if(gi<0) return;
+    BOARD_COLS.splice(gi,0,["Trend",null],["Mom",null]);
+    var st=document.createElement("style");
+    st.textContent=
+      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,11fr) minmax(0,13fr) minmax(0,11fr)"+
+      " minmax(0,8fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr)"+
+      " minmax(0,22fr) minmax(0,14fr) minmax(0,5fr) !important;gap:7px}"+
+      "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,11fr)"+
+      " minmax(0,12fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,6fr)"+
+      " minmax(0,8fr) minmax(0,8fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important}}"+
+      ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
+      ".gwx-div{color:var(--warn,#e0a24a);margin-left:3px}";
+    document.head.appendChild(st);
+    /* the header was rendered before these columns existed - repaint it once */
+    try{ var bs=E("boardScroll");
+         if(bs && typeof boardRowsHTML==="function") bs.innerHTML=boardRowsHTML(); }catch(e){}
+  }
+  function paintTM(){
+    addCols();
+    var rows=document.querySelectorAll(".sc-board__row"); if(!rows.length)return;
+    [].forEach.call(rows,function(r){
+      var t=r.getAttribute("data-t"), d=TM[t];
+      /* UPDATE, never skip. The first paint runs before the fetch lands, so the cells
+         are born as em-dashes; skipping rows that already had cells left them dashed
+         for ever once the data arrived. */
+      var ex=r.querySelectorAll(".gwx-tm");
+      var tr,mo,fresh=false;
+      if(ex.length>=2){ tr=ex[0]; mo=ex[1]; mo.innerHTML=""; }
+      else { tr=document.createElement("span"); mo=document.createElement("span"); fresh=true; }
+      tr.className="gwx-tm"; mo.className="gwx-tm";
+      if(!d||d.tr==null||d.mo==null){ tr.textContent="—"; mo.textContent="—";
+        tr.style.color="var(--mute)"; mo.style.color="var(--mute)"; }
+      else{
+        tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
+        mo.textContent=fmt2(d.mo); mo.style.color=d.mo>=0?"var(--bull)":"var(--bear)";
+        /* ◆ = trend and momentum disagree by more than 0.60, or point opposite ways.
+           A slow uptrend with a fast pullback lights up; tech, both engines running,
+           does not. */
+        if(Math.abs(d.tr-d.mo)>0.60 || (d.tr>0)!==(d.mo>0)){
+          var m=document.createElement("span"); m.className="gwx-div"; m.textContent="◆";
+          m.title="trend and momentum disagree: "+fmt2(d.tr)+" vs "+fmt2(d.mo);
+          mo.appendChild(m);
+        }
+      }
+      if(fresh){
+        var g=r.querySelector(".sc-gmini")||r.children[7];
+        if(g&&g.parentNode===r){ r.insertBefore(tr,g); r.insertBefore(mo,g); }
+      }
+    });
+  }
+  function loadTM(){
+    var key=(S.rows||[]).length+"|"+(S.coh||"");
+    if(TM_AT===key)return; TM_AT=key;
+    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
+      (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
+      paintTM();
+    });
+  }
+
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
-  setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); cmpToggle(); }, 900);
+  setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); cmpToggle(); loadTM(); paintTM(); }, 900);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
 })();
