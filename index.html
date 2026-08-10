@@ -3253,19 +3253,26 @@ const COHORTS = [
      beside XOM, CVX, JNJ, CAT and JPM. */
   ["MATERIALS", "MATERIALS"], ["UTILITIES", "UTILITIES"], ["STAPLES", "STAPLES"],
   ["REAL EST", "REAL_ESTATE"], ["COMMS", "COMMS"],
-  /* THE OTHER SIX SECTORS. Alan: "I do agree the coherent version is eleven sector cohorts
-     marrying the eleven SPDRs. So I would add those eleven sector cohorts, but I wouldn't
-     remove the blue chip one, because the blue chip one serves in the cohort compare... the
-     cohorts are a little bit more personally ours. Things can belong to multiple cohorts and
-     sectors, that's fine."
-     So this is an ADDITION, not a migration. BLUE_CHIP, MEGACAP, AI_HARDWARE and the rest
-     stay exactly as they are - they are editorial, they are his. The eleven sectors sit
-     beside them as the factual dimension, sourced from whichever SPDR holds the name.
-     Membership is many-to-many in ticker_membership: AAPL is MEGACAP and TECH at once, AMD
-     is AI_HARDWARE and TECH, and neither has to give way. */
-  ["ENERGY", "ENERGY"], ["INDUSTRIAL", "INDUSTRIAL"], ["HEALTH", "HEALTH"],
-  ["FINANCIALS", "FINANCIALS"], ["DISCRET", "DISCRET"], ["TECH", "TECH"],
-];   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
+  /* AI POWERTRAIN — Alan: "the AI powertrain, I would like to have as a cohort. That's
+     exactly what I've been trying to get at for a while, I just never got around to it."
+     The electricity behind the datacenter: the generators selling into hyperscaler demand
+     (CEG, VST), the people building the generating kit (GEV), the reactor developers
+     (OKLO, SMR), the fuel (CCJ), the fuel cells sited at the datacenter (BE) and the
+     storage (EOSE). They keep their factual sectors at the same time - CEG and VST are
+     UTILITIES, GEV is INDUSTRIAL - which is exactly what two dimensions are for.
+     NextEra came OUT: Alan, "NextEra Energy is a utility completely", and XLU agrees. */
+  ["AI POWER", "AI_POWERTRAIN"],
+];
+/* ★ THE SECTORS ARE NOT COHORT TABS. Alan, on seeing 22 of them: "the fact that we have
+   twenty two tabs now just says to me that we need a different structure. Cohorts and
+   sectors are different. Things are bleeding through."
+   He is right, and it was my doing: the compare strip has ALWAYS had a COHORTS | SECTORS
+   toggle, so putting the eleven sectors into COHORTS duplicated a view that already
+   existed. The eleven have been removed from this list. Nothing is lost - the sector
+   membership built this session stays in ticker_membership and now feeds the SECTORS side
+   of that toggle, which is a real upgrade: the sector read is computed from its actual
+   constituents instead of from the ETF's own price. Cohorts are Alan's, sectors are fact,
+   and each has its own strip. */   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
 const CO_TABS = ["GEIGER","CHART","STATS","ESTIMATES","FINANCIALS","NEWS","SOCIAL","EVENTS","READ"];
 const READ_TABS = ["BUSINESS", "VERDICT", "CATALYSTS", "WATCH"];   // R48 — Alan: business first, left-most
 
@@ -4093,9 +4100,7 @@ const COH_ABBR = { AI_HARDWARE:"AI HW", AI_SOFTWARE:"AI SW", MEGACAP:"MEGA", BLU
                    GROWTH:"GROWTH", CRYPTO:"CRYPTO", INTL:"INTL", MACRO:"MACRO",
                    INDEXES:"INDEX", THEMATIC:"THEME", METALS:"METALS",
                    MATERIALS:"MATRLS", UTILITIES:"UTILS", STAPLES:"STAPLE",
-                   REAL_ESTATE:"REALES", COMMS:"COMMS", ENERGY:"ENERGY",
-                   INDUSTRIAL:"INDUS", HEALTH:"HEALTH", FINANCIALS:"FINCL",
-                   DISCRET:"DISCR", TECH:"TECH" };
+                   REAL_ESTATE:"REALES", COMMS:"COMMS", AI_POWERTRAIN:"AI PWR" };
 /* R46 added quarter-scale gridlines to this track. R50 §1 REMOVES them (Alan: "I don't
    like those lines, that shading in the tickers — it's not necessary, the visuals say
    everything"). The CENTRE ZERO LINE stays: it is the one rule that carries meaning —
@@ -11798,6 +11803,10 @@ function filesWire(){
   var SECT=[["MATERIALS","XLB"],["ENERGY","XLE"],["FINANCIALS","XLF"],["INDUSTRIAL","XLI"],
             ["TECH","XLK"],["STAPLES","XLP"],["REAL EST","XLRE"],["UTILITIES","XLU"],
             ["HEALTH","XLV"],["DISCRET","XLY"],["COMMS","XLC"]];
+  /* the SPDR ticker to the sector key used in ticker_membership */
+  var SECT_KEY={XLB:"MATERIALS",XLE:"ENERGY",XLF:"FINANCIALS",XLI:"INDUSTRIAL",XLK:"TECH",
+                XLP:"STAPLES",XLRE:"REAL_ESTATE",XLU:"UTILITIES",XLV:"HEALTH",
+                XLY:"DISCRET",XLC:"COMMS"};
   var CMP_MODE="COHORTS";
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
@@ -11821,10 +11830,24 @@ function filesWire(){
         /* Alan: "I don't like the cropping of the health care energy, this stuff. Just use
            the State Street thingies, and maybe a hover that expands and says the full name."
            So the column shows the SPDR ticker - which never crops - and the title carries
-           the sector in full. */
-        return SECT.map(function(p){ return {key:p[1], label:p[0], short:p[1],
-                                             full:p[0].replace(/\b\w/g,function(c){return c;})+" \u00b7 "+p[1],
-                                             mean:gAt(p[1]), n:1}; })
+           the sector in full.
+
+           ★ AND THE READ IS NOW THE SECTOR, NOT THE ETF. This used to be gAt(XLB) - one
+           instrument's Geiger standing in for a whole sector, which is why "utilities are
+           oversold" could never be opened up. COHSETS now carries real sector membership
+           (18 utilities, 40 industrials...), so the column is the MEAN of the sector's
+           constituents, exactly as the cohort side works. Falls back to the ETF alone if
+           membership has not loaded, so it degrades to the old behaviour rather than to a
+           blank strip. */
+        return SECT.map(function(p){
+          var name=p[0], etf=p[1], vals=[];
+          var set=(typeof COHSETS!=="undefined" && COHSETS) ? COHSETS[SECT_KEY[etf]] : null;
+          if(set) set.forEach(function(t){ var v=gAt(t); if(v!=null) vals.push(v); });
+          var mean = vals.length ? vals.reduce(function(a,b){return a+b;},0)/vals.length : gAt(etf);
+          return {key:etf, label:name, short:etf,
+                  full:name+" \u00b7 "+etf+(vals.length?" \u00b7 "+vals.length+" holdings":" \u00b7 ETF only"),
+                  mean:mean, n:vals.length||1};
+        })
                    .sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
       }
       if(!ASOF) return _rows.apply(this,arguments);
