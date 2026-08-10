@@ -11499,8 +11499,49 @@ body.gwx-on .sc-board__row{padding-right:26px}
   }
   function stop(){ if(TIMER){clearInterval(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
 
+  /* ==========================================================================
+     SECTOR COMPARE — toggle the compare strip between COHORTS and the eleven
+     State Street SPDRs. Alan: "sectors are probably the most important part.
+     So I need to see them."
+
+     Same strip, same bars, same bull -> bear sort. Only the row SET changes:
+     cohort means, or the sector ETFs themselves. Nothing is duplicated - it
+     wraps cohortCompareRows() so every renderer downstream follows automatically.
+     ========================================================================== */
+  var SECT=[["MATERIALS","XLB"],["ENERGY","XLE"],["FINANCIALS","XLF"],["INDUSTRIAL","XLI"],
+            ["TECH","XLK"],["STAPLES","XLP"],["REAL EST","XLRE"],["UTILITIES","XLU"],
+            ["HEALTH","XLV"],["DISCRET","XLY"],["COMMS","XLC"]];
+  var CMP_MODE="COHORTS";
+  if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
+    window.__gwxWrapped=true;
+    var _rows=cohortCompareRows;
+    window.cohortCompareRows=function(){
+      if(CMP_MODE!=="SECTORS") return _rows.apply(this,arguments);
+      return SECT.map(function(p){
+        var v = (typeof GCOMP!=="undefined" && GCOMP[p[1]]!=null) ? GCOMP[p[1]] : null;
+        return {key:p[1], label:p[0], mean:v, n:1};
+      }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
+    };
+  }
+  function cmpToggle(){
+    var hd=document.querySelector(".sc-cohstrip__hd"); if(!hd||hd.querySelector(".gwx-cmp"))return;
+    var w=document.createElement("span"); w.className="gwx-cmp";
+    w.style.cssText="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle";
+    w.innerHTML='<button class="sc-l0chip'+(CMP_MODE==="COHORTS"?" is-on":"")+'" data-gwxcmp="COHORTS">COHORTS</button>'+
+                '<button class="sc-l0chip'+(CMP_MODE==="SECTORS"?" is-on":"")+'" data-gwxcmp="SECTORS">SECTORS</button>';
+    hd.appendChild(w);
+    [].forEach.call(w.querySelectorAll("[data-gwxcmp]"),function(b){
+      b.onclick=function(ev){ ev.stopPropagation();
+        CMP_MODE=b.getAttribute("data-gwxcmp");
+        var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
+          cc.innerHTML=cohortCompareStripHTML(); cmpToggle();
+        }
+      };
+    });
+  }
+
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
-  setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); }, 900);
+  setInterval(function(){ if(E("cohGeiger")&&!E("gwxBar")) mount(); cmpToggle(); }, 900);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});
 })();
