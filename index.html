@@ -11429,10 +11429,19 @@ body.gwx-on .sc-board__row{padding-right:26px}
        +0.00 while every row is green. Same lesson, same number. */
     var CH=35, parts=[];
     for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
-    Promise.all(parts.map(function(p){
-      return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");
-    })).then(function(sets){
-      var m={}; sets.forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
+    /* ★ BOTH LEGS FOR THE SAME DAY. Until momentum_daily existed the rewind moved trend
+       and left momentum showing today, so the composite being scrubbed was not a real
+       historical Geiger. Alan: "Geiger in motion without the momentum computation is
+       lying to me on hub." Now trend and momentum are both read at asof. */
+    var fanP = parts.map(function(p){
+      return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
+    var momP = parts.map(function(p){
+      return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
+    Promise.all([Promise.all(fanP), Promise.all(momP)]).then(function(res){
+      var m={}, mo={};
+      res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
+      m.__mom = mo;                                  // carried alongside, keyed off the map
       CACHE[d]=m; if(ASOF===d) apply(m);
     });
   }
@@ -11445,7 +11454,16 @@ body.gwx-on .sc-board__row{padding-right:26px}
        board using its AUGUST number. Nothing errored and nothing looked wrong - the
        board simply ranked today against last spring. g=null is how this page already
        says "no reading"; cohortGeigerHTML filters on g!=null and the row renders "—". */
-    (S.rows||[]).forEach(function(r){ r.g = (m[r.t]!=null) ? m[r.t] : null; });
+    var mo = m.__mom || {};
+    /* composite = (wt*trend + wm*momentum)/(wt+wm), the same blend refresh_geiger uses.
+       Falls back to trend alone if that day has no momentum row, and to null if neither. */
+    var wt=(GWX_W&&GWX_W.trend!=null)?GWX_W.trend:0.5, wm=(GWX_W&&GWX_W.mom!=null)?GWX_W.mom:0.5;
+    (S.rows||[]).forEach(function(r){
+      var tr=m[r.t], mm=mo[r.t];
+      if(tr==null){ r.g=null; }
+      else if(mm==null){ r.g=tr; }
+      else { r.g = (wt*tr + wm*mm)/((wt+wm)||1); }
+    });
     repaint(before);
   }
   function goLive(){
@@ -11615,7 +11633,17 @@ body.gwx-on .sc-board__row{padding-right:26px}
      The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
      colour already means direction here and must not be overloaded.
      ========================================================================== */
-  var TM={}, TM_AT=null, TM_ASOF=null;
+  var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null;
+  /* the family weights the live Geiger blends with - read once so a rewound composite is
+     mixed exactly as refresh_geiger mixes the live one */
+  api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
+    var w={trend:0.5,mom:0.5};
+    (rows||[]).forEach(function(r){
+      if(String(r.key).toUpperCase()==='TREND') w.trend=+r.weight;
+      if(String(r.key).toUpperCase()==='MOMENTUM') w.mom=+r.weight;
+    });
+    GWX_W=w;
+  }).catch(function(){ GWX_W={trend:0.5,mom:0.5}; });
   function fmt2(v){ return (v>=0?"+":"") + v.toFixed(2); }
   function addCols(){
     if(typeof BOARD_COLS==="undefined") return;
@@ -11662,8 +11690,8 @@ body.gwx-on .sc-board__row{padding-right:26px}
          momentum to show. It shows an em-dash. A dash is honest; today's number sitting
          on a March row is the same defect that had ESUSD ranked on an August value. */
       if(ASOF){
-        var fanv=(CACHE[ASOF]||{})[t];
-        d = (fanv==null) ? null : {tr:fanv, mo:null};
+        var cd=CACHE[ASOF]||{}, fanv=cd[t], momv=(cd.__mom||{})[t];
+        d = (fanv==null) ? null : {tr:fanv, mo:(momv==null?null:momv)};
       }
       /* UPDATE, never skip. The first paint runs before the fetch lands, so the cells
          are born as em-dashes; skipping rows that already had cells left them dashed
