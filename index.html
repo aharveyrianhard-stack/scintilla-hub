@@ -11579,7 +11579,7 @@ function filesWire(){
 .gwx__sc::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--crk,#00d4ff);border:none}
 /* rank badge — fixed column, hard right of every board row */
 .sc-board__row{position:relative}
-.gwx-rk{position:absolute;right:2px;top:50%;transform:translateY(-50%);
+.gwx-rk{position:absolute;right:0;top:50%;transform:translateY(-50%);
      font-family:var(--mono);font-size:9px;letter-spacing:.05em;opacity:0;
      transition:opacity .3s;pointer-events:none;width:26px;text-align:right}
 .gwx-rk.show{opacity:1}
@@ -11589,7 +11589,9 @@ function filesWire(){
    The reserve used to be conditional on body.gwx-on, so the whole row grid shifted the
    moment a rewind started and shifted back when it ended. The 26px is now permanent:
    the badge still comes and goes, but the space it occupies never does. */
-.sc-board__row{padding-right:26px}
+.sc-board__row{padding-right:18px}   /* the rank badge's reserve - permanent so columns never
+   shift when it appears, but trimmed from 26px: on a 13-column row that width was coming
+   straight out of the numeric cells and helping them collide. */
 </style>
 <script>
 (function(){
@@ -12039,12 +12041,21 @@ function filesWire(){
     BOARD_COLS.splice(gi,0,["Trend",null],["Mom",null],["Read",null]);
     var st=document.createElement("style");
     st.textContent=
-      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,10fr)"+
-      " minmax(0,7fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr)"+
-      " minmax(0,20fr) minmax(0,18fr) minmax(0,12fr) minmax(0,5fr) !important;gap:6px}"+
+      /* ★ THE COLLIDING COLUMNS. Seen on Alan's own screen: "+5.82%98.3x$314[" - CHG, F P/E
+         and MKT CAP running into each other and truncating mid-number.
+         Two causes, both mine. (1) Adding TREND/MOM/READ took the row from 10 tracks to 13
+         without widening the panel, so the numeric cells got too narrow. (2) Nothing in .ch
+         had an overflow guard, so a number that did not fit SPILLED into its neighbour
+         instead of being clipped - which is why it read as text on top of text.
+         Rebalanced: READ and GEIGER give up space to the three numeric columns, and every
+         cell now clips. A truncated number is legible; two overlapping ones are not. */
+      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
+      " minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr)"+
+      " minmax(0,13fr) minmax(0,16fr) minmax(0,10fr) minmax(0,5fr) !important;gap:5px}"+
+      ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
       "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr)"+
-      " minmax(0,11fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,6fr)"+
-      " minmax(0,7fr) minmax(0,7fr) minmax(0,16fr) minmax(0,12fr) minmax(0,7fr)"+
+      " minmax(0,11fr) minmax(0,10fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr)"+
+      " minmax(0,7fr) minmax(0,7fr) minmax(0,11fr) minmax(0,13fr) minmax(0,8fr)"+
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
