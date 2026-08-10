@@ -11975,6 +11975,19 @@ body.gwx-on .sc-board__row{padding-right:26px}
 .sc-sysf__x{ font-size:9px; color:var(--ink2); line-height:1.4; margin:3px 0 0 11px; }
 .sc-sysf__e{ font-size:8px; color:var(--dim); line-height:1.45; margin:3px 0 0 11px; display:none; }
 .sc-sysf.open .sc-sysf__e{ display:block; }
+/* budget gauges - one bar per ceiling, filled by percentage. Green under 60, amber to
+   85, red above: the colour is the whole message at a glance. */
+.sc-sysg{ margin:8px 0 2px; }
+.sc-sysg__r{ display:flex; align-items:baseline; gap:6px; font-size:8.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--dim); margin-bottom:3px; }
+.sc-sysg__r b{ color:var(--ink); font-size:10px; font-variant-numeric:tabular-nums; letter-spacing:0; }
+.sc-sysg__r .pc{ margin-left:auto; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.sc-sysg__t{ position:relative; height:4px; background:var(--panel); overflow:hidden; margin-bottom:9px; }
+.sc-sysg__t i{ position:absolute; left:0; top:0; bottom:0; }
+.sc-sysg__t i.ok{ background:var(--bull); }
+.sc-sysg__t i.mid{ background:#d8a534; }
+.sc-sysg__t i.hi{ background:var(--bear); }
+.sc-sysg__note{ font-size:8px; color:var(--dim); line-height:1.45; }
 .sc-sysf__b{ background:none;border:0;padding:0;margin:3px 0 0 11px;cursor:pointer;
   font-family:var(--mono); font-size:7.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--crk); }
 </style>
@@ -11994,21 +12007,35 @@ body.gwx-on .sc-board__row{padding-right:26px}
       var box=E("sysUseBox"); if(!box) return;
       var r=(rows&&rows[0])||null;
       if(!r){ box.querySelector(".sc-sysfact__body").innerHTML='<div class="dim">no meter rows yet.</div>'; return; }
-      var gbDay=+r.gb_per_day_at_current_rate;
+      /* Alan supplied the ceilings off the FMP dashboard: 500 GB per rolling 30 days and
+         3,000 calls/minute. They live in app_config, not in this file, so correcting them
+         is one UPDATE. What matters is not the raw number but how close it is to the wall. */
+      function cls(p){ return p>=85?"hi":(p>=60?"mid":"ok"); }
+      function gauge(label, now, cap, unit, pct){
+        var p=Math.max(0,Math.min(100,+pct||0));
+        return '<div class="sc-sysg__r">'+label+' <b>'+now+'</b> of '+cap+' '+unit+
+                 '<span class="pc">'+p.toFixed(1)+'%</span></div>'+
+               '<div class="sc-sysg__t"><i class="'+cls(p)+'" style="width:'+p+'%"></i></div>';
+      }
+      var partial = (+r.days_of_history) < 29.5;
       box.querySelector(".sc-sysfact__body").innerHTML =
+        '<div class="sc-sysg">'+
+          gauge('bandwidth &middot; 30d', (+r.gb_last_30d).toFixed(1), (+r.gb_cap_30d).toFixed(0), 'GB', r.pct_of_gb_cap)+
+          gauge('projected &middot; 30d at today\u2019s rate', (+r.gb_30d_projected).toFixed(0), (+r.gb_cap_30d).toFixed(0), 'GB', r.pct_of_cap_projected)+
+          gauge('call rate &middot; 1h avg', (+r.calls_per_minute_avg_1h).toFixed(0), (+r.calls_per_minute_cap).toFixed(0), '/min', r.pct_of_call_cap)+
+        '</div>'+
         '<div class="sc-sysbig">'+
-          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.calls_per_minute_avg_1h).toFixed(0)+'</div>'+
-            '<div class="sc-sysbig__l">calls / min</div></div>'+
           '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.gb_last_24h).toFixed(2)+'</div>'+
             '<div class="sc-sysbig__l">GB last 24h</div></div>'+
-          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+gbDay.toFixed(1)+'</div>'+
-            '<div class="sc-sysbig__l">GB/day at this rate</div></div>'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.calls_last_24h).toLocaleString()+'</div>'+
+            '<div class="sc-sysbig__l">calls last 24h</div></div>'+
         '</div>'+
-        '<div class="sc-fmpact__row"><span class="dim">'+(+r.calls_last_hour).toLocaleString()+
-          ' calls and '+(+r.mb_last_hour).toFixed(0)+' MB in the last hour &middot; '+
-          (+r.calls_last_24h).toLocaleString()+' calls in 24h</span></div>'+
-        '<div class="sc-fmpact__row"><span class="dim">FMP publishes no usage figure for this key, '+
-          'so these are counted on our side: every function that calls FMP logs its own calls and bytes.</span></div>';
+        '<div class="sc-sysg__note">FMP publishes no usage figure for this key, so every one of these is '+
+          'counted on our side \u2014 each function logs its own calls and bytes as it runs. The ceilings come '+
+          'from the FMP dashboard and are stored as config, not hard-coded.'+
+          (partial ? ' The meter has watched '+(+r.days_of_history).toFixed(1)+' of the 30 days, so the '+
+            'first bar is a floor \u2014 the projection is the honest read until it fills.' : '')+
+        '</div>';
     });
   }
 
