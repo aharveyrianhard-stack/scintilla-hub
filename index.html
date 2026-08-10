@@ -4357,12 +4357,34 @@ function heatSetScale(values) {
    tiles. The curve below is gamma 0.6, which lifts the ordinary moves into a band the eye
    can actually separate while still reserving full strength for the genuine outlier:
    at a 6% scale, 0.4% now reads 0.24 and 2.5% reads 0.61. Same rule, visible range. */
+/* Alan: "it's not about a single green, it's GEIGER green - like the Geiger bars. And Geiger
+   red. Single, but the RIGHT one."
+   The two hues are read straight off --bull and --bear, the same custom properties the
+   Geiger bars paint with, instead of being hard-coded here. They happened to match today,
+   but a hard-coded copy is a divergence waiting to happen: restyle the Geiger and the heat
+   map would quietly keep the old colour. Resolved once and cached. */
+let HEAT_RGB = null;
+function heatRGB() {
+  if (HEAT_RGB) return HEAT_RGB;
+  const cs = getComputedStyle(document.documentElement);
+  const toRGB = (hex, fallback) => {
+    const h = (hex || "").trim().replace("#", "");
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return fallback;
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)].join(",");
+  };
+  HEAT_RGB = {
+    bull: toRGB(cs.getPropertyValue("--bull"), "0,255,163"),
+    bear: toRGB(cs.getPropertyValue("--bear"), "255,45,85"),
+  };
+  return HEAT_RGB;
+}
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.08)";
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
   const a = 0.06 + Math.pow(r, 0.6) * 0.94;
-  return v >= 0 ? "rgba(0,255,163," + a.toFixed(3) + ")" : "rgba(255,45,85," + a.toFixed(3) + ")";
+  const rgb = heatRGB();
+  return "rgba(" + (v >= 0 ? rgb.bull : rgb.bear) + "," + a.toFixed(3) + ")";
 }
 /* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
    coloured and labelled by. Called with no argument (the standalone #133 heat view,
