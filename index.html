@@ -11564,15 +11564,18 @@ body.gwx-on .sc-board__row{padding-right:26px}
     if(BOARD_COLS.some(function(c){return c[0]==="Trend";})) return;
     var gi=BOARD_COLS.findIndex(function(c){return c[1]==="g";});
     if(gi<0) return;
-    BOARD_COLS.splice(gi,0,["Trend",null],["Mom",null]);
+    BOARD_COLS.splice(gi,0,["Trend",null],["Mom",null],["Read",null]);
     var st=document.createElement("style");
     st.textContent=
-      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,11fr) minmax(0,13fr) minmax(0,11fr)"+
-      " minmax(0,8fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr)"+
-      " minmax(0,22fr) minmax(0,14fr) minmax(0,5fr) !important;gap:7px}"+
-      "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,11fr)"+
-      " minmax(0,12fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,6fr)"+
-      " minmax(0,8fr) minmax(0,8fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important}}"+
+      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,10fr)"+
+      " minmax(0,7fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr)"+
+      " minmax(0,20fr) minmax(0,18fr) minmax(0,12fr) minmax(0,5fr) !important;gap:6px}"+
+      "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr)"+
+      " minmax(0,11fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,6fr)"+
+      " minmax(0,7fr) minmax(0,7fr) minmax(0,16fr) minmax(0,12fr) minmax(0,7fr)"+
+      " minmax(0,5fr) !important}}"+
+      ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
       ".gwx-div{color:var(--warn,#e0a24a);margin-left:3px}";
     document.head.appendChild(st);
@@ -11607,9 +11610,32 @@ body.gwx-on .sc-board__row{padding-right:26px}
           mo.appendChild(m);
         }
       }
+      /* THE READ — the shape in words. Trend is a SLOW, daily-locked measure; momentum
+         is FAST (Alan's equalizer puts its weight on 6h/12h/1D). So the two disagreeing
+         is not noise, it is the most informative state on the board:
+           strong trend + weak momentum  -> a pullback inside an uptrend, not a top
+           weak trend  + strong momentum -> turning up before the structure confirms
+         Both agreeing is the quiet case. */
+      var rd=r.querySelector(".gwx-read");
+      if(!rd){ rd=document.createElement("span"); rd.className="gwx-read"; }
+      if(!d||d.tr==null||d.mo==null){ rd.textContent="—"; rd.style.color="var(--mute)"; }
+      else {
+        var T=d.tr, M=d.mo, txt, col;
+        if(T>=0.5&&M>=0.4){ txt="aligned bull";      col="var(--bull)"; }
+        else if(T<=-0.5&&M<=-0.4){ txt="aligned bear"; col="var(--bear)"; }
+        else if(T>=0.4&&M<=-0.15){ txt="pullback";     col="var(--warn,#e0a24a)"; }
+        else if(T<=-0.2&&M>=0.35){ txt="turning up";   col="var(--warn,#e0a24a)"; }
+        else if(Math.abs(T)<0.25&&M>=0.5){ txt="mom leads"; col="var(--warn,#e0a24a)"; }
+        else if(T>=0.5&&Math.abs(M)<0.2){ txt="stalling";   col="var(--warn,#e0a24a)"; }
+        else if(T>=0.3&&M>=0){ txt="constructive"; col="var(--bull)"; }
+        else if(T<=-0.3&&M<=0){ txt="broken";      col="var(--bear)"; }
+        else { txt="mixed"; col="var(--mute)"; }
+        rd.textContent=txt; rd.style.color=col;
+        rd.title="trend "+fmt2(T)+" (slow, daily-locked) · momentum "+fmt2(M)+" (fast, 6h/12h/1D)";
+      }
       if(fresh){
         var g=r.querySelector(".sc-gmini")||r.children[7];
-        if(g&&g.parentNode===r){ r.insertBefore(tr,g); r.insertBefore(mo,g); }
+        if(g&&g.parentNode===r){ r.insertBefore(tr,g); r.insertBefore(mo,g); r.insertBefore(rd,g); }
       }
     });
   }
