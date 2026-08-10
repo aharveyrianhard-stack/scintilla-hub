@@ -1,0 +1,487 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCINTILLA · Visual Engine Lab</title>
+<style>
+:root{
+  /* surfaces */
+  --bg:#0A0A0F; --panel:#0D0D14; --panel2:#0F0F1A;
+  --line:#1A1A2A; --line2:#252538; --hair:rgba(0,212,255,.34); /* 0.8px cyan hairline */
+  /* ink */
+  --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#868AAA; --mute:#3A3A52;
+  /* accents */
+  --crk:#00D4FF;  /* cherenkov cyan — accent / live / headers */
+  --coin:#8B5CF6; /* violet — crypto */
+  /* severity scale + verdict */
+  --bull:#00FFA3; --sv1:#00FFA3; --sv2:#C8FF00; --sv3:#FFE500; --sv4:#FF8A00; --sv5:#FF3060;
+  --bear:#FF2D55;
+  /* type */
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
+  /* layout (FIX #2 — were used but undefined) */
+  --radius:4px; --gap:8px;
+  /* the 5 family hues (spec 01 — FIX #2) */
+  --trend:#2D9CFF; --momentum:#A24BFF; --structure:#FFD400; --volume:#FF8A00; --volatility:#FF3DBE;
+}
+*{box-sizing:border-box;border-radius:0}
+html,body{margin:0;padding:0;background:#0A0A0F;color:#E8E8F0;
+ font-family:ui-sans-serif,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.wrap{max-width:1180px;margin:0 auto;padding:54px 30px 120px}
+.eye{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+ color:#00D4FF;text-shadow:0 0 12px rgba(0,212,255,.45);margin-bottom:12px}
+h1{font-size:34px;margin:0 0 10px;letter-spacing:-.015em;font-weight:700}
+.lede{font-size:14.5px;color:#A0A0C0;line-height:1.65;max-width:760px;margin:0 0 12px}
+.note{border:1px solid #1A1A2A;background:#0D0D14;padding:13px 16px;margin:22px 0 46px;font-size:12.5px;color:#9A9AB6;line-height:1.6}
+.note b{color:#E8E8F0}
+.card{border:1px solid #1A1A2A;background:#0D0D14;margin:0 0 30px}
+.card__hd{display:flex;align-items:baseline;gap:12px;padding:13px 16px;border-bottom:1px solid #1A1A2A;flex-wrap:wrap}
+.card__n{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:#4A4A6A}
+.card__t{font-size:15px;font-weight:700;color:#E8E8F0}
+.card__tag{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+ color:#00D4FF;border:.8px solid rgba(0,212,255,.45);padding:3px 7px;margin-left:auto}
+.card__body{padding:0}
+.stage{position:relative;height:300px;background:#07070C;overflow:hidden;cursor:crosshair}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.card__ft{padding:12px 16px;border-top:1px solid #1A1A2A;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card__ft h4{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+ color:#4A4A6A;margin:0 0 5px}
+.card__ft p{margin:0;font-size:12px;color:#9A9AB6;line-height:1.55}
+.card__ft code{color:#00D4FF;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.ctl{display:flex;gap:6px;padding:9px 16px;border-top:1px solid #1A1A2A;flex-wrap:wrap;align-items:center}
+.chip{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;
+ color:#767690;border:.8px dashed rgba(0,212,255,.28);padding:4px 9px;cursor:pointer;background:none}
+.chip.on{color:#00D4FF;border:.8px solid #00D4FF}
+.chip:hover{color:#C6C8DE}
+.lbl{font-family:ui-monospace,Menlo,monospace;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:#4A4A6A;margin-right:2px}
+.foot{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#4A4A6A;margin-top:40px}
+@media(max-width:820px){.card__ft{grid-template-columns:1fr}.wrap{padding:36px 18px 90px}.stage{height:240px}}
+</style></head><body><div class="wrap">
+<div class="eye">SCINTILLA · VISUAL ENGINE LAB · v1</div>
+<h1>The range we can play with.</h1>
+<p class="lede">Seven live techniques, each running real code on this page &mdash; no video, no mockups. Move your cursor over every panel; they all react.
+These are the building blocks for moving the hub from passive readouts to a living, tactile canvas.</p>
+<div class="note"><b>How to use this:</b> each panel names the technique, shows it running, and states what it costs and where it belongs in the hub.
+Pick the ones you want and they get lifted into SCINTILLA as-is &mdash; every effect here is plain canvas/WebGL with no library and no CDN, so it drops straight into the single-file hub.
+<b>Panel 6 is the answer to "cohort compare, but as a video"</b> &mdash; that shape is called a <b>waterfall / heightfield</b>, and the animated form is a <b>temporal replay</b>.</div>
+<div class="card">
+<div class="card__hd"><span class="card__n">01</span><span class="card__t">Living Core</span><span class="card__tag">WebGL · fragment shader</span></div>
+<div class="card__body"><div class="stage" id="s1"><canvas></canvas></div></div>
+
+<div class="card__ft"><div><h4>Where it belongs</h4><p>Ambient state for the hub &mdash; behind the logo menu, the SCENES room backdrop, or the chat panel while the agent thinks. Turbulence rises with market heat, so the background itself carries the Geiger reading.</p></div><div><h4>Cost &amp; technique</h4><p>One fullscreen quad, ~40 lines of GLSL. Simplex-style noise + domain warp, cursor displaces the field. <code>~0.4ms/frame</code>, GPU only, zero DOM.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">02</span><span class="card__t">Dither / CRT post-process</span><span class="card__tag">Canvas · Bayer 8&times;8</span></div>
+<div class="card__body"><div class="stage" id="s2"><canvas></canvas></div></div>
+<div class="ctl"><span class="lbl">Pixel</span>
+<button class="chip" data-s2="2">2</button><button class="chip on" data-s2="4">4</button>
+<button class="chip" data-s2="6">6</button><button class="chip" data-s2="10">10</button>
+<span class="lbl" style="margin-left:12px">Palette</span>
+<button class="chip on" data-s2p="cyan">Cherenkov</button><button class="chip" data-s2p="heat">Sievert</button>
+<button class="chip" data-s2p="mono">Mono</button></div>
+<div class="card__ft"><div><h4>Where it belongs</h4><p>The 'hyper-pixelated' look from your doc. Wraps <em>any</em> existing canvas &mdash; drop it over the heatmap or RRG and they become period-correct without changing their code.</p></div><div><h4>Cost &amp; technique</h4><p>Ordered Bayer dithering to a reduced palette + scanlines + subtle chromatic offset. Post-pass on the pixel buffer. <code>~1.1ms</code> at 300px. Slider = pixel size.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">03</span><span class="card__t">Particle drift / data stream</span><span class="card__tag">Canvas · 2400 particles</span></div>
+<div class="card__body"><div class="stage" id="s3"><canvas></canvas></div></div>
+
+<div class="card__ft"><div><h4>Where it belongs</h4><p>Activity made physical. Each particle is a live event &mdash; a tick, a news hit, an alert. Density and speed encode throughput, so a busy tape <em>looks</em> busy. Good for the feed-health strip and the SCENES idle state.</p></div><div><h4>Cost &amp; technique</h4><p>Pooled particles, no allocation in the loop. Cursor is an attractor/repeller with inverse-square falloff. <code>~0.9ms</code> for 2400 at 60fps.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">04</span><span class="card__t">Spring physics + haptics</span><span class="card__tag">Canvas · critically damped</span></div>
+<div class="card__body"><div class="stage" id="s4"><canvas></canvas></div></div>
+
+<div class="card__ft"><div><h4>Where it belongs</h4><p>The tactile layer. Every node has momentum, damping and snap. Drag one and the rest respond through the lattice. This is what makes clicks feel physical rather than instant.</p></div><div><h4>Cost &amp; technique</h4><p>Hooke's law with critical damping (<code>&zeta;&asymp;1</code>), verlet integration. Fires <code>navigator.vibrate()</code> on snap where supported. <code>~0.3ms</code>.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">05</span><span class="card__t">Volumetric depth field</span><span class="card__tag">WebGL · raymarched</span></div>
+<div class="card__body"><div class="stage" id="s5"><canvas></canvas></div></div>
+
+<div class="card__ft"><div><h4>Where it belongs</h4><p>Depth without a 3D engine. Use it as the SCENES backdrop or behind the composite dial &mdash; the hub gains physical space while every readout stays flat and legible on top.</p></div><div><h4>Cost &amp; technique</h4><p>Signed-distance raymarch, 48 steps, fog + rim light. Parallax follows the cursor. <code>~1.6ms</code> &mdash; the most expensive here; fine as a backdrop, not per-tile.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">06</span><span class="card__t">Cohort waterfall &mdash; temporal replay</span><span class="card__tag">WebGL · heightfield</span></div>
+<div class="card__body"><div class="stage" id="s6"><canvas></canvas></div></div>
+<div class="ctl"><button class="chip on" id="s6play">&#9654; PLAY</button>
+<button class="chip" data-s6="grid">Wireframe</button><button class="chip on" data-s6="solid">Solid</button>
+<button class="chip" data-s6="dither">Dithered</button></div>
+<div class="card__ft"><div><h4>Where it belongs</h4><p><b>This is the one you described.</b> Cohort on X, time receding into Z, Geiger as height and colour. You watch the whole cohort structure evolve as a surface instead of reading ten numbers. Press play and it replays the window.</p></div><div><h4>Cost &amp; technique</h4><p>Heightfield mesh, per-vertex colour, orbit follows the cursor. Needs <code>composite_history</code> in the DB &mdash; this demo runs on generated data until that table exists.</p></div></div>
+</div><div class="card">
+<div class="card__hd"><span class="card__n">07</span><span class="card__t">Reactive glass panel</span><span class="card__tag">CSS/Canvas · specular</span></div>
+<div class="card__body"><div class="stage" id="s7"><canvas></canvas></div></div>
+
+<div class="card__ft"><div><h4>Where it belongs</h4><p>The P3 / glossy-glass surface from your doc. A real panel treatment for cards and modals &mdash; specular highlight tracks the cursor, edges catch light. Cheap enough to use everywhere.</p></div><div><h4>Cost &amp; technique</h4><p>Radial specular + edge rim, composited under content. Pure canvas, no blur filters (those are what make glass slow). <code>~0.2ms</code>.</p></div></div>
+</div><div class="foot">All effects live &middot; no libraries &middot; no CDN &middot; drop-in ready for the single-file hub</div></div>
+<script>
+(function(){
+/* ---------- shared helpers ---------- */
+function fit(stage){
+  var cv=stage.querySelector('canvas'), r=stage.getBoundingClientRect();
+  var d=Math.min(window.devicePixelRatio||1,2);
+  var w=Math.max(2,Math.round(r.width*d)), h=Math.max(2,Math.round(r.height*d));
+  if(cv.width!==w){cv.width=w;} if(cv.height!==h){cv.height=h;}
+  return {cv:cv,w:w,h:h,d:d,W:r.width,H:r.height};
+}
+function ptr(stage,st){
+  st.px=0.5; st.py=0.5; st.eng=0;
+  stage.addEventListener('pointermove',function(e){
+    var r=stage.getBoundingClientRect();
+    st.px=(e.clientX-r.left)/r.width; st.py=(e.clientY-r.top)/r.height; st.tgt=1;
+  });
+  stage.addEventListener('pointerenter',function(){st.tgt=1;});
+  stage.addEventListener('pointerleave',function(){st.tgt=0;});
+  st.tgt=0;
+}
+function glctx(cv){ return cv.getContext('webgl',{antialias:false,alpha:false,depth:true})||cv.getContext('experimental-webgl'); }
+function prog(gl,vs,fs){
+  function sh(t,s){var o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+    if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)){console.warn(gl.getShaderInfoLog(o));return null;}return o;}
+  var v=sh(gl.VERTEX_SHADER,vs),f=sh(gl.FRAGMENT_SHADER,fs); if(!v||!f)return null;
+  var p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.warn(gl.getProgramInfoLog(p));return null;}
+  return p;
+}
+var QUAD_VS='attribute vec2 a;varying vec2 uv;void main(){uv=a*0.5+0.5;gl_Position=vec4(a,0.,1.);}';
+function quad(gl,p){
+  var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  var l=gl.getAttribLocation(p,'a');gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0);
+}
+function fallback(stage,msg){
+  var c=stage.querySelector('canvas').getContext('2d');
+  var f=fit(stage); c.fillStyle='#0A0A0F';c.fillRect(0,0,f.w,f.h);
+  c.fillStyle='#4A4A6A';c.font=(11*f.d)+'px ui-monospace,Menlo,monospace';c.textAlign='center';
+  c.fillText(msg,f.w/2,f.h/2);
+}
+
+/* ================= 01 LIVING CORE ================= */
+(function(){
+  var stage=document.getElementById('s1'); if(!stage)return;
+  var f=fit(stage), gl=glctx(f.cv); if(!gl){fallback(stage,'WebGL unavailable');return;}
+  var FS=[
+  'precision highp float;varying vec2 uv;uniform vec2 res;uniform float t;uniform vec2 mo;uniform float eng;',
+  'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
+  'float n(vec2 p){vec2 i=floor(p),g=fract(p);g=g*g*(3.-2.*g);',
+  ' return mix(mix(h(i),h(i+vec2(1,0)),g.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),g.x),g.y);}',
+  'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<6;i++){v+=a*n(p);p*=2.03;a*=.5;}return v;}',
+  'void main(){vec2 p=(uv*res-.5*res)/res.y;',
+  ' vec2 m=(mo*res-.5*res)/res.y;',
+  ' float d=length(p);',
+  ' vec2 w=vec2(fbm(p*2.2+t*.10),fbm(p*2.2-t*.13+5.2));',
+  ' vec2 q=p+(w-.5)*(.55+eng*.35);',
+  ' float pull=eng*.16/(0.05+length(p-m));',
+  ' q+=normalize(p-m+1e-4)*pull;',
+  ' float core=fbm(q*3.1+t*.16);',
+  ' float r=length(q);',
+  ' float orb=smoothstep(.72,.06,r);',
+  ' float turb=core*orb;',
+  ' vec3 cy=vec3(0.,.83,1.);vec3 vi=vec3(.55,.36,.96);vec3 hot=vec3(1.,.33,.15);',
+  ' vec3 col=mix(cy,vi,smoothstep(.28,.72,core));',
+  ' col=mix(col,hot,smoothstep(.62,.95,turb+eng*.18));',
+  ' col*=pow(orb,1.35)*(.55+turb*1.5);',
+  ' float ring=smoothstep(.015,0.,abs(r-.60-.02*sin(t*.7)));',
+  ' col+=cy*ring*.30*(.4+eng*.9);',
+  ' col+=cy*.045/(0.02+d*d*2.2);',
+  ' float g=h(uv*res+t)*.035;col+=g-.017;',
+  ' gl_FragColor=vec4(col,1.);}'].join('\n');
+  var p=prog(gl,QUAD_VS,FS); if(!p){fallback(stage,'shader compile failed');return;}
+  gl.useProgram(p);quad(gl,p);
+  var uR=gl.getUniformLocation(p,'res'),uT=gl.getUniformLocation(p,'t'),
+      uM=gl.getUniformLocation(p,'mo'),uE=gl.getUniformLocation(p,'eng');
+  var st={};ptr(stage,st);var t0=performance.now();
+  (function loop(){
+    var f=fit(stage);gl.viewport(0,0,f.w,f.h);
+    st.eng+=((st.tgt||0)-st.eng)*0.06;
+    gl.uniform2f(uR,f.w,f.h);gl.uniform1f(uT,(performance.now()-t0)/1000);
+    gl.uniform2f(uM,st.px,1-st.py);gl.uniform1f(uE,st.eng);
+    gl.drawArrays(gl.TRIANGLES,0,3);requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 02 DITHER / CRT ================= */
+(function(){
+  var stage=document.getElementById('s2'); if(!stage)return;
+  var ctx=stage.querySelector('canvas').getContext('2d',{willReadFrequently:true});
+  var PIX=4, PAL='cyan';
+  var BAYER=[[0,32,8,40,2,34,10,42],[48,16,56,24,50,18,58,26],[12,44,4,36,14,46,6,38],
+             [60,28,52,20,62,30,54,22],[3,35,11,43,1,33,9,41],[51,19,59,27,49,17,57,25],
+             [15,47,7,39,13,45,5,37],[63,31,55,23,61,29,53,21]];
+  var PALS={cyan:[[6,6,12],[0,60,90],[0,140,190],[0,212,255],[190,245,255]],
+            heat:[[8,4,4],[110,20,10],[210,70,0],[255,180,0],[255,245,200]],
+            mono:[[8,8,12],[60,60,72],[120,120,140],[190,190,205],[240,240,248]]};
+  document.querySelectorAll('[data-s2]').forEach(function(b){b.onclick=function(){
+    PIX=+b.dataset.s2;document.querySelectorAll('[data-s2]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  document.querySelectorAll('[data-s2p]').forEach(function(b){b.onclick=function(){
+    PAL=b.dataset.s2p;document.querySelectorAll('[data-s2p]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  var st={};ptr(stage,st);var t0=performance.now();
+  (function loop(){
+    var f=fit(stage),W=f.w,H=f.h,t=(performance.now()-t0)/1000;
+    st.eng+=((st.tgt||0)-st.eng)*0.07;
+    var sw=Math.max(2,Math.floor(W/(PIX*f.d))),sh=Math.max(2,Math.floor(H/(PIX*f.d)));
+    var img=ctx.createImageData(sw,sh),D=img.data,pal=PALS[PAL];
+    var mx=st.px*sw,my=st.py*sh;
+    for(var y=0;y<sh;y++)for(var x=0;x<sw;x++){
+      var nx=x/sw-0.5,ny=y/sh-0.5;
+      var d=Math.sqrt(nx*nx+ny*ny);
+      var wv=Math.sin(d*16-t*2.4)*0.5+0.5;
+      var dm=Math.sqrt(Math.pow(x-mx,2)+Math.pow(y-my,2))/sw;
+      var lens=st.eng*Math.exp(-dm*dm*14)*0.85;
+      var v=wv*(0.55-d*0.5)+lens;
+      v+=(Math.sin(x*0.7+t)*0.5+0.5)*0.06;
+      v=Math.max(0,Math.min(1,v));
+      var thr=BAYER[y&7][x&7]/64;
+      var lvl=Math.max(0,Math.min(pal.length-1,Math.floor(v*(pal.length-1)+thr)));
+      var c=pal[lvl],i=(y*sw+x)*4;
+      var scan=(y%2===0)?1:0.82;
+      D[i]=c[0]*scan;D[i+1]=c[1]*scan;D[i+2]=c[2]*scan;D[i+3]=255;
+    }
+    var tmp=document.createElement('canvas');tmp.width=sw;tmp.height=sh;
+    tmp.getContext('2d').putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,W,H);ctx.drawImage(tmp,0,0,W,H);
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 03 PARTICLE DRIFT ================= */
+(function(){
+  var stage=document.getElementById('s3'); if(!stage)return;
+  var ctx=stage.querySelector('canvas').getContext('2d');
+  var N=2400,P=new Float32Array(N*5);
+  for(var i=0;i<N;i++){P[i*5]=Math.random();P[i*5+1]=Math.random();
+    P[i*5+2]=(Math.random()-.5)*.0006;P[i*5+3]=(Math.random()-.5)*.0006;P[i*5+4]=Math.random();}
+  var st={};ptr(stage,st);
+  (function loop(){
+    var f=fit(stage),W=f.w,H=f.h;
+    st.eng+=((st.tgt||0)-st.eng)*0.06;
+    ctx.fillStyle='rgba(7,7,12,0.26)';ctx.fillRect(0,0,W,H);
+    for(var i=0;i<N;i++){
+      var o=i*5,x=P[o],y=P[o+1],vx=P[o+2],vy=P[o+3],sp=P[o+4];
+      var dx=st.px-x,dy=st.py-y,d2=dx*dx+dy*dy+0.0016;
+      var force=st.eng*0.00022/d2;
+      vx+=dx*force;vy+=dy*force;
+      vy-=0.000035;
+      vx+=Math.sin(y*11+x*4)*0.0000075;
+      vx*=0.985;vy*=0.985;
+      x+=vx;y+=vy;
+      if(x<0)x+=1;if(x>1)x-=1;if(y<0)y+=1;if(y>1)y-=1;
+      P[o]=x;P[o+1]=y;P[o+2]=vx;P[o+3]=vy;
+      var v=Math.sqrt(vx*vx+vy*vy)*2200;
+      var a=Math.min(1,0.13+v*0.9);
+      var c=v>1.5?'0,255,163':(v>0.7?'0,212,255':'110,90,220');
+      ctx.fillStyle='rgba('+c+','+a.toFixed(3)+')';
+      var s=(sp<0.06?2.2:1.1)*f.d;
+      ctx.fillRect(x*W,y*H,s,s);
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 04 SPRING PHYSICS ================= */
+(function(){
+  var stage=document.getElementById('s4'); if(!stage)return;
+  var ctx=stage.querySelector('canvas').getContext('2d');
+  var COLS=13,ROWS=7,pts=[];
+  for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++)
+    pts.push({hx:(c+.5)/COLS,hy:(r+.5)/ROWS,x:(c+.5)/COLS,y:(r+.5)/ROWS,vx:0,vy:0,e:0});
+  var st={};ptr(stage,st);var buzzed=false;
+  stage.addEventListener('pointerdown',function(){ if(navigator.vibrate)navigator.vibrate(9); buzzed=true; });
+  (function loop(){
+    var f=fit(stage),W=f.w,H=f.h;
+    st.eng+=((st.tgt||0)-st.eng)*0.08;
+    ctx.fillStyle='#07070C';ctx.fillRect(0,0,W,H);
+    var K=0.055,D=0.86;
+    ctx.strokeStyle='rgba(0,212,255,.10)';ctx.lineWidth=1*f.d;
+    for(var i=0;i<pts.length;i++){
+      var p=pts[i];
+      var dx=p.x-st.px,dy=p.y-st.py,dd=Math.sqrt(dx*dx+dy*dy)+1e-4;
+      var push=st.eng*0.055*Math.exp(-dd*dd*26);
+      p.vx+=(p.hx-p.x)*K + (dx/dd)*push;
+      p.vy+=(p.hy-p.y)*K + (dy/dd)*push;
+      p.vx*=D;p.vy*=D;p.x+=p.vx;p.y+=p.vy;
+      p.e=Math.min(1,Math.sqrt(p.vx*p.vx+p.vy*p.vy)*90);
+      if(i%COLS!==COLS-1){var q=pts[i+1];
+        ctx.beginPath();ctx.moveTo(p.x*W,p.y*H);ctx.lineTo(q.x*W,q.y*H);ctx.stroke();}
+      if(i+COLS<pts.length){var s2=pts[i+COLS];
+        ctx.beginPath();ctx.moveTo(p.x*W,p.y*H);ctx.lineTo(s2.x*W,s2.y*H);ctx.stroke();}
+    }
+    for(var j=0;j<pts.length;j++){
+      var q2=pts[j],e=q2.e;
+      var col=e>0.5?'0,255,163':(e>0.18?'0,212,255':'74,74,106');
+      ctx.fillStyle='rgba('+col+','+(0.35+e*0.65).toFixed(3)+')';
+      var rad=(1.9+e*3.4)*f.d;
+      ctx.beginPath();ctx.arc(q2.x*W,q2.y*H,rad,0,6.284);ctx.fill();
+      if(e>0.4){ctx.shadowBlur=10*f.d;ctx.shadowColor='rgba(0,255,163,.6)';
+        ctx.beginPath();ctx.arc(q2.x*W,q2.y*H,rad,0,6.284);ctx.fill();ctx.shadowBlur=0;}
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 05 VOLUMETRIC DEPTH ================= */
+(function(){
+  var stage=document.getElementById('s5'); if(!stage)return;
+  var f=fit(stage),gl=glctx(f.cv); if(!gl){fallback(stage,'WebGL unavailable');return;}
+  var FS=[
+  'precision highp float;varying vec2 uv;uniform vec2 res;uniform float t;uniform vec2 mo;uniform float eng;',
+  'float bx(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.);}',
+  'float hs(vec2 p){return fract(sin(dot(p,vec2(21.9,78.2)))*43758.5);}',
+  'float map(vec3 p){',
+  ' float d=1e5;',
+  ' for(int i=0;i<9;i++){float fi=float(i);',
+  '  float col=mod(fi,3.)-1.,row=floor(fi/3.)-1.;',
+  '  float hgt=.20+hs(vec2(fi,1.))*.55;',
+  '  vec3 c=vec3(col*.62,-.42+hgt*.5,row*.62);',
+  '  float wob=sin(t*.7+fi)*.02*eng;',
+  '  d=min(d,bx(p-c-vec3(0.,wob,0.),vec3(.20,hgt*.5,.20)));',
+  ' }',
+  ' d=min(d,p.y+.42);return d;}',
+  'vec3 nrm(vec3 p){vec2 e=vec2(.0012,0.);',
+  ' return normalize(vec3(map(p+e.xyy)-map(p-e.xyy),map(p+e.yxy)-map(p-e.yxy),map(p+e.yyx)-map(p-e.yyx)));}',
+  'void main(){vec2 p=(uv*res-.5*res)/res.y;',
+  ' vec2 m=(mo-.5)*eng;',
+  ' float a=m.x*1.1,b=-m.y*.55+.36;',
+  ' vec3 ro=vec3(sin(a)*2.5,1.05+b,cos(a)*2.5);',
+  ' vec3 ta=vec3(0.,-.05,0.);',
+  ' vec3 f2=normalize(ta-ro),r=normalize(cross(vec3(0,1,0),f2)),u=cross(f2,r);',
+  ' vec3 rd=normalize(p.x*r+p.y*u+1.5*f2);',
+  ' float td=0.;vec3 col=vec3(.020,.020,.033);',
+  ' for(int i=0;i<48;i++){vec3 q=ro+rd*td;float d=map(q);',
+  '  if(d<.0016){vec3 n=nrm(q);',
+  '   float dif=max(0.,dot(n,normalize(vec3(.5,.9,.35))));',
+  '   float rim=pow(1.-max(0.,dot(n,-rd)),2.4);',
+  '   vec3 base=mix(vec3(.02,.10,.15),vec3(0.,.83,1.),dif*.75);',
+  '   col=base+vec3(0.,.83,1.)*rim*.75;',
+  '   col*=exp(-td*.19);break;}',
+  '  td+=d;if(td>11.)break;}',
+  ' col+=vec3(0.,.5,.75)*.030/(0.10+abs(p.y+.30));',
+  ' col+=hs(uv*res+t)*.028-.014;',
+  ' gl_FragColor=vec4(col,1.);}'].join('\n');
+  var p=prog(gl,QUAD_VS,FS); if(!p){fallback(stage,'shader compile failed');return;}
+  gl.useProgram(p);quad(gl,p);
+  var uR=gl.getUniformLocation(p,'res'),uT=gl.getUniformLocation(p,'t'),
+      uM=gl.getUniformLocation(p,'mo'),uE=gl.getUniformLocation(p,'eng');
+  var st={};ptr(stage,st);var t0=performance.now();
+  (function loop(){
+    var f=fit(stage);gl.viewport(0,0,f.w,f.h);
+    st.eng+=((st.tgt||0)-st.eng)*0.05;
+    gl.uniform2f(uR,f.w,f.h);gl.uniform1f(uT,(performance.now()-t0)/1000);
+    gl.uniform2f(uM,st.px,st.py);gl.uniform1f(uE,0.25+st.eng*0.75);
+    gl.drawArrays(gl.TRIANGLES,0,3);requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 06 COHORT WATERFALL ================= */
+(function(){
+  var stage=document.getElementById('s6'); if(!stage)return;
+  var ctx=stage.querySelector('canvas').getContext('2d');
+  var COH=['INTL','BLUE','INDEX','GROW','MACRO','MEGA','AIHW','AISW','THEME','CRYP'];
+  var NT=46, NC=COH.length, H=[];
+  for(var c=0;c<NC;c++){var row=[],base=(c/(NC-1))*-1.0+0.48,ph=c*0.9;
+    for(var t=0;t<NT;t++){var u=t/(NT-1);
+      row.push(Math.max(-1,Math.min(1, base + Math.sin(u*5.4+ph)*0.30 + Math.sin(u*13.1+ph*2.2)*0.11 + (u-0.5)*0.34 )));}
+    H.push(row);}
+  var mode='solid', playing=true, head=NT-1, st={};ptr(stage,st);
+  document.querySelectorAll('[data-s6]').forEach(function(b){b.onclick=function(){
+    mode=b.dataset.s6;document.querySelectorAll('[data-s6]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  var pb=document.getElementById('s6play');
+  if(pb)pb.onclick=function(){playing=!playing;pb.classList.toggle('on',playing);
+    pb.innerHTML=playing?'&#9654; PLAY':'&#10073;&#10073; PAUSE';};
+  function col(v,a){ var r,g,b2;
+    if(v>=0){var k=Math.min(1,v);r=Math.round(0+k*40);g=Math.round(150+k*105);b2=Math.round(120+k*43);}
+    else{var k2=Math.min(1,-v);r=Math.round(150+k2*105);g=Math.round(40-k2*40);b2=Math.round(80-k2*36);}
+    return 'rgba('+r+','+g+','+b2+','+a+')'; }
+  var t0=performance.now();
+  (function loop(){
+    var f=fit(stage),W=f.w,Ht=f.h;
+    st.eng+=((st.tgt||0)-st.eng)*0.05;
+    if(playing){head+=0.35;if(head>NT-1)head=6;}
+    ctx.fillStyle='#07070C';ctx.fillRect(0,0,W,Ht);
+    var yaw=(st.px-0.5)*0.85*st.eng, pit=0.52+(st.py-0.5)*0.34*st.eng;
+    var cx=W*0.5, cy=Ht*0.80, sx=W*0.055, sz=Ht*0.0138, sy=Ht*0.20;
+    function proj(ci,ti,h){
+      var x=(ci-(NC-1)/2), z=(ti-head);
+      var rx=x*Math.cos(yaw)-z*Math.sin(yaw)*0.42;
+      var rz=x*Math.sin(yaw)*0.42+z*Math.cos(yaw);
+      var d=1/(1+(-rz)*0.0165);
+      return [cx+rx*sx*d*1.5, cy + rz*sz*pit - h*sy*d, d];
+    }
+    var span=26, from=Math.max(0,Math.floor(head)-span);
+    for(var ti=from;ti<=Math.floor(head);ti++){
+      var age=(Math.floor(head)-ti)/span, al=Math.pow(1-age,1.5);
+      if(al<=0.012)continue;
+      for(var ci=0;ci<NC-1;ci++){
+        var h1=H[ci][ti],h2=H[ci+1][ti];
+        var a=proj(ci,ti,h1),b=proj(ci+1,ti,h2);
+        if(mode!=='grid'&&ti<Math.floor(head)){
+          var h1n=H[ci][ti+1],h2n=H[ci+1][ti+1];
+          var c2=proj(ci+1,ti+1,h2n),d2=proj(ci,ti+1,h1n);
+          ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);
+          ctx.lineTo(c2[0],c2[1]);ctx.lineTo(d2[0],d2[1]);ctx.closePath();
+          var mv=(h1+h2+h1n+h2n)/4;
+          if(mode==='dither'){
+            ctx.fillStyle=col(mv,al*0.9);
+            if(((ci+ti)&1)===0)ctx.fill();
+          } else { ctx.fillStyle=col(mv,al*0.55);ctx.fill(); }
+        }
+        ctx.strokeStyle=col((h1+h2)/2,Math.min(1,al*0.95));
+        ctx.lineWidth=(ti===Math.floor(head)?2.1:0.85)*f.d;
+        ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+      }
+    }
+    var hd=Math.floor(head);
+    ctx.font=(9*f.d)+'px ui-monospace,Menlo,monospace';ctx.textAlign='center';
+    for(var ci2=0;ci2<NC;ci2++){
+      var pp=proj(ci2,hd,H[ci2][hd]);
+      ctx.fillStyle=col(H[ci2][hd],1);
+      ctx.beginPath();ctx.arc(pp[0],pp[1],2.9*f.d,0,6.284);ctx.fill();
+      ctx.fillStyle='rgba(232,232,240,.92)';
+      ctx.fillText(COH[ci2],pp[0],pp[1]-9*f.d);
+    }
+    ctx.textAlign='left';ctx.fillStyle='rgba(74,74,106,.95)';
+    ctx.fillText('COHORT · TIME → DEPTH · GEIGER = HEIGHT',10*f.d,16*f.d);
+    ctx.fillText('t −'+(NT-1-hd)+' bars',10*f.d,Ht-10*f.d);
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ================= 07 GLASS PANEL ================= */
+(function(){
+  var stage=document.getElementById('s7'); if(!stage)return;
+  var ctx=stage.querySelector('canvas').getContext('2d');
+  var st={};ptr(stage,st);
+  (function loop(){
+    var f=fit(stage),W=f.w,H=f.h,d=f.d;
+    st.eng+=((st.tgt||0)-st.eng)*0.07;
+    ctx.fillStyle='#07070C';ctx.fillRect(0,0,W,H);
+    var pads=[[0.06,0.14,0.40,0.34],[0.06,0.54,0.40,0.32],[0.54,0.14,0.40,0.72]];
+    for(var i=0;i<pads.length;i++){
+      var P=pads[i],x=P[0]*W,y=P[1]*H,w=P[2]*W,h=P[3]*H;
+      var g=ctx.createLinearGradient(x,y,x,y+h);
+      g.addColorStop(0,'rgba(24,24,38,.92)');g.addColorStop(1,'rgba(13,13,20,.92)');
+      ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+      var mx=st.px*W,my=st.py*H;
+      var cxp=x+w/2,cyp=y+h/2;
+      var dd=Math.sqrt(Math.pow(mx-cxp,2)+Math.pow(my-cyp,2))/W;
+      var inten=st.eng*Math.exp(-dd*dd*5.5);
+      var rg=ctx.createRadialGradient(mx,my,0,mx,my,w*0.85);
+      rg.addColorStop(0,'rgba(0,212,255,'+(0.20*inten).toFixed(3)+')');
+      rg.addColorStop(0.45,'rgba(0,212,255,'+(0.05*inten).toFixed(3)+')');
+      rg.addColorStop(1,'rgba(0,212,255,0)');
+      ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+      ctx.fillStyle=rg;ctx.fillRect(x,y,w,h);
+      var sg=ctx.createLinearGradient(x,y,x+w,y+h*0.5);
+      sg.addColorStop(0,'rgba(255,255,255,'+(0.055+0.05*inten).toFixed(3)+')');
+      sg.addColorStop(0.5,'rgba(255,255,255,0)');
+      ctx.fillStyle=sg;ctx.fillRect(x,y,w,h*0.55);
+      ctx.restore();
+      ctx.strokeStyle='rgba(0,212,255,'+(0.16+0.55*inten).toFixed(3)+')';
+      ctx.lineWidth=1*d;ctx.strokeRect(x+0.5,y+0.5,w-1,h-1);
+      ctx.fillStyle='rgba(255,255,255,'+(0.10+0.30*inten).toFixed(3)+')';
+      ctx.fillRect(x,y,w,1*d);
+      ctx.fillStyle='rgba(160,160,192,.75)';
+      ctx.font=(9*d)+'px ui-monospace,Menlo,monospace';
+      ctx.fillText(['COHORT GEIGER','FEED HEALTH','ROTATION'][i],x+11*d,y+19*d);
+      ctx.fillStyle='rgba(232,232,240,'+(0.65+0.35*inten).toFixed(3)+')';
+      ctx.font='700 '+(20*d)+'px ui-monospace,Menlo,monospace';
+      ctx.fillText(['+0.41','NOMINAL','4H'][i],x+11*d,y+46*d);
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+})();
+</script></body></html>

@@ -1,0 +1,231 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCINTILLA · Geiger Motion Lab</title>
+<style>
+*{box-sizing:border-box;border-radius:0;margin:0;padding:0}
+:root{--bg:#0A0A0F;--panel:#0D0D14;--line:#1A1A2A;--ink:#E8E8F0;--ink2:#A0A0C0;--dim:#4A4A6A;
+ --crk:#00D4FF;--bull:#00FFA3;--bear:#FF0044;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+html,body{background:var(--bg);color:var(--ink);font-family:ui-sans-serif,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:48px 28px 110px}
+.eye{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--crk);
+ text-shadow:0 0 12px rgba(0,212,255,.45);margin-bottom:10px}
+h1{font-size:32px;letter-spacing:-.015em;margin-bottom:8px}
+.lede{font-size:14px;color:var(--ink2);line-height:1.6;max-width:760px;margin-bottom:8px}
+.warn{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--bear);margin-bottom:36px}
+.card{border:1px solid var(--line);background:var(--panel);margin-bottom:30px}
+.hd{display:flex;align-items:baseline;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.hd .n{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim)}
+.hd .t{font-size:15px;font-weight:700}
+.hd .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--crk);
+ border:.8px solid rgba(0,212,255,.45);padding:3px 7px;margin-left:auto}
+.stage{position:relative;background:#07070C;overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%}
+.ctl{display:flex;gap:6px;padding:9px 16px;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.chip{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:#767690;
+ border:.8px dashed rgba(0,212,255,.28);padding:4px 9px;cursor:pointer;background:none}
+.chip.on{color:var(--crk);border:.8px solid var(--crk)}
+.chip:hover{color:#C6C8DE}
+.lbl{font-family:var(--mono);font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.sep{width:.8px;height:14px;background:rgba(0,212,255,.25);margin:0 6px}
+.ft{padding:11px 16px;border-top:1px solid var(--line);font-size:12px;color:#9A9AB6;line-height:1.55}
+.ft b{color:var(--ink)}
+input[type=range]{accent-color:var(--crk);flex:1;min-width:120px}
+.foot{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-top:34px}
+@media(max-width:820px){.wrap{padding:32px 16px 80px}}
+</style></head><body><div class="wrap">
+<div class="eye">SCINTILLA · GEIGER MOTION LAB · R1</div>
+<h1>The geiger, in motion.</h1>
+<p class="lede">Four working answers to one question: the hub's geiger bars are already the best condensed read we have &mdash; what do they look like when TIME and ORDER move through them? Everything here is the real bar language (bipolar, center zero, glow), animated with springs. Toggle, scrub, play.</p>
+<p class="warn">ILLUSTRATIVE SERIES &mdash; real wiring needs composite_history (master). Shapes &amp; motion are the proposal.</p>
+
+<div class="card">
+<div class="hd"><span class="n">01</span><span class="t">Cohort Compare · Time Replay</span><span class="tag">the lookback toggle</span></div>
+<div class="stage" style="height:250px"><canvas id="c1"></canvas></div>
+<div class="ctl"><span class="lbl">Lookback</span>
+<button class="chip lb" data-lb="5">1W</button><button class="chip lb" data-lb="10">2W</button>
+<button class="chip lb on" data-lb="21">1M</button><button class="chip lb" data-lb="126">6M</button>
+<span class="sep"></span>
+<button class="chip" id="p1">&#10073;&#10073; PAUSE</button>
+<input type="range" id="s1" min="0" max="100" value="100">
+<span class="lbl" id="d1">now</span></div>
+<div class="ft"><b>What you're seeing:</b> the exact compare strip, but the bars GLIDE to each session's values as time replays across the lookback. Headers never move &mdash; the same cohort stays under your eye and you watch it swing green&rarr;red. Scrub the slider to any day. This is the top-level toggle you described: it defines "what we are viewing right now" for everything below it. <b>Center tick:</b> here it fades out whenever a bar is present (option for the noise complaint) &mdash; zero line only shows on flat/empty.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="n">02</span><span class="t">Rank Morph · the table as a shape</span><span class="tag">sort = silhouette</span></div>
+<div class="stage" style="height:340px"><canvas id="c2"></canvas></div>
+<div class="ctl"><span class="lbl">Rank by</span>
+<button class="chip rk on" data-rk="g">GEIGER</button><button class="chip rk" data-rk="chg">%CHG</button>
+<button class="chip rk" data-rk="pe">P/E</button><button class="chip rk" data-rk="mc">MKT CAP</button>
+<button class="chip rk" data-rk="rsi">RSI</button></div>
+<div class="ft"><b>Your board insight, made literal:</b> the geiger column IS a shape, and each sort key gives it a different silhouette. Rows spring to their new rank position (never teleport), so you SEE the re-ordering &mdash; which names fall, which climb, how the green/red mass redistributes. Ranked by geiger it's a clean fan; ranked by P/E or mkt cap the fan scrambles, and that scramble is information: it shows how disconnected signal is from size or valuation.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="n">03</span><span class="t">Within-Cohort · ghost trails</span><span class="tag">movement per company</span></div>
+<div class="stage" style="height:300px"><canvas id="c3"></canvas></div>
+<div class="ctl"><span class="lbl">Trail</span>
+<button class="chip tr" data-tr="0">OFF</button><button class="chip tr" data-tr="5">5</button>
+<button class="chip tr on" data-tr="10">10</button><button class="chip tr" data-tr="21">21</button>
+<span class="sep"></span><span class="lbl">follows the same lookback + scrub as 01</span></div>
+<div class="ft"><b>Inside one cohort:</b> every company is a vertical geiger; behind each live bar, its past N readings hang as fading ghosts. A name that has been building shows a green staircase behind it; one that just flipped shows a red bar with green ghosts &mdash; the turn is visible without reading a single number. This is the per-company layer under the 01 toggle.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="n">04</span><span class="t">Cohort Ident · aggregate readout</span><span class="tag">the empty header, filled</span></div>
+<div class="stage" style="height:120px"><canvas id="c4"></canvas></div>
+<div class="ctl"><button class="chip ch on" data-ch="AI HW">AI HW</button>
+<button class="chip ch" data-ch="MEGACAP">MEGACAP</button><button class="chip ch" data-ch="CRYPTO">CRYPTO</button>
+<button class="chip ch" data-ch="BLUE CHIP">BLUE CHIP</button></div>
+<div class="ft"><b>When no ticker is pinned the ident bar is dead space.</b> Proposal: it becomes the cohort's own ident &mdash; mkt-cap-weighted %chg as the big number (the honest aggregate you asked for), equal-weight beside it, breadth (advancers/decliners) as a split bar, count of tickers. Numbers roll and the breadth bar glides on cohort switch. Real wiring: all fields already exist per-ticker in the board pull &mdash; this needs NO new table, it can go live now.</div>
+</div>
+
+<div class="foot">All motion springs &middot; zero libraries &middot; bar language identical to the hub &middot; 01–03 need composite_history · 04 is wireable today</div>
+</div>
+<script>
+(function(){
+var COH=['INTL','BLUE','INDEX','GROW','MACRO','MEGA','AIHW','AISW','THEME','CRYP'];
+var TK=['NVDA','AVGO','AMD','MU','ANET','CRDO','MRVL','ALAB','LITE','SNDK','TSM','ARM'];
+function mul(a,c,m){a=a>>>0;return function(){a=(a*1664525+1013904223)>>>0;return a/4294967296;};}
+function walk(seed,n,start){var r=mul(seed),v=start,out=[];for(var i=0;i<n;i++){v+=(r()-0.5)*0.16+(0.0-v)*0.012;v=Math.max(-1,Math.min(1,v));out.push(v);}return out;}
+var N=140;
+var SER=COH.map(function(c,i){return walk(1000+i*77,N,(i/(COH.length-1))*1.2-0.6);});
+var TSER=TK.map(function(t,i){return walk(5000+i*131,N,(Math.sin(i*2.7))*0.5);});
+var META=TK.map(function(t,i){var r=mul(9000+i*17);return {t:t,pe:8+r()*120,mc:Math.pow(10,1+r()*3.6),rsi:22+r()*60,chg:(r()-0.45)*12};});
+function fit(id){var cv=document.getElementById(id),st=cv.parentNode,r=st.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);
+ var w=Math.round(r.width*d),h=Math.round(r.height*d);if(cv.width!==w)cv.width=w;if(cv.height!==h)cv.height=h;
+ return {c:cv.getContext('2d'),w:w,h:h,d:d};}
+function bullc(v){return v>=0?'0,255,163':'255,0,68';}
+
+/* shared time state (01 + 03) */
+var LB=21, HEAD=N-1, PLAY=true, SCRUB=1;
+var s1=document.getElementById('s1'), d1=document.getElementById('d1'), p1=document.getElementById('p1');
+document.querySelectorAll('.lb').forEach(function(b){b.onclick=function(){LB=+b.dataset.lb;
+ document.querySelectorAll('.lb').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+p1.onclick=function(){PLAY=!PLAY;p1.innerHTML=PLAY?'&#10073;&#10073; PAUSE':'&#9654; PLAY';p1.classList.toggle('on',PLAY);};
+s1.oninput=function(){PLAY=false;p1.innerHTML='&#9654; PLAY';SCRUB=+s1.value/100;};
+var t=0;
+function headIdx(){var lo=N-1-LB;return Math.round(lo+SCRUB*(N-1-lo));}
+
+/* 01 replay — cur values spring toward series[head] */
+var cur1=SER.map(function(s){return s[N-1];});
+function draw1(){var f=fit('c1'),c=f.c,W=f.w,H=f.h,d=f.d;
+ c.fillStyle='#07070C';c.fillRect(0,0,W,H);
+ var hi=headIdx();
+ var span=0.05;for(var i=0;i<SER.length;i++)span=Math.max(span,Math.abs(SER[i][hi]));
+ var n=COH.length,cw=W/n,track=H-64*d,cy=34*d+track/2;
+ for(var i2=0;i2<n;i2++){
+  var tgt=SER[i2][hi];cur1[i2]+=(tgt-cur1[i2])*0.14;
+  var v=cur1[i2],x=cw*i2+cw/2,bw=Math.min(26*d,cw*0.34);
+  c.fillStyle='rgba(255,255,255,.045)';c.fillRect(x-bw/2,cy-track/2,bw,track);
+  var hpx=Math.min(Math.abs(v)/span,1)*(track/2),col=bullc(v);
+  /* center tick fades when bar present (T3 option) */
+  var tickA=Math.max(0,0.55-Math.abs(v)/span*1.4);
+  if(tickA>0.02){c.fillStyle='rgba(160,160,192,'+tickA.toFixed(2)+')';c.fillRect(x-bw/2-3*d,cy-0.7*d,bw+6*d,1.4*d);}
+  c.fillStyle='rgba('+col+',.9)';c.shadowBlur=9*d;c.shadowColor='rgba('+col+',.7)';
+  c.fillRect(x-bw/2,v>=0?cy-hpx:cy,bw,hpx);c.shadowBlur=0;
+  c.fillStyle='rgba(160,160,192,.9)';c.font=(9*d)+'px '+'ui-monospace,Menlo,monospace';c.textAlign='center';
+  c.fillText(COH[i2],x,20*d);
+  c.fillStyle='rgba('+col+',1)';c.font='700 '+(10*d)+'px ui-monospace,Menlo,monospace';
+  c.fillText((v>=0?'+':'')+v.toFixed(2),x,H-12*d);
+ }
+ c.textAlign='left';c.fillStyle='rgba(74,74,106,1)';c.font=(8.5*d)+'px ui-monospace,Menlo,monospace';
+ c.fillText('scale ±'+span.toFixed(2),10*d,H-10*d);
+}
+
+/* 02 rank morph */
+var RK='g', pos2=TK.map(function(_,i){return i;}), y2=TK.map(function(_,i){return i;});
+document.querySelectorAll('.rk').forEach(function(b){b.onclick=function(){RK=b.dataset.rk;
+ document.querySelectorAll('.rk').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+function keyval(i,hi){var m=META[i];
+ if(RK==='g')return TSER[i][hi]; if(RK==='chg')return m.chg; if(RK==='pe')return -m.pe;
+ if(RK==='mc')return m.mc; return m.rsi;}
+function draw2(){var f=fit('c2'),c=f.c,W=f.w,H=f.h,d=f.d;
+ c.fillStyle='#07070C';c.fillRect(0,0,W,H);
+ var hi=headIdx();
+ var order=TK.map(function(_,i){return i;}).sort(function(a,b){return keyval(b,hi)-keyval(a,hi);});
+ var rank=[];order.forEach(function(idx,r){rank[idx]=r;});
+ var n=TK.length,rh=H/(n+0.5),cx=W*0.52,half=W*0.30;
+ for(var i=0;i<n;i++){
+  y2[i]+=((rank[i]+0.5)*rh-y2[i])*0.13;
+  var v=TSER[i][hi],col=bullc(v),y=y2[i];
+  c.fillStyle='rgba(232,232,240,.92)';c.font='700 '+(9.5*d)+'px ui-monospace,Menlo,monospace';c.textAlign='right';
+  c.fillText(TK[i],cx-half-12*d,y+3*d);
+  c.fillStyle='rgba(255,255,255,.05)';c.fillRect(cx-half,y-5.5*d,half*2,11*d);
+  c.fillStyle='rgba(160,160,192,.5)';c.fillRect(cx-0.7*d,y-5.5*d,1.4*d,11*d);
+  var w=Math.min(Math.abs(v),1)*half;
+  c.fillStyle='rgba('+col+',.9)';c.shadowBlur=7*d;c.shadowColor='rgba('+col+',.6)';
+  c.fillRect(v>=0?cx:cx-w,y-5.5*d,w,11*d);c.shadowBlur=0;
+  var m=META[i],lab=RK==='pe'?m.pe.toFixed(0)+'x':RK==='mc'?'$'+m.mc.toFixed(0)+'B':RK==='rsi'?m.rsi.toFixed(0):RK==='chg'?(m.chg>=0?'+':'')+m.chg.toFixed(1)+'%':(v>=0?'+':'')+v.toFixed(2);
+  c.fillStyle='rgba(122,122,150,.9)';c.font=(8.5*d)+'px ui-monospace,Menlo,monospace';c.textAlign='left';
+  c.fillText(lab,cx+half+12*d,y+3*d);
+ }
+}
+
+/* 03 ghost trails */
+var TR=10;
+document.querySelectorAll('.tr').forEach(function(b){b.onclick=function(){TR=+b.dataset.tr;
+ document.querySelectorAll('.tr').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+var cur3=TSER.map(function(s){return s[N-1];});
+function draw3(){var f=fit('c3'),c=f.c,W=f.w,H=f.h,d=f.d;
+ c.fillStyle='#07070C';c.fillRect(0,0,W,H);
+ var hi=headIdx(),n=TK.length,cw=W/n,track=H-58*d,cy=30*d+track/2;
+ for(var i=0;i<n;i++){
+  var x=cw*i+cw/2,bw=Math.min(16*d,cw*0.24);
+  c.fillStyle='rgba(255,255,255,.04)';c.fillRect(x-bw/2,cy-track/2,bw,track);
+  c.fillStyle='rgba(160,160,192,.28)';c.fillRect(x-bw/2-2*d,cy-0.6*d,bw+4*d,1.2*d);
+  for(var k=TR;k>=1;k--){var idx=hi-k;if(idx<0)continue;
+   var gv=TSER[i][idx],ga=0.05+0.28*(1-k/(TR+1)),gh=Math.min(Math.abs(gv),1)*(track/2);
+   var gx=x-bw/2 - (k/(TR+1))*bw*0.9;
+   c.fillStyle='rgba('+bullc(gv)+','+ga.toFixed(3)+')';
+   c.fillRect(gx,gv>=0?cy-gh:cy,bw*0.55,gh);}
+  var tgt=TSER[i][hi];cur3[i]+=(tgt-cur3[i])*0.14;
+  var v=cur3[i],hpx=Math.min(Math.abs(v),1)*(track/2),col=bullc(v);
+  c.fillStyle='rgba('+col+',.95)';c.shadowBlur=8*d;c.shadowColor='rgba('+col+',.7)';
+  c.fillRect(x-bw/2,v>=0?cy-hpx:cy,bw,hpx);c.shadowBlur=0;
+  c.fillStyle='rgba(160,160,192,.9)';c.font=(8.5*d)+'px ui-monospace,Menlo,monospace';c.textAlign='center';
+  c.fillText(TK[i],x,18*d);
+  c.fillStyle='rgba('+col+',1)';c.font='700 '+(9*d)+'px ui-monospace,Menlo,monospace';
+  c.fillText((v>=0?'+':'')+v.toFixed(2),x,H-10*d);
+ }
+}
+
+/* 04 aggregate ident */
+var CH='AI HW';
+var AGG={'AI HW':{w:-2.41,e:-1.02,adv:14,dec:26,n:40,cap:'$8.9T'},
+ 'MEGACAP':{w:0.84,e:0.61,adv:6,dec:3,n:9,cap:'$21.4T'},
+ 'CRYPTO':{w:-4.87,e:-5.32,adv:2,dec:9,n:11,cap:'$3.1T'},
+ 'BLUE CHIP':{w:0.22,e:0.13,adv:25,dec:22,n:47,cap:'$18.2T'}};
+var cw4=AGG[CH].w, ce4=AGG[CH].e, cb4=AGG[CH].adv/(AGG[CH].adv+AGG[CH].dec);
+document.querySelectorAll('.ch').forEach(function(b){b.onclick=function(){CH=b.dataset.ch;
+ document.querySelectorAll('.ch').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+function draw4(){var f=fit('c4'),c=f.c,W=f.w,H=f.h,d=f.d,A=AGG[CH];
+ cw4+=(A.w-cw4)*0.1;ce4+=(A.e-ce4)*0.1;cb4+=((A.adv/(A.adv+A.dec))-cb4)*0.1;
+ c.fillStyle='#07070C';c.fillRect(0,0,W,H);
+ c.strokeStyle='rgba(0,212,255,.35)';c.lineWidth=0.8*d;c.strokeRect(6*d,6*d,W-12*d,H-12*d);
+ c.fillStyle='rgba(232,232,240,1)';c.font='700 '+(17*d)+'px ui-monospace,Menlo,monospace';c.textAlign='left';
+ c.fillText(CH,20*d,H/2-8*d);
+ c.fillStyle='rgba(122,122,150,.9)';c.font=(8.5*d)+'px ui-monospace,Menlo,monospace';
+ c.fillText(A.n+' TICKERS · '+A.cap,20*d,H/2+12*d);
+ var col=cw4>=0?'0,255,163':'255,0,68';
+ c.fillStyle='rgba('+col+',1)';c.font='700 '+(24*d)+'px ui-monospace,Menlo,monospace';c.textAlign='right';
+ c.shadowBlur=12*d;c.shadowColor='rgba('+col+',.6)';
+ c.fillText((cw4>=0?'+':'')+cw4.toFixed(2)+'%',W-24*d,H/2-2*d);c.shadowBlur=0;
+ c.fillStyle='rgba(122,122,150,.9)';c.font=(8.5*d)+'px ui-monospace,Menlo,monospace';
+ c.fillText('CAP-WEIGHTED · EQ '+(ce4>=0?'+':'')+ce4.toFixed(2)+'%',W-24*d,H/2+14*d);
+ var bx=W*0.42,bw2=W*0.20,by=H/2-3*d;
+ c.fillStyle='rgba(255,0,68,.55)';c.fillRect(bx,by,bw2,6*d);
+ c.fillStyle='rgba(0,255,163,.75)';c.fillRect(bx,by,bw2*cb4,6*d);
+ c.fillStyle='rgba(122,122,150,.9)';c.textAlign='center';
+ c.fillText(AGG[CH].adv+' ADV · '+AGG[CH].dec+' DEC',bx+bw2/2,by+18*d);
+}
+
+(function loop(){
+ t++;
+ if(PLAY){SCRUB+=0.004;if(SCRUB>1)SCRUB=0;s1.value=Math.round(SCRUB*100);}
+ var hi=headIdx();d1.textContent=(hi===N-1)?'now':('−'+(N-1-hi)+' sess');
+ draw1();draw2();draw3();draw4();
+ requestAnimationFrame(loop);
+})();
+})();
+</script></body></html>
