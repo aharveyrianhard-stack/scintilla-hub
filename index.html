@@ -5671,7 +5671,20 @@ function l0BodyHTML() {
     const h = head("MAP · <b>" + esc(L0_MAP_MODE) + "</b> · " + rows.length + " tickers · <b>" +
       esc(S.tq ? "search" : S.coh) + "</b> · sorted by mkt cap · " + l0MapBasis(rows.length));
     if (!rows.length) return h + '<div class="sc-l0note">no tickers in this scope</div>';
-    if (L0_MAP_MODE === "GRID") return h + heatmapHTML(l0MapChg);
+    if (L0_MAP_MODE === "GRID") {
+      /* The FILL / LEVEL chips belong HERE. heatmapHTML has its own header, but the MAP tab
+         builds its own via head() and drops that one - so a toggle added there rendered
+         nowhere, which is exactly what the live check caught. Same .sc-l0chip language as
+         the rest of the Layer-0 controls, and the label states which rule is active so the
+         encoding is never ambiguous. */
+      const modeRow = '<div class="sc-l0rng" style="padding:4px 10px 6px">' +
+        '<button class="sc-l0chip' + (HEAT_MODE === "FILL" ? " is-on" : "") + '" data-act="heatmode" data-mode="FILL" ' +
+          'title="whole square in the Geiger colour; opacity carries the size of the move">FILL &middot; OPACITY</button>' +
+        '<button class="sc-l0chip' + (HEAT_MODE === "LEVEL" ? " is-on" : "") + '" data-act="heatmode" data-mode="LEVEL" ' +
+          'title="a rising level of full-strength colour">LEVEL</button>' +
+        '</div>';
+      return h + modeRow + heatmapHTML(l0MapChg);
+    }
     const body = (L0_MAP_MODE === "TILT") ? l0FocTiltHTML(rows) : '<canvas id="l0foc"></canvas>';
     return h + '<div class="sc-l0cv">' + body + "</div>";
   }
@@ -9994,7 +10007,13 @@ document.addEventListener("click", (e) => {
     /* FILL vs LEVEL — two ways of expressing the same two colours. See heatColorChg. */
     case "heatmode": {
       const m = a.getAttribute("data-mode");   /* the delegated element is `a` in this switch */
-      if (m && m !== HEAT_MODE) { HEAT_MODE = m; renderLeftPanel(); }
+      if (m && m !== HEAT_MODE) {
+        HEAT_MODE = m;
+        /* the grid lives in the Layer-0 MAP body, so repaint that; renderLeftPanel covers
+           the separate left-panel heat view when that is the surface on screen. */
+        if (typeof paintL0Body === "function") paintL0Body();          /* the MAP grid lives in #l0body */
+        if (typeof renderLeftPanel === "function") renderLeftPanel();   /* and the left-panel heat view */
+      }
       break;
     }
     case "heattoggle": {   // #133 — flip the left panel between single-ticker (rotate/pinned) and whole-scope heatmap
