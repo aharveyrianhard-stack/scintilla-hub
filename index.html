@@ -4206,8 +4206,19 @@ function cohortCompareStripHTML() {
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
     "</button>";
   }).join("");
+  /* ★ THE TOGGLE IS PART OF THE RENDER NOW. It used to be appended afterwards by cmpToggle()
+     and restored by a MutationObserver, so every time the page rebuilt this strip the
+     COHORTS|SECTORS control VANISHED until the next housekeeping tick - a navigation control
+     blinking out for a second or more. Rendering it inline means there is no gap to restore.
+     Clicks are delegated at document level (see the gwxcmp handler), so nothing needs
+     re-binding either. */
+  const cmpBtns = '<span class="gwx-cmp" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
+    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "COHORTS" ? " is-on" : "") +
+      '" data-gwxcmp="COHORTS">COHORTS</button>' +
+    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" ? " is-on" : "") +
+      '" data-gwxcmp="SECTORS">SECTORS</button></span>';
   return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
-           span.toFixed(2) + "</div>" +
+           span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip">' + cols + "</div>";
 }
 function boardPanelHTML() {
@@ -12129,6 +12140,18 @@ function filesWire(){
       }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
     };
   }
+  /* delegated once: any COHORTS/SECTORS button, however many times the strip is rebuilt */
+  if(!window.__gwxCmpDelegated){
+    window.__gwxCmpDelegated=true;
+    document.addEventListener("click",function(ev){
+      var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
+      ev.stopPropagation();
+      CMP_MODE=b.getAttribute("data-gwxcmp");
+      var cc=E("cohCompare");
+      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+    }, true);
+  }
+  /* kept as a harmless no-op: the toggle is rendered inline now, so there is nothing to restore */
   function cmpToggle(){
     var hd=document.querySelector(".sc-cohstrip__hd"); if(!hd||hd.querySelector(".gwx-cmp"))return;
     var w=document.createElement("span"); w.className="gwx-cmp";
