@@ -11572,6 +11572,15 @@ function filesWire(){
 .gwx{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:.4px solid var(--line)}
 .gwx__sc{flex:1;cursor:pointer;min-width:60px;height:14px;background:transparent;
   -webkit-appearance:none;appearance:none;outline:none}
+/* the START handle: same track language, dimmer thumb so the eye reads it as the boundary
+   rather than the playhead. Narrow - it sets an edge, it is not the thing you scrub. */
+.gwx__st{flex:0 0 66px;cursor:pointer;height:14px;background:transparent;
+  -webkit-appearance:none;appearance:none;outline:none;opacity:.75}
+.gwx__st::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a)}
+.gwx__st::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
+.gwx__st::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:7px;border-radius:50%;
+  background:var(--dim);margin-top:-2.5px;border:none}
+.gwx__st::-moz-range-thumb{width:7px;height:7px;border-radius:50%;background:var(--dim);border:none}
 .gwx__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a);border-radius:0}
 .gwx__sc::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
 .gwx__sc::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;
@@ -11598,6 +11607,7 @@ function filesWire(){
   var ASOF=null, DATES=[], CACHE={}, LIVE_G=null, PREV={}, TIMER=null, MOUNTED=false;
   var NEXT_D=null, BLEND=0;   /* the day being eased toward, and how far */
   var SUB=20;                 /* slider stops per trading day - the finger moves in 1/20ths */
+  var START_I=0;              /* index into DATES where the rewind window BEGINS */
   /* The second input: how far back the rewind reaches. label, calendar days, row cap.
      The list is TRIMMED at runtime to what fan_daily actually holds - offering a 5Y chip
      that quietly returns 14 months is worse than not offering it. The deepest option is
@@ -11629,9 +11639,28 @@ function filesWire(){
       '<span class="sc-l0rng__lbl">Rewind</span>'+
       '<button class="sc-l0chip" data-act="gwxplay" id="gwxPlay">&#9654; PLAY</button>'+
       '<button class="sc-l0chip" data-act="gwxback" id="gwxBack" title="how far back the rewind reaches - the point you measure change from">'+BACK_DEF[BACK_I][0]+'</button>'+
-      '<input type="range" class="gwx__sc" id="gwxSc" min="0" max="0" value="0" disabled>'+
+      /* ★ TWO HANDLES. Alan: "have the rewind bar have two toggles - one the starting, one
+         the ending, and you move the ending around, but the starting makes the start of the
+         rewind later."
+         START binds the window; END scrubs inside it. This is what fixes the steppiness
+         rather than papering over it: a one-year window forces 250 trading days through one
+         bar, so every pixel is most of a day and each move lurches. Bind the window to a
+         month and the same bar carries ~21 days - each step is smaller, the motion reads as
+         motion, and the rank arrows have far less to accumulate. One control, three symptoms. */
+      '<input type="range" class="gwx__st" id="gwxStart" min="0" max="0" value="0" disabled '+
+        'title="where the rewind BEGINS - drag right to bind the window tighter">'+
+      '<input type="range" class="gwx__sc" id="gwxSc" min="0" max="0" value="0" disabled '+
+        'title="where you are inside the window">'+
       '<span id="gwxLiveSlot"></span>'+
+      '<span class="sc-l0asof" id="gwxWin" style="opacity:.6;font-size:8.5px"></span>'+
       '<span class="sc-l0asof" id="gwxDt">live</span></div>';
+  }
+  /* say what the window IS - a bound window that does not announce itself is just a slider
+     that mysteriously stopped going back as far. */
+  function windowLbl(){
+    var e=E("gwxWin"); if(!e) return;
+    var a=DATES[START_I], b=DATES[DATES.length-1];
+    e.textContent = (a&&b) ? (a.slice(2)+" \u2192 "+b.slice(2)+"  ("+(DATES.length-START_I)+"d)") : "";
   }
   function liveChip(on){
     var slot=E("gwxLiveSlot"); if(!slot)return;
@@ -11663,6 +11692,21 @@ function filesWire(){
       clearTimeout(window.__gwxSeek);
       window.__gwxSeek=setTimeout(function(){ seek(DATES[i], DATES[i+1], f); }, 60);
     };
+    /* START binds the window; the scrubber then spans only [START_I .. last]. Narrowing the
+       window is what makes each step small enough to read as movement. */
+    var st=E("gwxStart");
+    if(st) st.oninput=function(){
+      stop();
+      var maxStart=Math.max(0, DATES.length-6);          // always leave a few days to scrub
+      START_I=Math.min(maxStart, Math.round(+this.value));
+      var sc=E("gwxSc");
+      if(sc){
+        sc.min=START_I*SUB;
+        if(+sc.value < +sc.min) sc.value=sc.min;
+      }
+      var d=DATES[START_I]; if(d) E("gwxDt").textContent=DATES[Math.floor((+E("gwxSc").value)/SUB)]||d;
+      windowLbl();
+    };
     var bk=E("gwxBack");
     if(bk) bk.onclick=function(){
       stop();
@@ -11687,7 +11731,22 @@ function filesWire(){
       var last=keep[keep.length-1].slice(); last[0]="MAX"; last[1]=have; last[2]=2000;
       keep[keep.length-1]=last;
       BACK_DEF=keep; BACK_I=Math.min(BACK_I,BACK_DEF.length-1);
-      var bk=E("gwxBack");
+      /* START binds the window; the scrubber then spans only [START_I .. last]. Narrowing the
+       window is what makes each step small enough to read as movement. */
+    var st=E("gwxStart");
+    if(st) st.oninput=function(){
+      stop();
+      var maxStart=Math.max(0, DATES.length-6);          // always leave a few days to scrub
+      START_I=Math.min(maxStart, Math.round(+this.value));
+      var sc=E("gwxSc");
+      if(sc){
+        sc.min=START_I*SUB;
+        if(+sc.value < +sc.min) sc.value=sc.min;
+      }
+      var d=DATES[START_I]; if(d) E("gwxDt").textContent=DATES[Math.floor((+E("gwxSc").value)/SUB)]||d;
+      windowLbl();
+    };
+    var bk=E("gwxBack");
       if(bk){ bk.textContent=BACK_DEF[BACK_I][0];
               bk.title="how far back the rewind reaches - the point you measure change from. "+
                        "History begins "+BACK_FLOOR+"."; }
@@ -11697,7 +11756,10 @@ function filesWire(){
     var w=BACK_DEF[BACK_I], from=new Date(Date.now()-w[1]*864e5).toISOString().slice(0,10);
     api("fan_daily?select=asof&ticker=eq.SPY&asof=gte."+from+"&order=asof.asc&limit="+w[2]).then(function(rows){
       DATES=rows.map(function(r){return r.asof;});
-      var sc=E("gwxSc"); if(sc&&DATES.length){sc.max=(DATES.length-1)*SUB;sc.value=sc.max;sc.disabled=false;}
+      var sc=E("gwxSc"), st=E("gwxStart");
+      if(sc&&DATES.length){ sc.min=0; sc.max=(DATES.length-1)*SUB; sc.value=sc.max; sc.disabled=false; }
+      if(st&&DATES.length){ st.min=0; st.max=Math.max(0,DATES.length-6); st.value=0; st.disabled=false; }
+      START_I=0; windowLbl();
     });
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
@@ -11707,7 +11769,7 @@ function filesWire(){
     NEXT_D = (frac && frac > 0.01 && dNext) ? dNext : null;
     BLEND  = NEXT_D ? frac : 0;
     ASOF=d; document.body.classList.add("gwx-on");
-    E("gwxDt").textContent=d; liveChip(true);
+    E("gwxDt").textContent=d; liveChip(true); armIdle();
     /* the neighbour must be warmed on EVERY seek, not only on a cache miss - the early
        return below used to skip it, so the blend had nothing to interpolate toward and
        each sub-step rendered the day flat. */
@@ -11777,7 +11839,17 @@ function filesWire(){
     });
     repaint(before);
   }
+  /* Alan: "I don't like this LIVE button that comes up... it should just revert back to live
+     on a timer automatically." So it does: 45 seconds after the last touch of the rewind,
+     the board returns to live on its own. Every interaction resets the clock, so it never
+     yanks the view out from under a finger that is still working. */
+  var IDLE=null;
+  function armIdle(){
+    clearTimeout(IDLE);
+    IDLE=setTimeout(function(){ if(ASOF && !TIMER) goLive(); }, 45000);
+  }
   function goLive(){
+    clearTimeout(IDLE);
     stop(); ASOF=null; document.body.classList.remove("gwx-on");
     E("gwxDt").textContent="live"; liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
@@ -11866,22 +11938,29 @@ function filesWire(){
     (S.boardOrder||[]).forEach(function(t,now){
       var was=before[t]; if(was===undefined||was===now)return;
       var row=document.querySelector('.sc-board__row[data-t="'+t+'"]'); if(!row)return;
-      var b=document.createElement("span"); b.className="gwx-rk";
+      /* ★ THE BUNCHING. Alan: "I am seeing bunching, and it's on the arrows... I think it's
+         that within the timeframe of the rewind there was up and down movement."
+         Exactly right. Every seek appended a NEW badge, so a name that rose then fell inside
+         the window ended up wearing three or four arrows stacked on top of each other, and
+         each carried its own 4-second timer. One badge per row now, reused and rewritten -
+         so what you see is where the row stands, not a pile of everywhere it has been. */
+      var b=row.querySelector(".gwx-rk");
+      if(!b){ b=document.createElement("span"); b.className="gwx-rk"; row.appendChild(b); }
+      clearTimeout(b.__hide); clearTimeout(b.__kill);
       var d=was-now;
       b.textContent=(d>0?"▲":"▼")+Math.abs(d);
       b.style.color=d>0?"var(--bull)":"var(--bear)";
-      row.appendChild(b);
       /* Alan: "let's leave it open for longer... I need it to stay longer." 1.4s was gone
          before you could read a board's worth of them. 4s visible, then a slow fade. */
       setTimeout(function(){b.classList.add("show");},10);
-      setTimeout(function(){b.classList.remove("show");},4000);
-      setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},4700);
+      b.__hide=setTimeout(function(){b.classList.remove("show");},4000);
+      b.__kill=setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},4700);
     });
   }
   function play(){
     if(TIMER)return stop();
     var sc=E("gwxSc"); if(!sc||!DATES.length)return;
-    if(+sc.value>=+sc.max) sc.value=Math.max(0,(DATES.length-40)*SUB);
+    if(+sc.value>=+sc.max) sc.value=START_I*SUB;   /* replay the bound window, not a fixed 40 days */
     E("gwxPlay").innerHTML="&#10073;&#10073; PAUSE"; E("gwxPlay").classList.add("is-on");
     /* The thumb is animated, the data is not. Moving both on the same 700ms tick is what
        made the bar hop. A requestAnimationFrame loop slides the thumb continuously; each
