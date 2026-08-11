@@ -3029,6 +3029,10 @@ function fpeVal(t, price) {
 }
 
 async function fetchBoardRows(cohort = "ALL", fav = []) {
+  /* the membership map decides which rows belong to this cohort, so wait for it rather than
+     racing it - a board that renders first would silently fall back to tickers.cohort, which
+     is the split that produced a Geiger for a cohort with no rows in it. */
+  try { await loadCohSets(); } catch (_) { /* fallback path below still works */ }
   /* R39 — COMPARE fix: this pull is now ALWAYS unscoped (every ticker's cohort tag,
      not just the active one) so cohortCompareRows() can read every cohort's
      membership regardless of which single cohort tab is on screen. Cheap: it's just
@@ -3087,7 +3091,21 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   const scopeAll = cohort === "ALL" || cohort === "FAV";
   let rows = members
     .filter((m) => !seen.has(m.ticker) && seen.add(m.ticker))
-    .filter((m) => scopeAll || m.cohort === cohort)   // R39 — members is now UNSCOPED (always full universe); narrow to the active cohort client-side, same result the old server-side filter gave
+    /* ★ ONE SOURCE FOR COHORT MEMBERSHIP. Alan, looking at the live hub: "cohort compare says
+       AI POWERTRAIN, red Geiger -0.10. There are no companies in it. How are we getting a
+       Geiger without any tickers?"
+       Because the STRIP read ticker_membership while the BOARD read tickers.cohort, and every
+       cohort edit went to membership only. So the strip averaged 8 real names and the board
+       filtered on a home_cohort none of them carried - a reading with nothing behind it.
+       MEASURED at the time: AI_POWERTRAIN strip 8 / board 0, AI_SOFTWARE 13 / 7,
+       THEMATIC 23 / 32, MACRO 21 / 26.
+       The board now asks the SAME map the strip asks. tickers.cohort stays as the home cohort
+       for anything that still wants it, but it no longer decides what you see. */
+    .filter((m) => {
+      if (scopeAll) return true;
+      if (COHSETS && COHSETS[cohort]) return COHSETS[cohort].has(m.ticker);
+      return m.cohort === cohort;                    // fallback if membership has not loaded
+    })
     .filter((m) => gg[m.ticker])   // FIX 1 — board universe = composite_staged tf=D only (drops DX/NKD/NQ/TNX/TYX/VIX proxies with no pipeline data)
     .map((m) => {
       const dbPx = num(px[m.ticker] && px[m.ticker].price);
