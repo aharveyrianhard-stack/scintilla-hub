@@ -232,8 +232,15 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* R43 §2 — HORIZONTAL cohort compare strip: one narrow column per cohort, laid
    left→right most-bullish → most-bearish (the sort IS the fan). ~100px tall vs the
    ~300px the vertical fan used to eat. */
-.sc-cohstrip{ flex:0 0 auto; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;
-  padding:6px 8px 7px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+/* A fixed 10-track grid squeezed 12+ cohorts into 32.7px columns — measured — which is
+   narrower than the word "constructive" can ever be set, so the read was truncated to
+   "constr…" in every column. Each column now has a floor of 46px and the strip scrolls
+   sideways when a scope has more cohorts than fit, rather than crushing every label. */
+.sc-cohstrip{ flex:0 0 auto; display:grid; grid-auto-flow:column;
+  grid-auto-columns:minmax(54px,1fr); gap:2px; overflow-x:auto; overscroll-behavior-x:contain;
+  padding:4px 8px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+.sc-cohstrip::-webkit-scrollbar{ height:4px; }
+.sc-cohstrip::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:2px; }
 .sc-cohstrip__hd{ flex:0 0 auto; padding:7px 10px 3px; font-size:8px; letter-spacing:.1em;
   text-transform:uppercase; color:var(--dim); font-family:var(--mono); }
 .sc-cohstrip__col{ display:flex; flex-direction:column; align-items:center; gap:3px;
@@ -261,11 +268,23 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    the visuals say everything." What remains is the track, the CENTRE ZERO LINE (kept:
    above it is bull, below it is bear — that one rule carries meaning) and the bar. The
    magnitude is stated once, in words, in the strip header ("scale ±0.41"). */
-.sc-vmini{ position:relative; width:15px; height:132px; background:var(--panel); border-radius:0; overflow:hidden; }
+.sc-vmini{ position:relative; width:15px; height:114px; background:var(--panel); border-radius:0; overflow:hidden; }
 .sc-vmini__mid{ position:absolute; top:50%; left:0; right:0; height:1.3px; background:var(--dim); z-index:2; }
 .sc-vmini i{ position:absolute; left:2px; right:2px; border-radius:0; max-height:50%; z-index:1; }
 .sc-cohstrip__val{ font-size:9px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
 .sc-cohstrip__col.is-empty .sc-cohstrip__val{ color:var(--mute); font-weight:400; }
+/* the read and the trend/momentum pair, mirroring the board's own columns. Fixed heights
+   so every column reserves the same space and the shared zero line across the strip stays
+   a straight line whether or not a given cohort has a reading yet. */
+.sc-cohstrip__read{ display:block; width:100%; max-width:100%; height:11px; line-height:11px;
+  font-family:var(--mono); font-size:7px; letter-spacing:0; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mute); }
+.sc-cohstrip__div{ margin-left:2px; color:var(--warn,#e0a24a); }
+.sc-cohstrip__tm{ display:flex; align-items:center; justify-content:center; gap:1px; height:11px;
+  width:100%; max-width:100%; overflow:hidden; font-family:var(--mono); font-size:7px;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+.sc-cohstrip__tm i{ font-style:normal; color:var(--dim); opacity:.7; }
+.sc-cohstrip__col.is-empty .sc-cohstrip__tm b{ color:var(--mute); }
 /* 5×2 wrap — never scrolls sideways. R50 §5 RAISED this breakpoint 640 → 820 (the
    authoritative rule now lives in the R50 small-screen block further down the sheet);
    this one is kept as the floor so the wrap can never be lost. */
@@ -323,6 +342,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   transform:perspective(600px); transform-style:preserve-3d;
   transition:box-shadow .12s linear, border-color .12s linear; }
 .sc-l0card.is-hot{ border-color:var(--crk); box-shadow:0 0 0 1px var(--crk), 0 10px 26px rgba(0,0,0,.55); z-index:3; }
+/* the card is grain-painted now (full-strength --bull/--bear dots), so each label sits
+   on a plate of the panel's own dark — same rule as the heat grid and the canvas maps */
+.sc-l0card__t, .sc-l0card__c, .sc-l0card__m{ background:rgba(6,8,12,.93); border-radius:2px; padding:0 4px; }
 .sc-l0card__t{ font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--ink); }
 .sc-l0card__c{ font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--ink2); font-variant-numeric:tabular-nums; }
 .sc-l0card__m{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim); font-variant-numeric:tabular-nums; }
@@ -4188,6 +4210,71 @@ function cohortCompareSpan(list) {
   }
   return Math.max(L0_CMP_MIN_SPAN, m);
 }
+/* ★ THE READ, DEFINED EXACTLY ONCE.
+   Alan: "we can't have two formulas, two definitions, two anything" — and then, on the
+   compare strip: "the behaviour of the cohort board is not being mirrored in the cohort
+   and sector compare in terms of the labels. This is the easiest area in which to express
+   the Geiger in motion."
+   It was not mirrored because the words only existed inside the board's row painter. They
+   live here now, and BOTH the board rows and the compare strip call this one function, so
+   a cohort reading "pullback" on the strip means precisely what "pullback" means on a row.
+
+   Trend is a SLOW, daily-locked measure; momentum is FAST (the equalizer weights 6h/12h/1D).
+   The two disagreeing is not noise, it is the most informative state on the board:
+     strong trend + weak momentum  -> a pullback inside an uptrend, not a top
+     weak trend  + strong momentum -> turning up before the structure confirms */
+function scinRead(T, M) {
+  if (T == null || !isFinite(T)) return { txt: "—", col: "var(--mute)", div: false };
+  if (M == null || !isFinite(M)) return { txt: "trend only", col: "var(--dimmer,#5a6270)", div: false };
+  /* ◆ = trend and momentum disagree by more than 0.60, or point opposite ways. A slow
+     uptrend with a fast pullback lights up; both engines running does not. */
+  const div = Math.abs(T - M) > 0.60 || (T > 0) !== (M > 0);
+  let txt, col;
+  if (T >= 0.5 && M >= 0.4)            { txt = "aligned bull"; col = "var(--bull)"; }
+  else if (T <= -0.5 && M <= -0.4)     { txt = "aligned bear"; col = "var(--bear)"; }
+  else if (T >= 0.4 && M <= -0.15)     { txt = "pullback";     col = "var(--warn,#e0a24a)"; }
+  else if (T <= -0.2 && M >= 0.35)     { txt = "turning up";   col = "var(--warn,#e0a24a)"; }
+  else if (Math.abs(T) < 0.25 && M >= 0.5) { txt = "mom leads"; col = "var(--warn,#e0a24a)"; }
+  else if (T >= 0.5 && Math.abs(M) < 0.2)  { txt = "stalling";  col = "var(--warn,#e0a24a)"; }
+  else if (T >= 0.3 && M >= 0)         { txt = "constructive"; col = "var(--bull)"; }
+  else if (T <= -0.3 && M <= 0)        { txt = "broken";       col = "var(--bear)"; }
+  else                                 { txt = "mixed";        col = "var(--mute)"; }
+  return { txt: txt, col: col, div: div };
+}
+/* mean trend and mean momentum for one group, off the SAME per-ticker store the board
+   paints from (window.SCIN_TM, published by the board's trend/mom loader). Returns nulls
+   rather than zeros when the store has not loaded, so the strip says "—" instead of
+   inventing a neutral reading. */
+function scinGroupTM(tickers) {
+  const TM = window.SCIN_TM;
+  if (!TM || !tickers || !tickers.length) return { tr: null, mo: null, n: 0 };
+  let st = 0, sm = 0, nt = 0, nm = 0;
+  for (const t of tickers) {
+    const d = TM[t]; if (!d) continue;
+    const a = num(d.tr), b = num(d.mo);
+    if (a != null && isFinite(a)) { st += a; nt++; }
+    if (b != null && isFinite(b)) { sm += b; nm++; }
+  }
+  return { tr: nt ? st / nt : null, mo: nm ? sm / nm : null, n: nt };
+}
+/* the ticker list behind one strip column — the same membership the column's mean is
+   built from, so the read can never describe a different set than the bar does */
+function scinGroupTickers(key) {
+  if (typeof COHSETS !== "undefined" && COHSETS) {
+    const direct = COHSETS[key];
+    if (direct) return Array.from(direct);
+    /* SECTORS mode keys the column by its SPDR ticker (XLB), membership by name (MATERIALS) */
+    if (typeof SPDR_TO_SECTOR !== "undefined" && SPDR_TO_SECTOR[key] && COHSETS[SPDR_TO_SECTOR[key]]) {
+      return Array.from(COHSETS[SPDR_TO_SECTOR[key]]);
+    }
+  }
+  if (typeof COHORT_OF !== "undefined") {
+    const out = [];
+    for (const t in COHORT_OF) if (COHORT_OF[t] === key) out.push(t);
+    return out;
+  }
+  return [];
+}
 function cohortCompareStripHTML() {
   const list = cohortCompareRows();
   const span = cohortCompareSpan(list);
@@ -4200,7 +4287,11 @@ function cohortCompareStripHTML() {
         '<span class="sc-cohstrip__slot"><span class="sc-cohstrip__lbl">' + esc(lbl) + '</span>' +
           '<span class="sc-cohstrip__val">—</span></span>' +
         vminiHTML(null, span) +
-        '<span class="sc-cohstrip__slot"></span></button>';
+        '<span class="sc-cohstrip__slot"></span>' +
+        /* the empty column reserves the read and trend/mom rows too, so a column with no
+           data cannot shift its neighbours' bars off the shared zero line */
+        '<span class="sc-cohstrip__read">—</span><span class="sc-cohstrip__tm"><b>—</b><i>/</i><b>—</b></span>' +
+        "</button>";
     }
     const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
     /* Alan: "the green label should be at the top of the green and the red labels at the
@@ -4218,10 +4309,33 @@ function cohortCompareStripHTML() {
     const name = '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>";
     const val  = '<span class="sc-cohstrip__val" style="color:' + color + '">' +
                  (bull ? "+" : "") + r.mean.toFixed(2) + "</span>";
+    /* ★ THE SAME READ THE BOARD SHOWS, ON THE SAME GROUP.
+       Trend and momentum are averaged over exactly the tickers this column's bar is built
+       from, then passed through scinRead() — the one function the board rows also call.
+       So "pullback" under INDUSTRIAL means what "pullback" means on a row, and the ◆ fires
+       on the identical disagreement rule. This is the strip mirroring the board, which is
+       what Alan asked for and did not get. */
+    const g = scinGroupTM(scinGroupTickers(r.key));
+    const rd = scinRead(g.tr, g.mo);
+    const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
+      : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
+        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers";
+    const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
+      esc(rd.txt) + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
+    /* two decimals plus signs is ~40px of text in a ~45px column and the numbers collided.
+       The sign is redundant here — the colour already carries it, in the same two tones as
+       everywhere else — so the pair reads as bare magnitudes and fits. */
+    const tmNum = (v) => (v == null ? "—" : Math.abs(v).toFixed(2));
+    const tmTag = '<span class="sc-cohstrip__tm" title="' + esc(tmTitle) + '">' +
+      '<b style="color:' + ((g.tr ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.tr) + "</b>" +
+      '<i>/</i>' +
+      '<b style="color:' + ((g.mo ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.mo) + "</b></span>";
+
     return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
       '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
       vminiHTML(r.mean, span) +
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
+      readTag + tmTag +
     "</button>";
   }).join("");
   /* ★ THE TOGGLE IS PART OF THE RENDER NOW. It used to be appended afterwards by cmpToggle()
@@ -5220,8 +5334,10 @@ function l0BubR(cap, maxCap, rmax, rmin) {
 function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   if (!(w > 0 && h > 0)) return;
   const cv0 = l0MapChg(r);                     // R49 §2 — the shared TF's %chg when it exists, session %chg otherwise
-  ctx.fillStyle = heatColorChg(cv0);
-  ctx.fillRect(x, y, w, h);
+  /* ONE HUE, coverage carries the move — identical to TREEMAP, BUBBLES and the heat
+     grid's GRAIN. heatColorChg's alpha ramp made every cell a slightly different green,
+     which is exactly what Alan rejected: "I say use Geiger green and you put more greens." */
+  l0PaintGrainRect(ctx, x, y, w, h, cv0);
   ctx.lineWidth = hot ? 1.4 : 0.8;
   ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.07)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
@@ -5229,21 +5345,34 @@ function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   if (m < 13) return;
   const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
   const chg = (cv != null) ? fmtC(cv) : "—";
-  const col = (cv == null || !isFinite(cv)) ? l0Tok("--dim", "#7a8090")
-            : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
+  /* the number is never tinted the same hue as the cell it sits on */
+  const col = (cv == null || !isFinite(cv)) ? l0Tok("--dim", "#7a8090") : l0Tok("--ink", "#e9ecf2");
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.textAlign = "center";
   const cx = x + w / 2, cy = y + h / 2;
   const ts = Math.max(7, Math.min(20, m * 0.21));
-  ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
   ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+  /* the grain runs at full strength under the text, so every tier gets a plate of the
+     panel's own dark first — same treatment as the heat grid and the treemap */
+  const plate = (lines, widest) => {
+    const pw = Math.min(w - 3, widest + 8), ph = ts * (1.15 * lines) + 5;
+    l0LabelPlate(ctx, cx - pw / 2, cy - ph / 2, pw, ph);
+  };
+  ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
   if (m < L0_FOC_D1) {                       // tier 1 — ticker only
+    plate(1, ctx.measureText(r.t).width);
+    ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
     ctx.textBaseline = "middle";
     ctx.fillText(r.t, cx, cy);
     ctx.restore(); return;
   }
   if (m < L0_FOC_D2) {                       // tier 2 — ticker + %chg
+    const w1 = ctx.measureText(r.t).width;
+    ctx.font = '600 ' + (ts * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    plate(2, Math.max(w1, ctx.measureText(chg).width));
+    ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
     ctx.textBaseline = "alphabetic";
     ctx.fillText(r.t, cx, cy - 1);
     ctx.font = '600 ' + (ts * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
@@ -5255,6 +5384,9 @@ function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   const rv = num(r.rsi);
   const rsi = (r.rsi != null && rv != null && isFinite(rv)) ? "RSI " + rv.toFixed(0) : "RSI —";
   const line = ts * 1.02;
+  plate(4, Math.max(ctx.measureText(r.t).width, ctx.measureText(fmtCap(r.mc) || "").width * 1.2));
+  ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+  ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
   ctx.textBaseline = "alphabetic";
   ctx.fillText(r.t, cx, cy - line);
   ctx.font = '600 ' + (ts * 0.80).toFixed(1) + 'px "SF Mono",Menlo,monospace';
@@ -5412,34 +5544,65 @@ function l0FocPaintBubbles(ctx, W, H, rows) {
     const b = B[i], r = rows[i]; if (!r) continue;
     const hot = live && Math.hypot(L0_FOC_P.x - b.x, L0_FOC_P.y - b.y) <= b.r;
     L0_FOC_CELLS.push({ t: b.t, cx: b.x, cy: b.y, r: b.r });
+    const cv0 = l0MapChg(r);
+    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
     ctx.globalAlpha = b.known ? 1 : 0.45;      // no market cap on file → drawn dimmer, honestly
+    /* ONE HUE. The circle is clipped and grain-painted exactly like a treemap tile, so a
+       quiet name is sparse dots of the SAME green and a big mover is a solid disc of it.
+       heatColorChg's alpha ramp used to make every bubble a slightly different green. */
+    ctx.save();
+    ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0.5, b.r), 0, Math.PI * 2); ctx.clip();
+    l0PaintGrainRect(ctx, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, cv0);
+    ctx.restore();
     ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0.5, b.r), 0, Math.PI * 2);
-    ctx.fillStyle = heatColorChg(l0MapChg(r)); ctx.fill();   // R49 §2 — same TF-aware value as every other MAP mode
     ctx.lineWidth = hot ? 1.4 : 0.8;
     ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.10)";
     ctx.stroke();
     ctx.globalAlpha = 1;
-    if (b.r < 9) continue;                     // too small for text — skip the label, never overflow
-    const fs = Math.max(7, Math.min(15, b.r * 0.5));
-    ctx.textAlign = "center";
-    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    if (ctx.measureText(r.t).width > b.r * 2 - 6) continue;
-    const cv0 = l0MapChg(r);
-    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
+
+    /* ★ EVERY BUBBLE CARRIES ITS NUMBER.
+       Alan, twice: "the bubbles don't have the percentage change and you do nothing.
+       BUBBLES HAS NO PERCENTAGE CHANGE." He was right — the change was gated behind
+       r >= 26px, which on a real cohort is three or four circles out of forty, so the
+       map he actually looks at showed tickers and no moves at all.
+       The gate is gone. A bubble wide enough for text gets BOTH lines; if only one
+       line fits, the NUMBER wins, because the move is the thing being asked for and
+       the ticker is recoverable by hovering. Text still never overflows its circle. */
+    if (b.r < 7) continue;
     const chg = (cv != null) ? fmtC(cv) : "—";
+    const room = b.r * 2 - 5;                  // usable chord for text, with a hair of margin
+    ctx.textAlign = "center";
+
+    let fs = Math.max(6.5, Math.min(15, b.r * 0.52));
+    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    let tw = ctx.measureText(r.t).width;
+    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    let cwd = ctx.measureText(chg).width;
+    /* shrink to fit rather than drop the label — a number at 6.5px still reads */
+    let guard = 0;
+    while (Math.max(tw, cwd) > room && fs > 6 && guard++ < 12) {
+      fs *= 0.9;
+      ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      tw = ctx.measureText(r.t).width; cwd = ctx.measureText(chg).width;
+    }
+    const both = (b.r * 2) >= (fs * 2.1 + 4) && Math.max(tw, cwd) <= room;
+
+    const plateW = Math.min(room + 4, Math.max(both ? tw : 0, cwd) + 6);
+    const plateH = (both ? fs * 1.9 : fs * 1.05) + 4;
+    l0LabelPlate(ctx, b.x - plateW / 2, b.y - plateH / 2, plateW, plateH);
+
     ctx.fillStyle = b.known ? ink : dim;
-    if (b.r >= 26) {
+    if (both) {
       ctx.textBaseline = "alphabetic";
       ctx.fillText(r.t, b.x, b.y - 1);
-      ctx.font = '600 ' + (fs * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      if (ctx.measureText(chg).width <= b.r * 2 - 6) {
-        ctx.fillStyle = (cv == null || !isFinite(cv)) ? dim
-          : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
-        ctx.fillText(chg, b.x, b.y + fs * 0.95);
-      }
+      ctx.font = '600 ' + (fs * 0.92).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      ctx.fillStyle = (cv == null) ? dim : ink;
+      ctx.fillText(chg, b.x, b.y + fs * 0.92);
     } else {
       ctx.textBaseline = "middle";
-      ctx.fillText(r.t, b.x, b.y);
+      ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      ctx.fillStyle = (cv == null) ? dim : ink;
+      ctx.fillText(chg, b.x, b.y);               // the move wins the last line, not the ticker
     }
   }
 }
@@ -5534,15 +5697,59 @@ function l0TreeLayout(items, X, Y, W, H) {
   flush();
   return out;
 }
-/* presence of the one true colour: 0.10 for a name that did nothing, 1.00 for the
-   biggest mover on screen. Returns [cssColour, presence] — presence also decides
-   whether the label reads better in ink or in the panel's dark. */
-function l0TreeFill(cv) {
-  if (cv == null || !isFinite(cv)) return ["rgba(140,140,160,.09)", 0];
-  const rgb = cv >= 0 ? heatRGB().bull : heatRGB().bear;
-  const r = Math.min(1, Math.abs(cv) / (HEAT_SCALE || 2));
-  const a = 0.10 + Math.pow(r, 0.75) * 0.90;
-  return ["rgba(" + rgb + "," + a.toFixed(3) + ")", a];
+/* ★ ONE GREEN, ONE RED — AND NOTHING ELSE ON SCREEN.
+   Alan: "it's amazing that I say use Geiger green and you put more greens."
+   He is right and this is the rule, not a preference. An alpha ramp over a dark panel
+   does NOT paint --bull at 40%: it paints a DIFFERENT, duller green. Ten tiles at ten
+   alphas are ten greens. So no tile is ever tinted.
+   Magnitude is carried the one way that leaves the hue untouched — COVERAGE. The tile
+   is painted with DOTS of exactly --bull or exactly --bear at FULL strength, and the
+   size of the move sets how much of the surface those dots occupy: fine sparse grain
+   for a name that barely moved, swelling until they merge into a solid sheet for the
+   biggest mover on screen. Every coloured pixel is the Geiger colour at every level.
+   This is the same language as the heat grid's GRAIN, which is the one Alan said was
+   "finally something where you agree with me on what we're trying to do" — so now the
+   map and the grid say the same thing the same way. */
+const L0_GRAIN_CELL = 5;                              // px between dot centres — matches heatGrain()
+function l0GrainRadius(cv) {
+  const r = Math.min(1, Math.abs(num(cv) ?? 0) / (HEAT_SCALE || 2));
+  return 0.55 + Math.pow(r, 0.5) * 3.15;              // 0.55px sparse → 3.7px, past the merge point
+}
+/* paints one rectangle in exactly one hue, coverage carrying the move. Returns the
+   coverage 0..1 so the label can decide whether it is sitting on a solid sheet. */
+function l0PaintGrainRect(ctx, x, y, w, h, cv) {
+  if (!(w > 0 && h > 0)) return 0;
+  if (cv == null || !isFinite(cv)) {
+    ctx.fillStyle = "rgba(140,140,160,.07)"; ctx.fillRect(x, y, w, h); return 0;
+  }
+  const col = "rgb(" + (cv >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
+  const rad = l0GrainRadius(cv);
+  const cov = Math.min(1, Math.max(0, (rad - 0.55) / 3.15));
+  ctx.fillStyle = col;
+  if (rad >= 3.55) { ctx.fillRect(x, y, w, h); return 1; }   // dots would fully overlap: solid sheet
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  const x0 = Math.floor(x / L0_GRAIN_CELL) * L0_GRAIN_CELL + L0_GRAIN_CELL / 2;
+  const y0 = Math.floor(y / L0_GRAIN_CELL) * L0_GRAIN_CELL + L0_GRAIN_CELL / 2;
+  for (let py = y0; py < y + h + L0_GRAIN_CELL; py += L0_GRAIN_CELL) {
+    for (let px = x0; px < x + w + L0_GRAIN_CELL; px += L0_GRAIN_CELL) {
+      ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+  return cov;
+}
+/* a label plate in the PANEL's own dark — never a third colour. Without it the grain
+   dots run at full strength straight through the text. */
+function l0LabelPlate(ctx, x, y, w, h) {
+  ctx.fillStyle = "rgba(6,8,12,.93)";
+  const r = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath(); ctx.fill();
 }
 function l0FocPaintTreemap(ctx, W, H, rows) {
   const vals = rows.map((r) => l0MapChg(r));
@@ -5566,55 +5773,62 @@ function l0FocPaintTreemap(ctx, W, H, rows) {
     const r = rows[c.i]; if (!r) continue;
     const cv0 = l0MapChg(r);
     const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
-    const fill = l0TreeFill(cv0);
     const hot = live && L0_FOC_P.x >= c.x && L0_FOC_P.x <= c.x + c.w &&
                         L0_FOC_P.y >= c.y && L0_FOC_P.y <= c.y + c.h;
     L0_FOC_CELLS.push({ t: r.t, x: c.x, y: c.y, w: c.w, h: c.h });
 
-    ctx.globalAlpha = (num(r.mc) > 0) ? 1 : 0.55;   // no cap on file → drawn dimmer, honestly
-    ctx.fillStyle = fill[0];
-    ctx.fillRect(c.x, c.y, c.w, c.h);
+    ctx.globalAlpha = (num(r.mc) > 0) ? 1 : 0.6;    // no cap on file → drawn dimmer, honestly
+    l0PaintGrainRect(ctx, c.x, c.y, c.w, c.h, cv0); // exactly one hue; coverage carries the move
     ctx.globalAlpha = 1;
     ctx.lineWidth = hot ? 1.6 : 1;
     ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : line;
     ctx.strokeRect(c.x + 0.5, c.y + 0.5, Math.max(0, c.w - 1), Math.max(0, c.h - 1));
 
     /* LABELS. Alan: "super nice in terms of colours, but bad in terms of labels."
-       So the rule is: if the ticker fits at all, it is drawn. The change is drawn
-       whenever there is a second line's worth of room, and the cap only when the
-       tile is genuinely roomy. Nothing is ever clipped or allowed to overflow. */
+       If the ticker fits, it is drawn. The change is drawn whenever there is a second
+       line's worth of room, and the cap only when the tile is genuinely roomy. Both
+       sit on a plate of the panel's own dark, because the grain runs at full strength
+       straight through the text otherwise. Nothing is ever clipped. */
     if (c.w < 26 || c.h < 13) continue;
-    const strong = fill[1] >= 0.52;
     const pad = 4;
     const fs = Math.max(8, Math.min(17, Math.min(c.w / 4.2, c.h / 3.0)));
     ctx.textAlign = "left"; ctx.textBaseline = "top";
     ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    if (ctx.measureText(r.t).width > c.w - pad * 2) continue;
-    ctx.fillStyle = strong ? "#05070A" : ink;
-    ctx.fillText(r.t, c.x + pad, c.y + pad);
+    const tw = ctx.measureText(r.t).width;
+    if (tw > c.w - pad * 2) continue;
 
-    /* The number is NOT re-coloured green/red here. The tile it sits on is already
-       exactly --bull or exactly --bear, so tinting the text the same hue puts red on
-       red and green on green — which is precisely the "bad in terms of labels" Alan
-       called out. Direction is the tile's job; the text's only job is to be readable
-       on it, so it goes dark on a strong fill and ink on a faint one. */
     const chg = (cv != null) ? fmtC(cv) : "—";
     const fs2 = fs * 0.86;
-    if (c.h >= fs + fs2 + pad * 2 + 2) {
-      ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      if (ctx.measureText(chg).width <= c.w - pad * 2) {
-        ctx.fillStyle = (cv == null) ? dim : strong ? "rgba(5,7,10,.88)" : ink;
-        ctx.fillText(chg, c.x + pad, c.y + pad + fs + 2);
-      }
-    }
+    ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    const cw2 = ctx.measureText(chg).width;
+    const twoLine = c.h >= fs + fs2 + pad * 2 + 3 && cw2 <= c.w - pad * 2;
+
     const cap = fmtCap(r.mc);
     const fs3 = fs * 0.7;
-    if (cap && c.h >= fs + fs2 + fs3 + pad * 2 + 6 && c.w >= 72) {
+    ctx.font = '500 ' + fs3.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    const cw3 = cap ? ctx.measureText(cap).width : 0;
+    const threeLine = twoLine && cap && c.w >= 72 &&
+                      c.h >= fs + fs2 + fs3 + pad * 2 + 7 && cw3 <= c.w - pad * 2;
+
+    const plateW = Math.min(c.w - pad, Math.max(tw, twoLine ? cw2 : 0, threeLine ? cw3 : 0) + 7);
+    const plateH = fs + (twoLine ? fs2 + 3 : 0) + (threeLine ? fs3 + 3 : 0) + 6;
+    l0LabelPlate(ctx, c.x + pad - 3, c.y + pad - 3, plateW, plateH);
+
+    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    ctx.fillStyle = ink;
+    ctx.fillText(r.t, c.x + pad, c.y + pad);
+    /* The number is NOT re-coloured green/red: the tile under it is already exactly
+       that hue, and a second green would be a second green. Direction is the tile's
+       job; the text's only job is to be readable. */
+    if (twoLine) {
+      ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      ctx.fillStyle = (cv == null) ? dim : ink;
+      ctx.fillText(chg, c.x + pad, c.y + pad + fs + 2);
+    }
+    if (threeLine) {
       ctx.font = '500 ' + fs3.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      if (ctx.measureText(cap).width <= c.w - pad * 2) {
-        ctx.fillStyle = strong ? "rgba(5,7,10,.55)" : dim;
-        ctx.fillText(cap, c.x + pad, c.y + pad + fs + fs2 + 4);
-      }
+      ctx.fillStyle = dim;
+      ctx.fillText(cap, c.x + pad, c.y + pad + fs + fs2 + 5);
     }
   }
 }
@@ -5625,8 +5839,9 @@ function l0FocTiltHTML(rows) {
     const cv0 = l0MapChg(r);                                   // R49 §2 — TF-aware, exactly like the other four modes
     const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
     const chg = (cv != null) ? fmtC(cv) : "—";
+    /* grain, not a tint — the same one green and one red as every other map mode */
     return '<div class="sc-l0card" id="l0tc_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) +
-      '" style="background:' + heatColorChg(cv0) + '" title="' + esc(r.t) + '">' +
+      '" style="background:' + heatGrain(cv0) + '" title="' + esc(r.t) + '">' +
       '<span class="sc-l0card__t">' + esc(r.t) + "</span>" +
       '<span class="sc-l0card__c" id="l0tcc_' + esc(r.t) + '">' + esc(chg) + "</span>" +
       '<span class="sc-l0card__m">' + esc(fmtCap(r.mc)) + "</span>" +
@@ -5811,7 +6026,7 @@ function l0FocusTick() {
   for (const r of l0FocRows()) {
     const card = el("l0tc_" + r.t); if (!card) continue;
     const v = l0MapChg(r);
-    card.style.background = heatColorChg(v);
+    card.style.background = heatGrain(v);      // grain on the tick too, or it would tint back
     const cc = el("l0tcc_" + r.t);
     if (cc) cc.textContent = (v != null && isFinite(v)) ? fmtC(v) : "—";
   }
@@ -12391,7 +12606,11 @@ function filesWire(){
      The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
      colour already means direction here and must not be overloaded.
      ========================================================================== */
+  /* published so the COMPARE STRIP reads the very same per-ticker trend/momentum the board
+     rows paint from. Without this the strip would have to fetch its own copy, and two
+     copies is how the board and the strip drifted apart in the first place. */
   var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null, prevPainted={};
+  window.SCIN_TM = TM;
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
   api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
@@ -12435,11 +12654,15 @@ function filesWire(){
       /* ONE ROW, ALWAYS. Alan: "what I like is the left to right, green to red. No rows."
          The strip was repeat(10,1fr) with 11 sectors, so the eleventh wrapped; under
          820px it dropped to repeat(5,1fr) and became two rows of five. Auto-flow column
-         keeps every member on one line and lets the columns narrow instead of wrapping. */
+         keeps every member on one line and lets the columns narrow instead of wrapping.
+         THE FLOOR (46px): minmax(0,1fr) let the columns collapse to a MEASURED 32.7px,
+         which is narrower than the word "constructive" can be set at any legible size —
+         so the read Alan asked for arrived truncated to "constr…" in every column. The
+         row still never wraps; past the floor the strip scrolls sideways instead. */
       ".sc-cohstrip{grid-template-columns:none !important;grid-auto-flow:column !important;"+
-      "grid-auto-columns:minmax(0,1fr) !important;gap:2px !important}"+
+      "grid-auto-columns:minmax(54px,1fr) !important;gap:2px !important;overflow-x:auto}"+
       "@media(max-width:820px){.sc-cohstrip{grid-template-columns:none !important;"+
-      "grid-auto-flow:column !important;grid-auto-columns:minmax(0,1fr) !important}}"+
+      "grid-auto-flow:column !important;grid-auto-columns:minmax(54px,1fr) !important}}"+
       ".sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
@@ -12514,17 +12737,11 @@ function filesWire(){
       else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
         rd.title="rewound - momentum has no history to compare against"; }
       else {
-        var T=d.tr, M=d.mo, txt, col;
-        if(T>=0.5&&M>=0.4){ txt="aligned bull";      col="var(--bull)"; }
-        else if(T<=-0.5&&M<=-0.4){ txt="aligned bear"; col="var(--bear)"; }
-        else if(T>=0.4&&M<=-0.15){ txt="pullback";     col="var(--warn,#e0a24a)"; }
-        else if(T<=-0.2&&M>=0.35){ txt="turning up";   col="var(--warn,#e0a24a)"; }
-        else if(Math.abs(T)<0.25&&M>=0.5){ txt="mom leads"; col="var(--warn,#e0a24a)"; }
-        else if(T>=0.5&&Math.abs(M)<0.2){ txt="stalling";   col="var(--warn,#e0a24a)"; }
-        else if(T>=0.3&&M>=0){ txt="constructive"; col="var(--bull)"; }
-        else if(T<=-0.3&&M<=0){ txt="broken";      col="var(--bear)"; }
-        else { txt="mixed"; col="var(--mute)"; }
-        rd.textContent=txt; rd.style.color=col;
+        /* ONE definition, shared with the compare strip — see scinRead(). The word ladder
+           used to live here and only here, which is exactly why the strip never mirrored
+           the board. */
+        var T=d.tr, M=d.mo, R=scinRead(T,M);
+        rd.textContent=R.txt; rd.style.color=R.col;
         rd.title="trend "+fmt2(T)+" (slow, daily-locked) · momentum "+fmt2(M)+" (fast, 6h/12h/1D)";
       }
       if(fresh){
@@ -12543,6 +12760,10 @@ function filesWire(){
     api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
       (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
       paintTM();
+      /* the strip renders before this arrives, so without a repaint here every column
+         would sit on "—" until the next unrelated rebuild */
+      var cc=E("cohCompare");
+      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
     });
   }
 
