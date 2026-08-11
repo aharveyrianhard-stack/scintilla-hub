@@ -11574,13 +11574,23 @@ function filesWire(){
   -webkit-appearance:none;appearance:none;outline:none}
 /* the START handle: same track language, dimmer thumb so the eye reads it as the boundary
    rather than the playhead. Narrow - it sets an edge, it is not the thing you scrub. */
-.gwx__st{flex:0 0 66px;cursor:pointer;height:14px;background:transparent;
-  -webkit-appearance:none;appearance:none;outline:none;opacity:.75}
-.gwx__st::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a)}
-.gwx__st::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
-.gwx__st::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:7px;border-radius:50%;
-  background:var(--dim);margin-top:-2.5px;border:none}
-.gwx__st::-moz-range-thumb{width:7px;height:7px;border-radius:50%;background:var(--dim);border:none}
+/* one track, two handles stacked on it. The inputs are transparent and overlaid; only their
+   thumbs receive the pointer, so each grabs independently and neither blocks the other. */
+.gwx__rng{position:relative;flex:1;min-width:90px;height:16px;display:block}
+.gwx__rng::before{content:"";position:absolute;left:0;right:0;top:7px;height:2px;
+  background:var(--line,#1a1a2a)}
+.gwx__rngfill{position:absolute;top:7px;height:2px;background:var(--crk);opacity:.5;pointer-events:none}
+.gwx__h{position:absolute;left:0;top:0;width:100%;height:16px;margin:0;background:transparent;
+  -webkit-appearance:none;appearance:none;outline:none;pointer-events:none}
+.gwx__h::-webkit-slider-runnable-track{height:16px;background:transparent}
+.gwx__h::-moz-range-track{height:16px;background:transparent}
+.gwx__h::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;cursor:grab;
+  width:9px;height:9px;border-radius:50%;border:none;margin-top:3.5px}
+.gwx__h::-moz-range-thumb{pointer-events:auto;cursor:grab;width:9px;height:9px;border-radius:50%;border:none}
+.gwx__h--a::-webkit-slider-thumb{background:var(--dim);width:7px;height:7px;margin-top:4.5px}
+.gwx__h--a::-moz-range-thumb{background:var(--dim);width:7px;height:7px}
+.gwx__h--b::-webkit-slider-thumb{background:var(--crk)}
+.gwx__h--b::-moz-range-thumb{background:var(--crk)}
 .gwx__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a);border-radius:0}
 .gwx__sc::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
 .gwx__sc::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;
@@ -11647,16 +11657,31 @@ function filesWire(){
          bar, so every pixel is most of a day and each move lurches. Bind the window to a
          month and the same bar carries ~21 days - each step is smaller, the motion reads as
          motion, and the rank arrows have far less to accumulate. One control, three symptoms. */
-      '<input type="range" class="gwx__st" id="gwxStart" min="0" max="0" value="0" disabled '+
-        'title="where the rewind BEGINS - drag right to bind the window tighter">'+
-      '<input type="range" class="gwx__sc" id="gwxSc" min="0" max="0" value="0" disabled '+
-        'title="where you are inside the window">'+
+      /* ★ ONE TRACK. Alan: "I don't like that you split the replay toggle into two - I should
+         have freedom in this." Right: two separate sliders is not freedom, it is two
+         constraints sitting next to each other. Both handles now live on the SAME track, so
+         the window is a span you grab either end of and the playhead runs inside it. The
+         shaded part IS the window; drag either edge, scrub anywhere between. */
+      '<span class="gwx__rng" id="gwxRng">'+
+        '<span class="gwx__rngfill" id="gwxFill"></span>'+
+        '<input type="range" class="gwx__h gwx__h--a" id="gwxStart" min="0" max="0" value="0" disabled '+
+          'title="drag to move where the rewind begins">'+
+        '<input type="range" class="gwx__h gwx__h--b" id="gwxSc" min="0" max="0" value="0" disabled '+
+          'title="scrub - where you are inside the window">'+
+      '</span>'+
       '<span id="gwxLiveSlot"></span>'+
       '<span class="sc-l0asof" id="gwxWin" style="opacity:.6;font-size:8.5px"></span>'+
       '<span class="sc-l0asof" id="gwxDt">live</span></div>';
   }
   /* say what the window IS - a bound window that does not announce itself is just a slider
      that mysteriously stopped going back as far. */
+  /* the shaded part IS the window - without it the two thumbs are just two dots on a line */
+  function paintRange(){
+    var f=E("gwxFill"), a=E("gwxStart"), b=E("gwxSc"); if(!f||!a||!b) return;
+    var span=(+b.max)||1;
+    var l=(+a.value/span)*100, r=(+b.value/span)*100;
+    f.style.left=Math.min(l,r)+"%"; f.style.width=Math.max(0,r-l)+"%";
+  }
   function windowLbl(){
     var e=E("gwxWin"); if(!e) return;
     var a=DATES[START_I], b=DATES[DATES.length-1];
@@ -11689,6 +11714,7 @@ function filesWire(){
       stop(); var raw=+this.value/SUB, i=Math.floor(raw), f=raw-i;
       i=Math.max(0,Math.min(DATES.length-1,i));
       E("gwxDt").textContent=DATES[i]||"";
+      paintRange();
       clearTimeout(window.__gwxSeek);
       window.__gwxSeek=setTimeout(function(){ seek(DATES[i], DATES[i+1], f); }, 60);
     };
@@ -11697,15 +11723,17 @@ function filesWire(){
     var st=E("gwxStart");
     if(st) st.oninput=function(){
       stop();
-      var maxStart=Math.max(0, DATES.length-6);          // always leave a few days to scrub
-      START_I=Math.min(maxStart, Math.round(+this.value));
+      /* both handles run on the SAME sub-step scale now, so the start handle is just the
+         left edge of the span - it cannot pass the playhead, and the playhead cannot fall
+         behind it. */
+      var maxStart=Math.max(0,(DATES.length-6)*SUB);
+      var v=Math.min(maxStart, Math.round(+this.value));
       var sc=E("gwxSc");
-      if(sc){
-        sc.min=START_I*SUB;
-        if(+sc.value < +sc.min) sc.value=sc.min;
-      }
-      var d=DATES[START_I]; if(d) E("gwxDt").textContent=DATES[Math.floor((+E("gwxSc").value)/SUB)]||d;
-      windowLbl();
+      if(sc && v > +sc.value - SUB) v = Math.max(0, +sc.value - SUB);
+      this.value=v;
+      START_I=Math.floor(v/SUB);
+      if(sc) sc.min=v;
+      windowLbl(); paintRange();
     };
     var bk=E("gwxBack");
     if(bk) bk.onclick=function(){
@@ -11736,15 +11764,17 @@ function filesWire(){
     var st=E("gwxStart");
     if(st) st.oninput=function(){
       stop();
-      var maxStart=Math.max(0, DATES.length-6);          // always leave a few days to scrub
-      START_I=Math.min(maxStart, Math.round(+this.value));
+      /* both handles run on the SAME sub-step scale now, so the start handle is just the
+         left edge of the span - it cannot pass the playhead, and the playhead cannot fall
+         behind it. */
+      var maxStart=Math.max(0,(DATES.length-6)*SUB);
+      var v=Math.min(maxStart, Math.round(+this.value));
       var sc=E("gwxSc");
-      if(sc){
-        sc.min=START_I*SUB;
-        if(+sc.value < +sc.min) sc.value=sc.min;
-      }
-      var d=DATES[START_I]; if(d) E("gwxDt").textContent=DATES[Math.floor((+E("gwxSc").value)/SUB)]||d;
-      windowLbl();
+      if(sc && v > +sc.value - SUB) v = Math.max(0, +sc.value - SUB);
+      this.value=v;
+      START_I=Math.floor(v/SUB);
+      if(sc) sc.min=v;
+      windowLbl(); paintRange();
     };
     var bk=E("gwxBack");
       if(bk){ bk.textContent=BACK_DEF[BACK_I][0];
@@ -11758,8 +11788,8 @@ function filesWire(){
       DATES=rows.map(function(r){return r.asof;});
       var sc=E("gwxSc"), st=E("gwxStart");
       if(sc&&DATES.length){ sc.min=0; sc.max=(DATES.length-1)*SUB; sc.value=sc.max; sc.disabled=false; }
-      if(st&&DATES.length){ st.min=0; st.max=Math.max(0,DATES.length-6); st.value=0; st.disabled=false; }
-      START_I=0; windowLbl();
+      if(st&&DATES.length){ st.min=0; st.max=(DATES.length-1)*SUB; st.value=0; st.disabled=false; }
+      START_I=0; windowLbl(); paintRange();
     });
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
