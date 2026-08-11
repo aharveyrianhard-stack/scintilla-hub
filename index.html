@@ -3103,7 +3103,12 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
        for anything that still wants it, but it no longer decides what you see. */
     .filter((m) => {
       if (scopeAll) return true;
-      if (COHSETS && COHSETS[cohort]) return COHSETS[cohort].has(m.ticker);
+      /* ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but membership is
+         keyed by sector name (STAPLES) - so the board found nothing and every sector looked
+         empty. Alan: "XLP empty. All of the sectors are empty. They have no tickers."
+         cohKey() resolves an ETF ticker to its sector key before the lookup. */
+      const k = cohKey(cohort);
+      if (COHSETS && COHSETS[k]) return COHSETS[k].has(m.ticker);
       return m.cohort === cohort;                    // fallback if membership has not loaded
     })
     .filter((m) => gg[m.ticker])   // FIX 1 — board universe = composite_staged tf=D only (drops DX/NKD/NQ/TNX/TYX/VIX proxies with no pipeline data)
@@ -6076,6 +6081,16 @@ function startAutoBar() {
    open room repaints. The FIX1-TESTABLE block below is extracted verbatim and
    unit-run under node (see fix1 test). */
 let COHSETS = null;          // cohort → Set(tickers) — the ONE full map
+/* The eleven sector SPDRs are addressed by their ETF ticker on the compare strip but stored
+   under their sector name in membership. Any code that turns a "cohort key" into a member
+   list must go through here, or sector clicks silently resolve to nothing. */
+const SPDR_TO_SECTOR = { XLB:"MATERIALS", XLE:"ENERGY", XLF:"FINANCIALS", XLI:"INDUSTRIAL",
+  XLK:"TECH", XLP:"STAPLES", XLRE:"REAL_ESTATE", XLU:"UTILITIES", XLV:"HEALTH",
+  XLY:"DISCRET", XLC:"COMMS" };
+function cohKey(k){
+  if (COHSETS && COHSETS[k]) return k;               // a real cohort/sector key already
+  return SPDR_TO_SECTOR[k] || k;                     // otherwise try the SPDR mapping
+}
 let cohSetsReady = null;
 function loadCohSets() {
   if (!cohSetsReady) cohSetsReady = pg("ticker_cohorts?select=ticker,cohort").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
