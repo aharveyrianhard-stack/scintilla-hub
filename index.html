@@ -1345,7 +1345,21 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    and the magnitude is this height. */
 .sc-heattile__fill{ position:absolute; left:0; right:0; bottom:0; z-index:0; display:block;
   transition:height .35s cubic-bezier(.32,0,.18,1); }
-.sc-heattile__t, .sc-heattile__c{ position:relative; z-index:1; }
+/* Alan: "super nice in terms of colours, but bad in terms of labels."
+   The grain paints dots of full-strength --bull/--bear THROUGH the label, and a solid
+   tile at a big move is a bright field under light text. Either way the reading dropped
+   out. A tight dark halo — not a box, not a plate — keeps the label legible over every
+   state (sparse dots, dense dots, solid colour) without putting a second tone on screen. */
+/* Alan: "super nice in terms of colours, but bad in terms of labels."
+   The grain paints dots of full-strength --bull/--bear THROUGH the label, and a solid
+   tile at a big move is a bright field under light text — either way the reading dropped
+   out, and the %chg line suffered worst because it is the smaller of the two. A soft halo
+   was not enough against dots at full strength, so each label now sits on its own chip of
+   the PANEL's own dark. No second tone enters the picture; the tile keeps saying exactly
+   --bull or exactly --bear, and the number stays readable at every density. */
+.sc-heattile__t, .sc-heattile__c{ position:relative; z-index:1;
+  background:rgba(6,8,12,.93); border-radius:2px; padding:0 4px;
+  text-shadow:0 1px 2px rgba(4,6,10,.9); }
 .sc-heattile:hover{ outline:1px solid var(--crk); outline-offset:1px; }
 /* R42 §1 — .lg/.md span rules RETIRED (uniform squares); heatmapHTML no longer
    assigns these classes. Kept as harmless no-ops in case of stale cached markup. */
@@ -1354,8 +1368,12 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-heattile__t{ display:block; max-width:100%; text-align:center; font-family:var(--mono); font-weight:700;
   font-size:clamp(11px, calc(var(--htile,105px) * .155), 20px); letter-spacing:.03em; color:var(--ink);
   line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* the element-level opacity used to soften this line is gone: it also thinned the dark
+   chip behind it to ~0.63, which is why the %chg stayed unreadable on the bright green
+   tiles after the chip went in. The softening now lives in the COLOUR, so the chip
+   behind it keeps its full strength. */
 .sc-heattile__c{ display:block; text-align:center; font-family:var(--mono);
-  font-size:clamp(9px, calc(var(--htile,105px) * .105), 14px); color:var(--ink); opacity:.85;
+  font-size:clamp(9px, calc(var(--htile,105px) * .105), 14px); color:var(--ink2);
   line-height:1.15; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .sc-heatgrid__empty{ padding:24px; text-align:center; color:var(--dim); font-family:var(--mono); font-size:9px; }
 @media(max-width:640px){ .sc-heatgrid{ grid-template-columns:repeat(4,1fr); } }   /* fallback only — sizeHeatTiles() overrides inline with 4 cols at ≤640px */
@@ -5050,8 +5068,9 @@ function renderL0Rel() {
    paint on demand. pointer:coarse → no listeners at all, plain static grid. */
 /* R49 §1 — these four are now MODES of the MAP tab, not a tab of their own, and GRID
    (the untouched heatmap renderer) joins them as the default. Five modes, one room. */
-const L0_MAP_MODES = ["GRID", "FISHEYE", "DOCK", "BUBBLES", "TILT"];
+const L0_MAP_MODES = ["TREEMAP", "GRID", "FISHEYE", "DOCK", "BUBBLES", "TILT"];
 const L0_MAP_TIP = {
+  TREEMAP: "size = how big the company is here · colour = today's move · quiet names fade back",
   GRID:    "the heatmap — uniform squares, market-cap order",
   FISHEYE: "focus+context distortion — the whole cohort stays visible",
   DOCK:    "macOS-dock proximity scaling with spring easing",
@@ -5424,6 +5443,181 @@ function l0FocPaintBubbles(ctx, W, H, rows) {
     }
   }
 }
+/* ── TREEMAP ─────────────────────────────────────────────────────────────────
+   Alan, on every other map mode: "it's not telling me in a visual way what moved
+   today and how important that company is in that tab, at all." And: "the bubbles
+   are very clean… although I think it should fill its rectangle, that gives me more
+   space to see some of the smaller ones."
+   So this mode answers exactly two questions at once and nothing else:
+     HOW BIG IT IS HERE  -> the area of its rectangle
+     WHAT IT DID TODAY   -> the colour, and how strongly that colour is present
+   Every pixel of the panel belongs to a company. No gaps, no wasted margin, no
+   circles with air between them — the small names get real estate because the big
+   ones are no longer squares with room to spare around them.
+
+   THE HUE IS A CONSTANT. Exactly --bull or exactly --bear, never a third tone, never
+   a blend, never a ramp through yellow. Only how much of that one colour is present
+   changes. Alan: "green is green, red is red. There's not more greens, more reds."
+
+   QUIET NAMES FADE BACK. Alan: "I'm just trying to not see the things that moved
+   little — that they draw my attention less." The presence curve is deliberately
+   harsher than the heat grid's: gamma 0.75 off a floor of 0.10, so a company that
+   barely moved sits almost flat against the panel while the real movers stay at full
+   strength. Scale is the 85th percentile of what is actually on screen, so "a big
+   move" always means big FOR TODAY rather than against some fixed number. */
+function l0TreeWeight(mc) {
+  /* Raw market cap spans about five orders of magnitude, and a strict area treemap
+     would hand one mega-cap a third of the panel and leave the rest as slivers you
+     cannot read or click. The 0.45 power keeps the ORDER and the sense of weight
+     while compressing the range to something a panel can actually show; the floor
+     guarantees the smallest name in the tab is still a real, clickable tile. */
+  const v = num(mc);
+  if (!(v > 0)) return null;                       // unknown: caller substitutes, and draws it dimmer
+  return Math.pow(v, 0.45);
+}
+/* Squarified treemap (Bruls, Huizing & van Wijk). Rows are laid along the SHORT side
+   of what is left, and a row closes as soon as adding one more cell would make the
+   worst aspect ratio in it worse — which is what keeps the tiles near-square instead
+   of degenerating into the long thin strips a naive slice-and-dice produces. */
+function l0TreeLayout(items, X, Y, W, H) {
+  const out = [];
+  if (!items.length || !(W > 0) || !(H > 0)) return out;
+  const total = items.reduce((s, it) => s + it.w, 0);
+  if (!(total > 0)) return out;
+  const k = (W * H) / total;
+  const q = items.map((it) => ({ i: it.i, a: it.w * k }));
+
+  let rx = X, ry = Y, rw = W, rh = H;
+  let row = [], rowSum = 0;
+
+  const worst = (r, s, len) => {
+    if (!r.length || !(s > 0) || !(len > 0)) return Infinity;
+    let mx = -Infinity, mn = Infinity;
+    for (const it of r) { if (it.a > mx) mx = it.a; if (it.a < mn) mn = it.a; }
+    const l2 = len * len, s2 = s * s;
+    return Math.max((l2 * mx) / s2, s2 / (l2 * mn));
+  };
+  const flush = () => {
+    if (!row.length) return;
+    if (rw >= rh) {                                  // a COLUMN down the left edge
+      const cw = Math.min(rw, rowSum / Math.max(1e-6, rh));
+      let cy = ry;
+      for (const it of row) {
+        const ch = (rowSum > 0) ? (it.a / rowSum) * rh : 0;
+        out.push({ i: it.i, x: rx, y: cy, w: cw, h: ch });
+        cy += ch;
+      }
+      rx += cw; rw -= cw;
+    } else {                                         // a ROW across the top edge
+      const ch = Math.min(rh, rowSum / Math.max(1e-6, rw));
+      let cx = rx;
+      for (const it of row) {
+        const cw = (rowSum > 0) ? (it.a / rowSum) * rw : 0;
+        out.push({ i: it.i, x: cx, y: ry, w: cw, h: ch });
+        cx += cw;
+      }
+      ry += ch; rh -= ch;
+    }
+    row = []; rowSum = 0;
+  };
+
+  for (let n = 0; n < q.length; n++) {
+    const it = q[n];
+    const len = Math.min(rw, rh);
+    if (!row.length || worst(row.concat([it]), rowSum + it.a, len) <= worst(row, rowSum, len)) {
+      row.push(it); rowSum += it.a;
+    } else {
+      flush();
+      row.push(it); rowSum = it.a;
+    }
+  }
+  flush();
+  return out;
+}
+/* presence of the one true colour: 0.10 for a name that did nothing, 1.00 for the
+   biggest mover on screen. Returns [cssColour, presence] — presence also decides
+   whether the label reads better in ink or in the panel's dark. */
+function l0TreeFill(cv) {
+  if (cv == null || !isFinite(cv)) return ["rgba(140,140,160,.09)", 0];
+  const rgb = cv >= 0 ? heatRGB().bull : heatRGB().bear;
+  const r = Math.min(1, Math.abs(cv) / (HEAT_SCALE || 2));
+  const a = 0.10 + Math.pow(r, 0.75) * 0.90;
+  return ["rgba(" + rgb + "," + a.toFixed(3) + ")", a];
+}
+function l0FocPaintTreemap(ctx, W, H, rows) {
+  const vals = rows.map((r) => l0MapChg(r));
+  heatSetScale(vals);                               // full strength = the biggest move actually on screen
+
+  const raw = rows.map((r) => l0TreeWeight(r.mc));
+  const known = raw.filter((v) => v != null);
+  const med = known.length ? known.slice().sort((a, b) => a - b)[known.length >> 1] : 1;
+  const mx  = known.length ? Math.max.apply(null, known) : 1;
+  const floor = mx * 0.012;                          // nobody disappears
+  const items = rows.map((r, i) => ({ i: i, w: Math.max(floor, raw[i] == null ? med : raw[i]) }))
+                    .sort((a, b) => b.w - a.w);      // squarify needs descending weights
+
+  const cells = l0TreeLayout(items, 0, 0, W, H);
+  const line = l0Tok("--line", "#1E2530");
+  const dim  = l0Tok("--dim", "#7a8090");
+  const ink  = l0Tok("--ink", "#e9ecf2");
+  const live = L0_FOC_P.in && L0_FOC_P.x != null;
+
+  for (const c of cells) {
+    const r = rows[c.i]; if (!r) continue;
+    const cv0 = l0MapChg(r);
+    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
+    const fill = l0TreeFill(cv0);
+    const hot = live && L0_FOC_P.x >= c.x && L0_FOC_P.x <= c.x + c.w &&
+                        L0_FOC_P.y >= c.y && L0_FOC_P.y <= c.y + c.h;
+    L0_FOC_CELLS.push({ t: r.t, x: c.x, y: c.y, w: c.w, h: c.h });
+
+    ctx.globalAlpha = (num(r.mc) > 0) ? 1 : 0.55;   // no cap on file → drawn dimmer, honestly
+    ctx.fillStyle = fill[0];
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = hot ? 1.6 : 1;
+    ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : line;
+    ctx.strokeRect(c.x + 0.5, c.y + 0.5, Math.max(0, c.w - 1), Math.max(0, c.h - 1));
+
+    /* LABELS. Alan: "super nice in terms of colours, but bad in terms of labels."
+       So the rule is: if the ticker fits at all, it is drawn. The change is drawn
+       whenever there is a second line's worth of room, and the cap only when the
+       tile is genuinely roomy. Nothing is ever clipped or allowed to overflow. */
+    if (c.w < 26 || c.h < 13) continue;
+    const strong = fill[1] >= 0.52;
+    const pad = 4;
+    const fs = Math.max(8, Math.min(17, Math.min(c.w / 4.2, c.h / 3.0)));
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+    if (ctx.measureText(r.t).width > c.w - pad * 2) continue;
+    ctx.fillStyle = strong ? "#05070A" : ink;
+    ctx.fillText(r.t, c.x + pad, c.y + pad);
+
+    /* The number is NOT re-coloured green/red here. The tile it sits on is already
+       exactly --bull or exactly --bear, so tinting the text the same hue puts red on
+       red and green on green — which is precisely the "bad in terms of labels" Alan
+       called out. Direction is the tile's job; the text's only job is to be readable
+       on it, so it goes dark on a strong fill and ink on a faint one. */
+    const chg = (cv != null) ? fmtC(cv) : "—";
+    const fs2 = fs * 0.86;
+    if (c.h >= fs + fs2 + pad * 2 + 2) {
+      ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      if (ctx.measureText(chg).width <= c.w - pad * 2) {
+        ctx.fillStyle = (cv == null) ? dim : strong ? "rgba(5,7,10,.88)" : ink;
+        ctx.fillText(chg, c.x + pad, c.y + pad + fs + 2);
+      }
+    }
+    const cap = fmtCap(r.mc);
+    const fs3 = fs * 0.7;
+    if (cap && c.h >= fs + fs2 + fs3 + pad * 2 + 6 && c.w >= 72) {
+      ctx.font = '500 ' + fs3.toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      if (ctx.measureText(cap).width <= c.w - pad * 2) {
+        ctx.fillStyle = strong ? "rgba(5,7,10,.55)" : dim;
+        ctx.fillText(cap, c.x + pad, c.y + pad + fs + fs2 + 4);
+      }
+    }
+  }
+}
 /* TILT is DOM — every card carries data-act="row", so a click pins through the
    EXACT board-row path with no synthetic routing at all. */
 function l0FocTiltHTML(rows) {
@@ -5484,7 +5678,8 @@ function renderL0Focus() {
   const rows = l0FocRows();
   L0_FOC_CELLS = [];
   if (!rows.length) return true;                     // the note state lives in l0BodyHTML
-  if (L0_MAP_MODE === "BUBBLES") l0FocPaintBubbles(c.ctx, c.W, c.H, rows);
+  if (L0_MAP_MODE === "TREEMAP") l0FocPaintTreemap(c.ctx, c.W, c.H, rows);
+  else if (L0_MAP_MODE === "BUBBLES") l0FocPaintBubbles(c.ctx, c.W, c.H, rows);
   else if (L0_MAP_MODE === "DOCK") l0FocPaintDock(c.ctx, c.W, c.H, rows);
   else l0FocPaintFisheye(c.ctx, c.W, c.H, rows);
   return true;
@@ -5565,6 +5760,10 @@ function l0FocusWire() {
     L0_FOC_P.ty = y + L0_FOC_P.vy * L0_FOC_LEAD * blend;
     if (fresh) { L0_FOC_P.fx = null; L0_FOC_P.fy = null; }   // next step seeds the lens here
     if (L0_MAP_MODE === "TILT") l0FocTiltApply();
+    /* TREEMAP is a STATIC picture — the tiles do not move, distort or spring, so it
+       has no business running a 60fps loop. It repaints only when the cursor moves
+       (to light the tile under it) and on the feed tick. */
+    else if (L0_MAP_MODE === "TREEMAP") renderL0Focus();
     else if (rm) {                       // reduced motion: no loop, no ramp — paint on demand
       L0_FOC_ENG = 1; L0_FOC_P.fx = L0_FOC_P.tx; L0_FOC_P.fy = L0_FOC_P.ty;
       renderL0Focus();
@@ -5576,6 +5775,7 @@ function l0FocusWire() {
        focus point. Nulling them (pre-R50) is exactly what made the exit snap. */
     L0_FOC_P.in = false; L0_FOC_P.vx = L0_FOC_P.vy = 0;
     if (L0_MAP_MODE === "TILT") l0FocTiltApply();
+    else if (L0_MAP_MODE === "TREEMAP") renderL0Focus();   // drop the highlight
     else if (rm) { L0_FOC_ENG = 0; L0_FOC_P.fx = L0_FOC_P.fy = null; renderL0Focus(); }
   };
   wrap.addEventListener("pointerleave", L0_FOC_OUT);
@@ -5586,7 +5786,7 @@ function l0FocusWire() {
     };
     wrap.addEventListener("click", L0_FOC_CLICK);
   }
-  if (rm || L0_MAP_MODE === "TILT") return;   // no springs, no loop
+  if (rm || L0_MAP_MODE === "TILT" || L0_MAP_MODE === "TREEMAP") return;   // no springs, no loop
   L0_FOC_ENG = 0; L0_FOC_ENGT = 0;            // R50 §2b — every render starts disengaged
   const loop = (ts) => {
     L0_FOC_RAF = null;
@@ -5602,7 +5802,12 @@ function l0FocusWire() {
    TILT's DOM needs patching — and it is patched in place, never rebuilt, so the
    cards never jump out from under the cursor. */
 function l0FocusTick() {
-  if (LAYER0_TAB !== "MAP" || L0_MAP_MODE !== "TILT") return;
+  if (LAYER0_TAB !== "MAP") return;
+  /* TREEMAP runs no loop (see l0FocusWire), so the feed tick is what keeps its
+     colours current — without this it would freeze at whatever the prices were
+     when the tab was opened. */
+  if (L0_MAP_MODE === "TREEMAP") { renderL0Focus(); return; }
+  if (L0_MAP_MODE !== "TILT") return;
   for (const r of l0FocRows()) {
     const card = el("l0tc_" + r.t); if (!card) continue;
     const v = l0MapChg(r);
