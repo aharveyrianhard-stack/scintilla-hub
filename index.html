@@ -1718,6 +1718,93 @@ body.econ .sc-cohsearch{ display:none; }
   font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
 #econList .sc-evrow{ padding:7px 0; }   /* match NEWS/.sc-art row rhythm; EVENTS keeps its own overrides */
 
+/* ----------------------------------------------------------------------------
+   R52 — ECONOMIC restructure (SCINTILLA Visual Plan v2 §A). The room stops being
+   one flat undifferentiated list and becomes a RELEASES TABLE:
+     row 1  country/region tabs  (US · EU · UK · JP · CN · EM · ALL) — primary nav
+     row 2  category chips       (ALL · GROWTH · INFLATION · LABOR · HOUSING ·
+                                  TRADE · CENTRAL BANK · OTHER) — scoped to row 1
+     row 3  day stepper          (◀ date ▶ · DAY|WEEK) — the landing state is TODAY;
+                                  every other period is a drill-down, never stacked
+     table  RELEASE · TIME · ACTUAL · EST · PRIOR · SURPRISE
+   Composite releases (CPI, PPI, PCE, payrolls…) collapse into ONE headline row
+   with its components as indented sub-rows, expanded inline on click.
+   ---------------------------------------------------------------------------- */
+/* row 1 — region tabs. Same visual grammar as the cohort strip: quiet until on. */
+.ec-ctry{ display:flex; gap:2px; padding:2px 12px 0; flex-wrap:wrap; }
+.ec-ct{ font-family:var(--mono); font-size:8.5px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--dim); padding:6px 11px; cursor:pointer; user-select:none; border:0.6px solid transparent;
+  border-radius:3px; white-space:nowrap; }
+.ec-ct:hover{ color:var(--ink2); }
+.ec-ct.on{ color:var(--crk); font-weight:600; background:rgba(0,212,255,.09);
+  border-color:rgba(0,212,255,.34); }
+/* row 2 — category chips. Underline-on-active, so it reads as a SECOND level. */
+.ec-cat{ display:flex; gap:0; padding:7px 12px 0; flex-wrap:wrap; }
+.ec-cc{ font-family:var(--mono); font-size:8px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--dim); padding:5px 13px 7px; cursor:pointer; user-select:none; white-space:nowrap; }
+.ec-cc:hover{ color:var(--ink2); }
+.ec-cc.on{ color:var(--crk); box-shadow:inset 0 -1.5px 0 var(--crk); }
+.ec-cc .n{ color:var(--mute); margin-left:5px; font-size:7.5px; }   /* honest count — nothing is hidden silently */
+.ec-cc.on .n{ color:var(--crk); opacity:.6; }
+/* row 3 — the day stepper. TODAY is the landing state; ◀ ▶ walk the calendar. */
+.ec-daybar{ display:flex; align-items:center; gap:9px; padding:9px 12px 7px;
+  border-bottom:.5px solid var(--line); font-family:var(--mono); }
+.ec-nav{ background:none; border:0.6px solid var(--line2); color:var(--ink3); cursor:pointer;
+  font-size:10px; line-height:1; padding:4px 8px; border-radius:2px; }
+.ec-nav:hover{ color:var(--crk); border-color:rgba(0,212,255,.34); }
+.ec-day{ font-size:9.5px; letter-spacing:.18em; color:var(--ink); text-transform:uppercase;
+  font-variant-numeric:tabular-nums; }
+.ec-today{ font-size:7.5px; letter-spacing:.2em; color:var(--crk); text-transform:uppercase; }
+.ec-span{ margin-left:auto; display:flex; gap:2px; }
+.ec-sp{ font-family:var(--mono); font-size:7.5px; letter-spacing:.2em; color:var(--dim);
+  padding:4px 9px; cursor:pointer; user-select:none; border:0.6px solid transparent; border-radius:2px; }
+.ec-sp.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
+/* the table — ONE grid, so header and every row share the same column truth */
+.ec-tbl{ display:block; }
+.ec-hd, .ec-row{ display:grid; grid-template-columns:1fr 52px 78px 70px 70px 66px;
+  gap:8px; align-items:center; }
+.ec-hd{ position:sticky; top:0; z-index:2; background:var(--panel);
+  font-family:var(--mono); font-size:7.5px; letter-spacing:.24em; color:var(--dim);
+  text-transform:uppercase; padding:8px 0 7px; border-bottom:.5px solid var(--line2); }
+.ec-hd span:not(:first-child), .ec-row .v{ text-align:right; }
+.ec-row{ padding:7px 0; border-bottom:.5px solid var(--line); font-size:10px; }
+.ec-row .rel{ display:flex; align-items:center; gap:7px; min-width:0; }
+.ec-row .rel .nm{ color:var(--ink); font-size:10px; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.ec-row .rel .cty{ font-family:var(--mono); font-size:7.5px; letter-spacing:.14em; color:var(--dim);
+  flex:none; }   /* shown only when the region tab spans more than one country */
+.ec-row .dot{ flex:none; width:11px; text-align:center; font-size:9px; }
+.ec-row .v{ font-family:var(--mono); font-size:10px; color:var(--ink2);
+  font-variant-numeric:tabular-nums; }
+.ec-row .v.act{ color:var(--ink); font-weight:600; font-size:10.5px; }
+.ec-row .v.na{ color:var(--mute); }
+.ec-row .v.up{ color:var(--bear); }     /* one green one red everywhere: hotter/above est */
+.ec-row .v.dn{ color:var(--bull); }
+.ec-row .v.flat{ color:var(--ink3); }
+/* composite parent + its inline components */
+.ec-row.par{ cursor:pointer; }
+.ec-row.par .nm::after{ content:"  ▸"; color:var(--crk); font-size:8px; }
+.ec-row.par.open .nm::after{ content:"  ▾"; }
+.ec-row.sub{ background:rgba(255,255,255,.018); }
+.ec-row.sub .rel{ padding-left:16px; }
+.ec-row.sub .rel .nm{ color:var(--ink2); font-size:9.5px; }
+.ec-row.sub .rel::before{ content:"└"; color:var(--mute); font-size:9px; margin-right:2px; }
+/* the day heading used by the WEEK drill-down */
+.ec-dhd{ font-family:var(--mono); font-size:7.5px; letter-spacing:.26em; color:var(--crk);
+  text-transform:uppercase; padding:13px 0 5px; border-bottom:.5px solid var(--line2); }
+.ec-empty{ color:var(--dim); font-size:10px; padding:26px 2px; text-align:center; line-height:1.8; }
+@media (max-width:900px){
+  /* phones: PRIOR is the first column to go — ACTUAL vs EST vs SURPRISE is the read.
+     The numeric columns tighten too, so the release NAME keeps enough width to stay
+     distinguishable (two "Factory Orders …" rows must not both truncate to the same
+     string); the full name is on the row's title attribute either way. */
+  .ec-hd, .ec-row{ grid-template-columns:1fr 40px 58px 50px 50px; gap:5px; }
+  .ec-hd{ font-size:7px; letter-spacing:.1em; }
+  .ec-hd span.pri, .ec-row .v.pri{ display:none; }
+  .ec-row .rel{ gap:5px; }
+  .ec-row .rel .nm{ font-size:9.5px; }
+}
+
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
    WHOLE cockpit proportionally on big screens (Chrome + Safari) — designed once,
@@ -3296,6 +3383,9 @@ const S = {
   socTab: "YOUTUBE",                            // SOCIAL sub-tab — defaults to YOUTUBE (live feed); SENTIMENT · X · STOCKTWITS await feeds
   ytFilt: "ALL",                                // YouTube feed filter — ALL · SUBS · SHORTS · WATCH · $TICKER
   ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
+  /* R52 — ECONOMIC room: region tab · category chip · the day being viewed (ET,
+     set to today on first mount) · DAY|WEEK span · which composite rows are open */
+  econCty: "US", econCat: "ALL", econDay: null, econSpan: "DAY", econOpen: {},
 };
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
@@ -7648,49 +7738,294 @@ function econRowHTML(label, when, val, impact) {
     '<span class="lbl"><b>' + label + '</b><div class="when">' + when + "</div></span>" +
     '<span class="econ-val">' + val + "</span></div>";
 }
+/* ============================================================================
+   R52 — ECONOMIC restructure (SCINTILLA Visual Plan v2 §A).
+   The room was one flat list of treasury yields + latest macro prints: no
+   actual-vs-estimate framing, CPI as a single headline number, no country
+   breakdown, heavy scrolling. It is now a RELEASES TABLE off `econ_calendar`
+   (event_ts · country · event · actual · estimate · previous · impact —
+   68k rows, 158 countries, forward schedule + history, written by the
+   fmp-economic-12h job). treasury_rates + econ_history are NOT dropped: they
+   move to the right rail, so nothing that was on screen left the room.
+   ============================================================================ */
+/* Primary nav — region tabs. Each is a SET of the feed's country codes, because
+   "EU" and "EM" are baskets, not countries. ALL is last so no country in the
+   feed becomes unreachable (the feed carries 158; the six named tabs cover ~40). */
+const EC_REGIONS = [
+  ["US", ["US"]],
+  ["EU", ["EU","DE","FR","IT","ES","NL","BE","AT","IE","PT","FI","GR","SK","SI","LT","LV","EE","LU","CY","MT"]],
+  ["UK", ["UK","GB"]],
+  ["JP", ["JP"]],
+  ["CN", ["CN","HK"]],
+  ["EM", ["BR","IN","MX","ZA","TR","ID","TH","PH","MY","CL","CO","PE","AR","PL","HU","CZ","RO","RU",
+          "EG","SA","AE","QA","KW","VN","TW","KR","NG","PK","BD","UA","KZ","MA"]],
+  ["ALL", null],
+];
+/* Secondary nav — category rules, FIRST MATCH WINS, so the order is the spec.
+   HOUSING sits above INFLATION on purpose: "House Price Index" is a housing
+   release, not an inflation print, and would otherwise be caught by /price index/. */
+const EC_CATS = [
+  ["CENTRAL BANK", /(fed |fomc|interest rate decision|rate decision|monetary policy|central bank|\becb\b|\bboe\b|\bboj\b|\brba\b|\bsnb\b|press conference|beige book|speech|testimony|minutes|balance sheet)/i],
+  ["HOUSING", /(housing|home sales|home price|house price|building permits|mortgage|construction spending|nahb|case-shiller|pending home|residential|rent index)/i],
+  ["LABOR", /(payroll|jobless|unemploy|employment|jolts|job cuts|job vacanc|wage|labou?r|participation rate|average hourly|\badp\b|challenger|hiring)/i],
+  ["INFLATION", /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|import prices|export prices|deflator|wholesale prices|harmonised)/i],
+  ["TRADE", /(balance of trade|trade balance|^imports|^exports|current account|tic flows|foreign bond|foreign invest|capital flows|terms of trade)/i],
+  ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|industrial production|durable goods|factory orders|consumer confidence|consumer sentiment|business confidence|business climate|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories)/i],
+];
+const EC_CAT_NAMES = ["ALL"].concat(EC_CATS.map((c) => c[0])).concat(["OTHER"]);
+/* Composite releases. A release like CPI arrives as 5 separate rows at the same
+   minute; the plan asks for ONE headline row with its components as sub-rows.
+   Group key = country + release minute + tag; `head` picks which member is the
+   headline (falls back to the highest-impact member). Only groups of 2+ collapse. */
+const EC_FAM = [
+  { tag:"CPI",    test:/(inflation rate|\bcpi\b|consumer price)/i,          head:/^inflation rate yoy$/i },
+  { tag:"PPI",    test:/(producer price|\bppi\b)/i,                         head:/^producer price index (yoy|mom)$/i },
+  { tag:"PCE",    test:/pce price index/i,                                  head:/^pce price index yoy$/i },
+  { tag:"JOBS",   test:/(non ?farm payrolls|unemployment rate|average hourly earnings|participation rate)/i, head:/^non ?farm payrolls$/i },
+  { tag:"CLAIMS", test:/jobless claims/i,                                   head:/^initial jobless claims$/i },
+  { tag:"MICH",   test:/^michigan /i,                                       head:/^michigan consumer sentiment$/i },
+  { tag:"RETAIL", test:/retail sales/i,                                     head:/^retail sales mom$/i },
+  { tag:"HOMES",  test:/(housing starts|building permits)/i,                head:/^housing starts$/i },
+  { tag:"GDP",    test:/^gdp /i,                                            head:/^gdp growth rate qoq$/i },
+  { tag:"TRADE",  test:/^(balance of trade|imports|exports)$/i,             head:/^balance of trade$/i },
+  { tag:"DGO",    test:/durable goods/i,                                    head:/^durable goods orders mom$/i },
+  { tag:"PMI",    test:/pmi$/i,                                             head:/composite pmi$/i },
+  { tag:"EIA",    test:/^(eia|api) /i,                                      head:/^eia crude oil stocks change$/i },
+  { tag:"MBA",    test:/^mba /i,                                            head:/^mba mortgage applications$/i },
+  { tag:"CFTC",   test:/^cftc /i,                                           head:/s&p 500/i },
+  { tag:"BILL",   test:/(bill auction|note auction|bond auction|bund auction|gilt auction|\bbot auction\b)/i, head:/./ },
+  { tag:"MICHX",  test:/^redbook/i,                                         head:/./ },
+];
+/* series where ABOVE estimate is the BAD print — inflation running hot, more
+   people out of work. Everything else: above estimate = stronger = green.
+   One green one red everywhere; the legend under the table states the rule. */
+const EC_INVERT = /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|deflator|unemploy|jobless|job cuts|initial claims|continuing claims)/i;
+
+const EC_MONTH_TAG = /\s*\((Q[1-4]|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^)]*\)\s*$/i;
+const ecBase  = (e) => String(e || "").replace(EC_MONTH_TAG, "").trim();          // "Core CPI (Jul)" → "Core CPI"
+const ecPeriod = (e) => { const m = String(e || "").match(EC_MONTH_TAG); return m ? m[0].trim().replace(/[()]/g, "") : ""; };
+const ecCat = (e) => { const b = ecBase(e); for (const [n, re] of EC_CATS) if (re.test(b)) return n; return "OTHER"; };
+const ecFam = (e) => { const b = ecBase(e); for (const f of EC_FAM) if (f.test.test(b)) return f; return null; };
+/* ET is the cockpit's clock — the operator trades a US session, so every release
+   time is shown in New York time regardless of which country printed it. */
+const ecDateKey = (ts) => new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+const ecTimeET  = (ts) => new Date(ts * 1000).toLocaleTimeString("en-US",
+  { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
+const ecToday   = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+const ecAnchor  = (iso) => Date.parse(iso + "T12:00:00Z") / 1000;                 // noon UTC — DST-proof day anchor
+const ecShift   = (iso, d) => new Date((ecAnchor(iso) + d * 86400) * 1000).toISOString().slice(0, 10);
+const ecDayLbl  = (iso) => new Date(ecAnchor(iso) * 1000).toLocaleDateString("en-US",
+  { timeZone: "UTC", weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+const EC_DOT = { High: ECON_DOT.H, Medium: ECON_DOT.M, Low: ECON_DOT.L, None: ECON_DOT.L };
+/* value formatting: keep the feed's own precision (it is already release-shaped —
+   3.1 for a rate, 1.177 for housing starts) instead of forcing a decimal count. */
+function ecNum(v) {
+  if (v == null || v === "") return null;
+  const n = +v; if (!isFinite(n)) return null;
+  return Math.abs(n) >= 10000 ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+       : String(+n.toFixed(3));
+}
+let ECON_CAL = null;        // the rows of ONE fetched window; region/category filter client-side
+let ECON_WIN = null;        // the window key currently in ECON_CAL (day or week span)
+/* PostgREST answers at most 1000 rows per request no matter what `limit` says
+   (measured: limit=8000 → 1000 back). A 7-day window across 158 countries lands
+   near that ceiling, so page through until a short page comes back — a silently
+   clipped calendar would read as "nothing else was scheduled", which is a lie. */
+async function ecFetchWindow(from, to) {
+  const PAGE = 1000, out = [];
+  for (let off = 0; off < 20000; off += PAGE) {
+    const page = await pg("econ_calendar?select=event_ts,country,event,actual,estimate,previous,impact" +
+      "&event_ts=gte." + from + "&event_ts=lte." + to +
+      "&order=event_ts.asc,country.asc,event.asc&limit=" + PAGE + "&offset=" + off);
+    out.push.apply(out, page);
+    if (!page || page.length < PAGE) break;
+  }
+  return out;
+}
+
+function ecWinKey() { return (S.econSpan || "DAY") + "|" + (S.econDay || ecToday()); }
+function ecDaysInView() {
+  const d0 = S.econDay || ecToday();
+  if ((S.econSpan || "DAY") === "DAY") return [d0];
+  return [0, 1, 2, 3, 4, 5, 6].map((i) => ecShift(d0, i));
+}
+function ecRegionSet() {
+  const r = EC_REGIONS.find((x) => x[0] === (S.econCty || "US"));
+  return r && r[1] ? new Set(r[1]) : null;   // null = ALL countries
+}
+/* rows for the current day/region — the set the category chips count against */
+function ecScoped() {
+  if (!ECON_CAL) return [];
+  const days = new Set(ecDaysInView()), set = ecRegionSet();
+  return ECON_CAL.filter((r) => days.has(ecDateKey(r.event_ts)) && (!set || set.has(r.country)));
+}
+
 function econRoomHTML() {
   return '<div class="body2">' +
-    '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>rates &amp; macro prints · <b>market-wide</b></span>' + SECFS_BTN + "</div>" +
-      '<div class="scroller" id="econList"><div class="soon">loading economic data…</div></div></div>' +
+    '<div class="panel">' +
+      '<div class="sc-plabel sc-plabel--row"><span>economic releases · <b>market-wide</b></span>' + SECFS_BTN + "</div>" +
+      '<div class="ec-ctry">' + EC_REGIONS.map(([n]) =>
+        '<span class="ec-ct ' + (n === (S.econCty || "US") ? "on" : "") + '" data-act="ecctry" data-c="' + n + '">' + n + "</span>").join("") + "</div>" +
+      '<div class="ec-cat" id="econCat"></div>' +
+      '<div class="ec-daybar">' +
+        '<button class="ec-nav" data-act="ecday" data-d="-1" aria-label="Previous day">◀</button>' +
+        '<span class="ec-day" id="econDayLbl">—</span><span class="ec-today" id="econDayNow"></span>' +
+        '<button class="ec-nav" data-act="ecday" data-d="1" aria-label="Next day">▶</button>' +
+        '<span class="ec-span">' +
+          '<span class="ec-sp" data-act="ecday" data-d="0">TODAY</span>' +
+          ["DAY", "WEEK"].map((s) =>
+            '<span class="ec-sp ' + (s === (S.econSpan || "DAY") ? "on" : "") + '" data-act="ecspan" data-s="' + s + '">' + s + "</span>").join("") +
+        "</span>" +
+      "</div>" +
+      '<div class="scroller" id="econTbl"><div class="soon">loading economic calendar…</div></div>' +
+    "</div>" +
     '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>live</b></span>' + SECFS_BTN + '</div><div class="rail">' +
       '<div class="card"><h4>Treasury curve</h4><div class="sc-senttxt" id="econCurve">—</div></div>' +
-      '<div class="card"><h4>Market-wide</h4><div class="sc-senttxt">Economic events are not cohort-scoped — they move everything.</div></div>' +
-      '<div class="card"><h4>Source (live)</h4><div class="sc-senttxt">treasury_rates + econ_history (FRED/FMP).</div></div>' +
+      '<div class="card" id="econLadder"><h4>UST ladder</h4><div class="sc-senttxt">—</div></div>' +
+      '<div class="card" id="econPrints"><h4>Macro prints · latest</h4><div class="sc-senttxt">—</div></div>' +
+      '<div class="card"><h4>Source (live)</h4><div class="sc-senttxt">Releases: <b>econ_calendar</b> (FMP economic calendar). ' +
+        'Curve + prints: <b>treasury_rates</b> + <b>econ_history</b> (FRED/FMP). Times shown in <b>ET</b>.</div></div>' +
     "</div></div></div>";
 }
-async function fillEcon() {
-  const list = el("econList");
-  if (!list) return;
-  try {
-    const [tr, eh] = await Promise.all([
-      pg("treasury_rates?select=*&order=date.desc&limit=1"),
-      pg("econ_history?select=series,date,value&order=date.desc&limit=600"),
-    ]);
-    if (!el("econList")) return;
-    const t0 = tr[0];
-    const TEN = [["1M","m1"],["2M","m2"],["3M","m3"],["6M","m6"],["1Y","y1"],["2Y","y2"],
-                 ["3Y","y3"],["5Y","y5"],["7Y","y7"],["10Y","y10"],["20Y","y20"],["30Y","y30"]];
-    let html = "";
-    /* FIX 6 — treasury curve rows grouped under their own cyan-labeled card */
-    if (t0) {
-      const tre = TEN.filter(([, k]) => num(t0[k]) != null).map(([lbl, k]) =>
-        econRowHTML("UST " + lbl, "treasury yield · " + esc(t0.date), (+t0[k]).toFixed(2) + "%",
-          (k === "y2" || k === "y10" || k === "y30") ? "M" : "L")).join("");
-      if (tre) html += '<div class="card" style="margin:4px 0 10px"><h4 style="color:var(--crk);letter-spacing:.22em">treasury curve · ' +
-        esc(t0.date) + "</h4>" + tre + "</div>";
+/* the category chips carry their own live counts, so a chip that hides rows says
+   how many — nothing disappears from this room silently */
+function renderEconCats() {
+  const box = el("econCat"); if (!box) return;
+  const scoped = ecScoped(), counts = {};
+  for (const r of scoped) counts[ecCat(r.event)] = (counts[ecCat(r.event)] || 0) + 1;
+  counts.ALL = scoped.length;
+  box.innerHTML = EC_CAT_NAMES.map((n) =>
+    '<span class="ec-cc ' + (n === (S.econCat || "ALL") ? "on" : "") + '" data-act="eccat" data-c="' + n + '">' +
+      n + '<span class="n">' + (counts[n] || 0) + "</span></span>").join("");
+}
+function ecRowHTML(r, kind, showCty, attrs) {
+  const a = num(r.actual), e = num(r.estimate), p = num(r.previous);
+  let sur = '<span class="v na">—</span>';
+  if (a != null && e != null) {
+    const d = a - e, hot = EC_INVERT.test(ecBase(r.event));
+    const cls = Math.abs(d) < 1e-9 ? "flat" : ((d > 0) === hot ? "up" : "dn");
+    sur = '<span class="v ' + cls + '">' + (d > 0 ? "+" : d < 0 ? "−" : "") + String(+Math.abs(d).toFixed(3)) + "</span>";
+  }
+  const per = ecPeriod(r.event);
+  return '<div class="ec-row ' + kind + '"' + (attrs || "") + ">" +
+    '<span class="rel"><span class="dot" style="' + (EC_DOT[r.impact] || ECON_DOT.L) + '">●</span>' +
+      (showCty ? '<span class="cty">' + esc(r.country) + "</span>" : "") +
+      '<span class="nm" title="' + esc(r.event) + '">' + esc(ecBase(r.event)) +
+      (per ? ' <span class="cty">' + esc(per) + "</span>" : "") + "</span></span>" +
+    '<span class="v">' + ecTimeET(r.event_ts) + "</span>" +
+    '<span class="v act' + (a == null ? " na" : "") + '">' + (ecNum(a) ?? "—") + "</span>" +
+    '<span class="v' + (e == null ? " na" : "") + '">' + (ecNum(e) ?? "—") + "</span>" +
+    '<span class="v pri' + (p == null ? " na" : "") + '">' + (ecNum(p) ?? "—") + "</span>" +
+    sur + "</div>";
+}
+/* one day's rows: composites collapsed to a headline + inline sub-rows, the rest flat */
+function ecDayRowsHTML(rows, showCty) {
+  const groups = [], byKey = {};
+  for (const r of rows) {
+    const f = ecFam(r.event);
+    const k = f ? r.country + "|" + ecTimeET(r.event_ts) + "|" + f.tag : null;
+    if (!k) { groups.push({ solo: r }); continue; }
+    if (!byKey[k]) { byKey[k] = { fam: f, key: k, members: [] }; groups.push(byKey[k]); }
+    byKey[k].members.push(r);
+  }
+  const IMP = { High: 3, Medium: 2, Low: 1, None: 0 };
+  return groups.map((g) => {
+    if (g.solo) return ecRowHTML(g.solo, "", showCty);
+    const m = g.members;
+    if (m.length === 1) return ecRowHTML(m[0], "", showCty);
+    /* headline = the family's named head if it printed, else the loudest member */
+    let head = m.find((r) => g.fam.head.test(ecBase(r.event)));
+    if (!head) head = m.slice().sort((x, y) => (IMP[y.impact] || 0) - (IMP[x.impact] || 0))[0];
+    const kids = m.filter((r) => r !== head);
+    const open = !!(S.econOpen && S.econOpen[g.key]);
+    return ecRowHTML(head, "par" + (open ? " open" : ""), showCty,
+                     ' data-act="ecfam" data-k="' + esc(g.key) + '"') +
+      (open ? kids.map((r) => ecRowHTML(r, "sub", showCty)).join("") : "");
+  }).join("");
+}
+function renderEconTable() {
+  const box = el("econTbl"); if (!box) return;
+  const lbl = el("econDayLbl"), now = el("econDayNow");
+  const d0 = S.econDay || ecToday();
+  if (lbl) lbl.textContent = (S.econSpan === "WEEK")
+    ? ecDayLbl(d0).toUpperCase() + "  →  " + ecDayLbl(ecShift(d0, 6)).toUpperCase()
+    : ecDayLbl(d0).toUpperCase();
+  if (now) now.textContent = d0 === ecToday() ? "· TODAY" : "";
+  if (!ECON_CAL) { box.innerHTML = '<div class="soon">loading economic calendar…</div>'; return; }
+  renderEconCats();
+  const cat = S.econCat || "ALL";
+  let rows = ecScoped().filter((r) => cat === "ALL" || ecCat(r.event) === cat);
+  rows.sort((a, b) => a.event_ts - b.event_ts || String(a.country).localeCompare(String(b.country)) ||
+                      String(a.event).localeCompare(String(b.event)));
+  const showCty = (ecRegionSet() || { size: 99 }).size !== 1;
+  const head = '<div class="ec-hd"><span>Release</span><span>Time</span><span>Actual</span>' +
+    '<span>Est</span><span class="pri">Prior</span><span>Surprise</span></div>';
+  if (!rows.length) {
+    box.innerHTML = head + '<div class="ec-empty">No ' + esc(cat === "ALL" ? "" : cat.toLowerCase() + " ") +
+      "releases scheduled for " + esc(S.econCty || "US") + " in this window.<br>" +
+      "Use ◀ ▶ to walk the calendar, or switch region.</div>";
+    return;
+  }
+  let body = "";
+  if ((S.econSpan || "DAY") === "WEEK") {
+    for (const d of ecDaysInView()) {
+      const dr = rows.filter((r) => ecDateKey(r.event_ts) === d);
+      if (!dr.length) continue;
+      body += '<div class="ec-dhd">' + esc(ecDayLbl(d)) + (d === ecToday() ? " · today" : "") + "</div>" +
+              ecDayRowsHTML(dr, showCty);
     }
-    const seen = {};
-    for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
-    const prints = Object.values(seen).sort((a, b) => String(a.series).localeCompare(String(b.series)))
-      .map((r) => econRowHTML(esc(ECON_LBL[r.series] || r.series), esc(r.date), fmtEconVal(r.value),
-        ECON_IMPACT[r.series] || "L")).join("");
-    if (prints) html += '<div class="sc-plabel" style="padding:10px 0 4px">macro prints · <b>latest</b></div>' + prints;
-    el("econList").innerHTML = html || '<div class="soon">treasury_rates and econ_history are empty.</div>';
+  } else body = ecDayRowsHTML(rows, showCty);
+  box.innerHTML = head + '<div class="ec-tbl">' + body + "</div>" +
+    '<div class="sc-est-note">surprise = actual − estimate · red = hotter inflation / weaker labour than expected, ' +
+    'green = the other way · ● high · ● medium · ● low impact · times in ET · — = the feed has not printed that value</div>';
+}
+async function fillEcon() {
+  if (!S.econDay) S.econDay = ecToday();
+  if (!S.econOpen) S.econOpen = {};
+  const box = el("econTbl");
+  if (!box) return;
+  /* ONE window fetch (±2 days of padding so ET bucketing never clips an edge),
+     then every region/category/expand interaction is client-side. */
+  const key = ecWinKey();
+  const days = ecDaysInView();
+  const from = Math.floor(ecAnchor(days[0]) - 2 * 86400);
+  const to   = Math.floor(ecAnchor(days[days.length - 1]) + 2 * 86400);
+  try {
+    const jobs = [
+      (ECON_WIN === key && ECON_CAL) ? Promise.resolve(ECON_CAL) : ecFetchWindow(from, to),
+      el("econCurve") ? pg("treasury_rates?select=*&order=date.desc&limit=1") : Promise.resolve(null),
+      el("econPrints") ? pg("econ_history?select=series,date,value&order=date.desc&limit=600") : Promise.resolve(null),
+    ];
+    const [cal, tr, eh] = await Promise.all(jobs);
+    if (!el("econTbl")) return;
+    ECON_CAL = cal || []; ECON_WIN = key;
+    renderEconTable();
+    /* ---- right rail: the curve + prints the room used to show, kept intact ---- */
+    const t0 = tr && tr[0];
     const c = el("econCurve");
     if (c && t0 && num(t0.y2) != null && num(t0.y10) != null)
       c.innerHTML = "as of <b>" + esc(t0.date) + "</b> · 2Y " + (+t0.y2).toFixed(2) + "% · 10Y " +
         (+t0.y10).toFixed(2) + "% · 2s10s " + ((t0.y10 - t0.y2) >= 0 ? "+" : "") + (t0.y10 - t0.y2).toFixed(2) + "%";
-  } catch (err) { list.innerHTML = '<div class="soon">economic pull failed — check connection.</div>'; }
+    const TEN = [["1M","m1"],["2M","m2"],["3M","m3"],["6M","m6"],["1Y","y1"],["2Y","y2"],
+                 ["3Y","y3"],["5Y","y5"],["7Y","y7"],["10Y","y10"],["20Y","y20"],["30Y","y30"]];
+    const lad = el("econLadder");
+    if (lad && t0) lad.innerHTML = '<h4>UST ladder · ' + esc(t0.date) + "</h4>" +
+      TEN.filter(([, k]) => num(t0[k]) != null).map(([l, k]) =>
+        econRowHTML("UST " + l, "treasury yield", (+t0[k]).toFixed(2) + "%",
+          (k === "y2" || k === "y10" || k === "y30") ? "M" : "L")).join("");
+    const pr = el("econPrints");
+    if (pr && eh) {
+      const seen = {};
+      for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
+      const prints = Object.values(seen).sort((a, b) => String(a.series).localeCompare(String(b.series)))
+        .map((r) => econRowHTML(esc(ECON_LBL[r.series] || r.series), esc(r.date), fmtEconVal(r.value),
+          ECON_IMPACT[r.series] || "L")).join("");
+      pr.innerHTML = "<h4>Macro prints · latest</h4>" +
+        (prints || '<div class="sc-senttxt">econ_history is empty.</div>');
+    }
+  } catch (err) {
+    if (el("econTbl") && !ECON_CAL) el("econTbl").innerHTML = '<div class="soon">economic pull failed — check connection.</div>';
+  }
 }
 
 /* ---- Room 3 · COMPANY ----------------------------------------------------------- */
@@ -10618,6 +10953,41 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "caltype":    S.calType = a.dataset.t; sync(); break;
+    /* R52 — ECONOMIC room. Region / category / expand are pure client-side
+       repaints of the already-fetched window (no refetch, no remount, so the
+       scroll position and the rest of the room survive). Only a day/span change
+       moves the window, and that one goes back to the feed. */
+    case "ecctry": {
+      S.econCty = a.dataset.c;
+      document.querySelectorAll(".ec-ctry .ec-ct").forEach((b) => b.classList.toggle("on", b.dataset.c === S.econCty));
+      S.econCat = "ALL";                       // a new region has a different category mix
+      renderEconTable();
+      break;
+    }
+    case "eccat":  S.econCat = a.dataset.c; renderEconTable(); break;
+    case "ecfam": {                            // composite release opens/closes inline
+      const k = a.dataset.k;
+      S.econOpen = S.econOpen || {};
+      if (S.econOpen[k]) delete S.econOpen[k]; else S.econOpen[k] = 1;
+      renderEconTable();
+      break;
+    }
+    case "ecday": {
+      const d = +a.dataset.d;
+      const step = (S.econSpan === "WEEK") ? 7 : 1;
+      S.econDay = d === 0 ? ecToday() : ecShift(S.econDay || ecToday(), d * step);
+      S.econOpen = {};
+      fillEcon();
+      break;
+    }
+    case "ecspan": {
+      S.econSpan = a.dataset.s;
+      document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((b) =>
+        b.classList.toggle("on", b.dataset.s === S.econSpan));
+      S.econOpen = {};
+      fillEcon();
+      break;
+    }
     /* R34 — removed orphaned case "systems" / case "chatbot": no DOM element
        dispatches those data-act values. The live paths are menuSys→openSys() and
        menuChat→openChat() in the logo-menu controller. */
