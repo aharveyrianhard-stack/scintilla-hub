@@ -3935,7 +3935,7 @@ document.addEventListener("input", (e) => {
      out from under the keystroke. */
   if (S.sec === "SCENES") {
     mountedKey = viewKey();
-    const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+    cohStripPaint();
     paintL0Body();
     return;
   }
@@ -4063,7 +4063,10 @@ function computeBoardOrder() {
 function sortBoardBy(key) {
   S.sort = S.sort.key === key ? { key, dir: -S.sort.dir } : { key, dir: -1 };
   S.boardOrder = computeBoardOrder();
-  updateBoard();
+  /* ★ MOVE, DO NOT REBUILD. A header click leaves every row's contents untouched, so
+     there is nothing to rebuild — and rebuilding is what destroyed the movement.
+     Falls back to the full repaint if the board is not on screen yet. */
+  if (!boardReorderInPlace()) updateBoard();
 }
 /* Rows in the frozen order. New tickers (cohort switch, first load) not yet in the
    order are seeded via computeBoardOrder(); any that still slip in (feed added a row)
@@ -4443,6 +4446,137 @@ function cohortCompareStripHTML() {
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip">' + cols + "</div>";
 }
+/* ═══ ONE MOVER FOR EVERY GEIGER SURFACE ══════════════════════════════════════
+   Alan: "you have to be consistent wherever there is a Geiger to apply the same
+   behavior... the labels have to move like the table is moving, but the direction
+   is different."
+   So there is exactly ONE function that moves things, and the only thing that
+   changes is the axis: the board slides its rows DOWN the page, the compare strip
+   slides its columns ACROSS. Same curve, same duration, same layer release.
+   Curve and duration are the motion spec's, at its GRADUAL speed. Source of truth:
+   /Users/alanharvey/SCINTILLA 0.5/scintilla-widgets/visuals/geiger-motion/index.html
+   Alan, after watching the two curves at 4x slow motion: "most definitely the slow
+   one. It has to be smooth." GRADUAL is that speed in the spec's own table. */
+const GWX_EASE    = "cubic-bezier(.34,.02,.2,1)";
+const GWX_MOVE_MS = 760;
+
+/* FLIP. Measure where everything is, let the caller reorder, put each node back
+   where it was, then release it.
+   The NODE travels, so whatever is inside it — a label, a value, a bar — travels
+   with it. That is the whole answer to "the labels didn't move, just the bars":
+   there is nothing to keep in sync, because the label and the bar are one object. */
+function gwxMove(nodes, axis, reorder) {
+  if (!nodes.length) { reorder(); return; }
+  const horiz = axis === "x";
+  const was = nodes.map((n) => { const r = n.getBoundingClientRect(); return horiz ? r.left : r.top; });
+  reorder();
+  let moved = false;
+  nodes.forEach((n, i) => {
+    const r = n.getBoundingClientRect();
+    n.__gwxD = was[i] - (horiz ? r.left : r.top);
+    if (n.__gwxD) moved = true;
+  });
+  if (!moved) return;
+  nodes.forEach((n) => {
+    if (!n.__gwxD) return;
+    n.style.transition = "none";
+    n.style.transform = horiz ? "translateX(" + n.__gwxD + "px)" : "translateY(" + n.__gwxD + "px)";
+  });
+  /* ONE forced reflow for the whole set, not one per node. The board used to pay a
+     layout flush per row, which is the kind of thing that turns 200 rows into a
+     stutter. */
+  nodes[0].getBoundingClientRect();
+  nodes.forEach((n) => {
+    if (!n.__gwxD) return;
+    n.__gwxD = 0;
+    n.style.transition = "transform " + GWX_MOVE_MS + "ms " + GWX_EASE;
+    n.style.transform = horiz ? "translateX(0)" : "translateY(0)";
+    /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
+       compositing layer. Holding transforms on 200+ nodes exhausts layer memory and
+       Safari flushes them — which Alan saw as the board going BLACK on iPad while
+       desktop, with far more headroom, never did. Clearing transform+transition once
+       the move lands drops the node back to a plain painted element.
+       THIS TIMEOUT MUST STAY LONGER THAN GWX_MOVE_MS. */
+    clearTimeout(n.__gwxT);
+    n.__gwxT = setTimeout(() => {
+      n.style.transition = ""; n.style.transform = ""; n.style.willChange = "";
+    }, GWX_MOVE_MS + 60);
+  });
+}
+
+/* ═══ THE COMPARE STRIP, UPDATED IN PLACE ═════════════════════════════════════
+   Alan: "the labels didn't move — just the bars."
+   It was rebuilt with innerHTML on every repaint, and you cannot animate a node you
+   have just replaced. Now the column nodes are KEPT and MOVED, exactly as the board
+   keeps and moves its rows. The markup still comes from cohortCompareStripHTML(), so
+   there is still only ONE builder and only one copy of the trend+momentum phrase
+   logic — this does not become a second implementation of the strip. */
+function cohStripPaint() {
+  const cc = el("cohCompare"); if (!cc) return;
+  const html = cohortCompareStripHTML();
+  const strip = cc.querySelector("#cohStrip");
+  if (!strip) { cc.innerHTML = html; return; }              /* first build */
+
+  const scratch = document.createElement("div");
+  scratch.innerHTML = html;
+  const freshStrip = scratch.querySelector("#cohStrip");
+  if (!freshStrip) { cc.innerHTML = html; return; }
+
+  const fresh = [...freshStrip.children];
+  const byKey = {};
+  [...strip.children].forEach((c) => { byKey[c.getAttribute("data-key")] = c; });
+
+  /* a column that has just appeared, or just gone, has nowhere to travel from or to.
+     That case is an honest rebuild rather than a fake slide. */
+  const sameSet = fresh.length === strip.children.length &&
+    fresh.every((f) => byKey[f.getAttribute("data-key")]);
+  if (!sameSet) { cc.innerHTML = html; return; }
+
+  /* the heading carries the ±scale, which moves with the data */
+  const hd = cc.querySelector(".sc-cohstrip__hd"), fhd = scratch.querySelector(".sc-cohstrip__hd");
+  if (hd && fhd && hd.innerHTML !== fhd.innerHTML) hd.innerHTML = fhd.innerHTML;
+
+  const nodes = fresh.map((f) => byKey[f.getAttribute("data-key")]);
+  gwxMove(nodes, "x", () => {
+    fresh.forEach((f) => {
+      const cur = byKey[f.getAttribute("data-key")];
+      if (cur.className !== f.className) cur.className = f.className;
+      if (cur.title !== f.title) cur.title = f.title;
+      if (cur.innerHTML !== f.innerHTML) cur.innerHTML = f.innerHTML;
+      strip.appendChild(cur);                                /* into its new rank */
+    });
+  });
+}
+
+/* ═══ THE BOARD, RE-SORTED IN PLACE ═══════════════════════════════════════════
+   A header click changes only the ORDER — every row's contents are identical either
+   side of it. updateBoard() was throwing all 41–210 rows away and building them
+   again: ~7ms at 41 rows [MEASURED], and worse, it left the browser nothing to
+   animate between, so the rows teleported. That is why the softer curve was
+   invisible here — on this path there was no movement at all to soften.
+   Keep the nodes, move them. */
+function boardReorderInPlace() {
+  const bs = el("boardScroll"); if (!bs) return false;
+  const rows = [...bs.querySelectorAll(".sc-board__row")];
+  if (!rows.length) return false;
+  const pos = {}; (S.boardOrder || []).forEach((t, i) => { pos[t] = i; });
+  const target = rows.slice().sort((a, b) => {
+    const pa = pos[a.getAttribute("data-t")], pb = pos[b.getAttribute("data-t")];
+    return (pa == null ? 1e9 : pa) - (pb == null ? 1e9 : pb);
+  });
+  gwxMove(rows, "y", () => {
+    /* the header carries the active sort arrow, so it is rewritten. It does not
+       move, so it takes no part in the animation. */
+    const hd = bs.firstElementChild;
+    if (hd && !hd.classList.contains("sc-board__row")) {
+      const d = document.createElement("div"); d.innerHTML = boardHeaderHTML();
+      if (d.firstElementChild) bs.replaceChild(d.firstElementChild, hd);
+    }
+    target.forEach((r) => bs.appendChild(r));
+  });
+  return true;
+}
+
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
     cohTabsHTML() +
@@ -4481,7 +4615,7 @@ function updateBoard() {
   const bs = el("boardScroll");
   if (bs) bs.innerHTML = boardRowsHTML();
   const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
-  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
+  cohStripPaint();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
   /* R49 §2 — a cohort/scope change moves the MAP's ticker set, so re-resolve which
      batched (tf, cohort) series is on screen BEFORE the grid is rebuilt. Inside
      Layer 0 the tiles read through l0MapChg (TF-aware); the standalone #133 heat
@@ -6418,7 +6552,7 @@ function scenesRoomHTML() {
 /* the SCENES room's live tick — the job updateBoard() does for the dashboard pane,
    minus the board (there isn't one here). */
 function scenesTick() {
-  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+  cohStripPaint();
   if (LAYER0_TAB !== "MAP") return;
   l0MapSync();
   const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(l0MapChg); wireHeatSizing(); }
@@ -10528,7 +10662,7 @@ document.addEventListener("click", (e) => {
     }
     case "cohcmptoggle": {   // R39 — expand the cross-cohort compare fan (R41: fan is always open in Layer 0; nothing dispatches this any more — kept harmless)
       S.cohCompareOpen = !S.cohCompareOpen;
-      const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 — #cohCompare holds the horizontal strip now
+      cohStripPaint();   // R43 — #cohCompare holds the horizontal strip now
       break;
     }
     case "gscompkids": {   // R41 §5a — composite parent toggles the stacked family lines below it
@@ -12795,8 +12929,7 @@ function filesWire(){
       });
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
-      var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
-        cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
+      { cohStripPaint(); cmpToggle();   /* the strip rewinds with the board */
       }
       paintTM();   /* same breath - never leave a frame with the columns missing */
       badges(before);
@@ -12943,8 +13076,7 @@ function filesWire(){
       var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
       ev.stopPropagation();
       CMP_MODE=b.getAttribute("data-gwxcmp");
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+      cohStripPaint();
     }, true);
   }
   /* kept as a harmless no-op: the toggle is rendered inline now, so there is nothing to restore */
@@ -12958,8 +13090,7 @@ function filesWire(){
     [].forEach.call(w.querySelectorAll("[data-gwxcmp]"),function(b){
       b.onclick=function(ev){ ev.stopPropagation();
         CMP_MODE=b.getAttribute("data-gwxcmp");
-        var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
-          cc.innerHTML=cohortCompareStripHTML(); cmpToggle();
+        { cohStripPaint(); cmpToggle();
         }
       };
     });
@@ -13138,8 +13269,7 @@ function filesWire(){
       paintTM();
       /* the strip renders before this arrives, so without a repaint here every column
          would sit on "—" until the next unrelated rebuild */
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+      cohStripPaint();
     });
   }
 
