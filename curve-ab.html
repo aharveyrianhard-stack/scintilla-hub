@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>THE CURVE — before and after, same re-sort</title>
+<style>
+:root{--bg:#070a0d;--pan:#0b0f14;--line:#161c25;--dim:#5d6877;--dimmer:#3c4551;
+ --txt:#c9d2dd;--up:#2bff9b;--dn:#ff2f55;--cy:#3fd0ff;
+ --mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);
+ font:400 14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+ -webkit-font-smoothing:antialiased}
+body{padding:14px 12px 40px;max-width:940px;margin:0 auto}
+h1{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--cy);
+ margin:0 0 6px;font-weight:500}
+.lede{color:var(--dim);font-size:13px;margin:0 0 14px;max-width:64ch}
+.lede b{color:var(--txt);font-weight:600}
+
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+button{appearance:none;background:#101620;color:var(--dim);border:1px solid var(--line);
+ border-radius:7px;padding:11px 14px;font-family:var(--mono);font-size:10px;
+ letter-spacing:.11em;cursor:pointer;min-height:40px;
+ transition:background .12s,color .12s,border-color .12s}
+button:active{transform:translateY(1px)}
+button.go{background:#12222e;color:var(--cy);border-color:#1d4256}
+button.act{background:#13251c;color:var(--up);border-color:#1d4a34}
+
+.pair{display:flex;gap:12px;align-items:flex-start}
+.side{flex:1 1 0;min-width:0;background:var(--pan);border:1px solid var(--line);
+ border-radius:9px;padding:8px 0 8px;overflow:hidden}
+/* stacked, the panels must size to their content. This block has to come AFTER the
+   .side rule above: a media query adds no specificity, so at equal specificity the
+   later rule wins. flex:1 1 0 in a column makes flex-basis apply to HEIGHT and
+   collapses each board to nothing. */
+@media(max-width:700px){
+ .pair{flex-direction:column}
+ .side{flex:0 0 auto;width:100%}}
+.cap{padding:0 12px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.cap .n{font-family:var(--mono);font-size:10px;letter-spacing:.16em;display:block}
+.cap .c{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--dimmer);
+ display:block;margin-top:3px}
+.side.old .cap .n{color:var(--dn)}
+.side.new .cap .n{color:var(--up)}
+.rows{position:relative}
+.row{position:absolute;left:0;right:0;height:30px;display:flex;align-items:center;
+ padding:0 12px;will-change:transform}
+.tk{width:46px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--txt)}
+.val{width:52px;text-align:right;font-family:var(--mono);font-size:10px;
+ color:var(--dim);padding-right:9px}
+.track{flex:1;position:relative;height:13px;background:#0d1218;border-radius:2px;overflow:hidden}
+.track:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#28323e}
+.bar{position:absolute;top:2px;bottom:2px;border-radius:2px;display:block}
+
+.note{margin-top:16px;font-size:12px;color:var(--dim);border-left:2px solid var(--line);
+ padding-left:10px;max-width:64ch}
+.note b{color:var(--txt);font-weight:600}
+.foot{margin-top:18px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--dimmer)}
+</style></head><body>
+
+<h1>THE CURVE · BEFORE AND AFTER</h1>
+<p class="lede">Both sides hold the same thirteen names with the same numbers and re-sort at
+the same instant. The <b>only</b> difference between them is the easing curve. Left is what
+the hub did until now. Right is what the motion spec says. Press the button a few times, then
+slow it down.</p>
+
+<div class="btns">
+ <button class="go" id="go">RE-SORT BOTH</button>
+ <button id="slow">SLOW IT DOWN 4×</button>
+ <button id="reset">RESET</button>
+</div>
+
+<div class="pair">
+ <div class="side old">
+  <div class="cap"><span class="n">HUB BEFORE</span>
+   <span class="c">cubic-bezier(.32, 0, .18, 1) · 420ms</span></div>
+  <div class="rows" id="rowsA"></div>
+ </div>
+ <div class="side new">
+  <div class="cap"><span class="n">SPEC — NOW IN THE HUB</span>
+   <span class="c">cubic-bezier(.34, .02, .2, 1) · 400ms</span></div>
+  <div class="rows" id="rowsB"></div>
+ </div>
+</div>
+
+<p class="note"><b>What to look for: the first instant of the move, not the landing.</b>
+The left side's curve starts at exactly 0, so a row leaves from a dead stop and gets snatched
+into motion. The right side starts at .02 — a fraction of ease-in — so the row already carries
+a little weight as it goes. Both arrive at about the same time. It is the departure that differs.</p>
+
+<p class="foot">DUMMY DATA · NOTHING LIVE · THE CURVE IS THE ONLY VARIABLE</p>
+
+<script>
+(function(){
+var NAMES=["C","SLB","AXP","GS","ABBV","COP","DPZ","CVX","IBM","PG","MCD","COST","CAT"];
+var BASE=[0.40,0.38,0.36,0.35,0.31,0.30,0.22,0.05,-0.04,-0.12,-0.14,-0.30,-0.55];
+var RH=30, MULT=1;
+
+var CURVES={
+  A:{el:"rowsA", ease:"cubic-bezier(.32,0,.18,1)", ms:420},
+  B:{el:"rowsB", ease:"cubic-bezier(.34,.02,.2,1)", ms:400}
+};
+
+var vals=BASE.slice();
+var state={};   /* per side: {host, rowEls, order} */
+
+Object.keys(CURVES).forEach(function(k){
+  var host=document.getElementById(CURVES[k].el);
+  host.style.height=(NAMES.length*RH)+"px";
+  var rowEls=[];
+  NAMES.forEach(function(n,i){
+    var el=document.createElement("div"); el.className="row";
+    el.innerHTML='<span class="tk"></span><span class="val"></span>'+
+                 '<div class="track"><i class="bar"></i></div>';
+    el.querySelector(".tk").textContent=n;
+    host.appendChild(el); rowEls.push(el);
+  });
+  state[k]={host:host,rowEls:rowEls,order:NAMES.map(function(_,i){return i})};
+});
+
+function paint(){
+  var mx=Math.max.apply(null,vals.map(Math.abs))||1;
+  Object.keys(state).forEach(function(k){
+    state[k].rowEls.forEach(function(el,i){
+      var v=vals[i]/mx, bar=el.querySelector(".bar");
+      el.querySelector(".val").textContent=(vals[i]>=0?"+":"")+vals[i].toFixed(2);
+      if(v>=0){ bar.style.left="50%"; bar.style.width=(v*50)+"%"; bar.style.background="var(--up)"; }
+      else { bar.style.left=(50+v*50)+"%"; bar.style.width=(-v*50)+"%"; bar.style.background="var(--dn)"; }
+    });
+  });
+}
+function place(k,dur){
+  var s=state[k], c=CURVES[k];
+  s.order.forEach(function(di,pos){
+    var el=s.rowEls[di];
+    el.style.transition=dur?("transform "+(c.ms*MULT)+"ms "+c.ease):"none";
+    el.style.transform="translateY("+(pos*RH)+"px)";
+  });
+}
+function computeOrder(){
+  var idx=NAMES.map(function(_,i){return i});
+  idx.sort(function(a,b){return vals[b]-vals[a]});
+  return idx;
+}
+function resort(){
+  var o=computeOrder();
+  /* both sides get the identical new order in the same frame */
+  Object.keys(state).forEach(function(k){ state[k].order=o.slice(); });
+  paint();
+  Object.keys(state).forEach(function(k){ place(k,true); });
+}
+
+document.getElementById("go").onclick=function(){
+  vals=vals.map(function(v){
+    return Math.max(-1,Math.min(1, v+(Math.random()-.5)*.55));
+  });
+  resort();
+};
+var slowBtn=document.getElementById("slow");
+slowBtn.onclick=function(){
+  MULT = (MULT===1)?4:1;
+  slowBtn.className = (MULT===4)?"act":"";
+  slowBtn.textContent = (MULT===4)?"BACK TO REAL SPEED":"SLOW IT DOWN 4×";
+};
+document.getElementById("reset").onclick=function(){
+  vals=BASE.slice();
+  var o=computeOrder();
+  Object.keys(state).forEach(function(k){ state[k].order=o.slice(); });
+  paint();
+  Object.keys(state).forEach(function(k){ place(k,false); });
+};
+
+/* first paint */
+var o=computeOrder();
+Object.keys(state).forEach(function(k){ state[k].order=o.slice(); });
+paint();
+Object.keys(state).forEach(function(k){ place(k,false); });
+})();
+</script>
+</body></html>
