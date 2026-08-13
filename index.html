@@ -1756,8 +1756,22 @@ body.econ .sc-cohsearch{ display:none; }
    Composite releases (CPI, PPI, PCE, payrolls…) collapse into ONE headline row
    with its components as indented sub-rows, expanded inline on click.
    ---------------------------------------------------------------------------- */
+/* R52d — dead space. Alan: "there's a bunch of areas that are empty above, between
+   US and economic release, and between macro rail and treasury curve — this empty
+   shit. The full screen buttons are not aligned to the top left." In this room the
+   panel label is a one-line header, so it gets a tight header rhythm instead of the
+   generous default, the ⛶ is pinned to the label's own line, and the rail's first
+   card starts immediately under its label rather than a third of the way down. */
+body.econ .sc-plabel{ padding:7px 12px 4px; line-height:1.1; }
+body.econ .sc-plabel--row{ display:flex; align-items:center; justify-content:space-between; }
+body.econ .sc-plabel--row .sc-fsico{ align-self:center; margin:0; padding:0; line-height:1; }
+body.econ .rail{ padding-top:0; }
+body.econ .rail .card{ padding:7px 11px 8px; }
+body.econ .rail .card h4{ margin:0 0 5px; }
+body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
+
 /* row 1 — region tabs. Same visual grammar as the cohort strip: quiet until on. */
-.ec-ctry{ display:flex; gap:2px; padding:2px 12px 0; flex-wrap:wrap; }
+.ec-ctry{ display:flex; gap:2px; padding:0 12px; flex-wrap:wrap; }
 .ec-ct{ font-family:var(--mono); font-size:8.5px; letter-spacing:.22em; text-transform:uppercase;
   color:var(--dim); padding:6px 11px; cursor:pointer; user-select:none; border:0.6px solid transparent;
   border-radius:3px; white-space:nowrap; }
@@ -1772,7 +1786,7 @@ body.econ .sc-cohsearch{ display:none; }
 .ec-ct.none{ opacity:.42; }
 .ec-ct.none.on{ opacity:1; }
 /* row 2 — category chips. Underline-on-active, so it reads as a SECOND level. */
-.ec-cat{ display:flex; gap:0; padding:7px 12px 0; flex-wrap:wrap; }
+.ec-cat{ display:flex; gap:0; padding:4px 12px 0; flex-wrap:wrap; }
 .ec-cc{ font-family:var(--mono); font-size:8px; letter-spacing:.22em; text-transform:uppercase;
   color:var(--dim); padding:5px 13px 7px; cursor:pointer; user-select:none; white-space:nowrap; }
 .ec-cc:hover{ color:var(--ink2); }
@@ -1780,7 +1794,7 @@ body.econ .sc-cohsearch{ display:none; }
 .ec-cc .n{ color:var(--mute); margin-left:5px; font-size:7.5px; }   /* honest count — nothing is hidden silently */
 .ec-cc.on .n{ color:var(--crk); opacity:.6; }
 /* row 3 — the day stepper. TODAY is the landing state; ◀ ▶ walk the calendar. */
-.ec-daybar{ display:flex; align-items:center; gap:9px; padding:9px 12px 7px;
+.ec-daybar{ display:flex; align-items:center; gap:9px; padding:6px 12px 6px;
   border-bottom:.5px solid var(--line); font-family:var(--mono); }
 .ec-nav{ background:none; border:0.6px solid var(--line2); color:var(--ink3); cursor:pointer;
   font-size:10px; line-height:1; padding:4px 8px; border-radius:2px; }
@@ -3431,7 +3445,10 @@ const S = {
   ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
   /* R52 — ECONOMIC room: region tab · category chip · the day being viewed (ET,
      set to today on first mount) · DAY|WEEK span · which composite rows are open */
-  econCty: "US", econCat: "ALL", econDay: null, econSpan: "DAY", econOpen: {}, econImp: "ALL",
+  /* R52d — WEEK is the landing span, not DAY. Alan, after working the control out
+     himself: "the default should be week, I think." A single day of one country is
+     a handful of rows and reads as an empty tab; a week is a calendar. */
+  econCty: "US", econCat: "ALL", econDay: null, econSpan: "WEEK", econOpen: {}, econImp: "ALL",
 };
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
@@ -7973,13 +7990,27 @@ const ecPassImp = (r) => (S.econImp !== "HIGH") || r.impact === "High";
 /* Secondary nav — category rules, FIRST MATCH WINS, so the order is the spec.
    HOUSING sits above INFLATION on purpose: "House Price Index" is a housing
    release, not an inflation print, and would otherwise be caught by /price index/. */
+/* R52d — the taxonomy re-cut. Alan, looking at a US day: "housing two pieces,
+   labor just a couple, inflation just one... what are these categories for OTHER?
+   Can we not send other into others? Split it up a little bit better."
+   Measured what was actually landing in OTHER over a US week: ENERGY 13 (EIA/API/
+   Baker Hughes), POSITIONING 11 (CFTC), AUCTIONS 10 (bills/notes/bonds), mortgage
+   9, plus a dozen that simply belonged in GROWTH or INFLATION and were falling
+   through. So OTHER stops being a bin: energy, auctions and positioning become
+   named categories of their own, mortgage moves into HOUSING (2 → 11 on a week),
+   and import/export prices, capacity utilization, the Michigan sub-indices, Empire
+   State, leading index and business inventories are routed where they belong.
+   Order still matters — first match wins. */
 const EC_CATS = [
+  ["ENERGY", /(^eia |^api |baker hughes|crude oil|natural gas|gasoline|distillate|heating oil|refinery|cushing|opec)/i],
+  ["AUCTIONS", /(bill auction|note auction|bond auction|bund auction|gilt auction|bot auction|btp auction|obl auction|schatz)/i],
+  ["POSITIONING", /(^cftc |speculative net positions|commitment of traders)/i],
   ["CENTRAL BANK", /(fed |fomc|interest rate decision|rate decision|monetary policy|central bank|\becb\b|\bboe\b|\bboj\b|\brba\b|\bsnb\b|press conference|beige book|speech|testimony|minutes|balance sheet)/i],
-  ["HOUSING", /(housing|home sales|home price|house price|building permits|mortgage|construction spending|nahb|case-shiller|pending home|residential|rent index)/i],
-  ["LABOR", /(payroll|jobless|unemploy|employment|jolts|job cuts|job vacanc|wage|labou?r|participation rate|average hourly|\badp\b|challenger|hiring)/i],
+  ["HOUSING", /(housing|home sales|home price|house price|building permits|mortgage|construction spending|nahb|case-shiller|pending home|residential|rent index|\bmba\b)/i],
+  ["LABOR", /(payroll|jobless|unemploy|employment|jolts|job cuts|job vacanc|wage|labou?r|participation rate|average hourly|real earnings|\badp\b|challenger|hiring)/i],
   ["INFLATION", /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|import prices|export prices|deflator|wholesale prices|harmonised)/i],
-  ["TRADE", /(balance of trade|trade balance|^imports|^exports|current account|tic flows|foreign bond|foreign invest|capital flows|terms of trade)/i],
-  ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|industrial production|durable goods|factory orders|consumer confidence|consumer sentiment|business confidence|business climate|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories)/i],
+  ["TRADE", /(balance of trade|trade balance|^imports|^exports|current account|tic flows|foreign bond|foreign invest|capital flows|terms of trade|budget balance|budget statement)/i],
+  ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|redbook|industrial production|durable goods|factory orders|consumer confidence|consumer sentiment|michigan|business confidence|business climate|business inventories|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories|\bnfib\b)/i],
 ];
 const EC_CAT_NAMES = ["ALL"].concat(EC_CATS.map((c) => c[0])).concat(["OTHER"]);
 /* Composite releases. A release like CPI arrives as 5 separate rows at the same
@@ -11861,6 +11892,15 @@ async function favLoad() {
    No cache yet (first-ever visit) → S.rows stays empty and the board shows its light
    loading state until restartFeed's live pull lands. Guarded end-to-end. */
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
+/* R52d — ?room=ECONOMIC opens the cockpit straight into that room instead of the
+   dashboard. Alan, on the review link: "it did not land on the economic tab on its
+   own — I don't understand why you're giving me this whole hub wide link." A review
+   build is deployed with that parameter baked into its redirect, so the URL IS the
+   room. No effect on scintillahub.ai, which is loaded without a parameter. */
+try {
+  const _room = (new URLSearchParams(location.search).get("room") || "").toUpperCase();
+  if (_room && SECTIONS.indexOf(_room) >= 0) S.sec = _room;
+} catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
 favLoad();                                                          // R29 — cross-device favorites from hub_favorites
