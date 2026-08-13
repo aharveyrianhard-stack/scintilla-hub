@@ -1842,6 +1842,41 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ec-row.sub .rel{ padding-left:16px; }
 .ec-row.sub .rel .nm{ color:var(--ink2); font-size:9.5px; }
 .ec-row.sub .rel::before{ content:"└"; color:var(--mute); font-size:9px; margin-right:2px; }
+/* ----------------------------------------------------------------------------
+   R52e — MONTH grid. Same colour law as the table: orange still-to-come at high
+   impact, green/red once the actual lands. Quiet days stay in the grid, dimmed,
+   because a calendar with holes in it stops being a calendar.
+   ---------------------------------------------------------------------------- */
+.ec-cal{ display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--line);
+  border:.5px solid var(--line); margin-top:8px; }
+.ec-dow{ background:var(--panel); font-family:var(--mono); font-size:7px; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--dim); padding:6px 6px 5px; text-align:center; }
+.ec-cell{ background:var(--panel2); min-height:74px; padding:5px 5px 6px; cursor:pointer;
+  display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+.ec-cell.pad{ background:var(--bg); cursor:default; min-height:0; }
+.ec-cell.quiet{ opacity:.5; }
+.ec-cell:hover:not(.pad){ background:#12121f; }
+.ec-cell.today{ box-shadow:inset 0 0 0 1px rgba(0,212,255,.55); }
+.ec-dnum{ display:flex; align-items:center; justify-content:space-between;
+  font-family:var(--mono); font-size:9px; color:var(--ink3); font-variant-numeric:tabular-nums;
+  margin-bottom:1px; }
+.ec-cell.today .ec-dnum{ color:var(--crk); font-weight:600; }
+.ec-hi{ font-size:7px; letter-spacing:.05em; color:#FF5500; border:.5px solid rgba(255,85,0,.5);
+  border-radius:2px; padding:0 3px; line-height:1.3; }
+.ec-cal .chip{ font-size:8px; line-height:1.35; color:var(--ink3); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; border-left:2px solid var(--mute); padding-left:4px; }
+.ec-cal .chip.imp-high{ color:var(--ink2); border-left-color:#FF5500; }
+.ec-cal .chip.imp-medium{ border-left-color:var(--sv3); }
+.ec-cal .chip.up{ color:var(--bear); border-left-color:var(--bear); }
+.ec-cal .chip.dn{ color:var(--bull); border-left-color:var(--bull); }
+.ec-cal .chip.flat{ color:var(--ink3); border-left-color:var(--ink3); }
+.ec-more{ font-family:var(--mono); font-size:7px; letter-spacing:.1em; color:var(--mute); margin-top:auto; }
+@media (max-width:900px){
+  .ec-cell{ min-height:56px; padding:4px 3px 5px; }
+  .ec-cal .chip{ font-size:7px; padding-left:3px; }
+  .ec-dow{ font-size:6.5px; letter-spacing:.14em; padding:5px 2px; }
+}
+
 /* the day heading used by the WEEK drill-down */
 .ec-dhd{ font-family:var(--mono); font-size:7.5px; letter-spacing:.26em; color:var(--crk);
   text-transform:uppercase; padding:13px 0 5px; border-bottom:.5px solid var(--line2); }
@@ -8084,9 +8119,21 @@ async function ecFetchWindow(from, to) {
 }
 
 function ecWinKey() { return (S.econSpan || "DAY") + "|" + (S.econDay || ecToday()); }
+/* R52e — MONTH is a real calendar grid. Alan: "the calendar goes week by week, but
+   you have to move the week. I think we should have a calendar view, bro — with your
+   colour coding and all of this shit." So the span control gains MONTH, and MONTH
+   draws the month as a grid rather than a list; clicking a day drops into that day. */
+function ecMonthDays(iso) {
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const pre = iso.slice(0, 8), out = [];
+  for (let d = 1; d <= last; d++) out.push(pre + String(d).padStart(2, "0"));
+  return out;
+}
 function ecDaysInView() {
-  const d0 = S.econDay || ecToday();
-  if ((S.econSpan || "DAY") === "DAY") return [d0];
+  const d0 = S.econDay || ecToday(), span = S.econSpan || "DAY";
+  if (span === "DAY") return [d0];
+  if (span === "MONTH") return ecMonthDays(d0);
   return [0, 1, 2, 3, 4, 5, 6].map((i) => ecShift(d0, i));
 }
 /* every row in the current day/week window, whatever region it belongs to */
@@ -8133,7 +8180,7 @@ function econRoomHTML() {
         '<span class="ec-span">' +
           '<span class="ec-sp hi" id="econHigh" data-act="ecimp">HIGH ONLY</span>' +
           '<span class="ec-sp" data-act="ecday" data-d="0">TODAY</span>' +
-          ["DAY", "WEEK"].map((s) =>
+          ["DAY", "WEEK", "MONTH"].map((s) =>
             '<span class="ec-sp ' + (s === (S.econSpan || "DAY") ? "on" : "") + '" data-act="ecspan" data-s="' + s + '">' + s + "</span>").join("") +
         "</span>" +
       "</div>" +
@@ -8228,12 +8275,50 @@ function ecDayRowsHTML(rows, showCty) {
       (open ? kids.map((r) => ecRowHTML(r, "sub", showCty)).join("") : "");
   }).join("");
 }
+/* R52e — the month grid. One cell per day, each carrying its releases as chips
+   coloured the way the table colours them: orange for a high-impact print still to
+   come, then green/red once the actual lands and there is a surprise to show. The
+   whole month is one glance; clicking a day drops into that day's table. */
+function ecMonthHTML(rows) {
+  const d0 = S.econDay || ecToday(), days = ecMonthDays(d0), today = ecToday();
+  const byDay = {};
+  for (const r of rows) (byDay[ecDateKey(r.event_ts)] = byDay[ecDateKey(r.event_ts)] || []).push(r);
+  const IMP = { High: 3, Medium: 2, Low: 1, None: 0 };
+  const dow = (new Date(ecAnchor(days[0]) * 1000).getUTCDay() + 6) % 7;   // Mon-first
+  let cells = "";
+  for (let i = 0; i < dow; i++) cells += '<div class="ec-cell pad"></div>';
+  for (const d of days) {
+    const list = (byDay[d] || []).sort((a, b) => (IMP[b.impact] || 0) - (IMP[a.impact] || 0) || a.event_ts - b.event_ts);
+    const chips = list.slice(0, 3).map((r) => {
+      const a = num(r.actual), e = num(r.estimate);
+      let cls = "chip imp-" + String(r.impact || "Low").toLowerCase();
+      if (a != null && e != null) {
+        const diff = a - e, hot = EC_INVERT.test(ecBase(r.event));
+        cls += " " + (Math.abs(diff) < 1e-9 ? "flat" : ((diff > 0) === hot ? "up" : "dn"));
+      }
+      return '<span class="' + cls + '" title="' + esc(r.event) + " · " + ecTimeET(r.event_ts) + '">' +
+        esc(ecBase(r.event)) + "</span>";
+    }).join("");
+    const more = list.length > 3 ? '<span class="ec-more">+' + (list.length - 3) + "</span>" : "";
+    const nHigh = list.filter((r) => r.impact === "High").length;
+    cells += '<div class="ec-cell' + (d === today ? " today" : "") + (list.length ? "" : " quiet") +
+      '" data-act="ecgoto" data-day="' + d + '">' +
+      '<div class="ec-dnum">' + (+d.slice(8)) +
+        (nHigh ? '<span class="ec-hi">' + nHigh + "</span>" : "") + "</div>" +
+      chips + more + "</div>";
+  }
+  const hdr = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+    .map((w) => '<div class="ec-dow">' + w + "</div>").join("");
+  return '<div class="ec-cal">' + hdr + cells + "</div>";
+}
 function renderEconTable() {
   const box = el("econTbl"); if (!box) return;
   const lbl = el("econDayLbl"), now = el("econDayNow");
   const d0 = S.econDay || ecToday();
-  if (lbl) lbl.textContent = (S.econSpan === "WEEK")
-    ? ecDayLbl(d0).toUpperCase() + "  →  " + ecDayLbl(ecShift(d0, 6)).toUpperCase()
+  if (lbl) lbl.textContent =
+      (S.econSpan === "WEEK")  ? ecDayLbl(d0).toUpperCase() + "  →  " + ecDayLbl(ecShift(d0, 6)).toUpperCase()
+    : (S.econSpan === "MONTH") ? new Date(ecAnchor(d0) * 1000).toLocaleDateString("en-US",
+        { timeZone: "UTC", month: "long", year: "numeric" }).toUpperCase()
     : ecDayLbl(d0).toUpperCase();
   if (now) now.textContent = d0 === ecToday() ? "· TODAY" : "";
   if (!ECON_CAL) { box.innerHTML = '<div class="soon">loading economic calendar…</div>'; return; }
@@ -8248,6 +8333,15 @@ function renderEconTable() {
   const showCty = new Set(rows.map((r) => r.country)).size > 1;
   const head = '<div class="ec-hd"><span>Release</span><span>Time</span><span>Actual</span>' +
     '<span>Est</span><span class="pri">Prior</span><span>Surprise</span></div>';
+  /* MONTH draws the grid instead of the table — and it draws every day of the month,
+     including the quiet ones, so an empty month is still a readable calendar rather
+     than the "nothing here" state the list view uses. */
+  if ((S.econSpan || "DAY") === "MONTH") {
+    box.innerHTML = ecMonthHTML(rows) +
+      '<div class="sc-est-note">a chip goes green or red once its actual lands · orange = high impact still to come · ' +
+      'the number beside the date is how many high-impact prints that day · click any day to open it</div>';
+    return;
+  }
   if (!rows.length) {
     /* R52b — an empty day is a normal, honest state for a single country (the UK
        publishes in bursts: 23 releases one day, then 1, 1, 0). So say WHY it is
@@ -11341,9 +11435,15 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ecday": {
-      const d = +a.dataset.d;
-      const step = (S.econSpan === "WEEK") ? 7 : 1;
-      S.econDay = d === 0 ? ecToday() : ecShift(S.econDay || ecToday(), d * step);
+      const d = +a.dataset.d, cur = S.econDay || ecToday();
+      if (d === 0) S.econDay = ecToday();
+      else if (S.econSpan === "MONTH") {
+        /* step a whole month, and land on the 1st so the grid never skips a short
+           month (Jan 31 + 1 month must be Feb, not March) */
+        const y = +cur.slice(0, 4), m = +cur.slice(5, 7);
+        const t = new Date(Date.UTC(y, m - 1 + d, 1));
+        S.econDay = t.toISOString().slice(0, 10);
+      } else S.econDay = ecShift(cur, d * (S.econSpan === "WEEK" ? 7 : 1));
       S.econOpen = {};
       fillEcon();
       break;
