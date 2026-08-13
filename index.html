@@ -1738,6 +1738,13 @@ body.econ .sc-cohsearch{ display:none; }
 .ec-ct:hover{ color:var(--ink2); }
 .ec-ct.on{ color:var(--crk); font-weight:600; background:rgba(0,212,255,.09);
   border-color:rgba(0,212,255,.34); }
+/* R52b — each region tab carries its count for the day on screen, so a thin day
+   reads as a thin day and not as a broken tab. A region with nothing today is
+   dimmed, not hidden: it stays clickable and the empty state explains itself. */
+.ec-ct .n{ color:var(--mute); margin-left:6px; font-size:7.5px; font-weight:400; }
+.ec-ct.on .n{ color:var(--crk); opacity:.6; }
+.ec-ct.none{ opacity:.42; }
+.ec-ct.none.on{ opacity:1; }
 /* row 2 — category chips. Underline-on-active, so it reads as a SECOND level. */
 .ec-cat{ display:flex; gap:0; padding:7px 12px 0; flex-wrap:wrap; }
 .ec-cc{ font-family:var(--mono); font-size:8px; letter-spacing:.22em; text-transform:uppercase;
@@ -1793,6 +1800,13 @@ body.econ .sc-cohsearch{ display:none; }
 .ec-dhd{ font-family:var(--mono); font-size:7.5px; letter-spacing:.26em; color:var(--crk);
   text-transform:uppercase; padding:13px 0 5px; border-bottom:.5px solid var(--line2); }
 .ec-empty{ color:var(--dim); font-size:10px; padding:26px 2px; text-align:center; line-height:1.8; }
+.ec-empty b{ color:var(--ink2); }
+.ec-jumps{ display:flex; gap:8px; justify-content:center; margin-top:14px; }
+.ec-jump{ font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--crk); border:0.6px solid rgba(0,212,255,.34); border-radius:2px;
+  padding:6px 11px; cursor:pointer; user-select:none; white-space:nowrap; }
+.ec-jump:hover{ background:rgba(0,212,255,.09); }
+.ec-jump .n{ color:var(--mute); margin-left:5px; }
 @media (max-width:900px){
   /* phones: PRIOR is the first column to go — ACTUAL vs EST vs SURPRISE is the read.
      The numeric columns tighten too, so the release NAME keeps enough width to stay
@@ -7882,19 +7896,30 @@ function econRowHTML(label, when, val, impact) {
    fmp-economic-12h job). treasury_rates + econ_history are NOT dropped: they
    move to the right rail, so nothing that was on screen left the room.
    ============================================================================ */
-/* Primary nav — region tabs. Each is a SET of the feed's country codes, because
-   "EU" and "EM" are baskets, not countries. ALL is last so no country in the
-   feed becomes unreachable (the feed carries 158; the six named tabs cover ~40). */
-const EC_REGIONS = [
-  ["US", ["US"]],
-  ["EU", ["EU","DE","FR","IT","ES","NL","BE","AT","IE","PT","FI","GR","SK","SI","LT","LV","EE","LU","CY","MT"]],
-  ["UK", ["UK","GB"]],
-  ["JP", ["JP"]],
-  ["CN", ["CN","HK"]],
-  ["EM", ["BR","IN","MX","ZA","TR","ID","TH","PH","MY","CL","CO","PE","AR","PL","HU","CZ","RO","RU",
-          "EG","SA","AE","QA","KW","VN","TW","KR","NG","PK","BD","UA","KZ","MA"]],
-  ["ALL", null],
-];
+/* Primary nav — region tabs. Each named region is a SET of the feed's country
+   codes, because "EU" is a basket, not a country.
+   R52b — EM is deliberately NOT a hand-written list: it is EVERYTHING the named
+   tabs don't claim. The first cut enumerated ~32 emerging markets and measurement
+   showed 26–54 releases a day falling through into no tab at all (AU 228, CA 173,
+   NZ 149, SG 114, CH 60 over a 90-day window, plus a long tail of small markets).
+   DM now holds the developed markets the plan's six tabs had no home for, and EM
+   takes the remainder — so the tab counts always add up to ALL and no country in
+   the feed can ever be orphaned again. */
+const EC_NAMED = {
+  US: ["US"],
+  EU: ["EU","DE","FR","IT","ES","NL","BE","AT","IE","PT","FI","GR","SK","SI","LT","LV","EE","LU","CY","MT"],
+  UK: ["UK","GB"],
+  JP: ["JP"],
+  CN: ["CN","HK","MO"],
+  DM: ["CA","AU","NZ","CH","SE","NO","DK","IS","SG","IL"],
+};
+const EC_REGIONS = ["US","EU","UK","JP","CN","DM","EM","ALL"];
+const EC_CLAIMED = new Set([].concat.apply([], Object.keys(EC_NAMED).map((k) => EC_NAMED[k])));
+function ecInRegion(country, region) {
+  if (region === "ALL") return true;
+  if (region === "EM") return !EC_CLAIMED.has(country);   // EM = the remainder, by construction
+  return (EC_NAMED[region] || []).indexOf(country) >= 0;
+}
 /* Secondary nav — category rules, FIRST MATCH WINS, so the order is the spec.
    HOUSING sits above INFLATION on purpose: "House Price Index" is a housing
    release, not an inflation print, and would otherwise be caught by /price index/. */
@@ -7983,23 +8008,42 @@ function ecDaysInView() {
   if ((S.econSpan || "DAY") === "DAY") return [d0];
   return [0, 1, 2, 3, 4, 5, 6].map((i) => ecShift(d0, i));
 }
-function ecRegionSet() {
-  const r = EC_REGIONS.find((x) => x[0] === (S.econCty || "US"));
-  return r && r[1] ? new Set(r[1]) : null;   // null = ALL countries
+/* every row in the current day/week window, whatever region it belongs to */
+function ecWindowRows() {
+  if (!ECON_CAL) return [];
+  const days = new Set(ecDaysInView());
+  return ECON_CAL.filter((r) => days.has(ecDateKey(r.event_ts)));
 }
 /* rows for the current day/region — the set the category chips count against */
 function ecScoped() {
-  if (!ECON_CAL) return [];
-  const days = new Set(ecDaysInView()), set = ecRegionSet();
-  return ECON_CAL.filter((r) => days.has(ecDateKey(r.event_ts)) && (!set || set.has(r.country)));
+  const reg = S.econCty || "US";
+  return ecWindowRows().filter((r) => ecInRegion(r.country, reg));
+}
+/* the nearest day either side of the one on screen that DOES carry releases for
+   this region+category, searched inside the already-loaded window (which is padded
+   several days past the view for exactly this). Powers the empty state's one-click
+   way out, so "UK has nothing today" never becomes a dead end. */
+function ecNearestDays(reg, cat) {
+  const d0 = S.econDay || ecToday(), byDay = {};
+  for (const r of (ECON_CAL || [])) {
+    if (!ecInRegion(r.country, reg)) continue;
+    if (cat !== "ALL" && ecCat(r.event) !== cat) continue;
+    const d = ecDateKey(r.event_ts);
+    if (d === d0) continue;
+    byDay[d] = (byDay[d] || 0) + 1;
+  }
+  const days = Object.keys(byDay).sort();
+  const prevD = days.filter((d) => d < d0).pop();
+  const nextD = days.filter((d) => d > d0)[0];
+  return { prev: prevD ? { day: prevD, count: byDay[prevD] } : null,
+           next: nextD ? { day: nextD, count: byDay[nextD] } : null };
 }
 
 function econRoomHTML() {
   return '<div class="body2">' +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>economic releases · <b>market-wide</b></span>' + SECFS_BTN + "</div>" +
-      '<div class="ec-ctry">' + EC_REGIONS.map(([n]) =>
-        '<span class="ec-ct ' + (n === (S.econCty || "US") ? "on" : "") + '" data-act="ecctry" data-c="' + n + '">' + n + "</span>").join("") + "</div>" +
+      '<div class="ec-ctry" id="econCtry"></div>' +
       '<div class="ec-cat" id="econCat"></div>' +
       '<div class="ec-daybar">' +
         '<button class="ec-nav" data-act="ecday" data-d="-1" aria-label="Previous day">◀</button>' +
@@ -8020,6 +8064,23 @@ function econRoomHTML() {
       '<div class="card"><h4>Source (live)</h4><div class="sc-senttxt">Releases: <b>econ_calendar</b> (FMP economic calendar). ' +
         'Curve + prints: <b>treasury_rates</b> + <b>econ_history</b> (FRED/FMP). Times shown in <b>ET</b>.</div></div>' +
     "</div></div></div>";
+}
+/* R52b — the REGION tabs carry their counts for the day on screen, exactly as the
+   category chips do. Alan, first look: "a bunch of tabs with a couple rows — is
+   that how you propose it, or do we need to wire the data?" The honest answer is
+   that a single day IS thin for one country (measured: UK 1, 1, 23, 1, 0, 8, 18
+   across seven consecutive days — it releases in bursts). A tab that reads "UK 1"
+   answers that question before it gets asked; a bare "UK" looks broken. */
+function renderEconRegions() {
+  const box = el("econCtry"); if (!box) return;
+  const rows = ecWindowRows(), counts = {};
+  for (const n of EC_REGIONS) counts[n] = 0;
+  for (const r of rows) for (const n of EC_REGIONS) if (ecInRegion(r.country, n)) counts[n]++;
+  const cur = S.econCty || "US";
+  box.innerHTML = EC_REGIONS.map((n) =>
+    '<span class="ec-ct ' + (n === cur ? "on" : "") + (counts[n] ? "" : " none") +
+      '" data-act="ecctry" data-c="' + n + '">' + n +
+      '<span class="n">' + counts[n] + "</span></span>").join("");
 }
 /* the category chips carry their own live counts, so a chip that hides rows says
    how many — nothing disappears from this room silently */
@@ -8086,18 +8147,34 @@ function renderEconTable() {
     : ecDayLbl(d0).toUpperCase();
   if (now) now.textContent = d0 === ecToday() ? "· TODAY" : "";
   if (!ECON_CAL) { box.innerHTML = '<div class="soon">loading economic calendar…</div>'; return; }
-  renderEconCats();
+  renderEconRegions(); renderEconCats();
   const cat = S.econCat || "ALL";
+  const reg = S.econCty || "US";
   let rows = ecScoped().filter((r) => cat === "ALL" || ecCat(r.event) === cat);
   rows.sort((a, b) => a.event_ts - b.event_ts || String(a.country).localeCompare(String(b.country)) ||
                       String(a.event).localeCompare(String(b.event)));
-  const showCty = (ecRegionSet() || { size: 99 }).size !== 1;
+  /* show the country code only when the rows on screen actually span more than
+     one country — a US-only or JP-only view doesn't need it repeated every line */
+  const showCty = new Set(rows.map((r) => r.country)).size > 1;
   const head = '<div class="ec-hd"><span>Release</span><span>Time</span><span>Actual</span>' +
     '<span>Est</span><span class="pri">Prior</span><span>Surprise</span></div>';
   if (!rows.length) {
-    box.innerHTML = head + '<div class="ec-empty">No ' + esc(cat === "ALL" ? "" : cat.toLowerCase() + " ") +
-      "releases scheduled for " + esc(S.econCty || "US") + " in this window.<br>" +
-      "Use ◀ ▶ to walk the calendar, or switch region.</div>";
+    /* R52b — an empty day is a normal, honest state for a single country (the UK
+       publishes in bursts: 23 releases one day, then 1, 1, 0). So say WHY it is
+       empty and offer the way out: the nearest day either side that does have
+       something, as one click. A dead end reads as a broken tab. */
+    const near = ecNearestDays(reg, cat);
+    const jump = (n, arrow) => n
+      ? '<span class="ec-jump" data-act="ecgoto" data-day="' + n.day + '">' + arrow + " " +
+        esc(ecDayLbl(n.day)) + ' <span class="n">' + n.count + "</span></span>"
+      : "";
+    box.innerHTML = head + '<div class="ec-empty">' +
+      "<b>" + esc(reg) + "</b> has no " + esc(cat === "ALL" ? "" : cat.toLowerCase() + " ") +
+      "releases " + ((S.econSpan || "DAY") === "WEEK" ? "this week" : "on this day") + ".<br>" +
+      "That is normal — most countries report in bursts, not daily." +
+      (near.prev || near.next ? '<div class="ec-jumps">' + jump(near.prev, "◀") + jump(near.next, "▶") + "</div>"
+                              : "<br>Nothing either side in the loaded window — use ◀ ▶ or switch region.") +
+      "</div>";
     return;
   }
   let body = "";
@@ -8122,8 +8199,10 @@ async function fillEcon() {
      then every region/category/expand interaction is client-side. */
   const key = ecWinKey();
   const days = ecDaysInView();
-  const from = Math.floor(ecAnchor(days[0]) - 2 * 86400);
-  const to   = Math.floor(ecAnchor(days[days.length - 1]) + 2 * 86400);
+  /* padded 5 days either side: 2 of that is ET-vs-UTC bucketing safety, the rest
+     gives the empty state something to point at when a region is quiet today */
+  const from = Math.floor(ecAnchor(days[0]) - 5 * 86400);
+  const to   = Math.floor(ecAnchor(days[days.length - 1]) + 5 * 86400);
   try {
     const jobs = [
       (ECON_WIN === key && ECON_CAL) ? Promise.resolve(ECON_CAL) : ecFetchWindow(from, to),
@@ -11093,9 +11172,14 @@ document.addEventListener("click", (e) => {
        moves the window, and that one goes back to the feed. */
     case "ecctry": {
       S.econCty = a.dataset.c;
-      document.querySelectorAll(".ec-ctry .ec-ct").forEach((b) => b.classList.toggle("on", b.dataset.c === S.econCty));
       S.econCat = "ALL";                       // a new region has a different category mix
-      renderEconTable();
+      renderEconTable();                        // repaints the region tabs too (counts move with it)
+      break;
+    }
+    case "ecgoto": {                           // empty state → jump to the nearest day that has releases
+      S.econDay = a.dataset.day;
+      S.econOpen = {};
+      fillEcon();
       break;
     }
     case "eccat":  S.econCat = a.dataset.c; renderEconTable(); break;
