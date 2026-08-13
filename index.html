@@ -1719,6 +1719,32 @@ body.econ .sc-cohsearch{ display:none; }
 #econList .sc-evrow{ padding:7px 0; }   /* match NEWS/.sc-art row rhythm; EVENTS keeps its own overrides */
 
 /* ----------------------------------------------------------------------------
+   R52c — WHAT'S COMING: one quiet line above the board carrying the next few
+   US High-impact releases and how long until each. One row, no panel, no chrome:
+   it must not compete with the board for attention, only answer "is anything
+   about to hit?" at a glance. Horizontally scrollable when it overflows.
+   ---------------------------------------------------------------------------- */
+.sc-macronext{ display:flex; align-items:center; gap:0; overflow-x:auto; overflow-y:hidden;
+  padding:7px 12px 8px; border-bottom:.5px solid var(--line); scrollbar-width:none;
+  white-space:nowrap; }
+.sc-macronext::-webkit-scrollbar{ display:none; }
+.sc-macronext:empty{ display:none; }
+.mn-lbl{ font-family:var(--mono); font-size:7.5px; letter-spacing:.26em; text-transform:uppercase;
+  color:var(--crk); flex:none; margin-right:14px; }
+.mn-soon{ font-size:9.5px; color:var(--dim); }
+.mn-it{ display:inline-flex; align-items:baseline; gap:7px; flex:none; cursor:pointer;
+  padding:2px 13px; border-left:.5px solid var(--line); }
+.mn-it:first-of-type{ border-left:0; padding-left:0; }
+.mn-it:hover .mn-nm{ color:var(--crk); }
+.mn-dot{ color:#FF5500; font-size:7px; text-shadow:0 0 6px rgba(255,85,0,.8); }
+.mn-nm{ font-size:10px; color:var(--ink); }
+.mn-when{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--ink3);
+  text-transform:uppercase; font-variant-numeric:tabular-nums; }
+.mn-cd{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--dim);
+  font-variant-numeric:tabular-nums; }
+@media (max-width:900px){ .mn-it{ padding:2px 10px; } .mn-nm{ font-size:9.5px; } }
+
+/* ----------------------------------------------------------------------------
    R52 — ECONOMIC restructure (SCINTILLA Visual Plan v2 §A). The room stops being
    one flat undifferentiated list and becomes a RELEASES TABLE:
      row 1  country/region tabs  (US · EU · UK · JP · CN · EM · ALL) — primary nav
@@ -1766,6 +1792,12 @@ body.econ .sc-cohsearch{ display:none; }
 .ec-sp{ font-family:var(--mono); font-size:7.5px; letter-spacing:.2em; color:var(--dim);
   padding:4px 9px; cursor:pointer; user-select:none; border:0.6px solid transparent; border-radius:2px; }
 .ec-sp.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
+/* HIGH ONLY sits apart from the DAY|WEEK pair — it answers a different question
+   ("which of these actually matter?") and carries the count it would leave. */
+.ec-sp.hi{ margin-right:10px; border-color:var(--line2); }
+.ec-sp.hi .n{ color:var(--mute); margin-left:5px; }
+.ec-sp.hi.on{ color:#FF5500; border-color:rgba(255,85,0,.45); background:rgba(255,85,0,.08); }
+.ec-sp.hi.on .n{ color:#FF5500; opacity:.7; }
 /* the table — ONE grid, so header and every row share the same column truth */
 .ec-tbl{ display:block; }
 .ec-hd, .ec-row{ display:grid; grid-template-columns:1fr 52px 78px 70px 70px 66px;
@@ -3399,7 +3431,7 @@ const S = {
   ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
   /* R52 — ECONOMIC room: region tab · category chip · the day being viewed (ET,
      set to today on first mount) · DAY|WEEK span · which composite rows are open */
-  econCty: "US", econCat: "ALL", econDay: null, econSpan: "DAY", econOpen: {},
+  econCty: "US", econCat: "ALL", econDay: null, econSpan: "DAY", econOpen: {}, econImp: "ALL",
 };
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
@@ -4610,6 +4642,12 @@ function dashboardHTML() {
      The 50/50 row lives below it, unchanged. */
   return '<section class="sc-dashwrap" aria-label="Dashboard">' +
     '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>" +
+    /* R52c — WHAT'S COMING. Alan: "something needs to be on the dashboard of the
+       next event or the events — I really don't know with the importance of coming
+       ones are. But if it's gonna consider Israel and fucking Turkey, I don't know."
+       So this is US High-impact only, the handful that actually move his book, with
+       how long until each one. Click a release to open it in ECONOMIC on its day. */
+    '<div class="sc-macronext" id="macroNext"></div>' +
     /* FIX (Alan: "flip the dashboard — cohort board on the LEFT, Geiger/chart/stats/
        estimates/financials on the RIGHT") — straight DOM-order swap of the 2 panels
        inside the existing sc-body2 grid; the grid's own column tracks (sc-body2 CSS)
@@ -7905,21 +7943,33 @@ function econRowHTML(label, when, val, impact) {
    DM now holds the developed markets the plan's six tabs had no home for, and EM
    takes the remainder — so the tab counts always add up to ALL and no country in
    the feed can ever be orphaned again. */
-const EC_NAMED = {
-  US: ["US"],
-  EU: ["EU","DE","FR","IT","ES","NL","BE","AT","IE","PT","FI","GR","SK","SI","LT","LV","EE","LU","CY","MT"],
-  UK: ["UK","GB"],
-  JP: ["JP"],
-  CN: ["CN","HK","MO"],
-  DM: ["CA","AU","NZ","CH","SE","NO","DK","IS","SG","IL"],
-};
-const EC_REGIONS = ["US","EU","UK","JP","CN","DM","EM","ALL"];
-const EC_CLAIMED = new Set([].concat.apply([], Object.keys(EC_NAMED).map((k) => EC_NAMED[k])));
+/* R52c — the tabs are now the blocs Alan actually thinks in, not a country list.
+   His words: "I care about the US... I guess the system being strong is reasonable,
+   maybe G20... emerging markets make sense... but if it's gonna consider Israel and
+   Turkey I don't know." So: US is the default and the one he watches, G7 is the
+   developed core, G20 is the systemic set, EM is the block, ALL is everything.
+   These NEST (US ⊂ G7 ⊂ G20 ⊂ ALL) rather than partition, so the counts do not sum
+   to ALL and are not meant to — ALL is what guarantees nothing in the feed is
+   unreachable. Turkey and Israel exist in the data and stay reachable; they just
+   never appear in US or G7, which is where he actually looks. */
+const EC_G7  = ["US","CA","JP","UK","GB","DE","FR","IT","EU"];
+const EC_G20 = EC_G7.concat(["CN","IN","BR","MX","KR","AU","RU","ZA","TR","SA","ID","AR"]);
+const EC_EM  = ["BR","IN","CN","MX","ZA","TR","KR","ID","SA","RU","AR","TH","MY","PH","VN","CL","CO",
+                "PE","PL","HU","CZ","RO","EG","AE","QA","KW","NG","PK","BD","UA","KZ","MA","TW","IL","GR"];
+const EC_REGIONS = ["US","G7","G20","EM","ALL"];
 function ecInRegion(country, region) {
-  if (region === "ALL") return true;
-  if (region === "EM") return !EC_CLAIMED.has(country);   // EM = the remainder, by construction
-  return (EC_NAMED[region] || []).indexOf(country) >= 0;
+  switch (region) {
+    case "ALL": return true;
+    case "US":  return country === "US";
+    case "G7":  return EC_G7.indexOf(country) >= 0;
+    case "G20": return EC_G20.indexOf(country) >= 0;
+    case "EM":  return EC_EM.indexOf(country) >= 0;
+  }
+  return false;
 }
+/* impact is the other axis Alan asked for — "I really don't know with the importance
+   of coming ones". HIGH ONLY collapses a 118-row day to the handful that move things. */
+const ecPassImp = (r) => (S.econImp !== "HIGH") || r.impact === "High";
 /* Secondary nav — category rules, FIRST MATCH WINS, so the order is the spec.
    HOUSING sits above INFLATION on purpose: "House Price Index" is a housing
    release, not an inflation print, and would otherwise be caught by /price index/. */
@@ -8017,7 +8067,7 @@ function ecWindowRows() {
 /* rows for the current day/region — the set the category chips count against */
 function ecScoped() {
   const reg = S.econCty || "US";
-  return ecWindowRows().filter((r) => ecInRegion(r.country, reg));
+  return ecWindowRows().filter((r) => ecInRegion(r.country, reg) && ecPassImp(r));
 }
 /* the nearest day either side of the one on screen that DOES carry releases for
    this region+category, searched inside the already-loaded window (which is padded
@@ -8050,6 +8100,7 @@ function econRoomHTML() {
         '<span class="ec-day" id="econDayLbl">—</span><span class="ec-today" id="econDayNow"></span>' +
         '<button class="ec-nav" data-act="ecday" data-d="1" aria-label="Next day">▶</button>' +
         '<span class="ec-span">' +
+          '<span class="ec-sp hi" id="econHigh" data-act="ecimp">HIGH ONLY</span>' +
           '<span class="ec-sp" data-act="ecday" data-d="0">TODAY</span>' +
           ["DAY", "WEEK"].map((s) =>
             '<span class="ec-sp ' + (s === (S.econSpan || "DAY") ? "on" : "") + '" data-act="ecspan" data-s="' + s + '">' + s + "</span>").join("") +
@@ -8073,7 +8124,7 @@ function econRoomHTML() {
    answers that question before it gets asked; a bare "UK" looks broken. */
 function renderEconRegions() {
   const box = el("econCtry"); if (!box) return;
-  const rows = ecWindowRows(), counts = {};
+  const rows = ecWindowRows().filter(ecPassImp), counts = {};
   for (const n of EC_REGIONS) counts[n] = 0;
   for (const r of rows) for (const n of EC_REGIONS) if (ecInRegion(r.country, n)) counts[n]++;
   const cur = S.econCty || "US";
@@ -8081,6 +8132,14 @@ function renderEconRegions() {
     '<span class="ec-ct ' + (n === cur ? "on" : "") + (counts[n] ? "" : " none") +
       '" data-act="ecctry" data-c="' + n + '">' + n +
       '<span class="n">' + counts[n] + "</span></span>").join("");
+  /* the HIGH ONLY pill carries the count it would leave behind, so its value is
+     visible before it is clicked */
+  const hi = el("econHigh");
+  if (hi) {
+    const nHigh = ecWindowRows().filter((r) => ecInRegion(r.country, cur) && r.impact === "High").length;
+    hi.className = "ec-sp hi" + (S.econImp === "HIGH" ? " on" : "");
+    hi.innerHTML = 'HIGH ONLY<span class="n">' + nHigh + "</span>";
+  }
 }
 /* the category chips carry their own live counts, so a chip that hides rows says
    how many — nothing disappears from this room silently */
@@ -8189,6 +8248,59 @@ function renderEconTable() {
   box.innerHTML = head + '<div class="ec-tbl">' + body + "</div>" +
     '<div class="sc-est-note">surprise = actual − estimate · red = hotter inflation / weaker labour than expected, ' +
     'green = the other way · ● high · ● medium · ● low impact · times in ET · — = the feed has not printed that value</div>';
+}
+/* ---- WHAT'S COMING (dashboard strip) --------------------------------------------
+   One pull, US High-impact only, the next 21 days. Deliberately NOT the whole
+   calendar: the dashboard is where Alan looks first, and a queue that included
+   every country's low-impact print is the thing he explicitly did not want there.
+   The full 158-country calendar stays one click away in ECONOMIC. */
+let MACRO_NEXT = null;
+function ecCountdown(ts) {
+  const s = ts - Math.floor(Date.now() / 1000);
+  if (s < 0) return "now";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d >= 1) return "in " + d + "d" + (h ? " " + h + "h" : "");
+  if (h >= 1) return "in " + h + "h" + (m ? " " + m + "m" : "");
+  return "in " + m + "m";
+}
+function macroNextHTML() {
+  if (!MACRO_NEXT) return '<span class="mn-lbl">what\'s coming</span><span class="mn-soon">loading…</span>';
+  if (!MACRO_NEXT.length) return '<span class="mn-lbl">what\'s coming</span>' +
+    '<span class="mn-soon">no high-impact US releases scheduled in the next 21 days</span>';
+  return '<span class="mn-lbl">what\'s coming</span>' +
+    MACRO_NEXT.slice(0, 5).map((r) => {
+      const day = ecDateKey(r.event_ts);
+      const wd = new Date(ecAnchor(day) * 1000).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" });
+      return '<span class="mn-it" data-act="mngoto" data-day="' + day + '" title="' + esc(r.event) + '">' +
+        '<span class="mn-dot">●</span>' +
+        '<span class="mn-nm">' + esc(ecBase(r.event)) + "</span>" +
+        '<span class="mn-when">' + esc(day === ecToday() ? "today" : wd) + " " + ecTimeET(r.event_ts) + "</span>" +
+        '<span class="mn-cd">' + ecCountdown(r.event_ts) + "</span></span>";
+    }).join("");
+}
+async function fillMacroNext() {
+  const box = el("macroNext"); if (!box) return;
+  box.innerHTML = macroNextHTML();
+  /* The DB currently answers this in anywhere from 90 ms to 11 s depending on how
+     hard ohlcv_history is being read at that moment, and a 500 here is a statement
+     TIMEOUT (SQLSTATE 57014), not a bad query — the plan is an index scan touching
+     184 buffers. pg() only retries 503/504/429, so a timeout would otherwise leave
+     this strip saying "loading…" forever. Retry it, then say something honest.
+     This is a dashboard nicety: it must never hold anything up, and must never lie. */
+  const now = Math.floor(Date.now() / 1000);
+  const path = "econ_calendar?select=event_ts,country,event,impact,estimate,previous" +
+    "&country=eq.US&impact=eq.High&event_ts=gte." + now +
+    "&event_ts=lte." + (now + 21 * 86400) + "&order=event_ts.asc&limit=40";
+  for (let i = 0; i < 3; i++) {
+    try {
+      MACRO_NEXT = await pg(path, 1);
+      if (el("macroNext")) el("macroNext").innerHTML = macroNextHTML();
+      return;
+    } catch (err) { await new Promise((r) => setTimeout(r, 1200 * (i + 1) + Math.random() * 400)); }
+  }
+  if (el("macroNext") && !MACRO_NEXT)
+    el("macroNext").innerHTML = '<span class="mn-lbl">what\'s coming</span>' +
+      '<span class="mn-soon">calendar timed out — the database is busy, not the feed</span>';
 }
 async function fillEcon() {
   if (!S.econDay) S.econDay = ecToday();
@@ -10472,6 +10584,7 @@ function afterMount() {
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
+    fillMacroNext();                             // R52c — the what's-coming strip above the board
     updateCohrow(); syncBoardSel();
     loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill RSI after the initial board mount
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
@@ -11182,7 +11295,14 @@ document.addEventListener("click", (e) => {
       fillEcon();
       break;
     }
+    case "mngoto": {                           // dashboard what's-coming → open that day in ECONOMIC
+      S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US";
+      S.econCat = "ALL"; S.econOpen = {};
+      go("ECONOMIC");
+      break;
+    }
     case "eccat":  S.econCat = a.dataset.c; renderEconTable(); break;
+    case "ecimp":  S.econImp = (S.econImp === "HIGH") ? "ALL" : "HIGH"; renderEconTable(); break;
     case "ecfam": {                            // composite release opens/closes inline
       const k = a.dataset.k;
       S.econOpen = S.econOpen || {};
