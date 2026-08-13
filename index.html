@@ -1793,6 +1793,9 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ec-cc.on{ color:var(--crk); box-shadow:inset 0 -1.5px 0 var(--crk); }
 .ec-cc .n{ color:var(--mute); margin-left:5px; font-size:7.5px; }   /* honest count — nothing is hidden silently */
 .ec-cc.on .n{ color:var(--crk); opacity:.6; }
+/* the tab's own hue, as a dot — this replaces a legend */
+.ec-cc .cd{ display:inline-block; width:5px; height:5px; border-radius:50%; margin-right:6px;
+  vertical-align:middle; position:relative; top:-1px; }
 /* row 3 — the day stepper. TODAY is the landing state; ◀ ▶ walk the calendar. */
 .ec-daybar{ display:flex; align-items:center; gap:9px; padding:6px 12px 6px;
   border-bottom:.5px solid var(--line); font-family:var(--mono); }
@@ -1876,21 +1879,25 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
      landed, worse than expected  --sv5  #FF3060   (hot inflation / weak labour)
      landed, in line              --sv3  #FFE500   neutral, NOT green
      landed, better than expected --sv1  #00FFA3 */
-.ec-ev{ display:flex; align-items:baseline; gap:5px; font-size:9px; line-height:1.5;
+/* SPINE = category hue (set inline from EC_CAT_COLOR) · NAME = result · WEIGHT = impact.
+   Impact never touches hue, so it can never be confused with a result. */
+.ec-ev{ display:flex; align-items:center; gap:5px; font-size:9px; line-height:1.55;
   white-space:nowrap; overflow:hidden; }
-.ec-ev .sp{ flex:none; width:2px; height:9px; background:var(--mute); border-radius:1px;
-  align-self:center; }
+.ec-ev .sp{ flex:none; width:2px; height:10px; border-radius:1px; opacity:.75; }
 .ec-ev .nm{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--ink3); }
 .ec-ev .tm{ flex:none; font-family:var(--mono); font-size:7.5px; color:var(--mute);
   font-variant-numeric:tabular-nums; }
-.ec-ev.imp-high .sp{ background:var(--sv4); box-shadow:0 0 5px rgba(255,138,0,.7); }
-.ec-ev.imp-high .nm{ color:var(--ink); }
-.ec-ev.imp-medium .sp{ background:var(--sv3); }
-.ec-ev.miss   .sp{ background:var(--sv5); box-shadow:0 0 5px rgba(255,48,96,.65); }
+/* how much it matters — thickness and brightness only */
+.ec-ev.imp-high   .sp{ width:3px; height:12px; opacity:1; filter:brightness(1.25); }
+.ec-ev.imp-high   .nm{ color:var(--ink); font-weight:600; }
+.ec-ev.imp-high   .tm{ color:var(--ink3); }
+.ec-ev.imp-medium .sp{ width:2px; opacity:.9; }
+.ec-ev.imp-medium .nm{ color:var(--ink2); }
+.ec-ev.imp-low    .sp{ width:1px; opacity:.55; }
+.ec-ev.imp-low    .nm{ color:var(--dim); }
+/* how it came out — the reserved three, on the NAME */
 .ec-ev.miss   .nm{ color:var(--sv5); }
-.ec-ev.beat   .sp{ background:var(--sv1); box-shadow:0 0 5px rgba(0,255,163,.6); }
 .ec-ev.beat   .nm{ color:var(--sv1); }
-.ec-ev.inline .sp{ background:var(--sv3); }
 .ec-ev.inline .nm{ color:var(--sv3); }
 .ec-more{ font-family:var(--mono); font-size:7.5px; letter-spacing:.1em; color:var(--dim);
   padding-left:7px; margin-top:1px; }
@@ -8073,6 +8080,29 @@ const EC_CATS = [
   ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|redbook|industrial production|durable goods|factory orders|consumer confidence|consumer sentiment|michigan|business confidence|business climate|business inventories|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories|\bnfib\b)/i],
 ];
 const EC_CAT_NAMES = ["ALL"].concat(EC_CATS.map((c) => c[0])).concat(["OTHER"]);
+/* R52g — THREE classifications, THREE channels. Alan: "there's starting to be a lot
+   of different classifications — the tab it belongs to, if it's green or red, if it's
+   high or low impact. They're all different, which means they have to look different…
+   green, yellow, red are for what they say there… I wasn't asking you to remove that
+   orange, if anything we need MORE colours."
+     WHAT KIND is it   → colour        (the category hue below, on the spine)
+     HOW DID IT COME   → colour        (green / yellow / red, on the NAME — reserved)
+     HOW MUCH IT MATTERS → weight       (spine thickness + text brightness, never hue)
+   So the three never fight for the same channel. Every hue is from the design kit,
+   and none of them is the mint green, the neon yellow or the neon red those results
+   own. The same hue appears as a dot on the category tab — that IS the legend. */
+const EC_CAT_COLOR = {
+  "CENTRAL BANK": "#FF3DBE",   /* volatility pink — the loudest thing on the calendar */
+  "INFLATION":    "#FF8A00",   /* volume orange — the one you said you liked */
+  "LABOR":        "#2D9CFF",   /* trend blue */
+  "GROWTH":       "#00D4FF",   /* cherenkov cyan */
+  "HOUSING":      "#A24BFF",   /* momentum purple */
+  "TRADE":        "#C8FF00",   /* lime */
+  "ENERGY":       "#8B5CF6",   /* violet */
+  "AUCTIONS":     "#6A6C86",   /* deliberately quiet — plumbing, not news */
+  "POSITIONING":  "#767690",   /* deliberately quiet */
+  "OTHER":        "#3A3A52",
+};
 /* Composite releases. A release like CPI arrives as 5 separate rows at the same
    minute; the plan asks for ONE headline row with its components as sub-rows.
    Group key = country + release minute + tag; `head` picks which member is the
@@ -8105,6 +8135,36 @@ const EC_MONTH_TAG = /\s*\((Q[1-4]|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|D
 const ecBase  = (e) => String(e || "").replace(EC_MONTH_TAG, "").trim();          // "Core CPI (Jul)" → "Core CPI"
 const ecPeriod = (e) => { const m = String(e || "").match(EC_MONTH_TAG); return m ? m[0].trim().replace(/[()]/g, "") : ""; };
 const ecCat = (e) => { const b = ecBase(e); for (const [n, re] of EC_CATS) if (re.test(b)) return n; return "OTHER"; };
+/* R52g — the calendar cell is narrow, so a release earns its width by its KEYWORDS.
+   Alan: "these are too wide… I understand that ADP employer CH is employer change,
+   but the keywords are what matters." Only the ceremony is dropped — never a word
+   that changes the meaning. The full name is on the row's tooltip either way, and
+   the table view still prints it in full. */
+const EC_SHORT = [
+  [/^ADP Employment Change$/i, "ADP Employment"],
+  [/\bProducer Price Index\b/i, "PPI"],
+  [/\bPersonal Consumption Expenditure\b/i, "PCE"],
+  [/\bInflation Rate\b/i, "Inflation"],
+  [/\bNon ?farm Payrolls\b/i, "Payrolls"],
+  [/\bInitial Jobless Claims\b/i, "Jobless Claims"],
+  [/\bContinuing Jobless Claims\b/i, "Continuing Claims"],
+  [/\bMichigan Consumer Sentiment\b/i, "Michigan Sentiment"],
+  [/\bS&P Global\b/i, "S&P"],
+  [/\bNY Empire State Manufacturing Index\b/i, "Empire State"],
+  [/\bNAHB Housing Market Index\b/i, "NAHB Housing"],
+  [/\bS&P\/Case-Shiller Home Price\b/i, "Case-Shiller"],
+  [/\bEIA\b\s*/i, "EIA "],
+  [/\bMBA\b\s*/i, "MBA "],
+  [/\bCFTC\b\s*/i, "CFTC "],
+  [/\bSpeculative net positions\b/i, "net pos"],
+  [/\bStocks Change\b/i, "stocks"],
+  [/\bIndex\b(?!\s*$)/i, ""],
+];
+function ecShort(name) {
+  let s = String(name || "");
+  for (const [re, to] of EC_SHORT) s = s.replace(re, to);
+  return s.replace(/\s{2,}/g, " ").trim();
+}
 const ecFam = (e) => { const b = ecBase(e); for (const f of EC_FAM) if (f.test.test(b)) return f; return null; };
 /* ET is the cockpit's clock — the operator trades a US session, so every release
    time is shown in New York time regardless of which country printed it. */
@@ -8127,6 +8187,9 @@ function ecNum(v) {
 }
 let ECON_CAL = null;        // the rows of ONE fetched window; region/category filter client-side
 let ECON_WIN = null;        // the window key currently in ECON_CAL (day or week span)
+const ECON_WINS = {};       // every window fetched this session — stepping back is instant
+const ECON_RAIL = {};       // curve + macro prints: session-lived, not per-day
+let ECON_GEN = 0;           // bumped per fetch so a stale response can't repaint
 /* PostgREST answers at most 1000 rows per request no matter what `limit` says
    (measured: limit=8000 → 1000 back). A 7-day window across 158 countries lands
    near that ceiling, so page through until a short page comes back — a silently
@@ -8251,8 +8314,12 @@ function renderEconCats() {
   const scoped = ecScoped(), counts = {};
   for (const r of scoped) counts[ecCat(r.event)] = (counts[ecCat(r.event)] || 0) + 1;
   counts.ALL = scoped.length;
+  /* the dot on each tab carries that category's hue — Alan: "the tabs should have
+     a little dot as a guide of the colour coding, think of it as a replacement of
+     a legend." ALL gets no dot; it isn't a category. */
   box.innerHTML = EC_CAT_NAMES.map((n) =>
     '<span class="ec-cc ' + (n === (S.econCat || "ALL") ? "on" : "") + '" data-act="eccat" data-c="' + n + '">' +
+      (n === "ALL" ? "" : '<i class="cd" style="background:' + (EC_CAT_COLOR[n] || "var(--mute)") + '"></i>') +
       n + '<span class="n">' + (counts[n] || 0) + "</span></span>").join("");
 }
 function ecRowHTML(r, kind, showCty, attrs) {
@@ -8341,18 +8408,24 @@ function ecMonthHTML(rows) {
       else if ((IMP[r.impact] || 0) > (IMP[cur.impact] || 0) && !f.head.test(ecBase(cur.event))) fams[k].head = r;
     }
     list.sort((a, b) => a.head.event_ts - b.head.event_ts || (IMP[b.head.impact] || 0) - (IMP[a.head.impact] || 0));
-    const shown = list.slice(0, 3).map((g) => {
+    /* fill the cell. Alan: "at least the boxes need to be fucking full — I see +3
+       more when three would have fit." Five is what a cell actually holds. */
+    const CAP = 5;
+    const shown = list.slice(0, CAP).map((g) => {
       const r = g.head, a = num(r.actual), e = num(r.estimate);
       let cls = "ec-ev imp-" + String(r.impact || "Low").toLowerCase();
       if (a != null && e != null) {
         const diff = a - e, hot = EC_INVERT.test(ecBase(r.event));
         cls += " " + (Math.abs(diff) < 1e-9 ? "inline" : ((diff > 0) === hot ? "miss" : "beat"));
       }
-      return '<div class="' + cls + '" title="' + esc(r.event) + '">' +
-        '<span class="sp"></span><span class="nm">' + esc(ecBase(r.event)) + "</span>" +
+      const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
+      return '<div class="' + cls + '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
+        " · " + esc(r.impact || "") + ' impact">' +
+        '<span class="sp" style="background:' + hue + '"></span>' +
+        '<span class="nm">' + esc(ecShort(ecBase(r.event))) + "</span>" +
         '<span class="tm">' + ecTimeET(r.event_ts) + "</span></div>";
     }).join("");
-    const more = list.length > 3 ? '<div class="ec-more">+' + (list.length - 3) + " more</div>" : "";
+    const more = list.length > CAP ? '<div class="ec-more">+' + (list.length - CAP) + " more</div>" : "";
     return '<div class="ec-cell' + (d.slice(0, 7) === month ? "" : " out") +
       '" data-act="ecgoto" data-day="' + d + '">' +
       '<div class="ec-dnum' + (d === today ? " is-today" : "") + '"><span>' + (+d.slice(8)) + "</span></div>" +
@@ -8499,17 +8572,31 @@ async function fillEcon() {
   const from = Math.floor(ecAnchor(days[0]) - pad);
   const to   = Math.floor(ecAnchor(days[days.length - 1]) + pad);
   try {
+    /* R52g — SPEED. Alan: "everything is very slow… I click the arrows and there was
+       such a lag that it went back like crazy."
+       (a) the rail's curve and macro prints do not change when you step a day, so
+           they are pulled ONCE per session instead of on every arrow press;
+       (b) every window that has been fetched is kept, so stepping back onto a month
+           you already looked at is instant;
+       (c) a generation counter means a slow response for a window you have since
+           stepped away from is dropped instead of repainting over the new one —
+           that is what made rapid arrow presses look like they jumped around. */
+    const gen = ++ECON_GEN;
+    const cached = ECON_WINS[key];
+    if (cached) { ECON_CAL = cached; ECON_WIN = key; renderEconTable(); }
     const jobs = [
-      (ECON_WIN === key && ECON_CAL) ? Promise.resolve(ECON_CAL) : ecFetchWindow(from, to),
-      el("econCurve") ? pg("treasury_rates?select=*&order=date.desc&limit=1") : Promise.resolve(null),
-      el("econPrints") ? pg("econ_history?select=series,date,value&order=date.desc&limit=600") : Promise.resolve(null),
+      cached ? Promise.resolve(cached) : ecFetchWindow(from, to),
+      (el("econCurve") && !ECON_RAIL.tr) ? pg("treasury_rates?select=*&order=date.desc&limit=1") : Promise.resolve(ECON_RAIL.tr),
+      (el("econPrints") && !ECON_RAIL.eh) ? pg("econ_history?select=series,date,value&order=date.desc&limit=600") : Promise.resolve(ECON_RAIL.eh),
     ];
     const [cal, tr, eh] = await Promise.all(jobs);
-    if (!el("econTbl")) return;
+    if (!el("econTbl") || gen !== ECON_GEN) return;        // a newer window won the race
+    ECON_RAIL.tr = tr || ECON_RAIL.tr; ECON_RAIL.eh = eh || ECON_RAIL.eh;
     ECON_CAL = cal || []; ECON_WIN = key;
+    ECON_WINS[key] = ECON_CAL;
     renderEconTable();
     /* ---- right rail: the curve + prints the room used to show, kept intact ---- */
-    const t0 = tr && tr[0];
+    const t0 = (ECON_RAIL.tr && ECON_RAIL.tr[0]) || null;
     const c = el("econCurve");
     if (c && t0 && num(t0.y2) != null && num(t0.y10) != null)
       c.innerHTML = "as of <b>" + esc(t0.date) + "</b> · 2Y " + (+t0.y2).toFixed(2) + "% · 10Y " +
@@ -8522,9 +8609,9 @@ async function fillEcon() {
         econRowHTML("UST " + l, "treasury yield", (+t0[k]).toFixed(2) + "%",
           (k === "y2" || k === "y10" || k === "y30") ? "M" : "L")).join("");
     const pr = el("econPrints");
-    if (pr && eh) {
+    if (pr && ECON_RAIL.eh) {
       const seen = {};
-      for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
+      for (const r of ECON_RAIL.eh) if (!(r.series in seen)) seen[r.series] = r;
       const prints = Object.values(seen).sort((a, b) => String(a.series).localeCompare(String(b.series)))
         .map((r) => econRowHTML(esc(ECON_LBL[r.series] || r.series), esc(r.date), fmtEconVal(r.value),
           ECON_IMPACT[r.series] || "L")).join("");
