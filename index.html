@@ -8194,11 +8194,26 @@ let ECON_GEN = 0;           // bumped per fetch so a stale response can't repain
    (measured: limit=8000 → 1000 back). A 7-day window across 158 countries lands
    near that ceiling, so page through until a short page comes back — a silently
    clipped calendar would read as "nothing else was scheduled", which is a lie. */
+/* R52h — ask for the REGION, not the world. Alan: "I don't understand why it would
+   have to be slow… the less it asks, the better."
+   Measured on a one-month window: fetching every country returns 3,400 rows over
+   FOUR round trips and ~560 kB; fetching the US alone returns 471 rows in ONE trip
+   and 68 kB. The page was doing the first so that switching region could be instant
+   — which was the wrong trade, because stepping months is what he does constantly
+   and switching region is what he does rarely. Regions are cached once fetched, so
+   switching back costs nothing either. */
+function ecCountryFilter() {
+  const reg = S.econCty || "US";
+  if (reg === "ALL") return "";
+  if (reg === "US") return "&country=eq.US";
+  const list = reg === "G7" ? EC_G7 : reg === "G20" ? EC_G20 : EC_EM;
+  return "&country=in.(" + list.join(",") + ")";
+}
 async function ecFetchWindow(from, to) {
-  const PAGE = 1000, out = [];
+  const PAGE = 1000, out = [], cty = ecCountryFilter();
   for (let off = 0; off < 20000; off += PAGE) {
     const page = await pg("econ_calendar?select=event_ts,country,event,actual,estimate,previous,impact" +
-      "&event_ts=gte." + from + "&event_ts=lte." + to +
+      cty + "&event_ts=gte." + from + "&event_ts=lte." + to +
       "&order=event_ts.asc,country.asc,event.asc&limit=" + PAGE + "&offset=" + off);
     out.push.apply(out, page);
     if (!page || page.length < PAGE) break;
@@ -8206,7 +8221,18 @@ async function ecFetchWindow(from, to) {
   return out;
 }
 
-function ecWinKey() { return (S.econSpan || "DAY") + "|" + (S.econDay || ecToday()); }
+/* the fetched window is now scoped to a region, so the region is part of its identity */
+function ecWinKey() { return (S.econCty || "US") + "|" + (S.econSpan || "DAY") + "|" + (S.econDay || ecToday()); }
+/* which region tabs can show a truthful count from the data currently loaded.
+   The named regions nest (US ⊂ G7 ⊂ G20), so a G20 window can count all three;
+   a US window can only count US. A tab we cannot count shows no number rather
+   than a wrong one — a zero that only means "not fetched" would be a lie. */
+function ecCanCount(tab, cur) {
+  if (cur === "ALL" || tab === cur) return true;
+  if (cur === "G20") return tab === "US" || tab === "G7";
+  if (cur === "G7")  return tab === "US";
+  return false;
+}
 /* R52e — MONTH is a real calendar grid. Alan: "the calendar goes week by week, but
    you have to move the week. I think we should have a calendar view, bro — with your
    colour coding and all of this shit." So the span control gains MONTH, and MONTH
@@ -8294,10 +8320,12 @@ function renderEconRegions() {
   for (const n of EC_REGIONS) counts[n] = 0;
   for (const r of rows) for (const n of EC_REGIONS) if (ecInRegion(r.country, n)) counts[n]++;
   const cur = S.econCty || "US";
-  box.innerHTML = EC_REGIONS.map((n) =>
-    '<span class="ec-ct ' + (n === cur ? "on" : "") + (counts[n] ? "" : " none") +
+  box.innerHTML = EC_REGIONS.map((n) => {
+    const known = ecCanCount(n, cur);
+    return '<span class="ec-ct ' + (n === cur ? "on" : "") + (known && !counts[n] ? " none" : "") +
       '" data-act="ecctry" data-c="' + n + '">' + n +
-      '<span class="n">' + counts[n] + "</span></span>").join("");
+      (known ? '<span class="n">' + counts[n] + "</span>" : "") + "</span>";
+  }).join("");
   /* the HIGH ONLY pill carries the count it would leave behind, so its value is
      visible before it is clicked */
   const hi = el("econHigh");
@@ -11555,7 +11583,7 @@ document.addEventListener("click", (e) => {
     case "ecctry": {
       S.econCty = a.dataset.c;
       S.econCat = "ALL";                       // a new region has a different category mix
-      renderEconTable();                        // repaints the region tabs too (counts move with it)
+      fillEcon();   // the window is region-scoped now, so a new region needs its own pull (cached after the first)
       break;
     }
     case "ecgoto": {                           // empty state → jump to the nearest day that has releases
