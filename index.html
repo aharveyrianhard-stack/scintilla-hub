@@ -8209,13 +8209,35 @@ function ecCountryFilter() {
   const list = reg === "G7" ? EC_G7 : reg === "G20" ? EC_G20 : EC_EM;
   return "&country=in.(" + list.join(",") + ")";
 }
+/* R52i — the Fed chair. Alan: "all chairman ones are high relevance, all of them…
+   Powell is not the chairman anymore, just remove the word Powell."
+   Two things wrong in the feed. It files the chair under a PERSON's name, so a rule
+   written against that name breaks silently the day the chair changes and he simply
+   stops being nudged. And it grades the same speaker High four times and Medium
+   four times in the same year, which is the feed's opinion, not his.
+   So: the chair is recognised by ROLE, every chair appearance is forced to High,
+   and the label loses the name. The name list below is a DATA-QUALITY SHIM for rows
+   FMP files without the word "Chair" — it is not the rule, and the rule survives it
+   being wrong. (Also measured: the feed carries no Testimony rows at all, so
+   Congressional testimony is simply absent — a gap another source would have to fill.) */
+const EC_CHAIR_ROLE = /fed\s+chair\b/i;
+const EC_CHAIR_NAMES = /^fed\s+(powell|bernanke|yellen|greenspan)\b/i;   // shim, not the rule
+function ecNormalize(r) {
+  const b = String(r.event || "");
+  if (EC_CHAIR_ROLE.test(b) || EC_CHAIR_NAMES.test(b)) {
+    r.impact = "High";                                   // the chair always matters
+    r.event = b.replace(/^fed\s+chair\s+\S+\s+/i, "Fed Chair ")
+               .replace(EC_CHAIR_NAMES, "Fed Chair");    // the office, never the person
+  }
+  return r;
+}
 async function ecFetchWindow(from, to) {
   const PAGE = 1000, out = [], cty = ecCountryFilter();
   for (let off = 0; off < 20000; off += PAGE) {
     const page = await pg("econ_calendar?select=event_ts,country,event,actual,estimate,previous,impact" +
       cty + "&event_ts=gte." + from + "&event_ts=lte." + to +
       "&order=event_ts.asc,country.asc,event.asc&limit=" + PAGE + "&offset=" + off);
-    out.push.apply(out, page);
+    out.push.apply(out, (page || []).map(ecNormalize));
     if (!page || page.length < PAGE) break;
   }
   return out;
