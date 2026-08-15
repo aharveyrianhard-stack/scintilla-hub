@@ -236,9 +236,18 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    narrower than the word "constructive" can ever be set, so the read was truncated to
    "constr…" in every column. Each column now has a floor of 46px and the strip scrolls
    sideways when a scope has more cohorts than fit, rather than crushing every label. */
+/* ★ IT CANNOT OVERFLOW TO THE RIGHT. Alan: "that overflow of the cohort compare and
+   the sector compare to the right is bullshit... I need to see it on the same space."
+   MEASURED before: 12 columns wanted 686px inside a 500px pane, so three of them sat
+   off the right edge behind a scrollbar. The 54px floor above was a deliberate earlier
+   trade — keep every label readable, let the strip scroll — and Alan has now called
+   that trade the other way. minmax(0,1fr) makes the columns share whatever space
+   there is, so every cohort is on screen at once, always.
+   The cost is real and lands on the READ word: at ~40px a column, "constructive"
+   truncates. The label, the value, the bar and the trend/momentum pair all still fit. */
 .sc-cohstrip{ flex:0 0 auto; display:grid; grid-auto-flow:column;
-  grid-auto-columns:minmax(54px,1fr); gap:2px; overflow-x:auto; overscroll-behavior-x:contain;
-  padding:4px 8px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+  grid-auto-columns:minmax(0,1fr); gap:1px; overflow-x:hidden; overscroll-behavior-x:contain;
+  padding:4px 4px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
 .sc-cohstrip::-webkit-scrollbar{ height:4px; }
 .sc-cohstrip::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:2px; }
 .sc-cohstrip__hd{ flex:0 0 auto; padding:7px 10px 3px; font-size:8px; letter-spacing:.1em;
@@ -276,8 +285,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* the read and the trend/momentum pair, mirroring the board's own columns. Fixed heights
    so every column reserves the same space and the shared zero line across the strip stays
    a straight line whether or not a given cohort has a reading yet. */
+/* narrower columns (see the overflow note above) mean this word has less room, so it
+   is set a touch smaller and tighter to keep as much of it whole as possible. The full
+   word is always on the hover title. */
 .sc-cohstrip__read{ display:block; width:100%; max-width:100%; height:11px; line-height:11px;
-  font-family:var(--mono); font-size:7px; letter-spacing:0; text-align:center;
+  font-family:var(--mono); font-size:6.5px; letter-spacing:-.02em; text-align:center;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mute); }
 .sc-cohstrip__div{ margin-left:2px; color:var(--warn,#e0a24a); }
 .sc-cohstrip__tm{ display:flex; align-items:center; justify-content:center; gap:1px; height:11px;
@@ -1044,6 +1056,18 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 
 /* column 5 · GeigerMini — FIX 2/3: hard-clipped cell, fill never past the half-track,
    mid line z≤1 so it can never paint over the sticky sort header */
+/* ★ WHILE THE ROWS TRAVEL, THE REST OF THE TABLE GETS OUT OF THE WAY.
+   Alan: "when we do the movement, a lot of the columns disappear, then just the Geiger
+   moves around. The Geiger and the ticker, of course... that'll make the visuals a lot
+   cleaner." He is describing the problem exactly — eleven columns sliding over each
+   other is unreadable, so during a move you are left with a NAME and a LEVEL, which is
+   the only thing you could have followed anyway.
+   OPACITY ONLY. Nothing in here may change layout: the movement is built from measured
+   distances, and anything that reflows mid-move would send rows to the wrong place. */
+.sc-board__scroll .sc-board__row > *{ transition:opacity 220ms linear; }
+.sc-board__scroll.gwx-moving .sc-board__row > *{ opacity:.1; transition:opacity 150ms linear; }
+.sc-board__scroll.gwx-moving .sc-board__row > .sc-ctk,
+.sc-board__scroll.gwx-moving .sc-board__row > .sc-gmini{ opacity:1; }
 .sc-gmini{ position:relative; height:13px; background:var(--panel); border-radius:2px; overflow:hidden; }
 .sc-gmini__mid{ position:absolute; left:50%; top:0; bottom:0; width:1.3px; background:var(--dim); z-index:1; }
 .sc-gmini i{ position:absolute; top:2px; bottom:2px; border-radius:2px; max-width:50%; }
@@ -4586,15 +4610,23 @@ function cohortCompareStripHTML() {
    Alan, after watching the two curves at 4x slow motion: "most definitely the slow
    one. It has to be smooth." GRADUAL is that speed in the spec's own table. */
 const GWX_EASE    = "cubic-bezier(.34,.02,.2,1)";
-const GWX_MOVE_MS = 760;
+/* Alan, twice: "definitely the slow one, it has to be smooth", then "the speed could
+   still be considerably slower". This is now well past the spec's GRADUAL (760ms). */
+const GWX_MOVE_MS = 1200;
+/* ...EXCEPT while the rewind is playing. play() seeks a new trading day every 700ms, so
+   a 1200ms move would be cut off and restarted before it ever arrived — the rows would
+   crawl and never land. During playback the move has to fit inside one day-step. */
+const GWX_PLAY_MS = 620;
+function gwxDur(){ return window.GWX_PLAYING ? GWX_PLAY_MS : GWX_MOVE_MS; }
 
 /* FLIP. Measure where everything is, let the caller reorder, put each node back
    where it was, then release it.
    The NODE travels, so whatever is inside it — a label, a value, a bar — travels
    with it. That is the whole answer to "the labels didn't move, just the bars":
    there is nothing to keep in sync, because the label and the bar are one object. */
-function gwxMove(nodes, axis, reorder) {
+function gwxMove(nodes, axis, reorder, dimHost) {
   if (!nodes.length) { reorder(); return; }
+  const dur = gwxDur();
   const horiz = axis === "x";
   const was = nodes.map((n) => { const r = n.getBoundingClientRect(); return horiz ? r.left : r.top; });
   reorder();
@@ -4605,6 +4637,13 @@ function gwxMove(nodes, axis, reorder) {
     if (n.__gwxD) moved = true;
   });
   if (!moved) return;
+  /* only now that something is actually travelling is it worth clearing the table —
+     a re-sort that changed nothing must not blink the columns */
+  if (dimHost) {
+    dimHost.classList.add("gwx-moving");
+    clearTimeout(dimHost.__gwxDim);
+    dimHost.__gwxDim = setTimeout(() => dimHost.classList.remove("gwx-moving"), dur + 40);
+  }
   nodes.forEach((n) => {
     if (!n.__gwxD) return;
     n.style.transition = "none";
@@ -4617,18 +4656,18 @@ function gwxMove(nodes, axis, reorder) {
   nodes.forEach((n) => {
     if (!n.__gwxD) return;
     n.__gwxD = 0;
-    n.style.transition = "transform " + GWX_MOVE_MS + "ms " + GWX_EASE;
+    n.style.transition = "transform " + dur + "ms " + GWX_EASE;
     n.style.transform = horiz ? "translateX(0)" : "translateY(0)";
     /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
        compositing layer. Holding transforms on 200+ nodes exhausts layer memory and
        Safari flushes them — which Alan saw as the board going BLACK on iPad while
        desktop, with far more headroom, never did. Clearing transform+transition once
        the move lands drops the node back to a plain painted element.
-       THIS TIMEOUT MUST STAY LONGER THAN GWX_MOVE_MS. */
+       THIS TIMEOUT MUST STAY LONGER THAN THE MOVE. */
     clearTimeout(n.__gwxT);
     n.__gwxT = setTimeout(() => {
       n.style.transition = ""; n.style.transform = ""; n.style.willChange = "";
-    }, GWX_MOVE_MS + 60);
+    }, dur + 60);
   });
 }
 
@@ -4701,7 +4740,7 @@ function boardReorderInPlace() {
       if (d.firstElementChild) bs.replaceChild(d.firstElementChild, hd);
     }
     target.forEach((r) => bs.appendChild(r));
-  });
+  }, bs);            /* bs = the container that clears its columns while rows travel */
   return true;
 }
 
@@ -13439,7 +13478,7 @@ function filesWire(){
         var frag=document.createDocumentFragment();
         (S.boardOrder||[]).forEach(function(t){ if(byT[t]) frag.appendChild(byT[t]); });
         bs.appendChild(frag);
-      });
+      },bs);
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
       { cohStripPaint(); cmpToggle();   /* the strip rewinds with the board */
@@ -13482,6 +13521,9 @@ function filesWire(){
        made the bar hop. A requestAnimationFrame loop slides the thumb continuously; each
        time it crosses into a new trading day the board seeks once. Rows keep their FLIP
        animation across the whole day, so nothing is repainted mid-flight. */
+    /* ★ tell the mover we are streaming days: a 1200ms move does not fit inside a
+       700ms day-step and would be restarted before it ever landed. */
+    window.GWX_PLAYING=true;
     var msPerDay=700, startVal=+sc.value, t0=performance.now(), lastDay=Math.floor(startVal/SUB);
     TIMER=requestAnimationFrame(function step(now){
       var v=startVal + ((now-t0)/msPerDay)*SUB;
@@ -13493,7 +13535,7 @@ function filesWire(){
     });
   }
   /* TIMER now holds a requestAnimationFrame handle, not an interval id */
-  function stop(){ if(TIMER){cancelAnimationFrame(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
+  function stop(){ window.GWX_PLAYING=false; if(TIMER){cancelAnimationFrame(TIMER);TIMER=null;} var p=E("gwxPlay"); if(p){p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on");} }
 
   /* ==========================================================================
      SECTOR COMPARE — toggle the compare strip between COHORTS and the eleven
