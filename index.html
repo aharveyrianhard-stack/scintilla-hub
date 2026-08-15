@@ -279,7 +279,16 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    magnitude is stated once, in words, in the strip header ("scale ±0.41"). */
 .sc-vmini{ position:relative; width:15px; height:114px; background:var(--panel); border-radius:0; overflow:hidden; }
 .sc-vmini__mid{ position:absolute; top:50%; left:0; right:0; height:1.3px; background:var(--dim); z-index:2; }
-.sc-vmini i{ position:absolute; left:2px; right:2px; border-radius:0; max-height:50%; z-index:1; }
+/* ★ A NEUTRAL COHORT MUST NOT LOOK LIKE A MISSING ONE. Alan: "what's up with these
+   missing things in growth and international? Why don't they have a Geiger?"
+   The data was there — CHECKED against the database: GROWTH 16 of 17 members carry a
+   composite, INTL 7 of 7. The bar was simply drawn at its true height, and a mean near
+   zero is a fraction of a pixel, so a genuinely flat cohort rendered as nothing at all
+   and read as broken. A non-null reading now always leaves at least a visible sliver on
+   the zero line, which is the same floor the motion spec uses on its own bars.
+   Null still draws no bar element at all, so "no data" and "flat" stay distinguishable. */
+.sc-vmini i{ position:absolute; left:2px; right:2px; border-radius:0; max-height:50%; z-index:1;
+  min-height:2px; }
 .sc-cohstrip__val{ font-size:9px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
 .sc-cohstrip__col.is-empty .sc-cohstrip__val{ color:var(--mute); font-weight:400; }
 /* the read and the trend/momentum pair, mirroring the board's own columns. Fixed heights
@@ -1065,9 +1074,21 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    OPACITY ONLY. Nothing in here may change layout: the movement is built from measured
    distances, and anything that reflows mid-move would send rows to the wrong place. */
 .sc-board__scroll .sc-board__row > *{ transition:opacity 220ms linear; }
-.sc-board__scroll.gwx-moving .sc-board__row > *{ opacity:.1; transition:opacity 150ms linear; }
+/* Alan: "I don't want the table information to go down to ten percent. I want it gone." */
+.sc-board__scroll.gwx-moving .sc-board__row > *{ opacity:0; transition:opacity 150ms linear; }
+/* what survives a move: the NAME, the GEIGER, and the rank arrow — Alan: "the arrow of
+   how many positions it changed. Matters." */
 .sc-board__scroll.gwx-moving .sc-board__row > .sc-ctk,
-.sc-board__scroll.gwx-moving .sc-board__row > .sc-gmini{ opacity:1; }
+.sc-board__scroll.gwx-moving .sc-board__row > .sc-gmini,
+.sc-board__scroll.gwx-moving .sc-board__row > .gwx-rk{ opacity:1; }
+/* ★ AND THE PRICE SURVIVES WHILE THE REWIND IS PLAYING.
+   Alan: "I saw a bunch of weird stuff when I was playing it... even it went blank."
+   That was mine. play() seeks a new day every 700ms and the clear lasted 660ms of each,
+   so the board was cleared ~94% of the time — which is exactly "it went blank". During
+   playback the price stays up and keeps ticking, which is also what Alan asked for:
+   "price remains, of course, but it should tick the movement." */
+.sc-board__scroll.gwx-playing.gwx-moving .sc-board__row > .sc-last,
+.sc-board__scroll.gwx-playing.gwx-moving .sc-board__row > .sc-chg{ opacity:1; }
 .sc-gmini{ position:relative; height:13px; background:var(--panel); border-radius:2px; overflow:hidden; }
 .sc-gmini__mid{ position:absolute; left:50%; top:0; bottom:0; width:1.3px; background:var(--dim); z-index:1; }
 .sc-gmini i{ position:absolute; top:2px; bottom:2px; border-radius:2px; max-width:50%; }
@@ -4535,7 +4556,7 @@ function cohortCompareStripHTML() {
         '<span class="sc-cohstrip__slot"></span>' +
         /* the empty column reserves the read and trend/mom rows too, so a column with no
            data cannot shift its neighbours' bars off the shared zero line */
-        '<span class="sc-cohstrip__read">—</span><span class="sc-cohstrip__tm"><b>—</b><i>/</i><b>—</b></span>' +
+        '<span class="sc-cohstrip__tm"><b>—</b><i>/</i><b>—</b></span>' +
         "</button>";
     }
     const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
@@ -4565,8 +4586,14 @@ function cohortCompareStripHTML() {
     const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
       : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
         (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers";
-    const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
-      esc(rd.txt) + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
+    /* ★ THE READ WORD IS OFF THE STRIP. Alan: "remove this constructive, aligned, stalling
+       from the cohort... because it is valuable. Maybe on a hover over the bar, but not
+       there. It looks horrible."
+       So the word is not drawn — it moves into the column's hover title, where it is still
+       one hover away. This also ends the truncation problem the narrower columns created:
+       there is no longer a twelve-character word competing for ~40px. scinRead() is still
+       the ONE place the word is decided, shared with the board. */
+    const readHover = rd.txt + (rd.div ? " (trend and momentum disagree)" : "");
     /* two decimals plus signs is ~40px of text in a ~45px column and the numbers collided.
        The sign is redundant here — the colour already carries it, in the same two tones as
        everywhere else — so the pair reads as bare magnitudes and fits. */
@@ -4576,11 +4603,11 @@ function cohortCompareStripHTML() {
       '<i>/</i>' +
       '<b style="color:' + ((g.mo ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.mo) + "</b></span>";
 
-    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + esc(readHover) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + " · " + esc(tmTitle) + '">' +
       '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
       vminiHTML(r.mean, span) +
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
-      readTag + tmTag +
+      tmTag +
     "</button>";
   }).join("");
   /* ★ THE TOGGLE IS PART OF THE RENDER NOW. It used to be appended afterwards by cmpToggle()
@@ -4641,8 +4668,13 @@ function gwxMove(nodes, axis, reorder, dimHost) {
      a re-sort that changed nothing must not blink the columns */
   if (dimHost) {
     dimHost.classList.add("gwx-moving");
+    /* while the rewind is streaming days the clear is almost permanent, so the CSS keeps
+       the price and change up in that state — see the .gwx-playing rule */
+    dimHost.classList.toggle("gwx-playing", !!window.GWX_PLAYING);
     clearTimeout(dimHost.__gwxDim);
-    dimHost.__gwxDim = setTimeout(() => dimHost.classList.remove("gwx-moving"), dur + 40);
+    dimHost.__gwxDim = setTimeout(() => {
+      dimHost.classList.remove("gwx-moving"); dimHost.classList.remove("gwx-playing");
+    }, dur + 40);
   }
   nodes.forEach((n) => {
     if (!n.__gwxD) return;
@@ -4726,6 +4758,8 @@ function boardReorderInPlace() {
   const bs = el("boardScroll"); if (!bs) return false;
   const rows = [...bs.querySelectorAll(".sc-board__row")];
   if (!rows.length) return false;
+  /* where every name stood before the move, so the arrow can say how far it travelled */
+  const before = {}; rows.forEach((r, i) => { before[r.getAttribute("data-t")] = i; });
   const pos = {}; (S.boardOrder || []).forEach((t, i) => { pos[t] = i; });
   const target = rows.slice().sort((a, b) => {
     const pa = pos[a.getAttribute("data-t")], pb = pos[b.getAttribute("data-t")];
@@ -4741,6 +4775,7 @@ function boardReorderInPlace() {
     }
     target.forEach((r) => bs.appendChild(r));
   }, bs);            /* bs = the container that clears its columns while rows travel */
+  if (typeof window.gwxBadges === "function") window.gwxBadges(before);
   return true;
 }
 
@@ -13488,6 +13523,9 @@ function filesWire(){
     }catch(e){}
   }
   /* rank badge — fixed column hard right, fades in on a move, clears after 1400ms */
+  /* ★ shared with the header-click re-sort (boardReorderInPlace), which had no arrows at
+     all until now. Alan: "the arrow of how many positions it changed. Matters." */
+  window.gwxBadges=function(before){ try{ badges(before); }catch(e){} };
   function badges(before){
     if(!before)return;
     (S.boardOrder||[]).forEach(function(t,now){
