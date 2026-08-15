@@ -3338,7 +3338,17 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
     pg("cohorts?select=ticker,cohort"),
     pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,volume"),   // FIX 2 — DB serves chg_pct + prev_close
-    pg("composite_staged?select=ticker,composite,trend,momentum,structure,updated_ts&tf=eq.D&order=updated_ts.desc"),
+    /* ★ THE COLUMN IS GONE FROM THE DATABASE. composite_staged no longer has a
+       `structure` column (it now carries: composite, conviction, core, momentum, tf,
+       tf_contributors, ticker, trend, updated_ts, volatility). PostgREST rejects the
+       WHOLE select with 400 when one name is unknown, so asking for it did not just
+       lose the Structure bar - it lost every geiger on the board, which is what
+       "awaiting data" was. VERIFIED: same select minus `structure` returns 200.
+       Structure now reads "-" honestly. There is a `core` column that may be the same
+       measure renamed, but guessing that mapping would put a wrong number on screen,
+       so whoever owns the schema decides: bring `structure` back, or retire the
+       Structure family from the UI. */
+    pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"),
     pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
     pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"),
     /* R26 FIX 6 — ONE batch: every future annual estimate row, first per ticker kept client-side */
@@ -3453,7 +3463,7 @@ async function fetchCompanyData(t) {
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
-    pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,structure,updated_ts&order=updated_ts.desc&limit=1"),
+    pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
     pg("fundamentals?ticker=eq." + e + "&select=trailing_pe,eps_ttm,revenue_ttm,market_cap"),
     pg("analyst_estimates?ticker=eq." + e + "&select=period,fiscal_date,est_eps_avg,est_eps_high,est_eps_low,est_revenue_avg,est_ebitda_avg,est_net_income_avg,num_analysts_eps,num_analysts_rev&order=fiscal_date.asc"),   // EST PORT — num_analysts_rev feeds the REV x-ray
@@ -8821,7 +8831,7 @@ async function geigerSummaryData(t) {
   const enc = encodeURIComponent(t);
   const e2 = encodeURIComponent(chFmpSym(t));   // crypto → BTCUSD form for ohlcv_history
   const [comp, der, ser, vol, last, ow, bvol] = await Promise.all([
-    pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,structure,conviction,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
+    pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,conviction,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
     /* RSI·MTF / Williams / MA ladder. Ask the DB for JUST the latest row per timeframe —
        an indexed lookup (~100ms each), run in parallel — instead of the derived_latest VIEW
        which re-sorts all 4.3M history rows on every read (~18s → timeout → "NO DATA").
