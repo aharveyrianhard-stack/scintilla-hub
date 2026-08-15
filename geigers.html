@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GEIGERS ONLY — the same names, ranked different ways</title>
+<style>
+:root{--bg:#070a0d;--pan:#0b0f14;--line:#161c25;--line2:#1d2531;--dim:#5d6877;--dimmer:#3c4551;
+ --mute:#2f3742;--txt:#c9d2dd;--ink2:#e6edf5;--bull:#2bff9b;--bear:#ff2f55;--cy:#3fd0ff;
+ --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+ --ease:cubic-bezier(.34,.02,.2,1);--move:1200ms}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);
+ font:400 14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+ -webkit-font-smoothing:antialiased}
+body{padding:12px 12px 40px;max-width:1100px;margin:0 auto}
+h1{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--cy);margin:0 0 5px;font-weight:500}
+.lede{color:var(--dim);font-size:12.5px;margin:0 0 14px;max-width:70ch}
+.lede b{color:var(--txt);font-weight:600}
+
+.block{margin:0 0 9px}
+.blab{font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--dimmer);margin:0 0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:4px}
+button{appearance:none;background:#101620;color:var(--dim);border:1px solid var(--line);
+ border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;
+ cursor:pointer;min-height:32px;text-transform:uppercase;
+ transition:background .12s,color .12s,border-color .12s}
+button:hover{color:var(--txt)}
+button.on{background:#12222e;color:var(--cy);border-color:#1d4256}
+
+.wrap{margin-top:12px;background:var(--pan);border:1px solid var(--line);border-radius:9px;
+ padding:8px 0 10px;overflow:hidden}
+.head{display:flex;align-items:center;padding:0 12px 7px;font-family:var(--mono);font-size:8.5px;
+ letter-spacing:.16em;color:var(--dimmer);border-bottom:1px solid var(--line);margin-bottom:6px}
+.head .c1{width:58px}.head .c2{flex:1;text-align:center;color:var(--cy)}
+.head .c3{width:66px;text-align:right}
+.rows{position:relative}
+.row{position:absolute;left:0;right:0;height:26px;display:flex;align-items:center;padding:0 12px;
+ will-change:transform}
+.tk{width:58px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink2)}
+/* the geiger, exactly as the board draws it: one green, one red, full strength, centre
+   zero, and the MAGNITUDE is how much of the track is inked — never a tint. */
+.gm{flex:1;position:relative;height:13px;background:#0d1218;border-radius:2px;overflow:hidden}
+.gm .mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--mute);z-index:1}
+.gm i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%;
+ transition:width var(--move) var(--ease),left var(--move) var(--ease),right var(--move) var(--ease)}
+.gv{width:52px;text-align:right;font-family:var(--mono);font-size:10px;
+ font-variant-numeric:tabular-nums;padding-left:9px}
+.rv{width:66px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);
+ font-variant-numeric:tabular-nums;padding-left:8px;opacity:1;transition:opacity .2s}
+.rv.hide{opacity:0}
+
+.note{margin-top:13px;font-size:12px;color:var(--dim);border-left:2px solid var(--line);padding-left:10px;max-width:70ch}
+.note b{color:var(--txt);font-weight:600}
+.stat{margin-top:9px;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--dimmer)}
+.err{color:var(--bear)}
+</style></head><body>
+
+<h1>GEIGERS ONLY · THE SAME NAMES, RANKED DIFFERENT WAYS</h1>
+<p class="lede">No table. Just the name and its geiger. Pick a group, then change what the
+list is <b>ranked by</b> — the bars stay exactly where they are on the scale, only the order
+changes. What you are looking for is whether ranking by something else makes the green and
+red <b>sort themselves</b> or <b>scatter</b>.</p>
+
+<div class="block">
+ <div class="blab">1 · COHORTS</div>
+ <div class="btns" id="tabsCoh"><button class="on">LOADING…</button></div>
+</div>
+
+<div class="block">
+ <div class="blab">2 · SECTORS</div>
+ <div class="btns" id="tabsSec"></div>
+</div>
+
+<div class="block">
+ <div class="blab">3 · RANKED BY</div>
+ <div class="btns" id="sorts"></div>
+</div>
+
+<div class="wrap">
+ <div class="head"><span class="c1">TICKER</span>
+  <span class="c2" id="scaleLab">GEIGER · BULL ◂ ▸ BEAR</span>
+  <span class="c3" id="rankLab"></span></div>
+ <div class="rows" id="rows"></div>
+</div>
+
+<p class="note"><b>Reading it.</b> Ranked by <b>geiger</b> the bars have to form a clean fan —
+that is what the measure is. Ranked by anything else, the fan breaking up is the interesting
+part: it means that column and the geiger are telling you different things. A column that
+keeps the fan roughly intact is largely already inside the geiger.</p>
+<p class="stat" id="stat">loading…</p>
+
+<script>
+(function(){
+var SB="https://wadinxqplrggagkvrdag.supabase.co";
+/* the same publishable anon key the hub already ships on this origin, read the same way */
+var ANON=(typeof window!=="undefined"&&window.SC_ANON_KEY)||
+ "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZGlueHFwbHJnZ2Fna3ZyZGFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NDk0MTYsImV4cCI6MjA5NjEyNTQxNn0.1UKKUb_fY-xOy33vNUszDzxGECqQxdcwaxb9kN7KY-g";
+function pg(p){ return fetch(SB+"/rest/v1/"+p,{headers:{apikey:ANON,Authorization:"Bearer "+ANON}})
+  .then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; }); }
+function num(x){ var n=typeof x==="number"?x:parseFloat(x); return isFinite(n)?n:null; }
+
+var RH=26;
+/* ONE number for the movement, shared with the stylesheet, so the transition and the
+   layer-release timer can never drift apart. Same curve and duration as the hub. */
+var MOVE_MS=1200;
+document.documentElement.style.setProperty("--move",MOVE_MS+"ms");
+var D=[], GROUPS={}, group="ALL", sortKey="g", rowEls={}, order=[];
+
+var SORTS=[
+ {k:"g",  n:"GEIGER",   lab:"GEIGER",  fmt:function(r){return sgn(r.g,2)}},
+ {k:"tr", n:"TREND",    lab:"TREND",   fmt:function(r){return sgn(r.tr,2)}},
+ {k:"mo", n:"MOMENTUM", lab:"MOM",     fmt:function(r){return sgn(r.mo,2)}},
+ {k:"c",  n:"CHANGE %", lab:"CHG %",   fmt:function(r){return r.c==null?"—":sgn(r.c,2)+"%"}},
+ {k:"mc", n:"MKT CAP",  lab:"MKT CAP", fmt:function(r){return cap(r.mc)}},
+ {k:"t",  n:"A → Z",    lab:"",        fmt:function(){return ""}}
+];
+/* Mirrored from the hub (COHORTS ~line 3547, SECT/SECT_KEY in the rewind block) rather
+   than derived from ticker_cohorts — that table carries every fine-grained industry, so
+   deriving produced eighty tabs instead of Alan's twelve cohorts and eleven sectors.
+   If the hub's lists change, these two lines are the ones to change. */
+var COHORT_KEYS=[["AI HW","AI_HARDWARE"],["AI SW","AI_SOFTWARE"],["MEGACAP","MEGACAP"],
+ ["BLUE CHIP","BLUE_CHIP"],["GROWTH","GROWTH"],["CRYPTO","CRYPTO"],["INTL","INTL"],
+ ["MACRO","MACRO"],["INDEXES","INDEXES"],["THEMATIC","THEMATIC"],["METALS","METALS"],
+ ["AI PWR","AI_POWERTRAIN"]];
+var SECTOR_KEYS=[["MATERIALS","MATERIALS"],["ENERGY","ENERGY"],["FINANCIALS","FINANCIALS"],
+ ["INDUSTRIAL","INDUSTRIAL"],["TECH","TECH"],["STAPLES","STAPLES"],["REAL EST","REAL_ESTATE"],
+ ["UTILITIES","UTILITIES"],["HEALTH","HEALTH"],["DISCRET","DISCRET"],["COMMS","COMMS"]];
+
+function sgn(v,d){ return v==null?"—":(v>=0?"+":"")+v.toFixed(d); }
+function cap(v){ if(v==null)return "—";
+ if(v>=1e12)return (v/1e12).toFixed(1)+"T"; if(v>=1e9)return (v/1e9).toFixed(0)+"B";
+ if(v>=1e6)return (v/1e6).toFixed(0)+"M"; return String(v); }
+
+function shown(){ return group==="ALL"?D:D.filter(function(r){ return GROUPS[group]&&GROUPS[group][r.t]; }); }
+
+function computeOrder(list){
+ var s=list.slice();
+ if(sortKey==="t") s.sort(function(a,b){ return a.t.localeCompare(b.t); });
+ else s.sort(function(a,b){
+   var av=a[sortKey], bv=b[sortKey];
+   if(av==null&&bv==null)return a.t.localeCompare(b.t);
+   if(av==null)return 1; if(bv==null)return -1;
+   return bv-av;
+ });
+ return s.map(function(r){ return r.t; });
+}
+
+/* ONE mover, the same one the hub uses: measure, reorder, put it back, release it.
+   Same curve and duration as the board, so this page and the hub move identically. */
+function place(list,animate){
+ var host=document.getElementById("rows");
+ host.style.height=(list.length*RH)+"px";
+ var was={};
+ list.forEach(function(r){ var el=rowEls[r.t]; if(el&&el.__y!=null) was[r.t]=el.__y; });
+ order.forEach(function(t,pos){
+  var el=rowEls[t]; if(!el)return;
+  var y=pos*RH, prev=was[t];
+  el.__y=y;
+  if(!animate||prev==null||prev===y){ el.style.transition="none"; el.style.transform="translateY("+y+"px)"; return; }
+  el.style.transition="none"; el.style.transform="translateY("+prev+"px)";
+ });
+ if(animate){
+  host.getBoundingClientRect();                       /* one flush for the whole set */
+  order.forEach(function(t,pos){
+   var el=rowEls[t]; if(!el)return;
+   var y=pos*RH;
+   if(el.style.transform==="translateY("+y+"px)")return;
+   el.style.transition="transform var(--move) var(--ease)";
+   el.style.transform="translateY("+y+"px)";
+   /* release the layer once the move lands — same reason as the hub: iOS Safari
+      promotes every transformed element and runs out of layer memory. */
+   clearTimeout(el.__t);
+   el.__t=setTimeout(function(){ el.style.transition=""; el.style.transform="translateY("+y+"px)"; },MOVE_MS+60);
+  });
+ }
+}
+
+function paint(list){
+ var mx=0.0001;
+ list.forEach(function(r){ if(r.g!=null) mx=Math.max(mx,Math.abs(r.g)); });
+ var srt=SORTS.filter(function(s){return s.k===sortKey})[0];
+ document.getElementById("rankLab").textContent=srt.lab;
+ document.getElementById("scaleLab").textContent="GEIGER · BULL ◂ ▸ BEAR · SCALE ±"+mx.toFixed(2);
+ list.forEach(function(r){
+  var el=rowEls[r.t]; if(!el)return;
+  var bar=el.querySelector(".gm i"), gv=el.querySelector(".gv"), rv=el.querySelector(".rv");
+  if(r.g==null){ bar.style.width="0%"; gv.textContent="—"; gv.style.color="var(--mute)"; }
+  else{
+   var bull=r.g>=0, w=(Math.min(Math.abs(r.g)/mx,1)*50)+"%";
+   bar.style.left=bull?"50%":""; bar.style.right=bull?"":"50%";
+   bar.style.width=w; bar.style.background=bull?"var(--bull)":"var(--bear)";
+   gv.textContent=sgn(r.g,2); gv.style.color=bull?"var(--bull)":"var(--bear)";
+  }
+  /* the ranking column's own value, so you can see WHY a name sits where it sits */
+  if(sortKey==="g"||sortKey==="t"){ rv.classList.add("hide"); rv.textContent=""; }
+  else{ rv.classList.remove("hide"); rv.textContent=srt.fmt(r); }
+ });
+}
+
+function build(){
+ var host=document.getElementById("rows");
+ host.innerHTML=""; rowEls={};
+ var list=shown();
+ list.forEach(function(r){
+  var el=document.createElement("div"); el.className="row";
+  el.innerHTML='<span class="tk"></span><div class="gm"><span class="mid"></span><i></i></div>'+
+               '<span class="gv"></span><span class="rv"></span>';
+  el.querySelector(".tk").textContent=r.t;
+  host.appendChild(el); rowEls[r.t]=el;
+ });
+ order=computeOrder(list);
+ paint(list); place(list,false);
+ document.getElementById("stat").textContent=
+  list.length+" NAMES · GROUP "+group+" · RANKED BY "+
+  SORTS.filter(function(s){return s.k===sortKey})[0].n;
+}
+function rerank(){
+ var list=shown();
+ order=computeOrder(list);
+ paint(list); place(list,true);
+ document.getElementById("stat").textContent=
+  list.length+" NAMES · GROUP "+group+" · RANKED BY "+
+  SORTS.filter(function(s){return s.k===sortKey})[0].n;
+}
+
+function mkBtns(host,items,cur,cb){
+ host.innerHTML="";
+ items.forEach(function(o){
+  var b=document.createElement("button"); b.textContent=o.n;
+  if(o.k===cur) b.className="on";
+  b.onclick=function(){
+   [].forEach.call(host.children,function(c){c.className="";});
+   b.className="on"; cb(o);
+  };
+  host.appendChild(b);
+ });
+}
+
+Promise.all([
+ pg("ticker_cohorts?select=ticker,cohort"),
+ pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"),
+ pg("live_quotes?select=ticker,chg_pct"),
+ pg("company_profile?select=ticker,market_cap")
+]).then(function(res){
+ var members=res[0]||[], comp=res[1]||[], quotes=res[2]||[], prof=res[3]||[];
+ if(!comp.length){ document.getElementById("stat").innerHTML=
+   '<span class="err">no geiger data came back — the database returned nothing for composite_staged</span>'; return; }
+ var newest={}; comp.forEach(function(r){ if(!(r.ticker in newest)) newest[r.ticker]=r; });
+ var q={}; quotes.forEach(function(r){ q[r.ticker]=r; });
+ var p={}; prof.forEach(function(r){ p[r.ticker]=r; });
+
+ D=Object.keys(newest).map(function(t){
+  return {t:t, g:num(newest[t].composite), tr:num(newest[t].trend), mo:num(newest[t].momentum),
+          c:q[t]?num(q[t].chg_pct):null, mc:p[t]?num(p[t].market_cap):null};
+ }).filter(function(r){ return r.g!=null; });
+
+ /* the tabs are DERIVED from membership, never a second copy of the hub's cohort list —
+    so this page cannot drift out of step with what the hub counts as a cohort or a sector. */
+ var counts={};
+ members.forEach(function(m){
+  if(!m.cohort||!m.ticker)return;
+  (GROUPS[m.cohort]=GROUPS[m.cohort]||{})[m.ticker]=1;
+  counts[m.cohort]=(counts[m.cohort]||0)+1;
+ });
+ function count(k){ return D.filter(function(r){ return GROUPS[k]&&GROUPS[k][r.t]; }).length; }
+ function opts(list){ return list.filter(function(p){ return count(p[1])>0; })
+   .map(function(p){ return {k:p[1], n:p[0]+" ("+count(p[1])+")"}; }); }
+
+ var cohHost=document.getElementById("tabsCoh"), secHost=document.getElementById("tabsSec");
+ /* one selection across BOTH rows — picking a sector must release the cohort */
+ function choose(k){
+  group=k;
+  [cohHost,secHost].forEach(function(h){
+   [].forEach.call(h.children,function(b){ b.className = b.dataset.k===k ? "on" : ""; });
+  });
+  build();
+ }
+ function fill(host,items){
+  host.innerHTML="";
+  items.forEach(function(o){
+   var b=document.createElement("button"); b.textContent=o.n; b.dataset.k=o.k;
+   if(o.k===group) b.className="on";
+   b.onclick=function(){ choose(o.k); };
+   host.appendChild(b);
+  });
+ }
+ fill(cohHost,[{k:"ALL",n:"ALL ("+D.length+")"}].concat(opts(COHORT_KEYS)));
+ fill(secHost,opts(SECTOR_KEYS));
+
+ mkBtns(document.getElementById("sorts"),SORTS,"g",function(o){ sortKey=o.k; rerank(); });
+
+ build();
+}).catch(function(e){
+ document.getElementById("stat").innerHTML='<span class="err">could not load: '+String(e)+'</span>';
+});
+})();
+</script>
+</body></html>
