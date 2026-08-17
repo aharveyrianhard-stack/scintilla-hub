@@ -2972,7 +2972,7 @@ const cryptoSet = new Set(Object.values(CB));
 
 let PRICES   = {};   // ticker → latest live price (WS / FMP / realtime — wins over DB pull)
 let prevClose = {};  // ticker → SERVED live_quotes.prev_close (FIX 2 — the ONLY chg recompute base for live patches)
-let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…}, VOLUME:{…} } (ribbon_signals tf=D)
+let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…} } (ribbon_signals tf=D). VOLUME deleted by Alan 2026-08-17.
 let eqSyms   = [];   // equity symbols for the 3 s FMP batch poll
 let UNIVERSE = null; // Set of cohort tickers (events-room scope)
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -3170,7 +3170,6 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
         fam:   gg[m.ticker] || null,
-        vr:    num(RIB[m.ticker] && RIB[m.ticker].VOLUME && RIB[m.ticker].VOLUME.read),
         /* rvol (battery) = board_volume.session_rvol = today's REAL traded volume ÷ avg
            daily volume, computed from the ohlcv bars — NOT the dirty live_quotes.volume
            field (that carries a rolling/extended-hours number, ~3.5× inflated intraday).
@@ -3233,8 +3232,7 @@ async function fetchCompanyData(t) {
     t, name: p.name ? p.name + " · " + (p.exchange || "") : "",
     price, chg: num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change),   // FIX 2 — chg_pct from the DB, never computed
     /* tapes: d — VerdictTape wiring removed per Alan 2026-06-11 */
-    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo, structure: d.st,
-              volume: num(ribMap.VOLUME && ribMap.VOLUME.read) } },
+    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo } },   /* 2026-08-17 — Geiger VOLUME deleted by Alan; STRUCTURE unapproved */
     stats: { statsTabs: [] },
     estimates: { fc: null },
     financials: {},
@@ -3905,7 +3903,7 @@ function updateLive() {
 const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 L8 13 L12 15 L20 5"/><path d="M4 5 v14 h16" opacity=".4"/></svg>';
 /* R23 FIX 3 — 8th col MKT: per-row trading-state dot (chart label stays blank, as ever). */
 /* R26 FIX 6 — FPE col (fwd P/E) between CHG and GEIGER, sortable like the rest. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Vol×","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* R42 §3 — compact market-cap formatter: $3.1T / $412B / $8.7B / $612M
    (one decimal under 100 in-unit, none at/above).
    R49 §4 (Alan: "market cap needs commas") — the NUMERIC part is comma-grouped via
@@ -7749,8 +7747,7 @@ function geigerTabHTML(g) {
       "%;background:" + col + ";box-shadow:0 0 10px " + col + '"></div></div>' +
     famBarHTML("Trend", fam.trend, "--trend") +
     famBarHTML("Momentum", fam.momentum, "--momentum") +
-    famBarHTML("Structure", fam.structure, "--structure") +
-    famBarHTML("Volume", fam.volume, "--volume") + "</div>";   // ribbon VOLUME read
+    "</div>";   /* 2026-08-17 — Structure and Volume family gauges removed: Volume DELETED BY ALAN, Structure unapproved */
 }
 
 /* ============================================================================
@@ -11499,7 +11496,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-08-17T1205";
+window.SC_BUILD = "2026-08-17T1230";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
@@ -11883,7 +11880,7 @@ function filesWire(){
 
   /* ---- equalizer (ported from approved v2) ---- */
   var TFS=["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12h","1d","3d","1w","2w","1M"];
-  var FAMS=["TREND","MOMENTUM"]; var FAMS_ARCHIVED=["STRUCTURE","VOLUME"];   /* R55 — STRUCTURE/VOLUME dropped from the score (they are inert in the engine: structure=0, volume=count). Archived here for later restore. */
+  var FAMS=["TREND","MOMENTUM"];   /* 2026-08-17 — Geiger VOLUME family DELETED BY ALAN; STRUCTURE remains unapproved. Neither is archived for restore: there is no approved methodology for either, and a retained vocabulary entry is how a retired family quietly comes back. Raw provider volume is untouched and lives elsewhere. */
   var FRGB={TREND:"45,156,255",MOMENTUM:"162,75,255",STRUCTURE:"255,212,0",VOLUME:"255,138,0"};
   var tfH=TFS.map(function(_,i){return {x:i/(TFS.length-1),y:.55};});   // R33 — ONE handle per timeframe: drag each of the 17 independently
   var famH=FAMS.map(function(_,i){return {x:i/(FAMS.length-1),y:[.62,.55,.45,.05][i]};});
