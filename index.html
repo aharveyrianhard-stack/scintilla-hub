@@ -4840,10 +4840,17 @@ async function l0LoadData(tf) {
   const def = L0_TF_DEF.find((d) => d.k === tf) || L0_TF_DEF[1];
   const syms = L0_SECTORS.map((s) => s.t).concat([L0_BENCH]);
   try {
-    const res = await Promise.all(syms.map((sym) =>
+    /* This panel issued one legacy read per sector symbol and was measured returning HTTP 500
+       "canceling statement due to statement timeout", which is what puts 4H SERIES UNAVAILABLE on
+       screen. Equities move to the clean lane; a symbol with no Massive series keeps its owner. */
+    const l0Legacy = (sym) =>
       pg("ohlcv_history?select=timestamp,close&ticker=eq." + encodeURIComponent(sym) +
          "&tf=eq." + encodeURIComponent(tf) +
-         "&order=timestamp.desc&limit=" + def.bars)
+         "&order=timestamp.desc&limit=" + def.bars);
+    const res = await Promise.all(syms.map((sym) =>
+      (window.SC_CLEAN_READS
+        ? scCleanRows(sym, tf, def.bars).then((r) => (r === null ? l0Legacy(sym) : r))
+        : l0Legacy(sym))
         .then((rows) => ({ sym, rows: Array.isArray(rows) ? rows : [] }))
         .catch(() => ({ sym, rows: [] }))
     ));
@@ -4938,11 +4945,32 @@ async function l0MapLoad(tf, tickers, key) {
       /* values are double-quoted so a ticker carrying a reserved character
          (BRK.A, BRK-B) can never break the in.() list */
       const list = part.map((t) => '"' + String(t).replace(/"/g, "") + '"').join(",");
-      const rows = await pg("ohlcv_history?select=ticker,timestamp,close" +
-        "&ticker=in.(" + encodeURIComponent(list) + ")" +
-        "&tf=eq." + encodeURIComponent(tf) +
-        "&timestamp=gte." + cut +
-        "&order=timestamp.desc&limit=" + (part.length * per));
+      /* The batched form of this read is the one measured at HTTP 500 statement timeout across 72
+         symbols. The clean lane has no batch route by design — it serves immutable per-symbol
+         objects — so the chunk fans out per symbol instead. Each call was measured at ~120 ms
+         against ~13 s to failure for the batch, so the fan-out is cheaper than the query it
+         replaces. Any symbol with no Massive series falls back to the batched legacy read. */
+      let rows;
+      if (window.SC_CLEAN_READS) {
+        const got = await Promise.all(part.map((t) => scCleanRows(t, tf, per)));
+        const missing = part.filter((t, i) => got[i] === null);
+        rows = got.filter(Boolean).flat().filter((r) => r.timestamp >= cut);
+        if (missing.length) {
+          const mlist = missing.map((t) => '"' + String(t).replace(/"/g, "") + '"').join(",");
+          const extra = await pg("ohlcv_history?select=ticker,timestamp,close" +
+            "&ticker=in.(" + encodeURIComponent(mlist) + ")" +
+            "&tf=eq." + encodeURIComponent(tf) +
+            "&timestamp=gte." + cut +
+            "&order=timestamp.desc&limit=" + (missing.length * per)).catch(() => []);
+          rows = rows.concat(Array.isArray(extra) ? extra : []);
+        }
+      } else {
+        rows = await pg("ohlcv_history?select=ticker,timestamp,close" +
+          "&ticker=in.(" + encodeURIComponent(list) + ")" +
+          "&tf=eq." + encodeURIComponent(tf) +
+          "&timestamp=gte." + cut +
+          "&order=timestamp.desc&limit=" + (part.length * per));
+      }
       for (const row of (Array.isArray(rows) ? rows : [])) {
         const t = row.ticker, ts = +row.timestamp, cl = +row.close;
         if (!t || !isFinite(ts) || !isFinite(cl) || cl <= 0) continue;
@@ -7784,8 +7812,23 @@ async function geigerSummaryData(t) {
       return rows.map((r) => (r && r[0]) || null).filter(Boolean);
     })(),
     pg("derived_series?ticker=eq." + enc + "&tf=eq.1D&select=macd_signed,timestamp&order=timestamp.desc&limit=22").catch(() => []),
-    pg("ohlcv_history?ticker=eq." + e2 + "&tf=eq.D&select=volume,timestamp&order=timestamp.desc&limit=30").catch(() => []),
-    pg("ohlcv_history?ticker=eq." + e2 + "&tf=eq.D&select=close&order=timestamp.desc&limit=1").catch(() => []),
+    /* These two are the heaviest legacy readers on the page: the close lookup alone measured
+       1,538,655 calls and ~278 hours of cumulative database time. Both are satisfied by one
+       immutable daily object, so the second call is a cache hit on the first. */
+    (async () => {
+      if (window.SC_CLEAN_READS) {
+        const r = await scCleanRows(chFmpSym(t), "D", 30);
+        if (r !== null) return r;                    /* rows carry volume + timestamp + close */
+      }
+      return pg("ohlcv_history?ticker=eq." + e2 + "&tf=eq.D&select=volume,timestamp&order=timestamp.desc&limit=30").catch(() => []);
+    })(),
+    (async () => {
+      if (window.SC_CLEAN_READS) {
+        const r = await scCleanRows(chFmpSym(t), "D", 1);
+        if (r !== null) return r;
+      }
+      return pg("ohlcv_history?ticker=eq." + e2 + "&tf=eq.D&select=close&order=timestamp.desc&limit=1").catch(() => []);
+    })(),
     pg("operator_weights?dim=eq.timeframe&select=key,weight,enabled").catch(() => []),
     /* AREA C — board_volume per-ticker (JUST created · EMPTY now): ring1 rvol_at_time,
        ring2 cum_rvol for the 3-ring VOLUME viz. Catch-wrapped → null → awaiting rings. */
@@ -11485,7 +11528,16 @@ async function fetchChartSeries(t, range){
   const e = RTF[range] || RTF["1D"];
   let pts = [];
   if (e[0] === "D") {
-    const rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(t) + "&tf=eq.D&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
+    /* The daily view is the range every user lands on, and it was the last chart timeframe still
+       served by the legacy table — measured at 0 of 80 rows carrying a MASSIVE source, i.e. a
+       different provider from the other ten timeframes on the same widget. The clean lane now
+       derives D from the same one-minute corpus as every other timeframe, so the whole chart is
+       one provider and one basis. Non-equity tickers keep their existing owner. */
+    let rows = null;
+    if (window.SC_CLEAN_READS) rows = await scCleanRows(t, "D", e[1]);
+    if (rows === null) {
+      rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(t) + "&tf=eq.D&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
+    }
     pts = (Array.isArray(rows) ? rows : []).map(function(r){ return { d: new Date(r.timestamp*1000).toISOString(), p: +r.close }; });
   } else {
     try {
@@ -11542,7 +11594,47 @@ try {
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
 window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";   /* clean Massive history lane */
 var SC_CHART_API = window.SC_CHART_API;
-window.SC_BUILD = "2026-08-17T1445";
+
+/* CLEAN-READ SWITCH -----------------------------------------------------------------------------
+   The remaining panels that still read the legacy price table are the two Layer-0 panels, the
+   company Geiger summary and the daily chart. Those reads are why the board stalls: one query shape
+   against that table measured 1,538,655 calls and roughly 278 hours of database time, and it holds
+   a third of the connection pool, which is what starves pg_cron and takes Geiger, the ribbon timers
+   and the FMP non-equity lanes down with it.
+
+   Shipped OFF. Turn on per-browser with  localStorage.sc_clean_reads = "1"  or ?cleanreads=1, so the
+   new path can be exercised against production before it becomes the default for everyone. */
+window.SC_CLEAN_READS = (function () {
+  try {
+    if (/[?&]cleanreads=1/.test(location.search)) return true;
+    if (/[?&]cleanreads=0/.test(location.search)) return false;
+    return localStorage.getItem("sc_clean_reads") === "1";
+  } catch (_) { return false; }
+})();
+
+/* Returns rows in the SHAPE THE LEGACY CALLERS ALREADY EXPECT — timestamp in SECONDS, newest first
+   — so each call site changes by one line and nothing downstream has to be re-reasoned.
+
+   Returns null when the symbol has no derived Massive series. That is PROVIDER ROUTING, not a
+   stale-data fallback: futures, commodities, indices, rates and crypto are not Massive's lane, and
+   their owner is unchanged. It is only safe to read a 404 that way once every equity has a derived
+   series, which is why the switch is not flipped until 366/366 daily objects are verified. */
+async function scCleanRows (sym, tf, bars) {
+  try {
+    const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(sym) +
+                          "&tf=" + encodeURIComponent(tf) + "&limit=" + (bars || 200));
+    if (r.status === 404) return null;                 // not a Massive equity — caller keeps its owner
+    if (!r.ok) return [];                              // real failure: empty, never silently legacy
+    const j = await r.json();
+    const s = (j && Array.isArray(j.series)) ? j.series : [];
+    const out = [];
+    for (let i = s.length - 1; i >= 0; i--) {          // newest first, matching the old ordering
+      out.push({ ticker: sym, timestamp: Math.floor(s[i].t / 1000), close: +s[i].c, volume: +s[i].v });
+    }
+    return out;
+  } catch (_) { return []; }
+}
+window.SC_BUILD = "2026-08-17T1930";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
