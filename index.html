@@ -11448,16 +11448,40 @@ function chartSeriesCached(t, range) {
   return null;
 }
 async function fetchChartSeries(t, range){
+  /* 2026-08-17 — EQUITY CHART HISTORY NOW READS THE CLEAN MASSIVE CORPUS.
+     Was: ohlcv_history via PostgREST. That legacy table carried mixed providers, mixed bases and
+     stale derived rows, and it is being decommissioned. History now comes from the Massive chart
+     API, which serves candles derived from the verified Massive one-minute corpus:
+     provider MASSIVE, surface REST_AGGS_1M_RANGE_DERIVED, price_basis SPLIT_ADJUSTED throughout.
+     There is deliberately NO legacy fallback: a silent fall back to ohlcv_history would reintroduce
+     the mixed-basis data this change exists to remove, and a visibly empty chart is better than a
+     quietly wrong one.
+     Live price is untouched and still comes from the Massive stream; this lane is history only.
+     tf "D" keeps its existing massive_daily_bars path — the daily spine is already Massive-backed. */
   const key = t + "|" + range;
   const hit = chartCache.get(key);
   if (hit && Date.now() - hit.ts < 300000) return hit.pts;
   const RTF = {"15m":["15",200],"30m":["30",200],"1h":["60",200],"2h":["120",200],"3h":["180",200],"4h":["240",200],"6h":["6h",200],"12h":["12h",200],"1D":["D",190],"3D":["3D",260],"1W":["W",300]};
   const e = RTF[range] || RTF["1D"];
-  const rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(chFmpSym(t)) + "&tf=eq." + encodeURIComponent(e[0]) + "&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
-  let pts = (Array.isArray(rows) ? rows : []).map(function(r){ return { d: new Date(r.timestamp*1000).toISOString(), p: +r.close }; }).filter(function(q){ return isFinite(q.p) && q.p > 0; });
+  let pts = [];
+  if (e[0] === "D") {
+    const rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(t) + "&tf=eq.D&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
+    pts = (Array.isArray(rows) ? rows : []).map(function(r){ return { d: new Date(r.timestamp*1000).toISOString(), p: +r.close }; });
+  } else {
+    try {
+      const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(t) + "&tf=" + encodeURIComponent(e[0]) + "&limit=" + e[1]);
+      if (r.ok) {
+        const j = await r.json();
+        /* the API returns t in MILLISECONDS and c for close - not the seconds/close shape the
+           legacy table used. Getting this wrong silently renders 1970. */
+        pts = (j && Array.isArray(j.series) ? j.series : []).map(function(b){ return { d: new Date(b.t).toISOString(), p: +b.c }; });
+      }
+    } catch (_) { pts = []; }
+  }
+  pts = pts.filter(function(q){ return isFinite(q.p) && q.p > 0; });
   pts.sort(function(a,b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
   chartCache.set(key, { ts: Date.now(), pts: pts });
-  if (pts.length >= 2) { try { cacheSet("sc_chart_" + key, { pts: pts }); } catch (_) {} }   // cross-session chart cache
+  if (pts.length >= 2) { try { cacheSet("sc_chart_" + key, { pts: pts }); } catch (_) {} }
   return pts;
 }                                          // equity 3 s poll (REGULAR session only)
 setInterval(pollFMPAfterHours, 10000);                               // GO-LIVE FIX 1 — PRE/POST-market 10 s poll
@@ -11496,7 +11520,9 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-08-17T1230";
+window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";   /* clean Massive history lane */
+var SC_CHART_API = window.SC_CHART_API;
+window.SC_BUILD = "2026-08-17T1330";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
