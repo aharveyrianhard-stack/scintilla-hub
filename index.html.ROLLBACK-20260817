@@ -232,15 +232,8 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* R43 §2 — HORIZONTAL cohort compare strip: one narrow column per cohort, laid
    left→right most-bullish → most-bearish (the sort IS the fan). ~100px tall vs the
    ~300px the vertical fan used to eat. */
-/* A fixed 10-track grid squeezed 12+ cohorts into 32.7px columns — measured — which is
-   narrower than the word "constructive" can ever be set, so the read was truncated to
-   "constr…" in every column. Each column now has a floor of 46px and the strip scrolls
-   sideways when a scope has more cohorts than fit, rather than crushing every label. */
-.sc-cohstrip{ flex:0 0 auto; display:grid; grid-auto-flow:column;
-  grid-auto-columns:minmax(54px,1fr); gap:2px; overflow-x:auto; overscroll-behavior-x:contain;
-  padding:4px 8px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
-.sc-cohstrip::-webkit-scrollbar{ height:4px; }
-.sc-cohstrip::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:2px; }
+.sc-cohstrip{ flex:0 0 auto; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;
+  padding:6px 8px 7px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
 .sc-cohstrip__hd{ flex:0 0 auto; padding:7px 10px 3px; font-size:8px; letter-spacing:.1em;
   text-transform:uppercase; color:var(--dim); font-family:var(--mono); }
 .sc-cohstrip__col{ display:flex; flex-direction:column; align-items:center; gap:3px;
@@ -250,13 +243,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-cohstrip__lbl{ font-size:8px; letter-spacing:.06em; color:var(--dim); text-transform:uppercase;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .sc-cohstrip__col.is-active .sc-cohstrip__lbl{ color:var(--ink2); }
-/* Fixed top and bottom slots. Both are always present and always claim their height even
-   when empty, which is what keeps every bar - and therefore every centre zero line - at the
-   same vertical position across the strip. Bull fills the top slot (name outermost, value
-   just inside it, against the bar); bear fills the bottom slot in mirror order. */
-.sc-cohstrip__slot{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
-  gap:1px; height:24px; flex:0 0 24px; overflow:hidden; width:100%; }
-.sc-cohstrip__col.is-bear .sc-cohstrip__slot:last-child{ justify-content:flex-start; }
+/* label follows the ink: bull reads label-bar-value top to bottom, bear reads
+   value-bar-label, so the name always sits beside the filled half of the track. */
+.sc-cohstrip__col.is-bear .sc-cohstrip__lbl{ order:3; }
+.sc-cohstrip__col.is-bear .sc-vmini{ order:2; }
+.sc-cohstrip__col.is-bear .sc-cohstrip__val{ order:1; }
 /* vertical bipolar bar — fixed 54px track, zero line dead center, grows up (bull) /
    down (bear) to at most 50% of the track; same ±1 composite scale + glow as .sc-gmini */
 /* R46 (Alan: "needs to be much taller so that the scale is there — we need to see
@@ -268,23 +259,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    the visuals say everything." What remains is the track, the CENTRE ZERO LINE (kept:
    above it is bull, below it is bear — that one rule carries meaning) and the bar. The
    magnitude is stated once, in words, in the strip header ("scale ±0.41"). */
-.sc-vmini{ position:relative; width:15px; height:114px; background:var(--panel); border-radius:0; overflow:hidden; }
+.sc-vmini{ position:relative; width:15px; height:132px; background:var(--panel); border-radius:0; overflow:hidden; }
 .sc-vmini__mid{ position:absolute; top:50%; left:0; right:0; height:1.3px; background:var(--dim); z-index:2; }
 .sc-vmini i{ position:absolute; left:2px; right:2px; border-radius:0; max-height:50%; z-index:1; }
 .sc-cohstrip__val{ font-size:9px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
 .sc-cohstrip__col.is-empty .sc-cohstrip__val{ color:var(--mute); font-weight:400; }
-/* the read and the trend/momentum pair, mirroring the board's own columns. Fixed heights
-   so every column reserves the same space and the shared zero line across the strip stays
-   a straight line whether or not a given cohort has a reading yet. */
-.sc-cohstrip__read{ display:block; width:100%; max-width:100%; height:11px; line-height:11px;
-  font-family:var(--mono); font-size:7px; letter-spacing:0; text-align:center;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mute); }
-.sc-cohstrip__div{ margin-left:2px; color:var(--warn,#e0a24a); }
-.sc-cohstrip__tm{ display:flex; align-items:center; justify-content:center; gap:1px; height:11px;
-  width:100%; max-width:100%; overflow:hidden; font-family:var(--mono); font-size:7px;
-  font-variant-numeric:tabular-nums; white-space:nowrap; }
-.sc-cohstrip__tm i{ font-style:normal; color:var(--dim); opacity:.7; }
-.sc-cohstrip__col.is-empty .sc-cohstrip__tm b{ color:var(--mute); }
 /* 5×2 wrap — never scrolls sideways. R50 §5 RAISED this breakpoint 640 → 820 (the
    authoritative rule now lives in the R50 small-screen block further down the sheet);
    this one is kept as the floor so the wrap can never be lost. */
@@ -342,9 +321,6 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   transform:perspective(600px); transform-style:preserve-3d;
   transition:box-shadow .12s linear, border-color .12s linear; }
 .sc-l0card.is-hot{ border-color:var(--crk); box-shadow:0 0 0 1px var(--crk), 0 10px 26px rgba(0,0,0,.55); z-index:3; }
-/* the card is grain-painted now (full-strength --bull/--bear dots), so each label sits
-   on a plate of the panel's own dark — same rule as the heat grid and the canvas maps */
-.sc-l0card__t, .sc-l0card__c, .sc-l0card__m{ background:rgba(6,8,12,.93); border-radius:2px; padding:0 4px; }
 .sc-l0card__t{ font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--ink); }
 .sc-l0card__c{ font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--ink2); font-variant-numeric:tabular-nums; }
 .sc-l0card__m{ font-family:var(--mono); font-size:8px; letter-spacing:.06em; color:var(--dim); font-variant-numeric:tabular-nums; }
@@ -1361,27 +1337,6 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    "correct" this back to 0 in a later pass. */
 .sc-heattile{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   border-radius:5px; cursor:pointer; overflow:hidden; padding:2px; border:1px solid rgba(255,255,255,.07); min-width:0; }
-.sc-heattile{ background:var(--panel); }
-/* the level. Pure --bull / --bear, rising from the bottom; its HEIGHT is the move size.
-   Alan: "I want my fucking green and red, only those tones" - so the colour is a constant
-   and the magnitude is this height. */
-.sc-heattile__fill{ position:absolute; left:0; right:0; bottom:0; z-index:0; display:block;
-  transition:height .35s cubic-bezier(.32,0,.18,1); }
-/* Alan: "super nice in terms of colours, but bad in terms of labels."
-   The grain paints dots of full-strength --bull/--bear THROUGH the label, and a solid
-   tile at a big move is a bright field under light text. Either way the reading dropped
-   out. A tight dark halo — not a box, not a plate — keeps the label legible over every
-   state (sparse dots, dense dots, solid colour) without putting a second tone on screen. */
-/* Alan: "super nice in terms of colours, but bad in terms of labels."
-   The grain paints dots of full-strength --bull/--bear THROUGH the label, and a solid
-   tile at a big move is a bright field under light text — either way the reading dropped
-   out, and the %chg line suffered worst because it is the smaller of the two. A soft halo
-   was not enough against dots at full strength, so each label now sits on its own chip of
-   the PANEL's own dark. No second tone enters the picture; the tile keeps saying exactly
-   --bull or exactly --bear, and the number stays readable at every density. */
-.sc-heattile__t, .sc-heattile__c{ position:relative; z-index:1;
-  background:rgba(6,8,12,.93); border-radius:2px; padding:0 4px;
-  text-shadow:0 1px 2px rgba(4,6,10,.9); }
 .sc-heattile:hover{ outline:1px solid var(--crk); outline-offset:1px; }
 /* R42 §1 — .lg/.md span rules RETIRED (uniform squares); heatmapHTML no longer
    assigns these classes. Kept as harmless no-ops in case of stale cached markup. */
@@ -1390,12 +1345,8 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-heattile__t{ display:block; max-width:100%; text-align:center; font-family:var(--mono); font-weight:700;
   font-size:clamp(11px, calc(var(--htile,105px) * .155), 20px); letter-spacing:.03em; color:var(--ink);
   line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-/* the element-level opacity used to soften this line is gone: it also thinned the dark
-   chip behind it to ~0.63, which is why the %chg stayed unreadable on the bright green
-   tiles after the chip went in. The softening now lives in the COLOUR, so the chip
-   behind it keeps its full strength. */
 .sc-heattile__c{ display:block; text-align:center; font-family:var(--mono);
-  font-size:clamp(9px, calc(var(--htile,105px) * .105), 14px); color:var(--ink2);
+  font-size:clamp(9px, calc(var(--htile,105px) * .105), 14px); color:var(--ink); opacity:.85;
   line-height:1.15; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .sc-heatgrid__empty{ padding:24px; text-align:center; color:var(--dim); font-family:var(--mono); font-size:9px; }
 @media(max-width:640px){ .sc-heatgrid{ grid-template-columns:repeat(4,1fr); } }   /* fallback only — sizeHeatTiles() overrides inline with 4 cols at ≤640px */
@@ -2720,13 +2671,7 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 
 <!-- 1.1 StampLine -->
 <div class="sc-stamp">
-  <!-- Equities are served by MASSIVE (live socket + Massive-derived chart history), so the old
-       "live FMP" stamp misattributed the whole cockpit to a provider that no longer supplies any
-       equity price or OHLCV. FMP remains valid for its own lanes — fundamentals, analysts, news,
-       economic events, and the six exact-symbol non-equity instruments — but naming it here read as
-       the equity feed. The label is now driven by real feed state (see setFeedStamp) rather than
-       hard-coded, so it can never again claim a provider the Hub is not actually reading. -->
-  <span>SCINTILLA · COCKPIT — clickable · <span id="scFeedStamp">equities · MASSIVE</span></span>
+  <span>SCINTILLA · COCKPIT — clickable · live FMP</span>
   <span class="sc-stamp__hint">click the master tabs &amp; cohorts</span>
 </div>
 
@@ -2978,7 +2923,7 @@ const cryptoSet = new Set(Object.values(CB));
 
 let PRICES   = {};   // ticker → latest live price (WS / FMP / realtime — wins over DB pull)
 let prevClose = {};  // ticker → SERVED live_quotes.prev_close (FIX 2 — the ONLY chg recompute base for live patches)
-let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…} } (ribbon_signals tf=D). VOLUME deleted by Alan 2026-08-17.
+let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…}, VOLUME:{…} } (ribbon_signals tf=D)
 let eqSyms   = [];   // equity symbols for the 3 s FMP batch poll
 let UNIVERSE = null; // Set of cohort tickers (events-room scope)
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -3075,10 +3020,6 @@ function fpeVal(t, price) {
 }
 
 async function fetchBoardRows(cohort = "ALL", fav = []) {
-  /* the membership map decides which rows belong to this cohort, so wait for it rather than
-     racing it - a board that renders first would silently fall back to tickers.cohort, which
-     is the split that produced a Geiger for a cohort with no rows in it. */
-  try { await loadCohSets(); } catch (_) { /* fallback path below still works */ }
   /* R39 — COMPARE fix: this pull is now ALWAYS unscoped (every ticker's cohort tag,
      not just the active one) so cohortCompareRows() can read every cohort's
      membership regardless of which single cohort tab is on screen. Cheap: it's just
@@ -3086,8 +3027,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      narrows the BOARD's own rows to the active cohort client-side. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
     pg("cohorts?select=ticker,cohort"),
-    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close"),   // 2026-08-17: volume REMOVED. live_quotes has no volume column and PostgREST rejects the WHOLE select when one column is absent, which killed the entire main board. RVOL stays honestly blank until a real volume source is wired.
-    pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"),   // 2026-08-17: structure REMOVED. The column no longer exists (table now has volatility/conviction/core/composite). Same PostgREST all-or-nothing failure.
+    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,volume"),   // FIX 2 — DB serves chg_pct + prev_close
+    pg("composite_staged?select=ticker,composite,trend,momentum,structure,updated_ts&tf=eq.D&order=updated_ts.desc"),
     pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
     pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"),
     /* R26 FIX 6 — ONE batch: every future annual estimate row, first per ticker kept client-side */
@@ -3137,26 +3078,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   const scopeAll = cohort === "ALL" || cohort === "FAV";
   let rows = members
     .filter((m) => !seen.has(m.ticker) && seen.add(m.ticker))
-    /* ★ ONE SOURCE FOR COHORT MEMBERSHIP. Alan, looking at the live hub: "cohort compare says
-       AI POWERTRAIN, red Geiger -0.10. There are no companies in it. How are we getting a
-       Geiger without any tickers?"
-       Because the STRIP read ticker_membership while the BOARD read tickers.cohort, and every
-       cohort edit went to membership only. So the strip averaged 8 real names and the board
-       filtered on a home_cohort none of them carried - a reading with nothing behind it.
-       MEASURED at the time: AI_POWERTRAIN strip 8 / board 0, AI_SOFTWARE 13 / 7,
-       THEMATIC 23 / 32, MACRO 21 / 26.
-       The board now asks the SAME map the strip asks. tickers.cohort stays as the home cohort
-       for anything that still wants it, but it no longer decides what you see. */
-    .filter((m) => {
-      if (scopeAll) return true;
-      /* ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but membership is
-         keyed by sector name (STAPLES) - so the board found nothing and every sector looked
-         empty. Alan: "XLP empty. All of the sectors are empty. They have no tickers."
-         cohKey() resolves an ETF ticker to its sector key before the lookup. */
-      const k = cohKey(cohort);
-      if (COHSETS && COHSETS[k]) return COHSETS[k].has(m.ticker);
-      return m.cohort === cohort;                    // fallback if membership has not loaded
-    })
+    .filter((m) => scopeAll || m.cohort === cohort)   // R39 — members is now UNSCOPED (always full universe); narrow to the active cohort client-side, same result the old server-side filter gave
     .filter((m) => gg[m.ticker])   // FIX 1 — board universe = composite_staged tf=D only (drops DX/NKD/NQ/TNX/TYX/VIX proxies with no pipeline data)
     .map((m) => {
       const dbPx = num(px[m.ticker] && px[m.ticker].price);
@@ -3176,6 +3098,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
         fam:   gg[m.ticker] || null,
+        vr:    num(RIB[m.ticker] && RIB[m.ticker].VOLUME && RIB[m.ticker].VOLUME.read),
         /* rvol (battery) = board_volume.session_rvol = today's REAL traded volume ÷ avg
            daily volume, computed from the ohlcv bars — NOT the dirty live_quotes.volume
            field (that carries a rolling/extended-hours number, ~3.5× inflated intraday).
@@ -3238,7 +3161,8 @@ async function fetchCompanyData(t) {
     t, name: p.name ? p.name + " · " + (p.exchange || "") : "",
     price, chg: num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change),   // FIX 2 — chg_pct from the DB, never computed
     /* tapes: d — VerdictTape wiring removed per Alan 2026-06-11 */
-    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo } },   /* 2026-08-17 — Geiger VOLUME deleted by Alan; STRUCTURE unapproved */
+    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo, structure: d.st,
+              volume: num(ribMap.VOLUME && ribMap.VOLUME.read) } },
     stats: { statsTabs: [] },
     estimates: { fc: null },
     financials: {},
@@ -3310,38 +3234,7 @@ const COHORTS = [
   ["AI HW", "AI_HARDWARE"], ["AI SW", "AI_SOFTWARE"], ["MEGACAP", "MEGACAP"],
   ["BLUE CHIP", "BLUE_CHIP"], ["GROWTH", "GROWTH"], ["CRYPTO", "CRYPTO"], ["INTL", "INTL"],
   ["MACRO", "MACRO"], ["INDEXES", "INDEXES"], ["THEMATIC", "THEMATIC"],
-  /* METALS — Alan: "I would even have a metals cohort... there is a rotation between the
-     actual commodity and the lower level." The cohort exists to make that rotation legible:
-     the metal (GLD/SLV/GCUSD/SIUSD, moved out of MACRO where they sat beside bonds and the
-     dollar), the miner ETFs (GDX/GDXJ/SIL/SILJ/COPX), the royalty names that usually turn
-     first (WPM/FNV/RGLD), and the miners themselves. 19 members, every symbol quoted on FMP
-     before it was written. */
-  ["METALS", "METALS"],
-  /* The five thin sectors got cohort tabs earlier today, before Alan saw the result and
-     called the structure: "cohorts and sectors are different, things are bleeding through."
-     They are removed for the same reason as the other six - every sector lives on the
-     SECTORS side of the compare toggle, which now reads real constituents. The tickers
-     themselves stay; only the duplicate tab goes. */
-  /* AI POWERTRAIN — Alan: "the AI powertrain, I would like to have as a cohort. That's
-     exactly what I've been trying to get at for a while, I just never got around to it."
-     The electricity behind the datacenter: the generators selling into hyperscaler demand
-     (CEG, VST), the people building the generating kit (GEV), the reactor developers
-     (OKLO, SMR), the fuel (CCJ), the fuel cells sited at the datacenter (BE) and the
-     storage (EOSE). They keep their factual sectors at the same time - CEG and VST are
-     UTILITIES, GEV is INDUSTRIAL - which is exactly what two dimensions are for.
-     NextEra came OUT: Alan, "NextEra Energy is a utility completely", and XLU agrees. */
-  ["AI POWER", "AI_POWERTRAIN"],
-];
-/* ★ THE SECTORS ARE NOT COHORT TABS. Alan, on seeing 22 of them: "the fact that we have
-   twenty two tabs now just says to me that we need a different structure. Cohorts and
-   sectors are different. Things are bleeding through."
-   He is right, and it was my doing: the compare strip has ALWAYS had a COHORTS | SECTORS
-   toggle, so putting the eleven sectors into COHORTS duplicated a view that already
-   existed. The eleven have been removed from this list. Nothing is lost - the sector
-   membership built this session stays in ticker_membership and now feeds the SECTORS side
-   of that toggle, which is a real upgrade: the sector read is computed from its actual
-   constituents instead of from the ETF's own price. Cohorts are Alan's, sectors are fact,
-   and each has its own strip. */   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
+];   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
 const CO_TABS = ["GEIGER","CHART","STATS","ESTIMATES","FINANCIALS","NEWS","SOCIAL","EVENTS","READ"];
 const READ_TABS = ["BUSINESS", "VERDICT", "CATALYSTS", "WATCH"];   // R48 — Alan: business first, left-most
 
@@ -3909,7 +3802,7 @@ function updateLive() {
 const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 L8 13 L12 15 L20 5"/><path d="M4 5 v14 h16" opacity=".4"/></svg>';
 /* R23 FIX 3 — 8th col MKT: per-row trading-state dot (chart label stays blank, as ever). */
 /* R26 FIX 6 — FPE col (fwd P/E) between CHG and GEIGER, sortable like the rest. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Vol×","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* R42 §3 — compact market-cap formatter: $3.1T / $412B / $8.7B / $612M
    (one decimal under 100 in-unit, none at/above).
    R49 §4 (Alan: "market cap needs commas") — the NUMERIC part is comma-grouped via
@@ -4100,37 +3993,11 @@ function cohortGeigerHTML() {
    single cohort is active — see fetchBoardRows). Sorted bullish → bearish, i.e.
    literally green at the top fading to red at the bottom. */
 function cohortCompareRows() {
-  /* Buckets are built from MEMBERSHIP, not from each ticker's single home cohort.
-     COHORT_OF is one cohort per ticker, so CAT (home BLUE_CHIP) never landed in
-     INDUSTRIAL and every sector tab read "—" while showing 39 members in the DB.
-     COHSETS is cohort -> Set(tickers) built from ticker_cohorts, which is now a view over
-     ticker_membership and therefore carries BOTH kinds - Alan's editorial cohorts and the
-     factual sector membership. A name counts in every group it genuinely belongs to, which
-     is the whole point of "things can belong to multiple cohorts and sectors".
-     COHORT_OF stays as the fallback so a failed COHSETS pull degrades to the old behaviour
-     rather than to an empty strip. */
   const buckets = {};
-  if (COHSETS) {
-    /* Only the DECLARED cohorts. COHSETS is built from ticker_cohorts, which carries the
-       sector membership too, so iterating its keys leaked MATERIALS, UTILITIES, STAPLES,
-       REAL_ESTATE and COMMS straight back into the cohort strip - 17 tabs where there
-       should be 12. That is the bleed-through Alan named; the sectors have their own
-       toggle and belong only there. */
-    for (const [, key] of COHORTS) {
-      const set = COHSETS[key];
-      if (!set) continue;
-      for (const t of set) {
-        const v = GCOMP[t];
-        if (v == null) continue;
-        (buckets[key] = buckets[key] || []).push(v);
-      }
-    }
-  } else {
-    for (const t in COHORT_OF) {
-      const key = COHORT_OF[t], v = GCOMP[t];
-      if (v == null) continue;
-      (buckets[key] = buckets[key] || []).push(v);
-    }
+  for (const t in COHORT_OF) {
+    const key = COHORT_OF[t], v = GCOMP[t];
+    if (v == null) continue;
+    (buckets[key] = buckets[key] || []).push(v);
   }
   return COHORTS.map(([label, key]) => {
     const vals = buckets[key] || [];
@@ -4174,9 +4041,7 @@ function cohortCompareHTML() {
    fallback presentation if the strip ever has to be reverted. */
 const COH_ABBR = { AI_HARDWARE:"AI HW", AI_SOFTWARE:"AI SW", MEGACAP:"MEGA", BLUE_CHIP:"BLUE",
                    GROWTH:"GROWTH", CRYPTO:"CRYPTO", INTL:"INTL", MACRO:"MACRO",
-                   INDEXES:"INDEX", THEMATIC:"THEME", METALS:"METALS",
-                   MATERIALS:"MATRLS", UTILITIES:"UTILS", STAPLES:"STAPLE",
-                   REAL_ESTATE:"REALES", COMMS:"COMMS", AI_POWERTRAIN:"AI PWR" };
+                   INDEXES:"INDEX", THEMATIC:"THEME" };
 /* R46 added quarter-scale gridlines to this track. R50 §1 REMOVES them (Alan: "I don't
    like those lines, that shading in the tickers — it's not necessary, the visuals say
    everything"). The CENTRE ZERO LINE stays: it is the one rule that carries meaning —
@@ -4214,71 +4079,6 @@ function cohortCompareSpan(list) {
   }
   return Math.max(L0_CMP_MIN_SPAN, m);
 }
-/* ★ THE READ, DEFINED EXACTLY ONCE.
-   Alan: "we can't have two formulas, two definitions, two anything" — and then, on the
-   compare strip: "the behaviour of the cohort board is not being mirrored in the cohort
-   and sector compare in terms of the labels. This is the easiest area in which to express
-   the Geiger in motion."
-   It was not mirrored because the words only existed inside the board's row painter. They
-   live here now, and BOTH the board rows and the compare strip call this one function, so
-   a cohort reading "pullback" on the strip means precisely what "pullback" means on a row.
-
-   Trend is a SLOW, daily-locked measure; momentum is FAST (the equalizer weights 6h/12h/1D).
-   The two disagreeing is not noise, it is the most informative state on the board:
-     strong trend + weak momentum  -> a pullback inside an uptrend, not a top
-     weak trend  + strong momentum -> turning up before the structure confirms */
-function scinRead(T, M) {
-  if (T == null || !isFinite(T)) return { txt: "—", col: "var(--mute)", div: false };
-  if (M == null || !isFinite(M)) return { txt: "trend only", col: "var(--dimmer,#5a6270)", div: false };
-  /* ◆ = trend and momentum disagree by more than 0.60, or point opposite ways. A slow
-     uptrend with a fast pullback lights up; both engines running does not. */
-  const div = Math.abs(T - M) > 0.60 || (T > 0) !== (M > 0);
-  let txt, col;
-  if (T >= 0.5 && M >= 0.4)            { txt = "aligned bull"; col = "var(--bull)"; }
-  else if (T <= -0.5 && M <= -0.4)     { txt = "aligned bear"; col = "var(--bear)"; }
-  else if (T >= 0.4 && M <= -0.15)     { txt = "pullback";     col = "var(--warn,#e0a24a)"; }
-  else if (T <= -0.2 && M >= 0.35)     { txt = "turning up";   col = "var(--warn,#e0a24a)"; }
-  else if (Math.abs(T) < 0.25 && M >= 0.5) { txt = "mom leads"; col = "var(--warn,#e0a24a)"; }
-  else if (T >= 0.5 && Math.abs(M) < 0.2)  { txt = "stalling";  col = "var(--warn,#e0a24a)"; }
-  else if (T >= 0.3 && M >= 0)         { txt = "constructive"; col = "var(--bull)"; }
-  else if (T <= -0.3 && M <= 0)        { txt = "broken";       col = "var(--bear)"; }
-  else                                 { txt = "mixed";        col = "var(--mute)"; }
-  return { txt: txt, col: col, div: div };
-}
-/* mean trend and mean momentum for one group, off the SAME per-ticker store the board
-   paints from (window.SCIN_TM, published by the board's trend/mom loader). Returns nulls
-   rather than zeros when the store has not loaded, so the strip says "—" instead of
-   inventing a neutral reading. */
-function scinGroupTM(tickers) {
-  const TM = window.SCIN_TM;
-  if (!TM || !tickers || !tickers.length) return { tr: null, mo: null, n: 0 };
-  let st = 0, sm = 0, nt = 0, nm = 0;
-  for (const t of tickers) {
-    const d = TM[t]; if (!d) continue;
-    const a = num(d.tr), b = num(d.mo);
-    if (a != null && isFinite(a)) { st += a; nt++; }
-    if (b != null && isFinite(b)) { sm += b; nm++; }
-  }
-  return { tr: nt ? st / nt : null, mo: nm ? sm / nm : null, n: nt };
-}
-/* the ticker list behind one strip column — the same membership the column's mean is
-   built from, so the read can never describe a different set than the bar does */
-function scinGroupTickers(key) {
-  if (typeof COHSETS !== "undefined" && COHSETS) {
-    const direct = COHSETS[key];
-    if (direct) return Array.from(direct);
-    /* SECTORS mode keys the column by its SPDR ticker (XLB), membership by name (MATERIALS) */
-    if (typeof SPDR_TO_SECTOR !== "undefined" && SPDR_TO_SECTOR[key] && COHSETS[SPDR_TO_SECTOR[key]]) {
-      return Array.from(COHSETS[SPDR_TO_SECTOR[key]]);
-    }
-  }
-  if (typeof COHORT_OF !== "undefined") {
-    const out = [];
-    for (const t in COHORT_OF) if (COHORT_OF[t] === key) out.push(t);
-    return out;
-  }
-  return [];
-}
 function cohortCompareStripHTML() {
   const list = cohortCompareRows();
   const span = cohortCompareSpan(list);
@@ -4286,75 +4086,23 @@ function cohortCompareStripHTML() {
     const lbl = r.short || COH_ABBR[r.key] || r.label;   /* r.short = SPDR ticker in SECTORS mode */
     const ttl = r.full || r.label;
     if (r.mean == null) {
-      /* same three-part skeleton, so a column with no data does not shift its neighbours' bars */
       return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
-        '<span class="sc-cohstrip__slot"><span class="sc-cohstrip__lbl">' + esc(lbl) + '</span>' +
-          '<span class="sc-cohstrip__val">—</span></span>' +
-        vminiHTML(null, span) +
-        '<span class="sc-cohstrip__slot"></span>' +
-        /* the empty column reserves the read and trend/mom rows too, so a column with no
-           data cannot shift its neighbours' bars off the shared zero line */
-        '<span class="sc-cohstrip__read">—</span><span class="sc-cohstrip__tm"><b>—</b><i>/</i><b>—</b></span>' +
-        "</button>";
+        '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" + vminiHTML(null, span) +
+        '<span class="sc-cohstrip__val">—</span></button>';
     }
     const color = r.mean >= 0 ? "var(--bull)" : "var(--bear)";
     /* Alan: "the green label should be at the top of the green and the red labels at the
        bottom of the red." The bar is a centre-zero track: bull ink rises above the middle,
        bear ink falls below it. is-bear flips the column order so the label always sits on
        the side the ink is actually on, instead of floating above empty track. */
-    /* Alan: "names at the top and bottom, and then inside of those, the labels at the top
-       and bottom." So the NAME sits on the outer edge of the side the ink is on, with the
-       VALUE just inside it, next to the bar.
-       Both slots are always rendered and always reserve their height even when empty. That
-       is the whole trick: the bar therefore sits at an identical vertical position in every
-       column, so the centre zero lines still form one straight line across the strip. Move
-       the bar itself and the fan stops being a fan. */
-    const bull = r.mean >= 0;
-    const name = '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>";
-    const val  = '<span class="sc-cohstrip__val" style="color:' + color + '">' +
-                 (bull ? "+" : "") + r.mean.toFixed(2) + "</span>";
-    /* ★ THE SAME READ THE BOARD SHOWS, ON THE SAME GROUP.
-       Trend and momentum are averaged over exactly the tickers this column's bar is built
-       from, then passed through scinRead() — the one function the board rows also call.
-       So "pullback" under INDUSTRIAL means what "pullback" means on a row, and the ◆ fires
-       on the identical disagreement rule. This is the strip mirroring the board, which is
-       what Alan asked for and did not get. */
-    const g = scinGroupTM(scinGroupTickers(r.key));
-    const rd = scinRead(g.tr, g.mo);
-    const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
-      : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
-        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers";
-    const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
-      esc(rd.txt) + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
-    /* two decimals plus signs is ~40px of text in a ~45px column and the numbers collided.
-       The sign is redundant here — the colour already carries it, in the same two tones as
-       everywhere else — so the pair reads as bare magnitudes and fits. */
-    const tmNum = (v) => (v == null ? "—" : Math.abs(v).toFixed(2));
-    const tmTag = '<span class="sc-cohstrip__tm" title="' + esc(tmTitle) + '">' +
-      '<b style="color:' + ((g.tr ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.tr) + "</b>" +
-      '<i>/</i>' +
-      '<b style="color:' + ((g.mo ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.mo) + "</b></span>";
-
-    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
-      '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
+    return '<button class="sc-cohstrip__col' + (r.mean < 0 ? " is-bear" : "") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+      '<span class="sc-cohstrip__lbl">' + esc(lbl) + "</span>" +
       vminiHTML(r.mean, span) +
-      '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
-      readTag + tmTag +
+      '<span class="sc-cohstrip__val" style="color:' + color + '">' + (r.mean >= 0 ? "+" : "") + r.mean.toFixed(2) + "</span>" +
     "</button>";
   }).join("");
-  /* ★ THE TOGGLE IS PART OF THE RENDER NOW. It used to be appended afterwards by cmpToggle()
-     and restored by a MutationObserver, so every time the page rebuilt this strip the
-     COHORTS|SECTORS control VANISHED until the next housekeeping tick - a navigation control
-     blinking out for a second or more. Rendering it inline means there is no gap to restore.
-     Clicks are delegated at document level (see the gwxcmp handler), so nothing needs
-     re-binding either. */
-  const cmpBtns = '<span class="gwx-cmp" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "COHORTS" ? " is-on" : "") +
-      '" data-gwxcmp="COHORTS">COHORTS</button>' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" ? " is-on" : "") +
-      '" data-gwxcmp="SECTORS">SECTORS</button></span>';
   return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
-           span.toFixed(2) + cmpBtns + "</div>" +
+           span.toFixed(2) + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip">' + cols + "</div>";
 }
 function boardPanelHTML() {
@@ -4496,94 +4244,19 @@ let LEFT_HEAT = false;
    no hardcoded dollar thresholds); color = chg%, capped at +/-5% for full saturation
    (typical heatmap convention), tickers with no market_cap on file fall to the smallest
    tier rather than being dropped (honest — still shown, just not oversized on a guess). */
-/* ★ ONLY TWO COLOURS. Alan, four times: "I want my fucking green and red. Only those tones."
-   Both earlier attempts missed the point in the same way.
-     Attempt 1 used rgba() over a blue-black ground, which composited into murky dark greens.
-     Attempt 2 scaled the RGB triple, which held the hue exactly - but a dark green and a
-     bright green are still two tones, which is still not what he asked for.
-   The error both times was putting MAGNITUDE IN THE COLOUR. It does not belong there.
-
-   The colour is now a constant: exactly --bull or exactly --bear, the values the Geiger bars
-   paint with, never modified. Magnitude is HOW MUCH OF THE TILE IS FILLED - a level rising
-   from the bottom, the same language the Geiger bar already speaks. A 3% mover is a nearly
-   full tile of pure Geiger green; a 0.1% mover is a sliver of the identical green.
-   One green, one red; the size of the move is a height, not a shade. */
-let HEAT_RGB = null;
-function heatRGB() {
-  if (HEAT_RGB) return HEAT_RGB;
-  const cs = getComputedStyle(document.documentElement);
-  const toRGB = (hex, fb) => {
-    const h = (hex || "").trim().replace("#", "");
-    if (!/^[0-9a-fA-F]{6}$/.test(h)) return fb;
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)].join(",");
-  };
-  HEAT_RGB = { bull: toRGB(cs.getPropertyValue("--bull"), "0,255,163"),
-               bear: toRGB(cs.getPropertyValue("--bear"), "255,45,85") };
-  return HEAT_RGB;
-}
-let HEAT_SCALE = 2;
-function heatSetScale(values) {
-  const a = (values || []).map((v) => Math.abs(num(v) ?? 0)).filter((v) => isFinite(v) && v > 0).sort((x, y) => x - y);
-  if (!a.length) { HEAT_SCALE = 2; return HEAT_SCALE; }
-  const p85 = a[Math.min(a.length - 1, Math.floor(a.length * 0.85))];
-  HEAT_SCALE = Math.max(0.4, Math.min(8, p85));
-  return HEAT_SCALE;
-}
-/* ★ HOW THE HEAT IS EXPRESSED — two modes, because Alan wanted the first one and I kept
-   trying to solve a problem he did not have.
-     FILL  (default) - the whole square is the Geiger colour, and OPACITY carries the move.
-                       Alan: "my idea was magnitude to show up in the opacity. Then you were
-                       saying that opacity makes it darker, but no - it's just a darker
-                       square." Exactly. Over a dark ground a lower opacity DOES read darker
-                       and that is fine; it is the same colour, more see-through, the way a
-                       TradingView line is made more transparent. What was actually wrong the
-                       first time was the RANGE: ordinary moves sat at 0.05-0.20, so the grid
-                       looked washed out rather than see-through. It now runs 0.22 to 1.00.
-     LEVEL           - the square holds a rising level of the pure colour at full strength.
-                       Built while chasing the wrong idea; Alan: "it's not bad, I'd save this
-                       type of view." Kept as a mode rather than thrown away.
-   Either way the HUE is a constant: exactly --bull or exactly --bear, never recomputed. */
-let HEAT_MODE = "GRAIN";
 function heatColorChg(c) {
   const v = num(c);
   if (v == null) return "rgba(140,140,160,.10)";
-  const rgb = v >= 0 ? heatRGB().bull : heatRGB().bear;
-  if (HEAT_MODE !== "FILL") return "rgb(" + rgb + ")";       /* GRAIN and LEVEL: full strength */
-  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
-  const a = 0.22 + Math.pow(r, 0.55) * 0.78;
-  return "rgba(" + rgb + "," + a.toFixed(3) + ")";
+  const a = 0.12 + Math.min(1, Math.abs(v) / 5) * 0.6;
+  return v >= 0 ? "rgba(0,255,163," + a.toFixed(2) + ")" : "rgba(255,45,85," + a.toFixed(2) + ")";
 }
-/* ★ GRAIN — Alan: "I'm fine with it going darker by opacity, by that the COLOURS MIX, not
-   that it just goes darker... I don't know if you want to make it like a grainy see-through."
-   That is the idea both of my earlier attempts were groping for. Flat alpha does not mix
-   anything: it just dims one colour toward the ground behind it, which is why every quiet
-   tile read as a darker square rather than a lighter green.
-   Grain does mix, the way a halftone does. The tile is painted with DOTS of the Geiger
-   colour at FULL strength, and the size of the move sets how big the dots are. Small move =
-   fine sparse grain over the dark panel. Big move = the dots swell until they merge into a
-   solid sheet of pure --bull or --bear. Every coloured pixel on screen is exactly the Geiger
-   colour at every level; only how much of the surface it covers changes.
-   Returns a CSS background shorthand: a dot grid, or a solid fill once the dots would meet. */
-function heatGrain(c) {
-  const v = num(c);
-  if (v == null) return "transparent";
-  const rgb = "rgb(" + (v >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
-  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
-  const CELL = 5;                                  // px between dot centres
-  const rad = 0.55 + Math.pow(r, 0.5) * 3.15;      // 0.55px sparse -> 3.7px, past the point they merge
-  if (rad >= 3.55) return rgb;                     // dots would overlap completely: just paint it solid
-  return "radial-gradient(circle at center, " + rgb + " " + rad.toFixed(2) + "px, transparent " +
-         (rad + 0.5).toFixed(2) + "px) 0 0 / " + CELL + "px " + CELL + "px";
-}
-/* how much of the tile that colour occupies: 8% for nothing, 100% for the biggest move on
-   screen. Gamma 0.55 so ordinary moves are still readable rather than all hugging the floor. */
-function heatFillPct(c) {
-  const v = num(c);
-  if (v == null) return 0;
-  if (HEAT_MODE !== "LEVEL") return 100;         /* FILL and GRAIN both cover the whole square */
-  const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
-  return Math.round((0.08 + Math.pow(r, 0.55) * 0.92) * 100);
-}
+/* R49 §2 — `chgOf` is the ONLY addition: an optional accessor for the value a tile is
+   coloured and labelled by. Called with no argument (the standalone #133 heat view,
+   every pre-R49 call site) it falls back to the board row's session %chg, so the grid
+   is byte-identical to before. Layer 0's MAP passes l0MapChg, which returns the
+   selected timeframe's % change when the batched ohlcv pull has the bars for that
+   ticker and the session %chg when it does not. Nothing else about the renderer —
+   the cap-ordering, the tile markup, the 5px corners, sizeHeatTiles() — moved. */
 function heatmapHTML(chgOf) {
   const chgAt = (typeof chgOf === "function") ? chgOf : (r) => num(r.c);
   const all = shownRows();
@@ -4595,12 +4268,9 @@ function heatmapHTML(chgOf) {
   const n = byCap.length;
   const rankOf = {}; byCap.forEach((r, i) => { rankOf[r.t] = i; });
   const rows = all.slice().sort((a, b) => (rankOf[a.t] ?? n) - (rankOf[b.t] ?? n));
-  heatSetScale(rows.map(chgAt));        /* full opacity = the biggest move actually on screen */
   const tiles = rows.map((r) => {
     const cv = chgAt(r);
-    return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) + '">' +
-      '<i class="sc-heattile__fill" style="height:' + heatFillPct(cv) + '%;background:' +
-        (HEAT_MODE === "GRAIN" ? heatGrain(cv) : heatColorChg(cv)) + '"></i>' +
+    return '<div class="sc-heattile" id="ht_' + esc(r.t) + '" style="background:' + heatColorChg(cv) + '" data-act="row" data-t="' + esc(r.t) + '">' +
       '<span class="sc-heattile__t">' + esc(r.t) + "</span>" +
       '<span class="sc-heattile__c" id="htc_' + esc(r.t) + '">' + (cv != null && isFinite(cv) ? fmtC(cv) : "—") + "</span>" +
     "</div>";
@@ -4664,11 +4334,8 @@ function wireHeatSizing() {
 }
 function heatHeadHTML() {
   return '<div class="sc-heathead">' +
-    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · ' +
-      (HEAT_MODE === "FILL" ? "opacity" : HEAT_MODE === "GRAIN" ? "grain density" : "level") + ' = %chg</span>' +
+    '<span class="sc-heathead__lbl">HEATMAP · <b>' + esc(S.tq ? "search" : S.coh) + '</b> · sorted by mkt cap · color = %chg</span>' +
     '<span class="sc-heathead__ctrls">' +
-      '<span class="sc-heatbtn' + (HEAT_MODE === "FILL" ? " on" : "") + '" data-act="heatmode" data-mode="FILL" title="whole square, opacity carries the move">FILL</span>' +
-      '<span class="sc-heatbtn' + (HEAT_MODE === "LEVEL" ? " on" : "") + '" data-act="heatmode" data-mode="LEVEL" title="rising level of full-strength colour">LEVEL</span>' +
       '<span class="sc-heatbtn on" data-act="heattoggle" title="back to single-ticker view">HEAT ▸ OFF</span>' +
       SECFS_BTN0 +
     "</span>" +
@@ -5186,9 +4853,8 @@ function renderL0Rel() {
    paint on demand. pointer:coarse → no listeners at all, plain static grid. */
 /* R49 §1 — these four are now MODES of the MAP tab, not a tab of their own, and GRID
    (the untouched heatmap renderer) joins them as the default. Five modes, one room. */
-const L0_MAP_MODES = ["TREEMAP", "GRID", "FISHEYE", "DOCK", "BUBBLES", "TILT"];
+const L0_MAP_MODES = ["GRID", "FISHEYE", "DOCK", "BUBBLES", "TILT"];
 const L0_MAP_TIP = {
-  TREEMAP: "size = how big the company is here · colour = today's move · quiet names fade back",
   GRID:    "the heatmap — uniform squares, market-cap order",
   FISHEYE: "focus+context distortion — the whole cohort stays visible",
   DOCK:    "macOS-dock proximity scaling with spring easing",
@@ -5338,10 +5004,8 @@ function l0BubR(cap, maxCap, rmax, rmin) {
 function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   if (!(w > 0 && h > 0)) return;
   const cv0 = l0MapChg(r);                     // R49 §2 — the shared TF's %chg when it exists, session %chg otherwise
-  /* ONE HUE, coverage carries the move — identical to TREEMAP, BUBBLES and the heat
-     grid's GRAIN. heatColorChg's alpha ramp made every cell a slightly different green,
-     which is exactly what Alan rejected: "I say use Geiger green and you put more greens." */
-  l0PaintGrainRect(ctx, x, y, w, h, cv0);
+  ctx.fillStyle = heatColorChg(cv0);
+  ctx.fillRect(x, y, w, h);
   ctx.lineWidth = hot ? 1.4 : 0.8;
   ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.07)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
@@ -5349,34 +5013,21 @@ function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   if (m < 13) return;
   const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
   const chg = (cv != null) ? fmtC(cv) : "—";
-  /* the number is never tinted the same hue as the cell it sits on */
-  const col = (cv == null || !isFinite(cv)) ? l0Tok("--dim", "#7a8090") : l0Tok("--ink", "#e9ecf2");
+  const col = (cv == null || !isFinite(cv)) ? l0Tok("--dim", "#7a8090")
+            : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.textAlign = "center";
   const cx = x + w / 2, cy = y + h / 2;
   const ts = Math.max(7, Math.min(20, m * 0.21));
-  ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-  /* the grain runs at full strength under the text, so every tier gets a plate of the
-     panel's own dark first — same treatment as the heat grid and the treemap */
-  const plate = (lines, widest) => {
-    const pw = Math.min(w - 3, widest + 8), ph = ts * (1.15 * lines) + 5;
-    l0LabelPlate(ctx, cx - pw / 2, cy - ph / 2, pw, ph);
-  };
   ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
+  ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
   if (m < L0_FOC_D1) {                       // tier 1 — ticker only
-    plate(1, ctx.measureText(r.t).width);
-    ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
     ctx.textBaseline = "middle";
     ctx.fillText(r.t, cx, cy);
     ctx.restore(); return;
   }
   if (m < L0_FOC_D2) {                       // tier 2 — ticker + %chg
-    const w1 = ctx.measureText(r.t).width;
-    ctx.font = '600 ' + (ts * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    plate(2, Math.max(w1, ctx.measureText(chg).width));
-    ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
     ctx.textBaseline = "alphabetic";
     ctx.fillText(r.t, cx, cy - 1);
     ctx.font = '600 ' + (ts * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
@@ -5388,9 +5039,6 @@ function l0FocCellDraw(ctx, r, x, y, w, h, hot) {
   const rv = num(r.rsi);
   const rsi = (r.rsi != null && rv != null && isFinite(rv)) ? "RSI " + rv.toFixed(0) : "RSI —";
   const line = ts * 1.02;
-  plate(4, Math.max(ctx.measureText(r.t).width, ctx.measureText(fmtCap(r.mc) || "").width * 1.2));
-  ctx.font = '700 ' + ts.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-  ctx.fillStyle = l0Tok("--ink", "#e9ecf2");
   ctx.textBaseline = "alphabetic";
   ctx.fillText(r.t, cx, cy - line);
   ctx.font = '600 ' + (ts * 0.80).toFixed(1) + 'px "SF Mono",Menlo,monospace';
@@ -5548,291 +5196,34 @@ function l0FocPaintBubbles(ctx, W, H, rows) {
     const b = B[i], r = rows[i]; if (!r) continue;
     const hot = live && Math.hypot(L0_FOC_P.x - b.x, L0_FOC_P.y - b.y) <= b.r;
     L0_FOC_CELLS.push({ t: b.t, cx: b.x, cy: b.y, r: b.r });
-    const cv0 = l0MapChg(r);
-    const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
     ctx.globalAlpha = b.known ? 1 : 0.45;      // no market cap on file → drawn dimmer, honestly
-    /* ONE HUE. The circle is clipped and grain-painted exactly like a treemap tile, so a
-       quiet name is sparse dots of the SAME green and a big mover is a solid disc of it.
-       heatColorChg's alpha ramp used to make every bubble a slightly different green. */
-    ctx.save();
-    ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0.5, b.r), 0, Math.PI * 2); ctx.clip();
-    l0PaintGrainRect(ctx, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, cv0);
-    ctx.restore();
     ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0.5, b.r), 0, Math.PI * 2);
+    ctx.fillStyle = heatColorChg(l0MapChg(r)); ctx.fill();   // R49 §2 — same TF-aware value as every other MAP mode
     ctx.lineWidth = hot ? 1.4 : 0.8;
     ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : "rgba(255,255,255,.10)";
     ctx.stroke();
     ctx.globalAlpha = 1;
-
-    /* ★ EVERY BUBBLE CARRIES ITS NUMBER.
-       Alan, twice: "the bubbles don't have the percentage change and you do nothing.
-       BUBBLES HAS NO PERCENTAGE CHANGE." He was right — the change was gated behind
-       r >= 26px, which on a real cohort is three or four circles out of forty, so the
-       map he actually looks at showed tickers and no moves at all.
-       The gate is gone. A bubble wide enough for text gets BOTH lines; if only one
-       line fits, the NUMBER wins, because the move is the thing being asked for and
-       the ticker is recoverable by hovering. Text still never overflows its circle. */
-    if (b.r < 7) continue;
-    const chg = (cv != null) ? fmtC(cv) : "—";
-    const room = b.r * 2 - 5;                  // usable chord for text, with a hair of margin
+    if (b.r < 9) continue;                     // too small for text — skip the label, never overflow
+    const fs = Math.max(7, Math.min(15, b.r * 0.5));
     ctx.textAlign = "center";
-
-    let fs = Math.max(6.5, Math.min(15, b.r * 0.52));
     ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    let tw = ctx.measureText(r.t).width;
-    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    let cwd = ctx.measureText(chg).width;
-    /* shrink to fit rather than drop the label — a number at 6.5px still reads */
-    let guard = 0;
-    while (Math.max(tw, cwd) > room && fs > 6 && guard++ < 12) {
-      fs *= 0.9;
-      ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      tw = ctx.measureText(r.t).width; cwd = ctx.measureText(chg).width;
-    }
-    const both = (b.r * 2) >= (fs * 2.1 + 4) && Math.max(tw, cwd) <= room;
-
-    const plateW = Math.min(room + 4, Math.max(both ? tw : 0, cwd) + 6);
-    const plateH = (both ? fs * 1.9 : fs * 1.05) + 4;
-    l0LabelPlate(ctx, b.x - plateW / 2, b.y - plateH / 2, plateW, plateH);
-
-    ctx.fillStyle = b.known ? ink : dim;
-    if (both) {
-      ctx.textBaseline = "alphabetic";
-      ctx.fillText(r.t, b.x, b.y - 1);
-      ctx.font = '600 ' + (fs * 0.92).toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      ctx.fillStyle = (cv == null) ? dim : ink;
-      ctx.fillText(chg, b.x, b.y + fs * 0.92);
-    } else {
-      ctx.textBaseline = "middle";
-      ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      ctx.fillStyle = (cv == null) ? dim : ink;
-      ctx.fillText(chg, b.x, b.y);               // the move wins the last line, not the ticker
-    }
-  }
-}
-/* ── TREEMAP ─────────────────────────────────────────────────────────────────
-   Alan, on every other map mode: "it's not telling me in a visual way what moved
-   today and how important that company is in that tab, at all." And: "the bubbles
-   are very clean… although I think it should fill its rectangle, that gives me more
-   space to see some of the smaller ones."
-   So this mode answers exactly two questions at once and nothing else:
-     HOW BIG IT IS HERE  -> the area of its rectangle
-     WHAT IT DID TODAY   -> the colour, and how strongly that colour is present
-   Every pixel of the panel belongs to a company. No gaps, no wasted margin, no
-   circles with air between them — the small names get real estate because the big
-   ones are no longer squares with room to spare around them.
-
-   THE HUE IS A CONSTANT. Exactly --bull or exactly --bear, never a third tone, never
-   a blend, never a ramp through yellow. Only how much of that one colour is present
-   changes. Alan: "green is green, red is red. There's not more greens, more reds."
-
-   QUIET NAMES FADE BACK. Alan: "I'm just trying to not see the things that moved
-   little — that they draw my attention less." The presence curve is deliberately
-   harsher than the heat grid's: gamma 0.75 off a floor of 0.10, so a company that
-   barely moved sits almost flat against the panel while the real movers stay at full
-   strength. Scale is the 85th percentile of what is actually on screen, so "a big
-   move" always means big FOR TODAY rather than against some fixed number. */
-function l0TreeWeight(mc) {
-  /* Raw market cap spans about five orders of magnitude, and a strict area treemap
-     would hand one mega-cap a third of the panel and leave the rest as slivers you
-     cannot read or click. The 0.45 power keeps the ORDER and the sense of weight
-     while compressing the range to something a panel can actually show; the floor
-     guarantees the smallest name in the tab is still a real, clickable tile. */
-  const v = num(mc);
-  if (!(v > 0)) return null;                       // unknown: caller substitutes, and draws it dimmer
-  return Math.pow(v, 0.45);
-}
-/* Squarified treemap (Bruls, Huizing & van Wijk). Rows are laid along the SHORT side
-   of what is left, and a row closes as soon as adding one more cell would make the
-   worst aspect ratio in it worse — which is what keeps the tiles near-square instead
-   of degenerating into the long thin strips a naive slice-and-dice produces. */
-function l0TreeLayout(items, X, Y, W, H) {
-  const out = [];
-  if (!items.length || !(W > 0) || !(H > 0)) return out;
-  const total = items.reduce((s, it) => s + it.w, 0);
-  if (!(total > 0)) return out;
-  const k = (W * H) / total;
-  const q = items.map((it) => ({ i: it.i, a: it.w * k }));
-
-  let rx = X, ry = Y, rw = W, rh = H;
-  let row = [], rowSum = 0;
-
-  const worst = (r, s, len) => {
-    if (!r.length || !(s > 0) || !(len > 0)) return Infinity;
-    let mx = -Infinity, mn = Infinity;
-    for (const it of r) { if (it.a > mx) mx = it.a; if (it.a < mn) mn = it.a; }
-    const l2 = len * len, s2 = s * s;
-    return Math.max((l2 * mx) / s2, s2 / (l2 * mn));
-  };
-  const flush = () => {
-    if (!row.length) return;
-    if (rw >= rh) {                                  // a COLUMN down the left edge
-      const cw = Math.min(rw, rowSum / Math.max(1e-6, rh));
-      let cy = ry;
-      for (const it of row) {
-        const ch = (rowSum > 0) ? (it.a / rowSum) * rh : 0;
-        out.push({ i: it.i, x: rx, y: cy, w: cw, h: ch });
-        cy += ch;
-      }
-      rx += cw; rw -= cw;
-    } else {                                         // a ROW across the top edge
-      const ch = Math.min(rh, rowSum / Math.max(1e-6, rw));
-      let cx = rx;
-      for (const it of row) {
-        const cw = (rowSum > 0) ? (it.a / rowSum) * rw : 0;
-        out.push({ i: it.i, x: cx, y: ry, w: cw, h: ch });
-        cx += cw;
-      }
-      ry += ch; rh -= ch;
-    }
-    row = []; rowSum = 0;
-  };
-
-  for (let n = 0; n < q.length; n++) {
-    const it = q[n];
-    const len = Math.min(rw, rh);
-    if (!row.length || worst(row.concat([it]), rowSum + it.a, len) <= worst(row, rowSum, len)) {
-      row.push(it); rowSum += it.a;
-    } else {
-      flush();
-      row.push(it); rowSum = it.a;
-    }
-  }
-  flush();
-  return out;
-}
-/* ★ ONE GREEN, ONE RED — AND NOTHING ELSE ON SCREEN.
-   Alan: "it's amazing that I say use Geiger green and you put more greens."
-   He is right and this is the rule, not a preference. An alpha ramp over a dark panel
-   does NOT paint --bull at 40%: it paints a DIFFERENT, duller green. Ten tiles at ten
-   alphas are ten greens. So no tile is ever tinted.
-   Magnitude is carried the one way that leaves the hue untouched — COVERAGE. The tile
-   is painted with DOTS of exactly --bull or exactly --bear at FULL strength, and the
-   size of the move sets how much of the surface those dots occupy: fine sparse grain
-   for a name that barely moved, swelling until they merge into a solid sheet for the
-   biggest mover on screen. Every coloured pixel is the Geiger colour at every level.
-   This is the same language as the heat grid's GRAIN, which is the one Alan said was
-   "finally something where you agree with me on what we're trying to do" — so now the
-   map and the grid say the same thing the same way. */
-const L0_GRAIN_CELL = 5;                              // px between dot centres — matches heatGrain()
-function l0GrainRadius(cv) {
-  const r = Math.min(1, Math.abs(num(cv) ?? 0) / (HEAT_SCALE || 2));
-  return 0.55 + Math.pow(r, 0.5) * 3.15;              // 0.55px sparse → 3.7px, past the merge point
-}
-/* paints one rectangle in exactly one hue, coverage carrying the move. Returns the
-   coverage 0..1 so the label can decide whether it is sitting on a solid sheet. */
-function l0PaintGrainRect(ctx, x, y, w, h, cv) {
-  if (!(w > 0 && h > 0)) return 0;
-  if (cv == null || !isFinite(cv)) {
-    ctx.fillStyle = "rgba(140,140,160,.07)"; ctx.fillRect(x, y, w, h); return 0;
-  }
-  const col = "rgb(" + (cv >= 0 ? heatRGB().bull : heatRGB().bear) + ")";
-  const rad = l0GrainRadius(cv);
-  const cov = Math.min(1, Math.max(0, (rad - 0.55) / 3.15));
-  ctx.fillStyle = col;
-  if (rad >= 3.55) { ctx.fillRect(x, y, w, h); return 1; }   // dots would fully overlap: solid sheet
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  const x0 = Math.floor(x / L0_GRAIN_CELL) * L0_GRAIN_CELL + L0_GRAIN_CELL / 2;
-  const y0 = Math.floor(y / L0_GRAIN_CELL) * L0_GRAIN_CELL + L0_GRAIN_CELL / 2;
-  for (let py = y0; py < y + h + L0_GRAIN_CELL; py += L0_GRAIN_CELL) {
-    for (let px = x0; px < x + w + L0_GRAIN_CELL; px += L0_GRAIN_CELL) {
-      ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
-    }
-  }
-  ctx.restore();
-  return cov;
-}
-/* a label plate in the PANEL's own dark — never a third colour. Without it the grain
-   dots run at full strength straight through the text. */
-function l0LabelPlate(ctx, x, y, w, h) {
-  ctx.fillStyle = "rgba(6,8,12,.93)";
-  const r = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath(); ctx.fill();
-}
-function l0FocPaintTreemap(ctx, W, H, rows) {
-  const vals = rows.map((r) => l0MapChg(r));
-  heatSetScale(vals);                               // full strength = the biggest move actually on screen
-
-  const raw = rows.map((r) => l0TreeWeight(r.mc));
-  const known = raw.filter((v) => v != null);
-  const med = known.length ? known.slice().sort((a, b) => a - b)[known.length >> 1] : 1;
-  const mx  = known.length ? Math.max.apply(null, known) : 1;
-  const floor = mx * 0.012;                          // nobody disappears
-  const items = rows.map((r, i) => ({ i: i, w: Math.max(floor, raw[i] == null ? med : raw[i]) }))
-                    .sort((a, b) => b.w - a.w);      // squarify needs descending weights
-
-  const cells = l0TreeLayout(items, 0, 0, W, H);
-  const line = l0Tok("--line", "#1E2530");
-  const dim  = l0Tok("--dim", "#7a8090");
-  const ink  = l0Tok("--ink", "#e9ecf2");
-  const live = L0_FOC_P.in && L0_FOC_P.x != null;
-
-  for (const c of cells) {
-    const r = rows[c.i]; if (!r) continue;
+    if (ctx.measureText(r.t).width > b.r * 2 - 6) continue;
     const cv0 = l0MapChg(r);
     const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
-    const hot = live && L0_FOC_P.x >= c.x && L0_FOC_P.x <= c.x + c.w &&
-                        L0_FOC_P.y >= c.y && L0_FOC_P.y <= c.y + c.h;
-    L0_FOC_CELLS.push({ t: r.t, x: c.x, y: c.y, w: c.w, h: c.h });
-
-    ctx.globalAlpha = (num(r.mc) > 0) ? 1 : 0.6;    // no cap on file → drawn dimmer, honestly
-    l0PaintGrainRect(ctx, c.x, c.y, c.w, c.h, cv0); // exactly one hue; coverage carries the move
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = hot ? 1.6 : 1;
-    ctx.strokeStyle = hot ? l0Tok("--crk", "#00e5ff") : line;
-    ctx.strokeRect(c.x + 0.5, c.y + 0.5, Math.max(0, c.w - 1), Math.max(0, c.h - 1));
-
-    /* LABELS. Alan: "super nice in terms of colours, but bad in terms of labels."
-       If the ticker fits, it is drawn. The change is drawn whenever there is a second
-       line's worth of room, and the cap only when the tile is genuinely roomy. Both
-       sit on a plate of the panel's own dark, because the grain runs at full strength
-       straight through the text otherwise. Nothing is ever clipped. */
-    if (c.w < 26 || c.h < 13) continue;
-    const pad = 4;
-    const fs = Math.max(8, Math.min(17, Math.min(c.w / 4.2, c.h / 3.0)));
-    ctx.textAlign = "left"; ctx.textBaseline = "top";
-    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    const tw = ctx.measureText(r.t).width;
-    if (tw > c.w - pad * 2) continue;
-
     const chg = (cv != null) ? fmtC(cv) : "—";
-    const fs2 = fs * 0.86;
-    ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    const cw2 = ctx.measureText(chg).width;
-    const twoLine = c.h >= fs + fs2 + pad * 2 + 3 && cw2 <= c.w - pad * 2;
-
-    const cap = fmtCap(r.mc);
-    const fs3 = fs * 0.7;
-    ctx.font = '500 ' + fs3.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    const cw3 = cap ? ctx.measureText(cap).width : 0;
-    const threeLine = twoLine && cap && c.w >= 72 &&
-                      c.h >= fs + fs2 + fs3 + pad * 2 + 7 && cw3 <= c.w - pad * 2;
-
-    const plateW = Math.min(c.w - pad, Math.max(tw, twoLine ? cw2 : 0, threeLine ? cw3 : 0) + 7);
-    const plateH = fs + (twoLine ? fs2 + 3 : 0) + (threeLine ? fs3 + 3 : 0) + 6;
-    l0LabelPlate(ctx, c.x + pad - 3, c.y + pad - 3, plateW, plateH);
-
-    ctx.font = '700 ' + fs.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-    ctx.fillStyle = ink;
-    ctx.fillText(r.t, c.x + pad, c.y + pad);
-    /* The number is NOT re-coloured green/red: the tile under it is already exactly
-       that hue, and a second green would be a second green. Direction is the tile's
-       job; the text's only job is to be readable. */
-    if (twoLine) {
-      ctx.font = '600 ' + fs2.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      ctx.fillStyle = (cv == null) ? dim : ink;
-      ctx.fillText(chg, c.x + pad, c.y + pad + fs + 2);
-    }
-    if (threeLine) {
-      ctx.font = '500 ' + fs3.toFixed(1) + 'px "SF Mono",Menlo,monospace';
-      ctx.fillStyle = dim;
-      ctx.fillText(cap, c.x + pad, c.y + pad + fs + fs2 + 5);
+    ctx.fillStyle = b.known ? ink : dim;
+    if (b.r >= 26) {
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(r.t, b.x, b.y - 1);
+      ctx.font = '600 ' + (fs * 0.78).toFixed(1) + 'px "SF Mono",Menlo,monospace';
+      if (ctx.measureText(chg).width <= b.r * 2 - 6) {
+        ctx.fillStyle = (cv == null || !isFinite(cv)) ? dim
+          : (cv >= 0 ? l0Tok("--bull", "#00ffa3") : l0Tok("--bear", "#ff2d55"));
+        ctx.fillText(chg, b.x, b.y + fs * 0.95);
+      }
+    } else {
+      ctx.textBaseline = "middle";
+      ctx.fillText(r.t, b.x, b.y);
     }
   }
 }
@@ -5843,9 +5234,8 @@ function l0FocTiltHTML(rows) {
     const cv0 = l0MapChg(r);                                   // R49 §2 — TF-aware, exactly like the other four modes
     const cv = (cv0 != null && isFinite(cv0)) ? cv0 : null;
     const chg = (cv != null) ? fmtC(cv) : "—";
-    /* grain, not a tint — the same one green and one red as every other map mode */
     return '<div class="sc-l0card" id="l0tc_' + esc(r.t) + '" data-act="row" data-t="' + esc(r.t) +
-      '" style="background:' + heatGrain(cv0) + '" title="' + esc(r.t) + '">' +
+      '" style="background:' + heatColorChg(cv0) + '" title="' + esc(r.t) + '">' +
       '<span class="sc-l0card__t">' + esc(r.t) + "</span>" +
       '<span class="sc-l0card__c" id="l0tcc_' + esc(r.t) + '">' + esc(chg) + "</span>" +
       '<span class="sc-l0card__m">' + esc(fmtCap(r.mc)) + "</span>" +
@@ -5897,8 +5287,7 @@ function renderL0Focus() {
   const rows = l0FocRows();
   L0_FOC_CELLS = [];
   if (!rows.length) return true;                     // the note state lives in l0BodyHTML
-  if (L0_MAP_MODE === "TREEMAP") l0FocPaintTreemap(c.ctx, c.W, c.H, rows);
-  else if (L0_MAP_MODE === "BUBBLES") l0FocPaintBubbles(c.ctx, c.W, c.H, rows);
+  if (L0_MAP_MODE === "BUBBLES") l0FocPaintBubbles(c.ctx, c.W, c.H, rows);
   else if (L0_MAP_MODE === "DOCK") l0FocPaintDock(c.ctx, c.W, c.H, rows);
   else l0FocPaintFisheye(c.ctx, c.W, c.H, rows);
   return true;
@@ -5979,10 +5368,6 @@ function l0FocusWire() {
     L0_FOC_P.ty = y + L0_FOC_P.vy * L0_FOC_LEAD * blend;
     if (fresh) { L0_FOC_P.fx = null; L0_FOC_P.fy = null; }   // next step seeds the lens here
     if (L0_MAP_MODE === "TILT") l0FocTiltApply();
-    /* TREEMAP is a STATIC picture — the tiles do not move, distort or spring, so it
-       has no business running a 60fps loop. It repaints only when the cursor moves
-       (to light the tile under it) and on the feed tick. */
-    else if (L0_MAP_MODE === "TREEMAP") renderL0Focus();
     else if (rm) {                       // reduced motion: no loop, no ramp — paint on demand
       L0_FOC_ENG = 1; L0_FOC_P.fx = L0_FOC_P.tx; L0_FOC_P.fy = L0_FOC_P.ty;
       renderL0Focus();
@@ -5994,7 +5379,6 @@ function l0FocusWire() {
        focus point. Nulling them (pre-R50) is exactly what made the exit snap. */
     L0_FOC_P.in = false; L0_FOC_P.vx = L0_FOC_P.vy = 0;
     if (L0_MAP_MODE === "TILT") l0FocTiltApply();
-    else if (L0_MAP_MODE === "TREEMAP") renderL0Focus();   // drop the highlight
     else if (rm) { L0_FOC_ENG = 0; L0_FOC_P.fx = L0_FOC_P.fy = null; renderL0Focus(); }
   };
   wrap.addEventListener("pointerleave", L0_FOC_OUT);
@@ -6005,7 +5389,7 @@ function l0FocusWire() {
     };
     wrap.addEventListener("click", L0_FOC_CLICK);
   }
-  if (rm || L0_MAP_MODE === "TILT" || L0_MAP_MODE === "TREEMAP") return;   // no springs, no loop
+  if (rm || L0_MAP_MODE === "TILT") return;   // no springs, no loop
   L0_FOC_ENG = 0; L0_FOC_ENGT = 0;            // R50 §2b — every render starts disengaged
   const loop = (ts) => {
     L0_FOC_RAF = null;
@@ -6021,16 +5405,11 @@ function l0FocusWire() {
    TILT's DOM needs patching — and it is patched in place, never rebuilt, so the
    cards never jump out from under the cursor. */
 function l0FocusTick() {
-  if (LAYER0_TAB !== "MAP") return;
-  /* TREEMAP runs no loop (see l0FocusWire), so the feed tick is what keeps its
-     colours current — without this it would freeze at whatever the prices were
-     when the tab was opened. */
-  if (L0_MAP_MODE === "TREEMAP") { renderL0Focus(); return; }
-  if (L0_MAP_MODE !== "TILT") return;
+  if (LAYER0_TAB !== "MAP" || L0_MAP_MODE !== "TILT") return;
   for (const r of l0FocRows()) {
     const card = el("l0tc_" + r.t); if (!card) continue;
     const v = l0MapChg(r);
-    card.style.background = heatGrain(v);      // grain on the tick too, or it would tint back
+    card.style.background = heatColorChg(v);
     const cc = el("l0tcc_" + r.t);
     if (cc) cc.textContent = (v != null && isFinite(v)) ? fmtC(v) : "—";
   }
@@ -6152,22 +5531,7 @@ function l0BodyHTML() {
     const h = head("MAP · <b>" + esc(L0_MAP_MODE) + "</b> · " + rows.length + " tickers · <b>" +
       esc(S.tq ? "search" : S.coh) + "</b> · sorted by mkt cap · " + l0MapBasis(rows.length));
     if (!rows.length) return h + '<div class="sc-l0note">no tickers in this scope</div>';
-    if (L0_MAP_MODE === "GRID") {
-      /* The FILL / LEVEL chips belong HERE. heatmapHTML has its own header, but the MAP tab
-         builds its own via head() and drops that one - so a toggle added there rendered
-         nowhere, which is exactly what the live check caught. Same .sc-l0chip language as
-         the rest of the Layer-0 controls, and the label states which rule is active so the
-         encoding is never ambiguous. */
-      const modeRow = '<div class="sc-l0rng" style="padding:4px 10px 6px">' +
-        '<button class="sc-l0chip' + (HEAT_MODE === "GRAIN" ? " is-on" : "") + '" data-act="heatmode" data-mode="GRAIN" ' +
-          'title="dots of the Geiger colour at full strength; the move sets how dense they are">GRAIN</button>' +
-        '<button class="sc-l0chip' + (HEAT_MODE === "FILL" ? " is-on" : "") + '" data-act="heatmode" data-mode="FILL" ' +
-          'title="whole square in the Geiger colour; opacity carries the size of the move">FILL &middot; OPACITY</button>' +
-        '<button class="sc-l0chip' + (HEAT_MODE === "LEVEL" ? " is-on" : "") + '" data-act="heatmode" data-mode="LEVEL" ' +
-          'title="a rising level of full-strength colour">LEVEL</button>' +
-        '</div>';
-      return h + modeRow + heatmapHTML(l0MapChg);
-    }
+    if (L0_MAP_MODE === "GRID") return h + heatmapHTML(l0MapChg);
     const body = (L0_MAP_MODE === "TILT") ? l0FocTiltHTML(rows) : '<canvas id="l0foc"></canvas>';
     return h + '<div class="sc-l0cv">' + body + "</div>";
   }
@@ -6516,16 +5880,6 @@ function startAutoBar() {
    open room repaints. The FIX1-TESTABLE block below is extracted verbatim and
    unit-run under node (see fix1 test). */
 let COHSETS = null;          // cohort → Set(tickers) — the ONE full map
-/* The eleven sector SPDRs are addressed by their ETF ticker on the compare strip but stored
-   under their sector name in membership. Any code that turns a "cohort key" into a member
-   list must go through here, or sector clicks silently resolve to nothing. */
-const SPDR_TO_SECTOR = { XLB:"MATERIALS", XLE:"ENERGY", XLF:"FINANCIALS", XLI:"INDUSTRIAL",
-  XLK:"TECH", XLP:"STAPLES", XLRE:"REAL_ESTATE", XLU:"UTILITIES", XLV:"HEALTH",
-  XLY:"DISCRET", XLC:"COMMS" };
-function cohKey(k){
-  if (COHSETS && COHSETS[k]) return k;               // a real cohort/sector key already
-  return SPDR_TO_SECTOR[k] || k;                     // otherwise try the SPDR mapping
-}
 let cohSetsReady = null;
 function loadCohSets() {
   if (!cohSetsReady) cohSetsReady = pg("ticker_cohorts?select=ticker,cohort").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
@@ -7753,7 +7107,8 @@ function geigerTabHTML(g) {
       "%;background:" + col + ";box-shadow:0 0 10px " + col + '"></div></div>' +
     famBarHTML("Trend", fam.trend, "--trend") +
     famBarHTML("Momentum", fam.momentum, "--momentum") +
-    "</div>";   /* 2026-08-17 — Structure and Volume family gauges removed: Volume DELETED BY ALAN, Structure unapproved */
+    famBarHTML("Structure", fam.structure, "--structure") +
+    famBarHTML("Volume", fam.volume, "--volume") + "</div>";   // ribbon VOLUME read
 }
 
 /* ============================================================================
@@ -10496,18 +9851,6 @@ document.addEventListener("click", (e) => {
     }
     /* R42 §6 — heattoggle now UNREACHABLE from the company header (button removed);
        case kept harmless for the heat-view's own "HEAT ▸ OFF" chip / stale markup. */
-    /* FILL vs LEVEL — two ways of expressing the same two colours. See heatColorChg. */
-    case "heatmode": {
-      const m = a.getAttribute("data-mode");   /* the delegated element is `a` in this switch */
-      if (m && m !== HEAT_MODE) {
-        HEAT_MODE = m;
-        /* the grid lives in the Layer-0 MAP body, so repaint that; renderLeftPanel covers
-           the separate left-panel heat view when that is the surface on screen. */
-        if (typeof paintL0Body === "function") paintL0Body();          /* the MAP grid lives in #l0body */
-        if (typeof renderLeftPanel === "function") renderLeftPanel();   /* and the left-panel heat view */
-      }
-      break;
-    }
     case "heattoggle": {   // #133 — flip the left panel between single-ticker (rotate/pinned) and whole-scope heatmap
       LEFT_HEAT = !LEFT_HEAT;
       if (LEFT_HEAT) clearRotate(); else if (LEFT_STATE === "AUTO") { scheduleNextTick(); startAutoBar(); }
@@ -10963,11 +10306,7 @@ function patch(t, price) {
     const onTf = !!(L0_MAP_NOW && L0_MAP_NOW.pct && L0_MAP_NOW.pct[t] != null && el("layer0"));
     if ((htTile || htTxt) && !onTf) {
       const hc = c != null ? c : (r ? r.c : null);
-      if (htTile && hc != null) {
-        const f = htTile.querySelector(".sc-heattile__fill");
-        if (f) { f.style.height = heatFillPct(hc) + "%";
-                 f.style.background = HEAT_MODE === "GRAIN" ? heatGrain(hc) : heatColorChg(hc); }
-      }
+      if (htTile && hc != null) htTile.style.background = heatColorChg(hc);
       if (htTxt && hc != null) htTxt.textContent = fmtC(hc);
     }
   }
@@ -11379,20 +10718,11 @@ function marketOpen(){
   }catch(e){ return true; }                          // fail open → keep genuine fault behavior
 }
 function updateLive(){
-  /* 2026-08-17 — THE BADGE NOW REFLECTS THE EQUITY FEED, NOT A LATCHED FETCH ERROR.
-     Previously: var live = (S.state === "live") && !eqStale. S.state is only ever ASSIGNED
-     "offline", by two unrelated catch handlers — the boot ticker-tape fetch and the company-detail
-     rotate fetch — and nothing ever restores it. So a single transient failure in either, neither
-     of which is the price feed, latched the global header AND every chart badge to OFFLINE
-     permanently while Massive prices kept updating underneath. That is what Alan saw.
-     Now liveness is derived from real equity freshness (feed_health.equity_price, refreshed by
-     scFeedWatch every 45 s) and is NOT hardcoded: __eqFresh is only true when that feed is GREEN
-     and its age is inside the bound, so a genuinely dead feed still reads STALE. */
   var eqStale = (window.__eqStale === true);
   var eqClosed = eqStale && !marketOpen();                                  // idle after-hours = CLOSED, not a fault
   var eqFault  = eqStale && !eqClosed;                                      // stale during the session = genuine fault
   try{ document.body.classList.toggle("feed-down", eqFault); }catch(e){}    // logo trefoil → red pulse ONLY on a real fault
-  var live = (window.__eqFresh === true) && !eqStale;   /* equity truth, not a latched fetch error */
+  var live = (S.state === "live") && !eqStale;
   var cls = live ? "is-live" : "is-off";
   var badge = el("liveBadge");
   if(badge){
@@ -11403,15 +10733,6 @@ function updateLive(){
   var chip = document.querySelector(".sc-clive");
   if(chip){ chip.className = "sc-clive" + (live ? "" : " is-off"); chip.textContent = "● " + txt; }
   document.querySelectorAll(".sc-chartlive").forEach(function(c){ c.className = "sc-chartlive " + cls; c.textContent = "● " + txt; });
-  /* Provider stamp — named from real feed state, never hard-coded. MASSIVE is the equity provider
-     for both the live socket and the derived chart history; FMP supplies no equity price or OHLCV.
-     The qualifier reports what the feed is actually doing, so the stamp degrades honestly (stale,
-     closed, offline) instead of asserting "live" while the data has stopped moving. */
-  try{
-    var stamp = el("scFeedStamp");
-    if(stamp) stamp.textContent = "equities · MASSIVE " +
-      (eqClosed ? "· market closed" : (eqFault ? "· stale" : (live ? "· live" : "· connecting")));
-  }catch(e){}
 }
 function scAlert(msg){
   try{
@@ -11428,9 +10749,6 @@ async function scFeedWatch(){
     var rows = await pg("feed_health?select=feed,status,age_sec");
     var eq = (Array.isArray(rows)?rows:[]).find(function(r){ return r.feed==="equity_price"; });
     var down = !!eq && (eq.status==="RED" || eq.age_sec>600);
-    /* Positive liveness signal, measured rather than assumed. A MISSING row is NOT healthy:
-       __eqFresh stays false so the badge degrades to OFFLINE instead of claiming LIVE on no data. */
-    window.__eqFresh = !!eq && eq.status !== "RED" && eq.age_sec != null && eq.age_sec <= 600;
     var open = (typeof marketOpen==="function") ? marketOpen() : true;
     var fault = down && open;                                   // only a genuine fault when the session is open
     window.__eqStale = down;                                    // badge still reads CLOSED after-hours
@@ -11463,45 +10781,16 @@ function chartSeriesCached(t, range) {
   return null;
 }
 async function fetchChartSeries(t, range){
-  /* 2026-08-17 — EQUITY CHART HISTORY NOW READS THE CLEAN MASSIVE CORPUS.
-     Was: ohlcv_history via PostgREST. That legacy table carried mixed providers, mixed bases and
-     stale derived rows, and it is being decommissioned. History now comes from the Massive chart
-     API, which serves candles derived from the verified Massive one-minute corpus:
-     provider MASSIVE, surface REST_AGGS_1M_RANGE_DERIVED, price_basis SPLIT_ADJUSTED throughout.
-     There is deliberately NO legacy fallback: a silent fall back to ohlcv_history would reintroduce
-     the mixed-basis data this change exists to remove, and a visibly empty chart is better than a
-     quietly wrong one.
-     Live price is untouched and still comes from the Massive stream; this lane is history only.
-     tf "D" keeps its existing massive_daily_bars path — the daily spine is already Massive-backed. */
   const key = t + "|" + range;
   const hit = chartCache.get(key);
   if (hit && Date.now() - hit.ts < 300000) return hit.pts;
-  /* Every user-facing chart is capped at 200 candles. 3D came down from 260 and 1W from 300, so no
-     timeframe draws denser than the eye can read. Daily stays at its established 190.
-     These are DISPLAY caps only — the derived corpus behind them keeps full depth (200 completed
-     weeks, or all real history for a listing-bounded instrument), and Geiger's calculation buffer is
-     untouched because Geiger reads that corpus directly on the backend, never through this map. */
-  const RTF = {"15m":["15",200],"30m":["30",200],"1h":["60",200],"2h":["120",200],"3h":["180",200],"4h":["240",200],"6h":["6h",200],"12h":["12h",200],"1D":["D",190],"3D":["3D",200],"1W":["W",200]};
+  const RTF = {"15m":["15",200],"30m":["30",200],"1h":["60",200],"2h":["120",200],"3h":["180",200],"4h":["240",200],"6h":["6h",200],"12h":["12h",200],"1D":["D",190],"3D":["3D",260],"1W":["W",300]};
   const e = RTF[range] || RTF["1D"];
-  let pts = [];
-  if (e[0] === "D") {
-    const rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(t) + "&tf=eq.D&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
-    pts = (Array.isArray(rows) ? rows : []).map(function(r){ return { d: new Date(r.timestamp*1000).toISOString(), p: +r.close }; });
-  } else {
-    try {
-      const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(t) + "&tf=" + encodeURIComponent(e[0]) + "&limit=" + e[1]);
-      if (r.ok) {
-        const j = await r.json();
-        /* the API returns t in MILLISECONDS and c for close - not the seconds/close shape the
-           legacy table used. Getting this wrong silently renders 1970. */
-        pts = (j && Array.isArray(j.series) ? j.series : []).map(function(b){ return { d: new Date(b.t).toISOString(), p: +b.c }; });
-      }
-    } catch (_) { pts = []; }
-  }
-  pts = pts.filter(function(q){ return isFinite(q.p) && q.p > 0; });
+  const rows = await pg("ohlcv_history?ticker=eq." + encodeURIComponent(chFmpSym(t)) + "&tf=eq." + encodeURIComponent(e[0]) + "&select=timestamp,close&order=timestamp.desc&limit=" + e[1]);
+  let pts = (Array.isArray(rows) ? rows : []).map(function(r){ return { d: new Date(r.timestamp*1000).toISOString(), p: +r.close }; }).filter(function(q){ return isFinite(q.p) && q.p > 0; });
   pts.sort(function(a,b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
   chartCache.set(key, { ts: Date.now(), pts: pts });
-  if (pts.length >= 2) { try { cacheSet("sc_chart_" + key, { pts: pts }); } catch (_) {} }
+  if (pts.length >= 2) { try { cacheSet("sc_chart_" + key, { pts: pts }); } catch (_) {} }   // cross-session chart cache
   return pts;
 }                                          // equity 3 s poll (REGULAR session only)
 setInterval(pollFMPAfterHours, 10000);                               // GO-LIVE FIX 1 — PRE/POST-market 10 s poll
@@ -11540,9 +10829,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";   /* clean Massive history lane */
-var SC_CHART_API = window.SC_CHART_API;
-window.SC_BUILD = "2026-08-17T1445";
+window.SC_BUILD = "2026-08-03T1536";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
@@ -11926,7 +11213,7 @@ function filesWire(){
 
   /* ---- equalizer (ported from approved v2) ---- */
   var TFS=["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12h","1d","3d","1w","2w","1M"];
-  var FAMS=["TREND","MOMENTUM"];   /* 2026-08-17 — Geiger VOLUME family DELETED BY ALAN; STRUCTURE remains unapproved. Neither is archived for restore: there is no approved methodology for either, and a retained vocabulary entry is how a retired family quietly comes back. Raw provider volume is untouched and lives elsewhere. */
+  var FAMS=["TREND","MOMENTUM"]; var FAMS_ARCHIVED=["STRUCTURE","VOLUME"];   /* R55 — STRUCTURE/VOLUME dropped from the score (they are inert in the engine: structure=0, volume=count). Archived here for later restore. */
   var FRGB={TREND:"45,156,255",MOMENTUM:"162,75,255",STRUCTURE:"255,212,0",VOLUME:"255,138,0"};
   var tfH=TFS.map(function(_,i){return {x:i/(TFS.length-1),y:.55};});   // R33 — ONE handle per timeframe: drag each of the 17 independently
   var famH=FAMS.map(function(_,i){return {x:i/(FAMS.length-1),y:[.62,.55,.45,.05][i]};});
@@ -12091,25 +11378,6 @@ function filesWire(){
 .gwx{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:.4px solid var(--line)}
 .gwx__sc{flex:1;cursor:pointer;min-width:60px;height:14px;background:transparent;
   -webkit-appearance:none;appearance:none;outline:none}
-/* the START handle: same track language, dimmer thumb so the eye reads it as the boundary
-   rather than the playhead. Narrow - it sets an edge, it is not the thing you scrub. */
-/* one track, two handles stacked on it. The inputs are transparent and overlaid; only their
-   thumbs receive the pointer, so each grabs independently and neither blocks the other. */
-.gwx__rng{position:relative;flex:1;min-width:90px;height:16px;display:block}
-.gwx__rng::before{content:"";position:absolute;left:0;right:0;top:7px;height:2px;
-  background:var(--line,#1a1a2a)}
-.gwx__rngfill{position:absolute;top:7px;height:2px;background:var(--crk);opacity:.5;pointer-events:none}
-.gwx__h{position:absolute;left:0;top:0;width:100%;height:16px;margin:0;background:transparent;
-  -webkit-appearance:none;appearance:none;outline:none;pointer-events:none}
-.gwx__h::-webkit-slider-runnable-track{height:16px;background:transparent}
-.gwx__h::-moz-range-track{height:16px;background:transparent}
-.gwx__h::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;cursor:grab;
-  width:9px;height:9px;border-radius:50%;border:none;margin-top:3.5px}
-.gwx__h::-moz-range-thumb{pointer-events:auto;cursor:grab;width:9px;height:9px;border-radius:50%;border:none}
-.gwx__h--a::-webkit-slider-thumb{background:var(--dim);width:7px;height:7px;margin-top:4.5px}
-.gwx__h--a::-moz-range-thumb{background:var(--dim);width:7px;height:7px}
-.gwx__h--b::-webkit-slider-thumb{background:var(--crk)}
-.gwx__h--b::-moz-range-thumb{background:var(--crk)}
 .gwx__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a);border-radius:0}
 .gwx__sc::-moz-range-track{height:2px;background:var(--line,#1a1a2a)}
 .gwx__sc::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;
@@ -12117,34 +11385,17 @@ function filesWire(){
 .gwx__sc::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--crk,#00d4ff);border:none}
 /* rank badge — fixed column, hard right of every board row */
 .sc-board__row{position:relative}
-.gwx-rk{position:absolute;right:0;top:50%;transform:translateY(-50%);
+.gwx-rk{position:absolute;right:2px;top:50%;transform:translateY(-50%);
      font-family:var(--mono);font-size:9px;letter-spacing:.05em;opacity:0;
      transition:opacity .3s;pointer-events:none;width:26px;text-align:right}
 .gwx-rk.show{opacity:1}
-.gwx-rk{transition:opacity .65s ease}
-/* Alan: "let's just give the table a permanent space, because when it appears and
-   disappears things kind of move - the columns are not sticking."
-   The reserve used to be conditional on body.gwx-on, so the whole row grid shifted the
-   moment a rewind started and shifted back when it ended. The 26px is now permanent:
-   the badge still comes and goes, but the space it occupies never does. */
-.sc-board__row{padding-right:18px}   /* the rank badge's reserve - permanent so columns never
-   shift when it appears, but trimmed from 26px: on a 13-column row that width was coming
-   straight out of the numeric cells and helping them collide. */
+body.gwx-on .sc-board__row{padding-right:26px}
 </style>
 <script>
 (function(){
   var ASOF=null, DATES=[], CACHE={}, LIVE_G=null, PREV={}, TIMER=null, MOUNTED=false;
   var NEXT_D=null, BLEND=0;   /* the day being eased toward, and how far */
   var SUB=20;                 /* slider stops per trading day - the finger moves in 1/20ths */
-  var START_I=0;              /* index into DATES where the rewind window BEGINS */
-  /* The second input: how far back the rewind reaches. label, calendar days, row cap.
-     The list is TRIMMED at runtime to what fan_daily actually holds - offering a 5Y chip
-     that quietly returns 14 months is worse than not offering it. The deepest option is
-     relabelled MAX and carries the true first date in its tooltip, so the control always
-     tells the truth about the history behind it and widens by itself as the fill deepens. */
-  var BACK_DEF=[["1M",31,60],["3M",93,140],["6M",186,260],["1Y",365,400],["2Y",730,760],["5Y",1826,1500]];
-  var BACK_I=3;               /* 1Y - what the bar has always silently used */
-  var BACK_FLOOR=null;        /* oldest asof that exists, once we have asked */
   function E(id){return document.getElementById(id);}
   /* use the page's OWN pg() — it already carries the 503/504/429 retry + jitter that
      every other read on this hub depends on. Rolling a second fetch here would quietly
@@ -12157,54 +11408,12 @@ function filesWire(){
      RETURN-TO-LIVE chip that DOES NOT EXIST until you have actually rewound.
      Alan: "I don't think I need a live button" — correct, and neither does the RRG. */
   function bar(){
-    /* Alan: "I would have the rewind bar have two toggles. One is the set point of which we
-       measure the change from, because I imagine that it's just measuring from one year.
-       That way I can really play around with it with both inputs."
-       Correct - the window was hard-coded to 365 days in yearAgo(). This chip is the second
-       input: it sets the ANCHOR, the oldest day the scrubber can reach, and the scrubber
-       itself picks the as-of day inside that window. Changing it reloads DATES and rescales
-       the track, so a 1M window gives you ~21 stops of real resolution instead of 250. */
     return '<div class="gwx" id="gwxBar">'+
       '<span class="sc-l0rng__lbl">Rewind</span>'+
       '<button class="sc-l0chip" data-act="gwxplay" id="gwxPlay">&#9654; PLAY</button>'+
-      '<button class="sc-l0chip" data-act="gwxback" id="gwxBack" title="how far back the rewind reaches - the point you measure change from">'+BACK_DEF[BACK_I][0]+'</button>'+
-      /* ★ TWO HANDLES. Alan: "have the rewind bar have two toggles - one the starting, one
-         the ending, and you move the ending around, but the starting makes the start of the
-         rewind later."
-         START binds the window; END scrubs inside it. This is what fixes the steppiness
-         rather than papering over it: a one-year window forces 250 trading days through one
-         bar, so every pixel is most of a day and each move lurches. Bind the window to a
-         month and the same bar carries ~21 days - each step is smaller, the motion reads as
-         motion, and the rank arrows have far less to accumulate. One control, three symptoms. */
-      /* ★ ONE TRACK. Alan: "I don't like that you split the replay toggle into two - I should
-         have freedom in this." Right: two separate sliders is not freedom, it is two
-         constraints sitting next to each other. Both handles now live on the SAME track, so
-         the window is a span you grab either end of and the playhead runs inside it. The
-         shaded part IS the window; drag either edge, scrub anywhere between. */
-      '<span class="gwx__rng" id="gwxRng">'+
-        '<span class="gwx__rngfill" id="gwxFill"></span>'+
-        '<input type="range" class="gwx__h gwx__h--a" id="gwxStart" min="0" max="0" value="0" disabled '+
-          'title="drag to move where the rewind begins">'+
-        '<input type="range" class="gwx__h gwx__h--b" id="gwxSc" min="0" max="0" value="0" disabled '+
-          'title="scrub - where you are inside the window">'+
-      '</span>'+
+      '<input type="range" class="gwx__sc" id="gwxSc" min="0" max="0" value="0" disabled>'+
       '<span id="gwxLiveSlot"></span>'+
-      '<span class="sc-l0asof" id="gwxWin" style="opacity:.6;font-size:8.5px"></span>'+
       '<span class="sc-l0asof" id="gwxDt">live</span></div>';
-  }
-  /* say what the window IS - a bound window that does not announce itself is just a slider
-     that mysteriously stopped going back as far. */
-  /* the shaded part IS the window - without it the two thumbs are just two dots on a line */
-  function paintRange(){
-    var f=E("gwxFill"), a=E("gwxStart"), b=E("gwxSc"); if(!f||!a||!b) return;
-    var span=(+b.max)||1;
-    var l=(+a.value/span)*100, r=(+b.value/span)*100;
-    f.style.left=Math.min(l,r)+"%"; f.style.width=Math.max(0,r-l)+"%";
-  }
-  function windowLbl(){
-    var e=E("gwxWin"); if(!e) return;
-    var a=DATES[START_I], b=DATES[DATES.length-1];
-    e.textContent = (a&&b) ? (a.slice(2)+" \u2192 "+b.slice(2)+"  ("+(DATES.length-START_I)+"d)") : "";
   }
   function liveChip(on){
     var slot=E("gwxLiveSlot"); if(!slot)return;
@@ -12233,82 +11442,16 @@ function filesWire(){
       stop(); var raw=+this.value/SUB, i=Math.floor(raw), f=raw-i;
       i=Math.max(0,Math.min(DATES.length-1,i));
       E("gwxDt").textContent=DATES[i]||"";
-      paintRange();
       clearTimeout(window.__gwxSeek);
       window.__gwxSeek=setTimeout(function(){ seek(DATES[i], DATES[i+1], f); }, 60);
     };
-    /* START binds the window; the scrubber then spans only [START_I .. last]. Narrowing the
-       window is what makes each step small enough to read as movement. */
-    var st=E("gwxStart");
-    if(st) st.oninput=function(){
-      stop();
-      /* both handles run on the SAME sub-step scale now, so the start handle is just the
-         left edge of the span - it cannot pass the playhead, and the playhead cannot fall
-         behind it. */
-      var maxStart=Math.max(0,(DATES.length-6)*SUB);
-      var v=Math.min(maxStart, Math.round(+this.value));
-      var sc=E("gwxSc");
-      if(sc && v > +sc.value - SUB) v = Math.max(0, +sc.value - SUB);
-      this.value=v;
-      START_I=Math.floor(v/SUB);
-      if(sc) sc.min=v;
-      windowLbl(); paintRange();
-    };
-    var bk=E("gwxBack");
-    if(bk) bk.onclick=function(){
-      stop();
-      BACK_I=(BACK_I+1)%BACK_DEF.length;
-      this.textContent=BACK_DEF[BACK_I][0];
-      DATES=[]; CACHE={};                    /* a new window is a new set of days */
-      var sc=E("gwxSc"); if(sc){sc.disabled=true;sc.max=0;sc.value=0;}
-      loadDates();
-    };
-    if(!DATES.length) trimBack().then(loadDates);
+    if(!DATES.length) loadDates();
     MOUNTED=true;
   }
-  function trimBack(){
-    if(BACK_FLOOR!==null) return Promise.resolve();
-    return api("fan_daily?select=asof&ticker=eq.SPY&order=asof.asc&limit=1").then(function(rows){
-      BACK_FLOOR=(rows&&rows[0]&&rows[0].asof)||null;
-      if(!BACK_FLOOR) return;
-      var have=Math.round((Date.now()-Date.parse(BACK_FLOOR))/864e5);
-      var keep=BACK_DEF.filter(function(d,i){ return i===0 || d[1]<=have; });
-      if(!keep.length) keep=[BACK_DEF[0]];
-      /* the deepest kept option becomes MAX and reaches the true floor */
-      var last=keep[keep.length-1].slice(); last[0]="MAX"; last[1]=have; last[2]=2000;
-      keep[keep.length-1]=last;
-      BACK_DEF=keep; BACK_I=Math.min(BACK_I,BACK_DEF.length-1);
-      /* START binds the window; the scrubber then spans only [START_I .. last]. Narrowing the
-       window is what makes each step small enough to read as movement. */
-    var st=E("gwxStart");
-    if(st) st.oninput=function(){
-      stop();
-      /* both handles run on the SAME sub-step scale now, so the start handle is just the
-         left edge of the span - it cannot pass the playhead, and the playhead cannot fall
-         behind it. */
-      var maxStart=Math.max(0,(DATES.length-6)*SUB);
-      var v=Math.min(maxStart, Math.round(+this.value));
-      var sc=E("gwxSc");
-      if(sc && v > +sc.value - SUB) v = Math.max(0, +sc.value - SUB);
-      this.value=v;
-      START_I=Math.floor(v/SUB);
-      if(sc) sc.min=v;
-      windowLbl(); paintRange();
-    };
-    var bk=E("gwxBack");
-      if(bk){ bk.textContent=BACK_DEF[BACK_I][0];
-              bk.title="how far back the rewind reaches - the point you measure change from. "+
-                       "History begins "+BACK_FLOOR+"."; }
-    });
-  }
   function loadDates(){
-    var w=BACK_DEF[BACK_I], from=new Date(Date.now()-w[1]*864e5).toISOString().slice(0,10);
-    api("fan_daily?select=asof&ticker=eq.SPY&asof=gte."+from+"&order=asof.asc&limit="+w[2]).then(function(rows){
+    api("fan_daily?select=asof&ticker=eq.SPY&asof=gte."+yearAgo()+"&order=asof.asc&limit=400").then(function(rows){
       DATES=rows.map(function(r){return r.asof;});
-      var sc=E("gwxSc"), st=E("gwxStart");
-      if(sc&&DATES.length){ sc.min=0; sc.max=(DATES.length-1)*SUB; sc.value=sc.max; sc.disabled=false; }
-      if(st&&DATES.length){ st.min=0; st.max=(DATES.length-1)*SUB; st.value=0; st.disabled=false; }
-      START_I=0; windowLbl(); paintRange();
+      var sc=E("gwxSc"); if(sc&&DATES.length){sc.max=(DATES.length-1)*SUB;sc.value=sc.max;sc.disabled=false;}
     });
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
@@ -12318,7 +11461,7 @@ function filesWire(){
     NEXT_D = (frac && frac > 0.01 && dNext) ? dNext : null;
     BLEND  = NEXT_D ? frac : 0;
     ASOF=d; document.body.classList.add("gwx-on");
-    E("gwxDt").textContent=d; liveChip(true); armIdle();
+    E("gwxDt").textContent=d; liveChip(true);
     /* the neighbour must be warmed on EVERY seek, not only on a cache miss - the early
        return below used to skip it, so the blend had nothing to interpolate toward and
        each sub-step rendered the day flat. */
@@ -12388,17 +11531,7 @@ function filesWire(){
     });
     repaint(before);
   }
-  /* Alan: "I don't like this LIVE button that comes up... it should just revert back to live
-     on a timer automatically." So it does: 45 seconds after the last touch of the rewind,
-     the board returns to live on its own. Every interaction resets the clock, so it never
-     yanks the view out from under a finger that is still working. */
-  var IDLE=null;
-  function armIdle(){
-    clearTimeout(IDLE);
-    IDLE=setTimeout(function(){ if(ASOF && !TIMER) goLive(); }, 45000);
-  }
   function goLive(){
-    clearTimeout(IDLE);
     stop(); ASOF=null; document.body.classList.remove("gwx-on");
     E("gwxDt").textContent="live"; liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
@@ -12406,6 +11539,7 @@ function filesWire(){
       (S.rows||[]).forEach(function(r){ if(LIVE_G[r.t]!=null) r.g=LIVE_G[r.t]; });
       repaint(before);}
   }
+  function yearAgo(){var d=new Date(Date.now()-365*864e5);return d.toISOString().slice(0,10);}
   /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
      animate between and every re-sort SNAPS. Alan, watching it: "I don't see the movement
      coming through." Correct - there was none. So: record where every row IS, let the page
@@ -12487,29 +11621,20 @@ function filesWire(){
     (S.boardOrder||[]).forEach(function(t,now){
       var was=before[t]; if(was===undefined||was===now)return;
       var row=document.querySelector('.sc-board__row[data-t="'+t+'"]'); if(!row)return;
-      /* ★ THE BUNCHING. Alan: "I am seeing bunching, and it's on the arrows... I think it's
-         that within the timeframe of the rewind there was up and down movement."
-         Exactly right. Every seek appended a NEW badge, so a name that rose then fell inside
-         the window ended up wearing three or four arrows stacked on top of each other, and
-         each carried its own 4-second timer. One badge per row now, reused and rewritten -
-         so what you see is where the row stands, not a pile of everywhere it has been. */
-      var b=row.querySelector(".gwx-rk");
-      if(!b){ b=document.createElement("span"); b.className="gwx-rk"; row.appendChild(b); }
-      clearTimeout(b.__hide); clearTimeout(b.__kill);
+      var b=document.createElement("span"); b.className="gwx-rk";
       var d=was-now;
       b.textContent=(d>0?"▲":"▼")+Math.abs(d);
       b.style.color=d>0?"var(--bull)":"var(--bear)";
-      /* Alan: "let's leave it open for longer... I need it to stay longer." 1.4s was gone
-         before you could read a board's worth of them. 4s visible, then a slow fade. */
+      row.appendChild(b);
       setTimeout(function(){b.classList.add("show");},10);
-      b.__hide=setTimeout(function(){b.classList.remove("show");},4000);
-      b.__kill=setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},4700);
+      setTimeout(function(){b.classList.remove("show");},1400);
+      setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},1800);
     });
   }
   function play(){
     if(TIMER)return stop();
     var sc=E("gwxSc"); if(!sc||!DATES.length)return;
-    if(+sc.value>=+sc.max) sc.value=START_I*SUB;   /* replay the bound window, not a fixed 40 days */
+    if(+sc.value>=+sc.max) sc.value=Math.max(0,(DATES.length-40)*SUB);
     E("gwxPlay").innerHTML="&#10073;&#10073; PAUSE"; E("gwxPlay").classList.add("is-on");
     /* The thumb is animated, the data is not. Moving both on the same 700ms tick is what
        made the bar hop. A requestAnimationFrame loop slides the thumb continuously; each
@@ -12540,10 +11665,6 @@ function filesWire(){
   var SECT=[["MATERIALS","XLB"],["ENERGY","XLE"],["FINANCIALS","XLF"],["INDUSTRIAL","XLI"],
             ["TECH","XLK"],["STAPLES","XLP"],["REAL EST","XLRE"],["UTILITIES","XLU"],
             ["HEALTH","XLV"],["DISCRET","XLY"],["COMMS","XLC"]];
-  /* the SPDR ticker to the sector key used in ticker_membership */
-  var SECT_KEY={XLB:"MATERIALS",XLE:"ENERGY",XLF:"FINANCIALS",XLI:"INDUSTRIAL",XLK:"TECH",
-                XLP:"STAPLES",XLRE:"REAL_ESTATE",XLU:"UTILITIES",XLV:"HEALTH",
-                XLY:"DISCRET",XLC:"COMMS"};
   var CMP_MODE="COHORTS";
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
@@ -12567,45 +11688,18 @@ function filesWire(){
         /* Alan: "I don't like the cropping of the health care energy, this stuff. Just use
            the State Street thingies, and maybe a hover that expands and says the full name."
            So the column shows the SPDR ticker - which never crops - and the title carries
-           the sector in full.
-
-           ★ AND THE READ IS NOW THE SECTOR, NOT THE ETF. This used to be gAt(XLB) - one
-           instrument's Geiger standing in for a whole sector, which is why "utilities are
-           oversold" could never be opened up. COHSETS now carries real sector membership
-           (18 utilities, 40 industrials...), so the column is the MEAN of the sector's
-           constituents, exactly as the cohort side works. Falls back to the ETF alone if
-           membership has not loaded, so it degrades to the old behaviour rather than to a
-           blank strip. */
-        return SECT.map(function(p){
-          var name=p[0], etf=p[1], vals=[];
-          var set=(typeof COHSETS!=="undefined" && COHSETS) ? COHSETS[SECT_KEY[etf]] : null;
-          if(set) set.forEach(function(t){ var v=gAt(t); if(v!=null) vals.push(v); });
-          var mean = vals.length ? vals.reduce(function(a,b){return a+b;},0)/vals.length : gAt(etf);
-          return {key:etf, label:name, short:etf,
-                  full:name+" \u00b7 "+etf+(vals.length?" \u00b7 "+vals.length+" holdings":" \u00b7 ETF only"),
-                  mean:mean, n:vals.length||1};
-        })
+           the sector in full. */
+        return SECT.map(function(p){ return {key:p[1], label:p[0], short:p[1],
+                                             full:p[0].replace(/\b\w/g,function(c){return c;})+" \u00b7 "+p[1],
+                                             mean:gAt(p[1]), n:1}; })
                    .sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
       }
       if(!ASOF) return _rows.apply(this,arguments);
       /* COHORTS while rewound: average that day's members rather than today's */
       var buckets={};
-      /* same membership basis as the live strip - otherwise the strip would silently change
-         what it means the moment you scrubbed */
-      if(typeof COHSETS!=="undefined" && COHSETS && typeof COHORTS!=="undefined"){
-        /* declared cohorts only - same reason as the live builder above */
-        COHORTS.forEach(function(c){
-          var set=COHSETS[c[1]]; if(!set) return;
-          set.forEach(function(t){
-            var v=gAt(t); if(v==null) return;
-            (buckets[c[1]]=buckets[c[1]]||[]).push(v);
-          });
-        });
-      } else if(typeof COHORT_OF!=="undefined"){
-        for(var t in COHORT_OF){
-          var v=gAt(t); if(v==null) continue;
-          (buckets[COHORT_OF[t]]=buckets[COHORT_OF[t]]||[]).push(v);
-        }
+      if(typeof COHORT_OF!=="undefined") for(var t in COHORT_OF){
+        var v=gAt(t); if(v==null) continue;
+        (buckets[COHORT_OF[t]]=buckets[COHORT_OF[t]]||[]).push(v);
       }
       var src=(typeof COHORTS!=="undefined")?COHORTS:[];
       return src.map(function(c){
@@ -12615,18 +11709,6 @@ function filesWire(){
       }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
     };
   }
-  /* delegated once: any COHORTS/SECTORS button, however many times the strip is rebuilt */
-  if(!window.__gwxCmpDelegated){
-    window.__gwxCmpDelegated=true;
-    document.addEventListener("click",function(ev){
-      var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
-      ev.stopPropagation();
-      CMP_MODE=b.getAttribute("data-gwxcmp");
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
-    }, true);
-  }
-  /* kept as a harmless no-op: the toggle is rendered inline now, so there is nothing to restore */
   function cmpToggle(){
     var hd=document.querySelector(".sc-cohstrip__hd"); if(!hd||hd.querySelector(".gwx-cmp"))return;
     var w=document.createElement("span"); w.className="gwx-cmp";
@@ -12661,11 +11743,7 @@ function filesWire(){
      The divergence mark uses ◆, a glyph already in this page's vocabulary, NOT colour -
      colour already means direction here and must not be overloaded.
      ========================================================================== */
-  /* published so the COMPARE STRIP reads the very same per-ticker trend/momentum the board
-     rows paint from. Without this the strip would have to fetch its own copy, and two
-     copies is how the board and the strip drifted apart in the first place. */
   var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null, prevPainted={};
-  window.SCIN_TM = TM;
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
   api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
@@ -12685,39 +11763,23 @@ function filesWire(){
     BOARD_COLS.splice(gi,0,["Trend",null],["Mom",null],["Read",null]);
     var st=document.createElement("style");
     st.textContent=
-      /* ★ THE COLLIDING COLUMNS. Seen on Alan's own screen: "+5.82%98.3x$314[" - CHG, F P/E
-         and MKT CAP running into each other and truncating mid-number.
-         Two causes, both mine. (1) Adding TREND/MOM/READ took the row from 10 tracks to 13
-         without widening the panel, so the numeric cells got too narrow. (2) Nothing in .ch
-         had an overflow guard, so a number that did not fit SPILLED into its neighbour
-         instead of being clipped - which is why it read as text on top of text.
-         Rebalanced: READ and GEIGER give up space to the three numeric columns, and every
-         cell now clips. A truncated number is legible; two overlapping ones are not. */
-      /* TREND and MOM need four characters ("+1.0") and were clipping to "+1..." at 8fr.
-         READ is the words version of the same two numbers, so it is the column that can
-         afford to lose width - it truncates gracefully and says nothing the pair does not. */
-      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
-      " minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr)"+
-      " minmax(0,9fr) minmax(0,15fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}"+
-      ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
+      ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,10fr)"+
+      " minmax(0,7fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr)"+
+      " minmax(0,20fr) minmax(0,18fr) minmax(0,12fr) minmax(0,5fr) !important;gap:6px}"+
       "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr)"+
-      " minmax(0,11fr) minmax(0,10fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr)"+
-      " minmax(0,9fr) minmax(0,9fr) minmax(0,8fr) minmax(0,12fr) minmax(0,7fr)"+
+      " minmax(0,11fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,6fr)"+
+      " minmax(0,7fr) minmax(0,7fr) minmax(0,16fr) minmax(0,12fr) minmax(0,7fr)"+
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       /* ONE ROW, ALWAYS. Alan: "what I like is the left to right, green to red. No rows."
          The strip was repeat(10,1fr) with 11 sectors, so the eleventh wrapped; under
          820px it dropped to repeat(5,1fr) and became two rows of five. Auto-flow column
-         keeps every member on one line and lets the columns narrow instead of wrapping.
-         THE FLOOR (46px): minmax(0,1fr) let the columns collapse to a MEASURED 32.7px,
-         which is narrower than the word "constructive" can be set at any legible size —
-         so the read Alan asked for arrived truncated to "constr…" in every column. The
-         row still never wraps; past the floor the strip scrolls sideways instead. */
+         keeps every member on one line and lets the columns narrow instead of wrapping. */
       ".sc-cohstrip{grid-template-columns:none !important;grid-auto-flow:column !important;"+
-      "grid-auto-columns:minmax(54px,1fr) !important;gap:2px !important;overflow-x:auto}"+
+      "grid-auto-columns:minmax(0,1fr) !important;gap:2px !important}"+
       "@media(max-width:820px){.sc-cohstrip{grid-template-columns:none !important;"+
-      "grid-auto-flow:column !important;grid-auto-columns:minmax(54px,1fr) !important}}"+
+      "grid-auto-flow:column !important;grid-auto-columns:minmax(0,1fr) !important}}"+
       ".sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
@@ -12792,11 +11854,17 @@ function filesWire(){
       else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
         rd.title="rewound - momentum has no history to compare against"; }
       else {
-        /* ONE definition, shared with the compare strip — see scinRead(). The word ladder
-           used to live here and only here, which is exactly why the strip never mirrored
-           the board. */
-        var T=d.tr, M=d.mo, R=scinRead(T,M);
-        rd.textContent=R.txt; rd.style.color=R.col;
+        var T=d.tr, M=d.mo, txt, col;
+        if(T>=0.5&&M>=0.4){ txt="aligned bull";      col="var(--bull)"; }
+        else if(T<=-0.5&&M<=-0.4){ txt="aligned bear"; col="var(--bear)"; }
+        else if(T>=0.4&&M<=-0.15){ txt="pullback";     col="var(--warn,#e0a24a)"; }
+        else if(T<=-0.2&&M>=0.35){ txt="turning up";   col="var(--warn,#e0a24a)"; }
+        else if(Math.abs(T)<0.25&&M>=0.5){ txt="mom leads"; col="var(--warn,#e0a24a)"; }
+        else if(T>=0.5&&Math.abs(M)<0.2){ txt="stalling";   col="var(--warn,#e0a24a)"; }
+        else if(T>=0.3&&M>=0){ txt="constructive"; col="var(--bull)"; }
+        else if(T<=-0.3&&M<=0){ txt="broken";      col="var(--bear)"; }
+        else { txt="mixed"; col="var(--mute)"; }
+        rd.textContent=txt; rd.style.color=col;
         rd.title="trend "+fmt2(T)+" (slow, daily-locked) · momentum "+fmt2(M)+" (fast, 6h/12h/1D)";
       }
       if(fresh){
@@ -12815,10 +11883,6 @@ function filesWire(){
     api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
       (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
       paintTM();
-      /* the strip renders before this arrives, so without a repaint here every column
-         would sit on "—" until the next unrelated rebuild */
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
     });
   }
 
@@ -12911,19 +11975,6 @@ function filesWire(){
 .sc-sysf__x{ font-size:9px; color:var(--ink2); line-height:1.4; margin:3px 0 0 11px; }
 .sc-sysf__e{ font-size:8px; color:var(--dim); line-height:1.45; margin:3px 0 0 11px; display:none; }
 .sc-sysf.open .sc-sysf__e{ display:block; }
-/* budget gauges - one bar per ceiling, filled by percentage. Green under 60, amber to
-   85, red above: the colour is the whole message at a glance. */
-.sc-sysg{ margin:8px 0 2px; }
-.sc-sysg__r{ display:flex; align-items:baseline; gap:6px; font-size:8.5px; letter-spacing:.06em;
-  text-transform:uppercase; color:var(--dim); margin-bottom:3px; }
-.sc-sysg__r b{ color:var(--ink); font-size:10px; font-variant-numeric:tabular-nums; letter-spacing:0; }
-.sc-sysg__r .pc{ margin-left:auto; color:var(--ink2); font-variant-numeric:tabular-nums; }
-.sc-sysg__t{ position:relative; height:4px; background:var(--panel); overflow:hidden; margin-bottom:9px; }
-.sc-sysg__t i{ position:absolute; left:0; top:0; bottom:0; }
-.sc-sysg__t i.ok{ background:var(--bull); }
-.sc-sysg__t i.mid{ background:#d8a534; }
-.sc-sysg__t i.hi{ background:var(--bear); }
-.sc-sysg__note{ font-size:8px; color:var(--dim); line-height:1.45; }
 .sc-sysf__b{ background:none;border:0;padding:0;margin:3px 0 0 11px;cursor:pointer;
   font-family:var(--mono); font-size:7.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--crk); }
 </style>
@@ -12943,35 +11994,21 @@ function filesWire(){
       var box=E("sysUseBox"); if(!box) return;
       var r=(rows&&rows[0])||null;
       if(!r){ box.querySelector(".sc-sysfact__body").innerHTML='<div class="dim">no meter rows yet.</div>'; return; }
-      /* Alan supplied the ceilings off the FMP dashboard: 500 GB per rolling 30 days and
-         3,000 calls/minute. They live in app_config, not in this file, so correcting them
-         is one UPDATE. What matters is not the raw number but how close it is to the wall. */
-      function cls(p){ return p>=85?"hi":(p>=60?"mid":"ok"); }
-      function gauge(label, now, cap, unit, pct){
-        var p=Math.max(0,Math.min(100,+pct||0));
-        return '<div class="sc-sysg__r">'+label+' <b>'+now+'</b> of '+cap+' '+unit+
-                 '<span class="pc">'+p.toFixed(1)+'%</span></div>'+
-               '<div class="sc-sysg__t"><i class="'+cls(p)+'" style="width:'+p+'%"></i></div>';
-      }
-      var partial = (+r.days_of_history) < 29.5;
+      var gbDay=+r.gb_per_day_at_current_rate;
       box.querySelector(".sc-sysfact__body").innerHTML =
-        '<div class="sc-sysg">'+
-          gauge('bandwidth &middot; 30d', (+r.gb_last_30d).toFixed(1), (+r.gb_cap_30d).toFixed(0), 'GB', r.pct_of_gb_cap)+
-          gauge('projected &middot; 30d at today\u2019s rate', (+r.gb_30d_projected).toFixed(0), (+r.gb_cap_30d).toFixed(0), 'GB', r.pct_of_cap_projected)+
-          gauge('call rate &middot; 1h avg', (+r.calls_per_minute_avg_1h).toFixed(0), (+r.calls_per_minute_cap).toFixed(0), '/min', r.pct_of_call_cap)+
-        '</div>'+
         '<div class="sc-sysbig">'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.calls_per_minute_avg_1h).toFixed(0)+'</div>'+
+            '<div class="sc-sysbig__l">calls / min</div></div>'+
           '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.gb_last_24h).toFixed(2)+'</div>'+
             '<div class="sc-sysbig__l">GB last 24h</div></div>'+
-          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+(+r.calls_last_24h).toLocaleString()+'</div>'+
-            '<div class="sc-sysbig__l">calls last 24h</div></div>'+
+          '<div class="sc-sysbig__c"><div class="sc-sysbig__n">'+gbDay.toFixed(1)+'</div>'+
+            '<div class="sc-sysbig__l">GB/day at this rate</div></div>'+
         '</div>'+
-        '<div class="sc-sysg__note">FMP publishes no usage figure for this key, so every one of these is '+
-          'counted on our side \u2014 each function logs its own calls and bytes as it runs. The ceilings come '+
-          'from the FMP dashboard and are stored as config, not hard-coded.'+
-          (partial ? ' The meter has watched '+(+r.days_of_history).toFixed(1)+' of the 30 days, so the '+
-            'first bar is a floor \u2014 the projection is the honest read until it fills.' : '')+
-        '</div>';
+        '<div class="sc-fmpact__row"><span class="dim">'+(+r.calls_last_hour).toLocaleString()+
+          ' calls and '+(+r.mb_last_hour).toFixed(0)+' MB in the last hour &middot; '+
+          (+r.calls_last_24h).toLocaleString()+' calls in 24h</span></div>'+
+        '<div class="sc-fmpact__row"><span class="dim">FMP publishes no usage figure for this key, '+
+          'so these are counted on our side: every function that calls FMP logs its own calls and bytes.</span></div>';
     });
   }
 
