@@ -11376,11 +11376,20 @@ function marketOpen(){
   }catch(e){ return true; }                          // fail open → keep genuine fault behavior
 }
 function updateLive(){
+  /* 2026-08-17 — THE BADGE NOW REFLECTS THE EQUITY FEED, NOT A LATCHED FETCH ERROR.
+     Previously: var live = (S.state === "live") && !eqStale. S.state is only ever ASSIGNED
+     "offline", by two unrelated catch handlers — the boot ticker-tape fetch and the company-detail
+     rotate fetch — and nothing ever restores it. So a single transient failure in either, neither
+     of which is the price feed, latched the global header AND every chart badge to OFFLINE
+     permanently while Massive prices kept updating underneath. That is what Alan saw.
+     Now liveness is derived from real equity freshness (feed_health.equity_price, refreshed by
+     scFeedWatch every 45 s) and is NOT hardcoded: __eqFresh is only true when that feed is GREEN
+     and its age is inside the bound, so a genuinely dead feed still reads STALE. */
   var eqStale = (window.__eqStale === true);
   var eqClosed = eqStale && !marketOpen();                                  // idle after-hours = CLOSED, not a fault
   var eqFault  = eqStale && !eqClosed;                                      // stale during the session = genuine fault
   try{ document.body.classList.toggle("feed-down", eqFault); }catch(e){}    // logo trefoil → red pulse ONLY on a real fault
-  var live = (S.state === "live") && !eqStale;
+  var live = (window.__eqFresh === true) && !eqStale;   /* equity truth, not a latched fetch error */
   var cls = live ? "is-live" : "is-off";
   var badge = el("liveBadge");
   if(badge){
@@ -11407,6 +11416,9 @@ async function scFeedWatch(){
     var rows = await pg("feed_health?select=feed,status,age_sec");
     var eq = (Array.isArray(rows)?rows:[]).find(function(r){ return r.feed==="equity_price"; });
     var down = !!eq && (eq.status==="RED" || eq.age_sec>600);
+    /* Positive liveness signal, measured rather than assumed. A MISSING row is NOT healthy:
+       __eqFresh stays false so the badge degrades to OFFLINE instead of claiming LIVE on no data. */
+    window.__eqFresh = !!eq && eq.status !== "RED" && eq.age_sec != null && eq.age_sec <= 600;
     var open = (typeof marketOpen==="function") ? marketOpen() : true;
     var fault = down && open;                                   // only a genuine fault when the session is open
     window.__eqStale = down;                                    // badge still reads CLOSED after-hours
@@ -11487,7 +11499,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-08-17T1135";
+window.SC_BUILD = "2026-08-17T1205";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
