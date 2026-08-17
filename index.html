@@ -3080,8 +3080,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      narrows the BOARD's own rows to the active cohort client-side. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
     pg("cohorts?select=ticker,cohort"),
-    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,volume"),   // FIX 2 — DB serves chg_pct + prev_close
-    pg("composite_staged?select=ticker,composite,trend,momentum,structure,updated_ts&tf=eq.D&order=updated_ts.desc"),
+    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close"),   // 2026-08-17: volume REMOVED. live_quotes has no volume column and PostgREST rejects the WHOLE select when one column is absent, which killed the entire main board. RVOL stays honestly blank until a real volume source is wired.
+    pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"),   // 2026-08-17: structure REMOVED. The column no longer exists (table now has volatility/conviction/core/composite). Same PostgREST all-or-nothing failure.
     pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
     pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"),
     /* R26 FIX 6 — ONE batch: every future annual estimate row, first per ticker kept client-side */
@@ -11487,7 +11487,7 @@ try {
    busted) and compare its build stamp to the running one — if the server is newer,
    the app is stale → reload ONCE (session-guarded, can't loop) straight to fresh.
    SC_BUILD is bumped on every deploy. Silent no-op offline. */
-window.SC_BUILD = "2026-08-03T1536";
+window.SC_BUILD = "2026-08-17T1135";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
