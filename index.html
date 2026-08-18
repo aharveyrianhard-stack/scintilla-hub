@@ -3195,9 +3195,22 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     .filter((m) => declaredSet.has(m.ticker) || gg[m.ticker])
     .map((m) => {
       const dbPx = num(px[m.ticker] && px[m.ticker].price);
-      const price = PRICES[m.ticker] != null ? PRICES[m.ticker] : dbPx;   // live tick wins over pull
+      /* SEED A REBUILT ROW FROM THE LAST ACCEPTED PROVIDER TICK.
+         MEASURED on production 2026-08-18: a cohort switch rebuilds every row object, and until the
+         NEXT network tick landed the board showed blanks - 5 to 18 s at the time, because the
+         whole-universe /quotes call was that slow. The provider's own last accepted snapshot is
+         already in memory and is authoritative, so a rebuilt row is seeded from it immediately.
+         This invents nothing: it is the same payload the tick applied, with its own previous close,
+         and it is used only for symbols the provider actually returned OK. Supabase equity values
+         are NOT used here. */
+      const tq = (window.SC_TICK_LAST && window.SC_TICK_LAST.quotes) ? window.SC_TICK_LAST.quotes[m.ticker] : null;
+      const tqOk = tq && tq.state === "OK" && num(tq.price) != null && num(tq.previous_close) != null && num(tq.previous_close) !== 0;
+      const price = PRICES[m.ticker] != null ? PRICES[m.ticker]
+                  : (tqOk ? num(tq.price) : dbPx);                     // live tick wins over pull
       if (price != null && PRICES[m.ticker] == null) PRICES[m.ticker] = price;
-      const pcServed = num(px[m.ticker] && px[m.ticker].prev_close);   // FIX 2 — SERVED prev_close feeds the live-patch store
+      /* The provider baseline outranks the served one for a declared equity; the served value is
+         still used for everything the provider does not own. */
+      const pcServed = tqOk ? num(tq.previous_close) : num(px[m.ticker] && px[m.ticker].prev_close);
       if (pcServed != null) prevClose[m.ticker] = pcServed;
       return {
         t: m.ticker,
@@ -3221,7 +3234,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
            field is used only when there is no baseline to compute from - i.e. non-equities, which
            keep their approved owner. */
         c:     (() => {
-                 const pcNow = num(px[m.ticker] && px[m.ticker].prev_close);
+                 const pcNow = pcServed != null ? pcServed : num(px[m.ticker] && px[m.ticker].prev_close);
                  if (price != null && pcNow != null && pcNow !== 0) return (price / pcNow - 1) * 100;
                  return num(px[m.ticker] && px[m.ticker].chg_pct) != null ? num(px[m.ticker].chg_pct)
                           : num(px[m.ticker] && px[m.ticker].change);
