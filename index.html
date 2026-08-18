@@ -11598,6 +11598,11 @@ async function scProviderTick () {
     const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(want.slice(0, 500).join(",")));
     if (!r.ok) throw new Error("quotes " + r.status);
     const j = await r.json();
+    /* THE ACCEPTED PAYLOAD IS RETAINED so a verifier can compare a rendered row against the EXACT
+       quote that produced it, rather than against a fresh fetch taken moments later. Without this
+       every check races the tape: a price that advances between paint and verification looks like
+       a mismatch, and a real defect hides inside that noise. */
+    window.SC_TICK_LAST = { utc: new Date().toISOString(), quotes: (j && j.quotes) || {} };
     let applied = 0;
     for (const [t, q] of Object.entries((j && j.quotes) || {})) {
       if (!q || q.state !== "OK") continue;                 // absence stays absent, never a legacy value
