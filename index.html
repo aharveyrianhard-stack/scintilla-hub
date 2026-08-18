@@ -11618,8 +11618,16 @@ async function scProviderTick () {
       /* patch() returns early on an identical re-quote, which is correct for repaint suppression
          but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
          it here from the same contract so price and percentage can never disagree. */
-      const row = (S.rows || []).find((x) => x.t === t);
-      if (row && isFinite(prev) && prev !== 0) {
+      /* SEED EVERY HELD ROW OBJECT, NOT JUST THE PAINTED COHORT.
+         MEASURED on production 2026-08-18: cohort switching swaps S.rows to a different array, so
+         GROWTH showed 17 of 17 and INTL 8 of 8 declared equities with a BLANK percentage - their
+         row objects were never the ones the tick updated. ALLROWS is the master universe store
+         (shownRows() filters it), so both are updated and no cohort can hold an unseeded row. */
+      const targets = [];
+      const rS = (S.rows || []).find((x) => x.t === t); if (rS) targets.push(rS);
+      const rA = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
+      if (rA && rA !== rS) targets.push(rA);
+      for (const row of targets) if (isFinite(prev) && prev !== 0) {
         /* A ROW WITH NO PRICE HAS NO PERCENTAGE.
            MEASURED on production 2026-08-18: this line previously ran Number(row.price) on a row
            that had never been seeded, and Number(null) is 0, so it rendered (0/prev - 1)*100 =
@@ -11630,6 +11638,7 @@ async function scProviderTick () {
         row.c = (isFinite(rp) && rp > 0) ? (rp / prev - 1) * 100 : null;
         if (isFinite(rp) && rp > 0 && (row.price == null || !isFinite(Number(row.price)))) row.price = rp;
       }
+
       applied++;
     }
     SC_TICK_FAILS = 0;
