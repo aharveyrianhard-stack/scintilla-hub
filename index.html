@@ -3114,7 +3114,16 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   for (const r of fpeEst) if (!seenF.has(r.ticker)) { seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg); }
   for (const r of fpeTtm) EPSTTM[r.ticker] = num(r.eps_ttm);
   const px = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+  /* P0-F: replace the legacy price/baseline/percentage with the provider's before ANY consumer
+     reads them. Done here, at the one place the board builds its quote index, so prevClose[],
+     the row's chg and every live-tick recompute inherit the provider baseline automatically. */
+  /* Pass the full member list, not just the legacy index's keys, so a provider-owned symbol with
+     no live_quotes row still gets its price and percentage. */
+  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, members.map((m) => m.ticker));
   const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
+  /* P0-E: provider/Equalizer Geiger replaces the legacy composite for every symbol the candidate
+     owns. Non-equities keep their existing owner, so the board universe is unchanged. */
+  if (window.SC_CLEAN_READS) await scApplyCandidateGeiger(gg);
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
      geiger[] is already ordered updated_ts desc, so gg (built above) already holds
@@ -3227,11 +3236,15 @@ async function fetchCompanyData(t) {
     pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
   ]);
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
+  /* P0-E: same Geiger authority on the company view as on the board. */
+  if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
   const rbMap = {};                                              // GO-LIVE FIX 2 — section → body
   for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
   const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, st: num(d0.structure) || 0 };
+  /* P0-F: same provider authority on the company view as on the board. */
+  if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
   if (num(q.prev_close) != null) prevClose[t] = num(q.prev_close);   // FIX 2 — served base for live patches
   return {
@@ -3265,6 +3278,11 @@ async function fetchTapeItems() {
     pg("live_quotes?select=ticker,price,change,chg_pct"),   // FIX 2 — DB serves chg_pct
     pg("composite_staged?select=ticker&tf=eq.D"),
   ]);
+  /* P0-F: the ticker tape carries the same percentage contract as the board. */
+  if (window.SC_CLEAN_READS) {
+    const _tix = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+    await scApplyProviderQuotes(_tix, Object.keys(_tix));
+  }
   const inComp = new Set(comp.map((c) => c.ticker));   // FIX 1 — tape universe = composite_staged tf=D only
   const all = quotes.filter((q) => q.price != null && inComp.has(q.ticker))
     .map((q) => ({ t: q.ticker, price: Number(q.price),
@@ -11199,6 +11217,16 @@ async function favLoad() {
    the auto-rotate's first geiger paints from its own cache) with ZERO network wait.
    No cache yet (first-ever visit) → S.rows stays empty and the board shows its light
    loading state until restartFeed's live pull lands. Guarded end-to-end. */
+/* CANDIDATE HOIST. SC_CHART_API and SC_CLEAN_READS are assigned much further down this script, but
+   boot paths below run FIRST. In the shipped build the switch defaulted OFF, so an early read of
+   `undefined` was indistinguishable from "off" and nothing broke. This candidate defaults ON, so an
+   early `undefined` read would silently take the LEGACY branch on the first paint — the candidate
+   would look like it worked while still reading the old table. Assigned here, before any boot call;
+   the original assignments below set the identical values and are harmless. */
+window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";
+var SC_CHART_API = window.SC_CHART_API;
+window.SC_CLEAN_READS = scComputeCleanReads();
+
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
@@ -11604,13 +11632,17 @@ var SC_CHART_API = window.SC_CHART_API;
 
    Shipped OFF. Turn on per-browser with  localStorage.sc_clean_reads = "1"  or ?cleanreads=1, so the
    new path can be exercised against production before it becomes the default for everyone. */
-window.SC_CLEAN_READS = (function () {
+/* CANDIDATE BUILD — DEFAULTS ON. A function DECLARATION (not an expression) so it hoists and can
+   be called by the early assignment above the boot calls. `?cleanreads=0` and
+   localStorage.sc_clean_reads="0" still force the legacy lane for side-by-side comparison. */
+function scComputeCleanReads () {
   try {
     if (/[?&]cleanreads=1/.test(location.search)) return true;
     if (/[?&]cleanreads=0/.test(location.search)) return false;
-    return localStorage.getItem("sc_clean_reads") === "1";
-  } catch (_) { return false; }
-})();
+    return localStorage.getItem("sc_clean_reads") !== "0";
+  } catch (_) { return true; }
+}
+window.SC_CLEAN_READS = scComputeCleanReads();
 
 /* Returns rows in the SHAPE THE LEGACY CALLERS ALREADY EXPECT — timestamp in SECONDS, newest first
    — so each call site changes by one line and nothing downstream has to be re-reasoned.
@@ -11619,10 +11651,130 @@ window.SC_CLEAN_READS = (function () {
    stale-data fallback: futures, commodities, indices, rates and crypto are not Massive's lane, and
    their owner is unchanged. It is only safe to read a 404 that way once every equity has a derived
    series, which is why the switch is not flipped until 366/366 daily objects are verified. */
+/* P0-E — GEIGER AUTHORITY.
+   Trend, Momentum and the composite come from the CANDIDATE artifact: recomputed from
+   provider-built bars under Alan's captured Equalizer (receipt sha256 f6cf97b5…97ad1) and served
+   read-only through the chart API's /geiger route.
+
+   IT IS NOT WRITTEN BACK INTO composite_staged, deliberately. That table is also written by cron 57
+   and the legacy ribbon engine, so publishing there would let a legacy writer silently overwrite
+   the candidate. One writer (the batch worker), one reader (this route).
+
+   TWO DEFECTS IN THE LIVE PATH THIS REPLACES, both measured 2026-08-18:
+     - live tf_contributors is 2, 5, 6 or 7 and NEVER 8, because geiger_for_user filters
+       ribbon_signals to a 3-hour freshness window and stale rungs silently fall out of the ladder.
+       The candidate reports 8 for all 365.
+     - live reads the local audit roll-up on a UTC anchor; the candidate reads provider bars on the
+       provider's own session anchor, with in-progress periods withheld.
+
+   PROVIDER ROUTING, NOT A FALLBACK: a symbol the candidate does not own (crypto, futures, indices,
+   rates) is LEFT ON ITS EXISTING OWNER rather than blanked. Overlaying blindly would erase every
+   non-equity row from the board. */
+const SC_CG = { at: 0, map: null, meta: null };
+async function scCandidateGeiger () {
+  if (SC_CG.map && Date.now() - SC_CG.at < 30000) return SC_CG.map;
+  try {
+    const r = await fetch(SC_CHART_API + "/geiger");
+    if (!r.ok) return SC_CG.map || {};            // absent stays absent; never a legacy substitute
+    const j = await r.json();
+    SC_CG.map = (j && j.symbols) || {};
+    SC_CG.meta = { receipt: j.equalizer_receipt_sha256, scale: j.scale, rungs: j.participating_rungs,
+                   computed: j.computed_utc, authority: j.bar_authority };
+    SC_CG.at = Date.now();
+    return SC_CG.map;
+  } catch (_) { return SC_CG.map || {}; }
+}
+/* Overlays a legacy-shaped {ticker -> {composite,trend,momentum,...}} index IN PLACE, only for
+   symbols the candidate owns. Returns how many were replaced. */
+async function scApplyCandidateGeiger (index) {
+  const cg = await scCandidateGeiger();
+  let applied = 0;
+  for (const t of Object.keys(index || {})) {
+    const v = cg[t];
+    if (!v || v.composite == null) continue;
+    index[t].composite = v.composite;
+    index[t].trend = v.trend;
+    index[t].momentum = v.momentum;
+    index[t].structure = null;                    // removed from the active contract
+    index[t].tf_contributors = v.tf_contributors;
+    index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
+    applied++;
+  }
+  return applied;
+}
+/* P0-F — PERCENTAGE AUTHORITY.
+   The displayed change must be the CURRENT PROVIDER PRICE against the PROVIDER'S OWN previous
+   COMPLETED official daily close. It must NOT come from live_quotes.chg_pct, live_quotes.change or
+   live_quotes.prev_close.
+
+   WHY, measured across the full 365-symbol universe on 2026-08-18: the legacy baseline disagreed
+   with the provider's previous close on 359 of 365 symbols, agreed on 5, and one symbol had no
+   legacy row at all. Worse, 183 symbols — exactly half the universe — were displayed with the
+   WRONG SIGN. AMD showed +6.50% while the provider's own numbers give -1.26% (507.90 against a
+   514.39 previous close). This is not an extended-hours baseline difference; after-hours drift is
+   worth about a point, these errors reach eight points and reverse direction.
+
+   Price AND baseline both come from the provider. Mixing a legacy price with a provider baseline
+   would simply invent a third wrong number. */
+const SC_PQ = { at: 0, map: {} };
+async function scProviderQuotes (tickers) {
+  const want = [...new Set((tickers || []).filter(Boolean))];
+  if (!want.length) return {};
+  /* 5 s is the quote object's own cache-control; the board refreshes on 45 s. */
+  if (Date.now() - SC_PQ.at < 5000 && want.every((t) => t in SC_PQ.map)) return SC_PQ.map;
+  const out = {};
+  for (let i = 0; i < want.length; i += 400) {          // route caps a request at 500 symbols
+    const batch = want.slice(i, i + 400);
+    try {
+      const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(batch.join(",")));
+      if (!r.ok) continue;                              // absent stays absent; never a legacy value
+      const j = await r.json();
+      for (const [k, q] of Object.entries((j && j.quotes) || {})) out[k] = q;
+    } catch (_) { /* leave absent rather than substitute */ }
+  }
+  SC_PQ.at = Date.now(); SC_PQ.map = Object.assign({}, SC_PQ.map, out);
+  return SC_PQ.map;
+}
+/* Overwrites price, prev_close and chg_pct IN PLACE on a legacy-shaped quote index, so every
+   downstream consumer keeps its existing shape and no call site has to be re-reasoned. A symbol the
+   provider does not own is left untouched — its owner is unchanged, which is provider routing, not
+   a fallback. */
+async function scApplyProviderQuotes (index, tickers) {
+  const pq = await scProviderQuotes(tickers);
+  let applied = 0;
+  /* Iterate the UNION of the legacy index and the requested tickers, not just the legacy keys.
+     PDD proved why: it has NO live_quotes row at all, so it was absent from the legacy index and
+     therefore never received its provider quote — it rendered 0.000% while the provider had it at
+     +2.371%. A symbol the provider owns must not depend on the legacy table having heard of it. */
+  const keys = [...new Set([...Object.keys(index || {}), ...(tickers || [])])];
+  for (const t of keys) {
+    if (!index[t]) {
+      const q0 = pq[t];
+      if (!q0 || q0.state !== "OK") continue;      // no provider quote either: leave genuinely absent
+      index[t] = { ticker: t };                    // provider-owned but unknown to live_quotes
+    }
+    const q = pq[t];
+    if (!q || q.state !== "OK") continue;
+    const price = Number(q.price), prev = Number(q.previous_close);
+    if (!isFinite(price) || !isFinite(prev) || prev === 0) continue;
+    index[t].price = price;
+    index[t].prev_close = prev;
+    index[t].chg_pct = (price - prev) / prev * 100;
+    index[t].change = price - prev;
+    index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
+    applied++;
+  }
+  return applied;
+}
 async function scCleanRows (sym, tf, bars) {
   try {
+    /* authority=provider is NOT optional. The API's default lane is the local audit roll-up, which
+       is measurably STALER than the legacy table it replaces on intraday widths (XLRE tf=240,
+       2026-08-18 01:10 ET: audit newest 2026-08-14T20:00Z vs legacy and provider 2026-08-17T20:00Z).
+       Defaulting clean reads ON without this parameter would make the Hub staler, not cleaner. */
     const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(sym) +
-                          "&tf=" + encodeURIComponent(tf) + "&limit=" + (bars || 200));
+                          "&tf=" + encodeURIComponent(tf) + "&authority=provider" +
+                          "&limit=" + (bars || 200));
     if (r.status === 404) return null;                 // not a Massive equity — caller keeps its owner
     if (!r.ok) return [];                              // real failure: empty, never silently legacy
     const j = await r.json();
@@ -12904,8 +13056,19 @@ function filesWire(){
        feeds the combined Geiger" - so the COMPONENT columns must stay raw. composite_staged
        .trend is now equalizer-weighted (it is what feeds the composite); fan_daily carries
        the same fan, and the raw structural read is what belongs in a component column. */
-    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
+    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(async function(rows){
       (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
+      /* P0-E: the component columns follow the SAME Geiger authority as the board, or the strip
+         would show legacy trend/momentum beside a candidate composite and the two would disagree
+         on screen. Non-equities keep their legacy values — provider routing, not a fallback. */
+      if (window.SC_CLEAN_READS) {
+        try {
+          const cg = await scCandidateGeiger();
+          for (const t of Object.keys(cg || {})) {
+            if (cg[t] && cg[t].trend != null) TM[t] = { tr: cg[t].trend, mo: cg[t].momentum };
+          }
+        } catch (_) { /* leave legacy values rather than blank the columns */ }
+      }
       paintTM();
       /* the strip renders before this arrives, so without a repaint here every column
          would sit on "—" until the next unrelated rebuild */
