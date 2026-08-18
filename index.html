@@ -13056,8 +13056,19 @@ function filesWire(){
        feeds the combined Geiger" - so the COMPONENT columns must stay raw. composite_staged
        .trend is now equalizer-weighted (it is what feeds the composite); fan_daily carries
        the same fan, and the raw structural read is what belongs in a component column. */
-    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(function(rows){
+    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(async function(rows){
       (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
+      /* P0-E: the component columns follow the SAME Geiger authority as the board, or the strip
+         would show legacy trend/momentum beside a candidate composite and the two would disagree
+         on screen. Non-equities keep their legacy values — provider routing, not a fallback. */
+      if (window.SC_CLEAN_READS) {
+        try {
+          const cg = await scCandidateGeiger();
+          for (const t of Object.keys(cg || {})) {
+            if (cg[t] && cg[t].trend != null) TM[t] = { tr: cg[t].trend, mo: cg[t].momentum };
+          }
+        } catch (_) { /* leave legacy values rather than blank the columns */ }
+      }
       paintTM();
       /* the strip renders before this arrives, so without a repaint here every column
          would sit on "—" until the next unrelated rebuild */
