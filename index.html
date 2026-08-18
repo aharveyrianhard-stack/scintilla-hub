@@ -11036,9 +11036,15 @@ function patch(t, price, src) {
   if (prev == null && r) prev = r.price;
   if (prev != null && +prev === price) { PRICES[t] = price; return; }
   PRICES[t] = price;
-  const pc = prevClose[t];                  // FIX 2 — SERVED live_quotes.prev_close only
+  const pc = prevClose[t];                  // provider previous completed daily close
   const c = pc ? (price / pc - 1) * 100 : null;
-  if (r) { r.price = price; if (c != null) r.c = c; }
+  /* A MOVED PRICE MUST NEVER KEEP AN OLD PERCENTAGE.
+     MEASURED on production 2026-08-18: r.price was updated while r.c was left alone whenever the
+     previous close was missing, so the percentage silently froze at its board-build value while the
+     price kept advancing. ADBE displayed -1.0521% against a price that actually implied -1.0182%.
+     94 of 365 rows on the ALL surface were stale this way. If there is no provider baseline the
+     percentage is CLEARED, not kept - the same fail-closed rule the rest of this overlay follows. */
+  if (r) { r.price = price; r.c = (c != null) ? c : null; }
   const lp = el("lp_" + t);
   if (lp) {
     lp.textContent = price.toFixed(2);
@@ -11582,7 +11588,9 @@ async function scProviderTick () {
   if (!decl || !decl.size) return;
   /* Only what is on screen. The board can hold ~365 rows but a hidden tab or a filtered cohort
      should not cost a full-universe request every two seconds. */
-  const want = (S.rows || []).map((r) => r.t).filter((t) => decl.has(t));
+  /* Cover every row currently held, not just the painted cohort: switching to ALL previously
+     exposed symbols the tick had never seeded with a previous close. Still ONE batched request. */
+  const want = [...new Set((S.rows || []).map((r) => r.t).filter((t) => decl.has(t)))];
   if (!want.length) return;
   SC_TICK_INFLIGHT = true;
   const t0 = Date.now();
@@ -11599,6 +11607,11 @@ async function scProviderTick () {
          displayed provider trade against the provider's own completed daily close. */
       if (isFinite(prev) && prev !== 0) prevClose[t] = prev;
       patch(t, price, "PROVIDER");
+      /* patch() returns early on an identical re-quote, which is correct for repaint suppression
+         but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
+         it here from the same contract so price and percentage can never disagree. */
+      const row = (S.rows || []).find((x) => x.t === t);
+      if (row && isFinite(prev) && prev !== 0) row.c = (Number(row.price) / prev - 1) * 100;
       applied++;
     }
     SC_TICK_FAILS = 0;
