@@ -3078,7 +3078,13 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* the membership map decides which rows belong to this cohort, so wait for it rather than
      racing it - a board that renders first would silently fall back to tickers.cohort, which
      is the split that produced a Geiger for a cohort with no rows in it. */
-  try { await loadCohSets(); } catch (_) { /* fallback path below still works */ }
+  /* P0: this await was UNBOUNDED. It is catch-wrapped so it could not FAIL the board, but with no
+     deadline it blocked boot for as long as Supabase took to answer - measured 21,113 ms healthy
+     against 4,727 ms with Supabase blocked entirely, i.e. the healthy path was SLOWER because it
+     waited here. It is now bounded like every other Supabase read: if the map is not back inside
+     the deadline the board proceeds without it and the map keeps loading in the background, so
+     cohort tabs fill in on the next repaint instead of holding the whole board hostage. */
+  await scOpt('ticker_cohorts', loadCohSets(), null);
   /* R39 — COMPARE fix: this pull is now ALWAYS unscoped (every ticker's cohort tag,
      not just the active one) so cohortCompareRows() can read every cohort's
      membership regardless of which single cohort tab is on screen. Cheap: it's just
