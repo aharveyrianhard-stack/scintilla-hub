@@ -11012,9 +11012,24 @@ function chatGrow() {   // textarea auto-grow, 1–3 rows (CSS max-height caps i
 /* ---- LIVE TICK LAYER (SCINTILLA_HUB patterns: patch-don't-rebuild) ----------------- */
 /* patch(): update price stores + flash the board cell in place. Text cells only —
    never re-sorts, never rebuilds rows. Also patches the open company IdentBar. */
-function patch(t, price) {
+/* PROVIDER-ONLY PRICE GUARD (P0-2, 2026-08-18).
+   Every legacy caller of patch() carried a Supabase live_quotes price. For a DECLARED MASSIVE
+   EQUITY that value is no longer authority and must never overwrite the provider's, so patch()
+   now takes its SOURCE and refuses a legacy price for a declared equity outright. Crypto and
+   every other non-equity are untouched — Coinbase and FMP keep their approved routes, which is
+   provider routing, not a fallback.
+   Counted rather than silent: SC_GUARD lets a rendered acceptance run prove the overwrite is
+   actually being refused instead of assuming it. */
+window.SC_GUARD = { refused_legacy_equity: 0, provider_applied: 0, nonequity_passthrough: 0 };
+function scDeclaredSync (t) {
+  const d = window.SC_DECLARED_SET;
+  return !!(d && d.has && d.has(t));
+}
+function patch(t, price, src) {
   price = +price;
   if (!isFinite(price)) return;
+  if (src !== "PROVIDER" && scDeclaredSync(t)) { window.SC_GUARD.refused_legacy_equity++; return; }
+  if (src === "PROVIDER") window.SC_GUARD.provider_applied++; else window.SC_GUARD.nonequity_passthrough++;
   /* FIX 2 — compare first: identical re-quotes (closed markets) never flash or repaint */
   let prev = PRICES[t];
   const r = S.rows.find((x) => x.t === t);
@@ -11165,8 +11180,11 @@ function pollFMP() {
       const batch = eqSyms.slice(i, i + 40).join(",");
       try {
         const j = await pg("live_quotes?ticker=in.(" + batch + ")&select=ticker,price");
+        /* Declared equities are refused inside patch(); this call now only carries whatever
+           non-equity rows live_quotes still owns. The batch itself is left in place so the
+           non-equity lane keeps working unchanged. */
         if (Array.isArray(j)) for (const qq of j)
-          if (qq && qq.ticker && qq.price != null) patch(String(qq.ticker).toUpperCase(), +qq.price);
+          if (qq && qq.ticker && qq.price != null) patch(String(qq.ticker).toUpperCase(), +qq.price, "LEGACY");
       } catch (err) {}
     }
   })();
@@ -11186,7 +11204,9 @@ function pollFMPAfterHours() {
 /* realtime — live_quotes ticks patch cells; news INSERTs prepend with .new flash */
 if (sb) {
   sb.channel("lq").on("postgres_changes", { event: "*", schema: "public", table: "live_quotes" }, (p) => {
-    if (p.new && p.new.ticker && p.new.price != null && !cryptoSet.has(p.new.ticker)) patch(p.new.ticker, p.new.price);
+    /* live_quotes realtime can no longer move a declared equity: patch() refuses it by source.
+       Kept subscribed because non-equity rows still arrive on this channel. */
+    if (p.new && p.new.ticker && p.new.price != null && !cryptoSet.has(p.new.ticker)) patch(p.new.ticker, p.new.price, "LEGACY");
   }).subscribe();
   sb.channel("nw").on("postgres_changes", { event: "INSERT", schema: "public", table: "news" }, (p) => {
     if (!p.new) return;
@@ -11541,6 +11561,66 @@ scFeedWatch(); setInterval(scFeedWatch, 45000);                        // health
 connectCB();                                                         // crypto WS — always on
 loadSession(); setInterval(loadSession, 60000);                      // GO-LIVE FIX 1 — market_state every 60 s
 setInterval(pollFMP, 12000);
+
+/* ── PROVIDER PRICE REFRESH (P0-2, 2026-08-18) ───────────────────────────────────────────────
+   Replaces the 12-second Supabase live_quotes poll as the equity price source. One BATCHED
+   request to the Fly /quotes route for the symbols actually on screen — never per-symbol fanout,
+   which is how the legacy per-symbol close lookup reached 1,538,655 calls in the first place.
+   Non-overlapping by construction: a tick that finds the previous one still in flight returns
+   immediately rather than queueing, so a slow response can never stack requests.
+   Price is the provider's real trade; previous close is the provider's completed daily bar from
+   the SAME response, so the percentage is exact arithmetic between two fields of one contract and
+   cannot drift the way the legacy triple did.
+   Throttled to 10 s when the tab is hidden, and backs off on consecutive failures. */
+let SC_TICK_INFLIGHT = false, SC_TICK_FAILS = 0, SC_TICK_TIMER = null;
+window.SC_TICK = { runs: 0, applied: 0, symbols: 0, failures: 0, last_ms: 0, last_utc: null };
+const SC_TICK_FAST_MS = 2000, SC_TICK_HIDDEN_MS = 10000;
+
+async function scProviderTick () {
+  if (SC_TICK_INFLIGHT) return;
+  const decl = window.SC_DECLARED_SET;
+  if (!decl || !decl.size) return;
+  /* Only what is on screen. The board can hold ~365 rows but a hidden tab or a filtered cohort
+     should not cost a full-universe request every two seconds. */
+  const want = (S.rows || []).map((r) => r.t).filter((t) => decl.has(t));
+  if (!want.length) return;
+  SC_TICK_INFLIGHT = true;
+  const t0 = Date.now();
+  try {
+    const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(want.slice(0, 500).join(",")));
+    if (!r.ok) throw new Error("quotes " + r.status);
+    const j = await r.json();
+    let applied = 0;
+    for (const [t, q] of Object.entries((j && j.quotes) || {})) {
+      if (!q || q.state !== "OK") continue;                 // absence stays absent, never a legacy value
+      const price = Number(q.price), prev = Number(q.previous_close);
+      if (!isFinite(price)) continue;
+      /* Previous close from the same contract, so the percentage recomputed inside patch() is the
+         displayed provider trade against the provider's own completed daily close. */
+      if (isFinite(prev) && prev !== 0) prevClose[t] = prev;
+      patch(t, price, "PROVIDER");
+      applied++;
+    }
+    SC_TICK_FAILS = 0;
+    window.SC_TICK.runs++; window.SC_TICK.applied += applied;
+    window.SC_TICK.symbols = want.length; window.SC_TICK.last_ms = Date.now() - t0;
+    window.SC_TICK.last_utc = new Date().toISOString();
+  } catch (_) {
+    SC_TICK_FAILS++; window.SC_TICK.failures++;
+  } finally { SC_TICK_INFLIGHT = false; /* Resolve the declared set immediately rather than waiting for the first board build, so the
+   guard is armed before any legacy tick can arrive. */
+scDeclaredEquities().catch(() => {});
+scScheduleTick(); }
+}
+function scScheduleTick () {
+  if (SC_TICK_TIMER) clearTimeout(SC_TICK_TIMER);
+  const hidden = (typeof document !== "undefined" && document.hidden);
+  const base = hidden ? SC_TICK_HIDDEN_MS : SC_TICK_FAST_MS;
+  const backoff = Math.min(8, Math.pow(2, SC_TICK_FAILS));   // 1,2,4,8x on consecutive failures
+  SC_TICK_TIMER = setTimeout(scProviderTick, base * backoff);
+}
+scScheduleTick();
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", scScheduleTick);
 /* R30 — CHART OFF FMP: the price line now reads ohlcv_history (your DB), not FMP's
    bandwidth-capped historical API. This later function declaration supersedes the
    FMP-based fetchChartSeries defined earlier (function-decl last-wins). Charts now
@@ -11831,8 +11911,14 @@ function scEqFromCache () {
   return null;
 }
 async function scDeclaredEquities () {
-  if (SC_EQ) return SC_EQ;
+  /* PUBLISH THE SET AS EARLY AS IT IS KNOWN.
+     MEASURED on the staged build: the board applied 64 legacy live_quotes patches during boot
+     because window.SC_DECLARED_SET was still null - the guard was correct and simply had nothing
+     to check against yet. The localStorage cache makes a warm load instant, and the fetched set is
+     published the moment it lands, so the unguarded window is as small as it can be. */
+  if (SC_EQ) { window.SC_DECLARED_SET = SC_EQ; return SC_EQ; }
   SC_EQ = scEqFromCache();
+  if (SC_EQ && SC_EQ.size) window.SC_DECLARED_SET = SC_EQ;
   try {
     const r = await fetch(SC_CHART_API + "/geiger");
     if (r.ok) {
@@ -11845,12 +11931,16 @@ async function scDeclaredEquities () {
     }
   } catch (_) {}
   window.SC_EQUITY_AUTHORITY_UNKNOWN = !SC_EQ;
+  if (SC_EQ && SC_EQ.size) window.SC_DECLARED_SET = SC_EQ;
   return SC_EQ;
 }
 
 async function scApplyProviderQuotes (index, tickers) {
   const pq = await scProviderQuotes(tickers);
   const eq = await scDeclaredEquities();
+  /* Publish the declared set synchronously so patch() can refuse a legacy equity price without
+     awaiting anything on the hot path. */
+  if (eq && eq.size) window.SC_DECLARED_SET = eq;
   let applied = 0, blanked = 0;
   /* Iterate the UNION of the legacy index and the requested tickers, not just the legacy keys.
      PDD proved why: it has NO live_quotes row at all, so it was absent from the legacy index and
