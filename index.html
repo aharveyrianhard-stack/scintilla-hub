@@ -3205,8 +3205,27 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         name: (pf[m.ticker] && pf[m.ticker].name) || "",
         exchange: (pf[m.ticker] && pf[m.ticker].exchange) || "",
         price,
-        c:     num(px[m.ticker] && px[m.ticker].chg_pct) != null ? num(px[m.ticker].chg_pct)
-                 : num(px[m.ticker] && px[m.ticker].change),            // FIX 2 — chg_pct from the DB, never computed
+        /* ONE PROVIDER-AUTHORITATIVE PERCENTAGE PATH.
+           This field used to be COPIED from the quote index ("chg_pct from the DB, never
+           computed"). That single line caused both remaining P0-4 defects, measured on production
+           2026-08-18:
+             - BLANKS: GROWTH 17/17 and INTL 8/8 declared equities rendered no percentage, because
+               a provider-owned symbol with no chg_pct in the index got null - even though its
+               price and provider previous close were both known.
+             - STALENESS: the 45 s merge does `for (const k in nr) old[k] = nr[k]`, so it copied
+               this BUILD-TIME percentage back over the value the ~2 s provider tick had just
+               recomputed, while `price` moved on. BLK rendered -0.4991% (implying a 1157.78
+               baseline) against the provider's 1160.14 (-0.7016%).
+           It is now COMPUTED from the row's own price and the provider previous close, so the
+           board build, the tick and the merge can only ever produce the same number. The legacy
+           field is used only when there is no baseline to compute from - i.e. non-equities, which
+           keep their approved owner. */
+        c:     (() => {
+                 const pcNow = num(px[m.ticker] && px[m.ticker].prev_close);
+                 if (price != null && pcNow != null && pcNow !== 0) return (price / pcNow - 1) * 100;
+                 return num(px[m.ticker] && px[m.ticker].chg_pct) != null ? num(px[m.ticker].chg_pct)
+                          : num(px[m.ticker] && px[m.ticker].change);
+               })(),
         fpe:   fpeVal(m.ticker, price),                                 // R26 FIX 6 — fwd P/E (guarded)
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
@@ -11033,8 +11052,29 @@ function patch(t, price, src) {
   /* FIX 2 — compare first: identical re-quotes (closed markets) never flash or repaint */
   let prev = PRICES[t];
   const r = S.rows.find((x) => x.t === t);
+  const rAll = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
   if (prev == null && r) prev = r.price;
-  if (prev != null && +prev === price) { PRICES[t] = price; return; }
+  if (prev != null && +prev === price) {
+    PRICES[t] = price;
+    /* A REBUILT ROW IS A NEW OBJECT AND MAY STILL BE UNSEEDED.
+       This early return exists to suppress repaint on an identical re-quote, and it was correct
+       about the DOM and wrong about the model. A cohort switch calls fetchBoardRows, which builds
+       BRAND NEW row objects with price null for any symbol the legacy index has never carried.
+       PRICES[t] was already at the provider's value from an earlier tick, so `prev === price` and
+       this returned before ever assigning the new object's fields - leaving it blank permanently.
+       MEASURED on production 2026-08-18: GROWTH 17/17 and INTL 8/8 declared equities held
+       row_price null while prevClose[t] carried the correct provider baseline (ABNB 184.485).
+       Seeding before the return costs nothing when the row is already correct. */
+    const pc0 = prevClose[t];
+    for (const row of [r, rAll]) {
+      if (!row) continue;
+      if (row.price == null || !isFinite(Number(row.price)) || Number(row.price) !== price) {
+        row.price = price;
+        row.c = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
+      }
+    }
+    return;
+  }
   PRICES[t] = price;
   const pc = prevClose[t];                  // provider previous completed daily close
   const c = pc ? (price / pc - 1) * 100 : null;
@@ -11044,7 +11084,7 @@ function patch(t, price, src) {
      price kept advancing. ADBE displayed -1.0521% against a price that actually implied -1.0182%.
      94 of 365 rows on the ALL surface were stale this way. If there is no provider baseline the
      percentage is CLEARED, not kept - the same fail-closed rule the rest of this overlay follows. */
-  if (r) { r.price = price; r.c = (c != null) ? c : null; }
+  for (const row of [r, rAll]) if (row) { row.price = price; row.c = (c != null) ? c : null; }
   const lp = el("lp_" + t);
   if (lp) {
     lp.textContent = price.toFixed(2);
