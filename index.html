@@ -3117,7 +3117,9 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* P0-F: replace the legacy price/baseline/percentage with the provider's before ANY consumer
      reads them. Done here, at the one place the board builds its quote index, so prevClose[],
      the row's chg and every live-tick recompute inherit the provider baseline automatically. */
-  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, Object.keys(px));
+  /* Pass the full member list, not just the legacy index's keys, so a provider-owned symbol with
+     no live_quotes row still gets its price and percentage. */
+  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, members.map((m) => m.ticker));
   const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
   /* P0-E: provider/Equalizer Geiger replaces the legacy composite for every symbol the candidate
      owns. Non-equities keep their existing owner, so the board universe is unchanged. */
@@ -11740,7 +11742,17 @@ async function scProviderQuotes (tickers) {
 async function scApplyProviderQuotes (index, tickers) {
   const pq = await scProviderQuotes(tickers);
   let applied = 0;
-  for (const t of Object.keys(index || {})) {
+  /* Iterate the UNION of the legacy index and the requested tickers, not just the legacy keys.
+     PDD proved why: it has NO live_quotes row at all, so it was absent from the legacy index and
+     therefore never received its provider quote — it rendered 0.000% while the provider had it at
+     +2.371%. A symbol the provider owns must not depend on the legacy table having heard of it. */
+  const keys = [...new Set([...Object.keys(index || {}), ...(tickers || [])])];
+  for (const t of keys) {
+    if (!index[t]) {
+      const q0 = pq[t];
+      if (!q0 || q0.state !== "OK") continue;      // no provider quote either: leave genuinely absent
+      index[t] = { ticker: t };                    // provider-owned but unknown to live_quotes
+    }
     const q = pq[t];
     if (!q || q.state !== "OK") continue;
     const price = Number(q.price), prev = Number(q.previous_close);
