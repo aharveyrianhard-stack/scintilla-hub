@@ -3114,6 +3114,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   for (const r of fpeEst) if (!seenF.has(r.ticker)) { seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg); }
   for (const r of fpeTtm) EPSTTM[r.ticker] = num(r.eps_ttm);
   const px = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+  /* P0-F: replace the legacy price/baseline/percentage with the provider's before ANY consumer
+     reads them. Done here, at the one place the board builds its quote index, so prevClose[],
+     the row's chg and every live-tick recompute inherit the provider baseline automatically. */
+  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, Object.keys(px));
   const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
@@ -3232,6 +3236,8 @@ async function fetchCompanyData(t) {
   for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
   const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, st: num(d0.structure) || 0 };
+  /* P0-F: same provider authority on the company view as on the board. */
+  if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
   if (num(q.prev_close) != null) prevClose[t] = num(q.prev_close);   // FIX 2 — served base for live patches
   return {
@@ -3265,6 +3271,11 @@ async function fetchTapeItems() {
     pg("live_quotes?select=ticker,price,change,chg_pct"),   // FIX 2 — DB serves chg_pct
     pg("composite_staged?select=ticker&tf=eq.D"),
   ]);
+  /* P0-F: the ticker tape carries the same percentage contract as the board. */
+  if (window.SC_CLEAN_READS) {
+    const _tix = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+    await scApplyProviderQuotes(_tix, Object.keys(_tix));
+  }
   const inComp = new Set(comp.map((c) => c.ticker));   // FIX 1 — tape universe = composite_staged tf=D only
   const all = quotes.filter((q) => q.price != null && inComp.has(q.ticker))
     .map((q) => ({ t: q.ticker, price: Number(q.price),
@@ -11633,6 +11644,60 @@ window.SC_CLEAN_READS = scComputeCleanReads();
    stale-data fallback: futures, commodities, indices, rates and crypto are not Massive's lane, and
    their owner is unchanged. It is only safe to read a 404 that way once every equity has a derived
    series, which is why the switch is not flipped until 366/366 daily objects are verified. */
+/* P0-F — PERCENTAGE AUTHORITY.
+   The displayed change must be the CURRENT PROVIDER PRICE against the PROVIDER'S OWN previous
+   COMPLETED official daily close. It must NOT come from live_quotes.chg_pct, live_quotes.change or
+   live_quotes.prev_close.
+
+   WHY, measured across the full 365-symbol universe on 2026-08-18: the legacy baseline disagreed
+   with the provider's previous close on 359 of 365 symbols, agreed on 5, and one symbol had no
+   legacy row at all. Worse, 183 symbols — exactly half the universe — were displayed with the
+   WRONG SIGN. AMD showed +6.50% while the provider's own numbers give -1.26% (507.90 against a
+   514.39 previous close). This is not an extended-hours baseline difference; after-hours drift is
+   worth about a point, these errors reach eight points and reverse direction.
+
+   Price AND baseline both come from the provider. Mixing a legacy price with a provider baseline
+   would simply invent a third wrong number. */
+const SC_PQ = { at: 0, map: {} };
+async function scProviderQuotes (tickers) {
+  const want = [...new Set((tickers || []).filter(Boolean))];
+  if (!want.length) return {};
+  /* 5 s is the quote object's own cache-control; the board refreshes on 45 s. */
+  if (Date.now() - SC_PQ.at < 5000 && want.every((t) => t in SC_PQ.map)) return SC_PQ.map;
+  const out = {};
+  for (let i = 0; i < want.length; i += 400) {          // route caps a request at 500 symbols
+    const batch = want.slice(i, i + 400);
+    try {
+      const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(batch.join(",")));
+      if (!r.ok) continue;                              // absent stays absent; never a legacy value
+      const j = await r.json();
+      for (const [k, q] of Object.entries((j && j.quotes) || {})) out[k] = q;
+    } catch (_) { /* leave absent rather than substitute */ }
+  }
+  SC_PQ.at = Date.now(); SC_PQ.map = Object.assign({}, SC_PQ.map, out);
+  return SC_PQ.map;
+}
+/* Overwrites price, prev_close and chg_pct IN PLACE on a legacy-shaped quote index, so every
+   downstream consumer keeps its existing shape and no call site has to be re-reasoned. A symbol the
+   provider does not own is left untouched — its owner is unchanged, which is provider routing, not
+   a fallback. */
+async function scApplyProviderQuotes (index, tickers) {
+  const pq = await scProviderQuotes(tickers);
+  let applied = 0;
+  for (const t of Object.keys(index || {})) {
+    const q = pq[t];
+    if (!q || q.state !== "OK") continue;
+    const price = Number(q.price), prev = Number(q.previous_close);
+    if (!isFinite(price) || !isFinite(prev) || prev === 0) continue;
+    index[t].price = price;
+    index[t].prev_close = prev;
+    index[t].chg_pct = (price - prev) / prev * 100;
+    index[t].change = price - prev;
+    index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
+    applied++;
+  }
+  return applied;
+}
 async function scCleanRows (sym, tf, bars) {
   try {
     /* authority=provider is NOT optional. The API's default lane is the local audit roll-up, which
