@@ -11688,18 +11688,34 @@ async function scCandidateGeiger () {
    symbols the candidate owns. Returns how many were replaced. */
 async function scApplyCandidateGeiger (index) {
   const cg = await scCandidateGeiger();
-  let applied = 0;
+  const eq = await scDeclaredEquities();
+  let applied = 0, blanked = 0;
   for (const t of Object.keys(index || {})) {
     const v = cg[t];
-    if (!v || v.composite == null) continue;
-    index[t].composite = v.composite;
-    index[t].trend = v.trend;
-    index[t].momentum = v.momentum;
-    index[t].structure = null;                    // removed from the active contract
-    index[t].tf_contributors = v.tf_contributors;
-    index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
-    applied++;
+    if (v && v.composite != null) {
+      index[t].composite = v.composite;
+      index[t].trend = v.trend;
+      index[t].momentum = v.momentum;
+      index[t].structure = null;                  // removed from the active contract
+      index[t].tf_contributors = v.tf_contributors;
+      index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
+      index[t].sc_geiger_state = "OK";
+      applied++;
+      continue;
+    }
+    if (!(eq && eq.has(t))) continue;             // non-equity keeps its approved owner
+    /* DECLARED EQUITY WITH NO CANDIDATE GEIGER — FAIL CLOSED. Skipping here previously left the
+       legacy composite_staged Trend, Momentum and composite on screen for a declared equity. */
+    index[t].composite = null;
+    index[t].trend = null;
+    index[t].momentum = null;
+    index[t].structure = null;
+    index[t].tf_contributors = null;
+    index[t].sc_geiger_source = null;
+    index[t].sc_geiger_state = "PROVIDER_GEIGER_UNAVAILABLE";
+    blanked++;
   }
+  window.SC_LAST_GEIGER_OVERLAY = { applied, blanked };
   return applied;
 }
 /* P0-F — PERCENTAGE AUTHORITY.
@@ -11739,31 +11755,95 @@ async function scProviderQuotes (tickers) {
    downstream consumer keeps its existing shape and no call site has to be re-reasoned. A symbol the
    provider does not own is left untouched — its owner is unchanged, which is provider routing, not
    a fallback. */
+/* DECLARED EQUITY MEMBERSHIP — from the RECEIPT, not from whether a response arrived.
+   The authoritative equity/ETF universe is the 365 active rows of massive_stocks.instrument_map,
+   echoed by the /geiger route together with the Equalizer receipt hash. Deciding membership from
+   the presence of a provider response is exactly the bug being fixed: a failed request would make a
+   declared equity look like a non-equity and quietly hand it back to the legacy table.
+   Cached in localStorage because the set changes rarely and a transient outage must not erase our
+   knowledge of WHO is an equity. If we have never obtained it, we say so via
+   SC_EQUITY_AUTHORITY_UNKNOWN rather than guessing. */
+const SC_EQ_KEY = "sc_declared_equities_v1";
+let SC_EQ = null;
+function scEqFromCache () {
+  try {
+    const r = JSON.parse(localStorage.getItem(SC_EQ_KEY) || "null");
+    if (r && r.at && (Date.now() - r.at) < 7 * 864e5 && Array.isArray(r.syms) && r.syms.length) return new Set(r.syms);
+  } catch (_) {}
+  return null;
+}
+async function scDeclaredEquities () {
+  if (SC_EQ) return SC_EQ;
+  SC_EQ = scEqFromCache();
+  try {
+    const r = await fetch(SC_CHART_API + "/geiger");
+    if (r.ok) {
+      const j = await r.json();
+      const syms = Object.keys((j && j.symbols) || {});
+      if (syms.length) {
+        SC_EQ = new Set(syms);
+        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), syms })); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  window.SC_EQUITY_AUTHORITY_UNKNOWN = !SC_EQ;
+  return SC_EQ;
+}
+
 async function scApplyProviderQuotes (index, tickers) {
   const pq = await scProviderQuotes(tickers);
-  let applied = 0;
+  const eq = await scDeclaredEquities();
+  let applied = 0, blanked = 0;
   /* Iterate the UNION of the legacy index and the requested tickers, not just the legacy keys.
      PDD proved why: it has NO live_quotes row at all, so it was absent from the legacy index and
      therefore never received its provider quote — it rendered 0.000% while the provider had it at
      +2.371%. A symbol the provider owns must not depend on the legacy table having heard of it. */
   const keys = [...new Set([...Object.keys(index || {}), ...(tickers || [])])];
   for (const t of keys) {
-    if (!index[t]) {
-      const q0 = pq[t];
-      if (!q0 || q0.state !== "OK") continue;      // no provider quote either: leave genuinely absent
-      index[t] = { ticker: t };                    // provider-owned but unknown to live_quotes
-    }
+    const declared = !!(eq && eq.has(t));
     const q = pq[t];
-    if (!q || q.state !== "OK") continue;
-    const price = Number(q.price), prev = Number(q.previous_close);
-    if (!isFinite(price) || !isFinite(prev) || prev === 0) continue;
-    index[t].price = price;
-    index[t].prev_close = prev;
-    index[t].chg_pct = (price - prev) / prev * 100;
-    index[t].change = price - prev;
-    index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
-    applied++;
+    const price = q ? Number(q.price) : NaN;
+    const prev = q ? Number(q.previous_close) : NaN;
+    const valid = !!q && q.state === "OK" && isFinite(price) && isFinite(prev) && prev !== 0;
+
+    if (valid) {
+      if (!index[t]) index[t] = { ticker: t };     // provider-owned but unknown to live_quotes (PDD)
+      index[t].price = price;
+      index[t].prev_close = prev;
+      index[t].chg_pct = (price - prev) / prev * 100;
+      index[t].change = price - prev;
+      index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
+      index[t].sc_state = "OK";
+      applied++;
+      continue;
+    }
+
+    /* NON-EQUITY: keeps its approved owner untouched. This is provider routing, not a fallback. */
+    if (!declared) continue;
+
+    /* DECLARED EQUITY WITH NO VALID PROVIDER VALUE — FAIL CLOSED.
+       The previous version skipped here, which LEFT THE LEGACY SUPABASE ROW IN PLACE and rendered a
+       legacy price, previous close and percentage for a declared equity with no visible marker.
+       One failed batch request was enough to do it. The row is kept so the symbol never vanishes
+       from navigation, but every legacy-derived value is cleared and a NAMED state is exposed. */
+    if (!index[t]) index[t] = { ticker: t };
+    index[t].price = null;
+    index[t].prev_close = null;
+    index[t].chg_pct = null;
+    index[t].change = null;
+    index[t].sc_pct_source = null;
+    index[t].sc_state = "PROVIDER_UNAVAILABLE";
+    /* Best VALID provider observation, when the response carried one: the last completed daily
+       close is still provider-built and may be shown as such. No percentage is derived from it,
+       because there is no current provider price to compare against. */
+    if (q && isFinite(Number(q.previous_close)) && Number(q.previous_close) !== 0) {
+      index[t].sc_last_completed_close = Number(q.previous_close);
+      index[t].sc_last_completed_session = q.previous_session_et || null;
+      index[t].sc_state = "PROVIDER_PRICE_UNAVAILABLE_LAST_CLOSE_KNOWN";
+    }
+    blanked++;
   }
+  window.SC_LAST_QUOTE_OVERLAY = { applied, blanked };
   return applied;
 }
 async function scCleanRows (sym, tf, bars) {
