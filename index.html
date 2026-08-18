@@ -11588,9 +11588,12 @@ async function scProviderTick () {
   if (!decl || !decl.size) return;
   /* Only what is on screen. The board can hold ~365 rows but a hidden tab or a filtered cohort
      should not cost a full-universe request every two seconds. */
-  /* Cover every row currently held, not just the painted cohort: switching to ALL previously
-     exposed symbols the tick had never seeded with a previous close. Still ONE batched request. */
-  const want = [...new Set((S.rows || []).map((r) => r.t).filter((t) => decl.has(t)))];
+  /* COVER THE WHOLE DECLARED UNIVERSE, not the painted cohort.
+     MEASURED: with only the visible rows seeded, switching to INTL left 8 of 8 and METALS 16 of 16
+     declared equities outside the last accepted tick, so a cohort switch exposed rows the provider
+     had never priced. The route caps a request at 500 symbols and the universe is 365, so this is
+     still ONE bounded batch - the same cost, without the hole. */
+  const want = [...decl];
   if (!want.length) return;
   SC_TICK_INFLIGHT = true;
   const t0 = Date.now();
@@ -11616,7 +11619,17 @@ async function scProviderTick () {
          but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
          it here from the same contract so price and percentage can never disagree. */
       const row = (S.rows || []).find((x) => x.t === t);
-      if (row && isFinite(prev) && prev !== 0) row.c = (Number(row.price) / prev - 1) * 100;
+      if (row && isFinite(prev) && prev !== 0) {
+        /* A ROW WITH NO PRICE HAS NO PERCENTAGE.
+           MEASURED on production 2026-08-18: this line previously ran Number(row.price) on a row
+           that had never been seeded, and Number(null) is 0, so it rendered (0/prev - 1)*100 =
+           -100.00% on 12 of 17 GROWTH rows. A fabricated -100% is far worse than a blank. The
+           price is taken from the tick itself when the row has none, and the percentage is left
+           null when there is still no usable price. */
+        const rp = Number(isFinite(Number(row.price)) && Number(row.price) > 0 ? row.price : price);
+        row.c = (isFinite(rp) && rp > 0) ? (rp / prev - 1) * 100 : null;
+        if (isFinite(rp) && rp > 0 && (row.price == null || !isFinite(Number(row.price)))) row.price = rp;
+      }
       applied++;
     }
     SC_TICK_FAILS = 0;
