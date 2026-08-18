@@ -11199,6 +11199,16 @@ async function favLoad() {
    the auto-rotate's first geiger paints from its own cache) with ZERO network wait.
    No cache yet (first-ever visit) → S.rows stays empty and the board shows its light
    loading state until restartFeed's live pull lands. Guarded end-to-end. */
+/* CANDIDATE HOIST. SC_CHART_API and SC_CLEAN_READS are assigned much further down this script, but
+   boot paths below run FIRST. In the shipped build the switch defaulted OFF, so an early read of
+   `undefined` was indistinguishable from "off" and nothing broke. This candidate defaults ON, so an
+   early `undefined` read would silently take the LEGACY branch on the first paint — the candidate
+   would look like it worked while still reading the old table. Assigned here, before any boot call;
+   the original assignments below set the identical values and are harmless. */
+window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";
+var SC_CHART_API = window.SC_CHART_API;
+window.SC_CLEAN_READS = scComputeCleanReads();
+
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
@@ -11604,13 +11614,17 @@ var SC_CHART_API = window.SC_CHART_API;
 
    Shipped OFF. Turn on per-browser with  localStorage.sc_clean_reads = "1"  or ?cleanreads=1, so the
    new path can be exercised against production before it becomes the default for everyone. */
-window.SC_CLEAN_READS = (function () {
+/* CANDIDATE BUILD — DEFAULTS ON. A function DECLARATION (not an expression) so it hoists and can
+   be called by the early assignment above the boot calls. `?cleanreads=0` and
+   localStorage.sc_clean_reads="0" still force the legacy lane for side-by-side comparison. */
+function scComputeCleanReads () {
   try {
     if (/[?&]cleanreads=1/.test(location.search)) return true;
     if (/[?&]cleanreads=0/.test(location.search)) return false;
-    return localStorage.getItem("sc_clean_reads") === "1";
-  } catch (_) { return false; }
-})();
+    return localStorage.getItem("sc_clean_reads") !== "0";
+  } catch (_) { return true; }
+}
+window.SC_CLEAN_READS = scComputeCleanReads();
 
 /* Returns rows in the SHAPE THE LEGACY CALLERS ALREADY EXPECT — timestamp in SECONDS, newest first
    — so each call site changes by one line and nothing downstream has to be re-reasoned.
@@ -11621,8 +11635,13 @@ window.SC_CLEAN_READS = (function () {
    series, which is why the switch is not flipped until 366/366 daily objects are verified. */
 async function scCleanRows (sym, tf, bars) {
   try {
+    /* authority=provider is NOT optional. The API's default lane is the local audit roll-up, which
+       is measurably STALER than the legacy table it replaces on intraday widths (XLRE tf=240,
+       2026-08-18 01:10 ET: audit newest 2026-08-14T20:00Z vs legacy and provider 2026-08-17T20:00Z).
+       Defaulting clean reads ON without this parameter would make the Hub staler, not cleaner. */
     const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(sym) +
-                          "&tf=" + encodeURIComponent(tf) + "&limit=" + (bars || 200));
+                          "&tf=" + encodeURIComponent(tf) + "&authority=provider" +
+                          "&limit=" + (bars || 200));
     if (r.status === 404) return null;                 // not a Massive equity — caller keeps its owner
     if (!r.ok) return [];                              // real failure: empty, never silently legacy
     const j = await r.json();
