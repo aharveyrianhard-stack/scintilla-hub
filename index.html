@@ -3119,6 +3119,9 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      the row's chg and every live-tick recompute inherit the provider baseline automatically. */
   if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, Object.keys(px));
   const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
+  /* P0-E: provider/Equalizer Geiger replaces the legacy composite for every symbol the candidate
+     owns. Non-equities keep their existing owner, so the board universe is unchanged. */
+  if (window.SC_CLEAN_READS) await scApplyCandidateGeiger(gg);
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
      geiger[] is already ordered updated_ts desc, so gg (built above) already holds
@@ -3231,6 +3234,8 @@ async function fetchCompanyData(t) {
     pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
   ]);
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
+  /* P0-E: same Geiger authority on the company view as on the board. */
+  if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
   const rbMap = {};                                              // GO-LIVE FIX 2 — section → body
   for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
@@ -11644,6 +11649,57 @@ window.SC_CLEAN_READS = scComputeCleanReads();
    stale-data fallback: futures, commodities, indices, rates and crypto are not Massive's lane, and
    their owner is unchanged. It is only safe to read a 404 that way once every equity has a derived
    series, which is why the switch is not flipped until 366/366 daily objects are verified. */
+/* P0-E — GEIGER AUTHORITY.
+   Trend, Momentum and the composite come from the CANDIDATE artifact: recomputed from
+   provider-built bars under Alan's captured Equalizer (receipt sha256 f6cf97b5…97ad1) and served
+   read-only through the chart API's /geiger route.
+
+   IT IS NOT WRITTEN BACK INTO composite_staged, deliberately. That table is also written by cron 57
+   and the legacy ribbon engine, so publishing there would let a legacy writer silently overwrite
+   the candidate. One writer (the batch worker), one reader (this route).
+
+   TWO DEFECTS IN THE LIVE PATH THIS REPLACES, both measured 2026-08-18:
+     - live tf_contributors is 2, 5, 6 or 7 and NEVER 8, because geiger_for_user filters
+       ribbon_signals to a 3-hour freshness window and stale rungs silently fall out of the ladder.
+       The candidate reports 8 for all 365.
+     - live reads the local audit roll-up on a UTC anchor; the candidate reads provider bars on the
+       provider's own session anchor, with in-progress periods withheld.
+
+   PROVIDER ROUTING, NOT A FALLBACK: a symbol the candidate does not own (crypto, futures, indices,
+   rates) is LEFT ON ITS EXISTING OWNER rather than blanked. Overlaying blindly would erase every
+   non-equity row from the board. */
+const SC_CG = { at: 0, map: null, meta: null };
+async function scCandidateGeiger () {
+  if (SC_CG.map && Date.now() - SC_CG.at < 30000) return SC_CG.map;
+  try {
+    const r = await fetch(SC_CHART_API + "/geiger");
+    if (!r.ok) return SC_CG.map || {};            // absent stays absent; never a legacy substitute
+    const j = await r.json();
+    SC_CG.map = (j && j.symbols) || {};
+    SC_CG.meta = { receipt: j.equalizer_receipt_sha256, scale: j.scale, rungs: j.participating_rungs,
+                   computed: j.computed_utc, authority: j.bar_authority };
+    SC_CG.at = Date.now();
+    return SC_CG.map;
+  } catch (_) { return SC_CG.map || {}; }
+}
+/* Overlays a legacy-shaped {ticker -> {composite,trend,momentum,...}} index IN PLACE, only for
+   symbols the candidate owns. Returns how many were replaced. */
+async function scApplyCandidateGeiger (index) {
+  const cg = await scCandidateGeiger();
+  let applied = 0;
+  for (const t of Object.keys(index || {})) {
+    const v = cg[t];
+    if (!v || v.composite == null) continue;
+    index[t].composite = v.composite;
+    index[t].trend = v.trend;
+    index[t].momentum = v.momentum;
+    index[t].structure = null;                    // removed from the active contract
+    index[t].tf_contributors = v.tf_contributors;
+    index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
+    applied++;
+  }
+  return applied;
+}
 /* P0-F — PERCENTAGE AUTHORITY.
    The displayed change must be the CURRENT PROVIDER PRICE against the PROVIDER'S OWN previous
    COMPLETED official daily close. It must NOT come from live_quotes.chg_pct, live_quotes.change or
