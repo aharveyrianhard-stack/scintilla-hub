@@ -3084,43 +3084,55 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      membership regardless of which single cohort tab is on screen. Cheap: it's just
      ticker+cohort, no price/composite payload. Per-cohort row filtering below still
      narrows the BOARD's own rows to the active cohort client-side. */
+  /* ── PROVIDER FIRST ────────────────────────────────────────────────────────────────────────
+     Massive quotes and R2 Geiger are STARTED HERE, before any Supabase await, and are never
+     downstream of one. Both are served by the Fly chart API from R2 and touch no database, so a
+     Supabase 503/504 cannot delay them and cannot prevent them rendering. */
+  const pGeiger = scCandidateGeiger();                    // R2 via chart API. No Supabase.
+  const pDeclared = scDeclaredEquities();                 // same surface: the declared equity set
+
+  /* ── SUPABASE ENRICHMENT ───────────────────────────────────────────────────────────────────
+     Individually optional, individually bounded, last-known-good on failure. No entry here can
+     fail the board. live_quotes and composite_staged remain ONLY as non-equity enrichment: they
+     are no longer the equity price or Geiger authority and no longer gate boot. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
-    pg("cohorts?select=ticker,cohort"),
-    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close"),   // 2026-08-17: volume REMOVED. live_quotes has no volume column and PostgREST rejects the WHOLE select when one column is absent, which killed the entire main board. RVOL stays honestly blank until a real volume source is wired.
-    pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"),   // 2026-08-17: structure REMOVED. The column no longer exists (table now has volatility/conviction/core/composite). Same PostgREST all-or-nothing failure.
-    pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"),   // #133 (fix) — market_cap feeds heatmap tile SIZE (real weight, not a proxy)
-    pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"),
-    /* R26 FIX 6 — ONE batch: every future annual estimate row, first per ticker kept client-side */
-    pg("analyst_estimates?select=ticker,est_eps_avg,fiscal_date&period=eq.annual&fiscal_date=gte." + todayISO() + "&order=ticker.asc,fiscal_date.asc").catch(() => []),
-    pg("fundamentals?select=ticker,eps_ttm").catch(() => []),   // R26 FIX 6 — basis-guard input
-    /* NEW bulk reads (tables JUST created · EMPTY now). Both catch-wrapped so an empty
-       or absent table never blocks a board load. social_sentiment feeds the SOCIAL
-       master tab (A); board_volume feeds the geiger 3-ring (C) and — TODO, once filled —
-       the board's Vol× column via rvol_at_time (left as-is for now). */
-    pg("social_sentiment?select=ticker,bullish,bearish,posts,score").catch(() => []),
-    pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol").catch(() => []),
-    /* NTM forward EPS (fwd_eps_ntm) — next 4 quarterly estimates summed; IBKR-style forward P/E basis. MUST stay the LAST pull (destructured as ntmRows). */
-    pg("fwd_eps_ntm?select=ticker,ntm_eps").catch(() => []),
-    /* FIX 1 (R36) — the ohlcv_history Vol× fallback pull was REMOVED: verified live it 500s and
-       takes ~3.2s to time out, blocking every board load AND starving the geiger's concurrent
-       queries (RSI·MTF/Williams rendered "NO DATA"). rvol now comes ONLY from
-       live_quotes.volume / company_profile.avg_volume (batteries for the ~122 tickers that have
-       live volume, "—" for the rest — a proper rvol is coming later). */
-    /* FIX A — the bulk daily-RSI pull was removed: derived_latest 500s (statement timeout)
-       for the full ~196-ticker universe, costing ~3s AND leaving every rsi null. RSI is now
-       lazy-loaded per shown ticker in chunks after render — see loadBoardRsi(). */
+    scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
+    scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close"), []),
+    scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
+    scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"), []),
+    scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
+    scOpt('analyst_estimates', pg("analyst_estimates?select=ticker,est_eps_avg,fiscal_date&period=eq.annual&fiscal_date=gte." + todayISO() + "&order=ticker.asc,fiscal_date.asc"), []),
+    scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
+    scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score"), []),
+    scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol"), []),
+    scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps"), []),
   ]);
   const seenF = new Set();                                     // first row per ticker = nearest FY
   for (const r of fpeEst) if (!seenF.has(r.ticker)) { seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg); }
   for (const r of fpeTtm) EPSTTM[r.ticker] = num(r.eps_ttm);
-  const px = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+  /* UNIVERSE = provider-declared equities UNION whatever Supabase membership returned.
+     The union is the point: if cohorts timed out, members is [] and the board is still the full
+     declared equity set with Massive prices and R2 Geiger. If cohorts answered, its non-equity
+     rows are added on top. Neither side can erase the other. */
+  const declaredSet = await pDeclared.catch(() => new Set());
+  const memberTickers = (members || []).map((m) => m.ticker).filter(Boolean);
+  const universe = [...new Set([...declaredSet, ...memberTickers])];
+  if (!memberTickers.length && declaredSet.size) {
+    console.warn('[SC] cohorts unavailable - board built from the provider declared set only:', declaredSet.size, 'symbols');
+  }
+  const px = Object.fromEntries((quotes || []).map((q) => [q.ticker, q]));
   /* P0-F: replace the legacy price/baseline/percentage with the provider's before ANY consumer
      reads them. Done here, at the one place the board builds its quote index, so prevClose[],
      the row's chg and every live-tick recompute inherit the provider baseline automatically. */
   /* Pass the full member list, not just the legacy index's keys, so a provider-owned symbol with
      no live_quotes row still gets its price and percentage. */
-  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, members.map((m) => m.ticker));
-  const gg = {}; for (const g of geiger) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
+  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(px, universe);
+  const gg = {}; for (const g of (geiger || [])) if (!(g.ticker in gg)) gg[g.ticker] = g; // newest per ticker
+  /* Seed a slot for every provider-declared equity so scApplyCandidateGeiger() has somewhere to
+     write even when composite_staged returned nothing. Without this the R2 Geiger would be
+     discarded for exactly the symbols the provider owns whenever that table is unavailable. */
+  await pGeiger.catch(() => ({}));
+  for (const t of declaredSet) if (!(t in gg)) gg[t] = { ticker: t };
   /* P0-E: provider/Equalizer Geiger replaces the legacy composite for every symbol the candidate
      owns. Non-equities keep their existing owner, so the board universe is unchanged. */
   if (window.SC_CLEAN_READS) await scApplyCandidateGeiger(gg);
@@ -3144,7 +3156,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      until then (no fake data, no premature switch). */
   const seen = new Set();
   const scopeAll = cohort === "ALL" || cohort === "FAV";
-  let rows = members
+  /* Rows come from the UNION so a Supabase membership failure cannot empty the board. Each entry
+     keeps its cohort tag when membership answered, and carries null when it did not. */
+  const COH_BY_T = Object.create(null);
+  for (const m of (members || [])) if (m && m.ticker) COH_BY_T[m.ticker] = m.cohort;
+  let rows = universe.map((t) => ({ ticker: t, cohort: COH_BY_T[t] ?? null }))
     .filter((m) => !seen.has(m.ticker) && seen.add(m.ticker))
     /* ★ ONE SOURCE FOR COHORT MEMBERSHIP. Alan, looking at the live hub: "cohort compare says
        AI POWERTRAIN, red Geiger -0.10. There are no companies in it. How are we getting a
@@ -3166,7 +3182,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
       if (COHSETS && COHSETS[k]) return COHSETS[k].has(m.ticker);
       return m.cohort === cohort;                    // fallback if membership has not loaded
     })
-    .filter((m) => gg[m.ticker])   // FIX 1 — board universe = composite_staged tf=D only (drops DX/NKD/NQ/TNX/TYX/VIX proxies with no pipeline data)
+    /* P0: was `.filter(m => gg[m.ticker])`, i.e. the board universe was composite_staged tf=D.
+       That made a Supabase table the gate on whether a provider-owned equity could appear at all.
+       A declared equity now qualifies on the PROVIDER's say-so; everything else still needs a
+       Geiger row, which keeps the old behaviour for non-equity proxies with no pipeline data. */
+    .filter((m) => declaredSet.has(m.ticker) || gg[m.ticker])
     .map((m) => {
       const dbPx = num(px[m.ticker] && px[m.ticker].price);
       const price = PRICES[m.ticker] != null ? PRICES[m.ticker] : dbPx;   // live tick wins over pull
@@ -11671,6 +11691,38 @@ window.SC_CLEAN_READS = scComputeCleanReads();
    rates) is LEFT ON ITS EXISTING OWNER rather than blanked. Overlaying blindly would erase every
    non-equity row from the board. */
 const SC_CG = { at: 0, map: null, meta: null };
+/* P0 PROVIDER-FIRST BOOT.
+   Every Supabase read on the board path is ENRICHMENT and must be individually optional. Before
+   this, fetchBoardRows() awaited a 10-way Promise.all whose first five entries were NOT
+   catch-wrapped, so one 503/504 rejected the whole await and scApplyProviderQuotes() /
+   scApplyCandidateGeiger() never ran at all - Massive prices and R2 Geiger could not render
+   because a METADATA table was down. That is the defect this closes.
+
+   scOpt() gives each read its own deadline and its own failure. It never throws, so it can never
+   take the board with it, and it returns the last known good value when it has one rather than
+   blanking a column that was populated a moment ago. */
+const SC_LAST = Object.create(null);
+const SC_DEGRADED = new Set();
+const SC_OPT_MS = 4000;
+async function scOpt (label, p, fallback) {
+  try {
+    const v = await Promise.race([
+      Promise.resolve(p),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('deadline ' + SC_OPT_MS + 'ms')), SC_OPT_MS)),
+    ]);
+    if (v != null) { SC_LAST[label] = v; SC_DEGRADED.delete(label); return v; }
+    SC_DEGRADED.add(label);
+    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
+  } catch (e) {
+    /* NAMED degradation. The console line is deliberate: a silently empty column and a column
+       whose source timed out must not look the same to whoever is debugging the board. */
+    SC_DEGRADED.add(label);
+    console.warn('[SC] optional supabase read degraded:', label, String(e && e.message).slice(0, 80));
+    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
+  }
+}
+window.scDegraded = () => [...SC_DEGRADED];
+
 async function scCandidateGeiger () {
   if (SC_CG.map && Date.now() - SC_CG.at < 30000) return SC_CG.map;
   try {
