@@ -480,6 +480,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .gsum .gs-kidk{ font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); width:46px; flex:0 0 auto; text-align:left; }
 .gsum .gs-kidv{ font-size:9.5px; font-variant-numeric:tabular-nums; width:44px; flex:0 0 auto; text-align:right; }
 .sc-board__row{ cursor:pointer; }
+.sc-board__row:focus-visible{ outline:2px solid var(--acc,#00d4ff); outline-offset:-2px; }
 .sc-board__row:hover{ background:rgba(0,212,255,.05); }
 /* DASHBOARD MODEL — the row whose ticker is shown in the LEFT panel (pinned or
    currently rotating) gets the selection wash (mock .brow.sel). Class flip only. */
@@ -4121,7 +4122,13 @@ function boardRowsHTML() {
   const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));
   return boardHeaderHTML() + sorted.map((d) => {
     const isFav = S.fav.includes(d.t);
-    return '<div class="ch sc-board__row' + (d.nf ? " nofeed" : "") + '" data-act="row" data-t="' + esc(d.t) + '">' +
+    /* KEYBOARD REACHABLE. The row was a bare div: the only way to open a company page was a mouse
+       click, so the whole detail surface — including the Geiger tile — was unreachable without a
+       pointer. role/tabindex plus the shared Enter/Space handler make it operable without adding
+       any new behaviour or changing the layout. */
+    return '<div class="ch sc-board__row' + (d.nf ? " nofeed" : "") + '" role="button" tabindex="0"'
+      + ' aria-label="Open ' + esc(d.t) + (d.name ? ' — ' + esc(d.name) : '') + ' company page"'
+      + ' data-act="row" data-t="' + esc(d.t) + '">' +
       '<button class="sc-star ' + (isFav ? "is-fav" : "") + '" aria-pressed="' + isFav + '" aria-label="' +
         (isFav ? "Unfavorite " : "Favorite ") + esc(d.t) + '" data-act="star" data-t="' + esc(d.t) + '">' +
         '<span class="sc-star__on">★</span><span class="sc-star__off">☆</span></button>' +
@@ -8046,14 +8053,18 @@ async function geigerSummaryData(t) {
     const rv = num(r.rsi_raw); if (rv != null && isFinite(rv)) rsiMtf.push([tf, rv]);
     const wv = num(r.wpr_raw); if (wv != null && isFinite(wv)) wprMtf.push([tf, wv]);
   }
-  if (!rsiMtf.length) unavail.rsi = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: anyDerRow ? "source retired — newest reading is stale" : "no source" };
-  if (!wprMtf.length) unavail.wpr = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: anyDerRow ? "source retired — newest reading is stale" : "no source" };
+  /* "no source" would be a CLAIM, and an empty read does not prove it: the read may simply have
+     hit its deadline. MEASURED for MU — 4,878 MACD rows exist and are 14 days old, yet the read
+     returned nothing, so a "no source" message would have been false. Say only what is known. */
+  const whyGone = (had) => had ? "source retired — newest reading is stale" : "no reading returned";
+  if (!rsiMtf.length) unavail.rsi = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: whyGone(anyDerRow) };
+  if (!wprMtf.length) unavail.wpr = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: whyGone(anyDerRow) };
 
   /* ── MACD — same gate, on the newest bar in the series ─────────────────────────────────────*/
   const macdRows = (ser || []).filter((r) => r && num(r.macd_signed) != null && isFinite(num(r.macd_signed)));
   const macdNewestTs = macdRows.length ? macdRows[0].timestamp : null;
   const macd = gsFreshTs(macdNewestTs) ? macdRows.map((r) => num(r.macd_signed)).reverse() : [];
-  if (!macd.length) unavail.macd = { state: "UNAVAILABLE", age_days: gsAgeDays(macdNewestTs), why: macdRows.length ? "source retired — newest reading is stale" : "no source" };
+  if (!macd.length) unavail.macd = { state: "UNAVAILABLE", age_days: gsAgeDays(macdNewestTs), why: whyGone(macdRows.length > 0) };
 
   /* volume series oldest→newest + rvol = latest / avg(last 20 newest) */
   const volRows = (vol || []).map((r) => num(r.volume)).filter((v) => v != null && isFinite(v));   // newest→oldest as pulled
