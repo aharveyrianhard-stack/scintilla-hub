@@ -11907,16 +11907,20 @@ function updateLive(){
      and the fault/alarm below stays purely a statement about the FEED. Neither can now mask the
      other. */
   var eqClosed = !marketOpen();                                             // the market is shut — says nothing about the feed
-  var eqFault  = eqStale && !eqClosed;                                      // stale during the session = genuine fault
+  /* NOT YET KNOWN IS NOT A FAULT. Before the first provider tick completes there is no evidence
+     either way, and raising a fault on absence of evidence is how a healthy feed gets alarmed on
+     every load. It reads CONNECTING and stays silent until the tick actually answers. */
+  var eqUnknown = !((window.SC_TICK || {}).runs > 0);
+  var eqFault  = eqStale && !eqClosed && !eqUnknown;                        // stale during the session = genuine fault
   try{ document.body.classList.toggle("feed-down", eqFault); }catch(e){}    // logo trefoil → red pulse ONLY on a real fault
   var live = (window.__eqFresh === true) && !eqStale;   /* equity truth, not a latched fetch error */
   var cls = live ? "is-live" : "is-off";
   var badge = el("liveBadge");
   if(badge){
     if(eqClosed){ badge.className = "sc-head__live is-off"; badge.style.color = "var(--sv4)"; badge.textContent = "● CLOSED"; }
-    else { badge.style.color = ""; badge.className = "sc-head__live " + cls; badge.textContent = "● " + (eqFault ? "STALE" : (live ? "LIVE" : "OFFLINE")); }
+    else { badge.style.color = ""; badge.className = "sc-head__live " + cls; badge.textContent = "● " + (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE"))); }
   }
-  var txt = eqClosed ? "CLOSED" : (eqFault ? "STALE" : (live ? "LIVE" : "OFFLINE"));
+  var txt = eqClosed ? "CLOSED" : (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE")));
   var chip = document.querySelector(".sc-clive");
   if(chip){ chip.className = "sc-clive" + (live ? "" : " is-off"); chip.textContent = "● " + txt; }
   document.querySelectorAll(".sc-chartlive").forEach(function(c){ c.className = "sc-chartlive " + cls; c.textContent = "● " + txt; });
@@ -12076,6 +12080,13 @@ async function scProviderTick () {
       applied++;
     }
     SC_TICK_FAILS = 0;
+    /* LIVENESS MOVES WITH THE DATA. Leaving it to scFeedWatch's 45-second cycle meant that after
+       every load during market hours the feed read stale for up to 45 s — and stale during an open
+       session is a FAULT, so the logo would pulse red and the audible "Equity feed down" alarm
+       would fire on every single page load while prices were arriving normally. The tick that
+       just succeeded is the freshest possible evidence the feed is alive, so it says so itself. */
+    window.__eqFresh = true; window.__eqStale = false; window.__eqAgeSec = 0;
+    try { if (typeof updateLive === "function") updateLive(); } catch (_) {}
     try { scStampRoot(); } catch (_) {}       // authority, counters and freshness move with each tick
     window.SC_TICK.runs++; window.SC_TICK.applied += applied;
     window.SC_TICK.symbols = want.length; window.SC_TICK.last_ms = Date.now() - t0;
