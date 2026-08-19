@@ -10340,7 +10340,12 @@ function seedBoardFromCache(cohort, fav) {
      minute old percentage is indistinguishable on screen from a live one.
      The layout still seeds instantly — ticker, name, market cap, Geiger, structure — and the two
      volatile fields are placeholders until one complete authoritative provider snapshot lands. */
-  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null }));
+  /* Q3e — RSI joins the never-seed list. A cached RSI survived the backend retirement
+     of frozen equity rows: the seed painted it, loadBoardRsi saw the row as already
+     resolved and SKIPPED the refetch, then the refreshed cache re-persisted the same
+     stale value with a fresh envelope ts — laundering it forever. Seeding it null
+     forces every boot through the gated board_rsi fetch (absent/stale rows → dash). */
+  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null, rsi: null }));
   /* AND NEVER RANK FROM CACHE. mergeBoardRows() would call computeBoardOrder() here, sorting the
      board by the cached value of whatever dynamic column is selected (Geiger by default, and the
      Geiger field was NOT blanked by the old age check at all — so a boot could rank on day-old
