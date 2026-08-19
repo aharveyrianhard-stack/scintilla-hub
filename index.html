@@ -3142,6 +3142,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* P0-E: provider/Equalizer Geiger replaces the legacy composite for every symbol the candidate
      owns. Non-equities keep their existing owner, so the board universe is unchanged. */
   if (window.SC_CLEAN_READS) await scApplyCandidateGeiger(gg);
+  /* ONE COMPLETE AUTHORITATIVE SNAPSHOT HAS NOW BEEN APPLIED. Every row carries provider values
+     or an honest null — no cached and no legacy value survives this point — so the board may be
+     ranked. The first computeBoardOrder() after this flips the order exactly once. */
+  window.SC_RANK_READY = true;
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
      geiger[] is already ordered updated_ts desc, so gg (built above) already holds
@@ -3265,7 +3269,17 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
 
 async function fetchCompanyData(t) {
   const e = encodeURIComponent(t);
-  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = await Promise.all([
+  /* BOUNDED AND ISOLATED — same reason as the Geiger tile above.
+     This fan is 22 concurrent Supabase reads and only the last six were catch-wrapped, so a single
+     503 on any of the first sixteen rejected the whole await and the company page stayed on
+     "loading…" forever with no stated reason. Each entry now degrades to an empty result after a
+     deadline. Every consumer below already handles an empty array (`x[0] || {}`), so this changes
+     no displayed value — it only stops one dead table from taking the page down. */
+  const bound = (pr) => Promise.race([
+    Promise.resolve(pr).catch(() => []),
+    new Promise((res) => setTimeout(() => res([]), 4000)),
+  ]);
+  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = (await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,structure,updated_ts&order=updated_ts.desc&limit=1"),
@@ -3292,7 +3306,7 @@ async function fetchCompanyData(t) {
     pg("analyst_grades?ticker=eq." + e + "&select=ticker,date,firm,action,from_grade,to_grade,price_target&order=date.desc&limit=12").catch(() => []),
     pg("etf_info?ticker=eq." + e + "&select=ticker,name,description,website,etf_company,expense_ratio,aum,avg_volume,inception_date,nav,holdings_count,sectors").catch(() => []),   // NEW — ETF/fund overview stats (honest empty if not an ETF)
     pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
-  ]);
+  ].map(bound)));
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   /* P0-E: same Geiger authority on the company view as on the board. */
   if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
@@ -3300,7 +3314,13 @@ async function fetchCompanyData(t) {
   const rbMap = {};                                              // GO-LIVE FIX 2 — section → body
   for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
-  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, st: num(d0.structure) || 0 };
+  /* STRUCTURE IS ABSENT FROM THE ACCEPTED CONTRACT, AND ABSENT IS NOT ZERO.
+     scApplyCandidateGeiger sets structure = null for every declared equity, because the accepted
+     provider artifact computes Trend and Momentum only. `num(null) || 0` turned that null into 0,
+     and every downstream test is `st >= 0`, so the read sentence said "structure is holding" and
+     the pill said "STRUCTURE INTACT" for all 365 equities — a verdict about a family that was
+     never computed. null now stays null and the surfaces below omit it. */
+  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, st: num(d0.structure) };
   /* P0-F: same provider authority on the company view as on the board. */
   if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
@@ -4044,6 +4064,17 @@ function volCellHTML(rv) {
    the board therefore does not move at all after the user sorts. */
 function computeBoardOrder() {
   const key = S.sort.key, dir = S.sort.dir;
+  /* NO DYNAMIC COLUMN IS RANKED BEFORE ONE COMPLETE AUTHORITATIVE PROVIDER SNAPSHOT HAS LANDED.
+     This is the single choke point: seedBoardFromCache, mergeBoardRows, the header click and the
+     Geiger-rewind repaint all arrive here, so the rule cannot be bypassed by adding a fourth
+     caller later. Before that snapshot the board keeps the order it already holds — which is
+     either the order persisted alongside the cached layout (itself computed from an authoritative
+     snapshot in an earlier session) or plain arrival order. Ticker is exempt: it is alphabetical
+     and cannot go stale.
+     WHY THIS EXISTS: the default sort key is Geiger, and the cache seeded Geiger values at any
+     age, so a cold boot could rank the entire board on day-old numbers and then visibly reorder
+     when the real ones arrived. */
+  if (key !== "t" && !window.SC_RANK_READY) return (S.rows || []).map((r) => r.t);
   return (S.rows || []).slice().sort((a, b) =>
     key === "t" ? dir * a.t.localeCompare(b.t)
       : dir * (((a[key] == null ? -Infinity : a[key])) - ((b[key] == null ? -Infinity : b[key]))))
@@ -7871,9 +7902,22 @@ const GS_LADDER = ["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12
 function gsNormTf(k){ const m={ "1d":"1D","3d":"3D","1w":"1W","2w":"2W" }; const s=String(k||""); return m[s.toLowerCase()] || s; }
 
 async function geigerSummaryData(t) {
+  /* BOUNDED, ISOLATED, NON-BLOCKING.
+     This fan is 7 top-level reads, one of which expands to 17 more (one per ladder rung) — about
+     23 Supabase round trips with no deadline of any kind. One slow or dead table therefore held
+     the whole Geiger tile indefinitely. Each entry now resolves to an empty result after a
+     deadline instead of hanging or rejecting, so a missing enrichment degrades that ONE tile to
+     its honest empty state and never gates the Geiger values themselves.
+     Deliberately a local helper rather than the shared scOpt(): scOpt closes over a `const`
+     declared far below in this same script, and this function can be reached during boot, where
+     that constant is still in its temporal dead zone. */
+  const bound = (pr) => Promise.race([
+    Promise.resolve(pr).catch(() => []),
+    new Promise((res) => setTimeout(() => res([]), 4000)),
+  ]);
   const enc = encodeURIComponent(t);
   const e2 = encodeURIComponent(chFmpSym(t));   // crypto → BTCUSD form for ohlcv_history
-  const [comp, der, ser, vol, last, ow, bvol] = await Promise.all([
+  const [comp, der, ser, vol, last, ow, bvol] = (await Promise.all([
     pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,structure,conviction,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
     /* RSI·MTF / Williams / MA ladder. Ask the DB for JUST the latest row per timeframe —
        an indexed lookup (~100ms each), run in parallel — instead of the derived_latest VIEW
@@ -7909,9 +7953,19 @@ async function geigerSummaryData(t) {
     /* AREA C — board_volume per-ticker (JUST created · EMPTY now): ring1 rvol_at_time,
        ring2 cum_rvol for the 3-ring VOLUME viz. Catch-wrapped → null → awaiting rings. */
     pg("board_volume?ticker=eq." + enc + "&select=rvol_at_time,cum_rvol,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
-  ]);
+  ].map(bound)));
 
   const c = (comp && comp[0]) || {};
+  /* P0-C — THE COMPANY GEIGER TILE NOW USES THE SAME AUTHORITY AS THE BOARD.
+     Until this line the tile was 100% legacy, and not as a race: the board's provider overlay
+     writes into the board index, while this tile paints from _gsum, and _gsum was only ever
+     produced here, from composite_staged, with no overlay anywhere in the path. So a declared
+     equity could show one Geiger on its board row and a different, older one on its own page.
+     This is the identical call the board (line ~3144) and the company heavy payload (~3302)
+     already make, against the same 30-second-cached artifact, so it costs no extra fetch and
+     cannot produce a different number than the row the user clicked.
+     Non-equities are skipped by scApplyCandidateGeiger and keep their approved legacy owner. */
+  if (window.SC_CLEAN_READS) { try { const _g = { [t]: c }; await scApplyCandidateGeiger(_g); } catch (_) {} }
   /* MA ladder from the 1D derived row (fall back to first row if no exact 1D) */
   const derRows = der || [];
   const d1 = derRows.find((r) => String(r.tf) === "1D") || derRows.find((r) => String(r.tf) === "D") || derRows[0] || {};
@@ -8264,10 +8318,22 @@ function geigerSummaryMount() {
      rotate revisit / pin / click never shows a "no data" / loading gap. Then the
      fresh pull below repaints the tile in place when it arrives. */
   const memHit = GEIGER_MEM[t];
-  const lsEnv = memHit ? null : cacheGet("sc_geiger_" + t);   // staleOk — show instantly, still refresh
-  const cached = memHit || (lsEnv && lsEnv.data) || null;
+  /* NEW KEY ON PURPOSE. Every browser that has opened a company page holds a `sc_geiger_<T>`
+     envelope written BEFORE this cutover, containing a legacy composite_staged composite. Keeping
+     the key would replay exactly the value this change exists to remove — on the first open after
+     deploy, painted before any network read, with no way to tell it apart from a live one. The
+     bumped key retires that store without deleting anything, and the stamp check below means even
+     a future envelope is only trusted if it was written by the provider path. */
+  const lsEnv = memHit ? null : cacheGet("sc_geiger2_" + t);   // staleOk — show instantly, still refresh
+  /* Only an envelope written by the provider-cutover path may seed the tile. An in-memory hit is
+     always fine — this process produced it. */
+  const cached = memHit || ((lsEnv && lsEnv.src === "PROVIDER_CUTOVER_V1") ? lsEnv.data : null) || null;
   if (cached && cached.t === t) {
-    if (livePx != null) cached.price = livePx;
+    /* NEVER PAINT A CACHED PRICE HERE EITHER. This tile hands cached.price straight to the trend
+       ladder, so on a cold boot — before PRICES[t] exists — it rendered a stale price against
+       live moving averages. Same rule as the board: a live price or a placeholder, never a
+       remembered one. */
+    cached.price = (livePx != null) ? livePx : null;
     S.coData._gsum = cached;
     GEIGER_MEM[t] = cached;
     if (S.coTab === "GEIGER" && LEFT_T === t) buildGeigerSummary(cached);
@@ -8275,7 +8341,7 @@ function geigerSummaryMount() {
   }
   geigerSummaryData(t).then((gd) => {
     GEIGER_MEM[t] = gd;                                       // in-memory cache — no flash next revisit
-    try { cacheSet("sc_geiger_" + t, { data: gd }); } catch (_) {}   // cross-session cache
+    try { cacheSet("sc_geiger2_" + t, { data: gd, src: "PROVIDER_CUTOVER_V1" }); } catch (_) {}   // cross-session cache
     if (!(S.coData && S.coData.t === t)) return;   // company changed mid-flight
     const lpx = (typeof PRICES !== "undefined" && PRICES[t] != null) ? num(PRICES[t]) : null;
     if (lpx != null) gd.price = lpx;
@@ -9848,7 +9914,7 @@ function liveReadSentence(d) {              // generated from the SAME composite
   const aligned = (d.tr >= 0) === (d.st >= 0);
   return "Right now the multi-timeframe read is " + (d.g >= 0 ? "constructive" : "heavy") +
     ". Trend is " + sigWord(d.tr) + " and momentum is " + sigWord(d.mo) +
-    ", while structure is " + (d.st >= 0 ? "holding" : "breaking down") +
+    (d.st == null ? "" : ", while structure is " + (d.st >= 0 ? "holding" : "breaking down")) +
     " — direction and structure are " + (aligned ? "pulling the same way" : "at odds") + ".";
 }
 function buildRead(t, cx, d, price, fund, est, rb) {
@@ -9865,7 +9931,7 @@ function buildRead(t, cx, d, price, fund, est, rb) {
       "×</b> trailing earnings and <b>" + fwd.toFixed(1) + "×</b> " +
       ((fwdNext && fwdNext.ntm) ? "the next 12 months' consensus EPS." : "next fiscal year's consensus EPS."));
   const pills = ["TREND " + sigWord(d.tr).toUpperCase(),
-                 "STRUCTURE " + (d.st >= 0 ? "INTACT" : "BROKEN")];
+                 (d.st == null ? null : "STRUCTURE " + (d.st >= 0 ? "INTACT" : "BROKEN"))].filter(Boolean);
   if (trail != null && fwd != null) pills.push("FWD " + fwd.toFixed(1) + "× VS " + trail.toFixed(1) + "×");
   /* GO-LIVE FIX 2 — trend/structure/levels/cohort bodies become a labeled second
      group of paragraphs shown under the active VERDICT tab. */
@@ -10109,11 +10175,23 @@ function seedBoardFromCache(cohort, fav) {
      structure) and BLANKS the two volatile fields unless the cache is under 2 minutes
      old. You get the layout immediately and a dash where a live value belongs, which
      fills in the moment the feed answers. */
-  const ageMs = Date.now() - (env.ts || 0);
-  if (ageMs > 120000) {
-    rows = rows.map((r) => Object.assign({}, r, { price: null, c: null }));
-  }
-  mergeBoardRows(rows, true);   // wholesale seed → computes the frozen order from cache
+  /* NEVER PAINT A CACHED PRICE OR PERCENTAGE — AT ANY AGE.
+     The 120-second grace above was still a lie, just a fresher one: Computer Use reproduced a
+     cold reload showing AMD +6.50%, MU +2.30%, NBIS +8.88% and SNDK +7.39% from cache, which then
+     jumped to the provider values seconds later. "Recent" is not "authoritative", and a two
+     minute old percentage is indistinguishable on screen from a live one.
+     The layout still seeds instantly — ticker, name, market cap, Geiger, structure — and the two
+     volatile fields are placeholders until one complete authoritative provider snapshot lands. */
+  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null }));
+  /* AND NEVER RANK FROM CACHE. mergeBoardRows() would call computeBoardOrder() here, sorting the
+     board by the cached value of whatever dynamic column is selected (Geiger by default, and the
+     Geiger field was NOT blanked by the old age check at all — so a boot could rank on day-old
+     values). Reuse the order persisted alongside the rows instead: that order was itself computed
+     from an authoritative snapshot in an earlier session, so it is layout, not a fresh ranking of
+     stale numbers. The first provider snapshot then computes the real order exactly once. */
+  S.rows = rows;
+  const cachedOrder = Array.isArray(env.order) ? env.order.filter((t) => rows.some((r) => r.t === t)) : null;
+  S.boardOrder = (cachedOrder && cachedOrder.length) ? cachedOrder : rows.map((r) => r.t);
   return true;
 }
 function restartFeed() {                       // = useEffect deps [st.coh, fav]
@@ -10134,7 +10212,14 @@ function restartFeed() {                       // = useEffect deps [st.coh, fav]
       /* CACHE-FIRST — persist the fresh rows for this scope for the next boot. Only
          cache non-FAV scopes wholesale; FAV is a filtered view of them but we cache it
          too so a FAV-default boot is instant. */
-      try { cacheSet("sc_board_" + feedCoh, { rows: S.rows.slice() }); } catch (_) {}
+      /* Persist the LAYOUT and the authoritative ORDER; strip the two volatile fields on the way
+         out so no future reader can resurrect a cached price even by accident. */
+      try {
+        cacheSet("sc_board_" + feedCoh, {
+          rows: S.rows.map((r) => Object.assign({}, r, { price: null, c: null })),
+          order: (S.boardOrder || []).slice()
+        });
+      } catch (_) {}
       sync();
       /* FIX 4 (R37) — the RSI column must populate on the FIRST board paint, not only
          after an operator interaction. On boot the initial afterMount() ran while
@@ -11052,15 +11137,39 @@ function chatGrow() {   // textarea auto-grow, 1–3 rows (CSS max-height caps i
    provider routing, not a fallback.
    Counted rather than silent: SC_GUARD lets a rendered acceptance run prove the overwrite is
    actually being refused instead of assuming it. */
-window.SC_GUARD = { refused_legacy_equity: 0, provider_applied: 0, nonequity_passthrough: 0 };
+window.SC_GUARD = { refused_legacy_equity: 0, provider_applied: 0, nonequity_passthrough: 0,
+                   refused_authority_unknown: 0 };
+/* Flipped true the first time a board build completes with the provider price and Geiger overlays
+   applied. Until then every row's price and percentage is a placeholder and no dynamic column may
+   be ranked. Read by computeBoardOrder(). */
+window.SC_RANK_READY = false;
 function scDeclaredSync (t) {
   const d = window.SC_DECLARED_SET;
   return !!(d && d.has && d.has(t));
 }
+/* Has the provider universe been resolved at all yet? Distinct from "is this symbol declared":
+   an EMPTY answer and an UNKNOWN answer are different facts, and the old guard conflated them. */
+function scAuthorityReady () {
+  const d = window.SC_DECLARED_SET;
+  return !!(d && d.size);
+}
 function patch(t, price, src) {
   price = +price;
   if (!isFinite(price)) return;
-  if (src !== "PROVIDER" && scDeclaredSync(t)) { window.SC_GUARD.refused_legacy_equity++; return; }
+  if (src !== "PROVIDER") {
+    /* FAIL CLOSED WHILE AUTHORITY IS UNKNOWN.
+       MEASURED on the staged build: the board applied 64 legacy live_quotes patches during boot
+       because window.SC_DECLARED_SET was still null. The guard was correct and simply had nothing
+       to check against — and "nothing to check against" was being read as "not an equity", so
+       every legacy equity price sailed through and became the false first paint.
+       An unknown answer now REFUSES instead of admitting. A caller that positively knows its
+       symbol is not an equity says so with src "NONEQUITY" and is still subject to the declared
+       check below, so this can never become a bypass. Legitimate non-equities refused during the
+       sub-second boot window are re-delivered by their own poll; a wrong equity price painted
+       confidently is not recoverable. */
+    if (!scAuthorityReady() && src !== "NONEQUITY") { window.SC_GUARD.refused_authority_unknown++; return; }
+    if (scDeclaredSync(t)) { window.SC_GUARD.refused_legacy_equity++; return; }
+  }
   if (src === "PROVIDER") window.SC_GUARD.provider_applied++; else window.SC_GUARD.nonequity_passthrough++;
   /* FIX 2 — compare first: identical re-quotes (closed markets) never flash or repaint */
   let prev = PRICES[t];
@@ -11173,7 +11282,7 @@ function connectCB() {
   try { ws = new WebSocket("wss://ws-feed.exchange.coinbase.com"); } catch (err) { return; }
   ws.onopen = () => ws.send(JSON.stringify({ type: "subscribe", product_ids: Object.keys(CB), channels: ["ticker"] }));
   ws.onmessage = (ev) => {
-    try { const m = JSON.parse(ev.data); if (m.type === "ticker" && CB[m.product_id]) patch(CB[m.product_id], m.price); }
+    try { const m = JSON.parse(ev.data); if (m.type === "ticker" && CB[m.product_id]) patch(CB[m.product_id], m.price, "NONEQUITY"); }
     catch (err) {}
   };
   ws.onclose = () => setTimeout(connectCB, 2500);
@@ -11262,6 +11371,19 @@ function pollFMPAfterHours() {
 
 /* realtime — live_quotes ticks patch cells; news INSERTs prepend with .new flash */
 if (sb) {
+  /* ARM PROVIDER AUTHORITY BEFORE THE SUBSCRIPTION THAT NEEDS IT.
+     The declared set normally resolves from /geiger, which is a network round trip; this reads
+     the 7-day localStorage copy SYNCHRONOUSLY so a warm load has zero unguarded window at all.
+     The key is inlined rather than calling scEqFromCache(): that helper closes over a `const`
+     declared much further down this same script, so calling it here would throw a TDZ
+     ReferenceError into a catch and silently do nothing — which is worse than not trying.
+     On a genuinely cold load this finds nothing and patch() fails closed instead. */
+  try {
+    const _dq = JSON.parse(localStorage.getItem("sc_declared_equities_v1") || "null");
+    if (_dq && _dq.at && (Date.now() - _dq.at) < 7 * 864e5 && Array.isArray(_dq.syms) && _dq.syms.length) {
+      window.SC_DECLARED_SET = new Set(_dq.syms);
+    }
+  } catch (_) {}
   sb.channel("lq").on("postgres_changes", { event: "*", schema: "public", table: "live_quotes" }, (p) => {
     /* live_quotes realtime can no longer move a declared equity: patch() refuses it by source.
        Kept subscribed because non-equity rows still arrive on this channel. */
@@ -11631,14 +11753,34 @@ setInterval(pollFMP, 12000);
    the SAME response, so the percentage is exact arithmetic between two fields of one contract and
    cannot drift the way the legacy triple did.
    Throttled to 10 s when the tab is hidden, and backs off on consecutive failures. */
-let SC_TICK_INFLIGHT = false, SC_TICK_FAILS = 0, SC_TICK_TIMER = null;
-window.SC_TICK = { runs: 0, applied: 0, symbols: 0, failures: 0, last_ms: 0, last_utc: null };
+let SC_TICK_INFLIGHT = false, SC_TICK_FAILS = 0, SC_TICK_TIMER = null, SC_TICK_WAITS = 0;
+window.SC_TICK = { runs: 0, applied: 0, symbols: 0, failures: 0, last_ms: 0, last_utc: null, authority_waits: 0 };
 const SC_TICK_FAST_MS = 2000, SC_TICK_HIDDEN_MS = 10000;
+/* Re-check interval while provider authority is still resolving. A waiting tick has done no work
+   and cost nothing, so it comes back quickly instead of leaving the board unpriced for 2-10 s. */
+const SC_TICK_WAIT_MS = 250;
 
 async function scProviderTick () {
-  if (SC_TICK_INFLIGHT) return;
+  /* THE LOOP MUST NEVER DIE, AND A TICK THAT CANNOT RUN YET IS RETRIED RATHER THAN DROPPED.
+     These guards used to sit OUTSIDE the try/finally below, so any of them returned WITHOUT
+     rescheduling. MEASURED consequence on a cold first-ever load: the first tick fires at
+     t=2000 ms, /geiger has not resolved, the function returned at the declared-set guard, and
+     the 2-second provider price loop was dead FOR THE REST OF THE SESSION — recoverable only by
+     a visibilitychange. Worse, the scDeclaredEquities() call that arms the legacy-refusal guard
+     lives inside that same unreachable finally, so the guard never armed either: that is one
+     half of how legacy Supabase percentages reached the first paint. */
+  if (SC_TICK_INFLIGHT) { scScheduleTick(); return; }
   const decl = window.SC_DECLARED_SET;
-  if (!decl || !decl.size) return;
+  if (!decl || !decl.size) {
+    /* Authority not resolved yet. Kick the resolver and come straight back — never disappear.
+       Bounded fast retries (~10 s) so a cold load starts pricing as soon as /geiger lands, then
+       normal cadence so a provider outage cannot turn into a 250 ms poll forever. */
+    scDeclaredEquities().catch(() => {});
+    SC_TICK_WAITS++; window.SC_TICK.authority_waits = SC_TICK_WAITS;
+    scScheduleTick(SC_TICK_WAITS <= 40);
+    return;
+  }
+  SC_TICK_WAITS = 0;
   /* Only what is on screen. The board can hold ~365 rows but a hidden tab or a filtered cohort
      should not cost a full-universe request every two seconds. */
   /* COVER THE WHOLE DECLARED UNIVERSE, not the painted cohort.
@@ -11647,7 +11789,7 @@ async function scProviderTick () {
      had never priced. The route caps a request at 500 symbols and the universe is 365, so this is
      still ONE bounded batch - the same cost, without the hole. */
   const want = [...decl];
-  if (!want.length) return;
+  if (!want.length) { scScheduleTick(true); return; }   // never a silent exit
   SC_TICK_INFLIGHT = true;
   const t0 = Date.now();
   try {
@@ -11705,12 +11847,12 @@ async function scProviderTick () {
 scDeclaredEquities().catch(() => {});
 scScheduleTick(); }
 }
-function scScheduleTick () {
+function scScheduleTick (fast) {
   if (SC_TICK_TIMER) clearTimeout(SC_TICK_TIMER);
   const hidden = (typeof document !== "undefined" && document.hidden);
   const base = hidden ? SC_TICK_HIDDEN_MS : SC_TICK_FAST_MS;
   const backoff = Math.min(8, Math.pow(2, SC_TICK_FAILS));   // 1,2,4,8x on consecutive failures
-  SC_TICK_TIMER = setTimeout(scProviderTick, base * backoff);
+  SC_TICK_TIMER = setTimeout(scProviderTick, fast ? SC_TICK_WAIT_MS : base * backoff);
 }
 scScheduleTick();
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", scScheduleTick);
@@ -11829,17 +11971,24 @@ var SC_CHART_API = window.SC_CHART_API;
    a third of the connection pool, which is what starves pg_cron and takes Geiger, the ribbon timers
    and the FMP non-equity lanes down with it.
 
-   Shipped OFF. Turn on per-browser with  localStorage.sc_clean_reads = "1"  or ?cleanreads=1, so the
-   new path can be exercised against production before it becomes the default for everyone. */
-/* CANDIDATE BUILD — DEFAULTS ON. A function DECLARATION (not an expression) so it hoists and can
-   be called by the early assignment above the boot calls. `?cleanreads=0` and
-   localStorage.sc_clean_reads="0" still force the legacy lane for side-by-side comparison. */
+   PROMOTED AND NO LONGER SWITCHABLE. This comment previously said "Shipped OFF, opt in with
+   sc_clean_reads = 1", which had already stopped being true once the flag defaulted on — the
+   staged rollout it describes is finished. A function DECLARATION (not an expression) so it
+   hoists and can be called by the early assignment above the boot calls. */
 function scComputeCleanReads () {
-  try {
-    if (/[?&]cleanreads=1/.test(location.search)) return true;
-    if (/[?&]cleanreads=0/.test(location.search)) return false;
-    return localStorage.getItem("sc_clean_reads") !== "0";
-  } catch (_) { return true; }
+  /* PROVIDER AUTHORITY IS NOT OPTIONAL IN PRODUCTION.
+     This used to honour ?cleanreads=0 and localStorage sc_clean_reads="0", either of which turned
+     all twelve provider read paths back to the legacy Supabase lane — board price and percentage,
+     the candidate Geiger overlay, the company page, the ticker tape contract, the Layer-0 series,
+     the Geiger daily volume and close, the D chart lane and the compare strip. A stale bookmark
+     or a single leftover localStorage key was therefore enough to put legacy equity numbers back
+     on screen with no visible indication that it had happened.
+     It is now a constant. The function is kept so all twelve call sites stay unchanged, and so a
+     future reader sees why the flag exists rather than finding a bare `true` and deleting it.
+     NOTE this switch never gated the guard in patch(): with the overlay disabled but the declared
+     set still armed, equities lost their provider price AND refused the legacy one — the switch
+     could not even fail back cleanly to what it claimed to restore. */
+  return true;
 }
 window.SC_CLEAN_READS = scComputeCleanReads();
 
