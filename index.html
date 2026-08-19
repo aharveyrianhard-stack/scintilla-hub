@@ -2314,6 +2314,14 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 .gsum .gs-vgc .gs-vl{ font-family:var(--gs-mono); font-size:var(--gt-label); letter-spacing:.24em; color:var(--gs-dim); text-transform:uppercase; margin-top:4px; }
 .gsum .gs-vmeta{ display:flex; flex-direction:column; align-items:center; gap:1px; font-family:var(--gs-mono); font-size:calc(var(--gt-value) - 1.5px); color:var(--gs-vol); margin-top:6px; text-align:center; }
 .gsum .gs-vmeta .gs-vsub{ font-size:calc(var(--gt-value) - 3px); color:var(--gs-dim); letter-spacing:.02em; }
+/* THE UNAVAILABLE STATE. Deliberately not styled as an error and not styled as a value: it is a
+   third thing, and it must not be mistakable for either a reading or a fault. */
+.gsum .gs-unav{ color:var(--gs-dim); text-transform:uppercase; letter-spacing:.14em; }
+.gsum .gs-unage{ color:var(--gs-dim); opacity:.75; margin-left:.5em; }
+.gsum .gs-unwhy{ display:block; margin-top:2px; opacity:.6; letter-spacing:.06em; text-transform:none; }
+/* Keyboard focus must be VISIBLE on the disclosure headers, or keyboard operation is technically
+   possible and practically unusable. */
+.gsum [data-act][role="button"]:focus-visible{ outline:2px solid var(--gs-mom); outline-offset:2px; border-radius:3px; }
 .gsum .gs-empty{ font-family:var(--gs-mono); font-size:10px; letter-spacing:.1em; color:var(--gs-dim);
   text-transform:uppercase; padding:24px; text-align:center; }
 /* ============================================================================
@@ -7898,6 +7906,23 @@ function geigerTabHTML(g) {
    Everything is null-guarded so a missing pull renders dashes, never throws.
    ============================================================================ */
 const GS_LADDER = ["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12h","1D","3D","1W","2W","1M"];
+/* THE STALENESS GATE FOR EVERY INDICATOR SURFACE ON THE COMPANY TILE.
+   MEASURED 2026-08-18 21:5x ET: public.derived_series — the only source for the RSI-MTF,
+   Williams %R and MACD tiles — has a newest row of 2026-08-05 for every equity timeframe, i.e.
+   13.4-13.8 days old, and the job that wrote it ('derived-precompute-1m') NO LONGER EXISTS in
+   cron.job at all. Those tiles were painting two-week-old numbers with nothing on screen to say
+   so, which is the same class of untruth as a cached price.
+   The rule is applied PER ROW against the row's own timestamp, not per table: ladder_values is
+   0.1 min fresh for all 365 equities but carries non-equity rows up to 11 days old, so a
+   table-level verdict would be wrong in both directions.
+   Three days survives a long weekend and still catches a writer that has stopped. */
+const GS_STALE_MS = 3 * 864e5;
+function gsFreshTs (tsSec) {
+  const ms = Number(tsSec) * 1000;
+  return isFinite(ms) && ms > 0 && (Date.now() - ms) < GS_STALE_MS;
+}
+const gsAgeDays = (tsSec) => { const ms = Number(tsSec) * 1000;
+  return (isFinite(ms) && ms > 0) ? Math.round((Date.now() - ms) / 864e5 * 10) / 10 : null; };
 /* operator_weights timeframe keys are stored lower-case (1d/3d/1w/2w); normalize to ladder casing */
 function gsNormTf(k){ const m={ "1d":"1D","3d":"3D","1w":"1W","2w":"2W" }; const s=String(k||""); return m[s.toLowerCase()] || s; }
 
@@ -7917,14 +7942,16 @@ async function geigerSummaryData(t) {
   ]);
   const enc = encodeURIComponent(t);
   const e2 = encodeURIComponent(chFmpSym(t));   // crypto → BTCUSD form for ohlcv_history
-  const [comp, der, ser, vol, last, ow, bvol] = (await Promise.all([
+  const [comp, der, ser, vol, last, ow, bvol, lad] = (await Promise.all([
     pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,structure,conviction,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
     /* RSI·MTF / Williams / MA ladder. Ask the DB for JUST the latest row per timeframe —
        an indexed lookup (~100ms each), run in parallel — instead of the derived_latest VIEW
        which re-sorts all 4.3M history rows on every read (~18s → timeout → "NO DATA").
        No side tables, no scans: read the tip of the data directly. */
     (async () => {
-      const cols = "tf,rsi_raw,wpr_raw,fan_ema5,fan_ema8,fan_ema13,fan_ema21,fan_ema34,fan_sma50,fan_sma100,fan_sma150,fan_sma200";
+      /* `timestamp` is selected so the row can be AGED. Without it the tile had no way to know
+         whether what it was painting was minutes or a fortnight old. */
+      const cols = "tf,timestamp,rsi_raw,wpr_raw,fan_ema5,fan_ema8,fan_ema13,fan_ema21,fan_ema34,fan_sma50,fan_sma100,fan_sma150,fan_sma200";
       const rows = await Promise.all(GS_LADDER.map((tf) =>
         pg("derived_series?ticker=eq." + enc + "&tf=eq." + encodeURIComponent(tf) +
            "&select=" + cols + "&order=timestamp.desc&limit=1").catch(() => [])
@@ -7953,6 +7980,13 @@ async function geigerSummaryData(t) {
     /* AREA C — board_volume per-ticker (JUST created · EMPTY now): ring1 rvol_at_time,
        ring2 cum_rvol for the 3-ring VOLUME viz. Catch-wrapped → null → awaiting rings. */
     pg("board_volume?ticker=eq." + enc + "&select=rvol_at_time,cum_rvol,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
+    /* THE MOVING-AVERAGE LADDER, FROM THE ACCEPTED PROVIDER OUTPUT.
+       public.ladder_values is written by the Fly ladder (services/hot-query/ladder-from-provider.mjs),
+       which reads provider-built bars through the chart API and carries the v9 maths character for
+       character — same EMA-below-35 / SMA-at-or-above-35 rule, same seeding. It is the same nine
+       rungs this tile already draws, so this is a repoint to an existing accepted authority, NOT a
+       new indicator methodology. MEASURED: 365 of 365 equities present at 1D, 0.1-1.6 minutes old. */
+    pg("ladder_values?ticker=eq." + enc + "&timeframe=eq.1D&select=ma_type,length,ma_value,updated_ts").catch(() => []),
   ].map(bound)));
 
   const c = (comp && comp[0]) || {};
@@ -7969,21 +8003,57 @@ async function geigerSummaryData(t) {
   /* MA ladder from the 1D derived row (fall back to first row if no exact 1D) */
   const derRows = der || [];
   const d1 = derRows.find((r) => String(r.tf) === "1D") || derRows.find((r) => String(r.tf) === "D") || derRows[0] || {};
-  const maDefs = [["EMA 5","fan_ema5"],["EMA 8","fan_ema8"],["EMA 13","fan_ema13"],["EMA 21","fan_ema21"],
-                  ["EMA 34","fan_ema34"],["SMA 50","fan_sma50"],["SMA 100","fan_sma100"],["SMA 150","fan_sma150"],["SMA 200","fan_sma200"]];
-  const mas = maDefs.map(([n, k]) => ({ n, v: num(d1[k]) })).filter((m) => m.v != null && isFinite(m.v));
+  /* UNAVAILABLE IS A STATE, NOT AN ABSENCE. Each surface records WHY it has no value, so the tile
+     can say "the source that fed this was retired" instead of the ambiguous "no data" — which
+     reads as "this instrument has none" and is a different claim entirely. */
+  const unavail = {};
 
-  /* MTF tables in ladder order, skipping null cells */
+  /* ── MOVING-AVERAGE LADDER — repointed to the accepted provider output ──────────────────────
+     Same nine rungs, same maths, a live source instead of a dead one. Rows are aged individually
+     because ladder_values holds fresh equity rows alongside non-equity rows up to 11 days old. */
+  const maDefs = [["EMA 5","EMA",5],["EMA 8","EMA",8],["EMA 13","EMA",13],["EMA 21","EMA",21],
+                  ["EMA 34","EMA",34],["SMA 50","SMA",50],["SMA 100","SMA",100],["SMA 150","SMA",150],["SMA 200","SMA",200]];
+  const ladFresh = (lad || []).filter((r) => gsFreshTs(r.updated_ts));
+  const ladBy = {}; for (const r of ladFresh) ladBy[String(r.ma_type).toUpperCase() + String(r.length)] = num(r.ma_value);
+  let mas = maDefs.map(([n, ty, len]) => ({ n, v: ladBy[ty + len] })).filter((m) => m.v != null && isFinite(m.v));
+  let ladderSource = "PROVIDER_LADDER_VALUES";
+  if (!mas.length) {
+    /* No fresh provider rung. Fall back to the legacy fan ONLY if it is itself fresh; a stale
+       legacy fan is refused rather than drawn, which is the whole point of this change. */
+    const legacyAge = gsAgeDays(d1.timestamp);
+    if (gsFreshTs(d1.timestamp)) {
+      const legacyDefs = [["EMA 5","fan_ema5"],["EMA 8","fan_ema8"],["EMA 13","fan_ema13"],["EMA 21","fan_ema21"],
+                          ["EMA 34","fan_ema34"],["SMA 50","fan_sma50"],["SMA 100","fan_sma100"],["SMA 150","fan_sma150"],["SMA 200","fan_sma200"]];
+      mas = legacyDefs.map(([n, k]) => ({ n, v: num(d1[k]) })).filter((m) => m.v != null && isFinite(m.v));
+      ladderSource = "LEGACY_DERIVED_SERIES";
+    }
+    if (!mas.length) { unavail.ladder = { state: "UNAVAILABLE", age_days: legacyAge, why: "no fresh moving-average source" }; ladderSource = null; }
+  }
+
+  /* ── RSI · MTF and WILLIAMS %R — fail closed when the row is stale ─────────────────────────
+     Only derived_series supplies these and nothing writes it any more, so in practice every
+     equity row fails this gate today. That is the correct outcome: an unknown is served, never a
+     13-day-old number dressed as current. No substitute is invented — the provider artifact
+     carries composite, trend and momentum only, and inventing a replacement RSI would be a new
+     methodology, which is out of bounds. */
   const byTf = {}; for (const r of derRows) byTf[String(r.tf)] = r;
   const rsiMtf = [], wprMtf = [];
+  let rsiStaleAge = null, anyDerRow = false;
   for (const tf of GS_LADDER) {
     const r = byTf[tf]; if (!r) continue;
+    anyDerRow = true;
+    if (!gsFreshTs(r.timestamp)) { const a = gsAgeDays(r.timestamp); if (a != null && (rsiStaleAge == null || a < rsiStaleAge)) rsiStaleAge = a; continue; }
     const rv = num(r.rsi_raw); if (rv != null && isFinite(rv)) rsiMtf.push([tf, rv]);
     const wv = num(r.wpr_raw); if (wv != null && isFinite(wv)) wprMtf.push([tf, wv]);
   }
+  if (!rsiMtf.length) unavail.rsi = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: anyDerRow ? "source retired — newest reading is stale" : "no source" };
+  if (!wprMtf.length) unavail.wpr = { state: "UNAVAILABLE", age_days: rsiStaleAge, why: anyDerRow ? "source retired — newest reading is stale" : "no source" };
 
-  /* MACD oldest→newest */
-  const macd = (ser || []).map((r) => num(r.macd_signed)).filter((v) => v != null && isFinite(v)).reverse();
+  /* ── MACD — same gate, on the newest bar in the series ─────────────────────────────────────*/
+  const macdRows = (ser || []).filter((r) => r && num(r.macd_signed) != null && isFinite(num(r.macd_signed)));
+  const macdNewestTs = macdRows.length ? macdRows[0].timestamp : null;
+  const macd = gsFreshTs(macdNewestTs) ? macdRows.map((r) => num(r.macd_signed)).reverse() : [];
+  if (!macd.length) unavail.macd = { state: "UNAVAILABLE", age_days: gsAgeDays(macdNewestTs), why: macdRows.length ? "source retired — newest reading is stale" : "no source" };
 
   /* volume series oldest→newest + rvol = latest / avg(last 20 newest) */
   const volRows = (vol || []).map((r) => num(r.volume)).filter((v) => v != null && isFinite(v));   // newest→oldest as pulled
@@ -8016,6 +8086,7 @@ async function geigerSummaryData(t) {
     structure: num(c.structure), conviction: num(c.conviction), updated_ts: c.updated_ts || null,
     price: livePx != null ? livePx : ohlcvClose,
     mas, rsiMtf, wprMtf, macd, volSeries, rvol, activeTfs,
+    unavail, ladderSource,
     /* AREA C — board_volume rings (null now → awaiting-state arcs) */
     rvolAtTime: (bvol && bvol[0] && num(bvol[0].rvol_at_time) != null) ? num(bvol[0].rvol_at_time) : null,
     cumRvol: (bvol && bvol[0] && num(bvol[0].cum_rvol) != null) ? num(bvol[0].cum_rvol) : null,
@@ -8056,7 +8127,7 @@ function geigerSummaryHTML() {
        collapsed (default) = COMPACT ladder (price + 2 MAs above + 2 below +
        compression band); expanded = the full ladder exactly as before. */
     '<div class="gs-zT">' +
-      '<div class="gs-zh" data-act="gsladtoggle" style="cursor:pointer" title="toggle compact / full ladder"><span class="gs-d" style="background:var(--gs-trend)"></span><h2 style="color:var(--gs-trend)"><span data-gs="ladcar">▸</span> Trend · daily ladder</h2></div>' +
+      '<div class="gs-zh" data-act="gsladtoggle" role="button" tabindex="0" aria-expanded="false" aria-controls="gs-ladder-body" style="cursor:pointer" title="toggle compact / full ladder"><span class="gs-d" style="background:var(--gs-trend)"></span><h2 style="color:var(--gs-trend)"><span data-gs="ladcar">▸</span> Trend · daily ladder</h2></div>' +
       '<div class="gs-tv" data-gs="tv"></div>' +
       '<div class="gs-more" data-act="gsladtoggle" data-gs="ladmore">▾ full ladder</div>' +
     '</div>' +
@@ -8068,11 +8139,11 @@ function geigerSummaryHTML() {
          the seed caret is ▾ and the ladder is on screen from the first paint. Both tiles
          are byte-for-byte the same markup and both render through the same gsMtf() /
          gs-mbar · gs-mfill · gs-mth bar language — Williams is never a lesser tile. */
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="rsi"><span data-gs="rsicar">▾</span> RSI · MTF</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="rsitable"></div></div>' +
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="wpr"><span data-gs="wprcar">▾</span> Williams %R</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="wprtable"></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="rsi" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-rsi-body"><span data-gs="rsicar">▾</span> RSI · MTF</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="rsitable" id="gs-rsi-body" role="group" aria-label="RSI by timeframe" aria-busy="true"></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="wpr" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-wpr-body"><span data-gs="wprcar">▾</span> Williams %R</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="wprtable" id="gs-wpr-body" role="group" aria-label="Williams %R by timeframe" aria-busy="true"></div></div>' +
       /* R41 §5c — MACD starts COLLAPSED: header + "now …" foot line only; the
          histogram body shows on toggle (session-only JS flag, no persistence). */
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmacdtoggle"><span data-gs="macdcar">▸</span> MACD · daily</div><div class="gs-hist" data-gs="macd" style="display:none"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span data-gs="macd22">22d</span></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmacdtoggle" role="button" tabindex="0" aria-expanded="false" aria-controls="gs-macd-body"><span data-gs="macdcar">▸</span> MACD · daily</div><div class="gs-hist" data-gs="macd" id="gs-macd-body" role="img" aria-label="MACD daily histogram" style="display:none"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span data-gs="macd22">22d</span></div></div>' +
       '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-vol)">Volume</div><div class="gs-sub">3-ring · at-time / cum / session</div><div class="gs-volp" data-gs="vol"></div></div>' +
     '</div>' +
   '</div></div>';
@@ -8090,15 +8161,32 @@ const gsTipW = (v) => v <= -80 ? "var(--gs-bull)" : v >= -20 ? "var(--gs-bear)" 
 function gsMbar(v, sc, tip){ const p=Math.max(4,Math.min(96,(v-sc.mn)/(sc.mx-sc.mn)*100));
   const lo=(sc.lo-sc.mn)/(sc.mx-sc.mn)*100, hi=(sc.hi-sc.mn)/(sc.mx-sc.mn)*100;
   return '<div class="gs-mbar"><span class="gs-zt" style="left:'+lo+'%"></span><span class="gs-zt" style="left:'+hi+'%"></span><span class="gs-mfill" style="width:'+p+'%;background:var(--gs-mom)"></span><span class="gs-mth" style="left:'+p+'%;background:'+tip+';box-shadow:0 0 7px '+tip+'"></span></div>'; }
-function gsMtf(node, rows, sc, tip, fmt){ if (!node) return;
-  if (!rows || !rows.length){ node.innerHTML = '<div class="gs-empty">no data</div>'; return; }
+/* ONE PLACE decides how an absent indicator is worded, so the tiles cannot drift apart and a
+   reader cannot be told two different stories about the same cause. The measured age is shown
+   when it is known: "unavailable" is honest, "unavailable, last reading 13.6 days old" is
+   actionable. */
+function gsUnavailHTML(un){
+  if (!un) return "no data";
+  const age = (un.age_days != null && isFinite(un.age_days)) ? ' <span class="gs-unage">last reading ' + un.age_days + 'd old</span>' : "";
+  return '<span class="gs-unav">unavailable</span>' + age + (un.why ? '<span class="gs-unwhy">' + esc(un.why) + '</span>' : "");
+}
+function gsMtf(node, rows, sc, tip, fmt, un){ if (!node) return;
+  if (!rows || !rows.length){
+    /* "no data" reads as "this instrument has none", which is a different and untrue claim when
+       the real reason is that the source stopped being written. Say which it is, and announce it
+       to assistive technology as a status rather than leaving a silently empty region. */
+    node.innerHTML = '<div class="gs-empty" role="status">' + gsUnavailHTML(un) + '</div>';
+    node.setAttribute("aria-busy", "false");
+    return;
+  }
+  node.setAttribute("aria-busy", "false");
   const lo=(sc.lo-sc.mn)/(sc.mx-sc.mn)*100, hi=(sc.hi-sc.mn)/(sc.mx-sc.mn)*100;
   const hdr = '<div class="gs-mhd"><span style="left:'+lo+'%">'+sc.loL+'</span><span style="left:'+hi+'%">'+sc.hiL+'</span></div>';
   node.innerHTML = hdr + rows.map(([tf, v]) => { const day = tf === "1D", t = tip(v), vc = t === GS_PUR ? "var(--gs-mom)" : t;
     return '<div class="gs-mrow'+(day?" gs-day":"")+'"><span class="gs-tf">'+tf+'</span>'+gsMbar(v, sc, t)+'<span class="gs-mv" style="color:'+vc+'">'+fmt(v)+'</span></div>'; }).join("");
 }
-function gsMacdHist(node, MACD){ if (!node) return; node.innerHTML = "";
-  if (!MACD || !MACD.length){ node.innerHTML = '<div class="gs-empty">no data</div>'; return; }
+function gsMacdHist(node, MACD, un){ if (!node) return; node.innerHTML = "";
+  if (!MACD || !MACD.length){ node.innerHTML = '<div class="gs-empty" role="status">' + gsUnavailHTML(un) + '</div>'; return; }
   const W = node.clientWidth, H = node.clientHeight; if (!W || !H) return;
   const svg = document.createElementNS(GS_NS, "svg");
   const mx = Math.max(...MACD.map(Math.abs)) || 1, zy = H/2, n = MACD.length, bw = W/n*0.7, gap = W/n;
@@ -8261,10 +8349,16 @@ function buildGeigerSummary(d) {
   const wprAll = (d.wprMtf || []).filter(([tf]) => active.has(tf));
   const rsiRows = GS_RSI_OPEN ? rsiAll : only1D(rsiAll);
   const wprRows = GS_WPR_OPEN ? wprAll : only1D(wprAll);
+  /* The caret glyph and aria-expanded are set together so a screen reader and a sighted reader
+     can never be told different things about the same tile. */
+  const setExp = (sel, open) => { const h = root.querySelector('[data-act="' + sel[0] + '"]' + (sel[1] ? '[data-k="' + sel[1] + '"]' : ''));
+    if (h) h.setAttribute("aria-expanded", open ? "true" : "false"); };
   const rcar = q("rsicar"); if (rcar) rcar.textContent = GS_RSI_OPEN ? "▾" : "▸";
   const wcar = q("wprcar"); if (wcar) wcar.textContent = GS_WPR_OPEN ? "▾" : "▸";
-  gsMtf(q("rsitable"), rsiRows, { mn:0, mx:100, lo:30, hi:70, loL:"30", hiL:"70" }, gsTipR, (v) => Math.round(v));
-  gsMtf(q("wprtable"), wprRows, { mn:-100, mx:0, lo:-80, hi:-20, loL:"−80", hiL:"−20" }, gsTipW, (v) => Math.round(v));
+  setExp(["gsmtfkids","rsi"], GS_RSI_OPEN); setExp(["gsmtfkids","wpr"], GS_WPR_OPEN);
+  const UN = d.unavail || {};
+  gsMtf(q("rsitable"), rsiRows, { mn:0, mx:100, lo:30, hi:70, loL:"30", hiL:"70" }, gsTipR, (v) => Math.round(v), UN.rsi);
+  gsMtf(q("wprtable"), wprRows, { mn:-100, mx:0, lo:-80, hi:-20, loL:"−80", hiL:"−20" }, gsTipW, (v) => Math.round(v), UN.wpr);
   /* R42 §4 (Alan thought the lines were DELETED) — collapsed still shows the live 1D
      row, but now with an explicit "▾ +N tfs" caret under it so it reads as expandable,
      not removed. The caret shares data-act=gsmtfkids with the tile header.
@@ -8282,19 +8376,28 @@ function buildGeigerSummary(d) {
   /* MACD now-label. R41 §5c — collapsed = header + this "now … bearish/bullish"
      line only (the one-liner); expanded shows the existing histogram. */
   const mn = q("macdnow");
-  if (mn){ if (d.macd && d.macd.length){ const last = d.macd[d.macd.length-1]; mn.textContent = "now " + Math.round(last) + (last < 0 ? " · bearish" : " · bullish"); } else mn.textContent = ""; }
+  if (mn){
+    if (d.macd && d.macd.length){ const last = d.macd[d.macd.length-1]; mn.textContent = "now " + Math.round(last) + (last < 0 ? " · bearish" : " · bullish"); mn.removeAttribute("role"); }
+    /* An empty label previously left the collapsed MACD tile looking merely quiet. It now states
+       the same unavailability the expanded histogram does, so collapsing cannot hide the fact. */
+    else { mn.innerHTML = gsUnavailHTML(UN.macd); mn.setAttribute("role", "status"); }
+  }
   const mh = q("macd"); if (mh) mh.style.display = GS_MACD_OPEN ? "" : "none";
   const m22 = q("macd22"); if (m22) m22.style.display = GS_MACD_OPEN ? "" : "none";
   const mcar = q("macdcar"); if (mcar) mcar.textContent = GS_MACD_OPEN ? "▾" : "▸";
+  setExp(["gsmacdtoggle", null], GS_MACD_OPEN);
 
   /* draw the size-dependent SVGs once the rail has real dimensions */
   /* R42 §5 — ladder caret + compact/full state */
   const lcar = q("ladcar"); if (lcar) lcar.textContent = GS_LAD_OPEN ? "▾" : "▸";
+  setExp(["gsladtoggle", null], GS_LAD_OPEN);
   const lmore = q("ladmore"); if (lmore) { lmore.textContent = GS_LAD_OPEN ? "▴ compact ladder" : "▾ full ladder";
     lmore.style.display = (d.mas && d.mas.length > 4) ? "" : "none"; }
   const draw = () => {
     gsTrend(q("tv"), d.price, GS_LAD_OPEN ? d.mas : gsCompactMAs(d.price, d.mas));
-    gsMacdHist(q("macd"), d.macd);
+    const tvn = q("tv");
+    if (tvn && (!d.mas || !d.mas.length)) tvn.innerHTML = '<div class="gs-empty" role="status">' + gsUnavailHTML(UN.ladder) + '</div>';
+    gsMacdHist(q("macd"), d.macd, UN.macd);
     gsVolume(q("vol"), d);   // AREA C — pass full record (session rvol + board_volume rings)
   };
   requestAnimationFrame(draw);
@@ -10336,6 +10439,19 @@ function toggleSecFs(panel) {
     document.body.classList.add("exp");        // companion class — section grow rules (est tiles stay 2-col, no hooks needed)
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeTvModal(); clearSecFs(); } });   // FIX 5 — Esc closes the TV modal too
+/* KEYBOARD ACTIVATION FOR THE DISCLOSURE CONTROLS.
+   These tiles are div-based headers carrying data-act, so they were mouse-only: reachable by no
+   key, activatable by no key. Rather than duplicate the click delegation (and risk the two drifting
+   apart), Enter and Space simply synthesise the click the mouse would have produced, so there is
+   exactly one behaviour and one place it is defined. Scoped to elements that have opted in by
+   declaring role="button". */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+  const el = e.target && e.target.closest && e.target.closest('[data-act][role="button"]');
+  if (!el) return;
+  e.preventDefault();                       // Space must not scroll the rail out from under the tile
+  el.click();
+});
 
 /* R21 FIX B2 — iOS FOCUS RESILIENCE: the CLASS is the source of truth and
    toggles FIRST; native requestFullscreen is best-effort sugar. iPhone
