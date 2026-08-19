@@ -3155,6 +3155,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      or an honest null — no cached and no legacy value survives this point — so the board may be
      ranked. The first computeBoardOrder() after this flips the order exactly once. */
   window.SC_RANK_READY = true;
+  try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
      geiger[] is already ordered updated_ts desc, so gg (built above) already holds
@@ -8368,6 +8369,27 @@ function buildGeigerSummary(d) {
   const wcar = q("wprcar"); if (wcar) wcar.textContent = GS_WPR_OPEN ? "▾" : "▸";
   setExp(["gsmtfkids","rsi"], GS_RSI_OPEN); setExp(["gsmtfkids","wpr"], GS_WPR_OPEN);
   const UN = d.unavail || {};
+  /* TILE-LEVEL MACHINE STATE. The visible composite is rounded to two places; these carry the
+     unrounded value the provider actually returned, plus which authority produced it. structure is
+     stamped UNKNOWN rather than 0 — the accepted artifact does not compute it, and that is a fact
+     a checker must be able to read. */
+  scStamp(root, {
+    symbol: d.t || null, timeframe: "1D",
+    composite: d.composite, trend: d.trend, momentum: d.momentum, structure: d.structure,
+    "geiger-source": (d.composite != null) ? "PROVIDER_EQUALIZER_ARTIFACT" : "UNAVAILABLE",
+    "ladder-source": d.ladderSource || "UNAVAILABLE",
+    "rsi-state":  UN.rsi  ? UN.rsi.state  : "OK",
+    "wpr-state":  UN.wpr  ? UN.wpr.state  : "OK",
+    "macd-state": UN.macd ? UN.macd.state : "OK",
+    "rsi-age-days":  UN.rsi  ? UN.rsi.age_days  : null,
+    "macd-age-days": UN.macd ? UN.macd.age_days : null,
+    "stale-reason": UN.rsi ? UN.rsi.why : (UN.macd ? UN.macd.why : null)
+  });
+  /* Per-tile state so a checker can assert on ONE tile without parsing the whole rail. */
+  scStamp(q("rsitable"),  { state: UN.rsi  ? "UNAVAILABLE" : "OK", "age-days": UN.rsi  ? UN.rsi.age_days  : null, reason: UN.rsi  ? UN.rsi.why  : null });
+  scStamp(q("wprtable"),  { state: UN.wpr  ? "UNAVAILABLE" : "OK", "age-days": UN.wpr  ? UN.wpr.age_days  : null, reason: UN.wpr  ? UN.wpr.why  : null });
+  scStamp(q("macd"),      { state: UN.macd ? "UNAVAILABLE" : "OK", "age-days": UN.macd ? UN.macd.age_days : null, reason: UN.macd ? UN.macd.why : null });
+  scStamp(q("tv"),        { state: UN.ladder ? "UNAVAILABLE" : "OK", source: d.ladderSource || "UNAVAILABLE", timeframe: "1D", rungs: (d.mas || []).length });
   gsMtf(q("rsitable"), rsiRows, { mn:0, mx:100, lo:30, hi:70, loL:"30", hiL:"70" }, gsTipR, (v) => Math.round(v), UN.rsi);
   gsMtf(q("wprtable"), wprRows, { mn:-100, mx:0, lo:-80, hi:-20, loL:"−80", hiL:"−20" }, gsTipW, (v) => Math.round(v), UN.wpr);
   /* R42 §4 (Alan thought the lines were DELETED) — collapsed still shows the live 1D
@@ -11270,6 +11292,43 @@ window.SC_GUARD = { refused_legacy_equity: 0, provider_applied: 0, nonequity_pas
    applied. Until then every row's price and percentage is a placeholder and no dynamic column may
    be ranked. Read by computeBoardOrder(). */
 window.SC_RANK_READY = false;
+
+/* ── MACHINE-READABLE STATE ────────────────────────────────────────────────────────────────────
+   Everything a machine needs to check this page WITHOUT reading pixels or parsing formatted text:
+   full-precision values, which authority produced them, and whether they are fresh, loading,
+   errored or unknown. Written as data-* attributes, so nothing visual changes — the numbers a
+   human sees are unchanged and still rounded exactly as before; these carry the unrounded value
+   alongside them.
+   UNKNOWN STAYS UNKNOWN: a null is written as the literal "UNKNOWN", never as 0 or an empty
+   string, because an automated reader must be able to tell "we do not know" from "it is zero" —
+   the same distinction the visible tiles now make. */
+function scStamp (node, map) {
+  if (!node) return;
+  for (const k in map) {
+    const v = map[k];
+    node.setAttribute("data-sc-" + k, (v === null || v === undefined || (typeof v === "number" && !isFinite(v))) ? "UNKNOWN" : String(v));
+  }
+}
+/* Page-level identity: which build is running, which authority it is bound to, and the exact
+   Equalizer receipt behind every Geiger on screen. Lets a checker prove it is looking at the
+   build it thinks it is. */
+function scStampRoot () {
+  const cg = (typeof SC_CG !== "undefined" && SC_CG.meta) ? SC_CG.meta : {};
+  scStamp(document.documentElement, {
+    build: window.SC_BUILD || null,
+    "provider-api": window.SC_CHART_API || null,
+    "provider-authority": window.SC_CLEAN_READS ? "PROVIDER" : "DISABLED",
+    "declared-equities": (window.SC_DECLARED_SET && window.SC_DECLARED_SET.size) || null,
+    "rank-ready": !!window.SC_RANK_READY,
+    "equalizer-receipt": cg.receipt || null,
+    "equalizer-contributors": (cg.rungs && cg.rungs.length) || null,
+    "geiger-scale": cg.scale || null,
+    "geiger-computed-utc": cg.computed || null,
+    "refused-legacy-equity": (window.SC_GUARD || {}).refused_legacy_equity,
+    "refused-authority-unknown": (window.SC_GUARD || {}).refused_authority_unknown,
+    "tick-failures": (window.SC_TICK || {}).failures
+  });
+}
 function scDeclaredSync (t) {
   const d = window.SC_DECLARED_SET;
   return !!(d && d.has && d.has(t));
@@ -11334,6 +11393,17 @@ function patch(t, price, src) {
      94 of 365 rows on the ALL surface were stale this way. If there is no provider baseline the
      percentage is CLEARED, not kept - the same fail-closed rule the rest of this overlay follows. */
   for (const row of [r, rAll]) if (row) { row.price = price; row.c = (c != null) ? c : null; }
+  /* Full-precision, source-attributed row state for automated checking. */
+  const rowEl = document.querySelector('[data-act="row"][data-t="' + (window.CSS && CSS.escape ? CSS.escape(t) : t) + '"]');
+  scStamp(rowEl, {
+    symbol: t,
+    price: price,
+    "chg-pct": (c != null && isFinite(c)) ? c : null,
+    "prev-close": (pc != null && isFinite(pc)) ? pc : null,
+    "price-source": src === "PROVIDER" ? "MASSIVE_PROVIDER" : (src === "NONEQUITY" ? "NON_EQUITY_OWNER" : "LEGACY"),
+    geiger: (r && r.g != null && isFinite(r.g)) ? r.g : null,
+    state: "OK"
+  });
   const lp = el("lp_" + t);
   if (lp) {
     lp.textContent = price.toFixed(2);
@@ -11964,6 +12034,7 @@ async function scProviderTick () {
       applied++;
     }
     SC_TICK_FAILS = 0;
+    try { scStampRoot(); } catch (_) {}       // authority, counters and freshness move with each tick
     window.SC_TICK.runs++; window.SC_TICK.applied += applied;
     window.SC_TICK.symbols = want.length; window.SC_TICK.last_ms = Date.now() - t0;
     window.SC_TICK.last_utc = new Date().toISOString();
@@ -12383,7 +12454,7 @@ async function scCleanRows (sym, tf, bars) {
     return out;
   } catch (_) { return []; }
 }
-window.SC_BUILD = "2026-08-17T1930";
+window.SC_BUILD = "2026-08-18T2300";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
