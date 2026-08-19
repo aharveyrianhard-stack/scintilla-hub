@@ -4552,8 +4552,16 @@ async function loadBoardRsi(tickers) {
   if (!need.length) return;
   for (let i = 0; i < need.length; i += 35) {
     const chunk = need.slice(i, i + 35);
-    const rows = await pg("board_rsi?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") + ")&select=ticker,rsi_raw").catch(() => []);
-    const m = {}; for (const r of (rows || [])) if (!(r.ticker in m)) m[r.ticker] = num(r.rsi_raw);   // first (latest) per ticker
+    const rows = await pg("board_rsi?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") + ")&select=ticker,rsi_raw,ts").catch(() => []);
+    /* Q3e FAIL-CLOSED — same doctrine as seedBoardFromCache: a wrong number shown
+       confidently is worse than no number. Rows whose compute stamp is >24h old
+       never paint (cell keeps its honest dash), so a frozen backend lane can't
+       masquerade as current. Equity rows were retired server-side 2026-08-19. */
+    const nowS = Date.now() / 1000;
+    const m = {};
+    for (const r of (rows || [])) if (!(r.ticker in m)) {
+      if (nowS - (num(r.ts) || 0) <= 86400) m[r.ticker] = num(r.rsi_raw);   // first (latest) per ticker
+    }
     for (const t of chunk) {
       const v = m[t];
       if (v == null) continue;
@@ -6874,7 +6882,7 @@ const NEWS_STOP = new Set(["this","that","with","from","have","will","been","wer
 function extractNewsTags(items) {
   const freq = {};
   for (const n of (items || [])) {
-    const raw = ((n && n.title) || "") + " " + ((n && n.snippet) || "");
+    const raw = stripNewsMarkup(((n && n.title) || "") + " " + ((n && n.snippet) || ""));   // D2 — anchor/URL fragments were polluting tag counts
     const words = raw.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/)
       .filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !NEWS_STOP.has(w.toLowerCase()));
     const seen = new Set();
@@ -9382,11 +9390,25 @@ function stripSrcTail(title, src) {
   if (!tail || !s) return t;
   return (tail === s || tail.indexOf(s) !== -1 || s.indexOf(tail) !== -1) ? m[1] : t;
 }
+/* D2 FIX — Google News RSS descriptions arrive with literal anchor markup
+   (`<a href="https://news.google.com/rss/...">…</a>` plus font/source tags);
+   esc() faithfully turned all of it into visible text under every headline.
+   Unwrap tags to their inner text, drop bare URLs and entity spaces. Runs
+   BEFORE esc(), same convention as stripSrcTail above. */
+function stripNewsMarkup(s) {
+  return String(s == null ? "" : s)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/<[^>]*$/, " ")             // a snippet truncated mid-tag leaves an unclosed `<a href="` — drop the remnant
+    .replace(/\s{2,}/g, " ").trim();
+}
 function newsArtHTML(n, isNew) {
   const ts = newsTS(n.published_ts);
   const tk = String(n.ticker || "");
   const title = stripSrcTail(n.title, n.site || n.feed);   // R20 FIX 6a — before escaping
-  const snip = String(n.snippet || "").trim();             // handoff: news body = snippet
+  const snip0 = stripNewsMarkup(n.snippet);                // handoff: news body = snippet
+  const snip = snip0 && srcNorm(snip0) === srcNorm(title) ? "" : snip0;   // RSS body is often just the linked title — don't print it twice
   const tkHTML = tk === "_MARKET"
     ? '<span class="rtk mkt">MARKET</span>'
     : '<span class="rtk">$' + esc(tk || "—") + "</span>";
