@@ -11326,7 +11326,9 @@ function scStampRoot () {
     "geiger-computed-utc": cg.computed || null,
     "refused-legacy-equity": (window.SC_GUARD || {}).refused_legacy_equity,
     "refused-authority-unknown": (window.SC_GUARD || {}).refused_authority_unknown,
-    "tick-failures": (window.SC_TICK || {}).failures
+    "tick-failures": (window.SC_TICK || {}).failures,
+    "equity-feed-fresh": (window.__eqFresh === true),
+    "equity-feed-age-sec": (window.__eqAgeSec != null) ? Math.round(window.__eqAgeSec) : null
   });
 }
 function scDeclaredSync (t) {
@@ -11894,17 +11896,31 @@ function updateLive(){
      scFeedWatch every 45 s) and is NOT hardcoded: __eqFresh is only true when that feed is GREEN
      and its age is inside the bound, so a genuinely dead feed still reads STALE. */
   var eqStale = (window.__eqStale === true);
-  var eqClosed = eqStale && !marketOpen();                                  // idle after-hours = CLOSED, not a fault
-  var eqFault  = eqStale && !eqClosed;                                      // stale during the session = genuine fault
+  /* SESSION STATE AND FEED STATE ARE TWO DIFFERENT FACTS, AND THE BADGE MUST NOT CONFLATE THEM.
+     This read `eqStale && !marketOpen()`, i.e. it could only say CLOSED when the feed had ALSO
+     gone idle. That worked while the legacy equity feed died every evening. The provider feed does
+     not: Massive keeps delivering real post-market trades, which is the whole point of the
+     after-hours price fix. So with liveness repointed at the provider, `eqStale` is false after
+     hours and the badge silently stopped ever saying CLOSED — replacing Alan's market-session cue
+     with a feed-liveness one.
+     CLOSED is now purely a statement about the SESSION, which is what it always meant to a reader,
+     and the fault/alarm below stays purely a statement about the FEED. Neither can now mask the
+     other. */
+  var eqClosed = !marketOpen();                                             // the market is shut — says nothing about the feed
+  /* NOT YET KNOWN IS NOT A FAULT. Before the first provider tick completes there is no evidence
+     either way, and raising a fault on absence of evidence is how a healthy feed gets alarmed on
+     every load. It reads CONNECTING and stays silent until the tick actually answers. */
+  var eqUnknown = !((window.SC_TICK || {}).runs > 0);
+  var eqFault  = eqStale && !eqClosed && !eqUnknown;                        // stale during the session = genuine fault
   try{ document.body.classList.toggle("feed-down", eqFault); }catch(e){}    // logo trefoil → red pulse ONLY on a real fault
   var live = (window.__eqFresh === true) && !eqStale;   /* equity truth, not a latched fetch error */
   var cls = live ? "is-live" : "is-off";
   var badge = el("liveBadge");
   if(badge){
     if(eqClosed){ badge.className = "sc-head__live is-off"; badge.style.color = "var(--sv4)"; badge.textContent = "● CLOSED"; }
-    else { badge.style.color = ""; badge.className = "sc-head__live " + cls; badge.textContent = "● " + (eqFault ? "STALE" : (live ? "LIVE" : "OFFLINE")); }
+    else { badge.style.color = ""; badge.className = "sc-head__live " + cls; badge.textContent = "● " + (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE"))); }
   }
-  var txt = eqClosed ? "CLOSED" : (eqFault ? "STALE" : (live ? "LIVE" : "OFFLINE"));
+  var txt = eqClosed ? "CLOSED" : (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE")));
   var chip = document.querySelector(".sc-clive");
   if(chip){ chip.className = "sc-clive" + (live ? "" : " is-off"); chip.textContent = "● " + txt; }
   document.querySelectorAll(".sc-chartlive").forEach(function(c){ c.className = "sc-chartlive " + cls; c.textContent = "● " + txt; });
@@ -11931,11 +11947,27 @@ var __eqDownPrev = false;
 async function scFeedWatch(){
   try{
     var rows = await pg("feed_health?select=feed,status,age_sec");
-    var eq = (Array.isArray(rows)?rows:[]).find(function(r){ return r.feed==="equity_price"; });
-    var down = !!eq && (eq.status==="RED" || eq.age_sec>600);
-    /* Positive liveness signal, measured rather than assumed. A MISSING row is NOT healthy:
-       __eqFresh stays false so the badge degrades to OFFLINE instead of claiming LIVE on no data. */
-    window.__eqFresh = !!eq && eq.status !== "RED" && eq.age_sec != null && eq.age_sec <= 600;
+    /* EQUITY LIVENESS NOW COMES FROM THE FEED THE BOARD ACTUALLY USES.
+       feed_health.equity_price measures the LEGACY live_quotes equity path, and that path was
+       deliberately retired this sprint — job 73 is deleted, so those rows froze at 19:56 ET and
+       the row has read RED ever since. Nothing is wrong with it: it is faithfully reporting a
+       feed we switched off on purpose.
+       The consequence was a false alarm scheduled for the next open. After hours marketOpen() is
+       false so the badge reads CLOSED and stays quiet, but at 09:30 ET eqFault would become true
+       and the Hub would pulse the logo red and fire an audible "Equity feed down - prices are
+       stale" while Massive was serving 364 of 365 symbols with zero tick failures.
+       Liveness is therefore derived from the provider tick itself — the same batched /quotes call
+       that puts the prices on screen. That is the honest measurement: it reports on the feed the
+       user is actually looking at, not on a retired one. It also fails CLOSED — before the first
+       successful tick, runs is 0 and __eqFresh stays false, so the badge never claims LIVE on no
+       evidence. feed_health is still read for every OTHER pill. */
+    var T = window.SC_TICK || {};
+    var lastMs = T.last_utc ? Date.parse(T.last_utc) : NaN;
+    var ageSec = isFinite(lastMs) ? (Date.now() - lastMs) / 1000 : null;
+    var eqOk = (T.runs > 0) && (ageSec !== null) && (ageSec <= SC_EQ_FRESH_SEC);
+    var down = !eqOk;
+    window.__eqFresh = eqOk;
+    window.__eqAgeSec = ageSec;
     var open = (typeof marketOpen==="function") ? marketOpen() : true;
     var fault = down && open;                                   // only a genuine fault when the session is open
     window.__eqStale = down;                                    // badge still reads CLOSED after-hours
@@ -11966,6 +11998,10 @@ const SC_TICK_FAST_MS = 2000, SC_TICK_HIDDEN_MS = 10000;
 /* Re-check interval while provider authority is still resolving. A waiting tick has done no work
    and cost nothing, so it comes back quickly instead of leaving the board unpriced for 2-10 s. */
 const SC_TICK_WAIT_MS = 250;
+/* How stale the provider tick may be before the equity feed is called down. The tick runs every
+   2 s visible and 10 s hidden, and backs off to 8x on consecutive failures, so the worst healthy
+   interval is 80 s. 180 s leaves headroom for that backoff without hiding a genuinely dead feed. */
+const SC_EQ_FRESH_SEC = 180;
 
 async function scProviderTick () {
   /* THE LOOP MUST NEVER DIE, AND A TICK THAT CANNOT RUN YET IS RETRIED RATHER THAN DROPPED.
@@ -12044,6 +12080,13 @@ async function scProviderTick () {
       applied++;
     }
     SC_TICK_FAILS = 0;
+    /* LIVENESS MOVES WITH THE DATA. Leaving it to scFeedWatch's 45-second cycle meant that after
+       every load during market hours the feed read stale for up to 45 s — and stale during an open
+       session is a FAULT, so the logo would pulse red and the audible "Equity feed down" alarm
+       would fire on every single page load while prices were arriving normally. The tick that
+       just succeeded is the freshest possible evidence the feed is alive, so it says so itself. */
+    window.__eqFresh = true; window.__eqStale = false; window.__eqAgeSec = 0;
+    try { if (typeof updateLive === "function") updateLive(); } catch (_) {}
     try { scStampRoot(); } catch (_) {}       // authority, counters and freshness move with each tick
     window.SC_TICK.runs++; window.SC_TICK.applied += applied;
     window.SC_TICK.symbols = want.length; window.SC_TICK.last_ms = Date.now() - t0;
