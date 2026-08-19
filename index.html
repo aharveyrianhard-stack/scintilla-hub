@@ -11896,7 +11896,17 @@ function updateLive(){
      scFeedWatch every 45 s) and is NOT hardcoded: __eqFresh is only true when that feed is GREEN
      and its age is inside the bound, so a genuinely dead feed still reads STALE. */
   var eqStale = (window.__eqStale === true);
-  var eqClosed = eqStale && !marketOpen();                                  // idle after-hours = CLOSED, not a fault
+  /* SESSION STATE AND FEED STATE ARE TWO DIFFERENT FACTS, AND THE BADGE MUST NOT CONFLATE THEM.
+     This read `eqStale && !marketOpen()`, i.e. it could only say CLOSED when the feed had ALSO
+     gone idle. That worked while the legacy equity feed died every evening. The provider feed does
+     not: Massive keeps delivering real post-market trades, which is the whole point of the
+     after-hours price fix. So with liveness repointed at the provider, `eqStale` is false after
+     hours and the badge silently stopped ever saying CLOSED — replacing Alan's market-session cue
+     with a feed-liveness one.
+     CLOSED is now purely a statement about the SESSION, which is what it always meant to a reader,
+     and the fault/alarm below stays purely a statement about the FEED. Neither can now mask the
+     other. */
+  var eqClosed = !marketOpen();                                             // the market is shut — says nothing about the feed
   var eqFault  = eqStale && !eqClosed;                                      // stale during the session = genuine fault
   try{ document.body.classList.toggle("feed-down", eqFault); }catch(e){}    // logo trefoil → red pulse ONLY on a real fault
   var live = (window.__eqFresh === true) && !eqStale;   /* equity truth, not a latched fetch error */
