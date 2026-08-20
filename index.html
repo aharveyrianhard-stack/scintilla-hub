@@ -1246,6 +1246,8 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-cpx{ font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
   margin-left:auto; min-width:80px; text-align:right; flex:0 0 auto; }
 .sc-cchg{ min-width:56px; text-align:right; font-variant-numeric:tabular-nums; font-size:9.5px; flex:0 0 auto; }
+.sc-cprev{ color:var(--ink3); font-size:8.5px; font-variant-numeric:tabular-nums;
+  letter-spacing:.03em; white-space:nowrap; flex:0 0 auto; }
 /* FIX 2 (R37) — frameless LIVE/CLOSED badge: colored ● dot + word only, no pill/box.
    Green = LIVE (--bull), amber = CLOSED/OFFLINE (--warn, fallback amber).
    FIX 5 (R47) — pinned right, never shrinks, never clips: flex:0 0 auto + tiny right pad. */
@@ -3346,7 +3348,7 @@ async function fetchCompanyData(t) {
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = (await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close"),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
-    pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,structure,updated_ts&order=updated_ts.desc&limit=1"),
+    pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
     pg("fundamentals?ticker=eq." + e + "&select=trailing_pe,eps_ttm,revenue_ttm,market_cap"),
     pg("analyst_estimates?ticker=eq." + e + "&select=period,fiscal_date,est_eps_avg,est_eps_high,est_eps_low,est_revenue_avg,est_ebitda_avg,est_net_income_avg,num_analysts_eps,num_analysts_rev&order=fiscal_date.asc"),   // EST PORT — num_analysts_rev feeds the REV x-ray
@@ -6568,12 +6570,14 @@ function leftPanelInnerHTML() {
    (the board is always visible; there is nothing to go back to). */
 function leftIdentHTML(data) {
   const chg = data.chg, live = S.state === "live";
+  const pc = num(prevClose[data.t]);
   const col = chg != null ? (chg >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
   return '<div class="sc-cident">' +
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     '<span class="sc-cname">' + esc(data.name || "") + "</span>" +
     '<span class="sc-cpx" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
     '<span class="sc-cchg" id="coChg" style="color:' + col + '">' + (chg != null ? fmtC(chg) : "") + "</span>" +
+    '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
     '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span></div>";
 }
 
@@ -7925,6 +7929,7 @@ const fmtV = (v) => (v >= 0 ? "+" + v.toFixed(2) : "(" + Math.abs(v).toFixed(2) 
 
 function identBarHTML(data) {
   const chg = data.chg, live = S.state === "live";
+  const pc = num(prevClose[data.t]);
   const col = chg != null ? (chg >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
   return '<div class="sc-cident">' +
     '<button class="sc-cback" data-act="back">← back</button>' +
@@ -7932,6 +7937,7 @@ function identBarHTML(data) {
     '<span class="sc-cname">' + esc(data.name || "") + "</span>" +
     '<span class="sc-cpx" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
     '<span class="sc-cchg" id="coChg" style="color:' + col + '">' + (chg != null ? fmtC(chg) : "") + "</span>" +
+    '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
     '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span></div>";
 }
 
@@ -8015,7 +8021,7 @@ async function geigerSummaryData(t) {
   const enc = encodeURIComponent(t);
   const e2 = encodeURIComponent(chFmpSym(t));   // crypto → BTCUSD form for ohlcv_history
   const [comp, pind, vol, last, ow, bvol] = (await Promise.all([
-    pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,structure,conviction,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
+    pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
     /* Provider-computed indicator index. Raw response history is immutable in R2; this query is
        only the newest exact FMP contract for the accepted 365-symbol identity. */
     pg("provider_indicators_current?ticker=eq." + enc +
@@ -11536,9 +11542,13 @@ function patch(t, price, src) {
     if (S.coData && S.coData.t === t) { S.coData.price = price; if (c != null) S.coData.chg = c; }
     const cc = c != null ? c : (S.coData && S.coData.t === t ? S.coData.chg : null);
     const col = cc != null ? (cc >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
-    const px = el("coPx"), ch = el("coChg");
+    const px = el("coPx"), ch = el("coChg"), pc = el("coPrev");
     if (px) { px.textContent = fmtPxIdent(price); px.style.color = col; }
     if (ch && cc != null) { ch.textContent = fmtC(cc); ch.style.color = col; }
+    if (pc) {
+      const base = num(prevClose[t]);
+      pc.textContent = base != null && base !== 0 ? "Prev " + fmtPxIdent(base) : "";
+    }
   }
   scChartLive(t, price);   // R18 — charted ticker on 1D: update last point + dot, cheap redraw
 }
