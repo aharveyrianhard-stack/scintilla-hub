@@ -3153,7 +3153,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      The union is the point: if cohorts timed out, members is [] and the board is still the full
      declared equity set with Massive prices and R2 Geiger. If cohorts answered, its non-equity
      rows are added on top. Neither side can erase the other. */
-  const declaredSet = await pDeclared.catch(() => new Set());
+  /* A first-ever origin has no cached universe. If the authority request is unavailable,
+     scDeclaredEquities() resolves null (it does not reject), so catch() alone is insufficient:
+     spreading null crashed the whole board. Unknown stays an empty Set and the board remains in
+     its honest connecting state until the resolver succeeds. */
+  const declaredSet = (await pDeclared.catch(() => null)) || new Set();
   const memberTickers = (members || []).map((m) => m.ticker).filter(Boolean);
   const universe = [...new Set([...declaredSet, ...memberTickers])];
   if (!memberTickers.length && declaredSet.size) {
