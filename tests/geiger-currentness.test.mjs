@@ -18,8 +18,9 @@ test('the Hub displays FMP date-state and explains unavailable native features',
   assert.match(source, /indicatorSourceDate, indicatorSessionState/)
   assert.match(source, /raw FMP provider" \+ \(indStamp/)
   assert.match(source, /FMP stable API has no MACD · Massive oracle is separate/)
-  assert.match(source, /Struct · legacy/)
-  assert.match(source, /RSI → MOM/)
+  assert.match(source, /Momentum · RSI \+ Williams/)
+  assert.doesNotMatch(source, /Struct · legacy/)
+  assert.doesNotMatch(source, /data-gs="f_struc"/)
 })
 
 test('pre-provenance local cache envelopes cannot first-paint current values', () => {

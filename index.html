@@ -8139,7 +8139,7 @@ async function geigerSummaryData(t) {
   return {
     t,
     composite: num(c.composite), trend: num(c.trend), momentum: num(c.momentum),
-    structure: num(c.structure), conviction: num(c.conviction), updated_ts: c.updated_ts || null,
+    updated_ts: c.updated_ts || null,
     geigerRungs: c.rungs || {},
     indicatorSourceDate, indicatorSessionState,
     price: livePx != null ? livePx : ohlcvClose,
@@ -8154,7 +8154,7 @@ async function geigerSummaryData(t) {
 function geigerSummaryHTML() {
   /* markup ported 1:1 from SCINTILLA_COMPANY_PAGE.html .g grid.
      composite = bar (.gs-cgr) ABOVE a small number (.gs-big); meter has NO
-     center tick + NO struct spine; family legend = Trend/Mom/Struct. */
+     center tick; the accepted families are Trend and Momentum only. */
   return '<div class="gsum"><div class="gs-body">' +
     /* GEIGER composite */
     '<div class="gs-zG">' +
@@ -8168,16 +8168,13 @@ function geigerSummaryHTML() {
         '<svg width="100%" height="100%" viewBox="0 0 340 240" preserveAspectRatio="xMidYMid meet" fill="none" style="max-height:150px">' +
           '<path d="M53.09,267.50 A135,135,0,1,1,286.91,267.50" stroke="rgba(255,255,255,.06)" stroke-width="10" stroke-linecap="round"/>' +
           '<path d="M76.47,254.00 A108,108,0,1,1,263.53,254.00" stroke="rgba(255,255,255,.06)" stroke-width="10" stroke-linecap="round"/>' +
-          '<path d="M99.85,240.50 A81,81,0,1,1,240.15,240.50" stroke="rgba(255,255,255,.06)" stroke-width="10" stroke-linecap="round"/>' +
           '<path data-gs="f_trend" d="M53.09,267.50 A135,135,0,1,1,286.91,267.50" pathLength="100" stroke="var(--gs-trend)" stroke-width="10" stroke-linecap="round" style="filter:drop-shadow(0 0 5px var(--gs-trend))"/>' +
           '<path data-gs="f_mom" d="M76.47,254.00 A108,108,0,1,1,263.53,254.00" pathLength="100" stroke="var(--gs-mom)" stroke-width="10" stroke-linecap="round" style="filter:drop-shadow(0 0 5px var(--gs-mom))"/>' +
-          '<path data-gs="f_struc" d="M99.85,240.50 A81,81,0,1,1,240.15,240.50" pathLength="100" stroke="var(--gs-struc)" stroke-width="10" stroke-linecap="round" style="filter:drop-shadow(0 0 5px var(--gs-struc))"/>' +
         '</svg>' +
       '</div>' +
       '<div class="gs-flegend">' +
         '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-trend)">Trend</span><span class="gs-v" data-gs="lt" style="color:var(--gs-trend)"></span></div>' +
-        '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-mom)">Mom</span><span class="gs-v" data-gs="lm" style="color:var(--gs-mom)"></span></div>' +
-        '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-struc)">Struct · legacy</span><span class="gs-v" data-gs="lsr" style="color:var(--gs-struc)"></span></div>' +
+        '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-mom)">Momentum · RSI + Williams</span><span class="gs-v" data-gs="lm" style="color:var(--gs-mom)"></span></div>' +
       '</div>' +
       '<div class="gs-asof" data-gs="rungasof" role="status"></div>' +
     '</div>' +
@@ -8372,7 +8369,6 @@ function buildGeigerSummary(d) {
   /* GEIGER meter + composite */
   if (d.trend != null) setf("f_trend", d.trend);
   if (d.momentum != null) setf("f_mom", d.momentum);
-  if (d.structure != null) setf("f_struc", d.structure);
   const C = q("comp"), CS = q("compst");
   if (C){ if (d.composite != null){ C.textContent = gsSgn(d.composite); C.style.color = gsTone(d.composite); C.style.filter = "drop-shadow(0 0 9px " + gsTone(d.composite) + ")"; } else C.textContent = "—"; }
   if (CS) CS.textContent = d.composite == null ? "" : (Math.abs(d.composite) < 0.10 ? "neutral" : (d.composite > 0 ? "bull lean" : "bear lean"));
@@ -8380,10 +8376,9 @@ function buildGeigerSummary(d) {
   const CGR = q("cgr");
   if (CGR){ if (d.composite != null){ const w = Math.min(Math.abs(d.composite), 1) * 50, cc = d.composite >= 0 ? "var(--gs-bull)" : "var(--gs-bear)";
       CGR.innerHTML = '<i style="' + (d.composite >= 0 ? "left" : "right") + ":50%;width:" + w + "%;background:" + cc + ";box-shadow:0 0 7px " + cc + '"></i>'; } else CGR.innerHTML = ""; }
-  const lt = q("lt"), lm = q("lm"), lsr = q("lsr");
+  const lt = q("lt"), lm = q("lm");
   if (lt) lt.textContent = d.trend == null ? "—" : gsSgn(d.trend);
   if (lm) lm.textContent = d.momentum == null ? "—" : gsSgn(d.momentum);
-  if (lsr) lsr.textContent = d.structure == null ? "RSI → MOM" : gsSgn(d.structure);
 
   /* Exact per-rung bar starts from the provider artifact. A new compute timestamp cannot hide one
      stale source rung; every contributing width is visible and machine-readable here. */
@@ -8400,14 +8395,14 @@ function buildGeigerSummary(d) {
 
   /* R41 §5a — composite children. Per-timeframe COMPOSITE data is NOT fetched
      client-side (every composite_staged pull is tf=eq.D only), so per spec the
-     stack falls back to the three FAMILY lines (Trend/Mom/Struct — the values
+     stack falls back to the two accepted FAMILY lines (Trend/Momentum — the values
      already on d), each a flat geigerMiniHTML(v,1) fixed ±1 bar. No invented
      numbers. TODO(data feed): per-TF composite rows would replace these. */
   const kids = q("compkids");
   if (kids) {
     const krow = (k, v) => '<div class="gs-kidrow"><span class="gs-kidk">' + k + "</span>" + geigerMiniHTML(v, 1) +
       '<span class="gs-kidv" style="color:' + (v != null ? gsTone(v) : "var(--mute)") + '">' + (v != null ? gsSgn(v) : "—") + "</span></div>";
-    kids.innerHTML = krow("TREND", d.trend) + krow("MOM", d.momentum) + krow("STRUCT", d.structure);
+    kids.innerHTML = krow("TREND", d.trend) + krow("MOM", d.momentum);
     kids.style.display = GS_KIDS ? "flex" : "none";
   }
 
@@ -8430,12 +8425,10 @@ function buildGeigerSummary(d) {
   setExp(["gsmtfkids","rsi"], GS_RSI_OPEN); setExp(["gsmtfkids","wpr"], GS_WPR_OPEN);
   const UN = d.unavail || {};
   /* TILE-LEVEL MACHINE STATE. The visible composite is rounded to two places; these carry the
-     unrounded value the provider actually returned, plus which authority produced it. structure is
-     stamped UNKNOWN rather than 0 — the accepted artifact does not compute it, and that is a fact
-     a checker must be able to read. */
+     unrounded value the provider actually returned, plus which authority produced it. */
   scStamp(root, {
     symbol: d.t || null, timeframe: "1D",
-    composite: d.composite, trend: d.trend, momentum: d.momentum, structure: d.structure,
+    composite: d.composite, trend: d.trend, momentum: d.momentum,
     "geiger-source": (d.composite != null) ? "PROVIDER_EQUALIZER_ARTIFACT" : "UNAVAILABLE",
     "geiger-computed-utc": d.updated_ts,
     "geiger-rungs": rr.length,
