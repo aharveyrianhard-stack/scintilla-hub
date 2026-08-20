@@ -3271,7 +3271,15 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
       if (pcServed != null) prevClose[m.ticker] = pcServed;
       return {
         t: m.ticker,
-        nf: !px[m.ticker],                                                  // FIX 1 — no live_quotes entry
+        /* Provider-owned absence is a named state, never merely an empty legacy row. */
+        nf: declaredSet.has(m.ticker)
+          ? !(px[m.ticker] && px[m.ticker].sc_provider_state === "OK")
+          : !px[m.ticker],
+        state: declaredSet.has(m.ticker)
+          ? ((px[m.ticker] && (px[m.ticker].sc_provider_state || px[m.ticker].sc_state)) || "PROVIDER_UNAVAILABLE")
+          : "NON_EQUITY_OWNER",
+        priceSource: declaredSet.has(m.ticker) ? "MASSIVE_PROVIDER" : "NON_EQUITY_OWNER",
+        pc: pcServed,
         name: (pf[m.ticker] && pf[m.ticker].name) || "",
         exchange: (pf[m.ticker] && pf[m.ticker].exchange) || "",
         price,
@@ -4172,12 +4180,16 @@ function boardRowsHTML() {
        any new behaviour or changing the layout. */
     return '<div class="ch sc-board__row' + (d.nf ? " nofeed" : "") + '" role="button" tabindex="0"'
       + ' aria-label="Open ' + esc(d.t) + (d.name ? ' — ' + esc(d.name) : '') + ' company page"'
-      + ' data-act="row" data-t="' + esc(d.t) + '">' +
+      + ' data-act="row" data-t="' + esc(d.t) + '"'
+      + ' data-sc-symbol="' + esc(d.t) + '" data-sc-state="' + esc(d.state || "UNKNOWN") + '"'
+      + ' data-sc-price-source="' + esc(d.priceSource || "UNKNOWN") + '"'
+      + (d.pc != null ? ' data-sc-prev-close="' + esc(d.pc) + '"' : '') + '>' +
       '<button class="sc-star ' + (isFav ? "is-fav" : "") + '" aria-pressed="' + isFav + '" aria-label="' +
         (isFav ? "Unfavorite " : "Favorite ") + esc(d.t) + '" data-act="star" data-t="' + esc(d.t) + '">' +
         '<span class="sc-star__on">★</span><span class="sc-star__off">☆</span></button>' +
       '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) +
-        (d.nf ? '<span class="no-feed">NO FEED</span>' : "") + "</span>" +
+        (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
+          (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
       '<span class="sc-last" id="lp_' + esc(d.t) + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—") + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">—</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
@@ -12522,6 +12534,7 @@ async function scApplyProviderQuotes (index, tickers) {
       index[t].change = price - prev;
       index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
       index[t].sc_state = "OK";
+      index[t].sc_provider_state = "OK";
       applied++;
       continue;
     }
@@ -12541,6 +12554,7 @@ async function scApplyProviderQuotes (index, tickers) {
     index[t].change = null;
     index[t].sc_pct_source = null;
     index[t].sc_state = "PROVIDER_UNAVAILABLE";
+    index[t].sc_provider_state = (q && q.state) || "PROVIDER_UNAVAILABLE";
     /* Best VALID provider observation, when the response carried one: the last completed daily
        close is still provider-built and may be shown as such. No percentage is derived from it,
        because there is no current provider price to compare against. */
