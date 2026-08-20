@@ -8054,7 +8054,20 @@ async function geigerSummaryData(t) {
      already make, against the same 30-second-cached artifact, so it costs no extra fetch and
      cannot produce a different number than the row the user clicked.
      Non-equities are skipped by scApplyCandidateGeiger and keep their approved legacy owner. */
-  if (window.SC_CLEAN_READS) { try { const _g = { [t]: c }; await scApplyCandidateGeiger(_g); } catch (_) {} }
+  if (window.SC_CLEAN_READS) {
+    try {
+      const _g = { [t]: c };
+      await scApplyCandidateGeiger(_g);
+      /* The all-universe projection intentionally omits `rungs`. Fetch the audit-heavy detail
+         projection only for the company the user opened, then overlay the same accepted value
+         plus its eight exact BAR AS-OF records. Boards remain on the light 365-symbol payload. */
+      const _gd = await scCandidateGeigerDetail(t);
+      if (_gd && _gd.value) {
+        Object.assign(c, _gd.value);
+        c.updated_ts = _gd.computed_utc || c.updated_ts || null;
+      }
+    } catch (_) {}
+  }
   const providerRows = (pind || []).filter((r) => gsFreshIso(r.fetched_at));
   const indicatorDates = [...new Set(providerRows.map((r) => r.source_date).filter(Boolean))].sort();
   const indicatorStates = [...new Set(providerRows.map((r) => r.session_state).filter(Boolean))].sort();
@@ -12337,6 +12350,7 @@ window.SC_CLEAN_READS = scComputeCleanReads();
    rates) is LEFT ON ITS EXISTING OWNER rather than blanked. Overlaying blindly would erase every
    non-equity row from the board. */
 const SC_CG = { at: 0, map: null, meta: null };
+const SC_CGD = new Map();
 /* P0 PROVIDER-FIRST BOOT.
    Every Supabase read on the board path is ENRICHMENT and must be individually optional. Before
    this, fetchBoardRows() awaited a 10-way Promise.all whose first five entries were NOT
@@ -12366,6 +12380,32 @@ async function scCandidateGeiger () {
     SC_CG.at = Date.now();
     return SC_CG.map;
   } catch (_) { return SC_CG.map || {}; }
+}
+
+/* Detail is intentionally separate from scCandidateGeiger(): shipping 8 audit records for every
+   symbol on every board refresh would turn a small serving contract into a multi-megabyte one.
+   The selected-company tile asks for exactly one symbol and fails closed unless the provider
+   receipt, rung contract, accounting and requested identity all agree. */
+async function scCandidateGeigerDetail (ticker) {
+  const t = String(ticker || "").toUpperCase();
+  const hit = SC_CGD.get(t);
+  if (hit && Date.now() - hit.at < 30000) return hit;
+  try {
+    const r = await fetch(SC_CHART_API + "/geiger?symbols=" + encodeURIComponent(t) + "&detail=1",
+      { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return hit || null;
+    const j = await r.json();
+    const keys = Object.keys((j && j.symbols) || {});
+    const value = j && j.symbols && j.symbols[t];
+    if (!j || j.equalizer_receipt_sha256 !== SC_EQUALIZER_RECEIPT ||
+        !Array.isArray(j.participating_rungs) || j.participating_rungs.length !== 8 ||
+        j.requested !== 1 || j.returned !== 1 || keys.length !== 1 || keys[0] !== t ||
+        !value || Object.keys(value.rungs || {}).length !== 8) return hit || null;
+    const out = { at: Date.now(), value, computed_utc: j.computed_utc || null,
+                  receipt: j.equalizer_receipt_sha256 };
+    SC_CGD.set(t, out);
+    return out;
+  } catch (_) { return hit || null; }
 }
 /* Overlays a legacy-shaped {ticker -> {composite,trend,momentum,...}} index IN PLACE, only for
    symbols the candidate owns. Returns how many were replaced. */

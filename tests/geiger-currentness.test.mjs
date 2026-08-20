@@ -5,6 +5,9 @@ import fs from 'node:fs'
 const source = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8')
 
 test('the Hub carries and visibly renders every provider-bar Geiger rung as-of', () => {
+  assert.match(source, /function scCandidateGeigerDetail/)
+  assert.match(source, /geiger\?symbols=" \+ encodeURIComponent\(t\) \+ "&detail=1/)
+  assert.match(source, /await scCandidateGeigerDetail\(t\)/)
   assert.match(source, /index\[t\]\.rungs = v\.rungs \|\| \{\}/)
   assert.match(source, /geigerRungs: c\.rungs \|\| \{\}/)
   assert.match(source, /BAR AS-OF/)
