@@ -3063,6 +3063,30 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
 const COHORT_OF = {};
+/* P0 PROVIDER-FIRST BOOT.
+   Every Supabase read on the board path is ENRICHMENT and must be individually optional. Each
+   read gets its own deadline and last-known-good value, so metadata cannot block provider price
+   or Geiger authority. This state must be initialized before fetchBoardRows() first executes;
+   leaving it below that call put SC_OPT_MS in the temporal dead zone on every cold boot. */
+const SC_LAST = Object.create(null);
+const SC_DEGRADED = new Set();
+const SC_OPT_MS = 4000;
+async function scOpt (label, p, fallback) {
+  try {
+    const v = await Promise.race([
+      Promise.resolve(p),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('deadline ' + SC_OPT_MS + 'ms')), SC_OPT_MS)),
+    ]);
+    if (v != null) { SC_LAST[label] = v; SC_DEGRADED.delete(label); return v; }
+    SC_DEGRADED.add(label);
+    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
+  } catch (e) {
+    SC_DEGRADED.add(label);
+    console.warn('[SC] optional supabase read degraded:', label, String(e && e.message).slice(0, 80));
+    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
+  }
+}
+window.scDegraded = () => [...SC_DEGRADED];
 /* R26 FIX 6 — "—" when no estimate, est ≤ 0, crypto, or the estimate fails the
    basis guard vs eps_ttm (KLAC's pre-split estimate rows would otherwise print
    a fake-plausible multiple). ETFs have no analyst_estimates rows → "—" too. */
@@ -4552,8 +4576,16 @@ async function loadBoardRsi(tickers) {
   if (!need.length) return;
   for (let i = 0; i < need.length; i += 35) {
     const chunk = need.slice(i, i + 35);
-    const rows = await pg("board_rsi?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") + ")&select=ticker,rsi_raw").catch(() => []);
-    const m = {}; for (const r of (rows || [])) if (!(r.ticker in m)) m[r.ticker] = num(r.rsi_raw);   // first (latest) per ticker
+    const rows = await pg("board_rsi?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") + ")&select=ticker,rsi_raw,ts").catch(() => []);
+    /* Q3e FAIL-CLOSED — same doctrine as seedBoardFromCache: a wrong number shown
+       confidently is worse than no number. Rows whose compute stamp is >24h old
+       never paint (cell keeps its honest dash), so a frozen backend lane can't
+       masquerade as current. Equity rows were retired server-side 2026-08-19. */
+    const nowS = Date.now() / 1000;
+    const m = {};
+    for (const r of (rows || [])) if (!(r.ticker in m)) {
+      if (nowS - (num(r.ts) || 0) <= 86400) m[r.ticker] = num(r.rsi_raw);   // first (latest) per ticker
+    }
     for (const t of chunk) {
       const v = m[t];
       if (v == null) continue;
@@ -6874,7 +6906,7 @@ const NEWS_STOP = new Set(["this","that","with","from","have","will","been","wer
 function extractNewsTags(items) {
   const freq = {};
   for (const n of (items || [])) {
-    const raw = ((n && n.title) || "") + " " + ((n && n.snippet) || "");
+    const raw = stripNewsMarkup(((n && n.title) || "") + " " + ((n && n.snippet) || ""));   // D2 — anchor/URL fragments were polluting tag counts
     const words = raw.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/)
       .filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !NEWS_STOP.has(w.toLowerCase()));
     const seen = new Set();
@@ -9382,11 +9414,25 @@ function stripSrcTail(title, src) {
   if (!tail || !s) return t;
   return (tail === s || tail.indexOf(s) !== -1 || s.indexOf(tail) !== -1) ? m[1] : t;
 }
+/* D2 FIX — Google News RSS descriptions arrive with literal anchor markup
+   (`<a href="https://news.google.com/rss/...">…</a>` plus font/source tags);
+   esc() faithfully turned all of it into visible text under every headline.
+   Unwrap tags to their inner text, drop bare URLs and entity spaces. Runs
+   BEFORE esc(), same convention as stripSrcTail above. */
+function stripNewsMarkup(s) {
+  return String(s == null ? "" : s)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/<[^>]*$/, " ")
+    .replace(/\s{2,}/g, " ").trim();
+}
 function newsArtHTML(n, isNew) {
   const ts = newsTS(n.published_ts);
   const tk = String(n.ticker || "");
   const title = stripSrcTail(n.title, n.site || n.feed);   // R20 FIX 6a — before escaping
-  const snip = String(n.snippet || "").trim();             // handoff: news body = snippet
+  const snip0 = stripNewsMarkup(n.snippet);                // handoff: news body = snippet
+  const snip = snip0 && srcNorm(snip0) === srcNorm(title) ? "" : snip0;   // RSS body is often just the linked title — don't print it twice
   const tkHTML = tk === "_MARKET"
     ? '<span class="rtk mkt">MARKET</span>'
     : '<span class="rtk">$' + esc(tk || "—") + "</span>";
@@ -10318,7 +10364,12 @@ function seedBoardFromCache(cohort, fav) {
      minute old percentage is indistinguishable on screen from a live one.
      The layout still seeds instantly — ticker, name, market cap, Geiger, structure — and the two
      volatile fields are placeholders until one complete authoritative provider snapshot lands. */
-  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null }));
+  /* Q3e — RSI joins the never-seed list. A cached RSI survived the backend retirement
+     of frozen equity rows: the seed painted it, loadBoardRsi saw the row as already
+     resolved and SKIPPED the refetch, then the refreshed cache re-persisted the same
+     stale value with a fresh envelope ts — laundering it forever. Seeding it null
+     forces every boot through the gated board_rsi fetch (absent/stale rows → dash). */
+  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null, rsi: null }));
   /* AND NEVER RANK FROM CACHE. mergeBoardRows() would call computeBoardOrder() here, sorting the
      board by the cached value of whatever dynamic column is selected (Geiger by default, and the
      Geiger field was NOT blanked by the old age check at all — so a boot could rank on day-old
@@ -11969,11 +12020,14 @@ async function scFeedWatch(){
     window.__eqFresh = eqOk;
     window.__eqAgeSec = ageSec;
     var open = (typeof marketOpen==="function") ? marketOpen() : true;
-    var fault = down && open;                                   // only a genuine fault when the session is open
+    /* Before the first provider request settles, absence of a successful run is UNKNOWN, not
+       a proven outage. Alarm only after a success has gone stale or an actual request failed. */
+    var observed = (T.runs > 0) || (T.failures > 0);
+    var fault = down && open && observed;                       // only a measured fault when the session is open
     window.__eqStale = down;                                    // badge still reads CLOSED after-hours
     if(typeof updateLive==="function"){ updateLive(); }
     if(fault && !__eqDownPrev){ scAlert("Equity feed down - prices are stale"); }   // audible alarm ONLY on a real fault
-    if(!fault && __eqDownPrev){ try{ document.title="SCINTILLA"; }catch(e){} }
+    if(!fault){ try{ document.title="SCINTILLA"; }catch(e){} }
     __eqDownPrev = fault;
   }catch(e){}
 }
@@ -12280,28 +12334,6 @@ const SC_CG = { at: 0, map: null, meta: null };
    scOpt() gives each read its own deadline and its own failure. It never throws, so it can never
    take the board with it, and it returns the last known good value when it has one rather than
    blanking a column that was populated a moment ago. */
-const SC_LAST = Object.create(null);
-const SC_DEGRADED = new Set();
-const SC_OPT_MS = 4000;
-async function scOpt (label, p, fallback) {
-  try {
-    const v = await Promise.race([
-      Promise.resolve(p),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('deadline ' + SC_OPT_MS + 'ms')), SC_OPT_MS)),
-    ]);
-    if (v != null) { SC_LAST[label] = v; SC_DEGRADED.delete(label); return v; }
-    SC_DEGRADED.add(label);
-    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
-  } catch (e) {
-    /* NAMED degradation. The console line is deliberate: a silently empty column and a column
-       whose source timed out must not look the same to whoever is debugging the board. */
-    SC_DEGRADED.add(label);
-    console.warn('[SC] optional supabase read degraded:', label, String(e && e.message).slice(0, 80));
-    return SC_LAST[label] !== undefined ? SC_LAST[label] : fallback;
-  }
-}
-window.scDegraded = () => [...SC_DEGRADED];
-
 async function scCandidateGeiger () {
   if (SC_CG.map && Date.now() - SC_CG.at < 30000) return SC_CG.map;
   try {
@@ -12507,7 +12539,7 @@ async function scCleanRows (sym, tf, bars) {
     return out;
   } catch (_) { return []; }
 }
-window.SC_BUILD = "2026-08-18T2300";
+window.SC_BUILD = "2026-08-20T1320";
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
