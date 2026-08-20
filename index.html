@@ -2263,6 +2263,9 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 .gsum .gs-fl{ text-align:center; }
 .gsum .gs-fl .gs-k{ font-family:var(--gs-mono); font-size:var(--gt-label); letter-spacing:.12em; text-transform:uppercase; }
 .gsum .gs-fl .gs-v{ font-family:var(--gs-mono); font-size:var(--gt-value); display:block; margin-top:3px; }
+.gsum .gs-asof{ font-family:var(--gs-mono); font-size:calc(var(--gt-label) - 1px); color:var(--gs-dim);
+  letter-spacing:.06em; white-space:nowrap; overflow-x:auto; padding-top:5px; text-align:center; scrollbar-width:none; }
+.gsum .gs-asof::-webkit-scrollbar{ display:none; }
 
 /* TREND zone (mock .gz.zT + .tv) */
 .gsum .gs-zT{ grid-column:1; grid-row:2; padding:9px 12px; min-height:0; display:flex; flex-direction:column;
@@ -8053,6 +8056,12 @@ async function geigerSummaryData(t) {
      Non-equities are skipped by scApplyCandidateGeiger and keep their approved legacy owner. */
   if (window.SC_CLEAN_READS) { try { const _g = { [t]: c }; await scApplyCandidateGeiger(_g); } catch (_) {} }
   const providerRows = (pind || []).filter((r) => gsFreshIso(r.fetched_at));
+  const indicatorDates = [...new Set(providerRows.map((r) => r.source_date).filter(Boolean))].sort();
+  const indicatorStates = [...new Set(providerRows.map((r) => r.session_state).filter(Boolean))].sort();
+  const indicatorSourceDate = indicatorDates.length === 1 ? indicatorDates[0]
+    : (indicatorDates.length ? indicatorDates[0] + "…" + indicatorDates[indicatorDates.length - 1] : null);
+  const indicatorSessionState = indicatorStates.length === 1 ? indicatorStates[0]
+    : (indicatorStates.length ? "MIXED " + indicatorStates.join("/") : null);
   /* UNAVAILABLE IS A STATE, NOT AN ABSENCE. Each surface records WHY it has no value, so the tile
      can say "the source that fed this was retired" instead of the ambiguous "no data" — which
      reads as "this instrument has none" and is a different claim entirely. */
@@ -8112,6 +8121,8 @@ async function geigerSummaryData(t) {
     t,
     composite: num(c.composite), trend: num(c.trend), momentum: num(c.momentum),
     structure: num(c.structure), conviction: num(c.conviction), updated_ts: c.updated_ts || null,
+    geigerRungs: c.rungs || {},
+    indicatorSourceDate, indicatorSessionState,
     price: livePx != null ? livePx : ohlcvClose,
     mas, rsiMtf, wprMtf, macd, volSeries, rvol, activeTfs,
     unavail, ladderSource,
@@ -8147,8 +8158,9 @@ function geigerSummaryHTML() {
       '<div class="gs-flegend">' +
         '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-trend)">Trend</span><span class="gs-v" data-gs="lt" style="color:var(--gs-trend)"></span></div>' +
         '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-mom)">Mom</span><span class="gs-v" data-gs="lm" style="color:var(--gs-mom)"></span></div>' +
-        '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-struc)">Struct</span><span class="gs-v" data-gs="lsr" style="color:var(--gs-struc)"></span></div>' +
+        '<div class="gs-fl"><span class="gs-k" style="color:var(--gs-struc)">Struct · legacy</span><span class="gs-v" data-gs="lsr" style="color:var(--gs-struc)"></span></div>' +
       '</div>' +
+      '<div class="gs-asof" data-gs="rungasof" role="status"></div>' +
     '</div>' +
     /* TREND ladder */
     /* R42 §5 — the ladder header is a PARENT toggle (data-act=gsladtoggle):
@@ -8167,11 +8179,11 @@ function geigerSummaryHTML() {
          the seed caret is ▾ and the ladder is on screen from the first paint. Both tiles
          are byte-for-byte the same markup and both render through the same gsMtf() /
          gs-mbar · gs-mfill · gs-mth bar language — Williams is never a lesser tile. */
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="rsi" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-rsi-body"><span data-gs="rsicar">▾</span> RSI · MTF</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="rsitable" id="gs-rsi-body" role="group" aria-label="RSI by timeframe" aria-busy="true"></div></div>' +
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="wpr" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-wpr-body"><span data-gs="wprcar">▾</span> Williams %R</div><div class="gs-sub">equalizer tfs</div><div class="gs-mtf" data-gs="wprtable" id="gs-wpr-body" role="group" aria-label="Williams %R by timeframe" aria-busy="true"></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="rsi" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-rsi-body"><span data-gs="rsicar">▾</span> RSI · DAILY</div><div class="gs-sub" data-gs="rsisub">raw FMP provider</div><div class="gs-mtf" data-gs="rsitable" id="gs-rsi-body" role="group" aria-label="RSI by timeframe" aria-busy="true"></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmtfkids" data-k="wpr" role="button" tabindex="0" aria-expanded="true" aria-controls="gs-wpr-body"><span data-gs="wprcar">▾</span> Williams %R · DAILY</div><div class="gs-sub" data-gs="wprsub">raw FMP provider</div><div class="gs-mtf" data-gs="wprtable" id="gs-wpr-body" role="group" aria-label="Williams %R by timeframe" aria-busy="true"></div></div>' +
       /* R41 §5c — MACD starts COLLAPSED: header + "now …" foot line only; the
          histogram body shows on toggle (session-only JS flag, no persistence). */
-      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmacdtoggle" role="button" tabindex="0" aria-expanded="false" aria-controls="gs-macd-body"><span data-gs="macdcar">▸</span> MACD · daily</div><div class="gs-hist" data-gs="macd" id="gs-macd-body" role="img" aria-label="MACD daily histogram" style="display:none"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span data-gs="macd22">22d</span></div></div>' +
+      '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-mom)" data-act="gsmacdtoggle" role="button" tabindex="0" aria-expanded="false" aria-controls="gs-macd-body"><span data-gs="macdcar">▸</span> MACD · unavailable</div><div class="gs-sub">FMP stable API has no MACD · Massive oracle is separate</div><div class="gs-hist" data-gs="macd" id="gs-macd-body" role="img" aria-label="MACD daily histogram" style="display:none"></div><div class="gs-histfoot"><span data-gs="macdnow"></span><span data-gs="macd22">no provider value</span></div></div>' +
       '<div class="gs-ip"><div class="gs-ih" style="color:var(--gs-vol)">Volume</div><div class="gs-sub">3-ring · at-time / cum / session</div><div class="gs-volp" data-gs="vol"></div></div>' +
     '</div>' +
   '</div></div>';
@@ -8352,7 +8364,20 @@ function buildGeigerSummary(d) {
   const lt = q("lt"), lm = q("lm"), lsr = q("lsr");
   if (lt) lt.textContent = d.trend == null ? "—" : gsSgn(d.trend);
   if (lm) lm.textContent = d.momentum == null ? "—" : gsSgn(d.momentum);
-  if (lsr) lsr.textContent = d.structure == null ? "—" : gsSgn(d.structure);
+  if (lsr) lsr.textContent = d.structure == null ? "RSI → MOM" : gsSgn(d.structure);
+
+  /* Exact per-rung bar starts from the provider artifact. A new compute timestamp cannot hide one
+     stale source rung; every contributing width is visible and machine-readable here. */
+  const rr = Object.values(d.geigerRungs || {});
+  const ra = q("rungasof");
+  if (ra) ra.textContent = rr.length ? "BAR AS-OF · " + rr.map((r) => {
+    const lab = String(r.tf_token || "?").toUpperCase();
+    return lab + " " + (r.availability === "ABSENT" ? "ABSENT" : String(r.newest || "UNKNOWN").replace("T", " ").replace(/:00\.000Z$/, "Z"));
+  }).join(" · ") : "BAR AS-OF · unavailable";
+  const indStamp = [d.indicatorSourceDate, d.indicatorSessionState].filter(Boolean).join(" · ");
+  const rsub = q("rsisub"), wsub = q("wprsub");
+  if (rsub) rsub.textContent = "raw FMP provider" + (indStamp ? " · " + indStamp : " · as-of unavailable");
+  if (wsub) wsub.textContent = "raw FMP provider" + (indStamp ? " · " + indStamp : " · as-of unavailable");
 
   /* R41 §5a — composite children. Per-timeframe COMPOSITE data is NOT fetched
      client-side (every composite_staged pull is tf=eq.D only), so per spec the
@@ -8393,6 +8418,8 @@ function buildGeigerSummary(d) {
     symbol: d.t || null, timeframe: "1D",
     composite: d.composite, trend: d.trend, momentum: d.momentum, structure: d.structure,
     "geiger-source": (d.composite != null) ? "PROVIDER_EQUALIZER_ARTIFACT" : "UNAVAILABLE",
+    "geiger-computed-utc": d.updated_ts,
+    "geiger-rungs": rr.length,
     "ladder-source": d.ladderSource || "UNAVAILABLE",
     "rsi-state":  UN.rsi  ? UN.rsi.state  : "OK",
     "wpr-state":  UN.wpr  ? UN.wpr.state  : "OK",
@@ -8476,10 +8503,10 @@ function geigerSummaryMount() {
      deploy, painted before any network read, with no way to tell it apart from a live one. The
      bumped key retires that store without deleting anything, and the stamp check below means even
      a future envelope is only trusted if it was written by the provider path. */
-  const lsEnv = memHit ? null : cacheGet("sc_geiger2_" + t);   // staleOk — show instantly, still refresh
+  const lsEnv = memHit ? null : cacheGet("sc_geiger3_" + t);   // v3 adds per-rung/FMP as-of provenance
   /* Only an envelope written by the provider-cutover path may seed the tile. An in-memory hit is
      always fine — this process produced it. */
-  const cached = memHit || ((lsEnv && lsEnv.src === "PROVIDER_CUTOVER_V1") ? lsEnv.data : null) || null;
+  const cached = memHit || ((lsEnv && lsEnv.src === "PROVIDER_CURRENTNESS_V2") ? lsEnv.data : null) || null;
   if (cached && cached.t === t) {
     /* NEVER PAINT A CACHED PRICE HERE EITHER. This tile hands cached.price straight to the trend
        ladder, so on a cold boot — before PRICES[t] exists — it rendered a stale price against
@@ -8493,7 +8520,7 @@ function geigerSummaryMount() {
   }
   geigerSummaryData(t).then((gd) => {
     GEIGER_MEM[t] = gd;                                       // in-memory cache — no flash next revisit
-    try { cacheSet("sc_geiger2_" + t, { data: gd, src: "PROVIDER_CUTOVER_V1" }); } catch (_) {}   // cross-session cache
+    try { cacheSet("sc_geiger3_" + t, { data: gd, src: "PROVIDER_CURRENTNESS_V2" }); } catch (_) {}   // cross-session cache
     if (!(S.coData && S.coData.t === t)) return;   // company changed mid-flight
     const lpx = (typeof PRICES !== "undefined" && PRICES[t] != null) ? num(PRICES[t]) : null;
     if (lpx != null) gd.price = lpx;
@@ -12354,6 +12381,8 @@ async function scApplyCandidateGeiger (index) {
       index[t].momentum = v.momentum;
       index[t].structure = null;                  // removed from the active contract
       index[t].tf_contributors = v.tf_contributors;
+      index[t].rungs = v.rungs || {};
+      index[t].updated_ts = (SC_CG.meta && SC_CG.meta.computed) || null;
       index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
       index[t].sc_geiger_state = "OK";
       applied++;
@@ -12367,6 +12396,8 @@ async function scApplyCandidateGeiger (index) {
     index[t].momentum = null;
     index[t].structure = null;
     index[t].tf_contributors = null;
+    index[t].rungs = {};
+    index[t].updated_ts = null;
     index[t].sc_geiger_source = null;
     index[t].sc_geiger_state = "PROVIDER_GEIGER_UNAVAILABLE";
     blanked++;
