@@ -3063,6 +3063,14 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
 const COHORT_OF = {};
+const SC_EXPECTED_EQUITY_COUNT = 365;
+const SC_EQUALIZER_RECEIPT = "f6cf97b57cf26a37aeb8393dec676f1776b02da282dffcce95786e5762697ad1";
+const SC_EQUITY_UNIVERSE_DIGEST = "7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063";
+async function scUniverseDigest (symbols) {
+  const bytes = new TextEncoder().encode(JSON.stringify([...symbols].sort()));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 /* P0 PROVIDER-FIRST BOOT.
    Every Supabase read on the board path is ENRICHMENT and must be individually optional. Each
    read gets its own deadline and last-known-good value, so metadata cannot block provider price
@@ -3182,7 +3190,14 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* ONE COMPLETE AUTHORITATIVE SNAPSHOT HAS NOW BEEN APPLIED. Every row carries provider values
      or an honest null — no cached and no legacy value survives this point — so the board may be
      ranked. The first computeBoardOrder() after this flips the order exactly once. */
-  window.SC_RANK_READY = true;
+  const qOverlay = window.SC_LAST_QUOTE_OVERLAY || {};
+  const gOverlay = window.SC_LAST_GEIGER_OVERLAY || {};
+  window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
+    (num(qOverlay.applied) || 0) + (num(qOverlay.blanked) || 0) === declaredSet.size &&
+    (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size &&
+    !!(SC_CG.meta && SC_CG.meta.receipt === SC_EQUALIZER_RECEIPT &&
+       SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
+       SC_CG.meta.rungs && SC_CG.meta.rungs.length === 8);
   try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
@@ -11376,6 +11391,7 @@ function scStampRoot () {
     "declared-equities": (window.SC_DECLARED_SET && window.SC_DECLARED_SET.size) || null,
     "rank-ready": !!window.SC_RANK_READY,
     "equalizer-receipt": cg.receipt || null,
+    "equity-universe-digest": cg.universe_digest || null,
     "equalizer-contributors": (cg.rungs && cg.rungs.length) || null,
     "geiger-scale": cg.scale || null,
     "geiger-computed-utc": cg.computed || null,
@@ -11644,7 +11660,9 @@ if (sb) {
      On a genuinely cold load this finds nothing and patch() fails closed instead. */
   try {
     const _dq = JSON.parse(localStorage.getItem("sc_declared_equities_v1") || "null");
-    if (_dq && _dq.at && (Date.now() - _dq.at) < 7 * 864e5 && Array.isArray(_dq.syms) && _dq.syms.length) {
+    if (_dq && _dq.at && (Date.now() - _dq.at) < 7 * 864e5 &&
+        _dq.receipt === SC_EQUALIZER_RECEIPT && _dq.digest === SC_EQUITY_UNIVERSE_DIGEST &&
+        Array.isArray(_dq.syms) && _dq.syms.length === SC_EXPECTED_EQUITY_COUNT) {
       window.SC_DECLARED_SET = new Set(_dq.syms);
     }
   } catch (_) {}
@@ -12344,8 +12362,15 @@ async function scCandidateGeiger () {
     const r = await fetch(SC_CHART_API + "/geiger");
     if (!r.ok) return SC_CG.map || {};            // absent stays absent; never a legacy substitute
     const j = await r.json();
+    const syms = Object.keys((j && j.symbols) || {});
+    const universeDigest = await scUniverseDigest(syms);
+    if (!j || j.equalizer_receipt_sha256 !== SC_EQUALIZER_RECEIPT ||
+        !Array.isArray(j.participating_rungs) || j.participating_rungs.length !== 8 ||
+        syms.length !== SC_EXPECTED_EQUITY_COUNT ||
+        universeDigest !== SC_EQUITY_UNIVERSE_DIGEST) return SC_CG.map || {};
     SC_CG.map = (j && j.symbols) || {};
-    SC_CG.meta = { receipt: j.equalizer_receipt_sha256, scale: j.scale, rungs: j.participating_rungs,
+    SC_CG.meta = { receipt: j.equalizer_receipt_sha256, universe_digest: universeDigest,
+                   scale: j.scale, rungs: j.participating_rungs,
                    computed: j.computed_utc, authority: j.bar_authority };
     SC_CG.at = Date.now();
     return SC_CG.map;
@@ -12435,7 +12460,10 @@ let SC_EQ = null;
 function scEqFromCache () {
   try {
     const r = JSON.parse(localStorage.getItem(SC_EQ_KEY) || "null");
-    if (r && r.at && (Date.now() - r.at) < 7 * 864e5 && Array.isArray(r.syms) && r.syms.length) return new Set(r.syms);
+    if (r && r.at && (Date.now() - r.at) < 7 * 864e5 &&
+        r.receipt === SC_EQUALIZER_RECEIPT && Array.isArray(r.syms) &&
+        r.digest === SC_EQUITY_UNIVERSE_DIGEST &&
+        r.syms.length === SC_EXPECTED_EQUITY_COUNT) return new Set(r.syms);
   } catch (_) {}
   return null;
 }
@@ -12453,9 +12481,12 @@ async function scDeclaredEquities () {
     if (r.ok) {
       const j = await r.json();
       const syms = Object.keys((j && j.symbols) || {});
-      if (syms.length) {
+      const digest = await scUniverseDigest(syms);
+      if (j.equalizer_receipt_sha256 === SC_EQUALIZER_RECEIPT &&
+          Array.isArray(j.participating_rungs) && j.participating_rungs.length === 8 &&
+          syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
         SC_EQ = new Set(syms);
-        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), syms })); } catch (_) {}
+        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), receipt: SC_EQUALIZER_RECEIPT, digest, syms })); } catch (_) {}
       }
     }
   } catch (_) {}
