@@ -3068,9 +3068,13 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
 const COHORT_OF = {};
-const SC_EXPECTED_EQUITY_COUNT = 365;
+const SC_EXPECTED_EQUITY_COUNT = 364;
 const SC_EQUALIZER_RECEIPT = "f6cf97b57cf26a37aeb8393dec676f1776b02da282dffcce95786e5762697ad1";
-const SC_EQUITY_UNIVERSE_DIGEST = "7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063";
+const SC_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3";
+/* Existing FMP reference rows retain the identity stamped by their source artifact. Future rows
+   use the accepted identity. Both are reference-only and neither controls Geiger membership. */
+const SC_FMP_REFERENCE_DIGESTS = "(7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063," +
+  SC_EQUITY_UNIVERSE_DIGEST + ")";
 async function scUniverseDigest (symbols) {
   const bytes = new TextEncoder().encode(JSON.stringify([...symbols].sort()));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -3380,13 +3384,7 @@ async function fetchCompanyData(t) {
   const rbMap = {};                                              // GO-LIVE FIX 2 — section → body
   for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
-  /* STRUCTURE IS ABSENT FROM THE ACCEPTED CONTRACT, AND ABSENT IS NOT ZERO.
-     scApplyCandidateGeiger sets structure = null for every declared equity, because the accepted
-     provider artifact computes Trend and Momentum only. `num(null) || 0` turned that null into 0,
-     and every downstream test is `st >= 0`, so the read sentence said "structure is holding" and
-     the pill said "STRUCTURE INTACT" for all 365 equities — a verdict about a family that was
-     never computed. null now stays null and the surfaces below omit it. */
-  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, st: num(d0.structure) };
+  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0 };
   /* P0-F: same provider authority on the company view as on the board. */
   if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
@@ -3395,7 +3393,7 @@ async function fetchCompanyData(t) {
     t, name: p.name ? p.name + " · " + (p.exchange || "") : "",
     price, chg: num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change),   // FIX 2 — chg_pct from the DB, never computed
     /* tapes: d — VerdictTape wiring removed per Alan 2026-06-11 */
-    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo } },   /* 2026-08-17 — Geiger VOLUME deleted by Alan; STRUCTURE unapproved */
+    geiger: { geiger: d.g, band: "", fam: { trend: d.tr, momentum: d.mo } },
     stats: { statsTabs: [] },
     estimates: { fc: null },
     financials: {},
@@ -4616,8 +4614,8 @@ async function loadBoardRsi(tickers) {
   for (let i = 0; i < need.length; i += 35) {
     const chunk = need.slice(i, i + 35);
     const rows = await pg("provider_indicators_current?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
-      ")&provider=eq.FMP&timeframe=eq.1day&indicator=eq.rsi&period_length=eq.14&universe_hash=eq." +
-      SC_EQUITY_UNIVERSE_DIGEST + "&select=ticker,value,source_date,session_state,fetched_at").catch(() => []);
+      ")&provider=eq.FMP&timeframe=eq.1day&indicator=eq.rsi&period_length=eq.14&universe_hash=in." +
+      SC_FMP_REFERENCE_DIGESTS + "&select=ticker,value,source_date,session_state,fetched_at").catch(() => []);
     /* Fail closed on a stopped provider lane.  source_date/session_state remain attached to the
        row so a forming current-day observation is never relabelled as a settled close. */
     const freshMs = 26 * 3600e3;
@@ -8023,9 +8021,9 @@ async function geigerSummaryData(t) {
   const [comp, pind, vol, last, ow, bvol] = (await Promise.all([
     pg("composite_staged?ticker=eq." + enc + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1").catch(() => []),
     /* Provider-computed indicator index. Raw response history is immutable in R2; this query is
-       only the newest exact FMP contract for the accepted 365-symbol identity. */
+       only the newest exact FMP contract from an accepted reference artifact. */
     pg("provider_indicators_current?ticker=eq." + enc +
-       "&provider=eq.FMP&timeframe=eq.1day&universe_hash=eq." + SC_EQUITY_UNIVERSE_DIGEST +
+       "&provider=eq.FMP&timeframe=eq.1day&universe_hash=in." + SC_FMP_REFERENCE_DIGESTS +
        "&indicator=in.(ema,sma,rsi,williams)&select=indicator,period_length,value,source_date,session_state,fetched_at").catch(() => []),
     /* These two are the heaviest legacy readers on the page: the close lookup alone measured
        1,538,655 calls and ~278 hours of cumulative database time. Both are satisfied by one
@@ -10116,11 +10114,8 @@ function fwdTrailPE(price, fund, est) {     // same valuation math the ESTIMATES
   return { trail, fwd, next, mismatch: false };
 }
 function liveReadSentence(d) {              // generated from the SAME composite row as the geiger tab
-  const aligned = (d.tr >= 0) === (d.st >= 0);
   return "Right now the multi-timeframe read is " + (d.g >= 0 ? "constructive" : "heavy") +
-    ". Trend is " + sigWord(d.tr) + " and momentum is " + sigWord(d.mo) +
-    (d.st == null ? "" : ", while structure is " + (d.st >= 0 ? "holding" : "breaking down")) +
-    " — direction and structure are " + (aligned ? "pulling the same way" : "at odds") + ".";
+    ". Trend is " + sigWord(d.tr) + " and momentum is " + sigWord(d.mo) + ".";
 }
 function buildRead(t, cx, d, price, fund, est, rb) {
   rb = rb || {};                                       // GO-LIVE FIX 2 — read_blocks (section → body)
@@ -10135,12 +10130,11 @@ function buildRead(t, cx, d, price, fund, est, rb) {
     verdict.push("On valuation, $" + t + " trades at <b>" + trail.toFixed(1) +
       "×</b> trailing earnings and <b>" + fwd.toFixed(1) + "×</b> " +
       ((fwdNext && fwdNext.ntm) ? "the next 12 months' consensus EPS." : "next fiscal year's consensus EPS."));
-  const pills = ["TREND " + sigWord(d.tr).toUpperCase(),
-                 (d.st == null ? null : "STRUCTURE " + (d.st >= 0 ? "INTACT" : "BROKEN"))].filter(Boolean);
+  const pills = ["TREND " + sigWord(d.tr).toUpperCase()];
   if (trail != null && fwd != null) pills.push("FWD " + fwd.toFixed(1) + "× VS " + trail.toFixed(1) + "×");
-  /* GO-LIVE FIX 2 — trend/structure/levels/cohort bodies become a labeled second
+  /* GO-LIVE FIX 2 — trend/levels/cohort bodies become a labeled second
      group of paragraphs shown under the active VERDICT tab. */
-  const extras = ["trend", "structure", "levels", "cohort"]
+  const extras = ["trend", "levels", "cohort"]
     .filter((k) => rb[k] != null && String(rb[k]).trim())
     .map((k) => [k.toUpperCase(), toParas(rb[k])]);
   return {
@@ -10149,7 +10143,7 @@ function buildRead(t, cx, d, price, fund, est, rb) {
        (\n\n paragraph breaks preserved by toParas). Fallback order per tab:
        read_blocks section → old field (business_catalysts / ticker_context) →
        honest default (readTxtHTML). VERDICT keeps the appended live composite
-       sentence + valuation sentence; trend/structure/levels/cohort extras stay. */
+       sentence + valuation sentence; trend/levels/cohort extras stay. */
     content: { VERDICT: verdict,
                BUSINESS: toParas(rb.business != null ? rb.business
                  : (rb.business_catalysts != null ? rb.business_catalysts : (cx && cx.business_now))),
@@ -12422,7 +12416,7 @@ async function scApplyCandidateGeiger (index) {
       index[t].composite = v.composite;
       index[t].trend = v.trend;
       index[t].momentum = v.momentum;
-      index[t].structure = null;                  // removed from the active contract
+      delete index[t].structure;
       index[t].tf_contributors = v.tf_contributors;
       index[t].rungs = v.rungs || {};
       index[t].updated_ts = (SC_CG.meta && SC_CG.meta.computed) || null;
@@ -12437,7 +12431,7 @@ async function scApplyCandidateGeiger (index) {
     index[t].composite = null;
     index[t].trend = null;
     index[t].momentum = null;
-    index[t].structure = null;
+    delete index[t].structure;
     index[t].tf_contributors = null;
     index[t].rungs = {};
     index[t].updated_ts = null;
@@ -12486,7 +12480,7 @@ async function scProviderQuotes (tickers) {
    provider does not own is left untouched — its owner is unchanged, which is provider routing, not
    a fallback. */
 /* DECLARED EQUITY MEMBERSHIP — from the RECEIPT, not from whether a response arrived.
-   The authoritative equity/ETF universe is the 365 active rows of massive_stocks.instrument_map,
+   The authoritative equity/ETF universe is the 364 accepted rows of massive_stocks.instrument_map,
    echoed by the /geiger route together with the Equalizer receipt hash. Deciding membership from
    the presence of a provider response is exactly the bug being fixed: a failed request would make a
    declared equity look like a non-equity and quietly hand it back to the legacy table.
@@ -12998,8 +12992,8 @@ function filesWire(){
 
   /* ---- equalizer (ported from approved v2) ---- */
   var TFS=["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12h","1d","3d","1w","2w","1M"];
-  var FAMS=["TREND","MOMENTUM"];   /* 2026-08-17 — Geiger VOLUME family DELETED BY ALAN; STRUCTURE remains unapproved. Neither is archived for restore: there is no approved methodology for either, and a retained vocabulary entry is how a retired family quietly comes back. Raw provider volume is untouched and lives elsewhere. */
-  var FRGB={TREND:"45,156,255",MOMENTUM:"162,75,255",STRUCTURE:"255,212,0",VOLUME:"255,138,0"};
+  var FAMS=["TREND","MOMENTUM"];
+  var FRGB={TREND:"45,156,255",MOMENTUM:"162,75,255"};
   var tfH=TFS.map(function(_,i){return {x:i/(TFS.length-1),y:.55};});   // R33 — ONE handle per timeframe: drag each of the 17 independently
   var famH=FAMS.map(function(_,i){return {x:i/(FAMS.length-1),y:[.62,.55,.45,.05][i]};});
   var tfEnabled=TFS.map(function(){return true;});   // per-timeframe ON/OFF — tap a timeframe to mute it (excluded from geiger)
