@@ -2966,6 +2966,7 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 
 <!-- 1.7 Helm — REMOVED (vestigial empty "Controls" footer; zoom controls gone since R27) -->
 
+<script src="/geiger-authority-contract.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================================
@@ -3069,8 +3070,27 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
 const GCOMP = {};
 const COHORT_OF = {};
 const SC_EXPECTED_EQUITY_COUNT = 364;
-const SC_EQUALIZER_RECEIPT = "f6cf97b57cf26a37aeb8393dec676f1776b02da282dffcce95786e5762697ad1";
 const SC_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3";
+const SC_GEIGER_AUTHORITY = window.SCGeigerAuthority || null;
+const SC_OPERATOR_WEIGHT_PATH = "operator_weights?select=dim,key,weight,enabled,owner_id" +
+  "&owner_id=eq.00000000-0000-0000-0000-000000000000" +
+  "&dim=in.(fam_handle,family,momentum,momentum_mix,tf_handle,timeframe)" +
+  "&order=dim.asc,key.asc&limit=43";
+let SC_EQUALIZER_READ = null;
+async function scCurrentEqualizer () {
+  /* No stale-config grace: each Geiger admission is checked against a current exact PostgREST
+     read. Concurrent callers share only the same in-flight read; a failed read never falls back
+     to the prior configuration. The last accepted Geiger may remain visible, but rank readiness
+     is revoked until current operator state is proven again. */
+  if (SC_EQUALIZER_READ) return SC_EQUALIZER_READ;
+  SC_EQUALIZER_READ = (async function () {
+    if (!SC_GEIGER_AUTHORITY) throw new Error("GEIGER_AUTHORITY_CONTRACT_UNAVAILABLE");
+    const rows = await pg(SC_OPERATOR_WEIGHT_PATH, 1);
+    return SC_GEIGER_AUTHORITY.deriveOperatorEqualizer(rows);
+  })();
+  try { return await SC_EQUALIZER_READ; }
+  finally { SC_EQUALIZER_READ = null; }
+}
 /* Existing FMP reference rows retain the identity stamped by their source artifact. Future rows
    use the accepted identity. Both are reference-only and neither controls Geiger membership. */
 const SC_FMP_REFERENCE_DIGESTS = "(7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063," +
@@ -3204,9 +3224,13 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
     (num(qOverlay.applied) || 0) + (num(qOverlay.blanked) || 0) === declaredSet.size &&
     (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size &&
-    !!(SC_CG.meta && SC_CG.meta.receipt === SC_EQUALIZER_RECEIPT &&
+    !!(SC_CG.meta && SC_CG.meta.current_equalizer_validated === true &&
        SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
-       SC_CG.meta.rungs && SC_CG.meta.rungs.length === 8);
+       SC_CG.meta.accounting && SC_CG.meta.accounting.failed === 0 &&
+       SC_CG.meta.accounting.unexplained === 0 &&
+       SC_CG.meta.accounting.named_absent === 0 &&
+       SC_CG.meta.accounting.computed === SC_CG.meta.accounting.expected_cells &&
+       SC_CG.meta.coverage && SC_CG.meta.coverage.complete === true);
   try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
@@ -11390,6 +11414,13 @@ function scStampRoot () {
     "equalizer-receipt": cg.receipt || null,
     "equity-universe-digest": cg.universe_digest || null,
     "equalizer-contributors": (cg.rungs && cg.rungs.length) || null,
+    "equalizer-current-validated": cg.current_equalizer_validated === true,
+    "geiger-coverage-complete": !!(cg.coverage && cg.coverage.complete),
+    "geiger-incomplete-symbols": (cg.coverage && cg.coverage.incomplete_symbols &&
+      cg.coverage.incomplete_symbols.length) || 0,
+    "geiger-unexplained-cells": (cg.accounting && cg.accounting.unexplained != null) ?
+      cg.accounting.unexplained : null,
+    "geiger-validation-error": cg.validation_error || null,
     "geiger-scale": cg.scale || null,
     "geiger-computed-utc": cg.computed || null,
     "refused-legacy-equity": (window.SC_GUARD || {}).refused_legacy_equity,
@@ -11662,7 +11693,7 @@ if (sb) {
   try {
     const _dq = JSON.parse(localStorage.getItem("sc_declared_equities_v1") || "null");
     if (_dq && _dq.at && (Date.now() - _dq.at) < 7 * 864e5 &&
-        _dq.receipt === SC_EQUALIZER_RECEIPT && _dq.digest === SC_EQUITY_UNIVERSE_DIGEST &&
+        _dq.digest === SC_EQUITY_UNIVERSE_DIGEST &&
         Array.isArray(_dq.syms) && _dq.syms.length === SC_EXPECTED_EQUITY_COUNT) {
       window.SC_DECLARED_SET = new Set(_dq.syms);
     }
@@ -12329,17 +12360,19 @@ window.SC_CLEAN_READS = scComputeCleanReads();
    series, which is why the switch is not flipped until 366/366 daily objects are verified. */
 /* P0-E — GEIGER AUTHORITY.
    Trend, Momentum and the composite come from the CANDIDATE artifact: recomputed from
-   provider-built bars under Alan's captured Equalizer (receipt sha256 f6cf97b5…97ad1) and served
-   read-only through the chart API's /geiger route.
+   provider-built bars under the current saved Equalizer and served read-only through the chart
+   API's /geiger route. The Hub independently derives the current Equalizer digest from the exact
+   42-row operator_weights contract before accepting the artifact.
 
    IT IS NOT WRITTEN BACK INTO composite_staged, deliberately. That table is also written by cron 57
    and the legacy ribbon engine, so publishing there would let a legacy writer silently overwrite
    the candidate. One writer (the batch worker), one reader (this route).
 
    TWO DEFECTS IN THE LIVE PATH THIS REPLACES, both measured 2026-08-18:
-     - live tf_contributors is 2, 5, 6 or 7 and NEVER 8, because geiger_for_user filters
-       ribbon_signals to a 3-hour freshness window and stale rungs silently fall out of the ladder.
-       The candidate reports 8 for all 365.
+     - live tf_contributors was incomplete because geiger_for_user filtered ribbon_signals to a
+       3-hour freshness window and stale rungs silently fell out of the ladder. This reader now
+       requires every one of the fixed 364 equities to carry the current participating count before
+       the board may rank.
      - live reads the local audit roll-up on a UTC anchor; the candidate reads provider bars on the
        provider's own session anchor, with in-progress periods withheld.
 
@@ -12358,51 +12391,88 @@ const SC_CGD = new Map();
    scOpt() gives each read its own deadline and its own failure. It never throws, so it can never
    take the board with it, and it returns the last known good value when it has one rather than
    blanking a column that was populated a moment ago. */
+function scRetainCandidateGeiger (reason, currentEqualizer) {
+  /* Retaining the last accepted values is a display-continuity policy, not renewed acceptance.
+     Rank readiness can survive a transient /geiger failure only when the current 42-row state was
+     just proven and still has the same digest. An unavailable/invalid operator read always revokes
+     readiness, even though the prior numbers may remain visible. */
+  if (SC_CG.meta) {
+    SC_CG.meta.current_equalizer_validated = !!(currentEqualizer &&
+      SC_CG.meta.receipt === currentEqualizer.receipt);
+    SC_CG.meta.validation_error = String(reason || "GEIGER_CURRENT_VALIDATION_FAILED").slice(0, 160);
+  }
+  return SC_CG.map || {};
+}
 async function scCandidateGeiger () {
-  if (SC_CG.map && Date.now() - SC_CG.at < 30000) return SC_CG.map;
+  let currentEqualizer;
+  try { currentEqualizer = await scCurrentEqualizer(); }
+  catch (e) { return scRetainCandidateGeiger(e && e.message, null); }
+  if (SC_CG.map && Date.now() - SC_CG.at < 30000 && SC_CG.meta &&
+      SC_CG.meta.receipt === currentEqualizer.receipt) {
+    SC_CG.meta.current_equalizer_validated = true;
+    SC_CG.meta.validation_error = null;
+    return SC_CG.map;
+  }
   try {
     const r = await fetch(SC_CHART_API + "/geiger");
-    if (!r.ok) return SC_CG.map || {};            // absent stays absent; never a legacy substitute
+    if (!r.ok) return scRetainCandidateGeiger("GEIGER_HTTP_" + r.status, currentEqualizer);
     const j = await r.json();
+    SC_GEIGER_AUTHORITY.validateArtifactProfile(j, currentEqualizer);
     const syms = Object.keys((j && j.symbols) || {});
     const universeDigest = await scUniverseDigest(syms);
-    if (!j || j.equalizer_receipt_sha256 !== SC_EQUALIZER_RECEIPT ||
-        !Array.isArray(j.participating_rungs) || j.participating_rungs.length !== 8 ||
-        syms.length !== SC_EXPECTED_EQUITY_COUNT ||
-        universeDigest !== SC_EQUITY_UNIVERSE_DIGEST) return SC_CG.map || {};
+    if (syms.length !== SC_EXPECTED_EQUITY_COUNT ||
+        universeDigest !== SC_EQUITY_UNIVERSE_DIGEST) {
+      return scRetainCandidateGeiger("GEIGER_EQUITY_UNIVERSE_MISMATCH", currentEqualizer);
+    }
+    const accounting = SC_GEIGER_AUTHORITY.auditArtifactAccounting(j, SC_EXPECTED_EQUITY_COUNT);
+    const coverage = SC_GEIGER_AUTHORITY.contributorCoverage(j.symbols,
+      currentEqualizer.participating_rungs.length);
     SC_CG.map = (j && j.symbols) || {};
     SC_CG.meta = { receipt: j.equalizer_receipt_sha256, universe_digest: universeDigest,
                    scale: j.scale, rungs: j.participating_rungs,
-                   computed: j.computed_utc, authority: j.bar_authority };
+                   excluded_zero_weight: j.excluded_zero_weight,
+                   excluded_disabled: j.excluded_disabled,
+                   computed: j.computed_utc, authority: j.bar_authority,
+                   accounting, coverage, current_equalizer_validated: true,
+                   validation_error: null };
     SC_CG.at = Date.now();
     return SC_CG.map;
-  } catch (_) { return SC_CG.map || {}; }
+  } catch (e) { return scRetainCandidateGeiger(e && e.message, currentEqualizer); }
 }
 
-/* Detail is intentionally separate from scCandidateGeiger(): shipping 8 audit records for every
-   symbol on every board refresh would turn a small serving contract into a multi-megabyte one.
+/* Detail is intentionally separate from scCandidateGeiger(): shipping every participating audit
+   record for every symbol on every board refresh would turn a small serving contract into a
+   multi-megabyte one.
    The selected-company tile asks for exactly one symbol and fails closed unless the provider
    receipt, rung contract, accounting and requested identity all agree. */
 async function scCandidateGeigerDetail (ticker) {
   const t = String(ticker || "").toUpperCase();
   const hit = SC_CGD.get(t);
-  if (hit && Date.now() - hit.at < 30000) return hit;
+  let currentEqualizer;
+  try { currentEqualizer = await scCurrentEqualizer(); }
+  catch (_) { return hit || null; }
+  if (hit && hit.receipt === currentEqualizer.receipt && Date.now() - hit.at < 30000) return hit;
   try {
     const r = await fetch(SC_CHART_API + "/geiger?symbols=" + encodeURIComponent(t) + "&detail=1",
       { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) return hit || null;
+    if (!r.ok) return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null;
     const j = await r.json();
+    SC_GEIGER_AUTHORITY.validateArtifactProfile(j, currentEqualizer);
+    SC_GEIGER_AUTHORITY.auditArtifactAccounting(j, SC_EXPECTED_EQUITY_COUNT);
     const keys = Object.keys((j && j.symbols) || {});
     const value = j && j.symbols && j.symbols[t];
-    if (!j || j.equalizer_receipt_sha256 !== SC_EQUALIZER_RECEIPT ||
-        !Array.isArray(j.participating_rungs) || j.participating_rungs.length !== 8 ||
-        j.requested !== 1 || j.returned !== 1 || keys.length !== 1 || keys[0] !== t ||
-        !value || Object.keys(value.rungs || {}).length !== 8) return hit || null;
+    const expectedRungKeys = currentEqualizer.participating_rungs
+      .map((rung) => rung.equalizer_key).sort();
+    const detailRungKeys = value ? Object.keys(value.rungs || {}).sort() : [];
+    if (!j || j.requested !== 1 || j.returned !== 1 || keys.length !== 1 || keys[0] !== t ||
+        !value || JSON.stringify(detailRungKeys) !== JSON.stringify(expectedRungKeys)) {
+      return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null;
+    }
     const out = { at: Date.now(), value, computed_utc: j.computed_utc || null,
                   receipt: j.equalizer_receipt_sha256 };
     SC_CGD.set(t, out);
     return out;
-  } catch (_) { return hit || null; }
+  } catch (_) { return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null; }
 }
 /* Overlays a legacy-shaped {ticker -> {composite,trend,momentum,...}} index IN PLACE, only for
    symbols the candidate owns. Returns how many were replaced. */
@@ -12479,9 +12549,9 @@ async function scProviderQuotes (tickers) {
    downstream consumer keeps its existing shape and no call site has to be re-reasoned. A symbol the
    provider does not own is left untouched — its owner is unchanged, which is provider routing, not
    a fallback. */
-/* DECLARED EQUITY MEMBERSHIP — from the RECEIPT, not from whether a response arrived.
+/* DECLARED EQUITY MEMBERSHIP — from the fixed universe identity, not from whether a response arrived.
    The authoritative equity/ETF universe is the 364 accepted rows of massive_stocks.instrument_map,
-   echoed by the /geiger route together with the Equalizer receipt hash. Deciding membership from
+   echoed by the /geiger route. Deciding membership from
    the presence of a provider response is exactly the bug being fixed: a failed request would make a
    declared equity look like a non-equity and quietly hand it back to the legacy table.
    Cached in localStorage because the set changes rarely and a transient outage must not erase our
@@ -12493,8 +12563,7 @@ function scEqFromCache () {
   try {
     const r = JSON.parse(localStorage.getItem(SC_EQ_KEY) || "null");
     if (r && r.at && (Date.now() - r.at) < 7 * 864e5 &&
-        r.receipt === SC_EQUALIZER_RECEIPT && Array.isArray(r.syms) &&
-        r.digest === SC_EQUITY_UNIVERSE_DIGEST &&
+        Array.isArray(r.syms) && r.digest === SC_EQUITY_UNIVERSE_DIGEST &&
         r.syms.length === SC_EXPECTED_EQUITY_COUNT) return new Set(r.syms);
   } catch (_) {}
   return null;
@@ -12514,11 +12583,9 @@ async function scDeclaredEquities () {
       const j = await r.json();
       const syms = Object.keys((j && j.symbols) || {});
       const digest = await scUniverseDigest(syms);
-      if (j.equalizer_receipt_sha256 === SC_EQUALIZER_RECEIPT &&
-          Array.isArray(j.participating_rungs) && j.participating_rungs.length === 8 &&
-          syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
+      if (syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
         SC_EQ = new Set(syms);
-        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), receipt: SC_EQUALIZER_RECEIPT, digest, syms })); } catch (_) {}
+        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), digest, syms })); } catch (_) {}
       }
     }
   } catch (_) {}
