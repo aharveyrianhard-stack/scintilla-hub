@@ -238,3 +238,25 @@ test('collection time bounds use actual retained per-handle attempts, independen
   assert.equal(invalidTime.collection_started_at, null);
   assert.equal(invalidTime.collection_time_basis, null);
 });
+
+test('a repost preserves nested quote text, kind, and every media level with independent timestamps', () => {
+  const quote = makePost({id:'2097000000000000002',handle:'OtherTrader',kind:'quote',created_at:'2026-09-07T22:00:00Z',
+    url:'https://x.com/OtherTrader/status/2097000000000000002',videos:[{url:'https://video.twimg.com/outer.mp4'}],
+    original:makePost({id:'2097000000000000003',handle:'ThirdTrader',created_at:'2026-09-06T21:00:00Z',
+      url:'https://x.com/ThirdTrader/status/2097000000000000003',youtube_id:'abcdefghijk',text:'Nested quoted full text',
+      videos:[{url:'https://video.twimg.com/inner.mp4'}],links:[{url:'https://example.com/report',title:'Report'}]})});
+  const row = normalizePost(makePost({kind:'repost',original:quote}), {handles});
+  assert.equal(row.original.kind,'quote');
+  assert.equal(row.original.original.text,'Nested quoted full text');
+  assert.equal(row.original.original.created_at,'2026-09-06T21:00:00.000Z');
+  assert.equal(row.original.original.videos[0].url,'https://video.twimg.com/inner.mp4');
+  assert.notEqual(row.created_at,row.original.created_at);
+  const receipt = buildReceipt(handles,[row],[],at);
+  assert.equal(receipt.videos_resolved,1);
+  assert.equal(receipt.videos_still_missing,0);
+  assert.equal(receipt.youtube_ids,1);
+  assert.equal(receipt.outbound_links,1);
+  let tooDeep = makePost();
+  for (let i=0;i<5;i++) tooDeep=makePost({kind:'quote',original:tooDeep});
+  assert.throws(()=>normalizePost(tooDeep),/nesting exceeds four/);
+});

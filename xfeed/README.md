@@ -1,10 +1,80 @@
-# X desk data
+# X desk: source, publication, and data contract
 
-The X desk is the Social master tab's X panel. Trading uses the exact 126 handles in `data/HANDLES_TRADING.txt`. Notifications remains unconnected until its handle list is supplied. Video shows native X video and YouTube rows, including unresolved native video.
+The X desk is scintillahub.ai → Social → X. Trading uses the exact 126 handles in `data/HANDLES_TRADING.txt`. Notifications filters the same retained feed to the Trading members whose native X notification flag is enabled. On September 8, 2026, seven observed `ListMembers` pages verified all 126 members against that file: 18 enabled, 108 disabled, and zero unknown. The configuration carries its actual verification time; it is not inferred from post frequency. Video shows native X video and YouTube rows, including unresolved native video items.
 
-The collection is a chronological record of observed posts. It has no sentiment filter, summary, recurring collection job, or automatic historical/sample seed.
+The collection retains observed originals, replies, quotes, and reposts in chronological order, with available source text, media, links, and nested originals. It applies no sentiment filter or summary and never inserts demo posts or automatically seeds unrelated historical datasets.
 
-The current first pass queries each handle separately in X's Latest search and retains the first returned page, up to 20 results. It extracts full available `note_tweet` text, quote data, and media from the browser's SearchTimeline response. Selected real post pages were checked against the extracted fields. It does not visit every post detail page or paginate account history. Latest search does not establish repost coverage; a zero repost-row count cannot establish that the accounts made no reposts.
+## Live source and scope
+
+The authenticated personal X account exposes the native [Trading list](https://x.com/i/lists/1405188850188759047), ID `1405188850188759047`. The collector observes the browser's `ListLatestTweetsTimeline` responses while navigating and scrolling that list. These responses include repost actions, available `note_tweet` text, quote/repost structure, and media. Membership and notification flags come from observed `ListMembers` responses. The source is the existing signed-in Chrome session; no separate Python search service or official X API integration has been established.
+
+`scripts/xfeed-browser-cycle.js` is a helper for the Codex CUA JavaScript session. It reads responses delivered to the exact controlled source tab, retains response identity, request cursor, and chunk count, and submits content through the loopback intake page. It does not independently call X endpoints. Each cycle starts at the list's newest window and pages toward the saved frontier. A continuous interval is claimed only when complete response chunks, linked cursors, and the prior frontier are verified. Blocked or rate-limited observations remain incomplete; obtained records are retained while collection waits for the actual reset.
+
+The initial live list pass retained 123 list-source rows, producing 2,622 current rows together with the earlier 2,500-row search snapshot. Its 35 saved response/chunks were not 35 verified network pages. That bootstrap pass left the interval from the earlier search snapshot to the initial list window open and did not verify a continuous cursor chain. Later receipts state each pass's actual evidence; reaching a recent frontier does not retroactively close an earlier historical gap. Unavailable originals and media stay explicit. No pass establishes complete account history or separate permalink checks for every row.
+
+The earlier search snapshot queried each of the 126 handles separately in Latest search and retained only its first returned page, up to 20 results. It extracted available full text and media from `SearchTimeline`, with selected real post pages checked. It did not visit every detail page or establish repost coverage. Those attempts remain historical evidence and are not relabeled as current list coverage. The exact handoff and implementation differences are recorded in [HANDOFF-REVIEW.md](</Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/HANDOFF-REVIEW.md>).
+
+## Update path and operating requirements
+
+The exact retained Chrome group, collector cycle, retry procedure, and runtime checks are documented in [OPERATIONS.md](OPERATIONS.md).
+
+The implemented path is:
+
+1. Codex observes the signed-in Chrome Trading list through CUA.
+2. The local capture service at `http://127.0.0.1:8766/` validates and imports saved response chunks into the operational append-only ledger.
+3. A completed source pass writes a separate source receipt and actual collector heartbeat. A service started with `--publish` then publishes one complete current feed.
+4. Vercel Blob stores an immutable compact feed JSON and separate immutable raw-ledger archive chunks. After the feed's public bytes and CORS are verified, publication replaces the small current manifest.
+5. `/api/xfeed` reads the fixed store manifest and redirects to its verified immutable feed URL. The desk polls every 30 seconds and retains its prior tape if an update fails. A failed initial live load is shown explicitly when using the static snapshot fallback.
+
+The active Codex task heartbeat `keep-scintilla-x-feed-current` is installed with a five-minute attempt cadence. This schedule is not a delivery-time guarantee: a cycle may need pagination, source retry/reset waits, or recovery. The browser helper and capture service do not schedule themselves. Collection requires the local Mac, Codex, Chrome, and the signed-in X session to remain available; it is not an independent cloud collector. Sleep, logout, app shutdown, or source access failure can interrupt it. The desk marks the published collector heartbeat stale after 600 seconds, independently of the newest post's age. A quiet Trading list is distinct from a stale collector.
+
+Operational files live outside the deployable repository:
+
+```text
+/Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/runtime/
+  captures/                 saved transformed browser responses and raw post fields
+  state.json                pass records, publication result, and source frontier
+  heartbeat.json            actual collector state and heartbeat timestamp
+  membership-progress.json  latest observed membership verification progress
+  data/
+    HANDLES_TRADING.txt      exact configured population
+    ledger.jsonl            append-only post events, including raw/provenance
+    query-attempts.jsonl    retained historical search-attempt evidence
+    receipt.json            ledger counts and historical attempt receipt
+    source-receipt.json     current list pass, cursor evidence, and open gaps
+    notifications.json     last fully verified notification-enabled subset
+```
+
+Only one capture service/publisher should own that runtime. The service serializes writes; `.ingest.lock` and `.publish.lock` guard their operations. Do not start a second service while the existing process is listening on port 8766. With the provisioned Blob credentials available in the ignored `.env.local`, the explicit service command from the repository root is:
+
+```sh
+node --env-file=.env.local scripts/xfeed-capture-server.mjs \
+  --serve --publish \
+  --runtime-dir '/Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/runtime'
+```
+
+This starts the loopback intake and publication hook, not browser collection or its schedule. Credentials remain server-side and outside Git. The capture form uses a local request token. Captures must never include cookies, authorization headers, or browser session credentials.
+
+## Durable publication and endpoint
+
+`scripts/xfeed-publish.mjs` uses `@vercel/blob` server-side. The dedicated public store is `scintilla-xfeed-live`, with origin `https://qmukdur29avitsgx.public.blob.vercel-storage.com`. The API requires `XFEED_BLOB_BASE_URL` set to that exact origin. Its [current manifest](https://qmukdur29avitsgx.public.blob.vercel-storage.com/xfeed/current.json) points to the latest complete publication; data updates need no code deployment.
+
+The public payload is `{posts, receipt, notifications, version}`. `posts` contains every current retained row, with full normalized text/media and originals through four nested levels, but omits bulky raw/provenance fields. The version is a stable content hash. Raw ledger and attempt bytes remain local and are archived as immutable appended chunks with chained indexes and hashes. Published prefixes cannot be rewritten. The immutable compact feed is uploaded first; public JSON type, full bytes, and CORS for scintillahub.ai are checked before committing `xfeed/current.json`. Transient public-read failures receive at most six attempts within a 30-second budget; access, CORS, or content-integrity failures are not treated as propagation delays. A failure before the manifest commit leaves that pointer untouched. An uncertain post-commit readback can mean the write succeeded; inspect metadata and content rather than blindly repeating the write. The current manifest has a 60-second cache lifetime, while immutable artifacts have a one-year lifetime. Replacement uses a strong metadata ETag matched against the just-read body ETag, so competing changes cannot silently be overwritten. Post-commit readback uses a trusted metadata-derived cache key and bounded reads, requiring the committed strong ETag and exact manifest bytes; it never retries the write. Unchanged content produces no replacement writes.
+
+`/api/xfeed` accepts no user-selected source URL. It validates the configured public Blob origin and manifest feed path, then returns a `307` redirect with `no-store` cache headers. Redirecting avoids the Function response-size limit as the tape grows. Missing configuration or an invalid/unavailable manifest returns an explicit `503`, with collector state `unconfigured` or `error`.
+
+Use publisher flags `--data-dir`, `--status-file`, and `--notifications-file` to select operational inputs. `--dry-run --output /absolute/path/feed.json` validates and builds a local preview without uploading. A standalone publication must not run concurrently with the service's publication hook:
+
+```sh
+node --env-file=.env.local scripts/xfeed-publish.mjs \
+  --data-dir '/Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/runtime/data' \
+  --status-file '/Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/runtime/heartbeat.json' \
+  --notifications-file '/Users/alanharvey/SCINTILLA 0.5/_orchestration/xfeed-live/runtime/data/notifications.json'
+```
+
+Collector status is `running`, `idle`, `error`, or `unconfigured`. Configured status requires an actual heartbeat and positive `stale_after_seconds`. In a live receipt, `collected_at` comes from the source's actual `observed_at`; `collector_heartbeat_at` comes from the separate heartbeat; `latest_source_event_at` is the newest observed post publication time. None is replaced by import/publication time. `collector_retry_at`, when present, is the actual source retry/reset time. `publishLastGoodStatus({statusFile, dataDir})` publishes only collector-state changes over the previously published feed, retaining its posts, source evidence, Notifications, and archive pointers. It never reads an active partial pass's ledger or receipt.
+
+The old search receipt is retained under `historical_search_coverage`, with `handle_attempts_scope: historical_search_attempts`. `source_receipt` preserves list scope, response/chunk integrity, cursor continuity, source times, unresolved fields, and historical gaps. The desk displays this evidence separately from historical per-handle attempts. An absent/incomplete Notifications configuration stays visibly unconfigured. Only complete membership matching the exact Trading roster, with explicit notification flags, can replace the verified subset. Notifications is a handle filter over retained posts; the flag does not imply that every row caused an X notification event.
 
 ## Offline import
 
@@ -49,7 +119,7 @@ Optional fields are normalized consistently:
 | `has_video` | Boolean. True for a video marker, native URL, YouTube ID, or original-post video. A marker with no usable URL remains unresolved. |
 | `youtube_id` | Actual 11-character ID or `null`; may be read from an extracted YouTube link. |
 | `links` | Array of `{url, title}`. URLs use HTTP(S), titles are source titles only. No article bodies are collected by this utility. |
-| `original` | Quote/repost source, with `id`, `handle`, optional source `url`, optional extracted `created_at`, `text`, and the same media/link fields. Original media is retained for in-desk playback. |
+| `original` | Quote/repost source, with `id`, `handle`, `kind`, optional source `url`, optional extracted `created_at`, `text`, the same media/link fields, and optional nested `original`. Up to four original levels are retained. Unavailable nested source content remains unresolved. |
 | `provenance` | Source URL, collection route, extraction/collection timestamps, and supplied evidence/limitations. A string becomes a note. |
 | `raw` | Supplied raw post object, or the input post when `raw` is absent. Keep only post extraction data here, never cookies, authorization headers, browser session state, or credentials. |
 
@@ -61,7 +131,7 @@ Normalized ledger rows add `schema_version`, `record_key`, and `ingested_at`. `i
 
 Identical normalized content, raw evidence, and provenance do not append another post. Observation timestamps alone (`collected_at`, `extracted_at`, `observed_at`, `captured_at`, `fetched_at`, `readAt`, `ingested_at`) do not create duplicates. Other changed raw fields or provenance append an amendment. Separate query-attempt evidence records repeated collection attempts.
 
-## Attempt evidence and incomplete first passes
+## Historical search-attempt evidence and incomplete passes
 
 Each attempt contains:
 
@@ -80,7 +150,7 @@ A successful batch page returning no rows for one member means **no rows observe
 
 The latest `attempted_at` determines each handle's current status, regardless of import order. Thus a later individual-handle query supersedes an earlier batch observation. Equal-time attempts use the last appended attempt. Older evidence remains in the attempt ledger.
 
-Receipt counters:
+These counters describe the historical search-attempt receipt. Live publication preserves its coverage under `historical_search_coverage` and uses the separate list source receipt for current collection scope:
 
 - `handles_attempted` counts handles with any attempt; `handles_queried` counts handles with evidence that a query ran.
 - `handles_successful`, `handles_no_results`, `handles_blocked`, `handles_failed`, and `handles_unattempted` are distinct current statuses. Missing coverage never becomes zero activity.
@@ -97,7 +167,7 @@ A latest search page for all 126 handles is a bounded pass. Full `note_tweet` te
 ## Verification
 
 ```sh
-node --test tests/xfeed-ingest.test.mjs
+npm run test:xfeed
 ```
 
-Tests use temporary directories only. They check append idempotency/amendments, actual timestamp handling, source identity/URL validation, distinct coverage statuses, latest attempt precedence, and quote/repost media. They create no production ledger or receipt and do not connect to X.
+Tests use temporary data and mocked remote services. They cover append idempotency/amendments, actual timestamps, source identity, distinct coverage statuses, nested media, response/cursor evidence, Notifications membership, safe rendering, complete publication, conditional manifest writes, public CORS checks, and status-only preservation of the last-good feed. They create no production ledger or receipt and do not connect to X or publish real Blob artifacts.

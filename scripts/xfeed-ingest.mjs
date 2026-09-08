@@ -122,17 +122,24 @@ function media(source) {
     links: outbound,
   };
 }
-function originalPost(value) {
+function originalPost(value, depth = 1) {
   if (value === undefined || value === null) return null;
+  if (depth > 4) fail('original nesting exceeds four levels');
   const source = object(value, 'original');
   const id = postId(source.id, 'original.id'), author = handle(source.handle, 'original.handle');
   if (source.text != null && typeof source.text !== 'string') fail('original.text must be a string');
+  const original = originalPost(source.original, depth + 1);
+  const ownMedia = media(source);
+  if (source.kind != null && !KINDS.has(source.kind)) fail('original.kind must be a supported post kind');
   return {
     id, handle: author,
+    kind: source.kind ?? 'original',
     url: source.url ? statusUrl(source.url, id, author, 'original.url') : null,
     created_at: source.created_at != null || source.at != null ? timestamp(source.created_at ?? source.at, 'original.created_at') : null,
     text: source.text ?? '',
-    ...media(source),
+    ...ownMedia,
+    has_video: ownMedia.has_video || Boolean(original?.has_video),
+    original,
     raw: source.raw ?? source,
   };
 }
@@ -202,6 +209,11 @@ export function latestPosts(records) {
   for (const record of records) latest.set(recordKey(record), record);
   return [...latest.values()];
 }
+function postChain(post) {
+  const result = [];
+  for (let current = post; current && result.length < 5; current = current.original) result.push(current);
+  return result;
+}
 function rowNativeVideos(post) {
   const explicit = (source) => {
     if (!source) return [];
@@ -209,12 +221,16 @@ function rowNativeVideos(post) {
     if (items.length) return items;
     return source.video_url ? [{ url: source.video_url }] : [];
   };
-  const own = explicit(post), original = explicit(post.original);
-  if (!original.length && post.original?.has_video && !post.original.youtube_id) original.push({ url: null });
-  // has_video includes inherited original media. Do not invent an additional
-  // unresolved wrapper video just because the original contains a video.
-  if (!own.length && !original.length && post.has_video && !post.youtube_id && !post.original?.youtube_id) own.push({ url: null });
-  return [...own, ...original];
+  const chain = postChain(post);
+  const items = chain.flatMap(explicit);
+  // Propagated has_video does not invent unresolved media on an enclosing
+  // repost/quote when a nested native or YouTube player accounts for it.
+  for (let index = 0; index < chain.length; index++) {
+    const node = chain[index];
+    if (node.has_video && !explicit(node).length && !node.youtube_id &&
+      !chain.slice(index + 1).some(child => explicit(child).length || child.youtube_id)) items.push({ url: null });
+  }
+  return items;
 }
 export function buildReceipt(handles, records, attempts, generatedAt = new Date().toISOString()) {
   const latest = latestPosts(records), lastAttempt = new Map();
@@ -234,8 +250,8 @@ export function buildReceipt(handles, records, attempts, generatedAt = new Date(
   const nativeVideoRows = videoRows.map((post) => ({ post, items: rowNativeVideos(post) })).filter(({ items }) => items.length);
   const resolvedNative = nativeVideoRows.filter(({ items, post }) => items.some((item) => item.url) || post.video_url || post.original?.video_url);
   const unresolvedNative = nativeVideoRows.filter(({ items }) => items.some((item) => !item.url));
-  const youtubeRows = latest.filter((post) => post.youtube_id || post.original?.youtube_id);
-  const linksPerPost = latest.reduce((sum, post) => sum + new Set([...(post.links ?? []), ...(post.original?.links ?? [])].map((link) => link.url)).size, 0);
+  const youtubeRows = latest.filter((post) => postChain(post).some(node => node.youtube_id));
+  const linksPerPost = latest.reduce((sum, post) => sum + new Set(postChain(post).flatMap(node => node.links ?? []).map((link) => link.url)).size, 0);
   const complete = handles.length > 0 && handleStatuses.every((item) => ['successful', 'no_results'].includes(item.status) && item.full_post_extraction_complete);
   const collectionScopes = [...new Set(handleStatuses.map((item) => item.scope).filter(Boolean))];
   const latestPageCollection = collectionScopes.includes('latest_page_per_handle');

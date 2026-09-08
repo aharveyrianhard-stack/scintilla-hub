@@ -67,28 +67,41 @@ function normalizeMedia(raw) {
   return { photos, links, videos, video_url, youtube_id, has_video: raw.has_video === true || !!videos.length || !!youtube_id };
 }
 
+function normalizeOriginal(raw, depth = 1) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || depth > 4) return null;
+  const handle = plain(raw.handle).replace(/^@/, '');
+  const id = plain(raw.id);
+  const media = normalizeMedia(raw);
+  const original = depth < 4 ? normalizeOriginal(raw.original, depth + 1) : null;
+  return {
+    handle: HANDLE.test(handle) ? handle : '',
+    id: POST_ID.test(id) ? id : '',
+    kind: KINDS.has(raw.kind) ? raw.kind : 'original',
+    url: safeUrl(raw.url), created_at: validDate(raw.created_at), text: plain(raw.text),
+    ...media, has_video: media.has_video || !!original?.has_video,
+    original, original_truncated: depth === 4 && !!raw.original,
+  };
+}
+
+export function postSources(post) {
+  const result = [];
+  let source = post;
+  for (let depth = 0; source && depth <= 4; depth++, source = source.original) result.push({ source, depth });
+  return result;
+}
+
 export function normalizePost(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : '';
   const handle = typeof raw.handle === 'string' ? raw.handle.replace(/^@/, '') : '';
   const created_at = validDate(raw.created_at);
   if (!POST_ID.test(id) || !HANDLE.test(handle) || !created_at || !KINDS.has(raw.kind)) return null;
-  let original = null;
-  if (raw.original && typeof raw.original === 'object' && !Array.isArray(raw.original)) {
-    const originalHandle = plain(raw.original.handle).replace(/^@/, '');
-    const originalId = plain(raw.original.id);
-    original = {
-      handle: HANDLE.test(originalHandle) ? originalHandle : '',
-      id: POST_ID.test(originalId) ? originalId : '',
-      url: safeUrl(raw.original.url),
-      text: plain(raw.original.text),
-      ...normalizeMedia(raw.original),
-    };
-  }
+  const original = normalizeOriginal(raw.original);
+  const media = normalizeMedia(raw);
   return {
     id, handle, created_at, kind: raw.kind, text: plain(raw.text),
     record_key: raw.kind === 'repost' ? 'repost:' + handle.toLowerCase() + ':' + id : 'post:' + id,
-    url: safeUrl(raw.url), ...normalizeMedia(raw), original,
+    url: safeUrl(raw.url), ...media, has_video: media.has_video || !!original?.has_video, original,
     provenance: raw.provenance ?? null,
   };
 }
@@ -114,35 +127,44 @@ export function parseLedger(source) {
 }
 
 export function mediaFor(post) {
-  const sources = [post, post.original].filter(Boolean);
+  const sources = postSources(post);
   const videos = [];
   const youtube_videos = [];
-  for (const source of sources) {
-    const origin = { original: source === post.original, handle: source.handle };
+  const addDistinct = (items, item, key) => {
+    const index = item[key] ? items.findIndex(existing => existing[key] === item[key]) : -1;
+    if (index < 0) items.push(item);
+    else if (sources[items[index].depth]?.source.kind === 'repost' && item.depth > items[index].depth) items[index] = item;
+  };
+  for (const { source, depth } of sources) {
+    const origin = { original: depth > 0, handle: source.handle, depth };
     for (const video of source.videos) {
-      if (!video.url || !videos.some(existing => existing.url === video.url)) videos.push({ ...video, ...origin });
+      addDistinct(videos, { ...video, ...origin }, 'url');
     }
     // Legacy has_video can be inherited from an original post; do not invent an
     // additional unresolved own video when the original already explains it.
-    if (!source.videos.length && source.has_video && !source.youtube_id && (source === post.original || !post.original?.has_video)) {
+    if (!source.videos.length && source.has_video && !source.youtube_id && !source.original?.has_video) {
       videos.push({ url: null, poster: null, alt: '', ...origin });
     }
-    if (source.youtube_id && !youtube_videos.some(video => video.id === source.youtube_id)) youtube_videos.push({ id: source.youtube_id, ...origin });
+    if (source.youtube_id) addDistinct(youtube_videos, { id: source.youtube_id, ...origin }, 'id');
   }
-  const photos = [...new Map(sources.flatMap(source => source.photos).map(photo => [photo.url, photo])).values()];
+  const photos = [...new Map(sources.flatMap(({ source, depth }) => source.photos.map(photo => ({ ...photo, depth, handle: source.handle, original: depth > 0 }))).map(photo => [photo.url, photo])).values()];
   return {
     video_url: videos.find(video => video.url)?.url || null,
     youtube_id: youtube_videos[0]?.id || null,
     videos,
     youtube_videos,
-    has_video: sources.some(source => source.has_video),
+    has_video: sources.some(({ source }) => source.has_video),
     photos,
-    originalMedia: !!post.original && !!(post.original.video_url || post.original.youtube_id || post.original.photos.length || post.original.has_video),
+    originalMedia: sources.some(({ source, depth }) => depth > 0 && (source.videos.length || source.youtube_id || source.photos.length || source.has_video)),
   };
 }
 
-export function filterPosts(posts, view) {
-  if (view === 'notifications') return [];
+export function filterPosts(posts, view, notifications = null) {
+  if (view === 'notifications') {
+    if (notifications?.status !== 'configured') return [];
+    const members = new Set(notifications.handles.map(handle => handle.toLowerCase()));
+    return posts.filter(post => members.has(post.handle.toLowerCase()));
+  }
   if (view === 'video') return posts.filter(post => mediaFor(post).has_video);
   return posts;
 }
@@ -154,11 +176,31 @@ export function ledgerCounts(posts) {
     videos_resolved: media.filter(item => item.videos.some(video => video.url)).length,
     videos_missing: media.filter(item => item.videos.some(video => !video.url)).length,
     youtube_ids: media.filter(item => item.youtube_videos.length).length,
-    outbound_links: posts.reduce((total, post) => total + new Set([...post.links, ...(post.original?.links || [])].map(link => link.url)).size, 0),
+    outbound_links: posts.reduce((total, post) => total + new Set(postSources(post).flatMap(({ source }) => source.links).map(link => link.url)).size, 0),
   };
 }
 
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+function tradingHandles(receipt) {
+  if (!Array.isArray(receipt.handles)) return null;
+  const handles = receipt.handles.map(item => typeof item === 'string' ? item : item?.handle);
+  if (handles.some(handle => typeof handle !== 'string' || !HANDLE.test(handle))) return null;
+  const unique = [...new Set(handles.map(handle => handle.toLowerCase()))];
+  if (count(receipt.handles_total) !== null && unique.length !== receipt.handles_total) return null;
+  return unique;
+}
+
+export function normalizeNotifications(raw, universe = null) {
+  const missing = reason => ({ status: 'unconfigured', handles: [], source: '', updated_at: null, reason });
+  if (!raw || raw.status !== 'configured') return missing('Notification membership has not been configured.');
+  if (!Array.isArray(universe)) return missing('Notification membership cannot be verified against the trading list.');
+  if (!Array.isArray(raw.handles) || raw.handles.some(handle => typeof handle !== 'string' || !HANDLE.test(handle))) return missing('The notification membership configuration is invalid.');
+  const allowed = new Set(universe.map(handle => handle.toLowerCase()));
+  const handles = [...new Set(raw.handles.map(handle => handle.toLowerCase()))];
+  if (handles.some(handle => !allowed.has(handle))) return missing('The notification membership configuration includes a handle outside the trading list.');
+  return { status: 'configured', handles, source: plain(raw.source), updated_at: validDate(raw.updated_at), reason: '' };
+}
 
 export function normalizeReceipt(raw, posts = []) {
   const receipt = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -169,17 +211,72 @@ export function normalizeReceipt(raw, posts = []) {
     handles_blocked: count(receipt.handles_blocked),
     handles_failed: count(receipt.handles_failed),
     handles_unattempted: count(receipt.handles_unattempted),
+    trading_handles: tradingHandles(receipt),
     collected_at: validDate(receipt.collected_at),
     generated_at: validDate(receipt.generated_at),
     status: plain(receipt.status) || 'Collection status unavailable',
     source_completeness: receipt.source_completeness ?? null,
+    source_receipt: receipt.source_receipt && typeof receipt.source_receipt === 'object' && !Array.isArray(receipt.source_receipt) ? receipt.source_receipt : null,
     collection_scopes: Array.isArray(receipt.collection_scopes) ? [...new Set(receipt.collection_scopes.filter(scope => typeof scope === 'string' && scope.trim()))] : [],
     first_pass_complete: typeof receipt.first_pass_complete === 'boolean' ? receipt.first_pass_complete : null,
     query_pass_complete: typeof receipt.query_pass_complete === 'boolean' ? receipt.query_pass_complete : null,
     notes: Array.isArray(receipt.notes) ? receipt.notes.filter(note => typeof note === 'string') : plain(receipt.notes),
     limitations: Array.isArray(receipt.limitations) ? receipt.limitations.filter(note => typeof note === 'string') : [],
+    collector_status: ['running', 'idle', 'error', 'unconfigured'].includes(receipt.collector_status) ? receipt.collector_status : 'unconfigured',
+    collector_error: plain(receipt.collector_error),
+    collector_retry_at: validDate(receipt.collector_retry_at),
+    collector_heartbeat_at: validDate(receipt.collector_heartbeat_at),
+    latest_source_event_at: validDate(receipt.latest_source_event_at),
+    stale_after_seconds: Number.isSafeInteger(receipt.stale_after_seconds) && receipt.stale_after_seconds >= 30 && receipt.stale_after_seconds <= 86400 ? receipt.stale_after_seconds : 180,
     ...ledgerCounts(posts),
   };
+}
+
+export function normalizeSnapshot(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.posts) || !raw.receipt || typeof raw.receipt !== 'object') throw new Error('The feed response does not contain a valid snapshot.');
+  const versions = new Map();
+  let duplicates = 0;
+  for (const item of raw.posts) {
+    const post = normalizePost(item);
+    if (!post) throw new Error('The feed response contains an invalid post.');
+    if (versions.has(post.record_key)) duplicates++;
+    versions.set(post.record_key, post);
+  }
+  const posts = [...versions.values()].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.length - a.id.length || b.id.localeCompare(a.id));
+  if (count(raw.receipt.posts_kept) !== null && raw.receipt.posts_kept !== posts.length) throw new Error('The feed response and its receipt disagree on the post count.');
+  const parsed = { posts, invalid: 0, duplicates };
+  const receipt = normalizeReceipt(raw.receipt, posts);
+  return { parsed, receipt, rawReceipt: raw.receipt, notifications: normalizeNotifications(raw.notifications, receipt.trading_handles) };
+}
+
+function postContent(post) {
+  const { provenance, ...content } = post;
+  return JSON.stringify(content);
+}
+
+export function snapshotDifference(current, incoming) {
+  const before = new Map(current.map(post => [post.record_key, post]));
+  const after = new Map(incoming.map(post => [post.record_key, post]));
+  const added = incoming.filter(post => !before.has(post.record_key));
+  const amended = incoming.filter(post => before.has(post.record_key) && postContent(before.get(post.record_key)) !== postContent(post));
+  const removed = current.filter(post => !after.has(post.record_key));
+  return { added, amended, removed, changed: !!(added.length || amended.length || removed.length) };
+}
+
+export function shouldApplySnapshot({ atTop, mediaOpen, focusedInTape, selectingText, receiptOpen }) {
+  return atTop && !mediaOpen && !focusedInTape && !selectingText && !receiptOpen;
+}
+
+export function freshness({ source, receipt, now = Date.now(), error = '', refreshing = false }) {
+  if (!receipt) return { state: error ? 'error' : 'loading', text: error || 'Connecting to feed…' };
+  const collected = receipt.collected_at ? formatET(receipt.collected_at) : 'collection time unavailable';
+  if (source === 'static') return { state: 'snapshot', text: 'Static snapshot · ' + collected + ' · collector unavailable' };
+  const heartbeat = receipt.collector_heartbeat_at ? formatET(receipt.collector_heartbeat_at) : 'unavailable';
+  if (error) return { state: 'error', text: 'Refresh failed · showing saved posts · last collector heartbeat ' + heartbeat };
+  if (receipt.collector_status === 'unconfigured' || !receipt.collector_heartbeat_at) return { state: 'unconfigured', text: 'Collector unconfigured · last heartbeat ' + heartbeat };
+  if (receipt.collector_status === 'error') return { state: 'error', text: 'Collector error · last heartbeat ' + heartbeat };
+  if (now - Date.parse(receipt.collector_heartbeat_at) > receipt.stale_after_seconds * 1000 || Date.parse(receipt.collector_heartbeat_at) > now + 60000) return { state: 'stale', text: 'Stale feed · last collector heartbeat ' + heartbeat };
+  return { state: 'updated', text: 'Feed checked ' + heartbeat + (refreshing ? ' · checking…' : ' · checks every 30s') };
 }
 
 export function formatET(iso, dayOnly = false) {
