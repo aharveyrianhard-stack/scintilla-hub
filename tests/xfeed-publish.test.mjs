@@ -20,6 +20,11 @@ const post = (overrides = {}) => ({
 });
 const receipt = (postsKept = 1) => ({ posts_kept: postsKept, collected_at: actualTime, generated_at: '2030-01-01T00:00:00.000Z', handles_total: 2, handles: handles.map((handle) => ({ handle })) });
 const status = { collector_status: 'idle', last_heartbeat_at: actualTime, latest_source_event_at: '2026-09-08T01:59:00Z', stale_after_seconds: 180 };
+const completedSource = () => ({
+  schema_version: 1, source_type: 'x_list_latest_timeline', list_id: '1405188850188759047', source_url: 'https://x.com/i/lists/1405188850188759047', pass_id: 'completed-live-pass',
+  observed_at: actualTime, completed_at: '2026-09-08T02:00:10Z', status: 'current_window_observed',
+  coverage: { history_complete: false, initial_history_gap_open: true, overlap_with_previous_frontier: false, termination_reason: 'initial_window', captured_responses_or_chunks: 1, observed_posts: 1, latest_observed_post_at: actualTime },
+});
 
 async function fixture(t) {
   const dataDir = await mkdtemp(join(tmpdir(), 'xfeed-publish-test-'));
@@ -324,6 +329,55 @@ test('manifest readback rejects a superseding writer even when the expected cont
     fetchImpl: async () => { reads++; return new Response('{}', { headers: { etag: 'W/"our-commit"' } }); },
   }), /changed during manifest readback; no write was retried/);
   assert.equal(reads, 0);
+});
+
+test('manifest readback spans the real 60-second CDN invalidation window within its 90-second budget', async () => {
+  let elapsed = 0, reads = 0;
+  const etag = '"committed"', expectedBody = Buffer.from('{}'), manifestUrl = `${BASE}/${CURRENT_MANIFEST_PATH}`;
+  await readManifestAtEtag({
+    blob: { head: async () => ({ url: manifestUrl, etag }) }, manifestUrl, etag, expectedBody,
+    nowImpl: () => elapsed, waitImpl: async (ms) => { elapsed += ms; },
+    fetchImpl: async () => { reads++; return new Response(elapsed < 60000 ? '{"old":true}' : expectedBody, { headers: { etag: elapsed < 60000 ? 'W/"old"' : `W/${etag}` } }); },
+  });
+  assert.equal(elapsed, 65000);
+  assert.equal(reads, 9);
+});
+
+test('retrying an already committed complete source pass recovers its exact publication without heartbeat-version churn', async (t) => {
+  const paths = await fixture(t), store = fakeStore();
+  await writeFile(join(paths.dataDir, 'source-receipt.json'), JSON.stringify(completedSource()));
+  const first = await publish({ ...paths, ...store });
+  const before = Buffer.from(store.objects.get(CURRENT_MANIFEST_PATH).body), putCount = store.calls.filter(call => call.method === 'put').length;
+  await writeFile(paths.statusFile, JSON.stringify({ ...status, last_heartbeat_at: '2026-09-08T02:03:00Z' }));
+  const recovered = await publish({ ...paths, ...store });
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.changed, false);
+  assert.equal(recovered.version, first.version);
+  assert.deepEqual(store.objects.get(CURRENT_MANIFEST_PATH).body, before);
+  assert.equal(store.calls.filter(call => call.method === 'put').length, putCount);
+});
+
+test('same-pass recovery requires intact feed bytes, identical source completion and Notifications, and exact raw archive prefixes', async (t) => {
+  for (const change of ['source completion', 'Notifications', 'raw archive', 'corrupt retained feed']) await t.test(change, async (subtest) => {
+    const paths = await fixture(subtest), store = fakeStore();
+    await writeFile(join(paths.dataDir, 'source-receipt.json'), JSON.stringify(completedSource()));
+    await publish({ ...paths, ...store });
+    const priorManifest = JSON.parse(store.objects.get(CURRENT_MANIFEST_PATH).body);
+    await writeFile(paths.statusFile, JSON.stringify({ ...status, last_heartbeat_at: '2026-09-08T02:03:00Z' }));
+    if (change === 'source completion') await writeFile(join(paths.dataDir, 'source-receipt.json'), JSON.stringify({ ...completedSource(), completed_at: '2026-09-08T02:01:00Z' }));
+    if (change === 'Notifications') await writeFile(paths.notificationsFile, JSON.stringify({ status: 'configured', handles: [handles[0]], updated_at: actualTime }));
+    if (change === 'raw archive') await appendFile(join(paths.dataDir, 'ledger.jsonl'), `${JSON.stringify(post())}\n`);
+    if (change === 'corrupt retained feed') {
+      store.objects.get(new URL(priorManifest.feed_url).pathname.slice(1)).body = Buffer.from('{}');
+      await assert.rejects(publish({ ...paths, ...store }), /Previous published feed does not match its manifest/);
+      assert.equal(JSON.parse(store.objects.get(CURRENT_MANIFEST_PATH).body).version, priorManifest.version);
+    } else {
+      const result = await publish({ ...paths, ...store });
+      assert.equal(result.changed, true);
+      assert.notEqual(result.recovered, true);
+      if (change === 'raw archive') assert.ok(JSON.parse(store.objects.get(CURRENT_MANIFEST_PATH).body).archives.ledger.bytes > priorManifest.archives.ledger.bytes);
+    }
+  });
 });
 
 test('publication refreshes a stale initial SDK manifest before computing an idempotent update', async (t) => {

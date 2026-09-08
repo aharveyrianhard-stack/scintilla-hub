@@ -16,6 +16,11 @@ function canonical(value) {
   return value;
 }
 export const stableJson = (value) => JSON.stringify(canonical(value));
+function collectionFingerprint(feed) {
+  const receipt = { ...feed.receipt };
+  for (const key of ['collector_status', 'collector_heartbeat_at', 'collector_error', 'collector_retry_at']) delete receipt[key];
+  return sha256(stableJson({ posts: feed.posts, receipt, notifications: feed.notifications }));
+}
 function requireObject(value, name) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${name} must be an object`);
   return value;
@@ -198,22 +203,23 @@ export async function verifyPublicFeed(url, expectedBody, { base, fetchImpl = fe
     await waitImpl(delay);
   }
 }
-export async function readManifestAtEtag({ blob, manifestUrl, etag, expectedBody, fetchImpl = fetch, waitImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), retryDelays = [250, 750, 1500, 3000, 6000] }) {
+export async function readManifestAtEtag({ blob, manifestUrl, etag, expectedBody, fetchImpl = fetch, waitImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), nowImpl = Date.now, retryDelays = [500, 1500, 3000, 5000, 10000, 15000, 15000, 15000, 15000] }) {
   const base = new URL(verifiedBlobUrl(manifestUrl, { pathname: CURRENT_MANIFEST_PATH })).origin;
   if (!/^"[^"\r\n]+"$/.test(etag)) throw new Error('Manifest readback requires a strong metadata ETag');
-  const deadline = Date.now() + 30000;
+  const deadline = nowImpl() + 90000;
   let failure = 'unavailable';
   for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-    const metadata = await blob.head(CURRENT_MANIFEST_PATH);
+    const metadata = await blob.head(CURRENT_MANIFEST_PATH, { abortSignal: AbortSignal.timeout(Math.max(1, Math.min(8000, deadline - nowImpl()))) });
     verifiedBlobUrl(metadata.url, { base, pathname: CURRENT_MANIFEST_PATH });
     if (metadata.etag !== etag) throw new Error('Current manifest changed during manifest readback; no write was retried');
-    // Public SDK get(useCache:false) still uses the CDN. This internal query is
-    // derived solely from the expected strong metadata, never request input.
+    // Public SDK get(useCache:false) still uses the CDN, whose invalidation can
+    // take 60 seconds even with a version query. Wait through that window; the
+    // query is derived solely from trusted metadata, never request input.
     const readUrl = new URL(manifestUrl);
     readUrl.searchParams.set('v', `${sha256(etag)}-${attempt}`);
     let response;
     try {
-      response = await fetchImpl(readUrl.href, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(Math.max(1, Math.min(8000, deadline - Date.now()))) });
+      response = await fetchImpl(readUrl.href, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(Math.max(1, Math.min(8000, deadline - nowImpl()))) });
       if (response.ok) {
         const body = Buffer.from(await response.arrayBuffer());
         if (body.length > 65536) throw new Error('Current manifest is too large');
@@ -229,7 +235,7 @@ export async function readManifestAtEtag({ blob, manifestUrl, etag, expectedBody
       failure = `network ${error.name}`;
     }
     const delay = retryDelays[attempt];
-    if (delay === undefined || Date.now() + delay >= deadline) throw new Error(`Current manifest commit could not be verified (${failure} after ${attempt + 1} attempt(s)); no write was retried`);
+    if (delay === undefined || nowImpl() + delay >= deadline) throw new Error(`Current manifest commit could not be verified (${failure} after ${attempt + 1} attempt(s)); no write was retried`);
     await waitImpl(delay);
   }
 }
@@ -310,6 +316,22 @@ async function publishSnapshot({ dataDir, statusFile, notificationsFile, baseUrl
         verifiedBlobUrl(archive.index_url, { base });
       }
       snapshot = { feed: { ...content, version: sha256(stableJson(content)) }, archives: previous.archives };
+    }
+    if (!statusOnly && previous && snapshot.feed.receipt.source_receipt?.pass_id && snapshot.feed.receipt.collector_status === 'idle') {
+      const retained = await readBlob(`xfeed/feeds/${previous.version}.json`);
+      if (!retained || retained.body.length !== previous.feed_bytes || sha256(retained.body) !== previous.feed_sha256) throw new Error('Previous published feed does not match its manifest');
+      const oldFeed = JSON.parse(retained.body.toString('utf8'));
+      const { version: oldVersion, ...oldContent } = oldFeed;
+      if (oldVersion !== previous.version || sha256(stableJson(oldContent)) !== oldVersion) throw new Error('Previous published feed has invalid content identity');
+      const sameArchives = [['ledger', snapshot.ledger], ['attempts', snapshot.attempts]].every(([name, bytes]) => previous.archives?.[name]?.bytes === bytes.length && previous.archives[name].sha256 === sha256(bytes));
+      if (oldFeed.receipt?.collector_status === 'idle' && sameArchives && collectionFingerprint(oldFeed) === collectionFingerprint(snapshot.feed)) {
+        // A completed pass can be committed even if its immediate CDN readback
+        // timed out. Verify the prior exact feed and raw archive prefixes, then
+        // return that publication without another heartbeat-derived write.
+        for (const name of ['ledger', 'attempts']) verifiedBlobUrl(previous.archives[name].index_url, { base });
+        await verifyPublicFeed(previous.feed_url, retained.body, { base, fetchImpl });
+        return { changed: false, recovered: true, version: previous.version, feed_url: previous.feed_url, base_url: base, manifest_url: `${base}/${CURRENT_MANIFEST_PATH}`, feed_bytes: previous.feed_bytes };
+      }
     }
     const feedBody = Buffer.from(stableJson(snapshot.feed));
     const feedPath = `xfeed/feeds/${snapshot.feed.version}.json`;
