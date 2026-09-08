@@ -2470,9 +2470,9 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 }
 
 /* ============================================================================
-   SOCIAL sub-tabs (SENTIMENT · YOUTUBE · X · STOCKTWITS) + YouTube feed.
-   Front shell only — YOUTUBE reads youtube_feed (DB, master-filled); empty =
-   honest awaiting state, lights up with zero code change. No side accent bars.
+   SOCIAL sub-tabs (SENTIMENT · YOUTUBE · X · STOCKTWITS).
+   YOUTUBE reads youtube_feed; X embeds the independent Desk ledger reader.
+   No side accent bars.
    ============================================================================ */
 .sc-soctabs{ display:flex; flex-wrap:wrap; border:1px solid var(--line); margin-bottom:12px; }
 .sc-soctab{ font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
@@ -2487,6 +2487,10 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 /* #socPane must vanish from layout (display:contents) so the SENTIMENT body2 stays a
    direct flex child of #main and keeps its height — a real box here collapses it. */
 #socPane{ display:contents; }
+/* The Desk fills the Social pane and owns its feed scroll. On mobile the shell
+   has auto height, so give the iframe an explicit viewport-relative height. */
+.sc-xdesk{ display:block; flex:1 1 0; width:100%; min-height:320px; border:0; background:#0a0a0b; }
+@media(max-width:900px){ .sc-xdesk{ flex:0 0 auto; height:70vh; height:70dvh; } }
 .sc-soctab__edit{ margin-left:auto; font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--ink2); background:transparent; border:0; border-left:1px solid var(--line); padding:11px 16px; cursor:pointer; }
 .sc-soctab__edit:hover{ color:var(--crk); }
@@ -3481,7 +3485,7 @@ const S = {
   readTab: "VERDICT", calType: "ALL",
   estTF: "A",                                   // (news cache lives in NEWS_CACHE — per-cohort, FIX A3)
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
-  socTab: "YOUTUBE",                            // SOCIAL sub-tab — defaults to YOUTUBE (live feed); SENTIMENT · X · STOCKTWITS await feeds
+  socTab: "YOUTUBE",                            // SOCIAL defaults to YOUTUBE; X opens the Desk ledger reader
   ytFilt: "ALL",                                // YouTube feed filter — ALL · SUBS · SHORTS · WATCH · $TICKER
   ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
 };
@@ -7045,8 +7049,8 @@ function socScopeTickers() {
   return base.length ? base : (S.fav && S.fav.length ? S.fav.slice() : []);
 }
 /* SOCIAL master tab = 4 sub-tabs. SENTIMENT is the original social_sentiment view;
-   YOUTUBE is the styled feed (reads youtube_feed, master-filled); X + STOCKTWITS are
-   reserved slots. Sub-tab switch repaints #socPane in place — no room remount. */
+   YOUTUBE reads youtube_feed; X embeds the Desk; STOCKTWITS is a reserved slot.
+   Sub-tab switch repaints #socPane in place — no room remount. */
 const SOC_TABS = [["SENTIMENT","SENTIMENT"],["YOUTUBE","YOUTUBE"],["X","X"],["STOCKTWITS","STOCKTWITS"]];
 function socSubtabsHTML() {
   const edit = S.socTab === "YOUTUBE"
@@ -7054,7 +7058,7 @@ function socSubtabsHTML() {
     : "";
   return '<div class="sc-soctabs">' + SOC_TABS.map(([k, l]) => {
     const on = S.socTab === k ? " is-on" : "";
-    const soon = (k === "X" || k === "STOCKTWITS") ? " is-soon" : "";
+    const soon = k === "STOCKTWITS" ? " is-soon" : "";
     return '<button class="sc-soctab' + on + soon + '" data-act="soctab" data-tab="' + k + '">' + l + "</button>";
   }).join("") + edit + "</div>";
 }
@@ -7063,7 +7067,7 @@ function socialRoomHTML() {
 }
 function socPaneHTML() {
   if (S.socTab === "YOUTUBE") return ytFeedHTML();
-  if (S.socTab === "X") return socSoonHTML("X", "𝕏", "Ticker-tagged posts light up here when the X ingester is wired to the feed.");
+  if (S.socTab === "X") return '<iframe class="sc-xdesk" src="/xfeed/" title="SCINTILLA X Desk — Trading, Notifications and Video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
   if (S.socTab === "STOCKTWITS") return socSoonHTML("StockTwits", "◇", "Message volume &amp; bull / bear ratio light up here when the StockTwits ingester lands.");
   return socSentimentPaneHTML();
 }
@@ -7082,7 +7086,7 @@ function socSentimentPaneHTML() {
         '<div class="card"><h4>SOURCE · LIVE</h4><div class="sc-senttxt">Reads <b>social_sentiment</b> (DB). Bars, net score and post counts fill per ticker when the sentiment feed lands — no code change.</div></div>' +
       "</div></div></div>";
 }
-/* reserved-slot placeholder (X / StockTwits) */
+/* reserved-slot placeholder (StockTwits) */
 function socSoonHTML(name, ico, txt) {
   return '<div class="sc-socsoon"><div class="sc-socsoon__ico">' + ico + "</div>" +
     '<div class="sc-socsoon__ttl">' + esc(name) + " · Feed</div>" +
@@ -10327,7 +10331,7 @@ function afterMount() {
   if (S.sec === "NEWS") fillNews();
   else if (S.sec === "SOCIAL") {               // AREA A — dispatch by SOCIAL sub-tab
     if (S.socTab === "YOUTUBE") fillYT();
-    else if (S.socTab === "SENTIMENT") fillSocial();   // X / STOCKTWITS are static reserved slots
+    else if (S.socTab === "SENTIMENT") fillSocial();   // X loads within its iframe; STOCKTWITS is a reserved slot
   }
   else if (S.sec === "EVENTS") fillEvents();
   else if (S.sec === "ECONOMIC") fillEcon();
@@ -10665,7 +10669,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     /* SOCIAL sub-tab switch — repaint #socPane in place (no room remount), then
-       run the tab's own fill. SENTIMENT/YOUTUBE pull; X/STOCKTWITS are static. */
+       run the tab's own fill. X loads within its iframe; STOCKTWITS is reserved. */
     case "soctab": {
       const t = a.dataset.tab; if (!t || t === S.socTab) break;
       S.socTab = t;
