@@ -239,8 +239,17 @@ export function buildReceipt(handles, records, attempts, generatedAt = new Date(
   const complete = handles.length > 0 && handleStatuses.every((item) => ['successful', 'no_results'].includes(item.status) && item.full_post_extraction_complete);
   const collectionScopes = [...new Set(handleStatuses.map((item) => item.scope).filter(Boolean))];
   const latestPageCollection = collectionScopes.includes('latest_page_per_handle');
+  const retainedAttemptTimes = handleStatuses.map((item) => {
+    if (item.status === 'unattempted' || !item.attempted_at) return null;
+    try { return timestamp(item.attempted_at, 'attempt.attempted_at'); } catch { return null; }
+  });
+  const attemptTimeEvidenceComplete = retainedAttemptTimes.length > 0 && retainedAttemptTimes.every(Boolean);
+  const sortedAttemptTimes = attemptTimeEvidenceComplete ? retainedAttemptTimes.sort() : [];
   return {
     schema_version: 1, generated_at: timestamp(generatedAt, 'generated_at'),
+    collected_at: sortedAttemptTimes.at(-1) ?? null,
+    collection_started_at: sortedAttemptTimes[0] ?? null,
+    collection_time_basis: attemptTimeEvidenceComplete ? 'retained_per_handle_attempts' : null,
     status: complete ? 'complete' : 'incomplete',
     first_pass_complete: complete,
     query_pass_complete: handles.length > 0 && handleStatuses.every((item) => ['successful', 'no_results'].includes(item.status)),

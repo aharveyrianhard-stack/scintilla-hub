@@ -214,3 +214,27 @@ test('a completed latest-page pass states its search, detail-check, history, and
   assert.ok(receipt.limitations.some((note) => /zero repost rows does not mean/.test(note)));
   assert.ok(receipt.limitations.some((note) => /rather than a separate detail-page visit for every row/.test(note)));
 });
+
+test('collection time bounds use actual retained per-handle attempts, independently of receipt generation time', () => {
+  const attempts = handles.map((author, index) => normalizeAttempt({
+    handle: author, status: 'success', attempted_at: `2026-09-08T01:${50 + index}:00Z`,
+    scope: 'latest_page_per_handle', full_post_extraction_complete: true,
+  }));
+  // A superseded attempt is historical evidence, not the start of the retained pass.
+  attempts.unshift(normalizeAttempt({ handle: handles[0], status: 'failed', attempted_at: '2026-09-07T00:00:00Z' }));
+  const generatedAt = '2030-01-01T12:34:56Z';
+  const receipt = buildReceipt(handles, [], attempts, generatedAt);
+  assert.equal(receipt.generated_at, '2030-01-01T12:34:56.000Z');
+  assert.equal(receipt.collection_started_at, '2026-09-08T01:50:00.000Z');
+  assert.equal(receipt.collected_at, '2026-09-08T01:54:00.000Z');
+  assert.equal(receipt.collection_time_basis, 'retained_per_handle_attempts');
+  assert.notEqual(receipt.collected_at, receipt.generated_at);
+
+  const missingHandle = buildReceipt(handles, [], attempts.slice(0, -1), generatedAt);
+  assert.equal(missingHandle.collected_at, null);
+  assert.equal(missingHandle.collection_started_at, null);
+  const invalidTime = buildReceipt(handles, [], attempts.map((attempt) => attempt.handle === handles[4] ? { ...attempt, attempted_at: 'unavailable' } : attempt), generatedAt);
+  assert.equal(invalidTime.collected_at, null, 'missing source time must never fall back to the import clock');
+  assert.equal(invalidTime.collection_started_at, null);
+  assert.equal(invalidTime.collection_time_basis, null);
+});
