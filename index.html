@@ -3242,7 +3242,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      the newest row per ticker for THIS pass — mirror it straight into GCOMP so the
      store still refreshes on every subsequent load instead of freezing at first-load
      values. */
-  for (const t in gg) { const c = num(gg[t].composite); if (c != null) GCOMP[t] = c; }
+  for (const t in gg) { const c = num(gg[t].composite); if (c != null) GCOMP[t] = c; else delete GCOMP[t]; }
   for (const m of members) if (m.cohort) COHORT_OF[m.ticker] = m.cohort;
   const pf = Object.fromEntries(profiles.map((p) => [p.ticker, p]));
   for (const r of ribbons) (RIB[r.ticker] = RIB[r.ticker] || {})[r.family] = r;   // fan cards / VOLUME read
@@ -3312,10 +3312,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         nf: declaredSet.has(m.ticker)
           ? !(px[m.ticker] && px[m.ticker].sc_provider_state === "OK")
           : !px[m.ticker],
-        state: declaredSet.has(m.ticker)
+        state: !declaredSet.size ? "PROVIDER_AUTHORITY_UNKNOWN" : declaredSet.has(m.ticker)
           ? ((px[m.ticker] && (px[m.ticker].sc_provider_state || px[m.ticker].sc_state)) || "PROVIDER_UNAVAILABLE")
           : "NON_EQUITY_OWNER",
-        priceSource: declaredSet.has(m.ticker) ? "MASSIVE_PROVIDER" : "NON_EQUITY_OWNER",
+        priceSource: !declaredSet.size ? "UNKNOWN" : (declaredSet.has(m.ticker) ? "MASSIVE_PROVIDER" : "NON_EQUITY_OWNER"),
+        quoteObservation: tqOk ? tq : px[m.ticker],
         pc: pcServed,
         name: (pf[m.ticker] && pf[m.ticker].name) || "",
         exchange: (pf[m.ticker] && pf[m.ticker].exchange) || "",
@@ -4224,7 +4225,7 @@ function boardRowsHTML() {
       '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) +
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
-      '<span class="sc-last" id="lp_' + esc(d.t) + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—") + "</span>" +
+      '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—") + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">—</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple */
@@ -8526,7 +8527,7 @@ function geigerSummaryMount() {
   /* GEIGER LIVE-PRICE FIX — always refresh the cached tile's price from the latest
      live quote so a revisit (rotate loop / tab re-open) uses the current price. */
   const livePx = (typeof PRICES !== "undefined" && PRICES[t] != null) ? num(PRICES[t]) : null;
-  if (S.coData._gsum && S.coData._gsum.t === t){
+  if (S.coData._gsum && S.coData._gsum.t === t && scGeigerSnapshotCurrent(S.coData._gsum)){
     if (livePx != null) S.coData._gsum.price = livePx;
     buildGeigerSummary(S.coData._gsum); return;
   }
@@ -8545,7 +8546,7 @@ function geigerSummaryMount() {
   /* Only an envelope written by the provider-cutover path may seed the tile. An in-memory hit is
      always fine — this process produced it. */
   const cached = memHit || ((lsEnv && lsEnv.src === "PROVIDER_CURRENTNESS_V2") ? lsEnv.data : null) || null;
-  if (cached && cached.t === t) {
+  if (cached && cached.t === t && scGeigerSnapshotCurrent(cached)) {
     /* NEVER PAINT A CACHED PRICE HERE EITHER. This tile hands cached.price straight to the trend
        ladder, so on a cold boot — before PRICES[t] exists — it rendered a stale price against
        live moving averages. Same rule as the board: a live price or a placeholder, never a
@@ -10413,7 +10414,8 @@ function seedBoardFromCache(cohort, fav) {
      it, loadBoardRsi sees the row as already resolved and skips the refetch, then the refreshed
      cache launders the same stale value behind a new envelope timestamp. Seeding it null forces
      every boot through the exact-universe provider_indicators_current gate. */
-  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null, rsi: null }));
+  rows = rows.map((r) => Object.assign({}, r, { price: null, c: null, rsi: null, g: null, fam: null,
+    state: "CONNECTING", priceSource: "UNKNOWN" }));
   /* AND NEVER RANK FROM CACHE. mergeBoardRows() would call computeBoardOrder() here, sorting the
      board by the cached value of whatever dynamic column is selected (Geiger by default, and the
      Geiger field was NOT blanked by the old age check at all — so a boot could rank on day-old
@@ -11433,6 +11435,8 @@ function scStampRoot () {
     "refused-authority-unknown": (window.SC_GUARD || {}).refused_authority_unknown,
     "tick-failures": (window.SC_TICK || {}).failures,
     "equity-feed-fresh": (window.__eqFresh === true),
+    "equity-fresh-trades": (window.SC_EQUITY_FRESHNESS || {}).fresh_count,
+    "equity-stale-trades": (window.SC_EQUITY_FRESHNESS || {}).stale_count,
     "equity-feed-age-sec": (window.__eqAgeSec != null) ? Math.round(window.__eqAgeSec) : null
   });
 }
@@ -11530,7 +11534,7 @@ function patch(t, price, src) {
     }
     const lc = el("lc_" + t);
     const cc = c != null ? c : (r ? r.c : null);
-    if (lc && cc != null) { lc.textContent = fmtC(cc); lc.className = "sc-chg " + (cc >= 0 ? "up" : "dn"); }
+    if (lc) { lc.textContent = cc != null ? fmtC(cc) : "—"; lc.className = "sc-chg" + (cc != null ? " " + (cc >= 0 ? "up" : "dn") : ""); }
   }
   /* FIX (Alan: "heatmap doesn't match cohort board") — heatmapHTML() is a static
      string, only rebuilt on cohort switch / 45s poll / HEAT toggle. Every OTHER
@@ -11563,12 +11567,12 @@ function patch(t, price, src) {
   /* DASHBOARD MODEL — the LEFT panel's ident line shows LEFT_T (the pinned or the
      currently-rotating ticker), whether S.sec is COMPANY or DASHBOARD. */
   if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
-    if (S.coData && S.coData.t === t) { S.coData.price = price; if (c != null) S.coData.chg = c; }
+    if (S.coData && S.coData.t === t) { S.coData.price = price; S.coData.chg = c; }
     const cc = c != null ? c : (S.coData && S.coData.t === t ? S.coData.chg : null);
     const col = cc != null ? (cc >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
     const px = el("coPx"), ch = el("coChg"), pc = el("coPrev");
     if (px) { px.textContent = fmtPxIdent(price); px.style.color = col; }
-    if (ch && cc != null) { ch.textContent = fmtC(cc); ch.style.color = col; }
+    if (ch) { ch.textContent = cc != null ? fmtC(cc) : "—"; ch.style.color = col; }
     if (pc) {
       const base = num(prevClose[t]);
       pc.textContent = base != null && base !== 0 ? "Prev " + fmtPxIdent(base) : "";
@@ -11701,7 +11705,11 @@ if (sb) {
     if (_dq && _dq.at && (Date.now() - _dq.at) < 7 * 864e5 &&
         _dq.digest === SC_EQUITY_UNIVERSE_DIGEST &&
         Array.isArray(_dq.syms) && _dq.syms.length === SC_EXPECTED_EQUITY_COUNT) {
-      window.SC_DECLARED_SET = new Set(_dq.syms);
+      /* Stored metadata is not proof of stored membership. Keep realtime fail-closed until
+         the actual cached symbols independently reproduce the accepted identity. */
+      scUniverseDigest(_dq.syms).then((digest) => {
+        if (digest === SC_EQUITY_UNIVERSE_DIGEST) window.SC_DECLARED_SET = new Set(_dq.syms);
+      }).catch(() => {});
     }
   } catch (_) {}
   sb.channel("lq").on("postgres_changes", { event: "*", schema: "public", table: "live_quotes" }, (p) => {
@@ -12041,8 +12049,12 @@ function updateLive(){
      closed, offline) instead of asserting "live" while the data has stopped moving. */
   try{
     var stamp = el("scFeedStamp");
-    if(stamp) stamp.textContent = "equities · MASSIVE " +
-      (eqClosed ? "· market closed" : (eqFault ? "· stale" : (live ? "· live" : "· connecting")));
+    if(stamp) {
+      const freshness = window.SC_EQUITY_FRESHNESS || {};
+      stamp.textContent = "equities · MASSIVE " +
+        (eqClosed ? "· market closed" : (eqFault ? "· stale" : (live ? "· live" : "· connecting"))) +
+        (freshness.stale_count ? " · " + freshness.stale_count + " stale trades" : "");
+    }
   }catch(e){}
 }
 function scAlert(msg){
@@ -12054,31 +12066,51 @@ function scAlert(msg){
   try{ document.title = "🔴 FEED DOWN · SCINTILLA"; }catch(e){}
   try{ console.warn("SCINTILLA ALERT:", msg); }catch(e){}
 }
+function scQuoteObservation (q, now = Date.now()) {
+  const ms = q && q.price_observation_utc ? Date.parse(q.price_observation_utc) : NaN;
+  const ageSec = isFinite(ms) ? (now - ms) / 1000 : null;
+  const usable = !!(q && q.state === "OK" && q.price != null && Number(q.price) > 0);
+  const known = usable && ageSec !== null && ageSec >= -60;
+  const fresh = known && ageSec <= 90 && q.price_freshness === "FRESH";
+  return { state: fresh ? "FRESH" : (known ? "STALE" : "UNKNOWN"),
+    observed_utc: known ? q.price_observation_utc : null,
+    age_sec: known ? Math.max(0, ageSec) : null };
+}
+function scQuoteObservationLabel (q) {
+  const o = scQuoteObservation(q);
+  return "MASSIVE · " + o.state + " · last trade " + (o.observed_utc || "UNKNOWN");
+}
+function scEquityFreshness (snapshot, tick, now = Date.now()) {
+  const values = Object.values(snapshot && snapshot.quotes || {});
+  let fresh = 0, stale = 0, unknown = 0, youngest = null;
+  for (const q of values) {
+    const o = scQuoteObservation(q, now);
+    if (o.state === "FRESH") fresh++; else if (o.state === "STALE") stale++; else unknown++;
+    if (o.age_sec !== null && (youngest === null || o.age_sec < youngest)) youngest = o.age_sec;
+  }
+  const requestMs = tick && tick.last_utc ? Date.parse(tick.last_utc) : NaN;
+  const reachable = isFinite(requestMs) && now - requestMs >= -60000 && now - requestMs <= 180000;
+  /* One thinly traded symbol cannot declare the whole feed down. A global LIVE claim requires
+     actual fresh trades plus recent transport; per-symbol age remains visible independently. */
+  return { fresh: reachable && fresh > 0, age_sec: youngest, reachable,
+    fresh_count: fresh, stale_count: stale, unknown_count: unknown, observed_count: values.length };
+}
+function scUpdateEquityFreshness () {
+  const state = scEquityFreshness(window.SC_TICK_LAST, window.SC_TICK);
+  window.SC_EQUITY_FRESHNESS = state;
+  window.__eqFresh = state.fresh; window.__eqStale = !state.fresh;
+  window.__eqAgeSec = state.age_sec;
+  return state;
+}
 var __eqDownPrev = false;
 async function scFeedWatch(){
   try{
-    var rows = await pg("feed_health?select=feed,status,age_sec");
-    /* EQUITY LIVENESS NOW COMES FROM THE FEED THE BOARD ACTUALLY USES.
-       feed_health.equity_price measures the LEGACY live_quotes equity path, and that path was
-       deliberately retired this sprint — job 73 is deleted, so those rows froze at 19:56 ET and
-       the row has read RED ever since. Nothing is wrong with it: it is faithfully reporting a
-       feed we switched off on purpose.
-       The consequence was a false alarm scheduled for the next open. After hours marketOpen() is
-       false so the badge reads CLOSED and stays quiet, but at 09:30 ET eqFault would become true
-       and the Hub would pulse the logo red and fire an audible "Equity feed down - prices are
-       stale" while Massive was serving 364 of 365 symbols with zero tick failures.
-       Liveness is therefore derived from the provider tick itself — the same batched /quotes call
-       that puts the prices on screen. That is the honest measurement: it reports on the feed the
-       user is actually looking at, not on a retired one. It also fails CLOSED — before the first
-       successful tick, runs is 0 and __eqFresh stays false, so the badge never claims LIVE on no
-       evidence. feed_health is still read for every OTHER pill. */
+    // Equity freshness has no dependency on the retired database quote feed.
+    /* Re-evaluate actual trade clocks between requests. HTTP success alone never makes a
+       stale observation fresh; regular-session closure still controls the existing alarm. */
     var T = window.SC_TICK || {};
-    var lastMs = T.last_utc ? Date.parse(T.last_utc) : NaN;
-    var ageSec = isFinite(lastMs) ? (Date.now() - lastMs) / 1000 : null;
-    var eqOk = (T.runs > 0) && (ageSec !== null) && (ageSec <= SC_EQ_FRESH_SEC);
-    var down = !eqOk;
-    window.__eqFresh = eqOk;
-    window.__eqAgeSec = ageSec;
+    var freshness = scUpdateEquityFreshness();
+    var down = !freshness.fresh;
     var open = (typeof marketOpen==="function") ? marketOpen() : true;
     /* Before the first provider request settles, absence of a successful run is UNKNOWN, not
        a proven outage. Alarm only after a success has gone stale or an actual request failed. */
@@ -12115,7 +12147,7 @@ const SC_TICK_WAIT_MS = 250;
 /* How stale the provider tick may be before the equity feed is called down. The tick runs every
    2 s visible and 10 s hidden, and backs off to 8x on consecutive failures, so the worst healthy
    interval is 80 s. 180 s leaves headroom for that backoff without hiding a genuinely dead feed. */
-const SC_EQ_FRESH_SEC = 180;
+
 
 async function scProviderTick () {
   /* THE LOOP MUST NEVER DIE, AND A TICK THAT CANNOT RUN YET IS RETRIED RATHER THAN DROPPED.
@@ -12130,7 +12162,7 @@ async function scProviderTick () {
   const decl = window.SC_DECLARED_SET;
   if (!decl || !decl.size) {
     /* Authority not resolved yet. Kick the resolver and come straight back — never disappear.
-       Bounded fast retries (~10 s) so a cold load starts pricing as soon as /geiger lands, then
+       Bounded fast retries (~10 s) so a cold load starts pricing as soon as /universe lands, then
        normal cadence so a provider outage cannot turn into a 250 ms poll forever. */
     scDeclaredEquities().catch(() => {});
     SC_TICK_WAITS++; window.SC_TICK.authority_waits = SC_TICK_WAITS;
@@ -12162,10 +12194,11 @@ async function scProviderTick () {
     for (const [t, q] of Object.entries((j && j.quotes) || {})) {
       if (!q || q.state !== "OK") continue;                 // absence stays absent, never a legacy value
       const price = Number(q.price), prev = Number(q.previous_close);
-      if (!isFinite(price)) continue;
+      if (q.price == null || !isFinite(price) || price <= 0) continue;
       /* Previous close from the same contract, so the percentage recomputed inside patch() is the
          displayed provider trade against the provider's own completed daily close. */
-      if (isFinite(prev) && prev !== 0) prevClose[t] = prev;
+      if (q.previous_close != null && isFinite(prev) && prev > 0) prevClose[t] = prev;
+      else delete prevClose[t];
       patch(t, price, "PROVIDER");
       /* patch() returns early on an identical re-quote, which is correct for repaint suppression
          but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
@@ -12175,11 +12208,29 @@ async function scProviderTick () {
          GROWTH showed 17 of 17 and INTL 8 of 8 declared equities with a BLANK percentage - their
          row objects were never the ones the tick updated. ALLROWS is the master universe store
          (shownRows() filters it), so both are updated and no cohort can hold an unseeded row. */
+      const observation = scQuoteObservation(q);
+      const priceNode = el("lp_" + t);
+      if (priceNode) priceNode.title = scQuoteObservationLabel(q);
+      if (typeof LEFT_T !== "undefined" && LEFT_T === t && el("coPx")) el("coPx").title = scQuoteObservationLabel(q);
+      const quoteRow = document.querySelector('[data-act="row"][data-t="' + t + '"]');
+      scStamp(quoteRow, { "price-observed-utc": observation.observed_utc,
+        "price-freshness": observation.state });
       const targets = [];
       const rS = (S.rows || []).find((x) => x.t === t); if (rS) targets.push(rS);
       const rA = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
       if (rA && rA !== rS) targets.push(rA);
-      for (const row of targets) if (isFinite(prev) && prev !== 0) {
+      for (const row of targets) {
+        row.quoteObservation = q; row.nf = false; row.state = "OK";
+        row.priceSource = "MASSIVE_PROVIDER";
+        row.pc = q.previous_close != null && isFinite(prev) && prev > 0 ? prev : null;
+        if (row.pc == null) row.c = null;
+      }
+      if (quoteRow) {
+        quoteRow.classList.remove("nofeed");
+        const marker = quoteRow.querySelector(".no-feed"); if (marker) marker.remove();
+        const tickerNode = quoteRow.querySelector(".sc-ctk"); if (tickerNode) tickerNode.classList.remove("has-nf");
+      }
+      for (const row of targets) if (q.previous_close != null && isFinite(prev) && prev > 0) {
         /* A ROW WITH NO PRICE HAS NO PERCENTAGE.
            MEASURED on production 2026-08-18: this line previously ran Number(row.price) on a row
            that had never been seeded, and Number(null) is 0, so it rendered (0/prev - 1)*100 =
@@ -12194,19 +12245,17 @@ async function scProviderTick () {
       applied++;
     }
     SC_TICK_FAILS = 0;
-    /* LIVENESS MOVES WITH THE DATA. Leaving it to scFeedWatch's 45-second cycle meant that after
-       every load during market hours the feed read stale for up to 45 s — and stale during an open
-       session is a FAULT, so the logo would pulse red and the audible "Equity feed down" alarm
-       would fire on every single page load while prices were arriving normally. The tick that
-       just succeeded is the freshest possible evidence the feed is alive, so it says so itself. */
-    window.__eqFresh = true; window.__eqStale = false; window.__eqAgeSec = 0;
-    try { if (typeof updateLive === "function") updateLive(); } catch (_) {}
-    try { scStampRoot(); } catch (_) {}       // authority, counters and freshness move with each tick
+    /* Request success and observed-trade freshness are recorded separately. Update the badge
+       immediately from the accepted observations, including stale-only successful responses. */
     window.SC_TICK.runs++; window.SC_TICK.applied += applied;
     window.SC_TICK.symbols = want.length; window.SC_TICK.last_ms = Date.now() - t0;
     window.SC_TICK.last_utc = new Date().toISOString();
+    scUpdateEquityFreshness();
+    try { if (typeof updateLive === "function") updateLive(); scStampRoot(); } catch (_) {}
   } catch (_) {
     SC_TICK_FAILS++; window.SC_TICK.failures++;
+    scUpdateEquityFreshness();
+    try { if (typeof updateLive === "function") updateLive(); } catch (_) {}
   } finally { SC_TICK_INFLIGHT = false; /* Resolve the declared set immediately rather than waiting for the first board build, so the
    guard is armed before any legacy tick can arrive. */
 scDeclaredEquities().catch(() => {});
@@ -12398,17 +12447,23 @@ const SC_CGD = new Map();
    take the board with it, and it returns the last known good value when it has one rather than
    blanking a column that was populated a moment ago. */
 function scRetainCandidateGeiger (reason, currentEqualizer) {
-  /* Retaining the last accepted values is a display-continuity policy, not renewed acceptance.
-     Rank readiness can survive a transient /geiger failure only when the current 42-row state was
-     just proven and still has the same digest. An unavailable/invalid operator read always revokes
-     readiness, even though the prior numbers may remain visible. */
-  if (SC_CG.meta) {
-    SC_CG.meta.current_equalizer_validated = !!(currentEqualizer &&
-      SC_CG.meta.receipt === currentEqualizer.receipt);
-    SC_CG.meta.validation_error = String(reason || "GEIGER_CURRENT_VALIDATION_FAILED").slice(0, 160);
-  }
-  return SC_CG.map || {};
+  /* A failed current read revokes score acceptance even if the saved weights did not change.
+     Retain diagnostic provenance, never return an expired score as an accepted current value. */
+  SC_CG.meta = Object.assign({}, SC_CG.meta || {}, {
+    current_equalizer_validated: false,
+    validation_error: String(reason || "GEIGER_CURRENT_VALIDATION_FAILED").slice(0, 160)
+  });
+  SC_CG.map = null; SC_CG.at = 0;
+  window.SC_RANK_READY = false;
+  return {};
 }
+function scGeigerSnapshotCurrent (data) {
+  try {
+    return !!(data && SC_CG.map && SC_CG.meta && SC_CG.meta.current_equalizer_validated &&
+      data.updated_ts === SC_CG.meta.computed && Date.now() - SC_CG.at < 30000);
+  } catch (_) { return false; }
+}
+
 async function scCandidateGeiger () {
   let currentEqualizer;
   try { currentEqualizer = await scCurrentEqualizer(); }
@@ -12456,12 +12511,12 @@ async function scCandidateGeigerDetail (ticker) {
   const hit = SC_CGD.get(t);
   let currentEqualizer;
   try { currentEqualizer = await scCurrentEqualizer(); }
-  catch (_) { return hit || null; }
+  catch (_) { return null; }
   if (hit && hit.receipt === currentEqualizer.receipt && Date.now() - hit.at < 30000) return hit;
   try {
     const r = await fetch(SC_CHART_API + "/geiger?symbols=" + encodeURIComponent(t) + "&detail=1",
       { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null;
+    if (!r.ok) return null;
     const j = await r.json();
     SC_GEIGER_AUTHORITY.validateArtifactProfile(j, currentEqualizer);
     SC_GEIGER_AUTHORITY.auditArtifactAccounting(j, SC_EXPECTED_EQUITY_COUNT);
@@ -12472,13 +12527,13 @@ async function scCandidateGeigerDetail (ticker) {
     const detailRungKeys = value ? Object.keys(value.rungs || {}).sort() : [];
     if (!j || j.requested !== 1 || j.returned !== 1 || keys.length !== 1 || keys[0] !== t ||
         !value || JSON.stringify(detailRungKeys) !== JSON.stringify(expectedRungKeys)) {
-      return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null;
+      return null;
     }
     const out = { at: Date.now(), value, computed_utc: j.computed_utc || null,
                   receipt: j.equalizer_receipt_sha256 };
     SC_CGD.set(t, out);
     return out;
-  } catch (_) { return (hit && hit.receipt === currentEqualizer.receipt) ? hit : null; }
+  } catch (_) { return null; }
 }
 /* Overlays a legacy-shaped {ticker -> {composite,trend,momentum,...}} index IN PLACE, only for
    symbols the candidate owns. Returns how many were replaced. */
@@ -12501,7 +12556,7 @@ async function scApplyCandidateGeiger (index) {
       applied++;
       continue;
     }
-    if (!(eq && eq.has(t))) continue;             // non-equity keeps its approved owner
+    if (eq && !eq.has(t)) continue;               // only VERIFIED non-equity keeps its approved owner
     /* DECLARED EQUITY WITH NO CANDIDATE GEIGER — FAIL CLOSED. Skipping here previously left the
        legacy composite_staged Trend, Momentum and composite on screen for a declared equity. */
     index[t].composite = null;
@@ -12548,8 +12603,10 @@ async function scProviderQuotes (tickers) {
       for (const [k, q] of Object.entries((j && j.quotes) || {})) out[k] = q;
     } catch (_) { /* leave absent rather than substitute */ }
   }
-  SC_PQ.at = Date.now(); SC_PQ.map = Object.assign({}, SC_PQ.map, out);
-  return SC_PQ.map;
+  /* An expired cache cannot fill holes in the current response. Missing symbols and failed
+     batches stay absent; only a genuinely warm, fully covered request can use the fast path. */
+  SC_PQ.at = Date.now(); SC_PQ.map = out;
+  return out;
 }
 /* Overwrites price, prev_close and chg_pct IN PLACE on a legacy-shaped quote index, so every
    downstream consumer keeps its existing shape and no call site has to be re-reasoned. A symbol the
@@ -12557,7 +12614,7 @@ async function scProviderQuotes (tickers) {
    a fallback. */
 /* DECLARED EQUITY MEMBERSHIP — from the fixed universe identity, not from whether a response arrived.
    The authoritative equity/ETF universe is the 364 accepted rows of massive_stocks.instrument_map,
-   echoed by the /geiger route. Deciding membership from
+   served independently by /universe. Geiger readiness does not gate prices or charts. Deciding membership from
    the presence of a provider response is exactly the bug being fixed: a failed request would make a
    declared equity look like a non-equity and quietly hand it back to the legacy table.
    Cached in localStorage because the set changes rarely and a transient outage must not erase our
@@ -12565,12 +12622,13 @@ async function scProviderQuotes (tickers) {
    SC_EQUITY_AUTHORITY_UNKNOWN rather than guessing. */
 const SC_EQ_KEY = "sc_declared_equities_v1";
 let SC_EQ = null;
-function scEqFromCache () {
+async function scEqFromCache () {
   try {
     const r = JSON.parse(localStorage.getItem(SC_EQ_KEY) || "null");
     if (r && r.at && (Date.now() - r.at) < 7 * 864e5 &&
         Array.isArray(r.syms) && r.digest === SC_EQUITY_UNIVERSE_DIGEST &&
-        r.syms.length === SC_EXPECTED_EQUITY_COUNT) return new Set(r.syms);
+        r.syms.length === SC_EXPECTED_EQUITY_COUNT && Date.now() - r.at >= -60000 &&
+        await scUniverseDigest(r.syms) === SC_EQUITY_UNIVERSE_DIGEST) return new Set(r.syms);
   } catch (_) {}
   return null;
 }
@@ -12581,15 +12639,17 @@ async function scDeclaredEquities () {
      to check against yet. The localStorage cache makes a warm load instant, and the fetched set is
      published the moment it lands, so the unguarded window is as small as it can be. */
   if (SC_EQ) { window.SC_DECLARED_SET = SC_EQ; return SC_EQ; }
-  SC_EQ = scEqFromCache();
+  SC_EQ = await scEqFromCache();
   if (SC_EQ && SC_EQ.size) window.SC_DECLARED_SET = SC_EQ;
   try {
-    const r = await fetch(SC_CHART_API + "/geiger");
+    const r = await fetch(SC_CHART_API + "/universe");
     if (r.ok) {
       const j = await r.json();
-      const syms = Object.keys((j && j.symbols) || {});
+      const syms = j && Array.isArray(j.symbols) ? j.symbols : [];
       const digest = await scUniverseDigest(syms);
-      if (syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
+      if (j.provider === "MASSIVE" && j.count === SC_EXPECTED_EQUITY_COUNT &&
+          j.universe_sha256 === SC_EQUITY_UNIVERSE_DIGEST &&
+          syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
         SC_EQ = new Set(syms);
         try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), digest, syms })); } catch (_) {}
       }
@@ -12617,7 +12677,8 @@ async function scApplyProviderQuotes (index, tickers) {
     const q = pq[t];
     const price = q ? Number(q.price) : NaN;
     const prev = q ? Number(q.previous_close) : NaN;
-    const valid = !!q && q.state === "OK" && isFinite(price) && isFinite(prev) && prev !== 0;
+    const valid = !!q && q.state === "OK" && q.price != null && q.previous_close != null &&
+      isFinite(price) && price > 0 && isFinite(prev) && prev > 0;
 
     if (valid) {
       if (!index[t]) index[t] = { ticker: t };     // provider-owned but unknown to live_quotes (PDD)
@@ -12628,14 +12689,18 @@ async function scApplyProviderQuotes (index, tickers) {
       index[t].sc_pct_source = "MASSIVE_PROVIDER_D_BAR";
       index[t].sc_state = "OK";
       index[t].sc_provider_state = "OK";
+      index[t].state = "OK";
+      index[t].price_observation_utc = q.price_observation_utc || null;
+      index[t].price_freshness = q.price_freshness || "UNKNOWN";
       applied++;
       continue;
     }
 
     /* NON-EQUITY: keeps its approved owner untouched. This is provider routing, not a fallback. */
-    if (!declared) continue;
+    if (eq && !declared) continue;
 
-    /* DECLARED EQUITY WITH NO VALID PROVIDER VALUE — FAIL CLOSED.
+    /* Unknown ownership is not permission to replay legacy prices.
+       DECLARED EQUITY WITH NO VALID PROVIDER VALUE — FAIL CLOSED.
        The previous version skipped here, which LEFT THE LEGACY SUPABASE ROW IN PLACE and rendered a
        legacy price, previous close and percentage for a declared equity with no visible marker.
        One failed batch request was enough to do it. The row is kept so the symbol never vanishes
