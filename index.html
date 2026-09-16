@@ -11508,10 +11508,22 @@ function patch(t, price, src) {
     const pc0 = prevClose[t];
     for (const row of [r, rAll]) {
       if (!row) continue;
-      if (row.price == null || !isFinite(Number(row.price)) || Number(row.price) !== price) {
-        row.price = price;
-        row.c = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
-      }
+      row.price = price;
+      row.c = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
+    }
+    /* The price can repeat while its baseline changes or disappears. Repaint percentage and
+       baseline disclosures before this price-only early return, including explicit absence. */
+    const sameChange = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
+    const sameCell = el("lc_" + t);
+    if (sameCell) {
+      sameCell.textContent = sameChange == null ? "—" : fmtC(sameChange);
+      sameCell.className = "sc-chg" + (sameChange == null ? "" : " " + (sameChange >= 0 ? "up" : "dn"));
+    }
+    if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
+      if (S.coData && S.coData.t === t) S.coData.chg = sameChange;
+      const sameCompany = el("coChg"), samePrev = el("coPrev");
+      if (sameCompany) sameCompany.textContent = sameChange == null ? "—" : fmtC(sameChange);
+      if (samePrev) samePrev.textContent = pc0 && isFinite(pc0) ? "Prev " + fmtPxIdent(pc0) : "";
     }
     return;
   }
@@ -13868,7 +13880,7 @@ function filesWire(){
   /* published so the COMPARE STRIP reads the very same per-ticker trend/momentum the board
      rows paint from. Without this the strip would have to fetch its own copy, and two
      copies is how the board and the strip drifted apart in the first place. */
-  var TM={}, TM_AT=null, TM_ASOF=null, GWX_W=null, prevPainted={};
+  var TM={}, TM_AT=null, TM_FLIGHT=false, TM_ASOF=null, GWX_W=null, prevPainted={};
   window.SCIN_TM = TM;
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
@@ -14009,32 +14021,42 @@ function filesWire(){
       }
     });
   }
-  function loadTM(){
-    var key=(S.rows||[]).length+"|"+(S.coh||"");
-    if(TM_AT===key)return; TM_AT=key;
-    /* Alan, 2026-08-10: "the template should read regardless of my scoring. My scoring
-       feeds the combined Geiger" - so the COMPONENT columns must stay raw. composite_staged
-       .trend is now equalizer-weighted (it is what feeds the composite); fan_daily carries
-       the same fan, and the raw structural read is what belongs in a component column. */
-    api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").then(async function(rows){
-      (rows||[]).forEach(function(r){ TM[r.ticker]={tr:r.trend,mo:r.momentum}; });
-      /* P0-E: the component columns follow the SAME Geiger authority as the board, or the strip
-         would show legacy trend/momentum beside a candidate composite and the two would disagree
-         on screen. Non-equities keep their legacy values — provider routing, not a fallback. */
-      if (window.SC_CLEAN_READS) {
-        try {
-          const cg = await scCandidateGeiger();
-          for (const t of Object.keys(cg || {})) {
-            if (cg[t] && cg[t].trend != null) TM[t] = { tr: cg[t].trend, mo: cg[t].momentum };
-          }
-        } catch (_) { /* leave legacy values rather than blank the columns */ }
+  async function loadTM(){
+    /* Explicit rewind keeps its own dated component data. Live components refresh even when
+       the cohort is unchanged, and cannot borrow an equity value from a legacy table. */
+    if(ASOF || TM_FLIGHT) return;
+    var meta = typeof SC_CG !== "undefined" && SC_CG.meta || {};
+    var key=(S.rows||[]).map(function(r){return r.t;}).join(",")+"|"+(S.coh||"")+"|"+
+      String(meta.computed||"")+"|"+String(meta.current_equalizer_validated===true);
+    if(TM_AT && TM_AT.key===key && Date.now()-TM_AT.at<30000) return;
+    TM_AT={key:key,at:Date.now()}; TM_FLIGHT=true;
+    try {
+      var result = await Promise.all([
+        api("composite_staged?select=ticker,trend,momentum&tf=eq.D&limit=400").catch(function(){return [];}),
+        scDeclaredEquities().catch(function(){return null;}),
+        scCandidateGeiger().catch(function(){return {};})
+      ]);
+      var rows=result[0], eq=result[1], cg=result[2], next={};
+      /* Retain only positively identified non-equity values on their existing owner. Unknown
+         identity is not a fallback classification. Replace the shared map in place so board
+         cells and the cohort strip observe the same acceptance/revocation transition. */
+      if(eq && eq.size){
+        Object.keys(TM).forEach(function(t){if(!eq.has(t)) next[t]=TM[t];});
+        (rows||[]).forEach(function(r){if(!eq.has(r.ticker)) next[r.ticker]={tr:r.trend,mo:r.momentum};});
+        Object.keys(cg||{}).forEach(function(t){
+          var value=cg[t];
+          if(eq.has(t) && value && value.composite!=null)
+            next[t]={tr:value.trend,mo:value.momentum};
+        });
       }
-      paintTM();
-      /* the strip renders before this arrives, so without a repaint here every column
-         would sit on "—" until the next unrelated rebuild */
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
-    });
+      Object.keys(TM).forEach(function(t){delete TM[t];});
+      Object.keys(next).forEach(function(t){TM[t]=next[t];});
+      if(!ASOF){
+        paintTM();
+        var cc=E("cohCompare");
+        if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+      }
+    } finally { TM_FLIGHT=false; }
   }
 
   /* ★ REGISTER THE COLUMNS IMMEDIATELY, before the board first renders.
@@ -14082,7 +14104,7 @@ function filesWire(){
     if(TIMER) return;
     if(E("cohGeiger")&&!E("gwxBar")) mount();
     watchBoard(); watchStrip();
-    loadTM();                                      // no-ops unless the cohort changed
+    loadTM();                                      // bounded refresh and authority transitions
   }, 1500);
   if(document.readyState!=="loading") setTimeout(mount,1200);
   else document.addEventListener("DOMContentLoaded",function(){setTimeout(mount,1200);});

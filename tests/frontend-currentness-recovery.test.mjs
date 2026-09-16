@@ -204,3 +204,60 @@ test('cached ownership independently hashes membership instead of trusting store
     else assert.equal(result, null);
   }
 });
+
+test('live Trend/Momentum/Read loader revokes failed equities and refreshes without a cohort change', async () => {
+  let time = now, cg = { AAPL:{ composite:0.2, trend:0.3, momentum:0.1 } };
+  let fail = false, eq = new Set(['AAPL']), paints = 0;
+  class Clock extends Date { static now() { return time; } }
+  const map = { AAPL:{ tr:-0.3, mo:-0.6 }, BTCUSD:{ tr:0.7, mo:0.6 } };
+  const c = vm.createContext({
+    Date:Clock, S:{ rows:[{ t:'AAPL' }], coh:'ALL' }, ASOF:null,
+    TM:map, TM_AT:null, TM_FLIGHT:false, SC_CG:{ meta:{} }, window:{ SCIN_TM:map },
+    api:async () => [{ ticker:'AAPL', trend:-0.3, momentum:-0.6 }, { ticker:'BTCUSD', trend:0.7, momentum:0.6 }],
+    scDeclaredEquities:async () => eq,
+    scCandidateGeiger:async () => { if (fail) throw new Error('GEIGER_NOT_READY'); return cg; },
+    paintTM:() => paints++, E:() => null
+  });
+  const start = source.indexOf('  async function loadTM(){');
+  vm.runInContext(source.slice(start, source.indexOf('\n  }', start) + 4), c);
+  await c.loadTM();
+  assert.equal(map.AAPL.tr, 0.3);
+  assert.equal(map.BTCUSD.tr, 0.7);
+  time += 31000; fail = true;
+  await c.loadTM();
+  assert.equal(map.AAPL, undefined, 'failed Geiger cannot leave legacy component values');
+  assert.equal(map.BTCUSD.tr, 0.7, 'verified non-equity owner remains');
+  time += 31000; fail = false; cg = { AAPL:{ composite:0.5, trend:0.6, momentum:0.4 } };
+  await c.loadTM();
+  assert.equal(map.AAPL.tr, 0.6, 'same cohort picks up restored provider components');
+  assert.equal(c.window.SCIN_TM, map, 'cohort strip retains the same shared map');
+  c.ASOF = '2026-08-20'; time += 31000; cg = {};
+  const priorPaints = paints;
+  await c.loadTM();
+  assert.equal(paints, priorPaints, 'explicit dated rewind is not repainted by live refresh');
+  c.ASOF = null; eq = null;
+  await c.loadTM();
+  assert.equal(Object.keys(map).length, 0, 'unknown ownership never implies non-equity fallback');
+});
+
+test('an identical price still updates or clears the visible previous-close percentage', () => {
+  for (const baseline of [99, undefined]) {
+    const row = { t:'AAPL', price:101, c:1 };
+    const cells = Object.fromEntries(['lc_AAPL', 'coChg', 'coPrev'].map((key) => [key, { textContent:'old' }]));
+    const c = context(['patch'], {
+      window:{ SC_GUARD:{ provider_applied:0 } }, S:{ rows:[row], coData:{ t:'AAPL', chg:1 } },
+      ALLROWS:[row], LEFT_T:'AAPL', PRICES:{ AAPL:101 }, prevClose:{ AAPL:baseline },
+      document:{ querySelector:() => null }, scStamp() {}, el:(id) => cells[id] || null,
+      fmtC:(value) => value.toFixed(2) + '%', fmtPxIdent:String
+    });
+    c.patch('AAPL', 101, 'PROVIDER');
+    if (baseline == null) {
+      assert.equal(row.c, null); assert.equal(c.S.coData.chg, null);
+      assert.equal(cells.lc_AAPL.textContent, '—'); assert.equal(cells.coChg.textContent, '—');
+      assert.equal(cells.coPrev.textContent, '');
+    } else {
+      assert.ok(Math.abs(row.c - (101 / 99 - 1) * 100) < 1e-12);
+      assert.equal(cells.lc_AAPL.textContent, '2.02%'); assert.equal(cells.coChg.textContent, '2.02%');
+    }
+  }
+});
