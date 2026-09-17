@@ -5159,6 +5159,36 @@ const L0_MAP_BUDGET = 950;               // rows per request — unconditionally
 const L0_MAP_TTL    = 90000;             // ms a resolved (tf,cohort) result stays authoritative before it is re-pulled
 const L0_MAP_CACHE = {};                 // key → { pct:{ticker:%}, hit, n, tf, at }
 const L0_MAP_LOADING = {}, L0_MAP_ERR = {};
+/* PER-SYMBOL SERIES CACHE — the same 90 s freshness rule, shared across cohorts.
+   The resolved cache above is keyed by the WHOLE cohort list, so every cohort switch re-pulled
+   series the map had just loaded for a different list: MEASURED on 2026-09-17, switching to ALL
+   fired 386 provider candle requests and took ~11 s to stop repainting, and the FAV symbols in
+   that list had been fetched seconds earlier. Caching each (tf, symbol) series under the same TTL
+   changes no value and no basis - a symbol's series is still at most L0_MAP_TTL old - it only
+   stops the refetch. Outcomes are cached exactly as they come back, including null (not a Massive
+   equity, so the caller still falls back to its retained owner) and [] (a real failure, which the
+   resolved-cache layer already holds for the same TTL). */
+const L0_SERIES_CACHE = {};              // tf|symbol → { rows, per, at }
+const L0_SERIES_INFLIGHT = {};           // tf|symbol → in-flight promise, so one symbol is pulled once
+function l0SeriesFor (sym, tf, per) {
+  const k = tf + "|" + sym;
+  const hit = L0_SERIES_CACHE[k];
+  if (hit && (Date.now() - hit.at) < L0_MAP_TTL && hit.per >= per) return Promise.resolve(hit.rows);
+  /* A cohort switch while the previous list is still loading asked for the same symbol twice.
+     One pull per symbol, shared by every waiter. */
+  const flight = L0_SERIES_INFLIGHT[k];
+  if (flight && flight.per >= per) return flight.promise;
+  const promise = Promise.resolve(scCleanRows(sym, tf, per)).then(function (rows) {
+    L0_SERIES_CACHE[k] = { rows: rows, per: per, at: Date.now() };
+    if (L0_SERIES_INFLIGHT[k] && L0_SERIES_INFLIGHT[k].promise === promise) delete L0_SERIES_INFLIGHT[k];
+    return rows;
+  }, function (err) {
+    if (L0_SERIES_INFLIGHT[k] && L0_SERIES_INFLIGHT[k].promise === promise) delete L0_SERIES_INFLIGHT[k];
+    throw err;
+  });
+  L0_SERIES_INFLIGHT[k] = { promise: promise, per: per };
+  return promise;
+}
 let L0_MAP_NOW = null;                   // the resolved entry for what is CURRENTLY on screen (null → session basis)
 let L0_MAP_NOWK = "";
 /* the ticker list is SORTED into the key so the same cohort always hashes the same
@@ -5199,7 +5229,7 @@ async function l0MapLoad(tf, tickers, key) {
          replaces. Any symbol with no Massive series falls back to the batched legacy read. */
       let rows;
       if (window.SC_CLEAN_READS) {
-        const got = await Promise.all(part.map((t) => scCleanRows(t, tf, per)));
+        const got = await Promise.all(part.map((t) => l0SeriesFor(t, tf, per)));
         const missing = part.filter((t, i) => got[i] === null);
         rows = got.filter(Boolean).flat().filter((r) => r.timestamp >= cut);
         if (missing.length) {

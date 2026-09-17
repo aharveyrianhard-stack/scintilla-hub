@@ -69,3 +69,64 @@ test("the cohort average states its contributor coverage when some rows carry no
   assert.match(src, /const avg = vals\.reduce\(\(s, v\) => s \+ v, 0\) \/ n;/);
   assert.match(src, /const rows = \(S\.rows \|\| \[\]\)\.filter\(\(r\) => r\.g != null\);/);
 });
+
+test("the map reuses a symbol's series across cohorts under the same freshness rule", async () => {
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  const calls = [];
+  const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, now: 0,
+    scCleanRows: async (sym, tf, per) => { calls.push(sym + "|" + tf + "|" + per); return [{ ticker: sym }] } };
+  const make = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+    ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")} ; return l0SeriesFor;`);
+  const l0SeriesFor = make(ctx);
+
+  await l0SeriesFor("AAPL", "240", 13);
+  await l0SeriesFor("AAPL", "240", 13);
+  assert.deepEqual(calls, ["AAPL|240|13"], "a second cohort containing AAPL reuses the loaded series");
+
+  await l0SeriesFor("AAPL", "D", 6);
+  assert.equal(calls.length, 2, "a different timeframe is its own series");
+
+  ctx.now = 90001;
+  await l0SeriesFor("AAPL", "240", 13);
+  assert.equal(calls.length, 3, "past the 90 s rule the series is pulled again");
+
+  ctx.now = 90002;
+  await l0SeriesFor("AAPL", "240", 20);
+  assert.equal(calls.length, 4, "a request needing more bars is not served from a shorter cached one");
+
+  const mapLoad = html.match(/async function l0MapLoad\([\s\S]*?\n\}\n/)[0];
+  assert.match(mapLoad, /part\.map\(\(t\) => l0SeriesFor\(t, tf, per\)\)/);
+  assert.doesNotMatch(mapLoad, /part\.map\(\(t\) => scCleanRows\(/);
+});
+
+test("a null series still routes the symbol to its retained owner", async () => {
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  let hits = 0;
+  const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, now: 0,
+    scCleanRows: async () => { hits++; return null } };
+  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+    ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")} ; return l0SeriesFor;`)(ctx);
+  assert.equal(await l0SeriesFor("CLUSD", "240", 13), null);
+  assert.equal(await l0SeriesFor("CLUSD", "240", 13), null, "the non-equity answer is cached too");
+  assert.equal(hits, 1);
+  const mapLoad = html.match(/async function l0MapLoad\([\s\S]*?\n\}\n/)[0];
+  assert.match(mapLoad, /const missing = part\.filter\(\(t, i\) => got\[i\] === null\)/,
+    "null still selects the legacy batched read for that symbol");
+});
+
+test("two cohorts loading at once pull a symbol's series only once", async () => {
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  let calls = 0, release;
+  const gate = new Promise((r) => { release = r });
+  const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, L0_SERIES_INFLIGHT: {}, now: 0,
+    scCleanRows: async () => { calls++; await gate; return [{ ticker: "AAPL" }] } };
+  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+    ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")
+         .replace("const L0_SERIES_INFLIGHT = {};", "const L0_SERIES_INFLIGHT = ctx.L0_SERIES_INFLIGHT;")} ; return l0SeriesFor;`)(ctx);
+  const a = l0SeriesFor("AAPL", "240", 13), b = l0SeriesFor("AAPL", "240", 13);
+  release();
+  const [ra, rb] = await Promise.all([a, b]);
+  assert.equal(calls, 1, "the second cohort waits on the first pull instead of firing its own");
+  assert.deepEqual(ra, rb);
+  assert.deepEqual(Object.keys(ctx.L0_SERIES_INFLIGHT), [], "the in-flight entry is cleared when it resolves");
+});
