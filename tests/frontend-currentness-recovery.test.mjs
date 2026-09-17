@@ -13,10 +13,14 @@ function fn(name) {
   const end = source.indexOf('\n}', start) + 2;
   return (source.slice(Math.max(0, start - 6), start) === 'async ' ? 'async ' : '') + source.slice(start, end);
 }
+/* The conditional DOM-write helpers are shared plumbing: every painting function now routes its
+   attribute/text/class writes through them, so they belong in any context that extracts one. */
+const WRITE_HELPERS = ['scSetAttr', 'scSetText', 'scSetClass', 'scSetTitle'];
 function context(names, bindings = {}) {
   const c = vm.createContext({ window:{}, Date, TextEncoder, crypto:webcrypto, console,
     ...bindings });
-  vm.runInContext(names.map(fn).join('\n'), c);
+  const needed = WRITE_HELPERS.filter((h) => !names.includes(h));
+  vm.runInContext([...needed, ...names].map(fn).join('\n'), c);
   return c;
 }
 const now = Date.parse('2026-09-16T15:00:00Z');

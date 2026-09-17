@@ -4289,9 +4289,11 @@ const SECFS_BTN0 = '<button class="sc-fsico" aria-label="Section fullscreen" dat
    fills exactly as far as a +0.42 on any board row). Max/Min name their ticker. */
 function cohortGeigerHTML() {
   const open = !!S.cohGeigerOpen;
+  const total = (S.rows || []).length;
   const rows = (S.rows || []).filter((r) => r.g != null);
   if (!rows.length) {
-    return '<div class="sc-cohgeiger"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span></div>' +
+    return '<div class="sc-cohgeiger"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      (total ? '<span class="sc-cohgeiger__n">0/' + total + " contributors</span>" : "") + '</div>' +
       '<div class="sc-cohgeiger__big" style="color:var(--mute)">—<span class="sc-cohgeiger__st">awaiting data</span></div></div>';
   }
   const vals = rows.map((r) => r.g).sort((a, b) => a - b);
@@ -4312,7 +4314,11 @@ function cohortGeigerHTML() {
   return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '">' +
     '<button class="sc-cohgeiger__hd" data-act="cohgeigertoggle" aria-expanded="' + (open ? "true" : "false") + '">' +
       '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
-      '<span class="sc-cohgeiger__n">' + n + " tickers</span>" +
+      /* CONTRIBUTORS, NOT MEMBERSHIP. The mean is over rows that actually carry a Geiger, which
+         can be far fewer than the cohort's rows - on 2026-09-17, with provider Geiger refused,
+         FAV read "5 tickers" while showing 46 rows, so the number looked like the cohort had
+         shrunk instead of saying how much of it the average covers. Aggregation math unchanged. */
+      '<span class="sc-cohgeiger__n">' + (total > n ? n + "/" + total + " contributors" : n + " tickers") + "</span>" +
       '<span class="sc-cohgeiger__car">' + (open ? "▲" : "▼") + "</span>" +
     "</button>" +
     (open
@@ -11420,12 +11426,37 @@ window.SC_RANK_READY = false;
    UNKNOWN STAYS UNKNOWN: a null is written as the literal "UNKNOWN", never as 0 or an empty
    string, because an automated reader must be able to tell "we do not know" from "it is zero" —
    the same distinction the visible tiles now make. */
+/* WRITE ONLY WHAT CHANGED.
+   Setting an attribute, textContent or className to the value it already holds still counts as a
+   DOM mutation: the browser fires the observer, invalidates style and can re-run layout. The
+   ~2 s provider tick rewrote every stamp, title and class on every painted row on every pass,
+   so a CLOSED market with motionless prices still produced MEASURED 303 DOM mutations per second
+   on the live Hub (88% of them attribute writes), which is what made navigation feel slow and the
+   screen feel like it was constantly reloading. These helpers make each write conditional. The
+   rendered result is byte-identical - only the redundant writes disappear. */
+function scSetAttr (node, name, value) {
+  if (!node) return;
+  const s = (value === null || value === undefined || (typeof value === "number" && !isFinite(value))) ? "UNKNOWN" : String(value);
+  if (node.getAttribute(name) !== s) node.setAttribute(name, s);
+}
+function scSetText (node, value) {
+  if (!node) return;
+  const s = String(value);
+  if (node.textContent !== s) node.textContent = s;
+}
+function scSetClass (node, value) {
+  if (!node) return;
+  const s = String(value);
+  if (node.className !== s) node.className = s;
+}
+function scSetTitle (node, value) {
+  if (!node) return;
+  const s = String(value == null ? "" : value);
+  if (node.getAttribute("title") !== s) node.setAttribute("title", s);
+}
 function scStamp (node, map) {
   if (!node) return;
-  for (const k in map) {
-    const v = map[k];
-    node.setAttribute("data-sc-" + k, (v === null || v === undefined || (typeof v === "number" && !isFinite(v))) ? "UNKNOWN" : String(v));
-  }
+  for (const k in map) scSetAttr(node, "data-sc-" + k, map[k]);
 }
 /* Page-level identity: which build is running, which authority it is bound to, and the exact
    Equalizer receipt behind every Geiger on screen. Lets a checker prove it is looking at the
@@ -11535,14 +11566,14 @@ function patch(t, price, src) {
     const sameChange = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
     const sameCell = el("lc_" + t);
     if (sameCell) {
-      sameCell.textContent = sameChange == null ? "—" : fmtC(sameChange);
-      sameCell.className = "sc-chg" + (sameChange == null ? "" : " " + (sameChange >= 0 ? "up" : "dn"));
+      scSetText(sameCell, sameChange == null ? "—" : fmtC(sameChange));
+      scSetClass(sameCell, "sc-chg" + (sameChange == null ? "" : " " + (sameChange >= 0 ? "up" : "dn")));
     }
     if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
       if (S.coData && S.coData.t === t) S.coData.chg = sameChange;
       const sameCompany = el("coChg"), samePrev = el("coPrev");
-      if (sameCompany) sameCompany.textContent = sameChange == null ? "—" : fmtC(sameChange);
-      if (samePrev) samePrev.textContent = pc0 && isFinite(pc0) ? "Prev " + fmtPxIdent(pc0) : "";
+      scSetText(sameCompany, sameChange == null ? "—" : fmtC(sameChange));
+      scSetText(samePrev, pc0 && isFinite(pc0) ? "Prev " + fmtPxIdent(pc0) : "");
     }
     return;
   }
@@ -12067,13 +12098,14 @@ function updateLive(){
   var cls = live ? "is-live" : "is-off";
   var badge = el("liveBadge");
   if(badge){
-    if(eqClosed){ badge.className = "sc-head__live is-off"; badge.style.color = "var(--sv4)"; badge.textContent = "● CLOSED"; }
-    else { badge.style.color = ""; badge.className = "sc-head__live " + cls; badge.textContent = "● " + (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE"))); }
+    /* Same values, written only when they actually change — see scSetText/scSetClass. */
+    if(eqClosed){ scSetClass(badge, "sc-head__live is-off"); if(badge.style.color !== "var(--sv4)") badge.style.color = "var(--sv4)"; scSetText(badge, "● CLOSED"); }
+    else { if(badge.style.color !== "") badge.style.color = ""; scSetClass(badge, "sc-head__live " + cls); scSetText(badge, "● " + (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE")))); }
   }
   var txt = eqClosed ? "CLOSED" : (eqFault ? "STALE" : (live ? "LIVE" : (eqUnknown ? "CONNECTING" : "OFFLINE")));
   var chip = document.querySelector(".sc-clive");
-  if(chip){ chip.className = "sc-clive" + (live ? "" : " is-off"); chip.textContent = "● " + txt; }
-  document.querySelectorAll(".sc-chartlive").forEach(function(c){ c.className = "sc-chartlive " + cls; c.textContent = "● " + txt; });
+  if(chip){ scSetClass(chip, "sc-clive" + (live ? "" : " is-off")); scSetText(chip, "● " + txt); }
+  document.querySelectorAll(".sc-chartlive").forEach(function(c){ scSetClass(c, "sc-chartlive " + cls); scSetText(c, "● " + txt); });
   /* Provider stamp — named from real feed state, never hard-coded. MASSIVE is the equity provider
      for both the live socket and the derived chart history; FMP supplies no equity price or OHLCV.
      The qualifier reports what the feed is actually doing, so the stamp degrades honestly (stale,
@@ -12241,8 +12273,8 @@ async function scProviderTick () {
          (shownRows() filters it), so both are updated and no cohort can hold an unseeded row. */
       const observation = scQuoteObservation(q);
       const priceNode = el("lp_" + t);
-      if (priceNode) priceNode.title = scQuoteObservationLabel(q);
-      if (typeof LEFT_T !== "undefined" && LEFT_T === t && el("coPx")) el("coPx").title = scQuoteObservationLabel(q);
+      if (priceNode) scSetTitle(priceNode, scQuoteObservationLabel(q));
+      if (typeof LEFT_T !== "undefined" && LEFT_T === t && el("coPx")) scSetTitle(el("coPx"), scQuoteObservationLabel(q));
       const quoteRow = document.querySelector('[data-act="row"][data-t="' + t + '"]');
       scStamp(quoteRow, { "price-observed-utc": observation.observed_utc,
         "price-freshness": observation.state });
@@ -12256,7 +12288,7 @@ async function scProviderTick () {
         row.pc = q.previous_close != null && isFinite(prev) && prev > 0 ? prev : null;
         if (row.pc == null) row.c = null;
       }
-      if (quoteRow) {
+      if (quoteRow && quoteRow.classList.contains("nofeed")) {
         quoteRow.classList.remove("nofeed");
         const marker = quoteRow.querySelector(".no-feed"); if (marker) marker.remove();
         const tickerNode = quoteRow.querySelector(".sc-ctk"); if (tickerNode) tickerNode.classList.remove("has-nf");
