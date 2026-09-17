@@ -130,3 +130,21 @@ test("two cohorts loading at once pull a symbol's series only once", async () =>
   assert.deepEqual(ra, rb);
   assert.deepEqual(Object.keys(ctx.L0_SERIES_INFLIGHT), [], "the in-flight entry is cleared when it resolves");
 });
+
+test("the shell fits the window and the zoom tiers compensate for their own padding", () => {
+  const body = html.match(/body\{ background:var\(--bg\)[\s\S]*?\n[^\n]*overflow:hidden; \}/)[0];
+  assert.match(body, /padding:16px 22px 16px/, "the shell padding is unchanged");
+  assert.match(body, /height:calc\(100vh - 32px\)/, "the viewport lock accounts for that padding");
+  assert.doesNotMatch(body, /box-sizing/, "width stays on the 1240px content box, so no strip narrows");
+  for (const [w, z] of [[1400, '1.12'], [1680, '1.28'], [1920, '1.45']]) {
+    const rule = html.match(new RegExp(`@media \\(min-width:${w}px\\)\\{ body\\{ zoom:${z}; height:([^;]+); \\} \\}`))
+    assert.ok(rule, `the ${w}px zoom tier must still exist`)
+    assert.equal(rule[1], `calc(100vh / ${z} - 32px)`, `zoom scales the padding too, so ${w}px must subtract it`)
+  }
+});
+
+test("the company tab strip cannot crush its two cohort controls", () => {
+  assert.match(html, /\.sc-ihead\.ptabs \.tabstrip > \.sc-backcoh,\s*\n\.sc-ihead\.ptabs \.tabstrip > \.sc-cohwrap\{ flex:none; \}/);
+  assert.match(html, /\.sc-ihead\.ptabs \.tabstrip\{ flex:1 1 auto;[^}]*overflow-x:auto;/,
+    "the strip still scrolls, so the tab list itself is never cut off");
+});

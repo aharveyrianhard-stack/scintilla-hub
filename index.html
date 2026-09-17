@@ -68,10 +68,19 @@
 .sc-addchart:active{ transform:scale(.92); }
 
 /* SCINTILLA · App — shell lock + focus rules   [APPROVED 2026-06-10 · Alan's focus law] */
+/* THE VIEWPORT LOCK MUST INCLUDE ITS OWN PADDING.
+   height:100vh is a CONTENT height here, so the 16px top and bottom padding sat on top of it and
+   the cockpit was always ~32-46px taller than the window (MEASURED at 1280x800, 1440x900,
+   1512x945, 1728x1117 and 1920x1080): the page carried a scrollbar it is designed not to have,
+   which is the "overflow and unnecessary scrolling" fault. Subtracting the padding fixes the
+   height WITHOUT touching the width - switching this box to border-box would also have taken the
+   22px side padding out of the 1240px content width, narrowing every strip by 44px and clipping
+   the company READ tab at every size (measured). The ≤900px block below releases this lock for
+   phones and is unaffected. */
 body{ background:var(--bg); color:var(--ink); font-family:var(--mono);
   -webkit-font-smoothing:antialiased; padding:16px 22px 16px; font-size:12px;
   max-width:1240px; margin:0 auto; letter-spacing:.02em;
-  height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  height:calc(100vh - 32px); display:flex; flex-direction:column; overflow:hidden; }
 #main{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; margin-top:8px; overflow-y:auto; }
 
 /* FIX 2 — auto-hide: master tabs + cohort row tuck after idle; mouse-to-top reveals; header NEVER hides */
@@ -1271,6 +1280,14 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-ihead.ptabs{ gap:0; padding:0 6px; align-items:stretch; flex-wrap:nowrap; }   /* R48 — explicit nowrap: Alan saw COHORT ▾ split onto its own row above GEIGER/CHART/... on his phone/iPad; couldn't reproduce it in desktop Chrome and found no wrap-inducing rule in the sheet, so hardening this defensively rather than leaving it to the default */
 .sc-ihead.ptabs .tabstrip{ flex:1 1 auto; min-width:0; display:flex; flex-wrap:nowrap; align-items:center; gap:2px; overflow-x:auto; }   /* FIX C — gap 2px + overflow-x safety so tabs scroll rather than hard-clip on very narrow windows */
 .sc-ihead.ptabs .tabstrip::-webkit-scrollbar{ display:none; }
+/* THE TWO COHORT CONTROLS MUST NOT BE CRUSHED BY THE TAB LIST.
+   The nine company tabs carry flex:none, so when the strip overflows, the only things left to
+   shrink are the "◂ COHORT" back button and the "COHORT ▾" chooser. MEASURED at 1512x945: the
+   back button was squeezed to 18px with its label overflowing on top of the GEIGER tab (both
+   unreadable) and the chooser was squeezed to ZERO width - a control Alan cannot click at all.
+   They keep their natural size; the strip already scrolls horizontally for the tabs. */
+.sc-ihead.ptabs .tabstrip > .sc-backcoh,
+.sc-ihead.ptabs .tabstrip > .sc-cohwrap{ flex:none; }
 .sc-ihead.ptabs .hctrls{ flex:0 0 auto; display:flex; flex-wrap:nowrap; align-items:center; gap:8px; padding-left:12px; }
 .sc-ihead.ptabs .sc-it{ flex:0 0 auto; font-size:7px; letter-spacing:.02em; padding:9px 4px; }   /* FIX C — smaller/tighter so GEIGER…READ + COHORT ▾ all stay visible with AUTO+⛶ at a normal laptop width */
 .sc-ihead.ptabs .sc-it.on{ color:var(--crk); border-bottom:2px solid var(--crk); }
@@ -1729,9 +1746,13 @@ body.econ .sc-cohsearch{ display:none; }
    file is px/fr/%-based and rides the zoom.
    ============================================================================ */
 html{ font-size:16px; }
-@media (min-width:1400px){ body{ zoom:1.12; height:calc(100vh / 1.12); } }
-@media (min-width:1680px){ body{ zoom:1.28; height:calc(100vh / 1.28); } }
-@media (min-width:1920px){ body{ zoom:1.45; height:calc(100vh / 1.45); } }
+/* The compensation has to subtract the shell's own 32px of top+bottom padding as well, because
+   zoom scales the padding too: at 1.12 the box was (height + 32) x 1.12, i.e. 36px taller than the
+   window, which is the scrollbar this rule exists to prevent (MEASURED 36px at 1512x945 and
+   1440x900, 41px at 1728x1117, 46px at 1920x1080). Scale itself is unchanged, so nothing resizes. */
+@media (min-width:1400px){ body{ zoom:1.12; height:calc(100vh / 1.12 - 32px); } }
+@media (min-width:1680px){ body{ zoom:1.28; height:calc(100vh / 1.28 - 32px); } }
+@media (min-width:1920px){ body{ zoom:1.45; height:calc(100vh / 1.45 - 32px); } }
 
 /* ============================================================================
    ZOOM LAW v3 (supersedes v2's locked layout) — ⌘+/⌘− shifts wide-laptop toward
