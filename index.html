@@ -3112,6 +3112,24 @@ async function scUniverseDigest (symbols) {
 const SC_LAST = Object.create(null);
 const SC_DEGRADED = new Set();
 const SC_OPT_MS = 4000;
+/* INCOHERENT RETAINED PREVIOUS CLOSE IS NOT A DAY REFERENCE (same rule as Station's provider client).
+   The retained non-equity writer refreshes price but can leave prev_close weeks old while the row's
+   own chg_pct disagrees with it (CLUSD 2026-09-16: price 102.4, prev_close 81.25, chg_pct 1.03 -
+   painted "+26.01%"). A row keeps its previous close and change only when its stored percentage
+   agrees with price/prev_close; otherwise both are withdrawn and the change reads unknown.
+   Provider-owned equities are overwritten afterwards by scApplyProviderQuotes either way. */
+function scCoherentRetainedQuotes(rows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((row) => {
+    if (!row) return row;
+    const price = num(row.price), prev = num(row.prev_close), stored = num(row.chg_pct);
+    const implied = price != null && prev != null && prev > 0 ? (price / prev - 1) * 100 : null;
+    if (implied != null && stored != null && Math.abs(implied - stored) <= 0.05) return row;
+    if (row.prev_close == null && row.chg_pct == null && row.change == null) return row;
+    return Object.assign({}, row, { prev_close: null, chg_pct: null, change: null,
+      prev_close_withheld: "RETAINED_PREV_CLOSE_INCOHERENT" });
+  });
+}
 async function scOpt (label, p, fallback) {
   try {
     const v = await Promise.race([
@@ -3177,7 +3195,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      are no longer the equity price or Geiger authority and no longer gate boot. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
-    scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close"), []),
+    scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
     scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"), []),
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
@@ -3379,7 +3397,7 @@ async function fetchCompanyData(t) {
     new Promise((res) => setTimeout(() => res([]), 4000)),
   ]);
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = (await Promise.all([
-    pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close"),   // FIX 2 — DB serves chg_pct + prev_close
+    pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
@@ -3446,7 +3464,7 @@ async function fetchCompanyData(t) {
 const MACRO_SET = ["SPY","QQQ","IWM","SMH","GLD","TLT","NVDA","COIN"];
 async function fetchTapeItems() {
   const [quotes, comp] = await Promise.all([
-    pg("live_quotes?select=ticker,price,change,chg_pct"),   // FIX 2 — DB serves chg_pct
+    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct
     pg("composite_staged?select=ticker&tf=eq.D"),
   ]);
   /* P0-F: the ticker tape carries the same percentage contract as the board. */
@@ -3457,7 +3475,8 @@ async function fetchTapeItems() {
   const inComp = new Set(comp.map((c) => c.ticker));   // FIX 1 — tape universe = composite_staged tf=D only
   const all = quotes.filter((q) => q.price != null && inComp.has(q.ticker))
     .map((q) => ({ t: q.ticker, price: Number(q.price),
-                   pct: (num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change)) || 0 }));   // FIX 2 — chg_pct first
+                   pct: num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change) }))   // FIX 2 — chg_pct first
+    .filter((q) => q.pct != null);   // an unknown day change is left off the tape, never painted as 0.00%
   const macro = all.filter((q) => MACRO_SET.includes(q.t));
   const movers = all.slice().sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   return { macro, all: movers };
