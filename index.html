@@ -8087,6 +8087,19 @@ function renderEvents(cohort) {
    the tab becomes visible again; the screen is redrawn ONLY when the rows differ, and then each list keeps its scroll
    position and an opened group stays open. Entering the section still paints at once from the last read, then re-reads. */
 let EV_SIG = "", EV_READ_AT = 0, EV_TRKEYS = "", EV_CSKEYS = [];   // EV_TRKEYS / EV_CSKEYS: the last GOOD call-key reads of the master feed
+/* A CALL SUMMARY THAT IS OPEN IS BEING READ - AND IT CAN BE OPENED WHILE A RE-READ IS ALREADY IN FLIGHT. Its open state lives
+   only on the node a redraw would replace, so the check made before the reads start is not enough: it is made AGAIN at the
+   moment of drawing. A change that arrives while a summary is open is HELD - the data is kept, the screen and the drawn
+   signature are not touched - and it is drawn the moment the summary is closed (or by the next re-read, whichever is first). */
+let EV_HELD_SIG = "";                                                           // master feed: the signature of rows that were read but not yet drawn
+const evBubbleOpen = (rootSel) => [...document.querySelectorAll(rootSel + " .sc-trbubble")].some((x) => x.style.display === "block");
+function drawHeldEvents(bubble) {                                               // called when a call summary is closed
+  if (bubble && bubble.closest && bubble.closest("#evList")) {
+    if (!EV_HELD_SIG || evBubbleOpen("#evList")) return;
+    EV_SIG = EV_HELD_SIG; EV_HELD_SIG = "";
+    redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh));
+  } else { const d = S.coData, held = d && d._evHeld; if (held && !evBubbleOpen("#leftPanel")) { d._evHeld = null; held(); } }
+}
 function redrawKeepingPlace(rootSel, scrollSel, draw) {
   const root = document.querySelector(rootSel), at = root ? [...root.querySelectorAll(scrollSel)].map((x) => x.scrollTop) : [];
   const open = root ? [...root.querySelectorAll("details.sc-ernnores-grp")].map((x) => x.open) : [];
@@ -8099,21 +8112,26 @@ function redrawKeepingPlace(rootSel, scrollSel, draw) {
 async function refreshCompanyEvents() {
   const d = S.coData;
   if (!d || d._loading || !d.t || S.coTab !== "EVENTS" || !el("leftPanel")) return;
-  if (document.querySelector("#leftPanel .sc-evtab.tr-open")) return;          // the call summary is open and being read: leave the panel alone
+  if (evBubbleOpen("#leftPanel")) return;                                       // the call summary is open and being read: leave the panel alone (checked again before drawing)
   const t = d.t, e = encodeURIComponent(t), token = ROT_TOKEN;
   let got; try { got = await Promise.all([pg(coEventsPath(e)), pg(coCallSumPath(e)), pg(coCallKeysPath(e))]); } catch (err) { return; }   // ANY of the three failing fails the whole re-read: a failed read is not "no calls", and must never blank the Transcript / Call summary controls that are working on screen
   if (!got.every(Array.isArray)) return;
   if (token !== ROT_TOKEN || S.coData !== d || S.coTab !== "EVENTS") return;   // another company or tab is on screen now
   const sig = JSON.stringify(got); EV_READ_AT = Date.now();
-  if (sig === d._evSig) return;
-  d.events = got[0] || []; d._callsum = matchCallSummaries(d.events, got[1] || []); d._callDays = (got[2] || []).map((c) => c && c.call_date).filter(Boolean); d._evSig = sig;
-  redrawKeepingPlace("#leftPanel", ".sc-evpastscroll, .sc-evrelscroll", renderLeftPanel);
+  if (sig === d._evSig) { d._evHeld = null; return; }
+  const draw = () => {
+    if (S.coData !== d || S.coTab !== "EVENTS") return;
+    d.events = got[0] || []; d._callsum = matchCallSummaries(d.events, got[1] || []); d._callDays = (got[2] || []).map((c) => c && c.call_date).filter(Boolean); d._evSig = sig;
+    redrawKeepingPlace("#leftPanel", ".sc-evpastscroll, .sc-evrelscroll", renderLeftPanel);
+  };
+  if (evBubbleOpen("#leftPanel")) { d._evHeld = draw; return; }               // opened WHILE the read was in flight: held, not drawn, and _evSig is not advanced
+  d._evHeld = null; draw();
 }
 function refreshOpenEvents(onResume) {
   if (document.visibilityState === "hidden") return;
   if (onResume && Date.now() - EV_READ_AT < 60000) return;                     // just read
   if (S.sec === "EVENTS" && el("evList") && S.calType !== "DIVIDENDS") {
-    if ([...document.querySelectorAll("#evList .sc-trbubble")].some((x) => x.style.display === "block")) return;   // a call summary is open in the feed and being read: the re-read waits (its open state lives only on the node a redraw would replace)
+    if (evBubbleOpen("#evList")) return;                                        // a call summary is open in the feed and being read: the re-read waits (checked again before drawing)
     fillEvents(true);
   } else if (S.coData && S.coTab === "EVENTS") refreshCompanyEvents();
 }
@@ -8162,9 +8180,11 @@ async function fillEvents(quiet) {
     const reportedToday = up.filter((e) => e.eps_actual != null);
     EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
     const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], EV_TRKEYS]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
-    EV_SIG = sig; EV_READ_AT = Date.now();
-    if (!quiet) renderEvents(S.coh);
-    else if (changed) redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh));   // a quiet re-read that found nothing new touches nothing
+    EV_READ_AT = Date.now();
+    if (!quiet) { EV_SIG = sig; EV_HELD_SIG = ""; renderEvents(S.coh); }
+    else if (!changed) EV_HELD_SIG = "";                                       // a quiet re-read that found nothing new touches nothing
+    else if (evBubbleOpen("#evList")) EV_HELD_SIG = sig;                       // a summary was opened WHILE the read was in flight: the rows are kept, the screen and EV_SIG are not touched; drawHeldEvents() draws them when it closes
+    else { EV_SIG = sig; EV_HELD_SIG = ""; redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh)); }
   } catch (err) { if (!EV_CACHE) list.innerHTML = '<div class="soon">events pull failed — check connection.</div>'; }
 }
 
@@ -11549,6 +11569,7 @@ document.addEventListener("click", (e) => {
       if (bub) {
         bub.style.display = (bub.style.display === "none" || !bub.style.display) ? "block" : "none";
         const tab = bub.closest(".sc-evtab"); if (tab) tab.classList.toggle("tr-open", bub.style.display === "block");
+        if (bub.style.display !== "block") drawHeldEvents(bub);   // closed: anything a re-read found while it was open is drawn now
         const fix = bub.closest(".sc-evfix");   // a tall header: bring the opened summary into view by scrolling the HEADER BLOCK ONLY - never the page (scrollIntoView moved the whole page on a phone)
         if (fix && bub.style.display === "block") { const over = bub.getBoundingClientRect().bottom - fix.getBoundingClientRect().bottom; if (over > 0) fix.scrollTop += Math.ceil(over); }
       }
