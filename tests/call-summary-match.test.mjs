@@ -49,7 +49,7 @@ test("two stored rows for one call (a period named two ways) are one call; malfo
 });
 
 test("the card: the event's own summary first; otherwise the matched call, labelled as a call summary; otherwise nothing", () => {
-  assert.match(page, /\(d\.summary \? '<button class="sc-ern__lnk" data-act="ernsum" data-t="[^\n]*▤ Summary<\/button>'\n\s*: \(d\.callSummary \? '<button class="sc-ern__lnk" data-act="ernsum" data-kind="call"[^\n]*▤ Call summary<\/button>' : ''\)\) \+/, "release_summary takes precedence; no third fallback");
+  assert.match(page, /\(d\.summary \? '<button class="sc-ern__lnk" data-act="ernsum" data-t="[^\n]*<\/button>'\n\s*: \(d\.callSummary \? '<button class="sc-ern__lnk" data-act="ernsum" data-kind="call"[^\n]*▤ Call summary<\/button>' : ''\)\) \+/, "release_summary takes precedence; no third fallback");
   assert.match(page, /title="summary of the earnings call held ' \+ esc\(fmtEvDate\(d\.callSummary\.call_date\)\) \+ ' — no release summary is stored for this event"/);
   assert.match(page, /data-cd="' \+ esc\(d\.callSummary\.call_date\) \+ '" data-q="' \+ esc\(d\.callSummary\.quarter \|\| ""\) \+ '"/, "stored values are escaped into the attributes");
   assert.match(page, /callSummary: \(callsum instanceof Map && row\.ticker && row\.date\) \? \(callsum\.get\(String\(row\.ticker\)\.toUpperCase\(\) \+ "\|" \+ row\.date\) \|\| null\) : null,/);
@@ -57,7 +57,7 @@ test("the card: the event's own summary first; otherwise the matched call, label
 });
 
 test("the panel says which summary it is, and the call text is fetched for exactly that call", () => {
-  assert.match(page, /\(isCall \? ' · CALL SUMMARY' \+ \(cq \? ' · ' \+ esc\(cq\) : ''\) : ' · RELEASE SUMMARY'\)/);
+  assert.match(page, /\(isCall \? ' · CALL SUMMARY' \+ \(cq \? ' · ' \+ esc\(cq\) : ''\) : ' · SUMMARY'\)/, "a call summary is titled as one from the moment the panel opens");
   assert.match(page, /"earnings_call_transcripts\?ticker=eq\." \+ encodeURIComponent\(tk\) \+ "&call_date=eq\." \+ encodeURIComponent\(cd\) \+ "&ai_summary=not\.is\.null&select=quarter,call_date,ai_summary&limit=4"/, "exact ticker and call date - no order-by-latest");
   assert.match(page, /Summary of the earnings call held ' \+ esc\(fmtEvDate\(r\.call_date\)\)[^\n]*No release summary is stored for this event\./);
   assert.match(page, /'<div style="margin-bottom:14px">' \+ summaryHTML\(r\.ai_summary\) \+ "<\/div>"/, "drawn by the escape-first formatter");

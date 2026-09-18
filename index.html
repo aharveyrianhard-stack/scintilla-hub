@@ -3547,7 +3547,7 @@ async function fetchCompanyData(t) {
     pg("analyst_ratings?ticker=eq." + e + "&select=consensus,strong_buy,buy,hold,sell,strong_sell"),
     pg("price_target_consensus?ticker=eq." + e + "&select=target_high,target_low,target_avg,target_median,num_analysts"),   // EST PORT — median for the 02 CONVICTION subline
     pg("news?ticker=eq." + e + "&select=ticker,title,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=30"),
-    pg("earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics&order=date.desc&limit=16"),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
+    pg("earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source&order=date.desc&limit=16"),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
     pg("ticker_context?ticker=eq." + e + "&select=ticker,narrative,business_now,catalysts,watch_notes&limit=1"),   // FIX 3 — dossier, pulled once on open
     pg("fundamentals_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 3 — period values are FY/Q1–Q4, not 'annual'
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
@@ -8074,7 +8074,7 @@ async function fillEvents() {
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const today = todayISO();
-    const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
+    const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
     const [up, past, tridx, csidx] = await Promise.all([
       pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
@@ -10168,7 +10168,7 @@ function earningsBlockHTML(d) {
         (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
         /* the event's own stored summary comes first; only without one does the card offer the summary of THAT event's call,
            and it says so - a call summary is never presented as a release summary */
-        (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>'
+        (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">' + esc((d.summaryKind && d.summaryKind.btn) || "▤ Summary") + '</button>'
           : (d.callSummary ? '<button class="sc-ern__lnk" data-act="ernsum" data-kind="call" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '" data-cd="' + esc(d.callSummary.call_date) + '" data-q="' + esc(d.callSummary.quarter || "") + '" title="summary of the earnings call held ' + esc(fmtEvDate(d.callSummary.call_date)) + ' — no release summary is stored for this event">▤ Call summary</button>' : '')) +
       "</div>"
     : "";
@@ -10191,7 +10191,7 @@ function earningsRowToBlock(row, callsum) {
     confirmed: (row.confirmed != null ? row.confirmed : null),
     eps:     { est: num(row.eps_estimate),     actual: num(row.eps_actual) },
     revenue: { est: num(row.revenue_estimate), actual: num(row.revenue_actual) },
-    releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, metrics: row.release_metrics || null, sample: false,
+    releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, summaryKind: ernSummaryKind(row), metrics: row.release_metrics || null, sample: false,
     hasTranscript: transcriptExists(row.ticker, row.date),   // REAL FIX — row.transcript_url is a dead column; check the real content index instead
     callSummary: (callsum instanceof Map && row.ticker && row.date) ? (callsum.get(String(row.ticker).toUpperCase() + "|" + row.date) || null) : null,
   };
@@ -10242,6 +10242,18 @@ function ernReleaseLabel(url) {
   try { host = new URL(String(url), "https://scintillahub.ai/").hostname.replace(/^www\./, ""); } catch (e) { host = ""; }
   if (!host || host === "scintillahub.ai") return "◹ Release";
   return "◹ Release · " + (host === "sec.gov" ? "SEC filing" : host);
+}
+/* WHAT THE STORED EVENT SUMMARY IS, FROM ITS OWN STORED PROVENANCE - NOT ASSUMED. Every one was titled "RELEASE SUMMARY".
+   MEASURED 2026-09-18 over the 167 rows that carry a release_summary: 113 have summary_source "transcript" (the old
+   summariser wrote them from the reported figures plus the call summary), 44 "data" (headline figures only), and only 10
+   have no summary_source with release_source "press_release:<publisher>" (the press-release catcher stored the opening of
+   the release text). Only those 10 are called a release summary; with neither field the panel says the source is not recorded. */
+function ernSummaryKind(row) {
+  const ss = String((row && row.summary_source) || "").toLowerCase(), rs = String((row && row.release_source) || "");
+  if (ss === "transcript") return { btn: "▤ Summary", head: "EARNINGS SUMMARY", note: "Written from the reported figures and the earnings call - not a summary of the company's release (stored source: transcript)." };
+  if (ss === "data") return { btn: "▤ Summary", head: "EARNINGS SUMMARY", note: "Written from the headline figures only - no release or call text behind it (stored source: data)." };
+  if (!ss && /^press_release:/i.test(rs)) return { btn: "▤ Release summary", head: "RELEASE SUMMARY", note: "Opening text of the press release (" + (rs.slice(rs.indexOf(":") + 1).trim() || "wire") + ")." };
+  return { btn: "▤ Summary", head: "SUMMARY", note: "The source of this text is not recorded." };
 }
 /* STORED SUMMARIES ARE LIGHT MARKDOWN AND WERE PRINTED RAW ("**Results:**", "*not*", every line run together in the call
    bubble). MEASURED 2026-09-18 over every stored summary (171 call summaries, 167 event summaries): the constructs present
@@ -11439,7 +11451,7 @@ document.addEventListener("click", (e) => {
       host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
         '<div data-act="ernsumclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
         '<div role="dialog" aria-modal="true" aria-label="' + esc(tk) + ' summary" style="position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + (isCall ? ' · CALL SUMMARY' + (cq ? ' · ' + esc(cq) : '') : ' · RELEASE SUMMARY') + '<button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + '<span id="ernSumKind">' + (isCall ? ' · CALL SUMMARY' + (cq ? ' · ' + esc(cq) : '') : ' · SUMMARY') + '</span><button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
           '<div id="ernSumBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace">loading…</div>' +
         '</div></div>';
       if (isCall) {
@@ -11453,10 +11465,12 @@ document.addEventListener("click", (e) => {
         }).catch(() => { const b = el("ernSumBody"); if (b) b.textContent = "failed to load."; });
         break;
       }
-      pg("earnings_events?ticker=eq." + encodeURIComponent(tk) + "&date=eq." + encodeURIComponent(dd) + "&select=release_summary,release_metrics,call_url,release_link&limit=1").then((rows) => {
+      pg("earnings_events?ticker=eq." + encodeURIComponent(tk) + "&date=eq." + encodeURIComponent(dd) + "&select=release_summary,release_metrics,call_url,release_link,summary_source,release_source&limit=1").then((rows) => {
         const b = el("ernSumBody"); if (!b) return; const r = rows && rows[0]; if (!r) { b.textContent = "no summary on file."; return; }
         let h = "";
-        if (r.release_summary) h += '<div style="margin-bottom:14px">' + summaryHTML(r.release_summary) + '</div>';
+        const kind = ernSummaryKind(r), kh = el("ernSumKind");
+        if (kh && r.release_summary) kh.textContent = " · " + kind.head;   // titled by the row's own stored provenance, once the row is in hand
+        if (r.release_summary) h += '<div style="color:#8A8EA8;margin-bottom:12px">' + esc(kind.note) + '</div><div style="margin-bottom:14px">' + summaryHTML(r.release_summary) + '</div>';
         const m = r.release_metrics || {};
         const fmtB = (v) => v == null ? "—" : (Math.abs(v) >= 1e9 ? "$" + (v / 1e9).toFixed(2) + "B" : "$" + (v / 1e6).toFixed(0) + "M");
         const rowsM = [["Net sales", m.net_sales], ["Net income", m.net_income], ["Operating income", m.operating_income], ["Adj. EBITDA", m.adjusted_ebitda], ["Operating cash flow", m.operating_cash_flow]].filter((x) => x[1] != null);

@@ -71,7 +71,7 @@ test("fuzz: 4,000 generated lines over a hostile alphabet never yield anything b
 });
 
 test("both summary displays use the formatter, nothing prints a stored summary raw, and the script stays parseable on older Safari", () => {
-  assert.match(page, /if \(r\.release_summary\) h \+= '<div style="margin-bottom:14px">' \+ summaryHTML\(r\.release_summary\) \+ '<\/div>';/, "event summary panel");
+  assert.match(page, /if \(r\.release_summary\) h \+= [^\n]*<div style="margin-bottom:14px">' \+ summaryHTML\(r\.release_summary\) \+ '<\/div>';/, "event summary panel");
   assert.match(page, /const bodyHTML = sum \? summaryHTML\(sum\)/, "earnings-call bubble");
   assert.doesNotMatch(page, /esc\(r\.release_summary\)|\? esc\(sum\)|esc\([a-z.]*ai_summary\)/, "no raw print of a stored summary is left");
   assert.doesNotMatch(fnSrc, /\(\?<[=!]/, "no regex lookbehind: one would stop the whole page script on Safari before 16.4");
