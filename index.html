@@ -865,6 +865,12 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    scroll — otherwise the fixed header scrolls with the page (nested-scroll fight).
    Hand the scroll to .sc-evpastscroll by clipping the parent that hosts it. */
 .sc-iscroll:has(> .sc-evtab){ overflow:hidden; }
+/* Same rule for the MASTER EVENTS panel: its two columns each scroll, so the list that hosts them must not scroll as well.
+   MEASURED 2026-09-18: the host overflowed by 36px and showed a second scrollbar beside the columns' own. The columns now
+   take the host's height instead of a fixed 560px cap. */
+#evList:has(> .sc-evcols--split){ overflow:hidden; display:flex; flex-direction:column; }
+#evList > .sc-evcols--split{ flex:1 1 0; min-height:0; }
+#evList > .sc-evcols--split > .sc-evcol{ max-height:none; min-height:0; }
 .sc-chartpanel__slot.cot-EVENTS:has(.sc-evtab){ overflow:hidden; }
 @media (max-width:640px){
   /* mobile: columns already stack (grid-template-columns:1fr above); give each a
@@ -3024,7 +3030,10 @@ let prevClose = {};  // ticker → SERVED live_quotes.prev_close (FIX 2 — the 
 let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…} } (ribbon_signals tf=D). VOLUME deleted by Alan 2026-08-17.
 let eqSyms   = [];   // equity symbols for the 3 s FMP batch poll
 let UNIVERSE = null; // Set of cohort tickers (events-room scope)
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/* THE MARKET'S CALENDAR DAY, NOT UTC'S. Earnings, estimates and fiscal dates are US-market (New York) dates. The UTC date
+   rolls over at 8 pm ET (7 pm in winter), so every evening the Hub called today "tomorrow": MEASURED 2026-09-17 23:50 ET,
+   FedEx's Sep 17 row read "1d ago", every "Nd ago" was one too many, and date-bounded reads started a day late. */
+const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
 async function pg(path, _tries) {
   /* RESILIENCE — the DB intermittently 503/504s under pipeline load; without a retry a
@@ -4029,7 +4038,7 @@ function setChartTicker(t) {
 /* R22 FIX 8 — live tick → cheap last-point update on WHICHEVER range is active,
    iff its last bar is "today" (every bar size whose tail is the live bar). */
 function scChartLive(t, price) {
-  const today = todayISO();
+  const today = new Date().toISOString().slice(0, 10);   // chart points carry UTC ISO stamps — compare on the UTC day (unchanged)
   for (const host of CHART_HOSTS) {
     if (!host.isConnected || host.dataset.t !== t) continue;
     const s = host._series;
@@ -9833,11 +9842,12 @@ function earningsBlockHTML(d) {
     ? '<span class="sc-ern__pill">' + esc(d.session) + "</span>"
     : '<span class="sc-ern__pill sc-ern__pill--wait">bmo/amc</span>';   // reserved slot next to the days — real value once master wires the session field
   const dstr = d.date ? esc(fmtEvDate(d.date)) : "—";
-  let rel = "";
+  let rel = "", pastNoResult = false;
   if (d.date) {
     const dd = new Date(d.date + "T00:00:00").getTime(), t0 = new Date(todayISO() + "T00:00:00").getTime();
     const days = Math.round((dd - t0) / 86400000);
     rel = days === 0 ? "<b>today</b>" : (days > 0 ? "in " + days + "d" : Math.abs(days) + "d ago");
+    if (days < 0 && !reported) pastNoResult = true;
   }
   const fxEst = (v, isRev) => '<span class="sc-ern__v est">' + (v == null ? "—" : esc(isRev ? fmtRev(v) : v.toFixed(2))) + "</span>";
   const fxAct = (v, isRev) => v == null ? '<span class="sc-ern__v dash">—</span>' : '<span class="sc-ern__v">' + esc(isRev ? fmtRev(v) : v.toFixed(2)) + "</span>";
@@ -9855,7 +9865,10 @@ function earningsBlockHTML(d) {
         '<span class="sc-ern__k">REV</span>' + fxEst(revEst, true) + fxAct(revAct, true) + spCell(revSp) +
       "</div>"
     : '<div class="sc-ern__metrics sc-ern__metrics--up">' +   // upcoming: estimates only — actual/surprise don't exist yet
-        '<span class="sc-ern__k"></span><span class="sc-ern__ch">estimate</span>' +
+        /* A PAST date with estimates only is not a report. MEASURED 2026-09-18: FedEx "Sep 17" (FedEx moved its fiscal
+           year-end and reported nothing that day) and NIO "Sep 9" (NIO reported Sep 1) sat in PAST EARNINGS looking like
+           results. They now say no result is stored for that date. */
+        '<span class="sc-ern__k"></span><span class="sc-ern__ch">' + (pastNoResult ? "estimate · no result stored for this date" : "estimate") + '</span>' +
         '<span class="sc-ern__k">EPS</span>' + fxEst(epsEst, false) +
         '<span class="sc-ern__k">REV</span>' + fxEst(revEst, true) +
       "</div>";
