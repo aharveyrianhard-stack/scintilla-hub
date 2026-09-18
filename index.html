@@ -187,6 +187,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
   font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
+/* a STORED market cap older than MCAP_MAX_AGE_MS (or with no source time) keeps its number but is drawn muted and
+   dotted-underlined; a current one is drawn exactly as before. Either way the cell title carries the source date. */
+.sc-mcap.is-aged{ color:var(--mute); text-decoration:underline dotted; text-underline-offset:2px; }
 
 /* SCINTILLA · Room 2 · CohortBoard — assembly frame   [APPROVED 2026-06-10] */
 .sc-board{ display:flex; flex-direction:column; min-height:0;
@@ -3271,6 +3274,35 @@ async function loadEstimates() {
   return { annual: EST_CACHE.annual || [], quarter: EST_CACHE.quarter || [] };
 }
 const NTM_STORED_MAX_AGE_MS = 14 * 86400e3;
+/* ESTIMATE CURRENCY BASIS. analyst_estimates (fmp-analyst) and fundamentals.eps_ttm (fmp-fundamentals) are stored exactly as
+   FMP serves them: in the company's REPORTING currency, with no currency column. Board and company prices are USD, so the
+   quotient is not a multiple. MEASURED 2026-09-18 (numeric-truth 19:24Z, re-measured by numeric-closure 21:50Z, unchanged):
+   LI painted 31.8x (CNY 0.38 NTM EPS under a USD 12.12 price; reference ~87x), ASML 35.1x (EUR; reference 29x), SPOT 37.2x
+   (EUR), CCJ 44.5x (CAD; reference 67.6x); TSM, BABA, BIDU, JD and PDD sat under the 2.5x cut by magnitude only, and STATS
+   printed TSM trailing "1.0" with "$434.95" for a TWD figure. Such a multiple is WITHHELD and the screen says why -
+   "not comparable: EPS in <CCY>" - never a bare dash, which on this board means no estimate or a non-positive EPS.
+   No FX is applied: the store holds no dated rate. EST_CCY_MEASURED comes from the supplier's own paired data
+   (earnings_events USD revenue estimate / analyst_estimates revenue for the same quarter: TWD 0.0312, CNY 0.147-0.150,
+   EUR 1.136-1.138, CAD 0.696; PDD, which has no paired quarter, by magnitude: ~115B quarterly revenue estimate is CNY).
+   EST_CCY holds a SERVED value (fundamentals.reported_currency, once fmp-fundamentals writes it AND a follow-up selects it);
+   a served value outranks the measured set. Selecting that column before it exists would 400 the whole fundamentals read. */
+const EST_CCY_MEASURED = { TSM: "TWD", BABA: "CNY", BIDU: "CNY", JD: "CNY", LI: "CNY", NIO: "CNY", EH: "CNY", PDD: "CNY", ASML: "EUR", SPOT: "EUR", CCJ: "CAD" };
+const EST_CCY = {};   // ticker -> served reporting currency (stays empty until fundamentals.reported_currency is served and selected)
+function ccyCode(c) {
+  const k = String(c == null ? "" : c).trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(k) ? k : null;
+}
+function estCcy(t) {
+  const k = String(t || "").toUpperCase();
+  return ccyCode(EST_CCY[k]) || ccyCode(EST_CCY_MEASURED[k]);
+}
+function estNonUsd(t) {
+  const c = estCcy(t);
+  return !!c && c !== "USD";
+}
+function notComparable(ccy) {
+  return "not comparable: EPS in " + ccy;
+}
 const estDate = (ts) => { const n = +ts; const d = isFinite(n) && n > 0 ? new Date(n * 1000) : new Date(ts); return isNaN(d) ? "" : d.toISOString().slice(0, 10); };
 /* which EPS the multiple is on, in fwdTrailPE()'s order: live NTM (even when ≤ 0 → no multiple, never an annual swap),
    else a fresh stored NTM, else the nearest annual estimate. */
@@ -3285,12 +3317,15 @@ function fpeTitle(t) {
   if (cryptoSet.has(t)) return "no forward P/E for a non-equity";
   const b = fpeBasis(t);
   if (!b) return "no forward EPS estimate stored for " + t;
+  if (estNonUsd(t)) return notComparable(estCcy(t)) + " · consensus EPS " + (+b.eps).toFixed(2) + " " + estCcy(t) + " (" + b.label +
+    " · estimate as of " + (estDate(b.at) || "unknown") + ") against a USD price · no FX rate is stored, so no multiple is shown";
   const pe = fpeVal(t, PRICES[t] != null ? PRICES[t] : null);
   return "fwd P/E on " + b.label + " · EPS " + (+b.eps).toFixed(2) + " · estimate as of " + (estDate(b.at) || "unknown") +
     (pe == null ? (b.eps <= 0 ? " · no multiple: consensus EPS is not positive" : " · no multiple") : "");
 }
 function fpeVal(t, price) {
   if (cryptoSet.has(t)) return null;
+  if (estNonUsd(t)) return null;          // EPS and price are in different currencies: no multiple (ESTIMATE CURRENCY BASIS)
   const b = fpeBasis(t);
   const e = b ? b.eps : null;
   if (e == null || e <= 0) return null;
@@ -3302,6 +3337,11 @@ function fpeVal(t, price) {
      hide that blanked MU's real 7× — it only rejects numbers that cannot be real. */
   if (pe < 2.5) return null;
   return pe;
+}
+/* The F P/E cell's text when fpeVal() gives no multiple. A multiple withheld for CURRENCY names the currency ("EPS CNY";
+   the title reads "not comparable: EPS in CNY ..."), so it can never be mistaken for the loss-maker / no-estimate dash. */
+function fpeWithheldText(t) {
+  return (!cryptoSet.has(t) && fpeBasis(t) && estNonUsd(t)) ? "EPS " + estCcy(t) : "—";
 }
 
 /* one scope rule for the pull and for the snapshot. ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but
@@ -3354,7 +3394,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
     scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
-    scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"), []),
+    scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap,updated_ts"), []),   // updated_ts = when the profile writer stored market_cap (epoch SECONDS); it follows the value to the cell
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
     loadEstimates(),   // FORWARD EPS — full coverage (paged), STATS-tab basis, source-dated; see loadEstimates()
     scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
@@ -3544,6 +3584,9 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
                })(),
         rvAsOf: (function () { const bv = BOARDVOL[String(m.ticker).toUpperCase()]; return bv && bv.updated_ts ? String(bv.updated_ts) : null; })(),
         mc:    num(pf[m.ticker] && pf[m.ticker].market_cap),   // #133 (fix) — real market cap, feeds heatmap tile size
+        /* THE VALUE CARRIES ITS SOURCE TIME: company_profile.updated_ts, epoch SECONDS, written by fmp-backfill job=profile
+           together with market_cap. null = the store has no source time for this row (said so on screen, never guessed). */
+        mcAsOf: (function () { const ts = num(pf[m.ticker] && pf[m.ticker].updated_ts); return (ts != null && ts > 0) ? ts : null; })(),
       };
     });
   /* THE LATEST PULL IS THE WHOLE UNIVERSE. Every pull already fetched every table for every ticker and threw all but one
@@ -3575,7 +3618,7 @@ async function fetchCompanyData(t) {
   ]);
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh, csum, ckeys] = (await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
-    pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
+    pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url,updated_ts"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
     pg("fundamentals?ticker=eq." + e + "&select=trailing_pe,eps_ttm,revenue_ttm,market_cap"),
@@ -4331,6 +4374,30 @@ function fmtCap(v) {
     : Math.round(u[0]).toLocaleString("en-US");
   return "$" + s + u[1];
 }
+/* A STORED MARKET CAP IS SHOWN WITH ITS SOURCE DATE, NEVER ERASED. company_profile.market_cap is the provider's profile
+   figure (its own shares x its own price at write time), stored by fmp-backfill job=profile with updated_ts in epoch
+   SECONDS. MEASURED 2026-09-18: all 364 declared equities were rewritten 19:58:03Z by v12 (job 18 re-armed, daily 06:25Z);
+   before that every row dated 2026-08-10 or older painted as a present-tense figure because this mapping never asked for the
+   time. The title always states the source date. Current = written within MCAP_MAX_AGE_MS (daily cadence plus a weekend
+   plus a holiday) and drawn exactly as before - a fresh value is never dimmed; older, or with no source time, is muted. */
+const MCAP_MAX_AGE_MS = 4 * 86400e3;
+function scCapAge(asOf, nowMs) {
+  const ts = num(asOf);
+  if (ts == null || !(ts > 0) || ts > 1e11) return { known: false, aged: true, days: null, date: null };   // epoch SECONDS only: a millisecond value is refused, never read as a far-future date
+  const ms = ts * 1000, age = (nowMs == null ? Date.now() : nowMs) - ms;
+  return { known: true, aged: !(age <= MCAP_MAX_AGE_MS), days: Math.max(0, Math.floor(age / 86400e3)), date: new Date(ms).toISOString().slice(0, 10) };
+}
+function scCapTitle(asOf, nowMs) {
+  const a = scCapAge(asOf, nowMs);
+  if (!a.known) return "market cap as stored (company_profile) - the store has no source date for this value";
+  return "market cap as stored " + a.date + " (company_profile)" + (a.aged ? " - " + a.days + " days old, not a current value" : "");
+}
+function mcapCellHTML(t, mc, asOf, nowMs) {
+  const has = num(mc) != null && num(mc) > 0;
+  const a = scCapAge(asOf, nowMs);
+  return '<span class="sc-mcap' + (has && a.aged ? " is-aged" : "") + '" id="lmc_' + esc(t) + '"' +
+    (has ? ' title="' + esc(scCapTitle(asOf, nowMs)) + '"' + (a.date ? ' data-sc-mcap-asof="' + esc(a.date) + '"' : "") : "") + ">" + fmtCap(mc) + "</span>";
+}
 const rb = (v) => (v < 0.8 ? 1 : v < 1.2 ? 2 : v < 1.8 ? 3 : v < 2.5 ? 4 : 5);
 
 /* FIX G — search matches tickers, not letters: prefix only (exact match still jumps via doSearch) */
@@ -4453,8 +4520,8 @@ function boardRowsHTML() {
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
-      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
-      '<span class="sc-mcap" id="lmc_' + esc(d.t) + '">' + fmtCap(d.mc) + "</span>" +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) */
+      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
+      mcapCellHTML(d.t, d.mc, d.mcAsOf) +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
@@ -9172,14 +9239,32 @@ function statsPriceHTML(data) {
   }
   rows1.push(kvRow("avg volume", fmtBig(num(p.avg_volume))));
   rows1.push(kvRow("shares out", fmtBig(num(p.shares_out))));
-  const { trail, fwd } = fwdTrailPE(data.price, f, data._est);
+  const { trail, fwd, next, ccy } = fwdTrailPE(data.price, f, data._est, data.t);
   const pt = data._pt;
+  /* a multiple withheld because EPS and price are in different currencies says so; a real absence keeps the dash */
+  const nonUsd = !!ccy && ccy !== "USD";
+  const ncTrail = nonUsd && num(f.eps_ttm) != null ? notComparable(ccy) : null;
+  const ncFwd = nonUsd && next && next.est_eps_avg != null ? notComparable(ccy) : null;
   const rows2 = [
-    kvRow("market cap", fmtBig(num(p.market_cap) != null ? num(p.market_cap) : num(f.market_cap))),
-    kvRow("trailing P/E", trail != null ? trail.toFixed(1) : null),
-    kvRow("forward P/E", fwd != null ? fwd.toFixed(1) : null),
-    kvRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : null),
-    kvRow("EPS (ttm)", num(f.eps_ttm) != null ? "$" + num(f.eps_ttm).toFixed(2) : null),
+    /* Same value precedence as before (profile, then fundamentals) - no number changes. The row states the age of what it
+       shows. The fundamentals fallback is labelled WITHOUT a date on purpose: fundamentals.updated_ts is an ingestion stamp
+       shared by every writer of that row, not the market cap's source time (MEASURED 2026-09-18: 292 rows stamped 01:45Z
+       hold a cap built from a quote last written on or before 2026-08-18). */
+    (function () {
+      const fromProfile = num(p.market_cap) != null;
+      const v = fromProfile ? num(p.market_cap) : num(f.market_cap);
+      if (v == null) return kvRow("market cap", null);
+      const a = fromProfile ? scCapAge(p.updated_ts) : null;
+      const note = !fromProfile ? "stored fundamentals value · source date not recorded"
+        : !a.known ? "stored · source date not recorded"
+        : a.aged ? "as of " + a.date + " · " + a.days + "d old" : "as of " + a.date;
+      return kvRow("market cap", fmtBig(v) + ' <i class="sc-asof" style="font-style:normal;font-weight:400;color:var(--mute);font-size:.85em" title="' +
+        esc(fromProfile ? scCapTitle(p.updated_ts) : "market cap from the fundamentals row; its source date is not recorded") + '">' + esc(note) + "</i>");
+    })(),
+    kvRow("trailing P/E", trail != null ? trail.toFixed(1) : ncTrail),
+    kvRow("forward P/E", fwd != null ? fwd.toFixed(1) : ncFwd),
+    kvRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : ncTrail),
+    kvRow("EPS (ttm)", num(f.eps_ttm) != null ? (nonUsd ? ccy + " " + num(f.eps_ttm).toFixed(2) : "$" + num(f.eps_ttm).toFixed(2)) : null),   // the currency the figure is stored in
     kvRow("PT · avg", pt && num(pt.target_avg) != null ? "$" + num(pt.target_avg).toFixed(2) : null),
   ];
   return stSec("price &amp; range", rows1) + stSec("valuation", rows2);
@@ -9693,7 +9778,7 @@ function estPEStats(data) {
   return { avg: vals.reduce((s, v) => s + v, 0) / vals.length, peak: Math.max.apply(null, vals) };
 }
 function estValuationHTML(data) {
-  const { trail, fwd, next, mismatch } = fwdTrailPE(data.price, data._fund, data._est);
+  const { trail, fwd, next, mismatch, ccy } = fwdTrailPE(data.price, data._fund, data._est, data.t);
   const meta = (trail != null && fwd != null)
     ? (fwd < trail ? '<span class="meta" style="color:var(--bull)">FWD CHEAP</span>'
                    : '<span class="meta" style="color:var(--bear)">FWD RICH</span>')
@@ -9704,7 +9789,8 @@ function estValuationHTML(data) {
   if (mismatch)
     return head + '<div class="sc-est-zone"><div class="sc-est-veng">' +
       (trail != null ? "Trailing P/E <b>" + trail.toFixed(1) + "×</b> (live price / eps_ttm). " : "") +
-      "Forward estimates on a different share/currency basis — flagged to data desk (e.g. splits)." +
+      (ccy ? esc(notComparable(ccy)) + " — trailing and consensus EPS are stored in " + esc(ccy) + ", the price is in USD and no FX rate is stored, so no multiple, compression or implied growth is shown."
+           : "Forward estimates on a different share/currency basis — flagged to data desk (e.g. splits).") +
       "</div></div>";
   if (trail == null && fwd == null)
     return head + '<div class="sc-senttxt">No P/E inputs loaded — eps_ttm and forward EPS are both empty (trailing P/E is computed live from price / eps_ttm — stored trailing_pe goes stale, e.g. KLAC 682.6 pre-split).</div>';
@@ -9764,12 +9850,12 @@ function estValuationHTML(data) {
 function estScenariosHTML(data) {
   const head = estSechead("04", "Scenarios", '<span class="meta">computed · fwd EPS × multiple</span>');
   const px = num(data.price);
-  const { trail, next, mismatch } = fwdTrailPE(data.price, data._fund, data._est);
+  const { trail, next, mismatch, ccy } = fwdTrailPE(data.price, data._fund, data._est, data.t);
   const pe = estPEStats(data);
   /* R26 FIX 3c — same basis gate as 03 VALUATION: mismatched fwd EPS never
      multiplies into a price scenario. */
   if (mismatch)
-    return head + '<div class="sc-senttxt">Forward estimates on a different share/currency basis — flagged to data desk (e.g. splits). No scenario ships on a mismatched EPS for $' + esc(data.t) + ".</div>";
+    return head + '<div class="sc-senttxt">' + (ccy ? esc(notComparable(ccy)) + " — the price is in USD and no FX rate is stored." : "Forward estimates on a different share/currency basis — flagged to data desk (e.g. splits).") + ' No scenario ships on a mismatched EPS for $' + esc(data.t) + ".</div>";
   if (px == null || px <= 0 || !next || next.est_eps_avg == null)
     return head + '<div class="sc-senttxt">Needs a live price + a forward EPS estimate — one is missing for $' + esc(data.t) + ".</div>";
   const fyTag = next.label || "FWD";
@@ -10833,12 +10919,16 @@ function toParas(v) {                       // text OR array → full paragraphs
   }
   return s.split(/\n\s*\n+/).map((x) => x.trim()).filter(Boolean);
 }
-function fwdTrailPE(price, fund, est) {     // same valuation math the ESTIMATES tab uses
+function fwdTrailPE(price, fund, est, t) {     // same valuation math the ESTIMATES tab uses; t (optional) = ticker for the currency basis
   /* R26 FIX 2 — trailing P/E is COMPUTED LIVE as price / eps_ttm (eps_ttm > 0),
      NEVER the stored fundamentals.trailing_pe: that column goes stale (data
      audit 2026-06-12 — KLAC stored 682.6 pre-split vs price/eps_ttm 71.4). */
   const epsTtm = num(fund && fund.eps_ttm);
-  const trail = (price != null && price > 0 && epsTtm != null && epsTtm > 0) ? price / epsTtm : null;
+  /* eps_ttm and the estimates are in the REPORTING currency; price is USD. Across currencies neither multiple exists
+     (ESTIMATE CURRENCY BASIS). A served fundamentals.reported_currency wins; otherwise the measured set by ticker. */
+  const ccy = ccyCode(fund && fund.reported_currency) || (t ? estCcy(t) : null);
+  const nonUsd = !!ccy && ccy !== "USD";
+  const trail = (!nonUsd && price != null && price > 0 && epsTtm != null && epsTtm > 0) ? price / epsTtm : null;
   const today = todayISO();
   /* FORWARD = NTM (next twelve months) = the next 4 quarterly estimates from today,
      summed. IBKR-style: anchored to TODAY, not the fiscal calendar, so it never counts
@@ -10854,7 +10944,7 @@ function fwdTrailPE(price, fund, est) {     // same valuation math the ESTIMATES
     r.period === "annual" && String(r.fiscal_date) >= today && num(r.est_eps_avg) > 0) || null;
   const fwdEps = ntmEps != null ? ntmEps : (nextA ? num(nextA.est_eps_avg) : null);
   const fwdEpsLow = ntmLow != null ? ntmLow : (nextA ? num(nextA.est_eps_low) : null);
-  const fwdRaw = (price != null && fwdEps != null && fwdEps > 0) ? price / fwdEps : null;
+  const fwdRaw = (!nonUsd && price != null && fwdEps != null && fwdEps > 0) ? price / fwdEps : null;
   /* <2.5× forward = wrong-basis estimate (foreign ADR in local currency) → withhold,
      show "—" not a fake multiple. Real cheap names (MU ~7×) pass fine. */
   const fwd = (fwdRaw != null && fwdRaw < 2.5) ? null : fwdRaw;
@@ -10865,7 +10955,7 @@ function fwdTrailPE(price, fund, est) {     // same valuation math the ESTIMATES
     label: ntmEps != null ? "NTM" : (nextA ? "FY" + String(nextA.fiscal_date).slice(2, 4) : "FWD"),
     fiscal_date: nextA ? nextA.fiscal_date : null, ntm: ntmEps != null,
   };
-  return { trail, fwd, next, mismatch: false };
+  return { trail, fwd, next, mismatch: nonUsd, ccy };
 }
 function liveReadSentence(d) {              // generated from the SAME composite row as the geiger tab
   return "Right now the multi-timeframe read is " + (d.g >= 0 ? "constructive" : "heavy") +
@@ -10887,7 +10977,7 @@ function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
   rb = rb || {}; rbAt = rbAt || {};                    // GO-LIVE FIX 2 — read_blocks (section → body); section → updated_ts
   const hasRb = Object.keys(rb).length > 0;
   if (!cx && !hasRb) return { content: {}, pills: [], extras: [] };   // no dossier, no blocks → honest default line
-  const { trail, fwd, next: fwdNext } = fwdTrailPE(price, fund, est);
+  const { trail, fwd, next: fwdNext } = fwdTrailPE(price, fund, est, t);
   /* GO-LIVE FIX 2 — the read_blocks verdict body is THE verdict; ticker_context.narrative
      is the fallback. The live composite sentence is ALWAYS appended after the body. */
   const verdict = toParas(rb.verdict != null ? rb.verdict : (cx && cx.narrative));
@@ -12402,7 +12492,7 @@ function patch(t, price, src) {
   const fv = fpeVal(t, price);
   if (r) r.fpe = fv;
   const lf = el("lf_" + t);
-  if (lf) lf.textContent = fv != null ? fv.toFixed(1) + "×" : "—";   /* R27 — × suffix on tick path too */
+  if (lf) lf.textContent = fv != null ? fv.toFixed(1) + "×" : fpeWithheldText(t);   /* R27 — × suffix on tick path too */
   /* DASHBOARD MODEL — the LEFT panel's ident line shows LEFT_T (the pinned or the
      currently-rotating ticker), whether S.sec is COMPANY or DASHBOARD. */
   if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
