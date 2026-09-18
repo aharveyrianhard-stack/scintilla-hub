@@ -3091,6 +3091,10 @@ const num = (x) => (x == null ? null : Number(x));   // PostgREST numeric guard
    ticker, refreshed by the SAME board pull (one analyst_estimates batch + one
    fundamentals batch). FPE itself is computed live: price / est_eps_avg. */
 const FEPS = {};     // ticker → nearest future annual est_eps_avg
+const FEPS_META = {};   // ticker → { fy, at } source date of that annual estimate
+const NTMLIVE = {};     // ticker → NTM EPS computed from the next four quarterly estimates (the STATS tab's own method)
+const NTMLIVE_META = {};// ticker → { through, at }
+const NTMEPS_AT = {};   // ticker → updated_ts of the stored fwd_eps_ntm row
 const EPSTTM = {};   // ticker → fundamentals.eps_ttm (basis guard input)
 /* NEW bulk stores — filled by fetchBoardRows from the JUST-created (empty) tables.
    SOCSENT: ticker → { bullish, bearish, posts, score } (SOCIAL master tab · A).
@@ -3182,12 +3186,62 @@ window.scDegraded = () => [...SC_DEGRADED];
 /* R26 FIX 6 — "—" when no estimate, est ≤ 0, crypto, or the estimate fails the
    basis guard vs eps_ttm (KLAC's pre-split estimate rows would otherwise print
    a fake-plausible multiple). ETFs have no analyst_estimates rows → "—" too. */
+/* ESTIMATES — FULL COVERAGE, ONE BASIS, SOURCE-DATED.
+   PostgREST serves at most 1,000 rows per request. The annual read returned 1,000 of 1,501 rows (MEASURED 2026-09-18:
+   212 of 319 tickers, alphabetically up to ORCL), so every later ticker had no forward EPS and its F P/E read "—" —
+   149 of 371 equities on the ALL board. The board also preferred fwd_eps_ntm, a stored table last written 2026-07-06
+   (143 rows; 52 differ from the current four-quarter consensus by more than 10%, NIO's sign had flipped), so board and
+   STATS disagreed (NVDA 22.1× vs 18.3×). Both estimate sets are now read in full through pages of 1,000 with the same
+   pg() reader and cached for ten minutes (fmp-analyst refreshes them at most every four hours); the multiple uses the
+   STATS tab's method (NTM from the next four quarters, else the nearest annual estimate) and every cell says which
+   basis and source date it is on. The stored NTM table is used only while fresher than 14 days (today: never). */
+const EST_TTL_MS = 10 * 60000, EST_PAGE = 1000, EST_MAX_PAGES = 6;
+const EST_CACHE = { at: 0, annual: null, quarter: null };
+async function pgAll(path) {
+  const out = [];
+  for (let i = 0; i < EST_MAX_PAGES; i++) {
+    const rows = await pg(path + "&limit=" + EST_PAGE + "&offset=" + (i * EST_PAGE));
+    if (!Array.isArray(rows)) break;
+    out.push.apply(out, rows);
+    if (rows.length < EST_PAGE) break;
+  }
+  return out;
+}
+function plusMonthsISO(iso, months) { const d = new Date(iso + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + months); return d.toISOString().slice(0, 10); }
+async function loadEstimates() {
+  const now = Date.now();
+  if (EST_CACHE.annual && now - EST_CACHE.at < EST_TTL_MS) return EST_CACHE;
+  const today = todayISO(), until = plusMonthsISO(today, 15);
+  const [annual, quarter] = await Promise.all([
+    scOpt('analyst_estimates_annual',  pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.annual&fiscal_date=gte." + today + "&order=ticker.asc,fiscal_date.asc"), null),
+    scOpt('analyst_estimates_quarter', pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.quarter&fiscal_date=gte." + today + "&fiscal_date=lte." + until + "&order=ticker.asc,fiscal_date.asc"), null),
+  ]);
+  if (annual || quarter) { EST_CACHE.at = now; EST_CACHE.annual = annual || EST_CACHE.annual || []; EST_CACHE.quarter = quarter || EST_CACHE.quarter || []; }
+  return { annual: EST_CACHE.annual || [], quarter: EST_CACHE.quarter || [] };
+}
+const NTM_STORED_MAX_AGE_MS = 14 * 86400e3;
+const estDate = (ts) => { const n = +ts; const d = isFinite(n) && n > 0 ? new Date(n * 1000) : new Date(ts); return isNaN(d) ? "" : d.toISOString().slice(0, 10); };
+/* which EPS the multiple is on, in fwdTrailPE()'s order: live NTM (even when ≤ 0 → no multiple, never an annual swap),
+   else a fresh stored NTM, else the nearest annual estimate. */
+function fpeBasis(t) {
+  if (NTMLIVE[t] != null) return { eps: NTMLIVE[t], label: "NTM · next 4 quarters to " + NTMLIVE_META[t].through, at: NTMLIVE_META[t].at };
+  const sAt = +NTMEPS_AT[t];
+  if (NTMEPS[t] != null && isFinite(sAt) && Date.now() - sAt * 1000 <= NTM_STORED_MAX_AGE_MS) return { eps: NTMEPS[t], label: "NTM · stored fwd_eps_ntm", at: NTMEPS_AT[t] };
+  if (FEPS[t] != null) return { eps: FEPS[t], label: "FY" + (FEPS_META[t] && FEPS_META[t].fy ? FEPS_META[t].fy.slice(2, 4) : "") + " consensus (annual)", at: FEPS_META[t] && FEPS_META[t].at };
+  return null;
+}
+function fpeTitle(t) {
+  if (cryptoSet.has(t)) return "no forward P/E for a non-equity";
+  const b = fpeBasis(t);
+  if (!b) return "no forward EPS estimate stored for " + t;
+  const pe = fpeVal(t, PRICES[t] != null ? PRICES[t] : null);
+  return "fwd P/E on " + b.label + " · EPS " + (+b.eps).toFixed(2) + " · estimate as of " + (estDate(b.at) || "unknown") +
+    (pe == null ? (b.eps <= 0 ? " · no multiple: consensus EPS is not positive" : " · no multiple") : "");
+}
 function fpeVal(t, price) {
   if (cryptoSet.has(t)) return null;
-  /* forward EPS = NTM (next 12 months = next 4 quarterly estimates, IBKR-style);
-     nearest-annual estimate only as a fallback when NTM isn't available. No hide/scale
-     guard — the real number always shows (only math validity: eps>0, price>0). */
-  const e = (NTMEPS[t] != null && NTMEPS[t] > 0) ? NTMEPS[t] : FEPS[t];
+  const b = fpeBasis(t);
+  const e = b ? b.eps : null;
   if (e == null || e <= 0) return null;
   if (price == null || price <= 0) return null;
   const pe = price / e;
@@ -3251,14 +3305,28 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
     scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap"), []),
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
-    scOpt('analyst_estimates', pg("analyst_estimates?select=ticker,est_eps_avg,fiscal_date&period=eq.annual&fiscal_date=gte." + todayISO() + "&order=ticker.asc,fiscal_date.asc"), []),
+    loadEstimates(),   // FORWARD EPS — full coverage (paged), STATS-tab basis, source-dated; see loadEstimates()
     scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
     scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score"), []),
     scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"), []),
-    scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps"), []),
+    scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps,updated_ts"), []),
   ]);
   const seenF = new Set();                                     // first row per ticker = nearest FY
-  for (const r of fpeEst) if (!seenF.has(r.ticker)) { seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg); }
+  for (const r of (fpeEst.annual || [])) if (r && r.ticker && !seenF.has(r.ticker)) {
+    seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg);
+    FEPS_META[r.ticker] = { fy: String(r.fiscal_date || ""), at: r.updated_ts };
+  }
+  /* NTM = the next four quarterly consensus EPS from today, summed — exactly fwdTrailPE()'s rule, so the board and the
+     STATS tab show the same multiple. Fewer than four future quarters → no NTM (annual fallback below). */
+  const qByT = {};
+  for (const r of (fpeEst.quarter || [])) if (r && r.ticker && num(r.est_eps_avg) != null) (qByT[r.ticker] = qByT[r.ticker] || []).push(r);
+  for (const t in qByT) {
+    const q4 = qByT[t].sort((a, b) => String(a.fiscal_date).localeCompare(String(b.fiscal_date))).slice(0, 4);
+    if (q4.length === 4) {
+      NTMLIVE[t] = q4.reduce((sum, r) => sum + num(r.est_eps_avg), 0);
+      NTMLIVE_META[t] = { through: String(q4[3].fiscal_date || ""), at: Math.max.apply(null, q4.map((r) => +r.updated_ts || 0)) || null };
+    }
+  }
   for (const r of fpeTtm) EPSTTM[r.ticker] = num(r.eps_ttm);
   /* UNIVERSE = provider-declared equities UNION whatever Supabase membership returned.
      The union is the point: if cohorts timed out, members is [] and the board is still the full
@@ -3320,7 +3388,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      → honest empty states downstream). */
   for (const s of (socSent || [])) if (s && s.ticker) SOCSENT[String(s.ticker).toUpperCase()] = s;
   for (const v of (boardVol || [])) if (v && v.ticker) BOARDVOL[String(v.ticker).toUpperCase()] = v;
-  for (const r of (ntmRows || [])) if (r && r.ticker) NTMEPS[String(r.ticker).toUpperCase()] = num(r.ntm_eps);
+  for (const r of (ntmRows || [])) if (r && r.ticker) { NTMEPS[String(r.ticker).toUpperCase()] = num(r.ntm_eps); NTMEPS_AT[String(r.ticker).toUpperCase()] = r.updated_ts; }
   /* TODO (board Vol×) — once board_volume is populated, prefer BOARDVOL[t].rvol_at_time
      for the board's Vol× column; the live_quotes/avg_volume ratio below stays as-is
      until then (no fake data, no premature switch). */
@@ -4311,7 +4379,7 @@ function boardRowsHTML() {
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
-      '<span class="sc-fpe" id="lf_' + esc(d.t) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple */
+      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
       '<span class="sc-mcap" id="lmc_' + esc(d.t) + '">' + fmtCap(d.mc) + "</span>" +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
@@ -7960,8 +8028,9 @@ function renderEvents(cohort) {
         const rel = evRel(evDays(ev.date));
         const est = num(ev.eps_estimate) != null
           ? '<span style="font-size:8.5px;color:var(--dim)">eps est ' + (+ev.eps_estimate).toFixed(2) + "</span>" : "<span></span>";
+        const sess = (ev.report_time && ev.report_time !== "TBD") ? " " + esc(ev.report_time) : "";
         return '<div class="ll"><span><b>' + esc(ev.ticker) + "</b></span>" + est +
-          "<span>" + esc(fmtEvDate(ev.date)) +
+          "<span>" + esc(fmtEvDate(ev.date)) + sess +
           (rel ? '<span class="sc-evrel up">' + rel + "</span>" : "") + "</span></div>";
       }).join("")
     : "Nothing upcoming for this scope.";
@@ -9711,8 +9780,9 @@ function evtUpRowHTML(ev) {
   if (num(ev.eps_estimate) != null)     parts.push("EPS est " + (+ev.eps_estimate).toFixed(2));
   if (num(ev.revenue_estimate) != null) parts.push("REV est " + fmtRev(ev.revenue_estimate));
   const cons = parts.length ? parts.join(" · ") : "consensus tbd";
+  const sess = (ev.report_time && ev.report_time !== "TBD") ? " · " + esc(ev.report_time) : "";
   return '<div class="sc-evrow" data-act="row" data-t="' + esc(ev.ticker) + '"><span class="gly">◷</span>' +
-    '<span class="lbl"><b>' + esc(ev.ticker) + "</b> — " + esc(fmtEvDate(ev.date)) +
+    '<span class="lbl"><b>' + esc(ev.ticker) + "</b> — " + esc(fmtEvDate(ev.date)) + sess +
     (rel ? '<span class="sc-evrel up">' + rel + "</span>" : "") +
     '<div class="ev-cons">' + esc(cons) + "</div></span></div>";
 }
@@ -9838,9 +9908,13 @@ function earningsBlockHTML(d) {
   const known = [epsSp, revSp].filter((x) => x != null);
   const beats = known.filter((x) => x >= 0).length;
   const reported = known.length > 0;
-  const pill = d.session
+  /* REPORT TIME: the stored report_time when the calendar carries one; otherwise an explicit "time unknown". The old
+     placeholder read "BMO/AMC", i.e. like a value (MEASURED 2026-09-18: 268 of 270 upcoming rows carry no report_time,
+     so almost every upcoming card wore it). An unconfirmed date says so. */
+  const pill = (d.session
     ? '<span class="sc-ern__pill">' + esc(d.session) + "</span>"
-    : '<span class="sc-ern__pill sc-ern__pill--wait">bmo/amc</span>';   // reserved slot next to the days — real value once master wires the session field
+    : '<span class="sc-ern__pill sc-ern__pill--wait" title="report time not in the stored calendar">time unknown</span>') +
+    (d.confirmed === false ? '<span class="sc-ern__pill sc-ern__pill--wait" title="date not yet confirmed by the issuer">unconfirmed</span>' : "");
   const dstr = d.date ? esc(fmtEvDate(d.date)) : "—";
   let rel = "", pastNoResult = false;
   if (d.date) {
@@ -12006,8 +12080,17 @@ loadSentiment(); setInterval(loadSentiment, 300000);
   function jset(k, v){ try{ lsSet(k, JSON.stringify(v)); }catch(e){} }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 
+  /* news.published_ts is an epoch in SECONDS (bigint). Date.parse(1789698022) is NaN, so every comparison below was
+     false and the bell never fired after its first seed (MEASURED 2026-09-18). One parser for seconds, milliseconds
+     or an ISO string; the last-seen store keeps whatever form it already holds. */
+  function tsMs(v){
+    if(v==null) return NaN;
+    var n = Number(v);
+    if(isFinite(n) && n > 0) return n < 1e12 ? n*1000 : n;
+    return Date.parse(String(v));
+  }
   function agoStr(iso){
-    var t = Date.parse(iso); if(!isFinite(t)) return "";
+    var t = tsMs(iso); if(!isFinite(t)) return "";
     var s = Math.max(0, Math.floor((Date.now()-t)/1000));
     if(s<60) return s+"s"; var m=Math.floor(s/60); if(m<60) return m+"m";
     var h=Math.floor(m/60); if(h<24) return h+"h"; var d=Math.floor(h/24); return d+"d";
@@ -12027,7 +12110,7 @@ loadSentiment(); setInterval(loadSentiment, 300000);
         (Array.isArray(rows)?rows:[]).forEach(function(r){
           var tk = String(r.ticker||"").toUpperCase(); if(!tk || !r.published_ts) return;
           var cur = newest[tk];
-          if(!cur || Date.parse(r.published_ts) > Date.parse(cur.ts)){
+          if(!cur || tsMs(r.published_ts) > tsMs(cur.ts)){
             newest[tk] = { title:r.title||"", url:r.url||"", ts:r.published_ts };
           }
         });
@@ -12108,7 +12191,7 @@ loadSentiment(); setInterval(loadSentiment, 300000);
       var fresh = [];
       Object.keys(newest).forEach(function(tk){
         var item = newest[tk], last = seen[tk];
-        var isNewer = !last || Date.parse(item.ts) > Date.parse(last);
+        var isNewer = !last || !isFinite(tsMs(last)) || tsMs(item.ts) > tsMs(last);
         if(isNewer){
           if(!firstRun) fresh.push({ ticker:tk, title:item.title, url:item.url, ts:item.ts });
           seen[tk] = item.ts;           // advance last-seen either way
