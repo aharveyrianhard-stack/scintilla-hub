@@ -7142,7 +7142,21 @@ function newsRailHTML(shown, scopeLbl) {
    Results cached per scope (Map scope→{items,ts}, 60 s TTL): tab flips repaint
    instantly from cache, then refresh when stale. cohort rides in the select so
    render-time scoping + realtime gating use the same authoritative column. */
-const NEWS_SEL = "select=ticker,cohort,title,snippet,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=120";
+const NEWS_LIMIT = 120;
+const NEWS_SEL = "select=ticker,cohort,title,snippet,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=" + NEWS_LIMIT;
+/* NEWS-WINDOW — ask for the newest rows INSIDE the last 7 days first. The unbounded pull makes the database rank the whole
+   table (469,259 rows on 2026-09-18, growing ~4,500 a day) to return 120 of them. MEASURED 2026-09-18 through the read-only
+   helper, same 120 rows, byte-identical bodies: ALL 0.46–2.41 s unbounded vs 0.26–0.38 s windowed; FAV (58 tickers) hit the
+   3 s statement timeout on both cold attempts (HTTP 500, code 57014 — which pg() and the loop below then retry) vs
+   0.21–0.28 s windowed. When the window holds at least NEWS_LIMIT rows the answer is the same set by construction (every
+   row outside the window is older, and undated rows already sort last). A quiet scope — fewer than NEWS_LIMIT rows in
+   7 days — falls back to the original unbounded pull, so nothing that shows today disappears. */
+const NEWS_WINDOW_S = 7 * 86400;
+/* NEWS-WINDOW, QUIET SCOPES (review 2026-09-18). A query whose window came back short is read with the original query from
+   then on - keyed by the query text, so a changed favourites list is a new query - so a quiet scope pays for ONE read per
+   refresh, as before the window, instead of the window read plus the original on every 60 s refresh. Correctness does not
+   depend on this set: the original query is always the right answer. */
+const NEWS_QUIET = new Set();
 const NEWS_TTL = 60000;
 const NEWS_CACHE = new Map();                            // scope key → { items, ts }
 const newsScopeKey = () => (S.tq ? "TQ|" + S.tq : S.coh);
@@ -7229,8 +7243,18 @@ async function fillNews() {
   const NEWS_RETRY_BACKOFF = [700, 1500];   // ms before retry #1 and #2
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let data = null, ok = false;
+  /* NEWS-WINDOW — the window read is retried like any read, but once it has answered short it is not asked again, and the
+     LAST attempt is always the original query: a window read that keeps failing can never turn a pull that works today
+     into "news pull failed". Worst case per pull, with pg()'s own 3 tries: 12 requests, of which the original (slow) query
+     at most 9 - today's ceiling; a scope already known to be quiet never exceeds today's 9. */
+  let windowed = !NEWS_QUIET.has(q);
   for (let attempt = 0; attempt <= NEWS_RETRY_BACKOFF.length; attempt++) {
     try {
+      if (windowed && attempt < NEWS_RETRY_BACKOFF.length) {
+        data = await pg(q + "&published_ts=gte." + (Math.floor(Date.now() / 1000) - NEWS_WINDOW_S));   // NEWS-WINDOW — cheap, same rows
+        if (Array.isArray(data) && data.length >= NEWS_LIMIT) { ok = true; break; }
+        windowed = false; NEWS_QUIET.add(q);                                                          // quiet scope → the original pull, now and on later refreshes
+      }
       data = await pg(q);
       ok = true;
       break;
