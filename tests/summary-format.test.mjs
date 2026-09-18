@@ -91,7 +91,7 @@ test("the open call summary scrolls inside its own bounded box instead of being 
 });
 
 test("Esc closes the summary panel first and leaves what is under it alone; the panel is announced as a dialog", () => {
-  assert.match(page, /if \(e\.key !== "Escape"\) return;\n  const fh = el\("trFullHost"\), sh = el\("ernSumHost"\);\n  if \(fh && fh\.firstChild\) \{ fh\.innerHTML = ""; return; \}[^\n]*\n  if \(sh && sh\.firstChild\) \{ sh\.innerHTML = ""; return; \}/);
+  assert.match(page, /if \(e\.key !== "Escape"\) return;\n  const fh = el\("trFullHost"\), sh = el\("ernSumHost"\);\n  if \(fh && fh\.firstChild\) \{ fh\._gen = \(fh\._gen \|\| 0\) \+ 1; fh\.innerHTML = ""; return; \}[^\n]*\n  if \(sh && sh\.firstChild\) \{ sh\._gen = \(sh\._gen \|\| 0\) \+ 1; sh\.innerHTML = ""; return; \}/);
   assert.match(page, /closeTvModal\(\); clearSecFs\(\);/, "the earlier Esc behaviour is kept");
   assert.match(page, /<div role="dialog" aria-modal="true" aria-label="' \+ esc\(tk\) \+ ' summary"/);
 });
