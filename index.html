@@ -4816,13 +4816,12 @@ async function loadBoardRsi(tickers) {
     const rows = await pg("provider_indicators_current?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
       ")&provider=eq.FMP&timeframe=eq.1day&indicator=eq.rsi&period_length=eq.14&universe_hash=in." +
       SC_FMP_REFERENCE_DIGESTS + "&select=ticker,value,source_date,session_state,fetched_at").catch(() => []);
-    /* Fail closed on a stopped provider lane.  source_date/session_state remain attached to the
-       row so a forming current-day observation is never relabelled as a settled close. */
-    const freshMs = 26 * 3600e3;
+    /* Fail closed on a stopped provider lane: only a row of the expected settled session (or today's
+       forming one) paints; source_date/session_state remain attached so a forming current-day
+       observation is never relabelled as a settled close. */
     const m = {};
     for (const r of (rows || [])) if (!(r.ticker in m)) {
-      const at = Date.parse(r.fetched_at || "");
-      if (isFinite(at) && Date.now() - at <= freshMs) m[r.ticker] = num(r.value);
+      if (gsSessionCurrent(r)) m[r.ticker] = num(r.value);
     }
     for (const t of chunk) {
       const v = m[t];
@@ -8246,17 +8245,74 @@ function geigerTabHTML(g) {
    Everything is null-guarded so a missing pull renders dashes, never throws.
    ============================================================================ */
 const GS_LADDER = ["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12h","1D","3D","1W","2W","1M"];
-/* THE STALENESS GATE FOR EVERY PROVIDER INDICATOR SURFACE ON THE COMPANY TILE.
-   The current index is refreshed from raw FMP responses and must be acquired inside 26 hours.
-   Provider source_date + FORMING/SETTLED state remain on every row; acquisition recency never
-   promotes a forming daily observation into a completed close. */
-const GS_PROVIDER_FRESH_MS = 26 * 3600e3;
-function gsFreshIso (iso) {
-  const ms = Date.parse(iso || "");
-  return isFinite(ms) && ms > 0 && (Date.now() - ms) < GS_PROVIDER_FRESH_MS;
+/* SESSION-FRESHNESS BEGIN — identical copy in Hub index.html and Station _provider/provider.js; keep byte-identical */
+/* A DAILY INDICATOR IS CURRENT WHEN IT BELONGS TO THE LAST SESSION THAT SHOULD HAVE SETTLED.
+   The provider's daily rows carry a session DATE (source_date) and a state (FORMING while that session was open,
+   SETTLED after its close). Judging them by clock distance from midnight, or by when they were fetched, gave wrong
+   answers both ways: a Sep-17 SETTLED close read at 01:05 ET on Sep 18 was called "AGE 29H · STALE (1d)" (MEASURED
+   2026-09-18), while a month-old value fetched five minutes ago would have passed a fetched-at gate. The rule here is
+   the calendar's: New York weekday sessions, NYSE holidays skipped, a session expected to be settled from
+   GS_SESSION_SETTLE_ET minutes after ET midnight (the 16:00 close plus four hours for the provider's settled print).
+   A reading of the expected session, or of today's still-open session, is CURRENT; any earlier session is STALE by
+   N sessions; a missing, unparseable, non-session or future-dated session date is STALE (fail closed).
+   fetched_at is never a freshness input. */
+var GS_NYSE_HOLIDAYS = ["2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25",
+  "2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"];
+var GS_SESSION_SETTLE_ET = 20 * 60;
+function gsNyClock(nowMs) {
+  var parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(nowMs));
+  var v = {}; for (var i = 0; i < parts.length; i++) v[parts[i].type] = parts[i].value;
+  return { date: v.year + "-" + v.month + "-" + v.day, minutes: (+v.hour % 24) * 60 + (+v.minute) };
 }
-const gsAgeDaysIso = (iso) => { const ms = Date.parse(iso || "");
-  return (isFinite(ms) && ms > 0) ? Math.round((Date.now() - ms) / 864e5 * 10) / 10 : null; };
+function gsIsTradingDay(dateStr) {
+  var dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+  return dow >= 1 && dow <= 5 && GS_NYSE_HOLIDAYS.indexOf(dateStr) < 0;
+}
+function gsPrevTradingDay(dateStr) {
+  var t = Date.parse(dateStr + "T12:00:00Z");
+  for (var i = 0; i < 15; i++) { t -= 86400e3; var d = new Date(t).toISOString().slice(0, 10); if (gsIsTradingDay(d)) return d; }
+  return dateStr;
+}
+function gsExpectedSettledSession(nowMs) {
+  var ny = gsNyClock(Number.isFinite(nowMs) ? nowMs : Date.now());
+  return (gsIsTradingDay(ny.date) && ny.minutes >= GS_SESSION_SETTLE_ET) ? ny.date : gsPrevTradingDay(ny.date);
+}
+function gsDailySessionFreshness(sourceDate, sessionState, nowMs) {
+  var now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  var sd = String(sourceDate == null ? "" : sourceDate).slice(0, 10);
+  var expected = gsExpectedSettledSession(now);
+  var state = String(sessionState || "").toUpperCase();
+  var out = { known: false, stale: true, current: false, settled: state === "SETTLED", state: state || "UNSTATED",
+    sourceDate: sd || null, expected: expected, sessionsBehind: null, reason: "" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sd) || !isFinite(Date.parse(sd + "T12:00:00Z"))) { out.reason = "no session date"; return out; }
+  out.known = true;
+  var today = gsNyClock(now).date;
+  if (sd > today) { out.reason = "session date " + sd + " is after today (" + today + " New York)"; return out; }
+  if (!gsIsTradingDay(sd)) { out.reason = sd + " is not a trading session"; return out; }
+  if (sd >= expected) {
+    out.stale = false; out.current = true; out.sessionsBehind = 0;
+    out.reason = sd === expected ? "expected session" : "today's session, " + (out.settled ? "settled" : "forming");
+    return out;
+  }
+  var n = 0, d = expected;
+  while (d > sd && n < 400) { n++; d = gsPrevTradingDay(d); }
+  out.sessionsBehind = n;
+  out.reason = n + " session" + (n === 1 ? "" : "s") + " behind the expected " + expected + " session";
+  return out;
+}
+/* SESSION-FRESHNESS END */
+
+/* THE STALENESS GATE FOR EVERY PROVIDER INDICATOR SURFACE ON THE COMPANY TILE AND THE BOARD RSI CELL.
+   A row is admitted when its session is current under gsDailySessionFreshness; a stale row is dropped
+   (fail closed) and its distance in sessions is reported. Provider source_date + FORMING/SETTLED state
+   remain on every row; acquisition recency never promotes a forming daily observation into a completed close. */
+function gsSessionCurrent (row) { return !!row && !gsDailySessionFreshness(row.source_date, row.session_state).stale; }
+function gsSessionWhy (label, row) {
+  if (!row) return "no FMP " + label + " row for this symbol";
+  const f = gsDailySessionFreshness(row.source_date, row.session_state);
+  return "FMP " + label + " reading of " + (f.sourceDate || "unknown date") + " is " + f.reason;
+}
+const gsSessionsBehind = (row) => row ? gsDailySessionFreshness(row.source_date, row.session_state).sessionsBehind : null;
 /* operator_weights timeframe keys are stored lower-case (1d/3d/1w/2w); normalize to ladder casing */
 function gsNormTf(k){ const m={ "1d":"1D","3d":"3D","1w":"1W","2w":"2W" }; const s=String(k||""); return m[s.toLowerCase()] || s; }
 
@@ -8330,8 +8386,8 @@ async function geigerSummaryData(t) {
       }
     } catch (_) {}
   }
-  const providerRows = (pind || []).filter((r) => gsFreshIso(r.fetched_at));
-  const indicatorDates = [...new Set(providerRows.map((r) => r.source_date).filter(Boolean))].sort();
+  const providerRows = (pind || []).filter(gsSessionCurrent);
+  const indicatorDates = [...new Set(providerRows.map((r) => String(r.source_date || "").slice(0, 10)).filter(Boolean))].sort();
   const indicatorStates = [...new Set(providerRows.map((r) => r.session_state).filter(Boolean))].sort();
   const indicatorSourceDate = indicatorDates.length === 1 ? indicatorDates[0]
     : (indicatorDates.length ? indicatorDates[0] + "…" + indicatorDates[indicatorDates.length - 1] : null);
@@ -8349,7 +8405,8 @@ async function geigerSummaryData(t) {
   const mas = maDefs.map(([n, ty, len]) => ({ n, v: num(pBy[ty + len] && pBy[ty + len].value) }))
     .filter((m) => m.v != null && isFinite(m.v));
   let ladderSource = mas.length ? "FMP_PROVIDER_INDICATORS" : null;
-  if (!mas.length) unavail.ladder = { state: "UNAVAILABLE", age_days: null, why: "no fresh FMP moving-average response" };
+  if (!mas.length) { const any = (pind || []).find((r) => /^(ema|sma)$/i.test(String(r.indicator)));
+    unavail.ladder = { state: "UNAVAILABLE", age_days: null, sessions_behind: gsSessionsBehind(any), why: gsSessionWhy("moving-average", any) }; }
   else if (mas.length < maDefs.length) unavail.ladder = { state: "PARTIAL", age_days: 0,
     why: (maDefs.length - mas.length) + " provider rung(s) not observed for this symbol" };
 
@@ -8360,8 +8417,9 @@ async function geigerSummaryData(t) {
   const prsi = pBy.RSI14, pwpr = pBy.WILLIAMS14;
   if (prsi && num(prsi.value) != null) rsiMtf.push(["1D", num(prsi.value)]);
   if (pwpr && num(pwpr.value) != null) wprMtf.push(["1D", num(pwpr.value)]);
-  if (!rsiMtf.length) unavail.rsi = { state: "UNAVAILABLE", age_days: gsAgeDaysIso(prsi && prsi.fetched_at), why: "no fresh FMP RSI response" };
-  if (!wprMtf.length) unavail.wpr = { state: "UNAVAILABLE", age_days: gsAgeDaysIso(pwpr && pwpr.fetched_at), why: "no fresh FMP Williams response" };
+  const anyRsi = (pind || []).find((r) => String(r.indicator).toLowerCase() === "rsi"), anyWpr = (pind || []).find((r) => String(r.indicator).toLowerCase() === "williams");
+  if (!rsiMtf.length) unavail.rsi = { state: "UNAVAILABLE", age_days: null, sessions_behind: gsSessionsBehind(anyRsi), why: gsSessionWhy("RSI", anyRsi) };
+  if (!wprMtf.length) unavail.wpr = { state: "UNAVAILABLE", age_days: null, sessions_behind: gsSessionsBehind(anyWpr), why: gsSessionWhy("Williams", anyWpr) };
 
   /* FMP's current stable technical API does not expose MACD.  The retired local series is not a
      fallback authority, so this tile stays honestly unavailable until a provider MACD lane lands. */
@@ -8485,7 +8543,8 @@ function gsMbar(v, sc, tip){ const p=Math.max(4,Math.min(96,(v-sc.mn)/(sc.mx-sc.
    actionable. */
 function gsUnavailHTML(un){
   if (!un) return "no data";
-  const age = (un.age_days != null && isFinite(un.age_days)) ? ' <span class="gs-unage">last reading ' + un.age_days + 'd old</span>' : "";
+  const age = (un.sessions_behind != null && isFinite(un.sessions_behind)) ? ' <span class="gs-unage">last reading ' + un.sessions_behind + ' session' + (un.sessions_behind === 1 ? "" : "s") + ' behind</span>'
+    : (un.age_days != null && isFinite(un.age_days)) ? ' <span class="gs-unage">last reading ' + un.age_days + 'd old</span>' : "";
   return '<span class="gs-unav">unavailable</span>' + age + (un.why ? '<span class="gs-unwhy">' + esc(un.why) + '</span>' : "");
 }
 function gsMtf(node, rows, sc, tip, fmt, un){ if (!node) return;
@@ -8650,7 +8709,8 @@ function buildGeigerSummary(d) {
     const lab = String(r.tf_token || "?").toUpperCase();
     return lab + " " + (r.availability === "ABSENT" ? "ABSENT" : String(r.newest || "UNKNOWN").replace("T", " ").replace(/:00\.000Z$/, "Z"));
   }).join(" · ") : "BAR AS-OF · unavailable";
-  const indStamp = [d.indicatorSourceDate, d.indicatorSessionState].filter(Boolean).join(" · ");
+  /* only session-current rows reach this tile (stale ones are dropped above), so the stamp may say so */
+  const indStamp = [d.indicatorSourceDate, d.indicatorSessionState, d.indicatorSourceDate ? "current session" : null].filter(Boolean).join(" · ");
   const rsub = q("rsisub"), wsub = q("wprsub");
   if (rsub) rsub.textContent = "raw FMP provider" + (indStamp ? " · " + indStamp : " · as-of unavailable");
   if (wsub) wsub.textContent = "raw FMP provider" + (indStamp ? " · " + indStamp : " · as-of unavailable");
