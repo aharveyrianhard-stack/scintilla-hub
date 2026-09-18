@@ -85,6 +85,8 @@ test("the open call summary scrolls inside its own bounded box instead of being 
   assert.match(page, /\.sc-evtab\.tr-open \.sc-evpastscroll\{ flex:1 1 0; min-height:88px; \}/, "PAST EARNINGS keeps a visible strip");
   assert.match(page, /const tab = bub\.closest\("\.sc-evtab"\); if \(tab\) tab\.classList\.toggle\("tr-open", bub\.style\.display === "block"\);/);
   assert.match(page, /\.sc-evfix\{ flex:0 0 auto; \}/, "with the summary closed the header block is exactly as before");
+  assert.match(page, /if \(over > 0\) fix\.scrollTop \+= Math\.ceil\(over\);/, "the opened summary is brought into view by scrolling the header block only");
+  assert.doesNotMatch(page.match(/case "transcript": \{[\s\S]*?break;\n    \}/)[0], /\.scrollIntoView\(/, "calling scrollIntoView would also scroll the page on a phone (measured: 246px)");
   assert.match(page, /\.sc-trbubble__hd a, \.sc-trbubble__full\{/, "the read-full-transcript control is styled like the link it replaced");
 });
 
