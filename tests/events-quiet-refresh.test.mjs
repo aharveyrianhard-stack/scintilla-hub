@@ -9,7 +9,7 @@ test("an open events view is re-read on a timer and on return to the tab, never 
   const src = page.match(/function refreshOpenEvents\(onResume\) \{[\s\S]*?\n\}\n/)[0];
   assert.match(src, /if \(document\.visibilityState === "hidden"\) return;/);
   assert.match(src, /if \(onResume && Date\.now\(\) - EV_READ_AT < 60000\) return;/);
-  assert.match(src, /if \(S\.sec === "EVENTS" && el\("evList"\) && S\.calType !== "DIVIDENDS"\) fillEvents\(true\);\n  else if \(S\.coData && S\.coTab === "EVENTS"\) refreshCompanyEvents\(\);/, "only the view that is open is re-read");
+  assert.match(src, /if \(S\.sec === "EVENTS" && el\("evList"\) && S\.calType !== "DIVIDENDS"\) \{\n[^\n]*#evList \.sc-trbubble[^\n]*style\.display === "block"\)\) return;[^\n]*\n    fillEvents\(true\);\n  \} else if \(S\.coData && S\.coTab === "EVENTS"\) refreshCompanyEvents\(\);/, "only the view that is open is re-read, and never while a call summary is open in it (review finding)");
 });
 
 test("a quiet re-read that finds the same rows touches nothing; one that finds a change redraws in place", () => {
@@ -33,6 +33,9 @@ test("redrawKeepingPlace keeps each list where the reader left it and an opened 
   const redraw = new Function("document", page.match(/function redrawKeepingPlace\(rootSel, scrollSel, draw\) \{[\s\S]*?\n\}\n/)[0] + "return redrawKeepingPlace;")(document);
   redraw("#evList", ".sc-evcol", () => { dom = mk([0, 0], [false]); });   // the draw replaces every node
   assert.deepEqual(dom.lists.map((x) => x.scrollTop), [0, 480]); assert.equal(dom.groups[0].open, true);
-  redraw("#evList", ".sc-evcol", () => { dom = mk([0], []); });            // fewer lists after the draw: nothing throws
-  assert.deepEqual(dom.lists.map((x) => x.scrollTop), [0]);
+  redraw("#evList", ".sc-evcol", () => { dom = mk([0], []); });            // UPCOMING disappears (its only row reported): the one list left is PAST and gets PAST's place, not UPCOMING's (review finding)
+  assert.deepEqual(dom.lists.map((x) => x.scrollTop), [480]);
+  dom = mk([300], []); redraw("#evList", ".sc-evcol", () => { dom = mk([0, 0], []); });   // and the other way round: PAST keeps its place, the new UPCOMING starts at the top
+  assert.deepEqual(dom.lists.map((x) => x.scrollTop), [0, 300]);
+  assert.match(page, /\(tridx \|\| \[\]\)\.map\(\(r\) => r\.ticker \+ "\|" \+ r\.call_date\)\.join\(","\)\]\), changed = sig !== EV_SIG;/, "the signature covers which calls are stored, not how many (review finding)");
 });

@@ -120,6 +120,10 @@ test("pickCall returns the call that was asked for - same company, named period,
   assert.equal(pickCall(rows, "FDX", "", ""), null, "no period and no day: nothing - it used to get the newest call");
   assert.equal(pickCall(rows, "FDX", "Q3 2026", "").quarter, "Q3 2026", "a named period alone is enough");
   for (const bad of [null, undefined, {}, "x", [null, 1, "y"]]) assert.equal(pickCall(bad, "FDX", "Q4 2026", "2026-06-23", true), null);
+  // one call stored under two period names (KR 2026-03-05): the row that carries the text wins the tie, in either order (review finding)
+  const twins = [{ ticker: "KR", quarter: "Q4 2025", call_date: "2026-03-05", transcript: null }, { ticker: "KR", quarter: "Q4 2026", call_date: "2026-03-05", transcript: "text" }];
+  assert.equal(pickCall(twins, "KR", "", "2026-03-05").quarter, "Q4 2026"); assert.equal(pickCall(twins.slice().reverse(), "KR", "", "2026-03-05").quarter, "Q4 2026");
+  assert.equal(pickCall(twins, "KR", "Q4 2025", "2026-03-05").quarter, "Q4 2025", "a named period is still exactly that period");
 });
 
 test("the transcript panel asks for exactly the call it was opened for", () => {
@@ -142,4 +146,9 @@ test("a company's own EVENTS tab brings its own call dates, so the Transcript co
   assert.equal(exists("FDX", "2026-09-17", ["2026-06-23", "2026-03-19"]), false, "a date with no call nearby shows no control");
   assert.equal(exists("FDX", "2026-06-23", []), false, "an empty list of its own is an answer: it does not fall through to the shared index");
   assert.equal(exists("KR", "2026-09-11"), true); assert.equal(exists("FDX", "2026-06-23"), false);
+});
+
+test("the latest-call bar names its call by day as well as by period, so a call stored without a period name can still be asked for (review finding)", () => {
+  assert.match(page, /data-act="fulltranscript" data-t="' \+ esc\(data\.t\) \+ '" data-q="' \+ esc\(String\(tr\.quarter \|\| ""\)\) \+ '" data-d="' \+ esc\(String\(tr\.call_date \|\| ""\)\) \+ '">/);
+  assert.equal(pickCall([{ ticker: "X", quarter: null, call_date: "2026-05-01", transcript: "t" }], "X", "", "2026-05-01").transcript, "t");
 });

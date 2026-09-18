@@ -8092,7 +8092,8 @@ function redrawKeepingPlace(rootSel, scrollSel, draw) {
   const open = root ? [...root.querySelectorAll("details.sc-ernnores-grp")].map((x) => x.open) : [];
   draw();
   const now = document.querySelector(rootSel); if (!now) return;
-  [...now.querySelectorAll(scrollSel)].forEach((x, i) => { if (at[i]) x.scrollTop = at[i]; });
+  const lists = [...now.querySelectorAll(scrollSel)], off = at.length - lists.length;   // matched from the END: PAST is always the last column, and UPCOMING appears or disappears when a row reports
+  lists.forEach((x, i) => { const v = at[i + off]; if (v) x.scrollTop = v; });
   [...now.querySelectorAll("details.sc-ernnores-grp")].forEach((x, i) => { if (open[i]) x.open = true; });
 }
 async function refreshCompanyEvents() {
@@ -8110,8 +8111,10 @@ async function refreshCompanyEvents() {
 function refreshOpenEvents(onResume) {
   if (document.visibilityState === "hidden") return;
   if (onResume && Date.now() - EV_READ_AT < 60000) return;                     // just read
-  if (S.sec === "EVENTS" && el("evList") && S.calType !== "DIVIDENDS") fillEvents(true);
-  else if (S.coData && S.coTab === "EVENTS") refreshCompanyEvents();
+  if (S.sec === "EVENTS" && el("evList") && S.calType !== "DIVIDENDS") {
+    if ([...document.querySelectorAll("#evList .sc-trbubble")].some((x) => x.style.display === "block")) return;   // a call summary is open in the feed and being read: the re-read waits (its open state lives only on the node a redraw would replace)
+    fillEvents(true);
+  } else if (S.coData && S.coTab === "EVENTS") refreshCompanyEvents();
 }
 setInterval(() => refreshOpenEvents(false), 300000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshOpenEvents(true); });
@@ -8151,7 +8154,7 @@ async function fillEvents(quiet) {
     const upPending = up.filter((e) => e.eps_actual == null);
     const reportedToday = up.filter((e) => e.eps_actual != null);
     EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
-    const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], tridx ? tridx.length : 0]), changed = sig !== EV_SIG;
+    const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], (tridx || []).map((r) => r.ticker + "|" + r.call_date).join(",")]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
     EV_SIG = sig; EV_READ_AT = Date.now();
     if (!quiet) renderEvents(S.coh);
     else if (changed) redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh));   // a quiet re-read that found nothing new touches nothing
@@ -10318,9 +10321,10 @@ function pickCall(rows, ticker, quarter, day, exactDay) {
   else if (span) list = list.filter((r) => r.call_date >= span[0] && r.call_date <= span[1]);
   else if (!q) return null;
   if (!list.length) return null;
-  if (!span) return list[0];
+  if (!span) return list.slice().sort((x, y) => (x.transcript || x.ai_summary ? 0 : 1) - (y.transcript || y.ai_summary ? 0 : 1))[0];
   const t0 = Date.parse(day + "T00:00:00Z");
-  return list.slice().sort((x, y) => Math.abs(Date.parse(x.call_date + "T00:00:00Z") - t0) - Math.abs(Date.parse(y.call_date + "T00:00:00Z") - t0))[0];
+  const text = (r) => (r.transcript || r.ai_summary ? 0 : 1);   // one call stored under two period names: the row that carries the text wins the tie
+  return list.slice().sort((x, y) => (Math.abs(Date.parse(x.call_date + "T00:00:00Z") - t0) - Math.abs(Date.parse(y.call_date + "T00:00:00Z") - t0)) || (text(x) - text(y)))[0];
 }
 function matchCallSummaries(events, calls) {
   const out = new Map(), byDay = new Map(), evDays = new Set(), amc = new Set();
@@ -10498,7 +10502,7 @@ function transcriptBubbleHTML(data) {
   const sum = String(tr.ai_summary || "").trim();
   const when = tr.call_date ? fmtRelDate(tr.call_date) : "";
   const q = tr.quarter ? String(tr.quarter) : "";
-  const link = '<button class="sc-trbubble__full" data-act="fulltranscript" data-t="' + esc(data.t) + '" data-q="' + esc(String(tr.quarter || "")) + '">◹ read full transcript</button>';
+  const link = '<button class="sc-trbubble__full" data-act="fulltranscript" data-t="' + esc(data.t) + '" data-q="' + esc(String(tr.quarter || "")) + '" data-d="' + esc(String(tr.call_date || "")) + '">◹ read full transcript</button>';   // the period AND the day: a call stored without a period name is still asked for exactly
   const bodyHTML = sum ? summaryHTML(sum)
     : "No call summary is stored for this call — open the full transcript.";
   return '<div class="sc-trbubble' + (sum ? "" : " empty") + '" id="trbubble-' + esc(data.t) + '" style="display:none">' +
