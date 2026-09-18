@@ -8088,19 +8088,46 @@ const ECON_LBL = {
   commercialBankInterestRateOnCreditCardPlansAllAccounts: "CREDIT CARD RATE %", newPrivatelyOwnedHousingUnitsStartedTotalUnits: "HOUSING STARTS K",
   nominalPotentialGDP: "POTENTIAL GDP $B", realGDPPerCapita: "REAL GDP / CAPITA $", smoothedUSRecessionProbabilities: "RECESSION PROB %",
 };
-/* HOW OFTEN EACH SERIES SHOULD MOVE, so an old print is called old. The tab listed every series as "latest" with a bare
-   date: MEASURED 2026-09-18, GDP dated 2025-10-01 (a year), M2 2026-04-01, the Fed balance sheet / TGA / reverse repo
-   2026-06 with no writer since 2026-06-09, all beside "MACRO RAIL · LIVE". Cadence in days; a print older than about
-   two periods past its date is STALE (a monthly print for Aug is normal in mid-Sep; one for Jun is not). */
-const ECON_CADENCE = { "15YearFixedRateMortgageAverage": 7, "30YearFixedRateMortgageAverage": 7, initialClaims: 7, WALCL: 7, WTREGEN: 7, RRPONTSYD: 1, inflationRate: 1,
-  CPI: 30, retailSales: 30, totalVehicleSales: 30, totalNonfarmPayroll: 30, federalFunds: 30, unemploymentRate: 30, newPrivatelyOwnedHousingUnitsStartedTotalUnits: 30,
-  durableGoods: 30, industrialProductionTotalIndex: 30, consumerSentiment: 30, M2SL: 30, smoothedUSRecessionProbabilities: 30,
-  GDP: 91, realGDP: 91, realGDPPerCapita: 91, nominalPotentialGDP: 91, commercialBankInterestRateOnCreditCardPlansAllAccounts: 91 };
-const ECON_CADENCE_WORD = (d) => d <= 1 ? "daily" : d <= 7 ? "weekly" : d <= 31 ? "monthly" : "quarterly";
-function econAge(dateStr, cadenceDays) {
-  const ms = Date.parse(String(dateStr || "") + "T12:00:00Z"); if (!isFinite(ms)) return { stale: false, days: null };
-  const days = Math.round((Date.now() - ms) / 86400e3);
-  return { stale: days > 2 * (cadenceDays || 30) + 7, days };
+/* WHEN IS A STORED PRINT REALLY BEHIND? An econ_history date is the START of the period observed, not the day it was
+   published: durable goods for July are published at the end of August and remain the latest release until the end of
+   September. Judging that date against "two periods" called valid latest releases STALE (root review 2026-09-18:
+   July sentiment / durable goods / industrial production / recession probability, 79 days old, were all the newest
+   print FRED itself carried). So each series carries `max`: how many days its newest observation normally reaches
+   before the next release lands (period + publication lag + slack). VALIDATED 2026-09-18 against FRED's actual latest
+   observation per series: the 15 series level with FRED read current under this table and the 8 really behind (GDP,
+   real GDP, real GDP per capita, credit-card rate, M2, Fed balance sheet, TGA, reverse repo) read behind.
+   Three facts stay separate on the row: the OBSERVATION period, whether it is past its normal RELEASE lag, and when the
+   row was last WRITTEN (ingestion) - a recent write with an old observation is the source not supplying a newer print;
+   an old write is a writer that stopped. A series this table does not know makes no staleness claim at all. */
+const ECON_RELEASE = {
+  inflationRate: { cad: "daily", max: 7 }, RRPONTSYD: { cad: "daily", max: 7 },
+  "30YearFixedRateMortgageAverage": { cad: "weekly", max: 10 }, "15YearFixedRateMortgageAverage": { cad: "weekly", max: 10 },
+  WALCL: { cad: "weekly", max: 12 }, WTREGEN: { cad: "weekly", max: 12 }, initialClaims: { cad: "weekly", max: 16 },
+  federalFunds: { cad: "monthly", max: 80 }, unemploymentRate: { cad: "monthly", max: 80 }, totalNonfarmPayroll: { cad: "monthly", max: 80 }, totalVehicleSales: { cad: "monthly", max: 80 },
+  CPI: { cad: "monthly", max: 90 }, retailSales: { cad: "monthly", max: 90 }, industrialProductionTotalIndex: { cad: "monthly", max: 90 }, newPrivatelyOwnedHousingUnitsStartedTotalUnits: { cad: "monthly", max: 90 },
+  durableGoods: { cad: "monthly", max: 100 }, consumerSentiment: { cad: "monthly", max: 100 }, M2SL: { cad: "monthly", max: 100 }, smoothedUSRecessionProbabilities: { cad: "monthly", max: 100 },
+  commercialBankInterestRateOnCreditCardPlansAllAccounts: { cad: "quarterly", max: 175 },
+  GDP: { cad: "quarterly", max: 225 }, realGDP: { cad: "quarterly", max: 225 }, realGDPPerCapita: { cad: "quarterly", max: 225 },
+  nominalPotentialGDP: { cad: "quarterly", projection: true },   /* CBO projection: dated ahead by construction, never "behind" */
+};
+function econFreshness(series, dateStr, updatedTs, nowMs) {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const rule = ECON_RELEASE[series] || null;
+  const ms = Date.parse(String(dateStr || "").slice(0, 10) + "T12:00:00Z");
+  const days = isFinite(ms) ? Math.round((now - ms) / 86400e3) : null;
+  const w = +updatedTs, wroteMs = isFinite(w) && w > 0 ? (w < 1e12 ? w * 1000 : w) : null;
+  const wrote = wroteMs != null ? new Date(wroteMs).toISOString().slice(0, 10) : null;
+  const out = { cad: rule ? rule.cad : null, days, wrote, state: "UNKNOWN", behind: false, note: "" };
+  if (!rule) { out.note = "release cadence not known to this tab - no freshness claim"; return out; }
+  if (rule.projection) { out.state = "PROJECTION"; out.note = "projection series"; return out; }
+  if (days == null) { out.note = "observation date unreadable"; return out; }
+  if (days <= rule.max) { out.state = "WITHIN_RELEASE_LAG"; return out; }
+  out.behind = true;
+  const writerRecent = wroteMs != null && now - wroteMs <= 3 * 86400e3;
+  out.state = wroteMs == null ? "BEHIND_WRITE_UNKNOWN" : writerRecent ? "BEHIND_SOURCE" : "BEHIND_WRITER_STOPPED";
+  out.note = "BEHIND - observed " + days + "d ago, a newer release is normal after " + rule.max + "d - " +
+    (wroteMs == null ? "last write unknown" : writerRecent ? "writer ran " + wrote + ", its source supplied no newer print" : "no writer has written this series since " + wrote);
+  return out;
 }
 const fmtEconVal = (v) => { v = +v; return Math.abs(v) >= 1000
   ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
@@ -8137,8 +8164,20 @@ async function fillEcon() {
   try {
     const [tr, eh] = await Promise.all([
       pg("treasury_rates?select=*&order=date.desc&limit=1"),
-      pg("econ_history?select=series,date,value,updated_ts&order=date.desc&limit=1000"),   // widest page PostgREST serves; a series whose newest print is older than the window's oldest row would drop out silently
+      pg("econ_history?select=series,date,value,updated_ts&order=date.desc&limit=1000"),   // widest page PostgREST serves - NOT a guarantee of one row per series (see the per-series top-up below)
     ]);
+    if (!el("econList")) return;
+    /* KNOWN COVERAGE GAP, CLOSED PER SERIES. The window is the newest 1,000 rows across ALL series (today it reaches
+       back to 2025-02; two daily series take most of it). A slow series whose newest print is older than the window's
+       oldest row would vanish silently - GDP sits at row ~550 today and moves down ~1 row per new daily print. Every
+       series this tab knows that the window did not return is therefore asked for by name (one newest row each);
+       a failed top-up is reported on the panel, never hidden. */
+    const inWindow = new Set(eh.map((r) => r.series));
+    const missing = Object.keys(ECON_RELEASE).filter((k) => !inWindow.has(k));
+    const topUps = await Promise.all(missing.map((k) =>
+      pg("econ_history?select=series,date,value,updated_ts&series=eq." + encodeURIComponent(k) + "&order=date.desc&limit=1").then((r) => ({ k, r }), () => ({ k, r: null }))));
+    const topUpFailed = topUps.filter((x) => x.r == null).map((x) => x.k), neverStored = topUps.filter((x) => x.r && !x.r.length).map((x) => x.k);
+    for (const x of topUps) if (x.r && x.r.length) eh.push(x.r[0]);
     if (!el("econList")) return;
     const t0 = tr[0];
     const TEN = [["1M","m1"],["2M","m2"],["3M","m3"],["6M","m6"],["1Y","y1"],["2Y","y2"],
@@ -8155,20 +8194,23 @@ async function fillEcon() {
     const seen = {};
     for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
     const printRows = Object.values(seen).sort((a, b) => String(ECON_LBL[a.series] || a.series).localeCompare(String(ECON_LBL[b.series] || b.series)));
-    let staleN = 0, newestPrint = "";
+    let staleN = 0, unknownN = 0, newestPrint = "";
     const prints = printRows.map((r) => {
-        const cad = ECON_CADENCE[r.series] || 30, age = econAge(r.date, cad);
-        if (age.stale) staleN++; if (String(r.date) > newestPrint) newestPrint = String(r.date);
-        const wrote = r.updated_ts ? String(new Date(+r.updated_ts < 1e12 ? +r.updated_ts * 1000 : +r.updated_ts).toISOString()).slice(0, 10) : "";
-        const when = esc(r.date) + " · " + ECON_CADENCE_WORD(cad) +
-          (age.stale ? '<span class="econ-age"> · STALE ' + (age.days >= 60 ? Math.round(age.days / 30) + " months" : age.days + "d") + (wrote ? " · last written " + esc(wrote) : "") + "</span>" : "");
+        const f = econFreshness(r.series, r.date, r.updated_ts);
+        if (f.behind) staleN++; if (f.state === "UNKNOWN") unknownN++; if (String(r.date) > newestPrint && f.state !== "PROJECTION") newestPrint = String(r.date);
+        const when = "observed " + esc(r.date) + (f.cad ? " · " + f.cad : "") +
+          (f.behind ? '<span class="econ-age"> · ' + esc(f.note) + "</span>" : f.state === "UNKNOWN" || f.state === "PROJECTION" ? " · " + esc(f.note) : "");
         return econRowHTML(esc(ECON_LBL[r.series] || r.series), when, fmtEconVal(r.value), ECON_IMPACT[r.series] || "L");
       }).join("");
     if (prints) html += '<div class="sc-plabel" style="padding:10px 0 4px">macro prints · <b>latest stored</b> · ' + printRows.length + " series · " +
-      (staleN ? '<span class="econ-age">' + staleN + " past their cadence</span>" : "all within cadence") + "</div>" + prints;
+      (staleN ? '<span class="econ-age">' + staleN + " behind their normal release lag</span>" : "none behind their normal release lag") +
+      (unknownN ? " · " + unknownN + " with no freshness claim" : "") + "</div>" + prints;
     const src = el("econSource");
-    if (src) src.innerHTML = "treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history (job macro-econ-cot-daily 22:35Z; fmp-economic 05:47/17:47Z) · newest print <b>" +
-      esc(newestPrint || "—") + "</b> · " + (staleN ? staleN + " series past cadence (see rows)" : "all series within cadence") + " · FRED M2 / balance sheet / TGA / reverse repo have had no writer since 2026-06-09";
+    if (src) src.innerHTML = "treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history written by fmp-economic (05:47/17:47Z) and macro-feeds (22:35Z), both FMP · newest observation <b>" +
+      esc(newestPrint || "—") + "</b> · " + (staleN ? staleN + " series behind their normal release lag (see rows)" : "no series behind its normal release lag") +
+      " · M2 / Fed balance sheet / TGA / reverse repo came from a FRED job retired 2026-06-10 and have had no writer since" +
+      (topUpFailed.length ? ' · <span class="econ-age">could not read: ' + esc(topUpFailed.join(", ")) + "</span>" : "") +
+      (neverStored.length ? " · never stored: " + esc(neverStored.join(", ")) : "");
     el("econList").innerHTML = html || '<div class="soon">treasury_rates and econ_history are empty.</div>';
     const c = el("econCurve");
     if (c && t0 && num(t0.y2) != null && num(t0.y10) != null)
@@ -8253,12 +8295,16 @@ const GS_LADDER = ["1m","3m","5m","10m","15m","30m","1h","2h","3h","4h","6h","12
    2026-09-18), while a month-old value fetched five minutes ago would have passed a fetched-at gate. The rule here is
    the calendar's: New York weekday sessions, NYSE holidays skipped, a session expected to be settled from
    GS_SESSION_SETTLE_ET minutes after ET midnight (the 16:00 close plus four hours for the provider's settled print).
-   A reading of the expected session, or of today's still-open session, is CURRENT; any earlier session is STALE by
-   N sessions; a missing, unparseable, non-session or future-dated session date is STALE (fail closed).
-   fetched_at is never a freshness input. */
+   A SETTLED reading of the expected session is CURRENT; so is today's session while it is honestly FORMING (before the
+   exporter's 16:15 ET settlement boundary) or once it is SETTLED after it. Any earlier session is STALE by N sessions.
+   FAIL CLOSED, never promoted: a missing, unparseable, non-session or future-dated session date; a session_state
+   that is not exactly FORMING or SETTLED (the provider contract admits only those two); a FORMING snapshot whose
+   session has since closed (it is an intraday value, not that day's close); a SETTLED claim for a session that has
+   not reached its settlement boundary. fetched_at is never a freshness input. */
 var GS_NYSE_HOLIDAYS = ["2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25",
   "2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24"];
 var GS_SESSION_SETTLE_ET = 20 * 60;
+var GS_SESSION_CLOSE_BUFFER_ET = 16 * 60 + 15;   /* the exporter's own FORMING -> SETTLED boundary (dailySessionState) */
 function gsNyClock(nowMs) {
   var parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(nowMs));
   var v = {}; for (var i = 0; i < parts.length; i++) v[parts[i].type] = parts[i].value;
@@ -8281,15 +8327,20 @@ function gsDailySessionFreshness(sourceDate, sessionState, nowMs) {
   var now = Number.isFinite(nowMs) ? nowMs : Date.now();
   var sd = String(sourceDate == null ? "" : sourceDate).slice(0, 10);
   var expected = gsExpectedSettledSession(now);
-  var state = String(sessionState || "").toUpperCase();
-  var out = { known: false, stale: true, current: false, settled: state === "SETTLED", state: state || "UNSTATED",
+  var state = sessionState == null ? "" : String(sessionState).trim();
+  var stateValid = state === "FORMING" || state === "SETTLED";
+  var out = { known: false, stale: true, current: false, settled: state === "SETTLED", state: stateValid ? state : (state ? "INVALID" : "UNSTATED"),
     sourceDate: sd || null, expected: expected, sessionsBehind: null, reason: "" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sd) || !isFinite(Date.parse(sd + "T12:00:00Z"))) { out.reason = "no session date"; return out; }
   out.known = true;
-  var today = gsNyClock(now).date;
+  var ny = gsNyClock(now), today = ny.date;
   if (sd > today) { out.reason = "session date " + sd + " is after today (" + today + " New York)"; return out; }
   if (!gsIsTradingDay(sd)) { out.reason = sd + " is not a trading session"; return out; }
+  if (!stateValid) { out.reason = "not admitted: session state " + (state ? "'" + state.slice(0, 24) + "' is not FORMING or SETTLED" : "missing"); return out; }
   if (sd >= expected) {
+    var closed = sd < today || ny.minutes >= GS_SESSION_CLOSE_BUFFER_ET;      /* has this session passed its settlement boundary? */
+    if (state === "FORMING" && closed) { out.reason = "a forming snapshot of " + sd + ", whose session has since closed — not the settled value"; return out; }
+    if (state === "SETTLED" && !closed) { out.reason = "marked SETTLED before the " + sd + " session reached its settlement boundary"; return out; }
     out.stale = false; out.current = true; out.sessionsBehind = 0;
     out.reason = sd === expected ? "expected session" : "today's session, " + (out.settled ? "settled" : "forming");
     return out;
