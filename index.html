@@ -1020,9 +1020,27 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-trbubble__hd{ display:flex; align-items:center; gap:8px; font-size:8px; letter-spacing:.12em;
   text-transform:uppercase; color:var(--crk); margin-bottom:5px; }
 .sc-trbubble__hd .q{ color:var(--dim); letter-spacing:.03em; text-transform:none; }
-.sc-trbubble__hd a{ margin-left:auto; color:var(--crk); text-decoration:none; font-size:8.5px; }
-.sc-trbubble__body{ font-size:9.5px; color:var(--ink2); line-height:1.5; }
+.sc-trbubble__hd a, .sc-trbubble__full{ margin-left:auto; color:var(--crk); text-decoration:none; font-size:8.5px; }
+.sc-trbubble__full{ background:none; border:0; padding:0; cursor:pointer; font-family:inherit; letter-spacing:inherit; text-transform:inherit; }   /* it is a button, and was drawn as the browser's default white one */
+.sc-trbubble__full:hover{ text-decoration:underline; }
+/* MEASURED 2026-09-18: an open call summary was 530-640px tall inside the header block that never scrolls - its end was cut
+   off below the panel and PAST EARNINGS was squeezed to zero height. The text now scrolls inside its own bounded box. */
+.sc-trbubble__body{ font-size:9.5px; color:var(--ink2); line-height:1.5; max-height:min(30vh,240px); overflow-y:auto; overscroll-behavior:contain; }
+/* ...and while it is open on the ticker EVENTS tab the header block may scroll too (a company with two upcoming cards has a
+   header too tall to also hold the summary), and PAST EARNINGS keeps a visible strip instead of collapsing to nothing. */
+.sc-evtab.tr-open .sc-evfix{ flex:0 1 auto; min-height:0; overflow-y:auto; }
+.sc-evtab.tr-open .sc-evpastscroll{ flex:1 1 0; min-height:88px; }
 .sc-trbubble.empty .sc-trbubble__body{ color:var(--dim); font-style:italic; }
+/* stored summary text (release_summary / ai_summary) drawn by summaryHTML(): one block per stored line, bullets with a
+   hanging indent, long tokens wrap instead of overflowing */
+.sc-sum{ overflow-wrap:anywhere; }
+.sc-sum__p, .sc-sum__li{ margin:0 0 .4em; }
+.sc-sum__li{ display:flex; gap:.6em; }
+.sc-sum__li > .g{ flex:0 0 auto; color:var(--crk); }
+.sc-sum__li > .t{ flex:1 1 auto; min-width:0; }
+.sc-sum__gap{ height:.5em; }
+.sc-sum b{ color:var(--ink); font-weight:700; }
+.sc-sum > :last-child{ margin-bottom:0; }
 /* AREA E · analyst grades sub-area — FIX 1: header is now estSechead ("05 · RATING
    CHANGES"), so the section top margin is trimmed; rows are colored by action. */
 .sc-grsec{ margin-top:2px; }
@@ -10189,6 +10207,34 @@ function ernReleaseLabel(url) {
   if (!host || host === "scintillahub.ai") return "◹ Release";
   return "◹ Release · " + (host === "sec.gov" ? "SEC filing" : host);
 }
+/* STORED SUMMARIES ARE LIGHT MARKDOWN AND WERE PRINTED RAW ("**Results:**", "*not*", every line run together in the call
+   bubble). MEASURED 2026-09-18 over every stored summary (171 call summaries, 167 event summaries): the constructs present
+   are **bold**, *emphasis* and line bullets ("- ", "•") - no headings, links, tables, code or HTML. This draws exactly
+   those and nothing else: a markdown link or a tag in stored text stays visible text. ESCAPE-FIRST - a line goes through
+   esc() before any tag is added, and the only tags added are the constants below, so stored text can never become markup.
+   Nine stored summaries were cut off mid-bold by the old writer's output cap: an unpaired "**" is dropped, not printed.
+   Line breaks are kept - one block per stored line, a blank line becomes a gap. */
+function summaryInlineHTML(s) {
+  return esc(s)
+    .replace(/\*\*(?!\s)((?:(?!\*\*).)+?)\*\*/g, "<b>$1</b>")
+    .replace(/\*\*/g, "")
+    .replace(/(^|[\s(\[–—-])\*(?![\s*])([^*<>]*?[^\s*<>])\*(?![*\w])/g, "$1<i>$2</i>");   // never across a <b> boundary
+}
+function summaryHTML(text) {
+  let out = "", gap = false;
+  String(text == null ? "" : text).replace(/\r\n?/g, "\n").split("\n").forEach((raw) => {
+    const line = raw.trim();
+    if (!line) { gap = out !== ""; return; }
+    const m = line.match(/^(?:[-*]\s+|[•·▪]\s*)(.*)$/);   // "- x", "* x", "• x" - never "-0.04" or "*(note)*"
+    if (m && !m[1].trim()) return;                                        // a bare marker with nothing after it
+    const body = summaryInlineHTML(m ? m[1] : line);
+    out += (gap ? '<div class="sc-sum__gap"></div>' : "") + (m
+      ? '<div class="sc-sum__li"><span class="g">•</span><span class="t">' + body + "</span></div>"
+      : '<div class="sc-sum__p">' + body + "</div>");
+    gap = false;
+  });
+  return '<div class="sc-sum">' + out + "</div>";
+}
 const SAMPLE_EARNINGS = [
   { sample:true, ticker:"NVDA", date:"2026-08-27", session:"AMC", confirmed:true,
     eps:{ est:2.64, actual:5.11 }, revenue:{ est:106500000000, actual:109900000000 },
@@ -10283,7 +10329,7 @@ function transcriptBubbleHTML(data) {
   const when = tr.call_date ? fmtRelDate(tr.call_date) : "";
   const q = tr.quarter ? String(tr.quarter) : "";
   const link = '<button class="sc-trbubble__full" data-act="fulltranscript" data-t="' + esc(data.t) + '" data-q="' + esc(String(tr.quarter || "")) + '">◹ read full transcript</button>';
-  const bodyHTML = sum ? esc(sum)
+  const bodyHTML = sum ? summaryHTML(sum)
     : "AI summary generating — open the full transcript below.";
   return '<div class="sc-trbubble' + (sum ? "" : " empty") + '" id="trbubble-' + esc(data.t) + '" style="display:none">' +
     '<div class="sc-trbubble__hd"><span>◹ earnings call</span>' +
@@ -10995,7 +11041,12 @@ function toggleSecFs(panel) {
   if (panel.classList.contains("sc-co-left") || panel.classList.contains("sc-co-right"))
     document.body.classList.add("exp");        // companion class — section grow rules (est tiles stay 2-col, no hooks needed)
 }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeTvModal(); clearSecFs(); } });   // FIX 5 — Esc closes the TV modal too
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const sh = el("ernSumHost");
+  if (sh && sh.firstChild) { sh.innerHTML = ""; return; }   // the summary panel sits on top of everything: Esc closes it and leaves what is under it alone
+  closeTvModal(); clearSecFs();                             // FIX 5 — Esc closes the TV modal too
+});
 /* KEYBOARD ACTIVATION FOR THE DISCLOSURE CONTROLS.
    These tiles are div-based headers carrying data-act, so they were mouse-only: reachable by no
    key, activatable by no key. Rather than duplicate the click delegation (and risk the two drifting
@@ -11308,8 +11359,13 @@ document.addEventListener("click", (e) => {
     }
     case "transcript": {   // AREA B — toggle the earnings-call transcript bubble (ai_summary / link)
       e.preventDefault(); e.stopPropagation();
-      const bub = document.getElementById("trbubble-" + a.dataset.t);
-      if (bub) bub.style.display = (bub.style.display === "none" || !bub.style.display) ? "block" : "none";
+      const scope = a.closest(".sc-evtab, #evList");   // the bubble beside the button that was pressed (the id alone is not unique when the master feed and a ticker tab show the same company)
+      const bub = (scope && scope.querySelector(".sc-trbubble")) || document.getElementById("trbubble-" + a.dataset.t);
+      if (bub) {
+        bub.style.display = (bub.style.display === "none" || !bub.style.display) ? "block" : "none";
+        const tab = bub.closest(".sc-evtab"); if (tab) tab.classList.toggle("tr-open", bub.style.display === "block");
+        if (bub.style.display === "block" && bub.scrollIntoView) bub.scrollIntoView({ block: "nearest" });   // a tall header scrolls the summary into view instead of leaving it under the fold
+      }
       break;
     }
     case "fulltranscript": {   // open the full earnings-call transcript in a modal (fetched on demand from earnings_call_transcripts)
@@ -11342,14 +11398,14 @@ document.addEventListener("click", (e) => {
       let host = el("ernSumHost"); if (!host) { host = document.createElement("div"); host.id = "ernSumHost"; document.body.appendChild(host); }
       host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
         '<div data-act="ernsumclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
-        '<div style="position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
+        '<div role="dialog" aria-modal="true" aria-label="' + esc(tk) + ' summary" style="position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + ' · RELEASE SUMMARY<button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
           '<div id="ernSumBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace">loading…</div>' +
         '</div></div>';
       pg("earnings_events?ticker=eq." + encodeURIComponent(tk) + "&date=eq." + encodeURIComponent(dd) + "&select=release_summary,release_metrics,call_url,release_link&limit=1").then((rows) => {
         const b = el("ernSumBody"); if (!b) return; const r = rows && rows[0]; if (!r) { b.textContent = "no summary on file."; return; }
         let h = "";
-        if (r.release_summary) h += '<div style="white-space:pre-wrap;margin-bottom:14px">' + esc(r.release_summary) + '</div>';
+        if (r.release_summary) h += '<div style="margin-bottom:14px">' + summaryHTML(r.release_summary) + '</div>';
         const m = r.release_metrics || {};
         const fmtB = (v) => v == null ? "—" : (Math.abs(v) >= 1e9 ? "$" + (v / 1e9).toFixed(2) + "B" : "$" + (v / 1e6).toFixed(0) + "M");
         const rowsM = [["Net sales", m.net_sales], ["Net income", m.net_income], ["Operating income", m.operating_income], ["Adj. EBITDA", m.adjusted_ebitda], ["Operating cash flow", m.operating_cash_flow]].filter((x) => x[1] != null);
