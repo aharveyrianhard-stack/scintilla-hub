@@ -3664,12 +3664,21 @@ async function fetchTapeItems() {
   return { macro, all: movers };
 }
 
+/* WHEN THE NEXT PULL RUNS (pure). A pull whose Geiger was refused (one failed operator_weights read, a /geiger error, a
+   contract mismatch) leaves every equity without a Geiger - correctly, the acceptance rules are untouched - but the board
+   then waited the full 45 s before asking again, so one transient failure at load read as "Geiger missing until I wait or
+   reload". A refusal is now re-asked after 8 s, 16 s, 32 s, then at the normal cadence; an accepted pull resets it. */
+function boardPullDelay(ms, refusedStreak) {
+  if (!(refusedStreak > 0)) return ms;
+  return Math.min(ms, 8000 * Math.pow(2, refusedStreak - 1));
+}
 function startBoardFeed(cohort, fav, onRows, onState, ms = 45000) {
-  let timer, dead = false;
+  let timer, dead = false, refused = 0;
   const tick = async () => {
     try { const rows = await fetchBoardRows(cohort, fav); if (dead) return; onRows(rows); onState && onState("live"); }
     catch (e) { if (dead) return; console.warn("board pull failed:", e.message); onState && onState("offline"); }
-    timer = setTimeout(tick, ms);
+    refused = (window.SC_CLEAN_READS && SC_CG.meta && SC_CG.meta.current_equalizer_validated === false) ? refused + 1 : 0;
+    timer = setTimeout(tick, boardPullDelay(ms, refused));
   };
   tick();
   return () => { dead = true; clearTimeout(timer); };
@@ -11252,12 +11261,24 @@ function toggleFav(t) {   // FIX F — add/remove, repaint stars NOW, feed the F
    and the exact-ticker jump both read from the full set, independent of the active tab. */
 let ALLTK = new Set();
 pg("all_tickers?select=ticker").then((rows) => { (rows || []).forEach((r) => ALLTK.add(r.ticker)); }).catch(() => {});
+/* THE BOARD'S OWN PULL ALREADY BUILDS THE WHOLE UNIVERSE (BOARD_SNAPSHOT). This used to run a second complete board pull
+   - ten table reads, the paged estimates, /geiger, /quotes - at parse time, concurrently with the boot pull, and again every
+   5 minutes, only to fill the search list with the rows the snapshot already holds (scope "ALL" filters nothing). It also
+   overwrote eqSyms, the board scope's poll list, with the whole universe. The snapshot is used while it is recent; the
+   separate pull remains only as the fallback when there is none. Pure selector below. */
+const ALLROWS_SNAPSHOT_MAX_AGE_MS = 300000;
+function allRowsFromSnapshot(snapshot, now, maxAgeMs) {
+  if (!snapshot || !Array.isArray(snapshot.rows) || !snapshot.rows.length) return null;
+  return (now - snapshot.at <= maxAgeMs) ? snapshot.rows : null;
+}
 function refreshAllRows() {
+  const snap = allRowsFromSnapshot(BOARD_SNAPSHOT, Date.now(), ALLROWS_SNAPSHOT_MAX_AGE_MS);
+  if (snap) { ALLROWS = snap; snap.forEach((r) => ALLTK.add(r.t)); return; }
   try { fetchBoardRows("ALL", []).then((rows) => {
     if (Array.isArray(rows) && rows.length) { ALLROWS = rows; rows.forEach((r) => ALLTK.add(r.t)); }
   }).catch(() => {}); } catch (_) {}
 }
-refreshAllRows(); setInterval(refreshAllRows, 300000);   /* universe cache refreshed every 5 min */
+setTimeout(refreshAllRows, 8000); setInterval(refreshAllRows, 300000);   /* first run after the boot pull has normally landed; same 5 min cadence as before */
 function doSearch(tq) {                        // FIX #16: search acts
   if (!tq) { S.tq = ""; sync(); return; }
   /* FIX 7 — NEWS and EVENTS rooms: search FILTERS the list (ticker prefix) — the
