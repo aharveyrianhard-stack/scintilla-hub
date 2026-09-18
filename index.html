@@ -8094,22 +8094,33 @@ const ECON_LBL = {
    July sentiment / durable goods / industrial production / recession probability, 79 days old, were all the newest
    print FRED itself carried). So each series carries `max`: how many days its newest observation normally reaches
    before the next release lands (period + publication lag + slack). VALIDATED 2026-09-18 against FRED's actual latest
-   observation per series: the 15 series level with FRED read current under this table and the 8 really behind (GDP,
+   observation per series, and against a modelled 2026-2028 release calendar (smallest margin 3 days; the weekly mortgage,
+   industrial-production and recession-probability limits carry two extra days for a late provider over a holiday week):
+   the 15 series level with FRED read current under this table and the 8 really behind (GDP,
    real GDP, real GDP per capita, credit-card rate, M2, Fed balance sheet, TGA, reverse repo) read behind.
    Three facts stay separate on the row: the OBSERVATION period, whether it is past its normal RELEASE lag, and when the
    row was last WRITTEN (ingestion) - a recent write with an old observation is the source not supplying a newer print;
    an old write is a writer that stopped. A series this table does not know makes no staleness claim at all. */
 const ECON_RELEASE = {
   inflationRate: { cad: "daily", max: 7 }, RRPONTSYD: { cad: "daily", max: 7 },
-  "30YearFixedRateMortgageAverage": { cad: "weekly", max: 10 }, "15YearFixedRateMortgageAverage": { cad: "weekly", max: 10 },
+  "30YearFixedRateMortgageAverage": { cad: "weekly", max: 12 }, "15YearFixedRateMortgageAverage": { cad: "weekly", max: 12 },
   WALCL: { cad: "weekly", max: 12 }, WTREGEN: { cad: "weekly", max: 12 }, initialClaims: { cad: "weekly", max: 16 },
   federalFunds: { cad: "monthly", max: 80 }, unemploymentRate: { cad: "monthly", max: 80 }, totalNonfarmPayroll: { cad: "monthly", max: 80 }, totalVehicleSales: { cad: "monthly", max: 80 },
-  CPI: { cad: "monthly", max: 90 }, retailSales: { cad: "monthly", max: 90 }, industrialProductionTotalIndex: { cad: "monthly", max: 90 }, newPrivatelyOwnedHousingUnitsStartedTotalUnits: { cad: "monthly", max: 90 },
-  durableGoods: { cad: "monthly", max: 100 }, consumerSentiment: { cad: "monthly", max: 100 }, M2SL: { cad: "monthly", max: 100 }, smoothedUSRecessionProbabilities: { cad: "monthly", max: 100 },
+  CPI: { cad: "monthly", max: 90 }, retailSales: { cad: "monthly", max: 90 }, industrialProductionTotalIndex: { cad: "monthly", max: 95 }, newPrivatelyOwnedHousingUnitsStartedTotalUnits: { cad: "monthly", max: 90 },
+  durableGoods: { cad: "monthly", max: 100 }, consumerSentiment: { cad: "monthly", max: 100 }, M2SL: { cad: "monthly", max: 100 }, smoothedUSRecessionProbabilities: { cad: "monthly", max: 105 },
   commercialBankInterestRateOnCreditCardPlansAllAccounts: { cad: "quarterly", max: 175 },
   GDP: { cad: "quarterly", max: 225 }, realGDP: { cad: "quarterly", max: 225 }, realGDPPerCapita: { cad: "quarterly", max: 225 },
   nominalPotentialGDP: { cad: "quarterly", projection: true },   /* CBO projection: dated ahead by construction, never "behind" */
 };
+/* WHEN DID A WRITER LAST TOUCH THIS SERIES? Not the newest row's own stamp: the FMP writers only re-upsert the rows their
+   request window returns, so once the newest print is older than that window its stamp FREEZES while the writer keeps
+   running every day - and "no writer has written this series since ..." would blame a live writer for a silent
+   source. The series' newest stamp across ALL its rows on hand is the writer's last visit. */
+function econSeriesLastWrite(rows) {
+  const last = {};
+  for (const r of rows || []) { const w = +r.updated_ts; if (!isFinite(w) || w <= 0) continue; const ms = w < 1e12 ? w * 1000 : w; if (!(last[r.series] >= ms)) last[r.series] = ms; }
+  return last;
+}
 function econFreshness(series, dateStr, updatedTs, nowMs) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const rule = ECON_RELEASE[series] || null;
@@ -8193,10 +8204,11 @@ async function fillEcon() {
     }
     const seen = {};
     for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
+    const lastWrite = econSeriesLastWrite(eh);
     const printRows = Object.values(seen).sort((a, b) => String(ECON_LBL[a.series] || a.series).localeCompare(String(ECON_LBL[b.series] || b.series)));
     let staleN = 0, unknownN = 0, newestPrint = "";
     const prints = printRows.map((r) => {
-        const f = econFreshness(r.series, r.date, r.updated_ts);
+        const f = econFreshness(r.series, r.date, lastWrite[r.series] != null ? lastWrite[r.series] : r.updated_ts);
         if (f.behind) staleN++; if (f.state === "UNKNOWN") unknownN++; if (String(r.date) > newestPrint && f.state !== "PROJECTION") newestPrint = String(r.date);
         const when = "observed " + esc(r.date) + (f.cad ? " · " + f.cad : "") +
           (f.behind ? '<span class="econ-age"> · ' + esc(f.note) + "</span>" : f.state === "UNKNOWN" || f.state === "PROJECTION" ? " · " + esc(f.note) : "");

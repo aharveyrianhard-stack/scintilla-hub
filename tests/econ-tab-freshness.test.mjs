@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const src = page.match(/const ECON_RELEASE = \{[\s\S]*?\n\};\n/)[0] + page.match(/function econFreshness\(series, dateStr, updatedTs, nowMs\) \{[\s\S]*?\n\}\n/)[0] + "return { ECON_RELEASE, econFreshness };";
+const src = page.match(/const ECON_RELEASE = \{[\s\S]*?\n\};\n/)[0] + page.match(/function econSeriesLastWrite\(rows\) \{[\s\S]*?\n\}\n/)[0] + page.match(/function econFreshness\(series, dateStr, updatedTs, nowMs\) \{[\s\S]*?\n\}\n/)[0] + "return { ECON_RELEASE, econFreshness, econSeriesLastWrite };";
 const api = new Function(src)();
 const NOW = Date.parse("2026-09-18T06:00:00Z"), sec = (iso) => Math.floor(Date.parse(iso) / 1000);
 const RAN = sec("2026-09-18T05:47:03Z"), JUNE = sec("2026-06-09T23:05:50Z");
@@ -56,4 +56,17 @@ test("the panel keeps observation, release lag and ingestion apart, tops up seri
   assert.match(page, /econ_history\?select=series,date,value,updated_ts&order=date\.desc&limit=1000/);
   const lbl = new Function(page.match(/const ECON_LBL = \{[\s\S]*?\n\};\n/)[0] + "return ECON_LBL;")();
   for (const k of Object.keys(api.ECON_RELEASE)) assert.ok(lbl[k], k + " has a display label");
+});
+test("a live writer is not blamed for a silent source: the series' last write is its newest stamp across ALL rows, not the newest row's frozen stamp", () => {
+  // federalFunds: FMP stops publishing after the 2026-08-01 print; the writer keeps running daily but only re-upserts rows inside its ~90-day window
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  const rows = [{ series: "federalFunds", date: "2026-08-01", value: 3.63, updated_ts: sec("2026-10-30T17:47:00Z") },      // newest print: left the writer's window on 10-30, its stamp froze
+                { series: "federalFunds", date: "2025-11-01", value: 3.9, updated_ts: sec("2026-11-04T05:47:00Z") },       // the year-ago slice the writer now gets back, rewritten today
+                { series: "WALCL", date: "2026-06-03", value: 6711495, updated_ts: sec("2026-06-09T23:05:50Z") }, { series: "WALCL", date: "2026-05-27", value: 6704383, updated_ts: sec("2026-06-09T23:05:50Z") }];
+  const last = api.econSeriesLastWrite(rows);
+  assert.equal(api.econFreshness("federalFunds", "2026-08-01", rows[0].updated_ts, now).state, "BEHIND_WRITER_STOPPED", "the newest row's own stamp gets it wrong (the shipped c40fbc8 behaviour)");
+  const f = api.econFreshness("federalFunds", "2026-08-01", last.federalFunds, now); assert.equal(f.state, "BEHIND_SOURCE"); assert.match(f.note, /writer ran 2026-11-04, its source supplied no newer print$/);
+  assert.equal(api.econFreshness("WALCL", "2026-06-03", last.WALCL, now).state, "BEHIND_WRITER_STOPPED", "a series nobody writes is still called that");
+  assert.deepEqual(api.econSeriesLastWrite([{ series: "x", updated_ts: null }, { series: "x", updated_ts: "junk" }]), {});
+  assert.match(page, /const lastWrite = econSeriesLastWrite\(eh\);/); assert.match(page, /econFreshness\(r\.series, r\.date, lastWrite\[r\.series\] != null \? lastWrite\[r\.series\] : r\.updated_ts\)/);
 });
