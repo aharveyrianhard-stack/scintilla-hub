@@ -5,10 +5,17 @@ import crypto from "node:crypto";
 const at = (p) => new URL("../prototypes/" + p, import.meta.url);
 const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).digest("hex");
 
-/* The static review catalogue root prepared and inspected (deliverable-homes/scintilla-prototypes, receipts beside it). It is
-   copied byte for byte: these are root's recorded hashes, so an edit to any of the three files fails here. */
-test("the three catalogue files are the bytes root inspected", () => {
-  assert.equal(sha("index.html"), "a4b7c3ad4f242c1b23b24a90683523686e55fe3f832bc82b3b762d0766724f81");
+/* The static review catalogue root prepared and inspected (deliverable-homes/scintilla-prototypes, receipts beside it).
+   catalog.json and the preview are still root's bytes. index.html was restyled to the Scintilla identity (Alan: "the prototype home
+   must look like Scintilla"): ONLY its <style> block changed - every byte after </style> (all markup, text, links and the filter
+   script) is still root's inspected markup, pinned below, so any content edit still fails here. */
+const MARKUP_AFTER_STYLE_ROOT_SHA256 = "e02ff3f12480ee96b5e068b4aa4db8310f8897835e6fe2ce5529e566cf44d046";   // of root's a4b7c3ad... bytes
+test("the three catalogue files are the bytes root inspected (index.html: style restyled, markup unchanged)", () => {
+  assert.equal(sha("index.html"), "cc8c27084fc452766ec50b4b4505dfb1338099d48aa3f230218f20c6c4153142");
+  const page = fs.readFileSync(at("index.html"), "utf8");
+  assert.equal(crypto.createHash("sha256").update(page.split("</style>")[1]).digest("hex"), MARKUP_AFTER_STYLE_ROOT_SHA256, "markup after the style block is root's");
+  assert.match(page, /--crk:#00D4FF/, "Scintilla cyan"); assert.match(page, /--bg:#0A0A0F/, "Scintilla background");
+  assert.match(page, /"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace/, "the Hub's mono stack, no web font fetched");
   assert.equal(sha("catalog.json"), "29cf01c232cec74398d136b18aab0a881dca6b68160b5485b2dc4a36a41181e1");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
   assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "index.html", "previews"]);
