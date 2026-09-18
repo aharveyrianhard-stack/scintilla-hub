@@ -2793,6 +2793,23 @@ body.ytm-open{ overflow:hidden; }
 .sc-ytm__next.is-closed .sc-ytm__nrow{ display:none; }
 /* native video fullscreen: hub chrome gets out of the way */
 body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display:none !important; }
+/* THE BOARD'S FINAL GEOMETRY IS STATIC. These rules were injected by the rewind module's addCols() ~91 KB further down the
+   document (and the rewind bar 1200 ms after load), so the first paint of a cold load could be the 10-track board without
+   the bar, then re-flow to 13 tracks and move ~35px down. They are copied here VERBATIM (same !important, same cascade
+   position: last in <head>, before every body <style>), so the very first render is already the settled one. */
+.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,15fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}
+.ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,8fr) minmax(0,12fr) minmax(0,7fr) minmax(0,5fr) !important}}
+.gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-cohstrip{grid-template-columns:repeat(var(--coh-n,10),minmax(0,1fr)) !important;grid-auto-flow:row !important;grid-auto-columns:auto !important;gap:1px !important;overflow-x:hidden !important;padding-left:4px !important;padding-right:4px !important}
+@media(max-width:820px){.sc-cohstrip{grid-template-columns:repeat(var(--coh-half,5),minmax(0,1fr)) !important}}
+.sc-cohstrip__read{white-space:normal !important;text-overflow:clip !important;height:16px !important;line-height:8px !important;hyphens:manual;overflow-wrap:normal}
+.sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}
+.gwx-div{color:var(--warn,#e0a24a);margin-left:3px}
+/* the rewind bar's box, so the slot the board template reserves for it has the bar's own height from the first paint */
+.gwx{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:.4px solid var(--line)}
+.gwx--slot > *{visibility:hidden}
 </style>
 </head>
 <body>
@@ -4285,7 +4302,18 @@ function updateLive() {
 const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 L8 13 L12 15 L20 5"/><path d="M4 5 v14 h16" opacity=".4"/></svg>';
 /* R23 FIX 3 — 8th col MKT: per-row trading-state dot (chart label stays blank, as ever). */
 /* R26 FIX 6 — FPE col (fwd P/E) between CHG and GEIGER, sortable like the rest. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* ONE STATIC COLUMN MODEL FOR THE HEADER AND THE ROWS. Trend/Mom/Read used to be spliced in here by the rewind module
+   after the first render, and their row cells were inserted into the DOM afterwards by an observer bound to ONE
+   #boardScroll element. Whenever that observer was not attached (cold parse; every return to DASHBOARD from another room,
+   until the next 45 s pull) the header had 13 cells over 10-cell rows: the Geiger bar sat under TREND, RVol under MOM,
+   the market dot under READ, and the GEIGER / RVOL / MKT columns were empty. The model is now complete from the first
+   render and boardRowsHTML() emits one cell per column; the rewind module still OWNS the three cells' values (paintTM). */
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
+   dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
+function boardTMCellsHTML() {
+  return '<span class="gwx-tm">' + SC_PENDING + '</span><span class="gwx-tm">' + SC_PENDING + '</span><span class="gwx-read">' + SC_PENDING + "</span>";
+}
 /* R42 §3 — compact market-cap formatter: $3.1T / $412B / $8.7B / $612M
    (one decimal under 100 in-unit, none at/above).
    R49 §4 (Alan: "market cap needs commas") — the NUMERIC part is comma-grouped via
@@ -4429,6 +4457,7 @@ function boardRowsHTML() {
       '<span class="sc-mcap" id="lmc_' + esc(d.t) + '">' + fmtCap(d.mc) + "</span>" +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
+      boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax)) +
       volCellHTML(d.rv, d.rvAsOf) +
       mktDotHTML(d.t) +
@@ -4479,9 +4508,14 @@ function cohortGeigerHTML() {
       '<span class="sc-gmini">' + SC_PENDING + '</span><span class="sc-cohgeiger__v">…</span><span class="sc-cohgeiger__t"></span></div></div></div>';
   }
   if (!rows.length) {
-    return '<div class="sc-cohgeiger"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
-      (total ? '<span class="sc-cohgeiger__n">0/' + total + " contributors</span>" : "") + '</div>' +
-      '<div class="sc-cohgeiger__big" style="color:var(--mute)">—<span class="sc-cohgeiger__st">awaiting data</span></div></div>';
+    /* NO CONTRIBUTORS KEEPS THE SHAPE TOO. The pending case above was given the summary's shape on 2026-09-18, but this
+       branch - rows present, none carrying a Geiger, i.e. a pull whose Geiger was refused - still swapped in the short
+       "awaiting data" block, the same 16.4px move of every row, for as long as the refusal lasted. Same header and MEAN
+       line; the value is a dash because here it really is unavailable. */
+    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      (total ? '<span class="sc-cohgeiger__n">0/' + total + " contributors · awaiting data</span>" : '<span class="sc-cohgeiger__n">awaiting data</span>') + '</div>' +
+      '<div class="sc-cohgeiger__lines"><div class="sc-cohgeiger__line is-mean"><span class="sc-cohgeiger__k">MEAN</span>' +
+      '<span class="sc-gmini"></span><span class="sc-cohgeiger__v" style="color:var(--mute)">—</span><span class="sc-cohgeiger__t"></span></div></div></div>';
   }
   const vals = rows.map((r) => r.g).sort((a, b) => a - b);
   const n = vals.length;
@@ -4789,6 +4823,11 @@ function boardPanelHTML() {
     /* R41 §2 — cohCompare moved OUT of the board into the right pane's Layer 0
        (layer0HTML). The left board keeps tabs + cohort geiger + rows only. */
     '<div id="cohGeiger">' + cohortGeigerHTML() + "</div>" +
+    /* THE REWIND BAR'S PLACE IS RESERVED BY THE TEMPLATE. The rewind module inserted its bar 1200 ms after load (and up to
+       1500 ms after every return to DASHBOARD), pushing the header and every row down by the bar's height. The slot is the
+       bar's own box (.gwx) holding one hidden control of the bar's own class, so it has the bar's height at any zoom tier
+       without a magic number; mount() replaces it in place. */
+    '<div class="gwx gwx--slot" id="gwxSlot" aria-hidden="true"><button class="sc-l0chip" tabindex="-1" disabled>1Y</button></div>' +
     '<div class="sc-board__scroll" id="boardScroll">' + boardRowsHTML() + "</div>" +
   "</div>";
 }
@@ -4829,6 +4868,9 @@ function updateBoard() {
   const inL0 = !!el("layer0");
   if (inL0 && LAYER0_TAB === "MAP") l0MapSync();
   const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(inL0 ? l0MapChg : null); wireHeatSizing(); }   // R41 — Layer-0 / heat-view grid tracks feed ticks too (R43 §1: re-measure after the swap)
+  /* the MAP was mounted before this scope had rows, so it holds a note and no grid/canvas to update: build it now that
+     the rows are here, instead of leaving the note up until the map's own TF series happens to land seconds later */
+  else if (inL0 && LAYER0_TAB === "MAP" && shownRows().length && document.querySelector("#l0body > .sc-l0note")) paintL0Body();
   l0FocusTick();                        // R47 — MAP's TILT cards track the same feed tick (canvas modes repaint themselves)
   updateCohrow();                       // keep the cohort-tab underline in sync
   syncBoardSel();                       // re-apply the current selection highlight after a rows repaint
@@ -5018,10 +5060,15 @@ function heatFillPct(c) {
   const r = Math.min(1, Math.abs(v) / (HEAT_SCALE || 2));
   return Math.round((0.08 + Math.pow(r, 0.55) * 0.92) * 100);
 }
+/* A SCOPE THAT HAS NOT LOADED IS NOT AN EMPTY SCOPE. On a first visit (no cached layout) the map said "no tickers in this
+   scope" about a cohort whose rows were simply still in flight. Pure. */
+function scopeEmptyNote(pending, abbr) {
+  return pending ? "loading " + ((abbr && abbr[pending]) || pending) + " …" : "no tickers in this scope";
+}
 function heatmapHTML(chgOf) {
   const chgAt = (typeof chgOf === "function") ? chgOf : (r) => num(r.c);
   const all = shownRows();
-  if (!all.length) return '<div class="sc-heatgrid__empty">no tickers in this scope</div>';
+  if (!all.length) return '<div class="sc-heatgrid__empty">' + esc(scopeEmptyNote(S.boardPending, COH_ABBR)) + '</div>';
   /* R42 §1 (Alan: symmetry) — cap-weighted lg/md tile SIZING removed: every tile is
      an identical square now. Market cap still drives the ORDER (biggest first) so the
      scan reads top-left = heaviest, but no tile is visually privileged. */
@@ -6643,7 +6690,7 @@ function l0BodyHTML() {
     const rows = l0FocRows();
     const h = head("MAP · <b>" + esc(L0_MAP_MODE) + "</b> · " + rows.length + " tickers · <b>" +
       esc(S.tq ? "search" : S.coh) + "</b> · sorted by mkt cap · " + l0MapBasis(rows.length));
-    if (!rows.length) return h + '<div class="sc-l0note">no tickers in this scope</div>';
+    if (!rows.length) return h + '<div class="sc-l0note">' + esc(scopeEmptyNote(S.boardPending, COH_ABBR)) + '</div>';
     if (L0_MAP_MODE === "GRID") {
       /* The FILL / LEVEL chips belong HERE. heatmapHTML has its own header, but the MAP tab
          builds its own via head() and drops that one - so a toggle added there rendered
@@ -7022,7 +7069,12 @@ function cohKey(k){
 }
 let cohSetsReady = null;
 function loadCohSets() {
-  if (!cohSetsReady) cohSetsReady = pg("ticker_cohorts?select=ticker,cohort").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
+  /* THE WHOLE MAP, NOT ITS FIRST 1,000 ROWS. PostgREST serves at most 1,000 rows per request and ticker_cohorts holds 1,280
+     (READ 2026-09-18): the unpaged read silently dropped 280 memberships - MEGACAP lost AAPL, NVDA, GOOGL, GOOG and TSLA
+     (7 of 12 left), AI_HARDWARE lost 15 of 43 (AMD, AVGO, NBIS, ARM, SMCI, VRT ...) - so those names were missing from
+     their cohort's board, and the cohort means on the compare strip were taken over the wrong members. Same reader and
+     paging as the estimates (pgAll); the explicit order keeps the pages disjoint. */
+  if (!cohSetsReady) cohSetsReady = pgAll("ticker_cohorts?select=ticker,cohort&order=ticker.asc,cohort.asc").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
     COHSETS = buildCohSets(ms);
     return COHSETS;
   }).catch((e) => { cohSetsReady = null; throw e; });   // retry on next call if the pull failed
@@ -12505,9 +12557,21 @@ if (sb) {
 /* R29 — CROSS-DEVICE FAVORITES. The server (hub_favorites) is the source of truth so
    every device shows the same stars. On boot we pull it; if it has rows they REPLACE the
    local seed (authoritative); localStorage stays only as an offline fallback. */
+/* same members, any order (pure) - the server list normally equals the local copy */
+function sameTickerSet(a, b) {
+  const A = new Set((a || []).map((t) => String(t).toUpperCase())), B = new Set((b || []).map((t) => String(t).toUpperCase()));
+  if (A.size !== B.size) return false;
+  for (const t of A) if (!B.has(t)) return false;
+  return true;
+}
 async function favLoad() {
   try {
     const rows = await pg("hub_favorites?select=ticker");
+    /* COMPARED WITH THE LIST AS IT STANDS WHEN THE READ RETURNS, not when it was sent. A star toggled while this read was in
+       flight has already restarted the feed with the toggled list (toggleFav), so that is the list the running feed serves;
+       taken before the await, an unchanged server list skipped the restart and left the FAV board on the toggled list
+       under the server's stars (and skipped the star repaint in other scopes). */
+    const before = S.fav.slice();
     const server = Array.isArray(rows) ? rows.map((r) => String(r.ticker).toUpperCase()) : [];
     /* BUGFIX (Alan: "stubborn favorite keeps coming back after I remove it") — this used
        to UNION server+local and re-push any local-only ticker to the server on EVERY boot.
@@ -12524,8 +12588,13 @@ async function favLoad() {
       for (const t of local) operatorWrite({ action: "fav_add", ticker: t }).catch((e) => console.error("fav migrate", t, e));
     }
     lsSet("sc_fav", JSON.stringify(S.fav));
+    /* DO NOT RESTART A FEED THAT IS ALREADY SERVING THIS LIST. This ran unconditionally ~one round trip after boot: it
+       stopped the boot pull (a stopped feed DISCARDS its result) and began a second full pull, so every cold load paid
+       for the board twice and the first prices / Geiger bars landed a whole pull later than they had to. The feed is
+       restarted only when the favourites really differ AND they are the scope on screen; otherwise only the stars move. */
+    if (sameTickerSet(before, S.fav)) return;
     NEWS_CACHE.delete("FAV");
-    restartFeed();
+    if (S.coh === "FAV") restartFeed(); else updateBoard();
   } catch (e) { console.error("favLoad failed", e); }
 }
 
@@ -14194,7 +14263,9 @@ function filesWire(){
   }
   function mount(){
     var host=E("cohGeiger"); if(!host||E("gwxBar"))return;
-    host.insertAdjacentHTML("afterend", bar());
+    /* the board template reserves the bar's box (#gwxSlot): replace it in place, so mounting moves nothing */
+    var slot=E("gwxSlot");
+    if(slot) slot.outerHTML=bar(); else host.insertAdjacentHTML("afterend", bar());
     E("gwxPlay").onclick=play;
     /* ★ COALESCE. Dragging fires oninput per pixel; each one queued a fetch and a full
        repaint, so a fast drag stacked dozens of them and the rows visibly fought each
@@ -14645,6 +14716,9 @@ function filesWire(){
      rows paint from. Without this the strip would have to fetch its own copy, and two
      copies is how the board and the strip drifted apart in the first place. */
   var TM={}, TM_AT=null, TM_FLIGHT=false, TM_ASOF=null, GWX_W=null, prevPainted={};
+  /* PENDING IS NOT ABSENT (the board's own rule): until the first component read has completed the three cells say "…";
+     a dash is kept for a ticker the completed read - or the rewound day - really has nothing for. */
+  var TM_LOADED=false;
   window.SCIN_TM = TM;
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
@@ -14741,13 +14815,14 @@ function filesWire(){
          write repaints. Now it computes the strings first and returns early if they match
          what is already on screen. */
       var wantT, wantM, wantR;
-      if(!d||d.tr==null){ wantT="—"; wantM="—"; }
+      var NONE=(TM_LOADED||ASOF)?"—":"…";
+      if(!d||d.tr==null){ wantT=NONE; wantM=NONE; }
       else if(d.mo==null){ wantT=fmt2(d.tr); wantM="—"; }
       else { wantT=fmt2(d.tr); wantM=fmt2(d.mo); }
       if(!fresh && tr.textContent===wantT && mo.firstChild && mo.firstChild.nodeValue===wantM){
         prevPainted[t]=1; return;          // nothing changed for this row - do not touch it
       }
-      if(!d||d.tr==null){ tr.textContent="—"; mo.textContent="—";
+      if(!d||d.tr==null){ tr.textContent=NONE; mo.textContent=NONE;
         tr.style.color="var(--mute)"; mo.style.color="var(--mute)"; }
       else if(d.mo==null){                       // rewound: trend is real, momentum has no history
         tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
@@ -14773,7 +14848,7 @@ function filesWire(){
          Both agreeing is the quiet case. */
       var rd=r.querySelector(".gwx-read");
       if(!rd){ rd=document.createElement("span"); rd.className="gwx-read"; }
-      if(!d||d.tr==null){ rd.textContent="—"; rd.style.color="var(--mute)"; }
+      if(!d||d.tr==null){ rd.textContent=NONE; rd.style.color="var(--mute)"; }
       else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
         rd.title="rewound - momentum has no history to compare against"; }
       else {
@@ -14820,6 +14895,7 @@ function filesWire(){
       }
       Object.keys(TM).forEach(function(t){delete TM[t];});
       Object.keys(next).forEach(function(t){TM[t]=next[t];});
+      TM_LOADED=true;
       if(!ASOF){
         paintTM();
         var cc=E("cohCompare");
@@ -14834,7 +14910,12 @@ function filesWire(){
      "when I reload it shows me the version of the table that did not have the trend and
      momentum, and then it goes over to the other one." BOARD_COLS exists at parse time,
      so registering here makes the very first render the correct one. */
-  try{ addCols(); loadTM(); watchBoard(); watchStrip(); }catch(e){}
+  /* …and the same goes for the rewind bar and the three component cells: the dashboard is already in the DOM when this
+     script is parsed, so the bar takes its reserved slot and the cells are painted NOW, in the task that parsed us,
+     instead of 1200 ms later / on whatever board mutation happens to come next. */
+  try{ addCols(); }catch(e){}
+  try{ mount(); }catch(e){}                      /* a bar that cannot mount must not take the cells down with it */
+  try{ watchBoard(); watchStrip(); watchMain(); loadTM(); }catch(e){}
 
   /* the board is rebuilt on room changes — re-mount whenever it reappears */
   /* the housekeeping tick used to run every 900ms REGARDLESS - straight through a FLIP
@@ -14850,14 +14931,35 @@ function filesWire(){
      A MutationObserver fires as soon as the DOM changes, before the browser paints, so the
      columns are restored in the same frame and the old table is never shown at all. */
   var boardObs=null;
+  /* rows fresh from the page's template carry the three cells as pending placeholders (.gwx-tm > .sc-pending); rows from
+     an older template carry none. Either way they have not been painted yet. Painted rows match neither, so an in-place
+     move (repaint) does not trigger a second paint. */
+  function needsTM(bs){
+    return !!(bs.querySelector(".gwx-tm > .sc-pending") ||
+      (!bs.querySelector(".gwx-tm") && bs.querySelector(".sc-board__row")));
+  }
   function watchBoard(){
     var bs=E("boardScroll"); if(!bs || bs.__gwxWatched) return;
     bs.__gwxWatched=true;
     boardObs=new MutationObserver(function(){
       if(TIMER) return;                            // playing - repaint() owns the frame
-      if(!bs.querySelector(".gwx-tm") && bs.querySelector(".sc-board__row")) paintTM();
+      if(needsTM(bs)) paintTM();
     });
     boardObs.observe(bs,{childList:true});
+    /* A board mounted while nobody was watching (cold parse, every return to DASHBOARD) is painted on attach. Attaching
+       alone used to leave it unpainted until the NEXT rebuild of #boardScroll - up to a whole 45 s pull away. */
+    if(!TIMER && needsTM(bs)) paintTM();
+  }
+  /* A room change replaces #main's children in one assignment. Seeing THAT, instead of waiting for the 1500 ms tick,
+     puts the bar, the observers and the component cells into the same frame as the new board. */
+  function watchMain(){
+    var m=E("main"); if(!m || m.__gwxWatched) return;
+    m.__gwxWatched=true;
+    new MutationObserver(function(){
+      if(TIMER) return;
+      if(E("cohGeiger")&&!E("gwxBar")) mount();
+      watchBoard(); watchStrip();
+    }).observe(m,{childList:true});
   }
   /* same for the compare strip, which the page also rebuilds under us */
   function watchStrip(){

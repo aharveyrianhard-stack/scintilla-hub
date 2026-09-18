@@ -14,8 +14,9 @@ function fn(name) {
 test("board header has one cell per row cell, relative volume labelled, and the same rank reserve as the rows", () => {
   const cols = page.match(/const BOARD_COLS = (\[[^\n]*\]);/)[1];
   const labels = [...cols.matchAll(/\["([^"]*)",/g)].map((m) => m[1]);
-  // row template: star, ticker, last, chg, fpe, mcap, rsi, geiger, vol, mkt dot = 10 (Trend/Mom/Read are injected into both)
-  assert.equal(labels.length, 10, "10 base header cells for 10 base row cells (was 9: no volume header)");
+  // row template: star, ticker, last, chg, fpe, mcap, rsi, trend, mom, read, geiger, vol, mkt dot = 13. Trend/Mom/Read are part of
+  // the static model and the row template (tests/dashboard-cold-load.test.mjs counts the rendered cells); they are no longer injected.
+  assert.equal(labels.length, 13, "13 header cells for 13 row cells (was 9: no volume header; then 10 + 3 injected after first paint)");
   assert.equal(labels[labels.indexOf("Geiger") + 1], "RVol", "relative-volume header sits over the volume cell");
   assert.equal(labels.at(-1), "Mkt", "Mkt stays over the market dot");
   assert.match(page, /\.sc-board__row, \.ch\.hdr\{padding-right:18px\}/, "header and rows share one geometry");
