@@ -3537,6 +3537,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   return rows;
 }
 
+/* the three reads the company EVENTS tab is drawn from - shared by the first load and the quiet re-read (refreshCompanyEvents) */
+const coEventsPath = (e) => "earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source&order=date.desc&limit=16";   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
+const coCallSumPath = (e) => "earnings_call_transcripts?ticker=eq." + e + "&ai_summary=not.is.null&select=ticker,quarter,call_date&order=call_date.desc&limit=24";
+const coCallKeysPath = (e) => "earnings_call_transcripts?ticker=eq." + e + "&select=ticker,quarter,call_date&order=call_date.desc&limit=40";
 async function fetchCompanyData(t) {
   const e = encodeURIComponent(t);
   /* BOUNDED AND ISOLATED — same reason as the Geiger tile above.
@@ -3559,7 +3563,7 @@ async function fetchCompanyData(t) {
     pg("analyst_ratings?ticker=eq." + e + "&select=consensus,strong_buy,buy,hold,sell,strong_sell"),
     pg("price_target_consensus?ticker=eq." + e + "&select=target_high,target_low,target_avg,target_median,num_analysts"),   // EST PORT — median for the 02 CONVICTION subline
     pg("news?ticker=eq." + e + "&select=ticker,title,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=30"),
-    pg("earnings_events?ticker=eq." + e + "&select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source&order=date.desc&limit=16"),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
+    pg(coEventsPath(e)),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
     pg("ticker_context?ticker=eq." + e + "&select=ticker,narrative,business_now,catalysts,watch_notes&limit=1"),   // FIX 3 — dossier, pulled once on open
     pg("fundamentals_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 3 — period values are FY/Q1–Q4, not 'annual'
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
@@ -3576,8 +3580,8 @@ async function fetchCompanyData(t) {
     pg("analyst_grades?ticker=eq." + e + "&select=ticker,date,firm,action,from_grade,to_grade,price_target&order=date.desc&limit=12").catch(() => []),
     pg("etf_info?ticker=eq." + e + "&select=ticker,name,description,website,etf_company,expense_ratio,aum,avg_volume,inception_date,nav,holdings_count,sectors").catch(() => []),   // NEW — ETF/fund overview stats (honest empty if not an ETF)
     pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
-    pg("earnings_call_transcripts?ticker=eq." + e + "&ai_summary=not.is.null&select=ticker,quarter,call_date&order=call_date.desc&limit=24").catch(() => []),   // keys only: WHICH of this company's calls have a stored summary (one small request per company open; the text is fetched when a card's Call summary is opened)
-    pg("earnings_call_transcripts?ticker=eq." + e + "&select=ticker,quarter,call_date&order=call_date.desc&limit=40").catch(() => []),   // keys only: which of this company's calls are stored at all - the cards' Transcript control needs it HERE (it used to depend on an index only the master EVENTS feed loads, so on a company's own tab the control never appeared: measured 0 of 20 cards)
+    pg(coCallSumPath(e)).catch(() => []),   // keys only: WHICH of this company's calls have a stored summary (one small request per company open; the text is fetched when a card's Call summary is opened)
+    pg(coCallKeysPath(e)).catch(() => []),   // keys only: which of this company's calls are stored at all - the cards' Transcript control needs it HERE (it used to depend on an index only the master EVENTS feed loads, so on a company's own tab the control never appeared: measured 0 of 20 cards)
   ].map(bound)));
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   /* P0-E: same Geiger authority on the company view as on the board. */
@@ -3614,6 +3618,7 @@ async function fetchCompanyData(t) {
     _transcript: (tran && tran[0]) || null,                                     // NEW — last earnings_call_transcripts row (or null → honest empty)
     _callsum: matchCallSummaries(evs || [], csum || []),                        // event date -> the summarised call of THAT event (see matchCallSummaries)
     _callDays: (ckeys || []).map((c) => c && c.call_date).filter(Boolean),       // this company's stored call dates (keys only)
+    _evSig: JSON.stringify([evs || [], csum || [], ckeys || []]),                // what the EVENTS tab was drawn from - the quiet re-read redraws only when this differs
     _releases: rels || [],                                                      // NEW — company_releases rows (empty → honest empty)
     _grades: grds || [],                                                        // NEW — analyst_grades rows (empty → honest empty)
     _etf: (etfi && etfi[0]) || null,                                            // NEW — etf_info row (null → not an ETF / not backfilled yet)
@@ -8075,7 +8080,42 @@ function renderEvents(cohort) {
       }).join("")
     : "Nothing upcoming for this scope.";
 }
-async function fillEvents() {
+/* AN OPEN EVENTS VIEW NEVER LOOKED AGAIN. The master feed read its rows when the section was entered and a company's tab when
+   the company was opened; nothing re-read them while the view stayed open. After FedEx Sep 17 and NIO Sep 9 were removed from
+   storage (2026-09-18) a tab that was already open went on showing both until it was reloaded or re-entered - reproduced in
+   an isolated browser, and what Alan reported. While an events view is open it is now re-read every five minutes and when
+   the tab becomes visible again; the screen is redrawn ONLY when the rows differ, and then each list keeps its scroll
+   position and an opened group stays open. Entering the section still paints at once from the last read, then re-reads. */
+let EV_SIG = "", EV_READ_AT = 0;
+function redrawKeepingPlace(rootSel, scrollSel, draw) {
+  const root = document.querySelector(rootSel), at = root ? [...root.querySelectorAll(scrollSel)].map((x) => x.scrollTop) : [];
+  const open = root ? [...root.querySelectorAll("details.sc-ernnores-grp")].map((x) => x.open) : [];
+  draw();
+  const now = document.querySelector(rootSel); if (!now) return;
+  [...now.querySelectorAll(scrollSel)].forEach((x, i) => { if (at[i]) x.scrollTop = at[i]; });
+  [...now.querySelectorAll("details.sc-ernnores-grp")].forEach((x, i) => { if (open[i]) x.open = true; });
+}
+async function refreshCompanyEvents() {
+  const d = S.coData;
+  if (!d || d._loading || !d.t || S.coTab !== "EVENTS" || !el("leftPanel")) return;
+  if (document.querySelector("#leftPanel .sc-evtab.tr-open")) return;          // the call summary is open and being read: leave the panel alone
+  const t = d.t, e = encodeURIComponent(t), token = ROT_TOKEN;
+  let got; try { got = await Promise.all([pg(coEventsPath(e)), pg(coCallSumPath(e)).catch(() => []), pg(coCallKeysPath(e)).catch(() => [])]); } catch (err) { return; }   // a failed re-read changes nothing on screen
+  if (token !== ROT_TOKEN || S.coData !== d || S.coTab !== "EVENTS") return;   // another company or tab is on screen now
+  const sig = JSON.stringify(got); EV_READ_AT = Date.now();
+  if (sig === d._evSig) return;
+  d.events = got[0] || []; d._callsum = matchCallSummaries(d.events, got[1] || []); d._callDays = (got[2] || []).map((c) => c && c.call_date).filter(Boolean); d._evSig = sig;
+  redrawKeepingPlace("#leftPanel", ".sc-evpastscroll, .sc-evrelscroll", renderLeftPanel);
+}
+function refreshOpenEvents(onResume) {
+  if (document.visibilityState === "hidden") return;
+  if (onResume && Date.now() - EV_READ_AT < 60000) return;                     // just read
+  if (S.sec === "EVENTS" && el("evList") && S.calType !== "DIVIDENDS") fillEvents(true);
+  else if (S.coData && S.coTab === "EVENTS") refreshCompanyEvents();
+}
+setInterval(() => refreshOpenEvents(false), 300000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshOpenEvents(true); });
+async function fillEvents(quiet) {
   const list = el("evList");
   if (!list) return;
   if (S.calType === "DIVIDENDS") {
@@ -8083,8 +8123,8 @@ async function fillEvents() {
     const r0 = el("evUpcoming"); if (r0) r0.textContent = "—";
     return;
   }
-  if (EV_CACHE) renderEvents(S.coh);                     // cohort/search switch repaints instantly from cache
-  loadCohSets().then(() => { if (S.sec === "EVENTS") renderEvents(S.coh); })   // map retries alone, repaints on arrival
+  if (EV_CACHE && !quiet) renderEvents(S.coh);           // cohort/search switch repaints instantly from cache
+  if (!quiet) loadCohSets().then(() => { if (S.sec === "EVENTS") renderEvents(S.coh); })   // map retries alone, repaints on arrival (a quiet re-read must not repaint: this one reset the reader's scroll position every five minutes)
     .catch(() => {});
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
@@ -8111,7 +8151,10 @@ async function fillEvents() {
     const upPending = up.filter((e) => e.eps_actual == null);
     const reportedToday = up.filter((e) => e.eps_actual != null);
     EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
-    renderEvents(S.coh);
+    const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], tridx ? tridx.length : 0]), changed = sig !== EV_SIG;
+    EV_SIG = sig; EV_READ_AT = Date.now();
+    if (!quiet) renderEvents(S.coh);
+    else if (changed) redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh));   // a quiet re-read that found nothing new touches nothing
   } catch (err) { if (!EV_CACHE) list.innerHTML = '<div class="soon">events pull failed — check connection.</div>'; }
 }
 
