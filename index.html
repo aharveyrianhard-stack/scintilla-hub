@@ -3537,7 +3537,7 @@ async function fetchCompanyData(t) {
     Promise.resolve(pr).catch(() => []),
     new Promise((res) => setTimeout(() => res([]), 4000)),
   ]);
-  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh] = (await Promise.all([
+  const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh, csum] = (await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
@@ -3564,6 +3564,7 @@ async function fetchCompanyData(t) {
     pg("analyst_grades?ticker=eq." + e + "&select=ticker,date,firm,action,from_grade,to_grade,price_target&order=date.desc&limit=12").catch(() => []),
     pg("etf_info?ticker=eq." + e + "&select=ticker,name,description,website,etf_company,expense_ratio,aum,avg_volume,inception_date,nav,holdings_count,sectors").catch(() => []),   // NEW — ETF/fund overview stats (honest empty if not an ETF)
     pg("etf_holdings?ticker=eq." + e + "&select=asset,name,shares,weight_pct,market_value&order=weight_pct.desc.nullslast&limit=100").catch(() => []),   // NEW — ETF holdings table (honest empty if not an ETF)
+    pg("earnings_call_transcripts?ticker=eq." + e + "&ai_summary=not.is.null&select=ticker,quarter,call_date&order=call_date.desc&limit=24").catch(() => []),   // keys only: WHICH of this company's calls have a stored summary (one small request per company open; the text is fetched when a card's Call summary is opened)
   ].map(bound)));
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   /* P0-E: same Geiger authority on the company view as on the board. */
@@ -3598,6 +3599,7 @@ async function fetchCompanyData(t) {
     _cfhist: cfh || [],                                                         // FIX 2 — cashflow_history FY
     _ratios: ratios || [],                                                      // EST PORT — ratios_history pe rows
     _transcript: (tran && tran[0]) || null,                                     // NEW — last earnings_call_transcripts row (or null → honest empty)
+    _callsum: matchCallSummaries(evs || [], csum || []),                        // event date -> the summarised call of THAT event (see matchCallSummaries)
     _releases: rels || [],                                                      // NEW — company_releases rows (empty → honest empty)
     _grades: grds || [],                                                        // NEW — analyst_grades rows (empty → honest empty)
     _etf: (etfi && etfi[0]) || null,                                            // NEW — etf_info row (null → not an ETF / not backfilled yet)
@@ -7952,6 +7954,7 @@ function parkedRoomHTML(sec) {
 /* ---- Room 8 · EVENTS (wired: earnings_events — cohort-scoped, upcoming first) --- */
 let EV_CACHE = null;   // { up:[], past:[] } universe rows — scope applied at RENDER time (cohort is an argument)
 let TRANSCRIPT_IDX = new Map();   // ticker -> [call_date,...] — real-content index (earnings_call_transcripts.transcript_url is never written; content lives here, matched by nearest date). Fixes the dead "Transcript" link in earnings blocks.
+let CALLSUM_IDX = new Map();      // "TICKER|event date" -> { call_date, quarter } for the master feed: the summarised call that belongs to that event (matchCallSummaries)
 let EV_PROFILE = null;  // FIX 3 (R46) — lazily-pulled company_profile for the currently single-ticker-scoped master EVENTS feed (website + IR links)
 let EV_EXTRA = null;    // AREA B — lazily-pulled { t, releases:[], transcript } for the single-ticker-scoped master feed (empty → honest empty)
 /* pull the profile + releases + transcript for a single-ticker-scoped master events
@@ -8024,8 +8027,9 @@ function renderEvents(cohort) {
   if (scopedTk && (!EV_PROFILE || EV_PROFILE.ticker !== scopedTk || !EV_EXTRA || EV_EXTRA.t !== scopedTk)) evtLoadProfile(scopedTk);
   /* R60 — restore the TWO INDEPENDENT-SCROLL columns (UPCOMING | PAST·REPORTED),
      each its own bounded scroll via sc-evcols--split, but rendered with the NEW blocks. */
-  const upBlocks   = upS.map(earningsRowToBlock).map(earningsBlockHTML).join("")   || '<div class="ev-empty">Nothing upcoming.</div>';
-  const pastBlocks = pastS.map(earningsRowToBlock).map(earningsBlockHTML).join("") || '<div class="ev-empty">No reported earnings yet.</div>';
+  const toBlock = (r) => earningsRowToBlock(r, CALLSUM_IDX);
+  const upBlocks   = upS.map(toBlock).map(earningsBlockHTML).join("")   || '<div class="ev-empty">Nothing upcoming.</div>';
+  const pastBlocks = pastS.map(toBlock).map(earningsBlockHTML).join("") || '<div class="ev-empty">No reported earnings yet.</div>';
   const cols = !upS.length
     ? '<div class="sc-evcols sc-evcols--single sc-evcols--split"><div class="sc-evcol"><div class="sc-evsec">PAST · REPORTED</div>' + pastBlocks + "</div></div>"
     : '<div class="sc-evcols sc-evcols--split">' +
@@ -8071,10 +8075,11 @@ async function fillEvents() {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const today = todayISO();
     const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
-    const [up, past, tridx] = await Promise.all([
+    const [up, past, tridx, csidx] = await Promise.all([
       pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
       pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => []),   // REAL FIX — transcript_url column is dead (never written); this table is the real content index
+      pg("earnings_call_transcripts?select=ticker,quarter,call_date&ai_summary=not.is.null&order=call_date.desc&limit=1000").catch(() => []),   // keys only: which calls have a stored summary — ONE request for the whole feed, never one per card
     ]);
     if (!el("evList")) return;
     TRANSCRIPT_IDX = new Map();
@@ -8084,6 +8089,7 @@ async function fillEvents() {
       if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
       TRANSCRIPT_IDX.get(k).push(r.call_date);
     });
+    CALLSUM_IDX = matchCallSummaries([...up, ...past], csidx || []);
     const inU = (ev) => UNIVERSE.has(ev.ticker);
     /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
        move it into the reported/past list so it stops showing as the next upcoming. */
@@ -10160,7 +10166,10 @@ function earningsBlockHTML(d) {
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">' + esc(ernReleaseLabel(d.releaseUrl)) + '</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
         (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">◹ Transcript</button>' : '') +
         (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
-        (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>' : '') +
+        /* the event's own stored summary comes first; only without one does the card offer the summary of THAT event's call,
+           and it says so - a call summary is never presented as a release summary */
+        (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>'
+          : (d.callSummary ? '<button class="sc-ern__lnk" data-act="ernsum" data-kind="call" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '" data-cd="' + esc(d.callSummary.call_date) + '" data-q="' + esc(d.callSummary.quarter || "") + '" title="summary of the earnings call held ' + esc(fmtEvDate(d.callSummary.call_date)) + ' — no release summary is stored for this event">▤ Call summary</button>' : '')) +
       "</div>"
     : "";
   return '<div class="sc-ern">' +
@@ -10174,7 +10183,7 @@ function earningsBlockHTML(d) {
 /* REAL-DATA MAPPER — earnings_events row → earningsBlockHTML field-spec. session/
    confirmed/release/transcript aren't in the DB yet → null (block renders honest
    "—" / awaiting / pending). This makes the block the REAL earnings renderer. */
-function earningsRowToBlock(row) {
+function earningsRowToBlock(row, callsum) {
   row = row || {};
   return {
     ticker: row.ticker, date: row.date,
@@ -10184,7 +10193,34 @@ function earningsRowToBlock(row) {
     revenue: { est: num(row.revenue_estimate), actual: num(row.revenue_actual) },
     releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, metrics: row.release_metrics || null, sample: false,
     hasTranscript: transcriptExists(row.ticker, row.date),   // REAL FIX — row.transcript_url is a dead column; check the real content index instead
+    callSummary: (callsum instanceof Map && row.ticker && row.date) ? (callsum.get(String(row.ticker).toUpperCase() + "|" + row.date) || null) : null,
   };
+}
+/* WHICH CALL SUMMARY BELONGS TO WHICH EARNINGS EVENT. MEASURED 2026-09-18: FDX Jun 23, MU Jun 24 and COST May 28 (and 55
+   other reported events) have no release_summary while the call held for that very event has a stored ai_summary - the
+   card offered nothing. A card may offer a CALL summary only when the call is provably that event's call:
+     - the call date IS the event date (159 of the 165 summarised calls that have a reported event within five days), or
+     - the call is the NEXT calendar day (5 of 165: STLD, FNV, DKNG, PAAS, SIMO - an evening release with the call the next
+       morning) AND no earnings row of that ticker is dated on the call's own day, so one call is never attached to two cards.
+   Never the day before (0 of 165), never two or more days away (1 of 165 - left unmatched), never "the latest call": a
+   quarter is ~90 days, so one day cannot reach another quarter's call. `calls` holds only calls that HAVE a summary.
+   Pure function: events [{ticker,date}], calls [{ticker,quarter,call_date}] -> Map "TICKER|event date" -> {call_date,quarter}. */
+function matchCallSummaries(events, calls) {
+  const out = new Map(), byDay = new Map(), evDays = new Set();
+  const isDay = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  (calls || []).forEach((c) => {
+    if (!c || !c.ticker || !isDay(c.call_date)) return;
+    const k = String(c.ticker).toUpperCase() + "|" + c.call_date;
+    if (!byDay.has(k)) byDay.set(k, { call_date: c.call_date, quarter: c.quarter == null ? "" : String(c.quarter) });   // two rows for one call (a period named two ways) are the same call: first listed
+  });
+  (events || []).forEach((ev) => { if (ev && ev.ticker && isDay(ev.date)) evDays.add(String(ev.ticker).toUpperCase() + "|" + ev.date); });
+  evDays.forEach((k) => {
+    if (byDay.has(k)) { out.set(k, byDay.get(k)); return; }
+    const t = k.slice(0, k.indexOf("|")), d = k.slice(k.indexOf("|") + 1);
+    const next = t + "|" + new Date(Date.parse(d + "T00:00:00Z") + 86400000).toISOString().slice(0, 10);
+    if (byDay.has(next) && !evDays.has(next)) out.set(k, byDay.get(next));
+  });
+  return out;
 }
 /* REAL FIX — earnings_events.transcript_url is never written by the backend (earnings-transcript
    stores content in earnings_call_transcripts with url:null, nothing syncs it back). The ticker-page
@@ -10330,7 +10366,7 @@ function transcriptBubbleHTML(data) {
   const q = tr.quarter ? String(tr.quarter) : "";
   const link = '<button class="sc-trbubble__full" data-act="fulltranscript" data-t="' + esc(data.t) + '" data-q="' + esc(String(tr.quarter || "")) + '">◹ read full transcript</button>';
   const bodyHTML = sum ? summaryHTML(sum)
-    : "AI summary generating — open the full transcript below.";
+    : "No call summary is stored for this call — open the full transcript.";
   return '<div class="sc-trbubble' + (sum ? "" : " empty") + '" id="trbubble-' + esc(data.t) + '" style="display:none">' +
     '<div class="sc-trbubble__hd"><span>◹ earnings call</span>' +
       (q || when ? '<span class="q">' + esc([q, when].filter(Boolean).join(" · ")) + "</span>" : "") + link + "</div>" +
@@ -10380,7 +10416,8 @@ function coEventsHTML(data) {
      as beat/miss/mixed, same logic earningsBlockHTML uses for a single quarter.
      Attached as .streakTag so earningsBlockHTML can render it in the empty
      104px column — flat tag, no sentence, no model call. */
-  const streakClass = pastEvs.slice(0, 3).map(earningsRowToBlock).map((b) => {
+  const toBlock = (r) => earningsRowToBlock(r, data._callsum);
+  const streakClass = pastEvs.slice(0, 3).map(toBlock).map((b) => {
     const eSp = surprisePct(num(b.eps && b.eps.actual), num(b.eps && b.eps.est));
     const rSp = surprisePct(num(b.revenue && b.revenue.actual), num(b.revenue && b.revenue.est));
     const known = [eSp, rSp].filter((x) => x != null);
@@ -10402,13 +10439,13 @@ function coEventsHTML(data) {
      that the company has no earnings — and a fund gets its own wording. */
   const isFund = !!(data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")) || cryptoSet.has(data.t);
   const nextBlock = upEvs.length                                    // (1) — UPCOMING earnings block (no label; sits beside AI READ)
-    ? upEvs.map(earningsRowToBlock).map((b) => { b.streakTag = streakTag; return b; }).map(earningsBlockHTML).join("")
+    ? upEvs.map(toBlock).map((b) => { b.streakTag = streakTag; return b; }).map(earningsBlockHTML).join("")
     : '<div class="sc-evsec" style="color:var(--dim)">NEXT EARNINGS · ' + (isFund
         ? "not applicable — fund / non-equity, no earnings calendar"
         : "no scheduled date in the stored calendar for $" + esc(data.t) + " (absence of a stored date, not a statement that none is scheduled)") + "</div>";
   const pastHTML = evs.length
     ? '<div class="sc-evsec">PAST EARNINGS</div>' + (pastEvs.length   // (4) — real earnings_events rows as blocks
-        ? pastEvs.map(earningsRowToBlock).map(earningsBlockHTML).join("")
+        ? pastEvs.map(toBlock).map(earningsBlockHTML).join("")
         : '<div class="ev-empty">No reported earnings yet.</div>')
     : '<div class="sc-senttxt" style="padding:6px 2px">No earnings events in earnings_events for $' + esc(data.t) + ".</div>";
   /* FIX (R52 item 3) — HEADLINES block REMOVED from the EVENTS tab. It duplicated
@@ -11043,8 +11080,9 @@ function toggleSecFs(panel) {
 }
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  const sh = el("ernSumHost");
-  if (sh && sh.firstChild) { sh.innerHTML = ""; return; }   // the summary panel sits on top of everything: Esc closes it and leaves what is under it alone
+  const fh = el("trFullHost"), sh = el("ernSumHost");
+  if (fh && fh.firstChild) { fh.innerHTML = ""; return; }   // topmost first: a transcript opened from a call summary sits above it
+  if (sh && sh.firstChild) { sh.innerHTML = ""; return; }   // the summary panel sits on top of everything else: Esc closes it and leaves what is under it alone
   closeTvModal(); clearSecFs();                             // FIX 5 — Esc closes the TV modal too
 });
 /* KEYBOARD ACTIVATION FOR THE DISCLOSURE CONTROLS.
@@ -11371,7 +11409,8 @@ document.addEventListener("click", (e) => {
     case "fulltranscript": {   // open the full earnings-call transcript in a modal (fetched on demand from earnings_call_transcripts)
       e.preventDefault(); e.stopPropagation();
       const tk = a.dataset.t, qq = a.dataset.q || "", dd = a.dataset.d || "";
-      let host = el("trFullHost"); if (!host) { host = document.createElement("div"); host.id = "trFullHost"; document.body.appendChild(host); }
+      let host = el("trFullHost"); if (!host) { host = document.createElement("div"); host.id = "trFullHost"; }
+      document.body.appendChild(host);   // (re)appended last: opened from a call summary it must sit above that panel, whichever host was created first
       host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
         '<div data-act="trfullclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
         '<div style="position:relative;width:min(860px,92vw);max-height:86vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
@@ -11395,13 +11434,25 @@ document.addEventListener("click", (e) => {
     case "ernsum": {   // newswire release summary + key metrics + call link (from the fast-primary catch)
       e.preventDefault(); e.stopPropagation();
       const tk = a.dataset.t, dd = a.dataset.d || "";
+      const isCall = a.dataset.kind === "call", cd = a.dataset.cd || "", cq = a.dataset.q || "";   // a card without a stored event summary opens the summary of THAT event's call, and the panel says which it is
       let host = el("ernSumHost"); if (!host) { host = document.createElement("div"); host.id = "ernSumHost"; document.body.appendChild(host); }
       host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
         '<div data-act="ernsumclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
         '<div role="dialog" aria-modal="true" aria-label="' + esc(tk) + ' summary" style="position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + ' · RELEASE SUMMARY<button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px">▤ ' + esc(tk) + (isCall ? ' · CALL SUMMARY' + (cq ? ' · ' + esc(cq) : '') : ' · RELEASE SUMMARY') + '<button data-act="ernsumclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
           '<div id="ernSumBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace">loading…</div>' +
         '</div></div>';
+      if (isCall) {
+        pg("earnings_call_transcripts?ticker=eq." + encodeURIComponent(tk) + "&call_date=eq." + encodeURIComponent(cd) + "&ai_summary=not.is.null&select=quarter,call_date,ai_summary&limit=4").then((rows) => {
+          const b = el("ernSumBody"); if (!b) return;
+          const r = (rows || []).find((x) => String(x.quarter || "") === cq) || (rows && rows[0]);
+          if (!r || !r.ai_summary) { b.textContent = "no call summary on file."; return; }
+          b.innerHTML = '<div style="color:#8A8EA8;margin-bottom:12px">Summary of the earnings call held ' + esc(fmtEvDate(r.call_date)) + (r.quarter ? " (" + esc(String(r.quarter)) + ")" : "") + ". No release summary is stored for this event.</div>" +
+            '<div style="margin-bottom:14px">' + summaryHTML(r.ai_summary) + "</div>" +
+            '<div style="margin-top:12px"><button data-act="fulltranscript" data-t="' + esc(tk) + '" data-q="' + esc(String(r.quarter || "")) + '" data-d="' + esc(r.call_date) + '" style="background:none;border:0;padding:0;cursor:pointer;color:#00D4FF;font:inherit">◹ read full transcript</button></div>';
+        }).catch(() => { const b = el("ernSumBody"); if (b) b.textContent = "failed to load."; });
+        break;
+      }
       pg("earnings_events?ticker=eq." + encodeURIComponent(tk) + "&date=eq." + encodeURIComponent(dd) + "&select=release_summary,release_metrics,call_url,release_link&limit=1").then((rows) => {
         const b = el("ernSumBody"); if (!b) return; const r = rows && rows[0]; if (!r) { b.textContent = "no summary on file."; return; }
         let h = "";
