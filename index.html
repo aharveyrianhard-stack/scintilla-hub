@@ -3534,7 +3534,7 @@ async function fetchCompanyData(t) {
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
     pg("balance_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,cash_and_equiv,total_debt,net_debt,total_assets,total_equity&order=fiscal_year.asc"),    // FIX 2 — balance sheet FY
     pg("cashflow_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,operating_cf,capex,free_cf,dividends_paid,buybacks&order=fiscal_year.asc"),             // FIX 2 — cash flow FY
-    pg("read_blocks?ticker=eq." + e + "&select=section,body"),   // R20 FIX 7 — re-pulled on EVERY company open, never cached: verdict=10min live; business/catalysts/watch=news cadence — always re-read, never hardcode. (fetchCompanyData has no payload cache: openCo nulls coData + refetches.)
+    pg("read_blocks?ticker=eq." + e + "&select=section,body,updated_ts"),   // R20 FIX 7 — re-pulled on EVERY company open, never cached: verdict=10min live; business/catalysts/watch=news cadence — always re-read, never hardcode. (fetchCompanyData has no payload cache: openCo nulls coData + refetches.)
     pg("ratios_history?ticker=eq." + e + "&select=pe").catch(() => []),   // EST PORT — P/E range strip (avg/peak); catch-wrapped: a missing table never kills the payload
     /* NEW TABLES (JUST CREATED · EMPTY until the ingester fills them) — every read is
        catch-wrapped so an empty/missing table renders an honest empty slot, never a crash.
@@ -3550,10 +3550,10 @@ async function fetchCompanyData(t) {
   /* P0-E: same Geiger authority on the company view as on the board. */
   if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
-  const rbMap = {};                                              // GO-LIVE FIX 2 — section → body
-  for (const b of (rblk || [])) if (b && b.section) rbMap[String(b.section).toLowerCase()] = b.body;
+  const rbMap = {}, rbAt = {};                                   // GO-LIVE FIX 2 — section → body; section → updated_ts
+  for (const b of (rblk || [])) if (b && b.section) { rbMap[String(b.section).toLowerCase()] = b.body; rbAt[String(b.section).toLowerCase()] = b.updated_ts || null; }
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
-  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0 };
+  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, asOf: d0.updated_ts || null };
   /* P0-F: same provider authority on the company view as on the board. */
   if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
@@ -3567,7 +3567,7 @@ async function fetchCompanyData(t) {
     estimates: { fc: null },
     financials: {},
     news: nws || [], social: [], events: evs || [],
-    read: buildRead(t, ctx[0] || null, d, price, fund[0] || null, est || [], rbMap),   // FIX 3 + GO-LIVE FIX 2
+    read: buildRead(t, ctx[0] || null, d, price, fund[0] || null, est || [], rbMap, rbAt),   // FIX 3 + GO-LIVE FIX 2
     _profile: p, _fund: fund[0] || null, _est: est || [],
     _ratings: rat[0] || null, _pt: pt[0] || null,
     _finhist: finh || [],                                                       // FIX 3/4 — FY actuals
@@ -10174,9 +10174,16 @@ function coEventsHTML(data) {
     else if (missN === streakClass.length) streakTag = "MISS" + (streakClass.length > 1 ? "×" + streakClass.length : "");
     else streakTag = "MIXED " + beatN + "-" + missN;
   }
+  /* ABSENT IS NOT "NONE". With no upcoming row the tab said nothing at all about the next report (MEASURED 2026-09-18:
+     103 of 364 universe symbols have no upcoming earnings_events row; the calendar writer had been failing since
+     2026-08-11). A company now gets an explicit line — no scheduled date in the STORED calendar, which is not a claim
+     that the company has no earnings — and a fund gets its own wording. */
+  const isFund = !!(data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")) || cryptoSet.has(data.t);
   const nextBlock = upEvs.length                                    // (1) — UPCOMING earnings block (no label; sits beside AI READ)
     ? upEvs.map(earningsRowToBlock).map((b) => { b.streakTag = streakTag; return b; }).map(earningsBlockHTML).join("")
-    : "";
+    : '<div class="sc-evsec" style="color:var(--dim)">NEXT EARNINGS · ' + (isFund
+        ? "not applicable — fund / non-equity, no earnings calendar"
+        : "no scheduled date in the stored calendar for $" + esc(data.t) + " (absence of a stored date, not a statement that none is scheduled)") + "</div>";
   const pastHTML = evs.length
     ? '<div class="sc-evsec">PAST EARNINGS</div>' + (pastEvs.length   // (4) — real earnings_events rows as blocks
         ? pastEvs.map(earningsRowToBlock).map(earningsBlockHTML).join("")
@@ -10359,15 +10366,28 @@ function liveReadSentence(d) {              // generated from the SAME composite
   return "Right now the multi-timeframe read is " + (d.g >= 0 ? "constructive" : "heavy") +
     ". Trend is " + sigWord(d.tr) + " and momentum is " + sigWord(d.mo) + ".";
 }
-function buildRead(t, cx, d, price, fund, est, rb) {
-  rb = rb || {};                                       // GO-LIVE FIX 2 — read_blocks (section → body)
+/* A READ IS DATED BY ITS INPUTS. read_blocks rows carry updated_ts; the TREND, LEVELS and COHORT blocks were last written
+   2026-06-11 (MEASURED 2026-09-18: AAPL LEVELS quoted resistance $294.75 / support $290.55 against a $336 price with no
+   date), and the verdict sentence reads the legacy daily composite, frozen since 2026-08-24 while its row is re-stamped
+   every ten minutes. A block or basis older than a day now says so, in the label, with its date and age. */
+const READ_STALE_MS = 86400e3;
+function readAgeLabel(ts, nowMs) {
+  const v = ts == null ? NaN : (isFinite(+ts) && +ts > 0 ? (+ts < 1e12 ? +ts * 1000 : +ts) : Date.parse(String(ts)));
+  if (!isFinite(v)) return null;
+  const age = (Number.isFinite(nowMs) ? nowMs : Date.now()) - v;
+  if (age <= READ_STALE_MS) return null;
+  return "AS OF " + new Date(v).toISOString().slice(0, 10) + " (" + Math.round(age / 86400e3) + "d old)";
+}
+function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
+  rb = rb || {}; rbAt = rbAt || {};                    // GO-LIVE FIX 2 — read_blocks (section → body); section → updated_ts
   const hasRb = Object.keys(rb).length > 0;
   if (!cx && !hasRb) return { content: {}, pills: [], extras: [] };   // no dossier, no blocks → honest default line
   const { trail, fwd, next: fwdNext } = fwdTrailPE(price, fund, est);
   /* GO-LIVE FIX 2 — the read_blocks verdict body is THE verdict; ticker_context.narrative
      is the fallback. The live composite sentence is ALWAYS appended after the body. */
   const verdict = toParas(rb.verdict != null ? rb.verdict : (cx && cx.narrative));
-  verdict.push(liveReadSentence(d));
+  const compAge = readAgeLabel(d && d.asOf);
+  verdict.push(liveReadSentence(d) + (compAge ? " Composite basis " + compAge.toLowerCase() + "." : ""));
   if (trail != null && fwd != null)
     verdict.push("On valuation, $" + t + " trades at <b>" + trail.toFixed(1) +
       "×</b> trailing earnings and <b>" + fwd.toFixed(1) + "×</b> " +
@@ -10378,7 +10398,7 @@ function buildRead(t, cx, d, price, fund, est, rb) {
      group of paragraphs shown under the active VERDICT tab. */
   const extras = ["trend", "levels", "cohort"]
     .filter((k) => rb[k] != null && String(rb[k]).trim())
-    .map((k) => [k.toUpperCase(), toParas(rb[k])]);
+    .map((k) => { const age = readAgeLabel(rbAt[k]); return [k.toUpperCase() + (age ? " · " + age : ""), toParas(rb[k])]; });
   return {
     /* R20 FIX 7 — read_blocks 4-SECTION CONTRACT (verdict·business·catalysts·watch,
        verified ×128 in DB): each tab renders the FULL matching section body

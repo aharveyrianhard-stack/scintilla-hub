@@ -33,3 +33,9 @@ test("report time: the stored value when present, an explicit unknown otherwise,
   assert.match(page, /const sess = \(ev\.report_time && ev\.report_time !== "TBD"\) \? " · " \+ esc\(ev\.report_time\) : "";/, "master list rows show a stored report time");
   assert.match(page, /const sess = \(ev\.report_time && ev\.report_time !== "TBD"\) \? " " \+ esc\(ev\.report_time\) : "";/, "the upcoming rail shows a stored report time");
 });
+
+test("a company with no upcoming calendar row says so explicitly, and never claims the company has no earnings", () => {
+  assert.match(page, /NEXT EARNINGS · ' \+ \(isFund/);
+  assert.match(page, /no scheduled date in the stored calendar for \$" \+ esc\(data\.t\) \+ " \(absence of a stored date, not a statement that none is scheduled\)/);
+  assert.match(page, /not applicable — fund \/ non-equity, no earnings calendar/);
+});
