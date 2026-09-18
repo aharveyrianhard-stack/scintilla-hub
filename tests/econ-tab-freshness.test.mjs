@@ -70,3 +70,15 @@ test("a live writer is not blamed for a silent source: the series' last write is
   assert.deepEqual(api.econSeriesLastWrite([{ series: "x", updated_ts: null }, { series: "x", updated_ts: "junk" }]), {});
   assert.match(page, /const lastWrite = econSeriesLastWrite\(eh\);/); assert.match(page, /econFreshness\(r\.series, r\.date, lastWrite\[r\.series\] != null \? lastWrite\[r\.series\] : r\.updated_ts\)/);
 });
+test("the source footer tells the truth about the four FRED-only series from their own write stamps (root 06:17, after macro-feeds v5)", () => {
+  const note = new Function(page.match(/const ECON_FRED_ONLY = \[[^\n]*\n/)[0] + page.match(/function econFredNote\(lastWrite, nowMs\) \{[\s\S]*?\n\}\n/)[0] + "return econFredNote;")();
+  const at = (iso) => Date.parse(iso), now = at("2026-09-18T10:20:00Z"), ran = at("2026-09-18T10:15:47Z");
+  assert.match(note({ M2SL: ran, WALCL: ran, WTREGEN: ran, RRPONTSYD: ran }, now), /read from FRED by macro-feeds since 2026-09-18 \(their earlier FRED job was retired 2026-06-10\) · all four last written 2026-09-18$/);
+  // the writer stops again (or one series fails every night): the OLDEST stamp speaks, and it is marked
+  assert.match(note({ M2SL: ran, WALCL: ran, WTREGEN: at("2026-06-09T23:05:50Z"), RRPONTSYD: ran }, now), /<span class="econ-age">not all four written since 2026-06-09<\/span>$/);
+  assert.match(note({ M2SL: ran, WALCL: ran, WTREGEN: ran, RRPONTSYD: ran }, at("2026-09-23T10:20:00Z")), /not all four written since 2026-09-18/);
+  assert.match(note({ M2SL: ran, WALCL: ran, WTREGEN: ran, RRPONTSYD: ran }, at("2026-09-21T22:36:00Z")), /all four last written 2026-09-18$/, "a weekend plus the evening run in flight is not an alarm");
+  assert.match(note({ M2SL: ran, WALCL: ran }, now), /last write not readable for all four$/); assert.match(note(null, now), /last write not readable/);
+  assert.doesNotMatch(page, /have had no writer since"|\(22:35Z\), both FMP/, "the obsolete sentences are gone");
+  assert.match(page, /macro-feeds \(22:35Z, FMP \+ FRED\)/); assert.match(page, /" · " \+ econFredNote\(lastWrite\) \+/);
+});

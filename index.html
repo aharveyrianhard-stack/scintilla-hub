@@ -8121,6 +8121,19 @@ function econSeriesLastWrite(rows) {
   for (const r of rows || []) { const w = +r.updated_ts; if (!isFinite(w) || w <= 0) continue; const ms = w < 1e12 ? w * 1000 : w; if (!(last[r.series] >= ms)) last[r.series] = ms; }
   return last;
 }
+/* THE FOUR FRED-ONLY SERIES (M2, Fed balance sheet, TGA, reverse repo). Their GitHub job was retired 2026-06-10 and nothing
+   wrote them until macro-feeds began reading FRED on 2026-09-18. The footer sentence is built from the rows' own write
+   stamps - the OLDEST last write among the four - so it cannot go on saying "written" if that writer stops again.
+   4 days, not 3: a label only, and it must not flicker across a weekend while the evening run is in flight. */
+const ECON_FRED_ONLY = ["M2SL", "WALCL", "WTREGEN", "RRPONTSYD"];
+function econFredNote(lastWrite, nowMs) {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const ws = ECON_FRED_ONLY.map((k) => (lastWrite || {})[k]);
+  const head = "M2 / Fed balance sheet / TGA / reverse repo are read from FRED by macro-feeds since 2026-09-18 (their earlier FRED job was retired 2026-06-10)";
+  if (ws.some((w) => !(w > 0))) return head + " · last write not readable for all four";
+  const oldest = Math.min(...ws), day = new Date(oldest).toISOString().slice(0, 10);
+  return head + (now - oldest <= 4 * 86400e3 ? " · all four last written " + day : ' · <span class="econ-age">not all four written since ' + day + "</span>");
+}
 function econFreshness(series, dateStr, updatedTs, nowMs) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const rule = ECON_RELEASE[series] || null;
@@ -8218,9 +8231,9 @@ async function fillEcon() {
       (staleN ? '<span class="econ-age">' + staleN + " behind their normal release lag</span>" : "none behind their normal release lag") +
       (unknownN ? " · " + unknownN + " with no freshness claim" : "") + "</div>" + prints;
     const src = el("econSource");
-    if (src) src.innerHTML = "treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history written by fmp-economic (05:47/17:47Z) and macro-feeds (22:35Z), both FMP · newest observation <b>" +
+    if (src) src.innerHTML = "treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history written by fmp-economic (05:47/17:47Z, FMP) and macro-feeds (22:35Z, FMP + FRED) · newest observation <b>" +
       esc(newestPrint || "—") + "</b> · " + (staleN ? staleN + " series behind their normal release lag (see rows)" : "no series behind its normal release lag") +
-      " · M2 / Fed balance sheet / TGA / reverse repo came from a FRED job retired 2026-06-10 and have had no writer since" +
+      " · " + econFredNote(lastWrite) +
       (topUpFailed.length ? ' · <span class="econ-age">could not read: ' + esc(topUpFailed.join(", ")) + "</span>" : "") +
       (neverStored.length ? " · never stored: " + esc(neverStored.join(", ")) : "");
     el("econList").innerHTML = html || '<div class="soon">treasury_rates and econ_history are empty.</div>';
