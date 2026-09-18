@@ -39,3 +39,13 @@ test("a company with no upcoming calendar row says so explicitly, and never clai
   assert.match(page, /no scheduled date in the stored calendar for \$" \+ esc\(data\.t\) \+ " \(absence of a stored date, not a statement that none is scheduled\)/);
   assert.match(page, /not applicable — fund \/ non-equity, no earnings calendar/);
 });
+
+test("the release link is labelled by where it points, never as a form type the row does not prove (root 06:33: NIO is a 6-K, KR is the company's IR page)", () => {
+  const label = new Function(page.match(/function ernReleaseLabel\(url\) \{[\s\S]*?\n\}\n/)[0] + "return ernReleaseLabel;")();
+  assert.equal(label("https://www.sec.gov/Archives/edgar/data/1736541/000110465926104110/tm2624535d3_ex99-1.htm"), "◹ Release · SEC filing");
+  assert.equal(label("https://ir.kroger.com/news/news-details/2026/Kroger-Reports-Second-Quarter-2026-Results-and-Updates-Guidance-for-2026/default.aspx"), "◹ Release · ir.kroger.com");
+  assert.equal(label("https://www.businesswire.com/news/home/x"), "◹ Release · businesswire.com");
+  for (const u of ["#", "", null, undefined, "/relative/path", "javascript:void(0)", "not a url at all"]) assert.equal(label(u), "◹ Release", String(u));
+  assert.doesNotMatch(page, /◹ Release · 8-K/, "no link is printed as an 8-K exhibit without evidence");
+  assert.match(page, /esc\(ernReleaseLabel\(d\.releaseUrl\)\)/, "the label is escaped like every other stored value");
+});

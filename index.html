@@ -10139,7 +10139,7 @@ function earningsBlockHTML(d) {
   const tag = tagTxt ? '<div class="sc-ern__tag streak">' + esc(tagTxt) + "</div>" : "";
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
-        (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">◹ Release · 8-K Ex 99.1</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
+        (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">' + esc(ernReleaseLabel(d.releaseUrl)) + '</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
         (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">◹ Transcript</button>' : '') +
         (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
         (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">▤ Summary</button>' : '') +
@@ -10179,6 +10179,15 @@ function transcriptExists(ticker, date) {
   if (!arr || !arr.length) return false;
   const d0 = new Date(date + "T00:00:00").getTime();
   return arr.some((cd) => Math.abs(new Date(cd + "T00:00:00").getTime() - d0) <= 3 * 86400000);
+}
+/* THE RELEASE LINK SAYS WHAT IT IS, NOT WHAT IT USUALLY IS. Every link used to be labelled "8-K Ex 99.1": NIO files 6-Ks,
+   and a stored link can be the company's own release page or a newswire. The only evidence on hand is the URL, so the
+   label names where it points - "SEC filing" for sec.gov, otherwise the host - and claims no form type or exhibit number. */
+function ernReleaseLabel(url) {
+  let host = "";
+  try { host = new URL(String(url), "https://scintillahub.ai/").hostname.replace(/^www\./, ""); } catch (e) { host = ""; }
+  if (!host || host === "scintillahub.ai") return "◹ Release";
+  return "◹ Release · " + (host === "sec.gov" ? "SEC filing" : host);
 }
 const SAMPLE_EARNINGS = [
   { sample:true, ticker:"NVDA", date:"2026-08-27", session:"AMC", confirmed:true,
