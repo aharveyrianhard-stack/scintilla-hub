@@ -136,6 +136,8 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   z-index:5;   /* FIX 2 — solid header above row content (geiger mids/bars are z≤1) */
 }
 .ch > *{ min-width:0; overflow:hidden; }
+.sc-pending{ color:var(--dim); opacity:.75; letter-spacing:.08em; }
+.sc-board__pending{ padding:14px 10px; font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; }
 /* FIX (Alan: "something crops the (parenthesis) of chg% on cmd +/- zoom") — the blanket
    overflow:hidden above is correct for the ticker/name cell (real ellipsis truncation),
    but the Chg/RSI/F P/E cells are short fixed-format numbers ("(1.60%)") that should
@@ -245,9 +247,10 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    narrower than the word "constructive" can ever be set, so the read was truncated to
    "constr…" in every column. Each column now has a floor of 46px and the strip scrolls
    sideways when a scope has more cohorts than fit, rather than crushing every label. */
-.sc-cohstrip{ flex:0 0 auto; display:grid; grid-auto-flow:column;
-  grid-auto-columns:minmax(54px,1fr); gap:2px; overflow-x:auto; overscroll-behavior-x:contain;
-  padding:4px 8px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
+/* 2026-09-18 — no sideways scroll at all: every cohort shares one row (--coh-n columns from the render). */
+.sc-cohstrip{ flex:0 0 auto; display:grid; grid-template-columns:repeat(var(--coh-n,10),minmax(0,1fr));
+  gap:1px; overflow-x:hidden;
+  padding:4px 4px 5px; border-bottom:.6px solid var(--line2); font-family:var(--mono); }
 .sc-cohstrip::-webkit-scrollbar{ height:4px; }
 .sc-cohstrip::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:2px; }
 .sc-cohstrip__hd{ flex:0 0 auto; padding:7px 10px 3px; font-size:8px; letter-spacing:.1em;
@@ -3187,6 +3190,25 @@ function fpeVal(t, price) {
   return pe;
 }
 
+/* one scope rule for the pull and for the snapshot. ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but
+   membership is keyed by sector name (STAPLES); cohKey() resolves it. Falls back to the home cohort before membership loads. */
+function boardScopeHas(cohort, t, homeCohort) {
+  if (cohort === "ALL" || cohort === "FAV") return true;
+  const k = cohKey(cohort);
+  if (COHSETS && COHSETS[k]) return COHSETS[k].has(t);
+  return homeCohort === cohort;
+}
+let BOARD_SNAPSHOT = null;                         // { at, rows (whole universe, built by the latest pull), cohByT }
+/* A snapshot counts as current for a scope switch while it is no older than two board refresh intervals: the values are
+   the same pull the board is already showing. Older (feed offline) → the switch shows an explicit pending state instead. */
+const BOARD_SNAPSHOT_MAX_AGE_MS = 90000;
+function scopeRowsFromSnapshot(cohort, fav) {
+  const s = BOARD_SNAPSHOT;
+  if (!s || !Array.isArray(s.rows) || Date.now() - s.at > BOARD_SNAPSHOT_MAX_AGE_MS) return null;
+  let rows = s.rows.filter((r) => boardScopeHas(cohort, r.t, s.cohByT[r.t]));
+  if (cohort === "FAV") rows = rows.filter((r) => fav.includes(r.t));
+  return rows.map((r) => Object.assign({}, r));
+}
 async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* the membership map decides which rows belong to this cohort, so wait for it rather than
      racing it - a board that renders first would silently fall back to tickers.cohort, which
@@ -3223,7 +3245,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('analyst_estimates', pg("analyst_estimates?select=ticker,est_eps_avg,fiscal_date&period=eq.annual&fiscal_date=gte." + todayISO() + "&order=ticker.asc,fiscal_date.asc"), []),
     scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
     scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score"), []),
-    scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol"), []),
+    scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"), []),
     scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps"), []),
   ]);
   const seenF = new Set();                                     // first row per ticker = nearest FY
@@ -3294,7 +3316,6 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      for the board's Vol× column; the live_quotes/avg_volume ratio below stays as-is
      until then (no fake data, no premature switch). */
   const seen = new Set();
-  const scopeAll = cohort === "ALL" || cohort === "FAV";
   /* Rows come from the UNION so a Supabase membership failure cannot empty the board. Each entry
      keeps its cohort tag when membership answered, and carries null when it did not. */
   const COH_BY_T = Object.create(null);
@@ -3311,16 +3332,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
        THEMATIC 23 / 32, MACRO 21 / 26.
        The board now asks the SAME map the strip asks. tickers.cohort stays as the home cohort
        for anything that still wants it, but it no longer decides what you see. */
-    .filter((m) => {
-      if (scopeAll) return true;
-      /* ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but membership is
-         keyed by sector name (STAPLES) - so the board found nothing and every sector looked
-         empty. Alan: "XLP empty. All of the sectors are empty. They have no tickers."
-         cohKey() resolves an ETF ticker to its sector key before the lookup. */
-      const k = cohKey(cohort);
-      if (COHSETS && COHSETS[k]) return COHSETS[k].has(m.ticker);
-      return m.cohort === cohort;                    // fallback if membership has not loaded
-    })
+    /* scope narrowing moved AFTER the rows are built (see BOARD_SNAPSHOT below); boardScopeHas() is the same rule */
     /* P0: was `.filter(m => gg[m.ticker])`, i.e. the board universe was composite_staged tf=D.
        That made a Supabase table the gate on whether a provider-owned equity could appear at all.
        A declared equity now qualifies on the PROVIDER's say-so; everything else still needs a
@@ -3391,15 +3403,27 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
            Falls back to the old live/avg ratio only if the table has no row for this ticker. */
         rv:    (function () {
                  const bv = BOARDVOL[String(m.ticker).toUpperCase()];
+                 /* A SESSION RATIO IS ONLY TRUE FOR ITS SESSION. board_volume has not been written since
+                    2026-07-06 (MEASURED 2026-09-18, 190 rows), yet every row painted e.g. "0.9×" as today's
+                    relative volume. A row older than scRvolCurrent() allows is shown as absent (dash + the
+                    source date in the tooltip) and does NOT fall through to another ratio. */
+                 if (bv && !scRvolCurrent(bv.updated_ts)) return null;
                  const sr = bv && num(bv.session_rvol);
                  if (sr != null) return sr;
                  const lqv = num(px[m.ticker] && px[m.ticker].volume);
                  const av = pf[m.ticker] && Number(pf[m.ticker].avg_volume);
                  return (lqv != null && lqv > 0 && av > 0) ? lqv / av : null;
                })(),
+        rvAsOf: (function () { const bv = BOARDVOL[String(m.ticker).toUpperCase()]; return bv && bv.updated_ts ? String(bv.updated_ts) : null; })(),
         mc:    num(pf[m.ticker] && pf[m.ticker].market_cap),   // #133 (fix) — real market cap, feeds heatmap tile size
       };
     });
+  /* THE LATEST PULL IS THE WHOLE UNIVERSE. Every pull already fetched every table for every ticker and threw all but one
+     cohort away, so a cohort switch had nothing to paint until the next pull: the previous cohort's rows stayed under the
+     new selection (MEASURED 175-933 ms) or cached rows painted with dashes (MEASURED 16.4 px summary collapse). The built
+     rows are kept with their pull time; a switch paints its scope from them (scopeRowsFromSnapshot). */
+  BOARD_SNAPSHOT = { at: Date.now(), rows: rows, cohByT: COH_BY_T };
+  rows = rows.filter((r) => boardScopeHas(cohort, r.t, COH_BY_T[r.t]));
   if (cohort === "FAV") rows = rows.filter((r) => fav.includes(r.t));
   eqSyms = rows.map((r) => r.t).filter((t) => !cryptoSet.has(t));          // FMP 3 s poll scope
   return rows;
@@ -4138,7 +4162,7 @@ function updateLive() {
 const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 L8 13 L12 15 L20 5"/><path d="M4 5 v14 h16" opacity=".4"/></svg>';
 /* R23 FIX 3 — 8th col MKT: per-row trading-state dot (chart label stays blank, as ever). */
 /* R26 FIX 6 — FPE col (fwd P/E) between CHG and GEIGER, sortable like the rest. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* R42 §3 — compact market-cap formatter: $3.1T / $412B / $8.7B / $612M
    (one decimal under 100 in-unit, none at/above).
    R49 §4 (Alan: "market cap needs commas") — the NUMERIC part is comma-grouped via
@@ -4183,8 +4207,13 @@ function geigerMiniHTML(g, max) {
     '<i style="' + (bull ? "left" : "right") + ':50%;width:' + width + ';background:' + color +
     ';box-shadow:0 0 5px ' + color + '"></i></span>';
 }
-function volCellHTML(rv) {
-  if (rv == null) return '<span class="sc-vol" style="color:var(--mute)">—</span>';   // FIX 1 — honest dash, not an empty box
+/* relative volume is a SESSION ratio: current only if its source row was written within 36 h (covers an evening
+   read of the day's session; a weekend or a stopped writer reads as absent, never as today's number). */
+const RVOL_MAX_AGE_MS = 36 * 3600e3;
+function scRvolCurrent(ts) { const at = Date.parse(ts || ""); return isFinite(at) && Date.now() - at <= RVOL_MAX_AGE_MS; }
+function volCellHTML(rv, asOf) {
+  if (rv == null) return '<span class="sc-vol" style="color:var(--mute)" title="' +
+    (asOf ? "relative volume not current — source last written " + esc(String(asOf).slice(0, 10)) : "relative volume unavailable") + '">—</span>';   // FIX 1 — honest dash, not an empty box
   const on = rb(rv);
   return '<span class="sc-vol sc-clip"><span class="sc-vol__dots">' +
     [0,1,2,3,4].map((i) => "<i" + (i < on ? ' class="on"' : "") + "></i>").join("") +
@@ -4240,8 +4269,13 @@ function orderedShownRows() {
   S.boardOrder = order;                                        // persist the reconciled order
   return order.map((t) => byT[t]);
 }
+/* PENDING IS NOT ABSENT. A cached-layout row (state CONNECTING) has not received its first provider snapshot; its live
+   cells show "…" (pending) rather than "—", which this board reserves for a value that is actually unavailable. */
+const SC_PENDING = '<span class="sc-pending" title="waiting for the first provider snapshot">…</span>';
 function boardRowsHTML() {
   const rows = orderedShownRows();
+  if (!rows.length && S.boardPending)
+    return boardHeaderHTML() + '<div class="sc-board__pending" role="status">loading ' + esc(COH_ABBR[S.boardPending] || S.boardPending) + ' …</div>';
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
   const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));
   return boardHeaderHTML() + sorted.map((d) => {
@@ -4265,15 +4299,15 @@ function boardRowsHTML() {
       '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) +
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
-      '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—") + "</span>" +
-      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">—</span>'
+      '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
+      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : "—") + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple */
       '<span class="sc-mcap" id="lmc_' + esc(d.t) + '">' + fmtCap(d.mc) + "</span>" +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
-      geigerMiniHTML(d.g, gMax) +
-      volCellHTML(d.rv) +
+      (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax)) +
+      volCellHTML(d.rv, d.rvAsOf) +
       mktDotHTML(d.t) +
       "</div>";
   }).join("");
@@ -4312,6 +4346,15 @@ function cohortGeigerHTML() {
   const open = !!S.cohGeigerOpen;
   const total = (S.rows || []).length;
   const rows = (S.rows || []).filter((r) => r.g != null);
+  /* PENDING KEEPS THE SUMMARY'S SHAPE. Collapsing to "awaiting data" on every cached seed moved the board 16.4px up and
+     back (MEASURED 2026-09-18, favourite toggle and warm cohort switch). While the scope is pending, the header and MEAN
+     line keep their size and say "…". */
+  if (!rows.length && (S.boardPending || (total && S.rows.every((r) => r.state === "CONNECTING")))) {
+    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      '<span class="sc-cohgeiger__n">' + (total ? total + " tickers · " : "") + 'loading</span></div>' +
+      '<div class="sc-cohgeiger__lines"><div class="sc-cohgeiger__line is-mean"><span class="sc-cohgeiger__k">MEAN</span>' +
+      '<span class="sc-gmini">' + SC_PENDING + '</span><span class="sc-cohgeiger__v">…</span><span class="sc-cohgeiger__t"></span></div></div></div>';
+  }
   if (!rows.length) {
     return '<div class="sc-cohgeiger"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
       (total ? '<span class="sc-cohgeiger__n">0/' + total + " contributors</span>" : "") + '</div>' +
@@ -4584,11 +4627,12 @@ function cohortCompareStripHTML() {
       : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
         (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers";
     const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
-      esc(rd.txt) + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
+      /* the one 12-letter single word gets a break point; every other read wraps at its space */
+      esc(rd.txt).replace("constructive", "construc&shy;tive") + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
     /* two decimals plus signs is ~40px of text in a ~45px column and the numbers collided.
        The sign is redundant here — the colour already carries it, in the same two tones as
        everywhere else — so the pair reads as bare magnitudes and fits. */
-    const tmNum = (v) => (v == null ? "—" : Math.abs(v).toFixed(2));
+    const tmNum = (v) => (v == null ? "—" : Math.abs(v).toFixed(2).replace(/^0(?=\.)/, ""));   // ".21" — same number, fits a 40px column
     const tmTag = '<span class="sc-cohstrip__tm" title="' + esc(tmTitle) + '">' +
       '<b style="color:' + ((g.tr ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.tr) + "</b>" +
       '<i>/</i>' +
@@ -4614,7 +4658,7 @@ function cohortCompareStripHTML() {
       '" data-gwxcmp="SECTORS">SECTORS</button></span>';
   return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
-         '<div class="sc-cohstrip" id="cohStrip">' + cols + "</div>";
+         '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
 }
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
@@ -8249,8 +8293,10 @@ async function geigerSummaryData(t) {
     mas, rsiMtf, wprMtf, macd, volSeries, rvol, activeTfs,
     unavail, ladderSource,
     /* AREA C — board_volume rings (null now → awaiting-state arcs) */
-    rvolAtTime: (bvol && bvol[0] && num(bvol[0].rvol_at_time) != null) ? num(bvol[0].rvol_at_time) : null,
-    cumRvol: (bvol && bvol[0] && num(bvol[0].cum_rvol) != null) ? num(bvol[0].cum_rvol) : null,
+    /* same session-ratio rule as the board column: a stale board_volume row (last written 2026-07-06) leaves the rings
+       in their honest "awaiting rvol feed" state instead of drawing July's numbers as today's */
+    rvolAtTime: (bvol && bvol[0] && scRvolCurrent(bvol[0].updated_ts) && num(bvol[0].rvol_at_time) != null) ? num(bvol[0].rvol_at_time) : null,
+    cumRvol: (bvol && bvol[0] && scRvolCurrent(bvol[0].updated_ts) && num(bvol[0].cum_rvol) != null) ? num(bvol[0].cum_rvol) : null,
   };
 }
 
@@ -10512,14 +10558,23 @@ function restartFeed() {                       // = useEffect deps [st.coh, fav]
   const feedCoh = S.coh, feedFav = S.fav.slice();   // capture the scope this feed serves
   /* CACHE-FIRST — paint cached rows for this scope NOW; the first live pull then
      merges in place (firstForScope starts false when we seeded, so order is kept). */
-  const seeded = seedBoardFromCache(feedCoh, feedFav);
-  if (seeded) { try { updateBoard(); } catch (_) {} }   // instant paint from cache
+  /* 1. the latest pull already holds this scope's authoritative values → paint them now (no loading state at all);
+     2. else the cached LAYOUT with pending cells (…), never dashes: a dash on this board means "unavailable";
+     3. else an explicit pending board — the previous scope's rows are never left under the new selection. */
+  const snap = scopeRowsFromSnapshot(feedCoh, feedFav);
+  let seeded = false;
+  if (snap) { S.rows = snap; S.boardOrder = computeBoardOrder(); seeded = true; }
+  else seeded = seedBoardFromCache(feedCoh, feedFav);
+  if (!seeded) { S.rows = []; S.boardOrder = []; }
+  S.boardPending = seeded ? null : feedCoh;
+  try { updateBoard(); } catch (_) {}
   let firstForScope = !seeded;
   stopFeed = startBoardFeed(S.coh, S.fav,
     (rows) => {
       /* replace wholesale on the first pull for a (re)started scope; merge in place after
          (and always merge in place when we already seeded from cache) */
       const wasFirst = firstForScope;
+      S.boardPending = null;
       mergeBoardRows(rows, firstForScope);
       firstForScope = false;
       /* CACHE-FIRST — persist the fresh rows for this scope for the next boot. Only
@@ -10543,6 +10598,7 @@ function restartFeed() {                       // = useEffect deps [st.coh, fav]
         loadBoardRsi(shownRows().map((r) => r.t));
     },
     (st)   => { S.state = st; sync(); });
+  return seeded;
 }
 /* EQUALIZER LIVE-RELOAD — on a weights SAVE (event dispatched from the equalizer
    script), re-pull the board and repaint the open geiger so a new curve shows up
@@ -10852,9 +10908,10 @@ document.addEventListener("click", (e) => {
        another room's mount, fall back to sync() to build the DASH frame. */
     case "coh": {
       S.coh = a.dataset.key; S.tq = "";
-      if (mountedKey === "DASH") { updateBoard(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
-      else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); }
-      restartFeed();
+      /* restartFeed() paints the NEW scope itself (latest pull → pending), so nothing repaints the previous cohort's rows
+         under the new selection first (that was the 175-933 ms wrong-scope flash). */
+      if (mountedKey === "DASH") { restartFeed(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
+      else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); restartFeed(); }
       break;
     }
     /* R43 §3 — Layer-0 sub-tabs. Tab state is a plain JS flag (no persistence); only
@@ -13449,7 +13506,10 @@ function filesWire(){
    The reserve used to be conditional on body.gwx-on, so the whole row grid shifted the
    moment a rewind started and shifted back when it ended. The 26px is now permanent:
    the badge still comes and goes, but the space it occupies never does. */
-.sc-board__row{padding-right:18px}   /* the rank badge's reserve - permanent so columns never
+/* ONE GEOMETRY FOR HEADER AND ROWS. The reserve below was on the rows only, so the header's grid was 18px wider and
+   every fr track came out wider than the row's: MEASURED 2026-09-18 at 1280x800, the Geiger header sat 13.8px right of
+   its cells and the drift reached 16-18px by the last column. The header now reserves the same width. */
+.sc-board__row, .ch.hdr{padding-right:18px}   /* the rank badge's reserve - permanent so columns never
    shift when it appears, but trimmed from 26px: on a 13-column row that width was coming
    straight out of the numeric cells and helping them collide. */
 </style>
@@ -14036,10 +14096,15 @@ function filesWire(){
          which is narrower than the word "constructive" can be set at any legible size —
          so the read Alan asked for arrived truncated to "constr…" in every column. The
          row still never wraps; past the floor the strip scrolls sideways instead. */
-      ".sc-cohstrip{grid-template-columns:none !important;grid-auto-flow:column !important;"+
-      "grid-auto-columns:minmax(54px,1fr) !important;gap:2px !important;overflow-x:auto}"+
-      "@media(max-width:820px){.sc-cohstrip{grid-template-columns:none !important;"+
-      "grid-auto-flow:column !important;grid-auto-columns:minmax(54px,1fr) !important}}"+
+      /* NO SIDEWAYS SCROLL. Alan rejected scrolling the compare strip: with a 54px floor, 4 of 12 cohorts (GROWTH, INTL,
+         BLUE, THEME) were only reachable by scrolling (MEASURED 2026-09-18, 686px of columns in a 499px strip). Every
+         cohort now shares the one left-to-right green-to-red row (--coh-n columns, set by the render); the read wraps to
+         two lines instead of truncating, and small screens keep the old two-row wrap (--coh-half). */
+      ".sc-cohstrip{grid-template-columns:repeat(var(--coh-n,10),minmax(0,1fr)) !important;grid-auto-flow:row !important;"+
+      "grid-auto-columns:auto !important;gap:1px !important;overflow-x:hidden !important;padding-left:4px !important;padding-right:4px !important}"+
+      "@media(max-width:820px){.sc-cohstrip{grid-template-columns:repeat(var(--coh-half,5),minmax(0,1fr)) !important}}"+
+      ".sc-cohstrip__read{white-space:normal !important;text-overflow:clip !important;height:16px !important;line-height:8px !important;"+
+      "hyphens:manual;overflow-wrap:normal}"+
       ".sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
       ".gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}"+
