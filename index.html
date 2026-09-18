@@ -1746,6 +1746,7 @@ body.econ .sc-cohsearch{ display:none; }
 .econ-val{ margin-left:auto; flex:none; text-align:right; color:var(--ink);
   font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
 #econList .sc-evrow{ padding:7px 0; }   /* match NEWS/.sc-art row rhythm; EVENTS keeps its own overrides */
+.econ-age{ color:var(--warn,#e0a24a); }   /* a print past its cadence says so, in the same small line as its date */
 
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
@@ -3534,7 +3535,7 @@ async function fetchCompanyData(t) {
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
     pg("balance_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,cash_and_equiv,total_debt,net_debt,total_assets,total_equity&order=fiscal_year.asc"),    // FIX 2 — balance sheet FY
     pg("cashflow_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,operating_cf,capex,free_cf,dividends_paid,buybacks&order=fiscal_year.asc"),             // FIX 2 — cash flow FY
-    pg("read_blocks?ticker=eq." + e + "&select=section,body,updated_ts"),   // R20 FIX 7 — re-pulled on EVERY company open, never cached: verdict=10min live; business/catalysts/watch=news cadence — always re-read, never hardcode. (fetchCompanyData has no payload cache: openCo nulls coData + refetches.)
+    pg("read_blocks?ticker=eq." + e + "&select=section,body,updated_ts"),   // sections used: verdict·business·catalysts·watch (+basis when the writer records it); the 2026-06-11 trend/levels/cohort/structure rows are superseded and not drawn   // R20 FIX 7 — re-pulled on EVERY company open, never cached: verdict=10min live; business/catalysts/watch=news cadence — always re-read, never hardcode. (fetchCompanyData has no payload cache: openCo nulls coData + refetches.)
     pg("ratios_history?ticker=eq." + e + "&select=pe").catch(() => []),   // EST PORT — P/E range strip (avg/peak); catch-wrapped: a missing table never kills the payload
     /* NEW TABLES (JUST CREATED · EMPTY until the ingester fills them) — every read is
        catch-wrapped so an empty/missing table renders an honest empty slot, never a crash.
@@ -3548,12 +3549,15 @@ async function fetchCompanyData(t) {
   ].map(bound)));
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   /* P0-E: same Geiger authority on the company view as on the board. */
+  /* the desk narrative (read_blocks.verdict) is generated server-side from the LEGACY daily composite; remember its date
+     before the provider Geiger replaces d0's numbers below, so the READ tab can say what the narrative was built from */
+  const legacyCompositeAsOf = d0.updated_ts || null;
   if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
   const rbMap = {}, rbAt = {};                                   // GO-LIVE FIX 2 — section → body; section → updated_ts
   for (const b of (rblk || [])) if (b && b.section) { rbMap[String(b.section).toLowerCase()] = b.body; rbAt[String(b.section).toLowerCase()] = b.updated_ts || null; }
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
-  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, asOf: d0.updated_ts || null };
+  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, asOf: d0.updated_ts || null, legacyAsOf: legacyCompositeAsOf };
   /* P0-F: same provider authority on the company view as on the board. */
   if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
@@ -8081,8 +8085,24 @@ const ECON_LBL = {
   initialClaims: "INITIAL CLAIMS", totalNonfarmPayroll: "NONFARM PAYROLLS K", totalVehicleSales: "VEHICLE SALES M",
   industrialProductionTotalIndex: "INDUSTRIAL PRODUCTION", M2SL: "M2 MONEY $B",
   WALCL: "FED BALANCE SHEET $M", WTREGEN: "TREASURY GEN ACCT $M", RRPONTSYD: "REVERSE REPO $B",
-  "30YearFixedRateMortgageAverage": "30Y MORTGAGE %",
+  "30YearFixedRateMortgageAverage": "30Y MORTGAGE %", "15YearFixedRateMortgageAverage": "15Y MORTGAGE %",
+  commercialBankInterestRateOnCreditCardPlansAllAccounts: "CREDIT CARD RATE %", newPrivatelyOwnedHousingUnitsStartedTotalUnits: "HOUSING STARTS K",
+  nominalPotentialGDP: "POTENTIAL GDP $B", realGDPPerCapita: "REAL GDP / CAPITA $", smoothedUSRecessionProbabilities: "RECESSION PROB %",
 };
+/* HOW OFTEN EACH SERIES SHOULD MOVE, so an old print is called old. The tab listed every series as "latest" with a bare
+   date: MEASURED 2026-09-18, GDP dated 2025-10-01 (a year), M2 2026-04-01, the Fed balance sheet / TGA / reverse repo
+   2026-06 with no writer since 2026-06-09, all beside "MACRO RAIL · LIVE". Cadence in days; a print older than about
+   two periods past its date is STALE (a monthly print for Aug is normal in mid-Sep; one for Jun is not). */
+const ECON_CADENCE = { "15YearFixedRateMortgageAverage": 7, "30YearFixedRateMortgageAverage": 7, initialClaims: 7, WALCL: 7, WTREGEN: 7, RRPONTSYD: 1, inflationRate: 1,
+  CPI: 30, retailSales: 30, totalVehicleSales: 30, totalNonfarmPayroll: 30, federalFunds: 30, unemploymentRate: 30, newPrivatelyOwnedHousingUnitsStartedTotalUnits: 30,
+  durableGoods: 30, industrialProductionTotalIndex: 30, consumerSentiment: 30, M2SL: 30, smoothedUSRecessionProbabilities: 30,
+  GDP: 91, realGDP: 91, realGDPPerCapita: 91, nominalPotentialGDP: 91, commercialBankInterestRateOnCreditCardPlansAllAccounts: 91 };
+const ECON_CADENCE_WORD = (d) => d <= 1 ? "daily" : d <= 7 ? "weekly" : d <= 31 ? "monthly" : "quarterly";
+function econAge(dateStr, cadenceDays) {
+  const ms = Date.parse(String(dateStr || "") + "T12:00:00Z"); if (!isFinite(ms)) return { stale: false, days: null };
+  const days = Math.round((Date.now() - ms) / 86400e3);
+  return { stale: days > 2 * (cadenceDays || 30) + 7, days };
+}
 const fmtEconVal = (v) => { v = +v; return Math.abs(v) >= 1000
   ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
   : v.toLocaleString("en-US", { maximumFractionDigits: 2 }); };
@@ -8106,10 +8126,10 @@ function econRoomHTML() {
   return '<div class="body2">' +
     '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>rates &amp; macro prints · <b>market-wide</b></span>' + SECFS_BTN + "</div>" +
       '<div class="scroller" id="econList"><div class="soon">loading economic data…</div></div></div>' +
-    '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>live</b></span>' + SECFS_BTN + '</div><div class="rail">' +
+    '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>stored prints</b></span>' + SECFS_BTN + '</div><div class="rail">' +
       '<div class="card"><h4>Treasury curve</h4><div class="sc-senttxt" id="econCurve">—</div></div>' +
       '<div class="card"><h4>Market-wide</h4><div class="sc-senttxt">Economic events are not cohort-scoped — they move everything.</div></div>' +
-      '<div class="card"><h4>Source (live)</h4><div class="sc-senttxt">treasury_rates + econ_history (FRED/FMP).</div></div>' +
+      '<div class="card"><h4>Sources &amp; freshness</h4><div class="sc-senttxt" id="econSource">treasury_rates + econ_history (FRED/FMP) · loading…</div></div>' +
     "</div></div></div>";
 }
 async function fillEcon() {
@@ -8118,7 +8138,7 @@ async function fillEcon() {
   try {
     const [tr, eh] = await Promise.all([
       pg("treasury_rates?select=*&order=date.desc&limit=1"),
-      pg("econ_history?select=series,date,value&order=date.desc&limit=600"),
+      pg("econ_history?select=series,date,value,updated_ts&order=date.desc&limit=1000"),   // widest page PostgREST serves; a series whose newest print is older than the window's oldest row would drop out silently
     ]);
     if (!el("econList")) return;
     const t0 = tr[0];
@@ -8135,10 +8155,21 @@ async function fillEcon() {
     }
     const seen = {};
     for (const r of eh) if (!(r.series in seen)) seen[r.series] = r;
-    const prints = Object.values(seen).sort((a, b) => String(a.series).localeCompare(String(b.series)))
-      .map((r) => econRowHTML(esc(ECON_LBL[r.series] || r.series), esc(r.date), fmtEconVal(r.value),
-        ECON_IMPACT[r.series] || "L")).join("");
-    if (prints) html += '<div class="sc-plabel" style="padding:10px 0 4px">macro prints · <b>latest</b></div>' + prints;
+    const printRows = Object.values(seen).sort((a, b) => String(ECON_LBL[a.series] || a.series).localeCompare(String(ECON_LBL[b.series] || b.series)));
+    let staleN = 0, newestPrint = "";
+    const prints = printRows.map((r) => {
+        const cad = ECON_CADENCE[r.series] || 30, age = econAge(r.date, cad);
+        if (age.stale) staleN++; if (String(r.date) > newestPrint) newestPrint = String(r.date);
+        const wrote = r.updated_ts ? String(new Date(+r.updated_ts < 1e12 ? +r.updated_ts * 1000 : +r.updated_ts).toISOString()).slice(0, 10) : "";
+        const when = esc(r.date) + " · " + ECON_CADENCE_WORD(cad) +
+          (age.stale ? '<span class="econ-age"> · STALE ' + (age.days >= 60 ? Math.round(age.days / 30) + " months" : age.days + "d") + (wrote ? " · last written " + esc(wrote) : "") + "</span>" : "");
+        return econRowHTML(esc(ECON_LBL[r.series] || r.series), when, fmtEconVal(r.value), ECON_IMPACT[r.series] || "L");
+      }).join("");
+    if (prints) html += '<div class="sc-plabel" style="padding:10px 0 4px">macro prints · <b>latest stored</b> · ' + printRows.length + " series · " +
+      (staleN ? '<span class="econ-age">' + staleN + " past their cadence</span>" : "all within cadence") + "</div>" + prints;
+    const src = el("econSource");
+    if (src) src.innerHTML = "treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history (job macro-econ-cot-daily 22:35Z; fmp-economic 05:47/17:47Z) · newest print <b>" +
+      esc(newestPrint || "—") + "</b> · " + (staleN ? staleN + " series past cadence (see rows)" : "all series within cadence") + " · FRED M2 / balance sheet / TGA / reverse repo have had no writer since 2026-06-09";
     el("econList").innerHTML = html || '<div class="soon">treasury_rates and econ_history are empty.</div>';
     const c = el("econCurve");
     if (c && t0 && num(t0.y2) != null && num(t0.y10) != null)
@@ -10396,9 +10427,17 @@ function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
   if (trail != null && fwd != null) pills.push("FWD " + fwd.toFixed(1) + "× VS " + trail.toFixed(1) + "×");
   /* GO-LIVE FIX 2 — trend/levels/cohort bodies become a labeled second
      group of paragraphs shown under the active VERDICT tab. */
-  const extras = ["trend", "levels", "cohort"]
-    .filter((k) => rb[k] != null && String(rb[k]).trim())
-    .map((k) => { const age = readAgeLabel(rbAt[k]); return [k.toUpperCase() + (age ? " · " + age : ""), toParas(rb[k])]; });
+  /* THE SUPERSEDED SECTIONS ARE NOT SHOWN. read_blocks.trend/levels/cohort/structure were written once, on 2026-06-11, by
+     the pre-contract writer; the four-section contract (verdict·business·catalysts·watch, 2026-06-14) replaced them and
+     folded their facts into the verdict's second paragraph. Rendering the 2026-06-11 rows under the verdict showed June
+     prices as levels (AAPL support $290 against $336). They stay in the database; the READ tab no longer draws them.
+     What the verdict WAS built from is stated instead: the writer's own 'basis' section when present, else the legacy
+     composite's date captured before the provider Geiger replaced the live numbers. */
+  const legacyNote = d && d.legacyAsOf ? readAgeLabel(d.legacyAsOf) : "";
+  const basis = rb.basis ? String(rb.basis)
+    : ("desk narrative generated from the legacy daily composite" + (legacyNote ? " " + legacyNote.toLowerCase() : "") +
+       " (the writer re-stamps it every 10 minutes; its number is not re-measured); the live read above uses the provider Geiger");
+  const extras = [["NARRATIVE BASIS", [basis]]];
   return {
     /* R20 FIX 7 — read_blocks 4-SECTION CONTRACT (verdict·business·catalysts·watch,
        verified ×128 in DB): each tab renders the FULL matching section body

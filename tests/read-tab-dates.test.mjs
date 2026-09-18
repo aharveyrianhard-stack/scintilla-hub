@@ -12,6 +12,8 @@ test("READ blocks and the composite basis are labelled with their date when olde
   assert.equal(readAgeLabel(null, now), null);
   assert.match(page, /read_blocks\?ticker=eq\." \+ e \+ "&select=section,body,updated_ts"/);
   assert.match(page, /asOf: d0\.updated_ts \|\| null/);
-  assert.match(page, /\[k\.toUpperCase\(\) \+ \(age \? " · " \+ age : ""\), toParas\(rb\[k\]\)\]/);
+  assert.match(page, /const extras = \[\["NARRATIVE BASIS", \[basis\]\]\];/, "the 2026-06-11 trend/levels/cohort rows are no longer drawn; the narrative basis is");
+  assert.match(page, /const basis = rb\.basis \? String\(rb\.basis\)/, "the writer's own basis section is preferred when present");
+  assert.match(page, /const legacyCompositeAsOf = d0\.updated_ts \|\| null;/, "the legacy composite date is captured before the provider Geiger replaces it");
   assert.match(page, /verdict\.push\(liveReadSentence\(d\) \+ \(compAge \? " Composite basis " \+ compAge\.toLowerCase\(\) \+ "\." : ""\)\);/);
 });
