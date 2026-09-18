@@ -36,9 +36,9 @@ function boardRenderer(S) {
     "\nreturn { BOARD_COLS, boardHeaderHTML, boardRowsHTML };";
   const cell = (cls) => () => '<span class="' + cls + '"></span>';
   return new Function("S", "esc", "orderedShownRows", "COH_ABBR", "fpeTitle", "fmtCap", "fmtC", "rsiGradColor",
-    "volCellHTML", "mktDotHTML", "scQuoteObservationLabel", src)(
+    "volCellHTML", "mktDotHTML", "scQuoteObservationLabel", "mcapCellHTML", "fpeWithheldText", src)(
     S, esc, () => S.rows, {}, () => "", () => "$1B", (c) => c.toFixed(2) + "%", () => "#fff",
-    cell("sc-vol"), cell("sc-mktdot"), () => "");
+    cell("sc-vol"), cell("sc-mktdot"), () => "", cell("sc-mcap"), () => "—");   // numeric-closure: the MKT CAP cell and the F P/E withheld text are page functions
 }
 
 test("the header and every row are built from ONE static column model: same cell count in every row state", () => {

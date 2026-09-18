@@ -21,7 +21,9 @@ test("the board multiple is on the STATS tab's basis: NTM from four quarters, el
   const env = { NTMLIVE: { A: 4.0, N: -0.4 }, NTMLIVE_META: { A: { through: "2027-06-30", at: 1789690620 }, N: { through: "2027-06-30", at: 1789690620 } },
     NTMEPS: { A: 3.0, B: 2.0, N: 0.0261 }, NTMEPS_AT: { A: 1783300000, B: 1783300000, N: 1783300000 },   // 2026-07-06: stale
     FEPS: { B: 5.0, C: 10 }, FEPS_META: { B: { fy: "2026-12-31", at: 1789690620 }, C: { fy: "2026-12-31", at: 1789690620 } }, PRICES: { A: 100, B: 100, N: 5, C: 100 } };
-  const src = consts + fn("fpeBasis") + fn("fpeTitle") + fn("fpeVal") + "return { fpeBasis, fpeTitle, fpeVal };";
+  const ccy = page.match(/^const EST_CCY_MEASURED = [^\n]*\n/m)[0] + page.match(/^const EST_CCY = [^\n]*\n/m)[0] +
+    fn("ccyCode") + fn("estCcy") + fn("estNonUsd") + fn("notComparable");   // currency basis helpers fpeVal/fpeTitle call (numeric-closure)
+  const src = consts + ccy + fn("fpeBasis") + fn("fpeTitle") + fn("fpeVal") + "return { fpeBasis, fpeTitle, fpeVal };";
   const api = new Function("NTMLIVE", "NTMLIVE_META", "NTMEPS", "NTMEPS_AT", "FEPS", "FEPS_META", "PRICES", "cryptoSet", src)(env.NTMLIVE, env.NTMLIVE_META, env.NTMEPS, env.NTMEPS_AT, env.FEPS, env.FEPS_META, env.PRICES, new Set(["BTCUSD"]));
   assert.equal(api.fpeVal("A", 100), 25, "live NTM 4.0 wins over the frozen stored 3.0");
   assert.equal(api.fpeVal("B", 100), 20, "stale stored NTM (2026-07-06) is skipped → annual 5.0");
