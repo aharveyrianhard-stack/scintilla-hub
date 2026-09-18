@@ -75,10 +75,10 @@ test("the panel says which summary it is, and the call text is fetched for exact
 
 test("no fetch storm: one key-only request per feed and one per company open; summary text only when a card's summary is opened", () => {
   assert.equal((page.match(/ai_summary=not\.is\.null/g) || []).length, 3, "master index, company index, and the on-demand read - nothing else asks for call summaries");
-  assert.match(page, /pg\("earnings_call_transcripts\?select=ticker,quarter,call_date&ai_summary=not\.is\.null&order=call_date\.desc&limit=1000"\)\.catch\(\(\) => \[\]\)/, "master: keys only, failure degrades to no buttons");
+  assert.match(page, /pg\("earnings_call_transcripts\?select=ticker,quarter,call_date&ai_summary=not\.is\.null&order=call_date\.desc&limit=1000"\)\.catch\(\(\) => null\)/, "master: keys only; a FAILED read is null, kept apart from 'no rows'");
   assert.match(page, /const coCallSumPath = \(e\) => "earnings_call_transcripts\?ticker=eq\." \+ e \+ "&ai_summary=not\.is\.null&select=ticker,quarter,call_date&order=call_date\.desc&limit=24";/, "company: keys only");
   assert.match(page, /pg\(coCallSumPath\(e\)\)\.catch\(\(\) => \[\]\),/);
-  assert.match(page, /CALLSUM_IDX = matchCallSummaries\(\[\.\.\.up, \.\.\.past\], csidx \|\| \[\]\);/);
+  assert.match(page, /CALLSUM_IDX = matchCallSummaries\(\[\.\.\.up, \.\.\.past\], EV_CSKEYS\);/, "matched against the last GOOD key read");
   assert.match(page, /_callsum: matchCallSummaries\(evs \|\| \[\], csum \|\| \[\]\),/);
   assert.doesNotMatch(page.match(/function earningsBlockHTML\(d\) \{[\s\S]*?\n\}\n/)[0], /pg\(|fetch\(/, "rendering a card never starts a request");
 });

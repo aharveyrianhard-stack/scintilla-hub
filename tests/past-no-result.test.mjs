@@ -13,7 +13,7 @@ const ORCL = [row("ORCL", "2026-09-10", 1.92, 19345000000), row("ORCL", "2026-09
 const SNPS = [row("SNPS", "2026-09-08"), row("SNPS", "2026-08-26", 3.91, 2476822000), row("SNPS", "2026-08-19"), row("SNPS", "2026-05-27", 3.35, 2275985000)];
 const BABA = [row("BABA", "2026-09-04"), row("BABA", "2026-08-28"), row("BABA", "2026-08-20", 1.25, 39639000000), row("BABA", "2026-05-13", 0.09, 35273060000)];
 
-test("the three cards Alan saw: a past date with no stored result is never among the reported, and says where that company's result is stored", () => {
+test("the three cards Alan saw: a past date with no stored result is never among the reported, and carries the nearest stored result of that company as a candidate", () => {
   const all = [...ORCL, ...SNPS, ...BABA], s = split(all, all);
   assert.deepEqual(s.reported.map((r) => r.ticker + " " + r.date), ["ORCL 2026-09-10", "ORCL 2026-06-10", "SNPS 2026-08-26", "SNPS 2026-05-27", "BABA 2026-08-20", "BABA 2026-05-13"], "order kept, only rows with a stored result");
   assert.deepEqual(s.noResult.map((x) => [x.row.ticker, x.row.date, x.stored && x.stored.date, x.stored && x.stored.gap]), [
@@ -32,19 +32,20 @@ test("nothing is invented: no reported row of the same company within 45 days me
   assert.deepEqual(split(undefined, undefined), { reported: [], noResult: [] });
 });
 
-test("the group is closed by default, says plainly these are not reports, and escapes stored values", () => {
+test("the group is closed by default, says only what is observed - no stored result - and escapes stored values (root 16:31Z: a missing stored actual does not establish that a company did not report)", () => {
   const s = split([...ORCL], ORCL), h = groupHTML(s.noResult);
-  assert.match(h, /^<details class="sc-ernnores-grp" title="[^"]*None of these is a report\."><summary>1 past date has no stored result — not reports<\/summary>/);
+  assert.match(h, /^<details class="sc-ernnores-grp" title="[^"]*an observation about storage, not a statement that the company did not report[^"]*a candidate, not proof that it is the same report\."><summary>1 past date without stored results<\/summary>/);
+  assert.doesNotMatch(h + groupHTML(split(SNPS, SNPS).noResult), /not reports|None of these is a report|results are stored on/i, "no claim that a company did not report, and none that the nearby result is the same report");
   assert.doesNotMatch(h, /<details[^>]* open/);
-  assert.match(h, /<span class="tk" data-tkopen="ORCL">ORCL<\/span><span class="d">D2026-09-08<\/span><span class="t">no result stored for this date — this company's results are stored on <b>D2026-09-10<\/b> \(2 days later\)<\/span>/);
-  assert.match(groupHTML(split(SNPS, SNPS).noResult), /<summary>2 past dates have no stored result/);
+  assert.match(h, /<span class="tk" data-tkopen="ORCL">ORCL<\/span><span class="d">D2026-09-08<\/span><span class="t">no result stored for this date \u00B7 nearest stored result for this company: <b>D2026-09-10<\/b> \(2 days later\)<\/span>/);
+  assert.match(groupHTML(split(SNPS, SNPS).noResult), /<summary>2 past dates without stored results<\/summary>/);
   assert.match(groupHTML(split(SNPS, SNPS).noResult), /\(13 days earlier\)/);
   assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: { date: "2026-08-02", gap: 1 } }]), /\(1 day later\)/);
   assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: null }]), /<span class="t">no result stored for this date<\/span>/);
   assert.equal(groupHTML([]), ""); assert.equal(groupHTML(null), "");
   const hostile = groupHTML([{ row: row('"><img src=x onerror=1>', "2026-08-01"), stored: null }]);
   assert.doesNotMatch(hostile, /<img/); assert.match(hostile, /&quot;&gt;&lt;img/);
-  assert.match(groupHTML(Array.from({ length: 41 }, (_, i) => ({ row: row("T" + i, "2026-08-01"), stored: null }))), /<summary>41 past dates have no stored result — not reports \(first 40 listed\)<\/summary>/);
+  assert.match(groupHTML(Array.from({ length: 41 }, (_, i) => ({ row: row("T" + i, "2026-08-01"), stored: null }))), /<summary>41 past dates without stored results \(first 40 listed\)<\/summary>/);
 });
 
 test("both views use it: REPORTED holds only stored results, the no-result dates stay on the page, and the streak reads real quarters", () => {

@@ -1031,7 +1031,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-evtab.tr-open .sc-evfix{ flex:0 1 auto; min-height:0; overflow-y:auto; }
 .sc-evtab.tr-open .sc-evpastscroll{ flex:1 1 0; min-height:88px; }
 .sc-trbubble.empty .sc-trbubble__body{ color:var(--dim); font-style:italic; }
-/* past dates with no stored result (splitPastEarnings): one quiet, closed-by-default group - never a card under REPORTED */
+/* past dates without stored results (splitPastEarnings): one quiet, closed-by-default group - kept out of REPORTED, called only what is observed */
 .sc-ernnores-grp{ margin:2px 0 10px; border:.6px dashed var(--line2); border-radius:var(--radius); padding:6px 9px; }
 .sc-ernnores-grp > summary{ cursor:pointer; font-size:9px; color:var(--dim); letter-spacing:.04em; list-style:none; }
 .sc-ernnores-grp > summary::-webkit-details-marker{ display:none; }
@@ -8086,7 +8086,7 @@ function renderEvents(cohort) {
    an isolated browser, and what Alan reported. While an events view is open it is now re-read every five minutes and when
    the tab becomes visible again; the screen is redrawn ONLY when the rows differ, and then each list keeps its scroll
    position and an opened group stays open. Entering the section still paints at once from the last read, then re-reads. */
-let EV_SIG = "", EV_READ_AT = 0;
+let EV_SIG = "", EV_READ_AT = 0, EV_TRKEYS = "", EV_CSKEYS = [];   // EV_TRKEYS / EV_CSKEYS: the last GOOD call-key reads of the master feed
 function redrawKeepingPlace(rootSel, scrollSel, draw) {
   const root = document.querySelector(rootSel), at = root ? [...root.querySelectorAll(scrollSel)].map((x) => x.scrollTop) : [];
   const open = root ? [...root.querySelectorAll("details.sc-ernnores-grp")].map((x) => x.open) : [];
@@ -8101,7 +8101,8 @@ async function refreshCompanyEvents() {
   if (!d || d._loading || !d.t || S.coTab !== "EVENTS" || !el("leftPanel")) return;
   if (document.querySelector("#leftPanel .sc-evtab.tr-open")) return;          // the call summary is open and being read: leave the panel alone
   const t = d.t, e = encodeURIComponent(t), token = ROT_TOKEN;
-  let got; try { got = await Promise.all([pg(coEventsPath(e)), pg(coCallSumPath(e)).catch(() => []), pg(coCallKeysPath(e)).catch(() => [])]); } catch (err) { return; }   // a failed re-read changes nothing on screen
+  let got; try { got = await Promise.all([pg(coEventsPath(e)), pg(coCallSumPath(e)), pg(coCallKeysPath(e))]); } catch (err) { return; }   // ANY of the three failing fails the whole re-read: a failed read is not "no calls", and must never blank the Transcript / Call summary controls that are working on screen
+  if (!got.every(Array.isArray)) return;
   if (token !== ROT_TOKEN || S.coData !== d || S.coTab !== "EVENTS") return;   // another company or tab is on screen now
   const sig = JSON.stringify(got); EV_READ_AT = Date.now();
   if (sig === d._evSig) return;
@@ -8136,25 +8137,31 @@ async function fillEvents(quiet) {
     const [up, past, tridx, csidx] = await Promise.all([
       pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
-      pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => []),   // REAL FIX — transcript_url column is dead (never written); this table is the real content index
-      pg("earnings_call_transcripts?select=ticker,quarter,call_date&ai_summary=not.is.null&order=call_date.desc&limit=1000").catch(() => []),   // keys only: which calls have a stored summary — ONE request for the whole feed, never one per card
+      pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => null),   // null = the read FAILED (kept apart from "no rows")  ·  REAL FIX — transcript_url column is dead (never written); this table is the real content index
+      pg("earnings_call_transcripts?select=ticker,quarter,call_date&ai_summary=not.is.null&order=call_date.desc&limit=1000").catch(() => null),   // keys only: which calls have a stored summary — ONE request for the whole feed, never one per card
     ]);
     if (!el("evList")) return;
-    TRANSCRIPT_IDX = new Map();
-    (tridx || []).forEach((r) => {
-      if (!r.ticker || !r.call_date) return;
-      const k = String(r.ticker).toUpperCase();
-      if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
-      TRANSCRIPT_IDX.get(k).push(r.call_date);
-    });
-    CALLSUM_IDX = matchCallSummaries([...up, ...past], csidx || []);
+    /* A FAILED INDEX READ IS NOT AN EMPTY INDEX. On a quiet re-read a transient failure of either key read would have rebuilt
+       the index empty and redrawn every card WITHOUT its Transcript / Call summary control. A failed read now leaves the last
+       good index in place (on the very first load there is none, and the cards honestly show no control until a read works). */
+    if (Array.isArray(tridx)) {
+      TRANSCRIPT_IDX = new Map(); EV_TRKEYS = tridx.map((r) => r.ticker + "|" + r.call_date).join(",");
+      tridx.forEach((r) => {
+        if (!r.ticker || !r.call_date) return;
+        const k = String(r.ticker).toUpperCase();
+        if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
+        TRANSCRIPT_IDX.get(k).push(r.call_date);
+      });
+    }
+    if (Array.isArray(csidx)) { EV_CSKEYS = csidx; }
+    CALLSUM_IDX = matchCallSummaries([...up, ...past], EV_CSKEYS);
     const inU = (ev) => UNIVERSE.has(ev.ticker);
     /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
        move it into the reported/past list so it stops showing as the next upcoming. */
     const upPending = up.filter((e) => e.eps_actual == null);
     const reportedToday = up.filter((e) => e.eps_actual != null);
     EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
-    const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], (tridx || []).map((r) => r.ticker + "|" + r.call_date).join(",")]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
+    const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], EV_TRKEYS]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
     EV_SIG = sig; EV_READ_AT = Date.now();
     if (!quiet) renderEvents(S.coh);
     else if (changed) redrawKeepingPlace("#evList", ".sc-evcol", () => renderEvents(S.coh));   // a quiet re-read that found nothing new touches nothing
@@ -10267,14 +10274,15 @@ function earningsRowToBlock(row, callsum, callDays) {
    Never the day before (0 of 165), never two or more days away (1 of 165, a BMO event - left unmatched), never "the latest
    call": a quarter is ~90 days, so one day cannot reach another quarter's call. `calls` holds only calls that HAVE a summary.
    Pure function: events [{ticker,date,report_time}], calls [{ticker,quarter,call_date}] -> Map "TICKER|event date" -> {call_date,quarter}. */
-/* A PAST DATE WITH NO STORED RESULT IS NOT A REPORT - AND, MEASURED, NOT A MISSED REPORT EITHER. 2026-09-18: all 26 such rows
-   since March sit within 45 days of a REPORTED row of the same company (17 within a week) and were last written between
-   2026-07-22 and 08-11: the day the calendar once projected, left behind when the company reported on another day. Checked
-   at the source for the three Alan saw: Oracle's results 8-K (Item 2.02) is dated Sep 10, not Sep 8; Synopsys' is Aug 26,
-   not Aug 19 or Sep 8; Alibaba's results 6-K is Aug 20 and its Sep 4 6-K is a share-capital return. They were drawn as cards
-   under "PAST · REPORTED" (and took three of the slots the streak tag reads). NOTHING IS DELETED OR HIDDEN: reported cards
-   stay under the heading, and every no-result date is listed in one quiet group that says what it is and where that
-   company's result IS stored, when a reported row within 45 days is on hand. Whether the rows should exist is root's call.
+/* A PAST DATE WITHOUT A STORED RESULT DOES NOT BELONG UNDER "REPORTED" - AND THAT IS ALL THE PAGE MAY SAY ABOUT IT. The
+   absence of a stored actual does not establish that the company did not report: the feed may simply not have delivered it.
+   So these rows leave the REPORTED list and are listed as exactly what is observed - "past dates without stored results" -
+   and when the same company HAS a stored result within 45 days, that date is shown as the NEAREST STORED RESULT: a candidate
+   relation read from storage, not proof that it is the same report. (What was measured on 2026-09-18, for the record and not
+   as a rule for future rows: all 26 such rows then sat within 45 days of a reported row of the same company, last written
+   2026-07-22..08-11; for ORCL Sep 8, SNPS Aug 19 / Sep 8 and BABA Aug 28 / Sep 4 the filings themselves were checked - the
+   evidence is in the run folder, not in this page.) They had been drawn as cards under "PAST · REPORTED" and took slots the
+   streak tag reads. NOTHING IS DELETED OR HIDDEN. Whether the rows should exist is a data decision, not this page's.
    Pure: past rows + every row on hand -> { reported:[row], noResult:[{ row, stored:{date,gap}|null }] }. */
 function splitPastEarnings(past, all) {
   const has = (r) => !!r && (r.eps_actual != null || r.revenue_actual != null);
@@ -10295,11 +10303,11 @@ function pastNoResultHTML(list) {
   if (!list || !list.length) return "";
   const n = list.length, rows = list.slice(0, 40).map((x) => {
     const g = x.stored ? Math.abs(x.stored.gap) : 0;
-    const where = x.stored ? " \u2014 this company's results are stored on <b>" + esc(fmtEvDate(x.stored.date)) + "</b> (" + g + (g === 1 ? " day " : " days ") + (x.stored.gap > 0 ? "later" : "earlier") + ")" : "";
+    const where = x.stored ? " \u00B7 nearest stored result for this company: <b>" + esc(fmtEvDate(x.stored.date)) + "</b> (" + g + (g === 1 ? " day " : " days ") + (x.stored.gap > 0 ? "later" : "earlier") + ")" : "";
     return '<div class="sc-ernnores"><span class="tk" data-tkopen="' + esc(x.row.ticker || "") + '">' + esc(x.row.ticker || "\u2014") + '</span><span class="d">' + esc(fmtEvDate(x.row.date)) + '</span><span class="t">no result stored for this date' + where + "</span></div>";
   }).join("");
-  return '<details class="sc-ernnores-grp" title="Dates the stored calendar carries with no result. Where a result for the same company is stored within 45 days, that is where it is. None of these is a report."><summary>' +
-    n + (n === 1 ? " past date has" : " past dates have") + " no stored result \u2014 not reports" + (n > 40 ? " (first 40 listed)" : "") + "</summary>" + rows + "</details>";
+  return '<details class="sc-ernnores-grp" title="Dates in the stored calendar for which no result is stored. That is an observation about storage, not a statement that the company did not report. Where the same company has a stored result within 45 days its date is shown as the nearest one - a candidate, not proof that it is the same report."><summary>' +
+    n + (n === 1 ? " past date" : " past dates") + " without stored results" + (n > 40 ? " (first 40 listed)" : "") + "</summary>" + rows + "</details>";
 }
 /* [first, last] calendar day of the window around a YYYY-MM-DD day, or null when the day is not a real one. */
 function callDayWindow(day, n) {
