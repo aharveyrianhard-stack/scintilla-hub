@@ -1031,6 +1031,18 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-evtab.tr-open .sc-evfix{ flex:0 1 auto; min-height:0; overflow-y:auto; }
 .sc-evtab.tr-open .sc-evpastscroll{ flex:1 1 0; min-height:88px; }
 .sc-trbubble.empty .sc-trbubble__body{ color:var(--dim); font-style:italic; }
+/* past dates with no stored result (splitPastEarnings): one quiet, closed-by-default group - never a card under REPORTED */
+.sc-ernnores-grp{ margin:2px 0 10px; border:.6px dashed var(--line2); border-radius:var(--radius); padding:6px 9px; }
+.sc-ernnores-grp > summary{ cursor:pointer; font-size:9px; color:var(--dim); letter-spacing:.04em; list-style:none; }
+.sc-ernnores-grp > summary::-webkit-details-marker{ display:none; }
+.sc-ernnores-grp > summary::before{ content:"\25B8\00A0"; color:var(--crk); }
+.sc-ernnores-grp[open] > summary::before{ content:"\25BE\00A0"; }
+.sc-ernnores-grp > summary:focus-visible{ outline:1px solid var(--crk); outline-offset:2px; }
+.sc-ernnores{ display:flex; gap:8px; align-items:baseline; font-size:9.5px; line-height:1.45; color:var(--ink3); padding:4px 0; border-top:.5px solid var(--line); margin-top:5px; }
+.sc-ernnores .tk{ flex:0 0 auto; min-width:42px; color:var(--ink2); font-weight:700; cursor:pointer; }
+.sc-ernnores .d{ flex:0 0 auto; min-width:50px; color:var(--dim); font-variant-numeric:tabular-nums; }
+.sc-ernnores .t{ flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+.sc-ernnores b{ color:var(--ink2); font-weight:600; }
 /* stored summary text (release_summary / ai_summary) drawn by summaryHTML(): one block per stored line, bullets with a
    hanging indent, long tokens wrap instead of overflowing */
 .sc-sum{ overflow-wrap:anywhere; }
@@ -8011,8 +8023,9 @@ function renderEvents(cohort) {
     return;
   }
   const upS = scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS);
-  const pastS = scopeItems(EV_CACHE.past, cohort, S.tq, S.fav, COHSETS).slice(0, 60);
-  const rows = upS.concat(pastS);
+  const pastSplit = splitPastEarnings(scopeItems(EV_CACHE.past, cohort, S.tq, S.fav, COHSETS), EV_CACHE.up.concat(EV_CACHE.past));
+  const pastS = pastSplit.reported.slice(0, 60);                 // REPORTED means a stored result; dates without one are listed apart (see splitPastEarnings)
+  const rows = upS.concat(pastS, pastSplit.noResult.map((x) => x.row));
   /* FIX 3 (R46) — SHARED renderer: identical two-column (UPCOMING | PAST/REPORTED)
      layout as the company EVENTS tab, wide variant (master has more room). When the
      feed is scoped to a single ticker via search, show that company's website + IR
@@ -8031,7 +8044,7 @@ function renderEvents(cohort) {
      each its own bounded scroll via sc-evcols--split, but rendered with the NEW blocks. */
   const toBlock = (r) => earningsRowToBlock(r, CALLSUM_IDX);
   const upBlocks   = upS.map(toBlock).map(earningsBlockHTML).join("")   || '<div class="ev-empty">Nothing upcoming.</div>';
-  const pastBlocks = pastS.map(toBlock).map(earningsBlockHTML).join("") || '<div class="ev-empty">No reported earnings yet.</div>';
+  const pastBlocks = pastNoResultHTML(pastSplit.noResult) + (pastS.map(toBlock).map(earningsBlockHTML).join("") || '<div class="ev-empty">No reported earnings yet.</div>');
   const cols = !upS.length
     ? '<div class="sc-evcols sc-evcols--single sc-evcols--split"><div class="sc-evcol"><div class="sc-evsec">PAST · REPORTED</div>' + pastBlocks + "</div></div>"
     : '<div class="sc-evcols sc-evcols--split">' +
@@ -10100,7 +10113,7 @@ function earningsBlockHTML(d) {
   const revSp = surprisePct(revAct, revEst);
   const known = [epsSp, revSp].filter((x) => x != null);
   const beats = known.filter((x) => x >= 0).length;
-  const reported = known.length > 0;
+  const reported = known.length > 0 || epsAct != null || revAct != null;   // a stored actual is a result even with no estimate beside it (measured: 1 such row, SHAZ 2025-11-14, was drawn as "no result stored")
   /* REPORT TIME: the stored report_time when the calendar carries one; otherwise an explicit "time unknown". The old
      placeholder read "BMO/AMC", i.e. like a value (MEASURED 2026-09-18: 268 of 270 upcoming rows carry no report_time,
      so almost every upcoming card wore it). An unconfirmed date says so. */
@@ -10208,6 +10221,40 @@ function earningsRowToBlock(row, callsum, callDays) {
    Never the day before (0 of 165), never two or more days away (1 of 165, a BMO event - left unmatched), never "the latest
    call": a quarter is ~90 days, so one day cannot reach another quarter's call. `calls` holds only calls that HAVE a summary.
    Pure function: events [{ticker,date,report_time}], calls [{ticker,quarter,call_date}] -> Map "TICKER|event date" -> {call_date,quarter}. */
+/* A PAST DATE WITH NO STORED RESULT IS NOT A REPORT - AND, MEASURED, NOT A MISSED REPORT EITHER. 2026-09-18: all 26 such rows
+   since March sit within 45 days of a REPORTED row of the same company (17 within a week) and were last written between
+   2026-07-22 and 08-11: the day the calendar once projected, left behind when the company reported on another day. Checked
+   at the source for the three Alan saw: Oracle's results 8-K (Item 2.02) is dated Sep 10, not Sep 8; Synopsys' is Aug 26,
+   not Aug 19 or Sep 8; Alibaba's results 6-K is Aug 20 and its Sep 4 6-K is a share-capital return. They were drawn as cards
+   under "PAST · REPORTED" (and took three of the slots the streak tag reads). NOTHING IS DELETED OR HIDDEN: reported cards
+   stay under the heading, and every no-result date is listed in one quiet group that says what it is and where that
+   company's result IS stored, when a reported row within 45 days is on hand. Whether the rows should exist is root's call.
+   Pure: past rows + every row on hand -> { reported:[row], noResult:[{ row, stored:{date,gap}|null }] }. */
+function splitPastEarnings(past, all) {
+  const has = (r) => !!r && (r.eps_actual != null || r.revenue_actual != null);
+  const dayNo = (d) => { const w = callDayWindow(d, 0); return w ? Date.parse(d + "T00:00:00Z") / 86400000 : null; };
+  const byT = new Map();
+  (all || []).forEach((r) => { if (!has(r) || !r.ticker || dayNo(r.date) == null) return; const k = String(r.ticker).toUpperCase(); if (!byT.has(k)) byT.set(k, []); byT.get(k).push(r.date); });
+  const reported = [], noResult = [];
+  (past || []).forEach((r) => {
+    if (!r) return;
+    if (has(r)) { reported.push(r); return; }
+    const d0 = dayNo(r.date); let stored = null;
+    if (d0 != null) (byT.get(String(r.ticker || "").toUpperCase()) || []).forEach((sd) => { const gap = dayNo(sd) - d0; if (Math.abs(gap) <= 45 && (!stored || Math.abs(gap) < Math.abs(stored.gap))) stored = { date: sd, gap }; });
+    noResult.push({ row: r, stored });
+  });
+  return { reported, noResult };
+}
+function pastNoResultHTML(list) {
+  if (!list || !list.length) return "";
+  const n = list.length, rows = list.slice(0, 40).map((x) => {
+    const g = x.stored ? Math.abs(x.stored.gap) : 0;
+    const where = x.stored ? " \u2014 this company's results are stored on <b>" + esc(fmtEvDate(x.stored.date)) + "</b> (" + g + (g === 1 ? " day " : " days ") + (x.stored.gap > 0 ? "later" : "earlier") + ")" : "";
+    return '<div class="sc-ernnores"><span class="tk" data-tkopen="' + esc(x.row.ticker || "") + '">' + esc(x.row.ticker || "\u2014") + '</span><span class="d">' + esc(fmtEvDate(x.row.date)) + '</span><span class="t">no result stored for this date' + where + "</span></div>";
+  }).join("");
+  return '<details class="sc-ernnores-grp" title="Dates the stored calendar carries with no result. Where a result for the same company is stored within 45 days, that is where it is. None of these is a report."><summary>' +
+    n + (n === 1 ? " past date has" : " past dates have") + " no stored result \u2014 not reports" + (n > 40 ? " (first 40 listed)" : "") + "</summary>" + rows + "</details>";
+}
 /* [first, last] calendar day of the window around a YYYY-MM-DD day, or null when the day is not a real one. */
 function callDayWindow(day, n) {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
@@ -10453,8 +10500,9 @@ function coEventsHTML(data) {
   const today0 = todayISO();
   const upEvs = evs.filter((e) => e && e.date && String(e.date) >= today0)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const pastEvs = evs.filter((e) => e && e.date && String(e.date) < today0)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 24);
+  const pastSplit = splitPastEarnings(evs.filter((e) => e && e.date && String(e.date) < today0)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date))), evs);
+  const pastEvs = pastSplit.reported.slice(0, 24);              // dates with no stored result are listed apart, and no longer use up the three quarters the streak tag reads
   /* R48 — streak tag for UPCOMING cards: classify the ticker's own last up-to-3
      REPORTED quarters (already sitting right here in pastEvs, zero extra fetch)
      as beat/miss/mixed, same logic earningsBlockHTML uses for a single quarter.
@@ -10489,8 +10537,8 @@ function coEventsHTML(data) {
         : "no scheduled date in the stored calendar for $" + esc(data.t) + " (absence of a stored date, not a statement that none is scheduled)") + "</div>";
   const pastHTML = evs.length
     ? '<div class="sc-evsec">PAST EARNINGS</div>' + (pastEvs.length   // (4) — real earnings_events rows as blocks
-        ? pastEvs.map(toBlock).map(earningsBlockHTML).join("")
-        : '<div class="ev-empty">No reported earnings yet.</div>')
+        ? pastNoResultHTML(pastSplit.noResult) + pastEvs.map(toBlock).map(earningsBlockHTML).join("")
+        : pastNoResultHTML(pastSplit.noResult) + '<div class="ev-empty">No reported earnings yet.</div>')
     : '<div class="sc-senttxt" style="padding:6px 2px">No earnings events in earnings_events for $' + esc(data.t) + ".</div>";
   /* FIX (R52 item 3) — HEADLINES block REMOVED from the EVENTS tab. It duplicated
      the NEWS tab, which is the single home for headlines. EVENTS keeps only:
