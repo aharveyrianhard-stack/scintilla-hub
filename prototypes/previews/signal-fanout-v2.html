@@ -1,0 +1,495 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Scintilla · Signal fanout v2 · design study</title><style>:root{color-scheme:dark;--foreground:#d8dfd9;--muted-foreground:#9eaea3;--border:#35413b;--muted:#26332c;--viz-series-1:#8dafbb;--viz-series-2:#9eba9c;--viz-series-3:#c0b28e;--viz-series-5:#ad9dbd;--destructive:#c59289}body{font:14px/1.45 system-ui;color:var(--foreground)}#scintilla-signal-fanout-v2{max-width:1150px;margin:auto;padding:28px 22px}.text-small{font-size:11px}.text-muted{color:var(--muted-foreground)}.btn{display:flex;align-items:center;background:transparent;color:inherit;font:inherit;border:0;border-radius:5px;padding:10px 7px;cursor:pointer}.btn:hover{background:#26332c}.btn:focus-visible{outline:2px solid #9eba9c}.btn-block{width:100%}.sf2-track{display:block}.sf2-hinge-mark{display:block}</style></head><body style="margin:0;background:#101313"><aside style="padding:12px 18px;font:12px/1.5 system-ui;color:#bac6ba;border-bottom:1px solid #344039"><a style="color:inherit" href="/prototypes/">← Prototypes</a> · Recovered design study · Sample data, not live market values · Portable preview theme</aside><div id="scintilla-signal-fanout-v2">
+  <style>
+    #scintilla-signal-fanout-v2 {
+      --sf2-cyan: var(--viz-series-1);
+      --sf2-up: var(--viz-series-2);
+      --sf2-down: var(--destructive);
+      --sf2-indicator: var(--viz-series-3);
+      --sf2-structure: var(--viz-series-5);
+      color: var(--foreground);
+    }
+
+    #scintilla-signal-fanout-v2 * { box-sizing: border-box; }
+
+    #scintilla-signal-fanout-v2 .sf2-shell {
+      display: grid;
+      gap: 1rem;
+      width: 100%;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-instrument,
+    #scintilla-signal-fanout-v2 .sf2-price,
+    #scintilla-signal-fanout-v2 .sf2-system-head,
+    #scintilla-signal-fanout-v2 .sf2-hinge-content,
+    #scintilla-signal-fanout-v2 .sf2-component-key {
+      display: flex;
+      align-items: center;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-instrument {
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: .75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-price,
+    #scintilla-signal-fanout-v2 .sf2-component-key { gap: .45rem; }
+
+    #scintilla-signal-fanout-v2 .sf2-symbol,
+    #scintilla-signal-fanout-v2 .sf2-number,
+    #scintilla-signal-fanout-v2 .sf2-timeframe,
+    #scintilla-signal-fanout-v2 .sf2-system-name,
+    #scintilla-signal-fanout-v2 .sf2-kicker {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-symbol,
+    #scintilla-signal-fanout-v2 .sf2-system-name { font-weight: 500; letter-spacing: .08em; }
+    #scintilla-signal-fanout-v2 .sf2-kicker,
+    #scintilla-signal-fanout-v2 .sf2-timeframe { letter-spacing: .06em; }
+
+    #scintilla-signal-fanout-v2 .sf2-direction {
+      display: inline-flex;
+      color: var(--sf2-up);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(230px, .55fr);
+      gap: 1.2rem;
+      align-items: start;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-stack {
+      display: grid;
+      gap: 1rem;
+      min-width: 0;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-system {
+      display: grid;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-system-head {
+      justify-content: space-between;
+      gap: 1rem;
+      padding: .55rem .45rem .3rem;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-hinge-content {
+      width: 100%;
+      gap: .65rem;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-timeframe {
+      flex: 0 0 3rem;
+      text-align: left;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-hinge-mark {
+      flex: 1 1 auto;
+      min-width: 96px;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-hinge-value,
+    #scintilla-signal-fanout-v2 .sf2-row-value {
+      flex: 0 0 3.6rem;
+      text-align: right;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-fan-count {
+      flex: 0 0 2.8rem;
+      text-align: right;
+      color: var(--muted-foreground);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-panel {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 220ms ease;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-panel.is-open { grid-template-rows: 1fr; }
+
+    #scintilla-signal-fanout-v2 .sf2-panel-inner {
+      overflow: hidden;
+      opacity: 0;
+      transform: scaleY(.82);
+      transition: opacity 150ms ease, transform 220ms ease;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-panel.is-upper .sf2-panel-inner { transform-origin: bottom; }
+    #scintilla-signal-fanout-v2 .sf2-panel.is-lower .sf2-panel-inner { transform-origin: top; }
+    #scintilla-signal-fanout-v2 .sf2-panel.is-open .sf2-panel-inner { opacity: 1; transform: scaleY(1); }
+
+    #scintilla-signal-fanout-v2 .sf2-rows { display: grid; }
+
+    #scintilla-signal-fanout-v2 .sf2-row {
+      display: grid;
+      grid-template-columns: 3rem minmax(96px, 1fr) 3.6rem 2.8rem;
+      align-items: center;
+      gap: .65rem;
+      min-height: 32px;
+      padding: .25rem .45rem;
+      border-top: 1px solid var(--border);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-hinge {
+      position: relative;
+      z-index: 2;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-track {
+      position: relative;
+      width: 100%;
+      height: 12px;
+      background: var(--muted);
+      overflow: visible;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-center {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: var(--foreground);
+      opacity: .72;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-fill {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-fill.is-up {
+      left: 50%;
+      background: var(--sf2-up);
+      box-shadow: 0 0 9px color-mix(in srgb, var(--sf2-up) 65%, transparent);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-fill.is-down {
+      right: 50%;
+      background: var(--sf2-down);
+      box-shadow: 0 0 9px color-mix(in srgb, var(--sf2-down) 65%, transparent);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-fill.is-oscillator {
+      background: color-mix(in srgb, var(--sf2-indicator) 72%, transparent);
+      box-shadow: none;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-threshold {
+      position: absolute;
+      z-index: 1;
+      top: -2px;
+      bottom: -2px;
+      width: 1px;
+      background: var(--muted-foreground);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-threshold.is-early { opacity: .32; }
+    #scintilla-signal-fanout-v2 .sf2-threshold.is-limit { opacity: .66; }
+
+    #scintilla-signal-fanout-v2 .sf2-tip {
+      position: absolute;
+      z-index: 3;
+      top: 2px;
+      width: 8px;
+      height: 8px;
+      margin-left: -4px;
+      border-radius: 50%;
+      background: var(--sf2-indicator);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-tip.is-warning-low,
+    #scintilla-signal-fanout-v2 .sf2-tip.is-warning-high { opacity: .72; }
+    #scintilla-signal-fanout-v2 .sf2-tip.is-warning-low { background: var(--sf2-up); }
+    #scintilla-signal-fanout-v2 .sf2-tip.is-warning-high { background: var(--sf2-down); }
+
+    #scintilla-signal-fanout-v2 .sf2-tip.is-extreme-low {
+      background: var(--sf2-up);
+      box-shadow: 0 0 9px color-mix(in srgb, var(--sf2-up) 72%, transparent);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-tip.is-extreme-high {
+      background: var(--sf2-down);
+      box-shadow: 0 0 9px color-mix(in srgb, var(--sf2-down) 72%, transparent);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-state-mark {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      justify-self: end;
+      background: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-state-mark.is-warning-low { background: color-mix(in srgb, var(--sf2-up) 62%, transparent); border-color: var(--sf2-up); }
+    #scintilla-signal-fanout-v2 .sf2-state-mark.is-warning-high { background: color-mix(in srgb, var(--sf2-down) 62%, transparent); border-color: var(--sf2-down); }
+    #scintilla-signal-fanout-v2 .sf2-state-mark.is-extreme-low { background: var(--sf2-up); border-color: var(--sf2-up); }
+    #scintilla-signal-fanout-v2 .sf2-state-mark.is-extreme-high { background: var(--sf2-down); border-color: var(--sf2-down); }
+
+    #scintilla-signal-fanout-v2 .sf2-makeup {
+      display: grid;
+      gap: .85rem;
+      min-width: 0;
+      padding-left: 1rem;
+      border-left: 1px solid var(--border);
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-ring {
+      width: 100%;
+      max-width: 280px;
+      justify-self: center;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-ring-track {
+      fill: none;
+      stroke: var(--muted);
+      stroke-width: 10;
+      stroke-linecap: round;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-ring-active {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 58%, transparent));
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-ring-active.is-trend { color: var(--sf2-cyan); stroke: currentColor; }
+    #scintilla-signal-fanout-v2 .sf2-ring-active.is-momentum { color: var(--sf2-indicator); stroke: currentColor; }
+    #scintilla-signal-fanout-v2 .sf2-ring-active.is-structure { color: var(--sf2-structure); stroke: currentColor; }
+
+    #scintilla-signal-fanout-v2 .sf2-components {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .6rem;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-component {
+      display: grid;
+      gap: .3rem;
+      min-width: 0;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    #scintilla-signal-fanout-v2 .sf2-swatch.is-trend { background: var(--sf2-cyan); }
+    #scintilla-signal-fanout-v2 .sf2-swatch.is-momentum { background: var(--sf2-indicator); }
+    #scintilla-signal-fanout-v2 .sf2-swatch.is-structure { background: var(--sf2-structure); }
+
+    #scintilla-signal-fanout-v2 .sf2-capacity {
+      padding-top: .75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 590px) {
+      #scintilla-signal-fanout-v2 .sf2-layout { grid-template-columns: 1fr; }
+      #scintilla-signal-fanout-v2 .sf2-makeup {
+        padding-left: 0;
+        padding-top: 1rem;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 390px) {
+      #scintilla-signal-fanout-v2 .sf2-instrument { align-items: flex-start; }
+      #scintilla-signal-fanout-v2 .sf2-hinge-content { gap: .4rem; }
+      #scintilla-signal-fanout-v2 .sf2-row { grid-template-columns: 2.5rem minmax(82px, 1fr) 3rem 1rem; gap: .4rem; }
+      #scintilla-signal-fanout-v2 .sf2-timeframe { flex-basis: 2.5rem; }
+      #scintilla-signal-fanout-v2 .sf2-hinge-value { flex-basis: 3rem; }
+      #scintilla-signal-fanout-v2 .sf2-fan-count { flex-basis: 1rem; overflow: hidden; }
+      #scintilla-signal-fanout-v2 .sf2-components { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #scintilla-signal-fanout-v2 .sf2-panel,
+      #scintilla-signal-fanout-v2 .sf2-panel-inner { transition: none; }
+    }
+  </style>
+
+  <section class="sf2-shell" aria-label="SCINTILLA outward signal fan proposal">
+    <header class="sf2-instrument">
+      <div>
+        <div class="sf2-kicker text-small text-muted">SELECTED · SPY</div>
+        <div class="sf2-symbol">STATE STREET SPDR S&amp;P 500 ETF</div>
+      </div>
+      <div class="sf2-price">
+        <span class="sf2-number">$740.86</span>
+        <span class="sf2-direction" aria-hidden="true"><i data-lucide="arrow-up-right"></i></span>
+        <span class="sf2-number">+0.24%</span>
+      </div>
+    </header>
+
+    <div class="sf2-layout">
+      <div class="sf2-stack" id="sf2-stack"></div>
+
+      <aside class="sf2-makeup" aria-label="Geiger composite makeup">
+        <div>
+          <div class="sf2-kicker text-small text-muted">GEIGER COMPOSITE</div>
+          <div class="sf2-number">−0.03 · NEUTRAL</div>
+        </div>
+        <svg class="sf2-ring" viewBox="0 0 300 230" role="img" aria-labelledby="sf2-ring-title sf2-ring-desc">
+          <title id="sf2-ring-title">Geiger subcomponent rings</title>
+          <desc id="sf2-ring-desc">Three active concentric subcomponent arcs for trend, momentum, and structure, with room for two future subcomponents.</desc>
+          <g transform="rotate(135 150 112)">
+            <circle class="sf2-ring-track" cx="150" cy="112" r="94" pathLength="100" stroke-dasharray="75 25"></circle>
+            <circle class="sf2-ring-track" cx="150" cy="112" r="78" pathLength="100" stroke-dasharray="75 25"></circle>
+            <circle class="sf2-ring-track" cx="150" cy="112" r="62" pathLength="100" stroke-dasharray="75 25"></circle>
+            <circle class="sf2-ring-track" cx="150" cy="112" r="46" pathLength="100" stroke-dasharray="75 25" opacity=".48"></circle>
+            <circle class="sf2-ring-track" cx="150" cy="112" r="30" pathLength="100" stroke-dasharray="75 25" opacity=".32"></circle>
+            <circle class="sf2-ring-active is-trend" cx="150" cy="112" r="94" pathLength="100" stroke-dasharray="41 59"></circle>
+            <circle class="sf2-ring-active is-momentum" cx="150" cy="112" r="78" pathLength="100" stroke-dasharray="31 69"></circle>
+            <circle class="sf2-ring-active is-structure" cx="150" cy="112" r="62" pathLength="100" stroke-dasharray="38 62"></circle>
+          </g>
+        </svg>
+        <div class="sf2-components">
+          <div class="sf2-component">
+            <span class="sf2-component-key text-small"><span class="sf2-swatch is-trend" aria-hidden="true"></span>TREND</span>
+            <span class="sf2-number">+0.00</span>
+          </div>
+          <div class="sf2-component">
+            <span class="sf2-component-key text-small"><span class="sf2-swatch is-momentum" aria-hidden="true"></span>MOM</span>
+            <span class="sf2-number">−0.07</span>
+          </div>
+          <div class="sf2-component">
+            <span class="sf2-component-key text-small"><span class="sf2-swatch is-structure" aria-hidden="true"></span>STRUCT</span>
+            <span class="sf2-number">+0.00</span>
+          </div>
+        </div>
+        <div class="sf2-capacity text-small text-muted">3 ACTIVE SUBCOMPONENTS · 2 OPEN RINGS</div>
+      </aside>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('scintilla-signal-fanout-v2');
+      const stack = root.querySelector('#sf2-stack');
+      const systems = [
+        {
+          id: 'geiger',
+          name: 'GEIGER · MTF',
+          scale: '−1 / 0 / +1',
+          type: 'geiger',
+          current: -0.03,
+          upper: [['1W',0.28],['3D',0.14]],
+          lower: [['12H',-0.18],['6H',-0.31],['4H',-0.43],['3H',-0.55],['2H',-0.62]],
+          open: true
+        },
+        {
+          id: 'rsi',
+          name: 'RSI · MTF',
+          scale: 'EARLY 37 / 63 · LIMIT 30 / 70',
+          type: 'rsi',
+          current: 45,
+          upper: [['1W',58],['3D',59]],
+          lower: [['12H',40],['6H',40],['4H',41],['3H',41],['2H',45]],
+          open: false
+        },
+        {
+          id: 'williams',
+          name: 'WILLIAMS %R · MTF',
+          scale: 'EARLY −63 / −37 · LIMIT −80 / −20',
+          type: 'williams',
+          current: -81,
+          upper: [['1W',-37],['3D',-36]],
+          lower: [['12H',-74],['6H',-68],['4H',-67],['3H',-67],['2H',-67]],
+          open: false
+        }
+      ];
+
+      const signed = value => `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(2)}`;
+
+      function oscillatorState(position, type) {
+        const lowerLimit = type === 'rsi' ? 30 : 20;
+        const upperLimit = type === 'rsi' ? 70 : 80;
+        if (position <= lowerLimit) return 'is-extreme-low';
+        if (position <= 37) return 'is-warning-low';
+        if (position >= upperLimit) return 'is-extreme-high';
+        if (position >= 63) return 'is-warning-high';
+        return 'is-neutral';
+      }
+
+      function thresholdMarks(type) {
+        const marks = type === 'rsi'
+          ? [[30,'is-limit'],[37,'is-early'],[63,'is-early'],[70,'is-limit']]
+          : [[20,'is-limit'],[37,'is-early'],[63,'is-early'],[80,'is-limit']];
+        return marks.map(([position, kind]) => `<span class="sf2-threshold ${kind}" style="left:${position}%" aria-hidden="true"></span>`).join('');
+      }
+
+      function geigerTrack(value) {
+        const positive = value >= 0;
+        const width = Math.abs(value) * 50;
+        return `<span class="sf2-track" role="img" aria-label="Geiger ${signed(value)} on a minus one to plus one scale"><span class="sf2-center" aria-hidden="true"></span><span class="sf2-fill ${positive ? 'is-up' : 'is-down'}" style="width:${width.toFixed(1)}%" aria-hidden="true"></span></span>`;
+      }
+
+      function oscillatorTrack(value, type) {
+        const position = type === 'rsi' ? value : value + 100;
+        const left = Math.min(50, position);
+        const width = Math.abs(position - 50);
+        const state = oscillatorState(position, type);
+        const label = type === 'rsi' ? `RSI ${value}` : `Williams percent R ${value}`;
+        return `<span class="sf2-track" role="img" aria-label="${label}">${thresholdMarks(type)}<span class="sf2-center" aria-hidden="true"></span><span class="sf2-fill is-oscillator" style="left:${left}%;width:${width}%" aria-hidden="true"></span><span class="sf2-tip ${state}" style="left:${position}%" aria-hidden="true"></span></span>`;
+      }
+
+      function track(value, type) {
+        return type === 'geiger' ? geigerTrack(value) : oscillatorTrack(value, type);
+      }
+
+      function valueLabel(value, type) {
+        return type === 'geiger' ? signed(value) : String(value).replace('-', '−');
+      }
+
+      function stateMark(value, type) {
+        if (type === 'geiger') return '<span aria-hidden="true"></span>';
+        const position = type === 'rsi' ? value : value + 100;
+        return `<span class="sf2-state-mark ${oscillatorState(position, type)}" aria-hidden="true"></span>`;
+      }
+
+      function row([timeframe, value], type) {
+        return `<div class="sf2-row"><span class="sf2-timeframe text-small">${timeframe}</span>${track(value,type)}<span class="sf2-row-value sf2-number">${valueLabel(value,type)}</span>${stateMark(value,type)}</div>`;
+      }
+
+      function systemMarkup(system) {
+        const openClass = system.open ? ' is-open' : '';
+        return `<section class="sf2-system" data-block="${system.id}">
+          <div class="sf2-system-head"><span class="sf2-system-name">${system.name}</span><span class="text-small text-muted">${system.scale}</span></div>
+          <div class="sf2-panel is-upper${openClass}" id="sf2-upper-${system.id}"><div class="sf2-panel-inner"><div class="sf2-rows">${system.upper.map(value => row(value,system.type)).join('')}</div></div></div>
+          <button class="btn btn-ghost btn-block sf2-hinge" type="button" data-system="${system.id}" aria-expanded="${system.open}" aria-controls="sf2-upper-${system.id} sf2-lower-${system.id}">
+            <span class="sf2-hinge-content"><span class="sf2-timeframe">1D</span><span class="sf2-hinge-mark">${track(system.current,system.type)}</span><span class="sf2-hinge-value sf2-number">${valueLabel(system.current,system.type)}</span><span class="sf2-fan-count text-small">×8</span></span>
+          </button>
+          <div class="sf2-panel is-lower${openClass}" id="sf2-lower-${system.id}"><div class="sf2-panel-inner"><div class="sf2-rows">${system.lower.map(value => row(value,system.type)).join('')}</div></div></div>
+        </section>`;
+      }
+
+      stack.innerHTML = systems.map(systemMarkup).join('');
+
+      root.addEventListener('click', event => {
+        const hinge = event.target.closest('[data-system]');
+        if (!hinge) return;
+        const id = hinge.dataset.system;
+        const expanded = hinge.getAttribute('aria-expanded') === 'true';
+        hinge.setAttribute('aria-expanded', String(!expanded));
+        root.querySelector(`#sf2-upper-${id}`).classList.toggle('is-open', !expanded);
+        root.querySelector(`#sf2-lower-${id}`).classList.toggle('is-open', !expanded);
+      });
+    })();
+  </script>
+</div>
+</body></html>
