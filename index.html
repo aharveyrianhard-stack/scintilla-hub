@@ -1860,6 +1860,9 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ec-cc .cd{ display:inline-block; width:5px; height:5px; border-radius:50%; margin-right:6px;
   vertical-align:middle; position:relative; top:-1px; }
 /* row 3 — the day stepper. TODAY is the landing state; ◀ ▶ walk the calendar. */
+/* PHONE (day restoration 2026-09-19): on a narrow screen the HIGH ONLY / TODAY / DAY / WEEK / MONTH buttons overlapped the date
+   label ("TODAYDAY WEEKMONT" at 390 px). They now wrap onto their own line under the date instead. */
+@media (max-width:900px){ .ec-daybar{ flex-wrap:wrap; row-gap:6px; } .ec-span{ margin-left:0; width:100%; flex-wrap:wrap; } }
 .ec-daybar{ display:flex; align-items:center; gap:9px; padding:6px 12px 6px;
   border-bottom:.5px solid var(--line); font-family:var(--mono); }
 .ec-nav{ background:none; border:0.6px solid var(--line2); color:var(--ink3); cursor:pointer;
@@ -3949,8 +3952,15 @@ function startBoardFeed(cohort, fav, onRows, onState, ms = 45000) {
 }
 
 /* ---- STATE (App.jsx) ------------------------------------------------------ */
+/* DIRECT ENTRY (day restoration 2026-09-19) — Alan opened the calendar preview and saw a dashboard: the room tabs tuck away,
+   so the calendar was never on screen. A link ending in #economic (or #calendar) now opens the ECONOMIC room directly, as the
+   original builder's preview did. Any other address keeps the DASHBOARD landing unchanged. */
+function scEntryRoom() {
+  try { const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "").toLowerCase(); return h === "economic" || h === "calendar" ? "ECONOMIC" : null; }
+  catch (_) { return null; }
+}
 const S = {
-  sec: "DASHBOARD", coh: "FAV", tq: "", focusT: "MU",   /* DASHBOARD MODEL — FAV is the default board scope on boot */
+  sec: scEntryRoom() || "DASHBOARD", coh: "FAV", tq: "", focusT: "MU",   /* DASHBOARD MODEL — FAV is the default board scope on boot */
   fav: ["MU", "NBIS", "SNDK"],
   rows: [], tapes: { macro: [], all: [] }, coData: null,
   state: "live", focus: false, chartT: "MU", chartRange: "1D",   // R18 — scChart range tabs
@@ -12329,6 +12339,8 @@ try {
   });
 } catch (_) {}
 let revealTabs = () => {};                     // FIX 2 — reassigned by the auto-hide controller below
+/* DIRECT ENTRY — following an #economic link from inside the open page switches room too (one listener, page life). */
+if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("hashchange", () => { if (scEntryRoom() === "ECONOMIC" && S.sec !== "ECONOMIC") go("ECONOMIC"); });
 function go(sec) {
   clearSecFs();                                // R21 FIX B — room switch drops any section fullscreen
   /* DASHBOARD MODEL — clicking DASHBOARD while already on the DASH mount (e.g.
