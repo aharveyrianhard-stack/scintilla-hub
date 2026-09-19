@@ -42,7 +42,7 @@ function load({ src = page, tapeOn = false, S = {}, pg = async () => [], nowMs =
   const names = isPort
     ? ["fillEcon", "fillEconRail", "ecLoadWindow", "ecFetchWindow", "renderEconTable", "ecRowHTML", "ecDayRowsHTML", "ecMonthHTML",
        "macroNextHTML", "fillMacroNext", "ecTimeET", "ecDateKey", "ecToday", "ecDaysInView", "ecShift", "ecDayLbl", "ecWinKey", "click", "leftIdentHTML",
-       ...(src.includes("function ecRefreshTick") ? ["ecRefreshTick", "ecNormalize", "ecKeysetAfter"] : [])]
+       ...(src.includes("function ecRefreshTick") ? ["ecRefreshTick", "ecNormalize", "ecKeysetAfter", "ecCommitWindow"] : [])]
     : ["fillEcon"];
   const api = vm.runInContext(code + "\n;({" + names.join(",") + (isPort ? ", get ECON_CAL() { return ECON_CAL; }, get ECON_WIN() { return ECON_WIN; }, set MACRO_NEXT(v) { MACRO_NEXT = v; }" + (src.includes("function ecRefreshTick") ? ", get ECON_WINS() { return ECON_WINS; }" : "") + "" : "") + "})", ctx);
   return { api, ctx, store };
@@ -452,4 +452,48 @@ test("closure: names and offices exactly as supplied - no person is promoted to 
   assert.deepEqual(N("  Fed   Chair  Speech ", "Low"), ["Fed Chair Speech", "High"], "only whitespace is normalised");
   assert.doesNotMatch(page, /EC_CHAIR_NAMES|powell\|bernanke|\(powell\|/i, "no person-to-office list (constant or name alternation) remains in code");
   assert.match(page, /\nconst ECON_TAPE_ON = false;/, "tape stays off");
+});
+
+
+/* ---------------------------------------------------------------- CACHE ORDER (root counterexample 2026-09-19, runs/…-074920/ROOT-CACHE-ORDER-COUNTEREXAMPLE.*) */
+const R_ = (ts, event, country = "US") => ({ event_ts: ts, country, event });
+const rowsOf = (api, k) => JSON.parse(JSON.stringify(api.ECON_WINS[k].rows.map((r) => r.event + "@" + r.event_ts)));
+test("cache order: root counterexample - cached B seq1, newer A seq3, then OLDER in-flight C seq2: B, C and A all keep A's newer row", () => {
+  const { api } = load();
+  api.ecCommitWindow("B", { seq: 1, at: 1, from: 0, to: 10, reg: "US", rows: [R_(5, "OLD")] });
+  api.ecCommitWindow("A", { seq: 3, at: 3, from: 0, to: 10, reg: "US", rows: [R_(5, "NEW")] });
+  assert.deepEqual(rowsOf(api, "B"), ["NEW@5"], "afterNew");
+  api.ecCommitWindow("C", { seq: 2, at: 2, from: 0, to: 10, reg: "US", rows: [R_(5, "OLD")] });
+  assert.deepEqual(rowsOf(api, "B"), ["NEW@5"], "afterOlder: B not regressed (root's 'regressed:true' case)");
+  assert.deepEqual(rowsOf(api, "C"), ["NEW@5"], "the older read's OWN window does not regress either");
+  assert.deepEqual(rowsOf(api, "A"), ["NEW@5"]);
+  assert.equal(api.ECON_WINS.B.at, 1, "B's read time is its own read, not promoted"); assert.equal(api.ECON_WINS.C.at, 2);
+});
+test("cache order: three overlapping windows, partial and disjoint ranges - the newest read owns each point it covered, nothing else changes", () => {
+  const { api } = load();
+  api.ecCommitWindow("D", { seq: 1, at: 1, from: 100, to: 200, reg: "US", rows: [R_(150, "D own")] });                  // disjoint
+  api.ecCommitWindow("B", { seq: 1.5, at: 1, from: 0, to: 20, reg: "US", rows: [R_(5, "X old"), R_(9, "W old"), R_(15, "Y old")] });
+  api.ecCommitWindow("A", { seq: 3, at: 3, from: 0, to: 10, reg: "US", rows: [R_(5, "X new")] });                        // W moved away (ghost in 0..10)
+  api.ecCommitWindow("C", { seq: 2, at: 2, from: 8, to: 30, reg: "US", rows: [R_(9, "W old"), R_(15, "Y c"), R_(25, "Z c")] });   // older, lands last
+  assert.deepEqual(rowsOf(api, "B"), ["X new@5", "Y c@15"], "0..10 from A (W's ghost gone), 11..20 from C (newer than B), nothing invented");
+  assert.deepEqual(rowsOf(api, "C"), ["Y c@15", "Z c@25"], "C's own window: its 9 row is owned by newer A (gone), the rest is C's own read");
+  assert.deepEqual(rowsOf(api, "A"), ["X new@5"]);
+  assert.deepEqual(rowsOf(api, "D"), ["D own@150"], "disjoint window untouched");
+  // region: a newer US read owns only US points inside an ALL window; other countries keep the ALL read
+  api.ecCommitWindow("ALLW", { seq: 4, at: 4, from: 40, to: 60, reg: "ALL", rows: [R_(50, "us a"), R_(50, "de a", "DE")] });
+  api.ecCommitWindow("USW", { seq: 5, at: 5, from: 45, to: 55, reg: "US", rows: [] });                                  // US row at 50 was moved
+  assert.deepEqual(rowsOf(api, "ALLW"), ["de a@50"]);
+});
+test("cache order: an older in-flight read for the CURRENT window lands after a neighbour refreshed the overlap - shown, not 'loading', newer rows kept", async () => {
+  const { q, pg } = deferred();
+  const { api, store } = load({ pg, S: { econDay: "2026-09-07" } });
+  const p0 = api.ecLoadWindow();                                               // 09-07 week, read seq1 in flight
+  api.click("ecday", { d: "1" }); await flush();                               // 09-14 week, read seq2 (range from 09-09)
+  api.click("ecday", { d: "-1" }); await flush();                              // back to 09-07: its read is still in flight (shared, no new read)
+  assert.equal(q.length, 2);
+  q[1].resolve([row("2026-09-10T12:30:00Z", "EXAMPLE Newer")]); await flush();
+  q[0].resolve([row("2026-09-10T12:30:00Z", "EXAMPLE Older"), row("2026-09-08T12:30:00Z", "EXAMPLE Own")]); await p0; await flush();
+  const html = store.econTbl.innerHTML;
+  assert.doesNotMatch(html, /loading economic calendar/); assert.match(html, /EXAMPLE Own/); assert.match(html, /EXAMPLE Newer/);
+  assert.doesNotMatch(html, /EXAMPLE Older/, "the older read does not resurrect what the newer read replaced");
 });

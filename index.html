@@ -8930,22 +8930,41 @@ async function ecFetchWindow(from, to) {
   }
   return out;
 }
-/* RELEASE CLOSURE — a successful read REPLACES what it covers. The window's own cache entry is replaced whole (so a row the
-   store no longer holds, e.g. an event FMP moved to another day, disappears), and every OTHER cached window that overlaps it
-   gets exactly the overlapping part replaced: rows in the shared time range whose country belongs to both regions are swapped
-   for the fresh ones. Disjoint windows are untouched, and a window whose own read is newer than this one is never overwritten. */
+/* RELEASE CLOSURE (cache-order fix, root counterexample 2026-09-19) — every successful read is kept in a small LEDGER, and each
+   cached window's rows are DERIVED from it: for any (time, country) point, the read with the highest sequence number that
+   covered that point is authoritative. A newer read therefore removes rows the store no longer returns (a moved event leaves
+   no ghost) wherever it reached, and an OLDER read that lands later can never undo it - not in another window and not in its
+   own. Parts no newer read touched keep their own (older) read; nothing is promoted to fresher than it was read. A read
+   fully covered by a newer one (range and region) is dropped from the ledger, so it stays small. */
+const ECON_READS = [];
+function ecRegCovers(a, b) { return a === b || a === "ALL" || (a === "G20" && (b === "G7" || b === "US")) || (a === "G7" && b === "US"); }
 function ecRowOrder(a, b) { return (+a.event_ts - +b.event_ts) || (a.country < b.country ? -1 : a.country > b.country ? 1 : 0) || (a.event < b.event ? -1 : a.event > b.event ? 1 : 0); }
+function ecDerive(w) {
+  const out = [];
+  for (const r of ECON_READS) {
+    if (r.to < w.from || r.from > w.to) continue;
+    for (const x of r.rows) {
+      const ts = +x.event_ts;
+      if (ts < w.from || ts > w.to || !ecInRegion(x.country, w.reg)) continue;
+      if (ECON_READS.some((n) => n.seq > r.seq && ts >= n.from && ts <= n.to && ecInRegion(x.country, n.reg))) continue;   // a newer read owns this point
+      out.push(x);
+    }
+  }
+  return out.sort(ecRowOrder);
+}
 function ecCommitWindow(key, got) {
-  ECON_WINS[key] = got;
+  ECON_READS.push(got);
+  for (let i = ECON_READS.length - 1; i >= 0; i--) {
+    const r = ECON_READS[i];
+    if (ECON_READS.some((n) => n.seq > r.seq && n.from <= r.from && n.to >= r.to && ecRegCovers(n.reg, r.reg))) ECON_READS.splice(i, 1);
+  }
+  const cur = ECON_WINS[key];
+  if (!cur || !(cur.seq > got.seq)) ECON_WINS[key] = { at: got.at, seq: got.seq, from: got.from, to: got.to, reg: got.reg, rows: [] };   // read time = this window's own last read
   for (const k in ECON_WINS) {
-    const c = ECON_WINS[k];
-    if (k === key || !c || c.from == null || c.to < got.from || c.from > got.to || (c.seq || 0) > got.seq) continue;
-    const lo = Math.max(c.from, got.from), hi = Math.min(c.to, got.to);
-    const shared = (r) => +r.event_ts >= lo && +r.event_ts <= hi && ecInRegion(r.country, got.reg) && ecInRegion(r.country, c.reg);
-    c.rows = c.rows.filter((r) => !shared(r)).concat(got.rows.filter(shared)).sort(ecRowOrder);
+    const w = ECON_WINS[k];
+    if (k === key || !(w.to < got.from || w.from > got.to)) w.rows = ecDerive(w);   // only windows this read can touch
   }
 }
-
 /* the fetched window is now scoped to a region, so the region is part of its identity */
 function ecWinKey() {
   const span = S.econSpan || "DAY", d = S.econDay || ecToday();
