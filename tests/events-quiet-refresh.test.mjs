@@ -46,7 +46,8 @@ test("redrawKeepingPlace keeps each list where the reader left it and an opened 
    transient failures would erase working controls on the refreshed screen." The REAL functions are run here with reads that reject. */
 import vm from "node:vm";
 const take = (re) => page.match(re)[0];
-const PURE = take(/function callDayWindow\(day, n\) \{[\s\S]*?\n\}\n/) + take(/function matchCallSummaries\(events, calls\) \{[\s\S]*?\n\}\n/) + take(/function transcriptExists\(ticker, date, callDays\) \{[\s\S]*?\n\}\n/);
+const PURE = take(/function callDayWindow\(day, n\) \{[\s\S]*?\n\}\n/) + take(/function matchCallSummaries\(events, calls\) \{[\s\S]*?\n\}\n/) + take(/function transcriptExists\(ticker, date, callDays\) \{[\s\S]*?\n\}\n/)
+  + take(/function ernByReportDay\(rows, today\) \{[\s\S]*?\n\}\n/);   // fillEvents splits its rows at today with the rule it shares with the company tab
 
 test("company tab: a quiet re-read whose call-key or call-summary read is REJECTED keeps the working Transcript / Call summary controls", async () => {
   const evs = [{ ticker: "FDX", date: "2026-06-23", eps_actual: 6.31, report_time: "AMC" }], keys = [{ ticker: "FDX", quarter: "Q4 2026", call_date: "2026-06-23" }];

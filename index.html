@@ -8320,11 +8320,10 @@ async function fillEvents(quiet) {
     if (Array.isArray(csidx)) { EV_CSKEYS = csidx; }
     CALLSUM_IDX = matchCallSummaries([...up, ...past], EV_CSKEYS);
     const inU = (ev) => UNIVERSE.has(ev.ticker);
-    /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
-       move it into the reported/past list so it stops showing as the next upcoming. */
-    const upPending = up.filter((e) => e.eps_actual == null);
-    const reportedToday = up.filter((e) => e.eps_actual != null);
-    EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
+    /* R40 — a today-dated row that has already REPORTED is NOT upcoming; it moves into the reported/past list so it stops
+       showing as the next upcoming. "Reported" = a stored EPS OR revenue, one rule shared with the company tab (ernByReportDay). */
+    const byDay = ernByReportDay(up.concat(past), today);
+    EV_CACHE = { up: byDay.up.filter(inU), past: byDay.past.filter(inU) };
     const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], EV_TRKEYS]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
     EV_READ_AT = Date.now();
     if (!quiet) { EV_SIG = sig; EV_HELD_SIG = ""; renderEvents(S.coh); }
@@ -10459,6 +10458,21 @@ function earningsRowToBlock(row, callsum, callDays) {
    Never the day before (0 of 165), never two or more days away (1 of 165, a BMO event - left unmatched), never "the latest
    call": a quarter is ~90 days, so one day cannot reach another quarter's call. `calls` holds only calls that HAVE a summary.
    Pure function: events [{ticker,date,report_time}], calls [{ticker,quarter,call_date}] -> Map "TICKER|event date" -> {call_date,quarter}. */
+/* A STORED RESULT IS A REPORT, WHATEVER DAY IT IS DATED. The two views split a company's rows at "today" differently: the
+   master feed moved a today-dated row out of UPCOMING only when its EPS was stored (a stored revenue alone stayed "upcoming"),
+   and a company's EVENTS tab never moved it at all - on a report day the result just captured sat in the NEXT EARNINGS slot,
+   was missing from PAST EARNINGS and from the three quarters the streak reads, and the next scheduled date was not asked
+   for. One rule for both now: a row is UPCOMING only while it is dated today or later AND carries no stored result (EPS or
+   revenue - the same test earningsBlockHTML and splitPastEarnings use); every other dated row is PAST, newest first.
+   Pure: rows + New York day "YYYY-MM-DD" -> { up:[rows, oldest first], past:[rows, newest first] }; undated rows are dropped. */
+function ernByReportDay(rows, today) {
+  const hasResult = (r) => r.eps_actual != null || r.revenue_actual != null;
+  const up = [], past = [];
+  (rows || []).forEach((r) => { if (!r || !r.date) return; (String(r.date) >= today && !hasResult(r) ? up : past).push(r); });
+  up.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  past.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return { up, past };
+}
 /* A PAST DATE WITHOUT A STORED RESULT DOES NOT BELONG UNDER "REPORTED" - AND THAT IS ALL THE PAGE MAY SAY ABOUT IT. The
    absence of a stored actual does not establish that the company did not report: the feed may simply not have delivered it.
    So these rows leave the REPORTED list and are listed as exactly what is observed - "past dates without stored results" -
@@ -10737,11 +10751,9 @@ function coEventsHTML(data) {
     transcriptBtnHTML(data) + "</div>" + transcriptBubbleHTML(data);
   const aiMini = AIREAD_SLOT("$" + esc(data.t)).replace('class="sc-airead"', 'class="sc-airead mini"');
   const releases = releasesSectionHTML(data, "PRESS RELEASES");     // (3) — honest company_releases
-  const today0 = todayISO();
-  const upEvs = evs.filter((e) => e && e.date && String(e.date) >= today0)
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const pastSplit = splitPastEarnings(evs.filter((e) => e && e.date && String(e.date) < today0)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date))), evs);
+  const byDay = ernByReportDay(evs, todayISO());                 // a result captured today is PAST EARNINGS, not the next report (same rule as the master feed)
+  const upEvs = byDay.up;
+  const pastSplit = splitPastEarnings(byDay.past, evs);
   const pastEvs = pastSplit.reported.slice(0, 24);              // dates with no stored result are listed apart, and no longer use up the three quarters the streak tag reads
   /* R48 — streak tag for UPCOMING cards: classify the ticker's own last up-to-3
      REPORTED quarters (already sitting right here in pastEvs, zero extra fetch)
