@@ -41,9 +41,10 @@ function load({ src = page, tapeOn = false, S = {}, pg = async () => [], nowMs =
   if (isPort) code += "\nfunction click(act, ds) { const a = { dataset: ds }; switch (act) {\n" + CLICKS + "\n} }";
   const names = isPort
     ? ["fillEcon", "fillEconRail", "ecLoadWindow", "ecFetchWindow", "renderEconTable", "ecRowHTML", "ecDayRowsHTML", "ecMonthHTML",
-       "macroNextHTML", "fillMacroNext", "ecTimeET", "ecDateKey", "ecToday", "ecDaysInView", "ecShift", "ecDayLbl", "ecWinKey", "click", "leftIdentHTML"]
+       "macroNextHTML", "fillMacroNext", "ecTimeET", "ecDateKey", "ecToday", "ecDaysInView", "ecShift", "ecDayLbl", "ecWinKey", "click", "leftIdentHTML",
+       ...(src.includes("function ecRefreshTick") ? ["ecRefreshTick", "ecNormalize", "ecKeysetAfter"] : [])]
     : ["fillEcon"];
-  const api = vm.runInContext(code + "\n;({" + names.join(",") + (isPort ? ", get ECON_CAL() { return ECON_CAL; }, get ECON_WIN() { return ECON_WIN; }, set MACRO_NEXT(v) { MACRO_NEXT = v; }" : "") + "})", ctx);
+  const api = vm.runInContext(code + "\n;({" + names.join(",") + (isPort ? ", get ECON_CAL() { return ECON_CAL; }, get ECON_WIN() { return ECON_WIN; }, set MACRO_NEXT(v) { MACRO_NEXT = v; }" + (src.includes("function ecRefreshTick") ? ", get ECON_WINS() { return ECON_WINS; }" : "") + "" : "") + "})", ctx);
   return { api, ctx, store };
 }
 const row = (iso, event, extra = {}) => ({ event_ts: ts(iso), country: "US", event, actual: 1, estimate: 1, previous: 1, impact: "High", ...extra });
@@ -284,7 +285,9 @@ function counter(calRowsPerRead = 1) {
     if (p.startsWith("treasury_rates?")) return [{ date: "2026-09-17", y2: 4.6, y10: 4.9 }];
     if (p.startsWith("econ_history?") && p.includes("limit=1000")) return [{ series: "CPI", date: "2026-08-01", value: 1, updated_ts: 1 }];
     if (p.startsWith("econ_history?")) return [{ series: "x", date: "2026-08-01", value: 1, updated_ts: 1 }];
-    const off = +p.match(/offset=(\d+)/)[1];
+    // release closure: keyset pages — page N+1 starts after the cursor's "EXAMPLE <n>" row
+    const cur = (decodeURIComponent((p.match(/&or=([^&]+)/) || [, ""])[1]).match(/event\.gt\."EXAMPLE (\d+)"/) || [])[1];
+    const off = cur == null ? 0 : +cur + 1;
     return Array.from({ length: Math.max(0, Math.min(1000, calRowsPerRead - off)) }, (_, i) => row("2026-09-18T12:30:00Z", "EXAMPLE " + (off + i)));
   };
   return { log, pg };
@@ -349,4 +352,104 @@ test("(g) the rail paints what a13a486's fillEcon paints, except the ladder's ca
   assert.equal(B.store.econCurve.innerHTML, A.store.econCurve.innerHTML);
   const rungs = (h) => [...h.matchAll(/<b>(UST [0-9]+[MY])<\/b>[\s\S]*?<span class="econ-val">([^<]*)</g)].map((m) => m[1] + "=" + m[2]).join(",");
   assert.equal(rungs(B.store.econLadder.innerHTML), rungs(card), "the same UST rungs, now in #econLadder");
+});
+
+
+/* ---------------------------------------------------------------- RELEASE CLOSURE (2026-09-19, root review 10:48Z) */
+function liveRoom(S) {           // a room with a controllable clock, visibility, timer and listener registry
+  const q = [], timers = [], listeners = [];
+  const pg = (p) => p.startsWith("econ_calendar") ? new Promise((resolve, reject) => q.push({ p, resolve, reject })) : Promise.resolve([]);   // the rail answers at once
+  const L = load({ pg, S: { econDay: "2026-09-07", ...S } });
+  vm.runInContext("Date.now = () => globalThis.__t", L.ctx); L.ctx.__t = Date.parse("2026-09-09T13:00:00Z");
+  L.ctx.setInterval = (fn, ms) => { timers.push({ fn, ms }); return timers.length; }; L.ctx.clearInterval = () => {};
+  L.ctx.document.visibilityState = "visible"; L.ctx.document.addEventListener = (ev, fn) => listeners.push({ ev, fn });
+  return { ...L, q, timers, listeners, advance: (min) => { L.ctx.__t += min * 60e3; } };
+}
+const mount = async (R, resolveRows) => { const p = R.api.fillEcon(); await flush(); R.q[R.q.length - 1].resolve(resolveRows); await flush(); await p; };
+test("closure: a long-open, visible room re-reads after 10 min and shows an actual that landed after the first render; view state kept", async () => {
+  const R = liveRoom({ econCat: "LABOR", econSpan: "WEEK" });
+  await mount(R, [row("2026-09-09T12:30:00Z", "Initial Jobless Claims", { actual: null })]);
+  assert.match(R.store.econTbl.innerHTML, /Initial Jobless Claims/); assert.doesNotMatch(R.store.econTbl.innerHTML, /<span class="v act">231/);
+  const n0 = R.q.length; R.advance(5); R.api.ecRefreshTick(); assert.equal(R.q.length, n0, "younger than 10 min: no read");
+  R.advance(6); R.api.ecRefreshTick(); assert.equal(R.q.length, n0 + 1, "older than 10 min: one read");
+  R.q[n0].resolve([row("2026-09-09T12:30:00Z", "Initial Jobless Claims", { actual: 231 })]); await flush();
+  assert.match(R.store.econTbl.innerHTML, /<span class="v act">231<\/span>/, "the late actual is shown");
+  assert.equal(R.ctx.S.econCat, "LABOR"); assert.equal(R.ctx.S.econSpan, "WEEK"); assert.equal(R.ctx.S.econDay, "2026-09-07");
+  assert.match(R.store.econTbl.innerHTML, /read 09:11 ET/, "the legend shows the real read time of the refresh (13:11Z = 09:11 ET)");
+});
+test("closure: hidden tab reads nothing; returning to the tab re-reads a stale window once; one timer and one listener however often the room mounts", async () => {
+  const R = liveRoom({});
+  await mount(R, [row("2026-09-08T12:30:00Z", "EXAMPLE A")]);
+  const p2 = R.api.fillEcon(); await flush(); await p2; const p3 = R.api.fillEcon(); await flush(); await p3;   // remounts
+  assert.equal(R.timers.length, 1, "one interval"); assert.equal(R.timers[0].ms, 60e3);
+  assert.equal(R.listeners.filter((l) => l.ev === "visibilitychange").length, 1, "one visibility listener");
+  const n0 = R.q.length; R.ctx.document.visibilityState = "hidden"; R.advance(30); R.timers[0].fn(); R.timers[0].fn();
+  assert.equal(R.q.length, n0, "hidden: no reads");
+  R.ctx.document.visibilityState = "visible"; R.listeners[0].fn(); R.listeners[0].fn();
+  assert.equal(R.q.length, n0 + 1, "visible again: exactly one read, even when the event fires twice (in-flight read is shared)");
+  R.q[n0].resolve([row("2026-09-08T12:30:00Z", "EXAMPLE A", { actual: 7 })]); await flush();
+  assert.match(R.store.econTbl.innerHTML, /<span class="v act">7<\/span>/);
+});
+test("closure: a failed refresh keeps the last good rows, says so with real times, backs off 2 min, and the next success clears it", async () => {
+  const R = liveRoom({});
+  await mount(R, [row("2026-09-08T12:30:00Z", "EXAMPLE Kept")]);
+  R.advance(11); R.api.ecRefreshTick(); const n0 = R.q.length; R.q[n0 - 1].reject(new Error("pg 503")); await flush();
+  assert.match(R.store.econTbl.innerHTML, /EXAMPLE Kept/, "last good rows retained");
+  assert.match(R.store.econTbl.innerHTML, /read 09:00 ET · refresh failed 09:11 ET, showing that read/);
+  R.advance(1); R.api.ecRefreshTick(); assert.equal(R.q.length, n0, "no retry inside 2 min");
+  R.advance(2); R.api.ecRefreshTick(); assert.equal(R.q.length, n0 + 1, "retry after 2 min");
+  R.q[n0].resolve([row("2026-09-08T12:30:00Z", "EXAMPLE Kept")]); await flush();
+  assert.doesNotMatch(R.store.econTbl.innerHTML, /refresh failed/);
+});
+test("closure: a rescheduled event leaves no ghost - the refreshed window is replaced, the overlapping cached window is spliced, disjoint and newer ones are untouched", async () => {
+  const R = liveRoom({});
+  await mount(R, [row("2026-09-10T12:30:00Z", "EXAMPLE Moved"), row("2026-09-08T12:30:00Z", "EXAMPLE Stays")]);        // week 09-07 (+pad to 09-19)
+  R.api.click("ecday", { d: "1" }); await flush();                                                                   // week 09-14 (pad from 09-09) - overlaps
+  R.q[R.q.length - 1].resolve([row("2026-09-10T12:30:00Z", "EXAMPLE Moved"), row("2026-09-16T12:30:00Z", "EXAMPLE Next Week"), row("2026-09-22T12:30:00Z", "EXAMPLE Far")]); await flush();
+  R.api.click("ecday", { d: "-1" }); await flush();                                                                  // back to 09-07 (cached)
+  R.advance(11); R.api.ecRefreshTick();                                                                               // refresh 09-07: the store moved the event to 09-11
+  // the 09-07 window reads 09-02 … 09-18 (5-day pad), so the store's answer covers 09-16 too
+  R.q[R.q.length - 1].resolve([row("2026-09-08T12:30:00Z", "EXAMPLE Stays"), row("2026-09-11T14:00:00Z", "EXAMPLE Moved"), row("2026-09-16T12:30:00Z", "EXAMPLE Next Week")]); await flush();
+  const html = R.store.econTbl.innerHTML;
+  const per = (html.match(/EXAMPLE Stays/g) || []).length;                                                      // how often one row names itself
+  assert.ok(per >= 1); assert.equal((html.match(/EXAMPLE Moved/g) || []).length, per, "shown once (as one row), at its new time");
+  const W = R.api.ECON_WINS["US|WEEK|2026-09-14"].rows.map((r) => r.event + "@" + new Date(r.event_ts * 1000).toISOString().slice(5, 10));
+  assert.deepEqual(JSON.parse(JSON.stringify(W)), ["EXAMPLE Moved@09-11", "EXAMPLE Next Week@09-16", "EXAMPLE Far@09-22"],
+    "the overlapping week lost the ghost (09-10) and gained the moved row; its row outside the overlap (09-22) is untouched");
+});
+test("closure: an OLDER read never splices over a window read later (sequence, not clock)", async () => {
+  const R = liveRoom({});
+  const p1 = R.api.ecLoadWindow(); R.ctx.S.econDay = "2026-09-14"; const p2 = R.api.ecLoadWindow();           // same millisecond
+  R.q[1].resolve([row("2026-09-16T12:30:00Z", "EXAMPLE New")]); await p2;
+  R.q[0].resolve([row("2026-09-08T12:30:00Z", "EXAMPLE Old")]); await p1;                                      // older read lands last
+  assert.deepEqual(JSON.parse(JSON.stringify(R.api.ECON_WINS["US|WEEK|2026-09-14"].rows.map((r) => r.event))), ["EXAMPLE New"]);
+  assert.match(R.store.econTbl.innerHTML, /EXAMPLE New/);
+});
+test("closure: keyset paging - an insert between pages neither duplicates nor drops a row that existed throughout (offsets would duplicate)", async () => {
+  const mk = (i) => ({ event_ts: 1000 + Math.floor(i / 3), country: "US", event: "E" + String(i).padStart(5, "0"), impact: "Low" });
+  const table = Array.from({ length: 2500 }, (_, i) => mk(i));
+  const ord = (a, b) => (a.event_ts - b.event_ts) || (a.country < b.country ? -1 : a.country > b.country ? 1 : 0) || (a.event < b.event ? -1 : a.event > b.event ? 1 : 0);
+  let calls = 0;
+  const pg = async (p) => { calls++;
+    if (calls === 2) table.push({ event_ts: 1000, country: "US", event: "E00000a", impact: "Low" });              // written behind the cursor mid-read
+    const all = table.slice().sort(ord); const m = decodeURIComponent((p.match(/&or=([^&]+)/) || [, ""])[1]).match(/event_ts\.gt\.(\d+),.*country\.gt\."([^"]*)".*event\.gt\."([^"]*)"/);
+    const after = m ? { event_ts: +m[1], country: m[2], event: m[3] } : null;
+    return all.filter((r) => !after || ord(r, after) > 0).slice(0, 1000).map((r) => ({ ...r })); };
+  const { api } = load({ pg });
+  const rows = await api.ecFetchWindow(0, 9e9);
+  const keys = rows.map((r) => r.event);
+  assert.equal(new Set(keys).size, keys.length, "no duplicates");
+  for (let i = 0; i < 2500; i++) assert.ok(keys.includes(mk(i).event), "row " + i + " present");
+  assert.equal(calls, 3);
+});
+test("closure: names and offices exactly as supplied - no person is promoted to Fed Chair, an office row names nobody new", () => {
+  const { api } = load();
+  const N = (event, impact) => { const r = api.ecNormalize({ event, impact }); return [r.event, r.impact]; };
+  for (const who of ["Powell", "Bernanke", "Yellen", "Greenspan"]) assert.deepEqual(N("Fed " + who + " Speech", "Medium"), ["Fed " + who + " Speech", "Medium"], who);
+  assert.deepEqual(N("Fed Chair Powell Speech", "Medium"), ["Fed Chair Powell Speech", "High"], "named by the supplier as the office: kept, High");
+  assert.deepEqual(N("Fed Chair Speech", "Low"), ["Fed Chair Speech", "High"], "the office alone: no holder invented");
+  assert.deepEqual(N("Fed Vice Chair Jefferson Speech", "Medium"), ["Fed Vice Chair Jefferson Speech", "Medium"], "vice chair is not the chair");
+  assert.deepEqual(N("  Fed   Chair  Speech ", "Low"), ["Fed Chair Speech", "High"], "only whitespace is normalised");
+  assert.doesNotMatch(page, /EC_CHAIR_NAMES|powell\|bernanke|\(powell\|/i, "no person-to-office list (constant or name alternation) remains in code");
+  assert.match(page, /\nconst ECON_TAPE_ON = false;/, "tape stays off");
 });

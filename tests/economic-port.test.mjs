@@ -118,8 +118,8 @@ test("flag ON: one read for 7 days of US High (+Medium, so a chair speech FMP gr
   assert.match(p, /^econ_calendar\?select=event_ts,country,event,impact,estimate,previous&country=eq\.US&impact=in\.\(High,Medium\)&event_ts=gte\.(\d+)&event_ts=lte\.(\d+)&order=event_ts\.asc&limit=200$/);
   const [, from, to] = p.match(/gte\.(\d+)&event_ts=lte\.(\d+)/);
   assert.equal(+to - +from, 7 * 86400);
-  assert.deepEqual(plain(api.MACRO_NEXT.map((r) => [r.event, r.impact])), [["Fed Chair Speech", "High"], ["Inflation Rate YoY (Dec)", "High"]],
-    "the chair is an office and always High; other Medium rows are not nudges");
+  assert.deepEqual(plain(api.MACRO_NEXT.map((r) => [r.event, r.impact])), [["Fed Chair Powell Speech", "High"], ["Inflation Rate YoY (Dec)", "High"]],
+    "a row the supplier files under the office is High, with the supplier's own name kept; other Medium rows are not nudges");
   await api.fillMacroNext();
   assert.equal(paths.length, 1, "no second read inside the TTL");
 });
@@ -147,10 +147,11 @@ test("taxonomy: first match wins, OTHER is a leak detector, and the chair is an 
   for (const [ev, cat] of Object.entries(cases)) assert.equal(api.ecCat(ev), cat, ev);
   assert.deepEqual(plain(api.EC_CAT_NAMES), ["ALL", "ENERGY", "AUCTIONS", "POSITIONING", "CENTRAL BANK", "HOUSING", "LABOR", "INFLATION", "TRADE", "GROWTH", "OTHER"]);
   assert.equal(api.ecBase("Core CPI (Jul)"), "Core CPI"); assert.equal(api.ecPeriod("GDP Growth Rate QoQ (Q2)"), "Q2");
+  // release closure: the office only where the supplier names it; names are kept; no person is promoted to the office
   const a = api.ecNormalize({ event: "Fed Chair Powell Speech", impact: "Medium" });
-  assert.equal(a.event, "Fed Chair Speech"); assert.equal(a.impact, "High");
+  assert.equal(a.event, "Fed Chair Powell Speech"); assert.equal(a.impact, "High");
   const b = api.ecNormalize({ event: "Fed Powell Speech", impact: "Low" });
-  assert.equal(b.event, "Fed Chair Speech"); assert.equal(b.impact, "High");
+  assert.equal(b.event, "Fed Powell Speech"); assert.equal(b.impact, "Low");
   const c = api.ecNormalize({ event: "Fed Waller Speech", impact: "Medium" });
   assert.equal(c.event, "Fed Waller Speech"); assert.equal(c.impact, "Medium", "other speakers keep the feed's grade");
   assert.equal(api.ecShort("Michigan Consumer Sentiment"), "Michigan Sentiment");
@@ -204,12 +205,14 @@ test("MONTH: a Sunday-first grid of whole weeks, impact class from a fixed list,
 
 test("the window fetch is a region-scoped GET that pages until a short page", async () => {
   const calls = [];
-  const { api } = load({ S: { econCty: "G20" }, pg: async (p) => { calls.push(p); return calls.length === 1 ? Array.from({ length: 1000 }, () => ({ event: "X", impact: "Low" })) : [{ event: "Y", impact: "Low" }]; } });
+  const { api } = load({ S: { econCty: "G20" }, pg: async (p) => { calls.push(p); return calls.length === 1 ? Array.from({ length: 1000 }, (_, i) => ({ event_ts: 150, country: "US", event: "X" + String(i).padStart(4, "0"), impact: "Low" })) : [{ event_ts: 151, country: "US", event: "Y", impact: "Low" }]; } });
   const rows = await api.ecFetchWindow(100, 200);
   assert.equal(rows.length, 1001);
   assert.equal(calls.length, 2);
-  assert.match(calls[0], /^econ_calendar\?select=event_ts,country,event,actual,estimate,previous,impact&country=in\.\(US,CA,JP,UK,GB,DE,FR,IT,EU,CN,IN,BR,MX,KR,AU,RU,ZA,TR,SA,ID,AR\)&event_ts=gte\.100&event_ts=lte\.200&order=event_ts\.asc,country\.asc,event\.asc&limit=1000&offset=0$/);
-  assert.match(calls[1], /&offset=1000$/);
+  assert.match(calls[0], /^econ_calendar\?select=event_ts,country,event,actual,estimate,previous,impact&country=in\.\(US,CA,JP,UK,GB,DE,FR,IT,EU,CN,IN,BR,MX,KR,AU,RU,ZA,TR,SA,ID,AR\)&event_ts=gte\.100&event_ts=lte\.200&order=event_ts\.asc,country\.asc,event\.asc&limit=1000$/);
+  // release closure: page 2 is a KEYSET page after page 1's last row, never an offset
+  assert.doesNotMatch(calls.join(" "), /offset=/);
+  assert.equal(decodeURIComponent(calls[1].match(/&or=([^&]+)/)[1]), '(event_ts.gt.150,and(event_ts.eq.150,country.gt."US"),and(event_ts.eq.150,country.eq."US",event.gt."X0999"))');
 });
 
 test("ecLoadWindow: a stale response never repaints, a failed new window says so, a fresh cached window is not re-read", async () => {
