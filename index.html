@@ -10112,6 +10112,28 @@ function stripSrcTail(title, src) {
   if (!tail || !s) return t;
   return (tail === s || tail.indexOf(s) !== -1 || s.indexOf(tail) !== -1) ? m[1] : t;
 }
+/* NEWS-PUBLISHER — Google News is the aggregator, not the publisher. Every google row written before news-feed v21
+   (2026-09-18 21:40Z), and any later one whose RSS item had no <source>, is stored with site="Google News"; the
+   publisher survives only as the " - Publisher" tail Google appends to every headline. Those rows rendered
+   "GOOGLE NEWS" as their source and kept "- Reuters" glued to the headline, because stripSrcTail only strips a tail
+   that matches the stored site. For feed=google rows carrying only the aggregator label, the source is now read from
+   that tail. Nothing stored changes: url, feed and site stay as written, the link is the stored link, and the
+   aggregator is still named (tooltip "via Google News") on every google row. A google row with no readable tail keeps
+   "Google News". Every non-google row takes the unchanged stripSrcTail path. */
+function newsSource(n) {
+  n = n || {};
+  const site = String(n.site == null ? "" : n.site).trim();
+  const feed = String(n.feed == null ? "" : n.feed).trim();
+  const raw = String(n.title == null ? "" : n.title).trim();
+  const via = feed === "google" ? "Google News" : "";
+  if (via && (!site || srcNorm(site) === "googlenews")) {
+    const m = raw.match(/^(.*\S)\s+-\s+(\S.{0,38}\S)$/);
+    if (m && !/\s[-–—|·]\s/.test(m[2])) return { title: m[1], src: m[2], via: via };
+    return { title: raw, src: site || "Google News", via: via };
+  }
+  const src = site || feed;
+  return { title: stripSrcTail(raw, src), src: src, via: via };
+}
 /* D2 FIX — Google News RSS descriptions arrive with literal anchor markup
    (`<a href="https://news.google.com/rss/...">…</a>` plus font/source tags);
    esc() faithfully turned all of it into visible text under every headline.
@@ -10128,7 +10150,8 @@ function stripNewsMarkup(s) {
 function newsArtHTML(n, isNew) {
   const ts = newsTS(n.published_ts);
   const tk = String(n.ticker || "");
-  const title = stripSrcTail(n.title, n.site || n.feed);   // R20 FIX 6a — before escaping
+  const ns = newsSource(n);                                // NEWS-PUBLISHER — publisher, not aggregator (R20 FIX 6a strip inside)
+  const title = ns.title;
   const snip0 = stripNewsMarkup(n.snippet);                // handoff: news body = snippet
   const snip = snip0 && srcNorm(snip0) === srcNorm(title) ? "" : snip0;   // RSS body is often just the linked title — don't print it twice
   const tkHTML = tk === "_MARKET"
@@ -10141,7 +10164,7 @@ function newsArtHTML(n, isNew) {
     "</div>" +
     '<div class="rmeta">' + tkHTML +
       '<span class="rts">' + (ts ? esc(ts) : "—") + "</span>" +
-      '<span class="rsrc">' + esc(n.site || n.feed || "") + "</span></div></div>";
+      '<span class="rsrc"' + (ns.via ? ' title="via ' + esc(ns.via) + '"' : "") + ">" + esc(ns.src) + "</span></div></div>";
 }
 
 /* EVENTS row — earnings_events → .sc-evrow with BEAT/MISS chips */
@@ -10622,14 +10645,15 @@ function evRowHTML(ev) {
 /* R43 — headline row for the EVENTS feed: compact sc-evrow, clickable to the
    article url (opens in a new tab), source + relative time + sentiment chip. */
 function evHeadlineRowHTML(n) {
-  const title = stripSrcTail(n.title, n.site || n.feed);   // reuse the publisher-tail stripper
+  const ns    = newsSource(n);                              // NEWS-PUBLISHER — same publisher reading as the news room
+  const title = ns.title;
   const ts    = newsTS(n.published_ts);
-  const src   = String(n.site || n.feed || "").trim();
+  const src   = ns.src;
   const href  = n.url ? esc(n.url) : "";
   const inner =
     '<span class="lbl"><b>' + esc(title) + "</b>" +
     '<div class="when">' + (ts ? esc(ts) : "") +
-      (src ? '<span class="src">· ' + esc(src) + "</span>" : "") + "</div></span>" +
+      (src ? '<span class="src"' + (ns.via ? ' title="via ' + esc(ns.via) + '"' : "") + ">· " + esc(src) + "</span>" : "") + "</div></span>" +
     (n.ticker && n.ticker !== "_MARKET" ? senChip(n.ticker) : "");
   return '<div class="sc-evrow hl"><span class="gly">▪</span>' +
     (href ? '<a href="' + href + '" target="_blank" rel="noopener" style="display:contents">' + inner + "</a>" : inner) +
