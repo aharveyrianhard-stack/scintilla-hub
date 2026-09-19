@@ -139,8 +139,10 @@ test("wiring: reads, row field, cells and tick path", () => {
   assert.match(page, /lf\.textContent = fv != null \? fv\.toFixed\(1\) \+ "×" : fpeWithheldText\(t\);/, "the price tick keeps the currency label");
   for (const c of ["fwdTrailPE(data.price, f, data._est, data.t)", "fwdTrailPE(data.price, data._fund, data._est, data.t)", "fwdTrailPE(price, fund, est, t)"])
     assert.ok(page.includes(c), c);
-  // NT-2 ordering guard: no screen may select reported_currency until the column exists and v11 writes it
-  assert.doesNotMatch(page, /fundamentals\?[^"]*reported_currency/, "reported_currency is not selected by this patch");
+  // NT-2 ordering guard (numeric-currency 2026-09-19): reported_currency is asked for ONLY through pgFund(), which falls back to
+  // production's exact select on a 400, so a missing column can never cost the fundamentals read (tests/numeric-currency.test.mjs)
+  assert.doesNotMatch(page, /pg\("fundamentals\?/, "no raw fundamentals read bypasses pgFund");
+  assert.doesNotMatch(page, /fundamentals\?[^"]*reported_currency/, "no literal select names the column");
 });
 
 test("every inline script still parses", () => {

@@ -3287,7 +3287,32 @@ const NTM_STORED_MAX_AGE_MS = 14 * 86400e3;
    EST_CCY holds a SERVED value (fundamentals.reported_currency, once fmp-fundamentals writes it AND a follow-up selects it);
    a served value outranks the measured set. Selecting that column before it exists would 400 the whole fundamentals read. */
 const EST_CCY_MEASURED = { TSM: "TWD", BABA: "CNY", BIDU: "CNY", JD: "CNY", LI: "CNY", NIO: "CNY", EH: "CNY", PDD: "CNY", ASML: "EUR", SPOT: "EUR", CCJ: "CAD" };
-const EST_CCY = {};   // ticker -> served reporting currency (stays empty until fundamentals.reported_currency is served and selected)
+const EST_CCY = {};   // ticker -> served reporting currency (fundamentals.reported_currency, filled by the board read below)
+/* NT-2 SCREEN — served reporting currency. fundamentals.reported_currency exists only after the additive migration, and PostgREST
+   answers 400 for a select that names a missing column. pgFund() asks WITH the column; on a 400 it re-asks exactly the select
+   production asks today and remembers, for this page session, that the column is absent. So a pre-migration page never loses
+   its fundamentals read (cost: one extra 400 per page load until the migration lands; none after). A served currency only
+   decides WHICH currency the EPS is in: nothing is converted, and a non-USD EPS still withholds the multiple (no FX, no ADS
+   ratio is stored, so an ADR's per-share unit is not reconciled either). The measured set stays only as the fallback for a
+   ticker without a served value, and is removed once every covered ticker is served (rollout step 5). */
+let FUND_CCY_COL = true;
+function fundPath(sel, filt) { return "fundamentals?" + (filt ? filt + "&" : "") + "select=" + sel; }
+async function pgFund(sel, filt) {
+  if (FUND_CCY_COL) {
+    /* ONE try first: pg() retries every non-OK status (its fail-fast throw sits inside its own catch), so a 400 would
+       otherwise be asked 3x with backoff. A busy/network failure then gets pg()'s usual retries, column kept. */
+    try { return await pg(fundPath(sel + ",reported_currency", filt), 1); }
+    catch (e) {
+      if (!/ → 400$/.test(String(e && e.message))) return pg(fundPath(sel + ",reported_currency", filt));
+      FUND_CCY_COL = false;
+    }
+  }
+  return pg(fundPath(sel, filt));
+}
+function noteServedCcy(rows) {
+  for (const r of Array.isArray(rows) ? rows : []) { const c = r && r.ticker ? ccyCode(r.reported_currency) : null; if (c) EST_CCY[String(r.ticker).toUpperCase()] = c; }
+  return rows;
+}
 function ccyCode(c) {
   const k = String(c == null ? "" : c).trim().toUpperCase();
   return /^[A-Z]{3}$/.test(k) ? k : null;
@@ -3397,7 +3422,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap,updated_ts"), []),   // updated_ts = when the profile writer stored market_cap (epoch SECONDS); it follows the value to the cell
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
     loadEstimates(),   // FORWARD EPS — full coverage (paged), STATS-tab basis, source-dated; see loadEstimates()
-    scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
+    scOpt('fundamentals',     pgFund("ticker,eps_ttm").then(noteServedCcy), []),   // NT-2: + reported_currency when the column exists
     scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score"), []),
     scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"), []),
     scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps,updated_ts"), []),
@@ -3621,7 +3646,7 @@ async function fetchCompanyData(t) {
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url,updated_ts"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
-    pg("fundamentals?ticker=eq." + e + "&select=trailing_pe,eps_ttm,revenue_ttm,market_cap"),
+    pgFund("trailing_pe,eps_ttm,revenue_ttm,market_cap", "ticker=eq." + e),   // NT-2: + reported_currency when the column exists (fwdTrailPE reads it)
     pg("analyst_estimates?ticker=eq." + e + "&select=period,fiscal_date,est_eps_avg,est_eps_high,est_eps_low,est_revenue_avg,est_ebitda_avg,est_net_income_avg,num_analysts_eps,num_analysts_rev&order=fiscal_date.asc"),   // EST PORT — num_analysts_rev feeds the REV x-ray
     pg("analyst_ratings?ticker=eq." + e + "&select=consensus,strong_buy,buy,hold,sell,strong_sell"),
     pg("price_target_consensus?ticker=eq." + e + "&select=target_high,target_low,target_avg,target_median,num_analysts"),   // EST PORT — median for the 02 CONVICTION subline
