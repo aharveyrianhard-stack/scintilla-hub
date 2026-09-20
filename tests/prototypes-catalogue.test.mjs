@@ -11,11 +11,20 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    "Working" - because nothing here proves function. catalog.json and the Indicator Lab files are the owner's deposit and are
    NOT pinned here - the owner adds to them; the page must follow. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "8f96eb94372159f5c947cd1e568b6f6e9712c74e87ff7b9501933fb8fc020ebc");
+  assert.equal(sha("index.html"), "8f7fce8ae7a7e9ff2078548cccd2fa116d5966fa96a9e16612d2b6cfb880a31c");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
-  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "index.html", "indicator-lab", "previews"]);
+  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "context-lens", "index.html", "indicator-lab", "previews"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));
+});
+
+/* September 19: the recovered Context Lens v4 file is hosted exactly as it was recovered. This hash is the recovered file's
+   own hash - if it ever changes, the page is no longer the artifact that was recovered, and this test is the place that says
+   so. Nothing here verifies what the page claims; it runs on the author's synthetic fixture. */
+test("the Context Lens v4 page is the recovered file, byte for byte", () => {
+  assert.equal(sha("context-lens/index.html"), "3f4fc79c6439d6879f6a7aea0223c2a23afa3e82fb27116463e7de1ba3d85ca2");
+  assert.equal(fs.statSync(at("context-lens/index.html")).size, 73151);
+  assert.deepEqual(fs.readdirSync(at("context-lens")), ["index.html"]);
 });
 
 /* A catalog status says what an entry is; the page may only show one of these readiness words for it. An unknown status
@@ -90,7 +99,7 @@ test("links are real destinations only; the page is self-contained and stores no
     "https://linear.app/alan-reply-desk/issue/REP-9", "https://linear.app/alan-reply-desk/issue/REP-18",   // assigned work (baseline "work"; sign-in required)
     "#overview", "#tools", "#review", "#work", "#architecture", "#page-spec"];         // in-page navigation
   for (const m of page.matchAll(/href="([^"]+)"/g)) assert.ok(catUrls.has(m[1]) || extra.includes(m[1]), "unlisted link " + m[1]);
-  assert.deepEqual(cat.filter((e) => e.url && e.url.startsWith("/")).map((e) => e.url).sort(), ["/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html"]);
+  assert.deepEqual(cat.filter((e) => e.url && e.url.startsWith("/")).map((e) => e.url).sort(), ["/prototypes/context-lens/", "/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html"]);
   const preview = fs.readFileSync(at("previews/signal-fanout-v2.html"), "utf8");
   for (const html of [page, preview, fs.readFileSync(at("indicator-lab/index.html"), "utf8")]) {
     assert.match(html, /<meta name="robots" content="noindex,nofollow">/);
@@ -98,6 +107,20 @@ test("links are real destinations only; the page is self-contained and stores no
     assert.doesNotMatch(html, /eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role|Authorization|\/Users\//i, "no key, token or local path");
   }
   assert.match(preview, /Sample data, not live market values/);
+});
+
+/* The Context Lens page is held to the same containment, checked on the recovered bytes as they are: its meta tags are
+   written in a different attribute order, and it keeps the reviewer's own notes in browser storage - stated here rather
+   than hidden, because it is the one difference from the pages above and nothing is edited to make a test pass. */
+test("the Context Lens page asks the network for nothing and carries no key, token or local path", () => {
+  const lens = fs.readFileSync(at("context-lens/index.html"), "utf8");
+  assert.match(lens, /<meta content="noindex,nofollow" name="robots"\/>/);
+  assert.doesNotMatch(lens, /<script[^>]+src=|<link[^>]|<iframe|<img|<object|<embed/i, "no external script, style, frame or image");
+  assert.doesNotMatch(lens, /fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|import\(/i, "no request of any kind");
+  assert.doesNotMatch(lens, /https?:\/\//i, "no outside address anywhere in the file");
+  assert.doesNotMatch(lens, /eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role|Authorization|\/Users\//i, "no key, token or local path");
+  assert.equal((lens.match(/localStorage/g) || []).length, 6, "storage is only the reviewer's own notes and settings; a new use must be looked at");
+  assert.doesNotMatch(lens, /sessionStorage|document\.cookie/i);
 });
 
 test("navigation baseline v0.1: six sections in order, each anchor lands on its section", () => {
@@ -109,15 +132,22 @@ test("navigation baseline v0.1: six sections in order, each anchor lands on its 
   assert.deepEqual(ids, items.map((i) => i[0]), "one section per navigation item, in the same order");
 });
 
-test("Context Lens sits under Signals & context and stays pending - no artifact or validation is claimed", () => {
+test("Context Lens sits under Signals & context; the page is hosted on sample data, and no validation is claimed", () => {
   const page = fs.readFileSync(at("index.html"), "utf8");
   const secs = sections(page);
   assert.ok(articles(secs.signals).some((a) => a.title === "Context Lens · v4"), "Context Lens is a Scintilla signals & context prototype");
   assert.ok(!articles(secs.visual).some((a) => /Context Lens/.test(a.title)), "not a visual/design item");
   const c = articles(page).find((a) => a.title === "Context Lens · v4");
-  assert.equal(c.readiness, "pending"); assert.equal(c.hrefs.length, 0);
+  assert.equal(c.readiness, "sample", "a recovered review page on synthetic data is sample data, never a working tool");
+  assert.deepEqual(c.hrefs, ["/prototypes/context-lens/"], "it opens the page hosted here, and nothing else");
+  assert.match(c.desc, /not a working tool/); assert.match(c.desc, /not independently verified/);
   assert.match(secs.signals, /<h3 class="gt">Signals &amp; context<\/h3>/);
   assert.doesNotMatch(page, /Working tool|data-readiness="working"|class="rd working"/, "no Working label anywhere without functional proof");
+  /* the hosted page says what its own numbers are, so a reader never mistakes the fixture for market data */
+  const lens = fs.readFileSync(at("context-lens/index.html"), "utf8");
+  assert.match(lens, /SYNTHETIC DATA/);
+  assert.match(page, /Context Lens v4 page[^<]*not independently verified\./, "the review home says plainly that the recovered page is not independently verified");
+  assert.doesNotMatch(page, /Context Lens[^<]*(validated|live data|live market)/i, "the recovered page is never described as validated or as live data");
 });
 
 test("the page spec is public-safe and states purpose, owner, maturity, inputs, outputs, release and verification separately", () => {
