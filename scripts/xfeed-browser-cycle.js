@@ -2,19 +2,27 @@
 // browser instructions. It runs only through supported, tab-scoped CUA APIs.
 // It does not export cookies, issue X API calls, or operate another tab/group.
 // Pass handles from the verified owned Chrome group; see xfeed/OPERATIONS.md.
-async function createXfeedBrowserCycle({ source, intake, ui, passId }) {
+async function createXfeedBrowserCycle({ source, intake, ui, passId, resume = null }) {
   const listUrl = 'https://x.com/i/lists/1405188850188759047';
   const cap = await source.capabilities.get('cdp');
+  // `resume` is the matching pending pass's resume record from intake /health.
+  const pageKey = value => (value === undefined || value === null ? '' : String(value));
+  const storedCursors = new Set((resume?.request_cursors ?? []).map(pageKey));
   const cycle = {
     source, intake, ui, cap, passId, listUrl,
     cursor: 0, responses: new Set(), pendingResponses: new Map(), queue: [], pages: 0, saved: 0,
     blocked: null, rateExhausted: null, lastRates: null,
+    storedCursors, resumeCursor: resume?.next_cursor ?? null, resumed: false, skippedStoredPages: 0,
     async begin() {
       if (this.blocked || this.rateExhausted) return this.summary();
       await cap.send('Network.enable', { maxTotalBufferSize: 30000000, maxResourceBufferSize: 15000000 });
       this.cursor = (await cap.readEvents({ methods: ['Network.responseReceived'] })).cursor;
-      if (await source.url() === listUrl) await source.reload();
-      else await source.goto(listUrl);
+      // Reloading restarts the timeline at the newest page, so a resumed pass
+      // would re-paginate every page it already stored and break its captured
+      // cursor chain. Keep the loaded list and page on from where it stopped.
+      if (await source.url() !== listUrl) await source.goto(listUrl);
+      else if (!this.storedCursors.size) await source.reload();
+      else this.resumed = true;
       await cap.send('Network.enable', { maxTotalBufferSize: 30000000, maxResourceBufferSize: 15000000 });
       return this.read();
     },
@@ -34,6 +42,8 @@ async function createXfeedBrowserCycle({ source, intake, ui, passId }) {
           if (variables.listId !== '1405188850188759047') throw Error('Unexpected list identity');
           const requestId = event.params.requestId;
           if (this.responses.has(requestId) || this.pendingResponses.has(requestId)) continue;
+          // A page this pass already stored is not collected or saved again.
+          if (this.storedCursors.has(pageKey(variables.cursor))) { this.responses.add(requestId); this.skippedStoredPages++; continue; }
           const headers = Object.fromEntries(Object.entries(response.headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
           const rates = Object.fromEntries(Object.entries(headers).filter(([k]) => ['x-rate-limit-limit', 'x-rate-limit-remaining', 'x-rate-limit-reset', 'retry-after'].includes(k)));
           this.lastRates = rates;
@@ -78,6 +88,7 @@ async function createXfeedBrowserCycle({ source, intake, ui, passId }) {
             rate_headers: rates,
           });
           this.responses.add(requestId); this.pages++;
+          this.storedCursors.add(pageKey(variables.cursor));
           this.pendingResponses.delete(requestId);
       }
       return this.summary();
@@ -116,7 +127,7 @@ async function createXfeedBrowserCycle({ source, intake, ui, passId }) {
       await intake.playwright.getByRole('heading', { name: 'Pass finished', exact: true }).waitFor({ state: 'visible' });
       return intake.playwright.locator('pre').textContent();
     },
-    summary() { return { pass_id: passId, pages: this.pages, saved_chunks: this.saved, pending_chunks: this.queue.length, pending_bodies: this.pendingResponses.size, blocked: this.blocked, rate_exhausted: this.rateExhausted, rates: this.lastRates }; },
+    summary() { return { pass_id: passId, pages: this.pages, saved_chunks: this.saved, pending_chunks: this.queue.length, pending_bodies: this.pendingResponses.size, resumed: this.resumed, resume_cursor: this.resumeCursor, skipped_stored_pages: this.skippedStoredPages, blocked: this.blocked, rate_exhausted: this.rateExhausted, rates: this.lastRates }; },
   };
   return cycle;
 }
