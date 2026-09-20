@@ -228,6 +228,15 @@ async function fetchCohortBundle(tickers){
   return out;
 }
 function fmtCap(v){ if(v==null) return '—'; return v>=1e12?'$'+(v/1e12).toFixed(2)+'T':'$'+(v/1e9).toFixed(0)+'B'; }
+/* A score is only a score if something was measured. The percentile list arrives with a null for
+   every multiple this ticker has no usable number for; averaging with `mean(...)||0` turned an
+   ENTIRELY unmeasured name into VALUE 0/100 · GRADE D — a confident verdict computed from nothing.
+   The score now carries its own coverage, and an empty measure set has no score at all. */
+function compsScore(pctls){
+  const have = pctls.filter(x => x != null);
+  return { n: have.length, of: pctls.length,
+           score: have.length ? (have.reduce((s,x)=>s+x,0)/have.length)*100 : null };
+}
 async function renderComps(sym){
   const cohort = COHORT_MAP[sym] || 'UNCOHORTED';
   const cohortMembers = UNIVERSE.filter(u=>u.cohort===cohort && u.ticker!==sym).map(u=>u.ticker);
@@ -249,7 +258,11 @@ async function renderComps(sym){
     document.getElementById('ffieldFoot').textContent='';
     document.getElementById('scoreFormula').innerHTML=''; document.getElementById('scoreBox').innerHTML=''; document.getElementById('scoreTable').innerHTML='';
     document.getElementById('compsBody').innerHTML='';
-    document.getElementById('cn1').textContent=''; document.getElementById('cn2').textContent='';
+    /* The written read is generated from the same fundamentals row the table uses. Blanking it
+       left the 🥇/📐 notes standing with nothing after them — an empty brief that looks like a
+       render failure. Say why it is empty instead; a gap is a finding, not a blank. */
+    document.getElementById('cn1').innerHTML='<b>No written comps read for '+sym+'.</b> This paragraph is built from the same Supabase <span class="mono2">fundamentals</span> row as the §1 table, and there is no row for '+sym+' yet — so there is nothing to read. A data gap, not an empty opinion.';
+    document.getElementById('cn2').innerHTML='The CAGR bridge into the DCF needs that same row: it returns as soon as fundamentals for '+sym+' land. No growth band is shown until then.';
     window.PEER = null;
     return;
   }
@@ -285,24 +298,27 @@ async function renderComps(sym){
   // ---- SCORE: value = cheapness percentile across multiples; quality = margins/growth/low-leverage ----
   const valM=[['pe',1],['ev',1],['ps',1],['pb',1],['peg',1]];
   const qualM=[['gm',0],['nm',0],['cagr',0],['de',1]];
-  const vAvg=(mean(valM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))||0)*100;
-  const qAvg=(mean(qualM.map(m=>pctl(COMPS[m[0]],m[1])).filter(x=>x!=null))||0)*100;
-  const comp=(vAvg+qAvg)/2, grade=comp>=85?'A':comp>=75?'A−':comp>=65?'B+':comp>=55?'B':comp>=45?'B−':comp>=35?'C':'D';
-  const col=s=>s>=66?'var(--green)':s>=45?'var(--gold)':'var(--red)';
+  const vS=compsScore(valM.map(m=>pctl(COMPS[m[0]],m[1]))), qS=compsScore(qualM.map(m=>pctl(COMPS[m[0]],m[1])));
+  const vAvg=vS.score, qAvg=qS.score;
+  const comp=(vAvg!=null&&qAvg!=null)?(vAvg+qAvg)/2:null;
+  const grade=comp==null?null:comp>=85?'A':comp>=75?'A−':comp>=65?'B+':comp>=55?'B':comp>=45?'B−':comp>=35?'C':'D';
+  const col=s=>s==null?'var(--dim)':s>=66?'var(--green)':s>=45?'var(--gold)':'var(--red)';
+  const s0=(s,n,of)=>s==null?'—':s.toFixed(0);                        // no measures → no number
+  const cov=(k)=>'<span class="foot"> '+k.n+'/'+k.of+' measured</span>';
   const fnode=(icon,lbl,val,color)=>'<div style="display:flex;flex-direction:column;align-items:center;min-width:64px;"><div style="font-size:20px;">'+icon+'</div><div class="foot" style="margin-top:2px;text-align:center;">'+lbl+'</div>'+(val!=null?'<div style="font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:13px;color:'+(color||'var(--txt)')+';margin-top:1px;">'+val+'</div>':'')+'</div>';
   const op=(s2)=>'<div style="font-size:18px;color:var(--dim);align-self:center;padding:0 2px;">'+s2+'</div>';
   document.getElementById('scoreFormula').innerHTML=
     '<div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:2px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">'+
-      fnode('📊','P/E · EV/EBITDA<br>P/S · P/B · PEG',null)+op('→')+fnode('%ile','peer rank<br>(cheap=high)',null)+op('=')+fnode('💰','VALUE',vAvg.toFixed(0),col(vAvg))+
+      fnode('📊','P/E · EV/EBITDA<br>P/S · P/B · PEG',null)+op('→')+fnode('%ile','peer rank<br>(cheap=high)',null)+op('=')+fnode('💰','VALUE',s0(vAvg),col(vAvg))+
       '<div style="width:22px;"></div>'+
-      fnode('📈','margins · CAGR<br>low leverage',null)+op('→')+fnode('%ile','peer rank<br>(better=high)',null)+op('=')+fnode('🏆','QUALITY',qAvg.toFixed(0),col(qAvg))+
+      fnode('📈','margins · CAGR<br>low leverage',null)+op('→')+fnode('%ile','peer rank<br>(better=high)',null)+op('=')+fnode('🏆','QUALITY',s0(qAvg),col(qAvg))+
       '<div style="width:22px;"></div>'+
-      fnode('💰','VALUE '+vAvg.toFixed(0),null)+op('+')+fnode('🏆','QUALITY '+qAvg.toFixed(0),null)+op('÷2 =')+fnode('🎓','GRADE',grade+' ('+comp.toFixed(0)+')',col(comp))+
+      fnode('💰','VALUE '+s0(vAvg),null)+op('+')+fnode('🏆','QUALITY '+s0(qAvg),null)+op('÷2 =')+fnode('🎓','GRADE',grade==null?'—':grade+' ('+comp.toFixed(0)+')',col(comp))+
     '</div>';
   document.getElementById('scoreBox').innerHTML=
-    '<div><span class="foot">VALUE score (cheap vs peers)</span><br><b style="font-size:26px;color:'+col(vAvg)+'">'+vAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
-    '<div><span class="foot">QUALITY score (margins·growth·balance sheet)</span><br><b style="font-size:26px;color:'+col(qAvg)+'">'+qAvg.toFixed(0)+'<span style="font-size:15px;color:var(--dim)">/100</span></b></div>'+
-    '<div><span class="foot">Composite grade</span><br><b style="font-size:26px;color:'+col(comp)+'">'+grade+'</b> <span class="foot">'+comp.toFixed(0)+'/100</span></div>';
+    '<div><span class="foot">VALUE score (cheap vs peers)</span><br><b style="font-size:26px;color:'+col(vAvg)+'">'+s0(vAvg)+'<span style="font-size:15px;color:var(--dim)">/100</span></b>'+cov(vS)+'</div>'+
+    '<div><span class="foot">QUALITY score (margins·growth·balance sheet)</span><br><b style="font-size:26px;color:'+col(qAvg)+'">'+s0(qAvg)+'<span style="font-size:15px;color:var(--dim)">/100</span></b>'+cov(qS)+'</div>'+
+    '<div><span class="foot">Composite grade</span><br><b style="font-size:26px;color:'+col(comp)+'">'+(grade==null?'—':grade)+'</b> <span class="foot">'+(comp==null?'no measure available — not scored':comp.toFixed(0)+'/100')+'</span></div>';
   const N=COMPS.names.length, verdict=(rk,cheapGood)=>{const top=rk<=2, bot=rk>=N-1; return cheapGood?(top?['cheap','pos']:bot?['expensive','neg']:['mid','']):(top?['best','pos']:bot?['worst','neg']:['mid','']);};
   const srow=(lbl,key,cheapGood,fmt)=>{const rk=rank(COMPS[key],cheapGood),vd=verdict(rk,cheapGood);return '<tr><td>'+lbl+'</td><td>'+fmt(COMPS[key][0])+'</td><td>'+fmt(med(clean(COMPS[key].slice(1))))+'</td><td class="'+vd[1]+'">'+rk+'</td><td class="'+vd[1]+'">'+vd[0]+'</td></tr>';};
   let st='<tr><th>Metric</th><th>'+sym+'</th><th>Peer median</th><th>Rank /'+N+'</th><th>Verdict</th></tr>';
