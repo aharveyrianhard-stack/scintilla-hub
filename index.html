@@ -1863,21 +1863,27 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 /* PHONE (day restoration 2026-09-19): on a narrow screen the HIGH ONLY / TODAY / DAY / WEEK / MONTH buttons overlapped the date
    label ("TODAYDAY WEEKMONT" at 390 px). They now wrap onto their own line under the date instead. */
 @media (max-width:900px){ .ec-daybar{ flex-wrap:wrap; row-gap:6px; } .ec-span{ margin-left:0; width:100%; flex-wrap:wrap; } }
-.ec-daybar{ display:flex; align-items:center; gap:9px; padding:6px 12px 6px;
+/* ECON TAPE 22 Sep — the WEEK header wrapped onto two lines once ZOOM + joined the row ("…SEP 28," / "2026", and
+   "HIGH ONLY 7" / "ZOOM +" breaking inside their own buttons). MEASURED at the 1240px design width: the row wanted
+   731px of 721px. So nothing inside the bar breaks mid-word any more, the week's date range is set a touch tighter
+   (it is the only long label), and if the bar is still too narrow - between the phone breakpoint and the design
+   width - the whole button group drops onto its own row instead of the date splitting. */
+.ec-daybar{ display:flex; align-items:center; gap:8px; padding:6px 12px 6px; flex-wrap:wrap; row-gap:6px;
   border-bottom:.5px solid var(--line); font-family:var(--mono); }
 .ec-nav{ background:none; border:0.6px solid var(--line2); color:var(--ink3); cursor:pointer;
   font-size:10px; line-height:1; padding:4px 8px; border-radius:2px; }
 .ec-nav:hover{ color:var(--crk); border-color:rgba(0,212,255,.34); }
 .ec-day{ font-size:9.5px; letter-spacing:.18em; color:var(--ink); text-transform:uppercase;
-  font-variant-numeric:tabular-nums; }
-.ec-today{ font-size:7.5px; letter-spacing:.2em; color:var(--crk); text-transform:uppercase; }
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ec-day.ec-day--range{ letter-spacing:.1em; }    /* WEEK prints two dates and an arrow: the only label that needs the room */
+.ec-today{ font-size:7.5px; letter-spacing:.2em; color:var(--crk); text-transform:uppercase; white-space:nowrap; }
 .ec-span{ margin-left:auto; display:flex; gap:2px; }
-.ec-sp{ font-family:var(--mono); font-size:7.5px; letter-spacing:.2em; color:var(--dim);
+.ec-sp{ font-family:var(--mono); font-size:7.5px; letter-spacing:.2em; color:var(--dim); white-space:nowrap;
   padding:4px 9px; cursor:pointer; user-select:none; border:0.6px solid transparent; border-radius:2px; }
 .ec-sp.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
 /* HIGH ONLY sits apart from the DAY|WEEK pair — it answers a different question
    ("which of these actually matter?") and carries the count it would leave. */
-.ec-sp.hi{ margin-right:10px; border-color:var(--line2); }
+.ec-sp.hi{ margin-right:6px; border-color:var(--line2); }   /* ECON TAPE 22 Sep — 4px back, so the WEEK row still fits on one line at 1280 */
 .ec-sp.hi .n{ color:var(--mute); margin-left:5px; }
 .ec-sp.hi.on{ color:var(--sv4); border-color:rgba(255,138,0,.45); background:rgba(255,138,0,.08); }
 .ec-sp.hi.on .n{ color:var(--sv4); opacity:.7; }
@@ -9266,6 +9272,8 @@ function renderEconTable() {
   if (box.classList) box.classList.toggle("ec-zoomed", !!S.econZoom);   // EVENTS 22 Sep — ZOOM: CSS only, the data and the reads are unchanged
   const lbl = el("econDayLbl"), now = el("econDayNow");
   const d0 = S.econDay || ecToday();
+  /* EVENTS 22 Sep — WEEK prints two dates and an arrow; it is the one label that needs the extra room (see .ec-day--range) */
+  if (lbl && lbl.classList) lbl.classList.toggle("ec-day--range", (S.econSpan || "DAY") === "WEEK");
   if (lbl) lbl.textContent =
       (S.econSpan === "WEEK")  ? ecDayLbl(d0).toUpperCase() + "  →  " + ecDayLbl(ecShift(d0, 6)).toUpperCase()
     : (S.econSpan === "MONTH") ? new Date(ecAnchor(d0) * 1000).toLocaleDateString("en-US",
