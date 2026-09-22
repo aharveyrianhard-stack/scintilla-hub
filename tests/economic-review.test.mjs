@@ -37,7 +37,9 @@ function load({ src = page, tapeOn = false, S = {}, pg = async () => [], nowMs =
   if (nowMs != null) vm.runInContext("(() => { const R = Date, F = " + nowMs + "; class D extends R { constructor(...a) { if (a.length) super(...a); else super(F); } static now() { return F; } } globalThis.Date = D; })()", ctx);
   const isPort = src.includes("const ECON_TAPE_ON");
   let code = helpers(src) + slice(src) + (ident && isPort ? fnSrc(src, "leftIdentHTML") : "");
-  if (tapeOn) code = code.replace("const ECON_TAPE_ON = false;", "const ECON_TAPE_ON = true;");
+  /* ECON TAPE 22 Sep — the page ships the flag ON, so the harness sets it BOTH ways: `tapeOn: false` is the
+     kill-switch proof (flag off = production's ident markup and not one request). */
+  if (isPort) code = code.replace(/const ECON_TAPE_ON = (?:true|false);/, "const ECON_TAPE_ON = " + (tapeOn ? "true" : "false") + ";");
   if (isPort) code += "\nfunction click(act, ds) { const a = { dataset: ds }; switch (act) {\n" + CLICKS + "\n} }";
   const names = isPort
     ? ["fillEcon", "fillEconRail", "ecLoadWindow", "ecFetchWindow", "renderEconTable", "ecRowHTML", "ecDayRowsHTML", "ecMonthHTML",
@@ -62,16 +64,18 @@ test("(a) flag OFF: leftIdentHTML output equals a13a486's for every room, state 
     for (const d of inputs) { ctx.S.sec = sec; ctx.S.state = state; assert.equal(api.leftIdentHTML(d), prod(d)); n++; }
   assert.equal(n, 144);
 });
-test("(a) flag OFF: the tape makes zero requests and the only dashboard call is guarded", async () => {
+test("(a) the kill switch: with ECON_TAPE_ON off the tape makes zero requests and touches nothing", async () => {
   let n = 0;
   const { api, store } = load({ S: { sec: "DASHBOARD" }, pg: async () => { n++; return []; } });
   store.macroNext = { innerHTML: "untouched" };
   await api.fillMacroNext(); await api.fillMacroNext();
   assert.equal(n, 0); assert.equal(store.macroNext.innerHTML, "untouched");
-  assert.equal((page.match(/fillMacroNext\(\);/g) || []).length, 1, "one call site");
+  assert.equal((page.match(/fillMacroNext\(\);/g) || []).length, 1, "one call site for the nudge");
   assert.match(page, /\n    if \(ECON_TAPE_ON\) fillMacroNext\(\);/);
-  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 2, "the page names econ_calendar twice: the room's window read and the tape");
+  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 1, "ONE calendar read in the page: the tape reuses the room's window read");
   assert.match(fnSrc(page, "fillMacroNext"), /^function fillMacroNext\(\) \{\n  if \(!ECON_TAPE_ON\) return;/, "first statement returns while the flag is off");
+  assert.equal((page.match(/^ecTapeStart\(\);/gm) || []).length, 1, "the band starts from exactly one place: boot");
+  assert.match(fnSrc(page, "ecTapeStart"), /if \(!ECON_TAPE_ON && !ECON_BAND_ON\) return;/, "with both switches off, nothing is armed and nothing is read");
 });
 
 /* ---------------------------------------------------------------- (b) escaping */
@@ -451,7 +455,7 @@ test("closure: names and offices exactly as supplied - no person is promoted to 
   assert.deepEqual(N("Fed Vice Chair Jefferson Speech", "Medium"), ["Fed Vice Chair Jefferson Speech", "Medium"], "vice chair is not the chair");
   assert.deepEqual(N("  Fed   Chair  Speech ", "Low"), ["Fed Chair Speech", "High"], "only whitespace is normalised");
   assert.doesNotMatch(page, /EC_CHAIR_NAMES|powell\|bernanke|\(powell\|/i, "no person-to-office list (constant or name alternation) remains in code");
-  assert.match(page, /\nconst ECON_TAPE_ON = false;/, "tape stays off");
+  assert.match(page, /\nconst ECON_TAPE_ON = true;/, "22 Sep: the tape is on, and the office rule rides with it");
 });
 
 

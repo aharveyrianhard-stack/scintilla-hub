@@ -2020,15 +2020,72 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
    above". Nudge proposal v2 (13 Aug, his calls folded in): same box, same height,
    no new row - ticker on the LEFT, the queue on the RIGHT. Every rule here matches
    only .sc-cident--nudge, which leftIdentHTML emits ONLY while ECON_TAPE_ON is true
-   (it ships false), so with the flag off not one dashboard pixel moves. Phones hide
-   the queue: the ≤900px ident is a single nowrap row with no room to give.
+   (ON since 22 Sep), so with the flag off not one dashboard pixel moves. Phones hide
+   the queue: the ≤900px ident is a single nowrap row with no room to give — on a
+   phone the ECON band under the price bands is what carries the week.
    ---------------------------------------------------------------------------- */
-.sc-cident--nudge .sc-cname{ flex:0 1 auto; }
+.sc-cident--nudge .sc-cname{ flex:0 1 auto; max-width:22ch; }   /* ECON TAPE 22 Sep — the company's long name gives the queue its room back */
 .sc-cident--nudge .sc-cpx{ margin-left:0; }
 .sc-cident--nudge .sc-macronext{ margin-left:auto; flex:0 1 auto; min-width:0; padding:0;
   border-bottom:0; }
 .sc-cident--nudge .mn-lbl + .mn-it{ border-left:0; padding-left:0; }   /* 3d69248's :first-of-type never matched: the label is a span too */
+/* ECON TAPE 22 Sep — with a ticker pinned the left of the box is full (name, price, change, prev close, LIVE), so the
+   queue is given tighter item padding here; when it still runs out of room it clips the FURTHEST-OUT item, never the
+   imminent one, and the box scrolls sideways on a touch screen. */
+.sc-cident--nudge .mn-it{ padding:2px 10px; }
 @media (max-width:900px){ .sc-cident--nudge .sc-macronext{ display:none; } }
+
+/* ----------------------------------------------------------------------------
+   THE MACRO NUDGE — the four states (nudge proposal v2, 13 Aug, §2). One item
+   walks them as it approaches: AHEAD (grey, quiet — you register it without
+   reading it) → SOON, inside the hour (orange dot and countdown: the "go look"
+   signal) → NOW, at the release minute (pulsing) → LANDED, the moment the number
+   is in the store (actual vs estimate, coloured the way the calendar colours a
+   surprise) → it drops off and the next one moves up. Hues are the design kit's
+   (--sv4 orange, --sv1/--sv3/--sv5 for better / in line / worse), never #FF5500.
+   ---------------------------------------------------------------------------- */
+.mn-it{ transition:opacity .25s ease; }
+.mn-it .mn-dot{ color:var(--dim); text-shadow:none; }                                   /* ahead: present, not loud */
+.mn-it .mn-nm{ max-width:26ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mn-it.s-soon .mn-dot{ color:var(--sv4); text-shadow:0 0 6px rgba(255,138,0,.8); }
+.mn-it.s-soon .mn-cd{ color:var(--sv4); }
+.mn-it.s-now .mn-dot{ color:var(--sv4); text-shadow:0 0 9px rgba(255,138,0,1); animation:mn-pulse 1.4s ease-in-out infinite; }
+.mn-it.s-now .mn-nm{ color:#fff; font-weight:600; }
+.mn-it.s-now .mn-cd{ color:var(--sv4); font-weight:600; animation:mn-pulse 1.4s ease-in-out infinite; }
+.mn-it.s-landed .mn-dot{ color:var(--sv1); text-shadow:none; }
+.mn-res{ font-family:var(--mono); font-size:8.5px; color:var(--ink3); font-variant-numeric:tabular-nums; }
+.mn-res b{ color:var(--ink); font-weight:600; }
+.mn-sur{ font-family:var(--mono); font-size:8.5px; font-variant-numeric:tabular-nums; }
+.mn-sur.beat{ color:var(--sv1); } .mn-sur.miss{ color:var(--sv5); } .mn-sur.inline{ color:var(--sv3); }
+.mn-new{ animation:mn-in .5s cubic-bezier(.34,.02,.2,1); }                              /* the next one slides up from the right */
+@keyframes mn-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.22; } }
+@keyframes mn-in{ from{ opacity:0; transform:translateX(18px); } to{ opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce){ .mn-it.s-now .mn-dot, .mn-it.s-now .mn-cd, .mn-new{ animation:none; } }
+
+/* ----------------------------------------------------------------------------
+   THE ECON BAND — this week at a glance, a third band under MACRO and ALL. It is
+   the same .sc-tape part at the same ≈45 px/s (tapeSpeed), so it pauses on hover
+   and finger-scrolls on touch exactly as the price bands do. Day, time, name; the
+   result once it has printed, in the calendar's own surprise colours; a release
+   still due pulses; one already past is faded.
+   ---------------------------------------------------------------------------- */
+.sc-tape--econ .ecb-it{ cursor:pointer; }
+.sc-tape--econ .ecb-it:hover .ecb-nm{ color:var(--crk); }
+.ecb-wk{ color:var(--crk); letter-spacing:.16em; }
+.ecb-dot{ font-size:7px; padding-right:5px; }
+.ecb-when{ color:var(--dim); padding-right:6px; }
+.ecb-when.is-today{ color:var(--crk); }
+.ecb-nm{ color:var(--ink); }
+.ecb-it.is-high .ecb-nm{ font-weight:600; }
+.ecb-res{ padding-left:7px; color:var(--dim); }
+.ecb-res b{ color:var(--ink); font-weight:600; }
+.ecb-res.beat b{ color:var(--sv1); } .ecb-res.miss b{ color:var(--sv5); } .ecb-res.inline b{ color:var(--sv3); }
+.ecb-it.is-past .ecb-dot, .ecb-it.is-past .ecb-when, .ecb-it.is-past .ecb-nm{ opacity:.45; }
+.ecb-it.is-now .ecb-dot{ animation:mn-pulse 1.4s ease-in-out infinite; }
+.ecb-it.is-now .ecb-nm{ color:#fff; font-weight:600; }
+.ecb-it.is-now .ecb-res{ color:var(--sv4); }
+.ecb-note{ color:var(--dim); }
+@media (prefers-reduced-motion:reduce){ .ecb-it.is-now .ecb-dot{ animation:none; } }
 
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
@@ -3298,8 +3355,9 @@ a.sc-menu__item{text-decoration:none}   /* the Prototypes entry is a plain link 
 
 <main id="main"></main>
 
-<!-- 1.5 / 1.6 tapes -->
-<div class="bands" id="bands"></div>
+<!-- 1.5 / 1.6 tapes — #bandsPx holds the MACRO / ALL price bands (repainted every 45 s), #econBandSlot the ECON week band
+     (repainted only when the week's events change, so its marquee is not restarted by a price tick). -->
+<div class="bands" id="bands"><div id="bandsPx"></div><div id="econBandSlot"></div></div>
 
 <!-- 1.7 Helm — REMOVED (vestigial empty "Controls" footer; zoom controls gone since R27) -->
 
@@ -7217,7 +7275,10 @@ function leftIdentHTML(data) {
   const chg = data.chg, live = S.state === "live";
   const pc = num(prevClose[data.t]);
   const col = chg != null ? (chg >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
-  const nudge = ECON_TAPE_ON && S.sec === "DASHBOARD";   // PORT — WHAT'S COMING rides in this box (proposal v2); false = production markup
+  /* PORT — the nudge rides in this box (proposal v2); with the flag off this is production's markup, byte for byte.
+     ECON TAPE 22 Sep — COMPANY is the SAME dashboard mount with a ticker pinned, and the proposal's own picture is the
+     nudge beside a pinned ticker ("ticker on the left, beside the selector it belongs to"), so it rides there too. */
+  const nudge = ECON_TAPE_ON && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
   return '<div class="sc-cident' + (nudge ? " sc-cident--nudge" : "") + '">' +
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     '<span class="sc-cname">' + esc(data.name || "") + "</span>" +
@@ -8944,8 +9005,10 @@ function ecKeysetAfter(r) {
   return "&or=" + encodeURIComponent("(event_ts.gt." + t + ",and(event_ts.eq." + t + ",country.gt." + c + "),and(event_ts.eq." + t + ",country.eq." + c + ",event.gt." + e + "))");
 }
 function ecRowKey(r) { return r.event_ts + "|" + r.country + "|" + r.event; }
-async function ecFetchWindow(from, to) {
-  const PAGE = 1000, out = [], seen = new Set(), cty = ecCountryFilter();
+/* ECON TAPE 22 Sep — `cty` lets the tape ask for its own region (US) without following whichever region the ROOM is
+   showing; everything else (the select, the keyset paging, the normalising) is the one read both surfaces share. */
+async function ecFetchWindow(from, to, cty0) {
+  const PAGE = 1000, out = [], seen = new Set(), cty = cty0 == null ? ecCountryFilter() : cty0;
   let after = "";
   for (let n = 0; n < 20; n++) {
     const page = await pg("econ_calendar?select=event_ts,country,event,actual,estimate,previous,impact" +
@@ -9344,71 +9407,305 @@ function renderEconTable() {
     '<div class="sc-est-note">surprise = actual − estimate · red = hotter inflation / weaker labour than expected, ' +
     'green = the other way · ● high · ● medium · ● low impact · times in ET · — = the feed has not printed that value · ' + ecReadNote() + '</div>';
 }
-/* ---- WHAT'S COMING (dashboard ticker tape) — recovered from 8995c4b, unmounted by 367589e ----------------
-   Alan, 13 Aug: "something needs to be on the dashboard of the next event"; then, on the full-width row it got:
-   "you added a full row i dont like that. theres room in the box above". Nudge proposal v2 settled with him:
-   three items, US only, inside the ident box — ticker left, queue right, same height, no new row.
-   STILL OPEN with Alan (close-out 14 Aug; nudge simulator 16 Aug): WHICH releases earn a nudge, the landed /
-   acknowledge lane, and the flash states. None of that is built here. So the whole tape sits behind ONE flag
-   and ships OFF: while it is false leftIdentHTML emits exactly what production emits, fillMacroNext() is never
-   called, and the dashboard never reads econ_calendar. */
-const ECON_TAPE_ON = false;
+/* ---- THE MACRO NUDGE + THE ECON BAND — the tape (8995c4b 13 Aug → off 367589e → ported f4b5c3f → ON 22 Sep) -------
+   Alan, 13 Aug: "something needs to be on the dashboard of the next event"; then, on the full-width row it got: "you
+   added a full row i dont like that. theres room in the box above". Nudge proposal v2 (his calls folded in) settled the
+   shape; 22 Sep settled the one question it left open — WHICH releases earn a nudge. Two surfaces, one rule, one read:
+
+   THE NUDGE — inside the ident box: ticker identity LEFT, beside the selector it belongs to; the queue fills the dead
+     space on the RIGHT of the same box; no new row. Three items, one week ahead, US. Each walks four states as it
+     approaches: "in 6d" (grey, quiet) → "in 34m" (orange — the go-look signal) → "now" (pulsing) → its result for a
+     moment (actual vs estimate, coloured the way the calendar colours a surprise) → it drops off and the next one
+     moves up. Clicking an item opens that day in the ECONOMIC tab.
+   THE ECON BAND — a third band under MACRO and ALL: this week at a glance, day · time · name · the result once it has
+     printed, scrolling in the same tape part at the same ≈45 px/s.
+
+   Both read econ_calendar through the ROOM's own window read (ecFetchWindow, US only): one request per 10 minutes —
+   every 2 minutes only while a number is due and not yet stored — nothing at all while the tab is hidden, no new
+   table, no column that no longer exists, and nothing written anywhere. Each surface has its own switch; with
+   ECON_TAPE_ON false leftIdentHTML emits production's ident markup byte for byte (the rollback is one word). */
+const ECON_TAPE_ON = true;           // the nudge inside the ident box
+const ECON_BAND_ON = true;           // the ECON band under the MACRO / ALL price bands
+/* THE RULE — what rides the tape, in one place. Alan, 22 Sep, naming what this week must show: the Fed speakers
+   (Williams, Jefferson, Barkin…), M2 money supply, the S&P Global PMIs, jobless claims; and what it must not: oil
+   inventories, Treasury auctions, futures positioning, weekly mortgage surveys, the Fed balance sheet — plumbing, not
+   news. So: US · the supplier's High and Medium grades (a Fed CHAIR row is always High — ecNormalize) · plus anything
+   the supplier grades Low that he named by name (M2) · minus the plumbing. MEASURED against econ_calendar for
+   21–25 Sep 2026: 25 rows → 20 items once a release's parts are joined. The 13 Aug rule (High only) gave 1 item. */
+const ECON_TAPE_RULE = Object.freeze({
+  country: "US",
+  impacts: ["High", "Medium"],
+  named: /\bm2\b|^money supply\b/i,
+  noise: /(^eia |^api |crude oil|natural gas|gasoline|distillate|heating oil|refinery|cushing|baker hughes|rig count|opec|auction|^cftc |speculative net position|commitment of traders|^mba |mortgage rate|mortgage applications|mortgage market|refinance index|purchase index|balance sheet)/i,
+});
+function ecTapeKeep(r) {
+  if (!r || !r.event || r.country !== ECON_TAPE_RULE.country) return false;
+  const b = ecBase(r.event);
+  if (!b || ECON_TAPE_RULE.noise.test(b)) return false;
+  return ECON_TAPE_RULE.impacts.indexOf(r.impact) >= 0 || ECON_TAPE_RULE.named.test(b);
+}
 const EC_TAPE_ITEMS = 3;             // proposal v2: "Three items. Yours."
 const EC_TAPE_DAYS = 7;              // proposal v2: "Anything further is a calendar, and the calendar is the tab."
 const EC_TAPE_TTL_MS = 10 * 60e3;    // one read per ten minutes, however often the ident bar repaints
-let MACRO_NEXT = null, MACRO_NEXT_AT = 0, MACRO_NEXT_BUSY = false;
+const EC_TAPE_FAST_MS = 2 * 60e3;    // …except while a number is due and not yet in the store
+const EC_TAPE_TICK_MS = 15e3;        // the countdowns move here; a tick reads nothing by itself
+const EC_NUDGE_SOON_S = 3600;        // inside the hour: the "go look" signal
+const EC_NUDGE_DUE_S = 15 * 60;      // "now" for something that prints no number (a speech, a meeting)
+const EC_NUDGE_WAIT_S = 60 * 60;     // "now" while a number is due: fmp-economic rewrites the near band hourly
+const EC_NUDGE_SHOW_S = 15 * 60;     // how long a result stays up once this page has seen it, then it drops off
+const EC_NUDGE_RECENT_S = 2 * 3600;  // a result first seen longer than this after its release is not replayed
+const EC_TAPE_PRICE = /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|deflator)/i;
+let MACRO_NEXT = null, MACRO_NEXT_AT = 0, MACRO_NEXT_BUSY = false, MACRO_NEXT_FAIL_AT = 0;
+const ECON_TAPE_SEEN = Object.create(null);   // item key → when THIS page first saw its number (sec)
+let ECON_TAPE_TIMER = null, ECON_TAPE_VIS_BOUND = false, ECON_BAND_HTML = "";
+const ecImpRank = (i) => (i === "High" ? 3 : i === "Medium" ? 2 : i === "Low" ? 1 : 0);
+/* the proposal's own wording: "in 6d", "in 22h", "in 34m" — the sub-unit only where it changes the decision */
 function ecCountdown(ts, nowSec) {
   const s = ts - (Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000));
-  if (s < 0) return "now";
+  if (s <= 0) return "now";
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  if (d >= 1) return "in " + d + "d" + (h ? " " + h + "h" : "");
-  if (h >= 1) return "in " + h + "h" + (m ? " " + m + "m" : "");
-  return "in " + m + "m";
+  if (d >= 1) return "in " + d + "d";
+  if (h >= 1) return "in " + h + "h" + (h < 10 && m ? " " + m + "m" : "");
+  return "in " + Math.max(1, m) + "m";
+}
+/* ONE LINE PER RELEASE, not per row. The calendar collapses a family printing at the same minute (CPI's four rows, the
+   three jobless-claims rows, the three S&P Global PMIs, durable goods) into one headline; so does the tape, using the
+   room's own families (ecFam) plus M2's two rows, which the supplier files twice. */
+function ecTapeItems(rows) {
+  const byKey = Object.create(null), out = [];
+  for (const r of (rows || [])) {
+    if (!ecTapeKeep(r)) continue;
+    const b = ecBase(r.event), f = ecFam(r.event);
+    const tag = f ? f.tag : (ECON_TAPE_RULE.named.test(b) ? "M2" : null);
+    const key = Math.floor(+r.event_ts) + "|" + (tag || b);
+    const isHead = (x) => (f ? f.head.test(ecBase(x.event)) : tag === "M2" ? /\bm2\b/i.test(ecBase(x.event)) : true);
+    const g = byKey[key];
+    if (!g) { byKey[key] = { key: key, ts: Math.floor(+r.event_ts), head: r, n: 1 }; out.push(byKey[key]); continue; }
+    g.n++;
+    if (isHead(r) && !isHead(g.head)) g.head = r;
+    else if (!isHead(g.head) && ecImpRank(r.impact) > ecImpRank(g.head.impact)) g.head = r;
+  }
+  return out.map((g) => {
+    const r = g.head, e = ecFin(r.estimate), p = ecFin(r.previous);
+    return { key: g.key, ts: g.ts, day: ecDateKey(g.ts), event: r.event, name: ecShort(ecBase(r.event)),
+             impact: r.impact, cat: ecCat(r.event), rows: g.n,
+             actual: ecFin(r.actual), estimate: e, previous: p, expects: e != null || p != null };
+  }).sort((a, b) => a.ts - b.ts || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+/* the surprise, read exactly as the calendar reads it: hotter inflation / weaker labour than expected is the red one */
+function ecTapeSurprise(it) {
+  if (it.actual == null || it.estimate == null) return null;
+  const d = it.actual - it.estimate;
+  if (Math.abs(d) < 1e-9) return { cls: "inline", txt: "in line" };
+  const b = ecBase(it.event), hot = EC_INVERT.test(b), price = EC_TAPE_PRICE.test(b);
+  return { cls: (d > 0) === hot ? "miss" : "beat",
+           txt: (d > 0 ? "+" : "−") + ecNum(Math.abs(d)) + " " + (price ? (d > 0 ? "hotter" : "cooler") : (d > 0 ? "above" : "below")) };
+}
+/* THE FOUR STATES (proposal v2 §2). `seenSec` is when this page first saw the number: a result shows for a quarter of
+   an hour from then — not from the release minute — because the supplier can publish the actual up to an hour late. */
+function ecNudgeState(it, nowSec, seenSec) {
+  const dt = it.ts - nowSec;
+  if (dt > EC_NUDGE_SOON_S) return "ahead";
+  if (dt > 0) return "soon";
+  if (it.actual != null) {
+    const seen = Number.isFinite(seenSec) ? seenSec : nowSec;
+    return (seen - it.ts < EC_NUDGE_RECENT_S && nowSec - seen < EC_NUDGE_SHOW_S) ? "landed" : "gone";
+  }
+  return -dt < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S) ? "now" : "gone";
+}
+function ecNudgeModel(nowSec) {
+  const model = [];
+  for (const it of ecTapeItems(MACRO_NEXT)) {
+    if (it.ts - nowSec > EC_TAPE_DAYS * 86400) break;          // sorted by time: nothing further out qualifies either
+    const st = ecNudgeState(it, nowSec, ECON_TAPE_SEEN[it.key]);
+    if (st === "gone") continue;
+    model.push({ it: it, st: st });
+    if (model.length >= EC_TAPE_ITEMS) break;
+  }
+  return model;
+}
+const ecWeekday = (day) => new Date(ecAnchor(day) * 1000).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" });
+function ecNudgeInnerHTML(it, st, nowSec) {
+  const head = '<span class="mn-dot">●</span><span class="mn-nm">' + esc(it.name) + "</span>";
+  if (st === "landed") {
+    const s = ecTapeSurprise(it);
+    /* against the estimate where the supplier carries one; against the prior print where it does not (M2 is the
+       one Alan named that arrives with no estimate at all), so the number never lands without something to read it against */
+    return head + '<span class="mn-res"><b>' + esc(ecNum(it.actual)) + "</b>" +
+      (it.estimate != null ? " vs " + esc(ecNum(it.estimate))
+        : it.previous != null ? " vs prior " + esc(ecNum(it.previous)) : "") + "</span>" +
+      (s ? '<span class="mn-sur ' + s.cls + '">' + esc(s.txt) + "</span>" : "");
+  }
+  const when = (it.day === ecDateKey(nowSec) ? "" : ecWeekday(it.day) + " ") + ecTimeET(it.ts);
+  return head + '<span class="mn-when">' + esc(when) + '</span><span class="mn-cd">' +
+    esc(st === "now" ? "now" : ecCountdown(it.ts, nowSec)) + "</span>";
+}
+const ecNudgeTitle = (it) => it.event + " · " + it.cat + " · " + ecTimeET(it.ts) + " ET · " + (it.impact || "") + " impact";
+function ecNudgeItemHTML(it, st, nowSec) {
+  return '<span class="mn-it s-' + st + '" data-act="mngoto" data-day="' + esc(it.day) + '" data-k="' + esc(it.key) +
+    '" title="' + esc(ecNudgeTitle(it)) + '">' + ecNudgeInnerHTML(it, st, nowSec) + "</span>";
 }
 function macroNextHTML(nowSec) {
   const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
-  if (!MACRO_NEXT) return '<span class="mn-lbl">what\'s coming</span><span class="mn-soon">loading…</span>';
-  const next = MACRO_NEXT.filter((r) => +r.event_ts >= now);    // a release whose minute has passed drops off without a re-read
-  if (!next.length) return '<span class="mn-lbl">what\'s coming</span>' +
-    '<span class="mn-soon">no high-impact US releases in the next ' + EC_TAPE_DAYS + " days</span>";
-  return '<span class="mn-lbl">what\'s coming</span>' +
-    next.slice(0, EC_TAPE_ITEMS).map((r) => {
-      const day = ecDateKey(r.event_ts);
-      const wd = new Date(ecAnchor(day) * 1000).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" });
-      return '<span class="mn-it" data-act="mngoto" data-day="' + esc(day) + '" title="' + esc(r.event) + '">' +
-        '<span class="mn-dot">●</span>' +
-        '<span class="mn-nm">' + esc(ecBase(r.event)) + "</span>" +
-        '<span class="mn-when">' + esc((day === ecToday() ? "today" : wd) + " " + ecTimeET(r.event_ts)) + "</span>" +
-        '<span class="mn-cd">' + esc(ecCountdown(r.event_ts, now)) + "</span></span>";
-    }).join("");
+  if (!MACRO_NEXT)
+    return MACRO_NEXT_FAIL_AT ? '<span class="mn-lbl">next</span><span class="mn-soon">economic calendar could not be read</span>' : "";
+  const model = ecNudgeModel(now);
+  /* a quiet week shows nothing at all and the ident box reads as it always did — proposal v2: "Silence is information." */
+  if (!model.length) return "";
+  return '<span class="mn-lbl">next</span>' + model.map((m) => ecNudgeItemHTML(m.it, m.st, now)).join("");
 }
+/* Repaint the queue IN PLACE: items are keyed, so a tick that only moves a countdown never rebuilds the node whose dot
+   is pulsing, and when one drops off the next slides up (.mn-new) instead of the whole row flickering. Anywhere there
+   is no DOM (this file's tests run it in a VM) it falls back to setting innerHTML from macroNextHTML. */
+function ecNudgePaint(nowSec) {
+  const box = el("macroNext");
+  if (!ECON_TAPE_ON || !box) return;
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const model = ecNudgeModel(now);
+  const live = typeof box.querySelectorAll === "function" && typeof document !== "undefined" && typeof document.createElement === "function";
+  if (!live || !MACRO_NEXT || !model.length || !box.querySelector(".mn-lbl")) {
+    const html = macroNextHTML(now);
+    if (box.innerHTML !== html) box.innerHTML = html;
+    return;
+  }
+  const want = Object.create(null);
+  for (const m of model) want[m.it.key] = 1;
+  for (const n of Array.prototype.slice.call(box.querySelectorAll(".mn-it")))
+    if (!want[n.getAttribute("data-k")]) n.remove();
+  let prev = box.querySelector(".mn-lbl");
+  for (const m of model) {
+    const cls = "mn-it s-" + m.st, inner = ecNudgeInnerHTML(m.it, m.st, now);
+    let n = Array.prototype.find.call(box.querySelectorAll(".mn-it"), (x) => x.getAttribute("data-k") === m.it.key);
+    if (!n) {
+      n = document.createElement("span");
+      n.className = cls + " mn-new";
+      n.setAttribute("data-act", "mngoto"); n.setAttribute("data-day", m.it.day); n.setAttribute("data-k", m.it.key);
+      n.setAttribute("title", ecNudgeTitle(m.it));
+      n.innerHTML = inner; n.__mn = inner;
+    } else {
+      if (n.className.replace(" mn-new", "") !== cls) n.className = cls;
+      if (n.__mn !== inner) { n.innerHTML = inner; n.__mn = inner; }
+    }
+    if (prev.nextSibling !== n) prev.parentNode.insertBefore(n, prev.nextSibling);
+    prev = n;
+  }
+}
+/* THE ECON BAND — "this week" is Monday→Sunday in New York; on Saturday and Sunday it rolls to the week ahead, because
+   by then this week has already happened and what he asked for is what is GOING to happen. */
+function ecBandWeek(nowSec) {
+  const today = ecDateKey(nowSec), dow = new Date(ecAnchor(today) * 1000).getUTCDay();   // 0 = Sunday … 6 = Saturday
+  const monday = ecShift(today, dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow);
+  return [0, 1, 2, 3, 4, 5, 6].map((i) => ecShift(monday, i));
+}
+function ecBandState(it, nowSec) {
+  if (it.ts > nowSec) return "up";
+  if (it.actual == null && nowSec - it.ts < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S)) return "now";
+  return "past";
+}
+function ecBandItems(nowSec) {
+  const days = new Set(ecBandWeek(nowSec));
+  return ecTapeItems(MACRO_NEXT).filter((it) => days.has(it.day));
+}
+function ecBandItemHTML(it, st, todayISO) {
+  const s = ecTapeSurprise(it);
+  const res = it.actual != null
+    ? '<span class="ecb-res ' + (s ? s.cls : "") + '"><b>' + esc(ecNum(it.actual)) + "</b>" +
+      (it.estimate != null ? " vs " + esc(ecNum(it.estimate))
+        : it.previous != null ? " vs prior " + esc(ecNum(it.previous)) : "") + "</span>"
+    : st === "now" ? '<span class="ecb-res">now</span>' : "";
+  return '<span class="sc-tape__item ecb-it is-' + st + (it.impact === "High" ? " is-high" : "") +
+    '" data-act="mngoto" data-day="' + esc(it.day) + '" title="' + esc(ecNudgeTitle(it)) + '">' +
+    /* the calendar's own category hue, except OTHER's near-black, which would read as a dead pixel on a tape */
+    '<span class="ecb-dot" style="color:' + (it.cat === "OTHER" ? "var(--dim)" : EC_CAT_COLOR[it.cat] || "var(--dim)") + '">●</span>' +
+    '<span class="ecb-when' + (it.day === todayISO ? " is-today" : "") + '">' +
+      esc((it.day === todayISO ? "TODAY" : ecWeekday(it.day).toUpperCase()) + " " + ecTimeET(it.ts)) + "</span>" +
+    '<span class="ecb-nm">' + esc(it.name) + "</span>" + res +
+    "</span>" + '<span class="sc-tape__dot">·</span>';
+}
+function econBandHTML(nowSec) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!MACRO_NEXT) {
+    seg = '<span class="sc-tape__item ecb-note">' +
+      (MACRO_NEXT_FAIL_AT ? "economic calendar could not be read" : "reading this week's economic calendar…") + "</span>" + sep;
+  } else {
+    const week = ecBandWeek(now), today = ecDateKey(now), items = ecBandItems(now);
+    seg = '<span class="sc-tape__item ecb-wk">WEEK OF ' + esc(ecDayLbl(week[0]).toUpperCase().replace(/^[A-Z]+, /, "")) + "</span>" + sep +
+      (items.length ? items.map((it) => ecBandItemHTML(it, ecBandState(it, now), today)).join("")
+                    : '<span class="sc-tape__item ecb-note">no US releases on the watch list this week</span>' + sep);
+  }
+  return '<div class="sc-tape sc-tape--econ" id="econBand"><b class="sc-tape__lbl">ECON →</b>' +
+    '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function renderEconBand(nowSec) {
+  const slot = el("econBandSlot");
+  if (!ECON_BAND_ON || !slot) return;
+  const html = econBandHTML(nowSec);
+  if (html === ECON_BAND_HTML && slot.innerHTML) return;      // unchanged: leave the marquee running where it is
+  ECON_BAND_HTML = html;
+  slot.innerHTML = html;
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = slot.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, slot.querySelector(".ecb-it.is-now, .ecb-it.is-up"));   // the band opens on today, not on Monday
+}
+/* ONE READ for both surfaces: the band's week and the nudge's seven days, US only, through the room's own window read
+   (same select, same keyset paging, same normalisation). ~250 rows = one page. */
+function ecTapeWindow(nowSec) {
+  const week = ecBandWeek(nowSec);
+  return { from: Math.floor(Math.min(ecAnchor(week[0]) - 1.5 * 86400, nowSec - 3 * 3600)),
+           to: Math.floor(Math.max(ecAnchor(week[6]) + 1.5 * 86400, nowSec + (EC_TAPE_DAYS + 1) * 86400)) };
+}
+function ecTapeDueMs(nowSec) {
+  for (const it of ecTapeItems(MACRO_NEXT))
+    if (it.expects && it.actual == null && it.ts <= nowSec && nowSec - it.ts < EC_NUDGE_WAIT_S) return EC_TAPE_FAST_MS;
+  return EC_TAPE_TTL_MS;
+}
+function ecTapeStale(nowMs) {
+  return !MACRO_NEXT || nowMs - MACRO_NEXT_AT >= ecTapeDueMs(Math.floor(nowMs / 1000));
+}
+async function ecTapeRead() {
+  if ((!ECON_TAPE_ON && !ECON_BAND_ON) || MACRO_NEXT_BUSY) return;
+  MACRO_NEXT_BUSY = true;
+  const w = ecTapeWindow(Math.floor(Date.now() / 1000));
+  try {
+    const rows = await ecFetchWindow(w.from, w.to, "&country=eq." + ECON_TAPE_RULE.country);
+    MACRO_NEXT = (rows || []).filter(ecTapeKeep);
+    MACRO_NEXT_AT = Date.now(); MACRO_NEXT_FAIL_AT = 0;
+    const seen = Math.floor(MACRO_NEXT_AT / 1000);
+    for (const it of ecTapeItems(MACRO_NEXT)) if (it.actual != null && ECON_TAPE_SEEN[it.key] == null) ECON_TAPE_SEEN[it.key] = seen;
+  } catch (err) {
+    MACRO_NEXT_FAIL_AT = Date.now();       // the last good rows stay on screen; the tick retries after EC_RETRY_MS
+  } finally { MACRO_NEXT_BUSY = false; }
+  ecTapePaint();
+}
+function ecTapePaint(nowSec) { ecNudgePaint(nowSec); renderEconBand(nowSec); }
+function ecTapeTick() {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
+  ecTapePaint();
+  if (MACRO_NEXT_BUSY) return;
+  if (MACRO_NEXT_FAIL_AT && Date.now() - MACRO_NEXT_FAIL_AT < EC_RETRY_MS) return;
+  if (ecTapeStale(Date.now())) ecTapeRead();
+}
+function ecTapeArm() {                     // idempotent: one timer and one listener for the page's life
+  if (ECON_TAPE_TIMER == null && typeof setInterval === "function") ECON_TAPE_TIMER = setInterval(ecTapeTick, EC_TAPE_TICK_MS);
+  if (!ECON_TAPE_VIS_BOUND && typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    ECON_TAPE_VIS_BOUND = true;
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") ecTapeTick(); });
+  }
+}
+/* boot — the band rides under every room, so it starts with the page. */
+function ecTapeStart() {
+  if (!ECON_TAPE_ON && !ECON_BAND_ON) return;
+  ecTapeArm(); ecTapePaint();
+  if (ecTapeStale(Date.now())) return ecTapeRead();
+}
+/* the dashboard mount — the ident box has just been rebuilt, so paint the queue into it from what is already cached. */
 async function fillMacroNext() {
   if (!ECON_TAPE_ON) return;
-  const box = el("macroNext"); if (!box) return;
-  box.innerHTML = macroNextHTML();
-  if ((MACRO_NEXT && Date.now() - MACRO_NEXT_AT < EC_TAPE_TTL_MS) || MACRO_NEXT_BUSY) return;
-  /* 8995c4b: a 500 from this table under load was a statement timeout, and pg() only retries 503/504/429 —
-     so retry here, then say so plainly rather than sit on "loading…". A dashboard nicety: it never holds
-     anything up. High AND Medium are asked for, then normalised: FMP files some Fed Chair appearances as
-     Medium, and 3d69248's rule is that the chair is always High — asking for High alone drops exactly those. */
-  MACRO_NEXT_BUSY = true;
-  const now = Math.floor(Date.now() / 1000);
-  const path = "econ_calendar?select=event_ts,country,event,impact,estimate,previous" +
-    "&country=eq.US&impact=in.(High,Medium)&event_ts=gte." + now +
-    "&event_ts=lte." + (now + EC_TAPE_DAYS * 86400) + "&order=event_ts.asc&limit=200";
-  try {
-    for (let i = 0; i < 3; i++) {
-      try {
-        const rows = await pg(path, 1);
-        MACRO_NEXT = (rows || []).map(ecNormalize).filter((r) => r.impact === "High"); MACRO_NEXT_AT = Date.now();
-        if (el("macroNext")) el("macroNext").innerHTML = macroNextHTML();
-        return;
-      } catch (err) { if (i < 2) await new Promise((r) => setTimeout(r, 1200 * (i + 1) + Math.random() * 400)); }
-    }
-    if (el("macroNext") && !MACRO_NEXT)
-      el("macroNext").innerHTML = '<span class="mn-lbl">what\'s coming</span>' +
-        '<span class="mn-soon">economic calendar could not be read</span>';
-  } finally { MACRO_NEXT_BUSY = false; }
+  ecNudgePaint();
+  ecTapeArm();
+  if (ecTapeStale(Date.now())) await ecTapeRead();
 }
 /* PORT — 3d69248's window fetch, split out of fillEcon so an arrow press moves ONLY the calendar. Two port fixes:
    (1) a cached window is shown at once but re-read when older than EC_WIN_TTL_MS — 3d69248 kept a window for
@@ -12126,11 +12423,19 @@ function renderTapes() {
   const j = JSON.stringify([macro, all]);
   if (j === lastTapes) return;     // don't restart the marquee for identical data
   lastTapes = j;
-  el("bands").innerHTML = tapeHTML("MACRO", macro) + tapeHTML("ALL", all);
-  // FIX 3 — constant ≈45 px/s for every band, regardless of track length
-  el("bands").querySelectorAll(".sc-tape__track").forEach((track) => {
-    track.style.animationDuration = Math.max(20, (track.scrollWidth / 2) / 45) + "s";
-  });
+  /* ECON TAPE 22 Sep — the price bands own #bandsPx; the ECON band sits in its own slot beside them, so a price tick
+     every 45 s no longer rewinds the week band (a whole week of events is longer than 45 s of scrolling). */
+  const px = el("bandsPx") || el("bands");
+  px.innerHTML = tapeHTML("MACRO", macro) + tapeHTML("ALL", all);
+  px.querySelectorAll(".sc-tape__track").forEach((track) => tapeSpeed(track));
+}
+/* FIX 3 — constant ≈45 px/s for every band, regardless of track length. ECON TAPE 22 Sep: ONE speed law, used by the
+   price bands and by the ECON band, so the third band moves at exactly the speed of the two above it. `startAt`, when
+   given, offsets the loop so the band opens on that item (the ECON band opens on today, not on Monday). */
+function tapeSpeed(track, startAt) {
+  const half = track.scrollWidth / 2, dur = Math.max(20, half / 45);
+  track.style.animationDuration = dur + "s";
+  track.style.animationDelay = (startAt && half > 0 ? -(((startAt.offsetLeft || 0) % half) / half) * dur : 0) + "s";
 }
 
 /* ---- mount / sync --------------------------------------------------------------- */
@@ -12212,7 +12517,7 @@ function afterMount() {
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
-    if (ECON_TAPE_ON) fillMacroNext();           // PORT — WHAT'S COMING in the ident box; the flag ships false
+    if (ECON_TAPE_ON) fillMacroNext();           // the nudge into the ident box this mount just rebuilt (cached rows; reads only if stale)
     updateCohrow(); syncBoardSel();
     loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill RSI after the initial board mount
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
@@ -13024,10 +13329,16 @@ document.addEventListener("click", (e) => {
       ecLoadWindow();
       break;
     }
-    case "mngoto": {                           // dashboard what's-coming → open that day in ECONOMIC
+    case "mngoto": {                           // the nudge or the ECON band → open that day in ECONOMIC
       S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US";
       S.econCat = "ALL"; S.econOpen = {};
-      go("ECONOMIC");
+      /* ECON TAPE 22 Sep — the band rides under the ECONOMIC room too, and go() does not remount a room already
+         mounted, so from inside the room the calendar is moved here instead (the same work an ecgoto click does). */
+      if (S.sec === "ECONOMIC") {
+        document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((b) =>
+          b.classList.toggle("on", b.dataset.s === S.econSpan));
+        ecLoadWindow();
+      } else go("ECONOMIC");
       break;
     }
     case "eccat":  S.econCat = a.dataset.c; renderEconTable(); break;
@@ -13840,6 +14151,7 @@ restartFeed();                                                       // board fe
 fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); })        // tapes, 45 s
   .catch(() => { S.state = "offline"; updateLive(); });
 setInterval(() => fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); }).catch(() => {}), 45000);
+ecTapeStart();                                                      // ECON TAPE — the ECON band + the ident-box nudge: one calendar read, then every 10 min
 loadHealth(); setInterval(loadHealth, 60000);
 var SENT={};
 function loadSentiment(){ try{ pg("news_sentiment?select=ticker,score,n_articles").then(function(rows){ if(Array.isArray(rows)){ var m={}; rows.forEach(function(r){ m[String(r.ticker).toUpperCase()]={s:+r.score,n:+r.n_articles}; }); SENT=m; if(typeof render==="function") render(); } }).catch(function(){}); }catch(e){} }

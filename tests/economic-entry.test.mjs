@@ -18,7 +18,11 @@ test("direct entry: one hashchange listener, which only ever switches to ECONOMI
   assert.equal(n, 1);
   assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ if \(scEntryRoom\(\) === "ECONOMIC" && S\.sec !== "ECONOMIC"\) go\("ECONOMIC"\); \}\);/);
 });
-test("phone: the day-bar controls wrap under the date instead of overlapping it; tape stays off", () => {
+test("phone: the day-bar controls wrap under the date instead of overlapping it; the nudge is not shown on a phone", () => {
   assert.match(page, /@media \(max-width:900px\)\{ \.ec-daybar\{ flex-wrap:wrap; row-gap:6px; \} \.ec-span\{ margin-left:0; width:100%; flex-wrap:wrap; \} \}/);
-  assert.match(page, /\nconst ECON_TAPE_ON = false;/);
+  /* ECON TAPE 22 Sep — the ident row on a phone is one nowrap line with no room to give, so the queue stays hidden
+     there (the ECON band under the price bands is what carries the week on a phone). */
+  assert.match(page, /@media \(max-width:900px\)\{ \.sc-cident--nudge \.sc-macronext\{ display:none; \} \}/);
+  assert.match(page, /\nconst ECON_TAPE_ON = true;/, "the nudge ships ON (22 Sep)");
+  assert.match(page, /\nconst ECON_BAND_ON = true;/, "the ECON band ships ON (22 Sep)");
 });

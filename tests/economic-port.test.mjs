@@ -37,7 +37,10 @@ function load({ tapeOn = false, S = {}, pg = async () => [], nodes = null } = {}
     document: { querySelectorAll: () => [] },
   });
   let src = escSrc + numSrc + mod + fnSrc(page, "leftIdentHTML");
-  if (tapeOn) { assert.equal(src.split("const ECON_TAPE_ON = false;").length, 2); src = src.replace("const ECON_TAPE_ON = false;", "const ECON_TAPE_ON = true;"); }
+  /* ECON TAPE 22 Sep - the page now ships the flag ON, so the harness sets it BOTH ways: `tapeOn: false` is the
+     kill-switch proof (flag off must emit production's ident markup byte for byte and read nothing). */
+  assert.equal(src.split(/const ECON_TAPE_ON = (?:true|false);/).length, 2, "exactly one flag");
+  src = src.replace(/const ECON_TAPE_ON = (?:true|false);/, "const ECON_TAPE_ON = " + (tapeOn ? "true" : "false") + ";");
   const api = vm.runInContext(src + "\n;({" + EXPORTS.join(",") +
     ", get ECON_CAL() { return ECON_CAL; }, get ECON_WIN() { return ECON_WIN; }, get ECON_WIN_AT() { return ECON_WIN_AT; }," +
     " get ECON_TAPE_ON() { return ECON_TAPE_ON; }, get MACRO_NEXT() { return MACRO_NEXT; }, set MACRO_NEXT(v) { MACRO_NEXT = v; } })", ctx);
@@ -49,11 +52,11 @@ const IDENT_INPUTS = [
   [{ t: "", name: "", price: 7, chg: null }, "live"],
 ];
 
-test("the tape ships OFF, and off, the ident bar is byte-identical to production 2dbeb4c", () => {
+test("the tape ships ON — and with its one flag off the ident bar is byte-identical to production 2dbeb4c", () => {
   assert.equal((page.match(/const ECON_TAPE_ON = /g) || []).length, 1, "exactly one flag");
-  assert.match(page, /const ECON_TAPE_ON = false;/);
+  assert.match(page, /const ECON_TAPE_ON = true;/, "22 Sep: the nudge is on");
   const { api, ctx } = load();
-  assert.equal(api.ECON_TAPE_ON, false);
+  assert.equal(api.ECON_TAPE_ON, false, "…and the rollback is that one word");
   const golden = vm.runInContext(GOLDEN_IDENT.replace("function leftIdentHTML(", "function goldenIdent(") + "\n;goldenIdent", ctx);
   for (const sec of ["DASHBOARD", "COMPANY"]) for (const [data, state] of IDENT_INPUTS) {
     ctx.S.sec = sec; ctx.S.state = state;
@@ -72,7 +75,7 @@ test("fillMacroNext never reads while the flag is off, even if a #macroNext node
   assert.equal(n, 0);
 });
 
-test("flag ON: three US High-impact items inside the ident box, dashboard only, escaped, passed ones drop off", () => {
+test("flag ON: three items inside the ident box, escaped, passed ones drop off, the queue rides with a pinned ticker too", () => {
   const { api, ctx } = load({ tapeOn: true });
   const now = ts("2030-01-07T12:00:00Z");
   api.MACRO_NEXT = [
@@ -83,43 +86,51 @@ test("flag ON: three US High-impact items inside the ident box, dashboard only, 
     { event_ts: ts("2030-01-10T13:30:00Z"), country: "US", event: "EXAMPLE Jobless Claims", impact: "High" },
   ];
   const html = api.macroNextHTML(now);
-  assert.equal((html.match(/class="mn-it"/g) || []).length, 3, "three items (proposal v2)");
-  assert.doesNotMatch(html, /Passed Release/, "a release whose minute has passed drops off");
+  assert.equal((html.match(/class="mn-it s-/g) || []).length, 3, "three items (proposal v2)");
+  assert.doesNotMatch(html, /Passed Release/, "an hour past its minute with no number, it has dropped off");
   assert.doesNotMatch(html, /<b>x<\/b>/, "names are escaped");
   assert.match(html, /EXAMPLE CPI &lt;b&gt;x&lt;\/b&gt;<\/span>/, "the period tag is dropped, the name kept and escaped");
   assert.match(html, /data-act="mngoto" data-day="2030-01-07"/);
   assert.match(html, /<span class="mn-cd">in 1h 30m<\/span>/);
-  assert.match(html, /Mon 08:30/, "ET wall time");
+  assert.match(html, /<span class="mn-when">08:30<\/span>/, "ET wall time; today needs no weekday");
+  assert.match(html, /<span class="mn-when">Tue 10:00<\/span>/, "another day carries its weekday");
   api.MACRO_NEXT = [];
-  assert.match(api.macroNextHTML(now), /no high-impact US releases in the next 7 days/);
-  ctx.S.sec = "DASHBOARD";
-  const on = api.leftIdentHTML({ t: "MU", name: "Micron", price: 1, chg: 1 });
-  assert.match(on, /^<div class="sc-cident sc-cident--nudge">/);
-  assert.match(on, /<span class="sc-macronext" id="macroNext">.*<\/span><\/div>$/);
-  ctx.S.sec = "COMPANY";
-  assert.doesNotMatch(api.leftIdentHTML({ t: "MU", name: "Micron", price: 1, chg: 1 }), /macroNext/, "the ident box on COMPANY stays production's");
+  assert.equal(api.macroNextHTML(now), "", "a quiet week shows nothing at all — silence is information");
+  for (const sec of ["DASHBOARD", "COMPANY"]) {     // COMPANY is the same dashboard mount with a ticker pinned
+    ctx.S.sec = sec;
+    const on = api.leftIdentHTML({ t: "MU", name: "Micron", price: 1, chg: 1 });
+    assert.match(on, /^<div class="sc-cident sc-cident--nudge">/, sec);
+    assert.match(on, /<span class="sc-macronext" id="macroNext">.*<\/span><\/div>$/, sec);
+  }
+  ctx.S.sec = "NEWS";
+  assert.doesNotMatch(api.leftIdentHTML({ t: "MU", name: "Micron", price: 1, chg: 1 }), /macroNext/, "no other room grows a queue");
   assert.equal(api.ecCountdown(ts("2030-01-09T12:00:00Z"), now), "in 2d");
   assert.equal(api.ecCountdown(now - 5, now), "now");
 });
 
-test("flag ON: one read for 7 days of US High (+Medium, so a chair speech FMP grades Medium survives), then a 10-minute cache", async () => {
+test("flag ON: ONE read, the room's own window read scoped to US, then a 10-minute cache", async () => {
   const paths = [];
   const rows = [
     { event_ts: ts("2030-01-07T13:30:00Z"), country: "US", event: "Fed Chair Powell Speech", impact: "Medium" },
     { event_ts: ts("2030-01-07T15:00:00Z"), country: "US", event: "Existing Home Sales", impact: "Medium" },
+    { event_ts: ts("2030-01-07T15:30:00Z"), country: "US", event: "EIA Crude Oil Stocks Change (Jan/04)", impact: "Medium" },
+    { event_ts: ts("2030-01-07T18:00:00Z"), country: "US", event: "M2 Money Supply MoM (Nov)", impact: "Low" },
     { event_ts: ts("2030-01-08T13:30:00Z"), country: "US", event: "Inflation Rate YoY (Dec)", impact: "High" },
   ];
   const box = { innerHTML: "" };
   const { api } = load({ tapeOn: true, pg: async (p, tries) => { paths.push([p, tries]); return rows.map((r) => ({ ...r })); }, nodes: { macroNext: box } });
+  const now = Math.floor(Date.now() / 1000);
   await api.fillMacroNext();
   assert.equal(paths.length, 1);
-  const [p, tries] = paths[0];
-  assert.equal(tries, 1, "pg is asked once per attempt; the tape does its own backoff");
-  assert.match(p, /^econ_calendar\?select=event_ts,country,event,impact,estimate,previous&country=eq\.US&impact=in\.\(High,Medium\)&event_ts=gte\.(\d+)&event_ts=lte\.(\d+)&order=event_ts\.asc&limit=200$/);
+  const [p] = paths[0];
+  assert.match(p, /^econ_calendar\?select=event_ts,country,event,actual,estimate,previous,impact&country=eq\.US&event_ts=gte\.(\d+)&event_ts=lte\.(\d+)&order=event_ts\.asc,country\.asc,event\.asc&limit=1000$/,
+    "the ECONOMIC room's own window read, asked for US");
   const [, from, to] = p.match(/gte\.(\d+)&event_ts=lte\.(\d+)/);
-  assert.equal(+to - +from, 7 * 86400);
-  assert.deepEqual(plain(api.MACRO_NEXT.map((r) => [r.event, r.impact])), [["Fed Chair Powell Speech", "High"], ["Inflation Rate YoY (Dec)", "High"]],
-    "a row the supplier files under the office is High, with the supplier's own name kept; other Medium rows are not nudges");
+  assert.ok(+from <= now - 3 * 3600, "back far enough to still carry this morning's results");
+  assert.ok(+to >= now + 8 * 86400, "forward past the nudge's seven days");
+  assert.deepEqual(plain(api.MACRO_NEXT.map((r) => [r.event, r.impact])),
+    [["Fed Chair Powell Speech", "High"], ["Existing Home Sales", "Medium"], ["M2 Money Supply MoM (Nov)", "Low"], ["Inflation Rate YoY (Dec)", "High"]],
+    "High + Medium + M2 by name; the office row is High with the supplier's own name kept; oil inventories are not news");
   await api.fillMacroNext();
   assert.equal(paths.length, 1, "no second read inside the TTL");
 });
@@ -259,7 +270,8 @@ test("the ported module only READS three tables and writes nothing", () => {
   const tables = new Set([...mod.matchAll(/"([a-z_]+)\?select=/g)].map((m) => m[1]));
   assert.deepEqual([...tables].sort(), ["econ_calendar", "econ_history", "treasury_rates"]);
   const args = [...mod.matchAll(/\bpg\(([^,)]{0,32})/g)].map((m) => m[1]);
-  assert.ok(args.length >= 5, "window, tape, curve, prints, per-series top-up");
+  assert.ok(args.length >= 4, "window (the tape shares it), curve, prints, per-series top-up");
+  assert.equal((mod.match(/econ_calendar\?select=/g) || []).length, 1, "ONE calendar read in the file: the tape reuses the room's");
   for (const a of args) assert.match(a, /^("econ_calendar\?|"econ_history\?|"treasury_rates\?|path$|$)/, "every read names one of the three tables: " + a);
 });
 
@@ -277,7 +289,8 @@ test("the rail is production's: stored prints with freshness, writer footer, and
   assert.match(fnSrc(page, "fillEcon"), /Promise\.all\(\[ecLoadWindow\(\), fillEconRail\(\)\]\)/);
   const clicks = page.slice(page.indexOf('case "ecctry"'), page.indexOf('/* R34 — removed orphaned case "systems"'));
   assert.doesNotMatch(clicks, /fillEcon\(\)/, "an arrow press never re-reads the rail");
-  assert.equal((clicks.match(/ecLoadWindow\(\);/g) || []).length, 4);
+  /* ecctry · ecgoto · ecday · ecspan, plus (22 Sep) mngoto when the ECON band is clicked from inside the room itself */
+  assert.equal((clicks.match(/ecLoadWindow\(\);/g) || []).length, 5);
   assert.doesNotMatch(page, /URLSearchParams\(location\.search\)\.get\("room"\)/, "the review build's ?room= boot parameter is not ported");
   assert.doesNotMatch(page, /'<div class="sc-macronext" id="macroNext"><\/div>' \+/, "8995c4b's full-width dashboard row is not ported");
 });
