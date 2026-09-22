@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · Station header as a real dock — concept</title>
+<!-- =============================================================================
+     CONCEPT PROTOTYPE. Not production. Nothing here is wired to the real Station.
+     Three answers to one question: what does the Station header look like when it
+     is ONE row that scrolls sideways and magnifies under the pointer, the way the
+     macOS dock does — instead of three stacked rows of controls.
+     Palette is the Station's own (/deck tokens). Every label is a real control.
+     ============================================================================= -->
+<style>
+:root{
+  --bg:#0A0A0F; --panel:#0D0D16; --panel2:#0F0F1A; --line:#1E1E30; --line2:#2A2A40;
+  --ink:#E2E4F0; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#7A7E9C; --mute:#3A3A52;
+  --crk:#00D4FF; --bull:#00FFA3; --bear:#FF2D55; --vol:#FF8A00;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --dh:44px;            /* dock rail height */
+  --pill:30px;          /* pill height at rest */
+  --maxs:2.15;          /* magnification at the pointer */
+}
+*{ box-sizing:border-box; min-width:0; -webkit-tap-highlight-color:transparent; }
+html,body{ margin:0; background:var(--bg); }
+body{
+  color:var(--ink2); font-family:var(--mono); font-size:12px; letter-spacing:.02em;
+  -webkit-font-smoothing:antialiased; padding:0 0 70px;
+}
+.wrap{ max-width:1440px; margin:0 auto; padding:0 18px; }
+
+/* ── the way back out ──────────────────────────────────────────────────
+   Added when this concept was published to the Hub. A concept page you
+   cannot leave is a trap: this strip rides inside the sticky head, so an
+   exit is on screen at every scroll position, and it repeats in the foot. */
+.wayout{ display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  font:600 11px/1 var(--mono); letter-spacing:.14em; padding:0 0 12px; }
+.wayout a{ color:var(--ink3); text-decoration:none; border:1px solid var(--line2);
+  border-radius:4px; padding:8px 12px; background:#12121F; }
+.wayout a:hover{ color:var(--crk); border-color:rgba(0,212,255,.55); background:rgba(0,212,255,.08); }
+.wayout a.home{ color:var(--crk); border-color:rgba(0,212,255,.5); background:rgba(0,212,255,.1); }
+.wayout a.home:hover{ background:rgba(0,212,255,.18); }
+.wayout s{ display:none; }
+.wayfoot{ border-top:1px solid var(--line); margin:34px 0 0; padding:18px 0 0; }
+.wayfoot .wayout{ padding:0; }
+
+/* ── page head ─────────────────────────────────────────────────────────── */
+.top{
+  position:sticky; top:0; z-index:60; background:linear-gradient(180deg,#0A0A0F 72%,rgba(10,10,15,0));
+  padding:16px 0 14px;
+}
+.top .wrap{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+h1{ font-size:13px; letter-spacing:.24em; color:var(--crk); margin:0; font-weight:600; }
+.sub{ color:var(--dim); font-size:11px; letter-spacing:.05em; }
+.spacer{ flex:1 1 40px; }
+.tgl{
+  font:600 10px/1 var(--mono); letter-spacing:.16em; color:var(--ink3); cursor:pointer;
+  background:#12121F; border:1px solid var(--line2); border-radius:4px; padding:8px 12px;
+}
+.tgl[aria-pressed="true"]{ color:var(--crk); border-color:rgba(0,212,255,.55); background:rgba(0,212,255,.08); }
+.hint{
+  color:var(--dim); font-size:11px; letter-spacing:.04em; padding:0 0 18px;
+}
+.hint b{ color:var(--ink2); font-weight:600; }
+
+/* ── panels ────────────────────────────────────────────────────────────── */
+.panel{ margin:0 0 26px; }
+.phead{ display:flex; align-items:center; gap:12px; padding:0 0 9px; flex-wrap:wrap; }
+.ptag{
+  width:22px; height:22px; border-radius:3px; display:grid; place-items:center;
+  font:700 11px/1 var(--mono); color:var(--bg); background:var(--crk);
+}
+.panel.problem .ptag{ background:var(--bear); color:#12000A; }
+h2{ font-size:12px; letter-spacing:.2em; color:var(--ink); margin:0; font-weight:600; }
+.pnote{ color:var(--dim); font-size:11px; letter-spacing:.04em; }
+.metric{ margin-left:auto; font-size:11px; letter-spacing:.06em; color:var(--ink3); white-space:nowrap; }
+.metric b{ color:var(--crk); font-size:14px; font-weight:600; }
+.panel.problem .metric b{ color:var(--bear); }
+.metric i{ font-style:normal; color:var(--bull); }
+
+.screen{
+  position:relative; height:262px; overflow:hidden; display:flex; flex-direction:column;
+  border:1px solid var(--line); border-radius:6px; background:var(--panel2);
+}
+.cost{
+  margin:8px 0 0; color:var(--dim); font-size:11px; letter-spacing:.03em;
+}
+.cost b{ color:var(--vol); font-weight:600; letter-spacing:.12em; }
+
+/* ── the dock ──────────────────────────────────────────────────────────── */
+.dockwrap{ position:relative; flex:none; z-index:20; }
+.rail{
+  position:relative; height:var(--dh);
+  background:linear-gradient(180deg,#14141F,#0E0E18);
+  border-bottom:1px solid var(--line2);
+  /* clip left/right at the rail edges, but let magnified pills spill downward */
+  clip-path:inset(0 0 -86px 0);
+  touch-action:pan-y; cursor:default;
+}
+.rail.grab{ cursor:grabbing; }
+.track{ position:absolute; inset:0 auto 0 0; display:flex; align-items:flex-start; height:var(--dh); will-change:transform; }
+.di{
+  position:relative; flex:0 0 auto; height:var(--dh);
+  background:none; border:0; padding:0; margin:0; font:inherit; color:inherit; cursor:pointer;
+}
+.cap{
+  position:absolute; left:50%; top:7px; transform-origin:50% 0; transform:translateX(-50%) scale(1);
+  display:flex; align-items:center; height:var(--pill); padding:0 11px; white-space:nowrap;
+  border:1px solid var(--line2); border-radius:5px; background:#13131F;
+  color:var(--ink2); font:600 11px/1 var(--mono); letter-spacing:.1em;
+  pointer-events:none; will-change:transform;
+}
+.di.on .cap{ color:var(--crk); border-color:rgba(0,212,255,.6); background:rgba(0,212,255,.1); }
+.di.brand .cap{ color:var(--crk); border-color:transparent; background:none; letter-spacing:.22em; }
+.di.mag .cap{ box-shadow:0 10px 26px rgba(0,0,0,.6), 0 0 0 1px rgba(0,212,255,.12); }
+.di.grp .cap{ color:var(--ink3); border-style:dashed; }
+.di.grp.open .cap{ color:var(--crk); border-color:rgba(0,212,255,.5); border-style:solid; }
+.dv{ pointer-events:none; }
+.dv .cap{ height:18px; top:13px; width:1px; padding:0; border:0; border-radius:0; background:var(--line2); }
+
+.capnote{
+  position:absolute; top:calc(7px + var(--pill) * var(--maxs) + 9px); left:0; z-index:5;
+  transform:translateX(-50%); padding:5px 9px; border-radius:4px;
+  background:rgba(10,10,15,.94); border:1px solid var(--line2);
+  color:var(--ink3); font-size:10px; letter-spacing:.07em; white-space:nowrap;
+  opacity:0; transition:opacity .12s ease; pointer-events:none;
+}
+.capnote b{ color:var(--crk); font-weight:600; letter-spacing:.12em; }
+.capnote.show{ opacity:1; }
+
+.fade{ position:absolute; top:0; height:var(--dh); width:56px; pointer-events:none; opacity:0; transition:opacity .2s ease; z-index:3; }
+.fade.l{ left:0; background:linear-gradient(90deg,#111120,rgba(17,17,32,0)); }
+.fade.r{ right:0; background:linear-gradient(270deg,#111120,rgba(17,17,32,0)); }
+.fade.on{ opacity:1; }
+.nudge{
+  position:absolute; top:0; height:var(--dh); width:26px; z-index:4; display:grid; place-items:center;
+  background:none; border:0; color:var(--ink3); font:600 15px/1 var(--mono); cursor:pointer;
+  opacity:0; transition:opacity .2s ease; pointer-events:none;
+}
+.nudge.on{ opacity:1; pointer-events:auto; }
+.nudge:hover{ color:var(--crk); }
+.nudge.l{ left:0; } .nudge.r{ right:0; }
+
+/* ── variant C, the edge dock ──────────────────────────────────────────── */
+.edge .dockwrap{ position:absolute; top:0; left:0; right:0; height:5px; z-index:30; }
+.edge .slide{
+  position:absolute; top:0; left:0; right:0; transform:translateY(-100%);
+  transition:transform .26s cubic-bezier(.22,.9,.3,1);
+}
+.edge.open .slide{ transform:translateY(0); }
+.lip{
+  position:absolute; top:0; left:0; right:0; height:5px; background:#12121E;
+  border-bottom:1px solid rgba(0,212,255,.45); display:grid; place-items:center; cursor:pointer;
+}
+.lip::after{
+  content:""; width:46px; height:3px; border-radius:2px; background:var(--crk); opacity:.85;
+  box-shadow:0 0 10px rgba(0,212,255,.55);
+}
+.edge.open .lip{ opacity:0; }
+
+/* ── the chart wall behind the header ──────────────────────────────────── */
+.charts{ flex:1 1 auto; min-height:0; padding:6px; display:grid; gap:6px;
+  grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); }
+.edge .charts{ margin-top:5px; }
+.cell{ border:1px solid var(--line); background:var(--panel); position:relative; overflow:hidden; border-radius:3px; }
+.cell .ch{ position:absolute; top:5px; left:7px; font:600 10px/1 var(--mono); letter-spacing:.12em; color:var(--ink2); }
+.cell .cp{ position:absolute; top:5px; left:58px; font:600 10px/1 var(--mono); color:var(--bull); }
+.cell.dn .cp{ color:var(--bear); }
+.cell svg{ position:absolute; inset:16px 0 0 0; width:100%; height:calc(100% - 16px); }
+.gain{
+  position:absolute; right:8px; bottom:6px; font-size:10px; letter-spacing:.1em; color:var(--bull);
+  background:rgba(10,10,15,.7); padding:3px 7px; border-radius:3px; z-index:10;
+}
+
+/* ── the problem: today's header, three rows ───────────────────────────── */
+.today{ position:relative; z-index:20; border-bottom:1px solid var(--line2); background:linear-gradient(180deg,#14141F,#0E0E18); }
+.trow{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:5px 8px; border-bottom:1px solid var(--line); }
+.trow:last-child{ border-bottom:0; }
+.tpill{
+  display:inline-flex; align-items:center; height:22px; padding:0 8px; white-space:nowrap;
+  border:1px solid var(--line2); border-radius:4px; background:#13131F;
+  color:var(--ink3); font:600 10px/1 var(--mono); letter-spacing:.08em;
+}
+.tpill.on{ color:var(--crk); border-color:rgba(0,212,255,.55); background:rgba(0,212,255,.1); }
+.tpill.brand{ color:var(--crk); border-color:transparent; background:none; letter-spacing:.2em; }
+.rowtag{
+  position:absolute; right:6px; font:600 9px/1 var(--mono); letter-spacing:.14em; color:var(--bear);
+  background:rgba(10,10,15,.8); padding:3px 5px; border-radius:3px;
+}
+.recon{ color:var(--mute); font-size:10px; letter-spacing:.08em; }
+
+@media (prefers-reduced-motion:reduce){ .edge .slide{ transition:none; } }
+@media (max-width:760px){
+  .metric{ margin-left:0; width:100%; }
+  .charts{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap wayout"><a class="home" href="/prototypes/">◂ BACK TO PROTOTYPES</a><s>·</s><a href="/">THE HUB</a><s>·</s><a href="https://station.scintillahub.ai/">STATION</a></div>
+  <div class="wrap">
+    <h1>THE STATION HEADER · AS A REAL DOCK</h1>
+    <span class="sub">concept only — nothing here touches the live Station</span>
+    <span class="spacer"></span>
+    <button class="tgl" id="probTgl" aria-pressed="true">SHOW ME THE PROBLEM</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="hint">Run the pointer along any strip below. The control under it grows, its neighbours grow a little less, and they <b>slide apart</b> to make room. <b>Drag sideways</b> — or scroll — to reach the rest. Nothing wraps onto a second row, ever.</p>
+</div>
+
+<div class="wrap" id="panels"></div>
+
+<div class="wrap wayfoot"><div class="wayout"><a class="home" href="/prototypes/">◂ BACK TO PROTOTYPES</a><s>·</s><a href="/">THE HUB</a><s>·</s><a href="https://station.scintillahub.ai/">STATION</a></div></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. THE CONTROLS — all 37 of them, as they are named in the live Station.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const G = [
+  { id:'brand', items:[
+    { t:'THE STATION', d:'this Station', brand:true },
+    { t:'THE HUB',     d:'jump out to the Hub' } ]},
+  { id:'scene', items:[
+    { t:'LIVE ▾',       d:'scene · which preset of charts is loaded', on:true },
+    { t:'RESET PRESET', d:'put this scene back to its original preset' },
+    { t:'COHORT ▾',     d:'which cohort fills the favourites rows' },
+    { t:'‹',            d:'previous cohort page' },
+    { t:'›',            d:'next cohort page' },
+    { t:'FAMILY ▾',     d:'this scene’s family basket' } ]},
+  { id:'auto', items:[
+    { t:'60s ▾', d:'auto rotate · how often it moves on' },
+    { t:'START', d:'start or pause the rotation' } ]},
+  { id:'screens', items:[
+    { t:'‹',            d:'previous screen' },
+    { t:'SCREEN 1 / 9', d:'which of the nine screens you are on' },
+    { t:'›',            d:'next screen' } ]},
+  { id:'layout', items:[
+    { t:'AUTO ▾',    d:'layout remembered for this window' },
+    { t:'DISPLAY ↗', d:'open the Station in its own display window' },
+    { t:'⛶',         d:'fullscreen' },
+    { t:'CHARTS 8 ▾',d:'how many charts on the wall' } ]},
+  { id:'tf', radio:true, items:[
+    { t:'15m', d:'timeframe · drives every chart' },
+    { t:'30m', d:'timeframe · drives every chart' },
+    { t:'1H',  d:'timeframe · drives every chart' },
+    { t:'2H',  d:'timeframe · drives every chart', on:true },
+    { t:'3H',  d:'timeframe · drives every chart' },
+    { t:'4H',  d:'timeframe · drives every chart' },
+    { t:'6H',  d:'timeframe · drives every chart' },
+    { t:'12H', d:'timeframe · drives every chart' },
+    { t:'1D',  d:'timeframe · drives every chart' },
+    { t:'3D',  d:'timeframe · drives every chart' },
+    { t:'1W',  d:'timeframe · drives every chart' },
+    { t:'CLOUDS', d:'show the cloud bands on every chart', on:true } ]},
+  { id:'panes', items:[
+    { t:'PCC',       d:'pane · put-call ratio' },
+    { t:'CURTICK',   d:'pane · current tick' },
+    { t:'TICK',      d:'pane · NYSE tick' },
+    { t:'TRIN',      d:'pane · arms index' },
+    { t:'PERSONAL',  d:'pane · your own feed' },
+    { t:'SCINTILLA', d:'pane · the Scintilla feed' },
+    { t:'X',         d:'pane · your live X timeline' },
+    { t:'ADD',       d:'add another pane' } ]}
+];
+const TOTAL = G.reduce((n,g)=>n+g.items.length,0);   /* 37 */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. THE DOCK ENGINE — one strip, never wraps, magnifies, slides apart.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const GAP = 13;                   /* breathing room around each pill at rest */
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp = (v,a,b)=> v<a?a:(v>b?b:v);
+const falloff = (d,R)=> d>=R ? 0 : 0.5*(1+Math.cos(Math.PI*d/R));
+
+class Dock{
+  constructor(wrap, opt){
+    this.wrap=wrap;
+    this.rail=wrap.querySelector('.rail');
+    this.track=wrap.querySelector('.track');
+    this.note=wrap.querySelector('.capnote');
+    this.fl=wrap.querySelector('.fade.l'); this.fr=wrap.querySelector('.fade.r');
+    this.nl=wrap.querySelector('.nudge.l'); this.nr=wrap.querySelector('.nudge.r');
+    this.o=Object.assign({max:2.15,R:200},opt||{});
+    this.items=[]; this.sx=0; this.px=null; this.amt=0; this.pending=0;
+    this.drag=false; this.moved=0; this.vel=0; this.frame=0;
+    this.cl=[]; this.cw=[];
+    this.bind();
+  }
+  /* --- build ------------------------------------------------------------ */
+  add(cfg){
+    const el=document.createElement(cfg.div?'div':'button');
+    el.className='di'+(cfg.div?' dv':'')+(cfg.brand?' brand':'')+(cfg.grp?' grp':'')+(cfg.on?' on':'');
+    if(!cfg.div) el.type='button';
+    const cap=document.createElement('span'); cap.className='cap';
+    cap.textContent=cfg.div?'':cfg.t;
+    el.appendChild(cap);
+    this.track.appendChild(el);
+    const it={el,cap,cfg,bw:0,open:cfg.hidden?0:1,mag:!cfg.div,tgt:cfg.hidden?0:1};
+    this.items.push(it);
+    if(!cfg.div) el.addEventListener('click',()=>{ if(this.moved>5) return; this.hit(it); });
+    return it;
+  }
+  divider(){ return this.add({div:true}); }
+  measure(){
+    for(const it of this.items) it.bw = (it.cfg.div ? 17 : it.cap.offsetWidth + GAP);
+    this.schedule();
+  }
+  /* --- interaction ------------------------------------------------------ */
+  hit(it){
+    const c=it.cfg;
+    if(c.grp){ this.toggleGroup(c.grp); return; }
+    if(c.radio){
+      for(const o of this.items) if(o.cfg.radio===c.radio){ o.el.classList.remove('on'); o.cfg.on=false; }
+      it.el.classList.add('on'); c.on=true;
+      if(c.echo){ const e=this.items.find(x=>x.cfg.id===c.echo); if(e){ e.cap.textContent=e.cfg.t=c.echoT.replace('%',c.t); this.measure(); } }
+      return;
+    }
+    it.el.classList.toggle('on'); c.on=!c.on;
+  }
+  toggleGroup(gid){
+    const opening=!this.openGroup || this.openGroup!==gid;
+    this.openGroup = opening ? gid : null;
+    for(const it of this.items){
+      if(it.cfg.grp) it.el.classList.toggle('open', it.cfg.grp===this.openGroup);
+      if(it.cfg.of)  it.tgt = (it.cfg.of===this.openGroup) ? 1 : 0;
+    }
+    this.tween=performance.now(); this.schedule();
+  }
+  bind(){
+    const r=this.rail;
+    r.addEventListener('pointerenter',e=>{ if(e.pointerType==='touch')return; this.enter=performance.now(); this.schedule(); });
+    r.addEventListener('pointermove',e=>{
+      this.px = e.clientX - r.getBoundingClientRect().left;
+      if(this.drag){
+        const dx=e.clientX-this.dx0; this.moved=Math.max(this.moved,Math.abs(dx));
+        this.sx=this.sx0-dx;
+        const now=performance.now(), dt=Math.max(1,now-this.lt);
+        this.vel=(e.clientX-this.lx)/dt; this.lx=e.clientX; this.lt=now;
+      }
+      this.schedule();
+    });
+    r.addEventListener('pointerleave',()=>{ this.enter=null; this.leave=performance.now(); this.schedule(); });
+    r.addEventListener('pointerdown',e=>{
+      this.drag=true; this.moved=0; this.dx0=e.clientX; this.sx0=this.sx;
+      this.lx=e.clientX; this.lt=performance.now(); this.vel=0; this.mom=0;
+      r.setPointerCapture(e.pointerId); r.classList.add('grab'); this.schedule();
+    });
+    const up=()=>{ if(!this.drag)return; this.drag=false; r.classList.remove('grab');
+      this.mom=Math.abs(this.vel)>0.05?this.vel:0; this.schedule(); };
+    r.addEventListener('pointerup',up); r.addEventListener('pointercancel',up);
+    r.addEventListener('wheel',e=>{
+      const d = Math.abs(e.deltaX)>Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const max=this.maxScroll();
+      if(max<=0) return;
+      const next=clamp(this.sx+d,0,max);
+      if(next!==this.sx){ e.preventDefault(); this.sx=next; this.mom=0; this.schedule(); }
+    },{passive:false});
+    const nudge=(dir)=>{ this.pending += dir*this.rail.clientWidth*0.62; this.mom=0; this.schedule(); };
+    if(this.nl) this.nl.addEventListener('click',()=>nudge(-1));
+    if(this.nr) this.nr.addEventListener('click',()=>nudge(1));
+  }
+  maxScroll(){ const t=this.cw.reduce((a,b)=>a+b,0); return Math.max(0,t-this.rail.clientWidth); }
+  schedule(){ if(!this.frame) this.frame=requestAnimationFrame(()=>{ this.frame=0; this.layout(); }); }
+  toBase(cx,bl,bw){
+    if(!this.cl.length) return cx;
+    for(let i=0;i<this.cl.length;i++){
+      if(this.cw[i]<=0) continue;
+      if(cx>=this.cl[i] && cx<this.cl[i]+this.cw[i]){
+        const f=(cx-this.cl[i])/this.cw[i];
+        return bl[i]+f*bw[i];
+      }
+    }
+    return cx<0 ? cx : bl[bl.length-1]+bw[bw.length-1]+(cx-(this.cl[this.cl.length-1]+this.cw[this.cw.length-1]));
+  }
+  /* --- the frame -------------------------------------------------------- */
+  layout(){
+    const o=this.o, now=performance.now(), N=this.items.length;
+    let busy=false;
+
+    /* expand / collapse groups */
+    for(const it of this.items){
+      if(it.open!==it.tgt){
+        const step=0.085; busy=true;
+        it.open = it.tgt>it.open ? Math.min(it.tgt,it.open+step) : Math.max(it.tgt,it.open-step);
+      }
+    }
+    /* how much magnification is switched on right now */
+    const want = (this.enter && !this.drag && !REDUCED) ? 1 : 0;
+    if(this.amt!==want){ const s=0.14; busy=true;
+      this.amt = want>this.amt ? Math.min(1,this.amt+s) : Math.max(0,this.amt-s); }
+
+    /* base layout (all scales = 1) */
+    const bl=[],bw=[]; let bt=0;
+    for(let i=0;i<N;i++){ const w=this.items[i].bw*ease(this.items[i].open); bl.push(bt); bw.push(w); bt+=w; }
+
+    /* where is the pointer, in base coordinates */
+    let pb=null;
+    if(this.px!=null && this.amt>0.001) pb=this.toBase(this.px+this.sx,bl,bw);
+
+    /* scales, then the new layout */
+    const cl=[],cw=[]; let t=0, best=-1, bestS=1;
+    for(let i=0;i<N;i++){
+      let s=1;
+      if(pb!=null && this.items[i].mag && bw[i]>0)
+        s = 1 + (o.max-1)*falloff(Math.abs(pb-(bl[i]+bw[i]/2)),o.R)*this.amt;
+      cl.push(t); cw.push(bw[i]*s); t+=cw[i];
+      this.items[i].s=s;
+      if(s>bestS){ bestS=s; best=i; }
+    }
+    /* keep whatever is under the pointer under the pointer */
+    if(pb!=null){
+      let j=-1,f=0;
+      for(let i=0;i<N;i++){ if(bw[i]>0 && pb>=bl[i] && pb<bl[i]+bw[i]){ j=i; f=(pb-bl[i])/bw[i]; break; } }
+      if(j>=0) this.sx = (cl[j]+f*cw[j]) - this.px;
+    }
+    /* momentum from a flick */
+    if(this.mom){ this.sx -= this.mom*16; this.mom*=0.94; busy=true; if(Math.abs(this.mom)<0.02) this.mom=0; }
+    /* reach toward the ends and the strip comes to you */
+    const railW=this.rail.clientWidth, maxS=Math.max(0,t-railW);
+    if(this.px!=null && this.amt>0.5 && !this.drag && maxS>0){
+      const E=78;
+      if(this.px<E)            { this.pending -= (E-this.px)/E*9; busy=true; }
+      else if(this.px>railW-E) { this.pending += (this.px-(railW-E))/E*9; busy=true; }
+    }
+    this.sx += this.pending; this.pending=0;
+    this.sx = clamp(this.sx,0,maxS);
+
+    /* paint */
+    this.track.style.transform='translateX('+(-this.sx)+'px)';
+    for(let i=0;i<N;i++){
+      const it=this.items[i], op=ease(it.open);
+      it.el.style.width=cw[i]+'px';
+      it.cap.style.transform='translateX(-50%) scale('+(it.s*op)+')';
+      it.cap.style.opacity = op<1 ? op : '';
+      it.el.style.visibility = op<=0.001 ? 'hidden':'';
+      it.el.classList.toggle('mag', it.s>1.35);
+    }
+    /* the caption under the magnified control */
+    if(this.note){
+      if(best>=0 && bestS>1.06){
+        const it=this.items[best], x=clamp(cl[best]+cw[best]/2-this.sx, 70, railW-70);
+        this.note.style.left=x+'px';
+        this.note.innerHTML='<b>'+esc(it.cfg.t)+'</b> &nbsp;'+esc(it.cfg.note||it.cfg.d||'');
+        this.note.classList.add('show');
+      } else this.note.classList.remove('show');
+    }
+    /* the ends */
+    const more=maxS>1;
+    if(this.fl){ this.fl.classList.toggle('on',more&&this.sx>2); this.fr.classList.toggle('on',more&&this.sx<maxS-2); }
+    if(this.nl){ this.nl.classList.toggle('on',more&&this.sx>2); this.nr.classList.toggle('on',more&&this.sx<maxS-2); }
+
+    this.cl=cl; this.cw=cw;
+    if(busy) this.schedule();
+  }
+}
+const ease=(x)=> x<=0?0 : x>=1?1 : 1-Math.pow(1-x,2);
+const esc=(s)=> String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. THE CHART WALL — so the height you get back is visible, not described.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const TICKERS=[['TSLA',1.15,1],['NVDA',0.82,1],['AAPL',0.65,1],['MSFT',-0.41,0],['GOOGL',0.33,1],['SPY',-0.18,0]];
+function wall(seed){
+  const d=document.createElement('div'); d.className='charts';
+  TICKERS.forEach((tk,i)=>{
+    const c=document.createElement('div'); c.className='cell'+(tk[2]?'':' dn');
+    let r=(seed*97+i*131)%1000, pts=[], v=50;
+    for(let x=0;x<=60;x++){ r=(r*9301+49297)%233280; v+=((r/233280)-0.47)*9; v=clamp(v,8,92); pts.push((x/60*100).toFixed(1)+','+(100-v).toFixed(1)); }
+    const col=tk[2]?'#00FFA3':'#FF2D55';
+    c.innerHTML='<span class="ch">'+tk[0]+'</span><span class="cp">'+(tk[1]>0?'+':'')+tk[1]+'%</span>'+
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="none">'+
+      '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+col+'" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".85"/>'+
+      '<polyline points="0,100 '+pts.join(' ')+' 100,100" fill="'+col+'" opacity=".07"/></svg>';
+    d.appendChild(c);
+  });
+  return d;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. THE PANELS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const P=document.getElementById('panels');
+function panel(tag,title,note,cost,cls){
+  const s=document.createElement('section'); s.className='panel'+(cls?' '+cls:'');
+  s.innerHTML=
+    '<div class="phead"><span class="ptag">'+tag+'</span><h2>'+title+'</h2>'+
+    '<span class="pnote">'+note+'</span>'+
+    '<span class="metric"><b class="mv">—</b>px of header <i class="mg"></i></span></div>'+
+    '<div class="screen"></div>'+
+    (cost?'<p class="cost"><b>COSTS YOU</b> — '+cost+'</p>':'');
+  P.appendChild(s); return s;
+}
+function dockHTML(){
+  return '<div class="dockwrap"><div class="rail"><div class="track"></div></div>'+
+         '<div class="capnote"></div><div class="fade l"></div><div class="fade r"></div>'+
+         '<button class="nudge l" type="button" aria-label="scroll left">‹</button>'+
+         '<button class="nudge r" type="button" aria-label="scroll right">›</button></div>';
+}
+
+/* ---- 0 · THE PROBLEM: today's header, three rows ------------------------ */
+const prob=panel('!','TODAY · THREE ROWS','the header you have now — it wraps instead of scrolling','', 'problem');
+{
+  const sc=prob.querySelector('.screen');
+  const h=document.createElement('div'); h.className='today';
+  const rows=[
+    G[0].items.concat(G[1].items,G[2].items,G[3].items,G[4].items),
+    G[5].items,
+    G[6].items
+  ];
+  rows.forEach((items,ri)=>{
+    const r=document.createElement('div'); r.className='trow';
+    if(ri===0){ const l=document.createElement('span'); l.className='tpill brand'; l.textContent=''; }
+    items.forEach(it=>{
+      const p=document.createElement('span');
+      p.className='tpill'+(it.brand?' brand':'')+(it.on?' on':'');
+      p.textContent=it.t; r.appendChild(p);
+    });
+    const tag=document.createElement('span'); tag.className='rowtag'; tag.textContent='ROW '+(ri+1);
+    r.appendChild(tag);
+    h.appendChild(r);
+  });
+  sc.appendChild(h); sc.appendChild(wall(3));
+  prob.querySelector('.pnote').innerHTML='the header you have now — it wraps instead of scrolling &nbsp;<span class="recon">· rebuilt from the live Station, whose rows sit at 0 / 35 / 91px · height below is measured on this page</span>';
+}
+
+/* ---- A · TRUE DOCK ------------------------------------------------------ */
+const pa=panel('A','TRUE DOCK','one strip · all '+TOTAL+' controls · scrolls sideways',
+  'the far end of the strip is off-screen until you flick it — nothing is hidden, but the last chips are a swipe away.');
+{
+  const sc=pa.querySelector('.screen');
+  sc.insertAdjacentHTML('afterbegin',dockHTML());
+  sc.appendChild(wall(11));
+  const d=new Dock(sc.querySelector('.dockwrap'));
+  G.forEach((g,gi)=>{
+    if(gi) d.divider();
+    g.items.forEach(it=> d.add(Object.assign({},it,{radio:g.radio?g.id:null})));
+  });
+  d.measure(); pa._dock=d;
+}
+
+/* ---- B · DOCK + DRAWER -------------------------------------------------- */
+const pb=panel('B','DOCK + DRAWER','11 controls in reach · the other 26 open inline on the same strip',
+  'one extra click before you can touch a timeframe or a pane — the strip is calmer, the deep controls are one move further away.');
+{
+  const sc=pb.querySelector('.screen');
+  sc.insertAdjacentHTML('afterbegin',dockHTML());
+  sc.appendChild(wall(29));
+  const d=new Dock(sc.querySelector('.dockwrap'));
+  const by=id=>G.find(g=>g.id===id).items;
+  d.add(by('brand')[0]); d.add(by('brand')[1]);
+  d.divider();
+  d.add(by('scene')[0]);
+  d.add({t:'SCENE ▸',grp:'scene',note:'opens reset · cohort · family, here on this strip'});
+  by('scene').slice(1).forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'scene'})));
+  d.divider();
+  d.add({t:'AUTO ▸',grp:'auto',note:'opens the rotate interval and start'});
+  by('auto').forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'auto'})));
+  d.add({t:'SCREENS ▸',grp:'screens',note:'opens screen 1 / 9 and its arrows'});
+  by('screens').forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'screens'})));
+  d.divider();
+  d.add({t:'LAYOUT ▸',grp:'layout',note:'opens layout, display and fullscreen'});
+  by('layout').slice(0,3).forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'layout'})));
+  d.add(by('layout')[3]);
+  d.divider();
+  d.add({t:'TIMEFRAME · 2H ▸',id:'tfEcho',grp:'tf',note:'opens all eleven timeframes on this same strip'});
+  by('tf').slice(0,11).forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'tf',radio:'tfB',echo:'tfEcho',echoT:'TIMEFRAME · % ▸'})));
+  d.add(by('tf')[11]);
+  d.divider();
+  d.add({t:'PANES · 8 ▸',grp:'panes',note:'opens PCC · CURTICK · TICK · TRIN · PERSONAL · SCINTILLA · X · ADD'});
+  by('panes').forEach(it=>d.add(Object.assign({},it,{hidden:true,of:'panes'})));
+  d.measure(); pb._dock=d;
+}
+
+/* ---- C · EDGE DOCK ------------------------------------------------------ */
+const pc=panel('C','EDGE DOCK','a 5px lip · the strip drops down when you reach for the top',
+  'the whole header is invisible until you reach for it — every control is one deliberate move away, and a stranger would not know it is there.');
+{
+  const sc=pc.querySelector('.screen'); sc.classList.add('edge');
+  sc.insertAdjacentHTML('afterbegin',
+    '<div class="dockwrap"><div class="slide"><div class="rail"><div class="track"></div></div>'+
+    '<div class="capnote"></div><div class="fade l"></div><div class="fade r"></div>'+
+    '<button class="nudge l" type="button" aria-label="scroll left">‹</button>'+
+    '<button class="nudge r" type="button" aria-label="scroll right">›</button></div>'+
+    '<div class="lip" title="reach for the top"></div></div>');
+  sc.appendChild(wall(47));
+  const d=new Dock(sc.querySelector('.dockwrap'));
+  G.forEach((g,gi)=>{ if(gi) d.divider(); g.items.forEach(it=>d.add(Object.assign({},it,{radio:g.radio?g.id+'C':null}))); });
+  d.measure(); pc._dock=d;
+
+  let hold=0;
+  const open=(v)=>{ sc.classList.toggle('open',v); pulse(); };
+  sc.addEventListener('pointermove',e=>{
+    const r=sc.getBoundingClientRect();
+    const near = (e.clientY-r.top) < 74;
+    clearTimeout(hold);
+    if(near) open(true); else hold=setTimeout(()=>open(false),220);
+  });
+  sc.addEventListener('pointerleave',()=>{ clearTimeout(hold); hold=setTimeout(()=>open(false),220); });
+  sc.querySelector('.lip').addEventListener('click',()=>open(!sc.classList.contains('open')));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. THE NUMBER — header height, measured live, every variant.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let TODAY=null;
+function h(el){ return el? Math.round(el.getBoundingClientRect().height) : 0; }
+function metrics(){
+  const t=prob.querySelector('.today');
+  if(prob.style.display!=='none'){ const v=h(t); if(v>0) TODAY=v; }
+  set(prob,TODAY,null);
+  const A=h(pa.querySelector('.rail'))+1;
+  const B=h(pb.querySelector('.rail'))+1;
+  const sc=pc.querySelector('.screen');
+  const C=sc.classList.contains('open') ? h(pc.querySelector('.rail'))+1 : 5;
+  set(pa,A,TODAY); set(pb,B,TODAY); set(pc,C,TODAY);
+}
+function set(p,v,base){
+  if(v==null) return;
+  p.querySelector('.mv').textContent=v;
+  const g=p.querySelector('.mg');
+  g.textContent = (base && base>v) ? '· charts gain +'+(base-v)+'px' : (base? '' : '· three rows of controls');
+}
+let pulseUntil=0, pulsing=false;
+function pulse(){ pulseUntil=performance.now()+520; if(!pulsing){ pulsing=true; (function loop(){
+  metrics(); if(performance.now()<pulseUntil) requestAnimationFrame(loop); else pulsing=false; })(); } }
+
+document.getElementById('probTgl').addEventListener('click',function(){
+  const on=this.getAttribute('aria-pressed')==='true';
+  this.setAttribute('aria-pressed',String(!on));
+  prob.style.display = on ? 'none' : '';
+  metrics();
+});
+addEventListener('resize',()=>{ [pa,pb,pc].forEach(p=>p._dock&&p._dock.measure()); metrics(); });
+addEventListener('load',()=>{ [pa,pb,pc].forEach(p=>p._dock&&p._dock.measure()); metrics(); });
+metrics();
+</script>
+</body>
+</html>

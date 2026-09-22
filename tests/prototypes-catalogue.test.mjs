@@ -9,19 +9,26 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    Architecture / Page spec), groups tools as Markets & macro, Signals & context, Portfolio & valuation, Workspaces, Visual
    experiments and Systems, puts Context Lens under Signals & context, and labels a separate app "Existing tool" - never
    "Working" - because nothing here proves function. catalog.json and the Indicator Lab files are the owner's deposit and are
-   NOT pinned here - the owner adds to them; the page must follow. */
+   NOT pinned here - the owner adds to them; the page must follow.
+
+   September 22 (navigation rebuild): the owner could reach pages he could not leave - "I'm stuck, I can't close the page, I
+   have to open a new window". Two rules now hold the page to that complaint, and are tested below: a destination on another
+   address opens in a NEW TAB so this page is never consumed, and a destination on this site must carry a link back here.
+   The page is generated from catalog.json, so the two can no longer drift. The Station dock concept was published under
+   /prototypes/dock-concept/ in the same pass, because it had only ever been sent as a file. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "8f96eb94372159f5c947cd1e568b6f6e9712c74e87ff7b9501933fb8fc020ebc");
+  assert.equal(sha("index.html"), "75f75c42e6efea286ffcd9491365f66047d882282dda3dde7695bd330807e9d6");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
-  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "index.html", "indicator-lab", "previews"]);
+  assert.equal(sha("dock-concept/index.html"), "b63d4bb1404b41ee0dbf2414817c08e4b0e4a35a5dbd8bd8460c89b717685a69");
+  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "previews"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));
 });
 
 /* A catalog status says what an entry is; the page may only show one of these readiness words for it. An unknown status
    fails here rather than being painted with a guessed badge. */
-const READINESS = { "Existing tool": "existing", "Existing preview": "preview", "Recovered local preview": "sample", "Review home": "review",
-  "Latest artifact pending": "pending", "Recovery in progress": "pending" };
+const READINESS = { "Existing tool": "existing", "Existing preview": "preview", "Recovered local preview": "sample",
+  "Concept study": "sample", "Review home": "review", "Latest artifact pending": "pending", "Recovery in progress": "pending" };
 const BADGE = { existing: "Existing tool", preview: "Preview", sample: "Sample data", review: "Review home", pending: "Pending" };
 const PURPOSES = ["markets", "signals", "portfolio", "workspaces", "visual"];
 const escHtml = (s) => s.replace(/&/g, "&amp;");
@@ -36,6 +43,7 @@ function articles(html) {
     attrs: m[1], body: m[2],
     purpose: (m[1].match(/data-purpose="([a-z]+)"/) || [])[1], readiness: (m[1].match(/data-readiness="([a-z]+)"/) || [])[1],
     title: (m[2].match(/<h4>([\s\S]*?)<\/h4>/) || [])[1], desc: (m[2].match(/<\/h4><p>([\s\S]*?)<\/p>/) || [])[1],
+    anchors: [...m[2].matchAll(/<a\b([^>]*)>/g)].map((x) => x[1]),
     hrefs: [...m[2].matchAll(/href="([^"]+)"/g)].map((x) => x[1]) }));
 }
 
@@ -72,6 +80,37 @@ test("every catalog entry appears exactly once, in a purpose group, with its tru
   for (const [r, n] of Object.entries(counts)) assert.match(page, new RegExp('<li><b class="rd ' + r + '">' + BADGE[r] + "</b>" + n + " · "), r + " count " + n);
 });
 
+/* THE "I'M STUCK" RULE. Every card that goes somewhere must say where the owner ends up, and be built so he can get back:
+   another address opens in a new tab (this page survives); this site opens in place and the destination carries a link home. */
+test("no card is a dead end: another address opens in a new tab, this site carries a link back", () => {
+  const page = fs.readFileSync(at("index.html"), "utf8"), cat = JSON.parse(fs.readFileSync(at("catalog.json"), "utf8"));
+  const all = articles(page);
+  for (const e of cat) {
+    if (!e.url) { assert.ok(!e.exit, e.title + " is pending and needs no exit"); continue; }
+    const c = all.find((a) => a.title === escHtml(e.title));
+    const external = e.url.startsWith("http");
+    assert.equal(e.exit, external ? "newtab" : "back", e.title + " declares how it is left");
+    for (const a of c.anchors) {
+      if (external) {
+        assert.match(a, /target="_blank"/, e.title + ": an off-site link opens in a new tab");
+        assert.match(a, /rel="noopener"/, e.title + ": a new-tab link is opened safely");
+      } else assert.doesNotMatch(a, /target="_blank"/, e.title + ": a same-site link opens in place and carries a way back");
+    }
+    assert.match(c.body, external ? /Opens in a new tab/ : /carries a link back to this page/, e.title + " says how it is left");
+  }
+  /* every off-site anchor anywhere on the page - not only the cards - opens in a new tab */
+  for (const m of page.matchAll(/<a\b([^>]*href="https?:[^"]*"[^>]*)>/g))
+    assert.match(m[1], /target="_blank"[^>]*rel="noopener"|rel="noopener"[^>]*target="_blank"/, "off-site link opens in a new tab: " + m[1]);
+  /* and every same-site destination this page names really does carry a link home */
+  const home = /href="\/prototypes\/"/;
+  for (const e of cat) {
+    if (!e.url || e.url.startsWith("http")) continue;
+    const file = e.url.endsWith("/") ? e.url + "index.html" : e.url;
+    const html = fs.readFileSync(new URL(".." + file, import.meta.url), "utf8");
+    assert.match(html, home, e.title + " (" + e.url + ") carries a link back to /prototypes/");
+  }
+});
+
 test("the Indicator Lab entry is the owner's: its link, status and card text are kept", () => {
   const page = fs.readFileSync(at("index.html"), "utf8"), cat = JSON.parse(fs.readFileSync(at("catalog.json"), "utf8"));
   const lab = cat.find((e) => e.title === "Indicator Lab");
@@ -87,17 +126,23 @@ test("links are real destinations only; the page is self-contained and stores no
   const catUrls = new Set(cat.flatMap((e) => [e.url, ...(e.related || []).map((r) => r.url)]).filter(Boolean));
   const extra = ["https://scintillahub.ai/", "https://station.scintillahub.ai/",   // the two live products (header and Systems group)
     "https://app.notion.com/p/3e096edf91af816aa966eb2fe07ec9c5?pvs=204",               // Scintilla review page (navigation baseline review_url; sign-in required)
-    "https://linear.app/alan-reply-desk/issue/REP-9", "https://linear.app/alan-reply-desk/issue/REP-18",   // assigned work (baseline "work"; sign-in required)
+    // assigned work, in the owning Scintilla workspace (the old alan-reply-desk links were the historical desk)
+    "https://linear.app/aharvey-scintilla/issue/SCI-11/restore-scintilla-hub-and-station-to-working-screens",
+    "https://linear.app/aharvey-scintilla/issue/SCI-10/context-lens-reconcile-latest-version-and-hosted-prototype",
+    "https://linear.app/aharvey-scintilla/issue/SCI-28/station-indicator-lab-clouds-on-every-chart-apple-dock-top-controls",
     "#overview", "#tools", "#review", "#work", "#architecture", "#page-spec"];         // in-page navigation
   for (const m of page.matchAll(/href="([^"]+)"/g)) assert.ok(catUrls.has(m[1]) || extra.includes(m[1]), "unlisted link " + m[1]);
-  assert.deepEqual(cat.filter((e) => e.url && e.url.startsWith("/")).map((e) => e.url).sort(), ["/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html"]);
+  assert.deepEqual(cat.filter((e) => e.url && e.url.startsWith("/")).map((e) => e.url).sort(),
+    ["/lab.html", "/prototypes/dock-concept/", "/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html", "/visual-engine/"]);
   const preview = fs.readFileSync(at("previews/signal-fanout-v2.html"), "utf8");
-  for (const html of [page, preview, fs.readFileSync(at("indicator-lab/index.html"), "utf8")]) {
+  const dock = fs.readFileSync(at("dock-concept/index.html"), "utf8");
+  for (const html of [page, preview, dock, fs.readFileSync(at("indicator-lab/index.html"), "utf8")]) {
     assert.match(html, /<meta name="robots" content="noindex,nofollow">/);
     assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=|<iframe|fetch\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|document\.cookie/i, "self-contained: no external script or style, no request, no storage");
     assert.doesNotMatch(html, /eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role|Authorization|\/Users\//i, "no key, token or local path");
   }
   assert.match(preview, /Sample data, not live market values/);
+  assert.match(dock, /nothing here touches the live Station/, "the dock page still says it is a concept");
 });
 
 test("navigation baseline v0.1: six sections in order, each anchor lands on its section", () => {
@@ -129,7 +174,7 @@ test("the page spec is public-safe and states purpose, owner, maturity, inputs, 
   /* generic patterns only: this test file is itself served publicly, so it must not name anyone or any private system */
   for (const re of [/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z.]{2,}/, /\/Users\/|~\//, /quota|utiliz|five.hour|weekly/i, /intake\b.*:|service.role|anon key/i])
     assert.doesNotMatch(page, re, "no private material on the public page: " + re);
-  for (const m of page.matchAll(/<a href="(https:\/\/(?:linear\.app|app\.notion\.com)[^"]+)">[^<]*<\/a>(<span class="signin">sign-in required<\/span>)?/g))
+  for (const m of page.matchAll(/<a\b[^>]*href="(https:\/\/(?:linear\.app|app\.notion\.com)[^"]+)"[^>]*>[^<]*<\/a>(<span class="signin">sign-in required<\/span>)?/g))
     assert.ok(m[2], "a sign-in destination says so: " + m[1]);
 });
 
@@ -148,4 +193,24 @@ test("the stylesheet is balanced: each @media block closes before the next rule 
     let d = 0; for (const ch of css.slice(0, at0)) { if (ch === "{") d++; if (ch === "}") d--; }
     assert.equal(d, 0, sel + " applies at every width, not only inside a media query");
   }
+});
+
+/* House rule: the palette is monochrome and carries no white or near-white. The rebuilt page caps its brightest ink well
+   below white and uses one accent hue at different opacities for readiness, rather than a second or third colour. */
+test("the rebuilt page is monochrome: no white, no near-white, one accent hue", () => {
+  const page = fs.readFileSync(at("index.html"), "utf8");
+  const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || "";
+  for (const bad of ["#fff", "#ffffff", "#f2f2f8", "#c6c8de", "#e2e4f0"])
+    assert.ok(!css.toLowerCase().includes(bad), "near-white in the palette: " + bad);
+  /* the keyword, but not the `white-space` property that merely starts with it */
+  assert.doesNotMatch(css, /(?:^|[;{\s])(?:color|background|background-color|border|border-color|fill|stroke)\s*:\s*[^;{}]*\bwhite\b(?!-)/i,
+    "the colour keyword white is used");
+  const hexes = [...css.matchAll(/#([0-9a-fA-F]{6})\b/g)].map((m) => m[1].toLowerCase());
+  for (const h of hexes) {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    assert.ok(0.2126 * r + 0.7152 * g + 0.0722 * b < 205, "#" + h + " is too close to white for the Scintilla palette");
+  }
+  /* one accent hue only: no green, orange or red tokens survive from the old page */
+  for (const bad of ["#00ffa3", "#ff8a00", "#ff2d55", "#ffe500", "#2d9cff", "#8b5cf6"])
+    assert.ok(!css.toLowerCase().includes(bad), "a second accent hue is on the page: " + bad);
 });

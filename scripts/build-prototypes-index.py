@@ -1,4 +1,147 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Prototypes</title><style>
+#!/usr/bin/env python3
+"""Build prototypes/index.html from prototypes/catalog.json.
+
+The review home is GENERATED, not hand-edited, so the page and the catalog can
+never drift apart - that drift is what left stale and dead entries on the page.
+Edit catalog.json, run this, and commit both. tests/prototypes-catalogue.test.mjs
+pins the result and enforces the rules the page promises: truthful readiness
+labels, a monochrome palette with no white, and no destination without a way back.
+
+    python3 scripts/build-prototypes-index.py
+"""
+import json, os
+
+# repo root, resolved from this file - no machine-specific path
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CAT = os.path.join(ROOT, "prototypes", "catalog.json")
+OUT = os.path.join(ROOT, "prototypes", "index.html")
+
+cat = json.load(open(CAT))
+
+READINESS = {
+    "Existing tool": "existing",
+    "Existing preview": "preview",
+    "Recovered local preview": "sample",
+    "Concept study": "sample",
+    "Review home": "review",
+    "Latest artifact pending": "pending",
+    "Recovery in progress": "pending",
+}
+BADGE = {"existing": "Existing tool", "preview": "Preview", "sample": "Sample data",
+         "review": "Review home", "pending": "Pending"}
+
+# purpose group for each title, and the icon that MEANS the tool
+PURPOSE = {
+    "Economic events": "markets", "Sector rotation": "markets",
+    "Indicator Lab": "signals", "Cohort Geiger": "signals", "Context Lens · v4": "signals",
+    "Allocation & DCF": "portfolio",
+    "Scintilla Desk": "workspaces",
+    "Visual Engine workbench": "visual", "Visual Engine Lab": "visual",
+    "Geiger motion": "visual", "Charts in motion": "visual", "Widget registry": "visual",
+    "Station dock concept": "visual", "Signal fanout · v2": "visual", "Visual menus": "visual",
+}
+
+# one stroke family: 24x24, fill:none, stroke:currentColor, round caps
+ICON = {
+ "Economic events":        '<rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3M7 13h3M7 16.5h6"/>',
+ "Sector rotation":        '<path d="M20 12a8 8 0 0 1-8 8M4 12a8 8 0 0 1 8-8"/><path d="M17.5 8.5V12H21M6.5 15.5V12H3"/><circle cx="12" cy="12" r="2"/>',
+ "Indicator Lab":          '<path d="M10 3.5v6L5 19a1.6 1.6 0 0 0 1.4 2.4h11.2A1.6 1.6 0 0 0 19 19l-5-9.5v-6"/><path d="M8.5 3.5h7M7.6 14.5h8.8"/>',
+ "Cohort Geiger":          '<path d="M3.5 19h17"/><path d="M6.5 19v-4M10.2 19v-8M13.8 19v-5.5M17.5 19v-11"/>',
+ "Context Lens · v4":      '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
+ "Allocation & DCF":      '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v8.5l6 6"/><path d="M12 12 4.6 8.6"/>',
+ "Scintilla Desk":         '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M11 9.5v10"/>',
+ "Visual Engine workbench":'<path d="M5 4.5v15M12 4.5v15M19 4.5v15"/><circle cx="5" cy="9.5" r="2.1"/><circle cx="12" cy="14.5" r="2.1"/><circle cx="19" cy="8" r="2.1"/>',
+ "Visual Engine Lab":      '<path d="M2.5 12h3l2.2-6 3.2 12 3-9 2.1 3h5.5"/>',
+ "Geiger motion":          '<path d="M4 7h9M4 12h13M4 17h6"/><path d="M17.5 4.5 21 8l-3.5 3.5M13.5 20.5 10 17l3.5-3.5"/>',
+ "Charts in motion":       '<path d="M3.5 19.5V4.5M3.5 19.5h17"/><path d="M6.5 15.5l3.5-4.5 3 2.5 4.5-6.5"/><circle cx="17.5" cy="7" r="1.6"/>',
+ "Widget registry":        '<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/>',
+ "Station dock concept":   '<rect x="2.5" y="8.5" width="19" height="7" rx="2"/><path d="M6.5 10.5v3M10 9.8v4.4M14 9.8v4.4M17.5 10.5v3"/>',
+ "Signal fanout · v2":     '<circle cx="5" cy="12" r="2"/><path d="M7 11.4 17 6.5M7 12h10M7 12.6 17 17.5"/><circle cx="18.5" cy="6" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/><circle cx="18.5" cy="18" r="1.6"/>',
+ "Visual menus":           '<path d="M4 6.5h16M4 12h16M4 17.5h10"/>',
+}
+
+HOST = {
+ "Indicator Lab": "this site · kept by its owner",
+ "Economic events": "scintilla-economic-tab.vercel.app",
+ "Sector rotation": "sectorrotation.scintillahub.ai",
+ "Allocation & DCF": "allocation.scintillahub.ai",
+ "Scintilla Desk": "scintilla-desk.vercel.app",
+ "Visual Engine workbench": "this site · /visual-engine/",
+ "Visual Engine Lab": "this site · /lab.html",
+ "Geiger motion": "scintilla-widgets.vercel.app",
+ "Charts in motion": "scintilla-widgets.vercel.app",
+ "Widget registry": "scintilla-widgets.vercel.app",
+ "Cohort Geiger": "scintilla-widgets.vercel.app",
+ "Station dock concept": "this site · /prototypes/",
+ "Signal fanout · v2": "this site · /prototypes/",
+ "Context Lens · v4": "Scintilla prototype · not recovered yet",
+ "Visual menus": "not available yet",
+}
+
+# the Indicator Lab card keeps its owner's second sentence verbatim
+EXTRA_DESC = {"Indicator Lab": " A home for the work, without keeping every chart open."}
+
+GROUPS = [
+ ("markets",    "Markets &amp; macro",      "Read the calendar and where money is rotating."),
+ ("signals",    "Signals &amp; context",    "Build, check and read the signals and context behind the board."),
+ ("portfolio",  "Portfolio &amp; valuation","Size positions and value companies."),
+ ("workspaces", "Workspaces",               "Desks that gather several views in one place."),
+ ("visual",     "Visual experiments",       "Motion, chart and widget studies for the Hub and Station."),
+]
+
+def esc(s):
+    return s.replace('&', '&amp;')
+
+def card(e):
+    t = e["title"]; r = READINESS[e["status"]]; p = PURPOSE[t]
+    desc = e["description"] + EXTRA_DESC.get(t, "")
+    ico = '<span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24">%s</svg></span>' % ICON[t]
+    meta = '<div class="meta"><span class="rd %s">%s</span><span class="host">%s</span></div>' % (r, BADGE[r], HOST[t])
+    if e.get("url"):
+        ext = e["url"].startswith("http")
+        tgt = ' target="_blank" rel="noopener"' if ext else ""
+        go = "↗" if ext else "→"
+        face = ('<a class="face" href="%s"%s>%s<span class="txt"><h4>%s</h4><p>%s</p></span>'
+                '<span class="go" aria-hidden="true">%s</span></a>') % (e["url"], tgt, ico, esc(t), desc, go)
+        rel = e.get("related") or []
+        links = ""
+        if rel:
+            links = '<div class="links">' + "".join(
+                '<a class="secondary" href="%s" target="_blank" rel="noopener">%s</a>' % (x["url"], x["label"]) for x in rel
+            ) + "</div>"
+        exitline = ('<p class="exit">Opens in a new tab — this page stays where it is.</p>' if ext
+                    else '<p class="exit">Opens here, and carries a link back to this page.</p>')
+        body = face + links + exitline
+    else:
+        body = ('<div class="face is-pending">%s<span class="txt"><h4>%s</h4><p>%s</p></span></div>'
+                '<div class="links"><span class="pending">%s</span></div>') % (ico, esc(t), desc, e["status"])
+    return '<article data-purpose="%s" data-readiness="%s">%s%s</article>' % (p, r, meta, body)
+
+# ---- counts, stated honestly -------------------------------------------------
+counts = {}
+for e in cat:
+    r = READINESS[e["status"]]
+    counts[r] = counts.get(r, 0) + 1
+linked = sum(1 for e in cat if e.get("url"))
+named = len(cat) - linked
+
+LEGEND_TEXT = {
+ "existing": "separate apps at their own addresses. They exist and answered when last checked; whether they work correctly is not verified here.",
+ "preview":  "existing review builds and studies at their own addresses; not wired into the dashboard.",
+ "sample":   "design studies that run on sample values, not live market data.",
+ "review":   "a home kept by its owner; its contents are the owner's to change.",
+ "pending":  "named here, not linked, until the artifact is recovered.",
+}
+legend = "".join('<li><b class="rd %s">%s</b>%d · %s</li>' % (r, BADGE[r], counts[r], LEGEND_TEXT[r])
+                 for r in ["existing", "preview", "sample", "review", "pending"] if r in counts)
+
+groups_html = ""
+for key, name, sub in GROUPS:
+    cards = "".join(card(e) for e in cat if PURPOSE[e["title"]] == key)
+    groups_html += ('<section class="grp" data-purpose="%s"><div class="gh"><h3 class="gt">%s</h3><p>%s</p></div>'
+                    '<div class="grid">\n%s\n</div></section>\n') % (key, name, sub, cards)
+
+CSS = """
 :root{color-scheme:dark;
 /* surfaces */
 --bg:#0A0A0F;--panel:#0D0D14;--panel2:#111120;--line:#1A1A2A;--line2:#252538;
@@ -96,7 +239,15 @@ table.arch td:first-child{font:11px/1.5 var(--mono);color:var(--ink2);white-spac
 @media(max-width:620px){.wrap{padding:14px 14px 30px}.grid{grid-template-columns:1fr}article{min-height:0}.brand{letter-spacing:.44em;font-size:14px}header{padding:12px 14px;flex-wrap:wrap}h1{margin-top:24px}.start a{flex:1 1 100%}}
 @media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:8px 0}table.arch tbody tr:first-child{border-top:0}table.arch td{display:block;border-top:0;padding:2px 14px}table.arch td:first-child{overflow-wrap:anywhere}table.arch td:last-child::before{content:"Kept by: ";color:var(--dim)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-</style></head><body><div class="wrap">
+"""
+
+SYSTEMS = """<section class="grp" data-purpose="systems"><div class="gh"><h3 class="gt">Systems</h3><p>The live products this work feeds, and where files are kept.</p></div><div class="grid">
+<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">scintillahub.ai</span></div><a class="face" href="https://scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M7.5 12.5h4M7.5 16h9M15 12.5h1.5"/></svg></span><span class="txt"><h4>Hub</h4><p>The dashboard: board, company pages, news, events, economic room.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
+<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">station.scintillahub.ai</span></div><a class="face" href="https://station.scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12" rx="1.5"/><path d="M8 20h8M12 16.5V20M6 8.5h5M6 12h3M14 8.5h4M14 12h4"/></svg></span><span class="txt"><h4>Station</h4><p>The display wall: charts, video panes and the X pane.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
+<div class="sysitem"><div class="meta"><span class="rd note">In the Hub</span><span class="host">no separate address</span></div><div class="face"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span><span class="txt"><h4>Files</h4><p>Files are kept inside the Hub, not on this page. Open the Hub, then the SCINTILLA logo menu, then Files.</p></span></div><div class="links"><span class="note">Hub → Scintilla menu → Files</span></div></div>
+</div></section>"""
+
+HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Prototypes</title><style>%(css)s</style></head><body><div class="wrap">
 <header><span class="brand">SCINTILLA</span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
 <nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav>
 <main>
@@ -110,40 +261,21 @@ table.arch td:first-child{font:11px/1.5 var(--mono);color:var(--ink2);white-spac
 <a href="/prototypes/indicator-lab/"><span class="sgo">→</span>Indicator Lab</a>
 </div>
 <div class="stats">
-<div class="stat"><b>15</b><span>listed</span></div>
-<div class="stat"><b>13</b><span>open now</span></div>
-<div class="stat"><b>2</b><span>named, not built</span></div>
-<div class="stat"><b>5</b><span>on this site</span></div>
+<div class="stat"><b>%(total)d</b><span>listed</span></div>
+<div class="stat"><b>%(linked)d</b><span>open now</span></div>
+<div class="stat"><b>%(named)d</b><span>named, not built</span></div>
+<div class="stat"><b>%(same)d</b><span>on this site</span></div>
 </div>
 </section>
 
 <section class="part" id="tools"><h2 class="pt">Tools</h2>
 <div class="filters" role="group" aria-label="Filter by purpose"><button type="button" aria-pressed="true" data-filter="all">All</button><button type="button" aria-pressed="false" data-filter="markets">Markets &amp; macro</button><button type="button" aria-pressed="false" data-filter="signals">Signals &amp; context</button><button type="button" aria-pressed="false" data-filter="portfolio">Portfolio &amp; valuation</button><button type="button" aria-pressed="false" data-filter="workspaces">Workspaces</button><button type="button" aria-pressed="false" data-filter="visual">Visual experiments</button><button type="button" aria-pressed="false" data-filter="systems">Systems</button></div>
-<section class="grp" data-purpose="markets"><div class="gh"><h3 class="gt">Markets &amp; macro</h3><p>Read the calendar and where money is rotating.</p></div><div class="grid">
-<article data-purpose="markets" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">scintilla-economic-tab.vercel.app</span></div><a class="face" href="https://scintilla-economic-tab.vercel.app/economic-tab?room=ECONOMIC" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3M7 13h3M7 16.5h6"/></svg></span><span class="txt"><h4>Economic events</h4><p>The economic room as it was rebuilt — the calendar, plus the macro nudge proposal and the original close-out beside it.</p></span><span class="go" aria-hidden="true">↗</span></a><div class="links"><a class="secondary" href="https://scintilla-economic-tab.vercel.app/nudge-proposal" target="_blank" rel="noopener">Macro nudge</a><a class="secondary" href="https://scintilla-economic-tab.vercel.app/close-out" target="_blank" rel="noopener">Close-out</a></div><p class="exit">Opens in a new tab — this page stays where it is.</p></article><article data-purpose="markets" data-readiness="existing"><div class="meta"><span class="rd existing">Existing tool</span><span class="host">sectorrotation.scintillahub.ai</span></div><a class="face" href="https://sectorrotation.scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-8 8M4 12a8 8 0 0 1 8-8"/><path d="M17.5 8.5V12H21M6.5 15.5V12H3"/><circle cx="12" cy="12" r="2"/></svg></span><span class="txt"><h4>Sector rotation</h4><p>Where money is moving between sectors, as its own workspace.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article>
-</div></section>
-<section class="grp" data-purpose="signals"><div class="gh"><h3 class="gt">Signals &amp; context</h3><p>Build, check and read the signals and context behind the board.</p></div><div class="grid">
-<article data-purpose="signals" data-readiness="review"><div class="meta"><span class="rd review">Review home</span><span class="host">this site · kept by its owner</span></div><a class="face" href="/prototypes/indicator-lab/"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 3.5v6L5 19a1.6 1.6 0 0 0 1.4 2.4h11.2A1.6 1.6 0 0 0 19 19l-5-9.5v-6"/><path d="M8.5 3.5h7M7.6 14.5h8.8"/></svg></span><span class="txt"><h4>Indicator Lab</h4><p>Cloud workshop, saved chart links, dated screenshots and the next indicator reviews. A home for the work, without keeping every chart open.</p></span><span class="go" aria-hidden="true">→</span></a><p class="exit">Opens here, and carries a link back to this page.</p></article><article data-purpose="signals" data-readiness="existing"><div class="meta"><span class="rd existing">Existing tool</span><span class="host">scintilla-widgets.vercel.app</span></div><a class="face" href="https://scintilla-widgets.vercel.app/geiger" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 19h17"/><path d="M6.5 19v-4M10.2 19v-8M13.8 19v-5.5M17.5 19v-11"/></svg></span><span class="txt"><h4>Cohort Geiger</h4><p>The cohort board on its own, pulled out of the dashboard as a standalone scene.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article><article data-purpose="signals" data-readiness="pending"><div class="meta"><span class="rd pending">Pending</span><span class="host">Scintilla prototype · not recovered yet</span></div><div class="face is-pending"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></span><span class="txt"><h4>Context Lens · v4</h4><p>The latest response describes the bubble-only switching correction. The v4 artifact still needs to be retrieved; the saved v2 is an older version.</p></span></div><div class="links"><span class="pending">Latest artifact pending</span></div></article>
-</div></section>
-<section class="grp" data-purpose="portfolio"><div class="gh"><h3 class="gt">Portfolio &amp; valuation</h3><p>Size positions and value companies.</p></div><div class="grid">
-<article data-purpose="portfolio" data-readiness="existing"><div class="meta"><span class="rd existing">Existing tool</span><span class="host">allocation.scintillahub.ai</span></div><a class="face" href="https://allocation.scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v8.5l6 6"/><path d="M12 12 4.6 8.6"/></svg></span><span class="txt"><h4>Allocation &amp; DCF</h4><p>Size a position and value a company. The separate saved analytics page still needs its source and version reconciled.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article>
-</div></section>
-<section class="grp" data-purpose="workspaces"><div class="gh"><h3 class="gt">Workspaces</h3><p>Desks that gather several views in one place.</p></div><div class="grid">
-<article data-purpose="workspaces" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">scintilla-desk.vercel.app</span></div><a class="face" href="https://scintilla-desk.vercel.app/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M11 9.5v10"/></svg></span><span class="txt"><h4>Scintilla Desk</h4><p>The saved desk prototype — several views gathered onto one screen.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article>
-</div></section>
-<section class="grp" data-purpose="visual"><div class="gh"><h3 class="gt">Visual experiments</h3><p>Motion, chart and widget studies for the Hub and Station.</p></div><div class="grid">
-<article data-purpose="visual" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">this site · /visual-engine/</span></div><a class="face" href="/visual-engine/"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4.5v15M12 4.5v15M19 4.5v15"/><circle cx="5" cy="9.5" r="2.1"/><circle cx="12" cy="14.5" r="2.1"/><circle cx="19" cy="8" r="2.1"/></svg></span><span class="txt"><h4>Visual Engine workbench</h4><p>Every candidate visual running on the same live data, side by side, under one set of controls — so you choose by looking, not by reading.</p></span><span class="go" aria-hidden="true">→</span></a><p class="exit">Opens here, and carries a link back to this page.</p></article><article data-purpose="visual" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">this site · /lab.html</span></div><a class="face" href="/lab.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2.5 12h3l2.2-6 3.2 12 3-9 2.1 3h5.5"/></svg></span><span class="txt"><h4>Visual Engine Lab</h4><p>The older visual-engine lab the workbench grew out of.</p></span><span class="go" aria-hidden="true">→</span></a><p class="exit">Opens here, and carries a link back to this page.</p></article><article data-purpose="visual" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">scintilla-widgets.vercel.app</span></div><a class="face" href="https://scintilla-widgets.vercel.app/visuals/geiger-motion" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h13M4 17h6"/><path d="M17.5 4.5 21 8l-3.5 3.5M13.5 20.5 10 17l3.5-3.5"/></svg></span><span class="txt"><h4>Geiger motion</h4><p>How the board should move when its order changes — the re-sort, slowed down so you can judge it.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article><article data-purpose="visual" data-readiness="preview"><div class="meta"><span class="rd preview">Preview</span><span class="host">scintilla-widgets.vercel.app</span></div><a class="face" href="https://scintilla-widgets.vercel.app/visuals/open?p=charts.html" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 19.5V4.5M3.5 19.5h17"/><path d="M6.5 15.5l3.5-4.5 3 2.5 4.5-6.5"/><circle cx="17.5" cy="7" r="1.6"/></svg></span><span class="txt"><h4>Charts in motion</h4><p>The chart-motion demonstration: price data that moves rather than redraws.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article><article data-purpose="visual" data-readiness="existing"><div class="meta"><span class="rd existing">Existing tool</span><span class="host">scintilla-widgets.vercel.app</span></div><a class="face" href="https://scintilla-widgets.vercel.app/registry" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg></span><span class="txt"><h4>Widget registry</h4><p>The widgets front door — every built Scintilla widget on one page, one tap away.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></article><article data-purpose="visual" data-readiness="sample"><div class="meta"><span class="rd sample">Sample data</span><span class="host">this site · /prototypes/</span></div><a class="face" href="/prototypes/dock-concept/"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="8.5" width="19" height="7" rx="2"/><path d="M6.5 10.5v3M10 9.8v4.4M14 9.8v4.4M17.5 10.5v3"/></svg></span><span class="txt"><h4>Station dock concept</h4><p>The Station header as one sideways-scrolling dock that magnifies under the pointer, instead of three stacked rows. Four mock-ups, side by side, on sample controls.</p></span><span class="go" aria-hidden="true">→</span></a><p class="exit">Opens here, and carries a link back to this page.</p></article><article data-purpose="visual" data-readiness="sample"><div class="meta"><span class="rd sample">Sample data</span><span class="host">this site · /prototypes/</span></div><a class="face" href="/prototypes/previews/signal-fanout-v2.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><path d="M7 11.4 17 6.5M7 12h10M7 12.6 17 17.5"/><circle cx="18.5" cy="6" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/><circle cx="18.5" cy="18" r="1.6"/></svg></span><span class="txt"><h4>Signal fanout · v2</h4><p>Recovered interaction study from the Hub design critique. A design demonstration, with sample data.</p></span><span class="go" aria-hidden="true">→</span></a><p class="exit">Opens here, and carries a link back to this page.</p></article><article data-purpose="visual" data-readiness="pending"><div class="meta"><span class="rd pending">Pending</span><span class="host">not available yet</span></div><div class="face is-pending"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h10"/></svg></span><span class="txt"><h4>Visual menus</h4><p>Motion Menu, Scintilla Visuals Menu, Living System Menu and Atelier are being reconciled into one design collection.</p></span></div><div class="links"><span class="pending">Recovery in progress</span></div></article>
-</div></section>
-<section class="grp" data-purpose="systems"><div class="gh"><h3 class="gt">Systems</h3><p>The live products this work feeds, and where files are kept.</p></div><div class="grid">
-<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">scintillahub.ai</span></div><a class="face" href="https://scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M7.5 12.5h4M7.5 16h9M15 12.5h1.5"/></svg></span><span class="txt"><h4>Hub</h4><p>The dashboard: board, company pages, news, events, economic room.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
-<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">station.scintillahub.ai</span></div><a class="face" href="https://station.scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12" rx="1.5"/><path d="M8 20h8M12 16.5V20M6 8.5h5M6 12h3M14 8.5h4M14 12h4"/></svg></span><span class="txt"><h4>Station</h4><p>The display wall: charts, video panes and the X pane.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
-<div class="sysitem"><div class="meta"><span class="rd note">In the Hub</span><span class="host">no separate address</span></div><div class="face"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span><span class="txt"><h4>Files</h4><p>Files are kept inside the Hub, not on this page. Open the Hub, then the SCINTILLA logo menu, then Files.</p></span></div><div class="links"><span class="note">Hub → Scintilla menu → Files</span></div></div>
-</div></section>
+%(groups)s%(systems)s
 </section>
 
 <section class="part" id="review"><h2 class="pt">Review</h2><div class="two">
 <div><span class="k">What the labels mean</span><ul>
-<li><b class="rd existing">Existing tool</b>4 · separate apps at their own addresses. They exist and answered when last checked; whether they work correctly is not verified here.</li><li><b class="rd preview">Preview</b>6 · existing review builds and studies at their own addresses; not wired into the dashboard.</li><li><b class="rd sample">Sample data</b>2 · design studies that run on sample values, not live market data.</li><li><b class="rd review">Review home</b>1 · a home kept by its owner; its contents are the owner's to change.</li><li><b class="rd pending">Pending</b>2 · named here, not linked, until the artifact is recovered.</li></ul></div>
+%(legend)s</ul></div>
 <div><span class="k">Checks and review</span><ul>
 <li>22 Sep, 21:0x UTC: every linked destination on this page was requested and answered HTTP 200. That is a reachability check, not a function check.</li>
 <li>Same check: two Hub pages that are not listed here — geigers.html and curve-ab.html — answered 404 and are deliberately absent rather than listed dead.</li>
@@ -190,3 +322,10 @@ table.arch td:first-child{font:11px/1.5 var(--mono);color:var(--ink2);white-spac
 <footer>Original tools remain at their existing addresses. Recovered previews are versioned; pending artifacts are named openly. No page listed here is a dead end.</footer></div>
 <script>document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('section.grp').forEach(function(s){s.hidden=b.dataset.filter!=='all'&&s.dataset.purpose!==b.dataset.filter})})});</script>
 </body></html>
+"""
+
+same = sum(1 for e in cat if e.get("url") and e["url"].startswith("/"))
+out = HTML % {"css": CSS, "groups": groups_html, "systems": SYSTEMS, "legend": legend,
+              "total": len(cat), "linked": linked, "named": named, "same": same}
+open(OUT, "w").write(out)
+print("wrote", OUT, len(out), "bytes;", len(cat), "entries,", linked, "linked,", named, "pending")
