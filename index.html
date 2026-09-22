@@ -2914,6 +2914,10 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 .sc-ytraw__c.ttl{ color:var(--ink); white-space:normal; }
 .sc-ytraw__c.auth{ color:var(--ink2); }
 .sc-ytraw__c.ts{ color:var(--dim); }
+/* The age reads lowercase wherever it lands, including inside the uppercased
+   card meta row: it is a quiet note under the title, not another label. Tabular
+   figures so the label does not twitch in width as the number ticks over. */
+.sc-ytage{ text-transform:none; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .sc-ytraw__c.tks{ color:var(--crk); }
 .sc-ytraw__c.tags{ color:#9A7BE0; }
 .sc-ytraw__c.sent.bull{ color:var(--bull); }
@@ -7932,13 +7936,40 @@ function ytHubAllowed(r) {
 function ytProvenance(r) {
   return ytHasAccount(r, "scintilla") ? "SCINTILLA subscription" : "unscoped search";
 }
-function ytAgo(iso) {
-  if (!iso) return "";
-  const t = new Date(iso).getTime(); if (isNaN(t)) return "";
-  const s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 3600) return Math.max(1, Math.round(s / 60)) + "m ago";
-  if (s < 86400) return Math.round(s / 3600) + "h ago";
-  return Math.round(s / 86400) + "d ago";
+/* HOW LONG AGO IT WAS POSTED — one wording, shared with the Station's YouTube
+   grid (station-shells/{personal,scintilla}-video-v1) so the same video never
+   reads as two different ages on two of Alan's screens.
+
+   What changed and why:
+     · three buckets became the full ladder — "just now" under two minutes,
+       minutes, hours, "yesterday", days, weeks, months, years. The old floor
+       collapsed everything past a day into "Nd ago", so a video from last
+       spring announced itself as "217d ago".
+     · round became floor. Rounding up made a 40-minute-old video "1h ago",
+       which is an age it had not reached.
+     · a future publish time (clock skew, or a premiere that slipped past the
+       sweep's "upcoming" filter) was clamped to "1m ago". It now renders
+       nothing: a scheduled video is not new.
+     · published_at is a timestamptz and is read as one. Date.parse is generous
+       enough to read the string "0" as the year 2000, and a guess that lands is
+       worse than no age at all. Nothing else — least of all the time we
+       collected the row — is ever substituted for the publish time. */
+const YT_PUBLISHED_SHAPE = /^\d{4}-\d{2}-\d{2}[T ]/;
+function ytAgo(iso, nowMs) {
+  if (typeof iso !== "string" || !YT_PUBLISHED_SHAPE.test(iso)) return "";
+  const t = Date.parse(iso);
+  if (!isFinite(t) || t <= 0) return "";
+  const now = isFinite(nowMs) ? nowMs : Date.now();
+  const s = (now - t) / 1000;
+  if (s < -60) return "";
+  if (s < 120) return "just now";
+  const m = s / 60;   if (m < 60) return Math.floor(m) + "m ago";
+  const h = m / 60;   if (h < 24) return Math.floor(h) + "h ago";
+  const d = h / 24;   if (d < 2) return "yesterday";
+  if (d < 7) return Math.floor(d) + "d ago";
+  const w = d / 7;    if (w < 9) return Math.floor(w) + "w ago";
+  const mo = d / 30.44; if (mo < 12) return Math.floor(mo) + "mo ago";
+  return Math.floor(d / 365.25) + "y ago";
 }
 function ytFiltHTML() {
   const chips = [["ALL", "All"], ["SUBS", "Subs"], ["SHORTS", "Shorts"], ["WATCH", "Watch Later"]];
@@ -8045,7 +8076,7 @@ function ytRawRowHTML(r) {
   const ttl = ytTitle(r);   // entity-decoded — no more literal "&amp;" in the feed
   const sentCls = sent === "BULLISH" ? "bull" : sent === "BEARISH" ? "bear" : "und";
   return '<div class="sc-ytraw__row" data-act="ytopenraw" data-vid="' + esc(r.video_id) + '" title="YouTube source: ' + esc(ytProvenance(r)) + '">' +
-    '<span class="sc-ytraw__c ts">' + esc(ytAgo(r.published_at)) + "</span>" +
+    '<span class="sc-ytraw__c ts sc-ytage">' + esc(ytAgo(r.published_at)) + "</span>" +
     '<span class="sc-ytraw__c auth">' + esc(r.channel || "") + "</span>" +
     '<span class="sc-ytraw__c ttl">' + esc(ttl) + "</span>" +
     '<span class="sc-ytraw__c tks">' + (tks.length ? tks.map((t) => "$" + esc(t)).join(" ") : "—") + "</span>" +
@@ -8098,7 +8129,7 @@ function ytCardHTML(r, i) {
     '<div class="sc-ytc__play"></div>' + short + star + dur + "</div>" +
     '<div class="sc-ytc__body"><div class="sc-ytc__ttl">' + esc(r.title || "") + "</div>" +
     (chips ? '<div class="sc-ytc__chips">' + chips + "</div>" : "") +
-    '<div class="sc-ytc__meta"><span>' + esc(r.channel || "") + ' · ' + esc(ytProvenance(r)) + "</span><span>" + esc(ytAgo(r.published_at)) + "</span></div></div></div>";
+    '<div class="sc-ytc__meta"><span>' + esc(r.channel || "") + ' · ' + esc(ytProvenance(r)) + '</span><span class="sc-ytage">' + esc(ytAgo(r.published_at)) + "</span></div></div></div>";
 }
 /* CONTINUE WATCHING — YouTube tab only (never the whole-hub launch). If the last video
    we made progress on is in the current view and has a saved position, show a resume banner
@@ -8212,7 +8243,7 @@ function ytTopHTML(r) {
   return '<div class="sc-ytm__top"><div class="sc-ytm__meta"><div class="sc-ytm__ttl">' + esc(r.title || "") + "</div>" +
     '<div class="sc-ytm__sub"><span class="ch">' + esc(r.channel || "") + "</span>" +
       (chips ? '<span class="dot">·</span>' + chips : "") +
-      '<span class="dot">·</span><span class="ago">' + esc(ytAgo(r.published_at)) + "</span>" + badge + "</div></div>" +
+      '<span class="dot">·</span><span class="ago sc-ytage">' + esc(ytAgo(r.published_at)) + "</span>" + badge + "</div></div>" +
     '<button class="sc-ytm__x" data-act="ytclose">✕ Close · Esc</button></div>';
 }
 function ytBarHTML(r) {
