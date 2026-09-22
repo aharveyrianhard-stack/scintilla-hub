@@ -1965,6 +1965,19 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ec-ev.miss   .nm{ color:var(--sv5); }
 .ec-ev.beat   .nm{ color:var(--sv1); }
 .ec-ev.inline .nm{ color:var(--sv3); }
+/* EVENTS 22 Sep — ZOOM (Alan: "I want to zoom in"). One toggle beside MONTH: the two mostly-empty weekend
+   columns fold away, names wrap instead of ending in "…", the text grows. Day / week lists scale up. */
+#econTbl.ec-zoomed .ec-cal{ grid-template-columns:repeat(5,1fr); }
+#econTbl.ec-zoomed .ec-cal > :nth-child(7n+1), #econTbl.ec-zoomed .ec-cal > :nth-child(7n){ display:none; }   /* Sun + Sat, headers included; markup unchanged */
+#econTbl.ec-zoomed .ec-cell{ min-height:150px; padding:7px 9px 9px; border-right:.5px solid var(--line); }
+#econTbl.ec-zoomed .ec-ev{ font-size:12px; line-height:1.3; white-space:normal; align-items:flex-start; margin:0 0 5px; }
+#econTbl.ec-zoomed .ec-ev .nm{ overflow:visible; text-overflow:clip; }
+#econTbl.ec-zoomed .ec-ev .tm{ font-size:10px; padding-top:1px; }
+#econTbl.ec-zoomed .ec-ev .sp{ margin-top:2px; }
+#econTbl.ec-zoomed .ec-dow{ font-size:10px; }
+#econTbl.ec-zoomed .ec-dnum span{ font-size:15px; }
+#econTbl.ec-zoomed .ec-more{ font-size:10px; }
+#econTbl.ec-zoomed > .ec-hd, #econTbl.ec-zoomed > .ec-tbl{ zoom:1.22; }
 .ec-more{ font-family:var(--mono); font-size:7.5px; letter-spacing:.1em; color:var(--dim);
   padding-left:7px; margin-top:1px; }
 @media (max-width:900px){
@@ -3978,7 +3991,7 @@ const S = {
   /* R52d — WEEK is the landing span, not DAY. Alan, after working the control out
      himself: "the default should be week, I think." A single day of one country is
      a handful of rows and reads as an empty tab; a week is a calendar. */
-  econCty: "US", econCat: "ALL", econDay: null, econSpan: "WEEK", econOpen: {}, econImp: "ALL",
+  econCty: "US", econCat: "ALL", econDay: null, econSpan: "MONTH", econZoom: false, econOpen: {}, econImp: "ALL",
 };
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
@@ -9053,6 +9066,7 @@ function econRoomHTML() {
           '<span class="ec-sp" data-act="ecday" data-d="0">TODAY</span>' +
           ["DAY", "WEEK", "MONTH"].map((s) =>
             '<span class="ec-sp ' + (s === (S.econSpan || "DAY") ? "on" : "") + '" data-act="ecspan" data-s="' + s + '">' + s + "</span>").join("") +
+          '<span class="ec-sp' + (S.econZoom ? " on" : "") + '" id="econZoom" data-act="eczoom" title="Zoom in: weekdays only, full names, bigger text">ZOOM +</span>' +   // EVENTS 22 Sep — Alan: "I want to zoom in"
         "</span>" +
       "</div>" +
       '<div class="scroller" id="econTbl"><div class="soon">loading economic calendar…</div></div>' +
@@ -9203,7 +9217,7 @@ function ecMonthHTML(rows) {
     list.sort((a, b) => a.head.event_ts - b.head.event_ts || (IMP[b.head.impact] || 0) - (IMP[a.head.impact] || 0));
     /* fill the cell. Alan: "at least the boxes need to be fucking full — I see +3
        more when three would have fit." Five is what a cell actually holds. */
-    const CAP = 5;
+    const CAP = S.econZoom ? 9 : 5;   // EVENTS 22 Sep — zoomed cells are taller, so they hold more before "+N more"
     const shown = list.slice(0, CAP).map((g) => {
       const r = g.head, a = ecFin(r.actual), e = ecFin(r.estimate);
       let cls = "ec-ev imp-" + ecImpCls(r.impact);
@@ -9215,7 +9229,7 @@ function ecMonthHTML(rows) {
       return '<div class="' + cls + '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
         " · " + esc(r.impact || "") + ' impact">' +
         '<span class="sp" style="background:' + hue + '"></span>' +
-        '<span class="nm">' + esc(ecShort(ecBase(r.event))) + "</span>" +
+        '<span class="nm">' + esc(S.econZoom ? ecBase(r.event) : ecShort(ecBase(r.event))) + "</span>" +
         '<span class="tm">' + esc(ecTimeET(r.event_ts)) + "</span></div>";
     }).join("");
     const more = list.length > CAP ? '<div class="ec-more">+' + (list.length - CAP) + " more</div>" : "";
@@ -9249,6 +9263,7 @@ function ecReadNote(nowSec) {
 }
 function renderEconTable() {
   const box = el("econTbl"); if (!box) return;
+  if (box.classList) box.classList.toggle("ec-zoomed", !!S.econZoom);   // EVENTS 22 Sep — ZOOM: CSS only, the data and the reads are unchanged
   const lbl = el("econDayLbl"), now = el("econDayNow");
   const d0 = S.econDay || ecToday();
   if (lbl) lbl.textContent =
@@ -13028,6 +13043,12 @@ document.addEventListener("click", (e) => {
       } else S.econDay = ecShift(cur, d * (S.econSpan === "WEEK" ? 7 : 1));
       S.econOpen = {};
       ecLoadWindow();
+      break;
+    }
+    case "eczoom": {                           // EVENTS 22 Sep — one toggle, no read: repaint what is already loaded
+      S.econZoom = !S.econZoom;
+      a.classList.toggle("on", S.econZoom);
+      renderEconTable();
       break;
     }
     case "ecspan": {
