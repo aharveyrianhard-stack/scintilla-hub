@@ -72,7 +72,23 @@ var xfeedCycle = await createXfeedBrowserCycle({
 });
 ```
 
-Do not reuse a finished pass ID. Before calling `begin()`, inspect any persisted `collector_retry_at` in runtime `heartbeat.json`. If its actual source reset time is still in the future, do not navigate or query X.
+Do not reuse a finished pass ID. An interrupted pass is different: reuse its own
+pass ID and pass its `resume` record from `/health` `pending_passes`, so the
+helper continues from the deepest stored cursor:
+
+```js
+var xfeedPending = (await (await fetch('http://127.0.0.1:8766/health')).json())
+  .pending_passes.find(p => p.pass_id === xfeedPassId);
+var xfeedCycle = await createXfeedBrowserCycle({
+  source: xfeedSource, intake: xfeedIntake, ui: xfeedUi, passId: xfeedPassId,
+  resume: xfeedPending && xfeedPending.resume
+});
+```
+
+With a resume record the helper does not reload the list (a reload restarts the
+timeline at its newest page) and does not collect or save a page whose request
+cursor is already stored. Its summary reports `resumed`, `resume_cursor`, and
+`skipped_stored_pages`. Before calling `begin()`, inspect any persisted `collector_retry_at` in runtime `heartbeat.json`. If its actual source reset time is still in the future, do not navigate or query X.
 
 ## One recurring pass
 
