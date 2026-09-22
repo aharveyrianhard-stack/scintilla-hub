@@ -85,6 +85,14 @@ export function auditResponseChain(pass) {
   };
 }
 
+function frontierReached(responseAudit, frontierKey) {
+  if (!frontierKey || !responseAudit.cursor_chain_verified || responseAudit.captures_without_response_metadata) return false;
+  // Older persisted rows have only an anchor. They remain usable as anchors,
+  // but missing module members require a fresh observed response, not inference
+  // from the ledger, detail cache, reply references, or nested originals.
+  return responseAudit.timeline_rows.some(row => row.anchor_key === frontierKey || (Array.isArray(row.member_keys) && row.member_keys.includes(frontierKey)));
+}
+
 export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handlesPath = join(REPOSITORY, 'xfeed/data/HANDLES_TRADING.txt'), publish = null, staleAfterSeconds = 600, clock = () => new Date().toISOString() } = {}) {
   const dataDir = join(runtimeDir, 'data'), statePath = join(runtimeDir, 'state.json');
   const handles = (await readFile(handlesPath, 'utf8')).trim().split(/\r?\n/);
@@ -193,7 +201,8 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
     const chainOverlap = (pass.baseline_keys ?? []).filter(key => chainAnchors.has(key));
     const chainOldest = responseAudit.timeline_rows.map(row => row.latest_action_at).sort()[0];
     const baselineReached = responseAudit.cursor_chain_verified && chainOverlap.length >= 2 && chainOldest && pass.baseline_latest_at && chainOldest <= pass.baseline_latest_at;
-    const overlap = Boolean((checkpoint?.frontier_key && anchors.has(checkpoint.frontier_key)) || (!checkpoint && baselineReached));
+    const observedFrontier = frontierReached(responseAudit, checkpoint?.frontier_key);
+    const overlap = Boolean(observedFrontier || (!checkpoint && baselineReached));
     if (input.reason === 'initial_window' && checkpoint) throw new Error('initial_window is only valid before the first source checkpoint');
     if (input.reason === 'overlap' && !overlap) throw new Error('pass has not observed the previous source frontier; keep paging');
     if (input.reason === 'timeline_end' && !pass.terminated_bottom) throw new Error('no observed bottom termination proves timeline_end');
@@ -214,7 +223,7 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
         history_complete: false, initial_history_gap_open: checkpoint ? checkpoint.initial_history_gap_open !== false : !baselineReached,
         overlap_with_previous_frontier: overlap, termination_reason: input.reason,
         cursor_chain_verified: responseAudit.cursor_chain_verified,
-        refresh_interval_continuity_verified: Boolean(responseAudit.cursor_chain_verified && checkpoint && chainAnchors.has(checkpoint.frontier_key)),
+        refresh_interval_continuity_verified: observedFrontier,
         response_integrity: Object.fromEntries(Object.entries(responseAudit).filter(([key]) => key !== 'timeline_rows')),
         captured_responses_or_chunks: pass.list_captures, timeline_entries: pass.entry_count, observed_posts: posts.length,
         earliest_observed_post_at: sorted.at(-1).created_at, latest_observed_post_at: sorted[0].created_at,
@@ -242,10 +251,11 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
     health: async () => ({ status: 'ready', collection: 'browser-observed responses only; no autonomous X requests', publication_enabled: Boolean(publish), runtime_dir: runtimeDir, checkpoint: state.checkpoint,
       pending_passes: Object.values(state.passes).filter(p => !p.completed_at).map(p => {
         const anchors = new Set((p.timeline_rows ?? []).map(row => row.anchor_key));
+        const responseAudit = auditResponseChain(p);
         return { pass_id: p.pass_id, list_captures: p.list_captures, posts: Object.keys(p.posts).length, members: Object.keys(p.members).length,
-          response_integrity: Object.fromEntries(Object.entries(auditResponseChain(p)).filter(([key]) => key !== 'timeline_rows')),
+          response_integrity: Object.fromEntries(Object.entries(responseAudit).filter(([key]) => key !== 'timeline_rows')),
           oldest_seen_at: (p.timeline_rows ?? []).map(row => row.latest_action_at).sort()[0] ?? null, baseline_latest_at: p.baseline_latest_at ?? null,
-          baseline_overlap_keys: (p.baseline_keys ?? []).filter(key => anchors.has(key)), previous_frontier_observed: Boolean(state.checkpoint?.frontier_key && anchors.has(state.checkpoint.frontier_key)) };
+          baseline_overlap_keys: (p.baseline_keys ?? []).filter(key => anchors.has(key)), previous_frontier_observed: frontierReached(responseAudit, state.checkpoint?.frontier_key) };
       }), heartbeat: await json(join(runtimeDir, 'heartbeat.json'), null) }),
     runtimeDir, dataDir,
   };
