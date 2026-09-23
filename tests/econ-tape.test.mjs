@@ -194,7 +194,10 @@ test("the band and the price bands share ONE speed law, and a price tick never r
   assert.match(page, /function tapeSpeed\(track, startAt\) \{\n  const half = track\.scrollWidth \/ 2, dur = Math\.max\(20, half \/ 45\);/);
   assert.match(page, /px\.querySelectorAll\("\.sc-tape__track"\)\.forEach\(\(track\) => tapeSpeed\(track\)\);/, "MACRO / ALL use it");
   assert.match(page, /if \(track\) tapeSpeed\(track, slot\.querySelector\("\.ecb-it\.is-now, \.ecb-it\.is-up"\)\);/, "and so does the ECON band");
-  assert.match(page, /<div class="bands" id="bands"><div id="bandsPx"><\/div><div id="econBandSlot"><\/div><\/div>/);
+  /* 23 Sep — the EARNINGS band joined the strip, so the promise pinned here is the one that matters:
+     the price bands own #bandsPx and the ECON band has its own slot right after it. A further band is a
+     further sibling slot and must not rewind this one either. */
+  assert.match(page, /<div class="bands" id="bands"><div id="bandsPx"><\/div><div id="econBandSlot"><\/div>/);
   assert.match(page, /const px = el\("bandsPx"\) \|\| el\("bands"\);/, "renderTapes writes into its own slot, not over the band");
   assert.match(page, /if \(html === ECON_BAND_HTML && slot\.innerHTML\) return;/, "and the band is only repainted when the week changes");
 });

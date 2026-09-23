@@ -1927,6 +1927,21 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ec-row.sub .rel{ padding-left:16px; }
 .ec-row.sub .rel .nm{ color:var(--ink2); font-size:9.5px; }
 .ec-row.sub .rel::before{ content:"└"; color:var(--mute); font-size:9px; margin-right:2px; }
+/* THE COLOUR LAW, three channels, restored 23 Sep to the tab's own 13 Aug plan. Before this, the only hue on a
+   row was the dot, and it carried IMPORTANCE — so kind had no hue at all and importance had one it was never
+   meant to have. Now: hue = what kind of release it is (the spine and its dot); the release name turns green,
+   yellow or red once it has printed, and nothing else on the row wears those three; importance is weight only —
+   a thicker spine and brighter text. */
+.ec-row{ border-left:1px solid var(--mute); padding-left:7px; }
+.ec-row.imp-medium{ border-left-width:2px; }
+.ec-row.imp-high{ border-left-width:3px; }
+.ec-row.imp-high .rel .nm{ color:var(--ink); font-weight:600; }
+.ec-row.imp-medium .rel .nm{ color:var(--ink2); }
+.ec-row.imp-low .rel .nm, .ec-row.imp-none .rel .nm{ color:var(--ink3); }
+.ec-row.sub .rel .nm{ color:var(--ink2); }                    /* a component stays quieter than its headline */
+.ec-row.res-up .rel .nm{ color:var(--sv5); }                  /* came out hotter (or weaker) than expected */
+.ec-row.res-dn .rel .nm{ color:var(--sv1); }
+.ec-row.res-flat .rel .nm{ color:var(--sv3); }                /* in line */
 /* ----------------------------------------------------------------------------
    R52e — MONTH grid. Same colour law as the table: orange still-to-come at high
    impact, green/red once the actual lands. Quiet days stay in the grid, dimmed,
@@ -2091,6 +2106,30 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ecb-it.is-now .ecb-res{ color:var(--sv4); }
 .ecb-note{ color:var(--dim); }
 @media (prefers-reduced-motion:reduce){ .ecb-it.is-now .ecb-dot{ animation:none; } }
+
+/* ----------------------------------------------------------------------------
+   THE EARNINGS BAND — Alan, 23 Sep: "I need a tape of the events earnings too at
+   the bottom ticker tape." It sits beside the ECON band in the same .sc-tape part
+   at the same ≈45 px/s (tapeSpeed), so it pauses on hover and finger-scrolls on
+   touch exactly as the bands above it do. Day, when it reports, ticker; once it
+   has reported, EPS against the estimate and the surprise, in the calendar's three
+   result colours — green beat, yellow in line, red miss. A day already gone fades.
+   ---------------------------------------------------------------------------- */
+.sc-tape--ern .sc-tape__lbl{ letter-spacing:.05em; }   /* EARNINGS is a longer word: the 84px seam still lines up with MACRO / ALL / ECON */
+.sc-tape--ern .ern-it{ cursor:pointer; }               /* tap a ticker → its company page */
+.sc-tape--ern .ern-it:hover .ern-tk{ color:var(--crk); }
+.ern-wk{ color:var(--crk); letter-spacing:.16em; }
+.ern-when{ color:var(--dim); padding-right:6px; }
+.ern-when.is-today{ color:var(--crk); }
+.ern-tk{ color:var(--ink); font-weight:600; letter-spacing:.06em; }
+.ern-res{ padding-left:7px; color:var(--dim); }
+.ern-res b{ color:var(--ink); font-weight:600; }
+.ern-res.beat b{ color:var(--sv1); } .ern-res.miss b{ color:var(--sv5); } .ern-res.inline b{ color:var(--sv3); }
+.ern-sur{ padding-left:5px; font-variant-numeric:tabular-nums; }
+.ern-sur.beat{ color:var(--sv1); } .ern-sur.miss{ color:var(--sv5); } .ern-sur.inline{ color:var(--sv3); }
+.ern-it.is-past .ern-when, .ern-it.is-past .ern-tk{ opacity:.45; }
+.ern-it.is-past .ern-res, .ern-it.is-past .ern-sur{ opacity:.7; }   /* the result stays readable; the row around it recedes */
+.ern-note{ color:var(--dim); }
 
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
@@ -3366,7 +3405,7 @@ a.sc-menu__item{text-decoration:none}   /* the Prototypes entry is a plain link 
 
 <!-- 1.5 / 1.6 tapes — #bandsPx holds the MACRO / ALL price bands (repainted every 45 s), #econBandSlot the ECON week band
      (repainted only when the week's events change, so its marquee is not restarted by a price tick). -->
-<div class="bands" id="bands"><div id="bandsPx"></div><div id="econBandSlot"></div></div>
+<div class="bands" id="bands"><div id="bandsPx"></div><div id="econBandSlot"></div><div id="ernBandSlot"></div></div>
 
 <!-- 1.7 Helm — REMOVED (vestigial empty "Controls" footer; zoom controls gone since R27) -->
 
@@ -8901,14 +8940,14 @@ const ecPassImp = (r) => (S.econImp !== "HIGH") || r.impact === "High";
    Order still matters — first match wins. */
 const EC_CATS = [
   ["ENERGY", /(^eia |^api |baker hughes|crude oil|natural gas|gasoline|distillate|heating oil|refinery|cushing|opec)/i],
-  ["AUCTIONS", /(bill auction|note auction|bond auction|bund auction|gilt auction|bot auction|btp auction|obl auction|schatz)/i],
+  ["AUCTIONS", /(bill auction|note auction|bond auction|frn auction|floating rate note auction|bund auction|gilt auction|bot auction|btp auction|obl auction|schatz)/i],
   ["POSITIONING", /(^cftc |speculative net positions|commitment of traders)/i],
-  ["CENTRAL BANK", /(fed |fomc|interest rate decision|rate decision|monetary policy|central bank|\becb\b|\bboe\b|\bboj\b|\brba\b|\bsnb\b|press conference|beige book|speech|testimony|minutes|balance sheet)/i],
+  ["CENTRAL BANK", /(fed |fomc|money supply|\bm[123]\b|interest rate decision|rate decision|monetary policy|central bank|\becb\b|\bboe\b|\bboj\b|\brba\b|\bsnb\b|press conference|beige book|speech|testimony|minutes|balance sheet)/i],
   ["HOUSING", /(housing|home sales|home price|house price|building permits|mortgage|construction spending|nahb|case-shiller|pending home|residential|rent index|\bmba\b)/i],
   ["LABOR", /(payroll|jobless|unemploy|employment|jolts|job cuts|job vacanc|wage|labou?r|participation rate|average hourly|real earnings|\badp\b|challenger|hiring)/i],
   ["INFLATION", /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|import prices|export prices|deflator|wholesale prices|harmonised)/i],
   ["TRADE", /(balance of trade|trade balance|^imports|^exports|current account|tic flows|foreign bond|foreign invest|capital flows|terms of trade|budget balance|budget statement)/i],
-  ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|redbook|industrial production|durable goods|factory orders|consumer confidence|consumer sentiment|michigan|business confidence|business climate|business inventories|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories|\bnfib\b)/i],
+  ["GROWTH", /(\bgdp\b|\bpmi\b|\bism\b|retail sales|redbook|industrial production|durable goods|goods orders|factory orders|consumer confidence|consumer sentiment|michigan|business confidence|business climate|business inventories|economic optimism|philly fed|empire state|richmond|chicago fed|dallas fed|kansas|personal income|personal spending|manufacturing production|capacity utilization|leading index|machine|\bzew\b|\bifo\b|sentix|economic activity|tertiary|construction output|vehicle sales|inventories|\bnfib\b)/i],
 ];
 const EC_CAT_NAMES = ["ALL"].concat(EC_CATS.map((c) => c[0])).concat(["OTHER"]);
 /* R52g — THREE classifications, THREE channels. Alan: "there's starting to be a lot
@@ -9282,15 +9321,21 @@ const ecFin = (v) => { const n = num(v); return n != null && isFinite(n) ? n : n
 function ecImpCls(i) { switch (i) { case "High": return "high"; case "Medium": return "medium"; case "None": return "none"; default: return "low"; } }
 function ecRowHTML(r, kind, showCty, attrs) {
   const a = ecFin(r.actual), e = ecFin(r.estimate), p = ecFin(r.previous);
-  let sur = '<span class="v na">—</span>';
+  let sur = '<span class="v na">—</span>', res = "";
   if (a != null && e != null) {
     const d = a - e, hot = EC_INVERT.test(ecBase(r.event));
     const cls = Math.abs(d) < 1e-9 ? "flat" : ((d > 0) === hot ? "up" : "dn");
+    res = " res-" + cls;                    /* THE RESULT CHANNEL — the same reading the surprise column uses */
     sur = '<span class="v ' + cls + '">' + (d > 0 ? "+" : d < 0 ? "−" : "") + esc(String(+Math.abs(d).toFixed(3))) + "</span>";
   }
   const per = ecPeriod(r.event);
-  return '<div class="ec-row ' + kind + '"' + (attrs || "") + ">" +
-    '<span class="rel"><span class="dot" style="' + EC_DOT[ecImpCls(r.impact)] + '">●</span>' +
+  /* THE COLOUR LAW (13 Aug plan): WHAT KIND it is sets the hue — the spine and its dot, from the same table the
+     category chips use as a legend; HOW IT CAME OUT sets the name's hue (green / yellow / red, worn by nothing
+     else); HOW MUCH IT MATTERS sets weight — a thicker spine and brighter text, never hue.
+     REVIEW — the hue is keyed by ecCat() and the weight by ecImpCls(), never taken from row data. */
+  const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
+  return '<div class="ec-row ' + kind + " imp-" + ecImpCls(r.impact) + res + '" style="border-left-color:' + hue + '"' + (attrs || "") + ">" +
+    '<span class="rel"><span class="dot" style="color:' + hue + '">●</span>' +
       (showCty ? '<span class="cty">' + esc(r.country) + "</span>" : "") +
       '<span class="nm" title="' + esc(r.event) + '">' + esc(ecBase(r.event)) +
       (per ? ' <span class="cty">' + esc(per) + "</span>" : "") + "</span></span>" +
@@ -12488,6 +12533,150 @@ function companyHTML() {
     "</div></div>";   /* READ is now a CO_TAB (coTabHTML case "READ") — no longer rendered as a strip below */
 }
 
+/* ============================================================================
+   THE EARNINGS BAND — Alan, 23 Sep: "I need a tape of the events earnings too at the bottom ticker tape."
+   WHAT RIDES IT: this week, Monday to Sunday in New York, for the names the Hub tracks (the cohorts table —
+     the same universe the EVENTS room filters by). Each item: the day, when it reports (before the open /
+     after the close, or the clock time when the supplier gives one), the ticker. Once it has reported: EPS
+     actual against the estimate and the surprise, in the calendar's three result colours (green beat, yellow
+     in line, red miss — nothing else on this band uses them). A day already gone is faded. Tapping a ticker
+     opens its company page.
+   THE READ: the EVENTS room's own table and columns (earnings_events, the dates the data audit found right and
+     current), one request per ten minutes, nothing at all while the tab is hidden, no new table, no new
+     schedule, nothing written anywhere. Rollback is one word: ERN_BAND_ON = false.
+   It is its own band in its own slot, so a price tick or a calendar repaint never rewinds it, and it never
+   touches the ident-box nudge or the ECON band's states.
+   ============================================================================ */
+const ERN_BAND_ON = true;
+const ERN_TTL_MS = 10 * 60e3;        // one read per ten minutes, however often the band repaints
+const ERN_RETRY_MS = 60e3;           // after a failed read, wait a minute before asking again
+const ERN_TICK_MS = 60e3;            // today/past move here; a tick by itself reads nothing
+let ERN_ROWS = null, ERN_AT = 0, ERN_BUSY = false, ERN_FAIL_AT = 0, ERN_HTML = "", ERN_TIMER = null, ERN_VIS_BOUND = false;
+
+/* An earnings row carries a DATE, not a minute, so the week is plain ISO-date arithmetic off New York's today. */
+function ernShift(iso, n) { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function ernWeek(todayIso) {
+  const dow = new Date(todayIso + "T12:00:00Z").getUTCDay();          // 0 Sun … 6 Sat
+  const mon = ernShift(todayIso, dow === 0 ? -6 : 1 - dow);           // Sunday belongs to the week that has just ended
+  return [0, 1, 2, 3, 4, 5, 6].map((i) => ernShift(mon, i));
+}
+const ERN_WD = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const ERN_MO = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const ernWeekday = (iso) => ERN_WD[new Date(iso + "T12:00:00Z").getUTCDay()];
+const ernMonthDay = (iso) => ERN_MO[+iso.slice(5, 7) - 1] + " " + String(+iso.slice(8, 10));
+const ernNum = (v) => (v < 0 ? "−" : "") + Math.abs(+v).toFixed(2);
+/* before the open / after the close / the clock time when it is given — and, when nothing is known, nothing. */
+function ernWhen(r) {
+  const t = String(r.report_time == null ? "" : r.report_time).trim().toUpperCase();
+  if (t === "BMO" || t === "BEFORE MARKET OPEN") return "before the open";
+  if (t === "AMC" || t === "AFTER MARKET CLOSE") return "after the close";
+  const hm = t.match(/^(\d{1,2}):(\d{2})/);
+  return hm ? hm[1] + ":" + hm[2] : "";
+}
+const ernSlot = (r) => { const w = ernWhen(r); return w === "before the open" ? 0 : w === "after the close" ? 2 : w ? 1 : 3; };
+/* the result, read the way the calendar reads a surprise: above the estimate is the green one, below it the red one. */
+function ernResult(r) {
+  const a = num(r.eps_actual);
+  if (a == null) return null;
+  const e = num(r.eps_estimate);
+  if (e == null) return { cls: "", act: a, est: null, sur: "" };
+  const d = a - e, p = num(r.surprise_pct);
+  const cls = Math.abs(d) < 5e-4 ? "inline" : d > 0 ? "beat" : "miss";
+  const pct = p != null ? p : (e !== 0 ? (d / Math.abs(e)) * 100 : null);
+  return { cls, act: a, est: e,
+           sur: cls === "inline" ? "in line"
+              : pct != null ? (pct > 0 ? "+" : "−") + Math.abs(pct).toFixed(1) + "%"
+              : (d > 0 ? "+" : "−") + Math.abs(d).toFixed(2) };
+}
+function ernTitle(r, res) {
+  const w = ernWhen(r);
+  return r.ticker + " · " + ernWeekday(r.date) + " " + ernMonthDay(r.date) + (w ? ", " + w : "") +
+    (res ? " · EPS " + ernNum(res.act) + (res.est != null ? " against an estimate of " + ernNum(res.est) : "") +
+           (res.sur ? " · " + (res.cls === "beat" ? "beat by " : res.cls === "miss" ? "missed by " : "") + res.sur : "")
+         : " · not reported yet") + " · tap for the company page";
+}
+function ernItemHTML(r, todayIso) {
+  const st = r.date < todayIso ? "past" : r.date === todayIso ? "today" : "up";
+  const w = ernWhen(r), res = ernResult(r);
+  const resHTML = res
+    ? '<span class="ern-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
+      (res.est != null ? " vs est " + esc(ernNum(res.est)) : "") + "</span>" +
+      (res.sur ? '<span class="ern-sur ' + res.cls + '">' + esc(res.sur) + "</span>" : "")
+    : "";
+  return '<span class="sc-tape__item ern-it is-' + st + '" data-act="row" data-t="' + esc(r.ticker) +
+    '" title="' + esc(ernTitle(r, res)) + '">' +
+    '<span class="ern-when' + (st === "today" ? " is-today" : "") + '">' +
+      esc((st === "today" ? "TODAY" : ernWeekday(r.date)) + (w ? " " + w : "")) + "</span>" +
+    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + "</span>" +
+    '<span class="sc-tape__dot">·</span>';
+}
+function ernBandItems(todayIso) {
+  const week = ernWeek(todayIso), first = week[0], last = week[6];
+  /* the week AND the tracked names are enforced here as well as at the read, so a row that arrives
+     any other way still cannot ride a band that promises "the names the Hub tracks, this week". */
+  return (ERN_ROWS || []).filter((r) => r && r.date >= first && r.date <= last && (!UNIVERSE || UNIVERSE.has(r.ticker)))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ernSlot(a) - ernSlot(b) ||
+                    (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0));
+}
+function ernBandHTML(todayIso) {
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!ERN_ROWS) {
+    seg = '<span class="sc-tape__item ern-note">' +
+      (ERN_FAIL_AT ? "this week's earnings could not be read" : "reading this week's earnings…") + "</span>" + sep;
+  } else {
+    const items = ernBandItems(todayIso), week = ernWeek(todayIso);
+    seg = '<span class="sc-tape__item ern-wk">WEEK OF ' + esc(ernMonthDay(week[0])) + "</span>" + sep +
+      (items.length ? items.map((r) => ernItemHTML(r, todayIso)).join("")
+                    : '<span class="sc-tape__item ern-note">no earnings this week for the names you track</span>' + sep);
+  }
+  return '<div class="sc-tape sc-tape--ern" id="ernBand"><b class="sc-tape__lbl">EARNINGS →</b>' +
+    '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function renderErnBand() {
+  const slot = el("ernBandSlot");
+  if (!ERN_BAND_ON || !slot) return;
+  const html = ernBandHTML(todayISO());
+  if (html === ERN_HTML && slot.innerHTML) return;          // unchanged: leave the marquee running where it is
+  ERN_HTML = html;
+  slot.innerHTML = html;
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = slot.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, slot.querySelector(".ern-it.is-today, .ern-it.is-up"));   // the band opens on today, not on Monday
+}
+async function ernRead() {
+  if (!ERN_BAND_ON || ERN_BUSY) return;
+  ERN_BUSY = true;
+  try {
+    if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));   // the names the Hub tracks — the EVENTS room's own universe
+    const week = ernWeek(todayISO());
+    const rows = await pg("earnings_events?select=ticker,date,report_time,eps_actual,eps_estimate,surprise_pct" +
+      "&date=gte." + week[0] + "&date=lte." + week[6] + "&order=date.asc&limit=500");
+    ERN_ROWS = (rows || []).filter((r) => r && r.ticker && UNIVERSE.has(r.ticker));
+    ERN_AT = Date.now(); ERN_FAIL_AT = 0;
+  } catch (err) {
+    ERN_FAIL_AT = Date.now();            // the last good rows stay on screen; the tick retries
+  } finally { ERN_BUSY = false; }
+  renderErnBand();
+}
+function ernTick() {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
+  renderErnBand();
+  if (ERN_BUSY) return;
+  if (ERN_FAIL_AT && Date.now() - ERN_FAIL_AT < ERN_RETRY_MS) return;
+  if (!ERN_ROWS || Date.now() - ERN_AT >= ERN_TTL_MS) ernRead();
+}
+/* boot — the band rides under every room, so it starts with the page. */
+function ernBandStart() {
+  if (!ERN_BAND_ON) return;
+  if (ERN_TIMER == null && typeof setInterval === "function") ERN_TIMER = setInterval(ernTick, ERN_TICK_MS);
+  if (!ERN_VIS_BOUND && typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    ERN_VIS_BOUND = true;
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") ernTick(); });
+  }
+  renderErnBand();
+  ernRead();
+}
 /* ---- tapes ------------------------------------------------------------------- */
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
 let lastTapes = "";
@@ -14236,6 +14425,7 @@ restartFeed();                                                       // board fe
 fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); })        // tapes, 45 s
   .catch(() => { S.state = "offline"; updateLive(); });
 setInterval(() => fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); }).catch(() => {}), 45000);
+ernBandStart();                                                     // EARNINGS BAND — this week's earnings for the names the Hub tracks: one read, then every 10 min
 ecTapeStart();                                                      // ECON TAPE — the ECON band + the ident-box nudge: one calendar read, then every 10 min
 loadHealth(); setInterval(loadHealth, 60000);
 var SENT={};

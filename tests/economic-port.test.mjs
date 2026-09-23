@@ -193,11 +193,12 @@ test("a composite release collapses to one headline row and opens inline", () =>
     ({ event_ts: at, country: "US", event, actual: 1, estimate: 1, previous: 1, impact: "High" }))
     .concat([{ event_ts: at, country: "US", event: "Initial Jobless Claims", actual: 1, estimate: 1, previous: 1, impact: "Medium" }]);
   const closed = api.ecDayRowsHTML(rows, false);
-  assert.equal((closed.match(/class="ec-row par"/g) || []).length, 1);
-  assert.equal((closed.match(/class="ec-row sub"/g) || []).length, 0);
+  /* 23 Sep — the class list now carries the colour law's weight and result channels too (ec-row par imp-high res-flat) */
+  assert.equal((closed.match(/class="ec-row par[ "]/g) || []).length, 1);
+  assert.equal((closed.match(/class="ec-row sub[ "]/g) || []).length, 0);
   assert.match(closed, /data-act="ecfam" data-k="US\|08:30\|CPI"[\s\S]*Inflation Rate YoY/, "the family's named head leads");
   ctx.S.econOpen = { "US|08:30|CPI": 1 };
-  assert.equal((api.ecDayRowsHTML(rows, false).match(/class="ec-row sub"/g) || []).length, 3);
+  assert.equal((api.ecDayRowsHTML(rows, false).match(/class="ec-row sub[ "]/g) || []).length, 3);
 });
 
 test("MONTH: a Sunday-first grid of whole weeks, impact class from a fixed list, cells escaped", () => {
