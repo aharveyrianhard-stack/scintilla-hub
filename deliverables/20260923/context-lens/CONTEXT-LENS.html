@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · CONTEXT LENS WORKSHOP</title>
+<style>
+:root{color-scheme:dark;
+ --bg:#07070B;--panel:#0C0C13;--panel2:#101018;--line:#1A1A2A;--line2:#252538;
+ --ink:#C6C8DE;--ink2:#A7AAC6;--ink3:#8A8DA8;--dim:#6E7290;--mute:#3A3A52;
+ --bull:#00C87E;--bear:#E0334F;--crk:#2FA8CC;--edge:#3A6C80;
+ --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+ --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;--rh:30px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink2);font:15px/1.5 var(--sans)}
+h1{font:500 12px/1 var(--mono);letter-spacing:.22em;color:var(--crk);margin:0 0 6px}
+h2{font:500 11px/1 var(--mono);letter-spacing:.18em;color:var(--ink3);margin:0}
+.sub{color:var(--dim);font-size:13px;max-width:78ch;margin:0}
+
+.hd{padding:14px 16px 10px;border-bottom:1px solid var(--line);background:var(--panel)}
+.clockrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+button.chip{appearance:none;background:#0F1018;color:var(--ink3);border:1px solid var(--line2);
+ border-radius:7px;padding:8px 11px;font:10px/1 var(--mono);letter-spacing:.11em;cursor:pointer;
+ min-height:34px;transition:background .12s,color .12s,border-color .12s}
+button.chip:hover{color:var(--ink)}
+button.chip.on{background:#10202A;color:var(--crk);border-color:var(--edge)}
+button.chip.go{background:#0E2019;color:var(--bull);border-color:#1C5340}
+button.chip[disabled]{opacity:.38;cursor:default}
+input[type=text]{background:#0F1018;border:1px solid var(--line2);border-radius:7px;color:var(--ink);
+ font:11px/1 var(--mono);letter-spacing:.14em;padding:9px 10px;width:96px;text-transform:uppercase}
+input[type=range]{flex:1;min-width:220px;accent-color:#2FA8CC;height:22px}
+.when{font:11px/1 var(--mono);letter-spacing:.08em;color:var(--ink);min-width:230px;
+ font-variant-numeric:tabular-nums}
+.when b{color:var(--crk);font-weight:500}
+.tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+.tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
+ font:10px/1 var(--mono);letter-spacing:.16em;padding:10px 12px;cursor:pointer}
+.tab.on{color:var(--crk);border-bottom-color:var(--crk)}
+main{padding:14px 16px 60px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 12px}
+.note{color:var(--dim);font-size:12.5px;margin:8px 0 0;max-width:80ch}
+.note b{color:var(--ink2);font-weight:600}
+.err{color:var(--bear);font:11px/1.4 var(--mono)}
+
+/* lens */
+.stage{position:relative;background:#090910;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stage svg{display:block;width:100%;height:auto}
+.lens{position:absolute;width:33%;min-width:210px;max-width:330px;background:rgba(10,11,18,.93);
+ border:1px solid var(--line2);border-radius:8px;padding:7px 8px 6px;
+ transition:left .45s cubic-bezier(.34,.02,.2,1),top .45s cubic-bezier(.34,.02,.2,1);pointer-events:none}
+.lens.below{position:static;width:auto;max-width:none;margin-top:8px}
+.lens .lrole{font:9px/1 var(--mono);letter-spacing:.16em;color:var(--crk);margin-bottom:5px}
+.lens .lscale{font:9px/1.5 var(--mono);letter-spacing:.1em;color:var(--dim);margin-top:4px;
+ font-variant-numeric:tabular-nums}
+.lens svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font:10px/1 var(--mono);letter-spacing:.08em;
+ color:var(--dim);margin-top:8px;font-variant-numeric:tabular-nums}
+.legend b{color:var(--ink);font-weight:500}
+
+/* geiger in motion */
+.gtable{position:relative;background:#090910;border:1px solid var(--line);border-radius:9px;padding:8px 0}
+.thead{display:flex;align-items:center;padding:0 12px 7px;font:9px/1 var(--mono);letter-spacing:.17em;
+ color:var(--mute);border-bottom:1px solid var(--line);margin-bottom:6px}
+.thead .c1{width:56px}.thead .c2{width:62px;text-align:right}.thead .c3{flex:1;text-align:center;color:var(--dim)}
+.rows{position:relative}
+.row{position:absolute;left:0;right:0;height:var(--rh);display:flex;align-items:center;padding:0 12px;
+ will-change:transform}
+.tk{width:56px;font:12px/1 var(--mono);letter-spacing:.05em;color:var(--ink)}
+.val{width:62px;text-align:right;font:11px/1 var(--mono);color:var(--ink3);padding-right:10px;
+ font-variant-numeric:tabular-nums}
+.track{flex:1;position:relative;height:15px;background:#0C0C14;border-radius:3px;overflow:hidden}
+.track:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#242B36}
+.bar{position:absolute;top:2px;bottom:2px;border-radius:2.5px}
+.gh{position:absolute;top:1px;bottom:1px;width:1px;background:#4C5666;opacity:.7}
+.rk{width:30px;text-align:right;font:9px/1 var(--mono);color:var(--mute);opacity:0;transition:opacity .3s}
+.rk.show{opacity:1}
+.trail{position:absolute;width:3px;border-radius:2px;left:6px;pointer-events:none}
+
+iframe{width:100%;height:78vh;border:1px solid var(--line);border-radius:9px;background:#08080D}
+.foot{font:9px/1.6 var(--mono);letter-spacing:.13em;color:var(--mute);padding:18px 16px 30px;
+ border-top:1px solid var(--line);margin-top:20px}
+@media(max-width:700px){.when{min-width:100%}main{padding:12px 10px 50px}}
+</style></head><body>
+
+<div class="hd">
+ <h1>SCINTILLA · CONTEXT LENS WORKSHOP</h1>
+ <p class="sub">Three things that used to live in three places, on one clock. Pick a name, hit play, and
+ watch it move through real sessions. <b>On play only the Geiger moves</b> — the chart holds still and
+ the playhead walks across it.</p>
+ <div class="clockrow">
+  <input type="text" id="sym" value="AAPL" spellcheck="false" aria-label="symbol">
+  <button class="chip go" id="load">LOAD</button>
+  <span class="chips">
+   <button class="chip" id="play" disabled>▶ PLAY</button>
+   <button class="chip" id="live" disabled>↻ NEWEST</button>
+  </span>
+  <span class="chips" id="speeds"></span>
+  <input type="range" id="scrub" min="0" max="0" value="0" disabled aria-label="timeline">
+  <span class="when" id="when">loading real sessions…</span>
+ </div>
+</div>
+
+<div class="tabs">
+ <button class="tab on" data-v="lens">CONTEXT LENS</button>
+ <button class="tab" data-v="motion">GEIGER IN MOTION</button>
+ <button class="tab" data-v="engine">VISUAL ENGINE</button>
+</div>
+
+<main>
+<section class="view on" id="v-lens">
+ <div class="card">
+  <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:10px">
+   <h2 id="lens-title">CONTEXT LENS</h2>
+   <span class="chips">
+    <button class="chip on" id="m-context">CONTEXT VIEW</button>
+    <button class="chip" id="m-detail">DETAIL VIEW</button>
+    <button class="chip on" id="m-lens">LENS ON</button>
+   </span>
+  </div>
+  <div class="stage" id="stage">
+   <svg id="main-chart" viewBox="0 0 1000 420" preserveAspectRatio="none" role="img"></svg>
+   <div class="lens" id="lens">
+    <div class="lrole" id="lens-role">CONTEXT · THE WHOLE HISTORY</div>
+    <svg id="lens-chart" viewBox="0 0 300 120" preserveAspectRatio="none" role="img"></svg>
+    <div class="lscale" id="lens-scale">—</div>
+   </div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <p class="note"><b>What the bubble is for.</b> The main chart never changes its job: it draws the
+  window you are standing in. The bubble answers the other question — either where this window sits in
+  the whole history, or what the last few sessions look like close up. It moves itself to the emptiest
+  corner so it never covers price, and it always says which of the two it is showing and over what range.</p>
+  <p class="note" id="lens-src">—</p>
+ </div>
+</section>
+
+<section class="view" id="v-motion">
+ <div class="card">
+  <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:10px">
+   <h2>GEIGER IN MOTION</h2>
+   <span class="chips" id="modes"></span>
+  </div>
+  <div class="gtable">
+   <div class="thead"><span class="c1">NAME</span><span class="c2">GEIGER</span>
+    <span class="c3">BULL ◄ ► BEAR</span></div>
+   <div class="rows" id="rows"></div>
+  </div>
+  <p class="note" id="motion-why">—</p>
+  <p class="note" id="motion-src">—</p>
+ </div>
+</section>
+
+<section class="view" id="v-engine">
+ <div class="card">
+  <h2>VISUAL ENGINE · WORKBENCH</h2>
+  <p class="note">The workbench as it already runs on the Hub — today's player, the cohort board, the
+  signal fan-out and what the Geiger agrees with. It is shown here, not copied here, so there is only
+  ever one of it. <a href="/visual-engine/" style="color:var(--crk)">Open it on its own ↗</a></p>
+  <iframe id="ve" title="Visual Engine workbench" loading="lazy" src="/visual-engine/"></iframe>
+ </div>
+</section>
+</main>
+
+<p class="foot" id="foot">REAL BARS FROM THE CHART API · NOTHING WRITTEN BACK · NOTHING SAVED</p>
+
+<script>
+(function(){
+var API="https://scintilla-massive-chart-api.fly.dev";
+var $=function(id){return document.getElementById(id)};
+var NAMES=["AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","JPM","XOM","CVX","CAT","COST","PG"];
+var SPEEDS=[{k:"slow",n:"GRADUAL",v:460,r:760,step:900},{k:"med",n:"MEDIUM",v:230,r:400,step:450},
+            {k:"fast",n:"FAST",v:110,r:190,step:200}];
+var MODES=[
+ {k:"sr",n:"SETTLE → REFLOW",why:"<b>Values first, then order.</b> The bars change where they are, then the rows slide. Two readings out of one session: what moved, then what it did to the standings."},
+ {k:"carry",n:"CARRY (TRAIL)",why:"<b>Both at once, with a wake.</b> Fastest to watch, and still traceable because every mover leaves a short trail behind it in the direction it came from."},
+ {k:"cut",n:"CUT",why:"<b>No animation.</b> The control case. Everything lands at once and you cannot tell whether a name rose or its neighbours fell. This is what the other two have to beat."}];
+
+/* ---------- state ---------- */
+var S={bars:[],idx:0,sym:"AAPL",mode:"context",lensOn:true,playing:false,timer:null,
+       sp:SPEEDS[1],mot:"sr",cohort:{},dates:[],order:[],prevOrder:[],rowEls:{},ghostY:{},
+       liveGeiger:null,err:{}};
+
+function jget(u){return fetch(u,{cache:"no-store"}).then(function(r){
+ if(!r.ok) throw new Error(r.status+" on "+u.replace(API,""));return r.json()})}
+
+/* ---------- maths, stated on the page ---------- */
+function sma(a,n,i){if(i+1<n)return null;var s=0;for(var k=i-n+1;k<=i;k++)s+=a[k];return s/n}
+function rsi(a,n,i){if(i<n)return null;var g=0,l=0;
+ for(var k=i-n+1;k<=i;k++){var d=a[k]-a[k-1];if(d>=0)g+=d;else l-=d}
+ if(l===0)return 100;var rs=(g/n)/(l/n);return 100-100/(1+rs)}
+/* derived Geiger: half trend (how far above or below its own 50-session average),
+   half momentum (RSI14 re-centred on 50). Clipped to -1..+1. */
+function derived(closes,i){
+ var m=sma(closes,50,i),r=rsi(closes,14,i);
+ if(m===null||r===null)return null;
+ var trend=Math.max(-1,Math.min(1,(closes[i]/m-1)*7));
+ var mom=Math.max(-1,Math.min(1,(r-50)/28));
+ return Math.max(-1,Math.min(1,0.5*trend+0.5*mom))}
+
+/* ---------- load ---------- */
+function loadAll(sym){
+ S.sym=sym;$("when").textContent="loading real sessions…";
+ var c1=jget(API+"/candles?symbol="+encodeURIComponent(sym)+"&tf=D&limit=1400")
+  .then(function(c){S.bars=(c.series||[]).slice();S.full=c.full_series_count;S.newest=c.newest;
+   S.basis=c.price_basis;S.prov=c.provider})
+  .catch(function(e){S.err.bars=e.message});
+ var c2=Promise.all(NAMES.map(function(n){
+   return jget(API+"/candles?symbol="+n+"&tf=D&limit=320").then(function(c){
+     S.cohort[n]=(c.series||[]).map(function(b){return{t:b.t,c:b.c}})})
+    .catch(function(e){S.err[n]=e.message})}));
+ var c3=jget(API+"/geiger?symbols="+NAMES.join(",")+"&detail=1")
+  .then(function(g){S.liveGeiger=g}).catch(function(e){S.err.geiger=e.message});
+ return Promise.all([c1,c2,c3]).then(build)}
+
+function build(){
+ if(!S.bars.length){$("when").innerHTML='<span class="err">no bars returned — '+
+   (S.err.bars||"empty series")+'</span>';return}
+ /* the shared clock runs over the last 180 sessions of the chosen name */
+ var n=S.bars.length,span=Math.min(180,n-60);
+ S.start=n-span;S.idx=span-1;
+ S.dates=S.bars.slice(S.start).map(function(b){return b.t});
+ /* cohort values aligned to those dates */
+ S.series={};
+ NAMES.forEach(function(nm){
+  var rows=S.cohort[nm]||[],cl=rows.map(function(r){return r.c}),out={};
+  rows.forEach(function(r,i){var v=derived(cl,i);if(v!==null)out[r.t]=v});
+  S.series[nm]=out});
+ var sc=$("scrub");sc.max=String(S.dates.length-1);sc.value=String(S.idx);sc.disabled=false;
+ $("play").disabled=false;$("live").disabled=false;
+ buildRows();renderAll()}
+
+/* ---------- lens ---------- */
+function path(vals,w,h,pad){
+ var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),rg=(mx-mn)||1,d="";
+ vals.forEach(function(v,i){
+  var x=vals.length<2?0:i*(w/(vals.length-1)),y=pad+(h-2*pad)*(1-(v-mn)/rg);
+  d+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)});
+ return{d:d,mn:mn,mx:mx}}
+
+function renderChart(){
+ var win=S.bars.slice(S.start),cl=win.map(function(b){return b.c}),
+     W=1000,H=420,p=path(cl,W,H,18);
+ var i=S.idx,px=win.length<2?0:i*(W/(win.length-1)),
+     rise=cl[i]>=cl[0];
+ var g='<defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">'+
+  '<stop offset="0%" stop-color="'+(rise?"#00C87E":"#E0334F")+'" stop-opacity=".16"/>'+
+  '<stop offset="100%" stop-color="#07070B" stop-opacity="0"/></linearGradient></defs>';
+ /* horizontal rules, no captions */
+ for(var k=1;k<4;k++){var y=18+(H-36)*k/4;
+  g+='<line x1="0" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#141422" stroke-width="1"/>'}
+ g+='<path d="'+p.d+'L'+W+' '+H+'L0 '+H+'Z" fill="url(#fill)"/>';
+ g+='<path d="'+p.d+'" fill="none" stroke="'+(rise?"#00C87E":"#E0334F")+
+  '" stroke-width="2.2" stroke-linejoin="round"/>';
+ /* the playhead: the only thing that moves while playing */
+ g+='<line x1="'+px.toFixed(1)+'" y1="0" x2="'+px.toFixed(1)+'" y2="'+H+
+  '" stroke="#2FA8CC" stroke-width="1.4" opacity=".85"/>';
+ var py=18+(H-36)*(1-(cl[i]-p.mn)/((p.mx-p.mn)||1));
+ g+='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#2FA8CC"/>';
+ $("main-chart").innerHTML=g;
+ return{win:win,cl:cl,px:px,py:py,W:W,H:H,mn:p.mn,mx:p.mx}}
+
+function renderLens(m){
+ var box=$("lens");
+ if(!S.lensOn){box.style.display="none";return}
+ box.style.display="";
+ var vals,role,scale;
+ if(S.mode==="context"){
+  var all=S.bars.map(function(b){return b.c});
+  vals=all;role="CONTEXT · THE WHOLE HISTORY WE HOLD";
+  scale=S.bars.length+" sessions · "+iso(S.bars[0].t)+" → "+iso(S.bars[S.bars.length-1].t);
+ }else{
+  var a=Math.max(0,S.start+S.idx-19),b=S.start+S.idx+1;
+  vals=S.bars.slice(a,b).map(function(x){return x.c});
+  role="DETAIL · LAST 20 SESSIONS TO THE PLAYHEAD";
+  scale=vals.length+" sessions · "+iso(S.bars[a].t)+" → "+iso(S.bars[b-1].t);
+ }
+ var lw=300,lh=120,p=path(vals,lw,lh,8),g="";
+ g+='<path d="'+p.d+'" fill="none" stroke="#7C8296" stroke-width="1.6"/>';
+ if(S.mode==="context"){
+  /* mark where the main chart's window sits inside the whole history */
+  var x0=S.start/(S.bars.length-1)*lw,x1=(S.start+S.idx)/(S.bars.length-1)*lw;
+  g+='<rect x="'+x0.toFixed(1)+'" y="0" width="'+Math.max(1.5,(x1-x0)).toFixed(1)+
+     '" height="'+lh+'" fill="#2FA8CC" opacity=".16"/>';
+  g+='<line x1="'+x1.toFixed(1)+'" y1="0" x2="'+x1.toFixed(1)+'" y2="'+lh+
+     '" stroke="#2FA8CC" stroke-width="1.2"/>';
+ }else{
+  var xe=lw,ye=8+(lh-16)*(1-(vals[vals.length-1]-p.mn)/((p.mx-p.mn)||1));
+  g+='<circle cx="'+(xe-1.5)+'" cy="'+ye.toFixed(1)+'" r="3.2" fill="#2FA8CC"/>';
+ }
+ $("lens-chart").innerHTML=g;$("lens-role").textContent=role;
+ $("lens-scale").textContent=scale+" · "+fmt(p.mn)+"–"+fmt(p.mx);
+ /* Never cover price. Measure where the line and its fill actually are, then take the
+    corner with the most clear air. While playing, hold the corner it already has, so the
+    bubble is not a second moving thing. */
+ if(S.playing&&box.dataset.placed)return;
+ place_lens(box,m)}
+
+function place_lens(box,m){
+ var st=$("stage"),W=st.clientWidth,H=st.clientHeight,pad=14;
+ if(!W||!H)return;
+ /* On a narrow screen there is no empty corner, so the bubble stops floating and sits
+    under the chart instead. It still never covers price. */
+ if(W<560){box.className="lens below";
+  if(box.parentNode===st)st.parentNode.insertBefore(box,st.nextSibling);
+  box.style.left="";box.style.top="";box.style.right="";box.style.bottom="";
+  box.dataset.placed="1";box.dataset.hit="0";return}
+ box.className="lens";
+ if(box.parentNode!==st)st.appendChild(box);
+ var w=box.offsetWidth||240,h=box.offsetHeight||150;
+ var sx=W/m.W,sy=H/m.H,pts=[];
+ m.cl.forEach(function(c,i){
+  var x=(m.cl.length<2?0:i*(m.W/(m.cl.length-1)))*sx,
+      y=(18+(m.H-36)*(1-(c-m.mn)/((m.mx-m.mn)||1)))*sy;
+  pts.push([x,y])});
+ var corners=[[pad,pad],[W-w-pad,pad],[pad,H-h-pad],[W-w-pad,H-h-pad]],best=null;
+ corners.forEach(function(c){
+  var x0=c[0],y0=c[1],x1=x0+w,y1=y0+h,hit=0,clear=1e9;
+  pts.forEach(function(q){
+   if(q[0]<x0-4||q[0]>x1+4)return;
+   /* the line and everything under it (the fill) counts as price */
+   if(y1>=q[1]-2)hit++;
+   clear=Math.min(clear,Math.abs(q[1]-(y0+h/2)))});
+  if(!best||hit<best.hit||(hit===best.hit&&clear>best.clear))best={x:x0,y:y0,hit:hit,clear:clear}});
+ box.style.right="auto";box.style.bottom="auto";
+ box.style.left=Math.max(0,best.x)+"px";box.style.top=Math.max(0,best.y)+"px";
+ box.dataset.placed="1";box.dataset.hit=String(best.hit)}
+
+/* ---------- geiger in motion ---------- */
+function buildRows(){
+ var el=$("rows");el.innerHTML="";S.rowEls={};
+ el.style.height=(NAMES.length*30)+"px";
+ NAMES.forEach(function(nm,i){
+  var r=document.createElement("div");r.className="row";
+  r.innerHTML='<span class="tk">'+nm+'</span><span class="val"></span>'+
+   '<div class="track"><i class="bar"></i></div><span class="rk"></span>';
+  el.appendChild(r);S.rowEls[i]=r});
+ S.order=NAMES.map(function(_,i){return i});S.prevOrder=S.order.slice()}
+
+function valuesAt(){
+ var t=S.dates[S.idx],out=NAMES.map(function(nm){
+  var s=S.series[nm]||{},v=s[t];
+  if(v===undefined){ /* that name has no bar on this exact session: hold its last known */
+   var ks=Object.keys(s),last=null;
+   for(var i=0;i<ks.length;i++){if(+ks[i]<=t&&(last===null||+ks[i]>last))last=+ks[i]}
+   v=last===null?null:s[last]}
+  return v});
+ return out}
+
+function place(dur){
+ S.order.forEach(function(di,pos){
+  var el=S.rowEls[di];
+  el.style.transition=dur?("transform "+dur+"ms cubic-bezier(.34,.02,.2,1)"):"none";
+  el.style.transform="translateY("+(pos*30)+"px)"})}
+
+function paint(dur){
+ var v=valuesAt();
+ NAMES.forEach(function(nm,i){
+  var el=S.rowEls[i],bar=el.querySelector(".bar"),val=el.querySelector(".val");
+  if(v[i]===null||v[i]===undefined){val.textContent="—";bar.style.width="0%";return}
+  val.textContent=(v[i]>=0?"+":"")+v[i].toFixed(2);
+  var L,W;if(v[i]>=0){L=50;W=v[i]*50}else{L=50+v[i]*50;W=-v[i]*50}
+  bar.style.transition=dur?("left "+dur+"ms ease-out,width "+dur+"ms ease-out,background "+
+   Math.round(dur*.4)+"ms linear"):"none";
+  bar.style.left=L+"%";bar.style.width=Math.max(0.8,W)+"%";
+  bar.style.background=v[i]>=0?"var(--bull)":"var(--bear)"})}
+
+function reorder(dur){
+ var v=valuesAt();
+ S.prevOrder=S.order.slice();
+ S.order=NAMES.map(function(_,i){return i}).sort(function(a,b){
+  var x=v[a],y=v[b];if(x===null)return 1;if(y===null)return -1;return y-x});
+ /* rank badges appear only for names that actually changed position */
+ S.order.forEach(function(di,pos){
+  var was=S.prevOrder.indexOf(di),el=S.rowEls[di],rk=el.querySelector(".rk");
+  if(was!==pos){rk.textContent=(was-pos>0?"▲":"▼")+Math.abs(was-pos);rk.className="rk show"}
+  else{rk.className="rk"}});
+ if(S.mot==="carry")trails();
+ place(dur)}
+
+function trails(){
+ S.order.forEach(function(di,pos){
+  var was=S.prevOrder.indexOf(di);if(was===pos)return;
+  var el=S.rowEls[di],t=document.createElement("i");t.className="trail";
+  var top=Math.min(was,pos)*30+6,h=Math.abs(was-pos)*30;
+  t.style.top=top+"px";t.style.height=h+"px";
+  t.style.background=was>pos?"var(--bull)":"var(--bear)";t.style.opacity=".5";
+  $("rows").appendChild(t);
+  setTimeout(function(){t.style.transition="opacity .5s";t.style.opacity="0";
+   setTimeout(function(){t.remove()},520)},S.sp.r)})}
+
+function stepMotion(){
+ var d=S.sp;
+ if(S.mot==="cut"){paint(0);reorder(0);return}
+ if(S.mot==="carry"){paint(d.v);reorder(d.r);return}
+ paint(d.v);setTimeout(function(){reorder(d.r)},d.v)}
+
+/* ---------- clock ---------- */
+function iso(t){var d=new Date(t);return d.toISOString().slice(0,10)}
+function fmt(x){return x>=1000?x.toFixed(0):x.toFixed(2)}
+function atNewest(){return S.idx>=S.dates.length-1}
+
+function renderAll(){
+ var m=renderChart();renderLens(m);stepMotion();paintWhen();paintLegend()}
+
+function paintWhen(){
+ var t=S.dates[S.idx],b=S.bars[S.start+S.idx];
+ $("when").innerHTML="SESSION <b>"+iso(t)+"</b> · "+(S.idx+1)+" of "+S.dates.length+
+  " · "+S.sym+" "+fmt(b.c)+(atNewest()?" · NEWEST BAR":"");
+ $("play").textContent=S.playing?"❚❚ PAUSE":"▶ PLAY";
+ $("scrub").value=String(S.idx)}
+
+function paintLegend(){
+ var b=S.bars[S.start+S.idx];
+ $("legend").innerHTML="<span>OPEN <b>"+fmt(b.o)+"</b></span><span>HIGH <b>"+fmt(b.h)+
+  "</b></span><span>LOW <b>"+fmt(b.l)+"</b></span><span>CLOSE <b>"+fmt(b.c)+
+  "</b></span><span>VOLUME <b>"+(b.v/1e6).toFixed(1)+"M</b></span>";
+ $("lens-title").textContent="CONTEXT LENS · "+S.sym;
+ $("lens-src").innerHTML="<b>Where these numbers come from.</b> "+S.bars.length+
+  " daily bars asked of the chart API as <code>/candles?symbol="+S.sym+"&tf=D&limit=1400</code>"+
+  " — the whole history it holds for this name is "+(S.full||"—")+" bars, "+
+  (S.basis||"—").toLowerCase().replace(/_/g," ")+", from "+(S.prov||"—")+".";
+ var live=S.liveGeiger&&S.liveGeiger.symbols&&S.liveGeiger.symbols[S.sym],
+     lg=live&&typeof live.composite==="number"?live.composite.toFixed(2):null;
+ $("motion-src").innerHTML="<b>Which Geiger this is.</b> The bars above are worked out here from the"+
+  " same daily closes, half trend (distance from a 50-session average) and half momentum (RSI-14"+
+  " re-centred on 50), so that rewinding has something to move: <b>the Hub's own Geiger is live-only"+
+  "</b> and keeps no history per rung."+(lg?" At the newest bar the Hub's live composite for "+S.sym+
+  " reads <b>"+lg+"</b> next to this one.":"")+
+  (S.err.geiger?' <span class="err">live read failed: '+S.err.geiger+"</span>":"")}
+
+function go(i){
+ S.idx=Math.max(0,Math.min(S.dates.length-1,i));
+ var m=renderChart();renderLens(m);stepMotion();paintWhen();paintLegend()}
+
+function play(){
+ if(S.playing)return pause();
+ if(atNewest())S.idx=0;
+ S.playing=true;paintWhen();
+ S.timer=setInterval(function(){
+  if(atNewest())return pause();
+  go(S.idx+1)},S.sp.step)}
+function pause(){S.playing=false;clearInterval(S.timer);S.timer=null;paintWhen();
+ renderLens(renderChart())}
+window.addEventListener("resize",function(){if(S.bars.length){var l=$("lens");delete l.dataset.placed;
+ renderLens(renderChart())}});
+
+/* ---------- controls ---------- */
+SPEEDS.forEach(function(s){
+ var b=document.createElement("button");b.className="chip"+(s.k==="med"?" on":"");
+ b.textContent=s.n;b.onclick=function(){S.sp=s;
+  [].forEach.call($("speeds").children,function(c){c.className="chip"});b.className="chip on";
+  if(S.playing){pause();play()}};
+ $("speeds").appendChild(b)});
+MODES.forEach(function(m){
+ var b=document.createElement("button");b.className="chip"+(m.k==="sr"?" on":"");
+ b.textContent=m.n;b.onclick=function(){S.mot=m.k;
+  [].forEach.call($("modes").children,function(c){c.className="chip"});b.className="chip on";
+  $("motion-why").innerHTML=m.why;stepMotion()};
+ $("modes").appendChild(b)});
+$("motion-why").innerHTML=MODES[0].why;
+
+$("play").onclick=play;
+$("live").onclick=function(){pause();go(S.dates.length-1)};
+$("scrub").addEventListener("input",function(){if(S.playing)pause();go(+this.value)});
+$("m-context").onclick=function(){S.mode="context";this.className="chip on";
+ $("m-detail").className="chip";delete $("lens").dataset.placed;renderLens(renderChart())};
+$("m-detail").onclick=function(){S.mode="detail";this.className="chip on";
+ $("m-context").className="chip";delete $("lens").dataset.placed;renderLens(renderChart())};
+$("m-lens").onclick=function(){S.lensOn=!S.lensOn;this.className="chip"+(S.lensOn?" on":"");
+ this.textContent=S.lensOn?"LENS ON":"LENS OFF";renderLens(renderChart())};
+$("load").onclick=function(){var s=$("sym").value.trim().toUpperCase();if(!s)return;
+ pause();S.cohort={};S.err={};loadAll(s)};
+$("sym").addEventListener("keydown",function(e){if(e.key==="Enter")$("load").click()});
+[].forEach.call(document.querySelectorAll(".tab"),function(t){
+ t.onclick=function(){
+  [].forEach.call(document.querySelectorAll(".tab"),function(x){x.className="tab"});
+  t.className="tab on";
+  [].forEach.call(document.querySelectorAll(".view"),function(v){v.className="view"});
+  $("v-"+t.dataset.v).className="view on"}});
+
+loadAll("AAPL");
+})();
+</script>
+</body></html>
