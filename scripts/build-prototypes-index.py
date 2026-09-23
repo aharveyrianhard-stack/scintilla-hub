@@ -35,6 +35,7 @@ PURPOSE = {
     "Economic events": "markets", "Sector rotation": "markets",
     "Indicator Lab": "signals", "Cohort Geiger": "signals", "Context Lens · v4": "signals",
     "Company report library": "signals",
+    "Projection cloud": "signals",
     "Allocation & DCF": "portfolio",
     "Scintilla Desk": "workspaces",
     "Visual Engine workbench": "visual", "Visual Engine Lab": "visual",
@@ -50,6 +51,7 @@ ICON = {
  "Cohort Geiger":          '<path d="M3.5 19h17"/><path d="M6.5 19v-4M10.2 19v-8M13.8 19v-5.5M17.5 19v-11"/>',
  "Context Lens · v4":      '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
  "Company report library": '<path d="M6 3.5h9l4 4v13H6z"/><path d="M15 3.5v4h4M8.5 11h7M8.5 14.5h7M8.5 18h4"/>',
+ "Projection cloud":        '<path d="M3.5 12h4"/><path d="M7.5 12c3.5-5.5 7-7.5 12-8.5M7.5 12c3.5 5.5 7 7.5 12 8.5"/><path d="M7.5 12c3.5-2.5 7-3.5 12-4M7.5 12c3.5 2.5 7 3.5 12 4"/><circle cx="7.5" cy="12" r="1.6"/>',
  "Allocation & DCF":      '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v8.5l6 6"/><path d="M12 12 4.6 8.6"/>',
  "Scintilla Desk":         '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M11 9.5v10"/>',
  "Visual Engine workbench":'<path d="M5 4.5v15M12 4.5v15M19 4.5v15"/><circle cx="5" cy="9.5" r="2.1"/><circle cx="12" cy="14.5" r="2.1"/><circle cx="19" cy="8" r="2.1"/>',
@@ -78,6 +80,7 @@ HOST = {
  "Signal fanout · v2": "this site · /prototypes/",
  "Context Lens · v4": "Scintilla prototype · not recovered yet",
  "Company report library": "this site · /prototypes/",
+ "Projection cloud": "this site · /prototypes/",
  "Visual menus": "not available yet",
 }
 

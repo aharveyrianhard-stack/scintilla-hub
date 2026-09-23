@@ -1,0 +1,104 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Research · FMP streaming</title><style>
+:root{color-scheme:dark;--bg:#0A0A0F;--panel:#0D0D14;--panel2:#111120;--line:#1A1A2A;--line2:#252538;--hair:rgba(0,212,255,.16);--hair2:rgba(0,212,255,.34);
+--ink:#B4BACB;--ink2:#949BB0;--ink3:#767D93;--dim:#5C6379;--mute:#3A3A52;--crk:#00D4FF;--c62:rgba(0,212,255,.62);--c40:rgba(0,212,255,.40);
+--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
+font:14px/1.6 var(--sans);color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}body{margin:0;background:var(--bg)}.wrap{max-width:1080px;margin:auto;padding:22px 28px 40px}
+a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:58px;padding:0 18px;border:1px solid var(--hair);background:var(--panel)}
+.brand{font:600 17px/1 var(--mono);letter-spacing:.62em;color:var(--ink)}
+.hlinks{display:flex;gap:10px;font:9px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}.hlinks a{border:1px solid var(--line2);padding:8px 12px;color:var(--ink3);background:var(--bg)}
+h1{font:600 12px/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:30px 0 10px}
+h2{font:600 11px/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:28px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.lede{max-width:820px;color:var(--ink3);margin:0 0 8px;font-size:13px}.k{font:8px/1.4 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:var(--crk)}
+blockquote{margin:12px 0;padding:10px 16px;border-left:2px solid var(--c40);color:var(--ink);font-size:13.5px;background:var(--panel)}
+.verdict{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.verdict div{border:1px solid var(--line);background:var(--panel);padding:12px 14px}.verdict b{display:block;font:600 15px/1.3 var(--sans);color:var(--ink);margin-bottom:4px}
+.verdict span{font:8px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}.verdict p{margin:6px 0 0;font-size:12.5px;color:var(--ink3)}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);font-size:12.5px}
+th{font:600 9px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:9px 12px;color:var(--ink3);border-top:1px solid var(--line);vertical-align:top}td:first-child{font:11px/1.5 var(--mono);color:var(--ink2);white-space:nowrap}
+pre{background:var(--panel2);border:1px solid var(--line2);padding:12px 14px;font:11.5px/1.5 var(--mono);color:var(--ink2);overflow:auto;margin:8px 0}
+code{font:11.5px var(--mono);color:var(--ink)}
+ol,ul{margin:6px 0 0;padding-left:20px}li{font-size:12.5px;color:var(--ink3);margin:4px 0}
+.src{font:9px/1.6 var(--mono);letter-spacing:.06em;color:var(--dim)}
+footer{border-top:1px solid var(--line);margin-top:30px;padding-top:16px;color:var(--dim);font:9px/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+@media(max-width:850px){.verdict{grid-template-columns:1fr}td:first-child{white-space:normal}}
+</style></head><body><div class="wrap">
+<header><span class="brand">SCINTILLA</span><nav class="hlinks"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
+<main>
+<h1>FMP streaming — what it offers, what we tested, how it would feed the quotes</h1>
+<p class="k">Research deliverable · 2026-09-23 · nothing deployed, nothing changed in production</p>
+<blockquote>“I'm pretty sure there's FMP streaming too. Why are we not using FMP streaming?”</blockquote>
+<p class="lede">Short answer: FMP does have streaming, and the socket answers from here. Whether <em>our</em> key is entitled to it, and whether it carries the three macro instruments, can only be settled by one keyed run of the probe below — a permission gate stopped this worker from reaching the key without printing it, and nothing was retried. What is already certain: on the Hub today VIX, DXY and US10Y are the only prices that never move during the day, because they come from a nightly FMP daily close while every equity comes from the Massive stream.</p>
+
+<div class="verdict">
+<div><b>Yes, FMP streams</b><span>the offer</span><p>Three socket clusters — stocks, forex, crypto. Login with the API key, subscribe by lowercase ticker, receive trades (T), top-of-book quotes (Q) and trade breaks (B). Stock cluster returns data 8 AM – 5 PM ET.</p></div>
+<div><b>Unknown until keyed</b><span>our entitlement</span><p>Sockets are entitlement-based per cluster, one simultaneous connection per cluster per account, and gated behind a one-time User Declaration Form. Our plan is at least Premium (the EOD history we already pull reaches 1962; only Premium/Ultimate carry 30+ years).</p></div>
+<div><b>Reachable, protocol confirmed</b><span>the keyless test</span><p>Connection opened in 355 ms; login without a key answered <code>400 Bad Request</code>; subscribe then answered <code>401 Unauthorized</code>. The wire format matches the documentation exactly.</p></div>
+</div>
+
+<h2>1 · What FMP's websocket offers</h2>
+<table><thead><tr><th>Item</th><th>Fact</th><th>Where it is stated</th></tr></thead><tbody>
+<tr><td>Endpoint (stocks)</td><td><code>wss://websockets.financialmodelingprep.com</code>; crypto and forex have their own clusters (<code>crypto.</code> / <code>forex.financialmodelingprep.com</code>).</td><td class="src">developer/docs/websocket-api (legacy page, still served); forex-websocket, crypto-websocket</td></tr>
+<tr><td>Login</td><td><code>{"event":"login","data":{"apiKey":"…"}}</code></td><td class="src">same</td></tr>
+<tr><td>Subscribe / unsubscribe</td><td><code>{"event":"subscribe","data":{"ticker":["aapl","msft"]}}</code> — tickers lowercase, one or many.</td><td class="src">same; FAQ “always subscribe to a symbol in lowercase”</td></tr>
+<tr><td>Message fields</td><td><code>s</code> ticker · <code>t</code> timestamp · <code>type</code> T (last trade) / Q (top-of-book) / B (trade break) · <code>ap, as</code> ask price and size · <code>bp, bs</code> bid price and size · <code>lp, ls</code> last price and size (T and B only)</td><td class="src">developer/docs/websocket-api</td></tr>
+<tr><td>Hours</td><td>“Currently, our WebSocket returns data from 8 AM – 5 PM EST.”</td><td class="src">FAQ, “What is the work hours for the Stock WebSocket?”</td></tr>
+<tr><td>Connections</td><td>“Each account comes with access to one simultaneous WebSocket connection per cluster.”</td><td class="src">FAQ</td></tr>
+<tr><td>Entitlement</td><td>“Our WebSocket APIs are based on entitlements that control which WebSocket Clusters you can connect to and which kinds of data you can access.” The stable docs add: “This endpoint requires WebSocket access. To enable WebSocket functionality, please complete the User Declaration Form. This is a one-time requirement.”</td><td class="src">FAQ; developer/docs/stable/websocket (page text)</td></tr>
+<tr><td>Plans</td><td>Basic — end of day, 250 calls/day, 5 years · Starter — real-time, 300/min, 5 years · Premium — real-time, 750/min, 30+ years · Ultimate — real-time, 3,000/min, 30+ years. The pricing table does not name websocket per tier; entitlement is separate (above).</td><td class="src">pricing-plans</td></tr>
+<tr><td>Indices on the socket</td><td><b>Not documented.</b> The stock cluster is described for company tickers. Whether <code>^vix</code>, <code>^tnx</code> and <code>dx-y.nyb</code> deliver messages is exactly what the keyed probe answers; FMP's REST <code>quote</code> does serve these index symbols (that is how our nightly macro refresh already works).</td><td class="src">absence in docs; chart API <code>/macro</code> provider symbols</td></tr>
+</tbody></table>
+
+<h2>2 · The test, without ever printing the key</h2>
+<p class="lede">The probe reads <code>FMP_API_KEY</code> from the environment, scrubs every logged string against it, and prints one JSON summary: login status, message kinds, counts per symbol, latency from the message's own timestamp to receipt. It was run from the worker's machine <b>without a key</b> — that run is embedded below. A permission gate ([Credential Exploration]) blocked the worker's attempt to locate a non-printing path to the key; the attempt was not retried and no other route was tried.</p>
+<pre>{
+ "url": "wss://websockets.financialmodelingprep.com",
+ "key_present": false,
+ "symbols_requested": ["aapl", "spy", "^vix", "^tnx", "dx-y.nyb"],
+ "opened_utc": "2026-09-23T08:25:37.552Z", "open_ms": 355,
+ "login":     { "event": "login",     "status": 400, "message": "Bad Request",  "at_ms": 384 },
+ "subscribe": { "event": "subscribe", "status": 401, "message": "Unauthorized", "at_ms": 1183 },
+ "per_symbol": {}, "kinds": {}, "errors": []
+}</pre>
+<p class="lede"><b>The keyed run (for the coordinator, in a shell where the key already exists as an environment variable — never pasted into a chat):</b></p>
+<pre>FMP_WS_SECONDS=40 node fmp-ws-probe.mjs                              # during 8 AM – 5 PM ET
+FMP_WS_SYMBOLS="^vix,^tnx,dx-y.nyb" FMP_WS_SECONDS=40 node fmp-ws-probe.mjs   # the macro trio alone</pre>
+<table><thead><tr><th>Question</th><th>What the summary shows</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>Are we entitled?</td><td><code>login.status</code> 200 vs 401/403</td><td>401 with a real key = the declaration form or the plan is the wall; nothing to build until it clears.</td></tr>
+<tr><td>Do indices stream?</td><td><code>per_symbol["^VIX"].n</code> etc. &gt; 0 while <code>aapl</code> &gt; 0</td><td>Equities flowing and indices silent = the socket does not carry them; fall to branch B below.</td></tr>
+<tr><td>How fresh?</td><td><code>latency_ms.mean / max</code></td><td>Message time vs receipt; anything well inside the 90 s freshness bound the quotes contract already uses is enough.</td></tr>
+<tr><td>What kinds?</td><td><code>kinds</code> T / Q / B</td><td>Indices, if present, will be T-only (no book).</td></tr>
+</tbody></table>
+
+<h2>3 · Why macro prices do not move today (as served, not inferred)</h2>
+<table><thead><tr><th>Surface</th><th>Serves</th><th>Consequence on screen</th></tr></thead><tbody>
+<tr><td>chart API <code>/quotes</code></td><td>Equities from <code>MASSIVE_WS_BOUNDED_STREAM</code>: rule 1 <code>TRADE_FRESH</code> (≤ 90 s), 2 <code>TRADE_REST_HYDRATED</code>, 3 <code>TRADE_LAST_VALID</code>, 4 <code>NO_VALID_OBSERVATION</code>. VIX, DXY, US10Y answer <code>NOT_OBSERVED_BY_STREAM</code>.</td><td>The Hub prints <b>NO STREAM</b> for those three rows (the reader that maps <code>NOT_OBSERVED_BY_STREAM</code> to that label is in the dashboard page).</td></tr>
+<tr><td>chart API <code>/macro</code></td><td>Provider FMP, provider symbols <code>^VIX</code>, <code>DX-Y.NYB</code>, <code>^TNX</code>; <code>basis: FMP_DAILY_CLOSE</code>; refreshed by the nightly <code>fmp-macro</code> run (last 02:52–02:58 UTC).</td><td>Yesterday's close all day. Correct as a settled basis; not a live price.</td></tr>
+<tr><td>chart API <code>/candles</code> for the trio</td><td>FMP EOD full history (US10Y from 1962-01-02, DXY 1971-01-04, VIX 1990) with intraday frames served from the same FMP namespace.</td><td>History is complete; only the live tick is missing.</td></tr>
+</tbody></table>
+
+<h2>4 · Design — “streams rule”, applied to the macro trio</h2>
+<p class="lede">The equities already obey one rule chain; the macro trio should join the same chain, not get a second one. Two branches, chosen by the keyed probe:</p>
+<table><thead><tr><th>Branch</th><th>When</th><th>What is built</th><th>What the quotes contract shows</th></tr></thead><tbody>
+<tr><td>A · socket</td><td>Keyed probe delivers messages for <code>^vix</code>, <code>^tnx</code>, <code>dx-y.nyb</code></td><td>One long-lived FMP stock-cluster connection, owned by exactly one process (the account allows one per cluster), subscribed to the three lowercase symbols, writing each T message into the same bounded-stream observation store the quotes handler already reads, tagged <code>provider: FMP</code>, <code>price_surface: FMP_WS_BOUNDED_STREAM</code>. Reconnect with backoff; resubscribe on reconnect; the existing daily FMP bar remains <code>previous_close</code>.</td><td>Rule 1 <code>TRADE_FRESH</code> during 8 AM – 5 PM ET with <code>price_age_ms</code> under the 90 s bound; outside those hours the chain degrades honestly to rule 2/3 exactly as equities do after the close.</td></tr>
+<tr><td>B · REST hydration</td><td>Socket is not entitled, or indices are silent on it</td><td>A 60-second poll of FMP's REST quote for the three symbols (one call per minute — negligible against 750/min on Premium), written into the same store as a REST observation.</td><td>Rule 2 <code>TRADE_REST_HYDRATED</code> with a one-minute age, still inside the bound, so the macro tiles move every minute and say how they were obtained.</td></tr>
+</tbody></table>
+<ul>
+<li><b>Single owner.</b> The suspended apps that once polled FMP or ran a market stream stay suspended; a second FMP socket from anywhere in the estate would be refused by the one-connection limit and would silently starve the first.</li>
+<li><b>No new definition.</b> <code>/macro</code> keeps the daily-close basis for anything settled (overlays, session logic). Only the live price surface changes.</li>
+<li><b>Acceptance, measured not assumed:</b> <code>/quotes?symbols=VIX,DXY,US10Y</code> returns <code>state: OK</code>, <code>price_selection_rule</code> 1 (branch A) or 2 (branch B), <code>price_age_ms</code> inside the bound during socket hours, <code>previous_close</code> still <code>SETTLED</code> from the FMP daily bar; the Hub rows stop saying NO STREAM; a real-browser screenshot of the three tiles moving across two reads.</li>
+<li><b>Rollback:</b> stop the owner process; the quotes handler falls back to <code>NOT_OBSERVED_BY_STREAM</code> and the Hub label returns to NO STREAM — the state it is in now.</li>
+</ul>
+
+<h2>5 · What this deliverable does not claim</h2>
+<ul>
+<li>It does not claim our key is entitled to sockets, nor that indices stream — the keyed probe decides both.</li>
+<li>No code was deployed, no machine touched, no schedule changed, no key read, copied or printed.</li>
+<li>Latency figures are absent on purpose: the keyless run cannot produce them.</li>
+</ul>
+<p class="src">Sources read on 2026-09-23: FMP legacy Company Web Socket API page; FMP FAQ (API Access); FMP stable docs websocket page text; FMP pricing-plans; chart API <code>/quotes</code>, <code>/quote</code>, <code>/macro</code>, <code>/candles</code>, <code>/intervals</code> as served.</p>
+</main>
+<footer>Research · FMP streaming · review copy, not a product page</footer>
+</div></body></html>
