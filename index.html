@@ -14095,12 +14095,15 @@ function pollFMP() {
     for (let i = 0; i < eqSyms.length; i += 40) {
       const batch = eqSyms.slice(i, i + 40).join(",");
       try {
-        const j = await pg("live_quotes?ticker=in.(" + batch + ")&select=ticker,price");
+        const j = await pg("live_quotes?ticker=in.(" + batch + ")&select=ticker,price,updated_ts");
         /* Declared equities are refused inside patch(); this call now only carries whatever
            non-equity rows live_quotes still owns. The batch itself is left in place so the
-           non-equity lane keeps working unchanged. */
-        if (Array.isArray(j)) for (const qq of j)
-          if (qq && qq.ticker && qq.price != null) patch(String(qq.ticker).toUpperCase(), +qq.price, "LEGACY");
+           non-equity lane keeps working unchanged.
+           23 Sep 2026: this 12-second poll re-applied August's VIX row (14.25) over the live quote every
+           cycle. A stored row older than four days is dropped here too, and the macro symbols belong to
+           the chart API's live quote (scMacroTick), never to this table. */
+        if (Array.isArray(j)) for (const qq of scCoherentRetainedQuotes(j))
+          if (qq && qq.ticker && qq.price != null && !scMacroOwned(qq.ticker)) patch(String(qq.ticker).toUpperCase(), +qq.price, "LEGACY");
       } catch (err) {}
     }
   })();
@@ -14141,7 +14144,7 @@ if (sb) {
   sb.channel("lq").on("postgres_changes", { event: "*", schema: "public", table: "live_quotes" }, (p) => {
     /* live_quotes realtime can no longer move a declared equity: patch() refuses it by source.
        Kept subscribed because non-equity rows still arrive on this channel. */
-    if (p.new && p.new.ticker && p.new.price != null && !cryptoSet.has(p.new.ticker)) patch(p.new.ticker, p.new.price, "LEGACY");
+    if (p.new && p.new.ticker && p.new.price != null && !cryptoSet.has(p.new.ticker) && !scMacroOwned(p.new.ticker)) patch(p.new.ticker, p.new.price, "LEGACY");
   }).subscribe();
   sb.channel("nw").on("postgres_changes", { event: "INSERT", schema: "public", table: "news" }, (p) => {
     if (!p.new) return;
@@ -14730,6 +14733,9 @@ if (typeof document !== "undefined") document.addEventListener("visibilitychange
    close said 81.25 while the market's was 90.52, so the change was blanked). Applied exactly the way the equity
    tick applies /quotes. Bitcoin stays on its Coinbase socket. */
 const SC_MACRO_SYMS = ["VIX", "US10Y", "US5Y", "US30Y", "US3M", "DXY", "DXUSD", "CLUSD", "GCUSD", "SIUSD"];
+/* Owned by the live route: the stored-table poll and the realtime channel leave these alone. A function
+   declaration, so the earlier poll can call it; it only runs after this script has finished loading. */
+function scMacroOwned(t) { return SC_MACRO_SYMS.includes(String(t || "").toUpperCase()); }
 const SC_MACRO_MS = 30000;
 window.SC_MACRO_TICK = { runs: 0, applied: 0, failures: 0, last_utc: null };
 async function scMacroTick() {
