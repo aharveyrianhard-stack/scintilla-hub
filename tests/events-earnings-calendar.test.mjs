@@ -8,14 +8,17 @@ import fs from "node:fs";
 const src = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const core = src.slice(src.indexOf("const ERC_MONTH_CELL"), src.indexOf("/* AN OPEN EVENTS VIEW NEVER LOOKED AGAIN."));
 
-/* 23 Sep evening (M26): the TIMELINE became the landing span — Alan asked for the
-   tape first, "a scrollable way of going to the history". MONTH, WEEK and DAY are
-   unchanged and one tap away, and the anchor still starts on today. */
-test("TIMELINE is the landing span, with MONTH · WEEK · DAY one tap away, and the anchor day starts on today", () => {
-  assert.match(src, /ernSpan: "TIMELINE", ernDay: null, ernPick: null, ernTlDay: null,/);
-  assert.match(core, /const ercSpan = \(\) => S\.ernSpan \|\| "TIMELINE";/);
+/* 23 Sep evening (M28): the tape is no longer a span of its own — it is the room's
+   HEADER, above MONTH · WEEK · DAY (Alan: "having it on top of the other views, more
+   like a header"). DAY is where the room lands, and the anchor still starts on today
+   unless today has no reports, in which case the room says so and points at the next
+   day that does. */
+test("the room lands on DAY under the tape, with MONTH and WEEK one tap away", () => {
+  assert.match(src, /ernSpan: "DAY", ernDay: null, ernPick: null, ernZoom: "DAYS", ernCohPick: null,/);
+  assert.match(core, /const ercSpan = \(\) => \(S\.ernSpan === "MONTH" \|\| S\.ernSpan === "WEEK" \? S\.ernSpan : "DAY"\);/);
   assert.match(core, /const ercAnchor = \(\) => S\.ernDay \|\| todayISO\(\);/);
-  assert.match(src, /\["TIMELINE", "MONTH", "WEEK", "DAY"\]\.map/);
+  assert.match(src, /\["MONTH", "WEEK", "DAY"\]\.map/);
+  assert.ok(!/"TIMELINE"/.test(src), "TIMELINE is gone as a view: the tape is the header now");
 });
 
 test("the four open decisions are the proposal's own, each one word to change", () => {
@@ -66,7 +69,10 @@ test("a blank report time is a real group, not an edge case", () => {
 
 test("the calendar reads earnings_events and writes nothing", () => {
   const reads = core.match(/pg\("[^"]+/g) || [];
-  assert.deepEqual(reads.map((r) => r.slice(4).split("?")[0].replace(/"/g, "")).sort(), ["cohorts", "earnings_events"]);
+  /* two read paths now — the view's own range with every column, and the tape's much
+     wider range with ticker and date only — and both touch the same two tables. */
+  assert.deepEqual([...new Set(reads.map((r) => r.slice(4).split("?")[0].replace(/"/g, "")))].sort(), ["cohorts", "earnings_events"]);
+  assert.match(core, /pg\("earnings_events\?select=ticker,date&date=gte\./, "the tape reads two columns, not every release summary in the season");
   assert.ok(!/POST|PATCH|DELETE|operatorWrite|upsert/.test(core), "nothing is written");
 });
 
@@ -74,7 +80,8 @@ test("one read per span, and a quiet re-read that does not move the reader", () 
   assert.match(core, /if \(!quiet && key === ERC_KEY && ERC_ROWS\) return;/);
   assert.match(core, /changed = key !== ERC_KEY \|\| sig !== ERC_SIG;/);
   assert.match(core, /now\.scrollTop = at;/);
-  assert.match(src, /if \(typeof ercSpan === "function" && ercSpan\(\) !== "DAY"\) ercRead\(!!quiet\);/, "and fillEvents still stands on its own");
+  assert.match(src, /if \(typeof ercRead === "function"\) ercRead\(!!quiet\);/, "and fillEvents still stands on its own");
+  assert.match(src, /if \(typeof ercTapeRead === "function"\) ercTapeRead\(!!quiet\);/, "the header tape is kept fresh by the same quiet re-read");
 });
 
 test("a size that has not arrived is said out loud, never guessed, and redrawn once it lands", () => {
