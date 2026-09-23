@@ -972,6 +972,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-socrow.awaiting .sc-soctk{ color:var(--ink3); font-weight:600; }
 .sc-socrow.awaiting .sc-socbar{ background:rgba(255,255,255,.04); }
 .sc-socrow.awaiting .sc-socposts{ color:var(--dim); font-style:italic; }
+/* YOUTUBE SENTIMENT — latest mention cell (channel · age); wraps under the bar on phones */
+.sc-soclast{ flex:0 0 168px; text-align:right; font-size:8.5px; color:var(--ink3); letter-spacing:.02em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-soclast__age{ color:var(--dim); }
+@media(max-width:560px){ .sc-socrow{ flex-wrap:wrap; row-gap:2px; } .sc-soclast{ flex:1 0 100%; text-align:left; padding-left:64px; } }
 
 /* ── AREA D · "◆ AI READ" placeholder slot — consistent dim on-brand reserved box,
    dropped into NEWS / SOCIAL / EVENTS. No data now; styled to light up later. ── */
@@ -3701,7 +3706,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      Individually optional, individually bounded, last-known-good on failure. No entry here can
      fail the board. live_quotes and composite_staged remain ONLY as non-equity enrichment: they
      are no longer the equity price or Geiger authority and no longer gate boot. */
-  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, boardVol, ntmRows] = await Promise.all([
+  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
     scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
@@ -3709,7 +3714,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
     loadEstimates(),   // FORWARD EPS — full coverage (paged), STATS-tab basis, source-dated; see loadEstimates()
     scOpt('fundamentals',     pg("fundamentals?select=ticker,eps_ttm"), []),
-    scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score"), []),
+    scOpt('social_sentiment', pg("social_sentiment?select=ticker,bullish,bearish,posts,score,updated_ts,source"), []),
+    /* YOUTUBE SENTIMENT — latest-mention detail lives in columns added by jobs/youtube-sentiment/sql/001.
+       One try, no retry: a 400 (columns not migrated yet) must not cost three round-trips or block boot. */
+    scOpt('social_sentiment_detail', pg("social_sentiment?select=ticker,last_channel,last_published_at,last_video_id,window_days,method&source=eq.youtube", 1).catch(() => []), []),
     scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"), []),
     scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps,updated_ts"), []),
   ]);
@@ -3789,6 +3797,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   /* NEW — index the just-created bulk tables by ticker (empty now → maps stay empty
      → honest empty states downstream). */
   for (const s of (socSent || [])) if (s && s.ticker) SOCSENT[String(s.ticker).toUpperCase()] = s;
+  for (const d of (socDetail || [])) if (d && d.ticker && SOCSENT[String(d.ticker).toUpperCase()]) Object.assign(SOCSENT[String(d.ticker).toUpperCase()], d);   // latest mention, when migrated
   for (const v of (boardVol || [])) if (v && v.ticker) BOARDVOL[String(v.ticker).toUpperCase()] = v;
   for (const r of (ntmRows || [])) if (r && r.ticker) { NTMEPS[String(r.ticker).toUpperCase()] = num(r.ntm_eps); NTMEPS_AT[String(r.ticker).toUpperCase()] = r.updated_ts; }
   /* TODO (board Vol×) — once board_volume is populated, prefer BOARDVOL[t].rvol_at_time
@@ -7756,7 +7765,22 @@ function socRowHTML(t, s) {
     '<div class="sc-socbar"><span class="sc-socbull" style="width:' + bp.toFixed(1) + '%"></span>' +
       '<span class="sc-socbear" style="width:' + rp.toFixed(1) + '%"></span></div>' +
     '<span class="sc-socscore" style="color:' + col + '">' + (score != null ? (score >= 0 ? "+" : "") + score.toFixed(2) : "—") + "</span>" +
-    '<span class="sc-socposts">' + (posts != null ? posts.toLocaleString("en-US") + " posts" : "—") + "</span></div>";
+    '<span class="sc-socposts">' + (posts != null ? posts.toLocaleString("en-US") + (s.source === "youtube" ? " videos" : " posts") : "—") + "</span>" +
+    socLastHTML(s) + "</div>";
+}
+/* YOUTUBE SENTIMENT — most recent mention: channel · age. Rendered only when the detail columns exist
+   (jobs/youtube-sentiment/sql/001); until then the row is exactly the original four cells. */
+function socLastHTML(s) {
+  if (!s || !s.last_channel) return "";
+  const age = (typeof ytAgo === "function" && s.last_published_at) ? ytAgo(s.last_published_at) : "";
+  return '<span class="sc-soclast" title="most recent mention · ' + esc(s.last_channel) + (s.last_published_at ? " · " + esc(String(s.last_published_at).slice(0, 10)) : "") + '">' +
+    esc(s.last_channel) + (age ? ' <span class="sc-soclast__age">· ' + esc(age) + "</span>" : "") + "</span>";
+}
+/* which feed filled the table (youtube job vs anything else) + when */
+function socFeedInfo(tks) {
+  let yt = 0, any = 0, ts = 0;
+  (tks || Object.keys(SOCSENT)).forEach((t) => { const s = SOCSENT[String(t).toUpperCase()]; if (!s) return; any++; if (s.source === "youtube") yt++; const u = num(s.updated_ts); if (u && u > ts) ts = u; });
+  return { any: any, youtube: yt, updated: ts ? new Date(ts * 1000) : null };
 }
 /* tickers in the current scope (FAV / cohort / ALL / search) — same rules as board */
 function socScopeTickers() {
@@ -7792,14 +7816,29 @@ function socSentimentPaneHTML() {
   return '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
     '<div class="body2">' +
     '<div class="panel">' +
-      '<div class="sc-plabel sc-plabel--row"><span>social sentiment · <b>' + esc(scope) + "</b> · bullish / bearish · net · posts</span>" + SECFS_BTN + "</div>" +
+      '<div class="sc-plabel sc-plabel--row"><span id="socLabel">' + socLabelHTML(scope) + "</span>" + SECFS_BTN + "</div>" +
       '<div class="scroller" id="socList"><div class="soon">loading social sentiment…</div></div>' +
     "</div>" +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>social pulse · adapts to <b>' + esc(scope) + "</b></span>" + SECFS_BTN + '</div>' +
       '<div class="rail" id="socRail">' + AIREAD_SLOT("social · " + esc(scope)) +
-        '<div class="card"><h4>SOURCE · LIVE</h4><div class="sc-senttxt">Reads <b>social_sentiment</b> (DB). Bars, net score and post counts fill per ticker when the sentiment feed lands — no code change.</div></div>' +
+        '<div class="card"><h4>SOURCE · LIVE</h4><div class="sc-senttxt" id="socSource">' + socSourceHTML() + "</div></div>" +
       "</div></div></div>";
+}
+/* YOUTUBE SENTIMENT — label + source text follow what actually filled the table */
+function socLabelHTML(scope) {
+  const fi = socFeedInfo(socScopeTickers());
+  const yt = fi.youtube > 0;
+  return (yt ? "youtube sentiment · <b>" : "social sentiment · <b>") + esc(scope) + "</b> · bullish / bearish · net · " + (yt ? "videos · 7d" : "posts");
+}
+function socSourceHTML() {
+  const fi = socFeedInfo(null);
+  if (!fi.any) return "Reads <b>social_sentiment</b> (DB). Empty until the YouTube sentiment job (jobs/youtube-sentiment) writes its first pass.";
+  const when = fi.updated ? fi.updated.toISOString().slice(0, 16).replace("T", " ") + "Z" : "—";
+  if (fi.youtube) return "<b>YouTube</b> · English transcripts of the channels Alan subscribes to (youtube_videos · subscription), 7-day window. " +
+    "Per ticker: videos that mention it, how many lean bullish / bearish, mean lean, latest mention. " +
+    "Finance-keyword lexicon around each mention, with negation — <b>not an AI read</b>. Updated " + esc(when) + ".";
+  return "Reads <b>social_sentiment</b> (DB) · " + fi.any + " tickers · updated " + esc(when) + ".";
 }
 /* reserved-slot placeholder (StockTwits) */
 function socSoonHTML(name, ico, txt) {
@@ -8426,8 +8465,10 @@ function renderSocial() {
   }
   const anyData = tks.some((t) => SOCSENT[String(t).toUpperCase()]);
   const head = anyData ? "" :
-    '<div class="sc-socempty">social sentiment · <b>awaiting feed</b> — social_sentiment is empty; rows fill per ticker when the ingester lands.</div>';
+    '<div class="sc-socempty">social sentiment · <b>awaiting feed</b> — social_sentiment has no rows for this scope; the YouTube sentiment job (jobs/youtube-sentiment) fills it per ticker.</div>';
   list.innerHTML = head + tks.map((t) => socRowHTML(t, SOCSENT[String(t).toUpperCase()])).join("");
+  const lb = el("socLabel"); if (lb) lb.innerHTML = socLabelHTML(S.tq || S.coh);
+  const sc = el("socSource"); if (sc) sc.innerHTML = socSourceHTML();
 }
 /* fill: the SOCSENT map is already populated by the board pull; render from it, and
    kick a board refresh if it hasn't run yet so the scope + map exist. */
