@@ -355,22 +355,32 @@ def lex_re():
     return _LEX_RE
 
 
-def score_text(text):
-    """Return (bull_hits, bear_hits). Negation within the 3 preceding tokens flips a hit."""
+def score_marks(text):
+    """Return (bull_hits, bear_hits, marks). A mark is every word that fired, which way it
+    counted and whether a negator in the three words before it flipped it — so a stored
+    reading can be taken apart down to the words (SCI-5: "show how it is built")."""
     t = text.lower()
     bull = bear = 0
+    marks = []
     for m in lex_re().finditer(t):
         hit = m.group(1)
         before = re.findall(r"[a-z']+", t[max(0, m.start() - 40):m.start()])[-3:]
         neg = any(b in NEG for b in before)
-        is_bull = hit in BULL_PHRASES or hit in BULL_WORDS
-        if neg:
-            is_bull = not is_bull
+        was_bull = hit in BULL_PHRASES or hit in BULL_WORDS
+        is_bull = (not was_bull) if neg else was_bull
         if is_bull:
             bull += 1
         else:
             bear += 1
-    return bull, bear
+        marks.append({"w": hit, "polarity": 1 if was_bull else -1, "negated": neg,
+                      "effect": 1 if is_bull else -1, "at": m.start()})
+    return bull, bear, marks
+
+
+def score_text(text):
+    """Return (bull_hits, bear_hits). Unchanged arithmetic: the sum of what score_marks found."""
+    b, r, _ = score_marks(text)
+    return b, r
 
 
 def lean(bull, bear, min_hits=1):
@@ -464,17 +474,30 @@ def analyze(days, out_dir, min_video_hits=1, videos=None, universe=None, words=N
         cased = title + "\n" + desc
         found = collections.Counter()
         windows = collections.defaultdict(list)  # ticker -> [ (bull, bear) ]
-        cb, cr = score_text(cased)
+        cb, cr, cmarks = score_marks(cased)
         chan = v.get("channel_title") or ""
+        evidence = collections.defaultdict(lambda: {"hits": [], "sample": None})
         for t, n in mentions_in_cased(cased, tset, words, arx, chan).items():
             found[t] += n
             windows[t].append((cb, cr))
+            evidence[t]["hits"].extend({"w": m["w"], "polarity": m["polarity"], "negated": m["negated"],
+                                        "effect": m["effect"], "src": "title"} for m in cmarks)
+            if evidence[t]["sample"] is None and cased.strip():
+                evidence[t]["sample"] = cased.strip()[:400]
         if text:
             toks_pos = mentions_in_transcript(text, tset, words, arx, spoken, chan)
             for t, pos in toks_pos:
                 found[t] += 1
                 win = text[max(0, pos - 260):pos + 260]     # ~ +/- 40 words
-                windows[t].append(score_text(win))
+                wb, wr, wmarks = score_marks(win)
+                windows[t].append((wb, wr))
+                evidence[t]["hits"].extend({"w": m["w"], "polarity": m["polarity"], "negated": m["negated"],
+                                            "effect": m["effect"], "src": "transcript"} for m in wmarks)
+                if evidence[t]["sample"] is None or evidence[t].get("sample_src") != "transcript":
+                    # the sample is the transcript window itself, so the page can show the
+                    # sentences the reading was taken from rather than only the number
+                    evidence[t]["sample"] = win.strip()[:400]
+                    evidence[t]["sample_src"] = "transcript"
         tb, trr = score_text(cased + "\n" + (text or ""))
         tone = lean(tb, trr, min_hits=3)
         rec = {"video_id": v["video_id"], "channel": v.get("channel_title"), "title": title,
@@ -485,7 +508,13 @@ def analyze(days, out_dir, min_video_hits=1, videos=None, universe=None, words=N
             leans = [lean(b, r) for b, r in windows[t]]
             leans = [x for x in leans if x is not None]
             tl = round(sum(leans) / len(leans), 3) if leans else None
-            rec["tickers"][t] = {"mentions": n, "lean": tl, "windows": len(windows[t])}
+            ev = evidence.get(t) or {"hits": [], "sample": None}
+            hits = ev["hits"][:40]
+            rec["tickers"][t] = {"mentions": n, "lean": tl, "windows": len(windows[t]),
+                                 "bullish_hits": sum(1 for h in ev["hits"] if h["effect"] > 0),
+                                 "bearish_hits": sum(1 for h in ev["hits"] if h["effect"] < 0),
+                                 "hits": hits, "sample": ev.get("sample"),
+                                 "sample_src": ev.get("sample_src", "title")}
             per_ticker[t]["videos"].append({"video_id": v["video_id"], "channel": v.get("channel_title"),
                                             "published_at": v.get("published_at"), "title": title,
                                             "mentions": n, "lean": tl})
@@ -551,6 +580,58 @@ def write_key():
     return None, None
 
 
+VID_COLS = ["video_id", "ticker", "mentions", "lean", "windows", "method"]
+VID_EVIDENCE_COLS = ["bullish_hits", "bearish_hits", "hits", "sample", "sample_src"]
+
+
+def video_rows(vid_out):
+    """One row per (video, ticker): the reading for that clip, and the words behind it."""
+    out = []
+    for rec in vid_out or []:
+        for t, d in (rec.get("tickers") or {}).items():
+            out.append({"video_id": rec["video_id"], "ticker": t, "mentions": d.get("mentions"),
+                        "lean": d.get("lean"), "windows": d.get("windows"), "method": METHOD,
+                        "bullish_hits": d.get("bullish_hits"), "bearish_hits": d.get("bearish_hits"),
+                        "hits": d.get("hits") or [], "sample": d.get("sample"),
+                        "sample_src": d.get("sample_src")})
+    return out
+
+
+def apply_videos(vid_out, dry=False, with_evidence=None):
+    """Upsert youtube_video_sentiment. This is what makes the blend cover every ticker the
+    channels talked about instead of the nine the pooled roll-up happens to carry, and what
+    lets the Hub show the transcript window a reading came from."""
+    rows = video_rows(vid_out)
+    if not rows:
+        log("videos: nothing to write")
+        return {"rows": 0}
+    key, used = write_key()
+    if not key:
+        raise SystemExit("no write key in environment")
+    if with_evidence is None:   # does migration 002 exist? read-only probe
+        st, _ = pg_write("GET", "youtube_video_sentiment?select=" + ",".join(VID_EVIDENCE_COLS) + "&limit=1", None, anon_key(), "")
+        with_evidence = st in (200, 206)
+    cols = VID_COLS + (VID_EVIDENCE_COLS if with_evidence else [])
+    log("videos: using key from env var", used, "| rows", len(rows), "| columns", ",".join(cols), "| dry" if dry else "")
+    if dry:
+        return {"dry": len(rows), "columns": cols}
+    res = collections.Counter()
+    for i in range(0, len(rows), 200):
+        chunk = [{c: r.get(c) for c in cols} for r in rows[i:i + 200]]
+        st, body = pg_write("POST", "youtube_video_sentiment?on_conflict=video_id,ticker", chunk, key,
+                            "resolution=merge-duplicates,return=minimal")
+        if st in (200, 201, 204):
+            res["upserted"] += len(chunk)
+        else:
+            res["failed"] += len(chunk)
+            res["last_error"] = "%s %s" % (st, str(body)[:160])
+            if st in (401, 403):
+                log("videos STOP: write refused (%s)" % st)
+                break
+    log("videos:", dict(res))
+    return dict(res)
+
+
 def apply_rows(rows, dry=False, with_extra=None):
     key, used = write_key()
     if not key:
@@ -611,6 +692,13 @@ def main(argv=None):
     if a.cmd in ("apply", "run"):
         rows = json.load(open(a.rows or os.path.join(a.out, "rows.json")))
         apply_rows(rows, dry=a.dry_run)
+        # per-video rows: the reading for each clip and ticker, with the words behind it.
+        # Without these the blend can only cover the tickers the pooled roll-up carries.
+        vpath = os.path.join(a.out, "videos.json")
+        if os.path.exists(vpath):
+            apply_videos(json.load(open(vpath)), dry=a.dry_run)
+        else:
+            log("videos: no videos.json at", vpath, "- run analyze first")
 
 
 if __name__ == "__main__":
