@@ -13,6 +13,9 @@
   --bg:#0A0A0F; --panel:#0D0D14; --panel2:#101018; --sunk:#08080C;
   --line:#1A1A2A; --line2:#252538;
   --ink:#C6C8DE; --ink2:#9A9AB6; --dim:#868AAA; --mute:#4A4A62; --faint:#2E2E42;
+  /* DIRECTION, and only direction: the same two the Hub's board uses, so a red cohort here
+     is the same red as the cohort strip there. Everything else on this page stays grey. */
+  --bull:#00FFA3; --bear:#FF2D55;
   --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
   --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,sans-serif;
 }
@@ -58,6 +61,23 @@ a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
 .split .cash{background:repeating-linear-gradient(135deg,var(--panel2) 0 7px,var(--sunk) 7px 14px);color:var(--dim)}
 
 /* ---- what a layer read, and what it produced ---- */
+/* M31 — cohorts, the drill-down, favourites and the oddities */
+.up{color:var(--bull)} .dn{color:var(--bear)}
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--mute);
+  border:1px solid var(--line2);padding:1px 5px;margin:0 4px 3px 0;display:inline-block}
+.chip.on{color:var(--ink2);border-color:var(--ink2)}
+.chip.star{color:var(--ink);border-color:var(--ink2)}
+.dsec{border:1px solid var(--line);margin:0 0 16px;background:var(--panel)}
+.dsec>h3{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--dim);margin:0;
+  padding:11px 13px;border-bottom:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;font-weight:400}
+.dsec>h3 .r{margin-left:auto;color:var(--ink)}
+.dsec table{margin:0}
+.dsec td,.dsec th{padding-left:13px}
+.odd{border:1px solid var(--line);background:var(--panel);padding:14px 15px;margin:0 0 14px}
+.odd h3{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--dim);margin:0 0 9px;font-weight:400}
+.odd p{margin:0 0 9px;font-size:15px;color:var(--ink2);max-width:52em}
+.odd .mm{font-family:var(--mono);font-size:13px;color:var(--dim)}
+.note{font-size:13px;color:var(--mute);max-width:52em;margin:8px 0 0}
 .io{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);margin:14px 0 4px;background:var(--sunk)}
 .io div{flex:1 1 260px;padding:10px 13px;border-right:1px solid var(--line)}
 .io div:last-child{border-right:0}
@@ -238,12 +258,22 @@ td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
       <div class="split" id="split"></div>
     </div>
 
+    <div class="layer" id="L0">
+      <h2>LAYER ZERO — THE HUB'S OWN COHORTS</h2>
+      <p class="says" id="l0says"></p>
+      <p class="because" id="l0because"></p>
+      <div class="io" id="l0io"></div>
+      <div id="l0tab"></div>
+      <div class="knobs" id="k0"><div class="kh">YOUR ASSUMPTIONS — HOW MUCH THE COHORTS COUNT</div></div>
+    </div>
+
     <div class="layer" id="L1">
       <h2>LAYER ONE — HOW MUCH TO OWN</h2>
       <p class="says" id="l1says"></p>
       <p class="because" id="l1because"></p>
       <div class="io" id="l1io"></div>
       <div class="ev" id="l1ev"></div>
+      <div id="l1breadth"></div>
       <div class="knobs" id="k1"><div class="kh">YOUR ASSUMPTIONS — CHANGE ONE AND THE SENTENCE ABOVE CHANGES</div></div>
     </div>
 
@@ -265,6 +295,20 @@ td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
       <div class="knobs" id="k3"><div class="kh">YOUR ASSUMPTIONS — THE STEP LINES SIT IN THE STEPS THEMSELVES</div></div>
     </div>
 
+    <div class="layer" id="L3B">
+      <h2>INSIDE EACH SECTOR — THE NAMES, RANKED</h2>
+      <p class="because" id="drillbecause"></p>
+      <div id="drill"></div>
+    </div>
+
+    <div class="layer" id="LFAV">
+      <h2>YOUR FAVOURITES</h2>
+      <p class="says" id="favsays"></p>
+      <p class="because" id="favbecause"></p>
+      <div id="favtab"></div>
+      <div class="knobs" id="kf"><div class="kh">YOUR ASSUMPTIONS — WHAT A STAR IS WORTH</div></div>
+    </div>
+
     <div class="layer" id="L4">
       <h2>WHY NOT THE OTHERS</h2>
       <p class="because" id="npbecause"></p>
@@ -276,6 +320,18 @@ td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
       <p class="says" id="pickssays"></p>
       <div id="picks"></div>
       <button class="reset" id="reset">PUT EVERY ASSUMPTION BACK TO ITS BASELINE</button>
+    </div>
+
+    <div class="layer" id="LODD">
+      <h2>THE ODDITIES — MEASURED, NOT EXPLAINED AWAY</h2>
+      <p class="because" id="oddbecause"></p>
+      <div id="odd"></div>
+    </div>
+
+    <div class="layer" id="LCR">
+      <h2>COHORT REVIEW — RECOMMENDATIONS ONLY</h2>
+      <p class="because" id="crbecause"></p>
+      <div id="crtab"></div>
     </div>
 
     <div class="sources" id="sources"></div>
@@ -315,6 +371,19 @@ async function pg(path) {
   if (!r.ok) throw new Error(path.split("?")[0] + " → " + r.status);
   return r.json();
 }
+/* PostgREST serves at most 1,000 rows per request. ticker_cohorts holds 1,280, and reading it
+   unpaged is exactly the bug the dashboard had to fix: 280 memberships silently vanished and the
+   cohort means were then taken over the wrong members. Same paging as the Hub, same explicit
+   order so the pages stay disjoint. */
+async function pgAll(path, page) {
+  const size = page || 1000, out = [];
+  for (let off = 0; off < 20000; off += size) {
+    const rows = await pg(path + (path.indexOf("?") >= 0 ? "&" : "?") + "limit=" + size + "&offset=" + off);
+    out.push.apply(out, rows);
+    if (rows.length < size) break;
+  }
+  return out;
+}
 const api = async (p) => {
   const r = await fetch(API + p, { cache: "no-store" });
   if (!r.ok) throw new Error(p.split("?")[0] + " → " + r.status);
@@ -329,19 +398,62 @@ const PLAIN = { "Financial Services":"Financials", "Consumer Cyclical":"Consumer
   "Communication Services":"Communications", "Real Estate":"Real estate" };
 const plain = (s) => PLAIN[s] || s;
 
+/* THE HUB'S OWN COHORTS — copied from the dashboard (index.html, const COHORTS) so this page
+   groups names exactly the way the board does. Twelve DECLARED cohorts: the sector keys also sit
+   in ticker_cohorts, and iterating the table's keys instead of this list is what used to leak
+   MATERIALS, UTILITIES, STAPLES, REAL_ESTATE and COMMS into the cohort strip. If the dashboard's
+   list changes, this one has to change with it — tests/allocation-cohorts.test.mjs fails when
+   they drift apart. */
+const COHORTS = [
+  ["AI HW", "AI_HARDWARE"], ["AI SW", "AI_SOFTWARE"], ["MEGACAP", "MEGACAP"],
+  ["BLUE CHIP", "BLUE_CHIP"], ["GROWTH", "GROWTH"], ["CRYPTO", "CRYPTO"], ["INTL", "INTL"],
+  ["MACRO", "MACRO"], ["INDEXES", "INDEXES"], ["THEMATIC", "THEMATIC"],
+  ["METALS", "METALS"], ["AI POWER", "AI_POWERTRAIN"],
+];
+/* The Hub's favourites: the same seed the board boots with, merged with whatever this browser has
+   starred (localStorage "sc_fav"). Same origin as the Hub, so it is the same list — but it is a
+   per-browser list: there is no favourites table on the server today, so a name starred on the
+   phone is not visible here until it is starred here too. The page says that in words. */
+const FAV_SEED = ["MU", "NBIS", "SNDK"];
+function favList() {
+  const out = FAV_SEED.slice();
+  try {
+    const f = JSON.parse(localStorage.getItem("sc_fav") || "null");
+    if (Array.isArray(f)) for (const t of f) {
+      const tt = String(t).toUpperCase();
+      if (tt && out.indexOf(tt) === -1) out.push(tt);
+    }
+  } catch (_) {}
+  return out;
+}
+
 /* ---- the assumptions, with their baselines --------------------------------- */
 const BASE = { measure:"heat", neutral:50, speed:1, cashFloor:10,
                lookback:60, mix:50, nSectors:4, maxSector:35, rotation:25,
                perSector:3, maxDebt:2.0, valuation:true, within:"equal", staleDays:45,
                /* the funnel's own lines — each one is a step you can move */
-               gFloor:0, ernDays:7, liqFloor:25, trendOn:true, extMax:12, tapeCap:60 };
+               gFloor:0, ernDays:7, liqFloor:25, trendOn:true, extMax:12, tapeCap:60,
+               /* M31 — the Hub's own Geigers, breadth and favourites, each with a line you can move */
+               cohW:20,        /* how much the cohort read counts in a sector's standing */
+               cohName:0.25,   /* how much a name's own cohorts move it inside its sector */
+               breadthW:30,    /* how much breadth counts in how much to own */
+               favBoost:0.10,  /* the preference a favourite gets, in Geiger units */
+               favShow:true }; /* a favourite that was cut is still shown, with its verdict */
 const T = Object.assign({}, BASE);
 
 const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, missing:[],
              ern:null,        /* next reported date per name — null means the read FAILED */
              ranks:null,      /* the sector tool's own published ranking, read not recomputed */
              bars:{},         /* daily bars per name, only for names that reach the tape steps */
-             barsAsked:0, barsFailed:0 };
+             barsAsked:0, barsFailed:0,
+             cohsets:null,    /* cohort key -> Set(tickers), the WHOLE table, paged */
+             cohRows:null,    /* the dashboard's own cohort read, computed the dashboard's way */
+             sma:null,        /* ticker -> { s50, s200 } from the published indicator table */
+             smaDate:null,
+             fav:[],          /* the Hub's favourites, read from this browser */
+             odd:{} };        /* the instruments behind the oddities panel, full payload */
+/* the bond ETF and the two ways of owning gold and silver — the names Alan pointed at */
+const ODD = ["IEF", "GLD", "GCUSD", "SLV", "SIUSD"];
 const INFLIGHT = new Set();
 /* today in New York, because sessions and earnings dates are New York dates */
 const todayET = () => new Date().toLocaleDateString("en-CA", { timeZone:"America/New_York" });
@@ -381,15 +493,56 @@ async function load() {
   const kP = pg("sector_rankings?select=sector,sector_name,rank,score,date&order=date.desc&limit=60")
               .catch(()=>null);
 
-  const funds = ["SPY", ...Object.values(SECTOR_FUND)];
+  /* THE HUB'S OWN COHORTS — the same table the dashboard reads, paged in full */
+  const cP = pgAll("ticker_cohorts?select=ticker,cohort&order=ticker.asc,cohort.asc")
+              .catch((e)=>{ D.missing.push("the Hub's cohort membership ("+e.message+")"); return null; });
+  /* BREADTH — the published 50- and 200-day averages, one read each instead of 364 bar pulls.
+     Same table and same provider the Hub's board reads its indicators from. */
+  const sP = pgAll("provider_indicators_current?select=ticker,indicator,period_length,value,source_date,session_state" +
+                   "&provider=eq.FMP&timeframe=eq.1day&indicator=eq.sma&period_length=in.(50,200)&order=ticker.asc")
+              .catch((e)=>{ D.missing.push("the 50- and 200-day averages ("+e.message+")"); return null; });
+
+  /* RSP joins the tape: the equal-weight S&P against the cap-weighted one is the breadth of the
+     rally itself, which is the thing Alan named. */
+  const funds = ["SPY", "RSP", ...Object.values(SECTOR_FUND)];
   const tP = Promise.all(funds.map((s) =>
     api("/candles?symbol=" + s + "&tf=1d&limit=260")
       .then((j) => { D.tape[s] = (j.series || []).map((b)=>({ t:b.t, c:b.c })); })
       .catch(() => { D.tape[s] = null; })));
 
-  let ernRows, rankRows;
-  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows] = await Promise.all([gP, pP, fP, rP, eP, kP]);
-  await tP;
+  /* THE ODDITIES Alan asked about, measured rather than described: the bond ETF whose Geiger
+     reads deep red, and the gold future against the gold ETF. The whole payload is kept, not
+     just the closes, because the answer is partly in what the chart API says about the
+     instrument: which provider symbol, which surface, which price basis. */
+  const oP = Promise.all(ODD.map((s) =>
+    api("/candles?symbol=" + s + "&tf=1d&limit=260")
+      .then((j) => { D.odd[s] = { series:(j.series||[]).map((b)=>({t:b.t,c:b.c})), provider:j.provider,
+        provider_symbol:j.provider_symbol || null, surface:j.surface, price_basis:j.price_basis,
+        volume_basis:j.volume_basis || null }; })
+      .catch((e) => { D.odd[s] = { error:e.message }; })));
+
+  let ernRows, rankRows, cohRows, smaRows;
+  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows, cohRows, smaRows] =
+    await Promise.all([gP, pP, fP, rP, eP, kP, cP, sP]);
+  await tP; await oP;
+  D.fav = favList();
+  if (cohRows) {
+    D.cohsets = {};
+    cohRows.forEach((r)=>{ const k=r.cohort, t=String(r.ticker).toUpperCase();
+      (D.cohsets[k] = D.cohsets[k] || new Set()).add(t); });
+    D.cohRowCount = cohRows.length;
+  }
+  if (smaRows) {
+    D.sma = {}; let newest = null;
+    smaRows.forEach((r)=>{ const t=String(r.ticker).toUpperCase();
+      const o = (D.sma[t] = D.sma[t] || { s50:null, s200:null });
+      const v = Number(r.value);
+      if (!isFinite(v)) return;
+      if (Number(r.period_length) === 50) o.s50 = v; else if (Number(r.period_length) === 200) o.s200 = v;
+      const d = String(r.source_date||"").slice(0,10);
+      if (d && (!newest || d > newest)) newest = d; });
+    D.smaDate = newest;
+  }
   /* next report per name, earliest first; the read failing and the calendar being empty are
      two different things and are kept apart */
   if (ernRows) {
@@ -451,6 +604,107 @@ function universe() {
   return out;
 }
 
+
+/* ---- THE HUB'S OWN COHORTS ------------------------------------------------
+   This is the dashboard's arithmetic, not a second opinion about it. The board's
+   COHORT COMPARE strip takes, for each DECLARED cohort, the mean of the daily Geiger
+   composite over the cohort's members from ticker_cohorts, counting only members that
+   have a composite, and sorts bull to bear. The function below is that, character for
+   character in behaviour; tests/allocation-cohorts.test.mjs runs the dashboard's own
+   cohortCompareRows() and this one over the same fixture and fails if a single number
+   differs. Extra columns this page needs (how many members had no Geiger at all) are
+   worked out separately so they cannot touch the mean. */
+function cohortRowsFrom(cohsets, gcomp, cohorts, cohortOf) {
+  const buckets = {};
+  if (cohsets) {
+    for (const pair of cohorts) {
+      const key = pair[1], set = cohsets[key];
+      if (!set) continue;
+      for (const t of set) {
+        const v = gcomp[t];
+        if (v == null) continue;
+        (buckets[key] = buckets[key] || []).push(v);
+      }
+    }
+  } else if (cohortOf) {
+    for (const t in cohortOf) {
+      const key = cohortOf[t], v = gcomp[t];
+      if (v == null) continue;
+      (buckets[key] = buckets[key] || []).push(v);
+    }
+  }
+  return cohorts.map((pair) => {
+    const label = pair[0], key = pair[1], vals = buckets[key] || [];
+    const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    return { key, label, mean, n: vals.length };
+  }).sort((a, b) => (b.mean == null ? -99 : b.mean) - (a.mean == null ? -99 : a.mean));
+}
+function gcompMap() {
+  const out = {};
+  if (D.g) for (const t in (D.g.symbols || {})) {
+    const c = D.g.symbols[t] ? D.g.symbols[t].composite : null;
+    if (c != null) out[t] = c;
+  }
+  return out;
+}
+/* the cohort read, plus the honest coverage columns beside it */
+function cohortRows() {
+  if (!D.cohsets || !D.g) return null;
+  const gc = gcompMap();
+  const rows = cohortRowsFrom(D.cohsets, gc, COHORTS, null);
+  rows.forEach((r) => {
+    const set = D.cohsets[r.key] || new Set();
+    r.total = set.size;
+    r.absent = Array.from(set).filter((t)=> gc[t] == null).sort();
+  });
+  return rows;
+}
+/* every DECLARED cohort a name belongs to — a name can be in several, which is the point */
+function cohortsOf(t) {
+  if (!D.cohsets) return [];
+  const out = [];
+  for (const pair of COHORTS) if (D.cohsets[pair[1]] && D.cohsets[pair[1]].has(t)) out.push(pair[0]);
+  return out;
+}
+
+/* ---- BREADTH --------------------------------------------------------------
+   Two readings, both measured, neither invented:
+     · the equal-weight S&P (RSP) against the cap-weighted one (SPY) — if the rally is
+       carried by a handful of giants, this ratio falls while the index rises;
+     · how many names are above their own 50- and 200-day averages, from the published
+       averages the Hub's own indicator table carries (one read, not 364 bar pulls).
+   A reading with no data behind it is absent, never zero. */
+function rspRatio(days) {
+  const r = D.tape.RSP, spy = D.tape.SPY;
+  if (!r || !spy || r.length <= days || spy.length <= days) return null;
+  const now  = r[r.length-1].c / spy[spy.length-1].c;
+  const then = r[r.length-1-days].c / spy[spy.length-1-days].c;
+  if (!isFinite(now) || !isFinite(then) || then === 0) return null;
+  return (now / then - 1) * 100;
+}
+function breadthRead(eq) {
+  const b = { share50:null, share200:null, n50:0, of50:0, n200:0, of200:0,
+              rspLong:rspRatio(T.lookback), rspShort:rspRatio(20), reading:null, parts:[] };
+  if (D.sma) {
+    eq.forEach((x) => {
+      const a = D.sma[x.t]; if (!a || x.price == null) return;
+      if (a.s50 != null)  { b.of50++;  if (x.price > a.s50)  b.n50++; }
+      if (a.s200 != null) { b.of200++; if (x.price > a.s200) b.n200++; }
+    });
+    if (b.of50)  b.share50  = b.n50  / b.of50;
+    if (b.of200) b.share200 = b.n200 / b.of200;
+  }
+  /* each leg lands on the same -1..+1 scale the Geiger uses, so they can be averaged
+     without pretending a percentage and a ratio are the same thing */
+  if (b.share50  != null) b.parts.push({ k:"above the 50-day", v:(b.share50 -0.5)*2,
+    read: pct(b.share50*100) + " of " + b.of50 + " names" });
+  if (b.share200 != null) b.parts.push({ k:"above the 200-day", v:(b.share200-0.5)*2,
+    read: pct(b.share200*100) + " of " + b.of200 + " names" });
+  if (b.rspLong != null) b.parts.push({ k:"equal weight vs the index", v:clamp(b.rspLong/5, -1, 1),
+    read: "RSP " + sg(b.rspLong,1) + "% against SPY over " + T.lookback + " days" });
+  if (b.parts.length) b.reading = mean(b.parts.map((x)=>x.v));
+  return b;
+}
 
 /* ---- the tape, read only for the names that get that far --------------------
    Reading 120 daily bars for every name in four sectors would be hundreds of
@@ -631,15 +885,41 @@ function compute() {
   const m = { eq, ok: eq.length > 0, notes: [], missing: [...D.missing] };
   if (!m.ok) return m;
 
+  /* LAYER 0 — the Hub's own cohorts, read the dashboard's way, before anything else */
+  m.coh = cohortRows();
+  m.cohBy = {};
+  if (m.coh) m.coh.forEach((r)=>{ m.cohBy[r.key] = r; });
+  const tiltOf = (t) => {
+    if (!m.coh || !D.cohsets) return null;
+    const vals = [];
+    for (const pair of COHORTS) {
+      const k = pair[1];
+      if (D.cohsets[k] && D.cohsets[k].has(t) && m.cohBy[k] && m.cohBy[k].mean != null) vals.push(m.cohBy[k].mean);
+    }
+    return vals.length ? mean(vals) : null;
+  };
+  eq.forEach((x)=>{ x.cohs = cohortsOf(x.t); x.cohTilt = tiltOf(x.t); x.fav = D.fav.indexOf(x.t) !== -1; });
+  m.favAll = D.fav.slice();
+  m.favCovered = eq.filter((x)=>x.fav).length;
+
   /* LAYER 1 — how much to own */
   m.heat    = mean(eq.map((x)=>x.g));
   m.breadth = eq.filter((x)=>x.g>0).length / eq.length;
   m.rising  = eq.filter((x)=>x.g>0).length;
   m.reading = T.measure === "heat" ? m.heat : (m.breadth - 0.5) * 2;
-  m.investedRaw = T.neutral + T.speed * m.reading * 50;
+  /* BREADTH — Alan: "this rally was really low breadth". The board reading alone cannot see
+     that; a handful of giants can carry the average while most names sit under their own
+     averages. The breadth leg is measured, weighted by a line you can move, and the page
+     prints what it did to the answer. With no breadth data the leg is absent, not zero. */
+  m.br = breadthRead(eq);
+  m.bw = (m.br.reading != null) ? T.breadthW/100 : 0;
+  m.readingUsed = m.bw ? (1 - m.bw) * m.reading + m.bw * m.br.reading : m.reading;
+  m.investedRaw = T.neutral + T.speed * m.readingUsed * 50;
   m.invested = clamp(m.investedRaw, 0, 100 - T.cashFloor);
   m.capped   = m.investedRaw > 100 - T.cashFloor;
   m.cash     = 100 - m.invested;
+  m.investedNoBreadth = clamp(T.neutral + T.speed * m.reading * 50, 0, 100 - T.cashFloor);
+  m.breadthMoved = m.invested - m.investedNoBreadth;
 
   /* LAYER 2 — which sectors */
   const bySec = {};
@@ -672,15 +952,35 @@ function compute() {
   const rot = zRank ? T.rotation/100 : 0;
   secs.forEach((s) => {
     s.rotZ = (zRank && s.rankScore!=null) ? zRank(s.rankScore) : null;
-    s.score = s.rotZ==null ? s.tapeHeat : (1-rot)*s.tapeHeat + rot*s.rotZ;
+    s.scoreRot = s.rotZ==null ? s.tapeHeat : (1-rot)*s.tapeHeat + rot*s.rotZ;
+    s.score = s.scoreRot;
   });
   m.rot = { on: rot > 0, share: T.rotation, date: D.ranks ? D.ranks.date : null,
             covered: withRank.length, of: secs.length };
+  /* FOURTH LEG — THE HUB'S OWN COHORTS. Every name carries the read of the cohorts it belongs
+     to; a sector's cohort pressure is the average of that across its names. A sector full of
+     names that sit in red cohorts is marked down even when its own fund looks fine, and a
+     sector full of names in strong cohorts is marked up. Nothing is hidden: the table prints
+     the cohort column, and the page says in one line what the leg changed. */
+  secs.forEach((s) => {
+    const v = bySec[s.name].map((x)=>x.cohTilt).filter((t)=>t!=null);
+    s.cohTilt = v.length ? mean(v) : null; s.cohN = v.length;
+  });
+  const withCoh = secs.filter((s)=>s.cohTilt!=null);
+  const zCoh = withCoh.length > 1 ? zs(withCoh.map((s)=>s.cohTilt)) : null;
+  const cw = zCoh ? T.cohW/100 : 0;
+  secs.forEach((s) => {
+    s.cohZ = (zCoh && s.cohTilt!=null) ? zCoh(s.cohTilt) : null;
+    s.score = s.cohZ==null ? s.scoreRot : (1-cw)*s.scoreRot + cw*s.cohZ;
+  });
+  m.cohLeg = { on: cw > 0, share: T.cohW, covered: withCoh.length, of: secs.length,
+               absent: !m.coh ? "the cohort membership did not come back" : null };
   /* the same sort, run once without the rotation leg, so the page can say in one
      line what that leg actually changed instead of asking anyone to take it on trust */
   const pickTop = (key) => [...secs].sort((a,b)=>b[key]-a[key]).filter((x)=>x[key]>0)
                     .slice(0, T.nSectors).map((x)=>x.name);
-  m.rotWith = pickTop("score"); m.rotWithout = pickTop("tapeHeat");
+  m.rotWith = pickTop("scoreRot"); m.rotWithout = pickTop("tapeHeat");
+  m.cohWith = pickTop("score");  m.cohWithout = pickTop("scoreRot");
   secs.sort((a,b)=>b.score-a.score);
   m.sectorsAll = secs;
   let chosen = secs.filter((s)=>s.score>0).slice(0, T.nSectors);
@@ -734,7 +1034,14 @@ function compute() {
     const gEdge = x.g - mid.gMed;
     let vEdge = 0;
     if (T.valuation && x.pe>0 && mid.peMed>0) vEdge = clamp((mid.peMed - x.pe)/mid.peMed, -1, 1);
-    return Object.assign(x, { gEdge, vEdge, peMed: mid.peMed, gMed: mid.gMed, score: gEdge + 0.5*vEdge });
+    /* the name's own cohorts, and the preference you give a favourite. Both are added in the
+       open and both are printed beside the name, so a favourite is never quietly promoted:
+       it is promoted by exactly the number you set, and the page says what that changed. */
+    const cohAdd = x.cohTilt == null ? 0 : T.cohName * x.cohTilt;
+    const favAdd = x.fav ? T.favBoost : 0;
+    const bare   = gEdge + 0.5*vEdge + cohAdd;
+    return Object.assign(x, { gEdge, vEdge, peMed: mid.peMed, gMed: mid.gMed,
+      cohAdd, favAdd, scoreBare: bare, score: bare + favAdd });
   };
   F.candidates.forEach(scoreOf);
   const names = [], nonPicks = [];
@@ -755,6 +1062,60 @@ function compute() {
   });
   m.names = names;
   m.nonPicks = nonPicks;
+
+  /* WHAT THE FAVOURITE PREFERENCE CHANGED — the same selection run again with the boost at
+     zero. If the answer is the same, the page says so rather than implying the star did work. */
+  m.favChanged = [];
+  if (T.favBoost > 0) {
+    chosen.forEach((s) => {
+      const cands = F.candidates.filter((x)=>x.sector===s.name);
+      const withB = cands.slice().sort((a,b)=>b.score-a.score).slice(0, T.perSector).map((x)=>x.t);
+      const noB   = cands.slice().sort((a,b)=>b.scoreBare-a.scoreBare).slice(0, T.perSector).map((x)=>x.t);
+      withB.forEach((t)=>{ if (noB.indexOf(t) === -1) m.favChanged.push({ t, sector:s.name,
+        out: noB.filter((u)=>withB.indexOf(u)===-1)[0] || null }); });
+    });
+  }
+
+  /* SECTOR -> THE OPPORTUNITIES INSIDE IT. Every name that entered a chosen sector, with the
+     cohorts it belongs to and what happened to it, in one place: picked, ranked below the cut,
+     or removed by a named step with the number that removed it. */
+  const cutBy = {};
+  F.steps.forEach((st)=>{ st.dropped.forEach((d)=>{ if (!cutBy[d.t]) cutBy[d.t] = { step:st.title, why:d.why }; }); });
+  const pickBy = {}; names.forEach((n)=>{ pickBy[n.t] = n; });
+  const nonBy  = {}; (nonPicks||[]).forEach((n)=>{ nonBy[n.t] = n; });
+  m.drill = chosen.map((s) => {
+    const rows = bySec[s.name].map((x) => {
+      const p = pickBy[x.t], np = nonBy[x.t], cut = cutBy[x.t];
+      return { t:x.t, g:x.g, gMed:mids[s.name].gMed, cohs:x.cohs, cohTilt:x.cohTilt, fav:x.fav,
+        pe:x.pe, score: p ? p.score : (np ? np.score : (x.score != null ? x.score : null)),
+        fate: p ? "PICK" : (np ? "RANKED " + np.rank + " of " + np.of : (cut ? "HELD BACK" : "STILL READING")),
+        why: p ? pickWhy(p) : (np ? "cleared every step, ranked below the " + T.perSector + " you hold"
+                                  : (cut ? cut.step.toLowerCase() + " — " + cut.why : "its tape has not come back yet")),
+        w: p ? p.w : null };
+    }).sort((a,b) => (b.score == null ? -99 : b.score) - (a.score == null ? -99 : a.score));
+    return { sector:s.name, w:s.w, cohTilt:s.cohTilt, rows };
+  });
+
+  /* FAVOURITES — every starred name, wherever it ended up, with its verdict. A favourite in a
+     sector this page did not choose is still shown and still says why. Nothing is forced in. */
+  const eqBy = {}; eq.forEach((x)=>{ eqBy[x.t] = x; });
+  m.favRows = D.fav.map((t) => {
+    const x = eqBy[t];
+    if (!x) return { t, state:"NOT COVERED", why: D.g && D.g.symbols && D.g.symbols[t]
+      ? "the Geiger covers it, but it has no sector on file here, so this page's equity universe does not carry it"
+      : "the Geiger artifact does not carry this name tonight" };
+    const inChosen = chosen.some((s)=>s.name === x.sector);
+    const p = pickBy[t], np = nonBy[t], cut = cutBy[t];
+    return { t, sector:x.sector, g:x.g, cohs:x.cohs, cohTilt:x.cohTilt, pe:x.pe,
+      state: p ? "PICK" : np ? "RANKED " + np.rank + " of " + np.of : cut ? "HELD BACK"
+             : inChosen ? "STILL READING" : "SECTOR NOT CHOSEN",
+      w: p ? p.w : null,
+      why: p ? pickWhy(p)
+         : np ? "cleared every step in " + plain(x.sector) + ", ranked below the " + T.perSector + " you hold"
+         : cut ? cut.step.toLowerCase() + " — " + cut.why
+         : inChosen ? "its daily bars have not come back yet"
+         : "this page did not choose " + plain(x.sector) + " tonight, so its names were never run through the funnel" };
+  });
 
   /* freshness — nothing frozen may feed a conclusion */
   const fAges = eq.map((x)=>x.fAge).filter((a)=>a!=null);
@@ -865,7 +1226,11 @@ function drawDesk(m) {
   document.getElementById("l1because").innerHTML = "The Geiger scores every name from −1 to +1 over eight timeframes. " +
     (T.measure==="heat" ? "Averaged across " + m.eq.length + " names that is " + sg(m.heat) + "."
                         : "Counting only whether a name is rising, " + pct(m.breadth*100) + " of " + m.eq.length + " are.") +
-    " A flat market sits at your baseline of " + pct(T.neutral) + " invested, and the reading moves it from there.";
+    " A flat market sits at your baseline of " + pct(T.neutral) + " invested, and the reading moves it from there. " +
+    (m.br.reading != null
+      ? "Breadth counts for " + T.breadthW + "% of that reading: " +
+        m.br.parts.map((x)=>esc(x.k) + " " + sg(x.v)).join(", ") + ", together " + sg(m.br.reading) + "."
+      : "No breadth reading came back tonight, so the board average carries it alone.");
   const gWhen = D.g && D.g.computed_utc
     ? new Date(D.g.computed_utc).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) + " NY"
     : "time unknown";
@@ -895,7 +1260,12 @@ function drawDesk(m) {
     "with no sector allowed more than " + pct(T.maxSector) + ". " +
     (m.rot.on
       ? "The sector rotation tool's own published ranking counts for " + m.rot.share + "% of the standing — this page reads that rank, it does not recompute it. " + rotSaid
-      : "No published sector-rotation ranking came back today, so the standing is the tape and the names alone.");
+      : "No published sector-rotation ranking came back today, so the standing is the tape and the names alone.") +
+    (m.cohLeg.on
+      ? " A fourth reading joins them: the Hub's own cohorts. Each sector carries the average cohort read of the names " +
+        "inside it, and that counts for " + m.cohLeg.share + "% of the standing (" + m.cohLeg.covered + " of " +
+        m.cohLeg.of + " sectors carry one). " + cohEffect(m)
+      : " The cohort leg is off or has nothing to read, so the cohorts are shown above but are not moving the standing.");
   document.getElementById("l2io").innerHTML = ioBox(
     "each sector fund against SPY over " + num(T.lookback) + " days (" +
       (D.tape.SPY ? D.tape.SPY.length + " daily bars each" : "the tape did not come back") + ") · " +
@@ -906,13 +1276,14 @@ function drawDesk(m) {
     m.sectors.map((s)=>"<b>" + esc(plain(s.name)) + "</b> " + pct(s.w)).join(" · "));
   const maxRel = Math.max(...m.sectorsAll.map((s)=>Math.abs(s.rel||0)), 1);
   document.getElementById("l2tab").innerHTML = "<table><thead><tr>" +
-    "<th>SECTOR</th><th>NAMES</th><th>VS MARKET " + T.lookback + "D</th><th>ITS OWN NAMES</th><th>ROTATION</th><th>STANDING</th><th>WEIGHT</th>" +
+    "<th>SECTOR</th><th>NAMES</th><th>VS MARKET " + T.lookback + "D</th><th>ITS OWN NAMES</th><th>ROTATION</th><th>COHORTS</th><th>STANDING</th><th>WEIGHT</th>" +
     "</tr></thead><tbody>" + m.sectorsAll.map((s) => {
       const on = m.sectors.includes(s);
       return '<tr class="'+(on?"pick":"out")+'"><td>'+esc(plain(s.name))+(on?"":"")+"</td><td>"+s.n+"</td>" +
         "<td>"+(s.rel==null?"—":sg(s.rel,1)+"%")+relBar(s.rel,maxRel)+"</td>" +
         "<td>"+sg(s.heat)+"</td>" +
         "<td>"+(s.rank==null?"—":"#"+s.rank+'<span class="why">'+sg(s.rankScore,2)+"</span>")+"</td>" +
+        "<td>"+(s.cohTilt==null?"—":sgc(s.cohTilt))+"</td>" +
         "<td>"+sg(s.score,2)+"</td>" +
         "<td>"+(on?pct(s.w):"—")+"</td></tr>"; }).join("") + "</tbody></table>";
 
@@ -935,6 +1306,7 @@ function drawDesk(m) {
       : "<b>" + m.names.length + " picks</b>, " + (m.nonPicks||[]).length + " non-picks, and " +
         F.steps.reduce((a,st)=>a+st.dropped.length,0) + " names removed with a reason");
   renderFunnel(m); renderNonPicks(m); renderPicks(m);
+  drawCohorts(m); drawBreadth(m); drawDrill(m); drawFav(m); drawOdd(m); drawCohortReview(m);
 
   document.getElementById("sources").innerHTML = sourcesHTML(m);
 }
@@ -959,8 +1331,269 @@ function sourcesHTML(m) {
       (D.ranks ? "ranking of " + D.ranks.date + ", read as published and never recomputed here" : "nothing published came back") + "<br>" +
     "Daily bars for the funnel · chart API /candles tf=1d limit=120 · asked for " + D.barsAsked +
       " names" + (D.barsFailed ? ", " + D.barsFailed + " came back empty" : "") + "<br>" +
+    "Cohorts · scintilla-live ticker_cohorts, the whole table read in pages · " + (D.cohRowCount||0) +
+      " memberships · the same table and the same means the dashboard's COHORT COMPARE strip uses<br>" +
+    "Breadth · scintilla-live provider_indicators_current, FMP 50- and 200-day averages dated " + esc(D.smaDate||"—") +
+      " · " + (D.sma ? Object.keys(D.sma).length : 0) + " names · and RSP against SPY on the chart API's daily bars<br>" +
+    "Favourites · this browser's sc_fav list merged with the board's seed · " + D.fav.length +
+      " names · there is no favourites table on the server, so another device's stars are not visible here<br>" +
+    "The oddities · chart API /candles for " + ODD.join(", ") + ", full payload including provider symbol and price basis<br>" +
     "Prices · chart API /quotes, asked for after the page drew itself; if it sheds load the close above stands.<br>" +
     "No discounted cash flow is used anywhere on this page.";
+}
+
+/* ---- M31 · the Hub's own Geigers on this page ------------------------------ */
+const sgc = (v,d) => (v==null||!isFinite(v)) ? "—" :
+  '<span class="' + (v>=0 ? "up" : "dn") + '">' + sg(v,d) + "</span>";
+const chips = (arr, cls) => (arr||[]).map((c)=>'<span class="chip '+(cls||"on")+'">'+esc(c)+"</span>").join("");
+const retOf = (ser, days) => (!ser || ser.length <= days) ? null :
+  (ser[ser.length-1].c / ser[ser.length-1-days].c - 1) * 100;
+const dstr = (ms) => { try { return new Date(ms).toISOString().slice(0,10); } catch(_) { return "—"; } };
+
+/* what the cohort leg actually changed — the same honesty the rotation leg already gets */
+function cohEffect(m) {
+  if (!m.cohLeg.on) return "";
+  const a = m.cohWith.join("|"), b = m.cohWithout.join("|");
+  if (a === b) return "Switching the cohorts off changes nothing today: the same sectors in the same order.";
+  const same = [...m.cohWith].sort().join("|") === [...m.cohWithout].sort().join("|");
+  if (same) return "Switching them off leaves the same sectors, ordered " +
+    list(m.cohWithout.map((n)=>esc(plain(n)))) + " instead, so only the weights move.";
+  return "Switching them off would choose " + list(m.cohWithout.map((n)=>esc(plain(n)))) + " instead.";
+}
+
+function drawCohorts(m) {
+  const says = document.getElementById("l0says");
+  if (!m.coh) {
+    says.innerHTML = "The Hub's cohort membership did not come back, so this page could not read the cohorts tonight. " +
+      "Nothing below pretends otherwise: the cohort leg is absent, not zero.";
+    document.getElementById("l0because").innerHTML = "";
+    document.getElementById("l0io").innerHTML = ""; document.getElementById("l0tab").innerHTML = "";
+    return;
+  }
+  const red = m.coh.filter((r)=>r.mean!=null && r.mean<0), grn = m.coh.filter((r)=>r.mean!=null && r.mean>=0);
+  const top = grn[0], bot = m.coh.filter((r)=>r.mean!=null).slice(-1)[0];
+  says.innerHTML = num(red.length) + " of " + num(m.coh.filter((r)=>r.mean!=null).length) +
+    " cohorts read negative tonight" + (red.length ? " — " + red.map((r)=>"<b>"+esc(r.label)+"</b> "+sgc(r.mean)).join(", ") : "") + ". " +
+    (top ? "The strongest is <b>" + esc(top.label) + "</b> at " + sgc(top.mean) + "" : "") +
+    (bot ? " and the weakest <b>" + esc(bot.label) + "</b> at " + sgc(bot.mean) : "") + ".";
+  document.getElementById("l0because").innerHTML =
+    "These are the board's own numbers, not a second opinion about them. For each cohort the dashboard takes the " +
+    "mean of the daily Geiger composite across the cohort's members, counting only members that have a composite, " +
+    "and sorts them bull to bear; this page runs that same calculation over the same two reads — the Geiger artifact " +
+    "and the Hub's <b>ticker_cohorts</b> table, all " + num(D.cohRowCount||0) + " rows of it, paged so nothing is " +
+    "silently dropped. A cohort's read then counts for " + num(T.cohW + "%") + " of a sector's standing in layer two, " +
+    "and each name is moved inside its sector by " + num("×"+T.cohName.toFixed(2)) + " of the read of the cohorts it " +
+    "belongs to. " + cohEffect(m);
+  document.getElementById("l0io").innerHTML = ioBox(
+    "the Geiger composite for " + num(Object.keys((D.g&&D.g.symbols)||{}).length) + " names and " +
+      num(D.cohRowCount||0) + " cohort memberships · " + num(m.coh.length) + " declared cohorts",
+    m.coh.slice(0,4).map((r)=>"<b>"+esc(r.label)+"</b> "+sg(r.mean)).join(" · ") + " … " +
+      m.coh.slice(-2).map((r)=>"<b>"+esc(r.label)+"</b> "+sg(r.mean)).join(" · "));
+  /* which of tonight's chosen sectors each cohort actually reaches */
+  const secOf = {}; m.eq.forEach((x)=>{ secOf[x.t] = x.sector; });
+  const chosenNames = new Set(m.sectors.map((s)=>s.name));
+  document.getElementById("l0tab").innerHTML = "<table><thead><tr>" +
+    "<th>COHORT</th><th>READ</th><th>MEMBERS COUNTED</th><th>NO GEIGER</th><th>IN TONIGHT'S SECTORS</th><th>WHERE IT LANDS</th>" +
+    "</tr></thead><tbody>" + m.coh.map((r) => {
+      const mem = Array.from((D.cohsets && D.cohsets[r.key]) || []);
+      const inChosen = mem.filter((t)=>chosenNames.has(secOf[t]));
+      const bySec = {}; inChosen.forEach((t)=>{ bySec[secOf[t]] = (bySec[secOf[t]]||0)+1; });
+      const where = Object.entries(bySec).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc(plain(k))+" "+v).join(", ");
+      return "<tr><td>" + esc(r.label) + "</td>" +
+        "<td>" + (r.mean==null ? "—" : sgc(r.mean)) + "</td>" +
+        "<td>" + r.n + " of " + r.total + "</td>" +
+        "<td>" + (r.absent.length ? '<span class="why">' + esc(r.absent.slice(0,6).join(", ")) +
+            (r.absent.length>6 ? " +"+(r.absent.length-6)+" more" : "") + "</span>" : "—") + "</td>" +
+        "<td>" + (inChosen.length || "—") + "</td>" +
+        "<td>" + (where || "—") + "</td></tr>"; }).join("") + "</tbody></table>";
+}
+
+function drawBreadth(m) {
+  const host = document.getElementById("l1breadth"), b = m.br;
+  if (!b.parts.length) {
+    host.innerHTML = '<p class="note">No breadth reading came back tonight — neither the published 50- and 200-day ' +
+      "averages nor the equal-weight tape — so how much to own rests on the board average alone, and this page says so " +
+      "rather than filling the gap with a guess.</p>";
+    return;
+  }
+  host.innerHTML = "<table><thead><tr><th>BREADTH</th><th>WHAT IT READS</th><th>ON THE GEIGER SCALE</th><th>EFFECT</th></tr></thead><tbody>" +
+    b.parts.map((x)=>"<tr><td>" + esc(x.k) + "</td><td>" + esc(x.read) + "</td><td>" + sgc(x.v) + "</td>" +
+      "<td>" + (x.v>=0 ? "adds to" : "takes from") + " how much to own</td></tr>").join("") +
+    "<tr class='pick'><td>the three together</td><td>weighted " + T.breadthW + "% against the board average</td>" +
+      "<td>" + sgc(b.reading) + "</td><td>" +
+      (Math.abs(m.breadthMoved) < 0.5 ? "moves the answer by less than a point"
+        : (m.breadthMoved>0 ? "adds " : "takes off ") + pct(Math.abs(m.breadthMoved)) ) + "</td></tr>" +
+    "</tbody></table>" +
+    '<p class="note">The board average alone would say ' + pct(m.investedNoBreadth) + " invested; with breadth it says " +
+    pct(m.invested) + ". " + (b.share50!=null && b.share200!=null && b.share50 < 0.5 && b.rspLong!=null && b.rspLong<0
+      ? "Fewer than half the names are above their own 50-day average while the equal-weight index trails the " +
+        "cap-weighted one — that is a narrow market, and the page owns less because of it."
+      : "Each leg is measured tonight, not assumed.") +
+    " The averages are the published ones dated " + esc(D.smaDate || "—") + "; the equal-weight leg is RSP against SPY " +
+    "on the same daily bars the sector tape uses.</p>";
+}
+
+function drawDrill(m) {
+  document.getElementById("drillbecause").innerHTML =
+    "A sector is chosen, and then the names inside it are ranked by the same funnel — nothing here is a separate " +
+    "opinion. Every name that entered is shown: the ones held, the ones that cleared every step but ranked below the " +
+    "cut, and the ones a step removed with the number that removed it. The cohorts each name belongs to are beside it, " +
+    "because that is how a red cohort reaches a single name.";
+  document.getElementById("drill").innerHTML = (m.drill||[]).map((d) =>
+    '<div class="dsec"><h3>' + esc(plain(d.sector).toUpperCase()) +
+      "<span>weight " + pct(d.w) + "</span>" +
+      "<span>cohort read " + (d.cohTilt==null ? "—" : sg(d.cohTilt)) + "</span>" +
+      '<span class="r">' + d.rows.length + " names</span></h3>" +
+      "<table><thead><tr><th>NAME</th><th>COHORTS</th><th>GEIGER</th><th>VS SECTOR MIDDLE</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>" +
+      d.rows.map((r)=>'<tr class="' + (r.fate==="PICK" ? "pick" : "out") + '"><td>' +
+        (r.fav ? '<span class="chip star">FAV</span>' : "") + esc(r.t) + "</td>" +
+        "<td>" + (r.cohs.length ? chips(r.cohs) : '<span class="why">no declared cohort</span>') + "</td>" +
+        "<td>" + sgc(r.g) + "</td>" +
+        "<td>" + sg(r.g - r.gMed) + "</td>" +
+        "<td>" + esc(r.fate) + '<span class="why">' + esc(r.why) + "</span></td>" +
+        "<td>" + (r.w==null ? "—" : pct(r.w,1)) + "</td></tr>").join("") +
+      "</tbody></table></div>").join("") ||
+    '<p class="note">No sector was chosen, so there is nothing to drill into.</p>';
+}
+
+function drawFav(m) {
+  const all = m.favRows || [];
+  const picked = all.filter((r)=>r.state==="PICK");
+  /* "always shown with their verdict" is a switch, not a silence: with it off the cut
+     favourites are hidden from the table and the count of them is still printed. */
+  const rows = T.favShow ? all : picked;
+  const hidden = all.length - rows.length;
+  document.getElementById("favsays").innerHTML =
+    "You have " + num(rows.length) + " favourite" + (rows.length===1?"":"s") + ": " +
+    rows.map((r)=>"<b>"+esc(r.t)+"</b>").join(", ") + ". Tonight " + num(picked.length) +
+    " of them " + (picked.length===1?"is":"are") + " held, and " +
+    (T.favShow ? "every other one is shown below with the reason."
+               : num(hidden) + " that did not make it " + (hidden===1?"is":"are") +
+                 " hidden because you turned that off — they are cut either way.");
+  document.getElementById("favbecause").innerHTML =
+    "A star is a preference, not an instruction. It adds " + num(sg(T.favBoost)) + " to a name's standing inside its " +
+    "own sector — the same units the Geiger uses, so you can see what it is worth against everything else — and it " +
+    "never pushes a name past a step it failed. " +
+    (T.favBoost === 0 ? "Right now the preference is zero, so a star changes nothing but what is shown."
+      : (m.favChanged.length
+        ? "Tonight it changed the answer: " + m.favChanged.map((c)=>"<b>"+esc(c.t)+"</b> is held in " +
+            esc(plain(c.sector)) + (c.out ? " in place of " + esc(c.out) : "")).join(", ") + "."
+        : "Tonight it changed nothing: the same names are held with or without it.")) +
+    " Favourites come from this browser's saved list (the same <b>sc_fav</b> the board uses) merged with the board's " +
+    "seed. There is no favourites table on the server, so a name starred on another device is not visible here yet.";
+  document.getElementById("favtab").innerHTML = "<table><thead><tr>" +
+    "<th>NAME</th><th>SECTOR</th><th>COHORTS</th><th>GEIGER</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>" +
+    rows.map((r)=>'<tr class="' + (r.state==="PICK" ? "pick" : "out") + '"><td>' + esc(r.t) + "</td>" +
+      "<td>" + esc(r.sector ? plain(r.sector) : "—") + "</td>" +
+      "<td>" + (r.cohs && r.cohs.length ? chips(r.cohs) : "—") + "</td>" +
+      "<td>" + (r.g==null ? "—" : sgc(r.g)) + "</td>" +
+      "<td>" + esc(r.state) + '<span class="why">' + esc(r.why) + "</span></td>" +
+      "<td>" + (r.w==null ? "—" : pct(r.w,1)) + "</td></tr>").join("") + "</tbody></table>";
+}
+
+function drawOdd(m) {
+  document.getElementById("oddbecause").innerHTML =
+    "Two things on the board looked wrong to you. Neither is a display fault, and both are measured here from the " +
+    "chart API rather than explained away.";
+  const G = (t) => (D.g && D.g.symbols && D.g.symbols[t]) || null;
+  const o = (t) => D.odd[t] || {};
+  const ief = G("IEF"), ieS = o("IEF").series, ieSma = (D.sma && D.sma.IEF) || {};
+  const last = ieS && ieS.length ? ieS[ieS.length-1] : null;
+  let H = "";
+  H += '<div class="odd"><h3>IEF — WHY IT READS SO RED</h3>' +
+    "<p><b>IEF is the iShares 7–10 Year Treasury Bond ETF.</b> It holds US government bonds with about seven to ten " +
+    "years left to run. It is not a company: it has no earnings, no balance sheet and nothing to beat. What it has is " +
+    "a price, and that price moves opposite to long-term interest rates — when yields rise, the bonds already issued " +
+    "are worth less, and the fund falls.</p>" +
+    "<p>The Geiger reads price and nothing else. So a deep red IEF is the Geiger saying <i>this price has been " +
+    "falling across the timeframes it watches</i> — which is another way of saying long yields have been rising. It " +
+    "is not a warning about the US government, and it is not a broken tile.</p>" +
+    '<p class="mm">Tonight: Geiger ' + (ief ? sgc(ief.composite) + " (trend " + sg(ief.trend) + ", momentum " + sg(ief.momentum) + ")" : "—") +
+    (last ? " · last close " + last.c.toFixed(2) + " on " + dstr(last.t) : "") +
+    (ieSma.s50!=null ? " · 50-day average " + ieSma.s50.toFixed(2) : "") +
+    (ieSma.s200!=null ? " · 200-day average " + ieSma.s200.toFixed(2) : "") +
+    (ieS ? " · " + sg(retOf(ieS,20),1) + "% over 20 sessions, " + sg(retOf(ieS,60),1) + "% over 60" : "") + "</p>" +
+    '<p class="note">This page never buys bonds: IEF is not in an equity sector, so it is not in the universe layer ' +
+    "three picks from. It is here because it sits on your board and the red was real.</p></div>";
+
+  const pair = (a, b, what) => {
+    const A = o(a), B = o(b), sa = A.series, sb = B.series;
+    const ga = G(a), gb = G(b);
+    return '<div class="odd"><h3>' + esc(what) + "</h3>" +
+      "<table><thead><tr><th></th><th>" + esc(a) + "</th><th>" + esc(b) + "</th></tr></thead><tbody>" +
+      "<tr><td>what it is</td><td>" + (a==="GLD" ? "an ETF that owns bullion in a vault" : "a fund") +
+        "</td><td>the futures contract on the metal</td></tr>" +
+      "<tr><td>newest daily bar</td><td>" + (sa&&sa.length ? dstr(sa[sa.length-1].t) : "—") +
+        "</td><td>" + (sb&&sb.length ? dstr(sb[sb.length-1].t) : "—") + "</td></tr>" +
+      "<tr><td>last close</td><td>" + (sa&&sa.length ? sa[sa.length-1].c.toFixed(2) : "—") +
+        "</td><td>" + (sb&&sb.length ? sb[sb.length-1].c.toFixed(2) : "—") + "</td></tr>" +
+      "<tr><td>5 sessions</td><td>" + sgc(retOf(sa,5),1) + "%</td><td>" + sgc(retOf(sb,5),1) + "%</td></tr>" +
+      "<tr><td>20 sessions</td><td>" + sgc(retOf(sa,20),1) + "%</td><td>" + sgc(retOf(sb,20),1) + "%</td></tr>" +
+      "<tr><td>60 sessions</td><td>" + sgc(retOf(sa,60),1) + "%</td><td>" + sgc(retOf(sb,60),1) + "%</td></tr>" +
+      "<tr><td>Geiger tonight</td><td>" + (ga ? sgc(ga.composite) : "<b>none</b>") +
+        "</td><td>" + (gb ? sgc(gb.composite) : "<b>none — not in the artifact</b>") + "</td></tr>" +
+      "<tr><td>provider symbol</td><td>" + esc(String(A.provider_symbol || A.provider || "—")) +
+        "</td><td>" + esc(String(B.provider_symbol || B.provider || "—")) + "</td></tr>" +
+      "<tr><td>price basis</td><td>" + esc(String(A.price_basis || "—")) + "</td><td>" + esc(String(B.price_basis || "—")) + "</td></tr>" +
+      "</tbody></table></div>";
+  };
+  H += pair("GLD", "GCUSD", "GOLD — THE ETF AND THE FUTURE ARE NOT THE SAME INSTRUMENT");
+  const gs = (o("GLD").series||[]), fs = (o("GCUSD").series||[]);
+  const dayGap = (gs.length && fs.length) ? Math.round((gs[gs.length-1].t - fs[fs.length-1].t) / 86400000) : null;
+  H += '<div class="odd"><h3>WHY THE TWO DISAGREE — IN PLAIN WORDS</h3>' +
+    "<p><b>They are different things.</b> GLD is a share in a trust that owns bars of gold; its price is roughly a " +
+    "tenth of an ounce minus the fee the trust charges every year, and it trades only while the US stock market is " +
+    "open. The gold future is a contract to take delivery of gold in a particular month; it trades nearly around the " +
+    "clock, and it carries the cost of holding gold until that month, so it normally sits <i>above</i> the spot price.</p>" +
+    "<p><b>They roll, and the ETF does not.</b> A future expires. The quoted contract hands over to the next month, " +
+    "and the price steps at the handover even though gold itself did not move. An ETF has nothing to roll.</p>" +
+    "<p><b>They are not even measured over the same day here.</b> " +
+    (dayGap ? "Tonight the future's newest daily bar is <b>" + dayGap + " day" + (dayGap===1?"":"s") +
+      " behind</b> the ETF's, so any read that compares them is comparing two different sessions."
+            : "Tonight both carry the same newest daily bar.") + "</p>" +
+    "<p><b>And only one of them has a Geiger at all.</b> The Geiger artifact covers the declared equity universe; " +
+    "the metal futures are not in it. That is why the METALS cohort's number is taken over the members that do have " +
+    "a read and not over the futures beside them — the table in layer zero names exactly which members were left out.</p></div>";
+  H += pair("SLV", "SIUSD", "SILVER — THE SAME TWO THINGS, THE SAME DIFFERENCE");
+  document.getElementById("odd").innerHTML = H;
+}
+
+function drawCohortReview(m) {
+  if (!D.cohsets) { document.getElementById("crtab").innerHTML = ""; return; }
+  const declared = COHORTS.map((c)=>c[1]);
+  const inHow = {};
+  declared.forEach((k)=>{ (D.cohsets[k]||new Set()).forEach((t)=>{ (inHow[t] = inHow[t] || []).push(k); }); });
+  const allKeys = Object.keys(D.cohsets).sort();
+  const undeclared = allKeys.filter((k)=>declared.indexOf(k) === -1);
+  document.getElementById("crbecause").innerHTML =
+    "The Hub's cohort table holds " + num(D.cohRowCount||0) + " memberships across " + num(allKeys.length) +
+    " keys, of which " + num(declared.length) + " are the declared cohorts the board shows; the rest are the factual " +
+    "sector and size keys that live on the other side of the board's toggle. Nothing here is changed — these are " +
+    "observations for you to accept or reject.";
+  const rows = m.coh ? m.coh.slice() : [];
+  document.getElementById("crtab").innerHTML = "<table><thead><tr>" +
+    "<th>COHORT</th><th>MEMBERS</th><th>WITH A GEIGER</th><th>READ</th><th>ALSO IN OTHER COHORTS</th><th>WHAT I WOULD LOOK AT</th>" +
+    "</tr></thead><tbody>" + rows.map((r) => {
+      const mem = Array.from(D.cohsets[r.key] || []);
+      const shared = mem.filter((t)=>(inHow[t]||[]).length > 1);
+      const notes = [];
+      if (r.total && r.n / r.total < 0.5)
+        notes.push("the read is taken over " + r.n + " of " + r.total + " members — it describes a minority of the cohort");
+      else if (r.absent.length)
+        notes.push(r.absent.length + " member" + (r.absent.length===1?"":"s") + " carry no Geiger (" + r.absent.slice(0,4).join(", ") + ")");
+      if (r.key === "MEGACAP" && D.cohsets.MEGA_CAP)
+        notes.push("MEGA_CAP also exists in the table with " + D.cohsets.MEGA_CAP.size + " members; the board reads MEGACAP (" + r.total + ")");
+      if (shared.length > r.total * 0.8 && r.total > 4)
+        notes.push("almost every member sits in another cohort too, so its read mostly repeats theirs");
+      if (!notes.length) notes.push("nothing misfiled that I can see");
+      return "<tr><td>" + esc(r.label) + "</td><td>" + r.total + "</td><td>" + r.n + "</td>" +
+        "<td>" + (r.mean==null ? "—" : sgc(r.mean)) + "</td>" +
+        "<td>" + shared.length + (shared.length ? '<span class="why">' + esc(shared.slice(0,8).join(", ")) +
+          (shared.length>8 ? " +" + (shared.length-8) + " more" : "") + "</span>" : "") + "</td>" +
+        "<td>" + esc(notes.join("; ")) + "</td></tr>"; }).join("") + "</tbody></table>" +
+    '<p class="note">Keys in the table that the board does not show as cohorts: ' + num(undeclared.length) +
+    " (the eleven sector names, the size buckets and the FMP industry keys). They are not a fault — they feed the " +
+    "SECTORS side of the board's toggle — but MEGACAP and MEGA_CAP sitting side by side is worth a decision.</p>";
 }
 
 /* ---- the funnel on the page ------------------------------------------------
@@ -1154,6 +1787,28 @@ function drawReport(m) {
     (T.speed===1 ? "one for one" : T.speed<1 ? "gently" : "hard") + ", never leaving less than " + num(pct(T.cashFloor)) +
     " in cash. That gives <b>" + pct(m.invested) + " invested, " + pct(m.cash) + " in cash</b>" +
     (m.capped ? ", which is the floor holding back a stronger reading" : "") + ".</p>");
+  if (m.coh) {
+    const red = m.coh.filter((r)=>r.mean!=null && r.mean<0);
+    P.push("<h2>WHAT THE HUB'S OWN COHORTS SAY</h2><p>The board groups your names into cohorts, and this page now reads " +
+      "those groups the same way the board does — the average Geiger of the members that have one. Tonight " +
+      num(red.length) + " of " + num(m.coh.filter((r)=>r.mean!=null).length) + " read negative: " +
+      red.map((r)=>"<b>"+esc(r.label)+"</b> " + sg(r.mean)).join(", ") + ". " +
+      "That is not decoration: a sector full of names sitting in red cohorts is marked down by " + num(T.cohW + "%") +
+      " of its standing, and each name is moved inside its own sector by the cohorts it belongs to. " + cohEffect(m) +
+      " Where a cohort holds something the Geiger does not cover — the metal futures, the crypto pairs, the yield " +
+      "series — the number is taken over the members that do have a read, and layer zero names the ones left out " +
+      "instead of quietly averaging fewer names than it claims.</p>");
+  }
+  if (m.br && m.br.reading != null) {
+    P.push("<h2>HOW BROAD THE MARKET IS</h2><p>You said this rally was narrow, and it is measurable. " +
+      (m.br.share50!=null ? num(pct(m.br.share50*100)) + " of " + num(m.br.of50) + " names are above their own 50-day average" : "") +
+      (m.br.share200!=null ? ", " + num(pct(m.br.share200*100)) + " above their 200-day" : "") +
+      (m.br.rspLong!=null ? ", and the equal-weight S&amp;P is " + num(sg(m.br.rspLong,1)+"%") +
+        " against the ordinary one over " + num(T.lookback + " days") : "") + ". " +
+      "Together that reads " + num(sg(m.br.reading)) + " and counts for " + num(T.breadthW + "%") +
+      " of how much to own: the board average alone would say " + num(pct(m.investedNoBreadth)) + " invested, " +
+      "with breadth it says <b>" + pct(m.invested) + "</b>.</p>");
+  }
   P.push("<h2>WHICH SECTORS CARRY IT</h2><p>Each sector is judged twice: how its fund has done against SPY over the last " +
     num(T.lookback) + " trading days, and what the Geiger says about the sector's own names. " +
     (s0 ? "<b>" + esc(plain(s0.name)) + "</b> leads" + (s0.rel!=null ? " at " + num(sg(s0.rel,1)+"%") + " against the market" : "") +
@@ -1197,6 +1852,29 @@ function drawReport(m) {
       ? "<p>" + sorted.map((n)=>"<b>"+esc(n.t)+"</b> " + num(pct(n.w,1)) + " — " + esc(pickWhy(n))).join("<br>") + "</p>"
       : "<p>Nothing cleared every step on your current lines, so there is no pick to make today. That is an answer, not a gap.</p>"));
   }
+  if ((m.favRows||[]).length) {
+    const pk = m.favRows.filter((r)=>r.state==="PICK");
+    P.push("<h2>YOUR FAVOURITES</h2><p>Your stars are " + m.favRows.map((r)=>"<b>"+esc(r.t)+"</b>").join(", ") +
+      ". A star adds " + num(sg(T.favBoost)) + " to a name inside its own sector and nothing else — it cannot carry a " +
+      "name past a step it failed, and it never appears as a pick without the reason beside it. Tonight " +
+      num(pk.length) + " " + (pk.length===1?"is":"are") + " held" +
+      (pk.length ? " (" + pk.map((r)=>esc(r.t) + " at " + pct(r.w,1)).join(", ") + ")" : "") + ", and the rest are " +
+      "listed with what stopped them: " +
+      m.favRows.filter((r)=>r.state!=="PICK").slice(0,6).map((r)=>"<b>"+esc(r.t)+"</b> " + esc(r.state.toLowerCase())).join(", ") +
+      ". " + (m.favChanged.length
+        ? "The preference changed the answer tonight: " + m.favChanged.map((c)=>esc(c.t)).join(", ") + "."
+        : "The preference changed nothing tonight — the same names are held without it.") +
+      " The list is this browser's; there is no favourites table on the server yet.</p>");
+  }
+  P.push("<h2>THE TWO ODD READINGS ON YOUR BOARD</h2><p><b>IEF</b> is the iShares 7–10 year Treasury bond ETF — " +
+    "government bonds, not a company. Its price falls when long interest rates rise, and the Geiger reads price, so " +
+    "a deep red IEF means yields have been climbing. Nothing is broken and this page never buys it: it is not in an " +
+    "equity sector.</p><p><b>Gold against GLD.</b> They are two different instruments. GLD is a share in a trust " +
+    "holding bullion, priced while the US market is open and shaved by a yearly fee; the future is a contract for a " +
+    "delivery month, trading nearly around the clock and rolling from one month to the next, which steps its price " +
+    "even when gold does not move. On top of that the future's newest daily bar is not always the same session as " +
+    "the ETF's, and the Geiger artifact does not cover the futures at all — which is why the METALS cohort's number " +
+    "is taken over the members that have a read. The measured numbers for both are on the desk page.</p>");
   P.push("<h2>WHAT THIS DID NOT USE</h2><p>" + (m.missing.length
     ? "This conclusion was reached without " + list(m.missing.map(esc)) + ". " +
       "Nothing stale was quietly folded in: the layers that could not read a current number said so above."
@@ -1218,6 +1896,21 @@ function drawReport(m) {
 
 /* ---- the toggles ARE the assumptions ---------------------------------------- */
 const KNOBS = {
+  k0: [
+    { id:"cohW", t:"How much the Hub's cohorts count in a sector's standing",
+      d:"0 leaves the cohorts on show but out of the decision", min:0, max:60, step:5, unit:"%" },
+    { id:"cohName", t:"How much a name's own cohorts move it inside its sector",
+      d:"in Geiger units: 0.25 means a cohort reading −0.40 costs a name 0.10",
+      min:0, max:1, step:0.05, unit:"", dec:2 },
+  ],
+  kf: [
+    { id:"favBoost", t:"What a star is worth",
+      d:"added to a favourite's standing inside its own sector, in Geiger units; it never carries a name past a step it failed",
+      min:0, max:0.5, step:0.05, unit:"", dec:2 },
+    { id:"favShow", t:"Always show a favourite, even when it was cut",
+      d:"off hides the ones that did not make it — they are still cut either way",
+      opt:[[true,"ON"],[false,"OFF"]] },
+  ],
   k1: [
     { id:"measure", t:"What counts as the market's reading",
       d:"the average score of every name, or simply how many of them are rising",
