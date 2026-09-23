@@ -594,7 +594,7 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["fetch", "analyze", "apply", "run"])
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--limit", type=int, default=None, help="max NEW transcript fetches this pass")
-    ap.add_argument("--pause", type=float, default=1.0)
+    ap.add_argument("--pause", type=float, default=8.0, help="seconds between transcript fetches (1/s got the IP blocked)")
     ap.add_argument("--out", default=os.path.join(CACHE, "out"))
     ap.add_argument("--rows", default=None, help="rows.json to apply (default: <out>/rows.json)")
     ap.add_argument("--dry-run", action="store_true")

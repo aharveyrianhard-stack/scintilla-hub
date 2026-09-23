@@ -6,9 +6,9 @@ their English transcripts. Zero YouTube Data API quota: transcripts come from th
 (`youtube-transcript-api`); the official `captions.download` endpoint only works for videos the caller owns.
 
 ## What runs, how often, where
-* `youtube_sentiment.py run --days 7 --limit 60` every **30 minutes** via launchd on the MacBook
-  (`launchd/com.scintilla.youtube-sentiment.plist`). Each pass: fetch up to 60 new transcripts (1 request/s,
-  never re-fetching a held one) → analyze the 7-day window → upsert one row per ticker.
+* `youtube_sentiment.py run --days 7 --limit 40 --pause 8` every **30 minutes** via launchd on the MacBook
+  (`launchd/com.scintilla.youtube-sentiment.plist`). Each pass: fetch up to 40 new transcripts (one every 8 s — YouTube
+  rate-limits the transcript endpoint per IP; 1/s was blocked after 38 — never re-fetching a held one) → analyze the 7-day window → upsert one row per ticker.
 * Cache: `~/Library/Application Support/scintilla/youtube-sentiment/transcripts/<video_id>.json`, outputs in
   `…/out/{rows,videos,summary,aliases}.json`.
 * Log: `~/Library/Logs/scintilla-youtube-sentiment.log`.
