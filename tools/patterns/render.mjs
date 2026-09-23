@@ -190,6 +190,7 @@ const CSS = fs.readFileSync(path.join(DIR, "../how-unusual/HOW-UNUSUAL.html"), "
   .match(/<style>[\s\S]*?<\/style>/)[0]
   .replace("--warn:#C8B25A", "--warn:#A8A8B4")
   + `<style>.chart svg{ display:block; border:.6px solid var(--line2); }
+th{ font-size:11px; }   /* the house sheet sets 10px; nothing on these pages goes below 11 */
 .chart{ margin:22px 0 26px; }
 .claim{ font-family:var(--mono); font-size:12px; color:var(--dim); text-transform:uppercase; letter-spacing:.09em; }
 .tally td.k{ width:34%; }
