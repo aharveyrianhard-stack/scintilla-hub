@@ -176,10 +176,11 @@ def stamp(iso):
         return "%d %s · %s ET" % (t.day, t.strftime("%b"), t.strftime("%-I:%M %p").lower())
     return "%d %s · %s UTC" % (t.day, t.strftime("%b"), t.strftime("%H:%M"))
 
-def latest_item(x):
+def latest_item(x, first=False):
     if x.get("kind") not in KIND:
         raise SystemExit("latest.json item %r has an unknown kind" % x.get("title"))
-    meta = '<span class="lm"><b>%s</b><span>%s</span></span>' % (KIND[x["kind"]], stamp(x["when"]))
+    badge = '<span class="new">Newest</span>' if first else ''
+    meta = '<span class="lm"><b>%s</b>%s<span>%s</span></span>' % (KIND[x["kind"]], badge, stamp(x["when"]))
     body = '<span class="lt">%s</span><span class="lw">%s</span>' % (esc(x["title"]), esc(x["what"]))
     u = x.get("url")
     if u:
@@ -191,7 +192,7 @@ def latest_item(x):
     return '<div class="li" data-when="%s">%s%s%s</div>' % (x["when"], meta, body, foot)
 
 latest_sorted = sorted(latest, key=lambda x: x["when"], reverse=True)
-latest_html = "".join(latest_item(x) for x in latest_sorted)
+latest_html = "".join(latest_item(x, i == 0) for i, x in enumerate(latest_sorted))
 latest_newest = stamp(latest_sorted[0]["when"]) if latest_sorted else "nothing yet"
 
 # ---- counts, stated honestly -------------------------------------------------
@@ -257,7 +258,7 @@ h1{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase
 a.li:hover{border-color:var(--hair2);background:var(--panel2)}
 .lm{display:flex;justify-content:space-between;gap:.5rem;font:.62rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .lm b{color:var(--c62);font-weight:600}
-.lt{font:600 .92rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
+.lt{font:600 1.02rem/1.35 var(--sans);letter-spacing:0;color:var(--ink)}
 a.li:hover .lt{color:var(--crk)}
 .lw{font-size:.9rem;color:var(--ink3)}
 .lx{margin-top:auto;padding-top:.3rem;font:.6rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
@@ -300,7 +301,7 @@ h3.gt{font:600 .78rem/1.4 var(--mono);letter-spacing:.3em;text-transform:upperca
 .face .go{flex:0 0 auto;color:var(--c40);font-size:1rem;line-height:1}
 .face:hover .go{color:var(--crk)}
 .face.is-pending{opacity:.62}.face.is-pending .ico{color:var(--mute)}
-article h4,.sysitem h4{font:600 1rem/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin:0 0 .35rem}
+article h4,.sysitem h4{font:600 1.04rem/1.35 var(--sans);letter-spacing:0;color:var(--ink);margin:0 0 .4rem}
 .face:hover h4{color:var(--crk)}
 article p,.sysitem p{font-size:.95rem;color:var(--ink3);margin:0}.note{color:var(--dim)}
 .exit{margin:.7rem 0 0!important;font:.6rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)!important}
@@ -310,9 +311,18 @@ article p,.sysitem p{font-size:.95rem;color:var(--ink3);margin:0}.note{color:var
 .sysitem{min-height:0}
 .sysitem .face{margin-top:.6rem}
 footer{border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-nav.pn{display:flex;gap:.3rem;flex-wrap:wrap;margin:.9rem 0 0}
-nav.pn a{font:.62rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);padding:.55rem .8rem;background:var(--bg)}
-nav.pn a:hover{color:var(--crk);border-color:var(--hair2)}
+nav.pn{display:flex;gap:.35rem;flex-wrap:wrap;margin:0;padding:.55rem 0 .45rem}
+/* the strip of rooms stays with you as you read, like the workshop page */
+.pnbar{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--line);margin:1.1rem 0 .2rem}
+@media(max-width:900px){nav.pn{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}nav.pn::-webkit-scrollbar{display:none}}
+.new{border:1px solid var(--c40);color:var(--c90);padding:.12rem .4rem;margin-right:.5rem;font:600 .55rem/1.4 var(--mono);letter-spacing:.18em}
+nav.pn a{font:600 .66rem/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);padding:.6rem .9rem;background:var(--bg);white-space:nowrap}
+nav.pn a:hover{color:var(--ink);border-color:var(--hair2)}
+nav.pn a.on{color:var(--crk);border-color:var(--crk);background:var(--panel);box-shadow:inset 0 -2px 0 var(--crk)}
+section.part[hidden]{display:none}
+/* the latest feed: a card each, newest first, reflowing like everything else */
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,21rem),1fr));gap:.75rem;padding:.7rem 0 .2rem}
+.lgrid .li{flex:0 0 auto}
 section.part{margin-top:2rem;scroll-margin-top:1rem}
 h2.pt{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0 0 .8rem;padding-bottom:.5rem;border-bottom:1px solid var(--line)}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:.75rem}.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.3rem}
@@ -341,12 +351,12 @@ SYSTEMS = """<section class="grp" data-purpose="systems"><div class="gh"><h3 cla
 
 HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Prototypes</title><style>%(css)s</style></head><body><div class="wrap">
 <header><span class="brand">SCINTILLA</span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
-<nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav>
+<div class="pnbar"><nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav></div>
 <main>
 <section class="part" id="overview"><h1>Prototypes &amp; review</h1>
 <p class="lede">One front door to everything being built and reviewed around the Hub. Each card says in plain words what it is, what it does, when it last moved and how ready it is — and every one of them either opens in a new tab or carries a link back here, so you are never stuck on a page with no way out.</p>
 <p class="k">Nothing here is part of the dashboard unless it says so. Inclusion does not establish current data, working function or production readiness.</p>
-<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latest_n)d most recent · newest %(latest_newest)s · from latest.json</p></div><div class="rail">%(latest)s</div></section>
+<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latest_n)d most recent · newest %(latest_newest)s · from latest.json</p></div><div class="lgrid">%(latest)s</div></section>
 <div class="stats">
 <div class="stat"><b>%(total)d</b><span>listed</span></div>
 <div class="stat"><b>%(linked)d</b><span>open now</span></div>
@@ -408,7 +418,21 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 </dl></section>
 </main>
 <footer>Original tools remain at their existing addresses. Recovered previews are versioned; pending artifacts are named openly. No page listed here is a dead end.</footer></div>
-<script>document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('section.grp').forEach(function(s){s.hidden=b.dataset.filter!=='all'&&s.dataset.purpose!==b.dataset.filter})})});</script>
+<script>
+(function(){
+ var nav=[].slice.call(document.querySelectorAll('nav.pn a'));
+ var parts=[].slice.call(document.querySelectorAll('section.part'));
+ function show(id){
+  if(!parts.some(function(p){return p.id===id;}))return false;
+  parts.forEach(function(p){p.hidden=(p.id!==id);});
+  nav.forEach(function(a){var on=a.getAttribute('href')==='#'+id;a.className=on?'on':'';if(on){a.setAttribute('aria-current','true');}else{a.removeAttribute('aria-current');}});
+  return true;
+ }
+ nav.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();var id=a.getAttribute('href').slice(1);show(id);window.scrollTo(0,0);location.hash=id;});});
+ function fromHash(){var h=(location.hash||'').replace('#','');if(!show(h))show('overview');}
+ window.addEventListener('hashchange',fromHash);fromHash();
+})();
+document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('section.grp').forEach(function(s){s.hidden=b.dataset.filter!=='all'&&s.dataset.purpose!==b.dataset.filter})})});</script>
 </body></html>
 """
 

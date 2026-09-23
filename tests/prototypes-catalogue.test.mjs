@@ -25,7 +25,7 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    latest.json. The rules below hold the page to that: a date on every card, the strip in order and never a dead end,
    no fixed column count anywhere. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "2a2f5d90af65745488d3c4c0b8b936fa97f8fcd825392338f452ab83924b033b");
+  assert.equal(sha("index.html"), "6a8b65e9a0eeabdc5e1fc985327c2e65c6b8a36a12c318a94dc9aed4cc7f7434");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
   assert.equal(sha("dock-concept/index.html"), "b63d4bb1404b41ee0dbf2414817c08e4b0e4a35a5dbd8bd8460c89b717685a69");
   assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
@@ -131,7 +131,8 @@ test("the latest strip lists every latest.json item, newest first, with a kind, 
     assert.match(x.when, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/, x.title + " has a UTC time");
     assert.ok(KIND[x.kind], x.title + " has a known kind");
     assert.equal(items[i].kind, KIND[x.kind]);
-    assert.match(items[i].body, /<span class="lm"><b>[^<]+<\/b><span>\d{1,2} [A-Z][a-z]{2} · \d{1,2}:\d\d [ap]m ET<\/span><\/span>/, x.title + " shows its day and Eastern time");
+    assert.match(items[i].body, /<span class="lm"><b>[^<]+<\/b>(?:<span class="new">Newest<\/span>)?<span>\d{1,2} [A-Z][a-z]{2} · \d{1,2}:\d\d [ap]m ET<\/span><\/span>/, x.title + " shows its day and Eastern time");
+    assert.equal(/<span class="new">Newest<\/span>/.test(items[i].body), i === 0, x.title + (i === 0 ? " is marked newest" : " is not marked newest"));
     assert.ok(x.what && x.what.length >= 20, x.title + " says what happened in a sentence");
     if (x.url) {
       assert.equal(items[i].tag, "a"); assert.equal(items[i].href, x.url);

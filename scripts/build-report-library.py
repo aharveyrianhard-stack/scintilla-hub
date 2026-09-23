@@ -16,7 +16,7 @@ data below so the counts on it can never drift from the list.
 
     python3 scripts/build-report-library.py
 """
-import os, json
+import os, json, re, datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "prototypes", "report-library", "index.html")
@@ -155,7 +155,7 @@ sec("price", "Structure read: where it stands - pivots, higher highs and lows, d
  "PARTIAL", "STATS gives distance from the 52-week high and low; GEIGER gives trend; the only written read is the dossier prose on the READ tab.", HUB,
  "Yes - two sentences generated from numbers the Hub already holds.")
 sec("price", "Levels and zones map: support and resistance zones with confluence count and members, unfilled gaps, round numbers, repeated tags",
- "The most-worked object in the library - five versions of the GOOGL lab, plus the key-levels tables of every scan.",
+ "The most-worked object in the library - the GOOGL levels lab, plus the key-levels tables of every scan.",
  ["googl_lab5","googl_worked4","googl_worked1","nvda_fullstack","mu_fullstack","sndk_fullstack","googl_exec","mu_deepdive"],
  "NONE", "Not on the Hub.", None,
  "Yes - it is the input to every ladder. It was waiting on the database's intraday bars.")
@@ -192,7 +192,7 @@ sec("fund", "Fundamental lens: revenue and EPS growth, segment growth, gross / n
  "HAVE", "ESTIMATES 01 tiles (EPS, revenue, EBITDA, net income, EPS growth, revenue growth, gross margin, net margin); FINANCIALS statements; revenue rows on STATS.", HUB,
  "Keep - add 'against its own five-year range' once the history is trusted.")
 sec("fund", "Multiples now: trailing P/E, forward P/E, P/S, PEG, P/B, EV/EBITDA, earnings yield",
- "Every report quotes at least the two P/Es; the protocol asked for P/S and PEG in v1; the demo's comps table carries the rest.",
+ "Every report quotes at least the two P/Es; the protocol asked for P/S and PEG; the demo's comps table carries the rest.",
  ["googl_exec","fav_brief","growth_leaders","comparison","mu_est","mu_deepdive","yf_watchlist","fmp_demo","protocol","template"],
  "PARTIAL", "Trailing and forward P/E (STATS, board F P/E, ESTIMATES 03) and earnings yield are shown; P/S, PEG, P/B and EV/EBITDA appear only on the demo fundamentals page.", FUND,
  "Yes - P/S and PEG at least.")
@@ -437,50 +437,113 @@ for s in S:
     for k in s["found"]:
         assert k in REPORTS, k
     assert s["status"] in ("HAVE", "PARTIAL", "NONE"), s["t"]
-instances = sum(len(s["found"]) for s in S)
+# ---- the page: one template, as cards under tabs -----------------------------
 distinct = len(S)
-dups = instances - distinct
 n = {k: sum(1 for s in S if s["status"] == k) for k in ("HAVE", "PARTIAL", "NONE")}
 used = sorted({k for s in S for k in s["found"]}, key=lambda k: REPORTS[k][0].lower())
 
 def esc(x):
     return x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-MARK = {"HAVE": ("have", "&#9679;", "Have on Hub"), "PARTIAL": ("partial", "&#9684;", "Partial"), "NONE": ("none", "&#9675;", "Don&#8217;t have")}
+# Alan reads the report, not our bookkeeping: version tags come off the titles.
+VER = re.compile(r"\s+v\d+(?:\.\d+)*[a-z]?\b", re.I)
+def plain(t):
+    return VER.sub("", t).strip()
 
-def row(i, s):
+MARK = {"HAVE":    ("have",    "&#9679;", "On the Hub"),
+        "PARTIAL": ("partial", "&#9684;", "Partly there"),
+        "NONE":    ("none",    "&#9675;", "Not on the Hub")}
+
+def card(i, s, pre="s"):
     cls, glyph, word = MARK[s["status"]]
-    found = ", ".join("%s (%s)" % (esc(REPORTS[k][0]), REPORTS[k][1]) for k in s["found"])
-    n_found = len(s["found"])
     where = esc(s["where"])
-    # the link is the card's OPEN button - where this section lives on the Hub. A section that is
-    # nowhere on the Hub has no button; the words say so.
-    open_btn = ('<a class="open" href="%s" target="_blank" rel="noopener">Open on the Hub &#8599;</a>' % s["link"]) if s["link"] else ""
-    return ('<article class="sec" id="s%d" data-status="%s"><div class="sl"><span class="num">%02d</span>'
-            '<span class="mark %s"><span class="g" aria-hidden="true">%s</span>%s</span></div>'
+    if s["link"]:
+        where += ' <a href="%s" target="_blank" rel="noopener">open it &#8599;</a>' % s["link"]
+    seen = len(s["found"])
+    titles = ", ".join(sorted({plain(REPORTS[k][0]) for k in s["found"]}))
+    return ('<article class="card" id="%s%d" data-status="%s">'
+            '<div class="ct"><span class="mark %s"><span class="g" aria-hidden="true">%s</span>%s</span>'
+            '<span class="num">%02d</span></div>'
             '<h3>%s</h3><p class="what">%s</p>'
-            '<dl><dt>On the Hub</dt><dd>%s</dd>'
-            '<dt>Should we have it?</dt><dd class="judge">%s</dd></dl>'
-            '<details class="fi"><summary>Found in %d report%s</summary><dl><dt>Found in</dt><dd>%s</dd></dl></details>'
-            '%s</article>'
-            ) % (i, s["status"], i, cls, glyph, word, esc(s["t"]), esc(s["what"]), where, esc(s["judge"]),
-                 n_found, "" if n_found == 1 else "s", found, open_btn)
+            '<div class="row"><span class="rk">Where it is</span><span class="rv">%s</span></div>'
+            '<div class="row"><span class="rk">Worth having?</span><span class="rv judge">%s</span></div>'
+            '<p class="seen" title="%s">In %d of your report%s</p>'
+            '</article>') % (pre, i, s["status"], cls, glyph, word, i, esc(s["t"]), esc(plain(s["what"])),
+                             where, esc(s["judge"]), esc(titles), seen, "" if seen == 1 else "s")
 
-groups_html = ""
-i = 0
+# numbers run down the whole report, so a card keeps its number in every tab
+NUM, i = {}, 0
+for key, name, sub in GROUPS:
+    for s in [x for x in S if x["g"] == key]:
+        i += 1
+        NUM[id(s)] = i
+
+def panel(key, name, sub, items):
+    c = {k: sum(1 for s in items if s["status"] == k) for k in ("HAVE", "PARTIAL", "NONE")}
+    cards = "\n".join(card(NUM[id(s)], s) for s in items)
+    return ('<section class="panel" id="t-%s" role="tabpanel" hidden><div class="ph"><h2>%s</h2><p>%s</p>'
+            '<p class="pc"><b class="have">%d on the Hub</b><b class="partial">%d partly there</b>'
+            '<b class="none">%d not there</b></p></div><div class="grid">\n%s\n</div></section>\n'
+            ) % (key, name, sub, c["HAVE"], c["PARTIAL"], c["NONE"], cards)
+
+panels = "".join(panel(key, name, sub, [s for s in S if s["g"] == key]) for key, name, sub in GROUPS)
+
+# the whole report in order: the template itself, one line per section
+outline = ""
 for key, name, sub in GROUPS:
     items = [s for s in S if s["g"] == key]
-    c = {k: sum(1 for s in items if s["status"] == k) for k in ("HAVE", "PARTIAL", "NONE")}
-    rows = ""
-    for s in items:
-        i += 1
-        rows += row(i, s) + "\n"
-    groups_html += ('<section class="grp" id="%s"><div class="gh"><h2>%s</h2><p>%s</p>'
-                    '<p class="gc"><b class="have">%d have</b> <b class="partial">%d partial</b> <b class="none">%d don&#8217;t</b> &#183; %d sections</p></div>\n<div class="grid">\n%s</div>'
-                    '<p class="up"><a href="#top">&#8593; contents</a></p></section>\n') % (key, name, sub, c["HAVE"], c["PARTIAL"], c["NONE"], len(items), rows)
+    rows = "".join('<a class="ol" href="#s%d" data-tab="%s"><span class="on%s">%s</span>'
+                   '<span class="ot">%s</span><span class="ow">%s</span></a>'
+                   % (NUM[id(s)], key, "", "%02d" % NUM[id(s)], esc(s["t"]), MARK[s["status"]][2])
+                   for s in items)
+    outline += ('<div class="obl"><h3>%s</h3><p>%s</p><div class="olist">%s</div></div>') % (name, sub, rows)
 
-toc = "".join('<a href="#%s">%s <span>%d</span></a>' % (key, name, sum(1 for s in S if s["g"] == key)) for key, name, sub in GROUPS)
-reports_html = "".join("<li>%s <span>%s &#183; used by %d section%s</span></li>" % (esc(REPORTS[k][0]), REPORTS[k][1], sum(1 for s in S if k in s["found"]), "" if sum(1 for s in S if k in s["found"]) == 1 else "s") for k in used)
+missing = [s for s in S if s["status"] == "NONE"]
+part = [s for s in S if s["status"] == "PARTIAL"]
+gaps_none = "\n".join(card(NUM[id(s)], s, "g") for s in missing)
+gaps_part = "\n".join(card(NUM[id(s)], s, "g") for s in part)
+
+reports_html = "".join('<li><b>%s</b><span>%s</span></li>' % (esc(plain(REPORTS[k][0])), REPORTS[k][1]) for k in used)
+
+# ---- the latest feed, shared with the prototypes front door ------------------
+# Same file, same words, same dates: what moved most recently, newest first.
+LATEST_FILE = os.path.join(ROOT, "prototypes", "latest.json")
+KIND = {"deploy": "Deployed", "page": "Published", "feed": "Feed"}
+try:
+    from zoneinfo import ZoneInfo
+    ET = ZoneInfo("America/New_York")
+except Exception:
+    ET = None
+
+def stamp(iso):
+    t = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    if ET is not None:
+        t = t.astimezone(ET)
+        return "%d %s &#183; %s ET" % (t.day, t.strftime("%b"), t.strftime("%-I:%M %p").lower())
+    return "%d %s &#183; %s UTC" % (t.day, t.strftime("%b"), t.strftime("%H:%M"))
+
+feed = sorted(json.load(open(LATEST_FILE)), key=lambda x: x["when"], reverse=True)[:3]
+
+def feed_card(x, first):
+    if x.get("kind") not in KIND:
+        raise SystemExit("latest.json item %r has an unknown kind" % x.get("title"))
+    badge = '<span class="new">Newest</span>' if first else ''
+    head = '<span class="lm"><b>%s</b>%s<span>%s</span></span>' % (KIND[x["kind"]], badge, stamp(x["when"]))
+    body = '<span class="lt">%s</span><span class="lw">%s</span>' % (esc(x["title"]), esc(x["what"]))
+    u, ext = x.get("url", ""), x.get("url", "").startswith("http")
+    foot = '<span class="lx">%s &#183; %s</span>' % (esc(x.get("surface", "")),
+           "opens in a new tab &#8599;" if ext else "opens here &#8594;")
+    tgt = ' target="_blank" rel="noopener"' if ext else ""
+    return '<a class="li" href="%s"%s>%s%s%s</a>' % (u, tgt, head, body, foot)
+
+latest_html = "".join(feed_card(x, i == 0) for i, x in enumerate(feed))
+latest_note = "%d most recent &#183; newest %s &#183; the full feed is on the Prototypes page" % (len(feed), stamp(feed[0]["when"])) if feed else "nothing yet"
+
+TABS = [("report", "The report", distinct)] + \
+       [(k, re.sub("&amp;", "&", nm), sum(1 for s in S if s["g"] == k)) for k, nm, _ in GROUPS] + \
+       [("gaps", "What we don't have", len(missing)), ("source", "Where it came from", len(used))]
+tabs_html = "".join('<button type="button" role="tab" data-tab="%s" aria-selected="%s" aria-controls="t-%s">%s<span>%d</span></button>'
+                    % (k, "true" if k == "report" else "false", k, nm.replace("'", "&#8217;"), c) for k, nm, c in TABS)
 
 CSS = """
 :root{color-scheme:dark;
@@ -488,124 +551,183 @@ CSS = """
 --hair:rgba(0,212,255,.16);--hair2:rgba(0,212,255,.34);
 /* ink: one neutral ramp, capped well below white. House rule: monochrome, no white, no near-white. */
 --ink:#B4BACB;--ink2:#949BB0;--ink3:#767D93;--dim:#5C6379;--mute:#3A3A52;
-/* one accent hue; the three marks are TONE x OPACITY x OUTLINE of this hue, never a second colour */
+/* one accent hue; the three marks are TONE x OPACITY x OUTLINE of it, never a second colour */
 --crk:#00D4FF;--c90:rgba(0,212,255,.90);--c62:rgba(0,212,255,.62);--c40:rgba(0,212,255,.40);--c22:rgba(0,212,255,.22);
 --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
-/* the type scales with the screen: 15 px on a phone, 19 px on a TV; everything below is in rem */
+/* type grows with the screen: 15 px on a phone, 19 px on a big display */
 font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55;color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}body{margin:0;background:var(--bg)}
-/* the page uses the screen it is given: no fixed box, side padding that grows with the width */
 .wrap{max-width:2400px;margin:auto;padding:1.3rem clamp(16px,3vw,64px) 2.6rem}
 a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
-a:focus-visible,button:focus-visible,summary:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
+a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
 header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
 .brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
 .hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
 .hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
 .hlinks a:hover{color:var(--crk);border-color:var(--hair2)}
-h1{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:1.6rem 0 .6rem}
-.lede{max-width:52rem;color:var(--ink3);margin:0 0 .5rem;font-size:.95rem}
-.k{font:.62rem/1.5 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--crk)}
-.stats{display:flex;gap:.5rem;flex-wrap:wrap;margin:.9rem 0 0}
-.stat{border:1px solid var(--line);background:var(--panel);padding:.55rem .9rem;min-width:6rem}
-.stat b{display:block;font:600 1.1rem/1.2 var(--mono);color:var(--ink)}
-.stat span{font:.6rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+h1{font:600 .92rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:1.6rem 0 .6rem}
+.lede{max-width:56rem;color:var(--ink3);margin:0 0 .6rem;font-size:.97rem}
+.k{font:.62rem/1.5 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--crk);max-width:56rem}
+.stats{display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0 0}
+.stat{border:1px solid var(--line);background:var(--panel);padding:.6rem 1rem;min-width:7rem}
+.stat b{display:block;font:600 1.25rem/1.2 var(--mono);color:var(--ink)}
+.stat span{font:.6rem/1.5 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
 .stat.have b{color:var(--c90)}.stat.partial b{color:var(--c62)}.stat.none b{color:var(--ink3)}
-nav.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:.4rem;margin:1.1rem 0 0}
-nav.toc a{display:flex;justify-content:space-between;gap:.5rem;border:1px solid var(--line2);background:var(--panel);padding:.6rem .8rem;color:var(--ink2);font:600 .68rem/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-nav.toc a span{color:var(--c62)}nav.toc a:hover{border-color:var(--hair2);color:var(--crk)}
-.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:1.1rem 0 .4rem}
-.filters button{font:.66rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:.55rem .85rem;background:var(--bg);color:var(--ink3);cursor:pointer}
+/* the latest feed: what moved most recently, newest first, a card each */
+.latest{border:1px solid var(--hair);background:var(--panel);padding:.9rem 1rem 1rem;margin:1.2rem 0 0}
+.lh{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;margin:0 0 .7rem}
+.lh h2{font:600 .74rem/1.4 var(--mono);letter-spacing:.32em;text-transform:uppercase;color:var(--crk)}
+.lh p{margin:0;font:.6rem/1.5 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.lrail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:.6rem}
+a.li{display:flex;flex-direction:column;gap:.34rem;background:var(--bg);border:1px solid var(--line);padding:.7rem .85rem .65rem;color:var(--ink2)}
+a.li:hover{border-color:var(--hair2);background:var(--panel2)}
+.lm{display:flex;justify-content:space-between;align-items:center;gap:.6rem;font:.6rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.lm b{color:var(--c62);font-weight:600}
+.new{border:1px solid var(--c40);color:var(--c90);padding:.12rem .4rem;margin-right:.5rem;font:600 .55rem/1.4 var(--mono);letter-spacing:.18em}
+.lt{font:600 1rem/1.35 var(--sans);color:var(--ink)}
+a.li:hover .lt{color:var(--crk)}
+.lw{font-size:.9rem;color:var(--ink3)}
+.lx{margin-top:auto;padding-top:.35rem;font:.58rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+/* the strip of rooms stays with you as you read, like the workshop page */
+.tabbar{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--line);margin:1.4rem 0 .9rem}
+/* the tabs: one row of rooms, the open one underlined in the accent */
+.tabs{display:flex;flex-wrap:wrap;gap:.35rem;margin:0;padding:.55rem 0 .45rem}
+.tabs button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;border:1px solid var(--line2);background:var(--bg);color:var(--ink3);font:600 .66rem/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap}
+.tabs button span{font-weight:600;color:var(--dim)}
+.tabs button:hover{color:var(--ink);border-color:var(--hair2)}
+.tabs button[aria-selected=true]{color:var(--crk);border-color:var(--crk);background:var(--panel);box-shadow:inset 0 -2px 0 var(--crk)}
+.tabs button[aria-selected=true] span{color:var(--c62)}
+.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:0 0 1rem}
+.filters button{font:.62rem/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;border:1px solid var(--line2);padding:.5rem .8rem;background:var(--bg);color:var(--dim);cursor:pointer}
 .filters button:hover{color:var(--ink);border-color:var(--hair2)}
-.filters button[aria-pressed=true]{color:var(--crk);border-color:var(--crk);box-shadow:inset 0 -2px 0 var(--crk)}
-.legend{display:flex;gap:.9rem;flex-wrap:wrap;margin:.6rem 0 0;font-size:.85rem;color:var(--ink3)}
-section.grp{margin-top:2.1rem;scroll-margin-top:1rem}
-.gh{border-bottom:1px solid var(--line);padding-bottom:.5rem;margin:0 0 .7rem}
-h2{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0}
-.gh p{margin:.25rem 0 0;font-size:.9rem;color:var(--ink3);max-width:52rem}
-.gc{font:.64rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)!important}
-.gc b{font-weight:600;margin-right:.5rem}.gc b.have{color:var(--c90)}.gc b.partial{color:var(--c62)}.gc b.none{color:var(--ink3)}
-/* cards reflow: as many ~320 px columns as fit - one on a phone, three on a laptop, five on a TV */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:.75rem}
-article.sec{display:flex;flex-direction:column;gap:.45rem;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--line2);padding:.85rem 1rem .8rem;margin:0}
-article.sec:hover{background:var(--panel2);border-color:var(--hair2);border-top-color:inherit}
-article.sec[hidden]{display:none}
-article.sec[data-status=HAVE]{border-top-color:var(--c90)}
-article.sec[data-status=PARTIAL]{border-top-color:var(--c40)}
-article.sec[data-status=NONE]{border-top-color:var(--mute);border-top-style:dashed}
-.sl{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
-.num{font:600 .7rem/1 var(--mono);letter-spacing:.2em;color:var(--dim)}
-/* the mark: glyph + word, so it reads without colour */
-.mark{display:inline-flex;align-items:center;gap:.4rem;font:600 .62rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.2rem .5rem;border:1px solid var(--line2);white-space:nowrap}
+.filters button[aria-pressed=true]{color:var(--crk);border-color:var(--crk)}
+.panel[hidden]{display:none}
+.ph{margin:0 0 .9rem}
+h2{font:600 .84rem/1.4 var(--mono);letter-spacing:.32em;text-transform:uppercase;color:var(--ink);margin:0}
+.ph p{margin:.35rem 0 0;font-size:.92rem;color:var(--ink3);max-width:60rem}
+.pc{font:.62rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)!important}
+.pc b{font-weight:600;margin-right:1rem}.pc b.have{color:var(--c90)}.pc b.partial{color:var(--c62)}.pc b.none{color:var(--ink3)}
+/* cards reflow: one column on a phone, two on a tablet, four or more on a desk */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,21rem),1fr));gap:.75rem;align-items:start}
+.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line2);padding:.85rem 1rem .8rem}
+.card[hidden]{display:none}
+.card:hover{background:var(--panel2);border-color:var(--hair2)}
+.card[data-status=HAVE]{border-left-color:var(--c90)}
+.card[data-status=PARTIAL]{border-left-color:var(--c40)}
+.card[data-status=NONE]{border-left-color:var(--mute);border-left-style:dashed}
+.card.flash{border-color:var(--crk)}
+.ct{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.55rem}
+.num{font:600 .62rem/1 var(--mono);letter-spacing:.18em;color:var(--dim)}
+.mark{display:inline-flex;align-items:center;gap:.4rem;font:600 .6rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.2rem .5rem;border:1px solid var(--line2);white-space:nowrap}
 .mark .g{font-size:.8rem;line-height:1}
 .mark.have{color:var(--c90);border-color:var(--c40)}
 .mark.partial{color:var(--c62);border-color:var(--c22);border-style:dashed}
 .mark.none{color:var(--ink3);border-color:var(--line2);border-style:dashed}
-h3{font:600 1rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin:0}
-.what{margin:0;font-size:.95rem;color:var(--ink3)}
-dl{display:grid;grid-template-columns:1fr;gap:0;margin:.2rem 0 0;border-top:1px solid var(--line);padding-top:.5rem}
-dt{font:600 .62rem/1.8 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk)}
-dd{margin:0 0 .35rem;font-size:.95rem;color:var(--ink3)}dd.judge{color:var(--ink2)}
-.cnt{color:var(--dim)}
-details.fi{margin-top:auto;padding-top:.3rem}
-details.fi summary{cursor:pointer;list-style:none;font:.62rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-details.fi summary::-webkit-details-marker{display:none}
-details.fi summary::before{content:"+ ";color:var(--c62)}details.fi[open] summary::before{content:"- "}
-details.fi summary:hover{color:var(--ink2)}
-/* the summary is the label; the term inside stays in the markup for the record and is not painted twice */
-details.fi dl{margin-top:.3rem;border-top:0;padding-top:0}details.fi dt{display:none}details.fi dd{font-size:.9rem}
-a.open{align-self:flex-start;margin-top:.45rem;font:600 .64rem/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.5rem .75rem;border:1px solid var(--c40);color:var(--c90);background:var(--bg)}
-a.open:hover{border-color:var(--crk);color:var(--crk)}
-.up{margin:.6rem 0 0;font:.64rem/1.4 var(--mono);letter-spacing:.2em;text-transform:uppercase}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:.75rem;margin-top:.6rem}.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.3rem}
-.two ul{margin:.5rem 0 0;padding:0;list-style:none}.two li{font-size:.88rem;color:var(--ink3);padding:.4rem 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
-.two li span{color:var(--dim)}
+.card h3{font:600 1.04rem/1.35 var(--sans);letter-spacing:0;color:var(--ink);margin:0 0 .4rem}
+.what{margin:0 0 .7rem;font-size:.93rem;color:var(--ink3)}
+.row{display:flex;gap:.7rem;padding:.5rem 0;border-top:1px solid var(--line)}
+.rk{flex:0 0 5.6rem;font:600 .6rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--c62)}
+.rv{flex:1 1 auto;min-width:0;font-size:.9rem;color:var(--ink3)}
+.rv.judge{color:var(--ink2)}
+.seen{margin:.55rem 0 0;font:.6rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+/* the report itself: every section in reading order */
+.obl{margin:0 0 1.4rem}
+.obl h3{font:600 .76rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0 0 .2rem}
+.obl>p{margin:0 0 .6rem;font-size:.9rem;color:var(--dim);max-width:60rem}
+.olist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,27rem),1fr));gap:.3rem}
+a.ol{display:flex;align-items:baseline;gap:.7rem;background:var(--panel);border:1px solid var(--line);padding:.55rem .8rem;color:var(--ink2)}
+a.ol:hover{border-color:var(--hair2);background:var(--panel2)}
+a.ol .on{font:600 .62rem/1.5 var(--mono);color:var(--dim)}
+a.ol .ot{flex:1 1 auto;font-size:.93rem}
+a.ol:hover .ot{color:var(--crk)}
+a.ol .ow{font:600 .58rem/1.5 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,24rem),1fr));gap:.75rem}
+.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.2rem}
+.two ul{margin:.6rem 0 0;padding:0;list-style:none}
+.two li{display:flex;justify-content:space-between;gap:1rem;font-size:.9rem;color:var(--ink3);padding:.42rem 0;border-top:1px solid var(--line)}
+.two li:first-child{border-top:0}
+.two li b{font-weight:600;color:var(--ink2)}
+.two li span{color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.1em;white-space:nowrap}
+.two p{margin:.5rem 0 0;font-size:.9rem;color:var(--ink3)}
 footer{border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-footer a{margin-right:.9rem}
-@media(max-width:620px){.wrap{padding:.9rem .9rem 2rem}.brand{letter-spacing:.44em;font-size:.9rem}header{padding:.7rem .9rem;flex-wrap:wrap}h1{margin-top:1.4rem}}
+footer a{margin-right:1rem}
+/* narrow: the rooms become one swipeable line instead of five stacked rows */
+@media(max-width:900px){.tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}}
+@media(max-width:620px){.wrap{padding:.9rem .9rem 2rem}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}.stats .stat{min-width:0}
+.latest{padding:.75rem .8rem .8rem}.brand{letter-spacing:.44em;font-size:.9rem}
+header{padding:.7rem .9rem;flex-wrap:wrap}h1{margin-top:1.3rem}
+.row{flex-direction:column;gap:.15rem}.rk{flex-basis:auto}
+.tabs{gap:.3rem}.tabs button{padding:.45rem .6rem;letter-spacing:.1em;font-size:.6rem}
+.stat{min-width:5.2rem;padding:.5rem .7rem}.stat b{font-size:1.1rem}.stat span{letter-spacing:.12em}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
-HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA &#183; Company report, one copy</title><style>%(css)s</style></head><body><div class="wrap" id="top">
+HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA &#183; The company report</title><style>%(css)s</style></head><body><div class="wrap" id="top">
 <header><span class="brand">SCINTILLA</span><nav class="hlinks" aria-label="Where to go"><a href="/prototypes/">&#8592; Prototypes</a><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub &#8599;</a></nav></header>
 <main>
-<h1>The company report, deduplicated into one</h1>
-<p class="lede">Every distinct section found across the recovered company reports - the executive briefs, the levels labs, the earnings logs, the scans, the comparisons, the templates and protocols, the DCF notes and the Bitcoin page - listed once, in the order of a per-ticker digest. Each is marked against what the Hub shows today, with a one-line answer to &#8220;should we have it?&#8221;. Inventory and mapping only; no new analysis, and nothing here was changed on the Hub.</p>
-<p class="k">Marks read against Hub production %(prod)s on %(date)s &#183; Have = on the company page, board or rooms &#183; Partial = part of it, or only on the demo fundamentals page or a separate tool, or in code but not seen on screen &#183; Don&#8217;t have = nowhere on the Hub &#183; Each card that is on the Hub carries an Open button to where it lives</p>
+<h1>The company report, one copy</h1>
+<p class="lede">This is the whole report for one ticker: every section your company reports have ever carried, written out once, in the order you would read them. Each one says whether the Hub shows it today, where to find it, and whether it is worth having. Open a room with the tabs; the first one is the report itself, start to finish.</p>
+<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latestnote)s</p></div><div class="lrail">%(latest)s</div></section>
+<p class="k">Read against the Hub on %(date)s &#183; a mark says the Hub shows that section, not that the numbers behind it are fresh</p>
 <div class="stats">
-<div class="stat"><b>%(instances)d</b><span>sections found</span></div>
-<div class="stat"><b>%(dups)d</b><span>duplicates removed</span></div>
-<div class="stat"><b>%(distinct)d</b><span>distinct sections</span></div>
-<div class="stat have"><b>%(have)d</b><span>have on Hub</span></div>
-<div class="stat partial"><b>%(partial)d</b><span>partial</span></div>
-<div class="stat none"><b>%(none)d</b><span>don&#8217;t have</span></div>
-<div class="stat"><b>%(reports)d</b><span>reports read</span></div>
+<div class="stat"><b>%(distinct)d</b><span>sections in the report</span></div>
+<div class="stat have"><b>%(have)d</b><span>on the Hub</span></div>
+<div class="stat partial"><b>%(partial)d</b><span>partly there</span></div>
+<div class="stat none"><b>%(none)d</b><span>not on the Hub</span></div>
+<div class="stat"><b>%(reports)d</b><span>reports it came from</span></div>
 </div>
-<nav class="toc" aria-label="Contents">%(toc)s</nav>
-<div class="filters" role="group" aria-label="Show"><button type="button" aria-pressed="true" data-filter="all">All</button><button type="button" aria-pressed="false" data-filter="HAVE">Have on Hub</button><button type="button" aria-pressed="false" data-filter="PARTIAL">Partial</button><button type="button" aria-pressed="false" data-filter="NONE">Don&#8217;t have</button></div>
-<p class="legend"><span><b class="mark have"><span class="g" aria-hidden="true">&#9679;</span>Have on Hub</b></span><span><b class="mark partial"><span class="g" aria-hidden="true">&#9684;</span>Partial</b></span><span><b class="mark none"><span class="g" aria-hidden="true">&#9675;</span>Don&#8217;t have</b></span></p>
-%(groups)s
-<section class="grp" id="reports"><div class="gh"><h2>Reports read</h2><p>%(reports)d recovered reports, by title and file date. Two further files were byte-level copies of these and are folded in. Numbers inside them are each report&#8217;s own numbers from its date, not today&#8217;s.</p></div>
+<div class="tabbar"><nav class="tabs" role="tablist" aria-label="Rooms">%(tabs)s</nav></div>
+<div class="filters" role="group" aria-label="Show"><button type="button" aria-pressed="true" data-filter="all">Everything</button><button type="button" aria-pressed="false" data-filter="HAVE">On the Hub</button><button type="button" aria-pressed="false" data-filter="PARTIAL">Partly there</button><button type="button" aria-pressed="false" data-filter="NONE">Not on the Hub</button></div>
+<section class="panel" id="t-report" role="tabpanel"><div class="ph"><h2>The report, start to finish</h2><p>All %(distinct)d sections in reading order. Tap any line to open that card in its room.</p></div>%(outline)s</section>
+%(panels)s
+<section class="panel" id="t-gaps" role="tabpanel" hidden><div class="ph"><h2>What we don&#8217;t have</h2><p>The %(none)d sections the Hub does not show at all. Each card says where it would go and whether it is worth building.</p></div><div class="grid">\n%(gapsnone)s\n</div>
+<div class="ph" style="margin-top:1.6rem"><h2>Only partly there</h2><p>The %(partial)d the Hub shows a piece of - the rest of the section is missing, or it only exists on the demo page or a separate tool.</p></div><div class="grid">\n%(gapspart)s\n</div></section>
+<section class="panel" id="t-source" role="tabpanel" hidden><div class="ph"><h2>Where it came from</h2><p>Your own company reports, read start to finish and merged into the one above.</p></div>
 <div class="two"><div><span class="k">The reports</span><ul>%(reports_html)s</ul></div>
-<div><span class="k">How this was made</span><ul>
-<li>Each report&#8217;s headings and full text were read; a section is counted once per report it appears in, then merged with the same section under other names (the exec brief&#8217;s &#8220;Where it stands&#8221; and the template&#8217;s &#8220;Technical lens&#8221; are one section).</li>
-<li>&#8220;Found in&#8221; is the evidence for each merge. &#8220;Sections found&#8221; is the sum of those appearances; &#8220;duplicates removed&#8221; is that sum minus the distinct list.</li>
-<li>The Hub marks come from the production page&#8217;s own code (board columns, the nine company tabs, the estimates sections, the financial rows, events, read, social) and from the fundamentals page. A mark says a section is rendered; it does not certify the data behind it is current.</li>
-<li>Grouping follows the digest shape asked for: identity, price and Geiger, fundamentals and multiples, debt, comparables, sentiment, events, risks. The ladder sits under risks because that is where it is sized.</li>
-<li>The page is generated from its own list, so the counts above cannot drift from the sections below. It reads nothing at run time, stores nothing and sends nothing.</li>
-</ul></div></div>
-<p class="up"><a href="#top">&#8593; contents</a></p></section>
+<div><span class="k">How to read it</span>
+<p>A section that appeared in several reports under different names is written once here, so nothing is repeated and nothing is lost.</p>
+<p>Numbers inside those reports belong to the day each was written; this page does not restate them and adds no new analysis.</p>
+<p>Nothing on the Hub was changed to make this page. It reads nothing while you are on it, stores nothing and sends nothing.</p>
+</div></div></section>
 </main>
-<footer><a href="/prototypes/">&#8592; Back to Prototypes</a> One report, one copy. The original files stay where they are; nothing was moved, renamed or edited.</footer></div>
-<script>document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('article.sec').forEach(function(a){a.hidden=b.dataset.filter!=='all'&&a.dataset.status!==b.dataset.filter})})});</script>
+<footer><a href="/prototypes/">&#8592; Back to Prototypes</a> One report, one copy.</footer></div>
+<script>
+(function(){
+ var tabs=[].slice.call(document.querySelectorAll('.tabs button'));
+ function show(name,focus){
+  var found=false;
+  tabs.forEach(function(b){var on=b.dataset.tab===name;if(on)found=true;b.setAttribute('aria-selected',String(on));});
+  if(!found){return false;}
+  [].forEach.call(document.querySelectorAll('.panel'),function(p){p.hidden=(p.id!=='t-'+name);});
+  var f=document.querySelector('.filters');if(f){f.style.display=(name==='report'||name==='source')?'none':'flex';}
+  if(focus){var el=document.getElementById(focus);
+   if(el){el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(function(){el.classList.remove('flash');},1400);}}
+  return true;
+ }
+ tabs.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.tab);window.scrollTo(0,0);location.hash=b.dataset.tab;});});
+ [].forEach.call(document.querySelectorAll('a.ol'),function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.dataset.tab,a.getAttribute('href').slice(1));});});
+ [].forEach.call(document.querySelectorAll('[data-filter]'),function(b){b.addEventListener('click',function(){
+   [].forEach.call(document.querySelectorAll('[data-filter]'),function(x){x.setAttribute('aria-pressed',String(x===b));});
+   [].forEach.call(document.querySelectorAll('.card'),function(c){c.hidden=(b.dataset.filter!=='all'&&c.dataset.status!==b.dataset.filter);});
+ });});
+ function fromHash(){var h=(location.hash||'').replace('#','');if(!h)return;
+  if(show(h))return;
+  var card=document.getElementById(h);
+  if(card){var p=card.closest('.panel');if(p)show(p.id.slice(2),h);}}
+ window.addEventListener('hashchange',fromHash);fromHash();
+})();
+</script>
 </body></html>
 """
 
-out = HTML % {"css": CSS, "prod": HUB_PROD, "date": READ_DATE, "instances": instances, "dups": dups, "distinct": distinct,
+out = HTML % {"css": CSS, "date": READ_DATE, "distinct": distinct,
               "have": n["HAVE"], "partial": n["PARTIAL"], "none": n["NONE"], "reports": len(used),
-              "toc": toc, "groups": groups_html, "reports_html": reports_html}
+              "tabs": tabs_html, "latest": latest_html, "latestnote": latest_note, "outline": outline, "panels": panels, "gapsnone": gaps_none, "gapspart": gaps_part,
+              "reports_html": reports_html}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 open(OUT, "w").write(out)
-counts = {"sections_found": instances, "duplicates_removed": dups, "distinct": distinct, "have": n["HAVE"], "partial": n["PARTIAL"], "dont_have": n["NONE"], "reports_read": len(used)}
 print("wrote", OUT, len(out), "bytes")
-print(json.dumps(counts))
+print(json.dumps({"sections": distinct, "have": n["HAVE"], "partial": n["PARTIAL"],
+                  "dont_have": n["NONE"], "reports_read": len(used)}))
