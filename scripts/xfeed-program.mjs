@@ -179,11 +179,27 @@ export function cdpAdapters(page, session, buffer = createEventBuffer()) {
   };
   const ui = {
     // The helper asks for an ordinary scroll inside the list column; wheel it in steps so the timeline's observers fire.
+    // Keep wheeling until X actually requests the next page, then let that page finish arriving.
+    // A fixed 8,000 px was shorter than one page of Alan's list, so X never reached the bottom and
+    // never asked for page two (first live run, 23 Sep: "stalled_without_termination" after 1 page).
     scroll: async ([x, y], direction, amount) => {
       await page.mouse.move(x, y);
       const sign = direction === 'up' ? -1 : 1;
-      for (let done = 0; done < amount * 100; done += 800) { await page.mouse.wheel(0, sign * 800); await page.waitForTimeout(120); }
-      await page.waitForTimeout(1500);
+      if (typeof page.waitForResponse !== 'function') {   // offline test doubles: the old fixed scroll
+        for (let done = 0; done < amount * 100; done += 800) { await page.mouse.wheel(0, sign * 800); await page.waitForTimeout(120); }
+        await page.waitForTimeout(1500);
+        return;
+      }
+      let settled = false;
+      const next = page.waitForResponse(r => r.url().includes('/ListLatestTweetsTimeline'), { timeout: 25000 })
+        .then(r => r.finished().then(() => r)).catch(() => null).finally(() => { settled = true; });
+      const floor = amount * 100, t0 = Date.now();
+      for (let done = 0; (done < floor || !settled) && Date.now() - t0 < 25000; done += 800) {
+        await page.mouse.wheel(0, sign * 800); await page.waitForTimeout(150);
+        if (settled && done >= floor) break;
+      }
+      await next;
+      await page.waitForTimeout(400);
     },
   };
   return { source, ui, cap, buffer };
@@ -365,7 +381,19 @@ export async function runCollector(options = {}, deps = {}) {
     const createCycle = await loadCycleFactory();
     const cycle = await createCycle({ source, intake: { playwright: intakePage, goto: url => intakePage.goto(url) }, ui, passId });
     const budgetMs = o.budgetSeconds * 1000, t0 = Date.now();
+    // WAIT FOR X BEFORE JUDGING. The list's first timeline request fires seconds after the page
+    // loads, and the helper's read() returns at once while other responses keep arriving, so the
+    // first live run on 23 Sep called "no timeline" before X had even asked for it. Register the
+    // wait before begin() navigates, and let the body finish downloading before the first read.
+    const firstTimeline = typeof page.waitForResponse === 'function'
+      ? page.waitForResponse(r => r.url().includes('/ListLatestTweetsTimeline'), { timeout: 45000 })
+        .then(r => r.finished().then(() => r)).catch(() => null)
+      : Promise.resolve(null);
     let summary = await cycle.begin(), stalled = 0, lastPages = 0;
+    if (summary.pages === 0 && !summary.blocked) {
+      receipt.first_timeline_seen = Boolean(await firstTimeline);
+      summary = await cycle.read();
+    }
     for (;;) {
       for (let i = 0; i < 8 && !summary.blocked && (summary.pending_bodies > 0 || (summary.pages === 0 && i < 6)); i++) summary = await cycle.read();
       while (summary.pending_chunks > 0) summary = await cycle.save(8);
