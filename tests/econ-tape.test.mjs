@@ -197,7 +197,8 @@ test("the ECON band is this week, in the same tape part, at the same speed, with
 });
 
 test("the band and the price bands share ONE speed law, and a price tick never rewinds the week", () => {
-  assert.match(page, /function tapeSpeed\(track, startAt\) \{\n  const half = track\.scrollWidth \/ 2, dur = Math\.max\(20, half \/ 45\);/);
+  assert.match(page, /function tapeSpeed\(track, startAt\) \{\n  const PX_S = 45;/, "one speed, 45 px/s");
+  assert.doesNotMatch(page, /Math\.max\(20, half \/ 45\)/, "no 20 s floor: a short band is never slowed below the others");
   assert.match(page, /px\.querySelectorAll\("\.sc-tape__track"\)\.forEach\(\(track\) => tapeSpeed\(track\)\);/, "MACRO / ALL use it");
   assert.match(page, /if \(track\) tapeSpeed\(track, slot\.querySelector\("\.ecb-it\.is-due, \.ecb-it\.is-near, \.ecb-it\.is-soon, \.ecb-it\.is-up"\)\);/, "and so does the ECON band");
   /* 23 Sep — the EARNINGS band joined the strip, so the promise pinned here is the one that matters:
@@ -265,4 +266,33 @@ test("the bottom tapes fold away like the top tabs and come back when the mouse 
   assert.match(page, /body\.btuck \.bands\{ max-height:7px; opacity:\.4; \}/);
   assert.match(page, /if \(fromBottom <= 90 \|\| overTapes\) \{ reveal\(\); return; \}/);
   assert.match(page, /hideTimer = setTimeout\(tuck, 3000\);\n\}\)\(\);\n\n\/\* R19/);
+});
+
+/* 23 Sep — Alan: "they're all moving at different speeds… it makes me dizzy", and the EARNINGS band "fills in like batches".
+   Both came from short bands: the 20 s floor slowed them, and a band narrower than its window left the window's right side
+   empty until the loop jumped back. */
+test("every band moves at 45 px/s, and a band narrower than its window is repeated until one loop fills it", () => {
+  const src = page.match(/function tapeSpeed\(track, startAt\) \{[\s\S]*?\n\}/)[0];
+  const tapeSpeed = new Function(src + "; return tapeSpeed;")();
+  const W = 50;                                   // every fake item is 50 px wide
+  const band = (n, winW) => {
+    let kids = Array.from({ length: 2 * n }, (_, i) => ({ outerHTML: "<i>" + (i % n) + "</i>", offsetLeft: i * W }));
+    const t = { style: {}, isConnected: true, parentElement: { clientWidth: winW } };
+    Object.defineProperty(t, "children", { get: () => kids });
+    Object.defineProperty(t, "scrollWidth", { get: () => kids.length * W });
+    Object.defineProperty(t, "innerHTML", { set: (h) => { kids = (h.match(/<i>\d+<\/i>/g) || []).map((x, i) => ({ outerHTML: x, offsetLeft: i * W })); } });
+    return t;
+  };
+  const long = band(40, 1000);                   // one loop = 2000 px, wider than the 1000 px window: left alone
+  tapeSpeed(long);
+  assert.equal(long.children.length, 80);
+  assert.equal(+parseFloat(long.style.animationDuration).toFixed(6), +(2000 / 45).toFixed(6));
+  const short = band(6, 1000);                   // one loop = 300 px in a 1000 px window
+  tapeSpeed(short);
+  assert.equal(short.children.length, 48, "repeated four times, still two equal halves");
+  assert.ok(short.scrollWidth / 2 >= 1000, "one loop is at least a window wide, so the window is never half empty");
+  assert.equal(+parseFloat(short.style.animationDuration).toFixed(6), +(1200 / 45).toFixed(6), "and it runs at the same 45 px/s");
+  const opener = band(6, 1000); const first = opener.children[3];
+  tapeSpeed(opener, first);                      // the band that opens on today still opens on today after the repeat
+  assert.equal(+parseFloat(opener.style.animationDelay).toFixed(6), +(-(150 / 1200) * (1200 / 45)).toFixed(6));
 });

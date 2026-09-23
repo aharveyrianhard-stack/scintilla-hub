@@ -20,6 +20,7 @@ font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55
 a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
 a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
 header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
+.hleft{display:flex;align-items:center;gap:1.1rem}
 .brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
 .hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
 .hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
@@ -121,7 +122,7 @@ table.arch td:first-child{font:.8rem/1.5 var(--mono);color:var(--ink2);white-spa
 @media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:.5rem 0}table.arch tbody tr:first-child{border-top:0}table.arch td{display:block;border-top:0;padding:.1rem .9rem}table.arch td:first-child{overflow-wrap:anywhere}table.arch td:last-child::before{content:"Kept by: ";color:var(--dim)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body><div class="wrap">
-<header><span class="brand">SCINTILLA</span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
+<header><span class="hleft"><span data-scnav-slot></span><span class="brand">SCINTILLA</span></span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
 <div class="pnbar"><nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav></div>
 <main>
 <section class="part" id="overview"><h1>Prototypes &amp; review</h1>
@@ -223,4 +224,37 @@ table.arch td:first-child{font:.8rem/1.5 var(--mono);color:var(--ink2);white-spa
  window.addEventListener('hashchange',fromHash);fromHash();
 })();
 document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('section.grp').forEach(function(s){s.hidden=b.dataset.filter!=='all'&&s.dataset.purpose!==b.dataset.filter})})});</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(7,11,17,.92);color:#8fa3b8;border:1px solid rgba(0,212,255,.38);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#00d4ff;border-color:rgba(0,212,255,.8);outline:none}
+.scnav i{font-style:normal;color:#00d4ff}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
 </body></html>

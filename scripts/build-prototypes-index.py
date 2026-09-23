@@ -241,6 +241,7 @@ font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55
 a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
 a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
 header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
+.hleft{display:flex;align-items:center;gap:1.1rem}
 .brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
 .hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
 .hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
@@ -350,7 +351,7 @@ SYSTEMS = """<section class="grp" data-purpose="systems"><div class="gh"><h3 cla
 </div></section>"""
 
 HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Prototypes</title><style>%(css)s</style></head><body><div class="wrap">
-<header><span class="brand">SCINTILLA</span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
+<header><span class="hleft"><span data-scnav-slot></span><span class="brand">SCINTILLA</span></span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
 <div class="pnbar"><nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav></div>
 <main>
 <section class="part" id="overview"><h1>Prototypes &amp; review</h1>
@@ -440,5 +441,7 @@ same = sum(1 for e in cat if e.get("url") and e["url"].startswith("/"))
 out = HTML % {"css": CSS, "groups": groups_html, "systems": SYSTEMS, "legend": legend,
               "latest": latest_html, "latest_n": len(latest_sorted), "latest_newest": latest_newest,
               "total": len(cat), "linked": linked, "named": named, "same": same}
+# BACK / CLOSE: the same inline pair every Hub sub-page carries (scripts/scnav-snippet.html), mounted in the header slot
+out = out.replace("</body>", open(os.path.join(ROOT, "scripts", "scnav-snippet.html")).read().strip() + "\n</body>", 1)
 open(OUT, "w").write(out)
 print("wrote", OUT, len(out), "bytes;", len(cat), "entries,", linked, "linked,", named, "pending;", len(latest_sorted), "latest")

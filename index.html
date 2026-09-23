@@ -5423,8 +5423,8 @@ function cohortCompareStripHTML() {
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
     cohTabsHTML() +
-    /* market-wide fear & greed, same reading as the SENTIMENT tab (Alan: a gauge on the Hub front page) */
-    '<div id="snFront">' + snFrontHTML(null) + '</div>' +
+    /* 23 Sep — the fear & greed strip that sat here is gone (Alan: "why is there a fear and greed meter here? who asked
+       for this?"). The reading lives in the SENTIMENT tab only; the board no longer asks for its thirteen inputs. */
     /* R41 §2 — cohCompare moved OUT of the board into the right pane's Layer 0
        (layer0HTML). The left board keeps tabs + cohort geiger + rows only. */
     '<div id="cohGeiger">' + cohortGeigerHTML() + "</div>" +
@@ -13473,6 +13473,7 @@ function ernBandHTML(todayIso) {
 function renderErnBand() {
   const slot = el("ernBandSlot");
   if (!ERN_BAND_ON || !slot) return;
+  if (!ERN_ROWS && !ERN_FAIL_AT) return;               // 23 Sep: no half-empty band while the first read is out — it appears whole
   const html = ernBandHTML(todayISO());
   if (html === ERN_HTML && slot.innerHTML) return;          // unchanged: leave the marquee running where it is
   ERN_HTML = html;
@@ -13539,9 +13540,31 @@ function renderTapes() {
 }
 /* FIX 3 — constant ≈45 px/s for every band, regardless of track length. ECON TAPE 22 Sep: ONE speed law, used by the
    price bands and by the ECON band, so the third band moves at exactly the speed of the two above it. `startAt`, when
-   given, offsets the loop so the band opens on that item (the ECON band opens on today, not on Monday). */
+   given, offsets the loop so the band opens on that item (the ECON band opens on today, not on Monday).
+   23 Sep (Alan: "they're all moving at different speeds… it makes me dizzy"; the earnings band "fills in like batches").
+   The old 20 s floor ran every short band slower than 45 px/s, and a band narrower than its window left the right of
+   the window empty until the loop jumped back. A short band is now repeated until one loop is at least a window wide,
+   and every band — long or short — runs at exactly 45 px/s. */
 function tapeSpeed(track, startAt) {
-  const half = track.scrollWidth / 2, dur = Math.max(20, half / 45);
+  const PX_S = 45;                                     // inside, not a top-level const: the ECON band can paint before this line runs
+  let half = track.scrollWidth / 2;
+  if (!(half > 0)) {                                   // not laid out yet (a hidden room): measure again shortly
+    track._tapeTry = (track._tapeTry || 0) + 1;
+    if (track._tapeTry <= 40 && typeof setTimeout === "function")
+      setTimeout(() => { if (track.isConnected) tapeSpeed(track, startAt); }, 250);
+    return;
+  }
+  const win = track.parentElement, want = win ? win.clientWidth : 0;
+  const kids = Array.prototype.slice.call(track.children || []);
+  if (want > half && kids.length && kids.length % 2 === 0) {
+    const at = startAt ? kids.indexOf(startAt) : -1;
+    const seg = kids.slice(0, kids.length / 2).map((n) => n.outerHTML).join("");
+    const k = Math.ceil(want / half);
+    track.innerHTML = seg.repeat(k) + seg.repeat(k);   // still two equal halves, so the -50% loop stays seamless
+    half = track.scrollWidth / 2;
+    startAt = at >= 0 ? track.children[at] : startAt;
+  }
+  const dur = half / PX_S;
   track.style.animationDuration = dur + "s";
   track.style.animationDelay = (startAt && half > 0 ? -(((startAt.offsetLeft || 0) % half) / half) * dur : 0) + "s";
 }
@@ -13616,7 +13639,6 @@ function afterMount() {
   /* R49 §5 — SCENES mounts the SAME Layer-0 surface the dashboard pane mounts; the
      board feed is section-independent, so the rows are already live. RSI is lazily
      filled because MAP's tier-3 cells print it. */
-  if (S.sec === "DASHBOARD" || S.sec === "COMPANY") fillSnFront();   // compact fear & greed on the board
   if (S.sec === "SCENES") { mountL0Body(); loadBoardRsi(shownRows().map((r) => r.t)); return; }
   if (S.sec === "NEWS") fillNews();
   else if (S.sec === "SOCIAL") {               // AREA A — dispatch by SOCIAL sub-tab
