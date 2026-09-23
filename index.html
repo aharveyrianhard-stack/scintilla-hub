@@ -3525,9 +3525,19 @@ const SC_OPT_MS = 4000;
    painted "+26.01%"). A row keeps its previous close and change only when its stored percentage
    agrees with price/prev_close; otherwise both are withdrawn and the change reads unknown.
    Provider-owned equities are overwritten afterwards by scApplyProviderQuotes either way. */
+/* A STORED QUOTE HAS AN AGE (23 Sep 2026). The guard below only asked whether a row's price, previous close
+   and percentage agree with EACH OTHER. August's VIX row (14.25, -10.88%) agreed perfectly, so it sat on the
+   dashboard as this morning's second-biggest mover forty days later, with the 5-, 10- and 30-year and the
+   3-month rate frozen beside it. A stored row older than four days (a weekend plus a holiday) is not a price:
+   it is dropped, and the ticker shows NO FEED unless a live route prices it. */
 function scCoherentRetainedQuotes(rows) {
   if (!Array.isArray(rows)) return rows;
-  return rows.map((row) => {
+  const maxAgeMs = 4 * 86400e3, now = Date.now();   // self-contained: the tests extract this function alone
+  return rows.filter((row) => {
+    if (!row || !row.updated_ts) return true;
+    const at = Date.parse(row.updated_ts);
+    return !isFinite(at) || now - at <= maxAgeMs;
+  }).map((row) => {
     if (!row) return row;
     const price = num(row.price), prev = num(row.prev_close), stored = num(row.chg_pct);
     const implied = price != null && prev != null && prev > 0 ? (price / prev - 1) * 100 : null;
@@ -3708,7 +3718,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      are no longer the equity price or Geiger authority and no longer gate boot. */
   const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
-    scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes), []),
+    scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
     scOpt('company_profile',  pg("company_profile?select=ticker,name,exchange,avg_volume,market_cap,updated_ts"), []),   // updated_ts = when the profile writer stored market_cap (epoch SECONDS); it follows the value to the cell
     scOpt('ribbon_signals',   pg("ribbon_signals?select=ticker,family,read,center,spread,sev_pos,top,bottom&tf=eq.D"), []),
@@ -3937,7 +3947,7 @@ async function fetchCompanyData(t) {
     new Promise((res) => setTimeout(() => res([]), 4000)),
   ]);
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh, csum, ckeys] = (await Promise.all([
-    pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
+    pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
     pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url,updated_ts"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
@@ -4012,7 +4022,7 @@ async function fetchCompanyData(t) {
 const MACRO_SET = ["SPY","QQQ","IWM","SMH","GLD","TLT","NVDA","COIN"];
 async function fetchTapeItems() {
   const [quotes, comp] = await Promise.all([
-    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct
+    pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct
     pg("composite_staged?select=ticker&tf=eq.D"),
   ]);
   /* P0-F: the ticker tape carries the same percentage contract as the board. */
@@ -14714,6 +14724,52 @@ function scScheduleTick (fast) {
 }
 scScheduleTick();
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", scScheduleTick);
+/* LIVE MACRO (23 Sep 2026). VIX, the dollar, the rates, oil, gold and silver are not shares, so the equity tick
+   above never prices them; the dashboard showed whatever the stored table held. The chart API's /macro carries
+   FMP's live quote for each, with FMP's previous close for the same instrument (on 23 Sep oil's stored previous
+   close said 81.25 while the market's was 90.52, so the change was blanked). Applied exactly the way the equity
+   tick applies /quotes. Bitcoin stays on its Coinbase socket. */
+const SC_MACRO_SYMS = ["VIX", "US10Y", "US5Y", "US30Y", "US3M", "DXY", "DXUSD", "CLUSD", "GCUSD", "SIUSD"];
+const SC_MACRO_MS = 30000;
+window.SC_MACRO_TICK = { runs: 0, applied: 0, failures: 0, last_utc: null };
+async function scMacroTick() {
+  if (typeof document !== "undefined" && document.hidden) return;
+  try {
+    const r = await fetch(SC_CHART_API + "/macro?symbols=" + encodeURIComponent(SC_MACRO_SYMS.join(",")));
+    if (!r.ok) throw new Error("macro " + r.status);
+    const j = await r.json();
+    let applied = 0;
+    for (const [t, m] of Object.entries((j && j.macro) || {})) {
+      const q = m && m.quote;
+      const price = Number(q && q.price), prev = Number(q && q.prev_close);
+      if (!q || !isFinite(price) || price <= 0) continue;
+      if (isFinite(prev) && prev > 0) prevClose[t] = prev; else delete prevClose[t];
+      patch(t, price, "PROVIDER");
+      const targets = [];
+      const rS = (S.rows || []).find((x) => x.t === t); if (rS) targets.push(rS);
+      const rA = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
+      if (rA && rA !== rS) targets.push(rA);
+      for (const row of targets) {
+        row.nf = false; row.state = "OK"; row.priceSource = "FMP_LIVE_QUOTE"; row.price = price;
+        row.pc = isFinite(prev) && prev > 0 ? prev : null;
+        row.c = row.pc ? (price / row.pc - 1) * 100 : null;
+      }
+      const quoteRow = document.querySelector('[data-act="row"][data-t="' + t + '"]');
+      if (quoteRow && quoteRow.classList.contains("nofeed")) {
+        quoteRow.classList.remove("nofeed");
+        const marker = quoteRow.querySelector(".no-feed"); if (marker) marker.remove();
+        const tickerNode = quoteRow.querySelector(".sc-ctk"); if (tickerNode) tickerNode.classList.remove("has-nf");
+      }
+      applied++;
+    }
+    window.SC_MACRO_TICK.runs++; window.SC_MACRO_TICK.applied += applied;
+    window.SC_MACRO_TICK.last_utc = new Date().toISOString();
+    try { if (typeof updateLive === "function") updateLive(); } catch (_) {}
+  } catch (_) { window.SC_MACRO_TICK.failures++; }
+}
+setTimeout(scMacroTick, 1500);
+setInterval(scMacroTick, SC_MACRO_MS);
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (!document.hidden) scMacroTick(); });
 /* R30 — CHART OFF FMP: the price line now reads ohlcv_history (your DB), not FMP's
    bandwidth-capped historical API. This later function declaration supersedes the
    FMP-based fetchChartSeries defined earlier (function-decl last-wins). Charts now

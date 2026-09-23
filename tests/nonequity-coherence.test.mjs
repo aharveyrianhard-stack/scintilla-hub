@@ -36,3 +36,15 @@ test("the tape leaves an unknown day change off instead of painting 0.00%", () =
   assert.doesNotMatch(tape, /\|\| 0 \}/);
   assert.match(tape, /\.filter\(\(q\) => q\.pct != null\)/);
 });
+
+test("a stored quote older than four days is dropped, so the row shows NO FEED instead of an old number (23 Sep)", () => {
+  const now = Date.now();
+  const rows = scCoherentRetainedQuotes([
+    { ticker:"VIX", price:14.25, change:-1.74, chg_pct:-10.88, prev_close:15.99, updated_ts:"2026-08-14T23:33:50.414Z" },
+    { ticker:"US10Y", price:4.695, change:null, chg_pct:null, prev_close:null, updated_ts:new Date(now - 3 * 86400e3).toISOString() },
+  ]);
+  assert.deepEqual(rows.map((r) => r.ticker), ["US10Y"], "August's VIX row is gone; a three-day-old row (a weekend) stays");
+  assert.match(html, /live_quotes\?select=ticker,price,change,chg_pct,prev_close,updated_ts/, "the reads carry the row's age");
+  assert.match(html, /const SC_MACRO_SYMS = \["VIX", "US10Y", "US5Y", "US30Y", "US3M", "DXY", "DXUSD", "CLUSD", "GCUSD", "SIUSD"\];/);
+  assert.match(html, /fetch\(SC_CHART_API \+ "\/macro\?symbols=" \+ encodeURIComponent\(SC_MACRO_SYMS\.join\(","\)\)\)/, "the macro rows take the chart API's live quote");
+});
