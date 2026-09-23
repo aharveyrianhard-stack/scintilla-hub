@@ -18411,6 +18411,15 @@ function filesWire(){
       out[i]= l===0?100:100-100/(1+g/l); }
     return out; }
 
+  /* the same bands the builder uses — a reading is placed in a range, not on one line */
+  var BANDS = [[0,30],[30,35],[35,40],[40,45],[45,50],[50,55],[55,60],[60,65],[65,70],[70,100]];
+  function bandOf(v){ if(v==null) return null;
+    for(var b=0;b<BANDS.length;b++){ var lo=BANDS[b][0], hi=BANDS[b][1];
+      if(v>=lo && (v<hi || (b===BANDS.length-1 && v<=hi))) return b; }
+    return null; }
+  function bandLabel(b){ if(b==null) return "—"; var lo=BANDS[b][0], hi=BANDS[b][1];
+    return b===0 ? "under "+hi : b===BANDS.length-1 ? hi.toString().replace("100","70")+" and over" : lo+" to "+hi; }
+
   function pctileOf(sym, v){
     if (v==null || !sym || !sym.percentile_curve) return null;
     var c=sym.percentile_curve, k=0;
@@ -18439,7 +18448,13 @@ function filesWire(){
         var v=rsi14(s.map(function(b){return b.c;}));
         var i=v.length-1; while(i>=0 && v[i]==null) i--;
         if(i<0) return null;
-        LIVE[t]={ rsi:Math.round(v[i]*100)/100, date:new Date(s[i].t).toISOString().slice(0,10), close:s[i].c };
+        var lows={};
+        [20,60].forEach(function(bk){
+          var lo=Infinity, at=null;
+          for(var j=Math.max(0,i-bk+1); j<=i; j++) if(v[j]!=null && v[j]<lo){ lo=v[j]; at=new Date(s[j].t).toISOString().slice(0,10); }
+          lows[bk]= isFinite(lo) ? { lowest:Math.round(lo*100)/100, band:bandOf(lo), on:at } : null;
+        });
+        LIVE[t]={ rsi:Math.round(v[i]*100)/100, date:new Date(s[i].t).toISOString().slice(0,10), close:s[i].c, lows:lows };
         return LIVE[t];
       }).catch(function(){ return null; });
   }
@@ -18470,6 +18485,76 @@ function filesWire(){
         + '<td data-l="60 days">'+(L.fwd60.n?n0(L.fwd60.up_pct)+"% up · "+sgn(L.fwd60.median_pct):"—")+"</td>"
         + "</tr>";
     }).join("");
+  }
+
+  /* Alan: "It's been close to forty recently though, so the range matters."
+     So: the band the reading sits in now, paired with the lowest band of the last
+     20 or 60 days, and what followed days that looked the same. */
+  function shapeHTML(sym, now, lows){
+    if (!sym.shapes) return "";
+    var nb = bandOf(now);
+    if (nb==null) return "";
+    var out = "";
+    [60,20].forEach(function(back){
+      var rows = sym.shapes[back] || [];
+      var low = lows && lows[back];
+      if (!low || low.band==null) return;
+      var m = null;
+      for (var i=0;i<rows.length;i++) if (rows[i].now_band===nb && rows[i].low_band===low.band) { m = rows[i]; break; }
+      out += '<p class="hu__say">In the last <b>'+back+" days</b> the lowest reading was <b>"+n1(low.lowest)+"</b> ("
+        + bandLabel(low.band)+", on "+say(low.on)+"), and it stands at <b>"+n1(now)+"</b> ("+bandLabel(nb)+") now. "
+        + (m
+            ? "Days that looked like that: <b>"+grp(m.days)+"</b> of the "+grp(sym.history.rsi_days_measured)
+              +" measured (<b>"+n1(m.days_pct)+"%</b>). After them "+sym.moves+" was higher 20 days later <b>"
+              +n0(m.fwd20.up_pct)+"% of the time</b>, middle move <b>"+sgn(m.fwd20.median_pct)+"</b>"
+              +" — against "+n0(sym.baseline.fwd20.up_pct)+"% and "+sgn(sym.baseline.fwd20.median_pct)+" from any day."
+              +" At 60 days, <b>"+n0(m.fwd60.up_pct)+"%</b> and <b>"+sgn(m.fwd60.median_pct)+"</b> against "
+              +n0(sym.baseline.fwd60.up_pct)+"% and "+sgn(sym.baseline.fwd60.median_pct)+"."
+            : "That exact pairing has happened on fewer than ten days in this symbol's history, so there is nothing to report from it. Fewer than ten is not a rate.")
+        + "</p>";
+    });
+    return out;
+  }
+
+  function bandsHTML(sym, now){
+    if (!sym.bands) return "";
+    var nb = bandOf(now);
+    return '<div class="hu__sec" style="margin-top:26px">Every reading, in bands</div>'
+      + '<p class="hu__say" style="font-size:15px">A band counts every day the reading sat inside it, and a visit is one stay however long it lasts. This is the same history as the table above, cut into ranges instead of thresholds.</p>'
+      + "<table><thead><tr><th>band</th><th>how often</th><th>visits a year</th><th>visits in all</th>"
+      + "<th>20 days later</th><th>middle move</th><th>60 days later</th></tr></thead><tbody>"
+      + sym.bands.map(function(B){
+          return '<tr class="'+(B.band===nb?"hu-here":"")+'">'
+            + '<td class="hu-lv">'+B.label+(B.band===nb?" · now":"")+"</td>"
+            + '<td data-l="how often">'+n1(B.days_pct)+"% of days</td>"
+            + '<td data-l="a year">'+n1(B.per_year)+" a year</td>"
+            + '<td data-l="in all">'+grp(B.visits)+(B.visits<25?' <span style="color:var(--mute)">few</span>':"")+"</td>"
+            + '<td data-l="20 days">'+(B.fwd20.n?n0(B.fwd20.up_pct)+"% up":"—")+"</td>"
+            + '<td data-l="middle move">'+(B.fwd20.n?sgn(B.fwd20.median_pct):"—")+"</td>"
+            + '<td data-l="60 days">'+(B.fwd60.n?n0(B.fwd60.up_pct)+"% up · "+sgn(B.fwd60.median_pct):"—")+"</td>"
+            + "</tr>";
+        }).join("")
+      + "</tbody></table>";
+  }
+
+  /* "came within three points of forty without touching it" — counted apart from touches */
+  function approachHTML(sym, now){
+    if (!sym.approaches || !sym.approaches.length) return "";
+    var near = sym.approaches.filter(function(A){ return A.near_misses >= 10; });
+    if (!near.length) return "";
+    return '<div class="hu__sec" style="margin-top:26px">Near misses</div>'
+      + '<p class="hu__say" style="font-size:15px">A turn that came within '+near[0].within+' points of a level and stopped there, counted separately from one that reached it. A turn is only known '+(near[0].confirm_days||5)+' days after it happens, so what followed is measured from that later day, never from the turn itself.</p>'
+      + "<table><thead><tr><th>level</th><th>near misses</th><th>20 days after a near miss</th><th>touches at a turn</th><th>20 days after a touch</th></tr></thead><tbody>"
+      + near.map(function(A){
+          return "<tr>"
+            + '<td class="hu-lv">within '+A.within+" of "+A.level+", "+A.side+"</td>"
+            + '<td data-l="near misses">'+grp(A.near_misses)+(A.near_misses<25?' <span style="color:var(--mute)">few</span>':"")+"</td>"
+            + '<td data-l="after a near miss">'+(A.fwd20.n?n0(A.fwd20.up_pct)+"% up · "+sgn(A.fwd20.median_pct):"—")+"</td>"
+            + '<td data-l="touches">'+grp(A.touches_at_a_turn)+"</td>"
+            + '<td data-l="after a touch">'+(A.touch_fwd20.n?n0(A.touch_fwd20.up_pct)+"% up · "+sgn(A.touch_fwd20.median_pct):"—")+"</td>"
+            + "</tr>";
+        }).join("")
+      + "</tbody></table>";
   }
 
   function paintList(){
@@ -18503,8 +18588,12 @@ function filesWire(){
       + '<p class="hu__say">'+levelSentence(sym, sym.levels.filter(function(L){
           return now!=null && (L.side==="below" ? now<=L.level : now>=L.level); }).sort(function(a,b){
           return Math.abs(a.level-now)-Math.abs(b.level-now); })[0] || sym.levels.filter(function(L){return L.level===40;})[0])+"</p>"
+      + shapeHTML(sym, now, (live && live.lows) || (sym.recent && sym.recent.lows))
+      + '<div class="hu__sec" style="margin-top:26px">Thresholds</div>'
       + "<table><thead><tr><th>reading</th><th>how often</th><th>how many times a year</th><th>in "+n1(hist.years_of_days||hist.years)+" years of days</th>"
       + "<th>20 days later</th><th>middle move</th><th>60 days later</th></tr></thead><tbody>"+rowsHTML(sym, now)+"</tbody></table>"
+      + bandsHTML(sym, now)
+      + approachHTML(sym, now)
       + '<div class="hu__gg"><div class="hu__sec">Geiger</div>'
       + (g ? '<p class="hu__say">Geiger <b>'+(g.composite>0?"+":"")+(Math.round(g.composite*100)/100).toFixed(2)+"</b>"
              + " — higher than <b>"+gPct+"% of the "+gN+" names</b> on the board today."

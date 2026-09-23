@@ -82,3 +82,64 @@ test("the shipped history file says what it is measured on", () => {
   const qqq = doc.symbols.find((s) => s.t === "QQQ");
   assert.equal(qqq.history.gaps.length, 1, "QQQ's missing years must stay visible in the data");
 });
+
+/* ---- readings in ranges, not on one line (23 Sep, lane M23) ---- */
+import { BANDS, bandOf, bandStats, approachStats, shapeStats, APPROACH_WITHIN } from "../tools/how-unusual/build.mjs";
+
+test("the page and the builder use the same bands", () => {
+  const m = HUB.match(/var BANDS = (\[\[0,30\][^;]*?\]);/);
+  assert.ok(m, "the page must carry its own copy of the bands");
+  assert.deepEqual(JSON.parse(m[1]), BANDS);
+});
+
+test("a reading falls in exactly one band, and the edges belong to the band above", () => {
+  for (const v of [0, 12.5, 29.99, 30, 39.9, 40, 55, 69.999, 70, 88, 100]) {
+    const b = bandOf(v);
+    assert.ok(b != null, `no band for ${v}`);
+    const hits = BANDS.filter(([lo, hi], i) => v >= lo && (v < hi || (i === BANDS.length - 1 && v <= hi)));
+    assert.equal(hits.length, 1, `${v} lands in ${hits.length} bands`);
+  }
+  assert.equal(bandOf(40), BANDS.findIndex(([lo]) => lo === 40), "40 belongs to 40-45, not 35-40");
+  assert.equal(bandOf(null), null);
+});
+
+test("the bands account for every measured day, once", () => {
+  const closes = Array.from({ length: 1200 }, (_, i) => 100 * (1 + Math.sin(i / 9) * 0.18 + Math.cos(i / 31) * 0.1 + i / 6000));
+  const rsi = rsi14(closes);
+  const bands = bandStats(closes, rsi);
+  assert.equal(bands.length, BANDS.length);
+  const days = bands.reduce((s, b) => s + b.days, 0);
+  assert.equal(days, rsi.filter((v) => v != null).length, "every measured day sits in one band");
+  for (const b of bands) assert.ok(b.visits <= b.days, `${b.label}: more visits than days`);
+});
+
+test("a near miss is measured from the day the turn could be seen, not from the turn", () => {
+  const closes = Array.from({ length: 600 }, (_, i) => 100 * (1 + Math.sin(i / 13) * 0.16));
+  const rsi = rsi14(closes);
+  const rows = approachStats(closes, rsi);
+  assert.ok(rows.length, "there should be levels reported");
+  for (const r of rows) {
+    assert.equal(r.within, APPROACH_WITHIN);
+    assert.equal(r.confirm_days, 5);
+    // nothing may be counted that needs bars the data does not have
+    assert.ok(r.fwd60.n <= r.near_misses, "more outcomes than turns is impossible");
+  }
+  // a turn inside the last five days cannot be known yet, so it is not counted
+  const short = closes.slice(0, 520);
+  const a = approachStats(short, rsi14(short));
+  const b = approachStats(closes, rsi);
+  const near = (rows2) => rows2.reduce((s, r) => s + r.near_misses, 0);
+  assert.ok(near(a) <= near(b), "shortening the history cannot create turns");
+});
+
+test("a shape pairs where the reading is now with the lowest band it has been", () => {
+  const closes = Array.from({ length: 1500 }, (_, i) => 100 * (1 + Math.sin(i / 17) * 0.2 + i / 9000));
+  const rsi = rsi14(closes);
+  const sh = shapeStats(closes, rsi, [60]);
+  assert.ok(sh[60].length, "there should be shapes");
+  for (const r of sh[60]) {
+    assert.ok(r.days >= 10, "a combination seen fewer than ten times must not be reported");
+    assert.ok(r.low_band <= r.now_band, "the lowest band of the window cannot be above the band it is in now");
+    assert.ok(r.fwd20.n <= r.days);
+  }
+});
