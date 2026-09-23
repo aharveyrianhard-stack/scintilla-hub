@@ -13,10 +13,11 @@ test("direct entry: #economic and #calendar open ECONOMIC; anything else keeps t
   assert.equal(new Function(fnSrc("scEntryRoom") + "return scEntryRoom();")(), null, "no location at all (tests, workers) is harmless");
   assert.match(page, /const S = \{\n  sec: scEntryRoom\(\) \|\| "DASHBOARD", coh: "FAV",/, "the default landing is still DASHBOARD");
 });
-test("direct entry: one hashchange listener, which only ever switches to ECONOMIC", () => {
+test("direct entry: one hashchange listener, which switches only to a room scEntryRoom names (ECONOMIC, and since 23 Sep SENTIMENT)", () => {
   const n = (page.match(/addEventListener\("hashchange"/g) || []).length;
   assert.equal(n, 1);
-  assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ if \(scEntryRoom\(\) === "ECONOMIC" && S\.sec !== "ECONOMIC"\) go\("ECONOMIC"\); \}\);/);
+  assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ const r = scEntryRoom\(\); if \(r && S\.sec !== r\) go\(r\); \}\);/);
+  assert.match(page, /return h === "economic" \|\| h === "calendar" \? "ECONOMIC" : \(h === "sentiment" \|\| h === "fear-greed" \? "SENTIMENT" : null\);/, "the resolver still owns the hash vocabulary");
 });
 test("phone: the day-bar controls wrap under the date instead of overlapping it; the nudge is not shown on a phone", () => {
   assert.match(page, /@media \(max-width:900px\)\{ \.ec-daybar\{ flex-wrap:wrap; row-gap:6px; \} \.ec-span\{ margin-left:0; width:100%; flex-wrap:wrap; \} \}/);
