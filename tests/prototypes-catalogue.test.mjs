@@ -25,7 +25,7 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    latest.json. The rules below hold the page to that: a date on every card, the strip in order and never a dead end,
    no fixed column count anywhere. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "24096f2d40b5c3fb6b77dc22ece23b0a2ca19b52de20e346d0962f87ca4d6bbc");   // regenerated 23 Sep: the day's Latest items, the mood board, and BACK / CLOSE in the header
+  assert.equal(sha("index.html"), "0bcc6d3b35d0a65b8c268f140f2d23d24934edf8f96934ed16db8ecfa4bcb94c");   // regenerated 23 Sep: the day's Latest items, the mood board, and BACK / CLOSE in the header
   assert.equal(sha("previews/signal-fanout-v2.html"), "b515b4fc290a686ba4d73dba1fd431e000e57d3e1b3f868073e7738e39dd6073");
   assert.equal(sha("dock-concept/index.html"), "43af029d01336c678b5cd6e14c8b226e0bf1f1c85c99d90a4f3bd434fe92d8b9");
   assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
