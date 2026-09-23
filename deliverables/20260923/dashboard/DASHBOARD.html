@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The dashboard's right half, and why the Hub opened slowly · 23 Sep 2026</title>
+<style>
+:root{--bg:#07080B;--pan:#0B0D11;--line:#191D24;--line2:#242A33;--ink:#BEC3CB;--ink2:#969CA6;--dim:#6B717B;--dimmer:#474D57;
+ --mono:"SF Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink2);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:34px 26px 80px}
+h1{font:500 12px/1 var(--mono);letter-spacing:.3em;color:var(--dim);margin:0 0 18px}
+h2{font:500 12px/1 var(--mono);letter-spacing:.22em;color:var(--ink);text-transform:uppercase;margin:46px 0 14px}
+h3{font:500 11px/1.4 var(--mono);letter-spacing:.16em;color:var(--ink2);text-transform:uppercase;margin:28px 0 8px}
+p{max-width:74ch}
+.lede{font-size:21px;line-height:1.45;color:var(--ink);max-width:66ch}
+blockquote{margin:22px 0;padding:14px 20px;border-left:2px solid var(--line2);background:var(--pan);color:var(--ink);font-size:17px}
+figure{margin:22px 0 0;background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:12px}
+figure img{display:block;width:100%;border-radius:7px;border:1px solid var(--line)}
+figcaption{margin-top:11px;color:var(--dim);font-size:15px}
+.frames{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
+.frames figure{margin:0}
+.phones{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+.phones figure{margin:0}
+table{border-collapse:collapse;width:100%;margin-top:16px;font-size:15px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 10px/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+td b{color:var(--ink);font-weight:600}
+td.n{font-family:var(--mono);font-size:14px;white-space:nowrap}
+code{font:13px/1.5 var(--mono);color:var(--ink2)}
+ul{max-width:74ch}li{margin:7px 0}
+a{color:var(--ink2)}a:hover{color:var(--ink)}
+footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--line);font:11px/1.8 var(--mono);color:var(--dimmer)}
+@media (max-width:900px){.frames,.phones{grid-template-columns:1fr}main{padding:22px 16px 60px}}
+</style>
+</head>
+<body><main>
+<h1>SCINTILLA · DASHBOARD · 23 SEP 2026</h1>
+<p class="lede">Two things were asked for. The right half of the dashboard is now one set of four tabs instead of a band stacked on top of a strip of three. And the Hub's slow opening was measured before anything was touched — the page itself was never the slow part, and the Geiger was never the slow part either.</p>
+
+<blockquote>"Cohort compare and the map, rotation and relative should all be tabs of the same right half."<br>"The hub. It loaded extremely slow. The Geiger is slow."<br><span style="color:var(--dim);font-size:14px">— Alan, 23 September</span></blockquote>
+
+<h2>1 · One strip of four tabs</h2>
+<p>COHORT COMPARE used to sit above the MAP / ROTATION / RELATIVE tabs as a permanent band, taking about 110 pixels out of a pane only about 330 pixels tall. It is now the first of four tabs, and whichever tab you choose owns the full height of the right half.</p>
+<ul>
+<li><b>Nothing was dropped.</b> Every view keeps the content and the controls it had. The cohort columns are the same columns, built by the same code, with the same click targets — clicking a column still switches the board to that cohort.</li>
+<li><b>The fan is bigger.</b> Its bar used to be locked to a 114-pixel track because it lived in a thin band. On its own tab it stretches to the height of the pane, so the spread between cohorts is easier to read.</li>
+<li><b>The tab is remembered.</b> Before, the pane always reopened on MAP. Now it reopens where you left it. If the browser refuses to store anything, it opens on MAP rather than failing.</li>
+<li><b>The timeframe row (60M · 4H · 1D · 1W) is not shown on the cohort tab</b>, because the cohort fan does not run off it — its scale is its own, and it is printed in the strip's header. Every other tab keeps that row exactly as before.</li>
+<li><b>The left board was not touched</b>, and the fear &amp; greed strip that was removed from it has not come back.</li>
+</ul>
+__SHOTS__
+
+<h2>2 · The speed, measured before it was touched</h2>
+<p>Every number below is a real browser at 1680×1050 with an empty cache, loading the page from scratch. The "before" runs are the live site at scintillahub.ai and an unchanged copy of production on this machine; the "after" runs are the same copy with the changes applied, loaded alternately with the unchanged one so that a slow minute on the data service hits both equally.</p>
+__TIMING__
+
+<h2>3 · The three causes, with numbers</h2>
+__CAUSES__
+
+<h2>4 · What is left for the data service, not the Hub</h2>
+__BACKEND__
+
+<h2>5 · Where each number on this page comes from</h2>
+<ul>
+<li><b>First paint, first prices, Geiger filled, tapes moving</b> — read inside the browser itself, by watching the page 10 times a second until the board's price cells contain digits, until the rows carry a Geiger value, and until the tape has items. Nothing is estimated.</li>
+<li><b>Request counts and sizes</b> — the browser's own network record for the page.</li>
+<li><b>The endpoint timings</b> — plain requests to the chart API from this machine, timed with <code>curl</code>, one batch size at a time, and then four at once to reproduce what the Hub was doing.</li>
+<li><b>The observer cost</b> — every MutationObserver on the page was wrapped in a counter for the whole load, so the figure is the real number of calls and the real milliseconds, not a guess.</li>
+</ul>
+
+<h2>6 · What could be wrong</h2>
+__RISKS__
+
+<h2>7 · What I did not do</h2>
+<ul>
+<li><b>Nothing was deployed or pushed.</b> The work is a local branch. The coordinator merges and deploys.</li>
+<li><b>The chart API was not changed.</b> Its own speed is the biggest remaining number and it belongs to whoever owns that service.</li>
+<li><b>No price table was written to</b>, and no schedule, permission or credential was touched.</li>
+<li><b>The left board, the other rooms and the Indicator Lab were not touched.</b></li>
+<li><b>The duplicated database reads were left alone.</b> They fall by two thirds on their own once the sentiment reading stops running three times, and rewriting the shared read helper on a timebox was a worse risk than the gain.</li>
+<li><b>Nothing was proved about a fast market day.</b> These measurements were taken this evening, with the data service unusually slow.</li>
+</ul>
+
+<footer>
+SCINTILLA · M19 · branch <code>hub/dashboard-20260923</code> · measured and written 23 Sep 2026 · nothing deployed
+</footer>
+</main></body>
+</html>

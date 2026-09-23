@@ -16363,8 +16363,11 @@ async function scProviderTick () {
   } finally { SC_TICK_INFLIGHT = false; /* Resolve the declared set immediately rather than waiting for the first board build, so the
    guard is armed before any legacy tick can arrive. */
 scDeclaredEquities().catch(() => {});
-/* M19 §B — after the first, screen-only request, come straight back for the whole universe */
-window.SC_TICK_FIRST = false;
+/* M19 §B — after the first, screen-only request, come straight back for the whole universe.
+   The one chance to prioritise is only spent once there ARE rows to prioritise: on a cold
+   load the first tick can fire before the board has been built, and burning the flag there
+   would quietly disable the whole thing. */
+if (window.SC_TICK_PARTIAL || ((typeof S !== "undefined" && S.rows) || []).length) window.SC_TICK_FIRST = false;
 scScheduleTick(window.SC_TICK_PARTIAL); window.SC_TICK_PARTIAL = false; }
 }
 function scScheduleTick (fast) {

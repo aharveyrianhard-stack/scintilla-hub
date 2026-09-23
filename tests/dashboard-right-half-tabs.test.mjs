@@ -113,6 +113,8 @@ test('the first tick prices the visible rows and the next one covers the whole u
   assert.match(tick, /if \(vis\.length && vis\.length < all\.length\) want = vis;/);
   assert.match(tick, /window\.SC_TICK_FIRST = false;\n\s*scScheduleTick\(window\.SC_TICK_PARTIAL\);/,
     'after a screen-only request it comes straight back for the full universe');
+  assert.match(tick, /if \(window\.SC_TICK_PARTIAL \|\| \(\(typeof S !== "undefined" && S\.rows\) \|\| \[\]\)\.length\)/,
+    'a tick that fired before the board existed does not burn the one chance to prioritise');
   assert.doesNotMatch(tick, /SC_TICK_FIRST = false[\s\S]{0,200}return;/, 'the flag is cleared in the finally, never on an early return');
   assert.match(tick, /if \(window\.SC_TICK_FIRST !== false\)/, 'a sandbox without the flag still takes the screen-only path once');
 });
@@ -124,4 +126,58 @@ test('the fear & greed computation runs once at a time, and waits for the board 
   const waiter = fn('scAfterFirstPrices');
   assert.match(waiter, /window\.SC_TICK && window\.SC_TICK\.runs > 0/, 'it waits for an ACCEPTED tick');
   assert.match(waiter, /Date\.now\(\) - t0 < cap/, 'and gives up after the cap, so a dead provider cannot hold the gauge for ever');
+});
+
+test('the tick really does ask for the visible rows first, then for everyone', async () => {
+  /* Runs scProviderTick twice in a sandbox and reads the urls it asked for. */
+  const urls = [];
+  const rows = [{ t:'AAPL', price:null }, { t:'MSFT', price:null }];
+  const decl = new Set(['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN']);
+  let scheduledFast = [];
+  const c = vm.createContext({
+    window: { SC_DECLARED_SET: decl, SC_TICK: { runs:0, applied:0, symbols:0, failures:0, last_utc:null } },
+    Date, console, SC_TICK_INFLIGHT: false, SC_TICK_WAITS: 0, SC_TICK_FAILS: 0,
+    SC_CHART_API: 'https://provider.test', S: { rows }, ALLROWS: rows, prevClose: {},
+    scScheduleTick: (fast) => scheduledFast.push(!!fast),
+    scDeclaredEquities: async () => decl,
+    fetch: async (u) => { urls.push(u); return { ok:true, status:200, json: async () => ({ quotes:{} }) }; },
+    patch: () => {}, el: () => null, document: { querySelector: () => null },
+    scStamp() {}, scStampRoot() {}, updateLive() {},
+    scQuoteObservation: () => ({ observed_utc:null, state:'OK' }), scQuoteObservationLabel: () => '',
+    scUpdateEquityFreshness() {}, scSetTitle() {},
+  });
+  vm.runInContext(fn('scJSONOnce') + '\n' + fn('scProviderTick'), c);
+  await c.scProviderTick();
+  const first = decodeURIComponent(urls[0].split('symbols=')[1]).split(',');
+  assert.deepEqual(first, ['AAPL', 'MSFT'], 'the first request is the rows on screen');
+  assert.equal(scheduledFast[0], true, 'and it comes straight back rather than waiting the full 2 s');
+  c.SC_TICK_INFLIGHT = false;
+  await c.scProviderTick();
+  const second = decodeURIComponent(urls[1].split('symbols=')[1]).split(',');
+  assert.deepEqual(second, ['AAPL', 'AMZN', 'MSFT', 'NVDA', 'TSLA'], 'the second request covers the whole declared universe');
+  assert.equal(scheduledFast[1], false, 'after which the normal cadence resumes');
+});
+
+test('a tick that fires before the board is built still prioritises the rows once they exist', async () => {
+  const urls = [];
+  const rows = [];
+  const decl = new Set(['AAPL', 'MSFT', 'NVDA']);
+  const c = vm.createContext({
+    window: { SC_DECLARED_SET: decl, SC_TICK: { runs:0, applied:0, symbols:0, failures:0, last_utc:null } },
+    Date, console, SC_TICK_INFLIGHT: false, SC_TICK_WAITS: 0, SC_TICK_FAILS: 0,
+    SC_CHART_API: 'https://provider.test', S: { rows }, ALLROWS: rows, prevClose: {},
+    scScheduleTick: () => {}, scDeclaredEquities: async () => decl,
+    fetch: async (u) => { urls.push(u); return { ok:true, status:200, json: async () => ({ quotes:{} }) }; },
+    patch: () => {}, el: () => null, document: { querySelector: () => null },
+    scStamp() {}, scStampRoot() {}, updateLive() {},
+    scQuoteObservation: () => ({ observed_utc:null, state:'OK' }), scQuoteObservationLabel: () => '',
+    scUpdateEquityFreshness() {}, scSetTitle() {},
+  });
+  vm.runInContext(fn('scJSONOnce') + '\n' + fn('scProviderTick'), c);
+  await c.scProviderTick();                       // board not built yet: nothing to prioritise
+  assert.match(urls[0], /AAPL%2CMSFT%2CNVDA/, 'so it asks for the whole universe, as before');
+  c.SC_TICK_INFLIGHT = false;
+  rows.push({ t:'AAPL', price:null });             // the board exists now
+  await c.scProviderTick();
+  assert.equal(decodeURIComponent(urls[1].split('symbols=')[1]), 'AAPL', 'and the screen-first pull still happens');
 });
