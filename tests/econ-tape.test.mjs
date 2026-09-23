@@ -92,7 +92,7 @@ const QUEUE = [
   R("2026-09-24T14:00:00Z", "New Home Sales (Aug)", { estimate: 0.62, previous: 0.607 }),      // in 1h 29m
   R("2026-09-30T12:30:00Z", "Core PCE Price Index MoM (Aug)", { estimate: 0.2, previous: 0.2 }),   // the calendar shortens this to "Core PCE Price MoM"
 ];
-test("the four states: in 6d → in 34m → now (pulsing) → the result, then it drops off and the next moves up", () => {
+test("the bands: in 6d → in 34m → tightening → one hard pulse → the result, then it drops off and the next moves up", () => {
   const { api } = load({ rows: QUEUE });
   const it = (name) => api.ecTapeItems(QUEUE).find((x) => x.name === name);
   const st = (name, now, seen) => api.ecNudgeState(it(name), now, seen);
@@ -100,7 +100,10 @@ test("the four states: in 6d → in 34m → now (pulsing) → the result, then i
   assert.equal(st("New Home Sales", NOW), "ahead", "1h 29m out is still quiet");
   assert.equal(st("New Home Sales", ts("2026-09-24T13:26:00Z")), "soon", "inside the hour: the go-look signal");
   assert.equal(st("Fed Hammack Speech", NOW), "soon");
-  assert.equal(st("Jobless Claims", NOW), "now", "its minute has passed and the number is not in yet");
+  /* 16 Aug: inside ten minutes it tightens — the band the 22 Sep build did not have (Alan, 23 Sep 09:43) */
+  assert.equal(st("New Home Sales", ts("2026-09-24T13:51:00Z")), "near", "nine minutes out: tightening");
+  assert.equal(st("New Home Sales", ts("2026-09-24T13:49:00Z")), "soon", "eleven minutes out is still just soon");
+  assert.equal(st("Jobless Claims", NOW), "due", "its minute has passed and the number is not in yet");
   assert.equal(api.ecCountdown(it("Core PCE Price MoM").ts, NOW), "in 5d");
   assert.equal(api.ecCountdown(NOW + 6 * 86400 + 3600, NOW), "in 6d", "the proposal's own wording");
   assert.equal(api.ecCountdown(it("New Home Sales").ts, ts("2026-09-24T13:26:00Z")), "in 34m");
@@ -118,31 +121,34 @@ test("the four states: in 6d → in 34m → now (pulsing) → the result, then i
     "a result first seen hours after its release is not replayed");
   /* a release that prints no number at all (a speech) says "now" for a quarter of an hour, then goes */
   const speech = L.api.ecTapeItems(landedRows).find((x) => x.name === "Fed Hammack Speech");
-  assert.equal(L.api.ecNudgeState(speech, speech.ts + 60), "now");
+  assert.equal(L.api.ecNudgeState(speech, speech.ts + 60), "due");
   assert.equal(L.api.ecNudgeState(speech, speech.ts + 16 * 60), "gone");
   /* and a number still missing an hour after its minute stops shouting */
   assert.equal(api.ecNudgeState(it("Jobless Claims"), it("Jobless Claims").ts + 61 * 60), "gone");
 });
 
-test("the queue: three items, one week ahead, the landed one first, click opens that day in ECONOMIC", () => {
+test("the queue: three items ahead, the landed one in its own lane on the left, click opens that day in ECONOMIC", () => {
   const rows = QUEUE.map((r) => (/Jobless/.test(r.event) ? { ...r, actual: 218 } : r));
   const { api } = load({ rows });
   const key = api.ecTapeItems(rows).find((x) => x.name === "Jobless Claims").key;
   api.ECON_TAPE_SEEN[key] = NOW;                                        // the number has just been seen
   const html = api.macroNextHTML(NOW);
-  assert.equal((html.match(/class="mn-it s-/g) || []).length, 3, "three items (proposal v2)");
-  assert.match(html, /^<span class="mn-lbl">next<\/span>/);
-  assert.match(html, /<span class="mn-it s-landed"[^>]*><span class="mn-dot">●<\/span><span class="mn-nm">Jobless Claims<\/span><span class="mn-res"><b>218<\/b> vs 201<\/span><span class="mn-sur miss">\+17 above<\/span>/,
-    "actual vs estimate, and more people out of work than expected is the red one");
+  /* 16 Aug: "landed … in its own lane on the left. NEVER takes an upcoming slot" — so three upcoming AND the result */
+  assert.equal((html.match(/class="mn-it s-(?!landed)/g) || []).length, 3, "three upcoming (proposal v2: 'Three items. Yours.')");
+  assert.equal((html.match(/class="mn-it s-landed/g) || []).length, 1, "and the landed one beside them, not instead of one");
+  assert.match(html, /^<span class="mn-lbl">next<\/span><span class="mn-it s-landed mn-lane-end"/, "the landed lane comes first, and is ruled off");
+  assert.match(html, /<span class="mn-dot" style="color:#2D9CFF">●<\/span><span class="mn-nm">Jobless Claims<\/span><span class="mn-res"[^>]*><b>218<\/b> vs 201<\/span><span class="mn-sur miss">\+17 above<\/span>/,
+    "LABOR blue, actual vs estimate, and more people out of work than expected is the red one");
+  assert.match(html, /data-act="mnclear" data-k="[^"]+" title="clear">✕/, "and it clears on click");
   assert.match(html, /<span class="mn-it s-soon"[^>]*>.*Fed Hammack Speech.*<span class="mn-cd">in 29m<\/span>/);
   assert.match(html, /<span class="mn-it s-ahead"[^>]*>.*New Home Sales.*<span class="mn-cd">in 1h 29m<\/span>/);
-  assert.doesNotMatch(html, /Core PCE/, "the fourth waits its turn");
+  assert.match(html, /Core PCE/, "with the result out of the queue, the fourth fits");
   for (const m of html.matchAll(/data-day="([^"]+)"/g)) assert.match(m[1], /^\d{4}-\d{2}-\d{2}$/);
   assert.match(html, /data-act="mngoto" data-day="2026-09-24"/, "clicking opens that day");
   /* once the result has had its quarter of an hour, it drops off and the next one moves up */
   const later = api.macroNextHTML(NOW + 16 * 60);
   assert.doesNotMatch(later, /Jobless Claims/);
-  assert.match(later, /Core PCE Price MoM/, "the fourth has moved up into the third slot");
+  assert.match(later, /Core PCE Price MoM/, "the fourth is still there; the lane emptied, the queue did not move");
   assert.equal((later.match(/class="mn-it s-/g) || []).length, 3);
 });
 
@@ -157,7 +163,7 @@ test("a surprise is coloured the way the calendar colours it, and an escaped nam
   assert.equal(sur("Fed Barkin Speech", null, null), null, "a speech has no number and no colour");
   /* a release the supplier carries with no estimate at all (M2 is the one he named) reads against its prior print */
   const M = load({ rows: [R("2026-09-24T13:00:00Z", "M2 Money Supply MoM (Aug)", { impact: "Low", actual: 23.34, previous: 23.22 })] });
-  assert.match(M.api.macroNextHTML(ts("2026-09-24T13:05:00Z")), /<span class="mn-res"><b>23.34<\/b> vs prior 23.22<\/span>/);
+  assert.match(M.api.macroNextHTML(ts("2026-09-24T13:05:00Z")), /<span class="mn-res"[^>]*><b>23.34<\/b> vs prior 23.22<\/span>/);
   const evil = [R("2026-09-24T13:00:00Z", '<img src=x onerror=alert(1)> & "q" (Aug)', { actual: 1, estimate: 0 })];
   const E = load({ rows: evil });
   const one = E.api.macroNextHTML(ts("2026-09-24T13:01:00Z"));
@@ -193,7 +199,7 @@ test("the ECON band is this week, in the same tape part, at the same speed, with
 test("the band and the price bands share ONE speed law, and a price tick never rewinds the week", () => {
   assert.match(page, /function tapeSpeed\(track, startAt\) \{\n  const half = track\.scrollWidth \/ 2, dur = Math\.max\(20, half \/ 45\);/);
   assert.match(page, /px\.querySelectorAll\("\.sc-tape__track"\)\.forEach\(\(track\) => tapeSpeed\(track\)\);/, "MACRO / ALL use it");
-  assert.match(page, /if \(track\) tapeSpeed\(track, slot\.querySelector\("\.ecb-it\.is-now, \.ecb-it\.is-up"\)\);/, "and so does the ECON band");
+  assert.match(page, /if \(track\) tapeSpeed\(track, slot\.querySelector\("\.ecb-it\.is-due, \.ecb-it\.is-near, \.ecb-it\.is-soon, \.ecb-it\.is-up"\)\);/, "and so does the ECON band");
   assert.match(page, /<div class="bands" id="bands"><div id="bandsPx"><\/div><div id="econBandSlot"><\/div><\/div>/);
   assert.match(page, /const px = el\("bandsPx"\) \|\| el\("bands"\);/, "renderTapes writes into its own slot, not over the band");
   assert.match(page, /if \(html === ECON_BAND_HTML && slot\.innerHTML\) return;/, "and the band is only repainted when the week changes");
@@ -205,7 +211,10 @@ test("one read for both surfaces: 10 minutes normally, 2 while a number is due, 
   const w = api.ecTapeWindow(NOW);
   assert.ok(w.from <= NOW - 3 * 3600 && w.to >= NOW + 8 * 86400, "the window carries this morning's results and the next seven days");
   assert.equal(api.ecTapeDueMs(ts("2026-09-24T11:00:00Z")), 10 * 60e3, "nothing due: one read per ten minutes");
-  assert.equal(api.ecTapeDueMs(ts("2026-09-24T12:35:00Z")), 2 * 60e3, "a number is due and not stored: every two minutes");
+  /* THE WATCHER (proposal v2): one a minute from one minute before to fifteen after, then back to the slow cadence */
+  assert.equal(api.ecTapeDueMs(ts("2026-09-24T12:29:30Z")), 60e3, "thirty seconds before the print: watching");
+  assert.equal(api.ecTapeDueMs(ts("2026-09-24T12:35:00Z")), 60e3, "five minutes after, still no number: watching");
+  assert.equal(api.ecTapeDueMs(ts("2026-09-24T12:47:00Z")), 2 * 60e3, "past the fifteen minutes: back to every two");
   assert.equal(api.ecTapeDueMs(ts("2026-09-24T15:30:00Z")), 10 * 60e3, "an hour after the last one it stops asking");
   assert.match(page, /function ecTapeTick\(\) \{\n  if \(typeof document !== "undefined" && document\.visibilityState === "hidden"\) return;/,
     "a hidden tab neither paints nor reads");
@@ -235,11 +244,16 @@ test("Indicator Lab's newest page is byte-identical to the restore commit 8211c8
   assert.deepEqual(fs.readdirSync(new URL("captures/", dir)).sort(), ["mcp-six-chart-20260919.png"]);
 });
 
-test("the tape keeps the nudge proposal's timing: orange inside the hour, a pulse only from the release minute; no white", () => {
-  /* Proposal v2, 13 Aug ("the four states"): soon = "dot goes orange, countdown goes orange"; due = "dot pulses, says now".
-     A pulse before the release minute was tried on 23 Sep and reverted the same morning: it is not the spec. */
-  assert.match(page, /\.mn-it\.s-soon \.mn-dot\{ color:var\(--sv4\); text-shadow:0 0 6px rgba\(255,138,0,\.8\); \}/, "soon glows, holds still");
-  assert.match(page, /\.mn-it\.s-now \.mn-dot\{[^}]*animation:mn-pulse/, "due pulses");
-  assert.doesNotMatch(page, /s-imminent|is-imminent|EC_NUDGE_IMMINENT_S/, "no pre-release pulse");
-  assert.doesNotMatch(page, /\.mn-it\.s-now \.mn-nm\{ color:#fff|\.ecb-it\.is-now \.ecb-nm\{ color:#fff/, "no white on the tape");
+test("the nudge walks the 16 Aug prototype's bands — still, breathing, tightening, one hard pulse — and no white", () => {
+  /* Alan, 23 Sep 09:43: "S&P composite PMI in two minutes. No scintillation." and 11:00: "review the proposal that the
+     session that made the prototype made" — _ECON_TAB_REVIEW/nudge.html. That page's own table is the spec, so the
+     breathing BEFORE the release minute which 22 Sep did not have is now required. This supersedes the 13 Aug timing. */
+  assert.match(page, /\.mn-it\.s-ahead \.mn-dot\{ opacity:\.6; text-shadow:none; \}/, "ahead: still, no flash, named");
+  assert.match(page, /\.mn-it\.s-soon\s+\.mn-dot\{[^}]*animation:mn-breathe 2\.4s/, "soon: breathes at 2.4s");
+  assert.match(page, /\.mn-it\.s-near\s+\.mn-dot\{[^}]*animation:mn-breathe 1\.1s/, "near: 1.1s, tightening");
+  assert.match(page, /\.mn-it\.s-due\s+\.mn-dot\{[^}]*animation:mn-hard \.38s/, "due: one hard 0.38s pulse");
+  assert.match(page, /\.ecb-it\.is-soon \.ecb-dot\{ animation:mn-breathe 2\.4s/, "and the ECON band keeps the same time");
+  assert.doesNotMatch(page, /\.mn-[a-z0-9-]*[^{]*\{[^}]*#fff|\.ecb-[a-z0-9-]*[^{]*\{[^}]*#fff/, "no white on the tape");
+  /* the dot's hue is never hard-coded: it comes from the calendar's own category colour, inline */
+  assert.match(page, /const ecHue = \(cat\) => \(cat === "OTHER" \? "var\(--dim\)" : EC_CAT_COLOR\[cat\] \|\| "var\(--dim\)"\);/);
 });

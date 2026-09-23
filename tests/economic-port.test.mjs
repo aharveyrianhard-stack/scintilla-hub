@@ -271,7 +271,11 @@ test("the ported module only READS three tables and writes nothing", () => {
   assert.deepEqual([...tables].sort(), ["econ_calendar", "econ_history", "treasury_rates"]);
   const args = [...mod.matchAll(/\bpg\(([^,)]{0,32})/g)].map((m) => m[1]);
   assert.ok(args.length >= 4, "window (the tape shares it), curve, prints, per-series top-up");
-  assert.equal((mod.match(/econ_calendar\?select=/g) || []).length, 1, "ONE calendar read in the file: the tape reuses the room's");
+  /* TWO calendar reads, and only two (23 Sep): the room's window read, which the tape and the band share, and the
+     two-year history behind a landed number, which runs only when the number itself is clicked. Neither writes. */
+  assert.equal((mod.match(/econ_calendar\?select=/g) || []).length, 2, "the shared window read, plus the click-only history");
+  assert.equal((mod.match(/&actual=not\.is\.null&order=event_ts\.desc&limit=26/g) || []).length, 1, "the history read is the second one");
+  assert.match(fnSrc(page, "ecHistShow"), /await pg\("econ_calendar\?select=/, "and it lives in the click handler, not on a timer");
   for (const a of args) assert.match(a, /^("econ_calendar\?|"econ_history\?|"treasury_rates\?|path$|$)/, "every read names one of the three tables: " + a);
 });
 
