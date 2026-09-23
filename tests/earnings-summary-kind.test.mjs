@@ -17,7 +17,7 @@ test("the event summary is titled by its own stored provenance - 'release summar
 });
 
 test("the provenance travels with the row and is escaped where it is printed", () => {
-  assert.equal((page.match(/release_summary,release_metrics,summary_source,release_source/g) || []).length, 2, "company payload and master feed read both provenance columns");
+  assert.equal((page.match(/release_summary,release_metrics,summary_source,release_source/g) || []).length, 3, "company payload, master feed and the MONTH/WEEK calendar all read both provenance columns — every read that can open a card carries them");
   assert.match(page, /&select=ticker,date,release_summary,release_metrics,call_url,release_link,summary_source,release_source&limit=1"/, "the panel reads them with the text it shows");
   assert.match(page, /summaryKind: ernSummaryKind\(row\),/);
   assert.match(page, /'">' \+ esc\(\(d\.summaryKind && d\.summaryKind\.btn\) \|\| "▤ Summary"\) \+ '<\/button>'/);

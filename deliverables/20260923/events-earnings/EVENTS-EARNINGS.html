@@ -1,0 +1,125 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>The EVENTS tab, built to the earnings proposal · 23 Sep 2026</title>
+<style>
+body{margin:0;background:#05060C;color:#9A9AB6;font:18px/1.55 -apple-system,"Helvetica Neue",Arial,sans-serif;padding:28px 34px 80px;max-width:1500px}
+h1{font-size:36px;margin:0 0 6px;color:#B4B6CC} h2{font-size:27px;margin:46px 0 8px;color:#B4B6CC} h3{font-size:21px;margin:26px 0 6px;color:#B4B6CC}
+p{max-width:1100px} p.note{color:#868AAA;margin:0 0 12px} .lead{font-size:22px;color:#B4B6CC}
+blockquote{margin:10px 0 18px;padding:8px 16px;border-left:3px solid #3455FF;color:#B4B6CC;max-width:1000px}
+table{border-collapse:collapse;font-size:16px;margin:10px 0 6px;max-width:100%} th,td{border:1px solid #1A1A2A;padding:8px 12px;text-align:left;vertical-align:top} th{color:#868AAA;font-weight:600}
+td.num{font:15px ui-monospace,Menlo,monospace;text-align:right} .ok{color:#3FB8AF} .bad{color:#FF2D55} .warn{color:#E0A24A} small{color:#868AAA;font-size:13px}
+figure{margin:0} figcaption{font:13px ui-monospace,Menlo,monospace;color:#868AAA;margin-top:4px}
+.single{max-width:1400px;margin:8px 0 6px} .single img{width:100%;border:1px solid #1A1A2A;display:block;background:#0A0A0F}
+.phone{max-width:420px;margin:8px 0 6px} .phone img{width:100%;border:1px solid #1A1A2A;display:block;background:#0A0A0F}
+.pair{display:grid;grid-template-columns:1fr 420px;gap:16px;align-items:start;margin:8px 0 6px}
+.pair img{width:100%;border:1px solid #1A1A2A;display:block;background:#0A0A0F}
+code{font:15px ui-monospace,Menlo,monospace;background:#0F0F1A;padding:2px 6px;border-radius:4px;color:#B4B6CC}
+ul{max-width:1100px} li{margin:6px 0} .meas{font:15px ui-monospace,Menlo,monospace;color:#868AAA} .meas b{color:#B4B6CC}
+.dec{border:1px solid #252538;background:#0B0B14;padding:14px 18px;margin:14px 0;max-width:1200px}
+.dec h3{margin:0 0 4px;color:#B4B6CC}
+@media(max-width:900px){ .pair{grid-template-columns:1fr} body{padding:20px 16px 60px} }
+</style></head><body>
+
+<h1>The EVENTS tab, rebuilt to your earnings proposal</h1>
+<p class="lead">MONTH is the shape of the season, WEEK is the working view, DAY is the list you already have. Everything on the proposal page is now in the Hub itself, reading your real earnings table, and nothing that was in the section has been dropped. Nothing is deployed: branch <code>hub/events-earnings-20260923</code>, built from production <code>a11b6b7</code>. The ECONOMIC tab and the nudge were not touched.</p>
+<blockquote>“I cannot lose any information that I have. I think the best simple way is just a monthly view or the calendar views. Or a weekly view, that kind of situation, but a little bit of polish.”</blockquote>
+
+<h2>1 · Your four decisions — I took the proposal's own recommendation on each</h2>
+<p>Each one is a single word in the page, so you can change any of them in a minute. They all sit together at the top of the calendar's code.</p>
+<table>
+<tr><th>The question</th><th>What the proposal recommended</th><th>What I built</th><th>To change it</th></tr>
+<tr><td>Month cell: load bar and top names, or pure heat?</td><td>The bar, with names</td><td>Load bar + the count + the three biggest names + “+N more”</td><td><code>ERC_MONTH_CELL = "HEAT"</code> leaves the bar and the count alone</td></tr>
+<tr><td>Which names get through on a 38-ticker day?</td><td>Biggest by market cap</td><td>Biggest first, using the market caps the board has already read — no extra request. A company with no stored size sorts last and is never treated as a zero</td><td><code>ERC_NAME_ORDER = "FAV"</code> puts your favourites first, then size</td></tr>
+<tr><td>Colour by cohort?</td><td>On</td><td>On. The dot is the cohort; the result (green beat, yellow in line, red miss) is the chip's edge and its number, so the two can never be read for each other. The legend under the view names only the cohorts actually on screen</td><td><code>ERC_COHORT_HUE = false</code> leaves result colour only</td></tr>
+<tr><td>Dividends: sub-tab or filter chip?</td><td>Kept exactly as-is</td><td>Untouched — still the third sub-tab beside ALL and EARNINGS, still saying it has no source wired</td><td>Say the word and it becomes a chip</td></tr>
+</table>
+<p class="note">One more choice, which the proposal implies but does not ask: <b>WEEK is what the tab opens on.</b> The proposal calls it “the working view · where you actually live during a reporting season” and calls DAY “the drill-in”. If you would rather land on MONTH or DAY, that is one word too: <code>ernSpan: "WEEK"</code>.</p>
+
+<h2>2 · WEEK — the working view, and where the tab opens</h2>
+<div class="single"><figure><img src="screens/w1680-week-foot.png" alt="the current week at 1680">
+<figcaption>1680 · this week, scrolled to the bottom so the legend shows</figcaption></figure></div>
+<p>What that screenshot says: <b>MON SEP 21 → SUN SEP 27</b> across the top with ◀ ▶ and TODAY, then one row per day. Monday has <b>NO REPORTS</b>. Tuesday carries <b>CBRS</b> under “TIME NOT SET · 1”. Wednesday — today — is tinted and carries <b>CTAS +3.0%</b> under “BEFORE THE OPEN · 1”, the surprise in green because it beat. Thursday carries <b>COST</b>. Friday, Saturday and Sunday are empty and say so. At the foot, the legend for the two cohorts on screen (BLUE, GROWTH) and the line <b>“3 reports in this week · click a ticker for its card”</b>.</p>
+<p>The groups are the four the data actually has: <b>before the open</b>, <b>at a set time</b> (when the supplier gives a clock time), <b>after the close</b>, and <b>time not set</b> — which, as your proposal measured, is almost everything still to come. It is a group with its own heading, not an afterthought.</p>
+
+<h3>The same week in the busiest part of the season</h3>
+<div class="pair">
+<figure><img src="screens/w1680-week-peak.png" alt="the week of 26 October at 1680"><figcaption>1680 · MON OCT 26 → SUN NOV 1 · 100 reports in one week</figcaption></figure>
+<figure><img src="screens/w390-week-peak.png" alt="the same week on a phone"><figcaption>390 · the same week, the day label above its chips</figcaption></figure>
+</div>
+<p>This is the week the month view sends you to. Monday 26th: 6 reporting. Tuesday 27th: 19. Wednesday 28th: <b>33</b>, one of them (FDX) after the close, the other 32 with no time set — GOOGL, GOOG, MSFT, META, TSLA first because they are the biggest. Thursday 29th: 33, led by AAPL, AMZN, LLY. Friday 30th: 9, led by XOM, ABBV, CVX. The weekend says NO REPORTS. On the phone the same week reads down the screen, four or five chips a row, each one still big enough to hit with a thumb.</p>
+
+<h3>A chip opens the card — the same card the DAY view draws</h3>
+<div class="pair">
+<figure><img src="screens/w1680-week-card.png" alt="a card opened from a chip at 1680"><figcaption>1680 · CBRS opened under its own day</figcaption></figure>
+<figure><img src="screens/w390-week-card.png" alt="the same card on a phone"><figcaption>390 · the same card</figcaption></figure>
+</div>
+<p>Clicking <b>CBRS</b> opens the card directly under Tuesday's row, with a <b>× CLOSE</b> at its corner, and the chip lights up so you can see which one is open. The card is not a new thing: it is the Hub's own earnings block, so it says <b>TIME UNKNOWN</b>, <b>UNCONFIRMED</b>, <b>1d ago</b>, and <b>“estimate · no result stored for this date”</b> above EPS −0.21 and REV $210.2M. Everything that card can show — the release link, the transcript, the call, the summary and its source — comes with it, because the calendar reads the same columns the DAY view reads.</p>
+
+<h2>3 · MONTH — the shape of the season</h2>
+<div class="single"><figure><img src="screens/w1680-month-peak.png" alt="November at 1680">
+<figcaption>1680 · NOVEMBER 2026 · 251 reports in the month</figcaption></figure></div>
+<p>This is the picture your proposal was built around, and the number it named is really there: <b>Wed 4 Nov carries 38</b>, in red. Around it, 28 and 29 October carry <b>33</b> each, 5 Nov <b>24</b>, 3 Nov <b>23</b>, 27 Oct <b>19</b>, 2 Nov <b>12</b>. The load bar under each date fills in proportion to the heaviest day in view and changes colour with the load — cyan on a quiet day, orange from 12, red from 25. Then the three biggest names: 4 Nov gives GOOGL, CAT, ARM and <b>+35 more</b>; 29 Oct gives AAPL, AMZN, LLY and +30 more. Days from the neighbouring month are dimmed but kept, so the weeks stay whole, and clicking any day opens its week.</p>
+<div class="phone"><figure><img src="screens/w390-month-peak.png" alt="November on a phone">
+<figcaption>390 · all seven columns kept — a calendar with columns missing stops being a calendar</figcaption></figure></div>
+<p>On the phone the month keeps its seven columns and loses only the report time inside a cell. The counts, the bars and the three names survive at 390px; the span controls wrap onto their own line under the date.</p>
+<div class="single"><figure><img src="screens/w1680-month.png" alt="September at 1680">
+<figcaption>1680 · the month you are in — 30 reports, the quiet end of the season</figcaption></figure></div>
+
+<h2>4 · DAY — untouched</h2>
+<div class="pair">
+<figure><img src="screens/w1680-day.png" alt="the day view at 1680"><figcaption>1680 · UPCOMING | PAST · REPORTED, exactly as it was</figcaption></figure>
+<figure><img src="screens/w390-day.png" alt="the day view on a phone"><figcaption>390 · the same list</figcaption></figure>
+</div>
+<p>DAY is the list that is already in the Hub, with nothing changed: two independently scrolling columns, COST / NKE / MU upcoming with their estimates, CTAS today with EPS 1.35 → 1.39 <span class="ok">+3.0%</span> and REV +1.0%, KR and ADBE behind it with their Release / Transcript / Call / Summary links, and the quiet group at the top holding <b>27 past dates without stored results</b>. The only new thing on it is the MONTH · WEEK · DAY control above it, which is how you get back out.</p>
+
+<h2>5 · Nothing lost — the proposal's own inventory, checked against the build</h2>
+<table>
+<tr><th>Information</th><th>Where it lives now</th></tr>
+<tr><td>EPS estimate / actual / surprise</td><td class="ok">The card, and the surprise is the colour on every chip and every name</td></tr>
+<tr><td>Revenue estimate / actual / surprise</td><td class="ok">The card, second row of the same block</td></tr>
+<tr><td>Report time (BMO / AMC)</td><td class="ok">WEEK groups by it; blank is its own “time not set” group; MONTH prints “open” or “close” beside a name when it is known</td></tr>
+<tr><td>Press release link</td><td class="ok">The card's action row — dimmed “Release pending”, never hidden, when there is none</td></tr>
+<tr><td>Release summary · release metrics · call link · AI call summary</td><td class="ok">The card, with the source of the text named (the provenance columns are read by the calendar too, so a card opened from a chip can never mislabel a summary)</td></tr>
+<tr><td>Transcript</td><td class="ok">The card's button, shown only when a transcript really exists for that company and date</td></tr>
+<tr><td>Company website / IR link · company releases</td><td class="ok">The extras column at the right, in every span, exactly as before</td></tr>
+<tr><td>Dividends sub-tab</td><td class="ok">Untouched</td></tr>
+<tr><td>Cohort scoping + ticker search</td><td class="ok">Kept, and now also colours every chip and every name. The same honest gate as the list: if the cohort map has not arrived, the view says so rather than showing an unscoped calendar</td></tr>
+<tr><td>Past dates without stored results</td><td class="ok">Still their own quiet group in DAY, still counted, still not called “reported”</td></tr>
+</table>
+
+<h2>6 · The band at the bottom and this calendar cannot disagree</h2>
+<p>The EARNINGS band you asked for this morning already knew how to say all of this, so the calendar uses its functions rather than writing its own: the week (Monday to Sunday), “before the open / after the close”, the order within a day, and the result with its surprise. One consequence you will see: <b>both start the week on Monday</b>, so the band's “WEEK OF SEP 21” and the calendar's “MON SEP 21 → SUN SEP 27” are the same seven days. If they ever disagree it will be because the data changed between two reads, never because they were written twice.</p>
+
+<h2>7 · What it reads, and what it never does</h2>
+<ul>
+<li>It reads <code>earnings_events</code> — the EVENTS room's own table and columns — for <b>the span on screen only</b>, and keeps only the tickers in <code>cohorts</code>, the universe the room already filters by.</li>
+<li><b>One request per span</b>, cached by that span. Walking to November and back does not ask twice. The five-minute quiet re-read that the room already had now refreshes the calendar too, and <b>only repaints when the rows actually differ</b> — your scroll position is kept.</li>
+<li>Market caps and cohort colours come from what the board has already loaded. The calendar never asks for them itself. While they are still arriving it says <span class="meas">“sizes have not arrived yet, so names are in alphabetical order for the moment”</span> and redraws itself once they land.</li>
+<li>Nothing is written anywhere. No new table, no new schedule, no provider call.</li>
+</ul>
+
+<h2>8 · What I found while building it</h2>
+<ul>
+<li><b>Alphabet is dated twice.</b> <code>GOOGL</code> sits on both <b>28 Oct</b> and <b>4 Nov</b>, and <code>GOOG</code> on 28 Oct only — none of the three confirmed. The month view makes it visible because GOOGL appears in two different weeks. That is what storage holds; I have not touched it, and the calendar shows both rather than picking one.</li>
+<li><b>“Time not set” really is the normal case ahead.</b> In the week of 26 October, 99 of the 100 reports carry no time at all; the single exception is FDX after the close. The proposal's measurement holds on live data.</li>
+<li><b>A defect I made and fixed:</b> entering EVENTS while the board was still loading drew November with its names in alphabetical order (AAPL, AEP, AME) and grey dots, because the sizes and the cohort map had not arrived. It now says so while it waits and redraws itself once. The first screenshots I took showed the wrong order — that is what looking at them is for.</li>
+</ul>
+
+<h3>The three honest gaps from the proposal, as they stand here</h3>
+<ul>
+<li><b>The transcript link still never resolves</b> — no row carries a URL. The Hub's card does not print a dead link: it shows the Transcript button only when the stored call content really exists for that company and date, and the AI summary behind it is the half that works.</li>
+<li><b>Report time is unknown for almost everything upcoming.</b> Handled as a real group, above.</li>
+<li><b>Press release, summary and metrics are thin.</b> The card shows the gap (“Release pending”) rather than collapsing it.</li>
+</ul>
+
+<h2>9 · Tests</h2>
+<p><span class="meas"><b>366</b> tests, <b>362</b> pass.</span> 15 of them are new and pin these decisions: WEEK lands, the four choices are the proposal's, the calendar reuses the band's functions instead of redefining them, both views start on Monday, a month day hands off to its week, a chip opens the same card, a blank report time is a real group, the read is <code>earnings_events</code> and nothing is written, one read per span with a quiet re-read that does not move you, a missing size is said out loud rather than guessed, the ECONOMIC tab's state is untouched, and there is no white in the new styles.</p>
+<p>The <b>2 failures are the two that already fail on production <code>a11b6b7</code></b> — I ran the same suite in a clean worktree at that commit to be sure: <code>xfeed-publish</code>, and one age-formatting assertion on another surface. Neither is mine, and neither is in this tab.</p>
+
+<h2>10 · Where it is</h2>
+<ul>
+<li>Branch <code>hub/events-earnings-20260923</code>, from <code>origin/hub/release-20260923</code> @ <code>a11b6b7</code>.</li>
+<li>One file changed in the Hub: <code>index.html</code>. One test file added.</li>
+<li><b>Not pushed, not deployed.</b> The ECONOMIC tab, its nudge, the Indicator Lab and the prototypes are untouched.</li>
+<li>Every screenshot above was taken in a real browser against your live earnings table, at the two widths, and looked at before it was put here.</li>
+</ul>
+</body></html>
