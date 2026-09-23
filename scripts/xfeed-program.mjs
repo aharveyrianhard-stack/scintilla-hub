@@ -164,13 +164,21 @@ export async function launchBrowser(o, deps = {}) {
     viewport: { width: 1280, height: 900 }, args: ['--no-first-run', '--no-default-browser-check'], timeout: 60000,
   });
   if (o.fixture) await installFixture(context, JSON.parse(await readFile(o.fixture, 'utf8')));
+  // The collector reads text. Pictures, video and fonts only churn Chrome's response buffer (the
+  // first long run lost a timeline body to that churn around page 25) and slow every page down.
+  else if (!o.keepMedia) await context.route('**/*', route => (['image', 'media', 'font'].includes(route.request().resourceType()) ? route.abort() : route.continue()));
   return { context, executablePath: executablePath ?? 'playwright-bundled-chromium' };
 }
 
 /** Adapters giving the unchanged helper its `source`, `ui` and `cdp` handles over one Playwright page. */
 export function cdpAdapters(page, session, buffer = createEventBuffer()) {
   session.on('Network.responseReceived', params => buffer.push('Network.responseReceived', params));
-  const cap = { send: (method, params = {}) => session.send(method, params), readEvents: options => buffer.readEvents(options) };
+  const failed = new Set();
+  session.on('Network.loadingFailed', params => failed.add(params.requestId));
+  // Chrome evicts response bodies past maxTotalBufferSize; 30 MB is about 35 pages of this list
+  // with nothing else loaded, so give the collector room for a whole catch-up.
+  const roomy = (method, params) => (method === 'Network.enable' ? { ...params, maxTotalBufferSize: 250e6, maxResourceBufferSize: 60e6 } : params);
+  const cap = { send: (method, params = {}) => session.send(method, roomy(method, params)), readEvents: options => buffer.readEvents(options), failed };
   const source = {
     capabilities: { get: async name => (name === 'cdp' ? cap : null) },
     url: async () => page.url(),
@@ -190,15 +198,15 @@ export function cdpAdapters(page, session, buffer = createEventBuffer()) {
         await page.waitForTimeout(1500);
         return;
       }
-      let settled = false;
-      const next = page.waitForResponse(r => r.url().includes('/ListLatestTweetsTimeline'), { timeout: 25000 })
-        .then(r => r.finished().then(() => r)).catch(() => null).finally(() => { settled = true; });
-      const floor = amount * 100, t0 = Date.now();
-      for (let done = 0; (done < floor || !settled) && Date.now() - t0 < 25000; done += 800) {
-        await page.mouse.wheel(0, sign * 800); await page.waitForTimeout(150);
-        if (settled && done >= floor) break;
-      }
-      await next;
+      let asked = false;
+      const isTimeline = u => u.includes('/ListLatestTweetsTimeline');
+      const request = page.waitForRequest(r => isTimeline(r.url()), { timeout: 25000 }).catch(() => null).finally(() => { asked = true; });
+      const next = page.waitForResponse(r => isTimeline(r.url()), { timeout: 30000 }).then(r => r.finished().then(() => r)).catch(() => null);
+      const t0 = Date.now();
+      // Wheel only until X requests the next page: wheeling on while that request is in flight made X
+      // fire an overlapping one and cancel it (first long run, 23 Sep, chain broke at page 25).
+      for (let done = 0; !asked && Date.now() - t0 < 25000; done += 800) { await page.mouse.wheel(0, sign * 800); await page.waitForTimeout(150); }
+      await request; await next;
       await page.waitForTimeout(400);
     },
   };
@@ -377,7 +385,7 @@ export async function runCollector(options = {}, deps = {}) {
     browser = await launchBrowser(o, deps);
     receipt.browser = browser.executablePath;
     const page = await browser.context.newPage(), intakePage = await browser.context.newPage();
-    const { source, ui } = cdpAdapters(page, await browser.context.newCDPSession(page));
+    const { source, ui, cap } = cdpAdapters(page, await browser.context.newCDPSession(page));
     const createCycle = await loadCycleFactory();
     const cycle = await createCycle({ source, intake: { playwright: intakePage, goto: url => intakePage.goto(url) }, ui, passId });
     const budgetMs = o.budgetSeconds * 1000, t0 = Date.now();
@@ -424,6 +432,10 @@ export async function runCollector(options = {}, deps = {}) {
         const retry = ['rate_limited', 'blocked'].includes(decision.status) ? retryAtFromRates(rates, summary.blocked?.observed_at ?? summary.rate_exhausted?.observed_at ?? clock()) : null;
         const detail = summary.blocked ? `HTTP ${summary.blocked.status} from the list timeline` : `${summary.pages} pages captured, last published frontier ${health.checkpoint?.observed_at ?? 'none'} not yet reached`;
         return await loud(decision.status, detail, retry);
+      }
+      if (summary.pending_bodies > 0 && cycle.pendingResponses && cap?.failed) {
+        for (const id of [...cycle.pendingResponses.keys()]) if (cap.failed.has(id)) { cycle.pendingResponses.delete(id); cycle.responses.add(id); receipt.cancelled_requests_dropped = (receipt.cancelled_requests_dropped ?? 0) + 1; }
+        summary = cycle.summary();
       }
       summary = await cycle.older();
     }
