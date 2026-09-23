@@ -114,7 +114,13 @@ test("house rule: the new room is monochrome — no white, no near-white, no bul
 
 test("stale StockTwits and missing CNN inputs are labelled on the row, never scored", () => {
   const js = between("Room · SENTIMENT (master tab, market-wide)", "/* ---- Room 8 · EVENTS");
-  assert.ok(js.includes('name: "Put / call ratio", val: "no source", score: null, none: true'));
+  /* 23 Sep: put/call is no longer one of the missing ones. Cboe retired the CSV files in 2019,
+     not the data - it still publishes a free JSON after every close - so this input now reads the
+     chart API's PCC series, five-day average, inverted, and the row names the published session. */
+  assert.ok(js.includes('key: "putcall", name: "Put / call ratio", val, score, none'));
+  assert.ok(js.includes('sentiSafe(sentiBars("PCC"))'), "the gauge reads the same series the chart draws");
+  assert.ok(js.includes("Cboe daily put/call (PCC)"), "and says where the number came from");
+  assert.ok(!js.includes("Cboe retired the free daily files in Oct 2019"), "the retired-in-2019 claim is gone");
   assert.ok(js.includes('name: "52-week highs vs lows", val: "no source", score: null, none: true'));
   assert.ok(js.includes('name: "How many stocks are up"'), "breadth now has a real source");
   assert.ok(js.includes("counted per stock, where CNN weighs by volume"), "and says how it differs from CNN's");
