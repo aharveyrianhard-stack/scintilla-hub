@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>CLAUDE CHECK — the bookmark backlog</title>
+<style>
+  :root { --bg:#0c0c0c; --panel:#141414; --line:#262626; --ink:#c6c6c6; --ink2:#8f8f8f; --ink3:#6e6e6e; --hi:#d2d2d2; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+  .cc-wrap { max-width:1180px; margin:0 auto; padding:22px 16px 70px; }
+  .cc-top { margin:0 0 14px; }
+  h1 { font:600 20px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; color:var(--hi); margin:0 0 4px; }
+  .cc-sub { color:var(--ink2); font-size:12px; margin:0 0 20px; }
+  .cc-panel { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:14px 16px; margin:0 0 16px; }
+  .cc-panel h2 { font:600 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.1em; color:var(--ink2); text-transform:uppercase; margin:0 0 10px; }
+  .cc-panel p { margin:0 0 9px; font-size:13px; }
+  .cc-panel p:last-child { margin-bottom:0; }
+  .cc-stats { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 16px; }
+  .cc-stat { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:9px 13px; min-width:104px; }
+  .cc-stat b { display:block; font:600 19px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--hi); }
+  .cc-stat span { font-size:11px; color:var(--ink3); letter-spacing:.04em; }
+  .cc-h3 { font:600 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; color:var(--ink2); text-transform:uppercase; margin:20px 0 8px; }
+  .cc-n { color:var(--ink3); }
+  .cc-scroll { overflow-x:auto; border:1px solid var(--line); border-radius:6px; }
+  .cc-table { width:100%; border-collapse:collapse; font-size:12px; background:var(--panel); }
+  .cc-table th { text-align:left; font:600 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; color:var(--ink3); text-transform:uppercase; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .cc-table td { padding:7px 10px; border-bottom:1px solid #1d1d1d; vertical-align:top; }
+  .cc-table tr:last-child td { border-bottom:0; }
+  .cc-tk { font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--hi); white-space:nowrap; }
+  .cc-fav { font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink2); white-space:nowrap; }
+  .cc-prop { color:var(--ink3); font-size:10px; }
+  .cc-filters { display:flex; flex-wrap:wrap; gap:6px; margin:18px 0 12px; }
+  .cc-filters button { background:var(--panel); border:1px solid var(--line); color:var(--ink2); font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; padding:7px 11px; border-radius:5px; cursor:pointer; }
+  .cc-filters button[aria-pressed="true"] { color:var(--hi); border-color:#3a3a3a; }
+  .cc-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:10px; }
+  .cc-card { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px 13px; }
+  .cc-card__hd { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:baseline; gap:8px; margin:0 0 8px; }
+  .cc-area { font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em; color:var(--ink3); border:1px solid var(--line); border-radius:3px; padding:2px 6px; }
+  .cc-who { font-size:11px; color:var(--ink3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cc-open { font-size:11px; white-space:nowrap; color:var(--ink2); text-decoration:none; border-bottom:1px solid var(--line); }
+  .cc-about { margin:0 0 7px; font-size:13px; color:var(--ink); }
+  .cc-action { margin:0 0 8px; font-size:12px; color:var(--ink2); }
+  .cc-lab { font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; color:var(--ink3); text-transform:uppercase; }
+  .cc-raw summary { cursor:pointer; font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; color:var(--ink3); text-transform:uppercase; }
+  .cc-text { margin:8px 0 0; font-size:12px; color:var(--ink2); white-space:normal; }
+  .cc-quote { margin:8px 0 0; padding:8px 10px; border-left:2px solid var(--line); font-size:12px; color:var(--ink3); }
+  .cc-alt, .cc-link { margin:7px 0 0; font-size:11px; color:var(--ink3); word-break:break-all; }
+  .cc-card a { color:var(--ink2); }
+  .cc-tags { display:flex; flex-wrap:wrap; gap:4px; margin:9px 0 0; }
+  .cc-tag { font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink3); border:1px solid var(--line); border-radius:3px; padding:1px 5px; }
+  code { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink2); }
+  @media (max-width:560px) { .cc-cards { grid-template-columns:1fr; } .cc-wrap { padding:16px 12px 60px; } }
+</style></head>
+<body><div class="cc-wrap">
+
+<header class="cc-top"><span data-scnav-slot></span></header>
+<h1>CLAUDE CHECK</h1>
+<p class="cc-sub">Your X bookmark folder “Claude Check”, read by the collector on this MacBook · 65 bookmarks · folder last read 2026-09-23 23:44 UTC · page built 2026-09-23 23:55 UTC</p>
+
+<div class="cc-stats">
+  <div class="cc-stat"><b>65</b><span>BOOKMARKS</span></div>
+  <div class="cc-stat"><b>117</b><span>TICKERS NAMED</span></div>
+  <div class="cc-stat"><b>65</b><span>ALREADY SERVED</span></div>
+  <div class="cc-stat"><b>34</b><span>NOT SERVED YET</span></div>
+  <div class="cc-stat"><b>12</b><span>NEW FAVOURITES</span></div>
+</div>
+
+<section class="cc-panel">
+  <h2>What this page shows</h2>
+  <p>Every post in your bookmark folder, as a card: what it is about, which part of Scintilla it touches, and one suggested next step. Nothing on this page was built — it is a list for you to go through and say yes or no to.</p>
+  <p>Under the cards is every ticker those posts name: whether Scintilla can already price it, which cohort it sits in (or would sit in), and whether it has been made a favourite.</p>
+  <p>The three kinds of card: <b>IDEA / WATCHLIST</b> (47) is somebody's trade or ticker, <b>DATA</b> (15) is a number Scintilla does not hold yet, <b>STATION / INDICATOR</b> (3) is a way of reading a chart.</p>
+</section>
+
+<section class="cc-panel">
+  <h2>Where each number comes from</h2>
+  <p><b>The posts</b> come from the folder itself, read by the collector's own signed-in browser on this MacBook. Nothing was retyped: the text, author, date, links, picture descriptions and $tickers are as X returned them.</p>
+  <p><b>“Served?”</b> is a live read of the chart API's universe list (65 of the names here are in it; the universe holds 364 symbols in total).</p>
+  <p><b>The cohorts and the favourites</b> are read from the same tables the Hub reads — the favourites list is the cross-device one, not your browser's.</p>
+  <p><b>The reading of each post</b> — “what it is about” and “proposed” — is one worker's judgement, not a measurement. Disagree freely.</p>
+</section>
+
+<section class="cc-panel">
+  <h2>The proof run</h2>
+  <p>One manual pass on this MacBook, on 2026-09-23 23:43 UTC, with the real folder and the real Trading list. The Trading list came back with <b>99</b> posts and published as usual; in the same pass the bookmark folder returned <b>65</b> posts. Both halves are in the pass's own receipt.</p>
+  <p>The folder is read as a sidecar after the Trading list has finished and written its receipt, in the same browser, on the same nine-times-a-day schedule. No new background job was installed. If the folder read fails, the Trading list result is untouched.</p>
+  <p>Running it twice changes nothing: the second pass added 0 and changed 0.</p>
+</section>
+
+<section class="cc-panel">
+  <h2>What could be wrong</h2>
+  <p>A $word in a post is not always a ticker. <code>$ES</code> here is the S&amp;P future, not Eversource Energy, and a few others are option shorthand or a truncated word — those are listed at the bottom of the table as “not a ticker here”, not silently counted.</p>
+  <p>The folder is read by scrolling until X stops sending more. If X changes that page, the read stops and says so rather than inventing a shorter folder.</p>
+  <p>A ticker being “not served” does not mean it is a bad name — it means Scintilla has no bars for it, so nothing on the board would be real until the universe is extended.</p>
+  <p>Favourites were added only for names this folder mentions in two or more separate bookmarks, because favourites are what your board opens on. The one-mention names are listed and can be added in one line.</p>
+</section>
+
+<section class="cc-panel">
+  <h2>What I did not do</h2>
+  <p>Nothing was deployed, pushed or published. No bookmark was added, removed or changed on X — the folder was only read. No price table was written.</p>
+  <p>The new favourites and the candidate list are written as two database migrations for the coordinator to apply; they have not been applied.</p>
+  <p>No ticker was added to the chart API's universe. That is not an additive change: the universe is pinned by a count and a digest in both the chart API and the Hub, so a new symbol needs the universe file extended, the digest re-pinned and a deploy.</p>
+  <p>Nothing on the cards was built. This page is the triage list, not the work.</p>
+</section>
+
+<h3 class="cc-h3">The tickers</h3>
+<h3 class='cc-h3'>Served by the chart API <span class='cc-n'>65</span></h3><div class='cc-scroll'><table class='cc-table'><thead><tr><th>ticker</th><th>bookmarks</th><th>served?</th><th>cohort</th><th>reason</th><th>favourite</th></tr></thead><tbody><tr><td class='cc-tk'>MU</td><td>11</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>AMD</td><td>6</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>INTC</td><td>6</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>SNDK</td><td>6</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CBRS</td><td>5</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>NOW</td><td>5</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>AXTI</td><td>4</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>MRVL</td><td>4</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>NVDA</td><td>4</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>ASTS</td><td>3</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CRWV</td><td>3</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>DELL</td><td>3</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>DRAM</td><td>3</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>GEV</td><td>3</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>IREN</td><td>3</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>LITE</td><td>3</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>NBIS</td><td>3</td><td>yes</td><td>AI_SOFTWARE</td><td>the Hub already places it in AI_SOFTWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>OKLO</td><td>3</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>RKLB</td><td>3</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>SPCX</td><td>3</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>TSLA</td><td>3</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>TSM</td><td>3</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>AAPL</td><td>2</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>ALAB</td><td>2</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>ASML</td><td>2</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>BE</td><td>2</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CEG</td><td>2</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CRDO</td><td>2</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CRM</td><td>2</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>IBM</td><td>2</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>LMT</td><td>2</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>MP</td><td>2</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>PLTR</td><td>2</td><td>yes</td><td>AI_SOFTWARE</td><td>the Hub already places it in AI_SOFTWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>SMR</td><td>2</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>SPY</td><td>2</td><td>yes</td><td>INDEXES</td><td>the Hub already places it in INDEXES · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>USAR</td><td>2</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>WDC</td><td>2</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>ADD</td></tr><tr><td class='cc-tk'>ADBE</td><td>1</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>AMAT</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>AMZN</td><td>1</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>APLD</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>AVGO</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>CCJ</td><td>1</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>CORZ</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>CRWD</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>ETN</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>FCX</td><td>1</td><td>yes</td><td>MATERIALS</td><td>the Hub already places it in MATERIALS</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>GOOG</td><td>1</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>GOOGL</td><td>1</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>JOBY</td><td>1</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>KLAC</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>LLY</td><td>1</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>LRCX</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>MDB</td><td>1</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>META</td><td>1</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>MSFT</td><td>1</td><td>yes</td><td>MEGACAP</td><td>the Hub already places it in MEGACAP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>NKE</td><td>1</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>PWR</td><td>1</td><td>yes</td><td>BLUE_CHIP</td><td>the Hub already places it in BLUE_CHIP · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>QQQ</td><td>1</td><td>yes</td><td>INDEXES</td><td>the Hub already places it in INDEXES · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>SCCO</td><td>1</td><td>yes</td><td>MATERIALS</td><td>the Hub already places it in MATERIALS</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>SMCI</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>STX</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>UBER</td><td>1</td><td>yes</td><td>GROWTH</td><td>the Hub already places it in GROWTH</td><td class='cc-fav'>not proposed (one passing mention)</td></tr><tr><td class='cc-tk'>VRT</td><td>1</td><td>yes</td><td>AI_HARDWARE</td><td>the Hub already places it in AI_HARDWARE · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr><tr><td class='cc-tk'>VST</td><td>1</td><td>yes</td><td>THEMATIC</td><td>the Hub already places it in THEMATIC · favourite since before tonight</td><td class='cc-fav'>already a favourite</td></tr></tbody></table></div><h3 class='cc-h3'>Named here, not served — candidates with a proposed cohort <span class='cc-n'>34</span></h3><div class='cc-scroll'><table class='cc-table'><thead><tr><th>ticker</th><th>bookmarks</th><th>served?</th><th>cohort</th><th>reason</th><th>favourite</th></tr></thead><tbody><tr><td class='cc-tk'>AAOI</td><td>4</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>optical transceivers — sits beside LITE and CRDO</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>PL</td><td>3</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>satellite imagery — beside ASTS and RKLB</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>BKSY</td><td>2</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>satellite imagery — beside PL and RDW</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>COHR</td><td>2</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>photonics components — beside LITE</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>CRML</td><td>2</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>critical minerals — beside MP and USAR</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>LUNR</td><td>2</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>lunar landers — beside RKLB and ASTS</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>RDW</td><td>2</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>space infrastructure</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>TSEM</td><td>2</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>specialty foundry — beside TSM</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>UUUU</td><td>2</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>uranium and rare earths — beside CCJ</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>ACHR</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>eVTOL — beside JOBY</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>ALB</td><td>1</td><td>no</td><td>MATERIALS <span class='cc-prop'>proposed</span></td><td>lithium — beside the other materials names</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>AMKR</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>chip packaging — beside AMAT/KLAC</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>AVAV</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>defence drones</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>BTDR</td><td>1</td><td>no</td><td>CRYPTO <span class='cc-prop'>proposed</span></td><td>bitcoin miner — beside COIN in CRYPTO</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>CLSK</td><td>1</td><td>no</td><td>CRYPTO <span class='cc-prop'>proposed</span></td><td>bitcoin miner — beside COIN in CRYPTO</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>GLW</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>optical fibre and glass for data centres</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>HIVE</td><td>1</td><td>no</td><td>CRYPTO <span class='cc-prop'>proposed</span></td><td>bitcoin miner — beside COIN in CRYPTO</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>HUBB</td><td>1</td><td>no</td><td>BLUE_CHIP <span class='cc-prop'>proposed</span></td><td>grid equipment — beside PWR</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>KTOS</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>defence drones</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>NOK</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>optical transport for data-centre interconnect</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>NVTS</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>power semiconductors — beside ADI/ALAB</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>OUST</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>lidar sensors — sits with the other hardware bets in THEMATIC</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>RIOT</td><td>1</td><td>no</td><td>CRYPTO <span class='cc-prop'>proposed</span></td><td>bitcoin miner — beside COIN in CRYPTO</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SATL</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>satellite operator — beside the other space names</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SERV</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>delivery robots</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SIDU</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>space services — beside the other space names</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SIVE</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>photonics, named beside AXTI and LITE</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SPIR</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>space weather and ship-tracking data</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SQM</td><td>1</td><td>no</td><td>MATERIALS <span class='cc-prop'>proposed</span></td><td>lithium — beside the other materials names</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>STM</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>European semiconductor — beside ADI</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>SYM</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>warehouse robotics — the robotics leg of THEMATIC</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>TECK</td><td>1</td><td>no</td><td>MATERIALS <span class='cc-prop'>proposed</span></td><td>copper — beside SCCO and FCX</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>TMRC</td><td>1</td><td>no</td><td>THEMATIC <span class='cc-prop'>proposed</span></td><td>rare earth exploration</td><td class='cc-fav'>after it is served</td></tr><tr><td class='cc-tk'>VSH</td><td>1</td><td>no</td><td>AI_HARDWARE <span class='cc-prop'>proposed</span></td><td>discrete components</td><td class='cc-fav'>after it is served</td></tr></tbody></table></div><h3 class='cc-h3'>In the Hub but not served by the chart API <span class='cc-n'>1</span></h3><div class='cc-scroll'><table class='cc-table'><thead><tr><th>ticker</th><th>bookmarks</th><th>served?</th><th>cohort</th><th>reason</th><th>favourite</th></tr></thead><tbody><tr><td class='cc-tk'>VIX</td><td>1</td><td>no</td><td>MACRO</td><td>the Hub tracks it (cohort MACRO) but the chart API&#x27;s 364-symbol universe does not serve it</td><td class='cc-fav'>already a favourite</td></tr></tbody></table></div><h3 class='cc-h3'>Not proposed <span class='cc-n'>17</span></h3><div class='cc-scroll'><table class='cc-table'><thead><tr><th>ticker</th><th>bookmarks</th><th>served?</th><th>cohort</th><th>reason</th><th>favourite</th></tr></thead><tbody><tr><td class='cc-tk'>SPX</td><td>5</td><td>no</td><td>—</td><td>index, not tradable</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>NASA</td><td>2</td><td>no</td><td>—</td><td>thematic ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SKHY</td><td>2</td><td>no</td><td>—</td><td>foreign listing (SK Hynix), not US-listed</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>TE</td><td>2</td><td>no</td><td>—</td><td>appears inside a list of grid names; not resolvable to one listed symbol</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>BW</td><td>1</td><td>no</td><td>—</td><td>one mention inside a 13F list, no context</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>DXY</td><td>1</td><td>no</td><td>—</td><td>dollar index, not an equity</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>ES</td><td>1</td><td>no</td><td>—</td><td>$ES here is the S&amp;P future, not Eversource Energy</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>FLY</td><td>1</td><td>no</td><td>—</td><td>used as a word in a space list, not a symbol Alan tracks</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>NB</td><td>1</td><td>no</td><td>—</td><td>a truncated word, not a listed symbol</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>PUMP</td><td>1</td><td>no</td><td>—</td><td>appears in a 13F list; ProPetro, one mention, no context in the post</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SEI</td><td>1</td><td>no</td><td>—</td><td>one mention inside a 13F list, no context</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SOXL</td><td>1</td><td>no</td><td>—</td><td>3x leveraged ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SOXS</td><td>1</td><td>no</td><td>—</td><td>3x inverse ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SPXL</td><td>1</td><td>no</td><td>—</td><td>3x leveraged ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>SPXS</td><td>1</td><td>no</td><td>—</td><td>3x inverse ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>TQQQ</td><td>1</td><td>no</td><td>—</td><td>3x leveraged ETF</td><td class='cc-fav'>—</td></tr><tr><td class='cc-tk'>UFO</td><td>1</td><td>no</td><td>—</td><td>thematic ETF</td><td class='cc-fav'>—</td></tr></tbody></table></div>
+
+<section class="cc-panel" style="margin-top:16px">
+  <h2>Rollback for each additive change</h2>
+  <p><b>Favourites</b> (<code>20260923_claude_check_favorites.sql</code>): adds 12 rows — CBRS, NOW, DELL, LITE, SPCX, AAPL, CRM, IBM, LMT, MP, SMR, WDC. To undo: the delete statement at the bottom of that file removes exactly those tickers and nothing else.</p>
+  <p><b>Candidate list</b> (<code>20260923_claude_check_candidates.sql</code>): creates one new table that nothing reads yet. To undo: <code>drop table public.claude_check_candidates;</code></p>
+  <p><b>The collector</b>: the folder read is a sidecar with an off switch — <code>--no-bookmarks</code>, or remove the one line that calls it. The Trading list code is untouched either way, and the folder's posts are kept in their own directory, beside the Trading list's files, never inside them.</p>
+</section>
+
+<h3 class="cc-h3">The backlog <span class="cc-n">65</span></h3>
+<div class="cc-filters">
+  <button type="button" data-f="ALL" aria-pressed="true">ALL 65</button>
+  <button type="button" data-f="IDEA" aria-pressed="false">IDEA / WATCHLIST 47</button>
+  <button type="button" data-f="DATA" aria-pressed="false">DATA 15</button>
+  <button type="button" data-f="STATION" aria-pressed="false">STATION 3</button>
+</div>
+<div class="cc-cards" id="ccCards">
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@MrTinvests · 2026-08-18</span>
+  <a class="cc-open" href="https://x.com/MrTinvests/status/2089711167329730886" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Buy list with prices: AXTI, OUST, TQQQ.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Tickers only — AXTI already followed; OUST and TQQQ are outside the Hub universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">today we buy…. <br><br>$axti 90.4<br>more $oust 45.79<br>more $tqqq 73.2<br><br>buy on red 👍👍👍👍</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AXTI</span><span class="cc-tag">$OUST</span><span class="cc-tag">$TQQQ</span></div>
+</article>
+<article class="cc-card" data-area="STATION">
+ <header class="cc-card__hd"><span class="cc-area">STATION / INDICATOR</span>
+  <span class="cc-who">@BeardoTrader · 2026-08-17</span>
+  <a class="cc-open" href="https://x.com/BeardoTrader/status/2089405550102528044" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Rule of thumb: how long a signal takes to play out on 4h, daily and weekly.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Could become the &#x27;expected time to resolution&#x27; line under a Geiger rung. Needs Alan&#x27;s sign-off on the numbers.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">4 HOUR CHART → EXPECT A MOVE IN 4 - 10 DAYS<br><br>DAILY CHART → EXPECT A MOVE IN 8 - 20 DAYS<br><br>WEEKLY CHART → EXPECT A MOVE IN 2 - 5 MONTHS</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@WOLF_Financial · 2026-08-14</span>
+  <a class="cc-open" href="https://x.com/WOLF_Financial/status/2088364109838319907" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A 13F holdings list (SNDK, MU, BE, TSM, NBIS, CRWV, CORZ, STM, APLD, RIOT…).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> A 13F-holdings source is a bigger build; for tonight it is a ticker source only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Leopold Aschenbrenner&#x27;s Situational Awareness just submitted their 13F filing which shows that their portfolio looked like as of the end of Q2<br><br>This is what they held<br><br>- SanDisk $SNDK: 2,495,344 shares, $5.7B<br>- Micron $MU: 4,828,786 shares, $5.6B<br>- Bloom Energy $BE: 6,272,808 shares, $1.9B<br>- Taiwan Semiconductor $TSM: 2,649,035 shares, $1.3B<br>- Nebius Group $NBIS: 4,464,260 shares, $1.2B<br>- CoreWeave $CRWV: 7,479,558 shares, $0.7B<br>- Core Scientific $CORZ: 26,008,473 shares, $0.7B<br>- STMicroelectronics $STM: 7,802,700 shares, $0.6B<br>- Applied Digital $APLD: 15,384,616 shares, $0.5B<br>- Riot Platforms $RIOT: 17,100,000 shares, $0.5B<br>- Sharonai Holdings: 5,396,127 shares, $0.5B<br>- IREN $IREN: 9,474,099 shares, $0.4B<br>- CleanSpark $CLSK: 12,276,139 shares, $0.2B<br>- Keel Infrastructure: 26,451,393 shares, $0.2B<br>- Solaris Energy Infrastructure $SEI: 1,129,621 shares, $0.1B<br>- Whitefiber: 1,757,600 shares, $0.1B<br>- Bitdeer Technologies $BTDR: 3,439,450 shares, $0.05B<br>- T1 Energy $TE: 4,900,000 shares, $0.05B<br>- Hive Digital Technologies $HIVE: 9,133,726 shares, $0.03B<br>- Babcock &amp; Wilcox Enterprises $BW: 2,027,451 shares, $0.03B<br>- ProPetro Holdings $PUMP: 1,960,382 shares, $0.03B<br>- Vishay Intertechnology $VSH: 375,000 shares, $0.02B<br>- Cerebras Systems $CBRS: 10,000 shares, $0.002B<br><br>Call options:<br>- Bloom Energy calls $BECALL: 145,800 contracts, $0.04B<br>- Taiwan Semiconductor calls $TSMCALL: 50,000 contracts, $0.02B<br><br>Put options:<br>- Infosys puts $INFYPUT: 500,000 contracts, $0.005B</div></details>
+ <div class="cc-tags"><span class="cc-tag">$APLD</span><span class="cc-tag">$BE</span><span class="cc-tag">$BECALL</span><span class="cc-tag">$BTDR</span><span class="cc-tag">$BW</span><span class="cc-tag">$CBRS</span><span class="cc-tag">$CLSK</span><span class="cc-tag">$CORZ</span><span class="cc-tag">$CRWV</span><span class="cc-tag">$HIVE</span><span class="cc-tag">$INFYPUT</span><span class="cc-tag">$IREN</span><span class="cc-tag">$MU</span><span class="cc-tag">$NBIS</span><span class="cc-tag">$PUMP</span><span class="cc-tag">$RIOT</span><span class="cc-tag">$SEI</span><span class="cc-tag">$SNDK</span><span class="cc-tag">$STM</span><span class="cc-tag">$TE</span><span class="cc-tag">$TSM</span><span class="cc-tag">$TSMCALL</span><span class="cc-tag">$VSH</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@BeardoTrader · 2026-07-29</span>
+  <a class="cc-open" href="https://x.com/BeardoTrader/status/2082500448733265969" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A one-minute rogue wick in SPY and whether price returns to it.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> No build. Related to the levels idea in the STATION card below.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Remember that rogue $SPY wick that happened in less than a minute at 3:59 PM on Friday, June 26th?<br><br>One thing that makes me nervous is the old saying:<br><br>&quot;If it prints there, it will trade there.&quot; <a href="https://t.co/C0EZvsWFG5" rel="noopener noreferrer nofollow">https://t.co/C0EZvsWFG5</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$SPY</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@BeardoTrader · 2026-07-29</span>
+  <a class="cc-open" href="https://x.com/BeardoTrader/status/2082445628332753174" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Percent of S&amp;P names above their 50-day average — market breadth.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Breadth is not in the Hub today. Would be one daily number per index, cheap to store, useful on the dashboard.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">This is the percentage of $SPX stocks trading above their 50 day moving average.<br><br>Since 2024, every rally has occurred on declining participation.<br><br>The market is attempting to break that trend for the first time in over 2 years. <a href="https://t.co/47ylp7zyiN" rel="noopener noreferrer nofollow">https://t.co/47ylp7zyiN</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$SPX</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@asklivermore · 2026-07-28</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2082071069859737812" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Drawdown depth and length vs the median tech selloff.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Drawdown-from-peak per ticker/sector is computable from bars the Hub already has.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Technology is down -12% from its peak. 56 days and counting.<br><br>The median Tech selloff drops 25.7% and bottoms in 73 days. This one is only 12% deep and 56 days in. It&#x27;s one of the shallowest on record.<br><br>Every single Technology drawdown in history has recovered to new all time highs. Every one.<br><br>If this follows the median path, we&#x27;re looking at a bottom forming in late August - late September.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-07-27</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2081794908164333790" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">MU weekly chart call around a Fibonacci level.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only (MU already followed).</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$MU (W) PINK called the drop but the magnitude still surprised me after they guided $50B with 86% margins.<br><br>Holding the 0.236 ($854). I think this is where it stops. Fib 0 ($806) is too far. Mr. Market gets the final say.<br><br>300+ charts daily. Try it free:<br><a href="https://t.co/ZQDP5HCFyq" rel="noopener noreferrer nofollow">https://t.co/ZQDP5HCFyq</a> <a href="https://t.co/Vi7p4xCK4Q" rel="noopener noreferrer nofollow">https://t.co/Vi7p4xCK4Q</a></div><div class="cc-link"><a href="https://www.patreon.com/posts/master-market-133466000" rel="noopener noreferrer nofollow">https://www.patreon.com/posts/master-market-133466000</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$MU</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@KobeissiLetter · 2026-07-26</span>
+  <a class="cc-open" href="https://x.com/KobeissiLetter/status/2081180171181113757" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Global market cap as a share of GDP.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Macro panel candidate; needs a source the Hub can read on a schedule.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">BREAKING: Global stock market cap is up to 137% of global GDP, near the highest on record.<br><br>The ratio has risen +40 percentage points since April 2025, matching the peak levels seen during the 2021 meme stock frenzy.<br><br>By comparison, this figure peaked at ~120% before the 2008 Financial Crisis.<br><br>This comes as global equity market cap surged to a record $166 trillion this month.<br><br>The US stock market alone accounts for ~$77 trillion, or ~46% of the global total.<br><br>AI is driving historic growth in equity markets.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-07-24</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2080688660601815346" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">MU 15-minute levels.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$MU (15m) Blue prints: $932 → $949. Recovering, but hurdles ahead (resistances).<br><br>Just opened up 3 Elite tier seats today. <br><br>300+ charts daily. Try it free:<br><a href="https://t.co/ZQDP5HCFyq" rel="noopener noreferrer nofollow">https://t.co/ZQDP5HCFyq</a> <a href="https://t.co/3OpMX8z9O6" rel="noopener noreferrer nofollow">https://t.co/3OpMX8z9O6</a></div><div class="cc-link"><a href="https://www.patreon.com/posts/master-market-133466000" rel="noopener noreferrer nofollow">https://www.patreon.com/posts/master-market-133466000</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$MU</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-07-24</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2080685274229817799" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Memory as the bottleneck for AI compute (MU, SKHY, DRAM, AMD).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; SKHY and DRAM are not in the Hub universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$MU $SKHY $DRAM When the GPU company sells you on memory, the memory is the product.<br><br>&quot;15% more compute, 50% more HBM4 memory capacity and memory bandwidth... more capacity for longer context&quot; $AMD CEO Lisa<br><br>The compute advantage is 15%. The memory advantage is 50%.</div><div class="cc-quote"><span class="cc-who">quoting @TradexWhisperer</span><div>$MU $SKHY $DRAM Holy Shit<br><br>$AMD&#x27;s Lisa Su just spent two full minutes at the 2026 AI keynote raving about HBM4 capacity as the thing that separates Helios from the competition. Not compute. Memory.<br><br>&quot;When you compare Helios to the competition, we&#x27;re delivering 15% more compute, 50% more HBM4 memory capacity and memory bandwidth, and 50% more scale-out bandwidth.&quot;<br><br>Notice which number is bigger.<br><br>&quot;</div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AMD</span><span class="cc-tag">$DRAM</span><span class="cc-tag">$MU</span><span class="cc-tag">$SKHY</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-07-24</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2080523318168613079" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Same HBM4 argument, the original post.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$MU $SKHY $DRAM Holy Shit<br><br>$AMD&#x27;s Lisa Su just spent two full minutes at the 2026 AI keynote raving about HBM4 capacity as the thing that separates Helios from the competition. Not compute. Memory.<br><br>&quot;When you compare Helios to the competition, we&#x27;re delivering 15% more compute, 50% more HBM4 memory capacity and memory bandwidth, and 50% more scale-out bandwidth.&quot;<br><br>Notice which number is bigger.<br><br>&quot;What that means is that every Helios can deliver more performance for the largest models, more capacity for longer context, and the bandwidth to scale across thousands of racks.... More than 18,000 CDNA five GPU compute units, over 4,600 Zen 6 CPU cores, and 31 terabytes of HBM4 memory, all in a single rack.&quot;<br><br>&quot;That&#x27;s what it takes to run agentic AI at scale. Today, I&#x27;m excited to announce that Helios is in full production. We have shipments on track to start at the end of the third quarter and ramping into the fourth quarter in the second half of the year. I can tell you, customer demand for Helios is extremely strong, we&#x27;re extremely proud of the work that we have done across the leading AI labs to adopt Helios.&quot;</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AMD</span><span class="cc-tag">$DRAM</span><span class="cc-tag">$MU</span><span class="cc-tag">$SKHY</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@amitisinvesting · 2026-07-24</span>
+  <a class="cc-open" href="https://x.com/amitisinvesting/status/2080484308611936509" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A one-day market recap naming 15 tickers plus oil, yields and claims.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source. The macro numbers are already the ECONOMIC room&#x27;s job.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">A TON OF THINGS HAPPENED IN THE STOCK MARKET TODAY.<br><br>Here&#x27;s a full recap:<br><br>1. Tesla $TSLA was down 14% today, its worst day since January 2024, while Google $GOOGL was down 7% after posting its first negative free cash flow quarter since 2004. The macro backdrop is not helping either. Crude oil has pushed back above $90/barrel for the first time since June and is up 25% over the past month. At the same time, the 10-year Treasury yield has crossed 4.7%, while jobless claims came in at 187K vs 211K expected, showing a stronger labor market but also raising concerns that inflation pressure could persist. Today was the worst day for the Mag 7 since April 2025 with all 7 stocks erasing $800B of market cap.<br><br>2. AMD $AMD CEO Lisa Su said at the AMD Advancing AI event today that the AI accelerator market could grow to $1.4T by 2030, within a broader compute market expected to reach $2T. She also noted that monthly AI token consumption has surged 158x over the past two years, underscoring how quickly compute demand is scaling. AMD unveiled Helios, its new rack-scale AI system built around the MI450 accelerator, which Su called the fastest AI accelerator in the industry. Helios is now in full production, with shipments expected to start at the end of Q3 and ramp through Q4.<br><br>3. Intel $INTC posted a strong Q2, with revenue of $16.1B vs $14.5B expected, up 25% YoY, and adjusted EPS of $0.42 vs $0.22 expected. Adjusted gross margin came in at 41.8% vs 39% expected, up 1,210 bps YoY, while non-GAAP operating margin reached 17.2% vs 10.7% expected. Segment results were strong across the core business, with CCPG revenue up 13% YoY to $8.9B, DCAI revenue up 59% YoY to $6.3B, total Intel Products revenue up 28% YoY to $15.1B, and Intel Foundry revenue up 31% YoY to $5.8B. Management said Q2 marked Intel’s strongest revenue growth in more than 15 years, driven by better execution, higher factory yields, improved cycle times, and stronger customer demand.<br><br>4. Trump warned that the U.S. will hold Iran responsible if the Houthis resume attacks on commercial shipping. He said the Houthis had acted “responsibly” after previous U.S. strikes, but are now “starting up again” after reportedly firing on two Saudi Arabian ships last night. Trump said the Houthis are a proxy of Iran, and that any further attacks would trigger major military punishment against both Iran and the Houthis.<br><br>5. Nvidia $NVDA is committing $1.5B to Amkor $AMKR through a prepayment tied to a multi-year advanced packaging and development agreement. The funding will help Amkor expand U.S. packaging capacity at its Arizona campus as both companies work on next-generation packaging and test technologies for AI and accelerated computing. The partnership will focus on high-density interconnects and heterogeneous integration, which are key for combining multiple chips and components into more powerful systems.<br><br>6. The top 10 most active options today by contracts traded were $TSLA with 3.6M contracts, $NVDA with 2.4M contracts, $GOOGL with 994K contracts, $AMZN with 940K contracts, $SPCX with 917K contracts, $AAPL with 732K contracts, $INTC with 706K contracts, $MU with 664K contracts, $GOOG with 560K contracts, and $MSFT with 532K contracts.<br><br>7. South Korea is moving to tighten rules around leveraged single-stock ETFs and ETNs beginning July 31. Retail investors will now need about $20,300 in cash to open or add to a position, up from roughly $6,800 previously. The key change is that stocks, bonds, and other securities will no longer count toward the deposit requirement, making it harder for retail traders to access these leveraged products.<br><br>8. U.S. mortgage rates rose for the third straight week, with the average 30-year fixed climbing to 6.58%, putting rates back near their highest level in a year.<br><br>9. AMD $AMD and Cerebras $CBRS are teaming up on a disaggregated AI inference architecture that divides workloads between both platforms. In the setup, AMD Helios manages prompts and long-context processing, while Cerebras’ Wafer-Scale Engine focuses on ultra-low-latency token generation. The companies say the combined system can deliver up to 5x more tokens per second per watt than Cerebras alone, with initial availability expected through Cerebras Cloud in the second half of 2026.<br><br>10. Uber $UBER cut 10% of roles in its customer service operations as it restructures the division and leans further into AI. The company said fragmented workflows were making it harder to roll out AI at scale, and this marks Uber’s first layoff round specifically tied to AI-driven efficiency.<br><br>11. SpaceX $SPCX is reportedly turning away satellite operators looking for dedicated Falcon 9 launches beyond 2028 as the company shifts more of its long-term launch strategy toward Starship, per Bloomberg. SpaceX has also stopped taking future Falcon 9 rideshare reservations and has paused production of some expendable Falcon components, though Falcon 9 is still expected to remain active for NASA and Pentagon missions. The risk is timing: if Starship is not commercially ready by 2028, the market could face a major launch-capacity gap, creating a bigger opening for competitors like Rocket Lab, Blue Origin, and ULA.<br><br>12. Meta’s $META new $12B Texas data center financing, tied to a nearly 1GW project, is reportedly being discussed at yields above 7%. That is roughly 40 bps higher than Meta’s $27B Hyperion financing from just nine months ago, adding about $48M in annual interest expense. Hyperion bonds are now trading around 96 cents on the dollar, showing how financing costs for massive AI infrastructure projects are starting to move higher.<br><br>WALL STREET IS THE GREATEST SHOW ON EARTH.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAPL</span><span class="cc-tag">$AMD</span><span class="cc-tag">$AMKR</span><span class="cc-tag">$AMZN</span><span class="cc-tag">$CBRS</span><span class="cc-tag">$GOOG</span><span class="cc-tag">$GOOGL</span><span class="cc-tag">$INTC</span><span class="cc-tag">$META</span><span class="cc-tag">$MSFT</span><span class="cc-tag">$MU</span><span class="cc-tag">$NVDA</span><span class="cc-tag">$SPCX</span><span class="cc-tag">$TSLA</span><span class="cc-tag">$UBER</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@TradableAstro · 2026-07-23</span>
+  <a class="cc-open" href="https://x.com/TradableAstro/status/2080404535177265191" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A global liquidity overlay with a weekly trend and a forward path.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Interesting as a macro overlay; no source for it in the Hub today. Ask Alan whether he wants it.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">macro overlay<br><br>global liquidity proxy reads unsupportive on the weekly trend. regime is hedge. daily status decreasing. weekly delta still +2.785 but the forecast path from today rolls lower before turning back up late august into september<br><br>the liquidity tape does not support strength here. the recovery comes later, not this week</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@newsinvesting · 2026-07-23</span>
+  <a class="cc-open" href="https://x.com/newsinvesting/status/2080391994971500691" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">MRVL bull/bear write-up link.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Marvell Technology $MRVL stock outlook: bull case, bear case, and key risks<br><br><a href="https://t.co/YZgkwmk5B8" rel="noopener noreferrer nofollow">https://t.co/YZgkwmk5B8</a> <a href="https://t.co/FRZiwme1ss" rel="noopener noreferrer nofollow">https://t.co/FRZiwme1ss</a></div><div class="cc-link"><a href="https://www.investing.com/news/stock-market-news/marvell-technology-stock-outlook-bull-case-bear-case-and-key-risks-93CH-4810022" rel="noopener noreferrer nofollow">https://www.investing.com/news/stock-market-news/marvell-technology-stock-outlook-bull-cas</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$MRVL</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@stockdatamarket · 2026-07-23</span>
+  <a class="cc-open" href="https://x.com/stockdatamarket/status/2080303391826129327" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A chart with no words (image only).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on — the picture is not stored.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">No words needed <a href="https://t.co/qxu3HEdQP5" rel="noopener noreferrer nofollow">https://t.co/qxu3HEdQP5</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@InvestingVisual · 2026-07-20</span>
+  <a class="cc-open" href="https://x.com/InvestingVisual/status/2079224490081353763" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">ASML one-pager analysis, TSM next.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source. The Hub&#x27;s own company page covers this ground.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">I just published the $ASML Q2 2026 one-pager stock analysis, covering:<br><br>• Financials<br>• Key metrics<br>• Valuation<br><br>And much more. You can see the full breakdown and 30+ others on my website. Link in bio &amp;amp; comments!<br><br>$TSM is next and will be out tomorrow🫡 <a href="https://t.co/bFmghrEhZ1" rel="noopener noreferrer nofollow">https://t.co/bFmghrEhZ1</a></div><div class="cc-quote"><span class="cc-who">quoting @InvestingVisual</span><div>$ASML fantastic Q2 2026 earnings:<br><br>• EPS: €7.59 vs €6.88 est. <br>• Revenue: €9.33B vs €8.87B est.  <br>• Gross Margin: 54.0% vs 51.9% est. <br><br>𝗢𝘂𝘁𝗹𝗼𝗼𝗸 𝗤𝟯 𝟮𝟬𝟮𝟲<br>Revenue: €11B-$12B vs €10.34B est. <br><br>𝗢𝘂𝘁𝗹𝗼𝗼𝗸 𝟮𝟬𝟮𝟲<br>Revenue: €43B-$45B vs €39.34B est. <a href="https://t.co/8ecsU7pGgn" rel="noopener noreferrer nofollow">https://t.co/8ecsU7pGgn</a></div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$ASML</span><span class="cc-tag">$TSM</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@KobeissiLetter · 2026-07-20</span>
+  <a class="cc-open" href="https://x.com/KobeissiLetter/status/2079213251372646426" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Hedge funds selling tech at a record pace — positioning.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Positioning data is not in the Hub and has no free source; note only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Hedge funds are dumping US tech stocks at a record pace:<br><br>Hedge funds have sold information technology stocks in 6 of the last 8 weeks.<br><br>This brings total 8-week sales to the largest in at least 10 years.<br><br>Last week alone, technology was the most-sold US sector among hedge funds.<br><br>As a result, tech exposure as a % of total market exposure is down to its lowest since February 2026.<br><br>At this rate, tech exposure could fall to its lowest in at least 5 years as early as next week.<br><br>Hedge funds are rapidly moving to the sidelines.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@stockdatamarket · 2026-07-16</span>
+  <a class="cc-open" href="https://x.com/stockdatamarket/status/2077838537521508804" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">&#x27;Market bottoms&#x27; chart (image only).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Market bottoms <a href="https://t.co/JdTt6t01pL" rel="noopener noreferrer nofollow">https://t.co/JdTt6t01pL</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@Mr_Derivatives · 2026-07-16</span>
+  <a class="cc-open" href="https://x.com/Mr_Derivatives/status/2077780068911489117" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">SPX chart question (image only).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$SPX Are you thinking what I am thinking...? <a href="https://t.co/JsDIvpaBW7" rel="noopener noreferrer nofollow">https://t.co/JsDIvpaBW7</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$SPX</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-07-15</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2077349040422007079" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Photonics names trying to bottom: AXTI, LITE, AAOI, SIVE.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source — AAOI and SIVE are outside the universe; a PHOTONICS cohort is worth considering.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Photonics stocks are trying to find a low here. <br><br>$AXTI is finally trying to find a low after 3 months of downtrend. <br>$LITE remains the strongest in my opinion from the photonics sector. <br>$AAOI is trying to find a low as well.<br>$SIVE still weaker like AXTI, but trying. <a href="https://t.co/vFOyq3CrpV" rel="noopener noreferrer nofollow">https://t.co/vFOyq3CrpV</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAOI</span><span class="cc-tag">$AXTI</span><span class="cc-tag">$LITE</span><span class="cc-tag">$SIVE</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@InvestingVisual · 2026-07-15</span>
+  <a class="cc-open" href="https://x.com/InvestingVisual/status/2077262783066804315" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">ASML Q2 beat with the numbers.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only — the Hub&#x27;s earnings room holds the same figures.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$ASML fantastic Q2 2026 earnings:<br><br>• EPS: €7.59 vs €6.88 est. <br>• Revenue: €9.33B vs €8.87B est.  <br>• Gross Margin: 54.0% vs 51.9% est. <br><br>𝗢𝘂𝘁𝗹𝗼𝗼𝗸 𝗤𝟯 𝟮𝟬𝟮𝟲<br>Revenue: €11B-$12B vs €10.34B est. <br><br>𝗢𝘂𝘁𝗹𝗼𝗼𝗸 𝟮𝟬𝟮𝟲<br>Revenue: €43B-$45B vs €39.34B est. <a href="https://t.co/8ecsU7pGgn" rel="noopener noreferrer nofollow">https://t.co/8ecsU7pGgn</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$ASML</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@ZTheTrader · 2026-07-13</span>
+  <a class="cc-open" href="https://x.com/ZTheTrader/status/2076740731671355672" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">MU line in the sand at the 50-day average.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$900 is the line in the sand this week for $MU. If it loses that tomorrow or Wednesday then $815 happens quickly most likely.<br><br>Micron is quietly pondering life at the 50MA here. <a href="https://t.co/1NSjRmv0Vv" rel="noopener noreferrer nofollow">https://t.co/1NSjRmv0Vv</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$MU</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@WizardsUnknown · 2026-07-04</span>
+  <a class="cc-open" href="https://x.com/WizardsUnknown/status/2073287229754273939" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Someone built a sector rotation tool in 15 minutes with Claude.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> The Hub already has a rotation read in three places. Nothing to add.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Took 15 mins to build a rotation tool with claude. <a href="https://t.co/TDliBYh5RN" rel="noopener noreferrer nofollow">https://t.co/TDliBYh5RN</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@JEFETRADES · 2026-06-30</span>
+  <a class="cc-open" href="https://x.com/JEFETRADES/status/2071772481501778006" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Semi-equipment names behind Micron: AMAT, LRCX, KLAC.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; all three already served.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">EVERYONE IS TALKING ABOUT MICRON BUT NOT THESE 3 STOCKS🥇<br><br>$AMAT absolute UNIT continues to make higher highs and higher lows... Micron NEEDS them $LRCX similar to AMAT they are supplying the tools to micron to manufacture. $KLAC THE SLEEPER<br><br>LOOK BEYOND THE MEMORY👇 <a href="https://t.co/rbvT19a2hv" rel="noopener noreferrer nofollow">https://t.co/rbvT19a2hv</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AMAT</span><span class="cc-tag">$KLAC</span><span class="cc-tag">$LRCX</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@dnapway · 2026-06-29</span>
+  <a class="cc-open" href="https://x.com/dnapway/status/2071619246896136283" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Why CBRS fell after earnings — IPO pricing and the story.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only (CBRS already served, cohort GROWTH).</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Gavin Banker explains why $CBRS dumped after earnings and the story Cerebras should have told<br><br>&quot;There are a lot of portfolio managers who, if a stock breaks IPO price, they sell it no matter what. They consider it a promise that was broken. They short it because they want to break deal price and then they make a quick 10 or 20%.&quot;<br><br>&quot;If you&#x27;re going public and you&#x27;re listening to this, tell your bankers to price it in such a way that we&#x27;re not going to break deal price in our first nine months as a public company. That&#x27;s what I always advise everyone to do.&quot;<br><br>&quot;The way I would have respectfully told the Cerebras story is: we signed this transformational ~$25 billion contract with OpenAI in December of 2025. It takes four months from when we make that order for TSMC to say yes and start producing. Then it takes two months to turn that chip into a server. Then it takes us a month to energize that chip and start making tokens with it.&quot; <br><br>&quot;So the first time you&#x27;re going to see the impact of this OpenAI deal at the earliest is probably around Labor Day.&quot;<br><br>&quot;It takes $35 billion to bring on a gigawatt, and you can generate $15 billion in token revenue out of that gigawatt. If they could add 50 megawatts a month in 2027, they exit the year at roughly a $9 billion cloud computing run rate. And we&#x27;re at less than $40 billion of market cap right now.&quot;</div></details>
+ <div class="cc-tags"><span class="cc-tag">$CBRS</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@RohOnChain · 2026-06-27</span>
+  <a class="cc-open" href="https://x.com/RohOnChain/status/2070929757492117704" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A PDF plus code claiming an always-on alpha loop.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Read it before building anything from it. Not a Scintilla feature as it stands.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">this is f*cking dangerous<br><br>6-page pdf along with CODE to build a hedge fund using &quot;loop engineering&quot; that prints alpha 24/7<br><br>bookmark &amp;amp; feed this paper into claude code before someone takes it down, thank me later <a href="https://t.co/QuZ8166TF3" rel="noopener noreferrer nofollow">https://t.co/QuZ8166TF3</a></div><div class="cc-quote"><span class="cc-who">quoting @RohOnChain</span><div><a href="https://t.co/JRsWSeUfrN" rel="noopener noreferrer nofollow">https://t.co/JRsWSeUfrN</a></div></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@PatrickToulme · 2026-06-26</span>
+  <a class="cc-open" href="https://x.com/PatrickToulme/status/2070572519619481687" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Bull case for Cerebras on fast inference.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Cerebras is going to 1T. Deep in the GPT 5.6 announcement is this gem. This offering will be a high priced fast mode offering for agentic coding. You will see customers like quant funds etc who have unlimited budget and the need for the fastest agentic coding in the world using GPT 5.6 on Cerebras. GPT 5.6 on Cerebras will enable coding projects to be completed in minutes due to this decode rate. The rate of progress in technology in the world is about to accelerate. $CBRS</div></details>
+ <div class="cc-tags"><span class="cc-tag">$CBRS</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@ripster47 · 2026-06-24</span>
+  <a class="cc-open" href="https://x.com/ripster47/status/2069810219878600839" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">CBRS short working into earnings.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$CBRS  <br>Top Earning Play<br>Short Hitting all targets<br>CEO came on CNBC but could not pump it <a href="https://t.co/8jT1rzOc5D" rel="noopener noreferrer nofollow">https://t.co/8jT1rzOc5D</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$CBRS</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@RohOnChain · 2026-06-22</span>
+  <a class="cc-open" href="https://x.com/RohOnChain/status/2069056530960490835" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A bare link to an X article (no text).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on — the link needs opening by hand.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text"><a href="https://t.co/JRsWSeUfrN" rel="noopener noreferrer nofollow">https://t.co/JRsWSeUfrN</a></div><div class="cc-link"><a href="http://x.com/i/article/2067524770175057920" rel="noopener noreferrer nofollow">http://x.com/i/article/2067524770175057920</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-06-16</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2066810331587031383" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Space names as dip buys: RKLB, ASTS, RDW, PL, plus a long tail and two ETFs.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source. RKLB and ASTS are served; the rest are outside the universe. A SPACE cohort would hold them.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Space stocks like $RKLB, $ASTS, $RDW, and $PL are always a buy for me when it dips.<br><br>Remember this, US Space Force, DoD, and allies are all spending HEAVILY on resilient comms, and launch capacities. <br><br>This is NATIONAL security and forever will be. <br>Launches, satellites, components, data is everything needed for global broadband and defense/ag/climate/AI training data. <br><br>Do NOT let these amazing dip opportunities pass you by!!! <br><br>Other names include $SPCX, $LUNR, $SIDU, $SATL, $FLY, $BKSY, and $SPIR.<br>ETFs include $UFO and $NASA.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$ASTS</span><span class="cc-tag">$BKSY</span><span class="cc-tag">$FLY</span><span class="cc-tag">$LUNR</span><span class="cc-tag">$NASA</span><span class="cc-tag">$PL</span><span class="cc-tag">$RDW</span><span class="cc-tag">$RKLB</span><span class="cc-tag">$SATL</span><span class="cc-tag">$SIDU</span><span class="cc-tag">$SPCX</span><span class="cc-tag">$SPIR</span><span class="cc-tag">$UFO</span></div>
+</article>
+<article class="cc-card" data-area="STATION">
+ <header class="cc-card__hd"><span class="cc-area">STATION / INDICATOR</span>
+  <span class="cc-who">@satymahajan · 2026-06-15</span>
+  <a class="cc-open" href="https://x.com/satymahajan/status/2066645971006595211" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Claims a phase oscillator reads better than RSI.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Direct hit on the Geiger&#x27;s momentum family. Worth a side-by-side against the existing RSI/Williams mix before anything changes.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Phase Oscillator &amp;gt; RSI<br><br>Wilder is still one of the GOATs though.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@patricky00n · 2026-06-15</span>
+  <a class="cc-open" href="https://x.com/patricky00n/status/2066623078063305147" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Power for AI: CEG, GEV, SMR, OKLO, CCJ.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; all five already served.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Jensen Huang just called nuclear energy &quot;wonderful&quot; for AI.<br><br>The market rewarded companies that build AI.<br><br>The next wave of wealth? Companies that power it.<br><br>Stocks to watch:<br>$CEG - nuclear operator, PPAs with Microsoft &amp; Meta<br>$GEV - grid infra for AI data centers<br>$SMR - only NRC-certified small modular reactor<br>$OKLO - Sam Altman-backed micro-reactors<br>$CCJ - world&#x27;s top uranium miner<br><br>Every time Jensen talks, I break it down here.<br><br>Follow so you don&#x27;t miss it.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$CCJ</span><span class="cc-tag">$CEG</span><span class="cc-tag">$GEV</span><span class="cc-tag">$OKLO</span><span class="cc-tag">$SMR</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@VJNCapital · 2026-06-15</span>
+  <a class="cc-open" href="https://x.com/VJNCapital/status/2066551882537951628" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Fast growers in drawdown, starting with PLTR.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only. Overlaps the drawdown idea above.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">7 fast growing companies in a drawdown<br><br>1/7 $PLTR <a href="https://t.co/ChcCJmgTjC" rel="noopener noreferrer nofollow">https://t.co/ChcCJmgTjC</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$PLTR</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@EhrmantrautCap_ · 2026-06-15</span>
+  <a class="cc-open" href="https://x.com/EhrmantrautCap_/status/2066547619946438856" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">AAOI revenue-to-price argument.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; AAOI is outside the universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">My favourite one is by far $AAOI. If they successfully deliver on their mid-2027 guidance of $471 monthly revenue (~$5.65bn ARR) then you are looking at a share price of around $480-500 by that time, if not higher.</div><div class="cc-quote"><span class="cc-who">quoting @saso_capital</span><div>My Top 5 Interconnect stocks ranked:<br><br>1.  $CRDO (Credo Technology)<br>The AEC copper pure-play with the best growth rate in the group, 274% YoY revenue growth last quarter. Hyperscalers are choosing copper wherever physics allows, and Credo owns that socket. But they’re not standing still: DustPhotonics ($750M) gives them silicon photonics, Hyperlume gives them microLED, and the optical DSP portfolio</div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAOI</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@saso_capital · 2026-06-15</span>
+  <a class="cc-open" href="https://x.com/saso_capital/status/2066538823698264335" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Interconnect ranked: CRDO, AAOI, MRVL, TSEM, ALAB, COHR, LITE.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; TSEM and COHR are outside the universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">My Top 5 Interconnect stocks ranked:<br><br>1.  $CRDO (Credo Technology)<br>The AEC copper pure-play with the best growth rate in the group, 274% YoY revenue growth last quarter. Hyperscalers are choosing copper wherever physics allows, and Credo owns that socket. But they’re not standing still: DustPhotonics ($750M) gives them silicon photonics, Hyperlume gives them microLED, and the optical DSP portfolio (Bluebird, Cardinal) is doubling revenue annually. Credo is building a full-stack interconnect company across all distance tiers. Smaller and higher-growth than Marvell.<br><br>2. $AAOI (Applied Optoelectronics)<br>A transceiver company riding the current 800G/1.6T wave, and riding it well. The capacity story is the bull case: AAOI is building toward 500,000 units/month of combined 800G and 1.6T transceivers by year-end. Raymond James models annualized EPS of $11-12 at that capacity level. The geopolitical angle is underappreciated, AAOI is positioning as the largest U.S.-based producer of AI-focused transceivers. The bear case: they don’t have a visible path into the CPO, microLED, or silicon photonics architectures that will define the next era, but their execution on the present cycle earns them a spot.<br><br>3. $MRVL (Marvell)<br>The most diversified interconnect play in the market. Optical DSP leader (70% interconnect revenue growth this year), CPO scale-up via the $5.5B Celestial AI acquisition (targeting $1B run rate by end of 2028 with Amazon Trainium 4), microLED through the Mojo Vision partnership, and copper connectivity for NVLink Fusion. Jensen Huang called it the next trillion-dollar company. The risk is valuation, 96x trailing P/E prices in a lot of execution.<br><br>4. Lumentum ($LITE)<br>The structural chokepoint. Only supplier shipping 200G-per-lane EMLs at volume, the component everyone needs for 1.6T transceivers. CPO is actually bullish for Lumentum because CPO switches still need external laser sources, and Lumentum just booked its largest CPO laser order ever (hundreds of millions, H1 2027 delivery). NVIDIA has pre-allocated laser capacity so aggressively that lead times stretch past 2027. The risk is concentration — Lumentum is a laser company, and if a competitor qualifies a second source at 200G, pricing power erodes.<br><br>5. $TSEM (Tower Semiconductor)<br>The picks-and-shovels play. Tower is the leading silicon photonics foundry, SiPh revenue grew 70% YoY, with $650M invested to triple capacity by mid-2026. Every CPO optical engine, every silicon photonics transceiver, and most photonic integrated circuits need a foundry, and Tower is where the industry is building. Less sexy than the chip designers, but foundries tend to win regardless of which architecture or end customer dominates. Lower volatility, lower ceiling, but the most technology-agnostic bet on the interconnect buildout.<br><br>Honorable mentions:<br><br>$ALAB (Astera Labs) would rank if it weren’t trading at a steeper premium with a narrower product focus (PCIe/CXL retimers and fabric switches). Worth watching if valuation pulls back.<br><br> $COHR (Coherent Corp) NVIDIA’s named silicon photonics collaborator for Spectrum-X. Coherent plays both sides, laser sources (where CPO is bullish) and transceivers (where CPO is bearish). The bear case is a messy transition where transceiver revenue drops before CPO revenue fills the gap.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAOI</span><span class="cc-tag">$ALAB</span><span class="cc-tag">$COHR</span><span class="cc-tag">$CRDO</span><span class="cc-tag">$LITE</span><span class="cc-tag">$MRVL</span><span class="cc-tag">$TSEM</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@BULLOFBRITAIN · 2026-06-14</span>
+  <a class="cc-open" href="https://x.com/BULLOFBRITAIN/status/2066212603815215190" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Praise for an early SNDK and AXTI call.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">This guy is CRAZY early<br><br>$SNDK and $AXTI before 99% of FinX<br><br>Why aren&#x27;t you following yet?</div><div class="cc-quote"><span class="cc-who">quoting @PhotonBull</span><div>There were so many good deals back in January<br><br>Some of my favorites were $SNDK at $317 and $AXTI under $20<br><br>It seems like they become more popular as the price goes up? <a href="https://t.co/CCXb0cS7JJ" rel="noopener noreferrer nofollow">https://t.co/CCXb0cS7JJ</a></div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AXTI</span><span class="cc-tag">$SNDK</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@PhotonBull · 2026-06-14</span>
+  <a class="cc-open" href="https://x.com/PhotonBull/status/2066211230281302471" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">The original SNDK/AXTI entry prices.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">There were so many good deals back in January<br><br>Some of my favorites were $SNDK at $317 and $AXTI under $20<br><br>It seems like they become more popular as the price goes up? <a href="https://t.co/CCXb0cS7JJ" rel="noopener noreferrer nofollow">https://t.co/CCXb0cS7JJ</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$AXTI</span><span class="cc-tag">$SNDK</span></div>
+</article>
+<article class="cc-card" data-area="STATION">
+ <header class="cc-card__hd"><span class="cc-area">STATION / INDICATOR</span>
+  <span class="cc-who">@TrendSpider · 2026-06-14</span>
+  <a class="cc-open" href="https://x.com/TrendSpider/status/2066204017274048727" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">NVDA at an anchored VWAP.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Anchored VWAP is not in Scintilla. It is a real, bounded indicator to add to the chart later.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Decision time at the aVWAP 👀 $NVDA <a href="https://t.co/kQspToikjC" rel="noopener noreferrer nofollow">https://t.co/kQspToikjC</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$NVDA</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TheBigBerbowski · 2026-06-13</span>
+  <a class="cc-open" href="https://x.com/TheBigBerbowski/status/2065941139463565738" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A bare link to an X article.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text"><a href="https://t.co/f0el82voBu" rel="noopener noreferrer nofollow">https://t.co/f0el82voBu</a></div><div class="cc-link"><a href="http://x.com/i/article/2065938427766304768" rel="noopener noreferrer nofollow">http://x.com/i/article/2065938427766304768</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-06-12</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2065440299254764027" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Space names to build slowly at their moving averages: PL, ASTS, RKLB, RDW.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; PL and RDW are outside the universe. Same SPACE cohort question as the other space card.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Space stocks like $PL, $ASTS, $RKLB, and $RDW are a buy for me. You can build your positions. <br><br>Look to build slowly on these names at great prices, especially at their moving averages.<br>Do NOT miss your opportunity, do NOT be scared of red for your future. <br><br>My personal favorite is $PL, but I like all the other names as well.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$ASTS</span><span class="cc-tag">$PL</span><span class="cc-tag">$RDW</span><span class="cc-tag">$RKLB</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@KobeissiLetter · 2026-06-08</span>
+  <a class="cc-open" href="https://x.com/KobeissiLetter/status/2064000748543975599" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Record volume in 3x leveraged ETFs and option volumes.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Leveraged-ETF volume as a froth gauge: one number a day. No source today.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Friday was a historic trading session:<br><br>Combined trading volume in the 3x leveraged long and short S&amp;P 500 ETFs, $SPXL and $SPXS, and the 3x leveraged long and short semiconductor ETFs, $SOXL and $SOXS, surged to a record $1.1 billion on Friday.<br><br>Trading volume in these ETFs has more than QUADRUPLED over the last several sessions.<br><br>This also exceeded the previous record set in 2025 by $250 million.<br><br>Furthermore, total US-listed option volumes surged to 107 million contracts on Friday, the 2nd-largest on record.<br><br>Of this total, 57.2 million were call options, the 3rd-highest daily volume on record, while 49.8 million were put options, the 2nd-highest on record.<br><br>Appetite for risk is extremely strong.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$SOXL</span><span class="cc-tag">$SOXS</span><span class="cc-tag">$SPXL</span><span class="cc-tag">$SPXS</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-06-03</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2062224774991061324" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A paid chart service promoting its models (MU, CRWD).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Promotional. Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">New statistical models just dropped across all 300+ charts. The results are already standing out. 6 Elite tier seats remaining.<br><br>Just two examples of what the new models are producing. $MU $CRWD<br><br>300+ charts daily. Try it free:<br><a href="https://t.co/ZQDP5HCFyq" rel="noopener noreferrer nofollow">https://t.co/ZQDP5HCFyq</a> <a href="https://t.co/VlYMRLifKs" rel="noopener noreferrer nofollow">https://t.co/VlYMRLifKs</a></div><div class="cc-link"><a href="https://www.patreon.com/posts/master-market-133466000" rel="noopener noreferrer nofollow">https://www.patreon.com/posts/master-market-133466000</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$CRWD</span><span class="cc-tag">$MU</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-06-01</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2061443033808449829" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Rotation call: trim AI winners, add non-tech.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source across several cohorts. The Hub&#x27;s cohort compare already shows this rotation.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Listen to ME. Get READY for the rotation.<br><br>Hold your AI winners like $MU, $INTC, $AMD. But NON-tech companies will start to OUTPERFORM very soon.<br><br>Make SURE you have NON-tech exposure in your portfolio to BALANCE heading into the summer months. <br><br>What you need to do:<br>1. Trim AI winners. Never sell FULLY. But consider taking 20% profits. $MU, $INTC, $AMD, etc. Keep your winners for the long-term. <br><br>2. Hold bottom formations in software like $NOW, $CRM, etc., healthcare like $LLY, etc.<br><br>3. Buy NON-tech laggards - look at companies like $NKE, $LMT, other clothing apparel, food, consumer staples, or contrarian buys. They will surprise people. <br><br>4. SLOWLY build positions in Stage 2 AI - $CRWV, etc. - they don&#x27;t have the big volume yet, still EARLY. <br><br>Overall you should have AI + emerging AI + non-tech laggards + defensive positions heading into the SUMMER.<br><br>Let&#x27;s go. I will tell you EXACTLY what to do - GET READY.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AMD</span><span class="cc-tag">$CRM</span><span class="cc-tag">$CRWV</span><span class="cc-tag">$INTC</span><span class="cc-tag">$LLY</span><span class="cc-tag">$LMT</span><span class="cc-tag">$MU</span><span class="cc-tag">$NKE</span><span class="cc-tag">$NOW</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@wolfgangkasper · 2026-05-30</span>
+  <a class="cc-open" href="https://x.com/wolfgangkasper/status/2060773740376408146" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">IBM callout after INTC, DELL, NOW.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only; all four served.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">First $INTC , $DELL <br><br>$NOW we have a callout for $IBM !<br><br>Well this is going to turn into another trade for sure.<br><br>Earnings report is on July 22nd too, marking my calendar.</div><div class="cc-quote"><span class="cc-who">quoting @antibearthesis</span><div>HE FREAKING DID IT AGAIN<br><br>DONALD TRUMP KEEPS TELLING YOU WHICH STOCKS TO BUY<br><br>HE CALLED:<br>$INTC AT $20 → +500%<br>$DELL AT $235 → +80%<br>$NOW AT $90 → +40%<br><br>NOW HE’S CALLING:<br>$IBM AT $297<br><br>“I’M SURE IT’S GONNA GO UP ALOT”<br><br>ARE YOU GOING TO MISS OUT AGAIN? <a href="https://t.co/yqlbwX2WLb" rel="noopener noreferrer nofollow">https://t.co/yqlbwX2WLb</a></div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$DELL</span><span class="cc-tag">$IBM</span><span class="cc-tag">$INTC</span><span class="cc-tag">$NOW</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@RealJGBanks · 2026-05-30</span>
+  <a class="cc-open" href="https://x.com/RealJGBanks/status/2060753527480217851" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A full AI build-out map: chips, memory, photonics, grid, copper, rare earths, robotics, space (46 tickers).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> The single richest ticker source in the folder. Several proposed cohorts come from it.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">The next 5-10 years will RETIRE you.<br><br>MILLIONAIRES will be made from the AI super cycle build out. <br><br>Here’s how I and those following me will position:<br><br>2026–2027: AI Infrastructure Boom<br><br>Money floods into chips, memory, networking, photonics, data centers, cooling, and compute capacity.<br><br>AI Chips: $NVDA $AMD $AVGO $MRVL $INTC  <br>Memory: $MU $SNDK $WDC  <br>Photonics: $GLW $AAOI $NVTS  <br>AI Infrastructure: $VRT $SMCI $DELL $NBIS $IREN  <br><br>2028–2030: The Power Bottleneck<br><br>It becomes a grid, power, copper, uranium, and domestic supply chain story.<br><br>Grid: $ETN $PWR $HUBB $VRT  <br>Electrification: $GEV $TE $ALB $SQM  <br>Copper: $FCX $TECK $SCCO  <br>Rare Earths: $MP $CRML $USAR $TMRC  <br>Nuclear: $UUUU $SMR $OKLO  <br><br>2030+: The Application Layer<br><br>Robotics: $TSLA $SERV $SYM  <br>Autonomy: $ACHR $JOBY  <br>Defense: $LMT $PLTR $KTOS $AVAV  <br>Space: $RKLB $ASTS $LUNR $PL $BKSY  <br><br>I’m trying to help you position and become a MILLIONAIRE. I will make sure it happens.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAOI</span><span class="cc-tag">$ACHR</span><span class="cc-tag">$ALB</span><span class="cc-tag">$AMD</span><span class="cc-tag">$ASTS</span><span class="cc-tag">$AVAV</span><span class="cc-tag">$AVGO</span><span class="cc-tag">$BKSY</span><span class="cc-tag">$CRML</span><span class="cc-tag">$DELL</span><span class="cc-tag">$ETN</span><span class="cc-tag">$FCX</span><span class="cc-tag">$GEV</span><span class="cc-tag">$GLW</span><span class="cc-tag">$HUBB</span><span class="cc-tag">$INTC</span><span class="cc-tag">$IREN</span><span class="cc-tag">$JOBY</span><span class="cc-tag">$KTOS</span><span class="cc-tag">$LMT</span><span class="cc-tag">$LUNR</span><span class="cc-tag">$MP</span><span class="cc-tag">$MRVL</span><span class="cc-tag">$MU</span><span class="cc-tag">$NBIS</span><span class="cc-tag">$NVDA</span><span class="cc-tag">$NVTS</span><span class="cc-tag">$OKLO</span><span class="cc-tag">$PL</span><span class="cc-tag">$PLTR</span><span class="cc-tag">$PWR</span><span class="cc-tag">$RKLB</span><span class="cc-tag">$SCCO</span><span class="cc-tag">$SERV</span><span class="cc-tag">$SMCI</span><span class="cc-tag">$SMR</span><span class="cc-tag">$SNDK</span><span class="cc-tag">$SQM</span><span class="cc-tag">$SYM</span><span class="cc-tag">$TE</span><span class="cc-tag">$TECK</span><span class="cc-tag">$TMRC</span><span class="cc-tag">$TSLA</span><span class="cc-tag">$USAR</span><span class="cc-tag">$UUUU</span><span class="cc-tag">$VRT</span><span class="cc-tag">$WDC</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@antibearthesis · 2026-05-30</span>
+  <a class="cc-open" href="https://x.com/antibearthesis/status/2060738979134136766" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">The original Trump-callout post.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">HE FREAKING DID IT AGAIN<br><br>DONALD TRUMP KEEPS TELLING YOU WHICH STOCKS TO BUY<br><br>HE CALLED:<br>$INTC AT $20 → +500%<br>$DELL AT $235 → +80%<br>$NOW AT $90 → +40%<br><br>NOW HE’S CALLING:<br>$IBM AT $297<br><br>“I’M SURE IT’S GONNA GO UP ALOT”<br><br>ARE YOU GOING TO MISS OUT AGAIN? <a href="https://t.co/yqlbwX2WLb" rel="noopener noreferrer nofollow">https://t.co/yqlbwX2WLb</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$DELL</span><span class="cc-tag">$IBM</span><span class="cc-tag">$INTC</span><span class="cc-tag">$NOW</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TradexWhisperer · 2026-05-22</span>
+  <a class="cc-open" href="https://x.com/TradexWhisperer/status/2057849504498635131" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A memory/storage framing by cache tier (DRAM, MU, SNDK, STX, WDC).</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; DRAM is an ETF the Hub already follows.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$DRAM The ticker is misleading. Not because the holdings are wrong. Because the framework most investors are using to evaluate it is wrong.<br><br>At its core it covers memory and storage. But even those two words do not do justice to what is actually being captured here. They miss the intelligence entirely.<br><br>The right framework for the AI Inference era is Cognitive Capacity. How much can an AI think, reason, retrieve, and remember at any given moment. Not as a hardware specification. As an intelligence ceiling.<br>That ceiling is built on four tiers. G1 cache through G4 cache. And this single ticker covers all of them.<br><br>Here is what each tier does and who owns it.<br><br>G1 Tier HBM: The active thinking desk.<br>Every word you typed. Every word the AI is forming right now. All of it lives here in real time through something called KV Cache. KV Cache is the AI&#x27;s active attention. It holds every piece of the conversation the model is tracking simultaneously. Bigger desk means more ideas stay in front of the AI while it thinks. The moment the desk fills up ideas fall off and the AI starts forgetting what you said earlier. Shorter answers. Shallower reasoning. Lost context.<br><br>SK Hynix. 60% global HBM market share.<br><br>$MU Micron. The US pure play.<br><br>Samsung. HBM3E yield challenges but catching Up. Potentially HBM4 leader.<br><br>G2 Tier DRAM: The overflow desk.<br>When the main desk fills up work spills here. Model weights live here during active inference. Still faster than anything below it. But the AI has to reach further. Every millisecond of extra reach is throughput the GPU never gets back. The latency gap between G1 and G2 is real and costly at scale.<br><br>$MU Micron. DRAM is the core business. SOCAMM2 leader. Potentially 3D DRAM too.<br><br>Samsung. Largest DRAM producer by volume globally.<br><br>SK Hynix. Strong DRAM portfolio alongside HBM leadership.<br><br>Nanya. Commodity DRAM. No HBM roadmap. Serves cost sensitive markets.<br><br>G3 Tier NAND: The reference library down the hall.<br>This is where RAG lives. RAG stands for Retrieval Augmented Generation. When the AI needs to answer something beyond its active context it reaches into an external knowledge base and pulls relevant information back into the response in real time. Think of it as the AI pausing mid thought to look something up in a filing cabinet and continuing the answer with that new information folded in. Every enterprise AI chatbot answering questions about internal documents runs on RAG. The speed and density of NAND determines how fast and how rich that retrieval is. Slower NAND means the AI waits. Waiting means higher cost per token.<br><br>$SNDK SanDisk. Pure NAND play. Enterprise SSD leader.<br><br>Kioxia. Joint venture partner with SanDisk on NAND wafer supply.<br><br>$MU Micron. Samsung. SK Hynix<br><br>G4 Tier HDD: The warehouse across town.<br>Cold storage including cold RAG. The AI does not touch this during a live conversation. But every model ever trained was built from what lives here. Raw training data at petabyte scale. The entire internet. Common Crawl. Books. Code repositories. Video and image datasets for multimodal models. Pre processed training shards waiting for the next training run. Model version archives. Compliance logs. Backup snapshots of the entire AI infrastructure stack.<br><br>KV Cache has never lived here. Not once. The physics do not allow it. Spinning magnetic disk runs on microseconds. Active inference needs nanoseconds. HDD was never a candidate.<br><br>But hyperscalers are buying petabytes of HDD capacity to store the raw material AI was built from and will keep being built from. That is a real and growing thesis.<br><br>$STX Seagate. Pure HDD. Scaling HAMR technology for high capacity AI data lake storage.<br><br>$WDC Western Digital. Pure HDD now. HAMR drives targeting 36TB and 44TB configurations for hyperscale AI storage.<br><br>AI Inference needs all four tiers firing simultaneously every single time an AI responds to you. Agentic AI raises the stakes even higher. An AI agent does not answer one question and stop. It plans across multiple steps. It holds context across long running tasks. It retrieves external knowledge mid execution. It writes results back. Every step of that loop stresses a different tier of the memory hierarchy. Run out of G1 and the agent loses the thread mid task. Wait on slow G3 retrieval and the agent burns cost per token sitting idle.<br><br>That is what makes $DRAM one of the most fitting ETFs ever constructed for the AI Inference and Agentic AI era. $DRAM covers the entire stack.<br><br>Long DRAM, I mean Long AI Inference and G1-G4 Cache/Context.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$DRAM</span><span class="cc-tag">$MU</span><span class="cc-tag">$SNDK</span><span class="cc-tag">$STX</span><span class="cc-tag">$WDC</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-05-20</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2057111568664744086" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Rare earths timeline: MP, USAR, UUUU, CRML, NB.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; UUUU, CRML and NB are outside the universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Listen to me. This is your chance to retire your entire bloodline in the future. <br><br>AI stocks will go 2X - 5X. But one of the only HUGE opportunities to make 10X is in rare earth elements. <br><br>My estimated timeline:<br><br>- 2026 - 2028 (1 - 2 years): chop and volatility. China&#x27;s policy shocks will drive 50% - 100% moves. Do not panic, this is normal. <br>- 2028 - 2030 (2 - 4 years): first real shortages emerge. Re-ratings will happen here. AI/robotics/EV booms and uptrends will start.<br>- 2030 - 2035 (4 - 9 years): peak multi-baggers once demand triples. Full vertical integrations here and euphoria time. <br><br>My favorite rare earth stocks:<br><br>1. $MP - Pentagon, $AAPL, are major shareholders and partners<br>2. $USAR - U.S. Department of Commerce is a partner and backed by BlackRock / Vanguard<br>3. $UUUU - big backer by the U.S. Government<br>4. $CRML - BlackRock, UBS, and State Street backers<br>5. $NB - Department of Defense backer <br><br>It&#x27;s still early. Start accumulating and please thank me later by buying me a yacht.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AAPL</span><span class="cc-tag">$CRML</span><span class="cc-tag">$MP</span><span class="cc-tag">$NB</span><span class="cc-tag">$USAR</span><span class="cc-tag">$UUUU</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@MrMikeInvesting · 2026-05-19</span>
+  <a class="cc-open" href="https://x.com/MrMikeInvesting/status/2056559044328882402" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">ServiceNow as the 2026 call.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only (NOW served, cohort GROWTH).</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">In 2024 I called out $TSLA at $140.<br><br>Then in 2025 I called out $AMD at $76.<br><br>Now for 2026 my next callout to change lives will be $NOW.<br><br>All while sitting at its LOWEST valuation ever ServiceNow has:<br><br>- Grown revenues +22% YoY.<br>- Partnered with Anthropic, Nvidia, Amazon &amp; more.<br>- Improved FCF by +44% YoY.<br>- Built a $6B cash pile.<br><br>Even the $NOW CEO, Bill McDermott bought $3M worth of shares back in February.  <br><br>Remember this post when you see $NOW squeeze later this year.<br><br>Don’t miss it…</div></details>
+ <div class="cc-tags"><span class="cc-tag">$AMD</span><span class="cc-tag">$NOW</span><span class="cc-tag">$TSLA</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@asklivermore · 2026-05-17</span>
+  <a class="cc-open" href="https://x.com/asklivermore/status/2056012150888632744" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Software names: ADBE, CRM, NOW, MDB.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only; all served.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Software.<br><br>$ADBE, $CRM $NOW, $MDB <a href="https://t.co/lQraEIToCd" rel="noopener noreferrer nofollow">https://t.co/lQraEIToCd</a></div></details>
+ <div class="cc-tags"><span class="cc-tag">$ADBE</span><span class="cc-tag">$CRM</span><span class="cc-tag">$MDB</span><span class="cc-tag">$NOW</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@antibearthesis · 2026-05-16</span>
+  <a class="cc-open" href="https://x.com/antibearthesis/status/2055635436647727187" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Energy names behind AI demand: CEG, VST, OKLO, BE, GEV, IREN.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker only; all served.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$NVDA CEO is telling you to buy energy stocks<br><br>He is literally saying demand will 1000x<br><br>Stocks positioned to benefit:<br>- $CEG<br>- $VST<br>- $OKLO<br>- $BE<br>- $GEV<br>- $IREN​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​<br><br>“This is the best time in the history of humanity to invest in sustainable energy”<br><br>In 2025, he was early on semis and neoclouds:<br>- $NBIS at $22 → +600%<br>- $INTC at $23 → +500%<br>- $SNDK at $275 → +400%<br>- $CRWV at $40 → +200%<br>- $TSM at $240 → +80%<br><br>He’s not guessing. He’s showing you the roadmap.<br><br>Are you going to ignore him again?</div></details>
+ <div class="cc-tags"><span class="cc-tag">$BE</span><span class="cc-tag">$CEG</span><span class="cc-tag">$CRWV</span><span class="cc-tag">$GEV</span><span class="cc-tag">$INTC</span><span class="cc-tag">$IREN</span><span class="cc-tag">$NBIS</span><span class="cc-tag">$NVDA</span><span class="cc-tag">$OKLO</span><span class="cc-tag">$SNDK</span><span class="cc-tag">$TSM</span><span class="cc-tag">$VST</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@TheChartReport · 2026-05-16</span>
+  <a class="cc-open" href="https://x.com/TheChartReport/status/2055453266666787302" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Cap-weighted vs equal-weight S&amp;P gap at a record.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Two series the Hub can already price (SPY vs RSP, both followed). A small ratio tile would answer it.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">The performance gap between the cap-weighted S&amp;amp;P and the Equal Weight S&amp;amp;P has widened to its largest level on record.<br><br>@davidsettle <a href="https://t.co/vGB7v8hvVf" rel="noopener noreferrer nofollow">https://t.co/vGB7v8hvVf</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@alphaticaio · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/alphaticaio/status/2055424110860104017" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Monthly OpEx gamma roll-off and dealer positioning.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Options positioning has no source in the Hub. Note only, unless Alan wants to pay for one.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">🚨🚨ALERT | SPY MONTHLY OPEX | Friday May 15<br><br>$739.12 close. The structural cliff arrived on schedule.<br><br>Two days ago we said: &quot;When the engine turns off (May 15 OpEx drains 24% of gamma), the streak&#x27;s structural support disappears.&quot;<br><br>It drained 36.8%. Bigger than forecasted. 2.61M gamma shares and 16.85M delta shares expire tonight. The largest single-session gamma rolloff since we started tracking.<br><br>The engine behind the rally: dealers short 207M shares, put decay forcing mechanical buying every session. Tonight, 4.39M contracts expire. 3.42M of those are puts. The P/C ratio on expiring contracts is 3.56x. Those were the hedges that powered the grind. They&#x27;re gone by Monday morning.<br><br>16.85M of long delta expires tonight. Dealers unwind short hedges to rebalance. That&#x27;s selling pressure into Monday&#x27;s open, not because of sentiment, because of mechanics.<br><br>What survived: +4.49M net gamma. Still positive. But surviving delta dropped from +119M last Friday to +49.18M after tonight. That&#x27;s a 59% reduction in the dealer engine that was buying every dip.<br><br>The gamma blanket went from 7.10M this morning to 4.49M after tonight. Same decline we saw May 1 and May 8, but at monthly scale. The weekly rolloffs chipped at the cushion. The monthly just took a third of what was left.<br><br>The streak&#x27;s structural support was never price. It was positioning. 13.8M puts decaying into dealer buying, every session. That fuel source just lost its largest single reload.<br><br>Volatility was compressed because the gamma blanket absorbed every move. The blanket is 37% thinner tonight. Monday&#x27;s ranges should reflect it.<br><br>The calendar answered the question.<br><br>$SPY $SPX $QQQ $VIX</div></details>
+ <div class="cc-tags"><span class="cc-tag">$QQQ</span><span class="cc-tag">$SPX</span><span class="cc-tag">$SPY</span><span class="cc-tag">$VIX</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@MarcosMillaYT · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/MarcosMillaYT/status/2055377908823474308" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">SpaceX IPO under SPCX.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> SPCX is already in the universe and in MEGACAP — worth a look, since the listing is recent.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">SpaceX is set to IPO under ticker symbol $SPCX<br><br>Shares are expected to begin trading on June 12<br><br>You can get in SpaceX earlier by buying:<br><br>1) $NASA</div></details>
+ <div class="cc-tags"><span class="cc-tag">$NASA</span><span class="cc-tag">$SPCX</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@WalterDeemer · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/WalterDeemer/status/2055354371211215184" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">The advance-decline line during the dot-com bubble.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Same breadth idea as the 50-day card.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Here&#x27;s what the advance-decline line looked like during the dot-com bubble (Jan 1998-Jul 2000) <a href="https://t.co/aVOLbSVatq" rel="noopener noreferrer nofollow">https://t.co/aVOLbSVatq</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@KobeissiLetter · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/KobeissiLetter/status/2055334639875633421" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">CBOE put/call ratio at a multi-year low.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Put/call is a single daily series; no source in the Hub today.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">BREAKING: The CBOE total put-to-call ratio is down to 0.78 on a 10-day moving average basis, the lowest since May 2025.<br><br>This is also the 3rd-lowest level since November 2021.<br><br>The ratio is down -0.23 points from the early-April high of 1.01 as the market has experienced a historic run.<br><br>Furthermore, the equity put-to-call ratio is down to 0.60 on a 10-day moving average basis, the lowest since November 2021.<br><br>This is down -0.30 points since the first week of April.<br><br>Puts are under serious pressure.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TriggerTrades · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/TriggerTrades/status/2055262227372888250" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A promoted wave model on the ES future.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Promotional. ES here is the S&amp;P future, not Eversource — do not treat it as a ticker.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">WARNING SENT.<br><br>My W4/W5 model caught the $ES bear setup last night.<br><br>Thought it was just for bull markets? Wrong.<br><br>Any market. Any asset. Any timeframe. Any bias.<br><br>Drops Sunday. <a href="https://t.co/8QzpJpOuoQ" rel="noopener noreferrer nofollow">https://t.co/8QzpJpOuoQ</a></div><div class="cc-quote"><span class="cc-who">quoting @TriggerTrades</span><div>$SPX 7500. CALLED.<br><br>W5 advances printing across multiple timeframes. <br><br>Pullback is coming.<br><br>New Daily FVG formed — that zone could extend the rally one more leg.<br><br>Though a higher degree correction is officially on the table.<br><br>We are fast followers, not first movers.<br><br>Daily FVG inverts → we FLIP.</div></div></details>
+ <div class="cc-tags"><span class="cc-tag">$ES</span></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@TheChartReport · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/TheChartReport/status/2055079564192223259" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">High-yield bonds diverging from the S&amp;P.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> HYG is already in MACRO. A credit-vs-equity divergence tile is within reach.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">High Yield bonds continue to diverge from the S&amp;amp;P 500. <br><br>@elliottwaveintl <a href="https://t.co/vw1iTmU1Hr" rel="noopener noreferrer nofollow">https://t.co/vw1iTmU1Hr</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@_Shark_Trading · 2026-05-15</span>
+  <a class="cc-open" href="https://x.com/_Shark_Trading/status/2055079138159989077" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Dollar, yields and breadth together as the warning.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> DXY is not in the Hub universe; the dollar would need adding as a macro series.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$DXY is pushing higher, but it does not really matter yet.<br><br>For equities, the real warning is not just the dollar moving up.<br><br>It is the dollar moving up, yields moving up, and breadth weakening at the same time.<br><br>We have 2 Out of 3 So far But the Dollar isnt high enough <br><br>$DXY is worth watching during this bounce and it will be important as it gets closer to $99.40s but not something to react to just yet.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$DXY</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@TriggerTrades · 2026-05-14</span>
+  <a class="cc-open" href="https://x.com/TriggerTrades/status/2055063812860985491" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">An SPX target call.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$SPX 7500. CALLED.<br><br>W5 advances printing across multiple timeframes. <br><br>Pullback is coming.<br><br>New Daily FVG formed — that zone could extend the rally one more leg.<br><br>Though a higher degree correction is officially on the table.<br><br>We are fast followers, not first movers.<br><br>Daily FVG inverts → we FLIP.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$SPX</span></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@Mr_Derivatives · 2026-05-14</span>
+  <a class="cc-open" href="https://x.com/Mr_Derivatives/status/2055018445696364960" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">&#x27;The market has eliminated bears&#x27; with a Sharpe chart.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">The stock market has fully eliminated bears.</div><div class="cc-quote"><span class="cc-who">quoting @zerohedge</span><div>There it is: the Nasdaq&#x27;s &quot;dirty sharpe&quot; ratio just hit the highest ever (basically means there are no more pullbacks). <a href="https://t.co/gojjATIn6Z" rel="noopener noreferrer nofollow">https://t.co/gojjATIn6Z</a></div></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="DATA">
+ <header class="cc-card__hd"><span class="cc-area">DATA</span>
+  <span class="cc-who">@zerohedge · 2026-05-14</span>
+  <a class="cc-open" href="https://x.com/zerohedge/status/2055010756920299918" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Nasdaq risk-adjusted return at a record.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Rolling Sharpe per index is computable from stored bars. Small, honest, and new.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">There it is: the Nasdaq&#x27;s &quot;dirty sharpe&quot; ratio just hit the highest ever (basically means there are no more pullbacks). <a href="https://t.co/gojjATIn6Z" rel="noopener noreferrer nofollow">https://t.co/gojjATIn6Z</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@JEFETRADES · 2026-05-14</span>
+  <a class="cc-open" href="https://x.com/JEFETRADES/status/2054937276304793844" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">A level held to the cent on an unnamed ticker.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Nothing to act on — no ticker named.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">THIS NAME MAY STILL BE IN THE TRENCHES<br><br>But somehow every time the LEVELS DONT LIE...<br><br>Came down to $400.62 key level marked and an instant $9 move from it. #jefemode <a href="https://t.co/QqqM8tGpRs" rel="noopener noreferrer nofollow">https://t.co/QqqM8tGpRs</a></div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@aakashgupta · 2026-05-09</span>
+  <a class="cc-open" href="https://x.com/aakashgupta/status/2053113277287473498" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Anthropic&#x27;s revenue growth curve.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Not investable in the Hub (private company). Context only.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">Anthropic&#x27;s growth rate is accelerating at $14 billion of scale.<br><br>The chart is on a log scale. A straight line on log means constant percentage growth. The curve above is bending up.<br><br>Dec 2022 to Jan 2025 was 10x per year, twice. Dec 2025 to May 2026 was 5x in five months. The annualized rate at $14B exceeds the rate at $1B.<br><br>That isn&#x27;t supposed to happen. Percentage growth decays as software companies scale. The largest software businesses have never sustained 50%+ YoY at $10B+ ARR, let alone accelerated.<br><br>Slack held the record for fastest SaaS company to $1B ARR. It took five years. Anthropic went from $1B to $44B in seventeen months.<br><br>Salesforce did $37.9B in revenue across all of fiscal 2025. Anthropic&#x27;s run rate now exceeds Salesforce. Salesforce was founded in 1999.<br><br>The most aggressive analyst projection from August 2025 had Anthropic hitting $30B ARR by August 2026. They beat the bull case by four months.<br><br>The acceleration is Claude Code. Launched May 2025. $2.5B in run-rate revenue by February 2026. Weekly active users doubled since January.<br><br>Enterprise customers spending over $1M per year went from 500 to 1,000 in two months. That&#x27;s where the curve comes from. The check size is compounding. The user count is secondary.<br><br>The last ninety days added more ARR than the entire seventeen-month climb to $14B.<br><br>There is no comparable curve in software history.</div></details>
+ <div class="cc-tags"></div>
+</article>
+<article class="cc-card" data-area="IDEA">
+ <header class="cc-card__hd"><span class="cc-area">IDEA / WATCHLIST</span>
+  <span class="cc-who">@optionscjp · 2026-05-09</span>
+  <a class="cc-open" href="https://x.com/optionscjp/status/2052984166900507069" rel="noopener noreferrer nofollow">open on X</a></header>
+ <p class="cc-about">Nokia as an underrated AI infrastructure name.</p>
+ <p class="cc-action"><span class="cc-lab">proposed:</span> Ticker source; NOK is outside the universe.</p>
+ <details class="cc-raw"><summary>the post itself</summary><div class="cc-text">$NOK Nokia is still one of the most underlooked AI stocks out there - <br><br>please read to understand this company better <br><br>The Multiple Ways Nokia Gets Paid<br><br>1. Data Center Interconnect (happening now) (most recently 49% YoY growth)<br><br>Every time Google or Microsoft builds a new AI cluster, they need fiber optic systems connecting those data centers to each other. <br><br>Nokia sells the optical transport equipment — cables, transponders, pluggables. This is the 49% AI &amp; Cloud growth you’re seeing right now in their numbers. Real revenue, today.<br><br>2. Inside the Data Center (early but growing)<br>Nokia has signed data center switching deals with Microsoft and Apple, and was selected by CoreSite to provide routing upgrades across their US data center footprint.  <br><br>So they’re not just connecting data centers to each other — they’re also selling the switches and routers that manage traffic inside the building.<br><br>3. AI-RAN / Cell Towers (future) HUGE potential<br><br>The GPU-in-tower story with NVIDIA. Still in trials, probably 2028+ at real revenue scale. But the optionality is there.<br><br>4. Defense and National Security (quietly growing)<br>Nokia has a Federal Solutions division and sells defense networking and tactical communications systems, most recently Anduril and Lockheed Martin. As Leopold’s “Project” thesis plays out and governments pour money into AI-secured infrastructure, Nokia sits right in that flow.<br><br>5. Sovereign AI Networks (emerging)<br>Worldwide sovereign cloud spending is forecast to hit $80 billion in 2026, up 35% from 2025.  Governments don’t want their AI data running through American or Chinese infrastructure — they want their own. <br><br>Nokia is pitching itself as the trusted Western provider to build those national networks.<br><br>6. 5G and 6G Densification (ongoing)<br>Separate from AI-RAN, carriers are still spending on upgrading their networks. Nokia’s mobile business is steadier than people give it credit for.</div></details>
+ <div class="cc-tags"><span class="cc-tag">$NOK</span></div>
+</article>
+</div>
+
+</div>
+<script>
+(function () {
+  var buttons = document.querySelectorAll(".cc-filters button");
+  var cards = document.querySelectorAll("#ccCards .cc-card");
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () {
+      buttons.forEach(function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+      var want = b.getAttribute("data-f");
+      cards.forEach(function (c) { c.style.display = (want === "ALL" || c.getAttribute("data-area") === want) ? "" : "none"; });
+    });
+  });
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+
+</body></html>
