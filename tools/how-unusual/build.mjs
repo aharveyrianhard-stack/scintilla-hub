@@ -21,6 +21,15 @@ export const SYMBOLS = [
   { t: "GCUSD", name: "Gold",                kind: "macro", moves: "the price" },
 ];
 
+/* Alan: "Everything cannot be very fixed thresholds… not only if it touches forty."
+   So a reading is also placed in a band, near misses are counted as well as touches,
+   and the shape of the last stretch is counted — where the reading is now, and how
+   low it got recently. */
+export const BANDS = [[0,30],[30,35],[35,40],[40,45],[45,50],[50,55],[55,60],[60,65],[65,70],[70,100]];
+export const APPROACH_LEVELS = [30, 40, 50, 60, 70];
+export const APPROACH_WITHIN = 3;     // "came within three points of forty"
+export const SHAPE_LOOKBACKS = [20, 60];
+
 export const LEVELS_LOW  = [20, 25, 30, 35, 40, 45];
 export const LEVELS_HIGH = [55, 60, 65, 70, 75, 80];
 export const HORIZONS = [5, 20, 60];
@@ -92,6 +101,97 @@ export function levelStats(closes, rsi, level, side) {
   return out;
 }
 
+export function bandOf(v) {
+  if (v == null) return null;
+  for (let b = 0; b < BANDS.length; b++) {
+    const [lo, hi] = BANDS[b];
+    if (v >= lo && (v < hi || (b === BANDS.length - 1 && v <= hi))) return b;
+  }
+  return null;
+}
+export const bandLabel = (b) => {
+  const [lo, hi] = BANDS[b];
+  return b === 0 ? `under ${hi}` : b === BANDS.length - 1 ? `${lo} and over` : `${lo} to ${hi}`;
+};
+
+/** every band: how much of history sits in it, how many separate visits, what followed a visit */
+export function bandStats(closes, rsi) {
+  const measured = rsi.filter((v) => v != null).length;
+  const yearsOfDays = measured / 252;
+  return BANDS.map((range, b) => {
+    const daysIdx = [], entriesIdx = [];
+    for (let i = 0; i < rsi.length; i++) {
+      if (bandOf(rsi[i]) !== b) continue;
+      daysIdx.push(i);
+      if (bandOf(rsi[i - 1]) !== b) entriesIdx.push(i);        // one visit, however long it lasts
+    }
+    const out = { band: b, from: range[0], to: range[1], label: bandLabel(b),
+      days: daysIdx.length, days_pct: r2(pct(daysIdx.length, measured)),
+      visits: entriesIdx.length, per_year: r2(entriesIdx.length / yearsOfDays) };
+    for (const h of HORIZONS) out["fwd" + h] = outcomes(closes, entriesIdx, h);
+    return out;
+  });
+}
+
+/** A turn that came close to a level without reaching it, counted separately from a touch.
+    A turn is only known k days after it happens — the days either side are what make it a
+    turn — so what followed is measured from the day it could first be seen, not from the
+    turn itself. Measuring from the turn would be reading the future. */
+export function approachStats(closes, rsi, within = APPROACH_WITHIN, k = 5) {
+  const out = [];
+  for (const L of APPROACH_LEVELS) {
+    for (const side of ["from above", "from below"]) {
+      const idx = [], touchIdx = [];
+      for (let i = k; i < rsi.length - k; i++) {
+        const v = rsi[i]; if (v == null) continue;
+        let turn = true;
+        for (let j = i - k; j <= i + k; j++) {
+          const w = rsi[j]; if (w == null) { turn = false; break; }
+          if (j === i) continue;
+          if (side === "from above" ? w <= v : w >= v) { turn = false; break; }
+        }
+        if (!turn) continue;                                    // only the low (or high) point of a swing counts
+        const near = side === "from above" ? v > L && v <= L + within : v < L && v >= L - within;
+        if (near) idx.push(i + k);                              // the day the turn could first be known
+        if (side === "from above" ? v <= L : v >= L) touchIdx.push(i + k);
+      }
+      const rec = { level: L, side, within, confirm_days: k,
+        near_misses: idx.length, touches_at_a_turn: touchIdx.length };
+      for (const h of HORIZONS) rec["fwd" + h] = outcomes(closes, idx, h);
+      for (const h of HORIZONS) rec["touch_fwd" + h] = outcomes(closes, touchIdx, h);
+      out.push(rec);
+    }
+  }
+  return out;
+}
+
+/** the shape Alan described: where the reading is now, and the lowest it has been lately */
+export function shapeStats(closes, rsi, lookbacks = SHAPE_LOOKBACKS) {
+  const shapes = {};
+  for (const back of lookbacks) {
+    const map = new Map();
+    for (let i = back; i < rsi.length; i++) {
+      const now = bandOf(rsi[i]); if (now == null) continue;
+      let lowest = Infinity, ok = true;
+      for (let j = i - back + 1; j <= i; j++) { const v = rsi[j]; if (v == null) { ok = false; break; } if (v < lowest) lowest = v; }
+      if (!ok) continue;
+      const low = bandOf(lowest);
+      const key = now + "|" + low;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(i);
+    }
+    shapes[back] = [...map.entries()].map(([key, idx]) => {
+      const [now, low] = key.split("|").map(Number);
+      const rec = { now_band: now, low_band: low, days: idx.length,
+        days_pct: r2(pct(idx.length, rsi.filter((v) => v != null).length)) };
+      for (const h of HORIZONS) rec["fwd" + h] = outcomes(closes, idx, h);
+      return rec;
+    }).filter((r) => r.days >= 10)          // a combination seen fewer than ten times says nothing
+      .sort((a, b) => b.days - a.days);
+  }
+  return shapes;
+}
+
 /** 0..100 curve: curve[k] = the RSI value at the k-th percentile of this symbol's history */
 export function percentileCurve(rsi) {
   const vals = rsi.filter((v) => v != null).sort((a, b) => a - b);
@@ -137,12 +237,26 @@ export function buildSymbol(meta, series, provider) {
   ];
   let latest = null;
   for (let i = rsi.length - 1; i >= 0; i--) if (rsi[i] != null) { latest = { rsi: r2(rsi[i]), date: days[i], close: r2(closes[i]) }; break; }
+  const bands = bandStats(closes, rsi);
+  const approaches = approachStats(closes, rsi);
+  const shapes = shapeStats(closes, rsi);
+  let recent = null;
+  if (latest) {
+    const iLast = rsi.length - 1 - [...rsi].reverse().findIndex((v) => v != null);
+    const lows = {};
+    for (const back of SHAPE_LOOKBACKS) {
+      let lo = Infinity, at = null;
+      for (let j = Math.max(0, iLast - back + 1); j <= iLast; j++) if (rsi[j] != null && rsi[j] < lo) { lo = rsi[j]; at = days[j]; }
+      lows[back] = isFinite(lo) ? { lowest: r2(lo), band: bandOf(lo), on: at } : null;
+    }
+    recent = { now_band: bandOf(latest.rsi), lows };
+  }
   return {
     ...meta, provider,
     history: { first_day: first, last_finished_day: last, daily_bars: series.length, rsi_days_measured: measured,
                years: r2(years), years_of_days: r2(measured / 252), gaps: findGaps(series),
                expected_trading_days: Math.round(years * 252) },
-    latest, baseline, levels, percentile_curve: percentileCurve(rsi),
+    latest, baseline, levels, bands, approaches, shapes, recent, percentile_curve: percentileCurve(rsi),
   };
 }
 
@@ -162,7 +276,7 @@ async function main() {
   const doc = {
     built_utc: new Date().toISOString(),
     source: "chart API /candles?tf=D, finished daily bars only",
-    method: "RSI(14) Wilder over closes; an episode is the first day a run crosses the level; what followed is measured from that first day to the close 5, 20 or 60 finished days later",
+    method: "RSI(14) Wilder over closes; bands place a reading in a range rather than on one line; an approach is a turn that came within 3 points of a level without reaching it; a shape pairs the band the reading is in now with the lowest band of the last 20 or 60 days; an episode is the first day a run crosses the level; what followed is measured from that first day to the close 5, 20 or 60 finished days later",
     symbols: built,
   };
   process.stdout.write(JSON.stringify(doc));
