@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>The Hub stops being a maze — the library rebuilt, and a way out of every page</title>
+<style>
+:root{--bg:#0B0B0D;--panel:#111114;--panel2:#16161A;--line:#1F1F24;--line2:#2B2B31;
+ --ink:#C8C8CE;--ink2:#A2A2A9;--ink3:#83838B;--dim:#63636B;--mute:#45454C;
+ --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:17px;line-height:1.62}
+main{max-width:1000px;margin:0 auto;padding:44px 24px 110px}
+h1{font-size:38px;line-height:1.15;color:var(--ink);margin:0 0 10px;font-weight:500;letter-spacing:-.01em}
+h2{font-size:25px;color:var(--ink);margin:58px 0 8px;font-weight:500}
+h3{font-size:19px;color:var(--ink);margin:30px 0 6px;font-weight:500}
+p{max-width:70ch;margin:0 0 15px}
+.lead{font-size:19px;color:var(--ink);max-width:66ch}
+.meta{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:0 0 26px}
+ul{max-width:70ch;padding-left:20px;margin:0 0 16px}li{margin:0 0 7px}
+b{color:var(--ink);font-weight:600}
+figure{margin:20px 0 26px;border:1px solid var(--line);border-radius:5px;background:var(--panel);overflow:hidden}
+figure img{display:block;width:100%;height:auto}
+figcaption{padding:10px 14px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;
+ letter-spacing:.06em;color:var(--dim);background:var(--panel2)}
+.pairfig{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;margin:20px 0 26px}
+.pairfig figure{margin:0}
+table{width:100%;border-collapse:collapse;border:1px solid var(--line);margin:18px 0 8px;background:var(--panel);font-size:14px}
+th{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line2);font-family:var(--mono);font-size:11px;
+ letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+td{padding:9px 11px;border-top:1px solid var(--line);color:var(--ink3);vertical-align:top}
+td:first-child{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
+.note{border-left:2px solid var(--line2);padding:2px 0 2px 14px;margin:18px 0;color:var(--ink3);max-width:70ch}
+.k{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+@media(max-width:620px){main{padding:26px 16px 80px}h1{font-size:30px}table{font-size:13px}
+ td:first-child{font-size:11.5px}}
+</style></head><body><main>
+
+<span data-scnav-slot></span><h1>The Hub stops being a maze</h1>
+<p class="meta">23 September 2026 · branch hub/nav-20260923 · nothing is deployed by this page</p>
+<p class="lead">You said: <em>"I open these things of the logo menu button and I don't have a back button. I don't have a
+close button. I'm stuck"</em>, and that the prototypes page <em>"looks horrible"</em>. Two things were done. Every page the
+Hub can open now carries its way out <b>in its own header</b>, instead of a grey pair floating on top of the page's own
+title. And the prototypes library was rebuilt on the model you pointed at &mdash; your 3D Workshop.</p>
+
+<h2>1. What I took from the 3D Workshop</h2>
+<p>I opened <b>aharvey.app/3d-workshop</b> in a real browser and read it as a visitor. What makes it easy to find your
+way there is not decoration &mdash; it is six plain habits:</p>
+<ul>
+<li><b>A bar that never leaves.</b> The name on the left takes you home; the rooms sit beside it; the room you are in is
+a filled pill. You always know where you are and you can always leave.</li>
+<li><b>A second row inside a room</b> (Projects · Lighting · Library · Making it), so a room can hold a lot without
+burying it.</li>
+<li><b>One line of plain instruction under the title</b>: "Newest first. Tap a version for its pictures, numbers and the
+Open in Fusion button." It tells you the order and what to do.</li>
+<li><b>Everything grouped under a heading with a sentence</b>, then a row of cards. You scan headings, not a list.</li>
+<li><b>Cards that all look the same shape</b>: a picture on top, then the name, a small word for its state
+(LATEST · EARLIER · SAVED · PLANNED) and a date. You can tell which one is current without reading.</li>
+<li><b>A footer that says what this is and where the files are</b>, and one link out.</li>
+</ul>
+<figure><img src="img/workshop.png" alt="The 3D Workshop, 3D Printing tab: sticky bar, sub-tabs, grouped card rows with picture, name, state chip and date">
+<figcaption>3D Workshop · the 3D Printing room, 23 Sep, in a real browser at 1680 wide</figcaption></figure>
+<p class="note"><b>One thing to tell you about your own site:</b> the Workshop's <b>Home</b> tab is broken today &mdash; it
+shows "Could not load the workshop data". The 3D Printing and Landscaping rooms are fine. The cause is small: the home
+screen expects "what's next" to be a <em>list</em> of items, and in the data file it is a single line of text. I did not
+touch it &mdash; it is a different site and not this job &mdash; but that is the fix when you want it.</p>
+
+<h2>2. The library, before and after</h2>
+<p>Same information, same two files behind it (<span class="k">catalog.json</span> and <span class="k">latest.json</span>),
+same generator, same rules. What changed is how it reads:</p>
+<ul>
+<li><b>Nothing is hidden any more.</b> The six tabs used to <em>hide</em> the other five sections, so whatever was not in
+the open tab could not be found. They now move you down one page that always holds everything.</li>
+<li><b>The tools come first and look like tools.</b> Every card carries a plate with the tool's own mark, its name, a
+sentence, how ready it is, a date, and the address it lives at.</li>
+<li><b>Latest is one row you push sideways</b>, not a wall of nineteen cards you must scroll past to reach the tools.</li>
+<li><b>It is grey.</b> The blue is gone; every colour on the page is a grey, and no label is under 11&nbsp;px.</li>
+<li><b>It fits a phone</b>: one card per row, the tabs scroll sideways, and the BACK / CLOSE pair stays reachable.</li>
+</ul>
+<div class="pairfig">
+<figure><img src="img/library-before.png" alt="The library before: blue labels, a wall of 19 Latest cards, tools hidden behind a tab">
+<figcaption>BEFORE · the whole first screen is Latest; the tools are behind a tab</figcaption></figure>
+<figure><img src="img/library-after.png" alt="The library after: grey, one scrolling page, latest as a rail, tools as cards in groups">
+<figcaption>AFTER · one page: Latest as a rail, then the tools, grouped</figcaption></figure>
+</div>
+<figure style="max-width:400px"><img src="img/library-after-phone.png" alt="The rebuilt library on a phone: one card per row, tabs scroll sideways">
+<figcaption>AFTER · on a phone, 390 wide</figcaption></figure>
+
+<h2>3. The pair no longer covers the page</h2>
+<p>The grey BACK / CLOSE pair was added last week. On pages that had nowhere to put it, it floated in the top-left corner
+&mdash; straight over the page's own title. This is <b>/visual-engine/</b> before and after: the title reads
+"SCINTILLA&nbsp;·&nbsp;VISUAL ENGINE", and before, the buttons sat on the first half of it.</p>
+<div class="pairfig">
+<figure><img src="img/overlap-before.png" alt="Before: the BACK and CLOSE buttons sit on top of the words SCINTILLA VISUAL ENGINE">
+<figcaption>BEFORE · the pair covers the title</figcaption></figure>
+<figure><img src="img/overlap-after.png" alt="After: the pair sits above the title and both are readable">
+<figcaption>AFTER · the pair sits in the page, above the title</figcaption></figure>
+</div>
+<p>Before today, <b>2 of 21</b> pages had a place of their own for the pair. Now <b>20 of 21</b> do. The one that does not
+is the Indicator Lab home, which is yours and is left exactly as it is &mdash; it carries its own link back to the library.</p>
+
+<h2>4. Every exit, checked in a window with no toolbar</h2>
+<p>I opened each page in a browser window with no address bar and no back arrow &mdash; the way the Hub runs on the
+iMac &mdash; and used only what is on the page: pressed CLOSE, then opened the page again and pressed BACK, then came to
+the page from the library and pressed BACK again.</p>
+<table>
+<thead><tr><th>Page</th><th>Pair before</th><th>Pair now</th><th>CLOSE goes to</th><th>BACK, opened cold</th><th>BACK, arrived from the library</th></tr></thead>
+<tbody>
+<tr><td>/lab.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/visual-engine/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/xfeed/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/fundamentals/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/fundamentals/spec/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/allocation/</td><td>in its own place</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/prototypes/</td><td>in its own place</td><td>in its own place</td><td>the Hub</td><td>the Hub</td><td>—</td></tr>
+<tr><td>/prototypes/report-library/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>back to the library</td></tr>
+<tr><td>/prototypes/dock-concept/</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>back to the library</td></tr>
+<tr><td>/prototypes/previews/signal-fanout-v2.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>back to the library</td></tr>
+<tr><td>/prototypes/indicator-lab/</td><td>no pair at all</td><td>no pair (the owner's page)</td><td>—</td><td>—</td><td>carries its own link back to the library; left byte-identical</td></tr>
+<tr><td>/deliverables/20260923/context-lens/CONTEXT-LENS.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/data-audit/DATA-AUDIT.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/earnings-tape/EARNINGS-TAPE.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/econ-nudge/ECON-NUDGE.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/events-earnings/EVENTS-EARNINGS.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/how-unusual/HOW-UNUSUAL.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/integrate/INTEGRATE.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/report-library-2/REPORT-LIBRARY.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/sentiment/SENTIMENT.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+<tr><td>/deliverables/20260923/visual-moodboard/MOODBOARD.html</td><td>sat over the page</td><td>in its own place</td><td>the Hub</td><td>the library</td><td>—</td></tr>
+</tbody></table>
+<p class="k">21 pages · 20 with the pair in its own place, clear of the title · no dead ends on the Hub</p>
+
+<h2>5. The Station: 33 of its 36 pages have no way back</h2>
+<p>I opened the Station pages the Hub can send you to, and then read every page in the Station's own production
+branch. The picture is worse than one page:</p>
+<ul>
+<li><b>33 of 36 Station pages carry no link back at all.</b> Only <span class="k">/tvwall/</span> and
+<span class="k">/components/</span> have one, plus the YouTube page below. In a window with no toolbar, each of the
+other 33 is a room with no door &mdash; including <span class="k">/deck/</span>, the main screen.</li>
+<li><b>station.scintillahub.ai</b> answers, and its one visible link is labelled "hub", but it goes to
+<span class="k">/registry</span>, which is another Station page. Nothing on it points at the Hub.</li>
+<li><b>station.scintillahub.ai/youtube-connect/</b> &mdash; the page you named &mdash; did have a way back, but it was a
+9&nbsp;px line of text at the very bottom, under the whole channel list, reading "Back to the Station".
+<em>My first automatic check reported this page as having no way out at all; that was my checker missing a link whose
+words were in the sentence rather than in the link. Corrected here.</em></li>
+</ul>
+<p><b>What I changed:</b> that one page now carries two plain links above its title &mdash;
+<b>&larr; STATION</b> (the deck) and <b>&#10005; HUB</b> (scintillahub.ai). It is a control page you read and press, not
+one of the wall screens, so buttons belong on it. It sits on its own branch,
+<span class="k">station/nav-20260923</span>, commit <span class="k">4470120</span>, and nothing is deployed.</p>
+<p><b>What I did not change:</b> the other 32 pages without an exit. They are display screens for the wall, and putting
+buttons on a wall screen is a decision for you, not a repair I should make unasked.</p>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>The pictures on the cards are the tool's own drawn mark, not a screenshot of the tool. They make the page readable at
+a glance; they do not prove anything about the tool behind them.</li>
+<li>Reachability is not function. Every card still says when it was last checked, and the page still refuses to call
+anything a "working tool" without proof.</li>
+<li>The exits were checked against a copy of the site running on this Mac, not against scintillahub.ai. The files are the
+ones that would be deployed, but nothing here has been deployed.</li>
+<li>On a phone the two header links (Hub&nbsp;↗ / Station&nbsp;↗) are hidden so the BACK / CLOSE pair and the name fit.
+Both still have their own cards further down the page.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>Nothing was pushed and nothing was deployed.</li>
+<li>The Indicator Lab home is untouched, byte for byte.</li>
+<li>The dashboard room, the sentiment work and the allocation contents belong to other lanes and were not touched.</li>
+<li>The Station dead end is reported, not fixed.</li>
+<li>The 3D Workshop's broken Home tab is reported, not fixed.</li>
+</ul>
+<p style="margin-top:44px"><a href="/prototypes/" style="color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line2);font-family:var(--mono);font-size:13px;letter-spacing:.1em">&larr; BACK TO THE PROTOTYPES LIBRARY</a></p>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
