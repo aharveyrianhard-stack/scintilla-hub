@@ -55,3 +55,8 @@ test("the 12-second stored-price poll and the realtime channel never overwrite t
   assert.match(html, /!cryptoSet\.has\(p\.new\.ticker\) && !scMacroOwned\(p\.new\.ticker\)\) patch\(p\.new\.ticker, p\.new\.price, "LEGACY"\)/);
   assert.match(html, /function scMacroOwned\(t\) \{ return SC_MACRO_SYMS\.includes\(String\(t \|\| ""\)\.toUpperCase\(\)\); \}/);
 });
+
+test("the tape asks the provider for its own symbols, so an aged-out stored row cannot empty MACRO (23 Sep)", () => {
+  assert.match(html, /if \(window\.SC_CLEAN_READS\) await scApplyProviderQuotes\(_tix, \[\.\.\.new Set\(\[\.\.\.Object\.keys\(_tix\), \.\.\.MACRO_SET, \.\.\.inComp\]\)\]\);/);
+  assert.match(html, /const all = Object\.values\(_tix\)\.filter\(\(q\) => q\.price != null && inComp\.has\(q\.ticker\)\)/);
+});

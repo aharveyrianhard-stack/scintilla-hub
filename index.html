@@ -4025,13 +4025,14 @@ async function fetchTapeItems() {
     pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct
     pg("composite_staged?select=ticker&tf=eq.D"),
   ]);
-  /* P0-F: the ticker tape carries the same percentage contract as the board. */
-  if (window.SC_CLEAN_READS) {
-    const _tix = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
-    await scApplyProviderQuotes(_tix, Object.keys(_tix));
-  }
   const inComp = new Set(comp.map((c) => c.ticker));   // FIX 1 — tape universe = composite_staged tf=D only
-  const all = quotes.filter((q) => q.price != null && inComp.has(q.ticker))
+  /* P0-F: the ticker tape carries the same percentage contract as the board.
+     23 Sep 2026: stored rows older than four days are now dropped, and SPY, QQQ and the rest of MACRO had
+     rows last written in August, so the MACRO band went completely empty. The tape now asks the provider
+     for ITS OWN symbols (MACRO and the composite universe), not only for rows the stored table still has. */
+  const _tix = Object.fromEntries(quotes.map((q) => [q.ticker, q]));
+  if (window.SC_CLEAN_READS) await scApplyProviderQuotes(_tix, [...new Set([...Object.keys(_tix), ...MACRO_SET, ...inComp])]);
+  const all = Object.values(_tix).filter((q) => q.price != null && inComp.has(q.ticker))
     .map((q) => ({ t: q.ticker, price: Number(q.price),
                    pct: num(q.chg_pct) != null ? num(q.chg_pct) : num(q.change) }))   // FIX 2 — chg_pct first
     .filter((q) => q.pct != null);   // an unknown day change is left off the tape, never painted as 0.00%
