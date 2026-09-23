@@ -46,15 +46,36 @@ test('the Label names the Geiger and its freshness, and reduced motion is stated
   assert.match(t, /GEIGER: Hub composite/); assert.match(t, /1 min ago/); assert.match(t, /COMPLETE_UNSTAMPED/); assert.match(t, /quotes 58 names/)
 })
 
-test('the workbench page: real feeds only, engine attached, nothing of the Hub or the Lab touched', () => {
+test('the mood board: six live tiles, no control panel, real feeds only', () => {
   const html = read('visual-engine/index.html')
-  assert.match(html, /src="\.\/geiger-engine\.js"/)
+  assert.match(html, /src="\.\/geiger-engine\.js"/, 'the Mover and the Bar come from the engine')
   assert.match(html, /scintilla-massive-chart-api\.fly\.dev/)
-  for (const p of ['/geiger', '/quotes?symbols=', '/candles?symbol=', '/universe']) assert.ok(html.includes(p), p)
-  assert.doesNotMatch(html, /\{t:"[A-Z]+",\s*last:/, 'no fixture rows like the motion bench')
-  assert.doesNotMatch(html, /sample data|dummy data|illustrative/i, 'nothing illustrative on the workbench')
+  for (const p of ['/geiger', "'/geiger?symbols='", '/candles?symbol=', "'/macro'"]) assert.ok(html.includes(p), p)
+  assert.equal((html.match(/<select/g) || []).length, 0, 'no pickers')
+  assert.equal((html.match(/type="range"/g) || []).length, 0, 'no sliders')
+  /* the BACK / CLOSE pair every Hub sub-page carries (scripts/scnav-snippet.html) is how you leave the page, not a control */
+  assert.ok((html.replace(/<!-- scnav · [\s\S]*?<!-- \/scnav -->/, '').match(/<button/g) || []).length <= 2, 'at most play/pause and the way back')
+  assert.equal((html.match(/key:'[a-z]+',\s*name:/g) || []).length, 6, 'six tiles, one per visual idea')
+  assert.match(html, /href="\/prototypes\/"/, 'a way back to the prototypes')
+  assert.match(html, /deliverables\/20260923\/context-lens\/CONTEXT-LENS\.html/, 'the Context Lens workshop stays linked')
+  assert.match(html, /prefers-reduced-motion/)
+  assert.doesNotMatch(html, /\{t:"[A-Z]+",\s*last:/, 'no fixture rows')
+  assert.doesNotMatch(html, /sample data|dummy data|illustrative/i, 'nothing illustrative')
   assert.doesNotMatch(html, /indicator-lab/, 'never reaches into the Indicator Lab')
   assert.ok(!fs.existsSync(new URL('visual-engine/prototypes', root)))
-  assert.match(html, /prefers-reduced-motion/)
-  assert.match(html, /class="seat"/, 'the LIVE chip has a reserved seat')
+})
+
+test('monochrome: every colour on the page is a grey, and none of them is white or near-white', () => {
+  const html = read('visual-engine/index.html')
+  const seen = []
+  for (const m of html.matchAll(/#([0-9a-fA-F]{6})\b/g)) {
+    const h = m[1]
+    seen.push([parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), '#' + h])
+  }
+  for (const m of html.matchAll(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g)) seen.push([+m[1], +m[2], +m[3], m[0]])
+  assert.ok(seen.length > 8, 'the palette is actually declared here')
+  for (const [r, g, b, src] of seen) {
+    assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 24, src + ' is a colour, not a grey')
+    assert.ok(Math.max(r, g, b) <= 210, src + ' is white or near-white')
+  }
 })

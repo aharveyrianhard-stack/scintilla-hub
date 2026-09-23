@@ -25,9 +25,9 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    latest.json. The rules below hold the page to that: a date on every card, the strip in order and never a dead end,
    no fixed column count anywhere. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "4ea9b28d72b351c0f42c7a20c44d5d0c1683686e555a17b0a4dc7b5c75e0851c");   // regenerated 23 Sep: the day's Latest items, and BACK / CLOSE in the header
-  assert.equal(sha("previews/signal-fanout-v2.html"), "4ad0c5f3df722c76dc1992c0354e3a06400036de2bf06761f3099174c8f3b743");
-  assert.equal(sha("dock-concept/index.html"), "604d5e3a5add60bb385fcf0e7bd20d956d52b148fa95c60fc5b06675c52bdc50");
+  assert.equal(sha("index.html"), "24096f2d40b5c3fb6b77dc22ece23b0a2ca19b52de20e346d0962f87ca4d6bbc");   // regenerated 23 Sep: the day's Latest items, the mood board, and BACK / CLOSE in the header
+  assert.equal(sha("previews/signal-fanout-v2.html"), "b515b4fc290a686ba4d73dba1fd431e000e57d3e1b3f868073e7738e39dd6073");
+  assert.equal(sha("dock-concept/index.html"), "43af029d01336c678b5cd6e14c8b226e0bf1f1c85c99d90a4f3bd434fe92d8b9");
   assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));

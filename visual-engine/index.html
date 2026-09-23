@@ -4,642 +4,551 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#0A0A0F">
-<title>SCINTILLA · Visual Engine · workbench</title>
+<meta name="theme-color" content="#07080B">
+<title>SCINTILLA · Visual Engine</title>
 <!-- ============================================================================================
-     SCINTILLA · VISUAL ENGINE · the workbench (SCI-21, 22 Sep 2026)
-     Not a gallery. Every candidate below runs on REAL Scintilla data, side by side, driven by one set of
-     controls, so the choice is made by looking. Data: the chart API the Hub reads (/geiger, /quotes,
-     /candles) plus the Hub's own cohort membership and favorites (read-only). Nothing here is invented;
-     a missing feed is one quiet line on the panel that needed it.
-     Engine: ./geiger-engine.js — the Bar, the Mover, the Quiet Rule, the Clock, the Label.
+     SCINTILLA · VISUAL ENGINE — a mood board (23 Sep 2026)
+     Six ways the Geiger could look, all six already moving on today's real numbers. No control
+     panel: nothing to set, nothing to switch on. Click a tile and it fills the screen, with one
+     button — play or pause. Data: the chart API the Hub reads (/geiger, /geiger?detail=1,
+     /candles, /macro). Nothing here is invented; a feed that does not answer says so in words.
+     Motion engine: ./geiger-engine.js (the Bar, the Mover, the Quiet Rule).
      ============================================================================================ -->
 <style>
-:root{--bg:#0A0A0F;--panel:#0D0D14;--panel2:#0F0F1A;--line:#1A1A2A;--line2:#252538;--ink:#F2F2F8;--ink2:#C6C8DE;--ink3:#9A9AB6;
- --dim:#868AAA;--mute:#3A3A52;--crk:#00D4FF;--bull:#00FFA3;--bear:#FF2D55;--warn:#e0a24a;--trend:#2D9CFF;--momentum:#A24BFF;--structure:#FFD400;
- --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;--rh:30px}
+:root{
+  --bg:#07080B; --pan:#0B0D11; --pan2:#0E1116; --line:#191D24; --line2:#242A33;
+  --ink:#BEC3CB;      /* brightest ink — grey, used only for names and the one live number */
+  --ink2:#969CA6; --dim:#6B717B; --dimmer:#474D57;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,sans-serif;
+  --rh:26px;
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink2);font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
-body{padding:0 0 60px}
-a{color:var(--crk)}
-h1{font:500 11px/1 var(--mono);letter-spacing:.24em;color:var(--crk);margin:0}
-.hd{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:14px 16px 8px;border-bottom:1px solid var(--line)}
-.hd .sub{color:var(--dim);font-size:12px;max-width:72ch}
-.hd .links{margin-left:auto;font:10px/1 var(--mono);letter-spacing:.1em}
-.hd .links a{margin-left:14px;text-decoration:none}
-/* the Label strip: fixed minimum height so a longer or shorter line never moves the controls */
-#label{font:10.5px/1.5 var(--mono);color:var(--ink3);padding:8px 16px;min-height:38px;border-bottom:1px solid var(--line);letter-spacing:.02em;overflow-wrap:anywhere}
-#label.ve-label-warn{color:var(--warn)}
+html,body{margin:0;background:var(--bg);color:var(--ink2);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:0 0 40px}
+a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line2)}
+a:hover{color:var(--ink)}
 
-/* controls — sticky, one grammar */
-.ctl{position:sticky;top:0;z-index:20;background:rgba(10,10,15,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:6px 16px 8px}
-.crow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:4px 0}
-.clab{font:9px/1 var(--mono);letter-spacing:.2em;color:var(--dim);width:64px;flex:none}
-.chips{display:flex;flex-wrap:wrap;gap:4px}
-button.chip,label.chip{appearance:none;background:#101620;color:var(--dim);border:1px solid var(--line2);border-radius:6px;padding:0 10px;height:32px;
- font:500 10px/32px var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
-button.chip:hover{color:var(--ink)}
-button.chip.on{background:#0e2230;color:var(--crk);border-color:#1d4256}
-button.chip.act{background:#0e2a1e;color:var(--bull);border-color:#1d4a34}
-button.chip:disabled{opacity:.45;cursor:default}
-.slider{display:flex;align-items:center;gap:8px;font:10px/1 var(--mono);color:var(--dim)}
-.slider input{width:130px;accent-color:var(--crk)}
-.slider b{color:var(--ink2);font-weight:500;min-width:52px;display:inline-block;font-variant-numeric:tabular-nums}
-/* the Clock row: the LIVE chip has a RESERVED SEAT — its box exists whether it is shown or not */
-.clock{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:1;min-width:280px}
-.seat{width:76px;height:32px;flex:none}
-.seat button.chip{width:76px;padding:0}
-.seat button.chip[hidden]{display:none}
-#scrub{flex:1;min-width:140px;accent-color:var(--crk);height:32px}
-.asof{font:11px/1 var(--mono);color:var(--ink2);min-width:150px;font-variant-numeric:tabular-nums}
-.asof small{color:var(--dim);font-size:9.5px}
+/* ── head: the name, one sentence, the ways out ───────────────────────────── */
+header{padding:26px 26px 18px;border-bottom:1px solid var(--line)}
+h1{font:500 12px/1 var(--mono);letter-spacing:.3em;color:var(--dim);margin:0 0 14px}
+.lede{margin:0;max-width:64ch;font-size:20px;line-height:1.45;color:var(--ink)}
+.ways{margin:16px 0 0;font:11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;display:flex;gap:22px;flex-wrap:wrap}
 
-/* choice */
-.choice{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-start;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
-.choice .k{font:9px/1 var(--mono);letter-spacing:.2em;color:var(--dim);padding-top:9px;width:64px;flex:none}
-.choice .chosen{font:11px/32px var(--mono);color:var(--bull);min-width:200px}
-.choice textarea{flex:1;min-width:240px;min-height:32px;max-height:120px;background:#0b0b12;color:var(--ink2);border:1px solid var(--line2);border-radius:6px;padding:7px 9px;font:12px/1.4 var(--sans);resize:vertical}
+/* ── the board of tiles ───────────────────────────────────────────────────── */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:18px;padding:22px 26px}
+.tile{position:relative;background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:16px 16px 12px;
+  cursor:pointer;overflow:hidden;transition:border-color .18s,background .18s}
+.tile:hover,.tile:focus-visible{border-color:var(--line2);background:var(--pan2);outline:none}
+.tile h2{margin:0;font:500 12px/1 var(--mono);letter-spacing:.22em;color:var(--ink);text-transform:uppercase}
+.tile p{margin:7px 0 12px;font-size:14px;color:var(--dim);min-height:2.9em}
+.art{position:relative;height:258px}
+.art canvas{display:block;width:100%;height:100%}
+.tile .now{margin:9px 0 0;font:10px/1 var(--mono);letter-spacing:.16em;color:var(--dimmer);text-transform:uppercase;min-height:12px}
 
-/* panels */
-.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;padding:12px 16px;align-items:start}
-@media (min-width:760px){#p-strip,#p-pair{grid-column:1/-1}}
-#p-pair .board{max-width:980px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 12px;min-width:0;display:flex;flex-direction:column}
-.panel.chosen{border-color:#1d4a34;box-shadow:0 0 0 1px #1d4a34 inset}
-.ph{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.ph h2{font:500 10px/1 var(--mono);letter-spacing:.2em;color:var(--crk);margin:0}
-.ph .form{font:9px/1 var(--mono);letter-spacing:.14em;color:var(--dim)}
-.ph .pick{margin-left:auto;display:flex;align-items:center;gap:6px;font:10px/1 var(--mono);letter-spacing:.1em;color:var(--dim);cursor:pointer;height:28px}
-.ph .pick input{accent-color:var(--bull)}
-.plan{font-size:11.5px;color:var(--ink3);margin:6px 0 8px;border-left:2px solid var(--line2);padding-left:9px;min-height:32px}
-.plan b{color:var(--ink2);font-weight:600}
-.pnote{font:10px/1.5 var(--mono);color:var(--dim);margin-top:8px;min-height:15px;letter-spacing:.02em;overflow-wrap:anywhere}
-.pnote.warn{color:var(--warn)}
-.ptools{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
+/* ── full size ────────────────────────────────────────────────────────────── */
+#stage{position:fixed;inset:0;background:var(--bg);z-index:60;display:none;flex-direction:column;padding:20px 26px 22px}
+#stage.on{display:flex}
+#stage .shead{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+#stage h2{margin:0;font:500 13px/1 var(--mono);letter-spacing:.24em;color:var(--ink);text-transform:uppercase}
+#stage .sub{font-size:15px;color:var(--dim)}
+#stage .art{flex:1;height:auto;margin-top:16px}
+.stagebar{display:flex;align-items:center;gap:14px;margin-top:14px}
+button.pp{appearance:none;background:var(--pan2);border:1px solid var(--line2);border-radius:8px;color:var(--ink2);
+  height:46px;min-width:120px;padding:0 20px;font:500 12px/46px var(--mono);letter-spacing:.2em;text-transform:uppercase;cursor:pointer}
+button.pp:hover{color:var(--ink);border-color:#333A45}
+.stagebar .back{margin-left:auto;font:11px/1 var(--mono);letter-spacing:.16em;color:var(--dim);cursor:pointer;background:none;border:0;text-transform:uppercase}
+.stagebar .back:hover{color:var(--ink)}
 
-/* THE BAR (engine primitives) */
-.ve-track{position:relative;display:block;height:12px;background:#0b0f16;border:0.6px solid var(--line2);border-radius:5px;overflow:hidden;flex:1;min-width:60px}
-.ve-track .ve-mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--mute)}
-.ve-track .ve-fill{position:absolute;top:1px;bottom:1px;border-radius:3px;width:0;left:50%}
+/* ── the row visual (uses geiger-engine.js: the Bar, the Mover, the Quiet Rule) ── */
+.ve-rows{position:relative;overflow:hidden;height:100%}
+.ve-row{position:absolute;left:0;right:0;height:var(--rh);display:flex;align-items:center;gap:10px;padding:0 2px;will-change:transform}
+.ve-tk{width:58px;flex:none;font:600 12px/1 var(--mono);letter-spacing:.04em;color:var(--ink)}
+.ve-track{position:relative;display:block;height:11px;flex:1;min-width:60px;background:#0A0C10;border:0.6px solid var(--line);border-radius:4px;overflow:hidden}
+.ve-track .ve-mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--dimmer)}
+.ve-track .ve-fill{position:absolute;top:1px;bottom:1px;width:0;left:50%;border-radius:2px;background:#3A414B}
+.ve-fill.ve-bull{background:#B4BAC3}   /* above the middle — brighter grey, never a colour */
+.ve-fill.ve-bear{background:#5A616B}   /* below the middle — darker grey */
 .ve-track.ve-none{border-style:dashed}
-.ve-fill.ve-bull{background:var(--bull);box-shadow:0 0 6px rgba(0,255,163,.45)}
-.ve-fill.ve-bear{background:var(--bear);box-shadow:0 0 6px rgba(255,45,85,.45)}
-.ve-track.ve-v{height:100%;width:14px;flex:none;min-width:0}
-.ve-track.ve-v .ve-mid{left:0;right:0;top:50%;bottom:auto;width:auto;height:1px}
-.ve-track.ve-v .ve-fill{left:1px;right:1px;width:auto;top:50%;height:0}
+.ve-val{width:52px;flex:none;text-align:right;font:12px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink2)}
+.ve-rk{width:26px;flex:none;text-align:right;font:9px/1 var(--mono);color:var(--dimmer);opacity:0;transition:opacity .3s}
+.ve-rk.ve-show{opacity:1}
+.ve-quiet .ve-val{visibility:hidden}   /* the Quiet Rule: while rows move, only name and bar */
 
-/* rows moved by THE MOVER */
-.ve-rows{position:relative;overflow:hidden}
-.ve-row{position:absolute;left:0;right:0;height:var(--rh);display:flex;align-items:center;gap:8px;padding:0 4px;will-change:transform;cursor:pointer;border-radius:4px}
-.ve-row:hover{background:#12121c}
-.ve-row.sel{background:#0e1a22}
-.ve-tk{width:54px;flex:none;font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--ink)}
-.ve-val{width:46px;flex:none;text-align:right;font:11px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink2)}
-.ve-val.ve-bull{color:var(--bull)}.ve-val.ve-bear{color:var(--bear)}
-.ve-extra{width:52px;flex:none;text-align:right;font:10px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink3)}
-.ve-extra.w{width:64px}
-.ve-rk{width:30px;flex:none;text-align:right;font:9px/1 var(--mono);letter-spacing:.05em;opacity:0;transition:opacity .3s;color:var(--dim)}
-.ve-rk.ve-show{opacity:1}.ve-rk.ve-up{color:var(--bull)}.ve-rk.ve-dn{color:var(--bear)}
-.ve-trail{position:absolute;left:2px;width:3px;border-radius:2px;pointer-events:none;opacity:.55;transition:opacity 480ms linear}
-.ve-trail.ve-up{background:linear-gradient(180deg,rgba(0,255,163,0),rgba(0,255,163,.6))}
-.ve-trail.ve-dn{background:linear-gradient(180deg,rgba(255,45,85,.6),rgba(255,45,85,0))}
-/* THE QUIET RULE: gone, not dimmed; visibility keeps the width, so nothing jumps */
-.ve-quiet .ve-extra{visibility:hidden}
-.thead{display:flex;gap:8px;padding:0 4px 5px;font:9px/1 var(--mono);letter-spacing:.16em;color:var(--dim);border-bottom:1px solid var(--line);margin-bottom:5px}
-.thead span{flex:none}
-.thead .hs{display:none}
-@media (max-width:640px){.thead .hl{display:none}.thead .hs{display:inline}}
-.board{--rh:30px}
-.board.small{--rh:24px}
-.scrollx{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+.note{padding:0 26px;font-size:14px;color:var(--dim)}
+footer{margin-top:24px;padding:16px 26px 0;border-top:1px solid var(--line);font:10.5px/1.7 var(--mono);color:var(--dimmer);letter-spacing:.04em;overflow-wrap:anywhere}
 
-/* TODAY's player: every column travels, old curve, twelve things moving */
-.today .ve-row{gap:6px;padding:0 2px}
-.today .ve-track{min-width:50px}
-.today .ve-rk{transition:none}
-
-/* STRIP: upright bars per cohort, headers fixed */
-.strip{position:relative;display:flex;gap:6px;min-width:0;height:206px;overflow:hidden}
-.strip .ve-rows{position:relative;height:206px}
-.strip .ve-row{position:absolute;top:0;bottom:0;left:0;right:auto;width:70px;height:auto;flex-direction:column;justify-content:flex-start;gap:4px;padding:0;cursor:default}
-.strip .ve-row:hover{background:transparent}
-.strip .ch{font:600 9px/1.1 var(--mono);letter-spacing:.06em;color:var(--ink2);text-align:center;height:22px;display:flex;align-items:center;justify-content:center;white-space:pre-line}
-.strip .cv{flex:1;display:flex;justify-content:center;width:100%;min-height:0}
-.strip .cn{font:10px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink2);height:12px}
-.strip .cw{font:8.5px/1.15 var(--mono);letter-spacing:.02em;color:var(--dim);text-align:center;height:32px;white-space:pre-line}
-.strip .ve-rk{position:absolute;right:2px;top:0;width:auto}
-
-/* FAN */
-.fan .sel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-.fan select{background:#101620;color:var(--ink2);border:1px solid var(--line2);border-radius:6px;height:32px;padding:0 8px;font:11px var(--mono)}
-.fan .lay{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(150px,.7fr);gap:12px;align-items:start}
-#fan-rungs{min-height:224px}
-.fan .rung{display:flex;align-items:center;gap:8px;height:28px;border-top:1px solid var(--line)}
-.fan .rung.hinge{background:#0e141b;border-radius:4px;border-top:0}
-.fan .tf{width:34px;flex:none;font:10px/1 var(--mono);letter-spacing:.06em;color:var(--dim)}
-.fan .rung.hinge .tf{color:var(--crk)}
-.fan .rv{width:46px;flex:none;text-align:right;font:11px/1 var(--mono);font-variant-numeric:tabular-nums}
-.fan .rtm{width:96px;flex:none;text-align:right;font:9px/1 var(--mono);color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
-.fan .ring{width:100%;max-width:220px;display:block;margin:0 auto}
-.fan .ringt{fill:none;stroke:#1a1f2b;stroke-width:9;stroke-linecap:round}
-.fan .ringa{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .6s ease-out}
-.fan .comp{font:600 14px/1 var(--mono);text-align:center;margin:2px 0 6px}
-.fan .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font:10px/1.3 var(--mono);text-align:center}
-.fan .kv b{display:block;font-weight:500;color:var(--ink2)}
-.fan .kv span{color:var(--dim);font-size:8.5px;letter-spacing:.1em}
-@media (max-width:520px){.fan .lay{grid-template-columns:1fr}}
-
-/* PAIR */
-.pair{display:flex;gap:0;min-width:0}
-.pair .col{flex:1;position:relative;min-width:0}
-.pair .col.right .ve-row{flex-direction:row-reverse}
-.pair .col.right .ve-tk{text-align:right}
-.pair svg{width:70px;flex:none}
-.pair .col .ve-tk{width:46px}
-.pair .col .ve-val{width:52px}
-.pair .col .ve-track{min-width:40px}
-.pair .ve-rk{display:none}
-
-@media (max-width:900px){ .ctl{position:static} }
-button.chip.more{display:none}
-@media (max-width:640px){ button.chip.more{display:inline-block;margin-left:auto} .ctl:not(.showmore) .crow.adv{display:none} }
-@media (max-width:640px){
- .clab{width:100%}
- .panels{grid-template-columns:1fr;padding:10px 8px}
- .hd{padding:12px 10px 6px}.ctl{padding:4px 8px 6px}#label{padding:6px 10px}.choice{padding:8px 10px}
- .ve-extra{width:44px}.ve-extra.w{width:54px}
+@media (max-width:900px){
+  header{padding:20px 16px 14px}
+  .lede{font-size:17px}
+  .board{grid-template-columns:1fr;gap:14px;padding:16px}
+  .art{height:220px}
+  #stage{padding:16px 16px 18px}
+  .note,footer{padding-left:16px;padding-right:16px}
 }
-@media (prefers-reduced-motion: reduce){
- .ve-row,.ve-fill,.ve-rk,.ve-trail,.fan .ringa{transition:none!important}
-}
+@media (prefers-reduced-motion:reduce){ .ve-row{transition:none !important} }
 </style>
 </head>
 <body>
-<div class="hd">
-  <div><h1>SCINTILLA · VISUAL ENGINE · WORKBENCH</h1>
-    <div class="sub">One Geiger, one way of moving, one clock. Every panel below runs on the same live data and the same controls, so you choose by looking, not by reading. Pick a panel with its ○ and write why.</div></div>
-  <div class="links"><a href="/">THE HUB</a><a href="/prototypes/">PROTOTYPES</a><a href="/lab.html">LAB</a></div>
-</div>
-<div id="label" aria-live="polite">loading the Hub Geiger…</div>
 
-<div class="ctl">
-  <div class="crow"><span class="clab">COHORT</span><div class="chips" id="cohorts"></div></div>
-  <div class="crow adv"><span class="clab">GEIGER</span><div class="chips" id="geiger"></div>
-    <span class="clab" style="width:auto;margin-left:6px">MOVER</span><div class="chips" id="mover"></div>
-    <span class="clab" style="width:auto;margin-left:6px">CURVE</span><div class="chips" id="curve"></div></div>
-  <div class="crow adv"><span class="clab">RULES</span>
-    <div class="slider"><span>RE-SORT</span><input type="range" id="dur" min="200" max="2000" step="50"><b id="durv"></b></div>
-    <div class="slider"><span>PLAY STEP</span><input type="range" id="pdur" min="150" max="1500" step="50"><b id="pdurv"></b></div>
-    <div class="chips"><button class="chip" id="tie">HOLD NEAR-TIES</button><button class="chip" id="quiet">QUIET RULE</button><button class="chip" id="trails">TRAILS</button><button class="chip" id="replay">REPLAY LAST CHANGE</button></div></div>
-  <div class="crow"><span class="clab">CLOCK</span><button class="chip more" id="more" aria-expanded="false">MORE ▾</button>
-    <div class="clock">
-      <span class="seat"><button class="chip act" id="live" hidden title="back to live">↻ LIVE</button></span>
-      <button class="chip" id="play">▶ PLAY</button>
-      <div class="chips" id="lookback"></div>
-      <input type="range" id="scrub" min="0" max="0" value="0" aria-label="rewind">
-      <span class="asof" id="asof">live</span>
-    </div></div>
+<header>
+  <h1>SCINTILLA · VISUAL ENGINE</h1>
+  <p class="lede">Six ways the Geiger could look on screen — every one of them already running on today's real numbers, with nothing for you to set. Click the one you like and it fills the screen.</p>
+  <nav class="ways">
+    <a href="/prototypes/">← Prototypes</a>
+    <a href="/deliverables/20260923/context-lens/CONTEXT-LENS.html">Context Lens workshop</a>
+  </nav>
+</header>
+
+<p class="note" id="note" hidden></p>
+<main class="board" id="board"></main>
+
+<div id="stage" aria-hidden="true">
+  <div class="shead"><h2 id="stage-name"></h2><span class="sub" id="stage-sub"></span></div>
+  <div class="art" id="stage-art"></div>
+  <div class="stagebar">
+    <button class="pp" id="pp" type="button">Pause</button>
+    <button class="back" id="back" type="button">← back to the board</button>
+  </div>
 </div>
 
-<div class="choice"><span class="k">CHOSEN</span><span class="chosen" id="chosen">— nothing yet</span>
-  <textarea id="note" placeholder="what I chose, and why — this page remembers it in this browser"></textarea></div>
-
-<main class="panels">
-  <!-- A · today's Hub table player -->
-  <section class="panel today" id="p-today" data-panel="today">
-    <div class="ph"><h2>TODAY'S HUB PLAYER</h2><span class="form">the baseline · as the Hub moves now</span>
-      <label class="pick"><input type="radio" name="pick" value="today">CHOOSE</label></div>
-    <div class="plan"><b>Replaces:</b> nothing — this is what scintillahub.ai does today (old fast curve ×2, every column travels, no quiet rule, no tie-hold). <b>Needs:</b> nothing; kept here so the others are judged against it, not against memory.</div>
-    <div class="board small"><div class="thead"><span style="width:54px">TICKER</span><span style="width:52px;text-align:right">LAST</span><span style="width:44px;text-align:right">CHG</span><span style="width:44px;text-align:right">TREND</span><span style="width:44px;text-align:right">MOM</span><span style="flex:1;text-align:center">GEIGER</span><span style="width:46px;text-align:right">VALUE</span><span style="width:30px"></span></div>
-      <div class="scrollx"><div id="today-rows" style="min-width:420px"></div></div></div>
-    <div class="pnote" id="today-note"></div>
-  </section>
-
-  <!-- B · LIST -->
-  <section class="panel" id="p-list" data-panel="list">
-    <div class="ph"><h2>GEIGER · IN MOTION</h2><span class="form">LIST · rows of Bars that re-rank</span>
-      <label class="pick"><input type="radio" name="pick" value="list">CHOOSE</label></div>
-    <div class="plan"><b>Replaces:</b> the Hub board's PLAY mode (the "watch" side of READ / WATCH). <b>Needs:</b> the engine wired into the Hub board behind a switch; the rewind needs the Geiger history repair (today the recorded composites start when this page opens).</div>
-    <div class="board"><div class="thead"><span style="width:54px">TICKER</span><span style="flex:1;text-align:center"><span class="hl">GEIGER · BEAR ◄ ► BULL</span><span class="hs">GEIGER</span></span><span style="width:46px;text-align:right">VALUE</span><span style="width:52px;text-align:right">CHG</span><span style="width:52px;text-align:right">TREND</span><span style="width:52px;text-align:right">MOM</span><span style="width:30px"></span></div>
-      <div id="list-rows"></div></div>
-    <div class="pnote" id="list-note"></div>
-  </section>
-
-  <!-- C · STRIP -->
-  <section class="panel" id="p-strip" data-panel="strip">
-    <div class="ph"><h2>COHORT BOARD</h2><span class="form">STRIP · upright Bars per cohort, headers fixed</span>
-      <label class="pick"><input type="radio" name="pick" value="strip">CHOOSE</label></div>
-    <div class="plan"><b>Replaces:</b> the widgets "cohort geiger" page (six NO DATA tiles) and the Hub's compare strip that re-orders during PLAY. <b>Needs:</b> to be served from scintillahub.ai (it is here); cohort = average of its members' Geiger, the Hub's own read words.</div>
-    <div class="ptools"><button class="chip" id="strip-rerank">RE-RANK COHORTS (off = headers never move)</button></div>
-    <div class="scrollx"><div class="strip"><div id="strip-rows" class="ve-rows"></div></div></div>
-    <div class="pnote" id="strip-note"></div>
-  </section>
-
-  <!-- D · FAN -->
-  <section class="panel fan" id="p-fan" data-panel="fan">
-    <div class="ph"><h2>SIGNAL FAN-OUT v2</h2><span class="form">FAN · one ticker, a Bar per timeframe, the ring</span>
-      <label class="pick"><input type="radio" name="pick" value="fan">CHOOSE</label></div>
-    <div class="plan"><b>Replaces:</b> the six-tile single-ticker board. <b>Needs:</b> per-timeframe history if the fan is to rewind (the chart API keeps only the newest artifact per rung; this page records none).</div>
-    <div class="sel"><span class="clab" style="width:auto">TICKER</span><select id="fan-sel" aria-label="ticker"></select><span class="pnote" id="fan-when" style="margin:0"></span></div>
-    <div class="lay"><div id="fan-rungs"></div>
-      <div><svg class="ring" viewBox="0 0 220 176" role="img" aria-label="composite ring">
-        <g transform="rotate(135 110 84)">
-          <circle class="ringt" cx="110" cy="84" r="70" pathLength="100" stroke-dasharray="75 25"></circle>
-          <circle class="ringt" cx="110" cy="84" r="56" pathLength="100" stroke-dasharray="75 25"></circle>
-          <circle class="ringt" cx="110" cy="84" r="42" pathLength="100" stroke-dasharray="75 25"></circle>
-          <circle class="ringa" id="ring-t" cx="110" cy="84" r="70" pathLength="100" stroke="var(--trend)" stroke-dasharray="0 100"></circle>
-          <circle class="ringa" id="ring-m" cx="110" cy="84" r="56" pathLength="100" stroke="var(--momentum)" stroke-dasharray="0 100"></circle>
-          <circle class="ringa" id="ring-s" cx="110" cy="84" r="42" pathLength="100" stroke="var(--structure)" stroke-dasharray="0 100"></circle>
-        </g></svg>
-        <div class="comp" id="fan-comp">—</div>
-        <div class="kv"><div><span>TREND</span><b id="fan-t">—</b></div><div><span>MOM</span><b id="fan-m">—</b></div><div><span>STRUCT</span><b id="fan-s">—</b></div></div></div></div>
-    <div class="pnote" id="fan-note"></div>
-  </section>
-
-  <!-- E · PAIR -->
-  <section class="panel" id="p-pair" data-panel="pair">
-    <div class="ph"><h2>WHAT THE GEIGER AGREES WITH</h2><span class="form">PAIR · two rankings joined by lines</span>
-      <label class="pick"><input type="radio" name="pick" value="pair">CHOOSE</label></div>
-    <div class="plan"><b>Replaces:</b> nothing yet — a new view (from geigers.html on the unpublished branch). <b>Needs:</b> the engine only; flat lines mean the other measure is already inside the Geiger.</div>
-    <div class="ptools" id="pair-sorts"></div>
-    <div class="board small"><div class="pair"><div class="col left" id="pair-l"></div><svg id="pair-svg" aria-hidden="true"></svg><div class="col right" id="pair-r"></div></div></div>
-    <div class="pnote" id="pair-note"></div>
-  </section>
-</main>
-
-<div style="padding:0 16px;font:10px/1.6 var(--mono);color:var(--dim);max-width:100ch" id="prov">
-  DATA · chart API scintilla-massive-chart-api.fly.dev (/geiger every 60 s, /quotes every ≥30 s for the names on screen, /candles daily only when the FAN READ is chosen) ·
-  cohort membership + favorites from the Hub's own tables (read-only) · recorded composites live in this browser (localStorage) · nothing is written anywhere else.
-</div>
+<footer id="prov">asking the chart API…</footer>
 
 <script src="./geiger-engine.js"></script>
 <script>
-(function(){
+(function () {
 'use strict';
-var E = window.GeigerEngine, Bar = E.Bar, Mover = E.Mover, sgn = E.fmtSigned, age = E.fmtAge;
-var CHART = 'https://scintilla-massive-chart-api.fly.dev';
-var SB = 'https://wadinxqplrggagkvrdag.supabase.co';
-/* the same publishable anon key the Hub ships on this origin, read the same way (GET only) */
-var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZGlueHFwbHJnZ2Fna3ZyZGFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NDk0MTYsImV4cCI6MjA5NjEyNTQxNn0.1UKKUb_fY-xOy33vNUszDzxGECqQxdcwaxb9kN7KY-g';
-var COHORTS = [['FAV','FAV'],['AI HW','AI_HARDWARE'],['AI SW','AI_SOFTWARE'],['MEGACAP','MEGACAP'],['BLUE CHIP','BLUE_CHIP'],['GROWTH','GROWTH'],['CRYPTO','CRYPTO'],['INTL','INTL'],['MACRO','MACRO'],['INDEXES','INDEXES'],['THEMATIC','THEMATIC'],['METALS','METALS'],['AI PWR','AI_POWERTRAIN']];
-var RUNG_ORDER = ['1w','3d','1d','12h','6h','4h','3h','2h'];
-var $ = function(id){ return document.getElementById(id); };
-var reduced = E.reducedMotion();
+var API = 'https://scintilla-massive-chart-api.fly.dev';
+var RUNGS = ['2h','3h','4h','6h','12h','1d','3d','1w'];
+var FAMILIES = ['composite','trend','momentum'];
+var STEP_MS = 2800;
+var reduced = window.GeigerEngine ? window.GeigerEngine.reducedMotion() : false;
 
-/* ---------------- settings (remembered in this browser) ---------------- */
-var SKEY = 've.settings.v1', CKEY = 've.choice.v1', NKEY = 've.note.v1', SNAPKEY = 've.snapshots.v1';
-var S = Object.assign({ cohort: 'FAV', geiger: E.DEFAULTS.geiger, mover: E.DEFAULTS.mover, curve: E.DEFAULTS.curve, resortMs: E.DEFAULTS.resortMs,
-  playMs: E.DEFAULTS.playMs, tie: true, quiet: true, trails: false, lookback: '3M', fan: null, pairSort: 'chg', stripRerank: false }, read(SKEY) || {});
-function read(k){ try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
-function write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: the page still works, it just forgets */ } }
-function save(){ write(SKEY, S); }
+var D = { geiger:null, detail:null, macro:null, candles:null, names:[], lead:null, errors:[] };
+var CLOCKTICK = 0, playing = !reduced, mounted = [], stageV = null;
 
-/* ---------------- data ---------------- */
-var D = { universe: null, cohorts: {}, favs: [], members: {}, geiger: null, quotes: {}, quotesMeta: null, detail: {}, fan: {}, snaps: read(SNAPKEY) || [],
-  errors: {}, fanLoading: null, lastQuotesMs: 0 };
-function jget(url, opt){ return fetch(url, Object.assign({ cache: 'no-store' }, opt || {})).then(function(r){ if (!r.ok) throw new Error(url.split('?')[0].split('/').pop() + ' HTTP ' + r.status); return r.json(); }); }
-function pg(path){ return jget(SB + '/rest/v1/' + path, { headers: { apikey: ANON, Authorization: 'Bearer ' + ANON } }); }
-function pgAll(path){ // the Hub's paged read: ticker_cohorts holds ~1,280 rows, past the 1000 cap
-  var out = []; function page(off){ return pg(path + '&limit=1000&offset=' + off).then(function(rows){ out = out.concat(rows); return rows.length === 1000 ? page(off + 1000) : out; }); } return page(0); }
+function $(id){ return document.getElementById(id); }
+function jget(path){
+  return fetch(API + path, { cache:'no-store' }).then(function(r){
+    if (!r.ok) throw new Error(path.split('?')[0] + ' answered HTTP ' + r.status);
+    return r.json();
+  });
+}
+function fin(v){ return v != null && isFinite(v); }
+function clamp(v,a,b){ return v < a ? a : v > b ? b : v; }
+function spread(list, n){                                      // an even sample, both sides of zero
+  if (list.length <= n) return list.slice();
+  var out = [], last = list.length - 1;
+  for (var i = 0; i < n; i++){ var k = list[Math.round(i * last / (n - 1))]; if (out.indexOf(k) < 0) out.push(k); }
+  return out;
+}
 
-function loadUniverse(){ return jget(CHART + '/universe').then(function(u){ D.universe = new Set(u.symbols || []); }).catch(function(e){ D.errors.universe = e.message; }); }
-function loadCohorts(){
-  return Promise.all([
-    pgAll('ticker_cohorts?select=ticker,cohort&order=ticker.asc,cohort.asc').then(function(rows){ rows.forEach(function(r){ (D.cohorts[r.cohort] = D.cohorts[r.cohort] || []).push(r.ticker); (D.members[r.ticker] = D.members[r.ticker] || []).push(r.cohort); }); }).catch(function(e){ D.errors.cohorts = e.message; }),
-    pg('hub_favorites?select=ticker').then(function(rows){ D.favs = rows.map(function(r){ return r.ticker; }); }).catch(function(e){ D.errors.favs = e.message; })
-  ]);
-}
-function loadGeiger(){
-  return jget(CHART + '/geiger').then(function(g){
-    var prev = D.geiger && D.geiger.computed_utc;
-    D.geiger = g; D.errors.geiger = null;
-    if (g.computed_utc !== prev) recordSnapshot(g);
-    return g.computed_utc !== prev;
-  }).catch(function(e){ D.errors.geiger = e.message; return false; });
-}
-/* THE CLOCK's recorded history: one compact snapshot per new artifact while this page is open. Real numbers, this browser only. */
-function recordSnapshot(g){
-  var last = D.snaps[D.snaps.length - 1];
-  if (last && last.t === g.computed_utc) return;
-  var m = {}; Object.keys(g.symbols || {}).forEach(function(s){ var x = g.symbols[s]; if (x && x.composite != null) m[s] = [r2(x.composite), r2(x.trend), r2(x.momentum)]; });
-  D.snaps.push({ t: g.computed_utc, label: g.verification && g.verification.label, g: m });
-  while (D.snaps.length > 120) D.snaps.shift();
-  write(SNAPKEY, D.snaps);
-}
-function r2(v){ return v == null || !isFinite(v) ? null : Math.round(v * 100) / 100; }
-var quotesInFlight = false, quotesTimer = null;
-function loadQuotes(syms){
-  if (quotesInFlight || !syms.length) return Promise.resolve();
-  quotesInFlight = true; var t0 = Date.now();
-  return jget(CHART + '/quotes?symbols=' + encodeURIComponent(syms.slice(0, 120).join(','))).then(function(q){
-    Object.keys(q.quotes || {}).forEach(function(s){ var x = q.quotes[s]; if (x && x.price != null) D.quotes[s] = { price: x.price, chg: x.change_pct, obs: x.price_observation_utc, prev: x.previous_close }; });
-    D.quotesMeta = { at: Date.now(), ms: Date.now() - t0, n: Object.keys(q.quotes || {}).length }; D.errors.quotes = null;
-  }).catch(function(e){ D.errors.quotes = e.message; }).then(function(){ quotesInFlight = false; D.lastQuotesMs = Date.now() - t0; });
-}
-function loadDetail(sym){
-  if (!sym) return Promise.resolve();
-  return jget(CHART + '/geiger?symbols=' + encodeURIComponent(sym) + '&detail=1').then(function(g){ var x = g.symbols && g.symbols[sym]; if (x) D.detail[sym] = { computed: g.computed_utc, label: g.verification && g.verification.label, d: x }; }).catch(function(e){ D.errors.detail = e.message; });
-}
-/* THE FAN READ (labelled DERIVED): the 9-line fan from daily candles — EMA 5/8/13/21/34, SMA 50/100/150/200,
-   (bullish adjacent pairs − 4) / 4, nine values −1..+1. It is not the Hub composite; the Label says so. */
-function ema(x, n){ var a = 2 / (n + 1), o = new Array(x.length).fill(null); if (x.length < n) return o; var s = 0; for (var i = 0; i < n; i++) s += x[i]; o[n - 1] = s / n; for (var j = n; j < x.length; j++) o[j] = a * x[j] + (1 - a) * o[j - 1]; return o; }
-function sma(x, n){ var o = new Array(x.length).fill(null), s = 0; for (var i = 0; i < x.length; i++) { s += x[i]; if (i >= n) s -= x[i - n]; if (i >= n - 1) o[i] = s / n; } return o; }
-function fanTrend(closes){
-  var L = [ema(closes, 5), ema(closes, 8), ema(closes, 13), ema(closes, 21), ema(closes, 34), sma(closes, 50), sma(closes, 100), sma(closes, 150), sma(closes, 200)];
-  return closes.map(function(_, i){ var b = 0; for (var k = 0; k < 8; k++) { if (L[k][i] == null || L[k + 1][i] == null) return null; if (L[k][i] > L[k + 1][i]) b++; } return (b - 4) / 4; });
-}
-function loadFan(syms, onProgress){
-  /* sequential, only tracked symbols (an untracked symbol could trigger an acquisition), cached for the session */
-  var todo = syms.filter(function(s){ return !D.fan[s] && (!D.universe || D.universe.has(s)); }), i = 0, cancelled = false;
-  var job = { cancel: function(){ cancelled = true; } };
-  function next(){
-    if (cancelled || i >= todo.length) { D.fanLoading = null; onProgress(null); return; }
-    var s = todo[i++]; onProgress(i + '/' + todo.length + ' ' + s);
-    var key = 've.fan.' + s, cached = null; try { cached = JSON.parse(sessionStorage.getItem(key)); } catch (e) {}
-    if (cached && cached.dates && cached.dates.length) { D.fan[s] = cached; return next(); }
-    jget(CHART + '/candles?symbol=' + encodeURIComponent(s) + '&tf=D&limit=400').then(function(c){
-      var rows = (c.series || c.candles || []).filter(function(b){ return b && b.c != null; });
-      var closes = rows.map(function(b){ return +b.c; }), dates = rows.map(function(b){ var t = +b.t; return new Date(t > 1e12 ? t : t * 1000).toISOString().slice(0, 10); });
-      var tr = fanTrend(closes), out = { dates: [], v: [] };
-      for (var k = 0; k < tr.length; k++) if (tr[k] != null) { out.dates.push(dates[k]); out.v.push(tr[k]); }
-      out.newest = c.newest || dates[dates.length - 1]; D.fan[s] = out;
-      try { sessionStorage.setItem(key, JSON.stringify(out)); } catch (e) {}
-    }).catch(function(e){ D.fan[s] = { dates: [], v: [], error: e.message }; }).then(next);
+/* ── tiles ─────────────────────────────────────────────────────────────────── */
+var TILES = [
+  { key:'rows',  name:'The board, breathing',
+    line:'A run of names from the strongest in the market to the weakest, one to a row. The bar grows right when the Geiger is above the middle, left when it is below. As the read moves from two hours out to a week the values settle first, and when the order changes the rows slide past each other.' },
+  { key:'strip', name:'The strip',
+    line:'The same run of names as one wall of bars, the middle line is zero. Above is strength, below is weakness — the whole market in one glance, nothing to read.' },
+  { key:'rings', name:'The rings',
+    line:'One name, eight rings — two hours in the middle, out to a week at the edge. Each ring sweeps as far as that timeframe is pushing, and the one being read now is the bright one.' },
+  { key:'shape', name:'The shape of the market',
+    line:'All three hundred and sixty four names piled into one hill. Lean right and the market is leaning up. It re-forms as it moves through the whole read, then the trend on its own, then the momentum.' },
+  { key:'trace', name:'The trace',
+    line:'One name drawing its own price, left to right, then again. No grid, no numbers around the edge — just the shape the last year actually made.' },
+  { key:'dials', name:'The dials',
+    line:'Volatility, the dollar, the ten year, gold, oil and bitcoin. Each sits somewhere between its own low and high for the day, and the marker is where it is right now.' }
+];
+
+/* ── the drawing surface ───────────────────────────────────────────────────── */
+function surface(host){
+  var c = document.createElement('canvas'); host.appendChild(c);
+  var ctx = c.getContext('2d'), w = 0, h = 0;
+  function fit(){
+    var r = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = Math.max(10, r.width); h = Math.max(10, r.height);
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  D.fanLoading = job; next(); return job;
+  fit();
+  return { c:c, ctx:ctx, fit:fit, W:function(){ return w; }, H:function(){ return h; },
+           clear:function(){ ctx.clearRect(0,0,w,h); } };
 }
+var grey = function (a){ return 'rgba(190,196,204,' + clamp(a,0,1).toFixed(3) + ')'; };
 
-/* ---------------- the visible list ---------------- */
-function visible(){
-  var list;
-  if (S.cohort === 'FAV') list = D.favs.length ? D.favs.slice() : [];
-  else list = (D.cohorts[S.cohort] || []).slice();
-  if (!list.length && D.geiger) list = Object.keys(D.geiger.symbols || {}).sort().slice(0, 58);
-  var seen = {}; list = list.filter(function(s){ if (seen[s]) return false; seen[s] = 1; return true; });
-  return list.slice(0, 120);
-}
-/* THE value of one name under the current Geiger source and Clock position */
-function readOf(sym){
-  if (S.geiger === 'fan') {
-    var f = D.fan[sym]; if (!f || !f.dates.length) return { g: null, t: null, m: null };
-    var date = clock.mode === 'rewind' && clock.state().entry ? clock.state().entry.t : f.dates[f.dates.length - 1];
-    var i = f.dates.length - 1; while (i > 0 && f.dates[i] > date) i--;
-    if (f.dates[i] > date) return { g: null, t: null, m: null };
-    return { g: f.v[i], t: f.v[i], m: null };
+/* ── the visuals ───────────────────────────────────────────────────────────── */
+function vRows(host, big){
+  var wrap = document.createElement('div'); wrap.className = 've-rows'; host.appendChild(wrap);
+  var E = window.GeigerEngine, n = big ? 18 : 9, size = big ? 34 : 26;
+  var hh = host.getBoundingClientRect().height || 0;           // rows fill the space they are given,
+  if (hh > 80) size = clamp(Math.floor(hh / n), big ? 30 : 18, big ? 72 : 30);   // on a phone or full size
+  wrap.style.setProperty('--rh', size + 'px');
+  var mover = new E.Mover(wrap, { size:size, resortMs:900, tieHold:0.02, badges:true, reduced:reduced });
+  E.QuietRule.attach(mover, wrap, true);
+  var names = spread(D.names, n), cur = {};
+  mover.ensure(names.map(function(s){
+    return { key:s, build:function(el){
+      var tk = document.createElement('span'); tk.className = 've-tk'; tk.textContent = s; el.appendChild(tk);
+      el.insertAdjacentHTML('beforeend', E.Bar.html(false));
+      var v = document.createElement('span'); v.className = 've-val'; el.appendChild(v);
+    } };
+  }));
+  function paint(el, key, dur){
+    var v = cur[key];
+    E.Bar.paint(el.querySelector('.ve-track'), v, { dur:dur, max:1 });
+    el.querySelector('.ve-val').textContent = fin(v) ? E.fmtSigned(v) : '—';
   }
-  if (clock.mode === 'rewind') { var sn = D.snaps[clock.idx]; var a = sn && sn.g[sym]; return a ? { g: a[0], t: a[1], m: a[2] } : { g: null, t: null, m: null }; }
-  var x = D.geiger && D.geiger.symbols && D.geiger.symbols[sym];
-  return x ? { g: x.composite, t: x.trend, m: x.momentum } : { g: null, t: null, m: null };
-}
-/* the Hub's own cohort read words (cohortGeigerHTML) */
-function readWord(T, M){
-  if (T == null || !isFinite(T)) return ['—', 'var(--mute)'];
-  if (M == null || !isFinite(M)) return ['trend only', 'var(--dim)'];
-  if (T >= 0.5 && M >= 0.4) return ['aligned bull', 'var(--bull)'];
-  if (T <= -0.5 && M <= -0.4) return ['aligned bear', 'var(--bear)'];
-  if (T >= 0.4 && M <= -0.15) return ['pullback', 'var(--warn)'];
-  if (T <= -0.2 && M >= 0.35) return ['turning up', 'var(--warn)'];
-  if (Math.abs(T) < 0.25 && M >= 0.5) return ['mom leads', 'var(--warn)'];
-  if (T >= 0.5 && Math.abs(M) < 0.2) return ['stalling', 'var(--warn)'];
-  if (T >= 0.3 && M >= 0) return ['constructive', 'var(--bull)'];
-  if (T <= -0.3 && M <= 0) return ['broken', 'var(--bear)'];
-  return ['mixed', 'var(--mute)'];
+  function show(){
+    names.forEach(function(s){ cur[s] = rungValue(s, RUNGS[CLOCKTICK % RUNGS.length]); });
+    mover.update(cur, paint, reduced ? 'fresh' : 'tick');
+  }
+  show();
+  return { tick:show, frame:function(){}, resize:function(){}, now:function(){
+    return 'reading the ' + RUNGS[CLOCKTICK % RUNGS.length] + ' · ' + names.length + ' names';
+  } };
 }
 
-/* ---------------- THE CLOCK ---------------- */
-var clock = new E.Clock({ playMs: S.playMs });
-function timeline(){
-  if (S.geiger === 'composite') return D.snaps.map(function(s){ return { t: s.t, label: 'recorded ' + s.t.slice(11, 19) + 'Z' }; });
-  var dates = {}; visible().forEach(function(s){ var f = D.fan[s]; if (f) f.dates.forEach(function(d){ dates[d] = 1; }); });
-  var all = Object.keys(dates).sort();
-  var keep = { '1M': 22, '3M': 64, '6M': 128, 'MAX': 1e9 }[S.lookback] || 64;
-  return all.slice(-keep).map(function(d){ return { t: d, label: d }; });
-}
-function refreshTimeline(){ var tl = timeline(); clock.setTimeline(tl); $('scrub').max = Math.max(0, tl.length - 1); if (clock.mode === 'live') $('scrub').value = $('scrub').max; }
-clock.on('timeline', paintClock).on('change', function(){ paintClock(); render(clock.playing ? 'play' : 'play'); });
-function paintClock(){
-  var st = clock.state(), live = st.mode === 'live';
-  $('live').hidden = live; $('play').textContent = st.playing ? '❚❚ PAUSE' : '▶ PLAY'; $('play').disabled = st.n < 2;
-  $('scrub').disabled = st.n < 2; if (!st.playing) $('scrub').value = live ? Math.max(0, st.n - 1) : st.idx; else $('scrub').value = st.idx;
-  var when = live ? 'live' : st.entry.label;
-  var hint = S.geiger === 'composite' ? (st.n + ' recorded composite' + (st.n === 1 ? '' : 's')) : (st.n + ' days · ' + S.lookback);
-  $('asof').innerHTML = when + ' <small>· ' + hint + (live ? '' : ' · returns to live after 45 s') + '</small>';
-  document.body.classList.toggle('rewind', !live);
-}
-$('scrub').addEventListener('input', function(){ if (clock.playing) clock.pause(); clock.rewindTo(+this.value); });
-$('play').onclick = function(){ clock.toggle(); };
-$('live').onclick = function(){ clock.goLive(); };
-
-/* ---------------- controls ---------------- */
-function chips(host, items, cur, cb){
-  host.innerHTML = '';
-  items.forEach(function(it){ var b = document.createElement('button'); b.className = 'chip' + (it[1] === cur ? ' on' : ''); b.textContent = it[0]; b.dataset.k = it[1]; if (it[2]) b.title = it[2];
-    b.onclick = function(){ [].forEach.call(host.children, function(c){ c.classList.toggle('on', c === b); }); cb(it[1]); }; host.appendChild(b); });
-}
-function toggleBtn(id, get, set){ var b = $(id); function sync(){ b.classList.toggle('act', !!get()); } b.onclick = function(){ set(!get()); sync(); }; sync(); }
-function buildControls(){
-  var coh = COHORTS.map(function(c){ var n = c[1] === 'FAV' ? D.favs.length : (D.cohorts[c[1]] || []).length; return [c[0] + (n ? ' ' + n : ''), c[1]]; });
-  chips($('cohorts'), coh, S.cohort, function(k){ S.cohort = k; save(); onCohort(); });
-  chips($('geiger'), [['HUB COMPOSITE', 'composite', 'the provider Geiger composite the Hub board shows (chart API /geiger)'], ['FAN READ · derived', 'fan', 'the 9-line moving-average fan, derived here from daily candles — not the Hub composite']], S.geiger, function(k){ S.geiger = k; save(); onGeigerSource(); });
-  chips($('mover'), [['SETTLE → REFLOW', 'settle-reflow'], ['IMMEDIATE', 'immediate'], ['COLLAPSE & REBUILD', 'collapse'], ['CUT', 'cut']], S.mover, function(k){ S.mover = k; save(); configureMovers(); });
-  chips($('curve'), [['SPEC .34,.02,.2,1', 'spec'], ['OLD .32,0,.18,1', 'old'], ['EASE-OUT', 'ease'], ['LINEAR', 'linear']], S.curve, function(k){ S.curve = k; save(); configureMovers(); });
-  chips($('lookback'), [['1M', '1M'], ['3M', '3M'], ['6M', '6M'], ['MAX', 'MAX']], S.lookback, function(k){ S.lookback = k; save(); refreshTimeline(); });
-  $('dur').value = S.resortMs; $('pdur').value = S.playMs; $('durv').textContent = S.resortMs + ' ms'; $('pdurv').textContent = S.playMs + ' ms';
-  $('dur').oninput = function(){ S.resortMs = +this.value; $('durv').textContent = S.resortMs + ' ms'; save(); configureMovers(); };
-  $('pdur').oninput = function(){ S.playMs = +this.value; $('pdurv').textContent = S.playMs + ' ms'; save(); clock.opt.playMs = S.playMs; configureMovers(); };
-  toggleBtn('tie', function(){ return S.tie; }, function(v){ S.tie = v; save(); configureMovers(); });
-  toggleBtn('quiet', function(){ return S.quiet; }, function(v){ S.quiet = v; save(); quietList.set(v); quietPair.set(v); });
-  toggleBtn('trails', function(){ return S.trails; }, function(v){ S.trails = v; save(); configureMovers(); });
-  toggleBtn('strip-rerank', function(){ return S.stripRerank; }, function(v){ S.stripRerank = v; save(); render('measure'); });
-  $('replay').onclick = replay;
-  $('more').onclick = function(){ var c = document.querySelector('.ctl'), on = c.classList.toggle('showmore'); this.textContent = on ? 'LESS ▴' : 'MORE ▾'; this.setAttribute('aria-expanded', String(on)); };
-  chips($('pair-sorts'), [['RIGHT: CHANGE %', 'chg'], ['RIGHT: TREND', 't'], ['RIGHT: MOMENTUM', 'm'], ['RIGHT: PRICE', 'price']], S.pairSort, function(k){ S.pairSort = k; save(); render('measure'); });
-  var picked = read(CKEY); document.querySelectorAll('input[name=pick]').forEach(function(r){ r.checked = picked && picked.panel === r.value; r.onchange = function(){ write(CKEY, { panel: r.value, at: new Date().toISOString() }); paintChoice(); }; });
-  $('note').value = read(NKEY) || ''; $('note').oninput = function(){ write(NKEY, $('note').value); };
-  paintChoice();
-}
-function paintChoice(){
-  var c = read(CKEY), names = { today: "TODAY'S HUB PLAYER", list: 'GEIGER · IN MOTION (LIST)', strip: 'COHORT BOARD (STRIP)', fan: 'SIGNAL FAN-OUT v2 (FAN)', pair: 'WHAT THE GEIGER AGREES WITH (PAIR)' };
-  $('chosen').textContent = c ? names[c.panel] + ' · since ' + c.at.slice(0, 16).replace('T', ' ') + 'Z' : '— nothing yet';
-  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('chosen', !!c && p.dataset.panel === c.panel); });
+function vStrip(host, big){
+  var s = surface(host), names = spread(D.names, big ? 28 : 18), cur = names.map(function(){ return 0; });
+  function target(i){ var v = rungValue(names[i], RUNGS[CLOCKTICK % RUNGS.length]); return fin(v) ? v : 0; }
+  function draw(){
+    var W = s.W(), H = s.H(), ctx = s.ctx, mid = H/2, pad = 6;
+    s.clear();
+    ctx.strokeStyle = 'rgba(190,196,204,.14)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mid + .5); ctx.lineTo(W, mid + .5); ctx.stroke();
+    var step = (W - pad*2) / names.length, bw = Math.max(3, step * .62);
+    cur.forEach(function(v, i){
+      var x = pad + i*step + (step - bw)/2, hgt = Math.abs(v) * (mid - 12);
+      ctx.fillStyle = grey(.26 + .62*Math.min(Math.abs(v),1) * (v >= 0 ? 1 : .55));
+      ctx.fillRect(x, v >= 0 ? mid - hgt : mid, bw, Math.max(1.5, hgt));
+    });
+  }
+  draw();
+  return {
+    tick:draw,
+    frame:function(){ var moved = false;
+      cur.forEach(function(v, i){ var t = target(i), d = t - v; if (Math.abs(d) > 1e-4){ cur[i] = v + d*0.08; moved = true; } else cur[i] = t; });
+      if (moved) draw(); },
+    resize:function(){ s.fit(); draw(); },
+    now:function(){ return 'reading the ' + RUNGS[CLOCKTICK % RUNGS.length] + ' · ' + names.length + ' names'; }
+  };
 }
 
-/* ---------------- THE MOVERS (one per surface, one grammar) ---------------- */
-var mvToday = new Mover($('today-rows'), { size: 24, mode: 'immediate', curve: 'old', resortMs: 420, playMs: 420, tieHold: 0, trails: false, badgeMs: 3000 });
-var mvList = new Mover($('list-rows'), { size: 30 });
-var mvStrip = new Mover($('strip-rows'), { axis: 'x', size: 76, badges: true, badgeMs: 1400 });
-var mvPairL = new Mover($('pair-l'), { size: 24, badges: false }), mvPairR = new Mover($('pair-r'), { size: 24, badges: false });
-var quietList = E.QuietRule.attach(mvList, $('p-list'), S.quiet), quietPair = E.QuietRule.attach(mvPairR, $('p-pair'), S.quiet);
-function configureMovers(){
-  var o = { mode: S.mover, curve: S.curve, resortMs: S.resortMs, playMs: S.playMs, tieHold: S.tie ? 0.02 : 0, trails: S.trails };
-  mvList.configure(o); mvStrip.configure(Object.assign({}, o, { trails: false })); mvPairL.configure(Object.assign({}, o, { trails: false })); mvPairR.configure(Object.assign({}, o, { trails: false }));
-  /* today's player keeps today's behaviour on purpose; only the clock is shared */
+function vRings(host, big){
+  var s = surface(host), sym = D.lead, cur = RUNGS.map(function(){ return 0; }), glow = RUNGS.map(function(){ return 0; });
+  function draw(){
+    var W = s.W(), H = s.H(), ctx = s.ctx, cx = W/2, cy = H/2, R = Math.min(W, H)/2 - (big ? 26 : 16);
+    s.clear();
+    var inner = R * .30, gap = (R - inner) / (RUNGS.length - 1);
+    RUNGS.forEach(function(r, i){
+      var rad = inner + gap*i, v = cur[i], lit = glow[i];
+      ctx.lineWidth = Math.max(2, (big ? 9 : 6) * (.55 + .45*lit));
+      ctx.strokeStyle = grey(.07 + .05*lit);
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI*2); ctx.stroke();
+      if (!fin(v) || Math.abs(v) < .004) return;
+      var sweep = clamp(Math.abs(v), 0, 1) * Math.PI * 1.5;
+      ctx.strokeStyle = grey((v >= 0 ? .40 : .20) + .48*Math.min(Math.abs(v),1) * (.5 + .5*lit));
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (v >= 0) ctx.arc(cx, cy, rad, -Math.PI/2, -Math.PI/2 + sweep);
+      else ctx.arc(cx, cy, rad, -Math.PI/2 - sweep, -Math.PI/2);
+      ctx.stroke();
+    });
+    ctx.fillStyle = grey(.72); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 ' + (big ? 22 : 15) + 'px "SF Mono",ui-monospace,Menlo,monospace';
+    ctx.fillText(sym || '—', cx, cy);
+  }
+  draw();
+  return {
+    tick:draw,
+    frame:function(){ var live = CLOCKTICK % RUNGS.length, moved = false;
+      RUNGS.forEach(function(r, i){
+        var t = rungValue(sym, r); t = fin(t) ? t : 0;
+        if (Math.abs(t - cur[i]) > 1e-4){ cur[i] += (t - cur[i])*0.08; moved = true; }
+        var g = i === live ? 1 : 0;
+        if (Math.abs(g - glow[i]) > 1e-3){ glow[i] += (g - glow[i])*0.09; moved = true; }
+      });
+      if (moved) draw(); },
+    resize:function(){ s.fit(); draw(); },
+    now:function(){ return sym + ' · bright ring = the ' + RUNGS[CLOCKTICK % RUNGS.length]; }
+  };
 }
 
-/* ---------------- rendering ---------------- */
-var LAST = { values: {}, kind: 'fresh' };
-function rowBuild(cls){ return function(el){ el.innerHTML = '<span class="ve-tk"></span>' + Bar.html() + '<span class="ve-val"></span>' + (cls || ''); el.querySelector('.ve-tk').textContent = el.dataset.key; el.onclick = function(){ selectFan(el.dataset.key); }; }; }
-function paintCommon(el, sym, dur, zero, vals){
-  var v = vals[sym], q = D.quotes[sym] || {};
-  Bar.paint(el.querySelector('.ve-track'), zero ? 0 : v.g, { dur: dur });
-  var vv = el.querySelector('.ve-val'); vv.textContent = sgn(v.g); vv.className = 've-val ' + (v.g == null ? '' : v.g >= 0 ? 've-bull' : 've-bear');
-  var ex = el.querySelectorAll('.ve-extra');
-  if (ex[0]) ex[0].textContent = q.chg == null ? '—' : sgn(q.chg) + '%';
-  if (ex[1]) ex[1].textContent = sgn(v.t);
-  if (ex[2]) ex[2].textContent = sgn(v.m);
-  el.classList.toggle('sel', sym === S.fan);
-}
-function render(kind){
-  kind = kind || 'tick';
-  var list = visible(), vals = {}, gv = {};
-  list.forEach(function(s){ vals[s] = readOf(s); gv[s] = vals[s].g; });
-  LAST = { values: vals, kind: kind, list: list };
-  /* A · today's player: seven columns, every one travels */
-  var chT = mvToday.ensure(list.map(function(s){ return { key: s, build: function(el){ el.innerHTML = '<span class="ve-tk"></span><span class="ve-extra" style="width:52px"></span><span class="ve-extra" style="width:44px"></span><span class="ve-extra" style="width:44px"></span><span class="ve-extra" style="width:44px"></span>' + Bar.html() + '<span class="ve-val"></span>'; el.querySelector('.ve-tk').textContent = s; el.onclick = function(){ selectFan(s); }; } }; }));
-  mvToday.update(gv, function(el, sym, dur, zero){
-    var v = vals[sym], q = D.quotes[sym] || {}, ex = el.querySelectorAll('.ve-extra');
-    ex[0].textContent = q.price == null ? '—' : (+q.price).toFixed(2); ex[1].textContent = q.chg == null ? '—' : sgn(q.chg) + '%'; ex[2].textContent = sgn(v.t); ex[3].textContent = sgn(v.m);
-    Bar.paint(el.querySelector('.ve-track'), zero ? 0 : v.g, { dur: dur }); var vv = el.querySelector('.ve-val'); vv.textContent = sgn(v.g); vv.className = 've-val ' + (v.g == null ? '' : v.g >= 0 ? 've-bull' : 've-bear');
-  }, chT ? 'fresh' : (kind === 'measure' ? 'tick' : kind));
-  /* B · LIST */
-  var chL = mvList.ensure(list.map(function(s){ return { key: s, build: rowBuild('<span class="ve-extra"></span><span class="ve-extra"></span><span class="ve-extra"></span>') }; }));
-  mvList.update(gv, function(el, sym, dur, zero){ paintCommon(el, sym, dur, zero, vals); }, chL ? 'fresh' : kind);
-  /* C · STRIP: cohort = average of its members' reading; headers fixed unless RE-RANK is on */
-  var strip = COHORTS.map(function(c){
-    var mem = c[1] === 'FAV' ? D.favs : (D.cohorts[c[1]] || []), gs = [], ts = [], ms = [];
-    mem.forEach(function(s){ var r = readOf(s); if (r.g != null) gs.push(r.g); if (r.t != null) ts.push(r.t); if (r.m != null) ms.push(r.m); });
-    var avg = function(a){ return a.length ? a.reduce(function(x, y){ return x + y; }, 0) / a.length : null; };
-    return { key: c[1], name: c[0], n: gs.length, g: avg(gs), t: avg(ts), m: avg(ms) };
-  }).filter(function(c){ return c.key !== 'FAV' || D.favs.length; });
-  var sv = {}, fixed = {}; strip.forEach(function(c, i){ sv[c.key] = c.g; fixed[c.key] = strip.length - i; });
-  var chS = mvStrip.ensure(strip.map(function(c){ return { key: c.key, build: function(el){ el.innerHTML = '<span class="ch">' + c.name + '</span><span class="cv">' + Bar.html(true) + '</span><span class="cn"></span><span class="cw"></span>'; } }; }));
-  var byKey = {}; strip.forEach(function(c){ byKey[c.key] = c; });
-  mvStrip.configure({ tieHold: S.stripRerank && S.tie ? 0.02 : 0 });
-  mvStrip.update(S.stripRerank ? sv : fixed, function(el, key, dur, zero){
-    var c = byKey[key]; Bar.paint(el.querySelector('.ve-track'), zero ? 0 : c.g, { dur: dur });
-    el.querySelector('.cn').textContent = sgn(c.g); el.querySelector('.cn').style.color = c.g == null ? 'var(--mute)' : c.g >= 0 ? 'var(--bull)' : 'var(--bear)';
-    var w = readWord(c.t, c.m); el.querySelector('.cw').textContent = c.n ? w[0] + '\n' + c.n + ' names' : 'no reading'; el.querySelector('.cw').style.color = w[1];
-  }, chS ? 'fresh' : kind);
-  /* E · PAIR */
-  var pv = {}; list.forEach(function(s){ var q = D.quotes[s] || {}; pv[s] = S.pairSort === 'chg' ? (q.chg == null ? null : +q.chg) : S.pairSort === 't' ? vals[s].t : S.pairSort === 'm' ? vals[s].m : (q.price == null ? null : +q.price); });
-  var chP = mvPairL.ensure(list.map(function(s){ return { key: s, build: rowBuild('') }; })) | mvPairR.ensure(list.map(function(s){ return { key: s, build: rowBuild('') }; }));
-  mvPairL.update(gv, function(el, sym, dur, zero){ paintCommon(el, sym, dur, zero, vals); }, chP ? 'fresh' : kind);
-  mvPairR.update(pv, function(el, sym, dur, zero){ paintCommon(el, sym, dur, zero, vals); var vv = el.querySelector('.ve-val'), q = D.quotes[sym] || {}, m = pv[sym];
-    vv.textContent = S.pairSort === 'chg' ? (m == null ? '—' : sgn(m) + '%') : S.pairSort === 'price' ? (m == null ? '—' : m.toFixed(2)) : sgn(m); vv.className = 've-val ' + (m == null || S.pairSort === 'price' ? '' : m >= 0 ? 've-bull' : 've-bear'); }, chP ? 'fresh' : kind);
-  animateLinks(list);
-  renderFan(); paintNotes(list, vals);
-}
-function replay(){
-  [mvToday, mvList, mvStrip, mvPairL, mvPairR].forEach(function(m){ if (m.prev.length) { m.order = m.prev.slice(); m._place(m.order, 0); } });
-  render(LAST.kind === 'fresh' ? 'tick' : LAST.kind);
-}
-/* PAIR's joining lines: drawn from where the rows ARE, every frame of a move */
-var linkRaf = null;
-function curY(el){ var t = getComputedStyle(el).transform, m = t && t !== 'none' ? t.match(/matrix\(([^)]+)\)/) : null; if (m) return parseFloat(m[1].split(',')[5]); var s = (el.style.transform || '').match(/-?[\d.]+/); return s ? parseFloat(s[0]) : 0; }
-function drawLinks(list){
-  var svg = $('pair-svg'), h = list.length * 24, w = 70; svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.style.height = h + 'px'; svg.setAttribute('height', h);
-  var parts = []; list.forEach(function(s){ var a = mvPairL.rows[s], b = mvPairR.rows[s]; if (!a || !b) return; var y1 = curY(a) + 12, y2 = curY(b) + 12, v = LAST.values[s] && LAST.values[s].g;
-    var col = v == null ? 'var(--mute)' : v >= 0 ? 'var(--bull)' : 'var(--bear)';
-    parts.push('<path d="M0 ' + y1.toFixed(1) + ' C' + (w * .42) + ' ' + y1.toFixed(1) + ', ' + (w * .58) + ' ' + y2.toFixed(1) + ', ' + w + ' ' + y2.toFixed(1) + '" fill="none" stroke="' + col + '" stroke-width="1" opacity="' + (list.length > 50 ? .3 : .5) + '"/>'); });
-  svg.innerHTML = parts.join('');
-}
-function animateLinks(list){ cancelAnimationFrame(linkRaf); var t0 = performance.now(), ms = S.resortMs * 1.6 + 200; (function step(){ drawLinks(list); if (performance.now() - t0 < ms) linkRaf = requestAnimationFrame(step); })(); }
-
-/* D · FAN: the selected ticker's rungs from /geiger?detail=1 (live only — the API keeps no rung history) */
-function selectFan(sym){ S.fan = sym; save(); loadDetail(sym).then(renderFan); render('tick'); }
-function renderFan(){
-  var list = LAST.list || visible(), sel = $('fan-sel');
-  if (!S.fan || list.indexOf(S.fan) < 0) S.fan = list.indexOf('SPY') >= 0 ? 'SPY' : list[0];
-  if (sel.options.length !== list.length || [].some.call(sel.options, function(o, i){ return o.value !== list[i]; })) { sel.innerHTML = list.map(function(s){ return '<option value="' + s + '">' + s + '</option>'; }).join(''); }
-  sel.value = S.fan || ''; sel.onchange = function(){ selectFan(sel.value); };
-  var det = D.detail[S.fan], host = $('fan-rungs'), dur = reduced || S.mover === 'cut' ? 0 : Math.round(S.resortMs * .4);
-  if (!det) { host.innerHTML = '<div class="pnote">' + (D.errors.detail ? 'no rung detail — ' + D.errors.detail : 'loading ' + (S.fan || '') + '…') + '</div>'; return; }
-  var d = det.d, rungs = d.rungs || {}, keys = RUNG_ORDER.filter(function(k){ return rungs[k]; });
-  if (host.children.length !== keys.length) host.innerHTML = keys.map(function(k){ return '<div class="rung' + (k === '1d' ? ' hinge' : '') + '" data-k="' + k + '"><span class="tf"></span>' + Bar.html() + '<span class="rv"></span><span class="rtm"></span></div>'; }).join('');
-  keys.forEach(function(k, i){ var r = rungs[k], el = host.children[i], v = r.availability === 'AVAILABLE' ? r.tf_composite : null;
-    el.querySelector('.tf').textContent = k.toUpperCase(); Bar.paint(el.querySelector('.ve-track'), v, { dur: dur });
-    var rv = el.querySelector('.rv'); rv.textContent = sgn(v); rv.style.color = v == null ? 'var(--mute)' : v >= 0 ? 'var(--bull)' : 'var(--bear)';
-    el.querySelector('.rtm').textContent = v == null ? (r.availability || 'absent') : 'T ' + sgn(r.trend_signed) + ' M ' + sgn(r.momentum_signed); });
-  var arc = function(id, v){ var e = $(id); e.setAttribute('stroke-dasharray', (v == null ? 0 : Math.abs(v) * 75).toFixed(1) + ' 100'); };
-  arc('ring-t', d.trend); arc('ring-m', d.momentum); arc('ring-s', d.structure);
-  var c = d.composite, w = readWord(d.trend, d.momentum); $('fan-comp').textContent = sgn(c) + ' · ' + w[0].toUpperCase(); $('fan-comp').style.color = c == null ? 'var(--mute)' : c >= 0 ? 'var(--bull)' : 'var(--bear)';
-  $('fan-t').textContent = sgn(d.trend); $('fan-m').textContent = sgn(d.momentum); $('fan-s').textContent = d.structure == null ? 'not scored' : sgn(d.structure);
-  $('fan-when').textContent = 'live · computed ' + String(det.computed).slice(11, 19) + 'Z · ' + (det.label || '') + (clock.mode === 'rewind' ? ' · the fan does not rewind (no rung history is kept)' : '');
+function vShape(host, big){
+  var s = surface(host), BUCKETS = 41, cur = new Array(BUCKETS).fill(0);
+  function counts(){
+    var fam = FAMILIES[CLOCKTICK % FAMILIES.length], out = new Array(BUCKETS).fill(0), sy = (D.geiger && D.geiger.symbols) || {};
+    Object.keys(sy).forEach(function(k){
+      var v = sy[k][fam];
+      if (!fin(v)) return;
+      out[clamp(Math.round((clamp(v,-1,1) + 1) / 2 * (BUCKETS-1)), 0, BUCKETS-1)] += 1;
+    });
+    var mx = Math.max.apply(null, out) || 1;
+    return out.map(function(n){ return n / mx; });
+  }
+  function draw(){
+    var W = s.W(), H = s.H(), ctx = s.ctx, base = H - 18, pad = 10;
+    s.clear();
+    ctx.strokeStyle = 'rgba(190,196,204,.14)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W/2 + .5, 8); ctx.lineTo(W/2 + .5, base); ctx.stroke();
+    var step = (W - pad*2) / (BUCKETS - 1), pts = cur.map(function(v, i){ return [pad + i*step, base - v*(base - 18)]; });
+    ctx.beginPath(); ctx.moveTo(pts[0][0], base); ctx.lineTo(pts[0][0], pts[0][1]);
+    for (var i = 0; i < pts.length - 1; i++){                    // smooth, never a staircase
+      var a = pts[i], b = pts[i+1], mx = (a[0] + b[0]) / 2;
+      ctx.bezierCurveTo(mx, a[1], mx, b[1], b[0], b[1]);
+    }
+    ctx.lineTo(pts[pts.length-1][0], base); ctx.closePath();
+    var g = ctx.createLinearGradient(0, 8, 0, base);
+    g.addColorStop(0, 'rgba(190,196,204,.30)'); g.addColorStop(1, 'rgba(190,196,204,.05)');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = grey(.62); ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,196,204,.18)';
+    ctx.beginPath(); ctx.moveTo(pad, base + .5); ctx.lineTo(W - pad, base + .5); ctx.stroke();
+  }
+  draw();
+  return {
+    tick:draw,
+    frame:function(){ var t = counts(), moved = false;
+      for (var i = 0; i < BUCKETS; i++){ var d = t[i] - cur[i]; if (Math.abs(d) > 1e-4){ cur[i] += d*0.10; moved = true; } else cur[i] = t[i]; }
+      if (moved) draw(); },
+    resize:function(){ s.fit(); draw(); },
+    now:function(){ return 'the ' + FAMILIES[CLOCKTICK % FAMILIES.length] + ' read · 364 names'; }
+  };
 }
 
-/* ---------------- THE LABEL (one strip for the page, one line per panel) ---------------- */
-function quotesAges(list){ var now = Date.now(), a = []; list.forEach(function(s){ var q = D.quotes[s]; if (q && q.obs) a.push(now - Date.parse(q.obs)); }); a.sort(function(x, y){ return x - y; }); return a.length ? { n: a.length, oldestMs: a[a.length - 1], medianMs: a[Math.floor((a.length - 1) / 2)] } : null; }
-function paintLabel(){
-  var g = D.geiger, list = LAST.list || visible(), notes = [];
-  if (D.errors.geiger) notes.push('GEIGER READ FAILED: ' + D.errors.geiger + (g ? ' (showing the last good artifact)' : ''));
-  if (D.errors.quotes) notes.push('quotes read failed: ' + D.errors.quotes);
-  if (D.errors.cohorts) notes.push('cohort membership unavailable (' + D.errors.cohorts + ')');
-  if (D.errors.favs) notes.push('FAV list unavailable (' + D.errors.favs + '); showing the first 58 tracked names A→Z');
-  if (D.fanLoading) notes.push('deriving the fan read from daily candles ' + (D.fanProgress || ''));
-  var src = S.geiger === 'composite' ? 'Hub composite (chart API /geiger)' : 'FAN READ — derived here from daily candles (9-line fan), NOT the Hub composite';
-  var clk = clock.mode === 'live' ? 'clock LIVE' : 'clock REWIND to ' + clock.state().entry.label + (S.geiger === 'composite' ? ' (a composite this page recorded)' : ' (derived daily fan)');
-  E.Label.render($('label'), { geiger: src, computed: g && g.computed_utc, verification: g && g.verification && g.verification.label, quotes: quotesAges(list), clock: clk, notes: notes, warn: !!(D.errors.geiger) });
-}
-function paintNotes(list, vals){
-  var n = list.length, nv = list.filter(function(s){ return vals[s].g != null; }).length, miss = n - nv;
-  var base = nv + ' of ' + n + ' names have a reading' + (miss ? ' · ' + miss + ' without one (not drawn, not invented)' : '');
-  $('today-note').textContent = base + ' · old curve cubic-bezier(.32,0,.18,1), 420 ms, every column moves';
-  $('list-note').textContent = base + ' · ' + (S.quiet ? 'quiet rule on: only name + Geiger + arrow while moving' : 'quiet rule OFF') + ' · ' + S.mover + ' · ' + S.resortMs + ' ms · ' + (S.tie ? 'near-ties hold' : 'near-ties swap');
-  var stripEmpty = COHORTS.filter(function(c){ return c[1] !== 'FAV' && !(D.cohorts[c[1]] || []).length; }).map(function(c){ return c[0]; });
-  $('strip-note').textContent = 'cohort = average of members with a reading · read words are the Hub\'s own' + (stripEmpty.length ? ' · no members known for ' + stripEmpty.join(', ') : '') + (S.stripRerank ? ' · re-ranking: bars change places' : ' · headers never move');
-  $('pair-note').textContent = 'left ranked by Geiger · right ranked by ' + { chg: 'change %', t: 'trend', m: 'momentum', price: 'price' }[S.pairSort] + ' · a flat line = agreement';
-  var fnote = $('fan-note'); fnote.textContent = 'per-timeframe Geiger from /geiger?detail=1 · ring = |trend| |momentum| |structure| · structure is not scored on the Hub yet';
-  paintLabel();
+function vTrace(host, big){
+  var s = surface(host), shown = 0, hold = 0;
+  function series(){ return (D.candles && D.candles.closes) || []; }
+  function draw(){
+    var W = s.W(), H = s.H(), ctx = s.ctx, c = series();
+    s.clear();
+    if (c.length < 3) return;
+    var n = Math.max(2, Math.floor(shown)), lo = Math.min.apply(null, c), hi = Math.max.apply(null, c), rng = (hi - lo) || 1;
+    var pad = 14, x = function(i){ return pad + (i / (c.length - 1)) * (W - pad*2); },
+        y = function(v){ return H - pad - ((v - lo) / rng) * (H - pad*2); };
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = grey(.13); ctx.lineWidth = 1.2;           // the whole shape, faint, always there
+    ctx.beginPath(); ctx.moveTo(x(0), y(c[0]));
+    for (var k = 1; k < c.length; k++) ctx.lineTo(x(k), y(c[k]));
+    ctx.stroke();
+    ctx.strokeStyle = grey(.40); ctx.lineWidth = 1.4;           // as far as the drawing has got
+    ctx.beginPath(); ctx.moveTo(x(0), y(c[0]));
+    for (var i = 1; i < n; i++) ctx.lineTo(x(i), y(c[i]));
+    ctx.stroke();
+    var tail = Math.max(0, n - 44);                               // the leading edge, brighter
+    ctx.strokeStyle = grey(.82); ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x(tail), y(c[tail]));
+    for (var j = tail + 1; j < n; j++) ctx.lineTo(x(j), y(c[j]));
+    ctx.stroke();
+    ctx.fillStyle = grey(.9);
+    ctx.beginPath(); ctx.arc(x(n-1), y(c[n-1]), big ? 4 : 3, 0, Math.PI*2); ctx.fill();
+  }
+  draw();
+  return {
+    tick:function(){},
+    frame:function(){
+      var c = series(); if (c.length < 3) return;
+      if (shown >= c.length){ if (++hold > 90){ shown = 0; hold = 0; } else return; }
+      shown = Math.min(c.length, shown + c.length / 260);
+      draw();
+    },
+    resize:function(){ s.fit(); draw(); },
+    now:function(){ return (D.candles ? D.candles.symbol + ' · ' + D.candles.closes.length + ' days to ' + D.candles.last : ''); }
+  };
 }
 
-/* ---------------- events ---------------- */
-function onCohort(){
-  var list = visible();
-  loadQuotes(list).then(function(){ render('tick'); });
-  if (S.geiger === 'fan') startFan(list);
-  render('fresh'); refreshTimeline();
+function vDials(host, big){
+  var s = surface(host), KEYS = ['VIX','DXY','US10Y','GCUSD','CLUSD','BTCUSD'], cur = KEYS.map(function(){ return .5; }), glow = KEYS.map(function(){ return 0; });
+  function pos(k){
+    var m = D.macro && D.macro[k] && D.macro[k].quote;
+    if (!m || !fin(m.price) || !fin(m.day_low) || !fin(m.day_high) || m.day_high <= m.day_low) return null;
+    return clamp((m.price - m.day_low) / (m.day_high - m.day_low), 0, 1);
+  }
+  function draw(){
+    var W = s.W(), H = s.H(), ctx = s.ctx, padL = big ? 96 : 74, padR = 16, rowH = H / KEYS.length;
+    s.clear();
+    ctx.textBaseline = 'middle'; ctx.font = (big ? 13 : 11) + 'px "SF Mono",ui-monospace,Menlo,monospace';
+    KEYS.forEach(function(k, i){
+      var cy = rowH*i + rowH/2, x0 = padL, x1 = W - padR, lit = glow[i], q = D.macro && D.macro[k] && D.macro[k].quote;
+      ctx.textAlign = 'left'; ctx.fillStyle = grey(.34 + .42*lit); ctx.fillText(k, 6, cy);
+      ctx.strokeStyle = grey(.10 + .08*lit); ctx.lineWidth = big ? 5 : 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1, cy); ctx.stroke();
+      if (pos(k) == null){ ctx.textAlign = 'left'; ctx.fillStyle = grey(.24); ctx.fillText('no reading', x0 + 8, cy); return; }
+      var px = x0 + cur[i]*(x1 - x0);
+      ctx.strokeStyle = grey(.30 + .45*lit); ctx.lineWidth = big ? 5 : 4;
+      ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(px, cy); ctx.stroke();
+      ctx.fillStyle = grey(.58 + .40*lit);
+      ctx.beginPath(); ctx.arc(px, cy, big ? 6 : 4.5, 0, Math.PI*2); ctx.fill();
+      if (q && fin(q.prev_close) && fin(q.day_low) && fin(q.day_high) && q.day_high > q.day_low){
+        var cpx = x0 + clamp((q.prev_close - q.day_low)/(q.day_high - q.day_low), 0, 1)*(x1 - x0);
+        ctx.strokeStyle = grey(.26); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cpx, cy - (big ? 11 : 8)); ctx.lineTo(cpx, cy + (big ? 11 : 8)); ctx.stroke();
+      }
+    });
+  }
+  draw();
+  return {
+    tick:draw,
+    frame:function(){ var live = CLOCKTICK % KEYS.length, moved = false;
+      KEYS.forEach(function(k, i){
+        var t = pos(k); if (t != null && Math.abs(t - cur[i]) > 1e-4){ cur[i] += (t - cur[i])*0.08; moved = true; }
+        var g = i === live ? 1 : 0;
+        if (Math.abs(g - glow[i]) > 1e-3){ glow[i] += (g - glow[i])*0.09; moved = true; }
+      });
+      if (moved) draw(); },
+    resize:function(){ s.fit(); draw(); },
+    now:function(){ return 'between today’s own low and high · live quote'; }
+  };
 }
-function onGeigerSource(){
-  clock.goLive();
-  if (S.geiger === 'fan') startFan(visible()); else { if (D.fanLoading) D.fanLoading.cancel(); refreshTimeline(); render('measure'); }
-}
-function startFan(list){
-  if (D.fanLoading) D.fanLoading.cancel();
-  D.fanProgress = ''; loadFan(list, function(p){ D.fanProgress = p || ''; paintLabel(); if (!p) { refreshTimeline(); render('measure'); } else if (Object.keys(D.fan).length % 8 === 0) { refreshTimeline(); render('tick'); } });
-  refreshTimeline(); render('measure');
-}
-function scheduleQuotes(){
-  clearTimeout(quotesTimer);
-  var wait = Math.max(30000, D.lastQuotesMs * 3);          // never faster than the feed can answer
-  quotesTimer = setTimeout(function(){ loadQuotes(visible()).then(function(){ if (clock.mode === 'live') render('tick'); else paintLabel(); scheduleQuotes(); }); }, wait);
-}
-function scheduleGeiger(){
-  setTimeout(function(){ loadGeiger().then(function(changed){ if (S.fan) loadDetail(S.fan).then(renderFan); if (changed && clock.mode === 'live') { refreshTimeline(); render('tick'); } else paintLabel(); scheduleGeiger(); }); }, 60000);
-}
-document.addEventListener('visibilitychange', function(){ if (!document.hidden) loadGeiger().then(function(c){ if (c) { refreshTimeline(); render('tick'); } }); });
 
-/* ---------------- boot ---------------- */
-Promise.all([loadUniverse(), loadCohorts(), loadGeiger()]).then(function(){
-  buildControls(); configureMovers();
-  var list = visible();
-  render('fresh'); refreshTimeline(); paintLabel();
-  if (S.geiger === 'fan') startFan(list);
-  return loadQuotes(list).then(function(){ render('tick'); }).then(function(){ return loadDetail(S.fan || (list.indexOf('SPY') >= 0 ? 'SPY' : list[0])); }).then(renderFan);
-}).then(function(){ scheduleQuotes(); scheduleGeiger(); setInterval(paintLabel, 15000); })
-  .catch(function(e){ $('label').textContent = 'the workbench could not start: ' + e.message; $('label').classList.add('ve-label-warn'); });
-window.__ve = { S: S, D: D, clock: clock, render: render, movers: { today: mvToday, list: mvList, strip: mvStrip, pairL: mvPairL, pairR: mvPairR } };
+var MAKE = { rows:vRows, strip:vStrip, rings:vRings, shape:vShape, trace:vTrace, dials:vDials };
+
+/* ── one real reading, per name, per timeframe ─────────────────────────────── */
+function rungValue(sym, rung){
+  var d = D.detail && D.detail[sym];
+  if (d && d.rungs && d.rungs[rung]){
+    var r = d.rungs[rung];
+    var v = r.composite != null ? r.composite : (r.trend != null ? r.trend : null);
+    if (fin(v)) return v;
+  }
+  var g = D.geiger && D.geiger.symbols && D.geiger.symbols[sym];
+  return g && fin(g.composite) ? g.composite : null;
+}
+
+/* ── the board ─────────────────────────────────────────────────────────────── */
+function build(){
+  var board = $('board'); board.innerHTML = '';
+  TILES.forEach(function(t){
+    var el = document.createElement('article');
+    el.className = 'tile'; el.tabIndex = 0; el.setAttribute('role','button');
+    el.innerHTML = '<h2></h2><p></p><div class="art"></div><p class="now"></p>';
+    el.querySelector('h2').textContent = t.name;
+    el.querySelector('p').textContent = t.line;
+    board.appendChild(el);
+    var v = MAKE[t.key](el.querySelector('.art'), false);
+    v.host = el; v.spec = t; v.nowEl = el.querySelector('.now');
+    mounted.push(v);
+    var open = function(){ openStage(t); };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+  });
+  paintNow();
+}
+
+function openStage(t){
+  var art = $('stage-art'); art.innerHTML = '';
+  $('stage-name').textContent = t.name;
+  $('stage-sub').textContent = t.line;
+  $('stage').classList.add('on'); $('stage').setAttribute('aria-hidden','false');
+  stageV = MAKE[t.key](art, true); stageV.spec = t;
+  try { stageV.tick(); stageV.frame(); } catch (e) {}
+  $('pp').focus();
+}
+function closeStage(){
+  $('stage').classList.remove('on'); $('stage').setAttribute('aria-hidden','true');
+  $('stage-art').innerHTML = ''; stageV = null;
+}
+function paintNow(){
+  mounted.forEach(function(v){ if (v.nowEl) v.nowEl.textContent = v.now ? v.now() : ''; });
+  if (stageV) $('stage-sub').textContent = stageV.spec.line + (stageV.now ? ' — ' + stageV.now() : '');
+}
+
+/* ── the one clock everything shares ───────────────────────────────────────── */
+function step(){
+  if (!playing) return;
+  CLOCKTICK += 1;
+  mounted.concat(stageV ? [stageV] : []).forEach(function(v){ try { v.tick(); } catch (e) {} });
+  paintNow();
+}
+function redrawAll(){
+  mounted.concat(stageV ? [stageV] : []).forEach(function(v){ try { v.tick(); v.frame(); } catch (e) {} });
+  paintNow();
+}
+function frame(){
+  if (playing) mounted.concat(stageV ? [stageV] : []).forEach(function(v){ try { v.frame(); } catch (e) {} });
+  requestAnimationFrame(frame);
+}
+
+/* ── load: ask the chart API, say what came back ───────────────────────────── */
+function say(){
+  var g = D.geiger || {}, v = g.verification || {};
+  var bits = [];
+  bits.push('asked ' + API + ' for /geiger, /geiger?detail=1 (' + D.names.length + ' names), /candles and /macro');
+  if (g.computed_utc) bits.push('geiger computed ' + g.computed_utc.slice(11,19) + 'Z for the session ending ' + (v.completed_session_et || '—'));
+  if (D.candles) bits.push(D.candles.symbol + ' ' + D.candles.closes.length + ' daily bars of ' + D.candles.full + ' held, newest ' + D.candles.last);
+  if (D.macro) bits.push('macro ' + Object.keys(D.macro).length + ' live quotes');
+  if (reduced) bits.push('YOUR SYSTEM ASKS FOR REDUCED MOTION — nothing moves by itself here');
+  if (D.errors.length) bits.push('DID NOT ANSWER: ' + D.errors.join(' · '));
+  $('prov').textContent = bits.join(' · ');
+}
+
+function boot(){
+  $('note').hidden = false; $('note').textContent = 'Asking the chart API for today’s numbers…';
+  jget('/geiger').then(function(g){
+    D.geiger = g;
+    var sy = g.symbols || {};
+    var ranked = Object.keys(sy).filter(function(k){ return fin(sy[k].composite); })
+      .sort(function(a,b){ return sy[b].composite - sy[a].composite; });
+    var WANT = 28, last = ranked.length - 1;                     // an even cross-section of the
+    D.names = [];                                                // whole market: strongest to weakest,
+    for (var i = 0; i < WANT && last >= 0; i++){                 // not just the extremes
+      var pick = ranked[Math.round(i * last / (WANT - 1))];
+      if (D.names.indexOf(pick) < 0) D.names.push(pick);
+    }
+    D.lead = ranked[0];
+    return Promise.all([
+      jget('/geiger?symbols=' + encodeURIComponent(D.names.join(',')) + '&detail=1')
+        .then(function(d){ D.detail = d.symbols || {}; })
+        .catch(function(e){ D.errors.push(e.message); }),
+      jget('/candles?symbol=' + encodeURIComponent(D.lead) + '&tf=D&limit=320')
+        .then(function(c){
+          var rows = c.series || [];                      // /candles returns {series:[{t,o,h,l,c,v}]}
+          D.candles = { symbol:c.symbol, full:c.full_series_count,
+            closes:rows.map(function(r){ return r.c; }).filter(fin),
+            last:(c.newest || '').slice(0,10) };
+        })
+        .catch(function(e){ D.errors.push(e.message); }),
+      jget('/macro').then(function(m){ D.macro = m.macro || {}; }).catch(function(e){ D.errors.push(e.message); })
+    ]);
+  }).then(function(){
+    $('note').hidden = true;
+    build(); say();
+    if (!reduced) setInterval(step, STEP_MS);
+    requestAnimationFrame(frame);
+    setInterval(function(){                                   // the numbers themselves, kept current
+      jget('/geiger').then(function(g){ D.geiger = g; say(); redrawAll(); }).catch(function(){});
+      jget('/geiger?symbols=' + encodeURIComponent(D.names.join(',')) + '&detail=1')
+        .then(function(d){ D.detail = d.symbols || D.detail; redrawAll(); }).catch(function(){});
+      jget('/macro').then(function(m){ D.macro = m.macro || D.macro; redrawAll(); }).catch(function(){});
+    }, 90000);
+  }).catch(function(e){
+    $('note').hidden = false;
+    $('note').textContent = 'The chart API did not answer, so there is nothing real to show: ' + e.message;
+    D.errors.push(e.message); say();
+  });
+}
+
+$('pp').addEventListener('click', function(){
+  playing = !playing;
+  $('pp').textContent = playing ? 'Pause' : 'Play';
+});
+$('back').addEventListener('click', closeStage);
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeStage(); });
+window.addEventListener('resize', function(){
+  mounted.concat(stageV ? [stageV] : []).forEach(function(v){ try { v.resize(); } catch (e) {} });
+});
+boot();
 })();
 </script>
 <!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
      scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
-     must stay self-contained. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
      runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
 <style id="scnav-css">
 .scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
 .scnav.is-inline{position:static;z-index:auto}
-.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(7,11,17,.92);color:#8fa3b8;border:1px solid rgba(0,212,255,.38);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
-.scnav button:hover,.scnav button:focus-visible{color:#00d4ff;border-color:rgba(0,212,255,.8);outline:none}
-.scnav i{font-style:normal;color:#00d4ff}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
 @media print{.scnav{display:none}}
 </style>
 <script>
