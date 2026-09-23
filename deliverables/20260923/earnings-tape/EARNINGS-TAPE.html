@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>The EARNINGS band, and the ECONOMIC tab checked line by line · 23 Sep 2026</title>
+<style>
+body{margin:0;background:#05060C;color:#9A9AB6;font:18px/1.55 -apple-system,"Helvetica Neue",Arial,sans-serif;padding:28px 34px 80px;max-width:1500px}
+h1{font-size:36px;margin:0 0 6px;color:#B4B6CC} h2{font-size:27px;margin:46px 0 8px;color:#B4B6CC} h3{font-size:21px;margin:26px 0 6px;color:#B4B6CC}
+p{max-width:1100px} p.note{color:#868AAA;margin:0 0 12px} .lead{font-size:22px;color:#B4B6CC}
+blockquote{margin:10px 0 18px;padding:8px 16px;border-left:3px solid #3455FF;color:#B4B6CC;max-width:1000px}
+table{border-collapse:collapse;font-size:16px;margin:10px 0 6px;max-width:100%} th,td{border:1px solid #1A1A2A;padding:8px 12px;text-align:left;vertical-align:top} th{color:#868AAA;font-weight:600}
+td.num{font:15px ui-monospace,Menlo,monospace;text-align:right} .ok{color:#3FB8AF} .bad{color:#FF2D55} .warn{color:#E0A24A} small{color:#868AAA;font-size:13px}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0} .shots img{width:100%;display:block;border:1px solid #1A1A2A;background:#0A0A0F}
+figure{margin:0} figcaption{font:13px ui-monospace,Menlo,monospace;color:#868AAA;margin-top:4px}
+.single{max-width:1400px} .single img{width:100%;border:1px solid #1A1A2A;display:block}
+.phone{max-width:420px} .phone img{width:100%;border:1px solid #1A1A2A;display:block}
+code{font:15px ui-monospace,Menlo,monospace;background:#0F0F1A;padding:2px 6px;border-radius:4px;color:#B4B6CC}
+ul{max-width:1100px} li{margin:6px 0} .meas{font:15px ui-monospace,Menlo,monospace;color:#868AAA} .meas b{color:#B4B6CC}
+</style></head><body>
+
+<h1>A tape of the earnings, at the bottom — and the ECONOMIC tab read against its own notes</h1>
+<p class="lead">There is now a fourth band under the Hub: <b>EARNINGS</b>, beside ECON, in the same part and at the same speed. It carries this week's earnings for the names the Hub tracks, and once a company has reported it carries the result. Separately, the ECONOMIC tab was checked line by line against the notes from the session that restructured it: most of it matches, two things did not and are fixed, one is a conflict only you can settle. Nothing here is deployed — branch <code>hub/earnings-tape-20260923</code>, built from production <code>3838dc7</code>.</p>
+<blockquote>“I need a tape of the events earnings too at the bottom ticker tape.” — Alan, 23 Sep, 13:00 ET</blockquote>
+
+<h2>1 · The band, as it looks right now</h2>
+<div class="single"><figure><img src="screens/branch-bands-1680.png" alt="the four bottom bands at 1680">
+<figcaption>1680 · the whole strip: MACRO, ALL, ECON, EARNINGS</figcaption></figure></div>
+<p>Reading the EARNINGS line: <b>WEEK OF SEP 21</b>, then <b>TUE CBRS</b> faded because Tuesday has gone, then <b>TODAY · before the open · CTAS 1.39 vs est 1.35 +3.0%</b> with the number and the surprise in green because it beat, then <b>THU COST</b> still to come. That is the real week — three of the 389 names the Hub tracks report between Monday and Sunday, and CTAS reported this morning.</p>
+<div class="phone"><figure><img src="screens/branch-bands-390.png" alt="the four bottom bands at 390">
+<figcaption>390 · the same four bands on a phone; the label column still lines up</figcaption></figure></div>
+
+<h3>What each item says</h3>
+<ul>
+<li><b>The day.</b> TODAY in cyan for today, otherwise MON…SUN. Monday to Sunday in New York, and the band opens on today rather than on Monday.</li>
+<li><b>When it reports.</b> “before the open”, “after the close”, or a clock time when the supplier gives one. When the supplier says nothing, the item says nothing — no guess. Of 709 rows since July the supplier gives BMO 94 times, AMC 108 and nothing 507 times, so “nothing known” is the common case and it has to read honestly.</li>
+<li><b>The ticker</b>, and tapping it opens that company's page.</li>
+<li><b>The result, once it has printed.</b> EPS actual, “vs est”, and the surprise. Green when it beat, red when it missed, yellow when it came in line — the calendar's three result colours, and nothing else on the band wears them.</li>
+<li><b>A day already gone is faded</b>, the result inside it stays readable.</li>
+<li>Hovering an item gives the long version: <code>CTAS · WED SEP 23, before the open · EPS 1.39 against an estimate of 1.35 · beat by 2.96% · tap for the company page</code>.</li>
+</ul>
+
+<h3>Where it gets the numbers, and what it never does</h3>
+<ul>
+<li>It reads <code>earnings_events</code> — the EVENTS room's own table and its own columns, the dates the data audit found right and current — and keeps only the tickers in <code>cohorts</code>, the same universe the EVENTS room filters by.</li>
+<li><b>One request per ten minutes</b>, nothing at all while the tab is hidden, and a minute's pause after a failed read. No new table, no new schedule, nothing written anywhere.</li>
+<li>It lives in its own slot next to the ECON band, so a price tick every 45 seconds and a calendar repaint never rewind it.</li>
+<li>It uses the one speed law, <code>tapeSpeed</code>: <span class="meas">EARNINGS <b>20 s</b> · ECON <b>107.3 s</b> · the price bands <b>20 s</b></span> — the same function, each track's own length, with the 20-second floor the law already had for short tracks.</li>
+<li>A failed read leaves the last good week on screen and says “this week's earnings could not be read”; an empty week says “no earnings this week for the names you track”. Neither ever shows an estimate dressed up as a result.</li>
+<li>Rollback is one word: <code>ERN_BAND_ON = false</code>.</li>
+</ul>
+
+<h3>The Station</h3>
+<p>Asked for “if the Station carries a bottom events tape”. <b>It does not.</b> On production <code>origin/station/merge-20260923</code> there is no events band anywhere — searching every page for the ECON band's own markup returns nothing — and the deck's bottom row is video · video · X. The Station's <code>ticker/</code> pane is a <i>price</i> tape (<code>?bands=macro,all</code>), not an events tape. So there was nothing to add the band to, and I did not invent a place for it. If you want one there, say so and it is a small pane change.</p>
+
+<h2>2 · The ECONOMIC tab, against the 13 August notes</h2>
+<table>
+<tr><th>The note</th><th>Live tab</th><th>What I did</th></tr>
+<tr><td>Three nav rows: regions US · G7 · G20 · EM · ALL</td><td class="ok">Matches</td><td>Nothing — all five, each carrying its own count</td></tr>
+<tr><td>Category chips, each with its colour dot as the legend</td><td class="ok">Matches</td><td>Nothing — ten chips, each with the hue that category uses</td></tr>
+<tr><td>Day stepper with DAY · WEEK · MONTH</td><td class="ok">Matches</td><td>Nothing (HIGH ONLY, TODAY and ZOOM + sit in the same group)</td></tr>
+<tr><td><b>WEEK is the default landing</b></td><td class="bad">Does not match — it lands on MONTH</td><td class="warn">Left alone on purpose. See section 5: this is a later decision of yours, not a regression.</td></tr>
+<tr><td>Table: Release / Time / Actual / Est / Prior / Surprise</td><td class="ok">Matches</td><td>Nothing (on a phone the Prior column is dropped for width — deliberate, and already so)</td></tr>
+<tr><td>Composite releases collapse to one headline row that opens inline (CPI to its nine components)</td><td class="ok">Matches</td><td>Nothing. A family printing at the same minute collapses to its named head with a ▸; clicking opens its components underneath. MEASURED on this September: CPI's <b>14</b> rows at 08:30 on the 11th collapse to one headline (Inflation Rate YoY) with 13 components inside it; the weekly CFTC block collapses 11 into one, the EIA block 10. The plan said nine components; the mechanism is the plan's, the count is whatever the supplier files that minute.</td></tr>
+<tr><td>MONTH is a real calendar: Apple-style grid, Sunday first, date top-right, today badged, neighbouring months greyed</td><td class="ok">Matches, all five</td><td>Nothing</td></tr>
+<tr><td><b>The colour law, three channels</b> — kind sets the hue, result sets the name's hue, importance sets weight and never hue</td><td class="bad">Two of the three were missing</td><td class="ok">Fixed — section 3</td></tr>
+<tr><td><b>OTHER reads 0</b>: every release has a home; a non-zero is a leak detector</td><td class="bad">Read 4 on the week, 28 on the month</td><td class="ok">Fixed — section 4 — now 0 except two kinds of thing that genuinely are not macro releases</td></tr>
+</table>
+
+<h3>Before and after, the whole tab</h3>
+<div class="shots">
+<figure><img src="screens/live-econ-week-1680.png" alt="live week"><figcaption>before · live scintillahub.ai, WEEK</figcaption></figure>
+<figure><img src="screens/branch-econ-week-1680.png" alt="branch week"><figcaption>after · this branch, WEEK</figcaption></figure>
+</div>
+<div class="shots">
+<figure><img src="screens/live-econ-month-1680.png" alt="live month"><figcaption>before · live, MONTH</figcaption></figure>
+<figure><img src="screens/branch-econ-month-1680.png" alt="branch month"><figcaption>after · this branch, MONTH — OTHER falls from 28 to 9</figcaption></figure>
+</div>
+<div class="phone"><figure><img src="screens/branch-econ-week-390.png" alt="branch week phone"><figcaption>390 · the same week on a phone</figcaption></figure></div>
+<div class="phone"><figure><img src="screens/branch-econ-month-390.png" alt="branch month phone"><figcaption>390 · MONTH on a phone, and the four bands under it</figcaption></figure></div>
+
+<h2>3 · The colour law, put back to three channels</h2>
+<p>The plan gives each row three separate things to say. Before this branch the row had <b>one</b> hue — the dot — and it carried <b>importance</b>. So “what kind of release is this” had no colour at all, and importance had one the plan says it must never have.</p>
+<table>
+<tr><th>Channel</th><th>Before</th><th>Now</th></tr>
+<tr><td>What kind it is</td><td class="bad">Nothing on the row. The hue existed only on the chips.</td><td class="ok">The row's spine and its dot, from the very table the chips use as a legend: central bank pink, inflation orange, labor blue, growth cyan, housing purple, trade lime, energy violet, auctions and positioning grey.</td></tr>
+<tr><td>How it came out</td><td class="warn">Only the surprise number was coloured.</td><td class="ok">The release name turns green, yellow or red the moment it prints, the same reading the surprise column uses (hotter inflation or weaker labour is the red one). Nothing else on the row wears those three.</td></tr>
+<tr><td>How much it matters</td><td class="bad">The dot's hue.</td><td class="ok">Weight only: a 1 / 2 / 3 px spine and brighter, heavier text for high impact.</td></tr>
+</table>
+<p class="meas">Measured on the live rows of Wed 23 Sep in this branch: S&amp;P Global Composite PMI — spine <b>rgb(0,212,255)</b> cyan (growth), 2 px, name <b>rgb(0,255,163)</b> green (58.4 against 55.2) · Fed Barr Speech — spine <b>rgb(255,61,190)</b> pink (central bank), 2 px, name plain (nothing printed) · EIA Crude Oil Stocks — spine <b>rgb(139,92,246)</b> violet (energy), name green · 17-Week Bill Auction — spine <b>rgb(106,108,134)</b> grey, 1 px, name dim · Building Permits — name <b>yellow</b>, 1.394 against an estimate of 1.394, exactly in line.</p>
+<p class="note">Nothing about the hue or the class can come from the feed: the hue is looked up by the category rule and the weight by a fixed list, and the page's own audit test now proves both with hostile inputs.</p>
+
+<h2>4 · OTHER, the leak detector, read and emptied</h2>
+<p>OTHER exists so a release with no home is visible. It was not reading 0.</p>
+<table>
+<tr><th>Window</th><th>Rows</th><th>OTHER before</th><th>OTHER after</th></tr>
+<tr><td>US week, 21–27 Sep</td><td class="num">88</td><td class="num bad">8</td><td class="num ok">3 — all of them the UN General Assembly</td></tr>
+<tr><td>US month, September</td><td class="num">464</td><td class="num bad">29</td><td class="num ok">9</td></tr>
+</table>
+<p>What was leaking, and where each one belongs now:</p>
+<ul>
+<li><b>Central bank</b> — money supply and M2 (you named M2 yourself), and the five FOMC interest-rate projections.</li>
+<li><b>Auctions</b> — the 2-Year FRN auction and the 10-Year TIPS auction; the rule knew bills, notes and bonds but not those two.</li>
+<li><b>Labor</b> — average weekly hours, nonfarm productivity.</li>
+<li><b>Inflation</b> — used car prices.</li>
+<li><b>Growth</b> — non-defense goods orders ex air, the logistics managers index, car and truck sales, consumer credit, the IPSOS consumer index, wholesale sales, corporate profits, real consumer spending.</li>
+</ul>
+<p>What is left in OTHER, and why I did not force it anywhere:</p>
+<ul>
+<li><b>The UN General Assembly</b> (4 rows in September) — a diplomatic event, not a data release.</li>
+<li><b>Five agricultural supply reports</b> — WASDE, the NOPA crush report, and the three quarterly grain stocks. They are commodity supply, and none of the eight spines is agriculture.</li>
+</ul>
+<p>Both would be honest in a ninth spine — say <b>COMMODITIES</b> for the crops and something for scheduled political events — but naming a new category is your call, not mine. Say the word and it is one line each.</p>
+
+<h2>5 · The one conflict: WEEK or MONTH?</h2>
+<p>Your 13 August notes say <b>WEEK is the default landing</b>. The live tab lands on <b>MONTH</b>. That is not rot: it came from the later session where you sent your iPad calendar and asked for “THE calendar view”, and the repo pins MONTH deliberately in <code>tests/economic-month-zoom.test.mjs</code>. Two of your own decisions disagree, so I changed nothing and wrote the disagreement into a test instead of quietly picking a side. <b>One word from you settles it</b> — if it is WEEK, it is a one-line change plus that test.</p>
+
+<h2>6 · Two things I stayed off, and one thing worth knowing</h2>
+<ul>
+<li><b>The ident-box nudge and the ECON band's timing and states</b> are another lane's work right now. Nothing in this branch touches either. The EARNINGS band is separate code in a separate slot with its own reader; the only shared line is the one that adds the slot.</li>
+<li><b>Indicator Lab</b> is byte-identical, as its own test still proves.</li>
+<li><b>The MACRO band is empty — on production too.</b> Live at 13:0x ET today the MACRO band has no items at all (the ALL band is full of crypto movers). Its list is the names that are in <code>live_quotes</code> <i>and</i> in <code>composite_staged</code> at the daily timeframe, and the macro names are not in the second one. That is not from this change and I have not touched it; it is a separate repair if you want it.</li>
+</ul>
+
+<h2>7 · How this was checked</h2>
+<ul>
+<li><b>22 new tests</b>, all offline: 11 pin the band (the week, only tracked names, the order inside a day, the wording for when a company reports, the result and its three colours, a name still to report showing no numbers, today and faded days, the empty week, the read window, the ten-minute cadence) and 11 pin the tab against the builder's notes, line by line.</li>
+<li>They found one real bug in my own code before you saw it: the band filtered to your tracked names only at the read, so a row arriving any other way could have ridden it. It now filters at the read <i>and</i> at the paint.</li>
+<li><b>Suite: 313 of 315.</b> The two failures (<code>hub-youtube-age</code>, <code>xfeed-publish</code>) fail identically on the base commit <code>3838dc7</code> — they are not from this work.</li>
+<li>Two older assertions were updated where the markup they pinned genuinely changed: the bands strip now has a third slot, and a row's class list now carries the weight and result channels.</li>
+<li><b>Screenshots</b>: every one above is a real browser at 1680 and 390, opened and looked at. One honest note — the chart API only allows <code>https://scintillahub.ai</code> as an origin, so a page served from a local port cannot fill the price bands. For the strip shots the real upstream answers were fetched outside the browser and handed to the page unchanged, so MACRO and ALL show exactly what production shows. Nothing was faked or edited.</li>
+</ul>
+<p class="note">Branch <code>hub/earnings-tape-20260923</code> · base <code>3838dc7</code> (<code>origin/hub/econ-pulse-20260923</code>) · not pushed, not deployed, not merged.</p>
+</body></html>

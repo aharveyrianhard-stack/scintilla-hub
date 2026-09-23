@@ -94,7 +94,9 @@ function evilRows() {
   return out;
 }
 const ALLOWED_ATTR = new Set(["class", "style", "title", "id", "data-act", "data-k", "data-day", "data-c", "data-s", "data-d", "aria-label"]);
-const ALLOWED_STYLE = /^(color:var\(--(sv[1345]|dim)\)(;text-shadow:0 0 7px rgba\(255,138,0,\.85\)|;opacity:\.7)?|background:(#[0-9A-F]{6}|var\(--mute\)))$/;
+/* 23 Sep — the colour law put the CATEGORY hue on the row's spine and its dot, so two more shapes are allowed:
+   both come from the fixed EC_CAT_COLOR table, keyed by ecCat(), and neither can be reached from row data. */
+const ALLOWED_STYLE = /^(color:var\(--(sv[1345]|dim)\)(;text-shadow:0 0 7px rgba\(255,138,0,\.85\)|;opacity:\.7)?|(background|color|border-left-color):(#[0-9A-F]{6}|var\(--mute\)))$/;
 function auditHTML(html, where, strictStyle = false) {
   const tag = /<\/?([a-z0-9]+)((?:\s+[a-z-]+="[^"<>]*")*)\s*>/gi;
   let m, covered = 0, lt = 0;
@@ -132,12 +134,18 @@ test("(b) flag ON (proof copy only): the tape escapes names and the ident box ke
   auditHTML(html, "macroNextHTML");
   auditHTML(api.leftIdentHTML({ t: "MU", name: "M", price: 1, chg: 1 }), "leftIdentHTML(on)");
 });
-test("(b) review: the impact dot's style is looked up with the row's impact on a plain object (prototype keys leak)", () => {
+test("(b) review: nothing on a row is styled or classed from row data — a hostile impact leaks nothing", () => {
+  /* 23 Sep — the dot no longer carries impact at all: its hue says what KIND of release it is, looked up by
+     ecCat() in the fixed table the chips use as a legend. Impact now only picks a class name through ecImpCls(),
+     which answers from a fixed list. Both halves are checked here with prototype keys as the impact. */
   const { api } = load();
   for (const impact of ["constructor", "__proto__", "toString"]) {
     const h = api.ecRowHTML({ event_ts: ts("2026-09-21T12:30:00Z"), country: "US", event: "X", impact }, "", false);
     const style = h.match(/<span class="dot" style="([^"]*)">/)[1];
     assert.match(style, ALLOWED_STYLE, "impact " + impact + " gives style " + JSON.stringify(style));
+    const spine = h.match(/<div class="ec-row ([^"]*)" style="([^"]*)"/);
+    assert.match(spine[1], /^ {1,2}imp-(high|medium|low|none)$/, "class from a fixed list: " + JSON.stringify(spine[1]));
+    assert.match(spine[2], ALLOWED_STYLE, "spine style from the fixed table: " + JSON.stringify(spine[2]));
   }
 });
 
