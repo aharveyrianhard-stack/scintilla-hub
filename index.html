@@ -977,6 +977,22 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sc-soclast__age{ color:var(--dim); }
 @media(max-width:560px){ .sc-socrow{ flex-wrap:wrap; row-gap:2px; } .sc-soclast{ flex:1 0 100%; text-align:left; padding-left:64px; } }
+/* Alan, 22 Sep: "Is the video count clickable?" It is now: the count opens the list of the videos
+   behind it — title · channel · age · link — under its own row. Same inks as the row; the only
+   colour is the lean, painted by the rule the row's net score already uses. */
+.sc-socposts[data-act="socvideos"]{ cursor:pointer; text-decoration:underline; text-decoration-color:var(--mute); text-underline-offset:2px; }
+.sc-socposts[data-act="socvideos"]:hover,.sc-socposts[data-act="socvideos"]:focus-visible{ color:var(--crk); text-decoration-color:var(--crk); outline:none; }
+.sc-socvids{ padding:2px 0 8px 64px; border-bottom:.5px solid rgba(255,255,255,.045); font-variant-numeric:tabular-nums; }
+.sc-socvids__h{ font-size:8.5px; color:var(--dim); letter-spacing:.06em; text-transform:uppercase; padding:4px 0 5px; }
+.sc-socvid{ display:flex; gap:10px; align-items:baseline; padding:3px 0; font-size:9.5px; min-width:0; }
+.sc-socvid a{ color:var(--ink2); text-decoration:none; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-socvid a:hover{ color:var(--crk); }
+.sc-socvid .ch{ flex:0 0 150px; color:var(--ink3); font-size:8.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-socvid .age{ flex:0 0 52px; text-align:right; color:var(--dim); font-size:8.5px; }
+.sc-socvid .lean{ flex:0 0 44px; text-align:right; font-size:8.5px; }
+.sc-socvids__empty{ font-size:9px; color:var(--dim); line-height:1.55; max-width:640px; }
+.sc-socvids__empty a{ color:var(--ink3); }
+@media(max-width:560px){ .sc-socvids{ padding-left:0; } .sc-socvid{ flex-wrap:wrap; } .sc-socvid a{ flex:1 0 100%; white-space:normal; } .sc-socvid .ch{ flex:1 1 auto; } }
 
 /* ── AREA D · "◆ AI READ" placeholder slot — consistent dim on-brand reserved box,
    dropped into NEWS / SOCIAL / EVENTS. No data now; styled to light up later. ── */
@@ -7765,8 +7781,85 @@ function socRowHTML(t, s) {
     '<div class="sc-socbar"><span class="sc-socbull" style="width:' + bp.toFixed(1) + '%"></span>' +
       '<span class="sc-socbear" style="width:' + rp.toFixed(1) + '%"></span></div>' +
     '<span class="sc-socscore" style="color:' + col + '">' + (score != null ? (score >= 0 ? "+" : "") + score.toFixed(2) : "—") + "</span>" +
-    '<span class="sc-socposts">' + (posts != null ? posts.toLocaleString("en-US") + (s.source === "youtube" ? " videos" : " posts") : "—") + "</span>" +
+    socPostsHTML(t, s, posts) +
     socLastHTML(s) + "</div>";
+}
+/* The count. For the YouTube job it is a control: it opens the list of the videos it counts. */
+function socPostsHTML(t, s, posts) {
+  if (posts == null) return '<span class="sc-socposts">—</span>';
+  const label = posts.toLocaleString("en-US") + (s && s.source === "youtube" ? " videos" : " posts");
+  if (!s || s.source !== "youtube") return '<span class="sc-socposts">' + label + "</span>";
+  return '<span class="sc-socposts" data-act="socvideos" data-t="' + esc(t) + '" role="button" tabindex="0" ' +
+    'aria-expanded="false" title="open the videos behind this count — title · channel · age · link">' + label + "</span>";
+}
+/* ── THE VIDEOS BEHIND THE COUNT ──────────────────────────────────────────────────────────
+   social_sentiment.posts is the job's 7-day count per ticker. The videos themselves are in
+   youtube_video_sentiment (one row per video × ticker, written by the same job) joined to
+   youtube_videos for the title, channel, publish time and link. If the job has not written its
+   per-video rows for a ticker, the list cannot be shown and says so — it never substitutes a
+   title search for the job's own list — and it still offers the latest mention the row carries. */
+const SOC_VIDEOS_OPEN = new Set();
+function socVideoRowHTML(v) {
+  const m = v && v.youtube_videos ? v.youtube_videos : (v || {});
+  const title = m.title || v.video_id || "";
+  const href = m.url || (v && v.video_id ? "https://www.youtube.com/watch?v=" + encodeURIComponent(v.video_id) : "#");
+  const age = (typeof ytAgo === "function" && m.published_at) ? ytAgo(m.published_at) : "";
+  const lean = num(v && v.lean);
+  const leanTxt = lean == null ? "" : (lean >= 0 ? "+" : "") + lean.toFixed(2);
+  const mentions = num(v && v.mentions);
+  return '<div class="sc-socvid">' +
+    '<a href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(title) + '">' + esc(title) + "</a>" +
+    '<span class="ch">' + esc(m.channel_title || "") + "</span>" +
+    '<span class="age">' + esc(age) + "</span>" +
+    '<span class="lean" style="color:' + socScoreCol(lean) + '" title="' + (mentions != null ? mentions + " mention" + (mentions === 1 ? "" : "s") + " · " : "") + 'video lean">' + esc(leanTxt) + "</span>" +
+    "</div>";
+}
+function socVideosHTML(t, rows, meta) {
+  const s = (meta && meta.summary) || {};
+  const posts = num(s.posts);
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    const last = meta && meta.last;
+    return '<div class="sc-socvids__h">videos mentioning ' + esc(t) + "</div>" +
+      '<div class="sc-socvids__empty">the count' + (posts != null ? " (" + posts.toLocaleString("en-US") + " videos)" : "") +
+      " comes from social_sentiment; the job has not written its per-video rows for " + esc(t) +
+      " yet (youtube_video_sentiment holds 0 rows for it), so the list behind the count cannot be shown." +
+      (last ? " Latest mention on record: " + socVideoRowHTML(last) : (s.last_channel ? " Latest mention on record: " + esc(s.last_channel) +
+        (s.last_published_at && typeof ytAgo === "function" ? " · " + esc(ytAgo(s.last_published_at)) : "") + "." : "")) + "</div>";
+  }
+  return '<div class="sc-socvids__h">' + list.length + " video" + (list.length === 1 ? "" : "s") + " mentioning " + esc(t) +
+    (s.window_days ? " · " + esc(String(s.window_days)) + "-day window" : "") + " · newest first</div>" +
+    list.map(socVideoRowHTML).join("");
+}
+async function socFetchVideos(t) {
+  const summary = SOCSENT[String(t).toUpperCase()] || {};
+  let rows = [];
+  try {
+    rows = await pg("youtube_video_sentiment?select=video_id,mentions,lean,computed_at,youtube_videos(title,channel_title,published_at,url)" +
+      "&ticker=eq." + encodeURIComponent(t) + "&order=computed_at.desc&limit=80", 1);
+    if (!Array.isArray(rows)) rows = [];
+    rows.sort((a, b) => String((b.youtube_videos || {}).published_at || "").localeCompare(String((a.youtube_videos || {}).published_at || "")));
+  } catch (_) { rows = []; }
+  let last = null;
+  if (!rows.length && summary.last_video_id) {
+    try {
+      const got = await pg("youtube_videos?select=video_id,title,channel_title,published_at,url&video_id=eq." + encodeURIComponent(summary.last_video_id), 1);
+      if (Array.isArray(got) && got[0]) last = got[0];
+    } catch (_) {}
+  }
+  return { rows, summary, last };
+}
+function socToggleVideos(t, node) {
+  const row = node.closest(".sc-socrow"); if (!row) return;
+  const open = row.nextElementSibling;
+  if (open && open.classList.contains("sc-socvids") && open.dataset.t === t) {
+    open.remove(); SOC_VIDEOS_OPEN.delete(t); node.setAttribute("aria-expanded", "false"); return;
+  }
+  SOC_VIDEOS_OPEN.add(t); node.setAttribute("aria-expanded", "true");
+  const box = document.createElement("div"); box.className = "sc-socvids"; box.dataset.t = t;
+  box.innerHTML = '<div class="sc-socvids__h">videos mentioning ' + esc(t) + " · loading…</div>";
+  row.insertAdjacentElement("afterend", box);
+  socFetchVideos(t).then((r) => { if (box.isConnected) box.innerHTML = socVideosHTML(t, r.rows, r); });
 }
 /* YOUTUBE SENTIMENT — most recent mention: channel · age. Rendered only when the detail columns exist
    (jobs/youtube-sentiment/sql/001); until then the row is exactly the original four cells. */
@@ -12907,6 +13000,7 @@ document.addEventListener("click", (e) => {
   if (!a) return;
   switch (a.dataset.act) {
     case "mtab":       go(a.dataset.sec); break;
+    case "socvideos": { e.stopPropagation(); socToggleVideos(a.dataset.t, a); break; }   // the count opens its videos, not the company
     case "cohgeigertoggle": {   // R37 — expand the hero cohort geiger to show median/min/max
       S.cohGeigerOpen = !S.cohGeigerOpen;
       const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();

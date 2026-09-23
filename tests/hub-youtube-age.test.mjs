@@ -116,8 +116,15 @@ test("every place this surface prints an age uses the one function", () => {
     /class="sc-ytraw__c ts sc-ytage">' \+ esc\(ytAgo\(r\.published_at\)\)/,  // raw table
     /<span class="ago sc-ytage">' \+ esc\(ytAgo\(r\.published_at\)\)/,       // player modal
   ]) assert.match(SRC, marker);
+  /* Since 22 Sep the SOCIAL › SENTIMENT box prints ages as well, all through the one function:
+     the latest-mention cell on the row (socLastHTML) and the two sites of the list behind the video
+     count (socVideoRowHTML, socVideosHTML). */
+  for (const marker of [
+    /function socLastHTML[\s\S]{0,200}ytAgo\(s\.last_published_at\)/,
+    /function socVideoRowHTML[\s\S]{0,300}ytAgo\(m\.published_at\)/,
+  ]) assert.match(SRC, marker);
   const calls = SRC.match(/ytAgo\(/g) || [];
-  assert.equal(calls.length, 4, "one definition and three call sites — no fourth wording anywhere");
+  assert.equal(calls.length, 7, "one definition and six call sites — no other wording anywhere");
 });
 
 test("length and age stay different numbers in different places", () => {
