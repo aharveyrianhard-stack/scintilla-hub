@@ -9448,7 +9448,7 @@ const SENTI = (function () {
 })();
 /* /SENTI-MATH */
 
-const SENTI_CACHE = { bars: new Map(), x: null, q: null, news: null, yt: null, calc: null, pub: null, ytc: null, macro: null, lex: null, head: null };   // ten-minute caches so re-entering the room does not re-pull the 13 MB feed
+const SENTI_CACHE = { bars: new Map(), brd: null, x: null, q: null, news: null, yt: null, calc: null, pub: null, ytc: null, macro: null, lex: null, head: null };   // ten-minute caches so re-entering the room does not re-pull the 13 MB feed
 const SENTI_TTL = 600000;
 function sentiApi() { return (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev"; }
 async function sentiBars(sym) {
@@ -9493,6 +9493,22 @@ async function sentiBreadth() {
   for (const row of rows) { const c = +row.change_pct; if (!isFinite(c)) continue; if (c > 0) up++; else if (c < 0) down++; else flat++; }
   const v = { up, down, flat, n: rows.length, universe: syms.length };
   SENTI_CACHE.q = { at: Date.now(), v }; return v;
+}
+/* MARKET BREADTH (lane M30). Alan, 23 Sep: "This rally was really low breadth — we
+   need to start considering market breadth more in our mix."
+   How many of our own names are above their 50- and 200-day averages, and how many
+   made a new 52-week high against a new low, needs a year of daily bars for all 364
+   names: 364 requests, far too much for a page load. scripts/breadth-snapshot.mjs
+   measures it from the chart API and writes data/breadth/. The page reads that file
+   and ALWAYS prints when it was measured, so a stale reading cannot look current. */
+async function sentiBreadthSnap() {
+  if (SENTI_CACHE.brd && Date.now() - SENTI_CACHE.brd.at < SENTI_TTL) return SENTI_CACHE.brd.v;
+  const [snap, hist] = await Promise.all([
+    fetch("/data/breadth/latest.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error("breadth " + r.status))),
+    fetch("/data/breadth/history.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : { readings: [] }).catch(() => ({ readings: [] })),
+  ]);
+  const v = { snap, hist: Array.isArray(hist.readings) ? hist.readings : [] };
+  SENTI_CACHE.brd = { at: Date.now(), v }; return v;
 }
 function sentiSafe(p, ms) {
   const t = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms || 20000));
@@ -9906,7 +9922,7 @@ async function sentiComputeAll() {
 async function sentiComputeAllRun() {
   if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
   const now = Date.now(), M = SENTI;
-  const [spy, vix, hyg, lqd, tlt, pcc, news, newsLast, yt, heads, x, cnn, cfg, q] = await Promise.all([
+  const [spy, vix, hyg, lqd, tlt, pcc, news, newsLast, yt, heads, x, cnn, cfg, q, rsp, brd] = await Promise.all([
     sentiSafe(sentiBars("SPY")), sentiSafe(sentiBars("VIX")), sentiSafe(sentiBars("HYG")), sentiSafe(sentiBars("LQD")), sentiSafe(sentiBars("TLT")),
     sentiSafe(sentiBars("PCC")),
     sentiSafe(pg("news_sentiment?select=ticker,score,n_articles,updated_ts")),
@@ -9917,6 +9933,8 @@ async function sentiComputeAllRun() {
     sentiSafe(fetch("https://production.dataviz.cnn.io/index/fearandgreed/graphdata").then((r) => r.ok ? r.json() : Promise.reject(new Error("cnn " + r.status))), 8000),
     sentiSafe(fetch("https://api.alternative.me/fng/?limit=1").then((r) => r.ok ? r.json() : Promise.reject(new Error("fng " + r.status))), 8000),
     sentiSafe(sentiBreadth(), 25000),
+    sentiSafe(sentiBars("RSP"), 25000),       /* equal weight, for the breadth reading */
+    sentiSafe(sentiBreadthSnap(), 15000),     /* the measured 364-name snapshot */
   ]);
   const inputs = [], voices = [];
   const closes = (b) => b.ok ? b.v.map((r) => +r.c) : null;
@@ -9940,7 +9958,34 @@ async function sentiComputeAllRun() {
   { const a = closes(hyg), b = closes(lqd); let score = null, val = "—", why = !hyg.ok ? "HYG bars: " + hyg.e : (!lqd.ok ? "LQD bars: " + lqd.e : "");
     if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.dev(g.ser, g.cur); val = "junk − investment grade, 20-day return: " + sgn(g.cur) + " pts"; }
     inputs.push({ key: "junk", name: "Junk bond demand", val, score, age: both(hyg, lqd), fresh: MARKET_FRESH, src: "HYG vs LQD · price proxy for the yield spread · chart API", cnn: cnnC("junk_bond_demand"), why }); }
-  inputs.push({ key: "strength", name: "52-week highs vs lows", val: "no source", score: null, none: true, src: "needs NYSE new-high / new-low counts · not collected", cnn: cnnC("stock_price_strength") });
+  /* BREADTH (lane M30) — four readings, each on its own, none folded into a composite.
+     The first is live from two daily series; the other three come from the measured
+     snapshot and carry the session they were measured on. */
+  { const a = closes(rsp), b = closes(spy); let score = null, val = "—", none = true, why = !rsp.ok ? "RSP bars: " + rsp.e : (!spy.ok ? "SPY bars: " + spy.e : "");
+    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.dev(g.ser, g.cur); none = false;
+      val = "equal weight \u2212 cap weight, 20-day return: " + sgn(g.cur) + " pts" + (g.cur < 0 ? " \u00b7 the average stock is behind the index" : " \u00b7 the average stock is ahead"); }
+    inputs.push({ key: "eqw", name: "Equal weight vs the index", val, score, none, age: both(rsp, spy), fresh: MARKET_FRESH,
+      src: "RSP vs SPY \u00b7 chart API daily bars \u00b7 session " + sessionOf(rsp) + " \u00b7 a rally only the biggest names join shows up here", why }); }
+  const bs = brd.ok && brd.v && brd.v.snap ? brd.v.snap : null;
+  const bAge = bs && bs.measured_utc ? now - Date.parse(bs.measured_utc) : null;
+  const bSrc = bs ? "our " + bs.universe + "-stock universe \u00b7 measured " + String(bs.measured_utc).slice(0, 16).replace("T", " ") + "Z \u00b7 session " + bs.session_et + " \u00b7 " + bs.measured + " names" : "data/breadth/latest.json \u00b7 not measured yet";
+  { let score = null, val = "not measured yet", none = true;
+    if (bs && bs.above50 && bs.above50.pct != null) { score = Math.round(bs.above50.pct); none = false;
+      val = bs.above50.n + " of " + bs.above50.of + " names are above their 50-day average \u00b7 " + bs.above50.pct + "%"; }
+    inputs.push({ key: "above50", name: "Above the 50-day average", val, score, none, age: bAge, fresh: 36 * 3600e3,
+      src: bSrc + " \u00b7 closing price against its own 50-day mean", why: brd.ok ? "" : "breadth snapshot: " + brd.e }); }
+  { let score = null, val = "not measured yet", none = true;
+    if (bs && bs.above200 && bs.above200.pct != null) { score = Math.round(bs.above200.pct); none = false;
+      val = bs.above200.n + " of " + bs.above200.of + " names are above their 200-day average \u00b7 " + bs.above200.pct + "%"; }
+    inputs.push({ key: "above200", name: "Above the 200-day average", val, score, none, age: bAge, fresh: 36 * 3600e3,
+      src: bSrc + " \u00b7 closing price against its own 200-day mean", why: "" }); }
+  { let score = null, val = "not measured yet", none = true, why = "";
+    if (bs && M.fin(+bs.new_highs) && M.fin(+bs.new_lows)) {
+      const h = +bs.new_highs, l = +bs.new_lows, t = h + l; none = false;
+      val = h + " made a new 52-week high, " + l + " a new low" + (t ? " \u00b7 " + Math.round(100 * h / t) + "% of the extremes are highs" : " \u00b7 no name at either extreme");
+      if (t >= 5) score = Math.round(100 * h / t); else why = "only " + t + " names sit at a 52-week extreme \u2014 too few to score"; }
+    inputs.push({ key: "strength", name: "52-week highs vs lows", val, score, none, age: bAge, fresh: 36 * 3600e3,
+      src: bSrc + " \u00b7 today's high or low against the 252 sessions before it \u00b7 our universe, not the NYSE count CNN uses", cnn: cnnC("stock_price_strength"), why }); }
   { let score = null, val = "no source", none = true, age = null, why = q.ok ? "" : "universe quotes: " + q.e;
     if (q.ok && q.v && q.v.up + q.v.down > 0) { const share = 100 * q.v.up / (q.v.up + q.v.down); score = Math.round(share); none = false; age = 0;
       val = q.v.up + " of our " + (q.v.up + q.v.down) + " stocks are up today · " + Math.round(share) + "% advancing"; }
@@ -10002,7 +10047,7 @@ async function sentiComputeAllRun() {
   for (const i of inputs) { if (i.none || !M.fin(i.score)) i.status = "none"; else if (M.fin(i.age) && i.age > i.fresh) i.status = "stale"; else i.status = "live"; }
   for (const v of voices) { const i = inputs.find((q) => q.key === v.key); v.status = i ? i.status : "none"; }
   const H = M.headline(inputs);
-  const out = { now, inputs, voices, H, cnn, cfg, xPosts: x.ok ? x.v : [] };
+  const out = { now, inputs, voices, H, cnn, cfg, xPosts: x.ok ? x.v : [], brd: brd.ok ? brd.v : null };
   SENTI_CACHE.calc = { at: Date.now(), v: out };
   return out;
 }
@@ -10235,8 +10280,22 @@ async function fillSentiment() {
     '<div class="sn-voice__txt">Newest post in the published feed: <b>' + (xNewest ? esc(new Date(xNewest).toISOString().slice(0, 16).replace("T", " ") + "Z") + " \u00b7 " + esc(M.ageTxt(xAge)) + " ago" : "none") + "</b>" +
       (xAge != null && xAge > 4 * 3600e3 ? ' \u2014 <b>older than four hours</b>, so the collector has probably missed a pass.' : xAge != null ? " \u2014 within the collector's two-hour rhythm." : "") + "</div>" +
     '<div class="sn-voice__txt">' + (C.xPosts || []).length + ' posts are stored in that feed in total; <b>' + xWin.length + '</b> of them fall in the last 24 hours and <b>' + stats[2].scored + '</b> carried a word the list knows. The collector runs on Alan\u2019s MacBook at 06:30, 08:30, 10:30, 12:30, 14:30, 16:30, 18:30, 21:00 and 23:30 ET and publishes the whole feed each time; this page only ever reads what it published.</div></div>';
+  /* BREADTH, with its own history and the names behind it (lane M30) */
+  const bsn = (C.brd && C.brd.snap) || null, bhist = (C.brd && C.brd.hist) || [];
+  const bCard = bsn ? '<div class="card"><h4>BREADTH \u00b7 THE WHOLE LIST, NOT THE INDEX</h4>' +
+      '<div class="sn-voice__txt">Measured over all <b>' + bsn.measured + '</b> of our names on session <b>' + esc(String(bsn.session_et)) + '</b>, ' +
+        esc(String(bsn.measured_utc).slice(0, 16).replace("T", " ")) + 'Z. An index can rise while most of its names fall; these four readings are the ones that say so.</div>' +
+      '<div class="sn-voice__txt" style="display:flex;gap:10px;align-items:center">' + snLeanBar((bsn.above50.pct - 50) / 50) +
+        '<span style="font-size:11px"><b>' + bsn.above50.pct + '%</b> above the 50-day (' + bsn.above50.n + " of " + bsn.above50.of + ")</span></div>" +
+      '<div class="sn-voice__txt" style="display:flex;gap:10px;align-items:center">' + snLeanBar((bsn.above200.pct - 50) / 50) +
+        '<span style="font-size:11px"><b>' + bsn.above200.pct + '%</b> above the 200-day (' + bsn.above200.n + " of " + bsn.above200.of + ")</span></div>" +
+      '<div class="sn-voice__txt"><b>' + bsn.new_highs + '</b> new 52-week highs' + (bsn.names_new_high.length ? " (" + esc(bsn.names_new_high.slice(0, 8).join(" \u00b7 ")) + ")" : "") +
+        ' against <b>' + bsn.new_lows + '</b> new lows' + (bsn.names_new_low.length ? " (" + esc(bsn.names_new_low.slice(0, 8).join(" \u00b7 ")) + (bsn.names_new_low.length > 8 ? " \u2026" : "") + ")" : "") + ".</div>" +
+      (bhist.length > 1 ? '<div class="sn-voice__txt" style="color:var(--dim)">history: ' + esc(bhist.slice(-6).map(function (r) { return r.session_et + " " + r.above50_pct + "%/" + r.above200_pct + "%"; }).join(" \u00b7 ")) + "</div>"
+        : '<div class="sn-voice__txt" style="color:var(--dim)">This is the first measured session, so there is no history to compare against yet \u2014 each run of <b>scripts/breadth-snapshot.mjs</b> adds one.</div>') + "</div>"
+    : '<div class="card"><h4>BREADTH</h4><div class="sn-voice__txt">Not measured yet: <b>data/breadth/latest.json</b> has not been written. Run <b>node scripts/breadth-snapshot.mjs</b>; it reads 364 daily series from the chart API and takes about twenty seconds.</div></div>';
   el("snRail").innerHTML =
-    '<div class="card"><h4>THE VOICES · SEEN, NOT LISTED</h4>' + ytCard + xCard + otherCard + "</div>" + kwCard + xFresh +
+    '<div class="card"><h4>THE VOICES · SEEN, NOT LISTED</h4>' + ytCard + xCard + otherCard + "</div>" + bCard + kwCard + xFresh +
     '<div class="card"><h4>HOW EACH VOICE IS MEASURED</h4>' +
       '<div class="sn-voice__txt"><b>YouTube.</b> A scheduled job collects clips from the channels Alan subscribes to and from ticker searches, and files them in <b>youtube_videos</b>. For the subscribed channels it fetches the English transcript and counts finance keywords around each ticker mention — a word list with negation (<b>yt-lexicon-v1</b>), not an AI read — and writes one pooled row per ticker into <b>social_sentiment</b> over a 7-day window. The room’s own blend above reads the ticker-tagged clips’ titles instead, because it needs the channel behind each reading and the per-video table is empty.</div>' +
       '<div class="sn-voice__txt"><b>X.</b> A browser-side collector saves the posts on Alan’s Trading list and publishes them at <b>/api/xfeed</b>. Each post’s text is run through the same keyword list; a post is bullish, bearish or neither; the blend above averages handles.</div>' +
