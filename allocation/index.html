@@ -775,6 +775,15 @@ function compute() {
    picked for being ahead of the market, for the strength of its own names, or for
    both, and the mix toggle decides how much each one counted. Never claim the
    whole list is "leading the market" when part of it is not. */
+/* what the published rotation leg actually changed: nothing, the order only, or the sectors themselves */
+function rotEffect(m) {
+  const withS = m.rotWith.join("|"), withoutS = m.rotWithout.join("|");
+  if (withS === withoutS) return "Switching that leg off changes nothing today: the same sectors come out in the same order.";
+  const same = [...m.rotWith].sort().join("|") === [...m.rotWithout].sort().join("|");
+  if (same) return "Switching it off leaves the same sectors, ordered " +
+    list(m.rotWithout.map((n)=>esc(plain(n)))) + " instead, so only the weights move.";
+  return "Switching it off would choose " + list(m.rotWithout.map((n)=>esc(plain(n)))) + " instead.";
+}
 function whyThese(m) {
   const ahead = m.sectors.filter((s)=>s.rel!=null && s.rel>0).length;
   const rated = m.sectors.filter((s)=>s.rel!=null).length;
@@ -872,7 +881,10 @@ function drawDesk(m) {
     tile("THE ANSWER", pct(m.invested), pct(m.cash) + " held in cash");
 
   /* layer 2 */
-  const sameSet = m.rotWith.join("|") === m.rotWithout.join("|");
+  /* three different things can happen when that leg is switched off, and saying
+     "the choice would be X" when the same sectors come out in a different order
+     would overstate it */
+  const rotSaid = rotEffect(m);
   document.getElementById("l2says").innerHTML = m.sectors.map((s)=>
     "<b>"+esc(plain(s.name))+"</b> "+num(pct(s.w))).join(" · ") +
     (m.thin ? " — fewer than the " + T.nSectors + " you asked for, because only these are leading." : "") +
@@ -882,9 +894,7 @@ function drawDesk(m) {
     "% the tape and " + (100-T.mix) + "% the names. The sectors that come out positive share the money in proportion to their strength, " +
     "with no sector allowed more than " + pct(T.maxSector) + ". " +
     (m.rot.on
-      ? "The sector rotation tool's own published ranking counts for " + m.rot.share + "% of the standing — this page reads that rank, it does not recompute it. " +
-        (sameSet ? "With that leg switched off the same sectors are chosen."
-                 : "With that leg switched off the choice would be " + list(m.rotWithout.map((n)=>plain(n))) + ".")
+      ? "The sector rotation tool's own published ranking counts for " + m.rot.share + "% of the standing — this page reads that rank, it does not recompute it. " + rotSaid
       : "No published sector-rotation ranking came back today, so the standing is the tape and the names alone.");
   document.getElementById("l2io").innerHTML = ioBox(
     "each sector fund against SPY over " + num(T.lookback) + " days (" +
@@ -1153,9 +1163,7 @@ function drawReport(m) {
     (m.rot.on
       ? "A third reading joins them: the sector rotation tool publishes its own ranking, and that rank counts for " +
         num(m.rot.share + "%") + " of the standing here — read from " + esc(m.rot.date) + ", not recomputed on this page. " +
-        (m.rotWith.join("|")===m.rotWithout.join("|")
-          ? "Switching it off changes nothing today."
-          : "Switching it off would leave " + list(m.rotWithout.map((n)=>esc(plain(n)))) + " instead.")
+        rotEffect(m)
       : "The sector rotation tool published no ranking this page could read today, so only the tape and the names decided it.") +
     "</p>");
   const F = m.funnel;
