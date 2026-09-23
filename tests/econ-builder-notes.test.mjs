@@ -125,14 +125,35 @@ test("how it CAME OUT sets the name's hue — green, yellow, red, and nothing el
 });
 
 /* ---- 2.5 · OTHER reads 0 ------------------------------------------------- */
-test("the three releases that had no home now have one", () => {
-  assert.equal(api.ecCat("M2 Money Supply MoM (Aug)"), "CENTRAL BANK");
-  assert.equal(api.ecCat("Money Supply (Aug)"), "CENTRAL BANK");
-  assert.equal(api.ecCat("2-Year FRN Auction"), "AUCTIONS");
-  assert.equal(api.ecCat("Non Defense Goods Orders Ex Air (Aug)"), "GROWTH");
+test("the releases that had no home now have one", () => {
+  /* MEASURED over a real US month (464 rows, Sep 2026): OTHER held 29. These are the ones that had a home
+     all along and were falling through the rules. Afterwards OTHER holds 9: the UN General Assembly and five
+     agricultural supply reports, neither of which is a macro release the eight spines cover. */
+  for (const [event, home] of [
+    ["M2 Money Supply MoM (Aug)", "CENTRAL BANK"], ["Money Supply (Aug)", "CENTRAL BANK"],
+    ["Interest Rate Projection - Longer", "CENTRAL BANK"],
+    ["2-Year FRN Auction", "AUCTIONS"], ["10-Year TIPS Auction", "AUCTIONS"],
+    ["Non Defense Goods Orders Ex Air (Aug)", "GROWTH"], ["LMI Logistics Managers Index", "GROWTH"],
+    ["All Car Sales", "GROWTH"], ["All Truck Sales", "GROWTH"], ["Consumer Credit Change", "GROWTH"],
+    ["Thomson Reuters IPSOS PCSI", "GROWTH"], ["Wholesale Sales MoM", "GROWTH"],
+    ["Corporate Profits QoQ", "GROWTH"], ["Real Consumer Spending QoQ", "GROWTH"],
+    ["Average Weekly Hours", "LABOR"], ["Nonfarm Productivity QoQ", "LABOR"],
+    ["Used Car Prices MoM", "INFLATION"],
+  ]) assert.equal(api.ecCat(event), home, event);
+  /* and the rules they had to pass through still answer the same way */
+  for (const [event, home] of [
+    ["Initial Jobless Claims", "LABOR"], ["Inflation Rate YoY", "INFLATION"], ["Wholesale Prices MoM", "INFLATION"],
+    ["New Home Sales", "HOUSING"], ["Retail Sales MoM", "GROWTH"], ["EIA Crude Oil Stocks Change", "ENERGY"],
+    ["CFTC Gold speculative net positions", "POSITIONING"], ["Fed Barr Speech", "CENTRAL BANK"],
+    ["Balance of Trade", "TRADE"], ["5-Year Note Auction", "AUCTIONS"],
+  ]) assert.equal(api.ecCat(event), home, event + " (unchanged)");
 });
 test("over a real US week, OTHER holds nothing but the one thing that is not a data release", () => {
   const other = WEEK.filter((r) => api.ecCat(r.event) === "OTHER").map((r) => api.ecBase(r.event));
   assert.deepEqual([...new Set(other)], ["UN General Assembly"],
     "OTHER is a leak detector: anything else in here is a release with no home");
+  /* what is left over a whole month, and why each one is honest: a diplomatic event and five agricultural
+     supply reports. Neither belongs to any of the eight spines; naming a ninth is Alan's call, not a test's. */
+  for (const e of ["WASDE Report", "NOPA Crush Report", "Quarterly Grain Stocks - Corn", "UN General Assembly"])
+    assert.equal(api.ecCat(e), "OTHER", e);
 });
