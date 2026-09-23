@@ -1,5 +1,12 @@
 # Operating the live X feed
 
+> **22 September 2026 — the collector is now a program.** `scripts/xfeed-program.mjs` performs the
+> "trusted browser helper" and "one recurring pass" procedure below by itself, from the collector's own
+> persistent Chrome profile, on a launchd schedule (06:30 / 10:30 / 14:30 / 18:30 ET on the iMac). The
+> five-minute Codex heartbeat described here is retired and must not run alongside it (one writer). See
+> `xfeed/program/README.md`. The intake contract, finish rules, quota handling and status command below
+> are unchanged and remain the reference.
+
 The source is Alan's actual Trading list, `1405188850188759047`, viewed through the existing signed-in Chrome session. The collector reads responses that ordinary list navigation and scrolling already produced. The local intake normalizes public post fields, preserves the ledger, verifies source coverage, and publishes completed passes. It does not request an X API, export cookies, or sign into another profile.
 
 The recurring cadence is **every five minutes**, through the active Codex heartbeat `keep-scintilla-x-feed-current` in this same task, installed September 8, 2026. Starting the intake service alone does not schedule collection. Collection requires this host, Chrome login, the retained task group, the CUA integration, and the intake service to be available. An unavailable source leaves the last good feed visible with an error or stale status. Keep unchanged runs quiet; report a meaningful failure or action the user needs to take.

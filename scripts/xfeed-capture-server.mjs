@@ -318,13 +318,16 @@ export function createCaptureServer(service, { port = 8766 } = {}) {
 async function main(args) {
   const flags = new Set(['--initialize', '--serve', '--publish']);
   const options = {};
-  for (let i = 0; i < args.length; i++) { const key = args[i]; if (flags.has(key)) options[key] = true; else if (['--runtime-dir', '--import-captures', '--pass-id', '--finish-reason'].includes(key) && args[i + 1]) options[key] = args[++i]; else throw new Error('Usage: node scripts/xfeed-capture-server.mjs [--initialize] [--import-captures DIR --pass-id ID] [--finish-reason initial_window|overlap|timeline_end] [--serve] [--publish] [--runtime-dir DIR]'); }
+  for (let i = 0; i < args.length; i++) { const key = args[i]; if (flags.has(key)) options[key] = true; else if (['--runtime-dir', '--import-captures', '--pass-id', '--finish-reason', '--stale-after-seconds'].includes(key) && args[i + 1]) options[key] = args[++i]; else throw new Error('Usage: node scripts/xfeed-capture-server.mjs [--initialize] [--import-captures DIR --pass-id ID] [--finish-reason initial_window|overlap|timeline_end] [--serve] [--publish] [--runtime-dir DIR] [--stale-after-seconds N]'); }
   if (!args.length) throw new Error('Choose --initialize, --import-captures, or --serve explicitly; service is stopped by default');
   const runtimeDir = resolve(options['--runtime-dir'] ?? DEFAULT_RUNTIME);
   if (options['--initialize']) process.stdout.write(`${JSON.stringify(await initializeRuntime({ runtimeDir }))}\n`);
   let publisher = null;
   if (options['--publish']) publisher = (await import('./xfeed-publish.mjs')).publish;
-  const service = await createCaptureService({ runtimeDir, publish: publisher });
+  // The scheduled program passes its cadence so the desk does not call a six-hour cadence stale after ten minutes.
+  const staleAfterSeconds = options['--stale-after-seconds'] === undefined ? 600 : Number(options['--stale-after-seconds']);
+  if (!Number.isSafeInteger(staleAfterSeconds) || staleAfterSeconds < 30 || staleAfterSeconds > 86400) throw new Error('--stale-after-seconds must be an integer from 30 through 86400');
+  const service = await createCaptureService({ runtimeDir, publish: publisher, staleAfterSeconds });
   if (options['--import-captures']) {
     const id = passId(options['--pass-id']), directory = resolve(options['--import-captures']); let imported = 0, ignored = 0;
     for (const name of (await readdir(directory)).filter(n => n.endsWith('.json')).sort()) {
