@@ -1024,7 +1024,37 @@ body.senti .sc-cohsearch{ display:none; }
 .sn-ref:last-child{ border-bottom:0; }
 .sn-ref b{ color:var(--ink2); font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
 .sn-ref small{ color:var(--dim); font-size:8px; }
-@media(max-width:700px){ .sn-head{ gap:10px; } .sn-tbl td.src, .sn-tbl th.src{ display:none; } .sn-tbl td, .sn-tbl th{ padding-right:4px; } .sn-bar{ min-width:54px; } }
+.sn-vs{ margin-left:auto; text-align:right; padding-left:16px; border-left:.5px solid var(--line2); }
+.sn-vs__n{ font-size:22px; font-weight:700; color:var(--ink3); font-variant-numeric:tabular-nums; line-height:1; }
+.sn-vs__l{ font-size:7.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); margin-top:5px; }
+.sn-vs__t{ font-size:8.5px; color:var(--dim); margin-top:7px; max-width:300px; line-height:1.5; }
+.sn-kpi{ display:flex; gap:26px; flex-wrap:wrap; padding:2px 0 4px; }
+.sn-kpi>div{ display:flex; flex-direction:column; gap:5px; }
+.sn-kpi b{ font-size:22px; color:var(--ink2); font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+.sn-kpi span{ font-size:7.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); }
+.sn-h2{ font-size:8px; letter-spacing:.24em; text-transform:uppercase; color:var(--dim); padding:4px 0 2px; }
+.sn-tbl td a{ color:var(--ink3); text-decoration:none; border-bottom:.5px solid var(--line2); }
+.sn-tbl td a:hover{ color:var(--ink2); }
+.sn-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.sn-chip{ font-size:9px; color:var(--ink3); border:.5px solid var(--line2); padding:2px 7px; font-variant-numeric:tabular-nums; }
+.sn-chip b{ color:var(--ink2); font-weight:700; }
+/* X posts: the picture IS the point (Alan) — charts and screenshots carry the call.
+   Held to the monochrome house rule at rest, true colour on hover/tap. */
+.sn-x{ display:grid; grid-template-columns:repeat(auto-fill,minmax(236px,1fr)); gap:10px; }
+.sn-xp{ border:.5px solid var(--line); padding:8px; display:flex; flex-direction:column; gap:6px; background:var(--mute); }
+.sn-xp__hd{ display:flex; gap:7px; align-items:baseline; }
+.sn-xp__h{ font-size:9px; color:var(--ink2); font-weight:700; letter-spacing:.02em; }
+.sn-xp__age{ margin-left:auto; font-size:8px; color:var(--dim); white-space:nowrap; }
+.sn-xp__t{ font-size:9px; color:var(--ink3); line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+.sn-xp__m{ display:flex; flex-direction:column; gap:5px; }
+.sn-xp__m img{ width:100%; display:block; border:.5px solid var(--line2); filter:grayscale(1) brightness(.86) contrast(1.02); transition:filter .18s; }
+.sn-xp__m img:hover{ filter:none; }
+.sn-xp__f{ display:flex; gap:8px; align-items:center; font-size:8px; color:var(--dim); }
+.sn-xp__f a{ color:var(--ink3); text-decoration:none; border-bottom:.5px solid var(--line2); }
+@media(max-width:700px){ .sn-head{ gap:10px; } .sn-tbl td.src, .sn-tbl th.src{ display:none; } .sn-tbl td, .sn-tbl th{ padding-right:4px; } .sn-bar{ min-width:54px; }
+  .sn-vs{ margin-left:0; padding-left:0; border-left:0; border-top:.5px solid var(--line2); padding-top:8px; text-align:left; width:100%; }
+  .sn-vs__t{ max-width:none; } .sn-kpi{ gap:16px; } .sn-kpi b{ font-size:18px; }
+  .sn-x{ grid-template-columns:1fr; } }
 
 /* ── AREA D · "◆ AI READ" placeholder slot — consistent dim on-brand reserved box,
    dropped into NEWS / SOCIAL / EVENTS. No data now; styled to light up later. ── */
@@ -4108,7 +4138,8 @@ const S = {
   readTab: "VERDICT", calType: "ALL",
   estTF: "A",                                   // (news cache lives in NEWS_CACHE — per-cohort, FIX A3)
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
-  socTab: "YOUTUBE",                            // SOCIAL defaults to YOUTUBE; X opens the Desk ledger reader
+  socTab: "YOUTUBE",
+  sentiTab: "OVERVIEW",                         /* SENTIMENT sub-tab: the gauge, then one page per voice */                            // SOCIAL defaults to YOUTUBE; X opens the Desk ledger reader
   ytFilt: "ALL",                                // YouTube feed filter — ALL · SUBS · SHORTS · WATCH · $TICKER
   ytView: "CARDS",                              // YouTube sub-view — CARDS (styled) · RAW (StockTwits-style table)
   /* R52 — ECONOMIC room: region tab · category chip · the day being viewed (ET,
@@ -8580,6 +8611,18 @@ const SENTI = (function () {
   function ret(a, n) { const out = new Array(a.length).fill(null); for (let i = n; i < a.length; i++) if (fin(a[i]) && fin(a[i - n]) && a[i - n] !== 0) out[i] = a[i] / a[i - n] - 1; return out; }
   /* percentile rank (0..100) of x within the finite values of its own series */
   function pct(series, x) { const v = (series || []).filter(fin); if (!v.length || !fin(x)) return null; let le = 0; for (const y of v) if (y <= x) le++; return Math.round(100 * le / v.length); }
+  /* CNN-style: how far today sits from its own average, measured in the size that
+     series normally moves (one standard deviation). Two deviations either way is the
+     end of the dial. This is what CNN means by deviation "compared to how much they
+     normally diverge", and it is what the percentile rank got wrong: a percentile can
+     say "higher than 68% of the last year" when today is only a whisker above average. */
+  function dev(series, x) {
+    const v = (series || []).filter(fin); if (v.length < 30 || !fin(x)) return null;
+    const m = v.reduce((a, b) => a + b, 0) / v.length;
+    const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / v.length);
+    if (!sd) return null;
+    return Math.round(Math.max(0, Math.min(100, 50 + 25 * ((x - m) / sd))));
+  }
   /* linear map -ext..+ext → 0..100, clamped */
   function lin(s, ext) { if (!fin(s) || !fin(ext) || ext <= 0) return null; const c = Math.max(-1, Math.min(1, s / ext)); return Math.round(50 + 50 * c); }
   function label(score) { if (!fin(score)) return "NO READING"; if (score < 25) return "EXTREME FEAR"; if (score < 45) return "FEAR"; if (score <= 55) return "NEUTRAL"; if (score <= 75) return "GREED"; return "EXTREME GREED"; }
@@ -8627,11 +8670,11 @@ const SENTI = (function () {
   /* weighted mean of per-ticker scores (weight = headline / mention count) */
   function wmean(rows, sKey, wKey) { let s = 0, w = 0; for (const r of rows || []) { const x = +r[sKey], k = Math.max(0, +r[wKey] || 0); if (fin(x) && k > 0) { s += x * k; w += k; } } return w ? s / w : null; }
   function ageTxt(ms) { if (!fin(ms) || ms < 0) return "—"; if (ms < 60e3) return "now"; if (ms < 3600e3) return Math.round(ms / 60e3) + "m"; if (ms < 48 * 3600e3) return Math.round(ms / 3600e3) + "h"; return Math.round(ms / 86400e3) + "d"; }
-  return { fin, sma, ret, pct, lin, label, headline, lexLean, xVoice, wmean, ageTxt, BULL, BEAR };
+  return { fin, sma, ret, pct, dev, lin, label, headline, lexLean, xVoice, wmean, ageTxt, BULL, BEAR };
 })();
 /* /SENTI-MATH */
 
-const SENTI_CACHE = { bars: new Map(), x: null };   // ten-minute caches so re-entering the room does not re-pull the 13 MB feed
+const SENTI_CACHE = { bars: new Map(), x: null, q: null, news: null, yt: null, calc: null };   // ten-minute caches so re-entering the room does not re-pull the 13 MB feed
 const SENTI_TTL = 600000;
 function sentiApi() { return (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev"; }
 async function sentiBars(sym) {
@@ -8646,20 +8689,75 @@ async function sentiX() {
   const r = await fetch("/api/xfeed", { cache: "default" }); if (!r.ok) throw new Error("xfeed " + r.status);
   const j = await r.json(); const posts = Array.isArray(j.posts) ? j.posts : []; SENTI_CACHE.x = { at: Date.now(), posts }; return posts;
 }
+/* How many of our own stocks are up today: ONE /quotes call for the whole universe.
+   This is the input whose absence let the gauge read greed on a fearful day. It counts
+   stocks; CNN weighs theirs by volume, so the row says so and the two are never mixed. */
+async function sentiBreadth() {
+  if (SENTI_CACHE.q && Date.now() - SENTI_CACHE.q.at < SENTI_TTL) return SENTI_CACHE.q.v;
+  const u = await (await fetch(sentiApi() + "/universe")).json();
+  const syms = Array.isArray(u.symbols) ? u.symbols : [];
+  if (!syms.length) throw new Error("universe empty");
+  const r = await fetch(sentiApi() + "/quotes?symbols=" + encodeURIComponent(syms.join(",")));
+  if (!r.ok) throw new Error("quotes " + r.status);
+  const j = await r.json();
+  const rows = Array.isArray(j.quotes) ? j.quotes : (Array.isArray(j.rows) ? j.rows : Object.values(j.quotes || j.rows || j.data || {}));
+  let up = 0, down = 0, flat = 0;
+  for (const row of rows) { const c = +row.change_pct; if (!isFinite(c)) continue; if (c > 0) up++; else if (c < 0) down++; else flat++; }
+  const v = { up, down, flat, n: rows.length, universe: syms.length };
+  SENTI_CACHE.q = { at: Date.now(), v }; return v;
+}
 function sentiSafe(p, ms) {
   const t = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms || 20000));
   return Promise.race([p, t]).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String((e && e.message) || e) }));
 }
+const SENTI_TABS = [["OVERVIEW", "OVERVIEW"], ["NEWS", "NEWS"], ["YOUTUBE", "YOUTUBE"], ["X", "X"]];
+const SENTI_LBL = {
+  OVERVIEW: ["sentiment · <b>market-wide</b> · scintilla fear &amp; greed", "voices · <b>news · youtube · x · stocktwits</b>"],
+  NEWS:     ["news · <b>what the headlines say</b>", "news · <b>where it comes from</b>"],
+  YOUTUBE:  ["youtube · <b>what the channels say</b>", "youtube · <b>where it comes from</b>"],
+  X:        ["x · <b>what the posts say</b> · pictures and charts included", "x · <b>where it comes from</b>"],
+};
+function sentiSubtabsHTML() {
+  return '<div class="sc-soctabs">' + SENTI_TABS.map(function (kv) {
+    return '<button class="sc-soctab' + (S.sentiTab === kv[0] ? " is-on" : "") + '" data-act="sentitab" data-tab="' + kv[0] + '">' + kv[1] + "</button>";
+  }).join("") + "</div>";
+}
 function sentimentRoomHTML() {
-  return '<div class="body2">' +
+  const L = SENTI_LBL[S.sentiTab] || SENTI_LBL.OVERVIEW;
+  return sentiSubtabsHTML() + '<div class="body2">' +
     '<div class="panel">' +
-      '<div class="sc-plabel sc-plabel--row"><span>sentiment · <b>market-wide</b> · scintilla fear &amp; greed</span>' + SECFS_BTN + "</div>" +
-      '<div class="scroller"><div class="sn-wrap" id="snMain"><div class="soon">reading the inputs…</div></div></div>' +
+      '<div class="sc-plabel sc-plabel--row"><span>' + L[0] + "</span>" + SECFS_BTN + "</div>" +
+      '<div class="scroller"><div class="sn-wrap" id="snMain"><div class="soon">reading…</div></div></div>' +
     "</div>" +
     '<div class="panel">' +
-      '<div class="sc-plabel sc-plabel--row"><span>voices · <b>news · youtube · x · stocktwits</b></span>' + SECFS_BTN + "</div>" +
-      '<div class="rail" id="snRail"><div class="soon">reading the feeds…</div></div>' +
+      '<div class="sc-plabel sc-plabel--row"><span>' + L[1] + "</span>" + SECFS_BTN + "</div>" +
+      '<div class="rail" id="snRail"><div class="soon">reading…</div></div>' +
     "</div></div>";
+}
+function sentiDispatch() {
+  if (S.sentiTab === "NEWS") return fillSentiNews();
+  if (S.sentiTab === "YOUTUBE") return fillSentiYT();
+  if (S.sentiTab === "X") return fillSentiXPage();
+  return fillSentiment();
+}
+/* Exact row count from PostgREST (count=exact runs a real count(*) — never the
+   planner estimate). Returns a number or throws, so a failure shows as a failure. */
+async function sentiCount(path) {
+  const r = await fetch(SB + "/rest/v1/" + path + "&limit=1", { headers: { apikey: ANON, Authorization: "Bearer " + ANON, Prefer: "count=exact", Range: "0-0" } });
+  if (!r.ok) throw new Error("count " + r.status);
+  const n = +String(r.headers.get("content-range") || "").split("/")[1];
+  if (!isFinite(n)) throw new Error("no count header");
+  return n;
+}
+function snKpi(items) {
+  return '<div class="sn-kpi">' + items.map(function (it) {
+    return "<div><b>" + esc(String(it[0])) + "</b><span>" + esc(String(it[1])) + "</span></div>";
+  }).join("") + "</div>";
+}
+function snLean(net, n) {
+  if (!SENTI.fin(net)) return "no reading";
+  const w = net > 0.08 ? "leaning positive" : net < -0.08 ? "leaning negative" : "balanced";
+  return w + " · " + (net >= 0 ? "+" : "") + net.toFixed(2) + (n ? " over " + n + " items" : "");
 }
 /* monochrome half-dial: track --mute, filled arc --ink3, needle --ink2, ticks at the CNN bands */
 function snGaugeSVG(score) {
@@ -8677,9 +8775,12 @@ function snGaugeSVG(score) {
     '<text x="12" y="118" fill="var(--dim)" font-size="7" letter-spacing="1.5">FEAR</text><text x="208" y="118" fill="var(--dim)" font-size="7" letter-spacing="1.5" text-anchor="end">GREED</text></svg>';
 }
 let SENTI_RUN = 0;
-async function fillSentiment() {
-  const run = ++SENTI_RUN, now = Date.now(), M = SENTI;
-  const [spy, vix, hyg, lqd, tlt, news, newsLast, yt, st, x, cnn, cfg] = await Promise.all([
+/* ONE computation of the reading, cached for ten minutes. The SENTIMENT tab and the
+   front-page gauge both read this, so the two can never show different numbers. */
+async function sentiComputeAll() {
+  if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
+  const now = Date.now(), M = SENTI;
+  const [spy, vix, hyg, lqd, tlt, news, newsLast, yt, st, x, cnn, cfg, q] = await Promise.all([
     sentiSafe(sentiBars("SPY")), sentiSafe(sentiBars("VIX")), sentiSafe(sentiBars("HYG")), sentiSafe(sentiBars("LQD")), sentiSafe(sentiBars("TLT")),
     sentiSafe(pg("news_sentiment?select=ticker,score,n_articles,updated_ts")),
     sentiSafe(pg("news?select=published_ts&order=published_ts.desc.nullslast&limit=1")),
@@ -8688,8 +8789,8 @@ async function fillSentiment() {
     sentiSafe(sentiX(), 45000),
     sentiSafe(fetch("https://production.dataviz.cnn.io/index/fearandgreed/graphdata").then((r) => r.ok ? r.json() : Promise.reject(new Error("cnn " + r.status))), 8000),
     sentiSafe(fetch("https://api.alternative.me/fng/?limit=1").then((r) => r.ok ? r.json() : Promise.reject(new Error("fng " + r.status))), 8000),
+    sentiSafe(sentiBreadth(), 25000),
   ]);
-  if (run !== SENTI_RUN || S.sec !== "SENTIMENT" || !el("snMain")) return;   // room left or superseded mid-flight
   const inputs = [], voices = [];
   const closes = (b) => b.ok ? b.v.map((r) => +r.c) : null;
   const lastT = (b) => (b.ok && b.v.length) ? +b.v[b.v.length - 1].t : null;
@@ -8701,19 +8802,23 @@ async function fillSentiment() {
   const sgn = (v, d) => (v >= 0 ? "+" : "") + (v * 100).toFixed(d == null ? 1 : d);
   const gap = (a, b) => { const n = Math.min(a.length, b.length); const ra = M.ret(a.slice(-n), 20), rb = M.ret(b.slice(-n), 20); const ser = ra.map((v, i) => (M.fin(v) && M.fin(rb[i])) ? v - rb[i] : null); return { ser, cur: ser[ser.length - 1] }; };
   { const c = closes(spy); let score = null, val = "—", why = spy.ok ? "" : "SPY bars: " + spy.e;
-    if (c && c.length > 130) { const s = M.sma(c, 125); const ser = c.map((v, i) => s[i] ? v / s[i] - 1 : null); const cur = ser[ser.length - 1]; score = M.pct(ser, cur); val = "SPY " + sgn(cur) + "% vs its 125-day average"; }
+    if (c && c.length > 130) { const s = M.sma(c, 125); const ser = c.map((v, i) => s[i] ? v / s[i] - 1 : null); const cur = ser[ser.length - 1]; score = M.dev(ser, cur); val = "SPY " + sgn(cur) + "% vs its 125-day average"; }
     inputs.push({ key: "momentum", name: "Market momentum", val, score, age: marketAge(spy), fresh: MARKET_FRESH, src: "SPY · chart API daily bars · session " + sessionOf(spy), cnn: cnnC("market_momentum_sp500"), why }); }
   { const c = closes(vix); let score = null, val = "—", why = vix.ok ? "" : "VIX bars: " + vix.e;
-    if (c && c.length > 60) { const s = M.sma(c, 50); const ser = c.map((v, i) => s[i] ? v / s[i] - 1 : null); const cur = ser[ser.length - 1]; const p = M.pct(ser, cur); score = p == null ? null : 100 - p; val = "VIX " + c[c.length - 1].toFixed(2) + " · " + sgn(cur) + "% vs its 50-day average"; }
+    if (c && c.length > 60) { const s = M.sma(c, 50); const ser = c.map((v, i) => s[i] ? v / s[i] - 1 : null); const cur = ser[ser.length - 1]; const p = M.dev(ser, cur); score = p == null ? null : 100 - p; val = "VIX " + c[c.length - 1].toFixed(2) + " · " + sgn(cur) + "% vs its 50-day average"; }
     inputs.push({ key: "volatility", name: "Market volatility", val, score, age: marketAge(vix), fresh: MARKET_FRESH, src: "VIX · chart API daily bars · session " + sessionOf(vix) + " · inverted", cnn: cnnC("market_volatility_vix"), why }); }
   { const a = closes(spy), b = closes(tlt); let score = null, val = "—", why = !spy.ok ? "SPY bars: " + spy.e : (!tlt.ok ? "TLT bars: " + tlt.e : "");
-    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.pct(g.ser, g.cur); val = "stocks − bonds, 20-day return: " + sgn(g.cur) + " pts"; }
+    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.dev(g.ser, g.cur); val = "stocks − bonds, 20-day return: " + sgn(g.cur) + " pts"; }
     inputs.push({ key: "safehaven", name: "Safe haven demand", val, score, age: both(spy, tlt), fresh: MARKET_FRESH, src: "SPY vs TLT · chart API daily bars", cnn: cnnC("safe_haven_demand"), why }); }
   { const a = closes(hyg), b = closes(lqd); let score = null, val = "—", why = !hyg.ok ? "HYG bars: " + hyg.e : (!lqd.ok ? "LQD bars: " + lqd.e : "");
-    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.pct(g.ser, g.cur); val = "junk − investment grade, 20-day return: " + sgn(g.cur) + " pts"; }
+    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.dev(g.ser, g.cur); val = "junk − investment grade, 20-day return: " + sgn(g.cur) + " pts"; }
     inputs.push({ key: "junk", name: "Junk bond demand", val, score, age: both(hyg, lqd), fresh: MARKET_FRESH, src: "HYG vs LQD · price proxy for the yield spread · chart API", cnn: cnnC("junk_bond_demand"), why }); }
   inputs.push({ key: "strength", name: "52-week highs vs lows", val: "no source", score: null, none: true, src: "needs NYSE new-high / new-low counts · not collected", cnn: cnnC("stock_price_strength") });
-  inputs.push({ key: "breadth", name: "Stock price breadth", val: "no source", score: null, none: true, src: "advancing vs declining volume · only ADD / TICK on TradingView today", cnn: cnnC("stock_price_breadth") });
+  { let score = null, val = "no source", none = true, age = null, why = q.ok ? "" : "universe quotes: " + q.e;
+    if (q.ok && q.v && q.v.up + q.v.down > 0) { const share = 100 * q.v.up / (q.v.up + q.v.down); score = Math.round(share); none = false; age = 0;
+      val = q.v.up + " of our " + (q.v.up + q.v.down) + " stocks are up today · " + Math.round(share) + "% advancing"; }
+    inputs.push({ key: "breadth", name: "How many stocks are up", val, score, none, age, fresh: 6 * 3600e3,
+      src: "our 364-stock universe · one /quotes call · counted per stock, where CNN weighs by volume", cnn: cnnC("stock_price_breadth"), why }); }
   inputs.push({ key: "putcall", name: "Put / call ratio", val: "no source", score: null, none: true, src: "Cboe retired the free daily files in Oct 2019 · not collected", cnn: cnnC("put_call_options") });
   { let score = null, val = "—", age = null, n = 0, tk = 0, why = news.ok ? "" : "news_sentiment: " + news.e;
     if (news.ok && Array.isArray(news.v) && news.v.length) { const rows = news.v.filter((r) => M.fin(+r.score) && +r.n_articles > 0); const m = M.wmean(rows, "score", "n_articles"); tk = rows.length; n = rows.reduce((s, r) => s + (+r.n_articles || 0), 0); const up = Math.max(...news.v.map((r) => +r.updated_ts || 0)); age = up ? now - up * 1000 : null; if (M.fin(m)) { score = M.lin(m, 0.3); val = (m >= 0 ? "+" : "") + m.toFixed(3) + " · " + tk + " tickers · " + n + " headlines · 4d"; } }
@@ -8735,6 +8840,15 @@ async function fillSentiment() {
   for (const i of inputs) { if (i.none || !M.fin(i.score)) i.status = "none"; else if (M.fin(i.age) && i.age > i.fresh) i.status = "stale"; else i.status = "live"; }
   for (const v of voices) { const i = inputs.find((q) => q.key === v.key); v.status = i ? i.status : "none"; }
   const H = M.headline(inputs);
+  const out = { now, inputs, voices, H, cnn, cfg };
+  SENTI_CACHE.calc = { at: Date.now(), v: out };
+  return out;
+}
+async function fillSentiment() {
+  const run = ++SENTI_RUN;
+  const C = await sentiComputeAll();
+  if (run !== SENTI_RUN || S.sec !== "SENTIMENT" || S.sentiTab !== "OVERVIEW" || !el("snMain")) return;   // room left or superseded mid-flight
+  const M = SENTI, now = C.now, inputs = C.inputs, voices = C.voices, H = C.H, cnn = C.cnn, cfg = C.cfg;
   const rows = inputs.map((i) => {
     const off = i.status !== "live";
     const tag = i.status === "live" ? '<span class="sn-tag live">live</span>' : i.status === "stale" ? '<span class="sn-tag">stale · ' + esc(M.ageTxt(i.age)) + "</span>" : '<span class="sn-tag">' + (i.none ? "no source" : "no reading") + "</span>";
@@ -8742,10 +8856,23 @@ async function fillSentiment() {
     return '<tr class="' + (off ? "off" : "") + '"><td class="k">' + esc(i.name) + tag + "</td><td>" + esc(i.val) + (i.why && !i.none ? ' <span class="sn-why">' + esc(i.why) + "</span>" : "") + "</td><td>" + bar + '</td><td class="n">' + (M.fin(i.score) ? i.score : "—") + '</td><td class="n">' + (i.cnn == null ? "—" : i.cnn) + '</td><td class="n">' + esc(M.ageTxt(i.age)) + '</td><td class="src">' + esc(i.src) + "</td></tr>";
   }).join("");
   const stamp = new Date(now).toISOString().slice(0, 16).replace("T", " ") + "Z";
+  /* The honest comparison: on the inputs we BOTH have, what does each of us read?
+     Whatever gap is left after that line is the inputs we do not hold, named in the table. */
+  const cnnHead = (cnn.ok && cnn.v && cnn.v.fear_and_greed && M.fin(+cnn.v.fear_and_greed.score)) ? Math.round(+cnn.v.fear_and_greed.score) : null;
+  const shared = inputs.filter((i) => i.status === "live" && M.fin(i.score) && M.fin(i.cnn));
+  const mine = shared.length ? Math.round(shared.reduce((a, i) => a + i.score, 0) / shared.length) : null;
+  const theirs = shared.length ? Math.round(shared.reduce((a, i) => a + i.cnn, 0) / shared.length) : null;
+  const missing = inputs.filter((i) => i.status !== "live" && M.fin(i.cnn));
+  const sameTxt = shared.length
+    ? "on the " + shared.length + " inputs we both have: us " + mine + " \u00b7 CNN " + theirs
+      + (missing.length ? " \u2014 the " + missing.length + " we do not hold read " + missing.map((i) => i.cnn).join(", ") + " for CNN" : "")
+    : "no shared input to compare yet";
   el("snMain").innerHTML =
     '<div class="sn-head"><div class="sn-gauge">' + snGaugeSVG(H.score) + "</div>" +
       '<div><div class="sn-num">' + (H.score == null ? "—" : H.score) + '</div><div class="sn-lbl">' + esc(H.label) + "</div>" +
-      '<div class="sn-sub"><b>' + H.n + " of " + H.of + "</b> inputs live and counted · equal weight · computed " + esc(stamp) + "<br>a stale or missing input is shown below but never counted</div></div></div>" +
+      '<div class="sn-sub"><b>' + H.n + " of " + H.of + "</b> inputs live and counted \u00b7 equal weight \u00b7 computed " + esc(stamp) + "<br>a stale or missing input is shown below but never counted</div></div>" +
+      '<div class="sn-vs"><div class="sn-vs__n">' + (cnnHead == null ? "\u2014" : cnnHead) + '</div><div class="sn-vs__l">CNN \u00b7 all seven inputs</div>' +
+        '<div class="sn-vs__t">' + esc(sameTxt) + "</div></div></div>" +
     '<table class="sn-tbl"><thead><tr><th>input</th><th>our reading</th><th class="nw">fear · greed</th><th class="n">score</th><th class="n" title="CNN Fear &amp; Greed score for the same component, fetched live — reference only, never an input">cnn</th><th class="n">age</th><th class="src">source</th></tr></thead><tbody>' + rows + "</tbody></table>" +
     '<div class="sn-sub">Market inputs: today\'s value ranked against its own trailing series (≈175–280 sessions of daily bars) → percentile 0–100; volatility inverted. Voices: news linear, ±0.30 score = the extremes; YouTube and StockTwits linear, ±0.60 net share; X ranked against the feed\'s own earlier days (percentile; linear ±0.60 until five days exist). The cnn column is CNN\'s own component score for comparison — it is not an input.</div>';
   const vHTML = voices.map((v) => {
@@ -8768,6 +8895,180 @@ async function fillSentiment() {
     '<div class="card"><h4>VOICES · WHAT THE TEXT SAYS</h4>' + vHTML + "</div>" +
     '<div class="card"><h4>REFERENCE GAUGES · NOT INPUTS</h4>' + refs + '<div class="sn-voice__txt" style="padding-top:6px">Published indexes, fetched live in the browser for comparison. CNN: seven equal-weight market inputs. alternative.me: crypto volatility, momentum and volume, social, dominance, search trends.</div></div>' +
     '<div class="card"><h4>WHAT FEEDS THE HEADLINE</h4><div class="sn-voice__txt">Market: SPY vs its 125-day average · VIX vs its 50-day average (inverted) · SPY − TLT 20-day return · HYG − LQD 20-day return. Voices: news_sentiment · YouTube social_sentiment · the X feed. Not in our data yet: 52-week highs and lows, advancing vs declining volume, put / call. StockTwits is stored but stale, so it is shown and not counted.</div></div>';
+}
+
+
+/* ═══ SENTIMENT · NEWS ═════════════════════════════════════════════════════════
+   What the headlines say. Counts are real count(*) reads (PostgREST count=exact),
+   never an estimate. The lean comes from news_sentiment — a per-ticker 4-day score
+   the board already uses; individual headlines are NOT scored anywhere yet, and the
+   page says so rather than implying a reading it does not have. */
+async function fillSentiNews() {
+  const run = ++SENTI_RUN, now = Date.now(), M = SENTI, nowS = Math.floor(now / 1000);
+  const [all, d1, d7, recent, lean] = await Promise.all([
+    sentiSafe(sentiCount("news?select=url"), 25000),
+    sentiSafe(sentiCount("news?select=url&published_ts=gte." + (nowS - 86400)), 25000),
+    sentiSafe(sentiCount("news?select=url&published_ts=gte." + (nowS - 7 * 86400)), 25000),
+    sentiSafe(pg("news?select=published_ts,ticker,site,title,url&published_ts=gte." + (nowS - 86400) + "&order=published_ts.desc&limit=400"), 25000),
+    sentiSafe(pg("news_sentiment?select=ticker,score,n_articles,updated_ts"), 25000),
+  ]);
+  if (run !== SENTI_RUN || S.sec !== "SENTIMENT" || S.sentiTab !== "NEWS" || !el("snMain")) return;
+  const rows = recent.ok && Array.isArray(recent.v) ? recent.v : [];
+  const lr = lean.ok && Array.isArray(lean.v) ? lean.v.filter(function (r) { return M.fin(+r.score) && +r.n_articles > 0; }) : [];
+  const net = M.wmean(lr, "score", "n_articles");
+  const upd = lr.length ? Math.max.apply(null, lr.map(function (r) { return +r.updated_ts || 0; })) * 1000 : 0;
+  const newest = rows.length ? (+rows[0].published_ts) * 1000 : 0;
+  const byT = new Map();
+  for (const r of rows) { const t = String(r.ticker || "?"); byT.set(t, (byT.get(t) || 0) + 1); }
+  const top = [...byT.entries()].sort(function (a, b) { return b[1] - a[1]; }).slice(0, 14);
+  const ranked = lr.filter(function (r) { return +r.n_articles >= 20; }).sort(function (a, b) { return (+b.score) - (+a.score); });
+  const chip = function (list) { return '<div class="sn-chips">' + list.map(function (x) { return '<span class="sn-chip">' + esc(x[0]) + " <b>" + x[1] + "</b></span>"; }).join("") + "</div>"; };
+  const heads = rows.slice(0, 40).map(function (r) {
+    const age = M.ageTxt(now - (+r.published_ts) * 1000);
+    const url = String(r.url || "");
+    const title = esc(String(r.title || "").slice(0, 150));
+    return "<tr><td class=\"n\">" + esc(age) + '</td><td class="k">' + esc(String(r.ticker || "")) + "</td><td>" + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + title + "</a>" : title) + '</td><td class="src">' + esc(String(r.site || "")) + "</td></tr>";
+  }).join("");
+  el("snMain").innerHTML =
+    snKpi([
+      [all.ok ? all.v.toLocaleString() : "—", "headlines stored"],
+      [d1.ok ? d1.v.toLocaleString() : "—", "in the last day"],
+      [d7.ok ? d7.v.toLocaleString() : "—", "in the last week"],
+      [lr.length, "tickers with a lean"],
+    ]) +
+    '<div class="sn-sub">The headlines lean <b>' + esc(snLean(net, lr.reduce(function (a, r) { return a + (+r.n_articles || 0); }, 0))) + "</b>" +
+      (upd ? " · scored " + esc(M.ageTxt(now - upd)) + " ago" : "") + (newest ? " · newest headline " + esc(M.ageTxt(now - newest)) + " ago" : "") + "</div>" +
+    '<div class="sn-h2">most covered in the last day</div>' + (top.length ? chip(top) : '<div class="sn-sub">no headlines stored in the last day</div>') +
+    (ranked.length >= 6 ?
+      '<div class="sn-h2">leaning most positive (20+ headlines)</div>' + chip(ranked.slice(0, 8).map(function (r) { return [r.ticker, (+r.score).toFixed(2)]; })) +
+      '<div class="sn-h2">leaning most negative (20+ headlines)</div>' + chip(ranked.slice(-8).reverse().map(function (r) { return [r.ticker, (+r.score).toFixed(2)]; })) : "") +
+    '<div class="sn-h2">freshest headlines</div>' +
+    (heads ? '<table class="sn-tbl"><thead><tr><th class="n">age</th><th>ticker</th><th>headline</th><th class="src">source</th></tr></thead><tbody>' + heads + "</tbody></table>"
+           : '<div class="sn-sub">' + esc(recent.ok ? "nothing published in the last day" : "news read failed: " + recent.e) + "</div>");
+  el("snRail").innerHTML =
+    '<div class="card"><h4>WHERE THESE NUMBERS COME FROM</h4><div class="sn-voice__txt">' +
+      "Counts are real count(*) reads of the <b>news</b> table" + (all.ok ? " (" + all.v.toLocaleString() + " rows)" : "") + ", not an estimate. " +
+      "The lean is <b>news_sentiment</b>: one score per ticker over a 4-day window, weighted here by how many headlines each ticker had" + (lr.length ? " (" + lr.length + " tickers)" : "") + ". " +
+      "Publication times are stored as plain seconds; ages above are measured against your clock now." +
+    "</div></div>" +
+    '<div class="card"><h4>WHAT THIS PAGE DOES NOT KNOW</h4><div class="sn-voice__txt">' +
+      "No individual headline carries a stored sentiment score — only the per-ticker roll-up does. So the page can say which tickers lean which way and how heavily they are covered, but it cannot yet say <b>which headline</b> moved a ticker. " +
+      "Nothing here is an AI reading of the text." +
+    "</div></div>" +
+    '<div class="card"><h4>FRESHNESS</h4><div class="sn-voice__txt">' +
+      (newest ? "Newest stored headline <b>" + esc(M.ageTxt(now - newest)) + "</b> ago. " : "No headline in the last day. ") +
+      (upd ? "Per-ticker scores last written <b>" + esc(M.ageTxt(now - upd)) + "</b> ago." : "") +
+    "</div></div>";
+}
+
+/* ═══ SENTIMENT · YOUTUBE ══════════════════════════════════════════════════════
+   What the channels say. Built from the rolled-up social_sentiment rows the
+   collector writes (source=youtube). The per-video and transcript tables are read
+   live for their real row counts so the page states its own coverage honestly. */
+async function fillSentiYT() {
+  const run = ++SENTI_RUN, now = Date.now(), M = SENTI;
+  const [rows, vids, trans] = await Promise.all([
+    sentiSafe(pg("social_sentiment?select=ticker,bullish,bearish,posts,score,updated_ts,last_channel,last_video_id,last_published_at,window_days,method&source=eq.youtube&order=posts.desc"), 25000),
+    sentiSafe(sentiCount("youtube_video_sentiment?select=*"), 20000),
+    sentiSafe(sentiCount("youtube_transcripts?select=*"), 20000),
+  ]);
+  if (run !== SENTI_RUN || S.sec !== "SENTIMENT" || S.sentiTab !== "YOUTUBE" || !el("snMain")) return;
+  const r = rows.ok && Array.isArray(rows.v) ? rows.v : [];
+  const bull = r.reduce(function (a, x) { return a + (+x.bullish || 0); }, 0);
+  const bear = r.reduce(function (a, x) { return a + (+x.bearish || 0); }, 0);
+  const posts = r.reduce(function (a, x) { return a + (+x.posts || 0); }, 0);
+  const net = bull + bear ? (bull - bear) / (bull + bear) : null;
+  const upd = r.length ? Math.max.apply(null, r.map(function (x) { return Date.parse(x.updated_ts) || 0; })) : 0;
+  const win = r.length ? (+r[0].window_days || 7) : 7;
+  const method = r.length ? String(r[0].method || "") : "";
+  const body = r.map(function (x) {
+    const b = +x.bullish || 0, e = +x.bearish || 0, n = b + e;
+    const share = n ? Math.round(100 * b / n) : null;
+    const bar = share == null ? '<div class="sn-bar"><em></em></div>' : '<div class="sn-bar"><i style="width:' + share + '%"></i><em></em></div>';
+    const when = x.last_published_at ? M.ageTxt(now - Date.parse(x.last_published_at)) : "—";
+    return '<tr><td class="k">' + esc(String(x.ticker)) + '</td><td class="n">' + b + '</td><td class="n">' + e + '</td><td class="n">' + (+x.posts || 0) + "</td><td>" + bar + '</td><td class="n">' + (M.fin(+x.score) ? (+x.score).toFixed(2) : "—") + '</td><td class="src">' + esc(String(x.last_channel || "—")) + '</td><td class="n">' + esc(when) + "</td></tr>";
+  }).join("");
+  el("snMain").innerHTML =
+    snKpi([[r.length, "tickers covered"], [posts, "mentions counted"], [bull, "bullish"], [bear, "bearish"]]) +
+    '<div class="sn-sub">The channels lean <b>' + esc(snLean(net, bull + bear)) + "</b> over a <b>" + win + "-day</b> window" + (upd ? " · last written " + esc(M.ageTxt(now - upd)) + " ago" : "") + "</div>" +
+    (body ? '<table class="sn-tbl"><thead><tr><th>ticker</th><th class="n">bull</th><th class="n">bear</th><th class="n">posts</th><th class="nw">bear · bull</th><th class="n">score</th><th class="src">newest channel</th><th class="n">age</th></tr></thead><tbody>' + body + "</tbody></table>"
+          : '<div class="sn-sub">' + esc(rows.ok ? "social_sentiment holds no YouTube rows" : "social_sentiment read failed: " + rows.e) + "</div>");
+  el("snRail").innerHTML =
+    '<div class="card"><h4>WHERE THESE NUMBERS COME FROM</h4><div class="sn-voice__txt">' +
+      "<b>social_sentiment</b> rows written by the YouTube collector (source=youtube" + (method ? ", method <b>" + esc(method) + "</b>" : "") + "): it reads the English transcripts of the subscribed channels, counts finance keywords with negation, and rolls the result up per ticker over " + win + " days. " +
+      "It is a keyword count, <b>not</b> an AI reading of the video." +
+    "</div></div>" +
+    '<div class="card"><h4>COVERAGE, STATED HONESTLY</h4><div class="sn-voice__txt">' +
+      "Read live just now: <b>youtube_video_sentiment</b> " + (vids.ok ? vids.v.toLocaleString() + " rows" : "unreadable") +
+      " · <b>youtube_transcripts</b> " + (trans.ok ? trans.v.toLocaleString() + " rows" : "unreadable") + ". " +
+      ((vids.ok && vids.v === 0) || (trans.ok && trans.v === 0)
+        ? "Those two tables are <b>empty</b>, so there is no per-video detail and no transcript text behind these numbers yet — this page is the roll-up only. Which video moved a ticker cannot be shown until the collector writes them."
+        : "Per-video detail is available and can be opened from here next.") +
+    "</div></div>" +
+    '<div class="card"><h4>FRESHNESS</h4><div class="sn-voice__txt">' +
+      (upd ? "Rows last written <b>" + esc(M.ageTxt(now - upd)) + "</b> ago." : "No write time on these rows.") +
+      (r.length && r[0].last_published_at ? " Newest video seen <b>" + esc(M.ageTxt(now - Date.parse(r[0].last_published_at))) + "</b> ago." : "") +
+    "</div></div>";
+}
+
+/* ═══ SENTIMENT · X ════════════════════════════════════════════════════════════
+   What the posts say — WITH the pictures. Alan: "Who told you that we only need
+   the text?" Charts and screenshots are most of the message on X, so every post
+   that carries one shows it, and posts with pictures are drawn first. */
+async function fillSentiXPage() {
+  const run = ++SENTI_RUN, now = Date.now(), M = SENTI;
+  const x = await sentiSafe(sentiX(), 60000);
+  if (run !== SENTI_RUN || S.sec !== "SENTIMENT" || S.sentiTab !== "X" || !el("snMain")) return;
+  if (!x.ok) {
+    el("snMain").innerHTML = '<div class="sn-sub">X feed unavailable: ' + esc(String(x.e)) + "</div>";
+    el("snRail").innerHTML = '<div class="card"><h4>WHERE THIS COMES FROM</h4><div class="sn-voice__txt">The collector publishes the feed at <b>/api/xfeed</b>. It did not answer this time, so nothing is shown rather than something stale.</div></div>';
+    return;
+  }
+  const posts = x.v || [];
+  const v = M.xVoice(posts, now, 86400e3);
+  const recent = posts.filter(function (p) { const t = Date.parse(p.created_at); return isFinite(t) && now - t <= 48 * 3600e3; })
+                      .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); });
+  const withPic = recent.filter(function (p) { return (p.photos && p.photos.length) || p.has_video || p.video_url; });
+  const handles = new Map();
+  for (const p of recent) { const h = String(p.handle || "?"); handles.set(h, (handles.get(h) || 0) + 1); }
+  const topH = [...handles.entries()].sort(function (a, b) { return b[1] - a[1]; }).slice(0, 12);
+  const show = withPic.concat(recent.filter(function (p) { return withPic.indexOf(p) < 0; })).slice(0, 24);
+  const cards = show.map(function (p) {
+    const t = Date.parse(p.created_at);
+    const pics = (p.photos || []).slice(0, 2).map(function (u) {
+      return '<img src="' + esc(String(u)) + '" alt="picture posted by ' + esc(String(p.handle || "")) + '" loading="lazy" referrerpolicy="no-referrer">';
+    }).join("");
+    const vid = (p.has_video || p.video_url) ? '<span class="sn-tag">video</span>' : "";
+    const txt = String(p.text || "").replace(/https?:\/\/t\.co\/\S+/g, "").trim().slice(0, 260);
+    const lean = M.lexLean(p.text || "");
+    return '<div class="sn-xp"><div class="sn-xp__hd"><span class="sn-xp__h">@' + esc(String(p.handle || "")) + "</span>" + vid +
+      '<span class="sn-xp__age">' + esc(M.ageTxt(now - t)) + "</span></div>" +
+      (txt ? '<div class="sn-xp__t">' + esc(txt) + "</div>" : "") +
+      (pics ? '<div class="sn-xp__m">' + pics + "</div>" : "") +
+      '<div class="sn-xp__f"><span>' + (lean > 0 ? "reads positive" : lean < 0 ? "reads negative" : "no keyword lean") + "</span>" +
+      (p.url ? '<a href="' + esc(String(p.url)) + '" target="_blank" rel="noopener noreferrer">open on X</a>' : "") + "</div></div>";
+  }).join("");
+  el("snMain").innerHTML =
+    snKpi([[posts.length.toLocaleString(), "posts stored"], [recent.length, "in the last two days"], [withPic.length, "with a picture or video"], [v.n, "counted in the last day"]]) +
+    '<div class="sn-sub">The posts lean <b>' + esc(snLean(v.net, v.bull + v.bear)) + "</b> over the last day" + (v.latest ? " · newest post " + esc(M.ageTxt(now - v.latest)) + " ago" : "") + "</div>" +
+    (v.top.length ? '<div class="sn-h2">most mentioned</div><div class="sn-chips">' + v.top.map(function (t) { return '<span class="sn-chip">' + esc(t[0]) + " <b>" + t[1] + "</b></span>"; }).join("") + "</div>" : "") +
+    (topH.length ? '<div class="sn-h2">who is posting</div><div class="sn-chips">' + topH.map(function (t) { return '<span class="sn-chip">@' + esc(t[0]) + " <b>" + t[1] + "</b></span>"; }).join("") + "</div>" : "") +
+    '<div class="sn-h2">the posts · pictures shown, tap or hover for true colour</div>' +
+    (cards ? '<div class="sn-x">' + cards + "</div>" : '<div class="sn-sub">no posts in the last two days</div>');
+  el("snRail").innerHTML =
+    '<div class="card"><h4>WHERE THESE NUMBERS COME FROM</h4><div class="sn-voice__txt">' +
+      "The collector's published feed at <b>/api/xfeed</b> — Alan's X Trading list, <b>" + posts.length.toLocaleString() + "</b> posts stored. " +
+      "Each post's lean is a finance-keyword count with negation, the same idea as the YouTube one. Not an AI read." +
+    "</div></div>" +
+    '<div class="card"><h4>PICTURES AND CHARTS</h4><div class="sn-voice__txt">' +
+      "<b>" + withPic.length + "</b> of the last " + recent.length + " posts carry a picture or video, and they are shown first because on X the chart usually <i>is</i> the argument. " +
+      "Pictures sit in the house monochrome until you hover or tap them, then they show their own colour. " +
+      "<b>What is not done:</b> nothing reads the picture — a chart screenshot counts only through its words." +
+    "</div></div>" +
+    '<div class="card"><h4>FRESHNESS</h4><div class="sn-voice__txt">' +
+      (v.latest ? "Newest post <b>" + esc(M.ageTxt(now - v.latest)) + "</b> ago. " : "No dated post found. ") +
+      (v.hist.length ? "The day's lean is ranked against <b>" + v.hist.length + "</b> earlier days of this same feed, because finance talk on X runs bullish by default." : "") +
+    "</div></div>";
 }
 
 /* ---- Room 8 · EVENTS (wired: earnings_events — cohort-scoped, upcoming first) --- */
@@ -12781,7 +13082,7 @@ function viewKey() {
     case "SCENES": return "SCENES|" + scope;
     case "NEWS": case "SOCIAL": return S.sec + "|" + scope;
     case "EVENTS": return "EVENTS|" + scope + "|" + S.calType;
-    case "SENTIMENT": return "SENTI";   // market-wide — one mount, like ECON
+    case "SENTIMENT": return "SENTI|" + S.sentiTab;   // market-wide — one mount per sub-tab, like ECON
     case "ECONOMIC": return "ECON";
     case "ALERTS": case "SCREENER": return S.sec;
     case "FILES": return "FILES";
@@ -12844,7 +13145,7 @@ function afterMount() {
     else if (S.socTab === "SENTIMENT") fillSocial();   // X loads within its iframe; STOCKTWITS is a reserved slot
   }
   else if (S.sec === "EVENTS") fillEvents();
-  else if (S.sec === "SENTIMENT") fillSentiment();
+  else if (S.sec === "SENTIMENT") sentiDispatch();
   else if (S.sec === "ECONOMIC") fillEcon();
   else if (S.sec === "FILES") filesWire();
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
@@ -13197,6 +13498,13 @@ document.addEventListener("click", (e) => {
     case "gsladtoggle": {   // R42 §5 — trend ladder compact (price ± 2 MAs) ⇄ full ladder
       GS_LAD_OPEN = !GS_LAD_OPEN;
       if (S.coData && S.coData._gsum) buildGeigerSummary(S.coData._gsum);
+      break;
+    }
+    /* SENTIMENT sub-tab switch — each page is its own mount (viewKey carries the
+       tab), so sync() rebuilds the room and afterMount runs that page's fill. */
+    case "sentitab": {
+      const t = a.dataset.tab; if (!t || t === S.sentiTab) break;
+      S.sentiTab = t; sync();
       break;
     }
     /* SOCIAL sub-tab switch — repaint #socPane in place (no room remount), then
