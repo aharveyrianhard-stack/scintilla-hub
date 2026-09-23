@@ -9,7 +9,7 @@ test("an open events view is re-read on a timer and on return to the tab, never 
   const src = page.match(/function refreshOpenEvents\(onResume\) \{[\s\S]*?\n\}\n/)[0];
   assert.match(src, /if \(document\.visibilityState === "hidden"\) return;/);
   assert.match(src, /if \(onResume && Date\.now\(\) - EV_READ_AT < 60000\) return;/);
-  assert.match(src, /if \(S\.sec === "EVENTS" && el\("evList"\) && S\.calType !== "DIVIDENDS"\) \{\n    if \(evBubbleOpen\("#evList"\)\) return;[^\n]*\n    fillEvents\(true\);\n  \} else if \(S\.coData && S\.coTab === "EVENTS"\) refreshCompanyEvents\(\);/, "only the view that is open is re-read, and never while a call summary is open in it");
+  assert.match(src, /if \(S\.sec === "EVENTS" && el\("evList"\)\) \{\n    if \(evBubbleOpen\("#evList"\)\) return;[^\n]*\n    fillEvents\(true\);\n  \} else if \(S\.coData && S\.coTab === "EVENTS"\) refreshCompanyEvents\(\);/, "only the view that is open is re-read, and never while a call summary is open in it (23 Sep: no DIVIDENDS type left to exclude)");
 });
 
 test("a quiet re-read that finds the same rows touches nothing; one that finds a change redraws in place", () => {
@@ -47,6 +47,9 @@ test("redrawKeepingPlace keeps each list where the reader left it and an opened 
 import vm from "node:vm";
 const take = (re) => page.match(re)[0];
 const PURE = take(/function callDayWindow\(day, n\) \{[\s\S]*?\n\}\n/) + take(/function matchCallSummaries\(events, calls\) \{[\s\S]*?\n\}\n/) + take(/function transcriptExists\(ticker, date, callDays\) \{[\s\S]*?\n\}\n/);
+/* 23 Sep: both read paths now go through the shared supersede helpers, so they are run here too
+   - the same bytes the page runs, not a copy. */
+const SUP = take(/const ERN_SUP_DAYS = 21;[\s\S]*?\nfunction ernSupersede\(rows, all\) \{[\s\S]*?\n\}\n/);
 
 test("company tab: a quiet re-read whose call-key or call-summary read is REJECTED keeps the working Transcript / Call summary controls", async () => {
   const evs = [{ ticker: "FDX", date: "2026-06-23", eps_actual: 6.31, report_time: "AMC" }], keys = [{ ticker: "FDX", quarter: "Q4 2026", call_date: "2026-06-23" }];
@@ -55,7 +58,7 @@ test("company tab: a quiet re-read whose call-key or call-summary read is REJECT
     const ctx = vm.createContext({ S: { coTab: "EVENTS", coData: null }, ROT_TOKEN: 7, EV_READ_AT: 0, evBubbleOpen: () => false, el: () => ({}), encodeURIComponent, JSON, Date, Array, Promise,
       coEventsPath: () => paths.ev, coCallSumPath: () => paths.cs, coCallKeysPath: () => paths.ck, renderLeftPanel() {}, redrawKeepingPlace: () => { redraws++; },
       pg: (q) => (failing === "summary keys" && q === "CS") || (failing === "call keys" && q === "CK") || (failing === "events" && q === "EV") ? Promise.reject(new Error("503")) : Promise.resolve(q === "EV" ? [...evs, { ticker: "FDX", date: "2026-10-28", eps_actual: null }] : keys) });
-    vm.runInContext(PURE + take(/async function refreshCompanyEvents\(\) \{[\s\S]*?\n\}\n/), ctx);
+    vm.runInContext(PURE + SUP + take(/async function refreshCompanyEvents\(\) \{[\s\S]*?\n\}\n/), ctx);
     const d = ctx.S.coData = { t: "FDX", events: evs, _evSig: "first", _callsum: vm.runInContext("matchCallSummaries", ctx)(evs, keys), _callDays: ["2026-06-23"] };
     await vm.runInContext("refreshCompanyEvents()", ctx);
     const hasControls = d._callsum.has("FDX|2026-06-23") && vm.runInContext("transcriptExists", ctx)("FDX", "2026-06-23", d._callDays);
@@ -72,7 +75,7 @@ test("master feed: a quiet re-read whose index reads are REJECTED keeps the last
     const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL" }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX", "COST"]), todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_READ_AT: 0, EV_TRKEYS: "FDX|2026-06-23", EV_CSKEYS: [{ ticker: "FDX", quarter: "Q4 2026", call_date: "2026-06-23" }],
       TRANSCRIPT_IDX: new Map([["FDX", ["2026-06-23"]]]), CALLSUM_IDX: new Map(), EV_HELD_SIG: "", evBubbleOpen: () => false, loadCohSets: () => Promise.resolve(), renderEvents: () => { renders++; }, redrawKeepingPlace: (a, b, draw) => { redraws++; draw(); }, JSON, Date, Array, Map, Set, Promise,
       pg: (q) => /^earnings_events/.test(q) ? Promise.resolve(/date=gte/.test(q) ? up : past) : (failIndexes ? Promise.reject(new Error("503")) : Promise.resolve(/ai_summary/.test(q) ? [] : [])) });
-    vm.runInContext(PURE + src, ctx); await vm.runInContext("fillEvents(true)", ctx);
+    vm.runInContext(PURE + SUP + src, ctx); await vm.runInContext("fillEvents(true)", ctx);
     return { transcript: vm.runInContext("transcriptExists('FDX', '2026-06-23')", ctx), callSummary: vm.runInContext("CALLSUM_IDX.has('FDX|2026-06-23')", ctx), redraws }; };
   assert.deepEqual(await run(true), { transcript: true, callSummary: true, redraws: 1 }, "both index reads rejected: the FDX card keeps Transcript and Call summary (the rows still redraw - they were read)");
   assert.deepEqual(await run(false), { transcript: false, callSummary: false, redraws: 1 }, "both index reads SUCCEEDED and returned no calls: that IS an answer, and the controls go");
@@ -88,7 +91,7 @@ test("company tab: a summary opened WHILE the re-read is in flight is not redraw
   const waiting = []; let redraws = 0, open = false;
   const ctx = vm.createContext({ S: { coTab: "EVENTS", coData: null, coh: "ALL" }, ROT_TOKEN: 7, EV_READ_AT: 0, EV_SIG: "", EV_HELD_SIG: "", evBubbleOpen: () => open, el: () => ({}), encodeURIComponent, JSON, Date, Array, Promise,
     coEventsPath: () => "EV", coCallSumPath: () => "CS", coCallKeysPath: () => "CK", renderLeftPanel() {}, renderEvents() {}, redrawKeepingPlace: (a, b, draw) => { redraws++; }, pg: (q) => new Promise((resolve) => waiting.push(() => resolve(q === "EV" ? [...evs, { ticker: "FDX", date: "2026-10-28", eps_actual: null }] : keys))) });
-  vm.runInContext(PURE + take(/async function refreshCompanyEvents\(\) \{[\s\S]*?\n\}\n/) + HELD, ctx);
+  vm.runInContext(PURE + SUP + take(/async function refreshCompanyEvents\(\) \{[\s\S]*?\n\}\n/) + HELD, ctx);
   // redrawKeepingPlace is mocked above without calling draw(); the real draw() body is what sets the data, so call it through
   ctx.redrawKeepingPlace = (a, b, draw) => { redraws++; if (typeof draw === "function") draw(); };
   const d = ctx.S.coData = { t: "FDX", events: evs, _evSig: "first", _callsum: new Map(), _callDays: ["2026-06-23"] };
@@ -110,7 +113,7 @@ test("master feed: the same - held while a summary opened mid-read is open, EV_S
   const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL", coData: null }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX"]), todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_HELD_SIG: "", EV_READ_AT: 0, EV_TRKEYS: "", EV_CSKEYS: [],
     TRANSCRIPT_IDX: new Map(), CALLSUM_IDX: new Map(), evBubbleOpen: () => open, loadCohSets: () => Promise.resolve(), renderEvents() {}, redrawKeepingPlace: () => { redraws++; }, JSON, Date, Array, Map, Set, Promise,
     pg: (q) => new Promise((resolve) => waiting.push(() => resolve(/^earnings_events/.test(q) ? (/date=gte/.test(q) ? up : past) : []))) });
-  vm.runInContext(PURE + src + HELD, ctx);
+  vm.runInContext(PURE + SUP + src + HELD, ctx);
   const run = vm.runInContext("fillEvents(true)", ctx); await Promise.resolve(); open = true; waiting.splice(0).forEach((f) => f()); await run;
   assert.equal(redraws, 0, "nothing is redrawn under the open summary"); assert.equal(vm.runInContext("EV_SIG", ctx), "old", "EV_SIG is what is DRAWN, and nothing was drawn"); assert.notEqual(vm.runInContext("EV_HELD_SIG", ctx), "", "the change is held"); assert.equal(vm.runInContext("EV_CACHE.past.length", ctx), 1, "the rows that were read are kept");
   const inFeed = "({ closest: (s) => (s === '#evList' ? {} : null) })";

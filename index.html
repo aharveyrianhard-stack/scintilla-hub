@@ -2406,6 +2406,14 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ern-it.is-past .ern-when, .ern-it.is-past .ern-tk{ opacity:.45; }
 .ern-it.is-past .ern-res, .ern-it.is-past .ern-sur{ opacity:.7; }   /* the result stays readable; the row around it recedes */
 .ern-note{ color:var(--dim); }
+/* 23 Sep — the band leans in: the nearer the report, the more the item says. Type size, speed and
+   colours are the tape's own (9px mono, 45 px/s, the three result colours); only the detail changes. */
+.ern-est{ padding-left:6px; color:var(--dim); font-variant-numeric:tabular-nums; }
+.ern-new{ padding-left:6px; color:var(--ink3); letter-spacing:.1em; }
+.ern-t-far .ern-when{ letter-spacing:.1em; }
+.ern-it.is-live{ animation:ernBreathe 2.4s ease-in-out infinite; }   /* the day itself breathes, like the ECON nudge's "soon" */
+@keyframes ernBreathe{ 0%,100%{ opacity:1 } 50%{ opacity:.6 } }
+@media (prefers-reduced-motion: reduce){ .ern-it.is-live{ animation:none } }
 
 /* ----------------------------------------------------------------------------
    THE EARNINGS CALENDAR — MONTH and WEEK (Alan, 23 Sep, the earnings proposal).
@@ -4558,7 +4566,7 @@ const S = {
   sort: { key: "g", dir: -1 },                  // CohortBoard local state
   boardOrder: [],                               // FIX 3 (R36) — frozen render order (tickers); re-sorts ONLY on a header click
   coTab: "GEIGER",                              // CompanyRoom local state (coExpand retired → R21 secfs)
-  readTab: "VERDICT", calType: "ALL",
+  readTab: "VERDICT", calType: "EARNINGS",   /* 23 Sep: the only calendar type there is - the sub-tab strip is gone */
   /* EVENTS · the earnings calendar (Alan's 23 Sep proposal): which span is on screen,
      the day it is anchored to (null = today), the chip whose card is open, and the
      day opened underneath the tape.
@@ -10336,6 +10344,66 @@ function evtLoadProfile(t) {
     if (S.sec === "EVENTS") renderEvents(S.coh);
   }).catch(() => {});
 }
+/* ============================================================================
+   A MOVED EARNINGS DATE LEAVES ITS OLD ROW BEHIND (measured 2026-09-23).
+   Identity in earnings_events is (ticker, date), and both writers upsert on that key
+   (fmp-events: `upsert(group,{onConflict:'ticker,date'})`, earnings-capture likewise).
+   So when the provider moves a projected report date the write INSERTS a second row and
+   the first one stays for ever - it never receives a result, and the page had to call it
+   "a past date without a stored result". Measured that day: 28 such pairs since 1 June
+   (ORCL 08 Sep beside the reported 10 Sep, ZS 01+02 Sep beside 03 Sep, SNOW/NTAP/MDB
+   26 Aug beside 01-02 Sep ...).
+   THE FIX HAS TWO HALVES, and this is the reading half:
+     - the database half is additive - superseded_at / superseded_by_date / superseded_reason
+       on the stale row (migration db/migrations/20260923_earnings_superseded.sql). NOTHING
+       IS DELETED: the row stays, it is simply no longer offered as a report.
+     - here, every earnings read asks for the live rows only, and ALSO applies the same rule
+       itself, so the Hub is correct in the hours before the migration is applied and stays
+       correct if a new stale row is written tomorrow.
+   The client rule is deliberately the weaker of the two: it only sets aside a date with NO
+   stored result when the same company has a stored result within ERN_SUP_DAYS. It never
+   touches a row that carries a result (two rows that BOTH carry one are a data question,
+   answered in the migration by the stored call date, never guessed here).
+   ============================================================================ */
+const ERN_SUP_DAYS = 21;                 // a quarter is ~90 days, so a date this close is the same report moved
+let ERN_SUP_COL = null;                  // null unknown · true the column exists · false not migrated yet
+/* one earnings read, asked so that it works either side of the migration */
+async function pgErn(path) {
+  if (ERN_SUP_COL === false) return pg(path);
+  try {
+    const rows = await pg(path + "&superseded_at=is.null", ERN_SUP_COL === true ? undefined : 1);   // one try while unknown: a 400 for a missing column must not be retried three times
+    ERN_SUP_COL = true;
+    return rows;
+  } catch (err) {
+    if (ERN_SUP_COL === true) throw err;                    // the column exists: a real failure, handled by the caller
+    ERN_SUP_COL = false;
+    return pg(path);
+  }
+}
+/* PURE. rows -> the rows a reader may be shown, in the order given. `all` is every row on
+   hand (a wider window than `rows` where the caller has one), used only to find the result
+   that supersedes a date. */
+function ernSupersede(rows, all) {
+  const list = rows || [], pool = all || list;
+  const has = (r) => !!r && (r.eps_actual != null || r.revenue_actual != null);
+  const day = (d) => Date.parse(String(d) + "T00:00:00Z") / 86400000;
+  const done = new Map();
+  pool.forEach((r) => {
+    /* a row the database has already retired is not evidence that anything reported */
+    if (!has(r) || r.superseded_at || !r.ticker || !isFinite(day(r.date))) return;
+    const k = String(r.ticker).toUpperCase();
+    if (!done.has(k)) done.set(k, []);
+    done.get(k).push(day(r.date));
+  });
+  return list.filter((r) => {
+    if (!r) return false;
+    if (r.superseded_at) return false;                      // the database decided, with its own evidence
+    if (has(r)) return true;                                // a stored result is never set aside by this rule
+    const d0 = day(r.date);
+    if (!isFinite(d0)) return true;
+    return !(done.get(String(r.ticker || "").toUpperCase()) || []).some((d) => Math.abs(d - d0) <= ERN_SUP_DAYS);
+  });
+}
 function eventsRoomHTML() {
   /* FIX 3 — cohort scoping for the master EVENTS section, EXACTLY like NEWS: the
      shared cohort strip (data-act="coh") sits at the very top; changing cohort
@@ -10343,13 +10411,11 @@ function eventsRoomHTML() {
      already scopes its rows to S.coh via scopeItems, so no other wiring is needed. */
   return '<div style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0">' +
     '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
-    '<div class="ctabs" style="margin-bottom:10px">' +
-      ["ALL", "EARNINGS", "DIVIDENDS"].map((t) =>
-        '<span class="ct ' + (t === S.calType ? "on" : "") + '" data-act="caltype" data-t="' + t + '">' + t + "</span>").join("") +
-    "</div>" +
+    /* 23 Sep — Alan: "the dividend section, we've never really used it... kind of weird to have."
+       The ALL | EARNINGS | DIVIDENDS strip is gone with it: this room is earnings, and says so. */
     '<div class="body2 body2--ev">' +
       '<div class="panel">' +
-        '<div class="sc-plabel sc-plabel--row"><span>' + (S.calType === "ALL" ? "earnings &amp; dividends" : S.calType.toLowerCase()) + "</span>" + SECFS_BTN + "</div>" +
+        '<div class="sc-plabel sc-plabel--row"><span>earnings</span>' + SECFS_BTN + "</div>" +
         '<div id="ernSpanBar">' + ercSpanBarHTML() + "</div>" +
         '<div class="scroller" id="evList"><div class="soon">loading events…</div></div>' +
       "</div>" +
@@ -10369,7 +10435,7 @@ function eventsRoomHTML() {
    ALL = whole universe, FAV = favourites only, search = ticker prefix filter. */
 function renderEvents(cohort) {
   const list = el("evList");
-  if (!list || S.calType === "DIVIDENDS") return;
+  if (!list) return;
   const sbar = el("ernSpanBar"); if (sbar) sbar.innerHTML = ercSpanBarHTML();
   /* MONTH and WEEK are the calendar views; DAY is the two-column UPCOMING | PAST
      list below, unchanged. The calendar reads its own span and does not wait for
@@ -10462,7 +10528,7 @@ function evFillExtras(upS, scopedTk) {
      ERC_MONTH_CELL  "LOAD+NAMES" (recommended)  |  "HEAT" for the load bar alone
      ERC_NAME_ORDER  "MCAP" (recommended: biggest first)  |  "FAV" favourites first
      ERC_COHORT_HUE  true (recommended: the dot is the cohort)  |  false
-     DIVIDENDS stays the sub-tab it is today (ALL | EARNINGS | DIVIDENDS, untouched).
+     DIVIDENDS: removed 23 Sep on Alan's word - there is no sub-tab strip any more.
    ============================================================================ */
 const ERC_MONTH_CELL = "LOAD+NAMES";
 const ERC_NAME_ORDER = "MCAP";
@@ -10535,9 +10601,9 @@ async function ercRead(quiet) {
       ? [{ from: r.from, to: ernShift(ercAnchor(), -1) }, { from: ercAnchor(), to: r.to }]
       : [r];
     const got = await Promise.all(parts.map((p) =>
-      pg("earnings_events?" + ERC_SEL + "&date=gte." + p.from + "&date=lte." + p.to + "&order=date.asc&limit=" + ERC_MAX)));
+      pgErn("earnings_events?" + ERC_SEL + "&date=gte." + p.from + "&date=lte." + p.to + "&order=date.asc&limit=" + ERC_MAX)));
     const rows = got.reduce((a, g) => a.concat(g || []), []);
-    const keep = (rows || []).filter((x) => x && x.ticker && (!UNIVERSE || UNIVERSE.has(x.ticker)));
+    const keep = ernSupersede((rows || []).filter((x) => x && x.ticker && (!UNIVERSE || UNIVERSE.has(x.ticker))), rows || []);
     const sig = JSON.stringify(keep), changed = key !== ERC_KEY || sig !== ERC_SIG;
     ERC_TRUNC = got.some((g) => (g || []).length >= ERC_MAX);
     ERC_ROWS = keep; ERC_KEY = key; ERC_SIG = sig; ERC_FAIL_AT = 0; ERC_FAIL_KEY = "";
@@ -10874,7 +10940,6 @@ function ercRenderCal(list, cohort) {
   evFillExtras(EV_CACHE ? scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS) : [], scopedTk);
 }
 function ercSpanBarHTML() {
-  if (S.calType === "DIVIDENDS") return "";
   const sp = ercSpan(), d0 = ercAnchor(), w = ernWeek(d0), tl = ercTlRange(d0);
   const lbl = sp === "TIMELINE" ? ernMonthDay(tl.from) + " " + tl.from.slice(0, 4) + "  →  " + ernMonthDay(tl.to) + " " + tl.to.slice(0, 4)
             : sp === "MONTH" ? ERC_MONTH_NAME[+d0.slice(5, 7) - 1] + " " + d0.slice(0, 4)
@@ -10931,7 +10996,7 @@ async function refreshCompanyEvents() {
   if (sig === d._evSig) { d._evHeld = null; return; }
   const draw = () => {
     if (S.coData !== d || S.coTab !== "EVENTS") return;
-    d.events = got[0] || []; d._callsum = matchCallSummaries(d.events, got[1] || []); d._callDays = (got[2] || []).map((c) => c && c.call_date).filter(Boolean); d._evSig = sig;
+    d.events = ernSupersede(got[0] || [], got[0] || []); d._callsum = matchCallSummaries(d.events, got[1] || []); d._callDays = (got[2] || []).map((c) => c && c.call_date).filter(Boolean); d._evSig = sig;
     redrawKeepingPlace("#leftPanel", ".sc-evpastscroll, .sc-evrelscroll", renderLeftPanel);
   };
   if (evBubbleOpen("#leftPanel")) { d._evHeld = draw; return; }               // opened WHILE the read was in flight: held, not drawn, and _evSig is not advanced
@@ -10940,7 +11005,7 @@ async function refreshCompanyEvents() {
 function refreshOpenEvents(onResume) {
   if (document.visibilityState === "hidden") return;
   if (onResume && Date.now() - EV_READ_AT < 60000) return;                     // just read
-  if (S.sec === "EVENTS" && el("evList") && S.calType !== "DIVIDENDS") {
+  if (S.sec === "EVENTS" && el("evList")) {
     if (evBubbleOpen("#evList")) return;                                        // a call summary is open in the feed and being read: the re-read waits (checked again before drawing)
     fillEvents(true);
   } else if (S.coData && S.coTab === "EVENTS") refreshCompanyEvents();
@@ -10950,11 +11015,6 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 async function fillEvents(quiet) {
   const list = el("evList");
   if (!list) return;
-  if (S.calType === "DIVIDENDS") {
-    list.innerHTML = '<div class="soon">No dividends source wired yet — earnings only for now.</div>';
-    const r0 = el("evUpcoming"); if (r0) r0.textContent = "—";
-    return;
-  }
   if (typeof ercSpan === "function" && ercSpan() !== "DAY") ercRead(!!quiet);   // the calendar reads its own span: first entry, and the quiet five-minute re-read. Guarded so fillEvents stands on its own, as its test runs it.
   if (EV_CACHE && !quiet) renderEvents(S.coh);           // cohort/search switch repaints instantly from cache
   if (!quiet) loadCohSets().then(() => { if (S.sec === "EVENTS") renderEvents(S.coh); })   // map retries alone, repaints on arrival (a quiet re-read must not repaint: this one reset the reader's scroll position every five minutes)
@@ -10964,8 +11024,8 @@ async function fillEvents(quiet) {
     const today = todayISO();
     const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
     const [up, past, tridx, csidx] = await Promise.all([
-      pg("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
-      pg("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
+      pgErn("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
+      pgErn("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
       pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => null),   // null = the read FAILED (kept apart from "no rows")  ·  REAL FIX — transcript_url column is dead (never written); this table is the real content index
       pg("earnings_call_transcripts?select=ticker,quarter,call_date&ai_summary=not.is.null&order=call_date.desc&limit=1000").catch(() => null),   // keys only: which calls have a stored summary — ONE request for the whole feed, never one per card
     ]);
@@ -10989,7 +11049,9 @@ async function fillEvents(quiet) {
        move it into the reported/past list so it stops showing as the next upcoming. */
     const upPending = up.filter((e) => e.eps_actual == null);
     const reportedToday = up.filter((e) => e.eps_actual != null);
-    EV_CACHE = { up: upPending.filter(inU), past: [...reportedToday, ...past].filter(inU) };
+    /* a date the provider moved is not offered as a report - see ernSupersede above */
+    const seen = up.concat(past);
+    EV_CACHE = { up: ernSupersede(upPending.filter(inU), seen), past: ernSupersede([...reportedToday, ...past].filter(inU), seen) };
     const sig = JSON.stringify([EV_CACHE.up, EV_CACHE.past, [...CALLSUM_IDX.entries()], EV_TRKEYS]), changed = sig !== EV_SIG;   // WHICH calls are stored, not how many: at the 1000-row cap the count never changes
     EV_READ_AT = Date.now();
     if (!quiet) { EV_SIG = sig; EV_HELD_SIG = ""; renderEvents(S.coh); }
@@ -14311,10 +14373,16 @@ function splitPastEarnings(past, all) {
 }
 function pastNoResultHTML(list) {
   if (!list || !list.length) return "";
+  /* 23 Sep — the dates the provider MOVED are no longer in this list at all (ernSupersede / the
+     superseded_at column). What is left is genuinely unexplained, so each one now says why it is
+     here instead of only that it is. */
   const n = list.length, rows = list.slice(0, 40).map((x) => {
     const g = x.stored ? Math.abs(x.stored.gap) : 0;
-    const where = x.stored ? " \u00B7 nearest stored result for this company: <b>" + esc(fmtEvDate(x.stored.date)) + "</b> (" + g + (g === 1 ? " day " : " days ") + (x.stored.gap > 0 ? "later" : "earlier") + ")" : "";
-    return '<div class="sc-ernnores"><span class="tk" data-tkopen="' + esc(x.row.ticker || "") + '">' + esc(x.row.ticker || "\u2014") + '</span><span class="d">' + esc(fmtEvDate(x.row.date)) + '</span><span class="t">no result stored for this date' + where + "</span></div>";
+    const why = x.stored
+      ? " \u00B7 the nearest stored result for this company is <b>" + esc(fmtEvDate(x.stored.date)) + "</b>, " + g + (g === 1 ? " day " : " days ") + (x.stored.gap > 0 ? "later" : "earlier") +
+        " \u2014 too far apart for this page to call it the same report, so both are shown"
+      : " \u00B7 this company has no stored result within 45 days either way \u2014 the feed has not delivered one";
+    return '<div class="sc-ernnores"><span class="tk" data-tkopen="' + esc(x.row.ticker || "") + '">' + esc(x.row.ticker || "\u2014") + '</span><span class="d">' + esc(fmtEvDate(x.row.date)) + '</span><span class="t">no result stored for this date' + why + "</span></div>";
   }).join("");
   return '<details class="sc-ernnores-grp" title="Dates in the stored calendar for which no result is stored. That is an observation about storage, not a statement that the company did not report. Where the same company has a stored result within 45 days its date is shown as the nearest one - a candidate, not proof that it is the same report."><summary>' +
     n + (n === 1 ? " past date" : " past dates") + " without stored results" + (n > 40 ? " (first 40 listed)" : "") + "</summary>" + rows + "</details>";
@@ -14900,12 +14968,20 @@ function companyHTML() {
 
 /* ============================================================================
    THE EARNINGS BAND — Alan, 23 Sep: "I need a tape of the events earnings too at the bottom ticker tape."
-   WHAT RIDES IT: this week, Monday to Sunday in New York, for the names the Hub tracks (the cohorts table —
-     the same universe the EVENTS room filters by). Each item: the day, when it reports (before the open /
-     after the close, or the clock time when the supplier gives one), the ticker. Once it has reported: EPS
-     actual against the estimate and the surprise, in the calendar's three result colours (green beat, yellow
-     in line, red miss — nothing else on this band uses them). A day already gone is faded. Tapping a ticker
-     opens its company page.
+   WHAT RIDES IT (23 Sep, second pass): this week's reports and the next three weeks ahead, for the names the
+     Hub tracks (the cohorts table — the same universe the EVENTS room filters by). THE BAND LEANS IN, the way
+     the ECON nudge does — Alan, 23 Sep: "as it gets closer, it displays more detail... how many days, what
+     company... more natural":
+       far off  (a week or more)  IN 12 DAYS · NKE            — how long, and who. Nothing else.
+       this week                  THU · COST                  — the day it lands on.
+       tomorrow                   TOMORROW after the close · COST · est 6.54
+       today                      TODAY after the close · COST · est 6.54, and the item breathes.
+       reported                   the result: EPS actual against the estimate and the surprise, in the
+                                  calendar's three result colours (green beat, yellow in line, red miss —
+                                  nothing else on this band uses them).
+     A day already gone is faded. Tapping a ticker opens its company page. A report time that has only just
+     become known carries a quiet "time announced" mark for a day (report_time_set_at), because until tonight
+     nothing on the screen ever said that the detail had arrived.
    THE READ: the EVENTS room's own table and columns (earnings_events, the dates the data audit found right and
      current), one request per ten minutes, nothing at all while the tab is hidden, no new table, no new
      schedule, nothing written anywhere. Rollback is one word: ERN_BAND_ON = false.
@@ -14913,6 +14989,7 @@ function companyHTML() {
    touches the ident-box nudge or the ECON band's states.
    ============================================================================ */
 const ERN_BAND_ON = true;
+const ERN_AHEAD_DAYS = 21;           // how far ahead the band looks: three weeks, one read, same ten minutes
 const ERN_TTL_MS = 10 * 60e3;        // one read per ten minutes, however often the band repaints
 const ERN_RETRY_MS = 60e3;           // after a failed read, wait a minute before asking again
 const ERN_TICK_MS = 60e3;            // today/past move here; a tick by itself reads nothing
@@ -14960,40 +15037,77 @@ function ernTitle(r, res) {
            (res.sur ? " · " + (res.cls === "beat" ? "beat by " : res.cls === "miss" ? "missed by " : "") + res.sur : "")
          : " · not reported yet") + " · tap for the company page";
 }
-function ernItemHTML(r, todayIso) {
-  const st = r.date < todayIso ? "past" : r.date === todayIso ? "today" : "up";
-  const w = ernWhen(r), res = ernResult(r);
+/* HOW NEAR IS IT. Whole days in New York between today and the report's date. */
+function ernDayGap(iso, todayIso) {
+  const a = Date.parse(String(iso) + "T00:00:00Z"), b = Date.parse(String(todayIso) + "T00:00:00Z");
+  return isFinite(a) && isFinite(b) ? Math.round((a - b) / 86400000) : null;
+}
+/* THE BAND'S DISTANCE LAW — pure, and the only place that decides how much an item says. */
+function ernTier(r, todayIso) {
+  if (ernResult(r)) return "reported";
+  const g = ernDayGap(r && r.date, todayIso);
+  if (g == null) return "far";
+  if (g < 0) return "past";
+  if (g === 0) return "today";
+  if (g === 1) return "tomorrow";
+  return g <= 6 ? "week" : "far";
+}
+/* A REPORT TIME THAT HAS JUST BECOME KNOWN. Alan, 23 Sep: "the ones that don't have the details because they
+   haven't announced - what are we doing to check? How do we become aware that it was announced?" The row
+   carries the answer already: report_time_set_at is stamped when a time is first stored (44 rows carry
+   'nasdaq-calendar' tonight). For one day after that stamp the item says so, and then goes quiet again. */
+const ERN_NEW_MS = 24 * 3600e3;
+function ernTimeJustAnnounced(r, nowMs) {
+  if (!r || !r.report_time || !r.report_time_set_at) return false;
+  const t = Date.parse(r.report_time_set_at), now = isFinite(nowMs) ? nowMs : Date.now();
+  return isFinite(t) && now - t >= 0 && now - t < ERN_NEW_MS;
+}
+function ernWhenLabel(r, tier, todayIso) {
+  const g = ernDayGap(r.date, todayIso), w = ernWhen(r);
+  if (tier === "far") return "IN " + g + " DAYS";
+  if (tier === "week") return ernWeekday(r.date);
+  if (tier === "tomorrow") return "TOMORROW" + (w ? " " + w : "");
+  if (tier === "today") return "TODAY" + (w ? " " + w : "");
+  if (tier === "past") return ernWeekday(r.date);
+  return (g === 0 ? "TODAY" : ernWeekday(r.date)) + (w ? " " + w : "");    /* reported */
+}
+function ernItemHTML(r, todayIso, nowMs) {
+  const tier = ernTier(r, todayIso), g = ernDayGap(r.date, todayIso), res = ernResult(r);
+  const st = tier === "reported" ? (g < 0 ? "past" : "today") : tier === "past" ? "past" : tier === "today" ? "today" : "up";
   const resHTML = res
     ? '<span class="ern-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
       (res.est != null ? " vs est " + esc(ernNum(res.est)) : "") + "</span>" +
       (res.sur ? '<span class="ern-sur ' + res.cls + '">' + esc(res.sur) + "</span>" : "")
     : "";
-  return '<span class="sc-tape__item ern-it is-' + st + '" data-act="row" data-t="' + esc(r.ticker) +
-    '" title="' + esc(ernTitle(r, res)) + '">' +
-    '<span class="ern-when' + (st === "today" ? " is-today" : "") + '">' +
-      esc((st === "today" ? "TODAY" : ernWeekday(r.date)) + (w ? " " + w : "")) + "</span>" +
-    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + "</span>" +
+  /* the estimate belongs to the last day before it lands, not to a name three weeks out */
+  const est = !res && (tier === "today" || tier === "tomorrow") && num(r.eps_estimate) != null
+    ? '<span class="ern-est">est ' + esc(ernNum(num(r.eps_estimate))) + "</span>" : "";
+  const mark = ernTimeJustAnnounced(r, nowMs) ? '<span class="ern-new" title="the report time for this date was stored in the last day">time announced</span>' : "";
+  const late = tier === "past" ? '<span class="ern-est">no result stored yet</span>' : "";
+  return '<span class="sc-tape__item ern-it is-' + st + " ern-t-" + tier + (tier === "today" ? " is-live" : "") +
+    '" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
+    '<span class="ern-when' + (st === "today" ? " is-today" : "") + '">' + esc(ernWhenLabel(r, tier, todayIso)) + "</span>" +
+    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + est + late + mark + "</span>" +
     '<span class="sc-tape__dot">·</span>';
 }
 function ernBandItems(todayIso) {
-  const week = ernWeek(todayIso), first = week[0], last = week[6];
+  const week = ernWeek(todayIso), first = week[0], last = ernShift(todayIso, ERN_AHEAD_DAYS);
   /* the week AND the tracked names are enforced here as well as at the read, so a row that arrives
-     any other way still cannot ride a band that promises "the names the Hub tracks, this week". */
+     any other way still cannot ride a band that promises "the names the Hub tracks, this week and the next three". */
   return (ERN_ROWS || []).filter((r) => r && r.date >= first && r.date <= last && (!UNIVERSE || UNIVERSE.has(r.ticker)))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ernSlot(a) - ernSlot(b) ||
                     (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0));
 }
-function ernBandHTML(todayIso) {
+function ernBandHTML(todayIso, nowMs) {
   const sep = '<span class="sc-tape__dot">·</span>';
   let seg;
   if (!ERN_ROWS) {
     seg = '<span class="sc-tape__item ern-note">' +
       (ERN_FAIL_AT ? "this week's earnings could not be read" : "reading this week's earnings…") + "</span>" + sep;
   } else {
-    const items = ernBandItems(todayIso), week = ernWeek(todayIso);
-    seg = '<span class="sc-tape__item ern-wk">WEEK OF ' + esc(ernMonthDay(week[0])) + "</span>" + sep +
-      (items.length ? items.map((r) => ernItemHTML(r, todayIso)).join("")
-                    : '<span class="sc-tape__item ern-note">no earnings this week for the names you track</span>' + sep);
+    const items = ernBandItems(todayIso);
+    seg = (items.length ? items.map((r) => ernItemHTML(r, todayIso, nowMs)).join("")
+                        : '<span class="sc-tape__item ern-note">no earnings ahead for the names you track</span>' + sep);
   }
   return '<div class="sc-tape sc-tape--ern" id="ernBand"><b class="sc-tape__lbl">EARNINGS →</b>' +
     '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
@@ -15002,23 +15116,25 @@ function renderErnBand() {
   const slot = el("ernBandSlot");
   if (!ERN_BAND_ON || !slot) return;
   if (!ERN_ROWS && !ERN_FAIL_AT) return;               // 23 Sep: no half-empty band while the first read is out — it appears whole
-  const html = ernBandHTML(todayISO());
+  const html = ernBandHTML(todayISO(), Date.now());
   if (html === ERN_HTML && slot.innerHTML) return;          // unchanged: leave the marquee running where it is
   ERN_HTML = html;
   slot.innerHTML = html;
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = slot.querySelector(".sc-tape__track");
-  if (track) tapeSpeed(track, slot.querySelector(".ern-it.is-today, .ern-it.is-up"));   // the band opens on today, not on Monday
+  if (track) tapeSpeed(track, slot.querySelector(".ern-it.is-today, .ern-it.is-up"));   // the band opens on today, not on Monday - and runs at the same 45 px/s as every other tape
 }
 async function ernRead() {
   if (!ERN_BAND_ON || ERN_BUSY) return;
   ERN_BUSY = true;
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));   // the names the Hub tracks — the EVENTS room's own universe
-    const week = ernWeek(todayISO());
-    const rows = await pg("earnings_events?select=ticker,date,report_time,eps_actual,eps_estimate,surprise_pct" +
-      "&date=gte." + week[0] + "&date=lte." + week[6] + "&order=date.asc&limit=500");
-    ERN_ROWS = (rows || []).filter((r) => r && r.ticker && UNIVERSE.has(r.ticker));
+    const today = todayISO(), week = ernWeek(today);
+    const rows = await pgErn("earnings_events?select=ticker,date,report_time,report_time_source,report_time_set_at," +
+      "eps_actual,revenue_actual,eps_estimate,surprise_pct" +
+      "&date=gte." + week[0] + "&date=lte." + ernShift(today, ERN_AHEAD_DAYS) + "&order=date.asc&limit=500");
+    const kept = (rows || []).filter((r) => r && r.ticker && UNIVERSE.has(r.ticker));
+    ERN_ROWS = ernSupersede(kept, kept);            // a date the provider moved never rides the band
     ERN_AT = Date.now(); ERN_FAIL_AT = 0;
   } catch (err) {
     ERN_FAIL_AT = Date.now();            // the last good rows stay on screen; the tick retries
@@ -16032,7 +16148,6 @@ document.addEventListener("click", (e) => {
       if (rt && S.coData) rt.innerHTML = readTxtHTML(S.coData);
       break;
     }
-    case "caltype":    S.calType = a.dataset.t; sync(); break;
     /* PORT — window moves call ecLoadWindow() (the calendar only); the rail is read once per room mount. */
     /* R52 — ECONOMIC room. Region / category / expand are pure client-side
        repaints of the already-fetched window (no refetch, no remount, so the
