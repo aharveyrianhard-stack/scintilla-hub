@@ -78,6 +78,16 @@ a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
 .odd p{margin:0 0 9px;font-size:15px;color:var(--ink2);max-width:52em}
 .odd .mm{font-family:var(--mono);font-size:13px;color:var(--dim)}
 .note{font-size:13px;color:var(--mute);max-width:52em;margin:8px 0 0}
+/* the new tables carry more words than the sector table; on a narrow screen they scroll
+   inside their own box so the PAGE never scrolls sideways */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tw>table{min-width:100%}
+@media (max-width:560px){
+  .tw>table{font-size:13px}
+  .tw td,.tw th{padding-left:7px;padding-right:7px}
+  .tw td .why{font-size:12px}
+  .chip{font-size:11px;padding:0 4px;letter-spacing:.04em}
+}
 .io{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);margin:14px 0 4px;background:var(--sunk)}
 .io div{flex:1 1 260px;padding:10px 13px;border-right:1px solid var(--line)}
 .io div:last-child{border-right:0}
@@ -1275,7 +1285,7 @@ function drawDesk(m) {
                 : "no published rotation ranking came back, so that leg is absent"),
     m.sectors.map((s)=>"<b>" + esc(plain(s.name)) + "</b> " + pct(s.w)).join(" · "));
   const maxRel = Math.max(...m.sectorsAll.map((s)=>Math.abs(s.rel||0)), 1);
-  document.getElementById("l2tab").innerHTML = "<table><thead><tr>" +
+  document.getElementById("l2tab").innerHTML = '<div class="tw"><table><thead><tr>' +
     "<th>SECTOR</th><th>NAMES</th><th>VS MARKET " + T.lookback + "D</th><th>ITS OWN NAMES</th><th>ROTATION</th><th>COHORTS</th><th>STANDING</th><th>WEIGHT</th>" +
     "</tr></thead><tbody>" + m.sectorsAll.map((s) => {
       const on = m.sectors.includes(s);
@@ -1285,7 +1295,7 @@ function drawDesk(m) {
         "<td>"+(s.rank==null?"—":"#"+s.rank+'<span class="why">'+sg(s.rankScore,2)+"</span>")+"</td>" +
         "<td>"+(s.cohTilt==null?"—":sgc(s.cohTilt))+"</td>" +
         "<td>"+sg(s.score,2)+"</td>" +
-        "<td>"+(on?pct(s.w):"—")+"</td></tr>"; }).join("") + "</tbody></table>";
+        "<td>"+(on?pct(s.w):"—")+"</td></tr>"; }).join("") + "</tbody></table></div>";
 
   /* layer 3 — the funnel, then why not the others, then the picks */
   const F = m.funnel;
@@ -1392,7 +1402,7 @@ function drawCohorts(m) {
   /* which of tonight's chosen sectors each cohort actually reaches */
   const secOf = {}; m.eq.forEach((x)=>{ secOf[x.t] = x.sector; });
   const chosenNames = new Set(m.sectors.map((s)=>s.name));
-  document.getElementById("l0tab").innerHTML = "<table><thead><tr>" +
+  document.getElementById("l0tab").innerHTML = '<div class="tw"><table><thead><tr>' +
     "<th>COHORT</th><th>READ</th><th>MEMBERS COUNTED</th><th>NO GEIGER</th><th>IN TONIGHT'S SECTORS</th><th>WHERE IT LANDS</th>" +
     "</tr></thead><tbody>" + m.coh.map((r) => {
       const mem = Array.from((D.cohsets && D.cohsets[r.key]) || []);
@@ -1405,7 +1415,7 @@ function drawCohorts(m) {
         "<td>" + (r.absent.length ? '<span class="why">' + esc(r.absent.slice(0,6).join(", ")) +
             (r.absent.length>6 ? " +"+(r.absent.length-6)+" more" : "") + "</span>" : "—") + "</td>" +
         "<td>" + (inChosen.length || "—") + "</td>" +
-        "<td>" + (where || "—") + "</td></tr>"; }).join("") + "</tbody></table>";
+        "<td>" + (where || "—") + "</td></tr>"; }).join("") + "</tbody></table></div>";
 }
 
 function drawBreadth(m) {
@@ -1416,14 +1426,14 @@ function drawBreadth(m) {
       "rather than filling the gap with a guess.</p>";
     return;
   }
-  host.innerHTML = "<table><thead><tr><th>BREADTH</th><th>WHAT IT READS</th><th>ON THE GEIGER SCALE</th><th>EFFECT</th></tr></thead><tbody>" +
+  host.innerHTML = '<div class="tw"><table><thead><tr><th>BREADTH</th><th>WHAT IT READS</th><th>ON THE GEIGER SCALE</th><th>EFFECT</th></tr></thead><tbody>' +
     b.parts.map((x)=>"<tr><td>" + esc(x.k) + "</td><td>" + esc(x.read) + "</td><td>" + sgc(x.v) + "</td>" +
       "<td>" + (x.v>=0 ? "adds to" : "takes from") + " how much to own</td></tr>").join("") +
     "<tr class='pick'><td>the three together</td><td>weighted " + T.breadthW + "% against the board average</td>" +
       "<td>" + sgc(b.reading) + "</td><td>" +
       (Math.abs(m.breadthMoved) < 0.5 ? "moves the answer by less than a point"
         : (m.breadthMoved>0 ? "adds " : "takes off ") + pct(Math.abs(m.breadthMoved)) ) + "</td></tr>" +
-    "</tbody></table>" +
+    "</tbody></table></div>" +
     '<p class="note">The board average alone would say ' + pct(m.investedNoBreadth) + " invested; with breadth it says " +
     pct(m.invested) + ". " + (b.share50!=null && b.share200!=null && b.share50 < 0.5 && b.rspLong!=null && b.rspLong<0
       ? "Fewer than half the names are above their own 50-day average while the equal-weight index trails the " +
@@ -1444,7 +1454,7 @@ function drawDrill(m) {
       "<span>weight " + pct(d.w) + "</span>" +
       "<span>cohort read " + (d.cohTilt==null ? "—" : sg(d.cohTilt)) + "</span>" +
       '<span class="r">' + d.rows.length + " names</span></h3>" +
-      "<table><thead><tr><th>NAME</th><th>COHORTS</th><th>GEIGER</th><th>VS SECTOR MIDDLE</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>" +
+      '<div class="tw"><table><thead><tr><th>NAME</th><th>COHORTS</th><th>GEIGER</th><th>VS SECTOR MIDDLE</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>' +
       d.rows.map((r)=>'<tr class="' + (r.fate==="PICK" ? "pick" : "out") + '"><td>' +
         (r.fav ? '<span class="chip star">FAV</span>' : "") + esc(r.t) + "</td>" +
         "<td>" + (r.cohs.length ? chips(r.cohs) : '<span class="why">no declared cohort</span>') + "</td>" +
@@ -1452,7 +1462,7 @@ function drawDrill(m) {
         "<td>" + sg(r.g - r.gMed) + "</td>" +
         "<td>" + esc(r.fate) + '<span class="why">' + esc(r.why) + "</span></td>" +
         "<td>" + (r.w==null ? "—" : pct(r.w,1)) + "</td></tr>").join("") +
-      "</tbody></table></div>").join("") ||
+      "</tbody></table></div></div>").join("") ||
     '<p class="note">No sector was chosen, so there is nothing to drill into.</p>';
 }
 
@@ -1481,14 +1491,14 @@ function drawFav(m) {
         : "Tonight it changed nothing: the same names are held with or without it.")) +
     " Favourites come from this browser's saved list (the same <b>sc_fav</b> the board uses) merged with the board's " +
     "seed. There is no favourites table on the server, so a name starred on another device is not visible here yet.";
-  document.getElementById("favtab").innerHTML = "<table><thead><tr>" +
+  document.getElementById("favtab").innerHTML = '<div class="tw"><table><thead><tr>' +
     "<th>NAME</th><th>SECTOR</th><th>COHORTS</th><th>GEIGER</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>" +
     rows.map((r)=>'<tr class="' + (r.state==="PICK" ? "pick" : "out") + '"><td>' + esc(r.t) + "</td>" +
       "<td>" + esc(r.sector ? plain(r.sector) : "—") + "</td>" +
       "<td>" + (r.cohs && r.cohs.length ? chips(r.cohs) : "—") + "</td>" +
       "<td>" + (r.g==null ? "—" : sgc(r.g)) + "</td>" +
       "<td>" + esc(r.state) + '<span class="why">' + esc(r.why) + "</span></td>" +
-      "<td>" + (r.w==null ? "—" : pct(r.w,1)) + "</td></tr>").join("") + "</tbody></table>";
+      "<td>" + (r.w==null ? "—" : pct(r.w,1)) + "</td></tr>").join("") + "</tbody></table></div>";
 }
 
 function drawOdd(m) {
@@ -1520,9 +1530,10 @@ function drawOdd(m) {
     const A = o(a), B = o(b), sa = A.series, sb = B.series;
     const ga = G(a), gb = G(b);
     return '<div class="odd"><h3>' + esc(what) + "</h3>" +
-      "<table><thead><tr><th></th><th>" + esc(a) + "</th><th>" + esc(b) + "</th></tr></thead><tbody>" +
-      "<tr><td>what it is</td><td>" + (a==="GLD" ? "an ETF that owns bullion in a vault" : "a fund") +
-        "</td><td>the futures contract on the metal</td></tr>" +
+      '<div class="tw"><table><thead><tr><th></th><th>' + esc(a) + "</th><th>" + esc(b) + "</th></tr></thead><tbody>" +
+      "<tr><td>what it is</td><td>" + (a==="GLD" ? "an ETF that owns gold bullion in a vault"
+        : a==="SLV" ? "an ETF that owns silver bullion in a vault" : "an ETF that owns the metal") +
+        "</td><td>the futures contract on the metal, quoted in the front delivery month</td></tr>" +
       "<tr><td>newest daily bar</td><td>" + (sa&&sa.length ? dstr(sa[sa.length-1].t) : "—") +
         "</td><td>" + (sb&&sb.length ? dstr(sb[sb.length-1].t) : "—") + "</td></tr>" +
       "<tr><td>last close</td><td>" + (sa&&sa.length ? sa[sa.length-1].c.toFixed(2) : "—") +
@@ -1535,7 +1546,7 @@ function drawOdd(m) {
       "<tr><td>provider symbol</td><td>" + esc(String(A.provider_symbol || A.provider || "—")) +
         "</td><td>" + esc(String(B.provider_symbol || B.provider || "—")) + "</td></tr>" +
       "<tr><td>price basis</td><td>" + esc(String(A.price_basis || "—")) + "</td><td>" + esc(String(B.price_basis || "—")) + "</td></tr>" +
-      "</tbody></table></div>";
+      "</tbody></table></div></div>";
   };
   H += pair("GLD", "GCUSD", "GOLD — THE ETF AND THE FUTURE ARE NOT THE SAME INSTRUMENT");
   const gs = (o("GLD").series||[]), fs = (o("GCUSD").series||[]);
@@ -1571,7 +1582,7 @@ function drawCohortReview(m) {
     "sector and size keys that live on the other side of the board's toggle. Nothing here is changed — these are " +
     "observations for you to accept or reject.";
   const rows = m.coh ? m.coh.slice() : [];
-  document.getElementById("crtab").innerHTML = "<table><thead><tr>" +
+  document.getElementById("crtab").innerHTML = '<div class="tw"><table><thead><tr>' +
     "<th>COHORT</th><th>MEMBERS</th><th>WITH A GEIGER</th><th>READ</th><th>ALSO IN OTHER COHORTS</th><th>WHAT I WOULD LOOK AT</th>" +
     "</tr></thead><tbody>" + rows.map((r) => {
       const mem = Array.from(D.cohsets[r.key] || []);
@@ -1590,7 +1601,7 @@ function drawCohortReview(m) {
         "<td>" + (r.mean==null ? "—" : sgc(r.mean)) + "</td>" +
         "<td>" + shared.length + (shared.length ? '<span class="why">' + esc(shared.slice(0,8).join(", ")) +
           (shared.length>8 ? " +" + (shared.length-8) + " more" : "") + "</span>" : "") + "</td>" +
-        "<td>" + esc(notes.join("; ")) + "</td></tr>"; }).join("") + "</tbody></table>" +
+        "<td>" + esc(notes.join("; ")) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
     '<p class="note">Keys in the table that the board does not show as cohorts: ' + num(undeclared.length) +
     " (the eleven sector names, the size buckets and the FMP industry keys). They are not a fault — they feed the " +
     "SECTORS side of the board's toggle — but MEGACAP and MEGA_CAP sitting side by side is worth a decision.</p>";
