@@ -34,6 +34,7 @@ BADGE = {"existing": "Existing tool", "preview": "Preview", "sample": "Sample da
 PURPOSE = {
     "Economic events": "markets", "Sector rotation": "markets",
     "Indicator Lab": "signals", "Cohort Geiger": "signals", "Context Lens · v4": "signals",
+    "Company report library": "signals",
     "Allocation & DCF": "portfolio",
     "Scintilla Desk": "workspaces",
     "Visual Engine workbench": "visual", "Visual Engine Lab": "visual",
@@ -48,6 +49,7 @@ ICON = {
  "Indicator Lab":          '<path d="M10 3.5v6L5 19a1.6 1.6 0 0 0 1.4 2.4h11.2A1.6 1.6 0 0 0 19 19l-5-9.5v-6"/><path d="M8.5 3.5h7M7.6 14.5h8.8"/>',
  "Cohort Geiger":          '<path d="M3.5 19h17"/><path d="M6.5 19v-4M10.2 19v-8M13.8 19v-5.5M17.5 19v-11"/>',
  "Context Lens · v4":      '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/><path d="M8 10.5h5M10.5 8v5"/>',
+ "Company report library": '<path d="M6 3.5h9l4 4v13H6z"/><path d="M15 3.5v4h4M8.5 11h7M8.5 14.5h7M8.5 18h4"/>',
  "Allocation & DCF":      '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v8.5l6 6"/><path d="M12 12 4.6 8.6"/>',
  "Scintilla Desk":         '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M11 9.5v10"/>',
  "Visual Engine workbench":'<path d="M5 4.5v15M12 4.5v15M19 4.5v15"/><circle cx="5" cy="9.5" r="2.1"/><circle cx="12" cy="14.5" r="2.1"/><circle cx="19" cy="8" r="2.1"/>',
@@ -75,6 +77,7 @@ HOST = {
  "Station dock concept": "this site · /prototypes/",
  "Signal fanout · v2": "this site · /prototypes/",
  "Context Lens · v4": "Scintilla prototype · not recovered yet",
+ "Company report library": "this site · /prototypes/",
  "Visual menus": "not available yet",
 }
 
@@ -300,7 +303,7 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 
 <section class="part" id="architecture"><h2 class="pt">Architecture</h2>
 <table class="arch"><thead><tr><th>Address</th><th>What lives there</th><th>Kept by</th></tr></thead><tbody>
-<tr><td>scintillahub.ai</td><td>The Hub, this home (/prototypes/), the Visual Engine workbench (/visual-engine/), the visual-engine lab (/lab.html), the Station dock concept (/prototypes/dock-concept/) and the Indicator Lab home (/prototypes/indicator-lab/)</td><td>Scintilla; the Indicator Lab home is kept independently by Indicator Lab</td></tr>
+<tr><td>scintillahub.ai</td><td>The Hub, this home (/prototypes/), the Visual Engine workbench (/visual-engine/), the visual-engine lab (/lab.html), the Station dock concept (/prototypes/dock-concept/), the company report library (/prototypes/report-library/) and the Indicator Lab home (/prototypes/indicator-lab/)</td><td>Scintilla; the Indicator Lab home is kept independently by Indicator Lab</td></tr>
 <tr><td>station.scintillahub.ai</td><td>Station, the display wall</td><td>Scintilla</td></tr>
 <tr><td>sectorrotation.scintillahub.ai · allocation.scintillahub.ai</td><td>Existing tools with their own addresses</td><td>Scintilla</td></tr>
 <tr><td>*.vercel.app</td><td>Previews, studies, the widget registry and the cohort board, each at its own address</td><td>Scintilla</td></tr>

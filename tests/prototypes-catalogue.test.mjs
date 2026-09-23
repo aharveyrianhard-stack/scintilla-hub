@@ -15,12 +15,15 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    have to open a new window". Two rules now hold the page to that complaint, and are tested below: a destination on another
    address opens in a NEW TAB so this page is never consumed, and a destination on this site must carry a link back here.
    The page is generated from catalog.json, so the two can no longer drift. The Station dock concept was published under
-   /prototypes/dock-concept/ in the same pass, because it had only ever been sent as a file. */
+   /prototypes/dock-concept/ in the same pass, because it had only ever been sent as a file.
+
+   September 23: the company report library joins under /prototypes/report-library/ - the recovered reports deduplicated
+   into one page and marked against the Hub (see tests/report-library.test.mjs for its own rules). */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "75f75c42e6efea286ffcd9491365f66047d882282dda3dde7695bd330807e9d6");
+  assert.equal(sha("index.html"), "704f73cdd243b0b38c64eb5ebfffdae71094d9bd6cf15994000c0a2c5d6697c0");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
   assert.equal(sha("dock-concept/index.html"), "b63d4bb1404b41ee0dbf2414817c08e4b0e4a35a5dbd8bd8460c89b717685a69");
-  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "previews"]);
+  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "previews", "report-library"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));
 });
@@ -133,10 +136,10 @@ test("links are real destinations only; the page is self-contained and stores no
     "#overview", "#tools", "#review", "#work", "#architecture", "#page-spec"];         // in-page navigation
   for (const m of page.matchAll(/href="([^"]+)"/g)) assert.ok(catUrls.has(m[1]) || extra.includes(m[1]), "unlisted link " + m[1]);
   assert.deepEqual(cat.filter((e) => e.url && e.url.startsWith("/")).map((e) => e.url).sort(),
-    ["/lab.html", "/prototypes/dock-concept/", "/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html", "/visual-engine/"]);
+    ["/lab.html", "/prototypes/dock-concept/", "/prototypes/indicator-lab/", "/prototypes/previews/signal-fanout-v2.html", "/prototypes/report-library/", "/visual-engine/"]);
   const preview = fs.readFileSync(at("previews/signal-fanout-v2.html"), "utf8");
   const dock = fs.readFileSync(at("dock-concept/index.html"), "utf8");
-  for (const html of [page, preview, dock, fs.readFileSync(at("indicator-lab/index.html"), "utf8")]) {
+  for (const html of [page, preview, dock, fs.readFileSync(at("indicator-lab/index.html"), "utf8"), fs.readFileSync(at("report-library/index.html"), "utf8")]) {
     assert.match(html, /<meta name="robots" content="noindex,nofollow">/);
     assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=|<iframe|fetch\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|document\.cookie/i, "self-contained: no external script or style, no request, no storage");
     assert.doesNotMatch(html, /eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role|Authorization|\/Users\//i, "no key, token or local path");
