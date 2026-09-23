@@ -1179,6 +1179,48 @@ body.senti .sc-cohsearch{ display:none; }
   padding:0 5px; color:var(--dim); margin-left:6px; }
 .an-lean-pos{ color:var(--fg5); } .an-lean-neg{ color:var(--fg1); } .an-lean-flat{ color:var(--dim); }
 
+/* M30 — the voices, drawn. A lean is a diverging bar with zero in the middle, up
+   green and down red (house rule for direction), the spread is the band between the
+   lowest and highest channel behind the average, and a ticker is a chip whose colour
+   is its lean and whose number is how many voices carried it. */
+.sn-stick{ width:100%; border-collapse:collapse; font-size:11px; }
+.sn-stick th{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+  text-align:left; font-weight:600; padding:0 8px 6px 0; border-bottom:.5px solid var(--line); }
+.sn-stick td{ padding:9px 8px 9px 0; border-bottom:.5px solid var(--line); color:var(--ink3);
+  vertical-align:middle; }
+.sn-stick td.n, .sn-stick th.n{ text-align:right; font-variant-numeric:tabular-nums; }
+.sn-stick .v{ color:var(--ink2); font-weight:700; letter-spacing:.08em; }
+.sn-stick tr.thin td{ opacity:.82; }
+.sn-lean{ position:relative; height:16px; min-width:120px; background:var(--mute); }
+.sn-lean__mid{ position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line2); }
+.sn-lean__v{ position:absolute; top:3px; bottom:3px; }
+.sn-lean__v.pos{ background:var(--fg5); } .sn-lean__v.neg{ background:var(--fg1); }
+.sn-lean__band{ position:absolute; top:0; bottom:0; background:rgba(160,164,190,.16); }
+.sn-lean__num{ font-variant-numeric:tabular-nums; font-weight:700; }
+.sn-lean__num.pos{ color:var(--fg5); } .sn-lean__num.neg{ color:var(--fg1); } .sn-lean__num.flat{ color:var(--dim); }
+.sn-tchips{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+.sn-tchip{ display:inline-flex; align-items:baseline; gap:6px; font-size:11px; padding:3px 7px;
+  border:.5px solid var(--line2); background:var(--mute); letter-spacing:.04em; }
+.sn-tchip b{ font-weight:700; font-variant-numeric:tabular-nums; }
+.sn-tchip.pos{ border-color:rgba(47,191,113,.55); } .sn-tchip.pos b{ color:var(--fg5); }
+.sn-tchip.neg{ border-color:rgba(232,56,79,.55); } .sn-tchip.neg b{ color:var(--fg1); }
+.sn-tchip.flat b{ color:var(--dim); }
+.sn-tchip__n{ color:var(--dim); font-variant-numeric:tabular-nums; }
+.sn-tchip__sp{ display:inline-flex; width:26px; height:6px; background:var(--mute); border:.5px solid var(--line); }
+.sn-tchip__sp i{ background:var(--fg5); } .sn-tchip__sp b{ background:var(--fg1); }
+.kw-tk{ display:flex; gap:8px; align-items:baseline; font-size:11px; padding:6px 0; border-bottom:.5px solid var(--line); }
+.kw-tk__t{ color:var(--ink2); font-weight:700; min-width:58px; letter-spacing:.06em; }
+.kw-tk__w{ color:var(--ink3); line-height:1.7; }
+.kw-tk__w .w-bull{ color:var(--fg5); font-weight:600; } .kw-tk__w .w-bear{ color:var(--fg1); font-weight:600; }
+.kw-tk__w .sep{ color:var(--dim); padding:0 4px; }
+.kw-tk__n{ margin-left:auto; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lx-row{ display:flex; gap:8px; align-items:baseline; font-size:11px; padding:5px 0; border-bottom:.5px solid var(--line); }
+.lx-row__t{ min-width:104px; font-weight:700; } .lx-row__t.pos{ color:var(--fg5); } .lx-row__t.neg{ color:var(--fg1); }
+.lx-row__k{ color:var(--dim); font-size:11px; letter-spacing:.1em; text-transform:uppercase; min-width:46px; }
+.lx-row__n{ color:var(--ink3); }
+.lx-ba{ font-size:11px; line-height:1.8; color:var(--ink3); border-left:2px solid var(--line2); padding:4px 0 4px 10px; margin:6px 0; }
+.lx-ba b{ color:var(--ink2); }
+@media(max-width:700px){ .sn-stick .hide-sm{ display:none; } .sn-lean{ min-width:80px; } }
 /* the keyword tracker */
 .kw-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .kw-col h5{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; margin:0 0 6px; font-weight:700; }
@@ -9121,24 +9163,147 @@ const SENTI = (function () {
   const BEAR = ["bear","bearish","bears","puts","shorts","shorting","dump","dumping","crash","crashing","sell","selling","sold","downgrade","downgraded","miss","missed","red","lower","weak","weakness","resistance","breakdown","tank","tanking","plunge","plunging","overvalued","overbought","bubble","fraud","bankrupt","bankruptcy","recession","fear","panic","drop","dropping","fall","falling"];
   const NEG = new Set(["not","no","never","isnt","isn't","dont","don't","cant","can't","wont","won't","without","hardly","aint","ain't"]);
   const BULL_S = new Set(BULL), BEAR_S = new Set(BEAR);
+  /* THE LANGUAGE PEOPLE ACTUALLY USE (lane M30). Alan, 23 Sep: "These people on
+     YouTube talk informal language — synonyms, slang, abbreviations." The list above
+     is the plain-English core (v1) and is unchanged, so no old number moves for a
+     reason nobody can see. Everything below is the v2 addition: slang, abbreviations,
+     two- and three-word phrases, and emoji. Every entry carries its polarity AND a
+     note saying why it is on the list, because a word list you cannot argue with is
+     a word list nobody can check. Phrases are matched BEFORE single words, so
+     "buy the dip" is one bullish reading and not a separate "buy" and "dip". */
+  const SOCIAL_LEX_VERSION = "sc-social-v2";
+  const SOCIAL_LEX_ADDED = [
+    /* [ text, polarity, kind, why it is here ] */
+    ["ripped", 1, "word", "past tense of the rip this list already counts"],
+    ["rips", 1, "word", "same word, third person"],
+    ["mooned", 1, "word", "went up a lot; the -ing form was already counted"],
+    ["lfg", 1, "word", "let's go — pure excitement, used when a position is working"],
+    ["wagmi", 1, "word", "we're all gonna make it — group optimism"],
+    ["gmi", 1, "word", "gonna make it — the same, said about one name"],
+    ["tendies", 1, "word", "profits, said as a joke"],
+    ["printing", 1, "word", "a position making money right now"],
+    ["printed", 1, "word", "it made money"],
+    ["yolo", 1, "word", "an oversized bet, always placed in the up direction"],
+    ["fomo", 1, "word", "chasing a move up — bullish in tone, and often said at a top"],
+    ["parabolic", 1, "word", "going up steeply"],
+    ["euphoria", 1, "word", "the crowd is excited — bullish tone, a warning to some"],
+    ["sendit", 1, "word", "buy it anyway"],
+    ["bullrun", 1, "word", "one word, as people type it"],
+    ["gapup", 1, "word", "opened above yesterday, typed as one word"],
+    ["atl", -1, "word", "all-time low, the mirror of ATH"],
+    ["rekt", -1, "word", "wrecked — a position badly lost"],
+    ["bagholder", -1, "word", "someone stuck holding a loser"],
+    ["bagholders", -1, "word", "the plural, used just as often"],
+    ["bagholding", -1, "word", "the verb"],
+    ["ngmi", -1, "word", "not gonna make it — the bearish twin of wagmi"],
+    ["fud", -1, "word", "fear, uncertainty, doubt — used about bad news"],
+    ["nuked", -1, "word", "dropped hard"],
+    ["nuke", -1, "word", "the same, as a verb"],
+    ["puked", -1, "word", "sold in a hurry at any price"],
+    ["puking", -1, "word", "the same, happening now"],
+    ["capitulation", -1, "word", "the give-up point of a fall"],
+    ["capitulate", -1, "word", "the verb"],
+    ["rugged", -1, "word", "the floor came out — from crypto, now used on stocks"],
+    ["rugpull", -1, "word", "the event itself"],
+    ["dumped", -1, "word", "past tense of the dump this list already counts"],
+    ["tanked", -1, "word", "past tense of tank"],
+    ["gapdown", -1, "word", "opened below yesterday, typed as one word"],
+    ["cooked", -1, "word", "finished, in the bad sense"],
+    ["calls printing", 1, "phrase", "upside options making money — the clearest bullish phrase in this language"],
+    ["buy the dip", 1, "phrase", "buying a fall on purpose — bullish, even though it contains a fall"],
+    ["short squeeze", 1, "phrase", "forced buying; the words apart would read bearish"],
+    ["melt up", 1, "phrase", "a market grinding higher"],
+    ["risk on", 1, "phrase", "money moving into risk"],
+    ["all time high", 1, "phrase", "the long form of ATH"],
+    ["to the moon", 1, "phrase", "the long form of moon"],
+    ["puts printing", -1, "phrase", "downside options making money — bearish, although it contains printing"],
+    ["dead cat bounce", -1, "phrase", "a bounce the speaker does not believe"],
+    ["falling knife", -1, "phrase", "a fall nobody should catch"],
+    ["risk off", -1, "phrase", "money leaving risk"],
+    ["blood bath", -1, "phrase", "a heavy down day"],
+    ["circuit breaker", -1, "phrase", "trading halted by a fall"],
+    ["left for dead", -1, "phrase", "written off"],
+    ["\u{1F680}", 1, "emoji", "rocket — the single most common bullish mark in this feed"],
+    ["\u{1F319}", 1, "emoji", "moon — goes with the rocket"],
+    ["\u{1F4C8}", 1, "emoji", "chart up"],
+    ["\u{1F402}", 1, "emoji", "ox, used as the bull"],
+    ["\u{1F911}", 1, "emoji", "money face — making money"],
+    ["\u{1F48E}", 1, "emoji", "diamond — holding through a fall, said in the up direction"],
+    ["\u{1F525}", 1, "emoji", "fire — something is running"],
+    ["\u{1F43B}", -1, "emoji", "bear"],
+    ["\u{1F4C9}", -1, "emoji", "chart down"],
+    ["\u{1FA78}", -1, "emoji", "blood drop — a bleeding position"],
+    ["\u{1F480}", -1, "emoji", "skull — a position is dead"],
+    ["\u{1F622}", -1, "emoji", "crying"],
+    ["\u{1F6BD}", -1, "emoji", "toilet — where the position went"],
+  ];
+  /* the three tables the scanner reads: single words, phrases, emoji */
+  const LEX_WORDS = new Map(), LEX_PHRASE = new Map(), LEX_EMOJI = new Map();
+  for (const w of BULL) LEX_WORDS.set(w, { pol: 1, kind: "word", note: "core list (v1)" });
+  for (const w of BEAR) LEX_WORDS.set(w, { pol: -1, kind: "word", note: "core list (v1)" });
+  for (const [t, pol, kind, note] of SOCIAL_LEX_ADDED) {
+    const e = { pol, kind, note, added: true };
+    if (kind === "phrase") LEX_PHRASE.set(t, e); else if (kind === "emoji") LEX_EMOJI.set(t, e); else LEX_WORDS.set(t, e);
+  }
+  const LEX_PHRASE_MAX = Math.max(1, ...[...LEX_PHRASE.keys()].map((p) => p.split(" ").length));
+  const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/gu;
+  /* tokens: emoji survive as their own tokens (the old scanner threw them away with
+     the punctuation), everything else keeps letters, digits, $ and the apostrophe */
+  function lexTokens(text) {
+    const s = String(text || "").toLowerCase().replace(/https?:\/\/\S+/g, " ").replace(/\uFE0F/g, "")
+      .replace(EMOJI_RE, (m) => " " + m + " ");
+    const out = [];
+    for (const raw of s.split(/\s+/)) {
+      if (!raw) continue;
+      if (LEX_EMOJI.has(raw)) { out.push(raw); continue; }
+      const w = raw.replace(/[^a-z0-9$']/g, "");
+      if (w) out.push(w);
+    }
+    return out;
+  }
   /* M27 — "I need to see how the sentiment is being built from the first scintillas
      that are measured upwards." lexScan is the bottom of that ladder: it returns the
      tokens, every word that matched, which list it came from and whether a negator
-     flipped it. lexLean is the same arithmetic, kept so every existing number is
-     unchanged: it is the sum of the effects lexScan found. */
+     flipped it. M30 adds phrases and emoji; a phrase is matched first and consumes
+     its tokens, so nothing is counted twice. */
   function lexScan(text) {
-    const toks = String(text || "").toLowerCase().replace(/https?:\/\/\S+/g, " ").replace(/[^a-z0-9$'\s]/g, " ").split(/\s+/).filter(Boolean);
+    const toks = lexTokens(text);
     const marks = []; let net = 0, bull = 0, bear = 0, flips = 0;
+    for (let i = 0; i < toks.length; i++) {
+      let hit = null, span = 1;
+      for (let L = Math.min(LEX_PHRASE_MAX, toks.length - i); L >= 2; L--) {
+        const phrase = toks.slice(i, i + L).join(" ");
+        const e = LEX_PHRASE.get(phrase);
+        if (e) { hit = { w: phrase, e }; span = L; break; }
+      }
+      if (!hit) {
+        const tok = toks[i], word = tok.replace(/^\$/, "");
+        const e = LEX_EMOJI.get(tok) || LEX_WORDS.get(word);
+        if (e) hit = { w: LEX_EMOJI.has(tok) ? tok : word, e };
+      }
+      if (!hit) continue;
+      let neg = false; for (let j = Math.max(0, i - 3); j < i; j++) if (NEG.has(toks[j])) neg = true;
+      const pol = hit.e.pol, eff = neg ? -pol : pol;
+      net += eff; if (eff > 0) bull++; else bear++; if (neg) flips++;
+      marks.push({ i, w: hit.w, polarity: pol, negated: neg, effect: eff, kind: hit.e.kind, note: hit.e.note, span });
+      i += span - 1;
+    }
+    return { toks, marks, net, bull, bear, flips };
+  }
+  /* the v1 scanner, kept exactly as it was, ONLY so the page can show before and
+     after on real posts. Nothing reads it for a live number. */
+  function lexScanCore(text) {
+    const toks = String(text || "").toLowerCase().replace(/https?:\/\/\S+/g, " ").replace(/[^a-z0-9$'\s]/g, " ").split(/\s+/).filter(Boolean);
+    const marks = []; let net = 0;
     for (let i = 0; i < toks.length; i++) {
       const w = toks[i].replace(/^\$/, "");
       const pol = BULL_S.has(w) ? 1 : BEAR_S.has(w) ? -1 : 0;
       if (!pol) continue;
       let neg = false; for (let j = Math.max(0, i - 3); j < i; j++) if (NEG.has(toks[j])) neg = true;
-      const eff = neg ? -pol : pol;
-      net += eff; if (eff > 0) bull++; else bear++; if (neg) flips++;
+      const eff = neg ? -pol : pol; net += eff;
       marks.push({ i, w, polarity: pol, negated: neg, effect: eff });
     }
-    return { toks, marks, net, bull, bear, flips };
+    return { toks, marks, net };
   }
   function lexLean(text) { return lexScan(text).net; }
   /* THE KEYWORD TRACKER. Counts every matched word over two windows so the page can
@@ -9183,6 +9348,65 @@ const SENTI = (function () {
     const top = [...tags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
     return { n, bull, bear, net, latest: latest || null, top, hist };
   }
+  /* ONE MEASURING STICK (lane M30). Alan, 23 Sep: "News: 31 scored, 21 up, 7 down —
+     it's very inconsistent the way you're measuring across platforms, which makes it
+     hard to gauge which one is better than the other."
+     Every voice now reports the SAME five things over a stated window:
+       read    — items the voice actually had in the window (headlines, clips, posts)
+       scored  — how many of them carried a word this lexicon knows
+       bull/bear — of the SCORED items only, never of the read ones
+       net     — (bull - bear) / scored, as -100..+100
+     Nothing is averaged into a single cross-platform number: the point is to put
+     them side by side honestly, including how thin each one is. */
+  function voiceStat(o) {
+    const read = Math.max(0, +o.read || 0), scored = Math.max(0, +o.scored || 0);
+    const bull = Math.max(0, +o.bull || 0), bear = Math.max(0, +o.bear || 0);
+    const net = scored ? Math.round((100 * (bull - bear)) / scored) : null;
+    return {
+      key: o.key, name: o.name, unit: o.unit || "items", window: o.window || "—",
+      read, scored, bull, bear, flat: Math.max(0, scored - bull - bear),
+      bullPct: scored ? Math.round((100 * bull) / scored) : null,
+      bearPct: scored ? Math.round((100 * bear) / scored) : null,
+      coverage: read ? Math.round((100 * scored) / read) : null,
+      net, age: o.age == null ? null : o.age, note: o.note || "",
+      thin: scored < 30,   /* said out loud rather than hidden: under 30 scored items is a thin voice */
+    };
+  }
+  /* KEYWORDS, WITH THEIR TICKER (lane M30). Alan: "Keyword tracker associated to a
+     ticker that was mentioned with is important." Each item carries the tickers it
+     mentioned; every word that fired is credited to each of them, after negation,
+     over today and over the week, so a ticker row reads
+     "NVDA - breakout x6, beat x3 / overbought x2". */
+  function lexTallyByTicker(items, nowMs, todayMs, weekMs) {
+    const by = new Map();
+    for (const it of items || []) {
+      const t = SENTI_T(it.at); if (!isFinite(t)) continue;
+      const age = nowMs - t; if (age > weekMs || t > nowMs + 3600e3) continue;
+      const tks = [...new Set((it.tks || []).map((x) => String(x || "").toUpperCase().replace(/^\$/, "")).filter(Boolean))];
+      if (!tks.length) continue;
+      const sc = lexScan(it.text);
+      if (!sc.marks.length) { for (const tk of tks) { const c = by.get(tk) || { tk, items: 0, itemsToday: 0, words: new Map(), bull: 0, bear: 0 }; c.items++; if (age <= todayMs) c.itemsToday++; by.set(tk, c); } continue; }
+      for (const tk of tks) {
+        const c = by.get(tk) || { tk, items: 0, itemsToday: 0, words: new Map(), bull: 0, bear: 0 };
+        c.items++; if (age <= todayMs) c.itemsToday++;
+        if (sc.net > 0) c.bull++; else if (sc.net < 0) c.bear++;
+        for (const m of sc.marks) {
+          const key = m.w + (m.negated ? " (flipped)" : "");
+          const w = c.words.get(key) || { w: m.w, negated: m.negated, side: m.effect > 0 ? "bull" : "bear", kind: m.kind, n: 0, today: 0 };
+          w.n++; if (age <= todayMs) w.today++; c.words.set(key, w);
+        }
+        by.set(tk, c);
+      }
+    }
+    return [...by.values()].map((c) => {
+      const all = [...c.words.values()];
+      const side = (s, key) => all.filter((w) => w.side === s && w[key] > 0).sort((a, b) => b[key] - a[key] || a.w.localeCompare(b.w));
+      return { tk: c.tk, items: c.items, itemsToday: c.itemsToday, bull: c.bull, bear: c.bear,
+               net: (c.bull + c.bear) ? (c.bull - c.bear) / (c.bull + c.bear) : 0,
+               bullToday: side("bull", "today"), bearToday: side("bear", "today"),
+               bullWeek: side("bull", "n"), bearWeek: side("bear", "n") };
+    }).sort((a, b) => b.itemsToday - a.itemsToday || b.items - a.items || a.tk.localeCompare(b.tk));
+  }
   /* weighted mean of per-ticker scores (weight = headline / mention count) */
   function wmean(rows, sKey, wKey) { let s = 0, w = 0; for (const r of rows || []) { const x = +r[sKey], k = Math.max(0, +r[wKey] || 0); if (fin(x) && k > 0) { s += x * k; w += k; } } return w ? s / w : null; }
   function ageTxt(ms) { if (!fin(ms) || ms < 0) return "—"; if (ms < 60e3) return "now"; if (ms < 3600e3) return Math.round(ms / 60e3) + "m"; if (ms < 48 * 3600e3) return Math.round(ms / 3600e3) + "h"; return Math.round(ms / 86400e3) + "d"; }
@@ -9211,11 +9435,16 @@ const SENTI = (function () {
       pos, neg, flat: chans.length - pos - neg,
       disagree: (pos + neg) ? Math.min(pos, neg) / (pos + neg) : null,
       top: chans.slice().sort((a, b) => b.n - a.n || a.ch.localeCompare(b.ch)).slice(0, 8),
+      /* M30 — the spread is drawn, not summarised away: the lowest and highest channel
+         lean behind the average, so "everyone mildly up" and "two shouting at each
+         other" stop looking identical. */
+      leans: chans.map((c) => c.lean).sort((a, b) => a - b),
+      lo: Math.min(...chans.map((c) => c.lean)), hi: Math.max(...chans.map((c) => c.lean)),
     };
   }
   /* One ticker's reading, blended the same way, plus the channel split behind it. */
   function tickerBlend(rows, tk) { return chanBlend((rows || []).filter((r) => r.tk === tk)); }
-  return { fin, sma, ret, pct, dev, lin, label, headline, MARKET_KEYS, MIN_MARKET, lexLean, lexScan, lexTally, xVoice, chanBlend, tickerBlend, wmean, ageTxt, BULL, BEAR, NEG };
+  return { fin, sma, ret, pct, dev, lin, label, headline, MARKET_KEYS, MIN_MARKET, lexLean, lexScan, lexScanCore, lexTokens, lexTally, lexTallyByTicker, voiceStat, xVoice, chanBlend, tickerBlend, wmean, ageTxt, BULL, BEAR, NEG, SOCIAL_LEX_VERSION, SOCIAL_LEX_ADDED, LEX_WORDS, LEX_PHRASE, LEX_EMOJI };
 })();
 /* /SENTI-MATH */
 
@@ -9754,7 +9983,7 @@ async function sentiComputeAllRun() {
     const lastHead = (newsLast.ok && Array.isArray(newsLast.v) && newsLast.v[0] && +newsLast.v[0].published_ts) ? now - (+newsLast.v[0].published_ts) * 1000 : null;
     inputs.push({ key: "news", name: "News voice", val, score, age, fresh: 36 * 3600e3,
       src: "the news table · every headline scored here (lm-v1) · 24h · every scored headline counts once", why });
-    voices.push({ key: "news", name: "NEWS", score, age, n, split: agg ? [agg.tickers.reduce((a, t) => a + t.pos, 0), agg.tickers.reduce((a, t) => a + t.neg, 0)] : null,
+    voices.push({ key: "news", name: "NEWS", score, age, n, agg, split: agg ? [agg.tickers.reduce((a, t) => a + t.pos, 0), agg.tickers.reduce((a, t) => a + t.neg, 0)] : null,
       txt: "Each headline is scored <b>here</b> against a finance dictionary (Loughran-McDonald plus the price verbs headlines use), a negator in the three words before a match flips it, and the score is the balance of the words that fired. " +
         (agg ? "<b>" + agg.n + "</b> of " + agg.of + " headlines in the last 24 hours carried a scoring word; <b>" + agg.unscored + "</b> carried none and are not counted as zero, and <b>" + agg.questions + "</b> asked a question. " : "") +
         "The old per-ticker roll-up (<b>news_sentiment</b>" + (tk ? ", " + tk + " tickers" : "") + (M.fin(oldMean) ? ", averaging " + oldMean.toFixed(3) : "") + ") is shown on the NEWS page for comparison only — nobody can say how it was produced." +
@@ -9815,6 +10044,72 @@ function snTickerRows(items, tks) {
       "</td><td>" + split + '</td><td class="n">' + b.channels + '</td><td class="n">' + b.items + "</td></tr>";
   }).join("");
 }
+/* M30 render helpers ──────────────────────────────────────────────────────────
+   One picture language for every voice: the same bar, the same colours, the same
+   zero in the middle, so two voices can be compared by eye without arithmetic. */
+function snLeanBar(net, lo, hi) {
+  /* net, lo, hi are -1..1. The band (when given) is the spread of the voices behind
+     the average — it is drawn, never summarised away. */
+  const px = (v) => Math.max(0, Math.min(100, 50 + 50 * Math.max(-1, Math.min(1, v))));
+  const band = (SENTI.fin(lo) && SENTI.fin(hi) && hi > lo)
+    ? '<i class="sn-lean__band" style="left:' + px(lo) + "%;width:" + Math.max(1, px(hi) - px(lo)) + '%"></i>' : "";
+  if (!SENTI.fin(net)) return '<div class="sn-lean">' + band + '<i class="sn-lean__mid"></i></div>';
+  const c = px(net), z = 50;
+  const left = Math.min(c, z), w = Math.max(0.8, Math.abs(c - z));
+  return '<div class="sn-lean" title="' + (net >= 0 ? "+" : "") + Math.round(net * 100) + ' of 100">' + band +
+    '<i class="sn-lean__mid"></i><i class="sn-lean__v ' + (net >= 0 ? "pos" : "neg") + '" style="left:' + left + "%;width:" + w + '%"></i></div>';
+}
+function snNet(n) {   /* the number beside the bar, in the direction colours */
+  if (n == null || !isFinite(n)) return '<span class="sn-lean__num flat">—</span>';
+  return '<span class="sn-lean__num ' + (n > 0 ? "pos" : n < 0 ? "neg" : "flat") + '">' + (n > 0 ? "+" : "") + n + "</span>";
+}
+/* THE ONE MEASURING STICK, drawn as a table: every voice, the same five columns. */
+function snStickHTML(stats) {
+  const rows = stats.map(function (v) {
+    const thin = v.scored ? (v.thin ? '<span class="sn-tag">thin</span>' : "") : '<span class="sn-tag">no reading</span>';
+    return '<tr class="' + (v.thin ? "thin" : "") + '"><td class="v">' + esc(v.name) + thin + "</td>" +
+      '<td class="hide-sm">' + esc(v.window) + "</td>" +
+      '<td class="n">' + v.read + "</td>" +
+      '<td class="n">' + v.scored + (v.coverage == null ? "" : ' <em style="font-style:normal;color:var(--dim)">' + v.coverage + "%</em>") + "</td>" +
+      '<td class="n">' + (v.bullPct == null ? "—" : v.bullPct + "%") + "</td>" +
+      '<td class="n">' + (v.bearPct == null ? "—" : v.bearPct + "%") + "</td>" +
+      "<td>" + snLeanBar(v.net == null ? null : v.net / 100) + "</td>" +
+      '<td class="n">' + snNet(v.net) + "</td>" +
+      '<td class="n hide-sm">' + esc(SENTI.ageTxt(v.age)) + "</td></tr>";
+  }).join("");
+  return '<table class="sn-stick"><thead><tr><th>voice</th><th class="hide-sm">window</th><th class="n">read</th>' +
+    '<th class="n" title="items that carried a word this lexicon knows">scored</th><th class="n">% bull</th><th class="n">% bear</th>' +
+    '<th>lean · bearish &#8592; 0 &#8594; bullish</th><th class="n">net</th><th class="n hide-sm">newest</th></tr></thead><tbody>' +
+    rows + "</tbody></table>";
+}
+/* A ticker, as a chip: colour is the lean, the number is how many voices carried it,
+   and the little split bar is the disagreement behind it. */
+function snTickerChips(items, tks, unit) {
+  return '<div class="sn-tchips">' + tks.map(function (tk) {
+    const b = SENTI.tickerBlend(items, tk);
+    const cls = b.net == null ? "flat" : b.net > 0.05 ? "pos" : b.net < -0.05 ? "neg" : "flat";
+    const sp = b.channels ? '<span class="sn-tchip__sp" title="' + b.pos + " lean up · " + b.neg + " lean down · " + b.flat + ' neither">' +
+        '<i style="width:' + Math.round(100 * b.pos / b.channels) + '%"></i><b style="width:' + Math.round(100 * b.neg / b.channels) + '%"></b></span>' : "";
+    const split = b.disagree != null && b.disagree >= 0.33 ? " · split" : "";
+    return '<span class="sn-tchip ' + cls + '" title="' + esc(tk + " · " + b.channels + " " + (unit || "voices") + " · " + b.items + " items" +
+        (b.disagree == null ? "" : " · " + Math.round(100 * b.disagree) + "% on the smaller side")) + '">' +
+      esc(tk) + " <b>" + (b.net == null ? "—" : (b.net > 0 ? "+" : "") + b.net.toFixed(2)) + '</b><span class="sn-tchip__n">' + b.channels + split + "</span>" + sp + "</span>";
+  }).join("") + "</div>";
+}
+/* "NVDA — breakout x6, beat x3 / overbought x2" */
+function snKwTickerHTML(tally, limit) {
+  const rows = tally.slice(0, limit || 12).map(function (c) {
+    const side = (list, cls) => list.slice(0, 4).map((w) => '<span class="' + cls + '">' + esc(w.w) + "</span> &times;" + (w.today || w.n)).join(", ");
+    const up = c.bullToday.length ? side(c.bullToday, "w-bull") : (c.bullWeek.length ? side(c.bullWeek, "w-bull") : "");
+    const dn = c.bearToday.length ? side(c.bearToday, "w-bear") : (c.bearWeek.length ? side(c.bearWeek, "w-bear") : "");
+    const today = c.bullToday.length || c.bearToday.length;
+    if (!up && !dn) return "";
+    return '<div class="kw-tk"><span class="kw-tk__t">' + esc(c.tk) + '</span><span class="kw-tk__w">' +
+      (up || '<span style="color:var(--dim)">no word up</span>') + '<span class="sep">/</span>' + (dn || '<span style="color:var(--dim)">none down</span>') +
+      '</span><span class="kw-tk__n">' + (today ? c.itemsToday + " today" : c.items + " this week") + "</span></div>";
+  }).join("");
+  return rows || '<div class="sn-voice__txt">no ticker carried a scoring word in this window.</div>';
+}
 /* /VOICE-BLEND */
 async function fillSentiment() {
   const run = ++SENTI_RUN;
@@ -9840,20 +10135,59 @@ async function fillSentiment() {
     return '<tr class="' + (off ? "off" : "") + '"><td class="k">' + esc(i.name) + tag + "</td><td>" + esc(i.val) + (i.why && !i.none ? ' <span class="sn-why">' + esc(i.why) + "</span>" : "") + "</td><td>" + bar + '</td><td class="n">' + (M.fin(i.score) ? i.score : "—") + '</td><td class="n">' + (i.cnn == null ? "—" : i.cnn) + '</td><td class="n">' + esc(M.ageTxt(i.age)) + '</td><td class="src">' + esc(i.src) + "</td></tr>";
   }).join("");
 
+  /* the three voices on one stick — the counts come from the same items the cards
+     below draw, so the table and the pictures can never disagree */
+  const xWin = (C.xPosts || []).filter(function (p) { const t = Date.parse(p && p.created_at); return isFinite(t) && now - t <= 86400e3 && t <= now + 3600e3; });
+  const xScan = xWin.map(function (p) { return M.lexScan((p.text || "") + " " + ((p.original && p.original.text) || "")); });
+  const ytAllItems = ytc.ok ? ytc.v.items : [];
+  const ytScan = ytAllItems.map(function (i) { return M.lexScan(i.text); });
+  const nvo = (C.voices.find(function (v) { return v.key === "news"; }) || {});
+  const nagg = nvo.agg || null;
+  const ytNewest = ytAllItems.reduce(function (a, i) { return Math.max(a, i.at || 0); }, 0);
+  const xNewest = xWin.reduce(function (a, p) { return Math.max(a, Date.parse(p.created_at) || 0); }, 0);
+  const stats = [
+    M.voiceStat({ key: "news", name: "NEWS", unit: "headlines", window: "24 hours",
+      read: nagg ? nagg.of : 0, scored: nagg ? nagg.n : 0,
+      bull: nagg ? nagg.tickers.reduce(function (a, t) { return a + t.pos; }, 0) : 0,
+      bear: nagg ? nagg.tickers.reduce(function (a, t) { return a + t.neg; }, 0) : 0,
+      age: nvo.age == null ? null : nvo.age }),
+    M.voiceStat({ key: "youtube", name: "YOUTUBE", unit: "clips", window: "7 days",
+      read: ytAllItems.length, scored: ytScan.filter(function (r) { return r.marks.length; }).length,
+      bull: ytScan.filter(function (r) { return r.net > 0; }).length, bear: ytScan.filter(function (r) { return r.net < 0; }).length,
+      age: ytNewest ? now - ytNewest : null }),
+    M.voiceStat({ key: "x", name: "X", unit: "posts", window: "24 hours",
+      read: xWin.length, scored: xScan.filter(function (r) { return r.marks.length; }).length,
+      bull: xScan.filter(function (r) { return r.net > 0; }).length, bear: xScan.filter(function (r) { return r.net < 0; }).length,
+      age: xNewest ? now - xNewest : null }),
+  ];
   el("snMain").innerHTML =
     '<div class="sn-h2">what the public gauges say · ' + liveN + " of " + pub.length + " readable from this browser · read " + esc(stamp) + "</div>" +
     '<div class="sg-grid">' + cards + "</div>" +
     '<div class="sn-h2">what we measure ourselves · each reading on its own</div>' +
     '<div class="sn-sub">There is no single Scintilla fear &amp; greed number here any more. We hold 364 stocks, no options flow of our own and no exchange high/low counts, so an internal one-number index would be claiming to measure a market we cannot see. Every row below is a real measurement of a real thing, with its own source and its own age, and nothing is averaged into a headline.</div>' +
     '<table class="sn-tbl"><thead><tr><th>input</th><th>our reading</th><th class="nw">fear · greed</th><th class="n">score</th><th class="n" title="CNN Fear &amp; Greed score for the same component, fetched live — reference only">cnn</th><th class="n">age</th><th class="src">source</th></tr></thead><tbody>' + rows + "</tbody></table>" +
-    '<div class="sn-sub">Each row is scored the way CNN scores its own: how far today sits from that input’s own average, measured in the size it normally moves — two of those steps either way is the end of the dial; volatility and put/call are inverted, because more fear belongs at the low end. The cnn column is CNN’s own component score, for comparison only.</div>';
+    '<div class="sn-sub">Each row is scored the way CNN scores its own: how far today sits from that input’s own average, measured in the size it normally moves — two of those steps either way is the end of the dial; volatility and put/call are inverted, because more fear belongs at the low end. The cnn column is CNN’s own component score, for comparison only.</div>' +
+    '<div class="sn-h2">every voice, measured the same way</div>' +
+    '<div class="sn-sub">News, YouTube and X used to each print a different kind of number, so there was no way to say which one was worth listening to. They now report the same five things: how many items the voice had in its window, how many of those carried a word the list knows (<b>scored</b>), and of the scored ones how many leaned up and how many leaned down. <b>Net</b> is the balance of the scored items, from &minus;100 to +100. The windows differ because the collectors differ, so each window is printed beside its voice, and a voice with fewer than 30 scored items is marked <b>thin</b> — a thin voice is not a quiet market, it is a small sample.</div>' +
+    snStickHTML(stats) +
+    '<div class="sn-sub">Nothing here is averaged into one cross-platform number. Percentages are of the <b>scored</b> items only: an item that carried no word is never counted as neutral, because silence is not a neutral opinion.</div>';
 
-  /* ── the voices, blended across channels ── */
+  /* ── ONE MEASURING STICK (lane M30) ──────────────────────────────────────────
+     Every voice, counted the same way over its own stated window, so they can be
+     put side by side. Each voice keeps its own window because that is what it
+     actually collects over — the window is printed, not hidden. */
   const yt = ytc.ok ? ytc.v : null;
   const ytAll = yt ? M.chanBlend(yt.items) : null;
   const xPosts = C.xPosts || [];
   const xItems = xPosts.filter(function (p) { const t = Date.parse(p && p.created_at); return isFinite(t) && now - t <= 86400e3 && t <= now + 3600e3; })
-    .map(function (p) { return { ch: String(p.handle || "").trim(), lean: M.lexLean((p.text || "") + " " + ((p.original && p.original.text) || "")) }; });
+    .map(function (p) { const tx = (p.text || "") + " " + ((p.original && p.original.text) || "");
+      return { ch: String(p.handle || "").trim(), lean: M.lexLean(tx), text: tx, at: Date.parse(p.created_at) || null,
+               tk: null, tks: [...new Set((String(tx).match(/\$[A-Za-z]{1,6}\b/g) || []).map(function (t) { return t.slice(1).toUpperCase(); }))] }; });
+  /* one row per ticker mentioned, so a $TAG can be blended across handles exactly the
+     way a YouTube ticker is blended across channels */
+  const xByTk = []; xItems.forEach(function (i) { i.tks.forEach(function (t) { xByTk.push({ ch: i.ch, tk: t, lean: i.lean, text: i.text, at: i.at }); }); });
+  const xTk = [...new Set(xByTk.map(function (r) { return r.tk; }))]
+    .sort(function (a, b) { return M.tickerBlend(xByTk, b).items - M.tickerBlend(xByTk, a).items; });
   const xAll = M.chanBlend(xItems);
   const vmap = {}; voices.forEach(function (v) { vmap[v.key] = v; });
 
@@ -9863,7 +10197,9 @@ async function fillSentiment() {
       '<span class="sn-tag' + (ytAll && ytAll.channels ? " live" : "") + '">' + (ytAll && ytAll.channels ? "blended across channels · 7 days" : "no channel rows") + "</span>" +
       '<span class="sn-voice__lean">' + (ytAll && ytAll.score != null ? M.label(ytAll.score).toLowerCase() + " · " + ytAll.score : "no reading") + "</span></div>" +
     '<div class="sn-voice__txt">' + esc(snBlendLine(ytAll)) + (ytc.ok ? "" : ' <span class="sn-why">' + esc(String(ytc.e || "")) + "</span>") + "</div>" +
-    (ytTk.length ? '<table class="sn-tbl sn-tbl--mini"><thead><tr><th>ticker</th><th>blended lean</th><th class="nw">split</th><th class="n">channels</th><th class="n">clips</th></tr></thead><tbody>' + snTickerRows(yt.items, ytTk) + "</tbody></table>" : "") +
+    (ytAll && ytAll.channels ? '<div class="sn-voice__txt" style="display:flex;gap:10px;align-items:center">' + snLeanBar(ytAll.net, ytAll.lo, ytAll.hi) + snNet(Math.round(ytAll.net * 100)) +
+        '<span style="color:var(--dim);font-size:11px">' + (ytAll.channels > 1 ? "channels run from " + ytAll.lo.toFixed(2) + " to " + ytAll.hi.toFixed(2) + " \u00b7 the band is the spread" : "one channel only") + "</span></div>" : "") +
+    (ytTk.length ? snTickerChips(yt.items, ytTk.slice(0, 24), "channels") : "") +
     '<div class="sn-voice__txt">Each channel counts once, whatever its volume, and a ticker’s lean is the average of the channel leans. The clips are the ticker-tagged ones the search collector files; the reading is over their <b>titles</b>, because no transcript rows exist in the database yet (youtube_transcripts and youtube_video_sentiment are both empty).</div>' +
     '<div class="sn-voice__txt">The collector’s own pooled number, over transcripts on the subscribed channels, still reads <b>' + (vmap.youtube && vmap.youtube.score != null ? vmap.youtube.score : "—") + '</b> across ' + (vmap.youtube ? vmap.youtube.n : 0) + ' mentions — pooled, so a channel that posts fifty clips a week carries it. That is the number this blend is meant to replace once per-video rows are written.</div></div>';
 
@@ -9872,6 +10208,9 @@ async function fillSentiment() {
       '<span class="sn-tag' + (xAll.channels ? " live" : "") + '">' + (xAll.channels ? "blended across handles · 24 hours" : "no posts in the window") + "</span>" +
       '<span class="sn-voice__lean">' + (xAll.score != null ? M.label(xAll.score).toLowerCase() + " · " + xAll.score : "no reading") + "</span></div>" +
     '<div class="sn-voice__txt">' + esc(snBlendLine(xAll)) + "</div>" +
+    (xAll.channels ? '<div class="sn-voice__txt" style="display:flex;gap:10px;align-items:center">' + snLeanBar(xAll.net, xAll.lo, xAll.hi) + snNet(Math.round(xAll.net * 100)) +
+        '<span style="color:var(--dim);font-size:11px">' + (xAll.channels > 1 ? "handles run from " + xAll.lo.toFixed(2) + " to " + xAll.hi.toFixed(2) + " \u00b7 the band is the spread" : "one handle only") + "</span></div>" : "") +
+    (xTk.length ? snTickerChips(xByTk, xTk.slice(0, 24), "handles") : "") +
     (xAll.top.length ? '<div class="sn-chips">' + xAll.top.map(function (c) { return '<span class="sn-chip">' + esc(c.ch) + " <b>" + (c.lean > 0 ? "+" : "") + c.lean.toFixed(2) + "</b> · " + c.n + "</span>"; }).join("") + "</div>" : "") +
     '<div class="sn-voice__txt">One handle, one vote. Each post gets a keyword lean (the same finance word list, with negation), a handle’s lean is the average of its posts, and the reading is the average of the handles.</div></div>';
 
@@ -9880,8 +10219,24 @@ async function fillSentiment() {
     '<div class="sn-voice"><div class="sn-voice__hd"><span class="sn-voice__nm">NEWS</span><span class="sn-tag' + (nws.score != null ? " live" : "") + '">every headline scored · 24 hours</span>' +
       '<span class="sn-voice__lean ' + (nws.score != null ? "sg-zone" + (sgZone(nws.score) || {}).i : "") + '">' + (nws.score != null ? M.label(nws.score).toLowerCase() + " · " + nws.score : "no reading") + "</span></div>" +
     '<div class="sn-voice__txt">' + (nws.txt || "") + ' <b>Not blended by outlet yet:</b> a headline carries its site, so the room can group by outlet as soon as the per-headline rows are stored — until then every scored headline counts once, whoever published it.</div></div>';
+  /* KEYWORDS, WITH THEIR TICKER (lane M30) — over the same items the cards above
+     draw, so a word in this card can always be found in a post or a clip above. */
+  const kwItems = xByTk.map(function (r) { return { at: r.at, text: r.text, tks: [r.tk] }; })
+    .concat((yt ? yt.items : []).map(function (i) { return { at: i.at, text: i.text, tks: [i.tk] }; }));
+  const kwTk = M.lexTallyByTicker(kwItems, now, 86400e3, 7 * 86400e3);
+  const kwCard = '<div class="card"><h4>KEYWORDS &middot; BY TICKER</h4>' +
+    '<div class="sn-voice__txt">What the words were, per ticker: today first, and the week behind it when today is quiet. Posts on X and clips on YouTube, the same lexicon, after negation \u2014 a flipped word is counted on the side it was scored.</div>' +
+    snKwTickerHTML(kwTk, 14) +
+    '<div class="sn-voice__txt" style="color:var(--dim)">' + kwTk.length + ' tickers carried a word this week. News headlines are not in this card: the stored rows keep the score and the word counts, not the headline text, so their words cannot be named per ticker yet.</div></div>';
+  /* IS THE X FEED EVEN CURRENT (lane M30) — the room can see the published feed and
+     nothing else, so it reports exactly that: the newest post it holds and how old. */
+  const xAge = xNewest ? now - xNewest : null;
+  const xFresh = '<div class="card"><h4>IS THE X FEED CURRENT?</h4>' +
+    '<div class="sn-voice__txt">Newest post in the published feed: <b>' + (xNewest ? esc(new Date(xNewest).toISOString().slice(0, 16).replace("T", " ") + "Z") + " \u00b7 " + esc(M.ageTxt(xAge)) + " ago" : "none") + "</b>" +
+      (xAge != null && xAge > 4 * 3600e3 ? ' \u2014 <b>older than four hours</b>, so the collector has probably missed a pass.' : xAge != null ? " \u2014 within the collector's two-hour rhythm." : "") + "</div>" +
+    '<div class="sn-voice__txt">' + (C.xPosts || []).length + ' posts are stored in that feed in total; <b>' + xWin.length + '</b> of them fall in the last 24 hours and <b>' + stats[2].scored + '</b> carried a word the list knows. The collector runs on Alan\u2019s MacBook at 06:30, 08:30, 10:30, 12:30, 14:30, 16:30, 18:30, 21:00 and 23:30 ET and publishes the whole feed each time; this page only ever reads what it published.</div></div>';
   el("snRail").innerHTML =
-    '<div class="card"><h4>THE VOICES · BLENDED ACROSS CHANNELS</h4>' + ytCard + xCard + otherCard + "</div>" +
+    '<div class="card"><h4>THE VOICES · SEEN, NOT LISTED</h4>' + ytCard + xCard + otherCard + "</div>" + kwCard + xFresh +
     '<div class="card"><h4>HOW EACH VOICE IS MEASURED</h4>' +
       '<div class="sn-voice__txt"><b>YouTube.</b> A scheduled job collects clips from the channels Alan subscribes to and from ticker searches, and files them in <b>youtube_videos</b>. For the subscribed channels it fetches the English transcript and counts finance keywords around each ticker mention — a word list with negation (<b>yt-lexicon-v1</b>), not an AI read — and writes one pooled row per ticker into <b>social_sentiment</b> over a 7-day window. The room’s own blend above reads the ticker-tagged clips’ titles instead, because it needs the channel behind each reading and the per-video table is empty.</div>' +
       '<div class="sn-voice__txt"><b>X.</b> A browser-side collector saves the posts on Alan’s Trading list and publishes them at <b>/api/xfeed</b>. Each post’s text is run through the same keyword list; a post is bullish, bearish or neither; the blend above averages handles.</div>' +
@@ -10075,10 +10430,38 @@ function snKwHTML(tal, todayLbl, weekLbl) {
 }
 function snWordListHTML() {
   const w = function (arr, cls) { return arr.slice().sort().map(function (x) { return '<b class="' + cls + '">' + esc(x) + "</b>"; }).join(" · "); };
-  return '<div class="kw-list">' + w(SENTI.BULL, "w-bull") + "</div>" +
-    '<div class="sn-h2">bearish</div><div class="kw-list">' + w(SENTI.BEAR, "w-bear") + "</div>" +
-    '<div class="sn-h2">negators — any of these in the three words before a match flips it</div>' +
+  const add = SENTI.SOCIAL_LEX_ADDED.map(function (e) {
+    return '<div class="lx-row"><span class="lx-row__t ' + (e[1] > 0 ? "pos" : "neg") + '">' + esc(e[0]) + '</span>' +
+      '<span class="lx-row__k">' + esc(e[2]) + '</span><span class="lx-row__n">' + esc(e[3]) + "</span></div>";
+  }).join("");
+  const nP = SENTI.SOCIAL_LEX_ADDED.filter(function (e) { return e[2] === "phrase"; }).length;
+  const nE = SENTI.SOCIAL_LEX_ADDED.filter(function (e) { return e[2] === "emoji"; }).length;
+  return '<div class="sn-sub">Version <b>' + esc(SENTI.SOCIAL_LEX_VERSION) + '</b> \u00b7 ' + (SENTI.BULL.length + SENTI.BEAR.length) + ' plain words (v1, unchanged) plus ' +
+      SENTI.SOCIAL_LEX_ADDED.length + ' added here: ' + (SENTI.SOCIAL_LEX_ADDED.length - nP - nE) + ' slang words, ' + nP + ' phrases and ' + nE + ' emoji. A phrase is matched before its single words, so "buy the dip" is one bullish reading and not a "buy" beside a "dip".</div>' +
+    '<div class="sn-h2">bullish (v1)</div><div class="kw-list">' + w(SENTI.BULL, "w-bull") + "</div>" +
+    '<div class="sn-h2">bearish (v1)</div><div class="kw-list">' + w(SENTI.BEAR, "w-bear") + "</div>" +
+    '<div class="sn-h2">added in ' + esc(SENTI.SOCIAL_LEX_VERSION) + ' \u2014 the language people actually use</div>' + add +
+    '<div class="sn-h2">negators \u2014 any of these in the three words before a match flips it</div>' +
     '<div class="kw-list">' + w([...SENTI.NEG], "w-neg") + "</div>";
+}
+/* BEFORE AND AFTER, on real posts (lane M30). Shows the posts where the new words
+   changed the reading, with the old reading beside the new one. Nothing is made up:
+   these are the collector\u2019s own posts from the window on screen. */
+function snLexBeforeAfterHTML(items, limit) {
+  const rows = [];
+  for (const it of items || []) {
+    const tx = String(it.text || ""); if (!tx.trim()) continue;
+    const a = SENTI.lexScanCore(tx), b = SENTI.lexScan(tx);
+    const sgn = function (n) { return n > 0 ? "bullish" : n < 0 ? "bearish" : "no lean"; };
+    if (sgn(a.net) === sgn(b.net) && a.marks.length === b.marks.length) continue;
+    const gained = b.marks.filter(function (m) { return !a.marks.some(function (x) { return x.w === m.w; }); });
+    if (!gained.length) continue;
+    rows.push('<div class="lx-ba"><b>' + esc(sgn(a.net)) + " &rarr; " + esc(sgn(b.net)) + "</b> &middot; new words: " +
+      gained.map(function (m) { return '<span class="' + (m.effect > 0 ? "w-bull" : "w-bear") + '">' + esc(m.w) + "</span>"; }).join(", ") +
+      '<div style="color:var(--dim);margin-top:3px">' + esc(snDecode(tx).slice(0, 190)) + (tx.length > 190 ? "\u2026" : "") + "</div></div>");
+    if (rows.length >= (limit || 6)) break;
+  }
+  return rows.length ? rows.join("") : '<div class="sn-voice__txt">no post in this window reads differently under the new words \u2014 which is itself a result, and it is printed rather than hidden.</div>';
 }
 async function fillSentiAnatomy() {
   const run = ++SENTI_RUN, now = Date.now(), M = SENTI;
@@ -10186,9 +10569,13 @@ async function fillSentiAnatomy() {
     '<div class="card"><h4>KEYWORD TRACKER · YOUTUBE</h4>' +
       (ytTal ? snKwHTML(ytTal, "clips in the last 24 hours", "clips in the last 7 days")
              : '<div class="sn-voice__txt">no clips to count.</div>') + "</div>" +
-    '<div class="card"><h4>THE WHOLE WORD LIST · X AND YOUTUBE</h4>' +
-      '<div class="sn-voice__txt">Every word the social readings can match, in full. Nothing else in a post is counted at all.</div>' +
-      '<div class="sn-h2">bullish</div>' + snWordListHTML() + "</div>" +
+    '<div class="card"><h4>THE WHOLE WORD LIST \u00b7 X AND YOUTUBE</h4>' +
+      '<div class="sn-voice__txt">Every word, phrase and emoji the social readings can match, in full. Nothing else in a post is counted at all.</div>' +
+      snWordListHTML() + "</div>" +
+    '<div class="card"><h4>BEFORE AND AFTER \u00b7 REAL POSTS</h4>' +
+      '<div class="sn-voice__txt">Posts from the window above that read differently now that slang, phrases and emoji are counted. The old reading is on the left of the arrow, the new one on the right.</div>' +
+      snLexBeforeAfterHTML((xr.ok ? xr.v : []).slice(0, 400).map(function (p) { return { text: (p.text || "") + " " + ((p.original && p.original.text) || "") }; }), 6) +
+      '<div class="sn-voice__txt" style="color:var(--dim)">If nothing is listed, the new words changed nothing in this window \u2014 which is worth knowing too.</div></div>' +
     '<div class="card"><h4>THE WORD LIST · NEWS</h4><div class="sn-voice__txt">' +
       (H.ok && H.v.L.meta.counts ?
         "News uses a bigger, finance-specific dictionary: <b>" + H.v.L.meta.counts.lm_positive + "</b> positive and <b>" +
