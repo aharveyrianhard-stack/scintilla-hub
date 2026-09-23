@@ -8,10 +8,14 @@ import fs from "node:fs";
 const src = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const core = src.slice(src.indexOf("const ERC_MONTH_CELL"), src.indexOf("/* AN OPEN EVENTS VIEW NEVER LOOKED AGAIN."));
 
-test("WEEK is the landing span, and the anchor day starts on today", () => {
-  assert.match(src, /ernSpan: "WEEK", ernDay: null, ernPick: null,/);
-  assert.match(core, /const ercSpan = \(\) => S\.ernSpan \|\| "WEEK";/);
+/* 23 Sep evening (M26): the TIMELINE became the landing span — Alan asked for the
+   tape first, "a scrollable way of going to the history". MONTH, WEEK and DAY are
+   unchanged and one tap away, and the anchor still starts on today. */
+test("TIMELINE is the landing span, with MONTH · WEEK · DAY one tap away, and the anchor day starts on today", () => {
+  assert.match(src, /ernSpan: "TIMELINE", ernDay: null, ernPick: null, ernTlDay: null,/);
+  assert.match(core, /const ercSpan = \(\) => S\.ernSpan \|\| "TIMELINE";/);
   assert.match(core, /const ercAnchor = \(\) => S\.ernDay \|\| todayISO\(\);/);
+  assert.match(src, /\["TIMELINE", "MONTH", "WEEK", "DAY"\]\.map/);
 });
 
 test("the four open decisions are the proposal's own, each one word to change", () => {
