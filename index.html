@@ -9000,9 +9000,9 @@ const SENTI_TTL = 600000;
 function sentiApi() { return (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev"; }
 async function sentiBars(sym) {
   const c = SENTI_CACHE.bars.get(sym); if (c && Date.now() - c.at < SENTI_TTL) return c.series;
-  const r = await fetch(sentiApi() + "/candles?symbol=" + encodeURIComponent(sym) + "&tf=1d&limit=300");
-  if (!r.ok) throw new Error(sym + " " + r.status);
-  const j = await r.json(); const series = Array.isArray(j.series) ? j.series : [];
+  const curl = sentiApi() + "/candles?symbol=" + encodeURIComponent(sym) + "&tf=1d&limit=300";
+  const j = window.scJSONOnce ? await window.scJSONOnce(curl)   /* M19 §B */
+          : await (async () => { const r = await fetch(curl); if (!r.ok) throw new Error(sym + " " + r.status); return r.json(); })(); const series = Array.isArray(j.series) ? j.series : [];
   SENTI_CACHE.bars.set(sym, { at: Date.now(), series }); return series;
 }
 async function sentiX() {
@@ -9015,12 +9015,15 @@ async function sentiX() {
    stocks; CNN weighs theirs by volume, so the row says so and the two are never mixed. */
 async function sentiBreadth() {
   if (SENTI_CACHE.q && Date.now() - SENTI_CACHE.q.at < SENTI_TTL) return SENTI_CACHE.q.v;
-  const u = await (await fetch(sentiApi() + "/universe")).json();
+  const u = await (window.scJSONOnce ? window.scJSONOnce(sentiApi() + "/universe")
+                                     : (await fetch(sentiApi() + "/universe")).json());   /* M19 §B */
   const syms = Array.isArray(u.symbols) ? u.symbols : [];
   if (!syms.length) throw new Error("universe empty");
-  const r = await fetch(sentiApi() + "/quotes?symbols=" + encodeURIComponent(syms.join(",")));
-  if (!r.ok) throw new Error("quotes " + r.status);
-  const j = await r.json();
+  /* M19 §B — sorted, and through the shared in-flight map, so this whole-universe read and
+     the board's own read of the same symbols are one request rather than two. */
+  const qurl = sentiApi() + "/quotes?symbols=" + encodeURIComponent(syms.slice().sort().join(","));
+  const j = window.scJSONOnce ? await window.scJSONOnce(qurl)
+          : await (async () => { const r = await fetch(qurl); if (!r.ok) throw new Error("quotes " + r.status); return r.json(); })();
   const rows = Array.isArray(j.quotes) ? j.quotes : (Array.isArray(j.rows) ? j.rows : Object.values(j.quotes || j.rows || j.data || {}));
   let up = 0, down = 0, flat = 0;
   for (const row of rows) { const c = +row.change_pct; if (!isFinite(c)) continue; if (c > 0) up++; else if (c < 0) down++; else flat++; }
@@ -9114,8 +9117,22 @@ function snFrontHTML(C) {
     "</div>" +
     (cnnHead == null ? "" : '<div class="sn-front__cnn"><b>' + cnnHead + "</b>cnn</div>") + "</div>";
 }
+/* M19 §B — PRICES FIRST, THEN THE GAUGE. The fear & greed reading needs the whole universe
+   from /quotes, and so does the board. MEASURED with curl: one whole-universe request alone
+   is 3.6 s, but four at once are 7.7-10.3 s EACH - the requests fight, and the board's prices
+   were stuck behind reads that nobody was looking at yet. The gauge now waits for the board's
+   first accepted tick (10 s cap, so a dead provider cannot hold it for ever) and then runs.
+   No input, weight or number changes; only the order in which two reads are made. */
+async function scAfterFirstPrices(capMs) {
+  const t0 = Date.now(), cap = capMs || 10000;
+  while (!(window.SC_TICK && window.SC_TICK.runs > 0) && Date.now() - t0 < cap) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
 async function fillSnFront() {
   if (!el("snFront")) return;
+  await scAfterFirstPrices(10000);
+  if (!el("snFront")) return;                              // room left while prices landed
   let C; try { C = await sentiComputeAll(); } catch (_) { return; }
   const n = el("snFront"); if (!n) return;                 // room left while the inputs loaded
   n.innerHTML = snFrontHTML(C);
@@ -9123,7 +9140,22 @@ async function fillSnFront() {
 let SENTI_RUN = 0;
 /* ONE computation of the reading, cached for ten minutes. The SENTIMENT tab and the
    front-page gauge both read this, so the two can never show different numbers. */
+/* M19 §B — AND ONE AT A TIME. MEASURED on a cold dashboard load: the cache below is only
+   written when the computation FINISHES, so the callers that arrive during the first run
+   (the front gauge repaints while the board is still building) all missed it and ran the
+   whole thing again. Three runs were in flight at once, and each one pulls the WHOLE
+   UNIVERSE from /quotes plus five /candles: three 389-symbol quote requests inside 5 ms,
+   competing with the board's own price pull, which is what made the board's first priced
+   paint 17.5 s median while first paint was 172 ms. Callers now share the run in progress.
+   Nothing about the computation, its inputs, its ten-minute TTL or its numbers changes. */
+let SENTI_CALC_INFLIGHT = null;
 async function sentiComputeAll() {
+  if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
+  if (SENTI_CALC_INFLIGHT) return SENTI_CALC_INFLIGHT;
+  SENTI_CALC_INFLIGHT = sentiComputeAllRun();
+  try { return await SENTI_CALC_INFLIGHT; } finally { SENTI_CALC_INFLIGHT = null; }
+}
+async function sentiComputeAllRun() {
   if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
   const now = Date.now(), M = SENTI;
   const [spy, vix, hyg, lqd, tlt, news, newsLast, yt, st, x, cnn, cfg, q] = await Promise.all([
@@ -16184,18 +16216,20 @@ const SC_TICK_WAIT_MS = 250;
    This keeps ONE promise per URL while that URL is in flight and hands the same one to
    every caller. A settled request is forgotten immediately, so nothing is ever served
    from a stale cache here - each call site keeps its own freshness rule unchanged. */
-const SC_INFLIGHT = new Map();
-window.SC_DEDUPED = 0;
+/* Self-contained on purpose: the register hangs off window rather than a module-level
+   const, so the offline tests that extract ONE function into a sandbox still get a working
+   helper (that is how tests/frontend-currentness-recovery.test.mjs runs this code). */
 function scJSONOnce (url) {
+  const reg = window.__SC_INFLIGHT || (window.__SC_INFLIGHT = new Map());
   const k = String(url);
-  const hit = SC_INFLIGHT.get(k);
-  if (hit) { window.SC_DEDUPED++; return hit; }
+  const hit = reg.get(k);
+  if (hit) { window.SC_DEDUPED = (window.SC_DEDUPED || 0) + 1; return hit; }
   const p = fetch(k).then((r) => {
     if (!r.ok) { const e = new Error("HTTP_" + r.status); e.status = r.status; throw e; }
     return r.json();
   });
-  p.catch(() => {}).then(() => { SC_INFLIGHT.delete(k); });   // forget on settle, either way
-  SC_INFLIGHT.set(k, p);
+  p.catch(() => {}).then(() => { reg.delete(k); });   // forget on settle, either way
+  reg.set(k, p);
   return p;
 }
 window.scJSONOnce = scJSONOnce;

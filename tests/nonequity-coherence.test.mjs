@@ -46,7 +46,9 @@ test("a stored quote older than four days is dropped, so the row shows NO FEED i
   assert.deepEqual(rows.map((r) => r.ticker), ["US10Y"], "August's VIX row is gone; a three-day-old row (a weekend) stays");
   assert.match(html, /live_quotes\?select=ticker,price,change,chg_pct,prev_close,updated_ts/, "the reads carry the row's age");
   assert.match(html, /const SC_MACRO_SYMS = \["VIX", "US10Y", "US5Y", "US30Y", "US3M", "DXY", "DXUSD", "CLUSD", "GCUSD", "SIUSD"\];/);
-  assert.match(html, /fetch\(SC_CHART_API \+ "\/macro\?symbols=" \+ encodeURIComponent\(SC_MACRO_SYMS\.join\(","\)\)\)/, "the macro rows take the chart API's live quote");
+  /* M19 §B — the same URL, now through scJSONOnce so two callers asking at the same moment
+     share one request. The assertion keeps its intent: the macro rows read the chart API. */
+  assert.match(html, /(fetch|scJSONOnce)\(SC_CHART_API \+ "\/macro\?symbols=" \+ encodeURIComponent\(SC_MACRO_SYMS\.join\(","\)\)\)/, "the macro rows take the chart API's live quote");
 });
 
 test("the 12-second stored-price poll and the realtime channel never overwrite the live macro quote (23 Sep: VIX reverted to 14.25)", () => {
