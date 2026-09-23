@@ -15,7 +15,11 @@ function fn(name) {
 }
 /* The conditional DOM-write helpers are shared plumbing: every painting function now routes its
    attribute/text/class writes through them, so they belong in any context that extracts one. */
-const WRITE_HELPERS = ['scSetAttr', 'scSetText', 'scSetClass', 'scSetTitle'];
+const WRITE_HELPERS = ['scSetAttr', 'scSetText', 'scSetClass', 'scSetTitle',
+  /* M19 §B — every chart-API read now goes through the shared in-flight helper, so it is
+     plumbing in exactly the same sense as the write helpers: any context that extracts a
+     function which reads the provider needs it, or the read throws and is swallowed. */
+  'scJSONOnce'];
 function context(names, bindings = {}) {
   const c = vm.createContext({ window:{}, Date, TextEncoder, crypto:webcrypto, console,
     ...bindings });
