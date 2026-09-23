@@ -331,6 +331,24 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-layer0 .sc-soctab:hover{ color:var(--ink2); }
 .sc-layer0 .sc-soctab.is-on{ color:var(--crk); background:none; box-shadow:inset 0 -2px 0 var(--crk); }
 .sc-l0body{ flex:1 1 0; min-height:0; overflow:auto; display:flex; flex-direction:column; position:relative; }
+/* ── M19 §A — COHORT COMPARE AS A TAB ────────────────────────────────────────────
+   Same strip, same columns, same clicks; it just owns the whole right half now. The
+   bipolar bar (.sc-vmini) was a fixed 114px track because it sat in a ~110px band —
+   as a full-height view it stretches, so the fan reads at the size of the pane. */
+.sc-cohtabwrap{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+.sc-cohtabwrap .sc-cohstrip{ flex:1 1 auto; min-height:0; border-bottom:0; align-items:stretch; }
+.sc-cohtabwrap .sc-cohstrip__col{ min-height:0; justify-content:center; }
+.sc-cohtabwrap .sc-vmini{ height:auto; flex:1 1 auto; min-height:114px; width:22px; }
+/* an empty control row must not leave a stray hairline on the cohort tab */
+.sc-l0ctlwrap:empty{ display:none; border:0; }
+/* four tabs in the strip: the long name where it fits, the short one on a phone */
+.sc-layer0 .sc-soctab{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-soctab__abbr{ display:none; }
+@media (max-width:560px){
+  .sc-layer0 .sc-soctab{ padding:9px 4px; letter-spacing:.08em; }
+  .sc-soctab__full{ display:none; }
+  .sc-soctab__abbr{ display:inline; }
+}
 .sc-l0body .sc-heatgrid{ flex:1 1 auto; min-height:0; }
 /* R45c — the canvas pane claims all remaining height and never letterboxes: an RRG
    read in a 100px strip is useless. 360px floor on desktop keeps the quadrants
@@ -6017,7 +6035,16 @@ const L0_MIN_BARS = 40;                  // RRG needs 14-bar window + 4-bar mome
    The heatmap IS a focus view, so HEATMAP + FOCUS were never two rooms: they are one
    room, MAP, with five ways of drawing the same cohort (GRID · FISHEYE · DOCK ·
    BUBBLES · TILT). The FOCUS tab is gone; nothing about the heat renderer moved. */
-let LAYER0_TAB = "MAP";                  // "MAP" | "ROTATION" | "RELATIVE"  (no persistence — a plain JS flag)
+/* M19 §A — FOUR TABS IN ONE STRIP. Alan: "Cohort compare and the map, rotation and
+   relative should all be tabs of the same right half." COHORT COMPARE was stacked ABOVE
+   the strip and ate ~110px of a ~330px pane; it is now the first tab, so whichever view
+   is chosen owns the whole right half. The choice is REMEMBERED (it used to reset to MAP
+   on every reload, which is why the pane never opened where it was left). */
+const L0_TAB_KEY = "sc_l0tab_v1";
+let LAYER0_TAB = (function () {
+  try { const v = localStorage.getItem(L0_TAB_KEY); if (v === "COHORT" || v === "MAP" || v === "ROTATION" || v === "RELATIVE") return v; } catch (_) {}
+  return "MAP";
+})();
 let L0_TF = "240";                       // active ohlcv_history.tf — intraday by default (the whole point of R44 §4); R49 §2: now shared by ALL THREE tabs
 let L0_REL_I = 1;                        // index into L0_REL_WIN[L0_TF] (an INDEX, so it survives tf switches)
 const L0_CACHE = {};                     // tf → { closes:{sym:{times,closes}}, thin:[sym…] } — per-tf, never refetched
@@ -7313,11 +7340,14 @@ function l0MapHint() {
   return l0FocCoarse() ? "touch · static grid (cursor effects need a pointer)"
     : l0FocReduced() ? "reduced motion · static" : "move the cursor · click to pin";
 }
-const L0_TABS = ["MAP", "ROTATION", "RELATIVE"];
+const L0_TABS = ["COHORT", "MAP", "ROTATION", "RELATIVE"];
+/* COHORT's full name is COHORT COMPARE. At panel width there is room for it; on a phone
+   the strip would blow out, so the short form is swapped in by CSS, never by JS. */
+const L0_TAB_LBL = { COHORT: '<span class="sc-soctab__full">COHORT COMPARE</span><span class="sc-soctab__abbr">COHORT</span>' };
 function l0TabsHTML() {
   return '<div class="sc-soctabs" role="tablist">' + L0_TABS.map((k) =>
     '<button class="sc-soctab' + (k === LAYER0_TAB ? " is-on" : "") + '" role="tab" aria-selected="' +
-    (k === LAYER0_TAB) + '" data-act="l0tab" data-tab="' + k + '">' + k + "</button>").join("") + "</div>";
+    (k === LAYER0_TAB) + '" data-act="l0tab" data-tab="' + k + '">' + (L0_TAB_LBL[k] || k) + "</button>").join("") + "</div>";
 }
 /* R49 §2 — THE ONE CONTROL ROW.  Alan: "the timeframes on the rotation — we should
    be able to apply them on ALL of them; it's scattered."
@@ -7334,6 +7364,11 @@ function l0TabsHTML() {
    So there is exactly ONE chip row on screen at any time — never a chip row nested
    inside a chip row. Same .sc-l0chip language, no inline onclick — data-act only. */
 function l0CtrlRowHTML() {
+  /* M19 §A — the shared TF row is the control for MAP / ROTATION / RELATIVE. COHORT
+     COMPARE does not run off it (its columns are cohort means with their own scale, stated
+     in the strip header), so on that tab the row renders nothing and the view gets those
+     pixels. No control was removed from any view that had one. */
+  if (LAYER0_TAB === "COHORT") return "";
   let h = '<div class="sc-l0rng"><span class="sc-l0rng__lbl">TF</span>' +
     L0_TF_DEF.map((d) => '<button class="sc-l0chip' + (d.k === L0_TF ? " is-on" : "") +
       '" data-act="l0tf" data-tf="' + esc(d.k) + '" title="apply ' + esc(d.l) + ' to every Layer-0 view">' + d.l + "</button>").join("");
@@ -7409,6 +7444,9 @@ function l0Stamp(sec) {
    while fullscreen keeps the fullscreen — the node holding .sc-secfs is never rebuilt.
    Works identically in the dashboard pane and in the full-width SCENES room. */
 function l0BodyHTML() {
+  /* M19 §A — COHORT COMPARE, unchanged markup, now claiming the full height of the pane
+     (the bars stretch; see .sc-l0body--coh). Same renderer, same click targets. */
+  if (LAYER0_TAB === "COHORT") return '<div id="cohCompare" class="sc-cohtabwrap">' + cohortCompareStripHTML() + "</div>";
   const head = (lbl) => '<div class="sc-heathead"><span class="sc-heathead__lbl">' + lbl + "</span>" +
     '<span class="sc-heathead__ctrls">' + SECFS_BTN0 + "</span></div>";
   /* R49 §1 — MAP. One room, five ways of drawing the SAME cohort: GRID is the
@@ -7488,6 +7526,9 @@ function mountL0Body() {
      transport; a timer redrawing a canvas that no longer exists is a leak. */
   if (LAYER0_TAB !== "ROTATION") { l0PlayStop(); L0_RRG_AT = null; }
   if (L0_FIX) { clearInterval(L0_FIX); L0_FIX = null; }        // R45b — never stack watchdogs
+  /* M19 §A — COHORT COMPARE draws no canvas and needs no per-sector ohlcv pull: it is
+     built from the board rows already in memory, so it mounts with zero network. */
+  if (LAYER0_TAB === "COHORT") return;
   if (LAYER0_TAB === "MAP") {
     l0MapSync();                                                          // R49 §2 — resolve/kick the batched TF series for this cohort
     if (L0_MAP_MODE === "GRID") { wireHeatSizing(); return; }             // R49 §1 — the heat path, unchanged
@@ -7582,8 +7623,11 @@ function l0Stop() {
    one mount is ever in the DOM at a time, so the renderers need no awareness of
    which room they are in — they size to their container, as they always have. */
 function layer0HTML() {
+  /* M19 §A — #cohCompare now lives INSIDE the tab body (l0BodyHTML), so it is one of the
+     four views rather than a permanent band above them. Every call site that repaints it
+     (updateBoard, scenesTick, the cohort click) already reads el("cohCompare") and no-ops
+     when it is absent, so nothing had to be re-reasoned. */
   return '<div class="sc-layer0" id="layer0">' +
-    '<div id="cohCompare">' + cohortCompareStripHTML() + "</div>" +
     l0TabsHTML() +
     '<div class="sc-l0ctlwrap" id="l0ctl">' + l0CtrlRowHTML() + "</div>" +
     '<div class="sc-l0body" id="l0body">' + l0BodyHTML() + "</div>" +
@@ -14558,11 +14602,12 @@ document.addEventListener("click", (e) => {
       const t = a.dataset.tab;
       if (!t || t === LAYER0_TAB || L0_TABS.indexOf(t) < 0) break;
       LAYER0_TAB = t;
+      try { localStorage.setItem(L0_TAB_KEY, t); } catch (_) {}   /* M19 §A — remembered across reloads */
       document.querySelectorAll('#layer0 .sc-soctab').forEach((b) => {
         const on = b.dataset.tab === t;
         b.classList.toggle("is-on", on); b.setAttribute("aria-selected", String(on));
       });
-      if (t !== "MAP" && !L0_CACHE[L0_TF]) l0LoadData(L0_TF);   // R49 §1 — MAP runs off board rows + its own batched read, no per-sector ohlcv pull
+      if (t !== "MAP" && t !== "COHORT" && !L0_CACHE[L0_TF]) l0LoadData(L0_TF);   // R49 §1 — COHORT runs off board rows, like MAP — MAP runs off board rows + its own batched read, no per-sector ohlcv pull
       paintL0Body();
       break;
     }
@@ -16126,6 +16171,35 @@ const SC_TICK_WAIT_MS = 250;
    interval is 80 s. 180 s leaves headroom for that backoff without hiding a genuinely dead feed. */
 
 
+/* ── M19 §B — ONE REQUEST PER URL IN FLIGHT ──────────────────────────────────────
+   MEASURED on production 23 Sep, cold load at 1680x1050: the board's first priced paint
+   took 17.5 s (median of 3; worst 30.2 s) while FIRST PAINT took 172 ms. The reason was
+   not the size of the page and not the how-unusual observer (measured: 18-23 calls, 1 ms
+   total). It was the SAME full-universe /quotes request being issued three or four times
+   at once by different callers, none of which knew about the others:
+     * one alone                    3.6 s
+     * four at once (what we did)   7.7 / 8.9 / 9.8 / 10.3 s   <- the requests fight
+   Six chunks of 61 symbols measured 41.9 s in total, so splitting the request is WORSE,
+   not better; the answer is to stop asking more than once.
+   This keeps ONE promise per URL while that URL is in flight and hands the same one to
+   every caller. A settled request is forgotten immediately, so nothing is ever served
+   from a stale cache here - each call site keeps its own freshness rule unchanged. */
+const SC_INFLIGHT = new Map();
+window.SC_DEDUPED = 0;
+function scJSONOnce (url) {
+  const k = String(url);
+  const hit = SC_INFLIGHT.get(k);
+  if (hit) { window.SC_DEDUPED++; return hit; }
+  const p = fetch(k).then((r) => {
+    if (!r.ok) { const e = new Error("HTTP_" + r.status); e.status = r.status; throw e; }
+    return r.json();
+  });
+  p.catch(() => {}).then(() => { SC_INFLIGHT.delete(k); });   // forget on settle, either way
+  SC_INFLIGHT.set(k, p);
+  return p;
+}
+window.scJSONOnce = scJSONOnce;
+
 async function scProviderTick () {
   /* THE LOOP MUST NEVER DIE, AND A TICK THAT CANNOT RUN YET IS RETRIED RATHER THAN DROPPED.
      These guards used to sit OUTSIDE the try/finally below, so any of them returned WITHOUT
@@ -16154,14 +16228,15 @@ async function scProviderTick () {
      declared equities outside the last accepted tick, so a cohort switch exposed rows the provider
      had never priced. The route caps a request at 500 symbols and the universe is 365, so this is
      still ONE bounded batch - the same cost, without the hole. */
-  const want = [...decl];
+  /* M19 §B — SORTED, so the board's own read of the same symbols produces the SAME URL and
+     shares the in-flight request instead of opening a second one. /quotes is keyed by symbol
+     in its response, so order carries no meaning. */
+  const want = [...decl].sort();
   if (!want.length) { scScheduleTick(true); return; }   // never a silent exit
   SC_TICK_INFLIGHT = true;
   const t0 = Date.now();
   try {
-    const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(want.slice(0, 500).join(",")));
-    if (!r.ok) throw new Error("quotes " + r.status);
-    const j = await r.json();
+    const j = await scJSONOnce(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(want.slice(0, 500).join(",")));
     /* THE ACCEPTED PAYLOAD IS RETAINED so a verifier can compare a rendered row against the EXACT
        quote that produced it, rather than against a fresh fetch taken moments later. Without this
        every check races the tape: a price that advances between paint and verification looks like
@@ -16261,9 +16336,7 @@ window.SC_MACRO_TICK = { runs: 0, applied: 0, failures: 0, last_utc: null };
 async function scMacroTick() {
   if (typeof document !== "undefined" && document.hidden) return;
   try {
-    const r = await fetch(SC_CHART_API + "/macro?symbols=" + encodeURIComponent(SC_MACRO_SYMS.join(",")));
-    if (!r.ok) throw new Error("macro " + r.status);
-    const j = await r.json();
+    const j = await scJSONOnce(SC_CHART_API + "/macro?symbols=" + encodeURIComponent(SC_MACRO_SYMS.join(",")));   /* M19 §B — deduped; a non-OK status throws HTTP_<status> into the catch below, as "macro <status>" used to */
     let applied = 0;
     for (const [t, m] of Object.entries((j && j.macro) || {})) {
       const q = m && m.quote;
@@ -16501,9 +16574,9 @@ async function scCandidateGeiger () {
     return SC_CG.map;
   }
   try {
-    const r = await fetch(SC_CHART_API + "/geiger");
-    if (!r.ok) return scRetainCandidateGeiger("GEIGER_HTTP_" + r.status, currentEqualizer);
-    const j = await r.json();
+    let j;
+    try { j = await scJSONOnce(SC_CHART_API + "/geiger"); }
+    catch (e) { if (e && e.status) return scRetainCandidateGeiger("GEIGER_HTTP_" + e.status, currentEqualizer); throw e; }
     SC_GEIGER_AUTHORITY.validateArtifactProfile(j, currentEqualizer);
     const syms = Object.keys((j && j.symbols) || {});
     const universeDigest = await scUniverseDigest(syms);
@@ -16615,17 +16688,28 @@ async function scApplyCandidateGeiger (index) {
    would simply invent a third wrong number. */
 const SC_PQ = { at: 0, map: {} };
 async function scProviderQuotes (tickers) {
-  const want = [...new Set((tickers || []).filter(Boolean))];
+  const want = [...new Set((tickers || []).filter(Boolean))].sort();   /* M19 §B — same canonical order as the tick */
   if (!want.length) return {};
   /* 5 s is the quote object's own cache-control; the board refreshes on 45 s. */
   if (Date.now() - SC_PQ.at < 5000 && want.every((t) => t in SC_PQ.map)) return SC_PQ.map;
+  /* M19 §B — THE 2-SECOND TICK HAS USUALLY JUST FETCHED THESE EXACT QUOTES. It retains the
+     accepted payload in window.SC_TICK_LAST for verification; if that payload is inside the same
+     5 s window and covers every symbol asked for, it IS this request's answer, and asking the
+     provider again only adds a second full-universe call that slows the first one down. Any
+     symbol it does not cover falls through to a real request - absence is never filled in. */
+  try {
+    const tl = window.SC_TICK_LAST;
+    const tlAge = tl && tl.utc ? Date.now() - Date.parse(tl.utc) : Infinity;
+    if (tl && tl.quotes && tlAge >= 0 && tlAge < 5000 && want.every((t) => t in tl.quotes)) {
+      SC_PQ.at = Date.now() - tlAge; SC_PQ.map = tl.quotes;
+      return tl.quotes;
+    }
+  } catch (_) {}
   const out = {};
   for (let i = 0; i < want.length; i += 400) {          // route caps a request at 500 symbols
     const batch = want.slice(i, i + 400);
     try {
-      const r = await fetch(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(batch.join(",")));
-      if (!r.ok) continue;                              // absent stays absent; never a legacy value
-      const j = await r.json();
+      const j = await scJSONOnce(SC_CHART_API + "/quotes?symbols=" + encodeURIComponent(batch.join(",")));
       for (const [k, q] of Object.entries((j && j.quotes) || {})) out[k] = q;
     } catch (_) { /* leave absent rather than substitute */ }
   }
@@ -16668,9 +16752,8 @@ async function scDeclaredEquities () {
   SC_EQ = await scEqFromCache();
   if (SC_EQ && SC_EQ.size) window.SC_DECLARED_SET = SC_EQ;
   try {
-    const r = await fetch(SC_CHART_API + "/universe");
-    if (r.ok) {
-      const j = await r.json();
+    {
+      const j = await scJSONOnce(SC_CHART_API + "/universe");   /* M19 §B — deduped; a non-OK status throws into the catch below, where a non-OK response already led */
       const syms = j && Array.isArray(j.symbols) ? j.symbols : [];
       const digest = await scUniverseDigest(syms);
       if (j.provider === "MASSIVE" && j.count === SC_EXPECTED_EQUITY_COUNT &&
@@ -18424,7 +18507,8 @@ function filesWire(){
   }
   function geiger(){
     if (GEIGER) return Promise.resolve(GEIGER);
-    return fetch(window.SC_CHART_API + "/geiger").then(function(r){ return r.ok?r.json():null; })
+    return (window.scJSONOnce ? window.scJSONOnce(window.SC_CHART_API + "/geiger")
+            : fetch(window.SC_CHART_API + "/geiger").then(function(r){ return r.ok?r.json():null; }))
       .then(function(j){ GEIGER=j||{}; return GEIGER; }).catch(function(){ GEIGER={}; return GEIGER; });
   }
   /* the reading as it stands now, from the same daily bars, so the panel is never
