@@ -72,7 +72,10 @@ test("(a) the kill switch: with ECON_TAPE_ON off the tape makes zero requests an
   assert.equal(n, 0); assert.equal(store.macroNext.innerHTML, "untouched");
   assert.equal((page.match(/fillMacroNext\(\);/g) || []).length, 1, "one call site for the nudge");
   assert.match(page, /\n    if \(ECON_TAPE_ON\) fillMacroNext\(\);/);
-  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 1, "ONE calendar read in the page: the tape reuses the room's window read");
+  /* TWO calendar reads in the page and no more: the room's window read, which the tape and the band share, and the
+     two-year history behind a landed number — click-driven, and behind the same kill switch. */
+  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 2, "the shared window read, plus the click-only history");
+  assert.match(fnSrc(page, "ecHistShow"), /if \(!ECON_TAPE_ON \|\|/, "the history read stops with the flag as well");
   assert.match(fnSrc(page, "fillMacroNext"), /^function fillMacroNext\(\) \{\n  if \(!ECON_TAPE_ON\) return;/, "first statement returns while the flag is off");
   assert.equal((page.match(/^ecTapeStart\(\);/gm) || []).length, 1, "the band starts from exactly one place: boot");
   assert.match(fnSrc(page, "ecTapeStart"), /if \(!ECON_TAPE_ON && !ECON_BAND_ON\) return;/, "with both switches off, nothing is armed and nothing is read");

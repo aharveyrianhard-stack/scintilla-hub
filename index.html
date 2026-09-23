@@ -1805,7 +1805,7 @@ body.econ .sc-cohsearch{ display:none; }
 .mn-it:first-of-type{ border-left:0; padding-left:0; }
 .mn-it:hover .mn-nm{ color:var(--crk); }
 .mn-dot{ color:var(--sv4); font-size:7px; text-shadow:0 0 6px rgba(255,138,0,.8); }
-.mn-nm{ font-size:10px; color:var(--ink); }
+.mn-nm{ font-size:10px; color:var(--ink2); }   /* house rule: no white, no near-white — weight carries emphasis, not brightness */
 .mn-when{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--ink3);
   text-transform:uppercase; font-variant-numeric:tabular-nums; }
 .mn-cd{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--dim);
@@ -2049,23 +2049,71 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
    surprise) → it drops off and the next one moves up. Hues are the design kit's
    (--sv4 orange, --sv1/--sv3/--sv5 for better / in line / worse), never #FF5500.
    ---------------------------------------------------------------------------- */
-.mn-it{ transition:opacity .25s ease; }
-.mn-it .mn-dot{ color:var(--dim); text-shadow:none; }                                   /* ahead: present, not loud */
+.mn-it{ transition:opacity .3s ease, transform .45s cubic-bezier(.34,.02,.2,1); }
 .mn-it .mn-nm{ max-width:26ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.mn-it.s-soon .mn-dot{ color:var(--sv4); text-shadow:0 0 6px rgba(255,138,0,.8); }
+/* the dot's HUE is set inline from EC_CAT_COLOR — the calendar's own legend. Only its SPEED changes here. */
+.mn-dot{ font-size:7px; }
+.mn-it.s-ahead .mn-dot{ opacity:.6; text-shadow:none; }                                  /* ahead: still. No flash. Named. */
+.mn-it.s-soon  .mn-dot{ text-shadow:0 0 6px currentColor; animation:mn-breathe 2.4s ease-in-out infinite; }
+.mn-it.s-near  .mn-dot{ text-shadow:0 0 7px currentColor; animation:mn-breathe 1.1s ease-in-out infinite; }
+.mn-it.s-due   .mn-dot{ text-shadow:0 0 9px currentColor; animation:mn-hard .38s ease-in-out infinite; }
 .mn-it.s-soon .mn-cd{ color:var(--sv4); }
-.mn-it.s-now .mn-dot{ color:var(--sv4); text-shadow:0 0 9px rgba(255,138,0,1); animation:mn-pulse 1.4s ease-in-out infinite; }
-.mn-it.s-now .mn-nm{ color:var(--ink2); font-weight:600; }   /* no white on Scintilla */
-.mn-it.s-now .mn-cd{ color:var(--sv4); font-weight:600; animation:mn-pulse 1.4s ease-in-out infinite; }
-.mn-it.s-landed .mn-dot{ color:var(--sv1); text-shadow:none; }
-.mn-res{ font-family:var(--mono); font-size:8.5px; color:var(--ink3); font-variant-numeric:tabular-nums; }
-.mn-res b{ color:var(--ink); font-weight:600; }
+.mn-it.s-near .mn-nm, .mn-it.s-due .mn-nm{ color:var(--ink2); font-weight:600; }         /* no white on Scintilla */
+.mn-it.s-near .mn-cd{ color:var(--sv4); font-weight:600; }
+.mn-it.s-due  .mn-cd{ color:var(--sv4); font-weight:600; animation:mn-hard .38s ease-in-out infinite; }
+/* LANDED — stops dead, and sits in its own lane to the LEFT of what is still coming */
+.mn-it.s-landed .mn-dot{ animation:none; text-shadow:none; opacity:.9; }
+.mn-it.s-landed .mn-nm{ font-weight:600; }
+.mn-it.s-landed.mn-lane-end{ border-right:.5px solid var(--line2); padding-right:12px; margin-right:3px; }
+.mn-x{ color:var(--dim); font-size:8.5px; padding-left:4px; cursor:pointer; opacity:.55; }
+.mn-x:hover{ color:var(--crk); opacity:1; }
+.mn-res{ font-family:var(--mono); font-size:8.5px; color:var(--ink3); font-variant-numeric:tabular-nums; cursor:pointer; }
+.mn-res b{ color:var(--ink2); font-weight:600; }
+.mn-res:hover b{ color:var(--crk); }
 .mn-sur{ font-family:var(--mono); font-size:8.5px; font-variant-numeric:tabular-nums; }
 .mn-sur.beat{ color:var(--sv1); } .mn-sur.miss{ color:var(--sv5); } .mn-sur.inline{ color:var(--sv3); }
-.mn-new{ animation:mn-in .5s cubic-bezier(.34,.02,.2,1); }                              /* the next one slides up from the right */
+/* HEAVY DAY — four or more the same day: it stops naming them. The density is the message. */
+.mn-swarm{ display:inline-flex; align-items:center; gap:9px; flex:none; cursor:pointer; padding:2px 10px;
+  border-left:.5px solid var(--line); transition:opacity .3s ease, transform .45s cubic-bezier(.34,.02,.2,1); }
+.mn-dots{ display:inline-flex; gap:5px; align-items:center; }
+.mn-swarm .mn-dots i{ width:6px; height:6px; border-radius:50%; display:inline-block;
+  animation:mn-hard 1.1s ease-in-out infinite; }
+.mn-swarm .mn-dots i:nth-child(2n){ animation-duration:.9s; }                            /* not one metronome — a swarm */
+.mn-swarm .mn-dots i:nth-child(3n){ animation-duration:1.3s; }
+.mn-slbl{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); }
+.mn-slbl b{ color:var(--ink2); }
+.mn-swarm:hover .mn-slbl{ color:var(--crk); }
+/* HEAVY AHEAD — a loaded day still to come. A warning, not an alarm: nothing here moves. */
+.mn-ahead{ display:inline-flex; align-items:center; gap:8px; flex:none; cursor:pointer; padding:2px 10px;
+  border-left:.5px solid var(--line); }
+.mn-ahead .mn-dots i{ width:5px; height:5px; border-radius:50%; display:inline-block; opacity:.85; }
+.mn-albl{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+.mn-albl b{ color:var(--sv4); }
+/* items SLIDE — in from the right when they arrive, out to the left when they go. Nothing pops. */
+.mn-new{ animation:mn-in .5s cubic-bezier(.34,.02,.2,1); }
+.mn-out{ opacity:0; transform:translateX(-12px); pointer-events:none; }
 @keyframes mn-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.22; } }
+@keyframes mn-breathe{ 0%,100%{ opacity:1; } 50%{ opacity:.22; } }
+@keyframes mn-hard{ 0%,100%{ opacity:1; } 50%{ opacity:.12; } }
 @keyframes mn-in{ from{ opacity:0; transform:translateX(18px); } to{ opacity:1; transform:none; } }
-@media (prefers-reduced-motion:reduce){ .mn-it.s-now .mn-dot, .mn-it.s-now .mn-cd, .mn-new{ animation:none; } }
+@media (prefers-reduced-motion:reduce){ .mn-dot, .mn-cd, .mn-swarm .mn-dots i, .mn-new{ animation:none; } }
+/* TWO YEARS OF THIS PRINT — the panel behind a landed number. */
+.mn-hist{ position:fixed; z-index:120; width:340px; max-height:60vh; overflow:auto; display:none;
+  background:var(--panel2,#0F0F1A); border:.6px solid var(--line2); box-shadow:0 18px 40px rgba(0,0,0,.55); }
+.mn-hist.on{ display:block; }
+.mn-hh{ font-family:var(--mono); font-size:8px; letter-spacing:.18em; text-transform:uppercase; color:var(--crk);
+  padding:9px 11px; border-bottom:.5px solid var(--line); position:sticky; top:0; background:var(--panel2,#0F0F1A);
+  display:flex; align-items:center; gap:6px; }
+.mn-hh .mn-x{ margin-left:auto; }
+.mn-hb{ padding:6px 11px 10px; }
+.mn-hr{ display:flex; align-items:center; gap:8px; padding:3px 0; }
+.mn-hd{ font-family:var(--mono); font-size:8px; color:var(--dim); flex:0 0 76px; white-space:nowrap; }
+.mn-hbar{ flex:1 1 auto; height:6px; background:rgba(255,255,255,.04); position:relative; }
+.mn-hbar i{ position:absolute; left:0; top:0; bottom:0; background:var(--dim); display:block; }
+.mn-hbar i.beat{ background:var(--sv1); } .mn-hbar i.miss{ background:var(--sv5); } .mn-hbar i.inline{ background:var(--sv3); }
+.mn-hv{ font-family:var(--mono); font-size:8.5px; color:var(--ink3); flex:0 0 104px; text-align:right;
+  font-variant-numeric:tabular-nums; }
+.mn-hv b{ color:var(--ink2); font-weight:600; }
 
 /* ----------------------------------------------------------------------------
    THE ECON BAND — this week at a glance, a third band under MACRO and ALL. It is
@@ -2086,11 +2134,13 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ecb-res b{ color:var(--ink); font-weight:600; }
 .ecb-res.beat b{ color:var(--sv1); } .ecb-res.miss b{ color:var(--sv5); } .ecb-res.inline b{ color:var(--sv3); }
 .ecb-it.is-past .ecb-dot, .ecb-it.is-past .ecb-when, .ecb-it.is-past .ecb-nm{ opacity:.45; }
-.ecb-it.is-now .ecb-dot{ animation:mn-pulse 1.4s ease-in-out infinite; }
-.ecb-it.is-now .ecb-nm{ color:var(--ink2); font-weight:600; }
-.ecb-it.is-now .ecb-res{ color:var(--sv4); }
+.ecb-it.is-soon .ecb-dot{ animation:mn-breathe 2.4s ease-in-out infinite; }     /* the band walks the nudge's bands */
+.ecb-it.is-near .ecb-dot{ animation:mn-breathe 1.1s ease-in-out infinite; }
+.ecb-it.is-due  .ecb-dot{ animation:mn-hard .38s ease-in-out infinite; }
+.ecb-it.is-near .ecb-nm, .ecb-it.is-due .ecb-nm{ color:var(--ink2); font-weight:600; }
+.ecb-it.is-due .ecb-res{ color:var(--sv4); }
 .ecb-note{ color:var(--dim); }
-@media (prefers-reduced-motion:reduce){ .ecb-it.is-now .ecb-dot{ animation:none; } }
+@media (prefers-reduced-motion:reduce){ .ecb-it .ecb-dot{ animation:none; } }
 
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
@@ -9522,10 +9572,29 @@ const EC_TAPE_TTL_MS = 10 * 60e3;    // one read per ten minutes, however often 
 const EC_TAPE_FAST_MS = 2 * 60e3;    // …except while a number is due and not yet in the store
 const EC_TAPE_TICK_MS = 15e3;        // the countdowns move here; a tick reads nothing by itself
 const EC_NUDGE_SOON_S = 3600;        // inside the hour: the "go look" signal
-const EC_NUDGE_DUE_S = 15 * 60;      // "now" for something that prints no number (a speech, a meeting)
+/* THE 16 AUG PROTOTYPE'S BANDS (_ECON_TAB_REVIEW/nudge.html — the page Alan pointed at on 23 Sep: "review the proposal
+   that the session that made the prototype made"). A release is STILL until the hour, BREATHES inside it, TIGHTENS
+   inside ten minutes, then gives ONE hard pulse at its minute. The SPEED is the state; the HUE is always the
+   category, so the thing that flashes also says what kind of number is coming. */
+const EC_NUDGE_NEAR_S = 10 * 60;     // under ten minutes: 1.1s, tightening
+const EC_NUDGE_SWARM_MIN = 4;        // 4+ the same day: the names collapse to a swarm of colours and a count
+const EC_NUDGE_AHEAD_DAYS = 3;       // the quiet "heavy ahead" cluster looks up to three days out
+const EC_NUDGE_AHEAD_MIN = 3;        // ...and says nothing about a day carrying fewer than three
+const EC_NUDGE_LANDED_MAX = 2;       // the landed lane holds two, and never takes an upcoming slot
+const EC_NUDGE_DUE_S = 15 * 60;      // "due" for something that prints no number (a speech, a meeting)
 const EC_NUDGE_WAIT_S = 60 * 60;     // "now" while a number is due: fmp-economic rewrites the near band hourly
 const EC_NUDGE_SHOW_S = 15 * 60;     // how long a result stays up once this page has seen it, then it drops off
 const EC_NUDGE_RECENT_S = 2 * 3600;  // a result first seen longer than this after its release is not replayed
+/* THE RELEASE WATCHER (proposal v2, 13 Aug): "ask once a minute from one minute before to fifteen after, stop when the
+   number lands". It is a CADENCE RULE on the one reader this file already runs (ecTapeTick, every 15 s) — no second
+   timer, no new endpoint, nothing written. What runs: the same econ_calendar window read. How often: at most one a
+   minute, and only while a release is between one minute before and fifteen after with no number stored. How to stop
+   it: EC_WATCH_ON = false, which puts the tape back on its 10-minute / 2-minute cadence. */
+const EC_WATCH_ON = true;
+const EC_WATCH_LEAD_S = 60;          // start asking one minute before
+const EC_WATCH_TAIL_S = 15 * 60;     // ...and stop fifteen minutes after
+const EC_WATCH_MS = 60e3;            // one ask a minute while it is watching
+const EC_HIST_MONTHS = 24;           // the print history behind a landed number: two years, the proposal's own span
 const EC_TAPE_PRICE = /(inflation|\bcpi\b|\bppi\b|producer price|consumer price|\bpce\b|price index|deflator)/i;
 let MACRO_NEXT = null, MACRO_NEXT_AT = 0, MACRO_NEXT_BUSY = false, MACRO_NEXT_FAIL_AT = 0;
 const ECON_TAPE_SEEN = Object.create(null);   // item key → when THIS page first saw its number (sec)
@@ -9577,45 +9646,112 @@ function ecTapeSurprise(it) {
    an hour from then — not from the release minute — because the supplier can publish the actual up to an hour late. */
 function ecNudgeState(it, nowSec, seenSec) {
   const dt = it.ts - nowSec;
-  if (dt > EC_NUDGE_SOON_S) return "ahead";
-  if (dt > 0) return "soon";
+  if (dt >= EC_NUDGE_SOON_S) return "ahead";     // an hour or more out: still, no flash, named
+  if (dt >= EC_NUDGE_NEAR_S) return "soon";      // INSIDE the hour: breathes at 2.4s, in its own category colour
+  if (dt > 0) return "near";                     // inside ten minutes: 1.1s, tightening
   if (it.actual != null) {
     const seen = Number.isFinite(seenSec) ? seenSec : nowSec;
     return (seen - it.ts < EC_NUDGE_RECENT_S && nowSec - seen < EC_NUDGE_SHOW_S) ? "landed" : "gone";
   }
-  return -dt < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S) ? "now" : "gone";
+  return -dt < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S) ? "due" : "gone";   // at the minute: 0.38s, hard
 }
+/* THE LANDED LANE AND WHAT IS COMING (16 Aug). A number that has printed stops dead, shows actual against estimate and
+   sits in its OWN lane on the left; it never takes one of the three upcoming slots, and it clears on its ✕ or at the
+   end of its session day. When four or more are due the SAME day the names collapse to a swarm of category colours and
+   a count — the density is the message. A loaded day still up to three days out gets a quiet, non-flashing cluster. */
+const ECON_TAPE_CLEARED = Object.create(null);     // landed keys dismissed with the ✕
+const ecHue = (cat) => (cat === "OTHER" ? "var(--dim)" : EC_CAT_COLOR[cat] || "var(--dim)");
 function ecNudgeModel(nowSec) {
-  const model = [];
+  const landed = [], up = [], today = ecDateKey(nowSec);
   for (const it of ecTapeItems(MACRO_NEXT)) {
-    if (it.ts - nowSec > EC_TAPE_DAYS * 86400) break;          // sorted by time: nothing further out qualifies either
+    if (it.ts - nowSec > EC_TAPE_DAYS * 86400) break;        // sorted by time: nothing further out qualifies either
     const st = ecNudgeState(it, nowSec, ECON_TAPE_SEEN[it.key]);
     if (st === "gone") continue;
-    model.push({ it: it, st: st });
-    if (model.length >= EC_TAPE_ITEMS) break;
+    if (st === "landed") { if (!ECON_TAPE_CLEARED[it.key] && it.day === today) landed.push(it); continue; }
+    up.push({ kind: "item", key: it.key, it: it, st: st });
   }
+  const keep = landed.slice(-EC_NUDGE_LANDED_MAX);
+  const model = keep.map((it, i) => ({ kind: "item", key: "L" + it.key, it: it, st: "landed", lane: i === keep.length - 1 }));
+  if (!up.length) return model;
+  const d0 = up[0].it.day, sameDay = up.filter((m) => m.it.day === d0);
+  /* HEAVY AHEAD first, because a loaded day still to come is COLLAPSED, not named: whichever day inside the next
+     three carries three or more becomes one quiet cluster, and its releases then stay out of the named queue. */
+  const byDay = Object.create(null);
+  for (const m of up) {
+    if (m.it.day === d0 || m.it.ts - nowSec > EC_NUDGE_AHEAD_DAYS * 86400) continue;
+    (byDay[m.it.day] = byDay[m.it.day] || []).push(m);
+  }
+  const hot = Object.keys(byDay).sort().find((d) => byDay[d].length >= EC_NUDGE_AHEAD_MIN);
+  if (sameDay.length >= EC_NUDGE_SWARM_MIN) {
+    /* HEAVY DAY — it stops naming them: a swarm of category colours, a count, and where to go */
+    model.push({ kind: "swarm", key: "SWARM" + d0, day: d0, it: sameDay[0].it, group: sameDay, st: "swarm" });
+  } else {
+    /* 16 Aug names the soonest day only; Alan's build carries three items across seven days and he kept that on
+       22 Sep, so the queue stays seven days deep and only the COLLAPSE states come from the prototype. */
+    let hard = 0;
+    for (const m of up.filter((m2) => m2.it.day !== hot).slice(0, EC_TAPE_ITEMS)) {
+      if (m.st !== "due") { model.push(m); continue; }
+      /* "Only ever ONE item does this" — a second thing already past its minute tightens, it does not hammer */
+      model.push(hard ? { kind: "item", key: m.key, it: m.it, st: "near" } : m);
+      hard = 1;
+    }
+  }
+  if (hot) model.push({ kind: "ahead", key: "AHEAD" + hot, day: hot, it: byDay[hot][0].it, group: byDay[hot], st: "cluster" });
   return model;
 }
 const ecWeekday = (day) => new Date(ecAnchor(day) * 1000).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" });
 function ecNudgeInnerHTML(it, st, nowSec) {
-  const head = '<span class="mn-dot">●</span><span class="mn-nm">' + esc(it.name) + "</span>";
+  /* the dot is ALWAYS the category's own hue (EC_CAT_COLOR, the calendar's legend); the speed is what the state says */
+  const head = '<span class="mn-dot" style="color:' + ecHue(it.cat) + '">●</span><span class="mn-nm">' + esc(it.name) + "</span>";
   if (st === "landed") {
     const s = ecTapeSurprise(it);
     /* against the estimate where the supplier carries one; against the prior print where it does not (M2 is the
        one Alan named that arrives with no estimate at all), so the number never lands without something to read it against */
-    return head + '<span class="mn-res"><b>' + esc(ecNum(it.actual)) + "</b>" +
+    return head + '<span class="mn-res" data-act="mnhist" data-k="' + esc(it.key) + '" data-ev="' + esc(ecBase(it.event)) +
+      '" title="two years of this print"><b>' + esc(ecNum(it.actual)) + "</b>" +
       (it.estimate != null ? " vs " + esc(ecNum(it.estimate))
         : it.previous != null ? " vs prior " + esc(ecNum(it.previous)) : "") + "</span>" +
-      (s ? '<span class="mn-sur ' + s.cls + '">' + esc(s.txt) + "</span>" : "");
+      (s ? '<span class="mn-sur ' + s.cls + '">' + esc(s.txt) + "</span>" : "") +
+      '<span class="mn-x" data-act="mnclear" data-k="' + esc(it.key) + '" title="clear">✕</span>';
   }
   const when = (it.day === ecDateKey(nowSec) ? "" : ecWeekday(it.day) + " ") + ecTimeET(it.ts);
   return head + '<span class="mn-when">' + esc(when) + '</span><span class="mn-cd">' +
-    esc(st === "now" ? "now" : ecCountdown(it.ts, nowSec)) + "</span>";
+    esc(st === "due" ? "now" : ecCountdown(it.ts, nowSec)) + "</span>";
 }
 const ecNudgeTitle = (it) => it.event + " · " + it.cat + " · " + ecTimeET(it.ts) + " ET · " + (it.impact || "") + " impact";
+/* a swarm names nothing: eight category colours flashing together, a count, and where to go */
+function ecSwarmInnerHTML(m, nowSec) {
+  const dots = m.group.slice(0, 8).map((x) => '<i style="background:' + ecHue(x.it.cat) + '"></i>').join("");
+  const dt = m.it.ts - nowSec;
+  return '<span class="mn-dots">' + dots + "</span>" +
+    '<span class="mn-slbl"><b>' + m.group.length + " due</b> · " +
+    esc(dt <= 0 ? "now" : ecCountdown(m.it.ts, nowSec)) + " · go to economic</span>";
+}
+/* the heavy day still to come: a warning, not an alarm — so nothing here moves at all */
+function ecAheadInnerHTML(m) {
+  const dots = m.group.slice(0, 6).map((x) => '<i style="background:' + ecHue(x.it.cat) + '"></i>').join("");
+  return '<span class="mn-dots">' + dots + "</span><span class=\"mn-albl\">" +
+    esc(ecWeekday(m.day).toUpperCase()) + " · <b>" + m.group.length + "</b> due</span>";
+}
+function ecNudgeClass(m) {
+  return m.kind === "swarm" ? "mn-swarm" : m.kind === "ahead" ? "mn-ahead"
+    : "mn-it s-" + m.st + (m.lane ? " mn-lane-end" : "");
+}
+function ecNudgeInner(m, nowSec) {
+  return m.kind === "swarm" ? ecSwarmInnerHTML(m, nowSec)
+    : m.kind === "ahead" ? ecAheadInnerHTML(m) : ecNudgeInnerHTML(m.it, m.st, nowSec);
+}
+function ecNudgeNodeTitle(m) {
+  return m.kind === "swarm" ? m.group.length + " releases due " + ecDayLbl(m.day) + " · go to the economic section"
+    : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) : ecNudgeTitle(m.it);
+}
+function ecNudgeNodeHTML(m, nowSec) {
+  return '<span class="' + ecNudgeClass(m) + '" data-act="mngoto" data-day="' + esc(m.kind === "item" ? m.it.day : m.day) +
+    '" data-k="' + esc(m.key) + '" title="' + esc(ecNudgeNodeTitle(m)) + '">' + ecNudgeInner(m, nowSec) + "</span>";
+}
+/* kept for the suite and for anything that renders a single item on its own */
 function ecNudgeItemHTML(it, st, nowSec) {
-  return '<span class="mn-it s-' + st + '" data-act="mngoto" data-day="' + esc(it.day) + '" data-k="' + esc(it.key) +
-    '" title="' + esc(ecNudgeTitle(it)) + '">' + ecNudgeInnerHTML(it, st, nowSec) + "</span>";
+  return ecNudgeNodeHTML({ kind: "item", key: it.key, it: it, st: st }, nowSec);
 }
 function macroNextHTML(nowSec) {
   const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
@@ -9624,11 +9760,11 @@ function macroNextHTML(nowSec) {
   const model = ecNudgeModel(now);
   /* a quiet week shows nothing at all and the ident box reads as it always did — proposal v2: "Silence is information." */
   if (!model.length) return "";
-  return '<span class="mn-lbl">next</span>' + model.map((m) => ecNudgeItemHTML(m.it, m.st, now)).join("");
+  return '<span class="mn-lbl">next</span>' + model.map((m) => ecNudgeNodeHTML(m, now)).join("");
 }
-/* Repaint the queue IN PLACE: items are keyed, so a tick that only moves a countdown never rebuilds the node whose dot
-   is pulsing, and when one drops off the next slides up (.mn-new) instead of the whole row flickering. Anywhere there
-   is no DOM (this file's tests run it in a VM) it falls back to setting innerHTML from macroNextHTML. */
+/* Repaint the queue IN PLACE: nodes are keyed, so a tick that only moves a countdown never rebuilds the node whose dot
+   is pulsing, and when one drops off the next SLIDES up (.mn-new in, .mn-out out) instead of the row flickering.
+   Anywhere there is no DOM (this file's tests run it in a VM) it falls back to setting innerHTML from macroNextHTML. */
 function ecNudgePaint(nowSec) {
   const box = el("macroNext");
   if (!ECON_TAPE_ON || !box) return;
@@ -9641,18 +9777,22 @@ function ecNudgePaint(nowSec) {
     return;
   }
   const want = Object.create(null);
-  for (const m of model) want[m.it.key] = 1;
-  for (const n of Array.prototype.slice.call(box.querySelectorAll(".mn-it")))
-    if (!want[n.getAttribute("data-k")]) n.remove();
+  for (const m of model) want[m.key] = 1;
+  for (const n of Array.prototype.slice.call(box.querySelectorAll("[data-k]"))) {
+    if (want[n.getAttribute("data-k")] || n.classList.contains("mn-out")) continue;
+    n.classList.add("mn-out");                                  // slides out, then goes
+    setTimeout(() => { if (n.parentNode) n.parentNode.removeChild(n); }, 500);
+  }
   let prev = box.querySelector(".mn-lbl");
   for (const m of model) {
-    const cls = "mn-it s-" + m.st, inner = ecNudgeInnerHTML(m.it, m.st, now);
-    let n = Array.prototype.find.call(box.querySelectorAll(".mn-it"), (x) => x.getAttribute("data-k") === m.it.key);
+    const cls = ecNudgeClass(m), inner = ecNudgeInner(m, now);
+    let n = Array.prototype.find.call(box.querySelectorAll("[data-k]"),
+      (x) => x.getAttribute("data-k") === m.key && !x.classList.contains("mn-out"));
     if (!n) {
       n = document.createElement("span");
       n.className = cls + " mn-new";
-      n.setAttribute("data-act", "mngoto"); n.setAttribute("data-day", m.it.day); n.setAttribute("data-k", m.it.key);
-      n.setAttribute("title", ecNudgeTitle(m.it));
+      n.setAttribute("data-act", "mngoto"); n.setAttribute("data-day", m.kind === "item" ? m.it.day : m.day);
+      n.setAttribute("data-k", m.key); n.setAttribute("title", ecNudgeNodeTitle(m));
       n.innerHTML = inner; n.__mn = inner;
     } else {
       if (n.className.replace(" mn-new", "") !== cls) n.className = cls;
@@ -9662,6 +9802,51 @@ function ecNudgePaint(nowSec) {
     prev = n;
   }
 }
+/* TWO YEARS OF THIS PRINT (proposal v2, 13 Aug: the history panel behind a landed item). Clicking the number opens the
+   last two years of that same release out of the same table — one read, no new source, nothing written. MEASURED on
+   23 Sep against econ_calendar (count(*), US, 24 months, actual not null): Initial Jobless Claims 97 prints ·
+   S&P Global Composite PMI 30 · Inflation Rate YoY 21 · Non Farm Payrolls 24 · Durable Goods 22 · New Home Sales 22. */
+let EC_HIST_BUSY = false;
+function ecHistClose() { const h = el("mnHist"); if (h) h.classList.remove("on"); }
+function ecHistBodyHTML(rows) {
+  let hi = 0;
+  for (const r of rows) { const v = Math.abs(ecFin(r.actual) || 0); if (v > hi) hi = v; }
+  return '<div class="mn-hb">' + rows.map((r) => {
+    const a = ecFin(r.actual), e = ecFin(r.estimate);
+    const s = ecTapeSurprise({ actual: a, estimate: e, event: r.event });
+    const w = Math.max(2, Math.round((Math.abs(a || 0) / (hi || 1)) * 100));
+    return '<div class="mn-hr"><span class="mn-hd">' + esc(ecDayLbl(ecDateKey(Math.floor(+r.event_ts))).replace(/^[A-Za-z]+,\s*/, "")) +
+      '</span><span class="mn-hbar"><i class="' + (s ? s.cls : "") + '" style="width:' + w + '%"></i></span>' +
+      '<span class="mn-hv"><b>' + esc(ecNum(a)) + "</b>" + (e != null ? " vs " + esc(ecNum(e)) : "") + "</span></div>";
+  }).join("") + "</div>";
+}
+async function ecHistShow(a) {
+  if (!ECON_TAPE_ON || typeof document === "undefined" || !a || EC_HIST_BUSY) return;   // the kill switch covers this too
+  let box = el("mnHist");
+  if (!box) {
+    box = document.createElement("div"); box.id = "mnHist"; box.className = "mn-hist";
+    document.body.appendChild(box);
+  }
+  const ev = a.getAttribute("data-ev") || "", r = a.getBoundingClientRect ? a.getBoundingClientRect() : { left: 20, bottom: 60 };
+  const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+  box.style.left = Math.max(8, Math.min(r.left - 30, vw - 348)) + "px";
+  box.style.top = Math.round(r.bottom + 9) + "px";
+  box.classList.add("on");
+  const head = (t) => '<div class="mn-hh">' + esc(ev) + t + '<span class="mn-x" data-act="mnhistx" title="close">✕</span></div>';
+  box.innerHTML = head(" · reading…");
+  EC_HIST_BUSY = true;
+  let rows = null;
+  try {
+    const from = Math.floor(Date.now() / 1000 - EC_HIST_MONTHS * 30.44 * 86400);
+    rows = await pg("econ_calendar?select=event_ts,event,actual,estimate,previous&country=eq.US&event=like." +
+      encodeURIComponent(ev + "*") + "&event_ts=gte." + from + "&actual=not.is.null&order=event_ts.desc&limit=26");
+  } catch (err) { rows = null; }
+  EC_HIST_BUSY = false;
+  if (!box.classList.contains("on")) return;                 // closed while the read was in flight
+  if (!rows) { box.innerHTML = head(" · could not be read"); return; }
+  if (!rows.length) { box.innerHTML = head(" · no earlier prints stored"); return; }
+  box.innerHTML = head(" · " + rows.length + " prints, two years") + ecHistBodyHTML(rows);
+}
 /* THE ECON BAND — "this week" is Monday→Sunday in New York; on Saturday and Sunday it rolls to the week ahead, because
    by then this week has already happened and what he asked for is what is GOING to happen. */
 function ecBandWeek(nowSec) {
@@ -9669,9 +9854,13 @@ function ecBandWeek(nowSec) {
   const monday = ecShift(today, dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow);
   return [0, 1, 2, 3, 4, 5, 6].map((i) => ecShift(monday, i));
 }
+/* the band walks the SAME bands as the nudge, at the same speeds and in the same category hues (23 Sep) */
 function ecBandState(it, nowSec) {
-  if (it.ts > nowSec) return "up";
-  if (it.actual == null && nowSec - it.ts < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S)) return "now";
+  const dt = it.ts - nowSec;
+  if (dt >= EC_NUDGE_SOON_S) return "up";
+  if (dt >= EC_NUDGE_NEAR_S) return "soon";
+  if (dt > 0) return "near";
+  if (it.actual == null && -dt < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S)) return "due";
   return "past";
 }
 function ecBandItems(nowSec) {
@@ -9684,7 +9873,7 @@ function ecBandItemHTML(it, st, todayISO) {
     ? '<span class="ecb-res ' + (s ? s.cls : "") + '"><b>' + esc(ecNum(it.actual)) + "</b>" +
       (it.estimate != null ? " vs " + esc(ecNum(it.estimate))
         : it.previous != null ? " vs prior " + esc(ecNum(it.previous)) : "") + "</span>"
-    : st === "now" ? '<span class="ecb-res">now</span>' : "";
+    : st === "due" ? '<span class="ecb-res">now</span>' : "";
   return '<span class="sc-tape__item ecb-it is-' + st + (it.impact === "High" ? " is-high" : "") +
     '" data-act="mngoto" data-day="' + esc(it.day) + '" title="' + esc(ecNudgeTitle(it)) + '">' +
     /* the calendar's own category hue, except OTHER's near-black, which would read as a dead pixel on a tape */
@@ -9719,7 +9908,7 @@ function renderEconBand(nowSec) {
   slot.innerHTML = html;
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = slot.querySelector(".sc-tape__track");
-  if (track) tapeSpeed(track, slot.querySelector(".ecb-it.is-now, .ecb-it.is-up"));   // the band opens on today, not on Monday
+  if (track) tapeSpeed(track, slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));   // the band opens on today, not on Monday
 }
 /* ONE READ for both surfaces: the band's week and the nudge's seven days, US only, through the room's own window read
    (same select, same keyset paging, same normalisation). ~250 rows = one page. */
@@ -9729,9 +9918,16 @@ function ecTapeWindow(nowSec) {
            to: Math.floor(Math.max(ecAnchor(week[6]) + 1.5 * 86400, nowSec + (EC_TAPE_DAYS + 1) * 86400)) };
 }
 function ecTapeDueMs(nowSec) {
-  for (const it of ecTapeItems(MACRO_NEXT))
-    if (it.expects && it.actual == null && it.ts <= nowSec && nowSec - it.ts < EC_NUDGE_WAIT_S) return EC_TAPE_FAST_MS;
-  return EC_TAPE_TTL_MS;
+  let ms = EC_TAPE_TTL_MS;
+  for (const it of ecTapeItems(MACRO_NEXT)) {
+    if (it.actual != null) continue;
+    const dt = it.ts - nowSec;
+    /* THE WATCHER: from one minute before to fifteen after, ask once a minute. It stops the moment the number is
+       stored (it.actual stops being null) or fifteen minutes pass, whichever comes first. */
+    if (EC_WATCH_ON && dt <= EC_WATCH_LEAD_S && -dt < EC_WATCH_TAIL_S) return EC_WATCH_MS;
+    if (it.expects && dt <= 0 && -dt < EC_NUDGE_WAIT_S) ms = Math.min(ms, EC_TAPE_FAST_MS);
+  }
+  return ms;
 }
 function ecTapeStale(nowMs) {
   return !MACRO_NEXT || nowMs - MACRO_NEXT_AT >= ecTapeDueMs(Math.floor(nowMs / 1000));
@@ -13401,7 +13597,12 @@ document.addEventListener("click", (e) => {
       ecLoadWindow();
       break;
     }
+    case "mnclear":                            // the ✕ on a landed number: clear it, leave the rest alone
+      ECON_TAPE_CLEARED[a.dataset.k] = 1; ecTapePaint(); break;
+    case "mnhist": ecHistShow(a); break;       // the number itself: two years of this print
+    case "mnhistx": ecHistClose(); break;
     case "mngoto": {                           // the nudge or the ECON band → open that day in ECONOMIC
+      ecHistClose();
       S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US";
       S.econCat = "ALL"; S.econOpen = {};
       /* ECON TAPE 22 Sep — the band rides under the ECONOMIC room too, and go() does not remount a room already
