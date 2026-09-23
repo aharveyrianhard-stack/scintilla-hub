@@ -2,19 +2,770 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SCINTILLA · ALLOCATION</title>
-<style>body{background:#0a0a0f;color:#8a8aa0;font-family:ui-monospace,Menlo,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>
+<meta name="robots" content="noindex">
+<style>
+/* ALLOCATION — the desk writes its own conclusion from live numbers.
+   Monochrome by instruction: no white, no near-white, no colour coding.
+   Direction is carried by the sign and by brightness, never by hue. */
+:root{
+  --bg:#0A0A0F; --panel:#0D0D14; --panel2:#101018; --sunk:#08080C;
+  --line:#1A1A2A; --line2:#252538;
+  --ink:#C6C8DE; --ink2:#9A9AB6; --dim:#868AAA; --mute:#4A4A62; --faint:#2E2E42;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font-family:var(--sans);font-size:17px;line-height:1.55;-webkit-text-size-adjust:100%}
+a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px 90px}
+
+/* ---- top bar ---- */
+.top{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+     padding:18px 0 14px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--mono);font-size:11px;letter-spacing:.20em;color:var(--dim)}
+.brand b{color:var(--ink);font-weight:600}
+.top .back{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--mute);border:0}
+.top .stamp{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.06em}
+
+/* ---- view switch ---- */
+.views{display:flex;border:1px solid var(--line);margin:18px 0 0}
+.views button{flex:1;padding:11px 6px;background:none;border:0;border-right:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--mute);cursor:pointer}
+.views button:last-child{border-right:0}
+.views button.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink2)}
+
+/* ---- the conclusion ---- */
+.said{padding:30px 0 6px}
+.said h1{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--dim);
+  margin:0 0 16px;font-weight:400}
+.headline{font-size:26px;line-height:1.5;color:var(--ink2);margin:0;max-width:44em}
+.headline b{color:var(--ink);font-weight:600}
+.headline .num{font-family:var(--mono);color:var(--ink);font-weight:600;letter-spacing:-.01em}
+.drove{margin:22px 0 0;padding:0;list-style:none;max-width:44em}
+.drove li{position:relative;padding-left:20px;margin:7px 0;color:var(--dim);font-size:16px}
+.drove li:before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1px;background:var(--mute)}
+.missing{margin-top:18px;padding:12px 14px;border:1px solid var(--line2);background:var(--sunk);
+  font-size:15px;color:var(--dim);max-width:44em}
+
+/* ---- the split ---- */
+.split{display:flex;gap:2px;margin:26px 0 4px;height:52px;border:1px solid var(--line)}
+.split div{position:relative;display:flex;align-items:center;padding:0 14px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.12em;white-space:nowrap;overflow:hidden}
+.split .inv{background:var(--ink2);color:var(--bg);font-weight:700}
+.split .cash{background:repeating-linear-gradient(135deg,var(--panel2) 0 7px,var(--sunk) 7px 14px);color:var(--dim)}
+
+/* ---- layer blocks ---- */
+.layer{margin:44px 0 0;border-top:1px solid var(--line);padding-top:26px}
+.layer > h2{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--dim);
+  margin:0 0 4px;font-weight:400}
+.layer .says{font-size:19px;color:var(--ink);margin:10px 0 18px;max-width:46em;line-height:1.5}
+.layer .says .num{font-family:var(--mono);font-weight:600}
+.because{font-size:15px;color:var(--dim);margin:0 0 20px;max-width:46em}
+
+/* ---- evidence ---- */
+.ev{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);margin:0 0 22px}
+.ev div{background:var(--panel);padding:13px 14px}
+.ev .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--mute);display:block;margin-bottom:6px}
+.ev .v{font-family:var(--mono);font-size:21px;color:var(--ink)}
+.ev .s{font-size:13px;color:var(--dim);display:block;margin-top:3px}
+
+/* ---- tables ---- */
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--mute);text-align:right;
+   font-weight:400;padding:0 10px 8px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--ink2);text-align:right;
+   font-family:var(--mono);font-size:14px}
+td:first-child{font-family:var(--sans);font-size:15px}
+tr.pick td{color:var(--ink)}
+tr.out td{color:var(--mute)}
+td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
+.bar{display:inline-block;height:9px;background:var(--ink2);vertical-align:middle;min-width:1px}
+.bar.neg{background:var(--mute)}
+/* behind/ahead of the market is drawn against a zero line: ahead grows right,
+   behind grows left, so weakness never reads as a long confident bar */
+.axis{display:inline-block;position:relative;width:88px;height:10px;vertical-align:middle;margin-left:6px}
+.axis:before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--faint)}
+.axis i{position:absolute;top:1px;height:8px;background:var(--ink2)}
+.axis i.neg{background:var(--mute)}
+.ph{display:none}
+.agerow{font-family:var(--mono);font-size:11.5px;color:var(--dim);letter-spacing:.04em}
+.stale{color:var(--ink2);border-bottom:1px dotted var(--mute)}
+
+/* ---- toggles ---- */
+.knobs{margin:6px 0 0;border:1px solid var(--line);background:var(--panel)}
+.knobs > .kh{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--mute);
+  padding:11px 14px;border-bottom:1px solid var(--line)}
+.knob{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.knob:last-child{border-bottom:0}
+.knob .lab{flex:1 1 260px;min-width:0}
+.knob .lab b{display:block;color:var(--ink2);font-weight:500;font-size:15px}
+.knob .lab span{font-size:13px;color:var(--dim)}
+.knob .ctl{display:flex;align-items:center;gap:8px}
+.knob input[type=range]{width:170px;accent-color:#9A9AB6;background:transparent}
+.knob .val{font-family:var(--mono);font-size:14px;color:var(--ink);min-width:62px;text-align:right}
+.opt{display:flex;border:1px solid var(--line2)}
+.opt button{background:none;border:0;border-right:1px solid var(--line2);color:var(--mute);
+  font-family:var(--mono);font-size:11px;letter-spacing:.10em;padding:7px 11px;cursor:pointer}
+.opt button:last-child{border-right:0}
+.opt button.on{background:var(--line2);color:var(--ink)}
+.reset{margin:16px 0 0;font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--mute);
+  background:none;border:1px solid var(--line);padding:9px 14px;cursor:pointer}
+
+/* ---- report view ---- */
+#report{display:none}
+#report.on{display:block}
+#desk.off{display:none}
+.rep{max-width:40em;font-size:18px;line-height:1.72;color:var(--ink2)}
+.rep h2{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--dim);
+  font-weight:400;margin:40px 0 12px}
+.rep p{margin:0 0 16px}
+.rep b{color:var(--ink);font-weight:600}
+.rep .num{font-family:var(--mono);color:var(--ink);font-weight:600}
+.rep .aside{border-left:1px solid var(--line2);padding-left:16px;color:var(--dim);font-size:16px}
+
+/* ---- sources ---- */
+.sources{margin:52px 0 0;border-top:1px solid var(--line);padding-top:22px;
+  font-family:var(--mono);font-size:12.5px;color:var(--dim);line-height:1.95}
+.sources b{color:var(--dim);font-weight:400}
+.boot{padding:70px 0;font-family:var(--mono);font-size:13px;color:var(--mute);letter-spacing:.1em}
+
+@media(max-width:760px){
+  body{font-size:16px}
+  .wrap{padding:0 15px 70px}
+  .headline{font-size:21px}
+  .layer .says{font-size:17px}
+  .rep{font-size:17px}
+  .ev{grid-template-columns:repeat(2,1fr)}
+  .ev .v{font-size:18px}
+  .knob .ctl{width:100%;justify-content:space-between}
+  .knob input[type=range]{width:100%;flex:1}
+  table{font-size:14px}
+  td,th{padding-left:5px;padding-right:5px}
+  td{font-size:13px}
+  .split{height:46px}
+  .split div{padding:0 9px;font-size:11px}
+  /* the phone drops the two columns it can fold into the name cell, so nothing
+     runs off the right edge: the sector and the row's age move under the ticker */
+  .ph{display:inline}
+  #l3tab th:nth-child(2), #l3tab td:nth-child(2),
+  #l3tab th:nth-child(8), #l3tab td:nth-child(8),
+  #l2tab th:nth-child(2), #l2tab td:nth-child(2),
+  #l2tab th:nth-child(5), #l2tab td:nth-child(5){ display:none }
+  .axis{width:40px;margin-left:4px}
+}
+</style>
 </head>
 <body>
-<div id="boot">loading allocation module…</div>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand"><b>SCINTILLA</b> · ALLOCATION</div>
+    <a class="back" href="/">← HUB</a>
+    <div class="stamp" id="stamp">reading the market…</div>
+  </div>
+
+  <div class="views">
+    <button id="vDesk" class="on">THE DESK · TOGGLES</button>
+    <button id="vRep">READ IT TOP TO BOTTOM</button>
+  </div>
+
+  <div id="boot" class="boot">reading the live Geiger, the sector tape and the fundamentals…</div>
+
+  <div id="desk" class="off">
+    <div class="said">
+      <h1>WHAT THIS SAYS TODAY</h1>
+      <p class="headline" id="headline"></p>
+      <ul class="drove" id="drove"></ul>
+      <div class="missing" id="missing" style="display:none"></div>
+      <div class="split" id="split"></div>
+    </div>
+
+    <div class="layer" id="L1">
+      <h2>LAYER ONE — HOW MUCH TO OWN</h2>
+      <p class="says" id="l1says"></p>
+      <p class="because" id="l1because"></p>
+      <div class="ev" id="l1ev"></div>
+      <div class="knobs" id="k1"><div class="kh">YOUR ASSUMPTIONS — CHANGE ONE AND THE SENTENCE ABOVE CHANGES</div></div>
+    </div>
+
+    <div class="layer" id="L2">
+      <h2>LAYER TWO — WHICH SECTORS CARRY IT</h2>
+      <p class="says" id="l2says"></p>
+      <p class="because" id="l2because"></p>
+      <div id="l2tab"></div>
+      <div class="knobs" id="k2"><div class="kh">YOUR ASSUMPTIONS</div></div>
+    </div>
+
+    <div class="layer" id="L3">
+      <h2>LAYER THREE — WHICH NAMES INSIDE THEM</h2>
+      <p class="says" id="l3says"></p>
+      <p class="because" id="l3because"></p>
+      <div id="l3tab"></div>
+      <div class="knobs" id="k3"><div class="kh">YOUR ASSUMPTIONS</div></div>
+      <button class="reset" id="reset">PUT EVERY ASSUMPTION BACK TO ITS BASELINE</button>
+    </div>
+
+    <div class="sources" id="sources"></div>
+  </div>
+
+  <div id="report"><div class="rep" id="repbody"></div><div class="sources" id="sources2"></div></div>
+
+</div>
 <script>
-// scintillahub.ai/allocation — standalone route, NOT part of the hub app.
-// Pulls the live module from the allocation project so this file never needs updating.
-fetch('https://allocation.scintillahub.ai/', {cache:'no-store'})
-  .then(r => { if (!r.ok) throw new Error('module fetch ' + r.status); return r.text(); })
-  .then(html => { document.open(); document.write(html); document.close(); })
-  .catch(e => { document.getElementById('boot').textContent = 'module unavailable: ' + e.message; });
+/* =============================================================================
+   ALLOCATION — every number on this page is computed here, on load, from:
+     · the live Geiger            (chart API /geiger)
+     · the sector tape            (chart API /candles, the eleven sector funds vs SPY)
+     · fundamentals and sectors   (scintilla-live, read-only)
+   Nothing is typed in. Nothing is frozen. The toggles below are the judgement
+   calls the method needs; each one has a baseline and each one moves the words
+   at the top of the page.
+   ========================================================================== */
+const API = "https://scintilla-massive-chart-api.fly.dev";
+const SB  = "https://wadinxqplrggagkvrdag.supabase.co";
+
+/* The read key is NOT copied into this file. It is taken from the page that
+   already publishes it on this same domain; if that ever fails, the fundamentals
+   layer says so in words instead of guessing. */
+let KEY = null;
+async function readKey() {
+  if (window.SC_ANON_KEY) return (KEY = window.SC_ANON_KEY);
+  try {
+    const t = await (await fetch("/pip.html", { cache: "no-store" })).text();
+    const m = t.match(/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_.\-]+/);
+    return (KEY = m ? m[0] : null);
+  } catch (_) { return (KEY = null); }
+}
+async function pg(path) {
+  if (!KEY) throw new Error("no read key");
+  const r = await fetch(SB + "/rest/v1/" + path, { headers: { apikey: KEY, Authorization: "Bearer " + KEY } });
+  if (!r.ok) throw new Error(path.split("?")[0] + " → " + r.status);
+  return r.json();
+}
+const api = async (p) => {
+  const r = await fetch(API + p, { cache: "no-store" });
+  if (!r.ok) throw new Error(p.split("?")[0] + " → " + r.status);
+  return r.json();
+};
+
+const SECTOR_FUND = { "Technology":"XLK", "Healthcare":"XLV", "Financial Services":"XLF",
+  "Consumer Cyclical":"XLY", "Consumer Defensive":"XLP", "Energy":"XLE", "Industrials":"XLI",
+  "Basic Materials":"XLB", "Utilities":"XLU", "Real Estate":"XLRE", "Communication Services":"XLC" };
+const PLAIN = { "Financial Services":"Financials", "Consumer Cyclical":"Consumer cyclicals",
+  "Consumer Defensive":"Consumer staples", "Basic Materials":"Materials",
+  "Communication Services":"Communications", "Real Estate":"Real estate" };
+const plain = (s) => PLAIN[s] || s;
+
+/* ---- the assumptions, with their baselines --------------------------------- */
+const BASE = { measure:"heat", neutral:50, speed:1, cashFloor:10,
+               lookback:60, mix:50, nSectors:4, maxSector:35,
+               perSector:3, maxDebt:2.0, valuation:true, within:"equal", staleDays:45 };
+const T = Object.assign({}, BASE);
+
+const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, missing:[] };
+
+/* ---- small helpers --------------------------------------------------------- */
+const mean = (a) => a.reduce((s,x)=>s+x,0)/(a.length||1);
+const med  = (a) => { const b=[...a].sort((x,y)=>x-y); const n=b.length; return !n?null:(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2); };
+const clamp= (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+const pct  = (v,d) => (v==null||!isFinite(v)) ? "—" : v.toFixed(d==null?0:d) + "%";
+const sg   = (v,d) => (v==null||!isFinite(v)) ? "—" : (v>0?"+":"") + v.toFixed(d==null?2:d);
+const num  = (s) => '<span class="num">' + s + "</span>";
+const esc  = (s) => String(s).replace(/[&<>]/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const ageDays = (ts) => ts==null ? null : Math.floor((Date.now()/1000 - Number(ts)) / 86400);
+const ageWord = (d) => d==null ? "age unknown" : d<=0 ? "today" : d===1 ? "1 day old" : d + " days old";
+function zs(vals){ const m=mean(vals); const sd=Math.sqrt(mean(vals.map(v=>(v-m)*(v-m))))||1e-9; return (v)=>(v-m)/sd; }
+const list = (a) => a.length<2 ? (a[0]||"") : a.slice(0,-1).join(", ") + " and " + a[a.length-1];
+
+/* ---- load ------------------------------------------------------------------ */
+async function load() {
+  await readKey();
+  const stamp = document.getElementById("stamp");
+
+  const gP = api("/geiger").catch((e)=>{ D.missing.push("the live Geiger ("+e.message+")"); return null; });
+  const pP = pg("company_profile?select=ticker,sector,market_cap,updated_ts&limit=2000")
+              .catch((e)=>{ D.missing.push("company sectors ("+e.message+")"); return null; });
+  const fP = pg("fundamentals?select=ticker,price,market_cap,trailing_pe,eps_ttm,revenue_ttm,updated_ts&limit=2000")
+              .catch((e)=>{ D.missing.push("trailing multiples ("+e.message+")"); return null; });
+  const rP = pg("ratios_history?period=eq.FY&fiscal_date=gte.2025-01-01&select=ticker,fiscal_date,pe,ps,pb,debt_to_equity,roe,net_margin,updated_ts&limit=2000")
+              .catch((e)=>{ D.missing.push("debt and ratio history ("+e.message+")"); return null; });
+
+  const funds = ["SPY", ...Object.values(SECTOR_FUND)];
+  const tP = Promise.all(funds.map((s) =>
+    api("/candles?symbol=" + s + "&tf=1d&limit=260")
+      .then((j) => { D.tape[s] = (j.series || []).map((b)=>({ t:b.t, c:b.c })); })
+      .catch(() => { D.tape[s] = null; })));
+
+  [D.g, D.prof, D.fund, D.ratios] = await Promise.all([gP, pP, fP, rP]);
+  await tP;
+  const dead = Object.entries(D.tape).filter(([,v])=>!v||v.length<30).map(([k])=>k);
+  if (dead.length) D.missing.push("the sector tape for " + dead.join(", "));
+
+  document.getElementById("boot").style.display = "none";
+  document.getElementById("desk").classList.remove("off");
+  const when = D.g && D.g.computed_utc ? new Date(D.g.computed_utc) : new Date();
+  stamp.textContent = "GEIGER " + when.toLocaleString("en-US",{ timeZone:"America/New_York", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })
+    + " NY · SESSION " + ((D.g && D.g.verification && D.g.verification.completed_session_et) || "—");
+  draw();
+
+  /* /quotes sheds load in market hours: asked for after first paint, never blocking,
+     and if it does not come back the page keeps the close it already printed. */
+  const picks = MODEL && MODEL.names ? MODEL.names.map((n)=>n.t) : [];
+  if (picks.length) {
+    api("/quotes?symbols=" + picks.join(",")).then((j) => {
+      const rows = j.quotes || j.symbols || j.data || [];
+      D.quotes = {};
+      (Array.isArray(rows) ? rows : Object.values(rows)).forEach((q) => {
+        const t = q.symbol || q.ticker; if (t) D.quotes[t] = q.price != null ? q.price : q.last;
+      });
+      draw();
+    }).catch(()=>{});
+  }
+}
+
+/* ---- the universe ---------------------------------------------------------- */
+function universe() {
+  if (!D.g || !D.prof) return [];
+  const prof = new Map(D.prof.map((r)=>[r.ticker, r]));
+  const fund = new Map((D.fund||[]).map((r)=>[r.ticker, r]));
+  const rat  = new Map();
+  (D.ratios||[]).forEach((r)=>{ const p=rat.get(r.ticker); if(!p || String(r.fiscal_date)>String(p.fiscal_date)) rat.set(r.ticker,r); });
+  const out = [];
+  for (const [t, g] of Object.entries(D.g.symbols || {})) {
+    const p = prof.get(t); if (!p || !p.sector) continue;
+    if (!SECTOR_FUND[p.sector]) continue;              // crypto, macro and index rows are not equities
+    const f = fund.get(t), r = rat.get(t);
+    out.push({ t, sector:p.sector, mcap:p.market_cap, g:g.composite, trend:g.trend, mom:g.momentum,
+      pe: (f && f.trailing_pe>0 ? f.trailing_pe : (r && r.pe>0 ? r.pe : null)),
+      peFrom: (f && f.trailing_pe>0 ? "trailing" : (r && r.pe>0 ? "last full year" : null)),
+      de: r && r.debt_to_equity!=null ? r.debt_to_equity : null,
+      roe: r && r.roe!=null ? r.roe : null,
+      price: f ? f.price : null,
+      fAge: f ? ageDays(f.updated_ts) : null,
+      rAge: r ? ageDays(r.updated_ts) : null,
+      rDate: r ? r.fiscal_date : null });
+  }
+  return out;
+}
+
+/* ---- the model ------------------------------------------------------------- */
+let MODEL = null;
+function compute() {
+  const eq = universe();
+  const m = { eq, ok: eq.length > 0, notes: [], missing: [...D.missing] };
+  if (!m.ok) return m;
+
+  /* LAYER 1 — how much to own */
+  m.heat    = mean(eq.map((x)=>x.g));
+  m.breadth = eq.filter((x)=>x.g>0).length / eq.length;
+  m.rising  = eq.filter((x)=>x.g>0).length;
+  m.reading = T.measure === "heat" ? m.heat : (m.breadth - 0.5) * 2;
+  m.investedRaw = T.neutral + T.speed * m.reading * 50;
+  m.invested = clamp(m.investedRaw, 0, 100 - T.cashFloor);
+  m.capped   = m.investedRaw > 100 - T.cashFloor;
+  m.cash     = 100 - m.invested;
+
+  /* LAYER 2 — which sectors */
+  const bySec = {};
+  eq.forEach((x)=>{ (bySec[x.sector] = bySec[x.sector] || []).push(x); });
+  const relOf = (sym) => {
+    const s = D.tape[sym], spy = D.tape.SPY;
+    if (!s || !spy || s.length <= T.lookback || spy.length <= T.lookback) return null;
+    const r = (a) => a[a.length-1].c / a[a.length-1-T.lookback].c - 1;
+    return (r(s) - r(spy)) * 100;
+  };
+  let secs = Object.entries(bySec).filter(([,v])=>v.length>=3).map(([name, v]) => ({
+    name, n: v.length, heat: mean(v.map((x)=>x.g)), rel: relOf(SECTOR_FUND[name]), fund: SECTOR_FUND[name] }));
+  const withRel = secs.filter((s)=>s.rel!=null);
+  const zRel  = withRel.length ? zs(withRel.map((s)=>s.rel)) : null;
+  const zHeat = zs(secs.map((s)=>s.heat));
+  const mix = T.mix / 100;
+  secs.forEach((s) => {
+    const rz = (zRel && s.rel!=null) ? zRel(s.rel) : null;
+    s.score = rz==null ? zHeat(s.heat) : mix*rz + (1-mix)*zHeat(s.heat);
+    s.relZ = rz; s.heatZ = zHeat(s.heat);
+  });
+  secs.sort((a,b)=>b.score-a.score);
+  m.sectorsAll = secs;
+  let chosen = secs.filter((s)=>s.score>0).slice(0, T.nSectors);
+  if (!chosen.length) { chosen = secs.slice(0,1); m.notes.push("nothing is leading: the single least-weak sector carries it"); }
+  m.thin = chosen.length < T.nSectors;
+  /* Share the money out in proportion to strength, respect the single-sector cap,
+     then re-spread whatever the cap pushed off. A sector that ends up under 4% is
+     not a position, it is a rounding artefact: drop it and let the rest re-share. */
+  const spread = (list) => {
+    let w = list.map((s)=>Math.max(s.score, 0.01));
+    const tot = w.reduce((x,y)=>x+y,0) || 1;
+    w = w.map((x)=>x/tot*100);
+    for (let pass=0; pass<12; pass++) {
+      const over = w.map((x,i)=>x > T.maxSector ? i : -1).filter((i)=>i>=0);
+      if (!over.length) break;
+      let spill = 0;
+      over.forEach((i)=>{ spill += w[i]-T.maxSector; w[i]=T.maxSector; });
+      const under = w.map((x,i)=>x < T.maxSector ? i : -1).filter((i)=>i>=0);
+      if (!under.length) break;
+      const base = under.reduce((x,i)=>x+w[i],0) || 1;
+      under.forEach((i)=>{ w[i] += spill * (w[i]/base); });
+    }
+    return w;
+  };
+  let w = spread(chosen);
+  const keepBig = chosen.filter((s,i)=>w[i] >= 4);
+  if (keepBig.length && keepBig.length < chosen.length) {
+    m.tiny = chosen.length - keepBig.length;
+    chosen = keepBig;
+    w = spread(chosen);
+  }
+  chosen.forEach((s,i)=>{ s.w = w[i]; });
+  m.sectors = chosen;
+
+  /* LAYER 3 — which names */
+  const names = [];
+  chosen.forEach((s) => {
+    const pool = bySec[s.name];
+    const peMed = med(pool.map((x)=>x.pe).filter((p)=>p>0));
+    const gMed  = med(pool.map((x)=>x.g));
+    const ranked = pool.map((x) => {
+      const gEdge = x.g - gMed;
+      let vEdge = 0, vWhy = null;
+      if (T.valuation && x.pe>0 && peMed>0) { vEdge = clamp((peMed - x.pe)/peMed, -1, 1); vWhy = x.pe; }
+      const heavy = T.maxDebt>0 && x.de!=null && x.de > T.maxDebt;
+      return Object.assign({}, x, { gEdge, vEdge, heavy, peMed, gMed, score: gEdge + 0.5*vEdge });
+    }).sort((a,b)=>b.score-a.score);
+    s.peMed = peMed; s.gMed = gMed;
+    const keep = ranked.filter((x)=>!x.heavy).slice(0, T.perSector);
+    s.dropped = ranked.filter((x)=>x.heavy).length;
+    s.ranked = ranked;
+    let inner;
+    if (T.within === "equal") inner = keep.map(()=>1/keep.length);
+    else { const lo = Math.min(...keep.map((x)=>x.g)) - 0.05; const raw = keep.map((x)=>x.g-lo);
+           const tt = raw.reduce((a,b)=>a+b,0)||1; inner = raw.map((x)=>x/tt); }
+    keep.forEach((x,i)=>{ names.push(Object.assign({}, x, { sector:s.name, inner:inner[i]*100,
+      w: m.invested/100 * s.w/100 * inner[i] * 100 })); });
+  });
+  m.names = names;
+
+  /* freshness — nothing frozen may feed a conclusion */
+  const fAges = eq.map((x)=>x.fAge).filter((a)=>a!=null);
+  const rAges = eq.map((x)=>x.rAge).filter((a)=>a!=null);
+  m.fAge = fAges.length ? med(fAges) : null;
+  m.rAge = rAges.length ? med(rAges) : null;
+  m.fStale = m.fAge!=null && m.fAge > T.staleDays;
+  m.rStale = m.rAge!=null && m.rAge > T.staleDays;
+  m.covPe = eq.filter((x)=>x.pe>0).length;
+  m.covDe = eq.filter((x)=>x.de!=null).length;
+  if (m.fStale) m.missing.push("trailing multiples (" + ageWord(m.fAge) + ", past the " + T.staleDays + "-day line)");
+  if (m.rStale) m.missing.push("debt levels (" + ageWord(m.rAge) + ", past the " + T.staleDays + "-day line)");
+  return m;
+}
+
+/* ---- the page writes its own conclusion ------------------------------------ */
+/* Why these sectors, in the words the numbers actually support: a sector can be
+   picked for being ahead of the market, for the strength of its own names, or for
+   both, and the mix toggle decides how much each one counted. Never claim the
+   whole list is "leading the market" when part of it is not. */
+function whyThese(m) {
+  const ahead = m.sectors.filter((s)=>s.rel!=null && s.rel>0).length;
+  const rated = m.sectors.filter((s)=>s.rel!=null).length;
+  const days  = num(T.lookback) + " days";
+  if (T.mix === 0 || !rated) return "chosen on the strength of their own names alone";
+  if (T.mix === 100) return ahead === rated
+    ? "chosen for being ahead of the market over the last " + days
+    : "chosen on the last " + days + " against the market, where " + num(ahead) + " of " + num(rated) + " are ahead of it";
+  if (ahead === rated) return "chosen for leading the market over the last " + days +
+    " and for the strength of their own names";
+  if (ahead === 0) return "chosen on the strength of their own names — not one of them is ahead of the market over the last " + days;
+  return "chosen on both counts: " + num(ahead) + " of " + num(rated) +
+    " are ahead of the market over the last " + days + ", and their own names carry the rest";
+}
+function headlineHTML(m) {
+  const top = m.sectors.map((s)=>"<b>"+esc(plain(s.name))+"</b> "+num(pct(s.w)));
+  const big = [...m.names].sort((a,b)=>b.w-a.w).slice(0,4).map((n)=>"<b>"+esc(n.t)+"</b>");
+  const read = T.measure==="heat"
+    ? "The market's own reading is " + num(sg(m.heat)) + " on a scale that runs from −1 to +1"
+    : "Of the " + num(m.eq.length) + " names the Geiger covers, " + num(pct(m.breadth*100)) + " are rising";
+  return "Own " + num(pct(m.invested)) + " and keep " + num(pct(m.cash)) + " in cash. " +
+    read + ", and that is what sets the size" + (m.capped ? ", held back by the cash floor you set" : "") + ". " +
+    "The weight goes to " + list(top) + " — " + whyThese(m) + ". Inside them the money sits in " + list(big) +
+    (m.names.length>4 ? ", with " + num(m.names.length-4) + " more behind them" : "") + ".";
+}
+function droveHTML(m) {
+  const out = [];
+  out.push(num(m.rising) + " of " + num(m.eq.length) + " names are rising and the average reading is " +
+    num(sg(m.heat)) + "; your baseline puts a flat market at " + num(pct(T.neutral)) + " invested.");
+  const s0 = m.sectors[0];
+  if (s0) out.push("<b>" + esc(plain(s0.name)) + "</b> is " + (s0.rel==null ? "carrying its own names at " + num(sg(s0.heat))
+    : (s0.rel>=0 ? "beating" : "behind") + " the market by " + num(sg(s0.rel,1)+"%") + " over " + num(T.lookback) +
+      " days with its own names at " + num(sg(s0.heat))) + " — the strongest pair on the board.");
+  const n0 = [...m.names].sort((a,b)=>b.w-a.w)[0];
+  if (n0) out.push("<b>" + esc(n0.t) + "</b> takes the largest single position at " + num(pct(n0.w,1)) +
+    ": it reads " + num(sg(n0.gEdge)) + " against the middle of its sector" +
+    (n0.pe>0 && n0.peMed>0 ? " and trades at " + num(n0.pe.toFixed(0)+"×") + " earnings against a sector middle of " + num(n0.peMed.toFixed(0)+"×") : "") + ".");
+  const dropped = m.sectors.reduce((a,s)=>a+(s.dropped||0),0);
+  if (dropped) out.push(num(dropped) + " name" + (dropped>1?"s were":" was") + " set aside for carrying more than " +
+    num(T.maxDebt.toFixed(1)+"×") + " debt to equity.");
+  return out.map((x)=>"<li>"+x+"</li>").join("");
+}
+function bar(v, max, w) { const px = Math.max(1, Math.round(Math.abs(v)/(max||1)*(w||90)));
+  return '<span class="bar'+(v<0?" neg":"")+'" style="width:'+px+'px"></span>'; }
+function relBar(v, max) {
+  if (v == null) return "";
+  const w = Math.max(1.5, Math.abs(v)/(max||1)*50);
+  return '<span class="axis"><i class="'+(v<0?"neg":"")+'" style="'+(v<0?"right:50%":"left:50%")+';width:'+w+'%"></i></span>';
+}
+
+function drawDesk(m) {
+  document.getElementById("headline").innerHTML = headlineHTML(m);
+  document.getElementById("drove").innerHTML = droveHTML(m);
+  const miss = document.getElementById("missing");
+  if (m.missing.length) { miss.style.display=""; miss.innerHTML = "This conclusion did <b>not</b> use " +
+    list(m.missing.map(esc)) + ". Everything above was worked out without " +
+    (m.missing.length>1?"them":"it") + "."; } else { miss.style.display="none"; }
+
+  document.getElementById("split").innerHTML =
+    '<div class="inv" style="flex:'+m.invested+'">INVESTED '+pct(m.invested)+'</div>' +
+    '<div class="cash" style="flex:'+m.cash+'">CASH '+pct(m.cash)+'</div>';
+
+  /* layer 1 */
+  document.getElementById("l1says").innerHTML = "Be " + num(pct(m.invested)) + " invested." +
+    (m.capped ? " The reading asks for " + num(pct(clamp(m.investedRaw,0,100))) + ", and your cash floor holds it here." : "");
+  document.getElementById("l1because").innerHTML = "The Geiger scores every name from −1 to +1 over eight timeframes. " +
+    (T.measure==="heat" ? "Averaged across " + m.eq.length + " names that is " + sg(m.heat) + "."
+                        : "Counting only whether a name is rising, " + pct(m.breadth*100) + " of " + m.eq.length + " are.") +
+    " A flat market sits at your baseline of " + pct(T.neutral) + " invested, and the reading moves it from there.";
+  document.getElementById("l1ev").innerHTML =
+    tile("MARKET READING", sg(m.reading), (T.measure==="heat"?"average of "+m.eq.length+" names":"share rising, centred")) +
+    tile("RISING", m.rising + " / " + m.eq.length, pct(m.breadth*100) + " of the board") +
+    tile("STRONGEST NAME", strongest(m).t, sg(strongest(m).g)) +
+    tile("WEAKEST NAME", weakest(m).t, sg(weakest(m).g)) +
+    tile("THE ANSWER", pct(m.invested), pct(m.cash) + " held in cash");
+
+  /* layer 2 */
+  document.getElementById("l2says").innerHTML = m.sectors.map((s)=>
+    "<b>"+esc(plain(s.name))+"</b> "+num(pct(s.w))).join(" · ") +
+    (m.thin ? " — fewer than the " + T.nSectors + " you asked for, because only these are leading." : "") +
+    (m.tiny ? " " + m.tiny + " more came out too small to be a position, so their share went to these." : "");
+  document.getElementById("l2because").innerHTML = "Two readings decide this: how the sector fund has done against SPY over " +
+    T.lookback + " days, and what the Geiger says about the sector's own names. Your mix is " + T.mix +
+    "% the tape and " + (100-T.mix) + "% the names. The sectors that come out positive share the money in proportion to their strength, " +
+    "with no sector allowed more than " + pct(T.maxSector) + ".";
+  const maxRel = Math.max(...m.sectorsAll.map((s)=>Math.abs(s.rel||0)), 1);
+  document.getElementById("l2tab").innerHTML = "<table><thead><tr>" +
+    "<th>SECTOR</th><th>NAMES</th><th>VS MARKET " + T.lookback + "D</th><th>ITS OWN NAMES</th><th>STANDING</th><th>WEIGHT</th>" +
+    "</tr></thead><tbody>" + m.sectorsAll.map((s) => {
+      const on = m.sectors.includes(s);
+      return '<tr class="'+(on?"pick":"out")+'"><td>'+esc(plain(s.name))+(on?"":"")+"</td><td>"+s.n+"</td>" +
+        "<td>"+(s.rel==null?"—":sg(s.rel,1)+"%")+relBar(s.rel,maxRel)+"</td>" +
+        "<td>"+sg(s.heat)+"</td><td>"+sg(s.score,2)+"</td>" +
+        "<td>"+(on?pct(s.w):"—")+"</td></tr>"; }).join("") + "</tbody></table>";
+
+  /* layer 3 */
+  const sorted = [...m.names].sort((a,b)=>b.w-a.w);
+  document.getElementById("l3says").innerHTML = sorted.slice(0,3).map((n)=>"<b>"+esc(n.t)+"</b> "+num(pct(n.w,1))).join(" · ") +
+    " — " + num(m.names.length) + " names in all, " + num(pct(m.invested)) + " of the portfolio between them.";
+  document.getElementById("l3because").innerHTML = "Inside each sector a name is judged on three things: its Geiger against the middle of its own sector, " +
+    (T.valuation ? "whether it is cheaper than the sector's middle multiple, " : "(the valuation test is switched off, ) ") +
+    "and how much debt it carries. " + (T.maxDebt>0 ? "Anything above " + T.maxDebt.toFixed(1) + "× debt to equity is set aside. " : "The debt limit is off. ") +
+    "The " + T.perSector + " best in each sector are held " + (T.within==="equal" ? "in equal size." : "with more in the stronger ones.");
+  document.getElementById("l3tab").innerHTML = "<table><thead><tr>" +
+    "<th>NAME</th><th>SECTOR</th><th>READING</th><th>VS SECTOR</th><th>EARNINGS</th><th>DEBT</th><th>WEIGHT</th><th>AS OF</th>" +
+    "</tr></thead><tbody>" + sorted.map((n) => {
+      const price = (D.quotes && D.quotes[n.t]!=null) ? D.quotes[n.t] : n.price;
+      const live  = D.quotes && D.quotes[n.t]!=null;
+      return '<tr class="pick"><td>'+esc(n.t)+'<span class="why">'+
+          (price!=null ? "$"+Number(price).toFixed(2)+(live?" live":" · close") : "") +
+          '<span class="ph"> · ' + esc(plain(n.sector)) + (n.fAge==null?"":" · " + ageWord(n.fAge)) + "</span></span></td>" +
+        "<td>"+esc(plain(n.sector))+"</td><td>"+sg(n.g)+"</td><td>"+sg(n.gEdge)+"</td>" +
+        "<td>"+(n.pe>0?n.pe.toFixed(1)+"×":"—")+(n.peMed>0&&n.pe>0?'<span class="why">sector '+n.peMed.toFixed(0)+"×</span>":"")+"</td>" +
+        "<td>"+(n.de==null?"—":n.de.toFixed(2)+"×")+"</td><td>"+pct(n.w,1)+"</td>" +
+        '<td class="agerow">'+(n.fAge==null?"—":ageWord(n.fAge))+"</td></tr>"; }).join("") + "</tbody></table>" +
+    '<div class="agerow" style="padding:10px 2px">Every multiple above carries the age of the row it came from. ' +
+      'Median age: trailing multiples ' + ageWord(m.fAge) + ', debt ' + ageWord(m.rAge) +
+      (m.fStale||m.rStale ? ' — <span class="stale">past your ' + T.staleDays + '-day line, so the layer is marked stale and named at the top of the page</span>' : ' — inside your ' + T.staleDays + '-day line') + '.</div>';
+
+  document.getElementById("sources").innerHTML = sourcesHTML(m);
+}
+const strongest = (m) => m.eq.reduce((a,b)=>b.g>a.g?b:a);
+const weakest   = (m) => m.eq.reduce((a,b)=>b.g<a.g?b:a);
+function tile(k,v,s){ return "<div><span class='k'>"+k+"</span><span class='v'>"+esc(v)+"</span><span class='s'>"+esc(s)+"</span></div>"; }
+
+function sourcesHTML(m) {
+  const g = D.g||{}; const v = g.verification||{};
+  return "<b>WHERE EVERY NUMBER CAME FROM</b><br>" +
+    "Geiger · chart API /geiger · " + m.eq.length + " names of " + (g.returned||"—") + " returned · computed " +
+      (g.computed_utc ? new Date(g.computed_utc).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) + " NY" : "—") +
+      " · session " + (v.completed_session_et||"—") + " · " + (v.label||"—") + "<br>" +
+    "Sector tape · chart API /candles tf=1d · SPY and the eleven sector funds · " +
+      (D.tape.SPY ? D.tape.SPY.length + " daily bars each, newest " + new Date(D.tape.SPY[D.tape.SPY.length-1].t).toISOString().slice(0,10) : "unavailable") + "<br>" +
+    "Sectors and size · scintilla-live company_profile · " + (D.prof? D.prof.length:0) + " rows<br>" +
+    "Trailing multiples · scintilla-live fundamentals · " + (D.fund? D.fund.length:0) + " rows · median " + ageWord(m.fAge) + " · " + m.covPe + " names priced<br>" +
+    "Debt and ratios · scintilla-live ratios_history, last full year · " + (D.ratios? D.ratios.length:0) + " rows · median " + ageWord(m.rAge) + " · " + m.covDe + " names covered<br>" +
+    "Prices · chart API /quotes, asked for after the page drew itself; if it sheds load the close above stands.<br>" +
+    "No discounted cash flow is used anywhere on this page.";
+}
+
+/* ---- read it top to bottom -------------------------------------------------- */
+function drawReport(m) {
+  const sorted = [...m.names].sort((a,b)=>b.w-a.w);
+  const s0 = m.sectors[0];
+  const P = [];
+  P.push("<h2>THE SHORT VERSION</h2><p>" + headlineHTML(m) + "</p>");
+  P.push("<h2>HOW MUCH TO OWN</h2><p>The Geiger reads every one of the " + num(m.eq.length) +
+    " names in the universe across eight timeframes and scores each from −1 to +1. Today " + num(m.rising) +
+    " of them are rising and the average is " + num(sg(m.heat)) + ". " +
+    "You have said a flat market means " + num(pct(T.neutral)) + " invested and that the reading should move that number " +
+    (T.speed===1 ? "one for one" : T.speed<1 ? "gently" : "hard") + ", never leaving less than " + num(pct(T.cashFloor)) +
+    " in cash. That gives <b>" + pct(m.invested) + " invested, " + pct(m.cash) + " in cash</b>" +
+    (m.capped ? ", which is the floor holding back a stronger reading" : "") + ".</p>");
+  P.push("<h2>WHICH SECTORS CARRY IT</h2><p>Each sector is judged twice: how its fund has done against SPY over the last " +
+    num(T.lookback) + " trading days, and what the Geiger says about the sector's own names. " +
+    (s0 ? "<b>" + esc(plain(s0.name)) + "</b> leads" + (s0.rel!=null ? " at " + num(sg(s0.rel,1)+"%") + " against the market" : "") +
+      " with its own names at " + num(sg(s0.heat)) + ". " : "") +
+    "The sectors that come out positive divide the invested money between them, none taking more than " + num(pct(T.maxSector)) + ": " +
+    m.sectors.map((s)=>"<b>"+esc(plain(s.name))+"</b> at " + num(pct(s.w))).join(", ") + ".</p>");
+  P.push("<h2>WHICH NAMES INSIDE THEM</h2><p>Within a sector the question is only whether a name is better than the sector's own middle. " +
+    "A name earns its place by reading above that middle, " + (T.valuation ? "by trading below the sector's middle multiple, " : "") +
+    "and by not carrying more debt than you allow. The result is " + num(sorted.length) + " positions: " +
+    sorted.slice(0,6).map((n)=>"<b>"+esc(n.t)+"</b> " + num(pct(n.w,1))).join(", ") +
+    (sorted.length>6 ? " and " + num(sorted.length-6) + " more below that" : "") + ".</p>");
+  const heavy = m.sectors.reduce((a,s)=>a+(s.dropped||0),0);
+  if (heavy) P.push("<p class='aside'>" + num(heavy) + " name" + (heavy>1?"s were":" was") +
+    " left out for carrying more than " + num(T.maxDebt.toFixed(1)+"×") + " debt against equity, whatever their Geiger said.</p>");
+  P.push("<h2>WHAT THIS DID NOT USE</h2><p>" + (m.missing.length
+    ? "This conclusion was reached without " + list(m.missing.map(esc)) + ". " +
+      "Nothing stale was quietly folded in: the layers that could not read a current number said so above."
+    : "Every layer read a current number. Trailing multiples are " + ageWord(m.fAge) + " and debt figures " + ageWord(m.rAge) +
+      ", both inside the " + num(T.staleDays) + "-day line you set, and the Geiger is from the session ending " +
+      esc((D.g&&D.g.verification&&D.g.verification.completed_session_et)||"—") + ".") +
+    " No discounted cash flow is used anywhere in this page.</p>");
+  P.push("<h2>THE JUDGEMENT CALLS BEHIND IT</h2><p>Every number above rests on assumptions that are yours to change, " +
+    "and they are all on the desk page as toggles: what a flat market should mean (" + num(pct(T.neutral)) + "), " +
+    "how hard the reading moves it (" + num("×"+T.speed.toFixed(1)) + "), the cash floor (" + num(pct(T.cashFloor)) + "), " +
+    "the rotation window (" + num(T.lookback + " days") + "), the balance between tape and names (" + num(T.mix + "/" + (100-T.mix)) + "), " +
+    "how many sectors carry weight (" + num(T.nSectors) + "), the cap on any one (" + num(pct(T.maxSector)) + "), " +
+    "how many names per sector (" + num(T.perSector) + "), the debt limit (" + num(T.maxDebt.toFixed(1)+"×") + ") " +
+    "and how old a fundamentals row may be before it is called stale (" + num(T.staleDays + " days") + "). " +
+    "Change any one of them and every sentence above is rewritten from the same live numbers.</p>");
+  document.getElementById("repbody").innerHTML = P.join("");
+  document.getElementById("sources2").innerHTML = sourcesHTML(m);
+}
+
+/* ---- the toggles ARE the assumptions ---------------------------------------- */
+const KNOBS = {
+  k1: [
+    { id:"measure", t:"What counts as the market's reading",
+      d:"the average score of every name, or simply how many of them are rising",
+      opt:[["heat","AVERAGE SCORE"],["breadth","HOW MANY RISING"]] },
+    { id:"neutral", t:"A flat market means this much invested",
+      d:"the anchor the reading pushes away from", min:20, max:80, step:5, unit:"%" },
+    { id:"speed", t:"How hard the reading moves that number",
+      d:"1.0 moves it one for one; lower is gentler, higher is bolder", min:0.25, max:2, step:0.25, unit:"×", dec:2 },
+    { id:"cashFloor", t:"Cash you always keep",
+      d:"the page will never invest past this, however hot the market reads", min:0, max:40, step:5, unit:"%" },
+  ],
+  k2: [
+    { id:"lookback", t:"How far back a sector has to prove itself",
+      d:"trading days of the sector fund against SPY", min:20, max:180, step:10, unit:" days" },
+    { id:"mix", t:"The tape against the names",
+      d:"100 is all sector-fund performance, 0 is all Geiger on the sector's own names", min:0, max:100, step:10, unit:"% tape" },
+    { id:"nSectors", t:"How many sectors carry weight",
+      d:"only sectors that come out positive are used, so you may get fewer", min:2, max:8, step:1, unit:"" },
+    { id:"maxSector", t:"The most any one sector may hold",
+      d:"anything over this is spread across the others", min:20, max:60, step:5, unit:"%" },
+  ],
+  k3: [
+    { id:"perSector", t:"Names held in each sector", d:"the best of the sector, by the test below", min:1, max:6, step:1, unit:"" },
+    { id:"maxDebt", t:"Most debt a name may carry", d:"debt against equity; above this it is set aside whatever its Geiger says",
+      min:0.5, max:5, step:0.5, unit:"×", dec:1 },
+    { id:"valuation", t:"Prefer names cheaper than their sector",
+      d:"compares each name's earnings multiple with the middle of its own sector",
+      opt:[[true,"ON"],[false,"OFF"]] },
+    { id:"within", t:"How the money splits inside a sector",
+      d:"equal sizes, or more in the stronger readings", opt:[["equal","EQUAL"],["tilt","TILT TO STRENGTH"]] },
+    { id:"staleDays", t:"How old a fundamentals row may be",
+      d:"past this it is called stale on the page and named at the top", min:10, max:120, step:5, unit:" days" },
+  ],
+};
+function knobHTML(k) {
+  const v = T[k.id];
+  const ctl = k.opt
+    ? '<div class="opt">' + k.opt.map(([val,lab]) =>
+        '<button data-knob="'+k.id+'" data-val="'+val+'" class="'+(String(v)===String(val)?"on":"")+'">'+lab+"</button>").join("") + "</div>"
+    : '<input type="range" data-knob="'+k.id+'" min="'+k.min+'" max="'+k.max+'" step="'+k.step+'" value="'+v+'">' +
+      '<span class="val" id="v_'+k.id+'">' + (k.dec ? Number(v).toFixed(k.dec) : v) + k.unit + "</span>";
+  return '<div class="knob"><div class="lab"><b>'+k.t+"</b><span>"+k.d+"</span></div>" +
+         '<div class="ctl">' + ctl + "</div></div>";
+}
+function buildKnobs() {
+  Object.entries(KNOBS).forEach(([box, ks]) => {
+    const host = document.getElementById(box);
+    host.innerHTML = host.firstElementChild.outerHTML + ks.map(knobHTML).join("");
+  });
+}
+function syncKnobs() {
+  Object.values(KNOBS).flat().forEach((k) => {
+    if (k.opt) {
+      document.querySelectorAll('[data-knob="'+k.id+'"][data-val]').forEach((b)=>
+        b.classList.toggle("on", String(T[k.id])===String(b.dataset.val)));
+    } else {
+      const r = document.querySelector('input[data-knob="'+k.id+'"]');
+      if (r) r.value = T[k.id];
+      const v = document.getElementById("v_"+k.id);
+      if (v) v.textContent = (k.dec ? Number(T[k.id]).toFixed(k.dec) : T[k.id]) + k.unit;
+    }
+  });
+}
+document.addEventListener("input", (e) => {
+  const id = e.target.dataset && e.target.dataset.knob;
+  if (!id || e.target.tagName !== "INPUT") return;
+  T[id] = Number(e.target.value);
+  const k = Object.values(KNOBS).flat().find((x)=>x.id===id);
+  const v = document.getElementById("v_"+id);
+  if (v) v.textContent = (k.dec ? Number(T[id]).toFixed(k.dec) : T[id]) + k.unit;
+  draw();
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-knob][data-val]");
+  if (b) {
+    const raw = b.dataset.val;
+    T[b.dataset.knob] = raw==="true" ? true : raw==="false" ? false : raw;
+    syncKnobs(); draw(); return;
+  }
+  if (e.target.id === "reset") { Object.assign(T, BASE); syncKnobs(); draw(); return; }
+  if (e.target.id === "vDesk" || e.target.id === "vRep") {
+    const rep = e.target.id === "vRep";
+    document.getElementById("vRep").classList.toggle("on", rep);
+    document.getElementById("vDesk").classList.toggle("on", !rep);
+    document.getElementById("report").classList.toggle("on", rep);
+    document.getElementById("desk").classList.toggle("off", rep);
+    window.scrollTo(0,0);
+  }
+});
+
+/* ---- draw ------------------------------------------------------------------- */
+function draw() {
+  MODEL = compute();
+  if (!MODEL.ok) {
+    document.getElementById("headline").innerHTML =
+      "This page could not read enough to say anything honest. It was missing " +
+      (MODEL.missing.length ? list(MODEL.missing.map(esc)) : "the Geiger and the company list") +
+      ". Nothing is shown rather than something invented.";
+    document.getElementById("drove").innerHTML = "";
+    return;
+  }
+  drawDesk(MODEL);
+  drawReport(MODEL);
+}
+
+buildKnobs();
+load().catch((e) => {
+  document.getElementById("boot").textContent = "could not read the live numbers: " + e.message;
+});
 </script>
 </body>
 </html>
