@@ -122,7 +122,8 @@ test('the first tick prices the visible rows and the next one covers the whole u
 test('the fear & greed computation runs once at a time, and waits for the board to be priced', () => {
   assert.match(source, /let SENTI_CALC_INFLIGHT = null;/);
   assert.match(source, /if \(SENTI_CALC_INFLIGHT\) return SENTI_CALC_INFLIGHT;/, 'callers share the run in progress');
-  assert.match(fn('fillSnFront'), /await scAfterFirstPrices\(10000\)/, 'prices first, then the gauge');
+  /* the board strip is gone (56f051d, M20); the SENTIMENT room is now the one that waits */
+  assert.match(fn('fillSentiment'), /await scAfterFirstPrices\(10000\)/, 'prices first, then the sentiment reads');
   const waiter = fn('scAfterFirstPrices');
   assert.match(waiter, /window\.SC_TICK && window\.SC_TICK\.runs > 0/, 'it waits for an ACCEPTED tick');
   assert.match(waiter, /Date\.now\(\) - t0 < cap/, 'and gives up after the cap, so a dead provider cannot hold the gauge for ever');
