@@ -62,6 +62,32 @@ update public.earnings_events e
   ) x
  where e.ticker = x.ticker and e.date = x.dup_date and e.superseded_at is null;
 
+-- ---- C. two dates still ahead, and only one of them is in Nasdaq's calendar ----------------
+-- Neither date has a result yet, so nothing has happened to prove which is right. What DOES
+-- exist is an independent source that states the date: the Nasdaq earnings calendar, whose fill
+-- stamps report_time_source = 'nasdaq-calendar' on the row it found. Where exactly one of the two
+-- carries that stamp, the other is the provider's older guess. MEASURED 2026-09-23: 13 of the 21
+-- future pairs are decided this way (NKE 01 Oct over 29 Sep, IBM 21 Oct over 28 Oct ...); the
+-- other 8 are left alone and listed below.
+update public.earnings_events e
+   set superseded_at      = now(),
+       superseded_by_date = x.kept,
+       superseded_reason  = 'date still ahead: Nasdaq''s calendar states ' || x.kept
+                            || ' for this report, and nothing has been stored against this date (M34 backfill, 2026-09-23)'
+  from (
+    select b.ticker, b.date as dup_date, a.date as kept
+      from public.earnings_events a
+      join public.earnings_events b
+        on b.ticker = a.ticker and b.date <> a.date and abs(b.date - a.date) <= 21
+     where a.superseded_at is null and b.superseded_at is null
+       and a.eps_actual is null and a.revenue_actual is null
+       and b.eps_actual is null and b.revenue_actual is null
+       and a.date > current_date and b.date > current_date
+       and a.report_time_source = 'nasdaq-calendar'
+       and (b.report_time_source is distinct from 'nasdaq-calendar')
+  ) x
+ where e.ticker = x.ticker and e.date = x.dup_date and e.superseded_at is null;
+
 -- ---- what is left for a person -------------------------------------------------------------
 -- Near-duplicate dates this backfill deliberately did NOT judge: two dates neither of which has
 -- a result (the provider is still moving a future date), and result pairs the call date cannot

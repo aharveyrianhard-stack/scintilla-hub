@@ -15082,7 +15082,10 @@ function ernItemHTML(r, todayIso, nowMs) {
   /* the estimate belongs to the last day before it lands, not to a name three weeks out */
   const est = !res && (tier === "today" || tier === "tomorrow") && num(r.eps_estimate) != null
     ? '<span class="ern-est">est ' + esc(ernNum(num(r.eps_estimate))) + "</span>" : "";
-  const mark = ernTimeJustAnnounced(r, nowMs) ? '<span class="ern-new" title="the report time for this date was stored in the last day">time announced</span>' : "";
+  /* the mark is for a report you can act on: inside the week, not a name three weeks out. Without
+     this, the night the Nasdaq fill lands the whole band wears it (measured: 20 items at once). */
+  const mark = (tier === "today" || tier === "tomorrow" || tier === "week") && ernTimeJustAnnounced(r, nowMs)
+    ? '<span class="ern-new" title="the report time for this date was stored in the last day">time announced</span>' : "";
   const late = tier === "past" ? '<span class="ern-est">no result stored yet</span>' : "";
   return '<span class="sc-tape__item ern-it is-' + st + " ern-t-" + tier + (tier === "today" ? " is-live" : "") +
     '" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +

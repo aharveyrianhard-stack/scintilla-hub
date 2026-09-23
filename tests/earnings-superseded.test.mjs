@@ -123,5 +123,9 @@ test("a report time that has just been stored is marked for a day, then goes qui
   assert.equal(band.ernTimeJustAnnounced({ ...fresh, report_time: null }, now), false, "no time, nothing to announce");
   assert.match(band.ernItemHTML(fresh, TODAY, now), /time announced/);
   assert.doesNotMatch(band.ernItemHTML(old, TODAY, now), /time announced/);
+  /* and it belongs to a report you can act on: the night the Nasdaq fill landed, 20 items three
+     weeks out would otherwise have worn it at once (measured in the browser). */
+  assert.doesNotMatch(band.ernItemHTML({ ...fresh, date: "2026-10-14" }, TODAY, now), /time announced/,
+    "a name three weeks out does not announce anything");
   assert.equal(band.ERN_NEW_MS, 24 * 3600e3);
 });
