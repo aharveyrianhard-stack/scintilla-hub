@@ -1,0 +1,232 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Hub data audit</title>
+<style>
+:root{--bg:#0a0a0b;--panel:#111113;--line:#2a2a2e;--ink:#cfcfd3;--ink2:#a3a3a9;--dim:#78787f;--bad:#9a9aa2;}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0;padding:0}
+body{font:400 19px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:64px 40px 96px;border-bottom:1px solid var(--line)}
+h1{font-size:44px;line-height:1.1;letter-spacing:-.5px;margin:0 0 6px;color:var(--ink)}
+h2{font-size:30px;margin:56px 0 14px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink)}
+h3{font-size:23px;margin:34px 0 10px;color:var(--ink)}
+.sub{color:var(--dim);font-size:17px;margin:0 0 34px}
+p{margin:0 0 16px;max-width:88ch;color:var(--ink2)}
+b,strong{color:var(--ink);font-weight:600}
+table{border-collapse:collapse;width:100%;margin:20px 0 26px;font-size:16.5px}
+th{text-align:left;font-weight:600;color:var(--ink);border-bottom:1px solid var(--line);padding:11px 12px 11px 0;vertical-align:bottom}
+td{border-bottom:1px solid #1b1b1f;padding:11px 12px 11px 0;color:var(--ink2);vertical-align:top}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.flag{color:var(--ink);font-weight:600}
+.ok{color:var(--dim)}
+blockquote{margin:22px 0;padding:16px 22px;border-left:3px solid #3a3a40;background:var(--panel);color:var(--ink2)}
+figure{margin:30px 0 34px}
+img{width:100%;display:block;border:1px solid var(--line)}
+figcaption{color:var(--dim);font-size:16px;margin-top:10px;max-width:88ch}
+ol,ul{color:var(--ink2);max-width:88ch;padding-left:22px}li{margin:0 0 10px}
+.big{font-size:23px;color:var(--ink);line-height:1.45;margin:8px 0 22px;max-width:80ch}
+.tag{display:inline-block;border:1px solid var(--line);color:var(--dim);font-size:14px;padding:2px 9px;margin-right:6px;border-radius:2px}
+.mean{color:var(--dim);font-size:16px}
+</style></head><body>
+
+<section class="page">
+<h1>Is the Hub’s information correct?</h1>
+<p class="sub">Measured on the live site and the live chart service between 10:38 and 10:57 New York time, Wednesday 23 September 2026. Nothing was changed. Every number below was read, not remembered.</p>
+
+<p class="big">Short answer: the stocks, the funds, bitcoin, the news, the earnings dates and the economic calendar are right and current. The <b>dollar, the oil price, gold and silver are right but show no daily change</b>. <b>VIX and the whole set of government-bond yields on the dashboard are wrong</b> — they are frozen at 14 August and the screen presents them as today.</p>
+
+<h2>The one that matters most</h2>
+<p>On the dashboard, under the MACRO group, <b>VIX reads 14.25 and a fall of 10.88%</b> in red. That row was last written on <b>14 August at 23:33</b>. Nothing has updated it in forty days. The 10.88% is August’s move, painted as if it happened this morning. The same stale number is currently sitting in the ALL ticker tape at the bottom of the screen as the <b>second-biggest mover of the day</b>.</p>
+<p>The live VIX at the moment of this audit was <b>14.68</b>. We already hold that number: the chart service serves it, and the Station uses it. The dashboard simply does not ask.</p>
+
+<h2>Why it happens, in one paragraph</h2>
+<p>The Hub gets prices down two different pipes. Shares and funds are fetched fresh from the chart service and overwrite whatever the old database held — that is why every stock on the board is correct. Everything that is <em>not</em> a share (VIX, yields, the dollar, oil, gold, silver) is never overwritten; it is read from an old table called <span class="tag">live_quotes</span>, and whatever was last written there is what you see. There is a guard in the page, but it only checks that a row’s price, previous close and percentage agree with <em>each other</em>. <b>It never asks how old the row is.</b> The August VIX row is perfectly self-consistent, so it sails through and is drawn as live.</p>
+
+<figure>
+<img src="shots/board-macro.png" alt="MACRO group on the dashboard">
+<figcaption><b>What this screenshot shows.</b> The MACRO group on the dashboard as it looked at 10:52 New York time. Reading down the LAST column: US10Y 4.70, US5Y 4.36, US3M 3.70, US30Y 5.26 — all four frozen on 14 August, all four with the change column blanked to a dash. CLUSD 92.13, SIUSD 65.09, GCUSD 4,320.00 and DXUSD 100.78 are live prices, also with a dash where the change should be. The funds beside them — SLV 58.48 down 3.70%, USO 147.64 up 2.47%, GLD 393.60, TLT 80.78, IEF, HYG, LQD, SHY — are all correct and current. At the bottom of the list, VIX 14.25 with a red 10.88%: the forty-day-old row, wearing a live look. US2Y honestly shows a small red NO FEED badge, and US2S10S is blank — those two are the only ones that admit they have nothing.</figcaption>
+</figure>
+
+<h2>The same number, three different answers</h2>
+<p>The ten-year government bond yield exists in three places in the product right now, and no two agree:</p>
+<table>
+<tr><th>Where you read it</th><th>What it says</th><th>Where it comes from</th><th>How old</th></tr>
+<tr><td>Dashboard, MACRO group</td><td class="n flag">4.70</td><td>live_quotes table</td><td class="n">40 days</td></tr>
+<tr><td>ECONOMIC tab, treasury ladder</td><td class="n">4.96%</td><td>treasury_rates table, dated on screen</td><td class="n">1 day (as designed)</td></tr>
+<tr><td>Chart service, live</td><td class="n">5.059</td><td>FMP live quote</td><td class="n">seconds</td></tr>
+</table>
+<p>The ECONOMIC tab is the honest one: it prints “as of 2026-09-22” next to the curve, so you know exactly what you are looking at. The dashboard prints a number with no date at all.</p>
+</section>
+
+<section class="page">
+<h1>Every number on the Hub, tab by tab</h1>
+<p class="sub">What it shows · where it comes from · how fresh it was at 10:57 New York time · whether it is correct.</p>
+
+<h3>Dashboard — the board</h3>
+<table>
+<tr><th>What</th><th>Comes from</th><th>Age</th><th>Correct?</th></tr>
+<tr><td>Share and fund prices, all cohorts</td><td>chart service /quotes (Massive)</td><td class="n">seconds</td><td class="ok">Yes</td></tr>
+<tr><td>Bitcoin and the other coins</td><td>chart service, plus a Coinbase live feed in the browser</td><td class="n">seconds</td><td class="ok">Yes</td></tr>
+<tr><td>Oil, gold, silver, dollar (CLUSD, GCUSD, SIUSD, DXUSD)</td><td>live_quotes, price only</td><td class="n">price live</td><td class="flag">Price yes, daily change missing</td></tr>
+<tr><td>VIX</td><td>live_quotes, written 14 Aug 23:33</td><td class="n">40 days</td><td class="flag">No — shows 14.25 / −10.88%, live is 14.68</td></tr>
+<tr><td>US10Y, US5Y, US3M, US30Y</td><td>live_quotes, written 14 Aug 23:33</td><td class="n">40 days</td><td class="flag">No — 4.70 / 4.36 / 3.70 / 5.26 against a current 4.96 / 4.83 / 4.16 / 5.29</td></tr>
+<tr><td>US2Y, US2S10S</td><td>nothing</td><td class="n">—</td><td class="ok">Honest: says NO FEED / blank</td></tr>
+<tr><td>RSI column</td><td>provider_indicators_current (FMP daily export)</td><td class="n">17.5 h</td><td class="ok">Yes, but it is yesterday evening’s figure by design</td></tr>
+<tr><td>TREND, MOM, READ, Geiger bar</td><td>chart service /geiger</td><td class="n">2.5 min</td><td class="ok">Yes</td></tr>
+<tr><td>MKT CAP, F P/E</td><td>company_profile, analyst estimates</td><td class="n">daily</td><td class="ok">Yes</td></tr>
+<tr><td>MACRO ticker tape (bottom)</td><td>eight funds and shares: SPY QQQ IWM SMH GLD TLT NVDA COIN</td><td class="n">seconds</td><td class="flag">Correct, but it is not macro — there is no VIX, no dollar, no oil in it, and NVDA appears twice</td></tr>
+<tr><td>ALL ticker tape</td><td>biggest movers</td><td class="n">seconds</td><td class="flag">Currently ranks the stale VIX as the day’s second-biggest mover</td></tr>
+</table>
+
+<h3>The other tabs</h3>
+<table>
+<tr><th>Tab</th><th>What it shows</th><th>Comes from</th><th>Freshness measured</th><th>Correct?</th></tr>
+<tr><td>NEWS</td><td>Headlines with source and time</td><td>news table, 486,851 rows</td><td class="n">newest 14:43 UTC — minutes</td><td class="ok">Yes</td></tr>
+<tr><td>SOCIAL · YouTube</td><td>Videos, watch-later, counts</td><td>youtube_feed, 9,928 rows</td><td class="n">newest 14:04 UTC — 43 min</td><td class="ok">Yes</td></tr>
+<tr><td>SOCIAL · Sentiment</td><td>Ticker mentions from transcripts</td><td>social_sentiment, 63 rows</td><td class="n">newest 00:37 UTC — 14 h</td><td class="flag">Correct but overnight only; nothing from today’s session</td></tr>
+<tr><td>ALERTS</td><td>“Parked until the hub is settled”</td><td>alert_log</td><td class="n">—</td><td class="ok">Honest — it says so on the page</td></tr>
+<tr><td>SCREENER</td><td>“Parked until the hub is settled”</td><td>signals, vol_signals</td><td class="n">—</td><td class="ok">Honest — it says so on the page</td></tr>
+<tr><td>EVENTS</td><td>Earnings and dividend dates with estimates</td><td>earnings_events, 22,167 rows</td><td class="n">forward dated to Mar 2027</td><td class="ok">Yes — COST Sep 24, MU Sep 30 are right</td></tr>
+<tr><td>ECONOMIC · calendar</td><td>428 US releases this month, by category</td><td>econ_calendar, 73,268 rows</td><td class="n">current month, today marked</td><td class="ok">Yes</td></tr>
+<tr><td>ECONOMIC · treasury ladder</td><td>1M to 30Y yields, dated on screen</td><td>treasury_rates, 1,535 rows</td><td class="n">as of 2026-09-22</td><td class="ok">Yes — and it says its own date</td></tr>
+<tr><td>ECONOMIC · macro prints</td><td>24 stored series with observation dates</td><td>econ_history, 15,797 rows</td><td class="n">“none behind their normal release lag”</td><td class="ok">Yes</td></tr>
+</table>
+
+<figure>
+<img src="shots/tab-economic.png" alt="ECONOMIC tab">
+<figcaption><b>What this screenshot shows.</b> The ECONOMIC tab at 10:55 New York time. On the left, September’s release calendar with today (23) marked and 428 US events grouped by kind. On the right, the treasury ladder headed “as of 2026-09-22 · 2Y 4.71% · 10Y 4.96% · 2s10s +0.25%”, then every maturity from 1 month (3.97%) to 30 years (5.29%), each line carrying its own observation date. Below it, 24 stored macro series, each dated, with the note that none is behind its normal release lag. This is the standard the dashboard should be held to: every number says how old it is. Note the contradiction — this page says the ten-year is 4.96%, while the dashboard one click away says 4.70.</figcaption>
+</figure>
+
+<h3>What to fix, in order</h3>
+<ol>
+<li><b>Refuse to draw a stale price.</b> Any price row older than one trading session should show NO FEED, exactly as US2Y already does. Today that would blank VIX and the four yields instead of lying about them. This is the single change that removes the whole class of fault.</li>
+<li><b>Point VIX, the dollar and the ten-year at the chart service</b> — the same lane the Station already uses, which carries them live. Nothing new is needed; the data is already paid for and already arriving.</li>
+<li><b>The other yields</b> (2Y, 3M, 5Y, 30Y, 2s10s) have no live source anywhere — the chart service answers “no series” for all of them. Read them from the treasury ladder that the ECONOMIC tab already shows, and print the date beside them.</li>
+<li><b>Give oil, gold, silver and the dollar their daily change back</b> by taking the previous close from the chart service, which supplies it. The dashes appear because the stored previous close is wrong (oil’s says 81.25, when yesterday’s settlement was 94.59), and the page correctly refuses to compute a change from it.</li>
+<li><b>Two names for one dollar.</b> DXY and DXUSD are the same instrument from the same provider symbol, but they carry different daily closes (100.383 against 100.428) and different intraday histories — the hourly DXY series has not moved since yesterday afternoon. Keep one.</li>
+</ol>
+</section>
+
+<section class="page">
+<h1>Who provides what</h1>
+<p class="sub">Measured by asking each service directly this morning, not from memory. The overnight research folder for this was not on this machine, so everything here was re-established from the live services and the code.</p>
+
+<h3>Streaming and fetching — what the two words mean</h3>
+<p><b>Streaming</b> is a socket held open so the provider pushes every price the moment it happens. It is for the number on the screen, and nothing else. <b>Fetching</b> is us asking on a timer and taking whatever the provider has ready. It is for history — the bars a chart draws and the bars the quant loop measures. A chart cannot be built from a stream, and a live price should not be built from a nightly fetch. Most of what is wrong on the Hub today is a fetched number being presented as a streamed one.</p>
+
+<h3>Massive</h3>
+<table>
+<tr><th>Provides</th><th>Depth measured today</th><th>How it arrives</th><th>Used for</th></tr>
+<tr><td>US shares and funds only</td><td>AAPL and SPY: 5,794 daily bars; 182,152 five-minute bars; 15,645 hourly</td><td>Fetched as bars through the chart service</td><td>The whole board, every chart, the Geiger, the 364-name universe</td></tr>
+</table>
+<p><b>Massive has no metals, no commodities, no currencies, no index levels and no futures.</b> I asked for gold (GC), the S&P index (SPX), spot gold (XAUUSD) and the euro (EURUSD): all four came back “no series”. There is a trap worth knowing: asking Massive for <b>CL</b> returns Colgate-Palmolive and <b>ES</b> returns Eversource Energy — the shares, not crude oil and not the S&P future. A futures code typed into this system will quietly hand back an unrelated company.</p>
+
+<h3>FMP</h3>
+<p>FMP fills exactly the gap Massive leaves, and it is where every number Alan asked about comes from:</p>
+<table>
+<tr><th>Instrument</th><th>Provider code</th><th>Daily bars held</th><th>Live quote lag now</th></tr>
+<tr><td>VIX</td><td class="n">^VIX</td><td class="n">9,271</td><td class="n">14 seconds</td></tr>
+<tr><td>Dollar index</td><td class="n">DX-Y.NYB</td><td class="n">14,282</td><td class="n">1–5 seconds</td></tr>
+<tr><td>US 10-year yield</td><td class="n">US10Y</td><td class="n">16,195</td><td class="n">11–56 seconds</td></tr>
+<tr><td>Crude oil (WTI)</td><td class="n">CLUSD</td><td class="n">6,606</td><td class="n">1–10 seconds</td></tr>
+<tr><td>Gold</td><td class="n">GCUSD</td><td class="n">13,163</td><td class="flag n">10 minutes</td></tr>
+<tr><td>Silver</td><td class="n">SIUSD</td><td class="n">14,400</td><td class="flag n">10 minutes</td></tr>
+<tr><td>Bitcoin</td><td class="n">BTCUSD</td><td class="n">6,099</td><td class="n">3–6 seconds</td></tr>
+</table>
+<p>Intraday, FMP serves us 1, 5, 15, 30, 60 and 240-minute bars directly; 2h, 3h, 6h, 12h, 3-day and weekly are built from those. History is refreshed by a job — this morning at 14:00–14:01 UTC for oil, metals, the dollar and bitcoin, and at 02:52 UTC for VIX and the dollar index.</p>
+<p><b>One measured fault:</b> I sampled the live quotes twice, 45 seconds apart. Oil, the dollar, VIX, the ten-year and bitcoin were all within a minute both times. <b>Gold and silver were 605 and 601 seconds behind on the first sample and 605 and 601 on the second</b> — a steady ten-minute delay, not a blip. Precious metals are on a slower beat than everything else beside them.</p>
+
+<h3>Coinbase</h3>
+<p>The Hub opens a live socket to Coinbase in the browser for the nine coins. This is the only true streaming feed in the product today, and it works.</p>
+
+<h3>IBKR</h3>
+<p>A gateway service, a collector, a health check and a futures feed plan all exist on disk. <b>Nothing in the Hub or the Station reads any of it, and no gateway process is running.</b> IBKR is the obvious home for real futures — actual contracts with actual expiries — which is exactly what the roll problem on the next page needs, and which neither Massive nor FMP can give us.</p>
+
+<h3>What we should use each for</h3>
+<ul>
+<li><b>Massive</b> — every US share and fund: history and live price. It already does this well.</li>
+<li><b>FMP</b> — VIX, the dollar, the ten-year, oil, gold, silver, bitcoin: deep daily history for the charts and the quant loop, and the live quote for the screen. Already paid for, already arriving, and on the dashboard largely unused.</li>
+<li><b>Coinbase</b> — live coin prices in the browser.</li>
+<li><b>IBKR</b> — real futures contracts, if and when the roll matters enough to wire it up.</li>
+</ul>
+</section>
+
+<section class="page">
+<h1>Geiger — situation report</h1>
+<p class="sub">Read from the live service at 14:38 UTC, 10:38 New York time.</p>
+
+<p class="big">Geiger itself is healthy. All 364 names, all eight timeframes, nothing missing, nothing stale, recomputed two and a half minutes before I looked. The one thing to know is that its readiness endpoint reports “not ready” even though nothing is actually blocking it.</p>
+
+<h3>What feeds it</h3>
+<p>Massive’s stored bars, through the chart service — the same bars the charts draw. It does not touch FMP, and it does not touch the old database tables. Its timeframes are Alan’s saved Equalizer, untouched: 2h, 3h, 4h, 6h, 12h, 1 day, 3 day, 1 week, with weights from 0.39 to 3.18. Two families are computed, TREND and MOMENTUM. VOLUME is recorded as deleted by Alan and STRUCTURE as unapproved — both deliberately absent, not broken.</p>
+
+<h3>Coverage and freshness</h3>
+<table>
+<tr><th>Measure</th><th>Reading</th></tr>
+<tr><td>Names requested / returned / absent</td><td class="n">364 / 364 / 0</td></tr>
+<tr><td>Cells computed (364 × 8)</td><td class="n">2,912 — none failed</td></tr>
+<tr><td>Last recomputed</td><td class="n">14:36:01 UTC, 2.5 minutes before the read</td></tr>
+<tr><td>Equalizer settings captured</td><td class="n">14:34:32 UTC</td></tr>
+<tr><td>Bars behind their required session</td><td class="n">0 stale, 0 missing, on every one of the eight timeframes</td></tr>
+</table>
+
+<h3>Per timeframe</h3>
+<table>
+<tr><th>Timeframe</th><th>Bars as of</th><th>Required through</th><th>Behind?</th></tr>
+<tr><td>2h, 3h, 4h, 6h, 12h, 1 day</td><td class="n">2026-09-23</td><td class="n">2026-09-22</td><td class="ok">No</td></tr>
+<tr><td>3 day, 1 week</td><td class="n">2026-09-22</td><td class="n">2026-09-22</td><td class="ok">No</td></tr>
+</table>
+
+<h3>The unproven cells</h3>
+<p>All 2,912 cells carry one label: <span class="tag">SOURCE_BAR_FINALITY_UNPROVEN</span>. The service’s own note explains it plainly — every cell was computed from current bars, and only the final-session stamp is unproven. It counts zero blocking problems. In ordinary words: <b>the readings are live and correct for right now, but the session is still open, so today’s bars are not final and a reading can still move before the close.</b></p>
+
+<h3>The one real problem</h3>
+<p>The readiness endpoint returns <b>HTTP 503, “GEIGER_NOT_READY”</b>, while simultaneously reporting zero blocking problems and a complete, current artifact. It also took 11 seconds to answer. Anything that gates on readiness will show “awaiting data” over perfectly good numbers. Either the label should stop failing the endpoint during an open session, or everything downstream should be reading the artifact directly and ignoring the gate.</p>
+
+<h3>What would make it wrong</h3>
+<ul>
+<li>Bars falling behind — that would appear as stale cells per timeframe, which today is zero on all eight.</li>
+<li>A change to the saved Equalizer — the service fingerprints the settings on every run, so a change is visible rather than silent.</li>
+<li>The open session itself — until the close is final, a reading is provisional. That is the meaning of the label on all 2,912 cells.</li>
+<li>A quiet substitution of provider — the payload names Massive as the provider and states the bars were built by the provider, not by us, on every read.</li>
+</ul>
+
+<blockquote>Worth noticing: in the VIX row on the dashboard, the Geiger reading is live and the price beside it is forty days old. Two different vintages, one row, no marking. Geiger is not the weak part of that row.</blockquote>
+</section>
+
+<section class="page">
+<h1>The futures roll, and what it does to our charts</h1>
+<p class="sub">Why oil showed 94.59 while it was trading near 91.6, and what to do about it.</p>
+
+<h3>What FMP actually gives us</h3>
+<p>CLUSD, GCUSD and SIUSD are not a single instrument with a long life. They are a <b>chain of separate contracts stitched end to end</b>: whichever contract is nearest to expiry is the price, and when that contract dies the series jumps to the next one. No adjustment is made for the price difference between the two. FMP holds 6,606 daily bars for oil this way, 13,163 for gold and 14,400 for silver.</p>
+
+<h3>What that did on Tuesday</h3>
+<p>October WTI expired on 22 September. FMP’s daily history therefore ends at that contract’s final settlement, <b>94.59</b>. The market that is actually trading is November, and this morning it was <b>91.73</b>, against FMP’s own previous close for it of <b>90.52</b>. So the daily chart will show a step of roughly four dollars between Tuesday and Wednesday <b>that nobody traded</b>. The Station header was showing the 94.59 until it was pointed at the live quote at 10:14 this morning.</p>
+
+<h3>How often this bites</h3>
+<p>Across the last 400 trading days I counted every day-over-day move above 4.5% and every opening gap above 2.5%:</p>
+<table>
+<tr><th>Series</th><th>Days flagged out of 400</th><th>Reading</th></tr>
+<tr><td>Gold (GCUSD)</td><td class="n">8</td><td>Roughly what a real market does</td></tr>
+<tr><td>Crude oil (CLUSD)</td><td class="flag n">67</td><td>Far more than the underlying market moved</td></tr>
+<tr><td>Silver (SIUSD)</td><td class="flag n">76</td><td>Far more than the underlying market moved</td></tr>
+</table>
+<p>Oil and silver are genuinely volatile, so not all of those are roll steps — but gold rolls on the same calendar and shows eight, which tells you how much of oil’s and silver’s 67 and 76 is the stitching rather than the market. Every one of those steps feeds a percentage change, an RSI, a trend reading and a Geiger cell as though it were a real move.</p>
+
+<h3>What silver is doing right now</h3>
+<p>FMP’s live quote says silver’s previous close was <b>66.53</b>. Our own daily bar for the same session says <b>65.932</b>. Both come from FMP. They disagree by 0.9%, which is the same stitching problem showing up as a disagreement between the quote line and the history line.</p>
+
+<h3>Recommended fix</h3>
+<ol>
+<li><b>Today, and it costs nothing:</b> take the previous close for oil, gold and silver from the live quote, never from the last daily bar. FMP already hands us the right number (oil: 90.52). This is what fixed the Station header at 10:14 and it is the same one-line change everywhere else the change is computed.</li>
+<li><b>Say what the series is.</b> Label these three charts as the nearest contract, not roll-adjusted. A step at a roll is then information, not a lie.</li>
+<li><b>Then build the adjusted series properly.</b> Keep a stored list of roll dates; on each one, shift all earlier bars by the gap between the dying contract and the new one, so the chart has no artificial step and a percentage move means what it says. Keep the raw unadjusted series beside it — the adjusted one is for measuring, the raw one is for checking. This is the only version the quant loop should ever read.</li>
+<li><b>If futures become a real part of the work, wire up IBKR</b> — actual contracts with actual expiry dates, which is the only way to know the roll date rather than infer it. The gateway and the plan are already on disk and unused. Keep FMP as the second opinion.</li>
+</ol>
+
+<h3>What I did not do</h3>
+<p>Nothing was changed, deployed or written. Every number here came from a read of the live site, the live chart service or the database as the page itself reads it. Where a number could not be obtained — the direct database read was walled by a credential rule, and the overnight provider research folder is not on this machine — I measured the same thing through the live page instead, and said so.</p>
+</section>
+
+</body></html>
