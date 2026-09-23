@@ -2562,6 +2562,9 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .se-tapesay{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:var(--mono); font-size:8px;
   letter-spacing:.1em; color:var(--dim); padding:6px 9px 0; }
 .se-tapesay b{ color:var(--ink3); }
+.se-vempty{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--mono); font-size:9px;
+  letter-spacing:.1em; padding:7px 9px 9px; border-bottom:.5px solid var(--line); margin-bottom:8px; }
+.se-vempty b{ color:var(--ink3); }
 .se-none{ color:var(--sv4); }
 .se-widen{ cursor:pointer; color:var(--dim); border:.6px solid var(--line2); border-radius:2px; padding:1px 6px; letter-spacing:.14em; }
 .se-widen:hover{ color:var(--ink); border-color:var(--crk); }
@@ -2575,12 +2578,15 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink3); }
 .se-dhd b{ color:var(--ink); font-size:11px; letter-spacing:.08em; }
 .se-dhd .sub{ color:var(--dim); font-size:8px; letter-spacing:.1em; text-transform:none; }
-.se-dcols{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; align-items:start; }
-.se-dcol{ min-width:0; border-top:.5px solid var(--line); padding-top:6px; }
+.se-dcols{ display:flex; gap:10px; align-items:stretch; }
+.se-dcol{ flex:1 1 0; min-width:0; border-top:.5px solid var(--line); padding-top:6px; }
 .se-dcol h5{ font-family:var(--mono); font-size:7.5px; letter-spacing:.16em; text-transform:uppercase;
   color:var(--mute); margin:0 0 6px; font-weight:400; }
 .se-dcol h5 b{ color:var(--ink3); margin-left:5px; font-weight:400; }
-.se-dlist{ display:flex; flex-direction:column; gap:4px; max-height:46vh; overflow-y:auto; }
+/* a slot with thirty names wraps them across its own width rather than falling off
+   the bottom of the panel — which is the long scroll this view exists to end. */
+.se-dlist{ display:grid; grid-template-columns:repeat(auto-fill, minmax(94px, 1fr)); gap:4px;
+  align-content:start; max-height:44vh; overflow-y:auto; }
 .se-drow{ display:flex; align-items:center; gap:6px; cursor:pointer; padding:4px 5px; border:.6px solid var(--line2);
   border-radius:2px; font-family:var(--mono); font-size:9.5px; color:var(--ink3); }
 .se-drow:hover{ border-color:var(--line); color:var(--ink); }
@@ -2623,9 +2629,11 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   .se-tlb{ width:10px; } .se-tlb i{ width:8px; } .se-tlx{ font-size:6.5px; margin-top:3px; }
   .se-tlmo{ font-size:7px; letter-spacing:.06em; padding-left:3px; }
   .se-tapesay{ font-size:7.5px; padding:5px 8px 0; }
-  /* the day's four columns become two on a phone, which still beats one long fall */
-  .se-dcols{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
-  .se-dlist{ max-height:32vh; }
+  /* the day's four slots become two rows of two on a phone, which still beats one
+     long fall, and each slot keeps its own wrapped grid of names */
+  .se-dcols{ flex-wrap:wrap; gap:8px; }
+  .se-dcol{ flex:1 1 44%; }
+  .se-dlist{ grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); max-height:30vh; }
 }
 
 /* ============================================================================
@@ -10832,7 +10840,9 @@ function ercBucketSay(b, z) {
   if (z === "WEEKS") return "the week of " + ernWeekday(b) + " " + ernMonthDay(b);
   return ernWeekday(b) + " " + ernMonthDay(b);
 }
-const ercBucketTick = (b, z) => (z === "MONTHS" ? ERC_MONTH_NAME[+b.slice(5, 7) - 1].slice(0, 1) : String(+b.slice(8)));
+/* the tick under a bar: the day number, or the month's three letters — one letter was
+   a puzzle, and this tape is meant to be read without hovering anything. */
+const ercBucketTick = (b, z) => (z === "MONTHS" ? ERC_MONTH_NAME[+b.slice(5, 7) - 1].slice(0, 3) : String(+b.slice(8)));
 const ercBucketOpens = (z) => (z === "MONTHS" ? "the month" : z === "WEEKS" ? "the week" : "the day");
 const ercTlLevel = (n) => (n >= ERC_TL_HOT ? "hot" : n >= ERC_TL_WARM ? "warm" : n > 0 ? "cool" : "");
 function ercTapeScale(counts) {
@@ -10916,11 +10926,13 @@ function ercTapeHTML() {
     (nm[b] || []).slice(0, 3).join(", "), today, at, coh, sc)).join("");
   const lbl = ernMonthDay(r.from) + " " + r.from.slice(0, 4) + "  →  " + ernMonthDay(r.to) + " " + r.to.slice(0, 4);
   return '<div class="se-tape">' +
+    /* ONE set of arrows and one TODAY in the room — they live on the span bar above,
+       because tape and view share an anchor and two of each would be two ways to do
+       the same thing. The tape carries only what is its own: how far it reaches, and
+       how much season one bar covers. */
     '<div class="se-tapehd">' +
-      '<button class="se-nav" data-act="ernnav" data-k="-1" title="' + esc("earlier — the tape and the view move together") + '">◀</button>' +
-      '<span class="se-lbl" title="' + esc("the stretch of season on the tape · " + ERC_ZOOM[z].say) + '">' + esc(lbl) + "</span>" +
-      '<button class="se-nav" data-act="ernnav" data-k="1" title="' + esc("later — the tape and the view move together") + '">▶</button>' +
-      '<span class="se-sp" data-act="erntoday" title="' + esc("bring the tape and the view back to today") + '">TODAY</span>' +
+      '<span class="se-lbl" title="' + esc("the stretch of season on the tape · " + ERC_ZOOM[z].say +
+        " · drag it sideways, or use the arrows above") + '">' + esc(lbl) + "</span>" +
       ercZoomBarHTML() +
     "</div>" +
     '<div class="se-tlscroll" id="ernTlScroll"><div class="se-tlgrid">' + bars + "</div>" + ercTapeStripHTML(buckets, z) + "</div>" +
@@ -10975,10 +10987,18 @@ function ercTapeRescale() {
 function ercTapeAfterPaint() {
   const sc = el("ernTlScroll");
   if (!sc || typeof sc.addEventListener !== "function") return;
-  if (ERC_TAPE_AT != null) sc.scrollLeft = ERC_TAPE_AT;
+  const pointer = sc.querySelector(".se-tlday.is-open") || sc.querySelector(".se-tlday.is-today");
+  const centre = () => { if (pointer) sc.scrollLeft = Math.max(0, pointer.offsetLeft - sc.clientWidth * 0.55); };
+  if (ERC_TAPE_AT == null) centre();
   else {
-    const t = sc.querySelector(".se-tlday.is-open") || sc.querySelector(".se-tlday.is-today");
-    sc.scrollLeft = t ? Math.max(0, t.offsetLeft - sc.clientWidth * 0.55) : 0;
+    sc.scrollLeft = ERC_TAPE_AT;
+    /* a remembered offset is kept ONLY while it still shows the bar the view is
+       sitting on. Stepping across a month otherwise left the tape looking at a
+       stretch the room was no longer in — MEASURED on a jump from September to
+       November, where the tape stayed on December. */
+    if (pointer && (pointer.offsetLeft < sc.scrollLeft || pointer.offsetLeft + pointer.offsetWidth > sc.scrollLeft + sc.clientWidth)) {
+      centre(); ERC_TAPE_AT = sc.scrollLeft;
+    }
   }
   ercTapeRescale();
   let rafid = 0;
@@ -11039,6 +11059,16 @@ function ercNoteHTML(rows) {
   if (ERC_TRUNC) bits.push("this range holds more rows than one read returns");
   return '<div class="se-note">' + esc(bits.join(" · ")) + "</div>";
 }
+/* NOTHING IN VIEW IS SAID IN THE VIEW, not only on the tape. Alan went to the week
+   view with his FAV strip on and found "no report" on every line — the week was
+   genuinely empty for three names, and nothing on screen said that 40 other names
+   reported that week. This is that sentence, with the way back beside it. */
+function ercEmptyHTML(coh, all, what) {
+  if (coh === "ALL") return "";
+  return '<div class="se-vempty"><span class="se-none">nothing for <b>' + esc(coh) + "</b> in this " + esc(what) +
+    (all ? " — " + all + (all === 1 ? " report" : " reports") + " across all names" : "") + "</span>" +
+    (all ? '<span class="se-widen" data-act="ernall">SHOW ALL NAMES</span>' : "") + "</div>";
+}
 function ercRenderCal(list, cohort) {
   const key = ercRangeKey();
   if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // the same honest gate as the list: never an unscoped view
@@ -11056,7 +11086,8 @@ function ercRenderCal(list, cohort) {
   if (!ercBoardRows().length) ercWaitForSizes();   // sizes + cohort hues come with the board; redraw once when they land
   const byDay = {};
   rows.forEach((r) => { (byDay[r.date] = byDay[r.date] || []).push(r); });
-  list.innerHTML = (ercSpan() === "MONTH" ? ercMonthHTML(byDay) : ercWeekHTML(byDay)) +
+  list.innerHTML = (rows.length ? "" : ercEmptyHTML(cohort, (ERC_ROWS || []).length, ercSpan() === "MONTH" ? "month" : "week")) +
+    (ercSpan() === "MONTH" ? ercMonthHTML(byDay) : ercWeekHTML(byDay)) +
     ercKeyHTML(rows) + ercNoteHTML(rows);
   /* the right-hand extras column is the same in every span */
   const scopedTk = (rows.length && rows.every((x) => x.ticker === rows[0].ticker)) ? rows[0].ticker : null;
@@ -11122,7 +11153,11 @@ function ercDayHTML(rows) {
   }
   const cols = ERC_DAY_SLOTS.map(function (sl) {
     const inSlot = list.filter((r) => ernSlot(r) === sl[0]);
-    return '<div class="se-dcol"><h5>' + esc(sl[1]) + (inSlot.length ? "<b>" + inSlot.length + "</b>" : "") + "</h5>" +
+    /* THE SLOTS SHARE THE WIDTH IN PROPORTION TO THEIR LOAD. On a heavy day almost
+       every name sits in one slot, and four equal columns would push it off the
+       bottom of the panel — the very scroll this view exists to end. */
+    const grow = Math.min(6, 1 + Math.round(inSlot.length / 3));
+    return '<div class="se-dcol" style="flex-grow:' + grow + '"><h5>' + esc(sl[1]) + (inSlot.length ? "<b>" + inSlot.length + "</b>" : "") + "</h5>" +
       (inSlot.length ? '<div class="se-dlist">' + inSlot.map(ercDayRowHTML).join("") + "</div>"
                      : '<div class="se-dnone">—</div>') + "</div>";
   }).join("");
@@ -15954,12 +15989,15 @@ document.addEventListener("click", (e) => {
     case "coh": {
       S.coh = a.dataset.key; S.tq = "";
       /* tapping the strip while the earnings room is open narrows THAT room too —
-         until it is entered again, when it starts wide. */
-      if (S.sec === "EVENTS") { S.ernCohPick = a.dataset.key; S.ernPick = null; }
+         until it is entered again, when it starts wide. The room is repainted after
+         the remount below, because a cohort change alone does not re-enter it. */
+      const inEvents = S.sec === "EVENTS";
+      if (inEvents) { S.ernCohPick = a.dataset.key; S.ernPick = null; }
       /* restartFeed() paints the NEW scope itself (latest pull → pending), so nothing repaints the previous cohort's rows
          under the new selection first (that was the 175-933 ms wrong-scope flash). */
       if (mountedKey === "DASH") { restartFeed(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
       else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); restartFeed(); }
+      if (inEvents) renderEvents(S.coh);
       break;
     }
     /* R43 §3 — Layer-0 sub-tabs. Tab state is a plain JS flag (no persistence); only

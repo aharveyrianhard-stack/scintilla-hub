@@ -143,6 +143,7 @@ test("NOTHING ON THE TAPE IS MYSTERIOUS: every bar says what it is and a click a
   assert.match(mo, /click to open the month below/);
   assert.match(mo, /is-open/, "the bar the view is sitting on says so");
   assert.match(mo, /data-n="120"/, "each bar carries its own count, so a re-scale never re-reads the rows");
+  assert.match(mo, /class="se-tlx">NOV</, "a month bar is ticked NOV, not N — the tape is read without hovering");
   /* the month strip explains itself too */
   const strip = ercTapeStripHTML(["2026-09-21", "2026-09-28", "2026-10-05"], "WEEKS");
   assert.match(strip, /<span class="se-tlmo" style="width:calc\(var\(--tlw\) \* 2\)" title="SEP · 2 bars">SEP<\/span>/);
@@ -162,9 +163,19 @@ test("the room reads ALL names by default and never looks empty by accident", ()
   const empty = ercTapeSayHTML(0, 84, "FAV");
   assert.match(empty, /nothing for <b>FAV<\/b> in this stretch — 84 reports across all names/);
   assert.match(empty, /SHOW ALL NAMES/);
+  /* and the same sentence appears IN THE VIEW, because a week with nothing in it is
+     where Alan actually hit this */
+  const view = new Function(src.match(/function ercEmptyHTML\(coh, all, what\) \{[\s\S]*?\n\}/)[0] +
+    (src.match(/const esc = \(s\) => String[\s\S]*?&#39;"\);/) || [""])[0] + "\nreturn ercEmptyHTML;")();
+  assert.equal(view("ALL", 40, "week"), "", "the whole universe having a quiet week is not a warning");
+  assert.match(view("FAV", 40, "week"), /nothing for <b>FAV<\/b> in this week — 40 reports across all names/);
+  assert.match(view("FAV", 40, "week"), /data-act="ernall"/);
+  assert.match(view("FAV", 0, "month"), /nothing for <b>FAV<\/b> in this month<\/span>/, "and it does not invent a number when there is none");
   /* entering the room starts wide again; tapping the strip inside the room narrows it */
   assert.match(src, /if \(a\.dataset\.sec === "EVENTS" && S\.sec !== "EVENTS"\) \{ S\.ernCohPick = null;/);
-  assert.match(src, /if \(S\.sec === "EVENTS"\) \{ S\.ernCohPick = a\.dataset\.key; S\.ernPick = null; \}/);
+  assert.match(src, /const inEvents = S\.sec === "EVENTS";\s*\n\s*if \(inEvents\) \{ S\.ernCohPick = a\.dataset\.key; S\.ernPick = null; \}/);
+  assert.match(src, /if \(inEvents\) renderEvents\(S\.coh\);/,
+    "MEASURED: a cohort tap alone does not re-enter the room, so the room is repainted explicitly — without this the tape went on saying ALL");
   assert.match(src, /case "ernall": \{ S\.ernCohPick = "ALL";/);
 });
 
@@ -174,6 +185,11 @@ test("the view below follows what the tape points at", () => {
     "and the tape marks the bucket the view is sitting in");
   assert.match(src, /ercPaintTape\(\);                                   \/\/ the header, whatever the view below is/);
   assert.match(src, /'<div id="ernTape"><\/div>' \+/, "the tape is its own element, outside the view's scroller");
+  /* ONE set of arrows and one TODAY in the room: they sit on the span bar, and the
+     tape carries only its own two things — how far it reaches and how big a bar is */
+  const tapeHead = src.slice(src.indexOf("'<div class=\"se-tapehd\">'"), src.indexOf('id="ernTlScroll"'));
+  assert.ok(!/data-act="ernnav"|data-act="erntoday"/.test(tapeHead), "the tape header does not repeat the span bar's controls");
+  assert.match(tapeHead, /ercZoomBarHTML\(\)/);
 });
 
 test("zoom: pinch, ⌘/ctrl-wheel or the strip — one level per gesture, and a plain wheel still walks the season", () => {
@@ -196,7 +212,9 @@ test("the tape's own read is small, wide and unscoped", () => {
 
 test("the tape keeps its place, and a drag never opens whatever bar it ended on", () => {
   assert.match(src, /sc\.addEventListener\("scroll", \(\) => \{\s*\n\s*ERC_TAPE_AT = sc\.scrollLeft;/);
-  assert.match(src, /if \(ERC_TAPE_AT != null\) sc\.scrollLeft = ERC_TAPE_AT;/);
+  assert.match(src, /if \(ERC_TAPE_AT == null\) centre\(\);/);
+  assert.match(src, /if \(pointer && \(pointer\.offsetLeft < sc\.scrollLeft \|\| pointer\.offsetLeft \+ pointer\.offsetWidth > sc\.scrollLeft \+ sc\.clientWidth\)\) \{\s*\n\s*centre\(\); ERC_TAPE_AT = sc\.scrollLeft;/,
+    "a remembered offset that no longer shows the bar the view is sitting on is re-centred");
   assert.match(src, /case "erntoday": \{ S\.ernDay = todayISO\(\); S\.ernPick = null; ERC_TAPE_AT = null;/);
   assert.match(src, /sc\.addEventListener\("click", \(e\) => \{ if \(moved > 4\) \{ e\.stopPropagation\(\); e\.preventDefault\(\); \} \}, true\);/);
   /* the re-scale moves heights and labels only: a bar's colour cannot change because
@@ -209,8 +227,11 @@ test("the tape keeps its place, and a drag never opens whatever bar it ended on"
 test("DAY reads across the screen, and nothing that was in it is lost", () => {
   assert.match(src, /const ERC_DAY_SLOTS = \[\[0, "before the open"\], \[1, "at a set time"\], \[2, "after the close"\], \[3, "time not announced"\]\];/,
     "a report with no stated time says the time was not announced — it is never guessed");
-  assert.match(src, /\.se-dcols\{ display:grid; grid-template-columns:repeat\(4, minmax\(0,1fr\)\);/);
-  assert.match(src, /\.se-dlist\{[\s\S]*?max-height:46vh; overflow-y:auto;/, "each column scrolls on its own, so a heavy day is one screen");
+  assert.match(src, /\.se-dcols\{ display:flex; gap:10px; align-items:stretch; \}/);
+  assert.match(src, /const grow = Math\.min\(6, 1 \+ Math\.round\(inSlot\.length \/ 3\)\);/,
+    "MEASURED on Nov 4 (38 reports, 37 of them with no stated time): four equal columns pushed the names off the bottom of the panel");
+  assert.match(src, /\.se-dlist\{ display:grid; grid-template-columns:repeat\(auto-fill, minmax\(94px, 1fr\)\)/,
+    "a busy slot wraps its names across its own width instead of falling down the page");
   assert.match(src, /EVERYTHING UPCOMING AND EVERYTHING REPORTED · the older list/, "the older DAY list is kept, one click down");
   assert.match(src, /\(open \? ercCardHTML\(open\) : ""\)/, "a name still opens the same full card the other views draw");
   /* the room points itself at a day that has something on it, and says that it did */
