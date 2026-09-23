@@ -13,6 +13,7 @@
  * Never touches Alan's everyday Chrome: the profile directory is the collector's own.
  *
  *   node scripts/xfeed-program.mjs run      [--max-pages N] [--budget-seconds N] [--catch-up] [--headless]
+ *                                           [--no-bookmarks] [--bookmark-folder NAME]   (the bookmark folder sidecar)
  *                                           [--profile DIR] [--runtime-dir DIR] [--env-file FILE] [--chrome PATH]
  *                                           [--fixture FILE]   (offline synthetic list; never a live capture)
  *   node scripts/xfeed-program.mjs sign-in  opens the collector profile on x.com for the one human step
@@ -359,9 +360,43 @@ export async function reportLoud(o, receipt, status, message, retryAt = null, lo
   return receipt;
 }
 
+/** The list receipt is already on disk by now; this only ADDS the folder read's outcome
+ *  to it and to the health file. No list field is touched, and a failure here is logged,
+ *  never thrown — the Trading list result stands whatever the folder did. */
+export async function persistBookmarkOutcome({ runDir, runtimeDir, folder, receipt, log = { write() {} } }) {
+  const bm = receipt.bookmarks;
+  if (!bm || bm.status === 'skipped') return false;
+  try {
+    await atomic(join(runDir, 'receipt.json'), receipt);
+    const health = await readJson(join(runtimeDir, 'program-health.json'));
+    if (health) await atomic(join(runtimeDir, 'program-health.json'), { ...health, bookmarks: { folder, status: bm.status, posts_seen: bm.posts_seen ?? null, added: bm.added ?? null, finished_at: bm.finished_at ?? null } });
+    return true;
+  } catch (error) { log.write(`bookmark receipt write failed: ${error.message}`); return false; }
+}
+
 // ---------------------------------------------------------------- the run
 
-export const DEFAULTS = { runtimeDir: DEFAULT_RUNTIME, profileDir: DEFAULT_PROFILE, intake: INTAKE, maxPages: 60, budgetSeconds: 1500, initialPages: 3, headless: false, chromePath: null, envFile: null, fixture: null, staleAfterSeconds: CADENCE_STALE_SECONDS, playwrightFrom: process.env.XFEED_PLAYWRIGHT_FROM ?? null };
+export const DEFAULTS = { runtimeDir: DEFAULT_RUNTIME, profileDir: DEFAULT_PROFILE, intake: INTAKE, maxPages: 60, budgetSeconds: 1500, initialPages: 3, headless: false, chromePath: null, envFile: null, fixture: null, staleAfterSeconds: CADENCE_STALE_SECONDS, playwrightFrom: process.env.XFEED_PLAYWRIGHT_FROM ?? null, bookmarks: true, bookmarkFolder: 'Claude Check', bookmarkBudgetSeconds: 240 };
+
+/** The bookmark folder rides the same scheduled pass, in the same browser, AFTER the Trading
+ *  list has finished and written its receipt. It is a sidecar on purpose: whatever it does,
+ *  it can neither change nor fail the list pass. Nothing it reads enters the list's ledger. */
+export async function runBookmarkSidecar(o, { browser, log = { write() {} }, capture = null } = {}) {
+  if (!browser || o.bookmarks === false || o.fixture) return { status: 'skipped', reason: o.fixture ? 'fixture run' : 'disabled' };
+  try {
+    const run = capture ?? (await import('./xfeed-bookmarks.mjs')).captureBookmarkFolder;
+    const budget = o.bookmarkBudgetSeconds ?? 240;
+    const result = await Promise.race([
+      run({ folder: o.bookmarkFolder, runtimeDir: o.runtimeDir, profileDir: o.profileDir, headless: o.headless, budgetSeconds: budget, playwrightFrom: o.playwrightFrom }, { browser }),
+      new Promise(done => setTimeout(() => done({ status: 'timed_out', error: `no answer within ${budget + 60} s` }), (budget + 60) * 1000).unref?.()),
+    ]);
+    log.write(`bookmarks ${result.status}: ${result.posts_seen ?? 0} in folder, +${result.added ?? 0} new${result.error ? ` (${result.error})` : ''}`);
+    return result;
+  } catch (error) {
+    log.write(`bookmarks failed: ${error.message}`);
+    return { status: 'failed', error: safeErrorMessage(String(error.message)) };
+  }
+}
 
 export async function runCollector(options = {}, deps = {}) {
   const o = { ...DEFAULTS, ...options };
@@ -445,6 +480,8 @@ export async function runCollector(options = {}, deps = {}) {
     log.write(`crash: ${error.stack ?? error.message}`);
     return await loud('crashed', String(error.message));
   } finally {
+    receipt.bookmarks = await runBookmarkSidecar(o, { browser, log, capture: deps.captureBookmarks ?? null });
+    await persistBookmarkOutcome({ runDir, runtimeDir: o.runtimeDir, folder: o.bookmarkFolder, receipt, log });
     await browser?.context.close().catch(() => {});
     await intake?.stop().catch(() => {});
     await log.close();
@@ -471,15 +508,16 @@ async function status(o) {
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
   const o = {};
-  const map = { '--profile': 'profileDir', '--runtime-dir': 'runtimeDir', '--intake': 'intake', '--max-pages': 'maxPages', '--budget-seconds': 'budgetSeconds', '--initial-pages': 'initialPages', '--env-file': 'envFile', '--chrome': 'chromePath', '--fixture': 'fixture', '--playwright-from': 'playwrightFrom', '--stale-after-seconds': 'staleAfterSeconds' };
+  const map = { '--bookmark-folder': 'bookmarkFolder', '--bookmark-budget-seconds': 'bookmarkBudgetSeconds', '--profile': 'profileDir', '--runtime-dir': 'runtimeDir', '--intake': 'intake', '--max-pages': 'maxPages', '--budget-seconds': 'budgetSeconds', '--initial-pages': 'initialPages', '--env-file': 'envFile', '--chrome': 'chromePath', '--fixture': 'fixture', '--playwright-from': 'playwrightFrom', '--stale-after-seconds': 'staleAfterSeconds' };
   for (let i = 0; i < rest.length; i++) {
     const key = rest[i];
     if (key === '--headless') o.headless = true;
+    else if (key === '--no-bookmarks') o.bookmarks = false;
     else if (key === '--catch-up') { o.maxPages = 600; o.budgetSeconds = 3000; }
-    else if (map[key] && rest[i + 1] !== undefined) { const value = rest[++i]; o[map[key]] = ['maxPages', 'budgetSeconds', 'initialPages', 'staleAfterSeconds'].includes(map[key]) ? Number(value) : value; }
+    else if (map[key] && rest[i + 1] !== undefined) { const value = rest[++i]; o[map[key]] = ['maxPages', 'budgetSeconds', 'initialPages', 'staleAfterSeconds', 'bookmarkBudgetSeconds'].includes(map[key]) ? Number(value) : value; }
     else throw new Error(`unknown or incomplete option ${key}`);
   }
-  for (const k of ['maxPages', 'budgetSeconds', 'initialPages', 'staleAfterSeconds']) if (o[k] !== undefined && !(Number.isSafeInteger(o[k]) && o[k] > 0)) throw new Error(`${k} must be a positive integer`);
+  for (const k of ['maxPages', 'budgetSeconds', 'initialPages', 'staleAfterSeconds', 'bookmarkBudgetSeconds']) if (o[k] !== undefined && !(Number.isSafeInteger(o[k]) && o[k] > 0)) throw new Error(`${k} must be a positive integer`);
   for (const k of ['runtimeDir', 'profileDir', 'envFile', 'fixture', 'playwrightFrom']) if (o[k]) o[k] = resolve(o[k]);
   if (!['run', 'sign-in', 'status'].includes(command)) throw new Error('Usage: node scripts/xfeed-program.mjs <run|sign-in|status> [options]');
   return { command, options: o };
