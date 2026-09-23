@@ -100,9 +100,21 @@ test('a failed shared request rejects every caller and is forgotten', async () =
 });
 
 test('the symbols in a /quotes url are sorted, so two callers can share one request', () => {
-  assert.match(source, /const want = \[\.\.\.decl\]\.sort\(\);/, 'the 2-second tick sorts');
+  assert.match(source, /const all = \[\.\.\.decl\]\.sort\(\);/, 'the 2-second tick sorts');
   assert.match(source, /const want = \[\.\.\.new Set\(\(tickers \|\| \[\]\)\.filter\(Boolean\)\)\]\.sort\(\);/, "the board's own read sorts");
   assert.match(source, /syms\.slice\(\)\.sort\(\)\.join\(","\)/, 'the breadth read sorts');
+});
+
+test('the first tick prices the visible rows and the next one covers the whole universe', () => {
+  assert.match(source, /window\.SC_TICK_FIRST = true; window\.SC_TICK_PARTIAL = false;/);
+  const tick = source.slice(source.indexOf('async function scProviderTick'), source.indexOf('function scScheduleTick'));
+  assert.match(tick, /window\.SC_TICK_FIRST !== false\) \{[\s\S]{0,400}\.filter\(\(t\) => decl\.has\(t\)\)/,
+    'the screen-only list is still filtered to declared equities, so nothing unowned is priced');
+  assert.match(tick, /if \(vis\.length && vis\.length < all\.length\) want = vis;/);
+  assert.match(tick, /window\.SC_TICK_FIRST = false;\n\s*scScheduleTick\(window\.SC_TICK_PARTIAL\);/,
+    'after a screen-only request it comes straight back for the full universe');
+  assert.doesNotMatch(tick, /SC_TICK_FIRST = false[\s\S]{0,200}return;/, 'the flag is cleared in the finally, never on an early return');
+  assert.match(tick, /if \(window\.SC_TICK_FIRST !== false\)/, 'a sandbox without the flag still takes the screen-only path once');
 });
 
 test('the fear & greed computation runs once at a time, and waits for the board to be priced', () => {

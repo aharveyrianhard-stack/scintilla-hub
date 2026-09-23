@@ -16193,6 +16193,10 @@ setInterval(pollFMP, 12000);
    cannot drift the way the legacy triple did.
    Throttled to 10 s when the tab is hidden, and backs off on consecutive failures. */
 let SC_TICK_INFLIGHT = false, SC_TICK_FAILS = 0, SC_TICK_TIMER = null, SC_TICK_WAITS = 0;
+/* M19 §B — the FIRST tick prices the rows on screen; every tick after it covers the whole
+   declared universe, as before. See the comment at the request itself. Both flags live on
+   window so the offline sandbox tests, which extract scProviderTick on its own, still run. */
+window.SC_TICK_FIRST = true; window.SC_TICK_PARTIAL = false;
 window.SC_TICK = { runs: 0, applied: 0, symbols: 0, failures: 0, last_ms: 0, last_utc: null, authority_waits: 0 };
 const SC_TICK_FAST_MS = 2000, SC_TICK_HIDDEN_MS = 10000;
 /* Re-check interval while provider authority is still resolving. A waiting tick has done no work
@@ -16265,8 +16269,22 @@ async function scProviderTick () {
   /* M19 §B — SORTED, so the board's own read of the same symbols produces the SAME URL and
      shares the in-flight request instead of opening a second one. /quotes is keyed by symbol
      in its response, so order carries no meaning. */
-  const want = [...decl].sort();
-  if (!want.length) { scScheduleTick(true); return; }   // never a silent exit
+  const all = [...decl].sort();
+  if (!all.length) { scScheduleTick(true); return; }   // never a silent exit
+  /* M19 §B — THE FIRST REQUEST PRICES WHAT IS ON SCREEN, THE SECOND COVERS EVERYTHING.
+     MEASURED against the live chart API on 23 Sep: a 364-symbol request took 3.6 s at best
+     and did not return inside 60 s at the worst, while ~60 symbols came back in 1.1-7 s. So
+     the whole board sat at "—" waiting for symbols nobody was looking at. The first tick now
+     asks for the visible rows only and the very next tick (250 ms later) asks for the full
+     declared universe, so the coverage argument above still holds within a second - a cohort
+     switch cannot expose an unpriced row, because the full pull has already run by then. */
+  let want = all;
+  if (window.SC_TICK_FIRST !== false) {
+    const vis = [...new Set(((typeof S !== "undefined" && S.rows) || []).map((r) => r && r.t).filter(Boolean))]
+      .filter((t) => decl.has(t)).sort();
+    if (vis.length && vis.length < all.length) want = vis;
+  }
+  window.SC_TICK_PARTIAL = want !== all;
   SC_TICK_INFLIGHT = true;
   const t0 = Date.now();
   try {
@@ -16345,7 +16363,9 @@ async function scProviderTick () {
   } finally { SC_TICK_INFLIGHT = false; /* Resolve the declared set immediately rather than waiting for the first board build, so the
    guard is armed before any legacy tick can arrive. */
 scDeclaredEquities().catch(() => {});
-scScheduleTick(); }
+/* M19 §B — after the first, screen-only request, come straight back for the whole universe */
+window.SC_TICK_FIRST = false;
+scScheduleTick(window.SC_TICK_PARTIAL); window.SC_TICK_PARTIAL = false; }
 }
 function scScheduleTick (fast) {
   if (SC_TICK_TIMER) clearTimeout(SC_TICK_TIMER);
