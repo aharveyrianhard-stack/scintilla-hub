@@ -13363,7 +13363,7 @@ function companyHTML() {
           '<div class="sc-chartpanel__slot sc-clip" id="coRailContent">' + coTabHTML(data) + "</div>" +
         "</section>" +
         '<div class="sc-board">' +
-          '<div class="sc-plabel sc-plabel--row"><span id="boardLabel">cohort board · <b>' + esc(S.coh) + "</b> · tap row → company page</span>" + SECFS_BTN + "</div>" +
+          '<div class="sc-plabel sc-plabel--row"><span id="boardLabel">cohort board · <b>' + esc(S.coh) + "</b> · tap row → company page</span><button class=\"hu-open\" type=\"button\" data-act=\"huopen\" data-t=\"SPY\">how unusual?</button>" + SECFS_BTN + "</div>" +
           '<div class="sc-board__scroll" id="boardScroll">' + boardRowsHTML() + "</div>" +
         "</div>" +
       "</section>" +
@@ -17849,5 +17849,290 @@ function filesWire(){
   }, true);
 })();
 </script>
+<!-- ============================================================================
+     HOW UNUSUAL IS THIS READING?  (23 Sep 2026)
+     Alan: "if the S&P daily RSI hits like 40, I find that not very frequent …
+     how often has it been above or below that level? Do we have that or not?"
+     Yes. Beside every reading he watches, this says where today's number sits in
+     that symbol's own history, how often it happens, and what usually came next.
+     History is counted by tools/how-unusual/build.mjs from finished daily bars
+     served by the chart API and stored in data/how-unusual.json; the reading on
+     screen is recomputed live from the same daily bars when the panel opens.
+     No opinions, no signals, nothing written anywhere.
+     ============================================================================ -->
+<style>
+#huWrap{ position:fixed; inset:0; z-index:9200; display:none; background:rgba(4,4,8,.86); }
+#huWrap.on{ display:block; }
+.hu{ position:absolute; inset:3vh 3vw; background:var(--bg); border:.6px solid var(--line2);
+     display:grid; grid-template-rows:auto 1fr; overflow:hidden; }
+.hu__top{ display:flex; align-items:baseline; gap:14px; padding:16px 18px 12px; border-bottom:.6px solid var(--line); }
+.hu__ttl{ font-family:var(--sans); font-size:19px; letter-spacing:.02em; color:var(--ink2); }
+.hu__sub{ font-family:var(--mono); font-size:11px; color:var(--dim); }
+.hu__x{ margin-left:auto; background:none; border:.6px solid var(--line2); color:var(--ink3);
+        font-size:15px; line-height:1; padding:6px 10px; cursor:pointer; }
+.hu__x:hover{ color:var(--ink2); }
+.hu__body{ display:grid; grid-template-columns:230px 1fr; min-height:0; }
+.hu__list{ border-right:.6px solid var(--line); overflow:auto; padding:8px 0; }
+.hu__item{ display:block; width:100%; text-align:left; background:none; border:0; cursor:pointer;
+           padding:9px 16px; color:var(--ink3); font-family:var(--sans); font-size:13px; }
+.hu__item:hover{ background:rgba(198,200,222,.05); color:var(--ink2); }
+.hu__item.on{ background:rgba(198,200,222,.08); color:var(--ink2); border-left:2px solid var(--ink3); }
+.hu__item b{ font-family:var(--mono); font-size:12px; font-weight:400; color:var(--dim); float:right; }
+.hu__main{ overflow:auto; padding:18px 22px 40px; }
+.hu__head{ font-family:var(--sans); font-size:24px; color:var(--ink2); margin:0 0 4px; }
+.hu__now{ font-family:var(--mono); font-size:13px; color:var(--dim); margin-bottom:18px; }
+.hu__say{ font-family:var(--sans); font-size:17px; line-height:1.55; color:var(--ink3); max-width:62ch; margin:0 0 18px; }
+.hu__say b{ color:var(--ink2); font-weight:500; }
+.hu tbody tr:hover{ background:rgba(198,200,222,.045); }
+.hu table{ border-collapse:collapse; width:100%; max-width:860px; font-family:var(--mono); font-size:12.5px; }
+.hu th{ text-align:left; font-weight:400; font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+        color:var(--dim); border-bottom:.6px solid var(--line2); padding:0 14px 7px 0; }
+.hu td{ padding:7px 14px 7px 0; color:var(--ink3); border-bottom:.4px solid var(--line); white-space:nowrap; }
+.hu td.hu-lv{ color:var(--ink2); }
+.hu tr.hu-here td{ color:var(--ink2); background:rgba(198,200,222,.07); }
+.hu__note{ font-family:var(--mono); font-size:11px; color:var(--dim); line-height:1.7; margin-top:16px; max-width:80ch; }
+.hu__warn{ border-left:2px solid var(--sv3); padding-left:10px; color:var(--ink3); }
+.hu__gg{ margin:22px 0 0; padding-top:16px; border-top:.6px solid var(--line); }
+.hu__sec{ font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; }
+.hu-open{ background:none; border:.6px solid var(--line2); color:var(--ink3); font-family:var(--mono);
+          font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; margin-left:8px; cursor:pointer; }
+.hu-open:hover{ color:var(--ink2); border-color:var(--ink3); }
+.sc-rsi[data-hu="1"]{ cursor:pointer; }
+.sc-rsi[data-hu="watch"]{ cursor:pointer; border-bottom:1px dotted var(--dim); }
+@media (max-width:900px){
+  .hu{ inset:0; }
+  .hu__body{ grid-template-columns:1fr; grid-template-rows:auto 1fr; }
+  .hu__list{ border-right:0; border-bottom:.6px solid var(--line); display:flex; overflow-x:auto; padding:6px; gap:4px; }
+  .hu__item{ flex:0 0 auto; white-space:nowrap; padding:8px 12px; border:.6px solid var(--line); }
+  .hu__item b{ float:none; margin-left:8px; }
+  .hu__head{ font-size:20px; } .hu__say{ font-size:15px; }
+  .hu__main{ padding:14px; }
+  /* one reading per block — nothing runs off the side of a phone */
+  .hu table, .hu tbody, .hu tr, .hu td{ display:block; width:100%; }
+  .hu thead{ display:none; }
+  .hu table{ font-size:13px; }
+  .hu tr{ border-bottom:.6px solid var(--line); padding:10px 0; }
+  .hu td{ border:0; padding:2px 0; white-space:normal; }
+  .hu td::before{ content:attr(data-l) " "; color:var(--dim); display:inline-block; min-width:12ch; }
+  .hu td.hu-lv{ font-size:15px; color:var(--ink2); padding-bottom:5px; }
+  .hu td.hu-lv::before{ content:""; min-width:0; }
+  .hu tr.hu-here{ background:rgba(198,200,222,.07); padding-left:8px; }
+}
+</style>
+<div id="huWrap" role="dialog" aria-label="How unusual is this reading">
+  <div class="hu">
+    <div class="hu__top">
+      <span class="hu__ttl">How unusual is this reading?</span>
+      <span class="hu__sub" id="huSub"></span>
+      <button class="hu__x" type="button" id="huX" aria-label="Close">✕</button>
+    </div>
+    <div class="hu__body">
+      <div class="hu__list" id="huList"></div>
+      <div class="hu__main" id="huMain"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var DOC = null, GEIGER = null, CUR = null, LIVE = {};
+  var DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function say(d){ if(!d) return "—"; var x=new Date(d+"T00:00:00Z");
+    return DAY[x.getUTCDay()]+" "+x.getUTCDate()+" "+MON[x.getUTCMonth()]+" "+x.getUTCFullYear(); }
+  function n0(v){ return v==null?"—":Math.round(v); }
+  function n1(v){ return v==null?"—":(Math.round(v*10)/10).toFixed(1); }
+  function sgn(v){ return v==null?"—":(v>0?"+":"")+(Math.round(v*100)/100).toFixed(2)+"%"; }
+  function grp(v){ return v==null?"—":String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
+
+  /* the same formula the builder uses — Wilder's RSI over closing prices */
+  function rsi14(c, p){ p=p||14; var out=new Array(c.length).fill(null); if(c.length<=p) return out;
+    var g=0,l=0,i,d;
+    for(i=1;i<=p;i++){ d=c[i]-c[i-1]; if(d>=0) g+=d; else l-=d; }
+    g/=p; l/=p; out[p]= l===0?100:100-100/(1+g/l);
+    for(i=p+1;i<c.length;i++){ d=c[i]-c[i-1];
+      g=(g*(p-1)+(d>0?d:0))/p; l=(l*(p-1)+(d<0?-d:0))/p;
+      out[i]= l===0?100:100-100/(1+g/l); }
+    return out; }
+
+  function pctileOf(sym, v){
+    if (v==null || !sym || !sym.percentile_curve) return null;
+    var c=sym.percentile_curve, k=0;
+    for (var i=0;i<=100;i++) if (c[i]!=null && c[i]<=v) k=i;
+    return k;
+  }
+  function load(){
+    if (DOC) return Promise.resolve(DOC);
+    return fetch("data/how-unusual.json").then(function(r){ if(!r.ok) throw new Error("how-unusual "+r.status); return r.json(); })
+      .then(function(j){ DOC=j; return j; });
+  }
+  function geiger(){
+    if (GEIGER) return Promise.resolve(GEIGER);
+    return fetch(window.SC_CHART_API + "/geiger").then(function(r){ return r.ok?r.json():null; })
+      .then(function(j){ GEIGER=j||{}; return GEIGER; }).catch(function(){ GEIGER={}; return GEIGER; });
+  }
+  /* the reading as it stands now, from the same daily bars, so the panel is never
+     older than the last finished day even if the stored history was built earlier */
+  function freshen(t){
+    if (LIVE[t]) return Promise.resolve(LIVE[t]);
+    return fetch(window.SC_CHART_API + "/candles?symbol=" + encodeURIComponent(t) + "&tf=D&limit=400")
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(j){
+        var s=(j&&j.series)||[]; if(s.length<40) return null;
+        s=s.slice().sort(function(a,b){return a.t-b.t;});
+        var v=rsi14(s.map(function(b){return b.c;}));
+        var i=v.length-1; while(i>=0 && v[i]==null) i--;
+        if(i<0) return null;
+        LIVE[t]={ rsi:Math.round(v[i]*100)/100, date:new Date(s[i].t).toISOString().slice(0,10), close:s[i].c };
+        return LIVE[t];
+      }).catch(function(){ return null; });
+  }
+
+  function levelSentence(sym, L){
+    return "At or "+(L.side==="below"?"below":"above")+" "+L.level+" happens on <b>"+n1(L.days_pct)+"% of days</b>"
+      + " — about <b>"+n1(L.per_year)+" times a year</b> ("+grp(L.episodes)+" separate times in "+n1(sym.history.years_of_days||sym.history.years)+" years of days)."
+      + (L.fwd20 && L.fwd20.n ? " After the first day of one of those runs, "+sym.moves+" was <b>higher 20 days later "+n0(L.fwd20.up_pct)+"% of the time</b>,"
+        + " middle move <b>"+sgn(L.fwd20.median_pct)+"</b> — against "+n0(sym.baseline.fwd20.up_pct)+"% and "+sgn(sym.baseline.fwd20.median_pct)+" starting from any day." : "");
+  }
+
+  function rowsHTML(sym, now){
+    var here = null;
+    if (now != null) {
+      var below = sym.levels.filter(function(L){ return L.side==="below" && now<=L.level; }).sort(function(a,b){return a.level-b.level;})[0];
+      var above = sym.levels.filter(function(L){ return L.side==="above" && now>=L.level; }).sort(function(a,b){return b.level-a.level;})[0];
+      here = below || above || null;
+    }
+    return sym.levels.map(function(L){
+      var hit = here && L.level===here.level && L.side===here.side;
+      return '<tr class="'+(hit?"hu-here":"")+'">'
+        + '<td class="hu-lv">'+(L.side==="below"?"at or below ":"at or above ")+L.level+'</td>'
+        + '<td data-l="how often">'+n1(L.days_pct)+"% of days</td>"
+        + '<td data-l="a year">'+n1(L.per_year)+" a year</td>"
+        + '<td data-l="in all">'+grp(L.episodes)+(L.episodes===1?" time":" times")+(L.episodes<25?' <span style="color:var(--mute)">few</span>':"")+"</td>"
+        + '<td data-l="20 days">'+(L.fwd20.n?n0(L.fwd20.up_pct)+"% up":"—")+"</td>"
+        + '<td data-l="middle move">'+(L.fwd20.n?sgn(L.fwd20.median_pct):"—")+"</td>"
+        + '<td data-l="60 days">'+(L.fwd60.n?n0(L.fwd60.up_pct)+"% up · "+sgn(L.fwd60.median_pct):"—")+"</td>"
+        + "</tr>";
+    }).join("");
+  }
+
+  function paintList(){
+    el("huList").innerHTML = DOC.symbols.map(function(s){
+      var v = (LIVE[s.t] && LIVE[s.t].rsi) != null ? LIVE[s.t].rsi : (s.latest && s.latest.rsi);
+      return '<button class="hu__item'+(CUR===s.t?" on":"")+'" type="button" data-hu-pick="'+s.t+'">'+s.name+"<b>"+n1(v)+"</b></button>";
+    }).join("");
+  }
+
+  function paint(){
+    var sym = DOC.symbols.filter(function(s){ return s.t===CUR; })[0];
+    if (!sym) { el("huMain").innerHTML = '<p class="hu__say">No history has been built for this one yet. The nine on the left are the indexes and macro readings, measured from their own full daily history.</p>'; paintList(); return; }
+    var live = LIVE[sym.t] || null, now = live ? live.rsi : (sym.latest && sym.latest.rsi), asOf = live ? live.date : (sym.latest && sym.latest.date);
+    var p = pctileOf(sym, now);
+    var g = (GEIGER && GEIGER.symbols && GEIGER.symbols[sym.t]) || null;
+    var gPct = null, gN = 0;
+    if (g && GEIGER.symbols) {
+      var all = Object.keys(GEIGER.symbols).map(function(k){ return GEIGER.symbols[k] && GEIGER.symbols[k].composite; }).filter(function(x){ return x!=null; });
+      gN = all.length;
+      gPct = Math.round(all.filter(function(x){ return x < g.composite; }).length / all.length * 100);
+    }
+    var hist = sym.history, gap = (hist.gaps||[])[0];
+    el("huMain").innerHTML =
+      '<h2 class="hu__head">'+sym.name+" · "+sym.t+"</h2>"
+      + '<div class="hu__now">daily RSI <b style="color:var(--ink2)">'+n1(now)+"</b> · "+say(asOf)+" (the last finished day)</div>"
+      + (gap ? '<p class="hu__say hu__warn">'+sym.t+" has <b>no bars at all</b> between "+say(gap.from)+" and "+say(gap.to)
+          + " — "+grp(gap.calendar_days)+" days missing from the stored history. Every count below is measured on the "
+          + grp(hist.rsi_days_measured)+" days we hold ("+n1(hist.years_of_days)+" years of days), not on the full period.</p>" : "")
+      + '<p class="hu__say">This reading is <b>higher than '+n0(p)+"% of all days</b> in this symbol's own history — "
+      + grp(hist.rsi_days_measured)+" days measured, "+say(hist.first_day)+" to "+say(hist.last_finished_day)+".</p>"
+      + '<p class="hu__say">'+levelSentence(sym, sym.levels.filter(function(L){
+          return now!=null && (L.side==="below" ? now<=L.level : now>=L.level); }).sort(function(a,b){
+          return Math.abs(a.level-now)-Math.abs(b.level-now); })[0] || sym.levels.filter(function(L){return L.level===40;})[0])+"</p>"
+      + "<table><thead><tr><th>reading</th><th>how often</th><th>how many times a year</th><th>in "+n1(hist.years_of_days||hist.years)+" years of days</th>"
+      + "<th>20 days later</th><th>middle move</th><th>60 days later</th></tr></thead><tbody>"+rowsHTML(sym, now)+"</tbody></table>"
+      + '<div class="hu__gg"><div class="hu__sec">Geiger</div>'
+      + (g ? '<p class="hu__say">Geiger <b>'+(g.composite>0?"+":"")+(Math.round(g.composite*100)/100).toFixed(2)+"</b>"
+             + " — higher than <b>"+gPct+"% of the "+gN+" names</b> on the board today."
+             + ' <span style="color:var(--dim)">That is across today\'s names, not across history: the Geiger\'s own past readings are not stored yet, so there is no "since 2003" for it.</span></p>'
+           : (GEIGER && GEIGER.symbols
+               ? '<p class="hu__say" style="color:var(--dim)">This one is not in the Geiger\'s '+Object.keys(GEIGER.symbols).length+' names, so there is no Geiger reading for it.</p>'
+               : '<p class="hu__say" style="color:var(--dim)">The Geiger did not answer just now, so there is nothing to place. It is not that this reading is unusual or ordinary \u2014 it is that the number is missing.</p>'))
+      + "</div>"
+      + '<div class="hu__note">'
+      + "Counted from finished daily bars served by the chart API ("+sym.provider+"), never from an estimate. "
+      + "A “time” is the first day of a run: a run that stays below 40 for nine days counts once, not nine times. "
+      + "What followed is measured from that first day to the close 20 (or 60) finished days later. "
+      + "History built "+(DOC.built_utc||"").slice(0,10)+"."
+      + ' A run counted \u201cfew\u201d has fewer than 25 examples behind it \u2014 too few to lean on.'
+      + "</div>";
+    paintList();
+  }
+
+  function el(id){ return document.getElementById(id); }
+  function open(t){
+    load().then(function(){
+      CUR = (t||"SPY").toUpperCase();
+      el("huWrap").classList.add("on");
+      el("huSub").textContent = "history from the chart API · nothing written anywhere";
+      paint();
+      return Promise.all([geiger(), freshen(CUR)]);
+    }).then(paint).catch(function(e){
+      el("huWrap").classList.add("on");
+      el("huMain").innerHTML = '<p class="hu__say">The history file did not load ('+String(e && e.message || e)+'). Nothing is being guessed in its place.</p>';
+    });
+  }
+  window.huOpen = open;
+  function close(){ el("huWrap").classList.remove("on"); }
+
+  document.addEventListener("click", function (e) {
+    var pick = e.target.closest && e.target.closest("[data-hu-pick]");
+    if (pick) { CUR = pick.getAttribute("data-hu-pick"); paint(); freshen(CUR).then(paint); return; }
+    if (e.target.closest && e.target.closest("#huX")) { close(); return; }
+    if (e.target.id === "huWrap") { close(); return; }
+    var btn = e.target.closest && e.target.closest("[data-act='huopen']");
+    if (btn) { e.preventDefault(); e.stopPropagation(); open(btn.getAttribute("data-t") || "SPY"); return; }
+    var cell = e.target.closest && e.target.closest(".sc-rsi");
+    if (cell && cell.id && cell.id.indexOf("lr_") === 0) { e.preventDefault(); e.stopPropagation(); open(cell.id.slice(3)); return; }
+    var gm = e.target.closest && e.target.closest(".sc-gmini");
+    var row = gm && gm.closest("[data-act='row']");
+    if (row && row.getAttribute("data-t")) { e.preventDefault(); e.stopPropagation(); open(row.getAttribute("data-t")); }
+  }, true);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+
+  /* every RSI cell on the board is a way in; the nine watched readings carry a mark */
+  var WATCHED = ["SPY","QQQ","IWM","DIA","VIX","US10Y","DXUSD","CLUSD","GCUSD"];
+  function markCells(){
+    document.querySelectorAll(".sc-rsi[id^='lr_']").forEach(function(c){
+      var t = c.id.slice(3);
+      c.setAttribute("data-hu", WATCHED.indexOf(t) >= 0 ? "watch" : "1");
+      c.title = WATCHED.indexOf(t) >= 0
+        ? "how unusual is this reading? — tap for " + t + "'s own history"
+        : "tap: how unusual is this reading?";
+    });
+  }
+  /* VIX, the ten-year, the dollar, oil and gold have no RSI in the provider table, so those
+     cells sat empty for good. The reading exists — it is computed from the same finished daily
+     bars as everything else here — so it is shown, with its source and day in the tooltip. */
+  function fillWatchedRsi(){
+    if (!DOC) return;
+    DOC.symbols.forEach(function(sym){
+      var c = document.getElementById("lr_" + sym.t);
+      if (!c) return;
+      var shown = (c.textContent || "").trim();
+      if (shown && shown !== "\u2014" && shown !== "-") return;      // never overwrite the provider's own number
+      var v = (LIVE[sym.t] && LIVE[sym.t].rsi) != null ? LIVE[sym.t].rsi : (sym.latest && sym.latest.rsi);
+      if (v == null) return;
+      c.textContent = Math.round(v);
+      if (typeof rsiGradColor === "function") c.style.color = rsiGradColor(v);
+      c.title = "RSI " + (Math.round(v*10)/10) + " on " + ((LIVE[sym.t]||sym.latest).date)
+              + ", from finished daily bars (" + sym.provider + ") \u2014 tap: how unusual is this reading?";
+    });
+  }
+  function warm(){ load().then(function(){ fillWatchedRsi(); }).catch(function(){}); }
+  new MutationObserver(function(){ markCells(); fillWatchedRsi(); }).observe(document.documentElement, { childList:true, subtree:true });
+  document.addEventListener("DOMContentLoaded", function(){ markCells(); warm(); });
+  markCells();
+  if (document.readyState !== "loading") warm();
+})();
+</script>
+
 </body>
 </html>
