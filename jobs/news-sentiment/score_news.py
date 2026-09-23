@@ -105,7 +105,9 @@ def anon_key():
     k = os.environ.get("SUPABASE_ANON_KEY")
     if not k:
         idx = os.path.join(REPO, "index.html")
-        m = re.search(r'const ANON = \(typeof window[^"]*"([A-Za-z0-9._\-]+)"', open(idx, encoding="utf-8").read(), re.S)
+        src = open(idx, encoding="utf-8").read()
+        at = src.find("const ANON =")
+        m = re.search(r'"([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)"', src[at:at + 800]) if at > 0 else None
         k = m.group(1) if m else ""
     _ANON = k
     return k

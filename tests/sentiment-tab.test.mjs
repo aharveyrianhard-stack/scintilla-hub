@@ -102,17 +102,34 @@ test("the SOCIAL → SENTIMENT sub-tab is untouched", () => {
   assert.ok(html.includes('else if (S.socTab === "SENTIMENT") fillSocial();'));
 });
 
-test("house rule: the new room is monochrome — no white, no near-white, no bull/bear colour", () => {
+test("house rule for this room (23 Sep): colour where it carries meaning, and still no white", () => {
+  /* Alan, 23 Sep: "I need some more colour, but this is very bland." So the SENTIMENT room
+     is the one place that may use colour — the fear-to-greed zones, which way an item leans,
+     and the words that made it lean. Everything else in the room stays grey, and WHITE IS
+     STILL FORBIDDEN, here as everywhere else. */
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "");   // comments may SAY "white"; values may not USE it
-  // both slices begin inside their opening comment, so the opener is put back before stripping
   const css = strip("/*" + between("/* ── Room · SENTIMENT (master tab)", '/* ── AREA D · "◆ AI READ"'));
   const js = strip("/*" + between("Room · SENTIMENT (master tab, market-wide)", "/* ---- Room 8 · EVENTS"));
-  const bad = /#fff\b|#ffffff\b|#f[0-9a-f]f[0-9a-f]f[0-9a-f]\b|(?<![-\w])white(?![-\w])|rgb\(\s*255\s*,\s*255\s*,\s*255|var\(--ink\)|var\(--bull\)|var\(--bear\)|var\(--crk\)|var\(--sv[1-5]\)/i;
-  for (const [name, txt] of [["css", css], ["js", js]]) { const m = txt.match(bad); assert.equal(m, null, name + " uses a forbidden colour: " + (m && m[0])); }
+  const white = /#fff\b|#ffffff\b|#f[0-9a-f]f[0-9a-f]f[0-9a-f]\b|(?<![-\w])white(?![-\w])|rgb\(\s*255\s*,\s*255\s*,\s*255|var\(--ink\)/i;
+  for (const [name, txt] of [["css", css], ["js", js]]) { const m = txt.match(white); assert.equal(m, null, name + " uses white: " + (m && m[0])); }
+  /* the only colours allowed are the named scale and the lean/highlight pair */
+  const allowed = new Set(["--fg1", "--fg2", "--fg3", "--fg4", "--fg5", "--crk"]);
+  for (const m of (css + js).matchAll(/var\(--(sv[1-5]|bull|bear|fg[1-5]|crk|coin)\)/g)) {
+    assert.ok(allowed.has("--" + m[1]), "the room may not use " + m[0] + " — colour here is the fear/greed scale only");
+  }
+  /* and the scale itself is five real, distinct, non-white colours */
+  const scale = html.slice(html.indexOf("--fg1:"), html.indexOf("--fg5:") + 40);
+  const hexes = [...scale.matchAll(/#([0-9A-Fa-f]{6})/g)].map((m) => m[1]);
+  assert.equal(hexes.length, 5, "five zones");
+  assert.equal(new Set(hexes).size, 5, "five different colours");
+  for (const h of hexes) {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    assert.ok(Math.max(r, g, b) <= 240, "#" + h + " is too close to white");
+  }
   assert.ok(css.includes("body.senti .sc-cohrow{ display:none; }"));
 });
 
-test("stale StockTwits and missing CNN inputs are labelled on the row, never scored", () => {
+test("missing inputs are labelled on the row and never scored, and StockTwits is gone", () => {
   const js = between("Room · SENTIMENT (master tab, market-wide)", "/* ---- Room 8 · EVENTS");
   /* 23 Sep: put/call is no longer one of the missing ones. Cboe retired the CSV files in 2019,
      not the data - it still publishes a free JSON after every close - so this input now reads the
@@ -124,7 +141,11 @@ test("stale StockTwits and missing CNN inputs are labelled on the row, never sco
   assert.ok(js.includes('name: "52-week highs vs lows", val: "no source", score: null, none: true'));
   assert.ok(js.includes('name: "How many stocks are up"'), "breadth now has a real source");
   assert.ok(js.includes("counted per stock, where CNN weighs by volume"), "and says how it differs from CNN's");
-  assert.ok(js.includes("the ingester has not written since. Shown, never counted."));
+  /* M27, Alan: "You can remove StockTwits." The voice, the input and the read are all gone
+     from this room; social_posts itself is untouched in the database. */
+  assert.ok(!js.includes('key: "stocktwits"'), "no StockTwits input or voice");
+  assert.ok(!js.includes("social_posts?select"), "the room does not read social_posts any more");
+  assert.ok(!/STOCKTWITS/.test(js), "and it is not named in the room at all");
 });
 
 /* ── the 68-vs-35 fix, pinned ────────────────────────────────────────────────
@@ -214,8 +235,14 @@ test("a gauge that cannot be read shows a dash and the reason — never a guess,
   assert.ok(failed.includes("CNN answered 500") && failed.includes("<b>—</b>"), "a live failure prints its own error");
   const good = api.sgCardHTML({ g: api.PUBG.find((g) => g.key === "crypto"), ok: true,
     v: { value: 71, scale: "0 – 100", label: "Greed", asOf: "2026-09-23" } });
-  assert.ok(good.includes("<b>71</b>") && good.includes("Greed") && good.includes("as of 2026-09-23"),
+  assert.ok(good.includes(">71<") && good.includes("Greed") && good.includes("as of 2026-09-23"),
     "a live gauge shows the publisher's own value, label and date");
+  assert.match(good, /sg-zone4/, "and the value is drawn in the colour of the zone it sits in");
+  const withPrev = api.sgCardHTML({ g: api.PUBG.find((g) => g.key === "crypto"), ok: true,
+    v: { value: 71, scale: "0 – 100", label: "Greed", asOf: "2026-09-23",
+         prev: [{ name: "previous close", value: 68 }, { name: "one week ago", value: 40 }] } });
+  assert.ok(withPrev.includes("previous close") && withPrev.includes(">68<"),
+    "the publisher's own previous readings sit beside the dial");
 });
 
 test("voices blend across channels: one channel, one vote, whatever its volume", () => {

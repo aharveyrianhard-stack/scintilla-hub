@@ -3282,7 +3282,7 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
 }
 
 /* ============================================================================
-   SOCIAL sub-tabs (SENTIMENT · YOUTUBE · X).
+   SOCIAL sub-tabs (SENTIMENT · YOUTUBE · X · STOCKTWITS).
    YOUTUBE reads youtube_feed; X embeds the independent Desk ledger reader.
    No side accent bars.
    ============================================================================ */
@@ -8273,19 +8273,16 @@ function socScopeTickers() {
   return base.length ? base : (S.fav && S.fav.length ? S.fav.slice() : []);
 }
 /* SOCIAL master tab = 4 sub-tabs. SENTIMENT is the original social_sentiment view;
-   YOUTUBE reads youtube_feed; X embeds the Desk.
+   YOUTUBE reads youtube_feed; X embeds the Desk; STOCKTWITS is a reserved slot.
    Sub-tab switch repaints #socPane in place — no room remount. */
-/* M27 — the StockTwits slot is gone (Alan: "You can remove StockTwits"). It was a
-   placeholder for an ingester that stopped writing, so it promised a feed nobody was
-   going to get. social_posts is untouched in the database. */
-const SOC_TABS = [["SENTIMENT","SENTIMENT"],["YOUTUBE","YOUTUBE"],["X","X"]];
+const SOC_TABS = [["SENTIMENT","SENTIMENT"],["YOUTUBE","YOUTUBE"],["X","X"],["STOCKTWITS","STOCKTWITS"]];
 function socSubtabsHTML() {
   const edit = S.socTab === "YOUTUBE"
     ? '<button class="sc-soctab__edit" data-act="ytedit" title="pick the 8 searched tickers — saved server-side">⚙ Edit tickers</button>'
     : "";
   return '<div class="sc-soctabs">' + SOC_TABS.map(([k, l]) => {
     const on = S.socTab === k ? " is-on" : "";
-    const soon = "";
+    const soon = k === "STOCKTWITS" ? " is-soon" : "";
     return '<button class="sc-soctab' + on + soon + '" data-act="soctab" data-tab="' + k + '">' + l + "</button>";
   }).join("") + edit + "</div>";
 }
@@ -9223,8 +9220,18 @@ function sentiSafe(p, ms) {
    words. It tokenises exactly the way the scorers do (lowercase, links dropped,
    only letters/digits/$/apostrophe), keeps each token's position in the original
    string, and so highlights the same words the score counted — never a re-guess. */
+/* the feeds hand us text that already carries HTML entities (BlackRock&#39;s, AT&amp;T).
+   They are turned back into characters BEFORE anything is scored or highlighted, so the
+   page shows the sentence as written instead of its markup, and "amp" is never a word. */
+function snDecode(t) {
+  return String(t == null ? "" : t)
+    .replace(/&#(\d+);/g, function (_, n) { return String.fromCharCode(+n); })
+    .replace(/&#x([0-9a-f]+);/gi, function (_, n) { return String.fromCharCode(parseInt(n, 16)); })
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
 function snHiHTML(text, sets, limit) {
-  const src = String(text == null ? "" : text);
+  const src = snDecode(text);
   const cut = limit && src.length > limit ? src.slice(0, limit) + "…" : src;
   const low = cut.toLowerCase().replace(/https?:\/\/\S+/g, function (m) { return " ".repeat(m.length); });
   const re = /[a-z0-9$']+/g;
@@ -9548,7 +9555,7 @@ function sgDial(score, max) {
     const z = sgZone(100 * score / m);
     const p = pt(ang(score), r - 20), tail = pt(ang(score) + Math.PI, 11);
     needle = '<line x1="' + tail[0].toFixed(1) + '" y1="' + tail[1].toFixed(1) + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) +
-      '" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>' +
+      '" stroke="var(--ink2)" stroke-width="3" stroke-linecap="round"/>' +
       '<circle cx="' + cx + '" cy="' + cy + '" r="7" fill="var(--panel)" stroke="' + (z ? z.v : "var(--ink2)") + '" stroke-width="2.5"/>';
   }
   return '<svg class="sg-dial" viewBox="0 0 240 126" role="img" aria-label="' + (ok ? score + " of " + m + ", " + (sgZone(100 * score / m) || {}).name : "no reading") + '">' +
@@ -9845,7 +9852,12 @@ async function sentiNewsHeads() {
   try {
     const r = await pg("news_headline_sentiment?select=url,ticker,published_ts,score,question,pos_n,neg_n,flip_n,method&published_ts=gte." + sinceS + "&order=published_ts.desc&limit=1000", 1);
     stored = Array.isArray(r) ? r : null;
-  } catch (e) { storedErr = String((e && e.message) || e); stored = null; }
+  } catch (e) {
+    /* the table simply does not exist yet; the raw PostgREST path is noise on the page */
+    storedErr = /404/.test(String((e && e.message) || e)) ? "the table has not been created yet"
+              : "the stored rows could not be read (" + String((e && e.message) || e).slice(0, 60) + ")";
+    stored = null;
+  }
   const rows = [];
   for (let i = 0; i < NEWS_PAGES; i++) {
     const page = await pg("news?select=ticker,title,snippet,site,url,published_ts&published_ts=gte." + sinceS +
@@ -14920,7 +14932,7 @@ function afterMount() {
   if (S.sec === "NEWS") fillNews();
   else if (S.sec === "SOCIAL") {               // AREA A — dispatch by SOCIAL sub-tab
     if (S.socTab === "YOUTUBE") fillYT();
-    else if (S.socTab === "SENTIMENT") fillSocial();   // X loads within its iframe
+    else if (S.socTab === "SENTIMENT") fillSocial();   // X loads within its iframe; STOCKTWITS is a reserved slot
   }
   else if (S.sec === "EVENTS") fillEvents();
   else if (S.sec === "SENTIMENT") sentiDispatch();
@@ -15325,7 +15337,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     /* SOCIAL sub-tab switch — repaint #socPane in place (no room remount), then
-       run the tab's own fill. X loads within its iframe. */
+       run the tab's own fill. X loads within its iframe; STOCKTWITS is reserved. */
     case "soctab": {
       const t = a.dataset.tab; if (!t || t === S.socTab) break;
       S.socTab = t;
