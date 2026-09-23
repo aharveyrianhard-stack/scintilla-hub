@@ -146,5 +146,5 @@ test("wiring: reads, row field, cells and tick path", () => {
 test("every inline script still parses", () => {
   const re = /<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g; let m, n = 0;
   while ((m = re.exec(page))) { n++; assert.doesNotThrow(() => new vm.Script(m[2], { filename: "inline" + n }), "inline script " + n); }
-  assert.equal(n, 6);
+  assert.equal(n, 7);   // 23 Sep 2026: the "how unusual" read is the seventh
 });
