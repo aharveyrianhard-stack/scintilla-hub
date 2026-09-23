@@ -2281,6 +2281,128 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ern-it.is-past .ern-res, .ern-it.is-past .ern-sur{ opacity:.7; }   /* the result stays readable; the row around it recedes */
 .ern-note{ color:var(--dim); }
 
+/* ----------------------------------------------------------------------------
+   THE EARNINGS CALENDAR — MONTH and WEEK (Alan, 23 Sep, the earnings proposal).
+   Earnings are the OPPOSITE of the economic calendar. The busiest economic day in
+   600 days carried four releases; 38 of the names the Hub tracks report on one
+   Wednesday. So MONTH cannot list names the way the economic month does — it
+   carries the SHAPE of the season (a load bar, the count, the biggest names) and
+   hands off to WEEK for the names. WEEK is the working view: one row per day, the
+   tickers grouped by when they report, each chip carrying its surprise.
+   COLOUR LAW — exactly the EARNINGS band's and the economic calendar's three:
+     green  --sv1  beat        yellow --sv3  in line        red --sv5  miss
+   The load bar is the one thing that is NOT a result: it is how many report that
+   day, cyan → orange → red, and it never touches a ticker's own colour. The dot
+   on a chip is the cohort (like the economic calendar's category spine); the
+   result lives on the chip's edge and its number, so the two can never be read
+   for each other.
+   Weeks start MONDAY here, exactly as the band's "WEEK OF" does.
+   ---------------------------------------------------------------------------- */
+.se-bar{ display:flex; align-items:center; gap:9px; padding:7px 10px 8px; font-family:var(--mono);
+  border-bottom:.5px solid var(--line); }
+.se-nav{ background:none; border:.6px solid var(--line2); color:var(--ink3); cursor:pointer;
+  font-size:10px; padding:4px 8px; border-radius:2px; font-family:var(--mono); }
+.se-nav:hover{ color:var(--crk); border-color:rgba(0,212,255,.34); }
+.se-lbl{ font-size:9.5px; letter-spacing:.18em; color:var(--ink); text-transform:uppercase;
+  font-variant-numeric:tabular-nums; }
+.se-lbl .n{ color:var(--dim); letter-spacing:.1em; }
+.se-spans{ margin-left:auto; display:flex; gap:2px; }
+.se-sp{ font-size:7.5px; letter-spacing:.2em; color:var(--dim); padding:4px 9px; cursor:pointer;
+  border:.6px solid transparent; border-radius:2px; text-transform:uppercase; }
+.se-sp:hover{ color:var(--ink2); }
+.se-sp.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
+.se-note{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--dim);
+  padding:8px 10px 2px; }
+.se-key{ display:flex; gap:11px; flex-wrap:wrap; padding:9px 10px 2px; font-family:var(--mono);
+  font-size:7.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+.se-key span{ display:inline-flex; align-items:center; gap:5px; }
+.se-key i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+
+/* ---- MONTH: the shape of the season ---- */
+.se-cal{ display:grid; grid-template-columns:repeat(7,1fr); border-top:.5px solid var(--line2); }
+.se-dow{ font-family:var(--mono); font-size:8px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--dim); padding:9px 8px 8px; }
+.se-cell{ min-height:106px; padding:5px 6px 7px; cursor:pointer; overflow:hidden;
+  border-top:.5px solid var(--line); border-right:.5px solid var(--line); }
+.se-cell:nth-child(7n+7){ border-right:0; }
+.se-cell:hover{ background:rgba(255,255,255,.022); }
+.se-cell.out{ opacity:.34; }                 /* the neighbouring month, kept so the weeks stay whole */
+.se-dnum{ display:flex; justify-content:space-between; align-items:center; height:20px; margin:0 0 3px; }
+.se-dnum .d{ font-family:var(--mono); font-size:12px; color:var(--ink2); line-height:1;
+  font-variant-numeric:tabular-nums; padding:3px 4px; }
+.se-dnum.is-today .d{ color:var(--bg); font-weight:700; background:var(--crk); border-radius:5px;
+  min-width:22px; text-align:center; }
+.se-load{ font-family:var(--mono); font-size:7.5px; letter-spacing:.06em; color:var(--sv4);
+  border:.5px solid rgba(255,138,0,.5); border-radius:2px; padding:0 4px; line-height:1.35;
+  font-variant-numeric:tabular-nums; }
+.se-load.warm{ background:rgba(255,138,0,.14); }
+.se-load.hot{ color:var(--sv5); border-color:var(--sv5); background:rgba(255,48,96,.14); font-weight:700; }
+.se-bars{ display:flex; gap:1px; height:4px; margin:0 0 5px; }
+.se-bars i{ flex:1 1 auto; border-radius:1px; background:var(--mute); }
+.se-ev{ display:flex; align-items:center; gap:5px; font-size:9px; line-height:1.55;
+  white-space:nowrap; overflow:hidden; }
+.se-ev .sp{ flex:none; width:2px; height:10px; border-radius:1px; opacity:.85; }
+.se-ev .tk{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  font-family:var(--mono); font-size:9px; letter-spacing:.06em; color:var(--ink); font-weight:600; }
+.se-ev .rt{ flex:none; font-family:var(--mono); font-size:7px; color:var(--mute); }
+.se-ev.beat .tk{ color:var(--sv1); } .se-ev.miss .tk{ color:var(--sv5); } .se-ev.inline .tk{ color:var(--sv3); }
+.se-more{ font-family:var(--mono); font-size:7.5px; letter-spacing:.1em; color:var(--dim);
+  padding-left:7px; margin-top:1px; }
+
+/* ---- WEEK: the working view ---- */
+.se-wk{ padding:2px 0 10px; }
+.se-day{ display:grid; grid-template-columns:120px 1fr; gap:12px; padding:10px 11px;
+  border-bottom:.5px solid var(--line); align-items:start; }
+.se-day.is-today{ background:rgba(0,212,255,.045); }
+.se-day.is-past .se-dlbl b{ color:var(--ink3); }
+.se-dlbl{ font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink3); }
+.se-dlbl b{ display:block; color:var(--ink); font-size:11px; margin-top:2px; }
+.se-dlbl .cnt{ display:block; color:var(--sv4); font-size:8px; letter-spacing:.1em; margin-top:3px; }
+.se-slot{ margin-bottom:7px; }
+.se-slot:last-child{ margin-bottom:0; }
+.se-sl{ font-family:var(--mono); font-size:7px; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--mute); margin-bottom:4px; }
+.se-chips{ display:flex; gap:5px; flex-wrap:wrap; }
+.se-chip{ display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9.5px;
+  letter-spacing:.06em; padding:3px 8px; border:.6px solid var(--line2); border-radius:3px;
+  color:var(--ink2); cursor:pointer; background:var(--panel2); }
+.se-chip:hover{ border-color:rgba(0,212,255,.34); color:var(--ink); }
+.se-chip.is-open{ border-color:var(--crk); color:var(--ink); }
+.se-chip i{ width:5px; height:5px; border-radius:50%; display:inline-block; flex:none; }
+.se-chip .s{ font-size:8px; font-variant-numeric:tabular-nums; color:var(--dim); }
+.se-chip.beat{ border-color:rgba(0,255,163,.34); } .se-chip.beat .s{ color:var(--sv1); }
+.se-chip.miss{ border-color:rgba(255,48,96,.34); } .se-chip.miss .s{ color:var(--sv5); }
+.se-chip.inline .s{ color:var(--sv3); }
+.se-empty{ font-family:var(--mono); font-size:8px; letter-spacing:.2em; color:var(--mute);
+  text-transform:uppercase; padding:3px 0; }
+/* the card a chip opens — the SAME block the DAY view draws, in its own frame */
+.se-card{ border-top:.5px solid var(--line2); border-bottom:.5px solid var(--line2);
+  background:var(--panel2); padding:9px 11px 4px; }
+.se-card .sc-ern{ max-width:640px; }   /* one card, not a card stretched across the panel */
+.se-card__hd{ display:flex; align-items:center; gap:9px; font-family:var(--mono); font-size:8px;
+  letter-spacing:.22em; text-transform:uppercase; color:var(--crk); padding:0 0 6px; }
+.se-card__x{ margin-left:auto; cursor:pointer; color:var(--dim); border:.6px solid var(--line2);
+  border-radius:2px; padding:1px 6px; }
+.se-card__x:hover{ color:var(--ink); border-color:var(--crk); }
+
+/* PHONE (390px) — the month keeps all seven columns (a calendar with columns missing
+   stops being a calendar) and loses the report time; the week stacks its day label
+   above its chips, which is where the room comes from. */
+@media (max-width:900px){
+  .se-cell{ min-height:72px; padding:4px 4px 5px; }
+  .se-ev{ font-size:8px; gap:4px; } .se-ev .rt{ display:none; }
+  .se-ev .tk{ font-size:8px; letter-spacing:0; }
+  .se-dnum{ height:16px; } .se-dnum .d{ font-size:10px; padding:2px 3px; }
+  .se-dow{ font-size:7px; letter-spacing:.06em; padding:7px 3px; }
+  .se-load{ font-size:7px; padding:0 3px; }
+  .se-more{ font-size:6.5px; letter-spacing:0; padding-left:2px; white-space:nowrap; }
+  .se-day{ grid-template-columns:1fr; gap:6px; padding:9px 9px; }
+  .se-dlbl{ display:flex; align-items:baseline; gap:8px; }
+  .se-dlbl b{ display:inline; margin:0; } .se-dlbl .cnt{ display:inline; margin:0; }
+  .se-bar{ flex-wrap:wrap; gap:6px; } .se-spans{ margin-left:0; width:100%; }
+}
+
 /* ============================================================================
    FIX 1 — GLOBAL SCALE LAW: the page is designed at 1240px. CSS zoom scales the
    WHOLE cockpit proportionally on big screens (Chrome + Safari) — designed once,
@@ -4258,6 +4380,11 @@ const S = {
   boardOrder: [],                               // FIX 3 (R36) — frozen render order (tickers); re-sorts ONLY on a header click
   coTab: "GEIGER",                              // CompanyRoom local state (coExpand retired → R21 secfs)
   readTab: "VERDICT", calType: "ALL",
+  /* EVENTS · the earnings calendar (Alan's 23 Sep proposal): which span is on screen,
+     the day it is anchored to (null = today), and the chip whose card is open.
+     WEEK is the landing span — the proposal calls it "the working view · where you
+     actually live during a reporting season"; DAY stays the drill-in it is today. */
+  ernSpan: "WEEK", ernDay: null, ernPick: null,
   estTF: "A",                                   // (news cache lives in NEWS_CACHE — per-cohort, FIX A3)
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
   socTab: "YOUTUBE",
@@ -9287,6 +9414,7 @@ function eventsRoomHTML() {
     '<div class="body2 body2--ev">' +
       '<div class="panel">' +
         '<div class="sc-plabel sc-plabel--row"><span>' + (S.calType === "ALL" ? "earnings &amp; dividends" : S.calType.toLowerCase()) + "</span>" + SECFS_BTN + "</div>" +
+        '<div id="ernSpanBar">' + ercSpanBarHTML() + "</div>" +
         '<div class="scroller" id="evList"><div class="soon">loading events…</div></div>' +
       "</div>" +
       /* AREA B — the standalone "calendar rail" card is GONE: the two-column
@@ -9305,7 +9433,13 @@ function eventsRoomHTML() {
    ALL = whole universe, FAV = favourites only, search = ticker prefix filter. */
 function renderEvents(cohort) {
   const list = el("evList");
-  if (!list || !EV_CACHE || S.calType === "DIVIDENDS") return;
+  if (!list || S.calType === "DIVIDENDS") return;
+  const sbar = el("ernSpanBar"); if (sbar) sbar.innerHTML = ercSpanBarHTML();
+  /* MONTH and WEEK are the calendar views; DAY is the two-column UPCOMING | PAST
+     list below, unchanged. The calendar reads its own span and does not wait for
+     the DAY caches, so a month paints while they are still arriving. */
+  if (ercSpan() !== "DAY") { ercRenderCal(list, cohort); return; }
+  if (!EV_CACHE) return;
   if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // honest gate — never an unscoped list
     list.innerHTML = '<div class="soon">cohort map loading…</div>';
     return;
@@ -9342,6 +9476,12 @@ function renderEvents(cohort) {
   list.innerHTML = rows.length
     ? headHTML + trHTML + cols
     : '<div class="soon">No earnings events for <b>' + esc(S.tq || cohort) + "</b>.</div>";
+  evFillExtras(upS, scopedTk);
+}
+/* the right-hand extras column (RELEASES card + the UPCOMING digest). Factored out
+   of renderEvents so the MONTH and WEEK views fill the same rail with the same rows
+   instead of leaving it blank or drawing a second version of it. */
+function evFillExtras(upS, scopedTk) {
   /* AREA B — master RELEASES panel (right column): per single-ticker scope, else a hint */
   const relP = el("evRelPanel");
   if (relP) {
@@ -9351,7 +9491,7 @@ function renderEvents(cohort) {
       relP.innerHTML = '<div class="card"><h4>RELEASES</h4><div class="sc-senttxt">Search a single ticker to see its company releases (from <b>company_releases</b>) + investor-relations link.</div></div>';
   }
   const rail = el("evUpcoming");
-  if (rail) rail.innerHTML = upS.length
+  if (rail) rail.innerHTML = (upS && upS.length)
     ? upS.slice(0, 8).map((ev) => {
         const rel = evRel(evDays(ev.date));
         const est = num(ev.eps_estimate) != null
@@ -9362,6 +9502,274 @@ function renderEvents(cohort) {
           (rel ? '<span class="sc-evrel up">' + rel + "</span>" : "") + "</span></div>";
       }).join("")
     : "Nothing upcoming for this scope.";
+}
+/* ============================================================================
+   THE EARNINGS CALENDAR — MONTH · WEEK · DAY   (Alan, 23 Sep: the earnings proposal)
+   WHY IT IS SHAPED THIS WAY: earnings are the opposite of the economic calendar.
+   The busiest economic day in 600 days carried four releases; on Wed 4 Nov 38 of
+   the names the Hub tracks report. A month cell cannot list 38 names, so MONTH
+   carries the SHAPE of the season — a load bar, the count, the biggest names — and
+   a day hands off to WEEK, which is the working view: one row per day, the tickers
+   grouped by when they report, each chip carrying its surprise, and a chip opens
+   the same card the DAY view draws. DAY keeps today's UPCOMING | PAST · REPORTED
+   list exactly as it is.
+   WHAT IT READS: earnings_events, the EVENTS room's own table and columns, for the
+   span on screen only, one request per span, cached by that span, filtered to the
+   names the Hub tracks and then scoped by the cohort strip like every other room.
+   Nothing is written anywhere, no new table, no new schedule.
+   THE SAME WORDS AS THE BAND AT THE BOTTOM OF THE SCREEN: the week is Monday to
+   Sunday (ernWeek), "before the open / after the close" is ernWhen, the order
+   within a day is ernSlot, and the result and its surprise are ernResult — so the
+   band and this calendar can never disagree about a day or a number.
+   THE FOUR OPEN DECISIONS from the proposal, built to its own recommendation, each
+   one word to change here:
+     ERC_MONTH_CELL  "LOAD+NAMES" (recommended)  |  "HEAT" for the load bar alone
+     ERC_NAME_ORDER  "MCAP" (recommended: biggest first)  |  "FAV" favourites first
+     ERC_COHORT_HUE  true (recommended: the dot is the cohort)  |  false
+     DIVIDENDS stays the sub-tab it is today (ALL | EARNINGS | DIVIDENDS, untouched).
+   ============================================================================ */
+const ERC_MONTH_CELL = "LOAD+NAMES";
+const ERC_NAME_ORDER = "MCAP";
+const ERC_COHORT_HUE = true;
+const ERC_NAMES_PER_CELL = 3;
+const ERC_MAX = 1000;                 // one read's ceiling: PostgREST serves no more
+const ERC_RETRY_MS = 60e3;
+/* the same columns the DAY view reads, so a chip opens a full card and nothing on it is missing */
+const ERC_SEL = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source";
+let ERC_ROWS = null, ERC_KEY = "", ERC_SIG = "", ERC_BUSY = false, ERC_FAIL_AT = 0, ERC_FAIL_KEY = "", ERC_TRUNC = false;
+const ercSpan = () => S.ernSpan || "WEEK";
+const ercAnchor = () => S.ernDay || todayISO();
+const ERC_MONTH_NAME = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
+/* THE COHORT HUE — the earnings analogue of the economic calendar's category spine,
+   built the same way EC_CAT_COLOR is: the cockpit's own design tokens, and a quiet
+   grey for the cohorts that are plumbing rather than news (an index or a metal does
+   not report earnings). The dot is the cohort; the result is the chip's edge and its
+   number, so a green dot can never be read as a beat. */
+const ERC_COH_COLOR = {
+  MEGACAP:      "#00D4FF",   /* cherenkov cyan */
+  BLUE_CHIP:    "#A24BFF",   /* momentum purple */
+  AI_HARDWARE:  "#FF8A00",   /* volume orange */
+  AI_SOFTWARE:  "#FF3DBE",   /* volatility pink */
+  AI_POWERTRAIN:"#C8FF00",   /* lime */
+  GROWTH:       "#FFE500",   /* structure yellow */
+  INTL:         "#2D9CFF",   /* trend blue */
+  CRYPTO:       "#8B5CF6",   /* violet — crypto, as everywhere else in the cockpit */
+  THEMATIC:     "#FF6AD5",
+  METALS:       "#B0B0C6",
+  UTILITIES:    "#5A8CA8",
+  MATERIALS:    "#767690",   /* deliberately quiet */
+  COMMS:        "#767690",
+  STAPLES:      "#6A6C86",   /* deliberately quiet */
+  REAL_ESTATE:  "#6A6C86",
+  MACRO:        "#3A3A52",   /* plumbing */
+  INDEXES:      "#3A3A52",
+};
+const ercHue = (t) => ERC_COH_COLOR[COHORT_OF[t]] || "#3A3A52";
+/* MONTH's grid: whole weeks, starting MONDAY like the band's week, so the day
+   columns of MONTH and WEEK are the same columns. */
+function ercMonthGrid(iso) {
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7), first = iso.slice(0, 8) + "01";
+  const dow = new Date(first + "T12:00:00Z").getUTCDay();          // 0 Sun … 6 Sat
+  const lead = dow === 0 ? 6 : dow - 1;                            // days before the 1st, Monday-based
+  const start = ernShift(first, -lead), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const weeks = Math.ceil((lead + days) / 7);
+  return Array.from({ length: weeks * 7 }, (_, i) => ernShift(start, i));
+}
+const ercMonthShift = (iso, k) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1 + k, 1)).toISOString().slice(0, 10);
+function ercRange() {
+  if (ercSpan() === "MONTH") { const g = ercMonthGrid(ercAnchor()); return { from: g[0], to: g[g.length - 1] }; }
+  const w = ernWeek(ercAnchor()); return { from: w[0], to: w[6] };
+}
+const ercRangeKey = () => { const r = ercRange(); return r.from + "|" + r.to; };
+/* ONE READ PER SPAN, and a quiet re-read that does not move the reader. A repaint
+   happens only when the rows actually differ, and the list keeps its scroll. */
+async function ercRead(quiet) {
+  const r = ercRange(), key = r.from + "|" + r.to;
+  if (ERC_BUSY) return;
+  if (!quiet && key === ERC_KEY && ERC_ROWS) return;
+  if (ERC_FAIL_KEY === key && Date.now() - ERC_FAIL_AT < ERC_RETRY_MS) return;
+  ERC_BUSY = true;
+  try {
+    if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));   // the names the Hub tracks
+    const rows = await pg("earnings_events?" + ERC_SEL + "&date=gte." + r.from + "&date=lte." + r.to + "&order=date.asc&limit=" + ERC_MAX);
+    const keep = (rows || []).filter((x) => x && x.ticker && (!UNIVERSE || UNIVERSE.has(x.ticker)));
+    const sig = JSON.stringify(keep), changed = key !== ERC_KEY || sig !== ERC_SIG;
+    ERC_TRUNC = (rows || []).length >= ERC_MAX;
+    ERC_ROWS = keep; ERC_KEY = key; ERC_SIG = sig; ERC_FAIL_AT = 0; ERC_FAIL_KEY = "";
+    if (changed && S.sec === "EVENTS" && ercSpan() !== "DAY") {
+      const box = el("evList"), at = box ? box.scrollTop : 0;
+      renderEvents(S.coh);
+      const now = el("evList"); if (now && at) now.scrollTop = at;
+    }
+  } catch (err) {
+    ERC_FAIL_AT = Date.now(); ERC_FAIL_KEY = key;
+    if (S.sec === "EVENTS" && ercSpan() !== "DAY" && !ERC_ROWS) renderEvents(S.coh);   // say so; the last good rows are never blanked
+  } finally { ERC_BUSY = false; }
+}
+/* THE SIZES AND THE COHORTS ARRIVE WITH THE BOARD, AND THE CALENDAR MAY BE DRAWN
+   FIRST. Measured here: entering EVENTS while the board was still loading drew
+   November with its names in alphabetical order (AAPL, AEP, AME) and grey dots,
+   because market_cap and the cohort map were not on hand yet. The view now says so
+   while it waits and redraws itself once, quietly, when they land — it never asks
+   for them itself, and it never guesses a size. */
+let ERC_SIZE_TRIES = 0, ERC_SIZE_TIMER = null;
+const ercBoardRows = () => (BOARD_SNAPSHOT && BOARD_SNAPSHOT.rows) || ALLROWS || [];
+function ercWaitForSizes() {
+  if (ERC_SIZE_TIMER != null || ERC_SIZE_TRIES >= 12 || typeof setTimeout !== "function") return;
+  ERC_SIZE_TIMER = setTimeout(() => {
+    ERC_SIZE_TIMER = null; ERC_SIZE_TRIES++;
+    if (S.sec !== "EVENTS" || ercSpan() === "DAY" || !ercBoardRows().length) return;
+    const box = el("evList"), at = box ? box.scrollTop : 0;
+    renderEvents(S.coh);
+    const now = el("evList"); if (now && at) now.scrollTop = at;
+  }, 1500);
+}
+/* the market caps the board already read — no extra request. A ticker with no
+   stored size sorts last; it is never treated as a zero. */
+function ercMcap() {
+  const m = {}, src = (BOARD_SNAPSHOT && BOARD_SNAPSHOT.rows) || ALLROWS || [];
+  for (const r of src) if (r && r.t && r.mc != null) m[r.t] = +r.mc;
+  return m;
+}
+function ercOrder(list, mcap) {
+  const fav = S.fav || [];
+  return list.slice().sort((a, b) => {
+    if (ERC_NAME_ORDER === "FAV") {
+      const fa = fav.indexOf(a.ticker) >= 0 ? 0 : 1, fb = fav.indexOf(b.ticker) >= 0 ? 0 : 1;
+      if (fa !== fb) return fa - fb;
+    }
+    const ma = mcap[a.ticker], mb = mcap[b.ticker];
+    if (ma != null && mb != null && ma !== mb) return mb - ma;
+    if ((ma == null) !== (mb == null)) return ma == null ? 1 : -1;
+    return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0;
+  });
+}
+const ercWhenShort = (r) => { const w = ernWhen(r); return w === "before the open" ? "open" : w === "after the close" ? "close" : w; };
+function ercTitle(r) {
+  const res = ernResult(r), w = ernWhen(r);
+  return r.ticker + " · " + ernWeekday(r.date) + " " + ernMonthDay(r.date) + (w ? ", " + w : ", time not set") +
+    (res ? " · EPS " + ernNum(res.act) + (res.est != null ? " against an estimate of " + ernNum(res.est) : "") +
+           (res.sur ? " · " + (res.cls === "beat" ? "beat by " : res.cls === "miss" ? "missed by " : "") + res.sur : "")
+         : " · not reported yet") + " · click for the card";
+}
+/* ---- MONTH: the shape of the season ---- */
+function ercCellEvHTML(r) {
+  const res = ernResult(r), w = ercWhenShort(r);
+  return '<div class="se-ev ' + (res && res.cls ? res.cls : "") + '">' +
+    (ERC_COHORT_HUE ? '<span class="sp" style="background:' + ercHue(r.ticker) + '"></span>' : "") +
+    '<span class="tk">' + esc(r.ticker) + "</span>" + (w ? '<span class="rt">' + esc(w) + "</span>" : "") + "</div>";
+}
+function ercMonthHTML(byDay) {
+  const d0 = ercAnchor(), grid = ercMonthGrid(d0), mo = d0.slice(0, 7), today = todayISO(), mcap = ercMcap();
+  let max = 8; for (const d of grid) max = Math.max(max, (byDay[d] || []).length);
+  const dow = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((w) => '<div class="se-dow">' + w + "</div>").join("");
+  const cells = grid.map((d) => {
+    const list = ercOrder(byDay[d] || [], mcap), n = list.length;
+    /* the load bar is HOW MANY report, never a result: cyan, then orange as the day
+       fills, then red on the heaviest days. */
+    const lvl = n >= 25 ? "var(--sv5)" : n >= 12 ? "var(--sv4)" : "var(--crk)";
+    const fill = n ? Math.max(1, Math.round(Math.min(1, n / max) * 10)) : 0;
+    const bars = n ? '<div class="se-bars">' + Array.from({ length: 10 }, (_, i) =>
+      '<i style="background:' + (i < fill ? lvl : "var(--mute)") + ";opacity:" + (i < fill ? ".9" : ".25") + '"></i>').join("") + "</div>" : "";
+    const names = ERC_MONTH_CELL === "HEAT" ? "" : list.slice(0, ERC_NAMES_PER_CELL).map(ercCellEvHTML).join("");
+    const more = (ERC_MONTH_CELL !== "HEAT" && n > ERC_NAMES_PER_CELL) ? '<div class="se-more">+' + (n - ERC_NAMES_PER_CELL) + " more</div>" : "";
+    const ttl = ernWeekday(d) + " " + ernMonthDay(d) + " · " + (n ? n + (n === 1 ? " name you track reports" : " names you track report") : "nothing") + " · click for the week";
+    return '<div class="se-cell' + (d.slice(0, 7) === mo ? "" : " out") + '" data-act="ernday" data-d="' + d + '" title="' + esc(ttl) + '">' +
+      '<div class="se-dnum' + (d === today ? " is-today" : "") + '"><span class="d">' + (+d.slice(8)) + "</span>" +
+      (n ? '<span class="se-load' + (n >= 25 ? " hot" : n >= 12 ? " warm" : "") + '">' + n + "</span>" : "") + "</div>" +
+      bars + names + more + "</div>";
+  }).join("");
+  return '<div class="se-cal">' + dow + cells + "</div>";
+}
+/* ---- WEEK: the working view ---- */
+function ercChipHTML(r) {
+  const res = ernResult(r), on = S.ernPick && S.ernPick.t === r.ticker && S.ernPick.d === r.date;
+  return '<span class="se-chip ' + (res && res.cls ? res.cls : "") + (on ? " is-open" : "") +
+    '" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '" title="' + esc(ercTitle(r)) + '">' +
+    (ERC_COHORT_HUE ? '<i style="background:' + ercHue(r.ticker) + '"></i>' : "") + esc(r.ticker) +
+    (res && res.sur ? '<span class="s">' + esc(res.sur) + "</span>" : "") + "</span>";
+}
+function ercCardHTML(r) {
+  return '<div class="se-card"><div class="se-card__hd"><span>' + esc(r.ticker) + " · " + esc(fmtEvDate(r.date)) + "</span>" +
+    '<span class="se-card__x" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '">✕ close</span></div>' +
+    earningsBlockHTML(earningsRowToBlock(r, CALLSUM_IDX)) + "</div>";
+}
+function ercWeekHTML(byDay) {
+  const week = ernWeek(ercAnchor()), today = todayISO(), mcap = ercMcap();
+  /* the four groups are ernSlot's own order, so the week and the band agree:
+     before the open, a given clock time, after the close, and — the common one for
+     anything still to come — no time in the stored calendar at all. */
+  const slots = [[0, "before the open"], [1, "at a set time"], [2, "after the close"], [3, "time not set"]];
+  return '<div class="se-wk">' + week.map((d) => {
+    const list = ercOrder(byDay[d] || [], mcap);
+    const body = list.length ? slots.map(function (sl) {
+      const inSlot = list.filter((r) => ernSlot(r) === sl[0]);
+      if (!inSlot.length) return "";
+      return '<div class="se-slot"><div class="se-sl">' + sl[1] + " · " + inSlot.length + '</div><div class="se-chips">' +
+        inSlot.map(ercChipHTML).join("") + "</div></div>";
+    }).join("") : '<div class="se-empty">no reports</div>';
+    const open = (S.ernPick && S.ernPick.d === d) ? (list.filter((r) => r.ticker === S.ernPick.t)[0] || null) : null;
+    return '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
+        '<div class="se-dlbl">' + esc(ernWeekday(d)) + "<b>" + esc(ernMonthDay(d)) + "</b>" +
+        (list.length ? '<span class="cnt">' + list.length + " reporting</span>" : "") + "</div>" +
+        "<div>" + body + "</div>" +
+      "</div>" + (open ? ercCardHTML(open) : "");
+  }).join("") + "</div>";
+}
+/* the legend, only for the cohorts actually on screen */
+function ercKeyHTML(rows) {
+  if (!ERC_COHORT_HUE) return "";
+  const seen = [];
+  rows.forEach((r) => { const c = COHORT_OF[r.ticker]; if (c && ERC_COH_COLOR[c] && seen.indexOf(c) < 0) seen.push(c); });
+  if (!seen.length) return "";
+  return '<div class="se-key">' + seen.sort().map((c) =>
+    '<span><i style="background:' + ERC_COH_COLOR[c] + '"></i>' + esc(COH_ABBR[c] || c.replace(/_/g, " ")) + "</span>").join("") + "</div>";
+}
+function ercNoteHTML(rows) {
+  const sp = ercSpan(), mcap = ercMcap(), known = rows.filter((r) => mcap[r.ticker] != null).length;
+  const bits = [rows.length + (rows.length === 1 ? " report" : " reports") + " in this " + sp.toLowerCase()];
+  if (sp === "MONTH") bits.push("click a day for its week");
+  if (sp === "WEEK") bits.push("click a ticker for its card");
+  if (ERC_NAME_ORDER === "MCAP" && rows.length && !known) bits.push("sizes have not arrived yet, so names are in alphabetical order for the moment");
+  if (ERC_TRUNC) bits.push("this range holds more rows than one read returns");
+  return '<div class="se-note">' + esc(bits.join(" · ")) + "</div>";
+}
+function ercRenderCal(list, cohort) {
+  const key = ercRangeKey();
+  if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // the same honest gate as the list: never an unscoped view
+    list.innerHTML = '<div class="soon">cohort map loading…</div>';
+    return;
+  }
+  if (!ERC_ROWS || key !== ERC_KEY) {
+    list.innerHTML = (ERC_FAIL_KEY === key)
+      ? '<div class="soon">this stretch of the calendar could not be read. It asks again by itself.</div>'
+      : '<div class="soon">reading the earnings calendar…</div>';
+    ercRead(false);
+    return;
+  }
+  const rows = scopeItems(ERC_ROWS, cohort, S.tq, S.fav, COHSETS);
+  if (!ercBoardRows().length) ercWaitForSizes();   // sizes + cohort hues come with the board; redraw once when they land
+  const byDay = {};
+  rows.forEach((r) => { (byDay[r.date] = byDay[r.date] || []).push(r); });
+  list.innerHTML = (ercSpan() === "MONTH" ? ercMonthHTML(byDay) : ercWeekHTML(byDay)) + ercKeyHTML(rows) + ercNoteHTML(rows);
+  /* the right-hand extras column is the same in every span */
+  const scopedTk = (rows.length && rows.every((x) => x.ticker === rows[0].ticker)) ? rows[0].ticker : null;
+  if (scopedTk && (!EV_PROFILE || EV_PROFILE.ticker !== scopedTk || !EV_EXTRA || EV_EXTRA.t !== scopedTk)) evtLoadProfile(scopedTk);
+  evFillExtras(EV_CACHE ? scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS) : [], scopedTk);
+}
+function ercSpanBarHTML() {
+  if (S.calType === "DIVIDENDS") return "";
+  const sp = ercSpan(), d0 = ercAnchor(), w = ernWeek(d0);
+  const lbl = sp === "MONTH" ? ERC_MONTH_NAME[+d0.slice(5, 7) - 1] + " " + d0.slice(0, 4)
+            : sp === "WEEK"  ? ernWeekday(w[0]) + " " + ernMonthDay(w[0]) + "  →  " + ernWeekday(w[6]) + " " + ernMonthDay(w[6])
+            : "TODAY";
+  const back = sp === "DAY" ? "" : '<button class="se-nav" data-act="ernnav" data-k="-1" title="back">◀</button>';
+  const fwd  = sp === "DAY" ? "" : '<button class="se-nav" data-act="ernnav" data-k="1" title="forward">▶</button>';
+  return '<div class="se-bar">' + back + '<span class="se-lbl">' + esc(lbl) + "</span>" + fwd +
+    (sp === "DAY" ? "" : '<span class="se-sp" data-act="erntoday" title="back to this week">TODAY</span>') +
+    '<span class="se-spans">' + ["MONTH", "WEEK", "DAY"].map((x) =>
+      '<span class="se-sp' + (x === sp ? " on" : "") + '" data-act="ernspan" data-s="' + x + '">' + x + "</span>").join("") +
+    "</span></div>";
 }
 /* AN OPEN EVENTS VIEW NEVER LOOKED AGAIN. The master feed read its rows when the section was entered and a company's tab when
    the company was opened; nothing re-read them while the view stayed open. After FedEx Sep 17 and NIO Sep 9 were removed from
@@ -9428,6 +9836,7 @@ async function fillEvents(quiet) {
     const r0 = el("evUpcoming"); if (r0) r0.textContent = "—";
     return;
   }
+  if (typeof ercSpan === "function" && ercSpan() !== "DAY") ercRead(!!quiet);   // the calendar reads its own span: first entry, and the quiet five-minute re-read. Guarded so fillEvents stands on its own, as its test runs it.
   if (EV_CACHE && !quiet) renderEvents(S.coh);           // cohort/search switch repaints instantly from cache
   if (!quiet) loadCohSets().then(() => { if (S.sec === "EVENTS") renderEvents(S.coh); })   // map retries alone, repaints on arrival (a quiet re-read must not repaint: this one reset the reader's scroll position every five minutes)
     .catch(() => {});
@@ -13970,6 +14379,32 @@ document.addEventListener("click", (e) => {
   if (!a) return;
   switch (a.dataset.act) {
     case "mtab":       go(a.dataset.sec); break;
+    /* EVENTS · the earnings calendar. MONTH ⇄ WEEK ⇄ DAY, ◀ ▶ walk the span, a day
+       in MONTH opens its week, a ticker in WEEK opens (and closes) its card. */
+    case "ernspan": {
+      S.ernSpan = a.dataset.s; S.ernPick = null;
+      if (!S.ernDay) S.ernDay = todayISO();
+      renderEvents(S.coh); if (S.ernSpan !== "DAY") ercRead(false);
+      break;
+    }
+    case "ernnav": {
+      const k = +a.dataset.k || 0, d0 = S.ernDay || todayISO();
+      S.ernDay = ercSpan() === "MONTH" ? ercMonthShift(d0, k) : ernShift(d0, 7 * k);
+      S.ernPick = null; renderEvents(S.coh); ercRead(false);
+      break;
+    }
+    case "erntoday": { S.ernDay = todayISO(); S.ernPick = null; renderEvents(S.coh); ercRead(false); break; }
+    case "ernday": {
+      S.ernDay = a.dataset.d || todayISO(); S.ernSpan = "WEEK"; S.ernPick = null;
+      renderEvents(S.coh); ercRead(false);
+      break;
+    }
+    case "ernchip": {
+      const t = a.dataset.t, d = a.dataset.d;
+      S.ernPick = (S.ernPick && S.ernPick.t === t && S.ernPick.d === d) ? null : { t: t, d: d };
+      renderEvents(S.coh);
+      break;
+    }
     case "cohgeigertoggle": {   // R37 — expand the hero cohort geiger to show median/min/max
       S.cohGeigerOpen = !S.cohGeigerOpen;
       const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();
