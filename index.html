@@ -15249,9 +15249,14 @@ document.addEventListener("click", (e) => {
       let host = el("trFullHost"); if (!host) { host = document.createElement("div"); host.id = "trFullHost"; }
       document.body.appendChild(host);   // (re)appended last: opened from a call summary it must sit above that panel, whichever host was created first
       const gen = host._gen = (host._gen || 0) + 1;   // THIS request's panel - see the note on the summary panel below
-      host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center">' +
+      /* MEASURED 2026-09-23 at 1680x1000: the panel came out 1,103px tall inside a
+         1,000px window, so its own header — and its ✕ Close — sat 35px ABOVE the top
+         of the screen. 86vh is not a safe height here because the cockpit's global
+         zoom law scales what a vh is worth. The window itself now holds the padding
+         and the panel simply may not exceed it. */
+      host.innerHTML = '<div style="position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:22px;box-sizing:border-box">' +
         '<div data-act="trfullclose" style="position:absolute;inset:0;background:rgba(0,0,0,.72)"></div>' +
-        '<div style="position:relative;width:min(860px,92vw);max-height:86vh;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
+        '<div style="position:relative;width:min(860px,92vw);max-height:100%;display:flex;flex-direction:column;background:#0A0A0F;border:1px solid rgba(0,212,255,.3);border-radius:10px;overflow:hidden">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(0,212,255,.18);color:#00D4FF;font:13px ui-monospace,Menlo,monospace;letter-spacing:1px"><span>◹ ' + esc(tk) + ' <span id="trFullKind">' + esc(qq) + '</span> · EARNINGS CALL</span>' +
             '<button data-act="trfullclose" style="background:transparent;border:1px solid rgba(0,212,255,.3);color:#A6AAC4;border-radius:6px;padding:4px 10px;cursor:pointer;font:12px ui-monospace,Menlo,monospace">✕ Close</button></div>' +
           '<div id="trFullBody" style="overflow:auto;padding:16px 20px;color:#C8CCE0;font:13px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap">loading transcript…</div>' +
