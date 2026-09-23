@@ -260,3 +260,9 @@ test("the nudge walks the 16 Aug prototype's bands — still, breathing, tighten
   /* the dot's hue is never hard-coded: it comes from the calendar's own category colour, inline */
   assert.match(page, /const ecHue = \(cat\) => \(cat === "OTHER" \? "var\(--dim\)" : EC_CAT_COLOR\[cat\] \|\| "var\(--dim\)"\);/);
 });
+
+test("the bottom tapes fold away like the top tabs and come back when the mouse nears the bottom (23 Sep)", () => {
+  assert.match(page, /body\.btuck \.bands\{ max-height:7px; opacity:\.4; \}/);
+  assert.match(page, /if \(fromBottom <= 90 \|\| overTapes\) \{ reveal\(\); return; \}/);
+  assert.match(page, /hideTimer = setTimeout\(tuck, 3000\);\n\}\)\(\);\n\n\/\* R19/);
+});

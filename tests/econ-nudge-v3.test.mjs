@@ -117,7 +117,7 @@ test("a landed number sits in its own lane on the left, never takes a slot, and 
 });
 
 /* ---------------------------------------------------------------- 4 · the heavy day */
-test("four or more the same day: the names collapse to a swarm of category colours and a count", () => {
+test("three or more the same day: the names collapse to a swarm of category colours and a count", () => {
   const heavy = [
     R("2026-09-24T12:30:00Z", "Initial Jobless Claims", { estimate: 201 }),
     R("2026-09-24T12:30:00Z", "GDP Growth Rate QoQ (Q2)", { estimate: 3.1 }),
@@ -136,13 +136,16 @@ test("four or more the same day: the names collapse to a swarm of category colou
   assert.equal((html.match(/<i style="background:/g) || []).length, 5, "one dot per release, in its own category hue");
   assert.match(html, /<b>5 due<\/b> · in 1h 30m · go to economic<\/span>/, "the count, the wait, and where to go");
   assert.doesNotMatch(html, /Jobless|Michigan|New Home/, "no names at all on a heavy day");
-  assert.equal(api.EC_NUDGE_SWARM_MIN, 4, "four or more, as the prototype's own table says");
-  /* three on the day is still a normal day, and reads by name */
+  /* 23 Sep: the prototype's CODE (nudge.html: sameDay.length>=3) and Alan's notes say three; its page text said four. */
+  assert.equal(api.EC_NUDGE_SWARM_MIN, 3, "three or more, as the prototype's own code does");
   const three = heavy.slice(0, 3);
-  const api3 = load(three);
-  const m3 = api3.ecNudgeModel(before);
-  assert.equal(m3.length, 3);
-  assert.ok(m3.every((m) => m.kind === "item"), "three gets named");
+  const m3 = load(three).ecNudgeModel(before);
+  assert.equal(m3.length, 1, "three on one day is already a heavy day");
+  assert.equal(m3[0].kind, "swarm");
+  /* two on the day is still a normal day, and reads by name */
+  const m2 = load(heavy.slice(0, 2)).ecNudgeModel(before);
+  assert.equal(m2.length, 2);
+  assert.ok(m2.every((m) => m.kind === "item"), "two get named");
 });
 
 /* ---------------------------------------------------------------- 5 · the heavy day still to come */

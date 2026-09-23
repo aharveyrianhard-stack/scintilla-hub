@@ -87,6 +87,11 @@ body{ background:var(--bg); color:var(--ink); font-family:var(--mono);
 .sc-mtabs, .sc-cohrow{ transition:max-height .22s ease, opacity .18s ease; max-height:48px; overflow:hidden; }
 body.tuck .sc-mtabs, body.tuck .sc-cohrow{ max-height:0; opacity:0; border-width:0; margin:0; }
 .bands{ border:0.8px solid rgba(0,212,255,.34); background:var(--panel2); margin-top:8px; }
+/* BOTTOM TAPES AUTO-HIDE (23 Sep 2026; Alan asked 22 Sep: "the tape at the bottom… auto hide"). The mirror of the
+   top tabs' tuck: after 3 s, and whenever the mouse has sat above the bottom band for 2 s, the tapes fold to a thin
+   lip; the mouse in the bottom 90 px or over the tapes brings them back at once. Touch screens never fold them. */
+.bands{ transition:max-height .28s ease, opacity .28s ease; max-height:260px; overflow:hidden; }
+body.btuck .bands{ max-height:7px; opacity:.4; }
 
 /* FOCUS (global ⛶): browser full-screen + chrome tucks away — HEADER STAYS (Alan's law) */
 body.focus .sc-stamp, body.focus .sc-mtabs, body.focus .sc-cohrow,
@@ -10268,7 +10273,7 @@ const EC_NUDGE_SOON_S = 3600;        // inside the hour: the "go look" signal
    inside ten minutes, then gives ONE hard pulse at its minute. The SPEED is the state; the HUE is always the
    category, so the thing that flashes also says what kind of number is coming. */
 const EC_NUDGE_NEAR_S = 10 * 60;     // under ten minutes: 1.1s, tightening
-const EC_NUDGE_SWARM_MIN = 4;        // 4+ the same day: the names collapse to a swarm of colours and a count
+const EC_NUDGE_SWARM_MIN = 3;        // 3+ the same day: the names collapse to a swarm of colours and a count (the 16 Aug prototype's own code: sameDay.length>=3)
 const EC_NUDGE_AHEAD_DAYS = 3;       // the quiet "heavy ahead" cluster looks up to three days out
 const EC_NUDGE_AHEAD_MIN = 3;        // ...and says nothing about a day carrying fewer than three
 const EC_NUDGE_LANDED_MAX = 2;       // the landed lane holds two, and never takes an upcoming slot
@@ -14746,6 +14751,24 @@ function chatGrow() {   // textarea auto-grow, 1–3 rows (CSS max-height caps i
       hideTimer = setTimeout(tuck, 2000);                        // below y=140 for 2 s → tuck
   });
   hideTimer = setTimeout(tuck, 3000);                            // initial collapse 3 s after load
+})();
+
+/* BOTTOM TAPES AUTO-HIDE — see the CSS note at .bands. */
+(function () {
+  if (window.matchMedia && window.matchMedia("(any-pointer:coarse)").matches) return;   // touch: always visible
+  let hideTimer = null;
+  const tuck   = () => { hideTimer = null; document.body.classList.add("btuck"); };
+  const disarm = () => { if (hideTimer != null) { clearTimeout(hideTimer); hideTimer = null; } };
+  const reveal = () => { disarm(); document.body.classList.remove("btuck"); };
+  document.addEventListener("mousemove", (e) => {
+    const overTapes = e.target && e.target.closest && e.target.closest(".bands");
+    const fromBottom = window.innerHeight - e.clientY;
+    if (fromBottom <= 90 || overTapes) { reveal(); return; }
+    if (fromBottom <= 140) { disarm(); return; }
+    if (!document.body.classList.contains("btuck") && hideTimer == null) hideTimer = setTimeout(tuck, 2000);
+  });
+  document.addEventListener("mouseleave", () => { if (!document.body.classList.contains("btuck") && hideTimer == null) hideTimer = setTimeout(tuck, 2000); });
+  hideTimer = setTimeout(tuck, 3000);
 })();
 
 /* R19 — TAP-HEADER TOGGLE (Alan APPROVED). Touch (pointer:coarse) ONLY — desktop
