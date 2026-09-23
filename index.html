@@ -2452,12 +2452,12 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
    MONTH load-bar law — cyan, then orange from 12, then red from 25. The month
    strip underneath is built from the same fixed column width, so a month segment
    sits exactly under its own days and cannot drift. */
-.se-tl{ --tlw:19px; --tlh:112px; border-top:.5px solid var(--line2); padding:11px 0 0; }
+.se-tl{ --tlw:19px; --tlh:132px; border-top:.5px solid var(--line2); padding:11px 0 0; }
 .se-tlscroll{ overflow-x:auto; overflow-y:hidden; cursor:grab; overscroll-behavior-x:contain; }
 .se-tlscroll.is-drag{ cursor:grabbing; user-select:none; }
 .se-tlscroll::-webkit-scrollbar{ height:7px; }
 .se-tlscroll::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:4px; }
-.se-tlgrid{ display:flex; align-items:flex-end; width:max-content; height:calc(var(--tlh) + 46px); padding:0 6px; }
+.se-tlgrid{ display:flex; align-items:flex-end; width:max-content; height:calc(var(--tlh) + 30px); padding:0 6px; }
 .se-tlday{ width:var(--tlw); flex:0 0 var(--tlw); height:100%; display:flex; flex-direction:column;
   align-items:center; justify-content:flex-end; cursor:pointer; position:relative; }
 .se-tlday:hover{ background:rgba(255,255,255,.035); }
@@ -2465,14 +2465,17 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .se-tlday.is-open{ background:rgba(255,255,255,.06); }
 .se-tlday.is-today::before{ content:""; position:absolute; top:0; bottom:14px; left:0; width:1px;
   background:var(--crk); opacity:.45; }
-.se-tlnm{ font-family:var(--mono); font-size:7px; letter-spacing:.02em; color:var(--ink3);
-  writing-mode:vertical-rl; transform:rotate(180deg); max-height:46px; overflow:hidden;
-  white-space:nowrap; margin-bottom:3px; }
-.se-tlv{ font-family:var(--mono); font-size:8px; line-height:1; color:var(--dim); margin-bottom:3px;
-  font-variant-numeric:tabular-nums; }
+.se-tlnm{ position:absolute; left:50%; transform:translateX(-50%) rotate(180deg); writing-mode:vertical-rl;
+  font-family:var(--mono); font-size:7px; letter-spacing:.02em; color:var(--ink3);
+  max-height:44px; overflow:hidden; white-space:nowrap; }
+.se-tlv{ position:absolute; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:8px;
+  line-height:1; color:var(--dim); font-variant-numeric:tabular-nums; }
 .se-tlv.warm{ color:var(--sv4); } .se-tlv.hot{ color:var(--sv5); font-weight:700; }
-.se-tlb{ width:9px; height:var(--tlh); display:flex; align-items:flex-end; flex:none; }
-.se-tlb i{ width:100%; border-radius:1px 1px 0 0; background:var(--mute); opacity:.9; }
+/* the track: the bar grows from the baseline and its own count and name are pinned
+   just above the bar's top, wherever that top happens to be. */
+.se-tlb{ position:relative; width:11px; height:var(--tlh); flex:none; }
+.se-tlb i{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:9px;
+  border-radius:1px 1px 0 0; background:var(--mute); opacity:.9; }
 .se-tlb i.cool{ background:var(--crk); } .se-tlb i.warm{ background:var(--sv4); } .se-tlb i.hot{ background:var(--sv5); }
 .se-tlx{ font-family:var(--mono); font-size:7.5px; color:var(--mute); margin-top:5px; line-height:1;
   font-variant-numeric:tabular-nums; }
@@ -2508,7 +2511,7 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
      season is still under the thumb and the drag has somewhere to go. */
   .se-tl{ --tlw:15px; --tlh:88px; padding-top:9px; }
   .se-tlnm{ font-size:6.5px; max-height:34px; } .se-tlv{ font-size:7px; }
-  .se-tlb{ width:8px; } .se-tlx{ font-size:6.5px; margin-top:4px; }
+  .se-tlb{ width:10px; } .se-tlb i{ width:8px; } .se-tlx{ font-size:6.5px; margin-top:4px; }
   .se-tlmo{ font-size:7px; letter-spacing:.06em; padding-left:3px; }
   .se-tlpanel{ padding:8px 9px 4px; } .se-tlhint{ font-size:7.5px; padding:8px 9px 0; }
 }
@@ -10141,7 +10144,9 @@ const ercTlLevel = (n) => (n >= ERC_TL_HOT ? "hot" : n >= ERC_TL_WARM ? "warm" :
 function ercTlScale(counts) {
   const max = (counts || []).reduce((m, n) => Math.max(m, n || 0), 0);
   return { max, quiet: max > 0 && max < ERC_TL_QUIET,
-    pct: (n) => (!n || n <= 0 ? 0 : Math.max(14, Math.round((n / Math.max(max, 1)) * 100))) };
+    /* 82, not 100: the busiest bar still has to carry its count and its name above
+       itself, and a bar drawn to the ceiling would push both off the top. */
+    pct: (n) => (!n || n <= 0 ? 0 : Math.min(82, Math.max(12, Math.round((n / Math.max(max, 1)) * 82)))) };
 }
 const ercTlMonthSeg = (ym, n) => '<span class="se-tlmo" style="width:calc(var(--tlw) * ' + n + ')">' +
   esc(ERC_MONTH_NAME[+ym.slice(5, 7) - 1].slice(0, 3) + (ym.slice(5, 7) === "01" ? " " + ym.slice(0, 4) : "")) + "</span>";
@@ -10151,18 +10156,35 @@ function ercTlColHTML(d, list, sc, today, open) {
   const ttl = ernWeekday(d) + " " + ernMonthDay(d) + " · " +
     (n ? n + (n === 1 ? " name you track reports" : " names you track report") + (names ? " · " + names : "") : "nothing") +
     (d === today ? " · today" : "") + " · click to open the day";
+  /* the name and the count sit INSIDE the track, directly on top of the bar, so a
+     short bar's number never floats away from it. data-n carries the count itself:
+     the tape re-scales to whatever is on screen as it is dragged. */
   return '<div class="se-tlday' + (d === today ? " is-today" : "") + (d === open ? " is-open" : "") +
-      (d < today ? " is-past" : "") + '" data-act="erntlday" data-d="' + d + '" title="' + esc(ttl) + '">' +
-    (n && pct >= ERC_TL_NAME_PCT ? '<span class="se-tlnm">' + esc(list[0].ticker) + "</span>" : "") +
-    (n ? '<span class="se-tlv ' + lvl + '">' + n + "</span>" : "") +
-    '<span class="se-tlb"><i class="' + lvl + '" style="height:' + pct + '%"></i></span>' +
+      (d < today ? " is-past" : "") + '" data-act="erntlday" data-d="' + d + '" data-n="' + n +
+      '" title="' + esc(ttl) + '">' +
+    '<span class="se-tlb">' +
+      '<i class="' + lvl + '" style="height:' + pct + '%"></i>' +
+      (n ? '<span class="se-tlv ' + lvl + '" style="bottom:calc(' + pct + '% + 3px)">' + n + "</span>" : "") +
+      (n && pct >= ERC_TL_NAME_PCT ? '<span class="se-tlnm" style="bottom:calc(' + pct + '% + 15px)">' +
+        esc(list[0].ticker) + "</span>" : "") + "</span>" +
     '<span class="se-tlx">' + (+d.slice(8)) + "</span></div>";
 }
+/* WHICH DAY IS OPEN UNDERNEATH. The tape opens on the next day that actually has
+   reports (today, when today has them), so entering the section already shows the
+   working list instead of an empty half-panel; clicking the open bar, or its ✕,
+   closes it and the tape keeps the whole panel. "" means the reader closed it on
+   purpose and is not given a day back. */
+function ercTlDefaultDay(byDay, today) {
+  if ((byDay[today] || []).length) return today;
+  const ahead = Object.keys(byDay).filter((d) => d >= today && (byDay[d] || []).length).sort();
+  return ahead[0] || null;
+}
+const ercTlOpenDay = (byDay, today) => (S.ernTlDay === "" ? null : (S.ernTlDay || ercTlDefaultDay(byDay, today)));
 /* the day a bar opens: the same chips, the same grouping and the same card the
    WEEK view draws, underneath the tape, so the tape never leaves the screen. */
 function ercTlDayHTML(byDay, sc) {
-  const d = S.ernTlDay;
-  if (!d) return '<div class="se-tlhint">' +
+  const d = ercTlOpenDay(byDay, todayISO());
+  if (!d) return '<div class="se-tlhint" id="ernTlHint">' +
     esc(sc.quiet ? "a quiet stretch — the busiest day on this tape has " + sc.max + (sc.max === 1 ? " report" : " reports") +
                    " · drag sideways for the season"
                  : "drag the tape sideways: history to the left, what is coming to the right") +
@@ -10187,7 +10209,7 @@ function ercTlHTML(byDay) {
   const r = ercTlRange(ercAnchor()), days = ercTlDays(r.from, r.to), today = todayISO(), mcap = ercMcap();
   const lists = days.map((d) => ercOrder(byDay[d] || [], mcap));
   const sc = ercTlScale(lists.map((l) => l.length));
-  const cols = days.map((d, i) => ercTlColHTML(d, lists[i], sc, today, S.ernTlDay)).join("");
+  const cols = days.map((d, i) => ercTlColHTML(d, lists[i], sc, today, ercTlOpenDay(byDay, today))).join("");
   let segs = "", run = 0, mo = "";
   days.forEach((d) => { const m = d.slice(0, 7); if (m !== mo) { if (run) segs += ercTlMonthSeg(mo, run); mo = m; run = 1; } else run++; });
   if (run) segs += ercTlMonthSeg(mo, run);
@@ -10197,6 +10219,33 @@ function ercTlHTML(byDay) {
 /* after every paint: put the tape back where the reader left it (first time:
    today a little right of centre, so history is already under the thumb), and
    give it drag, wheel and a click that a drag cannot trigger by accident. */
+/* AUTO-ADJUST (Alan: "the view should kind of auto-adjust in some way"). The bars
+   are scaled to the busiest day ACTUALLY ON SCREEN, recomputed as the tape is
+   dragged: a quiet fortnight fills the track with its own shape, and scrolling
+   into November puts those same quiet days back where they belong against a
+   38-name day. The colour never moves with the scale — it stays the count. */
+function ercTlRescale() {
+  const sc = el("ernTlScroll");
+  if (!sc || typeof sc.querySelectorAll !== "function") return;
+  const cols = [].slice.call(sc.querySelectorAll(".se-tlday"));
+  if (!cols.length) return;
+  const L = sc.scrollLeft, R = L + sc.clientWidth;
+  const vis = cols.filter((c) => c.offsetLeft + c.offsetWidth > L && c.offsetLeft < R);
+  const on = (vis.length ? vis : cols).map((c) => +c.dataset.n || 0);
+  const scale = ercTlScale(on);
+  cols.forEach((c) => {
+    const n = +c.dataset.n || 0, bar = c.querySelector("i"), nm = c.querySelector(".se-tlnm");
+    if (!bar) return;
+    const pct = scale.pct(n), cnt = c.querySelector(".se-tlv");
+    bar.style.height = pct + "%";
+    if (cnt) cnt.style.bottom = "calc(" + pct + "% + 3px)";
+    if (nm) { nm.style.bottom = "calc(" + pct + "% + 15px)"; nm.style.display = pct >= ERC_TL_NAME_PCT ? "" : "none"; }
+  });
+  const hint = el("ernTlHint");
+  if (hint) hint.textContent = (scale.quiet
+    ? "a quiet stretch — the busiest day on screen has " + scale.max + (scale.max === 1 ? " report" : " reports") + " · drag sideways for the season"
+    : "drag the tape sideways: history to the left, what is coming to the right") + " · click a bar to open its day";
+}
 function ercTlAfterPaint() {
   const sc = el("ernTlScroll");
   if (!sc || typeof sc.addEventListener !== "function") return;
@@ -10205,7 +10254,13 @@ function ercTlAfterPaint() {
     const t = sc.querySelector(".se-tlday.is-today");
     sc.scrollLeft = t ? Math.max(0, t.offsetLeft - sc.clientWidth * 0.62) : 0;
   }
-  sc.addEventListener("scroll", () => { ERC_TL_AT = sc.scrollLeft; }, { passive: true });
+  ercTlRescale();
+  let rafid = 0;
+  sc.addEventListener("scroll", () => {
+    ERC_TL_AT = sc.scrollLeft;
+    if (rafid || typeof requestAnimationFrame !== "function") return;
+    rafid = requestAnimationFrame(() => { rafid = 0; ercTlRescale(); });
+  }, { passive: true });
   sc.addEventListener("wheel", (e) => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { sc.scrollLeft += e.deltaY; e.preventDefault(); }
   }, { passive: false });
@@ -14909,7 +14964,9 @@ document.addEventListener("click", (e) => {
        The tape keeps its scroll position, so opening a day never moves the season. */
     case "erntlday": {
       const d = a.dataset.d || "";
-      S.ernTlDay = (S.ernTlDay === d ? null : d); S.ernPick = null;
+      const openEl = document.querySelector(".se-tlday.is-open");
+      S.ernTlDay = ((openEl ? openEl.dataset.d : "") === d ? "" : d);   // "" = closed on purpose
+      S.ernPick = null;
       renderEvents(S.coh);
       break;
     }
