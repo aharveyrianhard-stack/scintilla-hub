@@ -461,7 +461,9 @@ const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, mis
              sma:null,        /* ticker -> { s50, s200 } from the published indicator table */
              smaDate:null,
              fav:[],          /* the Hub's favourites, read from this browser */
-             odd:{} };        /* the instruments behind the oddities panel, full payload */
+             odd:{},          /* the instruments behind the oddities panel, full payload */
+             declared:null,   /* the declared equity set, from the chart API's /universe */
+             staged:null, stagedNewest:null };   /* the legacy composite_staged read, for non-equities only */
 /* the bond ETF and the two ways of owning gold and silver — the names Alan pointed at */
 const ODD = ["IEF", "GLD", "GCUSD", "SLV", "SIUSD"];
 const INFLIGHT = new Set();
@@ -506,6 +508,16 @@ async function load() {
   /* THE HUB'S OWN COHORTS — the same table the dashboard reads, paged in full */
   const cP = pgAll("ticker_cohorts?select=ticker,cohort&order=ticker.asc,cohort.asc")
               .catch((e)=>{ D.missing.push("the Hub's cohort membership ("+e.message+")"); return null; });
+  /* THE OTHER HALF OF THE BOARD'S COHORT NUMBER. The dashboard's cohort read is NOT the Geiger
+     artifact alone: for a member that is not a declared equity — the crypto pairs, the metal
+     futures, the yields — the board keeps the value from the legacy composite_staged table, and
+     only DECLARED equities are blanked when the artifact has nothing for them. Reading the
+     artifact alone gave a different METALS, MACRO, CRYPTO and INDEXES than the board shows, so
+     this page reads both and applies the board's own precedence. */
+  const uP = api("/universe").then((j)=> new Set((j && j.symbols) || []))
+              .catch((e)=>{ D.missing.push("the declared equity list ("+e.message+")"); return null; });
+  const stP = pgAll("composite_staged?select=ticker,composite,updated_ts&tf=eq.D&order=updated_ts.desc")
+              .catch((e)=>{ D.missing.push("the legacy staged composites ("+e.message+")"); return null; });
   /* BREADTH — the published 50- and 200-day averages, one read each instead of 364 bar pulls.
      Same table and same provider the Hub's board reads its indicators from. */
   const sP = pgAll("provider_indicators_current?select=ticker,indicator,period_length,value,source_date,session_state" +
@@ -531,9 +543,16 @@ async function load() {
         volume_basis:j.volume_basis || null }; })
       .catch((e) => { D.odd[s] = { error:e.message }; })));
 
-  let ernRows, rankRows, cohRows, smaRows;
-  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows, cohRows, smaRows] =
-    await Promise.all([gP, pP, fP, rP, eP, kP, cP, sP]);
+  let ernRows, rankRows, cohRows, smaRows, stagedRows;
+  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows, cohRows, smaRows, D.declared, stagedRows] =
+    await Promise.all([gP, pP, fP, rP, eP, kP, cP, sP, uP, stP]);
+  if (stagedRows) {
+    D.staged = {}; let newest = 0;
+    stagedRows.forEach((r)=>{ const t=String(r.ticker).toUpperCase();
+      if (!(t in D.staged)) D.staged[t] = { v: r.composite==null ? null : Number(r.composite), at: r.updated_ts };
+      if (r.updated_ts && Number(r.updated_ts) > newest) newest = Number(r.updated_ts); });
+    D.stagedNewest = newest || null;
+  }
   await tP; await oP;
   D.fav = favList();
   if (cohRows) {
@@ -649,13 +668,35 @@ function cohortRowsFrom(cohsets, gcomp, cohorts, cohortOf) {
     return { key, label, mean, n: vals.length };
   }).sort((a, b) => (b.mean == null ? -99 : b.mean) - (a.mean == null ? -99 : a.mean));
 }
+/* The board's precedence, in one place:
+     · a DECLARED equity takes the Geiger artifact's composite, and nothing else. If the artifact
+       has no value for it, it has no value here either — that is the fail-closed rule the board
+       adopted so a stale legacy row can never masquerade as a current Geiger.
+     · anything that is NOT a declared equity — the crypto pairs, the metal futures, the yields —
+       keeps its value from the legacy composite_staged table, which is what the board still
+       shows for them.
+   gsrc() records which of the two produced each number, so the page can say so out loud. */
 function gcompMap() {
   const out = {};
+  const declared = D.declared;
   if (D.g) for (const t in (D.g.symbols || {})) {
     const c = D.g.symbols[t] ? D.g.symbols[t].composite : null;
     if (c != null) out[t] = c;
   }
+  if (D.staged) for (const t in D.staged) {
+    if (t in out) continue;                                  // the artifact wins wherever it spoke
+    if (declared && declared.has(t)) continue;               // a declared equity fails closed
+    if (!declared) continue;                                 // without the list, do not guess
+    const v = D.staged[t].v;
+    if (v != null && isFinite(v)) out[t] = v;
+  }
   return out;
+}
+function gsrc(t) {
+  const g = D.g && D.g.symbols && D.g.symbols[t];
+  if (g && g.composite != null) return "artifact";
+  if (D.staged && D.staged[t] && D.staged[t].v != null && D.declared && !D.declared.has(t)) return "staged";
+  return null;
 }
 /* the cohort read, plus the honest coverage columns beside it */
 function cohortRows() {
@@ -666,6 +707,7 @@ function cohortRows() {
     const set = D.cohsets[r.key] || new Set();
     r.total = set.size;
     r.absent = Array.from(set).filter((t)=> gc[t] == null).sort();
+    r.staged = Array.from(set).filter((t)=> gsrc(t) === "staged").sort();
   });
   return rows;
 }
@@ -1096,9 +1138,11 @@ function compute() {
   m.drill = chosen.map((s) => {
     const rows = bySec[s.name].map((x) => {
       const p = pickBy[x.t], np = nonBy[x.t], cut = cutBy[x.t];
+      const unread = cut && /^the tape is read for the/.test(cut.why);
       return { t:x.t, g:x.g, gMed:mids[s.name].gMed, cohs:x.cohs, cohTilt:x.cohTilt, fav:x.fav,
         pe:x.pe, score: p ? p.score : (np ? np.score : (x.score != null ? x.score : null)),
-        fate: p ? "PICK" : (np ? "RANKED " + np.rank + " of " + np.of : (cut ? "HELD BACK" : "STILL READING")),
+        fate: p ? "PICK" : (np ? "RANKED " + np.rank + " of " + np.of
+              : (unread ? "NOT JUDGED" : cut ? "HELD BACK" : "STILL READING")),
         why: p ? pickWhy(p) : (np ? "cleared every step, ranked below the " + T.perSector + " you hold"
                                   : (cut ? cut.step.toLowerCase() + " — " + cut.why : "its tape has not come back yet")),
         w: p ? p.w : null };
@@ -1117,7 +1161,8 @@ function compute() {
     const inChosen = chosen.some((s)=>s.name === x.sector);
     const p = pickBy[t], np = nonBy[t], cut = cutBy[t];
     return { t, sector:x.sector, g:x.g, cohs:x.cohs, cohTilt:x.cohTilt, pe:x.pe,
-      state: p ? "PICK" : np ? "RANKED " + np.rank + " of " + np.of : cut ? "HELD BACK"
+      state: p ? "PICK" : np ? "RANKED " + np.rank + " of " + np.of
+             : cut ? (/^the tape is read for the/.test(cut.why) ? "NOT JUDGED" : "HELD BACK")
              : inChosen ? "STILL READING" : "SECTOR NOT CHOSEN",
       w: p ? p.w : null,
       why: p ? pickWhy(p)
@@ -1391,7 +1436,11 @@ function drawCohorts(m) {
     "mean of the daily Geiger composite across the cohort's members, counting only members that have a composite, " +
     "and sorts them bull to bear; this page runs that same calculation over the same two reads — the Geiger artifact " +
     "and the Hub's <b>ticker_cohorts</b> table, all " + num(D.cohRowCount||0) + " rows of it, paged so nothing is " +
-    "silently dropped. A cohort's read then counts for " + num(T.cohW + "%") + " of a sector's standing in layer two, " +
+    "silently dropped. <b>Two engines feed those means</b>, exactly as they feed the board: a declared " +
+    "equity takes its number from the Geiger artifact and nothing else, while a member that is not a declared " +
+    "equity — a crypto pair, a metal future, a yield — keeps the number in the older staged table, computed by a " +
+    "different path. The table below names which members those are, because it is the reason two things that look " +
+    "like the same reading can disagree. A cohort's read then counts for " + num(T.cohW + "%") + " of a sector's standing in layer two, " +
     "and each name is moved inside its sector by " + num("×"+T.cohName.toFixed(2)) + " of the read of the cohorts it " +
     "belongs to. " + cohEffect(m);
   document.getElementById("l0io").innerHTML = ioBox(
@@ -1403,7 +1452,7 @@ function drawCohorts(m) {
   const secOf = {}; m.eq.forEach((x)=>{ secOf[x.t] = x.sector; });
   const chosenNames = new Set(m.sectors.map((s)=>s.name));
   document.getElementById("l0tab").innerHTML = '<div class="tw"><table><thead><tr>' +
-    "<th>COHORT</th><th>READ</th><th>MEMBERS COUNTED</th><th>NO GEIGER</th><th>IN TONIGHT'S SECTORS</th><th>WHERE IT LANDS</th>" +
+    "<th>COHORT</th><th>READ</th><th>MEMBERS COUNTED</th><th>FROM THE LEGACY STORE</th><th>NO READ AT ALL</th><th>IN TONIGHT'S SECTORS</th><th>WHERE IT LANDS</th>" +
     "</tr></thead><tbody>" + m.coh.map((r) => {
       const mem = Array.from((D.cohsets && D.cohsets[r.key]) || []);
       const inChosen = mem.filter((t)=>chosenNames.has(secOf[t]));
@@ -1412,6 +1461,7 @@ function drawCohorts(m) {
       return "<tr><td>" + esc(r.label) + "</td>" +
         "<td>" + (r.mean==null ? "—" : sgc(r.mean)) + "</td>" +
         "<td>" + r.n + " of " + r.total + "</td>" +
+        "<td>" + ((r.staged||[]).length ? (r.staged.length + '<span class="why">' + esc(r.staged.slice(0,6).join(", ")) + "</span>") : "—") + "</td>" +
         "<td>" + (r.absent.length ? '<span class="why">' + esc(r.absent.slice(0,6).join(", ")) +
             (r.absent.length>6 ? " +"+(r.absent.length-6)+" more" : "") + "</span>" : "—") + "</td>" +
         "<td>" + (inChosen.length || "—") + "</td>" +
@@ -1448,7 +1498,9 @@ function drawDrill(m) {
     "A sector is chosen, and then the names inside it are ranked by the same funnel — nothing here is a separate " +
     "opinion. Every name that entered is shown: the ones held, the ones that cleared every step but ranked below the " +
     "cut, and the ones a step removed with the number that removed it. The cohorts each name belongs to are beside it, " +
-    "because that is how a red cohort reaches a single name.";
+    "because that is how a red cohort reaches a single name. <b>NOT JUDGED</b> means exactly that: the tape is " +
+    "read for the " + T.tapeCap + " strongest survivors only, so that name was never measured on liquidity, trend " +
+    "or distance — it was not rejected, it was not reached. Raise the cap in layer three to judge more of them.";
   document.getElementById("drill").innerHTML = (m.drill||[]).map((d) =>
     '<div class="dsec"><h3>' + esc(plain(d.sector).toUpperCase()) +
       "<span>weight " + pct(d.w) + "</span>" +
@@ -1542,7 +1594,12 @@ function drawOdd(m) {
       "<tr><td>20 sessions</td><td>" + sgc(retOf(sa,20),1) + "%</td><td>" + sgc(retOf(sb,20),1) + "%</td></tr>" +
       "<tr><td>60 sessions</td><td>" + sgc(retOf(sa,60),1) + "%</td><td>" + sgc(retOf(sb,60),1) + "%</td></tr>" +
       "<tr><td>Geiger tonight</td><td>" + (ga ? sgc(ga.composite) : "<b>none</b>") +
-        "</td><td>" + (gb ? sgc(gb.composite) : "<b>none — not in the artifact</b>") + "</td></tr>" +
+        "</td><td>" + (gb ? sgc(gb.composite)
+          : (D.staged && D.staged[b] && D.staged[b].v != null
+             ? sgc(D.staged[b].v) + '<span class="why">from the older staged store, not the Geiger artifact</span>'
+             : "<b>none</b>")) + "</td></tr>" +
+      "<tr><td>which engine produced it</td><td>the Geiger artifact (declared equity)</td><td>" +
+        (gb ? "the Geiger artifact" : "the legacy staged table — a different calculation on a different schedule") + "</td></tr>" +
       "<tr><td>provider symbol</td><td>" + esc(String(A.provider_symbol || A.provider || "—")) +
         "</td><td>" + esc(String(B.provider_symbol || B.provider || "—")) + "</td></tr>" +
       "<tr><td>price basis</td><td>" + esc(String(A.price_basis || "—")) + "</td><td>" + esc(String(B.price_basis || "—")) + "</td></tr>" +
@@ -1562,9 +1619,14 @@ function drawOdd(m) {
     (dayGap ? "Tonight the future's newest daily bar is <b>" + dayGap + " day" + (dayGap===1?"":"s") +
       " behind</b> the ETF's, so any read that compares them is comparing two different sessions."
             : "Tonight both carry the same newest daily bar.") + "</p>" +
-    "<p><b>And only one of them has a Geiger at all.</b> The Geiger artifact covers the declared equity universe; " +
-    "the metal futures are not in it. That is why the METALS cohort's number is taken over the members that do have " +
-    "a read and not over the futures beside them — the table in layer zero names exactly which members were left out.</p></div>";
+    "<p><b>And the two numbers on your board do not come from the same engine.</b> The Geiger artifact covers the " +
+    "declared equity universe, so GLD's read is a Geiger. The futures are not in that universe, so the board falls " +
+    "back to the older staged table for them — a different calculation, on a different schedule. Tonight that shows " +
+    "as " + (D.staged && D.staged.GCUSD && D.staged.GCUSD.v != null ? "<b>gold the future at " + sg(D.staged.GCUSD.v) +
+      " and GLD at " + (G("GLD") ? sg(G("GLD").composite) : "—") + "</b> — one positive, one negative, on the same " +
+      "metal, on the same board" : "two readings from two engines") + ". That is the mismatch you saw. It is not a " +
+    "bug in either number; it is two engines sharing one strip, and the layer-zero table now names every member " +
+    "whose number came from the older store.</p></div>";
   H += pair("SLV", "SIUSD", "SILVER — THE SAME TWO THINGS, THE SAME DIFFERENCE");
   document.getElementById("odd").innerHTML = H;
 }
@@ -1588,10 +1650,23 @@ function drawCohortReview(m) {
       const mem = Array.from(D.cohsets[r.key] || []);
       const shared = mem.filter((t)=>(inHow[t]||[]).length > 1);
       const notes = [];
+      if ((r.staged||[]).length)
+        notes.push(r.staged.length + " of its members are read by the older staged engine, not the Geiger (" +
+          r.staged.slice(0,4).join(", ") + (r.staged.length>4 ? " and " + (r.staged.length-4) + " more" : "") +
+          ") — so this one number mixes two calculations");
+      if (r.absent.length)
+        notes.push(r.absent.length + " member" + (r.absent.length===1?"":"s") + " carry no read at all (" + r.absent.slice(0,4).join(", ") + ")");
       if (r.total && r.n / r.total < 0.5)
         notes.push("the read is taken over " + r.n + " of " + r.total + " members — it describes a minority of the cohort");
-      else if (r.absent.length)
-        notes.push(r.absent.length + " member" + (r.absent.length===1?"":"s") + " carry no Geiger (" + r.absent.slice(0,4).join(", ") + ")");
+      /* who this cohort overlaps most with, by name, so a doubled-up read is visible */
+      let best = null;
+      for (const pair of COHORTS) {
+        if (pair[1] === r.key) continue;
+        const other = D.cohsets[pair[1]]; if (!other) continue;
+        let k = 0; mem.forEach((t)=>{ if (other.has(t)) k++; });
+        if (k >= 3 && (!best || k > best.k)) best = { label: pair[0], k };
+      }
+      if (best) notes.push("shares " + best.k + " names with " + best.label);
       if (r.key === "MEGACAP" && D.cohsets.MEGA_CAP)
         notes.push("MEGA_CAP also exists in the table with " + D.cohsets.MEGA_CAP.size + " members; the board reads MEGACAP (" + r.total + ")");
       if (shared.length > r.total * 0.8 && r.total > 4)

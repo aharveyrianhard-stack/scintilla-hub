@@ -103,3 +103,32 @@ test("favourites are read from the board's own list and never forced into a pick
   assert.match(scoreBlock, /favAdd = x\.fav \? T\.favBoost : 0/, "a star is worth exactly the knob, no more");
   assert.match(scoreBlock, /scoreBare: bare/, "the page must keep the score without the star, to say what it changed");
 });
+
+/* THE PART A FIXTURE CANNOT PROVE, PINNED IN SOURCE. Running the two functions over the same
+   inputs showed 12 of 12 identical — and the two pages STILL disagreed on four cohorts live,
+   because the board does not feed its function the artifact alone. A member that is not a
+   declared equity keeps the value in the older composite_staged table; only declared equities
+   are blanked when the artifact has nothing. These pin that precedence so it cannot quietly
+   revert to "the artifact only" and put the two surfaces out of step again. */
+test("a declared equity fails closed: no artifact value means no value, never a legacy one", () => {
+  const src = slice(ALLOC, "function gcompMap()", "function gsrc(", "gcompMap");
+  assert.match(src, /if \(declared && declared\.has\(t\)\) continue;/,
+    "a declared equity must never fall back to the staged table");
+  assert.match(src, /if \(t in out\) continue;/, "the artifact wins wherever it spoke");
+  assert.match(src, /if \(!declared\) continue;/,
+    "with no declared list the page must not guess which rows are equities");
+});
+
+test("the non-equity members are read, so the cohort means match the board's", () => {
+  assert.match(ALLOC, /pgAll\("composite_staged\?select=ticker,composite,updated_ts&tf=eq\.D&order=updated_ts\.desc"\)/,
+    "the legacy staged composites must be read, newest first");
+  assert.match(ALLOC, /api\("\/universe"\)/, "the declared equity set comes from the chart API");
+});
+
+test("the page can say which engine produced a number", () => {
+  const src = slice(ALLOC, "function gsrc(", "/* ---- BREADTH", "gsrc");
+  assert.match(src, /return "artifact"/);
+  assert.match(src, /return "staged"/);
+  assert.match(ALLOC, /r\.staged = Array\.from\(set\)\.filter\(\(t\)=> gsrc\(t\) === "staged"\)/,
+    "every cohort must count how many of its members came from the older store");
+});
