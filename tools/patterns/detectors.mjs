@@ -58,6 +58,9 @@ export const WEDGE = {
   max_span: 120,       // and no more than this, or it is a trend, not a wedge
   converge: 0.75,      // the gap between the lines at the end, as a share of the gap at the start
   max_wait: 20,        // the break must come within this many days of the last turning point
+  touches: 2,          // turning points per line. Two is the loosest reading the texts allow;
+                       // three is what Edwards & Magee actually draw, and is swept as a variant.
+  touch_tol: 0.02,     // with three, the middle one must sit this close to the line to count as a touch
   cooloff: COOLOFF,
 };
 
@@ -71,9 +74,19 @@ export function findWedge(bars, dir, R = WEDGE) {
   const cH = cursor(hi), cL = cursor(lo);
   for (let d = R.k * 4; d < bars.length; d++) {
     const seenH = cH.advance(d), seenL = cL.advance(d);
-    if (seenH.length < 2 || seenL.length < 2) continue;
-    const h1 = seenH[seenH.length - 2], h2 = seenH[seenH.length - 1];
-    const l1 = seenL[seenL.length - 2], l2 = seenL[seenL.length - 1];
+    const nT = R.touches || 2;
+    if (seenH.length < nT || seenL.length < nT) continue;
+    const H = seenH.slice(-nT), L = seenL.slice(-nT);
+    const h1 = H[0], h2 = H[nT - 1], l1 = L[0], l2 = L[nT - 1];
+    if (nT > 2) {
+      // every turning point in between must sit on its line, or this is not one shape
+      let onLine = true;
+      for (let m = 1; m < nT - 1; m++) {
+        if (Math.abs(H[m].p - lineAt(h1, h2, H[m].i)) / H[m].p > R.touch_tol) onLine = false;
+        if (Math.abs(L[m].p - lineAt(l1, l2, L[m].i)) / L[m].p > R.touch_tol) onLine = false;
+      }
+      if (!onLine) continue;
+    }
     const sH = slope(h1, h2), sL = slope(l1, l2);
     const startI = Math.min(h1.i, l1.i), endI = Math.max(h2.i, l2.i);
     const span = endI - startI;
@@ -96,8 +109,8 @@ export function findWedge(bars, dir, R = WEDGE) {
     if (!(ok && broke)) continue;
     if (d - lastTaken < R.cooloff) continue;
     lastTaken = d;
-    out.push({ i: d, t: bars[d].t, kind: dir === "rising" ? "rising-wedge" : "falling-wedge",
-      draw: { upper: [h1, h2].map((p) => ({ i: p.i, p: p.p })), lower: [l1, l2].map((p) => ({ i: p.i, p: p.p })),
+    out.push({ i: d, t: bars[d].t, kind: dir === "rising" ? "rising-wedge" : "falling-wedge", touches: nT,
+      draw: { upper: H.map((p) => ({ i: p.i, p: p.p })), lower: L.map((p) => ({ i: p.i, p: p.p })),
               from: startI, to: d } });
   }
   return out;

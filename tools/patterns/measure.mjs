@@ -30,7 +30,7 @@ export const DETECTORS = {
   "rising-wedge": (b) => findWedge(b, "rising"),
   "falling-wedge": (b) => findWedge(b, "falling"),
   "bull-flag": (b) => findFlags(b).map((f) => ({ ...f, kind: "bull-flag",
-      draw: { pole: [f.i - 25, f.i - 10], flag: [f.i - 10, f.i], from: Math.max(0, f.i - 30), to: f.i } })),
+      draw: { pole: [f.p - 10, f.p], flag: [f.p + 1, f.i], from: f.p - 10, to: f.i } })),
   "bear-flag": (b) => findBearFlag(b),
   "head-shoulders": (b) => findHeadShoulders(b, "top"),
   "inverse-head-shoulders": (b) => findHeadShoulders(b, "bottom"),
@@ -155,6 +155,8 @@ export function sweep(all, name) {
     const dir = name === "rising-wedge" ? "rising" : "falling";
     for (const k of [4, 5, 7]) for (const conv of [0.6, 0.75, 0.9])
       run(`pivot ${k} days, closing to ${Math.round(conv * 100)}%`, (b) => findWedge(b, dir, { ...WEDGE, k, converge: conv }));
+    for (const k of [4, 5, 7])
+      run(`three touches per line, pivot ${k} days`, (b) => findWedge(b, dir, { ...WEDGE, k, touches: 3 }));
   } else if (name === "bear-flag") {
     for (const mv of [0.10, 0.15, 0.20]) for (const give of [0.4, 0.5, 0.62])
       run(`fall ${Math.round(mv * 100)}%, gives back ${Math.round(give * 100)}%`,
@@ -193,9 +195,23 @@ export function pickExample(all, signals, h = 60) {
     symbol: best.symbol, kind: best.kind, signal_index: best.i - from,
     signal_date: new Date(bars[best.i].t).toISOString().slice(0, 10),
     after: { d5: r2(fwd(bars, best.i, 5)), d20: r2(fwd(bars, best.i, 20)), d60: r2(fwd(bars, best.i, 60)) },
-    draw: best.draw ? JSON.parse(JSON.stringify(best.draw, (k, v) => (k === "i" ? v - from : v))) : null,
+    draw: shiftDraw(best.draw, from),
     bars: bars.slice(from, to + 1).map((b) => ({ t: new Date(b.t).toISOString().slice(0, 10), o: r2(b.o), h: r2(b.h), l: r2(b.l), c: r2(b.c) })),
   };
+}
+
+/** every index in a drawing, moved into the slice of bars the page will show */
+function shiftDraw(d, from) {
+  if (!d) return null;
+  const pt = (p) => ({ i: p.i - from, p: p.p });
+  const out = { from: d.from - from, to: d.to - from };
+  if (d.upper) out.upper = d.upper.map(pt);
+  if (d.lower) out.lower = d.lower.map(pt);
+  if (d.points) out.points = d.points.map(pt);
+  if (d.neck) out.neck = d.neck.map(pt);
+  if (d.pole) out.pole = d.pole.map((i) => i - from);
+  if (d.flag) out.flag = d.flag.map((i) => i - from);
+  return out;
 }
 
 async function main() {

@@ -66,7 +66,7 @@ export function findFlags(bars, R = RULES) {
       const prior = bars.slice(p + 1, f);                                  // the breakout day itself is excluded
       const priorHigh = prior.length ? Math.max(...prior.map((b) => b.h)) : flagHigh;
       if (bars[f].c > priorHigh && (!R.flag_must_tighten || tight)) {
-        if (f - lastTaken >= R.cooloff_days) { out.push({ i: f, t: bars[f].t, pole_gain: gain, giveback, tight }); lastTaken = f; }
+        if (f - lastTaken >= R.cooloff_days) { out.push({ i: f, t: bars[f].t, p, pole_gain: gain, giveback, tight }); lastTaken = f; }
         break;                                                             // one signal per pole
       }
     }
