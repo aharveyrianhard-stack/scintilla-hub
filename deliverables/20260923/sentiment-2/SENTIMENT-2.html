@@ -1,0 +1,140 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Sentiment · the public gauges</title>
+<style>
+:root{ --bg:#0a0b0e; --panel:#101217; --panel2:#14161c; --line:#20242c; --line2:#191c22;
+       --ink:#b8bec9; --ink2:#c6ccd6; --dim:#707785; --accent:#4aa8b8; --mute:#181b21; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.wrap{ max-width:1180px; margin:0 auto; padding:34px 20px 90px; }
+h1{ font-size:30px; letter-spacing:.06em; color:var(--ink2); font-weight:700; margin:0 0 6px; }
+h2{ font-size:19px; letter-spacing:.05em; color:var(--ink2); font-weight:700; margin:54px 0 4px; padding-top:20px; border-top:.5px solid var(--line); }
+h3{ font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); font-weight:700; margin:28px 0 8px; }
+p{ margin:10px 0; max-width:86ch; }
+.sub{ color:var(--dim); font-size:13px; margin:0 0 4px; }
+b{ color:var(--ink2); }
+a{ color:var(--accent); text-decoration:none; border-bottom:.5px solid var(--line); }
+table{ border-collapse:collapse; width:100%; margin:14px 0 6px; font-size:13.5px; }
+th{ text-align:left; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); font-weight:700; padding:6px 10px 6px 0; border-bottom:.5px solid var(--line); }
+td{ padding:8px 10px 8px 0; border-bottom:.5px solid var(--line2); vertical-align:top; }
+td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.box{ border:.5px solid var(--line); background:var(--panel); padding:16px 18px; margin:16px 0; }
+.box h4{ margin:0 0 8px; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); }
+.big{ font-size:44px; line-height:1; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.row3{ display:flex; gap:34px; flex-wrap:wrap; margin:18px 0 6px; }
+.row3>div{ flex:1; min-width:180px; }
+.row3 span{ display:block; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-top:8px; }
+figure{ margin:22px 0 30px; }
+figure img{ width:100%; display:block; border:.5px solid var(--line); background:var(--panel); }
+figcaption{ color:var(--dim); font-size:13px; margin-top:10px; max-width:86ch; }
+.phone img{ max-width:390px; }
+ul{ max-width:86ch; padding-left:20px; } li{ margin:7px 0; }
+.rec{ border-left:2px solid var(--accent); padding:4px 0 4px 14px; margin:12px 0; color:var(--ink2); }
+code{ background:var(--mute); padding:1px 5px; font-size:13px; color:var(--ink2); }
+.k{ color:var(--dim); }
+</style></head><body><div class="wrap">
+
+<h1>Sentiment · the public gauges</h1>
+<p class="sub">23 September 2026 · branch <code>hub/sentiment-2-20260923</code> · built and checked on the MacBook · nothing deployed, nothing pushed</p>
+
+<p>You asked three things. <i>"The sentiment page… how exactly is this happening?"</i> — that is the first section below, in plain words, before anything was changed. <i>"Scoring by newest channel is not necessarily the right way. We need to blend the opinions of different channels."</i> — that is now how the voices are read. <i>"An internal sentiment meter when we don't have the entire market… same problem as the put to call."</i> — that meter is gone, and the page says why. The headline is now the gauges other people publish, shown the way they publish them.</p>
+
+<h2>1 · How each voice is measured today</h2>
+<p>Four feeds, four different methods, none of them an AI reading the text. Here is exactly what happens to each one, and what makes each one wrong.</p>
+
+<h3>YouTube</h3>
+<p>A scheduled job on the Mac collects clips two ways: everything new from the channels you subscribe to, and the results of ticker searches. Both land in a table called <code>youtube_videos</code> — <b>11,262 clips stored</b>, of which <b>6,085 carry a ticker</b>. For the subscribed channels the job then downloads the English subtitles and, around each mention of a ticker, counts words from a fixed finance word list — "breakout", "squeeze", "dump", "overvalued" — flipping a word when a "not" or "never" sits just before it. That is all it is: <b>a word list with a negation rule, not a model, and nothing reads the video or the picture</b>. The counts for the last seven days are added up per ticker and written as one row into <code>social_sentiment</code> — <b>63 tickers, 231 mentions</b> at the time of writing.</p>
+<p><b>What makes it wrong.</b> The row is <b>pooled</b>: every mention counts the same, so a channel that posts fifty clips a week carries the number and a careful channel that posts once does not register. The only channel named on the row is <code>last_channel</code>, the newest one to mention that ticker — that is the "scoring by newest channel" you spotted, and it is a label, not a measurement. A word list cannot hear a question or a joke: <i>"is NVDA about to crash?"</i> counts as bearish. And the two tables that would let anyone check a single video — <code>youtube_transcripts</code> and <code>youtube_video_sentiment</code> — are <b>both empty (0 rows)</b>, so the pooled number cannot be taken apart.</p>
+
+<h3>X</h3>
+<p>A browser-side collector saves the posts on your Trading list and republishes them at <code>/api/xfeed</code> — <b>16,931 posts</b> today. Every post's text goes through the same finance word list, so a post is bullish, bearish or neither, and the day's reading was the net share of the posts that leaned. <b>What makes it wrong:</b> the same word-list limits, plus the fact that <b>the picture is never read</b> — on X the chart in the image often is the call. Posts with no ticker still vote.</p>
+
+<h3>StockTwits</h3>
+<p><b>631 stored messages</b> in <code>social_posts</code>, each carrying the poster's own Bullish or Bearish tag, so nothing is inferred at all. <b>What makes it wrong:</b> the ingester stopped months ago. The page shows it and never counts it.</p>
+
+<h3>News</h3>
+<p><code>news_sentiment</code> holds <b>374 rows</b>: one score per ticker over four days, weighted by how many headlines it came from. <b>What makes it wrong:</b> individual headlines are not scored anywhere, and the stored row carries no publisher — so there is nothing to blend across outlets, and the page now says that instead of implying an outlet-level reading it does not have.</p>
+
+<h2>2 · The headline is now the public gauges</h2>
+<p>Each card shows the value, <b>the publisher's own word for it</b>, the date it refers to, one line on what it measures, and a link to the source. Nothing is averaged with anything else. A gauge whose source cannot be read from a browser shows a dash, the real reason, and what would fix it — never a guess and never an old number without its date.</p>
+<table>
+<thead><tr><th>Gauge</th><th>Publisher</th><th>What it measures</th><th>State today</th></tr></thead>
+<tbody>
+<tr><td><b>Fear &amp; Greed</b></td><td>CNN Business</td><td>Seven market readings, each measured as distance from its own average</td><td><b>Live · 35 "fear"</b> at 19:32Z, with all seven parts on the card (52-week highs 0, breadth 0, momentum 32, put/call 49, volatility 50, safe haven 60, junk bonds 54)</td></tr>
+<tr><td><b>Crypto Fear &amp; Greed</b></td><td>alternative.me</td><td>Bitcoin volatility, momentum, social posts, dominance, search interest</td><td><b>Live · 71 "Greed"</b>, 23 Sep</td></tr>
+<tr><td><b>VIX</b></td><td>Cboe, through our chart API</td><td>The swing the options market expects in the S&amp;P 500 over 30 days</td><td><b>Live · 14.21</b>, 22 Sep session, below its 50-day average. The term structure line is <b>not</b> shown: VIX3M is not carried by the chart API, and Cboe's own file sends no cross-origin header, so a browser cannot read it directly.</td></tr>
+<tr><td><b>Put / call ratio</b></td><td>Cboe, through our chart API</td><td>Puts traded for every call across all US options</td><td><b>Not readable · the chart API answers 404 for PCC.</b> Lane M13's branch adds that route; I folded M13's commit in, so this card fills itself in the moment the chart API is deployed.</td></tr>
+<tr><td><b>Investor sentiment survey</b></td><td>AAII, weekly</td><td>Members saying bullish / neutral / bearish for the next six months</td><td><b>Not readable · aaii.com answered HTTP 403</b> to this machine on 23 Sep and publishes no free data file.</td></tr>
+<tr><td><b>Exposure index</b></td><td>NAAIM, weekly</td><td>What active managers report actually holding, −200 to +200</td><td><b>Not readable · no public data route</b> — the number is printed inside the web page and the site's data endpoint answered 404 on 23 Sep.</td></tr>
+</tbody></table>
+<p class="rec"><b>The one thing that would fix three of these at once:</b> a small reader on our own domain that fetches AAII's and NAAIM's weekly pages once a week and republishes the numbers with their dates, and the chart-API deploy that carries Cboe's put/call. That is one deploy and one tiny job, and it takes the headline from three live gauges to six.</p>
+
+<h2>3 · The internal "Scintilla fear &amp; greed" is gone</h2>
+<p>You said it plainly: an internal meter when we do not see the whole market has the same problem as the put/call row did. <b>Removed, and here is why that is the right call rather than moving it lower down.</b> We hold 364 stocks out of some four thousand US listings, we have no options flow of our own, and we have no exchange count of 52-week highs and lows. A single number built from that was <i>presented</i> as a market reading while being a reading of our own shelf. The two runs I captured on production minutes apart read <b>54</b> and then <b>49</b>, because a different set of inputs happened to be live — a headline that moves five points on which feed answered is not a measurement.</p>
+<p><b>What stays:</b> every input row — momentum, volatility, safe haven, junk bonds, how many of our stocks are up, put/call, 52-week highs — each on its own line with its own source, its own age and CNN's score for the same thing beside it. Nothing is averaged into a headline. The rows are useful; the average was the claim.</p>
+
+<h2>4 · The voices now blend across channels</h2>
+<p><b>One channel, one vote, whatever its volume.</b> A channel's own lean is the average of its clips; a ticker's lean is the average of the channel leans; the reading is the average of the channels. Beside every reading the page prints how many channels and how many clips or posts are behind it, and when the channels split it says so on the row rather than averaging the disagreement away.</p>
+<p>What that looked like when I captured it: YouTube <b>358 channels, 736 clips over seven days — 89 leaning positive, 68 negative, 201 neither, and the channels disagree (43% on the smaller side)</b>. Per ticker: NVDA neutral 52 from <b>122 channels</b> across 179 clips, SPY neutral 46 from 87 channels, QQQ neutral 45 from 64, MU greed 64 from 55, GOOGL fear 37 from 32. X: <b>92 handles, 864 posts in 24 hours</b>, greed 57. The old pooled YouTube number read <b>98 — near-maximum greed</b> — over the same period, which is what happens when the loudest channel carries the count.</p>
+<p><b>The honest limit.</b> This blend reads the <b>titles</b> of the ticker-tagged clips, because the per-video and transcript tables in the database are empty — so it covers the nine tickers the search collector files (NVDA, SPY, QQQ, MU, IREN, NBIS, GOOGL, TSM, DRAM), not all 63 in the pooled roll-up. Both numbers are on the page, each named for what it is. When the collector starts writing per-video rows, the same blend covers everything without another change.</p>
+
+<h2>5 · Before and after</h2>
+<figure><img src="shots/before-1680.png" alt="production sentiment tab at 1680"><figcaption><b>Before · 1680.</b> Production today: the big Scintilla dial reading <b>54 NEUTRAL · THE MARKET</b>, a second number for the voices, CNN's number small at the side, and the seven input rows below in 9px type.</figcaption></figure>
+<figure><img src="shots/after-1680.png" alt="new sentiment tab at 1680"><figcaption><b>After · 1680.</b> The published gauges are the headline — CNN at 35 with its seven parts listed, crypto at 71, VIX at 14.21, and the three unreadable ones saying why. On the right, the voices blended across channels with the per-ticker table: channels, clips, and "channels split" where they disagree.</figcaption></figure>
+<figure class="phone"><img src="shots/before-390.png" alt="production sentiment tab at 390"><figcaption><b>Before · 390.</b> The same dial on the phone, reading 49 a minute later.</figcaption></figure>
+<figure class="phone"><img src="shots/after-390.png" alt="new sentiment tab at 390"><figcaption><b>After · 390.</b> One gauge card per row, the voices table underneath with the drawn split dropped so the counts fit.</figcaption></figure>
+<p class="k">How the shots were taken: the page was served from the branch on this MacBook and opened in a real Chromium at 1680 and 390. The chart API only answers <code>https://scintillahub.ai</code>, and CNN turns away anything that looks automated, so both were proxied through the capture script with the production origin and an ordinary browser header, and the X feed was proxied from production because a local static server has no serverless functions. Nothing else was changed, so what you see is what the deployed page renders. I opened both shots and read them.</p>
+
+<h2>6 · What could be wrong</h2>
+<ul>
+<li><b>The word list is still a word list.</b> Blending by channel fixes who votes, not how each vote is read. Irony, questions and hedges still count as if they were statements.</li>
+<li><b>Titles are written to be clicked.</b> The YouTube blend reads titles, which are louder than the video. It is the best per-channel evidence in the database today, and the card says so.</li>
+<li><b>Nine tickers, not the market.</b> The blend covers what the search collector files.</li>
+<li><b>No channel is weighted by whether it was right.</b> A careful analyst and a hype channel count the same.</li>
+<li><b>Three of six gauges are not readable</b> until the chart-API deploy and the weekly reader exist. They show as unreadable rather than as anything else.</li>
+<li><b>CNN's own numbers move during the day</b> — the card carries the timestamp CNN gives, so an old reading is visible as old.</li>
+</ul>
+
+<h2>7 · What I did not do</h2>
+<ul>
+<li><b>Nothing deployed and nothing pushed.</b> The branch is local, for you to look at and merge.</li>
+<li><b>No new collector, no new job, no schedule.</b> I did not start writing per-video YouTube rows — that is a change to the job on the Mac, not to the page.</li>
+<li><b>No AI reading of text or pictures.</b> Not in scope and not pretended.</li>
+<li><b>No change to any other room.</b> The SOCIAL tab's own sentiment view, the board and the prototypes are untouched.</li>
+<li><b>I did not verify the put/call card live</b>, because the series it needs is not deployed. It is exercised by tests and by its own failure message only.</li>
+</ul>
+
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

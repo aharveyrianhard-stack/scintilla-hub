@@ -1109,6 +1109,9 @@ body.senti .sc-cohsearch{ display:none; }
 .card h4{ letter-spacing:.2em; }
 @media(max-width:700px){
   .sg-grid{ grid-template-columns:1fr; }
+  /* the phone keeps the numbers and drops the drawn split — the counts say the same thing */
+  .sn-tbl--mini td:nth-child(3), .sn-tbl--mini th:nth-child(3){ display:none; }
+  .sn-tbl--mini .sn-tag{ padding:1px 4px; letter-spacing:.04em; }
   .sg-val b{ font-size:26px; }
   .sn-tbl td.src, .sn-tbl th.src{ display:none; }
 }
@@ -9053,7 +9056,7 @@ function sentiSafe(p, ms) {
 }
 const SENTI_TABS = [["OVERVIEW", "OVERVIEW"], ["NEWS", "NEWS"], ["YOUTUBE", "YOUTUBE"], ["X", "X"]];
 const SENTI_LBL = {
-  OVERVIEW: ["sentiment · <b>market-wide</b> · scintilla fear &amp; greed", "voices · <b>news · youtube · x · stocktwits</b>"],
+  OVERVIEW: ["sentiment · <b>the gauges other people publish</b>", "voices · <b>blended across channels</b>"],
   NEWS:     ["news · <b>what the headlines say</b>", "news · <b>where it comes from</b>"],
   YOUTUBE:  ["youtube · <b>what the channels say</b>", "youtube · <b>where it comes from</b>"],
   X:        ["x · <b>what the posts say</b> · pictures and charts included", "x · <b>where it comes from</b>"],
@@ -9155,18 +9158,14 @@ const PUBG = [
     measures: "How big a swing the options market expects in the S&amp;P 500 over the next 30 days, in percent a year. Higher means more fear.",
     link: "https://www.cboe.com/tradable_products/vix/",
     read: async function () {
-      const s = await sentiBars("VIX");
+      const [s, t3] = await Promise.all([sentiBars("VIX"), sentiSafe(sentiBars("VIX3M"), 18000)]);
       if (!s.length) throw new Error("no VIX bars");
       const last = s[s.length - 1], c = +last.c;
       if (!SENTI.fin(c)) throw new Error("no close on the last VIX bar");
       const closes = s.map(function (b) { return +b.c; }).filter(SENTI.fin);
       const avg = closes.slice(-50).reduce(function (a, b) { return a + b; }, 0) / Math.min(50, closes.length);
-      let term = null;
-      try {
-        const t = await sentiBars("VIX3M");
-        const tc = t.length ? +t[t.length - 1].c : null;
-        if (SENTI.fin(tc)) term = { v: tc, ratio: c / tc };
-      } catch (e) { term = { err: String((e && e.message) || e) }; }
+      let term = { err: t3.ok ? "VIX3M returned no bars" : String(t3.e || "no reply") };
+      if (t3.ok && t3.v.length) { const tc = +t3.v[t3.v.length - 1].c; if (SENTI.fin(tc)) term = { v: tc, ratio: c / tc }; }
       return { value: +c.toFixed(2), scale: "index points", label: c < avg ? "below its 50-day average" : "above its 50-day average",
         asOf: new Date(+last.t).toISOString().slice(0, 10),
         note: term && term.v != null
@@ -9203,7 +9202,7 @@ async function pubGaugeRead() {
   if (SENTI_CACHE.pub && Date.now() - SENTI_CACHE.pub.at < SENTI_TTL) return SENTI_CACHE.pub.v;
   const out = await Promise.all(PUBG.map(async function (g) {
     if (g.blocked) return { g, ok: false, blocked: true, e: g.blocked };
-    const r = await sentiSafe(g.read(), 12000);
+    const r = await sentiSafe(g.read(), 25000);
     return { g, ok: r.ok, v: r.v, e: r.e };
   }));
   SENTI_CACHE.pub = { at: Date.now(), v: out };
