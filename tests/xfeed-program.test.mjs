@@ -55,12 +55,13 @@ test('retry time comes only from what X actually returned', () => {
   assert.equal(retryAtFromRates({ 'x-rate-limit-reset': 'soon' }), null);
 });
 
-test('schedule maths: the four ET slots resolve to the right UTC instants across DST', () => {
+test('schedule maths: the ET slots resolve to the right UTC instants across DST', () => {
   assert.equal(zonedInstant(2026, 9, 23, 6, 30), Date.UTC(2026, 8, 23, 10, 30), 'EDT is UTC-4');
   assert.equal(zonedInstant(2026, 11, 5, 6, 30), Date.UTC(2026, 10, 5, 11, 30), 'EST is UTC-5');
   const next = nextScheduled(Date.UTC(2026, 8, 23, 12, 0)); // 08:00 ET
-  assert.deepEqual(next, ['2026-09-23T14:30:00.000Z', '2026-09-23T18:30:00.000Z', '2026-09-23T22:30:00.000Z', '2026-09-24T10:30:00.000Z']);
-  assert.equal(nextScheduled(Date.UTC(2026, 8, 23, 23, 0))[0], '2026-09-24T10:30:00.000Z', 'after the last slot the next one is tomorrow 06:30 ET');
+  assert.deepEqual(next, ['2026-09-23T12:30:00.000Z', '2026-09-23T14:30:00.000Z', '2026-09-23T16:30:00.000Z', '2026-09-23T18:30:00.000Z']);
+  assert.equal(nextScheduled(Date.UTC(2026, 8, 23, 23, 0))[0], '2026-09-24T01:00:00.000Z', 'the evening slot at 21:00 ET');
+  assert.equal(nextScheduled(Date.UTC(2026, 8, 24, 4, 0))[0], '2026-09-24T10:30:00.000Z', 'after the 23:30 ET late-night slot the next one is 06:30 ET');
 });
 
 test('decisions: finish on the observed frontier, keep paging otherwise, stop loudly on limits', () => {
@@ -99,7 +100,7 @@ test('ensureIntake reuses a live intake for the same runtime, refuses a foreign 
 test('the health file keeps the last good pass across later failures and lists the next four slots', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'xfeed-health-')); t.after(() => rm(dir, { recursive: true, force: true }));
   const first = await writeHealth(dir, { pass_id: 'p1', host: 'h', started_at: '2026-09-23T02:00:00Z', finished_at: '2026-09-23T02:01:00Z', status: 'signed_out', error: 'x' }, { profileDir: '/p' });
-  assert.equal(first.last_good_pass, null); assert.match(first.last_run.meaning, /signed out/); assert.equal(first.next_scheduled.length, 4); assert.deepEqual(first.schedule_et, ['06:30', '10:30', '14:30', '18:30']);
+  assert.equal(first.last_good_pass, null); assert.match(first.last_run.meaning, /signed out/); assert.equal(first.next_scheduled.length, 4); assert.deepEqual(first.schedule_et, ['06:30', '08:30', '10:30', '12:30', '14:30', '16:30', '18:30', '21:00', '23:30']);
   await writeHealth(dir, { pass_id: 'p2', host: 'h', started_at: '2026-09-23T03:00:00Z', finished_at: '2026-09-23T03:04:00Z', status: 'published', pages: 4, latest_source_event_at: '2026-09-23T02:58:00Z' }, {});
   const after = await writeHealth(dir, { pass_id: 'p3', host: 'h', started_at: '2026-09-23T09:00:00Z', finished_at: '2026-09-23T09:01:00Z', status: 'rate_limited', error: '429' }, {});
   assert.equal(after.last_good_pass.pass_id, 'p2'); assert.equal(after.last_good_pass.published, true); assert.equal(after.last_run.status, 'rate_limited');

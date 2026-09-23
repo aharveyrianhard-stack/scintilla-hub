@@ -34,8 +34,10 @@ export const REPOSITORY = dirname(dirname(fileURLToPath(import.meta.url)));
 export const LIST_URL = 'https://x.com/i/lists/1405188850188759047';
 export const INTAKE = 'http://127.0.0.1:8766';
 export const DEFAULT_PROFILE = join(homedir(), 'Library', 'Application Support', 'Scintilla', 'xfeed-collector-profile');
-export const SCHEDULE_ET = [[6, 30], [10, 30], [14, 30], [18, 30]];
-export const CADENCE_STALE_SECONDS = 6 * 3600 + 30 * 60; // one missed slot plus margin before the desk calls it stale
+// 23 Sep, Alan: "a couple more times a day… there should be a late night… spread it out thinner";
+// he did not want 6:30 PM to be the last run. Every two hours through the day, then evening and late night.
+export const SCHEDULE_ET = [[6, 30], [8, 30], [10, 30], [12, 30], [14, 30], [16, 30], [18, 30], [21, 0], [23, 30]];
+export const CADENCE_STALE_SECONDS = 7 * 3600 + 30 * 60; // the overnight gap (23:30 to 06:30) plus margin before the desk calls it stale
 export const CHROME_CANDIDATES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chrome.app/Contents/MacOS/Google Chrome',
