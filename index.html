@@ -1056,6 +1056,23 @@ body.senti .sc-cohsearch{ display:none; }
   .sn-vs__t{ max-width:none; } .sn-kpi{ gap:16px; } .sn-kpi b{ font-size:18px; }
   .sn-x{ grid-template-columns:1fr; } }
 
+/* ── Hub front page · compact fear & greed ─────────────────────────────────────
+   The same number as the SENTIMENT tab (both read sentiComputeAll's cache), drawn
+   as one thin scale so it costs almost no height on the board. Tap opens the room. */
+.sn-front{ display:flex; align-items:center; gap:12px; padding:7px 10px; border-bottom:.5px solid var(--line); cursor:pointer; background:var(--mute); }
+.sn-front:hover{ background:var(--mute2,var(--mute)); }
+.sn-front__n{ font-size:20px; font-weight:700; color:var(--ink2); font-variant-numeric:tabular-nums; line-height:1; min-width:32px; }
+.sn-front__mid{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.sn-front__l{ font-size:7.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); }
+.sn-front__l b{ color:var(--ink3); font-weight:700; }
+.sn-front__scale{ position:relative; height:5px; background:var(--line2); }
+.sn-front__scale i{ position:absolute; top:0; bottom:0; left:0; background:var(--ink4,var(--dim)); }
+.sn-front__scale em{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink2); }
+.sn-front__scale u{ position:absolute; top:0; bottom:0; width:.5px; background:var(--bg); opacity:.55; }
+.sn-front__cnn{ text-align:right; font-size:7.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); white-space:nowrap; }
+.sn-front__cnn b{ display:block; font-size:13px; letter-spacing:0; color:var(--ink3); font-variant-numeric:tabular-nums; margin-bottom:3px; }
+@media(max-width:700px){ .sn-front{ gap:9px; padding:6px 8px; } .sn-front__n{ font-size:17px; } .sn-front__cnn{ display:none; } }
+
 /* ── AREA D · "◆ AI READ" placeholder slot — consistent dim on-brand reserved box,
    dropped into NEWS / SOCIAL / EVENTS. No data now; styled to light up later. ── */
 .sc-airead{ border:.8px dashed rgba(0,212,255,.30); border-radius:0;
@@ -5299,6 +5316,8 @@ function cohortCompareStripHTML() {
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
     cohTabsHTML() +
+    /* market-wide fear & greed, same reading as the SENTIMENT tab (Alan: a gauge on the Hub front page) */
+    '<div id="snFront">' + snFrontHTML(null) + '</div>' +
     /* R41 §2 — cohCompare moved OUT of the board into the right pane's Layer 0
        (layer0HTML). The left board keeps tabs + cohort geiger + rows only. */
     '<div id="cohGeiger">' + cohortGeigerHTML() + "</div>" +
@@ -8627,7 +8646,31 @@ const SENTI = (function () {
   function lin(s, ext) { if (!fin(s) || !fin(ext) || ext <= 0) return null; const c = Math.max(-1, Math.min(1, s / ext)); return Math.round(50 + 50 * c); }
   function label(score) { if (!fin(score)) return "NO READING"; if (score < 25) return "EXTREME FEAR"; if (score < 45) return "FEAR"; if (score <= 55) return "NEUTRAL"; if (score <= 75) return "GREED"; return "EXTREME GREED"; }
   /* the headline: equal-weight mean of LIVE inputs only — stale or missing never count */
-  function headline(inputs) { const live = (inputs || []).filter((i) => i && i.status === "live" && fin(i.score)); const of = (inputs || []).length; if (!live.length) return { score: null, n: 0, of, label: "NO READING" }; const score = Math.round(live.reduce((s, i) => s + i.score, 0) / live.length); return { score, n: live.length, of, label: label(score) }; }
+  /* THE 68-vs-35 FIX. CNN's index measures the MARKET. Ours used to average the
+     market inputs together with the news / YouTube / X voices, and finance talk runs
+     bullish by default, so three cheerful feeds could carry the headline into GREED
+     on a red day. The market gauge is now market inputs ONLY — directly comparable
+     with CNN — and the voices keep their own number beside it, named as what it is.
+     A market reading also needs at least three live market inputs: with fewer, the
+     page says so rather than calling three social feeds a market reading. */
+  const MARKET_KEYS = new Set(["momentum", "volatility", "safehaven", "junk", "strength", "breadth", "putcall"]);
+  const MIN_MARKET = 3;
+  function headline(inputs) {
+    const all = (inputs || []).filter(Boolean);
+    const live = all.filter((i) => i.status === "live" && fin(i.score));
+    const mkt = live.filter((i) => MARKET_KEYS.has(i.key));
+    const voi = live.filter((i) => !MARKET_KEYS.has(i.key));
+    const mean = (a) => Math.round(a.reduce((s, i) => s + i.score, 0) / a.length);
+    const vScore = voi.length ? mean(voi) : null;
+    const base = {
+      of: all.filter((i) => MARKET_KEYS.has(i.key)).length,
+      vScore, vN: voi.length, vOf: all.filter((i) => !MARKET_KEYS.has(i.key)).length,
+      vLabel: voi.length ? label(vScore) : "NO READING",
+    };
+    if (mkt.length < MIN_MARKET) return Object.assign(base, { score: null, n: mkt.length, label: "NO MARKET READING" });
+    const score = mean(mkt);
+    return Object.assign(base, { score, n: mkt.length, label: label(score) });
+  }
   /* finance keyword lexicon for short social text — NOT an AI read. A negator within
      the three preceding tokens flips the keyword. Bare "long"/"short"/"put"/"call" are
      left out on purpose: too ambiguous in ordinary speech. */
@@ -8670,7 +8713,7 @@ const SENTI = (function () {
   /* weighted mean of per-ticker scores (weight = headline / mention count) */
   function wmean(rows, sKey, wKey) { let s = 0, w = 0; for (const r of rows || []) { const x = +r[sKey], k = Math.max(0, +r[wKey] || 0); if (fin(x) && k > 0) { s += x * k; w += k; } } return w ? s / w : null; }
   function ageTxt(ms) { if (!fin(ms) || ms < 0) return "—"; if (ms < 60e3) return "now"; if (ms < 3600e3) return Math.round(ms / 60e3) + "m"; if (ms < 48 * 3600e3) return Math.round(ms / 3600e3) + "h"; return Math.round(ms / 86400e3) + "d"; }
-  return { fin, sma, ret, pct, dev, lin, label, headline, lexLean, xVoice, wmean, ageTxt, BULL, BEAR };
+  return { fin, sma, ret, pct, dev, lin, label, headline, MARKET_KEYS, MIN_MARKET, lexLean, xVoice, wmean, ageTxt, BULL, BEAR };
 })();
 /* /SENTI-MATH */
 
@@ -8774,6 +8817,31 @@ function snGaugeSVG(score) {
     ticks + needle +
     '<text x="12" y="118" fill="var(--dim)" font-size="7" letter-spacing="1.5">FEAR</text><text x="208" y="118" fill="var(--dim)" font-size="7" letter-spacing="1.5" text-anchor="end">GREED</text></svg>';
 }
+/* ═══ Hub front page · the compact gauge ═══════════════════════════════════════
+   Reads sentiComputeAll(), the SAME cached computation the SENTIMENT tab uses, so
+   the front page and the room can never show two different numbers. */
+function snFrontHTML(C) {
+  if (!C) return '<div class="sn-front" data-act="gosenti" title="open the sentiment tab">' +
+    '<div class="sn-front__n">·</div><div class="sn-front__mid"><div class="sn-front__l">fear &amp; greed · <b>reading…</b></div>' +
+    '<div class="sn-front__scale"></div></div></div>';
+  const H = C.H, M = SENTI, s = M.fin(H.score) ? H.score : null;
+  const cnnHead = (C.cnn && C.cnn.ok && C.cnn.v && C.cnn.v.fear_and_greed && M.fin(+C.cnn.v.fear_and_greed.score)) ? Math.round(+C.cnn.v.fear_and_greed.score) : null;
+  const ticks = [25, 45, 55, 75].map(function (t) { return '<u style="left:' + t + '%"></u>'; }).join("");
+  return '<div class="sn-front" data-act="gosenti" title="open the sentiment tab">' +
+    '<div class="sn-front__n">' + (s == null ? "—" : s) + "</div>" +
+    '<div class="sn-front__mid">' +
+      '<div class="sn-front__l">fear &amp; greed · <b>' + esc(H.label) + "</b> · " + H.n + " of " + H.of + " market inputs" +
+        (H.vScore == null ? "" : " · voices <b>" + H.vScore + "</b>") + "</div>" +
+      '<div class="sn-front__scale">' + (s == null ? "" : '<i style="width:' + s + '%"></i>' + ticks + '<em style="left:calc(' + s + '% - 1px)"></em>') + "</div>" +
+    "</div>" +
+    (cnnHead == null ? "" : '<div class="sn-front__cnn"><b>' + cnnHead + "</b>cnn</div>") + "</div>";
+}
+async function fillSnFront() {
+  if (!el("snFront")) return;
+  let C; try { C = await sentiComputeAll(); } catch (_) { return; }
+  const n = el("snFront"); if (!n) return;                 // room left while the inputs loaded
+  n.innerHTML = snFrontHTML(C);
+}
 let SENTI_RUN = 0;
 /* ONE computation of the reading, cached for ten minutes. The SENTIMENT tab and the
    front-page gauge both read this, so the two can never show different numbers. */
@@ -8867,14 +8935,21 @@ async function fillSentiment() {
     ? "on the " + shared.length + " inputs we both have: us " + mine + " \u00b7 CNN " + theirs
       + (missing.length ? " \u2014 the " + missing.length + " we do not hold read " + missing.map((i) => i.cnn).join(", ") + " for CNN" : "")
     : "no shared input to compare yet";
+  const headTxt = H.score == null
+    ? "<b>" + H.n + " of " + H.of + "</b> market inputs live \u2014 a market reading needs at least " + M.MIN_MARKET
+      + ", so no market number is shown. The voices below still read."
+    : "<b>" + H.n + " of " + H.of + "</b> market inputs live and counted \u00b7 equal weight \u00b7 computed " + esc(stamp)
+      + "<br>news, YouTube and X are <b>not</b> in this number \u2014 they have their own, beside it";
   el("snMain").innerHTML =
     '<div class="sn-head"><div class="sn-gauge">' + snGaugeSVG(H.score) + "</div>" +
-      '<div><div class="sn-num">' + (H.score == null ? "—" : H.score) + '</div><div class="sn-lbl">' + esc(H.label) + "</div>" +
-      '<div class="sn-sub"><b>' + H.n + " of " + H.of + "</b> inputs live and counted \u00b7 equal weight \u00b7 computed " + esc(stamp) + "<br>a stale or missing input is shown below but never counted</div></div>" +
+      '<div><div class="sn-num">' + (H.score == null ? "—" : H.score) + '</div><div class="sn-lbl">' + esc(H.label) + " \u00b7 the market</div>" +
+      '<div class="sn-sub">' + headTxt + "</div></div>" +
+      '<div class="sn-vs"><div class="sn-vs__n">' + (H.vScore == null ? "\u2014" : H.vScore) + '</div><div class="sn-vs__l">the voices \u00b7 ' + esc(String(H.vLabel).toLowerCase()) + "</div>" +
+        '<div class="sn-vs__t">news, YouTube and X, ' + H.vN + " of " + H.vOf + " live. Kept apart from the market number on purpose: talk about stocks runs bullish nearly all the time, so mixing it in was what made this gauge read greed on a red day.</div></div>" +
       '<div class="sn-vs"><div class="sn-vs__n">' + (cnnHead == null ? "\u2014" : cnnHead) + '</div><div class="sn-vs__l">CNN \u00b7 all seven inputs</div>' +
         '<div class="sn-vs__t">' + esc(sameTxt) + "</div></div></div>" +
     '<table class="sn-tbl"><thead><tr><th>input</th><th>our reading</th><th class="nw">fear · greed</th><th class="n">score</th><th class="n" title="CNN Fear &amp; Greed score for the same component, fetched live — reference only, never an input">cnn</th><th class="n">age</th><th class="src">source</th></tr></thead><tbody>' + rows + "</tbody></table>" +
-    '<div class="sn-sub">Market inputs: today\'s value ranked against its own trailing series (≈175–280 sessions of daily bars) → percentile 0–100; volatility inverted. Voices: news linear, ±0.30 score = the extremes; YouTube and StockTwits linear, ±0.60 net share; X ranked against the feed\'s own earlier days (percentile; linear ±0.60 until five days exist). The cnn column is CNN\'s own component score for comparison — it is not an input.</div>';
+    '<div class="sn-sub">Market inputs: how far today sits from its own average, measured in the size that input normally moves — two of those steps either way is the end of the dial (CNN\'s own method); volatility inverted. Voices: news linear, ±0.30 score = the extremes; YouTube and StockTwits linear, ±0.60 net share; X ranked against the feed\'s own earlier days (percentile; linear ±0.60 until five days exist). The cnn column is CNN\'s own component score for comparison — it is not an input.</div>';
   const vHTML = voices.map((v) => {
     const off = v.status !== "live";
     const lean = M.fin(v.score) ? M.label(v.score).toLowerCase() + " · " + v.score : "no reading";
@@ -8894,7 +8969,7 @@ async function fillSentiment() {
   el("snRail").innerHTML =
     '<div class="card"><h4>VOICES · WHAT THE TEXT SAYS</h4>' + vHTML + "</div>" +
     '<div class="card"><h4>REFERENCE GAUGES · NOT INPUTS</h4>' + refs + '<div class="sn-voice__txt" style="padding-top:6px">Published indexes, fetched live in the browser for comparison. CNN: seven equal-weight market inputs. alternative.me: crypto volatility, momentum and volume, social, dominance, search trends.</div></div>' +
-    '<div class="card"><h4>WHAT FEEDS THE HEADLINE</h4><div class="sn-voice__txt">Market: SPY vs its 125-day average · VIX vs its 50-day average (inverted) · SPY − TLT 20-day return · HYG − LQD 20-day return. Voices: news_sentiment · YouTube social_sentiment · the X feed. Not in our data yet: 52-week highs and lows, advancing vs declining volume, put / call. StockTwits is stored but stale, so it is shown and not counted.</div></div>';
+    '<div class="card"><h4>WHAT FEEDS THE HEADLINE</h4><div class="sn-voice__txt">The big number is the MARKET only, so it can be set beside CNN\'s: SPY vs its 125-day average · VIX vs its 50-day average (inverted) · SPY − TLT 20-day return · HYG − LQD 20-day return. Voices: news_sentiment · YouTube social_sentiment · the X feed. Not in our data yet: 52-week highs and lows, advancing vs declining volume, put / call. StockTwits is stored but stale, so it is shown and not counted.</div></div>';
 }
 
 
@@ -13138,6 +13213,7 @@ function afterMount() {
   /* R49 §5 — SCENES mounts the SAME Layer-0 surface the dashboard pane mounts; the
      board feed is section-independent, so the rows are already live. RSI is lazily
      filled because MAP's tier-3 cells print it. */
+  if (S.sec === "DASHBOARD" || S.sec === "COMPANY") fillSnFront();   // compact fear & greed on the board
   if (S.sec === "SCENES") { mountL0Body(); loadBoardRsi(shownRows().map((r) => r.t)); return; }
   if (S.sec === "NEWS") fillNews();
   else if (S.sec === "SOCIAL") {               // AREA A — dispatch by SOCIAL sub-tab
@@ -13502,6 +13578,7 @@ document.addEventListener("click", (e) => {
     }
     /* SENTIMENT sub-tab switch — each page is its own mount (viewKey carries the
        tab), so sync() rebuilds the room and afterMount runs that page's fill. */
+    case "gosenti": { S.sec = "SENTIMENT"; S.sentiTab = "OVERVIEW"; sync(); break; }
     case "sentitab": {
       const t = a.dataset.tab; if (!t || t === S.sentiTab) break;
       S.sentiTab = t; sync();
