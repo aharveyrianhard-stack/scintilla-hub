@@ -1,0 +1,129 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Sentiment</title>
+<style>
+:root{ --bg:#0a0b0e; --panel:#101217; --panel2:#14161c; --line:#20242c; --line2:#191c22;
+       --ink:#b8bec9; --ink2:#c6ccd6; --dim:#707785; --accent:#4aa8b8; --mute:#181b21; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.wrap{ max-width:1180px; margin:0 auto; padding:34px 20px 90px; }
+h1{ font-size:30px; letter-spacing:.06em; color:var(--ink2); font-weight:700; margin:0 0 6px; }
+h2{ font-size:19px; letter-spacing:.05em; color:var(--ink2); font-weight:700; margin:54px 0 4px; padding-top:20px; border-top:.5px solid var(--line); }
+h3{ font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); font-weight:700; margin:28px 0 8px; }
+p{ margin:10px 0; max-width:86ch; }
+.sub{ color:var(--dim); font-size:13px; margin:0 0 4px; }
+b{ color:var(--ink2); }
+a{ color:var(--accent); text-decoration:none; border-bottom:.5px solid var(--line); }
+table{ border-collapse:collapse; width:100%; margin:14px 0 6px; font-size:13.5px; }
+th{ text-align:left; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); font-weight:700; padding:6px 10px 6px 0; border-bottom:.5px solid var(--line); }
+td{ padding:8px 10px 8px 0; border-bottom:.5px solid var(--line2); vertical-align:top; }
+td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.box{ border:.5px solid var(--line); background:var(--panel); padding:16px 18px; margin:16px 0; }
+.box h4{ margin:0 0 8px; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); }
+.big{ font-size:44px; line-height:1; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.row3{ display:flex; gap:34px; flex-wrap:wrap; margin:18px 0 6px; }
+.row3>div{ flex:1; min-width:180px; }
+.row3 span{ display:block; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-top:8px; }
+figure{ margin:22px 0 30px; }
+figure img{ width:100%; display:block; border:.5px solid var(--line); background:var(--panel); }
+figcaption{ color:var(--dim); font-size:13px; margin-top:10px; max-width:86ch; }
+.phone img{ max-width:390px; }
+ul{ max-width:86ch; padding-left:20px; } li{ margin:7px 0; }
+.rec{ border-left:2px solid var(--accent); padding:4px 0 4px 14px; margin:12px 0; color:var(--ink2); }
+code{ background:var(--mute); padding:1px 5px; font-size:13px; color:var(--ink2); }
+.k{ color:var(--dim); }
+</style></head><body><div class="wrap">
+
+<h1>Sentiment</h1>
+<p class="sub">23 September 2026 · branch <code>lane2/sentiment-20260923</code> · built and checked on the MacBook · nothing deployed, nothing pushed to production</p>
+
+<p>This is the answer to three things you asked for: the research first, then a page for each voice, then one master tab with a single fear &amp; greed gauge — and the explanation of why our gauge said 68 GREED on a night CNN said 35 FEAR.</p>
+
+<div class="box"><h4>The short version</h4>
+<p><b>Our gauge was measuring two different things at once and calling the answer one number.</b> Four market readings were averaged together with the news, YouTube and X feeds. Talk about stocks is cheerful nearly all the time, so three happy feeds lifted the headline into greed on a day the market was falling. CNN's number measures the market only. Now ours does too — the voices keep their own number beside it, named as what they are.</p>
+<p>Checked live at 14:47Z today, with the market open: <b>our market gauge 50</b>, <b>the voices 82</b>, <b>CNN 35</b>. Every one of those numbers is on the screenshot below, and each input says where it came from and how old it is.</p></div>
+
+<h2>1 · The research</h2>
+
+<h3>How StockTwits-style bull/bear sentiment works</h3>
+<p>StockTwits does not read anybody's writing to decide the mood. <b>The person posting tags their own message Bullish or Bearish</b> with a toggle on the message box. Only about a fifth to a quarter of posts carry a tag, and far more of them say bullish than bearish. Their published Sentiment score is not a simple count of those tags either: it mixes the tags with likes, replies and how much a ticker is being talked about at all, and it leans on recent activity rather than a long average. It uses no price data and no brokerage data — it is purely what the room is saying and how loudly.</p>
+<p><b>Two things worth stealing, one thing to avoid.</b> Worth stealing: an explicit bull/bear mark per item rather than a guess from the words, and treating <i>how much</i> a ticker is being discussed as its own signal separate from direction. Worth avoiding: depending on their pipe. Their public developer registrations are paused and data access is a request-based enterprise arrangement. Our own stored StockTwits rows prove the risk — the newest one is <b>7 June 2026, 108 days old</b>. It is shown on the page and never counted.</p>
+<p class="rec"><b>Recommendation for StockTwits:</b> do not build on it. Keep the stale rows visible and labelled as dead, and copy the mechanic instead: our X and YouTube feeds already give both halves — a direction per item and a volume of talk per ticker.</p>
+
+<h3>The best open tools for reading finance text, and what they cost to run</h3>
+<p>Today neither our YouTube nor our X lean is an AI reading. Both are <b>keyword counts with negation</b> — a list of bullish and bearish words, where a "not" in front flips the word. It is honest and cheap and it is also blunt: it cannot tell "this drop is a gift" from "this is a gift that dropped".</p>
+<table><thead><tr><th>Tool</th><th>What it is</th><th>How good</th><th>What it costs to run</th></tr></thead><tbody>
+<tr><td><b>FinBERT</b> (ProsusAI)</td><td>A BERT-base model, 12 layers, 110 million settings, fine-tuned on finance text. Free weights, downloaded and run on our own machine.</td><td>The most quoted benchmark on the standard finance sentence set is around <b>0.97 accuracy</b> after fine-tuning. It is the default in most published finance pipelines.</td><td>No per-call fee — only machine time. Roughly <b>50 ms a document on a small GPU</b>; several times slower on plain CPU. Our whole 486,825-headline backlog is a one-off job; the ~4,000 headlines a day that arrive now are nothing.</td></tr>
+<tr><td><b>FinGPT</b></td><td>An open framework that fine-tunes general open LLMs on finance data with LoRA adapters.</td><td>Competitive and more flexible than FinBERT; considerably heavier to serve and to keep current.</td><td>Machine time, GPU strongly preferred. More moving parts to maintain.</td></tr>
+<tr><td><b>A paid frontier model</b> (GPT-4o class)</td><td>Send the headline to somebody else's API and read the answer.</td><td>Reported to beat FinBERT by up to about 10% depending on sector.</td><td>A fee per headline, and our text leaves the building. At 4,000 headlines a day that is a real recurring bill for a number we can get locally.</td></tr>
+<tr><td><b>Distilled small models</b> (TinyBERT-style)</td><td>A smaller student model trained from a bigger one.</td><td>A little below FinBERT.</td><td>Cheapest; runs comfortably on CPU.</td></tr>
+</tbody></table>
+<p class="rec"><b>Recommendation for reading text:</b> FinBERT, run on our own machine, scoring <b>each headline</b> and writing the score next to the headline — not a per-ticker roll-up. Keep the keyword count as the labelled fallback, never mix the two in one number, and always say on screen which one produced the figure. Nothing about this needs a paid API.</p>
+
+<h3>How CNN's Fear &amp; Greed is built</h3>
+<p>Seven inputs, <b>equal weight</b>, market only: market momentum, stock price strength (52-week highs against lows), stock price breadth (advancing against declining volume), put/call options, junk bond demand, market volatility, safe haven demand. The scoring is the part that matters and the part we had wrong: CNN measures <b>how far each input sits from its own average, in units of how much that input normally moves</b> — not where it ranks against its own history.</p>
+<p>I read CNN's live component scores at 14:41Z today, and they explain their 35 exactly: momentum 34, volatility 50, safe haven 57, junk bonds 53, put/call 49, breadth <b>0</b>, 52-week highs vs lows <b>1</b>. Those last two are at the floor. Average the seven and you get 34.9 — their published 35.4.</p>
+
+<h3>Does TradingView have a fear &amp; greed widget to embed?</h3>
+<p><b>No.</b> I read their widget catalogue. The official embeddable set is: Advanced Chart, Symbol Overview, Mini Chart, Seasonal Chart, Market Summary, Market Overview, Market Data, World Market Summary, Ticker Tape, Ticker Tag, Single Ticker, Tickers, Stock Heatmap, Crypto Coins Heatmap, Forex Table, ETF Heatmap, Screener, Cryptocurrency Market, Symbol Info, Technical Analysis, Fundamental Data, Company Profile, Top Stories, Economic Calendar, Broker Rating, Broker Reviews, Economic Map. There is no fear &amp; greed widget among them. The fear &amp; greed things you see on TradingView are <b>community Pine scripts on a chart</b> — they live inside their chart, they are one author's recipe, and they are not embeddable on our site.</p>
+<p class="rec"><b>Recommendation for the gauge:</b> keep ours, because it is the only one we can explain input by input. Beside it, keep reading CNN's published number live for comparison — that already works from the browser and is on the page now, marked a reference and never an input. If you want a TradingView dial on the page it would have to be their Technical Analysis gauge, which is a buy/sell rating, not fear and greed, and I would not put it next to this without a very clear name.</p>
+
+<h2>2 · Why ours said 68 when CNN said 35</h2>
+<p>Three separate faults, all now fixed or named:</p>
+<ul>
+<li><b>We were averaging apples with opinions.</b> Four market readings and three chatter feeds went into one average. The chatter ran hot — news 73, YouTube 98, X 76 — so it dragged the headline up. CNN's index contains no chatter at all. <b>Fixed:</b> the big number is market inputs only; the voices have their own number next to it.</li>
+<li><b>We ranked where CNN measures distance.</b> Ours asked "is today higher than most of the last year?" — a percentile. A value a hair above average can rank at 68 that way. CNN asks "how far from average is today, compared with how much this thing normally moves?" <b>Fixed:</b> every market input is now scored that way — the middle is 50, one normal-sized move is 25 points, two is the end of the dial.</li>
+<li><b>We were missing the inputs that were screaming.</b> We held four of CNN's seven. The two biggest fear readings in their index are the two we did not have: 52-week highs against lows at <b>1</b>, and breadth at <b>0</b>. <b>Partly fixed:</b> breadth now comes from our own universe — one call, 364 stocks, counted. At 14:47Z today it read <b>123 of 364 up, 34% advancing</b>, a fear reading, and it pulled our number down. The 52-week highs/lows and put/call inputs are still not collected, and the page says so on their rows.</li>
+</ul>
+<p>What is left after those three fixes is an honest difference, and the page prints it in words: on the five inputs we both hold, <b>we read 50 and CNN reads 39</b>; the two we do not hold read 1 and 49 for them. Some of that gap is real method difference — CNN weighs breadth by volume, we count stocks, and the row says so. I did not tune our number to match theirs, because a number tuned to match another number is not a measurement.</p>
+<p>A fourth fault turned up while I was testing, and it was the same disease: with the chart API unreachable the page still printed <b>82 EXTREME GREED</b> from three social feeds alone. It will not do that now — a market reading needs at least three live market inputs, or the page says it has no market reading and shows the voices only.</p>
+
+<h2>3 · The master tab</h2>
+<figure><img src="shots/desk-02-overview.png" alt="Sentiment overview at desktop width">
+<figcaption>The master tab at desktop width, with the market open. The dial and <b>50 · NEUTRAL · THE MARKET</b> on the left; <b>82 · THE VOICES</b> and <b>35 · CNN</b> beside it, each with a sentence saying what it is. Below, every input on its own row: what we read, a fear-to-greed bar, our score, CNN's score for the same input, how old it is and exactly where it came from. Two rows read "no source" and say why. The right rail is the voices in longhand — news, YouTube, X, and StockTwits marked stale and not counted — then the reference gauges. Nothing on this page is white.</figcaption></figure>
+
+<figure class="phone"><img src="shots/phone-02-overview.png" alt="Sentiment overview at 390 pixels">
+<figcaption>The same page at 390 px. The dial stays big, the three numbers stack instead of sitting in a row, and the input table scrolls. The sub-tabs stay on one line.</figcaption></figure>
+
+<h3>The compact gauge on the Hub front page</h3>
+<figure><img src="shots/desk-01-front.png" alt="Hub front page with the compact fear and greed strip">
+<figcaption>One thin strip at the top of the cohort board: <b>50 · FEAR &amp; GREED · NEUTRAL · 5 OF 7 MARKET INPUTS · VOICES 82</b> and CNN's 35 on the right, over a scale with the band marks. It costs about 30 px of board height and opens the sentiment tab when clicked. It reads the same computed result as the tab — one calculation, cached for ten minutes — so the front page and the room can never show two different numbers. That is pinned by a test.</figcaption></figure>
+
+<h2>4 · A page for each voice</h2>
+
+<h3>News</h3>
+<figure><img src="shots/desk-03-news.png" alt="News sentiment page">
+<figcaption>What the headlines say. Real counts, not estimates — <b>486,851 stored</b>, 4,040 in the last day, 23,299 in the last week, 374 tickers with a lean. Then the tickers most covered today, the ones leaning most positive and most negative among those with 20+ headlines, and the freshest headlines with their source and a working link. The right rail states plainly that <b>no individual headline carries a score</b> — only the per-ticker roll-up does — so the page cannot yet tell you which headline moved a ticker. That is the gap FinBERT would close.</figcaption></figure>
+
+<h3>YouTube</h3>
+<figure><img src="shots/desk-03-youtube.png" alt="YouTube sentiment page">
+<figcaption>What the channels say: 63 tickers, 231 mentions, 108 bullish against 29 bearish over a 7-day window, last written 14 hours ago. Per ticker: bull, bear, posts, a bear-to-bull bar, the score, which channel was newest and how old it is. The rail is blunt about coverage — I read both detail tables live while the page rendered and <b>youtube_video_sentiment and youtube_transcripts are empty, 0 rows</b>, so this page is the roll-up only and cannot show which video moved a ticker. It also says the lean is a keyword count, not an AI reading.</figcaption></figure>
+
+<h3>X — with the pictures</h3>
+<figure><img src="shots/desk-03-x.png" alt="X sentiment page with post images">
+<figcaption>"Who told you that we only need the text?" — answered. <b>16,791 posts stored, 978 of the last 2,212 carry a picture or video</b>, and those are drawn first, because on X the chart usually is the argument. You can see it working: a real annotated NVDA chart posted 11 minutes earlier, and a cartoon posted against a 10-year yield move. Pictures sit in the house monochrome and show their own colour on hover or tap. Above them: who is posting and what is being mentioned. The rail says what is <b>not</b> done — nothing reads the picture; a chart screenshot still only counts through its words.</figcaption></figure>
+
+<h2>5 · What is not done</h2>
+<ul>
+<li><b>Nothing reads an image.</b> The X charts are shown, not understood. That needs a vision model and it is a separate job.</li>
+<li><b>No headline-level scores.</b> News leans come from a per-ticker 4-day roll-up. FinBERT per headline is the recommended next step.</li>
+<li><b>No per-video YouTube detail</b> — both detail tables are empty at 0 rows. The collector writes the roll-up only.</li>
+<li><b>Two CNN inputs still missing:</b> 52-week highs against lows, and put/call. Both are named on their rows with the reason. Cboe stopped publishing the free daily put/call files in 2019.</li>
+<li><b>Our breadth is not CNN's breadth.</b> We count stocks up against stocks down in our 364-stock universe; CNN weighs by volume. The row says so; the two are not mixed.</li>
+<li><b>StockTwits is dead data</b> — 108 days stale, shown and never counted.</li>
+<li><b>Not deployed and not pushed.</b> The branch is local, for you to look at and merge.</li>
+<li><b>A test the harness could not prove locally:</b> the chart API allows the live site as an origin, not localhost, so the screenshots were taken with the browser fetching the chart API through a local pass-through. The same calls answer directly, which is how I got the 364-stock breadth figures; on the deployed site no shim exists or is needed.</li>
+<li><b>Two test failures that are not from this work:</b> one counts how many times a YouTube age helper is called and already fails on production bytes; the other is the known xfeed-publish failure. The sentiment suite itself is 18 of 18.</li>
+</ul>
+
+<h2>6 · Sources</h2>
+<ul>
+<li>CNN Fear &amp; Greed, method and live components — <a href="https://www.cnn.com/markets/fear-and-greed">cnn.com/markets/fear-and-greed</a> and its published data feed, read live at 14:41Z on 23 Sep 2026.</li>
+<li>CNN method in longhand — <a href="https://supertype.ai/notes/fear-greed-index-part1">supertype.ai/notes/fear-greed-index-part1</a>.</li>
+<li>StockTwits' own explanation of the Bullish/Bearish toggle and score — <a href="https://help.stocktwits.com/c/faqs/articles/using-sentiment-on-stocktwits">help.stocktwits.com</a>.</li>
+<li>StockTwits tagged-message research (share of posts tagged, bull/bear skew) — <a href="https://link.springer.com/article/10.1007/s42521-023-00102-z">Divernois &amp; Filipović, Digital Finance</a>.</li>
+<li>TradingView's official widget catalogue — <a href="https://www.tradingview.com/widget-docs/widgets/">tradingview.com/widget-docs/widgets</a>.</li>
+<li>FinBERT model and benchmarks — <a href="https://huggingface.co/ProsusAI/finbert">huggingface.co/ProsusAI/finbert</a>; comparisons with GPT-class models and FinGPT from recent published work.</li>
+</ul>
+
+</div></body></html>
