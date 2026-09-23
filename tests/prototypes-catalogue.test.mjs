@@ -17,13 +17,18 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    The page is generated from catalog.json, so the two can no longer drift. The Station dock concept was published under
    /prototypes/dock-concept/ in the same pass, because it had only ever been sent as a file.
 
-   September 23: the company report library joins under /prototypes/report-library/ - the recovered reports deduplicated
-   into one page and marked against the Hub (see tests/report-library.test.mjs for its own rules). */
+   September 23: the company report library joins under /prototypes/report-library/ (see tests/report-library.test.mjs).
+
+   September 23, overnight (cards): the owner found the page "very hard to navigate ... not very cardified or readable".
+   The page is now a card grid that reflows from a phone to a TV (auto-fill columns, no fixed box), every card carries a
+   DATE beside its readiness label, and a LATEST strip at the top lists what just shipped, newest first, generated from
+   latest.json. The rules below hold the page to that: a date on every card, the strip in order and never a dead end,
+   no fixed column count anywhere. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "704f73cdd243b0b38c64eb5ebfffdae71094d9bd6cf15994000c0a2c5d6697c0");
+  assert.equal(sha("index.html"), "6a8b65e9a0eeabdc5e1fc985327c2e65c6b8a36a12c318a94dc9aed4cc7f7434");
   assert.equal(sha("previews/signal-fanout-v2.html"), "8fd727c9d97178cc8226b509228f587d5ee0caf0954f62bb211b4f55c2a76f1d");
   assert.equal(sha("dock-concept/index.html"), "b63d4bb1404b41ee0dbf2414817c08e4b0e4a35a5dbd8bd8460c89b717685a69");
-  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "previews", "report-library"]);
+  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));
 });
@@ -33,8 +38,11 @@ test("the reviewed page and preview bytes; the lab's home is present", () => {
 const READINESS = { "Existing tool": "existing", "Existing preview": "preview", "Recovered local preview": "sample",
   "Concept study": "sample", "Review home": "review", "Latest artifact pending": "pending", "Recovery in progress": "pending" };
 const BADGE = { existing: "Existing tool", preview: "Preview", sample: "Sample data", review: "Review home", pending: "Pending" };
+const DATE_KIND = { updated: "Updated", checked: "Checked", named: "Named" };
 const PURPOSES = ["markets", "signals", "portfolio", "workspaces", "visual"];
 const escHtml = (s) => s.replace(/&/g, "&amp;");
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayLabel = (iso) => { const [y, m, d] = iso.split("-").map(Number); return d + " " + MONTH[m - 1]; };
 
 function sections(page) {
   const out = {};
@@ -46,8 +54,16 @@ function articles(html) {
     attrs: m[1], body: m[2],
     purpose: (m[1].match(/data-purpose="([a-z]+)"/) || [])[1], readiness: (m[1].match(/data-readiness="([a-z]+)"/) || [])[1],
     title: (m[2].match(/<h4>([\s\S]*?)<\/h4>/) || [])[1], desc: (m[2].match(/<\/h4><p>([\s\S]*?)<\/p>/) || [])[1],
+    when: (m[2].match(/<span class="when" data-date="(\d{4}-\d\d-\d\d)">([^<]+)<\/span>/) || []),
     anchors: [...m[2].matchAll(/<a\b([^>]*)>/g)].map((x) => x[1]),
     hrefs: [...m[2].matchAll(/href="([^"]+)"/g)].map((x) => x[1]) }));
+}
+function latestItems(page) {
+  const strip = (page.match(/<section class="latest"[^>]*>([\s\S]*?)<\/section>/) || [])[1] || "";
+  return [...strip.matchAll(/<(a|div) class="li"([^>]*)>([\s\S]*?)<\/\1>/g)].map((m) => ({
+    tag: m[1], attrs: m[2], body: m[3],
+    when: (m[2].match(/data-when="([^"]+)"/) || [])[1], href: (m[2].match(/href="([^"]+)"/) || [])[1],
+    title: (m[3].match(/<span class="lt">([\s\S]*?)<\/span>/) || [])[1], kind: (m[3].match(/<span class="lm"><b>([^<]+)<\/b>/) || [])[1] }));
 }
 
 test("every catalog entry appears exactly once, in a purpose group, with its truthful readiness and its own destination", () => {
@@ -83,10 +99,55 @@ test("every catalog entry appears exactly once, in a purpose group, with its tru
   for (const [r, n] of Object.entries(counts)) assert.match(page, new RegExp('<li><b class="rd ' + r + '">' + BADGE[r] + "</b>" + n + " · "), r + " count " + n);
 });
 
+/* THE DATE RULE. Every card says when it last moved and what kind of date that is: Updated (a page on this site changed),
+   Checked (an address elsewhere answered) or Named (listed without an address). A catalog entry without a date is a build
+   error, not a blank. */
+test("every card carries its catalog date, labelled as updated, checked or named", () => {
+  const page = fs.readFileSync(at("index.html"), "utf8"), cat = JSON.parse(fs.readFileSync(at("catalog.json"), "utf8"));
+  const all = articles(page);
+  for (const e of cat) {
+    assert.match(e.date || "", /^\d{4}-\d\d-\d\d$/, e.title + " has an ISO date in the catalog");
+    assert.ok(DATE_KIND[e.date_kind], e.title + " says what kind of date it carries");
+    if (e.date_kind === "updated") assert.ok(!e.url || e.url.startsWith("/"), e.title + ": only a page on this site can be 'updated' here; elsewhere we can only check");
+    const c = all.find((a) => a.title === escHtml(e.title));
+    assert.equal(c.when[1], e.date, e.title + " card carries the catalog date");
+    assert.equal(c.when[2], DATE_KIND[e.date_kind] + " " + dayLabel(e.date), e.title + " date reads as words");
+    assert.match(c.body, /<div class="meta"><span class="rd [a-z]+">[^<]+<\/span><span class="when"/, e.title + ": the date sits beside the readiness label");
+  }
+});
+
+/* THE LATEST RULE. The strip at the top is generated from latest.json: every item, newest first, with its kind and time,
+   and the same exit rules as the cards (elsewhere -> new tab; this site -> the destination carries a way back). */
+test("the latest strip lists every latest.json item, newest first, with a kind, a time and a safe exit", () => {
+  const page = fs.readFileSync(at("index.html"), "utf8"), latest = JSON.parse(fs.readFileSync(at("latest.json"), "utf8"));
+  const items = latestItems(page);
+  assert.ok(latest.length >= 3 && latest.length <= 24, "a small feed: between 3 and 24 items");
+  assert.equal(items.length, latest.length, "one strip item per latest.json entry");
+  const expected = [...latest].sort((a, b) => (a.when < b.when ? 1 : a.when > b.when ? -1 : 0));
+  assert.deepEqual(items.map((i) => i.when), expected.map((x) => x.when), "newest first");
+  assert.deepEqual(items.map((i) => i.title), expected.map((x) => escHtml(x.title)));
+  const KIND = { deploy: "Deployed", page: "Published", feed: "Feed" };
+  for (const [i, x] of expected.entries()) {
+    assert.match(x.when, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/, x.title + " has a UTC time");
+    assert.ok(KIND[x.kind], x.title + " has a known kind");
+    assert.equal(items[i].kind, KIND[x.kind]);
+    assert.match(items[i].body, /<span class="lm"><b>[^<]+<\/b>(?:<span class="new">Newest<\/span>)?<span>\d{1,2} [A-Z][a-z]{2} · \d{1,2}:\d\d [ap]m ET<\/span><\/span>/, x.title + " shows its day and Eastern time");
+    assert.equal(/<span class="new">Newest<\/span>/.test(items[i].body), i === 0, x.title + (i === 0 ? " is marked newest" : " is not marked newest"));
+    assert.ok(x.what && x.what.length >= 20, x.title + " says what happened in a sentence");
+    if (x.url) {
+      assert.equal(items[i].tag, "a"); assert.equal(items[i].href, x.url);
+      if (x.url.startsWith("http")) assert.match(items[i].attrs, /target="_blank" rel="noopener"/, x.title + " opens elsewhere in a new tab");
+      else assert.doesNotMatch(items[i].attrs, /target=/, x.title + " opens here");
+    } else assert.equal(items[i].tag, "div", x.title + " has no address and is not a link");
+  }
+  assert.match(page, new RegExp("<p>" + latest.length + " most recent · newest "), "the strip states its own count");
+});
+
 /* THE "I'M STUCK" RULE. Every card that goes somewhere must say where the owner ends up, and be built so he can get back:
    another address opens in a new tab (this page survives); this site opens in place and the destination carries a link home. */
 test("no card is a dead end: another address opens in a new tab, this site carries a link back", () => {
   const page = fs.readFileSync(at("index.html"), "utf8"), cat = JSON.parse(fs.readFileSync(at("catalog.json"), "utf8"));
+  const latest = JSON.parse(fs.readFileSync(at("latest.json"), "utf8"));
   const all = articles(page);
   for (const e of cat) {
     if (!e.url) { assert.ok(!e.exit, e.title + " is pending and needs no exit"); continue; }
@@ -104,13 +165,13 @@ test("no card is a dead end: another address opens in a new tab, this site carri
   /* every off-site anchor anywhere on the page - not only the cards - opens in a new tab */
   for (const m of page.matchAll(/<a\b([^>]*href="https?:[^"]*"[^>]*)>/g))
     assert.match(m[1], /target="_blank"[^>]*rel="noopener"|rel="noopener"[^>]*target="_blank"/, "off-site link opens in a new tab: " + m[1]);
-  /* and every same-site destination this page names really does carry a link home */
+  /* and every same-site destination this page names - card or latest item - really does carry a link home */
   const home = /href="\/prototypes\/"/;
-  for (const e of cat) {
-    if (!e.url || e.url.startsWith("http")) continue;
-    const file = e.url.endsWith("/") ? e.url + "index.html" : e.url;
+  const sameSite = [...cat.map((e) => e.url), ...latest.map((x) => x.url)].filter((u) => u && u.startsWith("/"));
+  for (const u of new Set(sameSite)) {
+    const file = u.endsWith("/") ? u + "index.html" : u;
     const html = fs.readFileSync(new URL(".." + file, import.meta.url), "utf8");
-    assert.match(html, home, e.title + " (" + e.url + ") carries a link back to /prototypes/");
+    assert.match(html, home, u + " carries a link back to /prototypes/");
   }
 });
 
@@ -126,7 +187,10 @@ test("the Indicator Lab entry is the owner's: its link, status and card text are
 
 test("links are real destinations only; the page is self-contained and stores nothing", () => {
   const page = fs.readFileSync(at("index.html"), "utf8"), cat = JSON.parse(fs.readFileSync(at("catalog.json"), "utf8"));
+  const latest = JSON.parse(fs.readFileSync(at("latest.json"), "utf8"));
   const catUrls = new Set(cat.flatMap((e) => [e.url, ...(e.related || []).map((r) => r.url)]).filter(Boolean));
+  const OURS = /^(https:\/\/(scintillahub\.ai|station\.scintillahub\.ai|allocation\.scintillahub\.ai|sectorrotation\.scintillahub\.ai|scintilla-[a-z-]+\.vercel\.app)\/|\/)/;
+  for (const x of latest) if (x.url) { assert.match(x.url, OURS, "a latest item may only open one of our own addresses: " + x.url); catUrls.add(x.url); }
   const extra = ["https://scintillahub.ai/", "https://station.scintillahub.ai/",   // the two live products (header and Systems group)
     "https://app.notion.com/p/3e096edf91af816aa966eb2fe07ec9c5?pvs=204",               // Scintilla review page (navigation baseline review_url; sign-in required)
     // assigned work, in the owning Scintilla workspace (the old alan-reply-desk links were the historical desk)
@@ -144,6 +208,9 @@ test("links are real destinations only; the page is self-contained and stores no
     assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=|<iframe|fetch\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|document\.cookie/i, "self-contained: no external script or style, no request, no storage");
     assert.doesNotMatch(html, /eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role|Authorization|\/Users\//i, "no key, token or local path");
   }
+  /* latest.json is served publicly too: it may name commits and receipts, never a path, a person or a key */
+  const feed = fs.readFileSync(at("latest.json"), "utf8");
+  assert.doesNotMatch(feed, /\/Users\/|~\/|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z.]{2,}|eyJ[A-Za-z0-9_-]{10,}\.|apikey|service_role/i, "latest.json is public-safe");
   assert.match(preview, /Sample data, not live market values/);
   assert.match(dock, /nothing here touches the live Station/, "the dock page still says it is a concept");
 });
@@ -181,6 +248,18 @@ test("the page spec is public-safe and states purpose, owner, maturity, inputs, 
     assert.ok(m[2], "a sign-in destination says so: " + m[1]);
 });
 
+/* THE REFLOW RULE. The owner judges on a phone, a laptop and a TV. A fixed column count in a fixed box wastes half of a
+   1920 px screen and squeezes a phone; the grid must ask for as many ~300 px columns as fit, in a page that uses its width. */
+test("the cards reflow: auto-fill columns, no fixed column count, no fixed narrow box, type that scales with the screen", () => {
+  const page = fs.readFileSync(at("index.html"), "utf8");
+  const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || "";
+  assert.match(css, /\.grid\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(min\(100%,3\d\dpx\),1fr\)\)/, "the card grid auto-fills ~300 px columns");
+  assert.doesNotMatch(css, /grid-template-columns:repeat\([1-9],/, "no fixed column count anywhere");
+  assert.doesNotMatch(css, /\.wrap\{max-width:1\d{3}px/, "no laptop-sized box: the page uses the screen it is given");
+  assert.match(css, /font-size:clamp\(15px,[^)]+,19px\)/, "the base type scales between a phone and a TV");
+  assert.match(css, /\.rail\{display:flex;[^}]*overflow-x:auto/, "the latest strip scrolls sideways instead of wrapping into a wall");
+});
+
 test("the stylesheet is balanced: each @media block closes before the next rule set, so wide-screen rules are never trapped in a narrow query", () => {
   const page = fs.readFileSync(at("index.html"), "utf8");
   const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || "";
@@ -191,7 +270,7 @@ test("the stylesheet is balanced: each @media block closes before the next rule 
     if (css[i] === "}") { depth--; assert.ok(depth >= 0, "unbalanced } at offset " + i); }
   }
   assert.equal(depth, 0, "every block is closed");
-  for (const sel of ["nav.pn{", "section.part{", "h2.pt{", "dl.spec{", "table.arch{"]) {
+  for (const sel of ["nav.pn{", "section.part{", "h2.pt{", "dl.spec{", "table.arch{", ".grid{", ".latest{", ".when{"]) {
     const at0 = css.indexOf(sel); assert.ok(at0 > 0, sel + " is styled");
     let d = 0; for (const ch of css.slice(0, at0)) { if (ch === "{") d++; if (ch === "}") d--; }
     assert.equal(d, 0, sel + " applies at every width, not only inside a media query");
