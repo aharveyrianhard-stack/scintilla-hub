@@ -2054,7 +2054,6 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .mn-it .mn-nm{ max-width:26ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mn-it.s-soon .mn-dot{ color:var(--sv4); text-shadow:0 0 6px rgba(255,138,0,.8); }
 .mn-it.s-soon .mn-cd{ color:var(--sv4); }
-.mn-it.s-imminent .mn-dot, .mn-it.s-imminent .mn-cd{ animation:mn-pulse 1.4s ease-in-out infinite; }   /* the last ten minutes */
 .mn-it.s-now .mn-dot{ color:var(--sv4); text-shadow:0 0 9px rgba(255,138,0,1); animation:mn-pulse 1.4s ease-in-out infinite; }
 .mn-it.s-now .mn-nm{ color:var(--ink2); font-weight:600; }   /* no white on Scintilla */
 .mn-it.s-now .mn-cd{ color:var(--sv4); font-weight:600; animation:mn-pulse 1.4s ease-in-out infinite; }
@@ -2066,7 +2065,7 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .mn-new{ animation:mn-in .5s cubic-bezier(.34,.02,.2,1); }                              /* the next one slides up from the right */
 @keyframes mn-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.22; } }
 @keyframes mn-in{ from{ opacity:0; transform:translateX(18px); } to{ opacity:1; transform:none; } }
-@media (prefers-reduced-motion:reduce){ .mn-it.s-now .mn-dot, .mn-it.s-now .mn-cd, .mn-it.s-imminent .mn-dot, .mn-it.s-imminent .mn-cd, .ecb-it.is-imminent .ecb-dot, .mn-new{ animation:none; } }
+@media (prefers-reduced-motion:reduce){ .mn-it.s-now .mn-dot, .mn-it.s-now .mn-cd, .mn-new{ animation:none; } }
 
 /* ----------------------------------------------------------------------------
    THE ECON BAND — this week at a glance, a third band under MACRO and ALL. It is
@@ -2088,7 +2087,6 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .ecb-res.beat b{ color:var(--sv1); } .ecb-res.miss b{ color:var(--sv5); } .ecb-res.inline b{ color:var(--sv3); }
 .ecb-it.is-past .ecb-dot, .ecb-it.is-past .ecb-when, .ecb-it.is-past .ecb-nm{ opacity:.45; }
 .ecb-it.is-now .ecb-dot{ animation:mn-pulse 1.4s ease-in-out infinite; }
-.ecb-it.is-imminent .ecb-dot{ animation:mn-pulse 1.4s ease-in-out infinite; }
 .ecb-it.is-now .ecb-nm{ color:var(--ink2); font-weight:600; }
 .ecb-it.is-now .ecb-res{ color:var(--sv4); }
 .ecb-note{ color:var(--dim); }
@@ -9524,7 +9522,6 @@ const EC_TAPE_TTL_MS = 10 * 60e3;    // one read per ten minutes, however often 
 const EC_TAPE_FAST_MS = 2 * 60e3;    // …except while a number is due and not yet in the store
 const EC_TAPE_TICK_MS = 15e3;        // the countdowns move here; a tick reads nothing by itself
 const EC_NUDGE_SOON_S = 3600;        // inside the hour: the "go look" signal
-const EC_NUDGE_IMMINENT_S = 10 * 60; // inside ten minutes it scintillates (Alan, 23 Sep: "S&P composite PMI in two minutes. No scintillation.")
 const EC_NUDGE_DUE_S = 15 * 60;      // "now" for something that prints no number (a speech, a meeting)
 const EC_NUDGE_WAIT_S = 60 * 60;     // "now" while a number is due: fmp-economic rewrites the near band hourly
 const EC_NUDGE_SHOW_S = 15 * 60;     // how long a result stays up once this page has seen it, then it drops off
@@ -9588,11 +9585,6 @@ function ecNudgeState(it, nowSec, seenSec) {
   }
   return -dt < (it.expects ? EC_NUDGE_WAIT_S : EC_NUDGE_DUE_S) ? "now" : "gone";
 }
-/* the class an item wears: its state, plus "imminent" for the last ten minutes before the release, when the dot
-   starts to pulse. It kept a steady glow until the release time passed, so two minutes out it sat still. */
-function ecNudgeClass(it, st, nowSec) {
-  return "mn-it s-" + st + (st === "soon" && it.ts - nowSec <= EC_NUDGE_IMMINENT_S ? " s-imminent" : "");
-}
 function ecNudgeModel(nowSec) {
   const model = [];
   for (const it of ecTapeItems(MACRO_NEXT)) {
@@ -9622,7 +9614,7 @@ function ecNudgeInnerHTML(it, st, nowSec) {
 }
 const ecNudgeTitle = (it) => it.event + " · " + it.cat + " · " + ecTimeET(it.ts) + " ET · " + (it.impact || "") + " impact";
 function ecNudgeItemHTML(it, st, nowSec) {
-  return '<span class="' + ecNudgeClass(it, st, nowSec) + '" data-act="mngoto" data-day="' + esc(it.day) + '" data-k="' + esc(it.key) +
+  return '<span class="mn-it s-' + st + '" data-act="mngoto" data-day="' + esc(it.day) + '" data-k="' + esc(it.key) +
     '" title="' + esc(ecNudgeTitle(it)) + '">' + ecNudgeInnerHTML(it, st, nowSec) + "</span>";
 }
 function macroNextHTML(nowSec) {
@@ -9654,7 +9646,7 @@ function ecNudgePaint(nowSec) {
     if (!want[n.getAttribute("data-k")]) n.remove();
   let prev = box.querySelector(".mn-lbl");
   for (const m of model) {
-    const cls = ecNudgeClass(m.it, m.st, now), inner = ecNudgeInnerHTML(m.it, m.st, now);
+    const cls = "mn-it s-" + m.st, inner = ecNudgeInnerHTML(m.it, m.st, now);
     let n = Array.prototype.find.call(box.querySelectorAll(".mn-it"), (x) => x.getAttribute("data-k") === m.it.key);
     if (!n) {
       n = document.createElement("span");
@@ -9686,16 +9678,14 @@ function ecBandItems(nowSec) {
   const days = new Set(ecBandWeek(nowSec));
   return ecTapeItems(MACRO_NEXT).filter((it) => days.has(it.day));
 }
-function ecBandItemHTML(it, st, todayISO, nowSec) {
+function ecBandItemHTML(it, st, todayISO) {
   const s = ecTapeSurprise(it);
   const res = it.actual != null
     ? '<span class="ecb-res ' + (s ? s.cls : "") + '"><b>' + esc(ecNum(it.actual)) + "</b>" +
       (it.estimate != null ? " vs " + esc(ecNum(it.estimate))
         : it.previous != null ? " vs prior " + esc(ecNum(it.previous)) : "") + "</span>"
     : st === "now" ? '<span class="ecb-res">now</span>' : "";
-  return '<span class="sc-tape__item ecb-it is-' + st +
-    (st === "up" && Number.isFinite(nowSec) && it.ts - nowSec <= EC_NUDGE_IMMINENT_S ? " is-imminent" : "") +
-    (it.impact === "High" ? " is-high" : "") +
+  return '<span class="sc-tape__item ecb-it is-' + st + (it.impact === "High" ? " is-high" : "") +
     '" data-act="mngoto" data-day="' + esc(it.day) + '" title="' + esc(ecNudgeTitle(it)) + '">' +
     /* the calendar's own category hue, except OTHER's near-black, which would read as a dead pixel on a tape */
     '<span class="ecb-dot" style="color:' + (it.cat === "OTHER" ? "var(--dim)" : EC_CAT_COLOR[it.cat] || "var(--dim)") + '">●</span>' +
@@ -9714,7 +9704,7 @@ function econBandHTML(nowSec) {
   } else {
     const week = ecBandWeek(now), today = ecDateKey(now), items = ecBandItems(now);
     seg = '<span class="sc-tape__item ecb-wk">WEEK OF ' + esc(ecDayLbl(week[0]).toUpperCase().replace(/^[A-Z]+, /, "")) + "</span>" + sep +
-      (items.length ? items.map((it) => ecBandItemHTML(it, ecBandState(it, now), today, now)).join("")
+      (items.length ? items.map((it) => ecBandItemHTML(it, ecBandState(it, now), today)).join("")
                     : '<span class="sc-tape__item ecb-note">no US releases on the watch list this week</span>' + sep);
   }
   return '<div class="sc-tape sc-tape--econ" id="econBand"><b class="sc-tape__lbl">ECON →</b>' +

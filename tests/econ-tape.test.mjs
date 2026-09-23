@@ -235,18 +235,11 @@ test("Indicator Lab's newest page is byte-identical to the restore commit 8211c8
   assert.deepEqual(fs.readdirSync(new URL("captures/", dir)).sort(), ["mcp-six-chart-20260919.png"]);
 });
 
-test("the last ten minutes before a release scintillate on the nudge and the band (23 Sep: \"PMI in two minutes. No scintillation.\")", () => {
-  const L = load({ rows: WEEK, nodes: "auto" });
-  const pmi = L.api.ecTapeItems(WEEK).find((x) => /PMI/i.test(x.name)) || L.api.ecTapeItems(WEEK)[0];
-  const at = (m) => pmi.ts - m * 60;
-  assert.match(L.api.ecNudgeItemHTML(pmi, "soon", at(2)), /class="mn-it s-soon s-imminent"/, "two minutes out it pulses");
-  assert.match(L.api.ecNudgeItemHTML(pmi, "soon", at(10)), /class="mn-it s-soon s-imminent"/, "from ten minutes out");
-  assert.match(L.api.ecNudgeItemHTML(pmi, "soon", at(11)), /class="mn-it s-soon"/, "eleven minutes out it glows but holds still");
-  assert.doesNotMatch(L.api.ecNudgeItemHTML(pmi, "soon", at(11)), /s-imminent/);
-  const today = L.api.ecDateKey(at(2));
-  assert.match(L.api.ecBandItemHTML(pmi, "up", today, at(2)), /class="sc-tape__item ecb-it is-up is-imminent/, "the band pulses too");
-  assert.doesNotMatch(L.api.ecBandItemHTML(pmi, "up", today, at(30)), /is-imminent/);
-  assert.match(page, /\.mn-it\.s-imminent \.mn-dot, \.mn-it\.s-imminent \.mn-cd\{ animation:mn-pulse/);
-  assert.match(page, /\.ecb-it\.is-imminent \.ecb-dot\{ animation:mn-pulse/);
+test("the tape keeps the nudge proposal's timing: orange inside the hour, a pulse only from the release minute; no white", () => {
+  /* Proposal v2, 13 Aug ("the four states"): soon = "dot goes orange, countdown goes orange"; due = "dot pulses, says now".
+     A pulse before the release minute was tried on 23 Sep and reverted the same morning: it is not the spec. */
+  assert.match(page, /\.mn-it\.s-soon \.mn-dot\{ color:var\(--sv4\); text-shadow:0 0 6px rgba\(255,138,0,\.8\); \}/, "soon glows, holds still");
+  assert.match(page, /\.mn-it\.s-now \.mn-dot\{[^}]*animation:mn-pulse/, "due pulses");
+  assert.doesNotMatch(page, /s-imminent|is-imminent|EC_NUDGE_IMMINENT_S/, "no pre-release pulse");
   assert.doesNotMatch(page, /\.mn-it\.s-now \.mn-nm\{ color:#fff|\.ecb-it\.is-now \.ecb-nm\{ color:#fff/, "no white on the tape");
 });
