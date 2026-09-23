@@ -23,6 +23,25 @@ PAGES = [
 ] + sorted(str(p.relative_to(ROOT)) for p in (ROOT / "deliverables").rglob("*.html"))
 BLOCK = re.compile(r"\n?<!-- scnav · .*?<!-- /scnav -->\n?", re.S)
 
+# 23 Sep: floating over the page, the pair sat on top of the page's own title on several
+# pages (/visual-engine/ among them). A page that owns a header gets the pair INSIDE it, so
+# the two sit side by side and nothing is covered. Where there is no header, the slot goes
+# immediately above the page's title, which is still in the flow and still covers nothing.
+SLOT = '<span data-scnav-slot></span>'
+
+
+def ensure_slot(html, rel):
+    """Give the page a place to put the pair. Returns (html, where)."""
+    if "data-scnav-slot" in html:
+        return html, "already had one"
+    m = re.search(r"<header\b[^>]*>", html)
+    if m:
+        return html[: m.end()] + SLOT + html[m.end():], "in its <header>"
+    m = re.search(r"<h1\b", html)
+    if m:
+        return html[: m.start()] + SLOT + html[m.start():], "above its <h1>"
+    return html, "NO ANCHOR - still floating"
+
 
 def main():
     changed = 0
@@ -32,11 +51,12 @@ def main():
         if html.count("</body>") != 1:
             sys.exit(rel + ": expected exactly one </body>")
         new = BLOCK.sub("\n", html)
+        new, where = ensure_slot(new, rel)
         new = new.replace("</body>", SNIPPET + "\n</body>", 1)
         if new != html:
             f.write_text(new)
             changed += 1
-            print("placed", rel)
+            print("placed", rel, "-", where)
     print(changed, "of", len(PAGES), "pages changed")
 
 

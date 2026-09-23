@@ -139,7 +139,8 @@ def when_of(e):
 def card(e):
     t = e["title"]; r = READINESS[e["status"]]; p = purpose_of(e)
     desc = e["description"] + EXTRA_DESC.get(t, "")
-    ico = '<span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24">%s</svg></span>' % ICON.get(t, ICON_DEFAULT)
+    # the card's picture band: same plate on every card, carrying the tool's own mark
+    ico = '<span class="pic" aria-hidden="true"><svg viewBox="0 0 24 24">%s</svg></span>' % ICON.get(t, ICON_DEFAULT)
     meta = '<div class="meta"><span class="rd %s">%s</span>%s<span class="host">%s</span></div>' % (r, BADGE[r], when_of(e), host_of(e))
     if e.get("url"):
         ext = e["url"].startswith("http")
@@ -221,143 +222,170 @@ for key, name, sub in GROUPS:
 
 CSS = """
 :root{color-scheme:dark;
-/* surfaces */
---bg:#0A0A0F;--panel:#0D0D14;--panel2:#111120;--line:#1A1A2A;--line2:#252538;
---hair:rgba(0,212,255,.16);--hair2:rgba(0,212,255,.34);
-/* ink - one neutral ramp, deliberately capped well below white. House rule:
-   monochrome, no white and no near-white. The palette test enforces the cap. */
---ink:#B4BACB;--ink2:#949BB0;--ink3:#767D93;--dim:#5C6379;--mute:#3A3A52;
-/* one accent hue. Readiness is TONE (this hue) x OPACITY (how ready it is) -
-   never a second colour. */
---crk:#00D4FF;--c90:rgba(0,212,255,.90);--c62:rgba(0,212,255,.62);
---c40:rgba(0,212,255,.40);--c22:rgba(0,212,255,.22);
+/* surfaces - greys only. House rule: every colour is a grey (channels within 24
+   of each other), nothing brighter than 210, and no white anywhere. */
+--bg:#0B0B0D;--panel:#111114;--panel2:#16161A;--line:#1F1F24;--line2:#2B2B31;
+--hair:rgba(188,190,196,.12);--hair2:rgba(188,190,196,.30);
+/* ink - one neutral ramp, capped well below white */
+--ink:#C8C8CE;--ink2:#A2A2A9;--ink3:#83838B;--dim:#63636B;--mute:#45454C;
+/* readiness is TONE x OPACITY on the same grey, never a second colour */
+--crk:#C8C8CE;--c90:rgba(200,200,206,.90);--c62:rgba(200,200,206,.62);
+--c40:rgba(200,200,206,.40);--c22:rgba(200,200,206,.22);
 --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
 /* the type scales with the screen: 15 px on a phone, 19 px on a TV. Everything
    below is in rem, so the whole page grows together. */
 font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55;color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
-*{box-sizing:border-box}body{margin:0;background:var(--bg)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg)}
 /* the page uses the screen it is given: no fixed box, side padding that grows with the width */
-.wrap{max-width:2400px;margin:auto;padding:1.3rem clamp(16px,3vw,64px) 2.6rem}
-a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
-a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
-header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
-.hleft{display:flex;align-items:center;gap:1.1rem}
-.brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
-.hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
-.hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
-.hlinks a:hover{color:var(--crk);border-color:var(--hair2)}
-h1{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:1.6rem 0 .6rem}
-.lede{max-width:52rem;color:var(--ink3);margin:0 0 .5rem;font-size:.95rem}
-.k{font:.62rem/1.4 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:var(--crk)}
-/* the latest strip - what just happened, newest first, one row you can scroll sideways */
-.latest{margin:1.1rem 0 0;border:1px solid var(--hair);background:var(--panel);padding:.8rem 1rem .5rem}
-.lh{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
-.lh h2{font:600 .72rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--crk);margin:0}
-.lh p{margin:0;font:.62rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.rail{display:flex;gap:.6rem;overflow-x:auto;scroll-snap-type:x proximity;padding:.7rem 0 .5rem;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-.li{flex:0 0 clamp(240px,21vw,340px);scroll-snap-align:start;display:flex;flex-direction:column;gap:.3rem;background:var(--bg);border:1px solid var(--line2);padding:.7rem .85rem .6rem;color:inherit}
-a.li:hover{border-color:var(--hair2);background:var(--panel2)}
-.lm{display:flex;justify-content:space-between;gap:.5rem;font:.62rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-.lm b{color:var(--c62);font-weight:600}
-.lt{font:600 1.02rem/1.35 var(--sans);letter-spacing:0;color:var(--ink)}
-a.li:hover .lt{color:var(--crk)}
-.lw{font-size:.9rem;color:var(--ink3)}
-.lx{margin-top:auto;padding-top:.3rem;font:.6rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.stats{display:flex;gap:.5rem;flex-wrap:wrap;margin:.9rem 0 0}
-.stat{border:1px solid var(--line);background:var(--panel);padding:.55rem .9rem;min-width:6rem}
-.stat b{display:block;font:600 1.1rem/1.2 var(--mono);color:var(--ink)}
-.stat span{font:.6rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
-.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:1.3rem 0 .4rem}
-.filters button{font:.66rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:.55rem .85rem;background:var(--bg);color:var(--ink3);cursor:pointer}
-.filters button:hover{color:var(--ink);border-color:var(--hair2)}
-.filters button[aria-pressed=true]{color:var(--crk);border-color:var(--crk);box-shadow:inset 0 -2px 0 var(--crk)}
-section.grp{margin-top:1.5rem}section.grp[hidden]{display:none}
-.gh{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap;margin:0 0 .6rem}
-h2{font:600 .78rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
-.gh p{margin:0;font-size:.85rem;color:var(--dim)}
-/* cards reflow: as many columns as fit at about 300 px each - one on a phone, three
-   or four on a laptop, five or six on a TV. Never a fixed column count in a fixed box. */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:.75rem}
-article,.sysitem{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);padding:.9rem 1rem .8rem;min-height:11rem}
-article:hover{background:var(--panel2);border-color:var(--hair2)}
-.meta{display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap}
-/* readiness: one hue, four opacities, then a dashed outline for "not here yet" */
-.rd{font:600 .62rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.15rem .45rem;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap}
-.rd.existing{color:var(--c90);border-color:var(--c40)}
-.rd.review{color:var(--c62);border-color:var(--c40)}
-.rd.preview{color:var(--c62);border-color:var(--c22)}
-.rd.sample{color:var(--c40);border-color:var(--c22)}
+.wrap{max-width:2400px;margin:auto;padding:0 clamp(14px,3vw,56px) 3rem}
+a{color:var(--ink2);text-decoration:none}a:hover{color:var(--ink)}
+a:focus-visible,button:focus-visible{outline:1px solid var(--c62);outline-offset:3px}
+/* ---- the bar that never leaves: who you are, and the way out --------------- */
+header{position:sticky;top:0;z-index:40;display:flex;justify-content:space-between;align-items:center;gap:1rem;
+ min-height:3rem;margin:0 calc(-1 * clamp(14px,3vw,56px));padding:.4rem clamp(14px,3vw,56px);
+ border-bottom:1px solid var(--line);background:rgba(11,11,13,.92);backdrop-filter:blur(8px)}
+.hleft{display:flex;align-items:center;gap:.85rem;min-width:0}
+.brand{font:600 .82rem/1 var(--mono);letter-spacing:.44em;color:var(--ink);white-space:nowrap}
+.crumb{font:.66rem/1 var(--mono);font-size:max(11px,.66rem);letter-spacing:.2em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.crumb::before{content:"/";margin-right:.7em;color:var(--mute)}
+.hlinks{display:flex;gap:.4rem;font:.6rem/1 var(--mono);font-size:max(11px,.6rem);letter-spacing:.2em;text-transform:uppercase}
+.hlinks a{border:1px solid var(--line2);border-radius:999px;padding:.5rem .8rem;color:var(--ink3);background:var(--panel)}
+.hlinks a:hover{color:var(--ink);border-color:var(--hair2)}
+/* ---- section tabs: one scrolling page, the current place lit --------------- */
+.pnbar{position:sticky;top:3rem;z-index:35;margin:0 calc(-1 * clamp(14px,3vw,56px));padding:.5rem clamp(14px,3vw,56px);
+ border-bottom:1px solid var(--line);background:rgba(11,11,13,.92);backdrop-filter:blur(8px)}
+nav.pn{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none}
+nav.pn::-webkit-scrollbar{display:none}
+nav.pn a{flex:0 0 auto;border:1px solid transparent;border-radius:999px;padding:.44rem .8rem;
+ font:600 .62rem/1 var(--mono);font-size:max(11px,.62rem);letter-spacing:.2em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+nav.pn a:hover{color:var(--ink2);border-color:var(--line2)}
+nav.pn a.on{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+/* ---- page head ------------------------------------------------------------- */
+h1{font:600 clamp(1.5rem,2.4vw,2.1rem)/1.15 var(--sans);letter-spacing:-.01em;color:var(--ink);margin:1.9rem 0 .5rem}
+.lede{max-width:54rem;color:var(--ink3);margin:0 0 .7rem;font-size:.92rem;line-height:1.6}
+.k{display:block;font:.62rem/1.5 var(--mono);font-size:max(11px,.62rem);letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin:0 0 1.1rem}
+section.part{padding:0 0 2.2rem;scroll-margin-top:6.2rem}
+section.part+section.part{border-top:1px solid var(--line);padding-top:1.6rem}
+h2.pt{display:flex;align-items:baseline;gap:.8rem;font:600 1.15rem/1.2 var(--sans);color:var(--ink);margin:0 0 1rem}
+h2.pt::after{content:"";flex:1;height:1px;background:var(--line)}
+/* ---- latest: one row you push sideways, not a wall ------------------------- */
+.latest{margin:1.2rem 0 1.4rem}
+.lh{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin:0 0 .6rem}
+.lh h2{font:600 .68rem/1 var(--mono);font-size:max(11px,.68rem);letter-spacing:.26em;text-transform:uppercase;color:var(--ink2);margin:0}
+.lh p{margin:0;font:.62rem/1 var(--mono);font-size:max(11px,.62rem);letter-spacing:.1em;color:var(--mute)}
+.rail{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 0 10px;scrollbar-width:thin}
+.rail::-webkit-scrollbar{height:7px}
+.rail::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px}
+.li{flex:0 0 clamp(240px,23vw,310px);scroll-snap-align:start;display:flex;flex-direction:column;gap:.35rem;
+ padding:.7rem .8rem .75rem;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+a.li:hover{border-color:var(--line2);background:var(--panel2)}
+.lm{display:flex;align-items:center;flex-wrap:wrap;gap:.35rem .5rem;font:.56rem/1 var(--mono);font-size:max(11px,.56rem);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.lm b{font-weight:600;color:var(--ink3)}
+.lm span{margin-left:auto;color:var(--mute);letter-spacing:.1em}
+.new{border:1px solid var(--hair2);border-radius:999px;padding:.24rem .45rem;color:var(--ink);letter-spacing:.14em}
+.lt{font:600 .86rem/1.35 var(--sans);color:var(--ink)}
+a.li:hover .lt{color:var(--ink)}
+.lw{font-size:.78rem;line-height:1.45;color:var(--ink3)}
+.lx{margin-top:auto;padding-top:.45rem;font:.56rem/1.4 var(--mono);font-size:max(11px,.56rem);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+/* ---- counts ---------------------------------------------------------------- */
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 .4rem}
+.stat{flex:1 1 7rem;display:flex;align-items:baseline;gap:.5rem;padding:.6rem .8rem;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+.stat b{font:600 1.15rem/1 var(--sans);color:var(--ink)}
+.stat span{font:.58rem/1.2 var(--mono);font-size:max(11px,.58rem);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+/* ---- filters --------------------------------------------------------------- */
+.filters{display:flex;flex-wrap:wrap;gap:.35rem;margin:0 0 1.3rem}
+.filters button{cursor:pointer;border:1px solid var(--line2);border-radius:999px;padding:.44rem .8rem;background:var(--panel);
+ font:600 .6rem/1 var(--mono);font-size:max(11px,.6rem);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.filters button:hover{color:var(--ink2);border-color:var(--hair2)}
+.filters button[aria-pressed=true]{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+/* ---- groups and cards ------------------------------------------------------ */
+section.grp{margin:0 0 1.9rem}
+.gh{margin:0 0 .7rem}
+h3.gt{font:600 1rem/1.2 var(--sans);color:var(--ink);margin:0 0 .2rem}
+.gh p{margin:0;font-size:.82rem;color:var(--ink3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:12px;align-items:stretch}
+article,.sysitem{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:5px;background:var(--panel);overflow:hidden}
+article:hover,.sysitem:hover{border-color:var(--line2);background:var(--panel2)}
+.face{position:relative;display:flex;flex-direction:column;color:inherit;flex:1}
+/* the picture band: every card carries the same shaped plate, so the grid reads
+   as one family instead of a list of boxes. The mark is the tool's own icon. */
+.pic{position:relative;display:grid;place-items:center;height:clamp(86px,7.5vw,116px);border-bottom:1px solid var(--line);overflow:hidden;
+ background:radial-gradient(120% 95% at 50% 6%,#17171B 0%,#0E0E11 72%),
+ repeating-linear-gradient(0deg,rgba(150,152,158,.045) 0 1px,transparent 1px 24px),
+ repeating-linear-gradient(90deg,rgba(150,152,158,.045) 0 1px,transparent 1px 24px)}
+.pic svg{width:auto;height:clamp(34px,3.4vw,46px);fill:none;stroke:var(--ink3);stroke-width:1.05;stroke-linecap:round;stroke-linejoin:round}
+.face:hover .pic svg{stroke:var(--ink)}
+.go{position:absolute;top:8px;right:9px;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line2);
+ border-radius:999px;background:rgba(11,11,13,.8);font:.68rem/1 var(--mono);font-size:max(11px,.68rem);color:var(--dim)}
+.face:hover .go{color:var(--ink);border-color:var(--hair2)}
+.txt{display:block;flex:1;padding:.7rem .85rem .2rem}
+article h4,.sysitem h4{font:600 .92rem/1.3 var(--sans);color:var(--ink);margin:0 0 .28rem}
+article p,.sysitem p{margin:0;font-size:.8rem;line-height:1.5;color:var(--ink3)}
+.meta{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;padding:.6rem .85rem .2rem;order:2;
+ font:.56rem/1 var(--mono);font-size:max(11px,.56rem);letter-spacing:.16em;text-transform:uppercase}
+.rd{border:1px solid var(--line2);border-radius:999px;padding:.3rem .5rem;color:var(--ink3)}
+.rd.existing{color:var(--ink);border-color:var(--hair2)}
+.rd.review{color:var(--ink);border-color:var(--hair2)}
+.rd.preview{color:var(--ink2)}
+.rd.sample{color:var(--ink3)}
 .rd.pending{color:var(--dim);border-style:dashed}
-.rd.live{color:var(--c90);border-color:var(--c40)}.rd.note{color:var(--dim)}
-/* the date: what kind of date it is, then the day */
-.when{font:.62rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
-.host{flex-basis:100%;min-width:0;font:.6rem/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-h3.gt{font:600 .78rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
-/* the whole card is the target - icon, what it is, what it does, and an arrow */
-.face{display:flex;align-items:flex-start;gap:.8rem;margin:.75rem 0 0;flex:1;color:inherit}
-.face .ico{flex:0 0 auto;width:1.7rem;height:1.7rem;color:var(--c62)}
-.face:hover .ico{color:var(--crk)}
-.face .ico svg{width:1.7rem;height:1.7rem;display:block;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.face .txt{flex:1 1 auto;min-width:0}
-.face .go{flex:0 0 auto;color:var(--c40);font-size:1rem;line-height:1}
-.face:hover .go{color:var(--crk)}
-.face.is-pending{opacity:.62}.face.is-pending .ico{color:var(--mute)}
-article h4,.sysitem h4{font:600 1.04rem/1.35 var(--sans);letter-spacing:0;color:var(--ink);margin:0 0 .4rem}
-.face:hover h4{color:var(--crk)}
-article p,.sysitem p{font-size:.95rem;color:var(--ink3);margin:0}.note{color:var(--dim)}
-.exit{margin:.7rem 0 0!important;font:.6rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)!important}
-.links{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:.6rem;font:.64rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase}
-.secondary{color:var(--ink3);border-bottom:1px solid var(--line2)}.secondary:hover{color:var(--ink)}
-.pending{color:var(--ink3)}
-.sysitem{min-height:0}
-.sysitem .face{margin-top:.6rem}
-footer{border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-nav.pn{display:flex;gap:.35rem;flex-wrap:wrap;margin:0;padding:.55rem 0 .45rem}
-/* the strip of rooms stays with you as you read, like the workshop page */
-.pnbar{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--line);margin:1.1rem 0 .2rem}
-@media(max-width:900px){nav.pn{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}nav.pn::-webkit-scrollbar{display:none}}
-.new{border:1px solid var(--c40);color:var(--c90);padding:.12rem .4rem;margin-right:.5rem;font:600 .55rem/1.4 var(--mono);letter-spacing:.18em}
-nav.pn a{font:600 .66rem/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);padding:.6rem .9rem;background:var(--bg);white-space:nowrap}
-nav.pn a:hover{color:var(--ink);border-color:var(--hair2)}
-nav.pn a.on{color:var(--crk);border-color:var(--crk);background:var(--panel);box-shadow:inset 0 -2px 0 var(--crk)}
-section.part[hidden]{display:none}
-/* the latest feed: a card each, newest first, reflowing like everything else */
-.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,21rem),1fr));gap:.75rem;padding:.7rem 0 .2rem}
-.lgrid .li{flex:0 0 auto}
-section.part{margin-top:2rem;scroll-margin-top:1rem}
-h2.pt{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0 0 .8rem;padding-bottom:.5rem;border-bottom:1px solid var(--line)}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:.75rem}.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.3rem}
-.two ul,.spec ul{margin:.5rem 0 0;padding:0;list-style:none}.two li{font-size:.88rem;color:var(--ink3);padding:.4rem 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
-.two li b{font:600 .64rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-right:.5rem}
-.signin{font:.6rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:.4rem}
-dl.spec{display:grid;grid-template-columns:11rem 1fr;margin:0;border:1px solid var(--line);background:var(--panel)}
-dl.spec dt{font:600 .64rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);padding:.75rem 1rem;border-top:1px solid var(--line)}
-dl.spec dd{margin:0;padding:.75rem 1rem;font-size:.9rem;color:var(--ink3);border-top:1px solid var(--line)}
+.rd.live{color:var(--ink);border-color:var(--hair2)}
+.when{color:var(--dim)}
+.host{flex:1 0 100%;text-transform:none;letter-spacing:.04em;color:var(--mute);font-size:.6rem}
+.exit{order:3;margin:0;padding:.55rem .85rem;border-top:1px solid var(--line);font:.58rem/1.4 var(--mono);font-size:max(11px,.58rem);letter-spacing:.1em;
+ text-transform:uppercase;color:var(--mute)}
+.links{order:4;display:flex;flex-wrap:wrap;gap:.35rem;padding:0 .85rem .7rem}
+.secondary{border:1px solid var(--line2);border-radius:999px;padding:.3rem .55rem;font:.58rem/1 var(--mono);font-size:max(11px,.58rem);letter-spacing:.14em;
+ text-transform:uppercase;color:var(--ink3)}
+.secondary:hover{color:var(--ink);border-color:var(--hair2)}
+.pending{font:.58rem/1 var(--mono);font-size:max(11px,.58rem);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.face.is-pending{cursor:default}
+.face.is-pending .pic{opacity:.55}
+.sysitem .face{flex:1}
+/* ---- review / work / spec / architecture ----------------------------------- */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:1.3rem}
+.two ul,.spec ul{margin:.5rem 0 0;padding-left:1.1rem}
+.two li{margin:0 0 .5rem;font-size:.84rem;color:var(--ink3);line-height:1.55}
+.two li b{color:var(--ink2);font-weight:600}
+.signin{margin-left:.4rem;font:.56rem/1 var(--mono);font-size:max(11px,.56rem);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+dl.spec{display:grid;grid-template-columns:minmax(9rem,14rem) 1fr;gap:0;margin:0;border:1px solid var(--line);border-radius:5px;background:var(--panel);overflow:hidden}
+dl.spec dt{padding:.7rem .85rem;border-top:1px solid var(--line);font:600 .6rem/1.4 var(--mono);font-size:max(11px,.6rem);letter-spacing:.18em;text-transform:uppercase;color:var(--ink2)}
+dl.spec dd{margin:0;padding:.7rem .85rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--ink3);line-height:1.55}
 dl.spec dt:first-of-type,dl.spec dd:first-of-type{border-top:0}
-table.arch{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);font-size:.9rem}
-table.arch th{font:600 .64rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);text-align:left;padding:.6rem .9rem;border-bottom:1px solid var(--line)}
-table.arch td{padding:.6rem .9rem;color:var(--ink3);border-top:1px solid var(--line);vertical-align:top}
-table.arch td:first-child{font:.8rem/1.5 var(--mono);color:var(--ink2);white-space:nowrap}
-@media(max-width:850px){dl.spec{grid-template-columns:1fr}dl.spec dd{border-top:0;padding-top:0}table.arch td:first-child{white-space:normal}}
-@media(max-width:620px){.wrap{padding:.9rem .9rem 2rem}article{min-height:0}.brand{letter-spacing:.44em;font-size:.9rem}header{padding:.7rem .9rem;flex-wrap:wrap}h1{margin-top:1.4rem}.li{flex-basis:82vw}}
-@media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:.5rem 0}table.arch tbody tr:first-child{border-top:0}table.arch td{display:block;border-top:0;padding:.1rem .9rem}table.arch td:first-child{overflow-wrap:anywhere}table.arch td:last-child::before{content:"Kept by: ";color:var(--dim)}}
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+table.arch{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel)}
+table.arch th{text-align:left;padding:.6rem .85rem;border-bottom:1px solid var(--line);font:600 .58rem/1.3 var(--mono);font-size:max(11px,.58rem);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+table.arch td{padding:.65rem .85rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--ink3);vertical-align:top;line-height:1.5}
+table.arch td:first-child{font:.76rem/1.5 var(--mono);color:var(--ink2);white-space:nowrap}
+footer{margin-top:1.6rem;padding-top:1rem;border-top:1px solid var(--line);font:.6rem/1.6 var(--mono);font-size:max(11px,.6rem);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+@media(max-width:900px){.pnbar{top:2.8rem}.crumb{display:none}}
+/* On a phone the BACK / CLOSE pair is what matters in the bar, and it must not be pushed off the edge.
+   Hub and Station keep their own cards in the Systems group below, and CLOSE goes to the Hub anyway. */
+@media(max-width:700px){.hlinks{display:none}.brand{font-size:max(11px,.72rem);letter-spacing:.24em}
+ .k{letter-spacing:.06em}.lh{flex-wrap:wrap}.lh p{flex:1 0 100%}}
+@media(max-width:850px){dl.spec{grid-template-columns:1fr}dl.spec dd{border-top:0;padding-top:0}}
+@media(max-width:620px){.wrap{padding:0 .9rem 2rem}.brand{letter-spacing:.3em;font-size:.76rem}.hlinks a{padding:.45rem .6rem}
+ h1{margin-top:1.3rem}.stat{flex:1 1 45%}.pic{height:96px}}
+@media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:.5rem 0}
+ table.arch td{display:block;border:0;padding:.2rem .85rem}
+ table.arch td:first-child{white-space:normal}
+ table.arch td:nth-child(3)::before{content:"Kept by: ";color:var(--mute)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
 """
 
 SYSTEMS = """<section class="grp" data-purpose="systems"><div class="gh"><h3 class="gt">Systems</h3><p>The live products this work feeds, and where files are kept.</p></div><div class="grid">
-<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">scintillahub.ai</span></div><a class="face" href="https://scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M7.5 12.5h4M7.5 16h9M15 12.5h1.5"/></svg></span><span class="txt"><h4>Hub</h4><p>The dashboard: board, company pages, news, events, economic room.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
-<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">station.scintillahub.ai</span></div><a class="face" href="https://station.scintillahub.ai/" target="_blank" rel="noopener"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12" rx="1.5"/><path d="M8 20h8M12 16.5V20M6 8.5h5M6 12h3M14 8.5h4M14 12h4"/></svg></span><span class="txt"><h4>Station</h4><p>The display wall: charts, video panes and the X pane.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
-<div class="sysitem"><div class="meta"><span class="rd note">In the Hub</span><span class="host">no separate address</span></div><div class="face"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span><span class="txt"><h4>Files</h4><p>Files are kept inside the Hub, not on this page. Open the Hub, then the SCINTILLA logo menu, then Files.</p></span></div><div class="links"><span class="note">Hub → Scintilla menu → Files</span></div></div>
+<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">scintillahub.ai</span></div><a class="face" href="https://scintillahub.ai/" target="_blank" rel="noopener"><span class="pic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M7.5 12.5h4M7.5 16h9M15 12.5h1.5"/></svg></span><span class="txt"><h4>Hub</h4><p>The dashboard: board, company pages, news, events, economic room.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
+<div class="sysitem"><div class="meta"><span class="rd live">Live product</span><span class="host">station.scintillahub.ai</span></div><a class="face" href="https://station.scintillahub.ai/" target="_blank" rel="noopener"><span class="pic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12" rx="1.5"/><path d="M8 20h8M12 16.5V20M6 8.5h5M6 12h3M14 8.5h4M14 12h4"/></svg></span><span class="txt"><h4>Station</h4><p>The display wall: charts, video panes and the X pane.</p></span><span class="go" aria-hidden="true">↗</span></a><p class="exit">Opens in a new tab — this page stays where it is.</p></div>
+<div class="sysitem"><div class="meta"><span class="rd note">In the Hub</span><span class="host">no separate address</span></div><div class="face"><span class="pic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span><span class="txt"><h4>Files</h4><p>Files are kept inside the Hub, not on this page. Open the Hub, then the SCINTILLA logo menu, then Files.</p></span></div><div class="links"><span class="note">Hub → Scintilla menu → Files</span></div></div>
 </div></section>"""
 
 HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SCINTILLA · Prototypes</title><style>%(css)s</style></head><body><div class="wrap">
-<header><span class="hleft"><span data-scnav-slot></span><span class="brand">SCINTILLA</span></span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
+<header><span class="hleft"><span data-scnav-slot></span><span class="brand">SCINTILLA</span><span class="crumb">Prototypes</span></span><nav class="hlinks" aria-label="Live products"><a href="https://scintillahub.ai/" target="_blank" rel="noopener">Hub ↗</a><a href="https://station.scintillahub.ai/" target="_blank" rel="noopener">Station ↗</a></nav></header>
 <div class="pnbar"><nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav></div>
 <main>
 <section class="part" id="overview"><h1>Prototypes &amp; review</h1>
 <p class="lede">One front door to everything being built and reviewed around the Hub. Each card says in plain words what it is, what it does, when it last moved and how ready it is — and every one of them either opens in a new tab or carries a link back here, so you are never stuck on a page with no way out.</p>
 <p class="k">Nothing here is part of the dashboard unless it says so. Inclusion does not establish current data, working function or production readiness.</p>
-<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latest_n)d most recent · newest %(latest_newest)s · from latest.json</p></div><div class="lgrid">%(latest)s</div></section>
+<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latest_n)d most recent · newest %(latest_newest)s · from latest.json</p></div><div class="rail">%(latest)s</div></section>
 <div class="stats">
 <div class="stat"><b>%(total)d</b><span>listed</span></div>
 <div class="stat"><b>%(linked)d</b><span>open now</span></div>
@@ -420,18 +448,24 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 </main>
 <footer>Original tools remain at their existing addresses. Recovered previews are versioned; pending artifacts are named openly. No page listed here is a dead end.</footer></div>
 <script>
+/* The tabs used to HIDE the other five sections, so anything not in the open tab
+   was unreachable without guessing. They now move you down one page that always
+   holds everything, and the bar shows where you are. */
 (function(){
  var nav=[].slice.call(document.querySelectorAll('nav.pn a'));
  var parts=[].slice.call(document.querySelectorAll('section.part'));
- function show(id){
-  if(!parts.some(function(p){return p.id===id;}))return false;
-  parts.forEach(function(p){p.hidden=(p.id!==id);});
-  nav.forEach(function(a){var on=a.getAttribute('href')==='#'+id;a.className=on?'on':'';if(on){a.setAttribute('aria-current','true');}else{a.removeAttribute('aria-current');}});
-  return true;
+ function mark(id){nav.forEach(function(a){var on=a.getAttribute('href')==='#'+id;a.className=on?'on':'';
+  if(on){a.setAttribute('aria-current','true');}else{a.removeAttribute('aria-current');}});}
+ nav.forEach(function(a){a.addEventListener('click',function(e){
+  var el=document.getElementById(a.getAttribute('href').slice(1)); if(!el)return;
+  e.preventDefault(); el.scrollIntoView({block:'start'}); history.replaceState(null,'','#'+el.id); mark(el.id);});});
+ if(window.IntersectionObserver){
+  var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting)mark(en.target.id);});},
+   {rootMargin:'-28%% 0px -62%% 0px'});
+  parts.forEach(function(p){io.observe(p);});
  }
- nav.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();var id=a.getAttribute('href').slice(1);show(id);window.scrollTo(0,0);location.hash=id;});});
- function fromHash(){var h=(location.hash||'').replace('#','');if(!show(h))show('overview');}
- window.addEventListener('hashchange',fromHash);fromHash();
+ var h=(location.hash||'#overview').slice(1); mark(h);
+ if(location.hash){var t=document.getElementById(h); if(t)setTimeout(function(){t.scrollIntoView({block:'start'});},0);}
 })();
 document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});document.querySelectorAll('section.grp').forEach(function(s){s.hidden=b.dataset.filter!=='all'&&s.dataset.purpose!==b.dataset.filter})})});</script>
 </body></html>
