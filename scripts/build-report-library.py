@@ -451,16 +451,20 @@ MARK = {"HAVE": ("have", "&#9679;", "Have on Hub"), "PARTIAL": ("partial", "&#96
 def row(i, s):
     cls, glyph, word = MARK[s["status"]]
     found = ", ".join("%s (%s)" % (esc(REPORTS[k][0]), REPORTS[k][1]) for k in s["found"])
+    n_found = len(s["found"])
     where = esc(s["where"])
-    if s["link"]:
-        where += ' <a href="%s" target="_blank" rel="noopener">open &#8599;</a>' % s["link"]
+    # the link is the card's OPEN button - where this section lives on the Hub. A section that is
+    # nowhere on the Hub has no button; the words say so.
+    open_btn = ('<a class="open" href="%s" target="_blank" rel="noopener">Open on the Hub &#8599;</a>' % s["link"]) if s["link"] else ""
     return ('<article class="sec" id="s%d" data-status="%s"><div class="sl"><span class="num">%02d</span>'
             '<span class="mark %s"><span class="g" aria-hidden="true">%s</span>%s</span></div>'
-            '<div class="sb"><h3>%s</h3><p class="what">%s</p>'
-            '<dl><dt>Found in</dt><dd>%s <span class="cnt">&#183; %d report%s</span></dd>'
-            '<dt>On the Hub</dt><dd>%s</dd>'
-            '<dt>Should we have it?</dt><dd class="judge">%s</dd></dl></div></article>'
-            ) % (i, s["status"], i, cls, glyph, word, esc(s["t"]), esc(s["what"]), found, len(s["found"]), "" if len(s["found"]) == 1 else "s", where, esc(s["judge"]))
+            '<h3>%s</h3><p class="what">%s</p>'
+            '<dl><dt>On the Hub</dt><dd>%s</dd>'
+            '<dt>Should we have it?</dt><dd class="judge">%s</dd></dl>'
+            '<details class="fi"><summary>Found in %d report%s</summary><dl><dt>Found in</dt><dd>%s</dd></dl></details>'
+            '%s</article>'
+            ) % (i, s["status"], i, cls, glyph, word, esc(s["t"]), esc(s["what"]), where, esc(s["judge"]),
+                 n_found, "" if n_found == 1 else "s", found, open_btn)
 
 groups_html = ""
 i = 0
@@ -472,7 +476,7 @@ for key, name, sub in GROUPS:
         i += 1
         rows += row(i, s) + "\n"
     groups_html += ('<section class="grp" id="%s"><div class="gh"><h2>%s</h2><p>%s</p>'
-                    '<p class="gc"><b class="have">%d have</b> <b class="partial">%d partial</b> <b class="none">%d don&#8217;t</b> &#183; %d sections</p></div>\n%s'
+                    '<p class="gc"><b class="have">%d have</b> <b class="partial">%d partial</b> <b class="none">%d don&#8217;t</b> &#183; %d sections</p></div>\n<div class="grid">\n%s</div>'
                     '<p class="up"><a href="#top">&#8593; contents</a></p></section>\n') % (key, name, sub, c["HAVE"], c["PARTIAL"], c["NONE"], len(items), rows)
 
 toc = "".join('<a href="#%s">%s <span>%d</span></a>' % (key, name, sum(1 for s in S if s["g"] == key)) for key, name, sub in GROUPS)
@@ -487,65 +491,78 @@ CSS = """
 /* one accent hue; the three marks are TONE x OPACITY x OUTLINE of this hue, never a second colour */
 --crk:#00D4FF;--c90:rgba(0,212,255,.90);--c62:rgba(0,212,255,.62);--c40:rgba(0,212,255,.40);--c22:rgba(0,212,255,.22);
 --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
-font:14px/1.6 var(--sans);color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
+/* the type scales with the screen: 15 px on a phone, 19 px on a TV; everything below is in rem */
+font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55;color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}body{margin:0;background:var(--bg)}
-.wrap{max-width:1100px;margin:auto;padding:22px 28px 40px}
+/* the page uses the screen it is given: no fixed box, side padding that grows with the width */
+.wrap{max-width:2400px;margin:auto;padding:1.3rem clamp(16px,3vw,64px) 2.6rem}
 a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
-a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
-header{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:58px;padding:0 18px;border:1px solid var(--hair);background:var(--panel)}
-.brand{font:600 17px/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
-.hlinks{display:flex;gap:10px;font:9px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
-.hlinks a{border:1px solid var(--line2);padding:8px 12px;color:var(--ink3);background:var(--bg)}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
+.brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
+.hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
+.hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
 .hlinks a:hover{color:var(--crk);border-color:var(--hair2)}
-h1{font:600 12px/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:30px 0 10px}
-.lede{max-width:760px;color:var(--ink3);margin:0 0 8px;font-size:13px}
-.k{font:8px/1.4 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:var(--crk)}
-.stats{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0}
-.stat{border:1px solid var(--line);background:var(--panel);padding:9px 14px;min-width:96px}
-.stat b{display:block;font:600 17px/1.2 var(--mono);color:var(--ink)}
-.stat span{font:8px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+h1{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:1.6rem 0 .6rem}
+.lede{max-width:52rem;color:var(--ink3);margin:0 0 .5rem;font-size:.95rem}
+.k{font:.62rem/1.5 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--crk)}
+.stats{display:flex;gap:.5rem;flex-wrap:wrap;margin:.9rem 0 0}
+.stat{border:1px solid var(--line);background:var(--panel);padding:.55rem .9rem;min-width:6rem}
+.stat b{display:block;font:600 1.1rem/1.2 var(--mono);color:var(--ink)}
+.stat span{font:.6rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
 .stat.have b{color:var(--c90)}.stat.partial b{color:var(--c62)}.stat.none b{color:var(--ink3)}
-nav.toc{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:18px 0 0}
-nav.toc a{display:flex;justify-content:space-between;gap:8px;border:1px solid var(--line2);background:var(--panel);padding:10px 12px;color:var(--ink2);font:600 10px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+nav.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:.4rem;margin:1.1rem 0 0}
+nav.toc a{display:flex;justify-content:space-between;gap:.5rem;border:1px solid var(--line2);background:var(--panel);padding:.6rem .8rem;color:var(--ink2);font:600 .68rem/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase}
 nav.toc a span{color:var(--c62)}nav.toc a:hover{border-color:var(--hair2);color:var(--crk)}
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px}
-.filters button{font:9px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:8px 13px;background:var(--bg);color:var(--ink3);cursor:pointer}
+.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:1.1rem 0 .4rem}
+.filters button{font:.66rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:.55rem .85rem;background:var(--bg);color:var(--ink3);cursor:pointer}
 .filters button:hover{color:var(--ink);border-color:var(--hair2)}
 .filters button[aria-pressed=true]{color:var(--crk);border-color:var(--crk);box-shadow:inset 0 -2px 0 var(--crk)}
-.legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 0;font-size:12px;color:var(--ink3)}
-section.grp{margin-top:34px;scroll-margin-top:16px}
-.gh{border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 10px}
-h2{font:600 12px/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0}
-.gh p{margin:4px 0 0;font-size:12.5px;color:var(--ink3);max-width:820px}
-.gc{font:9px/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)!important}
-.gc b{font-weight:600;margin-right:8px}.gc b.have{color:var(--c90)}.gc b.partial{color:var(--c62)}.gc b.none{color:var(--ink3)}
-article.sec{display:grid;grid-template-columns:132px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line2);padding:12px 16px 10px;margin:0 0 8px}
+.legend{display:flex;gap:.9rem;flex-wrap:wrap;margin:.6rem 0 0;font-size:.85rem;color:var(--ink3)}
+section.grp{margin-top:2.1rem;scroll-margin-top:1rem}
+.gh{border-bottom:1px solid var(--line);padding-bottom:.5rem;margin:0 0 .7rem}
+h2{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0}
+.gh p{margin:.25rem 0 0;font-size:.9rem;color:var(--ink3);max-width:52rem}
+.gc{font:.64rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)!important}
+.gc b{font-weight:600;margin-right:.5rem}.gc b.have{color:var(--c90)}.gc b.partial{color:var(--c62)}.gc b.none{color:var(--ink3)}
+/* cards reflow: as many ~320 px columns as fit - one on a phone, three on a laptop, five on a TV */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:.75rem}
+article.sec{display:flex;flex-direction:column;gap:.45rem;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--line2);padding:.85rem 1rem .8rem;margin:0}
+article.sec:hover{background:var(--panel2);border-color:var(--hair2);border-top-color:inherit}
 article.sec[hidden]{display:none}
-article.sec[data-status=HAVE]{border-left-color:var(--c90)}
-article.sec[data-status=PARTIAL]{border-left-color:var(--c40)}
-article.sec[data-status=NONE]{border-left-color:var(--mute);border-left-style:dashed}
-.sl{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
-.num{font:600 10px/1 var(--mono);letter-spacing:.2em;color:var(--dim)}
+article.sec[data-status=HAVE]{border-top-color:var(--c90)}
+article.sec[data-status=PARTIAL]{border-top-color:var(--c40)}
+article.sec[data-status=NONE]{border-top-color:var(--mute);border-top-style:dashed}
+.sl{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.num{font:600 .7rem/1 var(--mono);letter-spacing:.2em;color:var(--dim)}
 /* the mark: glyph + word, so it reads without colour */
-.mark{display:inline-flex;align-items:center;gap:6px;font:600 8px/1.4 var(--mono);letter-spacing:.2em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--line2);white-space:nowrap}
-.mark .g{font-size:11px;line-height:1}
+.mark{display:inline-flex;align-items:center;gap:.4rem;font:600 .62rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.2rem .5rem;border:1px solid var(--line2);white-space:nowrap}
+.mark .g{font-size:.8rem;line-height:1}
 .mark.have{color:var(--c90);border-color:var(--c40)}
 .mark.partial{color:var(--c62);border-color:var(--c22);border-style:dashed}
 .mark.none{color:var(--ink3);border-color:var(--line2);border-style:dashed}
-h3{font:600 12.5px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin:0 0 4px}
-.what{margin:0 0 8px;font-size:12.5px;color:var(--ink3)}
-dl{display:grid;grid-template-columns:118px 1fr;gap:4px 12px;margin:0;border-top:1px solid var(--line);padding-top:8px}
-dt{font:600 8px/1.8 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk)}
-dd{margin:0;font-size:12.5px;color:var(--ink3)}dd.judge{color:var(--ink2)}
+h3{font:600 1rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin:0}
+.what{margin:0;font-size:.95rem;color:var(--ink3)}
+dl{display:grid;grid-template-columns:1fr;gap:0;margin:.2rem 0 0;border-top:1px solid var(--line);padding-top:.5rem}
+dt{font:600 .62rem/1.8 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk)}
+dd{margin:0 0 .35rem;font-size:.95rem;color:var(--ink3)}dd.judge{color:var(--ink2)}
 .cnt{color:var(--dim)}
-.up{margin:6px 0 0;font:9px/1.4 var(--mono);letter-spacing:.2em;text-transform:uppercase}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.two>div{background:var(--panel);border:1px solid var(--line);padding:16px 20px}
-.two ul{margin:8px 0 0;padding:0;list-style:none}.two li{font-size:12px;color:var(--ink3);padding:6px 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
+details.fi{margin-top:auto;padding-top:.3rem}
+details.fi summary{cursor:pointer;list-style:none;font:.62rem/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+details.fi summary::-webkit-details-marker{display:none}
+details.fi summary::before{content:"+ ";color:var(--c62)}details.fi[open] summary::before{content:"- "}
+details.fi summary:hover{color:var(--ink2)}
+/* the summary is the label; the term inside stays in the markup for the record and is not painted twice */
+details.fi dl{margin-top:.3rem;border-top:0;padding-top:0}details.fi dt{display:none}details.fi dd{font-size:.9rem}
+a.open{align-self:flex-start;margin-top:.45rem;font:600 .64rem/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.5rem .75rem;border:1px solid var(--c40);color:var(--c90);background:var(--bg)}
+a.open:hover{border-color:var(--crk);color:var(--crk)}
+.up{margin:.6rem 0 0;font:.64rem/1.4 var(--mono);letter-spacing:.2em;text-transform:uppercase}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:.75rem;margin-top:.6rem}.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.3rem}
+.two ul{margin:.5rem 0 0;padding:0;list-style:none}.two li{font-size:.88rem;color:var(--ink3);padding:.4rem 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
 .two li span{color:var(--dim)}
-footer{border-top:1px solid var(--line);margin-top:30px;padding-top:16px;color:var(--dim);font:9px/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-footer a{margin-right:14px}
-@media(max-width:850px){nav.toc{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}}
-@media(max-width:620px){.wrap{padding:14px 14px 30px}.brand{letter-spacing:.44em;font-size:14px}header{padding:12px 14px;flex-wrap:wrap}h1{margin-top:24px}article.sec{grid-template-columns:1fr;gap:8px}.sl{flex-direction:row;align-items:center}dl{grid-template-columns:1fr;gap:0}dt{margin-top:6px}nav.toc{grid-template-columns:1fr}}
+footer{border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+footer a{margin-right:.9rem}
+@media(max-width:620px){.wrap{padding:.9rem .9rem 2rem}.brand{letter-spacing:.44em;font-size:.9rem}header{padding:.7rem .9rem;flex-wrap:wrap}h1{margin-top:1.4rem}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
@@ -554,7 +571,7 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 <main>
 <h1>The company report, deduplicated into one</h1>
 <p class="lede">Every distinct section found across the recovered company reports - the executive briefs, the levels labs, the earnings logs, the scans, the comparisons, the templates and protocols, the DCF notes and the Bitcoin page - listed once, in the order of a per-ticker digest. Each is marked against what the Hub shows today, with a one-line answer to &#8220;should we have it?&#8221;. Inventory and mapping only; no new analysis, and nothing here was changed on the Hub.</p>
-<p class="k">Marks read against Hub production %(prod)s on %(date)s &#183; Have = on the company page, board or rooms &#183; Partial = part of it, or only on the demo fundamentals page or a separate tool, or in code but not seen on screen &#183; Don&#8217;t have = nowhere on the Hub</p>
+<p class="k">Marks read against Hub production %(prod)s on %(date)s &#183; Have = on the company page, board or rooms &#183; Partial = part of it, or only on the demo fundamentals page or a separate tool, or in code but not seen on screen &#183; Don&#8217;t have = nowhere on the Hub &#183; Each card that is on the Hub carries an Open button to where it lives</p>
 <div class="stats">
 <div class="stat"><b>%(instances)d</b><span>sections found</span></div>
 <div class="stat"><b>%(dups)d</b><span>duplicates removed</span></div>

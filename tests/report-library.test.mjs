@@ -70,3 +70,30 @@ test("the stylesheet is balanced and monochrome: no white, no near-white, one ac
   for (const [cls, word] of [["have", "Have on Hub"], ["partial", "Partial"], ["none", "Don&#8217;t have"]])
     assert.match(page, new RegExp('<span class="mark ' + cls + '"><span class="g" aria-hidden="true">&#\\d+;</span>' + word + "</span>"), cls + " mark has glyph and word");
 });
+
+/* September 23, overnight (cards): the 67 sections are CARDS in a grid that reflows from a phone to a TV. Each card carries
+   its number, its mark (glyph + word), the section, what it is, where it lives on the Hub with an OPEN button when it is
+   there, the judgement, and the reports it was found in, folded under a summary. */
+test("every section is a card: mark, title, where on the Hub, judgement, found-in folded, and an Open button when it is on the Hub", () => {
+  assert.match(css, /\.grid\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(min\(100%,3\d\dpx\),1fr\)\)/, "the card grid auto-fills ~320 px columns");
+  assert.doesNotMatch(css, /grid-template-columns:repeat\([1-9],/, "no fixed column count anywhere");
+  assert.doesNotMatch(css, /\.wrap\{max-width:1\d{3}px/, "no laptop-sized box");
+  assert.match(css, /font-size:clamp\(15px,[^)]+,19px\)/, "the base type scales between a phone and a TV");
+  const groups = [...page.matchAll(/<section class="grp" id="(identity|price|fund|debt|comps|sent|events|risk)">([\s\S]*?)<\/section>/g)];
+  assert.equal(groups.length, 8);
+  for (const g of groups) assert.match(g[2], /<div class="grid">\n<article class="sec"/, g[1] + " lays its sections out as a card grid");
+  const cards = [...page.matchAll(/<article class="sec" id="s(\d+)" data-status="(HAVE|PARTIAL|NONE)">([\s\S]*?)<\/article>/g)];
+  assert.equal(cards.length, 67);
+  for (const [, n, status, body] of cards) {
+    assert.match(body, /^<div class="sl"><span class="num">\d\d<\/span><span class="mark (have|partial|none)">/, "s" + n + " starts with its number and mark");
+    assert.match(body, /<\/div><h3>[^<]{8,}<\/h3><p class="what">[^<]{8,}<\/p>/, "s" + n + " names the section and says what it is");
+    assert.match(body, /<details class="fi"><summary>Found in \d+ reports?<\/summary><dl><dt>Found in<\/dt>/, "s" + n + " folds the reports it was found in");
+    const open = body.match(/<a class="open" href="(https:\/\/[^"]+)" target="_blank" rel="noopener">Open on the Hub &#8599;<\/a>$/);
+    if (status === "NONE") assert.equal(open, null, "s" + n + " is nowhere on the Hub and has no Open button");
+    else assert.ok(open, "s" + n + " is on the Hub and carries an Open button to where it lives");
+  }
+  /* the mark reads without colour: glyph and word, and the three glyphs differ */
+  assert.match(page, /<span class="mark have"><span class="g" aria-hidden="true">&#9679;<\/span>Have on Hub<\/span>/);
+  assert.match(page, /<span class="mark partial"><span class="g" aria-hidden="true">&#9684;<\/span>Partial<\/span>/);
+  assert.match(page, /<span class="mark none"><span class="g" aria-hidden="true">&#9675;<\/span>Don&#8217;t have<\/span>/);
+});

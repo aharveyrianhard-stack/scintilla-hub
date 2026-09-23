@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
-"""Build prototypes/index.html from prototypes/catalog.json.
+"""Build prototypes/index.html from prototypes/catalog.json and prototypes/latest.json.
 
-The review home is GENERATED, not hand-edited, so the page and the catalog can
+The review home is GENERATED, not hand-edited, so the page and its two inputs can
 never drift apart - that drift is what left stale and dead entries on the page.
-Edit catalog.json, run this, and commit both. tests/prototypes-catalogue.test.mjs
-pins the result and enforces the rules the page promises: truthful readiness
-labels, a monochrome palette with no white, and no destination without a way back.
+Edit catalog.json (what exists) or latest.json (what just happened), run this,
+and commit all three. tests/prototypes-catalogue.test.mjs pins the result and
+enforces the rules the page promises: truthful readiness labels, a date on every
+card, a monochrome palette with no white, cards that reflow from a phone to a
+TV, and no destination without a way back.
 
     python3 scripts/build-prototypes-index.py
 """
-import json, os
+import json, os, datetime
 
 # repo root, resolved from this file - no machine-specific path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAT = os.path.join(ROOT, "prototypes", "catalog.json")
+LATEST = os.path.join(ROOT, "prototypes", "latest.json")
 OUT = os.path.join(ROOT, "prototypes", "index.html")
 
 cat = json.load(open(CAT))
+latest = json.load(open(LATEST))
 
 READINESS = {
     "Existing tool": "existing",
@@ -29,6 +33,11 @@ READINESS = {
 }
 BADGE = {"existing": "Existing tool", "preview": "Preview", "sample": "Sample data",
          "review": "Review home", "pending": "Pending"}
+
+# the date on a card says what kind of date it is - a page we changed, an address
+# we only checked, or a name we only recorded. Guessing is not allowed: an entry
+# without a date fails the build rather than being painted with one.
+DATE_KIND = {"updated": "Updated", "checked": "Checked", "named": "Named"}
 
 # purpose group for each title, and the icon that MEANS the tool
 PURPOSE = {
@@ -61,6 +70,8 @@ ICON = {
  "Signal fanout · v2":     '<circle cx="5" cy="12" r="2"/><path d="M7 11.4 17 6.5M7 12h10M7 12.6 17 17.5"/><circle cx="18.5" cy="6" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/><circle cx="18.5" cy="18" r="1.6"/>',
  "Visual menus":           '<path d="M4 6.5h16M4 12h16M4 17.5h10"/>',
 }
+# a new catalog entry without its own icon gets the plain page glyph, never a blank
+ICON_DEFAULT = '<path d="M6 3.5h9l4 4v13H6z"/><path d="M15 3.5v4h4"/>'
 
 HOST = {
  "Indicator Lab": "this site · kept by its owner",
@@ -95,11 +106,41 @@ GROUPS = [
 def esc(s):
     return s.replace('&', '&amp;')
 
+def host_of(e):
+    t = e["title"]
+    if t in HOST:
+        return HOST[t]
+    u = e.get("url") or ""
+    if u.startswith("http"):
+        return u.split("/")[2]
+    if u.startswith("/prototypes/"):
+        return "this site · /prototypes/"
+    if u:
+        return "this site · " + u
+    return "not available yet"
+
+def purpose_of(e):
+    # an entry the map does not know yet is placed by its catalog topic, so a new
+    # deposit still lands in a real group instead of failing the build
+    t = e["title"]
+    if t in PURPOSE:
+        return PURPOSE[t]
+    topic = (e.get("topic") or "").lower()
+    return {"events": "markets", "analytics": "portfolio", "reports": "signals", "signals": "signals",
+            "workspaces": "workspaces", "design": "visual"}.get(topic, "visual")
+
+def when_of(e):
+    d = e.get("date"); k = e.get("date_kind")
+    if not d or k not in DATE_KIND:
+        raise SystemExit("catalog entry %r has no date or date_kind (updated / checked / named) - add one, do not guess" % e["title"])
+    day = datetime.date.fromisoformat(d)
+    return '<span class="when" data-date="%s">%s %d %s</span>' % (d, DATE_KIND[k], day.day, day.strftime("%b"))
+
 def card(e):
-    t = e["title"]; r = READINESS[e["status"]]; p = PURPOSE[t]
+    t = e["title"]; r = READINESS[e["status"]]; p = purpose_of(e)
     desc = e["description"] + EXTRA_DESC.get(t, "")
-    ico = '<span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24">%s</svg></span>' % ICON[t]
-    meta = '<div class="meta"><span class="rd %s">%s</span><span class="host">%s</span></div>' % (r, BADGE[r], HOST[t])
+    ico = '<span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24">%s</svg></span>' % ICON.get(t, ICON_DEFAULT)
+    meta = '<div class="meta"><span class="rd %s">%s</span>%s<span class="host">%s</span></div>' % (r, BADGE[r], when_of(e), host_of(e))
     if e.get("url"):
         ext = e["url"].startswith("http")
         tgt = ' target="_blank" rel="noopener"' if ext else ""
@@ -119,6 +160,39 @@ def card(e):
         body = ('<div class="face is-pending">%s<span class="txt"><h4>%s</h4><p>%s</p></span></div>'
                 '<div class="links"><span class="pending">%s</span></div>') % (ico, esc(t), desc, e["status"])
     return '<article data-purpose="%s" data-readiness="%s">%s%s</article>' % (p, r, meta, body)
+
+# ---- the latest strip: newest first, from latest.json ---------------------------
+KIND = {"deploy": "Deployed", "page": "Published", "feed": "Feed"}
+try:
+    from zoneinfo import ZoneInfo
+    ET = ZoneInfo("America/New_York")
+except Exception:  # pragma: no cover - the build machine always has zoneinfo
+    ET = None
+
+def stamp(iso):
+    t = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    if ET is not None:
+        t = t.astimezone(ET)
+        return "%d %s · %s ET" % (t.day, t.strftime("%b"), t.strftime("%-I:%M %p").lower())
+    return "%d %s · %s UTC" % (t.day, t.strftime("%b"), t.strftime("%H:%M"))
+
+def latest_item(x):
+    if x.get("kind") not in KIND:
+        raise SystemExit("latest.json item %r has an unknown kind" % x.get("title"))
+    meta = '<span class="lm"><b>%s</b><span>%s</span></span>' % (KIND[x["kind"]], stamp(x["when"]))
+    body = '<span class="lt">%s</span><span class="lw">%s</span>' % (esc(x["title"]), esc(x["what"]))
+    u = x.get("url")
+    if u:
+        ext = u.startswith("http")
+        tgt = ' target="_blank" rel="noopener"' if ext else ""
+        foot = '<span class="lx">%s · %s</span>' % (esc(x.get("surface", "")), "opens in a new tab ↗" if ext else "opens here →")
+        return '<a class="li" href="%s"%s data-when="%s">%s%s%s</a>' % (u, tgt, x["when"], meta, body, foot)
+    foot = '<span class="lx">%s</span>' % esc(x.get("surface", ""))
+    return '<div class="li" data-when="%s">%s%s%s</div>' % (x["when"], meta, body, foot)
+
+latest_sorted = sorted(latest, key=lambda x: x["when"], reverse=True)
+latest_html = "".join(latest_item(x) for x in latest_sorted)
+latest_newest = stamp(latest_sorted[0]["when"]) if latest_sorted else "nothing yet"
 
 # ---- counts, stated honestly -------------------------------------------------
 counts = {}
@@ -140,7 +214,7 @@ legend = "".join('<li><b class="rd %s">%s</b>%d · %s</li>' % (r, BADGE[r], coun
 
 groups_html = ""
 for key, name, sub in GROUPS:
-    cards = "".join(card(e) for e in cat if PURPOSE[e["title"]] == key)
+    cards = "".join(card(e) for e in cat if purpose_of(e) == key)
     groups_html += ('<section class="grp" data-purpose="%s"><div class="gh"><h3 class="gt">%s</h3><p>%s</p></div>'
                     '<div class="grid">\n%s\n</div></section>\n') % (key, name, sub, cards)
 
@@ -157,90 +231,105 @@ CSS = """
 --crk:#00D4FF;--c90:rgba(0,212,255,.90);--c62:rgba(0,212,255,.62);
 --c40:rgba(0,212,255,.40);--c22:rgba(0,212,255,.22);
 --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif;
-font:14px/1.6 var(--sans);color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
+/* the type scales with the screen: 15 px on a phone, 19 px on a TV. Everything
+   below is in rem, so the whole page grows together. */
+font-size:clamp(15px,.5vw + 8.5px,19px);font-family:var(--sans);line-height:1.55;color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}body{margin:0;background:var(--bg)}
-.wrap{max-width:1160px;margin:auto;padding:22px 28px 40px}
+/* the page uses the screen it is given: no fixed box, side padding that grows with the width */
+.wrap{max-width:2400px;margin:auto;padding:1.3rem clamp(16px,3vw,64px) 2.6rem}
 a{color:var(--crk);text-decoration:none}a:hover{color:var(--ink)}
 a:focus-visible,button:focus-visible{outline:1px solid var(--crk);outline-offset:3px}
-header{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:58px;padding:0 18px;border:1px solid var(--hair);background:var(--panel)}
-.brand{font:600 17px/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
-.hlinks{display:flex;gap:10px;font:9px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
-.hlinks a{border:1px solid var(--line2);padding:8px 12px;color:var(--ink3);background:var(--bg)}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem;min-height:3.4rem;padding:0 1.1rem;border:1px solid var(--hair);background:var(--panel)}
+.brand{font:600 1rem/1 var(--mono);letter-spacing:.62em;color:var(--ink);text-shadow:0 0 18px rgba(0,212,255,.25)}
+.hlinks{display:flex;gap:.6rem;font:.62rem/1 var(--mono);letter-spacing:.24em;text-transform:uppercase}
+.hlinks a{border:1px solid var(--line2);padding:.55rem .8rem;color:var(--ink3);background:var(--bg)}
 .hlinks a:hover{color:var(--crk);border-color:var(--hair2)}
-h1{font:600 12px/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:30px 0 10px}
-.lede{max-width:760px;color:var(--ink3);margin:0 0 8px;font-size:13px}
-.k{font:8px/1.4 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:var(--crk)}
-/* start here - the two or three things most worth opening, like a front door */
-.start{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 0}
-.start a{display:flex;align-items:center;gap:10px;border:1px solid var(--line2);background:var(--panel);padding:11px 15px;color:var(--ink2);font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-.start a:hover{border-color:var(--hair2);color:var(--crk);background:var(--panel2)}
-.start a .sgo{color:var(--c62)}
-.stats{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0}
-.stat{border:1px solid var(--line);background:var(--panel);padding:9px 14px;min-width:96px}
-.stat b{display:block;font:600 17px/1.2 var(--mono);color:var(--ink)}
-.stat span{font:8px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin:22px 0 6px}
-.filters button{font:9px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:8px 13px;background:var(--bg);color:var(--ink3);cursor:pointer}
+h1{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:1.6rem 0 .6rem}
+.lede{max-width:52rem;color:var(--ink3);margin:0 0 .5rem;font-size:.95rem}
+.k{font:.62rem/1.4 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:var(--crk)}
+/* the latest strip - what just happened, newest first, one row you can scroll sideways */
+.latest{margin:1.1rem 0 0;border:1px solid var(--hair);background:var(--panel);padding:.8rem 1rem .5rem}
+.lh{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
+.lh h2{font:600 .72rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--crk);margin:0}
+.lh p{margin:0;font:.62rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.rail{display:flex;gap:.6rem;overflow-x:auto;scroll-snap-type:x proximity;padding:.7rem 0 .5rem;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.li{flex:0 0 clamp(240px,21vw,340px);scroll-snap-align:start;display:flex;flex-direction:column;gap:.3rem;background:var(--bg);border:1px solid var(--line2);padding:.7rem .85rem .6rem;color:inherit}
+a.li:hover{border-color:var(--hair2);background:var(--panel2)}
+.lm{display:flex;justify-content:space-between;gap:.5rem;font:.62rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.lm b{color:var(--c62);font-weight:600}
+.lt{font:600 .92rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
+a.li:hover .lt{color:var(--crk)}
+.lw{font-size:.9rem;color:var(--ink3)}
+.lx{margin-top:auto;padding-top:.3rem;font:.6rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.stats{display:flex;gap:.5rem;flex-wrap:wrap;margin:.9rem 0 0}
+.stat{border:1px solid var(--line);background:var(--panel);padding:.55rem .9rem;min-width:6rem}
+.stat b{display:block;font:600 1.1rem/1.2 var(--mono);color:var(--ink)}
+.stat span{font:.6rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:1.3rem 0 .4rem}
+.filters button{font:.66rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;border:1px solid var(--line2);border-radius:0;padding:.55rem .85rem;background:var(--bg);color:var(--ink3);cursor:pointer}
 .filters button:hover{color:var(--ink);border-color:var(--hair2)}
 .filters button[aria-pressed=true]{color:var(--crk);border-color:var(--crk);box-shadow:inset 0 -2px 0 var(--crk)}
-section.grp{margin-top:24px}section.grp[hidden]{display:none}
-.gh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 10px}
-h2{font:600 11px/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
-.gh p{margin:0;font-size:12px;color:var(--dim)}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-article,.sysitem{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);padding:14px 16px 12px;min-height:164px}
+section.grp{margin-top:1.5rem}section.grp[hidden]{display:none}
+.gh{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap;margin:0 0 .6rem}
+h2{font:600 .78rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
+.gh p{margin:0;font-size:.85rem;color:var(--dim)}
+/* cards reflow: as many columns as fit at about 300 px each - one on a phone, three
+   or four on a laptop, five or six on a TV. Never a fixed column count in a fixed box. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:.75rem}
+article,.sysitem{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);padding:.9rem 1rem .8rem;min-height:11rem}
 article:hover{background:var(--panel2);border-color:var(--hair2)}
-.meta{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.meta{display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap}
 /* readiness: one hue, four opacities, then a dashed outline for "not here yet" */
-.rd{font:8px/1.4 var(--mono);letter-spacing:.2em;text-transform:uppercase;padding:2px 6px;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap}
+.rd{font:600 .62rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;padding:.15rem .45rem;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap}
 .rd.existing{color:var(--c90);border-color:var(--c40)}
 .rd.review{color:var(--c62);border-color:var(--c40)}
 .rd.preview{color:var(--c62);border-color:var(--c22)}
 .rd.sample{color:var(--c40);border-color:var(--c22)}
 .rd.pending{color:var(--dim);border-style:dashed}
 .rd.live{color:var(--c90);border-color:var(--c40)}.rd.note{color:var(--dim)}
-.host{font:8px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-h3.gt{font:600 11px/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
+/* the date: what kind of date it is, then the day */
+.when{font:.62rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.host{flex-basis:100%;min-width:0;font:.6rem/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+h3.gt{font:600 .78rem/1.4 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);margin:0}
 /* the whole card is the target - icon, what it is, what it does, and an arrow */
-.face{display:flex;align-items:flex-start;gap:12px;margin:12px 0 0;flex:1;color:inherit}
-.face .ico{flex:0 0 auto;width:26px;height:26px;color:var(--c62)}
+.face{display:flex;align-items:flex-start;gap:.8rem;margin:.75rem 0 0;flex:1;color:inherit}
+.face .ico{flex:0 0 auto;width:1.7rem;height:1.7rem;color:var(--c62)}
 .face:hover .ico{color:var(--crk)}
-.face .ico svg{width:26px;height:26px;display:block;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.face .ico svg{width:1.7rem;height:1.7rem;display:block;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .face .txt{flex:1 1 auto;min-width:0}
-.face .go{flex:0 0 auto;color:var(--c40);font-size:15px;line-height:1}
+.face .go{flex:0 0 auto;color:var(--c40);font-size:1rem;line-height:1}
 .face:hover .go{color:var(--crk)}
 .face.is-pending{opacity:.62}.face.is-pending .ico{color:var(--mute)}
-article h4,.sysitem h4{font:600 12.5px/1.35 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:0 0 6px}
+article h4,.sysitem h4{font:600 1rem/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin:0 0 .35rem}
 .face:hover h4{color:var(--crk)}
-article p,.sysitem p{font-size:12.5px;color:var(--ink3);margin:0}.note{color:var(--dim)}
-.exit{margin:10px 0 0!important;font:8px/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)!important}
-.links{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font:9px/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase}
+article p,.sysitem p{font-size:.95rem;color:var(--ink3);margin:0}.note{color:var(--dim)}
+.exit{margin:.7rem 0 0!important;font:.6rem/1.5 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)!important}
+.links{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:.6rem;font:.64rem/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase}
 .secondary{color:var(--ink3);border-bottom:1px solid var(--line2)}.secondary:hover{color:var(--ink)}
 .pending{color:var(--ink3)}
 .sysitem{min-height:0}
-.sysitem .face{margin-top:10px}
-footer{border-top:1px solid var(--line);margin-top:30px;padding-top:16px;color:var(--dim);font:9px/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
-nav.pn{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 0}
-nav.pn a{font:9px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);padding:8px 12px;background:var(--bg)}
+.sysitem .face{margin-top:.6rem}
+footer{border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;color:var(--dim);font:.62rem/1.6 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+nav.pn{display:flex;gap:.3rem;flex-wrap:wrap;margin:.9rem 0 0}
+nav.pn a{font:.62rem/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);padding:.55rem .8rem;background:var(--bg)}
 nav.pn a:hover{color:var(--crk);border-color:var(--hair2)}
-section.part{margin-top:32px;scroll-margin-top:16px}
-h2.pt{font:600 12px/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.two>div{background:var(--panel);border:1px solid var(--line);padding:16px 20px}
-.two ul,.spec ul{margin:8px 0 0;padding:0;list-style:none}.two li{font-size:12px;color:var(--ink3);padding:6px 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
-.two li b{font:600 9px/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-right:8px}
-.signin{font:8px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:6px}
-dl.spec{display:grid;grid-template-columns:180px 1fr;margin:0;border:1px solid var(--line);background:var(--panel)}
-dl.spec dt{font:600 9px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);padding:12px 16px;border-top:1px solid var(--line)}
-dl.spec dd{margin:0;padding:12px 16px;font-size:12.5px;color:var(--ink3);border-top:1px solid var(--line)}
+section.part{margin-top:2rem;scroll-margin-top:1rem}
+h2.pt{font:600 .82rem/1.4 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--ink);margin:0 0 .8rem;padding-bottom:.5rem;border-bottom:1px solid var(--line)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:.75rem}.two>div{background:var(--panel);border:1px solid var(--line);padding:1rem 1.3rem}
+.two ul,.spec ul{margin:.5rem 0 0;padding:0;list-style:none}.two li{font-size:.88rem;color:var(--ink3);padding:.4rem 0;border-top:1px solid var(--line)}.two li:first-child{border-top:0}
+.two li b{font:600 .64rem/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-right:.5rem}
+.signin{font:.6rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:.4rem}
+dl.spec{display:grid;grid-template-columns:11rem 1fr;margin:0;border:1px solid var(--line);background:var(--panel)}
+dl.spec dt{font:600 .64rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);padding:.75rem 1rem;border-top:1px solid var(--line)}
+dl.spec dd{margin:0;padding:.75rem 1rem;font-size:.9rem;color:var(--ink3);border-top:1px solid var(--line)}
 dl.spec dt:first-of-type,dl.spec dd:first-of-type{border-top:0}
-table.arch{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);font-size:12.5px}
-table.arch th{font:600 9px/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line)}
-table.arch td{padding:10px 14px;color:var(--ink3);border-top:1px solid var(--line);vertical-align:top}
-table.arch td:first-child{font:11px/1.5 var(--mono);color:var(--ink2);white-space:nowrap}
-@media(max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:850px){.two{grid-template-columns:1fr}dl.spec{grid-template-columns:1fr}dl.spec dd{border-top:0;padding-top:0}table.arch td:first-child{white-space:normal}}
-@media(max-width:620px){.wrap{padding:14px 14px 30px}.grid{grid-template-columns:1fr}article{min-height:0}.brand{letter-spacing:.44em;font-size:14px}header{padding:12px 14px;flex-wrap:wrap}h1{margin-top:24px}.start a{flex:1 1 100%}}
-@media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:8px 0}table.arch tbody tr:first-child{border-top:0}table.arch td{display:block;border-top:0;padding:2px 14px}table.arch td:first-child{overflow-wrap:anywhere}table.arch td:last-child::before{content:"Kept by: ";color:var(--dim)}}
+table.arch{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);font-size:.9rem}
+table.arch th{font:600 .64rem/1.5 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--crk);text-align:left;padding:.6rem .9rem;border-bottom:1px solid var(--line)}
+table.arch td{padding:.6rem .9rem;color:var(--ink3);border-top:1px solid var(--line);vertical-align:top}
+table.arch td:first-child{font:.8rem/1.5 var(--mono);color:var(--ink2);white-space:nowrap}
+@media(max-width:850px){dl.spec{grid-template-columns:1fr}dl.spec dd{border-top:0;padding-top:0}table.arch td:first-child{white-space:normal}}
+@media(max-width:620px){.wrap{padding:.9rem .9rem 2rem}article{min-height:0}.brand{letter-spacing:.44em;font-size:.9rem}header{padding:.7rem .9rem;flex-wrap:wrap}h1{margin-top:1.4rem}.li{flex-basis:82vw}}
+@media(max-width:560px){table.arch thead{display:none}table.arch tr{display:block;border-top:1px solid var(--line);padding:.5rem 0}table.arch tbody tr:first-child{border-top:0}table.arch td{display:block;border-top:0;padding:.1rem .9rem}table.arch td:first-child{overflow-wrap:anywhere}table.arch td:last-child::before{content:"Kept by: ";color:var(--dim)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
@@ -255,14 +344,9 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 <nav class="pn" aria-label="Page sections"><a href="#overview">Overview</a><a href="#tools">Tools</a><a href="#review">Review</a><a href="#work">Work</a><a href="#architecture">Architecture</a><a href="#page-spec">Page spec</a></nav>
 <main>
 <section class="part" id="overview"><h1>Prototypes &amp; review</h1>
-<p class="lede">One front door to everything being built and reviewed around the Hub. Each entry says in plain words what it is, what it does, and how ready it is — and every one of them either opens in a new tab or carries a link back here, so you are never stuck on a page with no way out.</p>
+<p class="lede">One front door to everything being built and reviewed around the Hub. Each card says in plain words what it is, what it does, when it last moved and how ready it is — and every one of them either opens in a new tab or carries a link back here, so you are never stuck on a page with no way out.</p>
 <p class="k">Nothing here is part of the dashboard unless it says so. Inclusion does not establish current data, working function or production readiness.</p>
-<div class="start">
-<a href="/visual-engine/"><span class="sgo">→</span>Visual Engine workbench</a>
-<a href="https://scintilla-widgets.vercel.app/visuals/geiger-motion" target="_blank" rel="noopener"><span class="sgo">↗</span>Geiger motion</a>
-<a href="/prototypes/dock-concept/"><span class="sgo">→</span>Station dock concept</a>
-<a href="/prototypes/indicator-lab/"><span class="sgo">→</span>Indicator Lab</a>
-</div>
+<section class="latest" aria-label="Latest"><div class="lh"><h2>Latest</h2><p>%(latest_n)d most recent · newest %(latest_newest)s · from latest.json</p></div><div class="rail">%(latest)s</div></section>
 <div class="stats">
 <div class="stat"><b>%(total)d</b><span>listed</span></div>
 <div class="stat"><b>%(linked)d</b><span>open now</span></div>
@@ -280,6 +364,7 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 <div><span class="k">What the labels mean</span><ul>
 %(legend)s</ul></div>
 <div><span class="k">Checks and review</span><ul>
+<li><b class="rd">Updated</b> on a card is the day that page last changed on this site; <b class="rd">Checked</b> is the day an address on another site was last confirmed to answer; <b class="rd">Named</b> is the day an entry was first listed without an address.</li>
 <li>22 Sep, 21:0x UTC: every linked destination on this page was requested and answered HTTP 200. That is a reachability check, not a function check.</li>
 <li>Same check: two Hub pages that are not listed here — geigers.html and curve-ab.html — answered 404 and are deliberately absent rather than listed dead.</li>
 <li>Every destination was also opened and read for a way back. Pages on this site carry one; pages on other addresses open in a new tab instead.</li>
@@ -295,7 +380,7 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 </ul></div>
 <div><span class="k">How work reaches this page</span><ul>
 <li>A tool is listed once it has an address that answers; its label changes only with evidence.</li>
-<li>New entries go into catalog.json and this page together; the page is generated from the catalog and the test fails if they disagree.</li>
+<li>New entries go into catalog.json with a date; something that just shipped goes into latest.json. The page is generated from both and the test fails if they disagree.</li>
 <li>Every listed destination must have a way back or open in a new tab; the test fails if one does not.</li>
 <li>The work items are the source of status; this page does not mirror them.</li>
 </ul></div>
@@ -308,17 +393,17 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 <tr><td>sectorrotation.scintillahub.ai · allocation.scintillahub.ai</td><td>Existing tools with their own addresses</td><td>Scintilla</td></tr>
 <tr><td>*.vercel.app</td><td>Previews, studies, the widget registry and the cohort board, each at its own address</td><td>Scintilla</td></tr>
 </tbody></table>
-<p class="lede" style="margin-top:12px">Section names follow the shared navigation baseline v0.1 (Overview · Tools · Review · Work · Architecture · Page spec), kept by central coordination.</p></section>
+<p class="lede" style="margin-top:.75rem">Section names follow the shared navigation baseline v0.1 (Overview · Tools · Review · Work · Architecture · Page spec), kept by central coordination.</p></section>
 
 <section class="part" id="page-spec"><h2 class="pt">Page spec</h2>
 <dl class="spec">
-<dt>Purpose</dt><dd>One place to reach Scintilla's prototypes and tools, grouped by purpose, each with a plain-words description and an honest readiness label — and a way back out of every one of them.</dd>
+<dt>Purpose</dt><dd>One place to reach Scintilla's prototypes and tools, grouped by purpose, each with a plain-words description, a date and an honest readiness label — and a way back out of every one of them. A latest strip at the top shows what just shipped, newest first.</dd>
 <dt>Owner</dt><dd>Scintilla. The Indicator Lab entry and its home are owned independently by Indicator Lab.</dd>
-<dt>Maturity</dt><dd>Review home, version 0.2. A static page; no tool on it is certified by it.</dd>
-<dt>Inputs</dt><dd>catalog.json in this folder (titles, descriptions, status, addresses and how each one is left) and the shared navigation baseline v0.1. The page is generated from the catalog.</dd>
+<dt>Maturity</dt><dd>Review home, version 0.3. A static page; no tool on it is certified by it.</dd>
+<dt>Inputs</dt><dd>catalog.json in this folder (titles, descriptions, status, dates, addresses and how each one is left), latest.json (what just shipped, when, and where to open it) and the shared navigation baseline v0.1. The page is generated from the two files.</dd>
 <dt>Outputs</dt><dd>Links only. The page reads nothing at run time, stores nothing and sends nothing.</dd>
 <dt>Release</dt><dd>Published by the Hub's normal reviewed deployment. Being published is not the same as being verified.</dd>
-<dt>Verification</dt><dd>Automated checks keep this page and catalog.json in agreement, keep labels to the evidence (Existing tool, never Working, without functional proof), keep every link a listed address, and require every destination to open in a new tab or carry a link back here. Reachability and the way back were checked on 22 Sep; function was not.</dd>
+<dt>Verification</dt><dd>Automated checks keep this page, catalog.json and latest.json in agreement, keep labels to the evidence (Existing tool, never Working, without functional proof), require a date on every card, keep every link a listed address, and require every destination to open in a new tab or carry a link back here. Reachability and the way back were checked on 22 Sep; function was not.</dd>
 <dt>Private material</dt><dd>Review notes and work items stay behind sign-in. Intakes, local paths, security findings and account or usage details are never published here.</dd>
 </dl></section>
 </main>
@@ -329,6 +414,7 @@ HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=
 
 same = sum(1 for e in cat if e.get("url") and e["url"].startswith("/"))
 out = HTML % {"css": CSS, "groups": groups_html, "systems": SYSTEMS, "legend": legend,
+              "latest": latest_html, "latest_n": len(latest_sorted), "latest_newest": latest_newest,
               "total": len(cat), "linked": linked, "named": named, "same": same}
 open(OUT, "w").write(out)
-print("wrote", OUT, len(out), "bytes;", len(cat), "entries,", linked, "linked,", named, "pending")
+print("wrote", OUT, len(out), "bytes;", len(cat), "entries,", linked, "linked,", named, "pending;", len(latest_sorted), "latest")
