@@ -9082,8 +9082,9 @@ let SENTI_RUN = 0;
 async function sentiComputeAll() {
   if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
   const now = Date.now(), M = SENTI;
-  const [spy, vix, hyg, lqd, tlt, news, newsLast, yt, st, x, cnn, cfg, q] = await Promise.all([
+  const [spy, vix, hyg, lqd, tlt, pcc, news, newsLast, yt, st, x, cnn, cfg, q] = await Promise.all([
     sentiSafe(sentiBars("SPY")), sentiSafe(sentiBars("VIX")), sentiSafe(sentiBars("HYG")), sentiSafe(sentiBars("LQD")), sentiSafe(sentiBars("TLT")),
+    sentiSafe(sentiBars("PCC")),
     sentiSafe(pg("news_sentiment?select=ticker,score,n_articles,updated_ts")),
     sentiSafe(pg("news?select=published_ts&order=published_ts.desc.nullslast&limit=1")),
     sentiSafe(pg("social_sentiment?select=ticker,bullish,bearish,posts,score,updated_ts,last_channel,last_published_at,window_days,method&source=eq.youtube")),
@@ -9121,7 +9122,24 @@ async function sentiComputeAll() {
       val = q.v.up + " of our " + (q.v.up + q.v.down) + " stocks are up today · " + Math.round(share) + "% advancing"; }
     inputs.push({ key: "breadth", name: "How many stocks are up", val, score, none, age, fresh: 6 * 3600e3,
       src: "our 364-stock universe · one /quotes call · counted per stock, where CNN weighs by volume", cnn: cnnC("stock_price_breadth"), why }); }
-  inputs.push({ key: "putcall", name: "Put / call ratio", val: "no source", score: null, none: true, src: "Cboe retired the free daily files in Oct 2019 · not collected", cnn: cnnC("put_call_options") });
+  /* PUT / CALL — Cboe's own daily number, from 2006 to the last published session.
+     The Oct-2019 note this row used to carry was half right: Cboe retired the CSV
+     files, not the data. It still publishes a free JSON file after every close, and
+     the chart API now carries it as PCC. CNN reads the FIVE-DAY average rather than
+     one session, so this does too, and the score is INVERTED: more puts than calls
+     is fear, which belongs at the low end. The number is yesterday's by nature - the
+     publisher prints it after the close - and the row names the session it is. */
+  { const c = closes(pcc); let score = null, val = "no source", none = true, why = pcc.ok ? "" : "PCC bars: " + pcc.e;
+    if (c && c.length > 60) {
+      const avg = M.sma(c, 5);
+      const cur = avg[avg.length - 1];
+      const p = M.dev(avg, cur);
+      if (M.fin(cur) && p != null) { score = 100 - p; none = false;
+        val = "put/call " + c[c.length - 1].toFixed(2) + " \u00b7 five-day average " + cur.toFixed(2); }
+    }
+    inputs.push({ key: "putcall", name: "Put / call ratio", val, score, none, age: marketAge(pcc), fresh: MARKET_FRESH,
+      src: "Cboe daily put/call (PCC) \u00b7 chart API \u00b7 session " + sessionOf(pcc) + " \u00b7 five-day average \u00b7 inverted",
+      cnn: cnnC("put_call_options"), why }); }
   { let score = null, val = "—", age = null, n = 0, tk = 0, why = news.ok ? "" : "news_sentiment: " + news.e;
     if (news.ok && Array.isArray(news.v) && news.v.length) { const rows = news.v.filter((r) => M.fin(+r.score) && +r.n_articles > 0); const m = M.wmean(rows, "score", "n_articles"); tk = rows.length; n = rows.reduce((s, r) => s + (+r.n_articles || 0), 0); const up = Math.max(...news.v.map((r) => +r.updated_ts || 0)); age = up ? now - up * 1000 : null; if (M.fin(m)) { score = M.lin(m, 0.3); val = (m >= 0 ? "+" : "") + m.toFixed(3) + " · " + tk + " tickers · " + n + " headlines · 4d"; } }
     const lastHead = (newsLast.ok && Array.isArray(newsLast.v) && newsLast.v[0] && +newsLast.v[0].published_ts) ? now - (+newsLast.v[0].published_ts) * 1000 : null;
