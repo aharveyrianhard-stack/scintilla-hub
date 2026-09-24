@@ -176,6 +176,7 @@ TEMPLATE = r"""<!doctype html>
   <p>One manual pass on this MacBook, on {proof_when}, with the real folder and the real Trading list. The Trading list came back with <b>{proof_posts}</b> posts and published as usual; in the same pass the bookmark folder returned <b>{proof_bm}</b> posts. Both halves are in the pass's own receipt.</p>
   <p>The folder is read as a sidecar after the Trading list has finished and written its receipt, in the same browser, on the same nine-times-a-day schedule. No new background job was installed. If the folder read fails, the Trading list result is untouched.</p>
   <p>Running it twice changes nothing: the second pass added 0 and changed 0.</p>
+  <p>A second pass thirteen minutes later showed the two halves really are separate. The Trading list half tripped a timing problem that was already there — its “finish” click gave up after thirty seconds while its own publication was still running, so the pass recorded itself as crashed even though the feed published and your desk stayed current. The folder read carried on regardless and returned the same 65 posts. Worth a look by whoever owns the collector; it is not something this work introduced.</p>
 </section>
 
 <section class="cc-panel">
