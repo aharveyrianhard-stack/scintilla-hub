@@ -29,11 +29,19 @@
 import {
   detectPriceOutliers, detectEarningsSurprises, detectEconSurprises, detectEconImminent, econEventKey,
 } from "./detect.mjs";
+/* M48 — the thresholds are no longer buried in the code. They live in data/scintilla-rules.json,
+   which the Hub fetches and this function carries as a generated copy (scripts/build-scintilla-rules.mjs;
+   a test pins the two together). Two families, either one fires: the move against the name's own usual
+   day, and a plain percentage floor, both per asset class. */
+import { RULES } from "./rules.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CHART = Deno.env.get("SC_CHART_API") || "https://scintilla-massive-chart-api.fly.dev";
-const PREFILTER_PCT = 0.5;      // below this a move cannot be a 2-sigma day for any name we serve intraday
+/* M48: the prefilter must stay BELOW the lowest bar any rule can fire on, or a rule in the file
+   would be unreachable intraday. The lowest is the smallest "at least this much" in price.* . */
+const PREFILTER_PCT = Math.min(0.5, ...Object.values(RULES.price as Record<string, any>)
+  .map((p: any) => Number(p.x_usual_needs_move_pct)).filter((n: number) => Number.isFinite(n)));
 const MAX_CANDLE_FETCH = 140;   // hard ceiling on daily-bar reads per run
 const CANDLE_DAYS = 90;         // ~60 trading days -> a 20-day volatility is comfortably covered
 const CONCURRENCY = 6;
@@ -83,7 +91,7 @@ Deno.serve(async (req) => {
   const mode = url.searchParams.get("mode") === "session" ? "session" : "intraday";
   const now = new Date();
   const session = sessionET(now);
-  const report: any = { mode, session, at: iso(now), kinds: {}, skipped_counts: {}, notes: [] };
+  const report: any = { mode, session, at: iso(now), rules_version: RULES.version, kinds: {}, skipped_counts: {}, notes: [] };
   const events: any[] = [];
 
   try {
@@ -120,7 +128,7 @@ Deno.serve(async (req) => {
         historyBySymbol[q.symbol] = bars.filter((b: any) => dayOf(b) < session);
       } catch (_) { historyBySymbol[q.symbol] = []; }
     });
-    const px = detectPriceOutliers({ quotes: candidates, historyBySymbol, session, ts: iso(now) });
+    const px = detectPriceOutliers({ quotes: candidates, historyBySymbol, session, ts: iso(now), rules: RULES });
     events.push(...px.events);
     report.kinds.price_outlier = px.events.length;
     report.skipped_counts.price = countReasons(px.skipped);
@@ -134,7 +142,8 @@ Deno.serve(async (req) => {
       const past = await sbGet("earnings_events?" + ernSel + "&ticker=in.(" + names.join(",") + ")&date=lt." + session + "&order=date.desc&limit=2000");
       const historyByTicker: Record<string, any[]> = {};
       for (const r of past) (historyByTicker[r.ticker] ||= []).push(r);
-      ern = detectEarningsSurprises({ rows: todays, historyByTicker, ts: iso(now) });
+      ern = detectEarningsSurprises({ rows: todays, historyByTicker, ts: iso(now),
+        minAbsZ: RULES.earnings.x_usual, minHistory: RULES.earnings.min_past_reports });
       events.push(...ern.events);
     }
     report.kinds.earnings_surprise = ern.events.length;
@@ -154,8 +163,10 @@ Deno.serve(async (req) => {
       const past = asIsoTs(await sbGet("econ_calendar?" + ecSel + "&event_ts=lt." + dayFrom + "&actual=not.is.null&order=event_ts.desc&limit=4000"));
       for (const r of past) (historyByEvent[econEventKey(r.country, r.event)] ||= []).push(r);
     }
-    const ecS = detectEconSurprises({ rows: printed, historyByEvent, ts: iso(now) });
-    const ecI = detectEconImminent({ rows: ecRows, nowSec: Math.floor(now.getTime() / 1000), ts: iso(now) });
+    const ecS = detectEconSurprises({ rows: printed, historyByEvent, ts: iso(now),
+      minAbsZ: RULES.econ.x_usual, minHistory: RULES.econ.min_past_prints });
+    const ecI = detectEconImminent({ rows: ecRows, nowSec: Math.floor(now.getTime() / 1000), ts: iso(now),
+      windowMin: RULES.econ.imminent_minutes });
     events.push(...ecS.events, ...ecI.events);
     report.kinds.econ_surprise = ecS.events.length;
     report.kinds.econ_imminent = ecI.events.length;
