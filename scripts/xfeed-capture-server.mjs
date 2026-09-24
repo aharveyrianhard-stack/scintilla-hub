@@ -20,6 +20,10 @@ async function json(path, fallback) { try { return JSON.parse(await readFile(pat
 async function atomic(path, value) { await mkdir(dirname(path), { recursive: true }); const temp = `${path}.${process.pid}.${randomBytes(5).toString('hex')}.tmp`; await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 }); await rename(temp, path); }
 async function ledger(path) { try { return (await readFile(path, 'utf8')).split(/\r?\n/).filter(Boolean).map(JSON.parse); } catch (e) { if (e.code === 'ENOENT') return []; throw e; } }
 const cleanState = () => ({ schema_version: 1, passes: {}, details: {}, checkpoint: null });
+// Resume fields describe where an interrupted pass continues. They are working
+// state, never part of the published response-integrity diagnostic.
+const RESUME_KEYS = ['timeline_rows', 'next_cursor', 'stored_request_cursors'];
+const responseIntegrity = audit => Object.fromEntries(Object.entries(audit).filter(([key]) => !RESUME_KEYS.includes(key)));
 
 export async function initializeRuntime({ runtimeDir = DEFAULT_RUNTIME, seedDir = join(REPOSITORY, 'xfeed/data') } = {}) {
   const dataDir = join(runtimeDir, 'data');
@@ -59,12 +63,15 @@ export function auditResponseChain(pass) {
   }
   const completed = responses.filter(r => !incomplete.some(i => i.response_id === r.response_id));
   const starts = completed.filter(r => Object.hasOwn(r, 'request_cursor') && r.request_cursor === null).sort((a, b) => b.observed_at.localeCompare(a.observed_at));
-  const visited = [], rows = []; let current = starts[0], ambiguous = false;
+  const visited = [], rows = []; let current = starts[0], ambiguous = false, nextCursor = null;
   while (current && !visited.includes(current.response_id)) {
     visited.push(current.response_id);
     const chunks = Object.entries(current.chunks).sort(([a], [b]) => Number(a) - Number(b)).map(([, c]) => c);
     rows.push(...chunks.flatMap(c => c.timeline_rows));
     const bottom = chunks.flatMap(c => c.cursors).find(c => c.type === 'Bottom')?.value;
+    // The deepest bottom cursor of the walked chain is where a resumed pass
+    // continues; it is only a resume point while nothing later is stored.
+    nextCursor = bottom ?? null;
     if (!bottom) break;
     if (completed.some(r => r.request_cursor === bottom && visited.includes(r.response_id))) { ambiguous = true; break; }
     const next = completed.filter(r => r.request_cursor === bottom && !visited.includes(r.response_id));
@@ -73,8 +80,11 @@ export function auditResponseChain(pass) {
     current = next[0];
   }
   const unlinked = completed.filter(r => !visited.includes(r.response_id)).map(r => r.response_id);
+  if (ambiguous) nextCursor = null;
   const metadataChunks = responses.reduce((count, response) => count + Object.keys(response.chunks).length, 0);
   return {
+    next_cursor: nextCursor,
+    stored_request_cursors: responses.filter(r => Object.hasOwn(r, 'request_cursor')).map(r => r.request_cursor),
     metadata_response_count: responses.length, complete_response_count: completed.length, missing_chunks: incomplete,
     verified_chain_response_ids: visited, unlinked_response_ids: unlinked,
     // Earlier persisted passes leave the explicit counter absent until the
@@ -83,6 +93,14 @@ export function auditResponseChain(pass) {
     cursor_chain_verified: Boolean(visited.length && !incomplete.length && !unlinked.length && !ambiguous),
     timeline_rows: rows,
   };
+}
+
+function frontierReached(responseAudit, frontierKey) {
+  if (!frontierKey || !responseAudit.cursor_chain_verified || responseAudit.captures_without_response_metadata) return false;
+  // Older persisted rows have only an anchor. They remain usable as anchors,
+  // but missing module members require a fresh observed response, not inference
+  // from the ledger, detail cache, reply references, or nested originals.
+  return responseAudit.timeline_rows.some(row => row.anchor_key === frontierKey || (Array.isArray(row.member_keys) && row.member_keys.includes(frontierKey)));
 }
 
 export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handlesPath = join(REPOSITORY, 'xfeed/data/HANDLES_TRADING.txt'), publish = null, staleAfterSeconds = 600, clock = () => new Date().toISOString() } = {}) {
@@ -139,6 +157,17 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
       pass.terminated_bottom ||= transformed.terminated_bottom;
       pass.rate_headers = { ...pass.rate_headers, ...transformed.rate_headers };
       pass.cursors = transformed.cursors.length ? transformed.cursors : pass.cursors ?? [];
+      // Partial commit: every stored page advances the pass resume point, so an
+      // interrupted refresh continues from the deepest stored cursor instead of
+      // restarting pagination at the newest page. Legacy captures without
+      // response metadata fall back to the last observed bottom cursor.
+      const progress = auditResponseChain(pass);
+      pass.resume = {
+        next_cursor: progress.next_cursor ?? (pass.cursors ?? []).find(c => c.type === 'Bottom')?.value ?? null,
+        request_cursors: progress.stored_request_cursors,
+        cursor_chain_verified: progress.cursor_chain_verified,
+        updated_at: transformed.observed_at,
+      };
       for (const post of transformed.posts) {
         if (allowed.has(post.handle.toLowerCase())) pass.posts[recordKey(post)] = resolveOriginals(post, state.details);
         else pass.issues.push({ reason: 'nonmember_timeline_context_excluded_from_roots', id: post.id, handle: post.handle });
@@ -170,7 +199,7 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
         // Recompute its persisted chunk audit without advancing any source or
         // completion clock, changing coverage boundaries, or reimporting rows.
         if (active.coverage.response_integrity) {
-          const diagnostic = Object.fromEntries(Object.entries(auditResponseChain(pass)).filter(([key]) => key !== 'timeline_rows'));
+          const diagnostic = responseIntegrity(auditResponseChain(pass));
           if (JSON.stringify(active.coverage.response_integrity) !== JSON.stringify(diagnostic)) {
             active.coverage.response_integrity = diagnostic;
             await atomic(join(dataDir, 'source-receipt.json'), active);
@@ -193,7 +222,8 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
     const chainOverlap = (pass.baseline_keys ?? []).filter(key => chainAnchors.has(key));
     const chainOldest = responseAudit.timeline_rows.map(row => row.latest_action_at).sort()[0];
     const baselineReached = responseAudit.cursor_chain_verified && chainOverlap.length >= 2 && chainOldest && pass.baseline_latest_at && chainOldest <= pass.baseline_latest_at;
-    const overlap = Boolean((checkpoint?.frontier_key && anchors.has(checkpoint.frontier_key)) || (!checkpoint && baselineReached));
+    const observedFrontier = frontierReached(responseAudit, checkpoint?.frontier_key);
+    const overlap = Boolean(observedFrontier || (!checkpoint && baselineReached));
     if (input.reason === 'initial_window' && checkpoint) throw new Error('initial_window is only valid before the first source checkpoint');
     if (input.reason === 'overlap' && !overlap) throw new Error('pass has not observed the previous source frontier; keep paging');
     if (input.reason === 'timeline_end' && !pass.terminated_bottom) throw new Error('no observed bottom termination proves timeline_end');
@@ -214,8 +244,8 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
         history_complete: false, initial_history_gap_open: checkpoint ? checkpoint.initial_history_gap_open !== false : !baselineReached,
         overlap_with_previous_frontier: overlap, termination_reason: input.reason,
         cursor_chain_verified: responseAudit.cursor_chain_verified,
-        refresh_interval_continuity_verified: Boolean(responseAudit.cursor_chain_verified && checkpoint && chainAnchors.has(checkpoint.frontier_key)),
-        response_integrity: Object.fromEntries(Object.entries(responseAudit).filter(([key]) => key !== 'timeline_rows')),
+        refresh_interval_continuity_verified: observedFrontier,
+        response_integrity: responseIntegrity(responseAudit),
         captured_responses_or_chunks: pass.list_captures, timeline_entries: pass.entry_count, observed_posts: posts.length,
         earliest_observed_post_at: sorted.at(-1).created_at, latest_observed_post_at: sorted[0].created_at,
         oldest_timeline_action_at: oldestSeen, frozen_baseline_latest_at: pass.baseline_latest_at,
@@ -242,10 +272,14 @@ export async function createCaptureService({ runtimeDir = DEFAULT_RUNTIME, handl
     health: async () => ({ status: 'ready', collection: 'browser-observed responses only; no autonomous X requests', publication_enabled: Boolean(publish), runtime_dir: runtimeDir, checkpoint: state.checkpoint,
       pending_passes: Object.values(state.passes).filter(p => !p.completed_at).map(p => {
         const anchors = new Set((p.timeline_rows ?? []).map(row => row.anchor_key));
+        const responseAudit = auditResponseChain(p);
         return { pass_id: p.pass_id, list_captures: p.list_captures, posts: Object.keys(p.posts).length, members: Object.keys(p.members).length,
-          response_integrity: Object.fromEntries(Object.entries(auditResponseChain(p)).filter(([key]) => key !== 'timeline_rows')),
+          response_integrity: responseIntegrity(responseAudit),
+          // The resume point an interrupted pass continues from. Pages already
+          // stored are never requested again; only deeper pages are collected.
+          resume: { next_cursor: responseAudit.next_cursor ?? p.resume?.next_cursor ?? null, request_cursors: responseAudit.stored_request_cursors, updated_at: p.resume?.updated_at ?? null },
           oldest_seen_at: (p.timeline_rows ?? []).map(row => row.latest_action_at).sort()[0] ?? null, baseline_latest_at: p.baseline_latest_at ?? null,
-          baseline_overlap_keys: (p.baseline_keys ?? []).filter(key => anchors.has(key)), previous_frontier_observed: Boolean(state.checkpoint?.frontier_key && anchors.has(state.checkpoint.frontier_key)) };
+          baseline_overlap_keys: (p.baseline_keys ?? []).filter(key => anchors.has(key)), previous_frontier_observed: frontierReached(responseAudit, state.checkpoint?.frontier_key) };
       }), heartbeat: await json(join(runtimeDir, 'heartbeat.json'), null) }),
     runtimeDir, dataDir,
   };
@@ -284,13 +318,16 @@ export function createCaptureServer(service, { port = 8766 } = {}) {
 async function main(args) {
   const flags = new Set(['--initialize', '--serve', '--publish']);
   const options = {};
-  for (let i = 0; i < args.length; i++) { const key = args[i]; if (flags.has(key)) options[key] = true; else if (['--runtime-dir', '--import-captures', '--pass-id', '--finish-reason'].includes(key) && args[i + 1]) options[key] = args[++i]; else throw new Error('Usage: node scripts/xfeed-capture-server.mjs [--initialize] [--import-captures DIR --pass-id ID] [--finish-reason initial_window|overlap|timeline_end] [--serve] [--publish] [--runtime-dir DIR]'); }
+  for (let i = 0; i < args.length; i++) { const key = args[i]; if (flags.has(key)) options[key] = true; else if (['--runtime-dir', '--import-captures', '--pass-id', '--finish-reason', '--stale-after-seconds'].includes(key) && args[i + 1]) options[key] = args[++i]; else throw new Error('Usage: node scripts/xfeed-capture-server.mjs [--initialize] [--import-captures DIR --pass-id ID] [--finish-reason initial_window|overlap|timeline_end] [--serve] [--publish] [--runtime-dir DIR] [--stale-after-seconds N]'); }
   if (!args.length) throw new Error('Choose --initialize, --import-captures, or --serve explicitly; service is stopped by default');
   const runtimeDir = resolve(options['--runtime-dir'] ?? DEFAULT_RUNTIME);
   if (options['--initialize']) process.stdout.write(`${JSON.stringify(await initializeRuntime({ runtimeDir }))}\n`);
   let publisher = null;
   if (options['--publish']) publisher = (await import('./xfeed-publish.mjs')).publish;
-  const service = await createCaptureService({ runtimeDir, publish: publisher });
+  // The scheduled program passes its cadence so the desk does not call a six-hour cadence stale after ten minutes.
+  const staleAfterSeconds = options['--stale-after-seconds'] === undefined ? 600 : Number(options['--stale-after-seconds']);
+  if (!Number.isSafeInteger(staleAfterSeconds) || staleAfterSeconds < 30 || staleAfterSeconds > 86400) throw new Error('--stale-after-seconds must be an integer from 30 through 86400');
+  const service = await createCaptureService({ runtimeDir, publish: publisher, staleAfterSeconds });
   if (options['--import-captures']) {
     const id = passId(options['--pass-id']), directory = resolve(options['--import-captures']); let imported = 0, ignored = 0;
     for (const name of (await readdir(directory)).filter(n => n.endsWith('.json')).sort()) {

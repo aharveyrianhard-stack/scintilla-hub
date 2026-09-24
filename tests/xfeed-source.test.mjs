@@ -41,7 +41,7 @@ test('repost uses observed wrapper actor, ID and action time before inherited qu
   assert.equal(p.raw.original.original.legacy.full_text, 'quoted body');
 });
 
-test('detail scopes to requested post and module frontier excludes its older conversation context', () => {
+test('detail scopes to requested post and module action time excludes older conversation context', () => {
   const older = tweet('2000000000000000001', { legacy: { created_at: 'Mon Sep 07 10:00:00 +0000 2026' } });
   const recent = tweet(); const input = envelope([]);
   input.payload.data.list.tweets_timeline.timeline.instructions[0].entries = [{ entryId: 'conversation', content: { items: [older, recent].map(t => ({ item: { itemContent: { tweet_results: { result: t } } } })) } }];
@@ -90,9 +90,9 @@ test('capture is idempotent and finish publishes once with separate honest list 
   const receipt = JSON.parse(await readFile(join(directory, 'data/receipt.json')));
   assert.equal(receipt.handles_attempted, 0, 'list capture must not fabricate individual queries');
   const second = envelope([tweet('2097355556394562029', { legacy: { created_at: 'Tue Sep 08 16:10:00 +0000 2026' } })], 'pass-two');
-  await service.capture(second);
-  await assert.rejects(service.finish({ pass_id: 'pass-two', reason: 'overlap' }), /previous source frontier/);
-  await service.capture({ ...envelope([tweet()], 'pass-two'), observed_at: '2026-09-08T16:31:00.000Z' });
+  await service.capture({ ...second, response_id: 'pass-two.response', request_cursor: null, response_chunk_index: 0, response_chunk_count: 2 });
+  await assert.rejects(service.finish({ pass_id: 'pass-two', reason: 'overlap' }), /chunks are incomplete/);
+  await service.capture({ ...envelope([tweet()], 'pass-two'), observed_at: '2026-09-08T16:31:00.000Z', response_id: 'pass-two.response', request_cursor: null, response_chunk_index: 1, response_chunk_count: 2 });
   const done = await service.finish({ pass_id: 'pass-two', reason: 'overlap' });
   assert.equal(done.source_receipt.coverage.overlap_with_previous_frontier, true); assert.equal(published, 2);
   const rows = (await readFile(join(directory, 'data/ledger.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);

@@ -272,10 +272,13 @@ export function freshness({ source, receipt, now = Date.now(), error = '', refre
   const collected = receipt.collected_at ? formatET(receipt.collected_at) : 'collection time unavailable';
   if (source === 'static') return { state: 'snapshot', text: 'Static snapshot · ' + collected + ' · collector unavailable' };
   const heartbeat = receipt.collector_heartbeat_at ? formatET(receipt.collector_heartbeat_at) : 'unavailable';
+  // A failed or silent collector is said in words, with the last good source time. Never a quiet stale list.
+  const lastGood = receipt.latest_source_event_at ? ' · last good source ' + formatET(receipt.latest_source_event_at) : ' · no good source pass on record';
+  const reason = receipt.collector_error ? ' · ' + (receipt.collector_error.length > 140 ? receipt.collector_error.slice(0, 139) + '…' : receipt.collector_error) : '';
   if (error) return { state: 'error', text: 'Refresh failed · showing saved posts · last collector heartbeat ' + heartbeat };
-  if (receipt.collector_status === 'unconfigured' || !receipt.collector_heartbeat_at) return { state: 'unconfigured', text: 'Collector unconfigured · last heartbeat ' + heartbeat };
-  if (receipt.collector_status === 'error') return { state: 'error', text: 'Collector error · last heartbeat ' + heartbeat };
-  if (now - Date.parse(receipt.collector_heartbeat_at) > receipt.stale_after_seconds * 1000 || Date.parse(receipt.collector_heartbeat_at) > now + 60000) return { state: 'stale', text: 'Stale feed · last collector heartbeat ' + heartbeat };
+  if (receipt.collector_status === 'unconfigured' || !receipt.collector_heartbeat_at) return { state: 'unconfigured', text: 'Collector unconfigured · last heartbeat ' + heartbeat + lastGood };
+  if (receipt.collector_status === 'error') return { state: 'error', text: 'Collector down since ' + heartbeat + reason + lastGood };
+  if (now - Date.parse(receipt.collector_heartbeat_at) > receipt.stale_after_seconds * 1000 || Date.parse(receipt.collector_heartbeat_at) > now + 60000) return { state: 'stale', text: 'Collector silent · no run since ' + heartbeat + lastGood };
   return { state: 'updated', text: 'Feed checked ' + heartbeat + (refreshing ? ' · checking…' : ' · checks every 30s') };
 }
 

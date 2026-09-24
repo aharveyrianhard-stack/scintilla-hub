@@ -192,7 +192,10 @@ export function transformResponse(input) {
   const timeline_rows = type === 'list' ? entries.map(entry => {
     const rowPosts = itemsFromEntries([entry]).map(({ item }) => byId.get(unwrapTweet(item.tweet_results?.result)?.rest_id)).filter(Boolean);
     const latest = rowPosts.reduce((p, candidate) => !p || candidate.created_at > p.created_at ? candidate : p, null);
-    return latest ? { entry_id: typeof entry.entryId === 'string' ? entry.entryId : null, anchor_key: recordKey(latest), latest_action_at: latest.created_at } : null;
+    // A newer reply can become the display anchor without removing its parent
+    // from the observed module. Only immediate timeline items count here;
+    // nested quoted/reposted originals are not source-window frontier proof.
+    return latest ? { entry_id: typeof entry.entryId === 'string' ? entry.entryId : null, anchor_key: recordKey(latest), member_keys: [...new Set(rowPosts.map(recordKey))], latest_action_at: latest.created_at } : null;
   }).filter(Boolean) : [];
   return {
     schema_version: 1, response_type: type, source_url, observed_at, pass_id: input.pass_id ?? null,
