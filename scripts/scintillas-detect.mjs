@@ -68,13 +68,20 @@ export function surprisePct(actual, estimate) {
 }
 const base = (event) => String(event || "").replace(/\s*\((Q[1-4]|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^)]*\)\s*$/i, "").trim();
 export const econEventKey = (country, event) => String(country || "") + "|" + base(event).toLowerCase();
-/* hot / cool / in line, by the room's colour law: for inflation and unemployment a number ABOVE
-   estimate is the bad kind of surprise ("hot"); for everything else above is "hot" in the plain
-   sense of stronger. The room paints hot red and cool green; the glow follows the room. */
+/* THE ROOM'S OWN READING, so a stored scintilla and the Economic room can never disagree.
+   index.html's ecRowHTML computes exactly this: cls = (diff > 0) === hot ? "up" : "dn", where `hot`
+   is EC_INVERT (inflation, unemployment). The room paints that "up" class RED and "dn" GREEN — its
+   note says so: "red = hotter inflation / weaker labour than expected, green = the other way".
+   So the class is kept as the room's word, and `reading` says in plain English what the colour
+   means: ADVERSE (the red kind — hotter inflation, weaker labour, stronger-than-wanted) or
+   FAVOURABLE (the green kind). A glow reads room_class and lights the room's own colour. */
+export function econRoomClass(event, diff) {
+  if (diff == null || Math.abs(diff) < 1e-9) return "flat";
+  return (diff > 0) === EC_INVERT.test(base(event)) ? "up" : "dn";
+}
 export function econReading(event, diff) {
-  if (diff == null || Math.abs(diff) < 1e-9) return "in line";
-  const hotIsUp = EC_INVERT.test(base(event));
-  return (diff > 0) === hotIsUp ? "hot" : "cool";
+  const cls = econRoomClass(event, diff);
+  return cls === "flat" ? "in line" : cls === "up" ? "adverse" : "favourable";
 }
 
 function ev(o) {
@@ -174,7 +181,8 @@ export function detectEconSurprises({ rows, historyByEvent, ts, minHistory = SUR
     events.push(ev({
       ts, kind: "econ_surprise", subject, subject_kind: "event", direction: sign(diff), magnitude: z, source,
       detail: { country: r.country, event: r.event, event_ts: r.event_ts, impact: r.impact,
-                actual: a, estimate: e, surprise: r3(diff), reading: econReading(r.event, diff),
+                actual: a, estimate: e, surprise: r3(diff),
+                reading: econReading(r.event, diff), room_class: econRoomClass(r.event, diff),
                 n_prints: past.length, usual_surprise: r3(mean(past)), spread: r3(stdev(past)), z: r3(z),
                 rule: "actual - estimate vs this release's own past surprises, |z| >= " + minAbsZ },
       dedupe_key: "econ_surprise|" + r.country + "|" + base(r.event).toLowerCase() + "|" + r.event_ts,
