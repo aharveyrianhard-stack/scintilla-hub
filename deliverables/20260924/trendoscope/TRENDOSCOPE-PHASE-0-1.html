@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>SCINTILLA · TRENDOSCOPE — phase 0 and 1</title>
+<style>
+:root{--bg:#0d0d0d;--panel:#151515;--panel2:#1b1b1b;--line:#272727;--line2:#333;--ink:#cdcdcd;--ink2:#ababab;--dim:#8c8c8c;--mute:#5c5c5c;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.65 var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:16px 16px 60px}
+h1{font-size:16px;letter-spacing:.14em;margin:0 0 4px}
+h2{font-size:13px;letter-spacing:.12em;margin:34px 0 8px;color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:6px}
+h3{font-size:12px;letter-spacing:.08em;color:var(--ink2);margin:18px 0 6px}
+p,li{color:var(--ink2);font-size:13px} .lede{color:var(--ink)}
+.dim{color:var(--dim)}
+table{width:100%;border-collapse:collapse;margin:8px 0 6px}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);font-size:12px;vertical-align:top}
+th{color:var(--dim);font-weight:400;letter-spacing:.06em} td.t,th.t{text-align:left}
+td.names{color:var(--dim);font-size:11px}
+.box{background:var(--panel);border:1px solid var(--line);padding:10px 12px;margin:10px 0}
+code{background:var(--panel2);border:1px solid var(--line);padding:1px 4px;font-size:12px;word-break:break-all}
+.dec{border-left:2px solid var(--line2);padding-left:10px;margin:12px 0}
+.wide{overflow-x:auto}
+@media (max-width:700px){
+  th,td{padding:4px 5px;font-size:11px} .wrap{padding:14px 16px 50px}
+  /* A column of prose cannot be read in a sideways-scrolling table on a phone, so the
+     rows stack and each cell names itself. */
+  table.stack thead{display:none}
+  table.stack tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
+  table.stack td{display:block;text-align:left;border:0;padding:1px 0}
+  table.stack td[data-label]::before{content:attr(data-label) " ";color:var(--dim)}
+  .wide{overflow-x:visible}
+}
+</style></head><body><div class="wrap">
+<span data-scnav-slot></span><h1>SCINTILLA · TRENDOSCOPE — PHASE 0 AND 1</h1>
+<p class="dim">Built 2026-09-24 03:48 UTC · nothing was deployed, nothing was pushed, no live table was written · the Indicator Lab's own files were read and left byte-identical</p>
+
+<p class="lede">The job was to take the pattern detector you watch on TradingView — the one that draws the two
+rails around a wedge, a channel or a triangle — and prove we can replay it ourselves, count what it finds, and
+describe the shapes it finds. Counting and describing only. Nothing on this page says a pattern predicts anything.</p>
+
+<div class="box"><b>The short version.</b> The replay <b>cannot be built on this Mac</b>, and I stopped rather than
+guess. The indicator file you have is only the picture: the rules that decide "this is a rising wedge, accept it"
+live in six Trendoscope library files that are not on this machine — I checked all <b>2,355</b> Pine files here and
+not one of them is a library. Everything that comes <i>after</i> the detector is built and tested: the permanent
+event record, the replay machinery that cannot peek at the future, the geometry maths, the duplicate-clustering,
+the four tables, and 8 symbols of real bars (148,389 of them) with their provenance.
+One of two things unblocks it, and both are Rob's to get: the library source, or a small export added to the
+indicator itself inside TradingView.</div>
+
+<h2>1 · What the detector is</h2>
+<p>It watches for a zig-zag of 5 turning points and then tries to draw two straight
+lines — an upper rail and a lower rail — through them. If the lines fit well enough, it keeps the shape and gives it
+one of thirteen names. The canonical settings under evaluation:</p>
+<table><tbody>
+<tr><td class="t">Turning-point finder</td><td class="t">ZigZag lane 1 only · length 8 · depth 55 · lanes 2–4 off</td></tr>
+<tr><td class="t">Points per pattern</td><td class="t">5</td></tr>
+<tr><td class="t">How loose a line may fit</td><td class="t">20% error threshold · 20% flat threshold · bar-ratio check on at 0.382</td></tr>
+<tr><td class="t">Overlap</td><td class="t">avoid overlap ON — so what it keeps depends on what it already kept</td></tr>
+<tr><td class="t">How many it remembers</td><td class="t">20 patterns (this is part of the detector, not just the display)</td></tr>
+<tr><td class="t">Redrawing</td><td class="t">repaint OFF — it only judges finished bars</td></tr>
+<tr><td class="t">Names</td><td class="t">13: channels, wedges and triangles, rising / falling / flat, parallel / expanding / contracting</td></tr>
+</tbody></table>
+<p><b>The names are shapes, not forecasts.</b> "Ascending" and "Rising" describe which way the lines lean. They do not
+say which way price will break, and nothing in this work treats them as if they did.</p>
+
+<h2>2 · Is our replay faithful? No — and here is the evidence</h2>
+<p>The two indicator files (<code>V3</code> for review, <code>V2</code> saved on your chart) hold the inputs, the memory of
+20 patterns, the drawing and the alerts. The decision itself is a single line inside them:</p>
+<p><code>[valid, currentPattern] = mlzigzag.find(this.sProperties, this.dProperties, this.patterns, ohlcArray)</code></p>
+<p>Everything that matters — how five turning points are chosen, how a line is fitted, what "20% error" measures, what
+overlap compares, and how a shape becomes one of the thirteen names — is inside <code>find(...)</code>, which is imported
+from libraries that live on TradingView's servers, not here. What I searched, and found:</p>
+<table class="stack"><thead><tr><th class="t">WHAT I LOOKED FOR</th><th class="t">RESULT</th></tr></thead><tbody>
+<tr><td class="t"><b>Every Pine file on this Mac</b></td><td class="t" data-label="result:">2,355 files · <b>none</b> is a library declaration</td></tr>
+<tr><td class="t">Text markers of the library source (<code>export method find</code>, <code>library("ZigzagLite</code>, …)</td><td class="t">no match anywhere in SCINTILLA 0.5, AlanOS or Downloads</td></tr>
+<tr><td class="t">The lab's own sprint evidence folder</td><td class="t">capture files only, no library source</td></tr>
+<tr><td class="t">Promising file names (Google Drive)</td><td class="t">document stubs holding an id and no text</td></tr>
+</tbody></table>
+<p>Writing my own version from the label names would be a <i>different</i> detector wearing this one's name, and its
+numbers would describe that other detector. The study packet forbids exactly that, so I did not do it.</p>
+<div class="dec"><b>What unblocks it (either one is enough, both are Rob's):</b>
+<br>1. The source of the six libraries at their exact versions — openable from the import line in the TradingView Pine editor.
+<br>2. Better: a small export added to the indicator itself, which prints, at the moment it accepts a pattern, the name,
+the lane and level, the five points and both rails. That needs no library source and is the only way to learn the one
+thing no screenshot can recover — <b>when</b> the detector first accepted the pattern.</div>
+
+<h2>3 · The census — what it found: nothing yet, and that is honest</h2>
+<p>A census counts events. An event is "the detector accepted this pattern, at this bar". With no replay there are no
+events, so every count is zero, and I did not quietly substitute something else for them:</p>
+<table><tbody>
+<tr><td class="t">Raw events</td><td>0</td></tr>
+<tr><td class="t">Deduplicated clusters</td><td>0</td></tr>
+<tr><td class="t">Series where the replay was attempted and blocked</td><td>32</td></tr>
+</tbody></table>
+<p>There <i>are</i> 24 real rail pairs in the two captures taken from your chart on 24 Sep. I deliberately did
+<b>not</b> promote them into the census: a snapshot of drawings has no acceptance time and does not even carry the
+pattern's name, so counting it would invent both. They are used for geometry only, clearly labelled.</p>
+
+<h2>4 · The geometry — measured on 24 real rail pairs</h2>
+<p>From the preserved captures (BTCUSD 4H and BTCUSD 1D,
+602 bars, linear scale). These describe shapes the detector actually drew:</p>
+<div class="wide"><table><thead><tr><th class="t">MEASURE</th><th>N</th><th>MEDIAN</th><th>5th</th><th>95th</th></tr></thead><tbody>
+<tr><td class="t">How many bars the shape spans</td><td>24</td><td>32</td><td>18</td><td>77</td></tr>
+<tr><td class="t">Rail gap at the end, in ATR</td><td>24</td><td>2.45</td><td>0.6</td><td>5.58</td></tr>
+<tr><td class="t">Upper rail slope, ATR per bar</td><td>24</td><td>0.01</td><td>-0.082</td><td>0.102</td></tr>
+<tr><td class="t">Lower rail slope, ATR per bar</td><td>24</td><td>0.024</td><td>-0.135</td><td>0.138</td></tr>
+<tr><td class="t">Narrowing (negative) or widening (positive)</td><td>24</td><td>-0.25</td><td>-0.73</td><td>0.84</td></tr>
+<tr><td class="t">Times price touched a rail</td><td>24</td><td>4</td><td>1</td><td>6</td></tr>
+</tbody></table></div>
+<p>Endpoint checks: <b>96</b> rail endpoints checked against the capture's own candles, <b>0</b> disagreements
+on which bar an endpoint sits on. <b>168</b> further drawn lines could not be resolved to a bar at all, and were left
+unresolved rather than guessed. A rail endpoint sits a median
+0.92 ATR (4H) and 0.41 ATR (1D)
+away from its candle's high/low, which is what a <i>fitted</i> line does; it is not an error.</p>
+
+<h2>5 · What the bars say about matching TradingView</h2>
+<p>Before any replay can be trusted, our bars must be the same bars you see. They are not yet, and the reason is the bar
+boundary rather than the price. Our chart API cuts intraday bars on the clock in UTC; TradingView cuts them from the
+trading session's start. Measured on the real series:</p>
+<div class="wide"><table class="stack"><thead><tr><th class="t">TIMEFRAME</th><th class="t">ET TIMES OUR BARS OPEN AT</th><th class="t">WHAT THAT MEANS</th></tr></thead><tbody>
+<tr><td class="t"><b>1H</b></td><td class="t" data-label="opens at (ET):">04:00, 05:00, 06:00, 07:00, 08:00, 09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00, 17:00, 18:00, 19:00</td><td class="t" data-label="meaning:">cut on the UTC clock, so it does not line up with a session-anchored chart</td></tr>
+<tr><td class="t"><b>3H</b></td><td class="t" data-label="opens at (ET):">02:00, 03:00, 05:00, 06:00, 08:00, 09:00, 11:00, 12:00, 14:00, 15:00, 17:00, 18:00</td><td class="t" data-label="meaning:">cut on the UTC clock, so it does not line up with a session-anchored chart</td></tr>
+<tr><td class="t"><b>4H</b></td><td class="t" data-label="opens at (ET):">03:00, 04:00, 07:00, 08:00, 11:00, 12:00, 15:00, 16:00, 19:00</td><td class="t" data-label="meaning:">two clock sets, because of daylight saving: it matches a TradingView extended-session 4H chart in summer and is an hour out in winter</td></tr>
+<tr><td class="t"><b>1D</b></td><td class="t" data-label="opens at (ET):">00:00</td><td class="t" data-label="meaning:">one bar per session date — this one lines up</td></tr>
+</tbody></table></div>
+<p>Three more facts worth knowing about the source:</p>
+<ul>
+<li>Our bars are <b>split-adjusted</b> and provider-built
+(<code>PROVIDER_BUILT</code>) — we do not rebuild them ourselves.</li>
+<li>The API serves <b>one</b> stream and ignores any request for a regular-session-only version, so the packet's
+"extended and regular as separate runs" cannot be done from this source without rebuilding bars from minutes, which
+would no longer be the provider's bars.</li>
+<li><b>No crypto and no futures.</b> The served universe is 364 US equities and ETFs.
+BTCUSD, ETHUSD and NQ are not in it — and <code>ES</code> in that list is Eversource Energy, the utility, not the
+E-mini future. Both of your existing captures are BTCUSD, so they cannot be checked against our bars at all.</li>
+</ul>
+
+<h2>6 · The pilot cohort, chosen by a seed and not by eye</h2>
+<p>Symbols were picked by hashing the packet's seed <code>scintilla-trendoscope-eval-v1</code> with each ticker, then taking the best-ranked
+name in each of eight buckets (four liquidity levels × two volatility levels, measured on the 60 most recent completed
+daily bars). Nobody looked at a chart first:</p>
+<div class="wide"><table><thead><tr><th class="t">SYMBOL</th><th class="t">BUCKET</th><th>MEDIAN DOLLAR VOLUME</th><th>VOLATILITY (ANNUAL)</th></tr></thead><tbody>
+<tr><td class="t">IREN</td><td class="t">Q4-high</td><td>$1,639M</td><td>113%</td></tr>
+<tr><td class="t">EZU</td><td class="t">Q1-low</td><td>$54M</td><td>14%</td></tr>
+<tr><td class="t">C</td><td class="t">Q4-low</td><td>$1,385M</td><td>28%</td></tr>
+<tr><td class="t">ABNB</td><td class="t">Q3-high</td><td>$625M</td><td>48%</td></tr>
+<tr><td class="t">RGTI</td><td class="t">Q2-high</td><td>$312M</td><td>80%</td></tr>
+<tr><td class="t">DLR</td><td class="t">Q2-low</td><td>$410M</td><td>34%</td></tr>
+<tr><td class="t">XLU</td><td class="t">Q3-low</td><td>$857M</td><td>15%</td></tr>
+<tr><td class="t">PAAS</td><td class="t">Q1-high</td><td>$176M</td><td>53%</td></tr>
+</tbody></table></div>
+<p>Bars pulled for each at 1H, 3H, 4H and 1D: 32 series, 148,389 bars, each one hashed so a
+fresh run can be checked byte for byte.</p>
+
+<h2>7 · The gates — what passed, what failed, what cannot be judged yet</h2>
+<div class="wide"><table class="stack"><thead><tr><th class="t">GATE</th><th class="t">RESULT</th><th class="t">WHY</th></tr></thead><tbody>
+<tr><td class="t"><b>Source identity</b></td><td class="t" data-label="result:" style="color:var(--dim)">FAIL</td><td class="t" data-label="why:">settings hash, library versions, feed/session/scale are captured, but the detector source hash cannot be computed: the executable rules are not available.</td></tr>
+<tr><td class="t"><b>Chronological determinism</b></td><td class="t" data-label="result:" style="color:var(--dim)">NOT EVALUABLE</td><td class="t" data-label="why:">Three replays cannot be compared because the detector cannot run. The harness is proven deterministic against a declared test double in tests/trendoscope-replay.test.mjs.</td></tr>
+<tr><td class="t"><b>Confirmation integrity</b></td><td class="t" data-label="result:" style="color:var(--dim)">NOT EVALUABLE</td><td class="t" data-label="why:">No formal event exists yet. The harness refuses any event not stamped with the bar of acceptance (tested).</td></tr>
+<tr><td class="t"><b>Coordinate completeness</b></td><td class="t" data-label="result:" style="color:var(--dim)">FAIL</td><td class="t" data-label="why:">0 formal replay events; 168 capture line primitives remain unresolved and are reported as such.</td></tr>
+<tr><td class="t"><b>Endpoint parity</b></td><td class="t" data-label="result:" style="color:var(--ink2)">PARTIAL</td><td class="t" data-label="why:">Within-capture check: 96 endpoint checks, 0 epoch mismatches. The packet's 10-symbol x 4-timeframe TradingView parity sample is the coordinator's spot audit (research/trendoscope/parity/).</td></tr>
+<tr><td class="t"><b>Label domain</b></td><td class="t" data-label="result:" style="color:var(--ink)">PASS (schema)</td><td class="t" data-label="why:">All 13 labels validate and anything outside them is rejected (tested). No event has been labelled yet.</td></tr>
+<tr><td class="t"><b>Geometry invariants</b></td><td class="t" data-label="result:" style="color:var(--ink)">PASS (schema)</td><td class="t" data-label="why:">Ordered alternating pivots and rail ordering are enforced, with every exception enumerated rather than dropped (tested).</td></tr>
+<tr><td class="t"><b>Dedupe audit</b></td><td class="t" data-label="result:" style="color:var(--ink)">PASS (schema)</td><td class="t" data-label="why:">Cluster members keep raw ids, lane/level and settings; cross-feed, cross-session and cross-timeframe merges are refused (tested).</td></tr>
+<tr><td class="t"><b>Minimum confirmatory N</b></td><td class="t" data-label="result:" style="color:var(--dim)">FAIL</td><td class="t" data-label="why:">0 deduped events. Listing only, per the packet's own rule.</td></tr>
+<tr><td class="t"><b>Reproducibility</b></td><td class="t" data-label="result:" style="color:var(--ink2)">PARTIAL</td><td class="t" data-label="why:">Seed, cohort, bar hashes, code and tables reproduce from a clean run; the detector step cannot.</td></tr>
+</tbody></table></div>
+<p>"Pass (schema)" means the rule is written and tested, but has had no real event to judge. 262 exclusions
+were counted and named, none dropped silently.</p>
+
+<h2>8 · What Rob gets to check</h2>
+<p><code>research/trendoscope/parity/PARITY-SAMPLE-20260924.md</code> is written for reading line by line against the chart.
+Part 1 gives ten bars each for C 4H, ABNB 1H, XLU 3H and DLR 1D, with both UTC and New York open times, so the boundary
+question above gets a yes or no. Part 2 lists all 48 rails from your two captures (96 endpoints) — bar, time and price —
+to re-read against study <code>Kqm3pV</code> on chart <code>99awrQQB</code>. Part 3 is the short list of what a faithful
+replay still needs.</p>
+
+<h2>9 · Three decisions for you before Phase 2</h2>
+<div class="dec"><b>1 · Which bars are the truth?</b> Our provider's bars are cut on the UTC clock; your chart's are cut from
+the session. <i>My recommendation:</i> make the provider's bars the study's truth and re-read the detector against them,
+rather than rebuilding bars to imitate TradingView — but that means the study describes the detector on <b>our</b> bars,
+and the parity table must be published beside every result.</div>
+<div class="dec"><b>2 · Crypto and futures, or equities only?</b> The packet asks for BTC, ETH and four futures; our source
+serves none of them. <i>My recommendation:</i> run Phase 2 on equities and ETFs only and say so plainly, rather than
+adding a second price source now — a second feed would mean a second set of parity work before any number could be trusted.</div>
+<div class="dec"><b>3 · Who adds the export?</b> The cheapest unblock is a few lines inside the indicator that print the
+pattern, the points and the rails at the moment it accepts one. <i>My recommendation:</i> the Indicator Lab session owns
+that file, so it should make that change; the pipeline here already accepts its output unchanged.</div>
+
+<h2>10 · What could be wrong, and what I did not do</h2>
+<ul>
+<li><b>The geometry numbers come from a drawing snapshot</b>, not from a replay. The rail pairs were matched by the two
+boundary colours and by how closely their ends line up; a mismatched pair would distort a row in section 4.</li>
+<li><b>No pattern names</b> exist in that snapshot, so no geometry figure can be attributed to a wedge rather than a channel.</li>
+<li><b>The daylight-saving finding</b> is measured from our own bars' New York clock times. It predicts a mismatch against a
+session-anchored chart in winter; that prediction is exactly what Rob's parity sample will confirm or refute.</li>
+<li><b>I did not touch the Indicator Lab</b>, did not write to any price table, did not deploy, did not push, and did not
+open a visible browser.</li>
+<li><b>No outcome statistics.</b> No breakout, retest, MFE or MAE number appears anywhere here — those are Phase 3, after
+preregistration, and only if the extractor gates pass.</li>
+<li><b>The migration is written but not applied.</b> Two new tables with read-only access and a rollback file; the
+coordinator applies them.</li>
+</ul>
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
