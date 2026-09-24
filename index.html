@@ -22395,8 +22395,12 @@ function filesWire(){
       }
 
       /* ORDER IN PLACE - move the nodes, never recreate them (a destroyed row cannot
-         animate, and an emptied board reads as a black flash) */
-      S.boardOrder=computeBoardOrder();
+         animate, and an emptied board reads as a black flash).
+         24 Sep - Alan: "The Geiger replay is with the Geiger bar only." While the replay plays,
+         rows rank by the replayed Geiger alone, whatever column the board was sorted on; the
+         board's own sort is left untouched, so LIVE ranks exactly as it did before PLAY. */
+      var keepSort=S.sort; S.sort={key:"g",dir:-1};
+      try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
       var frag=document.createDocumentFragment();
       (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
       bs.appendChild(frag);

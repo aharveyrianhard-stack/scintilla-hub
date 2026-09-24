@@ -137,3 +137,8 @@ test("the replay hands the board back to live exactly, nulls included", () => {
   assert.ok(/stop\(\);\s*goLive\(\);\s*return;/.test(play), "the end of a replay returns to live");
   assert.ok(/SPEEDS\[SPEED_I\]\[1\]/.test(play), "the play loop runs at the chosen speed");
 });
+
+test("the replay ranks by the Geiger bar only, and leaves the board's own sort untouched (Alan, 24 Sep)", () => {
+  const src = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(src, /var keepSort=S\.sort; S\.sort=\{key:"g",dir:-1\};\n\s*try\{ S\.boardOrder=computeBoardOrder\(\); \} finally \{ S\.sort=keepSort; \}/);
+});
