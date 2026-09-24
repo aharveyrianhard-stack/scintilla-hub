@@ -158,10 +158,10 @@ const isStale=(ms:number|null,nowMs:number,limit:number)=>ms==null||nowMs-ms>lim
 const unit=(v:any)=>typeof v==='number'&&Number.isFinite(v)&&v>=-1&&v<=1
 const finiteNum=(v:any)=>v!=null&&v!==''&&Number.isFinite(+v)
 // PostgREST serves at most 1,000 rows per request; pages are only a partition of the table under a STABLE order
-async function pageAll(sb:any,table:string,select:string,eq:[string,string]|null,orderBy:string[],maxPages:number){
+async function pageAll(sb:any,table:string,select:string,eq:[string,string]|null,orderBy:string[],maxPages:number,inFilter?:[string,string[]]){
   const out:any[]=[]; let error:any=null
   for(let p=0;p<maxPages;p++){
-    let q=sb.from(table).select(select); if(eq)q=q.eq(eq[0],eq[1])
+    let q=sb.from(table).select(select); if(eq)q=q.eq(eq[0],eq[1]); if(inFilter)q=q.in(inFilter[0],inFilter[1])
     for(const col of orderBy)q=q.order(col)
     const r=await q.range(p*1000,p*1000+999)
     if(r.error){error={message:r.error.message};break}
@@ -214,7 +214,7 @@ Deno.serve(async()=>{
   // PostgREST 400 and this engine silently emitted blocks:0 for days. structure_state was dropped
   // 08-19 (lane operator-archived) - its query is stubbed empty so the structure sentence stays
   // honestly absent instead of erroring on every run.
-  const [comp,reg,mtf,st,coh,tc,rib,prevV,prevB,G]=await Promise.all([
+  const [comp,reg,mtf,st,coh,tc,rib,prevV,prevB,prevD,G]=await Promise.all([
     sb.from('composite_staged').select('ticker,composite,trend,momentum,updated_ts').eq('tf','D'),
     pageAll(sb,'regime_state','ticker,term,state,updated_ts',null,['ticker','term'],4),
     sb.from('mtf_summary').select('ticker,n_bull,n_bear,n_tf,aligned,cascade'),
@@ -224,9 +224,11 @@ Deno.serve(async()=>{
     pageAll(sb,'ribbon_signals','ticker,tf,updated_ts',['family','TREND'],['ticker','tf'],12),
     sb.from('read_blocks').select('ticker,body,updated_ts').eq('section','verdict'),
     sb.from('read_blocks').select('ticker,body').eq('section','basis'),
+    // M37 — the previous BODIES of the dossier sections, so an unchanged one is not rewritten (see the write tail)
+    pageAll(sb,'read_blocks','ticker,section,body',null,['ticker','section'],4,['section',['business','catalysts','watch']]),
     acceptedGeiger(sb,nowMs)])
   const readErrors:any={}
-  for(const [k,r] of Object.entries({composite_staged:comp,regime_state:reg,mtf_summary:mtf,cohort_divergence:coh,ticker_context:tc,ribbon_signals:rib,read_blocks_verdict:prevV,read_blocks_basis:prevB}))if((r as any).error)readErrors[k]=String((r as any).error.message||(r as any).error).slice(0,120)
+  for(const [k,r] of Object.entries({composite_staged:comp,regime_state:reg,mtf_summary:mtf,cohort_divergence:coh,ticker_context:tc,ribbon_signals:rib,read_blocks_verdict:prevV,read_blocks_basis:prevB,read_blocks_dossier:prevD}))if((r as any).error)readErrors[k]=String((r as any).error.message||(r as any).error).slice(0,120)
   const idx=(rows:any)=>{const m:any={};for(const r of rows||[])m[r.ticker]=r;return m}
   const C=idx(comp.data),M=idx(mtf.data),S=idx(st.data),CO=idx(coh.data),TC=idx(tc.data),PV=idx(prevV.data),PB=idx(prevB.data)
   // per-ticker dates ONLY: a ticker is never dated by a newer peer
@@ -313,9 +315,26 @@ Deno.serve(async()=>{
     for(const sec of Object.keys(b))if(b[sec])rows.push({ticker:t,section:sec,body:b[sec],updated_ts:now})
   }catch(e){tally.ticker_errors=(tally.ticker_errors||0)+1;if(!tally.first_ticker_error)tally.first_ticker_error=t+': '+String((e as any)&&(e as any).message||e).slice(0,100)} }   // one bad ticker never costs the others their read
   let e=null
+  /* M37 — A ROW'S DATE MUST BE THE DATE OF ITS WORDS.
+     Every run upserted every row with updated_ts:now, changed or not. MEASURED 2026-09-23: all 386
+     verdict rows and all 206 business/catalysts/watch rows carried that run's timestamp, while the
+     words behind business/catalysts/watch come from ticker_context, last enriched 2026-06-15 to
+     2026-07-22. A June sentence therefore read as minutes old and nobody could see the staleness.
+     A row whose body is byte-identical to the stored one is now NOT WRITTEN AT ALL, so its
+     updated_ts keeps the date its words actually changed. No schema change and no new column.
+     The run still reports what it wrote and what it skipped, so a run that writes nothing is
+     visible in the response rather than looking like a run that did not happen. */
+  const PREVBODY=new Map<string,string>()
+  for(const r of (prevV.data||[]))if(r&&r.ticker)PREVBODY.set(r.ticker+'::verdict',typeof r.body==='string'?r.body:'')
+  for(const r of (prevB.data||[]))if(r&&r.ticker)PREVBODY.set(r.ticker+'::basis',typeof r.body==='string'?r.body:'')
+  for(const r of (prevD.data||[]))if(r&&r.ticker&&r.section)PREVBODY.set(r.ticker+'::'+r.section,typeof r.body==='string'?r.body:'')
+  const prevReadOk=!prevV.error&&!prevB.error&&!prevD.error
+  // A FAILED PREVIOUS-BODY READ MUST NOT LOOK LIKE "NOTHING CHANGED": without it, write everything, exactly as before.
+  const changed=prevReadOk?rows.filter(r=>PREVBODY.get(r.ticker+'::'+r.section)!==r.body):rows
+  const unchanged=rows.length-changed.length
   // a ticker's rows travel together (<=400 rows a chunk, never split inside a ticker): a failed chunk must not leave a new basis beside an old verdict
-  const chunks:any[][]=[[]];for(let i=0;i<rows.length;){let k=i;while(k<rows.length&&rows[k].ticker===rows[i].ticker)k++;if(chunks[chunks.length-1].length&&chunks[chunks.length-1].length+(k-i)>400)chunks.push([]);chunks[chunks.length-1].push(...rows.slice(i,k));i=k}
+  const chunks:any[][]=[[]];for(let i=0;i<changed.length;){let k=i;while(k<changed.length&&changed[k].ticker===changed[i].ticker)k++;if(chunks[chunks.length-1].length&&chunks[chunks.length-1].length+(k-i)>400)chunks.push([]);chunks[chunks.length-1].push(...changed.slice(i,k));i=k}
   for(const ch of chunks){if(!ch.length)continue;const {error}=await sb.from('read_blocks').upsert(ch,{onConflict:'ticker,section'});if(error)e=error.message}
-  return new Response(JSON.stringify({blocks:rows.length,err:e,read_errors:readErrors,
+  return new Response(JSON.stringify({blocks:rows.length,written:changed.length,unchanged,compared:prevReadOk,err:e,read_errors:readErrors,
     geiger:{state:G.state,reason:G.reason,computed:G.computed,age_min:G.computedMs==null?null:Math.round((nowMs-G.computedMs)/60000),receipt:G.receipt,universe:G.universe,...tally}}),{headers:{'Content-Type':'application/json'}})
 })
