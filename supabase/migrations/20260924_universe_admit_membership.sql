@@ -31,7 +31,6 @@ from (values
   ('KIE','SECTOR_AND_THEME_FUNDS','cohort'),
   ('ITB','SECTOR_AND_THEME_FUNDS','cohort'),
   ('REZ','SECTOR_AND_THEME_FUNDS','cohort'),
-  ('BJK','SECTOR_AND_THEME_FUNDS','cohort'),
   ('IHI','SECTOR_AND_THEME_FUNDS','cohort'),
   ('IYT','SECTOR_AND_THEME_FUNDS','cohort'),
   ('FDN','SECTOR_AND_THEME_FUNDS','cohort'),
@@ -58,7 +57,6 @@ from (values
   ('AVAV','THEMATIC','cohort'),
   ('BKSY','THEMATIC','cohort'),
   ('BTDR','CRYPTO','cohort'),
-  ('CLSK','CRYPTO','cohort'),
   ('COHR','AI_HARDWARE','cohort'),
   ('CRML','THEMATIC','cohort'),
   ('GLW','AI_HARDWARE','cohort'),
@@ -77,13 +75,11 @@ from (values
   ('SATL','THEMATIC','cohort'),
   ('SERV','THEMATIC','cohort'),
   ('SIDU','THEMATIC','cohort'),
-  ('SIVE','AI_HARDWARE','cohort'),
   ('SPIR','THEMATIC','cohort'),
   ('SQM','MATERIALS','sector'),
   ('STM','AI_HARDWARE','cohort'),
   ('SYM','THEMATIC','cohort'),
   ('TECK','MATERIALS','sector'),
-  ('TMRC','THEMATIC','cohort'),
   ('TSEM','AI_HARDWARE','cohort'),
   ('UUUU','THEMATIC','cohort'),
   ('VSH','AI_HARDWARE','cohort')
@@ -103,7 +99,6 @@ from (values
   ('AVAV'),
   ('BKSY'),
   ('BTDR'),
-  ('CLSK'),
   ('COHR'),
   ('CRML'),
   ('GLW'),
@@ -120,13 +115,11 @@ from (values
   ('SATL'),
   ('SERV'),
   ('SIDU'),
-  ('SIVE'),
   ('SPIR'),
   ('SQM'),
   ('STM'),
   ('SYM'),
   ('TECK'),
-  ('TMRC'),
   ('TSEM'),
   ('UUUU'),
   ('VSH')
@@ -136,4 +129,5 @@ where not exists (
   where f.ticker = v.ticker and f.owner_id = '00000000-0000-0000-0000-000000000000'::uuid
 );
 
--- WHAT TO EXPECT: 60 membership rows and 34 favourites on a first run, 0 and 0 on a second.
+-- WHAT TO EXPECT: 56 membership rows and 31 favourites on a first run, 0 and 0 on a second.
+-- SIVE, BJK, TMRC and CLSK are held by the gap report (24 Sep): no membership row and no favourite.

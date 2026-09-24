@@ -1,4 +1,6 @@
 -- ROLLBACK for 20260924_universe_admit_membership.sql.
+-- The four names the gap report held (SIVE, BJK, TMRC, CLSK) are not inserted, so they are not in these lists
+-- either: a rollback must never delete a favourite Alan may add for one of them himself.
 --
 -- It removes ONLY the rows that migration inserted, identified by the source stamp it wrote and by
 -- the exact ticker list. No other membership row, favourite, cohort, view or price is touched, and
@@ -10,8 +12,8 @@
 
 delete from public.ticker_membership
 where source = 'universe expansion 2026-09-24 (M57)'
-  and ticker in ('KRE', 'KIE', 'ITB', 'REZ', 'BJK', 'IHI', 'IYT', 'FDN', 'XBI', 'IGV', 'CIBR', 'URA', 'ARKX', 'BOTZ', 'LIT', 'REMX', 'JETS', 'PEJ', 'TAN', 'QTUM', 'FINX', 'ITA', 'PAVE', 'XSD', 'AAOI', 'ACHR', 'ALB', 'AMKR', 'AVAV', 'BKSY', 'BTDR', 'CLSK', 'COHR', 'CRML', 'GLW', 'HIVE', 'HUBB', 'KTOS', 'LEU', 'LUNR', 'NOK', 'NVTS', 'OUST', 'PL', 'POET', 'RDW', 'RIOT', 'SATL', 'SERV', 'SIDU', 'SIVE', 'SPIR', 'SQM', 'STM', 'SYM', 'TECK', 'TMRC', 'TSEM', 'UUUU', 'VSH');
+  and ticker in ('KRE', 'KIE', 'ITB', 'REZ', 'IHI', 'IYT', 'FDN', 'XBI', 'IGV', 'CIBR', 'URA', 'ARKX', 'BOTZ', 'LIT', 'REMX', 'JETS', 'PEJ', 'TAN', 'QTUM', 'FINX', 'ITA', 'PAVE', 'XSD', 'AAOI', 'ACHR', 'ALB', 'AMKR', 'AVAV', 'BKSY', 'BTDR', 'COHR', 'CRML', 'GLW', 'HIVE', 'HUBB', 'KTOS', 'LEU', 'LUNR', 'NOK', 'NVTS', 'OUST', 'PL', 'POET', 'RDW', 'RIOT', 'SATL', 'SERV', 'SIDU', 'SPIR', 'SQM', 'STM', 'SYM', 'TECK', 'TSEM', 'UUUU', 'VSH');
 
 delete from public.hub_favorites
 where owner_id = '00000000-0000-0000-0000-000000000000'::uuid
-  and ticker in ('AAOI', 'ACHR', 'ALB', 'AMKR', 'AVAV', 'BKSY', 'BTDR', 'CLSK', 'COHR', 'CRML', 'GLW', 'HIVE', 'HUBB', 'KTOS', 'LUNR', 'NOK', 'NVTS', 'OUST', 'PL', 'RDW', 'RIOT', 'SATL', 'SERV', 'SIDU', 'SIVE', 'SPIR', 'SQM', 'STM', 'SYM', 'TECK', 'TMRC', 'TSEM', 'UUUU', 'VSH');
+  and ticker in ('AAOI', 'ACHR', 'ALB', 'AMKR', 'AVAV', 'BKSY', 'BTDR', 'COHR', 'CRML', 'GLW', 'HIVE', 'HUBB', 'KTOS', 'LUNR', 'NOK', 'NVTS', 'OUST', 'PL', 'RDW', 'RIOT', 'SATL', 'SERV', 'SIDU', 'SPIR', 'SQM', 'STM', 'SYM', 'TECK', 'TSEM', 'UUUU', 'VSH');

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# UNIVERSE ADMISSION — make the 60 expansion names visible everywhere at once.
+# UNIVERSE ADMISSION — make the 56 expansion names that passed visible everywhere at once.
 #
 # This supersedes step 6 onwards of ../universe-expand/RUNBOOK.sh. That runbook assumed three places
 # count the universe. TEN do, and they do not fail the same way:
@@ -25,7 +25,7 @@
 # THE ORDER IS THE SAFETY, and it is not the order you would guess. Admitting names first is safe
 # (nothing shows them yet). Restarting the Geiger before every name is active is NOT: boot-geiger
 # rebuilds the universe from instrument_map and exits on a count mismatch, so a half-admitted set
-# takes the Geiger down for all 424 names.
+# takes the Geiger down for all 420 names.
 set -uo pipefail
 
 CONFIRM=0; ROLLBACK=0
@@ -87,7 +87,7 @@ say "          can still change under you."
 say "18:25 ET  the LAST safe minute. At 18:30 ET (GEIGER_COMPLETED_SESSION_AFTER_ET) the session the"
 say "          Geiger requires moves from Wednesday 23 Sep to Thursday 24 Sep. The new names have"
 say "          history through Wednesday, so inside the window their rungs are already complete."
-say "          After 18:30 every one of the 424 names needs Thursday's session in all 8 rungs, and the"
+say "          After 18:30 every one of the 420 names needs Thursday's session in all 8 rungs, and the"
 say "          hourly tail machine has not started since 2026-09-10 — so crossing 18:30 without a tail"
 say "          run turns /ready into a 503 and the Geiger into 'awaiting data' for EVERY name."
 say ""
@@ -95,7 +95,7 @@ say "THE ONE THING THAT DECIDES FRIDAY MORNING: the settled previous-close artif
 say "session is built by the supervisor inside machine $GEIGER_MACHINE, from the canonical file baked"
 say "into THAT image, and it is stamped with that file's digest. So the batch app must be deployed"
 say "(step 3) before Friday's artifact is built, or Friday opens with an artifact the chart API"
-say "refuses and a blank day-change column for all 424 names."
+say "refuses and a blank day-change column for all 420 names."
 
 # ------------------------------------------------------------------------------------- step 0 --
 if ! skip 0; then
@@ -245,7 +245,7 @@ fi
 if ! skip 8; then
 hd "STEP 8 — WHERE THE NEW NAMES BELONG (cohorts) and WHICH ONES ALAN STARTS ON (favourites)"
 run "psql \"\$SUPABASE_DB_URL\" -f '$HERE/../../../supabase/migrations/20260924_universe_admit_membership.sql'"
-note "60 membership rows + 34 Claude Check favourites, all guarded by NOT EXISTS, so re-running is safe."
+note "56 membership rows + 34 Claude Check favourites, all guarded by NOT EXISTS, so re-running is safe."
 note "the 24 funds carry SECTOR_AND_THEME_FUNDS, which the Hub does not declare as a tab: they show on"
 note "ALL, in search and on their own page, but get no cohort tab until Alan asks for one."
 say "  ROLLBACK: psql -f supabase/migrations/20260924_universe_admit_membership_ROLLBACK.sql"
@@ -269,7 +269,7 @@ run "api /ready | python3 -c \"
 import json,sys
 d=json.load(sys.stdin)
 print('ready', d.get('ready'), '| geiger', d.get('geiger_ready'), '| denominator', d.get('denominator_ready'))\""
-say "  and by eye, headless: the board ranks, the old 364 are unchanged, the 60 new names have a"
+say "  and by eye, headless: the board ranks, the old 364 are unchanged, the 56 new names have a"
 say "  price, a day change, a Geiger and a cohort or ALL placement, and the 34 Claude Check names are"
 say "  starred on the FAV tab, which is the tab the board opens on."
 fi
