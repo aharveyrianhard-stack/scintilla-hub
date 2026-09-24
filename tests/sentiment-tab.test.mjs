@@ -138,7 +138,16 @@ test("missing inputs are labelled on the row and never scored, and StockTwits is
   assert.ok(js.includes('sentiSafe(sentiBars("PCC"))'), "the gauge reads the same series the chart draws");
   assert.ok(js.includes("Cboe daily put/call (PCC)"), "and says where the number came from");
   assert.ok(!js.includes("Cboe retired the free daily files in Oct 2019"), "the retired-in-2019 claim is gone");
-  assert.ok(js.includes('name: "52-week highs vs lows", val: "no source", score: null, none: true'));
+  /* M30: this row is no longer sourceless. Alan asked for breadth, so the 52-week
+     extremes are now measured over our own 364 names by scripts/breadth-snapshot.mjs
+     and read from the snapshot. It still refuses to score when the snapshot is absent
+     ("not measured yet") or when too few names sit at an extreme to mean anything. */
+  assert.ok(js.includes('key: "strength", name: "52-week highs vs lows"'), "the row is still there");
+  assert.ok(js.includes('val = "not measured yet"'), "with no snapshot it says so instead of guessing");
+  assert.ok(js.includes("too few to score"), "and it refuses to score a handful of extremes");
+  assert.ok(js.includes("our universe, not the NYSE count CNN uses"), "and never claims to be the exchange count");
+  assert.ok(js.includes('key: "above50"') && js.includes('key: "above200"'), "the two moving-average readings are their own rows");
+  assert.ok(js.includes('key: "eqw"'), "equal weight against the index is its own row too");
   assert.ok(js.includes('name: "How many stocks are up"'), "breadth now has a real source");
   assert.ok(js.includes("counted per stock, where CNN weighs by volume"), "and says how it differs from CNN's");
   /* M27, Alan: "You can remove StockTwits." The voice, the input and the read are all gone
