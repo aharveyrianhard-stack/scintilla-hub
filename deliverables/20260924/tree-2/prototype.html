@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · THE TREE (standard categories)</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --panel3:#202020; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#5c5c5c;
+  --up:#35b06a; --dn:#d1483f;               /* direction only — daily up green, daily down red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+.wrap{max-width:1640px;margin:0 auto;padding:14px 16px 48px}
+h1{font-size:14px;letter-spacing:.14em;margin:0 0 2px}
+.sub{font-size:11px;color:var(--dim);margin:0 0 10px}
+.pan{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.hd{padding:7px 10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.12em;color:var(--dim);
+    display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.up{color:var(--up)} .dn{color:var(--dn)} .dim{color:var(--dim)} .mute{color:var(--mute)}
+.num{font-variant-numeric:tabular-nums}
+
+/* index band */
+.band{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.ix{padding:8px 10px;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.ix:hover{background:var(--panel2)}
+.ix.on{outline:1px solid var(--line2);background:var(--panel2)}
+.ix .nm{font-size:12px;letter-spacing:.08em}
+.ix .etf{font-size:11px;color:var(--dim)}
+.ix .g{font-size:18px;line-height:1.1;margin:3px 0 1px;font-variant-numeric:tabular-nums}
+.ix .mem{font-size:11px;color:var(--dim)}
+
+/* controls */
+.ctrl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.seg{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.seg button{background:var(--panel);color:var(--ink2);border:0;border-right:1px solid var(--line);
+  font:11px/1 var(--mono);letter-spacing:.08em;padding:7px 9px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--panel3);color:var(--ink)}
+.tag{font-size:11px;color:var(--dim);padding:6px 4px}
+select{background:var(--panel);color:var(--ink2);border:1px solid var(--line);border-radius:3px;
+  font:11px var(--mono);padding:6px 7px}
+
+/* icicle */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:10px;align-items:start}
+.ici{display:grid;grid-template-columns:118px repeat(3,minmax(0,1fr));gap:4px;padding:8px;height:620px}
+.col{display:flex;flex-direction:column;gap:2px;min-width:0}
+.colhd{font-size:11px;color:var(--mute);letter-spacing:.1em;padding:0 2px 3px}
+.blk{border:1px solid var(--line);border-radius:2px;padding:3px 5px;overflow:hidden;cursor:pointer;
+  min-height:13px;display:flex;flex-direction:column;justify-content:center;background:var(--panel2)}
+.blk:hover{border-color:var(--line2)}
+.blk.on{outline:1px solid var(--ink2)}
+.blk .t{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk .v{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.blk.tiny .v{display:none}
+.blk.lens{border-color:var(--ink2)}
+
+/* tree view */
+.tree{padding:6px 8px 10px;height:620px;overflow:auto}
+.row{display:flex;align-items:center;gap:6px;padding:2px 4px;cursor:pointer;border-radius:2px}
+.row:hover{background:var(--panel2)} .row.on{background:var(--panel2);outline:1px solid var(--line2)}
+.tw{width:10px;flex:0 0 10px;color:var(--mute)}
+.row .lbl{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:7px;background:var(--panel3);flex:0 0 120px;position:relative;border:1px solid var(--line)}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--mute)}
+
+/* table view */
+table{border-collapse:collapse;width:100%;font-size:11px}
+th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{color:var(--mute);font-weight:400;letter-spacing:.08em;position:sticky;top:0;background:var(--panel)}
+th:first-child,td:first-child{text-align:left}
+.tbl{height:620px;overflow:auto}
+
+/* detail */
+.det{padding:9px 10px;height:620px;overflow:auto}
+.det h2{font-size:13px;margin:0 0 1px;letter-spacing:.06em}
+.det .pth{font-size:11px;color:var(--mute);margin-bottom:8px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.cell{background:var(--panel2);border:1px solid var(--line);border-radius:2px;padding:6px 8px}
+.cell .k{font-size:11px;color:var(--dim)} .cell .n{font-size:16px;font-variant-numeric:tabular-nums}
+.kv{display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:11px;border-bottom:1px dotted var(--line)}
+.kv span:first-child{color:var(--dim)}
+.sec{margin:10px 0 4px;font-size:11px;letter-spacing:.1em;color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{border:1px solid var(--line);border-radius:2px;padding:3px 6px;font-size:11px;cursor:pointer;background:var(--panel2)}
+.chip:hover{border-color:var(--line2)} .chip.on{outline:1px solid var(--ink2)}
+.chip b{font-weight:400;color:var(--ink)}
+.thr{display:grid;grid-template-columns:1fr 62px;gap:4px 6px;align-items:center;font-size:11px}
+.thr input{background:var(--panel3);border:1px solid var(--line);color:var(--ink);font:11px var(--mono);
+  padding:3px 4px;width:100%;border-radius:2px;text-align:right}
+.note{font-size:11px;color:var(--mute);margin-top:8px;line-height:1.55}
+.err{padding:12px;color:var(--dn);font-size:12px}
+@media (max-width:900px){
+  .wrap{padding:12px 12px 40px}
+  .band{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .ici{grid-template-columns:minmax(0,1fr);height:auto}
+  .col{max-height:330px;overflow:auto}
+  .blk{min-height:30px}
+  .blk.tiny .v{display:block}
+  .tree,.det,.tbl{height:auto;max-height:none}
+  .bar{flex:0 0 54px}
+  .row .lbl{font-size:11px}
+  .blk .v{display:block}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span data-scnav-slot></span>
+  <h1>SCINTILLA · THE TREE</h1>
+  <p class="sub" id="sub">standard categories — the main indexes, the eleven sectors with their State Street ETFs, then industry groups, industries and the names</p>
+
+  <div class="band" id="band"></div>
+
+  <div class="ctrl">
+    <div class="seg" id="view"></div>
+    <span class="tag">width by</span><div class="seg" id="size"></div>
+    <span class="tag">branch reading</span><div class="seg" id="wt"></div>
+    <span class="tag">theme lens</span><select id="lens"></select>
+  </div>
+
+  <div class="grid">
+    <div class="pan" id="stage">
+      <div class="hd"><span id="stageTitle">THE TRUNK</span><span id="stageNote" class="mute"></span></div>
+      <div id="body"><div class="err" id="boot">loading the built tree…</div></div>
+    </div>
+    <div class="pan"><div class="hd"><span>BRANCH</span><span class="mute" id="detNote"></span></div>
+      <div class="det" id="det"></div></div>
+  </div>
+  <p class="note" id="prov"></p>
+</div>
+<script>
+const $=s=>document.querySelector(s), E=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const f2=(v,d=2)=>v==null?"—":Number(v).toFixed(d);
+const pc=v=>v==null?"—":(v>0?"+":"")+Number(v).toFixed(2)+"%";
+const dir=v=>v==null?"":(v>0?"up":v<0?"dn":"");
+const cap=v=>v==null?"—":v>=1e12?(v/1e12).toFixed(2)+"T":v>=1e9?(v/1e9).toFixed(0)+"B":(v/1e6).toFixed(0)+"M";
+const LS="sc-tree2-thresholds";
+let D=null, THR={}, sel="MARKET", view="ICICLE", size="CAP", wt="CAP", lens="", ixFilter="";
+
+fetch("/data/standard-tree-20260924.json").then(r=>r.json()).then(d=>{D=d;boot();})
+ .catch(e=>{$("#boot").textContent="the built tree did not load ("+e+"). Serve this page from the repository root so /data/standard-tree-20260924.json resolves.";});
+
+function boot(){
+  THR=Object.fromEntries(D.thresholds.map(t=>[t.key,t.value]));
+  try{const s=JSON.parse(localStorage.getItem(LS)||"{}");Object.assign(THR,s)}catch(_){}
+  view = window.innerWidth<900 ? "TREE" : "ICICLE";   // the icicle needs width; a phone gets the tree
+  segs("#view",[["ICICLE","icicle"],["TREE","tree"],["TABLE","table"]],v=>{view=v;draw()},view);
+  segs("#size",[["CAP","hub market cap"],["EQ","one name, one share"],["SPX","share of S&P 500 weight"]],v=>{size=v;draw()},"CAP");
+  segs("#wt",[["CAP","cap-weighted"],["EQ","equal-weighted"]],v=>{wt=v;draw()},"CAP");
+  const ls=$("#lens"); ls.appendChild(new Option("none — standard trunk only",""));
+  (D.themes||[]).forEach(t=>ls.appendChild(new Option(t.label+" ("+t.n_served+")",t.id)));
+  ls.onchange=()=>{lens=ls.value;draw()};
+  band(); draw();
+  const p=D.provenance;
+  $("#prov").textContent="Built "+D.built_utc+". Geiger computed "+(p.geiger.computed_utc||"—")+
+    "; prices from the "+(p.quotes.session_et||"—")+" session; daily RSI, 50-day and 200-day averages dated "+
+    (p.indicators.source_date&&p.indicators.source_date[0]||"—")+". S&P 500 weights are State Street's own SPY holdings file, "+
+    p.spy.as_of+"; the Dow is their DIA file, "+p.dia.as_of+". Sector names are GICS; the Hub's raw labels come from FMP and are translated by a stated table.";
+}
+function segs(sel,opts,cb,init){
+  const w=$(sel); opts.forEach(([k,t])=>{const b=E("button",k===init?"on":"",k);b.title=t;
+    b.onclick=()=>{[...w.children].forEach(c=>c.classList.remove("on"));b.classList.add("on");cb(k)};w.appendChild(b)});
+}
+function band(){
+  const w=$("#band"); w.innerHTML="";
+  D.indexes.forEach(ix=>{
+    const c=E("div","ix"+(ixFilter===ix.id?" on":"")); c.dataset.id=ix.id;
+    c.appendChild(E("div","nm",ix.label));
+    const a=ix.anchor||{};
+    c.appendChild(E("div","etf",ix.anchor_etf+(a.price?" · "+f2(a.price)+" · "+pc(a.chg_pct):" · not served")));
+    const g=E("div","g "+dir(a.geiger), a.geiger==null?"—":f2(a.geiger,2)); c.appendChild(g);
+    c.appendChild(E("div","mem", ix.membership==="measured"
+      ? ix.members_in_hub+" of its members here · they are "+f2(ix.hub_weight_of_index_pct,1)+"% of the index by weight"
+      : "member list not obtained — this branch reads its ETF only"));
+    c.onclick=()=>{ixFilter=(ixFilter===ix.id?"":ix.id); band(); draw()};
+    w.appendChild(c);
+  });
+}
+const members=id=>{
+  let m=D.nodes[id].members;
+  if(ixFilter==="SPX") m=m.filter(t=>D.names[t].sp500);
+  if(ixFilter==="DJIA") m=m.filter(t=>D.names[t].dow);
+  return m;
+};
+const lensSet=()=>{const t=(D.themes||[]).find(x=>x.id===lens);return t?new Set(t.tickers):null};
+function weight(id){
+  const m=members(id); if(!m.length) return 0;
+  if(size==="EQ") return m.length;
+  if(size==="SPX") return m.reduce((s,t)=>s+(D.names[t].sp500?(D.names[t].sp500_weight||0):0),0);
+  return m.reduce((s,t)=>s+(D.names[t].cap||0),0);
+}
+function reading(id,k){
+  const m=members(id), ns=m.map(t=>D.names[t]);
+  const vals=ns.filter(n=>n[k]!=null);
+  if(!vals.length) return null;
+  if(wt==="EQ") return vals.reduce((s,n)=>s+n[k],0)/vals.length;
+  const w=vals.reduce((s,n)=>s+(n.cap||0),0);
+  return w?vals.reduce((s,n)=>s+n[k]*(n.cap||0),0)/w:null;
+}
+function draw(){
+  $("#stageTitle").textContent = view==="TABLE"?"THE TRUNK AS A TABLE (secondary view)":"THE TRUNK";
+  $("#stageNote").textContent = (ixFilter?("filtered to "+D.indexes.find(i=>i.id===ixFilter).label+" members · "):"")+
+    (wt==="CAP"?"cap-weighted reading":"equal-weighted reading");
+  const b=$("#body"); b.innerHTML="";
+  b.appendChild(view==="ICICLE"?icicle():view==="TREE"?treeView():tableView());
+  detail();
+}
+function blk(id,depth){
+  const n=D.nodes[id], w=weight(id), g=reading(id,"geiger");
+  const e=E("div","blk"+(sel===id?" on":""));
+  e.style.flexGrow=Math.max(w,0.0001);
+  const L=lensSet(); if(L&&members(id).some(t=>L.has(t))) e.classList.add("lens");
+  const t=E("div","t",n.label); e.appendChild(t);
+  const v=E("div","v "+dir(g), (g==null?"—":f2(g,2))+" · "+members(id).length);
+  e.appendChild(v);
+  if(n.anchor_etf){
+    const a=n.anchor||{};
+    const x=E("div","v "+dir(a.geiger), n.anchor_etf+" "+(a.geiger==null?"—":f2(a.geiger,2)));
+    x.title="the branch's own ETF reading"; e.appendChild(x);
+  }
+  e.onclick=()=>{sel=id;draw()};
+  e.title=n.label+" — "+members(id).length+" names";
+  return e;
+}
+function icicle(){
+  const w=E("div","ici");
+  const secs=D.nodes.MARKET.children;
+  const secId = sel.startsWith("SEC:")?sel: sel.startsWith("GRP:")?D.nodes[sel].parent
+              : sel.startsWith("IND:")?D.nodes[D.nodes[sel].parent].parent : null;
+  // an icicle shows every level at once; picking a branch narrows the two right columns to it
+  const groups = secId? D.nodes[secId].children : secs.flatMap(s=>D.nodes[s].children);
+  const grpId = sel.startsWith("GRP:")?sel: sel.startsWith("IND:")?D.nodes[sel].parent:null;
+  const inds = grpId? D.nodes[grpId].children : groups.flatMap(g=>D.nodes[g].children);
+  const cols=[["MARKET",["MARKET"]],["SECTORS",secs],
+              [secId?"INDUSTRY GROUPS IN "+D.nodes[secId].label.toUpperCase():"INDUSTRY GROUPS",groups],
+              [grpId?"INDUSTRIES IN "+D.nodes[grpId].label.toUpperCase():"INDUSTRIES",inds]];
+  cols.forEach(([hd,ids])=>{
+    const c=E("div","col"); c.appendChild(E("div","colhd",hd));
+    if(!ids.length) c.appendChild(E("div","colhd","pick a branch"));
+    ids.filter(id=>members(id).length).forEach(id=>{const e=blk(id);if(weight(id)/ (weight("MARKET")||1) <0.02)e.classList.add("tiny");c.appendChild(e)});
+    w.appendChild(c);
+  });
+  return w;
+}
+function treeView(){
+  const w=E("div","tree"), tot=weight("MARKET")||1;
+  const walk=(id,d)=>{
+    const n=D.nodes[id], m=members(id); if(!m.length) return;
+    const r=E("div","row"+(sel===id?" on":"")); r.style.paddingLeft=(4+d*13)+"px";
+    r.appendChild(E("span","tw",n.children.length?(openSet.has(id)?"▾":"▸"):"·"));
+    r.appendChild(E("span","lbl",n.label));
+    const g=reading(id,"geiger"), c=reading(id,"chg_pct");
+    const bar=E("div","bar"); const i=E("i");i.style.width=Math.min(100,100*weight(id)/tot)+"%";bar.appendChild(i);
+    r.appendChild(bar);
+    r.appendChild(E("span","num dim",String(m.length).padStart(3)));
+    r.appendChild(E("span","num "+dir(g),(g==null?"—":f2(g,2)).padStart(6)));
+    r.appendChild(E("span","num "+dir(c),pc(c).padStart(7)));
+    r.onclick=()=>{sel=id; if(n.children.length){openSet.has(id)?openSet.delete(id):openSet.add(id)} draw()};
+    w.appendChild(r);
+    if(openSet.has(id)) n.children.forEach(k=>walk(k,d+1));
+  };
+  walk("MARKET",0);
+  return w;
+}
+const openSet=new Set(["MARKET"]);
+
+function tableView(){
+  const w=E("div","tbl"), t=E("table");
+  t.innerHTML="<thead><tr><th>branch</th><th>names</th><th>Geiger</th><th>day</th><th>above 200-day</th>"+
+    "<th>Hub cap share</th><th>S&P cap share</th><th>covers of sector weight</th><th>ETF</th></tr></thead>";
+  const tb=E("tbody");
+  D.nodes.MARKET.children.forEach(id=>{
+    const n=D.nodes[id], m=members(id), g=reading(id,"geiger"), c=reading(id,"chg_pct");
+    const tr=E("tr");
+    const cells=[[n.label,"l"],[m.length],[g==null?"—":f2(g,2),dir(g)],[pc(c),dir(c)],
+      [n.above200_pct==null?"—":f2(n.above200_pct,0)+"%"],[f2(n.hub_cap_share_pct,2)+"%"],
+      [f2((D.comparison.find(x=>x.gics_sector===n.label)||{}).sp500_cap_share_pct,2)+"%"],
+      [n.sp500_cover_of_sector_weight_pct==null?"—":f2(n.sp500_cover_of_sector_weight_pct,0)+"%"],
+      [n.anchor_etf+" "+(n.anchor&&n.anchor.geiger!=null?f2(n.anchor.geiger,2):"—")]];
+    cells.forEach(([v,cl])=>{const td=E("td",cl==="l"?"":cl||"",String(v));tr.appendChild(td)});
+    tr.onclick=()=>{sel=id;draw()};
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); w.appendChild(t); return w;
+}
+function path(id){const p=[];let c=id;while(c){p.unshift(D.nodes[c].label);c=D.nodes[c].parent}return p.join("  ›  ")}
+function detail(){
+  const d=$("#det"); d.innerHTML=""; const n=D.nodes[sel], m=members(sel);
+  $("#detNote").textContent=m.length+" names"+(ixFilter?" in view":"");
+  d.appendChild(E("h2",null,n.label));
+  d.appendChild(E("div","pth",path(sel)));
+  const gc=reading(sel,"geiger"), ge=(()=>{const v=m.map(t=>D.names[t].geiger).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null})();
+  const gcw=(()=>{const v=m.map(t=>D.names[t]).filter(x=>x.geiger!=null);const w=v.reduce((s,x)=>s+(x.cap||0),0);return w?v.reduce((s,x)=>s+x.geiger*(x.cap||0),0)/w:null})();
+  const pair=E("div","pair");
+  [["Geiger · cap-weighted",gcw],["Geiger · equal-weighted",ge]].forEach(([k,v])=>{
+    const c=E("div","cell"); c.appendChild(E("div","k",k));
+    c.appendChild(E("div","n "+dir(v), v==null?"—":f2(v,3))); pair.appendChild(c)});
+  d.appendChild(pair);
+  const anchor=n.anchor;
+  const kv=(k,v,cl)=>{const r=E("div","kv");r.appendChild(E("span",null,k));r.appendChild(E("span",cl||"",v));d.appendChild(r)};
+  if(anchor){ d.appendChild(E("div","sec","ITS ETF"));
+    kv(anchor.ticker+" — "+(anchor.name||""),"Geiger "+f2(anchor.geiger,2)+" · "+pc(anchor.chg_pct),dir(anchor.geiger));
+    kv("why it is here","when the Hub holds few names on this branch, read the ETF instead","mute");
+  }
+  d.appendChild(E("div","sec","THE BRANCH TODAY"));
+  const cc=reading(sel,"chg_pct");
+  kv("day, "+(wt==="CAP"?"cap-weighted":"equal-weighted"),pc(cc),dir(cc));
+  kv("names advancing", n.advancers_pct==null?"—":f2(n.advancers_pct,0)+"%");
+  const br=n.above200_pct;
+  kv("above their 200-day average", br==null?"—":f2(br,0)+"% of "+n.above200_n+
+     (br>=THR.breadth_strong?"  · strong":br<=THR.breadth_weak?"  · weak":""),
+     br==null?"":br>=THR.breadth_strong?"up":br<=THR.breadth_weak?"dn":"");
+  kv("median RSI(14)", n.rsi_median==null?"—":f2(n.rsi_median,1));
+  kv("market value here", cap(n.cap_usd));
+  d.appendChild(E("div","sec","AGAINST THE INDEXES"));
+  kv("in the S&P 500", n.sp500_members+" of "+n.n+" names");
+  kv("their weight in the S&P 500", f2(n.sp500_weight_of_members_pct,2)+"%");
+  if(n.sp500_sector_weight_pct!=null){
+    kv("this sector in the S&P 500", f2(n.sp500_sector_weight_pct,2)+"% by market value · "+f2(n.sp500_sector_count_pct,2)+"% by member count");
+    kv("share of the Hub", f2(n.hub_cap_share_pct,2)+"% by market value · "+f2(n.hub_count_share_pct,2)+"% by name count");
+    kv("we cover, of this sector's index weight", n.sp500_cover_of_sector_weight_pct==null?"—":f2(n.sp500_cover_of_sector_weight_pct,0)+"%");
+  }
+  if(n.dow_members) kv("in the Dow", n.dow_members+" names");
+  d.appendChild(E("div","sec","SELF-FILLING LISTS"));
+  const L=lists(m);
+  const ch=E("div","chips"); const out=E("div","note","");
+  L.forEach(l=>{const c=E("div","chip");c.innerHTML="<b>"+l.n+"</b> "+l.label;c.title=l.means;
+    c.onclick=()=>{[...ch.children].forEach(x=>{if(x!==c)x.classList.remove("on")});c.classList.toggle("on");
+      out.textContent=c.classList.contains("on")?(l.tickers.join(" ")||"no name meets that line here"):""};ch.appendChild(c)});
+  d.appendChild(ch); d.appendChild(out);
+  d.appendChild(E("div","sec","THE LINES THESE LISTS USE (editable)"));
+  const th=E("div","thr");
+  D.thresholds.forEach(t=>{
+    const lab=E("div",null,t.label); lab.title=t.means; th.appendChild(lab);
+    const inp=E("input"); inp.type="number"; inp.value=THR[t.key]; inp.step=t.key==="golden_cross"?1:1;
+    inp.title=t.means;
+    inp.oninput=()=>{THR[t.key]=Number(inp.value);try{localStorage.setItem(LS,JSON.stringify(THR))}catch(_){}
+      detail()};
+    th.appendChild(inp);
+  });
+  d.appendChild(th);
+  d.appendChild(E("div","note","Breadth is called strong at "+THR.breadth_strong+"% of a branch's names above their 200-day and weak at "+THR.breadth_weak+"%. These are the lines desks quote, not Scintilla's opinion: RSI 30 and 70, price against its 50-day and 200-day average, a branch called strong at 80% of names above their 200-day and weak at 20%, Williams %R at −80. Change a number and the lists above refill."));
+  d.appendChild(E("div","sec","NAMES"));
+  const t=E("table");
+  t.innerHTML="<thead><tr><th>name</th><th>Geiger</th><th>day</th><th>RSI</th><th>vs 200-day</th><th>cap</th><th>S&P wt</th></tr></thead>";
+  const tb=E("tbody"); const Ls=lensSet();
+  m.map(x=>D.names[x]).sort((a,b)=>(b.cap||0)-(a.cap||0)).slice(0,60).forEach(x=>{
+    const tr=E("tr"); if(Ls&&Ls.has(x.ticker)) tr.style.outline="1px solid var(--line2)";
+    [[x.ticker+"  "+(x.name||"").slice(0,22),""],[f2(x.geiger,2),dir(x.geiger)],[pc(x.chg_pct),dir(x.chg_pct)],
+     [x.rsi==null?"—":f2(x.rsi,0),""],[x.above200==null?"—":(x.above200?"above":"below"),x.above200==null?"":(x.above200?"up":"dn")],
+     [cap(x.cap),""],[x.sp500?f2(x.sp500_weight,2)+"%":"—",""]]
+      .forEach(([v,cl])=>tr.appendChild(E("td",cl,String(v))));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); d.appendChild(t);
+  if(m.length>60) d.appendChild(E("div","note","showing the 60 largest of "+m.length+"."));
+}
+function lists(m){
+  const N=m.map(t=>D.names[t]);
+  const mk=(label,means,f)=>{const ts=N.filter(f).map(x=>x.ticker).sort();return {label,means,n:ts.length,tickers:ts}};
+  return [
+    mk("RSI ≤ "+THR.rsi_oversold,"oversold on the daily RSI(14)",x=>x.rsi!=null&&x.rsi<=THR.rsi_oversold),
+    mk("RSI ≥ "+THR.rsi_overbought,"overbought on the daily RSI(14)",x=>x.rsi!=null&&x.rsi>=THR.rsi_overbought),
+    mk("below the 200-day","price under its 200-day average by more than the line",
+       x=>x.sma200&&x.price!=null&&x.price<x.sma200*(1+THR.above_200dma/100)),
+    mk("above the 50-day","price over its 50-day average by at least the line",
+       x=>x.sma50&&x.price!=null&&x.price>=x.sma50*(1+THR.above_50dma/100)),
+    mk("50-day over 200-day","the crossing traders call golden",x=>x.golden===true),
+    mk("Williams ≤ "+THR.williams_oversold,"a second oversold line",x=>x.williams!=null&&x.williams<=THR.williams_oversold),
+  ];
+}
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
