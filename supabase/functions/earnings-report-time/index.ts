@@ -1,4 +1,6 @@
-// SCINTILLA · earnings-report-time v1 — fill report_time from Nasdaq's public calendar.
+// SCINTILLA · earnings-report-time v2 — fill report_time from Nasdaq's public calendar.
+// v2 (24 Sep): reads and writes live rows only (superseded_at is null). v1 counted the dates M34
+// retired, so its first run listed NKE 29 Sep as disagreeing with Nasdaq after that date was retired.
 //
 // WHY THIS EXISTS. The job that catches earnings (fmp-events v2) writes ticker, date,
 // EPS and revenue and NOTHING ELSE — its row builder has no report_time field at all.
@@ -87,7 +89,7 @@ Deno.serve(async (req) => {
     /* only the rows that are actually missing a time: the read is the same filter the
        write will use, so the job does no work it is not allowed to finish */
     const rows = (await pg(
-      `earnings_events?select=ticker,date,report_time&date=gte.${today}&date=lte.${end}&report_time=is.null&order=date.asc&limit=2000`,
+      `earnings_events?select=ticker,date,report_time&date=gte.${today}&date=lte.${end}&report_time=is.null&superseded_at=is.null&order=date.asc&limit=2000`,
     )).filter((r: any) => universe.has(r.ticker));
 
     const cal = new Map<string, any>(), seen = new Map<string, string[]>(), failed: any[] = [];
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
       const set_at = new Date().toISOString();
       for (const f of fills) {
         await patch(
-          `earnings_events?ticker=eq.${encodeURIComponent(f.ticker)}&date=eq.${f.date}&report_time=is.null`,
+          `earnings_events?ticker=eq.${encodeURIComponent(f.ticker)}&date=eq.${f.date}&report_time=is.null&superseded_at=is.null`,
           { report_time: f.report_time, report_time_source: SOURCE_NAME, report_time_set_at: set_at },
         );
         written++;

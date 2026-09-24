@@ -41,7 +41,9 @@ test("the write itself refuses to overwrite, at the database, not just in the co
   const patchBody = fnSrc.match(/\{ report_time: f\.report_time[^}]*\}/)[0];
   assert.deepEqual([...patchBody.matchAll(/(\w+):/g)].map((m) => m[1]).sort(),
     ["report_time", "report_time_set_at", "report_time_source"]);
-  assert.match(fnSrc, /report_time=is\.null&order=date\.asc/, "and it only reads the rows that are missing a time");
+  assert.match(fnSrc, /report_time=is\.null&superseded_at=is\.null&order=date\.asc/,
+    "and it only reads the LIVE rows that are missing a time - a date M34 retired is not a report");
+  assert.match(fnSrc, /report_time=is\.null&superseded_at=is\.null`,/, "and it never writes a time onto a retired date");
 });
 
 test("it runs itself, once at a time, and leaves a receipt", () => {
