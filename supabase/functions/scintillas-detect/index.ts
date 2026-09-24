@@ -128,7 +128,23 @@ Deno.serve(async (req) => {
         historyBySymbol[q.symbol] = bars.filter((b: any) => dayOf(b) < session);
       } catch (_) { historyBySymbol[q.symbol] = []; }
     });
-    const px = detectPriceOutliers({ quotes: candidates, historyBySymbol, session, ts: iso(now), rules: RULES });
+    /* M52 — the usual day comes out of the store, not out of this pass. One read of
+       public.ticker_heartbeat_daily for the names under examination, newest row per name within the
+       last fortnight (a month-old row would be a stale divisor wearing today's label). Whatever is
+       missing simply falls back to the bars, and each event says which it used. */
+    const heartbeatBySymbol: Record<string, any> = {};
+    try {
+      const since = new Date(Date.now() - 14 * 86400e3).toISOString().slice(0, 10);
+      const hb = await sbGet("ticker_heartbeat_daily?ticker=in.(" +
+        candidates.map((q: any) => encodeURIComponent(q.symbol)).join(",") + ")&date=gte." + since +
+        "&order=ticker.asc,date.desc&select=ticker,date,usual_day_60,n&limit=5000");
+      for (const r of (hb || [])) if (!(r.ticker in heartbeatBySymbol)) heartbeatBySymbol[r.ticker] = r;
+      report.notes.push("usual day: " + Object.keys(heartbeatBySymbol).length + " of " + candidates.length +
+        " names read from ticker_heartbeat_daily; the rest computed from bars");
+    } catch (_) {
+      report.notes.push("ticker_heartbeat_daily unreadable — every usual day computed from bars, as before M52");
+    }
+    const px = detectPriceOutliers({ quotes: candidates, historyBySymbol, session, ts: iso(now), rules: RULES, heartbeatBySymbol });
     events.push(...px.events);
     report.kinds.price_outlier = px.events.length;
     report.skipped_counts.price = countReasons(px.skipped);

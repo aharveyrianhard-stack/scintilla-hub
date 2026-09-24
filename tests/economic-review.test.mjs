@@ -40,7 +40,10 @@ function load({ src = page, tapeOn = false, S = {}, pg = async () => [], nowMs =
   });
   if (nowMs != null) vm.runInContext("(() => { const R = Date, F = " + nowMs + "; class D extends R { constructor(...a) { if (a.length) super(...a); else super(F); } static now() { return F; } } globalThis.Date = D; })()", ctx);
   const isPort = src.includes("const ECON_TAPE_ON");
-  let code = helpers(src) + slice(src) + (ident && isPort ? fnSrc(src, "leftIdentHTML") : "");
+  /* M52 — the ident carries the name's stored usual day now, so its helpers come along with it. */
+  const hbSrc = (s) => (s.match(/^const SC_HB_STALE_DAYS = [^\n]*\n/m) || [""])[0] + (s.match(/^const SC_HB_X_UNUSUAL\s+= [^\n]*\n/m) || [""])[0] +
+    ["hbAgeDays", "hbPct", "hbXUsual", "hbTitle", "hbRowFor"].map((n) => (s.includes("function " + n + "(") ? fnSrc(s, n) : "")).join("");
+  let code = helpers(src) + slice(src) + (ident && isPort ? hbSrc(src) + fnSrc(src, "leftIdentHTML") : "");
   /* ECON TAPE 22 Sep — the page ships the flag ON, so the harness sets it BOTH ways: `tapeOn: false` is the
      kill-switch proof (flag off = production's ident markup and not one request). */
   if (isPort) code = code.replace(/const ECON_TAPE_ON = (?:true|false);/, "const ECON_TAPE_ON = " + (tapeOn ? "true" : "false") + ";");

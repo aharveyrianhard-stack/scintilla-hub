@@ -159,6 +159,19 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    silently eating the trailing ")". These 3 cells now render in full even if that means
    overlapping their own cell's edge slightly — never a clipped character. */
 .ch > .sc-chg, .ch > .sc-rsi, .ch > .sc-fpe{ overflow:visible; white-space:nowrap; }
+/* M52 HEARTBEAT — "usual day": the size of a typical day for this name, as ±x.x%.
+   Alan, 24 Sep: "that's a range of a normal day-to-day heartbeat. That's important to track
+   everywhere." Monochrome by default, like every other stored number on this board. The ONLY
+   coloured part is the multiple beside it on a day that actually is unusual, and it follows the
+   estate's one colour rule: daily up green, daily down red. */
+.ch > .sc-hb{ overflow:visible; white-space:nowrap; text-align:center; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.sc-hb__x{ margin-left:3px; font-weight:700; }
+.sc-hb__pm{ font-style:normal; }
+.sc-hb.is-stale{ color:var(--mute); }        /* the stored row is older than a week — dimmed, never hidden */
+.sc-hb__none{ color:var(--mute); }
+/* the same number on the company ident bar, quiet beside the price */
+.sc-chb{ font-family:var(--mono); font-size:9px; letter-spacing:.06em; color:var(--dim); white-space:nowrap; }
+.sc-identfull .sc-chb{ font-size:10px; }
 
 /* SCINTILLA · Room 2 · ChartPanel — left panel mount   [APPROVED 2026-06-10] */
 .sc-chartpanel{ display:flex; flex-direction:column; min-height:0;
@@ -4127,9 +4140,35 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
    document (and the rewind bar 1200 ms after load), so the first paint of a cold load could be the 10-track board without
    the bar, then re-flow to 13 tracks and move ~35px down. They are copied here VERBATIM (same !important, same cascade
    position: last in <head>, before every body <style>), so the very first render is already the settled one. */
-.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,15fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}
+/* M52 — a 14th track: USUAL DAY, immediately after CHG, because the two are read together
+   ("down 4.8%" means nothing until you know this name normally moves 1.5%). The width comes from
+   READ (10->8) and GEIGER (15->13), the two widest cells that lose the least by narrowing: READ is
+   words that truncate gracefully and GEIGER is a bar, not a number. */
+.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,13fr) minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr) minmax(0,8fr) minmax(0,13fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}
 .ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,8fr) minmax(0,12fr) minmax(0,7fr) minmax(0,5fr) !important}}
+@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,7fr) minmax(0,10fr) minmax(0,7fr) minmax(0,5fr) !important}}
+/* M52 · THE PHONE BOARD. MEASURED at 390 px: with 14 tracks the row collided exactly the way the
+   2026-06 "+5.82%98.3x$314[" bug did — "(0.83%)" and "±1.8%" printed on top of each other — because
+   CHG, F P/E, RSI (and, as first written, USUAL DAY) are allowed to overflow their track so they
+   never clip a character. Two rules, and only at phone width:
+   (a) USUAL DAY clips like every other cell instead of spilling into CHG;
+   (b) the READ column steps aside. This file already says why READ is the one that can: it "is the
+       words version of the same two numbers, so it is the column that can afford to lose width …
+       it says nothing the pair does not". TREND and MOM keep their numbers; the words come back the
+       moment there is room for them. Header and rows share one child order, so hiding the 11th cell
+       in both keeps every value under its own label. */
+@media(max-width:560px){
+  .ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,18fr) minmax(0,13fr) minmax(0,10fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr) minmax(0,11fr) minmax(0,7fr) minmax(0,5fr) !important; gap:4px !important}
+  /* TWO columns step aside at 390, and they are the two that were ALREADY unreadable there:
+     READ (6th-from-last; the words version of TREND and MOM, which keep their numbers) and F P/E,
+     which at this width printed "36…". What that buys is the two numbers a phone is actually read
+     for: the change in full — "(1.39%)", not "(1…" — and the usual day beside it. */
+  .ch > *:nth-child(6), .ch > *:nth-child(11){ display:none !important; }
+  .ch > .sc-hb, .ch > .sc-chg, .ch > .sc-fpe{ overflow:hidden !important; text-overflow:ellipsis; }
+  /* the sign goes, the number stays; F P/E and MKT CAP give up the width, since at this size they
+     already read "36…" and "$5…" — nothing legible is lost and one more real number is gained. */
+  .sc-hb__pm{ display:none; }
+}
 .gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sc-cohstrip{grid-template-columns:repeat(var(--coh-n,10),minmax(0,1fr)) !important;grid-auto-flow:row !important;grid-auto-columns:auto !important;gap:1px !important;overflow-x:hidden !important;padding-left:4px !important;padding-right:4px !important}
 @media(max-width:820px){.sc-cohstrip{grid-template-columns:repeat(var(--coh-half,5),minmax(0,1fr)) !important}}
@@ -4905,6 +4944,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
                })(),
         fpe:   fpeVal(m.ticker, price),                                 // R26 FIX 6 — fwd P/E (guarded)
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
+        hb:    null,                                                    // M52 — the stored heartbeat row, filled by loadBoardHeartbeat()
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
         fam:   gg[m.ticker] || null,
         /* rvol (battery) = board_volume.session_rvol = today's REAL traded volume ÷ avg
@@ -5748,7 +5788,7 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
    until the next 45 s pull) the header had 13 cells over 10-cell rows: the Geiger bar sat under TREND, RVol under MOM,
    the market dot under READ, and the GEIGER / RVOL / MKT columns were empty. The model is now complete from the first
    render and boardRowsHTML() emits one cell per column; the rewind module still OWNS the three cells' values (paintTM). */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["Usual day","hb"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
    dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
 function boardTMCellsHTML() {
@@ -5794,6 +5834,101 @@ function mcapCellHTML(t, mc, asOf, nowMs) {
   const a = scCapAge(asOf, nowMs);
   return '<span class="sc-mcap' + (has && a.aged ? " is-aged" : "") + '" id="lmc_' + esc(t) + '"' +
     (has ? ' title="' + esc(scCapTitle(asOf, nowMs)) + '"' + (a.date ? ' data-sc-mcap-asof="' + esc(a.date) + '"' : "") : "") + ">" + fmtCap(mc) + "</span>";
+}
+/* ── M52 HEARTBEAT ─────────────────────────────────────────────────────────────────────────
+   THE USUAL DAY. The size of a typical daily move for one name: the spread (standard deviation)
+   of its own daily close-to-close % changes. Alan, 24 Sep: "Normally we move five percent a day.
+   Measured how? … That's important to track everywhere."
+
+   THE HUB DOES NOT COMPUTE IT. It reads public.ticker_heartbeat_daily, which the heartbeat-daily
+   function writes after the close from the chart API's daily bars — the same table the scintilla
+   detector now divides by. One number, one definition, every surface.
+
+   WHICH WINDOW EACH SURFACE USES, and why:
+     · the board column and the company ident show the 60-SESSION number — the season. It is the
+       window data/scintilla-rules.json judges a move by, so the column and the strip agree.
+     · the tooltip adds the 20-session (now) and 250-session (the year) numbers, because "calmer
+       than its own normal" is a comparison and needs both ends of it.
+     · ATR% (14 days, gaps and wicks included) rides in the tooltip beside them: a quiet close can
+       hide a wild day, and the pair together says which kind of name this is.
+   NOTHING IS INVENTED: no stored row, or a row older than a week, reads as a dash or dims itself. */
+const SC_HB_STALE_DAYS = 7;          /* a heartbeat older than a week is dimmed, never presented as today's */
+const SC_HB_X_UNUSUAL  = 2;          /* the rules file's own bar: 2x its usual day is about 1 day in 20 */
+function hbAgeDays(date) {
+  const t = Date.parse(String(date || "") + "T00:00:00Z");
+  if (!isFinite(t)) return null;
+  return Math.floor((Date.now() - t) / 86400e3);
+}
+function hbPct(v) { const n = num(v); return n == null ? null : "\u00b1" + n.toFixed(1) + "%"; }
+/* "1.8x its usual day" — today's move in this name's own units. Null when there is nothing
+   honest to divide by, so the screen says so instead of printing a ratio built on air. */
+function hbXUsual(movePct, usualPct) {
+  const m = num(movePct), u = num(usualPct);
+  if (m == null || u == null || !(u > 0)) return null;
+  return m / u;
+}
+function hbTitle(t, hb, movePct) {
+  if (!hb || num(hb.usual_day_60) == null)
+    return "a normal day for this name moves about this much - not enough stored history for " + t + " yet";
+  const age = hbAgeDays(hb.date);
+  const parts = ["a normal day for this name moves about this much",
+    "usual day " + hbPct(hb.usual_day_60) + " over 60 sessions (the season), to " + hb.date +
+      (age != null && age > SC_HB_STALE_DAYS ? " - " + age + " days old, not a current reading" : "")];
+  if (num(hb.usual_day_20) != null)  parts.push("last 20 sessions " + hbPct(hb.usual_day_20) + " (now)");
+  if (num(hb.usual_day_250) != null) parts.push("last 250 sessions " + hbPct(hb.usual_day_250) + " (the year)");
+  if (num(hb.atr_pct_14) != null)    parts.push("whole-day range including gaps " + (+hb.atr_pct_14).toFixed(1) + "% (ATR 14)");
+  const x = hbXUsual(movePct, hb.usual_day_60);
+  if (x != null) parts.push("today " + (movePct >= 0 ? "+" : "") + (+movePct).toFixed(2) + "% = " +
+    Math.abs(x).toFixed(1) + "x its usual day");
+  parts.push("standard deviation of its own daily moves - sigma and standard deviation are the same thing");
+  return parts.join(" \u00b7 ");
+}
+/* the cell: the plain number, and the multiple ONLY on a day that is actually unusual */
+function hbCellHTML(t, hb, movePct) {
+  const u = hb ? num(hb.usual_day_60) : null;
+  const stale = hb && hbAgeDays(hb.date) != null && hbAgeDays(hb.date) > SC_HB_STALE_DAYS;
+  const x = hbXUsual(movePct, u);
+  const loud = x != null && Math.abs(x) >= SC_HB_X_UNUSUAL;
+  return '<span class="sc-hb' + (stale ? " is-stale" : "") + '" id="lh_' + esc(t) + '" title="' +
+    esc(hbTitle(t, hb, movePct)) + '">' +
+    (u == null ? '<span class="sc-hb__none">\u2014</span>'
+       /* the ± is its own element: at 390 px it is the one character that can go, and dropping it
+          buys the decimal that makes the number mean something ("1.8%" instead of "±1…"). */
+       : '<i class="sc-hb__pm">\u00b1</i>' + (+u).toFixed(1) + "%") +
+    (loud ? '<span class="sc-hb__x" style="color:' + (movePct >= 0 ? "var(--bull)" : "var(--bear)") + '">\u00b7' +
+      Math.abs(x).toFixed(1) + "\u00d7</span>" : "") + "</span>";
+}
+/* A GROUP'S HEARTBEAT IS THE MEDIAN OF ITS NAMES, NOT THE MEAN. One BYND in a cohort of forty
+   would drag a mean somewhere no member actually lives; the median says "the middle name in this
+   group has a day this size". Counted over the rows that HAVE a stored heartbeat, and the count is
+   always shown beside it, so a half-loaded cohort can never read as a whole one. */
+function hbMedian(rows) {
+  const v = (rows || []).map((r) => (r && r.hb ? num(r.hb.usual_day_60) : null)).filter((x) => x != null && x > 0).sort((a, b) => a - b);
+  if (!v.length) return { med: null, n: 0 };
+  const n = v.length;
+  return { med: n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2, n };
+}
+function hbGroupLabel(rows, total) {
+  const g = hbMedian(rows);
+  if (g.med == null) return "";
+  return "usual day " + hbPct(g.med) + " (middle of " + g.n + (total && total !== g.n ? " of " + total : "") + ")";
+}
+/* the stored heartbeat for one name, from whichever board row already holds it (the board loader
+   stashes it on the row). No row, no number — the ident says "usual —" rather than inventing one. */
+function hbRowFor(t) {
+  const all = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS : [];
+  const src = (typeof S !== "undefined" && S.rows && S.rows.length) ? S.rows : all;
+  for (const r of src) if (r && r.t === t) return r.hb || null;
+  for (const r of all) if (r && r.t === t) return r.hb || null;
+  return null;
+}
+function paintHbCell(t, hb, movePct) {
+  const n = el("lh_" + t);
+  if (!n) return;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = hbCellHTML(t, hb, movePct);
+  const fresh = tmp.firstChild;
+  if (fresh) { n.className = fresh.className; n.title = fresh.title; n.innerHTML = fresh.innerHTML; }
 }
 const rb = (v) => (v < 0.8 ? 1 : v < 1.2 ? 2 : v < 1.8 ? 3 : v < 2.5 ? 4 : 5);
 
@@ -5917,6 +6052,7 @@ function boardRowsHTML() {
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
+      hbCellHTML(d.t, d.hb, d.c) +   /* M52 — USUAL DAY, beside the change it gives meaning to */
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +   /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
@@ -5999,11 +6135,15 @@ function cohortGeigerHTML() {
   return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '">' +
     '<button class="sc-cohgeiger__hd" data-act="cohgeigertoggle" aria-expanded="' + (open ? "true" : "false") + '">' +
       '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      /* M52 — the cohort's own heartbeat, beside the count it is taken over: the middle name's
+         usual day. A cohort whose middle name moves 1.2% a day and one whose middle name moves
+         6% a day are different places to be, and nothing on this board said so before. */
       /* CONTRIBUTORS, NOT MEMBERSHIP. The mean is over rows that actually carry a Geiger, which
          can be far fewer than the cohort's rows - on 2026-09-17, with provider Geiger refused,
          FAV read "5 tickers" while showing 46 rows, so the number looked like the cohort had
          shrunk instead of saying how much of it the average covers. Aggregation math unchanged. */
-      '<span class="sc-cohgeiger__n">' + (total > n ? n + "/" + total + " contributors" : n + " tickers") + "</span>" +
+      '<span class="sc-cohgeiger__n">' + (total > n ? n + "/" + total + " contributors" : n + " tickers") +
+        (hbGroupLabel(S.rows, total) ? " \u00b7 " + esc(hbGroupLabel(S.rows, total)) : "") + "</span>" +
       '<span class="sc-cohgeiger__car">' + (open ? "▲" : "▼") + "</span>" +
     "</button>" +
     (open
@@ -6246,7 +6386,13 @@ function cohortCompareStripHTML() {
     const rd = scinRead(g.tr, g.mo);
     const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
       : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
-        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers";
+        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers" +
+      /* M52 — this group's own usual day rides in the same tooltip. The strip's columns are ~45 px
+         wide and Alan rejected wrapping them, so the number goes where there is room to say it
+         properly rather than being squeezed into a fourth line nobody could read. */
+      ((() => { const hbRows = scinGroupTickers(r.key).map((t) => ({ hb: hbRowFor(t) }));
+                const lbl = hbGroupLabel(hbRows, hbRows.length);
+                return lbl ? " · " + lbl : ""; })());
     const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
       /* the one 12-letter single word gets a break point; every other read wraps at its space */
       esc(rd.txt).replace("constructive", "construc&shy;tive") + (rd.div ? '<span class="sc-cohstrip__div">◆</span>' : "") + "</span>";
@@ -6354,7 +6500,55 @@ function updateBoard() {
    Idempotent: a value already resolved onto its S.rows entry is skipped, so repeated
    calls (cohort switch, sort repaint, star toggle) are cheap. Values are stashed on
    the row object so a re-render keeps the number (boardRowsHTML reads d.rsi). */
+/* M52 — fill the USUAL DAY column from the store. One read per chunk of names, newest row per
+   name, and ONLY rows from the last fortnight: a month-old heartbeat is not this name's usual day
+   any more, and bounding the date also keeps the read under PostgREST's 1,000-row page. A name
+   with no row keeps its dash — the column never guesses. */
+let cohHbDirty = false;
+async function loadBoardHeartbeat(tickers) {
+  const rowByT = {}; for (const r of (S.rows || [])) rowByT[r.t] = r;
+  const need = [];
+  const seen = new Set();
+  for (const t of (tickers || [])) {
+    if (!t || seen.has(t)) continue; seen.add(t);
+    const row = rowByT[t];
+    if (row && row.hb) { paintHbCell(t, row.hb, row.c); continue; }
+    need.push(t);
+  }
+  if (!need.length) return;
+  const since = new Date(Date.now() - 21 * 86400e3).toISOString().slice(0, 10);
+  for (let i = 0; i < need.length; i += 35) {
+    const chunk = need.slice(i, i + 35);
+    const rows = await pg("ticker_heartbeat_daily?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
+      ")&date=gte." + since + "&order=ticker.asc,date.desc" +
+      "&select=ticker,date,usual_day_20,usual_day_60,usual_day_250,atr_pct_14,n").catch(() => []);
+    const m = {};
+    for (const r of (rows || [])) if (!(r.ticker in m)) m[r.ticker] = r;   /* date.desc: the first row per name is its newest */
+    for (const t of chunk) {
+      const hb = m[t];
+      if (!hb) continue;
+      const row = rowByT[t]; if (row) row.hb = hb;
+      paintHbCell(t, hb, row ? row.c : null);
+      /* the ident bar shows the pinned name's own heartbeat; refresh it in place when its row lands */
+      if (typeof LEFT_T !== "undefined" && t === LEFT_T) {
+        const ib = el("coIdentBar");
+        if (ib) ib.innerHTML = leftIdentHTML(identBarData());
+      }
+      cohHbDirty = true;
+    }
+    /* the cohort summary is built once, before any heartbeat exists; redraw it when its names
+       arrive so the group's own usual day is not missing until the next repaint. */
+    if (cohHbDirty) {
+      cohHbDirty = false;
+      const cg = el("cohGeiger");
+      if (cg) cg.innerHTML = cohortGeigerHTML();
+    }
+  }
+}
 async function loadBoardRsi(tickers) {
+  /* M52 — the same lazy pass fills the USUAL DAY column: same tickers, its own read, never
+     blocking or delaying the RSI fill (and idempotent, so extra calls cost nothing). */
+  try { loadBoardHeartbeat(tickers); } catch (_) {}
   const rowByT = {}; for (const r of (S.rows || [])) rowByT[r.t] = r;
   const need = [];
   const seen = new Set();
@@ -8401,6 +8595,15 @@ function leftIdentHTML(data) {
     '<span class="sc-cpx" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
     '<span class="sc-cchg" id="coChg" style="color:' + col + '">' + (chg != null ? fmtC(chg) : "") + "</span>" +
     '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
+    /* M52 — the name's usual day, read from the store, right where its price and change are. It is
+       the answer to "is this move big?" and it belongs beside the move, not three rooms away. */
+    (data.t ? '<span class="sc-chb" id="coHb" title="' + esc(hbTitle(data.t, hbRowFor(data.t), chg)) + '">usual ' +
+      (hbRowFor(data.t) && num(hbRowFor(data.t).usual_day_60) != null
+        ? hbPct(hbRowFor(data.t).usual_day_60) +
+          (hbXUsual(chg, hbRowFor(data.t).usual_day_60) != null && Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)) >= SC_HB_X_UNUSUAL
+            ? ' <b style="color:' + (chg >= 0 ? "var(--bull)" : "var(--bear)") + '">' +
+              Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)).toFixed(1) + "\u00d7 today</b>" : "")
+        : "\u2014") + "</span>" : "") +   /* with no ticker pinned there is nothing whose usual day this would be */
     '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>" +
     (nudge ? '<span class="sc-macronext" id="macroNext">' + macroNextHTML() + "</span>" : "") + "</div>";
 }
@@ -19984,9 +20187,14 @@ function scintOneLineHTML(inner, title) {
 function scintUsualNote() {
   const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
   const rulesLine = scintRulesLine();
+  /* M52 — Alan, 24 Sep: "what's the difference between sigma and standard deviation?" None: sigma is
+     the symbol mathematicians write for it. Said in words, never with the Greek letter (M48's rule),
+     and "standard deviation" still written exactly once, for the record. */
   return "“usual day” is the size of a typical daily move for that name — its own last " + sessions +
-    " sessions [standard deviation]. An ordinary day is about 1×; 2× happens about 1 day in 20; " +
-    "3× about 1 day in 370." + (rulesLine ? " · " + rulesLine : "") +
+    " sessions [standard deviation; sigma means the same thing, and we say “usual day” instead of either]. " +
+    "An ordinary day is about 1×; 2× happens about 1 day in 20; " +
+    "3× about 1 day in 370. It is stored once a day for every name, so every screen divides by the same number." +
+    (rulesLine ? " · " + rulesLine : "") +
     " · the spark is criticality over the last " + SCINT_CRIT_HOURS + "h — a first measure only, " +
     scintSessions() + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet" +
     " · tap to open the notifications, where every one of today’s is listed.";
@@ -23318,12 +23526,12 @@ function filesWire(){
          READ is the words version of the same two numbers, so it is the column that can
          afford to lose width - it truncates gracefully and says nothing the pair does not. */
       ".ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
-      " minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr)"+
-      " minmax(0,9fr) minmax(0,15fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}"+
+      " minmax(0,13fr) minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr)"+
+      " minmax(0,8fr) minmax(0,13fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}"+
       ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
       "@media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr)"+
-      " minmax(0,11fr) minmax(0,10fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr)"+
-      " minmax(0,9fr) minmax(0,9fr) minmax(0,8fr) minmax(0,12fr) minmax(0,7fr)"+
+      " minmax(0,11fr) minmax(0,10fr) minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr)"+
+      " minmax(0,9fr) minmax(0,9fr) minmax(0,7fr) minmax(0,10fr) minmax(0,7fr)"+
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
