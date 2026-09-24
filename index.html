@@ -630,6 +630,39 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__row.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__empty{ font-size:11px; color:var(--dim); padding:2px 0; }
 .sc-ss__coh{ font-family:var(--mono); font-size:10px; color:var(--ink3); letter-spacing:.06em; }
+/* ── M55 · ONE LINE ─────────────────────────────────────────────────────────────────────────
+   Alan: "this would be too many tapes." The strip is now a single row: the label, the count, the
+   newest one in plain words, and the way through to the notifications, which hold the rest. Same
+   height whatever the day does, so the board below it never moves. */
+.sc-ss--one{ display:flex; align-items:center; gap:8px; padding:4px 8px; }
+.sc-ss__one{ display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0;
+  background:none; border:0; text-align:left; cursor:pointer; font:inherit; padding:0; }
+.sc-ss__one:hover .sc-ss__d{ color:var(--ink); }
+.sc-ss__one .sc-ss__d{ flex:1 1 auto; }
+.sc-ss__one.up .sc-ss__d{ color:var(--bull); }
+.sc-ss__one.dn .sc-ss__d{ color:var(--bear); }
+.sc-ss__one.hot .sc-ss__d{ color:var(--sv5); }
+.sc-ss__one.cool .sc-ss__d{ color:var(--sv1); }
+.sc-ss__go{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); white-space:nowrap; }
+.sc-ss--one .sc-ss__spark{ flex:0 0 auto; }
+@media(max-width:560px){
+  /* MEASURED at 390: the kind and the way-through do not fit beside the number. The line keeps the
+     time, the name and what happened; the rest is one tap away in the bell anyway. */
+  .sc-ss__one .sc-ss__k{ display:none; }
+  .sc-ss--one .sc-ss__lbl{ font-size:9px; letter-spacing:.1em; }
+}
+/* M55 — a scintilla in the notifications list: the same row shape as a news alert, plus what kind
+   of thing it was. It is a button, not a link: it goes to the PLACE, not to a story. */
+.sc-alert--scint{ width:100%; background:none; border:0; border-bottom:.4px solid var(--line);
+  text-align:left; font:inherit; }
+.sc-alerts__note{ padding:7px 12px; border-bottom:.4px solid var(--line); font-size:11px;
+  line-height:1.45; color:var(--dim); }
+.sc-alert__kind{ display:block; margin-top:2px; font-family:var(--mono); font-size:9px;
+  letter-spacing:.08em; color:var(--dim); text-transform:uppercase; }
+.sc-alert--scint.up .sc-alert__ttl{ color:var(--bull); }
+.sc-alert--scint.dn .sc-alert__ttl{ color:var(--bear); }
+.sc-alert--scint.hot .sc-alert__ttl{ color:var(--sv5); }
+.sc-alert--scint.cool .sc-alert__ttl{ color:var(--sv1); }
 /* M48 — what "usual day" means, said once, under the header. Alan, 24 Sep: "What's that Greek
    letter there? What does that exactly mean … I don't think we're using that." So the strip says
    it in words; the letter itself appears once, in brackets, and never as a label on a number. */
@@ -19094,6 +19127,7 @@ document.addEventListener("click", (e) => {
       }
       S.econDay = a.dataset.day || ecToday(); S.econSpan = "DAY";
       S.econCty = a.dataset.cty || "US"; S.econCat = "ALL"; S.econOpen = {};
+      S.econFocus = sub ? { sub: sub, day: S.econDay, k: "", scrolled: 0 } : null;   /* M55 — name it in the room */
       if (S.sec === "ECONOMIC") {
         document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((b) =>
           b.classList.toggle("on", b.dataset.s === S.econSpan));
@@ -19101,6 +19135,8 @@ document.addEventListener("click", (e) => {
       } else go("ECONOMIC");
       break;
     }
+    /* M55 — the one-line strip is the presence; the list is the bell. */
+    case "scintbell": { try { if (typeof window.scAlertsOpen === "function") window.scAlertsOpen(); } catch (_) {} break; }
     case "mnclear":                            // the ✕ on a landed number: clear it, leave the rest alone
       ECON_TAPE_CLEARED[a.dataset.k] = 1; ecTapePaint(); break;
     case "mnhist": ecHistShow(a); break;       // the number itself: two years of this print
@@ -19893,57 +19929,60 @@ function scintSessions() {
   return days.size;
 }
 
-/* ── the strip: newest first, one line each, tap to go to the thing ──────────────────────────── */
+/* ── M55 · ONE LINE, NOT A TAPE ───────────────────────────────────────────────────────────────
+   Alan, 24 Sep: "look at how many rows it takes … this would be too many tapes … we need things to
+   scintillate in their own place where I navigate around … more front and center. What about a
+   notifications channel, internal notifications?"
+   So the dashboard keeps ONE line: how many today, and the newest one said in plain words. It is
+   the presence, not the list — the list is the bell, which now carries every scintilla as its own
+   notification (scintNotify). Tapping the line opens the bell. What "usual day" means still travels
+   with it, in the line's own tooltip, instead of a paragraph under the board. */
+function scintOneLineHTML(inner, title) {
+  return '<div class="sc-ss sc-ss--one"' + (title ? ' title="' + esc(title) + '"' : "") + ">" +
+    '<span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' + inner + "</div>";
+}
+function scintUsualNote() {
+  const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
+  const rulesLine = scintRulesLine();
+  return "“usual day” is the size of a typical daily move for that name — its own last " + sessions +
+    " sessions [standard deviation]. An ordinary day is about 1×; 2× happens about 1 day in 20; " +
+    "3× about 1 day in 370." + (rulesLine ? " · " + rulesLine : "") +
+    " · the spark is criticality over the last " + SCINT_CRIT_HOURS + "h — a first measure only, " +
+    scintSessions() + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet" +
+    " · tap to open the notifications, where every one of today’s is listed.";
+}
 function scintStripHTML() {
   if (!SCINT_FEED_ON) return "";
-  if (SCINT_MISSING) {
-    return '<div class="sc-ss"><div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
-      '<span class="sc-ss__note">the store is not there yet — the migration has not been applied, so nothing is recorded</span></div></div>';
-  }
-  if (!SCINT_ROWS) {
+  if (SCINT_MISSING)
+    return scintOneLineHTML('<span class="sc-ss__note">the store is not there yet — the migration has not been applied, so nothing is recorded</span>');
+  if (!SCINT_ROWS)
     return SCINT_FAIL_AT
-      ? '<div class="sc-ss"><div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
-        '<span class="sc-ss__note">could not be read — showing nothing rather than something stale</span></div></div>'
+      ? scintOneLineHTML('<span class="sc-ss__note">could not be read — showing nothing rather than something stale</span>')
       : "";
-  }
   const rows = scintToday();
   const crit = scintCrit(rows, Date.now(), SCINT_CRIT_HOURS);
-  const sess = scintSessions();
   const coh = scintCohorts(rows);
+  /* M48's cohort chip survives the squeeze: which corner of the market is doing it, in two words */
   const cohHTML = coh.length
     ? '<span class="sc-ss__coh" title="' + esc(coh.slice(0, 3).map((c) => c.cohort + " " + c.count + " · " +
         c.intensity + "× usual, added up").join(" · ") +
         " · a name counts in every cohort it belongs to") + '">' + esc(coh[0].cohort) + " " + coh[0].count + "</span>"
     : "";
-  /* said ONCE, under the header: what "usual day" means, in words, with the standard measure in
-     brackets for the record and the two everyday frequencies spelled out. */
-  const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
-  const rulesLine = scintRulesLine();
-  const exp = '<div class="sc-ss__exp"><b>“usual day”</b> is the size of a typical daily move for that name — ' +
-    "its own last " + sessions + " sessions [standard deviation]. An ordinary day is about <b>1×</b>; " +
-    "<b>2×</b> happens about 1 day in 20; <b>3×</b> about 1 day in 370." +
-    (rulesLine ? '<i> · ' + esc(rulesLine) + "</i>" : "") + "</div>";
-  const head = '<div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
-    '<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + scintSpark(crit) +
-    '<span class="sc-ss__note">criticality, last ' + SCINT_CRIT_HOURS + "h · a first measure only · " +
-    sess + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet</span></div>";
-  if (!rows.length) {
-    return '<div class="sc-ss">' + head +
-      '<div class="sc-ss__empty">nothing has moved further than its own history today.</div>' + exp + "</div>";
-  }
-  const lines = rows.slice(0, 24).map((ev) => {
-    const d = ev.detail || {};
-    const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
-    return '<button class="sc-ss__row ' + scintClass(ev) + '" data-act="scintgo" data-kind="' + esc(ev.kind) +
-      '" data-sub="' + esc(ev.subject) + '" data-cty="' + esc(d.country || "") + '" data-day="' +
-      esc(d.event_ts ? scintDayET(d.event_ts) : "") + '" title="' + esc(scintWhat(ev) + " · " + scintSays(ev) +
-      " · source " + ev.source) + '">' +
-      '<span class="sc-ss__t">' + esc(when) + "</span>" +
-      '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
-      '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
-      '<span class="sc-ss__k">' + esc(scintWhat(ev)) + "</span></button>";
-  }).join("");
-  return '<div class="sc-ss">' + head + '<div class="sc-ss__rows">' + lines + "</div>" + exp + "</div>";
+  if (!rows.length)
+    return scintOneLineHTML('<span class="sc-ss__n">0</span><span class="sc-ss__empty">nothing has moved further than its own history today.</span>' +
+      scintSpark(crit), scintUsualNote());
+  const ev = rows[0], d = ev.detail || {};
+  const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
+  const line = '<button class="sc-ss__one ' + scintClass(ev) + '" data-act="scintbell" data-kind="' + esc(ev.kind) +
+    '" data-sub="' + esc(ev.subject) + '" data-cty="' + esc(d.country || "") + '" data-day="' +
+    esc(d.event_ts ? scintDayET(d.event_ts) : "") + '">' +
+    '<span class="sc-ss__t">' + esc(when) + "</span>" +
+    '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
+    '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
+    '<span class="sc-ss__k">' + esc(scintWhat(ev)) + "</span>" +
+    '<span class="sc-ss__go">all ' + rows.length + " ›</span></button>";
+  return scintOneLineHTML('<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + line + scintSpark(crit),
+    scintUsualNote());
 }
 function scintStripRender() {
   const host = el("scintStrip");
@@ -19952,10 +19991,51 @@ function scintStripRender() {
   if (html !== SCINT_HTML || host.innerHTML === "") { SCINT_HTML = html; host.innerHTML = html; }
   if (!host.querySelectorAll) return;
   let n = 0;
-  for (const row of host.querySelectorAll(".sc-ss__row[data-kind]")) {
+  for (const row of host.querySelectorAll(".sc-ss__one[data-kind], .sc-ss__row[data-kind]")) {
     const ev = scintBy().get(scintKey(row.dataset.kind, row.dataset.sub));
     if (ev && n < SCINT_GLOW_CAP && scintGlow("strip", ev, row.querySelector(".sc-ss__d") || row)) n++;
   }
+}
+/* ── M55 · EVERY SCINTILLA LANDS IN THE HUB'S OWN NOTIFICATIONS ───────────────────────────────
+   The bell already exists, already keeps a rolling list in local storage, already carries an unread
+   badge. It was fed by favourite-ticker news only. A scintilla is the same shape of thing — one
+   line, a subject, a time, somewhere to go — so it goes in the same list rather than into a second
+   one. The alerts module owns the store; this only hands it rows, newest first, and it is idempotent:
+   the store de-dupes on kind|subject|ts, so re-reading the table changes nothing.
+   HOW MANY A DAY: measured against the stored rows, not guessed — see the deliverable. */
+const SCINT_NOTIFY_MAX = 40;         /* one day's worth; the bell's own cap then applies */
+function scintNotifyItems(rows) {
+  return (rows || []).slice(0, SCINT_NOTIFY_MAX).map((ev) => {
+    const d = ev.detail || {};
+    return {
+      kind: ev.kind, sub: ev.subject, ts: ev.ts,
+      ticker: ev.subject_kind === "ticker" ? ev.subject : ev.subject,
+      isco: ev.subject_kind === "ticker",
+      cty: d.country || "", day: d.event_ts ? scintDayET(d.event_ts) : scintDayET(ev.ts),
+      what: scintWhat(ev), says: scintSays(ev), tone: scintClass(ev),
+    };
+  });
+}
+function scintNotify() {
+  if (typeof window === "undefined" || typeof window.scAlertsAdd !== "function") return 0;
+  const rows = scintToday();
+  if (!rows.length) return 0;
+  try { return window.scAlertsAdd(scintNotifyItems(rows)) || 0; } catch (_) { return 0; }
+}
+/* ── M55 · THE COMPANY IDENT ─────────────────────────────────────────────────────────────────
+   "we need things to scintillate in their own place where I navigate around." The board row is one
+   place; the company's own ident bar is the other — open NVDA on a day it is an outlier and the
+   number that IS the outlier glows once, the same 520 ms, through the same primitive. */
+function identScintPass() {
+  if (typeof document === "undefined" || typeof LEFT_T === "undefined" || !LEFT_T) return 0;
+  const ev = scintBy().get(scintKey("price_outlier", LEFT_T)) ||
+             scintBy().get(scintKey("earnings_surprise", LEFT_T));
+  if (!ev) return 0;
+  const node = el("coChg") || el("coPx");
+  if (!node) return 0;
+  if (node.classList) node.classList.add("is-scint");
+  scSetTitle(node, scintWhat(ev) + " · " + scintSays(ev));
+  return scintGlow("ident", ev, node) ? 1 : 0;
 }
 
 /* ── the four surfaces ──────────────────────────────────────────────────────────────────────── */
@@ -20142,6 +20222,7 @@ function scintPaint() {
   try { ecScintPass(); } catch (_) {}
   try { ernScintPass(); } catch (_) {}
   try { boardScintPass(); } catch (_) {}
+  try { identScintPass(); } catch (_) {}        /* M55 — the company's own ident bar */
   try { mnScintPass(); } catch (_) {}          /* M48 — the top tape flashes as its moment comes */
   try { ecRoomScintPass(); } catch (_) {}      /* M55 — and the Economic room, at the same cadence */
   try { ecFocusPaint(); } catch (_) {}         /* M55 — the release the tape sent him to stays named */
@@ -20157,6 +20238,7 @@ async function scintPull() {
     const rows = await pg(SCINT_SEL, 1);
     SCINT_ROWS = Array.isArray(rows) ? rows : [];
     SCINT_BY = null; SCINT_AT = Date.now(); SCINT_FAIL_AT = 0; SCINT_MISSING = false;
+    try { scintNotify(); } catch (_) {}          /* M55 — one line each, in the bell */
   } catch (err) {
     const m = String((err && err.message) || "");
     SCINT_MISSING = /→ (404|400|406)/.test(m) || /relation .* does not exist/i.test(m);
@@ -20712,12 +20794,30 @@ loadSentiment(); setInterval(loadSentiment, 300000);
     else { badge.hidden=true; bell.classList.remove("has-unread"); }
   }
 
+  /* M55 — TWO KINDS OF NOTIFICATION, ONE LIST. A news alert is an anchor to the story; a scintilla
+     is a button that goes to the PLACE the thing lives — the company for a price or earnings move,
+     the ECONOMIC room, on that day, for a release. The row says what it is in plain words, one line,
+     exactly what the dashboard strip says of the newest one. */
   function renderList(){
     var wrap = document.getElementById("alertList"); if(!wrap) return;
     var alerts = jget(ALERTS_KEY, []);
-    if(!alerts.length){ wrap.innerHTML = '<div class="sc-alerts__empty">No favorite-ticker news yet.<br>Alerts appear here when a new story drops.</div>'; return; }
-    wrap.innerHTML = alerts.map(function(a){
+    if(!alerts.length){ wrap.innerHTML = '<div class="sc-alerts__empty">No notifications yet.<br>Favourite-ticker news and today’s scintillas appear here.</div>'; return; }
+    /* M55 — the measure is explained ONCE, here, where the list of scintillas is */
+    var note = "";
+    if(alerts.some(function(a){ return !!a.kind; }) && typeof scintUsualNote === "function"){
+      try{ note = '<div class="sc-alerts__note">'+esc(scintUsualNote())+'</div>'; }catch(_){ note = ""; }
+    }
+    wrap.innerHTML = note + alerts.map(function(a){
       var newCls = a.read ? "" : " is-new";
+      if(a.kind){
+        return '<button class="sc-alert sc-alert--scint'+newCls+(a.tone?" "+esc(a.tone):"")+'" type="button"'
+          + ' data-kind="'+esc(a.kind)+'" data-sub="'+esc(a.sub||a.ticker||"")+'"'
+          + ' data-cty="'+esc(a.cty||"")+'" data-day="'+esc(a.day||"")+'" data-isco="'+(a.isco?1:0)+'">'
+          + '<div class="sc-alert__top"><span class="sc-alert__tk">'+esc(a.sub||a.ticker||"")+'</span>'
+          + '<span class="sc-alert__ago">'+esc(agoStr(a.ts))+'</span></div>'
+          + '<span class="sc-alert__ttl">'+esc(a.says||"")+'</span>'
+          + '<span class="sc-alert__kind">'+esc(a.what||"scintilla")+'</span></button>';
+      }
       return '<a class="sc-alert'+newCls+'" href="'+esc(a.url||"#")+'" target="_blank" rel="noopener"'
         + ' data-tk="'+esc(a.ticker)+'" data-url="'+esc(a.url||"")+'">'
         + '<div class="sc-alert__top"><span class="sc-alert__tk">'+esc(a.ticker)+'</span>'
@@ -20727,24 +20827,38 @@ loadSentiment(); setInterval(loadSentiment, 300000);
   }
 
   /* record new alerts (de-duped by url||title), bump unread, chime, repaint */
+  function alertKey(a){ return a.kind ? a.kind+"|"+String(a.sub||a.ticker||"").toUpperCase()+"|"+a.ts
+                                       : (a.url||a.title||"")+"|"+a.ticker; }
   function pushAlerts(items){
-    if(!items.length) return;
+    if(!items.length) return 0;
     var alerts = jget(ALERTS_KEY, []);
-    var have = {}; alerts.forEach(function(a){ have[(a.url||a.title||"")+"|"+a.ticker]=1; });
-    var added = 0;
+    var have = {}; alerts.forEach(function(a){ have[alertKey(a)]=1; });
+    var added = 0, news = 0;
     items.forEach(function(it){
-      var key = (it.url||it.title||"")+"|"+it.ticker;
+      var key = alertKey(it);
       if(have[key]) return;
       have[key]=1;
-      alerts.unshift({ ticker:it.ticker, title:it.title, url:it.url, ts:it.ts, seenAt:new Date().toISOString(), read:false });
+      if(it.kind){
+        alerts.unshift({ kind:it.kind, sub:it.sub, ticker:it.ticker, isco:!!it.isco, cty:it.cty, day:it.day,
+                         what:it.what, says:it.says, tone:it.tone, ts:it.ts,
+                         seenAt:new Date().toISOString(), read:false });
+      } else {
+        alerts.unshift({ ticker:it.ticker, title:it.title, url:it.url, ts:it.ts, seenAt:new Date().toISOString(), read:false });
+        news++;
+      }
       added++;
     });
-    if(!added) return;
+    if(!added) return 0;
+    alerts.sort(function(x,y){ return (tsMs(y.ts)||0) - (tsMs(x.ts)||0); });   /* one list, newest first */
     if(alerts.length>ALERT_CAP) alerts = alerts.slice(0, ALERT_CAP);
     jset(ALERTS_KEY, alerts);
     var unread = (+jget(UNREAD_KEY,0)||0) + added;
     jset(UNREAD_KEY, unread);
-    paintBadge(); renderList(); chime();
+    paintBadge(); renderList();
+    /* M55 — the chime stays a NEWS thing. A day carries a dozen or more scintillas; ringing for each
+       one would train the sound out of him, which is the opposite of a signal. */
+    if(news) chime();
+    return added;
   }
 
   function poll(){
@@ -20804,6 +20918,25 @@ loadSentiment(); setInterval(loadSentiment, 300000);
     var t = e.target;
     if(t.closest && t.closest("#alertBell")){ e.preventDefault(); isOpen()?closePanel():openPanel(); return; }
     if(t.closest && t.closest("#alertClear")){ e.preventDefault(); jset(ALERTS_KEY, []); jset(UNREAD_KEY, 0); paintBadge(); renderList(); return; }
+    var srow = t.closest && t.closest(".sc-alert--scint");
+    if(srow){
+      e.preventDefault();
+      var kd = srow.getAttribute("data-kind"), sub = srow.getAttribute("data-sub");
+      if(srow.getAttribute("data-isco")==="1" && typeof openCo==="function"){
+        try{ if(typeof LEFT_HEAT!=="undefined") LEFT_HEAT=false; openCo(sub); }catch(_){}
+      } else if(typeof S!=="undefined"){
+        try{
+          S.econDay = srow.getAttribute("data-day") || (typeof ecToday==="function"?ecToday():null);
+          S.econSpan = "DAY"; S.econCty = srow.getAttribute("data-cty") || "US"; S.econCat = "ALL"; S.econOpen = {};
+          S.econFocus = sub ? { sub: sub, day: S.econDay, k: "", scrolled: 0 } : null;
+          if(S.sec === "ECONOMIC"){ if(typeof ecLoadWindow==="function") ecLoadWindow(); }
+          else if(typeof go==="function") go("ECONOMIC");
+        }catch(_){}
+      }
+      void kd;
+      closePanel();
+      return;
+    }
     var row = t.closest && t.closest(".sc-alert");
     if(row){
       var tk = row.getAttribute("data-tk"), url = row.getAttribute("data-url");
@@ -20817,6 +20950,12 @@ loadSentiment(); setInterval(loadSentiment, 300000);
   });
   document.addEventListener("keydown", function(e){ if(e.key==="Escape" && isOpen()) closePanel(); });
   window.addEventListener("resize", function(){ if(isOpen()) positionPanel(); });
+
+  /* M55 — the two doors the rest of the page uses. Nothing else about this module is exposed. */
+  try {
+    window.scAlertsAdd = function(items){ try { return pushAlerts(items||[]); } catch(_) { return 0; } };
+    window.scAlertsOpen = function(){ try { openPanel(); } catch(_) {} };
+  } catch(_) {}
 
   // boot: restore badge, first poll shortly after load (seeds silently), then interval
   paintBadge();

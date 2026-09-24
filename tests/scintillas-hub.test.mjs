@@ -46,6 +46,7 @@ function world({ rows = null, today = "2026-09-23", now = Date.parse("2026-09-23
   const setTitleSrc = page.match(/function scSetTitle \(node, value\) \{[\s\S]*?\n\}/)[0];
   const src = "const COHSETS = arguments[11] || null;\n" + LAYER + setTitleSrc + "\nreturn { scintKey, scintToday, scintIndex, scintBy, scintTone, scintGlow, scintWhat, scintSays," +
     " scintClass, scintCrit, scintSpark, scintSessions, scintCohorts, scintStripHTML, scintStripRender, ecScintPass," +
+    " scintNotifyItems, scintUsualNote, identScintPass," +
     " ernScintPass, boardScintPass, scintPull, scintTick, scintPaint," +
     " state: () => ({ missing: SCINT_MISSING, fail: SCINT_FAIL_AT, rows: SCINT_ROWS, cap: SCINT_GLOW_CAP })," +
     " setRows: (r) => { SCINT_ROWS = r; SCINT_BY = null; }, setMissing: (m) => { SCINT_MISSING = m; }," +
@@ -163,7 +164,11 @@ test("the board marks the outliers of the day on the percentage cell that IS the
   assert.equal(api.boardScintPass(), 0, "a board repaint keeps the mark and does not re-flash");
 });
 
-test("today's strip: newest first, one line each, and every line knows where to go", () => {
+test("M55 — today's strip is ONE line: the count, the newest said plainly, and the way into the notifications", () => {
+  /* Alan, 24 Sep: "look at how many rows it takes … this would be too many tapes … What about a
+     notifications channel, internal notifications?" So the dashboard keeps one line and the LIST
+     moved to the bell. What each event knows — where it lives, which day, which country — did not
+     move: it travels with the notification row instead of the strip row. */
   const host = node();
   const rows = [
     ev({ ts: "2026-09-23T20:04:00Z" }),
@@ -176,15 +181,23 @@ test("today's strip: newest first, one line each, and every line knows where to 
   assert.match(html, /TODAY’S SCINTILLAS/);
   assert.match(html, />2</, "two events today, not the third from yesterday");
   assert.ok(!html.includes(">OLD<"), "yesterday is not today");
-  assert.match(html, /data-act="scintgo" data-kind="price_outlier" data-sub="AAPL"/);
-  assert.match(html, /data-kind="econ_surprise" data-sub="Core CPI" data-cty="US" data-day="2026-09-23"/,
-    "a release carries the day the ECONOMIC room must open");
+  assert.equal((html.match(/class="sc-ss__one/g) || []).length, 1, "ONE line, not one per event");
+  assert.match(html, /data-act="scintbell"/, "the line opens the notifications, where the rest are");
   assert.match(html, /outlier of the day/);
-  assert.match(html, /surprise print/);
-  assert.match(html, /a first measure only · 2 of 60 sessions stored, so no probability is claimed yet/,
-    "the criticality reading says what it is and what it still needs");
-  assert.ok(html.indexOf("AAPL") < html.indexOf("Core CPI"), "newest first");
-  const plain = html.replace(/<[^>]*>/g, " ");
+  assert.ok(html.includes("AAPL") && !html.includes("Core CPI"), "the line is the NEWEST one");
+  assert.match(html, /all 2 ›/, "and it says how many are behind it");
+
+  /* every event still knows where to go — now as a notification */
+  const items = api.scintNotifyItems(api.scintToday());
+  assert.equal(items.length, 2);
+  assert.equal(items[0].sub, "AAPL");
+  assert.equal(items[0].isco, true, "a price outlier opens the company");
+  assert.equal(items[1].kind, "econ_surprise");
+  assert.equal(items[1].isco, false, "a release opens the ECONOMIC room, not a company");
+  assert.equal(items[1].day, "2026-09-23", "on the day the release belongs to");
+  assert.equal(items[1].cty, "US");
+  assert.ok(items[1].says.includes("actual 3.9"), "said in the room's own words: " + items[1].says);
+  const plain = (html + JSON.stringify(items)).replace(/<[^>]*>/g, " ");
   assert.ok(!/undefined|NaN|null/.test(plain), "no half-formed number reaches the screen: " + plain.slice(0, 200));
 });
 
@@ -321,15 +334,25 @@ test("a row says how unusual in words, with the usual day spelled out", () => {
   assert.ok(!/σ/.test(html), "no Greek letter reaches the screen");
 });
 
-test("the strip explains 'usual day' ONCE, with the standard measure in brackets and the odds in words", () => {
+test("M55 — 'usual day' is still explained ONCE, in words, where the list now lives", () => {
+  /* M48's rule has not changed: the letter is written once, in brackets, for the record, and the
+     odds are spelled out. Only the PLACE changed — one line has no room for a paragraph, so the
+     sentence travels on the line itself and heads the notifications list. */
   const { api } = world({ rows: [bynd()] });
   const html = api.scintStripHTML();
-  assert.equal((html.match(/standard deviation/g) || []).length, 1, "written once, for the record");
-  assert.equal((html.match(/class="sc-ss__exp"/g) || []).length, 1, "and in one place");
-  assert.ok(html.includes("1 day in 20") && html.includes("1 day in 370"), "the two everyday frequencies");
-  assert.ok(html.includes("<b>1×</b>"), "an ordinary day is about 1×");
+  const note = api.scintUsualNote();
+  assert.equal((note.match(/standard deviation/g) || []).length, 1, "written once, for the record");
+  assert.ok(note.includes("1 day in 20") && note.includes("1 day in 370"), "the two everyday frequencies");
+  assert.ok(note.includes("An ordinary day is about 1×"));
+  assert.ok(note.includes("no probability is claimed yet"), "and the criticality line stays honest");
+  assert.equal((html.match(/standard deviation/g) || []).length, 1, "carried on the line, once");
+  assert.ok(!html.includes("sc-ss__exp"), "the paragraph under the board is gone");
   const empty = world({ rows: [] }).api.scintStripHTML();
-  assert.equal((empty.match(/class="sc-ss__exp"/g) || []).length, 1, "a quiet day still explains the measure");
+  assert.match(empty, /standard deviation/, "a quiet day still explains the measure");
+  /* and the panel prints it: the renderer asks the page for this exact sentence */
+  const alerts = page.slice(page.indexOf("function renderList(){"), page.indexOf("function alertKey("));
+  assert.ok(/scintUsualNote/.test(alerts) && /sc-alerts__note/.test(alerts),
+    "the notifications list heads itself with the same sentence");
 });
 
 test("which rule fired is said beside the row, in the rules file's own numbers", () => {
