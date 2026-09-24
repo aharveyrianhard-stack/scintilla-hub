@@ -73,7 +73,10 @@ test("the tape ships ON — and with its one flag off the ident bar is byte-iden
        production's markup plus that one span and NOTHING else. Strip the span, compare byte for
        byte against the 2dbeb4c fixture, then check the span itself separately. */
     const HB_SPAN = /<span class="sc-chb" id="coHb" title="[^"]*">usual [^<]*(?:<b style="color:var\(--(?:bull|bear)\)">[^<]*<\/b>)?<\/span>/;
-    assert.match(got, HB_SPAN, "the usual day is on the ident (" + sec + ", " + state + ")");
+    /* with no ticker pinned there is no name whose usual day it would be, so the span is absent
+       and the bar is production's markup exactly. */
+    if (data.t) assert.match(got, HB_SPAN, "the usual day is on the ident (" + sec + ", " + state + ")");
+    else assert.doesNotMatch(got, /sc-chb/, "no ticker, no usual day");
     assert.equal(got.replace(HB_SPAN, ""), golden(data), "apart from the usual day, flag off is production's exact markup (" + sec + ", " + state + ")");
     assert.doesNotMatch(got, /macroNext|sc-cident--nudge/);
   }

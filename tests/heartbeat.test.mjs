@@ -132,7 +132,9 @@ test("the board cell prints the stored usual day, and the multiple ONLY on a day
   const H = hubEnv();
   const hb = { date: today(), usual_day_60: 1.45, usual_day_20: 1.5, usual_day_250: 1.22, atr_pct_14: 1.93, n: 250 };
   const quiet = H.hbCellHTML("MCD", hb, -0.9);
-  assert.match(quiet, /±1\.5%/, "the usual day is always shown");
+  const body = (h) => h.slice(h.indexOf('">', h.indexOf("title=")) + 2);   // past the title attribute
+  assert.match(body(quiet), /^<i class="sc-hb__pm">±<\/i>1\.4%<\/span>$/,
+    "the cell is the number and nothing else, its sign in its own element so a phone can drop it");
   assert.doesNotMatch(quiet, /sc-hb__x/, "an ordinary day gets no multiple");
   const loud = H.hbCellHTML("MCD", hb, -4.81);
   assert.match(loud, /sc-hb__x/, "a 3.3x day is called out");
@@ -179,6 +181,15 @@ test("a group's heartbeat is the MIDDLE name's, so one wild name cannot speak fo
   assert.equal(H.hbMedian([{ hb: null }, {}]).med, null, "nothing stored, nothing claimed");
   assert.match(H.hbGroupLabel(rows, 46), /usual day ±1\.4% \(middle of 5 of 46\)/, "the count it is taken over is always shown");
   assert.equal(H.hbGroupLabel([{}], 46), "");
+});
+
+test("at phone width the row stays legible: one column steps aside and the sign is dropped, not the number", () => {
+  const phone = [...page.matchAll(/@media\(max-width:560px\)\{[\s\S]*?\n\}/g)].map((m) => m[0]).find((b) => b.includes(".ch{grid-template-columns"));
+  assert.ok(phone, "the board has a phone rule of its own");
+  assert.match(phone, /nth-child\(6\), \.ch > \*:nth-child\(11\)\{ display:none/, "F P/E and READ step aside - the two that were already unreadable at 390");
+  assert.match(phone, /\.sc-hb__pm\{ display:none/, "the ± goes so the decimal fits");
+  assert.equal(phone.match(/minmax\(0,\d+fr\)/g).length, 12, "12 tracks for the 12 cells that remain");
+  assert.match(phone, /\.ch > \.sc-hb, \.ch > \.sc-chg, \.ch > \.sc-fpe\{ overflow:hidden/, "no cell spills into its neighbour at 390");
 });
 
 test("the column exists on the board, has a track to sit in, and the page carries the words", () => {

@@ -166,6 +166,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    estate's one colour rule: daily up green, daily down red. */
 .ch > .sc-hb{ overflow:visible; white-space:nowrap; text-align:center; color:var(--ink2); font-variant-numeric:tabular-nums; }
 .sc-hb__x{ margin-left:3px; font-weight:700; }
+.sc-hb__pm{ font-style:normal; }
 .sc-hb.is-stale{ color:var(--mute); }        /* the stored row is older than a week — dimmed, never hidden */
 .sc-hb__none{ color:var(--mute); }
 /* the same number on the company ident bar, quiet beside the price */
@@ -4093,6 +4094,28 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 .ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,13fr) minmax(0,10fr) minmax(0,12fr) minmax(0,6fr) minmax(0,10fr) minmax(0,10fr) minmax(0,8fr) minmax(0,13fr) minmax(0,9fr) minmax(0,5fr) !important;gap:5px}
 .ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:900px){.ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,7fr) minmax(0,10fr) minmax(0,7fr) minmax(0,5fr) !important}}
+/* M52 · THE PHONE BOARD. MEASURED at 390 px: with 14 tracks the row collided exactly the way the
+   2026-06 "+5.82%98.3x$314[" bug did — "(0.83%)" and "±1.8%" printed on top of each other — because
+   CHG, F P/E, RSI (and, as first written, USUAL DAY) are allowed to overflow their track so they
+   never clip a character. Two rules, and only at phone width:
+   (a) USUAL DAY clips like every other cell instead of spilling into CHG;
+   (b) the READ column steps aside. This file already says why READ is the one that can: it "is the
+       words version of the same two numbers, so it is the column that can afford to lose width …
+       it says nothing the pair does not". TREND and MOM keep their numbers; the words come back the
+       moment there is room for them. Header and rows share one child order, so hiding the 11th cell
+       in both keeps every value under its own label. */
+@media(max-width:560px){
+  .ch{grid-template-columns:minmax(0,4fr) minmax(0,10fr) minmax(0,12fr) minmax(0,18fr) minmax(0,13fr) minmax(0,10fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr) minmax(0,11fr) minmax(0,7fr) minmax(0,5fr) !important; gap:4px !important}
+  /* TWO columns step aside at 390, and they are the two that were ALREADY unreadable there:
+     READ (6th-from-last; the words version of TREND and MOM, which keep their numbers) and F P/E,
+     which at this width printed "36…". What that buys is the two numbers a phone is actually read
+     for: the change in full — "(1.39%)", not "(1…" — and the usual day beside it. */
+  .ch > *:nth-child(6), .ch > *:nth-child(11){ display:none !important; }
+  .ch > .sc-hb, .ch > .sc-chg, .ch > .sc-fpe{ overflow:hidden !important; text-overflow:ellipsis; }
+  /* the sign goes, the number stays; F P/E and MKT CAP give up the width, since at this size they
+     already read "36…" and "$5…" — nothing legible is lost and one more real number is gained. */
+  .sc-hb__pm{ display:none; }
+}
 .gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sc-cohstrip{grid-template-columns:repeat(var(--coh-n,10),minmax(0,1fr)) !important;grid-auto-flow:row !important;grid-auto-columns:auto !important;gap:1px !important;overflow-x:hidden !important;padding-left:4px !important;padding-right:4px !important}
 @media(max-width:820px){.sc-cohstrip{grid-template-columns:repeat(var(--coh-half,5),minmax(0,1fr)) !important}}
@@ -5815,7 +5838,10 @@ function hbCellHTML(t, hb, movePct) {
   const loud = x != null && Math.abs(x) >= SC_HB_X_UNUSUAL;
   return '<span class="sc-hb' + (stale ? " is-stale" : "") + '" id="lh_' + esc(t) + '" title="' +
     esc(hbTitle(t, hb, movePct)) + '">' +
-    (u == null ? '<span class="sc-hb__none">\u2014</span>' : hbPct(u)) +
+    (u == null ? '<span class="sc-hb__none">\u2014</span>'
+       /* the ± is its own element: at 390 px it is the one character that can go, and dropping it
+          buys the decimal that makes the number mean something ("1.8%" instead of "±1…"). */
+       : '<i class="sc-hb__pm">\u00b1</i>' + (+u).toFixed(1) + "%") +
     (loud ? '<span class="sc-hb__x" style="color:' + (movePct >= 0 ? "var(--bull)" : "var(--bear)") + '">\u00b7' +
       Math.abs(x).toFixed(1) + "\u00d7</span>" : "") + "</span>";
 }
@@ -6425,6 +6451,7 @@ function updateBoard() {
    name, and ONLY rows from the last fortnight: a month-old heartbeat is not this name's usual day
    any more, and bounding the date also keeps the read under PostgREST's 1,000-row page. A name
    with no row keeps its dash — the column never guesses. */
+let cohHbDirty = false;
 async function loadBoardHeartbeat(tickers) {
   const rowByT = {}; for (const r of (S.rows || [])) rowByT[r.t] = r;
   const need = [];
@@ -6454,6 +6481,14 @@ async function loadBoardHeartbeat(tickers) {
         const ib = el("coIdentBar");
         if (ib) ib.innerHTML = leftIdentHTML(identBarData());
       }
+      cohHbDirty = true;
+    }
+    /* the cohort summary is built once, before any heartbeat exists; redraw it when its names
+       arrive so the group's own usual day is not missing until the next repaint. */
+    if (cohHbDirty) {
+      cohHbDirty = false;
+      const cg = el("cohGeiger");
+      if (cg) cg.innerHTML = cohortGeigerHTML();
     }
   }
 }
@@ -8502,13 +8537,13 @@ function leftIdentHTML(data) {
     '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
     /* M52 — the name's usual day, read from the store, right where its price and change are. It is
        the answer to "is this move big?" and it belongs beside the move, not three rooms away. */
-    '<span class="sc-chb" id="coHb" title="' + esc(hbTitle(data.t, hbRowFor(data.t), chg)) + '">usual ' +
+    (data.t ? '<span class="sc-chb" id="coHb" title="' + esc(hbTitle(data.t, hbRowFor(data.t), chg)) + '">usual ' +
       (hbRowFor(data.t) && num(hbRowFor(data.t).usual_day_60) != null
         ? hbPct(hbRowFor(data.t).usual_day_60) +
           (hbXUsual(chg, hbRowFor(data.t).usual_day_60) != null && Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)) >= SC_HB_X_UNUSUAL
             ? ' <b style="color:' + (chg >= 0 ? "var(--bull)" : "var(--bear)") + '">' +
               Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)).toFixed(1) + "\u00d7 today</b>" : "")
-        : "\u2014") + "</span>" +
+        : "\u2014") + "</span>" : "") +   /* with no ticker pinned there is nothing whose usual day this would be */
     '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>" +
     (nudge ? '<span class="sc-macronext" id="macroNext">' + macroNextHTML() + "</span>" : "") + "</div>";
 }
