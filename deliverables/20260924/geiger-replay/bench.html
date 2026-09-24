@@ -1,0 +1,186 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Geiger replay bench — ms per tick, layouts per tick</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#07070b;--panel:#0d0d14;--line:#1a1a2a;--ink:#c8c8d2;--dim:#6a6a78;
+  --bull:#00d492;--bear:#d4455e;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+#head{padding:8px 10px;border-bottom:.4px solid var(--line)}
+#boardScroll{height:520px;overflow:auto;border-bottom:.4px solid var(--line)}
+.sc-board__row{position:relative;display:grid;grid-template-columns:52px 70px 1fr 120px;
+  gap:5px;align-items:center;padding:3px 18px 3px 6px;border-bottom:.4px solid var(--line);height:20px}
+.sc-ctk{font-size:11px}
+.sc-gmini{position:relative;height:13px;background:var(--panel);border-radius:2px;overflow:hidden}
+.sc-gmini__mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--dim)}
+.sc-gmini i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
+#out{padding:8px 10px;white-space:pre}
+</style></head><body>
+<div id="head">GEIGER REPLAY BENCH · <span id="n"></span> rows · arm: <b id="arm">—</b></div>
+<div id="boardScroll"></div>
+<div id="out">run window.__bench(arm, ticks)</div>
+<script>
+/* ============================================================================
+   THE MEASUREMENT, SAME SHAPE AS THE M32 GLOW BENCH.
+   Two arms over the SAME rows and the SAME values:
+     shipped  - the FLIP as production carries it: inside the row loop, read a rect,
+                write a transform, read again. Every read-after-write forces layout.
+     batched  - the replacement: read all, write all, reorder once, read all, one flush.
+   Nothing here is simulated: both arms are the real code paths, and the counters below
+   are the browser's own layout flushes, not a guess.
+   ========================================================================== */
+const ROWS = +(new URLSearchParams(location.search).get("rows") || 364);
+const bs = document.getElementById("boardScroll");
+const TICKERS = Array.from({length: ROWS}, (_, i) =>
+  String.fromCharCode(65 + (i % 26)) + String.fromCharCode(65 + ((i / 26 | 0) % 26)) + (i % 10));
+let vals = {}, order = TICKERS.slice();
+for (const t of TICKERS) vals[t] = Math.random() * 2 - 1;
+bs.innerHTML = TICKERS.map((t) =>
+  '<div class="sc-board__row" data-t="' + t + '"><span class="sc-ctk">' + t + '</span>' +
+  '<span class="sc-last">100.00</span><span class="sc-gmini"><span class="sc-gmini__mid"></span><i></i></span>' +
+  '<span class="sc-tm">+0.00</span></div>').join("");
+document.getElementById("n").textContent = ROWS;
+
+/* ---- counters: reads, writes, and the flushes the writes forced ---------- */
+let R = 0, W = 0, FL = 0, DIRTY = false;
+const proto = CSSStyleDeclaration.prototype;
+for (const prop of ["transform","transition","width","left","right","background","boxShadow","willChange"]) {
+  const d = Object.getOwnPropertyDescriptor(proto, prop);
+  if (d && d.set) Object.defineProperty(proto, prop, {
+    configurable: true, enumerable: d.enumerable, get: d.get,
+    set(v) { W++; DIRTY = true; d.set.call(this, v); } });
+}
+const _append = Node.prototype.appendChild;
+Node.prototype.appendChild = function (n) { DIRTY = true; return _append.call(this, n); };
+const _grc = Element.prototype.getBoundingClientRect;
+Element.prototype.getBoundingClientRect = function () {
+  R++; if (DIRTY) { FL++; DIRTY = false; } return _grc.call(this); };
+const _oh = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+  configurable: true,
+  get() { R++; if (DIRTY) { FL++; DIRTY = false; } return _oh.get.call(this); } });
+
+/* ---- the values a tick brings (a replayed day moves most of the board) ---- */
+function nextValues() {
+  for (const t of TICKERS) vals[t] = Math.max(-1, Math.min(1, vals[t] + (Math.random() - 0.5) * 0.35));
+  order = TICKERS.slice().sort((a, b) => vals[b] - vals[a]);
+}
+function paintBars(rows) {
+  let mx = 0.0001; for (const t in vals) mx = Math.max(mx, Math.abs(vals[t]));
+  for (const r of rows) {
+    const v = vals[r.getAttribute("data-t")], bar = r.querySelector(".sc-gmini i");
+    const bull = v >= 0, col = bull ? "var(--bull)" : "var(--bear)";
+    bar.style.left = bull ? "50%" : ""; bar.style.right = bull ? "" : "50%";
+    bar.style.width = (Math.min(Math.abs(v) / mx, 1) * 50) + "%";
+    bar.style.background = col; bar.style.boxShadow = "0 0 5px " + col;
+  }
+}
+function reorder(byT) {
+  const frag = document.createDocumentFragment();
+  for (const t of order) if (byT[t]) frag.appendChild(byT[t]);
+  bs.appendChild(frag);
+}
+
+/* ---- ARM A: the shipped FLIP, read-write-read inside the row loop -------- */
+function armShipped() {
+  const rows = [].slice.call(bs.querySelectorAll(".sc-board__row"));
+  const byT = {}, was = {};
+  for (const r of rows) { const t = r.getAttribute("data-t"); byT[t] = r; was[t] = r.getBoundingClientRect().top; }
+  paintBars(rows);
+  reorder(byT);
+  for (const r of rows) {
+    const t = r.getAttribute("data-t");
+    const dy = was[t] - r.getBoundingClientRect().top;      // read (forced: the reorder + writes dirtied layout)
+    if (!dy) continue;
+    r.style.transition = "none";                            // write
+    r.style.transform = "translateY(" + dy + "px)";         // write
+    r.getBoundingClientRect();                              // READ AGAIN — one forced layout per row
+    r.style.transition = "transform .42s cubic-bezier(.32,0,.18,1)";
+    r.style.transform = "translateY(0)";
+  }
+  return rows.length;
+}
+
+/* ---- ARM B: the batched FLIP that now ships ------------------------------ */
+function armBatched() {
+  const rows = [].slice.call(bs.querySelectorAll(".sc-board__row"));
+  const byT = {}, was = {}, now = {};
+  for (const r of rows) { const t = r.getAttribute("data-t"); byT[t] = r; was[t] = r.getBoundingClientRect().top; }
+  const vh = window.innerHeight || 800;
+  paintBars(rows);
+  reorder(byT);
+  for (const r of rows) now[r.getAttribute("data-t")] = r.getBoundingClientRect().top;
+  const anim = [];
+  for (const r of rows) {
+    const t = r.getAttribute("data-t"), dy = was[t] - now[t];
+    if (!dy) continue;
+    if (was[t] < -120 || was[t] > vh + 120) continue;       // moved, not animated
+    r.style.transition = "none"; r.style.transform = "translateY(" + dy + "px)";
+    anim.push(r);
+  }
+  if (anim.length) void bs.offsetHeight;                    // THE one flush
+  for (const r of anim) {
+    r.style.transition = "transform .42s cubic-bezier(.32,0,.18,1)";
+    r.style.transform = "translateY(0)";
+  }
+  return rows.length;
+}
+
+/* ---- ARM C: what now ships — the pitch is measured once and every position is
+        derived from the row's INDEX, so a tick reads geometry twice, not twice per row.
+        Bars are written as one cssText and skipped when unchanged. ------------- */
+let PITCH = null;
+function armPitch() {
+  const rows = [].slice.call(bs.querySelectorAll(".sc-board__row"));
+  if (PITCH == null) PITCH = rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top;
+  const box = bs.getBoundingClientRect(), scrolled = bs.scrollTop, vh = window.innerHeight || 800;
+  const byT = {}, oldIx = {};
+  let mx = 0.0001; for (const t in vals) mx = Math.max(mx, Math.abs(vals[t]));
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], t = r.getAttribute("data-t");
+    byT[t] = r; oldIx[t] = i;
+    const v = vals[t], bull = v >= 0, col = bull ? "var(--bull)" : "var(--bear)";
+    const css = (bull ? "left:50%;" : "right:50%;") + "width:" + (Math.min(Math.abs(v) / mx, 1) * 50).toFixed(2) +
+      "%;background:" + col + ";box-shadow:0 0 5px " + col;
+    if (r.__css !== css) { r.querySelector(".sc-gmini i").style.cssText = css; r.__css = css; }
+  }
+  reorder(byT);
+  const newIx = {}; order.forEach((t, i) => { newIx[t] = i; });
+  const anim = [];
+  for (const r of rows) {
+    const t = r.getAttribute("data-t"), dy = (oldIx[t] - newIx[t]) * PITCH;
+    if (!dy) continue;
+    const top = box.top - scrolled + oldIx[t] * PITCH;
+    if (top < -120 || top > vh + 120) continue;
+    r.style.transition = "none"; r.style.transform = "translateY(" + dy + "px)";
+    anim.push(r);
+  }
+  if (anim.length) void bs.offsetHeight;
+  for (const r of anim) {
+    r.style.transition = "transform .42s cubic-bezier(.32,0,.18,1)";
+    r.style.transform = "translateY(0)";
+  }
+  return rows.length;
+}
+
+const ARMS = { shipped: armShipped, batched: armBatched, pitch: armPitch };
+window.__bench = function (arm, ticks) {
+  document.getElementById("arm").textContent = arm;
+  const f = ARMS[arm], ms = [], fls = [], reads = [];
+  for (let i = 0; i < ticks; i++) {
+    nextValues();
+    R = 0; W = 0; FL = 0; DIRTY = false;
+    const t0 = performance.now();
+    f();
+    const t1 = performance.now();
+    ms.push(t1 - t0); fls.push(FL); reads.push(R);
+  }
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const p95 = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length * 0.95)];
+  const out = { arm, rows: ROWS, ticks,
+    msMean: +mean(ms).toFixed(2), msP95: +p95(ms).toFixed(2), msMax: +Math.max(...ms).toFixed(2),
+    forcedLayoutsMean: +mean(fls).toFixed(1), forcedLayoutsMax: Math.max(...fls),
+    rectReadsMean: +mean(reads).toFixed(1) };
+  document.getElementById("out").textContent = JSON.stringify(out, null, 1);
+  return out;
+};
+</script></body></html>

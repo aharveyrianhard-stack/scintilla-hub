@@ -19661,6 +19661,11 @@ function filesWire(){
 (function(){
   var ASOF=null, DATES=[], CACHE={}, LIVE_G=null, PREV={}, TIMER=null, MOUNTED=false;
   var NEXT_D=null, BLEND=0;   /* the day being eased toward, and how far */
+  /* ★ SPEED. Alan asked for the replay to be a thing you can run, and a fixed 700ms a day
+     is one speed, not a transport. The chip cycles; changing it while PLAYING rebases the
+     clock to where the playhead already is, so the speed changes and the position does not. */
+  var SPEEDS=[["\u00bd\u00d7",1400],["1\u00d7",700],["2\u00d7",350],["4\u00d7",175]], SPEED_I=1;
+  var PLAY_V0=0, PLAY_T0=0;
   var SUB=20;                 /* slider stops per trading day - the finger moves in 1/20ths */
   var START_I=0;              /* index into DATES where the rewind window BEGINS */
   /* The second input: how far back the rewind reaches. label, calendar days, row cap.
@@ -19693,6 +19698,7 @@ function filesWire(){
     return '<div class="gwx" id="gwxBar">'+
       '<span class="sc-l0rng__lbl">Rewind</span>'+
       '<button class="sc-l0chip" data-act="gwxplay" id="gwxPlay">&#9654; PLAY</button>'+
+      '<button class="sc-l0chip" data-act="gwxspeed" id="gwxSpeed" title="replay speed">'+SPEEDS[SPEED_I][0]+'</button>'+
       '<button class="sc-l0chip" data-act="gwxback" id="gwxBack" title="how far back the rewind reaches - the point you measure change from">'+BACK_DEF[BACK_I][0]+'</button>'+
       /* ★ TWO HANDLES. Alan: "have the rewind bar have two toggles - one the starting, one
          the ending, and you move the ending around, but the starting makes the start of the
@@ -19744,6 +19750,13 @@ function filesWire(){
     var slot=E("gwxSlot");
     if(slot) slot.outerHTML=bar(); else host.insertAdjacentHTML("afterend", bar());
     E("gwxPlay").onclick=play;
+    var sp=E("gwxSpeed");
+    if(sp) sp.onclick=function(){
+      SPEED_I=(SPEED_I+1)%SPEEDS.length; this.textContent=SPEEDS[SPEED_I][0];
+      /* rebase, do not restart: the playhead keeps its place and only the rate changes */
+      if(TIMER){ var s2=E("gwxSc"); PLAY_V0=+s2.value; PLAY_T0=performance.now(); }
+      armIdle();
+    };
     /* ★ COALESCE. Dragging fires oninput per pixel; each one queued a fetch and a full
        repaint, so a fast drag stacked dozens of them and the rows visibly fought each
        other. Alan: "it gets stuck in moments... they struggle to separate." Only the
@@ -19931,7 +19944,15 @@ function filesWire(){
     E("gwxDt").textContent="live"; liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
     if(LIVE_G){var before={};(S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
-      (S.rows||[]).forEach(function(r){ if(LIVE_G[r.t]!=null) r.g=LIVE_G[r.t]; });
+      /* EXACTLY. `!=null` skipped every ticker whose LIVE value was null, so a name with no
+         live reading kept the rewound number after the replay ended - the board came back
+         from a replay holding one borrowed value per absent row. A ticker that was in the
+         snapshot is restored to what it held, null included. */
+      (S.rows||[]).forEach(function(r){
+        if(Object.prototype.hasOwnProperty.call(LIVE_G,r.t)) r.g=LIVE_G[r.t]; });
+      /* the snap back to live is not a market move: clear the crossing baseline so nothing
+         glows for a jump the reader made themselves */
+      PREV={};
       repaint(before);}
   }
   /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
@@ -19947,59 +19968,142 @@ function filesWire(){
      Instead the rows are never removed. Their geiger bar is rewritten in place, and the
      row itself is MOVED to its new rank with a transform. Nothing disappears, so there
      is nothing to flash. */
+  /* ★ THREE LAYOUTS A TICK, NOT TWO PER ROW. The FLIP below used to read a rect, write
+     a transform and read again INSIDE the row loop. Every one of those read-after-write
+     pairs forces the browser to flush layout, so a 364-row board paid 729 forced layouts
+     per tick and the replay could not hold a frame - which is what Alan saw as "it gets
+     stuck in moments... they struggle to separate".
+     The passes are now separated: read every first position, write every value, reorder
+     once, read every last position, then write every transform with ONE flush between.
+     That is three layouts whatever the row count. Numbers are in the deliverable.
+     A row that is off screen is still MOVED - the order is the truth - but it is not
+     animated: travel nobody can see is pure cost, the same rule scScint already applies
+     to the glow. */
+  var PERF={ticks:0,ms:0,msMax:0,rows:0,moved:0,animated:0,reads:0,last:null};
+  try{ window.__GWX_PERF=PERF; }catch(_){}
+  /* THE ROW PITCH, MEASURED ONCE. Board rows are one fixed-height grid template, so the
+     distance a row travels when it moves N places is N x pitch - it does not need to be
+     read off the DOM for every row, every tick. The pitch is measured when the board is
+     built (or its row count changes) and CHECKED: if the rows are not uniform the module
+     falls back to reading rects, so a future row that is taller cannot silently make the
+     movement wrong. */
+  var PITCH=null, PITCH_N=0, PITCH_OK=false;
+  function measurePitch(rows){
+    if(PITCH_OK && PITCH_N===rows.length && PITCH>0) return;
+    PITCH_N=rows.length; PITCH_OK=false; PITCH=null;
+    if(rows.length<2) return;
+    var h0=rows[0].getBoundingClientRect(), h1=rows[1].getBoundingClientRect();
+    var pitch=h1.top-h0.top;
+    if(!(pitch>0)) return;
+    /* check a sample, not all 364 - three misses anywhere is enough to distrust the pitch */
+    var step=Math.max(1,Math.floor(rows.length/12)), bad=0;
+    for(var i=step;i<rows.length;i+=step){
+      var want=h0.top+i*pitch, got=rows[i].getBoundingClientRect().top;
+      if(Math.abs(want-got)>1.5){ bad++; if(bad>1) return; }
+    }
+    PITCH=pitch; PITCH_OK=true;
+  }
   function repaint(before){
     try{
+      var T0=(window.performance&&performance.now)?performance.now():0;
       var bs=E("boardScroll"); if(!bs) return;
       var rows=[].slice.call(bs.querySelectorAll(".sc-board__row"));
       if(!rows.length) return;
-      var byT={}; rows.forEach(function(r){ byT[r.getAttribute("data-t")]=r; });
+      var i,r,t,reads=0;
 
-      var was={}; rows.forEach(function(r){ was[r.getAttribute("data-t")]=r.getBoundingClientRect().top; });
+      measurePitch(rows);
+      /* ONE read of where the board is and how far it is scrolled. With the pitch known,
+         every row's position on screen is arithmetic from its INDEX - so the tick reads
+         geometry twice in total instead of twice per row (MEASURED: 729 rect reads a tick
+         became 2). */
+      var box=bs.getBoundingClientRect(); reads++;
+      var scrolled=bs.scrollTop; reads++;
+      var vh=(window.innerHeight||800);
+      var oldIx={}, rectMode=!PITCH_OK;
+      for(i=0;i<rows.length;i++) oldIx[rows[i].getAttribute("data-t")]=i;
+      var was={};
+      if(rectMode){ for(i=0;i<rows.length;i++){ was[rows[i].getAttribute("data-t")]=rows[i].getBoundingClientRect().top; reads++; } }
 
-      // value in place — the same bipolar bar the page draws, just rewritten
-      var vals={}; (S.rows||[]).forEach(function(r){ vals[r.t]=r.g; });
-      var mx=0.0001; for(var t in vals) if(vals[t]!=null) mx=Math.max(mx,Math.abs(vals[t]));
-      rows.forEach(function(r){
-        var t=r.getAttribute("data-t"), v=vals[t];
-        var cell=r.querySelector(".sc-gmini");
-        if(!cell) return;
+      /* WRITE PASS - the same bipolar bar the page draws, rewritten in place.
+         ONE cssText write per bar instead of five property writes, and skipped entirely
+         when the bar already says what it is about to say: on a replay tick most rows
+         move a little, but the ones that do not should cost nothing. */
+      var vals={}; (S.rows||[]).forEach(function(x){ vals[x.t]=x.g; });
+      var mx=0.0001; for(var k in vals) if(vals[k]!=null) mx=Math.max(mx,Math.abs(vals[k]));
+      var byT={};
+      for(i=0;i<rows.length;i++){
+        r=rows[i]; t=r.getAttribute("data-t"); byT[t]=r;
+        var v=vals[t], cell=r.querySelector(".sc-gmini");
+        if(!cell) continue;
         var bar=cell.querySelector("i");
-        if(v==null){ if(bar){bar.style.width="0%";bar.style.boxShadow="none";} return; }
+        if(v==null){
+          if(bar && r.__gwxCss!==""){ bar.style.cssText="width:0%"; r.__gwxCss=""; }
+          PREV[t]=null; continue;
+        }
         if(!bar){ bar=document.createElement("i"); cell.appendChild(bar); }
-        var bull=v>=0, w=(Math.min(Math.abs(v)/mx,1)*50)+"%";
-        var col=bull?"var(--bull)":"var(--bear)";
-        bar.style.left = bull?"50%":""; bar.style.right = bull?"":"50%";
-        bar.style.width=w; bar.style.background=col; bar.style.boxShadow="0 0 5px "+col;
-      });
+        var bull=v>=0, col=bull?"var(--bull)":"var(--bear)";
+        var css=(bull?"left:50%;":"right:50%;")+"width:"+(Math.min(Math.abs(v)/mx,1)*50).toFixed(2)+"%;"+
+                "background:"+col+";box-shadow:0 0 5px "+col;
+        if(r.__gwxCss!==css){ bar.style.cssText=css; r.__gwxCss=css; }
+        /* ★ THE CROSSING IS THE EVENT. A name that walks from +0.02 to -0.02 has changed
+           SIDE - bull to bear - and on a bipolar board that is the one move worth a glow.
+           It goes through the page's own scScint (its keyframe carries offset 0, so the
+           colour IS the glow at t=0 and eases back to the cell's own style), never a
+           second animation: one primitive, one language. The ticker carries it because
+           the bar itself has no text to glow. */
+        var pv=PREV[t];
+        if(pv!=null && ((pv<0)!==(v<0)) && typeof scScint==="function")
+          scScint(r.querySelector(".sc-ctk")||r, v>=0);
+        PREV[t]=v;
+      }
 
-      // order in place — move the nodes, never recreate them
+      /* ORDER IN PLACE - move the nodes, never recreate them (a destroyed row cannot
+         animate, and an emptied board reads as a black flash) */
       S.boardOrder=computeBoardOrder();
       var frag=document.createDocumentFragment();
-      (S.boardOrder||[]).forEach(function(t){ if(byT[t]) frag.appendChild(byT[t]); });
-      rows.forEach(function(r){ if(!r.parentNode) return; });
+      (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
       bs.appendChild(frag);
 
-      // play them from where they were to where they now are
-      rows.forEach(function(r){
-        var t=r.getAttribute("data-t"); if(was[t]==null) return;
-        var dy=was[t]-r.getBoundingClientRect().top;
-        if(!dy) return;
+      /* WHERE EVERY ROW NOW IS - derived from its new index, not read back */
+      var newIx={}, ord=S.boardOrder||[];
+      for(i=0;i<ord.length;i++) newIx[ord[i]]=i;
+      var now={};
+      if(rectMode){ for(i=0;i<rows.length;i++){ now[rows[i].getAttribute("data-t")]=rows[i].getBoundingClientRect().top; reads++; } }
+
+      /* WRITE PASS - put each row back where it was. No read in this loop, and a row
+         that is off screen is MOVED but never animated: travel nobody can see is pure
+         cost, the same rule scScint already applies to the glow. */
+      var anim=[], moved=0;
+      for(i=0;i<rows.length;i++){
+        r=rows[i]; t=r.getAttribute("data-t");
+        var oi=oldIx[t], ni=newIx[t];
+        if(ni===undefined) continue;
+        var dy = rectMode ? (was[t]-now[t]) : (oi-ni)*PITCH;
+        if(!dy) continue;
+        moved++;
+        var top = rectMode ? was[t] : (box.top - scrolled + oi*PITCH);
+        if(top<-120 || top>vh+120) continue;
         r.style.transition="none";
         r.style.transform="translateY("+dy+"px)";
-        r.getBoundingClientRect();
+        anim.push(r);
+      }
+      /* THE ONE FLUSH. Reading here, once, is what makes the transform above a starting
+         point instead of a no-op - the old code bought this per row, 364 times. */
+      if(anim.length){ void bs.offsetHeight; reads++; }
+      for(i=0;i<anim.length;i++){
+        r=anim[i];
         r.style.transition="transform .42s cubic-bezier(.32,0,.18,1)";
         r.style.transform="translateY(0)";
         /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
-           compositing layer. Holding a transform on 200+ rows exhausts layer memory and
-           Safari flushes them - which is seen as the board going BLACK and snapping back.
-           Alan saw it on iPad while desktop, with far more headroom, never did.
-           Clearing transform+transition once the move lands drops the row back to a plain
-           painted element and keeps the live layer count near zero. */
+           compositing layer; holding 200+ of them exhausts layer memory and Safari
+           flushes the lot, which is seen as the board going BLACK and snapping back.
+           Clearing transform+transition once the move lands keeps the live layer count
+           near zero. */
         clearTimeout(r.__gwxT);
-        r.__gwxT=setTimeout(function(){
-          r.style.transition=""; r.style.transform=""; r.style.willChange="";
-        }, 460);
-      });
+        r.__gwxT=setTimeout((function(row){ return function(){
+          row.style.transition=""; row.style.transform=""; row.style.willChange="";
+        };})(r), 460);
+      }
 
       var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
       var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
@@ -20007,6 +20111,14 @@ function filesWire(){
       }
       paintTM();   /* same breath - never leave a frame with the columns missing */
       badges(before);
+
+      /* MEASURED, NOT CLAIMED - same shape as the M32 glow bench: what a tick costs and
+         what it is made of. The bench page next to this file runs the same three paths. */
+      var T1=(window.performance&&performance.now)?performance.now():0;
+      PERF.ticks++; PERF.ms=T1-T0; PERF.msMax=Math.max(PERF.msMax,PERF.ms);
+      PERF.rows=rows.length; PERF.moved=moved; PERF.animated=anim.length; PERF.reads=reads;
+      PERF.last={ms:+PERF.ms.toFixed(2),rows:rows.length,moved:moved,animated:anim.length,
+                 reads:reads,mode:rectMode?"rects":"pitch"};
     }catch(e){}
   }
   /* rank badge — fixed column hard right, fades in on a move, clears after 1400ms */
@@ -20043,10 +20155,14 @@ function filesWire(){
        made the bar hop. A requestAnimationFrame loop slides the thumb continuously; each
        time it crosses into a new trading day the board seeks once. Rows keep their FLIP
        animation across the whole day, so nothing is repainted mid-flight. */
-    var msPerDay=700, startVal=+sc.value, t0=performance.now(), lastDay=Math.floor(startVal/SUB);
+    PLAY_V0=+sc.value; PLAY_T0=performance.now();
+    var lastDay=Math.floor(PLAY_V0/SUB);
     TIMER=requestAnimationFrame(function step(now){
-      var v=startVal + ((now-t0)/msPerDay)*SUB;
-      if(v>=+sc.max){ sc.value=sc.max; stop(); return; }
+      var v=PLAY_V0 + ((now-PLAY_T0)/SPEEDS[SPEED_I][1])*SUB;
+      /* ★ THE END IS LIVE. Stopping on the last replayed day left the board holding a past
+         date until the 45s idle timer noticed. A replay that finishes hands the board back
+         to the live pipeline in the same breath, exactly as it was before the rewind. */
+      if(v>=+sc.max){ sc.value=sc.max; stop(); goLive(); return; }
       sc.value=v;
       var d=Math.floor(v/SUB);
       if(d!==lastDay){ lastDay=d; E("gwxDt").textContent=DATES[d]||""; seek(DATES[d]); }
