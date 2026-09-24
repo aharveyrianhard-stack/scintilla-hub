@@ -2024,6 +2024,25 @@ body.tvmodal-open{ overflow:hidden; }
 @keyframes pxfl-dn{0%{color:var(--bear);text-shadow:0 0 8px rgba(255,45,85,.6)}100%{}}
 .sc-last.fl-up{ animation:pxfl .6s; }
 .sc-last.fl-dn{ animation:pxfl-dn .6s; }
+/* ── SCINTILLATION (M32 · Alan 23 Sep: "some scintillation — price percent changes in the
+   parentheses — in the tape, on screen, in the cohorts") ────────────────────────────────────
+   Colour and a faint text-shadow ONLY: never a background, a size, a weight or a padding, so a
+   glow can never move the row under the reader's eye. The animation itself is run from script
+   through the Web Animations API (scScint); these classes are the fallback for a browser without
+   Element.animate, and the reduced-motion rule below switches BOTH paths off. */
+@keyframes sc-scint-up{0%{color:var(--bull);text-shadow:0 0 8px rgba(0,255,163,.6)}100%{}}
+@keyframes sc-scint-dn{0%{color:var(--bear);text-shadow:0 0 8px rgba(255,45,85,.6)}100%{}}
+.sc-scint-up{ animation:sc-scint-up .52s ease-out; }
+.sc-scint-dn{ animation:sc-scint-dn .52s ease-out; }
+@media (prefers-reduced-motion:reduce){
+  .sc-scint-up, .sc-scint-dn, .sc-last.fl-up, .sc-last.fl-dn{ animation:none; }
+}
+/* the read's own age, on its face — see readSectionAge() */
+.readage{ font:700 8px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--mute);
+  border:1px solid var(--line); border-radius:3px; padding:2px 6px; margin:0 0 8px; display:inline-block; }
+.readage.old{ color:var(--warn,#ffb020); border-color:rgba(255,176,32,.45); }
+.readage.dead{ color:var(--bear); border-color:rgba(255,45,85,.45); }
+.readage.unknown{ color:var(--bear); border-color:rgba(255,45,85,.45); }
 /* FIX 1 — NO FEED rows: keep the row, dim it, badge the ticker, honest dashes */
 .sc-board__row.nofeed{ opacity:.55; }
 .no-feed{ font:700 7px var(--mono); color:var(--bear); border:1px solid rgba(255,45,85,.4);
@@ -4551,7 +4570,7 @@ async function fetchCompanyData(t) {
     pg("price_target_consensus?ticker=eq." + e + "&select=target_high,target_low,target_avg,target_median,num_analysts"),   // EST PORT — median for the 02 CONVICTION subline
     pg("news?ticker=eq." + e + "&select=ticker,title,site,feed,url,published_ts&order=published_ts.desc.nullslast&limit=30"),
     pg(coEventsPath(e)),   // FIX 3 (R46) — revenue_estimate added: EPS+REV beat/miss on every past row
-    pg("ticker_context?ticker=eq." + e + "&select=ticker,narrative,business_now,catalysts,watch_notes&limit=1"),   // FIX 3 — dossier, pulled once on open
+    pg("ticker_context?ticker=eq." + e + "&select=ticker,narrative,business_now,catalysts,watch_notes,enriched_ts,updated_ts&limit=1"),   // FIX 3 — dossier, pulled once on open   // M32 — enriched_ts/updated_ts: the date of the WORDS, which read_blocks.updated_ts cannot give (read-engine re-stamps every row on every run)
     pg("fundamentals_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 3 — period values are FY/Q1–Q4, not 'annual'
     pg("fundamentals_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,revenue,gross_profit,operating_income,ebitda,net_income,eps_diluted&order=fiscal_year.asc"),   // FIX 4 — quarterly actuals (+ GP/OI for the 6-tile grid)
     pg("balance_history?ticker=eq." + e + "&period=eq.FY&select=fiscal_year,cash_and_equiv,total_debt,net_debt,total_assets,total_equity&order=fiscal_year.asc"),    // FIX 2 — balance sheet FY
@@ -15597,8 +15616,48 @@ function liveReadSentence(d) {              // generated from the SAME composite
    date), and the verdict sentence reads the legacy daily composite, frozen since 2026-08-24 while its row is re-stamped
    every ten minutes. A block or basis older than a day now says so, in the label, with its date and age. */
 const READ_STALE_MS = 86400e3;
+/* ── HOW OLD IS THIS SECTION, REALLY (M32) ───────────────────────────────────────────────────
+   Alan, 23 Sep: "All of these sections of the read, verdict, business catalyst, are super stale
+   as far as I've read… why do they go stale to begin with?"
+   Because a read_blocks row is dated by the JOB, not by the WORDS: read-engine writes
+   `updated_ts: now` on every row it upserts, so a body unchanged since June reads as minutes old.
+   MEASURED against production 2026-09-23 (read-only):
+     · every verdict/business/catalysts/watch row carried 2026-09-23T23:10Z — 386 verdict rows;
+     · the words behind BUSINESS / CATALYSTS / WATCH come from ticker_context, whose overlay was
+       last written between 2026-06-15 and 2026-07-22 (63-100 days), because dossier-refresh has
+       not run since 2026-07-22 — its own change_log entries stop there;
+     · the composite the VERDICT narrative is written from is frozen at 2026-08-24 for 364 of the
+       386 tf=D rows.
+   So each tab is dated by ITS OWN source, on its face, and a section that cannot prove its date
+   says exactly that rather than looking current. */
+const READ_AGE_OLD_D = 2, READ_AGE_DEAD_D = 30;
+function readTsMs(ts) {
+  if (ts == null || ts === "") return NaN;
+  const n = +ts;                                     // a 0 or negative epoch is NOT a date:
+  if (isFinite(n)) return n > 0 ? (n < 1e12 ? n * 1000 : n) : NaN;   // Date.parse("0") is the year 2000
+  return Date.parse(String(ts));
+}
+function readSectionAge(kind, ts, stampedAt, nowMs) {
+  const ms = readTsMs(ts), now = Number.isFinite(nowMs) ? nowMs : Date.now(), stamp = readTsMs(stampedAt);
+  const note = isFinite(stamp)
+    ? "stored block re-stamped " + new Date(stamp).toISOString().slice(0, 16).replace("T", " ") +
+      "Z by read-engine — that is when the job ran, not when these words changed"
+    : "";
+  if (!isFinite(ms)) return { kind, level: "unknown", days: null, date: "", note,
+    text: kind + " · SOURCE DATE NOT RECORDED" };
+  const days = Math.max(0, Math.floor((now - ms) / 86400e3));
+  return { kind, days, date: new Date(ms).toISOString().slice(0, 10), note,
+    level: days >= READ_AGE_DEAD_D ? "dead" : days >= READ_AGE_OLD_D ? "old" : "fresh",
+    text: kind + " · AS OF " + new Date(ms).toISOString().slice(0, 10) + " · " +
+      (days === 0 ? "TODAY" : days + "D OLD") };
+}
+function readAgeHTML(a) {
+  if (!a || !a.text) return "";
+  return '<div class="readage ' + esc(a.level) + '"' + (a.note ? ' title="' + esc(a.note) + '"' : "") +
+    ">" + esc(a.text) + "</div>";
+}
 function readAgeLabel(ts, nowMs) {
-  const v = ts == null ? NaN : (isFinite(+ts) && +ts > 0 ? (+ts < 1e12 ? +ts * 1000 : +ts) : Date.parse(String(ts)));
+  const v = readTsMs(ts);
   if (!isFinite(v)) return null;
   const age = (Number.isFinite(nowMs) ? nowMs : Date.now()) - v;
   if (age <= READ_STALE_MS) return null;
@@ -15607,7 +15666,7 @@ function readAgeLabel(ts, nowMs) {
 function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
   rb = rb || {}; rbAt = rbAt || {};                    // GO-LIVE FIX 2 — read_blocks (section → body); section → updated_ts
   const hasRb = Object.keys(rb).length > 0;
-  if (!cx && !hasRb) return { content: {}, pills: [], extras: [] };   // no dossier, no blocks → honest default line
+  if (!cx && !hasRb) return { content: {}, pills: [], extras: [], ages: {} };   // no dossier, no blocks → honest default line
   const { trail, fwd, next: fwdNext } = fwdTrailPE(price, fund, est, t);
   /* GO-LIVE FIX 2 — the read_blocks verdict body is THE verdict; ticker_context.narrative
      is the fallback. The live composite sentence is ALWAYS appended after the body. */
@@ -15631,9 +15690,22 @@ function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
   const legacyNote = d && d.legacyAsOf ? readAgeLabel(d.legacyAsOf) : "";
   const basis = rb.basis ? String(rb.basis)
     : ("desk narrative generated from the legacy daily composite" + (legacyNote ? " " + legacyNote.toLowerCase() : "") +
-       " (the writer re-stamps it every 10 minutes; its number is not re-measured); the live read above uses the provider Geiger");
+       "; read-engine re-stamps the stored block on every run, so the block's own row date is when the job ran, not when these words changed; the live read above uses the provider Geiger");
   const extras = [["NARRATIVE BASIS", [basis]]];
+  /* M32 — every tab carries the date of the source its words actually came from: the dossier
+     overlay for BUSINESS/CATALYSTS/WATCH, and the composite the narrative was generated from for
+     VERDICT (its dossier date when the narrative fell back to ticker_context.narrative). */
+  const dossierAt = cx ? (cx.enriched_ts != null ? cx.enriched_ts : cx.updated_ts) : null;
+  const ages = {
+    VERDICT: rb.verdict != null
+      ? readSectionAge("COMPOSITE BASIS", (d && (d.legacyAsOf != null ? d.legacyAsOf : d.asOf)), rbAt.verdict)
+      : readSectionAge("DOSSIER", dossierAt, rbAt.verdict),
+    BUSINESS: readSectionAge("DOSSIER", dossierAt, rbAt.business),
+    CATALYSTS: readSectionAge("DOSSIER", dossierAt, rbAt.catalysts),
+    WATCH: readSectionAge("DOSSIER", dossierAt, rbAt.watch),
+  };
   return {
+    ages,
     /* R20 FIX 7 — read_blocks 4-SECTION CONTRACT (verdict·business·catalysts·watch,
        verified ×128 in DB): each tab renders the FULL matching section body
        (\n\n paragraph breaks preserved by toParas). Fallback order per tab:
@@ -15655,8 +15727,11 @@ function readBlocksHTML(extras) {            // GO-LIVE FIX 2 — uppercase-labe
 }
 function readTxtHTML(data) {
   const paras = (data.read && data.read.content && data.read.content[S.readTab]) || [];
+  const age = data.read && data.read.ages && data.read.ages[S.readTab];
+  /* M32 — the age rides ON THE FACE of the words, so a section written in June cannot pass for
+     today's. No words, no date claim. */
   let html = paras.length
-    ? paras.map((p) => "<p>" + sanitize(p) + "</p>").join("")
+    ? readAgeHTML(age) + paras.map((p) => "<p>" + sanitize(p) + "</p>").join("")
     : "<p>Desk narrative auto-generates per ticker from <b>read_blocks</b> / <b>ticker_context</b> (DB) once its dossier is loaded.</p>";
   if (S.readTab === "VERDICT")               // GO-LIVE FIX 2 — read blocks live under VERDICT only
     html += readBlocksHTML(data.read && data.read.extras);
@@ -15904,8 +15979,11 @@ function ernBandStart() {
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
 let lastTapes = "";
 function tapeHTML(label, items) {
+  /* M32 — each item carries its ticker and the two numbers it is currently showing, so a later
+     tick can patch the value in place (and scintillate it) instead of rebuilding the band. */
   const seg = items.map((it) =>
-    '<span class="sc-tape__item">' + esc(it.t) + " <b>" + fmtTapePx(it.price) + "</b> " +
+    '<span class="sc-tape__item" data-t="' + esc(it.t) + '" data-px="' + esc(it.price) + '" data-pc="' + esc(it.pct) + '">' +
+    esc(it.t) + " <b>" + fmtTapePx(it.price) + "</b> " +
     '<span class="' + (it.pct >= 0 ? "up" : "dn") + '">' + fmtC(it.pct) + "</span></span>" +
     '<span class="sc-tape__dot">·</span>').join("");
   return '<div class="sc-tape"><b class="sc-tape__lbl">' + label + " →</b>" +
@@ -15920,8 +15998,48 @@ function renderTapes() {
   /* ECON TAPE 22 Sep — the price bands own #bandsPx; the ECON band sits in its own slot beside them, so a price tick
      every 45 s no longer rewinds the week band (a whole week of events is longer than 45 s of scrolling). */
   const px = el("bandsPx") || el("bands");
-  px.innerHTML = tapeHTML("MACRO", macro) + tapeHTML("ALL", all);
-  px.querySelectorAll(".sc-tape__track").forEach((track) => tapeSpeed(track));
+  /* M32 — a tick that changed only NUMBERS patches the bands where they stand and scintillates
+     the cells that moved. Replacing innerHTML rebuilt both tracks every 45 s, which threw away
+     the marquee's position (the band jumped back to its left edge mid-scroll) and killed any
+     glow in flight. A real change of membership or order still rebuilds — that is the only case
+     that needs new nodes. */
+  if (!tapePatch(px, [macro, all])) {
+    px.innerHTML = tapeHTML("MACRO", macro) + tapeHTML("ALL", all);
+    px.querySelectorAll(".sc-tape__track").forEach((track) => tapeSpeed(track));
+  }
+}
+/* Patch the two price bands in place. Returns false — meaning "rebuild instead" — whenever the
+   bands are not the same tickers in the same order, because then the nodes themselves are wrong.
+   Each track holds the segment repeated an exact number of times (tapeSpeed duplicates it so the
+   -50% loop is seamless), so item n of the track is item n % items.length of the data, and every
+   copy of a ticker is patched — otherwise the second half of the loop would scroll in stale. */
+function tapePatch(host, bands) {
+  if (!host) return false;
+  const tracks = host.querySelectorAll(".sc-tape__track");
+  if (tracks.length !== bands.length) return false;
+  for (let i = 0; i < bands.length; i++) {
+    const want = bands[i] || [], nodes = tracks[i].querySelectorAll(".sc-tape__item");
+    if (!want.length || !nodes.length || nodes.length % want.length) return false;
+    for (let n = 0; n < nodes.length; n++)
+      if (nodes[n].getAttribute("data-t") !== String(want[n % want.length].t)) return false;
+  }
+  for (let i = 0; i < bands.length; i++) {
+    const want = bands[i] || [], nodes = tracks[i].querySelectorAll(".sc-tape__item");
+    for (let n = 0; n < nodes.length; n++) {
+      const it = want[n % want.length], node = nodes[n];
+      const oPx = node.hasAttribute("data-px") ? +node.getAttribute("data-px") : NaN;
+      const oPc = node.hasAttribute("data-pc") ? +node.getAttribute("data-pc") : NaN;
+      const pxEl = node.querySelector("b"), pcEl = node.querySelector("span");
+      if (scScintSet(pxEl, fmtTapePx(it.price), isFinite(oPx) && oPx !== it.price ? it.price > oPx : null))
+        node.setAttribute("data-px", String(it.price));
+      if (pcEl) {
+        if (scScintSet(pcEl, fmtC(it.pct), isFinite(oPc) && oPc !== it.pct ? it.pct > oPc : null))
+          node.setAttribute("data-pc", String(it.pct));
+        pcEl.className = it.pct >= 0 ? "up" : "dn";
+      }
+    }
+  }
+  return true;
 }
 /* FIX 3 — constant ≈45 px/s for every band, regardless of track length. ECON TAPE 22 Sep: ONE speed law, used by the
    price bands and by the ECON band, so the third band moves at exactly the speed of the two above it. `startAt`, when
@@ -17340,6 +17458,93 @@ function scSetAttr (node, name, value) {
   const s = (value === null || value === undefined || (typeof value === "number" && !isFinite(value))) ? "UNKNOWN" : String(value);
   if (node.getAttribute(name) !== s) node.setAttribute(name, s);
 }
+/* ── SCINTILLATION — ONE primitive for every live number ────────────────────────────────────
+   Alan, 23 Sep: "What do you think about putting in some scintillation — price percent changes
+   in the parentheses — in the tape, on screen, in the cohorts, some scintillating".
+   RULES, all three enforced here rather than at each call site:
+     · a number glows ONLY when the value the reader can SEE changed (scScintSet compares the
+       rendered text, so 100.001 → 100.004 both printing "100.00" stays silent);
+     · the glow is colour + text-shadow, so it can never shift layout;
+     · prefers-reduced-motion turns it off entirely — the number still updates, it just sits down.
+   WHY the Web Animations API and not a class toggle: restarting a CSS animation needs a forced
+   synchronous layout (`void node.offsetWidth`) per node. MEASURED, 364 rows, 20 ticks each, two
+   passes, headless Chromium 151: the shipped price flash spent 155-186 ms of main-thread work
+   per tick and forced 289 layouts per tick. This path covers TWICE the cells (price AND
+   percentage) for 68 ms and 29 layouts a tick — 2.5x cheaper than the flash it replaces, against
+   a 3.7 ms floor for writing the same numbers with no glow at all.
+   Numbers and method: deliverables/20260923/hub-polish/HUB-POLISH.html. */
+const SCINT_MS = 520;                       // inside the 400-700 ms Alan asked for
+let SCINT_OFF = false;
+try {
+  if (typeof matchMedia === "function") {
+    const scMq = matchMedia("(prefers-reduced-motion: reduce)");
+    SCINT_OFF = !!scMq.matches;
+    if (scMq.addEventListener) scMq.addEventListener("change", (e) => { SCINT_OFF = !!e.matches; });
+  }
+} catch (_) {}
+/* var(--bull) cannot be used inside a WAAPI keyframe, so the two tokens are resolved from the
+   live stylesheet and re-read at most every 5 s — a theme change is picked up, a 364-row tick
+   does not pay for 364 style reads. */
+let SCINT_C = null, SCINT_C_AT = 0;
+function scintColors () {
+  const now = Date.now();
+  if (SCINT_C && now - SCINT_C_AT < 5000) return SCINT_C;
+  let up = "#00ffa3", dn = "#ff2d55";
+  try {
+    const cs = getComputedStyle(document.documentElement);
+    up = (cs.getPropertyValue("--bull") || "").trim() || up;
+    dn = (cs.getPropertyValue("--bear") || "").trim() || dn;
+  } catch (_) {}
+  SCINT_C = { up, dn }; SCINT_C_AT = now;
+  return SCINT_C;
+}
+/* A GLOW NOBODY CAN SEE IS PURE COST. The ALL board holds every row of the universe while the
+   window shows about thirty of them, so at 364 rows a tick most of the animation was being paid
+   for off-screen. Each cell registers itself with one IntersectionObserver the first time it
+   glows — no call site changes, and no layout is read at tick time; a row scrolled out of view
+   gets its new value with no animation at all. A cell starts as visible so its first glow is
+   never swallowed, and if the browser has no IntersectionObserver everything simply glows. */
+let SCINT_IO = null;
+function scScintVis (node) {
+  if (typeof IntersectionObserver !== "function") return true;
+  if (node.__scVis === undefined) {
+    node.__scVis = true;
+    try {
+      if (!SCINT_IO) SCINT_IO = new IntersectionObserver((es) => {
+        for (const e of es) e.target.__scVis = e.isIntersecting;
+      }, { rootMargin: "80px" });
+      SCINT_IO.observe(node);
+    } catch (_) { return true; }
+  }
+  return node.__scVis !== false;
+}
+function scScint (node, up) {
+  if (!node || SCINT_OFF || !scScintVis(node)) return;
+  const c = scintColors();
+  try {
+    if (typeof node.animate === "function") {
+      if (node.__scint) node.__scint.cancel();          // restart, without reading layout
+      node.__scint = node.animate(
+        [{ color: up ? c.up : c.dn, textShadow: "0 0 8px " + (up ? "rgba(0,255,163,.6)" : "rgba(255,45,85,.6)") }],
+        { duration: SCINT_MS, easing: "ease-out" });     // implicit end frame = the cell's own style
+      return;
+    }
+  } catch (_) {}
+  const cls = up ? "sc-scint-up" : "sc-scint-dn";
+  node.classList.remove("sc-scint-up", "sc-scint-dn");
+  void node.offsetWidth;
+  node.classList.add(cls);
+}
+/* write a value and scintillate only if what is ON SCREEN changed. `up` may be null (direction
+   unknown — a first paint, or no baseline): the value is written, nothing glows. */
+function scScintSet (node, value, up) {
+  if (!node) return false;
+  const str = String(value);
+  if (node.textContent === str) return false;
+  node.textContent = str;
+  if (up === true || up === false) scScint(node, up);
+  return true;
+}
 function scSetText (node, value) {
   if (!node) return;
   const s = String(value);
@@ -17481,6 +17686,7 @@ function patch(t, price, src) {
   PRICES[t] = price;
   const pc = prevClose[t];                  // provider previous completed daily close
   const c = pc ? (price / pc - 1) * 100 : null;
+  const prevC = r ? num(r.c) : null;        // M32 — the percentage's own baseline, read BEFORE the row is overwritten
   /* A MOVED PRICE MUST NEVER KEEP AN OLD PERCENTAGE.
      MEASURED on production 2026-08-18: r.price was updated while r.c was left alone whenever the
      previous close was missing, so the percentage silently froze at its board-build value while the
@@ -17490,14 +17696,15 @@ function patch(t, price, src) {
   for (const row of [r, rAll]) if (row) { row.price = price; row.c = (c != null) ? c : null; }
   const lp = el("lp_" + t);
   if (lp) {
-    lp.textContent = price.toFixed(2);
-    if (prev != null) {                       // FIX 2 — flash the number only, on real change, with direction
-      const fl = price > +prev ? "fl-up" : "fl-dn";
-      lp.classList.remove("fl-up", "fl-dn"); void lp.offsetWidth; lp.classList.add(fl);
-    }
+    /* M32 — price AND percentage both scintillate now, through the one primitive. The old path
+       flashed the price only, and restarted its animation with a forced reflow per row. */
+    scScintSet(lp, price.toFixed(2), prev != null && +prev !== price ? price > +prev : null);
     const lc = el("lc_" + t);
     const cc = c != null ? c : (r ? r.c : null);
-    if (lc) { lc.textContent = cc != null ? fmtC(cc) : "—"; lc.className = "sc-chg" + (cc != null ? " " + (cc >= 0 ? "up" : "dn") : ""); }
+    if (lc) {
+      scScintSet(lc, cc != null ? fmtC(cc) : "—", (prevC != null && cc != null && cc !== prevC) ? cc > prevC : null);
+      lc.className = "sc-chg" + (cc != null ? " " + (cc >= 0 ? "up" : "dn") : "");
+    }
   }
   /* FIX (Alan: "heatmap doesn't match cohort board") — heatmapHTML() is a static
      string, only rebuilt on cohort switch / 45s poll / HEAT toggle. Every OTHER
@@ -17519,7 +17726,8 @@ function patch(t, price, src) {
         if (f) { f.style.height = heatFillPct(hc) + "%";
                  f.style.background = HEAT_MODE === "GRAIN" ? heatGrain(hc) : heatColorChg(hc); }
       }
-      if (htTxt && hc != null) htTxt.textContent = fmtC(hc);
+      /* M32 — "in the cohorts": the heat tile's own percentage scintillates on the same rule. */
+      if (htTxt && hc != null) scScintSet(htTxt, fmtC(hc), (prevC != null && hc !== prevC) ? hc > prevC : null);
     }
   }
   /* R26 FIX 6 — FPE rides the price tick: cheap textContent set, never a rebuild */
@@ -17534,8 +17742,8 @@ function patch(t, price, src) {
     const cc = c != null ? c : (S.coData && S.coData.t === t ? S.coData.chg : null);
     const col = cc != null ? (cc >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
     const px = el("coPx"), ch = el("coChg"), pc = el("coPrev");
-    if (px) { px.textContent = fmtPxIdent(price); px.style.color = col; }
-    if (ch) { ch.textContent = cc != null ? fmtC(cc) : "—"; ch.style.color = col; }
+    if (px) { scScintSet(px, fmtPxIdent(price), prev != null && +prev !== price ? price > +prev : null); px.style.color = col; }
+    if (ch) { scScintSet(ch, cc != null ? fmtC(cc) : "—", (prevC != null && cc != null && cc !== prevC) ? cc > prevC : null); ch.style.color = col; }
     if (pc) {
       const base = num(prevClose[t]);
       pc.textContent = base != null && base !== 0 ? "Prev " + fmtPxIdent(base) : "";

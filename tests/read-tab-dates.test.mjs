@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 test("READ blocks and the composite basis are labelled with their date when older than a day", () => {
-  const src = page.match(/const READ_STALE_MS = [^\n]*\n/)[0] + page.match(/function readAgeLabel\(ts, nowMs\) \{[\s\S]*?\n\}\n/)[0] + "return readAgeLabel;";
+  /* M32 — the epoch/ISO parse moved into readTsMs so the per-section ages and this label cannot
+     drift apart; both are extracted here, and the test below pins that there is only one parser. */
+  const src = page.match(/const READ_STALE_MS = [^\n]*\n/)[0] + page.match(/function readTsMs\(ts\) \{[\s\S]*?\n\}\n/)[0] +
+    page.match(/function readAgeLabel\(ts, nowMs\) \{[\s\S]*?\n\}\n/)[0] + "return readAgeLabel;";
   const readAgeLabel = new Function(src)();
   const now = Date.parse("2026-09-18T04:50:00Z");
   assert.equal(readAgeLabel("2026-06-11T16:20:02.256+00:00", now), "AS OF 2026-06-11 (99d old)", "read_blocks ISO stamp");
@@ -16,4 +19,7 @@ test("READ blocks and the composite basis are labelled with their date when olde
   assert.match(page, /const basis = rb\.basis \? String\(rb\.basis\)/, "the writer's own basis section is preferred when present");
   assert.match(page, /const legacyCompositeAsOf = d0\.updated_ts \|\| null;/, "the legacy composite date is captured before the provider Geiger replaces it");
   assert.match(page, /verdict\.push\(liveReadSentence\(d\) \+ \(compAge \? " Composite basis " \+ compAge\.toLowerCase\(\) \+ "\." : ""\)\);/);
+  assert.equal((page.match(/^function readTsMs\(/gm) || []).length, 1, "one epoch/ISO parser for every read date on this surface");
+  assert.match(page.match(/function readAgeLabel\(ts, nowMs\) \{[\s\S]*?\n\}\n/)[0], /const v = readTsMs\(ts\);/, "and this label uses it");
+  assert.equal(readAgeLabel(0, now), null, "a 0 epoch is no date at all — never 2000-01-01");
 });
