@@ -22683,23 +22683,37 @@ function filesWire(){
    keep their live content underneath, so LIVE is one class away: nothing is
    rebuilt, nothing is refetched, and there is no empty frame to flash. */
 body.gwx-motion .ch{
-  grid-template-columns:minmax(0,4fr) minmax(0,14fr) 0 0 0 0 0 0 0 0 0 minmax(0,104fr) 0 0 !important;
+  /* the two floors are the cells' own fixed widths (.sc-star 13px, .sc-ctk 44px): without them
+     the 390px phone gave the ticker a 25px track and MEASURED clipped "MRVL" to "MRVI". */
+  grid-template-columns:minmax(13px,4fr) minmax(46px,14fr) minmax(0,104fr) !important;
   gap:7px !important;
 }
-/* 3..11, 13, 14 are LAST, CHG, USUAL DAY, F P/E, MKT CAP, RSI, TREND, MOM, READ, RVOL, MKT.
-   Index, not class, so the header row hides on exactly the same rule as the body rows. */
-body.gwx-motion .ch > *:nth-child(n+3):nth-child(-n+11),
-body.gwx-motion .ch > *:nth-child(13),
-body.gwx-motion .ch > *:nth-child(14){opacity:0 !important;pointer-events:none}
-body.gwx-motion .ch.hdr > *:nth-child(2),
-body.gwx-motion .ch.hdr > *:nth-child(12){opacity:1 !important;color:var(--dim)}
+/* STRUCTURE, NOT COLUMN INDEX. A first pass collapsed tracks 3..11/13/14 by nth-child and it
+   was WRONG on the phone: at =<560px the page already display:none's F P/E and READ, so those
+   two are not grid items, every later cell shifts two tracks left, and MEASURED at 390 the
+   Geiger bar came out 0px wide while the MKT dot sat in the bar's 159px track. So the rule now
+   hides every cell and names the three that stay - and it names the Geiger cell by the one
+   thing that is true at every width: it is the cell straight after READ. That also keeps the
+   honest "—" a row with no reading draws instead of a bar. */
+body.gwx-motion .ch > *{display:none !important}
+body.gwx-motion .ch > .sc-star,
+body.gwx-motion .ch > .sc-ctk,
+body.gwx-motion .ch > .gwx-read + *,
+body.gwx-motion .ch > span[style*="text-align:center"],
+body.gwx-motion .ch > .gwx-pct,
+body.gwx-motion .ch > .gwx-rk,
+body.gwx-motion .ch.hdr > *:first-child,
+body.gwx-motion .ch.hdr > [data-key="t"],
+body.gwx-motion .ch.hdr > [data-key="g"]{display:block !important}
+body.gwx-motion .ch.hdr > [data-key="t"],
+body.gwx-motion .ch.hdr > [data-key="g"]{color:var(--dim)}
 /* the reserve on the right carries the rank badge AND the span's % change, so the bar
    never runs underneath either of them */
 body.gwx-motion .sc-board__row, body.gwx-motion .ch.hdr{padding-right:104px}
 /* "The Geigers get bigger" - taller as well as wider, the proposal's 16px-in-a-34px-row */
 body.gwx-motion .sc-gmini{height:18px}
 body.gwx-motion .sc-gmini i{top:2.5px;bottom:2.5px}
-body.gwx-motion .sc-ctk{font-size:11.5px;letter-spacing:.07em}
+body.gwx-motion .sc-ctk{width:auto;font-size:11.5px;letter-spacing:.07em}
 /* % PRICE CHANGE over the replayed span, beside the bar. Absolutely positioned, so it is
    not a grid item and cannot shift a single track. */
 .gwx-pct{position:absolute;right:32px;top:50%;transform:translateY(-50%);width:64px;

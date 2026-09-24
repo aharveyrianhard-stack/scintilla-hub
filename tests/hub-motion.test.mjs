@@ -24,23 +24,33 @@ function slice(from, to) {
 }
 
 /* ── motion mode, as the stylesheet ships it ───────────────────────────────────────────────── */
-test("motion mode collapses every column except TICKER and the GEIGER bar", () => {
-  const css = slice("body.gwx-motion .ch{", "/* ══ M61 · ONLY THE BARS MOVE");
-  const grid = css.match(/body\.gwx-motion \.ch\{\s*grid-template-columns:([^;]+);/);
+test("motion mode leaves exactly three cells: the star, the TICKER and the GEIGER bar", () => {
+  const css = slice("body.gwx-motion .ch{", "/* % PRICE CHANGE over the replayed span");
+  const grid = css.match(/body\.gwx-motion \.ch\{[\s\S]*?grid-template-columns:([^;]+)!important/);
   assert.ok(grid, "motion mode must override the board's track list");
-  const tracks = grid[1].match(/minmax\([^)]*\)|\b0\b/g) || [];
-  assert.equal(tracks.length, 14, "the board has 14 tracks and motion mode must name all of them");
-  const zero = tracks.map((t, i) => (t === "0" ? i + 1 : 0)).filter(Boolean);
-  assert.deepEqual(zero, [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14],
-    "LAST, CHG, USUAL DAY, F P/E, MKT CAP, RSI, TREND, MOM, READ, RVOL and MKT collapse; TICKER and GEIGER do not");
-  /* and the bar is the one that grows into the freed width */
-  const geiger = parseFloat(tracks[11].match(/([\d.]+)fr/)[1]);
-  const ticker = parseFloat(tracks[1].match(/([\d.]+)fr/)[1]);
-  assert.ok(geiger > 5 * ticker, `the geiger track (${geiger}fr) must take the freed width, ticker is ${ticker}fr`);
+  const tracks = grid[1].match(/minmax\([^)]*\)/g) || [];
+  assert.equal(tracks.length, 3, "three cells remain, so the grid must be three tracks at every width");
+  /* the phone gave the ticker a 25px track and clipped MRVL to "MRVI" until these floors existed */
+  assert.match(tracks[0], /minmax\(13px,/, "the star keeps its own 13px");
+  assert.match(tracks[1], /minmax\(46px,/, "the ticker never gets less than its 44px cell needs");
+  assert.match(css, /body\.gwx-motion \.sc-ctk\{width:auto/);
+  const [star, ticker, geiger] = tracks.map((t) => parseFloat(t.match(/([\d.]+)fr/)[1]));
+  assert.ok(geiger > 5 * ticker && geiger > 20 * star,
+    `the geiger track (${geiger}fr) must take the freed width — ticker ${ticker}fr, star ${star}fr`);
+
+  /* the defect this replaced: nth-child(12) is NOT the Geiger cell at =<560px, because the page
+     already display:none's F P/E and READ there, so every later cell shifts two tracks left. */
+  assert.equal(/nth-child\(n\+3\)/.test(css), false, "column index is not a safe way to find the bar");
+  assert.match(css, /body\.gwx-motion \.ch > \*\{display:none !important\}/);
+  assert.match(css, /body\.gwx-motion \.ch > \.gwx-read \+ \*/,
+    "the Geiger cell is named by structure: the cell straight after READ");
+  assert.match(css, /body\.gwx-motion \.ch > span\[style\*="text-align:center"\]/,
+    "including the honest dash a row with no reading draws instead of a bar");
+  for (const keep of ["\\.sc-star", "\\.sc-ctk", "\\.gwx-pct", "\\.gwx-rk"])
+    assert.match(css, new RegExp("body\\.gwx-motion \\.ch > " + keep));
+  assert.match(css, /\.ch\.hdr > \*:first-child[\s\S]{0,120}\[data-key="t"\][\s\S]{0,60}\[data-key="g"\][\s\S]{0,40}display:block/,
+    "the header keeps the same three slots, so its labels stay over the right cells");
   assert.match(css, /body\.gwx-motion \.sc-gmini\{height:18px\}/, "the Geigers get bigger");
-  assert.match(css, /body\.gwx-motion \.ch > \*:nth-child\(n\+3\):nth-child\(-n\+11\)/);
-  assert.match(css, /body\.gwx-motion \.ch\.hdr > \*:nth-child\(2\)[\s\S]{0,60}nth-child\(12\)[\s\S]{0,40}opacity:1/,
-    "the header keeps exactly the two labels the rows keep");
 });
 
 test("the % change sits beside the bar, in its own reserve, and is never a grid item", () => {
