@@ -19,6 +19,7 @@ PAGES = [
     "fundamentals/spec/index.html",
     "prototypes/report-library/index.html",
     "prototypes/dock-concept/index.html",
+    "prototypes/widget-scout/index.html",
     "prototypes/previews/signal-fanout-v2.html",
 ] + sorted(str(p.relative_to(ROOT)) for p in (ROOT / "deliverables").rglob("*.html"))
 BLOCK = re.compile(r"\n?<!-- scnav · .*?<!-- /scnav -->\n?", re.S)

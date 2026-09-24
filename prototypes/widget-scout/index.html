@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Widget scout · Scintilla</title>
+<!--
+  WIDGET SCOUT · M71 (SCINTILLA-20260924-M71)
+  A shelf of other people's widgets, mounted live so Alan can see them rather than read about them.
+  Nothing here is wired into the Hub. Every panel below is a third-party embed served by TradingView
+  or Investing.com: their data, their colours, their terms. Scintilla's own numbers are not in this page.
+  Each group loads only when you click it, so opening the page costs nothing.
+-->
+<style>
+  :root{
+    --bg:#0b0c0d; --panel:#111214; --panel2:#151619; --line:rgba(150,154,160,.24);
+    --ink:#c4c7cb; --ink2:#9a9ea3; --ink3:#7d8186; --ok:#8f9a8f; --no:#9a8f8f;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink2);
+    font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{padding:18px 16px 12px;border-bottom:1px solid var(--line)}
+  h1{margin:0 0 6px;font:600 15px/1.2 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
+  .sub{font-size:12px;max-width:74ch}
+  .sub b{color:var(--ink);font-weight:600}
+  main{padding:14px 16px 56px;max-width:1520px;margin:0 auto}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 4px;font:11px/1.4 var(--mono);letter-spacing:.1em;color:var(--ink3)}
+  .grp{border:1px solid var(--line);background:var(--panel);border-radius:4px;margin:12px 0;overflow:hidden}
+  .grp>button{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;
+    background:var(--panel2);color:var(--ink);border:0;border-bottom:1px solid transparent;text-align:left;
+    font:600 12px/1.3 var(--mono);letter-spacing:.16em;text-transform:uppercase}
+  .grp>button:hover,.grp>button:focus-visible{color:#cfd2d6;outline:none}
+  .grp[open-state="on"]>button{border-bottom-color:var(--line)}
+  .grp .count{margin-left:auto;font-size:11px;color:var(--ink3);letter-spacing:.1em}
+  .grp .what{display:block;margin-top:4px;font:400 11px/1.4 -apple-system,sans-serif;letter-spacing:0;
+    text-transform:none;color:var(--ink3)}
+  .body{display:none;padding:12px;gap:12px;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+  .grp[open-state="on"] .body{display:grid}
+  .card{border:1px solid var(--line);background:var(--panel2);border-radius:3px;display:flex;flex-direction:column}
+  .card h2{margin:0;padding:9px 11px 7px;font:600 11px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+  .meta{padding:0 11px 8px;font-size:11px;color:var(--ink3);border-bottom:1px solid var(--line)}
+  .meta .tag{display:inline-block;margin:0 6px 0 0;padding:1px 5px;border:1px solid var(--line);border-radius:2px;
+    font:11px/1.4 var(--mono);letter-spacing:.06em;color:var(--ink2)}
+  .status{padding:6px 11px;font:11px/1.4 var(--mono);letter-spacing:.06em;border-bottom:1px solid var(--line);color:var(--ink3)}
+  .status[data-state="rendered"]{color:var(--ok)}
+  .status[data-state="mounted"]{color:var(--ink2)}
+  .status[data-state="norender"]{color:var(--no)}
+  .mountpoint{position:relative;background:#0e0f11;min-height:80px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .mountpoint iframe{display:block;border:0;width:100%}
+  .warn{margin-top:6px;padding:5px 7px;border:1px solid var(--line);border-radius:2px;color:var(--ink2);font-size:11px}
+  .note{padding:8px 11px;font-size:11px;color:var(--ink3);border-top:1px solid var(--line)}
+  .noembed{padding:11px;font-size:12px;color:var(--ink2)}
+  .noembed a{color:var(--ink);text-decoration:underline}
+  footer{padding:18px 16px 40px;border-top:1px solid var(--line);font-size:11px;color:var(--ink3);max-width:1520px;margin:0 auto}
+  @media (max-width:700px){ .body{grid-template-columns:1fr} h1{font-size:13px}
+    /* the vendor panels have their own minimum width: the card scrolls, the page does not */
+    .card{overflow:hidden} .mountpoint>*{min-width:min-content} }
+</style>
+</head>
+<body>
+<header>
+  <span data-scnav-slot></span>
+  <h1>Widget scout</h1>
+  <p class="sub">Every widget TradingView and Investing.com will let a page embed, mounted live and grouped by
+  <b>what it tells you</b>. Each group loads only when you open it. Everything below is <b>somebody else's panel</b> —
+  their data, their colours, their branding rules — shown here so you can point at what you want. Nothing is wired
+  into the Hub, and no Scintilla number appears on this page. iOS Stocks cannot be embedded by anyone; it is
+  described at the bottom.</p>
+  <div class="legend">
+    <span>OPEN A GROUP TO LOAD IT</span><span>GREEN = DREW SOMETHING</span><span>GREY = MOUNTED, JUDGE IT BY EYE</span><span>RED = NOTHING CAME BACK</span><span>AN EMPTY BLACK PANEL MEANS THE VENDOR REFUSED</span>
+  </div>
+</header>
+<main id="main"></main>
+<footer id="foot"></footer>
+
+<script>
+/* Every widget below was checked against its vendor endpoint on 24 Sep 2026 before being listed here.
+   fam: "tv" = TradingView's long-standing embed script (s3.tradingview.com/external-embedding/…);
+        "tvw" = TradingView's newer web components (widgets.tradingview-widget.com/w/en/tv-….js);
+        "iv" = Investing.com's iframe widgets (their webmaster tools). */
+var TV  = "https://s3.tradingview.com/external-embedding/embed-widget-";
+var TVW = "https://widgets.tradingview-widget.com/w/en/tv-";
+var D   = { colorTheme:"dark", isTransparent:true, locale:"en", width:"100%" };
+
+function cfg(o){ var r={}, k; for (k in D) r[k]=D[k]; for (k in o) r[k]=o[k]; return r; }
+
+var GROUPS = [
+ { id:"sentiment", name:"Sentiment", what:"How the crowd or the indicators are leaning right now — the shelf next to our own Fear &amp; Greed." },
+ { id:"breadth",   name:"Breadth",   what:"How much of the market is moving, not just the index: heatmaps, movers, whole-market summaries." },
+ { id:"technicals",name:"Technicals",what:"Price pictures: full charts, small charts, seasonality." },
+ { id:"calendar",  name:"Calendar",  what:"What is scheduled: economic releases by day and by country." },
+ { id:"news",      name:"News",      what:"Headlines, from their newsroom rather than ours." },
+ { id:"fundamentals",name:"Fundamentals",what:"What a company is and what it earns." },
+ { id:"quotes",    name:"Quotes and tape",what:"Running prices: tapes, quote rows, rate tables." },
+ { id:"refusals",  name:"Known refusals",what:"Mounted on purpose to show what will NOT embed, so nobody ships a black box." }
+];
+
+var W = [
+ /* ---- SENTIMENT ---------------------------------------------------------- */
+ { g:"sentiment", fam:"tv", s:"technical-analysis", n:"Technical Analysis gauge (SPY)", h:450,
+   c:cfg({symbol:"AMEX:SPY",interval:"1D",height:450,showIntervalTabs:true,displayMode:"single"}),
+   shows:"A speedometer reading BUY / NEUTRAL / SELL, built from moving averages and oscillators, per timeframe." },
+ { g:"sentiment", fam:"tv", s:"technical-analysis", n:"Technical Analysis gauge (AAPL, multi)", h:450,
+   c:cfg({symbol:"NASDAQ:AAPL",interval:"1D",height:450,showIntervalTabs:true,displayMode:"multiple"}),
+   shows:"The same gauge with every timeframe at once — the closest thing either vendor has to a sentiment dial." },
+ { g:"sentiment", fam:"tvw", s:"technical-analysis", n:"Technical Analysis (new web component)", h:450,
+   a:{theme:"dark", symbol:"NASDAQ:NVDA"},
+   shows:"TradingView's newer build of the same gauge, loaded as a custom element instead of an iframe script." },
+ { g:"sentiment", fam:"iv", n:"Investing.com Technical Summary", h:460,
+   u:"https://ssltsw.investing.com/?lang=1&forex=1,2,3,5&commodities=8830,8836,8831&indices=23660,166,172&stocks=334,345,346&tabs=1,2,3,4",
+   shows:"Investing's streaming BUY/SELL summary across forex, commodities, indices and stocks, in tabs.", warn:"Measured 24 Sep: their server answered 403 to this embed from here, with and without our domain as the referrer. The panel below stays black." },
+ { g:"sentiment", fam:"tv", s:"hotlists", n:"Top movers (hotlists)", h:450,
+   c:cfg({colorTheme:"dark",dateRange:"1D",exchange:"US",showChart:true,height:450,showSymbolLogo:false}),
+   shows:"Today's biggest gainers, losers and most active names — crowd attention, as a list." },
+
+ /* ---- BREADTH ------------------------------------------------------------ */
+ { g:"breadth", fam:"tv", s:"stock-heatmap", n:"Stock heatmap (S&P 500)", h:520,
+   c:cfg({dataSource:"SPX500",grouping:"sector",blockSize:"market_cap_basic",blockColor:"change",height:520,
+     hasTopBar:false,isDataSetEnabled:false,isZoomEnabled:true,hasSymbolTooltip:true,symbolUrl:""}),
+   shows:"The whole index as tiles by size, coloured by today's move. The fastest read of breadth there is." },
+ { g:"breadth", fam:"tv", s:"etf-heatmap", n:"ETF heatmap", h:480,
+   c:cfg({dataSource:"AllUSEtf",grouping:"asset_class",blockSize:"aum",blockColor:"change",height:480,hasTopBar:false}),
+   shows:"Every US ETF as tiles by assets, coloured by move — where money sits by asset class." },
+ { g:"breadth", fam:"tv", s:"crypto-coins-heatmap", n:"Crypto heatmap", h:440,
+   c:cfg({dataSource:"Crypto",blockSize:"market_cap_calc",blockColor:"24h_close_change|5",height:440,hasTopBar:false}),
+   shows:"The same tile view for coins." },
+ { g:"breadth", fam:"tv", s:"forex-heat-map", n:"Forex heat map", h:400,
+   c:cfg({currencies:["EUR","USD","JPY","GBP","CHF","AUD","CAD"],height:400}),
+   shows:"Every currency against every other, coloured by strength — the dollar read at a glance." },
+ { g:"breadth", fam:"tv", s:"market-overview", n:"Market overview", h:460,
+   c:cfg({dateRange:"1D",showChart:true,height:460,showSymbolLogo:true,showFloatingTooltip:true,
+     tabs:[{title:"Indices",symbols:[{s:"FOREXCOM:SPXUSD",d:"S&P 500"},{s:"FOREXCOM:NSXUSD",d:"Nasdaq 100"},
+       {s:"FOREXCOM:DJI",d:"Dow 30"},{s:"INDEX:RUT",d:"Russell 2000"}]},
+      {title:"Futures",symbols:[{s:"CME_MINI:ES1!",d:"S&P 500 futures"},{s:"COMEX:GC1!",d:"Gold"},
+       {s:"NYMEX:CL1!",d:"Crude oil"}]}]}),
+   shows:"A short watchlist with a chart under it, in tabs you choose." },
+ { g:"breadth", fam:"tvw", s:"market-summary", n:"Market summary (new)", h:220, a:{theme:"dark", direction:"horizontal"},
+   shows:"A single strip summarising the main markets — TradingView's newest, smallest overview." },
+ { g:"breadth", fam:"tvw", s:"world-market-summary", n:"World market summary (new)", h:420, a:{theme:"dark"},
+   shows:"The same idea across world regions." },
+ { g:"breadth", fam:"tvw", s:"heatmap", n:"Heatmap (new web component)", h:480, a:{theme:"dark"},
+   shows:"The newer heatmap build, as a custom element." },
+
+ /* ---- TECHNICALS --------------------------------------------------------- */
+ { g:"technicals", fam:"tv", s:"advanced-chart", n:"Advanced chart", h:520,
+   c:cfg({symbol:"NASDAQ:AAPL",interval:"D",theme:"dark",style:"1",height:520,hide_side_toolbar:false,
+     allow_symbol_change:true,save_image:false,timezone:"America/New_York"}),
+   shows:"Their full chart, with drawing tools and indicators. The heaviest thing on this page." },
+ { g:"technicals", fam:"tv", s:"symbol-overview", n:"Symbol overview", h:420,
+   c:cfg({symbols:[["Apple","NASDAQ:AAPL|1D"],["S&P 500","AMEX:SPY|1D"]],chartOnly:false,height:420,
+     scalePosition:"right",scaleMode:"Normal",fontSize:"11",noTimeScale:false,chartType:"area"}),
+   shows:"A clean line chart for one or several symbols, with the quote above it." },
+ { g:"technicals", fam:"tv", s:"mini-symbol-overview", n:"Mini chart", h:250,
+   c:cfg({symbol:"NASDAQ:AAPL",dateRange:"12M",height:250,trendLineColor:"#8f9a8f",underLineColor:"rgba(143,154,143,.15)",
+     noTimeScale:false}),
+   shows:"A thumbnail chart — small enough to sit inside a tile." },
+ { g:"technicals", fam:"tvw", s:"mini-chart", n:"Mini chart (new)", h:250, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
+   shows:"The newer thumbnail build." },
+ { g:"technicals", fam:"tvw", s:"seasonal-chart", n:"Seasonal chart (new)", h:420, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
+   shows:"How this symbol usually behaves month by month across past years. There is no older version of this one." },
+ { g:"technicals", fam:"iv", n:"Investing.com technical chart", h:460,
+   u:"https://ssltvc.investing.com/?pair_ID=6408&height=440&width=100%25&interval=900&plotStyle=candle&domain_ID=56&lang_ID=1&timezone_ID=8",
+   shows:"Investing's charting widget (itself built on TradingView's library).", warn:"Measured 24 Sep: 403 from their server. Black panel." },
+
+ /* ---- CALENDAR ----------------------------------------------------------- */
+ { g:"calendar", fam:"tv", s:"events", n:"Economic calendar", h:520,
+   c:cfg({height:520,importanceFilter:"0,1",countryFilter:"us,eu,gb,jp"}),
+   shows:"Scheduled releases with forecast, previous and actual, filtered to the countries that matter." },
+ { g:"calendar", fam:"iv", n:"Investing.com economic calendar", h:520,
+   u:"https://sslecal2.investing.com/?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=5&calType=day&timeZone=8&lang=1",
+   shows:"The calendar most desks actually use. Same columns, their styling, updates on release.", warn:"Measured 24 Sep: 403 from their server. Black panel. This is the one worth re-testing from the live domain." },
+ { g:"calendar", fam:"tvw", s:"economic-map", n:"Economic map (new)", h:480, a:{theme:"dark"},
+   shows:"A world map coloured by an economic measure you pick — growth, inflation, rates." },
+
+ /* ---- NEWS --------------------------------------------------------------- */
+ { g:"news", fam:"tv", s:"timeline", n:"Top stories (all symbols)", h:480,
+   c:cfg({feedMode:"all_symbols",displayMode:"regular",height:480}),
+   shows:"TradingView's newsroom feed for the whole market." },
+ { g:"news", fam:"tv", s:"timeline", n:"Top stories (one symbol)", h:480,
+   c:cfg({feedMode:"symbol",symbol:"NASDAQ:AAPL",displayMode:"regular",height:480}),
+   shows:"The same feed narrowed to one ticker — the version that would sit on a company page." },
+
+ /* ---- FUNDAMENTALS ------------------------------------------------------- */
+ { g:"fundamentals", fam:"tv", s:"symbol-info", n:"Symbol info", h:220, c:cfg({symbol:"NASDAQ:AAPL"}),
+   shows:"Name, price, change and a one-line description. A header strip." },
+ { g:"fundamentals", fam:"tv", s:"financials", n:"Fundamental data", h:520,
+   c:cfg({symbol:"NASDAQ:AAPL",displayMode:"regular",height:520,largeChartUrl:""}),
+   shows:"Revenue, earnings, margins and balance-sheet lines, by quarter or year." },
+ { g:"fundamentals", fam:"tv", s:"symbol-profile", n:"Company profile", h:420, c:cfg({symbol:"NASDAQ:AAPL",height:420}),
+   shows:"What the company does, sector, employees, website." },
+ { g:"fundamentals", fam:"tvw", s:"company-profile", n:"Company profile (new)", h:420, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
+   shows:"The newer profile build." },
+ { g:"fundamentals", fam:"tv", s:"screener", n:"Screener", h:560,
+   c:cfg({defaultColumn:"overview",defaultScreen:"most_capitalized",market:"america",showToolbar:true,height:560}),
+   shows:"A sortable table of the whole US market — their screener, inside your page." },
+
+ /* ---- QUOTES AND TAPE ---------------------------------------------------- */
+ { g:"quotes", fam:"tv", s:"ticker-tape", n:"Ticker tape", h:80,
+   c:cfg({symbols:[{proName:"FOREXCOM:SPXUSD",title:"S&P 500"},{proName:"FOREXCOM:NSXUSD",title:"Nasdaq 100"},
+     {proName:"NASDAQ:AAPL",title:"AAPL"},{proName:"NASDAQ:NVDA",title:"NVDA"},{proName:"COMEX:GC1!",title:"Gold"}],
+     showSymbolLogo:true,displayMode:"adaptive"}),
+   shows:"The scrolling strip along the top of a page." },
+ { g:"quotes", fam:"tvw", s:"ticker-tape", n:"Ticker tape (new)", h:80, a:{theme:"dark"},
+   shows:"The newer tape build." },
+ { g:"quotes", fam:"tv", s:"tickers", n:"Tickers (static row)", h:130,
+   c:cfg({symbols:[{proName:"NASDAQ:AAPL",title:"AAPL"},{proName:"NASDAQ:MSFT",title:"MSFT"},
+     {proName:"NASDAQ:NVDA",title:"NVDA"}],showSymbolLogo:true}),
+   shows:"A row of quote cards that does not scroll." },
+ { g:"quotes", fam:"tv", s:"single-quote", n:"Single quote", h:130, c:cfg({symbol:"NASDAQ:AAPL"}),
+   shows:"One price, one change, nothing else." },
+ { g:"quotes", fam:"tvw", s:"single-ticker", n:"Single ticker (new)", h:130, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
+   shows:"The newer single-quote build." },
+ { g:"quotes", fam:"tvw", s:"ticker-tag", n:"Ticker tag (inline)", h:120, a:{theme:"dark", symbol:"NASDAQ:AAPL"}, inline:true,
+   shows:"A price that sits inside a sentence and updates. Only exists in the new family." },
+ { g:"quotes", fam:"tv", s:"market-quotes", n:"Market data (quote table)", h:480,
+   c:cfg({height:480,symbolsGroups:[{name:"Indices",symbols:[{name:"FOREXCOM:SPXUSD",displayName:"S&P 500"},
+     {name:"FOREXCOM:NSXUSD",displayName:"Nasdaq 100"},{name:"INDEX:RUT",displayName:"Russell 2000"}]},
+     {name:"Rates",symbols:[{name:"TVC:US10Y",displayName:"US 10Y"},{name:"TVC:US02Y",displayName:"US 2Y"}]}]}),
+   shows:"Grouped quote rows — the closest match to a watchlist panel." },
+ { g:"quotes", fam:"tv", s:"forex-cross-rates", n:"Forex cross rates", h:420,
+   c:cfg({currencies:["EUR","USD","JPY","GBP","CHF","AUD"],height:420}),
+   shows:"A grid of every pair between the currencies you list." },
+ { g:"quotes", fam:"iv", n:"Investing.com interest rates", h:420,
+   u:"https://sslirates.investing.com/?lang=1&theme=darkTheme",
+   shows:"A streaming table of the main central-bank and market rates.", warn:"Measured 24 Sep: 403 from their server. Black panel." },
+
+ /* ---- KNOWN REFUSALS ------------------------------------------------------ */
+ { g:"refusals", fam:"tv", s:"technical-analysis", n:"VIX gauge (CBOE:VIX)", h:450,
+   c:cfg({symbol:"CBOE:VIX",interval:"1D",height:450,showIntervalTabs:true,displayMode:"single"}),
+   shows:"Mounted to test the Station's note: TradingView answers “this symbol is only available on TradingView” for VIX inside an embed." },
+ { g:"refusals", fam:"tv", s:"advanced-chart", n:"VIX chart (TVC:VIX)", h:420,
+   c:cfg({symbol:"TVC:VIX",interval:"D",theme:"dark",style:"1",height:420,allow_symbol_change:false}),
+   shows:"The second VIX route the Station tried. Same test, different widget." },
+ { g:"refusals", fam:"tv", s:"symbol-info", n:"VIX header (CBOE:VIX)", h:220, c:cfg({symbol:"CBOE:VIX"}),
+   shows:"The lightest VIX surface, to see whether the refusal is the symbol or the widget." }
+];
+
+/* ---------- mounting ---------- */
+function el(t,p){ var e=document.createElement(t); if(p) for(var k in p) e.setAttribute(k,p[k]); return e; }
+
+function mount(w, host, status){
+  var cost;
+  if (w.fam === "iv"){
+    var f = el("iframe",{src:w.u,height:String(w.h),width:"100%",frameborder:"0",scrolling:"auto",
+      allowtransparency:"true",loading:"lazy",title:w.n});
+    f.style.height = w.h + "px";
+    host.appendChild(f);
+    cost = "1 iframe, 0 scripts";
+  } else if (w.fam === "tvw"){
+    var s = el("script",{type:"module",src:TVW + w.s + ".js",async:""});
+    document.head.appendChild(s);
+    var tag = document.createElement("tv-" + w.s);
+    for (var k in (w.a||{})) tag.setAttribute(k, w.a[k]);
+    if (!w.inline) tag.style.display = "block";
+    host.appendChild(tag);
+    cost = "1 module script + 1 custom element";
+  } else {
+    var box = el("div",{class:"tradingview-widget-container"});
+    var inner = el("div",{class:"tradingview-widget-container__widget"});
+    box.appendChild(inner);
+    var sc = el("script",{type:"text/javascript",src:TV + w.s + ".js",async:""});
+    sc.text = JSON.stringify(w.c);
+    box.appendChild(sc);
+    host.appendChild(box);
+    cost = "1 script → 1 iframe";
+  }
+  host.style.minHeight = Math.min(w.h, 560) + "px";
+
+  /* Honesty about what this page can and cannot see.
+     A widget from another site sits in a cross-origin frame: this page is allowed to measure the BOX
+     but is not allowed to read what is inside it. So an iframe widget is reported as MOUNTED, never as
+     "rendered" — if the panel below is an empty black rectangle, the vendor refused, and no script here
+     can tell you that. The custom-element widgets keep their content in a shadow root on this page, so
+     those really can be checked. The deliverable carries a by-eye check of every panel. */
+  function check(final){
+    var fr = host.querySelector("iframe");
+    if (fr){
+      var hh = fr.getBoundingClientRect().height;
+      if (hh > 40 || final){
+        status.textContent = (hh > 40 ? "MOUNTED" : "NO FRAME") + " \u00b7 " + Math.round(hh) + "px \u00b7 " + cost +
+          " \u00b7 CONTENTS NOT READABLE FROM THIS PAGE";
+        status.setAttribute("data-state", hh > 40 ? "mounted" : "norender");
+        return hh > 40;
+      }
+      return false;
+    }
+    var ce = host.firstElementChild;
+    var hh2 = ce ? ce.getBoundingClientRect().height : 0;
+    var open = ce && ce.shadowRoot;           // the new family uses a CLOSED shadow root, so this is null
+    var len = open ? (ce.shadowRoot.textContent || "").trim().length : -1;
+    var up = hh2 > 40;
+    if (up || final){
+      status.textContent = (up ? (len === -1 ? "MOUNTED" : (len > 15 ? "RENDERED" : "NO RENDER")) : "NO RENDER") +
+        " \u00b7 " + Math.round(hh2) + "px \u00b7 " + cost +
+        (len === -1 && up ? " \u00b7 CONTENTS NOT READABLE FROM THIS PAGE" : "");
+      status.setAttribute("data-state", up ? (len === -1 ? "mounted" : (len > 15 ? "rendered" : "norender")) : "norender");
+    }
+    return up;
+  }
+  setTimeout(function(){ if(!check(false)) setTimeout(function(){ check(true); }, 7000); }, 3500);
+}
+
+/* ---------- page ---------- */
+var main = document.getElementById("main");
+GROUPS.forEach(function(g){
+  var items = W.filter(function(w){ return w.g === g.id; });
+  var sec = el("section",{class:"grp","open-state":"off","data-group":g.id});
+  var btn = el("button",{type:"button"});
+  btn.innerHTML = "<span>" + g.name + "<span class='what'>" + g.what + "</span></span>" +
+                  "<span class='count'>" + items.length + " · CLICK TO LOAD</span>";
+  var body = el("div",{class:"body"});
+  sec.appendChild(btn); sec.appendChild(body); main.appendChild(sec);
+
+  btn.addEventListener("click", function(){
+    if (sec.getAttribute("open-state") === "on"){ sec.setAttribute("open-state","off"); return; }
+    sec.setAttribute("open-state","on");
+    if (sec.getAttribute("data-loaded")) return;
+    sec.setAttribute("data-loaded","1");
+    items.forEach(function(w){
+      var card = el("article",{class:"card","data-widget":(w.fam + ":" + (w.s || "iframe"))});
+      var src = w.fam === "iv" ? "Investing.com" : (w.fam === "tvw" ? "TradingView (new)" : "TradingView");
+      card.innerHTML =
+        "<h2>" + w.n + "</h2>" +
+        "<div class='meta'><span class='tag'>" + src + "</span>" +
+        "<span class='tag'>" + (w.s || "iframe") + "</span>" + w.shows +
+        (w.warn ? "<div class='warn'>" + w.warn + "</div>" : "") + "</div>";
+      var st = el("div",{class:"status","data-state":"loading"}); st.textContent = "LOADING…";
+      var host = el("div",{class:"mountpoint"});
+      card.appendChild(st); card.appendChild(host); body.appendChild(card);
+      mount(w, host, st);
+    });
+  });
+});
+
+/* iOS Stocks — cannot be embedded by anyone, so it is described, not faked. */
+var ios = el("section",{class:"grp","open-state":"on"});
+ios.innerHTML =
+ "<button type='button'><span>iOS Stocks<span class='what'>Apple ships no embeddable widget. Described here for reference only.</span></span>" +
+ "<span class='count'>NO EMBED</span></button>" +
+ "<div class='body' style='display:grid'><article class='card'><h2>What Apple's own widgets show</h2>" +
+ "<div class='noembed'><p>iOS Stocks has three home-screen sizes. <b>Small</b>: one symbol, its price, today's change, " +
+ "and a sparkline for the session. <b>Medium</b>: a short watchlist, four to six rows, each with price and change, " +
+ "or one symbol with a bigger chart. <b>Large</b>: the watchlist plus the top business headlines from Apple News.</p>" +
+ "<p>Three things are worth copying: the change is always shown two ways at once (amount and percent, with the " +
+ "coloured pill); the sparkline carries no axis at all; and the list never shows more rows than fit — it truncates " +
+ "rather than scrolls.</p><p>It runs only inside iOS. There is no web embed, no iframe and no script, so it cannot " +
+ "appear on this page. Apple's description: <a href='https://support.apple.com/guide/iphone/track-stocks-iph0d6d1a5e/ios' " +
+ "rel='noopener noreferrer' target='_blank'>Track stocks on iPhone</a>. No Apple image is copied here.</p></div>" +
+ "</article></div>";
+main.appendChild(ios);
+
+document.getElementById("foot").innerHTML =
+ "Checked 24 September 2026. TradingView widgets are free to embed and must keep their visible attribution " +
+ "link; Investing.com widgets are free to embed and must keep their link back, per each vendor's terms. " +
+ "Every panel loads the vendor's own code into this page, which is why they are grouped and lazy — nothing " +
+ "loads until you open a group. No Scintilla data, key or number is used anywhere on this page.";
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
