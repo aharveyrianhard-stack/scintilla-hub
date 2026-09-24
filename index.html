@@ -4805,8 +4805,25 @@ function startBoardFeed(cohort, fav, onRows, onState, ms = 45000) {
 /* DIRECT ENTRY (day restoration 2026-09-19) — Alan opened the calendar preview and saw a dashboard: the room tabs tuck away,
    so the calendar was never on screen. A link ending in #economic (or #calendar) now opens the ECONOMIC room directly, as the
    original builder's preview did. Any other address keeps the DASHBOARD landing unchanged. */
+/* M40 — #past-reported opens the earnings room already on that tab. */
+function scEntryTab() {
+  try {
+    const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "").toLowerCase();
+    return (h === "past" || h === "past-reported" || h === "reported") ? "PAST" : "DASH";
+  } catch (_) { return "DASH"; }
+}
 function scEntryRoom() {
-  try { const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "").toLowerCase(); return h === "economic" || h === "calendar" ? "ECONOMIC" : (h === "sentiment" || h === "fear-greed" ? "SENTIMENT" : null); }
+  /* M40 — earnings has its own way in. Alan, of PAST REPORTED: "either we lost it or
+     I don't know how to get to it." #earnings opens the room; #past-reported opens it
+     on that tab. */
+  try {
+    const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "").toLowerCase();
+    if (h === "economic" || h === "calendar") return "ECONOMIC";
+    if (h === "sentiment" || h === "fear-greed") return "SENTIMENT";
+    if (h === "earnings" || h === "events") return "EVENTS";
+    if (h === "past" || h === "past-reported" || h === "reported") return "EVENTS";
+    return null;
+  }
   catch (_) { return null; }
 }
 const S = {
@@ -4829,7 +4846,7 @@ const S = {
      loads, so none of it replaces a choice Alan has saved. */
   ernSpan: "DAY", ernDay: null, ernPick: null, ernZoom: "DAYS", ernCohPick: null,
   ernTlAt: null,        /* the TIMELINE's own centre — the grid's arrows never touch it (M40) */
-  ernTab: "DASH",       /* DASH the dashboard · PAST the full PAST REPORTED tab · OLD the older list, kept (M40) */
+  ernTab: scEntryTab(),  /* DASH the dashboard · PAST the full PAST REPORTED tab · OLD the older list, kept (M40) */
   ernPast: null,        /* the open name in PAST REPORTED */
   estTF: "A",                                   // (news cache lives in NEWS_CACHE — per-cohort, FIX A3)
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
@@ -17003,7 +17020,7 @@ try {
 } catch (_) {}
 let revealTabs = () => {};                     // FIX 2 — reassigned by the auto-hide controller below
 /* DIRECT ENTRY — following an #economic link from inside the open page switches room too (one listener, page life). */
-if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("hashchange", () => { const r = scEntryRoom(); if (r && S.sec !== r) go(r); });
+if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("hashchange", () => { const r = scEntryRoom(); if (!r) return; S.ernTab = scEntryTab(); if (S.sec !== r) go(r); else if (r === "EVENTS") renderEvents(S.coh); });
 function go(sec) {
   clearSecFs();                                // R21 FIX B — room switch drops any section fullscreen
   /* DASHBOARD MODEL — clicking DASHBOARD while already on the DASH mount (e.g.

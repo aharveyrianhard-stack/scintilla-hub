@@ -113,7 +113,11 @@ test("the room has three tabs, and the filters are the room's own cohort strip",
   assert.match(src, /one\("PAST", "PAST REPORTED"/);
   assert.match(src, /one\("OLD", "THE OLDER LIST"/);
   assert.match(src, /case "erntab": \{/);
-  assert.match(src, /ernTab: "DASH",/, "the room opens on the dashboard");
+  assert.match(src, /ernTab: scEntryTab\(\),/, "the room opens on the dashboard, or on the tab the address asks for");
+  /* Alan: "either we lost it or I don't know how to get to it" — so there is a way in */
+  assert.match(src, /if \(h === "earnings" \|\| h === "events"\) return "EVENTS";/);
+  assert.match(src, /if \(h === "past" \|\| h === "past-reported" \|\| h === "reported"\) return "EVENTS";/);
+  assert.match(src, /return \(h === "past" \|\| h === "past-reported" \|\| h === "reported"\) \? "PAST" : "DASH";/);
   /* ALL / FAV / cohort is the strip the whole room already uses — not a second filter */
   const render = src.slice(src.indexOf("function erpRender(list, cohort)"), src.indexOf("function ercSpanBarHTML"));
   assert.match(render, /scopeItems\(ERP_ROWS, cohort, S\.tq, S\.fav, COHSETS\)/);

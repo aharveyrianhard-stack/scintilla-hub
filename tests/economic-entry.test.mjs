@@ -16,8 +16,13 @@ test("direct entry: #economic and #calendar open ECONOMIC; anything else keeps t
 test("direct entry: one hashchange listener, which switches only to a room scEntryRoom names (ECONOMIC, and since 23 Sep SENTIMENT)", () => {
   const n = (page.match(/addEventListener\("hashchange"/g) || []).length;
   assert.equal(n, 1);
-  assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ const r = scEntryRoom\(\); if \(r && S\.sec !== r\) go\(r\); \}\);/);
-  assert.match(page, /return h === "economic" \|\| h === "calendar" \? "ECONOMIC" : \(h === "sentiment" \|\| h === "fear-greed" \? "SENTIMENT" : null\);/, "the resolver still owns the hash vocabulary");
+  /* M40 — earnings joined the vocabulary (#earnings, #past-reported), so the listener
+     also carries the tab the address asks for. It still switches only to a room the
+     resolver names, and there is still exactly one of it. */
+  assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ const r = scEntryRoom\(\); if \(!r\) return; S\.ernTab = scEntryTab\(\); if \(S\.sec !== r\) go\(r\); else if \(r === "EVENTS"\) renderEvents\(S\.coh\); \}\);/);
+  assert.match(page, /if \(h === "economic" \|\| h === "calendar"\) return "ECONOMIC";/, "the resolver still owns the hash vocabulary");
+  assert.match(page, /if \(h === "sentiment" \|\| h === "fear-greed"\) return "SENTIMENT";/);
+  assert.match(page, /if \(h === "earnings" \|\| h === "events"\) return "EVENTS";/);
 });
 test("phone: the day-bar controls wrap under the date instead of overlapping it; the nudge is not shown on a phone", () => {
   assert.match(page, /@media \(max-width:900px\)\{ \.ec-daybar\{ flex-wrap:wrap; row-gap:6px; \} \.ec-span\{ margin-left:0; width:100%; flex-wrap:wrap; \} \}/);
