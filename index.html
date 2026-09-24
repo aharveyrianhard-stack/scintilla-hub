@@ -22910,6 +22910,19 @@ function filesWire(){
     try{ return ET_DAY.format(new Date(ms)); }
     catch(_){ try{ return new Date(ms-144e5).toISOString().slice(0,10); }catch(__){ return ""; } }
   }
+  /* A WEEKEND OR HOLIDAY IS NOT A HOLE. The Geiger replays calendar days, so every Saturday and
+     Sunday frame used to blank LAST and CHG and the whole board blinked once a week. On a day with
+     no session the board shows what any quote screen shows then: the last close and that
+     session's move, titled with the date it came from. Only up to 4 days back — a longer gap is a
+     real hole (before listing, a halt) and stays a dash. */
+  function pxAsOf(px, d){
+    var ds=px.__d||[], lo=0, hi=ds.length-1, k=-1;
+    while(lo<=hi){ var mid=(lo+hi)>>1; if(ds[mid]<=d){ k=mid; lo=mid+1; } else hi=mid-1; }
+    if(k<0) return null;
+    var gap=(Date.parse(d+"T12:00:00Z")-Date.parse(ds[k]+"T12:00:00Z"))/864e5;
+    if(!(gap>=0 && gap<=4)) return null;
+    var b=px[ds[k]]; return b ? {c:b.c, p:b.p, from:ds[k]} : null;
+  }
   function pxWant(t){
     if(!t || PXC[t] || PXQS[t] || PX_NONE[t]) return;
     PXQS[t]=1; PXQ.push(t); pxRun();
@@ -22928,14 +22941,15 @@ function filesWire(){
           .then(function(j){
             var ser=(j&&j.series)||[];
             if(!ser.length){ PX_NONE[tk]=1; return done(); }
-            var m={}, prev=null;
+            var m={}, prev=null, ds=[];
             for(var i=0;i<ser.length;i++){
               var b=ser[i]; if(!b||b.c==null||b.t==null) continue;
-              m[pxDay(+b.t)]={c:+b.c, p:prev};      /* p = the previous bar's close, so the
+              var dk=pxDay(+b.t);
+              m[dk]={c:+b.c, p:prev};               /* p = the previous bar's close, so the
                                                        day's change is the day's own change */
-              prev=+b.c;
+              ds.push(dk); prev=+b.c;
             }
-            PXC[tk]=m; done();
+            m.__d=ds.sort(); PXC[tk]=m; done();
           })
           .catch(function(){ PX_NONE[tk]=1; done(); });
         }catch(_){ PX_NONE[tk]=1; done(); }
@@ -22951,13 +22965,23 @@ function filesWire(){
     fpe:"the forward multiple is today's consensus estimate - it has no dated history, so the replay shows no value rather than today's",
     mc:"market cap is a current profile field with no dated history, so the replay shows no value rather than today's",
     rv:"a relative-volume ratio is only true for its own session and none is stored per date",
-    mkt:"the market-state dot is a live reading, not a stored history"
+    mkt:"the market-state dot is a live reading, not a stored history",
+    hb:"the usual day is stored per date, but the replay does not read it yet - it shows no value rather than today's"
   };
   function dash(node, why){
     if(!node) return;
     if(node.textContent!=="—") node.textContent="—";
     if(node.style.color!=="var(--mute)") node.style.color="var(--mute)";
     if(node.getAttribute("title")!==why) node.setAttribute("title", why);
+  }
+  /* a cell whose daily bar is still on its way: the same quiet "…" the board shows while it loads.
+     SC_PENDING is markup, so it can never go through textContent — on 24 Sep that printed the raw
+     <span class="sc-pending" …> across LAST and CHG on the live board while PLAY ran. */
+  function waitCell(node){
+    if(!node) return;
+    if(node.textContent!=="\u2026") node.textContent="\u2026";
+    if(node.style.color!=="var(--mute)") node.style.color="var(--mute)";
+    node.setAttribute("title","waiting for this day's bar from the chart API");
   }
   /* WRITE-ONLY. No getBoundingClientRect, no offsetHeight, nothing that forces layout. */
   function paintCols(){
@@ -22968,7 +22992,7 @@ function filesWire(){
       var r=rows[i], t=r.getAttribute("data-t"); if(!t) continue;
       var lp=r.querySelector(".sc-last"), lc=r.querySelector(".sc-chg"),
           lf=r.querySelector(".sc-fpe"), lmc=r.querySelector(".sc-mcap"),
-          lr=r.querySelector(".sc-rsi"), lv=r.querySelector(".sc-vol"),
+          lr=r.querySelector(".sc-rsi"), lv=r.querySelector(".sc-vol"), lh=r.querySelector(".sc-hb"),
           mk=r.querySelector(".sc-mktdot")||r.querySelector(".sc-mkt");
       if(!ASOF){                                   /* LIVE - hand every cell back to the live values */
         var row=null, all=S.rows||[];
@@ -22983,23 +23007,27 @@ function filesWire(){
         if(lr){ if(row.rsi!=null){ lr.textContent=Math.round(row.rsi); lr.style.color=rsiGradColor(row.rsi); }
                 else { lr.textContent="—"; lr.style.color=""; } lr.removeAttribute("title"); }
         if(lv){ lv.style.color=""; lv.removeAttribute("title"); if(typeof volCellHTML==="function") lv.outerHTML=volCellHTML(row.rv, row.rvAsOf); }
+        if(lh && typeof hbCellHTML==="function"){ lh.style.color=""; lh.outerHTML=hbCellHTML(t, row.hb, row.c); }
         if(mk) mk.style.opacity="";
         continue;
       }
       /* REWOUND */
-      var px=PXC[t], bar=px?px[ASOF]:null;
+      var px=PXC[t], bar=px?px[ASOF]:null, from=ASOF;
+      if(px && !bar){ bar=pxAsOf(px, ASOF); if(bar) from=bar.from; }
       if(lp){
         if(bar){ lp.textContent=bar.c.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-                 lp.style.color=""; lp.setAttribute("title","close on "+ASOF+" · daily bar from the chart API"); }
+                 lp.style.color=""; lp.setAttribute("title", from===ASOF ? "close on "+ASOF+" · daily bar from the chart API"
+                   : "no session on "+ASOF+" · last close, "+from+" · daily bar from the chart API"); }
         else if(px||PX_NONE[t]) dash(lp,"no daily bar stored for "+ASOF);
-        else { if(lp.textContent!==SC_PENDING){ lp.textContent=SC_PENDING; lp.style.color="var(--mute)"; } }
+        else waitCell(lp);
       }
       if(lc){
         var c=(bar&&bar.p!=null&&bar.p!==0)?(bar.c/bar.p-1)*100:null;
         if(c!=null){ lc.textContent=fmtC(c); lc.className="sc-chg "+(c>=0?"up":"dn"); lc.style.color="";
-                     lc.setAttribute("title","the day's own move on "+ASOF+" · close against the previous stored bar"); }
+                     lc.setAttribute("title", from===ASOF ? "the day's own move on "+ASOF+" · close against the previous stored bar"
+                       : "no session on "+ASOF+" · the move on "+from+", the last session before it"); }
         else if(px||PX_NONE[t]){ lc.className="sc-chg"; dash(lc,"no daily bar stored for "+ASOF); }
-        else if(lc.textContent!==SC_PENDING){ lc.textContent=SC_PENDING; lc.className="sc-chg"; lc.style.color="var(--mute)"; }
+        else { lc.className="sc-chg"; waitCell(lc); }
       }
       if(lr){
         var rv2=rsiM[t];
@@ -23007,7 +23035,7 @@ function filesWire(){
                        lr.setAttribute("title","RSI on "+ASOF+" · momentum_daily"); }
         else dash(lr,"no stored RSI for "+ASOF);
       }
-      dash(lf, NOHIST.fpe); dash(lmc, NOHIST.mc);
+      dash(lf, NOHIST.fpe); dash(lmc, NOHIST.mc); dash(lh, NOHIST.hb);
       if(lv){ lv.innerHTML=""; dash(lv, NOHIST.rv); }
       if(mk){ mk.style.opacity="0.25"; mk.setAttribute("title", NOHIST.mkt); }
     }
