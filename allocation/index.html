@@ -491,7 +491,7 @@ async function load() {
   const stamp = document.getElementById("stamp");
 
   const gP = api("/geiger").catch((e)=>{ D.missing.push("the live Geiger ("+e.message+")"); return null; });
-  const pP = pg("company_profile?select=ticker,sector,market_cap,updated_ts,is_etf,is_fund&limit=2000")
+  const pP = pg("company_profile?select=ticker,sector,market_cap,updated_ts,is_etf&limit=2000")
               .catch((e)=>{ D.missing.push("company sectors ("+e.message+")"); return null; });
   const fP = pg("fundamentals?select=ticker,price,market_cap,trailing_pe,eps_ttm,revenue_ttm,updated_ts&limit=2000")
               .catch((e)=>{ D.missing.push("trailing multiples ("+e.message+")"); return null; });
@@ -631,8 +631,9 @@ function universe() {
     /* 24 Sep: A FUND IS NOT A COMPANY. FMP files every ETF under "Financial Services / Asset
        Management", so SPY, QQQ, SMH, GLD, TLT and 44 more sat inside Financials - 49 of its 82
        members - and the page held QQQ "in Financials". Funds are left out of the sectors and
-       named in the sources, so a sector is only ever its own companies. */
-    if (p.is_etf === true || p.is_fund === true) { D.fundsOut.push(t); continue; }
+       named in the sources, so a sector is only ever its own companies. The ETF flag only:
+       FMP also sets is_fund on Realty Income (O), which is a company - a property REIT. */
+    if (p.is_etf === true) { D.fundsOut.push(t); continue; }
     const f = fund.get(t), r = rat.get(t);
     out.push({ t, sector:p.sector, mcap:p.market_cap, g:g.composite, trend:g.trend, mom:g.momentum,
       pe: (f && f.trailing_pe>0 ? f.trailing_pe : (r && r.pe>0 ? r.pe : null)),
