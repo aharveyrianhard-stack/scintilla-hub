@@ -1,0 +1,21 @@
+--- a/supabase/functions/read-engine/index.ts   (deployed; snapshot at repo/_LIVE_SNAPSHOT/functions/read-engine/index.ts)
++++ b/supabase/functions/read-engine/index.ts   (CANDIDATE - not deployed, not scheduled)
+@@ the upsert at the end of the handler @@
+-  for(let i=0;i<rows.length;i+=400){const {error}=await sb.from('read_blocks').upsert(rows.slice(i,i+400),{onConflict:'ticker,section'});if(error)e=error.message}
++  /* A ROW'S DATE MUST BE THE DATE OF ITS WORDS.
++     Every run stamped updated_ts:now on every row, changed or not, so a body that had not moved
++     since June read as minutes old on the company page and nobody could see the staleness.
++     MEASURED 2026-09-23: all 386 verdict rows and all 206 business/catalysts/watch rows carried
++     2026-09-23T23:10Z, while the words behind business/catalysts/watch come from ticker_context,
++     last enriched 2026-06-15..2026-07-22.
++     A row whose body is byte-identical to the stored one is now NOT WRITTEN AT ALL, so its
++     updated_ts keeps the date the words actually changed. No schema change, no new column. */
++  const seen = [...new Set(rows.map(r => r.ticker))]
++  const prev = new Map<string,string>()
++  for(let i=0;i<seen.length;i+=200){
++    const { data } = await sb.from('read_blocks').select('ticker,section,body').in('ticker', seen.slice(i,i+200))
++    for(const r of (data||[])) prev.set(r.ticker + '::' + r.section, r.body ?? '')
++  }
++  const changed = rows.filter(r => prev.get(r.ticker + '::' + r.section) !== r.body)
++  for(let i=0;i<changed.length;i+=400){const {error}=await sb.from('read_blocks').upsert(changed.slice(i,i+400),{onConflict:'ticker,section'});if(error)e=error.message}
++  const unchanged = rows.length - changed.length   // report it, so a run that writes nothing is visible
