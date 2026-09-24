@@ -2246,6 +2246,19 @@ body.econ .sc-cohsearch{ display:none; }
 .mn-cd{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--dim);
   font-variant-numeric:tabular-nums; }
 @media (max-width:900px){ .mn-it{ padding:2px 10px; } .mn-nm{ font-size:9.5px; } }
+/* M55 — the same queue inside the ECONOMIC room. Same item classes, so the same dot colours and the
+   same breathe/hard animations; only the box around them is new, and the names are set at the room's
+   own body size rather than the header's. */
+.ec-next{ display:flex; align-items:center; gap:0; overflow-x:auto; padding:6px 10px;
+  border-bottom:.4px solid var(--line); scrollbar-width:none; }
+.ec-next::-webkit-scrollbar{ display:none; }
+.ec-next:empty{ display:none; }
+.ec-next .mn-nm{ font-size:11px; }
+.ec-next .mn-when, .ec-next .mn-cd{ font-size:9px; }
+.ec-next .mn-it{ padding:2px 11px; }
+/* the release the tape sent you to: named, not shouted — a quiet grey edge, no colour */
+.ec-row.is-focus, .ec-ev.is-focus, .ec-next .mn-it.is-focus{ box-shadow:inset 0 0 0 .5px var(--dim); }
+.ec-next .mn-it.is-focus .mn-nm{ color:var(--ink); }
 
 /* ----------------------------------------------------------------------------
    R52 — ECONOMIC restructure (SCINTILLA Visual Plan v2 §A). The room stops being
@@ -13750,6 +13763,13 @@ function econRoomHTML() {
           '<span class="ec-sp' + (S.econZoom ? " on" : "") + '" id="econZoom" data-act="eczoom" title="Zoom in: weekdays only, full names, bigger text">ZOOM +</span>' +   // EVENTS 22 Sep — Alan: "I want to zoom in"
         "</span>" +
       "</div>" +
+      /* M55 — THE ROOM CARRIES THE SAME QUEUE THE TOP TAPE CARRIES. Alan: "this thing is telling me
+         go to economic … and then I go there, Fed Williams speech, I don't get it. I don't see the
+         flashing." The strip below is not a new widget: it is the header tape's own nodes, painted
+         by the same ecNudgePaintBox() and flashed by the same mnScintPass(), so the two surfaces
+         cannot drift in what they name, what colour the dot is, or how fast it moves. It sits above
+         the table so it is there in DAY, WEEK and MONTH — MONTH has no table rows at all. */
+      '<div class="ec-next" id="ecRoomQueue"></div>' +
       '<div class="scroller" id="econTbl"><div class="soon">loading economic calendar…</div></div>' +
     "</div>" +
     /* PORT — the rail is PRODUCTION's (579dee5 · c40fbc8 · 211a1ec · 3c4e0b1): stored prints with their
@@ -14000,6 +14020,7 @@ function renderEconTable() {
     /* M42 — the MONTH grid is Alan's saved Economic view and it returns from here, so the glow pass
        belongs on THIS path too, not only at the end of the function. */
     try { ecScintPass(); } catch (_) {}
+    try { ecRoomPaint(); } catch (_) {}          /* M55 — the queue, the flash and the focus, on MONTH too */
     return;
   }
   if (!rows.length) {
@@ -14035,6 +14056,35 @@ function renderEconTable() {
     'green = the other way · ● high · ● medium · ● low impact · times in ET · — = the feed has not printed that value · ' + ecReadNote() + '</div>';
   /* M42 — the room Alan walked into: the rows that ARE scintillas glow here, once each. */
   try { ecScintPass(); } catch (_) {}
+  try { ecRoomPaint(); } catch (_) {}            /* M55 — and what the top tape is pointing at, flashing */
+}
+/* M55 — one call for the three things the room owes the tape: the same queue, the same flash, and
+   the named release the reader was sent to. */
+function ecRoomPaint(nowSec) {
+  try { ecNudgePaintBox(el("ecRoomQueue"), nowSec); } catch (_) {}
+  try { ecRoomScintPass(); } catch (_) {}
+  try { ecFocusPaint(); } catch (_) {}
+}
+/* THE ROOM OPENS ON THAT EVENT. Arriving from the tape carries the release's identity with it
+   (data-esub, the same key the rows carry), so the room can say WHICH one it was: the row, the
+   month chip and the queue node all wear a quiet grey edge, and the first real row is scrolled
+   into view once — once, so the reader is never fought while they scroll. */
+function ecFocusPaint() {
+  const f = S.econFocus;
+  if (!f || !f.sub || typeof document === "undefined" || !document.querySelectorAll) return 0;
+  let n = 0, first = null;
+  for (const node of document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub], .ec-next [data-esub]")) {
+    const on = !!(node.dataset && node.dataset.esub === f.sub);
+    if (node.classList) node.classList.toggle("is-focus", on);
+    if (!on) continue;
+    n++;
+    if (!first && node.classList && !node.classList.contains("mn-it")) first = node;
+  }
+  if (first && !f.scrolled && typeof first.scrollIntoView === "function") {
+    f.scrolled = 1;
+    try { first.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_) { try { first.scrollIntoView(); } catch (__) {} }
+  }
+  return n;
 }
 /* ---- THE MACRO NUDGE + THE ECON BAND — the tape (8995c4b 13 Aug → off 367589e → ported f4b5c3f → ON 22 Sep) -------
    Alan, 13 Aug: "something needs to be on the dashboard of the next event"; then, on the full-width row it got: "you
@@ -14253,8 +14303,11 @@ function ecNudgeNodeTitle(m) {
     : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) : ecNudgeTitle(m.it);
 }
 function ecNudgeNodeHTML(m, nowSec) {
+  /* M55 — data-esub is the SAME key the ECONOMIC room's rows and month chips carry, so "the thing
+     the tape is pointing at" and "the row in the room" are one identity, not two lookups. */
   return '<span class="' + ecNudgeClass(m) + '" data-act="mngoto" data-day="' + esc(m.kind === "item" ? m.it.day : m.day) +
-    '" data-k="' + esc(m.key) + '" title="' + esc(ecNudgeNodeTitle(m)) + '">' + ecNudgeInner(m, nowSec) + "</span>";
+    '" data-k="' + esc(m.key) + '"' + (m.kind === "item" ? ' data-esub="' + esc(ecBase(m.it.event)) + '"' : "") +
+    ' title="' + esc(ecNudgeNodeTitle(m)) + '">' + ecNudgeInner(m, nowSec) + "</span>";
 }
 /* kept for the suite and for anything that renders a single item on its own */
 function ecNudgeItemHTML(it, st, nowSec) {
@@ -14272,8 +14325,15 @@ function macroNextHTML(nowSec) {
 /* Repaint the queue IN PLACE: nodes are keyed, so a tick that only moves a countdown never rebuilds the node whose dot
    is pulsing, and when one drops off the next SLIDES up (.mn-new in, .mn-out out) instead of the row flickering.
    Anywhere there is no DOM (this file's tests run it in a VM) it falls back to setting innerHTML from macroNextHTML. */
+/* M55 — ONE PAINTER, TWO BOXES. The header tape and the ECONOMIC room's strip are the same queue;
+   painting them with two different functions is how they would come to disagree. ecNudgePaint()
+   keeps its signature (the suite calls it) and now also paints the room's strip when that room is
+   mounted; the work itself moved into ecNudgePaintBox(). */
 function ecNudgePaint(nowSec) {
-  const box = el("macroNext");
+  ecNudgePaintBox(el("macroNext"), nowSec);
+  ecNudgePaintBox(el("ecRoomQueue"), nowSec);
+}
+function ecNudgePaintBox(box, nowSec) {
   if (!ECON_TAPE_ON || !box) return;
   const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
   const model = ecNudgeModel(now);
@@ -14300,6 +14360,7 @@ function ecNudgePaint(nowSec) {
       n.className = cls + " mn-new";
       n.setAttribute("data-act", "mngoto"); n.setAttribute("data-day", m.kind === "item" ? m.it.day : m.day);
       n.setAttribute("data-k", m.key); n.setAttribute("title", ecNudgeNodeTitle(m));
+      if (m.kind === "item") n.setAttribute("data-esub", ecBase(m.it.event));   /* M55 — same identity as the room's rows */
       n.innerHTML = inner; n.__mn = inner;
     } else {
       if (n.className.replace(" mn-new", "") !== cls) n.className = cls;
@@ -19046,6 +19107,8 @@ document.addEventListener("click", (e) => {
     case "mnhistx": ecHistClose(); break;
     case "mngoto": {                           // the nudge or the ECON band → open that day in ECONOMIC
       ecHistClose();
+      /* M55 — remember WHICH release sent him, so the room can name it when he lands */
+      S.econFocus = a.dataset.esub ? { sub: a.dataset.esub, day: a.dataset.day, k: a.dataset.k || "", scrolled: 0 } : null;
       S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US";
       S.econCat = "ALL"; S.econOpen = {};
       /* ECON TAPE 22 Sep — the band rides under the ECONOMIC room too, and go() does not remount a room already
@@ -19058,6 +19121,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "eccat":  S.econCat = a.dataset.c; renderEconTable(); break;
+    /* M55 — the moment he moves the calendar himself, the room stops pointing at where he came from */
     case "ecimp":  S.econImp = (S.econImp === "HIGH") ? "ALL" : "HIGH"; renderEconTable(); break;
     case "ecfam": {                            // composite release opens/closes inline
       const k = a.dataset.k;
@@ -19067,6 +19131,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ecday": {
+      S.econFocus = null;                        /* M55 — moving the calendar by hand leaves the tape's release behind */
       const d = +a.dataset.d, cur = S.econDay || ecToday();
       if (d === 0) S.econDay = ecToday();
       else if (S.econSpan === "MONTH") {
@@ -19099,6 +19164,8 @@ document.addEventListener("click", (e) => {
     }
     case "ecspan": {
       S.econSpan = a.dataset.s;
+      /* M55 — the same release stays named when the view changes; it just has to be found again */
+      if (S.econFocus) S.econFocus.scrolled = 0;
       document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((b) =>
         b.classList.toggle("on", b.dataset.s === S.econSpan));
       S.econOpen = {};
@@ -19998,7 +20065,7 @@ function mnScintNode(box, key) {
   return Array.prototype.find.call(box.querySelectorAll("[data-k]"),
     (x) => x.getAttribute("data-k") === key && !(x.classList && x.classList.contains("mn-out"))) || null;
 }
-function mnScintPass(nowMs, boxIn, modelIn) {
+function mnScintPass(nowMs, boxIn, modelIn, surface) {
   if (!ECON_TAPE_ON || SCINT_OFF) return 0;               /* reduced motion: the queue still counts down, silently */
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return 0;
   const box = boxIn || (typeof el === "function" ? el("macroNext") : null);
@@ -20009,20 +20076,65 @@ function mnScintPass(nowMs, boxIn, modelIn) {
   let n = 0;
   for (const m of model || []) {
     const plan = mnScintPlan(m.it, m.st, nowSec);
-    if (!plan) { MN_SCINT_AT.delete(m.key); continue; }
+    if (!plan) { MN_SCINT_AT.delete(surface ? surface + "|" + m.key : m.key); continue; }
     const node = mnScintNode(box, m.key);
     if (!node) continue;
-    const last = MN_SCINT_AT.get(m.key);
+    /* M55 — the room keeps its own clock at the same rate; the tape's keys are left exactly as they
+       were, so nothing about the header's memory changes. */
+    const sk = surface ? surface + "|" + m.key : m.key;
+    const last = MN_SCINT_AT.get(sk);
     if (plan.once ? last != null : last != null && now - last < plan.everyMs) continue;
-    MN_SCINT_AT.set(m.key, now);
+    MN_SCINT_AT.set(sk, now);
     scScint(mnScintTarget(node, plan.phase), plan.tone);
     n++;
   }
   return n;
 }
+/* ── M55 · THE ROOM FLASHES WHAT THE TAPE FLASHES ─────────────────────────────────────────────
+   Alan: "colors flashing like crazy, six … in four hours ten minutes. And then I go there, Fed
+   Williams speech, I don't get it. I don't see the flashing."
+   The flashing was real and it was only ever in the header. Nothing new is invented here: the room
+   runs the SAME ecNudgeModel through the SAME mnScintPlan and the SAME scScint, so the cadence is
+   the tape's by construction — 20 s at fifteen minutes out, 6 s inside five, 2 s through the
+   release minute, one glow in the room's own colour when the number lands. Two surfaces get it:
+     · the room's queue strip (the tape's own nodes, so the dots breathe at the same rate too), and
+     · the release's own row in DAY/WEEK, or its chip in MONTH, matched on data-esub.
+   A view with no row for it — MONTH, when the day is off-grid — still has the strip. */
+function ecRoomScintPass(nowMs, modelIn) {
+  if (!ECON_TAPE_ON || SCINT_OFF) return 0;
+  if (typeof document === "undefined" || !document.querySelectorAll) return 0;
+  if (document.visibilityState === "hidden") return 0;
+  const now = nowMs == null ? Date.now() : nowMs, nowSec = Math.floor(now / 1000);
+  let model = modelIn;
+  if (!model) { try { model = ecNudgeModel(nowSec); } catch (_) { return 0; } }
+  let n = mnScintPass(now, (typeof el === "function" ? el("ecRoomQueue") : null), model, "room");
+  const rows = Array.prototype.slice.call(document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub]"));
+  if (!rows.length) return n;
+  for (const m of model || []) {
+    if (m.kind !== "item") continue;
+    const plan = mnScintPlan(m.it, m.st, nowSec);
+    const sk = "row|" + m.key;
+    if (!plan) { MN_SCINT_AT.delete(sk); continue; }
+    const last = MN_SCINT_AT.get(sk);
+    if (plan.once ? last != null : last != null && now - last < plan.everyMs) continue;
+    const sub = ecBase(m.it.event);
+    let hit = 0;
+    for (const row of rows) {
+      if (!row.dataset || row.dataset.esub !== sub) continue;
+      const cell = (row.querySelector && (row.querySelector(".nm") || row.querySelector(".v.act"))) || row;
+      scScint(cell, plan.tone);
+      if (++hit >= 4) break;                       /* a composite release is several rows, not forty */
+    }
+    if (hit) { MN_SCINT_AT.set(sk, now); n++; }
+  }
+  return n;
+}
 function mnScintArm() {
   if (MN_SCINT_TIMER == null && typeof setInterval === "function")
-    MN_SCINT_TIMER = setInterval(() => { try { mnScintPass(); } catch (_) {} }, MN_SCINT_TICK_MS);
+    MN_SCINT_TIMER = setInterval(() => {
+      try { mnScintPass(); } catch (_) {}
+      try { ecRoomScintPass(); } catch (_) {}      /* M55 — the room, on the tape's own clock */
+    }, MN_SCINT_TICK_MS);
 }
 
 function scintPaint() {
@@ -20031,6 +20143,8 @@ function scintPaint() {
   try { ernScintPass(); } catch (_) {}
   try { boardScintPass(); } catch (_) {}
   try { mnScintPass(); } catch (_) {}          /* M48 — the top tape flashes as its moment comes */
+  try { ecRoomScintPass(); } catch (_) {}      /* M55 — and the Economic room, at the same cadence */
+  try { ecFocusPaint(); } catch (_) {}         /* M55 — the release the tape sent him to stays named */
 }
 
 /* ── the read ───────────────────────────────────────────────────────────────────────────────── */
