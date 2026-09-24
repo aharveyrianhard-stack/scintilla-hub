@@ -21090,5 +21090,201 @@ function filesWire(){
 })();
 </script>
 
+<!-- ============================================================================
+     GEIGER IN MOTION — the company tab learns to move.
+
+     PURE ADDITION, in its own functions, so the board's rewind module above and
+     anything merging alongside it are untouched. Alan: "when you click on a ticker
+     this Geiger tab is garbage... if that had a movement Geiger in motion style and
+     we could put it on the play button of the rewind, that would be pretty legendary."
+
+     WHAT MOVES: the one name's composite bar, its number, and BOTH family rings -
+     trend and momentum travelling together, because a composite whose parts are
+     frozen is the "lying to me on hub" defect in a different tile.
+
+     WHERE THE NUMBERS COME FROM: the same two tables the board's rewind reads -
+     fan_daily.read (trend) and momentum_daily.read (momentum) - for THIS ticker, and
+     the family weights from operator_weights. One read of each per ticker, the whole
+     window at once: playing is then pure arithmetic, so a replay makes no requests.
+     A day with no momentum row plays trend alone and says so; nothing is invented.
+     ============================================================================ -->
+<style>
+.gmo{display:flex;align-items:center;gap:6px;padding:3px 12px 5px;font-family:var(--gs-mono,var(--mono));font-size:9px}
+.gmo__b{background:transparent;border:.4px solid var(--line);color:var(--ink,#c8c8d2);
+  font:inherit;letter-spacing:.06em;padding:2px 6px;border-radius:2px;cursor:pointer}
+.gmo__b.is-on{border-color:var(--crk);color:var(--crk)}
+.gmo__sc{flex:1;min-width:50px;height:12px;background:transparent;-webkit-appearance:none;appearance:none;outline:none;cursor:pointer}
+.gmo__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a)}
+.gmo__sc::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;border-radius:50%;
+  background:var(--crk,#00d4ff);margin-top:-3px;border:none}
+.gmo__sc::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--crk,#00d4ff);border:none}
+.gmo__dt{color:var(--gs-dim,#6a6a78);letter-spacing:.06em;min-width:66px;text-align:right}
+/* the rings and the bar EASE while the tab is playing, and only then: a live paint
+   must stay instant, so the transition lives on a class the module owns. */
+.gsum.gmo-on [data-gs="f_trend"],.gsum.gmo-on [data-gs="f_mom"]{transition:stroke-dasharray 190ms linear}
+.gsum.gmo-on .gs-cgr i{transition:width 190ms linear,left 190ms linear,right 190ms linear}
+</style>
+<script>
+(function(){
+  var T=null, FAN=[], MOM=[], W=null, IX=0, RAF=null, PREVC=null, MOUNT=null;
+  var SPEED=700;                       /* ms per day - the board's 1x, same feel */
+  function E(sel,root){ return (root||document).querySelector(sel); }
+  function api(p){ try{ return pg(p).catch(function(){return [];}); }catch(e){ return Promise.resolve([]); } }
+  function root(){ return E("#coRailContent .gsum"); }
+  function q(k){ var r=root(); return r?r.querySelector('[data-gs="'+k+'"]'):null; }
+
+  /* the weights the live composite is blended with, read once */
+  api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
+    var w={trend:0.5,mom:0.5};
+    (rows||[]).forEach(function(r){
+      if(String(r.key).toUpperCase()==="TREND") w.trend=+r.weight;
+      if(String(r.key).toUpperCase()==="MOMENTUM") w.mom=+r.weight;
+    });
+    W=w;
+  }).catch(function(){ W={trend:0.5,mom:0.5}; });
+
+  function strip(){
+    return '<div class="gmo" id="gmoBar">'+
+      '<button class="gmo__b" id="gmoPlay" title="play this name\'s Geiger over time">&#9654; PLAY</button>'+
+      '<input type="range" class="gmo__sc" id="gmoSc" min="0" max="0" value="0" disabled '+
+        'title="scrub - the day this tile is showing">'+
+      '<span class="gmo__dt" id="gmoDt">live</span></div>';
+  }
+  /* WHERE IT SITS: directly under the composite zone, so the transport is beside the
+     thing it moves rather than at the top of a tile it does not own. */
+  function mount(t){
+    var r=root(); if(!r) return;
+    var zone=r.querySelector(".gs-zG"); if(!zone) return;
+    if(MOUNT===t && E("#gmoBar",r)) return;
+    var old=E("#gmoBar",r); if(old) old.parentNode.removeChild(old);
+    var asof=zone.querySelector('[data-gs="rungasof"]');
+    if(asof) asof.insertAdjacentHTML("beforebegin", strip()); else zone.insertAdjacentHTML("beforeend", strip());
+    MOUNT=t; T=t; FAN=[]; MOM=[]; IX=0; PREVC=null;
+    E("#gmoPlay",r).onclick=play;
+    var sc=E("#gmoSc",r);
+    sc.oninput=function(){ stop(); show(+this.value, true); };
+    load(t);
+  }
+  /* ONE read per table for the whole window. Playing then costs no requests at all -
+     the board's rewind has to fetch per day because it carries 364 names; a single
+     name fits in two reads. */
+  function load(t){
+    var from=new Date(Date.now()-400*864e5).toISOString().slice(0,10);
+    Promise.all([
+      api("fan_daily?select=asof,read&ticker=eq."+encodeURIComponent(t)+"&asof=gte."+from+"&order=asof.asc&limit=420"),
+      api("momentum_daily?select=asof,read&ticker=eq."+encodeURIComponent(t)+"&asof=gte."+from+"&order=asof.asc&limit=420")
+    ]).then(function(res){
+      if(T!==t) return;                       /* the reader moved on while this was in flight */
+      FAN=(res[0]||[]).filter(function(r){return r&&r.asof!=null&&r.read!=null;});
+      var m={}; (res[1]||[]).forEach(function(r){ if(r&&r.asof!=null) m[r.asof]=r.read; });
+      MOM=FAN.map(function(r){ return m[r.asof]==null?null:m[r.asof]; });
+      var sc=E("#gmoSc");
+      if(sc&&FAN.length){ sc.min=0; sc.max=FAN.length-1; sc.value=FAN.length-1; sc.disabled=false; }
+    });
+  }
+  function comp(tr,mo){
+    if(tr==null) return null;
+    if(mo==null) return tr;
+    var wt=(W&&W.trend!=null)?W.trend:0.5, wm=(W&&W.mom!=null)?W.mom:0.5;
+    return (wt*tr+wm*mo)/((wt+wm)||1);
+  }
+  function ring(k,v){
+    var n=q(k); if(!n||v==null) return;
+    n.setAttribute("stroke-dasharray", Math.max(2,Math.min(100,(v+1)/2*100))+" 100");
+  }
+  /* every part of the tile, in one breath - the rings, the bar, the number, the words */
+  function paint(tr,mo){
+    var r=root(); if(!r) return;
+    var c=comp(tr,mo);
+    ring("f_trend",tr); ring("f_mom",mo);
+    var lt=q("lt"), lm=q("lm");
+    if(lt) lt.textContent = tr==null?"\u2014":gsSgn(tr);
+    if(lm) lm.textContent = mo==null?"\u2014":gsSgn(mo);
+    var C=q("comp"), CS=q("compst");
+    if(C){
+      if(c==null){ C.textContent="\u2014"; }
+      else{
+        C.textContent=gsSgn(c); C.style.color=gsTone(c);
+        C.style.filter="drop-shadow(0 0 9px "+gsTone(c)+")";
+        /* the one primitive, again: a name that changes side gets the page's glow */
+        if(PREVC!=null && ((PREVC<0)!==(c<0)) && typeof scScint==="function") scScint(C, c>=0);
+      }
+      PREVC=c;
+    }
+    if(CS) CS.textContent = c==null ? "" : (mo==null ? "trend only \u00b7 no momentum that day"
+      : (Math.abs(c)<0.10 ? "neutral" : (c>0 ? "bull lean" : "bear lean")));
+    var CGR=q("cgr");
+    if(CGR){
+      if(c==null){ CGR.innerHTML=""; }
+      else{
+        var w=Math.min(Math.abs(c),1)*50, cc=c>=0?"var(--gs-bull)":"var(--gs-bear)";
+        var i=CGR.querySelector("i");
+        if(!i){ CGR.innerHTML='<i></i>'; i=CGR.querySelector("i"); }
+        i.style.cssText=(c>=0?"left:50%;":"right:50%;")+"width:"+w+"%;background:"+cc+
+          ";box-shadow:0 0 7px "+cc;
+      }
+    }
+  }
+  function show(i, fromScrub){
+    if(!FAN.length) return;
+    IX=Math.max(0,Math.min(FAN.length-1,Math.round(i)));
+    var r=root(); if(r) r.classList.add("gmo-on");
+    paint(FAN[IX].read, MOM[IX]);
+    var dt=E("#gmoDt"); if(dt) dt.textContent=FAN[IX].asof;
+    var sc=E("#gmoSc"); if(sc && !fromScrub) sc.value=IX;
+  }
+  function play(){
+    if(RAF) return stop();
+    if(!FAN.length) return;
+    var sc=E("#gmoSc"); if(!sc) return;
+    if(+sc.value>=FAN.length-1) sc.value=0;
+    var p=E("#gmoPlay"); if(p){ p.innerHTML="&#10073;&#10073; PAUSE"; p.classList.add("is-on"); }
+    var v0=+sc.value, t0=performance.now();
+    PREVC=null;
+    RAF=requestAnimationFrame(function step(now){
+      var v=v0+(now-t0)/SPEED;
+      if(v>=FAN.length-1){ show(FAN.length-1); stop(); live(); return; }
+      show(v);
+      RAF=requestAnimationFrame(step);
+    });
+  }
+  function stop(){
+    if(RAF){ cancelAnimationFrame(RAF); RAF=null; }
+    var p=E("#gmoPlay"); if(p){ p.innerHTML="&#9654; PLAY"; p.classList.remove("is-on"); }
+  }
+  /* BACK TO LIVE, EXACTLY: the tile is repainted by the page's own builder from the
+     data it already holds, so nothing this module computed can survive the handover. */
+  function live(){
+    var r=root(); if(r) r.classList.remove("gmo-on");
+    PREVC=null;
+    var dt=E("#gmoDt"); if(dt) dt.textContent="live";
+    try{
+      if(typeof S!=="undefined" && S.coData && S.coData._gsum && typeof buildGeigerSummary==="function")
+        buildGeigerSummary(S.coData._gsum);
+    }catch(e){}
+  }
+  /* The tab is rebuilt by the page whenever the reader opens a name or switches tabs,
+     so the module watches for the tile instead of hooking the renderer - nothing above
+     is modified, and a merge that changes the renderer cannot break this. */
+  function watch(){
+    var host=document.getElementById("coRailContent");
+    if(!host){ setTimeout(watch,600); return; }
+    var mo=new MutationObserver(function(){
+      try{
+        var r=root();
+        if(!r){ MOUNT=null; stop(); return; }
+        var t=(typeof LEFT_T!=="undefined")?LEFT_T:null;
+        if(t && t!==MOUNT){ stop(); mount(t); }
+        else if(t && !document.getElementById("gmoBar")) mount(t);
+      }catch(e){}
+    });
+    mo.observe(host,{childList:true,subtree:true});
+    try{ var t=(typeof LEFT_T!=="undefined")?LEFT_T:null; if(t&&root()) mount(t); }catch(e){}
+  }
+  if(document.readyState!=="loading") watch();
+  else document.addEventListener("DOMContentLoaded", watch);
+})();
+</script>
+
 </body>
 </html>

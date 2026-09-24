@@ -5,7 +5,7 @@
 :root{--bg:#07070b;--panel:#0d0d14;--line:#1a1a2a;--ink:#c8c8d2;--dim:#6a6a78;
   --bull:#00d492;--bear:#d4455e;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
 body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
-#head{padding:8px 10px;border-bottom:.4px solid var(--line)}
+header#head{padding:8px 10px;border-bottom:.4px solid var(--line)}
 #boardScroll{height:520px;overflow:auto;border-bottom:.4px solid var(--line)}
 .sc-board__row{position:relative;display:grid;grid-template-columns:52px 70px 1fr 120px;
   gap:5px;align-items:center;padding:3px 18px 3px 6px;border-bottom:.4px solid var(--line);height:20px}
@@ -15,7 +15,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
 .sc-gmini i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
 #out{padding:8px 10px;white-space:pre}
 </style></head><body>
-<div id="head">GEIGER REPLAY BENCH · <span id="n"></span> rows · arm: <b id="arm">—</b></div>
+<header id="head"><span data-scnav-slot></span>GEIGER REPLAY BENCH · <span id="n"></span> rows · arm: <b id="arm">—</b></header>
 <div id="boardScroll"></div>
 <div id="out">run window.__bench(arm, ticks)</div>
 <script>
@@ -183,4 +183,38 @@ window.__bench = function (arm, ticks) {
   document.getElementById("out").textContent = JSON.stringify(out, null, 1);
   return out;
 };
-</script></body></html>
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
