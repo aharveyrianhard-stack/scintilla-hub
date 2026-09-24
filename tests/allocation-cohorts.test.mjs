@@ -97,7 +97,10 @@ test("the whole membership table is read in pages, because it is longer than one
 });
 
 test("favourites are read from the board's own list and never forced into a pick", () => {
-  assert.match(ALLOC, /localStorage\.getItem\("sc_fav"\)/, "favourites come from the board's saved list");
+  assert.match(ALLOC, /pg\("hub_favorites\?select=ticker"\)/, "favourites come from the board's cross-device list (24 Sep)");
+  assert.match(ALLOC, /if \(Array\.isArray\(server\) && server\.length\) return server\.slice\(\);/,
+    "and the server list, when it has rows, IS the list - the board's own R29 rule");
+  assert.match(ALLOC, /localStorage\.getItem\("sc_fav"\)/, "this browser's saved list is only the fallback");
   assert.match(ALLOC, /const FAV_SEED = \["MU", "NBIS", "SNDK"\]/, "and from the board's seed");
   const scoreBlock = slice(ALLOC, "const scoreOf = (x) =>", "F.candidates.forEach(scoreOf)", "the name score");
   assert.match(scoreBlock, /favAdd = x\.fav \? T\.favBoost : 0/, "a star is worth exactly the knob, no more");

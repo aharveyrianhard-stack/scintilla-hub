@@ -420,12 +420,14 @@ const COHORTS = [
   ["MACRO", "MACRO"], ["INDEXES", "INDEXES"], ["THEMATIC", "THEMATIC"],
   ["METALS", "METALS"], ["AI POWER", "AI_POWERTRAIN"],
 ];
-/* The Hub's favourites: the same seed the board boots with, merged with whatever this browser has
-   starred (localStorage "sc_fav"). Same origin as the Hub, so it is the same list — but it is a
-   per-browser list: there is no favourites table on the server today, so a name starred on the
-   phone is not visible here until it is starred here too. The page says that in words. */
+/* The Hub's favourites. 24 Sep: the server list (hub_favorites) is the source of truth, the same
+   rule the board follows (R29): when it has rows it IS the list, on every device - including the
+   names Claude Check starred on 23 Sep. Only when the server cannot be read, or is empty, does the
+   page fall back to the board's seed merged with this browser's saved list (localStorage "sc_fav"),
+   and it says which one it used. */
 const FAV_SEED = ["MU", "NBIS", "SNDK"];
-function favList() {
+function favList(server) {
+  if (Array.isArray(server) && server.length) return server.slice();
   const out = FAV_SEED.slice();
   try {
     const f = JSON.parse(localStorage.getItem("sc_fav") || "null");
@@ -543,9 +545,14 @@ async function load() {
         volume_basis:j.volume_basis || null }; })
       .catch((e) => { D.odd[s] = { error:e.message }; })));
 
-  let ernRows, rankRows, cohRows, smaRows, stagedRows;
-  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows, cohRows, smaRows, D.declared, stagedRows] =
-    await Promise.all([gP, pP, fP, rP, eP, kP, cP, sP, uP, stP]);
+  /* FAVOURITES — the board's cross-device list, read like every other table here. */
+  const favP = pg("hub_favorites?select=ticker")
+              .then((rows)=> Array.isArray(rows) ? rows.map((r)=>String(r.ticker).toUpperCase()) : null)
+              .catch((e)=>{ D.missing.push("the favourites list ("+e.message+")"); return null; });
+
+  let ernRows, rankRows, cohRows, smaRows, stagedRows, favServer;
+  [D.g, D.prof, D.fund, D.ratios, ernRows, rankRows, cohRows, smaRows, D.declared, stagedRows, favServer] =
+    await Promise.all([gP, pP, fP, rP, eP, kP, cP, sP, uP, stP, favP]);
   if (stagedRows) {
     D.staged = {}; let newest = 0;
     stagedRows.forEach((r)=>{ const t=String(r.ticker).toUpperCase();
@@ -554,7 +561,8 @@ async function load() {
     D.stagedNewest = newest || null;
   }
   await tP; await oP;
-  D.fav = favList();
+  D.fav = favList(favServer);
+  D.favSource = (Array.isArray(favServer) && favServer.length) ? "server" : "browser";
   if (cohRows) {
     D.cohsets = {};
     cohRows.forEach((r)=>{ const k=r.cohort, t=String(r.ticker).toUpperCase();
@@ -1390,8 +1398,10 @@ function sourcesHTML(m) {
       " memberships · the same table and the same means the dashboard's COHORT COMPARE strip uses<br>" +
     "Breadth · scintilla-live provider_indicators_current, FMP 50- and 200-day averages dated " + esc(D.smaDate||"—") +
       " · " + (D.sma ? Object.keys(D.sma).length : 0) + " names · and RSP against SPY on the chart API's daily bars<br>" +
-    "Favourites · this browser's sc_fav list merged with the board's seed · " + D.fav.length +
-      " names · there is no favourites table on the server, so another device's stars are not visible here<br>" +
+    (D.favSource === "server"
+      ? "Favourites · scintilla-live hub_favorites, the board's cross-device list · " + D.fav.length + " names · the same stars on every device<br>"
+      : "Favourites · the server list could not be read or is empty, so this browser's sc_fav list merged with the board's seed · " +
+        D.fav.length + " names<br>") +
     "The oddities · chart API /candles for " + ODD.join(", ") + ", full payload including provider symbol and price basis<br>" +
     "Prices · chart API /quotes, asked for after the page drew itself; if it sheds load the close above stands.<br>" +
     "No discounted cash flow is used anywhere on this page.";
@@ -1541,8 +1551,9 @@ function drawFav(m) {
         ? "Tonight it changed the answer: " + m.favChanged.map((c)=>"<b>"+esc(c.t)+"</b> is held in " +
             esc(plain(c.sector)) + (c.out ? " in place of " + esc(c.out) : "")).join(", ") + "."
         : "Tonight it changed nothing: the same names are held with or without it.")) +
-    " Favourites come from this browser's saved list (the same <b>sc_fav</b> the board uses) merged with the board's " +
-    "seed. There is no favourites table on the server, so a name starred on another device is not visible here yet.";
+    (D.favSource === "server"
+      ? " Favourites come from the board's cross-device list (<b>hub_favorites</b>), so a name starred on any device counts here."
+      : " The server's favourites list could not be read, so this uses this browser's saved list (<b>sc_fav</b>) and the board's seed.");
   document.getElementById("favtab").innerHTML = '<div class="tw"><table><thead><tr>' +
     "<th>NAME</th><th>SECTOR</th><th>COHORTS</th><th>GEIGER</th><th>VERDICT</th><th>WEIGHT</th></tr></thead><tbody>" +
     rows.map((r)=>'<tr class="' + (r.state==="PICK" ? "pick" : "out") + '"><td>' + esc(r.t) + "</td>" +
@@ -1950,7 +1961,8 @@ function drawReport(m) {
       ". " + (m.favChanged.length
         ? "The preference changed the answer tonight: " + m.favChanged.map((c)=>esc(c.t)).join(", ") + "."
         : "The preference changed nothing tonight — the same names are held without it.") +
-      " The list is this browser's; there is no favourites table on the server yet.</p>");
+      (D.favSource === "server" ? " The list is the board's, the same on every device.</p>"
+                                 : " The server's list could not be read, so the list is this browser's.</p>"));
   }
   P.push("<h2>THE TWO ODD READINGS ON YOUR BOARD</h2><p><b>IEF</b> is the iShares 7–10 year Treasury bond ETF — " +
     "government bonds, not a company. Its price falls when long interest rates rise, and the Geiger reads price, so " +
