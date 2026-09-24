@@ -2769,6 +2769,7 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .se-prow .d.beat{ color:var(--sv1); } .se-prow .d.miss{ color:var(--sv5); } .se-prow .d.inline{ color:var(--sv3); }
 .se-prow .sur{ justify-content:flex-end; color:var(--dim); font-variant-numeric:tabular-nums; }
 .se-prow .sur.is-scint{ color:var(--ink); }
+.se-chip .s.is-scint, .se-drow .s.is-scint, .ern-sur.is-scint{ font-weight:700; letter-spacing:.02em; }
 .se-pxask{ cursor:pointer; color:var(--dim); border:.6px solid var(--line2); border-radius:2px; padding:1px 6px;
   font-size:7.5px; letter-spacing:.12em; white-space:nowrap; }
 .se-pxask:hover{ color:var(--ink); border-color:var(--crk); }
@@ -16627,6 +16628,11 @@ function renderErnBand() {
   if (html === ERN_HTML && slot.innerHTML) return;          // unchanged: leave the marquee running where it is
   ERN_HTML = html;
   slot.innerHTML = html;
+  /* M40 — the band asks for the habit of the names it has just drawn (one read for
+     all of them) and glows the results that are beyond their own usual surprise. */
+  if (typeof ernStatsEnsure === "function")
+    ernStatsEnsure((ERN_ROWS || []).filter((r) => r && num(r.surprise_pct) != null).map((r) => r.ticker));
+  if (typeof ernScintPaint === "function") ernScintPaint(slot);
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = slot.querySelector(".sc-tape__track");
   if (track) tapeSpeed(track, slot.querySelector(".ern-it.is-today, .ern-it.is-up"));   // the band opens on today, not on Monday - and runs at the same 45 px/s as every other tape
