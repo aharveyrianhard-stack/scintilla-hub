@@ -4531,8 +4531,16 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
 const COHORT_OF = {};
-const SC_EXPECTED_EQUITY_COUNT = 364;
-const SC_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3";
+/* UNIVERSE ADMISSION 2026-09-24 (M57). 364 -> 424: the 60 names the expansion proved. These two
+   values must equal the chart API's /universe exactly; SC_RANK_READY below refuses to rank unless
+   the declared set, its size and the Geiger artifact all agree with them. They move at the same
+   time as control/CANONICAL_EQUITY_UNIVERSE_20260820.json, boot-geiger.sh, the chart API fly.toml
+   and the Station pin - never one at a time. */
+const SC_EXPECTED_EQUITY_COUNT = 424;
+const SC_EQUITY_UNIVERSE_DIGEST = "4a5dd2ac74dee077ab23c0a6f237844ec83821957a2d305653771f0154e06621";
+/* The identity the 364 were served under until tonight. It stays named here because FMP reference
+   rows carry the identity of the artifact that wrote them (see SC_FMP_REFERENCE_DIGESTS). */
+const SC_PREVIOUS_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3";
 const SC_GEIGER_AUTHORITY = window.SCGeigerAuthority || null;
 const SC_OPERATOR_WEIGHT_PATH = "operator_weights?select=dim,key,weight,enabled,owner_id" +
   "&owner_id=eq.00000000-0000-0000-0000-000000000000" +
@@ -4555,8 +4563,14 @@ async function scCurrentEqualizer () {
 }
 /* Existing FMP reference rows retain the identity stamped by their source artifact. Future rows
    use the accepted identity. Both are reference-only and neither controls Geiger membership. */
+/* THREE IDENTITIES, ON PURPOSE (M57). Every FMP row in the table today was stamped with the
+   364-symbol identity. Replacing that entry with the new one would have dropped every existing row
+   out of this filter and blanked the RSI column for the 364 names that already worked - the new
+   names would have shown a value and the old ones nothing. So the superseded digest stays accepted
+   until the exporter has refreshed every ticker under the new identity. All three are
+   reference-only; none of them controls Geiger membership. */
 const SC_FMP_REFERENCE_DIGESTS = "(7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063," +
-  SC_EQUITY_UNIVERSE_DIGEST + ")";
+  SC_PREVIOUS_EQUITY_UNIVERSE_DIGEST + "," + SC_EQUITY_UNIVERSE_DIGEST + ")";
 async function scUniverseDigest (symbols) {
   const bytes = new TextEncoder().encode(JSON.stringify([...symbols].sort()));
   const digest = await crypto.subtle.digest("SHA-256", bytes);

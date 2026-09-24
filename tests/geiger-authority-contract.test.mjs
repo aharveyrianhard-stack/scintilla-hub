@@ -148,8 +148,12 @@ test('Hub wiring has no static receipt or exactly-eight admission and preserves 
   assert.match(source, /SC_CG\.meta\.coverage\.complete === true/)
   assert.match(source, /SC_CG\.meta\.accounting\.named_absent === 0/)
   assert.match(source, /SC_CG\.meta\.accounting\.computed === SC_CG\.meta\.accounting\.expected_cells/)
-  assert.match(source, /const SC_EXPECTED_EQUITY_COUNT = 364/)
-  assert.match(source, /const SC_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3"/)
+  assert.match(source, /const SC_EXPECTED_EQUITY_COUNT = 424/)
+  assert.match(source, /const SC_EQUITY_UNIVERSE_DIGEST = "4a5dd2ac74dee077ab23c0a6f237844ec83821957a2d305653771f0154e06621"/)
+  /* M57: the superseded identity must remain ACCEPTED for FMP reference rows, or the RSI column
+     blanks for every name that was already working. */
+  assert.match(source, /SC_PREVIOUS_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3"/)
+  assert.match(source, /SC_FMP_REFERENCE_DIGESTS = "\(7ad595cc[0-9a-f]*," \+\s*\n?\s*SC_PREVIOUS_EQUITY_UNIVERSE_DIGEST \+ "," \+ SC_EQUITY_UNIVERSE_DIGEST/)
   assert.doesNotMatch(source, /const SC_EQUALIZER_RECEIPT/)
   assert.doesNotMatch(source, /participating_rungs\.length !== 8/)
   assert.doesNotMatch(source, /rungs\.length === 8/)
