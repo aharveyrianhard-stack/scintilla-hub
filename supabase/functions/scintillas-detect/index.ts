@@ -142,12 +142,16 @@ Deno.serve(async (req) => {
 
     /* ── economic: today's prints, and what is about to print ─────────────────────── */
     const ecSel = "select=event_ts,country,event,actual,estimate,previous,impact";
-    const dayFrom = iso(new Date(now.getTime() - 36 * 3600e3)), dayTo = iso(new Date(now.getTime() + 36 * 3600e3));
-    const ecRows = await sbGet("econ_calendar?" + ecSel + "&event_ts=gte." + dayFrom + "&event_ts=lte." + dayTo + "&order=event_ts.asc&limit=600");
+    /* 24 Sep: econ_calendar.event_ts is EPOCH SECONDS (bigint). The first live run sent ISO text
+       and got a 400; detect.mjs reads event_ts as a date string, so rows are converted on the way in. */
+    const dayFrom = Math.floor((now.getTime() - 36 * 3600e3) / 1000), dayTo = Math.floor((now.getTime() + 36 * 3600e3) / 1000);
+    const asIsoTs = (rows: any[]) => (rows || []).map((r: any) => ({ ...r,
+      event_ts: typeof r.event_ts === "number" || /^\d+$/.test(String(r.event_ts)) ? new Date(Number(r.event_ts) * 1000).toISOString() : r.event_ts }));
+    const ecRows = asIsoTs(await sbGet("econ_calendar?" + ecSel + "&event_ts=gte." + dayFrom + "&event_ts=lte." + dayTo + "&order=event_ts.asc&limit=600"));
     const printed = ecRows.filter((r: any) => r.actual != null && r.estimate != null);
     const historyByEvent: Record<string, any[]> = {};
     if (printed.length) {
-      const past = await sbGet("econ_calendar?" + ecSel + "&event_ts=lt." + dayFrom + "&actual=not.is.null&order=event_ts.desc&limit=4000");
+      const past = asIsoTs(await sbGet("econ_calendar?" + ecSel + "&event_ts=lt." + dayFrom + "&actual=not.is.null&order=event_ts.desc&limit=4000"));
       for (const r of past) (historyByEvent[econEventKey(r.country, r.event)] ||= []).push(r);
     }
     const ecS = detectEconSurprises({ rows: printed, historyByEvent, ts: iso(now) });
