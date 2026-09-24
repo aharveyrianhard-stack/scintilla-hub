@@ -28,26 +28,43 @@ const shared =
   grab(/const ERC_TL_NAME_PCT = [^\n]*\n/) +
   grab(/const ERC_ZOOMS = \[[^\]]*\];/) + "\n" +
   grab(/const ERC_ZOOM = \{[\s\S]*?\n\};/) + "\n" +
-  grab(/const ercTapeRange = \(anchor\) => \{[\s\S]*?\n\};/) + "\n" +
+  grab(/function ercTlMissing\(from, to, have\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/function ercTlMerge\(have, add\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/function ercTlChunks\(r\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/const ERC_TL_CHUNK = [^\n]*\n/) +
+  grab(/const ERC_TR = 1e12, ERC_BN = 1e9;\n/) +
+  grab(/function ercMoney\(v\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/function ercTlIndex\(rows, z, mcap, fav\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/const ercLogoURL = \(t\) =>[^\n]*\n/) +
+  grab(/function ernLogoHTML\(t, cls\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/const ercQuarter1 = \(iso\) =>[^\n]*\n/) +
+  grab(/const ercYear1 = \(iso\) =>[^\n]*\n/) +
+  grab(/const ercQuarterNo = \(b\) =>[^\n]*\n/) +
   grab(/const ercMonday = \(iso\) =>[^\n]*\n/) +
   grab(/const ercMonth1 = \(iso\) =>[^\n]*\n/) +
-  grab(/function ercBucketOf\(iso, z\) \{[^\n]*\n/) +
+  grab(/function ercBucketOf\(iso, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercBuckets\(from, to, z, dated\) \{[\s\S]*?\n\}/) + "\n" +
-  grab(/const ercBucketEnd = \(b, z\) =>[^\n]*\n/) +
+  grab(/function ercBucketEnd\(b, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercBucketSay\(b, z\) \{[\s\S]*?\n\}/) + "\n" +
-  grab(/const ercBucketTick = \(b, z\) =>[^\n]*\n/) +
+  grab(/function ercBucketTick\(b, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/const ercBucketOpens = \(z\) =>[^\n]*\n/) +
-  grab(/const ercTlLevel = \(n\) =>[^\n]*\n/) +
+  grab(/const ERC_TL_DAYS = \{[^\n]*\n/) +
+  grab(/function ercTlLevel\(n, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercTapeScale\(counts\) \{[\s\S]*?\n\}/) + "\n" +
-  grab(/function ercTapeBarHTML\([\s\S]*?\n\}/) + "\n" +
+  grab(/function ercTlBarHTML\([\s\S]*?\n\}/) + "\n" +
   grab(/function ercTapeStripHTML\(buckets, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercTapeSayHTML\(scoped, all, coh\) \{[\s\S]*?\n\}/) + "\n" +
   'const ERC_MONTH_NAME = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];\n' +
   'const S = { ernZoom: "DAYS" };\nconst ercZoom = () => "DAYS";\n';
 const fn = (name) => new Function(shared + "return " + name + ";")();
 const ercBuckets = fn("ercBuckets"), ercTapeScale = fn("ercTapeScale"), ercTlLevel = fn("ercTlLevel");
-const ercTapeBarHTML = fn("ercTapeBarHTML"), ercTapeStripHTML = fn("ercTapeStripHTML");
-const ercTapeSayHTML = fn("ercTapeSayHTML"), ercTapeRange = fn("ercTapeRange"), ercBucketOf = fn("ercBucketOf");
+const ercTapeStripHTML = fn("ercTapeStripHTML");
+const ercTapeSayHTML = fn("ercTapeSayHTML"), ercBucketOf = fn("ercBucketOf");
+const ercTlBarHTML = fn("ercTlBarHTML"), ercTlIndex = fn("ercTlIndex"), ercMoney = fn("ercMoney");
+const ercTlMissing = fn("ercTlMissing"), ercTlMerge = fn("ercTlMerge"), ercTlChunks = fn("ercTlChunks");
+/* the bar HTML takes one bucket's reading, so the tests build it the way the page does */
+const bucket = (n, opt = {}) => ({ n, wt: opt.wt || 0, unk: opt.unk || 0, fav: !!opt.fav,
+  names: (opt.names || []).map((t) => ({ t, m: null })) });
 const sc1 = (...c) => ercTapeScale(c);
 
 test("one bar is a day, a week or a month — and the zoom says which", () => {
@@ -74,18 +91,45 @@ test("one bar is a day, a week or a month — and the zoom says which", () => {
   assert.equal(ercBucketOf("2026-10-23", "MONTHS"), "2026-10-01");
 });
 
-test("three zoom levels, the default is three months around today, and the window snaps to the month", () => {
-  assert.deepEqual(fn("ERC_ZOOMS"), ["DAYS", "WEEKS", "MONTHS"]);
-  assert.match(src, /ernZoom: "DAYS"/, "the room opens on days");
-  const d = ercTapeRange("2026-09-23");
-  assert.equal(d.from, "2026-07-18");
-  assert.equal(d.to, "2026-10-26", "about three months of season on one screen");
-  /* measured from the FIRST of the anchor's month, so stepping a day at a time does
-     not throw the tape's read away on every step */
-  assert.deepEqual(ercTapeRange("2026-09-01"), ercTapeRange("2026-09-30"));
-  assert.notDeepEqual(ercTapeRange("2026-09-30"), ercTapeRange("2026-10-01"));
-  assert.match(src, /const ERC_ZOOM_SPAN = \{ DAYS: "DAY", WEEKS: "WEEK", MONTHS: "MONTH" \};/,
-    "a bar opens the view that matches its own unit");
+test("M40 — five zoom levels, and the timeline pages instead of re-reading a fixed window", () => {
+  assert.deepEqual(fn("ERC_ZOOMS"), ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"]);
+  assert.match(src, /ernZoom: "DAYS"/, "the room still opens on days");
+  const Z = fn("ERC_ZOOM");
+  assert.equal(Z.DAYS.back + Z.DAYS.fwd, 120, "four months of days on the first screen");
+  assert.ok(Z.YEARS.back >= 2920, "a bar-a-year opens on at least eight years of season");
+  for (const k of ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"]) assert.ok(Z[k].page > 0 && Z[k].w > 0);
+  /* Alan: "the lookback should be way longer, months doesn't even fill the screen."
+     The window is no longer pinned to the anchor's month: it GROWS as it is dragged,
+     and only the stretches it does not already hold are asked for. */
+  assert.deepEqual(ercTlMissing("2026-01-01", "2026-03-31", []), [{ from: "2026-01-01", to: "2026-03-31" }]);
+  assert.deepEqual(ercTlMissing("2026-01-01", "2026-03-31", [{ from: "2026-01-01", to: "2026-02-10" }]),
+    [{ from: "2026-02-11", to: "2026-03-31" }], "only the part that is not held is asked for");
+  assert.deepEqual(ercTlMissing("2026-01-01", "2026-03-31", [{ from: "2025-01-01", to: "2027-01-01" }]), [],
+    "a stretch already held is never asked for twice");
+  assert.deepEqual(ercTlMissing("2026-01-01", "2026-03-31",
+    [{ from: "2026-01-05", to: "2026-01-20" }, { from: "2026-02-01", to: "2026-02-28" }]),
+    [{ from: "2026-01-01", to: "2026-01-04" }, { from: "2026-01-21", to: "2026-01-31" }, { from: "2026-03-01", to: "2026-03-31" }],
+    "holes in the middle are found, in order");
+  assert.deepEqual(ercTlMerge([{ from: "2026-01-01", to: "2026-01-31" }], { from: "2026-02-01", to: "2026-02-28" }),
+    [{ from: "2026-01-01", to: "2026-02-28" }], "two touching stretches become one");
+  const chunks = ercTlChunks({ from: "2026-01-01", to: "2026-12-31" });
+  assert.ok(chunks.length >= 2 && chunks.every((c) => c.from <= c.to));
+  assert.equal(chunks[0].from, "2026-01-01");
+  assert.equal(chunks[chunks.length - 1].to, "2026-12-31", "the chunks cover the range exactly, with no gap and no overlap");
+  for (let i = 1; i < chunks.length; i++) assert.ok(chunks[i].from > chunks[i - 1].to);
+  assert.match(src, /const ERC_TL_FLOOR = "1996-01-01";/, "the tape stops where the stored calendar starts");
+  assert.match(src, /const ERC_ZOOM_SPAN = \{ DAYS: "DAY", WEEKS: "WEEK", MONTHS: "MONTH", QUARTERS: "MONTH", YEARS: "MONTH" \};/);
+  /* a quarter and a year are buckets like any other */
+  assert.equal(ercBucketOf("2026-10-23", "QUARTERS"), "2026-10-01");
+  assert.equal(ercBucketOf("2026-02-09", "QUARTERS"), "2026-01-01");
+  assert.equal(ercBucketOf("2026-10-23", "YEARS"), "2026-01-01");
+  assert.deepEqual(fn("ercBuckets")("2026-02-01", "2026-11-30", "QUARTERS", {}), ["2026-01-01", "2026-04-01", "2026-07-01", "2026-10-01"]);
+  assert.deepEqual(fn("ercBuckets")("2024-06-01", "2026-03-01", "YEARS", {}), ["2024-01-01", "2025-01-01", "2026-01-01"]);
+  assert.equal(fn("ercBucketEnd")("2026-10-01", "QUARTERS"), "2026-12-31");
+  assert.equal(fn("ercBucketEnd")("2026-01-01", "YEARS"), "2026-12-31");
+  assert.equal(fn("ercBucketSay")("2026-10-01", "QUARTERS"), "Q4 2026");
+  assert.equal(fn("ercBucketTick")("2026-10-01", "QUARTERS"), "Q4");
+  assert.equal(fn("ercBucketTick")("2026-01-01", "YEARS"), "2026", "a year bar is ticked with its year, not one digit");
 });
 
 test("the height is scaled to the busiest bar ON SCREEN; the colour is the count itself", () => {
@@ -101,55 +145,111 @@ test("the height is scaled to the busiest bar ON SCREEN; the colour is the count
   assert.equal(sc1(0, 0, 0).quiet, false, "a stretch with nothing in it is empty, not 'quiet'");
   assert.equal(sc1(1, 100).pct(1), 14, "one lone report against a 100-name day still shows a stub");
   /* the colour law is MONTH's load bar law, unchanged since M26 */
-  assert.equal(ercTlLevel(0), "");
-  assert.equal(ercTlLevel(11), "cool");
-  assert.equal(ercTlLevel(12), "warm");
-  assert.equal(ercTlLevel(24), "warm");
-  assert.equal(ercTlLevel(25), "hot");
+  assert.equal(ercTlLevel(0, "DAYS"), "");
+  assert.equal(ercTlLevel(11, "DAYS"), "cool");
+  assert.equal(ercTlLevel(12, "DAYS"), "warm");
+  assert.equal(ercTlLevel(24, "DAYS"), "warm");
+  assert.equal(ercTlLevel(25, "DAYS"), "hot");
+  /* M40 — a bar is not always a day, so the threshold is per trading day inside it.
+     MEASURED: every year on the YEARS tape came out red, and a wall of red says nothing. */
+  assert.equal(ercTlLevel(1271, "YEARS"), "cool", "about five reports a day across a year is a quiet year");
+  assert.equal(ercTlLevel(300, "MONTHS"), "warm", "fourteen a day through a month is a season");
+  assert.equal(ercTlLevel(700, "MONTHS"), "hot", "thirty-three a day through a month is the peak of one");
+  assert.equal(ercTlLevel(1, "YEARS"), "cool", "one report is still a bar, never nothing");
   assert.match(src, /const lvl = n >= 25 \? "var\(--sv5\)" : n >= 12 \? "var\(--sv4\)" : "var\(--crk\)";/);
 });
 
-test("NOTHING ON THE TAPE IS MYSTERIOUS: every bar says what it is and a click always opens something", () => {
-  const sc = sc1(3, 1);
-  const big = ercTapeBarHTML("2026-11-04", "DAYS", 3, 9, "AAPL, MSFT, NVDA", "2026-09-23", null, "ALL", sc);
+test("NOTHING ON THE TAPE IS MYSTERIOUS: every bar says what it is, and now says what it weighs", () => {
+  const sc = sc1(3, 1), w0 = sc1(0);
+  const big = ercTlBarHTML("2026-11-04", "DAYS", bucket(3, { names: ["AAPL", "MSFT", "NVDA"] }), 9, "2026-09-23", null, "ALL", sc, w0);
   assert.match(big, /data-act="erntape" data-d="2026-11-04"/, "a bar opens its own day");
   assert.match(big, /click to open the day below/, "and the tooltip says so before it is clicked");
   assert.match(big, /3 names you track report · AAPL, MSFT, NVDA/);
-  assert.match(big, /class="se-tlnm"[^>]*display:inline[^>]*>AAPL</, "the biggest name rides a tall bar");
-  const small = ercTapeBarHTML("2026-11-05", "DAYS", 1, 1, "AAPL", "2026-09-23", null, "ALL", sc1(38, 1));
+  assert.match(big, /class="se-tlnm"[^>]*display:inline-flex[^>]*>.*AAPL/, "the biggest name rides a tall bar");
+  const small = ercTlBarHTML("2026-11-05", "DAYS", bucket(1, { names: ["AAPL"] }), 1, "2026-09-23", null, "ALL", sc1(38, 1), w0);
   assert.match(small, /display:none/, "a short bar keeps its name hidden until a drag makes it tall");
   assert.match(small, /1 name you track reports/, "one name is singular");
-  /* THE EMPTY DAY ALAN CLICKED: it now says what it is, how many report across all
-     names, and that clicking still opens the day */
-  const none = ercTapeBarHTML("2026-10-23", "DAYS", 0, 14, "", "2026-09-23", null, "FAV", sc);
+  const none = ercTlBarHTML("2026-10-23", "DAYS", null, 14, "2026-09-23", null, "FAV", sc, w0);
   assert.match(none, /nothing for FAV · 14 reports across all names/);
   assert.match(none, /click to open the day below/);
   assert.match(none, /height:0%/, "nothing reported means no bar");
   assert.doesNotMatch(none, /se-tlv/, "a zero is never printed as a count");
-  assert.match(ercTapeBarHTML("2026-10-23", "DAYS", 0, 0, "", "2026-09-23", null, "ALL", sc), /nothing reports/);
-  /* THE BLUE LINE. Alan: "There's a blue line. I'm trying to click on it and it
-     doesn't say… nothing." It is today's marker, and it is now a real element with
-     its own words instead of a decoration nothing could explain. */
-  const today = ercTapeBarHTML("2026-09-23", "DAYS", 1, 1, "MU", "2026-09-23", null, "ALL", sc);
+  assert.doesNotMatch(none, /se-tlw/, "and nothing reporting weighs nothing");
+  assert.match(ercTlBarHTML("2026-10-23", "DAYS", null, 0, "2026-09-23", null, "ALL", sc, w0), /nothing reports/);
+  /* THE BLUE LINE — Alan: "I'm trying to click on it and it doesn't say… nothing." */
+  const today = ercTlBarHTML("2026-09-23", "DAYS", bucket(1, { names: ["MU"] }), 1, "2026-09-23", null, "ALL", sc, w0);
   assert.match(today, /class="se-tlday is-today/);
   assert.match(today, /class="se-tlnow" title="the cyan line is TODAY, WED SEP 23 — everything left of it has happened/);
   assert.match(today, /this is where today sits/);
-  /* a week bar and a month bar explain themselves the same way, in their own unit */
-  const wk = ercTapeBarHTML("2026-10-19", "WEEKS", 14, 40, "AAPL, MSFT", "2026-09-23", null, "ALL", sc1(14));
+  /* M40 — THE MARKET-CAP WEIGHT (Alan: "a graphic or measure in the timeline that
+     measures like the market cap weight of the companies reporting"). */
+  const wsc = sc1(4e12, 1e11);
+  const heavy = ercTlBarHTML("2026-10-29", "DAYS", bucket(4, { wt: 4e12, names: ["AAPL"] }), 4, "2026-09-23", null, "ALL", sc1(4), wsc);
+  assert.match(heavy, /<u class="se-tlw" style="height:80%">/, "the heaviest bar's wash fills the track");
+  assert.match(heavy, /\$4\.0T of market cap reporting/, "and the tooltip says the figure in words");
+  assert.match(heavy, /data-w="4000000000000"/, "the weight rides the bar, so a re-scale never re-reads the rows");
+  const partial = ercTlBarHTML("2026-10-30", "DAYS", bucket(5, { wt: 2e11, unk: 2, names: ["X"] }), 5, "2026-09-23", null, "ALL", sc1(5), wsc);
+  assert.match(partial, /\(2 without a stored size\)/, "the names whose size has not arrived are counted, never guessed at");
+  assert.match(heavy, /counting each company once/, "and the tooltip says which way it is counted");
+  assert.equal(ercMoney(0), "", "no size is not a zero");
+  assert.equal(ercMoney(3.14e12), "$3.1T");
+  assert.equal(ercMoney(2.5e10), "$25.0B");
+  /* M40 — the favourite star and the company logo */
+  const fav = ercTlBarHTML("2026-10-29", "DAYS", bucket(2, { fav: true, names: ["MU"] }), 2, "2026-09-23", null, "ALL", sc1(2), w0);
+  assert.match(fav, /class="se-tlstar"[^>]*>★</);
+  assert.match(fav, /one of your favourites reports here/);
+  assert.doesNotMatch(ercTlBarHTML("2026-10-29", "DAYS", bucket(2, { names: ["MU"] }), 2, "2026-09-23", null, "ALL", sc1(2), w0),
+    /se-tlstar/, "a bar with no favourite in it wears no star");
+  const logo = fn("ernLogoHTML")("NVDA", "se-lg--tl");
+  assert.match(logo, /financialmodelingprep\.com\/image-stock\/NVDA\.png/);
+  assert.match(logo, /onerror="ernLogoFail\(this\)"/, "an image that does not load steps aside");
+  assert.match(logo, /<i>NVDA<\/i>/, "and the ticker is already in the page behind it");
+  assert.match(src, /\.se-lg i\{ display:none;/, "the fallback is hidden until the image fails");
+  /* a week, a quarter and a year bar explain themselves in their own unit */
+  const wk = ercTlBarHTML("2026-10-19", "WEEKS", bucket(14, { names: ["AAPL", "MSFT"] }), 40, "2026-09-23", null, "ALL", sc1(14), w0);
   assert.match(wk, /the week of MON OCT 19 · 14 names you track report/);
   assert.match(wk, /click to open the week below/);
-  const mo = ercTapeBarHTML("2026-11-01", "MONTHS", 120, 300, "AAPL", "2026-09-23", "2026-11-01", "ALL", sc1(120));
+  const mo = ercTlBarHTML("2026-11-01", "MONTHS", bucket(120, { names: ["AAPL"] }), 300, "2026-09-23", "2026-11-01", "ALL", sc1(120), w0);
   assert.match(mo, /NOVEMBER 2026 · 120 names you track report/);
-  assert.match(mo, /click to open the month below/);
-  assert.match(mo, /is-open/, "the bar the view is sitting on says so");
-  assert.match(mo, /data-n="120"/, "each bar carries its own count, so a re-scale never re-reads the rows");
-  assert.match(mo, /class="se-tlx">NOV</, "a month bar is ticked NOV, not N — the tape is read without hovering");
-  /* the month strip explains itself too */
+  assert.match(mo, /is-open/, "the bar the grid is sitting on says so");
+  assert.match(mo, /data-n="120"/);
+  assert.match(mo, /class="se-tlx">NOV</);
+  const q = ercTlBarHTML("2026-10-01", "QUARTERS", bucket(340, { names: ["AAPL"] }), 340, "2026-09-23", null, "ALL", sc1(340), w0);
+  assert.match(q, /Q4 2026 · 340 names you track report/);
+  const yr = ercTlBarHTML("2019-01-01", "YEARS", bucket(1200, { names: ["AAPL"] }), 1200, "2026-09-23", null, "ALL", sc1(1200), w0);
+  assert.match(yr, /2019 · 1200 names you track report/);
+  assert.match(yr, /is-past/, "a year that is over is drawn as past");
+  /* the strip under the bars */
   const strip = ercTapeStripHTML(["2026-09-21", "2026-09-28", "2026-10-05"], "WEEKS");
   assert.match(strip, /<span class="se-tlmo" style="width:calc\(var\(--tlw\) \* 2\)" title="SEP · 2 bars">SEP<\/span>/);
-  assert.match(ercTapeStripHTML(["2027-01-04"], "WEEKS"), /JAN 2027/, "a tape that crosses a year says which year");
-  assert.match(ercTapeStripHTML(["2026-01-01", "2026-02-01"], "MONTHS"), /title="2026 · 2 bars">2026</, "months are grouped by year");
-  assert.match(src, /\.se-tape\{ --tlw:19px;/, "one width drives the bars and the strip under them");
+  assert.match(ercTapeStripHTML(["2027-01-04"], "WEEKS"), /JAN 2027/);
+  assert.match(ercTapeStripHTML(["2026-01-01", "2026-02-01"], "MONTHS"), /title="2026 · 2 bars">2026</);
+  assert.match(ercTapeStripHTML(["2019-01-01", "2018-01-01"], "YEARS"), /2010s/, "a tape of years is grouped by decade");
+  assert.match(src, /style="--tlw:' \+ ERC_ZOOM\[z\]\.w \+ 'px"/, "one width per zoom drives the bars and the strip under them");
+});
+
+test("M40 — the weight, the star and the names come from one pure index", () => {
+  const rows = [
+    { ticker: "AAPL", date: "2026-10-29" }, { ticker: "MSFT", date: "2026-10-29" },
+    { ticker: "TINY", date: "2026-10-29" }, { ticker: "MU", date: "2026-11-02" },
+  ];
+  const idx = ercTlIndex(rows, "DAYS", { AAPL: 3.4e12, MSFT: 3.1e12, MU: 2e11 }, ["MU"]);
+  assert.equal(idx["2026-10-29"].n, 3);
+  assert.equal(idx["2026-10-29"].wt, 6.5e12, "the weight is the sum of the sizes it knows");
+  /* a year holds four of Apple's reports; adding Apple's size four times would say a
+     year weighs four times the market */
+  const twice = ercTlIndex([{ ticker: "AAPL", date: "2026-02-01" }, { ticker: "AAPL", date: "2026-05-01" }],
+    "YEARS", { AAPL: 3.4e12 }, []);
+  assert.equal(twice["2026-01-01"].n, 2, "two reports");
+  assert.equal(twice["2026-01-01"].wt, 3.4e12, "one company");
+  assert.equal(idx["2026-10-29"].unk, 1, "and the one it does not know is counted, not guessed");
+  assert.equal(idx["2026-10-29"].fav, false);
+  assert.deepEqual(idx["2026-10-29"].names.map((x) => x.t), ["AAPL", "MSFT", "TINY"], "biggest first, the unsized last");
+  assert.equal(idx["2026-11-02"].fav, true, "a favourite in the bucket raises the star");
+  const byMonth = ercTlIndex(rows, "MONTHS", {}, []);
+  assert.equal(byMonth["2026-10-01"].n, 3);
+  assert.equal(byMonth["2026-11-01"].n, 1);
+  assert.equal(ercTlIndex([], "DAYS", {}, [])["2026-10-29"], undefined, "no rows, no bucket");
 });
 
 test("the room reads ALL names by default and never looks empty by accident", () => {
@@ -179,16 +279,21 @@ test("the room reads ALL names by default and never looks empty by accident", ()
   assert.match(src, /case "ernall": \{ S\.ernCohPick = "ALL";/);
 });
 
-test("the view below follows what the tape points at", () => {
-  assert.match(src, /case "erntape": \{[\s\S]*?S\.ernDay = d; S\.ernSpan = ERC_ZOOM_SPAN\[ercZoom\(\)\] \|\| "DAY";[\s\S]*?renderEvents\(S\.coh\); ercRead\(false\);/);
+test("M40 — the tape moves the grid; the grid never moves the tape", () => {
+  assert.match(src, /case "erntape": \{[\s\S]*?S\.ernDay = d; S\.ernSpan = ERC_ZOOM_SPAN\[ercZoom\(\)\] \|\| "DAY";/);
+  const tap = src.slice(src.indexOf('case "erntape"'), src.indexOf('case "ernchip"'));
+  assert.ok(!/ERC_TL_FROM|ERC_TL_TO|S\.ernTlAt|ERC_TAPE_AT = null/.test(tap),
+    "tapping a bar must not re-range or re-centre the tape the reader is dragging");
+  const nav = src.slice(src.indexOf('case "ernnav"'), src.indexOf('case "erntlnow"'));
+  assert.ok(!/ERC_TL_FROM|ERC_TL_TO|S\.ernTlAt|ERC_TAPE_AT/.test(nav),
+    "Alan: the timeline header is not ruled by the date selector arrows");
+  assert.match(src, /case "erntlnow": \{ ercTlToday\(\); break; \}/, "the timeline has a TODAY of its own");
+  assert.match(src, /const ercTlCentre = \(\) => S\.ernTlAt \|\| todayISO\(\);/);
   assert.match(src, /const ercTapePointer = \(\) => ercBucketOf\(ercAnchor\(\), ercZoom\(\)\);/,
-    "and the tape marks the bucket the view is sitting in");
-  assert.match(src, /ercPaintTape\(\);                                   \/\/ the header, whatever the view below is/);
-  assert.match(src, /'<div id="ernTape"><\/div>' \+/, "the tape is its own element, outside the view's scroller");
-  /* ONE set of arrows and one TODAY in the room: they sit on the span bar, and the
-     tape carries only its own two things — how far it reaches and how big a bar is */
+    "and the tape still marks the bucket the grid is sitting in");
+  assert.match(src, /'<div id="ernTape"><\/div>' \+/, "the tape is its own element, outside the grid's scroller");
   const tapeHead = src.slice(src.indexOf("'<div class=\"se-tapehd\">'"), src.indexOf('id="ernTlScroll"'));
-  assert.ok(!/data-act="ernnav"|data-act="erntoday"/.test(tapeHead), "the tape header does not repeat the span bar's controls");
+  assert.ok(!/data-act="ernnav"/.test(tapeHead), "the tape header does not repeat the grid's arrows");
   assert.match(tapeHead, /ercZoomBarHTML\(\)/);
 });
 
@@ -200,28 +305,34 @@ test("zoom: pinch, ⌘/ctrl-wheel or the strip — one level per gesture, and a 
   assert.match(src, /S\.ernZoom = z; ERC_TAPE_AT = null;/, "a new unit re-centres the tape on the pointer");
 });
 
-test("the tape's own read is small, wide and unscoped", () => {
-  const read = src.slice(src.indexOf("async function ercTapeRead"), src.indexOf("/* ---- buckets"));
-  assert.match(read, /pgErn\("earnings_events\?select=ticker,date&date=gte\./, "ticker and date only, live rows only (a retired date is not a report) — not every release summary in two years");
-  assert.match(read, /ercTapeChunks\(r\.from, r\.to\)/);
-  assert.match(src, /const ERC_TAPE_CHUNK = 120;/, "a chunk this size cannot reach the 1,000-row ceiling");
-  assert.match(read, /ERC_TAPE_TRUNC = got\.some\(\(g\) => \(g \|\| \[\]\)\.length >= ERC_MAX\);/, "and a full page is admitted out loud");
+test("the timeline's own read is small, wide, unscoped — and paged", () => {
+  const read = src.slice(src.indexOf("async function ercTlPump"), src.indexOf("/* the old name, kept"));
+  assert.match(read, /pgErn\("earnings_events\?select=ticker,date&date=gte\./, "ticker and date only, live rows only (a retired date is not a report)");
+  assert.match(read, /if \(\(got \|\| \[\]\)\.length >= ERC_MAX\) ERC_TL_TRUNC = true;/, "a full page is admitted out loud");
+  assert.match(read, /if \(ERC_TL_SEEN\.has\(k\)\) return;/, "a report already held is never counted twice");
   assert.ok(!/scopeItems/.test(read), "it is read unscoped, so the room can always say how many exist across all names");
-  assert.match(src, /if \(ERC_TAPE_FAIL_KEY === key && Date\.now\(\) - ERC_TAPE_FAIL_AT < ERC_RETRY_MS\) return;/, "a failed read waits before asking again");
+  assert.match(src, /const ERC_TL_CHUNK = 180;/, "a chunk this size cannot reach the 1,000-row ceiling");
+  assert.match(src, /const ERC_TL_MAXQ = 3;/, "a long stretch pages in a few requests at a time, not all at once");
+  assert.match(src, /if \(ERC_TL_FAIL_AT && Date\.now\(\) - ERC_TL_FAIL_AT < ERC_RETRY_MS\) return;/, "a failed read waits before asking again");
+  assert.match(read, /ERC_TL_Q\.unshift\(ch\);/, "and the stretch that failed is put back, not dropped");
+  assert.match(src, /ERC_TL_Q\.sort\(\(a, b\) => ercTlDist\(c, a\) - ercTlDist\(c, b\)\);/, "the season nearest the reader arrives first");
 });
 
-test("the tape keeps its place, and a drag never opens whatever bar it ended on", () => {
+test("the tape keeps its place, pages at its edges, and a drag never opens the bar it ended on", () => {
   assert.match(src, /sc\.addEventListener\("scroll", \(\) => \{\s*\n\s*ERC_TAPE_AT = sc\.scrollLeft;/);
   assert.match(src, /if \(ERC_TAPE_AT == null\) centre\(\);/);
-  assert.match(src, /if \(pointer && \(pointer\.offsetLeft < sc\.scrollLeft \|\| pointer\.offsetLeft \+ pointer\.offsetWidth > sc\.scrollLeft \+ sc\.clientWidth\)\) \{\s*\n\s*centre\(\); ERC_TAPE_AT = sc\.scrollLeft;/,
-    "a remembered offset that no longer shows the bar the view is sitting on is re-centred");
-  assert.match(src, /case "erntoday": \{ S\.ernDay = todayISO\(\); S\.ernPick = null; ERC_TAPE_AT = null;/);
   assert.match(src, /sc\.addEventListener\("click", \(e\) => \{ if \(moved > 4\) \{ e\.stopPropagation\(\); e\.preventDefault\(\); \} \}, true\);/);
-  /* the re-scale moves heights and labels only: a bar's colour cannot change because
-     of what else happens to be on screen */
-  const rescale = src.slice(src.indexOf("function ercTapeRescale"), src.indexOf("function ercTapeAfterPaint"));
+  /* M40 — dragging towards an end asks for the next stretch instead of stopping dead */
+  const edge = src.slice(src.indexOf("function ercTlEdgeCheck"), src.indexOf("/* after every paint"));
+  assert.match(edge, /if \(sc\.scrollLeft < ERC_TL_EDGE_PX && span\.from > ercTlFloor\(\)\)/);
+  assert.match(edge, /if \(sc\.scrollWidth - sc\.clientWidth - sc\.scrollLeft < ERC_TL_EDGE_PX && span\.to < ercTlCeil\(\)\)/);
+  assert.match(edge, /ERC_TAPE_AT = sc\.scrollLeft;/, "the offset is kept, so the season grows without moving under the thumb");
+  assert.match(src, /rafid = requestAnimationFrame\(\(\) => \{ rafid = 0; ercTapeRescale\(\); ercTlEdgeCheck\(sc\); \}\);/);
+  /* the re-scale moves heights only: a bar's colour cannot change because of what
+     else happens to be on screen */
+  const rescale = src.slice(src.indexOf("function ercTapeRescale"), src.indexOf("/* PAGING AS YOU MOVE"));
   assert.doesNotMatch(rescale, /ercTlLevel|className|classList\.(add|remove)/);
-  assert.match(src, /rafid = requestAnimationFrame\(\(\) => \{ rafid = 0; ercTapeRescale\(\); \}\);/, "re-scaling is throttled to a frame, not run per scroll event");
+  assert.match(rescale, /wash\.style\.height = wscale\.pct/, "the weight wash rescales with the bars it sits behind");
 });
 
 test("DAY reads across the screen, and nothing that was in it is lost", () => {
@@ -232,7 +343,12 @@ test("DAY reads across the screen, and nothing that was in it is lost", () => {
     "MEASURED on Nov 4 (38 reports, 37 of them with no stated time): four equal columns pushed the names off the bottom of the panel");
   assert.match(src, /\.se-dlist\{ display:grid; grid-template-columns:repeat\(auto-fill, minmax\(94px, 1fr\)\)/,
     "a busy slot wraps its names across its own width instead of falling down the page");
-  assert.match(src, /EVERYTHING UPCOMING AND EVERYTHING REPORTED · the older list/, "the older DAY list is kept, one click down");
+  /* M40 — the older list moved from a <details> under the day to a TAB of its own.
+     Alan: "the slider tape of earnings is not a replacement for the earnings section
+     we had before… not ready to trash what I had." */
+  assert.match(src, /one\("OLD", "THE OLDER LIST", "the earnings section as it was before this revamp — kept, not thrown away"\)/);
+  assert.match(src, /function ercOldListHTML\(cohort\) \{/);
+  assert.match(src, /the earnings section as it was before the 24 Sep revamp · kept here until you say it can go/);
   assert.match(src, /\(open \? ercCardHTML\(open\) : ""\)/, "a name still opens the same full card the other views draw");
   /* the room points itself at a day that has something on it, and says that it did */
   assert.match(src, /function ercResolveAnchor\(\) \{[\s\S]*?S\.ernDay = next \|\| today;/);
