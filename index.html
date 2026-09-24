@@ -6593,15 +6593,17 @@ function rsiGradColor(v) {
   return d < 0 ? "rgba(0,255,163," + alpha + ")" : "rgba(255,45,85," + alpha + ")";
 }
 /* M55 — is the board showing a past day? One reader, so every writer asks the same question. */
+/* Is the board rewound? The page's one reader of that state — shared plumbing, lifted into every
+   painting context by tests/frontend-currentness-recovery.
+   M61: it no longer FREEZES anything. M55 used it to stop the live tick writing LAST, CHG and RSI
+   while the board showed a past day; motion mode hides those columns instead, so the live values
+   may keep flowing underneath and LIVE comes back to cells that never went stale. */
 function scRewoundNow() {
   return typeof document !== "undefined" && !!document.body && document.body.classList.contains("gwx-on");
 }
 function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
-  /* M55 — the lazy RSI loader must not paint today's RSI onto a rewound row; the value is
-     still stashed on the row object, so LIVE gets it back untouched. */
-  if (scRewoundNow()) return;
   cell.textContent = Math.round(v);
   cell.style.color = rsiGradColor(v);
 }
@@ -20627,17 +20629,15 @@ function patch(t, price, src) {
     /* The price can repeat while its baseline changes or disappears. Repaint percentage and
        baseline disclosures before this price-only early return, including explicit absence. */
     const sameChange = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
-    /* M55 — THE PRICE-REPEAT PATH WRITES CELLS TOO, and it is the path that runs all day while the
-       market is closed. MEASURED on the rewound board before this guard: every column replayed
-       except the percentage, which held today's number on a July row — the exact defect the replay
-       exists to remove, arriving through the one branch that returns early. The row object above is
-       still advanced, so LIVE restores the current number. */
-    const sameCell = scRewoundNow() ? null : el("lc_" + t);
+    /* M61 — the replay no longer plays this column, so the live tick keeps writing it. The cell
+       is HIDDEN while motion mode runs, so there is no past row for today's number to sit on, and
+       LIVE comes back to a cell that never went stale. (M55 froze it here; that gate is gone.) */
+    const sameCell = el("lc_" + t);
     if (sameCell) {
       scSetText(sameCell, sameChange == null ? "—" : fmtC(sameChange));
       scSetClass(sameCell, "sc-chg" + (sameChange == null ? "" : " " + (sameChange >= 0 ? "up" : "dn")));
     }
-    if (typeof LEFT_T !== "undefined" && LEFT_T === t && !scRewoundNow()) {
+    if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
       if (S.coData && S.coData.t === t) S.coData.chg = sameChange;
       const sameCompany = el("coChg"), samePrev = el("coPrev");
       scSetText(sameCompany, sameChange == null ? "—" : fmtC(sameChange));
@@ -20657,11 +20657,9 @@ function patch(t, price, src) {
      percentage is CLEARED, not kept - the same fail-closed rule the rest of this overlay follows. */
   for (const row of [r, rAll]) if (row) { row.price = price; row.c = (c != null) ? c : null; }
   const lp = el("lp_" + t);
-  /* M55 — WHILE THE BOARD IS REWOUND THE LIVE TICK DOES NOT TOUCH THE CELLS. The row objects
-     above are still advanced, so pressing LIVE restores the current number exactly; but writing
-     today's price into a row showing 20 August is the same defect as ranking a March board on an
-     August value. The rewind owns these cells until it hands them back (paintCols on goLive). */
-  if (lp && !scRewoundNow()) {
+  /* M61 — LAST is not replayed any more; motion mode hides it, so the live tick may keep it
+     current and LIVE returns to a cell that was never frozen. */
+  if (lp) {
     /* M32 — price AND percentage both scintillate now, through the one primitive. The old path
        flashed the price only, and restarted its animation with a forced reflow per row. */
     scScintSet(lp, price.toFixed(2), prev != null && +prev !== price ? price > +prev : null);
@@ -22676,6 +22674,43 @@ function filesWire(){
 .sc-board__row, .ch.hdr{padding-right:18px}   /* the rank badge's reserve - permanent so columns never
    shift when it appears, but trimmed from 26px: on a 13-column row that width was coming
    straight out of the numeric cells and helping them collide. */
+
+/* ══ M61 · MOTION MODE — the board plays like the approved proposal ═══════════
+   visuals/geiger-motion: "TICKER plus a big GEIGER bar", nothing else moving.
+   Alan, 24 Sep: "The columns disappear. The Geigers get bigger. And it was just
+   the bars moving."
+   Every other column's TRACK collapses to zero and its cell fades out - the cells
+   keep their live content underneath, so LIVE is one class away: nothing is
+   rebuilt, nothing is refetched, and there is no empty frame to flash. */
+body.gwx-motion .ch{
+  grid-template-columns:minmax(0,4fr) minmax(0,14fr) 0 0 0 0 0 0 0 0 0 minmax(0,104fr) 0 0 !important;
+  gap:7px !important;
+}
+/* 3..11, 13, 14 are LAST, CHG, USUAL DAY, F P/E, MKT CAP, RSI, TREND, MOM, READ, RVOL, MKT.
+   Index, not class, so the header row hides on exactly the same rule as the body rows. */
+body.gwx-motion .ch > *:nth-child(n+3):nth-child(-n+11),
+body.gwx-motion .ch > *:nth-child(13),
+body.gwx-motion .ch > *:nth-child(14){opacity:0 !important;pointer-events:none}
+body.gwx-motion .ch.hdr > *:nth-child(2),
+body.gwx-motion .ch.hdr > *:nth-child(12){opacity:1 !important;color:var(--dim)}
+/* the reserve on the right carries the rank badge AND the span's % change, so the bar
+   never runs underneath either of them */
+body.gwx-motion .sc-board__row, body.gwx-motion .ch.hdr{padding-right:104px}
+/* "The Geigers get bigger" - taller as well as wider, the proposal's 16px-in-a-34px-row */
+body.gwx-motion .sc-gmini{height:18px}
+body.gwx-motion .sc-gmini i{top:2.5px;bottom:2.5px}
+body.gwx-motion .sc-ctk{font-size:11.5px;letter-spacing:.07em}
+/* % PRICE CHANGE over the replayed span, beside the bar. Absolutely positioned, so it is
+   not a grid item and cannot shift a single track. */
+.gwx-pct{position:absolute;right:32px;top:50%;transform:translateY(-50%);width:64px;
+  text-align:right;font-family:var(--mono);font-size:10px;font-variant-numeric:tabular-nums;
+  opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+body.gwx-motion .gwx-pct{opacity:1}
+@media(max-width:560px){
+  body.gwx-motion .sc-board__row, body.gwx-motion .ch.hdr{padding-right:88px}
+  body.gwx-motion .ch{gap:5px !important}
+  .gwx-pct{right:28px;width:56px;font-size:9.5px}
+}
 </style>
 <script>
 (function(){
@@ -22874,47 +22909,35 @@ function filesWire(){
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
 
-  /* ══ M55 · THE WHOLE TABLE REPLAYS ══════════════════════════════════════════
-     Alan, 24 Sep: "See the whole table moving. All of the rows and columns moving.
-     Not just the Geiger rolling." And, the same night: "The Geiger replay is with
-     the Geiger bar only."  Both hold, and they are about different things:
-       · RANK is the Geiger's job - the rows sort by the replayed Geiger, as before;
-       · every COLUMN plays its own history in place.
+  /* ══ M61 · ONLY THE BARS MOVE ══════════════════════════════════════════════
+     Alan, 24 Sep: "it did not move every table, every column. The player should play.
+     The columns disappear. The Geigers get bigger. And it was just the bars moving."
 
-     WHERE EACH REPLAYED COLUMN COMES FROM, and nothing else:
-       Last, Chg   the daily bars the chart API serves (/candles tf=1d) - the same
-                   provider surface the rest of the hub prices from. Chg is that
-                   bar's close against the PREVIOUS BAR in the same series, so it is
-                   the day's move as it was on the day, not against today's close.
-       RSI         momentum_daily.rsi - the rewind was already reading that row for
-                   momentum, so this is one more column on a request it already made.
-       Trend, Mom  fan_daily.read and momentum_daily.read (paintTM, unchanged).
-       Read        derived from those two, as it always is.
-       Geiger      the composite the module already replays.
-       F P/E · Mkt Cap · RVol · Mkt   NO dated history exists for these (the forward
-                   multiple is today's consensus, market cap is a current profile
-                   field, the volume ratio is only true for its own session). They
-                   show a quiet dash with a title that says why - never today's
-                   number sitting on a past row, which is the defect that once had
-                   ESUSD ranked on an August value.
+     So M55's "every column plays its own history" is GONE. LAST, CHG, RSI, USUAL DAY,
+     F P/E, MKT CAP, RVOL and MKT are not replayed at all: motion mode hides them, and
+     their live values stay in the cells underneath, untouched, which is what lets LIVE
+     come back in one class change with nothing rebuilt.
 
-     COST. Bars are fetched per ticker ONCE for the whole window and cached, and only
-     for the rows that are actually ON SCREEN (plus a margin), at most four requests in
-     flight. Nothing here reads geometry: the visible range is arithmetic from the box
-     and scroll position repaint() has already read, so the tick still costs its two
-     geometry reads. A row whose bars have not landed yet shows the page's own pending
-     mark, then a dash if the provider has no history for it. */
+     WHAT IS KEPT FROM M55, and only because the new mode needs it:
+       · the daily-bar cache (chart API /candles tf=1d, once per ticker per window,
+         four in flight, visible rows first) - the % change is computed from it;
+       · the WEEKEND CARRY (pxAsOf): a Saturday frame is not a hole, it carries the
+         last close up to four days back, so the % change does not blank once a week;
+       · the waiting mark, now only on the % cell: a bar still in flight shows "…",
+         never a number it has not got.
+     WHAT WAS REMOVED: paintCols() and its live-restore branch, the NOHIST reasons,
+     the generic dash()/waitCell() writers, and the per-day RSI column that M55 added
+     to the momentum_daily read (the RSI column does not replay any more). */
   var PXC={}, PXQ=[], PXQS={}, PXN=0, PX_MAX=4, PX_LIMIT=420, PX_NONE={};
-  var COLS_T=null;
+  var PCT_T=null;
   function pxDay(ms){
     try{ return ET_DAY.format(new Date(ms)); }
     catch(_){ try{ return new Date(ms-144e5).toISOString().slice(0,10); }catch(__){ return ""; } }
   }
-  /* A WEEKEND OR HOLIDAY IS NOT A HOLE. The Geiger replays calendar days, so every Saturday and
-     Sunday frame used to blank LAST and CHG and the whole board blinked once a week. On a day with
-     no session the board shows what any quote screen shows then: the last close and that
-     session's move, titled with the date it came from. Only up to 4 days back — a longer gap is a
-     real hole (before listing, a halt) and stays a dash. */
+  /* A WEEKEND OR HOLIDAY IS NOT A HOLE. The replay walks calendar days; on a day with no
+     session the % change is measured to the last close, titled with the date it came from.
+     Only up to 4 days back - a longer gap is a real hole (before listing, a halt) and the
+     cell stays empty rather than inventing a span. */
   function pxAsOf(px, d){
     var ds=px.__d||[], lo=0, hi=ds.length-1, k=-1;
     while(lo<=hi){ var mid=(lo+hi)>>1; if(ds[mid]<=d){ k=mid; lo=mid+1; } else hi=mid-1; }
@@ -22932,7 +22955,7 @@ function filesWire(){
       var t=PXQ.shift(); delete PXQS[t]; PXN++;
       (function(tk){
         var base=(typeof SC_CHART_API!=="undefined"&&SC_CHART_API)?SC_CHART_API:"";
-        var done=function(){ PXN--; pxRun(); if(ASOF) schedCols(); };
+        var done=function(){ PXN--; pxRun(); if(ASOF) schedPct(); };
         /* a fetch that throws on the spot (a blocked scheme, a CSP refusal) must still give the
            slot back, or the queue stops feeding after four of them */
         try{
@@ -22945,8 +22968,7 @@ function filesWire(){
             for(var i=0;i<ser.length;i++){
               var b=ser[i]; if(!b||b.c==null||b.t==null) continue;
               var dk=pxDay(+b.t);
-              m[dk]={c:+b.c, p:prev};               /* p = the previous bar's close, so the
-                                                       day's change is the day's own change */
+              m[dk]={c:+b.c, p:prev};
               ds.push(dk); prev=+b.c;
             }
             m.__d=ds.sort(); PXC[tk]=m; done();
@@ -22956,89 +22978,63 @@ function filesWire(){
       })(t);
     }
   }
-  /* one repaint of the columns when late bars land, coalesced */
-  function schedCols(){
-    if(COLS_T) return;
-    COLS_T=setTimeout(function(){ COLS_T=null; try{ paintCols(); }catch(_){} }, 90);
+  /* one repaint of the % column when late bars land, coalesced */
+  function schedPct(){
+    if(PCT_T) return;
+    PCT_T=setTimeout(function(){ PCT_T=null; try{ paintPct(); }catch(_){} }, 90);
   }
-  var NOHIST={
-    fpe:"the forward multiple is today's consensus estimate - it has no dated history, so the replay shows no value rather than today's",
-    mc:"market cap is a current profile field with no dated history, so the replay shows no value rather than today's",
-    rv:"a relative-volume ratio is only true for its own session and none is stored per date",
-    mkt:"the market-state dot is a live reading, not a stored history",
-    hb:"the usual day is stored per date, but the replay does not read it yet - it shows no value rather than today's"
-  };
-  function dash(node, why){
-    if(!node) return;
-    if(node.textContent!=="—") node.textContent="—";
-    if(node.style.color!=="var(--mute)") node.style.color="var(--mute)";
-    if(node.getAttribute("title")!==why) node.setAttribute("title", why);
+  /* THE SPAN. Alan: "what percentage the price changed during the move". The move is the
+     window the two handles bound, so the measurement runs from the window's FIRST day to
+     the frame on screen - not from today, and not from the whole year the data covers. */
+  function spanFirst(){
+    if(!DATES.length) return null;
+    return DATES[Math.max(0,Math.min(START_I,DATES.length-1))];
   }
-  /* a cell whose daily bar is still on its way: the same quiet "…" the board shows while it loads.
-     SC_PENDING is markup, so it can never go through textContent — on 24 Sep that printed the raw
-     <span class="sc-pending" …> across LAST and CHG on the live board while PLAY ran. */
-  function waitCell(node){
-    if(!node) return;
-    if(node.textContent!=="\u2026") node.textContent="\u2026";
-    if(node.style.color!=="var(--mute)") node.style.color="var(--mute)";
-    node.setAttribute("title","waiting for this day's bar from the chart API");
+  /* undefined = the bar has not landed yet · null = no history either end · number = the % */
+  function pctFor(t, d0, d1){
+    var px=PXC[t];
+    if(!px) return PX_NONE[t] ? null : undefined;
+    if(!d0||!d1) return null;
+    var a=pxAsOf(px,d0), b=pxAsOf(px,d1);
+    if(!a||!b||!(a.c>0)) return null;
+    return (b.c/a.c-1)*100;
   }
   /* WRITE-ONLY. No getBoundingClientRect, no offsetHeight, nothing that forces layout. */
-  function paintCols(){
+  function paintPct(){
     var bs=E("boardScroll"); if(!bs) return;
     var rows=bs.querySelectorAll(".sc-board__row"); if(!rows.length) return;
-    var cd=ASOF?(CACHE[ASOF]||{}):null, rsiM=(cd&&cd.__rsi)||{};
+    var d0=spanFirst(), d1=ASOF;
     for(var i=0;i<rows.length;i++){
       var r=rows[i], t=r.getAttribute("data-t"); if(!t) continue;
-      var lp=r.querySelector(".sc-last"), lc=r.querySelector(".sc-chg"),
-          lf=r.querySelector(".sc-fpe"), lmc=r.querySelector(".sc-mcap"),
-          lr=r.querySelector(".sc-rsi"), lv=r.querySelector(".sc-vol"), lh=r.querySelector(".sc-hb"),
-          mk=r.querySelector(".sc-mktdot")||r.querySelector(".sc-mkt");
-      if(!ASOF){                                   /* LIVE - hand every cell back to the live values */
-        var row=null, all=S.rows||[];
-        for(var k=0;k<all.length;k++) if(all[k].t===t){ row=all[k]; break; }
-        if(!row) continue;
-        if(lp){ lp.textContent = row.price!=null ? row.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "—"; lp.style.color=""; }
-        if(lc){ lc.textContent = row.c!=null ? fmtC(row.c) : "—";
-                lc.className="sc-chg"+(row.c!=null?(row.c>=0?" up":" dn"):""); lc.style.color=""; }
-        if(lf){ lf.textContent = row.fpe!=null ? row.fpe.toFixed(1)+"×" : (typeof fpeWithheldText==="function"?fpeWithheldText(t):"—");
-                lf.style.color=""; lf.removeAttribute("title"); }
-        if(lmc){ lmc.textContent = (typeof fmtCap==="function")?fmtCap(row.mc):(row.mc!=null?String(row.mc):"—"); lmc.style.color=""; lmc.removeAttribute("title"); }
-        if(lr){ if(row.rsi!=null){ lr.textContent=Math.round(row.rsi); lr.style.color=rsiGradColor(row.rsi); }
-                else { lr.textContent="—"; lr.style.color=""; } lr.removeAttribute("title"); }
-        if(lv){ lv.style.color=""; lv.removeAttribute("title"); if(typeof volCellHTML==="function") lv.outerHTML=volCellHTML(row.rv, row.rvAsOf); }
-        if(lh && typeof hbCellHTML==="function"){ lh.style.color=""; lh.outerHTML=hbCellHTML(t, row.hb, row.c); }
-        if(mk) mk.style.opacity="";
+      var el=r.querySelector(".gwx-pct");
+      if(!ASOF){
+        if(el && r.__gwxPct!==""){ el.textContent=""; el.removeAttribute("title"); r.__gwxPct=""; }
         continue;
       }
-      /* REWOUND */
-      var px=PXC[t], bar=px?px[ASOF]:null, from=ASOF;
-      if(px && !bar){ bar=pxAsOf(px, ASOF); if(bar) from=bar.from; }
-      if(lp){
-        if(bar){ lp.textContent=bar.c.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-                 lp.style.color=""; lp.setAttribute("title", from===ASOF ? "close on "+ASOF+" · daily bar from the chart API"
-                   : "no session on "+ASOF+" · last close, "+from+" · daily bar from the chart API"); }
-        else if(px||PX_NONE[t]) dash(lp,"no daily bar stored for "+ASOF);
-        else waitCell(lp);
+      if(!el){ el=document.createElement("span"); el.className="gwx-pct"; r.appendChild(el); }
+      var p=pctFor(t,d0,d1), txt, col, why;
+      if(p===undefined){ txt="\u2026"; col="var(--mute)"; why="waiting for this name's daily bars from the chart API"; }
+      else if(p===null){ txt=""; col=""; why=""; }
+      else { txt=(p>=0?"+":"")+p.toFixed(1)+"%";
+             /* green up, red down - a price move is never drawn grey on this board */
+             col=p>=0?"var(--bull)":"var(--bear)";
+             why="price change over the replayed span: "+d0+" \u2192 "+d1+" \u00b7 daily closes from the chart API"; }
+      var k=txt+"|"+col;
+      if(r.__gwxPct!==k){
+        el.textContent=txt; el.style.color=col;
+        if(why) el.setAttribute("title",why); else el.removeAttribute("title");
+        r.__gwxPct=k;
       }
-      if(lc){
-        var c=(bar&&bar.p!=null&&bar.p!==0)?(bar.c/bar.p-1)*100:null;
-        if(c!=null){ lc.textContent=fmtC(c); lc.className="sc-chg "+(c>=0?"up":"dn"); lc.style.color="";
-                     lc.setAttribute("title", from===ASOF ? "the day's own move on "+ASOF+" · close against the previous stored bar"
-                       : "no session on "+ASOF+" · the move on "+from+", the last session before it"); }
-        else if(px||PX_NONE[t]){ lc.className="sc-chg"; dash(lc,"no daily bar stored for "+ASOF); }
-        else { lc.className="sc-chg"; waitCell(lc); }
-      }
-      if(lr){
-        var rv2=rsiM[t];
-        if(rv2!=null){ lr.textContent=Math.round(rv2); lr.style.color=rsiGradColor(rv2);
-                       lr.setAttribute("title","RSI on "+ASOF+" · momentum_daily"); }
-        else dash(lr,"no stored RSI for "+ASOF);
-      }
-      dash(lf, NOHIST.fpe); dash(lmc, NOHIST.mc); dash(lh, NOHIST.hb);
-      if(lv){ lv.innerHTML=""; dash(lv, NOHIST.rv); }
-      if(mk){ mk.style.opacity="0.25"; mk.setAttribute("title", NOHIST.mkt); }
     }
+  }
+  function clearPct(){
+    try{
+      var bs=E("boardScroll"); if(!bs) return;
+      var els=bs.querySelectorAll(".gwx-pct");
+      for(var i=0;i<els.length;i++){ els[i].textContent=""; els[i].removeAttribute("title"); }
+      var rows=bs.querySelectorAll(".sc-board__row");
+      for(var j=0;j<rows.length;j++) rows[j].__gwxPct="";
+    }catch(_){}
   }
   /* which rows are on screen, from numbers repaint() has ALREADY read - no new reads */
   function wantVisible(boxTop, scrolled, vh){
@@ -23057,6 +23053,9 @@ function filesWire(){
     NEXT_D = (frac && frac > 0.01 && dNext) ? dNext : null;
     BLEND  = NEXT_D ? frac : 0;
     ASOF=d; document.body.classList.add("gwx-on");
+    /* MOTION MODE ON: the columns collapse, the bars take the width. Nothing is rebuilt -
+       the hidden cells keep their live content, which is what makes LIVE a single class away. */
+    motionOn(true);
     E("gwxDt").textContent=d; liveChip(true); armIdle();
     /* the neighbour must be warmed on EVERY seek, not only on a cache miss - the early
        return below used to skip it, so the blend had nothing to interpolate toward and
@@ -23077,16 +23076,12 @@ function filesWire(){
     var fanP = parts.map(function(p){
       return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
     var momP = parts.map(function(p){
-      return api("momentum_daily?select=ticker,read,rsi&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
+      return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
     Promise.all([Promise.all(fanP), Promise.all(momP)]).then(function(res){
-      var m={}, mo={}, rs={};
+      var m={}, mo={};
       res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read; rs[r.ticker]=r.rsi;});});
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
       m.__mom = mo;                                  // carried alongside, keyed off the map
-      /* M55 - THE WHOLE TABLE REPLAYS. momentum_daily stores that day's RSI in the same
-         row as that day's momentum read, so the RSI column costs one extra column on a
-         request the rewind was already making - no new table, no new round trip. */
-      m.__rsi = rs;
       CACHE[d]=m; if(ASOF===d) apply(m);
       if(dNext && !CACHE[dNext]) seekFetch(dNext);   /* warm the next day for the blend */
     });
@@ -23096,12 +23091,12 @@ function filesWire(){
     var CH=35, parts=[]; for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
     Promise.all([
       Promise.all(parts.map(function(p){return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");})),
-      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read,rsi&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
+      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
     ]).then(function(res){
-      var m={},mo={},rs={};
+      var m={},mo={};
       res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read; rs[r.ticker]=r.rsi;});});
-      m.__mom=mo; m.__rsi=rs; CACHE[d]=m;
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
+      m.__mom=mo; CACHE[d]=m;
       /* it landed after the frame that needed it - repaint so the ease is visible */
       if(NEXT_D===d && ASOF && CACHE[ASOF]) apply(CACHE[ASOF]);
     });
@@ -23143,6 +23138,9 @@ function filesWire(){
   function goLive(){
     clearTimeout(IDLE);
     stop(); ASOF=null; document.body.classList.remove("gwx-on");
+    /* the normal board, exactly as it was: one class off, no rebuild, no refetch, and the
+       cells underneath were never written to, so there is nothing to restore and nothing to flash */
+    motionOn(false);
     E("gwxDt").textContent="live"; liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
     if(LIVE_G){var before={};(S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
@@ -23156,7 +23154,7 @@ function filesWire(){
          glows for a jump the reader made themselves */
       PREV={};
       repaint(before);}
-    try{ paintCols(); }catch(_){}   /* M55 - every replayed column returns to its live value */
+    try{ paintPct(); }catch(_){}   /* the span % clears with the replay that produced it */
   }
   /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
      animate between and every re-sort SNAPS. Alan, watching it: "I don't see the movement
@@ -23184,6 +23182,39 @@ function filesWire(){
      to the glow. */
   var PERF={ticks:0,ms:0,msMax:0,rows:0,moved:0,animated:0,reads:0,last:null};
   try{ window.__GWX_PERF=PERF; }catch(_){}
+  /* ══ MOTION MODE ══════════════════════════════════════════════════════════
+     The approved proposal's DEFAULT movement is SETTLE → REFLOW ("sr"): the bars
+     change in place first, then the rows slide to the new order. That is the one
+     that gives two readings out of one update - what changed, then what it did to
+     the standings - and it is what the proposal ships selected. GHOST OF LAST ORDER
+     is OFF, also as the proposal ships it: a ghost tick on every track, on 364 rows,
+     at four days a second, is noise where the proposal shows thirteen rows by hand.
+     HOLD NEAR-TIES is effectively already here - the board's own sort is stable, so
+     equal values keep the order they had.
+     The two durations come from the speed chip, in the proposal's own ratio
+     (230:400 out of a 700ms day = .33:.57), so the settle and the reflow always fit
+     inside one replayed day, at 1x, 2x and 4x alike. */
+  var MOTION=false, PEND=null, PEND_T=null, PITCH_READS=0;
+  function motionDur(){
+    var day=700; try{ day=SPEEDS[SPEED_I][1]; }catch(_){}
+    return { v:Math.max(60,Math.round(day*0.33)), r:Math.max(90,Math.round(day*0.57)) };
+  }
+  function motionOn(on){
+    on=!!on; if(MOTION===on) return;
+    MOTION=on;
+    try{ document.body.classList.toggle("gwx-motion", on); }catch(_){}
+    /* the bar gets taller in motion mode, so the row pitch the FLIP does its arithmetic
+       with is no longer true - force one re-measure rather than animating to a stale grid */
+    PITCH_OK=false; PITCH_N=0;
+    if(!on){ flushPend(); try{ clearPct(); }catch(_){} }
+  }
+  /* the deferred half of SETTLE → REFLOW. A frame that arrives before the reflow has run
+     flushes it first, so the order can never land out of sequence or be skipped. */
+  function flushPend(){
+    var f=PEND; if(!f) return;
+    PEND=null; try{ clearTimeout(PEND_T); }catch(_){} PEND_T=null;
+    try{ f(); }catch(_){}
+  }
   /* THE ROW PITCH, MEASURED ONCE. Board rows are one fixed-height grid template, so the
      distance a row travels when it moves N places is N x pitch - it does not need to be
      read off the DOM for every row, every tick. The pitch is measured when the board is
@@ -23195,20 +23226,22 @@ function filesWire(){
     if(PITCH_OK && PITCH_N===rows.length && PITCH>0) return;
     PITCH_N=rows.length; PITCH_OK=false; PITCH=null;
     if(rows.length<2) return;
-    var h0=rows[0].getBoundingClientRect(), h1=rows[1].getBoundingClientRect();
+    var h0=rows[0].getBoundingClientRect(), h1=rows[1].getBoundingClientRect(); PITCH_READS+=2;
     var pitch=h1.top-h0.top;
     if(!(pitch>0)) return;
     /* check a sample, not all 364 - three misses anywhere is enough to distrust the pitch */
     var step=Math.max(1,Math.floor(rows.length/12)), bad=0;
     for(var i=step;i<rows.length;i+=step){
-      var want=h0.top+i*pitch, got=rows[i].getBoundingClientRect().top;
+      var want=h0.top+i*pitch, got=rows[i].getBoundingClientRect().top; PITCH_READS++;
       if(Math.abs(want-got)>1.5){ bad++; if(bad>1) return; }
     }
     PITCH=pitch; PITCH_OK=true;
   }
   function repaint(before){
     try{
+      flushPend();                    /* a reflow still owed from the last frame lands first */
       var T0=(window.performance&&performance.now)?performance.now():0;
+      PITCH_READS=0;
       var bs=E("boardScroll"); if(!bs) return;
       var rows=[].slice.call(bs.querySelectorAll(".sc-board__row"));
       if(!rows.length) return;
@@ -23231,6 +23264,11 @@ function filesWire(){
          ONE cssText write per bar instead of five property writes, and skipped entirely
          when the bar already says what it is about to say: on a replay tick most rows
          move a little, but the ones that do not should cost nothing. */
+      /* SETTLE. In motion mode the bar CHANGES OVER TIME instead of being rewritten
+         instantly - that easing is the "settle" half of the proposal's default movement. */
+      var MD=MOTION?motionDur():null;
+      var tr=MD?("transition:left "+MD.v+"ms ease-out,right "+MD.v+"ms ease-out,width "+MD.v+
+                 "ms ease-out,background "+Math.round(MD.v*0.4)+"ms linear;"):"";
       var vals={}; (S.rows||[]).forEach(function(x){ vals[x.t]=x.g; });
       var mx=0.0001; for(var k in vals) if(vals[k]!=null) mx=Math.max(mx,Math.abs(vals[k]));
       var byT={};
@@ -23245,7 +23283,7 @@ function filesWire(){
         }
         if(!bar){ bar=document.createElement("i"); cell.appendChild(bar); }
         var bull=v>=0, col=bull?"var(--bull)":"var(--bear)";
-        var css=(bull?"left:50%;":"right:50%;")+"width:"+(Math.min(Math.abs(v)/mx,1)*50).toFixed(2)+"%;"+
+        var css=tr+(bull?"left:50%;":"right:50%;")+"width:"+(Math.min(Math.abs(v)/mx,1)*50).toFixed(2)+"%;"+
                 "background:"+col+";box-shadow:0 0 5px "+col;
         if(r.__gwxCss!==css){ bar.style.cssText=css; r.__gwxCss=css; }
         /* ★ THE CROSSING IS THE EVENT. A name that walks from +0.02 to -0.02 has changed
@@ -23262,73 +23300,85 @@ function filesWire(){
 
       /* ORDER IN PLACE - move the nodes, never recreate them (a destroyed row cannot
          animate, and an emptied board reads as a black flash).
-         24 Sep - Alan: "The Geiger replay is with the Geiger bar only." While the replay plays,
-         rows rank by the replayed Geiger alone, whatever column the board was sorted on; the
-         board's own sort is left untouched, so LIVE ranks exactly as it did before PLAY. */
-      var keepSort=S.sort; S.sort={key:"g",dir:-1};
-      try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
-      var frag=document.createDocumentFragment();
-      (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
-      bs.appendChild(frag);
+         ★ M61 - SETTLE → REFLOW. The proposal's default movement is values first, then
+         order. So the reorder below is DEFERRED by the settle duration while motion mode
+         runs, and runs inline otherwise. Everything it needs - the old indices, the box,
+         the scroll position - was read in the pass above; it reads no geometry of its own. */
+      var TW=((window.performance&&performance.now)?performance.now():0)-T0;
+      function orderPass(){
+        var TO0=(window.performance&&performance.now)?performance.now():0;
+        var keepSort=S.sort; S.sort={key:"g",dir:-1};
+        try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
+        var frag=document.createDocumentFragment();
+        (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
+        bs.appendChild(frag);
 
-      /* WHERE EVERY ROW NOW IS - derived from its new index, not read back */
-      var newIx={}, ord=S.boardOrder||[];
-      for(i=0;i<ord.length;i++) newIx[ord[i]]=i;
-      var now={};
-      if(rectMode){ for(i=0;i<rows.length;i++){ now[rows[i].getAttribute("data-t")]=rows[i].getBoundingClientRect().top; reads++; } }
+        /* WHERE EVERY ROW NOW IS - derived from its new index, not read back */
+        var newIx={}, ord=S.boardOrder||[];
+        for(i=0;i<ord.length;i++) newIx[ord[i]]=i;
+        var now={};
+        if(rectMode){ for(i=0;i<rows.length;i++){ now[rows[i].getAttribute("data-t")]=rows[i].getBoundingClientRect().top; reads++; } }
 
-      /* WRITE PASS - put each row back where it was. No read in this loop, and a row
-         that is off screen is MOVED but never animated: travel nobody can see is pure
-         cost, the same rule scScint already applies to the glow. */
-      var anim=[], moved=0;
-      for(i=0;i<rows.length;i++){
-        r=rows[i]; t=r.getAttribute("data-t");
-        var oi=oldIx[t], ni=newIx[t];
-        if(ni===undefined) continue;
-        var dy = rectMode ? (was[t]-now[t]) : (oi-ni)*PITCH;
-        if(!dy) continue;
-        moved++;
-        var top = rectMode ? was[t] : (box.top - scrolled + oi*PITCH);
-        if(top<-120 || top>vh+120) continue;
-        r.style.transition="none";
-        r.style.transform="translateY("+dy+"px)";
-        anim.push(r);
+        /* WRITE PASS - put each row back where it was. No read in this loop, and a row
+           that is off screen is MOVED but never animated: travel nobody can see is pure
+           cost, the same rule scScint already applies to the glow. */
+        var anim=[], moved=0;
+        for(i=0;i<rows.length;i++){
+          r=rows[i]; t=r.getAttribute("data-t");
+          var oi=oldIx[t], ni=newIx[t];
+          if(ni===undefined) continue;
+          var dy = rectMode ? (was[t]-now[t]) : (oi-ni)*PITCH;
+          if(!dy) continue;
+          moved++;
+          var top = rectMode ? was[t] : (box.top - scrolled + oi*PITCH);
+          if(top<-120 || top>vh+120) continue;
+          r.style.transition="none";
+          r.style.transform="translateY("+dy+"px)";
+          anim.push(r);
+        }
+        /* THE ONE FLUSH. Reading here, once, is what makes the transform above a starting
+           point instead of a no-op - the old code bought this per row, 364 times. */
+        if(anim.length){ void bs.offsetHeight; reads++; }
+        for(i=0;i<anim.length;i++){
+          r=anim[i];
+          r.style.transition="transform .42s cubic-bezier(.32,0,.18,1)";
+          r.style.transform="translateY(0)";
+          /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
+             compositing layer; holding 200+ of them exhausts layer memory and Safari
+             flushes the lot, which is seen as the board going BLACK and snapping back.
+             Clearing transform+transition once the move lands keeps the live layer count
+             near zero. */
+          clearTimeout(r.__gwxT);
+          r.__gwxT=setTimeout((function(row){ return function(){
+            row.style.transition=""; row.style.transform=""; row.style.willChange="";
+          };})(r), 460);
+        }
+
+        var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
+        var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
+          cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
+        }
+        /* M61 - the component columns are HIDDEN in motion mode, so they are not painted
+           either: a hidden cell is work nobody can see. LIVE repaints them in its own frame. */
+        if(!MOTION) paintTM();
+        /* M61 - the % over the replayed span, same breath, same frame. wantVisible() reuses the
+           box and scroll position read above, so the tick's geometry reads stay at two. */
+        try{ wantVisible(box.top, scrolled, vh); paintPct(); }catch(_){}
+        badges(before);
+
+        /* MEASURED, NOT CLAIMED - same shape as the M32 glow bench: what a tick costs and
+           what it is made of. The bench page next to this file runs the same three paths. */
+        var T1=(window.performance&&performance.now)?performance.now():0;
+        /* what the tick COST, not how long it waited: the settle delay is not work */
+        PERF.ticks++; PERF.ms=TW+(T1-TO0); PERF.msMax=Math.max(PERF.msMax,PERF.ms);
+        PERF.rows=rows.length; PERF.moved=moved; PERF.animated=anim.length; PERF.reads=reads;
+        PERF.last={ms:+PERF.ms.toFixed(2),write:+TW.toFixed(2),order:+(T1-TO0).toFixed(2),
+                   wait:MD?(MD.v+20):0,rows:rows.length,moved:moved,animated:anim.length,
+                   reads:reads,pitchReads:PITCH_READS,mode:rectMode?"rects":"pitch",
+                   motion:MOTION?"settle-reflow":"live"};
       }
-      /* THE ONE FLUSH. Reading here, once, is what makes the transform above a starting
-         point instead of a no-op - the old code bought this per row, 364 times. */
-      if(anim.length){ void bs.offsetHeight; reads++; }
-      for(i=0;i<anim.length;i++){
-        r=anim[i];
-        r.style.transition="transform .42s cubic-bezier(.32,0,.18,1)";
-        r.style.transform="translateY(0)";
-        /* ★ RELEASE THE LAYER. iOS Safari promotes every transformed element to its own
-           compositing layer; holding 200+ of them exhausts layer memory and Safari
-           flushes the lot, which is seen as the board going BLACK and snapping back.
-           Clearing transform+transition once the move lands keeps the live layer count
-           near zero. */
-        clearTimeout(r.__gwxT);
-        r.__gwxT=setTimeout((function(row){ return function(){
-          row.style.transition=""; row.style.transform=""; row.style.willChange="";
-        };})(r), 460);
-      }
-
-      var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
-      var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
-        cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
-      }
-      paintTM();   /* same breath - never leave a frame with the columns missing */
-      /* M55 - the rest of the table, same breath, same frame. wantVisible() reuses the box
-         and scroll position read above, so the tick's geometry reads stay at two. */
-      try{ wantVisible(box.top, scrolled, vh); paintCols(); }catch(_){}
-      badges(before);
-
-      /* MEASURED, NOT CLAIMED - same shape as the M32 glow bench: what a tick costs and
-         what it is made of. The bench page next to this file runs the same three paths. */
-      var T1=(window.performance&&performance.now)?performance.now():0;
-      PERF.ticks++; PERF.ms=T1-T0; PERF.msMax=Math.max(PERF.msMax,PERF.ms);
-      PERF.rows=rows.length; PERF.moved=moved; PERF.animated=anim.length; PERF.reads=reads;
-      PERF.last={ms:+PERF.ms.toFixed(2),rows:rows.length,moved:moved,animated:anim.length,
-                 reads:reads,mode:rectMode?"rects":"pitch"};
+      if(MOTION){ PEND=orderPass; PEND_T=setTimeout(flushPend, MD.v+20); }
+      else orderPass();
     }catch(e){}
   }
   /* rank badge — fixed column hard right, fades in on a move, clears after 1400ms */
@@ -23349,11 +23399,15 @@ function filesWire(){
       var d=was-now;
       b.textContent=(d>0?"▲":"▼")+Math.abs(d);
       b.style.color=d>0?"var(--bull)":"var(--bear)";
-      /* Alan: "let's leave it open for longer... I need it to stay longer." 1.4s was gone
-         before you could read a board's worth of them. 4s visible, then a slow fade. */
+      /* M61 - back to the proposal's own timing: fades in on a move, CLEARS AFTER 1400ms.
+         Alan once asked for 4s, and 4s is right for a single scrub you stop on; at a day
+         every 175-700ms it is not, because a badge from four days ago is still on screen
+         while the next three land on top of it - the "bunching" he saw. The badge now says
+         where this row went on THIS frame. The 650ms fade in the stylesheet still runs, so
+         it leaves gently rather than blinking out. */
       setTimeout(function(){b.classList.add("show");},10);
-      b.__hide=setTimeout(function(){b.classList.remove("show");},4000);
-      b.__kill=setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},4700);
+      b.__hide=setTimeout(function(){b.classList.remove("show");},1400);
+      b.__kill=setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},2100);
     });
   }
   function play(){
