@@ -18,7 +18,7 @@ const cut = (from, to, what) => {
 };
 const UNITS = cut("const EC_SCALE_STEPS = [1e3, 1e6];", "/* what the dotted value says", "the same-scale trio rule") +
   page.match(/function ecUnitNote\(r, field\) \{[\s\S]*?\n\}\n/)[0];
-const NOW = cut("const EC_NOW_TICK_MS = 30e3;", "function renderEconTable()", "the now-line engine");
+const NOW = cut("function ecNowLabel(nowSec)", "function renderEconTable()", "the now-line engine");
 const KEEP = cut("const EC_IMP_W = { High: 3", "function ecMonthHTML(rows) {", "the month-cell keep rule");
 const HELPERS = page.match(/const ecDateKey = \(ts\) =>[^\n]*\n/)[0] +
   page.match(/const ecTimeET {2}= \(ts\) =>[\s\S]*?;\n/)[0] +
@@ -178,4 +178,11 @@ test("a full month cell keeps the loudest releases and still draws them in time 
   assert.deepEqual(kept.map((g) => g.head.event_ts), kept.map((g) => g.head.event_ts).slice().sort((a, b) => a - b),
     "what is kept is still drawn in time order");
   assert.equal(api.ecCellKeep(list.slice(0, 3), 5).length, 3, "a cell that fits keeps everything");
+});
+
+test("two numbers a thousand apart with no third value are NOT corrected — the room says so instead", () => {
+  const api = load(host([]).box);
+  const u = api.ecUnifyRow({ actual: 0.66, estimate: 655 });
+  assert.equal(u.ambiguous, true, "no majority, so no scale is chosen");
+  assert.equal(u.fixes.length, 0, "nothing is rescaled on a guess");   // values cross a VM realm: compare content
 });
