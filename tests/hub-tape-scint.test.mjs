@@ -37,7 +37,13 @@ function host(bands) {
 }
 const scint = new Function("getComputedStyle", "document", "fmtC", "fmtTapePx",
   "const SCINT_MS = 520; let SCINT_OFF = false; let SCINT_C = null, SCINT_C_AT = 0;\n" +
-  fn("scintColors") + "let SCINT_IO = null;\n" + fn("scScintVis") + fn("scScint") + fn("scScintSet") + fn("tapePatch") + "return tapePatch;")(
+  /* M72 — scScint leans on the small overlay helpers beside it; with no KeyframeEffect here they
+     report "no overlay" and the classic glow runs, exactly as an older browser behaves. */
+  fn("scintColors") + "let SCINT_IO = null;\n" + fn("scScintVis") +
+  page.match(/^let SC_GLOW_Q = [^\n]*\n/m)[0] + page.match(/^const SC_WARM_SEL = [^\n]*\n/m)[0] +
+  fn("scGlowCapable") + fn("scGlowOK") + fn("scGlowWrite") + fn("scGlowPlay") + fn("scGlowQueue") +
+  fn("scGlowFlush") + fn("scGlowWarm") +
+  fn("scScint") + fn("scScintSet") + fn("tapePatch") + "return tapePatch;")(
   () => ({ getPropertyValue: (k) => (k === "--bull" ? "#00ffa3" : "#ff2d55") }), { documentElement: {} }, fmtC, fmtTapePx);
 
 test("a tick that changes only numbers patches the band where it stands", () => {

@@ -2241,8 +2241,13 @@ body.tvmodal-open{ overflow:hidden; }
    exactly over the number; only its opacity animates, which the compositor does without
    repainting text. It inherits font, padding, alignment and clipping from the cell, so it lands
    on the same pixels, and position:relative with no offsets moves nothing. */
-.sc-glow{ position:relative; }
-.sc-glow::after{ content:attr(data-scv); position:absolute; left:0; top:0; right:0; bottom:0;
+/* M72 — keyed to the ATTRIBUTE, not to a class. The board rewrites a cell's className on every
+   direction change (`lc.className = "sc-chg up"`, index.html:20797 / 23128 / 23151), which wiped a
+   `sc-glow` class while the cell still believed it had an overlay: from then on the glow animated a
+   pseudo-element that no longer existed and the cell stopped flashing altogether. `data-scv` is an
+   attribute, so no className assignment can take the overlay away. */
+[data-scv]{ position:relative; }
+[data-scv]::after{ content:attr(data-scv); position:absolute; left:0; top:0; right:0; bottom:0;
   box-sizing:border-box; padding:inherit; text-align:inherit; white-space:inherit;
   overflow:inherit; text-overflow:inherit; color:var(--sc-glow-c, transparent);
   text-shadow:var(--sc-glow-s, none); opacity:0; pointer-events:none; }
@@ -19888,6 +19893,100 @@ function scScintVis (node) {
   }
   return node.__scVis !== false;
 }
+/* ── M72 · THE SAME GLOW, FOR LESS ───────────────────────────────────────────────────────────
+   Alan, 24 Sep: "this graphics thing redrawing fraction of the cost is extremely important…
+   Seems like this kind of thing is putting load on the iMac because I do have Scintilla on the
+   iMac open too". Nothing below changes a single pixel of the glow. It changes how often the
+   page asks the browser to do work for it:
+     1. ONE animation per cell, replayed. The overlay's keyframes never change — opacity 1 → 0,
+        with the colour and the shadow held in CSS variables — so the Animation is built once per
+        cell and restarted with currentTime = 0. The first version built a new Animation, and a new
+        KeyframeEffect, on every glow: about 45 a second on a live board.
+     2. The overlay's text and its tone are written ONLY when they actually changed.
+     3. Every write a frame needs happens together in one animation-frame callback, so the style
+        pass that follows is one pass for all the cells that glowed, not one per cell.
+     4. Overlays are created while the browser is idle, so a cell's first glow is not pushed back
+        onto the expensive path (an overlay born in the same frame as its animation cannot be
+        handed to the graphics chip).
+   TWO CELLS ARE DELIBERATELY KEPT ON THE CLASSIC PATH, because an overlay would look wrong:
+     · a cell with element children inside it (a row, a chip) — the overlay is ONE string, so every
+       child's text would be flattened into it and printed on top: doubled text;
+     · an SVG element — a pseudo-element is never rendered for one, so there would be no glow.
+   Both are property reads, never layout.
+   AND ONE DEFECT FIXED: the overlay is keyed to the data-scv attribute (see the CSS above), so a
+   cell whose className is rewritten on a direction change keeps its glow. */
+let SC_GLOW_Q = null, SC_GLOW_RAF = 0;
+const SC_WARM_SEL = "[id^=lp_],[id^=lc_],[id^=htc_],#coPx,#coChg,.sc-tape__item b,.sc-tape__item span,.sc-ctk,.sc-ss__d,.mn-cd";
+function scGlowCapable () {
+  if (scScint.overlay === undefined) {
+    try { scScint.overlay = typeof KeyframeEffect === "function" && "pseudoElement" in KeyframeEffect.prototype; }
+    catch (_) { scScint.overlay = false; }
+  }
+  return scScint.overlay;
+}
+function scGlowOK (node) {
+  if (!scGlowCapable()) return false;
+  if (node.firstElementChild !== null) return false;                       /* doubled text — see above */
+  if (node.namespaceURI !== "http://www.w3.org/1999/xhtml") return false;  /* no pseudo on SVG */
+  if (node.__scGlow === undefined) {
+    try { const pos = getComputedStyle(node).position; node.__scGlow = pos === "static" || pos === "relative"; }
+    catch (_) { node.__scGlow = false; }
+  }
+  return node.__scGlow;
+}
+function scGlowWrite (node, tone) {
+  const txt = node.textContent;
+  if (node.__scvText !== txt) { node.setAttribute("data-scv", txt); node.__scvText = txt; }
+  if (!tone) return;
+  if (node.__scToneC !== tone[0]) { node.style.setProperty("--sc-glow-c", tone[0]); node.__scToneC = tone[0]; }
+  const sh = "0 0 8px " + tone[1];
+  if (node.__scToneS !== sh) { node.style.setProperty("--sc-glow-s", sh); node.__scToneS = sh; }
+}
+function scGlowPlay (node) {
+  let a = node.__scintA;
+  if (!a) a = node.__scintA = node.animate([{ opacity: 1 }, { opacity: 0 }],
+    { duration: SCINT_MS, easing: "ease-out", pseudoElement: "::after" });
+  else { a.currentTime = 0; a.play(); }            /* cancelled or finished, this restarts it */
+  node.__scint = a;
+  node.__scintOverlay = true;
+}
+function scGlowQueue (node, tone) {
+  node.__scQTone = tone;
+  if (!SC_GLOW_Q) SC_GLOW_Q = [];
+  if (!node.__scQd) { node.__scQd = true; SC_GLOW_Q.push(node); }
+  if (SC_GLOW_RAF) return;
+  SC_GLOW_RAF = typeof requestAnimationFrame === "function" ? requestAnimationFrame(scGlowFlush) : setTimeout(scGlowFlush, 0);
+}
+function scGlowFlush () {
+  SC_GLOW_RAF = 0;
+  const q = SC_GLOW_Q; SC_GLOW_Q = null;
+  if (!q) return;
+  for (let i = 0; i < q.length; i++) scGlowWrite(q[i], q[i].__scQTone);   /* all the writes … */
+  for (let i = 0; i < q.length; i++) { q[i].__scQd = false; scGlowPlay(q[i]); }   /* … then all the glows */
+}
+/* Create overlays for the cells that can glow, while the browser has nothing else to do. The
+   overlay sits at opacity 0 until a glow plays it, so nothing appears on screen. */
+function scGlowWarm (budget) {
+  if (SCINT_OFF || !scGlowCapable() || typeof document === "undefined") return 0;
+  let n = 0;
+  const list = document.querySelectorAll(SC_WARM_SEL);
+  for (let i = 0; i < list.length && n < budget; i++) {
+    const node = list[i];
+    if (node.__scGlowReady || !scGlowOK(node)) continue;
+    scGlowWrite(node, null);
+    node.__scGlowReady = true;
+    n++;
+  }
+  return n;
+}
+function scGlowWarmLoop () {
+  const run = () => { let did = 0; try { did = scGlowWarm(80); } catch (_) {} setTimeout(tick, did ? 800 : 6000); };
+  const tick = () => { try {
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 2000 }); else run();
+  } catch (_) { run(); } };
+  tick();
+}
+try { setTimeout(scGlowWarmLoop, 3000); } catch (_) {}
 function scScint (node, up) {
   if (!node || SCINT_OFF || !scScintVis(node)) return;
   const c = scintColors();
@@ -19909,30 +20008,15 @@ function scScint (node, up) {
          animate a pseudo-element and the cell is not already absolutely positioned; the position
          is read once per cell and remembered, never at tick time. Everything else keeps the
          colour + text-shadow animation below, so no browser loses the glow. */
-      if (scScint.overlay === undefined) {
-        try { scScint.overlay = typeof KeyframeEffect === "function" && "pseudoElement" in KeyframeEffect.prototype; }
-        catch (_) { scScint.overlay = false; }
-      }
-      if (scScint.overlay && node.__scGlow === undefined) {
-        try { const pos = getComputedStyle(node).position; node.__scGlow = pos === "static" || pos === "relative"; }
-        catch (_) { node.__scGlow = false; }
-      }
-      if (scScint.overlay && node.__scGlow) {
-        node.setAttribute("data-scv", node.textContent);
-        node.style.setProperty("--sc-glow-c", tone[0]);
-        node.style.setProperty("--sc-glow-s", "0 0 8px " + tone[1]);
+      if (scGlowOK(node)) {
         /* A cell's FIRST glow creates its overlay, and an overlay born in the same frame as its
            animation cannot be handed to the compositor (traced: 25 of 60 glows fell back to the
            main thread, "target has invalid compositing state"). So the first glow on a cell runs
            the classic way below while its overlay comes into being; every later glow fades the
-           overlay on the graphics chip. */
-        if (node.__scGlowReady) {
-          node.__scint = node.animate([{ opacity: 1 }, { opacity: 0 }],
-            { duration: SCINT_MS, easing: "ease-out", pseudoElement: "::after" });
-          node.__scintOverlay = true;
-          return;
-        }
-        node.classList.add("sc-glow");
+           overlay on the graphics chip. M72 warms the overlays on idle, so in practice a live
+           cell's first glow has already happened before Alan's first tick. */
+        if (node.__scGlowReady) { scGlowQueue(node, tone); return; }   /* M72 — one style pass a frame */
+        scGlowWrite(node, tone);                                         /* data-scv brings the overlay into being */
         node.__scGlowReady = true;
       }
       node.__scint = node.animate(
