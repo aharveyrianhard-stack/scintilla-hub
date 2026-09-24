@@ -230,11 +230,13 @@ test("one read for both surfaces: 10 minutes normally, 2 while a number is due, 
 });
 
 /* ------------------------------------------------------------------ 5 · Indicator Lab, untouched */
-test("Indicator Lab's newest page is byte-identical to the restore commit 8211c8f", () => {
-  /* the hashes the restore commit itself recorded (8211c8f, 22 Sep): the Lab thread owns these files and this
-     branch must not move them by one byte. */
+test("Indicator Lab's newest page is byte-identical to the Lab's own commit 990712a", () => {
+  /* the Lab thread owns these files and this branch must not move them by one byte. First pinned to the
+     restore commit 8211c8f (22 Sep); moved on 24 Sep to the Lab's own commit 990712a (detailed views and the
+     statistical brief), which the coordinator carried into the release after two Hub deploys had rolled the
+     page back to 8211c8f. Only the Lab moves these pins. */
   const EXPECT = {
-    "prototypes/indicator-lab/index.html": ["06523710dfad8518ac7f4ffb237df162fc4dbf18", 17350],
+    "prototypes/indicator-lab/index.html": ["47e51e10e9fcce6fffbd43188e4d9494557d1ac6", 19854],
     "prototypes/indicator-lab/captures/mcp-six-chart-20260919.png": ["4591a283ddca44efed9be1d70832eff276a3e52a", 737757],
     "tests/indicator-lab-methods.test.mjs": ["57ab583cf3710597935c72cdb60b768847645521", 3624],
   };
@@ -244,7 +246,9 @@ test("Indicator Lab's newest page is byte-identical to the restore commit 8211c8
     assert.equal(crypto.createHash("sha1").update(buf).digest("hex"), sha1, rel + " is not the Lab's file any more");
   }
   const dir = new URL("../prototypes/indicator-lab/", import.meta.url);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ["captures", "index.html"], "no file added to the Lab's folder either");
+  assert.deepEqual(fs.readdirSync(dir).sort(), ["briefs", "captures", "index.html"], "no file added to the Lab's folder either");
+  assert.deepEqual(fs.readdirSync(new URL("briefs/", dir)).sort(),
+    ["DETAILED_INDICATORS_2026-09-24.html", "DETAILED_INDICATORS_2026-09-24.md"]);
   assert.deepEqual(fs.readdirSync(new URL("captures/", dir)).sort(), ["mcp-six-chart-20260919.png"]);
 });
 
