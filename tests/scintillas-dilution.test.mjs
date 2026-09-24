@@ -194,6 +194,13 @@ test("the migration only widens the kinds, and its rollback is exact", () => {
   assert.match(rb, /delete from public\.scintillas where kind = 'dilution'/);
   assert.ok(!/price_outlier'\)\)/.test(rb.replace(/\s/g, "")) || /breadth_thrust'\)\)/.test(rb.replace(/\s+/g, "")),
     "the old kind list comes back");
+  const cron = fs.readFileSync(new URL("../supabase/migrations/20260924_scintillas_dilution_cron.sql", import.meta.url), "utf8");
+  assert.match(cron, /cron\.schedule\('scintillas-dilution-hourly'/);
+  assert.match(cron, /cron\.schedule\('scintillas-dilution-evening'/);
+  assert.match(cron, /mode=dilution/);
+  assert.ok(!/eyJ|service_role_key\s*:=\s*'/.test(cron), "no key value in the migration");
+  const cronRb = fs.readFileSync(new URL("../supabase/migrations/20260924_scintillas_dilution_cron_ROLLBACK.sql", import.meta.url), "utf8");
+  assert.match(cronRb, /unschedule\('scintillas-dilution-hourly'\)/);
   const fn = fs.readFileSync(new URL("../supabase/functions/scintillas-detect/index.ts", import.meta.url), "utf8");
   assert.match(fn, /mode === "dilution"/);
   assert.ok(!/FMP_API_KEY|apikey=/.test(fn.replace(/apikey: SERVICE/g, "")), "no key value and no FMP call");
