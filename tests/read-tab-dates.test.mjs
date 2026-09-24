@@ -17,8 +17,12 @@ test("READ blocks and the composite basis are labelled with their date when olde
   assert.match(page, /asOf: d0\.updated_ts \|\| null/);
   assert.match(page, /const extras = \[\["NARRATIVE BASIS", \[basis\]\]\];/, "the 2026-06-11 trend/levels/cohort rows are no longer drawn; the narrative basis is");
   assert.match(page, /const basis = rb\.basis \? String\(rb\.basis\)/, "the writer's own basis section is preferred when present");
-  assert.match(page, /const legacyCompositeAsOf = d0\.updated_ts \|\| null;/, "the legacy composite date is captured before the provider Geiger replaces it");
-  assert.match(page, /verdict\.push\(liveReadSentence\(d\) \+ \(compAge \? " Composite basis " \+ compAge\.toLowerCase\(\) \+ "\." : ""\)\);/);
+  /* M37 — the legacy capture is GONE. The verdict is no longer dated by composite_staged at all:
+     it reads the row the board's own provider overlay just wrote. */
+  assert.doesNotMatch(page, /legacyCompositeAsOf/, "the frozen composite date is no longer captured for the verdict");
+  assert.doesNotMatch(page, /legacyAsOf/, "and nothing downstream can still read it");
+  assert.match(page, /const liveRead = scLiveRead\(d0\);/, "the verdict reads the overlaid row");
+  assert.match(page, /verdict\.push\(liveReadSentence\(d, t\)\);/);
   assert.equal((page.match(/^function readTsMs\(/gm) || []).length, 1, "one epoch/ISO parser for every read date on this surface");
   assert.match(page.match(/function readAgeLabel\(ts, nowMs\) \{[\s\S]*?\n\}\n/)[0], /const v = readTsMs\(ts\);/, "and this label uses it");
   assert.equal(readAgeLabel(0, now), null, "a 0 epoch is no date at all — never 2000-01-01");
