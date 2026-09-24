@@ -151,7 +151,8 @@ export function priceRuleSentence(rule, verdict, version) {
    historyBySymbol:  { SYM: [{ c }] ascending, ending BEFORE today }
    session:          the trading date these moves belong to (YYYY-MM-DD) */
 export function detectPriceOutliers({ quotes, historyBySymbol, session, ts, minHistory = PRICE_MIN_HISTORY,
-                                      minAbsZ = MIN_ABS_Z, rules = null, source = "chart-api:/candles" }) {
+                                      minAbsZ = MIN_ABS_Z, rules = null, source = "chart-api:/candles",
+                                      heartbeatBySymbol = null }) {
   const events = [], skipped = [];
   for (const q of quotes || []) {
     const sym = q && q.symbol;
@@ -161,9 +162,20 @@ export function detectPriceOutliers({ quotes, historyBySymbol, session, ts, minH
     const movePct = (price / prev - 1) * 100;
     const rets = dailyReturnsPct(historyBySymbol && historyBySymbol[sym] ? historyBySymbol[sym] : []);
     if (rets.length < minHistory) { skipped.push({ subject: sym, reason: "SHORT_HISTORY", n: rets.length }); continue; }
-    const z = volZ(movePct, rets);
-    if (z == null) { skipped.push({ subject: sym, reason: "FLAT_HISTORY", n: rets.length }); continue; }
-    const usual = stdev(rets);
+    /* M52 — THE USUAL DAY IS NOW A STORED NUMBER, NOT ONE THIS PASS INVENTS. When
+       public.ticker_heartbeat_daily has a row for this name, its 60-session usual day is the
+       divisor, so the strip on the dashboard and the column on the board are the same number
+       by construction rather than by coincidence. With no stored row (a new listing, or the
+       writer behind) it falls back to computing the spread from these bars exactly as before,
+       and detail.usual_source says which of the two happened — never silently. */
+    const hb = heartbeatBySymbol && heartbeatBySymbol[sym];
+    const stored = hb && num(hb.usual_day_60) != null && num(hb.usual_day_60) > 0 ? num(hb.usual_day_60) : null;
+    const usual = stored != null ? stored : stdev(rets);
+    const usualSource = stored != null
+      ? "ticker_heartbeat_daily:" + (hb.date || "") + " · 60 sessions"
+      : "computed here from " + rets.length + " sessions";
+    if (usual == null || !(usual > 0)) { skipped.push({ subject: sym, reason: "FLAT_HISTORY", n: rets.length }); continue; }
+    const z = movePct / usual;
     const rule = rules ? priceRuleFor(sym, rules) : null;
     const verdict = rule ? priceVerdict(movePct, usual, rule)
       : { x: z, fired: Math.abs(z) >= minAbsZ ? ["statistical"] : [], hit: Math.abs(z) >= minAbsZ, minAbsZ };
@@ -174,7 +186,9 @@ export function detectPriceOutliers({ quotes, historyBySymbol, session, ts, minH
     }
     events.push(ev({
       ts, kind: "price_outlier", subject: sym, subject_kind: "ticker", direction: sign(movePct), magnitude: z, source,
-      detail: { session, move_pct: r3(movePct), daily_vol_pct: r3(usual), n_days: rets.length,
+      detail: { session, move_pct: r3(movePct), daily_vol_pct: r3(usual),
+                usual_source: usualSource, usual_sessions: stored != null ? 60 : rets.length,
+                n_days: stored != null && hb.n != null ? +hb.n : rets.length,
                 price, prev_close: prev, z: r3(z), x_usual: r3(Math.abs(z)),
                 asset_class: rule ? rule.asset_class : "equity",
                 fired: verdict.fired.slice(),
