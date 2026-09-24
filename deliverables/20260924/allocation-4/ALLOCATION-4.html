@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SCINTILLA · ALLOCATION 4 — DEEP RED IS WHERE THE LOADING STARTS</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#0A0A0F;--panel:#0D0D14;--sunk:#08080C;--line:#1A1A2A;--line2:#252538;
+  --ink:#C6C8DE;--ink2:#9A9AB6;--dim:#868AAA;--mute:#4A4A62;--bull:#00FFA3;--bear:#FF2D55;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+  --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font-family:var(--sans);font-size:17px;line-height:1.6}
+.wrap{max-width:900px;margin:0 auto;padding:0 22px 90px}
+.top{padding:20px 0 14px;border-bottom:1px solid var(--line);font-family:var(--mono);
+  font-size:11px;letter-spacing:.20em;color:var(--dim)}
+.top b{color:var(--ink)}
+h1{font-size:27px;line-height:1.35;color:var(--ink);font-weight:600;margin:34px 0 6px;max-width:24em}
+h2{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--dim);font-weight:400;
+  margin:40px 0 12px;padding-top:22px;border-top:1px solid var(--line)}
+h3{font-size:17px;color:var(--ink);margin:22px 0 4px}
+p{margin:11px 0;max-width:44em}
+li{margin:7px 0;color:var(--dim)}
+b{color:var(--ink)}
+code{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+.lede{font-size:19px;color:var(--ink2)}
+.q{border-left:2px solid var(--line2);padding:2px 0 2px 16px;margin:16px 0;color:var(--dim);font-style:italic}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:14px 0}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--mute);text-align:left;
+  padding:0 10px 7px 0;border-bottom:1px solid var(--line2)}
+td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);color:var(--ink2);vertical-align:top}
+td:first-child{color:var(--ink)}
+.up{color:var(--bull)}.dn{color:var(--bear)}
+.box{border:1px solid var(--line);background:var(--panel);padding:14px 16px;margin:16px 0}
+.box.sunk{background:var(--sunk)}
+img{width:100%;border:1px solid var(--line);margin:10px 0;display:block}
+.cap{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.06em;margin:0 0 20px}
+.mono{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><span data-scnav-slot></span><b>SCINTILLA</b> · ALLOCATION 4 · 24 SEPTEMBER 2026</div>
+
+<h1>Deep red is where the loading starts</h1>
+<p class="lede">The allocation page used to pick the four sectors that had led the market for sixty days
+and then look for names inside them. That is why it said 35% energy on a night you thought energy was
+overbought: it was buying leaders, not opportunities. The search has been turned round.</p>
+
+<div class="q">"I'm trying to find oversold companies. And then the ones that are oversold, is there
+quality in them to say that the oversold is exaggerated." — Alan, 24 September</div>
+
+<h2>WHAT THE PAGE NOW SHOWS</h2>
+<h3>Two answers, side by side</h3>
+<p>The old answer is still computed and still on the page, next to the new one, so you can see what
+changed and judge it. The new answer works bottom up: every company the Hub carries is searched first,
+and the sector mix is whatever the opportunities add up to. A weak sector is where the search looks,
+not a reason to stay out.</p>
+<img src="screens/answers-1680.png" alt="The two answers side by side">
+<p class="cap">The two answers, rendered offline against fixtures (see EVIDENCE below). Left: the old
+sixty-day-leaders answer. Right: the new one, which found its names in the two beaten-up sectors.</p>
+
+<h3>What the search looks for</h3>
+<ul>
+<li><b>Quality, out of 100.</b> Net margin, return on equity, debt against equity, forward earnings
+growth and the direction of the margin, each ranked against the name's own sector. A leg with fewer
+than eight measured peers gets no rank, and under two measured legs there is <b>no score at all</b> —
+not a zero.</li>
+<li><b>Oversold, on two legs that cost no extra reads.</b> The daily RSI and the distance from the
+published 200-day average, both from the table the Hub's own board reads.</li>
+<li><b>Quality at the 200-day</b> gets its own list — your Munger and Buffett line.</li>
+<li><b>Leaders on pullbacks</b> — above the 200-day, under the 50-day — are found too, and the
+<b>WHICH SEARCH LEADS</b> toggle answers one question at a time.</li>
+<li><b>Inconsistencies</b> — cheaper than its sector while growing faster — are flagged by name.</li>
+<li><b>Red cohorts count towards a name, not against it.</b> That is the whole reversal.</li>
+</ul>
+
+<h3>Staged loading, with a probability from the name's own history</h3>
+<p>Every proposed action is three tranches: a first one now, then adds only if the name falls further
+against its own 200-day average. Each step carries the probability measured <b>at that depth</b>, from
+that name's own daily history and nothing else: after the last times it was this far below its 200-day,
+how often it was higher 20 and 60 sessions later, and by how much.</p>
+<div class="box">
+<p class="mono">First tranche · 61% higher 20 sessions later · median +0.7% · 3 separate episodes, 462 days</p>
+<p>Days inside one selloff overlap, so they are not independent tries. The honest sample is the number
+of <b>separate episodes</b>, and that is the number the minimum is applied to. Under your line (three
+episodes by default) the page shows no probability at all and says why.</p>
+</div>
+<img src="screens/actions-1680.png" alt="Proposed actions with sizes, triggers and probabilities">
+<p class="cap">The page now ends in proposed actions: name, size, trigger, why, probability.</p>
+
+<h3>The swipe</h3>
+<p>A card stack of what the search found. Right is interested, left is a pass, up is a watch. Arrow
+keys work, and so does dragging the card on a phone. Each card carries the name, its cohorts, its
+Geiger with trend and momentum, the distance to the 200-day, the quality score with how much of it was
+measured, the probability line, and the reason in one sentence.</p>
+<img src="screens/swipe-390.png" alt="The swipe card on a phone">
+<p class="cap">The card at 390 wide. The same card at 1680 is in <code>screens/swipe-1680.png</code>.</p>
+<p>Every swipe is written to this device the moment you make it, then pushed to the server through the
+same operator path the board uses for favourites. What you have swiped feeds back as a weight you can
+see and change (<b>HOW MUCH YOUR OWN SWIPES COUNT</b>), per cohort and per sector.</p>
+
+<h2>WHAT MAKES MORE CASH DEPLOYED</h2>
+<p>Every toggle on the page now carries one plain sentence saying what it does to deployed cash, and
+they are collected in one table on the page. The short version:</p>
+<table>
+<thead><tr><th>TOGGLE</th><th>WHAT IT DOES TO DEPLOYED CASH</th></tr></thead>
+<tbody>
+<tr><td>A flat market means this much invested</td><td>Straight up or down: every point here is a point of deployed cash when the market reads flat.</td></tr>
+<tr><td>How hard the reading moves that number</td><td>Straight up or down: higher deploys more when the reading is good and less when it is bad.</td></tr>
+<tr><td>How much breadth counts <b>(new)</b></td><td>Straight up or down. Breadth is the only leg that can pull the number off the board's own average. It was already in the arithmetic but was not adjustable — now it is.</td></tr>
+<tr><td>Cash you always keep</td><td>A hard ceiling: deployed can never pass 100 minus this, whatever everything else says.</td></tr>
+<tr><td>The first tranche <b>(new)</b></td><td>The conservative dial: a smaller first tranche puts less in today and leaves the rest in cash until the name falls further.</td></tr>
+<tr><td>How much further it must fall for the next tranche <b>(new)</b></td><td>A wider step means the later tranches are reached less often, so less is deployed over time.</td></tr>
+<tr><td>Everything else</td><td>Changes <b>what</b> you own, not <b>how much</b>. Each one says so in its own row on the page.</td></tr>
+</tbody>
+</table>
+<p>One thing the page now admits out loud: when only one or two sectors carry opportunities, the cap on
+any single sector can leave part of the deployed money with nowhere to go. It stays in cash and the page
+says how much, rather than pushing it into a sector the search did not choose.</p>
+
+<h2>BREADTH, AND HOW REPRESENTATIVE THIS IS</h2>
+<p>Breadth is now a line over the last year, not one number, with its source named beside it.</p>
+<table>
+<thead><tr><th>MEASURE</th><th>WHERE IT COMES FROM</th><th>SHAPE</th></tr></thead>
+<tbody>
+<tr><td>Equal weight against the index (RSP ÷ SPY)</td><td>chart API <code>/candles</code>, daily closes</td><td>A full year, drawn, every session. Two reads.</td></tr>
+<tr><td>Share above the 50-day</td><td><code>provider_indicators_current</code>, provider FMP, the same table the board's own RSI column reads</td><td>Today from the published averages; the year-long line is measured on request over the largest names, one daily-bar read each, and it prints its own sample size.</td></tr>
+<tr><td>Share above the 200-day</td><td>the same</td><td>the same</td></tr>
+</tbody>
+</table>
+<p>The year-long lines are behind a button on purpose: they cost one read per name, and nothing on this
+page spends bandwidth without being asked.</p>
+<div class="box sunk">
+<h3>"Is the Hub a decently representative sample of the market?"</h3>
+<p><b>The honest answer tonight is: this page cannot measure it.</b> Breadth here is the Hub's own
+companies — the names with a sector on file, funds left out. No table this page can read carries the
+S&amp;P 500's membership or its weights, so coverage by count and by weight cannot be computed, and the
+page says so where the numbers are rather than implying its breadth is the index's breadth.</p>
+<p>The one change that would settle it is written and waiting: <code>supabase/migrations/20260924_index_constituents.sql</code>
+adds an empty <code>index_constituents</code> table (index, ticker, weight, sector, as-of, source). The
+job that already holds the provider key fills it; the page never sees that key. The day one row lands,
+the page can state coverage both ways and check RSP-against-SPY against the real thing.</p>
+<p>What can be said now: RSP against SPY <i>is</i> the index's own breadth, measured by the index's own
+members, and it is on the page as a year-long line.</p>
+</div>
+<img src="screens/breadth-390.png" alt="The breadth panel on a phone">
+<p class="cap">The breadth panel at 390, each measure stacked with its source.</p>
+
+<h2>THE QUESTIONS YOU ASKED, ANSWERED ON THE PAGE</h2>
+<table>
+<thead><tr><th>YOUR QUESTION</th><th>WHERE THE PAGE ANSWERS IT</th></tr></thead>
+<tbody>
+<tr><td>Which names are the most oversold?</td><td>A list, by RSI, with the distance to the 200-day and the quality score beside each one. <b>It is the Hub's companies, not the S&amp;P 500</b>, and it says so.</td></tr>
+<tr><td>Is there a quality company at or near its 200-day?</td><td>Its own list, sorted by how close, and only names that clear your quality line appear on it.</td></tr>
+<tr><td>Is there a tradeable exaggeration in a quality company?</td><td>That is the <code>EXAGGERATION?</code> label, and the probability line under it is what makes it a question rather than a claim.</td></tr>
+<tr><td>Of the leaders on pullbacks, is it a tradeable pullback?</td><td>The <code>PULLBACK</code> label, and the WHICH SEARCH LEADS toggle set to LEADERS ON PULLBACKS.</td></tr>
+<tr><td>A low P/E, better multiple than peers, higher growth</td><td>The <code>INCONSISTENCY</code> label. <b>Peers are the sector, not the sub-industry</b> — the tables do not carry a sub-industry, and the page says that where it matters.</td></tr>
+<tr><td>What does weak breadth with strong earnings nudge allocation towards?</td><td>Weak breadth cuts how much is deployed (that is the breadth weight, now adjustable), while the search keeps hunting inside the weakness. Conservative on deployment, contrarian on selection.</td></tr>
+<tr><td>A rising tide lifts all boats</td><td>SPY against its own 200-day, and its last sixty sessions, at the top of THE TIDE.</td></tr>
+<tr><td>Midterms, and the cyclical calendar</td><td>Measured from SPY's own history, with the years named. <b>Four or five years is far too few to lean on</b>, and the sample size is printed for exactly that reason.</td></tr>
+<tr><td>Not always the trade I like</td><td>Every action is labelled A FAVOURITE, YOUR USUAL GROUND, or OUTSIDE YOUR USUAL, and the list deliberately reaches past frontier tech to fill the last slots.</td></tr>
+</tbody>
+</table>
+
+<h2>WHERE EACH NUMBER COMES FROM</h2>
+<table>
+<thead><tr><th>NUMBER</th><th>SOURCE</th></tr></thead>
+<tbody>
+<tr><td>Geiger, per name and per cohort</td><td>the live artifact from the chart API, plus <code>ticker_cohorts</code> — unchanged, and still matching the board</td></tr>
+<tr><td>Quality legs</td><td><code>ratios_history</code> (net margin, return on equity, debt to equity, and the margin trend across full years), <code>fundamentals</code> (trailing earnings) and <code>fwd_eps_ntm</code> (the next twelve months' earnings)</td></tr>
+<tr><td>Oversold legs</td><td><code>provider_indicators_current</code> — daily RSI(14) and the 50- and 200-day averages, provider FMP</td></tr>
+<tr><td>Probabilities and staged levels</td><td>the chart API's daily bars for that one name, up to about five years, read only for the names that reach the stack</td></tr>
+<tr><td>The tide and the calendar</td><td>SPY's daily bars from the chart API</td></tr>
+<tr><td>Favourites</td><td><code>hub_favorites</code>, the server list, the same on every device</td></tr>
+<tr><td>Your swipes</td><td>this device first, then <code>allocation_operator_votes</code> through the operator-write function</td></tr>
+</tbody>
+</table>
+
+<h2>WHAT COULD BE WRONG</h2>
+<ul>
+<li><b>A probability is not a forecast.</b> It is what this one name did after the last few times it was
+this far below its own 200-day average. Three episodes is a small number, and the page prints the
+episode count beside every one so you can discount it yourself.</li>
+<li><b>Peers are the sector, not the sub-industry.</b> A specialist inside a broad sector will look
+cheaper or dearer than it really is against true peers.</li>
+<li><b>Free cash flow is not in the quality score</b>, because no table this page can read carries it.
+Margins, returns on equity, debt and forward growth stand in for it.</li>
+<li><b>Quality is a rank inside a sector, not an absolute.</b> The best of a bad sector still scores
+well; the score says what it measured (<code>n of 5</code>) but not that the sector is worth owning.</li>
+<li><b>Forward earnings growth comes from analysts' estimates.</b> They are an opinion, and they are
+often wrong in exactly the situations this page is hunting for.</li>
+<li><b>The midterm and seasonal lines rest on four or five years.</b> Do not trade them; they are context.</li>
+<li><b>Breadth is the Hub's companies</b>, and the Hub is not the index. Until the constituents table is
+filled, that limit stands.</li>
+<li><b>The oversold search can find a company that is falling for a good reason.</b> Nothing here reads
+news, litigation or guidance. The earnings step is the only event guard, and it is in the old funnel,
+not in this search.</li>
+<li><b>Live numbers were not verified tonight</b> — see EVIDENCE below.</li>
+</ul>
+
+<h2>EVIDENCE</h2>
+<p>Everything above was rendered and photographed <b>offline against generated fixtures</b>: a small
+made-up market of 70 companies across five sectors, in which two sectors are beaten down and hold the
+good companies. Every request the page made was intercepted and answered locally — 144 of them — so no
+production table and no chart API was read, and the "key" the page found was the literal word FIXTURE.
+The browser ran headless and was closed at the end; nothing appeared on your screen.</p>
+<p><b>Why fixtures and not the live site:</b> two attempts to read live data from this session were
+refused by this machine's own permission gate — once for reading the published key, once for reading
+production through a browser. Those refusals were left in place rather than worked around. So the page's
+<i>logic and layout</i> are proven, and its <i>live numbers</i> are not. The first thing to do with this
+branch is open it against the live site and read the same panels.</p>
+<p>The offline render did catch three real defects, which are fixed: a swipe was stored under a cohort's
+label and read back under its key, so swipes moved nothing; the vote writer called a rendering function
+directly, so a refused write threw; and the lane used two pieces of state the page had never declared,
+which made it throw on every load until the first render was actually looked at.</p>
+<p class="mono">Tests: 15 new (<code>tests/allocation-contrarian.test.mjs</code>), all passing.
+Whole suite 532 pass, 2 fail — the same two that already fail on production.</p>
+
+<h2>WHAT I DID NOT DO</h2>
+<ul>
+<li><b>Nothing was pushed and nothing was deployed.</b> The branch is local.</li>
+<li><b>No migration was applied.</b> Both are written with their rollbacks, for the coordinator.</li>
+<li><b>The operator-write function was not changed</b> — it does not live in this repository. It needs
+one new case, <code>allocation_vote</code>, and the exact code is in the migration file. Until it lands,
+every swipe is kept on the device and the page says how many are waiting.</li>
+<li><b>The old funnel was not deleted.</b> It still runs, still has its tests, and its answer is on the
+page beside the new one.</li>
+<li><b>Global liquidity with a three-month lag is not measured.</b> No table this page reads carries it.</li>
+<li><b>The regime lane's read was not available</b> while this was built, so the calendar numbers are
+computed here; the page reads that lane's file the moment it exists and says which it used.</li>
+<li><b>No live probe, no screenshot of the live site, no production write of any kind.</b></li>
+</ul>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
