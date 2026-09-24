@@ -188,6 +188,11 @@ test("the column exists on the board, has a track to sit in, and the page carrie
   assert.equal(track, cols, "one grid track per column (" + cols + " columns, " + track + " tracks)");
   assert.match(page, /hbCellHTML\(d\.t, d\.hb, d\.c\)/, "every row renders it");
   assert.match(page, /ticker_heartbeat_daily\?ticker=in\./, "the Hub READS the stored heartbeat");
-  assert.match(page, /σ \(sigma\) is simply the symbol for standard/, "the plain-words answer to Alan's question");
+  /* Alan asked "what's the difference between sigma and standard deviation?" — the page answers it
+     in words and STILL never puts a Greek letter on his screen, which is M48's rule. */
+  assert.match(page, /sigma means the same thing/, "the plain-words answer to Alan's question");
+  const strip = page.match(/const exp = '<div class="sc-ss__exp">[\s\S]*?<\/div>";/)[0];
+  assert.doesNotMatch(strip, /σ/, "no Greek letter reaches the screen (M48)");
+  assert.equal((strip.match(/standard deviation/g) || []).length, 1, "written once, for the record");
   assert.doesNotMatch(page.match(/function hbCellHTML[\s\S]*?\n}\n/)[0], /Math\.sqrt/, "the Hub never computes a spread of its own");
 });

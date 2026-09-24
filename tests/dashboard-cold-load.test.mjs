@@ -31,13 +31,18 @@ function topLevelChildren(html) {
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function boardRenderer(S) {
+  // M52 — the USUAL DAY cell is a real page function, not a stub: this test's whole job is to prove
+  // every column renders exactly one cell in every row state, and a stub would hide a second one.
   const src = page.match(/const BOARD_COLS = [^\n]*\n/)[0] + page.match(/const SC_PENDING = [^\n]*\n/)[0] +
+    page.match(/^const SC_HB_STALE_DAYS = [^\n]*\n/m)[0] + page.match(/^const SC_HB_X_UNUSUAL\s+= [^\n]*\n/m)[0] +
+    fn("hbAgeDays") + fn("hbPct") + fn("hbXUsual") + fn("hbTitle") + fn("hbCellHTML") +
     fn("boardTMCellsHTML") + fn("boardHeaderHTML") + fn("geigerMiniHTML") + fn("boardRowsHTML") +
     "\nreturn { BOARD_COLS, boardHeaderHTML, boardRowsHTML };";
   const cell = (cls) => () => '<span class="' + cls + '"></span>';
-  return new Function("S", "esc", "orderedShownRows", "COH_ABBR", "fpeTitle", "fmtCap", "fmtC", "rsiGradColor",
+  const num = (v) => { const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
+  return new Function("S", "esc", "num", "orderedShownRows", "COH_ABBR", "fpeTitle", "fmtCap", "fmtC", "rsiGradColor",
     "volCellHTML", "mktDotHTML", "scQuoteObservationLabel", "mcapCellHTML", "fpeWithheldText", src)(
-    S, esc, () => S.rows, {}, () => "", () => "$1B", (c) => c.toFixed(2) + "%", () => "#fff",
+    S, esc, num, () => S.rows, {}, () => "", () => "$1B", (c) => c.toFixed(2) + "%", () => "#fff",
     cell("sc-vol"), cell("sc-mktdot"), () => "", cell("sc-mcap"), () => "—");   // numeric-closure: the MKT CAP cell and the F P/E withheld text are page functions
 }
 
@@ -48,14 +53,14 @@ test("the header and every row are built from ONE static column model: same cell
     { t: "SIUSD", state: "NON_EQUITY_OWNER", priceSource: "NON_EQUITY_OWNER", price: 66.74, c: null, fpe: null, mc: null, rsi: null, g: null, nf: true },   // values unavailable
   ] };
   const api = boardRenderer(S);
-  assert.equal(api.BOARD_COLS.length, 13, "13 columns from the first render (Trend/Mom/Read are no longer spliced in later)");
-  assert.deepEqual(api.BOARD_COLS.slice(6, 11).map((c) => c[0]), ["RSI", "Trend", "Mom", "Read", "Geiger"]);
+  assert.equal(api.BOARD_COLS.length, 14, "14 columns from the first render (Trend/Mom/Read are no longer spliced in later; M52 added USUAL DAY)");
+  assert.deepEqual(api.BOARD_COLS.slice(7, 12).map((c) => c[0]), ["RSI", "Trend", "Mom", "Read", "Geiger"]);
   const html = api.boardRowsHTML();
   const header = html.slice(0, html.indexOf('<div class="ch sc-board__row'));
   const rows = html.slice(header.length).split(/(?=<div class="ch sc-board__row)/);
   assert.equal(rows.length, 3);
   const headerCells = topLevelChildren(header);
-  assert.equal(headerCells, 13);
+  assert.equal(headerCells, 14);
   for (const r of rows) assert.equal(topLevelChildren(r), headerCells, "row cells = header cells: " + r.slice(0, 80));
   // the Geiger cell sits in the Geiger column (index 10) in each state, not under TREND (index 7)
   for (const r of rows) {
@@ -68,15 +73,15 @@ test("the header and every row are built from ONE static column model: same cell
 test("a pending board (no rows yet) still renders the full header from the model", () => {
   const S = { sort: { key: "g", dir: -1 }, fav: [], boardPending: "MEGACAP", rows: [] };
   const html = boardRenderer(S).boardRowsHTML();
-  assert.equal(topLevelChildren(html.slice(0, html.indexOf('<div class="sc-board__pending"'))), 13);
+  assert.equal(topLevelChildren(html.slice(0, html.indexOf('<div class="sc-board__pending"'))), 14);
   assert.match(html, /loading MEGACAP …/);
 });
 
 test("the final board geometry is in the head stylesheet, before any script can paint", () => {
   const head = page.slice(0, page.indexOf("</head>"));
   const tracks = head.match(/\n\.ch\{grid-template-columns:([^;]*) !important;gap:5px\}/);
-  assert.ok(tracks, "13-track .ch rule is static");
-  assert.equal(tracks[1].split("minmax(").length - 1, 13);
+  assert.ok(tracks, "the .ch track rule is static");
+  assert.equal(tracks[1].split("minmax(").length - 1, 14, "one track per column, M52 included");
   assert.match(head, /\n\.gwx-tm\{[^}]*text-align:right/);
   assert.match(head, /\n\.sc-cohstrip__read\{[^}]*height:16px !important/, "the compare strip's final height is static too (it grew 5px after first paint)");
   assert.match(head, /\n\.gwx\{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:\.4px solid var\(--line\)\}/, "the rewind bar's box exists for the reserved slot");
@@ -189,7 +194,11 @@ test("a scope that has not loaded is not reported as empty, and the map is built
 
 test("the cohort summary keeps one shape in all three states: pending, no contributors (Geiger refused), and live", () => {
   const SC_PENDING = eval(page.match(/const SC_PENDING = ('[^\n]*');/)[1]);
-  const render = (S) => new Function("S", "esc", "geigerMiniHTML", "SC_PENDING", "return " + fn("cohortGeigerHTML") + ";")(S, esc, () => '<span class="sc-gmini"></span>', SC_PENDING)();
+  const num = (v) => { const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
+  // M52 — the header now also carries the cohort's own usual day; its helpers come from the page.
+  const render = (S) => new Function("S", "esc", "num", "geigerMiniHTML", "SC_PENDING",
+    fn("hbPct") + fn("hbMedian") + fn("hbGroupLabel") + "return " + fn("cohortGeigerHTML") + ";")(
+      S, esc, num, () => '<span class="sc-gmini"></span>', SC_PENDING)();
   const shape = (html) => [/class="sc-cohgeiger__hd"/.test(html), (html.match(/sc-cohgeiger__line is-mean/g) || []).length, /sc-cohgeiger__big/.test(html)];
   const pending = render({ coh: "FAV", boardPending: null, cohGeigerOpen: false, rows: [{ t: "AMD", g: null, state: "CONNECTING" }] });
   const refused = render({ coh: "FAV", boardPending: null, cohGeigerOpen: false, rows: [{ t: "AMD", g: null, state: "OK" }, { t: "BE", g: null, state: "OK" }] });

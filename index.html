@@ -5837,9 +5837,10 @@ function hbGroupLabel(rows, total) {
 /* the stored heartbeat for one name, from whichever board row already holds it (the board loader
    stashes it on the row). No row, no number — the ident says "usual —" rather than inventing one. */
 function hbRowFor(t) {
-  const src = (S.rows && S.rows.length ? S.rows : (ALLROWS || []));
+  const all = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS : [];
+  const src = (typeof S !== "undefined" && S.rows && S.rows.length) ? S.rows : all;
   for (const r of src) if (r && r.t === t) return r.hb || null;
-  for (const r of (ALLROWS || [])) if (r && r.t === t) return r.hb || null;
+  for (const r of all) if (r && r.t === t) return r.hb || null;
   return null;
 }
 function paintHbCell(t, hb, movePct) {
@@ -20016,15 +20017,15 @@ function scintStripHTML() {
      brackets for the record and the two everyday frequencies spelled out. */
   const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
   const rulesLine = scintRulesLine();
-  /* M52 — Alan asked the question this sentence answers: "what's the difference between sigma and
-     standard deviation? Just to understand." There is none, and the page now says so in its own
-     words instead of leaving a Greek letter standing in brackets. */
+  /* M52 — Alan, 24 Sep: "what's the difference between sigma and standard deviation? Just to
+     understand." None: sigma is the symbol mathematicians write for it. The sentence says so in
+     words and STILL never puts a Greek letter on his screen, which is M48's rule and stays.
+     "standard deviation" is written exactly once here, for the record — a test pins both. */
   const exp = '<div class="sc-ss__exp"><b>“usual day”</b> is the size of a typical daily move for that name — ' +
-    "its own last " + sessions + " sessions. An ordinary day is about <b>1×</b>; " +
+    "its own last " + sessions + " sessions [standard deviation; <b>sigma means the same thing</b>, " +
+    "and we say “usual day” instead of either]. An ordinary day is about <b>1×</b>; " +
     "<b>2×</b> happens about 1 day in 20; <b>3×</b> about 1 day in 370. " +
-    "It is the standard deviation of those daily moves — <b>σ (sigma) is simply the symbol for standard " +
-    "deviation</b>, so the two are the same thing, and this hub says “usual day” instead of either. " +
-    "It is stored once a day per name, so every screen divides by the same number." +
+    "It is stored once a day for every name, so every screen divides by the same number." +
     (rulesLine ? '<i> · ' + esc(rulesLine) + "</i>" : "") + "</div>";
   const head = '<div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
     '<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + scintSpark(crit) +

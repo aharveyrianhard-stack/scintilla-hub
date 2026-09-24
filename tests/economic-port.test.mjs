@@ -40,7 +40,10 @@ function load({ tapeOn = false, S = {}, pg = async () => [], nodes = null } = {}
     prevClose: { MU: 100 }, fmtPxIdent: (v) => "$" + v, fmtC: (v) => (v >= 0 ? "+" : "") + v + "%",
     document: { querySelectorAll: () => [] },
   });
-  let src = escSrc + numSrc + mod + fnSrc(page, "leftIdentHTML");
+  /* M52 — the ident now carries the name's stored usual day, so its helpers load with it. */
+  const hbSrc = page.match(/^const SC_HB_STALE_DAYS = [^\n]*\n/m)[0] + page.match(/^const SC_HB_X_UNUSUAL\s+= [^\n]*\n/m)[0] +
+    fnSrc(page, "hbAgeDays") + fnSrc(page, "hbPct") + fnSrc(page, "hbXUsual") + fnSrc(page, "hbTitle") + fnSrc(page, "hbRowFor");
+  let src = escSrc + numSrc + mod + hbSrc + fnSrc(page, "leftIdentHTML");
   /* ECON TAPE 22 Sep - the page now ships the flag ON, so the harness sets it BOTH ways: `tapeOn: false` is the
      kill-switch proof (flag off must emit production's ident markup byte for byte and read nothing). */
   assert.equal(src.split(/const ECON_TAPE_ON = (?:true|false);/).length, 2, "exactly one flag");
@@ -65,7 +68,13 @@ test("the tape ships ON — and with its one flag off the ident bar is byte-iden
   for (const sec of ["DASHBOARD", "COMPANY"]) for (const [data, state] of IDENT_INPUTS) {
     ctx.S.sec = sec; ctx.S.state = state;
     const got = api.leftIdentHTML(data);
-    assert.equal(got, golden(data), "flag off must emit production's exact markup (" + sec + ", " + state + ")");
+    /* M52 added ONE span to this bar — the name's stored usual day, which Alan asked to see beside
+       the price. The pin's job is unchanged and still exact: with the tape flag off, the ident is
+       production's markup plus that one span and NOTHING else. Strip the span, compare byte for
+       byte against the 2dbeb4c fixture, then check the span itself separately. */
+    const HB_SPAN = /<span class="sc-chb" id="coHb" title="[^"]*">usual [^<]*(?:<b style="color:var\(--(?:bull|bear)\)">[^<]*<\/b>)?<\/span>/;
+    assert.match(got, HB_SPAN, "the usual day is on the ident (" + sec + ", " + state + ")");
+    assert.equal(got.replace(HB_SPAN, ""), golden(data), "apart from the usual day, flag off is production's exact markup (" + sec + ", " + state + ")");
     assert.doesNotMatch(got, /macroNext|sc-cident--nudge/);
   }
   assert.match(page, /\n    if \(ECON_TAPE_ON\) fillMacroNext\(\);/, "the dashboard mount only calls the tape behind the flag");
