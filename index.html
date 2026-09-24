@@ -2466,6 +2466,26 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .ec-sp.hi.on .n{ color:var(--sv4); opacity:.7; }
 /* the table — ONE grid, so header and every row share the same column truth */
 .ec-tbl{ display:block; }
+/* M70 — THE NOW LINE. Alan: "you put a line of the current date … we need a horizontal one on the
+   other side of the current hour". One marker, drawn between the release before now and the release
+   after it, in the same cyan every other "today" marking in this room already wears. It is placed by
+   ecNowPaint() from the row times, so it moves on its own every 30 s. */
+.ec-now{ display:flex; align-items:center; gap:8px; margin:3px 0; padding:0 2px; pointer-events:none; }
+.ec-now::before, .ec-now::after{ content:""; flex:1 1 auto; height:1px; background:rgba(0,212,255,.42); }
+.ec-now::before{ flex:0 0 10px; }
+.ec-nowlbl{ flex:0 0 auto; font:600 10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--crk); background:rgba(0,212,255,.10); border:.8px solid rgba(0,212,255,.34);
+  border-radius:3px; padding:2px 5px; white-space:nowrap; }
+.ec-now--cell{ margin:2px 0; overflow:hidden; }
+.ec-now--cell .ec-nowlbl{ font-size:9px; padding:1px 3px; letter-spacing:.04em; white-space:nowrap; }
+/* on a phone a month cell is about 48 px wide — narrower than any honest label — so there the marker
+   is the line alone and the time lives in its tooltip. The DAY and WEEK lists, which is where a phone
+   reader actually reads the releases, keep the full "now HH:MM ET". */
+@media (max-width:900px){ .ec-now--cell .ec-nowlbl{ display:none; } .ec-now--cell::before{ flex:0 0 4px; } }
+.ec-now--tape{ display:inline-flex; vertical-align:middle; margin:0 2px; }
+.ec-now--tape::before, .ec-now--tape::after{ flex:0 0 8px; }
+/* a value the feed filed on a different scale from its own siblings, shown at the shared scale */
+.ec-ufx{ border-bottom:1px dotted rgba(0,212,255,.55); cursor:help; }
 .ec-hd, .ec-row{ display:grid; grid-template-columns:1fr 52px 78px 70px 70px 66px;
   gap:8px; align-items:center; }
 .ec-hd{ position:sticky; top:0; z-index:2; background:var(--panel);
@@ -13876,11 +13896,78 @@ function ecCountryFilter() {
    such rows keep Alan's rule that every chair appearance is High. Names and roles stay exactly as supplied; only whitespace
    is normalised. */
 const EC_CHAIR_ROLE = /\bfed\s+chair\b/i;
+/* M70 — THE SAME-SCALE TRIO. The supplier sometimes files one of a release's three numbers on a
+   different scale from the other two. MEASURED 24 Sep: New Home Sales (Aug) carried actual 684 and
+   previous 607 (thousands) with estimate 0.62 (millions) — so the surprise column read "+683.38",
+   and the scintilla detector, which is actual − estimate against this release's own past surprises,
+   would have called an ordinary print the largest miss in its history.
+
+   THE RULE — and it is deliberately narrow:
+     · it looks only at ONE row's own actual / estimate / previous, never across rows;
+     · a value is corrected ONLY when it sits a factor of 1,000 or 1,000,000 away from the scale the
+       rest of the row uses (the band is a half-decade either side: 316×–3,163×). A 10× or 100×
+       difference is NEVER touched — that is a plausible real miss, not a units slip;
+     · the scale that WINS must be a MAJORITY — at least two of the three values sharing it. Two
+       values a thousand apart with nothing to break the tie are NOT corrected: the row says so, and
+       no surprise is computed from it. Guessing which of the two is right would be inventing a number;
+     · zero and missing values take no part and are never invented;
+     · the feed's own number is kept in raw_<field> and shown in the tooltip, so nothing is hidden.
+   The corrected values are what the room prints and what any surprise here is computed from. The
+   same rule, in the same words, is implemented for the backend detector in
+   supabase/functions/scintillas-detect/detect.mjs and as the SQL view econ_calendar_unified. */
+const EC_SCALE_STEPS = [1e3, 1e6];
+const EC_SCALE_BAND = Math.sqrt(10);      // 3.162…: a half-decade either side of each step
+const EC_TRIO = ["previous", "actual", "estimate"];   // reference priority when the vote ties
+function ecScaleGap(v, ref) {
+  if (!isFinite(v) || !isFinite(ref) || v === 0 || ref === 0) return 1;
+  const q = Math.abs(v) / Math.abs(ref);
+  for (const f of EC_SCALE_STEPS) {
+    if (q > f / EC_SCALE_BAND && q < f * EC_SCALE_BAND) return f;                 // v is f times too big
+    if (q > 1 / (f * EC_SCALE_BAND) && q < EC_SCALE_BAND / f) return 1 / f;       // v is f times too small
+  }
+  return 1;                                                                        // same scale (or a difference this rule will not judge)
+}
+function ecUnifyRow(r) {
+  const v = {};
+  for (const k of EC_TRIO) { const n = +r[k]; if (r[k] != null && r[k] !== "" && isFinite(n) && n !== 0) v[k] = n; }
+  const keys = Object.keys(v);
+  if (keys.length < 2) return null;
+  let best = null;
+  for (const ref of EC_TRIO) {
+    if (v[ref] == null) continue;
+    const group = keys.filter((k) => ecScaleGap(v[k], v[ref]) === 1);
+    if (!best || group.length > best.group.length) best = { ref: ref, group: group };
+  }
+  if (!best || best.group.length === keys.length) return null;    // one scale already: nothing to do
+  if (best.group.length < 2) return { ambiguous: true, ref: null, fixes: [] };   // no majority: correct nothing
+  const fixes = [];
+  for (const k of keys) {
+    const f = ecScaleGap(v[k], v[best.ref]);
+    if (f !== 1) fixes.push({ field: k, from: v[k], to: v[k] / f, factor: f });
+  }
+  return fixes.length ? { ref: best.ref, fixes: fixes } : null;
+}
 function ecNormalize(r) {
   const b = String(r.event == null ? "" : r.event).replace(/\s+/g, " ").trim();
   r.event = b;
   if (EC_CHAIR_ROLE.test(b)) r.impact = "High";          // the office as the supplier wrote it; never inferred from a name
+  const u = ecUnifyRow(r);
+  if (u && u.ambiguous) r.unit_warn = 1;               // two numbers a thousand apart and no majority
+  else if (u) {
+    r.unit_fix = u;
+    for (const f of u.fixes) { r["raw_" + f.field] = r[f.field]; r[f.field] = f.to; }
+  }
   return r;
+}
+/* what the dotted value says when the reader hovers it */
+function ecUnitNote(r, field) {
+  if (!r || !r.unit_fix) return "";
+  const f = r.unit_fix.fixes.filter((x) => x.field === field)[0];
+  if (!f) return "";
+  return "the feed filed this as " + String(+f.from.toFixed(6)) + "; it is " +
+    (f.factor > 1 ? String(f.factor) + " times" : "one " + String(1 / f.factor) + "th") +
+    " the scale of the other values in this row, so it is shown at their scale (" +
+    String(+f.to.toFixed(6)) + ") and the surprise is computed from that";
 }
 /* RELEASE CLOSURE — KEYSET pages, not offsets. (event_ts, country, event) is the table's upsert key, so it is a total order;
    each page asks for rows strictly AFTER the last row of the previous page (a quoted PostgREST or() filter). An insert or a
@@ -14099,7 +14186,13 @@ function ecImpCls(i) { switch (i) { case "High": return "high"; case "Medium": r
 function ecRowHTML(r, kind, showCty, attrs) {
   const a = ecFin(r.actual), e = ecFin(r.estimate), p = ecFin(r.previous);
   let sur = '<span class="v na">—</span>', res = "";
-  if (a != null && e != null) {
+  if (r.unit_warn) {
+    /* M70 — the feed filed these numbers a thousand apart and there is no third value to say which
+       scale is right. Subtracting them would print a surprise a thousand times too big, so the room
+       prints none and says why. */
+    sur = '<span class="v na ec-ufx" title="' + esc("the feed filed these numbers about a thousand apart " +
+      "(one in thousands, one in millions) and there is no third value to say which is right, so no surprise is computed") + '">—</span>';
+  } else if (a != null && e != null) {
     const d = a - e, hot = EC_INVERT.test(ecBase(r.event));
     const cls = Math.abs(d) < 1e-9 ? "flat" : ((d > 0) === hot ? "up" : "dn");
     res = " res-" + cls;                    /* THE RESULT CHANNEL — the same reading the surprise column uses */
@@ -14113,17 +14206,25 @@ function ecRowHTML(r, kind, showCty, attrs) {
   const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
   /* M42 — data-esub is the release exactly as a stored scintilla names its subject (ecBase, no period
      tag), and data-ecty its country, so ecScintPass can match a row without re-deriving anything. */
+  /* M70 — data-ets is the row's own release time; ecNowPaint() places the now line from it */
   return '<div class="ec-row ' + kind + " imp-" + ecImpCls(r.impact) + res + '" style="border-left-color:' + hue + '"' +
-    ' data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) + '"' + (attrs || "") + ">" +
+    ' data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) + '" data-ets="' + esc(String(+r.event_ts)) + '"' + (attrs || "") + ">" +
     '<span class="rel"><span class="dot" style="color:' + hue + '">●</span>' +
       (showCty ? '<span class="cty">' + esc(r.country) + "</span>" : "") +
       '<span class="nm" title="' + esc(r.event) + '">' + esc(ecBase(r.event)) +
       (per ? ' <span class="cty">' + esc(per) + "</span>" : "") + "</span></span>" +
     '<span class="v">' + esc(ecTimeET(r.event_ts)) + "</span>" +
-    '<span class="v act' + (a == null ? " na" : "") + '">' + esc(ecNum(a) ?? "—") + "</span>" +
-    '<span class="v' + (e == null ? " na" : "") + '">' + esc(ecNum(e) ?? "—") + "</span>" +
-    '<span class="v pri' + (p == null ? " na" : "") + '">' + esc(ecNum(p) ?? "—") + "</span>" +
+    ecValHTML(r, "actual", a, "v act") + ecValHTML(r, "estimate", e, "v") + ecValHTML(r, "previous", p, "v pri") +
     sur + "</div>";
+}
+/* M70 — one value cell. A number the same-scale trio rule moved carries a dotted underline and
+   says, on hover, exactly what the feed filed and why it is shown differently. Nothing is hidden. */
+function ecValHTML(r, field, n, cls) {
+  const note = r && r.unit_warn
+    ? "the feed filed this row's numbers about a thousand apart and nothing in the row says which scale is right — both are shown exactly as supplied"
+    : ecUnitNote(r, field);
+  return '<span class="' + cls + (n == null ? " na" : "") + (note ? " ec-ufx" : "") + '"' +
+    (note ? ' title="' + esc(note) + '"' : "") + ">" + esc(ecNum(n) ?? "—") + "</span>";
 }
 /* one day's rows: composites collapsed to a headline + inline sub-rows, the rest flat */
 function ecDayRowsHTML(rows, showCty) {
@@ -14161,6 +14262,16 @@ function ecDayRowsHTML(rows, showCty) {
    "+N more" underneath, and the days either side of the month shown greyed so the
    weeks are never broken. Releases collapse by family exactly as the table does, so
    the four rows of a CPI print read as one line here too. */
+/* M70 — which entries a month cell keeps when more releases fall on a day than fit. The cell keeps
+   the LOUDEST (impact first, then earliest), and returns them in time order, so a High-impact print
+   is never the one that falls behind "+N more". */
+const EC_IMP_W = { High: 3, Medium: 2, Low: 1, None: 0 };
+function ecCellKeep(list, cap) {
+  if (!list || list.length <= cap) return (list || []).slice();
+  const keep = new Set(list.slice().sort((a, b) =>
+    ((EC_IMP_W[b.head.impact] || 0) - (EC_IMP_W[a.head.impact] || 0)) || (a.head.event_ts - b.head.event_ts)).slice(0, cap));
+  return list.filter((g) => keep.has(g));
+}
 function ecMonthHTML(rows) {
   const d0 = S.econDay || ecToday(), month = d0.slice(0, 7), today = ecToday();
   const days = ecMonthDays(d0);
@@ -14194,7 +14305,14 @@ function ecMonthHTML(rows) {
     /* fill the cell. Alan: "at least the boxes need to be fucking full — I see +3
        more when three would have fit." Five is what a cell actually holds. */
     const CAP = S.econZoom ? 9 : 5;   // EVENTS 22 Sep — zoomed cells are taller, so they hold more before "+N more"
-    const shown = list.slice(0, CAP).map((g) => {
+    /* M70 — WHICH releases a full cell keeps. Alan, 24 Sep, about New Home Sales: "did we have it in
+       the economic calendar? … I scanned for it but I don't remember seeing it." It was there: High
+       impact, 10:00 ET, and tenth in the day — so in MONTH (his saved view) it sat behind "+N more",
+       which only ever dropped the LAST entries of the day. Now the cell keeps the loudest releases
+       (impact first, then time) and draws the ones it keeps in time order, so a High-impact print
+       cannot be the one that falls off. "+N more" still says how many are not shown. */
+    const shownList = ecCellKeep(list, CAP);
+    const shown = shownList.map((g) => {
       const r = g.head, a = ecFin(r.actual), e = ecFin(r.estimate);
       let cls = "ec-ev imp-" + ecImpCls(r.impact);
       if (a != null && e != null) {
@@ -14205,13 +14323,15 @@ function ecMonthHTML(rows) {
       /* M42 — a chip carries the same two attributes a table row does: Alan's saved Economic view is
          MONTH, so without this the room he actually opens would have had nothing scintillating. */
       return '<div class="' + cls + '" data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) +
-        '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
+        '" data-ets="' + esc(String(+r.event_ts)) + '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
         " · " + esc(r.impact || "") + ' impact">' +
         '<span class="sp" style="background:' + hue + '"></span>' +
         '<span class="nm">' + esc(S.econZoom ? ecBase(r.event) : ecShort(ecBase(r.event))) + "</span>" +
         '<span class="tm">' + esc(ecTimeET(r.event_ts)) + "</span></div>";
     }).join("");
-    const more = list.length > CAP ? '<div class="ec-more">+' + (list.length - CAP) + " more</div>" : "";
+    const more = list.length > shownList.length
+      ? '<div class="ec-more" title="' + esc("the lower-impact releases of this day; open the day to read them all") + '">+' +
+        (list.length - shownList.length) + " more</div>" : "";
     return '<div class="ec-cell' + (d.slice(0, 7) === month ? "" : " out") +
       '" data-act="ecgoto" data-day="' + esc(d) + '">' +
       '<div class="ec-dnum' + (d === today ? " is-today" : "") + '"><span>' + (+d.slice(8)) + "</span></div>" +
@@ -14239,6 +14359,57 @@ function ecReadNote(nowSec) {
   return "newest actual in this window: " + (b ? esc(ecDayLbl(ecDateKey(b.event_ts))) + " " + esc(ecTimeET(b.event_ts)) + " ET" : "none yet") +
     (ECON_WIN_AT ? " · read " + esc(ecTimeET(Math.floor(ECON_WIN_AT / 1000))) + " ET" : "") +
     (failAt && failAt > ECON_WIN_AT ? " · refresh failed " + esc(ecTimeET(Math.floor(failAt / 1000))) + " ET, showing that read" : "");
+}
+/* M70 — THE NOW LINE. Alan, 24 Sep: "You know how the left to right slider tape of earnings, you put
+   a line of the current date? Well, we need a horizontal one on the other side of the current hour …
+   markings of current on all of those kinds of things that apply."
+
+   One placement rule, used by every surface that lists releases in time order: the marker goes
+   BETWEEN the last release that has already happened and the next one that has not, and it is placed
+   from the rows' own times (data-ets), never from where the list happens to be scrolled. If today is
+   not on screen — another day, another month — nothing is drawn, because there is no "now" there.
+   It rides the room's EXISTING refresh tick (one interval, one visibility listener — the closure the
+   economic-review test pins), so it walks down the day by itself without a second timer; the tape
+   markers' labels are re-lettered in place so a running marquee is never restarted. A hidden tab
+   paints nothing and is repainted when the reader comes back. */
+function ecNowLabel(nowSec) { return "now " + ecTimeET(nowSec) + " ET"; }
+function ecTapeNowHTML(title) {
+  return '<span class="sc-tape__item ec-now ec-now--tape"' + (title ? ' title="' + esc(title) + '"' : "") +
+    '><span class="ec-nowlbl">now</span></span><span class="sc-tape__dot">·</span>';
+}
+function ecNowPlace(host, sel, nowSec, today, cls) {
+  if (!host || typeof host.querySelectorAll !== "function" || typeof document === "undefined") return 0;
+  const mine = [].slice.call(host.querySelectorAll(sel))
+    .filter((n) => n.dataset && n.dataset.ets && ecDateKey(+n.dataset.ets) === today);
+  if (!mine.length) return 0;                       // today is not on this screen: claim nothing
+  const mark = document.createElement("div");
+  mark.className = "ec-now" + (cls || "");
+  /* a month cell is one seventh of the panel, so the marker there wears the short label and carries the
+     full one in its tooltip; the room's own note already says every time in it is ET */
+  const cell = /cell/.test(cls || "");
+  mark.innerHTML = '<span class="ec-nowlbl"' + (cell ? ' title="' + esc(ecNowLabel(nowSec)) + '"' : "") + ">" +
+    esc(cell ? "now " + ecTimeET(nowSec) : ecNowLabel(nowSec)) + "</span>";
+  const next = mine.filter((n) => +n.dataset.ets > nowSec)[0];
+  if (next && next.parentNode) next.parentNode.insertBefore(mark, next);
+  else { const last = mine[mine.length - 1]; if (!last.parentNode) return 0; last.parentNode.insertBefore(mark, last.nextSibling); }
+  return 1;
+}
+function ecNowPaint(nowSec) {
+  if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return 0;
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const today = ecDateKey(now);
+  let n = 0;
+  const box = el("econTbl");
+  if (box && typeof box.querySelectorAll === "function") {
+    for (const old of [].slice.call(box.querySelectorAll(".ec-now"))) if (old.parentNode) old.parentNode.removeChild(old);
+    n += ecNowPlace(box.querySelector(".ec-tbl"), ".ec-row:not(.sub)", now, today, "");
+    n += ecNowPlace(box.querySelector('.ec-cell[data-day="' + today + '"]'), ".ec-ev", now, today, " ec-now--cell");
+  }
+  /* the tapes carry their marker inside the marquee, so it is re-lettered, never rebuilt */
+  for (const lbl of [].slice.call(document.querySelectorAll(".ec-now--tape .ec-nowlbl"))) {
+    lbl.textContent = ecNowLabel(now); n++;
+  }
+  return n;
 }
 function renderEconTable() {
   const box = el("econTbl"); if (!box) return;
@@ -14287,6 +14458,7 @@ function renderEconTable() {
        belongs on THIS path too, not only at the end of the function. */
     try { ecScintPass(); } catch (_) {}
     try { ecRoomPaint(); } catch (_) {}          /* M55 — the queue, the flash and the focus, on MONTH too */
+    try { ecNowPaint(); } catch (_) {}   /* M70 — today's cell gets the now line too */
     return;
   }
   if (!rows.length) {
@@ -14323,6 +14495,7 @@ function renderEconTable() {
   /* M42 — the room Alan walked into: the rows that ARE scintillas glow here, once each. */
   try { ecScintPass(); } catch (_) {}
   try { ecRoomPaint(); } catch (_) {}            /* M55 — and what the top tape is pointing at, flashing */
+  try { ecNowPaint(); } catch (_) {}    /* M70 — the now line, between the release before and the one after */
 }
 /* M55 — one call for the three things the room owes the tape: the same queue, the same flash, and
    the named release the reader was sent to. */
@@ -14755,8 +14928,15 @@ function econBandHTML(nowSec) {
       (MACRO_NEXT_FAIL_AT ? "economic calendar could not be read" : "reading this week's economic calendar…") + "</span>" + sep;
   } else {
     const week = ecBandWeek(now), today = ecDateKey(now), items = ecBandItems(now);
+    /* M70 — the week's band is in time order too, so it carries the same marker, once, where the
+       releases that have happened end and the ones still to come begin. */
+    let crossed = false;
     seg = '<span class="sc-tape__item ecb-wk">WEEK OF ' + esc(ecDayLbl(week[0]).toUpperCase().replace(/^[A-Z]+, /, "")) + "</span>" + sep +
-      (items.length ? items.map((it) => ecBandItemHTML(it, ecBandState(it, now), today)).join("")
+      (items.length ? items.map((it) => {
+          let pre = "";
+          if (!crossed && it.ts > now) { crossed = true; pre = ecTapeNowHTML("everything before this has already printed"); }
+          return pre + ecBandItemHTML(it, ecBandState(it, now), today);
+        }).join("")
                     : '<span class="sc-tape__item ecb-note">no US releases on the watch list this week</span>' + sep);
   }
   return '<div class="sc-tape sc-tape--econ" id="econBand"><b class="sc-tape__lbl">ECON →</b>' +
@@ -14885,6 +15065,7 @@ async function ecLoadWindow() {
 function ecRefreshTick() {
   if (!el("econTbl")) { if (ECON_TIMER != null && typeof clearInterval === "function") clearInterval(ECON_TIMER); ECON_TIMER = null; return; }
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  try { ecNowPaint(); } catch (_) {}     /* M70 — the now line walks down the day on the room's own tick */
   const key = ecWinKey(), hit = ECON_WINS[key], failAt = ECON_FAIL_AT[key];
   if (ECON_INFLIGHT[key] || (failAt && Date.now() - failAt < EC_RETRY_MS)) return;
   if (!hit || Date.now() - hit.at >= EC_WIN_TTL_MS) return ecLoadWindow();
@@ -18194,7 +18375,22 @@ function ernBandHTML(todayIso, nowMs) {
       (ERN_FAIL_AT ? "this week's earnings could not be read" : "reading this week's earnings…") + "</span>" + sep;
   } else {
     const items = ernBandItems(todayIso);
-    seg = (items.length ? items.map((r) => ernItemHTML(r, todayIso, nowMs)).join("")
+    /* M70 — the same marker, on the tape Alan was pointing AT. Earnings are stored by day and by
+       before-open / after-close, never by the clock, so this marks where TODAY begins on the tape —
+       everything to its left is an earlier day. The tooltip says exactly that, so it cannot be read
+       as a claim about the hour. */
+    let ernCrossed = false;
+    seg = (items.length ? items.map((r) => {
+          let pre = "";
+          if (!ernCrossed && String(r.date) >= todayIso) {
+            ernCrossed = true;
+            /* the econ block owns the marker; the earnings band is extracted and tested on its own, so it
+               asks for it the same way it asks for ernWildResult — present in the page, absent in the harness */
+            pre = typeof ecTapeNowHTML === "function"
+              ? ecTapeNowHTML("today starts here — earnings are stored by day and by before-open / after-close, not by the clock") : "";
+          }
+          return pre + ernItemHTML(r, todayIso, nowMs);
+        }).join("")
                         : '<span class="sc-tape__item ern-note">no earnings ahead for the names you track</span>' + sep);
   }
   return '<div class="sc-tape sc-tape--ern" id="ernBand"><b class="sc-tape__lbl">EARNINGS →</b>' +

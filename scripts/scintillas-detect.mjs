@@ -68,6 +68,61 @@ export function surprisePct(actual, estimate) {
 }
 const base = (event) => String(event || "").replace(/\s*\((Q[1-4]|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^)]*\)\s*$/i, "").trim();
 export const econEventKey = (country, event) => String(country || "") + "|" + base(event).toLowerCase();
+/* M70 — THE SAME-SCALE TRIO (the identical rule the Hub applies in ecNormalize, index.html).
+   The supplier sometimes files one of a release's three numbers on a different scale from the other
+   two. MEASURED 24 Sep 2026: New Home Sales (Aug) carried actual 684 and previous 607 (thousands)
+   with estimate 0.62 (millions). Left alone, actual − estimate is +683.38 against a release whose
+   surprises are normally a handful of thousands, so this detector would have published the largest
+   miss in the series' history for an ordinary print.
+
+   The rule, deliberately narrow:
+     · one row at a time, its own actual / estimate / previous — never across rows;
+     · a value is corrected ONLY when it sits a factor of 1,000 or 1,000,000 from the scale the rest
+       of the row uses (band: 316×–3,163×). 10× and 100× are NEVER touched — those can be real;
+     · the winning scale must be a MAJORITY — at least two of the three values sharing it. Two
+       values a thousand apart, with nothing to break the tie, are NOT corrected: the row is marked
+       ambiguous, no surprise is computed from it, and it is dropped from the history it would
+       otherwise distort. Guessing which of the two is right would be inventing a number;
+     · zero and missing take no part, and nothing is invented;
+     · the supplier's own values are returned untouched in `raw`, and `unit_fix` says what moved.
+   History rows are put through the same rule before they become the yardstick, so a past row with
+   the same slip cannot quietly widen the spread this z-score is measured against. */
+const ECON_SCALE_STEPS = [1e3, 1e6];
+const ECON_SCALE_BAND = Math.sqrt(10);
+const ECON_TRIO = ["previous", "actual", "estimate"];
+export function econScaleGap(v, ref) {
+  if (!Number.isFinite(v) || !Number.isFinite(ref) || v === 0 || ref === 0) return 1;
+  const q = Math.abs(v) / Math.abs(ref);
+  for (const f of ECON_SCALE_STEPS) {
+    if (q > f / ECON_SCALE_BAND && q < f * ECON_SCALE_BAND) return f;
+    if (q > 1 / (f * ECON_SCALE_BAND) && q < ECON_SCALE_BAND / f) return 1 / f;
+  }
+  return 1;
+}
+export function econUnify(row) {
+  const v = {}, out = { actual: num(row && row.actual), estimate: num(row && row.estimate),
+                        previous: num(row && row.previous), unit_fix: null };
+  for (const k of ECON_TRIO) if (out[k] != null && out[k] !== 0) v[k] = out[k];
+  const keys = Object.keys(v);
+  if (keys.length < 2) return out;
+  let best = null;
+  for (const ref of ECON_TRIO) {
+    if (v[ref] == null) continue;
+    const group = keys.filter((k) => econScaleGap(v[k], v[ref]) === 1);
+    if (!best || group.length > best.group.length) best = { ref, group };
+  }
+  if (!best || best.group.length === keys.length) return out;
+  if (best.group.length < 2) { out.unit_ambiguous = true; return out; }   // no majority: correct nothing, say so
+  const fixes = [];
+  for (const k of keys) {
+    const f = econScaleGap(v[k], v[best.ref]);
+    if (f === 1) continue;
+    fixes.push({ field: k, from: v[k], to: v[k] / f, factor: f });
+    out[k] = v[k] / f;
+  }
+  if (fixes.length) out.unit_fix = { ref: best.ref, fixes, raw: { actual: num(row.actual), estimate: num(row.estimate), previous: num(row.previous) } };
+  return out;
+}
 /* THE ROOM'S OWN READING, so a stored scintilla and the Economic room can never disagree.
    index.html's ecRowHTML computes exactly this: cls = (diff > 0) === hot ? "up" : "dn", where `hot`
    is EC_INVERT (inflation, unemployment). The room paints that "up" class RED and "dn" GREEN — its
@@ -248,13 +303,15 @@ export function detectEconSurprises({ rows, historyByEvent, ts, minHistory = SUR
                                       minAbsZ = MIN_ABS_Z, source = "econ_calendar" }) {
   const events = [], skipped = [];
   for (const r of rows || []) {
-    const a = num(r && r.actual), e = num(r && r.estimate);
+    const u = econUnify(r);                      /* M70 — one scale per row, before any arithmetic */
+    const a = u.actual, e = u.estimate;
     const subject = base(r && r.event);
     if (a == null || e == null) { skipped.push({ subject, reason: "NOT_PRINTED" }); continue; }
+    if (u.unit_ambiguous) { skipped.push({ subject, reason: "UNIT_AMBIGUOUS" }); continue; }
     const diff = a - e;
     const key = econEventKey(r.country, r.event);
     const past = ((historyByEvent && historyByEvent[key]) || [])
-      .map((h) => { const ha = num(h.actual), he = num(h.estimate); return ha == null || he == null ? null : ha - he; })
+      .map((h) => { const hu = econUnify(h); return hu.unit_ambiguous || hu.actual == null || hu.estimate == null ? null : hu.actual - hu.estimate; })
       .filter((x) => x != null);
     if (past.length < minHistory) { skipped.push({ subject, reason: "SHORT_HISTORY", n: past.length }); continue; }
     const z = zScore(diff, past);
@@ -266,7 +323,9 @@ export function detectEconSurprises({ rows, historyByEvent, ts, minHistory = SUR
                 actual: a, estimate: e, surprise: r3(diff),
                 reading: econReading(r.event, diff), room_class: econRoomClass(r.event, diff),
                 n_prints: past.length, usual_surprise: r3(mean(past)), spread: r3(stdev(past)), z: r3(z),
-                rule: "actual - estimate vs this release's own past surprises, |z| >= " + minAbsZ },
+                unit_fix: u.unit_fix,                 /* M70 — null unless a value was read at another scale */
+                rule: "actual - estimate vs this release's own past surprises, |z| >= " + minAbsZ +
+                      (u.unit_fix ? " (one value was filed on another scale and was read at the row's shared scale)" : "") },
       dedupe_key: "econ_surprise|" + r.country + "|" + base(r.event).toLowerCase() + "|" + r.event_ts,
     }));
   }
@@ -289,7 +348,7 @@ export function detectEconImminent({ rows, nowSec, ts, windowMin = IMMINENT_MIN,
       /* no number has printed, so there is NO z to state — magnitude stays null on purpose. */
       ts, kind: "econ_imminent", subject, subject_kind: "event", direction: 0, magnitude: null, source,
       detail: { country: r.country, event: r.event, event_ts: r.event_ts, impact: r.impact,
-                minutes_to: r3(mins), estimate: num(r.estimate), previous: num(r.previous),
+                minutes_to: r3(mins), estimate: econUnify(r).estimate, previous: econUnify(r).previous,
                 rule: "high or medium impact release inside " + windowMin + " minutes, nothing printed yet" },
       dedupe_key: "econ_imminent|" + r.country + "|" + base(r.event).toLowerCase() + "|" + r.event_ts,
     }));

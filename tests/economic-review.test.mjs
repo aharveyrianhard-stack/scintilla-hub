@@ -103,7 +103,9 @@ function evilRows() {
 /* M42 — data-esub (the release, as a stored scintilla names its subject) and data-ecty (its country)
    are on the row so a stored scintilla can find it. Both go through esc(), and this audit still
    proves it: the tag pattern only accepts attribute values with no raw quote, < or >. */
-const ALLOWED_ATTR = new Set(["class", "style", "title", "id", "data-act", "data-k", "data-day", "data-c", "data-s", "data-d", "data-esub", "data-ecty", "aria-label"]);
+/* M70 — data-ets is the row's own release time, written as esc(String(+r.event_ts)): a number, so the
+   audit below also pins that it carries nothing but digits (a hostile event_ts cannot ride it). */
+const ALLOWED_ATTR = new Set(["class", "style", "title", "id", "data-act", "data-k", "data-day", "data-c", "data-s", "data-d", "data-esub", "data-ecty", "data-ets", "aria-label"]);
 /* 23 Sep — the colour law put the CATEGORY hue on the row's spine and its dot, so two more shapes are allowed:
    both come from the fixed EC_CAT_COLOR table, keyed by ecCat(), and neither can be reached from row data. */
 const ALLOWED_STYLE = /^(color:var\(--(sv[1345]|dim)\)(;text-shadow:0 0 7px rgba\(255,138,0,\.85\)|;opacity:\.7)?|(background|color|border-left-color):(#[0-9A-F]{6}|var\(--mute\)))$/;
@@ -116,6 +118,7 @@ function auditHTML(html, where, strictStyle = false) {
     for (const a of m[2].matchAll(/([a-z-]+)="([^"]*)"/gi)) {
       assert.ok(ALLOWED_ATTR.has(a[1]), where + ": unexpected attribute " + a[1]);
       if (a[1] === "class") assert.match(a[2], /^[a-z0-9 -]*$/i, where + ": class carries data: " + a[2]);
+      if (a[1] === "data-ets") assert.match(a[2], /^-?[0-9]+(\.[0-9]+)?$|^NaN$/, where + ": data-ets carries something other than a number: " + a[2]);
       if (a[1] === "style") { assert.doesNotMatch(a[2], /["<>]/, where); if (strictStyle) assert.match(a[2], ALLOWED_STYLE, where + ": style not from the fixed set: " + a[2]); }
     }
   }
