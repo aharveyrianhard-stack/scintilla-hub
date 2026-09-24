@@ -631,9 +631,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__empty{ font-size:11px; color:var(--dim); padding:2px 0; }
 /* A row whose glow has faded still SAYS it was a scintilla — a shadow on the text it happened to,
    never a border, a size or a background that would shift anything. */
-.ec-row.is-scint .nm, .ern-it.is-scint .ern-tk, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
+.ec-row.is-scint .nm, .ec-ev.is-scint .nm, .ern-it.is-scint .ern-tk, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
 .ec-row.is-scint.res-up .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
 .ec-row.is-scint.res-dn .nm{ text-shadow:0 0 7px rgba(0,255,163,.4); }
+.ec-ev.is-scint.miss .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
+.ec-ev.is-scint.beat .nm{ text-shadow:0 0 7px rgba(0,255,163,.4); }
 .sc-identfull .sc-cident{ width:100%; height:40px; padding:0 18px; gap:16px;
   border-color:rgba(0,212,255,.5); box-shadow:inset 0 0 22px rgba(0,212,255,.05); }
 .sc-identfull .sc-ctkbig{ font-size:19px; letter-spacing:.08em; min-width:64px; }
@@ -12506,7 +12508,10 @@ function ecMonthHTML(rows) {
         cls += " " + (Math.abs(diff) < 1e-9 ? "inline" : ((diff > 0) === hot ? "miss" : "beat"));
       }
       const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
-      return '<div class="' + cls + '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
+      /* M42 — a chip carries the same two attributes a table row does: Alan's saved Economic view is
+         MONTH, so without this the room he actually opens would have had nothing scintillating. */
+      return '<div class="' + cls + '" data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) +
+        '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
         " · " + esc(r.impact || "") + ' impact">' +
         '<span class="sp" style="background:' + hue + '"></span>' +
         '<span class="nm">' + esc(S.econZoom ? ecBase(r.event) : ecShort(ecBase(r.event))) + "</span>" +
@@ -12584,6 +12589,9 @@ function renderEconTable() {
       '<b style="color:var(--sv5)">■</b> worse than expected · <b style="color:var(--sv3)">■</b> in line · ' +
       '<b style="color:var(--sv1)">■</b> better than expected &nbsp;·&nbsp; ' +
       'a release and its components read as one line · click any day to open it · ' + ecReadNote() + '</div>';
+    /* M42 — the MONTH grid is Alan's saved Economic view and it returns from here, so the glow pass
+       belongs on THIS path too, not only at the end of the function. */
+    try { ecScintPass(); } catch (_) {}
     return;
   }
   if (!rows.length) {
@@ -17858,7 +17866,8 @@ function scintStripRender() {
 function ecScintPass() {
   if (typeof document === "undefined" || !document.querySelectorAll) return 0;
   const by = scintBy(); let n = 0;
-  for (const row of document.querySelectorAll(".ec-row[data-esub]")) {
+  /* both shapes of the room: the day/week table's rows AND the month grid's chips */
+  for (const row of document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub]")) {
     const sub = row.dataset.esub;
     const sur = by.get(scintKey("econ_surprise", sub)), imm = by.get(scintKey("econ_imminent", sub));
     const ev = sur || imm;                                  /* a printed surprise supersedes "about to print" */
