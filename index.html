@@ -14094,7 +14094,10 @@ function renderEconTable() {
 /* M55 — one call for the three things the room owes the tape: the same queue, the same flash, and
    the named release the reader was sent to. */
 function ecRoomPaint(nowSec) {
-  try { ecNudgePaintBox(el("ecRoomQueue"), nowSec); } catch (_) {}
+  try {
+    const room = el("ecRoomQueue");
+    if (room) ecNudgePaintBox(room, nowSec, ecRoomModel(Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000)));
+  } catch (_) {}
   try { ecRoomScintPass(); } catch (_) {}
   try { ecFocusPaint(); } catch (_) {}
 }
@@ -14364,15 +14367,35 @@ function macroNextHTML(nowSec) {
    mounted; the work itself moved into ecNudgePaintBox(). */
 function ecNudgePaint(nowSec) {
   ecNudgePaintBox(el("macroNext"), nowSec);
-  ecNudgePaintBox(el("ecRoomQueue"), nowSec);
+  const room = el("ecRoomQueue");
+  if (room) ecNudgePaintBox(room, nowSec, ecRoomModel(Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000)));
 }
-function ecNudgePaintBox(box, nowSec) {
+/* M55 — THE ROOM HAS THE WIDTH THE HEADER DOES NOT, so it says WHICH releases the header collapsed.
+   Alan: "colors flashing like crazy, six … in four hours ten minutes. And then I go there … I don't
+   get it." The header is right to collapse a loaded day into one chip of dots — it has one line. The
+   room then has to open that chip back up, or he has walked into the room and still cannot tell what
+   the six were. Each released item keeps its own category dot (the calendar's own hue, the same one
+   the tape's dots carry), its own state, and its own place to go. */
+const EC_ROOM_QUEUE_MAX = 8;
+function ecRoomModel(nowSec) {
+  const out = [];
+  for (const m of ecNudgeModel(nowSec)) {
+    if ((m.kind === "swarm" || m.kind === "ahead") && Array.isArray(m.group) && m.group.length) {
+      for (const g of m.group.slice(0, EC_ROOM_QUEUE_MAX)) out.push({ kind: "item", key: g.key, it: g.it, st: g.st });
+      continue;
+    }
+    out.push(m);
+  }
+  return out.slice(0, EC_ROOM_QUEUE_MAX + 4);
+}
+function ecNudgePaintBox(box, nowSec, modelIn) {
   if (!ECON_TAPE_ON || !box) return;
   const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
-  const model = ecNudgeModel(now);
+  const model = modelIn || ecNudgeModel(now);
   const live = typeof box.querySelectorAll === "function" && typeof document !== "undefined" && typeof document.createElement === "function";
   if (!live || !MACRO_NEXT || !model.length || !box.querySelector(".mn-lbl")) {
-    const html = macroNextHTML(now);
+    const html = model.length ? '<span class="mn-lbl">next</span>' + model.map((m) => ecNudgeNodeHTML(m, now)).join("")
+                              : macroNextHTML(now);
     if (box.innerHTML !== html) box.innerHTML = html;
     return;
   }
@@ -20186,7 +20209,7 @@ function ecRoomScintPass(nowMs, modelIn) {
   if (document.visibilityState === "hidden") return 0;
   const now = nowMs == null ? Date.now() : nowMs, nowSec = Math.floor(now / 1000);
   let model = modelIn;
-  if (!model) { try { model = ecNudgeModel(nowSec); } catch (_) { return 0; } }
+  if (!model) { try { model = ecRoomModel(nowSec); } catch (_) { return 0; } }
   let n = mnScintPass(now, (typeof el === "function" ? el("ecRoomQueue") : null), model, "room");
   const rows = Array.prototype.slice.call(document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub]"));
   if (!rows.length) return n;
@@ -22669,6 +22692,9 @@ function filesWire(){
       (function(tk){
         var base=(typeof SC_CHART_API!=="undefined"&&SC_CHART_API)?SC_CHART_API:"";
         var done=function(){ PXN--; pxRun(); if(ASOF) schedCols(); };
+        /* a fetch that throws on the spot (a blocked scheme, a CSP refusal) must still give the
+           slot back, or the queue stops feeding after four of them */
+        try{
         fetch(base+"/candles?symbol="+encodeURIComponent(tk)+"&tf=1d&limit="+PX_LIMIT)
           .then(function(r){ return r.ok?r.json():null; })
           .then(function(j){
@@ -22684,6 +22710,7 @@ function filesWire(){
             PXC[tk]=m; done();
           })
           .catch(function(){ PX_NONE[tk]=1; done(); });
+        }catch(_){ PX_NONE[tk]=1; done(); }
       })(t);
     }
   }
