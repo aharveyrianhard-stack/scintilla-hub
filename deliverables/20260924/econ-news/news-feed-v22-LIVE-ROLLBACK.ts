@@ -2,25 +2,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const SB_URL=Deno.env.get('SUPABASE_URL')||''
 const SB_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 const J=(o)=>new Response(JSON.stringify(o),{headers:{'Content-Type':'application/json'}})
-// M70 (24 Sep 2026) — INVESTING.COM. Alan: "let's ingest the investing.com news one". They publish RSS and no
-// API (https://www.investing.com/webmaster-tools/rss). These five are their NEWS desks; their Analysis &
-// Opinion feeds are columns, not news, so they are deliberately left out. Each name below is the channel title
-// the feed itself returned when it was read on 24 Sep 2026 — not a guess from the listing page:
-//   All News · Economy · Stock Market · Economic Indicators · Commodities & Futures. 10 items each, 200 OK.
-// WHAT IS STORED: the headline, its time and its link. NOTHING ELSE — no article text, no description, no
-// fetch of the page behind the link. The row's ticker is the market bucket below, because these stories are
-// about the market and not about one name.
-const INVESTING_FEEDS=[['https://www.investing.com/rss/news.rss','All News'],['https://www.investing.com/rss/news_14.rss','Economy'],['https://www.investing.com/rss/news_25.rss','Stock Market'],['https://www.investing.com/rss/news_95.rss','Economic Indicators'],['https://www.investing.com/rss/news_11.rss','Commodities & Futures']]
-// THE HUB ALREADY HAS THIS BUCKET. index.html: "_MARKET LAW - market-wide rows surface on the ALL tab
-// ONLY" (l.8825) and "ALL -> global pull (the ONLY tab that shows ticker='_MARKET')" (l.8870). The live
-// table already holds _MARKET rows from the 'general' feed (wsj.com, marketwatch.com). So this lane
-// joins that convention instead of inventing a second one, and the headlines appear on the NEWS room's
-// ALL tab the day it is deployed - no page change needed.
-const MARKET_BUCKET='_MARKET'
-// the same story rides several of their feeds, so the batch is de-duplicated on its own link and on a
-// normalised headline before anything is offered to the table
-const normTitle=(t)=>(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
-const normUrl=(u)=>{const s=(u||'').split('#')[0].split('?')[0];return s.replace(/\/$/,'')}
 function tag(b,name){const a=b.indexOf('<'+name);if(a<0)return '';const s=b.indexOf('>',a)+1;const e=b.indexOf('</'+name+'>',s);if(e<0)return '';return b.slice(s,e)}
 // DECODE ENTITIES BEFORE STRIPPING TAGS, NOT AFTER.
 // Google News puts its markup in <description> ENTITY-ENCODED (&lt;a href=...&gt;). Stripping tags
@@ -62,7 +43,7 @@ async function upsertNews(sb,rows,W:any){if(!rows.length)return {cand:0,ins:0};c
 async function run(req){
   const u=new URL(req.url); const one=u.searchParams.get('ticker')
   const sb=createClient(SB_URL,SB_KEY); const now=Math.floor(Date.now()/1000)
-  const {data:cfg,error:ce}=await sb.from('app_config').select('key,value').in('key',['news_busy','news_offset','gdelt_offset','FMP_KEY','fmp_enabled','investing_enabled'])
+  const {data:cfg,error:ce}=await sb.from('app_config').select('key,value').in('key',['news_busy','news_offset','gdelt_offset','FMP_KEY','fmp_enabled'])
   if(ce) throw new Error('app_config read: '+ce.message)
   const C={}; for(const r of (cfg||[])) C[r.key]=r.value
   // One parser for every stored number (lock stamp, offsets): tolerates JSON-quoted values and falls back to 0 on
@@ -103,11 +84,8 @@ async function run(req){
       await sb.from('app_config').upsert({key:'gdelt_offset',value:''+((goff+GDELT_PER_BATCH)%L)},{onConflict:'key'})
     }
   }
-  const bySource={google:0,gdelt:0,fmp:0,investing:0}   // CANDIDATES offered to the table (unchanged meaning, kept for receipt readers)
-  const stored:any={google:0,gdelt:0,fmp:0,investing:0}  // rows the table actually INSERTED this run; null = unknown for that source
-  const INVESTING_ON=((C['investing_enabled']||'1').trim()!=='0')   // a free source: on unless it is switched off
-  const INVESTING_TIMEOUT_MS=8000
-  const investingErrors:string[]=[]
+  const bySource={google:0,gdelt:0,fmp:0}   // CANDIDATES offered to the table (unchanged meaning, kept for receipt readers)
+  const stored:any={google:0,gdelt:0,fmp:0}  // rows the table actually INSERTED this run; null = unknown for that source
   const addStored=(k:string,n:any)=>{stored[k]=(n==null||stored[k]==null)?null:stored[k]+n}
   const W={rep:true}     // representation (inserted-row) counting; switched off for the rest of the run after one refusal
   // Preserve the article but never invent its publication time. Undated/future dates remain null and are counted.
@@ -140,39 +118,6 @@ async function run(req){
   // + plain text; short tickers and 4-letter names like "Visa") and rate-limits with HTTP 429. The old lane fanned out six
   // tickers at once and swallowed both errors, so it has written nothing since 2026-09-13. When re-enabled, this lane runs
   // serially alongside the Google lane and reports its errors; it still needs a relevance filter before storing hits.
-  // M70 — the Investing.com lane. Five feeds in parallel, one timeout each, so it adds at most
-  // INVESTING_TIMEOUT_MS to this invocation's network time (it runs beside Google and GDELT, not after them).
-  // Batch mode only: an on-view ?ticker= lookup asks about one name, and these stories are not about one name.
-  async function fetchInvesting(){
-    const out:any[]=[],seenUrl=new Set(),seenTitle=new Set()
-    const pages=await Promise.all(INVESTING_FEEDS.map(async ([url,name])=>{
-      try{const r=await fetch(url,{signal:AbortSignal.timeout(INVESTING_TIMEOUT_MS),headers:{'User-Agent':'Mozilla/5.0 (compatible; ScintillaHub/1.0)'}})
-        if(!r.ok){investingErrors.push(name+':HTTP_'+r.status);return []}
-        return rssItems(await r.text())
-      }catch(e){investingErrors.push(name+':'+String((e as any)&&(e as any).message||e).slice(0,40));return []}
-    }))
-    for(const items of pages)for(const x of items){
-      const u=normUrl(x.link),t=normTitle(x.title)
-      if(!u||!t||seenUrl.has(u)||seenTitle.has(t))continue          // the same story on two of their feeds
-      seenUrl.add(u);seenTitle.add(t)
-      const ts=gts(x.pub)||Math.floor(Date.parse(x.pub||'')/1000)||now
-      if(ts>now+3600)continue                                        // a stamp in the future is a feed fault, not news
-      out.push({ticker:MARKET_BUCKET,url:x.link,title:x.title,site:'Investing.com',snippet:'',published_ts:ts,updated_ts:now,feed:'investing'})
-    }
-    // and against what the table already holds. MEASURED 24 Sep: news is indexed on (ticker,url), so a
-    // lookup scoped to this bucket answers in ~0.14 s, while a url-only lookup across every ticker hits
-    // the 3 s statement timeout (57014) — so the bucket-scoped read is what runs. The (ticker,url) unique
-    // index already makes a repeat insert a no-op; the only case this read adds is a link that arrived in
-    // an earlier batch. A story that also exists under a real ticker from Google or FMP is a DIFFERENT row
-    // by design. To dedupe across every ticker as well, apply the index in
-    // migrations/20260924_news_url_index.sql and set INVESTING_GLOBAL_DEDUPE to true.
-    const INVESTING_GLOBAL_DEDUPE=false
-    if(out.length){try{const q=sb.from('news').select('url').in('url',out.map(r=>r.url))
-      const {data:have}=await (INVESTING_GLOBAL_DEDUPE?q:q.eq('ticker',MARKET_BUCKET))
-      const held=new Set((have||[]).map((r:any)=>r.url));return out.filter(r=>!held.has(r.url))
-    }catch(e){investingErrors.push('dedupe:'+String((e as any)&&(e as any).message||e).slice(0,40))}}
-    return out
-  }
   const gdeltErrors:string[]=[]
   async function fetchGdeltSerial(list){
     const out=[]
@@ -193,11 +138,6 @@ async function run(req){
   // the failure is reported in the receipt (store_errors) instead of surfacing as a bare error that leaves the lock held.
   const storeErrors:string[]=[]
   const gdP=(one||!gdeltList.length)?Promise.resolve([]):fetchGdeltSerial(gdeltList)
-  // EVERY FIFTH MINUTE, NOT EVERY MINUTE (coordinator, 24 Sep). The batch runs once a minute; five feeds each
-  // time would be 7,200 requests a day to one publisher for a desk whose newest story was 23 min old when
-  // read (18:36 UTC). On the 5-minute marks only: 1,440 a day. A batch skipped on a mark just waits for the next.
-  const INVESTING_EVERY_MIN=5
-  const invP=(one||!INVESTING_ON||Math.floor(now/60)%INVESTING_EVERY_MIN!==0)?Promise.resolve([]):fetchInvesting()
   for(let i=0;i<tickers.length;i+=6){
     const chunk=tickers.slice(i,i+6)
     const arrs=await Promise.all(chunk.map(fetchT)); const got=[].concat.apply([],arrs)
@@ -205,8 +145,6 @@ async function run(req){
   }
   const gd=await gdP
   if(gd.length){try{const w=await upsertNews(sb,gd,W);bySource.gdelt+=gd.length;addStored('gdelt',w.ins)}catch(e){storeErrors.push('gdelt: '+String((e as any)&&(e as any).message||e).slice(0,80))}}
-  const inv=await invP
-  if(inv.length){try{const w=await upsertNews(sb,inv,W);bySource.investing+=inv.length;addStored('investing',w.ins)}catch(e){storeErrors.push('investing: '+String((e as any)&&(e as any).message||e).slice(0,80))}}
   // COMPARE-AND-CLEAR: release the lock only if it still carries THIS batch's stamp. An unconditional clear let a
   // batch that outlived the 120 s window release the lock of the batch that had since taken it over, opening the
   // door to a third. The read-then-write leaves a millisecond window (not atomic; an atomic release needs a
@@ -217,6 +155,6 @@ async function run(req){
     if(cur===now)await sb.from('app_config').upsert({key:'news_busy',value:'0'},{onConflict:'key'})
   }catch(_){/* an unreleased lock self-expires after 120 s */}}
   if(fmpCalls){try{await sb.from('fmp_bandwidth_log').insert({fn:'news-feed',calls:fmpCalls,symbols:tickers.length,bytes:fmpBytes,status:fmpStatus,at:new Date().toISOString()})}catch(_){/* logging must never break the run */}}
-  return J({mode:one?'on-view':'batch',tickers:tickers.length,gdelt:GDELT_PER_BATCH>0?'enabled':'disabled',gdelt_window:gdeltList.length,universe:one?null:L,bySource,stored,fmp_tz:'America/New_York',fmp_future_rejected:fmpFutureRejected,fmp_invalid_dates:fmpInvalidDates,fmp_on:FMP_ON,gdelt_errors:gdeltErrors.slice(0,30),investing:INVESTING_ON?(Math.floor(now/60)%INVESTING_EVERY_MIN===0?'ran':'waiting for the 5-minute mark'):'disabled',investing_feeds:INVESTING_FEEDS.length,investing_errors:investingErrors.slice(0,10),store_errors:storeErrors.slice(0,10)})
+  return J({mode:one?'on-view':'batch',tickers:tickers.length,gdelt:GDELT_PER_BATCH>0?'enabled':'disabled',gdelt_window:gdeltList.length,universe:one?null:L,bySource,stored,fmp_tz:'America/New_York',fmp_future_rejected:fmpFutureRejected,fmp_invalid_dates:fmpInvalidDates,fmp_on:FMP_ON,gdelt_errors:gdeltErrors.slice(0,30),store_errors:storeErrors.slice(0,10)})
 }
 Deno.serve(async (req)=>{ try{ return await run(req) }catch(e){ return J({error:String(e&&e.message||e)}) } })
