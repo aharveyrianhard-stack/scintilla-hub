@@ -2696,6 +2696,51 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   padding:1px 6px; font-family:var(--mono); font-size:8px; letter-spacing:.12em; }
 .se-jump:hover{ color:var(--ink); border-color:var(--crk); }
 
+/* ---- M40 — THE ROOM'S TABS, AND THE GRID OF SQUARES -------------------------
+   Alan: "the month week day view below the timeline are not readjusting to their
+   spaces… there's a lot of black on the weekly, it makes me scroll… maybe a grid
+   would be better — timeline, day view square, week view square, month view square.
+   It's a full earnings dashboard."
+   So the three views share the width as squares, each scrolling INSIDE itself, and
+   MONTH / WEEK / DAY enlarges one instead of hiding the other two. A square that is
+   not enlarged carries the SHAPE of its span (the load bars, the counts, the chips)
+   and hands the names to the enlarged one — which is how a month of 38-name days
+   fits a 330px box without a page of black under it. */
+.se-tabs{ display:flex; gap:3px; padding:7px 10px 0; flex-wrap:wrap; }
+.se-tab{ font-family:var(--mono); font-size:8px; letter-spacing:.2em; color:var(--dim); cursor:pointer;
+  padding:5px 10px; border:.6px solid var(--line2); border-bottom:0; border-radius:3px 3px 0 0;
+  background:rgba(255,255,255,.015); }
+.se-tab:hover{ color:var(--ink2); }
+.se-tab.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
+.se-grid{ display:grid; gap:9px; padding:3px 9px 10px; align-items:stretch;
+  grid-template-columns:repeat(auto-fit, minmax(322px, 1fr)); }
+.se-sq{ display:flex; flex-direction:column; min-width:0; min-height:318px; overflow:hidden;
+  border:.5px solid var(--line2); border-radius:3px; background:rgba(255,255,255,.012); }
+.se-sq.is-max{ grid-column:1 / -1; min-height:430px; border-color:rgba(0,212,255,.22); }
+.se-sqhd{ display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:.5px solid var(--line);
+  font-family:var(--mono); font-size:8px; letter-spacing:.18em; text-transform:uppercase; }
+.se-sqhd .t{ color:var(--ink); }
+.se-sqhd .n{ color:var(--dim); letter-spacing:.1em; }
+.se-sqz{ margin-left:auto; cursor:pointer; color:var(--dim); border:.6px solid var(--line2); border-radius:2px;
+  padding:1px 6px; letter-spacing:.14em; }
+.se-sqz:hover{ color:var(--ink); border-color:var(--crk); }
+.se-sqbody{ flex:1 1 auto; min-height:0; overflow:auto; padding:7px 8px 9px; }
+.se-sqbody::-webkit-scrollbar{ width:6px; }
+.se-sqbody::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:4px; }
+/* a square that is not enlarged: the shape, not the names */
+.se-sq:not(.is-max) .se-cell{ min-height:56px; padding:4px 4px 5px; }
+.se-sq:not(.is-max) .se-ev, .se-sq:not(.is-max) .se-more{ display:none; }
+.se-sq:not(.is-max) .se-day{ grid-template-columns:76px 1fr; gap:8px; padding:7px 6px; }
+.se-sq:not(.is-max) .se-dlbl{ font-size:8px; } .se-sq:not(.is-max) .se-dlbl b{ font-size:9.5px; }
+.se-sq .se-wk{ padding:0; }
+.se-sq .se-dcols{ flex-wrap:wrap; gap:8px; }
+.se-sq .se-dcol{ flex:1 1 138px; }
+.se-sq .se-dlist{ max-height:none; overflow:visible; grid-template-columns:repeat(auto-fill, minmax(88px, 1fr)); }
+.se-sq .se-dhd{ padding-bottom:6px; }
+.se-sq .se-card{ margin-top:8px; }
+.se-oldsay{ font-family:var(--mono); font-size:8px; letter-spacing:.12em; color:var(--dim);
+  padding:8px 10px 6px; border-bottom:.5px solid var(--line); margin-bottom:8px; }
+
 /* PHONE (390px) — the month keeps all seven columns (a calendar with columns missing
    stops being a calendar) and loses the report time; the week stacks its day label
    above its chips, which is where the room comes from. */
@@ -2711,6 +2756,12 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   .se-dlbl{ display:flex; align-items:baseline; gap:8px; }
   .se-dlbl b{ display:inline; margin:0; } .se-dlbl .cnt{ display:inline; margin:0; }
   .se-bar{ flex-wrap:wrap; gap:6px; } .se-spans{ margin-left:0; width:100%; }
+  /* PHONE — one square under another, each bounded so all three are reachable by
+     thumb and none of them leaves a screen of black under it. */
+  .se-grid{ grid-template-columns:1fr; gap:8px; padding:3px 7px 9px; }
+  .se-sq{ min-height:0; max-height:58vh; } .se-sq.is-max{ min-height:0; max-height:72vh; }
+  .se-tabs{ padding:6px 7px 0; gap:2px; } .se-tab{ font-size:7px; padding:5px 7px; letter-spacing:.12em; }
+  .se-sqhd{ font-size:7px; letter-spacing:.1em; padding:5px 6px; }
   /* the tape on a phone: narrower days and a shorter track, so a whole month of
      season is still under the thumb and the drag has somewhere to go. */
   /* the tape on a phone: narrower bars and a shorter track, so a whole month of
@@ -10966,6 +11017,11 @@ function eventsRoomHTML() {
     '<div class="body2 body2--ev">' +
       '<div class="panel">' +
         '<div class="sc-plabel sc-plabel--row"><span>earnings</span>' + SECFS_BTN + "</div>" +
+        /* M40 — the room is a dashboard with tabs. PAST REPORTED is a tab of its own
+           again (Alan: "we lost the tracking of the past reported… we need it back"),
+           and the section he had before this revamp is still one tap away, kept
+           whole, until he says it can go. */
+        '<div id="ernTabs">' + ernTabsHTML() + "</div>" +
         '<div id="ernSpanBar">' + ercSpanBarHTML() + "</div>" +
         /* THE TAPE IS THE HEADER: it is its own element, outside the scroller, so it
            stays on screen whatever the view below does. */
@@ -10986,6 +11042,20 @@ function eventsRoomHTML() {
 /* FIX 1 (events leg) — SAME strict scope as the board/news: rows filtered to the
    active cohort's members via scopeItems with the cohort passed as an ARGUMENT;
    ALL = whole universe, FAV = favourites only, search = ticker prefix filter. */
+/* M40 — WHICH TAB THE ROOM IS ON. DASH is the dashboard (timeline + the three
+   squares), PAST is the full PAST REPORTED tab, OLD is the section Alan had before
+   this revamp, kept exactly as it was. */
+const ernTab = () => (S.ernTab === "PAST" || S.ernTab === "OLD" ? S.ernTab : "DASH");
+function ernTabsHTML() {
+  const t = ernTab();
+  const one = (k, lbl, ttl) => '<span class="se-tab' + (k === t ? " on" : "") + '" data-act="erntab" data-t="' + k +
+    '" title="' + esc(ttl) + '">' + lbl + "</span>";
+  return '<div class="se-tabs">' +
+    one("DASH", "DASHBOARD", "the timeline, and the day, the week and the month below it") +
+    one("PAST", "PAST REPORTED", "every report with a stored result, newest first, back to 1996") +
+    one("OLD", "THE OLDER LIST", "the earnings section as it was before this revamp — kept, not thrown away") +
+    "</div>";
+}
 function renderEvents(cohort) {
   const list = el("evList");
   if (!list) return;
@@ -10993,46 +11063,93 @@ function renderEvents(cohort) {
      room reads ALL unless the strip was tapped while this room was open. */
   cohort = ercCohort();
   ercResolveAnchor();
-  const sbar = el("ernSpanBar"); if (sbar) sbar.innerHTML = ercSpanBarHTML();
-  ercPaintTape();                                   // the header, whatever the view below is
-  /* MONTH and WEEK are the calendar views; DAY is the chosen day across four
-     columns. Each reads its own range and does not wait for the others. */
-  if (ercSpan() !== "DAY") { ercRenderCal(list, cohort); return; }
-  if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // honest gate — never an unscoped list
+  const tabs = el("ernTabs"); if (tabs) tabs.innerHTML = ernTabsHTML();
+  /* the ◀ ▶ TODAY MONTH/WEEK/DAY bar belongs to the GRID, so it shows on the
+     dashboard only — on the other tabs there is no grid for it to step. */
+  const sbar = el("ernSpanBar");
+  if (sbar) { sbar.innerHTML = ernTab() === "DASH" ? ercSpanBarHTML() : ""; sbar.style.display = ernTab() === "DASH" ? "" : "none"; }
+  ercPaintTape();                                   // the timeline is the header of every tab
+  if (ernTab() === "PAST") { erpRender(list, cohort); return; }
+  if (ernTab() === "OLD") { list.innerHTML = ercOldListHTML(cohort); evFillExtras(ercOldUpcoming(cohort), null); return; }
+  ercRenderGrid(list, cohort);
+}
+/* ---- THE GRID: the day, the week and the month, as three squares -------------
+   Alan: "the month week day view below the timeline are not readjusting to their
+   spaces, there's a lot of black on the weekly, it makes me scroll and maybe a grid
+   would be better — timeline, day view square, week view square, month view square,
+   it's a full earnings dashboard."
+   So the three views are no longer one at a time down a long scroller. They are
+   three squares that share the room's width, each scrolling inside itself, and the
+   MONTH / WEEK / DAY buttons now ENLARGE one square rather than hiding the others.
+   The three read ONE request between them: ercRange covers the month grid, the week
+   and the day at once. */
+function ercRenderGrid(list, cohort) {
+  const key = ercRangeKey();
+  if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // the same honest gate as before: never an unscoped view
     list.innerHTML = '<div class="soon">cohort map loading…</div>';
     return;
   }
-  const dayKey = ercRangeKey();
-  if (!ERC_ROWS || dayKey !== ERC_KEY) {
-    list.innerHTML = (ERC_FAIL_KEY === dayKey)
-      ? '<div class="soon">this day could not be read. It asks again by itself.</div>'
-      : '<div class="soon">reading the day…</div>';
+  if (!ERC_ROWS || key !== ERC_KEY) {
+    list.innerHTML = (ERC_FAIL_KEY === key)
+      ? '<div class="soon">this stretch of the calendar could not be read. It asks again by itself.</div>'
+      : '<div class="soon">reading the earnings calendar…</div>';
     ercRead(false);
     return;
   }
-  const dayHTML = ercDayHTML(scopeItems(ERC_ROWS, cohort, S.tq, S.fav, COHSETS));
-  if (!ercBoardRows().length) ercWaitForSizes();     // sizes + cohort hues come with the board
-  if (!EV_CACHE) { list.innerHTML = dayHTML; return; }
+  const rows = scopeItems(ERC_ROWS, cohort, S.tq, S.fav, COHSETS);
+  if (!ercBoardRows().length) ercWaitForSizes();   // sizes + cohort hues come with the board; redraw once when they land
+  const byDay = {};
+  rows.forEach((r) => { (byDay[r.date] = byDay[r.date] || []).push(r); });
+  const sp = ercSpan();
+  const wk = ernWeek(ercAnchor()), mo = ercAnchor().slice(0, 7);
+  const nDay = (byDay[ercAnchor()] || []).length;
+  const nWeek = wk.reduce((a, d) => a + (byDay[d] || []).length, 0);
+  const nMonth = rows.filter((r) => r.date.slice(0, 7) === mo).length;
+  const sq = (kind, title, n, body) =>
+    '<section class="se-sq' + (sp === kind ? " is-max" : "") + '">' +
+      '<header class="se-sqhd"><span class="t">' + esc(title) + "</span>" +
+        '<span class="n">' + n + (n === 1 ? " report" : " reports") + "</span>" +
+        '<span class="se-sqz" data-act="ernspan" data-s="' + kind + '" title="' +
+          esc(sp === kind ? "this square already has the room" : "give this square the room") + '">' +
+          (sp === kind ? "FULL" : "ENLARGE") + "</span>" +
+      "</header>" +
+      '<div class="se-sqbody">' + body + "</div>" +
+    "</section>";
+  list.innerHTML = (rows.length ? "" : ercEmptyHTML(cohort, (ERC_ROWS || []).length, "stretch")) +
+    '<div class="se-grid">' +
+      sq("DAY", ernWeekday(ercAnchor()) + " " + ernMonthDay(ercAnchor()), nDay, ercDayHTML(rows)) +
+      sq("WEEK", "WEEK OF " + ernMonthDay(wk[0]), nWeek, ercWeekHTML(byDay)) +
+      sq("MONTH", ERC_MONTH_NAME[+mo.slice(5, 7) - 1] + " " + mo.slice(0, 4), nMonth, ercMonthHTML(byDay)) +
+    "</div>" + ercKeyHTML(rows) + ercNoteHTML(rows);
+  /* the right-hand extras column is the same on every tab */
+  const scopedTk = (rows.length && rows.every((x) => x.ticker === rows[0].ticker)) ? rows[0].ticker : null;
+  if (scopedTk && (!EV_PROFILE || EV_PROFILE.ticker !== scopedTk || !EV_EXTRA || EV_EXTRA.t !== scopedTk)) evtLoadProfile(scopedTk);
+  evFillExtras(EV_CACHE ? scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS) : [], scopedTk);
+}
+/* ---- THE OLDER LIST, KEPT WHOLE ---------------------------------------------
+   Alan: "the slider tape of earnings is not a replacement for the earnings section
+   we had before… not ready to trash what I had." This is that section, the same
+   two independently-scrolling columns with the same blocks, moved from a <details>
+   at the bottom of the day view to a tab of its own. Nothing about it changed. */
+function ercOldUpcoming(cohort) {
+  return EV_CACHE ? scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS) : [];
+}
+function ercOldListHTML(cohort) {
+  if (!EV_CACHE) return '<div class="soon">loading events…</div>';
   const upS = scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS);
   const pastSplit = splitPastEarnings(scopeItems(EV_CACHE.past, cohort, S.tq, S.fav, COHSETS), EV_CACHE.up.concat(EV_CACHE.past));
   const pastS = pastSplit.reported.slice(0, 60);                 // REPORTED means a stored result; dates without one are listed apart (see splitPastEarnings)
   const rows = upS.concat(pastS, pastSplit.noResult.map((x) => x.row));
-  /* FIX 3 (R46) — SHARED renderer: identical two-column (UPCOMING | PAST/REPORTED)
-     layout as the company EVENTS tab, wide variant (master has more room). When the
-     feed is scoped to a single ticker via search, show that company's website + IR
-     links up top (profile pulled lazily; header omitted gracefully if absent). */
-  const scopedTk = (rows.length && rows.every((r) => r.ticker === rows[0].ticker)) ? rows[0].ticker : null;   // FIX (R2026-07-22) — was gated to S.tq (search-only); now ANY natural single-ticker narrowing (search, cohort-of-one, favorites-of-one) surfaces the SAME website/IR header + releases section the ticker-specific EVENTS tab uses (coEvHeaderHTML / releasesSectionHTML — one source, both views)
+  if (!rows.length) return '<div class="soon">No earnings events for <b>' + esc(S.tq || cohort) + "</b>.</div>";
+  const scopedTk = rows.every((r) => r.ticker === rows[0].ticker) ? rows[0].ticker : null;
   const headHTML = scopedTk && EV_PROFILE && EV_PROFILE.ticker === scopedTk
     ? coEvHeaderHTML({ t: scopedTk, name: EV_PROFILE.name, _profile: EV_PROFILE }, true) : "";
-  /* AREA B — a single-ticker scope also shows the transcript button + bubble up top */
   const trHTML = scopedTk && EV_EXTRA && EV_EXTRA.t === scopedTk
     ? '<div class="sc-evrow" style="border:0;padding:2px 0"><span class="lbl" style="font-size:9px;color:var(--dim)">◹ earnings call · ' + esc(scopedTk) + "</span>" +
         transcriptBtnHTML({ t: scopedTk, _transcript: EV_EXTRA.transcript }) + "</div>" +
         transcriptBubbleHTML({ t: scopedTk, _transcript: EV_EXTRA.transcript })
     : "";
   if (scopedTk && (!EV_PROFILE || EV_PROFILE.ticker !== scopedTk || !EV_EXTRA || EV_EXTRA.t !== scopedTk)) evtLoadProfile(scopedTk);
-  /* R60 — restore the TWO INDEPENDENT-SCROLL columns (UPCOMING | PAST·REPORTED),
-     each its own bounded scroll via sc-evcols--split, but rendered with the NEW blocks. */
   const toBlock = (r) => earningsRowToBlock(r, CALLSUM_IDX);
   const upBlocks   = upS.map(toBlock).map(earningsBlockHTML).join("")   || '<div class="ev-empty">Nothing upcoming.</div>';
   const pastBlocks = pastNoResultHTML(pastSplit.noResult) + (pastS.map(toBlock).map(earningsBlockHTML).join("") || '<div class="ev-empty">No reported earnings yet.</div>');
@@ -11042,15 +11159,8 @@ function renderEvents(cohort) {
         '<div class="sc-evcol"><div class="sc-evsec">UPCOMING</div>' + upBlocks + "</div>" +
         '<div class="sc-evcol"><div class="sc-evsec">PAST · REPORTED</div>' + pastBlocks + "</div>" +
       "</div>";
-  /* KEPT, NOT LOST: the older UPCOMING | PAST · REPORTED list is still the same
-     list, one click below the day — so the long scroll is a choice now, not the
-     only way to read the room. */
-  list.innerHTML = dayHTML + (rows.length
-    ? '<details class="se-dmore"><summary>EVERYTHING UPCOMING AND EVERYTHING REPORTED · the older list</summary>' +
-        headHTML + trHTML + cols + "</details>"
-    : '<details class="se-dmore"><summary>EVERYTHING UPCOMING AND EVERYTHING REPORTED · the older list</summary>' +
-        '<div class="soon">No earnings events for <b>' + esc(S.tq || cohort) + "</b>.</div></details>");
-  evFillExtras(upS, scopedTk);
+  return '<div class="se-oldsay">the earnings section as it was before the 24 Sep revamp · kept here until you say it can go</div>' +
+    headHTML + trHTML + cols;
 }
 /* the right-hand extras column (RELEASES card + the UPCOMING digest). Factored out
    of renderEvents so the MONTH and WEEK views fill the same rail with the same rows
@@ -11157,10 +11267,14 @@ function ercMonthGrid(iso) {
 const ercMonthShift = (iso, k) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1 + k, 1)).toISOString().slice(0, 10);
 /* the range the VIEW below needs, with all its columns. The tape reads its own,
    much wider range separately and far more cheaply (ticker and date only). */
+/* M40 — the three squares are on screen together, so the range is the UNION of the
+   month grid, the week and the day: one request feeds all three. A month grid is at
+   most 42 days and a week can straddle it, so the widest this can be is ~48 days —
+   nowhere near the 1,000-row ceiling, which is still checked and said out loud. */
 function ercRange() {
-  if (ercSpan() === "MONTH") { const g = ercMonthGrid(ercAnchor()); return { from: g[0], to: g[g.length - 1] }; }
-  if (ercSpan() === "WEEK") { const w = ernWeek(ercAnchor()); return { from: w[0], to: w[6] }; }
-  return { from: ercAnchor(), to: ercAnchor() };
+  const g = ercMonthGrid(ercAnchor()), w = ernWeek(ercAnchor()), d = ercAnchor();
+  const lo = [g[0], w[0], d].sort()[0], hi = [g[g.length - 1], w[6], d].sort()[2];
+  return { from: lo, to: hi };
 }
 const ercRangeKey = () => { const r = ercRange(); return r.from + "|" + r.to; };
 /* ONE READ PER SPAN, and a quiet re-read that does not move the reader. A repaint
@@ -11812,31 +11926,6 @@ function ercEmptyHTML(coh, all, what) {
   return '<div class="se-vempty"><span class="se-none">nothing for <b>' + esc(coh) + "</b> in this " + esc(what) +
     (all ? " — " + all + (all === 1 ? " report" : " reports") + " across all names" : "") + "</span>" +
     (all ? '<span class="se-widen" data-act="ernall">SHOW ALL NAMES</span>' : "") + "</div>";
-}
-function ercRenderCal(list, cohort) {
-  const key = ercRangeKey();
-  if (!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S.tq) {   // the same honest gate as the list: never an unscoped view
-    list.innerHTML = '<div class="soon">cohort map loading…</div>';
-    return;
-  }
-  if (!ERC_ROWS || key !== ERC_KEY) {
-    list.innerHTML = (ERC_FAIL_KEY === key)
-      ? '<div class="soon">this stretch of the calendar could not be read. It asks again by itself.</div>'
-      : '<div class="soon">reading the earnings calendar…</div>';
-    ercRead(false);
-    return;
-  }
-  const rows = scopeItems(ERC_ROWS, cohort, S.tq, S.fav, COHSETS);
-  if (!ercBoardRows().length) ercWaitForSizes();   // sizes + cohort hues come with the board; redraw once when they land
-  const byDay = {};
-  rows.forEach((r) => { (byDay[r.date] = byDay[r.date] || []).push(r); });
-  list.innerHTML = (rows.length ? "" : ercEmptyHTML(cohort, (ERC_ROWS || []).length, ercSpan() === "MONTH" ? "month" : "week")) +
-    (ercSpan() === "MONTH" ? ercMonthHTML(byDay) : ercWeekHTML(byDay)) +
-    ercKeyHTML(rows) + ercNoteHTML(rows);
-  /* the right-hand extras column is the same in every span */
-  const scopedTk = (rows.length && rows.every((x) => x.ticker === rows[0].ticker)) ? rows[0].ticker : null;
-  if (scopedTk && (!EV_PROFILE || EV_PROFILE.ticker !== scopedTk || !EV_EXTRA || EV_EXTRA.t !== scopedTk)) evtLoadProfile(scopedTk);
-  evFillExtras(EV_CACHE ? scopeItems(EV_CACHE.up, cohort, S.tq, S.fav, COHSETS) : [], scopedTk);
 }
 /* ---- DAY: the chosen day, read ACROSS instead of down -----------------------
    Alan: "The daily view just has a scrolling downwards… it requires a lot of
@@ -16695,7 +16784,7 @@ document.addEventListener("click", (e) => {
     /* EVENTS · the earnings room. The TAPE is the header: a bar on it brings its day,
        week or month into the view below. ◀ ▶ step that view; TODAY comes home. */
     case "ernspan": {
-      S.ernSpan = a.dataset.s; S.ernPick = null;
+      S.ernSpan = a.dataset.s; S.ernPick = null;   /* M40 — this ENLARGES that square; the other two stay on screen */
       if (!S.ernDay) S.ernDay = todayISO();
       renderEvents(S.coh); ercRead(false);
       break;
@@ -16722,6 +16811,12 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ernzoom": { ercSetZoom(a.dataset.z); break; }
+    case "erntab": {                                                              /* M40 — DASHBOARD · PAST REPORTED · THE OLDER LIST */
+      S.ernTab = a.dataset.t || "DASH"; S.ernPick = null; S.ernPast = null;
+      renderEvents(S.coh);
+      if (ernTab() === "DASH") ercRead(false);
+      break;
+    }
     /* one tap back to the whole universe */
     case "ernall": { S.ernCohPick = "ALL"; S.ernPick = null; renderEvents(S.coh); ercRead(false); break; }
     case "ernjump": { S.ernDay = a.dataset.d || todayISO(); S.ernPick = null; ERC_AUTO_DAY = null; renderEvents(S.coh); ercRead(false); break; }
