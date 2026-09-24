@@ -24,7 +24,9 @@ test("a section is dated by its own source, not by the job that re-stamped it", 
   assert.match(a.note, /re-stamped 2026-09-23 23:10Z by read-engine — that is when the job ran, not when these words changed/);
 });
 
-test("the verdict is dated by the composite it was written from", () => {
+test("the frozen composite date, if it ever reached a label again, reads as a month old", () => {
+  /* Kept as the counter-example M37 removed: this is what the VERDICT chip used to say while the
+     board beside it showed a reading computed minutes earlier. */
   const a = api("COMPOSITE BASIS", COMPOSITE_AAPL, RESTAMP, NOW);
   assert.equal(a.text, "COMPOSITE BASIS · AS OF 2026-08-24 · 30D OLD");
   assert.equal(a.level, "dead", "364 of 386 tf=D rows are frozen at this date");
@@ -55,7 +57,10 @@ test("the dossier's own write date is fetched, and each tab carries the date of 
   assert.match(page, /const dossierAt = cx \? \(cx\.enriched_ts != null \? cx\.enriched_ts : cx\.updated_ts\) : null;/);
   for (const tab of ["BUSINESS", "CATALYSTS", "WATCH"])
     assert.match(page, new RegExp(tab + ': readSectionAge\\("DOSSIER", dossierAt, rbAt\\.' + tab.toLowerCase() + "\\)"));
-  assert.match(page, /VERDICT: rb\.verdict != null\n      \? readSectionAge\("COMPOSITE BASIS", \(d && \(d\.legacyAsOf != null \? d\.legacyAsOf : d\.asOf\)\), rbAt\.verdict\)/);
+  /* M37 — VERDICT is dated by the engine that produced its numbers, not by composite_staged. */
+  assert.match(page, /VERDICT: rb\.verdict == null\n      \? readSectionAge\("DOSSIER", dossierAt, rbAt\.verdict\)\n      : live\.ok \? readSectionAge\("LIVE GEIGER", live\.at, rbAt\.verdict\)/);
+  assert.match(page, /: live\.state === "LEGACY_NON_EQUITY" \? readSectionAge\("LEGACY COMPOSITE", live\.at, rbAt\.verdict\)/);
+  assert.match(page, /text: "LIVE GEIGER · NO LIVE READ"/, "a declared equity with no live number says so");
 });
 
 test("the age is drawn on the face of the words, and nowhere claims a date it does not have", () => {

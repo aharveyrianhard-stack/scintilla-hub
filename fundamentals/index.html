@@ -121,7 +121,13 @@ async function loadUniverse(){
   const cohorts = await sb('ticker_cohorts?select=ticker,cohort,is_primary&is_primary=eq.true&limit=1000');
   cohorts.forEach(c=>{ COHORT_MAP[c.ticker]=c.cohort; });
   UNIVERSE = staged.map(s=>({ticker:s.ticker, cohort:COHORT_MAP[s.ticker]||'UNCOHORTED', updated_ts:s.updated_ts}));
-  document.getElementById('universeStatus').innerHTML = '✅ '+UNIVERSE.length+' tickers loaded live from <span class="mono2">composite_staged</span> · '+Object.keys(UNIVERSE.reduce((a,u)=>{a[u.cohort]=1;return a;},{})).length+' cohorts (via ticker_cohorts) · '+freshTag(UNIVERSE[0]&&UNIVERSE[0].updated_ts);
+  /* M37 — THIS TABLE IS A TICKER LIST HERE, NOT A LIVE SOURCE. composite_staged's 364 equity rows
+     have not moved since 2026-08-24 (measured 2026-09-24); only its 22 non-equity rows are current.
+     The page used to print "loaded live from composite_staged" beside that row's own date, so a
+     month-old stamp wore the word live. No number on this page comes from it — only the names —
+     and the line now says exactly that, with the list's true date. */
+  const stagedAt = UNIVERSE.reduce((newest,u)=>{const s=tsToSec(u.updated_ts); return (s!=null && (newest==null || s>newest)) ? s : newest;}, null);
+  document.getElementById('universeStatus').innerHTML = '✅ '+UNIVERSE.length+' tickers · '+Object.keys(UNIVERSE.reduce((a,u)=>{a[u.cohort]=1;return a;},{})).length+' cohorts (via ticker_cohorts) · ticker list only, from the retired <span class="mono2">composite_staged</span> table '+freshTag(stagedAt)+' — no number on this page is read from it';
   const quick=['NVDA','MU','AAPL','GOOGL','TSLA'];
   document.getElementById('quickChips').innerHTML = quick.filter(t=>UNIVERSE.find(u=>u.ticker===t)).map(t=>'<button class="tbtn" onclick="setTicker(\''+t+'\')">'+t+'</button>').join('');
   return UNIVERSE;

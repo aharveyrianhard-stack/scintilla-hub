@@ -4930,15 +4930,21 @@ async function fetchCompanyData(t) {
   ].map(bound)));
   const q = quote[0] || {}, p = prof[0] || {}, d0 = comp[0] || {};
   /* P0-E: same Geiger authority on the company view as on the board. */
-  /* the desk narrative (read_blocks.verdict) is generated server-side from the LEGACY daily composite; remember its date
-     before the provider Geiger replaces d0's numbers below, so the READ tab can say what the narrative was built from */
-  const legacyCompositeAsOf = d0.updated_ts || null;
+  /* M37 — THE VERDICT SPEAKS FROM THE LIVE ENGINE, NEVER FROM THE FROZEN COMPOSITE.
+     Until here the READ tab dated its verdict by the composite_staged row this payload arrived
+     with. MEASURED 2026-09-24: 364 of that table's 386 tf=D equity rows have not moved since
+     2026-08-24 (only 22 non-equity rows are fresh), so the tab stamped a live reading with a
+     month-old date - AAPL read COMPOSITE BASIS - AS OF 2026-08-24 - 30D OLD while the board beside
+     it showed the provider Equalizer's 01:28Z number. The board's authority is the provider
+     artifact applied by scApplyCandidateGeiger() one line below; the verdict now reads THAT row -
+     the same composite, trend, momentum, receipt and compute time - so the two cannot disagree. */
   if (window.SC_CLEAN_READS) { const _g = { [t]: d0 }; await scApplyCandidateGeiger(_g); }
+  const liveRead = scLiveRead(d0);
   const ribMap = {}; for (const r of rib) ribMap[r.family] = r;
   const rbMap = {}, rbAt = {};                                   // GO-LIVE FIX 2 — section → body; section → updated_ts
   for (const b of (rblk || [])) if (b && b.section) { rbMap[String(b.section).toLowerCase()] = b.body; rbAt[String(b.section).toLowerCase()] = b.updated_ts || null; }
   RIB[t] = Object.assign(RIB[t] || {}, ribMap);
-  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, asOf: d0.updated_ts || null, legacyAsOf: legacyCompositeAsOf };
+  const d = { g: num(d0.composite) || 0, tr: num(d0.trend) || 0, mo: num(d0.momentum) || 0, asOf: d0.updated_ts || null, live: liveRead };
   /* P0-F: same provider authority on the company view as on the board. */
   if (window.SC_CLEAN_READS && q && q.ticker) { const _i = { [q.ticker]: q }; await scApplyProviderQuotes(_i, [q.ticker]); }
   const price = PRICES[t] != null ? PRICES[t] : num(q.price);
@@ -17437,9 +17443,60 @@ function fwdTrailPE(price, fund, est, t) {     // same valuation math the ESTIMA
   };
   return { trail, fwd, next, mismatch: nonUsd, ccy };
 }
-function liveReadSentence(d) {              // generated from the SAME composite row as the geiger tab
-  return "Right now the multi-timeframe read is " + (d.g >= 0 ? "constructive" : "heavy") +
-    ". Trend is " + sigWord(d.tr) + " and momentum is " + sigWord(d.mo) + ".";
+/* M37 — ONE DESCRIPTION OF WHERE A COMPANY'S MULTI-TIMEFRAME NUMBERS CAME FROM.
+   Reads the row AFTER scApplyCandidateGeiger() has had it, which is the same overlay the board
+   applies, and reports which of three things is true. It invents nothing:
+     OK                - the provider Equalizer artifact owns this symbol and carried finite values;
+     LEGACY_NON_EQUITY - the symbol is not a declared equity (crypto, futures, rates, VIX), whose
+                         approved owner is still composite_staged - those 22 rows are current;
+     UNAVAILABLE       - a declared equity the artifact could not price. The frozen composite is
+                         NOT used in its place, and no number is shown at all. */
+function scLiveRead(row) {
+  const r = row || {};
+  const meta = (typeof SC_CG !== "undefined" && SC_CG && SC_CG.meta) || {};
+  const provider = r.sc_geiger_source === "CANDIDATE_PROVIDER_EQUALIZER";
+  const blanked = r.sc_geiger_state === "PROVIDER_GEIGER_UNAVAILABLE";
+  const g = num(r.composite), tr = num(r.trend), mo = num(r.momentum);
+  const ok = provider && g != null && tr != null && mo != null;
+  const state = ok ? "OK" : (blanked || provider) ? "UNAVAILABLE" : "LEGACY_NON_EQUITY";
+  return {
+    ok, state,
+    g: ok ? g : null, tr: ok ? tr : null, mo: ok ? mo : null,
+    /* OK: the artifact's own compute time. LEGACY: that table's own write date. Never crossed. */
+    at: ok ? (r.updated_ts || meta.computed || null)
+       : state === "LEGACY_NON_EQUITY" ? (r.updated_ts || null) : null,
+    receipt: ok && meta.receipt ? String(meta.receipt).slice(0, 12) : null,
+    rungs: ok && r.tf_contributors != null ? num(r.tf_contributors) : null,
+    validated: meta.current_equalizer_validated === true,
+  };
+}
+function scReadStamp(ts) {                   // "2026-09-24 01:28Z (6 min old)" - never a bare date
+  const ms = readTsMs(ts);
+  if (!isFinite(ms)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  return new Date(ms).toISOString().slice(0, 16).replace("T", " ") + "Z (" +
+    (mins < 1 ? "just now" : mins < 60 ? mins + " min old"
+     : mins < 1440 ? Math.round(mins / 60) + "h old" : Math.round(mins / 1440) + "d old") + ")";
+}
+function liveReadSentence(d, t) {            // the SAME numbers the board row shows, or a plain no
+  const L = (d && d.live) || {};
+  if (L.ok) {
+    const stamp = L.at ? scReadStamp(L.at) : "";
+    return "Right now the multi-timeframe read is " + (L.g >= 0 ? "constructive" : "heavy") +
+      ". Trend is " + sigWord(L.tr) + " and momentum is " + sigWord(L.mo) +
+      ". These are the board's own live numbers" +
+      (stamp ? ", computed " + stamp : "") +
+      (L.receipt ? " under Equalizer receipt " + L.receipt : "") +
+      (L.rungs != null ? " across " + L.rungs + " timeframes" : "") + ".";
+  }
+  if (L.state === "LEGACY_NON_EQUITY") {
+    return (t ? t + " is " : "This symbol is ") + "not a declared equity, so its multi-timeframe " +
+      "read still comes from the legacy daily composite" +
+      (L.at ? ", written " + scReadStamp(L.at) : ", which carries no date") + ".";
+  }
+  return "There is no live multi-timeframe read for " + (t || "this company") + " right now: the " +
+    "provider Geiger carried no value for it, so no composite, trend or momentum is shown. The " +
+    "retired composite_staged number is deliberately not shown in its place.";
 }
 /* A READ IS DATED BY ITS INPUTS. read_blocks rows carry updated_ts; the TREND, LEVELS and COHORT blocks were last written
    2026-06-11 (MEASURED 2026-09-18: AAPL LEVELS quoted resistance $294.75 / support $290.55 against a $336 price with no
@@ -17501,13 +17558,15 @@ function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
   /* GO-LIVE FIX 2 — the read_blocks verdict body is THE verdict; ticker_context.narrative
      is the fallback. The live composite sentence is ALWAYS appended after the body. */
   const verdict = toParas(rb.verdict != null ? rb.verdict : (cx && cx.narrative));
-  const compAge = readAgeLabel(d && d.asOf);
-  verdict.push(liveReadSentence(d) + (compAge ? " Composite basis " + compAge.toLowerCase() + "." : ""));
+  /* M37 — the appended sentence IS the live engine's reading (or an honest refusal). The old
+     " Composite basis as of ..." tail came from composite_staged.updated_ts and is gone with it. */
+  verdict.push(liveReadSentence(d, t));
   if (trail != null && fwd != null)
     verdict.push("On valuation, $" + t + " trades at <b>" + trail.toFixed(1) +
       "×</b> trailing earnings and <b>" + fwd.toFixed(1) + "×</b> " +
       ((fwdNext && fwdNext.ntm) ? "the next 12 months' consensus EPS." : "next fiscal year's consensus EPS."));
-  const pills = ["TREND " + sigWord(d.tr).toUpperCase()];
+  const live = (d && d.live) || {};
+  const pills = ["TREND " + (live.ok ? sigWord(live.tr).toUpperCase() : "NO LIVE READ")];
   if (trail != null && fwd != null) pills.push("FWD " + fwd.toFixed(1) + "× VS " + trail.toFixed(1) + "×");
   /* GO-LIVE FIX 2 — trend/levels/cohort bodies become a labeled second
      group of paragraphs shown under the active VERDICT tab. */
@@ -17515,21 +17574,33 @@ function buildRead(t, cx, d, price, fund, est, rb, rbAt) {
      the pre-contract writer; the four-section contract (verdict·business·catalysts·watch, 2026-06-14) replaced them and
      folded their facts into the verdict's second paragraph. Rendering the 2026-06-11 rows under the verdict showed June
      prices as levels (AAPL support $290 against $336). They stay in the database; the READ tab no longer draws them.
-     What the verdict WAS built from is stated instead: the writer's own 'basis' section when present, else the legacy
-     composite's date captured before the provider Geiger replaced the live numbers. */
-  const legacyNote = d && d.legacyAsOf ? readAgeLabel(d.legacyAsOf) : "";
+     What the verdict WAS built from is stated instead: the writer's own 'basis' section when present, else - M37 - the
+     live engine this tab now reads, named with its receipt. The frozen composite's date is never quoted here again. */
   const basis = rb.basis ? String(rb.basis)
-    : ("desk narrative generated from the legacy daily composite" + (legacyNote ? " " + legacyNote.toLowerCase() : "") +
-       "; read-engine re-stamps the stored block on every run, so the block's own row date is when the job ran, not when these words changed; the live read above uses the provider Geiger");
+    : live.ok
+      ? ("live read from the provider Equalizer artifact" + (live.at ? ", computed " + scReadStamp(live.at) : "") +
+         (live.receipt ? ", receipt " + live.receipt : "") +
+         " - the same reading the board row shows; read-engine re-stamps the stored block on every run, so the block's own row date is when the job ran, not when these words changed")
+      : live.state === "LEGACY_NON_EQUITY"
+        ? ("not a declared equity: the legacy daily composite is this symbol's approved owner" +
+           (live.at ? ", written " + scReadStamp(live.at) : "") + "")
+        : "no live provider Geiger for this company, so no multi-timeframe number is shown and the retired composite_staged value is not substituted";
   const extras = [["NARRATIVE BASIS", [basis]]];
   /* M32 — every tab carries the date of the source its words actually came from: the dossier
      overlay for BUSINESS/CATALYSTS/WATCH, and the composite the narrative was generated from for
      VERDICT (its dossier date when the narrative fell back to ticker_context.narrative). */
   const dossierAt = cx ? (cx.enriched_ts != null ? cx.enriched_ts : cx.updated_ts) : null;
   const ages = {
-    VERDICT: rb.verdict != null
-      ? readSectionAge("COMPOSITE BASIS", (d && (d.legacyAsOf != null ? d.legacyAsOf : d.asOf)), rbAt.verdict)
-      : readSectionAge("DOSSIER", dossierAt, rbAt.verdict),
+    /* M37 — VERDICT is dated by the engine that actually produced its numbers: the live artifact's
+       compute time for a declared equity, that table's own date for an approved non-equity, and a
+       plain "NO LIVE READ" when there is nothing - never composite_staged's frozen stamp. */
+    VERDICT: rb.verdict == null
+      ? readSectionAge("DOSSIER", dossierAt, rbAt.verdict)
+      : live.ok ? readSectionAge("LIVE GEIGER", live.at, rbAt.verdict)
+      : live.state === "LEGACY_NON_EQUITY" ? readSectionAge("LEGACY COMPOSITE", live.at, rbAt.verdict)
+      : { kind: "LIVE GEIGER", level: "dead", days: null, date: "",
+          note: "the provider Equalizer artifact carried no value for this company; the retired composite_staged number is not shown in its place",
+          text: "LIVE GEIGER · NO LIVE READ" },
     BUSINESS: readSectionAge("DOSSIER", dossierAt, rbAt.business),
     CATALYSTS: readSectionAge("DOSSIER", dossierAt, rbAt.catalysts),
     WATCH: readSectionAge("DOSSIER", dossierAt, rbAt.watch),
