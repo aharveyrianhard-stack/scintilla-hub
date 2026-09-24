@@ -7,7 +7,11 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const START = "/* ---- Room 9 · ECONOMIC", END = "/* ---- Room 3 · COMPANY";
+/* M44 (24 Sep) — the ECONOMIC room now holds TWO views: the ported releases room this file is
+   about, and the REGIME view, which mounts separately, reads its own sources and has its own
+   tests (tests/regime-view.test.mjs). The slice ends where REGIME begins, so every guarantee
+   below still covers exactly the module it was written about, unchanged. */
+const START = "/* ---- Room 9 · ECONOMIC", END = "/* ---- Room 9b · REGIME view (M44";
 const mod = page.slice(page.indexOf(START), page.indexOf(END));
 function fnSrc(src, name) {
   const at = src.indexOf("function " + name + "(");
