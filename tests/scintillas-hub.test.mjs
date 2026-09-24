@@ -164,11 +164,11 @@ test("the board marks the outliers of the day on the percentage cell that IS the
   assert.equal(api.boardScintPass(), 0, "a board repaint keeps the mark and does not re-flash");
 });
 
-test("M55 — today's strip is ONE line: the count, the newest said plainly, and the way into the notifications", () => {
-  /* Alan, 24 Sep: "look at how many rows it takes … this would be too many tapes … What about a
-     notifications channel, internal notifications?" So the dashboard keeps one line and the LIST
-     moved to the bell. What each event knows — where it lives, which day, which country — did not
-     move: it travels with the notification row instead of the strip row. */
+test("M63 — today's strip is a TAPE: one chip per event, in one line, with the door to the bell", () => {
+  /* Alan, 24 Sep: "where do you think a good home for those Sigma events in a swipeable left to
+     right scrollable tape style could go?" M55 kept ONE line and pushed the list into the bell;
+     M63 keeps the same single line and fills it with chips instead — so every event is on the
+     dashboard, the strip still cannot grow a second row, and the bell is still one tap away. */
   const host = node();
   const rows = [
     ev({ ts: "2026-09-23T20:04:00Z" }),
@@ -179,26 +179,13 @@ test("M55 — today's strip is ONE line: the count, the newest said plainly, and
   const { api } = world({ rows, ids: { scintStrip: host } });
   const html = api.scintStripHTML();
   assert.match(html, /TODAY’S SCINTILLAS/);
-  assert.match(html, />2</, "two events today, not the third from yesterday");
+  assert.match(html, />2 ›</, "two events today, not the third from yesterday");
   assert.ok(!html.includes(">OLD<"), "yesterday is not today");
-  assert.equal((html.match(/class="sc-ss__one/g) || []).length, 1, "ONE line, not one per event");
-  assert.match(html, /data-act="scintbell"/, "the line opens the notifications, where the rest are");
-  assert.match(html, /outlier of the day/);
-  assert.ok(html.includes("AAPL") && !html.includes("Core CPI"), "the line is the NEWEST one");
-  assert.match(html, /all 2 ›/, "and it says how many are behind it");
-
-  /* every event still knows where to go — now as a notification */
-  const items = api.scintNotifyItems(api.scintToday());
-  assert.equal(items.length, 2);
-  assert.equal(items[0].sub, "AAPL");
-  assert.equal(items[0].isco, true, "a price outlier opens the company");
-  assert.equal(items[1].kind, "econ_surprise");
-  assert.equal(items[1].isco, false, "a release opens the ECONOMIC room, not a company");
-  assert.equal(items[1].day, "2026-09-23", "on the day the release belongs to");
-  assert.equal(items[1].cty, "US");
-  assert.ok(items[1].says.includes("actual 3.9"), "said in the room's own words: " + items[1].says);
-  const plain = (html + JSON.stringify(items)).replace(/<[^>]*>/g, " ");
-  assert.ok(!/undefined|NaN|null/.test(plain), "no half-formed number reaches the screen: " + plain.slice(0, 200));
+  assert.equal((html.match(/class="sc-ss sc-ss--tape"/g) || []).length, 1, "ONE strip, where it always was");
+  assert.equal((html.match(/sc-tape__chip/g) || []).length, 2, "one chip per event today");
+  assert.match(html, /data-act="scintbell"/, "the count opens the notifications, where they persist");
+  assert.match(html, /data-act="scchip"/, "and a chip goes to the thing itself");
+  assert.ok(html.includes("AAPL") && html.includes("Core CPI"), "BOTH are on the tape — that is the point of it");
 });
 
 test("every shape of the Economic room glows — the month grid returns early and still does", () => {

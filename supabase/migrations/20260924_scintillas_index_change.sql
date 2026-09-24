@@ -1,0 +1,44 @@
+-- 2026-09-24 · M63 INDEX CHANGES — joining or leaving an index becomes a scintilla.
+--
+-- WHY. Alan, 24 Sep: "Bloom Energy … just got added to the S&P. Do we capture those kinds of
+-- signals?" We did not. An index change is a catalyst with an unusual shape: it is announced in
+-- advance, it binds on a stated date, and on that date every fund tracking the index must buy the
+-- name (or sell it). It is one of the few reasons a name moves hard with no news of its own —
+-- which is exactly the question the tape's "why:" is there to answer.
+--
+-- WHAT THIS CHANGES. ONE thing: the list of kinds public.scintillas will accept. The table, its
+-- columns, its indexes, its policy and every stored row are untouched. No row is read, rewritten,
+-- renamed or deleted by this migration. The new constraint is a strict SUPERSET of the one M59
+-- left behind, so every row that passed before passes now and the validation scan cannot fail on
+-- existing data.
+--
+-- WHAT AN INDEX_CHANGE ROW MEANS.
+--   subject     the ticker joining or leaving
+--   direction   +1 added, -1 removed. It is not a forecast: it is which way the membership went.
+--   magnitude   NULL, on purpose. Every other kind's magnitude is "how far past its OWN usual" —
+--               a company has no usual number of index changes, so no such number exists and none
+--               is invented.
+--   detail      index (the index's own name), action, effective_date (the day the change binds),
+--               announced_date (NULL — the provider endpoint does not publish it, so nothing is
+--               claimed), security (the company name as the provider writes it), replaces /
+--               replaced_by (the name on the other side of the swap, when there is one), reason
+--               (the provider's own words) and days_from_today at detection.
+--   dedupe_key  'index_change|<index>|TICKER|<action>|<effective date>' — one row per company per
+--               change, for ever. Re-running the pass over the same window cannot produce a second.
+--
+-- WHERE THE DATA COMES FROM. The provider's index-constituent-change endpoints, read by
+-- supabase/functions/scintillas-detect in ?mode=index, with the key read from that function's own
+-- environment. The key is never sent to the browser and never written into a response. Three reads
+-- per run, one per index; no candles, no filings and no calendar are touched in that mode.
+--
+-- ROLLBACK (exact) — in supabase/migrations/20260924_scintillas_index_change_ROLLBACK.sql:
+--     delete from public.scintillas where kind = 'index_change';
+--     alter table public.scintillas drop constraint scintillas_kind_ck;
+--     alter table public.scintillas add constraint scintillas_kind_ck check (kind in
+--       ('price_outlier','earnings_surprise','econ_surprise','econ_imminent','sentiment_spike','breadth_thrust','dilution'));
+--   The delete comes first because the narrower constraint cannot be added while index_change rows
+--   exist. It removes only rows this feature wrote; nothing else in the table is read or changed.
+
+alter table public.scintillas drop constraint if exists scintillas_kind_ck;
+alter table public.scintillas add constraint scintillas_kind_ck check (kind in
+  ('price_outlier','earnings_surprise','econ_surprise','econ_imminent','sentiment_spike','breadth_thrust','dilution','index_change'));

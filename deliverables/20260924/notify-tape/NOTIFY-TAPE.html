@@ -1,0 +1,187 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>The tape, the cards and the bell — M63</title>
+<style>
+:root{--bg:#0b0b0b;--pan:#131313;--ln:#232323;--ink:#c8c8c8;--dim:#8e8e8e;--hi:#d2d2d2;--bull:#00c281;--bear:#ff2d55}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:26px 18px 70px}
+.wrap{max-width:900px;margin:0 auto}h1{font:600 21px/1.3 ui-sans-serif,sans-serif;color:var(--hi);margin:0 0 4px}
+h2{font:600 14px/1.4 ui-sans-serif,sans-serif;color:var(--hi);margin:30px 0 8px;letter-spacing:.02em}
+.sub{color:var(--dim);font-size:12px;margin:0 0 20px}
+.q{border-left:2px solid var(--ln);padding:6px 0 6px 12px;color:var(--hi);margin:12px 0;font-size:13px}
+.panel{background:var(--pan);border:1px solid var(--ln);border-radius:7px;padding:14px 15px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0}
+th{text-align:left;color:var(--dim);font-weight:600;border-bottom:1px solid var(--ln);padding:6px 8px 6px 0;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+td{padding:7px 8px 7px 0;border-bottom:1px solid var(--ln);vertical-align:top}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--hi)}
+a{color:var(--hi)}a:hover{color:#dcdcdc}
+.bell{background:#0e0e0e;border:1px solid var(--ln);border-left:2px solid var(--bear);border-radius:6px;padding:10px 12px;margin:9px 0}
+.bell b{color:var(--hi);font-weight:600}.bell .s{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.dn{color:var(--bear)}.up{color:var(--bull)}
+ul{padding-left:18px;margin:8px 0}li{margin:5px 0}
+.note{color:var(--dim);font-size:12px}
+.kv{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.kv div{background:#0e0e0e;border:1px solid var(--ln);border-radius:5px;padding:6px 9px;font-size:11.5px}
+/* PHONE. The first render at 390 pushed the body text off the right edge: the tables' own
+   content was wider than the screen, so the whole page scrolled sideways and every paragraph
+   went with it. Long words and file paths now break, and a table that still cannot fit scrolls
+   inside its own panel instead of dragging the page. */
+html,body{max-width:100%;overflow-x:hidden}
+td,th,p,li,.bell .s{overflow-wrap:anywhere}
+code,.mono{overflow-wrap:anywhere}
+@media(max-width:560px){body{padding:18px 14px 60px}table,td,th{font-size:11.5px}
+  .panel{overflow-x:auto}table{min-width:0}th{white-space:nowrap}.kv div{font-size:11px}}
+</style></head><body><div class="wrap">
+
+<span data-scnav-slot></span><h1>Scintillas that pop and fade</h1>
+<p class="sub">M63 · 24 September 2026 · branch <code>hub/notify-tape-20260924</code> (from <code>hub/release-20260923</code> @ 19d1870, with <code>hub/dilution-20260924</code> @ 3ed0627 merged in) · nothing deployed, no migration applied, no provider job started</p>
+
+<div class="q">“Where do you think a good home for those Sigma events in a <b>swipeable left to right scrollable tape</b> style could go? … we need to start using this left to right scrolling tape a lot more broadly.” · “I just noticed there were <b>99</b> news alerts… It says no favorite ticker news yet.” · “A notification center style card popping out and disappearing, <b>that’s a scintilla</b>.” · “The sigma event is easy to express… <b>how do we overlay the reason</b>?” — Alan, 24 September</div>
+
+<h2>What changed, in one paragraph</h2>
+<div class="panel">
+The one-line TODAY’S SCINTILLAS strip is now a <b>tape</b>: one chip per event, “EOSE −12.3% · 1.8× usual”, green up, red down, swipeable left to right. It is the same strip in the same place at the same height — <b>no new row</b>. A chip goes to the name: its board row scrolls into view and glows through <code>scScint</code>, the page’s one glow. Things that arrive <i>while he is watching</i> also pop out as a <b>card</b> at the bottom right for six seconds, three at a time, and every card is written into the bell as well. The bell’s news is his favourites only, <b>one row per name</b>, and its badge is now the number of unread rows rather than a counter that only ever went up. Where the store already knows <i>why</i> a name moved — a dilution filing, an earnings surprise, an index change, a stored headline — the chip, the card and the row tooltip all say “why: …”. Where it does not, they say nothing.
+</div>
+
+<h2>1 · The tape, measured</h2>
+<p>Rendered headless in Chrome at both widths from the shipped bytes — the page’s own CSS, the page’s own tape markup, and the <b>19 scintillas actually stored</b> for 23–24 September (XEL, WEC, EOSE, BYND, SHAZ, ABNB, SILJ, SIL, GDXJ, MCD, GDX, SLV, EWY, NEE …):</p>
+<table>
+<tr><th>At</th><th>Strip</th><th>Chips</th><th>Tape</th><th>Page</th><th>Cards</th></tr>
+<tr><td>1680 × 1050</td><td>42 px tall, one line</td><td>19 on <b>1</b> row</td><td>980 px visible of 3,344 px — it really scrolls</td><td>no sideways scroll</td><td>3 · 486 px · bottom-right</td></tr>
+<tr><td>390 × 844</td><td>35 px tall, one line</td><td>19 on <b>1</b> row</td><td>318 px visible of 3,353 px</td><td>no sideways scroll</td><td>3 · 366 px · full width above the bottom</td></tr>
+</table>
+<p class="note"><b>Three layout faults were found by that measurement and fixed before this was written.</b> (1) The cards were content-box, so a card at <code>width:100%</code> plus its padding hung 20 px off the right edge of its own stack. (2) At 390 the label, the count and the cohort chip left the tape only 190 px of a 390-wide screen; below 430 px the label now steps aside and the tape gets 318 px. (3) At 1680 the card held its line to one row, so “EOSE −12.3% · 1.8× usual · why: dilution · $15.0M” was <b>cut at the ellipsis and the reader lost the reason</b> — the line wraps now, and two lines is still a glance. Every number above is after the fixes.</p>
+<div class="panel">
+<b>The chip.</b> <span class="mono">EOSE</span> <span class="mono dn">−12.3% · 1.8× usual</span> <span class="mono">why: dilution · $15.0M</span> — the name, the move, how unusual the move was against that name’s own usual day, and the reason if the store holds one. Tapping it scrolls the board to EOSE and glows the row. A <b>drag is not a tap</b>: past four pixels the click that ends the swipe is swallowed, so a swipe never opens a company by accident.
+</div>
+<p><b>Where this tape should go next</b> (same component, <code>scTapeHTML</code> / <code>scTapeBind</code>, nothing scintilla-specific in it): the earnings week band in EVENTS; the economic day band; the dilution filings of the week; the favourites’ news itself; the X and YouTube rails, which are lists in boxes today; and the company page’s own events. Each is a row of short facts that currently either wraps, truncates, or gets a box of its own.</p>
+
+<h2>2 · The cards, and how many a day</h2>
+<div class="panel">
+<b>What pops:</b> a scintilla on a favourite or an index, a dilution filing, an earnings surprise, an index change, and a favourite’s news. Nothing else — an economic release already has the top tape’s own flash.<br>
+<b>How it behaves:</b> bottom right, six seconds, at most three on screen, the rest queued; a ✕ dismisses one; tapping goes to the thing. The stack is <b>bottom-anchored on purpose</b>, so it cannot cover the board’s first row — measured above, no overlap at either width. <code>prefers-reduced-motion</code> stops the movement, not the notification.<br>
+<b>Only what arrives while he is here.</b> An event older than the open tab is history, not news, so it goes to the bell and not to a card. Opening the Hub therefore never dumps the day at him.
+</div>
+<p><b>How many a day, measured on stored rows</b> — not estimated:</p>
+<table>
+<tr><th>Source</th><th>Measured</th><th>Cards a day</th></tr>
+<tr><td>Scintillas in <code>public.scintillas</code></td><td>23 Sep: <b>5</b> · 24 Sep: <b>14</b> (all <code>price_outlier</code> so far)</td><td><b>0–1</b> — of those 19, one (SLV) is on his favourites or an index</td></tr>
+<tr><td>Favourite news in <code>public.news</code></td><td>1,686–2,095 rows a day on his 72 favourites, across ~<b>36</b> distinct names (META alone ran 170 in a day on 23 Sep)</td><td>≤ <b>36</b> — one per name per 90 minutes</td></tr>
+<tr><td>Dilution · earnings · index changes</td><td>no rows stored yet — the dilution pass and the index pass are not running</td><td>a handful on a busy day, once they run</td></tr>
+</table>
+<p class="note">A hard ceiling of 60 cards a day is in the code as well, so a defect in a collector cannot turn into a storm of cards.</p>
+
+<h2>3 · The bell: favourites only, and seen</h2>
+<div class="panel">
+<b>What the “99” actually was.</b> Two separate things, both true at once. The badge was a free-running counter: every added row bumped it and nothing ever took anything off, while the list itself is capped at 50 rows and can be cleared — so the number stopped meaning anything. And the list was one row per <i>story</i>: with 1,686–2,095 favourite stories a day over ~36 names, the list was full of things nobody reads, which is why the panel could look empty of anything worth opening.<br><br>
+<b>What it is now.</b> The badge <b>is the list, counted</b> — unread rows, nothing else. News is <b>one row per name</b>: the newest headline, with “+N more on META today” under it. The watch list is his favourites <b>plus any name that has scintillated today</b> — on the day EOSE falls 12%, its headline is the one he wants, favourite or not.<br><br>
+<b>The empty text says what would land</b>, in his own numbers: “Nothing yet today. What lands here: a story on one of your <b>72 favourites</b> (one line per name, newest headline), a name that moves further than its own usual day, a dilution filing, an earnings surprise, or an index addition or deletion.”
+</div>
+
+<h2>4 · The reason, overlaid</h2>
+<p>When a name has a sigma move, the Hub looks for another <b>stored fact about the same name on the same day</b> and ranks them the way a desk would:</p>
+<table>
+<tr><th>#</th><th>Reason</th><th>Reads</th><th>Shows as</th></tr>
+<tr><td>1</td><td>A dilution filing</td><td><code>scintillas</code>, kind <code>dilution</code></td><td>why: dilution · $15.0M</td></tr>
+<tr><td>2</td><td>An earnings surprise</td><td><code>scintillas</code>, kind <code>earnings_surprise</code></td><td>why: earnings −18.4% vs est</td></tr>
+<tr><td>3</td><td>An index change</td><td><code>scintillas</code>, kind <code>index_change</code></td><td>why: added to S&amp;P 500 · effective 2026-09-29</td></tr>
+<tr><td>4</td><td>A stored headline</td><td><code>news</code> — one read, ≤40 names, once every 5 minutes</td><td>why: Eos Energy prices $50M offering</td></tr>
+<tr><td>—</td><td><b>Nothing found</b></td><td>—</td><td><b>nothing.</b> No guess, no “probably”, no filler</td></tr>
+</table>
+<p class="note">Yesterday’s headline does not explain today’s move: a stored headline counts only if it was published on the same day as the move. Google’s “ — Publisher” tail is taken off the headline, because the publisher is not part of the story. The same sentence appears on the chip, on the card and in the board row’s tooltip, so the three can never disagree.</p>
+
+<h2>5 · BYND’s dilution row</h2>
+<div class="panel">
+<b>BYND</b> <span class="mono">DILUTION</span> — <span class="mono">$15.0M of convertible notes exchanged for shares · floor $7.40 (6% below last close) · up to +11.3% more shares</span>
+<span class="note" style="display:block;margin-top:6px">Every part is the 8-K’s own: 1,097,444 shares issued now plus up to 848,265 in the true-up = 1,945,709, against 17,193,966 shares outstanding after the 1-for-30 reverse split of 13 August. Read from <code>tests/fixtures/dilution/BYND-2026-09-23-8K.txt</code>, the filing verbatim.</span>
+</div>
+<p>The tag is a <b>word, not a colour</b>: <code>DILUTION</code> sits on the board row’s ticker and on the company ident, with that sentence as its tooltip. A share count is a fact about the company, so it reads the same whatever the price did today, and it does not fade with the day’s glow.</p>
+<p><b>The chart marker, described — not built.</b> Station draws its chart on a canvas from provider candles (<code>chart/</code>), and I checked: it has no event-marker layer and does not read <code>public.scintillas</code> at all today. The change is therefore new work, and it is one read plus one draw: read <code>scintillas?kind=eq.dilution&amp;subject=eq.&lt;T&gt;</code> when a symbol is opened; for each row, draw a thin vertical rule at the filing day’s x with a small <code>DIL</code> label at the time axis and the stored sentence as its tooltip; skip rows outside the visible range. No new store, no new provider call, and the marker says the filing date — never the price date.</p>
+
+<h2>6 · Index changes: the catalyst we were missing</h2>
+<div class="panel">
+“Bloom Energy … just got added to the S&amp;P. <b>Do we capture those kinds of signals?</b>” We did not. Now: <code>index_change</code> is a scintilla kind, S&amp;P 500 / 400 / 600, additions and deletions, each with <b>the date it binds</b> — the day every fund tracking the index has to own the name. One provider row that adds BE and drops MRO becomes <b>two</b> events, one per company, because it is two facts about two companies.
+</div>
+<p><b>What is deliberately not claimed:</b> no magnitude (a company has no “usual” number of index changes), and no announcement date — the endpoint publishes the effective date only, so the screen says “effective” and nothing else. A change dated in the <i>future</i> is kept, because an announced change that has not bound yet is exactly the signal; anything older than 21 days is dropped as history.</p>
+
+<h2>7 · News sources audit</h2>
+<table>
+<tr><th>Question</th><th>Answer</th><th>Evidence</th></tr>
+<tr><td><b>What the Hub pulls today</b></td><td><b>Two collectors, no more.</b> <code>feed='google'</code> (Google News RSS) and <code>feed='fmp'</code>. In a 1,000-row sample since 22 Sep: 745 google, 255 fmp. Volume: 4,324–6,286 rows a day, 1,686–2,095 of them on his favourites.</td><td>Read live from <code>public.news</code>, 24 Sep. Link hosts: news.google.com 757, defenseworld.net 76, fool.com 33, 247wallst 29, zacks 28, seekingalpha 8, benzinga 7, prnewswire 7.</td></tr>
+<tr><td><b>Yahoo Finance per-ticker headlines</b></td><td><b>Yes — it works, and it is built.</b> A free RSS feed, no key and no account: <code>feeds.finance.yahoo.com/rss/2.0/headline?s=BE</code>. <b>Limits:</b> ~20 items per name, roughly the last few days, headline + link + time + a short description only — no article text, no full history, no bulk endpoint, and it is a courtesy, not a contract: one request per name, spaced, and a 429 stops the pass.</td><td>Measured 24 Sep: HTTP 200, <code>application/xml</code>, 14.6 KB, <b>20 items</b> for BE. Saved verbatim as <code>tests/fixtures/news/yahoo-BE-20260924.xml</code>; the collector turns it into 20 storable rows with 0 refusals.</td></tr>
+<tr><td><b>A “MarketWire” connector in the Claude connector directory</b></td><td><b>I could not verify one, and I will not say there is.</b> Nothing in this estate references such a connector, and I have no read of that directory from here. Note also that Marketwired the wire service was folded into Nasdaq’s GlobeNewswire years ago, so the name may not refer to a live product. <b>Root should check the directory directly.</b> Press-release wires do already reach the Hub second-hand through Google News (prnewswire.com appears in the stored rows).</td><td>Repo-wide search; no connector API reachable from this machine.</td></tr>
+<tr><td><b>Reuters</b></td><td><b>A personal subscription gives no data access for software</b> — it licenses one human to read, and its terms do not permit machine ingestion, storage or redisplay. What would be needed: a <b>Reuters Connect / LSEG content licence</b>, negotiated and paid, with its own API credentials and redistribution terms. That is a commercial decision, not an engineering one.</td><td>Licensing position; no Reuters call is made anywhere in this change.</td></tr>
+<tr><td><b>Apple Stocks</b></td><td><b>No public feed.</b> Apple publishes no API for Stocks or Apple News content; there is nothing to connect to, legally or technically.</td><td>—</td></tr>
+</table>
+<p class="note">Everything above is stored as <b>data</b>: ticker, headline, link, time, publisher host, and a trimmed description only where the feed itself carries one. No paywalled text is copied, and no linked page is ever fetched. Yahoo rows are written with <code>feed='yahoo'</code> so they can be told apart from — or deleted independently of — the google and fmp rows, and the write is ignore-duplicates on <code>(ticker, url)</code>, so a story that both Google and Yahoo carry is stored once.</p>
+
+<h2>8 · The migration and function changes — written, not applied</h2>
+<table>
+<tr><th>File</th><th>What it does</th><th>State</th></tr>
+<tr><td><code>supabase/migrations/20260924_scintillas_index_change.sql</code></td><td>Adds one name to the <code>scintillas_kind_ck</code> CHECK: <code>index_change</code>. A strict superset of the M59 list — every existing row still passes, nothing is read, rewritten or deleted.</td><td><b>Not applied</b></td></tr>
+<tr><td><code>…_index_change_ROLLBACK.sql</code></td><td>Deletes only <code>kind='index_change'</code> rows, then restores the previous CHECK.</td><td>Written</td></tr>
+<tr><td><code>supabase/functions/scintillas-index/index.ts</code></td><td>New edge function. Three provider reads (S&amp;P 500 / 400 / 600), ≤60 rows each, insert ignore-duplicates on <code>dedupe_key</code>. <b>The key is read from the function’s environment, never printed, never logged, and never sent to the browser</b>; a failed read names the index, never the URL that carries the key.</td><td><b>Not deployed</b></td></tr>
+<tr><td><code>…/scintillas-detect/detect.mjs</code> + <code>scripts/scintillas-detect.mjs</code></td><td><code>detectIndexChanges</code>, pure, in both byte-identical copies.</td><td>Committed</td></tr>
+<tr><td><code>supabase/migrations/20260924_scintillas_index_cron.sql</code></td><td>Twice a weekday — 08:40 and 18:40 New York. Six provider reads a day, no more. No secret value in the file.</td><td><b>Not applied</b></td></tr>
+<tr><td><code>lib/yahoo-news.mjs</code> · <code>scripts/yahoo-news-pull.mjs</code></td><td>The Yahoo collector: pure parsing in the library, reading and writing in the runner.</td><td><b>Not run</b></td></tr>
+</table>
+<div class="panel">
+<b>Why the index pass is its own function.</b> <code>scintillas-detect</code> makes a promise that a test enforces: it never calls a paid provider. Its dilution pass reads the SEC, which is free. My first attempt put the index pass inside it and <b>broke that test</b> — correctly. The guard was right, so the code moved: the paid pass lives on its own, on its own cadence, and can be switched off without touching anything else.
+</div>
+
+<h2>9 · What could be wrong</h2>
+<ul>
+<li><b>Nothing can pop until the collectors run.</b> The dilution pass and the index pass are not running, and the scintillas table holds 19 rows over two days, all <code>price_outlier</code>. Until those run, the “why:” overlay has only headlines to work with, and cards will be rare.</li>
+<li><b>“Only what arrives while he is here” is a judgement.</b> If a card is missed the row is still in the bell — but if he wants the day replayed on open, this is the switch to change, and it is one condition in <code>scintToastPass</code>.</li>
+<li><b>One news card per name per 90 minutes is a guess at his taste</b>, not a measurement. On 23 September that would have been up to 36 cards. If that is too many, the honest lever is the interval, not hiding rows.</li>
+<li><b>A headline is not proof of causation.</b> “why: <i>headline</i>” says only that this was the newest story stored for that name on that day. The three stored reasons above it are facts; the headline is an association, and it is ranked last for that reason.</li>
+<li><b>The tape is measured, not yet lived in.</b> The numbers here come from a headless render of the real markup and CSS with real rows; they are not a morning of using it on a phone with a thumb.</li>
+<li><b>The index provider’s date is taken as the effective date.</b> If that endpoint ever means “announced” by it, the label would be wrong — it says “effective” because that is what the endpoint documents.</li>
+<li><b>Yahoo can stop answering at any time.</b> It is an unofficial courtesy feed. The collector stops on a 429 and the Hub loses nothing it has today, because Yahoo is additive.</li>
+<li><b>The common brief was not on this machine.</b> <code>handoffs/BRIEF-20260923-COMMON.md</code> is absent from the repo, its history and the operations tree; I searched for it before starting. This work follows the rules stated in the dispatch itself — one glow primitive, monochrome with daily up green / down red, headless tests only, nothing deployed.</li>
+</ul>
+
+<h2>10 · Evidence</h2>
+<table>
+<tr><th>Claim</th><th>How it was checked</th></tr>
+<tr><td>Tape, cards, reasons, bell, index changes, Yahoo, migration</td><td><code>tests/notify-tape.test.mjs</code> — <b>22 tests, all passing</b>, offline, no browser. The page’s own bytes are the fixture: the M63 code is lifted out of <code>index.html</code> and run, so a test cannot pass against code the page does not ship.</td></tr>
+<tr><td>Nothing else broke</td><td>Full suite: <b>804 tests, 798 passing.</b> The 3 failures that remain — <code>xfeed-publish</code>, <code>hub-youtube-age</code>, <code>indicator-lab-methods</code> — fail identically on the merge commit before any of this work, verified by running them there.</td></tr>
+<tr><td>Layout at 1680 and 390</td><td>Headless Chrome, real viewports, real CSS, 19 real stored rows. Screenshots and the measured JSON are in the run directory.</td></tr>
+<tr><td>News volumes and sources</td><td>Read live from <code>public.news</code> and <code>public.hub_favorites</code> on 24 September, read-only.</td></tr>
+<tr><td>BYND’s numbers</td><td>Recomputed here from the verbatim 8-K fixture, not copied from the earlier deliverable.</td></tr>
+</table>
+
+<p class="note" style="margin-top:26px">Nothing in this unit was deployed, pushed, scheduled or applied to the database. No provider job was started and no paid API was called; the only network reads were the Hub’s own public tables and one free Yahoo RSS feed.</p>
+
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

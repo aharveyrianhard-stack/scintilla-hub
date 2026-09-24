@@ -698,3 +698,75 @@ export function detectDilution({ filings, marketBy, ts, rules = null, source = "
   }
   return { events, skipped };
 }
+
+/* ── M63 · INDEX CHANGES ─────────────────────────────────────────────────────────────────────
+   Alan, 24 Sep: "Bloom Energy … just got added to the S&P. Do we capture those kinds of signals?"
+   We did not. An addition or a deletion is a catalyst of a particular kind: it is announced in
+   advance, it binds on a stated date, and on that date every fund tracking the index has to own
+   the name (or stop owning it). That is why a name can move hard on no news of its own.
+
+   WHAT THIS IS AND IS NOT. It is a normaliser, not a detector: the provider states the membership
+   change, so there is nothing to infer and no threshold to cross. Its whole job is to turn one
+   provider row into the one or two events it actually contains — a row that adds BE and removes
+   another name is two facts about two companies — and to refuse anything it cannot date or name.
+   No magnitude is claimed: a company has no "usual" number of index changes. */
+export const INDEX_CHANGE_KIND = "index_change";
+export const INDEX_CHANGE_MAX_AGE_DAYS = 21;   // older than this is history, not a signal
+
+const idxSym = (v) => String(v == null ? "" : v).trim().toUpperCase().replace(/\s+/g, "");
+const idxDay = (v) => {
+  const s = String(v == null ? "" : v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const t = Date.parse(s);                      /* "September 22, 2026" — the provider's own words */
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+};
+const idxAgeDays = (day, today) => {
+  const a = Date.parse(day + "T00:00:00Z"), b = Date.parse(String(today) + "T00:00:00Z");
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86400000) : null;
+};
+
+export function detectIndexChanges({ changes, index, ts, today, universe = null,
+                                     maxAgeDays = INDEX_CHANGE_MAX_AGE_DAYS,
+                                     source = "fmp:index-constituent-changes" }) {
+  const events = [], skipped = [];
+  const inUniverse = universe && universe.length
+    ? new Set(universe.map((s) => idxSym(s))) : null;
+  const name = String(index || "").trim();
+  for (const c of changes || []) {
+    const day = idxDay(c && (c.date ?? c.dateAdded ?? c.effective_date));
+    if (!day) { skipped.push({ subject: idxSym(c && c.symbol) || null, reason: "NO_DATE" }); continue; }
+    const age = idxAgeDays(day, today);
+    /* a change dated in the FUTURE is exactly what we want — it is the announcement — so only the
+       past is aged out */
+    if (age != null && age > maxAgeDays) { skipped.push({ subject: idxSym(c && c.symbol) || null, reason: "TOO_OLD", day }); continue; }
+
+    const pairs = [
+      { sym: idxSym(c && c.symbol), security: (c && (c.addedSecurity ?? c.security)) || null, action: "added",
+        counterpart: idxSym(c && c.removedTicker) || null },
+      { sym: idxSym(c && c.removedTicker), security: (c && c.removedSecurity) || null, action: "removed",
+        counterpart: idxSym(c && c.symbol) || null },
+    ];
+    for (const p of pairs) {
+      if (!p.sym) continue;
+      if (inUniverse && !inUniverse.has(p.sym)) { skipped.push({ subject: p.sym, reason: "NOT_IN_UNIVERSE", day }); continue; }
+      events.push(ev({
+        ts, kind: INDEX_CHANGE_KIND, subject: p.sym, subject_kind: "ticker",
+        direction: p.action === "added" ? 1 : -1,
+        magnitude: null,                         /* membership has no "usual", so none is claimed */
+        source,
+        detail: {
+          index: name, action: p.action, effective_date: day,
+          /* this provider states ONE date — the day the membership changes. It does not publish the
+             announcement date, so none is invented; the screen says "effective" and nothing else. */
+          announced_date: null,
+          security: p.security || null,
+          [p.action === "added" ? "replaces" : "replaced_by"]: p.counterpart,
+          reason: (c && c.reason) || null,
+          days_from_today: age,
+        },
+        dedupe_key: INDEX_CHANGE_KIND + "|" + name + "|" + p.sym + "|" + p.action + "|" + day,
+      }));
+    }
+  }
+  return { events, skipped };
+}
