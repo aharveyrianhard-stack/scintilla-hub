@@ -630,6 +630,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__row.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__empty{ font-size:11px; color:var(--dim); padding:2px 0; }
 .sc-ss__coh{ font-family:var(--mono); font-size:10px; color:var(--ink3); letter-spacing:.06em; }
+/* M48 — what "usual day" means, said once, under the header. Alan, 24 Sep: "What's that Greek
+   letter there? What does that exactly mean … I don't think we're using that." So the strip says
+   it in words; the letter itself appears once, in brackets, and never as a label on a number. */
+.sc-ss__exp{ font-size:11px; line-height:1.5; color:var(--dim); margin-top:3px;
+  border-top:.5px solid var(--line); padding-top:3px; }
+.sc-ss__exp b{ color:var(--ink3); font-weight:600; }
+.sc-ss__exp i{ font-style:normal; color:var(--ink3); font-family:var(--mono); font-size:10px; letter-spacing:.04em; }
 @media(max-width:560px){
   /* MEASURED at 390 wide: the note took the whole row and pushed the label onto two lines across the
      spark. On a phone the header stacks and each line carries its number on a second row. */
@@ -13017,9 +13024,9 @@ function erpRowHTML(r, st) {
     '<span class="fld sur' + (wild ? " is-scint" : "") + '"' + (wild ? ' data-up="' + (sur > 0 ? "1" : "0") + '"' : "") +
       ' title="' + esc(st && st.sd != null
         ? r.ticker + " usually surprises by " + st.mean.toFixed(1) + "% give or take " + st.sd.toFixed(1) +
-          " over its last " + st.n + " reports" + (z != null ? " · this one is " + z.toFixed(1) + " of those away" : "")
+          " over its last " + st.n + " reports" + (z != null ? " · this one is " + z.toFixed(1) + "× that usual surprise" : "")
         : "not enough of this name's own history to say what is usual for it") + '">' +
-      (z != null ? (wild ? "◆ " : "") + z.toFixed(1) + "σ" : "—") + "</span>" +
+      (z != null ? (wild ? "◆ " : "") + z.toFixed(1) + "×" : "—") + "</span>" +
     "</div>" + (open ? erpHistHTML(r.ticker) : "");
 }
 /* ---- one name's quarter-by-quarter history ---------------------------------- */
@@ -19604,6 +19611,29 @@ const SCINT_CRIT_HOURS = 8;         /* the criticality line's window */
 const SCINT_CRIT_SESSIONS = 60;     /* stored sessions needed before any hit-rate could be claimed */
 const SCINT_SEL = "scintillas?select=ts,kind,subject,subject_kind,direction,magnitude,source,detail" +
                   "&order=ts.desc&limit=300";
+/* M48 — ONE RULES FILE. data/scintilla-rules.json holds the thresholds; the detector takes them
+   as an argument and this page fetches the same file, so what the strip says a rule is and what
+   the detector actually did cannot drift. It is read once; if it is missing the strip simply says
+   less, and nothing else changes. */
+const SCINT_RULES_URL = "/data/scintilla-rules.json";
+let SCINT_RULES = null, SCINT_RULES_TRIED = false;
+async function scintRulesRead() {
+  if (SCINT_RULES || SCINT_RULES_TRIED) return SCINT_RULES;
+  SCINT_RULES_TRIED = true;
+  try {
+    const r = await fetch(SCINT_RULES_URL, { cache: "no-cache" });
+    if (r.ok) SCINT_RULES = await r.json();
+  } catch (_) {}
+  return SCINT_RULES;
+}
+/* the thresholds in one short line, in the file's own numbers */
+function scintRulesLine(rules) {
+  const R = rules || SCINT_RULES;
+  if (!R || !R.price) return "";
+  const say = (k, name) => R.price[k] ? name + " " + R.price[k].x_usual + "× or " + R.price[k].raw_move_pct + "%" : "";
+  const parts = [say("equity", "equities"), say("index_etf", "indexes"), say("sector_etf", "sectors")].filter(Boolean);
+  return parts.length ? "rules " + R.version + " · " + parts.join(" · ") : "";
+}
 let SCINT_ROWS = null, SCINT_BY = null, SCINT_AT = 0, SCINT_FAIL_AT = 0, SCINT_BUSY = false;
 let SCINT_MISSING = false, SCINT_TIMER = null, SCINT_VIS_BOUND = false, SCINT_HTML = "";
 const SCINT_SEEN = new Map();       /* "surface|kind|SUBJECT" -> the ts that already glowed there */
@@ -19640,7 +19670,48 @@ function scintGlow(surface, ev, node, tone) {
   scScint(node, tone === undefined ? scintTone(ev) : tone);
   return true;
 }
-const scintZ = (ev) => (ev && ev.magnitude != null && isFinite(ev.magnitude) ? (+ev.magnitude).toFixed(1) + "σ" : "");
+/* ── M48 · PLAIN WORDS, NOT σ ────────────────────────────────────────────────────────────────
+   Alan, 24 Sep: "How unusual? What's that Greek letter there? What does that exactly mean, and
+   what's that standard measure? Because I don't think we're using that."
+   The stored magnitude IS a standard-deviation multiple. Nothing about the maths changes; the
+   SCREEN stops using the letter. A row now reads "2.4× its usual day (usual: ±5.1% a day,
+   measured over its last 60 sessions)", and the letter is written once, in brackets, in the
+   strip's explainer — for the record, not as a label. */
+const scintMult = (ev) => (ev && ev.magnitude != null && isFinite(ev.magnitude) ? (+ev.magnitude).toFixed(1) + "×" : "");
+function scintUnusual(ev) {
+  const x = scintMult(ev);
+  if (!x) return "";
+  return x + (ev.kind === "price_outlier" ? " its usual day"
+    : ev.kind === "earnings_surprise" ? " its usual surprise"
+    : ev.kind === "econ_surprise" ? " this release's usual miss" : " its usual");
+}
+/* what "usual" was measured to be, and over how much history — never a bare multiple */
+function scintUsualIs(ev) {
+  const d = (ev && ev.detail) || {};
+  if (ev.kind === "price_outlier" && d.daily_vol_pct != null && isFinite(+d.daily_vol_pct))
+    return "usual: ±" + (+d.daily_vol_pct).toFixed(1) + "% a day" +
+      (d.n_days ? ", measured over its last " + d.n_days + " sessions" : "");
+  if (ev.kind === "earnings_surprise") {
+    const m = (d.measures || []).find((x) => x && x.name === d.measure) || {};
+    if (m.spread_pct != null && isFinite(+m.spread_pct))
+      return "usual: ±" + Math.abs(+m.spread_pct).toFixed(1) + "%" + (m.n ? " over its last " + m.n + " reports" : "");
+  }
+  if (ev.kind === "econ_surprise" && d.spread != null && isFinite(+d.spread))
+    return "usual miss: ±" + Math.abs(+d.spread).toFixed(2) + (d.n_prints ? " over its last " + d.n_prints + " prints" : "");
+  return "";
+}
+/* WHICH RULE made this a scintilla (M48's two families). A row stored before the rules file
+   existed carries no `fired`, and then nothing is claimed about which rule it was. */
+function scintWhyRule(ev) {
+  const d = (ev && ev.detail) || {};
+  const fired = Array.isArray(d.fired) ? d.fired : null;
+  if (!fired || !fired.length) return "";
+  const cls = String(d.asset_class || "equity").replace(/_/g, " ");
+  const floor = d.thresholds && d.thresholds.raw_move_pct != null ? d.thresholds.raw_move_pct + "%" : "";
+  if (fired.indexOf("raw") >= 0 && fired.indexOf("statistical") >= 0) return "big move, and far beyond its usual day";
+  if (fired.indexOf("raw") >= 0) return "a big move on its own" + (floor ? " (over the " + floor + " floor for " + cls + ")" : "");
+  return "";                       /* the statistical rule is already said by "2.4× its usual day" */
+}
 /* plain words for the strip: what kind of scintilla this is */
 function scintWhat(ev) {
   switch (ev && ev.kind) {
@@ -19656,27 +19727,27 @@ function scintWhat(ev) {
 /* the number itself, said the way the room says it */
 function scintSays(ev) {
   const d = (ev && ev.detail) || {};
+  const u = scintUsualIs(ev);
+  const unusual = [scintUnusual(ev), u ? "(" + u + ")" : ""].filter(Boolean).join(" ");
   if (ev.kind === "price_outlier") {
     const mv = d.move_pct != null ? fmtC(+d.move_pct) : "";
-    return [mv, scintZ(ev), d.daily_vol_pct != null ? "usual " + (+d.daily_vol_pct).toFixed(1) + "%/day" : ""]
-      .filter(Boolean).join(" · ");
+    return [mv, unusual, scintWhyRule(ev)].filter(Boolean).join(" · ");
   }
   if (ev.kind === "earnings_surprise") {
     const m = (d.measures || []).find((x) => x && x.name === d.measure) || {};
-    return [(d.measure || "result") + " " + (m.surprise_pct != null ? fmtC(+m.surprise_pct) : "") + " vs est",
-            m.usual_pct != null ? "usually " + Math.abs(+m.usual_pct).toFixed(1) + "%" : "", scintZ(ev)]
+    return [(d.measure || "result") + " " + (m.surprise_pct != null ? fmtC(+m.surprise_pct) : "") + " vs est", unusual]
       .filter(Boolean).join(" · ");
   }
   if (ev.kind === "econ_surprise") {
     return [(d.actual != null ? "actual " + d.actual : "") + (d.estimate != null ? " vs est " + d.estimate : ""),
-            d.reading || "", scintZ(ev)].filter(Boolean).join(" · ");
+            d.reading || "", unusual].filter(Boolean).join(" · ");
   }
   if (ev.kind === "econ_imminent") {
     return ["in " + Math.max(0, Math.round(+d.minutes_to || 0)) + " min",
             d.estimate != null ? "est " + d.estimate : "no estimate published", d.impact ? d.impact.toLowerCase() + " impact" : ""]
       .filter(Boolean).join(" · ");
   }
-  return scintZ(ev);
+  return [scintUnusual(ev), scintUsualIs(ev) ? "(" + scintUsualIs(ev) + ")" : ""].filter(Boolean).join(" ");
 }
 const scintClass = (ev) => {
   const t = scintTone(ev);
@@ -19770,16 +19841,25 @@ function scintStripHTML() {
   const sess = scintSessions();
   const coh = scintCohorts(rows);
   const cohHTML = coh.length
-    ? '<span class="sc-ss__coh" title="' + esc(coh.slice(0, 3).map((c) => c.cohort + " " + c.count + " · " + c.intensity + "σ").join(" · ") +
+    ? '<span class="sc-ss__coh" title="' + esc(coh.slice(0, 3).map((c) => c.cohort + " " + c.count + " · " +
+        c.intensity + "× usual, added up").join(" · ") +
         " · a name counts in every cohort it belongs to") + '">' + esc(coh[0].cohort) + " " + coh[0].count + "</span>"
     : "";
+  /* said ONCE, under the header: what "usual day" means, in words, with the standard measure in
+     brackets for the record and the two everyday frequencies spelled out. */
+  const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
+  const rulesLine = scintRulesLine();
+  const exp = '<div class="sc-ss__exp"><b>“usual day”</b> is the size of a typical daily move for that name — ' +
+    "its own last " + sessions + " sessions [standard deviation]. An ordinary day is about <b>1×</b>; " +
+    "<b>2×</b> happens about 1 day in 20; <b>3×</b> about 1 day in 370." +
+    (rulesLine ? '<i> · ' + esc(rulesLine) + "</i>" : "") + "</div>";
   const head = '<div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
     '<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + scintSpark(crit) +
     '<span class="sc-ss__note">criticality, last ' + SCINT_CRIT_HOURS + "h · a first measure only · " +
     sess + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet</span></div>";
   if (!rows.length) {
     return '<div class="sc-ss">' + head +
-      '<div class="sc-ss__empty">nothing has moved further than its own history today.</div></div>';
+      '<div class="sc-ss__empty">nothing has moved further than its own history today.</div>' + exp + "</div>";
   }
   const lines = rows.slice(0, 24).map((ev) => {
     const d = ev.detail || {};
@@ -19793,7 +19873,7 @@ function scintStripHTML() {
       '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
       '<span class="sc-ss__k">' + esc(scintWhat(ev)) + "</span></button>";
   }).join("");
-  return '<div class="sc-ss">' + head + '<div class="sc-ss__rows">' + lines + "</div></div>";
+  return '<div class="sc-ss">' + head + '<div class="sc-ss__rows">' + lines + "</div>" + exp + "</div>";
 }
 function scintStripRender() {
   const host = el("scintStrip");
@@ -19855,11 +19935,99 @@ function boardScintPass() {
   }
   return n;
 }
+/* ── M48 · THE TOP TAPE IS THE SCINTILLATION ────────────────────────────────────────────────
+   Alan, 24 Sep: "On the dashboard, events tape, on the one at the top, not the one at the bottom.
+   The flashing when the event is upcoming — that is what I see as scintillation. It's not like
+   adding something new. It's just whatever it is flashes."
+
+   So NOTHING NEW IS DRAWN. The header queue the page already builds (ecNudgeModel → the ident
+   box) flashes through the page's ONE glow primitive, scScint, as its moment comes:
+
+     more than 15 min out   still. No glow at all — the 16 Aug rule: "silence is information"
+     last 15 minutes        a gentle pulse, every 20 s
+     last 5 minutes         quicker, every 6 s
+     the release minute     a hard flash every 2 s, for two minutes
+     the number lands       ONE glow in the Economic room's own colour: adverse hot, favourable cool
+
+   THE RULES IT KEEPS.
+     · One primitive: every glow here is scScint, so prefers-reduced-motion switches all of it off
+       (SCINT_OFF), and colour + text-shadow means it can never move the layout.
+     · It reads the model, not the kind. An earnings report standing in the same queue gets the
+       same treatment with no extra code — ecTapeSurprise already reads a beat as favourable.
+       TODAY the header queue carries macro releases only, so that path is proven by test, not by
+       something on screen.
+     · Nothing about the queue's own four states, its category colours or its countdown changes. */
+const MN_SCINT_SOON_S = 15 * 60;      /* the pulse starts here */
+const MN_SCINT_NEAR_S = 5 * 60;       /* and quickens here */
+const MN_SCINT_SOON_MS = 20000, MN_SCINT_NEAR_MS = 6000, MN_SCINT_DUE_MS = 2000;
+const MN_SCINT_DUE_S = 120;           /* how long the release flash lasts past the minute */
+const MN_SCINT_TICK_MS = 2000;        /* the fastest phase decides the tick */
+const MN_SCINT_AT = new Map();        /* item key -> when it last glowed */
+let MN_SCINT_TIMER = null;
+/* WHAT THIS ITEM SHOULD BE DOING NOW. Pure: an item, its state and the clock go in, a plan or
+   null comes out, so the timings are pinned by test rather than watched by eye. */
+function mnScintPlan(it, st, nowSec) {
+  if (!it || !isFinite(+it.ts)) return null;
+  if (st === "landed") {
+    const s = ecTapeSurprise(it);
+    return { phase: "landed", once: true, everyMs: 0,
+             tone: !s || s.cls === "inline" ? "soon" : s.cls === "miss" ? "hot" : "cool" };
+  }
+  if (st === "ahead" || st === "cluster") return null;   /* a day still to come is a warning, not an alarm */
+  const dt = +it.ts - nowSec;
+  if (dt > MN_SCINT_SOON_S) return null;
+  if (dt > MN_SCINT_NEAR_S) return { phase: "soon", once: false, everyMs: MN_SCINT_SOON_MS, tone: "soon" };
+  if (dt > 0) return { phase: "near", once: false, everyMs: MN_SCINT_NEAR_MS, tone: "soon" };
+  if (-dt <= MN_SCINT_DUE_S) return { phase: "due", once: false, everyMs: MN_SCINT_DUE_MS, tone: "soon" };
+  return null;                                            /* past its window: it stops, it does not nag */
+}
+/* the cell that carries the glow: the countdown while it is coming, the surprise once it lands */
+function mnScintTarget(node, phase) {
+  if (!node || typeof node.querySelector !== "function") return node;
+  const pick = phase === "landed" ? [".mn-sur", ".mn-res"]
+    : phase === "due" ? [".mn-cd", ".mn-nm", ".mn-slbl"]
+    : [".mn-cd", ".mn-slbl", ".mn-nm"];
+  for (const sel of pick) { const n = node.querySelector(sel); if (n) return n; }
+  return node;
+}
+function mnScintNode(box, key) {
+  if (!box || typeof box.querySelectorAll !== "function") return null;
+  return Array.prototype.find.call(box.querySelectorAll("[data-k]"),
+    (x) => x.getAttribute("data-k") === key && !(x.classList && x.classList.contains("mn-out"))) || null;
+}
+function mnScintPass(nowMs, boxIn, modelIn) {
+  if (!ECON_TAPE_ON || SCINT_OFF) return 0;               /* reduced motion: the queue still counts down, silently */
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return 0;
+  const box = boxIn || (typeof el === "function" ? el("macroNext") : null);
+  if (!box) return 0;
+  const now = nowMs == null ? Date.now() : nowMs, nowSec = Math.floor(now / 1000);
+  let model = modelIn;
+  if (!model) { try { model = ecNudgeModel(nowSec); } catch (_) { return 0; } }
+  let n = 0;
+  for (const m of model || []) {
+    const plan = mnScintPlan(m.it, m.st, nowSec);
+    if (!plan) { MN_SCINT_AT.delete(m.key); continue; }
+    const node = mnScintNode(box, m.key);
+    if (!node) continue;
+    const last = MN_SCINT_AT.get(m.key);
+    if (plan.once ? last != null : last != null && now - last < plan.everyMs) continue;
+    MN_SCINT_AT.set(m.key, now);
+    scScint(mnScintTarget(node, plan.phase), plan.tone);
+    n++;
+  }
+  return n;
+}
+function mnScintArm() {
+  if (MN_SCINT_TIMER == null && typeof setInterval === "function")
+    MN_SCINT_TIMER = setInterval(() => { try { mnScintPass(); } catch (_) {} }, MN_SCINT_TICK_MS);
+}
+
 function scintPaint() {
   try { scintStripRender(); } catch (_) {}
   try { ecScintPass(); } catch (_) {}
   try { ernScintPass(); } catch (_) {}
   try { boardScintPass(); } catch (_) {}
+  try { mnScintPass(); } catch (_) {}          /* M48 — the top tape flashes as its moment comes */
 }
 
 /* ── the read ───────────────────────────────────────────────────────────────────────────────── */
@@ -19887,6 +20055,8 @@ function scintTick() {
   else scintPaint();
 }
 function scintStart() {
+  mnScintArm();                                 /* M48 — the tape's flash does not depend on the store */
+  scintRulesRead();                             /* M48 — the thresholds the strip quotes are the file's own */
   if (!SCINT_FEED_ON) return;
   if (SCINT_TIMER == null && typeof setInterval === "function") SCINT_TIMER = setInterval(scintTick, SCINT_TICK_MS);
   if (!SCINT_VIS_BOUND && typeof document !== "undefined" && typeof document.addEventListener === "function") {

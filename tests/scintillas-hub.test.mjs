@@ -158,7 +158,7 @@ test("the board marks the outliers of the day on the percentage cell that IS the
   assert.equal(glows[0].node, lc);
   assert.equal(glows[0].tone, true);
   assert.ok(lc.classes.has("is-scint"));
-  assert.match(lc.attrs.title, /outlier of the day · \+3\.20% · 2\.6σ · usual 1\.2%\/day/,
+  assert.match(lc.attrs.title, /outlier of the day · \+3\.20% · 2\.6× its usual day \(usual: ±1\.2% a day, measured over its last 40 sessions\)/,
     "hovering says what made it one, in plain words");
   assert.equal(api.boardScintPass(), 0, "a board repaint keeps the mark and does not re-flash");
 });
@@ -246,12 +246,12 @@ test("the criticality reading also says WHICH cohort is doing the scintillating"
   assert.deepEqual(out, [{ cohort: "AI_HARDWARE", count: 2, intensity: 4.8 },
                          { cohort: "FOOD", count: 1, intensity: 3 },
                          { cohort: "MEGACAP", count: 1, intensity: 2.7 }],
-    "ranked by intensity; a release is not a cohort member and the 9σ print does not distort any of them");
+    "ranked by intensity; a release is not a cohort member and the 9× print does not distort any of them");
   assert.equal(api.scintCohorts([]).length, 0);
   const noMap = world({ rows });
   assert.deepEqual(noMap.api.scintCohorts(rows), [], "with no cohort map loaded it says nothing rather than guessing");
   const html = world({ rows, cohsets, ids: { scintStrip: node() } }).api.scintStripHTML();
-  assert.match(html, /class="sc-ss__coh" title="AI_HARDWARE 2 · 4.8σ · FOOD 1 · 3σ · MEGACAP 1 · 2.7σ · a name counts in every cohort it belongs to">AI_HARDWARE 2</);
+  assert.match(html, /class="sc-ss__coh" title="AI_HARDWARE 2 · 4.8× usual, added up · FOOD 1 · 3× usual, added up · MEGACAP 1 · 2.7× usual, added up · a name counts in every cohort it belongs to">AI_HARDWARE 2</);
 });
 
 test("the criticality reading counts and weighs, and its line carries direction", () => {
@@ -301,4 +301,53 @@ test("nothing that already scintillated was touched, and the strip cannot move t
     const size = rule[0].match(/font-size:(\d+(?:\.\d+)?)px/);
     assert.ok(size && parseFloat(size[1]) >= 11, cls + " is at least 11px: " + rule[0]);
   }
+});
+
+/* ── M48 — PLAIN WORDS, NOT σ ──────────────────────────────────────────────────────────────────
+   Alan, 24 Sep, seeing "3.4σ" on the strip: "How unusual? What's that Greek letter there? What
+   does that exactly mean, and what's that standard measure? Because I don't think we're using
+   that." The maths did not change. The screen did. */
+const bynd = (extra = {}) => ev({
+  subject: "BYND", kind: "price_outlier", magnitude: 2.384, direction: -1,
+  detail: { move_pct: -12.16, daily_vol_pct: 5.1, n_days: 60, asset_class: "equity",
+            fired: ["statistical", "raw"], thresholds: { raw_move_pct: 8 }, rules_version: "2026-09-24.1", ...extra },
+});
+
+test("a row says how unusual in words, with the usual day spelled out", () => {
+  const { api } = world({ rows: [bynd()] });
+  const html = api.scintStripHTML();
+  assert.ok(html.includes("2.4× its usual day (usual: ±5.1% a day, measured over its last 60 sessions)"),
+    "the sentence Alan asked for, verbatim: " + html.slice(html.indexOf("sc-ss__d"), html.indexOf("sc-ss__d") + 180));
+  assert.ok(!/σ/.test(html), "no Greek letter reaches the screen");
+});
+
+test("the strip explains 'usual day' ONCE, with the standard measure in brackets and the odds in words", () => {
+  const { api } = world({ rows: [bynd()] });
+  const html = api.scintStripHTML();
+  assert.equal((html.match(/standard deviation/g) || []).length, 1, "written once, for the record");
+  assert.equal((html.match(/class="sc-ss__exp"/g) || []).length, 1, "and in one place");
+  assert.ok(html.includes("1 day in 20") && html.includes("1 day in 370"), "the two everyday frequencies");
+  assert.ok(html.includes("<b>1×</b>"), "an ordinary day is about 1×");
+  const empty = world({ rows: [] }).api.scintStripHTML();
+  assert.equal((empty.match(/class="sc-ss__exp"/g) || []).length, 1, "a quiet day still explains the measure");
+});
+
+test("which rule fired is said beside the row, in the rules file's own numbers", () => {
+  const both = world({ rows: [bynd()] }).api.scintStripHTML();
+  assert.ok(both.includes("big move, and far beyond its usual day"), both.slice(0, 200));
+  const rawOnly = world({ rows: [bynd({ fired: ["raw"] })] }).api.scintStripHTML();
+  assert.ok(rawOnly.includes("a big move on its own (over the 8% floor for equity)"));
+  const older = world({ rows: [ev({ detail: { move_pct: 3.2, daily_vol_pct: 1.2, n_days: 40 } })] }).api.scintStripHTML();
+  assert.ok(!older.includes("floor for"), "a row stored before the rules file claims nothing about which rule it was");
+});
+
+test("an earnings surprise and an economic print are said the same way", () => {
+  const ern = ev({ kind: "earnings_surprise", subject: "MU", magnitude: 3.1,
+    detail: { measure: "eps", measures: [{ name: "eps", surprise_pct: 12.4, spread_pct: 4.0, n: 8 }] } });
+  const html = world({ rows: [ern] }).api.scintStripHTML();
+  assert.ok(html.includes("3.1× its usual surprise (usual: ±4.0% over its last 8 reports)"), html.slice(0, 400));
+  const econ = ev({ kind: "econ_surprise", subject: "Core CPI", subject_kind: "event", magnitude: 2.1,
+    detail: { actual: 3.4, estimate: 3.1, reading: "adverse", spread: 0.14, n_prints: 12, room_class: "up" } });
+  const h2 = world({ rows: [econ] }).api.scintStripHTML();
+  assert.ok(h2.includes("2.1× this release's usual miss (usual miss: ±0.14 over its last 12 prints)"), h2.slice(0, 400));
 });
