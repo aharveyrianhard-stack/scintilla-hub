@@ -13,7 +13,7 @@ const code = [
   grab(/function rssItems\(xml\)\{.*\n/, "rssItems"),
   grab(/function gts\(s\)\{.*\n/, "gts"),
   grab(/const INVESTING_FEEDS=\[.*\n/, "INVESTING_FEEDS"),
-  grab(/const MARKET_BUCKET='\*MARKET'.*\n/, "MARKET_BUCKET"),
+  grab(/const MARKET_BUCKET='\_MARKET'.*\n/, "MARKET_BUCKET"),
   grab(/const normTitle=.*\n/, "normTitle"),
   grab(/const normUrl=.*\n/, "normUrl"),
 ].join("");
@@ -52,7 +52,7 @@ for (const [url, name] of F.INVESTING_FEEDS) {
 let held = new Set();
 if (rows.length) {
   /* the lane's own read: scoped to the market bucket, which is what the (ticker,url) index can answer */
-  const q = SB + "/rest/v1/news?select=url&ticker=eq." + encodeURIComponent("*MARKET") +
+  const q = SB + "/rest/v1/news?select=url&ticker=eq." + "_MARKET" +
     "&url=in.(" + rows.map((r) => '"' + r.url.replace(/"/g, '\\"') + '"').join(",") + ")";
   const r = await fetch(q, { headers: { apikey: ANON, Authorization: "Bearer " + ANON } });
   const body = await r.json();

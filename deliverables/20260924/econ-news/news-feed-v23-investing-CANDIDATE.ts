@@ -9,10 +9,14 @@ const J=(o)=>new Response(JSON.stringify(o),{headers:{'Content-Type':'applicatio
 //   All News · Economy · Stock Market · Economic Indicators · Commodities & Futures. 10 items each, 200 OK.
 // WHAT IS STORED: the headline, its time and its link. NOTHING ELSE — no article text, no description, no
 // fetch of the page behind the link. The row's ticker is the market bucket below, because these stories are
-// about the market and not about one name: per-ticker surfaces filter by ticker and never see them, while the
-// Hub's 24-hour news surface reads the window rather than a ticker and does.
+// about the market and not about one name.
 const INVESTING_FEEDS=[['https://www.investing.com/rss/news.rss','All News'],['https://www.investing.com/rss/news_14.rss','Economy'],['https://www.investing.com/rss/news_25.rss','Stock Market'],['https://www.investing.com/rss/news_95.rss','Economic Indicators'],['https://www.investing.com/rss/news_11.rss','Commodities & Futures']]
-const MARKET_BUCKET='*MARKET'   // not a symbol, so it can never collide with a tracked name
+// THE HUB ALREADY HAS THIS BUCKET. index.html: "_MARKET LAW - market-wide rows surface on the ALL tab
+// ONLY" (l.8825) and "ALL -> global pull (the ONLY tab that shows ticker='_MARKET')" (l.8870). The live
+// table already holds _MARKET rows from the 'general' feed (wsj.com, marketwatch.com). So this lane
+// joins that convention instead of inventing a second one, and the headlines appear on the NEWS room's
+// ALL tab the day it is deployed - no page change needed.
+const MARKET_BUCKET='_MARKET'
 // the same story rides several of their feeds, so the batch is de-duplicated on its own link and on a
 // normalised headline before anything is offered to the table
 const normTitle=(t)=>(t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()

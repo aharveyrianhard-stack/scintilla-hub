@@ -13,7 +13,7 @@ const ctx = vm.createContext({});
 vm.runInContext([
   grab(/function tag\(b,name\)\{.*\n/, "tag"), grab(/function clean\(s\)\{.*\n/, "clean"),
   grab(/function rssItems\(xml\)\{.*\n/, "rssItems"), grab(/function gts\(s\)\{.*\n/, "gts"),
-  grab(/const INVESTING_FEEDS=\[.*\n/, "the feed list"), grab(/const MARKET_BUCKET='\*MARKET'.*\n/, "the market bucket"),
+  grab(/const INVESTING_FEEDS=\[.*\n/, "the feed list"), grab(/const MARKET_BUCKET='\_MARKET'.*\n/, "the market bucket"),
   grab(/const normTitle=.*\n/, "normTitle"), grab(/const normUrl=.*\n/, "normUrl"),
 ].join(""), ctx);
 const F = vm.runInContext("({rssItems,gts,INVESTING_FEEDS,MARKET_BUCKET,normTitle,normUrl})", ctx);
@@ -49,7 +49,7 @@ test("a headline becomes a row with the source, the time and the link — and no
   const r = out.find((x) => /new home sales/i.test(x.title));
   assert.ok(r, "today's New Home Sales story is in the feed");
   assert.equal(r.site, "Investing.com");
-  assert.equal(r.ticker, "*MARKET");
+  assert.equal(r.ticker, "_MARKET");
   assert.equal(r.feed, "investing");
   assert.equal(r.snippet, "", "no article text is stored");
   assert.match(r.url, /^https:\/\/www\.investing\.com\/news\//);
@@ -72,7 +72,9 @@ test("a headline dated in the future is a feed fault and is not stored", () => {
     "the future-dated story is the one dropped — the other new-home-sales headline is untouched");
 });
 
-test("the market bucket is not a symbol, so it cannot collide with a tracked name", () => {
-  assert.equal(F.MARKET_BUCKET, "*MARKET");
-  assert.doesNotMatch(F.MARKET_BUCKET, /^[A-Z]{1,5}$/);
+test("the lane uses the Hub's OWN market bucket, so the headlines land on the NEWS room's ALL tab", () => {
+  assert.equal(F.MARKET_BUCKET, "_MARKET", "the same bucket index.html calls the _MARKET LAW");
+  assert.doesNotMatch(F.MARKET_BUCKET, /^[A-Z]{1,5}$/, "and it is not a symbol, so it cannot collide with a tracked name");
+  const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(page, /if \(t === "_MARKET"\) return cohort === "ALL";/, "the page still routes _MARKET to ALL");
 });

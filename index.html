@@ -2459,8 +2459,12 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .ec-nowlbl{ flex:0 0 auto; font:600 10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
   color:var(--crk); background:rgba(0,212,255,.10); border:.8px solid rgba(0,212,255,.34);
   border-radius:3px; padding:2px 5px; white-space:nowrap; }
-.ec-now--cell{ margin:2px 0; }
-.ec-now--cell .ec-nowlbl{ font-size:9px; padding:1px 4px; letter-spacing:.10em; }
+.ec-now--cell{ margin:2px 0; overflow:hidden; }
+.ec-now--cell .ec-nowlbl{ font-size:9px; padding:1px 3px; letter-spacing:.04em; white-space:nowrap; }
+/* on a phone a month cell is about 48 px wide — narrower than any honest label — so there the marker
+   is the line alone and the time lives in its tooltip. The DAY and WEEK lists, which is where a phone
+   reader actually reads the releases, keep the full "now HH:MM ET". */
+@media (max-width:900px){ .ec-now--cell .ec-nowlbl{ display:none; } .ec-now--cell::before{ flex:0 0 4px; } }
 .ec-now--tape{ display:inline-flex; vertical-align:middle; margin:0 2px; }
 .ec-now--tape::before, .ec-now--tape::after{ flex:0 0 8px; }
 /* a value the feed filed on a different scale from its own siblings, shown at the shared scale */
@@ -14361,7 +14365,11 @@ function ecNowPlace(host, sel, nowSec, today, cls) {
   if (!mine.length) return 0;                       // today is not on this screen: claim nothing
   const mark = document.createElement("div");
   mark.className = "ec-now" + (cls || "");
-  mark.innerHTML = '<span class="ec-nowlbl">' + esc(ecNowLabel(nowSec)) + "</span>";
+  /* a month cell is one seventh of the panel, so the marker there wears the short label and carries the
+     full one in its tooltip; the room's own note already says every time in it is ET */
+  const cell = /cell/.test(cls || "");
+  mark.innerHTML = '<span class="ec-nowlbl"' + (cell ? ' title="' + esc(ecNowLabel(nowSec)) + '"' : "") + ">" +
+    esc(cell ? "now " + ecTimeET(nowSec) : ecNowLabel(nowSec)) + "</span>";
   const next = mine.filter((n) => +n.dataset.ets > nowSec)[0];
   if (next && next.parentNode) next.parentNode.insertBefore(mark, next);
   else { const last = mine[mine.length - 1]; if (!last.parentNode) return 0; last.parentNode.insertBefore(mark, last.nextSibling); }
