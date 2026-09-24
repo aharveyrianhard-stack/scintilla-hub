@@ -24,6 +24,14 @@ export async function pgAll(path: string, page = 1000, cap = 20) {
   }
   return out;
 }
+/* 24 Sep: a snippet cut around a matched word can split an emoji in half, leaving a lone
+   UTF-16 surrogate. JSON.stringify escapes it, but PostgREST rejects the body as invalid JSON
+   (PGRST102) and the whole slice is lost. Every string is made well-formed before it is sent:
+   a broken half-emoji becomes U+FFFD, nothing else changes. */
+function wellFormed(_k: string, v: unknown) {
+  if (typeof v !== "string") return v;
+  return v.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
+}
 export async function upsert(table: string, rows: unknown[], onConflict: string, chunk = 500) {
   let written = 0;
   for (let i = 0; i < rows.length; i += chunk) {
@@ -31,7 +39,7 @@ export async function upsert(table: string, rows: unknown[], onConflict: string,
     const r = await fetch(SB + `/rest/v1/${table}?on_conflict=${onConflict}`, {
       method: "POST",
       headers: { ...H, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify(slice),
+      body: JSON.stringify(slice, wellFormed),
     });
     if (!r.ok) throw new Error("write " + table + " -> " + r.status + " " + (await r.text()).slice(0, 300));
     written += slice.length;
