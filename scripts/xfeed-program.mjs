@@ -369,14 +369,17 @@ export async function persistBookmarkOutcome({ runDir, runtimeDir, folder, recei
   try {
     await atomic(join(runDir, 'receipt.json'), receipt);
     const health = await readJson(join(runtimeDir, 'program-health.json'));
-    if (health) await atomic(join(runtimeDir, 'program-health.json'), { ...health, bookmarks: { folder, status: bm.status, posts_seen: bm.posts_seen ?? null, added: bm.added ?? null, finished_at: bm.finished_at ?? null } });
+    const dp = receipt.bookmarks_deep ?? null;
+    if (health) await atomic(join(runtimeDir, 'program-health.json'), { ...health,
+      bookmarks: { folder, status: bm.status, posts_seen: bm.posts_seen ?? null, added: bm.added ?? null, finished_at: bm.finished_at ?? null },
+      ...(dp ? { bookmarks_deep: { status: dp.status, pending: dp.pending ?? null, read: dp.read ?? null, media_saved: dp.media_saved ?? null, finished_at: dp.finished_at ?? null } } : {}) });
     return true;
   } catch (error) { log.write(`bookmark receipt write failed: ${error.message}`); return false; }
 }
 
 // ---------------------------------------------------------------- the run
 
-export const DEFAULTS = { runtimeDir: DEFAULT_RUNTIME, profileDir: DEFAULT_PROFILE, intake: INTAKE, maxPages: 60, budgetSeconds: 1500, initialPages: 3, headless: false, chromePath: null, envFile: null, fixture: null, staleAfterSeconds: CADENCE_STALE_SECONDS, playwrightFrom: process.env.XFEED_PLAYWRIGHT_FROM ?? null, bookmarks: true, bookmarkFolder: 'Claude Check', bookmarkBudgetSeconds: 240 };
+export const DEFAULTS = { runtimeDir: DEFAULT_RUNTIME, profileDir: DEFAULT_PROFILE, intake: INTAKE, maxPages: 60, budgetSeconds: 1500, initialPages: 3, headless: false, chromePath: null, envFile: null, fixture: null, staleAfterSeconds: CADENCE_STALE_SECONDS, playwrightFrom: process.env.XFEED_PLAYWRIGHT_FROM ?? null, bookmarks: true, bookmarkFolder: 'Claude Check', bookmarkBudgetSeconds: 240, deepBookmarks: true, deepLimit: 6, deepBudgetSeconds: 300, deepMaxLinks: 3 };
 
 /** The bookmark folder rides the same scheduled pass, in the same browser, AFTER the Trading
  *  list has finished and written its receipt. It is a sidecar on purpose: whatever it does,
@@ -394,6 +397,29 @@ export async function runBookmarkSidecar(o, { browser, log = { write() {} }, cap
     return result;
   } catch (error) {
     log.write(`bookmarks failed: ${error.message}`);
+    return { status: 'failed', error: safeErrorMessage(String(error.message)) };
+  }
+}
+
+/** The deep read of NEW bookmarks rides the same pass, in the same browser, AFTER the folder
+ *  capture. Same rules as its sidecar: it can neither change nor fail the list pass, and it
+ *  keeps every picture in the collector's own store — never in the repository, never published.
+ *  Bounded by count and by seconds so a busy folder cannot stretch a cycle. */
+export async function runDeepSidecar(o, { browser, log = { write() {} }, deep = null, bookmarkOutcome = null } = {}) {
+  if (!browser || o.deepBookmarks === false || o.bookmarks === false || o.fixture) return { status: 'skipped', reason: o.fixture ? 'fixture run' : 'disabled' };
+  if (bookmarkOutcome && !['captured', 'no_posts'].includes(bookmarkOutcome.status)) return { status: 'skipped', reason: `folder read ${bookmarkOutcome.status}` };
+  try {
+    const run = deep ?? (await import('./xfeed-bookmark-deep.mjs')).deepPass;
+    const budget = o.deepBudgetSeconds ?? 300;
+    const result = await Promise.race([
+      run({ folder: o.bookmarkFolder, runtimeDir: o.runtimeDir, profileDir: o.profileDir, headless: o.headless,
+            limit: o.deepLimit ?? 6, budgetSeconds: budget, maxLinks: o.deepMaxLinks ?? 3, playwrightFrom: o.playwrightFrom }, { browser }),
+      new Promise(done => setTimeout(() => done({ status: 'timed_out', error: `no answer within ${budget + 60} s` }), (budget + 60) * 1000).unref?.()),
+    ]);
+    log.write(`deep ${result.status}: ${result.read ?? 0} read of ${result.pending ?? 0} pending, ${result.media_saved ?? 0} pictures kept${result.error ? ` (${result.error})` : ''}`);
+    return result;
+  } catch (error) {
+    log.write(`deep failed: ${error.message}`);
     return { status: 'failed', error: safeErrorMessage(String(error.message)) };
   }
 }
@@ -481,6 +507,7 @@ export async function runCollector(options = {}, deps = {}) {
     return await loud('crashed', String(error.message));
   } finally {
     receipt.bookmarks = await runBookmarkSidecar(o, { browser, log, capture: deps.captureBookmarks ?? null });
+    receipt.bookmarks_deep = await runDeepSidecar(o, { browser, log, deep: deps.deepBookmarks ?? null, bookmarkOutcome: receipt.bookmarks });
     await persistBookmarkOutcome({ runDir, runtimeDir: o.runtimeDir, folder: o.bookmarkFolder, receipt, log });
     await browser?.context.close().catch(() => {});
     await intake?.stop().catch(() => {});
