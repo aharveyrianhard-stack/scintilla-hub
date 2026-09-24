@@ -181,3 +181,13 @@ test("the median of dollars traded, not the mean, decides liquidity", () => {
   assert.ok(r.dollar < 2e8, "one busy session must not carry a thin name over the line");
   assert.equal(r.bars, 120);
 });
+
+test("a fund is not a company: ETFs and funds never sit inside a sector (24 Sep)", () => {
+  /* FMP files SPY, QQQ, SMH, GLD, TLT ... under "Financial Services", so 49 of Financials' 82
+     members were funds and the live page held QQQ "in Financials". */
+  const src = fs.readFileSync(new URL("../allocation/index.html", import.meta.url), "utf8");
+  assert.match(src, /company_profile\?select=ticker,sector,market_cap,updated_ts,is_etf,is_fund/, "the flags are read");
+  assert.match(src, /if \(p\.is_etf === true \|\| p\.is_fund === true\) \{ D\.fundsOut\.push\(t\); continue; \}/,
+    "a fund is left out of the sector universe");
+  assert.match(src, /Funds left out of the sectors/, "and the page names what it left out");
+});

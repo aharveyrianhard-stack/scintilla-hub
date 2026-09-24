@@ -491,7 +491,7 @@ async function load() {
   const stamp = document.getElementById("stamp");
 
   const gP = api("/geiger").catch((e)=>{ D.missing.push("the live Geiger ("+e.message+")"); return null; });
-  const pP = pg("company_profile?select=ticker,sector,market_cap,updated_ts&limit=2000")
+  const pP = pg("company_profile?select=ticker,sector,market_cap,updated_ts,is_etf,is_fund&limit=2000")
               .catch((e)=>{ D.missing.push("company sectors ("+e.message+")"); return null; });
   const fP = pg("fundamentals?select=ticker,price,market_cap,trailing_pe,eps_ttm,revenue_ttm,updated_ts&limit=2000")
               .catch((e)=>{ D.missing.push("trailing multiples ("+e.message+")"); return null; });
@@ -624,9 +624,15 @@ function universe() {
   const rat  = new Map();
   (D.ratios||[]).forEach((r)=>{ const p=rat.get(r.ticker); if(!p || String(r.fiscal_date)>String(p.fiscal_date)) rat.set(r.ticker,r); });
   const out = [];
+  D.fundsOut = [];
   for (const [t, g] of Object.entries(D.g.symbols || {})) {
     const p = prof.get(t); if (!p || !p.sector) continue;
     if (!SECTOR_FUND[p.sector]) continue;              // crypto, macro and index rows are not equities
+    /* 24 Sep: A FUND IS NOT A COMPANY. FMP files every ETF under "Financial Services / Asset
+       Management", so SPY, QQQ, SMH, GLD, TLT and 44 more sat inside Financials - 49 of its 82
+       members - and the page held QQQ "in Financials". Funds are left out of the sectors and
+       named in the sources, so a sector is only ever its own companies. */
+    if (p.is_etf === true || p.is_fund === true) { D.fundsOut.push(t); continue; }
     const f = fund.get(t), r = rat.get(t);
     out.push({ t, sector:p.sector, mcap:p.market_cap, g:g.composite, trend:g.trend, mom:g.momentum,
       pe: (f && f.trailing_pe>0 ? f.trailing_pe : (r && r.pe>0 ? r.pe : null)),
@@ -1163,6 +1169,8 @@ function compute() {
   const eqBy = {}; eq.forEach((x)=>{ eqBy[x.t] = x; });
   m.favRows = D.fav.map((t) => {
     const x = eqBy[t];
+    if (!x && (D.fundsOut||[]).indexOf(t) !== -1)
+      return { t, state:"A FUND", why: "a fund, not a company: this page picks companies inside sectors, so a fund is never held here" };
     if (!x) return { t, state:"NOT COVERED", why: D.g && D.g.symbols && D.g.symbols[t]
       ? "the Geiger covers it, but it has no sector on file here, so this page's equity universe does not carry it"
       : "the Geiger artifact does not carry this name tonight" };
@@ -1386,6 +1394,8 @@ function sourcesHTML(m) {
     "Sector tape · chart API /candles tf=1d · SPY and the eleven sector funds · " +
       (D.tape.SPY ? D.tape.SPY.length + " daily bars each, newest " + new Date(D.tape.SPY[D.tape.SPY.length-1].t).toISOString().slice(0,10) : "unavailable") + "<br>" +
     "Sectors and size · scintilla-live company_profile · " + (D.prof? D.prof.length:0) + " rows<br>" +
+    "Funds left out of the sectors · " + ((D.fundsOut||[]).length) + " (" + esc((D.fundsOut||[]).slice().sort().join(", ")) +
+      ") · FMP files every fund under Financial Services, and a fund is not a company<br>" +
     "Trailing multiples · scintilla-live fundamentals · " + (D.fund? D.fund.length:0) + " rows · median " + ageWord(m.fAge) + " · " + m.covPe + " names priced<br>" +
     "Debt and ratios · scintilla-live ratios_history, last full year · " + (D.ratios? D.ratios.length:0) + " rows · median " + ageWord(m.rAge) + " · " + m.covDe + " names covered<br>" +
     "Earnings dates · scintilla-live earnings_events, from today forward · " +
