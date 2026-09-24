@@ -2234,6 +2234,18 @@ body.tvmodal-open{ overflow:hidden; }
    glow green or red: it glows a grey (all three channels 200, inside the estate's grey law). */
 @keyframes sc-scint-neu{0%{color:#C8C8C8;text-shadow:0 0 8px rgba(200,200,200,.55)}100%{}}
 .sc-scint-neu{ animation:sc-scint-neu .52s ease-out; }
+/* 24 Sep — the same glow, drawn ONCE into an overlay and faded by the graphics chip. MEASURED
+   headless at 1680x1050 in market hours: the Hub spent 17.3 CPU-seconds a minute, 13.1 of them
+   repainting ~34 cells whose colour and text-shadow changed every frame (45 layout and style
+   passes a second). The overlay prints the same text, in the glow colour with the glow shadow,
+   exactly over the number; only its opacity animates, which the compositor does without
+   repainting text. It inherits font, padding, alignment and clipping from the cell, so it lands
+   on the same pixels, and position:relative with no offsets moves nothing. */
+.sc-glow{ position:relative; }
+.sc-glow::after{ content:attr(data-scv); position:absolute; left:0; top:0; right:0; bottom:0;
+  box-sizing:border-box; padding:inherit; text-align:inherit; white-space:inherit;
+  overflow:inherit; text-overflow:inherit; color:var(--sc-glow-c, transparent);
+  text-shadow:var(--sc-glow-s, none); opacity:0; pointer-events:none; }
 @media (prefers-reduced-motion:reduce){
   .sc-scint-up, .sc-scint-dn, .sc-last.fl-up, .sc-last.fl-dn{ animation:none; }
   .sc-scint-neu{ animation:none; }                    /* M42 — the stored-scintilla tone sits down too */
@@ -19893,6 +19905,36 @@ function scScint (node, up) {
   try {
     if (typeof node.animate === "function") {
       if (node.__scint) node.__scint.cancel();          // restart, without reading layout
+      /* 24 Sep — the graphics-chip path (see .sc-glow above). Taken only where the browser can
+         animate a pseudo-element and the cell is not already absolutely positioned; the position
+         is read once per cell and remembered, never at tick time. Everything else keeps the
+         colour + text-shadow animation below, so no browser loses the glow. */
+      if (scScint.overlay === undefined) {
+        try { scScint.overlay = typeof KeyframeEffect === "function" && "pseudoElement" in KeyframeEffect.prototype; }
+        catch (_) { scScint.overlay = false; }
+      }
+      if (scScint.overlay && node.__scGlow === undefined) {
+        try { const pos = getComputedStyle(node).position; node.__scGlow = pos === "static" || pos === "relative"; }
+        catch (_) { node.__scGlow = false; }
+      }
+      if (scScint.overlay && node.__scGlow) {
+        node.setAttribute("data-scv", node.textContent);
+        node.style.setProperty("--sc-glow-c", tone[0]);
+        node.style.setProperty("--sc-glow-s", "0 0 8px " + tone[1]);
+        /* A cell's FIRST glow creates its overlay, and an overlay born in the same frame as its
+           animation cannot be handed to the compositor (traced: 25 of 60 glows fell back to the
+           main thread, "target has invalid compositing state"). So the first glow on a cell runs
+           the classic way below while its overlay comes into being; every later glow fades the
+           overlay on the graphics chip. */
+        if (node.__scGlowReady) {
+          node.__scint = node.animate([{ opacity: 1 }, { opacity: 0 }],
+            { duration: SCINT_MS, easing: "ease-out", pseudoElement: "::after" });
+          node.__scintOverlay = true;
+          return;
+        }
+        node.classList.add("sc-glow");
+        node.__scGlowReady = true;
+      }
       node.__scint = node.animate(
         /* offset 0 is required: a lone keyframe without one is placed at the END (offset 1), which ran
            the glow backwards - the number crept to full green over 520 ms and then snapped back.
@@ -19916,12 +19958,16 @@ function scScintSet (node, value, up) {
   if (node.textContent === str) return false;
   node.textContent = str;
   if (up === true || up === false) scScint(node, up);
+  else if (node.__scintOverlay && node.__scint) node.__scint.cancel();   // the overlay still shows the old text
   return true;
 }
 function scSetText (node, value) {
   if (!node) return;
   const s = String(value);
-  if (node.textContent !== s) node.textContent = s;
+  if (node.textContent !== s) {
+    node.textContent = s;
+    if (node.__scintOverlay && node.__scint) node.__scint.cancel();      // the overlay still shows the old text
+  }
 }
 function scSetClass (node, value) {
   if (!node) return;
