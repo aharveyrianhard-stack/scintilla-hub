@@ -2637,6 +2637,30 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
 .se-none{ color:var(--sv4); }
 .se-widen{ cursor:pointer; color:var(--dim); border:.6px solid var(--line2); border-radius:2px; padding:1px 6px; letter-spacing:.14em; }
 .se-widen:hover{ color:var(--ink); border-color:var(--crk); }
+/* M40 — THE TIMELINE AS ITS OWN INSTRUMENT.
+   The wash behind a bar is the combined MARKET CAP reporting in that bucket; the bar
+   in front of it is still the COUNT, with the count's own absolute colour law. The
+   star says a favourite reports there, and it is a grey on purpose: a coloured star
+   on this tape would read as a result. The logo is FMP's public stock image and it
+   falls back to the ticker, quietly, when it does not load. */
+.se-tlw{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:15px;
+  background:rgba(0,212,255,.11); border-radius:2px 2px 0 0; pointer-events:none; }
+.se-tlday.is-past .se-tlw{ background:rgba(0,212,255,.075); }
+.se-tlstar{ position:absolute; top:-8px; left:50%; transform:translateX(-50%); font-size:8px; line-height:1;
+  color:var(--ink2); pointer-events:none; }
+/* the name slot now carries a logo, so it reads across instead of down */
+.se-tlnm{ writing-mode:horizontal-tb; transform:translateX(-50%); max-height:none; align-items:center; }
+.se-lg{ display:inline-flex; align-items:center; gap:4px; }
+.se-lg img{ width:13px; height:13px; object-fit:contain; border-radius:2px; background:rgba(255,255,255,.05); }
+.se-lg i{ display:none; font-style:normal; font-family:var(--mono); font-size:7.5px; letter-spacing:.02em; color:var(--ink3); }
+.se-lg--tl img{ width:14px; height:14px; }
+.se-lg--chip img{ width:11px; height:11px; }
+.se-tlload{ color:var(--dim); }
+.se-zm--now{ margin-left:6px; }
+.se-tape--quarters .se-tlb, .se-tape--years .se-tlb{ width:18px; }
+.se-tape--quarters .se-tlb i, .se-tape--years .se-tlb i{ width:16px; }
+.se-tape--quarters .se-tlw, .se-tape--years .se-tlw{ width:24px; }
+.se-tape--years .se-tlx{ font-size:8px; letter-spacing:.04em; }
 /* ---- DAY: the chosen day, read across instead of down ------------------------
    Alan: "the daily view is the most tape-y one, but it requires a lot of
    scrolling… The daily view just has a scrolling downwards." The day's reports now
@@ -2698,6 +2722,8 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   .se-tlb{ width:10px; } .se-tlb i{ width:8px; } .se-tlx{ font-size:6.5px; margin-top:3px; }
   .se-tlmo{ font-size:7px; letter-spacing:.06em; padding-left:3px; }
   .se-tapesay{ font-size:7.5px; padding:5px 8px 0; }
+  .se-tlw{ width:13px; } .se-lg img{ width:11px; height:11px; } .se-lg--tl img{ width:12px; height:12px; }
+  .se-tape--quarters .se-tlw, .se-tape--years .se-tlw{ width:20px; }
   /* the day's four slots become two rows of two on a phone, which still beats one
      long fall, and each slot keeps its own wrapped grid of names */
   .se-dcols{ flex-wrap:wrap; gap:8px; }
@@ -4692,6 +4718,9 @@ const S = {
      report" — his saved strip is FAV, three names). Nothing here is remembered between
      loads, so none of it replaces a choice Alan has saved. */
   ernSpan: "DAY", ernDay: null, ernPick: null, ernZoom: "DAYS", ernCohPick: null,
+  ernTlAt: null,        /* the TIMELINE's own centre — the grid's arrows never touch it (M40) */
+  ernTab: "DASH",       /* DASH the dashboard · PAST the full PAST REPORTED tab · OLD the older list, kept (M40) */
+  ernPast: null,        /* the open name in PAST REPORTED */
   estTF: "A",                                   // (news cache lives in NEWS_CACHE — per-cohort, FIX A3)
   statTab: 0,                                   // STATS subtab — 0 price&value · 1 fundamentals · 2 balance&profile
   socTab: "YOUTUBE",
@@ -11274,90 +11303,184 @@ function ercWeekHTML(byDay) {
       "</div>" + (open ? ercCardHTML(open) : "");
   }).join("") + "</div>";
 }
-/* ---- THE TAPE: the HEADER of the earnings room ------------------------------
-   Alan, 23 Sep evening: "I do like this timeline view, but it's very thin. So how
-   about just having it on top of the other views, more like a header." So the tape
-   is no longer a view of its own — TIMELINE is gone from the span bar. The tape is
-   pinned above MONTH / WEEK / DAY, it is always on screen, and THE VIEW BELOW
-   FOLLOWS WHAT IT POINTS AT: tap a day and DAY opens on that day, tap a week and
-   WEEK opens on it, tap a month and MONTH opens on it.
-   ZOOM (Alan: "don't you think it should be a little more dynamic to zoom?"). One
-   bar is a DAY, a WEEK or a MONTH. Pinch, ⌘/ctrl + wheel, the +/− keys of the zoom
-   strip — the whole season fits on one screen, or one day can fill it. The default
-   is DAYS, about three months around today.
-   NOTHING ON IT IS MYSTERIOUS (Alan: "There's a blue line. I'm trying to click on
-   it and it doesn't say… nothing."). The cyan line is TODAY and it now carries its
-   own words; every bar, every empty stretch and every month label says what it is
-   on hover and on tap, and a tap always moves the view below.
-   THE HEIGHT IS RELATIVE, THE COLOUR IS NOT. Height is scaled to the busiest bar
-   ON SCREEN, recomputed as the tape is dragged. The colour keeps the absolute
-   meaning MONTH's load bar has — cyan under 12, orange from 12, red from 25 — so
-   red always means the same number of reports, in season and out of it. */
+/* ---- THE TIMELINE: the earnings room's own instrument ------------------------
+   Alan, 23 Sep: "the timeline header should NOT be ruled by that date selector
+   arrow shit, it's a separate thing, its own zoom" — and "the lookback should be
+   way longer, months doesn't even fill the screen… if this is what we have,
+   earnings from 2025? it's ridiculous, how are we gonna make any conclusions".
+   So the timeline stopped sharing the grid's anchor. It has:
+     · its own centre (S.ernTlAt) and its own pan — the grid's ◀ ▶ never move it;
+     · its own zoom, five levels: DAY → WEEK → MONTH → QUARTER → YEAR;
+     · its own loaded range, which PAGES. Dragging towards either end asks for the
+       next stretch of season and draws it in behind the bars already on screen,
+       so the 22,167 stored reports back to 1996 are one drag away instead of a
+       three-month window.
+   WHAT ONE BAR CARRIES
+     height  how many of the names you track report in it;
+     colour  the absolute law MONTH's load bar already uses — cyan under 12,
+             orange from 12, red from 25 — so red always means the same number;
+     wash    behind the bar, the COMBINED MARKET CAP reporting in it, scaled to the
+             heaviest bar on screen (Alan: "a graphic or measure in the timeline
+             that measures like the market cap weight of the companies reporting
+             would be really really epic"). Sizes come from the board's own rows —
+             never guessed, and the names whose size has not arrived are counted
+             and said out loud;
+     ★       one of your favourites reports in it (hub_favorites, the same list the
+             board stars);
+     logo    the biggest name's logo, with its own ticker as the fallback.
+   Tapping a bar still moves the GRID below onto that day, week or month — that
+   direction Alan liked. The reverse never happens.
+   ---------------------------------------------------------------------------- */
 const ERC_TL_WARM = 12, ERC_TL_HOT = 25;     /* the two thresholds MONTH's load bar already uses */
 const ERC_TL_QUIET = 4;                      /* busiest bar on screen below this = a quiet stretch, said out loud */
-const ERC_TL_NAME_PCT = 58;                  /* only a bar this tall carries a name, or the tape turns into text */
-const ERC_ZOOMS = ["DAYS", "WEEKS", "MONTHS"];
+const ERC_TL_NAME_PCT = 58;                  /* only a bar this tall carries a name or a logo */
+const ERC_TL_FLOOR = "1996-01-01";           /* the oldest report stored in earnings_events (measured: 1996-04-30) */
+const ERC_TL_CEIL_D = 420;                   /* how far past today the stored calendar is ever asked for */
+const ERC_TL_CHUNK = 180;                    /* days per request: at today's density (~1,400 reports a year) a chunk this size cannot reach the 1,000-row ceiling */
+const ERC_TL_MAXQ = 3;                       /* requests in flight at once while a long stretch pages in */
+const ERC_ZOOMS = ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"];
 const ERC_ZOOM = {
-  DAYS:   { back: 45,  fwd: 55,  say: "one bar a day · about three months" },
-  WEEKS:  { back: 175, fwd: 189, say: "one bar a week · about a year" },
-  MONTHS: { back: 365, fwd: 365, say: "one bar a month · two years" },
+  DAYS:     { back: 60,   fwd: 60,  page: 120,  w: 19, say: "one bar a day · four months a screen" },
+  WEEKS:    { back: 240,  fwd: 120, page: 365,  w: 17, say: "one bar a week · a year a screen" },
+  MONTHS:   { back: 730,  fwd: 210, page: 730,  w: 22, say: "one bar a month · about three years" },
+  QUARTERS: { back: 1460, fwd: 210, page: 1460, w: 30, say: "one bar a quarter · about five years" },
+  YEARS:    { back: 2920, fwd: 365, page: 3650, w: 44, say: "one bar a year · drag for all of it, back to 1996" },
 };
 const ercZoom = () => (ERC_ZOOM[S.ernZoom] ? S.ernZoom : "DAYS");
-/* the window is measured from the FIRST OF THE ANCHOR'S MONTH, not from the anchor
-   itself: stepping a day at a time must not throw the tape's read away each step. */
-const ercTapeRange = (anchor) => {
-  const z = ERC_ZOOM[ercZoom()], base = anchor.slice(0, 8) + "01";
-  return { from: ernShift(base, -z.back), to: ernShift(base, z.fwd) };
-};
-const ercTapeRangeKey = () => { const r = ercTapeRange(ercAnchor()); return ercZoom() + "|" + r.from + "|" + r.to; };
-/* THE TAPE HAS ITS OWN READ, AND IT IS A SMALL ONE: ticker and date, nothing else.
-   Two years of the whole universe is thousands of rows, and dragging every release
-   summary across the wire to draw a bar chart would be absurd. The views below read
-   the full columns for the one month / week / day they are actually showing.
-   IT IS READ UNSCOPED, so the room can always say how many reports exist across all
-   names even while the strip is narrowed to three favourites. */
-let ERC_TAPE_ROWS = null, ERC_TAPE_KEY = "", ERC_TAPE_BUSY = false;
-let ERC_TAPE_FAIL_KEY = "", ERC_TAPE_FAIL_AT = 0, ERC_TAPE_TRUNC = false, ERC_TAPE_AT = null;
-const ERC_TAPE_CHUNK = 120;                  /* days per request: a chunk this size cannot reach the 1,000-row ceiling */
-function ercTapeChunks(from, to) {
+/* THE TIMELINE'S OWN CENTRE. It starts on today and moves only when the timeline
+   itself is dragged or zoomed — never when the grid below is stepped. */
+const ercTlCentre = () => S.ernTlAt || todayISO();
+const ercTlFloor = () => ERC_TL_FLOOR;
+const ercTlCeil = () => ernShift(todayISO(), ERC_TL_CEIL_D);
+const ercTlClamp = (d) => (d < ercTlFloor() ? ercTlFloor() : d > ercTlCeil() ? ercTlCeil() : d);
+/* the stretch the timeline is SHOWING. It grows as the reader drags towards an end;
+   a zoom change starts it again from the centre. */
+let ERC_TL_FROM = "", ERC_TL_TO = "";
+function ercTlSpan() {
+  if (!ERC_TL_FROM || !ERC_TL_TO) {
+    const z = ERC_ZOOM[ercZoom()], c = ercTlCentre();
+    ERC_TL_FROM = ercTlClamp(ernShift(c, -z.back));
+    ERC_TL_TO = ercTlClamp(ernShift(c, z.fwd));
+  }
+  return { from: ERC_TL_FROM, to: ERC_TL_TO };
+}
+/* ---- the loaded range, and the paging that fills it ---- */
+let ERC_TAPE_ROWS = null;          /* every ticker+date loaded so far — the day view and the anchor resolver read it too */
+let ERC_TL_SEEN = null;            /* "TICKER|date" already held, so a re-read can never double-count a report */
+let ERC_TL_HAVE = [];              /* merged [from,to] stretches actually read */
+let ERC_TL_Q = [];                 /* stretches still to read, nearest the centre first */
+let ERC_TL_IN = 0;                 /* reads in flight */
+let ERC_TL_TRUNC = false;          /* a single read came back at the 1,000-row ceiling */
+let ERC_TL_FAIL = 0, ERC_TL_FAIL_AT = 0;
+let ERC_TAPE_AT = null;            /* the scroll offset the reader left the tape at */
+let ERC_TL_PAINT = null;
+/* PURE. the stretches of [from,to] that are NOT already held. */
+function ercTlMissing(from, to, have) {
   const out = [];
-  for (let a = from; a <= to; a = ernShift(a, ERC_TAPE_CHUNK)) {
-    const b = ernShift(a, ERC_TAPE_CHUNK - 1);
-    out.push({ from: a, to: b > to ? to : b });
+  let cur = from;
+  (have || []).slice().sort((a, b) => (a.from < b.from ? -1 : 1)).forEach((h) => {
+    if (h.to < cur || h.from > to) return;
+    if (h.from > cur) out.push({ from: cur, to: ernShift(h.from, -1) });
+    if (h.to >= cur) cur = ernShift(h.to, 1);
+  });
+  if (cur <= to) out.push({ from: cur, to });
+  return out.filter((r) => r.from <= r.to);
+}
+/* PURE. merge a newly read stretch into the held ones. */
+function ercTlMerge(have, add) {
+  const all = (have || []).concat([add]).sort((a, b) => (a.from < b.from ? -1 : 1));
+  const out = [];
+  all.forEach((r) => {
+    const last = out[out.length - 1];
+    if (last && r.from <= ernShift(last.to, 1)) { if (r.to > last.to) last.to = r.to; }
+    else out.push({ from: r.from, to: r.to });
+  });
+  return out;
+}
+function ercTlChunks(r) {
+  const out = [];
+  for (let a = r.from; a <= r.to; a = ernShift(a, ERC_TL_CHUNK)) {
+    const b = ernShift(a, ERC_TL_CHUNK - 1);
+    out.push({ from: a, to: b > r.to ? r.to : b });
   }
   return out;
 }
-async function ercTapeRead(quiet) {
-  const key = ercTapeRangeKey(), r = ercTapeRange(ercAnchor());
-  if (ERC_TAPE_BUSY) return;
-  if (!quiet && key === ERC_TAPE_KEY && ERC_TAPE_ROWS) return;
-  if (ERC_TAPE_FAIL_KEY === key && Date.now() - ERC_TAPE_FAIL_AT < ERC_RETRY_MS) return;
-  ERC_TAPE_BUSY = true;
+const ercTlDist = (c, r) => (c < r.from ? Date.parse(r.from) - Date.parse(c) : c > r.to ? Date.parse(c) - Date.parse(r.to) : 0);
+/* ask for whatever of the shown stretch is not held yet, nearest the centre first. */
+function ercTlEnsure() {
+  const span = ercTlSpan(), c = ercTlCentre();
+  const miss = ercTlMissing(span.from, span.to, ERC_TL_HAVE);
+  if (!miss.length) return;
+  const queued = {};
+  ERC_TL_Q.forEach((q) => { queued[q.from + "|" + q.to] = 1; });
+  miss.forEach((m) => ercTlChunks(m).forEach((ch) => {
+    if (!queued[ch.from + "|" + ch.to]) { ERC_TL_Q.push(ch); queued[ch.from + "|" + ch.to] = 1; }
+  }));
+  ERC_TL_Q.sort((a, b) => ercTlDist(c, a) - ercTlDist(c, b));
+  ercTlPump();
+}
+async function ercTlPump() {
+  if (ERC_TL_IN >= ERC_TL_MAXQ || !ERC_TL_Q.length) return;
+  if (ERC_TL_FAIL_AT && Date.now() - ERC_TL_FAIL_AT < ERC_RETRY_MS) return;
+  const ch = ERC_TL_Q.shift();
+  ERC_TL_IN++;
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
-    const got = await Promise.all(ercTapeChunks(r.from, r.to).map((p) =>
-      pgErn("earnings_events?select=ticker,date&date=gte." + p.from + "&date=lte." + p.to + "&order=date.asc&limit=" + ERC_MAX)));   // live rows only: a retired date (M34) is not a report on the tape
-    const rows = got.reduce((a, g) => a.concat(g || []), [])
-      .filter((x) => x && x.ticker && (!UNIVERSE || UNIVERSE.has(x.ticker)));
-    ERC_TAPE_TRUNC = got.some((g) => (g || []).length >= ERC_MAX);
-    ERC_TAPE_ROWS = rows; ERC_TAPE_KEY = key; ERC_TAPE_FAIL_KEY = ""; ERC_TAPE_FAIL_AT = 0;
-    if (S.sec === "EVENTS") { ercPaintTape(); if (!S.ernDay) renderEvents(S.coh); }
+    /* the timeline's read is the SMALL one: ticker and date, nothing else. The grid
+       below reads the full columns for the one day, week and month it is showing. */
+    const got = await pgErn("earnings_events?select=ticker,date&date=gte." + ch.from + "&date=lte." + ch.to +
+      "&order=date.asc&limit=" + ERC_MAX);
+    if ((got || []).length >= ERC_MAX) ERC_TL_TRUNC = true;
+    if (!ERC_TAPE_ROWS) { ERC_TAPE_ROWS = []; ERC_TL_SEEN = new Set(); }
+    (got || []).forEach((x) => {
+      if (!x || !x.ticker || !x.date) return;
+      if (UNIVERSE && !UNIVERSE.has(x.ticker)) return;
+      const k = x.ticker + "|" + x.date;
+      if (ERC_TL_SEEN.has(k)) return;
+      ERC_TL_SEEN.add(k);
+      ERC_TAPE_ROWS.push({ ticker: x.ticker, date: x.date });
+    });
+    ERC_TL_HAVE = ercTlMerge(ERC_TL_HAVE, ch);
+    ERC_TL_FAIL = 0; ERC_TL_FAIL_AT = 0;
+    ercTlRepaintSoon();
   } catch (err) {
-    ERC_TAPE_FAIL_KEY = key; ERC_TAPE_FAIL_AT = Date.now();
-    if (S.sec === "EVENTS") ercPaintTape();
-  } finally { ERC_TAPE_BUSY = false; }
+    ERC_TL_FAIL++; ERC_TL_FAIL_AT = Date.now();
+    ERC_TL_Q.unshift(ch);
+    ercTlRepaintSoon();
+  } finally {
+    ERC_TL_IN--;
+    if (ERC_TL_Q.length) ercTlPump();
+  }
 }
-/* ---- buckets: a bar is a day, a week or a month ---- */
+/* the old name, kept: everything that used to ask the tape to read still can. */
+function ercTapeRead() { ercTlEnsure(); }
+function ercTlRepaintSoon() {
+  if (ERC_TL_PAINT || typeof setTimeout !== "function") return;
+  ERC_TL_PAINT = setTimeout(() => {
+    ERC_TL_PAINT = null;
+    if (S.sec !== "EVENTS") return;
+    ercPaintTape();
+    if (!S.ernDay) renderEvents(S.coh);
+  }, 140);
+}
+/* ---- buckets: a bar is a day, a week, a month, a quarter or a year ---- */
 const ercMonday = (iso) => ernWeek(iso)[0];
 const ercMonth1 = (iso) => iso.slice(0, 8) + "01";
-function ercBucketOf(iso, z) { return z === "WEEKS" ? ercMonday(iso) : z === "MONTHS" ? ercMonth1(iso) : iso; }
+const ercQuarter1 = (iso) => iso.slice(0, 4) + "-" + String(Math.floor((+iso.slice(5, 7) - 1) / 3) * 3 + 1).padStart(2, "0") + "-01";
+const ercYear1 = (iso) => iso.slice(0, 4) + "-01-01";
+function ercBucketOf(iso, z) {
+  return z === "YEARS" ? ercYear1(iso) : z === "QUARTERS" ? ercQuarter1(iso)
+       : z === "MONTHS" ? ercMonth1(iso) : z === "WEEKS" ? ercMonday(iso) : iso;
+}
 /* the bars of a range, in order. In DAYS a weekend carries no bar — but a report
    DATED on a weekend still gets one, because a row that exists must never vanish
    from the picture of the season. */
 function ercBuckets(from, to, z, dated) {
   const out = [], seen = {};
-  if (z === "WEEKS") { for (let d = ercMonday(from); d <= to; d = ernShift(d, 7)) out.push(d); return out; }
+  if (z === "YEARS") { for (let d = ercYear1(from); d <= to; d = (+d.slice(0, 4) + 1) + "-01-01") out.push(d); return out; }
+  if (z === "QUARTERS") { for (let d = ercQuarter1(from); d <= to; d = ercMonthShift(d, 3)) out.push(d); return out; }
   if (z === "MONTHS") { for (let d = ercMonth1(from); d <= to; d = ercMonthShift(d, 1)) out.push(d); return out; }
+  if (z === "WEEKS") { for (let d = ercMonday(from); d <= to; d = ernShift(d, 7)) out.push(d); return out; }
   for (let d = from; d <= to; d = ernShift(d, 1)) {
     const w = new Date(d + "T12:00:00Z").getUTCDay();
     if (w !== 0 && w !== 6) { out.push(d); seen[d] = 1; }
@@ -11365,16 +11488,29 @@ function ercBuckets(from, to, z, dated) {
   Object.keys(dated || {}).forEach((d) => { if (d >= from && d <= to && !seen[d]) { out.push(d); seen[d] = 1; } });
   return out.sort();
 }
-const ercBucketEnd = (b, z) => (z === "WEEKS" ? ernShift(b, 6) : z === "MONTHS" ? ernShift(ercMonthShift(b, 1), -1) : b);
+function ercBucketEnd(b, z) {
+  return z === "YEARS" ? b.slice(0, 4) + "-12-31"
+       : z === "QUARTERS" ? ernShift(ercMonthShift(b, 3), -1)
+       : z === "MONTHS" ? ernShift(ercMonthShift(b, 1), -1)
+       : z === "WEEKS" ? ernShift(b, 6) : b;
+}
+const ercQuarterNo = (b) => Math.floor((+b.slice(5, 7) - 1) / 3) + 1;
 function ercBucketSay(b, z) {
+  if (z === "YEARS") return b.slice(0, 4);
+  if (z === "QUARTERS") return "Q" + ercQuarterNo(b) + " " + b.slice(0, 4);
   if (z === "MONTHS") return ERC_MONTH_NAME[+b.slice(5, 7) - 1] + " " + b.slice(0, 4);
   if (z === "WEEKS") return "the week of " + ernWeekday(b) + " " + ernMonthDay(b);
   return ernWeekday(b) + " " + ernMonthDay(b);
 }
-/* the tick under a bar: the day number, or the month's three letters — one letter was
-   a puzzle, and this tape is meant to be read without hovering anything. */
-const ercBucketTick = (b, z) => (z === "MONTHS" ? ERC_MONTH_NAME[+b.slice(5, 7) - 1].slice(0, 3) : String(+b.slice(8)));
-const ercBucketOpens = (z) => (z === "MONTHS" ? "the month" : z === "WEEKS" ? "the week" : "the day");
+/* the tick under a bar: the day number, the month's three letters, Q3, or the year —
+   one letter was a puzzle, and this tape is meant to be read without hovering it. */
+function ercBucketTick(b, z) {
+  if (z === "YEARS") return b.slice(0, 4);
+  if (z === "QUARTERS") return "Q" + ercQuarterNo(b);
+  if (z === "MONTHS") return ERC_MONTH_NAME[+b.slice(5, 7) - 1].slice(0, 3);
+  return String(+b.slice(8));
+}
+const ercBucketOpens = (z) => (z === "YEARS" || z === "QUARTERS" || z === "MONTHS" ? "the month" : z === "WEEKS" ? "the week" : "the day");
 const ercTlLevel = (n) => (n >= ERC_TL_HOT ? "hot" : n >= ERC_TL_WARM ? "warm" : n > 0 ? "cool" : "");
 function ercTapeScale(counts) {
   const max = (counts || []).reduce((m, n) => Math.max(m, n || 0), 0);
@@ -11382,38 +11518,96 @@ function ercTapeScale(counts) {
     /* 80, not 100: the busiest bar still has to carry its own count above itself. */
     pct: (n) => (!n || n <= 0 ? 0 : Math.min(80, Math.max(14, Math.round((n / Math.max(max, 1)) * 80)))) };
 }
+/* THE MARKET-CAP WEIGHT. Sizes are the board's own market_cap — the timeline never
+   asks for them and never guesses one. A bucket's weight is the sum of the sizes it
+   knows; the names whose size has not arrived are counted separately and said. */
+const ERC_TR = 1e12, ERC_BN = 1e9;
+function ercMoney(v) {
+  if (!isFinite(v) || v <= 0) return "";
+  return v >= ERC_TR ? "$" + (v / ERC_TR).toFixed(v >= 10 * ERC_TR ? 0 : 1) + "T"
+       : v >= ERC_BN ? "$" + (v / ERC_BN).toFixed(v >= 100 * ERC_BN ? 0 : 1) + "B"
+       : "$" + Math.round(v / 1e6) + "M";
+}
+/* PURE. rows (ticker+date) -> one entry per bucket: count, weight, unknown sizes,
+   whether a favourite is in it, and the names in size order. */
+function ercTlIndex(rows, z, mcap, fav) {
+  const by = {};
+  const favs = {}; (fav || []).forEach((t) => { favs[t] = 1; });
+  (rows || []).forEach((r) => {
+    if (!r || !r.date || !r.ticker) return;
+    const b = ercBucketOf(r.date, z);
+    const e = by[b] || (by[b] = { n: 0, wt: 0, unk: 0, fav: false, names: [] });
+    e.n++;
+    const m = mcap ? mcap[r.ticker] : null;
+    if (m != null && isFinite(m)) e.wt += +m; else e.unk++;
+    if (favs[r.ticker]) e.fav = true;
+    e.names.push({ t: r.ticker, m: m != null && isFinite(m) ? +m : null });
+  });
+  Object.keys(by).forEach((b) => {
+    by[b].names.sort((a, c) => (a.m == null) - (c.m == null) || (c.m || 0) - (a.m || 0) || (a.t < c.t ? -1 : 1));
+  });
+  return by;
+}
 /* which view a tap on the tape opens, and where the tape's own pointer sits */
-const ERC_ZOOM_SPAN = { DAYS: "DAY", WEEKS: "WEEK", MONTHS: "MONTH" };
+const ERC_ZOOM_SPAN = { DAYS: "DAY", WEEKS: "WEEK", MONTHS: "MONTH", QUARTERS: "MONTH", YEARS: "MONTH" };
 const ercTapePointer = () => ercBucketOf(ercAnchor(), ercZoom());
+/* ---- the company logo, with the ticker as its fallback ----------------------
+   Alan: "little logos of companies would be nice too, like gameifying". The image
+   is FMP's public stock image; nothing is stored and nothing is proxied. When it
+   does not load — a name FMP has no image for, or an image blocked on the device —
+   the ticker takes its place quietly, which is what the page showed before. */
+const ercLogoURL = (t) => "https://financialmodelingprep.com/image-stock/" + encodeURIComponent(String(t).toUpperCase()) + ".png";
+function ernLogoFail(img) {
+  try {
+    img.style.display = "none";
+    const i = img.parentNode && img.parentNode.querySelector("i");
+    if (i) i.style.display = "inline";
+  } catch (_) {}
+}
+function ernLogoHTML(t, cls) {
+  if (!t) return "";
+  return '<span class="se-lg' + (cls ? " " + cls : "") + '"><img src="' + esc(ercLogoURL(t)) +
+    '" alt="" loading="lazy" decoding="async" onerror="ernLogoFail(this)"><i>' + esc(t) + "</i></span>";
+}
 /* ---- the bar ---- */
-function ercTapeBarHTML(b, z, n, all, names, today, at, coh, sc) {
-  const lvl = ercTlLevel(n), pct = sc.pct(n), end = ercBucketEnd(b, z), isNow = today >= b && today <= end;
+function ercTlBarHTML(b, z, e, all, today, at, coh, sc, wsc) {
+  const n = e ? e.n : 0, wt = e ? e.wt : 0, unk = e ? e.unk : 0;
+  const lvl = ercTlLevel(n), pct = sc.pct(n), wpct = wsc.pct(wt), end = ercBucketEnd(b, z), isNow = today >= b && today <= end;
+  const top = e && e.names.length ? e.names[0].t : "";
+  const names = e ? e.names.slice(0, 3).map((x) => x.t).join(", ") : "";
   const what = n
     ? n + (n === 1 ? " name you track reports" : " names you track report") + (names ? " · " + names : "")
     : (coh !== "ALL" && all ? "nothing for " + coh + " · " + all + (all === 1 ? " report" : " reports") + " across all names"
                             : "nothing reports");
-  const ttl = ercBucketSay(b, z) + " · " + what + (isNow ? " · this is where today sits" : "") +
-    " · click to open " + ercBucketOpens(z) + " below";
+  const money = wt > 0 ? " · " + ercMoney(wt) + " of market cap reporting" + (unk ? " (" + unk + " without a stored size)" : "") : "";
+  const ttl = ercBucketSay(b, z) + " · " + what + money + (e && e.fav ? " · one of your favourites is in it" : "") +
+    (isNow ? " · this is where today sits" : "") + " · click to open " + ercBucketOpens(z) + " below";
   return '<div class="se-tlday' + (isNow ? " is-today" : "") + (b === at ? " is-open" : "") +
-      (end < today ? " is-past" : "") + '" data-act="erntape" data-d="' + b + '" data-n="' + n +
+      (end < today ? " is-past" : "") + '" data-act="erntape" data-d="' + b + '" data-n="' + n + '" data-w="' + Math.round(wt) +
       '" title="' + esc(ttl) + '">' +
     '<span class="se-tlb">' +
       (isNow ? '<span class="se-tlnow" title="' + esc("the cyan line is TODAY, " + ernWeekday(today) + " " + ernMonthDay(today) +
         " — everything left of it has happened, everything right of it is still to come") + '"></span>' : "") +
+      /* the weight wash sits BEHIND the count bar: the same bucket read two ways,
+         never two competing colours. */
+      (wt > 0 ? '<u class="se-tlw" style="height:' + wpct + '%"></u>' : "") +
       '<i class="' + lvl + '" style="height:' + pct + '%"></i>' +
       (n ? '<span class="se-tlv ' + lvl + '" style="bottom:calc(' + pct + '% + 3px)">' + n + "</span>" : "") +
-      /* the name is always in the page and hidden while its bar is short, so the
-         re-scale on a drag can show it again without redrawing the tape. */
-      (n ? '<span class="se-tlnm" style="bottom:calc(' + pct + '% + 15px);display:' + (pct >= ERC_TL_NAME_PCT ? "inline" : "none") +
-        '">' + esc(String(names).split(",")[0].trim()) + "</span>" : "") +
+      (e && e.fav ? '<span class="se-tlstar" title="' + esc("one of your favourites reports here") + '">★</span>' : "") +
+      /* the logo (and the name behind it) is always in the page and hidden while its
+         bar is short, so a re-scale on a drag can show it again without a redraw. */
+      (top ? '<span class="se-tlnm" style="bottom:calc(' + pct + '% + 15px);display:' + (pct >= ERC_TL_NAME_PCT ? "inline-flex" : "none") +
+        '">' + ernLogoHTML(top, "se-lg--tl") + "</span>" : "") +
     "</span>" +
     '<span class="se-tlx">' + esc(ercBucketTick(b, z)) + "</span></div>";
 }
 /* the strip under the bars: months when a bar is a day or a week, years when a bar
-   is a month. Each segment is as wide as its own bars, so it cannot drift. */
+   is a month or a quarter, decades when a bar is a year. Each segment is as wide as
+   its own bars, so it cannot drift. */
 function ercTapeStripHTML(buckets, z) {
-  const grp = (b) => (z === "MONTHS" ? b.slice(0, 4) : b.slice(0, 7));
-  const say = (g) => (z === "MONTHS" ? g : ERC_MONTH_NAME[+g.slice(5, 7) - 1].slice(0, 3) + (g.slice(5, 7) === "01" ? " " + g.slice(0, 4) : ""));
+  const grp = (b) => (z === "YEARS" ? b.slice(0, 3) + "0" : z === "MONTHS" || z === "QUARTERS" ? b.slice(0, 4) : b.slice(0, 7));
+  const say = (g) => (z === "YEARS" ? g + "s" : z === "MONTHS" || z === "QUARTERS" ? g
+    : ERC_MONTH_NAME[+g.slice(5, 7) - 1].slice(0, 3) + (g.slice(5, 7) === "01" ? " " + g.slice(0, 4) : ""));
   let out = "", run = 0, cur = "";
   const flush = () => { if (run) out += '<span class="se-tlmo" style="width:calc(var(--tlw) * ' + run + ')" title="' + esc(say(cur) + " · " + run + " bars") + '">' + esc(say(cur)) + "</span>"; };
   buckets.forEach((b) => { const g = grp(b); if (g !== cur) { flush(); cur = g; run = 1; } else run++; });
@@ -11422,10 +11616,12 @@ function ercTapeStripHTML(buckets, z) {
 }
 function ercZoomBarHTML() {
   const z = ercZoom();
-  return '<span class="se-zooms" title="' + esc("how much of the season one bar covers — pinch, or hold ⌘/ctrl and scroll, to change it") + '">' +
+  return '<span class="se-zooms" title="' + esc("how much of the season one bar covers — pinch, or hold ⌘/ctrl and scroll, to change it. This is the TIMELINE's own zoom: the ◀ ▶ under it move the grid, not this.") + '">' +
     '<span class="se-zlbl">ZOOM</span>' +
     ERC_ZOOMS.map((x) => '<span class="se-zm' + (x === z ? " on" : "") + '" data-act="ernzoom" data-z="' + x +
-      '" title="' + esc(ERC_ZOOM[x].say) + '">' + x + "</span>").join("") + "</span>";
+      '" title="' + esc(ERC_ZOOM[x].say) + '">' + x + "</span>").join("") +
+    '<span class="se-zm se-zm--now" data-act="erntlnow" title="' + esc("bring the timeline back to today — the grid below stays where it is") + '">TODAY</span>' +
+    "</span>";
 }
 /* THE ROOM SAYS WHAT IT IS SHOWING, AND NEVER LOOKS EMPTY BY ACCIDENT. Alan, of the
    week view: "I feel like it's empty… no report." It was not broken: his saved strip
@@ -11440,51 +11636,48 @@ function ercTapeSayHTML(scoped, all, coh) {
   return "<span>showing <b>" + esc(coh) + "</b> · " + scoped + " of " + all + " reports on this tape</span>" + wide;
 }
 function ercTapeHTML() {
-  const z = ercZoom(), anchor = ercAnchor(), r = ercTapeRange(anchor), today = todayISO(), coh = ercCohort();
-  const allRows = ERC_TAPE_ROWS || [];
+  const z = ercZoom(), span = ercTlSpan(), today = todayISO(), coh = ercCohort();
+  const allRows = (ERC_TAPE_ROWS || []).filter((x) => x.date >= span.from && x.date <= span.to);
   const scoped = (!COHSETS && coh !== "ALL" && coh !== "FAV" && !S.tq) ? null : scopeItems(allRows, coh, S.tq, S.fav, COHSETS);
   const dated = {}; allRows.forEach((x) => { dated[x.date] = 1; });
-  const buckets = ercBuckets(r.from, r.to, z, dated);
-  const nS = {}, nA = {}, nm = {};
-  allRows.forEach((x) => { const b = ercBucketOf(x.date, z); nA[b] = (nA[b] || 0) + 1; });
-  (scoped || []).forEach((x) => {
-    const b = ercBucketOf(x.date, z); nS[b] = (nS[b] || 0) + 1;
-    (nm[b] = nm[b] || []).push(x.ticker);
-  });
+  const buckets = ercBuckets(span.from, span.to, z, dated);
+  const mcap = ercMcap();
+  const idxS = ercTlIndex(scoped || [], z, mcap, S.fav);
+  const idxA = ercTlIndex(allRows, z, mcap, S.fav);
   const at = ercTapePointer();
-  const sc = ercTapeScale(buckets.map((b) => nS[b] || 0));
-  const bars = buckets.map((b) => ercTapeBarHTML(b, z, nS[b] || 0, nA[b] || 0,
-    (nm[b] || []).slice(0, 3).join(", "), today, at, coh, sc)).join("");
-  const lbl = ernMonthDay(r.from) + " " + r.from.slice(0, 4) + "  →  " + ernMonthDay(r.to) + " " + r.to.slice(0, 4);
-  return '<div class="se-tape">' +
-    /* ONE set of arrows and one TODAY in the room — they live on the span bar above,
-       because tape and view share an anchor and two of each would be two ways to do
-       the same thing. The tape carries only what is its own: how far it reaches, and
-       how much season one bar covers. */
+  const sc = ercTapeScale(buckets.map((b) => (idxS[b] ? idxS[b].n : 0)));
+  const wsc = ercTapeScale(buckets.map((b) => (idxS[b] ? idxS[b].wt : 0)));
+  const bars = buckets.map((b) => ercTlBarHTML(b, z, idxS[b], idxA[b] ? idxA[b].n : 0, today, at, coh, sc, wsc)).join("");
+  const lbl = ernMonthDay(span.from) + " " + span.from.slice(0, 4) + "  →  " + ernMonthDay(span.to) + " " + span.to.slice(0, 4);
+  const heavy = buckets.map((b) => idxS[b]).filter(Boolean).sort((a, b2) => b2.wt - a.wt)[0];
+  return '<div class="se-tape se-tape--' + z.toLowerCase() + '" style="--tlw:' + ERC_ZOOM[z].w + 'px">' +
     '<div class="se-tapehd">' +
       '<span class="se-lbl" title="' + esc("the stretch of season on the tape · " + ERC_ZOOM[z].say +
-        " · drag it sideways, or use the arrows above") + '">' + esc(lbl) + "</span>" +
+        " · drag it sideways and it asks for more season by itself") + '">' + esc(lbl) + "</span>" +
       ercZoomBarHTML() +
     "</div>" +
     '<div class="se-tlscroll" id="ernTlScroll"><div class="se-tlgrid">' + bars + "</div>" + ercTapeStripHTML(buckets, z) + "</div>" +
     '<div class="se-tapesay" id="ernTapeSay">' +
       (scoped === null ? "<span>cohort map loading…</span>"
         : ercTapeSayHTML((scoped || []).length, allRows.length, coh)) +
-      (ERC_TAPE_TRUNC ? '<span class="se-none">this stretch holds more rows than one read returns</span>' : "") +
+      (heavy && heavy.wt > 0 ? '<span title="' + esc("the wash behind each bar is the combined market cap reporting in it, scaled to the heaviest bar on this tape") +
+        '">heaviest bar · <b>' + esc(ercMoney(heavy.wt)) + "</b></span>" : "") +
+      (ERC_TL_Q.length || ERC_TL_IN ? '<span class="se-tlload">reading ' + (ERC_TL_Q.length + ERC_TL_IN) +
+        " more " + (ERC_TL_Q.length + ERC_TL_IN === 1 ? "stretch" : "stretches") + " of season…</span>" : "") +
+      (ERC_TL_FAIL ? '<span class="se-none">a stretch could not be read. It asks again by itself.</span>' : "") +
+      (ERC_TL_TRUNC ? '<span class="se-none">one stretch holds more rows than a single read returns</span>' : "") +
     "</div></div>";
 }
-/* the tape is drawn on its own, above the view, and it is redrawn when the view is
-   redrawn — so switching MONTH ⇄ WEEK ⇄ DAY never takes it off the screen. */
+/* the tape is drawn on its own, above the grid, and it is redrawn when the grid is
+   redrawn — so moving the grid never takes the timeline off the screen. */
 function ercPaintTape() {
   const host = el("ernTape");
   if (!host) return;
   if (S.calType === "DIVIDENDS") { host.innerHTML = ""; return; }
-  const key = ercTapeRangeKey();
-  if (!ERC_TAPE_ROWS || key !== ERC_TAPE_KEY) {
+  ercTlEnsure();
+  if (!ERC_TAPE_ROWS) {
     host.innerHTML = '<div class="se-tape"><div class="se-tapesay">' +
-      (ERC_TAPE_FAIL_KEY === key ? "the tape could not be read. It asks again by itself."
-        : "reading the season…") + "</div></div>";
-    ercTapeRead(false);
+      (ERC_TL_FAIL ? "the timeline could not be read. It asks again by itself." : "reading the season…") + "</div></div>";
     return;
   }
   host.innerHTML = ercTapeHTML();
@@ -11494,7 +11687,8 @@ function ercPaintTape() {
    are scaled to the busiest bar ACTUALLY ON SCREEN, recomputed as the tape moves:
    a quiet fortnight fills the track with its own shape, and scrolling into November
    puts those same quiet days back where they belong against a 38-name day. The
-   colour never moves with the scale — it stays the count. */
+   colour never moves with the scale — it stays the count. The market-cap wash
+   rescales with it, against the heaviest bar on screen. */
 function ercTapeRescale() {
   const sc = el("ernTlScroll");
   if (!sc || typeof sc.querySelectorAll !== "function") return;
@@ -11502,15 +11696,35 @@ function ercTapeRescale() {
   if (!cols.length) return;
   const L = sc.scrollLeft, R = L + sc.clientWidth;
   const vis = cols.filter((c) => c.offsetLeft + c.offsetWidth > L && c.offsetLeft < R);
-  const scale = ercTapeScale((vis.length ? vis : cols).map((c) => +c.dataset.n || 0));
+  const on = vis.length ? vis : cols;
+  const scale = ercTapeScale(on.map((c) => +c.dataset.n || 0));
+  const wscale = ercTapeScale(on.map((c) => +c.dataset.w || 0));
   cols.forEach((c) => {
     const n = +c.dataset.n || 0, bar = c.querySelector("i");
+    const wash = c.querySelector("u.se-tlw");
+    if (wash) wash.style.height = wscale.pct(+c.dataset.w || 0) + "%";
     if (!bar) return;
     const pct = scale.pct(n), cnt = c.querySelector(".se-tlv"), nm = c.querySelector(".se-tlnm");
     bar.style.height = pct + "%";
     if (cnt) cnt.style.bottom = "calc(" + pct + "% + 3px)";
-    if (nm) { nm.style.bottom = "calc(" + pct + "% + 15px)"; nm.style.display = pct >= ERC_TL_NAME_PCT ? "inline" : "none"; }
+    if (nm) { nm.style.bottom = "calc(" + pct + "% + 15px)"; nm.style.display = pct >= ERC_TL_NAME_PCT ? "inline-flex" : "none"; }
   });
+}
+/* PAGING AS YOU MOVE. Dragging within six bars of either end extends the stretch the
+   timeline shows by one page and asks for it; what is already on screen is not
+   redrawn out from under the thumb — the scroll offset is kept. */
+const ERC_TL_EDGE_PX = 240;
+function ercTlEdgeCheck(sc) {
+  if (!sc) return;
+  const z = ERC_ZOOM[ercZoom()], span = ercTlSpan();
+  let grew = false;
+  if (sc.scrollLeft < ERC_TL_EDGE_PX && span.from > ercTlFloor()) {
+    ERC_TL_FROM = ercTlClamp(ernShift(span.from, -z.page)); grew = true;
+  }
+  if (sc.scrollWidth - sc.clientWidth - sc.scrollLeft < ERC_TL_EDGE_PX && span.to < ercTlCeil()) {
+    ERC_TL_TO = ercTlClamp(ernShift(span.to, z.page)); grew = true;
+  }
+  if (grew) { ERC_TAPE_AT = sc.scrollLeft; ercTlEnsure(); ercTlRepaintSoon(); }
 }
 /* after every paint: put the tape back where the reader left it (first time: the
    pointer a little right of centre, so history is already under the thumb), and
@@ -11521,27 +11735,18 @@ function ercTapeAfterPaint() {
   const pointer = sc.querySelector(".se-tlday.is-open") || sc.querySelector(".se-tlday.is-today");
   const centre = () => { if (pointer) sc.scrollLeft = Math.max(0, pointer.offsetLeft - sc.clientWidth * 0.55); };
   if (ERC_TAPE_AT == null) centre();
-  else {
-    sc.scrollLeft = ERC_TAPE_AT;
-    /* a remembered offset is kept ONLY while it still shows the bar the view is
-       sitting on. Stepping across a month otherwise left the tape looking at a
-       stretch the room was no longer in — MEASURED on a jump from September to
-       November, where the tape stayed on December. */
-    if (pointer && (pointer.offsetLeft < sc.scrollLeft || pointer.offsetLeft + pointer.offsetWidth > sc.scrollLeft + sc.clientWidth)) {
-      centre(); ERC_TAPE_AT = sc.scrollLeft;
-    }
-  }
+  else sc.scrollLeft = ERC_TAPE_AT;
   ercTapeRescale();
   let rafid = 0;
   sc.addEventListener("scroll", () => {
     ERC_TAPE_AT = sc.scrollLeft;
     if (rafid || typeof requestAnimationFrame !== "function") return;
-    rafid = requestAnimationFrame(() => { rafid = 0; ercTapeRescale(); });
+    rafid = requestAnimationFrame(() => { rafid = 0; ercTapeRescale(); ercTlEdgeCheck(sc); });
   }, { passive: true });
   /* PINCH AND ⌘/ctrl-WHEEL ARE THE ZOOM; a plain wheel still walks the season. A
      trackpad pinch arrives as a wheel with ctrlKey set, which is why both are one
      branch. The zoom steps one level per gesture and then waits, or a single pinch
-     would run from days to months in one flick. */
+     would run from days to years in one flick. */
   sc.addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) { e.preventDefault(); ercZoomStep(e.deltaY > 0 ? 1 : -1); return; }
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { sc.scrollLeft += e.deltaY; e.preventDefault(); }
@@ -11553,7 +11758,7 @@ function ercTapeAfterPaint() {
     const dx = e.clientX - x0;
     if (Math.abs(dx) > 3) { moved = Math.abs(dx); sc.scrollLeft = l0 - dx; sc.classList.add("is-drag"); }
   });
-  const end = () => { down = false; sc.classList.remove("is-drag"); setTimeout(() => { moved = 0; }, 0); };
+  const end = () => { down = false; sc.classList.remove("is-drag"); ercTlEdgeCheck(sc); setTimeout(() => { moved = 0; }, 0); };
   ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => sc.addEventListener(ev, end));
   sc.addEventListener("click", (e) => { if (moved > 4) { e.stopPropagation(); e.preventDefault(); } }, true);
 }
@@ -11565,11 +11770,19 @@ function ercZoomStep(dir) {
   ERC_ZOOM_AT = Date.now();
   ercSetZoom(ERC_ZOOMS[j]);
 }
+/* a new unit starts its stretch again from the timeline's own centre, and re-centres
+   itself on the pointer. Nothing already read is thrown away. */
 function ercSetZoom(z) {
   if (!ERC_ZOOM[z] || z === ercZoom()) return;
-  S.ernZoom = z; ERC_TAPE_AT = null;                    // a new unit re-centres itself on the pointer
-  renderEvents(S.coh);
-  ercTapeRead(false);
+  S.ernZoom = z; ERC_TAPE_AT = null; ERC_TL_FROM = ""; ERC_TL_TO = "";
+  ercTlEnsure();
+  ercPaintTape();
+}
+/* the timeline's own TODAY: it moves the timeline and nothing else. */
+function ercTlToday() {
+  S.ernTlAt = todayISO(); ERC_TL_FROM = ""; ERC_TL_TO = ""; ERC_TAPE_AT = null;
+  ercTlEnsure();
+  ercPaintTape();
 }
 /* the legend, only for the cohorts actually on screen */
 function ercKeyHTML(rows) {
@@ -11700,8 +11913,9 @@ function ercSpanBarHTML() {
   const lbl = sp === "MONTH" ? ERC_MONTH_NAME[+d0.slice(5, 7) - 1] + " " + d0.slice(0, 4)
             : sp === "WEEK"  ? ernWeekday(w[0]) + " " + ernMonthDay(w[0]) + "  →  " + ernWeekday(w[6]) + " " + ernMonthDay(w[6])
             : ernWeekday(d0) + " " + ernMonthDay(d0) + " " + d0.slice(0, 4);
-  /* ONE pair of arrows in the room, and they step the VIEW by its own unit — a day,
-     a week, a month. The tape follows, because tape and view share one anchor. */
+  /* M40 — these arrows step the GRID by its own unit: a day, a week, a month.
+     They do NOT move the timeline above. Alan: "the timeline header should not be
+     ruled by that date selector arrow shit, it's a separate thing, its own zoom." */
   const step = sp === "MONTH" ? "month" : sp === "WEEK" ? "week" : "day";
   const back = '<button class="se-nav" data-act="ernnav" data-k="-1" title="' + esc("the " + step + " before this one") + '">◀</button>';
   const fwd  = '<button class="se-nav" data-act="ernnav" data-k="1" title="' + esc("the " + step + " after this one") + '">▶</button>';
@@ -16493,13 +16707,17 @@ document.addEventListener("click", (e) => {
       renderEvents(S.coh); ercRead(false);
       break;
     }
-    case "erntoday": { S.ernDay = todayISO(); S.ernPick = null; ERC_TAPE_AT = null; ERC_AUTO_DAY = null; renderEvents(S.coh); ercRead(false); break; }
+    case "erntoday": { S.ernDay = todayISO(); S.ernPick = null; ERC_AUTO_DAY = null; renderEvents(S.coh); ercRead(false); break; }   /* M40 — the GRID goes to today; the timeline is its own instrument and stays put */
+    case "erntlnow": { ercTlToday(); break; }                                    /* M40 — the TIMELINE's own TODAY */
     /* A BAR ON THE TAPE ALWAYS DOES SOMETHING VISIBLE: it opens the day, the week or
        the month it stands for in the view below — whichever unit the zoom is set to —
        and the tape keeps its place, so the season never jumps under the reader. */
     case "erntape": {
       const d = a.dataset.d || todayISO();
       S.ernDay = d; S.ernSpan = ERC_ZOOM_SPAN[ercZoom()] || "DAY"; S.ernPick = null; ERC_AUTO_DAY = null;
+      /* M40 — the tap moves the GRID onto that bucket. The timeline keeps its own
+         centre, its own zoom and its own scroll: tapping a bar must not jump the
+         tape the reader is dragging. */
       renderEvents(S.coh); ercRead(false);
       break;
     }
