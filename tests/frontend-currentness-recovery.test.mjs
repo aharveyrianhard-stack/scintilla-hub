@@ -19,7 +19,10 @@ const WRITE_HELPERS = ['scSetAttr', 'scSetText', 'scSetClass', 'scSetTitle',
   /* M19 §B — every chart-API read now goes through the shared in-flight helper, so it is
      plumbing in exactly the same sense as the write helpers: any context that extracts a
      function which reads the provider needs it, or the read throws and is swallowed. */
-  'scJSONOnce'];
+  'scJSONOnce',
+  /* M55 — the same kind of plumbing: while the board is REWOUND every painting function asks this
+     one reader whether it may touch a cell at all, so any context that extracts a painter needs it. */
+  'scRewoundNow'];
 function context(names, bindings = {}) {
   const c = vm.createContext({ window:{}, Date, TextEncoder, crypto:webcrypto, console,
     ...bindings });

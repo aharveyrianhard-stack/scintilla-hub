@@ -634,22 +634,29 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    Alan: "this would be too many tapes." The strip is now a single row: the label, the count, the
    newest one in plain words, and the way through to the notifications, which hold the rest. Same
    height whatever the day does, so the board below it never moves. */
-.sc-ss--one{ display:flex; align-items:center; gap:8px; padding:4px 8px; }
-.sc-ss__one{ display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0;
+.sc-ss--one{ display:flex; align-items:center; gap:8px; padding:4px 8px; min-width:0;
+  flex-wrap:nowrap; overflow:hidden; }
+.sc-ss--one .sc-ss__lbl, .sc-ss--one .sc-ss__n, .sc-ss--one .sc-ss__coh{ white-space:nowrap; flex:0 0 auto; }
+.sc-ss--one .sc-ss__spark{ flex:0 0 auto; }
+.sc-ss__one{ display:flex; align-items:baseline; gap:8px; flex:1 1 auto; min-width:0; overflow:hidden;
   background:none; border:0; text-align:left; cursor:pointer; font:inherit; padding:0; }
+.sc-ss__one > span{ flex:0 0 auto; white-space:nowrap; }
 .sc-ss__one:hover .sc-ss__d{ color:var(--ink); }
-.sc-ss__one .sc-ss__d{ flex:1 1 auto; }
+.sc-ss__one .sc-ss__d{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .sc-ss__one.up .sc-ss__d{ color:var(--bull); }
 .sc-ss__one.dn .sc-ss__d{ color:var(--bear); }
 .sc-ss__one.hot .sc-ss__d{ color:var(--sv5); }
 .sc-ss__one.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__go{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); white-space:nowrap; }
 .sc-ss--one .sc-ss__spark{ flex:0 0 auto; }
-@media(max-width:560px){
-  /* MEASURED at 390: the kind and the way-through do not fit beside the number. The line keeps the
-     time, the name and what happened; the rest is one tap away in the bell anyway. */
-  .sc-ss__one .sc-ss__k{ display:none; }
+@media(max-width:700px){
+  /* MEASURED at 390 on the shipped bytes: the label wrapped to two lines and the count, the cohort
+     and the ticker all landed on top of each other. On a phone the line keeps what a glance needs —
+     how many, when, which name, what happened — and drops the rest, which is one tap away in the bell. */
+  .sc-ss__one .sc-ss__k, .sc-ss__one .sc-ss__go, .sc-ss--one .sc-ss__coh{ display:none; }
   .sc-ss--one .sc-ss__lbl{ font-size:9px; letter-spacing:.1em; }
+  .sc-ss--one .sc-ss__spark{ display:none; }
+  .sc-ss__one{ gap:6px; }
 }
 /* M55 — a scintilla in the notifications list: the same row shape as a news alert, plus what kind
    of thing it was. It is a button, not a link: it goes to the PLACE, not to a story. */
@@ -6391,12 +6398,16 @@ function rsiGradColor(v) {
   if (Math.abs(d) < 0.04) return "var(--ink3)";  // dead-center 48-52 stays neutral dim
   return d < 0 ? "rgba(0,255,163," + alpha + ")" : "rgba(255,45,85," + alpha + ")";
 }
+/* M55 — is the board showing a past day? One reader, so every writer asks the same question. */
+function scRewoundNow() {
+  return typeof document !== "undefined" && !!document.body && document.body.classList.contains("gwx-on");
+}
 function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
   /* M55 — the lazy RSI loader must not paint today's RSI onto a rewound row; the value is
      still stashed on the row object, so LIVE gets it back untouched. */
-  if (typeof document !== "undefined" && document.body && document.body.classList.contains("gwx-on")) return;
+  if (scRewoundNow()) return;
   cell.textContent = Math.round(v);
   cell.style.color = rsiGradColor(v);
 }
@@ -14316,9 +14327,13 @@ const ecNudgeTitle = (it) => it.event + " · " + it.cat + " · " + ecTimeET(it.t
 function ecSwarmInnerHTML(m, nowSec) {
   const dots = m.group.slice(0, 8).map((x) => '<i style="background:' + ecHue(x.it.cat) + '"></i>').join("");
   const dt = m.it.ts - nowSec;
+  /* M55 — the same chip rides inside the ECONOMIC room, where "go to economic" would be telling the
+     reader to go where he already is. In the room it says which day it is instead. */
+  const here = typeof S !== "undefined" && S && S.sec === "ECONOMIC";
   return '<span class="mn-dots">' + dots + "</span>" +
     '<span class="mn-slbl"><b>' + m.group.length + " due</b> · " +
-    esc(dt <= 0 ? "now" : ecCountdown(m.it.ts, nowSec)) + " · go to economic</span>";
+    esc(dt <= 0 ? "now" : ecCountdown(m.it.ts, nowSec)) +
+    (here ? " · " + esc(ecWeekday(m.day || m.it.day).toUpperCase()) : " · go to economic") + "</span>";
 }
 /* the heavy day still to come: a warning, not an alarm — so nothing here moves at all */
 function ecAheadInnerHTML(m) {
@@ -14380,13 +14395,15 @@ const EC_ROOM_QUEUE_MAX = 8;
 function ecRoomModel(nowSec) {
   const out = [];
   for (const m of ecNudgeModel(nowSec)) {
-    if ((m.kind === "swarm" || m.kind === "ahead") && Array.isArray(m.group) && m.group.length) {
-      for (const g of m.group.slice(0, EC_ROOM_QUEUE_MAX)) out.push({ kind: "item", key: g.key, it: g.it, st: g.st });
-      continue;
-    }
-    out.push(m);
+    out.push(m);                                  /* WHAT FLASHES IN THE HEADER FLASHES HERE: the swarm
+                                                     chip is the same element with the same CSS, so its
+                                                     dots keep the 1.1s / .9s / 1.3s they have up top —
+                                                     measured, not re-invented. */
+    if ((m.kind === "swarm" || m.kind === "ahead") && Array.isArray(m.group) && m.group.length)
+      for (const g of m.group.slice(0, EC_ROOM_QUEUE_MAX))   /* and then WHICH releases those dots are */
+        out.push({ kind: "item", key: g.key, it: g.it, st: g.st });
   }
-  return out.slice(0, EC_ROOM_QUEUE_MAX + 4);
+  return out.slice(0, EC_ROOM_QUEUE_MAX + 6);
 }
 function ecNudgePaintBox(box, nowSec, modelIn) {
   if (!ECON_TAPE_ON || !box) return;
@@ -20402,12 +20419,17 @@ function patch(t, price, src) {
     /* The price can repeat while its baseline changes or disappears. Repaint percentage and
        baseline disclosures before this price-only early return, including explicit absence. */
     const sameChange = (pc0 && isFinite(pc0) && pc0 !== 0) ? (price / pc0 - 1) * 100 : null;
-    const sameCell = el("lc_" + t);
+    /* M55 — THE PRICE-REPEAT PATH WRITES CELLS TOO, and it is the path that runs all day while the
+       market is closed. MEASURED on the rewound board before this guard: every column replayed
+       except the percentage, which held today's number on a July row — the exact defect the replay
+       exists to remove, arriving through the one branch that returns early. The row object above is
+       still advanced, so LIVE restores the current number. */
+    const sameCell = scRewoundNow() ? null : el("lc_" + t);
     if (sameCell) {
       scSetText(sameCell, sameChange == null ? "—" : fmtC(sameChange));
       scSetClass(sameCell, "sc-chg" + (sameChange == null ? "" : " " + (sameChange >= 0 ? "up" : "dn")));
     }
-    if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
+    if (typeof LEFT_T !== "undefined" && LEFT_T === t && !scRewoundNow()) {
       if (S.coData && S.coData.t === t) S.coData.chg = sameChange;
       const sameCompany = el("coChg"), samePrev = el("coPrev");
       scSetText(sameCompany, sameChange == null ? "—" : fmtC(sameChange));
@@ -20431,9 +20453,7 @@ function patch(t, price, src) {
      above are still advanced, so pressing LIVE restores the current number exactly; but writing
      today's price into a row showing 20 August is the same defect as ranking a March board on an
      August value. The rewind owns these cells until it hands them back (paintCols on goLive). */
-  const scRewound = typeof document !== "undefined" && document.body &&
-                    document.body.classList.contains("gwx-on");
-  if (lp && !scRewound) {
+  if (lp && !scRewoundNow()) {
     /* M32 — price AND percentage both scintillate now, through the one primitive. The old path
        flashed the price only, and restarted its animation with a forced reflow per row. */
     scScintSet(lp, price.toFixed(2), prev != null && +prev !== price ? price > +prev : null);

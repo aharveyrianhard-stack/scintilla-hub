@@ -146,12 +146,20 @@ test("the rewind asks for the day's RSI on the request it was already making", (
   assert.ok(!/momentum_daily\?select=ticker,read&asof/.test(page), "and neither is left on the old two-column read");
 });
 
-test("nothing live writes over a rewound cell", () => {
-  const patch = slice("  const scRewound = typeof document", "  /* FIX (Alan: \"heatmap doesn't match cohort board\")");
-  assert.match(patch, /classList\.contains\("gwx-on"\)/);
-  assert.match(patch, /if \(lp && !scRewound\)/, "the ~2 s provider tick leaves the cells alone while rewound");
+test("nothing live writes over a rewound cell — including the path that returns early", () => {
+  /* MEASURED before this guard: on a rewound board every column replayed EXCEPT the day change,
+     because the tick has a second, earlier branch for a price that repeats — which, with the market
+     closed, is the branch that runs all day. */
+  const guard = slice("function scRewoundNow() {", "\n}\n");
+  assert.match(guard, /classList\.contains\("gwx-on"\)/);
+  const repeat = slice("    const sameChange = (pc0 &&", "    return;");
+  assert.match(repeat, /scRewoundNow\(\) \? null : el\("lc_" \+ t\)/, "the price-repeat path asks too");
+  assert.match(repeat, /LEFT_T === t && !scRewoundNow\(\)/, "and it leaves the company ident alone as well");
+  assert.match(page, /if \(lp && !scRewoundNow\(\)\)/, "so does the moved-price path");
   const rsi = slice("function paintRsiCell(t, v) {", "\n}\n");
-  assert.match(rsi, /gwx-on/, "and so does the lazy RSI loader");
+  assert.match(rsi, /scRewoundNow\(\)/, "and so does the lazy RSI loader");
+  assert.equal((page.match(/classList\.contains\("gwx-on"\)/g) || []).length, 1,
+    "ONE reader of that state, so a future writer cannot answer the question differently");
 });
 
 test("the tick still costs two geometry reads: the column work reuses what repaint already read", () => {
@@ -186,9 +194,10 @@ test("a day the header COLLAPSES into one chip is opened back up in the room, re
         group: [{ kind: "item", key: "H1", it: { event: "PCE Price Index" }, st: "ahead" }] },
     ], 8);
   const out = fn(0);
-  assert.deepEqual(out.map((m) => m.key), ["A", "S1", "S2", "H1"], "every collapsed release gets its own node");
-  assert.ok(out.every((m) => m.kind === "item"), "and each is a real item, so it carries its own dot, state and link");
-  assert.equal(out.filter((m) => m.key === "SWARM2026-09-24").length, 0, "the collapsed chip itself does not survive");
+  assert.deepEqual(out.map((m) => m.key), ["A", "SWARM2026-09-24", "S1", "S2", "AHEAD2026-09-25", "H1"],
+    "the chip the header flashes is here too — and the releases behind it are named, in order");
+  assert.ok(out.filter((m) => m.kind === "item").every((m) => m.it && m.it.event),
+    "each named release is a real item, so it carries its own dot, its own state and its own way through");
   const head = slice("function macroNextHTML(nowSec) {", "/* Repaint the queue IN PLACE");
   assert.ok(!/ecRoomModel/.test(head), "the HEADER still collapses — it has one line");
 });
