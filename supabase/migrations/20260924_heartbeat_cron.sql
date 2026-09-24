@@ -14,9 +14,11 @@
 -- SAFE TO RUN TWICE. The function upserts on (ticker, date), so a manual re-run or an overlapping
 -- catch-up leaves one row per name per day.
 --
--- THE SECRET. This migration contains NO key. It reads the bearer by name from Vault, exactly as
--- 20260924_scintillas_cron.sql does:
---     select vault.create_secret('<the functions bearer key>', 'scintilla_functions_key');
+-- THE SECRET. This migration contains NO key, and there is no Vault secret to read: the name
+-- 'scintilla_functions_key' this file first used does not exist in this project (checked 24 Sep).
+-- The bearer is copied server-side from the live earnings-report-time job (jobid 259), exactly as
+-- scintillas-detect-intraday/-session (266/267) were scheduled, so it never passes through a file,
+-- a log or a chat. Coordinator, applied 24 Sep 2026.
 --
 -- ROLLBACK (exact):
 --     select cron.unschedule('heartbeat-daily');
@@ -26,10 +28,6 @@ create extension if not exists pg_net;
 
 select cron.unschedule('heartbeat-daily') where exists (select 1 from cron.job where jobname = 'heartbeat-daily');
 
-select cron.schedule('heartbeat-daily', '10 23 * * 1-5', $$
-  select net.http_post(
-    url     := 'https://' || current_setting('app.settings.project_ref', true) || '.functions.supabase.co/heartbeat-daily',
-    headers := jsonb_build_object('content-type', 'application/json',
-                 'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'scintilla_functions_key')),
-    body    := '{}'::jsonb, timeout_milliseconds := 55000);
-$$);
+select cron.schedule('heartbeat-daily', '10 23 * * 1-5', format(
+  $cmd$select net.http_post(url := 'https://wadinxqplrggagkvrdag.supabase.co/functions/v1/heartbeat-daily', headers := %s::jsonb || '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 120000)$cmd$,
+  quote_literal((select substring(command from $re$'(\{"Authorization":[^']+\})'::jsonb$re$) from cron.job where jobid = 259))));

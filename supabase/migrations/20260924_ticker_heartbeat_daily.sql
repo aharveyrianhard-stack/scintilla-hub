@@ -78,3 +78,8 @@ create policy thd_read_all on public.ticker_heartbeat_daily for select using (tr
 
 grant select on public.ticker_heartbeat_daily to anon, authenticated;
 revoke insert, update, delete on public.ticker_heartbeat_daily from anon, authenticated;
+
+-- THE WRITER. A table made by migration gets no default grants here, so the service role the
+-- heartbeat-daily function writes with could not insert (the same miss as allocation_operator_votes
+-- and the scintillas tables on 23-24 Sep). Coordinator, applied 24 Sep 2026.
+grant select, insert, update on public.ticker_heartbeat_daily to service_role;
