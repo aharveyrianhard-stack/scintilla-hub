@@ -1,0 +1,225 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content=noindex>
+<title>Admit redo — the expansion names, made safe to switch on</title><style>
+:root{--bg:#0c0c0d;--panel:#141516;--line:#26282a;--ink:#d2d2d2;--ink2:#9a9c9d;--ink3:#77797a;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:28px 18px 80px}
+.wrap{max-width:1000px;margin:0 auto}h1{font-size:21px;letter-spacing:.01em;margin:0 0 4px}
+h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:34px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3{font-size:13.5px;margin:18px 0 6px;color:var(--ink)}
+p,li{font-size:13.5px;color:var(--ink)}.sub{color:var(--ink3);font-size:12.5px;margin:0 0 18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:14px 16px;margin:12px 0}
+table{width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;margin:10px 0;font-size:12.5px}
+th{text-align:left;color:var(--ink3);font-weight:500;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line);padding:6px 8px}
+td{padding:6px 8px;border-bottom:1px solid #1c1e1f;vertical-align:top}
+.mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;word-break:break-word}.num{text-align:right}
+code,pre{font-family:var(--mono);font-size:12px;color:var(--ink)}
+pre{background:#111213;border:1px solid var(--line);border-radius:6px;padding:11px 13px;overflow-x:auto;line-height:1.5}
+.key{color:var(--ink2)}ul{padding-left:19px;margin:8px 0}li{margin:4px 0}
+.flag{border-left:2px solid #6e7072;padding-left:11px;color:var(--ink2);font-size:13px}
+@media(max-width:640px){td,th{padding:5px 4px}.mono{font-size:11px}pre{white-space:pre-wrap;word-break:break-word}h1{font-size:18px}}
+</style></head><body><div class=wrap>
+<span data-scnav-slot></span><h1>Admit redo: the expansion names, made safe to switch on</h1>
+<p class=sub>24 September 2026 · prepared for a closed-market window · nothing here was deployed, pushed or written to any database</p>
+
+<div class=panel><p style="margin:0">Two attempts this morning admitted the 56 new names and had to be rolled back.
+The second one got as far as the board before the settled close refused the whole set over
+<b>FINX</b>, whose daily close said 25.4279 while the last official print said 25.42 — eight tenths of a cent.
+This unit does four things: it makes a cent a note instead of a refusal, it adds the check that asks
+the question <i>before</i> the window, it measures what the new names actually have on the Hub (very
+little, and that is the important finding), and it writes the order to switch them on.</p></div>
+
+<h2>1 · The cent rule</h2>
+<p>In the settled close, three independent numbers for the same close had to match to the last decimal:
+the daily aggregate, the previous-close surface, and the official closing print. Any difference at all
+refused the name — and one refused name refuses the whole day.</p>
+<p><b>Now:</b> a difference of <b>one cent or less</b>, or <b>0.05% or less</b>, is admitted with a named note
+(<span class=mono>CROSS_CHECK_WITHIN_TOLERANCE</span>) that keeps all three numbers, the gap in dollars and
+the gap in percent. The number that enters the artifact is always the daily aggregate — nothing is averaged
+and nothing is picked as the "best" of three. Anything wider still refuses, exactly as before, and the
+refusal now says how far apart the sources were.</p>
+<table><tr><th>Case</th><th>Numbers</th><th>Gap</th><th>Result</th></tr>
+<tr><td class=mono>FINX 2026-09-23</td><td class=mono>25.4279 / 25.4279 / 25.42</td><td class=mono>0.0079 · 0.031%</td><td>admitted, with the note</td></tr>
+<tr><td>a cent on a $10 name</td><td class=mono>10.00 / 10.01</td><td class=mono>0.01 · 0.10%</td><td>admitted, with the note</td></tr>
+<tr><td>two cents on a $10 name</td><td class=mono>10.00 / 10.02</td><td class=mono>0.02 · 0.20%</td><td>still refused</td></tr>
+<tr><td>the Aug-19 defect</td><td class=mono>767.45 / 767.45 / 767.71</td><td class=mono>0.26 · 0.034%</td><td>still refused</td></tr></table>
+<p class=flag><b>One deliberate difference from the brief.</b> The brief said "$0.01 <i>or</i> 0.05%". On a $767 name
+0.05% is 38 cents, and that would have re-admitted the measured 19 August defect — a mid-session snapshot of
+767.71 standing in for a settled 767.45 — which two shipped tests exist to refuse. So the percentage leg is
+capped at five cents. FINX passes on the cent leg alone and never needed the percentage one. To get the
+uncapped rule the brief describes, set <span class=mono>CROSS_CHECK_REL_MAX_ABS = Infinity</span>: one line,
+nothing else changes. That is your call, and it is the first decision below.</p>
+<p>I also checked what the Geiger machine really runs, rather than assuming. It injects exactly two files at
+every boot — <span class=mono>settled-close-supervisor.mjs</span> and <span class=mono>boot-geiger.sh</span> —
+and I verified both against the machine config: byte-identical to b20ee49. <b>The one-shot is not injected, and
+neither is the file the cent rule lives in</b>, so the tolerance ships with the image and needs no
+<span class=mono>--file-local</span>. The 420-name boot file still does.</p>
+
+<h2>2 · What the new names actually have on the Hub</h2>
+<p>Alan asked whether they have financials, fundamentals, earnings and analyst coverage. I measured it on the
+live database rather than assuming. <b>The answer today is none of it — zero of 56 names have a row in any
+Hub pillar</b>, because the Hub reads its own list of names and these are not on it.</p>
+<table><tr><th>Pillar</th><th>Table</th><th class=num>The 56</th><th class=num>The 364 that already work</th></tr><tr><td>FMP profile</td><td class=mono>company_profile</td><td class='mono num'>0 / 56</td><td class='mono num'>364 / 364</td></tr><tr><td>fundamentals (current)</td><td class=mono>fundamentals</td><td class='mono num'>0 / 56</td><td class='mono num'>360 / 364</td></tr><tr><td>fundamentals history</td><td class=mono>fundamentals_history</td><td class='mono num'>0 / 56</td><td class='mono num'>30 / 364</td></tr><tr><td>ratios history</td><td class=mono>ratios_history</td><td class='mono num'>0 / 56</td><td class='mono num'>30 / 364</td></tr><tr><td>earnings history (reported)</td><td class=mono>earnings_events</td><td class='mono num'>0 / 56</td><td class='mono num'>65 / 364</td></tr><tr><td>earnings calendar (upcoming)</td><td class=mono>earnings_events</td><td class='mono num'>0 / 56</td><td class='mono num'>315 / 364</td></tr><tr><td>analyst estimates</td><td class=mono>analyst_estimates</td><td class='mono num'>0 / 56</td><td class='mono num'>39 / 364</td></tr><tr><td>price target consensus</td><td class=mono>price_target_consensus</td><td class='mono num'>0 / 56</td><td class='mono num'>319 / 364</td></tr><tr><td>cohort membership</td><td class=mono>cohorts</td><td class='mono num'>0 / 56</td><td class='mono num'>364 / 364</td></tr><tr><td>read engine: read_blocks</td><td class=mono>read_blocks</td><td class='mono num'>0 / 56</td><td class='mono num'>364 / 364</td></tr><tr><td>read engine: ticker_context</td><td class=mono>ticker_context</td><td class='mono num'>0 / 56</td><td class='mono num'>196 / 364</td></tr><tr><td>indicators (FMP reference)</td><td class=mono>provider_indicators_current</td><td class='mono num'>0 / 56</td><td class='mono num'>256 / 364</td></tr></table>
+<p>Two things follow. First, the incumbent names are themselves uneven — fundamentals history, earnings
+history and analyst estimates are thin for the 364 as well, so "everything that's on Hub" is not a full set
+for anybody. Second, the fix is one list: <span class=mono>public.cohorts</span>, which the board reads, is
+<span class=mono>public.tickers</span> row for row (measured today: both 389 rows, identical sets), and the
+read engine builds its universe from that same table.</p>
+<h3>Which pipelines add a name on their own, and which need a list edited</h3>
+<ul>
+<li><b>On their own, once the row exists:</b> the read engine (it selects every active ticker), and with it
+read blocks and ticker context; the cohort tab membership follows the same row.</li>
+<li><b>Needs the list edited — and it was missing:</b> <span class=mono>public.tickers</span> itself. The
+migration written this morning adds taxonomy rows only. I added the tickers migration on the Hub branch, with
+a rollback, and it refuses to finish unless the active equity count lands on exactly 420.</li>
+<li><b>Nothing to edit:</b> the logo. It is built from the ticker
+(<span class=mono>financialmodelingprep.com/image-stock/&lt;TICKER&gt;.png</span>) and falls back to the ticker
+text. I fetched all 56: every one resolves.</li>
+<li><b>Not in these repositories:</b> the FMP loaders that fill profile, fundamentals, earnings and estimates
+live outside both repos on this Mac, so I could not read which list they walk. Every one of them covers the
+active names in that same table today, which is the evidence for expecting them to pick the new names up —
+but it is inference, not proof, and the runbook says to check it the morning after.</li>
+</ul>
+<h3>Per name</h3>
+<table><tr><th>Name</th><th>Logo</th><th>Hub pillars present</th><th>Plain reason</th></tr><tr><td class=mono>AAOI</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>ACHR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>ALB</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>AMKR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>ARKX</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>AVAV</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>BKSY</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>BOTZ</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>BTDR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>CIBR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>COHR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>CRML</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>FDN</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>FINX</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>GLW</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>HIVE</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>HUBB</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>IGV</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>IHI</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>ITA</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>ITB</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>IYT</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>JETS</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>KIE</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>KRE</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>KTOS</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>LEU</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>LIT</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>LUNR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>NOK</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>NVTS</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>OUST</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>PAVE</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>PEJ</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>PL</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>POET</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>QTUM</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>RDW</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>REMX</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>REZ</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>RIOT</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SATL</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SERV</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SIDU</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SPIR</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SQM</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>STM</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>SYM</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>TAN</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>TECK</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>TSEM</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>URA</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>UUUU</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>VSH</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>XBI</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr><tr><td class=mono>XSD</td><td class=mono>yes</td><td>none of the twelve</td><td>no row in <span class=mono>public.tickers</span> yet</td></tr></table>
+
+<h2>3 · The held names</h2>
+<table><tr><th>Name</th><th>In plain words</th><th>What the data says</th></tr><tr><td class=mono>BJK</td><td>the gaming fund looks closed</td><td>Last bar 2026-04-08, then 34 sessions we asked for and never got, 14 of them consecutive through April. The chart API answers 503 DAILY_REFRESH_DID_NOT_CONVERGE for it today. That is what a fund that stopped trading looks like.</td></tr><tr><td class=mono>CLSK</td><td>one missing day, still missing</td><td>2024-11-08, a normal Friday session. I re-read the daily series through the chart API today: it goes 11-07, then 11-11. A full provider request ran at 05:43Z this morning and did not fill it.</td></tr><tr><td class=mono>SIVE</td><td>Swedish listing, no US data</td><td>0 stored sessions against a gate of 60, and no first or last bar. The provider has nothing for it on the US tape, so there is nothing to admit. Its FMP logo does not resolve either.</td></tr><tr><td class=mono>TMRC</td><td>a thin OTC micro-cap</td><td>13 missing sessions spread from 2022 to 2026 and a last bar of 2026-08-10. On an OTC book a day with no eligible trade is normal, which is exactly why it cannot be told apart from a collection defect here.</td></tr></table>
+<p><b>The casino replacement.</b> BJK was the only gaming exposure in the set. The honest options are the two
+US casino operators with full data — <span class=mono>MGM</span>, <span class=mono>WYNN</span> or
+<span class=mono>LVS</span> — or the one remaining gaming fund, <span class=mono>BETZ</span>. I did not add any
+of them: a new name has to pass the gap report and the preflight first, and neither has been run for them.
+My recommendation is MGM and WYNN as operators rather than another thin fund, put through the same gate.</p>
+<p><b>CLSK.</b> The brief asked me to re-pull that month and clear it if it fills. A re-pull writes bars, which
+this unit is not allowed to do, so it stays held and the exact command is in the runbook. What I could check
+read-only says the day is still absent after this morning's full provider request.</p>
+
+<h2>4 · The preflight</h2>
+<p>Both failed attempts found out what the settled close thought <i>after</i> the board had been switched over.
+The preflight asks first. By default it reads the provider, builds the artifact in memory and writes
+absolutely nothing — no object, no candidate, no pointer, no database row. With
+<span class=mono>--write-candidate</span> it hands the job to the shipped one-shot, which can only write inside
+the candidate namespace and can never write the pointer.</p>
+<pre># on the Geiger machine, read-only, writes nothing:
+node services/stocks-ops/settled-close-preflight.mjs \
+  --universe control/CANONICAL_EQUITY_UNIVERSE_20260820.json \
+  --session &lt;the last completed session&gt;
+
+# it prints, among other things:
+#   "exception_count": 0,
+#   "drop_from_set": [],                       <span class=key>&lt;- every name here must leave the set</span>
+#   "CROSS_CHECK_WITHIN_TOLERANCE_count": 1,   <span class=key>&lt;- FINX, with all three numbers kept</span></pre>
+<p><b>I could not run it against the real provider</b>: the provider key and the R2 credentials are not on this
+Mac, and I do not extract credentials. What I did instead was run it against stubbed provider responses
+carrying FINX's real numbers — it admits FINX with the note, names a genuinely broken name and lists it for
+removal, and treats a provider-empty day as a named absence. The command above is the one to run in the window,
+before anything is admitted.</p>
+
+<h2>5 · The final set</h2>
+<p>I re-derived it from the original 364 with the builder, exactly as the plan asks: the original file, plus
+the 56 names that passed the gap report, and nothing else. The four held names appear nowhere in it.</p>
+<table><tr><th>Item</th><th>Value</th></tr>
+<tr><td>Original set</td><td class=mono>364</td></tr>
+<tr><td>Admitted</td><td class=mono>56 (FINX included, on the cent rule)</td></tr>
+<tr><td>Held</td><td class=mono>4 — SIVE, BJK, TMRC, CLSK</td></tr>
+<tr><td>Final count</td><td class=mono>420</td></tr>
+<tr><td>Digest</td><td class=mono>0c2abd57a836845ee120eba1e465cdb61db6a2cca5b3da1fcecbdc591936bb20</td></tr>
+<tr><td>Previous digest, still accepted for FMP reference rows</td><td class=mono>ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3</td></tr></table>
+<p>Because the cent rule keeps FINX, the set and the digest are the ones already pinned on all four branches —
+no pin had to move. I checked that three independent ways: the builder's own dry run, a separate digest
+computed from the original file plus the gap report, and the repository's pin test, which compares every
+in-repo pin against the artifact.</p>
+
+<h2>6 · The runbook</h2>
+<p>Market closed, before 18:30 ET on a trading day or overnight. Every step is read back before the next one
+starts, and anything with a switch runs <span class=mono>--dry-run</span> first.</p>
+<pre>0  PREFLIGHT (writes nothing)
+   node services/stocks-ops/settled-close-preflight.mjs --universe &lt;canonical&gt; --session &lt;last session&gt;
+   STOP unless "drop_from_set": []. Any name listed there leaves the set and the digest is rebuilt.
+
+1  ADMIT IN THE DATABASE (provider side)
+   REPORT=expansion-gap-20260924.json SYMBOL=&lt;each&gt; node scripts/expansion-admit.mjs            # dry run
+   REPORT=expansion-gap-20260924.json SYMBOL=&lt;each&gt; node scripts/expansion-admit.mjs --confirm
+
+2  GEIGER RUNNER — image AND the injected boot file, or the pins do not run
+   fly machine update 820229b7795798 -a scintilla-massive-stocks-batch \
+     --image &lt;geiger line image&gt; \
+     --file-local /app/services/hot-query/boot-geiger.sh=services/hot-query/boot-geiger.sh
+   Check the boot log says tickers 420. The supervisor stays as injected (b20ee49) on purpose.
+
+3  CHART API from a clean clone of the provider line, so fly.toml carries the new env
+   fly deploy -a scintilla-massive-chart-api --image &lt;admit image&gt;
+   Check /universe is 420 and 0c2abd57.
+
+4  WAIT for the supervisor to promote: /ready shows denominator_ready true and identity MATCH.
+   Do not continue while it is false. This is the step attempt 2 never reached cleanly.
+
+5  HUB AND STATION — merge the admission branches into their CURRENT heads, test, deploy.
+   Both merge cleanly today (hub into 19d1870, station into 14bcfe5 — checked, no conflicts).
+
+6  SUPABASE — run 20260924_universe_admit_tickers.sql, then the membership migration, then the
+   chat function. Then confirm the read engine reports universe digest 0c2abd57.
+
+7  STREAM restart, then look at the board with your own eyes.</pre>
+<h3>The rollback, in reverse, and it is the proven one</h3>
+<pre>chart API back to putcall-parts-3057e57      (quotes go MATCH immediately)
+database rollback: SYMBOL=&lt;each&gt; node scripts/expansion-admit.mjs --rollback --confirm
+Geiger runner back to b20ee49 AND the original injected file
+   handoffs/geiger-injected-boot-geiger-b20ee49.sh   (verified byte-identical to what runs today)
+Supabase: 20260924_universe_admit_tickers_ROLLBACK.sql, then the membership rollback
+Hub and Station: the revert commits 19d1870 and 29cd11b</pre>
+
+<h2>7 · What could be wrong</h2>
+<ul>
+<li><b>The preflight has not run against the real provider.</b> Everything about FINX here rests on this
+morning's numbers and on stubs carrying them. If another name has drifted since, the preflight will say so —
+which is exactly why it runs first.</li>
+<li><b>The FMP loaders are an inference.</b> I could not read their source on this Mac. If they walk a list of
+their own rather than the tickers table, the new names will have prices and Geiger and still no financials the
+next morning, and someone has to add them to that list.</li>
+<li><b>The funds land on the THEMATIC tab.</b> 23 of the new names are funds. The taxonomy's own group is not
+one of the Hub's tabs, and the tickers table has no row without a cohort, so I put them in THEMATIC. It is
+visible, it is one UPDATE to change, and it is Alan's call.</li>
+<li><b>The five-cent cap is my judgement, not the brief's.</b> It is one constant.</li>
+<li><b>Nothing here was run against production.</b> No deploy, no machine change, no database write, no push.
+Every branch is local and every number above came from a read.</li>
+<li><b>Two Hub tests and one Station-adjacent test fail before I touch anything</b> (the age-function test,
+xfeed-publish, and indicator-lab-methods). They fail identically at the base commit.</li>
+</ul>
+
+<p class=sub style="margin-top:26px">Measured 2026-09-24T13:20:06Z · coverage from the live read database,
+logos from the public image endpoint, prices and the CLSK gap from the chart API, injected files from the
+machine config. All reads.</p>
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
