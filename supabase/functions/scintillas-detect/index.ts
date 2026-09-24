@@ -91,7 +91,13 @@ Deno.serve(async (req) => {
     const universe = await chartGet("/universe");
     const symbols: string[] = (universe.symbols || universe.universe || []).map((s: any) => (typeof s === "string" ? s : s.symbol)).filter(Boolean);
     const quotes = await chartGet("/quotes?symbols=" + symbols.join(","));
-    const qRows = (quotes.quotes || quotes.rows || quotes || []) as any[];
+    /* 24 Sep: the chart API's /quotes answers { quotes: { AAPL: {...}, … } } — an object keyed by
+       symbol, with previous_close — not a list with prev_close. The first live run died on
+       "qRows.filter is not a function". Both shapes are accepted; detect.mjs keeps its contract. */
+    const qRaw = quotes && (quotes.quotes ?? quotes.rows ?? quotes);
+    const qRows = (Array.isArray(qRaw) ? qRaw
+      : (qRaw && typeof qRaw === "object" ? Object.entries(qRaw).map(([sym, q]: any) => ({ ...(q || {}), symbol: (q && q.symbol) || sym })) : []))
+      .map((q: any) => ({ ...q, prev_close: q.prev_close ?? q.previous_close })) as any[];
     let candidates = qRows.filter((q) => Number.isFinite(+q.price) && Number.isFinite(+q.prev_close) && +q.prev_close > 0);
     if (mode === "intraday") {
       const before = candidates.length;
@@ -102,14 +108,16 @@ Deno.serve(async (req) => {
       candidates = candidates.slice().sort((a, b) => Math.abs(+b.price / +b.prev_close - 1) - Math.abs(+a.price / +a.prev_close - 1)).slice(0, MAX_CANDLE_FETCH);
       report.notes.push("capped at " + MAX_CANDLE_FETCH + " daily-bar reads: the biggest movers first");
     }
-    const from = dayKey(new Date(now.getTime() - CANDLE_DAYS * 86400e3));
     const historyBySymbol: Record<string, any[]> = {};
     await pool(candidates, CONCURRENCY, async (q: any) => {
       try {
-        const c = await chartGet("/candles?symbol=" + encodeURIComponent(q.symbol) + "&interval=1d&from=" + from);
-        const bars = (c.candles || c.bars || c.rows || []) as any[];
+        /* the chart API's daily bars: tf=1d&limit=N, answered under "series", t in epoch ms */
+        const c = await chartGet("/candles?symbol=" + encodeURIComponent(q.symbol) + "&tf=1d&limit=" + CANDLE_DAYS);
+        const bars = (c.series || c.candles || c.bars || c.rows || []) as any[];
+        const dayOf = (b: any) => { const t = b.t ?? b.time ?? b.date;
+          return typeof t === "number" ? new Date(t).toISOString().slice(0, 10) : String(t || "").slice(0, 10); };
         /* today's own forming bar must not be part of the history it is judged against */
-        historyBySymbol[q.symbol] = bars.filter((b: any) => String(b.t || b.time || b.date || "").slice(0, 10) < session);
+        historyBySymbol[q.symbol] = bars.filter((b: any) => dayOf(b) < session);
       } catch (_) { historyBySymbol[q.symbol] = []; }
     });
     const px = detectPriceOutliers({ quotes: candidates, historyBySymbol, session, ts: iso(now) });
