@@ -34,7 +34,7 @@ function node(opts = {}) {
 }
 /* one small world: a document whose querySelectorAll answers per selector, and an el() by id */
 function world({ rows = null, today = "2026-09-23", now = Date.parse("2026-09-23T20:30:00Z"),
-                 sel = {}, ids = {}, pg = async () => [], missing = false } = {}) {
+                 sel = {}, ids = {}, pg = async () => [], missing = false, cohsets = null } = {}) {
   const glows = [];
   const doc = {
     visibilityState: "visible",
@@ -44,8 +44,8 @@ function world({ rows = null, today = "2026-09-23", now = Date.parse("2026-09-23
   };
   /* scSetTitle is the page's own, lifted verbatim: the hover text is part of what is being proved */
   const setTitleSrc = page.match(/function scSetTitle \(node, value\) \{[\s\S]*?\n\}/)[0];
-  const src = LAYER + setTitleSrc + "\nreturn { scintKey, scintToday, scintIndex, scintBy, scintTone, scintGlow, scintWhat, scintSays," +
-    " scintClass, scintCrit, scintSpark, scintSessions, scintStripHTML, scintStripRender, ecScintPass," +
+  const src = "const COHSETS = arguments[11] || null;\n" + LAYER + setTitleSrc + "\nreturn { scintKey, scintToday, scintIndex, scintBy, scintTone, scintGlow, scintWhat, scintSays," +
+    " scintClass, scintCrit, scintSpark, scintSessions, scintCohorts, scintStripHTML, scintStripRender, ecScintPass," +
     " ernScintPass, boardScintPass, scintPull, scintTick, scintPaint," +
     " state: () => ({ missing: SCINT_MISSING, fail: SCINT_FAIL_AT, rows: SCINT_ROWS, cap: SCINT_GLOW_CAP })," +
     " setRows: (r) => { SCINT_ROWS = r; SCINT_BY = null; }, setMissing: (m) => { SCINT_MISSING = m; }," +
@@ -62,6 +62,7 @@ function world({ rows = null, today = "2026-09-23", now = Date.parse("2026-09-23
     (n, tone) => glows.push({ node: n, tone }),
     pg, () => 1,
     class FakeDate extends Date { constructor(...a) { super(...(a.length ? a : [now])); } static now() { return now; } },
+    cohsets,
   );
   if (rows) api.setRows(rows);
   if (missing) api.setMissing(true);
@@ -233,6 +234,24 @@ test("a hidden tab reads nothing and paints nothing", () => {
   doc.visibilityState = "hidden";
   api.scintTick();
   assert.equal(asked.length, 0);
+});
+
+test("the criticality reading also says WHICH cohort is doing the scintillating", () => {
+  const rows = [ev({ subject: "AMD", magnitude: 2.7 }), ev({ subject: "MU", magnitude: 2.1 }),
+                ev({ subject: "COST", magnitude: 3.0, kind: "earnings_surprise" }),
+                ev({ subject: "Core CPI", subject_kind: "event", kind: "econ_surprise", magnitude: 9 })];
+  const cohsets = { AI_HARDWARE: new Set(["AMD", "MU"]), MEGACAP: new Set(["AMD"]), FOOD: new Set(["COST"]) };
+  const { api } = world({ rows, cohsets });
+  const out = api.scintCohorts(rows);
+  assert.deepEqual(out, [{ cohort: "AI_HARDWARE", count: 2, intensity: 4.8 },
+                         { cohort: "FOOD", count: 1, intensity: 3 },
+                         { cohort: "MEGACAP", count: 1, intensity: 2.7 }],
+    "ranked by intensity; a release is not a cohort member and the 9σ print does not distort any of them");
+  assert.equal(api.scintCohorts([]).length, 0);
+  const noMap = world({ rows });
+  assert.deepEqual(noMap.api.scintCohorts(rows), [], "with no cohort map loaded it says nothing rather than guessing");
+  const html = world({ rows, cohsets, ids: { scintStrip: node() } }).api.scintStripHTML();
+  assert.match(html, /class="sc-ss__coh" title="AI_HARDWARE 2 · 4.8σ · FOOD 1 · 3σ · MEGACAP 1 · 2.7σ · a name counts in every cohort it belongs to">AI_HARDWARE 2</);
 });
 
 test("the criticality reading counts and weighs, and its line carries direction", () => {

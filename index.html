@@ -614,7 +614,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__note{ font-size:11px; color:var(--dim); margin-left:auto; text-align:right; }
 .sc-ss__spark{ display:block; }
 .sc-ss__rows{ max-height:66px; overflow:auto; margin-top:4px; }
-.sc-ss__row{ display:grid; grid-template-columns:44px 62px 1fr auto; gap:8px; align-items:baseline;
+.sc-ss__row{ display:grid; grid-template-columns:44px minmax(62px,190px) 1fr auto; gap:8px; align-items:baseline;
   width:100%; padding:2px 0; background:none; border:0; border-top:.5px solid var(--line);
   text-align:left; cursor:pointer; font:inherit; }
 .sc-ss__row:first-child{ border-top:0; }
@@ -629,6 +629,16 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__row.hot .sc-ss__d{ color:var(--sv5); }
 .sc-ss__row.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__empty{ font-size:11px; color:var(--dim); padding:2px 0; }
+.sc-ss__coh{ font-family:var(--mono); font-size:10px; color:var(--ink3); letter-spacing:.06em; }
+@media(max-width:560px){
+  /* MEASURED at 390 wide: the note took the whole row and pushed the label onto two lines across the
+     spark. On a phone the header stacks and each line carries its number on a second row. */
+  .sc-ss__hd{ flex-wrap:wrap; }
+  .sc-ss__note{ order:9; width:100%; margin-left:0; text-align:left; }
+  .sc-ss__rows{ max-height:96px; }
+  .sc-ss__row{ grid-template-columns:44px 1fr auto; }
+  .sc-ss__d{ grid-column:1 / -1; padding-left:52px; }
+}
 /* A row whose glow has faded still SAYS it was a scintilla — a shadow on the text it happened to,
    never a border, a size or a background that would shift anything. */
 .ec-row.is-scint .nm, .ec-ev.is-scint .nm, .ern-it.is-scint .ern-tk, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
@@ -17803,6 +17813,27 @@ function scintSpark(buckets, w, hgt) {
   return '<svg class="sc-ss__spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H +
     '" aria-label="criticality: scintillas per hour, ' + buckets.length + ' hours">' + segs + dot + "</svg>";
 }
+/* PER COHORT — which part of the market is doing the scintillating. Memberships overlap by design
+   (a name sits in MEGACAP and in AI_HARDWARE), so a ticker counts in every cohort it belongs to and the
+   hover says so rather than pretending the buckets are exclusive. Cohorts come from the map the board
+   already builds (COHSETS); with no map loaded this returns nothing rather than guessing. */
+function scintCohorts(rows) {
+  const out = [];
+  const sets = (typeof COHSETS !== "undefined" && COHSETS) || null;
+  if (!sets) return out;
+  for (const name in sets) {
+    const set = sets[name];
+    if (!set || typeof set.has !== "function") continue;
+    let n = 0, z = 0;
+    for (const r of rows || []) {
+      if (r.subject_kind !== "ticker" || !set.has(String(r.subject).toUpperCase())) continue;
+      n++;
+      if (r.magnitude != null && isFinite(r.magnitude)) z += Math.abs(+r.magnitude);
+    }
+    if (n) out.push({ cohort: name, count: n, intensity: Math.round(z * 10) / 10 });
+  }
+  return out.sort((a, b) => b.intensity - a.intensity || b.count - a.count || (a.cohort < b.cohort ? -1 : 1));
+}
 /* how many days of stored events this reading would need before it could claim anything */
 function scintSessions() {
   const days = new Set((SCINT_ROWS || []).map((r) => scintDayET(r.ts)).filter(Boolean));
@@ -17825,8 +17856,13 @@ function scintStripHTML() {
   const rows = scintToday();
   const crit = scintCrit(rows, Date.now(), SCINT_CRIT_HOURS);
   const sess = scintSessions();
+  const coh = scintCohorts(rows);
+  const cohHTML = coh.length
+    ? '<span class="sc-ss__coh" title="' + esc(coh.slice(0, 3).map((c) => c.cohort + " " + c.count + " · " + c.intensity + "σ").join(" · ") +
+        " · a name counts in every cohort it belongs to") + '">' + esc(coh[0].cohort) + " " + coh[0].count + "</span>"
+    : "";
   const head = '<div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
-    '<span class="sc-ss__n">' + rows.length + "</span>" + scintSpark(crit) +
+    '<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + scintSpark(crit) +
     '<span class="sc-ss__note">criticality, last ' + SCINT_CRIT_HOURS + "h · a first measure only · " +
     sess + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet</span></div>";
   if (!rows.length) {
