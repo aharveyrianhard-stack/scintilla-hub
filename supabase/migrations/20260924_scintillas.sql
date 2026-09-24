@@ -45,8 +45,9 @@ create table if not exists public.scintillas (
 
 -- A detector that runs every few minutes must be able to run twice with the same inputs and leave
 -- one row. dedupe_key is that promise: kind + subject + the occurrence it belongs to.
-create unique index if not exists scintillas_dedupe_uidx on public.scintillas (dedupe_key)
-  where dedupe_key is not null;
+-- 24 Sep: a FULL unique index. PostgREST's on_conflict=dedupe_key cannot use a partial index
+-- (the first live insert failed with 42P10); NULL keys stay allowed, since NULLs are distinct.
+create unique index if not exists scintillas_dedupe_uidx on public.scintillas (dedupe_key);
 create index if not exists scintillas_ts_idx         on public.scintillas (ts desc);
 create index if not exists scintillas_kind_ts_idx    on public.scintillas (kind, ts desc);
 create index if not exists scintillas_subject_ts_idx on public.scintillas (subject, ts desc);
