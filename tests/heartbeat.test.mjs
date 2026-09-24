@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   stdev, dailyReturnsPct, usualDayPct, atrPct, trueRange, heartbeatRow, xUsual, calmRatio,
-  MIN_SESSIONS, HEARTBEAT_VERSION,
+  MIN_SESSIONS, HEARTBEAT_VERSION, sinceLastJoin, JOIN_GAP_DAYS,
 } from "../supabase/functions/heartbeat-daily/heartbeat.mjs";
 import { stdev as detectStdev, detectPriceOutliers } from "../scripts/scintillas-detect.mjs";
 
@@ -80,6 +80,36 @@ test("a stored row says what it is, how much history is behind it, and where it 
   assert.match(row.source, /chart-api/);
   for (const k of ["usual_day_20", "usual_day_60", "usual_day_250", "atr_pct_14"]) assert.ok(row[k] > 0, k);
   assert.equal(row.usual_day_20, Math.round(usualDayPct(bars, 20) * 1000) / 1000, "stored to 3 decimals, nothing else changed");
+});
+
+test("two companies under one ticker: only the bars after the last long gap are the name's own", () => {
+  // BNY on 24 Sep 2026: a $10 fund until 6 Feb, 103 days of nothing, then BNY Mellon at $138.98.
+  // Joined, the one "day" is +1,263% and the usual day reads in the hundreds. Cut, it is the bank's.
+  const day = 86400e3;
+  const old = barsFrom(repeat([0.3, -0.3], 60), 10);                  // the old fund, quiet
+  const lastOld = old[old.length - 1].t;
+  const bank = barsFrom(repeat([1.5, -1.5], 40), 138.98).map((b, i) => ({ ...b, t: lastOld + 103 * day + i * day }));
+  const joinedBars = old.concat(bank);
+  const cut = sinceLastJoin(joinedBars);
+  assert.equal(cut.joins_cut, true);
+  assert.equal(cut.bars.length, bank.length, "every bar before the gap is dropped");
+  assert.equal(cut.from, new Date(bank[0].t).toISOString().slice(0, 10));
+  const row = heartbeatRow("BNY", "2026-09-23", joinedBars);
+  assert.ok(row.usual_day_20 > 1.3 && row.usual_day_20 < 1.7, "the bank's own ±1.5% day, got " + row.usual_day_20);
+  assert.ok(row.usual_day_250 > 1.3 && row.usual_day_250 < 1.7, "the year window holds only the bank's days, got " + row.usual_day_250);
+  assert.equal(row.n, 80, "and n says it is 80 days, not a year — none of them the old fund's");
+  assert.equal(row.history_from, cut.from);
+  assert.equal(JOIN_GAP_DAYS, 20);
+});
+
+test("a huge day without a gap is a real day and stays in the history (BYND's squeeze)", () => {
+  const bars = barsFrom(repeat([2, -2], 30).concat([127.7, 146.3]).concat(repeat([5, -5], 10)));
+  const cut = sinceLastJoin(bars);
+  assert.equal(cut.joins_cut, false);
+  assert.equal(cut.bars.length, bars.length);
+  // a week-long halt is not a relisting either
+  const halted = bars.map((b, i) => ({ ...b, t: b.t + (i >= 40 ? 9 * 86400e3 : 0) }));
+  assert.equal(sinceLastJoin(halted).joins_cut, false);
 });
 
 test("the heartbeat's spread and the detector's spread are the same formula", () => {

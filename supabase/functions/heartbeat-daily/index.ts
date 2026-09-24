@@ -26,7 +26,7 @@
 //                                 (the backfill: 2 years is ?days=504, run in slices).
 //   ?symbols=MCD,BYND           — only these names (a repair, or a new listing).
 //   ?dry=1                      — compute and report, write nothing.
-import { heartbeatRow, MIN_SESSIONS } from "./heartbeat.mjs";
+import { heartbeatRow, MIN_SESSIONS, sinceLastJoin } from "./heartbeat.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -84,7 +84,8 @@ Deno.serve(async (req) => {
 
     const rows: any[] = [];
     const skipped: any[] = [];
-    let short = 0, failed = 0;
+    let short = 0, failed = 0, outOfRange = 0;
+    const joined: any[] = [];
 
     for (let i = 0; i < symbols.length; i += CHUNK) {
       await Promise.all(symbols.slice(i, i + CHUNK).map(async (sym) => {
@@ -94,6 +95,10 @@ Deno.serve(async (req) => {
         } catch (e) {
           failed++; skipped.push({ symbol: sym, reason: "CANDLES_FAILED", detail: String(e).slice(0, 80) }); return;
         }
+        // Dates before the last join belong to another company that used the ticker: no row at all.
+        const cut = sinceLastJoin(bars);
+        if (cut.joins_cut) joined.push({ symbol: sym, history_from: cut.from });
+        bars = cut.bars;
         if (bars.length < MIN_SESSIONS + 1) {
           short++; skipped.push({ symbol: sym, reason: "SHORT_HISTORY", bars: bars.length }); return;
         }
@@ -104,7 +109,17 @@ Deno.serve(async (req) => {
           const end = bars.length - back;
           if (end < MIN_SESSIONS + 1) break;
           const window = bars.slice(0, end);
-          rows.push(heartbeatRow(sym, dateOf(window[window.length - 1]), window));
+          const row = heartbeatRow(sym, dateOf(window[window.length - 1]), window);
+          // The table refuses a usual day over 200%. One such row would fail the whole write, so it
+          // is held back here and named in the response instead.
+          const wild = ["usual_day_20", "usual_day_60", "usual_day_250", "atr_pct_14"]
+            .filter((k) => row[k] != null && !(row[k] >= 0 && row[k] <= 200));
+          if (wild.length) {
+            outOfRange++;
+            if (outOfRange <= 20) skipped.push({ symbol: sym, reason: "OUT_OF_RANGE", date: row.date, fields: wild });
+            continue;
+          }
+          rows.push(row);
         }
       }));
     }
@@ -112,7 +127,8 @@ Deno.serve(async (req) => {
     const written = dry ? 0 : await upsert(rows);
     return new Response(JSON.stringify({
       ok: true, dry, symbols: symbols.length, days, rows: rows.length, written,
-      short_history: short, candle_failures: failed,
+      short_history: short, candle_failures: failed, out_of_range_rows: outOfRange,
+      history_cut_at_join: joined,
       skipped: skipped.slice(0, 40), ms: Date.now() - t0,
     }), { headers: { "content-type": "application/json" } });
   } catch (e) {
