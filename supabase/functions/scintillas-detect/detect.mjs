@@ -92,12 +92,66 @@ function ev(o) {
   };
 }
 
+
+/* ── THE RULES FILE — data/scintilla-rules.json ─────────────────────────────────────────────
+   M48. Alan, 24 Sep: "these are relative, pretty high percentages. But like raw, something above
+   X percent on equities, above X percent on indexes … what kind of good rules for scintillation
+   would be nice. Statistical analysis based rules."
+   So there are TWO families and a day counts if EITHER fires:
+     · STATISTICAL — the move against the NAME'S OWN usual day, with its own bar per asset class,
+       plus a minimum move so a dead-flat name printing 4x a nothing-move is not a pointer;
+     · RAW — a plain percentage floor per asset class, so a big move on a quiet name still counts.
+   The thresholds live in ONE versioned file the detector and the Hub both read. These functions
+   take that file as an argument and never load it themselves: pure in, pure out. With no rules
+   passed they behave exactly as M42 did (|z| >= MIN_ABS_Z), so nothing already stored changes. */
+export function assetClassOf(symbol, rules) {
+  const s = String(symbol || "").toUpperCase();
+  const classes = (rules && rules.classes) || null;
+  if (!classes) return "equity";
+  for (const name in classes) {
+    const c = classes[name];
+    if (c && Array.isArray(c.symbols) && c.symbols.indexOf(s) >= 0) return name;
+  }
+  for (const name in classes) if (classes[name] && classes[name].default) return name;
+  return "equity";
+}
+export function priceRuleFor(symbol, rules) {
+  const asset_class = assetClassOf(symbol, rules);
+  const p = rules && rules.price && (rules.price[asset_class] || rules.price.equity);
+  if (!p) return null;
+  return { asset_class, x_usual: +p.x_usual, needs_move_pct: +p.x_usual_needs_move_pct, raw_move_pct: +p.raw_move_pct };
+}
+/* the verdict and WHICH family said so — both are reported, because a day that is both a big raw
+   move AND far beyond the name's own history is a different thing from a day that is only one. */
+export function priceVerdict(movePct, usualPct, rule) {
+  const abs = Math.abs(movePct);
+  const x = usualPct > 0 ? movePct / usualPct : null;
+  const statistical = x != null && Math.abs(x) >= rule.x_usual && abs >= rule.needs_move_pct;
+  const raw = abs >= rule.raw_move_pct;
+  const fired = [];
+  if (statistical) fired.push("statistical");
+  if (raw) fired.push("raw");
+  return { x, fired, hit: fired.length > 0 };
+}
+/* the sentence stored beside the row, in the words the strip uses */
+export function priceRuleSentence(rule, verdict, version) {
+  if (!rule) return "move / own daily volatility, |z| >= " + verdict.minAbsZ;
+  const x = verdict.x == null ? null : Math.abs(verdict.x);
+  const parts = [];
+  if (verdict.fired.indexOf("statistical") >= 0)
+    parts.push(x.toFixed(1) + "x its usual day (" + rule.asset_class + ": " + rule.x_usual +
+               "x or more, and at least " + rule.needs_move_pct + "%)");
+  if (verdict.fired.indexOf("raw") >= 0)
+    parts.push("a raw move of at least " + rule.raw_move_pct + "% for " + rule.asset_class);
+  return parts.join(" · ") + (version ? " · rules " + version : "");
+}
+
 /* ── OUTLIERS OF THE DAY ────────────────────────────────────────────────────────────────────
    quotes:           [{ symbol, price, prev_close }]      — today, as the board already has it
    historyBySymbol:  { SYM: [{ c }] ascending, ending BEFORE today }
    session:          the trading date these moves belong to (YYYY-MM-DD) */
 export function detectPriceOutliers({ quotes, historyBySymbol, session, ts, minHistory = PRICE_MIN_HISTORY,
-                                      minAbsZ = MIN_ABS_Z, source = "chart-api:/candles" }) {
+                                      minAbsZ = MIN_ABS_Z, rules = null, source = "chart-api:/candles" }) {
   const events = [], skipped = [];
   for (const q of quotes || []) {
     const sym = q && q.symbol;
@@ -109,11 +163,25 @@ export function detectPriceOutliers({ quotes, historyBySymbol, session, ts, minH
     if (rets.length < minHistory) { skipped.push({ subject: sym, reason: "SHORT_HISTORY", n: rets.length }); continue; }
     const z = volZ(movePct, rets);
     if (z == null) { skipped.push({ subject: sym, reason: "FLAT_HISTORY", n: rets.length }); continue; }
-    if (Math.abs(z) < minAbsZ) { skipped.push({ subject: sym, reason: "BELOW_THRESHOLD", z: r3(z) }); continue; }
+    const usual = stdev(rets);
+    const rule = rules ? priceRuleFor(sym, rules) : null;
+    const verdict = rule ? priceVerdict(movePct, usual, rule)
+      : { x: z, fired: Math.abs(z) >= minAbsZ ? ["statistical"] : [], hit: Math.abs(z) >= minAbsZ, minAbsZ };
+    if (!verdict.hit) {
+      skipped.push({ subject: sym, reason: "BELOW_THRESHOLD", z: r3(z), x_usual: r3(Math.abs(z)),
+                     move_pct: r3(movePct), asset_class: rule ? rule.asset_class : null });
+      continue;
+    }
     events.push(ev({
       ts, kind: "price_outlier", subject: sym, subject_kind: "ticker", direction: sign(movePct), magnitude: z, source,
-      detail: { session, move_pct: r3(movePct), daily_vol_pct: r3(stdev(rets)), n_days: rets.length,
-                price, prev_close: prev, z: r3(z), rule: "move / own daily volatility, |z| >= " + minAbsZ },
+      detail: { session, move_pct: r3(movePct), daily_vol_pct: r3(usual), n_days: rets.length,
+                price, prev_close: prev, z: r3(z), x_usual: r3(Math.abs(z)),
+                asset_class: rule ? rule.asset_class : "equity",
+                fired: verdict.fired.slice(),
+                thresholds: rule ? { x_usual: rule.x_usual, needs_move_pct: rule.needs_move_pct, raw_move_pct: rule.raw_move_pct }
+                                 : { x_usual: minAbsZ },
+                rules_version: (rules && rules.version) || null,
+                rule: priceRuleSentence(rule, verdict, rules && rules.version) },
       dedupe_key: "price_outlier|" + sym + "|" + session,
     }));
   }
