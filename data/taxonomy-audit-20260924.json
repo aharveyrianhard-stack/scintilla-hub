@@ -1,0 +1,766 @@
+{
+ "built_utc": "2026-09-24T02:43:56.808850Z",
+ "cohort_findings": [
+  {
+   "kind": "SAME_NAME_TWO_SPELLINGS",
+   "cohorts": [
+    "MEGACAP",
+    "MEGA_CAP"
+   ],
+   "sizes": {
+    "MEGACAP": 12,
+    "MEGA_CAP": 62
+   },
+   "members_unique_to_each": {
+    "MEGACAP": [
+     "BA"
+    ],
+    "MEGA_CAP": [
+     "ABBV",
+     "AMAT",
+     "AMD",
+     "AMGN",
+     "ANET",
+     "APH",
+     "ARM",
+     "ASML",
+     "AVGO",
+     "AXP",
+     "BABA",
+     "BAC",
+     "BRK-B",
+     "C",
+     "CAT",
+     "COST",
+     "CRWD",
+     "CSCO",
+     "CVX",
+     "DELL",
+     "GE",
+     "GEV",
+     "GS",
+     "HD",
+     "IBM",
+     "INTC",
+     "JNJ",
+     "JPM",
+     "KLAC",
+     "KO",
+     "LIN",
+     "LLY",
+     "LRCX",
+     "MA",
+     "MRK",
+     "MS",
+     "MU",
+     "NFLX",
+     "PANW",
+     "PG",
+     "PLTR",
+     "PM",
+     "RTX",
+     "SHOP",
+     "TMO",
+     "TXN",
+     "UNH",
+     "V",
+     "WFC",
+     "WMT",
+     "XOM"
+    ]
+   },
+   "fix": "keep MEGA_CAP, move the rows of the other, then drop it",
+   "impact": "a screen filtered on one spelling silently omits the other's names"
+  },
+  {
+   "kind": "COHORT_ROWS_FOR_NAMES_THE_HUB_CANNOT_PRICE",
+   "n": 22,
+   "tickers": [
+    "ADAUSD",
+    "AVAXUSD",
+    "BTCUSD",
+    "CLUSD",
+    "DOGEUSD",
+    "DXUSD",
+    "ESUSD",
+    "ETHUSD",
+    "GCUSD",
+    "LINKUSD",
+    "LTCUSD",
+    "NQUSD",
+    "SIUSD",
+    "SOLUSD",
+    "US10Y",
+    "US2S10S",
+    "US2Y",
+    "US30Y",
+    "US3M",
+    "US5Y",
+    "VIX",
+    "XRPUSD"
+   ],
+   "fix": "either add the name to the served universe (coordinator: universe file + digest + redeploy) or park the row in the candidate table",
+   "impact": "these rows make a cohort look bigger than anything that can be measured; every aggregate over them is computed on fewer names than the label implies"
+  },
+  {
+   "kind": "SERVED_BUT_IN_NO_COHORT",
+   "n": 0,
+   "tickers": [],
+   "fix": "place each on a branch (the tree does this automatically from sector/industry)",
+   "impact": "invisible to every cohort view although the Hub prices it"
+  },
+  {
+   "kind": "COHORT_OF_ONE_OR_NONE_SERVED",
+   "n": 31,
+   "cohorts": [
+    "ADVERTISING_AGENCIES",
+    "AGRICULTURAL_FARM_PRODUCTS",
+    "AGRICULTURAL_INPUTS",
+    "APPAREL___FOOTWEAR_&_ACCESSORIES",
+    "AUTO___PARTS",
+    "BANKS___REGIONAL",
+    "CHEMICALS",
+    "CONSUMER_ELECTRONICS",
+    "DIVERSIFIED_UTILITIES",
+    "FOOD_CONFECTIONERS",
+    "FOOD_DISTRIBUTION",
+    "GAMBLING,_RESORTS_&_CASINOS",
+    "GROCERY_STORES",
+    "HARDWARE,_EQUIPMENT_&_PARTS",
+    "INSURANCE___DIVERSIFIED",
+    "INVESTMENT___BANKING_&_INVESTMENT_SERVICES",
+    "MEDICAL___DISTRIBUTION",
+    "MEDICAL___EQUIPMENT_&_SERVICES",
+    "MEDICAL___INSTRUMENTS_&_SUPPLIES",
+    "OTHER_PRECIOUS_METALS",
+    "PACKAGED_FOODS",
+    "REAL_ESTATE___SERVICES",
+    "REGULATED_GAS",
+    "REIT___DIVERSIFIED",
+    "REIT___RETAIL",
+    "RENTAL_&_LEASING_SERVICES",
+    "SILVER",
+    "SOLAR",
+    "SPECIALTY_BUSINESS_SERVICES",
+    "URANIUM",
+    "WASTE_MANAGEMENT"
+   ],
+   "fix": "fold into the branch that already holds the name",
+   "impact": "a group of one cannot be compared with anything; it only adds noise to a menu"
+  },
+  {
+   "kind": "MACHINE_GENERATED_INDUSTRY_COHORTS",
+   "n": 47,
+   "examples": [
+    "AGRICULTURAL___MACHINERY",
+    "AIRLINES,_AIRPORTS_&_AIR_SERVICES",
+    "APPAREL___FOOTWEAR_&_ACCESSORIES",
+    "APPAREL___RETAIL",
+    "AUTO___MANUFACTURERS",
+    "AUTO___PARTS",
+    "BANKS___DIVERSIFIED",
+    "BANKS___REGIONAL",
+    "BEVERAGES___NON_ALCOHOLIC",
+    "CHEMICALS___SPECIALTY",
+    "DRUG_MANUFACTURERS___GENERAL",
+    "ELECTRICAL_EQUIPMENT_&_PARTS",
+    "ELECTRONIC_GAMING_&_MULTIMEDIA",
+    "FINANCIAL___CAPITAL_MARKETS"
+   ],
+   "fix": "stop shipping the FMP industry string as a cohort; the tree's industry level already holds it",
+   "impact": "113 cohort labels for 364 names, so a menu of groups nobody chose"
+  },
+  {
+   "kind": "TWO_ENGINES_DISAGREE",
+   "n": 22,
+   "sample": [
+    "BE",
+    "CCJ",
+    "CEG",
+    "CSCO",
+    "EOSE",
+    "GEV",
+    "NEE",
+    "OKLO",
+    "SMR",
+    "UNH",
+    "VST",
+    "XLB",
+    "XLC",
+    "XLE",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLRE",
+    "XLU"
+   ],
+   "old_rows": 389,
+   "new_rows": 1280,
+   "fix": "one table feeds the board; make cohorts a view over the new engine, or migrate the board to the tree",
+   "impact": "the board reads `cohorts` while the newer engine writes `ticker_cohorts`, so the same name can be in different groups on different screens"
+  },
+  {
+   "kind": "COHORT_CONTRADICTS_THE_NAME_S_BUSINESS",
+   "n": 10,
+   "rows": [
+    {
+     "ticker": "AGIX",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": null,
+     "industry": "Asset Management"
+    },
+    {
+     "ticker": "CIFR",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "CRYPTO_EQUITIES",
+     "industry": "Information Technology Services"
+    },
+    {
+     "ticker": "CORZ",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "CRYPTO_EQUITIES",
+     "industry": "Software - Infrastructure"
+    },
+    {
+     "ticker": "CRWD",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "CYBER",
+     "industry": "Software - Infrastructure"
+    },
+    {
+     "ticker": "DRAM",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": null,
+     "industry": "Asset Management"
+    },
+    {
+     "ticker": "ETN",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "AI_POWER",
+     "industry": "Electrical Equipment & Parts"
+    },
+    {
+     "ticker": "IREN",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "CRYPTO_EQUITIES",
+     "industry": "Information Technology Services"
+    },
+    {
+     "ticker": "SMH",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": null,
+     "industry": "Asset Management"
+    },
+    {
+     "ticker": "SOXX",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": null,
+     "industry": "Asset Management"
+    },
+    {
+     "ticker": "WULF",
+     "cohort": "AI_HARDWARE",
+     "measured_branch": "CRYPTO_EQUITIES",
+     "industry": "Financial - Capital Markets"
+    }
+   ],
+   "fix": "let the branch rule decide and keep the cohort as Alan's own list",
+   "impact": "an AI-hardware aggregate that includes a cyber-security name or a bitcoin miner is not an AI-hardware reading"
+  }
+ ],
+ "representativeness": {
+  "sp500_rows_parsed": 501,
+  "sectors": [
+   {
+    "sector_fmp": "Technology",
+    "sector_gics": "Information Technology",
+    "hub_n": 73,
+    "hub_cap_usd": 29876851786261,
+    "hub_cap_share_pct": 39.57,
+    "sp500_n": 74,
+    "sp500_share_of_members_pct": 14.77,
+    "hub_names_that_are_sp500": 42,
+    "sp500_cover_pct": 56.8
+   },
+   {
+    "sector_fmp": "Communication Services",
+    "sector_gics": "Communication Services",
+    "hub_n": 18,
+    "hub_cap_usd": 11868636427394,
+    "hub_cap_share_pct": 15.72,
+    "sp500_n": 23,
+    "sp500_share_of_members_pct": 4.59,
+    "hub_names_that_are_sp500": 15,
+    "sp500_cover_pct": 65.2
+   },
+   {
+    "sector_fmp": "Financial Services",
+    "sector_gics": "Financials",
+    "hub_n": 32,
+    "hub_cap_usd": 6896076878218,
+    "hub_cap_share_pct": 9.13,
+    "sp500_n": 75,
+    "sp500_share_of_members_pct": 14.97,
+    "hub_names_that_are_sp500": 28,
+    "sp500_cover_pct": 37.3
+   },
+   {
+    "sector_fmp": "Consumer Cyclical",
+    "sector_gics": "Consumer Discretionary",
+    "hub_n": 30,
+    "hub_cap_usd": 6493682678719,
+    "hub_cap_share_pct": 8.6,
+    "sp500_n": 47,
+    "sp500_share_of_members_pct": 9.38,
+    "hub_names_that_are_sp500": 21,
+    "sp500_cover_pct": 44.7
+   },
+   {
+    "sector_fmp": "Industrials",
+    "sector_gics": "Industrials",
+    "hub_n": 44,
+    "hub_cap_usd": 6235926467988,
+    "hub_cap_share_pct": 8.26,
+    "sp500_n": 82,
+    "sp500_share_of_members_pct": 16.37,
+    "hub_names_that_are_sp500": 37,
+    "sp500_cover_pct": 45.1
+   },
+   {
+    "sector_fmp": "Healthcare",
+    "sector_gics": "Health Care",
+    "hub_n": 22,
+    "hub_cap_usd": 5160205528660,
+    "hub_cap_share_pct": 6.83,
+    "sp500_n": 60,
+    "sp500_share_of_members_pct": 11.98,
+    "hub_names_that_are_sp500": 21,
+    "sp500_cover_pct": 35.0
+   },
+   {
+    "sector_fmp": "Consumer Defensive",
+    "sector_gics": "Consumer Staples",
+    "hub_n": 18,
+    "hub_cap_usd": 3128952029747,
+    "hub_cap_share_pct": 4.14,
+    "sp500_n": 31,
+    "sp500_share_of_members_pct": 6.19,
+    "hub_names_that_are_sp500": 17,
+    "sp500_cover_pct": 54.8
+   },
+   {
+    "sector_fmp": "Energy",
+    "sector_gics": "Energy",
+    "hub_n": 17,
+    "hub_cap_usd": 2191459103030,
+    "hub_cap_share_pct": 2.9,
+    "sp500_n": 21,
+    "sp500_share_of_members_pct": 4.19,
+    "hub_names_that_are_sp500": 16,
+    "sp500_cover_pct": 76.2
+   },
+   {
+    "sector_fmp": "Basic Materials",
+    "sector_gics": "Materials",
+    "hub_n": 28,
+    "hub_cap_usd": 1647363710020,
+    "hub_cap_share_pct": 2.18,
+    "sp500_n": 25,
+    "sp500_share_of_members_pct": 4.99,
+    "hub_names_that_are_sp500": 15,
+    "sp500_cover_pct": 60.0
+   },
+   {
+    "sector_fmp": "Utilities",
+    "sector_gics": "Utilities",
+    "hub_n": 20,
+    "hub_cap_usd": 1057738760761,
+    "hub_cap_share_pct": 1.4,
+    "sp500_n": 31,
+    "sp500_share_of_members_pct": 6.19,
+    "hub_names_that_are_sp500": 19,
+    "sp500_cover_pct": 61.3
+   },
+   {
+    "sector_fmp": "Real Estate",
+    "sector_gics": "Real Estate",
+    "hub_n": 15,
+    "hub_cap_usd": 944617798822,
+    "hub_cap_share_pct": 1.25,
+    "sp500_n": 30,
+    "sp500_share_of_members_pct": 5.99,
+    "hub_names_that_are_sp500": 15,
+    "sp500_cover_pct": 50.0
+   }
+  ],
+  "sp500_source": "Wikipedia 'List of S&P 500 companies' component table, fetched 2026-09-24 (external reference, labelled; no price data)",
+  "nasdaq100": "NOT OBTAINED \u2014 slickcharts returns 403 and the estate's own index_constituents table is empty; the coordinator can fill it from FMP, and this table should be re-run then"
+ },
+ "uncovered_sub_industries": [
+  {
+   "gics_sector": "Financials",
+   "sub_industry": "Regional Banks",
+   "sp500_members": 6,
+   "hub_has": 0,
+   "names": [
+    "CFG",
+    "FITB",
+    "HBAN",
+    "KEY",
+    "MTB",
+    "RF"
+   ]
+  },
+  {
+   "gics_sector": "Financials",
+   "sub_industry": "Life & Health Insurance",
+   "sp500_members": 5,
+   "hub_has": 0,
+   "names": [
+    "AFL",
+    "GL",
+    "MET",
+    "PFG",
+    "PRU"
+   ]
+  },
+  {
+   "gics_sector": "Real Estate",
+   "sub_industry": "Multi-Family Residential REITs",
+   "sp500_members": 5,
+   "hub_has": 0,
+   "names": [
+    "CPT",
+    "ESS",
+    "MAA",
+    "UDR",
+    "VMRK"
+   ]
+  },
+  {
+   "gics_sector": "Consumer Discretionary",
+   "sub_industry": "Homebuilding",
+   "sp500_members": 4,
+   "hub_has": 0,
+   "names": [
+    "DHI",
+    "LEN",
+    "NVR",
+    "PHM"
+   ]
+  },
+  {
+   "gics_sector": "Information Technology",
+   "sub_industry": "Electronic Equipment & Instruments",
+   "sp500_members": 4,
+   "hub_has": 0,
+   "names": [
+    "KEYS",
+    "ROP",
+    "TDY",
+    "ZBRA"
+   ]
+  },
+  {
+   "gics_sector": "Consumer Discretionary",
+   "sub_industry": "Casinos & Gaming",
+   "sp500_members": 3,
+   "hub_has": 0,
+   "names": [
+    "LVS",
+    "MGM",
+    "WYNN"
+   ]
+  },
+  {
+   "gics_sector": "Financials",
+   "sub_industry": "Multi-line Insurance",
+   "sp500_members": 3,
+   "hub_has": 0,
+   "names": [
+    "AIG",
+    "AIZ",
+    "L"
+   ]
+  },
+  {
+   "gics_sector": "Health Care",
+   "sub_industry": "Health Care Supplies",
+   "sp500_members": 3,
+   "hub_has": 0,
+   "names": [
+    "ALGN",
+    "COO",
+    "WST"
+   ]
+  },
+  {
+   "gics_sector": "Industrials",
+   "sub_industry": "Cargo Ground Transportation",
+   "sp500_members": 3,
+   "hub_has": 0,
+   "names": [
+    "FDXF",
+    "JBHT",
+    "ODFL"
+   ]
+  },
+  {
+   "gics_sector": "Information Technology",
+   "sub_industry": "Internet Services & Infrastructure",
+   "sp500_members": 3,
+   "hub_has": 0,
+   "names": [
+    "AKAM",
+    "GDDY",
+    "VRSN"
+   ]
+  }
+ ],
+ "candidates_36": [
+  {
+   "ticker": "AAOI",
+   "mentions": 4,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "optical transceivers \u2014 sits beside LITE and CRDO"
+  },
+  {
+   "ticker": "PL",
+   "mentions": 3,
+   "proposed_cohort": "THEMATIC",
+   "reason": "satellite imagery \u2014 beside ASTS and RKLB"
+  },
+  {
+   "ticker": "BKSY",
+   "mentions": 2,
+   "proposed_cohort": "THEMATIC",
+   "reason": "satellite imagery \u2014 beside PL and RDW"
+  },
+  {
+   "ticker": "COHR",
+   "mentions": 2,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "photonics components \u2014 beside LITE"
+  },
+  {
+   "ticker": "CRML",
+   "mentions": 2,
+   "proposed_cohort": "THEMATIC",
+   "reason": "critical minerals \u2014 beside MP and USAR"
+  },
+  {
+   "ticker": "LUNR",
+   "mentions": 2,
+   "proposed_cohort": "THEMATIC",
+   "reason": "lunar landers \u2014 beside RKLB and ASTS"
+  },
+  {
+   "ticker": "RDW",
+   "mentions": 2,
+   "proposed_cohort": "THEMATIC",
+   "reason": "space infrastructure"
+  },
+  {
+   "ticker": "TSEM",
+   "mentions": 2,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "specialty foundry \u2014 beside TSM"
+  },
+  {
+   "ticker": "UUUU",
+   "mentions": 2,
+   "proposed_cohort": "THEMATIC",
+   "reason": "uranium and rare earths \u2014 beside CCJ"
+  },
+  {
+   "ticker": "ACHR",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "eVTOL \u2014 beside JOBY"
+  },
+  {
+   "ticker": "ALB",
+   "mentions": 1,
+   "proposed_cohort": "MATERIALS",
+   "reason": "lithium \u2014 beside the other materials names"
+  },
+  {
+   "ticker": "AMKR",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "chip packaging \u2014 beside AMAT/KLAC"
+  },
+  {
+   "ticker": "AVAV",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "defence drones"
+  },
+  {
+   "ticker": "BTDR",
+   "mentions": 1,
+   "proposed_cohort": "CRYPTO",
+   "reason": "bitcoin miner \u2014 beside COIN in CRYPTO"
+  },
+  {
+   "ticker": "CLSK",
+   "mentions": 1,
+   "proposed_cohort": "CRYPTO",
+   "reason": "bitcoin miner \u2014 beside COIN in CRYPTO"
+  },
+  {
+   "ticker": "GLW",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "optical fibre and glass for data centres"
+  },
+  {
+   "ticker": "HIVE",
+   "mentions": 1,
+   "proposed_cohort": "CRYPTO",
+   "reason": "bitcoin miner \u2014 beside COIN in CRYPTO"
+  },
+  {
+   "ticker": "HUBB",
+   "mentions": 1,
+   "proposed_cohort": "BLUE_CHIP",
+   "reason": "grid equipment \u2014 beside PWR"
+  },
+  {
+   "ticker": "KTOS",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "defence drones"
+  },
+  {
+   "ticker": "NOK",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "optical transport for data-centre interconnect"
+  },
+  {
+   "ticker": "NVTS",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "power semiconductors \u2014 beside ADI/ALAB"
+  },
+  {
+   "ticker": "OUST",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "lidar sensors \u2014 sits with the other hardware bets in THEMATIC"
+  },
+  {
+   "ticker": "RIOT",
+   "mentions": 1,
+   "proposed_cohort": "CRYPTO",
+   "reason": "bitcoin miner \u2014 beside COIN in CRYPTO"
+  },
+  {
+   "ticker": "SATL",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "satellite operator \u2014 beside the other space names"
+  },
+  {
+   "ticker": "SERV",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "delivery robots"
+  },
+  {
+   "ticker": "SIDU",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "space services \u2014 beside the other space names"
+  },
+  {
+   "ticker": "SIVE",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "photonics, named beside AXTI and LITE"
+  },
+  {
+   "ticker": "SPIR",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "space weather and ship-tracking data"
+  },
+  {
+   "ticker": "SQM",
+   "mentions": 1,
+   "proposed_cohort": "MATERIALS",
+   "reason": "lithium \u2014 beside the other materials names"
+  },
+  {
+   "ticker": "STM",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "European semiconductor \u2014 beside ADI"
+  },
+  {
+   "ticker": "SYM",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "warehouse robotics \u2014 the robotics leg of THEMATIC"
+  },
+  {
+   "ticker": "TECK",
+   "mentions": 1,
+   "proposed_cohort": "MATERIALS",
+   "reason": "copper \u2014 beside SCCO and FCX"
+  },
+  {
+   "ticker": "TMRC",
+   "mentions": 1,
+   "proposed_cohort": "THEMATIC",
+   "reason": "rare earth exploration"
+  },
+  {
+   "ticker": "VSH",
+   "mentions": 1,
+   "proposed_cohort": "AI_HARDWARE",
+   "reason": "discrete components"
+  }
+ ],
+ "candidate_branch": {
+  "AAOI": "PHOTONICS_OPTICAL",
+  "COHR": "PHOTONICS_OPTICAL",
+  "POET": "PHOTONICS_OPTICAL",
+  "PL": "SPACE",
+  "BKSY": "SPACE",
+  "LUNR": "SPACE",
+  "RDW": "SPACE",
+  "RKLB": "SPACE",
+  "CRML": "CRITICAL_MINERALS",
+  "UUUU": "NUCLEAR_URANIUM",
+  "LEU": "NUCLEAR_URANIUM",
+  "TSEM": "SEMI_EQUIPMENT",
+  "ACHR": "EVTOL_AUTONOMY",
+  "IGV": "SECTOR_AND_THEME_FUNDS",
+  "NVTS": "AI_ACCELERATORS",
+  "STM": "AI_ACCELERATORS",
+  "VSH": "AI_ACCELERATORS",
+  "AMKR": "SEMI_EQUIPMENT",
+  "GLW": "PHOTONICS_OPTICAL",
+  "AVAV": "DEFENCE_AEROSPACE",
+  "KTOS": "DEFENCE_AEROSPACE",
+  "BTDR": "CRYPTO_EQUITIES",
+  "CLSK": "CRYPTO_EQUITIES",
+  "HIVE": "CRYPTO_EQUITIES",
+  "RIOT": "CRYPTO_EQUITIES",
+  "HUBB": "AI_POWER",
+  "NOK": "MEDIA_TELECOM",
+  "OUST": "EVTOL_AUTONOMY",
+  "SERV": "EVTOL_AUTONOMY",
+  "SATL": "SPACE",
+  "SIDU": "SPACE",
+  "SPIR": "SPACE",
+  "ALB": "CRITICAL_MINERALS",
+  "SQM": "CRITICAL_MINERALS",
+  "TMRC": "CRITICAL_MINERALS",
+  "TECK": "COPPER_STEEL",
+  "SYM": "INDUSTRIAL_MACHINES"
+ }
+}
