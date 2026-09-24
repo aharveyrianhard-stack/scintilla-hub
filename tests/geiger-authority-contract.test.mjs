@@ -158,3 +158,21 @@ test('Hub wiring has no static receipt or exactly-eight admission and preserves 
   assert.doesNotMatch(source, /participating_rungs\.length !== 8/)
   assert.doesNotMatch(source, /rungs\.length === 8/)
 })
+
+// M66 — THE HUB'S OWN LIST. `cohorts` is public.tickers row-for-row (measured 24 Sep: both 389
+// rows, identical sets), and the read engine derives its universe from that table. If the 56
+// admitted names are not inserted there, they arrive on the Hub with a price and a Geiger reading
+// and nothing else: no profile, no fundamentals, no earnings, no estimates, no cohort, no read.
+test('the tickers admission migration exists, is guarded, and proves 420 before it finishes', () => {
+  const sql = fs.readFileSync(new URL('../supabase/migrations/20260924_universe_admit_tickers.sql', import.meta.url), 'utf8')
+  assert.match(sql, /insert into public\.tickers/)
+  assert.match(sql, /where not exists \(select 1 from public\.tickers/, 'running it twice must be a no-op')
+  assert.match(sql, /found 420|<> 420/, 'it must assert the resulting count, not assume it')
+  assert.equal((sql.match(/^ {2}\('[A-Z.]+','[A-Z_]+',(?:'etf'|null)\)/gm) ?? []).length, 56)
+  for (const held of ['SIVE', 'BJK', 'TMRC', 'CLSK']) {
+    assert.ok(!new RegExp(`'${held}'`).test(sql), `${held} is held and must not be admitted`)
+  }
+  const rollback = fs.readFileSync(new URL('../supabase/migrations/20260924_universe_admit_tickers_ROLLBACK.sql', import.meta.url), 'utf8')
+  assert.match(rollback, /delete from public\.tickers/)
+  assert.match(rollback, /found 364|<> 364/, 'the rollback must prove it landed back on 364')
+})
