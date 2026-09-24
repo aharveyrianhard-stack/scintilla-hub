@@ -805,6 +805,13 @@ function universe() {
      and not only as a level. Two points and the years they belong to, nothing smoothed. */
   const ratOld = new Map();
   (D.ratios||[]).forEach((r)=>{ const p=ratOld.get(r.ticker); if(!p || String(r.fiscal_date)<String(p.fiscal_date)) ratOld.set(r.ticker,r); });
+  /* 24 Sep: every full-year net margin per name, newest last — so one odd year (a one-off
+     gain, a write-down) cannot pose as the company's margin. BYND's FY2025 printed +80% on a
+     debt-restructuring gain after -49% the year before, and ranked as a top-margin company. */
+  const nmHist = new Map();
+  (D.ratios||[]).forEach((r)=>{ if (r.net_margin == null || !isFinite(Number(r.net_margin))) return;
+    (nmHist.get(r.ticker) || nmHist.set(r.ticker, []).get(r.ticker)).push([String(r.fiscal_date), Number(r.net_margin)]); });
+  nmHist.forEach((a)=> a.sort((x, y)=> x[0] < y[0] ? -1 : 1));
   const out = [];
   D.fundsOut = [];
   for (const [t, g] of Object.entries(D.g.symbols || {})) {
@@ -826,8 +833,21 @@ function universe() {
       fAge: f ? ageDays(f.updated_ts) : null,
       rAge: r ? ageDays(r.updated_ts) : null,
       rDate: r ? r.fiscal_date : null,
-      /* M39 — the quality inputs, each one straight off a table the Hub already reads */
-      nm: r && r.net_margin != null ? Number(r.net_margin) : null,
+      /* M39 — the quality inputs, each one straight off a table the Hub already reads.
+         24 Sep guards (measured on the live page: BYND scored quality 76):
+         · NEGATIVE EQUITY. When equity is below zero, debt/equity turns negative and ranked as
+           "least debt", and ROE's sign means nothing. 24 served names were there in their latest
+           year (MCD, LOW, SBUX, BKNG… by buybacks; BYND by losses). Both legs read "not measurable".
+         · ONE ODD YEAR. The margin is the median of the last three full years, not the last one,
+           and a last year more than 25 points away from that median leaves the trend unmeasured. */
+      negEq: !!(r && r.debt_to_equity != null && Number(r.debt_to_equity) < 0),
+      nm: (() => { const h = (nmHist.get(t) || []).slice(-3).map((z)=> z[1]).filter((v)=> Math.abs(v) <= 1.5);
+        if (!h.length) return null; const s2 = h.slice().sort((a, b)=> a - b);
+        return s2.length % 2 ? s2[(s2.length - 1) / 2] : (s2[s2.length / 2 - 1] + s2[s2.length / 2]) / 2; })(),
+      nmOdd: (() => { const h = (nmHist.get(t) || []).slice(-3).map((z)=> z[1]);
+        if (h.length < 2) return false; const last = h[h.length - 1], s2 = h.slice().sort((a, b)=> a - b);
+        const med = s2.length % 2 ? s2[(s2.length - 1) / 2] : (s2[s2.length / 2 - 1] + s2[s2.length / 2]) / 2;
+        return Math.abs(last - med) > 0.25; })(),
       nmTrend: (() => { const o = ratOld.get(t);
         return (r && o && r.net_margin != null && o.net_margin != null && r.fiscal_date !== o.fiscal_date)
           ? Number(r.net_margin) - Number(o.net_margin) : null; })(),
@@ -1423,11 +1443,11 @@ const USUAL = ["AI_HARDWARE", "AI_SOFTWARE", "AI_POWERTRAIN", "CRYPTO", "THEMATI
    Free cash flow is NOT one of them: no table this page can read carries it, so it
    is named as a gap instead of being guessed at from earnings. */
 const QLEGS = [
-  { k:"margin", t:"net margin",              u:"%",  get:(x)=> x.nm },
-  { k:"roe",    t:"return on equity",        u:"%",  get:(x)=> x.roe },
-  { k:"debt",   t:"debt against equity",     u:"×",  get:(x)=> x.de == null ? null : -x.de },
+  { k:"margin", t:"net margin (median of 3 years)", u:"%",  get:(x)=> x.nm },
+  { k:"roe",    t:"return on equity",        u:"%",  get:(x)=> x.negEq ? null : x.roe },
+  { k:"debt",   t:"debt against equity",     u:"×",  get:(x)=> (x.negEq || x.de == null) ? null : -x.de },
   { k:"growth", t:"forward earnings growth", u:"%",  get:(x)=> x.grw },
-  { k:"mtrend", t:"margin trend",            u:"pts",get:(x)=> x.nmTrend },
+  { k:"mtrend", t:"margin trend",            u:"pts",get:(x)=> x.nmOdd ? null : x.nmTrend },
 ];
 /* a percentile needs a peer group; under eight measured peers there is no percentile
    and the leg says so rather than pretending to a rank */
@@ -2122,6 +2142,26 @@ function whyThese(m) {
   return "chosen on both counts: " + num(ahead) + " of " + num(rated) +
     " are ahead of the market over the last " + days + ", and their own names carry the rest";
 }
+/* 24 Sep: the headline leads with THE SEARCH, not the sixty-day leaders. Alan, on seeing
+   "Energy 35%… chosen for leading the market over the last 60 days": "buying whatever led in the
+   last 60 days is like the stupidest thing I've ever heard. Like, it's the opposite of what I'd
+   like to do." How much to own still comes from layer one; WHAT to own now comes from the search.
+   The leaders' answer stays one sentence long, labelled, for comparison. */
+function searchHeadlineHTML(m) {
+  if (!m.head || !m.head.length || m.laneError) return headlineHTML(m);
+  const read = T.measure==="heat"
+    ? "The market's own reading is " + num(sg(m.heat)) + " on a scale that runs from −1 to +1"
+    : "Of the " + num(m.eq.length) + " names the Geiger covers, " + num(pct(m.breadth*100)) + " are rising";
+  const mix = m.oppMix.map((r)=> "<b>" + esc(plain(r.name)) + "</b> " + num(pct(r.w)));
+  const top = m.head.slice(0, 4).map((o)=> "<b>" + esc(o.t) + "</b>");
+  const old = m.sectors.map((sx)=> plain(sx.name) + " " + pct(sx.w)).join(" · ");
+  return "Own " + num(pct(m.invested)) + " and keep " + num(pct(m.cash)) + " in cash. " +
+    read + ", and that sets the size" + (m.capped ? ", held back by the cash floor you set" : "") + ". " +
+    "The search for weakness found " + num(m.opp.length) + " companies worth a look, " + num(m.oppQuality.length) +
+    " of them past your quality line; the loading starts in " + list(mix) + " — first " + list(top) + "." +
+    (m.oppUnplaced > 0.5 ? " " + num(pct(m.oppUnplaced)) + " of the deployed money has nowhere to go under your one-sector cap, so it stays in cash." : "") +
+    ' <span class="qn">The old sixty-day-leaders answer would have been ' + esc(old || "nothing") + "; it is kept below only for comparison.</span>";
+}
 function headlineHTML(m) {
   const top = m.sectors.map((s)=>"<b>"+esc(plain(s.name))+"</b> "+num(pct(s.w)));
   const big = [...m.names].sort((a,b)=>b.w-a.w).slice(0,4).map((n)=>"<b>"+esc(n.t)+"</b>");
@@ -2139,6 +2179,21 @@ function headlineHTML(m) {
   return "Own " + num(pct(m.invested)) + " and keep " + num(pct(m.cash)) + " in cash. " +
     read + ", and that is what sets the size" + (m.capped ? ", held back by the cash floor you set" : "") + ". " +
     "The weight goes to " + list(top) + " — " + whyThese(m) + ". " + inside;
+}
+/* 24 Sep: the lines under the search headline talk about the search, not the leaders. */
+function searchDroveHTML(m) {
+  const out = [];
+  out.push(num(m.rising) + " of " + num(m.eq.length) + " companies are rising and the average reading is " +
+    num(sg(m.heat)) + "; your baseline puts a flat market at " + num(pct(T.neutral)) + " invested.");
+  const o0 = m.head[0];
+  if (o0) out.push("<b>" + esc(o0.t) + "</b> leads the search: " +
+    (o0.q && o0.q.score != null ? "quality " + num(o0.q.score) + "/100 (" + num(o0.q.n) + " of " + num(o0.q.of) + " measured), " : "") +
+    (o0.st && o0.st.d200 != null ? num(sg(o0.st.d200, 1) + "%") + " against its 200-day" : "") +
+    (o0.st && o0.st.rsi != null ? ", daily RSI " + num(Math.round(o0.st.rsi)) : "") + ".");
+  if (m.near200 && m.near200.length) out.push(num(m.near200.length) + " quality companies sit within " + num(T.near200 + "%") +
+    " of their 200-day average — the Munger and Buffett line — and are listed below.");
+  if (m.actions && m.actions.length) out.push(num(m.actions.length) + " proposed actions close the page, each with its size, trigger, reason and odds.");
+  return out.map((x)=>"<li>"+x+"</li>").join("");
 }
 function droveHTML(m) {
   const out = [];
@@ -2172,8 +2227,8 @@ function relBar(v, max) {
 }
 
 function drawDesk(m) {
-  document.getElementById("headline").innerHTML = headlineHTML(m);
-  document.getElementById("drove").innerHTML = droveHTML(m);
+  document.getElementById("headline").innerHTML = searchHeadlineHTML(m);
+  document.getElementById("drove").innerHTML = (m.head && m.head.length && !m.laneError) ? searchDroveHTML(m) : droveHTML(m);
   const miss = document.getElementById("missing");
   if (m.missing.length) { miss.style.display=""; miss.innerHTML = "This conclusion did <b>not</b> use " +
     list(m.missing.map(esc)) + ". Everything above was worked out without " +

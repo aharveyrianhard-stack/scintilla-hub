@@ -192,3 +192,13 @@ test("a fund is not a company: ETFs and funds never sit inside a sector (24 Sep)
   assert.doesNotMatch(src, /p\.is_fund === true/, "but not on is_fund, which FMP also sets on Realty Income, a REIT");
   assert.match(src, /Funds left out of the sectors/, "and the page names what it left out");
 });
+
+test("quality cannot be faked by negative equity or one odd year (24 Sep, BYND scored 76 live)", () => {
+  const src = fs.readFileSync(new URL("../allocation/index.html", import.meta.url), "utf8");
+  assert.match(src, /negEq: !!\(r && r\.debt_to_equity != null && Number\(r\.debt_to_equity\) < 0\)/,
+    "negative equity is detected from the debt/equity sign");
+  assert.match(src, /get:\(x\)=> x\.negEq \? null : x\.roe/, "ROE is not measurable when equity is negative");
+  assert.match(src, /get:\(x\)=> \(x\.negEq \|\| x\.de == null\) \? null : -x\.de/, "nor is debt/equity");
+  assert.match(src, /t:"net margin \(median of 3 years\)"/, "the margin is a three-year median, not the last year");
+  assert.match(src, /get:\(x\)=> x\.nmOdd \? null : x\.nmTrend/, "and a one-off year leaves the trend unmeasured");
+});
