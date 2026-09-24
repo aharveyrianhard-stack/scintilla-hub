@@ -1,10 +1,15 @@
-/* M55 — THE WHOLE TABLE REPLAYS, and the ECONOMIC room flashes what the top tape flashes.
-   Everything here is lifted from the bytes ../index.html ships and run as written: no browser, no
-   network, no store. What is pinned is what Alan asked for and what must not quietly come back:
-     · every column plays its own history, and a column with no history shows a dash, never today;
-     · the replay still costs two geometry reads a tick — the column pass reads none;
-     · the room runs the TAPE's own model, plan and primitive, so the two cannot drift;
-     · the release the tape sent him to is named in the room, in every view. */
+/* M61 — THE REPLAY PLAYS LIKE THE APPROVED PROPOSAL, and the ECONOMIC room flashes what the
+   top tape flashes. Everything here is lifted from the bytes ../index.html ships and run as
+   written: no browser, no network, no store. What is pinned is what Alan asked for on 24 Sep —
+   "The columns disappear. The Geigers get bigger. And it was just the bars moving" — and what
+   must not quietly come back:
+     · motion mode hides every column but TICKER and the GEIGER bar, and the bar takes the width;
+     · the movement is the proposal's default, SETTLE → REFLOW: values first, then the order;
+     · the rank arrow clears after 1400ms, the proposal's own timing;
+     · the % change is measured from the window's FIRST day to the frame on screen, green or red;
+     · M55's "every column plays its own history" is GONE, including its live-tick freeze;
+     · the tick still costs two geometry reads;
+     · the room runs the TAPE's own model, plan and primitive, so the two cannot drift. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -18,156 +23,303 @@ function slice(from, to) {
   return page.slice(a, b);
 }
 
-/* ── the column layer, exactly as it ships ─────────────────────────────────────────────────── */
-const COLS = slice("  var PXC={}, PXQ=[], PXQS={}, PXN=0", "  function seek(d, dNext, frac){");
+/* ── motion mode, as the stylesheet ships it ───────────────────────────────────────────────── */
+test("motion mode leaves exactly three cells: the star, the TICKER and the GEIGER bar", () => {
+  const css = slice("body.gwx-motion .ch{", "/* % PRICE CHANGE over the replayed span");
+  const grid = css.match(/body\.gwx-motion \.ch\{[\s\S]*?grid-template-columns:([^;]+)!important/);
+  assert.ok(grid, "motion mode must override the board's track list");
+  const tracks = grid[1].match(/minmax\([^)]*\)/g) || [];
+  assert.equal(tracks.length, 3, "three cells remain, so the grid must be three tracks at every width");
+  /* the phone gave the ticker a 25px track and clipped MRVL to "MRVI" until these floors existed */
+  assert.match(tracks[0], /minmax\(13px,/, "the star keeps its own 13px");
+  assert.match(tracks[1], /minmax\(46px,/, "the ticker never gets less than its 44px cell needs");
+  assert.match(css, /body\.gwx-motion \.sc-ctk\{width:auto/);
+  const [star, ticker, geiger] = tracks.map((t) => parseFloat(t.match(/([\d.]+)fr/)[1]));
+  assert.ok(geiger > 5 * ticker && geiger > 20 * star,
+    `the geiger track (${geiger}fr) must take the freed width — ticker ${ticker}fr, star ${star}fr`);
 
-function cell(cls) {
-  const n = { _cls: cls, textContent: "", innerHTML: "", attrs: {}, style: { color: "", opacity: "" },
-    className: cls, setAttribute(k, v) { n.attrs[k] = String(v); }, getAttribute: (k) => (k in n.attrs ? n.attrs[k] : null),
-    removeAttribute(k) { delete n.attrs[k]; } };
-  return n;
-}
-function mkRow(t) {
-  const kids = { ".sc-last": cell("sc-last"), ".sc-chg": cell("sc-chg"), ".sc-fpe": cell("sc-fpe"),
-    ".sc-mcap": cell("sc-mcap"), ".sc-rsi": cell("sc-rsi"), ".sc-vol": cell("sc-vol"), ".sc-mktdot": cell("sc-mktdot") };
-  return { _t: t, kids, getAttribute: (k) => (k === "data-t" ? t : null), querySelector: (q) => kids[q] || null };
-}
-function colsWorld({ rows, asof = "2026-08-20", cache = {}, px = {}, sRows = [], order = null } = {}) {
-  const counters = { rects: 0, fetched: [] };
-  const bs = {
-    scrollTop: 0, getBoundingClientRect() { counters.rects++; return { top: 0, height: 600 }; },
-    querySelectorAll: () => rows.slice(),
+  /* the defect this replaced: nth-child(12) is NOT the Geiger cell at =<560px, because the page
+     already display:none's F P/E and READ there, so every later cell shifts two tracks left. */
+  assert.equal(/nth-child\(n\+3\)/.test(css), false, "column index is not a safe way to find the bar");
+  assert.match(css, /body\.gwx-motion \.ch > \*\{display:none !important\}/);
+  assert.match(css, /body\.gwx-motion \.ch > \.gwx-read \+ \*/,
+    "the Geiger cell is named by structure: the cell straight after READ");
+  assert.match(css, /body\.gwx-motion \.ch > span\[style\*="text-align:center"\]/,
+    "including the honest dash a row with no reading draws instead of a bar");
+  for (const keep of ["\\.sc-star", "\\.sc-ctk", "\\.gwx-pct", "\\.gwx-rk"])
+    assert.match(css, new RegExp("body\\.gwx-motion \\.ch > " + keep));
+  assert.match(css, /\.ch\.hdr > \*:first-child[\s\S]{0,120}\[data-key="t"\][\s\S]{0,60}\[data-key="g"\][\s\S]{0,40}display:block/,
+    "the header keeps the same three slots, so its labels stay over the right cells");
+  assert.match(css, /body\.gwx-motion \.sc-gmini\{height:18px\}/, "the Geigers get bigger");
+});
+
+test("the % change sits beside the bar, in its own reserve, and is never a grid item", () => {
+  const css = slice(".gwx-pct{", "body.gwx-motion .gwx-pct{opacity:1}");
+  assert.match(css, /position:absolute/, "an extra grid item would shift every track");
+  const reserve = page.match(/body\.gwx-motion \.sc-board__row, body\.gwx-motion \.ch\.hdr\{padding-right:(\d+)px\}/);
+  assert.ok(reserve && +reserve[1] >= 90, "the row must reserve room for the badge and the % together");
+  assert.match(page, /@media\(max-width:560px\)\{[\s\S]{0,400}\.gwx-pct\{right:\d+px;width:\d+px/,
+    "the phone gets its own, narrower reserve");
+});
+
+/* ── the movement itself, run against the bytes ────────────────────────────────────────────── */
+const SRC = slice("  var PERF={ticks:0,ms:0,msMax:0",
+                  "  /* rank badge — fixed column hard right");
+
+function mkBoard(n, { pitch = 20, rowsVisible = 30 } = {}) {
+  const counters = { rects: 0, offsetHeight: 0, cssWrites: 0, css: [] };
+  const style = () => { const o = { _css: "" };
+    return new Proxy(o, { set(t, k, v) { if (k === "cssText") { counters.cssWrites++; counters.css.push(v); } t[k] = v; return true; } }); };
+  const mkRow = (t, i) => {
+    const row = { _t: t, _i: i, style: style(), __gwxCss: undefined,
+      getAttribute: (k) => (k === "data-t" ? t : null),
+      getBoundingClientRect() { counters.rects++; return { top: row._i * pitch, height: pitch }; },
+      querySelector(sel) { return sel === ".sc-gmini" ? row._cell : sel === ".sc-ctk" ? row._tick : null; } };
+    row._bar = { style: style() };
+    row._cell = { querySelector: () => row._bar, appendChild() {} };
+    row._tick = { _t: t };
+    return row;
   };
-  const S = { rows: sRows, boardOrder: order || rows.map((r) => r._t) };
-  const src = "var ASOF=arguments[7], CACHE=arguments[8], PITCH=20, PITCH_OK=true, PX_SEED=arguments[9];\n" +
-    COLS + "\nfor (const k in PX_SEED) PXC[k]=PX_SEED[k];\n" +
-    "return { paintCols, wantVisible, pxDay, pxWant, queued: () => PXQ.slice(), PXC };";
-  const api = new Function("E", "S", "SC_PENDING", "fmtC", "rsiGradColor", "fmtCap", "volCellHTML",
-    "ASOF_IN", "CACHE_IN", "PX_IN", "ET_DAY", "SC_CHART_API", "fetch", "setTimeout", "fpeWithheldText", src)(
-    (id) => (id === "boardScroll" ? bs : null), S, "…",
-    (v) => (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%",
-    () => "rgba(200,200,200,.5)", (v) => (v == null ? "—" : String(v)),
-    () => '<span class="sc-vol">live</span>',
-    asof, cache, px,
-    new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }),
-    "https://example.invalid", (u) => { counters.fetched.push(u); return new Promise(() => {}); }, () => 0, () => "—");
-  return { api, counters, S, bs };
+  let order = Array.from({ length: n }, (_, i) => "T" + i);
+  const rows = order.map(mkRow);
+  const bs = { scrollTop: 0,
+    get offsetHeight() { counters.offsetHeight++; return 800; },
+    getBoundingClientRect() { counters.rects++; return { top: 0, height: rowsVisible * pitch }; },
+    querySelectorAll: () => rows.slice().sort((a, b) => a._i - b._i),   // DOM order, like the real one
+    appendChild(frag) { const ord = frag._kids.map((r) => r._t); rows.forEach((r) => { r._i = ord.indexOf(r._t); }); order = ord; } };
+  return { bs, rows, counters, order: () => order };
 }
 
-const bars = (map) => map;   /* { "2026-08-20": {c: 210, p: 200} } */
+function harness(board, S, { speedMs = 700 } = {}) {
+  const timers = [];
+  const classes = new Set();
+  const doc = { getElementById: (id) => (id === "boardScroll" ? board.bs : null),
+    createDocumentFragment: () => ({ _kids: [], appendChild(n) { this._kids.push(n); } }),
+    querySelectorAll: () => [], querySelector: () => null,
+    body: { classList: { toggle: (c, on) => { on ? classes.add(c) : classes.delete(c); } } } };
+  const src = "var PREV={}, SPEEDS=[['\\u00bd\\u00d7',1400],['1\\u00d7'," + speedMs + "]], SPEED_I=1;\n" + SRC +
+    "\nreturn { repaint, motionOn, flushPend, PERF, motion: () => MOTION, dur: motionDur };";
+  const api = new Function(
+    "E", "S", "computeBoardOrder", "scScint", "paintTM", "badges", "cohortGeigerHTML",
+    "cohortCompareStripHTML", "cmpToggle", "document", "window", "clearTimeout", "setTimeout", "performance", src)(
+    (id) => (id === "boardScroll" ? board.bs : null), S,
+    () => S.rows.slice().sort((a, b) => (b.g == null ? -Infinity : b.g) - (a.g == null ? -Infinity : a.g)).map((r) => r.t),
+    () => {}, () => { board.counters.paintTM = (board.counters.paintTM || 0) + 1; }, () => {},
+    undefined, undefined, undefined, doc,
+    { innerHeight: 600, performance: { now: () => 0 } },
+    (h) => { const t = timers.find((x) => x.h === h); if (t) t.cancelled = true; },
+    (fn, ms) => { const h = timers.length + 1; timers.push({ h, fn, ms }); return h; },
+    { now: () => 0 });
+  api.timers = timers; api.classes = classes;
+  api.fire = (ms) => { timers.filter((t) => !t.cancelled && !t.done && t.ms === ms).forEach((t) => { t.done = true; t.fn(); }); };
+  return api;
+}
 
-test("the replayed row shows THAT DAY's price, its own day change and its own RSI", () => {
-  const rows = [mkRow("AAPL")];
-  const { api } = colsWorld({
-    rows, asof: "2026-08-20",
-    cache: { "2026-08-20": { AAPL: 0.4, __mom: { AAPL: 0.2 }, __rsi: { AAPL: 61.4 } } },
-    px: { AAPL: bars({ "2026-08-20": { c: 210.5, p: 200 } }) },
-    sRows: [{ t: "AAPL", price: 999, c: 12, rsi: 30, fpe: 41.2, mc: 4e12 }],
-  });
-  api.paintCols();
-  const k = rows[0].kids;
-  assert.equal(k[".sc-last"].textContent, "210.50", "the close on the replayed day, not today's 999");
-  assert.equal(k[".sc-chg"].textContent, "+5.25%", "(210.5/200-1) — the day's own move");
-  assert.equal(k[".sc-chg"].className, "sc-chg up");
-  assert.equal(k[".sc-rsi"].textContent, 61, "momentum_daily's RSI for that date, not today's 30");
-  assert.match(k[".sc-last"].attrs.title, /close on 2026-08-20/);
+test("the movement is the proposal's default: the bars settle first, then the rows reflow", () => {
+  const board = mkBoard(6);
+  const S = { rows: [0, 1, 2, 3, 4, 5].map((i) => ({ t: "T" + i, g: i / 10 })), boardOrder: [] };
+  const api = harness(board, S);
+  api.repaint({});                                   // live: everything lands in one pass
+  assert.deepEqual(board.order(), ["T5", "T4", "T3", "T2", "T1", "T0"]);
+
+  api.motionOn(true);
+  assert.equal(api.classes.has("gwx-motion"), true, "the body carries the mode the stylesheet keys off");
+  const { v, r } = api.dur();
+  assert.equal(v, 231, "settle = 33% of a 700ms day — the proposal's 230ms MEDIUM");
+  assert.equal(r, 399, "reflow = 57% of the day — the proposal's 400ms");
+
+  S.rows[0].g = 9;                                   // the last name becomes the leader
+  const before = board.counters.cssWrites;
+  api.repaint({});
+  assert.ok(board.counters.cssWrites > before, "the bars are rewritten immediately — values first");
+  assert.match(board.counters.css.at(-1), /transition:left 231ms ease-out/, "and they EASE to their new value");
+  assert.equal(board.order()[0], "T5", "the order has NOT moved yet — that is the whole point of settle → reflow");
+
+  api.fire(v + 20);
+  assert.equal(board.order()[0], "T0", "the reflow lands one settle later");
+  assert.deepEqual(S.boardOrder, board.order());
+  assert.equal(api.PERF.last.motion, "settle-reflow");
 });
 
-test("a column with no history for that date is a quiet dash that says why — never today's value", () => {
-  const rows = [mkRow("AAPL")];
-  const { api } = colsWorld({
-    rows, cache: { "2026-08-20": { AAPL: 0.4, __mom: {}, __rsi: {} } },
-    px: { AAPL: bars({ "2026-08-20": { c: 210.5, p: 200 } }) },
-    sRows: [{ t: "AAPL", price: 999, c: 12, rsi: 30, fpe: 41.2, mc: 4e12, rv: 1.4 }],
-  });
-  api.paintCols();
-  const k = rows[0].kids;
-  for (const sel of [".sc-fpe", ".sc-mcap", ".sc-vol", ".sc-rsi"]) {
-    assert.equal(k[sel].textContent, "—", sel + " has no dated history, so it shows nothing");
-    assert.equal(k[sel].style.color, "var(--mute)");
-  }
-  assert.match(k[".sc-fpe"].attrs.title, /today's consensus estimate/);
-  assert.match(k[".sc-mcap"].attrs.title, /current profile field/);
-  assert.match(k[".sc-vol"].attrs.title, /only true for its own session/);
-  assert.ok(!/41\.2|4e\+?12|1\.4/.test(k[".sc-fpe"].textContent + k[".sc-mcap"].textContent + k[".sc-vol"].textContent),
-    "not one of today's numbers leaked onto a past row");
+test("a frame that arrives during the settle flushes the reflow it owes, and never skips one", () => {
+  const board = mkBoard(5);
+  const S = { rows: [0, 1, 2, 3, 4].map((i) => ({ t: "T" + i, g: i / 10 })), boardOrder: [] };
+  const api = harness(board, S);
+  api.repaint({}); api.motionOn(true);
+  S.rows[0].g = 9;
+  api.repaint({});                                   // reflow pending
+  assert.equal(board.order()[0], "T4");
+  S.rows[1].g = 99;                                  // the next day arrives before the settle finished
+  api.repaint({});
+  assert.equal(board.order()[0], "T1",
+    "the owed reflow ran before this frame measured anything, and it ordered on what is true NOW");
+  const settled = board.order().join(",");
+  api.fire(api.dur().v + 20);
+  assert.equal(board.order().join(","), settled, "this frame's own reflow lands on the same order, not a second jump");
+  assert.equal(api.timers.filter((t) => !t.done && !t.cancelled && t.ms === api.dur().v + 20).length, 0,
+    "no reflow is left owed");
 });
 
-test("a ticker the provider has no bar for waits, then dashes — it never borrows the live price", () => {
-  const rows = [mkRow("ESUSD")];
-  const w = colsWorld({ rows, cache: { "2026-08-20": { ESUSD: 0.1, __mom: {}, __rsi: {} } },
-    px: {}, sRows: [{ t: "ESUSD", price: 5555, c: 1 }] });
-  w.api.paintCols();
-  assert.equal(rows[0].kids[".sc-last"].textContent, "…", "while the bars are in flight it is pending");
-  assert.notEqual(rows[0].kids[".sc-last"].textContent, "5555");
+test("motion mode costs the same two geometry reads a tick, and re-measures the pitch when it turns on", () => {
+  const n = 364;
+  const board = mkBoard(n);
+  const S = { rows: Array.from({ length: n }, (_, i) => ({ t: "T" + i, g: (i % 7) / 7 - 0.5 })), boardOrder: [] };
+  const api = harness(board, S);
+  api.repaint({});
+  api.motionOn(true);                                 // taller bars: the old pitch is not true any more
+  S.rows.forEach((r, i) => { r.g = Math.sin(i * 2.7); });
+  api.repaint({}); api.fire(api.dur().v + 20);
+  assert.ok(api.PERF.last.pitchReads > 0, "turning motion on must re-measure the row pitch");
+  board.counters.rects = 0; board.counters.offsetHeight = 0;
+  S.rows.forEach((r, i) => { r.g = Math.cos(i * 1.3); });
+  api.repaint({}); api.fire(api.dur().v + 20);
+  const reads = board.counters.rects + board.counters.offsetHeight;
+  assert.ok(reads <= 4, `geometry reads per motion tick = ${reads}, expected <= 4 at ${n} rows`);
+  assert.equal(api.PERF.last.pitchReads, 0, "a steady tick re-measures nothing");
+  assert.equal(api.PERF.last.mode, "pitch");
+  assert.equal(api.PERF.last.rows, n);
 });
 
-test("LIVE hands every column back to the live row, and the dashes' reasons go with them", () => {
-  const rows = [mkRow("AAPL")];
-  const { api } = colsWorld({ rows, asof: null,
-    sRows: [{ t: "AAPL", price: 1234.5, c: -2.5, rsi: 44, fpe: 30, mc: 1e12, rv: 1.2 }] });
-  api.paintCols();
-  const k = rows[0].kids;
-  assert.equal(k[".sc-last"].textContent, "1,234.50");
-  assert.equal(k[".sc-chg"].textContent, "-2.50%");
-  assert.equal(k[".sc-chg"].className, "sc-chg dn");
-  assert.equal(k[".sc-rsi"].textContent, 44);
-  assert.equal(k[".sc-fpe"].textContent, "30.0×");
-  assert.equal(k[".sc-fpe"].attrs.title, undefined, "the replay's explanation is not left behind");
+test("the hidden columns are not painted while they are hidden", () => {
+  const board = mkBoard(4);
+  const S = { rows: [0, 1, 2, 3].map((i) => ({ t: "T" + i, g: i / 10 })), boardOrder: [] };
+  const api = harness(board, S);
+  api.repaint({});
+  const live = board.counters.paintTM;
+  assert.ok(live >= 1, "live paints TREND · MOM · READ");
+  api.motionOn(true);
+  api.repaint({}); api.fire(api.dur().v + 20);
+  assert.equal(board.counters.paintTM, live, "motion mode paints no column the reader cannot see");
+  api.motionOn(false);
+  api.repaint({});
+  assert.ok(board.counters.paintTM > live, "LIVE paints them again");
 });
 
-test("the column pass reads no geometry at all, and only the rows on screen are fetched", () => {
-  const rows = Array.from({ length: 364 }, (_, i) => mkRow("T" + i));
-  const w = colsWorld({ rows, cache: { "2026-08-20": { __mom: {}, __rsi: {} } },
-    sRows: rows.map((r) => ({ t: r._t })) });
-  w.counters.rects = 0;
-  w.api.paintCols();
-  assert.equal(w.counters.rects, 0, "painting 364 rows' columns must not force a single layout");
-  w.api.wantVisible(0, 0, 600);                       // the numbers repaint() has already read
-  const asked = w.counters.fetched.map((u) => decodeURIComponent(u).replace(/.*symbol=([^&]+).*/, "$1")).concat(w.api.queued());
-  assert.equal(w.counters.rects, 0, "and neither may deciding who is on screen");
-  assert.ok(asked.length > 0 && asked.length <= 45, `asked for ${asked.length} tickers, expected the visible window only`);
-  assert.equal(asked[0], "T0", "starting at the top of the board, where the reader is");
-  assert.ok(!asked.includes("T200"), "a row 200 places down the board is not fetched until it is reached");
-  assert.ok(w.counters.fetched.length <= 4, "at most four requests in flight");
-  assert.match(w.counters.fetched[0], /\/candles\?symbol=T0&tf=1d&limit=\d+/, "one daily series per ticker, for the whole window");
+/* ── the % change over the replayed span ───────────────────────────────────────────────────── */
+const PCT = slice("  var PXC={}, PXQ=[], PXQS={}, PXN=0",
+                  "  /* which rows are on screen, from numbers repaint() has ALREADY read - no new reads */");
+
+function pctWorld({ rows, asof, dates, startI = 0, px = {} }) {
+  const counters = { rects: 0 };
+  const bs = { scrollTop: 0,
+    getBoundingClientRect() { counters.rects++; return { top: 0, height: 600 }; },
+    querySelectorAll: (sel) => (sel === ".sc-board__row" ? rows.slice() : rows.map((r) => r._pct).filter(Boolean)) };
+  const src = "var ASOF=arguments[6], DATES=arguments[7], START_I=arguments[8], SEED=arguments[9];\n" +
+    PCT + "\nfor (const k in SEED) PXC[k]=SEED[k];\nreturn { paintPct, pctFor, spanFirst, clearPct, PXC };";
+  const api = new Function("E", "document", "setTimeout", "ET_DAY", "SC_CHART_API", "fetch",
+    "ASOF_IN", "DATES_IN", "START_IN", "PX_IN", src)(
+    (id) => (id === "boardScroll" ? bs : null),
+    { createElement: () => ({ className: "", textContent: "", style: {}, attrs: {},
+        setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } }) },
+    () => 0, { format: (d) => d.toISOString().slice(0, 10) }, "", () => {},
+    asof, dates, startI, px);
+  return { api, counters };
+}
+const mkPctRow = (t) => {
+  const row = { _t: t, _pct: null, getAttribute: (k) => (k === "data-t" ? t : null),
+    querySelector: (q) => (q === ".gwx-pct" ? row._pct : null),
+    appendChild(n) { row._pct = n; } };
+  return row;
+};
+const series = (o) => { const m = { __d: Object.keys(o).sort() }; for (const d in o) m[d] = { c: o[d], p: null }; return m; };
+
+test("the % is measured from the window's FIRST day to the frame on screen, green up and red down", () => {
+  const rows = [mkPctRow("AAA"), mkPctRow("BBB")];
+  const dates = ["2026-09-01", "2026-09-02", "2026-09-03"];
+  const { api } = pctWorld({ rows, asof: "2026-09-03", dates, startI: 0,
+    px: { AAA: series({ "2026-09-01": 100, "2026-09-02": 105, "2026-09-03": 110 }),
+          BBB: series({ "2026-09-01": 50, "2026-09-02": 48, "2026-09-03": 45 }) } });
+  api.paintPct();
+  assert.equal(rows[0]._pct.textContent, "+10.0%");
+  assert.equal(rows[0]._pct.style.color, "var(--bull)");
+  assert.equal(rows[1]._pct.textContent, "-10.0%");
+  assert.equal(rows[1]._pct.style.color, "var(--bear)");
+  assert.match(rows[0]._pct.attrs.title, /2026-09-01 → 2026-09-03/);
+  assert.ok(!/var\(--mute\)/.test(rows[0]._pct.style.color), "a price move is never drawn grey");
 });
 
-test("a daily bar is filed under the session it belongs to, in New York, across the DST line", () => {
-  const { api } = colsWorld({ rows: [], sRows: [] });
-  assert.equal(api.pxDay(Date.parse("2026-09-23T04:00:00Z")), "2026-09-23", "summer: the bar anchors at 04:00Z");
-  assert.equal(api.pxDay(Date.parse("2026-01-05T05:00:00Z")), "2026-01-05", "winter: 05:00Z, same session date");
+test("moving the START handle moves what the % is measured from", () => {
+  const rows = [mkPctRow("AAA")];
+  const dates = ["2026-09-01", "2026-09-02", "2026-09-03"];
+  const px = { AAA: series({ "2026-09-01": 100, "2026-09-02": 200, "2026-09-03": 220 }) };
+  const a = pctWorld({ rows, asof: "2026-09-03", dates, startI: 1, px }).api;
+  a.paintPct();
+  assert.equal(rows[0]._pct.textContent, "+10.0%", "from 2 Sep, not from the whole year");
+  assert.equal(a.spanFirst(), "2026-09-02");
 });
 
-/* ── the page's own wiring, read from the bytes ────────────────────────────────────────────── */
-test("the rewind asks for the day's RSI on the request it was already making", () => {
-  assert.equal((page.match(/momentum_daily\?select=ticker,read,rsi&asof=eq\./g) || []).length, 2,
-    "both the seek and the warm-ahead read carry it");
-  assert.ok(!/momentum_daily\?select=ticker,read&asof/.test(page), "and neither is left on the old two-column read");
+test("a weekend frame carries the last close instead of blanking, and a real hole stays empty", () => {
+  const rows = [mkPctRow("AAA"), mkPctRow("BBB")];
+  const dates = ["2026-09-17", "2026-09-18", "2026-09-19"];
+  const { api } = pctWorld({ rows, asof: "2026-09-19", dates, startI: 0,   // a Saturday
+    px: { AAA: series({ "2026-09-17": 100, "2026-09-18": 120 }),
+          BBB: series({ "2026-09-01": 10, "2026-09-02": 11 }) } });        // 17 days stale
+  api.paintPct();
+  assert.equal(rows[0]._pct.textContent, "+20.0%", "Saturday reads Friday's close");
+  assert.equal(rows[1]._pct.textContent, "", "a gap of weeks is a hole, and a hole shows nothing");
 });
 
-test("nothing live writes over a rewound cell — including the path that returns early", () => {
-  /* MEASURED before this guard: on a rewound board every column replayed EXCEPT the day change,
-     because the tick has a second, earlier branch for a price that repeats — which, with the market
-     closed, is the branch that runs all day. */
-  const guard = slice("function scRewoundNow() {", "\n}\n");
-  assert.match(guard, /classList\.contains\("gwx-on"\)/);
-  const repeat = slice("    const sameChange = (pc0 &&", "    return;");
-  assert.match(repeat, /scRewoundNow\(\) \? null : el\("lc_" \+ t\)/, "the price-repeat path asks too");
-  assert.match(repeat, /LEFT_T === t && !scRewoundNow\(\)/, "and it leaves the company ident alone as well");
-  assert.match(page, /if \(lp && !scRewoundNow\(\)\)/, "so does the moved-price path");
-  const rsi = slice("function paintRsiCell(t, v) {", "\n}\n");
-  assert.match(rsi, /scRewoundNow\(\)/, "and so does the lazy RSI loader");
-  assert.equal((page.match(/classList\.contains\("gwx-on"\)/g) || []).length, 1,
-    "ONE reader of that state, so a future writer cannot answer the question differently");
+test("a name whose bars are still in flight waits — it never shows a number it has not got", () => {
+  const rows = [mkPctRow("AAA")];
+  const { api } = pctWorld({ rows, asof: "2026-09-03", dates: ["2026-09-01", "2026-09-03"], px: {} });
+  api.paintPct();
+  assert.equal(rows[0]._pct.textContent, "…");
+  assert.equal(api.pctFor("AAA", "2026-09-01", "2026-09-03"), undefined);
 });
 
-test("the tick still costs two geometry reads: the column work reuses what repaint already read", () => {
-  const rep = slice("      var box=bs.getBoundingClientRect(); reads++;", "      badges(before);");
-  assert.match(rep, /wantVisible\(box\.top, scrolled, vh\)/, "no new reads — the numbers are passed in");
-  const extra = rep.split("\n").filter((l) => /getBoundingClientRect\(\)/.test(l) && !/var box=/.test(l));
-  assert.ok(extra.every((l) => /rectMode/.test(l)),
-    "every other rect read is the rectMode fallback, taken only when the rows are not uniform:\n" + extra.join("\n"));
+test("the % pass reads no geometry at all", () => {
+  const rows = Array.from({ length: 40 }, (_, i) => mkPctRow("T" + i));
+  const px = {}; rows.forEach((r) => { px[r._t] = series({ "2026-09-01": 10, "2026-09-03": 11 }); });
+  const { api, counters } = pctWorld({ rows, asof: "2026-09-03", dates: ["2026-09-01", "2026-09-03"], px });
+  api.paintPct();
+  assert.equal(counters.rects, 0);
+});
+
+/* ── what M55 left behind, and what must not come back ─────────────────────────────────────── */
+test("the rank arrow clears after 1400ms, the proposal's own timing", () => {
+  const src = slice("  function badges(before){", "  function play(){");
+  assert.match(src, /b\.__hide=setTimeout\(function\(\)\{b\.classList\.remove\("show"\);\},1400\);/);
+  assert.match(src, /b\.textContent=\(d>0\?"▲":"▼"\)\+Math\.abs\(d\);/, "positions changed, with a direction");
+  assert.match(page, /\.gwx-rk\{position:absolute;right:0/, "in the fixed column, hard right");
+});
+
+test("the speed chip sits beside PLAY and says which speed is running", () => {
+  const bar = slice("  function bar(){", "  /* say what the window IS");
+  const play = bar.indexOf('id="gwxPlay"'), speed = bar.indexOf('id="gwxSpeed"');
+  assert.ok(play > 0 && speed > play, "the speed chip is the next control after PLAY");
+  assert.match(bar, /id="gwxSpeed"[^>]*>'\+SPEEDS\[SPEED_I\]\[0\]\+'/, "the chip shows the CURRENT speed");
+  const speeds = page.match(/var SPEEDS=\[(.+?)\], SPEED_I=(\d+);/);
+  assert.ok(speeds, "the speed table must exist");
+  assert.ok(/1\\u00d7/.test(speeds[1]) && /2\\u00d7/.test(speeds[1]) && /4\\u00d7/.test(speeds[1]),
+    "1x, 2x and 4x are all offered");
+  assert.equal(speeds[2], "1", "and the board starts at 1x");
+});
+
+test("M55's every-column replay is gone: no column painter, no reasons table, no RSI on the rewind read", () => {
+  assert.equal(page.includes("function paintCols("), false, "paintCols() must not come back");
+  assert.equal(page.includes("var NOHIST={"), false, "the no-history reasons table went with it");
+  assert.equal(page.includes("function waitCell("), false, "the generic waiting writer went with it");
+  assert.equal(page.includes("momentum_daily?select=ticker,read,rsi"), false,
+    "the rewind no longer asks for a day's RSI it does not paint");
+  assert.equal(page.includes("__rsi"), false);
+});
+
+test("the live tick is no longer frozen by a rewind — the columns it writes are hidden, not replayed", () => {
+  assert.equal(/!scRewoundNow\(\)/.test(page), false,
+    "M55's freeze existed so today's price could not sit on a past row; motion mode hides the row instead");
+  assert.equal(/scRewoundNow\(\) \? null :/.test(page), false, "and the price-repeat path is not frozen either");
+  assert.ok(page.includes("function scRewoundNow()"),
+    "the shared reader stays — other painting contexts are handed it — it just gates nothing now");
+  assert.match(page, /const sameCell = el\("lc_" \+ t\);/);
+});
+
+test("LIVE is one class away: nothing is rebuilt and the cells were never written to", () => {
+  const src = slice("  function goLive(){", "  /* FLIP. boardRowsHTML()");
+  assert.match(src, /motionOn\(false\);/, "the mode comes off with the rewind");
+  assert.match(src, /hasOwnProperty\.call\(LIVE_G,\s*r\.t\)/, "and every snapshotted value goes back, nulls included");
+  assert.equal(/innerHTML\s*=\s*boardRowsHTML/.test(src), false, "returning to live must not rebuild the board");
+  const seek = slice("  function seek(d, dNext, frac){", "  function seekFetch(d){");
+  assert.match(seek, /motionOn\(true\);/, "and it goes on with the first scrubbed frame");
 });
 
 /* ── the room and the tape ─────────────────────────────────────────────────────────────────── */
