@@ -294,8 +294,9 @@ test("the rail is production's: stored prints with freshness, writer footer, and
   assert.match(fnSrc(page, "fillEcon"), /Promise\.all\(\[ecLoadWindow\(\), fillEconRail\(\)\]\)/);
   const clicks = page.slice(page.indexOf('case "ecctry"'), page.indexOf('/* R34 — removed orphaned case "systems"'));
   assert.doesNotMatch(clicks, /fillEcon\(\)/, "an arrow press never re-reads the rail");
-  /* ecctry · ecgoto · ecday · ecspan, plus (22 Sep) mngoto when the ECON band is clicked from inside the room itself */
-  assert.equal((clicks.match(/ecLoadWindow\(\);/g) || []).length, 5);
+  /* ecctry · ecgoto · ecday · ecspan, plus (22 Sep) mngoto when the ECON band is clicked from inside the
+     room itself, plus (M42) scintgo when a line in TODAY'S SCINTILLAS names a release */
+  assert.equal((clicks.match(/ecLoadWindow\(\);/g) || []).length, 6);
   assert.doesNotMatch(page, /URLSearchParams\(location\.search\)\.get\("room"\)/, "the review build's ?room= boot parameter is not ported");
   assert.doesNotMatch(page, /'<div class="sc-macronext" id="macroNext"><\/div>' \+/, "8995c4b's full-width dashboard row is not ported");
 });

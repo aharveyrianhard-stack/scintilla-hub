@@ -93,7 +93,10 @@ function evilRows() {
       actual: [1.5, "abc", null, "", "2", 1e6][i % 6], estimate: [1.4, null, "x", 2][i % 4], previous: [null, 3, "y"][i % 3] });
   return out;
 }
-const ALLOWED_ATTR = new Set(["class", "style", "title", "id", "data-act", "data-k", "data-day", "data-c", "data-s", "data-d", "aria-label"]);
+/* M42 — data-esub (the release, as a stored scintilla names its subject) and data-ecty (its country)
+   are on the row so a stored scintilla can find it. Both go through esc(), and this audit still
+   proves it: the tag pattern only accepts attribute values with no raw quote, < or >. */
+const ALLOWED_ATTR = new Set(["class", "style", "title", "id", "data-act", "data-k", "data-day", "data-c", "data-s", "data-d", "data-esub", "data-ecty", "aria-label"]);
 /* 23 Sep — the colour law put the CATEGORY hue on the row's spine and its dot, so two more shapes are allowed:
    both come from the fixed EC_CAT_COLOR table, keyed by ecCat(), and neither can be reached from row data. */
 const ALLOWED_STYLE = /^(color:var\(--(sv[1345]|dim)\)(;text-shadow:0 0 7px rgba\(255,138,0,\.85\)|;opacity:\.7)?|(background|color|border-left-color):(#[0-9A-F]{6}|var\(--mute\)))$/;
