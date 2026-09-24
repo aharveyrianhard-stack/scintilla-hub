@@ -28,7 +28,10 @@ test("the reviewed page and preview bytes; the lab's home is present", () => {
   assert.equal(sha("index.html"), "72d77a3ef007a420ffc7416d68280c07faa520f9d6e4ef3a9fd5d5f988ea50b8");   // rebuilt 23 Sep (M18): one scrolling page on the 3D-workshop model - picture band, chips, dates - in greys, no hidden tabs
   assert.equal(sha("previews/signal-fanout-v2.html"), "13b2c843f68af1b98c02e78f40ff68994ab383cd490e6e561b5584a0d0f2fb51");
   assert.equal(sha("dock-concept/index.html"), "0c2c682844c2cfff7227d162c9db5e12ea1cfe5c6f1f350930dcda775975aebc");
-  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
+  /* 24 Sep (M71): widget-scout joins as the one page here that is deliberately NOT self-contained - it exists to
+     mount other people's widgets live, so it is kept out of the self-contained loop below and out of catalog.json
+     until Alan says whether the library should list a page that loads vendor code. See tests/widget-scout.test.mjs. */
+  assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library", "widget-scout"]);
   assert.deepEqual(fs.readdirSync(at("previews")), ["signal-fanout-v2.html"]);
   assert.ok(fs.existsSync(at("indicator-lab/index.html")));
 });
