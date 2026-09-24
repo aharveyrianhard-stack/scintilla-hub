@@ -202,7 +202,7 @@ test("zoom: pinch, ⌘/ctrl-wheel or the strip — one level per gesture, and a 
 
 test("the tape's own read is small, wide and unscoped", () => {
   const read = src.slice(src.indexOf("async function ercTapeRead"), src.indexOf("/* ---- buckets"));
-  assert.match(read, /pg\("earnings_events\?select=ticker,date&date=gte\./, "ticker and date only — not every release summary in two years");
+  assert.match(read, /pgErn\("earnings_events\?select=ticker,date&date=gte\./, "ticker and date only, live rows only (a retired date is not a report) — not every release summary in two years");
   assert.match(read, /ercTapeChunks\(r\.from, r\.to\)/);
   assert.match(src, /const ERC_TAPE_CHUNK = 120;/, "a chunk this size cannot reach the 1,000-row ceiling");
   assert.match(read, /ERC_TAPE_TRUNC = got\.some\(\(g\) => \(g \|\| \[\]\)\.length >= ERC_MAX\);/, "and a full page is admitted out loud");
