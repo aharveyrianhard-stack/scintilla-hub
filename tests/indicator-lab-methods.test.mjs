@@ -1,64 +1,33 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import fs from "node:fs";
-
-const page = fs.readFileSync(new URL("../prototypes/indicator-lab/index.html", import.meta.url), "utf8");
-
-test("channel and diagonal review surfaces are all linked once", () => {
-  for (const url of [
-    "https://www.tradingview.com/chart/99awrQQB/",
-    "https://www.tradingview.com/chart/XMhDLRjG/",
-    "https://www.tradingview.com/chart/LmUGaNim/",
-  ]) {
-    assert.equal(page.split(url).length - 1, 1, url);
-  }
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL('../prototypes/indicator-lab/'+p,import.meta.url),'utf8');
+const page=read('index.html'), checkpoint=read('checkpoint-20260924.html');
+test('category anchors are unique, visible, and TradingView comes before experiments',()=>{
+ for(const id of ['clouds','oscillators','patterns','levels','templates','workshops','research']){
+  assert.equal(page.split(`id="${id}"`).length-1,1);
+  assert.match(page,new RegExp(`href="#${id}"`));
+ }
+ assert.ok(page.indexOf('id="oscillators"')<page.indexOf('id="workshops"'));
+ assert.match(page,/href="\/prototypes\/"/);
+ assert.doesNotMatch(page,/<script|<iframe|localStorage|setInterval/);
 });
-
-test("method provenance links and the exact saved split remain explicit", () => {
-  for (const url of [
-    "https://www.tradingview.com/script/WZ8B1FIW-Auto-Chart-Patterns-Trendoscope/",
-    "https://www.tradingview.com/script/PpPsTrnJ-Auto-Parallel-Channel-Trend-Reversal-Tracker/",
-    "https://www.tradingview.com/script/Lytlc97U-Auto-Parallel-Channels/",
-    "https://www.tradingview.com/script/YMQcZAVD-Auto-Parallel-Channels-HTF/",
-    "https://www.tradingview.com/script/BIWG0mAw-Auto-Channel-Detector/",
-  ]) assert.match(page, new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-
-  assert.match(page, /Auto Parallel Channel confirmed\/history plus developing/);
-  assert.match(page, /SCINTILLA APC lower-primary plus upper-primary offsets/);
-  assert.match(page, /TradeSymbiotic APCh HTF/);
-  assert.match(page, /SCINTILLA APC independently fitted dual rails/);
-  assert.match(page, /sunnywilson93 Auto Channel Detector v7/);
-  assert.match(page, /the four shared-slope lanes above are off/);
-  assert.match(page, /no method was deleted, fused with Trendoscope or allowed to import pivots into it/i);
+test('saved review charts are direct and publication links are secondary',()=>{
+ for(const id of ['K3Rgctld','eoKLEQLd','Co9sV1xl','tWoF5LXZ','RkwmLtwJ','99awrQQB','XMhDLRjG','LmUGaNim'])
+  assert.equal(page.split(`https://www.tradingview.com/chart/${id}/`).length-1,1,id);
+ assert.match(page,/Read original Trendoscope source publication/);
+ assert.match(page,/current content has not been reverified/);
 });
-
-test("licensing and protected-source boundaries are not blurred", () => {
-  assert.match(page, /CC BY-NC-SA 4\.0/);
-  assert.match(page, /not a new detector or blanket permission for commercial Station use/);
-  assert.match(page, /not a clone of the protected pivot search, scoring, touch accounting or lifecycle/);
-  assert.match(page, /SCINTILLA_Parallel_Channels_Additive_Stack_V1\.pine/);
+test('the formula relationship and disabled Williams default are explicit',()=>{
+ for(const text of ['Williams off','Stochastic %K','eight-hour candles','not a fourth oscillator','not a blended score','14-bar range → SMA3','Recursive memory'])assert.ok(page.includes(text),text);
+ assert.match(page,/raw Stochastic is 80 and Williams is −20/);
 });
-
-test("the registry records the current workshop and RSI candidate exactly", () => {
-  assert.match(page, /https:\/\/scintilla-widgets-cfntmj6bw-aharveyrianhard-8432s-projects\.vercel\.app\/chart-workshop\//);
-  assert.match(page, /EMA8 is the quieter step below EMA13: width <code>0\.6<\/code>, indigo opacity <code>20%<\/code>, pink opacity <code>8%<\/code>/);
-  assert.match(page, /The V2 source is local and paste-ready; it has not been applied to the saved TradingView chart/);
-  for (const zone of ["68–72", "48.5–51.5", "28–32"]) assert.match(page, new RegExp(zone));
-  assert.match(page, /32 \/ 32 focused tests passed/);
-  assert.match(page, /pine_check<\/code>: 0 errors \/ 0 warnings/);
+test('readiness does not turn a source candidate or snapshot into installed live work',()=>{
+ for(const text of ['V3 visual and V4 screening candidates are locally compiled, not installed','not a continuously refreshed feed','not a performance backtest','No new Station integration','not identified yet','not a claim that the new TradingView arrangements are built'])assert.ok(page.includes(text),text);
+ assert.match(page,/Clouds are closed/);
 });
-
-test("the registry distinguishes live MCP evidence from older extraction checks", () => {
-  assert.match(page, /<code>99awrQQB<\/code> is <code>CDP_CONNECTED<\/code>/);
-  assert.match(page, /reads <code>BTCUSD<\/code> on <code>4h<\/code> and 108 V2 line objects/);
-  assert.match(page, /Earlier reads matched 126 completed candle timestamps/);
-  assert.match(page, /other 32 remain explicitly unresolved/);
-});
-
-test("the geometry history ceilings remain explicit", () => {
-  assert.match(page, /diagonal <code>calc_bars_count<\/code> and retained detection state are separate limits/);
-  assert.match(page, /channel B archive <code>10 \/ 40<\/code>/);
-  assert.match(page, /channel D archive <code>20 \/ 80<\/code>/);
-  assert.match(page, /combined object budget <code>474 \/ 500<\/code>/);
-  assert.match(page, /audited candidate compiles at 0 errors \/ 0 warnings/);
+test('prior methods, licenses and history budget remain available in the checkpoint',()=>{
+ for(const text of ['CC BY-NC-SA 4.0','not a clone of the protected pivot search','TradeSymbiotic APCh HTF','sunnywilson93 Auto Channel Detector v7','474 / 500','10 / 40','20 / 80','PpPsTrnJ','Lytlc97U','YMQcZAVD','BIWG0mAw'])assert.ok(checkpoint.includes(text),text);
+ assert.match(page,/href="checkpoint-20260924.html"/);
+ assert.match(checkpoint,/href="\.\/"/);
 });

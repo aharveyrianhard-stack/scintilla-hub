@@ -230,15 +230,16 @@ test("one read for both surfaces: 10 minutes normally, 2 while a number is due, 
 });
 
 /* ------------------------------------------------------------------ 5 · Indicator Lab, untouched */
-test("Indicator Lab's newest page is byte-identical to the Lab's own commit 990712a", () => {
+test("Indicator Lab's newest page matches the owner's TradingView-first checkpoint", () => {
   /* the Lab thread owns these files and this branch must not move them by one byte. First pinned to the
      restore commit 8211c8f (22 Sep); moved on 24 Sep to the Lab's own commit 990712a (detailed views and the
      statistical brief), which the coordinator carried into the release after two Hub deploys had rolled the
      page back to 8211c8f. Only the Lab moves these pins. */
   const EXPECT = {
-    "prototypes/indicator-lab/index.html": ["47e51e10e9fcce6fffbd43188e4d9494557d1ac6", 19854],
+    "prototypes/indicator-lab/index.html": ["0402c27da88dbb55caa4bc0b92f34404ac96dc84", 16737],
+    "prototypes/indicator-lab/checkpoint-20260924.html": ["1951731572d55a263c9de95e12980df5c27ee08a", 19865],
     "prototypes/indicator-lab/captures/mcp-six-chart-20260919.png": ["4591a283ddca44efed9be1d70832eff276a3e52a", 737757],
-    "tests/indicator-lab-methods.test.mjs": ["57ab583cf3710597935c72cdb60b768847645521", 3624],
+    "tests/indicator-lab-methods.test.mjs": ["6cbb22502d9c6ebf0bf420ffbd44a2cb4fca2cb4", 2434],
   };
   for (const [rel, [sha1, bytes]] of Object.entries(EXPECT)) {
     const buf = fs.readFileSync(new URL("../" + rel, import.meta.url));
@@ -246,7 +247,7 @@ test("Indicator Lab's newest page is byte-identical to the Lab's own commit 9907
     assert.equal(crypto.createHash("sha1").update(buf).digest("hex"), sha1, rel + " is not the Lab's file any more");
   }
   const dir = new URL("../prototypes/indicator-lab/", import.meta.url);
-  assert.deepEqual(fs.readdirSync(dir).sort(), ["briefs", "captures", "index.html"], "no file added to the Lab's folder either");
+  assert.deepEqual(fs.readdirSync(dir).sort(), ["briefs", "captures", "checkpoint-20260924.html", "index.html"], "owner-approved Lab inventory");
   assert.deepEqual(fs.readdirSync(new URL("briefs/", dir)).sort(),
     ["DETAILED_INDICATORS_2026-09-24.html", "DETAILED_INDICATORS_2026-09-24.md"]);
   assert.deepEqual(fs.readdirSync(new URL("captures/", dir)).sort(), ["mcp-six-chart-20260919.png"]);
