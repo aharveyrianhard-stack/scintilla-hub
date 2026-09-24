@@ -30,7 +30,9 @@ const manifest = {
   frozen_utc: new Date().toISOString(),
   phase: "0 and 1 only — extractor proof, census, geometry. No outcome statistics, no predictive claim.",
   branch: execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT }).toString().trim(),
-  commit: execSync("git rev-parse HEAD", { cwd: ROOT }).toString().trim(),
+  // The freeze necessarily runs before the commit that contains it, so this names the commit
+  // the manifest was computed against, not the commit it lives in.
+  commit_at_freeze: execSync("git rev-parse HEAD", { cwd: ROOT }).toString().trim(),
   base_commit: "158a21e (origin/hub/release-20260923)",
   seed: EVAL_SEED, extractor_version: EXTRACTOR_VERSION,
   settings_sha256: settingsSha256(), settings: CANONICAL_SETTINGS,
