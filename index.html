@@ -6348,6 +6348,9 @@ function rsiGradColor(v) {
 function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
+  /* M55 — the lazy RSI loader must not paint today's RSI onto a rewound row; the value is
+     still stashed on the row object, so LIVE gets it back untouched. */
+  if (typeof document !== "undefined" && document.body && document.body.classList.contains("gwx-on")) return;
   cell.textContent = Math.round(v);
   cell.style.color = rsiGradColor(v);
 }
@@ -20205,7 +20208,13 @@ function patch(t, price, src) {
      percentage is CLEARED, not kept - the same fail-closed rule the rest of this overlay follows. */
   for (const row of [r, rAll]) if (row) { row.price = price; row.c = (c != null) ? c : null; }
   const lp = el("lp_" + t);
-  if (lp) {
+  /* M55 — WHILE THE BOARD IS REWOUND THE LIVE TICK DOES NOT TOUCH THE CELLS. The row objects
+     above are still advanced, so pressing LIVE restores the current number exactly; but writing
+     today's price into a row showing 20 August is the same defect as ranking a March board on an
+     August value. The rewind owns these cells until it hands them back (paintCols on goLive). */
+  const scRewound = typeof document !== "undefined" && document.body &&
+                    document.body.classList.contains("gwx-on");
+  if (lp && !scRewound) {
     /* M32 — price AND percentage both scintillate now, through the one primitive. The old path
        flashed the price only, and restarted its animation with a forced reflow per row. */
     scScintSet(lp, price.toFixed(2), prev != null && +prev !== price ? price > +prev : null);
@@ -22361,6 +22370,152 @@ function filesWire(){
   }
   function tickers(){return (S.rows||[]).map(function(r){return r.t;});}
 
+  /* ══ M55 · THE WHOLE TABLE REPLAYS ══════════════════════════════════════════
+     Alan, 24 Sep: "See the whole table moving. All of the rows and columns moving.
+     Not just the Geiger rolling." And, the same night: "The Geiger replay is with
+     the Geiger bar only."  Both hold, and they are about different things:
+       · RANK is the Geiger's job - the rows sort by the replayed Geiger, as before;
+       · every COLUMN plays its own history in place.
+
+     WHERE EACH REPLAYED COLUMN COMES FROM, and nothing else:
+       Last, Chg   the daily bars the chart API serves (/candles tf=1d) - the same
+                   provider surface the rest of the hub prices from. Chg is that
+                   bar's close against the PREVIOUS BAR in the same series, so it is
+                   the day's move as it was on the day, not against today's close.
+       RSI         momentum_daily.rsi - the rewind was already reading that row for
+                   momentum, so this is one more column on a request it already made.
+       Trend, Mom  fan_daily.read and momentum_daily.read (paintTM, unchanged).
+       Read        derived from those two, as it always is.
+       Geiger      the composite the module already replays.
+       F P/E · Mkt Cap · RVol · Mkt   NO dated history exists for these (the forward
+                   multiple is today's consensus, market cap is a current profile
+                   field, the volume ratio is only true for its own session). They
+                   show a quiet dash with a title that says why - never today's
+                   number sitting on a past row, which is the defect that once had
+                   ESUSD ranked on an August value.
+
+     COST. Bars are fetched per ticker ONCE for the whole window and cached, and only
+     for the rows that are actually ON SCREEN (plus a margin), at most four requests in
+     flight. Nothing here reads geometry: the visible range is arithmetic from the box
+     and scroll position repaint() has already read, so the tick still costs its two
+     geometry reads. A row whose bars have not landed yet shows the page's own pending
+     mark, then a dash if the provider has no history for it. */
+  var PXC={}, PXQ=[], PXQS={}, PXN=0, PX_MAX=4, PX_LIMIT=420, PX_NONE={};
+  var COLS_T=null;
+  function pxDay(ms){
+    try{ return ET_DAY.format(new Date(ms)); }
+    catch(_){ try{ return new Date(ms-144e5).toISOString().slice(0,10); }catch(__){ return ""; } }
+  }
+  function pxWant(t){
+    if(!t || PXC[t] || PXQS[t] || PX_NONE[t]) return;
+    PXQS[t]=1; PXQ.push(t); pxRun();
+  }
+  function pxRun(){
+    while(PXN<PX_MAX && PXQ.length){
+      var t=PXQ.shift(); delete PXQS[t]; PXN++;
+      (function(tk){
+        var base=(typeof SC_CHART_API!=="undefined"&&SC_CHART_API)?SC_CHART_API:"";
+        var done=function(){ PXN--; pxRun(); if(ASOF) schedCols(); };
+        fetch(base+"/candles?symbol="+encodeURIComponent(tk)+"&tf=1d&limit="+PX_LIMIT)
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(j){
+            var ser=(j&&j.series)||[];
+            if(!ser.length){ PX_NONE[tk]=1; return done(); }
+            var m={}, prev=null;
+            for(var i=0;i<ser.length;i++){
+              var b=ser[i]; if(!b||b.c==null||b.t==null) continue;
+              m[pxDay(+b.t)]={c:+b.c, p:prev};      /* p = the previous bar's close, so the
+                                                       day's change is the day's own change */
+              prev=+b.c;
+            }
+            PXC[tk]=m; done();
+          })
+          .catch(function(){ PX_NONE[tk]=1; done(); });
+      })(t);
+    }
+  }
+  /* one repaint of the columns when late bars land, coalesced */
+  function schedCols(){
+    if(COLS_T) return;
+    COLS_T=setTimeout(function(){ COLS_T=null; try{ paintCols(); }catch(_){} }, 90);
+  }
+  var NOHIST={
+    fpe:"the forward multiple is today's consensus estimate - it has no dated history, so the replay shows no value rather than today's",
+    mc:"market cap is a current profile field with no dated history, so the replay shows no value rather than today's",
+    rv:"a relative-volume ratio is only true for its own session and none is stored per date",
+    mkt:"the market-state dot is a live reading, not a stored history"
+  };
+  function dash(node, why){
+    if(!node) return;
+    if(node.textContent!=="—") node.textContent="—";
+    if(node.style.color!=="var(--mute)") node.style.color="var(--mute)";
+    if(node.getAttribute("title")!==why) node.setAttribute("title", why);
+  }
+  /* WRITE-ONLY. No getBoundingClientRect, no offsetHeight, nothing that forces layout. */
+  function paintCols(){
+    var bs=E("boardScroll"); if(!bs) return;
+    var rows=bs.querySelectorAll(".sc-board__row"); if(!rows.length) return;
+    var cd=ASOF?(CACHE[ASOF]||{}):null, rsiM=(cd&&cd.__rsi)||{};
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], t=r.getAttribute("data-t"); if(!t) continue;
+      var lp=r.querySelector(".sc-last"), lc=r.querySelector(".sc-chg"),
+          lf=r.querySelector(".sc-fpe"), lmc=r.querySelector(".sc-mcap"),
+          lr=r.querySelector(".sc-rsi"), lv=r.querySelector(".sc-vol"),
+          mk=r.querySelector(".sc-mktdot")||r.querySelector(".sc-mkt");
+      if(!ASOF){                                   /* LIVE - hand every cell back to the live values */
+        var row=null, all=S.rows||[];
+        for(var k=0;k<all.length;k++) if(all[k].t===t){ row=all[k]; break; }
+        if(!row) continue;
+        if(lp){ lp.textContent = row.price!=null ? row.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "—"; lp.style.color=""; }
+        if(lc){ lc.textContent = row.c!=null ? fmtC(row.c) : "—";
+                lc.className="sc-chg"+(row.c!=null?(row.c>=0?" up":" dn"):""); lc.style.color=""; }
+        if(lf){ lf.textContent = row.fpe!=null ? row.fpe.toFixed(1)+"×" : (typeof fpeWithheldText==="function"?fpeWithheldText(t):"—");
+                lf.style.color=""; lf.removeAttribute("title"); }
+        if(lmc){ lmc.textContent = (typeof fmtCap==="function")?fmtCap(row.mc):(row.mc!=null?String(row.mc):"—"); lmc.style.color=""; lmc.removeAttribute("title"); }
+        if(lr){ if(row.rsi!=null){ lr.textContent=Math.round(row.rsi); lr.style.color=rsiGradColor(row.rsi); }
+                else { lr.textContent="—"; lr.style.color=""; } lr.removeAttribute("title"); }
+        if(lv){ lv.style.color=""; lv.removeAttribute("title"); if(typeof volCellHTML==="function") lv.outerHTML=volCellHTML(row.rv, row.rvAsOf); }
+        if(mk) mk.style.opacity="";
+        continue;
+      }
+      /* REWOUND */
+      var px=PXC[t], bar=px?px[ASOF]:null;
+      if(lp){
+        if(bar){ lp.textContent=bar.c.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+                 lp.style.color=""; lp.setAttribute("title","close on "+ASOF+" · daily bar from the chart API"); }
+        else if(px||PX_NONE[t]) dash(lp,"no daily bar stored for "+ASOF);
+        else { if(lp.textContent!==SC_PENDING){ lp.textContent=SC_PENDING; lp.style.color="var(--mute)"; } }
+      }
+      if(lc){
+        var c=(bar&&bar.p!=null&&bar.p!==0)?(bar.c/bar.p-1)*100:null;
+        if(c!=null){ lc.textContent=fmtC(c); lc.className="sc-chg "+(c>=0?"up":"dn"); lc.style.color="";
+                     lc.setAttribute("title","the day's own move on "+ASOF+" · close against the previous stored bar"); }
+        else if(px||PX_NONE[t]){ lc.className="sc-chg"; dash(lc,"no daily bar stored for "+ASOF); }
+        else if(lc.textContent!==SC_PENDING){ lc.textContent=SC_PENDING; lc.className="sc-chg"; lc.style.color="var(--mute)"; }
+      }
+      if(lr){
+        var rv2=rsiM[t];
+        if(rv2!=null){ lr.textContent=Math.round(rv2); lr.style.color=rsiGradColor(rv2);
+                       lr.setAttribute("title","RSI on "+ASOF+" · momentum_daily"); }
+        else dash(lr,"no stored RSI for "+ASOF);
+      }
+      dash(lf, NOHIST.fpe); dash(lmc, NOHIST.mc);
+      if(lv){ lv.innerHTML=""; dash(lv, NOHIST.rv); }
+      if(mk){ mk.style.opacity="0.25"; mk.setAttribute("title", NOHIST.mkt); }
+    }
+  }
+  /* which rows are on screen, from numbers repaint() has ALREADY read - no new reads */
+  function wantVisible(boxTop, scrolled, vh){
+    if(!ASOF) return;
+    var ord=S.boardOrder||[]; if(!ord.length) return;
+    var pitch=PITCH||28, first=0, last=ord.length-1;
+    if(PITCH_OK){
+      first=Math.max(0, Math.floor((scrolled-(boxTop>0?0:boxTop))/pitch)-4);
+      last=Math.min(ord.length-1, first+Math.ceil(vh/pitch)+10);
+    } else { last=Math.min(ord.length-1, 40); }
+    for(var i=first;i<=last;i++) pxWant(ord[i]);
+  }
+
   function seek(d, dNext, frac){
     if(!d)return;
     NEXT_D = (frac && frac > 0.01 && dNext) ? dNext : null;
@@ -22386,12 +22541,16 @@ function filesWire(){
     var fanP = parts.map(function(p){
       return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
     var momP = parts.map(function(p){
-      return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
+      return api("momentum_daily?select=ticker,read,rsi&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
     Promise.all([Promise.all(fanP), Promise.all(momP)]).then(function(res){
-      var m={}, mo={};
+      var m={}, mo={}, rs={};
       res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read; rs[r.ticker]=r.rsi;});});
       m.__mom = mo;                                  // carried alongside, keyed off the map
+      /* M55 - THE WHOLE TABLE REPLAYS. momentum_daily stores that day's RSI in the same
+         row as that day's momentum read, so the RSI column costs one extra column on a
+         request the rewind was already making - no new table, no new round trip. */
+      m.__rsi = rs;
       CACHE[d]=m; if(ASOF===d) apply(m);
       if(dNext && !CACHE[dNext]) seekFetch(dNext);   /* warm the next day for the blend */
     });
@@ -22401,12 +22560,12 @@ function filesWire(){
     var CH=35, parts=[]; for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
     Promise.all([
       Promise.all(parts.map(function(p){return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");})),
-      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
+      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read,rsi&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
     ]).then(function(res){
-      var m={},mo={};
+      var m={},mo={},rs={};
       res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
-      m.__mom=mo; CACHE[d]=m;
+      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read; rs[r.ticker]=r.rsi;});});
+      m.__mom=mo; m.__rsi=rs; CACHE[d]=m;
       /* it landed after the frame that needed it - repaint so the ease is visible */
       if(NEXT_D===d && ASOF && CACHE[ASOF]) apply(CACHE[ASOF]);
     });
@@ -22461,6 +22620,7 @@ function filesWire(){
          glows for a jump the reader made themselves */
       PREV={};
       repaint(before);}
+    try{ paintCols(); }catch(_){}   /* M55 - every replayed column returns to its live value */
   }
   /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
      animate between and every re-sort SNAPS. Alan, watching it: "I don't see the movement
@@ -22621,6 +22781,9 @@ function filesWire(){
         cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
       }
       paintTM();   /* same breath - never leave a frame with the columns missing */
+      /* M55 - the rest of the table, same breath, same frame. wantVisible() reuses the box
+         and scroll position read above, so the tick's geometry reads stay at two. */
+      try{ wantVisible(box.top, scrolled, vh); paintCols(); }catch(_){}
       badges(before);
 
       /* MEASURED, NOT CLAIMED - same shape as the M32 glow bench: what a tick costs and
