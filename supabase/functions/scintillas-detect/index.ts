@@ -26,8 +26,16 @@
 //     until the session pass.
 //   ?mode=session — the same pass with the prefilter switched off, for once after the close.
 // Econ (surprise + imminent) and earnings run in BOTH modes: they cost two database reads.
+//   ?mode=dilution — M59. A separate, cheap pass over what companies FILED: convertible notes,
+//     offerings, at-the-market programmes, private placements, warrant exercises, notes exchanged
+//     for shares. It reads EDGAR's own daily index — ONE file that lists every filing made that
+//     day, for every company in America — keeps the lines whose CIK is in this universe and whose
+//     form can carry an issuance, and only then reads those few documents. A quiet day costs one
+//     index read and nothing else. It costs NOTHING at FMP: the SEC publishes all of this free,
+//     needs no key, and is the primary source rather than a copy of it.
 import {
   detectPriceOutliers, detectEarningsSurprises, detectEconSurprises, detectEconImminent, econEventKey,
+  detectDilution, DILUTION_FORMS,
 } from "./detect.mjs";
 /* M48 — the thresholds are no longer buried in the code. They live in data/scintilla-rules.json,
    which the Hub fetches and this function carries as a generated copy (scripts/build-scintilla-rules.mjs;
@@ -43,6 +51,7 @@ const CHART = Deno.env.get("SC_CHART_API") || "https://scintilla-massive-chart-a
 const PREFILTER_PCT = Math.min(0.5, ...Object.values(RULES.price as Record<string, any>)
   .map((p: any) => Number(p.x_usual_needs_move_pct)).filter((n: number) => Number.isFinite(n)));
 const MAX_CANDLE_FETCH = 140;   // hard ceiling on daily-bar reads per run
+const MAX_FILING_READS = 40;    // hard ceiling on SEC documents read per run
 const CANDLE_DAYS = 90;         // ~60 trading days -> a 20-day volatility is comfortably covered
 const CONCURRENCY = 6;
 
@@ -88,7 +97,8 @@ async function insert(rows: any[]) {
 Deno.serve(async (req) => {
   const started = Date.now();
   const url = new URL(req.url);
-  const mode = url.searchParams.get("mode") === "session" ? "session" : "intraday";
+  const m0 = url.searchParams.get("mode");
+  const mode = m0 === "session" ? "session" : m0 === "dilution" ? "dilution" : "intraday";
   const now = new Date();
   const session = sessionET(now);
   const report: any = { mode, session, at: iso(now), rules_version: RULES.version, kinds: {}, skipped_counts: {}, notes: [] };
@@ -112,6 +122,10 @@ Deno.serve(async (req) => {
       candidates = candidates.filter((q) => Math.abs(+q.price / +q.prev_close - 1) * 100 >= PREFILTER_PCT);
       report.notes.push("intraday prefilter: " + candidates.length + " of " + before + " names moving at least " + PREFILTER_PCT + "% examined");
     }
+    /* M59 — in dilution mode the quotes are read for ONE reason (the last close a discount is
+       measured against), so nothing below this line runs: no daily bars, no heartbeat, no earnings
+       and no economic reads. */
+    if (mode === "dilution") candidates = [];
     if (candidates.length > MAX_CANDLE_FETCH) {
       candidates = candidates.slice().sort((a, b) => Math.abs(+b.price / +b.prev_close - 1) - Math.abs(+a.price / +a.prev_close - 1)).slice(0, MAX_CANDLE_FETCH);
       report.notes.push("capped at " + MAX_CANDLE_FETCH + " daily-bar reads: the biggest movers first");
@@ -134,6 +148,7 @@ Deno.serve(async (req) => {
        missing simply falls back to the bars, and each event says which it used. */
     const heartbeatBySymbol: Record<string, any> = {};
     try {
+      if (!candidates.length) throw new Error("no names under examination");
       const since = new Date(Date.now() - 14 * 86400e3).toISOString().slice(0, 10);
       const hb = await sbGet("ticker_heartbeat_daily?ticker=in.(" +
         candidates.map((q: any) => encodeURIComponent(q.symbol)).join(",") + ")&date=gte." + since +
@@ -151,7 +166,8 @@ Deno.serve(async (req) => {
 
     /* ── earnings: a surprise beyond the name's usual surprise ────────────────────── */
     const ernSel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate";
-    const todays = await sbGet("earnings_events?" + ernSel + "&date=eq." + session + "&eps_actual=not.is.null&limit=400");
+    const todays = mode === "dilution" ? [] :
+      await sbGet("earnings_events?" + ernSel + "&date=eq." + session + "&eps_actual=not.is.null&limit=400");
     let ern = { events: [] as any[], skipped: [] as any[] };
     if (todays.length) {
       const names = [...new Set(todays.map((r: any) => r.ticker))];
@@ -172,7 +188,7 @@ Deno.serve(async (req) => {
     const dayFrom = Math.floor((now.getTime() - 36 * 3600e3) / 1000), dayTo = Math.floor((now.getTime() + 36 * 3600e3) / 1000);
     const asIsoTs = (rows: any[]) => (rows || []).map((r: any) => ({ ...r,
       event_ts: typeof r.event_ts === "number" || /^\d+$/.test(String(r.event_ts)) ? new Date(Number(r.event_ts) * 1000).toISOString() : r.event_ts }));
-    const ecRows = asIsoTs(await sbGet("econ_calendar?" + ecSel + "&event_ts=gte." + dayFrom + "&event_ts=lte." + dayTo + "&order=event_ts.asc&limit=600"));
+    const ecRows = mode === "dilution" ? [] : asIsoTs(await sbGet("econ_calendar?" + ecSel + "&event_ts=gte." + dayFrom + "&event_ts=lte." + dayTo + "&order=event_ts.asc&limit=600"));
     const printed = ecRows.filter((r: any) => r.actual != null && r.estimate != null);
     const historyByEvent: Record<string, any[]> = {};
     if (printed.length) {
@@ -188,6 +204,64 @@ Deno.serve(async (req) => {
     report.kinds.econ_imminent = ecI.events.length;
     report.skipped_counts.econ = countReasons(ecS.skipped.concat(ecI.skipped));
 
+    /* ── M59 · DILUTION: what the company FILED ───────────────────────────────────
+       Only in its own mode, because it answers a different question from "did it move today" and
+       runs on its own cadence. Three steps, each bounded:
+         1. EDGAR's daily form index for the last few days (rules.dilution.lookback_days). An 8-K is
+            due within four business days of the event, so a short window catches the filing on the
+            morning it lands without re-reading the quarter.
+         2. Keep only this universe's CIKs and only the forms that can issue shares. 424B2 — the
+            banks' medium-term-note shelf, thousands of them a quarter — is not in that list.
+         3. Read ONLY the matching documents, and the shares outstanding for ONLY the names that
+            matched, from the SEC's own XBRL cover-page figure. */
+    if (mode === "dilution") {
+      const D = (RULES as any).dilution || {};
+      const back = Math.max(1, Math.min(7, +D.lookback_days || 3));
+      const tickers = await secTickerMap(symbols);                 // ticker -> CIK, SEC's own file
+      const byCik: Record<string, string> = {};
+      for (const t in tickers) byCik[String(+tickers[t])] = t;
+      const lines: any[] = [];
+      for (let i = 0; i < back; i++) {
+        const d = new Date(now.getTime() - i * 86400e3);
+        const rows = await edgarDayIndex(d);
+        report.notes.push("edgar " + dayKey(d) + ": " + rows.length + " filings in the index");
+        for (const r of rows) {
+          if (DILUTION_FORMS.indexOf(r.form) < 0) continue;
+          const tic = byCik[String(+r.cik)];
+          if (!tic) continue;
+          lines.push({ ...r, ticker: tic });
+        }
+      }
+      report.notes.push("dilution candidates in this universe: " + lines.length);
+      const filings: any[] = [];
+      await pool(lines.slice(0, MAX_FILING_READS), 3, async (r: any) => {
+        try {
+          const text = await secText(r.path);
+          filings.push({ ticker: r.ticker, form: r.form, items: r.items || "", filed_date: r.date,
+                         accession: r.acc, url: "https://www.sec.gov/Archives/" + r.path, text });
+        } catch (_) { /* a document that will not load is reported as unread, never as clean */ }
+      });
+      report.notes.push("filings read: " + filings.length + " of " + lines.length);
+      /* the market side: the last close the board already shows, and the share count from the
+         SEC's own cover page — only for the names that actually filed something. */
+      const marketBy: Record<string, any> = {};
+      for (const f of filings) {
+        const q = qRows.find((x: any) => x.symbol === f.ticker);
+        marketBy[f.ticker] = { last_close: q ? +q.prev_close : null, shares_out: null, shares_out_asof: null };
+      }
+      await pool(Object.keys(marketBy), 3, async (tic: string) => {
+        try {
+          const so = await secSharesOut(tickers[tic]);
+          if (so) { marketBy[tic].shares_out = so.val; marketBy[tic].shares_out_asof = so.end; }
+        } catch (_) { /* no share count -> the event says so and the percentage stays null */ }
+      });
+      const dil = detectDilution({ filings, marketBy, ts: iso(now), rules: RULES });
+      events.push(...dil.events);
+      report.kinds.dilution = dil.events.length;
+      report.skipped_counts.dilution = countReasons(dil.skipped);
+      report.excluded = countExcluded(dil.skipped);
+    }
+
     const { inserted } = await insert(events);
     report.detected = events.length;
     report.inserted = inserted;
@@ -201,6 +275,78 @@ Deno.serve(async (req) => {
   }
 });
 
+/* ── M59 · the SEC, read politely and without a key ─────────────────────────────────────────
+   The SEC asks every automated reader to identify itself in a User-Agent and to stay under ten
+   requests a second. Both are honoured here. No key exists for any of this: it is a public
+   government feed, and it is the ORIGINAL of what any paid provider resells. */
+const SEC_UA = Deno.env.get("SEC_USER_AGENT") || "Scintilla Hub research (+https://scintillahub.ai)";
+async function secGet(u: string) {
+  const r = await fetch(u, { headers: { "User-Agent": SEC_UA, "Accept-Encoding": "gzip" } });
+  if (!r.ok) throw new Error("sec " + r.status + " " + u.slice(0, 80));
+  return r;
+}
+const SEC_QTR = (d: Date) => Math.floor(d.getUTCMonth() / 3) + 1;
+/* EDGAR's daily index: one fixed-width file listing every filing made that day. A weekend or a
+   holiday has no file, which is a 404 and simply means no filings — not an error. */
+async function edgarDayIndex(d: Date) {
+  const day = dayKey(d).replace(/-/g, "");
+  const url = "https://www.sec.gov/Archives/edgar/daily-index/" + d.getUTCFullYear() +
+    "/QTR" + SEC_QTR(d) + "/form." + day + ".idx";
+  let text = "";
+  try { text = await (await secGet(url)).text(); } catch (_) { return []; }
+  const out: any[] = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/^(\S[\S ]{0,11}\S)\s{2,}(.+?)\s{2,}(\d{4,10})\s+(\d{8})\s+(edgar\/data\/\S+)\s*$/);
+    if (!m) continue;
+    const path = m[5];
+    const acc = (path.split("/").pop() || "").replace(/\.txt$/, "");
+    out.push({ form: m[1].trim(), company: m[2].trim(), cik: m[3], date: m[4].replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3"), path, acc });
+  }
+  return out;
+}
+/* the filing itself. The daily index points at the complete submission text file, which carries the
+   8-K item numbers in its header and the document in its body — one read, not two. */
+async function secText(path: string) {
+  const raw = await (await secGet("https://www.sec.gov/Archives/" + path)).text();
+  const items = [...raw.matchAll(/^ITEM INFORMATION:\s*(.+)$/gim)].map((x) => x[1].trim());
+  const body = raw
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    /* a real filing writes "1,097,444&#160;shares": decode the numeric entities BEFORE the
+       whitespace is squeezed, or the number and its unit never meet. */
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;|&ldquo;|&rdquo;/gi, '"')
+    .replace(/[ \t\r\n\u00a0\u2007\u202f]+/g, " ");
+  return body.slice(0, 600000) + (items.length ? " ITEM INFORMATION: " + items.join("; ") : "");
+}
+/* ticker -> CIK, from the SEC's own published file, narrowed to the universe we care about */
+let SEC_TICKERS: Record<string, string> | null = null;
+async function secTickerMap(symbols: string[]) {
+  if (!SEC_TICKERS) {
+    const j = await (await secGet("https://www.sec.gov/files/company_tickers.json")).json();
+    const all: Record<string, string> = {};
+    for (const k in j) all[String(j[k].ticker).toUpperCase()] = String(j[k].cik_str).padStart(10, "0");
+    SEC_TICKERS = all;
+  }
+  const out: Record<string, string> = {};
+  for (const s of symbols) if (SEC_TICKERS[s]) out[s] = SEC_TICKERS[s];
+  return out;
+}
+/* the share count a percentage is measured against: the company's own cover page, as filed */
+async function secSharesOut(cik: string) {
+  const j = await (await secGet("https://data.sec.gov/api/xbrl/companyconcept/CIK" + cik +
+    "/dei/EntityCommonStockSharesOutstanding.json")).json();
+  const u = (j && j.units && j.units.shares) || [];
+  if (!u.length) return null;
+  const last = u.slice().sort((a: any, b: any) => String(a.end || "").localeCompare(String(b.end || "")))[u.length - 1];
+  return last && last.val ? { val: +last.val, end: last.end } : null;
+}
+function countExcluded(skipped: any[]) {
+  const out: Record<string, number> = {};
+  for (const s of skipped || []) if (s.excluded_by) out[s.excluded_by] = (out[s.excluded_by] || 0) + 1;
+  return out;
+}
 function countReasons(skipped: any[]) {
   const out: Record<string, number> = {};
   for (const s of skipped || []) out[s.reason] = (out[s.reason] || 0) + 1;

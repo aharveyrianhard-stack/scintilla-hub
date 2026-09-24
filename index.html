@@ -20068,6 +20068,7 @@ function scintWhat(ev) {
     case "earnings_surprise": return "earnings surprise";
     case "econ_surprise": return "surprise print";
     case "econ_imminent": return "about to print";
+    case "dilution": return "dilution";
     case "sentiment_spike": return "sentiment spike";
     case "breadth_thrust": return "breadth thrust";
   }
@@ -20090,6 +20091,33 @@ function scintSays(ev) {
   if (ev.kind === "econ_surprise") {
     return [(d.actual != null ? "actual " + d.actual : "") + (d.estimate != null ? " vs est " + d.estimate : ""),
             d.reading || "", unusual].filter(Boolean).join(" · ");
+  }
+  /* M59 — DILUTION, said the way Alan says it. The company filed a document that hands out new
+     shares; the number that matters is how many more shares can exist, as a share of the ones that
+     exist today. Every part is the filing's own: nothing here is estimated, and a part the filing
+     does not give is simply left out of the sentence rather than guessed. */
+  if (ev.kind === "dilution") {
+    const parts = [];
+    const what = d.principal_usd != null ? fmtCap(d.principal_usd) : d.gross_usd != null ? fmtCap(d.gross_usd) : "";
+    const kind = d.pattern === "convertible_notes" ? "convertible notes"
+      : d.pattern === "note_exchange_for_shares" ? "of convertible notes exchanged for shares"
+      : d.pattern === "atm_program" ? "at-the-market programme"
+      : d.pattern === "registered_direct" ? "registered direct offering"
+      : d.pattern === "pipe" ? "private placement"
+      : d.pattern === "warrant_exercise" ? "warrants exercised"
+      : d.pattern === "reverse_split" ? "reverse split" : "share issue";
+    parts.push([what, kind].filter(Boolean).join(" "));
+    if (d.priced_at != null) {
+      const at = (d.price_is_floor ? "floor " : d.pattern === "convertible_notes" ? "converts at " : "at ") + "$" +
+        (+d.priced_at).toFixed(2);
+      parts.push(d.discount_pct != null && d.discount_pct < 0
+        ? at + " (" + Math.abs(+d.discount_pct).toFixed(0) + "% below last close)"
+        : d.discount_pct != null && d.discount_pct > 0
+        ? at + " (" + (+d.discount_pct).toFixed(0) + "% above last close)" : at);
+    }
+    if (d.pct_of_shares_out != null) parts.push("up to " + (+d.pct_of_shares_out).toFixed(1) + "% more shares");
+    else if (d.gross_usd != null && d.shares_added == null) parts.push("share count not stated in the filing");
+    return parts.filter(Boolean).join(" · ");
   }
   if (ev.kind === "econ_imminent") {
     return ["in " + Math.max(0, Math.round(+d.minutes_to || 0)) + " min",
@@ -20276,6 +20304,18 @@ function scintNotify() {
    number that IS the outlier glows once, the same 520 ms, through the same primitive. */
 function identScintPass() {
   if (typeof document === "undefined" || typeof LEFT_T === "undefined" || !LEFT_T) return 0;
+  /* M59 — dilution rides the same ident, on the ticker itself. It is checked FIRST because it is a
+     fact about the company that outlives the day's move, and it glows once, through the one
+     primitive, exactly like everything else here. */
+  const dil = scintBy().get(scintKey("dilution", LEFT_T));
+  if (dil) {
+    const tk = document.querySelector(".sc-cident .sc-ctkbig");
+    if (tk) {
+      if (tk.classList) tk.classList.add("is-scint");
+      scSetTitle(tk, scintWhat(dil) + " · " + scintSays(dil));
+      if (scintGlow("ident-dilution", dil, tk)) return 1;
+    }
+  }
   const ev = scintBy().get(scintKey("price_outlier", LEFT_T)) ||
              scintBy().get(scintKey("earnings_surprise", LEFT_T));
   if (!ev) return 0;
@@ -20320,9 +20360,25 @@ function ernScintPass() {
   }
   return n;
 }
-/* THE BOARD — the outliers of the day, on the percentage cell that IS the outlier */
-function boardScintPass() {
+/* THE BOARD — the outliers of the day, on the percentage cell that IS the outlier.
+   M59 — and dilution on the TICKER of the same row, because a share count is a fact about the
+   company, not about today's move: putting it on the percentage cell would say the wrong thing. */
+function boardDilutionPass() {
+  if (typeof document === "undefined" || !document.querySelectorAll) return 0;
   const by = scintBy(); let n = 0;
+  for (const ev of by.values()) {
+    if (ev.kind !== "dilution") continue;
+    const row = document.querySelector('.sc-board__row[data-t="' + String(ev.subject).replace(/"/g, "") + '"]');
+    if (!row) continue;
+    const cell = row.querySelector(".sc-ctk") || row;
+    if (cell.classList) cell.classList.add("is-scint");
+    scSetTitle(cell, scintWhat(ev) + " · " + scintSays(ev));
+    if (n < SCINT_GLOW_CAP && scintGlow("board-dilution", ev, cell)) n++;
+  }
+  return n;
+}
+function boardScintPass() {
+  const by = scintBy(); let n = boardDilutionPass();
   for (const ev of by.values()) {
     if (ev.kind !== "price_outlier") continue;
     const cell = el("lc_" + ev.subject);

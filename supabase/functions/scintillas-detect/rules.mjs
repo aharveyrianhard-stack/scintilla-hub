@@ -2,7 +2,7 @@
    The rules file is the one Alan changes; this copy exists only because an edge function ships
    with its own folder and cannot read the site's file. A test pins the two together. */
 export const RULES = Object.freeze({
-  "version": "2026-09-24.1",
+  "version": "2026-09-24.2",
   "what_this_is": "The rules that decide whether a day's move is a scintilla. Two families. STATISTICAL asks how the move compares with that name's OWN usual day; RAW asks whether the move is simply big. A move counts if EITHER family says so. Change a number here and both the detector and the Hub follow it — nothing else has to change.",
   "usual_day": {
     "sessions": 60,
@@ -154,6 +154,42 @@ export const RULES = Object.freeze({
     "imminent_minutes": 15,
     "why": "actual minus estimate against that release's own past misses; imminent is the quarter of an hour before it prints"
   },
+  "dilution": {
+    "min_pct_of_shares_out": 1,
+    "min_gross_usd": 100000000,
+    "lookback_days": 3,
+    "forms": [
+      "8-K",
+      "8-K/A",
+      "424B5",
+      "424B3",
+      "424B4",
+      "S-3",
+      "S-3ASR",
+      "S-1",
+      "S-1/A"
+    ],
+    "patterns": [
+      "convertible_notes",
+      "note_exchange_for_shares",
+      "registered_direct",
+      "atm_program",
+      "pipe",
+      "warrant_exercise",
+      "reverse_split"
+    ],
+    "why": "a company issuing shares makes every share already held own a little less of it. The size is the share count the filing itself gives, as a percentage of the shares outstanding — never a price move, so there is no 'usual' to divide by and no z-score is claimed.",
+    "why_min_pct": "under 1% of the shares outstanding the arithmetic is real but the effect is inside an ordinary day's noise",
+    "why_min_gross": "a filing that gives dollars but no share count (an at-the-market programme before any sale) still counts when it is large enough to matter to a big company: $100m",
+    "why_lookback": "8-Ks are filed within four business days of the event, so a three-day window catches the filing on the morning it lands without re-reading the whole quarter",
+    "excluded": {
+      "structured_or_medium_term_notes": "form 424B2 and the banks' medium-term-note shelves: they sell debt, not shares",
+      "resale_by_existing_holders": "a resale prospectus where the company says it will not receive any proceeds: the shares already exist",
+      "repaid_or_redeemed_for_cash": "a convertible note paid off in cash is the OPPOSITE of dilution",
+      "debt_for_debt_exchange": "old notes swapped for new notes issues no shares",
+      "capped_call_only": "a capped call is bought to REDUCE the dilution of notes already issued"
+    }
+  },
   "measured": {
     "when": "2026-09-24",
     "how": "scripts/scintilla-rule-counts.mjs replays the last 60 sessions of daily bars from the chart API for every fund named here plus every 4th single name (125 of 364)",
@@ -167,4 +203,4 @@ export const RULES = Object.freeze({
     "note": "the sample is about a third of the universe, so expect roughly three times these counts across all 364 names"
   }
 });
-export const RULES_VERSION = "2026-09-24.1";
+export const RULES_VERSION = "2026-09-24.2";
