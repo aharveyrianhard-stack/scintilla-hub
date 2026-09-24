@@ -48,7 +48,8 @@ const shared =
   grab(/function ercBucketSay\(b, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercBucketTick\(b, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/const ercBucketOpens = \(z\) =>[^\n]*\n/) +
-  grab(/const ercTlLevel = \(n\) =>[^\n]*\n/) +
+  grab(/const ERC_TL_DAYS = \{[^\n]*\n/) +
+  grab(/function ercTlLevel\(n, z\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercTapeScale\(counts\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function ercTlBarHTML\([\s\S]*?\n\}/) + "\n" +
   grab(/function ercTapeStripHTML\(buckets, z\) \{[\s\S]*?\n\}/) + "\n" +
@@ -144,11 +145,17 @@ test("the height is scaled to the busiest bar ON SCREEN; the colour is the count
   assert.equal(sc1(0, 0, 0).quiet, false, "a stretch with nothing in it is empty, not 'quiet'");
   assert.equal(sc1(1, 100).pct(1), 14, "one lone report against a 100-name day still shows a stub");
   /* the colour law is MONTH's load bar law, unchanged since M26 */
-  assert.equal(ercTlLevel(0), "");
-  assert.equal(ercTlLevel(11), "cool");
-  assert.equal(ercTlLevel(12), "warm");
-  assert.equal(ercTlLevel(24), "warm");
-  assert.equal(ercTlLevel(25), "hot");
+  assert.equal(ercTlLevel(0, "DAYS"), "");
+  assert.equal(ercTlLevel(11, "DAYS"), "cool");
+  assert.equal(ercTlLevel(12, "DAYS"), "warm");
+  assert.equal(ercTlLevel(24, "DAYS"), "warm");
+  assert.equal(ercTlLevel(25, "DAYS"), "hot");
+  /* M40 — a bar is not always a day, so the threshold is per trading day inside it.
+     MEASURED: every year on the YEARS tape came out red, and a wall of red says nothing. */
+  assert.equal(ercTlLevel(1271, "YEARS"), "cool", "about five reports a day across a year is a quiet year");
+  assert.equal(ercTlLevel(300, "MONTHS"), "warm", "fourteen a day through a month is a season");
+  assert.equal(ercTlLevel(700, "MONTHS"), "hot", "thirty-three a day through a month is the peak of one");
+  assert.equal(ercTlLevel(1, "YEARS"), "cool", "one report is still a bar, never nothing");
   assert.match(src, /const lvl = n >= 25 \? "var\(--sv5\)" : n >= 12 \? "var\(--sv4\)" : "var\(--crk\)";/);
 });
 
@@ -183,6 +190,7 @@ test("NOTHING ON THE TAPE IS MYSTERIOUS: every bar says what it is, and now says
   assert.match(heavy, /data-w="4000000000000"/, "the weight rides the bar, so a re-scale never re-reads the rows");
   const partial = ercTlBarHTML("2026-10-30", "DAYS", bucket(5, { wt: 2e11, unk: 2, names: ["X"] }), 5, "2026-09-23", null, "ALL", sc1(5), wsc);
   assert.match(partial, /\(2 without a stored size\)/, "the names whose size has not arrived are counted, never guessed at");
+  assert.match(heavy, /counting each company once/, "and the tooltip says which way it is counted");
   assert.equal(ercMoney(0), "", "no size is not a zero");
   assert.equal(ercMoney(3.14e12), "$3.1T");
   assert.equal(ercMoney(2.5e10), "$25.0B");
@@ -228,6 +236,12 @@ test("M40 — the weight, the star and the names come from one pure index", () =
   const idx = ercTlIndex(rows, "DAYS", { AAPL: 3.4e12, MSFT: 3.1e12, MU: 2e11 }, ["MU"]);
   assert.equal(idx["2026-10-29"].n, 3);
   assert.equal(idx["2026-10-29"].wt, 6.5e12, "the weight is the sum of the sizes it knows");
+  /* a year holds four of Apple's reports; adding Apple's size four times would say a
+     year weighs four times the market */
+  const twice = ercTlIndex([{ ticker: "AAPL", date: "2026-02-01" }, { ticker: "AAPL", date: "2026-05-01" }],
+    "YEARS", { AAPL: 3.4e12 }, []);
+  assert.equal(twice["2026-01-01"].n, 2, "two reports");
+  assert.equal(twice["2026-01-01"].wt, 3.4e12, "one company");
   assert.equal(idx["2026-10-29"].unk, 1, "and the one it does not know is counted, not guessed");
   assert.equal(idx["2026-10-29"].fav, false);
   assert.deepEqual(idx["2026-10-29"].names.map((x) => x.t), ["AAPL", "MSFT", "TINY"], "biggest first, the unsized last");

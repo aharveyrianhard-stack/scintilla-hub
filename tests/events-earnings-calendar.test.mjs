@@ -114,8 +114,12 @@ test("M40 — DAY, WEEK and MONTH are three squares now, and the older list is k
   assert.match(grid, /ercWeekHTML\(byDay\)/);
   assert.match(grid, /ercMonthHTML\(byDay\)/);
   assert.match(grid, /sp === kind \? " is-max" : ""/, "MONTH/WEEK/DAY enlarges a square instead of hiding the other two");
-  assert.match(src, /\.se-grid\{ display:grid; gap:9px; padding:3px 9px 10px; align-items:stretch;/);
+  assert.match(src, /\.se-grid\{ display:grid; gap:9px; padding:3px 9px 10px; align-items:stretch; min-height:calc\(100% - 13px\);/,
+    "the grid fills the panel, so no square is pushed below the fold and no black is left under them");
+  assert.match(src, /\.se-sq\.is-max\{ border-color:rgba\(0,212,255,\.22\); \}/, "enlarging one square never hides the other two");
   assert.match(src, /grid-template-columns:repeat\(auto-fit, minmax\(322px, 1fr\)\);/, "the squares fill the width they are given");
+  assert.match(src, /@media \(min-width:1180px\)\{ \.se-grid\{ grid-template-columns:repeat\(3, minmax\(0, 1fr\)\); \} \}/,
+    "MEASURED at 1680: auto-fit gave two columns and pushed MONTH under the fold");
   assert.match(src, /\.se-sqbody\{ flex:1 1 auto; min-height:0; overflow:auto;/, "each square scrolls inside itself, so the weekly leaves no page of black");
   /* and one read feeds all three */
   assert.match(src, /const lo = \[g\[0\], w\[0\], d\]\.sort\(\)\[0\], hi = \[g\[g\.length - 1\], w\[6\], d\]\.sort\(\)\[2\];/);

@@ -2712,11 +2712,19 @@ body.econ .rail .card .sc-senttxt{ padding:2px 0 0; }
   background:rgba(255,255,255,.015); }
 .se-tab:hover{ color:var(--ink2); }
 .se-tab.on{ color:var(--crk); border-color:rgba(0,212,255,.34); background:rgba(0,212,255,.07); }
-.se-grid{ display:grid; gap:9px; padding:3px 9px 10px; align-items:stretch;
-  grid-template-columns:repeat(auto-fit, minmax(322px, 1fr)); }
+/* the three squares sit side by side and FILL the panel: no square is ever pushed
+   below the fold by another, which is what left the black Alan saw. */
+.se-grid{ display:grid; gap:9px; padding:3px 9px 10px; align-items:stretch; min-height:calc(100% - 13px);
+  grid-template-columns:repeat(auto-fit, minmax(322px, 1fr)); grid-auto-rows:minmax(318px, 1fr); }
 .se-sq{ display:flex; flex-direction:column; min-width:0; min-height:318px; overflow:hidden;
   border:.5px solid var(--line2); border-radius:3px; background:rgba(255,255,255,.012); }
-.se-sq.is-max{ grid-column:1 / -1; min-height:430px; border-color:rgba(0,212,255,.22); }
+/* ENLARGE gives a square the names and the room to show them — it does not take the
+   other two off the screen. */
+.se-sq.is-max{ border-color:rgba(0,212,255,.22); }
+.se-sq .se-dhd{ display:none; }   /* the square's own header already says the day and the count */
+/* on a desk the three squares are three columns — the dashboard Alan asked for.
+   MEASURED at 1680: auto-fit gave two columns and pushed MONTH under the fold. */
+@media (min-width:1180px){ .se-grid{ grid-template-columns:repeat(3, minmax(0, 1fr)); } }
 .se-sqhd{ display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:.5px solid var(--line);
   font-family:var(--mono); font-size:8px; letter-spacing:.18em; text-transform:uppercase; }
 .se-sqhd .t{ color:var(--ink); }
@@ -11710,7 +11718,16 @@ function ercBucketTick(b, z) {
   return String(+b.slice(8));
 }
 const ercBucketOpens = (z) => (z === "YEARS" || z === "QUARTERS" || z === "MONTHS" ? "the month" : z === "WEEKS" ? "the week" : "the day");
-const ercTlLevel = (n) => (n >= ERC_TL_HOT ? "hot" : n >= ERC_TL_WARM ? "warm" : n > 0 ? "cool" : "");
+/* THE COLOUR IS STILL THE COUNT, NOT THE SCALE — but a bar is not always a day. The
+   thresholds are per trading day (cyan under 12, orange from 12, red from 25, exactly
+   MONTH's load bar), so a wider bar is judged on the days inside it. MEASURED: without
+   this every year on the YEARS tape was red, because a year always holds more than 25
+   reports, and a wall of red says nothing. */
+const ERC_TL_DAYS = { DAYS: 1, WEEKS: 5, MONTHS: 21, QUARTERS: 63, YEARS: 252 };
+function ercTlLevel(n, z) {
+  const d = ERC_TL_DAYS[z] || 1, per = n / d;
+  return per >= ERC_TL_HOT ? "hot" : per >= ERC_TL_WARM ? "warm" : n > 0 ? "cool" : "";
+}
 function ercTapeScale(counts) {
   const max = (counts || []).reduce((m, n) => Math.max(m, n || 0), 0);
   return { max, quiet: max > 0 && max < ERC_TL_QUIET,
@@ -11735,12 +11752,18 @@ function ercTlIndex(rows, z, mcap, fav) {
   (rows || []).forEach((r) => {
     if (!r || !r.date || !r.ticker) return;
     const b = ercBucketOf(r.date, z);
-    const e = by[b] || (by[b] = { n: 0, wt: 0, unk: 0, fav: false, names: [] });
+    const e = by[b] || (by[b] = { n: 0, wt: 0, unk: 0, fav: false, names: [], seen: {} });
     e.n++;
+    if (favs[r.ticker]) e.fav = true;
+    e.names.push({ t: r.ticker, m: mcap && mcap[r.ticker] != null && isFinite(mcap[r.ticker]) ? +mcap[r.ticker] : null });
+    /* THE WEIGHT COUNTS A COMPANY ONCE PER BUCKET. A year holds four of Apple's
+       reports, and adding Apple's size four times said "$302T reports in 2025",
+       which is four times the market. The COUNT is still reports; the WEIGHT is the
+       companies behind them. */
+    if (e.seen[r.ticker]) return;
+    e.seen[r.ticker] = 1;
     const m = mcap ? mcap[r.ticker] : null;
     if (m != null && isFinite(m)) e.wt += +m; else e.unk++;
-    if (favs[r.ticker]) e.fav = true;
-    e.names.push({ t: r.ticker, m: m != null && isFinite(m) ? +m : null });
   });
   Object.keys(by).forEach((b) => {
     by[b].names.sort((a, c) => (a.m == null) - (c.m == null) || (c.m || 0) - (a.m || 0) || (a.t < c.t ? -1 : 1));
@@ -11771,15 +11794,17 @@ function ernLogoHTML(t, cls) {
 /* ---- the bar ---- */
 function ercTlBarHTML(b, z, e, all, today, at, coh, sc, wsc) {
   const n = e ? e.n : 0, wt = e ? e.wt : 0, unk = e ? e.unk : 0;
-  const lvl = ercTlLevel(n), pct = sc.pct(n), wpct = wsc.pct(wt), end = ercBucketEnd(b, z), isNow = today >= b && today <= end;
+  const lvl = ercTlLevel(n, z), pct = sc.pct(n), wpct = wsc.pct(wt), end = ercBucketEnd(b, z), isNow = today >= b && today <= end;
   const top = e && e.names.length ? e.names[0].t : "";
   const names = e ? e.names.slice(0, 3).map((x) => x.t).join(", ") : "";
   const what = n
     ? n + (n === 1 ? " name you track reports" : " names you track report") + (names ? " · " + names : "")
     : (coh !== "ALL" && all ? "nothing for " + coh + " · " + all + (all === 1 ? " report" : " reports") + " across all names"
                             : "nothing reports");
-  const money = wt > 0 ? " · " + ercMoney(wt) + " of market cap reporting" + (unk ? " (" + unk + " without a stored size)" : "") : "";
-  const ttl = ercBucketSay(b, z) + " · " + what + money + (e && e.fav ? " · one of your favourites is in it" : "") +
+  const perDay = (ERC_TL_DAYS[z] || 1) > 1 && n ? " · about " + Math.round(n / ERC_TL_DAYS[z]) + " a trading day" : "";
+  const money = wt > 0 ? " · " + ercMoney(wt) + " of market cap reporting, counting each company once" +
+    (unk ? " (" + unk + " without a stored size)" : "") : "";
+  const ttl = ercBucketSay(b, z) + " · " + what + perDay + money + (e && e.fav ? " · one of your favourites is in it" : "") +
     (isNow ? " · this is where today sits" : "") + " · click to open " + ercBucketOpens(z) + " below";
   return '<div class="se-tlday' + (isNow ? " is-today" : "") + (b === at ? " is-open" : "") +
       (end < today ? " is-past" : "") + '" data-act="erntape" data-d="' + b + '" data-n="' + n + '" data-w="' + Math.round(wt) +
@@ -11913,17 +11938,27 @@ function ercTapeRescale() {
    timeline shows by one page and asks for it; what is already on screen is not
    redrawn out from under the thumb — the scroll offset is kept. */
 const ERC_TL_EDGE_PX = 240;
+let ERC_TL_GROWING = false;     /* one growth per paint: without this the tape grew to 1996 in one frame */
+let ERC_TL_KEEP = null;         /* the bar under the left edge, so growing leftwards does not move the season under the thumb */
 function ercTlEdgeCheck(sc) {
-  if (!sc) return;
+  if (!sc || ERC_TL_GROWING) return;
   const z = ERC_ZOOM[ercZoom()], span = ercTlSpan();
   let grew = false;
   if (sc.scrollLeft < ERC_TL_EDGE_PX && span.from > ercTlFloor()) {
+    /* MEASURED: prepending bars while the scroll offset stays where it is leaves the
+       tape still at its left edge, which asks for another page, and another — the
+       whole stored calendar in one frame, and the browser out of memory. The bar
+       under the left edge is remembered and put back under it after the repaint, so
+       the tape stops asking the moment the reader stops dragging. */
+    const first = [].slice.call(sc.querySelectorAll(".se-tlday"))
+      .filter((c) => c.offsetLeft + c.offsetWidth > sc.scrollLeft)[0];
+    if (first) ERC_TL_KEEP = { d: first.dataset.d, dx: first.offsetLeft - sc.scrollLeft };
     ERC_TL_FROM = ercTlClamp(ernShift(span.from, -z.page)); grew = true;
   }
   if (sc.scrollWidth - sc.clientWidth - sc.scrollLeft < ERC_TL_EDGE_PX && span.to < ercTlCeil()) {
     ERC_TL_TO = ercTlClamp(ernShift(span.to, z.page)); grew = true;
   }
-  if (grew) { ERC_TAPE_AT = sc.scrollLeft; ercTlEnsure(); ercTlRepaintSoon(); }
+  if (grew) { ERC_TL_GROWING = true; ERC_TAPE_AT = sc.scrollLeft; ercTlEnsure(); ercTlRepaintSoon(); }
 }
 /* after every paint: put the tape back where the reader left it (first time: the
    pointer a little right of centre, so history is already under the thumb), and
@@ -11935,6 +11970,14 @@ function ercTapeAfterPaint() {
   const centre = () => { if (pointer) sc.scrollLeft = Math.max(0, pointer.offsetLeft - sc.clientWidth * 0.55); };
   if (ERC_TAPE_AT == null) centre();
   else sc.scrollLeft = ERC_TAPE_AT;
+  /* the bar that was under the left edge goes back under it, so a page of older
+     season arriving never slides the stretch the reader was looking at */
+  if (ERC_TL_KEEP) {
+    const back = sc.querySelector('.se-tlday[data-d="' + ERC_TL_KEEP.d + '"]');
+    if (back) { sc.scrollLeft = Math.max(0, back.offsetLeft - ERC_TL_KEEP.dx); ERC_TAPE_AT = sc.scrollLeft; }
+    ERC_TL_KEEP = null;
+  }
+  ERC_TL_GROWING = false;
   ercTapeRescale();
   let rafid = 0;
   sc.addEventListener("scroll", () => {
