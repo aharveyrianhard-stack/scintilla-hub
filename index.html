@@ -21109,20 +21109,35 @@ function filesWire(){
      A day with no momentum row plays trend alone and says so; nothing is invented.
      ============================================================================ -->
 <style>
-.gmo{display:flex;align-items:center;gap:6px;padding:3px 12px 5px;font-family:var(--gs-mono,var(--mono));font-size:9px}
+.gmo{display:flex;align-items:center;gap:6px;padding:3px 10px 5px;font-family:var(--gs-mono,var(--mono));font-size:9px;
+  /* THE ZONE IS NARROW AND IT CLIPS. MEASURED on the GEIGER tab at 1680: the strip's
+     natural width is 349px inside a 231px column, and because the zone is a centred
+     flex column the overflow split both ways - the PLAY chip ended up 59px to the LEFT
+     of its own panel, under the dashboard's left half, where it could not be clicked.
+     align-self:stretch + min-width:0 makes it take the column's width and shrink inside
+     it; the scrubber is the part that gives. */
+  align-self:stretch;flex:none;min-width:0;max-width:100%;box-sizing:border-box}
 .gmo__b{background:transparent;border:.4px solid var(--line);color:var(--ink,#c8c8d2);
-  font:inherit;letter-spacing:.06em;padding:2px 6px;border-radius:2px;cursor:pointer}
+  font:inherit;letter-spacing:.06em;padding:2px 6px;border-radius:2px;cursor:pointer;flex:none;white-space:nowrap}
 .gmo__b.is-on{border-color:var(--crk);color:var(--crk)}
-.gmo__sc{flex:1;min-width:50px;height:12px;background:transparent;-webkit-appearance:none;appearance:none;outline:none;cursor:pointer}
+.gmo__sc{flex:1 1 40px;min-width:0;height:12px;background:transparent;-webkit-appearance:none;appearance:none;outline:none;cursor:pointer}
 .gmo__sc::-webkit-slider-runnable-track{height:2px;background:var(--line,#1a1a2a)}
 .gmo__sc::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;border-radius:50%;
   background:var(--crk,#00d4ff);margin-top:-3px;border:none}
 .gmo__sc::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--crk,#00d4ff);border:none}
-.gmo__dt{color:var(--gs-dim,#6a6a78);letter-spacing:.06em;min-width:66px;text-align:right}
+.gmo__dt{color:var(--gs-dim,#6a6a78);letter-spacing:.06em;flex:none;text-align:right;white-space:nowrap}
 /* the rings and the bar EASE while the tab is playing, and only then: a live paint
    must stay instant, so the transition lives on a class the module owns. */
 .gsum.gmo-on [data-gs="f_trend"],.gsum.gmo-on [data-gs="f_mom"]{transition:stroke-dasharray 190ms linear}
 .gsum.gmo-on .gs-cgr i{transition:width 190ms linear,left 190ms linear,right 190ms linear}
+/* ★ NEVER TWO DATES ON ONE SCREEN. The rings and the composite follow the replay, but the
+   trend ladder and the RSI / Williams / MACD / volume tiles are live FMP provider readings
+   with no per-day history in that shape - so while the tile is playing they are dimmed and
+   the strip says they stayed put. Showing an August Geiger beside today's RSI, unmarked, is
+   the same defect the board's rewind was built to remove. */
+.gsum.gmo-on .gs-zT,.gsum.gmo-on .gs-zI{opacity:.34;transition:opacity .2s}
+.gmo__note{color:var(--gs-dim,#6a6a78);letter-spacing:.04em;display:none;flex:none;white-space:nowrap}
+.gsum.gmo-on .gmo__note{display:inline}
 </style>
 <script>
 (function(){
@@ -21148,6 +21163,7 @@ function filesWire(){
       '<button class="gmo__b" id="gmoPlay" title="play this name\'s Geiger over time">&#9654; PLAY</button>'+
       '<input type="range" class="gmo__sc" id="gmoSc" min="0" max="0" value="0" disabled '+
         'title="scrub - the day this tile is showing">'+
+      '<span class="gmo__note">ladders stay live</span>'+
       '<span class="gmo__dt" id="gmoDt">live</span></div>';
   }
   /* WHERE IT SITS: directly under the composite zone, so the transport is beside the

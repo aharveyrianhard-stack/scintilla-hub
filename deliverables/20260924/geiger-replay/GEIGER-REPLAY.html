@@ -1,0 +1,220 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCINTILLA · The Geiger replay re-sorts as it plays</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#0a0a0c;--panel:#111114;--panel2:#161619;--line:#232327;--ink:#c9c9cd;--ink2:#9a9a9f;
+  --dim:#6f6f74;--bull:#00d492;--bear:#d4455e;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,Segoe UI,Roboto,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:880px;margin:0 auto;padding:22px 16px 80px}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px}
+h1{font:600 25px/1.25 var(--sans);margin:14px 0 6px;letter-spacing:-.01em}
+h2{font:600 18px/1.3 var(--sans);margin:34px 0 8px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font:600 14px/1.3 var(--sans);margin:20px 0 6px;color:var(--ink2)}
+p{margin:0 0 12px;color:var(--ink)}
+.lede{font-size:16.5px;color:var(--ink2)}
+.said{border-left:2px solid var(--line);padding:2px 0 2px 14px;margin:0 0 16px;
+  color:var(--ink2);font-style:italic}
+table{border-collapse:collapse;width:100%;margin:6px 0 16px;font:13px/1.5 var(--mono)}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:500;letter-spacing:.04em;text-transform:uppercase;font-size:11px}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.good{color:var(--bull)}.bad{color:var(--bear)}
+figure{margin:14px 0 20px}
+figure img{width:100%;display:block;border:1px solid var(--line);border-radius:4px;background:#000}
+figcaption{color:var(--dim);font-size:12.5px;margin-top:7px}
+ul{margin:0 0 14px;padding-left:20px}li{margin:0 0 7px}
+code{font:12.5px var(--mono);background:var(--panel2);border:1px solid var(--line);
+  border-radius:3px;padding:1px 5px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:14px 16px;margin:0 0 16px}
+.tag{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+  border:1px solid var(--line);border-radius:3px;padding:2px 7px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+</style></head><body>
+<div class="wrap">
+<header><span data-scnav-slot></span><span class="tag">M47 · Hub</span><span class="tag">24 Sep 2026</span>
+  <span class="tag">branch hub/geiger-replay-20260924</span></header>
+<h1>The Geiger replay re-sorts as it plays</h1>
+<p class="lede">Two things were built. The board's rewind now re-orders the rows while it plays,
+smoothly, fast enough to hold a 364-row board. And the company Geiger tab — the one you said was
+garbage — plays that one name's Geiger over time, with its parts moving together.</p>
+
+<div class="said">"Geiger in motion. How a re-sort should work. When when when. The replay is right
+there. It's just reprogramming it."</div>
+
+<h2>1 · What the board does now</h2>
+<p>Press PLAY on the rewind bar and the board walks forward one trading day at a time. Every row's
+Geiger bar follows that day's value, the Trend and Mom columns follow it, the cohort mean under the
+header follows it — and the rows <b>re-order as they go</b>, each one travelling to its new rank
+instead of jumping there. A small ▲3 / ▼5 badge on the right says how far a name moved.</p>
+<p>Three things are new this round:</p>
+<ul>
+  <li><b>A speed chip.</b> ½× · 1× · 2× · 4×. Changing it while the replay is running keeps the
+      playhead where it is and only changes the rate.</li>
+  <li><b>A glow when a name changes side.</b> A Geiger that crosses from plus to minus (or back)
+      makes the ticker flash green or red — the same glow the live prices use, not a second
+      animation invented for this. Nothing glows for a name that merely moved a little.</li>
+  <li><b>The end of a replay hands the board back to live.</b> It used to stop on the last replayed
+      day and wait for a 45-second idle timer.</li>
+</ul>
+<figure><img src="shots/hub-replay-2.png" alt="The board mid-replay">
+<figcaption>Caught mid-move, 29 Sep 2025 on the scrubber. Rows are between ranks — some overlap and
+some slots look empty, because every row is travelling to where it now belongs; it settles in under
+half a second. The rank badges (▼1, ▼3, ▲5) are on the right, and the cohort mean above the table
+has rewound with the board.</figcaption></figure>
+<div class="grid2">
+<figure><img src="shots/hub-replay-1.png" alt="An earlier replay frame">
+<figcaption>One frame earlier.</figcaption></figure>
+<figure><img src="shots/hub-after-replay.png" alt="The board after the replay ended">
+<figcaption>After the replay runs out: the date says <b>live</b>, the LIVE chip is gone, and the
+board is back on today's numbers.</figcaption></figure>
+</div>
+
+<h2>2 · The performance numbers, measured the way the glow was measured</h2>
+<p>The old re-sort read a row's position, wrote its movement, then read the position again —
+<i>inside the loop</i>, once per row. On 364 rows that is 1,091 geometry reads in a single tick,
+and it is why the replay felt like it was sticking.</p>
+<p>It now measures the row pitch <b>once</b>, works every position out from the row's place in the
+list, and reads geometry <b>twice</b> per tick no matter how many rows there are. Rows below the
+fold are still re-ordered; they are just not animated, because nobody can see them move.</p>
+<table>
+<tr><th>364 rows, 60 ticks</th><th class="n">ms per tick</th><th class="n">p95</th>
+    <th class="n">geometry reads</th></tr>
+<tr><td>the old way (shipped until today)</td><td class="n">18.44</td><td class="n bad">24.3</td><td class="n">1,091</td></tr>
+<tr><td>read all / write all</td><td class="n">12.98</td><td class="n">14.9</td><td class="n">729</td></tr>
+<tr><td><b>what ships now</b></td><td class="n good">7.86</td><td class="n good">10.8</td><td class="n good">2</td></tr>
+<tr><td colspan="4" style="color:var(--dim)">210 rows: 8.48 → 4.19 ms mean, reads 629 → 2</td></tr>
+</table>
+<p>A screen refreshes every <b>16.7 ms</b>. The old path used more than that at the 95th percentile,
+which is a dropped frame you can see; the new one has room to spare.</p>
+<div class="box"><p style="margin:0"><b>One honest correction to how this was measured.</b> The brief
+asked for "layouts per tick". Chrome's own layout counter says <b>1 per tick in every version</b>,
+old and new — because moving a row with a transform does not make the browser re-lay-out the page.
+The cost that was actually being paid, and is now gone, is the forced geometry reads in the table
+above. Reporting "layouts" as if they had fallen would have been a nicer number and a false one.</p></div>
+<figure><img src="shots/bench-364.png" alt="The bench page">
+<figcaption>The bench: <code>deliverables/20260924/geiger-replay/bench.html</code>, 364 synthetic rows,
+three code paths over the same rows and the same values. Run it yourself with <code>?rows=364</code>.</figcaption></figure>
+<h3>And on the real board, with real prices</h3>
+<p>The numbers above are a bench. Driven through the actual Hub against live tables, a replay tick on
+the 72-name FAV cohort costs <b>5.5–6.0 ms</b>, makes <b>3</b> geometry reads, moves about 61 rows and
+animates the ~23 that are on screen. The mode it reports is <code>pitch</code>, meaning the fast path
+is the one being used.</p>
+
+<h2>3 · The company Geiger tab, in motion</h2>
+<div class="said">"when you click on a ticker this Geiger tab is garbage… if that had a movement
+Geiger in motion style and we could put it on the play button of the rewind, that would be pretty
+legendary."</div>
+<p>Open a name, go to GEIGER, and there is now a small transport under the composite: PLAY, a
+scrubber, and the date it is showing. Play it and the whole tile moves together — the composite
+number and its bar, the words under it, and <b>both rings</b>, trend and momentum.</p>
+<div class="grid2">
+<figure><img src="shots/hub-company-geiger-live.png" alt="The company Geiger tab, live">
+<figcaption>AMD, live: composite +0.82, trend +0.83, momentum +0.81.</figcaption></figure>
+<figure><img src="shots/hub-company-motion-1.png" alt="The company Geiger tab, replaying">
+<figcaption>The same tile playing 26 Aug 2025: composite +0.04, trend +0.28, momentum −0.20, and both
+rings drawn at that day's fill.</figcaption></figure>
+</div>
+<p>Four consecutive frames from that run, so you can see the parts move together rather than one
+number twitching:</p>
+<table>
+<tr><th>day</th><th class="n">composite</th><th class="n">trend</th><th class="n">momentum</th></tr>
+<tr><td>2025-08-21</td><td class="n bad">−0.08</td><td class="n">+0.19</td><td class="n bad">−0.35</td></tr>
+<tr><td>2025-08-25</td><td class="n bad">−0.09</td><td class="n">+0.19</td><td class="n bad">−0.37</td></tr>
+<tr><td>2025-08-26</td><td class="n good">+0.04</td><td class="n">+0.28</td><td class="n bad">−0.20</td></tr>
+<tr><td>2025-08-27</td><td class="n good">+0.06</td><td class="n">+0.28</td><td class="n bad">−0.17</td></tr>
+</table>
+<p>When the replay reaches the end, the tile is repainted by the Hub's own builder from the live
+data it already holds. Measured: it comes back to <b>exactly</b> +0.82 / +0.83 / +0.81.</p>
+<figure><img src="shots/hub-company-ended-live.png" alt="The tile back on live numbers">
+<figcaption>After playing out: the date says live and the numbers are the live ones again.</figcaption></figure>
+
+<h2>4 · Where each number comes from</h2>
+<table>
+<tr><th>what you see</th><th>where it comes from</th></tr>
+<tr><td>Board Geiger bar while replaying</td><td><code>fan_daily.read</code> (trend) and
+  <code>momentum_daily.read</code> (momentum) for that date, blended with the family weights from
+  <code>operator_weights</code> — the same blend the live Geiger uses.</td></tr>
+<tr><td>Trend / Mom columns</td><td>the same two rows, shown as numbers.</td></tr>
+<tr><td>A name with no reading for that day</td><td>drops out and renders "—". It does not keep its
+  live value, because ranking today's number inside a March board is how a name ends up ranked
+  against last spring.</td></tr>
+<tr><td>Company tile rings, bar, number</td><td>the same two tables, read once for the whole window
+  when you open the name — so playing it makes no further requests.</td></tr>
+<tr><td>A day with no momentum row</td><td>plays trend alone and says <i>"trend only · no momentum
+  that day"</i>.</td></tr>
+<tr><td>The ladders and RSI / Williams tiles</td><td><b>Live FMP provider values.</b> They have no
+  per-day history in that shape, so while the tile is playing they are dimmed and the strip says
+  "ladders stay live" — rather than showing an August Geiger beside today's RSI as if they were the
+  same day.</td></tr>
+</table>
+
+<h2>5 · What could be wrong</h2>
+<ul>
+  <li><b>A still frame of a re-sort looks broken.</b> Mid-flight, rows overlap and slots look empty.
+      That is what a FLIP is; it settles in 420 ms. If it reads as mess in motion on your screen,
+      the fix is a shorter travel or fewer rows moving at once, not more animation.</li>
+  <li><b>The row pitch is assumed uniform.</b> It is measured and sampled at twelve points; if the
+      rows are ever not evenly spaced the code falls back to reading every rect (slower, correct).
+      A future row that is taller than the rest would take that slower path silently.</li>
+  <li><b>Momentum history depth is not verified.</b> The company tile asks for 400 days of both
+      tables; AMD returned 313 usable days. How far back other names go, I did not check.</li>
+  <li><b>The replay is still one request per day on the board</b> (the company tile is not). A long
+      window at 4× asks for days faster than they land; the board eases between the two days it has
+      and catches up. Nothing is invented, but a fast replay can look smoother than its data.</li>
+  <li><b>The threshold that glows is zero</b> — bull to bear. If you want a glow at other levels,
+      say which ones; they are one line each.</li>
+</ul>
+
+<h2>6 · What I did not do</h2>
+<ul>
+  <li>Nothing was pushed or deployed. The branch is <code>hub/geiger-replay-20260924</code> from
+      <code>9d50795</code>.</li>
+  <li>No weight, rung, threshold or Geiger definition was changed.</li>
+  <li>I did not touch <code>prototypes/indicator-lab/</code>, the other rooms, or the X pane work
+      another lane is doing this week.</li>
+  <li>I did not watch this with the market open. Everything here is a closed-market replay of stored
+      daily rows.</li>
+  <li>The screenshots are from this MacBook in a <b>headless</b> browser — no window opened on your
+      screen. The chart API only accepts scintillahub.ai, so the harness re-issued those calls with
+      that origin and handed the real answers to the page; nothing else was changed.</li>
+</ul>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
