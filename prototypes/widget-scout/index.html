@@ -45,9 +45,11 @@
     font:11px/1.4 var(--mono);letter-spacing:.06em;color:var(--ink2)}
   .status{padding:6px 11px;font:11px/1.4 var(--mono);letter-spacing:.06em;border-bottom:1px solid var(--line);color:var(--ink3)}
   .status[data-state="rendered"]{color:var(--ok)}
+  .status[data-state="mounted"]{color:var(--ink2)}
   .status[data-state="norender"]{color:var(--no)}
   .mountpoint{position:relative;background:#0e0f11;min-height:80px}
   .mountpoint iframe{display:block;border:0;width:100%}
+  .warn{margin-top:6px;padding:5px 7px;border:1px solid var(--line);border-radius:2px;color:var(--ink2);font-size:11px}
   .note{padding:8px 11px;font-size:11px;color:var(--ink3);border-top:1px solid var(--line)}
   .noembed{padding:11px;font-size:12px;color:var(--ink2)}
   .noembed a{color:var(--ink);text-decoration:underline}
@@ -65,7 +67,7 @@
   into the Hub, and no Scintilla number appears on this page. iOS Stocks cannot be embedded by anyone; it is
   described at the bottom.</p>
   <div class="legend">
-    <span>OPEN A GROUP TO LOAD IT</span><span>GREEN = RENDERED</span><span>RED = REFUSED / BLANK</span>
+    <span>OPEN A GROUP TO LOAD IT</span><span>GREEN = DREW SOMETHING</span><span>GREY = MOUNTED, JUDGE IT BY EYE</span><span>RED = NOTHING CAME BACK</span><span>AN EMPTY BLACK PANEL MEANS THE VENDOR REFUSED</span>
   </div>
 </header>
 <main id="main"></main>
@@ -102,11 +104,11 @@ var W = [
    c:cfg({symbol:"NASDAQ:AAPL",interval:"1D",height:450,showIntervalTabs:true,displayMode:"multiple"}),
    shows:"The same gauge with every timeframe at once — the closest thing either vendor has to a sentiment dial." },
  { g:"sentiment", fam:"tvw", s:"technical-analysis", n:"Technical Analysis (new web component)", h:450,
-   a:{symbol:"NASDAQ:NVDA"},
+   a:{theme:"dark", symbol:"NASDAQ:NVDA"},
    shows:"TradingView's newer build of the same gauge, loaded as a custom element instead of an iframe script." },
  { g:"sentiment", fam:"iv", n:"Investing.com Technical Summary", h:460,
    u:"https://ssltsw.investing.com/?lang=1&forex=1,2,3,5&commodities=8830,8836,8831&indices=23660,166,172&stocks=334,345,346&tabs=1,2,3,4",
-   shows:"Investing's streaming BUY/SELL summary across forex, commodities, indices and stocks, in tabs." },
+   shows:"Investing's streaming BUY/SELL summary across forex, commodities, indices and stocks, in tabs.", warn:"Measured 24 Sep: their server answered 403 to this embed from here, with and without our domain as the referrer. The panel below stays black." },
  { g:"sentiment", fam:"tv", s:"hotlists", n:"Top movers (hotlists)", h:450,
    c:cfg({colorTheme:"dark",dateRange:"1D",exchange:"US",showChart:true,height:450,showSymbolLogo:false}),
    shows:"Today's biggest gainers, losers and most active names — crowd attention, as a list." },
@@ -132,11 +134,11 @@ var W = [
       {title:"Futures",symbols:[{s:"CME_MINI:ES1!",d:"S&P 500 futures"},{s:"COMEX:GC1!",d:"Gold"},
        {s:"NYMEX:CL1!",d:"Crude oil"}]}]}),
    shows:"A short watchlist with a chart under it, in tabs you choose." },
- { g:"breadth", fam:"tvw", s:"market-summary", n:"Market summary (new)", h:220, a:{direction:"horizontal"},
+ { g:"breadth", fam:"tvw", s:"market-summary", n:"Market summary (new)", h:220, a:{theme:"dark", direction:"horizontal"},
    shows:"A single strip summarising the main markets — TradingView's newest, smallest overview." },
- { g:"breadth", fam:"tvw", s:"world-market-summary", n:"World market summary (new)", h:420, a:{},
+ { g:"breadth", fam:"tvw", s:"world-market-summary", n:"World market summary (new)", h:420, a:{theme:"dark"},
    shows:"The same idea across world regions." },
- { g:"breadth", fam:"tvw", s:"heatmap", n:"Heatmap (new web component)", h:480, a:{},
+ { g:"breadth", fam:"tvw", s:"heatmap", n:"Heatmap (new web component)", h:480, a:{theme:"dark"},
    shows:"The newer heatmap build, as a custom element." },
 
  /* ---- TECHNICALS --------------------------------------------------------- */
@@ -152,13 +154,13 @@ var W = [
    c:cfg({symbol:"NASDAQ:AAPL",dateRange:"12M",height:250,trendLineColor:"#8f9a8f",underLineColor:"rgba(143,154,143,.15)",
      noTimeScale:false}),
    shows:"A thumbnail chart — small enough to sit inside a tile." },
- { g:"technicals", fam:"tvw", s:"mini-chart", n:"Mini chart (new)", h:250, a:{symbol:"NASDAQ:AAPL"},
+ { g:"technicals", fam:"tvw", s:"mini-chart", n:"Mini chart (new)", h:250, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
    shows:"The newer thumbnail build." },
- { g:"technicals", fam:"tvw", s:"seasonal-chart", n:"Seasonal chart (new)", h:420, a:{symbol:"NASDAQ:AAPL"},
+ { g:"technicals", fam:"tvw", s:"seasonal-chart", n:"Seasonal chart (new)", h:420, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
    shows:"How this symbol usually behaves month by month across past years. There is no older version of this one." },
  { g:"technicals", fam:"iv", n:"Investing.com technical chart", h:460,
    u:"https://ssltvc.investing.com/?pair_ID=6408&height=440&width=100%25&interval=900&plotStyle=candle&domain_ID=56&lang_ID=1&timezone_ID=8",
-   shows:"Investing's charting widget (itself built on TradingView's library)." },
+   shows:"Investing's charting widget (itself built on TradingView's library).", warn:"Measured 24 Sep: 403 from their server. Black panel." },
 
  /* ---- CALENDAR ----------------------------------------------------------- */
  { g:"calendar", fam:"tv", s:"events", n:"Economic calendar", h:520,
@@ -166,8 +168,8 @@ var W = [
    shows:"Scheduled releases with forecast, previous and actual, filtered to the countries that matter." },
  { g:"calendar", fam:"iv", n:"Investing.com economic calendar", h:520,
    u:"https://sslecal2.investing.com/?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=5&calType=day&timeZone=8&lang=1",
-   shows:"The calendar most desks actually use. Same columns, their styling, updates on release." },
- { g:"calendar", fam:"tvw", s:"economic-map", n:"Economic map (new)", h:480, a:{},
+   shows:"The calendar most desks actually use. Same columns, their styling, updates on release.", warn:"Measured 24 Sep: 403 from their server. Black panel. This is the one worth re-testing from the live domain." },
+ { g:"calendar", fam:"tvw", s:"economic-map", n:"Economic map (new)", h:480, a:{theme:"dark"},
    shows:"A world map coloured by an economic measure you pick — growth, inflation, rates." },
 
  /* ---- NEWS --------------------------------------------------------------- */
@@ -186,7 +188,7 @@ var W = [
    shows:"Revenue, earnings, margins and balance-sheet lines, by quarter or year." },
  { g:"fundamentals", fam:"tv", s:"symbol-profile", n:"Company profile", h:420, c:cfg({symbol:"NASDAQ:AAPL",height:420}),
    shows:"What the company does, sector, employees, website." },
- { g:"fundamentals", fam:"tvw", s:"company-profile", n:"Company profile (new)", h:420, a:{symbol:"NASDAQ:AAPL"},
+ { g:"fundamentals", fam:"tvw", s:"company-profile", n:"Company profile (new)", h:420, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
    shows:"The newer profile build." },
  { g:"fundamentals", fam:"tv", s:"screener", n:"Screener", h:560,
    c:cfg({defaultColumn:"overview",defaultScreen:"most_capitalized",market:"america",showToolbar:true,height:560}),
@@ -198,7 +200,7 @@ var W = [
      {proName:"NASDAQ:AAPL",title:"AAPL"},{proName:"NASDAQ:NVDA",title:"NVDA"},{proName:"COMEX:GC1!",title:"Gold"}],
      showSymbolLogo:true,displayMode:"adaptive"}),
    shows:"The scrolling strip along the top of a page." },
- { g:"quotes", fam:"tvw", s:"ticker-tape", n:"Ticker tape (new)", h:80, a:{},
+ { g:"quotes", fam:"tvw", s:"ticker-tape", n:"Ticker tape (new)", h:80, a:{theme:"dark"},
    shows:"The newer tape build." },
  { g:"quotes", fam:"tv", s:"tickers", n:"Tickers (static row)", h:130,
    c:cfg({symbols:[{proName:"NASDAQ:AAPL",title:"AAPL"},{proName:"NASDAQ:MSFT",title:"MSFT"},
@@ -206,9 +208,9 @@ var W = [
    shows:"A row of quote cards that does not scroll." },
  { g:"quotes", fam:"tv", s:"single-quote", n:"Single quote", h:130, c:cfg({symbol:"NASDAQ:AAPL"}),
    shows:"One price, one change, nothing else." },
- { g:"quotes", fam:"tvw", s:"single-ticker", n:"Single ticker (new)", h:130, a:{symbol:"NASDAQ:AAPL"},
+ { g:"quotes", fam:"tvw", s:"single-ticker", n:"Single ticker (new)", h:130, a:{theme:"dark", symbol:"NASDAQ:AAPL"},
    shows:"The newer single-quote build." },
- { g:"quotes", fam:"tvw", s:"ticker-tag", n:"Ticker tag (inline)", h:120, a:{symbol:"NASDAQ:AAPL"}, inline:true,
+ { g:"quotes", fam:"tvw", s:"ticker-tag", n:"Ticker tag (inline)", h:120, a:{theme:"dark", symbol:"NASDAQ:AAPL"}, inline:true,
    shows:"A price that sits inside a sentence and updates. Only exists in the new family." },
  { g:"quotes", fam:"tv", s:"market-quotes", n:"Market data (quote table)", h:480,
    c:cfg({height:480,symbolsGroups:[{name:"Indices",symbols:[{name:"FOREXCOM:SPXUSD",displayName:"S&P 500"},
@@ -220,7 +222,7 @@ var W = [
    shows:"A grid of every pair between the currencies you list." },
  { g:"quotes", fam:"iv", n:"Investing.com interest rates", h:420,
    u:"https://sslirates.investing.com/?lang=1&theme=darkTheme",
-   shows:"A streaming table of the main central-bank and market rates." },
+   shows:"A streaming table of the main central-bank and market rates.", warn:"Measured 24 Sep: 403 from their server. Black panel." },
 
  /* ---- KNOWN REFUSALS ------------------------------------------------------ */
  { g:"refusals", fam:"tv", s:"technical-analysis", n:"VIX gauge (CBOE:VIX)", h:450,
@@ -264,19 +266,36 @@ function mount(w, host, status){
   }
   host.style.minHeight = Math.min(w.h, 560) + "px";
 
-  /* Did it actually draw? Look for a frame or a shadow root with size, twice, and say so. */
+  /* Honesty about what this page can and cannot see.
+     A widget from another site sits in a cross-origin frame: this page is allowed to measure the BOX
+     but is not allowed to read what is inside it. So an iframe widget is reported as MOUNTED, never as
+     "rendered" — if the panel below is an empty black rectangle, the vendor refused, and no script here
+     can tell you that. The custom-element widgets keep their content in a shadow root on this page, so
+     those really can be checked. The deliverable carries a by-eye check of every panel. */
   function check(final){
     var fr = host.querySelector("iframe");
-    var ce = host.firstElementChild;
-    var hh = 0;
-    if (fr) hh = fr.getBoundingClientRect().height;
-    else if (ce) hh = ce.getBoundingClientRect().height || (ce.shadowRoot ? 60 : 0);
-    var drew = hh > 40;
-    if (drew || final){
-      status.textContent = (drew ? "RENDERED" : "NO RENDER") + " · " + Math.round(hh) + "px · " + cost;
-      status.setAttribute("data-state", drew ? "rendered" : "norender");
+    if (fr){
+      var hh = fr.getBoundingClientRect().height;
+      if (hh > 40 || final){
+        status.textContent = (hh > 40 ? "MOUNTED" : "NO FRAME") + " \u00b7 " + Math.round(hh) + "px \u00b7 " + cost +
+          " \u00b7 CONTENTS NOT READABLE FROM THIS PAGE";
+        status.setAttribute("data-state", hh > 40 ? "mounted" : "norender");
+        return hh > 40;
+      }
+      return false;
     }
-    return drew;
+    var ce = host.firstElementChild;
+    var hh2 = ce ? ce.getBoundingClientRect().height : 0;
+    var open = ce && ce.shadowRoot;           // the new family uses a CLOSED shadow root, so this is null
+    var len = open ? (ce.shadowRoot.textContent || "").trim().length : -1;
+    var up = hh2 > 40;
+    if (up || final){
+      status.textContent = (up ? (len === -1 ? "MOUNTED" : (len > 15 ? "RENDERED" : "NO RENDER")) : "NO RENDER") +
+        " \u00b7 " + Math.round(hh2) + "px \u00b7 " + cost +
+        (len === -1 && up ? " \u00b7 CONTENTS NOT READABLE FROM THIS PAGE" : "");
+      status.setAttribute("data-state", up ? (len === -1 ? "mounted" : (len > 15 ? "rendered" : "norender")) : "norender");
+    }
+    return up;
   }
   setTimeout(function(){ if(!check(false)) setTimeout(function(){ check(true); }, 7000); }, 3500);
 }
@@ -303,7 +322,8 @@ GROUPS.forEach(function(g){
       card.innerHTML =
         "<h2>" + w.n + "</h2>" +
         "<div class='meta'><span class='tag'>" + src + "</span>" +
-        "<span class='tag'>" + (w.s || "iframe") + "</span>" + w.shows + "</div>";
+        "<span class='tag'>" + (w.s || "iframe") + "</span>" + w.shows +
+        (w.warn ? "<div class='warn'>" + w.warn + "</div>" : "") + "</div>";
       var st = el("div",{class:"status","data-state":"loading"}); st.textContent = "LOADING…";
       var host = el("div",{class:"mountpoint"});
       card.appendChild(st); card.appendChild(host); body.appendChild(card);
