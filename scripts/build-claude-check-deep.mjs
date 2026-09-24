@@ -107,7 +107,7 @@ const card = c => `
         </footer>
       </article>`;
 
-export function renderPage({ cards, generatedAt, storePath, health, folder = 'Claude Check' }) {
+export function renderPage({ cards, generatedAt, storePath, health, folder = 'Claude Check', proof = [], operationalNote = null }) {
   const n = counts(cards);
   const top = topTen(cards);
   const themes = byTheme(cards);
@@ -156,6 +156,8 @@ export function renderPage({ cards, generatedAt, storePath, health, folder = 'Cl
   th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { font:11px ui-monospace,Menlo,monospace; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
   code { font:11px ui-monospace,Menlo,monospace; color:var(--dim); background:#151515; padding:1px 5px; border:1px solid var(--line); }
+  ul.proof { margin:8px 0 14px; padding-left:18px; color:var(--dim); font-size:13px; }
+  ul.proof li { margin:0 0 6px; }
   .note { border-left:2px solid var(--line); padding:2px 0 2px 14px; color:var(--dim); margin:12px 0; }
   @media (max-width:560px){ .cards { grid-template-columns:1fr; } .wrap { padding:20px 14px 60px; } }
 </style>
@@ -202,6 +204,8 @@ ${themes.map(([theme, list]) => `
   pictures, linked readings, all kept privately, and a card appears here within one cycle. It is bounded by count and
   by seconds, and it can neither change nor fail the Trading-list pass that runs before it.</p>
   <p class="mono">writer: scripts/xfeed-bookmark-deep.mjs &middot; rides: scripts/xfeed-program.mjs run &middot; store: ${esc(storePath)}</p>
+  ${proof.length ? `<h3>Proved by hand, not assumed</h3>\n  <ul class="proof">${proof.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+  ${operationalNote ? `<p class="note">${esc(operationalNote)}</p>` : ''}
   ${health ? `<p class="mono">last pass: ${esc(health.last_pass?.pass_id ?? '')} &middot; ${esc(health.last_pass?.status ?? '')} &middot; read ${esc(String(health.last_pass?.read ?? 0))} &middot; ${esc(String(health.last_pass?.media_saved ?? 0))} pictures &middot; ${esc(health.last_pass?.finished_at ?? '')}</p>` : ''}
   <p class="note">Another folder or list: it is read by name, not by id. Say the name of the folder
   (for example <code>--folder "Macro Reads"</code>) and the same pass reads it into its own store beside this one.
@@ -241,7 +245,7 @@ export async function build({ indexPath = DEFAULT_INDEX, readingsPath = DEFAULT_
   let health = null;
   try { health = JSON.parse(await readFile(join(dirname(indexPath), 'health.json'), 'utf8')); } catch { /* optional */ }
   const cards = joinCards(index, readings);
-  const html = renderPage({ cards, generatedAt: now.slice(0, 16).replace('T', ' ') + 'Z', storePath: dirname(indexPath), health, folder: index.folder ?? 'Claude Check' });
+  const html = renderPage({ cards, generatedAt: now.slice(0, 16).replace('T', ' ') + 'Z', storePath: dirname(indexPath), health, folder: index.folder ?? 'Claude Check', proof: readings.proof ?? [], operationalNote: readings.operational_note ?? null });
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, html);
   return { out, cards: cards.length, described: cards.filter(c => c.described).length, bytes: html.length };
