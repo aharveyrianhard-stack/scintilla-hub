@@ -1,0 +1,212 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Allocation, rebuilt — 24 September 2026</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0D0D14;--line:#1A1A2A;--line2:#252538;--ink:#C6C8DE;--ink2:#9A9AB6;
+  --dim:#868AAA;--mute:#4A4A62;--bull:#00FFA3;--bear:#FF2D55;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink2);font:16px/1.65 var(--sans);padding:34px 22px 90px}
+.wrap{max-width:980px;margin:0 auto}
+h1{font:600 26px/1.3 var(--sans);color:var(--ink);margin:0 0 6px}
+h2{font:600 11px/1 var(--mono);letter-spacing:.22em;color:var(--dim);text-transform:uppercase;
+  margin:42px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+h3{font:600 15px/1.4 var(--sans);color:var(--ink);margin:22px 0 6px}
+p{margin:0 0 14px;max-width:46em}
+.sub{font:600 11px/1.6 var(--mono);letter-spacing:.14em;color:var(--mute);text-transform:uppercase;margin-bottom:22px}
+b{color:var(--ink);font-weight:600}
+.up{color:var(--bull)}.dn{color:var(--bear)}
+code,.m{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 18px}
+th{font:600 10px/1.4 var(--mono);letter-spacing:.13em;color:var(--mute);text-align:left;
+  padding:8px;border-bottom:1px solid var(--line2);vertical-align:bottom}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+td:first-child{color:var(--ink)}
+.wrapx{overflow-x:auto;border:1px solid var(--line)}
+ul{margin:0 0 16px;padding-left:20px;max-width:46em}li{margin-bottom:7px}
+img{width:100%;border:1px solid var(--line2);margin:6px 0 4px;display:block}
+.cap{font:600 10px/1.5 var(--mono);letter-spacing:.1em;color:var(--mute);margin-bottom:20px;text-transform:uppercase}
+.note{border-left:2px solid var(--line2);padding:2px 0 2px 14px;color:var(--dim);font-size:15px;margin:0 0 16px;max-width:46em}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.two{grid-template-columns:1fr}body{padding:24px 16px 70px}}
+</style></head><body><div class="wrap">
+<span data-scnav-slot></span>
+
+<h1>Allocation, rebuilt</h1>
+<div class="sub">24 September 2026 · branch hub/allocation-rebuild-20260924 · nothing deployed</div>
+
+<p>You said the allocation page was telling you its conclusion first, that it looked unwired, and that the
+methods were scattered across a lot of reading. This rebuild does four things: it puts the evidence first and
+the conclusion last, it collapses every method into <b>one table you can re-rank</b>, it makes the template
+carry the things the assistant actually uses (rates, breadth, put/call, the clock), and it turns your cash
+position into a staged plan instead of a shrug.</p>
+
+<p class="note">Everything below was read live while the page was open, this morning, 24 September, with the
+market in pre-market. No number on the page is typed in, and nothing was deployed — the coordinator merges.</p>
+
+<h2>1 · Was it wired? Mostly yes — but two things were not</h2>
+<p>I audited every read the page makes. The page now carries that audit at the bottom of itself, so you can
+check it any day without asking anyone. Today, twenty of twenty-one reads answered.</p>
+<div class="wrapx"><table>
+<tr><th>What</th><th>Where it comes from</th><th>Today</th></tr>
+<tr><td>The Geiger, per name</td><td class="m">chart API /geiger</td><td><span class="up">read</span> — 364 symbols, session 2026-09-23</td></tr>
+<tr><td>Sectors, size, multiples, debt, margins</td><td class="m">company_profile · fundamentals · ratios_history</td><td><span class="up">read</span> — 384 / 366 / 1,646 rows</td></tr>
+<tr><td>50-day, 200-day, RSI, Williams, ADX, sigma</td><td class="m">provider_indicators_current</td><td><span class="up">read</span> — 2026-09-23</td></tr>
+<tr><td>Earnings calendar, cohorts, favourites</td><td class="m">earnings_events · ticker_cohorts · hub_favorites</td><td><span class="up">read</span> — 72 names starred</td></tr>
+<tr><td>The tape, SPY and RSP and the eleven sector funds</td><td class="m">chart API /candles</td><td><span class="up">read</span> — 13 of 13</td></tr>
+<tr><td><b>The treasury curve</b></td><td class="m">treasury_rates</td><td><span class="up">NEWLY WIRED</span> — every tenor, 2026-09-23</td></tr>
+<tr><td><b>The Fed's own rate</b></td><td class="m">econ_history · federalFunds</td><td><span class="up">NEWLY WIRED</span> — 3.63%, 55 days old, monthly</td></tr>
+<tr><td><b>Put / call, with its parts</b></td><td class="m">chart API /candles · PCC, PCCE, PCCI</td><td><span class="up">NEWLY WIRED</span> — 0.86 total, 0.46 equity, 1.04 index</td></tr>
+<tr><td>live_quotes (the price table)</td><td class="m">Supabase live_quotes</td><td><span class="dn">REMOVED</span> — its newest row is weeks old</td></tr>
+<tr><td>composite_staged (the legacy store)</td><td class="m">Supabase composite_staged</td><td><span class="dn">KEPT, NARROWED</span> — no company uses it</td></tr>
+</table></div>
+<p><b>The two honest answers.</b> <b>live_quotes</b> is dead: its newest row dates to mid-August, because the job
+that filled it stopped. Nothing on the page reads it any more; prices come from the chart API, which is fresh to
+the second. <b>composite_staged</b> — the legacy store you saw — is not used for any company. It survives for one
+narrow job, and the page names it per row: the board's own cohort number keeps the legacy value for members that
+are not declared equities (the crypto pairs, the metal futures, the yields). If it were dropped outright, the
+cohort strip on this page would stop matching the board's.</p>
+<p><b>One thing the Hub still gets wrong.</b> The Hub's sentiment card says the chart API answers 404 for put/call.
+It does not any more — it answered 200 this morning, from Cboe. That note is stale, and it is worth fixing on the
+dashboard as well.</p>
+
+<h2>2 · One table, and you can re-rank it</h2>
+<p>One row per name — 317 of them today — and one column per method: Geiger, momentum, value, quality, pullback,
+oversold, the usual day, and earnings timing. Each cell shows the name's <b>place out of 100 inside the covered
+set</b>, with the reading it came from printed underneath (so <span class="m">86</span> in VALUE sits above
+<span class="m">pe 14.7</span>). Click any header and the table re-ranks; click it again to reverse.</p>
+<ul>
+<li><b>The toggles are yours, and each one shows its baseline.</b> Every weight and every rule now prints
+"baseline 20%" beside your setting, and says when yours differs. That was your point about assumptions.</li>
+<li><b>Presets</b>: <b>PULLBACK LEADERS</b> (above its 200-day by at least 10%, now below its 50-day — 11 names
+today), <b>MOST OVERSOLD</b> (RSI at or under 40), <b>QUALITY ON SALE</b> (quality over 55, in the cheaper half,
+not stretched), <b>FAVOURITES</b>.</li>
+<li><b>Filters</b> for sector, cohort and favourites, a ticker box, and <b>saved views</b> that keep your weights,
+filters and sort together under a name you choose.</li>
+<li>A name with fewer than three measures gets <b>no combined score at all</b>, rather than a flattering one.</li>
+</ul>
+<img src="shots/screener-1680.png" alt="The screener at 1680 wide">
+<div class="cap">The screener at 1680 — presets, filters, saved views, and every cell showing its own reading</div>
+<div class="two">
+<div><img src="shots/desk-390.png" alt="The page at 390 wide"><div class="cap">At 390: the six lines</div></div>
+<div><img src="shots/screener-390.png" alt="The screener at 390 wide"><div class="cap">At 390: name, combined, Geiger, oversold</div></div>
+</div>
+
+<h2>3 · The template now carries what the assistant uses</h2>
+<p>Each input states its rule <b>with a number</b>, and the page reports what that rule changed today. Every one of
+them is a slider you can move.</p>
+<div class="wrapx"><table>
+<tr><th>Input</th><th>Today</th><th>The rule</th><th>What it did</th></tr>
+<tr><td>The Fed's own rate</td><td>3.63%, 55 days old</td><td>A rise takes 5 points off deployed cash while it works through</td><td>no rise on file this month</td></tr>
+<tr><td>The 10-year</td><td>5.11%, +15bp on the day</td><td>Above 4.5%, each excess point takes up to 8 points off the most expensive names and adds 4 to financials</td><td>applied to every row — named per name</td></tr>
+<tr><td>The slope (2s10s)</td><td>+26bp</td><td>Under 0bp is late-cycle: 5 points off deployed cash</td><td>not inverted, so nothing</td></tr>
+<tr><td>Equal weight vs cap weight</td><td><span class="dn">−4.3%</span> over 60 sessions</td><td>Breadth carries 30% of how much to own</td><td>moved deployed cash directly</td></tr>
+<tr><td>Put / call</td><td>0.86 total, 0.80 five-day</td><td>Over 1.00 fear lifts oversold by up to 6 points and adds 3 to cash deployed; under 0.70 does the reverse</td><td>between your lines — nothing applied</td></tr>
+<tr><td>Participation</td><td>47% above the 50-day, 57% above the 200-day</td><td>Feeds breadth, and sets what counts as a leader (10% above its 200-day)</td><td>the PULLBACK LEADERS preset</td></tr>
+<tr><td>The usual day (sigma)</td><td>each name's own 20-day sigma</td><td>Tranche spacing is 1.5× the name's usual day</td><td>the levels in the plan below</td></tr>
+<tr><td>Earnings</td><td>a filed date per name</td><td>A report inside 7 sessions takes 8 points off the row and holds its tranche</td><td>named per row</td></tr>
+<tr><td>The squeeze</td><td>SPY's 20-session move is normal</td><td>Stated, not wired: a squeeze says a move is coming, not which way</td><td><b>nothing — deliberately</b></td></tr>
+</table></div>
+<p><b>Your Fed question, answered directly.</b> If the Fed raises, two things happen on this page without anyone
+rewriting it: deployed cash steps back by your hike line while the new rate works through, and the table marks
+down long-duration names — the expensive multiples — while marking up financials, because a bank earns the spread
+and a positive slope helps it. Today the 10-year is <b>5.11%</b>, well over the 4.5% line, so that mark-down is
+already running; the curve is <b>+26bp</b>, so financials get the lift rather than the late-cycle cut. That is why
+TRV and EOG sit at the top of the table this morning rather than the expensive growth names.</p>
+
+<h2>4 · You are in cash: what your rules say</h2>
+<p>Your twelve names, each with three tranches, levels taken from that name's own history — its 20-day sigma, its
+50-day and its 200-day — not from a round number. Every tranche says what triggers it, what cancels it, and how
+often the name has been that far below its own 200-day before, with what followed.</p>
+<div class="wrapx"><table>
+<tr><th>Name</th><th>Now</th><th>From its 12-month high</th><th>First tranche</th><th>What cancels it</th></tr>
+<tr><td>AVGO</td><td>349.69</td><td><span class="dn">−27.4%</span></td><td>335.13 — 40% of the position, 4.2% away</td><td>a close 5% under its 200-day (368.79)</td></tr>
+<tr><td>GOOGL</td><td>336.43</td><td><span class="dn">−16.4%</span></td><td>327.08 — 40%, 2.8% away</td><td>the same line, or its score falling under 45</td></tr>
+<tr><td>NVDA</td><td>222.19</td><td><span class="dn">−5.7%</span></td><td>212.97 — 40%, 4.2% away</td><td>the same</td></tr>
+<tr><td>VST</td><td>136.84</td><td><span class="dn">−35.1%</span></td><td>130.19 — 40%, 4.9% away</td><td>the same — and note it is already under its 200-day</td></tr>
+<tr><td>MU</td><td colspan="4">reports 30 September, inside your 7-session window, so its tranche waits until the report is out</td></tr>
+</table></div>
+<p>The label on that section is <b>"what your rules say"</b>. It is never called a buy, no order is placed, and
+nothing is sent anywhere. Each tranche is described as staying live for about as long as a daily signal takes to
+play out on SPY.</p>
+<img src="shots/plan-1680.png" alt="The staged plan at 1680 wide">
+<div class="cap">The staged plan — levels, sizes, what cancels each one</div>
+
+<h2>5 · The equal-weight basket</h2>
+<p>RSP has lagged SPY by <b>4.4%</b> over 60 sessions and <b>7.4%</b> over 120. The page measures where that lag
+sits: by sector, the furthest behind are <b>Utilities (−17.2%)</b>, <b>Industrials (−10.5%)</b> and <b>Real estate
+(−10.5%)</b>, against Energy <span class="up">+12.8%</span> and Technology <span class="up">+1.7%</span> ahead. By
+size, the middle third of the covered names carries a much weaker average Geiger than the largest third. The
+basket is then the best-ranked names <i>inside those lagging sectors</i>, equal weighted, measured against RSP
+itself over 60, 120 and 252 sessions.</p>
+<p class="note"><b>Read that comparison carefully.</b> It is a backward measurement of <i>today's</i> basket, so it
+carries hindsight: the names were picked with today's rankings, not a year ago. It is not a return you could have
+had, and the page says so in those words.</p>
+
+<h2>6 · What could be wrong</h2>
+<ul>
+<li><b>The clock number is bounded by its own window.</b> "How long a daily signal takes to play out" measures the
+sessions to the best close within the next twenty, so it can never exceed twenty and today it reads fifteen. My
+first version measured the days to simply recover the drop and answered <b>one</b> — true and useless. Neither
+reproduces the "about six days" from the M60 note, which used a different definition; do not read the two as the
+same measure.</li>
+<li><b>Strength is a proxy.</b> "Pullback leaders" uses distance above the 200-day average as the stand-in for
+6–12 month strength, because the published table carries averages for every name while a true 6–12 month return
+needs a history read per name. The plan section does read real history, for your twelve.</li>
+<li><b>Today's move is only priced for the rows on screen.</b> That is why the USUAL DAY column carries zero
+weight by default: a leg only some rows have would entrench the rows that have it.</li>
+<li><b>The Fed rate is monthly and 55 days old.</b> It is a direction, not today's decision, and the page prints
+its age everywhere it appears.</li>
+<li><b>Quality still rests on however many measures came back</b> — some names score on two of five. The count is
+printed in the cell, and under three measures no combined score is given at all.</li>
+<li><b>Nothing here is verified against the market's future.</b> Every probability is measured on that name's own
+past, and past episodes are not a forecast.</li>
+</ul>
+
+<h2>7 · What I did not do</h2>
+<ul>
+<li><b>Nothing was deployed, pushed or merged.</b> The work sits on <code>hub/allocation-rebuild-20260924</code>
+at <code>6691da9</code>, branched from <code>19d1870</code>.</li>
+<li>I did not change the Geiger, your saved Equalizer, the funnel's own steps, the cohort arithmetic or any
+existing calculation. The older layers are untouched and still on the page, below the new ones.</li>
+<li>I did not touch <code>prototypes/indicator-lab/</code> or any other Hub room.</li>
+<li>I did not build an RSP holdings list: the holdings table on file covers one ETF (AGIX), not RSP, so the basket
+is built from sectors and size, which are real, rather than from a holdings file that does not exist.</li>
+<li>I did not wire the squeeze into any score, and I did not add a per-name put/call: Cboe's series is a market
+measure, and pretending it is per name would be inventing data.</li>
+</ul>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
