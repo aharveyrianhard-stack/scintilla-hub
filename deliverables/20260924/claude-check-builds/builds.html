@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Claude Check builds · five small ideas on our own bars</title>
+<style>
+:root{
+  --bg:#0A0A0C; --panel:#101014; --panel2:#141419; --line:#1E1E24; --line2:#2A2A32;
+  --ink:#CDCDD2; --ink2:#9C9CA4; --dim:#75757C; --mute:#4A4A52;
+  /* the one exception to monochrome, and Alan's own rule: up is green, down is red */
+  --up:#00FFA3; --dn:#FF2D55;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 var(--mono);padding:18px 16px 60px}
+h1{font-size:15px;letter-spacing:.14em;margin:0 0 4px;color:var(--ink)}
+h2{font-size:12px;letter-spacing:.18em;color:var(--ink2);margin:0;font-weight:500}
+.sub{font-size:11px;color:var(--dim);margin:0 0 16px}
+.wrap{max-width:1560px;margin:0 auto}
+section{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:14px;margin:0 0 14px}
+.shead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
+.note{font-size:11px;color:var(--dim);margin:8px 0 0;line-height:1.5}
+.tag{font-size:10px;letter-spacing:.1em;border:1px solid var(--line2);border-radius:2px;padding:1px 5px;color:var(--ink2)}
+.tag.est{color:var(--dim)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:10px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:11px}
+.card .m{font-size:10px;letter-spacing:.16em;color:var(--dim)}
+.word{font-size:30px;line-height:1.1;letter-spacing:.02em;margin:5px 0 2px;color:var(--ink)}
+.word.none{font-size:14px;color:var(--dim)}
+.says{font-size:11px;color:var(--ink2);min-height:28px}
+.rows{margin-top:8px;border-top:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--line)}
+.row span:first-child{color:var(--dim)}
+.basis{font-size:11px;color:var(--dim);margin-top:7px;line-height:1.45}
+.basis b{color:var(--ink2);font-weight:500}
+.up{color:var(--up)} .dn{color:var(--dn)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;font-weight:500;color:var(--dim);font-size:10px;letter-spacing:.1em;border-bottom:1px solid var(--line2);padding:5px 6px}
+td{padding:4px 6px;border-bottom:1px solid var(--line);color:var(--ink)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line2);border-radius:1px;position:relative;min-width:54px}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--ink2);border-radius:1px}
+.legend{font-size:11px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+.err{color:var(--dn);font-size:11px}
+svg{display:block;max-width:100%}
+.chartwrap{overflow-x:auto}
+@media (max-width:560px){
+  body{padding:12px 10px 40px}
+  .cards{grid-template-columns:1fr 1fr}
+  .word{font-size:23px}
+  .card .m{font-size:10px}
+  table{font-size:11px}
+  td,th{padding:4px 3px}
+  .hide-s{display:none}
+}
+</style></head>
+<body><div class="wrap">
+<span data-scnav-slot></span><h1>CLAUDE CHECK · THE FIVE SMALL BUILDS</h1>
+<p class="sub" id="head">reading the snapshot…</p>
+<div id="app"></div>
+<section><h2>WHAT EVERY NUMBER ON THIS PAGE IS</h2>
+<p class="note"><b>measured</b> means we counted it on our own stored bars, and the count (n) is beside it.
+<b>estimate</b> means it is somebody's rule of thumb, named, and nothing on our bars has checked it.
+Colour is used for one thing only: <span class="up">up</span> and <span class="dn">down</span>. Everything else is grey on purpose.</p>
+</section>
+</div>
+<script>
+const $ = (h) => { const d = document.createElement("div"); d.innerHTML = h.trim(); return d.firstChild; };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const n1 = (v) => (v == null || !isFinite(v) ? "—" : (Math.round(v * 10) / 10).toLocaleString());
+const n2 = (v) => (v == null || !isFinite(v) ? "—" : (Math.round(v * 100) / 100).toLocaleString());
+const sign = (v) => (v == null ? "" : v > 0 ? "up" : v < 0 ? "dn" : "");
+const tag = (t) => t ? `<span class="tag${t === "estimate" ? " est" : ""}">${esc(t)}</span>` : "";
+
+/* Every line on this page is drawn one segment at a time, so each segment can carry the
+   direction it actually moved: up green, down red. No line is grey. */
+function line(points, w, h, { pad = 3, lo = null, hi = null, flat = null } = {}) {
+  const ys = points.filter((p) => isFinite(p));
+  if (ys.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
+  const mn = lo == null ? Math.min(...ys) : lo, mx = hi == null ? Math.max(...ys) : hi;
+  const span = mx - mn || 1;
+  const X = (i) => pad + (i * (w - 2 * pad)) / (points.length - 1);
+  const Y = (v) => h - pad - ((v - mn) / span) * (h - 2 * pad);
+  let out = "";
+  for (let i = 1; i < points.length; i++) {
+    if (!isFinite(points[i]) || !isFinite(points[i - 1])) continue;
+    const up = points[i] >= points[i - 1];
+    out += `<line x1="${X(i - 1).toFixed(1)}" y1="${Y(points[i - 1]).toFixed(1)}" x2="${X(i).toFixed(1)}" y2="${Y(points[i]).toFixed(1)}" stroke="var(--${up ? "up" : "dn"})" stroke-width="1.2" />`;
+  }
+  if (flat != null && flat >= mn && flat <= mx) out += `<line x1="${pad}" y1="${Y(flat).toFixed(1)}" x2="${w - pad}" y2="${Y(flat).toFixed(1)}" stroke="var(--line2)" stroke-dasharray="2 3" stroke-width="1" />`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="sparkline">${out}</svg>`;
+}
+
+/* ---- 1. one word per measure ---- */
+function card(c) {
+  const v = c.saved, has = v.word != null;
+  const spark = c.spark && c.spark.length > 3 ? line(c.spark, 210, 32)
+    : `<div class="basis">no line: ${esc(c.spark_missing || "nothing stored to draw")}</div>`;
+  const rows = (c.rows || []).map(([k, val]) => `<div class="row"><span>${esc(k)}</span><span class="${c.key.startsWith("rail") && k === "Day" ? sign(c.day_pct) : ""}">${esc(val)}</span></div>`).join("");
+  const differs = c.differs
+    ? `<div class="basis"><b>Alan's toggles change this word.</b> Saved says ${esc(v.word)}; the plain baseline says ${esc(c.baseline.word)} (${n2(c.baseline.value)}).</div>`
+    : `<div class="basis">Baseline (${esc(c.baseline.basis || "")}) reads ${n2(c.baseline.value)} and says the same word.</div>`;
+  return `<div class="card">
+    <div class="m">${esc(c.title)}</div>
+    <div class="word${has ? "" : " none"}">${esc(has ? v.word : "NOT MEASURED")}</div>
+    <div class="says">${esc(has ? (v.says || "") : (v.says || v.reason || ""))} ${has ? `· <b>${n2(v.value)}${esc(v.unit || "")}</b>` : ""}</div>
+    ${spark}
+    <div class="rows">${rows}</div>
+    ${differs}
+    <div class="basis">rule <b>${esc(v.rule_id || "—")}</b> · ${tag(v.tag)}</div>
+  </div>`;
+}
+
+/* ---- 3. participation, with the peaks line ---- */
+function participationChart(p, w) {
+  const wk = p.weekly.filter((r) => isFinite(r.pct));
+  if (wk.length < 8) return `<p class="err">only ${wk.length} weekly readings — not enough to draw</p>`;
+  const h = 250, padL = 30, padB = 20, padT = 8, padR = 8;
+  const X = (i) => padL + (i * (w - padL - padR)) / (wk.length - 1);
+  const Y = (v) => padT + (1 - v / 100) * (h - padT - padB);
+  let out = "";
+  for (const g of [0, 25, 50, 75, 100]) out += `<line x1="${padL}" y1="${Y(g)}" x2="${w - padR}" y2="${Y(g)}" stroke="var(--line)" stroke-width="1"/><text x="2" y="${Y(g) + 3}" fill="var(--dim)" font-size="9">${g}</text>`;
+  for (let i = 1; i < wk.length; i++) {
+    const up = wk[i].pct >= wk[i - 1].pct;
+    out += `<line x1="${X(i - 1).toFixed(1)}" y1="${Y(wk[i - 1].pct).toFixed(1)}" x2="${X(i).toFixed(1)}" y2="${Y(wk[i].pct).toFixed(1)}" stroke="var(--${up ? "up" : "dn"})" stroke-width="1.3"/>`;
+  }
+  const pk = p.peaks;
+  if (pk.line_points && pk.line_points.length > 1) {
+    const idx = new Map(wk.map((r, i) => [r.week, i]));
+    const first = pk.line_points[0], last = pk.line_points[pk.line_points.length - 1];
+    const col = (pk.slope_per_year ?? 0) < 0 ? "dn" : "up";
+    out += `<line x1="${X(idx.get(first.week) ?? 0)}" y1="${Y(first.pct)}" x2="${X(idx.get(last.week) ?? wk.length - 1)}" y2="${Y(last.pct)}" stroke="var(--${col})" stroke-width="1" stroke-dasharray="5 4"/>`;
+    for (const pt of pk.points) {
+      const i = idx.get(pt.week); if (i == null) continue;
+      out += `<circle cx="${X(i)}" cy="${Y(pt.pct)}" r="2.6" fill="none" stroke="var(--${col})" stroke-width="1"/>`;
+    }
+  }
+  /* a narrow screen fits four dates, not eight: at 390 the eight ran into each other */
+  const every = Math.ceil(wk.length / (w < 620 ? 3 : 8));
+  for (let i = 0; i < wk.length; i += every) {
+    const anchor = i === 0 ? "start" : i + every >= wk.length ? "end" : "middle";
+    out += `<text x="${X(i).toFixed(0)}" y="${h - 5}" fill="var(--dim)" font-size="9" text-anchor="${anchor}">${wk[i].week.slice(0, 7)}</text>`;
+  }
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="share of our names above their own 50-day average, weekly">${out}</svg>`;
+}
+
+function render(d) {
+  const { verdicts, participation, squeeze, unfinished, waits } = d;
+  const m = verdicts.manifest;
+  document.getElementById("head").innerHTML =
+    `measured ${esc(m.measured_utc)} · ${m.names_measured} of ${m.universe} names · ${m.failures.length} failed · took ${m.took_s}s<br>source: ${esc(m.source)}`;
+  const W = () => Math.max(320, Math.min(1500, (document.getElementById("app").clientWidth || 900) - 30));
+  const app = document.getElementById("app");
+
+  /* 1 */
+  app.appendChild($(`<section>
+    <div class="shead"><h2>1 · ONE WORD PER MEASURE</h2><span class="tag">${verdicts.cards.length} cards</span></div>
+    <div class="cards">${verdicts.cards.map(card).join("")}</div>
+    <p class="note">Each card is one measure the Hub already computes, one word, a small line of the last 60 readings, and the three rows behind it.
+    The words and the cut-offs live in <b>data/claude-check-rules.json</b> — change a word there and the card follows, no code.
+    Alan's Equalizer toggles are assumptions, so every card also shows what the plain baseline (every rung, equal weight) says.</p>
+  </section>`));
+
+  /* 2 */
+  const rows = Object.values(waits.rungs).map((r) => {
+    const w = r.n >= (r.min_n ?? 30) && r.median_days != null;
+    const thumb = { "4h": "4–10", "1d": "8–20", "1w": "60–150" }[r.rung];
+    return `<tr><td>${esc(r.rung)}</td>
+      <td class="n">${w ? n1(r.median_days) : "—"}</td>
+      <td class="n">${w ? n1(r.p25_days) + "–" + n1(r.p75_days) : "—"}</td>
+      <td class="n">${r.n}</td><td class="n">${r.hit_rate == null ? "—" : Math.round(r.hit_rate * 100) + "%"}</td>
+      <td class="n hide-s">${thumb ? thumb + " d" : "—"}</td>
+      <td>${tag(w ? "measured" : "estimate")}</td></tr>`;
+  }).join("");
+  app.appendChild($(`<section>
+    <div class="shead"><h2>2 · HOW LONG A READING ON THAT RUNG USUALLY TAKES</h2><span class="tag">measured on our bars</span></div>
+    <table><thead><tr><th>RUNG</th><th class="n">MIDDLE</th><th class="n">USUAL RANGE</th><th class="n">SIGNALS</th><th class="n">ARRIVED</th><th class="n hide-s">RULE OF THUMB</th><th>TAG</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note">How it was counted: ${esc(waits.rungs["1d"].how)}. Sample: ${esc(waits.rungs["1d"].window || "")}.
+    Days are calendar days, not bars. <b>ARRIVED</b> is the share of signals where the move showed up at all inside 40 bars; the middle and the range describe only those.
+    The last column is the post's rule of thumb (${esc(waits.rule_of_thumb_source)}) — kept so you can see where our own history disagrees with it.</p>
+  </section>`));
+
+  /* 3 */
+  const pk = participation.peaks;
+  const cmp = Object.entries(participation.compare).map(([s, v]) => {
+    if (!Array.isArray(v)) return `<tr><td>${esc(s)}</td><td colspan="3" class="err">${esc(v.error || "not read")}</td></tr>`;
+    const first = v[0]?.close, last = v[v.length - 1]?.close;
+    const ch = first ? (100 * (last - first)) / first : null;
+    return `<tr><td>${esc(s)}</td><td class="n">${n2(first)}</td><td class="n">${n2(last)}</td><td class="n ${sign(ch)}">${n1(ch)}%</td></tr>`;
+  }).join("");
+  app.appendChild($(`<section>
+    <div class="shead"><h2>3 · HOW MANY NAMES ARE TAKING PART</h2><span class="tag">${participation.weekly.length} weeks · ${pk.n} peaks</span></div>
+    <div class="chartwrap">${participationChart(participation, W())}</div>
+    <p class="note"><b>${esc(pk.says || pk.reason || "")}</b> — the dashed line runs through the ${pk.n} rally peaks and falls ${n2(Math.abs(pk.slope_per_year))} points a year.
+    Each point is the share of our names closing above their own 50-day average, on the last session of that week.</p>
+    <table><thead><tr><th>COMPARE</th><th class="n">FIRST WEEK</th><th class="n">LAST WEEK</th><th class="n">CHANGE</th></tr></thead><tbody>${cmp}</tbody></table>
+    <p class="note">${esc(participation.note)} SPY is cap-weighted, RSP holds the same index equally weighted; the gap between those two is the same question this chart asks, from the other side.</p>
+  </section>`));
+
+  /* 4 */
+  const sq = squeeze.names.slice(0, 14).map((s) => `<tr>
+    <td>${esc(s.sym)}</td>
+    <td class="n">${n2(s.width)}%</td>
+    <td class="n">${n1(s.pctile)}</td>
+    <td><div class="bar"><i style="width:${Math.max(2, Math.min(100, s.pctile))}%"></i></div></td>
+    <td class="hide-s">${esc(s.says)}</td>
+    <td>${s.candidate ? '<span class="tag">CANDIDATE</span>' : ""}</td></tr>`).join("");
+  const idx = Object.entries(squeeze.indexes).map(([s, v]) => v && v.width != null
+    ? `<tr><td>${esc(s)}</td><td class="n">${n2(v.width)}%</td><td class="n">${n1(v.pctile)}</td><td><div class="bar"><i style="width:${Math.max(2, Math.min(100, v.pctile))}%"></i></div></td><td class="hide-s">${esc(v.says)}</td><td>${v.candidate ? '<span class="tag">CANDIDATE</span>' : ""}</td></tr>`
+    : `<tr><td>${esc(s)}</td><td colspan="5" class="err">${esc(v?.reason || v?.error || "not measured")}</td></tr>`).join("");
+  app.appendChild($(`<section>
+    <div class="shead"><h2>4 · THE SQUEEZE</h2><span class="tag">${squeeze.candidates} of ${squeeze.measured} names coiled</span></div>
+    <table><thead><tr><th>NAME</th><th class="n">BAND WIDTH</th><th class="n">%ILE</th><th>OWN YEAR</th><th class="hide-s">LAST THIS TIGHT</th><th></th></tr></thead>
+    <tbody>${sq}</tbody></table>
+    <p class="note">Band width is the distance between the two Bollinger bands (20 days, 2 deviations) as a share of the middle line, so a $30 name and a $900 name can be compared.
+    The percentile ranks today against that <b>same name's</b> own last ${squeeze.lookback_sessions} sessions — never against another name. At or under ${squeeze.tight_threshold_pctile} it is called a candidate:
+    a quiet tape about to stop being quiet, <b>direction unknown</b>. Nothing here says which way.</p>
+    ${squeeze.not_ranked && squeeze.not_ranked.length ? `<p class="note"><b>Not ranked:</b> ${squeeze.not_ranked.map((s) => esc(s.sym) + " (" + s.lookback + " sessions)").join(", ")} — fewer than ${squeeze.min_history_to_rank} sessions of their own to compare against, so no percentile is shown for them.</p>` : ""}
+    <div class="shead" style="margin-top:14px"><h2>THE RAILS</h2></div>
+    <table><thead><tr><th>RAIL</th><th class="n">BAND WIDTH</th><th class="n">%ILE</th><th>OWN YEAR</th><th class="hide-s">LAST THIS TIGHT</th><th></th></tr></thead><tbody>${idx}</tbody></table>
+  </section>`));
+
+  /* 5 */
+  const lv = unfinished.levels.slice(0, 18).map((l) => `<tr>
+    <td>${esc(l.sym)}</td><td>${esc(l.session)}</td>
+    <td class="${l.side === "up" ? "up" : "dn"}">${l.side === "up" ? "spike up" : "spike down"}</td>
+    <td class="n">${n2(l.level)}</td><td class="n">${n2(l.wick_atr)}×</td>
+    <td class="n ${sign(l.distance_pct)}">${n1(l.distance_pct)}%</td>
+    <td class="n">${l.bars_standing}</td></tr>`).join("");
+  const spy = (unfinished.indexes.SPY || []).map((l) => `<tr><td>SPY</td><td>${esc(l.session)}</td>
+    <td class="${l.side === "up" ? "up" : "dn"}">${l.side === "up" ? "spike up" : "spike down"}</td>
+    <td class="n">${n2(l.level)}</td><td class="n">${n2(l.wick_atr)}×</td><td class="n ${sign(l.distance_pct)}">${n1(l.distance_pct)}%</td><td class="n">${l.bars_standing}</td></tr>`).join("")
+    || `<tr><td colspan="7" class="note">no standing level on SPY at this threshold</td></tr>`;
+  app.appendChild($(`<section>
+    <div class="shead"><h2>5 · UNFINISHED BUSINESS</h2><span class="tag">${unfinished.total_found} standing levels</span></div>
+    <table><thead><tr><th>NAME</th><th>DATE</th><th>WHAT HAPPENED</th><th class="n">LEVEL</th><th class="n">VS ITS OWN RANGE</th><th class="n">FROM HERE</th><th class="n">DAYS</th></tr></thead>
+    <tbody>${spy}${lv}</tbody></table>
+    <p class="note">${esc(unfinished.rule)}. How rare that is: ${unfinished.how_rare.map((r) => `${r.threshold}× → ${r.levels}`).join(" · ")} levels.
+    A level stays on the list until price trades back through the middle of the wick that made it; the row shows how far it is from here and how many sessions it has stood.
+    <b>Intraday:</b> ${esc(unfinished.intraday)}</p>
+  </section>`));
+}
+
+(async () => {
+  const names = ["verdicts", "participation", "squeeze", "unfinished", "waits"];
+  try {
+    const parts = await Promise.all(names.map(async (n) => {
+      const r = await fetch(`../../../data/claude-check/${n}.json`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`${n}.json: HTTP ${r.status}`);
+      return [n, await r.json()];
+    }));
+    render(Object.fromEntries(parts));
+  } catch (e) {
+    document.getElementById("head").innerHTML = `<span class="err">the snapshot could not be read: ${esc(e.message)}. Run <b>node scripts/claude-check-snapshot.mjs</b>, which is the only thing that fetches.</span>`;
+  }
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
