@@ -22,9 +22,12 @@ test("the four open decisions are the proposal's own, each one word to change", 
   assert.match(core, /const ERC_MONTH_CELL = "LOAD\+NAMES";/);   // load bar + count + top names
   assert.match(core, /const ERC_NAME_ORDER = "MCAP";/);          // biggest first
   assert.match(core, /const ERC_COHORT_HUE = true;/);            // the dot is the cohort
-  /* the fourth: DIVIDENDS stays a sub-tab beside ALL and EARNINGS, untouched */
-  assert.match(src, /\["ALL", "EARNINGS", "DIVIDENDS"\]\.map\(\(t\) =>/);
-  assert.match(src, /data-act="caltype"/);
+  /* the fourth was "DIVIDENDS stays the sub-tab it is today". Alan, 23 Sep: "the dividend
+     section, we've never really used it... kind of weird to have." The strip is gone with it. */
+  assert.doesNotMatch(src, /\["ALL", "EARNINGS", "DIVIDENDS"\]\.map\(\(t\) =>/, "no ALL | EARNINGS | DIVIDENDS strip");
+  assert.doesNotMatch(src, /data-act="caltype"/, "and nothing left to click on it");
+  assert.doesNotMatch(src, /earnings &amp; dividends/, "the panel calls itself earnings");
+  assert.doesNotMatch(src, /No dividends source wired yet/, "the empty dividends view is gone too");
 });
 
 test("the calendar and the EARNINGS band speak with one voice — no second definition", () => {
@@ -65,8 +68,9 @@ test("a blank report time is a real group, not an edge case", () => {
 });
 
 test("the calendar reads earnings_events and writes nothing", () => {
-  const reads = core.match(/pg\("[^"]+/g) || [];
-  assert.deepEqual(reads.map((r) => r.slice(4).split("?")[0].replace(/"/g, "")).sort(), ["cohorts", "earnings_events"]);
+  const reads = core.match(/pgErn\("[^"]+|\bpg\("[^"]+/g) || [];
+  assert.deepEqual(reads.map((r) => r.replace(/^pgErn\(|^pg\(/, "").split("?")[0].replace(/"/g, "")).sort(), ["cohorts", "earnings_events"]);
+  assert.match(core, /pgErn\("earnings_events\?"/, "the calendar reads through pgErn, so a superseded date never reaches it");
   assert.ok(!/POST|PATCH|DELETE|operatorWrite|upsert/.test(core), "nothing is written");
 });
 

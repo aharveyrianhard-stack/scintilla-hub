@@ -37,11 +37,11 @@ test("the group is closed by default, says only what is observed - no stored res
   assert.match(h, /^<details class="sc-ernnores-grp" title="[^"]*an observation about storage, not a statement that the company did not report[^"]*a candidate, not proof that it is the same report\."><summary>1 past date without stored results<\/summary>/);
   assert.doesNotMatch(h + groupHTML(split(SNPS, SNPS).noResult), /not reports|None of these is a report|results are stored on/i, "no claim that a company did not report, and none that the nearby result is the same report");
   assert.doesNotMatch(h, /<details[^>]* open/);
-  assert.match(h, /<span class="tk" data-tkopen="ORCL">ORCL<\/span><span class="d">D2026-09-08<\/span><span class="t">no result stored for this date \u00B7 nearest stored result for this company: <b>D2026-09-10<\/b> \(2 days later\)<\/span>/);
+  assert.match(h, /<span class="tk" data-tkopen="ORCL">ORCL<\/span><span class="d">D2026-09-08<\/span><span class="t">no result stored for this date \u00B7 the nearest stored result for this company is <b>D2026-09-10<\/b>, 2 days later \u2014 too far apart for this page to call it the same report, so both are shown<\/span>/);
   assert.match(groupHTML(split(SNPS, SNPS).noResult), /<summary>2 past dates without stored results<\/summary>/);
-  assert.match(groupHTML(split(SNPS, SNPS).noResult), /\(13 days earlier\)/);
-  assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: { date: "2026-08-02", gap: 1 } }]), /\(1 day later\)/);
-  assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: null }]), /<span class="t">no result stored for this date<\/span>/);
+  assert.match(groupHTML(split(SNPS, SNPS).noResult), /13 days earlier/);
+  assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: { date: "2026-08-02", gap: 1 } }]), /1 day later/);
+  assert.match(groupHTML([{ row: row("X", "2026-08-01"), stored: null }]), /<span class="t">no result stored for this date · this company has no stored result within 45 days either way — the feed has not delivered one<\/span>/);
   assert.equal(groupHTML([]), ""); assert.equal(groupHTML(null), "");
   const hostile = groupHTML([{ row: row('"><img src=x onerror=1>', "2026-08-01"), stored: null }]);
   assert.doesNotMatch(hostile, /<img/); assert.match(hostile, /&quot;&gt;&lt;img/);

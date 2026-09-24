@@ -16,12 +16,16 @@ const START = "/* ==============================================================
 const END = "/* ---- tapes ---";
 assert.ok(page.indexOf(START) > 0 && page.indexOf(END) > page.indexOf(START), "the earnings band block is in the page");
 const mod = page.slice(page.indexOf(START), page.indexOf(END));
+/* the band reads through the shared supersede helpers (a moved date never rides it), so the
+   block that defines them is extracted with it - the same bytes the page runs. */
+const SUP = page.match(/const ERN_SUP_DAYS = 21;[\s\S]*?\nfunction ernSupersede\(rows, all\) \{[\s\S]*?\n\}\n/)[0];
 const escSrc = page.match(/const esc = \(s\) => [\s\S]*?;\n/)[0];
 const numSrc = page.match(/const num = \(x\) => [^\n]*\n/)[0];
 const FIX = JSON.parse(fs.readFileSync(new URL("./fixtures/earnings-week-20260921.json", import.meta.url), "utf8")).rows;
 
 const EXPORTS = ["ernWeek", "ernShift", "ernWeekday", "ernMonthDay", "ernWhen", "ernResult", "ernItemHTML",
-  "ernBandItems", "ernBandHTML", "ernRead", "renderErnBand", "ERN_BAND_ON", "ERN_TTL_MS"];
+  "ernBandItems", "ernBandHTML", "ernRead", "renderErnBand", "ERN_BAND_ON", "ERN_TTL_MS",
+  "ernTier", "ernDayGap", "ernWhenLabel", "ernTimeJustAnnounced", "ernSupersede", "ERN_AHEAD_DAYS"];
 function load({ rows = null, universe = ["CTAS", "COST", "CBRS"], pg = async () => [], today = "2026-09-23" } = {}) {
   const asked = [];
   const slot = { id: "ernBandSlot", innerHTML: "", querySelector: () => null };
@@ -34,7 +38,7 @@ function load({ rows = null, universe = ["CTAS", "COST", "CBRS"], pg = async () 
     todayISO: () => today,
     pg: async (path) => { asked.push(path); return pg(path); },
   });
-  const api = vm.runInContext(escSrc + numSrc + mod + "\n;({" + EXPORTS.join(",") +
+  const api = vm.runInContext(escSrc + numSrc + SUP + mod + "\n;({" + EXPORTS.join(",") +
     ", get ERN_ROWS() { return ERN_ROWS; }, set ERN_ROWS(v) { ERN_ROWS = v; }," +
     " get UNIVERSE() { return UNIVERSE; } })", ctx);
   if (rows !== null) api.ERN_ROWS = rows;
@@ -50,13 +54,17 @@ test("the week is Monday to Sunday in New York, and Sunday belongs to the week t
   assert.equal(api.ernWeek("2026-09-28")[0], "2026-09-28", "the next Monday starts the next week");
 });
 
-test("only the names the Hub tracks ride the band, and only this week", () => {
-  const { api } = load({ rows: [...FIX, row({ ticker: "NOTINUNIV", date: "2026-09-24" }), row({ ticker: "CTAS", date: "2026-10-05" })],
+test("only the names the Hub tracks ride the band: this week and the three weeks ahead", () => {
+  /* 23 Sep — the band was this week only. Alan asked it to lean in like the ECON nudge
+     ("how many days, what company"), which needs names further out than Sunday. */
+  const { api } = load({ rows: [...FIX, row({ ticker: "NOTINUNIV", date: "2026-09-24" }),
+                                row({ ticker: "CTAS", date: "2026-10-05" }), row({ ticker: "CTAS", date: "2026-11-20" })],
                          universe: FIX.map((r) => r.ticker) });
   const items = api.ernBandItems("2026-09-23");
-  assert.deepEqual(plain(items.map((r) => r.ticker + "@" + r.date)), FIX.map((r) => r.ticker + "@" + r.date));
   assert.ok(!items.some((r) => r.ticker === "NOTINUNIV"), "a name the Hub does not track never appears");
-  assert.ok(!items.some((r) => r.date > "2026-09-27"), "next month's report is not this week's band");
+  assert.ok(items.some((r) => r.date === "2026-10-05"), "a report twelve days out rides the band");
+  assert.ok(!items.some((r) => r.date > "2026-10-14"), "three weeks is the horizon: November is not on the band");
+  assert.ok(!items.some((r) => r.date < "2026-09-21"), "last week's reports have left it");
 });
 
 test("inside a day: before the open, then a given time, then after the close, then the ones with no time", () => {
@@ -120,24 +128,26 @@ test("the band is the same tape part as the bands above it, labelled EARNINGS", 
   assert.match(html, /class="sc-tape sc-tape--ern"/);
   assert.match(html, /sc-tape__lbl">EARNINGS →/);
   assert.match(html, /sc-tape__track/);
-  assert.match(html, /WEEK OF SEP 21/);
+  assert.doesNotMatch(html, /WEEK OF/);
   assert.equal((html.match(/data-t="CTAS"/g) || []).length, 2, "the track is doubled so the marquee loops seamlessly");
 });
 
 test("an empty week says so, and a failed read does not pretend the week is empty", () => {
   const { api } = load({ rows: [] });
-  assert.match(api.ernBandHTML("2026-09-23"), /no earnings this week for the names you track/);
+  assert.match(api.ernBandHTML("2026-09-23"), /no earnings ahead for the names you track/);
   const cold = load({ rows: null });
   assert.match(cold.api.ernBandHTML("2026-09-23"), /reading this week's earnings…/);
 });
 
-test("the read asks for this week only, from the events room's own table, and writes nothing", async () => {
+test("the read asks for this week and three weeks ahead, from the events room's own table, and writes nothing", async () => {
   const { api, asked } = load({ rows: null, universe: null, pg: async (p) => (p.startsWith("cohorts") ? [{ ticker: "CTAS" }] : FIX) });
   await api.ernRead();
   const ern = asked.find((p) => p.startsWith("earnings_events"));
   assert.ok(ern, "it reads earnings_events");
   assert.match(ern, /date=gte\.2026-09-21/);
-  assert.match(ern, /date=lte\.2026-09-27/);
+  assert.match(ern, /date=lte\.2026-10-14/, "this week's Monday to three weeks out - one read");
+  assert.match(ern, /superseded_at=is\.null/, "a date the provider moved is never asked for");
+  assert.match(ern, /report_time_set_at/, "the band reads when a report time was first stored");
   assert.ok(!/insert|upsert|rpc/i.test(asked.join("|")), "nothing is written anywhere");
   assert.deepEqual(plain(api.ERN_ROWS.map((r) => r.ticker)), ["CTAS"], "rows outside the tracked names are dropped after the read");
 });

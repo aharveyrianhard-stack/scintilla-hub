@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earnings dates, the past list, and a tape that leans in — 23 September</title>
+<style>
+:root{ --bg:#0A0A0F; --panel:#0D0D14; --panel2:#0F0F1A; --line:#1A1A2A; --line2:#252538;
+  --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#868AAA; --mute:#3A3A52; --crk:#00D4FF;
+  --sv1:#00FFA3; --sv3:#FFE500; --sv5:#FF3060;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink2); font-family:var(--sans); font-size:15px; line-height:1.65; padding:0 0 90px; }
+.wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
+header{ padding:40px 0 10px; }
+h1{ font-family:var(--mono); font-size:15px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink2); margin:0 0 10px; }
+.sub{ color:var(--dim); font-size:14px; max-width:80ch; }
+h3{ font-family:var(--mono); font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--crk); margin:46px 0 10px; }
+h4{ font-family:var(--mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink3); margin:26px 0 6px; }
+p{ max-width:84ch; }
+.quote{ border-left:2px solid var(--line2); padding:2px 0 2px 16px; color:var(--ink3); font-size:14.5px; max-width:84ch; }
+.quote b{ color:var(--ink2); font-weight:600; }
+figure{ margin:0 0 20px; }
+figure img{ width:100%; display:block; border:.6px solid var(--line2); background:var(--panel); }
+figcaption{ font-size:13px; color:var(--dim); padding-top:8px; max-width:84ch; }
+.pair{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+table{ width:100%; border-collapse:collapse; font-size:13.5px; margin:10px 0 0; }
+th{ font-family:var(--mono); font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim);
+  text-align:left; font-weight:400; padding:8px 10px; border-bottom:.5px solid var(--line2); }
+td{ padding:9px 10px; border-bottom:.5px solid var(--line); color:var(--ink3); vertical-align:top; }
+td b{ color:var(--ink2); }
+code{ font-family:var(--mono); font-size:12.5px; color:var(--ink3); }
+.tape{ border:.6px solid var(--line2); background:var(--panel2); font-family:var(--mono); font-size:11px;
+  padding:10px 14px; color:var(--ink2); overflow-x:auto; white-space:nowrap; }
+.tape .w{ color:var(--dim); } .tape .t{ color:var(--ink); font-weight:600; } .tape .e{ color:var(--dim); }
+.tape .beat{ color:var(--sv1); } .tape .n{ color:var(--ink3); }
+.dot{ color:var(--mute); padding:0 9px; }
+.box{ border:.6px solid var(--line2); background:var(--panel); padding:16px 18px; margin:14px 0; }
+.gone{ color:var(--dim); text-decoration:line-through; }
+.kept{ color:var(--sv1); }
+.note{ color:var(--dim); font-size:13px; max-width:84ch; }
+ul{ max-width:84ch; } li{ margin:6px 0; }
+@media(max-width:820px){ .pair{ grid-template-columns:1fr; } }
+</style></head><body><div class="wrap">
+
+<header><span data-scnav-slot></span>
+<h1>Earnings dates · the past list · a tape that leans in</h1>
+<p class="sub">Lane M34 · 23 September 2026 · Hub branch <code>hub/earnings-data-20260923</code>.
+Written for Alan. Nothing here is deployed, and nothing has been deleted from the database.</p>
+</header>
+
+<h3>1. “Eight past dates without stored results.” What that actually was</h3>
+<p class="quote">Alan, 7:30 PM: “It says <b>eight past dates without stored results</b>. What's up with that?”</p>
+
+<p>It was one fault with a simple cause. <b>A company's report date is the row's name.</b> The table stores an
+earnings event under the pair (company, date), so the date is part of its identity. When the supplier moves a
+projected date — and they move constantly — the job that writes the calendar cannot change the name of the old
+row. It writes a <b>new</b> row on the new date, and the old one stays behind for ever. The company never
+reported on that old day, so a result never arrives for it, and the page had to call it exactly what it saw:
+a past date with no stored result.</p>
+
+<p>This is not a guess about the code. The writer says so itself, in its own comment:</p>
+<div class="box"><code>// Identity in this table is (ticker,date), so when the provider moves a projected report date the<br>
+// upsert above creates a NEW row and the old one stays (MU 09-22/09-30, NKE 09-29/10-01 ...)</code>
+<p class="note" style="margin:10px 0 0">— <code>fmp-events</code>, the deployed function, pulled with the Supabase CLI tonight.
+<code>earnings-capture</code> writes the same way. <code>earnings-date-verify</code> <i>does</i> move a date when a
+company's own press release states one, but only for the next ten days, and its move collides with the
+(company, date) name whenever a row already sits on the new date — so it can never tidy these up.</p></div>
+
+<h4>The eight, by name</h4>
+<p>Your events room was on <b>★ FAV</b>, your 60 favourites. Those eight dates were:</p>
+<table>
+<tr><th>Company</th><th>The date with no result</th><th>What actually happened</th></tr>
+<tr><td><b>SNOW</b></td><td class="gone">26 Aug</td><td>reported <b class="kept">2 Sep</b> · 7 days later</td></tr>
+<tr><td><b>CRWV</b></td><td class="gone">18 Aug</td><td>reported <b class="kept">11 Aug</b> · 7 days earlier</td></tr>
+<tr><td><b>PANW</b></td><td class="gone">17 Aug</td><td>reported <b class="kept">1 Sep</b> · 15 days later</td></tr>
+<tr><td><b>WULF</b></td><td class="gone">14 Aug</td><td>reported <b class="kept">5 Aug</b> · 9 days earlier</td></tr>
+<tr><td><b>TGT</b></td><td class="gone">10 Aug</td><td>reported <b class="kept">19 Aug</b> · 9 days later</td></tr>
+<tr><td><b>NBIS</b></td><td class="gone">6 Aug</td><td>reported <b class="kept">12 Aug</b> · 6 days later</td></tr>
+<tr><td><b>RKLB</b></td><td class="gone">6 Aug</td><td>reported <b class="kept">10 Aug</b> · 4 days later</td></tr>
+<tr><td><b>APLD</b></td><td>20 Aug</td><td>its nearest stored result is 27 July — <b>24 days apart, so this one is NOT
+  called a moved date</b>. It stays on the list, now with that sentence beside it.</td></tr>
+</table>
+<p class="note">Across every name the Hub tracks, not just your favourites, there were <b>27</b> such dates since 1 June,
+and <b>12</b> more pairs where the same result is stored twice on two different days (AVGO 2 and 3 Sep, DELL 1 and
+3 Sep, CRWD 26 Aug and 1 Sep …).</p>
+
+<h3>2. The fix: a date can be retired, and nothing is thrown away</h3>
+<p>A stale date is not wrong data — it is a date that <b>stopped being the report date</b>. So it is marked, not
+removed. The migration adds three empty columns to the earnings table: <b>when</b> a date was retired,
+<b>which</b> date it gave way to, and <b>why</b>, in plain words. Every row keeps every value it has. Deleting
+rows would need your say-so; this does not, and it is reversible in two lines (they are written at the bottom of
+the migration file).</p>
+
+<p>The backfill only writes where the database itself holds the evidence. Three rules, and nothing else:</p>
+<table>
+<tr><th>Rule</th><th>The evidence</th><th>How many</th></tr>
+<tr><td><b>A · the moved date</b></td><td>the date has no result, and the same company has a stored result within 21 days.
+  A quarter is about 90 days, so a report three weeks away is the same report moved — not the next one.</td><td><b>25 rows</b></td></tr>
+<tr><td><b>B · the same result twice</b></td><td>two dates carry identical figures within 7 days, and exactly one of them is the day
+  the company's <b>earnings call</b> is stored against. The call is the evidence.</td><td><b>12 rows</b> — it settles all 12</td></tr>
+<tr><td><b>C · two dates still ahead</b></td><td>neither has a result yet, and exactly one of them carries a time from
+  <b>Nasdaq's own calendar</b>, which states the date. The other is the older guess.</td><td><b>13 rows</b> of 21 pairs</td></tr>
+<tr><td>everything else</td><td>—</td><td><b>left alone</b> and listed for a person</td></tr>
+</table>
+<p class="note">21 days, not 45, is deliberate: it leaves the far-apart cases (APLD, CBRS) to a human instead of
+guessing them away. The eight future pairs rule C cannot settle — PGR, TXN, NOW, GOOGL, BRK-B, HIMS, AU, CEG —
+are all in late October or November, and they settle themselves the moment one of the dates receives a result.</p>
+
+<h3>3. What the past list looks like now</h3>
+<figure><img src="frames/before-events-1680.png" alt="The events room before the change, at 1680 wide">
+<figcaption><b>Before</b> — the deployed page, rendered in a real browser tonight from the exact production bytes
+(<code>b6913cb</code>). The sub-tab strip <b>ALL | EARNINGS | DIVIDENDS</b> sits at the top, the panel calls itself
+“earnings &amp; dividends”, and the past column opens with <b>“8 past dates without stored results”</b>.</figcaption></figure>
+
+<figure><img src="frames/after-events-1680.png" alt="The events room after the change, at 1680 wide">
+<figcaption><b>After</b> — the same minute, same browser, same data, this branch. The sub-tab strip is gone and the
+panel says <b>earnings</b>. The past column opens with <b>“1 past date without stored results”</b>: APLD, 20 Aug,
+which now says why it is still there — “the nearest stored result for this company is Jul 27, 24 days earlier —
+too far apart for this page to call it the same report, so both are shown”. Below it the reported cards run
+AVGO 3 Sep, CRDO 2 Sep, exactly as before.</figcaption></figure>
+
+<table>
+<tr><th>The past column</th><th>Before</th><th>After</th></tr>
+<tr><td>on ★ FAV (what you were looking at)</td><td>8 dates without results</td><td><b>1</b> — APLD, with its reason</td></tr>
+<tr><td>across every tracked name</td><td>27 dates without results</td><td><b>2</b> — APLD and CBRS, each with its reason</td></tr>
+<tr><td>reported cards on ★ FAV</td><td>44</td><td>44 — <b>no report was hidden</b></td></tr>
+</table>
+
+<h4>“The first past reporting I see is September 3rd”</h4>
+<p>This one is <b>not</b> a fault, and I want to be straight about it rather than “fix” something that is right.
+The events room was scoped to <b>★ FAV</b>. Kroger (11 Sep), Adobe and Oracle (both 10 Sep) and UiPath (3 Sep)
+are all stored, complete and correctly ordered — they are simply <b>not in your 60 favourites</b>. I read the
+page's own memory in the browser to be sure: the rows it holds begin CTAS 23 Sep, CBRS 22 Sep, KR 11 Sep, ADBE
+10 Sep, ORCL 10 Sep — and the favourites filter is what removes the last three before they are drawn. Press
+<b>ALL</b> and the column opens with CTAS 23 Sep, KR 11 Sep, ADBE 10 Sep, ORCL 10 Sep.</p>
+<p class="note">So: the dates were broken, the ordering was not. If you would rather the column never hid a recent
+report, the honest change is a line above it saying “★ FAV · 4 more reports outside your favourites” — that is a
+decision for you, below.</p>
+
+<h3>4. The tape now leans in</h3>
+<p class="quote">Alan: “As a report comes nearer, we should apply a similar idea to the <b>economic section</b> — as it gets
+closer, it displays more detail: <b>before market open, after market close</b>… more like this timeline: how many
+days, what company… more natural.”</p>
+
+<p>The band used to say one thing at one size for everything in the week: the weekday, the ticker, and the result
+when it had one. It now carries the next three weeks as well, and the nearer a report is, the more it says.</p>
+
+<h4>Before — the whole band, this week only</h4>
+<div class="tape"><span class="n">WEEK OF SEP 21</span><span class="dot">·</span><span class="w">TUE</span>
+<span class="t">CBRS</span><span class="dot">·</span><span class="w">TODAY before the open</span> <span class="t">CTAS</span>
+<span class="beat">1.39 vs est 1.35 &nbsp;+3.0%</span><span class="dot">·</span><span class="w">THU after the close</span> <span class="t">COST</span></div>
+
+<h4>After — five states, one law</h4>
+<table>
+<tr><th>How near</th><th>What the item says</th><th>Why</th></tr>
+<tr><td>a week or more out</td><td><code>IN 12 DAYS · NKE</code></td><td>how long, and who. Nothing else — it is not news yet.</td></tr>
+<tr><td>inside this week</td><td><code>TUE · NKE</code></td><td>the day it lands on.</td></tr>
+<tr><td>tomorrow</td><td><code>TOMORROW after the close · COST · est 6.54</code></td><td>now the session and the number to beat matter.</td></tr>
+<tr><td>today</td><td><code>TODAY before the open · CTAS · est 1.35</code>, and the item breathes</td><td>the same slow pulse the economic nudge uses for “soon”.</td></tr>
+<tr><td>reported</td><td><code>CTAS · 1.39 vs est 1.35 · +3.0%</code> in green</td><td>unchanged: the result, in the calendar's own three colours.</td></tr>
+</table>
+
+<figure><img src="frames/after-band-1680.png" alt="The earnings band after the change">
+<figcaption>The real band tonight, at 1680: “…after the close <b>COST</b> est 6.54 <b>time announced</b> · TUE
+<b>NKE</b> · IN 7 DAYS <b>MU</b> · IN 8 DAYS <b>NKE</b> · IN 15 DAYS <b>PEP</b> …”. It runs at 45 px/s, the same
+speed as the other three tapes, and stops when you hover. <b>NKE appears twice</b> — that is the duplicate-date
+fault still in the data: 29 Sep and 1 Oct. Rule C retires 29 Sep the moment the migration is applied, because
+Nasdaq's calendar states 1 Oct.</figcaption></figure>
+
+<h4>“How do we become aware that it was announced?”</h4>
+<p>A report time arrives long after the date does. When one is stored, the row is stamped with where it came from
+and when — that stamp already exists (<code>report_time_source</code>, <code>report_time_set_at</code>; 44 rows
+carry “nasdaq-calendar” as of tonight). For <b>one day</b> after that stamp, and only for reports inside the
+coming week, the band adds a quiet <b>time announced</b> mark. Then it goes silent again. In the picture above,
+only Costco wears it.</p>
+<p class="note">I tightened this after looking at the first screenshot: the night the Nasdaq fill lands, twenty
+items three weeks out all wore the mark at once, which is noise rather than news.</p>
+
+<h3>5. Dividends</h3>
+<p class="quote">Alan: “The <b>dividend section, we've never really used it</b>… kind of weird to have.”</p>
+<p>Gone. The <b>ALL | EARNINGS | DIVIDENDS</b> strip is removed from the events room, the panel now calls itself
+<b>earnings</b>, and the empty “no dividends source wired yet” view went with it. Nothing else in the room moved:
+the span bar (TIMELINE · MONTH · WEEK · DAY), the cards, the extras column and the calendar are untouched — lane
+M28 is working on that layout tonight and I stayed out of it.</p>
+
+<div class="pair">
+<figure><img src="frames/before-events-390.png" alt="Phone, before"><figcaption><b>Before, at 390 (phone).</b> The three
+sub-tabs take a whole row; “8 past dates without stored results”.</figcaption></figure>
+<figure><img src="frames/after-events-390.png" alt="Phone, after"><figcaption><b>After, at 390.</b> The row is gone, the
+space goes back to the cards, and the list is down to APLD. The <b>COST</b> card's ticker still overlaps its date
+at this width — I checked the production bytes and it does exactly the same there, so it is not something this
+change caused; it belongs to the card layout M28 has in hand.</figcaption></figure>
+</div>
+
+<h3>6. Where every number on this page comes from</h3>
+<ul>
+<li><b>The rows</b> — <code>earnings_events</code> in the live database, read tonight, read-only. No number here was typed by hand.</li>
+<li><b>“Eight”, “27”, “44 cards”</b> — counted by running the page's own functions over those rows, in the browser, on both the production bytes and this branch, in the same minute.</li>
+<li><b>Which date is real</b> — rule B uses <code>earnings_call_transcripts</code> (the day the company's call is stored against); rule C uses <code>report_time_source = 'nasdaq-calendar'</code>.</li>
+<li><b>Why the duplicates exist</b> — the deployed source of <code>fmp-events</code>, <code>earnings-capture</code>, <code>earnings-sweep</code> and <code>earnings-date-verify</code>, pulled with the Supabase CLI.</li>
+<li><b>The screenshots</b> — a real Chromium at 1680×1000 and 390×844, pointed at a local copy of each version. The chart API only accepts scintillahub.ai, so prices, the Geiger column and the macro tape are blank in these frames; that is the local origin, not a fault, and nothing on this page depends on them.</li>
+</ul>
+
+<h3>7. What could be wrong</h3>
+<ul>
+<li><b>Rule A could retire a date that a company really did report on</b>, if a company reported twice inside 21 days. No company in this data does, and a quarter is ~90 days — but it is the assumption the rule rests on.</li>
+<li><b>Rule C trusts Nasdaq's calendar</b> over the older provider guess for dates still ahead. If Nasdaq is the one that is wrong, the Hub will show the wrong date until the report happens — at which point rule A corrects it.</li>
+<li><b>The Hub's own copy of the rule is weaker than the database's.</b> Until the migration is applied, the page sets aside only case A (a resultless date next to a real report). AVGO 2/3 Sep will keep appearing twice on screen until the backfill runs.</li>
+<li><b>Nothing stops tomorrow's stale row from being written.</b> The writers are unchanged. The two fixes for that are in the last section — neither is applied.</li>
+<li><b>APLD 20 Aug and CBRS 22 Sep are still unexplained.</b> They are listed by name with their distance, which is all the page can honestly say.</li>
+</ul>
+
+<h3>8. What I did not do</h3>
+<ul>
+<li><b>Deleted nothing</b>, renamed nothing, overwrote no value. Retiring a date is three new columns.</li>
+<li><b>Applied nothing.</b> The migration and the backfill are written and dry-run only — the coordinator applies them. I ran no write of any kind against the database.</li>
+<li><b>Deployed nothing and pushed nothing.</b></li>
+<li><b>Did not change any edge function.</b> The durable repair is described below and is the coordinator's call.</li>
+<li><b>Did not touch</b> the earnings room's header, zoom or DAY card layout (M28's work tonight), the calendar views, the Indicator Lab, or any other room.</li>
+<li><b>Did not verify against the companies' own filings.</b> Every judgement here is made from what the database itself holds.</li>
+</ul>
+
+<h3>9. Three decisions for you</h3>
+<table>
+<tr><th>#</th><th>The decision</th><th>What I would do</th></tr>
+<tr><td>1</td><td>How the stale rows stop coming back. Either the two rules run as a small scheduled job every ten
+  minutes (no function is touched, it is the same SQL), or the writers are changed to stamp the old row when they
+  insert a moved date.</td><td><b>Schedule the SQL.</b> It is additive, reversible and needs no deploy; changing
+  the writers can follow once it has been watched for a week.</td></tr>
+<tr><td>2</td><td>Whether ★ FAV should say when it is hiding recent reports (Kroger, Adobe, Oracle were all
+  outside your favourites tonight).</td><td><b>Yes — one quiet line</b> above the column: “4 more reports outside
+  your favourites”. It is honest and costs nothing.</td></tr>
+<tr><td>3</td><td>The band carries three weeks now. That is 25–30 names on a busy week.</td><td><b>Leave it for a
+  week and see.</b> If it feels long, the economic nudge's answer is the one to copy: collapse a loaded day into
+  a count rather than naming everyone.</td></tr>
+</table>
+
+<p class="note" style="margin-top:40px">Branch <code>hub/earnings-data-20260923</code>, from <code>origin/hub/release-20260923</code> @ <code>b6913cb</code>.
+Tests: 467 run, 465 pass; the two failures are the two that already fail on production. 9 of those tests are new and cover the rules on this page.</p>
+
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
