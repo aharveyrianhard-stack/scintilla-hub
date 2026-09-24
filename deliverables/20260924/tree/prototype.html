@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · TREE (proposal preview)</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#5c5c5c;
+  --up:#35b06a; --dn:#d1483f;                 /* direction only — Alan: daily up green, daily down red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+a{color:var(--ink2)}
+.wrap{max-width:1640px;margin:0 auto;padding:14px 16px 40px}
+h1{font-size:14px;letter-spacing:.14em;margin:0 0 2px;color:var(--ink)}
+.sub{font-size:11px;color:var(--dim);margin:0 0 12px}
+.grid{display:grid;grid-template-columns:420px minmax(0,1fr);gap:12px;align-items:start}
+.grid>*{min-width:0}
+.pan{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.pan>.hd{padding:8px 10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.12em;color:var(--dim)}
+.tree{padding:6px 4px 10px;max-height:78vh;overflow:auto}
+.row{display:flex;align-items:center;gap:6px;padding:3px 6px;cursor:pointer;border-radius:2px;white-space:nowrap}
+.row:hover{background:var(--panel2)}
+.row.on{background:var(--panel2);outline:1px solid var(--line2)}
+.tw{width:11px;color:var(--mute);font-size:11px;flex:0 0 11px}
+.lbl{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.lvl-market>.lbl{letter-spacing:.1em}
+.lvl-trunk>.lbl{color:var(--ink)}
+.lvl-sector>.lbl,.lvl-branch>.lbl{color:var(--ink2)}
+.lvl-industry>.lbl,.lvl-family>.lbl{color:var(--dim);font-size:11px}
+.n{color:var(--mute);font-size:11px;flex:0 0 auto}
+.bar{flex:0 0 46px;height:6px;background:var(--panel2);border:1px solid var(--line);position:relative}
+.bar i{position:absolute;top:0;bottom:0;display:block}
+.chg{flex:0 0 52px;text-align:right;font-size:11px}
+.up{color:var(--up)} .dn{color:var(--dn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;padding:10px}
+.tile{background:var(--panel2);border:1px solid var(--line);padding:8px}
+.tile b{display:block;font-size:16px;font-weight:500;letter-spacing:.02em}
+.tile span{font-size:11px;color:var(--dim);letter-spacing:.08em}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tab{background:var(--panel2);border:1px solid var(--line);color:var(--ink2);font:11px/1.4 var(--mono);padding:5px 8px;cursor:pointer;letter-spacing:.06em}
+.tab.on{color:var(--ink);border-color:var(--line2);background:#202020}
+.rule{padding:7px 10px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:right;padding:5px 8px;font-size:11px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--dim);font-weight:400;letter-spacing:.08em;position:sticky;top:0;background:var(--panel)}
+td.t,th.t{text-align:left}
+td.nm{text-align:left;color:var(--dim);max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.star{cursor:pointer;color:var(--mute);background:none;border:0;font:12px var(--mono)}
+.star.on{color:var(--ink)}
+.scroll{max-height:60vh;overflow:auto}
+.foot{margin-top:12px;font-size:11px;color:var(--dim)}
+.warn{color:var(--ink2)}
+.pan{overflow:hidden}
+.scroll{max-height:60vh;overflow:auto}
+@media (max-width:980px){ .grid{grid-template-columns:1fr} .tree{max-height:46vh} }
+@media (max-width:560px){
+  /* phone: nothing may push the page sideways. The table scrolls inside its own panel and
+     drops the columns that do not help on a phone; the tree keeps count and move. */
+  .wrap{padding:12px 10px 28px}
+  .sub{word-break:break-word}
+  .row{gap:4px;padding:3px 4px}
+  .lbl{min-width:0}
+  .bar{flex-basis:26px}
+  .chg{flex:0 0 46px}
+  td.nm,th.nm,td.cap,th.cap,td.gr,th.gr,td.pe,th.pe{display:none}
+  th,td{padding:5px 6px}
+  .tiles{grid-template-columns:repeat(2,1fr);gap:6px}
+  .tile b{font-size:15px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span data-scnav-slot></span><h1>SCINTILLA · TREE</h1>
+  <p class="sub" id="sub">loading…</p>
+  <div class="grid">
+    <div class="pan">
+      <div class="hd">THE TREE — tap a node</div>
+      <div class="tree" id="tree"></div>
+    </div>
+    <div class="pan">
+      <div class="hd" id="nodeHd">—</div>
+      <div class="tiles" id="tiles"></div>
+      <div class="tabs" id="tabs"></div>
+      <div class="rule" id="rule"></div>
+      <div class="scroll"><table id="tbl"></table></div>
+    </div>
+  </div>
+  <p class="foot" id="foot"></p>
+</div>
+<script>
+/* TREE PREVIEW — proposal only. It reads one built file and writes nothing anywhere.
+   Every number on this page comes from data/taxonomy-20260924.json, which scripts/build-taxonomy.py
+   builds from the chart API (/universe, /geiger, /quotes) and PostgREST (company_profile,
+   ticker_cohorts, cohorts, social_sentiment, fundamentals, fwd_eps_ntm, hub_favorites). */
+const S={data:null,node:"MARKET",tab:"NAMES",stars:{}};
+const $=(id)=>document.getElementById(id);
+const fmtCap=(v)=>v==null?"—":(v>=1e12?(v/1e12).toFixed(2)+"T":v>=1e9?(v/1e9).toFixed(0)+"B":(v/1e6).toFixed(0)+"M");
+const sgn=(v)=>v==null?"":(v>0?"up":v<0?"dn":"");
+const pct=(v,d)=>v==null?"—":(v>0?"+":"")+v.toFixed(d==null?2:d)+"%";
+/* green-to-red scale: -1 red … 0 mid … +1 green. Direction colour only, per Alan's rule. */
+function scale(v){
+  if(v==null) return "var(--mute)";
+  const x=Math.max(-1,Math.min(1,v));
+  return x>=0 ? `color-mix(in srgb, var(--up) ${Math.round(x*100)}%, var(--mute))`
+              : `color-mix(in srgb, var(--dn) ${Math.round(-x*100)}%, var(--mute))`;
+}
+function children(id){ return Object.values(S.data.nodes).filter(n=>n.parent===id); }
+const ORDER={market:0,trunk:1,sector:2,family:2,branch:2,industry:3};
+function rowHTML(n,depth,open){
+  const kids=children(n.id).length;
+  const g=n.geiger_mean, w=g==null?0:Math.abs(g)*100/2;
+  return `<div class="row lvl-${n.level} ${S.node===n.id?"on":""}" data-id="${n.id}" style="padding-left:${6+depth*12}px">
+    <span class="tw">${kids?(open?"▾":"▸"):""}</span>
+    <span class="lbl">${n.label}</span>
+    <span class="n">${n.n}</span>
+    <span class="bar" title="Geiger mean ${g==null?"—":g.toFixed(3)}"><i style="left:50%;width:${w}%;background:${scale(g)};${g<0?"transform:translateX(-100%)":""}"></i></span>
+    <span class="chg ${sgn(n.chg_mean_pct)}">${pct(n.chg_mean_pct)}</span>
+  </div>`;
+}
+const OPEN=new Set(["MARKET","COMPANIES","BRANCHES"]);
+function drawTree(){
+  const out=[];
+  (function walk(id,depth){
+    const n=S.data.nodes[id]; if(!n) return;
+    out.push(rowHTML(n,depth,OPEN.has(id)));
+    if(!OPEN.has(id)) return;
+    children(id).sort((a,b)=>(ORDER[a.level]-ORDER[b.level])||(b.n-a.n)||a.label.localeCompare(b.label))
+      .forEach(c=>walk(c.id,depth+1));
+  })("MARKET",0);
+  $("tree").innerHTML=out.join("");
+  $("tree").querySelectorAll(".row").forEach(r=>r.onclick=()=>{
+    const id=r.dataset.id;
+    if(S.node===id && children(id).length){ OPEN.has(id)?OPEN.delete(id):OPEN.add(id); }
+    else { S.node=id; OPEN.add(id); }
+    drawTree(); drawNode();
+  });
+}
+const LISTS=[
+  {id:"NAMES",label:"ALL NAMES",rule:"every name placed on this node.",f:(m)=>m},
+  {id:"OVERSOLD",label:"OVERSOLD QUALITY",
+   rule:"market cap ≥ $20B and Geiger ≤ −0.35, weakest first. Quality is a size stand-in until the fundamentals join the tree.",
+   f:(m,p)=>m.filter(t=>(p[t].market_cap||0)>=2e10 && p[t].geiger!=null && p[t].geiger<=-0.35).sort((a,b)=>p[a].geiger-p[b].geiger)},
+  {id:"PULLBACK",label:"LEADERS PULLING BACK",
+   rule:"Geiger trend ≥ +0.25 while the last session closed down — strength that gave something back.",
+   f:(m,p)=>m.filter(t=>p[t].trend!=null&&p[t].trend>=0.25&&p[t].chg_pct!=null&&p[t].chg_pct<0).sort((a,b)=>b>a?0:0).sort((a,b)=>p[b].trend-p[a].trend)},
+  {id:"SCINTILLAS",label:"SCINTILLAS",
+   rule:"moved 3% or more in the last completed session, biggest move first.",
+   f:(m,p)=>m.filter(t=>p[t].chg_pct!=null&&Math.abs(p[t].chg_pct)>=3).sort((a,b)=>Math.abs(p[b].chg_pct)-Math.abs(p[a].chg_pct))},
+  {id:"CHEAPER",label:"CHEAPER, GROWING FASTER",
+   rule:"forward P/E below this node's median and forward EPS growth above it. Needs four names with both numbers.",
+   f:(m,p)=>{
+     const ok=m.filter(t=>p[t].pe_ntm!=null&&p[t].eps_growth_pct!=null);
+     if(ok.length<4) return [];
+     const med=(a)=>{const s=a.slice().sort((x,y)=>x-y);return s[Math.floor(s.length/2)];};
+     const mp=med(ok.map(t=>p[t].pe_ntm)), mg=med(ok.map(t=>p[t].eps_growth_pct));
+     return ok.filter(t=>p[t].pe_ntm<mp&&p[t].eps_growth_pct>mg).sort((a,b)=>p[a].pe_ntm-p[b].pe_ntm);
+   }},
+  {id:"FAVRED",label:"FAVOURITES IN RED",
+   rule:"a name Alan has starred that closed down. 72 stars read from hub_favorites.",
+   f:(m,p)=>m.filter(t=>p[t].fav&&p[t].chg_pct!=null&&p[t].chg_pct<0).sort((a,b)=>p[a].chg_pct-p[b].chg_pct)},
+];
+function drawNode(){
+  const n=S.data.nodes[S.node], p=S.data.profiles;
+  $("nodeHd").textContent=n.label.toUpperCase()+"  ·  "+n.level+"  ·  "+n.n+" names";
+  const t=[
+    ["NAMES",n.n],["GEIGER MEAN",n.geiger_mean==null?"—":n.geiger_mean.toFixed(3)],
+    ["BREADTH",n.breadth_pct==null?"—":n.breadth_pct+"%"],
+    ["ADVANCERS",n.advancers_pct==null?"—":n.advancers_pct+"%"],
+    ["LAST SESSION",pct(n.chg_mean_pct)],["MARKET CAP",fmtCap(n.market_cap)],
+    ["SENTIMENT",n.sentiment_mean==null?"—":n.sentiment_mean.toFixed(2)+" ("+n.sentiment_n+")"],
+    ["PUT / CALL","not yet"],
+  ];
+  $("tiles").innerHTML=t.map(([k,v])=>{
+    const cls=(k==="LAST SESSION")?sgn(n.chg_mean_pct):(k==="GEIGER MEAN"?"":"");
+    const col=(k==="GEIGER MEAN")?`style="color:${scale(n.geiger_mean)}"`:"";
+    return `<div class="tile"><b class="${cls}" ${col}>${v}</b><span>${k}</span></div>`;
+  }).join("");
+  $("tabs").innerHTML=LISTS.map(l=>`<button class="tab ${S.tab===l.id?"on":""}" data-t="${l.id}">${l.label}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;drawNode();});
+  const L=LISTS.find(l=>l.id===S.tab);
+  const rows=L.f(n.members,p);
+  $("rule").innerHTML=`<span class="warn">${L.label}</span> — ${L.rule} ${rows.length} of ${n.n} names.`;
+  $("tbl").innerHTML=`<thead><tr><th class="t">TICKER</th><th class="t nm">NAME</th><th>GEIGER</th><th>CHG</th><th class="cap">CAP</th><th class="pe">FWD P/E</th><th class="gr">EPS GROWTH</th><th>★</th></tr></thead><tbody>`+
+    (rows.length?rows.map(tk=>{const r=p[tk];return `<tr>
+      <td class="t">${tk}${r.fav?' <span style="color:var(--ink)">★</span>':""}</td>
+      <td class="nm ">${r.name||""}</td>
+      <td style="color:${scale(r.geiger)}">${r.geiger==null?"—":r.geiger.toFixed(3)}</td>
+      <td class="${sgn(r.chg_pct)}">${pct(r.chg_pct)}</td>
+      <td class="cap">${fmtCap(r.market_cap)}</td>
+      <td class="pe">${r.pe_ntm==null?"—":r.pe_ntm.toFixed(1)}</td>
+      <td class="gr ${sgn(r.eps_growth_pct)}">${r.eps_growth_pct==null?"—":pct(r.eps_growth_pct,1)}</td>
+      <td><button class="star ${S.stars[tk]?"on":""}" data-s="${tk}">${S.stars[tk]?"★":"☆"}</button></td>
+    </tr>`}).join("")
+    :`<tr><td class="t" colspan="8" style="color:var(--dim)">no name on this node meets the rule.</td></tr>`)+`</tbody>`;
+  $("tbl").querySelectorAll(".star").forEach(b=>b.onclick=()=>{S.stars[b.dataset.s]=!S.stars[b.dataset.s];drawNode();});
+}
+fetch("/data/taxonomy-20260924.json").then(r=>r.json()).then(d=>{
+  S.data=d;
+  const pv=d.provenance;
+  $("sub").textContent=`${pv.universe.count} served names · Geiger ${pv.geiger.computed_utc} · prices read ${pv.quotes.generated_utc} for session ${pv.quotes.session_et||"—"} · built ${d.built_utc} · proposal preview, nothing is written`;
+  $("foot").innerHTML=`Geiger mean is the plain mean of the composite the chart API serves for each name on the node; breadth is the share of those names with a composite of 0.5 or better; the change column is the chart API's own CHG basis (price against the previous session's close), and the last completed session is ${pv.quotes.session_et||"—"}. Market cap comes from company_profile (FMP) and is shown for companies; for funds it is whatever FMP files and is not comparable. Put/call is empty because per-ticker option volume does not exist yet. Stars on this page are local to this preview and write nothing. Forward P/E and EPS growth use fwd_eps_ntm, last written ${pv.eps&&pv.eps.ntm_updated_ts?pv.eps.ntm_updated_ts.slice(0,10):"—"}, so they are older than the price.`;
+  drawTree(); drawNode();
+}).catch(e=>{ $("sub").textContent="could not load data/taxonomy-20260924.json — "+e; });
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
