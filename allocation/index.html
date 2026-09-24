@@ -354,12 +354,38 @@ td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
   <div id="boot" class="boot">reading the live Geiger, the sector tape and the fundamentals…</div>
 
   <div id="desk" class="off">
-    <div class="said">
-      <h1>WHAT THIS SAYS TODAY</h1>
-      <p class="headline" id="headline"></p>
-      <ul class="drove" id="drove"></ul>
-      <div class="missing" id="missing" style="display:none"></div>
-      <div class="split" id="split"></div>
+    <div class="layer first" id="STATE">
+      <h2>THE MARKET, IN SIX LINES</h2>
+      <div id="statelines" class="stlines"></div>
+      <p class="because" id="statenote"></p>
+    </div>
+
+    <div class="layer" id="SCREEN">
+      <h2>THE SCREENER — ONE TABLE, EVERY METHOD, CLICK ANY HEADER TO RE-RANK</h2>
+      <p class="says" id="scrsays"></p>
+      <div id="scrtab"></div>
+      <div class="knobs" id="kS"><div class="kh">HOW MUCH EACH METHOD COUNTS — YOUR SETTING, WITH THE BASELINE BESIDE IT</div></div>
+      <div class="knobs" id="kR"><div class="kh">THE TEMPLATE'S RULES — EVERY ONE IS A NUMBER YOU CAN MOVE</div></div>
+    </div>
+
+    <div class="layer" id="TMPLL">
+      <h2>WHAT THE TEMPLATE USED, AND WHAT EACH INPUT DID TO THE ANSWER</h2>
+      <div id="tmpl"></div>
+    </div>
+
+    <div class="layer" id="PLANL">
+      <h2>YOU ARE IN CASH — WHAT YOUR RULES SAY, STAGED</h2>
+      <div id="plan"></div>
+    </div>
+
+    <div class="layer" id="RSPL">
+      <h2>THE EQUAL-WEIGHT LAG, AND A BASKET THAT CARRIES IT</h2>
+      <div id="rspb"></div>
+    </div>
+
+    <div class="layer" id="AUDITL">
+      <h2>EVERY READ ON THIS PAGE, AND WHAT IT ANSWERED TODAY</h2>
+      <div id="audit"></div>
     </div>
 
     <div class="layer" id="L0">
@@ -468,6 +494,15 @@ td .why{font-family:var(--sans);font-size:13px;color:var(--dim);display:block}
     <div class="layer" id="ACTL">
       <h2>PROPOSED ACTIONS — NAME, SIZE, TRIGGER, WHY, PROBABILITY</h2>
       <div id="acts"></div>
+    </div>
+
+    <div class="layer said" id="SAIDL">
+      <h1>THE CONCLUSION — LAST, AFTER THE EVIDENCE</h1>
+      <p class="headline" id="headline"></p>
+      <ul class="drove" id="drove"></ul>
+      <div class="missing" id="missing" style="display:none"></div>
+      <div class="split" id="split"></div>
+      <div class="cites" id="cites"></div>
     </div>
 
     <div class="sources" id="sources"></div>
@@ -603,7 +638,21 @@ const BASE = { measure:"heat", neutral:50, speed:1, cashFloor:10,
                minEp:3,        /* the fewest SEPARATE past episodes a probability may rest on */
                oppCap:24,      /* how many opportunities get their own history read */
                prefW:15,       /* how much your own swipes move the order */
-               brSample:60 };  /* how many names the year-long breadth lines are measured over */
+               brSample:60,    /* how many names the year-long breadth lines are measured over */
+               /* M62 — HOW MUCH EACH METHOD COUNTS IN THE COMBINED SCORE. Alan, 24 Sep: "a combined
+                  method… a combined table I can re-rank… and all of the toggles and throttles". A weight
+                  of 0 switches a column off; the column still shows its reading, it just stops counting. */
+               wGeiger:20, wMom:15, wValue:15, wQual:20, wPull:15, wOver:15, wSigma:0, wEarn:0,
+               scrRows:25,     /* how many rows the table draws */
+               /* M62 — THE TEMPLATE'S RULES. Each one states what it does, in points, and is reversible. */
+               rateOn:true, rate10Hi:4.5, rateDrag:8, finLift:4, slopeFloor:0, slopeCut:5, hikeCut:5,
+               pcOn:true, pcHi:1.00, pcLo:0.70, pcLift:6, pcCash:3,
+               ernOn:true, ernCut:8,
+               sigMult:1.5,    /* tranche spacing, in the name's own usual day */
+               cancelPct:5,    /* how far under its 200-day cancels the plan */
+               planScore:45,   /* the combined score a name must keep for its plan to stand */
+               leadAbove200:10,/* how far above its 200-day a name must be to count as a leader */
+               basketN:10 };   /* how many names the equal-weight basket holds */
 const T = Object.assign({}, BASE);
 
 const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, missing:[],
@@ -624,7 +673,13 @@ const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, mis
              spyLong:null,    /* SPY as far back as the chart API serves it: the tide and the calendar */
              regime:null,     /* the regime lane's own read, when it has published one */
              declared:null,   /* the declared equity set, from the chart API's /universe */
-             staged:null, stagedNewest:null };   /* the legacy composite_staged read, for non-equities only */
+             staged:null, stagedNewest:null,   /* the legacy composite_staged read, for non-equities only */
+             /* M62 — the rails the template has to carry */
+             rates:null,      /* the whole treasury curve, today and the day before */
+             ff:null,         /* the Fed's own rate, monthly, carried with its age */
+             pc:{},           /* the Cboe put/call series: total, equity, index */
+             wr:null, adx:null, sd:null,   /* Williams %R, ADX and the 20-day sigma, same table as the averages */
+             qfull:null };    /* the full quote rows, so today's move can be measured in sigma */
 /* the bond ETF and the two ways of owning gold and silver — the names Alan pointed at */
 const ODD = ["IEF", "GLD", "GCUSD", "SLV", "SIUSD"];
 const INFLIGHT = new Set();
@@ -683,8 +738,28 @@ async function load() {
   /* BREADTH — the published 50- and 200-day averages, one read each instead of 364 bar pulls.
      Same table and same provider the Hub's board reads its indicators from. */
   const sP = pgAll("provider_indicators_current?select=ticker,indicator,period_length,value,source_date,session_state" +
-                   "&provider=eq.FMP&timeframe=eq.1day&indicator=in.(sma,rsi)&period_length=in.(14,50,200)&order=ticker.asc")
+                   "&provider=eq.FMP&timeframe=eq.1day&indicator=in.(sma,rsi,williams,adx,standarddeviation)" +
+                   "&period_length=in.(14,20,50,200)&order=ticker.asc")
               .catch((e)=>{ D.missing.push("the 50- and 200-day averages ("+e.message+")"); return null; });
+
+  /* M62 — THE RAILS THE TEMPLATE MUST CARRY. Alan, 24 Sep: "whatever you are using to AI assist
+     needs to be included in the template and in the decision making", and "how would the template
+     change if it took into account that the Fed just raised rates?"
+       · the curve: treasury_rates already keeps every tenor, so this reads the CURVE and the day
+         before it — the 2-year, the 10-year, the slope and the one-day change are measured here;
+       · the Fed's own rate: econ_history's federalFunds series. It is a MONTHLY print, so it is
+         carried with its age and never read as today's decision;
+       · put/call: the Cboe series through the chart API, total, equity and index. This route used to
+         answer 404 and the Hub still carries that note; it answers now, and the audit says so. */
+  const trP = pg("treasury_rates?select=*&order=date.desc&limit=2")
+              .catch((e)=>{ D.missing.push("the treasury curve ("+e.message+")"); return null; });
+  const ffP = pg("econ_history?select=series,date,value&series=eq.federalFunds&order=date.desc&limit=24")
+              .catch((e)=>{ D.missing.push("the Fed's own rate ("+e.message+")"); return null; });
+  const pcP = Promise.all(["PCC","PCCE","PCCI"].map((s) =>
+    api("/candles?symbol=" + s + "&tf=1d&limit=260")
+      .then((j)=>{ D.pc[s] = { series:(j.series||[]).map((b)=>({ t:b.t, c:b.c })), provider:j.provider,
+                               provider_symbol:j.provider_symbol || null }; })
+      .catch((e)=>{ D.pc[s] = { error:e.message }; })));
 
   /* RSP joins the tape: the equal-weight S&P against the cap-weighted one is the breadth of the
      rally itself, which is the thing Alan named. */
@@ -736,7 +811,8 @@ async function load() {
       if (r.updated_ts && Number(r.updated_ts) > newest) newest = Number(r.updated_ts); });
     D.stagedNewest = newest || null;
   }
-  await tP; await oP; await spP; await rgP;
+  await tP; await oP; await spP; await rgP; await pcP;
+  D.rates = await trP; D.ff = await ffP;
   D.fav = favList(favServer);
   D.favSource = (Array.isArray(favServer) && favServer.length) ? "server" : "browser";
   if (cohRows) {
@@ -746,14 +822,18 @@ async function load() {
     D.cohRowCount = cohRows.length;
   }
   if (smaRows) {
-    D.sma = {}; D.rsi = {}; let newest = null;
+    D.sma = {}; D.rsi = {}; D.wr = {}; D.adx = {}; D.sd = {}; let newest = null;
     smaRows.forEach((r)=>{ const t=String(r.ticker).toUpperCase();
       const o = (D.sma[t] = D.sma[t] || { s50:null, s200:null });
       const v = Number(r.value);
       if (!isFinite(v)) return;
       /* M39 — the same table, the same provider, the same day: the board's own RSI column */
-      if (String(r.indicator) === "rsi") { if (Number(r.period_length) === 14) D.rsi[t] = v; }
-      else if (Number(r.period_length) === 50) o.s50 = v; else if (Number(r.period_length) === 200) o.s200 = v;
+      const ind = String(r.indicator), per = Number(r.period_length);
+      if (ind === "rsi") { if (per === 14) D.rsi[t] = v; }
+      else if (ind === "williams") { if (per === 14) D.wr[t] = v; }
+      else if (ind === "adx") { if (per === 14) D.adx[t] = v; }
+      else if (ind === "standarddeviation") { if (per === 20) D.sd[t] = v; }
+      else if (ind === "sma" && per === 50) o.s50 = v; else if (ind === "sma" && per === 200) o.s200 = v;
       const d = String(r.source_date||"").slice(0,10);
       if (d && (!newest || d > newest)) newest = d; });
     D.smaDate = newest;
@@ -781,13 +861,22 @@ async function load() {
 
   /* /quotes sheds load in market hours: asked for after first paint, never blocking,
      and if it does not come back the page keeps the close it already printed. */
-  const picks = MODEL && MODEL.names ? MODEL.names.map((n)=>n.t) : [];
-  if (picks.length) {
-    api("/quotes?symbols=" + picks.join(",")).then((j) => {
+  /* M62 — the rows the screener is actually showing, the watch list and the picks, in one call.
+     The full quote row is kept, not just the price, because today's move measured in the name's
+     own sigma needs the previous close the chart API states alongside it. */
+  const want = [];
+  const add = (t) => { if (t && want.indexOf(t) === -1 && want.length < 90) want.push(t); };
+  (MODEL && MODEL.names ? MODEL.names : []).forEach((n)=> add(n.t));
+  WATCH.forEach(add);
+  if (MODEL && MODEL.screen) viewRows(MODEL.screen).slice(0, T.scrRows).forEach((r)=> add(r.t));
+  if (want.length) {
+    api("/quotes?symbols=" + want.join(",")).then((j) => {
       const rows = j.quotes || j.symbols || j.data || [];
-      D.quotes = {};
+      D.quotes = {}; D.qfull = {};
       (Array.isArray(rows) ? rows : Object.values(rows)).forEach((q) => {
-        const t = q.symbol || q.ticker; if (t) D.quotes[t] = q.price != null ? q.price : q.last;
+        const t = q.symbol || q.ticker; if (!t) return;
+        D.qfull[t] = q;
+        D.quotes[t] = q.price != null ? q.price : q.last;
       });
       draw();
     }).catch(()=>{});
@@ -1197,6 +1286,18 @@ function compute() {
   m.cash     = 100 - m.invested;
   m.investedNoBreadth = clamp(T.neutral + T.speed * m.reading * 50, 0, 100 - T.cashFloor);
   m.breadthMoved = m.invested - m.investedNoBreadth;
+  /* M62 — THE RAILS, then what they do to how much to own, then the combined table.
+     The rails are read first because two of them move the deployed number, and the page has to
+     be able to say by how much: investedNoRails is kept so the change is always printable. */
+  m.rails = railsRead();
+  m.railCash = railEffectOnCash(m);
+  m.investedNoRails = m.invested;
+  if (m.railCash.pts) {
+    m.invested = clamp(m.invested + m.railCash.pts, 0, 100 - T.cashFloor);
+    m.cash = 100 - m.invested;
+  }
+  m.m60 = m60Read(m, eq);
+  m.screen = screenRows(m);
 
   /* LAYER 2 — which sectors */
   const bySec = {};
@@ -3010,6 +3111,79 @@ const KNOBS = {
       d:"the largest companies first; each one costs one daily-bar read", min:20, max:150, step:10, unit:" names",
       cash:"Nothing directly. It is the sample size printed beside the breadth lines." },
   ],
+  kS: [
+    { id:"wGeiger", t:"How much the Geiger counts", d:"the board's own daily composite for that name", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wMom", t:"How much momentum counts", d:"the Geiger's momentum leg, with ADX(14) shown beside it", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wValue", t:"How much value counts", d:"a cheaper earnings multiple than the rest of the covered set", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wQual", t:"How much quality counts", d:"margin, its direction, debt, return on equity and growth", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wPull", t:"How much the pullback counts", d:"how far below its own 50-day a name above its 200-day sits", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wOver", t:"How much oversold counts", d:"daily RSI(14), with Williams %R(14) beside it", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wSigma", t:"How much today's move counts", d:"today's move in the name's own 20-day sigma. 0 by default: today's move is only priced for the rows on screen, and a leg only some rows have would entrench them", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"wEarn", t:"How much earnings timing counts", d:"sessions until the next filed report, nearer scoring lower. 0 by default: the earnings RULE below already marks the row down, and counting it twice would double it", min:0, max:40, step:5, unit:"%",
+      cash:"Nothing directly. It changes the order of the combined table." },
+    { id:"scrRows", t:"How many rows the table draws",
+      d:"the rest are still filtered and ranked, just not drawn", min:10, max:120, step:5, unit:" rows",
+      cash:"Nothing. It is how much of the table you see." },
+  ],
+  kR: [
+    { id:"rateOn", t:"Let rates move the scores", d:"the 10-year, the 2-year and the Fed's own rate",
+      opt:[[true,"ON"],[false,"OFF"]],
+      cash:"OFF removes the curve's effect on deployed cash as well as on the rows." },
+    { id:"rate10Hi", t:"The 10-year line", d:"above this, long-duration growth is marked down and financials are marked up",
+      min:3, max:6.5, step:0.25, unit:"%", dec:2,
+      cash:"Indirect: a lower line means the curve bites sooner, which changes which names lead, not the total." },
+    { id:"rateDrag", t:"How hard a high 10-year marks down an expensive name",
+      d:"points off the combined score for each 1% the 10-year is over your line, at the most expensive end",
+      min:0, max:20, step:1, unit:" points",
+      cash:"Nothing directly. It is the long-duration penalty." },
+    { id:"finLift", t:"How much a high long rate helps a financial",
+      d:"points added for each 1% over the line, while the curve is not inverted (net interest margin)",
+      min:0, max:20, step:1, unit:" points",
+      cash:"Nothing directly." },
+    { id:"slopeFloor", t:"The slope that counts as late-cycle", d:"the 10-year minus the 2-year, in percentage points",
+      min:-1, max:1, step:0.1, unit:"%", dec:2,
+      cash:"Under this line, deployed cash is cut by the next setting." },
+    { id:"slopeCut", t:"What an inverted curve takes off deployed cash", d:"points of deployed cash",
+      min:0, max:20, step:1, unit:" points",
+      cash:"Straight down, when the curve is under your slope line." },
+    { id:"hikeCut", t:"What a rise in the Fed's own rate takes off", d:"points of deployed cash while the rise works through",
+      min:0, max:20, step:1, unit:" points",
+      cash:"Straight down, when the monthly series shows a rise." },
+    { id:"pcOn", t:"Let put/call move the scores", d:"the Cboe total put/call, five-day",
+      opt:[[true,"ON"],[false,"OFF"]], cash:"OFF removes both the row effect and the cash effect." },
+    { id:"pcHi", t:"The fear line on put/call", d:"at or over this, an oversold reading counts for more",
+      min:0.6, max:1.6, step:0.05, unit:"", dec:2,
+      cash:"At or over it, deployed cash gets the put/call bonus below." },
+    { id:"pcLo", t:"The complacency line on put/call", d:"at or under this, an oversold reading counts for less",
+      min:0.4, max:1.2, step:0.05, unit:"", dec:2, cash:"Nothing directly." },
+    { id:"pcLift", t:"How much put/call moves a row", d:"points at the extremes of the oversold column",
+      min:0, max:15, step:1, unit:" points", cash:"Nothing directly." },
+    { id:"pcCash", t:"What fear adds to deployed cash", d:"points, when five-day put/call is at or over the fear line",
+      min:0, max:15, step:1, unit:" points", cash:"Straight up, in fear." },
+    { id:"ernOn", t:"Hold names that report soon", d:"a report inside your window is a coin toss, not a staged entry",
+      opt:[[true,"ON"],[false,"OFF"]], cash:"Nothing directly." },
+    { id:"ernCut", t:"What a report inside the window takes off a row", d:"points off the combined score",
+      min:0, max:20, step:1, unit:" points", cash:"Nothing directly." },
+    { id:"sigMult", t:"Tranche spacing, in the name's own usual day",
+      d:"the first tranche sits this many daily sigmas below today, or at the 50-day, whichever is lower",
+      min:0.5, max:4, step:0.25, unit:"×", dec:2,
+      cash:"Nothing directly. Wider spacing means fewer tranches fill." },
+    { id:"cancelPct", t:"How far under its 200-day cancels a plan", d:"a broken trend is not a pullback",
+      min:1, max:15, step:1, unit:"%", cash:"Nothing directly." },
+    { id:"planScore", t:"The score a name must keep for its plan to stand", d:"out of 100 on this table",
+      min:0, max:90, step:5, unit:"", cash:"Nothing directly." },
+    { id:"leadAbove200", t:"How far above its 200-day counts as a leader", d:"the PULLBACK LEADERS preset uses this line",
+      min:0, max:40, step:5, unit:"%", cash:"Nothing directly." },
+    { id:"basketN", t:"How many names the equal-weight basket holds", d:"the best-ranked names inside the lagging sectors",
+      min:4, max:20, step:1, unit:" names", cash:"Nothing directly." },
+  ],
   k1: [
     { id:"measure", t:"What counts as the market's reading",
       d:"the average score of every name, or simply how many of them are rising",
@@ -3068,13 +3242,19 @@ const KNOBS = {
 };
 function knobHTML(k) {
   const v = T[k.id];
+  /* Alan, 24 Sep: "Alan's toggles are assumptions: show the baseline beside his setting." */
+  const b = BASE[k.id];
+  const bl = (b === undefined) ? "" : '<span class="base">baseline ' +
+    (k.opt ? esc(((k.opt.find((o)=>String(o[0])===String(b)) || ["",""])[1]))
+           : esc((k.dec ? Number(b).toFixed(k.dec) : b) + k.unit)) +
+    (String(b) === String(v) ? "" : " · yours differs") + "</span>";
   const ctl = k.opt
     ? '<div class="opt">' + k.opt.map(([val,lab]) =>
         '<button data-knob="'+k.id+'" data-val="'+val+'" class="'+(String(v)===String(val)?"on":"")+'">'+lab+"</button>").join("") + "</div>"
     : '<input type="range" data-knob="'+k.id+'" min="'+k.min+'" max="'+k.max+'" step="'+k.step+'" value="'+v+'">' +
       '<span class="val" id="v_'+k.id+'">' + (k.dec ? Number(v).toFixed(k.dec) : v) + k.unit + "</span>";
   return '<div class="knob"><div class="lab"><b>'+k.t+"</b><span>"+k.d+"</span></div>" +
-         '<div class="ctl">' + ctl + "</div></div>";
+         '<div class="ctl">' + ctl + bl + "</div></div>";
 }
 function buildKnobs() {
   Object.entries(KNOBS).forEach(([box, ks]) => {
@@ -3122,6 +3302,744 @@ document.addEventListener("click", (e) => {
   }
 });
 
+/* ==========================================================================
+   M62 — THE RAILS, THE COMBINED SCREENER, THE PLAN. 24 Sep.
+   Alan: "whatever you are using to AI assist needs to be included in the
+   template and in the decision making" · "a combined table I can re-rank" ·
+   "telling me the conclusion so quickly is not great".
+   Nothing here is typed in. Every number below names the read it came from,
+   and every rule that moves a score is a number you can change.
+   ========================================================================== */
+
+/* ---- 1. THE RAILS ---------------------------------------------------------- */
+function railsRead() {
+  const R = { curve:null, ff:null, pc:null };
+  if (D.rates && D.rates.length) {
+    const a = D.rates[0], b = D.rates[1] || null;
+    const n = (v)=> (v==null || !isFinite(Number(v))) ? null : Number(v);
+    R.curve = { date:String(a.date).slice(0,10), m3:n(a.m3), y2:n(a.y2), y5:n(a.y5), y10:n(a.y10), y30:n(a.y30),
+      slope: (n(a.y10)!=null && n(a.y2)!=null) ? n(a.y10)-n(a.y2) : null,
+      slope3m: (n(a.y10)!=null && n(a.m3)!=null) ? n(a.y10)-n(a.m3) : null,
+      chg10: (b && n(a.y10)!=null && n(b.y10)!=null) ? n(a.y10)-n(b.y10) : null,
+      chg2:  (b && n(a.y2)!=null  && n(b.y2)!=null)  ? n(a.y2)-n(b.y2)  : null,
+      prevDate: b ? String(b.date).slice(0,10) : null,
+      age: a.updated_ts ? ageDays(a.updated_ts) : null };
+  }
+  if (D.ff && D.ff.length) {
+    const path = D.ff.slice().sort((x,y)=> String(x.date) < String(y.date) ? -1 : 1)
+      .map((r)=>({ d:String(r.date).slice(0,10), v:Number(r.value) })).filter((p)=>isFinite(p.v));
+    const last = path[path.length-1] || null, prev = path.length>1 ? path[path.length-2] : null;
+    if (last) R.ff = { v:last.v, date:last.d, move: prev ? last.v - prev.v : null, prevDate: prev ? prev.d : null,
+      path: path.slice(-12),
+      age: Math.round((Date.now() - Date.parse(last.d + "T00:00:00Z")) / 86400000) };
+  }
+  const one = (k) => {
+    const o = D.pc[k];
+    if (!o || o.error || !o.series || !o.series.length) return { err: o && o.error ? o.error : "no series" };
+    const s = o.series, lastN = (n) => s.slice(-n).map((b)=>b.c).filter((v)=>isFinite(v));
+    const five = lastN(5), year = lastN(252);
+    return { v:s[s.length-1].c, at:dstr(s[s.length-1].t), avg5: five.length ? mean(five) : null,
+      med1y: year.length > 60 ? med(year) : null, n:s.length, provider:o.provider,
+      provider_symbol:o.provider_symbol };
+  };
+  R.pc = { total:one("PCC"), equity:one("PCCE"), index:one("PCCI") };
+  R.pcOK = !R.pc.total.err;
+  return R;
+}
+
+/* ---- 2. THE M60 MEASURES, each one word and a number ----------------------- */
+function m60Read(m, eq) {
+  const o = { };
+  /* GEIGER — one word for the board's own average, on the lines the page already uses */
+  o.geiger = { v:m.heat, word: m.heat > 0.25 ? "hot" : m.heat > 0.05 ? "firm" : m.heat > -0.05 ? "soft" : "cold" };
+  /* PARTICIPATION — how many names sit above their own 50-day, and how far the middle one is.
+     Read from the published averages, so it covers every name the table carries. */
+  const d50 = eq.map((x)=> stretchOf(x).d50).filter((v)=> v!=null && isFinite(v));
+  const d200 = eq.map((x)=> stretchOf(x).d200).filter((v)=> v!=null && isFinite(v));
+  o.above50 = d50.length ? { share: d50.filter((v)=>v>0).length / d50.length * 100, mid: med(d50), n:d50.length } : null;
+  o.above200 = d200.length ? { share: d200.filter((v)=>v>0).length / d200.length * 100, mid: med(d200), n:d200.length } : null;
+  /* THINNING — the equal-weight S&P against the cap-weighted one. Falling means fewer names
+     are carrying the move, which is the thing Alan named. Two windows, from the same tape. */
+  const rr = (n) => rspRatio(n);
+  o.thin = { d20: rr(20), d60: rr(60) };
+  o.thinWord = (o.thin.d60 == null) ? null : o.thin.d60 < -1 ? "thinning" : o.thin.d60 > 1 ? "broadening" : "flat";
+  /* WAITING TIME — how long a daily signal takes to play out, measured on SPY's own history:
+     after a day SPY fell 1% or more, the median number of sessions until it closed back above
+     that day's close. Defined here in full because the number is meaningless without it. */
+  o.wait = spyWait(1);
+  /* SQUEEZE — SPY's 20-session realised move against its own year. Tight means a squeeze. */
+  o.sq = spySqueeze();
+  /* PEAKS — honest limit: the averages table keeps TODAY only, so this page cannot say where
+     participation peaked. It says what it can measure instead. */
+  o.peakNote = "the averages table carries today's values only, so participation has no history here; " +
+               "the equal-weight line above is the measure that does have one";
+  return o;
+}
+/* HOW LONG A DAILY SIGNAL TAKES TO PLAY OUT. The first version of this measured the sessions until
+   SPY simply closed back above the down day, and it answered 1 — true, and useless, because a
+   one-day bounce clears it. What the measure means is how long the move takes to reach its best
+   point, so that is what this measures: after a down day of 1% or more that also closed under its
+   own 20-day average, the sessions to the HIGHEST close in the next twenty. Signal days overlap
+   inside one selloff, so the count below is signal days, not separate episodes. */
+function spyWait(dropPct) {
+  const s = D.spyLong; if (!s || s.length < 400) return null;
+  const c = s.map((b)=>b.c), a20 = [];
+  let run = 0;
+  for (let i = 0; i < c.length; i++) { run += c[i]; if (i >= 20) run -= c[i-20]; a20.push(i >= 19 ? run/20 : null); }
+  const waits = [];
+  for (let i = 20; i < c.length - 21; i++) {
+    if (!(c[i] / c[i-1] - 1 <= -dropPct/100)) continue;
+    if (a20[i] == null || c[i] >= a20[i]) continue;
+    let best = 0, bestV = c[i];
+    for (let k = 1; k <= 20; k++) if (c[i+k] > bestV) { bestV = c[i+k]; best = k; }
+    if (best) waits.push(best);
+  }
+  if (waits.length < 20) return null;
+  return { days: med(waits), n: waits.length, from: dstr(s[0].t), drop: dropPct };
+}
+function spySqueeze() {
+  const s = D.spyLong; if (!s || s.length < 300) return null;
+  const c = s.map((b)=>b.c);
+  const vol = (end) => { const r = []; for (let i = Math.max(1, end-20); i < end; i++) r.push(c[i]/c[i-1]-1);
+    if (r.length < 15) return null; const mm = mean(r);
+    return Math.sqrt(mean(r.map((v)=>(v-mm)*(v-mm)))) * 100; };
+  const now = vol(c.length); if (now == null) return null;
+  const hist = []; for (let e = c.length - 252; e < c.length; e += 5) { const v = vol(e); if (v != null) hist.push(v); }
+  const mid = hist.length > 20 ? med(hist) : null;
+  return { now, mid, word: (mid == null) ? null : now < mid * 0.8 ? "squeezed" : now > mid * 1.25 ? "wide" : "normal" };
+}
+
+/* ---- 3. THE COMBINED SCREENER --------------------------------------------- */
+/* One row per name. One column per method. Every column is a percentile inside the
+   covered set, so they can be added up at all; the raw reading is shown beside it.
+   A name with fewer than MIN_LEGS measured gets NO combined score — the same rule the
+   quality score already follows, for the same reason. */
+const MIN_LEGS = 3;
+const SCR_COLS = [
+  { k:"g",     t:"GEIGER",   w:"wGeiger", d:"the board's own daily composite, from the live artifact" },
+  { k:"mom",   t:"MOMENTUM", w:"wMom",    d:"the Geiger's momentum leg, plus ADX(14) shown beside it" },
+  { k:"val",   t:"VALUE",    w:"wValue",  d:"cheaper earnings multiple than the rest of the covered set" },
+  { k:"qual",  t:"QUALITY",  w:"wQual",   d:"the page's own quality score: margin, its direction, debt, return on equity, growth" },
+  { k:"pull",  t:"PULLBACK", w:"wPull",   d:"how far below its own 50-day the name sits, for names above their 200-day" },
+  { k:"over",  t:"OVERSOLD", w:"wOver",   d:"daily RSI(14) and Williams %R(14), both from the published table" },
+  { k:"sig",   t:"USUAL DAY",w:"wSigma",  d:"today's move measured in the name's own 20-day sigma" },
+  { k:"earn",  t:"EARNINGS", w:"wEarn",   d:"sessions until the next confirmed report; nearer scores lower" },
+];
+function pctile(vals) {
+  const s = vals.filter((v)=>v!=null && isFinite(v)).sort((a,b)=>a-b);
+  return (v) => {
+    if (v == null || !isFinite(v) || s.length < 8) return null;
+    let n = 0; for (const z of s) if (z <= v) n++;
+    return n / s.length * 100;
+  };
+}
+function screenRows(m) {
+  const eq = m.eq, q = qualityScorer(eq);
+  const ernOf = (t) => { const r = D.ern && D.ern[t]; return r ? daysApart(todayET(), r.date) : null; };
+  const raw = eq.map((x) => {
+    const st = stretchOf(x);
+    const sd = D.sd && D.sd[x.t] != null ? D.sd[x.t] : null;
+    const px = st.px;
+    const sigPct = (sd != null && px) ? sd / px * 100 : null;
+    const qq = q(x);
+    return { t:x.t, sector:x.sector, plain:plain(x.sector), mcap:x.mcap, fav:x.fav, cohs:x.cohs, cohTilt:x.cohTilt,
+      g:x.g, mom:x.mom, trend:x.trend, pe:x.pe, peFrom:x.peFrom, quality:qq.score, qLegs:qq.n, qOf:qq.of,
+      rsi:st.rsi, wr: (D.wr && D.wr[x.t] != null) ? D.wr[x.t] : null,
+      adx: (D.adx && D.adx[x.t] != null) ? D.adx[x.t] : null,
+      d50:st.d50, d200:st.d200, px, sig:sigPct,
+      move: movePct(x.t), ern: ernOf(x.t), grw:x.grw, negEq:x.negEq };
+  });
+  /* the percentile ladders, each built over the names that actually have the reading */
+  const P = {
+    g:    pctile(raw.map((r)=>r.g)),
+    mom:  pctile(raw.map((r)=>r.mom)),
+    val:  pctile(raw.map((r)=> (r.pe != null && r.pe > 0) ? -r.pe : null)),
+    qual: pctile(raw.map((r)=>r.quality)),
+    pull: pctile(raw.map((r)=> (r.d50 != null && r.d200 != null && r.d200 > 0) ? -r.d50 : null)),
+    over: pctile(raw.map((r)=> r.rsi != null ? -r.rsi : null)),
+    sig:  pctile(raw.map((r)=> (r.move != null && r.sig) ? -(r.move / r.sig) : null)),
+    earn: pctile(raw.map((r)=> r.ern != null ? r.ern : null)),
+  };
+  raw.forEach((r) => {
+    r.s = { g:P.g(r.g), mom:P.mom(r.mom), val:P.val((r.pe!=null&&r.pe>0)?-r.pe:null), qual:P.qual(r.quality),
+            pull:P.pull((r.d50!=null&&r.d200!=null&&r.d200>0)?-r.d50:null), over:P.over(r.rsi!=null?-r.rsi:null),
+            sig:P.sig((r.move!=null&&r.sig)?-(r.move/r.sig):null), earn:P.earn(r.ern) };
+    const eff = ruleEffect(r, m);
+    r.rule = eff;
+    let num = 0, den = 0, n = 0;
+    for (const c of SCR_COLS) {
+      const w = Number(T[c.w]) || 0, v = r.s[c.k];
+      if (!w || v == null) continue;
+      num += w * v; den += w; n++;
+    }
+    r.legs = n;
+    r.base = den ? num / den : null;                       /* before the template's rules */
+    r.score = (r.base == null || n < MIN_LEGS) ? null : clamp(r.base + eff.pts, 0, 100);
+    r.why = n < MIN_LEGS ? (n + " of " + SCR_COLS.length + " measures came back, which is not enough to rank it") : null;
+    if (r.fav) r.score = r.score == null ? null : clamp(r.score + T.favBoost * 100 * 0.1, 0, 100);
+  });
+  return raw;
+}
+function movePct(t) {
+  const q = D.qfull && D.qfull[t];
+  if (!q || q.price == null || q.previous_close == null || !q.previous_close) return null;
+  return (q.price / q.previous_close - 1) * 100;
+}
+/* ---- 4. THE TEMPLATE'S RULES, with numbers, applied and shown -------------- */
+/* Each rule says what it does in one line, moves the score by a stated number of
+   points, and reports what it changed. Nothing is applied silently. */
+function ruleEffect(r, m) {
+  const R = m.rails, out = { pts:0, said:[] };
+  const c = R && R.curve;
+  if (c && c.y10 != null && T.rateOn) {
+    const over = c.y10 - T.rate10Hi;
+    if (over > 0) {
+      /* LONG DURATION. A high multiple is a long-duration asset: more of its value sits in
+         far-off earnings, and a higher discount rate takes more off it. The mark-down is
+         proportional to how expensive the name is inside the covered set. */
+      if (r.s.val != null) {
+        const dur = (100 - r.s.val) / 100;                 /* 1 = the most expensive names */
+        const pts = -over * T.rateDrag * dur;
+        if (Math.abs(pts) >= 0.05) { out.pts += pts; out.said.push("the 10-year at " + c.y10.toFixed(2) +
+          "% is " + over.toFixed(2) + " over your " + T.rate10Hi + "% line, and this multiple is long duration: " + pts.toFixed(1)); }
+      }
+      /* NET INTEREST MARGIN. Banks earn the spread; a higher long rate with a positive slope
+         helps them. The lift only applies while the curve is not inverted. */
+      if (r.sector === "Financial Services" && c.slope != null && c.slope > T.slopeFloor) {
+        const pts = over * T.finLift;
+        out.pts += pts; out.said.push("a financial with the curve " + (c.slope*100).toFixed(0) +
+          "bp positive, so the spread helps: +" + pts.toFixed(1));
+      }
+    }
+  }
+  /* PUT/CALL. Five-day total put/call above your fear line means the crowd is paying for
+     protection, which is when an oversold reading is worth more, not less. */
+  const pc = R && R.pc && R.pc.total;
+  if (T.pcOn && pc && !pc.err && pc.avg5 != null && r.s.over != null) {
+    if (pc.avg5 >= T.pcHi) { const pts = (r.s.over - 50) / 50 * T.pcLift;
+      out.pts += pts; if (Math.abs(pts) >= 0.05) out.said.push("five-day put/call " + pc.avg5.toFixed(2) +
+        " is at or over your " + T.pcHi + " fear line, so the oversold reading counts for more: " + (pts>0?"+":"") + pts.toFixed(1)); }
+    else if (pc.avg5 <= T.pcLo) { const pts = -(r.s.over - 50) / 50 * T.pcLift;
+      out.pts += pts; if (Math.abs(pts) >= 0.05) out.said.push("five-day put/call " + pc.avg5.toFixed(2) +
+        " is at or under your " + T.pcLo + " complacency line, so the oversold reading counts for less: " + pts.toFixed(1)); }
+  }
+  /* EARNINGS TIMING. A name reporting inside your window is not a staged entry, it is a coin
+     toss; the screener marks it down rather than hiding it. */
+  if (T.ernOn && r.ern != null && r.ern <= T.ernDays) {
+    out.pts += -T.ernCut; out.said.push("reports in " + r.ern + " session" + (r.ern===1?"":"s") +
+      ", inside your " + T.ernDays + "-session window: -" + T.ernCut); }
+  return out;
+}
+/* what the rails do to HOW MUCH TO OWN, stated as a number and reversible */
+function railEffectOnCash(m) {
+  const out = { pts:0, said:[] };
+  const c = m.rails && m.rails.curve;
+  if (T.rateOn && c && c.slope != null && c.slope < T.slopeFloor) {
+    out.pts -= T.slopeCut;
+    out.said.push("the 2s10s slope is " + (c.slope*100).toFixed(0) + "bp, under your " + (T.slopeFloor*100).toFixed(0) +
+      "bp line, which is late-cycle: " + (-T.slopeCut) + " points of deployed cash");
+  }
+  const ff = m.rails && m.rails.ff;
+  if (T.rateOn && ff && ff.move != null && ff.move > 0) {
+    out.pts -= T.hikeCut;
+    out.said.push("the Fed's own rate rose from " + ff.prevDate + " to " + ff.date + " (" + ff.v.toFixed(2) +
+      "%), so the page steps back while the new rate works through: " + (-T.hikeCut) + " points");
+  }
+  const pc = m.rails && m.rails.pc && m.rails.pc.total;
+  if (T.pcOn && pc && !pc.err && pc.avg5 != null && pc.avg5 >= T.pcHi) {
+    out.pts += T.pcCash;
+    out.said.push("five-day put/call " + pc.avg5.toFixed(2) + " at or over the fear line adds " + T.pcCash +
+      " points, because fear is when staged buying pays");
+  }
+  return out;
+}
+
+
+/* ---- 5. THE SCREEN: evidence first ---------------------------------------- */
+const SORT = { key:"score", dir:-1 };
+const VIEW = { preset:"all", sector:"", cohort:"", favOnly:false, q:"" };
+const VIEWS_KEY = "sc_alloc_views";
+const PRESETS = {
+  all:   { t:"EVERYTHING", d:"every covered name, ranked by the combined score" },
+  pull:  { t:"PULLBACK LEADERS", d:"above the 200-day by " + "" , f:(r)=> r.d200 != null && r.d200 >= T.leadAbove200 && r.d50 != null && r.d50 <= 0 },
+  over:  { t:"MOST OVERSOLD", d:"daily RSI at or under your oversold line", f:(r)=> r.rsi != null && r.rsi <= T.rsiMax },
+  qsale: { t:"QUALITY ON SALE", d:"quality over your floor, cheap against the set, and not extended",
+           f:(r)=> r.quality != null && r.quality >= T.qFloor && r.s && r.s.val != null && r.s.val >= 60 && (r.d50 == null || r.d50 <= 2) },
+  fav:   { t:"FAVOURITES", d:"the board's own starred names", f:(r)=> r.fav },
+};
+function presetDesc(k) {
+  if (k === "pull") return "a leader — above its 200-day by at least " + T.leadAbove200 + "% — that is now below its 50-day";
+  if (k === "over") return "daily RSI(14) at or under " + T.rsiMax;
+  if (k === "qsale") return "quality " + T.qFloor + " or better, in the cheaper half of the set, and not stretched above its 50-day";
+  return PRESETS[k].d;
+}
+function viewRows(rows) {
+  const p = PRESETS[VIEW.preset] || PRESETS.all;
+  let out = rows.filter((r)=> !p.f || p.f(r));
+  if (VIEW.sector) out = out.filter((r)=> r.sector === VIEW.sector);
+  if (VIEW.cohort) out = out.filter((r)=> (r.cohs||[]).indexOf(VIEW.cohort) !== -1);
+  if (VIEW.favOnly) out = out.filter((r)=> r.fav);
+  if (VIEW.q) { const q = VIEW.q.toUpperCase(); out = out.filter((r)=> r.t.indexOf(q) !== -1); }
+  const k = SORT.key, dir = SORT.dir;
+  const val = (r) => k === "t" ? r.t : k === "sector" ? r.plain : (r.s && r.s[k] != null ? r.s[k] : r[k]);
+  out.sort((a,b)=>{
+    const x = val(a), y = val(b);
+    if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y)) * (dir<0?-1:1);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;                 /* unread rows always sink, either direction */
+    if (y == null) return -1;
+    return (x - y) * dir;
+  });
+  return out;
+}
+function drawState(m) {
+  const R = m.rails, c = R.curve, pc = R.pc && R.pc.total, x = m.m60;
+  const L = [];
+  const ln = (k, v, s) => L.push('<div class="stl"><span class="k">' + esc(k) + '</span><span class="v">' + v +
+    '</span><span class="s">' + esc(s) + "</span></div>");
+  ln("HOW MUCH TO OWN", num(pct(m.invested)) + " deployed, " + num(pct(m.cash)) + " cash",
+     "the board's average score " + m.heat.toFixed(3) + " (" + x.geiger.word + ") with breadth at " + T.breadthW + "%");
+  ln("PARTICIPATION", x.above50 ? num(pct(x.above50.share)) + " above their 50-day" + (x.above200 ? ", " + num(pct(x.above200.share)) + " above their 200-day" : "") : "—",
+     x.above50 ? "the middle name is " + sg(x.above50.mid,1) + "% from its 50-day, over " + x.above50.n + " names" : "the averages did not come back");
+  ln("EQUAL WEIGHT vs CAP", x.thin.d60 != null ? dirSpan(x.thin.d60, sg(x.thin.d60,1) + "% over 60 sessions") : "—",
+     "RSP against SPY" + (x.thinWord ? " — " + x.thinWord : "") + (x.thin.d20 != null ? ", " + sg(x.thin.d20,1) + "% over 20" : ""));
+  ln("RATES", c && c.y10 != null ? num(c.y10.toFixed(2) + "%") + " 10-year, " + num(c.y2.toFixed(2) + "%") + " 2-year, slope " +
+      dirSpan(c.slope, (c.slope*100).toFixed(0) + "bp") : "—",
+     c ? "the treasury curve as of " + c.date + (c.chg10 != null ? ", the 10-year " + sg(c.chg10*100,0) + "bp on the day" : "") +
+         (R.ff ? " · the Fed's own rate " + R.ff.v.toFixed(2) + "% (" + R.ff.date + ", " + R.ff.age + " days old)" : "") : "the curve did not come back");
+  ln("PUT / CALL", pc && !pc.err ? num(pc.v.toFixed(2)) + " total, five-day " + num(pc.avg5.toFixed(2)) : "—",
+     pc && !pc.err ? "Cboe through the chart API, " + pc.at + (R.pc.equity.err ? "" : " · equity " + R.pc.equity.v.toFixed(2) +
+       " · index " + R.pc.index.v.toFixed(2)) + (pc.med1y != null ? " · its own year median " + pc.med1y.toFixed(2) : "")
+       : "the put/call series did not come back (" + (pc ? pc.err : "not read") + ")");
+  ln("THE CLOCK", x.wait ? num(x.wait.days + " sessions") + " for a daily signal to play out" : "—",
+     x.wait ? "after a 1% down day that closed under its own 20-day average, the median sessions to the best close " +
+       "in the next twenty · " + x.wait.n + " signal days since " + x.wait.from +
+       " · the window is twenty sessions, so this number cannot exceed it and sits near it" +
+       (x.sq && x.sq.word ? " · the 20-session move is " + x.sq.word : "") : "not enough SPY history came back");
+  document.getElementById("statelines").innerHTML = L.join("");
+  document.getElementById("statenote").innerHTML =
+    "Six lines, then the table. The conclusion is at the bottom of the page, after the evidence it rests on. " +
+    esc(x.peakNote) + ".";
+}
+const scn = (v, d) => v == null ? '<span class="qn">—</span>' : num(Number(v).toFixed(d==null?0:d));
+function drawScreen(m) {
+  const rows = viewRows(m.screen);
+  const shown = rows.slice(0, T.scrRows);
+  const H = [];
+  H.push('<div class="scrctl">');
+  H.push('<div class="scrrow">' + Object.keys(PRESETS).map((k)=>
+    '<button class="chip ' + (VIEW.preset===k?"on":"") + '" data-preset="' + k + '">' + PRESETS[k].t + "</button>").join("") + "</div>");
+  H.push('<div class="scrrow"><span class="qn">' + esc(presetDesc(VIEW.preset)) + "</span></div>");
+  const secs = [...new Set(m.screen.map((r)=>r.sector))].sort();
+  const cohs = COHORTS.filter((p)=> m.screen.some((r)=> (r.cohs||[]).indexOf(p[1]) !== -1));
+  H.push('<div class="scrrow">' +
+    '<select data-f="sector"><option value="">EVERY SECTOR</option>' + secs.map((s)=>
+      '<option value="' + esc(s) + '"' + (VIEW.sector===s?" selected":"") + ">" + esc(plain(s).toUpperCase()) + "</option>").join("") + "</select>" +
+    '<select data-f="cohort"><option value="">EVERY COHORT</option>' + cohs.map((p)=>
+      '<option value="' + esc(p[1]) + '"' + (VIEW.cohort===p[1]?" selected":"") + ">" + esc(p[0]) + "</option>").join("") + "</select>" +
+    '<input data-f="q" placeholder="TICKER" value="' + esc(VIEW.q) + '" size="7">' +
+    '<button class="chip ' + (VIEW.favOnly?"on":"") + '" data-f="favOnly">★ FAVOURITES ONLY</button>' +
+    '<span class="qn">' + rows.length + " of " + m.screen.length + " names · showing " + shown.length + "</span></div>");
+  const saved = viewsLoad();
+  H.push('<div class="scrrow"><button class="chip" data-view="save">SAVE THIS VIEW</button>' +
+    saved.map((v,i)=> '<button class="chip on" data-view="load" data-i="' + i + '">' + esc(v.name) +
+      '</button><button class="chip" data-view="del" data-i="' + i + '" title="forget this view">✕</button>').join("") +
+    (saved.length ? "" : '<span class="qn">no saved views yet — set the table the way you want it and save it</span>') + "</div>");
+  H.push("</div>");
+  const th = (k, t, cls) => '<th class="' + (cls||"") + (SORT.key===k?" sorted":"") + '" data-sort="' + k + '">' + t +
+    (SORT.key===k ? (SORT.dir<0?" ↓":" ↑") : "") + "</th>";
+  H.push('<div class="scrwrap"><table class="scr"><thead><tr>');
+  H.push(th("t","NAME") + th("sector","SECTOR","sc2") + th("score","COMBINED"));
+  SCR_COLS.forEach((c)=> H.push(th(c.k, c.t + (Number(T[c.w])?"":" ·off"), c.k==="g"||c.k==="over"?"":"sc2")));
+  H.push(th("cohTilt","COHORT","sc2") + "<th>RULES</th></tr></thead><tbody>");
+  shown.forEach((r) => {
+    const cell = (k, rawTxt) => '<td class="' + (SCR_COLS.find((c)=>c.k===k) && ["mom","val","qual","pull","over","sig","earn"].indexOf(k)>=0 ? "sc2" : "") + '">' +
+      (r.s[k] == null ? '<span class="qn">—</span>' : num(Math.round(r.s[k]))) +
+      '<span class="why">' + rawTxt + "</span></td>";
+    H.push("<tr" + (r.fav ? ' class="fv"' : "") + "><td>" + (r.fav ? "★ " : "") + esc(r.t) +
+      '<span class="why">' + esc((r.cohs||[]).slice(0,2).join(" ")) + "</span></td>");
+    H.push('<td class="sc2">' + esc(plain(r.sector)) + "</td>");
+    H.push("<td>" + (r.score == null ? '<span class="qn">—</span>' : '<b class="' + dirCls(r.score-50) + '">' + Math.round(r.score) + "</b>") +
+      '<span class="why">' + (r.why ? esc(r.why) : (r.legs + "/" + SCR_COLS.length + " measures" +
+      (r.rule && r.rule.pts ? ", rules " + sg(r.rule.pts,1) : ""))) + "</span></td>");
+    H.push(cell("g", sg(r.g,3)));
+    H.push(cell("mom", sg(r.mom,3) + (r.adx != null ? " · adx " + r.adx.toFixed(0) : "")));
+    H.push(cell("val", r.pe != null ? "pe " + r.pe.toFixed(1) + (r.peFrom==="last full year"?" (last year)":"") : "no multiple"));
+    H.push(cell("qual", r.quality != null ? r.quality + "/100 on " + r.qLegs + "/" + r.qOf : "not enough measures"));
+    H.push(cell("pull", (r.d50 != null ? sg(r.d50,1) + "% vs 50-day" : "—") + (r.d200 != null ? " · " + sg(r.d200,1) + "% vs 200" : "")));
+    H.push(cell("over", (r.rsi != null ? "rsi " + r.rsi.toFixed(0) : "—") + (r.wr != null ? " · %r " + r.wr.toFixed(0) : "")));
+    H.push(cell("sig", r.sig ? (r.move != null ? sg(r.move/r.sig,1) + "σ today" : "σ " + r.sig.toFixed(1) + "%/day") : "—"));
+    H.push(cell("earn", r.ern != null ? "in " + r.ern + "d" : (D.ern ? "none filed" : "calendar not read")));
+    H.push('<td class="sc2">' + (r.cohTilt == null ? '<span class="qn">—</span>' : dirSpan(r.cohTilt, sg(r.cohTilt,3))) + "</td>");
+    H.push('<td class="rl">' + (r.rule && r.rule.said.length ? r.rule.said.map((s)=>'<span class="why">' + esc(s) + "</span>").join("") : '<span class="qn">none</span>') + "</td></tr>");
+  });
+  H.push("</tbody></table></div>");
+  document.getElementById("scrtab").innerHTML = H.join("");
+  document.getElementById("scrsays").innerHTML =
+    "One row per name, one column per method, every header re-ranks. " +
+    "Each cell shows the name's place in the covered set out of 100, with the reading it came from underneath. " +
+    "A name with fewer than " + MIN_LEGS + " measures gets no combined score rather than a flattering one.";
+}
+function viewsLoad() { try { const v = JSON.parse(localStorage.getItem(VIEWS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch(_) { return []; } }
+function viewsSave(v) { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v.slice(0,12))); } catch(_) {} }
+
+/* ---- 6. THE RE-ENTRY PLAN — what your rules say, not advice ---------------- */
+const WATCH = ["AVGO","GOOGL","NVDA","VST","WMT","BAC","AMZN","NBIS","MU","SNDK","GEV","BE"];
+function planFor(t, m) {
+  const ser = D.hist[t] || null;
+  const row = m.screen.find((r)=> r.t === t) || null;
+  const q = D.qfull && D.qfull[t];
+  const px = (q && q.price != null) ? q.price : (row ? row.px : null);
+  const o = { t, row, px, read: !!ser, ern: row ? row.ern : null };
+  if (!ser || ser.length < 60 || px == null) return o;
+  const cl = ser.map((b)=>b.c);
+  const win = (n) => cl.length > n ? cl[cl.length-1-n] : null;
+  o.hi252 = Math.max.apply(null, cl.slice(-252));
+  o.ddown = (px / o.hi252 - 1) * 100;
+  o.r252 = win(252) ? (px / win(252) - 1) * 100 : null;
+  o.r126 = win(126) ? (px / win(126) - 1) * 100 : null;
+  o.s50 = row ? row.s50 : null;
+  const a = D.sma && D.sma[t];
+  o.a50 = a ? a.s50 : null; o.a200 = a ? a.s200 : null;
+  o.sig = row && row.sig ? row.sig : null;
+  const step = o.sig ? Math.max(1.5, T.sigMult * o.sig) : T.stageStep;
+  const L1 = Math.min(px * (1 - step/100), o.a50 != null ? o.a50 : Infinity);
+  const L2 = L1 * (1 - T.stageStep/100);
+  const L3 = (o.a200 != null && o.a200 < L2) ? o.a200 : L2 * (1 - T.stageStep/100);
+  const share2 = Math.round((100 - T.stage1) * 0.6), share3 = 100 - T.stage1 - Math.round((100 - T.stage1) * 0.6);
+  o.step = step;
+  o.tranches = [
+    { n:1, px:L1, size:T.stage1, why: o.a50 != null && L1 === o.a50 ? "its own 50-day average" : step.toFixed(1) + "% below today, which is " + T.sigMult + "× its usual day" },
+    { n:2, px:L2, size:share2, why:"a further " + T.stageStep + "%" },
+    { n:3, px:L3, size:share3, why: (o.a200 != null && L3 === o.a200) ? "its own 200-day average" : "a further " + T.stageStep + "%" },
+  ].map((z)=> Object.assign(z, { from: (z.px/px - 1) * 100,
+      /* the probability is measured at THAT depth against the name's own 200-day, which is
+         what probAt() measures, and it is only shown when the history holds enough separate
+         episodes to carry it (your minEp line). */
+      prob: (o.a200 != null) ? probAt(ser, (z.px / o.a200 - 1) * 100, 20) : null }));
+  o.cancel = [];
+  if (o.a200 != null) o.cancel.push("a close more than " + T.cancelPct + "% under the 200-day (" +
+    (o.a200 * (1 - T.cancelPct/100)).toFixed(2) + ") — that is a broken trend, not a pullback");
+  if (o.ern != null && o.ern <= T.ernDays) o.cancel.push("it reports in " + o.ern + " session" + (o.ern===1?"":"s") +
+    ", inside your " + T.ernDays + "-session window, so the tranche waits until the report is out");
+  o.cancel.push("the combined score falling under " + T.planScore + " on this table");
+  o.live = m.m60 && m.m60.wait ? m.m60.wait.days : null;
+  return o;
+}
+function drawPlan(m) {
+  ensureHist(WATCH);                    /* bounded: twelve names, four at a time, once per session */
+  const plans = WATCH.map((t)=> planFor(t, m));
+  const cashNow = m.cash, perName = m.invested / Math.max(1, plans.filter((p)=>p.read).length);
+  const H = [];
+  H.push("<p class='says'>You are in cash. These are the levels your own lines put the money back to work at — " +
+    num(pct(m.invested)) + " deployed in the end, " + num(pct(cashNow)) + " kept, in three tranches per name. " +
+    "<b>This is what your rules say, not a recommendation to buy.</b></p>");
+  H.push('<div class="scrwrap"><table class="scr"><thead><tr><th>NAME</th><th>SCORE</th><th>NOW</th>' +
+    "<th>FROM ITS HIGH</th><th>TRANCHE 1</th><th>TRANCHE 2</th><th>TRANCHE 3</th><th>WHAT CANCELS IT</th></tr></thead><tbody>");
+  plans.forEach((p) => {
+    if (!p.read) {
+      H.push("<tr><td>" + esc(p.t) + "</td><td colspan='7'><span class='qn'>no history read for this name yet — " +
+        (p.row ? "it is on the table but its daily history was not pulled" : "it is not in the covered set (" +
+        (D.declared && !D.declared.has(p.t) ? "not a declared equity" : "no Geiger or no sector") + ")") + "</span></td></tr>");
+      return;
+    }
+    const tr = (z) => "<td>" + num(z.px.toFixed(2)) + '<span class="why">' + z.size + "% of the position · " +
+      sg(z.from,1) + "% away · " + esc(z.why) + (z.prob && z.prob.hit != null ?
+      " · at that depth this name was higher 20 sessions later in " + Math.round(z.prob.hit) + "% of " + z.prob.ep +
+      " separate past episodes, middle move " + sg(z.prob.med,1) + "%" : (z.prob && z.prob.why ? " · " + esc(z.prob.why) : "")) + "</span></td>";
+    H.push("<tr><td>" + (p.row && p.row.fav ? "★ " : "") + esc(p.t) + '<span class="why">' +
+      (p.r252 != null ? "12-month " + sg(p.r252,0) + "%" : "") + (p.r126 != null ? " · 6-month " + sg(p.r126,0) + "%" : "") + "</span></td>");
+    H.push("<td>" + (p.row && p.row.score != null ? num(Math.round(p.row.score)) : '<span class="qn">—</span>') + "</td>");
+    H.push("<td>" + num(p.px.toFixed(2)) + '<span class="why">' + (p.a50 != null ? "50-day " + p.a50.toFixed(2) : "") +
+      (p.a200 != null ? " · 200-day " + p.a200.toFixed(2) : "") + "</span></td>");
+    H.push("<td>" + dirSpan(p.ddown, sg(p.ddown,1) + "%") + '<span class="why">high ' + p.hi252.toFixed(2) + " in the last year</span></td>");
+    H.push(tr(p.tranches[0]) + tr(p.tranches[1]) + tr(p.tranches[2]));
+    H.push("<td class='rl'>" + p.cancel.map((c)=>'<span class="why">' + esc(c) + "</span>").join("") + "</td></tr>");
+  });
+  H.push("</tbody></table></div>");
+  const read = plans.filter((p)=>p.read).length;
+  H.push("<p class='because'>Each tranche stays live for about " + (m.m60 && m.m60.wait ? num(m.m60.wait.days + " sessions") : "—") +
+    ", the median time a daily signal takes to play out on SPY. Sizes are your own staging lines: " +
+    num(T.stage1 + "%") + " first, then " + num(T.stageStep + "%") + " further down for each step. " +
+    "Levels come from each name's own 20-day sigma, its 50-day and its 200-day, read today — " + num(read + " of " + WATCH.length) +
+    " names had their history read. Nothing here is an order and nothing is sent anywhere.</p>");
+  document.getElementById("plan").innerHTML = H.join("");
+}
+
+/* ---- 7. THE RSP-REPRESENTATIVE BASKET ------------------------------------- */
+function drawRSP(m) {
+  const spy = D.tape.SPY, rsp = D.tape.RSP;
+  const H = [];
+  if (!spy || !rsp) { document.getElementById("rspb").innerHTML =
+    "<p class='says'>The equal-weight comparison needs both SPY and RSP from the tape, and one of them did not come back.</p>"; return; }
+  const ret = (s, n) => (s.length > n) ? (s[s.length-1].c / s[s.length-1-n].c - 1) * 100 : null;
+  const W = [[60,"60 sessions"],[120,"120 sessions"],[252,"a year"]];
+  H.push("<p class='says'>The equal-weight S&amp;P has " +
+    (ret(rsp,60) != null && ret(spy,60) != null ? (ret(rsp,60) < ret(spy,60) ? "lagged" : "led") : "—") +
+    " the cap-weighted one: " + W.map(([n,lab])=> (ret(rsp,n)==null?"":lab + " " + dirSpan(ret(rsp,n)-ret(spy,n), sg(ret(rsp,n)-ret(spy,n),1) + "%"))).filter(Boolean).join(", ") +
+    ". The lag is the thing to be paid for, so the question is which names carry it.</p>");
+  /* which sectors carry the lag: the sector funds' own performance against SPY, already read */
+  const lag = m.sectorsAll.filter((s)=>s.rel != null).sort((a,b)=>a.rel-b.rel);
+  const worst = lag.slice(0, 3).map((s)=>s.name);
+  H.push("<p class='because'>Over your " + num(T.lookback + " sessions") + ", the sectors furthest behind SPY are " +
+    list(lag.slice(0,3).map((s)=> plain(s.name) + " (" + sg(s.rel,1) + "%)")) + ", and the sectors ahead are " +
+    list(lag.slice(-2).map((s)=> plain(s.name) + " (" + sg(s.rel,1) + "%)")) + ".</p>");
+  /* and which size carries it, measured on the covered names */
+  const byCap = m.screen.filter((r)=>r.mcap).sort((a,b)=>b.mcap-a.mcap);
+  const third = Math.max(1, Math.floor(byCap.length/3));
+  const band = (a, lab) => ({ lab, n:a.length, g: mean(a.map((r)=>r.g)),
+    d200: med(a.map((r)=>r.d200).filter((v)=>v!=null)) });
+  const bands = [band(byCap.slice(0,third),"the largest third"), band(byCap.slice(third, third*2),"the middle third"),
+                 band(byCap.slice(third*2),"the smallest third")];
+  H.push('<div class="scrwrap"><table class="scr"><thead><tr><th>SIZE BAND</th><th>NAMES</th><th>AVERAGE GEIGER</th>' +
+    "<th>MIDDLE NAME vs ITS 200-DAY</th></tr></thead><tbody>" +
+    bands.map((b)=> "<tr><td>" + esc(b.lab) + "</td><td>" + b.n + "</td><td>" + dirSpan(b.g, sg(b.g,3)) + "</td><td>" +
+      (b.d200 == null ? "—" : dirSpan(b.d200, sg(b.d200,1) + "%")) + "</td></tr>").join("") + "</tbody></table></div>");
+  /* the basket: the best-ranked names inside the lagging sectors */
+  const pool = m.screen.filter((r)=> worst.indexOf(r.sector) !== -1 && r.score != null)
+    .sort((a,b)=>b.score-a.score).slice(0, T.basketN);
+  if (!pool.length) { H.push("<p class='because'>No name inside those sectors has enough measures to rank, so this page does not name a basket.</p>");
+    document.getElementById("rspb").innerHTML = H.join(""); return; }
+  ensureHist(pool.map((r)=> r.t));      /* bounded by your basket size */
+  const withHist = pool.filter((r)=> D.hist[r.t] && D.hist[r.t].length > 260);
+  const bret = (n) => { const v = withHist.map((r)=>{ const cl = D.hist[r.t].map((b)=>b.c);
+      return cl.length > n ? (cl[cl.length-1]/cl[cl.length-1-n] - 1) * 100 : null; }).filter((x)=>x!=null);
+    return v.length ? mean(v) : null; };
+  H.push('<div class="scrwrap"><table class="scr"><thead><tr><th>THE BASKET</th><th>SECTOR</th><th>SCORE</th><th>GEIGER</th>' +
+    "<th>vs ITS 50-DAY</th><th>vs ITS 200-DAY</th></tr></thead><tbody>" +
+    pool.map((r)=> "<tr><td>" + (r.fav?"★ ":"") + esc(r.t) + "</td><td>" + esc(plain(r.sector)) + "</td><td>" +
+      num(Math.round(r.score)) + "</td><td>" + dirSpan(r.g, sg(r.g,3)) + "</td><td>" +
+      (r.d50==null?"—":dirSpan(r.d50, sg(r.d50,1)+"%")) + "</td><td>" + (r.d200==null?"—":dirSpan(r.d200, sg(r.d200,1)+"%")) +
+      "</td></tr>").join("") + "</tbody></table></div>");
+  const rows = W.map(([n,lab])=>{ const b = bret(n), r = ret(rsp,n);
+    return (b==null||r==null) ? null : "<tr><td>" + lab + "</td><td>" + sg(b,1) + "%</td><td>" + sg(r,1) + "%</td><td>" +
+      dirSpan(b-r, sg(b-r,1) + "%") + "</td></tr>"; }).filter(Boolean);
+  H.push(rows.length ? '<div class="scrwrap"><table class="scr"><thead><tr><th>WINDOW</th><th>THE BASKET, EQUAL WEIGHT</th>' +
+    "<th>RSP ITSELF</th><th>DIFFERENCE</th></tr></thead><tbody>" + rows.join("") + "</tbody></table></div>" +
+    "<p class='because'>Measured on " + num(withHist.length + " of " + pool.length) + " basket names whose daily history was read, " +
+    "equal weighted, against RSP over the same windows. <b>This is a backward measurement of today's basket</b>, so it carries " +
+    "hindsight: the names were chosen with today's rankings, not a year ago. It is not a return you could have had.</p>"
+    : "<p class='because'>Not enough basket history was read to measure the basket against RSP, so no comparison is shown.</p>");
+  document.getElementById("rspb").innerHTML = H.join("");
+}
+
+
+/* ---- 8. THE TEMPLATE: every input the page used, and the rule it applies ---- */
+function drawTemplate(m) {
+  const R = m.rails, c = R.curve, pc = R.pc, x = m.m60, ce = railEffectOnCash(m);
+  const row = (what, read, rule, changed) =>
+    "<tr><td>" + what + "</td><td>" + read + "</td><td class='rl'>" + rule + "</td><td class='rl'>" + changed + "</td></tr>";
+  const H = [];
+  H.push('<div class="scrwrap"><table class="scr tmpl"><thead><tr><th>INPUT</th><th>WHAT IT READS TODAY</th>' +
+    "<th>THE RULE, WITH ITS NUMBER</th><th>WHAT IT CHANGED HERE</th></tr></thead><tbody>");
+  H.push(row("The Fed's own rate",
+    R.ff ? num(R.ff.v.toFixed(2) + "%") + " on " + R.ff.date + " <span class='why'>econ_history, series federalFunds, a monthly print — " +
+      R.ff.age + " days old</span>" : "<span class='qn'>not read</span>",
+    "A rise in this rate takes " + num(T.hikeCut) + " points off deployed cash while it works through. Monthly, so it is a direction, not today's decision.",
+    ce.said.filter((s)=>s.indexOf("Fed's own rate")>=0).map(esc).join("<br>") || "<span class='qn'>no rise on file</span>"));
+  H.push(row("The 10-year",
+    c && c.y10 != null ? num(c.y10.toFixed(2) + "%") + (c.chg10!=null? " (" + sg(c.chg10*100,0) + "bp on the day)" : "") +
+      " <span class='why'>treasury_rates, " + c.date + "</span>" : "<span class='qn'>not read</span>",
+    "Above " + num(T.rate10Hi + "%") + " every point of excess takes up to " + num(T.rateDrag) +
+      " points off the most expensive names in the table (long duration) and adds " + num(T.finLift) + " to financials (the spread they earn).",
+    c && c.y10 != null && c.y10 > T.rate10Hi ? "applied to every row — the RULES column on the table names it per name"
+      : "<span class='qn'>the 10-year is under your line, so nothing was applied</span>"));
+  H.push(row("The 2-year and the slope",
+    c && c.y2 != null ? num(c.y2.toFixed(2) + "%") + " · slope " + num((c.slope*100).toFixed(0) + "bp") +
+      " <span class='why'>the market's own read of the path</span>" : "<span class='qn'>not read</span>",
+    "A slope under " + num((T.slopeFloor*100).toFixed(0) + "bp") + " is late-cycle and takes " + num(T.slopeCut) + " points off deployed cash.",
+    ce.said.filter((s)=>s.indexOf("slope")>=0).map(esc).join("<br>") || "<span class='qn'>the curve is not inverted</span>"));
+  H.push(row("Equal weight against cap weight",
+    x.thin.d60 != null ? dirSpan(x.thin.d60, sg(x.thin.d60,1) + "% over 60 sessions") + " <span class='why'>RSP vs SPY, chart API candles</span>"
+      : "<span class='qn'>not read</span>",
+    "Breadth carries " + num(T.breadthW + "%") + " of how much to own. This is the line Alan named: a narrow rally cuts deployment.",
+    m.breadthMoved != null ? "moved deployed cash by " + num(sg(m.breadthMoved,1) + " points") : "—"));
+  H.push(row("How many names are above their averages",
+    x.above50 ? num(pct(x.above50.share)) + " above the 50-day, " + (x.above200?num(pct(x.above200.share)) + " above the 200-day":"") +
+      " <span class='why'>provider_indicators_current, " + (D.smaDate||"—") + "</span>" : "<span class='qn'>not read</span>",
+    "Feeds the breadth leg above, and the PULLBACK column: a leader is a name above its 200-day by " + num(T.leadAbove200 + "%") + " or more.",
+    "the PULLBACK LEADERS preset uses exactly that line"));
+  H.push(row("Put / call",
+    pc && !pc.total.err ? num(pc.total.v.toFixed(2)) + " total, " + num(pc.total.avg5.toFixed(2)) + " five-day" +
+      " <span class='why'>Cboe " + esc(pc.total.provider_symbol||"") + " through the chart API · equity " +
+      (pc.equity.err?"—":pc.equity.v.toFixed(2)) + " · index " + (pc.index.err?"—":pc.index.v.toFixed(2)) + "</span>"
+      : "<span class='qn'>not read — " + esc(pc && pc.total.err ? pc.total.err : "no series") + "</span>",
+    "Five-day at or over " + num(T.pcHi) + " (fear) moves the oversold leg by up to " + num(T.pcLift) + " points a row and adds " +
+      num(T.pcCash) + " to deployed cash; at or under " + num(T.pcLo) + " (complacency) it takes the same off.",
+    ce.said.filter((s)=>s.indexOf("put/call")>=0).map(esc).join("<br>") ||
+      (pc && !pc.total.err ? "five-day " + pc.total.avg5.toFixed(2) + " sits between your two lines, so nothing was applied" : "—")));
+  H.push(row("The Geiger",
+    num(m.heat.toFixed(3)) + " average (" + x.geiger.word + ") <span class='why'>the live artifact, " +
+      esc((D.g && D.g.verification && D.g.verification.completed_session_et) || "—") + ", " + m.eq.length + " companies</span>",
+    "The base of how much to own: " + num(T.neutral + "%") + " at flat, moved " + num(T.speed + "×") + " by the reading.",
+    "deployed " + num(pct(m.invested))));
+  H.push(row("The usual day, and sigma",
+    "each name's 20-day sigma <span class='why'>standarddeviation(20) from the same published table</span>",
+    "Tranche spacing is " + num(T.sigMult + "×") + " the name's own usual day, so a quiet name is not asked to fall like a loud one.",
+    "used in the plan below"));
+  H.push(row("How long a signal takes",
+    x.wait ? num(x.wait.days + " sessions") + " <span class='why'>SPY: sessions to the best close in twenty after a 1% down " +
+      "day under its 20-day average · " + x.wait.n + " signal days</span>"
+      : "<span class='qn'>not read</span>",
+    "Each tranche stays live for that long before it is re-read.",
+    x.wait ? "printed against every tranche" : "—"));
+  H.push(row("The squeeze",
+    x.sq && x.sq.word ? esc(x.sq.word) + " <span class='why'>SPY's 20-session move " + x.sq.now.toFixed(2) +
+      "% a day against its own year median " + x.sq.mid.toFixed(2) + "%</span>" : "<span class='qn'>not read</span>",
+    "Stated, not yet wired into a score — a squeeze says a move is coming, not which way.",
+    "<span class='qn'>nothing — it is evidence on the page, and it changes no number</span>"));
+  H.push(row("The earnings calendar",
+    D.ern ? num(Object.keys(D.ern).length + " names") + " with a filed date <span class='why'>earnings_events, from today forward</span>"
+      : "<span class='qn'>not read — the funnel stops at that step</span>",
+    "A report inside " + num(T.ernDays + " sessions") + " takes " + num(T.ernCut) + " points off the row and holds its tranche.",
+    "named per row in the RULES column"));
+  H.push(row("The cohorts",
+    m.coh ? num(m.coh.length + " cohorts") + " over " + num(D.cohRowCount + " memberships") + " <span class='why'>ticker_cohorts, paged in full</span>"
+      : "<span class='qn'>not read</span>",
+    "A name carries the read of the cohorts it belongs to at " + num((T.cohName*100).toFixed(0) + "%") + " inside its sector, and " +
+      num(T.cohW + "%") + " of a sector's standing.",
+    "the COHORT column on the table"));
+  H.push(row("Your own favourites and swipes",
+    num(m.favAll.length + " starred") + " <span class='why'>hub_favorites (" + esc(D.favSource||"—") + ")</span>",
+    "A favourite gets " + num((T.favBoost*100*0.1).toFixed(1)) + " points on the combined score, and your swipes carry " + num(T.prefW + "%") + " in the older stack.",
+    "★ rows on the table"));
+  H.push("</tbody></table></div>");
+  H.push("<p class='because'>Every rule above is a number in the panel under the table, and every one of them is reversible. " +
+    "The rules that moved deployed cash this session: " + (ce.said.length ? list(ce.said.map(esc)) : "none") + ".</p>");
+  document.getElementById("tmpl").innerHTML = H.join("");
+}
+
+/* ---- 9. THE WIRING AUDIT — every read on this page, with its own answer ----- */
+function drawAudit(m) {
+  const A = [];
+  const st = (ok, what) => ok ? "<span class='up'>read</span>" : "<span class='dn'>" + esc(what||"no read") + "</span>";
+  const r = (what, source, state, used) => A.push("<tr><td>" + what + "</td><td class='rl'><span class='why'>" + source +
+    "</span></td><td>" + state + "</td><td class='rl'><span class='why'>" + used + "</span></td></tr>");
+  const g = D.g && D.g.verification;
+  r("The Geiger, per name", "chart API /geiger · artifact " + esc((D.g&&D.g.computed_utc)||"—"),
+    st(!!D.g), D.g ? Object.keys(D.g.symbols||{}).length + " symbols, session " + esc(g.completed_session_et) +
+    ", label " + esc(g.label) : "nothing");
+  r("The declared equity list", "chart API /universe", st(!!D.declared), D.declared ? D.declared.size + " symbols" : "nothing");
+  r("Sectors and size", "company_profile", st(!!D.prof), D.prof ? D.prof.length + " rows; funds excluded from sectors" : "nothing");
+  r("Trailing multiples", "fundamentals", st(!!D.fund), D.fund ? D.fund.length + " rows" : "nothing");
+  r("Debt, return on equity, margins", "ratios_history (full years)", st(!!D.ratios), D.ratios ? D.ratios.length + " rows" : "nothing");
+  r("Forward earnings", "fwd_eps_ntm", st(!!D.ntm), D.ntm ? Object.keys(D.ntm).length + " names" : "nothing");
+  r("50-, 200-day, RSI, Williams, ADX, sigma", "provider_indicators_current (FMP, 1day)", st(!!D.sma),
+    D.sma ? Object.keys(D.sma).length + " names, source date " + esc(D.smaDate||"—") : "nothing");
+  r("The earnings calendar", "earnings_events", st(!!D.ern), D.ern ? Object.keys(D.ern).length + " names" : "the funnel's earnings step stops");
+  r("The cohorts", "ticker_cohorts (paged in full)", st(!!D.cohsets), D.cohsets ? D.cohRowCount + " memberships" : "nothing");
+  r("Favourites", "hub_favorites, then this browser", st(!!m.favAll.length), esc(D.favSource||"—") + ", " + m.favAll.length + " names");
+  r("The sector tape", "chart API /candles · SPY, RSP and the eleven sector funds",
+    st(!!D.tape.SPY && !!D.tape.RSP), Object.keys(D.tape).filter((k)=>D.tape[k]).length + " of " + Object.keys(D.tape).length + " series");
+  r("The treasury curve", "treasury_rates", st(!!m.rails.curve), m.rails.curve ? "the whole curve, " + m.rails.curve.date : "nothing");
+  r("The Fed's own rate", "econ_history · federalFunds", st(!!m.rails.ff), m.rails.ff ? m.rails.ff.date + ", " + m.rails.ff.age + " days old — monthly" : "nothing");
+  r("Put / call", "chart API /candles · PCC, PCCE, PCCI",
+    st(!!(m.rails.pc && !m.rails.pc.total.err)), m.rails.pc && !m.rails.pc.total.err ?
+    m.rails.pc.total.n + " sessions on file, " + esc(m.rails.pc.total.at) : esc(m.rails.pc ? m.rails.pc.total.err : "not read"));
+  r("The rotation ranking", "sector_rankings", st(!!D.ranks), D.ranks ? "published " + esc(D.ranks.date) : "the leg is absent, not zero");
+  r("The regime lane", "/regime/latest.json", st(!!D.regime), D.regime ? "published" : "this page computed the calendar numbers itself");
+  r("SPY's long history", "chart API /candles · 5,000 sessions", st(!!D.spyLong), D.spyLong ? D.spyLong.length + " sessions" : "nothing");
+  r("Daily history, per name", "chart API /candles, only for the names that need levels",
+    st(D.histAsked > 0), D.histAsked + " asked, " + D.histFailed + " failed, cap " + T.oppCap);
+  r("Live prices", "chart API /quotes, after first paint",
+    st(!!(D.qfull && Object.keys(D.qfull).length)), D.qfull ? Object.keys(D.qfull).length + " names priced" : "the close stands");
+  /* REMOVED, with the reason — the two the audit says must go */
+  A.push("<tr class='rm'><td>live_quotes (the table)</td><td class='rl'><span class='why'>Supabase live_quotes</span></td>" +
+    "<td><span class='dn'>REMOVED</span></td><td class='rl'><span class='why'>its newest row is weeks old: the writer behind it " +
+    "stopped on 11 Aug, so it cannot price anything. This page takes prices from the chart API instead, which is fresh. " +
+    "Nothing on the page reads it.</span></td></tr>");
+  A.push("<tr class='rm'><td>composite_staged (the legacy store)</td><td class='rl'><span class='why'>Supabase composite_staged</span></td>" +
+    "<td><span class='dn'>KEPT, NARROWED</span></td><td class='rl'><span class='why'>it is NOT used for any company on this page. " +
+    "It is read for one purpose only, and the cohort table says so per row: the board's own cohort number keeps the legacy value for " +
+    "members that are not declared equities (the crypto pairs, the metal futures, the yields). Newest row " +
+    (D.stagedNewest ? esc(new Date(D.stagedNewest*1000).toISOString().slice(0,10)) : "unknown") + ".</span></td></tr>");
+  document.getElementById("audit").innerHTML =
+    '<div class="scrwrap"><table class="scr"><thead><tr><th>WHAT</th><th>WHERE IT COMES FROM</th><th>TODAY</th>' +
+    "<th>WHAT IT GAVE</th></tr></thead><tbody>" + A.join("") + "</tbody></table></div>" +
+    "<p class='because'>" + (m.missing.length ? "This session could not read " + list(m.missing.map(esc)) +
+    ", and every number that needed one of those says so where it should have been." :
+    "Every read above answered this session.") + "</p>";
+}
+
+/* ---- 10. the screener's own controls ---------------------------------------- */
+document.addEventListener("click", (e) => {
+  const p = e.target.closest("[data-preset]");
+  if (p) { VIEW.preset = p.dataset.preset; draw(); return; }
+  const s = e.target.closest("th[data-sort]");
+  if (s) { const k = s.dataset.sort;
+    if (SORT.key === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = (k === "t" || k === "sector" || k === "earn") ? 1 : -1; }
+    draw(); return; }
+  const f = e.target.closest("[data-f='favOnly']");
+  if (f) { VIEW.favOnly = !VIEW.favOnly; draw(); return; }
+  const v = e.target.closest("[data-view]");
+  if (v) {
+    const all = viewsLoad();
+    if (v.dataset.view === "save") {
+      const name = (prompt("Name this view", PRESETS[VIEW.preset].t) || "").trim();
+      if (!name) return;
+      const keep = {}; SCR_COLS.forEach((c)=>{ keep[c.w] = T[c.w]; });
+      all.unshift({ name, view:Object.assign({}, VIEW), sort:Object.assign({}, SORT), w:keep });
+      viewsSave(all); draw(); return;
+    }
+    const i = Number(v.dataset.i);
+    if (v.dataset.view === "del") { all.splice(i,1); viewsSave(all); draw(); return; }
+    const o = all[i]; if (!o) return;
+    Object.assign(VIEW, o.view); Object.assign(SORT, o.sort); Object.assign(T, o.w || {});
+    syncKnobs(); draw(); return;
+  }
+});
+document.addEventListener("change", (e) => {
+  const k = e.target.dataset && e.target.dataset.f;
+  if (!k || (k !== "sector" && k !== "cohort")) return;
+  VIEW[k] = e.target.value; draw();
+});
+document.addEventListener("input", (e) => {
+  if (e.target.dataset && e.target.dataset.f === "q") { VIEW.q = e.target.value.trim(); draw(); }
+});
+
+/* ---- 11. THE CONCLUSION'S RECEIPTS ------------------------------------------
+   Alan, 24 Sep: "telling me the conclusion so quickly is not great." The conclusion sits at the
+   bottom of the page now, and every sentence of it names the rows above that carry it, so a claim
+   can be checked in one scroll instead of taken on trust. */
+function drawCites(m) {
+  const x = m.m60, c = m.rails.curve, pc = m.rails.pc && m.rails.pc.total;
+  const top = viewRows(m.screen).slice(0, 3);
+  const C = [];
+  const say = (txt, rows) => C.push('<span class="ct">' + txt + "<i>rests on: " + esc(rows) + "</i></span>");
+  say("Own " + num(pct(m.invested)) + " and keep " + num(pct(m.cash)) + " in cash.",
+    "THE MARKET IN SIX LINES, line 1 (how much to own) · WHAT THE TEMPLATE USED, the Geiger row and the equal-weight row" +
+    (m.railCash.pts ? " · the rails moved it by " + sg(m.railCash.pts,1) + " points, named in the same table" : ""));
+  if (x.above50) say("Participation is " + num(pct(x.above50.share)) + " of names above their own 50-day" +
+    (x.thinWord ? " and the equal-weight line is " + esc(x.thinWord) : "") + ".",
+    "THE MARKET IN SIX LINES, lines 2 and 3 · THE EQUAL-WEIGHT LAG, the size-band table");
+  if (c && c.y10 != null) say("The 10-year at " + num(c.y10.toFixed(2) + "%") + " with a " +
+    num((c.slope*100).toFixed(0) + "bp") + " slope " + (c.y10 > T.rate10Hi ?
+      "marks down the most expensive names and lifts financials" : "is under your line, so it changes no row") + ".",
+    "THE MARKET IN SIX LINES, line 4 · WHAT THE TEMPLATE USED, the 10-year row and the slope row · " +
+    "the RULES column of the screener, per name");
+  if (pc && !pc.err) say("Put/call five-day at " + num(pc.avg5.toFixed(2)) + " is " +
+    (pc.avg5 >= T.pcHi ? "at or over your fear line, so oversold readings count for more" :
+     pc.avg5 <= T.pcLo ? "at or under your complacency line, so they count for less" : "between your two lines, so it changes nothing") + ".",
+    "THE MARKET IN SIX LINES, line 5 · WHAT THE TEMPLATE USED, the put/call row");
+  if (top.length) say("On this setting the table's top names are " + list(top.map((r)=> "<b>" + esc(r.t) + "</b> (" +
+    Math.round(r.score) + ")")) + ".",
+    "THE SCREENER, rows 1 to " + top.length + " under the " + PRESETS[VIEW.preset].t + " preset, sorted by " + SORT.key);
+  const best = WATCH.map((t)=> m.screen.find((r)=> r.t === t)).filter(Boolean)
+    .filter((r)=> r.score != null).sort((a,b)=>b.score-a.score)[0];
+  if (best) { const pl = planFor(best.t, m);
+    say("Of your watch list, <b>" + esc(best.t) + "</b> ranks highest at " + num(Math.round(best.score)) + ", and " +
+      (pl.read && pl.tranches ? "your rules put its first tranche at " + num(pl.tranches[0].px.toFixed(2)) +
+        " (" + sg(pl.tranches[0].from,1) + "% away)" : "its history has not been read yet, so it has no levels") + ".",
+      "THE SCREENER, the " + esc(best.t) + " row · YOU ARE IN CASH, the " + esc(best.t) + " row"); }
+  const lag = (m.sectorsAll||[]).filter((z)=>z.rel != null).sort((a,b)=>a.rel-b.rel).slice(0,3);
+  if (lag.length) say("The equal-weight lag sits in " + list(lag.map((z)=> plain(z.name))) + ".",
+    "THE EQUAL-WEIGHT LAG, the sector line and the basket table");
+  say("Everything above is measured, not advised. No order is placed, nothing is sent, and the staged levels are " +
+    "what your own lines say, not a recommendation to buy.",
+    "every table on this page, and the read list at the bottom");
+  document.getElementById("cites").innerHTML = C.join("");
+}
+
 /* ---- draw ------------------------------------------------------------------- */
 function draw() {
   MODEL = compute();
@@ -3134,6 +4052,15 @@ function draw() {
     return;
   }
   drawDesk(MODEL);
+  try { drawState(MODEL); drawScreen(MODEL); drawTemplate(MODEL); drawAudit(MODEL); }
+  catch (e) { const h = document.getElementById("scrsays");
+    if (h) h.textContent = "the screener could not draw: " + e.message; }
+  try { drawPlan(MODEL); } catch (e) { const h = document.getElementById("plan");
+    if (h) h.innerHTML = "<p class='says'>the plan could not draw: " + esc(e.message) + "</p>"; }
+  try { drawRSP(MODEL); } catch (e) { const h = document.getElementById("rspb");
+    if (h) h.innerHTML = "<p class='says'>the basket could not draw: " + esc(e.message) + "</p>"; }
+  try { drawCites(MODEL); } catch (e) { const h = document.getElementById("cites");
+    if (h) h.textContent = "the citations could not draw: " + e.message; }
   try {
     drawLane(MODEL); drawActions(MODEL); drawLists(MODEL); drawTide(MODEL);
     drawCash(); drawBreadthLine(MODEL); renderSwipeStatus();
@@ -3160,6 +4087,52 @@ load().catch((e) => {
 .scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
 .scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
 .scnav i{font-style:normal;color:#c4c7cb}
+/* ---- M62: the six lines, the screener, the baselines, the citations --------- */
+.layer.first{margin:18px 0 0;border-top:0;padding-top:4px}
+.stlines{display:grid;gap:1px;background:var(--line);border:1px solid var(--line)}
+.stl{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 16px;background:var(--panel);padding:11px 13px;align-items:baseline}
+.stl .k{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--mute)}
+.stl .v{font-size:17px;color:var(--ink)}
+.stl .s{grid-column:2;font-size:12px;color:var(--dim);margin-top:4px;line-height:1.5}
+.scrctl{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
+.scrrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.scrrow select,.scrrow input{background:var(--sunk);color:var(--ink2);border:1px solid var(--line2);
+  font:600 11px/1.6 var(--mono);letter-spacing:.1em;padding:5px 7px;border-radius:2px}
+.scrrow .qn{font-size:12px}
+.scrwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line)}
+table.scr{font-size:13px}
+table.scr th{cursor:pointer;white-space:nowrap;padding:9px 8px;font-size:11px}
+table.scr th.sorted{color:var(--ink2)}
+table.scr td{padding:8px;vertical-align:top;font-size:13px}
+table.scr td:first-child{font-size:14px;color:var(--ink2)}
+table.scr td .why{display:block;font-family:var(--sans);font-size:11px;color:var(--mute);margin-top:3px;line-height:1.45}
+table.scr tr.fv td:first-child{color:var(--ink)}
+table.scr td.rl{text-align:left;max-width:300px}
+table.scr tr.rm td{color:var(--dim)}
+table.scr.tmpl td,table.scr.tmpl th{text-align:left}
+.knob .base{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--mute);white-space:nowrap}
+.cites{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.cites .ct{display:block;font-size:14px;color:var(--ink2);margin:0 0 12px;line-height:1.5;max-width:44em}
+.cites .ct i{font-style:normal;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--mute);display:block;margin-top:3px}
+@media(max-width:760px){
+  .stl{grid-template-columns:1fr}
+  .stl .s{grid-column:1}
+  table.scr .sc2{display:none}
+  table.scr td.rl{max-width:180px}
+  table.scr td,table.scr th{padding:7px 6px}
+}
+@media(max-width:560px){
+  /* the RULES prose is already summarised inside the COMBINED cell ("rules -1.4"), and at phone
+     width it squeezed the OVERSOLD column to nothing, which the 390 shot caught. */
+  #scrtab td.rl,#scrtab th:last-child{display:none}
+  /* the baseline sits beside the setting on a desk screen and under it on a phone: kept on one
+     line it pushed the slider past the viewport, which is what the 390 shot caught. */
+  .knob .ctl{flex-wrap:wrap}
+  .knob .base{white-space:normal;flex:1 1 100%}
+  .knob input[type=range]{min-width:0}
+  .layer,.scrctl,.scrrow{min-width:0}
+  .scrrow select,.scrrow input{max-width:100%}
+}
 @media print{.scnav{display:none}}
 </style>
 <script>
