@@ -25,7 +25,7 @@ const sha = (p) => crypto.createHash("sha256").update(fs.readFileSync(at(p))).di
    latest.json. The rules below hold the page to that: a date on every card, the strip in order and never a dead end,
    no fixed column count anywhere. */
 test("the reviewed page and preview bytes; the lab's home is present", () => {
-  assert.equal(sha("index.html"), "49058e7ec5c99c993267e3c85045186549f53a9dfacb94fa3736a5b863519411");   // rebuilt 23 Sep (M18): one scrolling page on the 3D-workshop model - picture band, chips, dates - in greys, no hidden tabs
+  assert.equal(sha("index.html"), "72d77a3ef007a420ffc7416d68280c07faa520f9d6e4ef3a9fd5d5f988ea50b8");   // rebuilt 23 Sep (M18): one scrolling page on the 3D-workshop model - picture band, chips, dates - in greys, no hidden tabs
   assert.equal(sha("previews/signal-fanout-v2.html"), "13b2c843f68af1b98c02e78f40ff68994ab383cd490e6e561b5584a0d0f2fb51");
   assert.equal(sha("dock-concept/index.html"), "0c2c682844c2cfff7227d162c9db5e12ea1cfe5c6f1f350930dcda775975aebc");
   assert.deepEqual(fs.readdirSync(at(".")).sort(), ["catalog.json", "dock-concept", "index.html", "indicator-lab", "latest.json", "previews", "report-library"]);
@@ -180,7 +180,7 @@ test("the Indicator Lab entry is the owner's: its link, status and card text are
   const lab = cat.find((e) => e.title === "Indicator Lab");
   assert.ok(lab && lab.url === "/prototypes/indicator-lab/" && lab.status === "Review home");
   const card = articles(page).find((a) => a.title === "Indicator Lab");
-  assert.equal(card.desc, "Cloud workshop, saved chart links, dated screenshots and the next indicator reviews. A home for the work, without keeping every chart open.");
+  assert.equal(card.desc, "Detailed oscillator templates, persistent multi-timeframe geometry, clouds and statistical handoffs. A home for the work, without keeping every chart open.");
   assert.deepEqual(card.hrefs, ["/prototypes/indicator-lab/"]);
   assert.doesNotMatch(page, /indicator-lab\/(downloads|captures)/, "the page links only the lab's home, never into its files");
 });
