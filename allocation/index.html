@@ -91,6 +91,10 @@ a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
 .cnums span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--mute)}
 .cnums b{display:block;font-family:var(--mono);font-size:19px;color:var(--ink);margin-top:3px}
 .cnums i{font-style:normal;font-size:11px;color:var(--mute)}
+/* direction keeps its colour inside the card: the house rule is daily up green, down red,
+   and .cnums b was quietly overriding it */
+.cnums b.up{color:var(--bull)} .cnums b.dn{color:var(--bear)}
+td .up,td .dn{font-family:var(--mono)}
 .cwhy{margin:14px 0 0;font-size:15px;color:var(--ink2)}
 .cprob{margin:10px 0 0;font-size:13px;color:var(--dim)}
 .cprob b{font-family:var(--mono);color:var(--ink)}
@@ -103,6 +107,12 @@ a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
 .swbtns button:active{background:var(--line)}
 .swhint{margin-top:12px;font-size:12px;color:var(--mute);text-align:center}
 @media (max-width:560px){
+  #brline thead{display:none}
+  #brline table,#brline tbody,#brline tr,#brline td{display:block;text-align:left;width:auto}
+  #brline tr{border-bottom:1px solid var(--line);padding:10px 0}
+  #brline td{border:0;padding:3px 0}
+  #brline td:first-child{font-size:15px;color:var(--ink)}
+  #brline .spk{width:100%;max-width:280px}
   .chead b{font-size:22px}
   .cnums{flex-wrap:wrap}
   .cnums div{flex:1 1 44%}
@@ -607,11 +617,18 @@ const D = { g:null, prof:null, fund:null, ratios:null, tape:{}, quotes:null, mis
              smaDate:null,
              fav:[],          /* the Hub's favourites, read from this browser */
              odd:{},          /* the instruments behind the oddities panel, full payload */
+             rsi:null,        /* ticker -> daily RSI(14), same table and provider as the averages */
+             ntm:null,        /* ticker -> next-twelve-month earnings, for the growth leg */
+             hist:{},         /* M39 — long daily history, only for the names that reach the stack */
+             histAsked:0, histFailed:0,
+             spyLong:null,    /* SPY as far back as the chart API serves it: the tide and the calendar */
+             regime:null,     /* the regime lane's own read, when it has published one */
              declared:null,   /* the declared equity set, from the chart API's /universe */
              staged:null, stagedNewest:null };   /* the legacy composite_staged read, for non-equities only */
 /* the bond ETF and the two ways of owning gold and silver — the names Alan pointed at */
 const ODD = ["IEF", "GLD", "GCUSD", "SLV", "SIUSD"];
 const INFLIGHT = new Set();
+const HIST_IN = new Set();   /* M39 — long-history reads in flight */
 /* today in New York, because sessions and earnings dates are New York dates */
 const todayET = () => new Date().toLocaleDateString("en-CA", { timeZone:"America/New_York" });
 
@@ -1713,6 +1730,10 @@ function contrarianLane(m, eq, bySec) {
   }
   mixRows.sort((a,b)=>b.w-a.w);
   m.oppMix = mixRows;
+  /* When only a sector or two carry opportunities, the single-sector cap can leave part of
+     the deployed money with nowhere to go. It stays in cash and the page says so, rather
+     than being pushed into a sector this search did not choose. */
+  m.oppUnplaced = Math.max(0, 100 - mixRows.reduce((s,r)=>s+r.w, 0));
 
   /* THE PROPOSED ACTIONS. Alan: "this is the way you guys start to propose market
      actions to me." Name, size, trigger, why, probability — and at least three that
@@ -1766,7 +1787,10 @@ function drawLane(m) {
         '<p class="qn">Sectors are picked for leading the market over ' + T.lookback +
         " days, then the names are picked inside them. This is the search Alan called wrong in spirit.</p></div>" +
       '<div class="on"><div class="tk">THE NEW ANSWER — WHERE THE LOADING STARTS</div>' +
-        "<p>" + esc(newMix) + "</p>" +
+        "<p>" + esc(newMix) +
+          (m.oppUnplaced > 0.5 ? ' <span class="qn">· ' + pct(m.oppUnplaced) +
+            " of the deployed money has nowhere to go under your " + pct(T.maxSector) +
+            " cap on one sector, so it stays in cash</span>" : "") + "</p>" +
         '<p class="qn">The opportunities are found first, over every company the Hub carries, and the sector ' +
         "mix is whatever they add up to. A weak sector is where the search looks, not a reason to stay out.</p></div>" +
     "</div>";
@@ -2003,7 +2027,7 @@ function renderSwipeStatus() {
   if (!el) return;
   const sent = VOTES.rows.filter((r)=>r.sent).length;
   el.innerHTML = VOTES.rows.length === 0 ? "no swipes yet"
-    : num(VOTES.rows.length) + " swipes · " + num(sent) + " on the server · " +
+    : num(VOTES.rows.length) + (VOTES.rows.length === 1 ? " swipe · " : " swipes · ") + num(sent) + " on the server · " +
       (VOTES.pending ? num(VOTES.pending) + " still on this device" : "none waiting") +
       (VOTES.lastError ? ' <span class="qn">(' + esc(VOTES.lastError) + ")</span>" : "");
   const b = document.getElementById("swcount");
