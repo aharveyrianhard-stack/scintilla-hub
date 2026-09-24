@@ -58,7 +58,7 @@ const main = async () => {
     symbols = (u.symbols || u.universe || []).map((s) => (typeof s === "string" ? s : s.symbol)).filter(Boolean);
   }
   console.log(`${symbols.length} names · ${DAYS} trading dates back · ${DRY ? "DRY RUN" : "writing"}`);
-  let wrote = 0, shortHist = 0, failed = 0;
+  let wrote = 0, computed = 0, shortHist = 0, failed = 0;
   for (let i = 0; i < symbols.length; i += 10) {
     const chunk = symbols.slice(i, i + 10);
     const rows = [];
@@ -74,9 +74,10 @@ const main = async () => {
         rows.push(heartbeatRow(sym, dateOf(w[w.length - 1]), w));
       }
     }));
+    computed += rows.length;
     for (let j = 0; j < rows.length; j += 500) wrote += await upsert(rows.slice(j, j + 500));
     console.log(`  ${Math.min(i + 10, symbols.length)}/${symbols.length} names · ${rows.length} rows this slice · ${wrote} written so far`);
   }
-  console.log(`done · ${wrote} rows ${DRY ? "computed (nothing written)" : "written"} · ${shortHist} too short · ${failed} candle failures`);
+  console.log(`done · ${computed} rows computed · ${DRY ? "nothing written (dry run)" : wrote + " written"} · ${shortHist} too short · ${failed} candle failures`);
 };
 main().catch((e) => { console.error(String(e).slice(0, 300)); process.exit(1); });
