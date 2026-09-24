@@ -192,7 +192,8 @@ test("M72 — the overlay hangs off the printed attribute, never off a class a r
   assert.ok(!/classList\.add\("sc-glow"\)/.test(page), "nothing re-creates the class dependency");
   assert.ok(!/\.sc-glow::after/.test(page), "the class-keyed rule is gone");
   const wipes = page.match(/^\s*lc\.className\s*=/gm) || [];
-  assert.ok(wipes.length >= 2, "the className rewrites this protects against are still in the page");
+  /* M61 (merged 24 Sep) rewrote the replay and removed the LIVE-rebuild rewrite; the board's own remains. */
+  assert.ok(wipes.length >= 1, "the className rewrite this protects against is still in the page");
 });
 
 test("M72 — one animation per cell, replayed; a glow is not rebuilt 45 times a second", () => {
