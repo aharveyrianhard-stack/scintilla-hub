@@ -17525,7 +17525,11 @@ function scScint (node, up) {
     if (typeof node.animate === "function") {
       if (node.__scint) node.__scint.cancel();          // restart, without reading layout
       node.__scint = node.animate(
-        [{ color: up ? c.up : c.dn, textShadow: "0 0 8px " + (up ? "rgba(0,255,163,.6)" : "rgba(255,45,85,.6)") }],
+        /* offset 0 is required: a lone keyframe without one is placed at the END (offset 1), which ran
+           the glow backwards - the number crept to full green over 520 ms and then snapped back.
+           MEASURED on the live board 24 Sep: t=0 base colour, t=519 full green. With offset 0 the
+           colour is the glow at t=0 and eases back to the cell's own style by the end. */
+        [{ offset: 0, color: up ? c.up : c.dn, textShadow: "0 0 8px " + (up ? "rgba(0,255,163,.6)" : "rgba(255,45,85,.6)") }],
         { duration: SCINT_MS, easing: "ease-out" });     // implicit end frame = the cell's own style
       return;
     }

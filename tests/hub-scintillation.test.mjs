@@ -46,7 +46,7 @@ test("the glow carries the direction of the move, and only colour and shadow", (
   const { scScintSet } = api();
   const up = node("1.00"), dn = node("1.00");
   scScintSet(up, "1.01", true); scScintSet(dn, "0.99", false);
-  assert.deepEqual(Object.keys(up.anims[0].frames[0]).sort(), ["color", "textShadow"],
+  assert.deepEqual(Object.keys(up.anims[0].frames[0]).filter((k) => k !== "offset").sort(), ["color", "textShadow"],
     "no width, padding, weight or background — a glow must never move the row");
   assert.equal(up.anims[0].frames[0].color, "#00ffa3");
   assert.equal(dn.anims[0].frames[0].color, "#ff2d55");
@@ -124,4 +124,15 @@ test("no IntersectionObserver means everything glows, rather than nothing", () =
   const n = node("1.00");
   scScintSet(n, "1.01", true);
   assert.equal(n.anims.length, 1);
+});
+
+test("the glow starts bright and fades: its one keyframe sits at offset 0", () => {
+  /* 24 Sep: without an offset, Web Animations puts a lone keyframe at the END, so the live board
+     glowed backwards - base colour at t=0, full green at t=519 ms, then a snap back to white. */
+  const { scScintSet } = api();
+  const n = node("1.00");
+  scScintSet(n, "1.01", true);
+  assert.equal(n.anims.length, 1);
+  assert.equal(n.anims[0].frames.length, 1);
+  assert.equal(n.anims[0].frames[0].offset, 0, "the glow is the FIRST frame; the cell's own style is the implicit end");
 });
