@@ -106,7 +106,8 @@ soft shadow, nothing that moves a row. Four surfaces read the same stored rows:<
 day table the row glows. Grey while a release is still coming (it has no direction yet), then the room's own
 red or green once the number lands.</li>
 <li><b>The earnings tape and the events timeline</b> — the surprise itself glows on the tape, and the same
-company is marked in the timeline.</li>
+company is marked in the timeline. (Checked in the browser: a stored surprise for COST marked both copies of
+the tape's repeating segment, and glowed once.)</li>
 <li><b>The board</b> — the percentage cell of every outlier of the day, in the direction of the move.</li>
 <li><b>Today's scintillas</b> — a new strip under the ident bar, newest first, one line each.</li>
 </ul>
@@ -120,44 +121,71 @@ scintillas. If you have reduced motion switched on, the marks stay and nothing a
   <img src="econ-month-1680.png" alt="The Economic room's month calendar with a marked release">
   <figcaption><b>The Economic room, month view, 1680 wide.</b> This is the view your saved state opens, and it
   is the one that had nothing scintillating before: the month grid has no table rows at all, and the render
-  returns early, so a pass written only for the table would never have run here. 100 release chips drawn,
-  6 of them marked as scintillas.</figcaption>
+  returns early, so a pass written only for the table would never have run here. Measured in this capture:
+  100 release chips drawn, 6 of them marked as scintillas.</figcaption>
 </figure>
 
 <figure>
   <img src="econ-day-1680.png" alt="The Economic room's day table with two marked rows">
-  <figcaption><b>The same room, day table.</b> 10 rows for today, 2 of them stored scintillas — one release
-  about to print, one that printed further from consensus than it usually does.</figcaption>
+  <figcaption><b>The same room, day table.</b> 10 rows for today, 2 of them stored scintillas: <b>MBA Mortgage
+  Applications</b>, which printed further from consensus than it usually does, and <b>S&amp;P Global Composite
+  PMI</b>, which was about to print. Both names carry the halo; the rows around them do not.</figcaption>
 </figure>
 
-<div class="two">
-<figure><img src="glow-0ms.png" alt="The glowing row at the start of the animation"><figcaption><b>0 ms</b> — the glow is at full strength.</figcaption></figure>
-<figure><img src="glow-180ms.png" alt="The row mid-animation"><figcaption><b>~180 ms</b> — easing back.</figcaption></figure>
-<figure><img src="glow-420ms.png" alt="The row near the end of the animation"><figcaption><b>~420 ms</b> — nearly the row's own colour again.</figcaption></figure>
-</div>
+<figure>
+  <img src="econ-day-row-marked.png" alt="A single marked release row">
+  <figcaption><b>One marked row, close up.</b> A picture cannot show a 520 ms animation — three screenshots
+  taken 180 ms apart came back identical, because a screenshot takes longer than the glow does. So the frames
+  below are <b>measured inside the page</b> instead, and this picture shows what is left afterwards: the release
+  keeps a faint halo that says it was a scintilla, and the rows around it do not.</figcaption>
+</figure>
 
-<p>Measured inside the page rather than guessed: at the first frame the release's name is rendered
-<code>rgb(158, 149, 178)</code> with a <code>rgba(203, 191, 194, 0.41)</code> halo — the grey glow already
-easing toward the cell's own colour — and by 80 ms it has settled on the row's own
-<code>rgb(154, 154, 182)</code>, keeping only the faint <code>rgba(200, 200, 200, 0.4)</code> mark that says
-this row was a scintilla. The animation is 520 ms of colour and shadow: no size, no weight, no border, so
-nothing on the page can move.</p>
+<p>Measured inside the page rather than guessed. Sampling the release's own name as the glow ran:</p>
+
+<table>
+<tr><th>from the first sample</th><th>the name's colour</th><th>its halo</th></tr>
+<tr><td class="n">0 ms</td><td class="n">rgb(172, 135, 167)</td><td class="n">rgba(213, 165, 176, 0.43)</td></tr>
+<tr><td class="n">66 ms</td><td class="n">rgb(162, 145, 175)</td><td class="n">rgba(206, 184, 189, 0.41)</td></tr>
+<tr><td class="n">132 ms</td><td class="n">rgb(156, 152, 180)</td><td class="n">rgba(201, 196, 197, 0.40)</td></tr>
+<tr><td class="n">198 ms onward</td><td class="n">rgb(154, 154, 182)</td><td class="n">rgba(200, 200, 200, 0.40)</td></tr>
+</table>
+
+<p>That is the red of a hotter-than-expected print easing back to the row's own colour, and then holding the
+faint mark that says this row was a scintilla. <b>Honest detail:</b> the first sample lands part-way through
+the 520 ms, not at its very first frame — the page was still drawing the rest of the room when the glow
+started, so what the numbers prove is the easing and the landing, not the peak. The animation is colour and
+shadow only: no size, no weight, no border, so nothing on the page can move.</p>
 
 <h1>4 · TODAY'S SCINTILLAS — THE STRIP</h1>
 
 <figure>
-  <img src="strip-1680.png" alt="The today's scintillas strip">
+  <img src="strip-cohort-1680.png" alt="The today's scintillas strip with three events">
   <figcaption><b>The strip, as it renders.</b> One line each: the time in ET, the subject, what the number was,
   and what kind of scintilla it is. Tap a line and you go to the thing — a ticker opens its company, a release
-  opens that day in the Economic room. It is 134 px tall and scrolls inside itself, so a new event never moves
-  the board underneath it. With nothing stored, the strip is not an empty box — it is not there at all.</figcaption>
+  opens that day in the Economic room. Beside the count is the busiest cohort (<b>MEGA_CAP 3</b> here), and
+  beside that the criticality line. It is 134 px tall and scrolls inside itself, so a new event never moves the
+  board underneath it. With nothing stored, the strip is not an empty box — it is not there at all.</figcaption>
+</figure>
+
+<figure>
+  <img src="dash-1680.png" alt="The dashboard with the strip in place">
+  <figcaption><b>Where it sits.</b> Under the ident bar, above the board — one thin row, and the dashboard below
+  it is unchanged. (The board's own numbers read "…" here because the market was closed when this was taken.)</figcaption>
+</figure>
+
+<figure>
+  <img src="dash-390.png" alt="The dashboard on a phone">
+  <figcaption><b>On a phone, 390 wide.</b> The header stacks and each line puts its number on a second row.
+  Measured: the document is 390 px wide against a 390 px window, so nothing runs off the right edge.</figcaption>
 </figure>
 
 <h1>5 · THE FIRST CRITICALITY READING</h1>
 
 <p>In the strip's header is a small line: <b>how many scintillas happened each hour, weighted by how unusual
 they were</b> (the sum of their sigmas, so one 8σ event does not read the same as four 2σ ones). Each segment
-is green where that hour's scintillas were mostly upward and red where they were mostly down.</p>
+is green where that hour's scintillas were mostly upward and red where they were mostly down. Beside it, the
+<b>cohort doing the most of the scintillating</b> today; hovering shows the top three. A name that belongs to
+two cohorts counts in both — the memberships overlap by design, and the hover says so.</p>
 
 <div class="box"><b>WHAT IT IS NOT</b>
 <p style="margin:0">It is a <b>description of today</b>, not a forecast. Nothing on that line has been tested
@@ -185,6 +213,9 @@ coordinator to apply. Until that happens the strip says exactly that, and nothin
 <li><b>The screenshots above use fixture rows.</b> Everything else in them is live production data, but the
 scintillas themselves were served to the browser by the test, because the table does not exist yet. No
 screenshot here shows a real detected event.</li>
+<li><b>The board's own glow is not proven by a picture.</b> The capture was taken with the market closed, so
+the board's percentage cells were still blank in that render: the two outliers were marked in the page (the
+test counted them) but there was no number in the cell to see. That one needs a live session to look at.</li>
 <li><b>Between passes the detector examines only names already moving.</b> To keep the bandwidth honest it
 reads daily bars for names moving at least 0.5% (biggest movers first, capped at 140 reads a run). A name so
 quiet that 2σ is under 0.5% is not examined until the after-the-close pass.</li>
