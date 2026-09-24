@@ -12,7 +12,11 @@ const P = (rel) => fileURLToPath(new URL(rel, import.meta.url));
 const page = fs.readFileSync(process.env.ECON_REVIEW_PAGE || P("../index.html"), "utf8");
 const base = process.env.ECON_REVIEW_BASE ? fs.readFileSync(process.env.ECON_REVIEW_BASE, "utf8") : null;
 const NEEDS_BASE = { skip: base ? false : "set ECON_REVIEW_BASE to an a13a486 index.html" };
-const START = "/* ---- Room 9 · ECONOMIC", END = "/* ---- Room 3 · COMPANY";
+/* M44 (24 Sep) — the ECONOMIC room now holds TWO views: the ported releases room this file is
+   about, and the REGIME view, which mounts separately, reads its own sources and has its own
+   tests (tests/regime-view.test.mjs). The slice ends where REGIME begins, so every guarantee
+   below still covers exactly the module it was written about, unchanged. */
+const START = "/* ---- Room 9 · ECONOMIC", END = "/* ---- Room 9b · REGIME view (M44";
 const slice = (src) => src.slice(src.indexOf(START), src.indexOf(END));
 function fnSrc(src, name) {
   const at = src.indexOf("function " + name + "(");

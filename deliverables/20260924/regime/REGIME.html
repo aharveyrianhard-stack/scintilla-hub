@@ -1,0 +1,176 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>REGIME — the broad market read</title><style>
+:root{--bg:#07070C;--ink:#F2F2F8;--ink2:#C6C8DE;--ink3:#9A9AB6;--dim:#868AAA;--line:#1A1A2A;--bull:#00FFA3;--bear:#FF2D55;
+--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box} body{background:var(--bg);color:var(--ink2);font:400 13px/1.75 var(--mono);margin:0;padding:26px 20px 70px}
+.wrap{max-width:900px;margin:0 auto} h1{font-size:17px;letter-spacing:.14em;color:var(--ink);font-weight:600;margin:0 0 4px}
+h2{font-size:12px;letter-spacing:.18em;color:var(--ink);text-transform:uppercase;font-weight:600;margin:30px 0 8px;border-bottom:.8px solid var(--line);padding-bottom:5px}
+h3{font-size:11px;letter-spacing:.12em;color:var(--ink2);text-transform:uppercase;font-weight:400;margin:18px 0 5px}
+p{margin:0 0 11px} .sub{color:var(--dim);font-size:11px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0 14px}
+th{text-align:right;color:var(--dim);font-weight:400;border-bottom:.8px solid var(--line);padding:4px 6px}
+td{text-align:right;padding:3px 6px;color:var(--ink3)} td:first-child,th:first-child{text-align:left}
+b{color:var(--ink)} .up{color:var(--bull)} .dn{color:var(--bear)} li{margin-bottom:7px}
+ul{padding-left:17px;margin:0 0 12px} code{color:var(--ink2);font-size:11px}
+.box{border:.6px solid var(--line);padding:12px 14px;margin:12px 0}
+@media(max-width:560px){body{padding:16px 12px 60px;font-size:12px} table{font-size:10px} td,th{padding:2px 3px}}
+</style></head><body><div class="wrap">
+<span data-scnav-slot></span><h1>REGIME — the broad market read</h1>
+<p class="sub">Lane M44 · built 24 September 2026 · branch <code>hub/regime-20260924</code> · it lives in the Hub's ECONOMIC room, under the REGIME tab beside RELEASES. Nothing here is deployed.</p>
+
+<div class="box"><p><b>For lane M39 (allocation), the field names, first.</b> The daily row lands in <code>public.market_regime_daily</code>:
+<code>date, tide('RISING'|'MIXED'|'FALLING'), score(-100..100), paragraph, curve_2s10s_bp, curve_3m10y_bp, curve_state, curve_asof,
+breadth_rsp_spy_63d, credit_hyg_spy_63d, credit_hy_oas, froth_score, liquidity_usd_tn, liquidity_yoy_pct, liquidity_lead_r,
+liquidity_lead_months, cycle_year, cycle_month_mean_pct, cycle_sample_n, catalysts(jsonb), inputs(jsonb), formula_version, computed_utc</code>.
+Read-only to the board. The table is written as a migration; the coordinator applies it.</p></div>
+
+<h2>Tonight's read</h2>
+<p><b>The tide is going out, and the page says so: FALLING, −29 out of ±100, from all six measures.</b>
+Over the last 63 sessions the S&amp;P is <span class="up">+4.7%</span>, the average share in it (equal weight) <span class="up">+0.4%</span>,
+and high yield <span class="dn">−2.2%</span>. So the index went up while the average share barely moved and the credit market went backwards.
+That is the opposite of a rising tide lifting all boats: it is a narrow market. The curve is not inverted — it is positive at 109 basis points
+from three months to ten years — but the whole curve has moved UP about 15 basis points today and sits above where it was a week, a month,
+three months and a year ago, which is a tightening, not an easing. Global liquidity is shrinking at −7.3% on the year. September is the weakest
+month in the long record, and 2026 is a midterm year, historically the weakest of the four. The one real tailwind in the numbers is what happens
+AFTER the vote, not before it.</p>
+
+<h2>1 · The curve, live — and why it cannot go stale again</h2>
+<p>Alan: <i>"why would the yield curve thing lag doesnt make sense if we have the data yields is easy"</i>. He was right, and here is what was wrong.
+The ECONOMIC room read <code>treasury_rates</code>, which is written once a day by the job <code>treasury-curve-daily</code>. So the room could only ever
+be as fresh as this morning's write — and when that job was late, the room said "September 22" on the 23rd.</p>
+<p><b>The board already had live yields.</b> The macro rail on the dashboard reads the chart API's <code>/macro</code> route every 30 seconds, and that
+route carries FMP's live quote for the 3-month, 5-, 10- and 30-year. The REGIME view now reads the same route. Tonight the 10-year printed
+<b>5.12%</b> observed at <b>14:59 ET</b>; the stored table's close for the same day was 5.11%.</p>
+<ul>
+<li><b>Four tenors are live</b> (3M, 5Y, 10Y, 30Y) and each one shows the time it was read, in ET, on the chip under the chart.</li>
+<li><b>Eight tenors come from the stored close</b> (1M, 2M, 6M, 1Y, 2Y, 3Y, 7Y, 20Y) and say "close 09-23". The live route does not carry them.</li>
+<li><b>NO FEED, the dashboard's own rule.</b> A live point that stops updating for 15 minutes while the market is open reads NO FEED and prints no
+value at all. A stored point reads NO FEED once the table falls more than one session behind. Outside market hours the last live point is the
+close, not a fault — the page knows the difference.</li>
+<li><b>The comparison Alan asked for:</b> the curve is drawn against 1 week, 1 month, 3 months and 1 year ago, as four dashed lines behind tonight's,
+and 2s10s and 3m10y are drawn as lines over time with the zero line marked, so an inversion is visible the moment it happens.</li>
+</ul>
+
+<h2>2 · The cycles, measured</h2>
+<p>Every number below carries how many observations it rests on. The long record is the Nasdaq Composite from February 1971 (FRED, free);
+the S&amp;P is SPY from September 2003, which is as far back as our own chart API goes.</p>
+<h3>By month of the year</h3>
+<table><tr><th>month</th><th>Nasdaq mean %</th><th>up %</th><th>n</th><th>S&amp;P mean %</th><th>up %</th><th>n</th></tr><tr><td>Jan</td><td>2.49</td><td>67.3</td><td>55</td><td>0.33</td><td>56.5</td><td>23</td></tr><tr><td>Feb</td><td>0.39</td><td>50.9</td><td>55</td><td>0.31</td><td>56.5</td><td>23</td></tr><tr><td>Mar</td><td>0.6</td><td>62.5</td><td>56</td><td>0.35</td><td>56.5</td><td>23</td></tr><tr><td>Apr</td><td>1.56</td><td>66.1</td><td>56</td><td>2.02</td><td>73.9</td><td>23</td></tr><tr><td>May</td><td>1.38</td><td>62.5</td><td>56</td><td>1.1</td><td>78.3</td><td>23</td></tr><tr><td>Jun</td><td>1.03</td><td>57.1</td><td>56</td><td>-0.15</td><td>47.8</td><td>23</td></tr><tr><td>Jul</td><td>0.87</td><td>57.1</td><td>56</td><td>2.26</td><td>78.3</td><td>23</td></tr><tr><td>Aug</td><td>0.38</td><td>57.1</td><td>56</td><td>0.37</td><td>65.2</td><td>23</td></tr><tr><td>Sep</td><td>-0.68</td><td>53.6</td><td>56</td><td>-0.68</td><td>60.9</td><td>23</td></tr><tr><td>Oct</td><td>0.76</td><td>54.5</td><td>55</td><td>1.16</td><td>60.9</td><td>23</td></tr><tr><td>Nov</td><td>2.05</td><td>70.9</td><td>55</td><td>2.45</td><td>82.6</td><td>23</td></tr><tr><td>Dec</td><td>1.49</td><td>60.0</td><td>55</td><td>0.45</td><td>65.2</td><td>23</td></tr></table>
+<h3>By year of the presidential cycle — Nasdaq Composite, 1971 to 2025</h3>
+<table><tr><th>year</th><th>mean</th><th>up %</th><th>n years</th></tr><tr><td>year 1 · post-election</td><td>13.76%</td><td>78.6%</td><td>14</td></tr><tr><td>year 2 · MIDTERM</td><td>-0.53%</td><td>53.8%</td><td>13</td></tr><tr><td>year 3 · pre-election</td><td>30.52%</td><td>84.6%</td><td>13</td></tr><tr><td>year 4 · election</td><td>10.31%</td><td>78.6%</td><td>14</td></tr></table>
+<p><b>2026 is year 2, the midterm year</b> — the weakest of the four in the long record: a mean of -0.53% and up in only
+53.8% of 13 of them. Year 3 is the strongest by a distance.</p>
+<h3>Around the midterm vote — 60 sessions either side, 13 elections (1974, 1978, 1982, 1986, 1990, 1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022)</h3>
+<p>Before the vote: <b>0.72%</b> on average. After it: <b class="up">+9.29%</b>, and higher in
+<b>92.3%</b> of them — 12 of 13. That is the strongest single seasonal fact on this page,
+and it argues for patience into November rather than for selling.</p>
+
+<h2>3 · Global liquidity, and the three-month lag</h2>
+<p>Alan: <i>"How is global liquidity doing, with a three month lag?"</i> The proxy is built from free FRED downloads, no key and no paid API:
+the Fed's balance sheet, less the Treasury's account at the Fed, less overnight reverse repo, plus the ECB's total assets and the Bank of Japan's,
+each converted to dollars at FRED's own exchange rates. Month-end, back to February 2003.</p>
+<p>It now stands at <b>$16.681 trillion</b> (2026-08), <b class="dn">-7.26%</b> on a year.</p>
+<table><tr><th>liquidity leads the market by</th><th>correlation r</th><th>explains</th><th>months compared</th></tr><tr><td>0 months</td><td>0.229</td><td>5%</td><td>152</td></tr><tr><td>1 months</td><td>0.277</td><td>8%</td><td>152</td></tr><tr><td>2 months</td><td>0.303</td><td>9%</td><td>151</td></tr><tr><td>3 months</td><td>0.33</td><td>11%</td><td>150</td></tr><tr><td>6 months</td><td>0.325</td><td>10%</td><td>147</td></tr></table>
+<p><b>The honest answer: three months IS the best lead of the five tested — and it is still weak.</b> An r of 0.33 explains about 11% of the
+market's year-on-year move. It is a real relationship and worth watching as a background condition, but it is not a timing signal, and this page
+does not present it as one.</p>
+
+<h2>4 · Credit and froth</h2>
+<p><b>Bond versus S&amp;P.</b> Over 63 sessions high yield (HYG) is <b class="dn">-2.19%</b> against the index's
+<b class="up">+4.71%</b> — a divergence of <b class="dn">-6.91</b> points, drawn as a line with the zero marked.
+The equal-weight index (RSP) is <b class="dn">-4.27</b> points behind the index too, which is the breadth half of the same story.
+The high yield spread itself is 2.68% (2026-09-22), which is historically tight — so this is credit lagging a rally,
+not credit in distress.</p>
+<p><b>Froth: the leveraged ETFs are not in our universe, so they are not used.</b> TQQQ, SOXL and SQQQ are not served by the chart API. Rather than
+invent a number, the gauge is built from three things we do have, each as a percentile against its own history: the Cboe equity put/call ratio
+(20-day average, 2006 on), the Nasdaq-100's lead over the index, and index volume against its own year.</p>
+<table><tr><th>measure</th><th>now</th><th>percentile</th></tr>
+<tr><td>equity put/call, 20-day</td><td>0.572</td><td>79.8th (low ratio = greedy)</td></tr>
+<tr><td>Nasdaq-100 lead over the index, 63 sessions</td><td>-0.41%</td><td>31.1th</td></tr>
+<tr><td>index volume vs its own year</td><td>0.632×</td><td>4.8th</td></tr></table>
+<p>Composite <b>38.6 out of 100</b>: option buyers are positioned greedily, but leadership is not speculative and the tape is unusually
+quiet. That is a mixed reading, not a bubble reading. <b>Decision for Alan:</b> add TQQQ/SOXL/SQQQ to the served universe through lane M36's runbook
+and this gauge gets the measure he actually asked for.</p>
+
+<h2>5 · Catalyst odds</h2>
+<p>Alan: <i>"its a news driven market how do we parametrize that - polymarket kalshi"</i> and <i>"I would start with catalysts"</i>.
+Both venues publish this data with no key. A collector (<code>supabase/functions/catalyst-odds</code>) reads six catalysts and appends every reading
+to <code>public.catalyst_odds</code>, so a probability becomes a line instead of a number that is only true the second you looked at it.
+<b>It is written and NOT scheduled</b> — the coordinator schedules it. The page shows the stored line as soon as there is one; until then it shows
+this one-off read, labelled as exactly that, taken 2026-09-24T01:42:32Z.</p>
+<table><tr><th>catalyst</th><th>market</th><th>outcome</th><th>odds</th><th>venue</th></tr><tr><td>cpi</td><td>Will the rate of CPI inflation be above 3.0% for the year ending in September </td><td>Above 3.0%</td><td><b>98%</b></td><td>kalshi</td></tr><tr><td>cpi</td><td>Will the rate of CPI inflation be above 3.4% for the year ending in September </td><td>Above 3.4%</td><td><b>95%</b></td><td>kalshi</td></tr><tr><td>cpi</td><td>Will the rate of CPI inflation be above 3.5% for the year ending in September </td><td>Above 3.5%</td><td><b>85%</b></td><td>kalshi</td></tr><tr><td>cpi</td><td>Will the rate of CPI inflation be above 3.6% for the year ending in September </td><td>Above 3.6%</td><td><b>45%</b></td><td>kalshi</td></tr><tr><td>fomc</td><td>Will the Federal Reserve Hike rates by 25bps at their October 2026 meeting?</td><td>Hike 25bps</td><td><b>66%</b></td><td>kalshi</td></tr><tr><td>fomc</td><td>Will the Federal Reserve Hike rates by 0bps at their October 2026 meeting?</td><td>Fed maintains rate</td><td><b>34%</b></td><td>kalshi</td></tr><tr><td>fomc</td><td>Will the Federal Reserve Hike rates by >25bps at their October 2026 meeting?</td><td>Hike >25bps</td><td><b>2%</b></td><td>kalshi</td></tr><tr><td>fomc</td><td>Will the Federal Reserve Cut rates by 25bps at their October 2026 meeting?</td><td>Cut 25bps</td><td><b>1%</b></td><td>kalshi</td></tr><tr><td>midterms house</td><td>Will the Democratic Party control the House after the 2026 Midterm elections?</td><td>Yes</td><td><b>92%</b></td><td>polymarket</td></tr><tr><td>midterms house</td><td>Will the Republican Party control the House after the 2026 Midterm elections?</td><td>Yes</td><td><b>8%</b></td><td>polymarket</td></tr><tr><td>midterms senate</td><td>Will the Democratic Party control the Senate after the 2026 Midterm elections?</td><td>Yes</td><td><b>66%</b></td><td>polymarket</td></tr><tr><td>midterms senate</td><td>Will the Republican Party control the Senate after the 2026 Midterm elections?</td><td>Yes</td><td><b>34%</b></td><td>polymarket</td></tr><tr><td>recession</td><td>Will there be a recession in 2027?</td><td>Yes</td><td><b>24%</b></td><td>kalshi</td></tr><tr><td>recession</td><td>US recession by end of 2026?</td><td>Yes</td><td><b>8%</b></td><td>polymarket</td></tr><tr><td>recession</td><td>Will there be a recession in 2026?</td><td>Starts</td><td><b>5%</b></td><td>kalshi</td></tr><tr><td>shutdown</td><td>Will there be another US government shutdown by January 31 and will the Democr</td><td>Yes</td><td><b>93%</b></td><td>polymarket</td></tr><tr><td>shutdown</td><td>Will there be another US government shutdown by January 31 and will the Republ</td><td>Yes</td><td><b>6%</b></td><td>polymarket</td></tr></table>
+<p>Read together: a Fed that is more likely to <b>raise</b> than hold at the October meeting, inflation odds-on to stay above 3.5% for the year,
+a near-certain shutdown, a low near-term recession probability — and a Congress the market expects to change hands. That is a tightening,
+news-heavy backdrop, which is consistent with what the curve and the credit market are already doing.</p>
+
+<h2>6 · What could be wrong</h2>
+<ul>
+<li><b>The live 3-month is not the same instrument as the stored 3-month.</b> The live quote is the 13-week bill (^IRX, a discount rate);
+the stored table is the Treasury's constant-maturity par yield. Tonight they read 4.03% and 4.19% — 16 basis points apart. The brief asked for the
+live tenors where they exist, so the live one is drawn, but that difference is real and the 3m10y spread inherits it. Every other live tenor
+matches its stored close to within a basis point or two.</li>
+<li><b>The measured history is a file, not a live read.</b> The cycle tables, the liquidity series and the credit/froth numbers were computed once,
+tonight, and shipped as a dated file the page reads. They do not update by themselves yet. The curve and the catalysts do.</li>
+<li><b>FRED cannot be read from the browser</b> (no cross-origin headers), which is why the liquidity work is precomputed rather than live.</li>
+<li><b>QQQ's daily history has a hole.</b> The chart API is missing every session from 1 December 2004 to 22 March 2011 — 1,588 of them. QQQ was
+therefore dropped from the month tables entirely; the Nasdaq record here is FRED's Composite. Worth fixing at source.</li>
+<li><b>Small samples.</b> 13 midterms is 13 observations. Five S&amp;P midterms is five. The tables print n beside every number for that reason.</li>
+<li><b>One month of the year is not a forecast.</b> September's mean is −0.68% with a median of +0.35%: a couple of very bad Septembers move the mean.</li>
+<li><b>The regime score is an average of six bounded measures.</b> It is a summary, not a model; the six inputs are printed beside it so the number
+can be argued with.</li>
+</ul>
+
+<h2>7 · What is not free, and so was not used</h2>
+<ul>
+<li><b>No paid API was called.</b> Everything here is the chart API we already run, Supabase, FRED's free CSV, Polymarket's public gamma API and
+Kalshi's public v2 API.</li>
+<li><b>S&amp;P 500 history before 2003</b> is licensed: FRED serves only the last ten years of the index. The long record therefore uses the Nasdaq
+Composite, which is free back to 1971. Wilshire's total-market index was checked and is no longer published on FRED.</li>
+<li><b>Real global liquidity</b> (CrossBorder Capital, Bloomberg) is a paid product. The proxy here is built by hand from central bank balance sheets.</li>
+<li><b>The PBoC is not included</b> — there is no free, reliable dollar series for it on FRED. The proxy is the Fed, the ECB and the Bank of Japan,
+and the page says so.</li>
+<li><b>Leveraged ETF volume</b> was not bought from anywhere; the substitute is named above.</li>
+</ul>
+
+<h2>What was not done</h2>
+<ul>
+<li>Nothing was deployed, pushed or scheduled, and no migration was applied. The two migrations and the collector are written with their rollback.</li>
+<li>No price table was written to. The view only reads.</li>
+<li>The daily <code>market_regime_daily</code> row is not yet written by a job: the table and the formula exist, and the page computes the same
+numbers on screen. Wiring the writer is the next unit.</li>
+</ul>
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
