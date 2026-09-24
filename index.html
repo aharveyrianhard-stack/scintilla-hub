@@ -600,6 +600,52 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    .sc-cident stretches edge-to-edge. Made prominent so the AUTO-rotate's current
    company is unmissable: taller bar, larger ticker, brighter frame. */
 .sc-identfull{ flex:0 0 auto; width:100%; }
+/* ── M42 TODAY'S SCINTILLAS ─────────────────────────────────────────────────────────────────
+   A thin strip under the ident bar: one line per stored scintilla, newest first, tap to go to the
+   thing. It has a fixed height and scrolls INSIDE itself, so a landing event never moves the board
+   below it. Empty means gone, not an empty box. */
+.sc-scintstrip{ flex:0 0 auto; width:100%; }
+.sc-scintstrip:empty{ display:none; }
+.sc-ss{ border:.5px solid var(--line); border-radius:6px; background:var(--panel);
+  padding:5px 8px 6px; margin:4px 0 0; }
+.sc-ss__hd{ display:flex; align-items:center; gap:8px; }
+.sc-ss__lbl{ font-family:var(--mono); font-size:10px; letter-spacing:.16em; color:var(--crk); }
+.sc-ss__n{ font-family:var(--mono); font-size:10px; color:var(--ink2); }
+.sc-ss__note{ font-size:11px; color:var(--dim); margin-left:auto; text-align:right; }
+.sc-ss__spark{ display:block; }
+.sc-ss__rows{ max-height:66px; overflow:auto; margin-top:4px; }
+.sc-ss__row{ display:grid; grid-template-columns:44px minmax(62px,190px) 1fr auto; gap:8px; align-items:baseline;
+  width:100%; padding:2px 0; background:none; border:0; border-top:.5px solid var(--line);
+  text-align:left; cursor:pointer; font:inherit; }
+.sc-ss__row:first-child{ border-top:0; }
+.sc-ss__row:hover{ background:rgba(0,212,255,.05); }
+.sc-ss__t{ font-family:var(--mono); font-size:11px; color:var(--dim); }
+.sc-ss__w{ font-family:var(--mono); font-size:11px; color:var(--ink); letter-spacing:.04em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-ss__d{ font-size:11px; color:var(--ink2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-ss__k{ font-size:11px; color:var(--dim); white-space:nowrap; }
+.sc-ss__row.up .sc-ss__d{ color:var(--bull); }
+.sc-ss__row.dn .sc-ss__d{ color:var(--bear); }
+.sc-ss__row.hot .sc-ss__d{ color:var(--sv5); }
+.sc-ss__row.cool .sc-ss__d{ color:var(--sv1); }
+.sc-ss__empty{ font-size:11px; color:var(--dim); padding:2px 0; }
+.sc-ss__coh{ font-family:var(--mono); font-size:10px; color:var(--ink3); letter-spacing:.06em; }
+@media(max-width:560px){
+  /* MEASURED at 390 wide: the note took the whole row and pushed the label onto two lines across the
+     spark. On a phone the header stacks and each line carries its number on a second row. */
+  .sc-ss__hd{ flex-wrap:wrap; }
+  .sc-ss__note{ order:9; width:100%; margin-left:0; text-align:left; }
+  .sc-ss__rows{ max-height:96px; }
+  .sc-ss__row{ grid-template-columns:44px 1fr auto; }
+  .sc-ss__d{ grid-column:1 / -1; padding-left:52px; }
+}
+/* A row whose glow has faded still SAYS it was a scintilla — a shadow on the text it happened to,
+   never a border, a size or a background that would shift anything. */
+.ec-row.is-scint .nm, .ec-ev.is-scint .nm, .ern-it.is-scint .ern-tk, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
+.ec-row.is-scint.res-up .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
+.ec-row.is-scint.res-dn .nm{ text-shadow:0 0 7px rgba(0,255,163,.4); }
+.ec-ev.is-scint.miss .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
+.ec-ev.is-scint.beat .nm{ text-shadow:0 0 7px rgba(0,255,163,.4); }
 .sc-identfull .sc-cident{ width:100%; height:40px; padding:0 18px; gap:16px;
   border-color:rgba(0,212,255,.5); box-shadow:inset 0 0 22px rgba(0,212,255,.05); }
 .sc-identfull .sc-ctkbig{ font-size:19px; letter-spacing:.08em; min-width:64px; }
@@ -2124,8 +2170,13 @@ body.tvmodal-open{ overflow:hidden; }
 @keyframes sc-scint-dn{0%{color:var(--bear);text-shadow:0 0 8px rgba(255,45,85,.6)}100%{}}
 .sc-scint-up{ animation:sc-scint-up .52s ease-out; }
 .sc-scint-dn{ animation:sc-scint-dn .52s ease-out; }
+/* M42 — the NEUTRAL tone. A release that is about to print has no direction yet, so it must not
+   glow green or red: it glows a grey (all three channels 200, inside the estate's grey law). */
+@keyframes sc-scint-neu{0%{color:#C8C8C8;text-shadow:0 0 8px rgba(200,200,200,.55)}100%{}}
+.sc-scint-neu{ animation:sc-scint-neu .52s ease-out; }
 @media (prefers-reduced-motion:reduce){
   .sc-scint-up, .sc-scint-dn, .sc-last.fl-up, .sc-last.fl-dn{ animation:none; }
+  .sc-scint-neu{ animation:none; }                    /* M42 — the stored-scintilla tone sits down too */
 }
 /* the read's own age, on its face — see readSectionAge() */
 .readage{ font:700 8px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--mute);
@@ -6190,6 +6241,9 @@ function dashboardHTML() {
      The 50/50 row lives below it, unchanged. */
   return '<section class="sc-dashwrap" aria-label="Dashboard">' +
     '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>" +
+    /* M42 — TODAY'S SCINTILLAS. Filled by scintStripRender; while there is nothing stored it is an
+       empty element and :empty hides it, so the dashboard is exactly as it is today. */
+    (SCINT_FEED_ON ? '<div class="sc-scintstrip" id="scintStrip"></div>' : "") +
     /* FIX (Alan: "flip the dashboard — cohort board on the LEFT, Geiger/chart/stats/
        estimates/financials on the RIGHT") — straight DOM-order swap of the 2 panels
        inside the existing sc-body2 grid; the grid's own column tracks (sc-body2 CSS)
@@ -6224,6 +6278,7 @@ function updateBoard() {
   updateCohrow();                       // keep the cohort-tab underline in sync
   syncBoardSel();                       // re-apply the current selection highlight after a rows repaint
   loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill the RSI column for the shown tickers (idempotent)
+  try { boardScintPass(); } catch (_) {}       // M42 — the outliers of the day keep their mark through a repaint
 }
 
 /* PROVIDER RSI — NON-BLOCKING lazy loader.  FMP computes this value from its own
@@ -13754,7 +13809,10 @@ function ecRowHTML(r, kind, showCty, attrs) {
      else); HOW MUCH IT MATTERS sets weight — a thicker spine and brighter text, never hue.
      REVIEW — the hue is keyed by ecCat() and the weight by ecImpCls(), never taken from row data. */
   const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
-  return '<div class="ec-row ' + kind + " imp-" + ecImpCls(r.impact) + res + '" style="border-left-color:' + hue + '"' + (attrs || "") + ">" +
+  /* M42 — data-esub is the release exactly as a stored scintilla names its subject (ecBase, no period
+     tag), and data-ecty its country, so ecScintPass can match a row without re-deriving anything. */
+  return '<div class="ec-row ' + kind + " imp-" + ecImpCls(r.impact) + res + '" style="border-left-color:' + hue + '"' +
+    ' data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) + '"' + (attrs || "") + ">" +
     '<span class="rel"><span class="dot" style="color:' + hue + '">●</span>' +
       (showCty ? '<span class="cty">' + esc(r.country) + "</span>" : "") +
       '<span class="nm" title="' + esc(r.event) + '">' + esc(ecBase(r.event)) +
@@ -13842,7 +13900,10 @@ function ecMonthHTML(rows) {
         cls += " " + (Math.abs(diff) < 1e-9 ? "inline" : ((diff > 0) === hot ? "miss" : "beat"));
       }
       const hue = EC_CAT_COLOR[ecCat(r.event)] || "var(--mute)";
-      return '<div class="' + cls + '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
+      /* M42 — a chip carries the same two attributes a table row does: Alan's saved Economic view is
+         MONTH, so without this the room he actually opens would have had nothing scintillating. */
+      return '<div class="' + cls + '" data-esub="' + esc(ecBase(r.event)) + '" data-ecty="' + esc(r.country) +
+        '" title="' + esc(r.event) + " · " + esc(ecCat(r.event)) +
         " · " + esc(r.impact || "") + ' impact">' +
         '<span class="sp" style="background:' + hue + '"></span>' +
         '<span class="nm">' + esc(S.econZoom ? ecBase(r.event) : ecShort(ecBase(r.event))) + "</span>" +
@@ -13920,6 +13981,9 @@ function renderEconTable() {
       '<b style="color:var(--sv5)">■</b> worse than expected · <b style="color:var(--sv3)">■</b> in line · ' +
       '<b style="color:var(--sv1)">■</b> better than expected &nbsp;·&nbsp; ' +
       'a release and its components read as one line · click any day to open it · ' + ecReadNote() + '</div>';
+    /* M42 — the MONTH grid is Alan's saved Economic view and it returns from here, so the glow pass
+       belongs on THIS path too, not only at the end of the function. */
+    try { ecScintPass(); } catch (_) {}
     return;
   }
   if (!rows.length) {
@@ -13953,6 +14017,8 @@ function renderEconTable() {
   box.innerHTML = head + '<div class="ec-tbl">' + body + "</div>" +
     '<div class="sc-est-note">surprise = actual − estimate · red = hotter inflation / weaker labour than expected, ' +
     'green = the other way · ● high · ● medium · ● low impact · times in ET · — = the feed has not printed that value · ' + ecReadNote() + '</div>';
+  /* M42 — the room Alan walked into: the rows that ARE scintillas glow here, once each. */
+  try { ecScintPass(); } catch (_) {}
 }
 /* ---- THE MACRO NUDGE + THE ECON BAND — the tape (8995c4b 13 Aug → off 367589e → ported f4b5c3f → ON 22 Sep) -------
    Alan, 13 Aug: "something needs to be on the dashboard of the next event"; then, on the full-width row it got: "you
@@ -17710,6 +17776,7 @@ function renderErnBand() {
   if (typeof ernStatsEnsure === "function")
     ernStatsEnsure((ERN_ROWS || []).filter((r) => r && num(r.surprise_pct) != null).map((r) => r.ticker));
   if (typeof ernScintPaint === "function") ernScintPaint(slot);
+  try { ernScintPass(); } catch (_) {}      /* M42 — a stored earnings surprise glows on the tape it rebuilt */
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = slot.querySelector(".sc-tape__track");
   if (track) tapeSpeed(track, slot.querySelector(".ern-it.is-today, .ern-it.is-up"));   // the band opens on today, not on Monday - and runs at the same 45 px/s as every other tape
@@ -17934,6 +18001,7 @@ function afterMount() {
     loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill RSI after the initial board mount
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
     else startRotate();
+    try { scintStripRender(); boardScintPass(); } catch (_) {}   /* M42 — the strip and the outlier marks on a fresh mount */
   }
 }
 
@@ -18873,6 +18941,24 @@ document.addEventListener("click", (e) => {
       ecLoadWindow();
       break;
     }
+    /* M42 — a strip line goes where the scintilla is: a ticker opens its company, a release opens
+       that day in the ECONOMIC room (the same work mngoto does). */
+    case "scintgo": {
+      const kind = a.dataset.kind || "", sub = a.dataset.sub || "";
+      if (kind === "price_outlier" || kind === "earnings_surprise") {
+        if (typeof LEFT_HEAT !== "undefined") LEFT_HEAT = false;
+        openCo(sub);
+        break;
+      }
+      S.econDay = a.dataset.day || ecToday(); S.econSpan = "DAY";
+      S.econCty = a.dataset.cty || "US"; S.econCat = "ALL"; S.econOpen = {};
+      if (S.sec === "ECONOMIC") {
+        document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((b) =>
+          b.classList.toggle("on", b.dataset.s === S.econSpan));
+        ecLoadWindow();
+      } else go("ECONOMIC");
+      break;
+    }
     case "mnclear":                            // the ✕ on a landed number: clear it, leave the rest alone
       ECON_TAPE_CLEARED[a.dataset.k] = 1; ecTapePaint(); break;
     case "mnhist": ecHistShow(a); break;       // the number itself: two years of this print
@@ -19330,13 +19416,17 @@ let SCINT_C = null, SCINT_C_AT = 0;
 function scintColors () {
   const now = Date.now();
   if (SCINT_C && now - SCINT_C_AT < 5000) return SCINT_C;
-  let up = "#00ffa3", dn = "#ff2d55";
+  let up = "#00ffa3", dn = "#ff2d55", hot = "#ff3060", cool = "#00ffa3";
   try {
     const cs = getComputedStyle(document.documentElement);
     up = (cs.getPropertyValue("--bull") || "").trim() || up;
     dn = (cs.getPropertyValue("--bear") || "").trim() || dn;
+    /* M42 — the Economic room paints an adverse surprise --sv5 and a favourable one --sv1. A stored
+       econ scintilla glows those same two tokens, so the glow and the row can never disagree. */
+    hot = (cs.getPropertyValue("--sv5") || "").trim() || hot;
+    cool = (cs.getPropertyValue("--sv1") || "").trim() || cool;
   } catch (_) {}
-  SCINT_C = { up, dn }; SCINT_C_AT = now;
+  SCINT_C = { up, dn, hot, cool }; SCINT_C_AT = now;
   return SCINT_C;
 }
 /* A GLOW NOBODY CAN SEE IS PURE COST. The ALL board holds every row of the universe while the
@@ -19362,6 +19452,17 @@ function scScintVis (node) {
 function scScint (node, up) {
   if (!node || SCINT_OFF || !scScintVis(node)) return;
   const c = scintColors();
+  /* M42 — `up` stays true/false for every live number that already scintillates (identical colours
+     and shadows to before). A stored scintilla may pass a named tone instead:
+       "hot"  an adverse economic surprise — the room's own --sv5
+       "cool" a favourable one            — the room's own --sv1
+       "soon" a release inside 15 minutes: no number has printed, so no direction is implied and the
+              glow is a plain grey (channels equal, 200). */
+  const tone = up === true ? [c.up, "rgba(0,255,163,.6)"]
+    : up === false ? [c.dn, "rgba(255,45,85,.6)"]
+    : up === "hot" ? [c.hot, "rgba(255,48,96,.55)"]
+    : up === "cool" ? [c.cool, "rgba(0,255,163,.5)"]
+    : ["#C8C8C8", "rgba(200,200,200,.55)"];
   try {
     if (typeof node.animate === "function") {
       if (node.__scint) node.__scint.cancel();          // restart, without reading layout
@@ -19370,13 +19471,13 @@ function scScint (node, up) {
            the glow backwards - the number crept to full green over 520 ms and then snapped back.
            MEASURED on the live board 24 Sep: t=0 base colour, t=519 full green. With offset 0 the
            colour is the glow at t=0 and eases back to the cell's own style by the end. */
-        [{ offset: 0, color: up ? c.up : c.dn, textShadow: "0 0 8px " + (up ? "rgba(0,255,163,.6)" : "rgba(255,45,85,.6)") }],
+        [{ offset: 0, color: tone[0], textShadow: "0 0 8px " + tone[1] }],
         { duration: SCINT_MS, easing: "ease-out" });     // implicit end frame = the cell's own style
       return;
     }
   } catch (_) {}
-  const cls = up ? "sc-scint-up" : "sc-scint-dn";
-  node.classList.remove("sc-scint-up", "sc-scint-dn");
+  const cls = (up === true || up === "cool") ? "sc-scint-up" : (up === false || up === "hot") ? "sc-scint-dn" : "sc-scint-neu";
+  node.classList.remove("sc-scint-up", "sc-scint-dn", "sc-scint-neu");
   void node.offsetWidth;
   node.classList.add(cls);
 }
@@ -19399,6 +19500,329 @@ function scSetClass (node, value) {
   if (!node) return;
   const s = String(value);
   if (node.className !== s) node.className = s;
+}
+/* ── M42 SCINTILLAS — the glow becomes a signal: stored, scored, and alive where Alan looks ──────
+   Alan, 23 Sep: "the hub dashboard is scintillating telling me to go to economic … i go to economic
+   and i dont see scintillating"; "how do we make earnings scintillate percentage price changes
+   scintillate the outliers of the day"; "we need to broaden scintillation as a signal thats why its
+   called scintilla"; "its a scintilla that can be part of a measure of criticality".
+
+   WHERE THE ROWS COME FROM. public.scintillas — one row per detected scintilla, written by the
+   scintillas-detect edge function (supabase/migrations/20260924_scintillas.sql, and the detectors in
+   scripts/scintillas-detect.mjs). magnitude is |z| against the SUBJECT'S OWN history, never a raw
+   percentage, so a 2% day on a quiet name can outrank a 6% day on a wild one.
+
+   THE RULES THIS LAYER KEEPS.
+     · ONE primitive. Every glow here is scScint — the same 520 ms colour-and-shadow animation the
+       board already uses. Nothing new animates and nothing here changes layout.
+     · ONE GLOW PER SURFACE per event. Walking into the Economic room glows the row the dashboard
+       pointed at (that was the complaint), and a room that re-reads every ten minutes does not
+       re-flash what the reader has already seen. The authority is the event's own ts.
+     · THE ROOM'S COLOUR. An economic surprise glows the Economic room's own two colours through
+       detail.room_class; a price or earnings move glows bull/bear; a release that has not printed
+       has no direction, so it glows grey.
+     · A FADED SCINTILLA STILL SAYS SO — class is-scint, a text shadow, colour only.
+     · NOTHING IS INVENTED. If the table is not there yet the strip says exactly that and every
+       other surface behaves as it does today; no detector runs in the browser.
+     · The read is one request a minute while the tab is visible, nothing at all while it is hidden,
+       and it is never retried in a tight loop when the table is missing. */
+const SCINT_FEED_ON = true;
+const SCINT_TTL_MS = 60000, SCINT_RETRY_MS = 180000, SCINT_TICK_MS = 20000;
+const SCINT_GLOW_CAP = 12;          /* opening a room flashes the newest few, never forty at once */
+const SCINT_CRIT_HOURS = 8;         /* the criticality line's window */
+const SCINT_CRIT_SESSIONS = 60;     /* stored sessions needed before any hit-rate could be claimed */
+const SCINT_SEL = "scintillas?select=ts,kind,subject,subject_kind,direction,magnitude,source,detail" +
+                  "&order=ts.desc&limit=300";
+let SCINT_ROWS = null, SCINT_BY = null, SCINT_AT = 0, SCINT_FAIL_AT = 0, SCINT_BUSY = false;
+let SCINT_MISSING = false, SCINT_TIMER = null, SCINT_VIS_BOUND = false, SCINT_HTML = "";
+const SCINT_SEEN = new Map();       /* "surface|kind|SUBJECT" -> the ts that already glowed there */
+
+const scintDayET = (ts) => { try { return ET_DAY.format(new Date(ts)); } catch (_) { return ""; } };
+const scintKey = (kind, subject) => String(kind) + "|" + String(subject == null ? "" : subject).toUpperCase();
+function scintToday() {
+  const today = todayISO();
+  return (SCINT_ROWS || []).filter((r) => r && scintDayET(r.ts) === today);
+}
+/* newest first, so the freshest row for a subject is the one every surface reads */
+function scintIndex() {
+  const by = new Map();
+  for (const r of scintToday()) { const k = scintKey(r.kind, r.subject); if (!by.has(k)) by.set(k, r); }
+  return by;
+}
+function scintBy() { if (!SCINT_BY) SCINT_BY = scintIndex(); return SCINT_BY; }
+/* the tone a stored scintilla glows in: the room's colour for an economic surprise, the move's own
+   direction for a price or an earnings result, and grey for something that has not printed yet. */
+function scintTone(ev) {
+  if (!ev) return "soon";
+  if (ev.kind === "econ_imminent") return "soon";
+  if (ev.kind === "econ_surprise") {
+    const c = ev.detail && ev.detail.room_class;
+    return c === "up" ? "hot" : c === "dn" ? "cool" : "soon";
+  }
+  return ev.direction > 0 ? true : ev.direction < 0 ? false : "soon";
+}
+function scintGlow(surface, ev, node, tone) {
+  if (!ev || !node) return false;
+  const k = surface + "|" + scintKey(ev.kind, ev.subject);
+  if (SCINT_SEEN.get(k) === ev.ts) return false;     /* already seen on this surface */
+  SCINT_SEEN.set(k, ev.ts);
+  scScint(node, tone === undefined ? scintTone(ev) : tone);
+  return true;
+}
+const scintZ = (ev) => (ev && ev.magnitude != null && isFinite(ev.magnitude) ? (+ev.magnitude).toFixed(1) + "σ" : "");
+/* plain words for the strip: what kind of scintilla this is */
+function scintWhat(ev) {
+  switch (ev && ev.kind) {
+    case "price_outlier": return "outlier of the day";
+    case "earnings_surprise": return "earnings surprise";
+    case "econ_surprise": return "surprise print";
+    case "econ_imminent": return "about to print";
+    case "sentiment_spike": return "sentiment spike";
+    case "breadth_thrust": return "breadth thrust";
+  }
+  return "scintilla";
+}
+/* the number itself, said the way the room says it */
+function scintSays(ev) {
+  const d = (ev && ev.detail) || {};
+  if (ev.kind === "price_outlier") {
+    const mv = d.move_pct != null ? fmtC(+d.move_pct) : "";
+    return [mv, scintZ(ev), d.daily_vol_pct != null ? "usual " + (+d.daily_vol_pct).toFixed(1) + "%/day" : ""]
+      .filter(Boolean).join(" · ");
+  }
+  if (ev.kind === "earnings_surprise") {
+    const m = (d.measures || []).find((x) => x && x.name === d.measure) || {};
+    return [(d.measure || "result") + " " + (m.surprise_pct != null ? fmtC(+m.surprise_pct) : "") + " vs est",
+            m.usual_pct != null ? "usually " + Math.abs(+m.usual_pct).toFixed(1) + "%" : "", scintZ(ev)]
+      .filter(Boolean).join(" · ");
+  }
+  if (ev.kind === "econ_surprise") {
+    return [(d.actual != null ? "actual " + d.actual : "") + (d.estimate != null ? " vs est " + d.estimate : ""),
+            d.reading || "", scintZ(ev)].filter(Boolean).join(" · ");
+  }
+  if (ev.kind === "econ_imminent") {
+    return ["in " + Math.max(0, Math.round(+d.minutes_to || 0)) + " min",
+            d.estimate != null ? "est " + d.estimate : "no estimate published", d.impact ? d.impact.toLowerCase() + " impact" : ""]
+      .filter(Boolean).join(" · ");
+  }
+  return scintZ(ev);
+}
+const scintClass = (ev) => {
+  const t = scintTone(ev);
+  return t === true ? "up" : t === false ? "dn" : t === "hot" ? "hot" : t === "cool" ? "cool" : "";
+};
+
+/* ── the criticality reading (a FIRST measure, and labelled as one) ──────────────────────────────
+   Count and intensity of scintillas per hour. Intensity is the sum of |z| in the hour, so five
+   two-sigma events and one ten-sigma event do not read the same. The line is coloured by the NET
+   DIRECTION of the hour (up green, down red) — the estate's colour law — and a bucket with no
+   direction (only imminent releases) carries none, so it draws no segment colour of its own. */
+function scintCrit(rows, nowMs, hours) {
+  const h = hours || SCINT_CRIT_HOURS;
+  const end = Math.floor((nowMs == null ? Date.now() : nowMs) / 3600e3) * 3600e3 + 3600e3;
+  const buckets = [];
+  for (let i = h - 1; i >= 0; i--) {
+    const from = end - (i + 1) * 3600e3;
+    buckets.push({ from, to: from + 3600e3, count: 0, intensity: 0, net: 0 });
+  }
+  for (const r of rows || []) {
+    const t = Date.parse(r && r.ts);
+    if (!isFinite(t)) continue;
+    const b = buckets.find((x) => t >= x.from && t < x.to);
+    if (!b) continue;
+    const z = r.magnitude != null && isFinite(r.magnitude) ? Math.abs(+r.magnitude) : 0;
+    b.count += 1; b.intensity += z; b.net += (+r.direction || 0) * (z || 1);
+  }
+  return buckets;
+}
+function scintSpark(buckets, w, hgt) {
+  const W = w || 96, H = hgt || 18;
+  const max = Math.max(1, ...buckets.map((b) => b.intensity));
+  const x = (i) => (buckets.length < 2 ? W / 2 : (i / (buckets.length - 1)) * (W - 2) + 1);
+  const y = (b) => H - 1 - (b.intensity / max) * (H - 3);
+  let segs = "";
+  for (let i = 1; i < buckets.length; i++) {
+    const net = buckets[i].net || buckets[i - 1].net;
+    const col = net > 0 ? "var(--bull)" : net < 0 ? "var(--bear)" : "var(--sv3)";
+    segs += '<line x1="' + x(i - 1).toFixed(1) + '" y1="' + y(buckets[i - 1]).toFixed(1) +
+            '" x2="' + x(i).toFixed(1) + '" y2="' + y(buckets[i]).toFixed(1) +
+            '" stroke="' + col + '" stroke-width="1.2" stroke-linecap="round"/>';
+  }
+  const last = buckets[buckets.length - 1];
+  const dot = '<circle cx="' + x(buckets.length - 1).toFixed(1) + '" cy="' + y(last).toFixed(1) +
+    '" r="1.7" fill="' + (last.net > 0 ? "var(--bull)" : last.net < 0 ? "var(--bear)" : "var(--sv3)") + '"/>';
+  return '<svg class="sc-ss__spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H +
+    '" aria-label="criticality: scintillas per hour, ' + buckets.length + ' hours">' + segs + dot + "</svg>";
+}
+/* PER COHORT — which part of the market is doing the scintillating. Memberships overlap by design
+   (a name sits in MEGACAP and in AI_HARDWARE), so a ticker counts in every cohort it belongs to and the
+   hover says so rather than pretending the buckets are exclusive. Cohorts come from the map the board
+   already builds (COHSETS); with no map loaded this returns nothing rather than guessing. */
+function scintCohorts(rows) {
+  const out = [];
+  const sets = (typeof COHSETS !== "undefined" && COHSETS) || null;
+  if (!sets) return out;
+  for (const name in sets) {
+    const set = sets[name];
+    if (!set || typeof set.has !== "function") continue;
+    let n = 0, z = 0;
+    for (const r of rows || []) {
+      if (r.subject_kind !== "ticker" || !set.has(String(r.subject).toUpperCase())) continue;
+      n++;
+      if (r.magnitude != null && isFinite(r.magnitude)) z += Math.abs(+r.magnitude);
+    }
+    if (n) out.push({ cohort: name, count: n, intensity: Math.round(z * 10) / 10 });
+  }
+  return out.sort((a, b) => b.intensity - a.intensity || b.count - a.count || (a.cohort < b.cohort ? -1 : 1));
+}
+/* how many days of stored events this reading would need before it could claim anything */
+function scintSessions() {
+  const days = new Set((SCINT_ROWS || []).map((r) => scintDayET(r.ts)).filter(Boolean));
+  return days.size;
+}
+
+/* ── the strip: newest first, one line each, tap to go to the thing ──────────────────────────── */
+function scintStripHTML() {
+  if (!SCINT_FEED_ON) return "";
+  if (SCINT_MISSING) {
+    return '<div class="sc-ss"><div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
+      '<span class="sc-ss__note">the store is not there yet — the migration has not been applied, so nothing is recorded</span></div></div>';
+  }
+  if (!SCINT_ROWS) {
+    return SCINT_FAIL_AT
+      ? '<div class="sc-ss"><div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
+        '<span class="sc-ss__note">could not be read — showing nothing rather than something stale</span></div></div>'
+      : "";
+  }
+  const rows = scintToday();
+  const crit = scintCrit(rows, Date.now(), SCINT_CRIT_HOURS);
+  const sess = scintSessions();
+  const coh = scintCohorts(rows);
+  const cohHTML = coh.length
+    ? '<span class="sc-ss__coh" title="' + esc(coh.slice(0, 3).map((c) => c.cohort + " " + c.count + " · " + c.intensity + "σ").join(" · ") +
+        " · a name counts in every cohort it belongs to") + '">' + esc(coh[0].cohort) + " " + coh[0].count + "</span>"
+    : "";
+  const head = '<div class="sc-ss__hd"><span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' +
+    '<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + scintSpark(crit) +
+    '<span class="sc-ss__note">criticality, last ' + SCINT_CRIT_HOURS + "h · a first measure only · " +
+    sess + " of " + SCINT_CRIT_SESSIONS + " sessions stored, so no probability is claimed yet</span></div>";
+  if (!rows.length) {
+    return '<div class="sc-ss">' + head +
+      '<div class="sc-ss__empty">nothing has moved further than its own history today.</div></div>';
+  }
+  const lines = rows.slice(0, 24).map((ev) => {
+    const d = ev.detail || {};
+    const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
+    return '<button class="sc-ss__row ' + scintClass(ev) + '" data-act="scintgo" data-kind="' + esc(ev.kind) +
+      '" data-sub="' + esc(ev.subject) + '" data-cty="' + esc(d.country || "") + '" data-day="' +
+      esc(d.event_ts ? scintDayET(d.event_ts) : "") + '" title="' + esc(scintWhat(ev) + " · " + scintSays(ev) +
+      " · source " + ev.source) + '">' +
+      '<span class="sc-ss__t">' + esc(when) + "</span>" +
+      '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
+      '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
+      '<span class="sc-ss__k">' + esc(scintWhat(ev)) + "</span></button>";
+  }).join("");
+  return '<div class="sc-ss">' + head + '<div class="sc-ss__rows">' + lines + "</div></div>";
+}
+function scintStripRender() {
+  const host = el("scintStrip");
+  if (!host) return;
+  const html = scintStripHTML();
+  if (html !== SCINT_HTML || host.innerHTML === "") { SCINT_HTML = html; host.innerHTML = html; }
+  if (!host.querySelectorAll) return;
+  let n = 0;
+  for (const row of host.querySelectorAll(".sc-ss__row[data-kind]")) {
+    const ev = scintBy().get(scintKey(row.dataset.kind, row.dataset.sub));
+    if (ev && n < SCINT_GLOW_CAP && scintGlow("strip", ev, row.querySelector(".sc-ss__d") || row)) n++;
+  }
+}
+
+/* ── the four surfaces ──────────────────────────────────────────────────────────────────────── */
+/* THE ECONOMIC ROOM — what Alan went looking for. An upcoming row glows grey when its release is
+   inside fifteen minutes, and the same row glows the room's own colour once the number lands. */
+function ecScintPass() {
+  if (typeof document === "undefined" || !document.querySelectorAll) return 0;
+  const by = scintBy(); let n = 0;
+  /* both shapes of the room: the day/week table's rows AND the month grid's chips */
+  for (const row of document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub]")) {
+    const sub = row.dataset.esub;
+    const sur = by.get(scintKey("econ_surprise", sub)), imm = by.get(scintKey("econ_imminent", sub));
+    const ev = sur || imm;                                  /* a printed surprise supersedes "about to print" */
+    if (!ev) continue;
+    const cty = ev.detail && ev.detail.country;
+    if (cty && row.dataset.ecty && cty !== row.dataset.ecty) continue;
+    if (row.classList) row.classList.add("is-scint");
+    const cell = (row.querySelector && (row.querySelector(".nm") || row.querySelector(".v.act"))) || row;
+    if (n < SCINT_GLOW_CAP && scintGlow("econ", ev, cell)) n++;
+  }
+  return n;
+}
+/* THE EARNINGS TAPE AND THE TIMELINE — the same stored surprise, on both surfaces */
+function ernScintPass() {
+  if (typeof document === "undefined" || !document.querySelectorAll) return 0;
+  const by = scintBy(); let n = 0;
+  for (const it of document.querySelectorAll(".ern-it[data-t], .sc-evrow[data-t]")) {
+    const ev = by.get(scintKey("earnings_surprise", it.dataset.t));
+    if (!ev) continue;
+    if (it.classList) it.classList.add("is-scint");
+    const cell = (it.querySelector && (it.querySelector(".ern-sur") || it.querySelector(".ern-res") ||
+                  it.querySelector(".ern-tk"))) || it;
+    if (n < SCINT_GLOW_CAP && scintGlow("earnings", ev, cell)) n++;
+  }
+  return n;
+}
+/* THE BOARD — the outliers of the day, on the percentage cell that IS the outlier */
+function boardScintPass() {
+  const by = scintBy(); let n = 0;
+  for (const ev of by.values()) {
+    if (ev.kind !== "price_outlier") continue;
+    const cell = el("lc_" + ev.subject);
+    if (!cell) continue;
+    if (cell.classList) cell.classList.add("is-scint");
+    scSetTitle(cell, "outlier of the day · " + scintSays(ev));
+    if (n < SCINT_GLOW_CAP && scintGlow("board", ev, cell)) n++;
+  }
+  return n;
+}
+function scintPaint() {
+  try { scintStripRender(); } catch (_) {}
+  try { ecScintPass(); } catch (_) {}
+  try { ernScintPass(); } catch (_) {}
+  try { boardScintPass(); } catch (_) {}
+}
+
+/* ── the read ───────────────────────────────────────────────────────────────────────────────── */
+async function scintPull() {
+  if (!SCINT_FEED_ON || SCINT_BUSY) return;
+  SCINT_BUSY = true;
+  try {
+    /* ONE try: a table that is not there yet answers 404 immediately, and three retries a minute
+       would be noise. Everything else comes back on the next tick. */
+    const rows = await pg(SCINT_SEL, 1);
+    SCINT_ROWS = Array.isArray(rows) ? rows : [];
+    SCINT_BY = null; SCINT_AT = Date.now(); SCINT_FAIL_AT = 0; SCINT_MISSING = false;
+  } catch (err) {
+    const m = String((err && err.message) || "");
+    SCINT_MISSING = /→ (404|400|406)/.test(m) || /relation .* does not exist/i.test(m);
+    SCINT_FAIL_AT = Date.now();
+  } finally { SCINT_BUSY = false; }
+  scintPaint();
+}
+function scintTick() {
+  if (!SCINT_FEED_ON || SCINT_MISSING || SCINT_BUSY) return;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   /* hidden tab: no read, no paint */
+  if (SCINT_FAIL_AT && Date.now() - SCINT_FAIL_AT < SCINT_RETRY_MS) return;
+  if (!SCINT_ROWS || Date.now() - SCINT_AT >= SCINT_TTL_MS) scintPull();
+  else scintPaint();
+}
+function scintStart() {
+  if (!SCINT_FEED_ON) return;
+  if (SCINT_TIMER == null && typeof setInterval === "function") SCINT_TIMER = setInterval(scintTick, SCINT_TICK_MS);
+  if (!SCINT_VIS_BOUND && typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    SCINT_VIS_BOUND = true;
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") scintTick(); });
+  }
+  scintPull();
 }
 function scSetTitle (node, value) {
   if (!node) return;
@@ -19828,6 +20252,7 @@ fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); })        // tapes, 4
 setInterval(() => fetchTapeItems().then((t) => { S.tapes = t; renderTapes(); }).catch(() => {}), 45000);
 ernBandStart();                                                     // EARNINGS BAND — this week's earnings for the names the Hub tracks: one read, then every 10 min
 ecTapeStart();                                                      // ECON TAPE — the ECON band + the ident-box nudge: one calendar read, then every 10 min
+scintStart();                                                       // M42 SCINTILLAS — read public.scintillas, glow the four surfaces, list today's in the strip
 loadHealth(); setInterval(loadHealth, 60000);
 var SENT={};
 function loadSentiment(){ try{ pg("news_sentiment?select=ticker,score,n_articles").then(function(rows){ if(Array.isArray(rows)){ var m={}; rows.forEach(function(r){ m[String(r.ticker).toUpperCase()]={s:+r.score,n:+r.n_articles}; }); SENT=m; if(typeof render==="function") render(); } }).catch(function(){}); }catch(e){} }
