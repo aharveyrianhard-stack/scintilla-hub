@@ -22443,16 +22443,32 @@ setInterval(function () {
       }).catch(function () {});
   } catch (e) {}
 }, 75000);
+/* K3 — quiet-time self-update: the etag sample is shared between R19's resume
+   check and the quiet poller; hubSelfUpdatePlan is the pure decision (tests slice
+   it and the two consts out of the page). */
+let SC_ETAG_SEEN = null;
+const HUB_SELF_UPDATE_IDLE_MS = 120000;
+const HUB_SELF_UPDATE_EVERY_MS = 180000;
+function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
+  const seen = typeof seenEtag === "string" && seenEtag.length > 0;
+  const now = typeof nowEtag === "string" && nowEtag.length > 0;
+  if (!seen && now) return { reload: false, adopt: true, reason: "adopted" };
+  if (!seen || !now || seenEtag === nowEtag) return { reload: false, adopt: false, reason: "same build" };
+  if (videoPlaying) return { reload: false, adopt: false, reason: "video playing" };
+  if (typing) return { reload: false, adopt: false, reason: "typing" };
+  if (idleMs < HUB_SELF_UPDATE_IDLE_MS) return { reload: false, adopt: false, reason: "in use" };
+  return { reload: true, adopt: false, reason: "reload" };
+}
 /* R19 — PWA SELF-UPDATE (Alan: installed home-screen app doesn't update).
    ETag of "/" sampled on load; on resume (visibilitychange → visible after a
    hidden spell, ≤ once per 5 min) re-sample — a changed etag means a fresh build
    shipped, so reload. NEVER reloads while the tab is actively visible/in use;
    every step guarded, silent no-op offline. */
 (function () {
-  let SC_ETAG = null, wasHidden = false, lastChk = 0;
+  let wasHidden = false, lastChk = 0;
   const headEtag = () => fetch("/", { method: "HEAD", cache: "no-store" })
     .then((r) => r.headers.get("etag"));
-  try { headEtag().then((et) => { SC_ETAG = et; }).catch(() => {}); } catch (err) {}
+  try { headEtag().then((et) => { SC_ETAG_SEEN = et; }).catch(() => {}); } catch (err) {}
   document.addEventListener("visibilitychange", () => {
     try {
       if (document.visibilityState === "hidden") { wasHidden = true; return; }
@@ -22462,11 +22478,48 @@ setInterval(function () {
       if (now - lastChk < 300000) return;                      // at most once per 5 min
       lastChk = now;
       headEtag().then((et) => {
-        if (et && SC_ETAG && et !== SC_ETAG) { location.reload(); return; }
-        if (et && !SC_ETAG) SC_ETAG = et;                      // load-time sample failed — adopt now
+        if (et && SC_ETAG_SEEN && et !== SC_ETAG_SEEN) { location.reload(); return; }
+        if (et && !SC_ETAG_SEEN) SC_ETAG_SEEN = et;            // load-time sample failed — adopt now
       }).catch(() => {});
     } catch (err) {}
   });
+})();
+/* K3 — QUIET-TIME SELF-UPDATE. R19 only fires on resume from hidden, so a window
+   that is never hidden (the iMac's Safari web app) never updates. While the page
+   is quiet — idle for HUB_SELF_UPDATE_IDLE_MS, no video playing, nobody typing —
+   re-sample the etag every HUB_SELF_UPDATE_EVERY_MS and reload on a new build.
+   Every step guarded; a failed fetch is a silent no-op. */
+(function () {
+  let lastActive = Date.now();
+  const bump = () => { lastActive = Date.now(); };
+  ["pointermove", "pointerdown", "keydown", "wheel", "touchstart", "scroll"].forEach((ev) => {
+    try { window.addEventListener(ev, bump, { passive: true, capture: true }); } catch (err) {}
+  });
+  setInterval(() => {
+    try {
+      fetch("/", { method: "HEAD", cache: "no-store" }).then((r) => {
+        try {
+          const etag = r.headers.get("etag");
+          let videoPlaying = false;
+          try {
+            const vids = document.querySelectorAll("video");
+            for (let i = 0; i < vids.length; i++) {
+              if (!vids[i].paused && !vids[i].ended && vids[i].readyState > 2) { videoPlaying = true; break; }
+            }
+          } catch (err) {}
+          let typing = false;
+          try {
+            const ae = document.activeElement;
+            typing = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" ||
+              (typeof ae.getAttribute === "function" && ae.getAttribute("contenteditable") === "true"));
+          } catch (err) {}
+          const plan = hubSelfUpdatePlan(SC_ETAG_SEEN, etag, Date.now() - lastActive, videoPlaying, typing);
+          if (plan.adopt) SC_ETAG_SEEN = etag;
+          else if (plan.reload) location.reload();
+        } catch (err) {}
+      }).catch(() => {});
+    } catch (err) {}
+  }, HUB_SELF_UPDATE_EVERY_MS);
 })();
 </script>
 <!-- FILES ROOM — sectioned file drawer (replicates the URTH files page in Scintilla brand).
