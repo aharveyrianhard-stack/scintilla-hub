@@ -25,6 +25,19 @@ td{padding:7px 12px 7px 0;border-bottom:.4px solid var(--line);vertical-align:to
 p{max-width:78ch;margin:0 0 10px}.note{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.75;max-width:90ch}
 .err{color:var(--dn);font-family:var(--mono);font-size:13px}
 @media(max-width:600px){main{padding:56px 16px 80px}input{width:100px}.tile .v{font-size:20px}}
+.s6{margin-top:56px;border-top:.6px solid var(--line2);padding-top:6px}
+.s6 h3{font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin:26px 0 8px}
+.s6scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.s6scroll table{min-width:980px}.s6scroll td{white-space:nowrap}.s6scroll th{white-space:normal;vertical-align:bottom;padding-right:10px}
+.s6swipe{display:none}@media(max-width:1040px){.s6swipe{display:block}}
+.s6 td.pool,.s6 tr.pool td{color:var(--ink)}.s6 tr.fund td{color:var(--dim)}
+.s6 .up,.s6 tr.pool td.up,.s6 tr.fund td.up{color:var(--up)}.s6 .dn,.s6 tr.pool td.dn,.s6 tr.fund td.dn{color:var(--dn)}
+.s6name{margin:18px 0 4px;font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.6}.s6name b{color:var(--ink);font-weight:500;font-size:13px}
+.s6row{display:grid;grid-template-columns:190px 1fr;align-items:center;gap:10px;margin:2px 0}
+.s6row .l{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.35}
+.s6row svg{width:100%;height:34px;display:block;overflow:visible}
+.s6tip{position:fixed;pointer-events:none;background:rgba(10,10,15,.96);border:.6px solid var(--line2);color:var(--ink);font-family:var(--mono);font-size:11.5px;padding:6px 8px;line-height:1.5;display:none;z-index:9;white-space:nowrap}
+.s6banner{border:.8px solid var(--warn);border-left-width:3px;padding:10px 14px;margin:12px 0;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+@media(max-width:600px){.s6row{grid-template-columns:1fr;gap:0}.s6row .l{margin-top:6px}}
 </style></head><body><main>
 <div data-scnav-slot style="margin-bottom:14px"></div>
 <h1>How unusual is this reading?</h1>
@@ -59,6 +72,21 @@ p{max-width:78ch;margin:0 0 10px}.note{font-family:var(--mono);font-size:12px;co
   source · chart API /candles?tf=D, split-adjusted as served. Arithmetic: research/statistics/stats.mjs, tested in tests/statistics-arithmetic.test.mjs.
   </div>
 </section>
+<section class="s6" id="s6">
+  <h2>Into the report — what happened around past earnings</h2>
+  <div class="meta">Three stretches around every past report: the 20 sessions before it (the run-up), the first session that trades on the news (the report day), and the five sessions after. Each is measured in % and in usual days — the name's ordinary daily move, read before the run-up starts. This says what happened and how often. It does not say what comes next, and a share of past run-ups is not a reason to buy before a report.</div>
+  <div class="controls" style="margin:14px 0 4px"><div><label for="s6u">measure in</label><select id="s6u"><option value="sd">usual days</option><option value="pct">%</option></select></div></div>
+  <div id="s6status" class="meta"></div>
+  <div id="s6body" hidden>
+    <h3>Pooled — every name with at least 8 reports, the eight targets, and the funds over the same sessions</h3>
+    <div class="note s6swipe">← swipe the table sideways for every column →</div><div class="s6scroll"><table id="s6table"><thead><tr><th>name</th><th>reports</th><th>run-up · median</th><th>10th–90th</th><th>up</th><th>report day · median</th><th>up</th><th>five after · median</th><th>up</th><th>any 20 sessions · median</th><th>up</th></tr></thead><tbody></tbody></table></div>
+    <div class="note" id="s6tnote"></div>
+    <h3>One strip per name — each dot is one past report</h3>
+    <div class="note">Green dots rose over the stretch, red fell; left of the centre line is down, right is up. The shaded bar is the middle 80% (10th to 90th percentile), the upright tick the median. Hover or tap a dot for its dates.</div>
+    <div id="s6strips"></div>
+  </div>
+  <div class="tip s6tip" id="s6tip"></div>
+</section>
 </main>
 <script type="module">
 import { analyseSymbol, INDICATORS, WINDOWS, LEVELS, priorWindow, pctMoves } from "./stats.mjs";
@@ -72,7 +100,7 @@ $("#go").onclick = run; $("#t").addEventListener("keydown", (e) => { if (e.key =
 let cache = {};
 async function run() {
   const t = $("#t").value.trim().toUpperCase(), ik = $("#i").value, wk = $("#w").value;
-  history.replaceState(null, "", `?t=${t}&i=${ik}&w=${wk}`);
+  history.replaceState(null, "", `?t=${t}&i=${ik}&w=${wk}`); s6Show(t);
   $("#status").textContent = "asking the chart API for " + t + " …"; $("#out").hidden = true;
   try {
     if (!cache[t]) { const r = await fetch(`${API}/candles?tf=D&symbol=${encodeURIComponent(t)}`); if (!r.ok) throw new Error("the chart API answered " + r.status + " for " + t); cache[t] = await r.json(); }
@@ -144,6 +172,58 @@ function drawSeries(series, dates, todayIdx, W, unit, label) {
   const tip = $("#tsTip"); c.onmousemove = (e) => { const r = c.getBoundingClientRect(); const x = e.clientX - r.left; const i = Math.round(i0 + (x - L) / pw * (i1 - i0)); if (i < i0 || i > i1 || series[i] == null) { tip.style.display = "none"; return; } tip.style.display = "block"; tip.style.left = Math.min(x + 12, w - 150) + "px"; tip.style.top = (e.clientY - r.top + 12) + "px"; tip.innerHTML = `${dates[i]}<br>${fmt(series[i], 2)}${unit}`; }; c.onmouseleave = () => tip.style.display = "none";
 }
 addEventListener("resize", () => { if (!$("#out").hidden) run(); });
+/* ---- S6 · into the report. Reads data/runup-into-earnings.json, built by build.mjs --earnings from a read-only export. ---- */
+let S6 = null;
+const s6fmt = (v, u) => v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : "") + (u === "pct" ? fmt(v, 1) + "%" : fmt(v, 2));
+const s6share = (x) => x && x.n ? `${fmt(x.share_positive, 0)}% <span style="color:var(--dim)">of ${x.n}</span>` : "—";
+const s6cls = (v) => v == null ? "" : v > 0 ? "up" : v < 0 ? "dn" : "";
+fetch("./data/runup-into-earnings.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((j) => { S6 = j; s6Show($("#t").value.trim().toUpperCase()); })
+  .catch(() => { $("#s6status").innerHTML = `<span class="err">Not built yet.</span> These numbers need the list of past report dates (public.earnings_events) as a read-only export; this build has none. Nothing is shown rather than anything guessed.`; });
+$("#s6u").onchange = () => s6Show($("#t").value.trim().toUpperCase());
+function s6Show(sel) {
+  if (!S6) return; const u = $("#s6u").value; const P = S6.pooled.universe;
+  $("#s6status").innerHTML = (S6.fixture ? `<div class="s6banner">TEST FIXTURE — made-up prices and made-up report dates, drawn to check the layout. Nothing here is measured.</div>` : "") +
+    `built ${S6.built_utc.slice(0, 16).replace("T", " ")}Z · ${P.names} names with ≥${S6.definitions.min_reports} reports · ${P.reports.toLocaleString()} reports pooled · export ${S6.reports.rows.toLocaleString()} rows, ${S6.reports.happened.toLocaleString()} that happened · report time unknown for ${(P.timing.unknown || 0).toLocaleString()} (treated as the next session) · ${S6.survivorship}`;
+  const row = (name, n, s, any, cls = "", noteN = "") => { const m = (k) => s ? s[k][u] : null;
+    return `<tr class="${cls}"><td class="k">${name}</td><td>${n}${noteN}</td>` +
+      `<td class="${s6cls(m("runup")?.median)}">${s6fmt(m("runup")?.median, u)}</td><td>${m("runup")?.n ? s6fmt(m("runup").q10, u) + " to " + s6fmt(m("runup").q90, u) : "—"}</td><td>${s6share(m("runup"))}</td>` +
+      `<td class="${s6cls(m("day")?.median)}">${s6fmt(m("day")?.median, u)}</td><td>${s6share(m("day"))}</td>` +
+      `<td class="${s6cls(m("after")?.median)}">${s6fmt(m("after")?.median, u)}</td><td>${s6share(m("after"))}</td>` +
+      `<td class="${s6cls(any?.[u]?.median)}">${any ? s6fmt(any[u].median, u) : "—"}</td><td>${any ? s6share(any[u]) : "—"}</td></tr>`; };
+  const rows = [row("all names, pooled", P.reports.toLocaleString(), P.summary, P.any20, "pool")];
+  for (const t of S6.table) {
+    if (t.kind === "fund") rows.push(row(t.name + " · same sessions", `${t.windows_matched}/${t.windows_asked}`, t.summary, null, "fund"));
+    else rows.push(row(t.name, t.reports_used, t.summary, t.any20, "", t.enough ? "" : ` <span style="color:var(--warn)">· fewer than ${S6.definitions.min_reports}</span>`));
+  }
+  $("#s6table tbody").innerHTML = rows.join("");
+  $("#s6tnote").innerHTML = `up · the share of reports where the stretch ended higher; a flat stretch is not counted as up. any 20 sessions · every 20-session stretch of the same names' history, scaled the same way — the baseline a run-up has to beat before it means anything. Fund rows · a fund does not report, so these are the fund over the very same sessions as every pooled report: what the market did around those dates. For scale: twenty ordinary days in a row add up to a spread of about √20 ≈ 4.5 usual days, so a run-up of 2 usual days is well inside what any 20 sessions do.`;
+  const names = [...new Set([sel, ...S6.targets].filter((n) => S6.symbols[n]))];
+  $("#s6strips").innerHTML = names.map((n) => s6Strips(n, S6.symbols[n], u)).join("") ||
+    `<div class="note">No name in this build has reports.</div>`;
+  $("#s6body").hidden = false;
+  const tip = $("#s6tip");
+  document.querySelectorAll("#s6strips circle").forEach((c) => {
+    const show = (e) => { tip.innerHTML = c.dataset.tip; tip.style.display = "block"; const p = e.touches ? e.touches[0] : e; tip.style.left = Math.min(p.clientX + 12, innerWidth - 250) + "px"; tip.style.top = (p.clientY + 14) + "px"; };
+    c.addEventListener("mousemove", show); c.addEventListener("touchstart", show, { passive: true }); c.addEventListener("mouseleave", () => tip.style.display = "none");
+  });
+}
+function s6Strips(name, v, u) {
+  const s = v.summary, ev = v.events;
+  const head = `<div class="s6name">${S6.fixture ? `<span style="color:var(--warn)">TEST FIXTURE · made-up data · </span>` : ""}<b>${name}</b> · ${v.reports_used} reports measured since ${v.analysis_start}${v.enough ? "" : ` · <span style="color:var(--warn)">fewer than ${S6.definitions.min_reports} — shown, not leaned on</span>`}${v.excluded.length ? ` · ${v.excluded.length} left out (${[...new Set(v.excluded.map((e) => e.reason))].slice(0, 2).join("; ")})` : ""} · run-up up in ${s.runup.pct.n ? fmt(s.runup.pct.share_positive, 0) + "%" : "—"}, median ${s6fmt(s.runup[u].median, u)}${u === "sd" ? " usual days" : ""}</div>`;
+  const key = { runup: ["runup_", "run-up, 20 sessions"], day: ["day_", "report day"], after: ["after_", "five after"] };
+  return head + Object.entries(key).map(([k, [f, label]]) => {
+    const vals = ev.map((e) => e[f + u]).filter((x) => x != null);
+    const ext = Math.min(u === "sd" ? 10 : 40, Math.max(1, ...vals.map(Math.abs)) * 1.08);   // symmetric around zero, capped; beyond-edge dots sit on the edge and say so
+    const X = (x) => 50 + 50 * Math.max(-1, Math.min(1, x / ext));
+    const sm = s[k][u]; const band = sm.n ? `<rect x="${X(sm.q10)}%" y="9" width="${Math.max(0.3, X(sm.q90) - X(sm.q10))}%" height="16" fill="rgba(58,58,82,.55)"/><line x1="${X(sm.median)}%" x2="${X(sm.median)}%" y1="5" y2="29" stroke="var(--ink2)" stroke-width="2"/>` : "";
+    const dots = ev.filter((e) => e[f + u] != null).map((e) => { const x = e[f + u]; const beyond = Math.abs(x) > ext;
+      return `<circle cx="${X(x)}%" cy="17" r="4.5" fill="${x > 0 ? "var(--up)" : x < 0 ? "var(--dn)" : "var(--dim)"}" fill-opacity=".8" stroke="var(--bg)" stroke-width="1.5" data-tip="${name} · report ${e.date} (${e.timing === "unknown" ? "time unknown — next session used" : e.timing})<br>${label}: ${s6fmt(e[f + "pct"], "pct")} · ${s6fmt(e[f + "sd"], "sd")} usual days${beyond ? " (beyond the strip's edge)" : ""}<br>news session ${e.session} · usual day ${fmt(e.usual_day, 2)}%"/>`; }).join("");
+    const edge = `<text x="0" y="33" font-size="10" fill="var(--dim)" font-family="var(--mono)">${s6fmt(-ext, u)}</text><text x="100%" y="33" text-anchor="end" font-size="10" fill="var(--dim)" font-family="var(--mono)">${s6fmt(ext, u)}</text>`;
+    return `<div class="s6row"><div class="l">${label}<br>${sm.n ? `median ${s6fmt(sm.median, u)} · up ${fmt(sm.share_positive, 0)}%` : "—"}</div><svg role="img" aria-label="${name} ${label}: ${sm.n} reports"><line x1="50%" x2="50%" y1="2" y2="32" stroke="var(--line2)" stroke-width="1"/>${band}${dots}${edge}</svg></div>`;
+  }).join("");
+}
+addEventListener("resize", () => { if (S6) s6Show($("#t").value.trim().toUpperCase()); });
 run();
 </script>
 <style id="scnav-css">

@@ -17,6 +17,8 @@ test("S6 build: the export is filtered to reports that happened, and the output 
   assert.deepEqual(fs.readFileSync(path.join(root, "research/statistics/data/summary.json")), before, "--s6-only never rewrites summary.json");
   const j = JSON.parse(fs.readFileSync(out, "utf8"));
   assert.equal(j.fixture, true);
+  assert.deepEqual(j.targets, fx.targets, "the page draws one strip per target from this list");
+  assert.deepEqual(j.funds, fx.funds);
   assert.match(j.reports.rule, /eps_actual, superseded_at/);
   const rows = fs.readFileSync(fx.earnings, "utf8").trim().split("\n").length - 1;
   assert.equal(j.reports.rows, rows);

@@ -67,7 +67,7 @@ const s6 = earn && { built_utc: out.built_utc, study: "S6 · into the report", f
     rule: `eps_actual present and superseded_at empty (columns found and filtered on: ${earn.filtered_on.join(", ") || "none — the export was taken as already filtered"})` },
   definitions: { runup_sessions: RUNUP_SESSIONS, after_sessions: AFTER_SESSIONS, usual_day_sessions: USUAL_SESSIONS, min_reports: MIN_REPORTS,
     method: "see the S6 block in research/statistics/stats.mjs — report session by BMO/AMC, run-up close[r-21] -> close[r-1], report day close[r-1] -> close[r], five after close[r] -> close[r+5], scaled by the usual day at the run-up start" },
-  universe: out.universe, survivorship: "the universe is today's list; names that were delisted, merged or dropped before today are not in it, so the pooled rows describe survivors",
+  universe: out.universe, targets: TARGETS, funds: FUNDS, survivorship: "the universe is today's list; names that were delisted, merged or dropped before today are not in it, so the pooled rows describe survivors",
   symbols: {}, no_reports: [], missing_bars: [], pooled: {}, table: [] };
 const pooledEvents = [], pooledAny = { pct: [], sd: [] }, fundBars = {};
 for (const sym of symbols) {
