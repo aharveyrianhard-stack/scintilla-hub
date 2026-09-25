@@ -150,7 +150,9 @@ test('a stale or rejected Geiger read revokes rank readiness even with unchanged
 });
 
 test('board cache restores layout without repainting remembered market data', () => {
-  const c = context(['seedBoardFromCache'], { S:{}, cacheGet:() => ({
+  /* H-FRONT — seedBoardFromCache filters every list scope through the one list-scope helper */
+  const c = context(['seedBoardFromCache', 'isListCoh', 'listMembers'], { S:{}, LIST_COHS:{ FAV:null, FAVORITES:'favorites', RADAR:'radar' },
+    LISTS:{ favorites:[], radar:[] }, cacheGet:() => ({
     rows:[{ t:'AAPL', name:'Apple', price:271, c:7.31, g:0.8, rsi:61, fam:{ trend:0.9 } }], order:['AAPL']
   }) });
   assert.equal(c.seedBoardFromCache('ALL', []), true);

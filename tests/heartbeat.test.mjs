@@ -216,9 +216,9 @@ test("a group's heartbeat is the MIDDLE name's, so one wild name cannot speak fo
 test("at phone width the row stays legible: one column steps aside and the sign is dropped, not the number", () => {
   const phone = [...page.matchAll(/@media\(max-width:560px\)\{[\s\S]*?\n\}/g)].map((m) => m[0]).find((b) => b.includes(".ch{grid-template-columns"));
   assert.ok(phone, "the board has a phone rule of its own");
-  assert.match(phone, /nth-child\(6\), \.ch > \*:nth-child\(11\)\{ display:none/, "F P/E and READ step aside - the two that were already unreadable at 390");
+  assert.match(phone, /nth-child\(6\), \.ch > \*:nth-child\(12\)\{ display:none/, "F P/E and READ step aside - the two that were already unreadable at 390 (READ is cell 12 since H-FRONT put REVENUE at 8)");
   assert.match(phone, /\.sc-hb__pm\{ display:none/, "the ± goes so the decimal fits");
-  assert.equal(phone.match(/minmax\(0,\d+fr\)/g).length, 12, "12 tracks for the 12 cells that remain");
+  assert.equal(phone.match(/minmax\(0,\d+fr\)/g).length, 13, "13 tracks for the 13 cells that remain (REVENUE stays on the phone)");
   assert.match(phone, /\.ch > \.sc-hb, \.ch > \.sc-chg, \.ch > \.sc-fpe\{ overflow:hidden/, "no cell spills into its neighbour at 390");
 });
 

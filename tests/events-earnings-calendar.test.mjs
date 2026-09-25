@@ -99,7 +99,8 @@ test("the cohort scope gate is the same honest one the list uses", () => {
   /* M40 — the gate moved with the renderer: the three squares are drawn by
      ercRenderGrid, and it must never draw an unscoped view. */
   const grid = src.slice(src.indexOf("function ercRenderGrid(list, cohort) {"), src.indexOf("/* ---- THE OLDER LIST, KEPT WHOLE"));
-  assert.match(grid, /if \(!COHSETS && cohort !== "ALL" && cohort !== "FAV" && !S\.tq\)/);
+  /* H-FRONT — the gate names every list scope (LIKED = FAV, FAVORITES, RADAR), not FAV alone */
+  assert.match(grid, /if \(!COHSETS && cohort !== "ALL" && !isListCoh\(cohort\) && !S\.tq\)/);
   assert.match(grid, /scopeItems\(ERC_ROWS, cohort, S\.tq, S\.fav, COHSETS\)/);
   assert.match(grid, /cohort map loading…/);
 });
