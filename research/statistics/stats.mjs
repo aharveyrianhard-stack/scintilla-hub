@@ -288,7 +288,7 @@ export function summariseEvents(events) {
 }
 
 /** Every 20-session stretch of the name's own history, scaled the same way: the baseline a run-up is read against. */
-export function anyStretch(closes, usual, len = RUNUP_SESSIONS) {
+export function anyStretch(closes, usual, len = RUNUP_SESSIONS, keep = false) {
   const pct = [], sd = [];
   for (let s0 = 0; s0 + len < closes.length; s0++) {
     const sig = usual[s0];
@@ -296,11 +296,11 @@ export function anyStretch(closes, usual, len = RUNUP_SESSIONS) {
     const v = (closes[s0 + len] / closes[s0] - 1) * 100;
     pct.push(v); sd.push(v / sig);
   }
-  return { pct: spread(pct), sd: spread(sd) };
+  return keep ? { pct: spread(pct), sd: spread(sd), raw: { pct, sd } } : { pct: spread(pct), sd: spread(sd) };
 }
 
 /** One name. `bars` finished daily bars oldest first; `reports` [{date, report_time}] that happened. */
-export function runupStudy(bars, reports) {
+export function runupStudy(bars, reports, { keepStretches = false } = {}) {
   const a = analyseSymbol(bars);
   const seg = bars.slice(a.history.bars_before_start);
   const closes = seg.map((b) => +b.c);
@@ -323,10 +323,13 @@ export function runupStudy(bars, reports) {
     events.push({ date, report_time: rep.report_time ?? null, timing: t.timing, timing_flagged: t.flagged,
       session: dates[r], runup_from: dates[m.start_idx], ...m });
   }
+  const any = anyStretch(closes, usual, RUNUP_SESSIONS, keepStretches);
+  const raw = any.raw; delete any.raw;
   return {
+    ...(keepStretches ? { _any20_raw: raw } : {}),
     reports_listed: seen.size, reports_used: events.length, enough: events.length >= MIN_REPORTS,
     first_day: a.first_day, source_date: a.source_date, analysis_start: a.history.analysis_start,
-    timing, excluded, events, summary: summariseEvents(events), any20: anyStretch(closes, usual),
+    timing, excluded, events, summary: summariseEvents(events), any20: any,
   };
 }
 
