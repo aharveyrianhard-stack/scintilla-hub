@@ -1,0 +1,178 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Scintilla · how unusual is this reading — statistics</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0D0D14;--line:#1A1A2A;--line2:#252538;--ink:#C6C8DE;--ink2:#9A9AB6;--dim:#868AAA;--mute:#3A3A52;--warn:#C8B25A;
+  --up:#00FFA3;--dn:#FF2D55;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;--sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink2);font-family:var(--sans);font-size:15px;line-height:1.55}
+main{max-width:1180px;margin:0 auto;padding:56px 24px 100px}
+h1{font-size:26px;font-weight:500;color:var(--ink);margin:0 0 4px;letter-spacing:-.01em}h2{font-size:16px;font-weight:500;color:var(--ink);margin:30px 0 8px}
+.meta{font-family:var(--mono);font-size:11.5px;color:var(--dim);line-height:1.7}
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 18px;align-items:end}
+label{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:5px}
+input,select,button{font-family:var(--mono);font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line2);border-radius:3px;padding:8px 10px;min-height:38px}
+input{width:120px;text-transform:uppercase}button{cursor:pointer}button:hover{border-color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin:14px 0}
+.tile{background:var(--panel);border:.6px solid var(--line2);padding:12px 14px}.tile .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.tile .v{font-family:var(--mono);font-size:24px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}.tile .s{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5}
+.tile.up .v{color:var(--up)}.tile.dn .v{color:var(--dn)}
+.flag{border:.8px solid var(--warn);border-left-width:3px;padding:10px 14px;margin:14px 0;font-size:13.5px;color:var(--ink)}.flag b{color:var(--warn);font-weight:500}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}@media(max-width:820px){.charts{grid-template-columns:1fr}}
+figure{margin:0;background:var(--panel);border:.6px solid var(--line2);padding:12px 12px 8px;position:relative}
+figcaption{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:6px;line-height:1.6}canvas{width:100%;height:280px;display:block;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:rgba(10,10,15,.95);border:.6px solid var(--line2);color:var(--ink);font-family:var(--mono);font-size:11.5px;padding:6px 8px;line-height:1.5;display:none;z-index:5;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px;margin:8px 0}th{text-align:left;font-weight:400;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:.6px solid var(--line2);padding:0 12px 6px 0}
+td{padding:7px 12px 7px 0;border-bottom:.4px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}td.k{color:var(--ink)}
+p{max-width:78ch;margin:0 0 10px}.note{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.75;max-width:90ch}
+.err{color:var(--dn);font-family:var(--mono);font-size:13px}
+@media(max-width:600px){main{padding:56px 16px 80px}input{width:100px}.tile .v{font-size:20px}}
+</style></head><body><main>
+<div data-scnav-slot style="margin-bottom:14px"></div>
+<h1>How unusual is this reading?</h1>
+<div class="meta">One name · one indicator · one trailing window. Where today's value sits against that name's own prior days, counted from finished daily bars. Nothing here says what comes next: rarity is not expected return.</div>
+<div class="controls">
+  <div><label for="t">name</label><input id="t" list="names" placeholder="MU" autocapitalize="characters" spellcheck="false"><datalist id="names"></datalist></div>
+  <div><label for="i">indicator</label><select id="i"><option value="rsi14">RSI(14), daily</option><option value="dist200">distance to the 200-day, %</option><option value="usual60">usual day (60-session sd), %</option></select></div>
+  <div><label for="w">trailing window</label><select id="w"><option value="1y">1 year (252 sessions)</option><option value="3y">3 years (756 sessions)</option><option value="all">all since 2003</option></select></div>
+  <div><label>&nbsp;</label><button id="go">read</button></div>
+</div>
+<div id="status" class="meta"></div>
+<section id="out" hidden>
+  <div id="flags"></div>
+  <div class="grid" id="tiles"></div>
+  <div class="charts">
+    <figure><canvas id="hist"></canvas><div class="tip" id="histTip"></div><figcaption id="histCap"></figcaption></figure>
+    <figure><canvas id="ts"></canvas><div class="tip" id="tsTip"></div><figcaption id="tsCap"></figcaption></figure>
+  </div>
+  <h2>How often it has been beyond the rulebook's lines — prior days in this window</h2>
+  <table id="levels"><thead><tr><th>line</th><th>days at or beyond</th><th>share of prior days</th></tr></thead><tbody></tbody></table>
+  <h2>The numbers, exactly</h2>
+  <table id="numbers"><thead><tr><th>measure</th><th>1 year</th><th>3 years</th><th>all since start</th></tr></thead><tbody></tbody></table>
+  <h2>What the words mean</h2>
+  <div class="note">
+  a day · a finished daily bar from the chart API; today's unfinished session is never counted.<br>
+  prior observations only · the window holds the values BEFORE the reading being placed; the reading is never inside the sample it is compared with.<br>
+  percentile · the share of prior days with a lower value (ties count half). 90 means nine prior days in ten were lower.<br>
+  Z · how many standard deviations today sits from the window's mean; sd is the sample kind (n−1). Undefined when every prior value is identical, and it says so.<br>
+  RSI(14) · Wilder's, RMA smoothing, exactly as the rulebook's I-8 states it (RSI = 100 when the average loss is 0). distance to the 200-day · 100 × (close ÷ 200-day simple average − 1). usual day · the standard deviation of the last 60 daily % moves, the board's heartbeat number.<br>
+  the rulebook's lines · RSI 30/70 (Wilder's fixed defaults, I-8) and the 10th/90th percentile lines of the window (the rulebook's PERCENTILE mode, U-3). The 200-day itself is a rulebook object (I-4); the ±10% and ±20% distance lines are reference lines chosen for this page, not the book's. The usual day has no rulebook line.<br>
+  short history · fewer prior sessions than the window asks for; too few · fewer than 30 valid prior values. Both are shown, flagged, never hidden.<br>
+  source · chart API /candles?tf=D, split-adjusted as served. Arithmetic: research/statistics/stats.mjs, tested in tests/statistics-arithmetic.test.mjs.
+  </div>
+</section>
+</main>
+<script type="module">
+import { analyseSymbol, INDICATORS, WINDOWS, LEVELS, priorWindow, pctMoves } from "./stats.mjs";
+const API = "https://scintilla-massive-chart-api.fly.dev";
+const $ = (s) => document.querySelector(s);
+const fmt = (v, d = 2) => v == null || !isFinite(v) ? "—" : (Math.round(v * 10 ** d) / 10 ** d).toFixed(d);
+const q = new URLSearchParams(location.search);
+$("#t").value = (q.get("t") || "MU").toUpperCase(); $("#i").value = q.get("i") || "rsi14"; $("#w").value = q.get("w") || "1y";
+fetch(API + "/universe").then((r) => r.json()).then((u) => { $("#names").innerHTML = (u.symbols || []).map((s) => `<option value="${s}">`).join(""); }).catch(() => {});
+$("#go").onclick = run; $("#t").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); }); $("#i").onchange = run; $("#w").onchange = run;
+let cache = {};
+async function run() {
+  const t = $("#t").value.trim().toUpperCase(), ik = $("#i").value, wk = $("#w").value;
+  history.replaceState(null, "", `?t=${t}&i=${ik}&w=${wk}`);
+  $("#status").textContent = "asking the chart API for " + t + " …"; $("#out").hidden = true;
+  try {
+    if (!cache[t]) { const r = await fetch(`${API}/candles?tf=D&symbol=${encodeURIComponent(t)}`); if (!r.ok) throw new Error("the chart API answered " + r.status + " for " + t); cache[t] = await r.json(); }
+    render(t, cache[t], ik, wk);
+  } catch (e) { $("#status").innerHTML = `<span class="err">${e.message}</span>`; }
+}
+function render(t, j, ik, wk) {
+  const bars = j.series; const a = analyseSymbol(bars); const ind = a.indicators[ik]; const d = ind.windows[wk];
+  const startIdx = a.history.bars_before_start; const closes = bars.slice(startIdx).map((b) => +b.c); const series = INDICATORS[ik].compute(closes);
+  const dates = bars.slice(startIdx).map((b) => new Date(b.t).toISOString().slice(0, 10)); const todayIdx = series.length - 1;
+  const unit = INDICATORS[ik].unit;
+  $("#status").innerHTML = `<b style="color:var(--ink);font-weight:500">${t}</b> · ${ind.label} · source date <b style="color:var(--ink);font-weight:500">${a.source_date}</b> · ${a.bars.toLocaleString()} finished days from ${a.first_day} · ${j.provider || "MASSIVE"}, ${(j.price_basis || "").toLowerCase().replace("_", " ")} · read ${new Date().toISOString().slice(0, 16).replace("T", " ")}Z`;
+  const flags = [];
+  if (a.history.bars_before_start > 0) flags.push(`<b>history starts ${a.history.analysis_start}.</b> The store holds ${a.history.bars_before_start} earlier bars for this ticker, then a hole of ${a.history.gaps.filter((g) => g.days > 365).map((g) => g.days).join("/")} days — a different listing or a delisting. Those bars are not this name's own history and are left out.`);
+  const smallGaps = a.history.gaps.filter((g) => g.days <= 365 && g.to > a.history.analysis_start);
+  if (smallGaps.length) flags.push(`<b>${smallGaps.length} hole${smallGaps.length > 1 ? "s" : ""} in the stored history</b> (${smallGaps.slice(0, 3).map((g) => g.from + " → " + g.to + ", " + g.days + " days").join("; ")}${smallGaps.length > 3 ? "; …" : ""}). Counts are per stored day; the holes are not filled.`);
+  const wild = a.history.wild_examples.filter((w) => w.date > a.history.analysis_start);
+  if (wild.length) flags.push(`<b>${wild.length} daily move${wild.length > 1 ? "s" : ""} beyond ±50%</b> in the stored series (${wild.slice(0, 3).map((w) => w.date + " " + (w.move > 0 ? "+" : "") + w.move + "%").join(", ")}). Real or a bad print, they are inside the usual-day and distance numbers. Treat this name's extremes with care.`);
+  if (d.short_history) flags.push(`<b>short history:</b> this window asks for ${d.sessions_asked} prior sessions and ${d.sessions_covered} exist.`);
+  if (d.too_few) flags.push(`<b>too few:</b> ${d.n} valid prior values; fewer than 30 is shown but not leaned on.`);
+  $("#flags").innerHTML = flags.map((f) => `<div class="flag">${f}</div>`).join("");
+  const mv = pctMoves(closes)[todayIdx]; const dir = series[todayIdx] != null && series[todayIdx - 1] != null ? (series[todayIdx] >= series[todayIdx - 1] ? "up" : "dn") : "";
+  const tiles = [
+    [`today ${unit}`, fmt(ind.today), `${a.source_date} · ${dir === "up" ? "higher" : dir === "dn" ? "lower" : "—"} than the day before`, dir],
+    ["percentile", d.percentile == null ? "—" : fmt(d.percentile, 1), `of ${d.n.toLocaleString()} prior days · higher than ${d.percentile == null ? "—" : fmt(d.percentile, 0)}% of them`, ""],
+    ["Z", d.z == null ? "—" : (d.z > 0 ? "+" : "") + fmt(d.z), d.z_note || "standard deviations from the window's mean", ""],
+    [`mean ${unit}`, fmt(d.mean), "of the prior days in the window", ""], [`sd ${unit}`, fmt(d.sd), "sample standard deviation (n−1)", ""],
+    ["valid count", d.n.toLocaleString(), `${d.sessions_covered.toLocaleString()} sessions covered · asked ${Number.isFinite(WINDOWS[wk]) ? WINDOWS[wk] : "all"}`, ""],
+    [`10th / 90th pct ${unit}`, `${fmt(d.q10, 1)} / ${fmt(d.q90, 1)}`, "the window's own percentile lines (rulebook U-3)", ""],
+    [`min / median / max ${unit}`, `${fmt(d.min, 1)} / ${fmt(d.median, 1)} / ${fmt(d.max, 1)}`, "prior days", ""],
+  ];
+  $("#tiles").innerHTML = tiles.map(([l, v, s, c]) => `<div class="tile ${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+  const lv = Object.entries(d.levels);
+  $("#levels tbody").innerHTML = lv.length ? lv.map(([k, v]) => `<tr><td class="k">${k}</td><td>${v.count.toLocaleString()}</td><td>${fmt(v.share, 1)}%</td></tr>`).join("") : `<tr><td class="k">the rulebook names no line for the usual day</td><td>—</td><td>—</td></tr>`;
+  const rows = [["today", (x) => fmt(x.today)], ["prior days (n)", (x) => x.n.toLocaleString()], ["sessions covered / asked", (x) => x.sessions_covered + " / " + (Number.isFinite(x.sessions_asked) ? x.sessions_asked : "all")], ["percentile", (x) => fmt(x.percentile, 1)], ["Z", (x) => x.z == null ? (x.z_note ? "undefined" : "—") : fmt(x.z)], ["mean", (x) => fmt(x.mean)], ["sd", (x) => fmt(x.sd)], ["median", (x) => fmt(x.median)], ["10th pct", (x) => fmt(x.q10, 1)], ["90th pct", (x) => fmt(x.q90, 1)], ["min", (x) => fmt(x.min, 1)], ["max", (x) => fmt(x.max, 1)], ["short history?", (x) => x.short_history ? "yes" : "no"], ["too few?", (x) => x.too_few ? "yes" : "no"]];
+  $("#numbers tbody").innerHTML = rows.map(([l, f]) => `<tr><td class="k">${l}</td>${["1y", "3y", "all"].map((k) => `<td>${f(ind.windows[k])}</td>`).join("")}</tr>`).join("");
+  $("#out").hidden = false;   // the canvases must be laid out before they are measured and drawn
+  drawHist(series, todayIdx, WINDOWS[wk], d, unit); drawSeries(series, dates, todayIdx, WINDOWS[wk], unit, ind.label);
+}
+function setup(c) { const r = c.getBoundingClientRect(), dpr = devicePixelRatio || 1; c.width = r.width * dpr; c.height = r.height * dpr; const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height); return [g, r.width, r.height]; }
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function drawHist(series, todayIdx, W, d, unit) {
+  const c = $("#hist"); const [g, w, h] = setup(c); const prior = priorWindow(series, todayIdx, W).values; const today = series[todayIdx];
+  if (!prior.length) return; const lo = Math.min(...prior, today ?? Infinity), hi = Math.max(...prior, today ?? -Infinity); const nb = Math.min(40, Math.max(12, Math.round(Math.sqrt(prior.length))));
+  const bw = (hi - lo) / nb || 1; const bins = new Array(nb).fill(0); for (const v of prior) bins[Math.min(nb - 1, Math.floor((v - lo) / bw))]++;
+  const mx = Math.max(...bins); const L = 34, R = 10, T = 14, B = 30; const pw = w - L - R, ph = h - T - B;
+  g.font = "10px " + css("--mono"); g.fillStyle = css("--dim"); g.strokeStyle = css("--line2"); g.lineWidth = .6;
+  for (let k = 0; k <= 4; k++) { const y = T + ph - ph * k / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke(); g.fillText(Math.round(mx * k / 4), 4, y + 3); }
+  g.fillStyle = css("--mute"); const gap = 2;
+  bins.forEach((n, k) => { const x = L + pw * k / nb, bh = ph * n / mx; g.fillRect(x + gap / 2, T + ph - bh, pw / nb - gap, bh); });
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4; g.fillStyle = css("--dim"); g.fillText(fmt(v, 1), L + pw * k / 4 - 8, h - 12); }
+  if (today != null) { const x = L + pw * (today - lo) / (hi - lo || 1); g.strokeStyle = series[todayIdx] >= (series[todayIdx - 1] ?? today) ? css("--up") : css("--dn"); g.lineWidth = 2; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke(); g.fillStyle = g.strokeStyle; g.fillText("today " + fmt(today, 1), Math.min(x + 6, w - 90), T + 10); }
+  $("#histCap").textContent = `distribution of the ${prior.length.toLocaleString()} prior days in the window · ${nb} bins of ${fmt(bw, 2)}${unit} · the coloured line is today (green if up on the day, red if down)`;
+  const tip = $("#histTip"); c.onmousemove = (e) => { const r = c.getBoundingClientRect(); const x = e.clientX - r.left; const k = Math.floor((x - L) / (pw / nb)); if (k < 0 || k >= nb) { tip.style.display = "none"; return; } tip.style.display = "block"; tip.style.left = Math.min(x + 12, w - 170) + "px"; tip.style.top = (e.clientY - r.top + 12) + "px"; tip.innerHTML = `${fmt(lo + bw * k, 1)} to ${fmt(lo + bw * (k + 1), 1)}${unit}<br>${bins[k]} days · ${fmt(100 * bins[k] / prior.length, 1)}%`; }; c.onmouseleave = () => tip.style.display = "none";
+}
+function drawSeries(series, dates, todayIdx, W, unit, label) {
+  const c = $("#ts"); const [g, w, h] = setup(c); const pts = []; for (let i = 0; i < series.length; i++) if (series[i] != null) pts.push([i, series[i]]);
+  if (pts.length < 2) return; const L = 40, R = 10, T = 14, B = 30, pw = w - L - R, ph = h - T - B; const i0 = pts[0][0], i1 = todayIdx;
+  let lo = Infinity, hi = -Infinity; for (const [, v] of pts) { if (v < lo) lo = v; if (v > hi) hi = v; } if (lo === hi) { lo -= 1; hi += 1; }
+  const X = (i) => L + pw * (i - i0) / (i1 - i0 || 1), Y = (v) => T + ph - ph * (v - lo) / (hi - lo);
+  const ws = Number.isFinite(W) ? Math.max(i0, todayIdx - W) : i0; g.fillStyle = "rgba(58,58,82,.22)"; g.fillRect(X(ws), T, X(todayIdx) - X(ws), ph);
+  g.font = "10px " + css("--mono"); g.strokeStyle = css("--line2"); g.lineWidth = .6; g.fillStyle = css("--dim");
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke(); g.fillText(fmt(v, 0), 4, y + 3); }
+  const up = css("--up"), dn = css("--dn"); g.lineWidth = 1.2;
+  for (let k = 1; k < pts.length; k++) { const [ia, va] = pts[k - 1], [ib, vb] = pts[k]; g.strokeStyle = vb >= va ? up : dn; g.beginPath(); g.moveTo(X(ia), Y(va)); g.lineTo(X(ib), Y(vb)); g.stroke(); }
+  const yrs = [...new Set(dates.slice(i0).map((s) => s.slice(0, 4)))]; const step = Math.ceil(yrs.length / 6); g.fillStyle = css("--dim");
+  yrs.forEach((y, k) => { if (k % step) return; const i = dates.findIndex((s) => s.startsWith(y)); if (i >= i0) g.fillText(y, X(i), h - 12); });
+  $("#tsCap").textContent = `${label} from ${dates[i0]} to ${dates[todayIdx]} (${pts.length.toLocaleString()} days) · the shaded stretch is the window today is compared with · line green where the reading rose on the day, red where it fell`;
+  const tip = $("#tsTip"); c.onmousemove = (e) => { const r = c.getBoundingClientRect(); const x = e.clientX - r.left; const i = Math.round(i0 + (x - L) / pw * (i1 - i0)); if (i < i0 || i > i1 || series[i] == null) { tip.style.display = "none"; return; } tip.style.display = "block"; tip.style.left = Math.min(x + 12, w - 150) + "px"; tip.style.top = (e.clientY - r.top + 12) + "px"; tip.innerHTML = `${dates[i]}<br>${fmt(series[i], 2)}${unit}`; }; c.onmouseleave = () => tip.style.display = "none";
+}
+addEventListener("resize", () => { if (!$("#out").hidden) run(); });
+run();
+</script>
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
