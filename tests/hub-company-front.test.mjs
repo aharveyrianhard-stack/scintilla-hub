@@ -115,22 +115,45 @@ test("EXPAND hides the board and gives the company the full width; COLLAPSE rest
 });
 
 /* ── HF-2 · REVENUE ─────────────────────────────────────────────────────────────────────────── */
-const revKit = new Function("num", "esc", "fmtCap", fn("fmtRev") + fn("revTitle") + fn("revCellHTML") + "\nreturn { fmtRev, revTitle, revCellHTML };")(num, esc, fmtCap);
+const revKit = new Function("num", "esc", "fmtCap", fn("fmtRevCell") + fn("fmtRevLocal") + fn("revTitle") + fn("revCellHTML") +
+  "\nreturn { fmtRevCell, fmtRevLocal, revTitle, revCellHTML };")(num, esc, fmtCap);
 test("REVENUE is a board column beside MKT CAP, read from fundamentals.revenue_ttm in the board's own read", () => {
   const cols = page.match(/const BOARD_COLS = \[(.*?)\];/s)[1];
   assert.match(cols, /\["Mkt Cap","mc"\], \["Revenue","rev"\]/);
   assert.match(page, /pg\("fundamentals\?select=ticker,eps_ttm,revenue_ttm,updated_ts"\)/, "the read the board already made, two columns wider");
-  assert.match(page, /REVTTM\[r\.ticker\] = \{ v: \(rv != null && rv > 0\) \? rv : null/, "a stored 0 is not a revenue");
-  assert.match(fn("boardRowsHTML"), /mcapCellHTML\(d\.t, d\.mc, d\.mcAsOf\) \+\n\s+revCellHTML\(d\.t, d\.rev, d\.revAsOf\)/);
+  assert.match(page, /REVTTM\[r\.ticker\] = \{ v: \(rv != null && rv > 0 && !ccy\) \? rv : null/, "a stored 0, or a non-USD figure, is never a dollar value");
+  assert.match(page, /const ccy = estNonUsd\(r\.ticker\) \? estCcy\(r\.ticker\) : null;/, "the currency rule F P/E already follows");
+  assert.match(fn("boardRowsHTML"), /mcapCellHTML\(d\.t, d\.mc, d\.mcAsOf\) \+\n\s+revCellHTML\(d\.t, d\.rev, d\.revAsOf, d\.revCcy, d\.revLocal, d\.revZero\)/);
 });
 test("REVENUE formats as $12.3B / $845M and absent is a blank cell, never 0", () => {
-  assert.equal(revKit.fmtRev(12.3e9), "$12.3B");
-  assert.equal(revKit.fmtRev(845e6), "$845M");
-  assert.equal(revKit.fmtRev(90274000000), "$90.3B");
-  for (const absent of [null, undefined, 0, -5]) assert.equal(revKit.fmtRev(absent), "", String(absent));
+  assert.equal(revKit.fmtRevCell(12.3e9), "$12.3B");
+  assert.equal(revKit.fmtRevCell(845e6), "$845M");
+  assert.equal(revKit.fmtRevCell(90274000000), "$90.3B");
+  for (const absent of [null, undefined, 0, -5]) assert.equal(revKit.fmtRevCell(absent), "", String(absent));
   const blank = revKit.revCellHTML("BTCUSD", null, null);
   assert.match(blank, /<span class="sc-rev" id="lrv_BTCUSD" title="revenue not on file \(fundamentals\.revenue_ttm\)"><\/span>/);
   assert.match(revKit.revCellHTML("MU", 90274000000, 1789884421), /title="trailing-twelve-month revenue · fundamentals\.revenue_ttm · stored 2026-09-20">\$90\.3B</);
+});
+test("a non-USD revenue is never printed as dollars and never converted: withheld from the column, currency named", () => {
+  /* live 2026-09-25: TSM's stored revenue_ttm is 4,450,400,000,000 — TWD. As dollars it would top the board at "$4.5T". */
+  const cell = revKit.revCellHTML("TSM", null, 1789884421, "TWD", 4450400000000, false);
+  assert.match(cell, /class="sc-rev is-ccy"[^>]*>in TWD<\/span>/);
+  assert.doesNotMatch(cell, />\$/, "no dollar figure in the cell");
+  assert.match(cell, /revenue reported in TWD \(TWD 4\.5T\) · not converted: no dated FX rate is stored/);
+  assert.equal(revKit.fmtRevLocal(1044.2e9, "CNY"), "CNY 1.0T");
+  const zero = revKit.revCellHTML("QS", null, 1789884421, null, null, true);
+  assert.match(zero, /title="stored as 0 \(no revenue reported: pre-revenue, or a fund\) · shown blank, not as a number[^"]*"><\/span>/);
+});
+test("every function and store this change adds is declared exactly once in the page (a twin silently replaces the first)", () => {
+  /* the first draft of this change declared fmtRev, which the EVENTS room already declares: the later one won, so the
+     board ran the EVENTS formatter while these tests passed against the unused copy. Never again, for any new name. */
+  const names = ["coRange", "coChartSrc", "coFundSrc", "coChartTabHTML", "coBoardRow", "coFundLineHTML", "coFundTabHTML", "coExpandOn",
+    "coExpandBtnHTML", "coExpandApply", "isListCoh", "listMembers", "listApply", "listRowsFor", "listsFromRows", "listCtlHTML",
+    "coIdentLists", "coListsRepaint", "listsRepaint", "listsLoad", "listStore", "listIntent", "toggleList", "fmtRevCell", "fmtRevLocal", "revTitle", "revCellHTML"];
+  for (const n of names) assert.equal((page.match(new RegExp("(^|[^.\\w])(async )?function " + n + "\\(", "gm")) || []).length, 1, n);
+  for (const n of ["CO_LANDING_TAB", "STATION_CHART_URL", "STATION_FUND_URL", "CO_RANGES", "CO_CHART_RSI", "CO_FRAME_TABS", "CO_EXPANDED",
+    "LIST_COHS", "SUB_LISTS", "LISTS", "LISTS_READ", "LISTS_SEL", "LIST_WRITES", "REVTTM"])
+    assert.equal((page.match(new RegExp("(const|let|var) " + n + " ?=", "g")) || []).length, 1, n);
 });
 test("sorting by REVENUE orders numerically; a name with no revenue sorts as lowest, exactly like every other column", () => {
   const rows = [{ t: "A", rev: 2e9 }, { t: "B", rev: null }, { t: "C", rev: 90e9 }, { t: "D", rev: 845e6 }, { t: "E", rev: 12.3e9 }];
@@ -141,9 +164,9 @@ test("sorting by REVENUE orders numerically; a name with no revenue sorts as low
 });
 
 /* ── HF-3 · FUNDAMENTALS ────────────────────────────────────────────────────────────────────── */
-const fundKit = (rows) => new Function("S", "ALLROWS", "PRICES", "esc", "num", "fmtCap", "fmtC", "fmtPxIdent", "fmtRev", "revTitle",
+const fundKit = (rows) => new Function("S", "ALLROWS", "PRICES", "esc", "num", "fmtCap", "fmtC", "fmtPxIdent", "fmtRevCell", "fmtRevLocal", "revTitle",
   FRONT_CONSTS + fn("coFundSrc") + fn("coBoardRow") + fn("coFundLineHTML") + fn("coFundTabHTML") + "\nreturn { coFundTabHTML, coFundLineHTML };")(
-  { rows }, [], {}, esc, num, fmtCap, (c) => (c >= 0 ? "+" + c.toFixed(2) + "%" : "(" + Math.abs(c).toFixed(2) + "%)"), (p) => p.toFixed(2), revKit.fmtRev, revKit.revTitle);
+  { rows }, [], {}, esc, num, fmtCap, (c) => (c >= 0 ? "+" + c.toFixed(2) + "%" : "(" + Math.abs(c).toFixed(2) + "%)"), (p) => p.toFixed(2), revKit.fmtRevCell, revKit.fmtRevLocal, revKit.revTitle);
 test("FUNDAMENTALS embeds the Station's fundamentals shell under one line of the Hub's own numbers", () => {
   const html = fundKit([{ t: "MU", price: 157.2, c: -1.25, rev: 90274000000, revAsOf: 1789884421, mc: 1041730560000 }]).coFundTabHTML("MU");
   assert.match(html, /<iframe class="sc-cofr__frame" id="coFundFrame"[^>]*src="https:\/\/station\.scintillahub\.ai\/station-shells\/fundamentals-v1\/\?t=MU"/);
@@ -152,6 +175,8 @@ test("FUNDAMENTALS embeds the Station's fundamentals shell under one line of the
   assert.match(ln, /class="sc-cofl__c dn"[^>]*><i>DAY<\/i>\(1\.25%\)/, "down in red");
   assert.match(ln, /<i>REVENUE TTM<\/i>\$90\.3B/);
   assert.match(ln, /<i>MKT CAP<\/i>\$1\.0T/);
+  const tsm = fundKit([{ t: "TSM", price: 300, c: 0.5, rev: null, revCcy: "TWD", revLocal: 4450400000000, mc: 1.5e12 }]).coFundTabHTML("TSM");
+  assert.match(tsm, /<i>REVENUE TTM<\/i>TWD 4\.5T/, "one company, its own currency, written with its code");
   const none = fundKit([]).coFundTabHTML("ZZZZ");
   assert.equal((none.match(/<i>[A-Z ]+<\/i>—/g) || []).length, 4, "a ticker the board does not hold says absent in all four — the line is never empty");
 });
@@ -263,6 +288,8 @@ test("every board row and the company view carry ♥ ★ ◎; a list click never
   assert.match(row, /class="sc-lst sc-lst--radar is-on" aria-pressed="true"[^>]*data-act="lst" data-l="radar" data-t="MU">◉</);
   assert.match(ctl.listCtlHTML("MU", "co"), /^<span class="sc-lists sc-lists--co" id="coLists">/);
   assert.match(fn("boardRowsHTML"), /listCtlHTML\(d\.t, "row"\)/);
-  assert.match(fn("leftHeadHTML"), /listCtlHTML\(t, "co"\)/);
+  assert.match(fn("coIdentLists"), /tk\.insertAdjacentHTML\("afterend", listCtlHTML\(LEFT_T, "co"\)\)/, "company view: beside the pinned ticker");
+  assert.match(fn("renderLeftPanel"), /ib\.innerHTML = leftIdentHTML\(identBarData\(\)\);\n  coIdentLists\(ib\);/);
+  assert.doesNotMatch(fn("leftHeadHTML"), /listCtlHTML/, "not in the tab header: the tabs keep their room");
   assert.match(page, /case "lst":\s+e\.preventDefault\(\); e\.stopPropagation\(\); toggleList\(a\.dataset\.l, a\.dataset\.t\); break;/);
 });

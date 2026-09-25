@@ -4181,9 +4181,9 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
    ("down 4.8%" means nothing until you know this name normally moves 1.5%). The width comes from
    READ (10->8) and GEIGER (15->13), the two widest cells that lose the least by narrowing: READ is
    words that truncate gracefully and GEIGER is a bar, not a number. */
-.ch{grid-template-columns:minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,8fr) minmax(0,12fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}
+.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,14fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,6fr) minmax(0,10fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}
 .ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:900px){.ch{grid-template-columns:minmax(0,8fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,11fr) minmax(0,8fr) minmax(0,10fr) minmax(0,10fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr) minmax(0,7fr) minmax(0,10fr) minmax(0,7fr) minmax(0,5fr) !important}}
+@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,13fr) minmax(0,9fr) minmax(0,10fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr) minmax(0,5fr) minmax(0,8fr) minmax(0,7fr) minmax(0,5fr) !important}}
 /* M52 · THE PHONE BOARD. MEASURED at 390 px: with 14 tracks the row collided exactly the way the
    2026-06 "+5.82%98.3x$314[" bug did — "(0.83%)" and "±1.8%" printed on top of each other — because
    CHG, F P/E, RSI (and, as first written, USUAL DAY) are allowed to overflow their track so they
@@ -4236,16 +4236,26 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 .sc-coexp[aria-pressed="true"]{border-color:#8A8A92}
 body.co-exp .sc-body2{grid-template-columns:minmax(0,1fr) !important}
 body.co-exp #boardPanel{display:none !important}
-.sc-lists{display:flex;align-items:center;justify-content:flex-start;gap:3px;min-width:0}
-.sc-lst{padding:0;background:none;border:0;cursor:pointer;font-size:11px;line-height:1;width:12px;text-align:center;color:#4A4A52}
+.sc-lists{display:flex;align-items:center;justify-content:flex-start;gap:1px;min-width:0}
+.sc-lst{padding:0;background:none;border:0;cursor:pointer;font-size:11px;line-height:1;width:11px;flex:none;text-align:center;color:#4A4A52}
+@media(min-width:561px){ .sc-lists .sc-star{flex:none} }   /* on a phone the ♥ is alone in its cell and shrinks to it, as the star did */
 .sc-lst.is-on{color:#C9C9CE}
-.sc-lists--co{gap:7px;margin-right:10px}
-.sc-lists--co .sc-star,.sc-lists--co .sc-lst{font-size:14px;width:18px}
+.sc-lists--co{gap:5px;margin:0 8px 0 0;flex:none}
+.sc-lists--co .sc-star,.sc-lists--co .sc-lst{font-size:13px;width:15px}
+/* the 60px these take comes out of the news queue on the right (built to clip its furthest item), never out of the
+   usual-day readout, which had no flex rule and was squashed under LIVE */
+.sc-identfull .sc-chb{flex:none}
+.sc-rev.is-ccy{color:#6E6E76}
 .sc-rev{text-align:right;font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:#B4B4BA;white-space:nowrap;overflow:hidden}
 body.gwx-motion .sc-lists .sc-lst{display:none}
 /* at phone width a row keeps only its ♥ (a 13px track cannot hold three tap targets); ★ and ◎ are on the
    company view, which is full width there */
 @media(max-width:560px){ .ch > .sc-lists .sc-lst{display:none} }
+/* on a phone the EXPAND/COLLAPSE words would push the company tabs off the header: the control draws as an icon there
+   (its words stay in the text, for screen readers, and in the title) */
+@media(max-width:640px){ .sc-coexp{font-size:0;padding:3px 7px;letter-spacing:0} .sc-coexp::after{content:"\2922";font-size:15px} .sc-coexp[aria-pressed="true"]::after{content:"\2921"} }
+/* on a phone every company tab gets a 300px slot; an embedded page needs more to be read */
+@media(max-width:640px){ .sc-chartpanel__slot.cot-CHART{min-height:58vh} .sc-chartpanel__slot.cot-FUNDAMENTALS{min-height:82vh} }
 </style>
 </head>
 <body>
@@ -4872,7 +4882,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   for (const r of fpeTtm) {
     EPSTTM[r.ticker] = num(r.eps_ttm);
     const rv = num(r.revenue_ttm), at = num(r.updated_ts);
-    REVTTM[r.ticker] = { v: (rv != null && rv > 0) ? rv : null, at: (at != null && at > 0) ? at : null };
+    /* revenue_ttm is in the company's REPORTING currency (TSM's is TWD, BABA's CNY). The board's dollar column never
+       prints those as dollars and never converts them (no dated FX rate is stored) - the same rule F P/E follows. */
+    const ccy = estNonUsd(r.ticker) ? estCcy(r.ticker) : null;
+    REVTTM[r.ticker] = { v: (rv != null && rv > 0 && !ccy) ? rv : null, at: (at != null && at > 0) ? at : null,
+                         ccy: ccy, local: (ccy && rv != null && rv > 0) ? rv : null, zero: rv === 0 };
   }
   /* UNIVERSE = provider-declared equities UNION whatever Supabase membership returned.
      The union is the point: if cohorts timed out, members is [] and the board is still the full
@@ -5044,8 +5058,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         /* THE VALUE CARRIES ITS SOURCE TIME: company_profile.updated_ts, epoch SECONDS, written by fmp-backfill job=profile
            together with market_cap. null = the store has no source time for this row (said so on screen, never guessed). */
         mcAsOf: (function () { const ts = num(pf[m.ticker] && pf[m.ticker].updated_ts); return (ts != null && ts > 0) ? ts : null; })(),
-        rev:    REVTTM[m.ticker] ? REVTTM[m.ticker].v : null,     // H-FRONT — fundamentals.revenue_ttm; null = not on file (blank cell)
+        rev:    REVTTM[m.ticker] ? REVTTM[m.ticker].v : null,     // H-FRONT — fundamentals.revenue_ttm in USD; null = blank (and sorts lowest)
         revAsOf: REVTTM[m.ticker] ? REVTTM[m.ticker].at : null,
+        revCcy: REVTTM[m.ticker] ? REVTTM[m.ticker].ccy : null,   // non-USD reporter: withheld from the dollar column, currency named
+        revLocal: REVTTM[m.ticker] ? REVTTM[m.ticker].local : null,
+        revZero: !!(REVTTM[m.ticker] && REVTTM[m.ticker].zero),
       };
     });
   /* THE LATEST PULL IS THE WHOLE UNIVERSE. Every pull already fetched every table for every ticker and threw all but one
@@ -5346,7 +5363,8 @@ function coFundLineHTML(t, row, px) {
     '<b class="sc-cofl__t">' + esc(t) + "</b>" +
     cell("PRICE", price != null ? fmtPxIdent(price) : "—", "last price · the board's live quote") +
     cell("DAY", r.c != null ? fmtC(r.c) : "—", "change today · the board's live quote", r.c == null ? "" : (r.c >= 0 ? "up" : "dn")) +
-    cell("REVENUE TTM", r.rev != null ? fmtRev(r.rev) : "—", revTitle(r.rev, r.revAsOf)) +
+    cell("REVENUE TTM", r.rev != null ? fmtRevCell(r.rev) : (r.revCcy && r.revLocal != null ? fmtRevLocal(r.revLocal, r.revCcy) : "—"),
+      revTitle(r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero)) +
     cell("MKT CAP", (num(r.mc) != null && num(r.mc) > 0) ? fmtCap(r.mc) : "—", "company_profile.market_cap") +
   "</div>";
 }
@@ -5430,6 +5448,13 @@ function listCtlHTML(t, where) {
     btn("favorites", fv, "★", "☆", "FAVORITES") +
     btn("radar", rd, "◉", "◎", "RADAR") +
   "</span>";
+}
+/* the company view's ♥ ★ ◎ ride in the full-width ticker bar, right after the ticker (the tab header has no room left
+   for them). Inserted AFTER leftIdentHTML renders, so that renderer stays production's markup byte for byte. */
+function coIdentLists(ib) {
+  if (!ib || LEFT_STATE !== "PINNED" || !LEFT_T) return;
+  const tk = ib.querySelector(".sc-ctkbig");
+  if (tk) tk.insertAdjacentHTML("afterend", listCtlHTML(LEFT_T, "co"));
 }
 function coListsRepaint() {
   const c = el("coLists");
@@ -6081,18 +6106,29 @@ function fmtCap(v) {
     : Math.round(u[0]).toLocaleString("en-US");
   return "$" + s + u[1];
 }
-/* H-FRONT · REVENUE on the board. Formatted like MKT CAP ($12.3B, $845M); absent is a BLANK cell, never 0. */
-function fmtRev(v) {
+/* H-FRONT · REVENUE on the board. Formatted like MKT CAP ($12.3B, $845M); absent is a BLANK cell, never 0.
+   (Named fmtRevCell: fmtRev is the EVENTS room's formatter and a second declaration would silently replace it.) */
+function fmtRevCell(v) {
   const n = num(v);
   return (n != null && n > 0) ? fmtCap(n) : "";
 }
-function revTitle(v, asOf) {
-  if (num(v) == null || !(num(v) > 0)) return "revenue not on file (fundamentals.revenue_ttm)";
-  const d = num(asOf) != null && num(asOf) > 0 ? new Date(num(asOf) * 1000).toISOString().slice(0, 10) : null;
-  return "trailing-twelve-month revenue · fundamentals.revenue_ttm" + (d ? " · stored " + d : " · no stored date");
+/* a reporting-currency figure, written with its own code and never a dollar sign: 4450400000000, "TWD" → "TWD 4.5T" */
+function fmtRevLocal(v, ccy) {
+  const n = num(v);
+  return (n != null && n > 0 && ccy) ? ccy + " " + fmtCap(n).replace(/^\$/, "") : "";
 }
-function revCellHTML(t, v, asOf) {
-  return '<span class="sc-rev" id="lrv_' + esc(t) + '" title="' + esc(revTitle(v, asOf)) + '">' + fmtRev(v) + "</span>";
+function revTitle(v, asOf, ccy, local, zero) {
+  const d = num(asOf) != null && num(asOf) > 0 ? new Date(num(asOf) * 1000).toISOString().slice(0, 10) : null;
+  const when = d ? " · stored " + d : " · no stored date";
+  if (ccy) return "revenue reported in " + ccy + (local != null ? " (" + fmtRevLocal(local, ccy) + ")" : "") +
+    " · not converted: no dated FX rate is stored, so it is not ranked against dollar revenues · fundamentals.revenue_ttm" + when;
+  if (zero) return "stored as 0 (no revenue reported: pre-revenue, or a fund) · shown blank, not as a number · fundamentals.revenue_ttm" + when;
+  if (num(v) == null || !(num(v) > 0)) return "revenue not on file (fundamentals.revenue_ttm)";
+  return "trailing-twelve-month revenue · fundamentals.revenue_ttm" + when;
+}
+function revCellHTML(t, v, asOf, ccy, local, zero) {
+  const text = ccy ? "in " + ccy : fmtRevCell(v);
+  return '<span class="sc-rev' + (ccy ? " is-ccy" : "") + '" id="lrv_' + esc(t) + '" title="' + esc(revTitle(v, asOf, ccy, local, zero)) + '">' + esc(text) + "</span>";
 }
 /* A STORED MARKET CAP IS SHOWN WITH ITS SOURCE DATE, NEVER ERASED. company_profile.market_cap is the provider's profile
    figure (its own shares x its own price at write time), stored by fmp-backfill job=profile with updated_ts in epoch
@@ -6339,7 +6375,7 @@ function boardRowsHTML() {
       hbCellHTML(d.t, d.hb, d.c) +   /* M52 — USUAL DAY, beside the change it gives meaning to */
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
-      revCellHTML(d.t, d.rev, d.revAsOf) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
+      revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
       '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
@@ -6388,7 +6424,7 @@ function cohortGeigerHTML() {
      back (MEASURED 2026-09-18, favourite toggle and warm cohort switch). While the scope is pending, the header and MEAN
      line keep their size and say "…". */
   if (!rows.length && (S.boardPending || (total && S.rows.every((r) => r.state === "CONNECTING")))) {
-    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh === "FAV" ? "LIKED" : S.coh) + '</span>' +
       '<span class="sc-cohgeiger__n">' + (total ? total + " tickers · " : "") + 'loading</span></div>' +
       '<div class="sc-cohgeiger__lines"><div class="sc-cohgeiger__line is-mean"><span class="sc-cohgeiger__k">MEAN</span>' +
       '<span class="sc-gmini">' + SC_PENDING + '</span><span class="sc-cohgeiger__v">…</span><span class="sc-cohgeiger__t"></span></div></div></div>';
@@ -6398,7 +6434,7 @@ function cohortGeigerHTML() {
        branch - rows present, none carrying a Geiger, i.e. a pull whose Geiger was refused - still swapped in the short
        "awaiting data" block, the same 16.4px move of every row, for as long as the refusal lasted. Same header and MEAN
        line; the value is a dash because here it really is unavailable. */
-    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+    return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '"><div class="sc-cohgeiger__hd"><span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh === "FAV" ? "LIKED" : S.coh) + '</span>' +
       (total ? '<span class="sc-cohgeiger__n">0/' + total + " contributors · awaiting data</span>" : '<span class="sc-cohgeiger__n">awaiting data</span>') + '</div>' +
       '<div class="sc-cohgeiger__lines"><div class="sc-cohgeiger__line is-mean"><span class="sc-cohgeiger__k">MEAN</span>' +
       '<span class="sc-gmini"></span><span class="sc-cohgeiger__v" style="color:var(--mute)">—</span><span class="sc-cohgeiger__t"></span></div></div></div>';
@@ -6420,7 +6456,7 @@ function cohortGeigerHTML() {
     "</div>";
   return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '">' +
     '<button class="sc-cohgeiger__hd" data-act="cohgeigertoggle" aria-expanded="' + (open ? "true" : "false") + '">' +
-      '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh) + '</span>' +
+      '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh === "FAV" ? "LIKED" : S.coh) + '</span>' +
       /* M52 — the cohort's own heartbeat, beside the count it is taken over: the middle name's
          usual day. A cohort whose middle name moves 1.2% a day and one whose middle name moves
          6% a day are different places to be, and nothing on this board said so before. */
@@ -6819,6 +6855,7 @@ async function loadBoardHeartbeat(tickers) {
       if (typeof LEFT_T !== "undefined" && t === LEFT_T) {
         const ib = el("coIdentBar");
         if (ib) ib.innerHTML = leftIdentHTML(identBarData());
+        coIdentLists(ib);                           // H-FRONT — the repaint keeps the pinned ticker's ♥ ★ ◎
       }
       cohHbDirty = true;
     }
@@ -7148,7 +7185,7 @@ function leftHeadHTML(t) {
   const backBtn = '<button class="sc-backcoh" data-act="unpin" title="back to cohort view (Layer 0)">◂ COHORT</button>';
   return '<div class="sc-ihead ptabs" id="leftHead">' +
     '<div class="tabstrip" role="tablist">' + backBtn + tabs + cohortChipHTML(t) + "</div>" +
-    '<div class="hctrls">' + listCtlHTML(t, "co") + coExpandBtnHTML() + autoBox + rotSel + SECFS_BTN0 + "</div>" +
+    '<div class="hctrls">' + coExpandBtnHTML() + autoBox + rotSel + SECFS_BTN0 + "</div>" +
   "</div>";
 }
 
@@ -8904,6 +8941,7 @@ function renderLeftPanel() {
      inside #leftPanel) so the ticker/name/price stay in sync on every swap. */
   const ib = el("coIdentBar");
   if (ib) ib.innerHTML = leftIdentHTML(identBarData());
+  coIdentLists(ib);                                 // H-FRONT — ♥ ★ ◎ beside the pinned ticker
   lp.innerHTML = leftPanelInnerHTML();
   /* R50 §3 — this line just destroyed the subtree, and .sc-layer0 can be the node
      currently holding .sc-secfs. A detached fullscreen target leaves body.secfs stuck
@@ -24272,13 +24310,13 @@ body.gwx-motion .gwx-pct{opacity:1}
       /* TREND and MOM need four characters ("+1.0") and were clipping to "+1..." at 8fr.
          READ is the words version of the same two numbers, so it is the column that can
          afford to lose width - it truncates gracefully and says nothing the pair does not. */
-      ".ch{grid-template-columns:minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
-      " minmax(0,12fr) minmax(0,9fr) minmax(0,11fr) minmax(0,11fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr)"+
-      " minmax(0,8fr) minmax(0,12fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}"+
+      ".ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
+      " minmax(0,14fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr)"+
+      " minmax(0,6fr) minmax(0,10fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}"+
       ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
-      "@media(max-width:900px){.ch{grid-template-columns:minmax(0,8fr) minmax(0,10fr)"+
-      " minmax(0,11fr) minmax(0,10fr) minmax(0,11fr) minmax(0,8fr) minmax(0,10fr) minmax(0,10fr) minmax(0,6fr)"+
-      " minmax(0,8fr) minmax(0,8fr) minmax(0,7fr) minmax(0,10fr) minmax(0,7fr)"+
+      "@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr)"+
+      " minmax(0,11fr) minmax(0,10fr) minmax(0,13fr) minmax(0,9fr) minmax(0,10fr) minmax(0,9fr) minmax(0,6fr)"+
+      " minmax(0,8fr) minmax(0,8fr) minmax(0,5fr) minmax(0,8fr) minmax(0,7fr)"+
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+

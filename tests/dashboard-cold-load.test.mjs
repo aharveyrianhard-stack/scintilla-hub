@@ -39,7 +39,7 @@ function boardRenderer(S) {
     fn("boardTMCellsHTML") + fn("boardHeaderHTML") + fn("geigerMiniHTML") + fn("boardRowsHTML") +
     /* H-FRONT — the lists cell and the REVENUE cell are real page functions too, for the same reason */
     page.slice(page.indexOf("const LIST_COHS = "), page.indexOf("/* apply one intent")) + fn("listCtlHTML") +
-    fn("fmtRev") + fn("revTitle") + fn("revCellHTML") +
+    fn("fmtRevCell") + fn("fmtRevLocal") + fn("revTitle") + fn("revCellHTML") +
     "\nreturn { BOARD_COLS, boardHeaderHTML, boardRowsHTML };";
   const cell = (cls) => () => '<span class="' + cls + '"></span>';
   const num = (v) => { const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
