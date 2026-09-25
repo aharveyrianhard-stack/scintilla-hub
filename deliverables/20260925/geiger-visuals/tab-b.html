@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Company GEIGER · B · its own history</title>
+<link rel="stylesheet" href="gv.css">
+<style>
+.gv-app{padding:10px 12px 8px}
+.grid{flex:1 1 0;min-height:0;display:grid;grid-template-columns:1fr 132px;grid-template-rows:auto 1fr auto;gap:8px 12px}
+.now{grid-column:1/3;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.now .big{font-size:26px;font-weight:600}
+.now .k{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.now .v{color:var(--ink2);font-size:11px}
+.now .v b{color:var(--ink);font-weight:500}
+.line{position:relative;min-height:0}
+.side{display:flex;flex-direction:column;gap:6px;min-height:0}
+.side .k{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.rs{display:grid;grid-template-columns:28px 1fr 34px;gap:6px;align-items:center;font-size:10.5px;color:var(--ink2)}
+.rs .t{position:relative;height:8px;background:var(--panel2)}
+.rs .t:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)}
+.rs .t i{position:absolute;top:1px;bottom:1px;width:50%;transform:scaleX(0);transition:transform .6s cubic-bezier(.32,0,.18,1)}
+.rs .t .pos{left:50%;transform-origin:left;background:var(--bull)} .rs .t .neg{right:50%;transform-origin:right;background:var(--bear)}
+.rs .v{text-align:right}
+.moved{grid-column:1/3;font-size:10.5px;color:var(--ink2);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
+.moved b{color:var(--ink);font-weight:500}
+.moved .c{display:inline-flex;align-items:center;gap:5px}
+.moved .c i{display:inline-block;height:6px;background:var(--ink2)}
+.x .now .big{font-size:36px}
+.x .grid{grid-template-columns:1fr 220px}
+.x .rs{font-size:11.5px;grid-template-columns:34px 1fr 40px 40px 40px}
+.x .rs .extra{display:block;text-align:right;color:var(--dim)}
+.rs .extra{display:none}
+@media(max-width:400px){ .grid{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;gap:4px} .side,#tr,.moved{display:none} .side{flex-direction:row;flex-wrap:wrap;gap:4px 10px} .side .k{width:100%} .rs{width:calc(50% - 5px)} .now .big{font-size:22px} .gv-app{padding:8px 10px 6px} .gv-foot{display:none} }
+</style></head>
+<body>
+<div class="gv-app" id="app">
+  <div class="grid">
+    <div class="now"><span class="big" id="big"></span><span class="k" id="lean"></span><span class="v" id="pct"></span><span class="v" id="streak"></span></div>
+    <div class="line" id="line"></div>
+    <div class="side"><div class="k">the eight rungs · now</div><div id="rungs"></div></div>
+    <div class="moved" id="moved"></div>
+  </div>
+  <div class="gv-top" style="border:0;padding:6px 0 0"><div id="tr"></div><span data-scnav-slot></span></div>
+  <div class="gv-foot"><span id="note"></span></div>
+</div>
+<script src="data.js"></script><script src="gv-common.js"></script>
+<script>
+(function(){
+  const D=GV.D, R=D.RUNGS.MU, ORDER=["2h","3h","4h","6h","12h","1d","3d","1w"], H=D.MU_HIST;
+  const app=document.getElementById("app"); const expand=()=>window.innerWidth>=800; app.classList.toggle("x",expand());
+  const NOW={c:D.META.mu_composite_now,t:D.META.mu_trend_now,m:D.META.mu_momentum_now};
+  const BULL=GV.css("--bull"), BEAR=GV.css("--bear"), INK=GV.css("--ink"), INK2=GV.css("--ink2"), DIM=GV.css("--dim"), LINE=GV.css("--line2");
+  /* the rungs now, and what each contributes to the composite (weight × the rung's composite, over the weight sum) */
+  const wsum=ORDER.reduce((s,k)=>s+R[k].eq_weight,0);
+  document.getElementById("rungs").innerHTML=ORDER.map(k=>{ const r=R[k]; return '<div class="rs" data-k="'+k+'"><span>'+k.toUpperCase()+'</span><div class="t"><i class="neg"></i><i class="pos"></i></div><span class="v tab" style="color:'+GV.tone(r.tf_composite)+'">'+GV.fmtG(r.tf_composite)+'</span><span class="extra tab">'+r.rsi14.toFixed(0)+'</span><span class="extra tab">'+r.williams14.toFixed(0)+'</span></div>'; }).join("");
+  requestAnimationFrame(()=>ORDER.forEach(k=>{ const c=R[k].tf_composite, el=document.querySelector('.rs[data-k="'+k+'"]'); el.querySelector(".pos").style.transform="scaleX("+(c>=0?Math.min(1,c):0)+")"; el.querySelector(".neg").style.transform="scaleX("+(c<0?Math.min(1,-c):0)+")"; }));
+  const contrib=ORDER.map(k=>[k,R[k].eq_weight*R[k].tf_composite/wsum]).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  const cmax=Math.max(...contrib.map(c=>Math.abs(c[1])));
+  document.getElementById("moved").innerHTML='<b>what carries it</b>'+contrib.map(([k,v])=>'<span class="c"><span>'+k.toUpperCase()+'</span><i style="width:'+Math.round(6+40*Math.abs(v)/cmax)+'px;background:'+GV.tone(v)+'"></i><span class="tab" style="color:'+GV.tone(v)+'">'+GV.fmtG(v)+'</span></span>').join("");
+  const hv=H.map(r=>r[1]); const pct=Math.round(100*hv.filter(v=>v<NOW.c).length/hv.length); let streak=0; for(let i=H.length-1;i>=0&&H[i][1]>=0;i--) streak++;
+  document.getElementById("pct").innerHTML="higher than <b>"+pct+"%</b> of its last "+H.length+" sessions"; document.getElementById("streak").innerHTML="above zero <b>"+streak+"</b> sessions running";
+  /* the line: composite over its own history, filled green above zero and red below, revealed as the clock runs */
+  const C=GV.canvas(document.getElementById("line")), ctx=C.ctx;
+  function frame(pos){ const {w,h}=C.fit(); const pad={l:34,r:14,t:10,b:20}; const n=H.length;
+    const X=i=>pad.l+(i/(n-1))*(w-pad.l-pad.r), Y=v=>pad.t+((1-v)/2)*(h-pad.t-pad.b);
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle=LINE; ctx.lineWidth=1; [1,0.5,0,-0.5,-1].forEach(v=>{ ctx.globalAlpha=v===0?1:0.45; ctx.beginPath(); ctx.moveTo(pad.l,Y(v)); ctx.lineTo(w-pad.r,Y(v)); ctx.stroke(); }); ctx.globalAlpha=1;
+    ctx.fillStyle=DIM; ctx.font="10px "+GV.css("--mono"); ctx.textAlign="right"; [1,0,-1].forEach(v=>ctx.fillText((v>0?"+":"")+v,pad.l-6,Y(v)+3));
+    ctx.textAlign="center"; for(let i=0;i<n;i+=Math.max(1,Math.round(n/(w<500?4:8)))) ctx.fillText(H[i][0].slice(2,7),X(i),h-6);
+    const upto=Math.min(n-1,pos);
+    /* fill by sign: two passes, each clipped to its half */
+    for(const sign of [1,-1]){ ctx.save(); ctx.beginPath(); ctx.rect(pad.l,sign>0?pad.t:Y(0),w-pad.l-pad.r,sign>0?Y(0)-pad.t:h-pad.b-Y(0)); ctx.clip();
+      ctx.beginPath(); ctx.moveTo(X(0),Y(0)); for(let i=0;i<=Math.floor(upto);i++) ctx.lineTo(X(i),Y(H[i][1])); if(upto>Math.floor(upto)) ctx.lineTo(X(upto),Y(GV.lerpAt(H,upto,r=>r[1])));
+      ctx.lineTo(X(upto),Y(0)); ctx.closePath(); ctx.fillStyle=GV.rgba(sign>0?BULL:BEAR,0.16); ctx.fill();
+      ctx.beginPath(); for(let i=0;i<=Math.floor(upto);i++){ const p=[X(i),Y(H[i][1])]; i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); } if(upto>Math.floor(upto)) ctx.lineTo(X(upto),Y(GV.lerpAt(H,upto,r=>r[1])));
+      ctx.strokeStyle=sign>0?BULL:BEAR; ctx.lineWidth=1.6; ctx.lineJoin="round"; ctx.stroke(); ctx.restore(); }
+    /* trend and momentum as quiet thin lines of the same rule */
+    for(const [ix,alpha] of [[2,0.45],[3,0.45]]){ ctx.lineWidth=1; for(let i=1;i<=Math.floor(upto);i++){ const a=H[i-1][ix], b=H[i][ix]; if(a==null||b==null) continue; ctx.strokeStyle=GV.rgba(b>=0?BULL:BEAR,alpha); ctx.beginPath(); ctx.moveTo(X(i-1),Y(a)); ctx.lineTo(X(i),Y(b)); ctx.stroke(); } }
+    const v=GV.lerpAt(H,upto,r=>r[1]); ctx.beginPath(); ctx.arc(X(upto),Y(v),3.5,0,Math.PI*2); ctx.fillStyle=GV.tone(v); ctx.fill();
+    const live=!clock.playing&&clock.pos>=n-1; const shown=live?NOW.c:v;
+    const big=document.getElementById("big"); big.textContent=GV.fmtG(shown); big.style.color=GV.tone(shown);
+    document.getElementById("lean").textContent=(Math.abs(shown)<0.1?"neutral":shown>0?"bull lean":"bear lean")+(live?" · now (artifact "+D.META.geiger_computed_utc.slice(0,10)+")":" · "+H[Math.round(upto)][0]);
+    if(live){ ctx.fillStyle=INK2; ctx.textAlign="right"; ctx.fillText("history to "+H[n-1][0]+" · now "+GV.fmtG(NOW.c),w-pad.r,h-pad.b-6); }
+  }
+  const clock=GV.clock(frame,H.length,H.map(r=>r[0])); GV.transport(document.getElementById("tr"),clock); clock.loop=false; clock.pos=H.length-1; clock.start();
+  document.getElementById("note").textContent="composite line: fan_daily + momentum_daily blended 0.5/0.5 (thin lines: trend, momentum) · rungs and contributions: the Geiger artifact for MU, today only · the history stops at "+H[H.length-1][0]+" while the artifact is "+D.META.geiger_computed_utc.slice(0,10)+" - the gap is a data-pipeline fact, shown, not hidden";
+  window.addEventListener("resize",()=>app.classList.toggle("x",expand()));
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Company GEIGER · A · the ladder</title>
+<link rel="stylesheet" href="gv.css">
+<style>
+.gv-app{padding:10px 12px 8px}
+.head{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.big{font-size:30px;font-weight:600;letter-spacing:-.01em;line-height:1}
+.big small{display:block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);margin-top:5px;font-weight:400}
+.comp{display:flex;flex-direction:column;gap:5px}
+.trk{position:relative;height:10px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.trk:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)}
+.trk i{position:absolute;top:1px;bottom:1px;width:50%;transform:scaleX(0);transition:transform .5s cubic-bezier(.32,0,.18,1)}
+.trk .pos{left:50%;transform-origin:left center;background:var(--bull)} .trk .neg{right:50%;transform-origin:right center;background:var(--bear)}
+.trk.thin{height:5px}
+.fam{display:grid;grid-template-columns:70px 1fr 48px;gap:8px;align-items:center;font-size:11px;color:var(--ink2)}
+.fam .v{text-align:right}
+.hist{text-align:right;font-size:11px;color:var(--ink2);line-height:1.5}
+.hist b{color:var(--ink);font-weight:500}
+.rungs{flex:1 1 0;min-height:0;display:flex;flex-direction:column;justify-content:space-around;padding:6px 0}
+.rung{display:grid;grid-template-columns:34px 44px 1fr 44px 44px;gap:10px;align-items:center;font-size:11px}
+.rung .tf{color:var(--ink);letter-spacing:.08em}
+.rung .wt{height:4px;background:var(--panel2);position:relative}
+.rung .wt i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);transform-origin:left;transform:scaleX(0);transition:transform .6s}
+.rung .tk{position:relative;height:16px;background:var(--panel2);border-radius:2px}
+.rung .tk:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)}
+.rung .tk .bar{position:absolute;top:4px;bottom:4px;width:50%;transform:scaleX(0);transition:transform .6s cubic-bezier(.32,0,.18,1)}
+.rung .tk .bar.pos{left:50%;transform-origin:left center;background:var(--bull)} .rung .tk .bar.neg{right:50%;transform-origin:right center;background:var(--bear)}
+.rung .tk .tick{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);opacity:.9;transition:left .6s}
+.rung .tk .tick.mo{top:9px;height:7px;background:var(--ink2)}
+.rung .r{text-align:right;color:var(--ink2)}
+.rung .r.hot{color:var(--bear)} .rung .r.cold{color:var(--bull)}
+.cols{display:grid;grid-template-columns:34px 44px 1fr 44px 44px;gap:10px;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);padding:8px 0 2px}
+.cols span:nth-child(n+4){text-align:right}
+.cols .sp{display:none}
+.x .cols .sp{display:block}
+.spark{display:none}
+.gv-foot{font-size:10.5px}
+.x .rung{grid-template-columns:34px 44px 1fr 150px 44px 44px}
+.x .cols{grid-template-columns:34px 44px 1fr 150px 44px 44px}
+.x .spark{display:block;height:26px}
+.x .big{font-size:40px}
+@media(max-width:400px){
+  .head{grid-template-columns:auto 1fr;gap:10px} .hist{display:none} .big{font-size:24px}
+  .rung{grid-template-columns:26px 22px 1fr 30px 30px;gap:6px;font-size:10.5px} .rung .tk{height:12px} .rung .tk .bar{top:3px;bottom:3px} .rung .tk .tick.mo{top:7px;height:5px}
+  .cols,.gv-foot,#tr{display:none} .rungs{padding:2px 0} .comp{gap:3px} .trk{height:8px} .trk.thin{height:4px}
+  .gv-app{padding:6px 8px 4px}
+}
+</style></head>
+<body>
+<div class="gv-app" id="app">
+  <div class="head">
+    <div class="big" id="big">+0.00<small id="lean">—</small></div>
+    <div class="comp">
+      <div class="trk" id="ctrk"><i class="neg"></i><i class="pos"></i></div>
+      <div class="fam"><span>TREND</span><div class="trk thin" id="ttrk"><i class="neg"></i><i class="pos"></i></div><span class="v tab" id="tv"></span></div>
+      <div class="fam"><span>MOMENTUM</span><div class="trk thin" id="mtrk"><i class="neg"></i><i class="pos"></i></div><span class="v tab" id="mv"></span></div>
+    </div>
+    <div class="hist" id="hist"></div>
+  </div>
+  <div class="cols"><span>rung</span><span>weight</span><span>reading by timeframe · | trend · ▪ momentum · bar = rung composite</span><span class="sp">last 60 · fan now</span><span>RSI</span><span>W%R</span></div>
+  <div class="rungs" id="rungs"></div>
+  <div class="gv-top" style="border:0;padding:0"><div id="tr"></div><span data-scnav-slot></span></div>
+  <div class="gv-foot"><span id="note"></span></div>
+</div>
+<script src="data.js"></script><script src="gv-common.js"></script>
+<script>
+(function(){
+  const D=GV.D, R=D.RUNGS.MU, ORDER=["2h","3h","4h","6h","12h","1d","3d","1w"], H=D.MU_HIST;
+  const app=document.getElementById("app"); const expand=()=>window.innerWidth>=800; app.classList.toggle("x",expand());
+  const setBar=(el,v,max)=>{ const w=v==null?0:Math.min(1,Math.abs(v)/(max||1)); el.querySelector(".pos").style.transform="scaleX("+(v>=0?w:0)+")"; el.querySelector(".neg").style.transform="scaleX("+(v<0?w:0)+")"; };
+  /* the rungs, in timeframe order: weight · the rung's own composite as the bar, trend and momentum as ticks */
+  const wmax=Math.max(...ORDER.map(k=>R[k].eq_weight));
+  document.getElementById("rungs").innerHTML=ORDER.map(k=>{ const r=R[k]; return '<div class="rung" data-k="'+k+'"><span class="tf">'+k.toUpperCase()+'</span><div class="wt" title="equalizer weight '+r.eq_weight.toFixed(2)+'"><i></i></div>'+
+    '<div class="tk"><span class="bar neg"></span><span class="bar pos"></span><span class="tick tr" title="trend"></span><span class="tick mo" title="momentum"></span></div>'+
+    '<canvas class="spark"></canvas>'+
+    '<span class="r tab '+(r.rsi14>=70?"hot":r.rsi14<=30?"cold":"")+'">'+r.rsi14.toFixed(0)+'</span><span class="r tab '+(r.williams14>=-20?"hot":r.williams14<=-80?"cold":"")+'">'+r.williams14.toFixed(0)+'</span></div>'; }).join("");
+  requestAnimationFrame(()=>ORDER.forEach(k=>{ const r=R[k], el=document.querySelector('.rung[data-k="'+k+'"]');
+    el.querySelector(".wt i").style.transform="scaleX("+(r.eq_weight/wmax).toFixed(3)+")";
+    const c=r.tf_composite; el.querySelector(".bar.pos").style.transform="scaleX("+(c>=0?Math.min(1,c):0)+")"; el.querySelector(".bar.neg").style.transform="scaleX("+(c<0?Math.min(1,-c):0)+")";
+    el.querySelector(".tick.tr").style.left=(50+50*Math.max(-1,Math.min(1,r.trend_signed)))+"%"; el.querySelector(".tick.mo").style.left=(50+50*Math.max(-1,Math.min(1,r.momentum_signed)))+"%"; }));
+  /* expand: each rung's last 60 closes, with the fan centre ± spread the artifact reports now, as a grey band at the right */
+  function sparks(){ if(!expand()) return; const TOK={"2h":"120","3h":"180","4h":"240","6h":"6h","12h":"12h","1d":"D","3d":"3D","1w":"W"};
+    ORDER.forEach(k=>{ const cv=document.querySelector('.rung[data-k="'+k+'"] .spark'); const bars=(D.MU_BARS[TOK[k]]||[]).slice(-60); if(!bars.length) return;
+      const w=cv.clientWidth||150, h=26; cv.width=w*2; cv.height=h*2; const x=cv.getContext("2d"); x.scale(2,2);
+      const cs=bars.map(b=>b[4]); const r=R[k]; let lo=Math.min(...cs,r.fan_center-r.fan_spread), hi=Math.max(...cs,r.fan_center+r.fan_spread); const Y=v=>h-2-((v-lo)/((hi-lo)||1))*(h-4);
+      x.fillStyle=GV.rgba(GV.css("--ink2"),0.18); x.fillRect(w-14,Y(r.fan_center+r.fan_spread),14,Math.max(1,Y(r.fan_center-r.fan_spread)-Y(r.fan_center+r.fan_spread)));
+      x.strokeStyle=GV.css("--ink2"); x.lineWidth=1; x.beginPath(); x.moveTo(w-14,Y(r.fan_center)); x.lineTo(w,Y(r.fan_center)); x.stroke();
+      const up=cs[cs.length-1]>=cs[0]; x.strokeStyle=up?GV.css("--bull"):GV.css("--bear"); x.lineWidth=1.2; x.beginPath(); cs.forEach((v,i)=>{ const px=(i/(cs.length-1))*(w-16); i?x.lineTo(px,Y(v)):x.moveTo(px,Y(v)); }); x.stroke(); }); }
+  /* the composite: now from the artifact, and its own history to replay */
+  const NOW={c:D.META.mu_composite_now,t:D.META.mu_trend_now,m:D.META.mu_momentum_now};
+  const hv=H.map(r=>r[1]); const pct=Math.round(100*hv.filter(v=>v<NOW.c).length/hv.length); let streak=0; for(let i=H.length-1;i>=0&&H[i][1]>=0;i--) streak++;
+  document.getElementById("hist").innerHTML="now <b>"+GV.fmtG(NOW.c)+"</b> · artifact "+D.META.geiger_computed_utc.slice(0,10)+"<br>higher than <b>"+pct+"%</b> of its last "+H.length+" sessions<br>above zero <b>"+streak+"</b> sessions running (to "+H[H.length-1][0]+")";
+  function paint(c,t,m,live){ const big=document.getElementById("big"); big.firstChild.textContent=GV.fmtG(c); big.style.color=GV.tone(c); document.getElementById("lean").textContent=(Math.abs(c)<0.1?"neutral":c>0?"bull lean":"bear lean")+(live?" · now":" · replay");
+    setBar(document.getElementById("ctrk"),c,1); setBar(document.getElementById("ttrk"),t,1); setBar(document.getElementById("mtrk"),m,1);
+    document.getElementById("tv").textContent=GV.fmtG(t); document.getElementById("mv").textContent=GV.fmtG(m); document.getElementById("rungs").style.opacity=live?1:0.35; }
+  const clock=GV.clock((pos)=>{ if(!clock.playing&&clock.pos>=H.length-1){ paint(NOW.c,NOW.t,NOW.m,true); return; }
+    paint(GV.lerpAt(H,pos,r=>r[1]),GV.lerpAt(H,pos,r=>r[2]),GV.lerpAt(H,pos,r=>r[3]),false); },H.length,H.map(r=>r[0]));
+  GV.transport(document.getElementById("tr"),clock); clock.loop=false; clock.pos=H.length-1; clock.start();
+  document.getElementById("note").textContent="rungs: the chart API's Geiger artifact for MU, "+D.META.geiger_computed_utc.replace("T"," ").slice(0,16)+"Z (today only - the artifact keeps no history) · history: fan_daily + momentum_daily to "+H[H.length-1][0]+" · RSI and W%R from the rung's own bars";
+  window.addEventListener("resize",()=>{app.classList.toggle("x",expand());sparks();}); setTimeout(sparks,50);
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Geiger in motion · A · the list, continuous</title>
+<link rel="stylesheet" href="gv.css">
+<style>
+.rows{position:absolute;inset:0;overflow:hidden}
+.row{position:absolute;left:0;right:0;top:0;height:var(--pitch);display:grid;grid-template-columns:30px 64px 1fr 62px 74px 44px;align-items:center;gap:8px;
+  will-change:transform;border-bottom:1px solid var(--line);opacity:1;transition:opacity .35s;background:var(--bg)}
+.row.is-fold{opacity:0;pointer-events:none}
+.rk{color:var(--dim);font-size:10px;text-align:right}
+.tk{color:var(--ink);font-size:12px;letter-spacing:.06em}
+.trk{position:relative;height:16px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.trk:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)}
+.trk i{position:absolute;top:2px;bottom:2px;width:50%;transform:scaleX(0);border-radius:1px}
+.trk .pos{left:50%;transform-origin:left center;background:var(--bull)}
+.trk .neg{right:50%;transform-origin:right center;background:var(--bear)}
+.val,.spn{text-align:right;font-size:11.5px}
+.bdg{font-size:10px;text-align:right;opacity:0;transition:opacity .5s}
+.bdg.show{opacity:1;transition:opacity .08s}
+.fold{position:absolute;left:0;right:0;height:26px;display:flex;align-items:center;gap:10px;color:var(--dim);font-size:11px;border-top:1px solid var(--line2);background:var(--bg)}
+.fold b{color:var(--ink2);font-weight:500}
+.hdr{display:grid;grid-template-columns:30px 64px 1fr 62px 74px 44px;gap:8px;color:var(--dim);font-size:10px;letter-spacing:.18em;text-transform:uppercase;padding:2px 0 6px}
+.hdr span:nth-child(n+4){text-align:right}
+.hdr .sortk{color:var(--ink2)}
+@media(max-width:560px){
+  .row,.hdr{grid-template-columns:22px 50px 1fr 54px 34px;gap:6px}
+  .spn,.hdr .h-spn{display:none}
+  .tk{font-size:11.5px;letter-spacing:.03em}
+}
+</style></head>
+<body>
+<div class="gv-app">
+  <div class="gv-top">
+    <div class="gv-title"><b>GEIGER IN MOTION</b> · A · the list, continuous</div>
+    <div id="coh"></div><span class="gv-lab">rank by</span><div id="sort"></div>
+    <div id="tr"></div><span data-scnav-slot></span>
+  </div>
+  <div class="hdr"><span></span><span>ticker</span><span class="sortk" id="hsort">geiger</span><span>reading</span><span class="h-spn">% over span</span><span>moved</span></div>
+  <div class="gv-body"><div class="rows" id="rows"></div><div class="fold" id="fold"></div></div>
+  <div class="gv-foot"><span id="note"></span><span id="perf"></span></div>
+</div>
+<script src="data.js"></script><script src="gv-common.js"></script>
+<script>
+(function(){
+  const rowsEl=document.getElementById("rows"), fold=document.getElementById("fold");
+  let cohort="AI_HARDWARE", sortKey="g", names=[], R={}, pitch=34, visible=10, PREV=[];
+  const clock=GV.clock(frame); GV.transport(document.getElementById("tr"),clock);
+  GV.chips(document.getElementById("coh"),[["AI_HARDWARE","AI HW"],["FAV","LIKED"]],cohort,(k)=>{cohort=k;build();clock.dirty=true;});
+  GV.chips(document.getElementById("sort"),GV.SORTS,sortKey,(k)=>{sortKey=k;PREV=[];clock.dirty=true;document.getElementById("hsort").textContent=GV.SORTS.find(s=>s[0]===k)[1].toLowerCase();});
+  function layout(){
+    const h=rowsEl.parentElement.getBoundingClientRect().height, w=window.innerWidth;
+    pitch=w<=560?30:34; visible=Math.max(4,Math.floor((h-26)/pitch));
+    document.documentElement.style.setProperty("--pitch",pitch+"px");
+    fold.style.top=(visible*pitch)+"px";
+  }
+  function build(){
+    names=GV.cohort(cohort); rowsEl.innerHTML=""; R={}; PREV=[];
+    names.forEach((t,i)=>{
+      const el=document.createElement("div"); el.className="row"; el.innerHTML='<span class="rk tab"></span><span class="tk">'+t+'</span><div class="trk"><i class="neg"></i><i class="pos"></i></div><span class="val tab"></span><span class="spn tab"></span><span class="bdg tab"></span>';
+      rowsEl.appendChild(el);
+      R[t]={el,y:i*pitch,rank:i,pos:el.querySelector(".pos"),neg:el.querySelector(".neg"),rk:el.querySelector(".rk"),val:el.querySelector(".val"),spn:el.querySelector(".spn"),bdg:el.querySelector(".bdg"),
+        lastVal:"",lastSpn:"",lastRk:"",lastW:"",fold:false,bdgT:0,lastRank:i};
+    });
+    layout();
+    document.getElementById("note").textContent=names.length+" names · "+GV.DATES[0]+" → "+GV.DATES[GV.N-1]+" · fan_daily + momentum_daily blended 0.5/0.5, daily closes from the chart API · bar scale fixed ±1, never the day's max";
+  }
+  /* every frame: interpolate, rank, glide. Nothing waits for the next day; nothing moves as a batch. */
+  function frame(pos,dt){
+    const g={},m={},sp={};
+    for(const t of names){ g[t]=GV.geigerAt(t,pos); m[t]=sortKey==="g"?g[t]:GV.metric(sortKey,t,pos); sp[t]=GV.spanAt(t,pos); }
+    /* NEAR-TIES HOLD: start from the order on screen and let a name pass its neighbour only when it is clearly ahead
+       (2% of the column's range). Without this, names within a hair of each other swap every frame and the rows never rest. */
+    const have=names.filter(t=>m[t]!=null), out=names.filter(t=>m[t]==null);
+    let rng=0; for(const t of have) rng=Math.max(rng,Math.abs(m[t])); const eps=Math.max(1e-6,rng*0.03);
+    let order=(PREV.length?PREV.filter(t=>m[t]!=null):[]).concat(have.filter(t=>PREV.indexOf(t)<0).sort((a,b)=>m[b]-m[a]));
+    for(let pass=0;pass<order.length;pass++){ let swapped=false; for(let i=0;i+1<order.length;i++){ if(m[order[i+1]]>m[order[i]]+eps){ const x=order[i]; order[i]=order[i+1]; order[i+1]=x; swapped=true; } } if(!swapped) break; }
+    PREV=order; const all=order.concat(out);
+    let moved=0;
+    all.forEach((t,i)=>{
+      const r=R[t], isFold=i>=visible, target=isFold?visible*pitch:i*pitch;
+      if(r.fold!==isFold){ r.fold=isFold; r.el.classList.toggle("is-fold",isFold); }
+      /* a row glides toward where it now belongs: ~95% of the way inside 450 ms at any speed (never a batch) */
+      const y=GV.approach(r.y,target,dt,150);
+      if(Math.abs(y-r.y)>0.05){ r.y=y; r.el.style.transform="translateY("+y.toFixed(2)+"px)"; moved++;
+        /* while crossing, the row on its way UP rides over the one on its way down: rows are opaque, so the two never blend */
+        const z=target<y?"3":"2"; if(r.z!==z){ r.el.style.zIndex=z; r.z=z; } }
+      else if(r.y!==target && Math.abs(target-r.y)<=0.05){ r.y=target; r.el.style.transform="translateY("+target+"px)"; }
+      else if(r.z){ r.el.style.zIndex=""; r.z=""; }
+      if(isFold) return;
+      const v=g[t]; const w=v==null?0:Math.min(1,Math.abs(v));
+      const ws=(v==null?"0|0":(v>=0?w.toFixed(3)+"|0":"0|"+w.toFixed(3)));
+      if(ws!==r.lastW){ const [p,n]=ws.split("|"); r.pos.style.transform="scaleX("+p+")"; r.neg.style.transform="scaleX("+n+")"; r.lastW=ws; }
+      const vs=GV.fmtG(v); if(vs!==r.lastVal){ r.val.textContent=vs; r.val.style.color=GV.tone(v); r.lastVal=vs; }
+      const ss=GV.fmtPct(sp[t]); if(ss!==r.lastSpn){ r.spn.textContent=ss; r.spn.style.color=sp[t]==null?"":GV.tone(sp[t]); r.lastSpn=ss; }
+      const rk=String(i+1); if(rk!==r.lastRk){ r.rk.textContent=rk; r.lastRk=rk; }
+      if(i!==r.lastRank){ const d=r.lastRank-i; r.bdg.textContent=(d>0?"▲":"▼")+Math.abs(d); r.bdg.style.color=d>0?GV.css("--bull"):GV.css("--bear"); r.bdg.classList.add("show"); r.bdgT=performance.now(); r.lastRank=i; }
+      else if(r.bdgT && performance.now()-r.bdgT>900){ r.bdg.classList.remove("show"); r.bdgT=0; }
+    });
+    window.__GV.moves+=moved; if(moved) clock.dirty=true;
+    const more=all.length-visible;
+    const ft=more>0?"<b>+"+more+" more</b> below the fold · next "+all.slice(visible,visible+3).join(", "):"every name fits";
+    if(fold.__t!==ft){ fold.innerHTML=ft; fold.__t=ft; }
+  }
+  build(); window.addEventListener("resize",layout); clock.start(); clock.play();
+  setInterval(()=>{ document.getElementById("perf").textContent="frames "+window.__GV.frames+" · row moves "+window.__GV.moves; },1000);
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

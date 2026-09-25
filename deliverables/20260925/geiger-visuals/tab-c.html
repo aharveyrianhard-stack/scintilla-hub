@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Company GEIGER · C · the plane</title>
+<link rel="stylesheet" href="gv.css">
+<style>
+.gv-app{padding:10px 12px 8px}
+.wrap{flex:1 1 0;min-height:0;display:grid;grid-template-columns:1fr;gap:10px}
+.x .wrap{grid-template-columns:1fr 250px}
+.plane{position:relative;min-height:0}
+.tbl{display:none;flex-direction:column;justify-content:center;gap:4px;font-size:11px}
+.x .tbl{display:flex}
+.tbl .r{display:grid;grid-template-columns:30px 1fr 44px 44px 44px;gap:8px;align-items:center;color:var(--ink2)}
+.tbl .r.h{color:var(--dim);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase}
+.tbl .r span:nth-child(n+3){text-align:right}
+.tbl .w{height:4px;background:var(--panel2);position:relative}.tbl .w i{position:absolute;left:0;top:0;bottom:0;background:var(--ink2)}
+.head{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.head .big{font-size:26px;font-weight:600}
+.head .k{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.head .v{font-size:11px;color:var(--ink2)} .head .v b{color:var(--ink);font-weight:500}
+.x .head .big{font-size:36px}
+@media(max-width:400px){ .head .big{font-size:22px} .head .v{display:none} .gv-app{padding:6px 8px 4px} .gv-foot,#tr{display:none} }
+</style></head>
+<body>
+<div class="gv-app" id="app">
+  <div class="head"><span class="big" id="big"></span><span class="k" id="lean"></span><span class="v" id="where"></span></div>
+  <div class="wrap"><div class="plane" id="plane"></div><div class="tbl" id="tbl"></div></div>
+  <div class="gv-top" style="border:0;padding:6px 0 0"><div id="tr"></div><span data-scnav-slot></span></div>
+  <div class="gv-foot"><span id="note"></span></div>
+</div>
+<script src="data.js"></script><script src="gv-common.js"></script>
+<script>
+(function(){
+  const D=GV.D, R=D.RUNGS.MU, ORDER=["2h","3h","4h","6h","12h","1d","3d","1w"], H=D.MU_HIST;
+  const app=document.getElementById("app"); const expand=()=>window.innerWidth>=800; app.classList.toggle("x",expand());
+  const NOW={c:D.META.mu_composite_now,t:D.META.mu_trend_now,m:D.META.mu_momentum_now};
+  const BULL=GV.css("--bull"), BEAR=GV.css("--bear"), INK=GV.css("--ink"), INK2=GV.css("--ink2"), DIM=GV.css("--dim"), LINE=GV.css("--line2"), MUTE=GV.css("--mute");
+  const wmax=Math.max(...ORDER.map(k=>R[k].eq_weight));
+  document.getElementById("tbl").innerHTML='<div class="r h"><span>rung</span><span>weight</span><span>trend</span><span>mom</span><span>rung</span></div>'+ORDER.map(k=>{ const r=R[k]; return '<div class="r"><span style="color:var(--ink)">'+k.toUpperCase()+'</span><div class="w"><i style="width:'+Math.round(100*r.eq_weight/wmax)+'%"></i></div><span class="tab" style="color:'+GV.tone(r.trend_signed)+'">'+GV.fmtG(r.trend_signed)+'</span><span class="tab" style="color:'+GV.tone(r.momentum_signed)+'">'+GV.fmtG(r.momentum_signed)+'</span><span class="tab" style="color:'+GV.tone(r.tf_composite)+'">'+GV.fmtG(r.tf_composite)+'</span></div>'; }).join("");
+  const C=GV.canvas(document.getElementById("plane")), ctx=C.ctx; const TRAIL=60;
+  function frame(pos){ const {w,h}=C.fit(); const phone=w<400; const pad={l:phone?26:40,r:phone?10:20,t:phone?14:18,b:phone?22:28};
+    const X=t=>pad.l+((t+1)/2)*(w-pad.l-pad.r), Y=m=>pad.t+((1-m)/2)*(h-pad.t-pad.b);
+    ctx.clearRect(0,0,w,h);
+    /* the plane: trend across, momentum up; the composite is the diagonal, so distance from the corner is the reading */
+    ctx.strokeStyle=LINE; ctx.lineWidth=1; for(const v of [-1,-0.5,0,0.5,1]){ ctx.globalAlpha=v===0?1:0.4; ctx.beginPath(); ctx.moveTo(X(v),pad.t); ctx.lineTo(X(v),h-pad.b); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pad.l,Y(v)); ctx.lineTo(w-pad.r,Y(v)); ctx.stroke(); } ctx.globalAlpha=1;
+    ctx.setLineDash([3,4]); ctx.strokeStyle=GV.rgba(INK2,0.35); ctx.beginPath(); ctx.moveTo(X(-1),Y(1)); ctx.lineTo(X(1),Y(-1)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=DIM; ctx.font=(phone?9:10)+"px "+GV.css("--mono"); ctx.textAlign="center"; ctx.fillText("trend −1",X(-0.85),h-pad.b+14); ctx.fillText("trend +1",X(0.85),h-pad.b+14);
+    ctx.textAlign="right"; ctx.fillText("mom +1",pad.l-4,Y(0.92)+3); ctx.fillText("mom −1",pad.l-4,Y(-0.92)+3);
+    if(!phone){ ctx.fillStyle=MUTE; ctx.textAlign="left"; ctx.fillText("BOTH BULL",X(0.55),Y(0.95)); ctx.fillText("TREND UP · MOMENTUM DOWN",X(0.3),Y(-0.95)); ctx.textAlign="right"; ctx.fillText("TREND DOWN · MOMENTUM UP",X(-0.3),Y(0.95)); ctx.fillText("BOTH BEAR",X(-0.55),Y(-0.95)); }
+    /* the trail: where the company's (trend, momentum) has been, fading into the past, growing as the clock runs */
+    const upto=Math.min(H.length-1,pos), i1=Math.floor(upto), i0=Math.max(0,i1-TRAIL);
+    for(let i=i0+1;i<=i1;i++){ const a=H[i-1], b=H[i]; if(a[3]==null||b[3]==null) continue; const age=(i1-i)/TRAIL; ctx.strokeStyle=GV.rgba(b[1]>=0?BULL:BEAR,0.12+0.5*(1-age)); ctx.lineWidth=1+1.5*(1-age); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(X(a[2]),Y(a[3])); ctx.lineTo(X(b[2]),Y(b[3])); ctx.stroke(); }
+    const live=!clock.playing&&clock.pos>=H.length-1;
+    let ct,cm,cc; if(live){ ct=NOW.t; cm=NOW.m; cc=NOW.c; } else { ct=GV.lerpAt(H,upto,r=>r[2]); cm=GV.lerpAt(H,upto,r=>r[3]); cc=GV.lerpAt(H,upto,r=>r[1]); }
+    /* the eight rungs now: dots sized by weight, so the spread of the timeframes around the composite is visible */
+    if(live||true){ const alpha=live?1:0.3; ORDER.forEach(k=>{ const r=R[k]; const rad=(phone?3:4)+(phone?5:8)*r.eq_weight/wmax; const x=X(r.trend_signed), y=Y(r.momentum_signed);
+        ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fillStyle=GV.rgba(GV.tone(r.tf_composite),0.35*alpha); ctx.fill(); ctx.strokeStyle=GV.rgba(GV.tone(r.tf_composite),0.9*alpha); ctx.lineWidth=1; ctx.stroke();
+        ctx.fillStyle=GV.rgba(INK2,alpha); ctx.font=(phone?9:10)+"px "+GV.css("--mono"); ctx.textAlign="left"; ctx.fillText(k.toUpperCase(),x+rad+3,y+3); }); }
+    if(cm!=null){ ctx.beginPath(); ctx.arc(X(ct),Y(cm),phone?5:7,0,Math.PI*2); ctx.fillStyle=GV.tone(cc); ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle=INK; ctx.font=(phone?10:11)+"px "+GV.css("--mono"); ctx.textAlign="left"; ctx.fillText("MU "+(live?"now":H[Math.round(upto)][0]),X(ct)+(phone?8:11),Y(cm)-8); }
+    const big=document.getElementById("big"); big.textContent=GV.fmtG(cc); big.style.color=GV.tone(cc);
+    document.getElementById("lean").textContent=(Math.abs(cc)<0.1?"neutral":cc>0?"bull lean":"bear lean")+(live?" · now":" · replay");
+    document.getElementById("where").innerHTML="trend <b>"+GV.fmtG(ct)+"</b> · momentum <b>"+GV.fmtG(cm)+"</b>"+(live?" · rungs from the artifact "+D.META.geiger_computed_utc.slice(0,10):" · "+H[Math.round(upto)][0]+" (rungs dimmed: today only)");
+  }
+  const clock=GV.clock(frame,H.length,H.map(r=>r[0])); GV.transport(document.getElementById("tr"),clock); clock.loop=false; clock.pos=H.length-1; clock.start();
+  document.getElementById("note").textContent="trail: the last "+TRAIL+" sessions of (trend, momentum) from fan_daily / momentum_daily, to "+H[H.length-1][0]+" · the now point and the eight rung dots: the Geiger artifact for MU · the dashed diagonal is composite = 0";
+  window.addEventListener("resize",()=>app.classList.toggle("x",expand()));
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

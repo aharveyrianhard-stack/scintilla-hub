@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Geiger in motion · C · the rank river</title>
+<link rel="stylesheet" href="gv.css">
+<style>.gv-body{overflow:hidden}</style></head>
+<body>
+<div class="gv-app">
+  <div class="gv-top">
+    <div class="gv-title"><b>GEIGER IN MOTION</b> · C · the rank river</div>
+    <div id="coh"></div><span class="gv-lab">rank by</span><div id="sort"></div>
+    <div id="tr"></div><span data-scnav-slot></span>
+  </div>
+  <div class="gv-body" id="river"></div>
+  <div class="gv-foot"><span>each line is one name's <b>rank</b> through the window, drawn only up to the day on the clock · green where its Geiger reading is above zero, red below · the column at the right is the standings <b>now</b>, sliding as the day unfolds · hover a line to follow one name</span><span id="perf"></span></div>
+</div>
+<script src="data.js"></script><script src="gv-common.js"></script>
+<script>
+(function(){
+  const host=document.getElementById("river"); const C=GV.canvas(host), ctx=C.ctx;
+  let cohort="AI_HARDWARE", sortKey="g", names=[], RANK={}, hover=null, LAB={}, PAST=null, PAST_KEY="";
+  const clock=GV.clock(frame); GV.transport(document.getElementById("tr"),clock);
+  GV.chips(document.getElementById("coh"),[["AI_HARDWARE","AI HW"],["FAV","LIKED"]],cohort,(k)=>{cohort=k;build();clock.dirty=true;});
+  GV.chips(document.getElementById("sort"),GV.SORTS,sortKey,(k)=>{sortKey=k;build();clock.dirty=true;});
+  /* ranks per real day, for the chosen column - the lines are history, so they are computed once */
+  function build(){
+    names=GV.cohort(cohort); RANK={}; LAB={};
+    for(const t of names){ RANK[t]=new Array(GV.N).fill(null); LAB[t]={y:null}; }
+    for(let d=0;d<GV.N;d++){
+      const v=names.map(t=>[t,GV.metric(sortKey,t,d)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]);
+      v.forEach(([t],i)=>{ RANK[t][d]=i; });
+    }
+  }
+  const BULL=GV.css("--bull"), BEAR=GV.css("--bear"), INK=GV.css("--ink"), INK2=GV.css("--ink2"), DIM=GV.css("--dim"), LINE=GV.css("--line2"), MUTE=GV.css("--mute");
+  function frame(pos,dt){
+    const {w,h}=C.fit(); const phone=w<560;
+    const colW=phone?96:150, pad={l:phone?24:34,t:10,b:phone?22:26};
+    const n=names.length, laneH=Math.min(phone?15:18,(h-pad.t-pad.b)/n);
+    const maxLanes=Math.floor((h-pad.t-pad.b)/laneH), shown=Math.min(n,maxLanes);
+    const X=(d)=>pad.l+(d/(GV.N-1))*(w-colW-pad.l-10);
+    const Y=(r)=>pad.t+r*laneH+laneH/2;
+    ctx.clearRect(0,0,w,h);
+    /* the day grid and the playhead */
+    ctx.strokeStyle=LINE; ctx.lineWidth=1; ctx.fillStyle=DIM; ctx.font="10px "+GV.css("--mono"); ctx.textAlign="center";
+    for(let d=0;d<GV.N;d+=phone?8:4){ ctx.globalAlpha=0.5; ctx.beginPath(); ctx.moveTo(X(d),pad.t); ctx.lineTo(X(d),h-pad.b); ctx.stroke(); ctx.globalAlpha=1; ctx.fillText(GV.DATES[d].slice(5),X(d),h-8); }
+    ctx.textAlign="right"; ctx.fillStyle=MUTE; for(let r=0;r<shown;r+=5){ ctx.fillText(String(r+1),pad.l-6,Y(r)+3); }
+    const px=X(pos); ctx.strokeStyle=INK2; ctx.globalAlpha=0.6; ctx.beginPath(); ctx.moveTo(px,pad.t); ctx.lineTo(px,h-pad.b); ctx.stroke(); ctx.globalAlpha=1;
+    /* the rivers: rank paths up to the clock, segment by segment in the reading's own colour.
+       THE PAST IS DRAWN ONCE. Everything up to the last whole day only changes when the day changes (or the hover,
+       the size, the cohort), so it lives on an offscreen layer and each frame blits it; only the partial segment
+       to the playhead, the playhead and the standings column are drawn per frame. */
+    const di=Math.floor(pos), f=pos-di;
+    const nowRank={};
+    const key=[di,hover,w,h,cohort,sortKey,shown].join("|");
+    if(key!==PAST_KEY){
+      PAST_KEY=key; const dpr=Math.min(2,window.devicePixelRatio||1);
+      if(!PAST) PAST=document.createElement("canvas");
+      PAST.width=w*dpr; PAST.height=h*dpr; const pc=PAST.getContext("2d"); pc.setTransform(dpr,0,0,dpr,0,0);
+      for(const t of names){
+        const R=RANK[t]; const hi=hover===t, alpha=hover?(hi?1:0.18):0.62;
+        pc.lineWidth=hi?2.2:1.2; pc.lineCap="round"; pc.lineJoin="round";
+        let prev=null;
+        for(let d=0;d<=di;d++){
+          const r=R[d]; if(r==null){ prev=null; continue; }
+          const g=GV.geigerAt(t,d); const col=g==null?MUTE:g>=0?BULL:BEAR;
+          if(prev){ pc.strokeStyle=GV.rgba(col,alpha); pc.beginPath(); pc.moveTo(prev[0],prev[1]); pc.lineTo(X(d),Y(r)); pc.stroke(); }
+          prev=[X(d),Y(r)];
+        }
+      }
+    }
+    ctx.drawImage(PAST,0,0,w,h);
+    for(const t of names){
+      const R=RANK[t]; const cur=GV.lerpAt(R,pos); nowRank[t]=cur;
+      const hi=hover===t, alpha=hover?(hi?1:0.18):0.62; const r0=R[di];
+      if(r0!=null&&cur!=null&&f>0){ const g=GV.geigerAt(t,pos); const col=g==null?MUTE:g>=0?BULL:BEAR; ctx.lineWidth=hi?2.2:1.2; ctx.lineCap="round"; ctx.strokeStyle=GV.rgba(col,alpha); ctx.beginPath(); ctx.moveTo(X(di),Y(r0)); ctx.lineTo(px,Y(cur)); ctx.stroke(); }
+    }
+    /* the standings column: a label per name at its interpolated rank, gliding, folded after what fits */
+    const order=names.filter(t=>nowRank[t]!=null).sort((a,b)=>nowRank[a]-nowRank[b]);
+    ctx.textAlign="left"; ctx.font=(phone?10.5:11.5)+"px "+GV.css("--mono");
+    let folded=0;
+    order.forEach((t,i)=>{
+      const target=Y(Math.min(i,shown)); const L=LAB[t]; const oy=L.y; L.y=L.y==null?target:GV.approach(L.y,target,dt,150); if(oy==null||Math.abs(L.y-oy)>0.05) clock.dirty=true;
+      if(i>=shown){ folded++; return; }
+      const g=GV.geigerAt(t,pos), col=g==null?MUTE:g>=0?BULL:BEAR, hi=hover===t;
+      ctx.beginPath(); ctx.arc(px,Y(nowRank[t]),hi?3.5:2.4,0,Math.PI*2); ctx.fillStyle=col; ctx.fill();
+      ctx.strokeStyle=GV.rgba(col,0.35); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(px+4,Y(nowRank[t])); ctx.lineTo(w-colW+6,L.y); ctx.stroke();
+      ctx.fillStyle=hi?INK:INK2; ctx.fillText(t,w-colW+10,L.y+4);
+      ctx.fillStyle=col; ctx.textAlign="right"; ctx.fillText(GV.fmtG(g),w-6,L.y+4); ctx.textAlign="left";
+    });
+    if(folded){ ctx.fillStyle=DIM; ctx.fillText("+"+folded+" more",w-colW+10,Y(shown-1)+laneH+8); }
+  }
+  host.addEventListener("mousemove",(e)=>{ const b=host.getBoundingClientRect(), my=e.clientY-b.top, mx=e.clientX-b.left; const {w,h}=C.fit(); const phone=w<560; const colW=phone?96:150;
+    let best=null,bd=1e9; for(const t of names){ const L=LAB[t]; if(L.y==null) continue; const d=Math.abs(L.y-my); if(mx>w-colW-40&&d<8&&d<bd){bd=d;best=t;} } if(hover!==best) clock.dirty=true; hover=best; });
+  host.addEventListener("mouseleave",()=>{hover=null;clock.dirty=true;});
+  build(); clock.start(); clock.play();
+  setInterval(()=>{ document.getElementById("perf").textContent="frames "+window.__GV.frames; },1000);
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
