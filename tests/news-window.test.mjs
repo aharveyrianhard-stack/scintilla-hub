@@ -20,7 +20,9 @@ function hubNews() {
   const c = page.indexOf("async function fillNews() {");
   const d = page.indexOf("\n}\n", c) + 3;
   assert.ok(a > 0 && b > a && c > b && d > c, "news anchors");
-  return pgSrc + page.slice(a, b) + "\n" + page.slice(c, d) + "\nreturn { fillNews, newsQueryFor, NEWS_CACHE };";
+  /* H-FRONT — newsQueryFor asks the one list-scope helper which scopes are lists (LIKED/FAVORITES/RADAR) */
+  const lists = page.slice(page.indexOf("const LIST_COHS = "), page.indexOf("/* apply one intent"));
+  return pgSrc + lists + page.slice(a, b) + "\n" + page.slice(c, d) + "\nreturn { fillNews, newsQueryFor, NEWS_CACHE };";
 }
 const SRC = hubNews();
 

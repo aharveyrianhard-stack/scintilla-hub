@@ -14,10 +14,12 @@ function fn(name) {
 test("board header has one cell per row cell, relative volume labelled, and the same rank reserve as the rows", () => {
   const cols = page.match(/const BOARD_COLS = (\[[^\n]*\]);/)[1];
   const labels = [...cols.matchAll(/\["([^"]*)",/g)].map((m) => m[1]);
-  // row template: star, ticker, last, chg, USUAL DAY, fpe, mcap, rsi, trend, mom, read, geiger, vol, mkt dot = 14 (M52 added the
+  // row template: lists (♥ ★ ◎), ticker, last, chg, USUAL DAY, fpe, mcap, REVENUE, rsi, trend, mom, read, geiger, vol, mkt dot = 15
+  // (H-FRONT, 25 Sep, added REVENUE after MKT CAP; M52 added the
   // usual-day column after CHG). Trend/Mom/Read are part of
   // the static model and the row template (tests/dashboard-cold-load.test.mjs counts the rendered cells); they are no longer injected.
-  assert.equal(labels.length, 14, "14 header cells for 14 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY)");
+  assert.equal(labels.length, 15, "15 header cells for 15 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY; H-FRONT added REVENUE)");
+  assert.equal(labels[labels.indexOf("Mkt Cap") + 1], "Revenue", "REVENUE sits beside the other size column");
   assert.equal(labels[labels.indexOf("Chg") + 1], "Usual day", "the usual day sits beside the change it gives meaning to");
   assert.equal(labels[labels.indexOf("Geiger") + 1], "RVol", "relative-volume header sits over the volume cell");
   assert.equal(labels.at(-1), "Mkt", "Mkt stays over the market dot");
@@ -42,7 +44,7 @@ test("relative volume older than its session is shown absent with its source dat
 
 test("a cohort switch paints the new scope from the latest pull; the previous scope is never painted under the new selection", () => {
   const COHSETS = { MEGACAP: new Set(["AAPL", "MSFT"]), CRYPTO: new Set(["BTCUSD"]) };
-  const src = fn("boardScopeHas") + "\nlet BOARD_SNAPSHOT = null;\n" + page.match(/const BOARD_SNAPSHOT_MAX_AGE_MS = [^\n]*\n/)[0] +
+  const src = page.slice(page.indexOf("const LIST_COHS = "), page.indexOf("/* apply one intent")) + fn("boardScopeHas") + "\nlet BOARD_SNAPSHOT = null;\n" + page.match(/const BOARD_SNAPSHOT_MAX_AGE_MS = [^\n]*\n/)[0] +
     fn("scopeRowsFromSnapshot") + "\nreturn { set: (s) => { BOARD_SNAPSHOT = s; }, scopeRowsFromSnapshot, boardScopeHas };";
   const api = new Function("COHSETS", "cohKey", src)(COHSETS, (k) => k);
   const rows = [{ t: "AAPL", price: 336.13 }, { t: "MSFT", price: 496.9 }, { t: "BTCUSD", price: 76712 }, { t: "NBIS", price: 216.65 }];
