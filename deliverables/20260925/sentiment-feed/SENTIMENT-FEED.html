@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SCINTILLA · SENTIMENT · the stages, then a feed</title>
+<style>
+:root{color-scheme:dark;
+ --bg:#0A0A0F;--panel:#0D0D14;--sunk:#08080C;--line:#1A1B28;--line2:#25263A;
+ --ink:#C4C6D2;--ink2:#9C9EB0;--dim:#82849A;--mute:#3A3C4E;
+ --up:#2FBF71;--dn:#E8384F;
+ --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+ --sans:ui-sans-serif,-apple-system,"Helvetica Neue",Helvetica,sans-serif}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font:17px/1.6 var(--sans);-webkit-text-size-adjust:100%}
+.wrap{max-width:920px;margin:0 auto;padding:0 22px 100px}
+.top{padding:18px 0 14px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+.brand{font:400 11px/1 var(--mono);letter-spacing:.20em;color:var(--dim)}
+.brand b{color:var(--ink);font-weight:600}
+.stamp{margin-left:auto;font:400 11px/1 var(--mono);color:var(--dim);letter-spacing:.06em}
+h1{font:400 12px/1.4 var(--mono);letter-spacing:.20em;color:var(--dim);margin:44px 0 14px;text-transform:uppercase}
+h2{font:400 11px/1.4 var(--mono);letter-spacing:.18em;color:var(--dim);margin:30px 0 10px;text-transform:uppercase}
+p{margin:0 0 14px;max-width:70ch}
+p.lead{font-size:21px;line-height:1.55;color:var(--ink);max-width:60ch}
+b{color:var(--ink);font-weight:600}
+code{font:12px/1 var(--mono);color:var(--ink);background:var(--sunk);border:1px solid var(--line);padding:2px 5px}
+ul{margin:0 0 16px;padding:0;list-style:none;max-width:70ch}
+li{position:relative;padding-left:20px;margin:8px 0;color:var(--ink2)}
+li:before{content:"";position:absolute;left:2px;top:.72em;width:7px;height:1px;background:var(--mute)}
+table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:400 10px/1.3 var(--mono);letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+td.n{font-family:var(--mono);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.dn{color:var(--dn)}
+figure{margin:18px 0 26px;border:1px solid var(--line);background:var(--panel)}
+figure img{display:block;width:100%;height:auto;border-bottom:1px solid var(--line)}
+figcaption{padding:10px 13px;font-size:13px;color:var(--dim)}
+.two{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.two figure{flex:1 1 300px;margin:18px 0}
+.two figure.phone{flex:0 1 300px}
+.box{border:1px solid var(--line2);background:var(--sunk);padding:14px 16px;margin:16px 0;max-width:70ch}
+.box b.k{display:block;font:400 10px/1.4 var(--mono);letter-spacing:.16em;color:var(--dim);margin-bottom:7px;text-transform:uppercase}
+blockquote{margin:0 0 16px;padding:0 0 0 16px;border-left:2px solid var(--line2);color:var(--dim);font-style:italic;max-width:64ch}
+/* the stage chain */
+.chain{display:flex;flex-wrap:wrap;gap:0;margin:12px 0 18px;align-items:stretch}
+.st{flex:1 1 150px;border:1px solid var(--line2);background:var(--panel);padding:10px 12px;position:relative;margin:0 18px 10px 0;min-width:150px}
+.st:after{content:"→";position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:var(--dim);font:14px var(--mono)}
+.st:last-child:after{content:""}
+.st .k{display:block;font:400 9px/1.4 var(--mono);letter-spacing:.16em;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+.st .v{display:block;font:600 13px/1.4 var(--mono);color:var(--ink)}
+.st .s{display:block;font-size:12px;line-height:1.5;color:var(--ink2);margin-top:4px}
+mark{background:transparent;font-weight:700;padding:0 1px}mark.hb{color:var(--up)}mark.hr{color:var(--dn)}mark.hf{text-decoration:line-through dotted}
+.ex{font-family:var(--mono);font-size:13px;line-height:1.7;color:var(--ink);background:var(--sunk);border:1px solid var(--line);padding:10px 12px;margin:8px 0 14px;max-width:70ch;word-wrap:break-word}
+.ex small{display:block;color:var(--dim);font-size:11px;letter-spacing:.06em}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 14px;font-size:14px;max-width:70ch;margin:0 0 14px}
+.kv span:nth-child(odd){font:400 10px/1.7 var(--mono);letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.kv span:nth-child(even){color:var(--ink2)}
+.kv b{color:var(--ink)}
+@media(max-width:700px){body{font-size:16px}.wrap{padding:0 16px 80px}p.lead{font-size:19px}.kv{grid-template-columns:1fr}.st{margin-right:0;flex-basis:100%;min-width:0}.st:after{content:""}td.n{white-space:normal}table{font-size:13px}th,td{padding:7px 6px}.ex{font-size:12px}.top{gap:8px}.stamp{margin-left:0}}
+.ex,.ex small,td,p,li{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><span class="brand">SCINTILLA · <b>SENTIMENT</b> · THE STAGES, THEN A FEED</span><span class="stamp">25 SEP 2026 · F2 · BRANCH candidate/sentiment-feed-20260925</span></div>
+
+<p class="lead" style="margin-top:36px">You called the room a data dump, and it is one. This page does two things: it walks through exactly how a sentiment number is made here, stage by stage with real items flowing through, and it shows the room redrawn as a feed you can read in a glance. Nothing shipped. The mockup is a live page built from today's stored rows, so what you see is what the data can already show.</p>
+
+<div class="box"><b class="k">Status</b>
+<b>Proposal and mockups, nothing deployed, nothing pushed.</b> Branch <code>candidate/sentiment-feed-20260925</code> off <code>origin/hub/release-20260923</code> at <code>6b43a52</code>. Files: this page, <code>mockup-feed.html</code> (the live mockup), its builder <code>build-mockup.mjs</code>, the data it was built from, the screenshots, and one test. Every number below was read from the live database and the public gauges on 25 Sep between 19:25Z and 19:28Z, read-only, with the page's own public key.</div>
+
+<span data-scnav-slot></span><h1>1 · What the room shows today, and why it reads as a dump</h1>
+<p>The OVERVIEW tab stacks, in one scroll: a mood line, a per-ticker tape, that day's stories, a "news-driven market" number that refuses to exist yet, six public gauge cards, a seven-row table of our own market inputs with CNN's beside them, a "measuring stick" table of the three voices, three voice cards with lean bars, a keyword card, a "is the X feed current" card, breadth twice, and four explanatory cards. Each piece was asked for in an earlier session and each is honest. Together they are twelve things fighting for the same eye, and the reading never comes first.</p>
+<blockquote>"See, this keyword tracker is better than everything else in this section. If you keep it simple to me, with little visuals like this, that would be great."</blockquote>
+<p>That tracker is the model for the whole redesign in section 4. First, the mechanics.</p>
+
+<h1>2 · The mechanics, stage by stage</h1>
+<p>There are three voices (news, YouTube, X) and one separate thing (fear &amp; greed). All three voices are built the same way: collect items, look every word up in a list, score the item as the balance of the words that fired, store the item with its words, roll the items up per ticker per day, roll the days up per voice. <b>Nothing in any of it is an AI read.</b> No model reads a headline or a transcript; a word is either on a list or it is not. Every number in this room is a keyword count, not an AI read.</p>
+
+<h2>Stage 0 · the collectors (what comes in)</h2>
+<table><tr><th>voice</th><th>what is collected</th><th>into</th><th>how often</th><th>right now</th></tr>
+<tr><td>news</td><td>headline, snippet, site, URL, one row per ticker the story is filed under</td><td><code>news</code></td><td>the news feed jobs, all day; the scorer follows every 10 minutes (live pass, newest 600 first)</td><td class="n">506,297 headlines · 4,738 in the last 24 h</td></tr>
+<tr><td>YouTube</td><td>videos from ticker searches and the subscribed channels: title, description, channel</td><td><code>youtube_videos</code></td><td>the YouTube collector's sweep</td><td class="n">11,792 videos · 744 ticker-tagged in 7 days</td></tr>
+<tr><td>YouTube transcripts</td><td>the English caption track of a video</td><td><code>youtube_transcripts</code></td><td>a launchd job on the MacBook, every 30 min <b>(not installed)</b></td><td class="n">0 rows</td></tr>
+<tr><td>X</td><td>the posts on your Trading list, published as one file at <code>/api/xfeed</code></td><td>the blob feed</td><td>the browser collector, nine times a day</td><td class="n">19,276 posts · 126 handles · newest 18:29Z today</td></tr>
+</table>
+
+<h2>Stage 1 · the word list</h2>
+<p>The list is a file: <code>data/news-lexicon/lm-headline-v1.json</code>, method <b>lm-v1</b>. It is the Loughran-McDonald finance dictionary (<b>354</b> positive words, <b>2,355</b> negative, built from 10-K filings), plus <b>31</b> positive and <b>36</b> negative price verbs that headlines use and filings never do (beats, surges, plunges, downgrade), plus <b>25</b> negators. Because the dictionary carries 6.6 negative words for every positive one, a score is never a count of hits, always a balance. The sha of the file that scored each row is stored beside the row.</p>
+<div class="box"><b class="k">Finding · there are three word lists, not one</b>
+<b>lm-v1</b> scores every stored row (the three edge functions). <b>sc-social-v2</b>, a different list living inside the Hub page (38 bullish and 40 bearish plain words, 62 slang words, phrases and emoji, 13 negators), scores the X and YouTube cards, the anatomy ladder and the keyword tracker <i>in the browser</i>. <b>yt-lexicon-v1</b>, a third list inside the Python job, wrote the pooled YouTube roll-up (<code>social_sentiment</code>, 63 rows, last written 23 Sep 00:37Z). So the same X post can carry two different numbers on the same screen, and the keyword tracker you liked counts words from a list the stored rows never used. The feed in section 4 uses the stored rows and one list only.</div>
+
+<h2>Stage 2 · one item is scored</h2>
+<p>Every word in the item is looked up. If a negator sits in the three words before a match, the match is flipped and the flip is recorded. The score is <b>(positive − negative) ÷ (positive + negative)</b>, so it always lands between −1 and +1. An item with no listed word gets <b>no score</b>, not a zero. An item that asks a question is scored and then left out of every total. A real headline from today, filed under META:</p>
+<div class="ex">Meta Stock <mark class="hr">Fails</mark> at the Highs as Muse Demand Shows Capacity <mark class="hr">Strains</mark> and Oppenheimer Flags Monetization – FXLeaders<small>title + snippet → words that fired: fails (−1), strains (−1), fails (−1), strains (−1) · positive 0, negative 4 · score (0 − 4) ÷ 4 = <b>−1.00</b> · not a question · stored 19:20Z with the four words and the sentence they sit in</small></div>
+<p>And one where a negator did its work, because this is the part people doubt:</p>
+<div class="ex">Fed's Hammack says bond yield <mark class="hb">surge</mark> not about <mark class="hb hf">lost</mark> inflation confidence<small>surge (+1, a headline verb) · lost is negative on the list, but "not" sits two words before it, so it is flipped to +1 and marked · score (2 − 0) ÷ 2 = <b>+1.00</b>. Right or wrong, you can see why.</small></div>
+<div class="ex">This 3M Analyst Is No Longer <mark class="hb hf">Bearish</mark>; Here Are Top 5 <mark class="hb">Upgrades</mark> For Friday<small>bearish flipped by "no" · upgrades +1 (twice, title and snippet) · downgrades −1 in the snippet · (3 − 1) ÷ 4 = <b>+0.50</b></small></div>
+
+<h2>Stage 3 · the item is stored with its words</h2>
+<div class="chain">
+<div class="st"><span class="k">news</span><span class="v">news_headline_sentiment</span><span class="s">one row per (URL, ticker): score, the words, the sentence, the site, the lexicon sha</span></div>
+<div class="st"><span class="k">youtube</span><span class="v">youtube_video_sentiment</span><span class="s">one row per (video, ticker): lean, mentions, windows, the words, and <b>which text</b> was scored</span></div>
+<div class="st"><span class="k">x</span><span class="v">x_post_sentiment</span><span class="s">one row per (post, $TICKER named): score, handle, the words, the sentence</span></div>
+</div>
+<p>Right now: <b>7,681</b> headline rows (3,136 carry a score, 41 %; the rest had no listed word), <b>830</b> video rows, <b>4,319</b> post rows.</p>
+
+<h2>Stage 4 · a ticker's day</h2>
+<p>All of that ticker's scored items for one New York day and one voice are averaged: <code>sentiment_ticker_daily</code>, keyed by day, ticker and source, carrying the mean, how many items were seen, how many scored, how many leaned up and down, how many had no word, how many asked a question, and the top eight words with a sentence each. This is the row the tape draws, and the row a 90-day history lives in. It is rebuilt from <i>all</i> stored items for that day every time a function touches the day, so it never undercounts because of the slice that happened to be read. Today: NVDA news +0.49 over 34 items, NVDA X +0.22, NVDA YouTube −1.00 over one clip.</p>
+
+<h2>Stage 5 · the voice's day</h2>
+<p>The voice's reading is the item-weighted mean of its ticker rows for the day (<code>marketRead</code> in the shared module). Tickers are not equalised, so a name with forty stories moves it more than a name with two. Today at 19:28Z, from the stored rows:</p>
+<table><tr><th>voice</th><th class="n">today</th><th class="n">items scored</th><th class="n">names</th><th class="n">yesterday</th><th>in words</th></tr>
+<tr><td>news</td><td class="n up">+0.207</td><td class="n">940 of 2,512</td><td class="n">211</td><td class="n">+0.085</td><td>mildly positive, firmer than the day before</td></tr>
+<tr><td>X</td><td class="n">+0.036</td><td class="n">217 of 452</td><td class="n">112</td><td class="n">+0.008</td><td>balanced, about where it was</td></tr>
+<tr><td>YouTube</td><td class="n dn">−0.458</td><td class="n">16 of 45</td><td class="n">7</td><td class="n">−0.290</td><td>negative, softer, and <b>thin</b>: 16 items is a sample, not a market</td></tr>
+</table>
+<p>Across the 273 names heard today, <b>51</b> were heard by more than one voice; <b>22</b> agree on direction and <b>29</b> disagree. That disagreement is the most useful single number on the page and today's room does not print it.</p>
+
+<h2>Stage 6 · the screen</h2>
+<p>The Hub reads the daily rows (45 days back, <code>SN_STORE_DAYS</code>), the item rows for the picked day, and, for the X and YouTube cards, re-scores the raw feed and the video titles in the browser with the second list. The redesign stops the browser scoring and reads the store only.</p>
+
+<h2>YouTube: the transcript stage, and why it is not running</h2>
+<div class="chain">
+<div class="st"><span class="k">designed</span><span class="v">transcript → ±40-word windows around each mention</span><span class="s">a 40-minute video is not "about" one stock, so only the words around the ticker's name count</span></div>
+<div class="st"><span class="k">measured</span><span class="v">0 transcripts stored</span><span class="s">the fetch job needs the MacBook launch agent, which <b>SCHEDULING.md</b> records as not installed and pointed at a dead worktree path</span></div>
+<div class="st"><span class="k">so today</span><span class="v">830 of 830 rows scored on the title</span><span class="s">the row says <code>sample_src = title</code>, and a title is written to be clicked</span></div>
+</div>
+<div class="ex">QQQ Stock Forecast: <mark class="hr">BEARISH</mark> 📈<small>title-scored · bearish (−1) in the title and again in the description · <b>−1.00</b> · the arrow emoji is not on the lm-v1 list, so it does not count</small></div>
+<div class="ex">$SPY Flow Data: <mark class="hr">Fear</mark> at 29, <mark class="hb">Bullish</mark> Rotation into ETFs #Shorts<small>fear (−1), bullish (+1), dropped (−1, description), bullish (+1, description) · (2 − 2) ÷ 4 = <b>0.00</b> · an even split, which the room has no word for yet</small></div>
+<p>The function that would read transcripts is deployed and ready (<code>sentiment-youtube</code>, every 6 hours at :25, 7-day window, 800 clips a pass). It scores the title only because there is nothing else to read. Until the transcript job runs on a Mac that stays awake, "YouTube" on this page means "video titles".</p>
+
+<h2>X: one post, one vote, per ticker it names</h2>
+<div class="ex">Mizuho is <mark class="hb">bullish</mark> on Tower Semiconductor $TSEM, pointing to AI optical growth as a potential driver…<small>@newsinvesting · 18:00Z · bullish (+1), strengthen (+1) · <b>+1.00</b> · filed under TSEM</small></div>
+<div class="ex">2.4 billion positive node at 772<small>@TraderJonesy · 18:09Z · positive (+1, twice) · <b>+1.00</b> · filed under $QQQ, $SPX, $NDX, $SPY <i>and</i> $TLT — one post about a chart level, five bullish votes. This is the honest weakness of "one vote per ticker named".</small></div>
+<p>The function reads the published feed only (never a browser, never your Mac), every 2 hours at :40, the last 3 days, and it says in its receipt when the collector is behind. The feed holds posts back to June 2023, so an X history of 90 days is one run away (section 5).</p>
+
+<h2>Fear &amp; greed: a separate thing, kept separate</h2>
+<p>Two gauges are shown that <b>other people publish</b>: CNN's Fear &amp; Greed (today <b class="dn">37, fear</b>; 36 yesterday, 30 a week ago, 60 a month ago; its seven parts today: momentum 36, 52-week strength 0, breadth 0, put/call 58, volatility 50, junk bonds 61, safe havens 54) and alternative.me's index, which is for <b>crypto</b>, not stocks, and the card says so. Beside them the room computes <b>seven market inputs of its own</b> in the browser, from chart-API daily bars, CNN's way: each one is today's distance from its own average in units of how much it normally moves (50 + 25 × that distance, two deviations either way is the end of the dial; volatility and put/call inverted). These seven are <b>not stored</b>: they are recomputed every ten minutes in whichever browser is open and forgotten, which is why they have no history and the CNN card does. None of this is a word count, none of it is sentiment in the voices' sense, and Alan's 23 Sep ruling stands: there is no blended Scintilla fear &amp; greed number.</p>
+
+<h1>3 · How much history exists today (measured)</h1>
+<p>Rows in <code>sentiment_ticker_daily</code> per source per day. A ticker-day is one name, one voice, one day; items are the headlines, clips or posts behind it; scored is how many carried a listed word.</p>
+<table><tr><th>day</th><th class="n">news ticker-days · items · scored</th><th class="n">X ticker-days · items · scored</th><th class="n">YouTube ticker-days · items · scored</th></tr>
+<tr><td>2026-09-16</td><td class="n">—</td><td class="n">—</td><td class="n">1 · 2 · 1</td></tr>
+<tr><td>2026-09-17</td><td class="n">—</td><td class="n">—</td><td class="n">9 · 104 · 53</td></tr>
+<tr><td>2026-09-18</td><td class="n">—</td><td class="n">—</td><td class="n">9 · 101 · 45</td></tr>
+<tr><td>2026-09-19</td><td class="n">—</td><td class="n">—</td><td class="n">8 · 59 · 31</td></tr>
+<tr><td>2026-09-20</td><td class="n">—</td><td class="n">38 · 40 · 37</td><td class="n">9 · 70 · 35</td></tr>
+<tr><td>2026-09-21</td><td class="n">—</td><td class="n">265 · 320 · 175</td><td class="n">10 · 135 · 72</td></tr>
+<tr><td>2026-09-22</td><td class="n">—</td><td class="n">285 · 564 · 329</td><td class="n">9 · 103 · 45</td></tr>
+<tr><td>2026-09-23</td><td class="n">279 · 1,248 · 362</td><td class="n">245 · 898 · 516</td><td class="n">8 · 99 · 48</td></tr>
+<tr><td>2026-09-24</td><td class="n">350 · 3,921 · 1,469</td><td class="n">216 · 774 · 385</td><td class="n">9 · 112 · 54</td></tr>
+<tr><td>2026-09-25 (to 19:25Z)</td><td class="n">304 · 2,512 · 940</td><td class="n">163 · 452 · 217</td><td class="n">8 · 45 · 16</td></tr>
+</table>
+<div class="kv">
+<span>total</span><span><b>2,225</b> ticker-day rows, <b>811</b> names, 16 → 25 Sep</span>
+<span>news depth</span><span><b>3 days</b>. The oldest scored headline is 23 Sep 18:36Z. The live pass keeps up (3,704 of the last 24 hours' 4,738 headlines are scored, and the newest was scored at 19:20Z), but the backfill that was meant to walk back through 506,297 headlines <b>stopped after one slice of 1,000</b> at 02:18Z on 24 Sep and marked itself done.</span>
+<span>why it stopped</span><span>The function asks the database for 1,500 rows a slice and treats a short reply as the end of the data. The database hands out at most 1,000 rows per request (the Hub's own code comments say so), so the very first reply was "short", and <code>done = 1000 &lt; 1500</code> became true. One line to fix; until it is fixed, no history older than 23 Sep will ever appear.</span>
+<span>X depth</span><span><b>5 days</b> (21 Sep 02:27Z → 25 Sep 18:23Z), 4,319 post rows, 666 in the last 24 hours. Live.</span>
+<span>YouTube depth</span><span><b>10 days</b>, but 8 to 10 names a day, all from titles.</span>
+<span>run receipts</span><span>Each function writes a receipt to <code>app_config</code>; that table refuses the public key (401), so run times were confirmed from the rows themselves, not the receipts.</span>
+</div>
+
+<h1>4 · The redesign: a feed, not a dump</h1>
+<p>The rule for every piece: small, dense, visual, in the idiom of the keyword tracker. Monochrome, no white, green and red only for direction. One list, the stored rows, no browser scoring. The mockup below is built from today's stored rows by <code>build-mockup.mjs</code>; open <code>mockup-feed.html</code> in this folder to use it.</p>
+<figure><img src="screens/mockup-1680-fold.png" alt="the feed mockup at 1680 wide, above the fold"><figcaption>1680 wide, the first screen. Visible: the five sub-tabs with FEED first; three voice bars (NEWS +0.21 green, X +0.04 grey, YOUTUBE −0.46 red with THIN in red) each with a pale notch for yesterday; the agreement line (51 names, 22 agree, 29 disagree); the SINCE YESTERDAY line naming DOW, BE, AAPL and JNJ as flipped; the keyword tracker with NEWS · 233 selected, eight bullish and eight bearish words with bars and counts; the feed filters ALL / MY LIST / NEWS / VIDEO / POSTS; the first cards (META bearish −1.00 with "Fails" and "Strains" in red, BAC bullish +1.00 with "Best" and "reward" in green, Costco once, marked "same story in 2 outlets"). Right rail: the CNN card (37 FEAR, a monochrome half-dial, yesterday 36, week 30, month 60, a 30-day line), TRENDING with ten names, each with lean, item count, one dot per voice and a 10-day line, SPLIT badges on NVDA, SPY and AAPL, and the how-to-read card.</figcaption></figure>
+<div class="two">
+<figure class="phone"><img src="screens/mockup-390-fold.png" alt="the feed mockup at 390 wide, first screen"><figcaption>390 wide, first screen: the three voices stacked, the agreement line, since-yesterday, then the CNN card and the top of TRENDING. Nothing overflows the width.</figcaption></figure>
+<figure class="phone"><img src="screens/mockup-390-fold2.png" alt="the feed mockup at 390 wide, further down"><figcaption>390, the next screens: the full TRENDING list, then the keyword tracker as one column pair, then the feed filters and the first card.</figcaption></figure>
+</div>
+<p>The full-page captures at both widths are <code>screens/mockup-1680.png</code> and <code>screens/mockup-390.png</code> (no horizontal overflow at either).</p>
+
+<h2>The pieces, and what each one is for</h2>
+<ul>
+<li><b>The strip.</b> One bar per voice, zero in the middle, today's balance as the bar, yesterday's as a notch, the count of scored items beside it, and THIN in red under 30 items. Read left to right in a second: news up a little, X flat, YouTube down on a thin sample.</li>
+<li><b>The agreement line.</b> How many names more than one voice talked about, and how many of those disagree. This replaces the "measuring stick" table.</li>
+<li><b>Since yesterday.</b> Which voice firmed or softened, which names flipped sign (with the numbers), which names are new today. One line, computed from the daily rows already stored.</li>
+<li><b>Fear &amp; greed, its own small card.</b> CNN's number the way CNN prints it (dial, rating, yesterday / week / month, a 30-day line), labelled "theirs, not ours". Our seven market inputs stay in their own tab and are never mixed in.</li>
+<li><b>Trending.</b> Ten names by items today: lean, count, one dot per voice in its direction, SPLIT when the voices disagree, a 10-day line from the stored rows, ★ on the board's own names. Tapping a name opens the existing tape.</li>
+<li><b>The words that did it.</b> The keyword tracker, unchanged in idiom, one column pair per voice, counted from the stored rows' top words after negation.</li>
+<li><b>The feed.</b> The strongest items first (score × words that fired), one story once even when four outlets ran it, a NEWS / VIDEO / POST badge, the tickers as chips, a BULLISH / BEARISH badge with the number, the text with the scoring words in colour and struck through where a negator flipped them, the outlet, handle or channel, the age, and "scored on the title, no transcript yet" where that is true. Filters: all, my list, news, video, posts.</li>
+</ul>
+
+<h2>What was borrowed from StockTwits-style feeds, and what was left out</h2>
+<ul>
+<li><b>Borrowed:</b> a sentiment badge on every post; trending tickers as a short ranked list; a watchlist filter; the ticker as a tappable chip; a "what changed" line as the first thing after the numbers.</li>
+<li><b>Left out:</b> the message volume charts (our volume is what the collectors happened to fetch, not the crowd); follower counts and reputation (nobody here has checked whether any voice was right last month, so no voice is ranked); the endless-scroll of unscored chatter (an item with no listed word is not shown as neutral, it is not shown at all); avatars, colour fills, white cards.</li>
+</ul>
+
+<h1>5 · Keeping and showing 90 days per ticker</h1>
+<table><tr><th>need</th><th>already there</th><th>to do</th></tr>
+<tr><td>a row per ticker per day per voice, kept</td><td><code>sentiment_ticker_daily</code> is keyed by day and never deleted</td><td>nothing; the reader asks for 45 days (<code>SN_STORE_DAYS</code>), change it to 90</td></tr>
+<tr><td>news back to 90 days</td><td>the backfill function, the resume table, a 5-minute schedule</td><td>fix the one-line "done" rule (page at 1,000, or treat only a reply under 1,000 as the end). At 1,000 headlines per 5-minute slice, 90 days (~340,000 headlines) takes about 28 hours of slices and rebuilds each day's rows as it goes</td></tr>
+<tr><td>X back to 90 days</td><td>the feed already holds posts back to 2023; the function takes <code>days=</code> up to 30</td><td>raise the cap to 90 and call it once with <code>days=90</code>; one pass, one afternoon. Then leave the 2-hour schedule at 3 days</td></tr>
+<tr><td>YouTube back to 90 days</td><td>the function takes <code>days=</code> up to 60</td><td>one call with <code>days=60</code> gives 60 days of title readings; transcripts only from the day the transcript job is installed</td></tr>
+<tr><td>the strip's trend without a big read</td><td>—</td><td>a new small table <code>sentiment_voice_daily</code> (day, source, score, items, tickers, bull, bear), written by the same day-rebuild that writes the ticker rows. 90 days × 3 voices = 270 rows per read instead of ~68,000. Additive migration, with its rollback</td></tr>
+<tr><td>size</td><td>~750 ticker-day rows a day today</td><td>90 days ≈ 68,000 daily rows (small). Item rows with their words: ~4,000 a day, ≈ 360,000 over 90 days at well under a kilobyte each; fine for now, and the daily rows can outlive the item rows if it ever matters</td></tr>
+<tr><td>our own seven market inputs over time</td><td>computed in the browser, stored nowhere</td><td>only if Alan wants that trend: a daily writer for them, separate from the voices</td></tr>
+</table>
+
+<h1>6 · What could be wrong</h1>
+<ul>
+<li><b>A word list cannot hear irony, a hedge or a joke.</b> "Fails at the highs" is bearish; "no longer bearish" is caught by the negator rule; "bearish… just kidding" is not.</li>
+<li><b>The dictionary was built from filings.</b> "Despite" scores positive on it and fired 48 times in today's news; "force" scores negative ("Force Majeure" and "workforce" both hit). Every such word is visible in the tracker, which is the point of showing it, but the list has quirks and the supplement of 67 headline verbs is small.</li>
+<li><b>One post, many tickers.</b> A post naming five $TAGS casts five votes. It is honest and it is also why X can look busier than it is.</li>
+<li><b>Two outlets, one story.</b> The mockup collapses identical titles; the stored rows still count each URL once per ticker, so the daily numbers do not.</li>
+<li><b>YouTube is titles</b> until the transcript job runs, and 16 items a day is thin whatever list scores them.</li>
+<li><b>Two lists on one screen today.</b> Until the browser stops scoring with sc-social-v2, a post's badge in the feed (lm-v1, stored) can differ from its lean in the X card (browser). The redesign removes the second number; it does not reconcile the two lists.</li>
+<li><b>My list is a stand-in.</b> In the mockup, ★ marks ten names typed into the builder; the build reads the board's cohort instead.</li>
+</ul>
+
+<h1>7 · What I did not do</h1>
+<ul>
+<li>Did not deploy, push, run any function, apply any migration, install the transcript job, or change a schedule.</li>
+<li>Did not fix the backfill "done" rule; it is a one-line change in <code>supabase/functions/sentiment-news/index.ts</code> and belongs to the build that follows this pick.</li>
+<li>Did not touch the Hub room itself (<code>index.html</code> is unchanged on this branch); the mockup is a standalone page.</li>
+<li>Did not read the function receipts (401 with the public key); run cadence is inferred from row times and the cron migration.</li>
+<li>Did not verify the mockup in a visible browser; both screenshots are headless captures, opened and examined by me.</li>
+</ul>
+
+<h1>8 · One recommendation</h1>
+<p><b>Build the FEED tab as mocked and make it the room's first tab</b>, keeping HOW IT IS BUILT, NEWS, YOUTUBE and X behind it; move today's OVERVIEW content (public gauges, our seven inputs, breadth) into a MARKET tab. Before the Opus build starts, do the four data fixes in section 5 in this order: the backfill "done" rule, the X 90-day pass, the 90-day reader, the voice-daily table. Score with one list only, the stored lm-v1 rows, and fold the slang and emoji additions from sc-social-v2 into the shared lexicon file as a supplement so nothing you asked for is lost.</p>
+
+<div class="box"><b class="k">Decisions for Alan</b>
+<b>1. FEED first, OVERVIEW retired into a MARKET tab?</b> Recommendation: yes.<br>
+<b>2. One word list for everything (stored rows, lm-v1 plus the slang supplement), and the browser stops scoring?</b> Recommendation: yes; the same post should never show two numbers.<br>
+<b>3. Install the YouTube transcript job on this MacBook (it only runs while the Mac is awake) or accept that YouTube means titles?</b> Recommendation: install it, because the transcript stage is the only one that reads what the person actually said.</div>
+
+<p style="margin-top:36px;font-size:13px;color:var(--dim)">Evidence: <code>feed-data.json</code> (today's rows and the computed reads), <code>series.json</code> (10-day series), <code>cnn-fng.json</code> (CNN's feed as read), the screenshots under <code>screens/</code>, and <code>tests/sentiment-feed-deliverable.test.mjs</code>. Test baseline on this branch is reported in the return message.</p>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
