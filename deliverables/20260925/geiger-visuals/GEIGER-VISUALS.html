@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>SCINTILLA · Geiger in motion v2 and a new company GEIGER tab · proposals</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0D0D14;--line:#1A1A2A;--line2:#252538;--ink:#C8C8D2;--ink2:#9C9CB0;--dim:#6E6E82;--bull:#00FFA3;--bear:#FF2D55;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:15px;letter-spacing:.3em;text-transform:uppercase;margin:0 0 4px;color:var(--ink)}
+h2{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink2);margin:40px 0 12px;padding-top:14px;border-top:1px solid var(--line)}
+h3{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:22px 0 8px}
+p{margin:8px 0;max-width:86ch}
+.kicker{color:var(--dim);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:22px}
+.lead{font-size:13.5px;color:var(--ink)}
+.q{border-left:2px solid var(--line2);padding:2px 12px;color:var(--ink2);margin:8px 0;max-width:86ch}
+.q i{color:var(--dim);font-style:normal}
+b{color:var(--ink);font-weight:600}
+.up{color:var(--bull)} .dn{color:var(--bear)}
+table{border-collapse:collapse;margin:10px 0 14px;font-size:12px;width:100%;max-width:960px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:500;letter-spacing:.14em;text-transform:uppercase;font-size:10px}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+figure{margin:12px 0 18px}
+figure img{width:100%;height:auto;display:block;border:1px solid var(--line2);background:#000}
+figcaption{color:var(--dim);font-size:11px;margin-top:6px;max-width:100ch}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.trio{display:grid;grid-template-columns:2fr 1fr;gap:14px;align-items:start}
+.phone{max-width:300px}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
+a.open{display:inline-block;border:1px solid var(--line2);padding:5px 10px;margin:4px 8px 4px 0;text-decoration:none;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+a.open:hover{border-color:var(--ink2)}
+.rec{border:1px solid var(--line2);padding:14px 16px;margin:14px 0;background:var(--panel)}
+ul{padding-left:18px;max-width:86ch} li{margin:4px 0}
+.small{font-size:11px;color:var(--dim)}
+@media(max-width:700px){.pair,.trio{grid-template-columns:1fr}.wrap{padding:18px 14px 40px}}
+</style></head>
+<body><div class="wrap">
+<div class="kicker" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><span data-scnav-slot></span><span>SCINTILLA · GEIGER IN MOTION v2 · THE COMPANY GEIGER TAB · 25 SEP 2026 · proposals, nothing shipped</span></div>
+<span data-scnav-slot></span><h1>Geiger in motion v2, and a GEIGER tab that says what the reading is for</h1>
+<p class="kicker" id="stamp">branch candidate/geiger-visuals-20260925 · base 6b43a52 · work d5c7991, this stamp on top · fable · high · nothing pushed, nothing deployed</p>
+
+<p class="lead">Three things you said on Thursday, and what was actually happening on the page. The bars were moving but the rows were not: the player moves every row <b>once a day, all at once</b>, a quarter of a second after the bars have already finished. It ranks by Geiger no matter what the table is sorted on, because the replay overwrites the sort. And the list is long because it is the whole cohort: 43 names, 17 fit, and the ones you cannot see are moved but never animated. Below: the measurements, then three working players on real data, then three working GEIGER tabs for MU. One recommendation at the end. Nothing here is deployed; you pick, and the pick becomes an Opus build.</p>
+
+<h2>Part one · the player as it is, measured</h2>
+<p>I ran the shipped board headlessly (no window opened) on the <b>AI HW</b> cohort, pressed PLAY at 1×, and photographed it ten times a second for ten seconds while reading the row positions off the page every 100 ms. Every number here is from that run, not from the code alone.</p>
+<figure><img src="screens/diagnosis-10s-contact-sheet.png" alt="twenty frames, one every half second, of the current replay on AI HW"><figcaption>Twenty of the hundred frames, one every half second. The headline on each frame is the clock, the replayed day and the tick number; the second line is what the page's own counter reported: how many rows the day moved, how many it animated, and how many were mid-slide at that instant. Between ticks that last number is 0: nothing moves. Right after a tick it is 13 to 19: everything moves together.</figcaption></figure>
+<figure><img src="screens/diagnosis-one-day.png" alt="three frames inside one replayed day"><figcaption>One day, close up. Left: the bars have eased to the new day's values. Middle, 100 ms later: the order pass fires and every changed row slides at once. Right, 200 ms after that: landed, and still, until the next day.</figcaption></figure>
+
+<table>
+<tr><th>what you saw</th><th>what the page does</th><th>where</th></tr>
+<tr><td>"the bars are moving but the positions are not"</td><td>Each day (700 ms at 1×) the bars ease over 231 ms. Then, 251 ms after the day starts, ONE order pass moves every row that changed (27 to 42 of 43 per day) in a single 420 ms slide. So positions do move, but as a batch, once a day, after the bars. With the market moving a little every day it reads as bars alive, rows dead.</td><td><code>repaint()</code> → <code>orderPass()</code>, deferred by the settle time (M61 "settle → reflow")</td></tr>
+<tr><td>"it's in batches, which I don't love"</td><td>The batch is by design: "values first, then order" was the proposal's default movement. Rows below the fold are moved but never animated (travel nobody sees), so of 43 rows only the 13 to 19 on screen ever slide.</td><td>same order pass; the "off screen = no animation" rule</td></tr>
+<tr><td>"locked to whatever ranking I had in the table … nothing to do with the table"</td><td>Right. While replaying, the page forces the sort to <b>Geiger, descending</b> and restores your sort afterwards. Whatever column the board is on, the player ranks by Geiger.</td><td><code>S.sort={key:"g",dir:-1}</code> inside <code>orderPass()</code></td></tr>
+<tr><td>"I don't see a lot of tickers … the list is very long"</td><td>43 names in AI HW; the board box is 585 px tall at 1680, a row is 33 px, so 17 fit and 26 are below the fold. In the frames above only 13 are visible under the transport row.</td><td>measured on the page</td></tr>
+<tr><td>"moving like crazy and the percentages change"</td><td>Two things. The % beside the bar is the price change since the <i>first day of the window</i>, so it jumps every day by design. And the bar's width is scaled to the <b>day's biggest reading</b>, not to a fixed scale: on every frame the leader is full width, and in the frame below all 13 visible bars are identical full-width green. The bar carries almost no information at the top of the list.</td><td><code>mx = max |v|</code> per frame; width = |v| / mx</td></tr>
+</table>
+<figure><img src="screens/current-player-1680.png" alt="the current player mid-replay on AI HW at 1680"><figcaption>The shipped player at 1680, mid-replay on AI HW, 2025-10-06. Thirteen visible rows, thirteen full-width bars.</figcaption></figure>
+
+<h2>Part two · Geiger in motion v2 · three working players</h2>
+<p>All three run on the same real data: the AI HW cohort (43 names) and your LIKED list (72), Geiger history from <code>fan_daily</code> and <code>momentum_daily</code> blended 0.5 / 0.5 exactly as the board's replay blends them, and daily closes from the chart API. The history the pipeline holds for these cohorts runs <b>15 July to 20 August 2026</b>, so that is the window every player replays. Each one is a page you can open and run; the transport is the hub's own PLAY, speed chip and scrubber. Monochrome; the only colours are up-green and down-red. Every reading on screen is an interpolation between two real days, advanced every frame: nothing is stepped once a day, so nothing can arrive as a batch.</p>
+
+<h3>A · the same list, continuous</h3>
+<p><a class="open" href="motion-a.html">open A</a> The board's own shape, ticker and one big bar, but three rules changed. <b>Every row glides to its new place the moment it earns it</b>, individually, about half a second per move, never as a group. <b>The rank follows the column you choose</b>, Geiger, day move, move versus its usual day, % over the span or market cap, so it is the table's sort, not a private one. And <b>the list is cut to what fits</b>: what does not fit folds under "+N more" with the next three names, and a name that climbs into the visible set slides up out of the fold. The bar is on a fixed ±1 scale, so a full bar means a full reading, not "the biggest today". Near-ties hold: a name has to be clearly past its neighbour before it overtakes, so rows rest instead of jittering.</p>
+<p><b>What it shows that the table cannot:</b> who is overtaking whom, right now, as one movement you can follow with your eye.</p>
+<div class="trio"><figure><img src="screens/motion-a-1680.png" alt="A at 1680"><figcaption>1680. Rows mid-crossing are drawn opaque, the one rising on top.</figcaption></figure><figure class="phone"><img src="screens/motion-a-390.png" alt="A at 390"><figcaption>390. Same page; the span column drops, 20 rows fit.</figcaption></figure></div>
+
+<h3>B · the field</h3>
+<p><a class="open" href="motion-b.html">open B</a> No list. Each name is a dot: <b>across</b> is today's move measured in its own usual days (a +2 means it moved twice what it normally moves), <b>up</b> is the Geiger reading, <b>size</b> is market cap. The "3D" you asked for is depth by liquidity: the thin names sit back, smaller and dimmer, the deep names in front. As the day unfolds the dots drift, each dragging a short tail so you can see the direction of travel in a still. Hover names it and gives the numbers. The quadrants are labelled in words: up more than usual with a bull reading, down more than usual with a bear reading, and the two disagreements.</p>
+<p><b>What it shows that the table cannot:</b> the whole cohort at once, and whether today's move agrees with the reading, in one glance instead of forty rows.</p>
+<div class="trio"><figure><img src="screens/motion-b-1680.png" alt="B at 1680"><figcaption>1680, AI HW on 2026-07-20: the deep names clustered near flat, a handful of thin names out at +2 to +3 usual days.</figcaption></figure><figure class="phone"><img src="screens/motion-b-390.png" alt="B at 390"><figcaption>390.</figcaption></figure></div>
+
+<h3>C · the rank river</h3>
+<p><a class="open" href="motion-c.html">open C</a> My third. Time runs across; each name is a line of its <b>rank</b> through the window, drawn only up to the day on the clock, green where its reading is above zero and red below. The column at the right is the standings <i>now</i>, and it slides as the day unfolds, one slot per name, folded after what fits. Hover a name to follow it. The rank follows the same column choice as A.</p>
+<p><b>What it shows that the table cannot:</b> the path. A name that has climbed steadily for two weeks and one that jumped today look the same in a list; here they are two different lines.</p>
+<div class="trio"><figure><img src="screens/motion-c-1680.png" alt="C at 1680"><figcaption>1680.</figcaption></figure><figure class="phone"><img src="screens/motion-c-390.png" alt="C at 390"><figcaption>390: the lines stay, the label column carries the top of the standings and folds the rest.</figcaption></figure></div>
+
+<h2>Part three · the company GEIGER tab, for MU</h2>
+<figure><img src="screens/current-tab-1680-panel.png" alt="the current GEIGER tab for MU in its panel at 1680" style="max-width:640px"><figcaption>The tab as it is, MU, 1680, in the 609 × 632 px rail it gets. Phone below.</figcaption></figure>
+<p><b>In plain words, what is wrong with it.</b> Six boxes, and three of them say they have nothing: MACD "unavailable", the volume rings "awaiting rvol feed", the trend ladder an empty dotted frame with two moving-average labels. The two boxes with a reading show one number each, the daily RSI and the daily Williams, in purple and red, against your rule. The ring at the top draws the same two numbers that are printed in text beside it. <b>The eight timeframes your Equalizer is built on are not on the tab at all</b>, except as a line of tiny grey text under the ring ("BAR AS-OF · 12H 2026-09-24 …"), and nothing on the tab says whether +0.66 is high or low for MU, or what pushed it there. The space is spent on frames, not on the reading. Your word for it was "dead", and by these measures it is.</p>
+<figure class="phone"><img src="screens/current-tab-390.png" alt="the current tab at 390"><figcaption>390: the same tab in a 340 × 300 box below the board.</figcaption></figure>
+<p>The three mockups answer one question in three ways: <b>what is a Geiger reading for, on one company?</b> Each carries the same facts from the same source: the composite now (+0.66, bull lean, artifact of 24 Sep), its trend and momentum, the eight rungs of your saved Equalizer with their weights and each rung's own reading, RSI and Williams per rung, and the composite's own history so "now" has a context. Each is built for the panel (609 × 632), for EXPAND (I used 898 × 708, see the note below) and for the phone (340 × 300), and each plays: the history replays through the hub's transport with the same settle motion as the board.</p>
+
+<h3>Tab A · the ladder</h3>
+<p><a class="open" href="tab-a.html">open A</a> The composite big at the top, then the <b>eight rungs as eight rows</b>, 2H down to 1W: the weight you gave the rung, a bar of the rung's own composite, a tick for its trend and a tick for its momentum, and its RSI and Williams. You can see at once where the timeframes agree and where they do not (for MU today: every rung bull, the 4H and 1D strongest, the 6H the weakest; the 1D and 3D Williams already in the overbought band, in red). In EXPAND each rung gains its last 60 bars with the fan the artifact reports now as a grey band at the right.</p>
+<div class="pair"><figure><img src="screens/tab-a-panel.png" alt="tab A in the panel"><figcaption>Panel, 609 × 632.</figcaption></figure><figure><img src="screens/tab-a-expand.png" alt="tab A in expand"><figcaption>EXPAND, 898 × 708, with the per-rung bars.</figcaption></figure></div>
+<figure class="phone"><img src="screens/tab-a-phone.png" alt="tab A on the phone"><figcaption>Phone, 340 × 300: the composite and the eight rungs, nothing else.</figcaption></figure>
+
+<h3>Tab B · its own history</h3>
+<p><a class="open" href="tab-b.html">open B</a> The composite as a line over its last 260 sessions, filled green above zero and red below, with trend and momentum as thin lines of the same rule, and the "now" point. Two sentences above it say what the number means for this company: <b>higher than 46 % of its last 260 sessions</b>, and <b>above zero for 6 sessions running</b>. Beside it the eight rungs now, and under it "what carries it": each rung's weight times its reading, ranked, so you can see the 1D, 12H and 3D are doing the lifting and the 2H hardly counts. The line reveals itself as you play.</p>
+<div class="pair"><figure><img src="screens/tab-b-panel.png" alt="tab B in the panel"><figcaption>Panel.</figcaption></figure><figure><img src="screens/tab-b-expand.png" alt="tab B in expand"><figcaption>EXPAND: the rungs gain RSI and Williams columns.</figcaption></figure></div>
+<figure class="phone"><img src="screens/tab-b-phone.png" alt="tab B on the phone"><figcaption>Phone: the two sentences and the line.</figcaption></figure>
+
+<h3>Tab C · the plane</h3>
+<p><a class="open" href="tab-c.html">open C</a> Trend across, momentum up. The composite is the diagonal, so distance from the bottom-left corner is the reading. The company's last 60 sessions are a trail on this plane, fading into the past; the now point sits at the end of it; and the eight rungs are dots around it, sized by weight, so the spread of the timeframes is visible as a shape rather than a list. For MU today the rungs sit tight in the top-right, all bull, the 6H a little lower on momentum. EXPAND adds the rung table.</p>
+<div class="pair"><figure><img src="screens/tab-c-panel.png" alt="tab C in the panel"><figcaption>Panel.</figcaption></figure><figure><img src="screens/tab-c-expand.png" alt="tab C in expand"><figcaption>EXPAND.</figcaption></figure></div>
+<figure class="phone"><img src="screens/tab-c-phone.png" alt="tab C on the phone"><figcaption>Phone.</figcaption></figure>
+
+<h2>What each one costs</h2>
+<p>Measured the same way for every page: headless Chromium, the page playing at 1×, and the browser's own main-thread task time read before and after 60 seconds (30 for the tabs, scaled to a minute). The shipped player was measured with the same method in the same session, on the same cohort, so the rows compare like with like. The 1.90 figure recorded for the flashes after M72 came from a different bench and is not on this table.</p>
+<table id="cpu"><tr><th>page</th><th>size</th><th class="n">CPU-seconds per minute</th><th class="n">of which script</th><th class="n">layout + style</th><th class="n">frames per second</th></tr>
+<tr><td colspan="6" class="small">measuring …</td></tr></table>
+<script id="cpujson" type="application/json">{"shipped": {"label": "the shipped player \u00b7 hub page \u00b7 AI HW \u00b7 playing 1\u00d7", "size": "1680", "seconds": 60, "task": 9.019, "script": 0.551, "layout": 0.674, "style": 1.02, "frames": null}, "a1680": {"label": "A \u00b7 the list, continuous \u00b7 playing", "size": "1680", "seconds": 30, "task": 2.631, "script": 0.422, "layout": 0.444, "style": 0.521, "frames": 1800}, "a390": {"label": "A \u00b7 playing", "size": "390", "seconds": 30, "task": 2.172, "script": 0.392, "layout": 0.315, "style": 0.461, "frames": 1800}, "b1680": {"label": "B \u00b7 the field \u00b7 playing", "size": "1680", "seconds": 30, "task": 2.769, "script": 0.549, "layout": 0.057, "style": 0.001, "frames": 1801}, "b390": {"label": "B \u00b7 playing", "size": "390", "seconds": 30, "task": 1.967, "script": 0.614, "layout": 0.058, "style": 0.001, "frames": 1800}, "c1680": {"label": "C \u00b7 the rank river \u00b7 playing", "size": "1680", "seconds": 30, "task": 2.747, "script": 0.546, "layout": 0.054, "style": 0.001, "frames": 1800}, "c390": {"label": "C \u00b7 playing", "size": "390", "seconds": 30, "task": 1.404, "script": 0.513, "layout": 0.058, "style": 0.001, "frames": 1801}, "ta": {"label": "Tab A \u00b7 the ladder \u00b7 replaying", "size": "609 \u00d7 632", "seconds": 30, "task": 0.899, "script": 0.1, "layout": 0.207, "style": 0.032, "frames": 1800}, "tb": {"label": "Tab B \u00b7 its own history \u00b7 replaying", "size": "609 \u00d7 632", "seconds": 30, "task": 3.022, "script": 0.399, "layout": 0.174, "style": 0.028, "frames": 1801}, "tc": {"label": "Tab C \u00b7 the plane \u00b7 replaying", "size": "609 \u00d7 632", "seconds": 30, "task": 1.57, "script": 0.342, "layout": 0.167, "style": 0.058, "frames": 1800}, "rest": {"label": "any of the six at rest (paused player, or a tab left open)", "size": "\u2014", "seconds": 15, "task": 0.083, "script": 0.012, "layout": 0.0, "style": 0.0, "frames": 0}}</script>
+<p class="small" id="cpunote"></p>
+<p>Three things the table says. <b>Every player costs about half of the shipped one</b> while playing (5.3 to 5.5 CPU-seconds a minute against 9.0), and each one is at 60 frames a second, because the rows move by transform only and the two canvas views redraw only what changed. <b>The rank river cost 11.2 before I cached its past</b>: a first version redrew every line every frame; now the days already played live on a hidden layer and only the moving edge is drawn. <b>At rest, all six cost nothing</b>: the frame loop stops when nothing is moving, so a tab left open on a company page does no work until something changes. Tab B is the dearest tab while replaying (6.0 a minute, the 260-session line is refilled each frame); the same past-on-a-layer trick would bring it under 2 if it is picked.</p>
+
+<h2>One recommendation</h2>
+<div class="rec">
+<p><b>Ship A as the player, and B as the second view behind one chip.</b></p>
+<p>A is the board you already read, with the three faults removed: rows move one at a time and the moment they earn it, the rank is the table's own sort, and the list is what fits. It costs less than the shipped player because it moves 20 rows by transform and never touches layout. It is the smallest change to what you know, and it answers all three of Thursday's complaints directly.</p>
+<p>B is the "cleaner, more 3D" view you asked about, and it is the one that shows something the table cannot: the whole cohort at once, with today's move against the reading. It should be a chip beside the player ("FIELD"), not a replacement, because a field is worse than a list the moment you want a specific name.</p>
+<p>C is honest and cheap, but it is a chart to study, not a player to watch; keep it in the drawer for a REPLAY room if one comes.</p>
+<p><b>For the tab, B.</b> It is the only one of the three that says what +0.66 means for MU in words ("higher than 46 % of its last 260 sessions"), it keeps the eight rungs on screen at every size, and the history line is the same motion theme as the board's replay. Fold Tab A's ladder into its EXPAND mode: the rung rows with the ticks are the best single view of the Equalizer, and EXPAND has the room.</p>
+</div>
+
+<h2>What could be wrong</h2>
+<ul>
+<li><b>The history stops on 20 August.</b> <code>fan_daily</code> holds the AI HW and LIKED names only to 2026-08-20 (after that, 22 names a day across the whole universe). So every player replays 15 July to 20 August, and in the tabs the "now" (the chart API's artifact of 24 September) sits 24 sessions after the last point of the line. The pages say so on their footers rather than hiding it. It is the same pipeline fact the 24 September replay write-up recorded.</li>
+<li><b>The rungs have no history.</b> The chart API's Geiger artifact is a snapshot; nothing stores yesterday's rung readings. So the tabs can show the eight rungs <i>now</i>, but "what moved it since yesterday" per rung is not computable today. The canonical data-path slice from 19 September is what would make it computable (a stored result per rung per session). The tabs show "what carries it" (weight × reading) instead, which is true now.</li>
+<li><b>EXPAND was designed for a box I could not photograph.</b> P3's full-width company mode is not on this branch (<code>6b43a52</code>). The widest the company rail reached in any state I could measure was 898 × 708, so that is the EXPAND size the mockups are built for. If P3 lands wider, the pages are fluid and will use it.</li>
+<li><b>The tab's "higher than 46 %" is against fan/momentum history, not against the artifact's own past.</b> They are the same blend, but the artifact and the daily tables can differ on a day; the percentile is a fair reading, not an audited one.</li>
+<li><b>The chart API only accepts the hub's origin.</b> For the local screenshots I proxied it through the test browser with the hub's origin set on the request; nothing was written anywhere.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>Nothing is wired into <code>index.html</code>. The player and the tab on the hub are exactly as they were. No deploy, no push.</li>
+<li>No Indicator Lab, Pine or TradingView work; <code>prototypes/indicator-lab/</code> untouched.</li>
+<li>No new provider calls beyond read-only pulls of the data the pages already read; no price table written.</li>
+<li>I did not measure real-hardware CPU or battery; the numbers are headless main-thread time, which ranks the options but is not a watt.</li>
+</ul>
+
+<h2>Decisions for you</h2>
+<ul>
+<li><b>Which player.</b> My pick: A, with B behind a chip. The alternative is B as the default, which is bolder and better for a glance, worse for finding a name.</li>
+<li><b>Which tab.</b> My pick: B, with A's ladder inside EXPAND. The alternative is A as the default: more numbers, less meaning.</li>
+<li><b>What the rank follows when the board is sorted by a column with no history</b> (market cap, forward P/E): A ranks by that column and the rows simply do not move while the bars do. My pick: keep that, because it is the truth; the alternative is to fall back to Geiger silently, which is what you disliked.</li>
+</ul>
+<script>
+(function(){ try{ const j=JSON.parse(document.getElementById("cpujson").textContent||"{}"); const rows=Object.entries(j); if(!rows.length) return;
+  const t=document.getElementById("cpu"); t.querySelector("tr:last-child").remove();
+  for(const [k,v] of rows){ const tr=document.createElement("tr"); const f=(v.seconds||60); const m=60/f; tr.innerHTML="<td>"+v.label+"</td><td>"+v.size+"</td><td class=n><b>"+(v.task*m).toFixed(2)+"</b></td><td class=n>"+(v.script*m).toFixed(2)+"</td><td class=n>"+((v.layout+v.style)*m).toFixed(2)+"</td><td class=n>"+(v.frames?Math.round(v.frames/f):"—")+"</td>"; t.appendChild(tr); }
+  document.getElementById("cpunote").textContent="Main-thread task time is everything the page's thread did: script, style, layout and the painting of what changed. The shipped player was on the hub page with the rest of the hub alive underneath it; the mockups are pages of their own, so their figures are a floor, not a like-for-like of the finished build."; }catch(e){} })();
+</script>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
