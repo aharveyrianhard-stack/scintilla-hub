@@ -4844,6 +4844,14 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      downstream of one. Both are served by the Fly chart API from R2 and touch no database, so a
      Supabase 503/504 cannot delay them and cannot prevent them rendering. */
   const pGeiger = scCandidateGeiger();                    // R2 via chart API. No Supabase.
+  /* H2 — COHORT / SECTOR COMPARE paints as soon as the provider Geiger answers, not after the whole board pull
+     (MEASURED cold, after hours: strip filled 2.1 s after the click; the page's own market-hours record for the full
+     pull is 17.5 s median, 30.2 s worst). Same authority, same values the end of this pull mirrors into GCOMP. */
+  pGeiger.then(function (m) {
+    let n = 0;
+    for (const t in (m || {})) { const c = num(m[t] && m[t].composite); if (c != null) { GCOMP[t] = c; n++; } }
+    if (n) { const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML(); }
+  }).catch(function () {});
   const pDeclared = scDeclaredEquities();                 // same surface: the declared equity set
 
   /* ── SUPABASE ENRICHMENT ───────────────────────────────────────────────────────────────────
@@ -5195,14 +5203,16 @@ async function fetchTapeItems() {
   return { macro, all: movers };
 }
 
-function startBoardFeed(cohort, fav, onRows, onState, ms = 45000) {
+function startBoardFeed(cohort, fav, onRows, onState, ms = 45000, firstDelay = 0) {
   let timer, dead = false;
   const tick = async () => {
     try { const rows = await fetchBoardRows(cohort, fav); if (dead) return; onRows(rows); onState && onState("live"); }
     catch (e) { if (dead) return; console.warn("board pull failed:", e.message); onState && onState("offline"); }
     timer = setTimeout(tick, ms);
   };
-  tick();
+  /* H2 — a scope painted from a fresh snapshot waits for that snapshot's natural refresh instead of re-pulling the
+     whole universe at once (MEASURED: a COHORT COMPARE column click fired 23 Supabase reads for rows already on screen) */
+  if (firstDelay > 0) timer = setTimeout(tick, firstDelay); else tick();
   return () => { dead = true; clearTimeout(timer); };
 }
 
@@ -6667,6 +6677,9 @@ function scinGroupTickers(key) {
   }
   return [];
 }
+/* H2 — the COHORTS | SECTORS mode lives inside the rewind module's closure; the strip read a global that never
+   existed, so neither chip ever lit and the header always said COHORT. The module mirrors its mode here. */
+function scCmpMode() { return (typeof window !== "undefined" && window.SC_CMP_MODE) || "COHORTS"; }
 function cohortCompareStripHTML() {
   const list = cohortCompareRows();
   const span = cohortCompareSpan(list);
@@ -6744,11 +6757,11 @@ function cohortCompareStripHTML() {
      Clicks are delegated at document level (see the gwxcmp handler), so nothing needs
      re-binding either. */
   const cmpBtns = '<span class="gwx-cmp" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "COHORTS" ? " is-on" : "") +
+    '<button class="sc-l0chip' + (scCmpMode() === "COHORTS" ? " is-on" : "") +
       '" data-gwxcmp="COHORTS">COHORTS</button>' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" ? " is-on" : "") +
+    '<button class="sc-l0chip' + (scCmpMode() === "SECTORS" ? " is-on" : "") +
       '" data-gwxcmp="SECTORS">SECTORS</button></span>';
-  return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
+  return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? "SECTOR" : "COHORT") + ' COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
 }
@@ -6807,6 +6820,8 @@ function updateBoard() {
      view has no #layer0 and keeps the session %chg exactly as before. */
   const inL0 = !!el("layer0");
   if (inL0 && LAYER0_TAB === "MAP") l0MapSync();
+  /* H2 — ROTATION / RELATIVE follow the scope: if the names under it changed (rows landed after a cohort click), redraw */
+  if (inL0 && (LAYER0_TAB === "ROTATION" || LAYER0_TAB === "RELATIVE") && L0_PAINTED_KEY !== l0RotKey()) paintL0Body();
   const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(inL0 ? l0MapChg : null); wireHeatSizing(); }   // R41 — Layer-0 / heat-view grid tracks feed ticks too (R43 §1: re-measure after the swap)
   /* the MAP was mounted before this scope had rows, so it holds a note and no grid/canvas to update: build it now that
      the rows are here, instead of leaving the note up until the map's own TF series happens to land seconds later */
@@ -7307,7 +7322,20 @@ let L0_RRG_AT = null, L0_PLAY = null, L0_FIX = null;
 const L0_PLAY_SPAN = 40, L0_PLAY_MS = 90;
 
 function l0TfDef() { return L0_TF_DEF.find((d) => d.k === L0_TF) || L0_TF_DEF[1]; }
-function l0Ds() { return L0_CACHE[L0_TF] || null; }
+/* H2 (Alan: "rotation is stuck on sectors") — ROTATION and RELATIVE follow the selected cohort like MAP does. On ALL
+   (no search) they keep the eleven sector SPDRs; on any other cohort or sector they draw that scope's twelve largest
+   names (the MAP's own market-cap order) against SPY. The cache is keyed by timeframe AND symbol set, so a cohort
+   switch loads its own series and flipping back is instant. Colours reuse the sector app's palette in order. */
+function l0RotSet() {
+  if (!S.tq && S.coh === "ALL") return L0_SECTORS;
+  const rows = l0FocRows().filter((r) => r.t !== L0_BENCH).slice(0, 12);
+  if (rows.length < 2) return L0_SECTORS;
+  return rows.map((r, i) => ({ t: r.t, n: r.name || r.t, c: L0_SECTORS[i % L0_SECTORS.length].c }));
+}
+function l0RotKey(tf) { return (tf || L0_TF) + "|" + l0RotSet().map((x) => x.t).join(","); }
+function l0RotScopeLbl(set) { return set === L0_SECTORS ? "sectors" : "names · " + (COH_ABBR[S.coh] || (S.coh === "FAV" ? "LIKED" : S.coh)); }
+function l0Ds() { return L0_CACHE[l0RotKey()] || null; }
+let L0_PAINTED_KEY = null;   // H2 — the rotation scope last mounted; updateBoard repaints when the scope's names change
 function l0RelWin() {
   const a = L0_REL_WIN[L0_TF] || L0_REL_WIN.D;
   return a[Math.min(Math.max(0, L0_REL_I), a.length - 1)];
@@ -7324,10 +7352,11 @@ function l0RelWin() {
    uncached with its error recorded, so the next click retries for real. */
 async function l0LoadData(tf) {
   tf = tf || L0_TF;
-  if (L0_CACHE[tf] || L0_LOADING[tf]) return;
-  L0_LOADING[tf] = true; L0_ERR[tf] = null;
+  const key = l0RotKey(tf);   /* H2 — keyed by timeframe + the scope's symbol set */
+  if (L0_CACHE[key] || L0_LOADING[key]) return;
+  L0_LOADING[key] = true; L0_ERR[key] = null;
   const def = L0_TF_DEF.find((d) => d.k === tf) || L0_TF_DEF[1];
-  const syms = L0_SECTORS.map((s) => s.t).concat([L0_BENCH]);
+  const syms = l0RotSet().map((s) => s.t).concat([L0_BENCH]);
   try {
     /* This panel issued one legacy read per sector symbol and was measured returning HTTP 500
        "canceling statement due to statement timeout", which is what puts 4H SERIES UNAVAILABLE on
@@ -7356,12 +7385,13 @@ async function l0LoadData(tf) {
       else thin.push(r.sym);
     }
     if (!out[L0_BENCH]) throw new Error("no " + L0_BENCH + " bars on tf=" + tf);
-    L0_CACHE[tf] = { closes: out, thin };
+    L0_CACHE[key] = { closes: out, thin };
   } catch (e) {
-    L0_ERR[tf] = String((e && e.message) || e);
+    L0_ERR[key] = String((e && e.message) || e);
   }
-  L0_LOADING[tf] = false;
-  if (LAYER0_TAB === "ROTATION" || LAYER0_TAB === "RELATIVE") paintL0Body();   // R49 §1 — MAP never waits on this pull (it has its own batched read)
+  L0_LOADING[key] = false;
+  /* repaint only if this is still the scope and timeframe on screen (a cohort click may have moved on meanwhile) */
+  if ((LAYER0_TAB === "ROTATION" || LAYER0_TAB === "RELATIVE") && key === l0RotKey()) paintL0Body();   // R49 §1 — MAP never waits on this pull (it has its own batched read)
 }
 /* ═══════════════════════════════════════════════════════════════════════════
    R49 §2 — THE MAP'S TIMEFRAME.  Alan: "the timeframes on the rotation — we should
@@ -7631,7 +7661,7 @@ function renderL0RRG() {
   ctx.fillText("LAGGING", loX + 5, hiY - 5);     ctx.fillText("IMPROVING", loX + 5, loY + 12);
   ctx.fillText("RS-RATIO →", cx + 6, hiY + 17);
   ctx.save(); ctx.translate(loX - 10, cy - 8); ctx.rotate(-Math.PI / 2); ctx.fillText("RS-MOM →", 0, 0); ctx.restore();
-  for (const s of L0_SECTORS) {                                      // tails + heads
+  for (const s of l0RotSet()) {                                      // tails + heads (H2 — the scope's set)
     const rr = l0RrgSeries(s.t); if (!rr) continue;
     const n = rr.ratio.length, pts = [];
     /* R45 — the tail ends on L0_RRG_AT while scrubbing/playing, on the newest bar
@@ -7666,7 +7696,7 @@ function renderL0Rel() {
   const from = Math.max(0, n - Math.min(l0RelWin()[1], n));
   const series = [];
   let lo = 0, hi = 0;
-  for (const s of L0_SECTORS) {
+  for (const s of l0RotSet()) {
     const closes = l0Aligned(s.t, ds); if (!closes) continue;
     const base = closes[from]; if (!base) continue;
     const pts = [];
@@ -8734,25 +8764,25 @@ function l0BodyHTML() {
      changed while a pull is in flight or after one failed. Nothing is synthesised. */
   if (!D) {
     const h = (LAYER0_TAB === "ROTATION")
-      ? "ROTATION · <b>RRG</b> · 11 sectors vs " + L0_BENCH + " · " + def.l
+      ? "ROTATION · <b>RRG</b> · " + l0RotSet().length + " " + l0RotScopeLbl(l0RotSet()) + " vs " + L0_BENCH + " · " + def.l
       : "RELATIVE · <b>% change</b> · rebased to 0% at the left edge · " + def.l;
-    const note = L0_ERR[L0_TF]
-      ? '<div class="sc-l0note is-err">db series unavailable on ' + esc(def.l) + " — " + esc(L0_ERR[L0_TF]) + "</div>"
+    const note = L0_ERR[l0RotKey()]
+      ? '<div class="sc-l0note is-err">db series unavailable on ' + esc(def.l) + " — " + esc(L0_ERR[l0RotKey()]) + "</div>"
       : '<div class="sc-l0note">loading ' + esc(def.l) + " closes from ohlcv_history…</div>";
     return head(h) + note;
   }
-  const kept = L0_SECTORS.filter((s) => D.closes[s.t]).length;
+  const rset = l0RotSet(), kept = rset.filter((s) => D.closes[s.t]).length, scopeLbl = l0RotScopeLbl(rset);
   const drop = (D.thin || []).filter((x) => x !== L0_BENCH);
   const dropNote = drop.length
     ? " · <b>" + drop.length + " dropped</b> (thin " + esc(def.l) + " history: " + esc(drop.join(" ")) + ")"
     : "";
   if (LAYER0_TAB === "ROTATION") {
-    return head("ROTATION · <b>RRG</b> · " + kept + " sectors vs " + L0_BENCH + " · " + esc(def.l) +
+    return head("ROTATION · <b>RRG</b> · " + kept + " " + esc(scopeLbl) + " vs " + L0_BENCH + " · " + esc(def.l) +
         " · " + L0_TAIL_PTS + "-bar tail" + dropNote) +
       '<div class="sc-l0cv"><canvas id="l0rrg"></canvas></div>';
   }
   const w = l0RelWin();
-  return head("RELATIVE · <b>% change</b> · " + kept + " sectors vs " + L0_BENCH + " · rebased to 0% at the left edge · " +
+  return head("RELATIVE · <b>% change</b> · " + kept + " " + esc(scopeLbl) + " vs " + L0_BENCH + " · rebased to 0% at the left edge · " +
       esc(def.l) + " · last " + w[1] + " bars (" + esc(w[0]) + ")" + dropNote) +
     '<div class="sc-l0cv"><canvas id="l0rel"></canvas></div>';
 }
@@ -8768,6 +8798,7 @@ function paintL0Body() {
 /* per-render wiring: heat sizing OR canvas draw + a resize observer that is always
    torn down first, so nothing accumulates across the many Layer-0 re-renders. */
 function mountL0Body() {
+  try { L0_PAINTED_KEY = l0RotKey(); } catch (_) {}
   l0FocusStop();      // R47 — MAP's cursor rAF + pointermove/leave/click die FIRST, every single render
   if (L0_RO) { try { L0_RO.disconnect(); } catch (e) {} L0_RO = null; }
   if (L0_WIN) { window.removeEventListener("resize", L0_WIN); L0_WIN = null; }
@@ -19076,7 +19107,8 @@ function restartFeed() {                       // = useEffect deps [st.coh, fav]
       if (wasFirst && (S.sec === "DASHBOARD" || S.sec === "COMPANY"))
         loadBoardRsi(shownRows().map((r) => r.t));
     },
-    (st)   => { S.state = st; sync(); });
+    (st)   => { S.state = st; sync(); },
+    45000, snap && BOARD_SNAPSHOT ? Math.max(0, 45000 - (Date.now() - BOARD_SNAPSHOT.at)) : 0);
   return seeded;
 }
 /* EQUALIZER LIVE-RELOAD — on a weights SAVE (event dispatched from the equalizer
@@ -19541,7 +19573,7 @@ document.addEventListener("click", (e) => {
         const on = b.dataset.tab === t;
         b.classList.toggle("is-on", on); b.setAttribute("aria-selected", String(on));
       });
-      if (t !== "MAP" && t !== "COHORT" && !L0_CACHE[L0_TF]) l0LoadData(L0_TF);   // R49 §1 — COHORT runs off board rows, like MAP — MAP runs off board rows + its own batched read, no per-sector ohlcv pull
+      if (t !== "MAP" && t !== "COHORT" && !l0Ds()) l0LoadData(L0_TF);   // R49 §1 — COHORT runs off board rows, like MAP — MAP runs off board rows + its own batched read, no per-sector ohlcv pull
       paintL0Body();
       break;
     }
@@ -19554,7 +19586,7 @@ document.addEventListener("click", (e) => {
       const k = a.dataset.tf;
       if (!k || k === L0_TF) break;
       L0_TF = k;
-      if (LAYER0_TAB !== "MAP" && !L0_CACHE[k]) l0LoadData(k);   // on MAP the pull is l0MapSync()'s job, not this one
+      if (LAYER0_TAB !== "MAP" && !l0Ds()) l0LoadData(k);   // on MAP the pull is l0MapSync()'s job, not this one
       paintL0Body();
       break;
     }
@@ -23439,6 +23471,10 @@ body.gwx-motion .gwx-pct{opacity:1}
   body.gwx-motion .ch{gap:5px !important}
   .gwx-pct{right:28px;width:56px;font-size:9.5px}
 }
+/* H2 — the one-click exit from a rewind, fixed so it is never scrolled away; exists only while rewound */
+.gwx-livefab{position:fixed;right:16px;bottom:16px;z-index:9000;padding:6px 12px;font-size:11px;letter-spacing:.12em;
+  background:var(--panel,#121218);box-shadow:0 0 0 1px var(--line,#2a2a33)}
+.gwx-livefab[hidden]{display:none}
 </style>
 <script>
 (function(){
@@ -23521,7 +23557,11 @@ body.gwx-motion .gwx-pct{opacity:1}
     var a=DATES[START_I], b=DATES[DATES.length-1];
     e.textContent = (a&&b) ? (a.slice(2)+" \u2192 "+b.slice(2)+"  ("+(DATES.length-START_I)+"d)") : "";
   }
+  /* H2 — every stamp write is null-safe: a room change removes the bar, and an unguarded write used to
+     throw inside the play loop and strand TIMER (so nothing could ever re-mount the bar or return to live). */
+  function setDt(txt){ var dt=E("gwxDt"); if(dt) dt.textContent=txt; }
   function liveChip(on){
+    var fab=E("gwxLiveFab"); if(fab) fab.hidden=!on;   /* H2 — the fixed exit mirrors the in-bar chip */
     var slot=E("gwxLiveSlot"); if(!slot)return;
     slot.innerHTML = on ? '<button class="sc-l0chip" data-act="gwxlive" id="gwxLive" '+
       'title="back to the newest bar">&#8635; LIVE</button>' : "";
@@ -23533,6 +23573,16 @@ body.gwx-motion .gwx-pct{opacity:1}
     var slot=E("gwxSlot");
     if(slot) slot.outerHTML=bar(); else host.insertAdjacentHTML("afterend", bar());
     E("gwxPlay").onclick=play;
+    /* H2 (Alan: leaving the player must be one click from anywhere, no scrolling). A fixed "↻ LIVE · Esc" pill exists
+       only while the board is rewound (liveChip toggles it with the in-bar chip), and Esc returns to live. mount() also
+       re-enters a rewound state it finds (a room round-trip while paused used to come back saying "live" with no chip). */
+    if(!E("gwxLiveFab")){
+      document.body.insertAdjacentHTML("beforeend",'<button class="sc-l0chip gwx-livefab" id="gwxLiveFab" hidden '+
+        'title="leave the rewind: back to the newest bar (Esc)">&#8635; LIVE &middot; Esc</button>');
+      E("gwxLiveFab").onclick=function(){ goLive(); };
+      document.addEventListener("keydown",function(e){ if(e.key==="Escape" && ASOF) goLive(); });
+    }
+    if(ASOF){ setDt(ASOF); liveChip(true); armIdle(); }
     var sp=E("gwxSpeed");
     if(sp) sp.onclick=function(){
       SPEED_I=(SPEED_I+1)%SPEEDS.length; this.textContent=SPEEDS[SPEED_I][0];
@@ -23556,7 +23606,7 @@ body.gwx-motion .gwx-pct{opacity:1}
     E("gwxSc").oninput=function(){
       stop(); var raw=+this.value/SUB, i=Math.floor(raw), f=raw-i;
       i=Math.max(0,Math.min(DATES.length-1,i));
-      E("gwxDt").textContent=DATES[i]||"";
+      setDt(DATES[i]||"");
       paintRange();
       clearTimeout(window.__gwxSeek);
       window.__gwxSeek=setTimeout(function(){ seek(DATES[i], DATES[i+1], f); }, 60);
@@ -23784,53 +23834,52 @@ body.gwx-motion .gwx-pct{opacity:1}
     /* MOTION MODE ON: the columns collapse, the bars take the width. Nothing is rebuilt -
        the hidden cells keep their live content, which is what makes LIVE a single class away. */
     motionOn(true);
-    E("gwxDt").textContent=d; liveChip(true); armIdle();
+    setDt(d); liveChip(true); armIdle();
     /* the neighbour must be warmed on EVERY seek, not only on a cache miss - the early
        return below used to skip it, so the blend had nothing to interpolate toward and
        each sub-step rendered the day flat. */
     if(NEXT_D && !CACHE[NEXT_D]) seekFetch(NEXT_D);
     if(CACHE[d]) return apply(CACHE[d]);
-    var ts=tickers(); if(!ts.length)return;
-    /* CHUNK 35 — the DB 500s on huge in.() lists. This page already learned that the hard
-       way in the alerts poller ("var CHUNK = 35; // DB 500s on huge in.() lists"); a FAV
-       cohort of 41 tickers sent in one go returns 500 and the cohort mean silently reads
-       +0.00 while every row is green. Same lesson, same number. */
-    var CH=35, parts=[];
-    for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
-    /* ★ BOTH LEGS FOR THE SAME DAY. Until momentum_daily existed the rewind moved trend
-       and left momentum showing today, so the composite being scrubbed was not a real
-       historical Geiger. Alan: "Geiger in motion without the momentum computation is
-       lying to me on hub." Now trend and momentum are both read at asof. */
-    var fanP = parts.map(function(p){
-      return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
-    var momP = parts.map(function(p){
-      return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500"); });
-    Promise.all([Promise.all(fanP), Promise.all(momP)]).then(function(res){
-      var m={}, mo={};
-      res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
-      m.__mom = mo;                                  // carried alongside, keyed off the map
-      CACHE[d]=m; if(ASOF===d) apply(m);
+    /* H2 — ONE read per table for the WHOLE universe of that day (~383 rows, 50-140 ms MEASURED), not the active
+       board's tickers in chunks of 35. The chunked read held only the board's names, so while rewound the
+       COHORT/SECTOR COMPARE columns off the board read "—", a cohort click blanked the board on a cached day, and a
+       replay on ALL fired 24 reads per day (≈137/s at 4×). The old CHUNK-35 lesson was about huge in.() lists;
+       this read has no in.() list at all. */
+    dayFetch(d).then(function(m){
+      if(ASOF===d) apply(m);
       if(dNext && !CACHE[dNext]) seekFetch(dNext);   /* warm the next day for the blend */
     });
   }
-  function seekFetch(d){            /* fetch a day into CACHE without displaying it */
-    var ts=tickers(); if(!ts.length||CACHE[d])return;
-    var CH=35, parts=[]; for(var i=0;i<ts.length;i+=CH) parts.push(ts.slice(i,i+CH));
-    Promise.all([
-      Promise.all(parts.map(function(p){return api("fan_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");})),
-      Promise.all(parts.map(function(p){return api("momentum_daily?select=ticker,read&asof=eq."+d+"&ticker=in.("+p.join(",")+")&limit=500");}))
+  var DAYQ={};                      /* H2 — in-flight guard: one fetch per day, however many seeks ask for it */
+  function dayFetch(d){
+    if(CACHE[d]) return Promise.resolve(CACHE[d]);
+    if(DAYQ[d]) return DAYQ[d];
+    DAYQ[d]=Promise.all([
+      api("fan_daily?select=ticker,read&asof=eq."+d+"&limit=1000"),
+      api("momentum_daily?select=ticker,read&asof=eq."+d+"&limit=1000")
     ]).then(function(res){
       var m={},mo={};
-      res[0].forEach(function(rows){(rows||[]).forEach(function(r){m[r.ticker]=r.read;});});
-      res[1].forEach(function(rows){(rows||[]).forEach(function(r){mo[r.ticker]=r.read;});});
-      m.__mom=mo; CACHE[d]=m;
+      (res[0]||[]).forEach(function(r){m[r.ticker]=r.read;});
+      (res[1]||[]).forEach(function(r){mo[r.ticker]=r.read;});
+      m.__mom=mo; CACHE[d]=m; delete DAYQ[d];
+      return m;
+    });
+    return DAYQ[d];
+  }
+  function seekFetch(d){            /* fetch a day into CACHE without displaying it */
+    if(CACHE[d])return;
+    dayFetch(d).then(function(){
       /* it landed after the frame that needed it - repaint so the ease is visible */
       if(NEXT_D===d && ASOF && CACHE[ASOF]) apply(CACHE[ASOF]);
     });
   }
   function apply(m){
-    if(LIVE_G===null){LIVE_G={};(S.rows||[]).forEach(function(r){LIVE_G[r.t]=r.g;});}
+    /* H2 — snapshot the WHOLE universe's live Geiger (the latest pull), not only this board's rows: a cohort click
+       while rewound used to come back from LIVE holding rewound values for every name the old board did not show */
+    if(LIVE_G===null){LIVE_G={};
+      var snapRows=(typeof BOARD_SNAPSHOT!=="undefined"&&BOARD_SNAPSHOT&&BOARD_SNAPSHOT.rows)||[];
+      snapRows.forEach(function(r){LIVE_G[r.t]=r.g;});
+      (S.rows||[]).forEach(function(r){LIVE_G[r.t]=r.g;});}
     var before={}; (S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
     /* A ticker with no fan history for this date must DROP OUT, not keep its live value.
        MEASURED on the ALL tab: 19 of 210 rows (the crypto/futures set plus a few thin
@@ -23869,19 +23918,24 @@ body.gwx-motion .gwx-pct{opacity:1}
     /* the normal board, exactly as it was: one class off, no rebuild, no refetch, and the
        cells underneath were never written to, so there is nothing to restore and nothing to flash */
     motionOn(false);
-    E("gwxDt").textContent="live"; liveChip(false);
+    setDt("live"); liveChip(false);
     var sc=E("gwxSc"); if(sc&&DATES.length)sc.value=(DATES.length-1)*SUB;   /* sub-step scale, not days */
     if(LIVE_G){var before={};(S.boardOrder||[]).forEach(function(t,i){before[t]=i;});
       /* EXACTLY. `!=null` skipped every ticker whose LIVE value was null, so a name with no
          live reading kept the rewound number after the replay ended - the board came back
          from a replay holding one borrowed value per absent row. A ticker that was in the
          snapshot is restored to what it held, null included. */
-      (S.rows||[]).forEach(function(r){
-        if(Object.prototype.hasOwnProperty.call(LIVE_G,r.t)) r.g=LIVE_G[r.t]; });
+      var back=function(r){ if(Object.prototype.hasOwnProperty.call(LIVE_G,r.t)) r.g=LIVE_G[r.t]; };
+      (S.rows||[]).forEach(back);
+      /* H2 — rows of a board left while rewound live on in the snapshot a later scope switch paints from */
+      ((typeof BOARD_SNAPSHOT!=="undefined"&&BOARD_SNAPSHOT&&BOARD_SNAPSHOT.rows)||[]).forEach(back);
+      /* H2 — forget this replay's snapshot: it was never reset, so a SECOND replay in the same session came back
+         to LIVE with the Geiger values captured at the first one (possibly hours old) until the next pull */
+      LIVE_G=null;
       /* the snap back to live is not a market move: clear the crossing baseline so nothing
          glows for a jump the reader made themselves */
       PREV={};
-      repaint(before);}
+      try{ repaint(before); }catch(_){} }
     try{ paintPct(); }catch(_){}   /* the span % clears with the replay that produced it */
   }
   /* FLIP. boardRowsHTML() replaces the entire row DOM, so the browser has nothing to
@@ -24150,6 +24204,9 @@ body.gwx-motion .gwx-pct{opacity:1}
     PLAY_V0=+sc.value; PLAY_T0=performance.now();
     var lastDay=Math.floor(PLAY_V0/SUB);
     TIMER=requestAnimationFrame(function step(now){
+      /* H2 — the bar was unmounted mid-play (a room change): end the replay cleanly instead of throwing */
+      if(!sc.isConnected){ TIMER=null; stop(); goLive(); return; }
+      try{
       var v=PLAY_V0 + ((now-PLAY_T0)/SPEEDS[SPEED_I][1])*SUB;
       /* ★ THE END IS LIVE. Stopping on the last replayed day left the board holding a past
          date until the 45s idle timer noticed. A replay that finishes hands the board back
@@ -24157,8 +24214,9 @@ body.gwx-motion .gwx-pct{opacity:1}
       if(v>=+sc.max){ sc.value=sc.max; stop(); goLive(); return; }
       sc.value=v;
       var d=Math.floor(v/SUB);
-      if(d!==lastDay){ lastDay=d; E("gwxDt").textContent=DATES[d]||""; seek(DATES[d]); }
+      if(d!==lastDay){ lastDay=d; setDt(DATES[d]||""); seek(DATES[d]); }
       TIMER=requestAnimationFrame(step);
+      }catch(e){ TIMER=null; stop(); goLive(); }   /* H2 — a throw can never strand TIMER again */
     });
   }
   /* TIMER now holds a requestAnimationFrame handle, not an interval id */
@@ -24180,7 +24238,7 @@ body.gwx-motion .gwx-pct{opacity:1}
   var SECT_KEY={XLB:"MATERIALS",XLE:"ENERGY",XLF:"FINANCIALS",XLI:"INDUSTRIAL",XLK:"TECH",
                 XLP:"STAPLES",XLRE:"REAL_ESTATE",XLU:"UTILITIES",XLV:"HEALTH",
                 XLY:"DISCRET",XLC:"COMMS"};
-  var CMP_MODE="COHORTS";
+  var CMP_MODE="COHORTS"; window.SC_CMP_MODE=CMP_MODE;
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
     var _rows=cohortCompareRows;
@@ -24257,7 +24315,7 @@ body.gwx-motion .gwx-pct{opacity:1}
     document.addEventListener("click",function(ev){
       var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
       ev.stopPropagation();
-      CMP_MODE=b.getAttribute("data-gwxcmp");
+      CMP_MODE=b.getAttribute("data-gwxcmp"); window.SC_CMP_MODE=CMP_MODE;
       var cc=E("cohCompare");
       if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
     }, true);
@@ -24272,7 +24330,7 @@ body.gwx-motion .gwx-pct{opacity:1}
     hd.appendChild(w);
     [].forEach.call(w.querySelectorAll("[data-gwxcmp]"),function(b){
       b.onclick=function(ev){ ev.stopPropagation();
-        CMP_MODE=b.getAttribute("data-gwxcmp");
+        CMP_MODE=b.getAttribute("data-gwxcmp"); window.SC_CMP_MODE=CMP_MODE;
         var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
           cc.innerHTML=cohortCompareStripHTML(); cmpToggle();
         }
