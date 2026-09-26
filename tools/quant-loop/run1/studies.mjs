@@ -204,16 +204,23 @@ export function pairSpan(rsi, wr, { K = 50, threshold = 0.9 } = {}) {
     wr_os_base: base, wr_os_given_rsi_os: cond, lift: cond != null && base ? cond / base : null };
 }
 
-/** Per name: RSI(14) and %R(14) on the same bars, whole history and each half. bars = [{h,l,c,date}] */
-export function s2Name(bars, opts = {}) {
+/** Per name: RSI(14) and %R(14) on the same bars, whole history and each half. bars = [{h,l,c,date}]
+    `skipDates`: bars flagged as bad high/low prints; a day whose 14-bar %R window touches one is left out. */
+export function s2Name(bars, opts = {}, skipDates = new Set()) {
   const c = bars.map((b) => +b.c), h = bars.map((b) => +b.h), l = bars.map((b) => +b.l);
   const r = rsiWilder(c, 14);
   const w = williamsR(h, l, c, 14);
   const rs = [], ws = [], ds = [];
-  for (let i = 0; i < c.length; i++) if (r[i] != null && w[i] != null) { rs.push(r[i]); ws.push(w[i]); ds.push(bars[i].date); }
+  let lastBad = -Infinity, skipped = 0;
+  for (let i = 0; i < c.length; i++) {
+    if (skipDates.has(bars[i].date)) lastBad = i;
+    if (r[i] == null || w[i] == null) continue;
+    if (i - lastBad < 14) { skipped++; continue; }
+    rs.push(r[i]); ws.push(w[i]); ds.push(bars[i].date);
+  }
   const half = Math.floor(rs.length / 2);
   return {
-    first: ds[0], last: ds[ds.length - 1], zero_range_days: w.zeroRange,
+    first: ds[0], last: ds[ds.length - 1], zero_range_days: w.zeroRange, skipped_near_bad_prints: skipped,
     rsi_at_100_days: r.filter((v) => v === 100).length,
     all: { first: ds[0], last: ds.at(-1), ...pairSpan(rs, ws, opts) },
     early: { first: ds[0], last: ds[half - 1], ...pairSpan(rs.slice(0, half), ws.slice(0, half), opts) },
@@ -233,4 +240,11 @@ export function prefixStable(fn, n, cuts) {
     }
   }
   return { ok: true, cuts: cuts.length };
+}
+
+/** Bars whose high or low cannot be right: a range over 40% of the close, a high 1.5x above the open/close,
+    or a low 1.5x below them (e.g. IWM 2004-07-30: high 5,486.5 on a close of 55). Flagged, never edited. */
+export function badHighLow(bars) {
+  return bars.filter((b) => (b.h - b.l) / b.c > 0.4 || b.h > 1.5 * Math.max(b.o, b.c) || b.l < Math.min(b.o, b.c) / 1.5)
+    .map((b) => b.date);
 }

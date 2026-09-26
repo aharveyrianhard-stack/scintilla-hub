@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { williamsR, ranks, pearson, spearman, acf, effectiveN, fisherInterval, blockResample, rng, binomialTolerance,
-  shareAtOrBelow, percentileLineCoverage, indexVsMembers, pairSpan, prefixStable } from "../tools/quant-loop/run1/studies.mjs";
+  shareAtOrBelow, percentileLineCoverage, indexVsMembers, pairSpan, prefixStable, s2Name, badHighLow } from "../tools/quant-loop/run1/studies.mjs";
 
 const close = (v, p = 6) => Math.round(v * 10 ** p) / 10 ** p;
 
@@ -96,4 +96,20 @@ test("G0 for the readings: the check catches a reading that redraws the past", (
   assert.equal(prefixStable(series, 50, [10, 30]).ok, true);
   const repaint = (m) => Array.from({ length: m }, (_, i) => i / m);    // divides by the whole length: redraws
   assert.equal(prefixStable(repaint, 50, [10, 30]).ok, false);
+});
+
+test("S2 leaves out every day whose 14-bar %R window touches a flagged bar", () => {
+  const bars = Array.from({ length: 60 }, (_, i) => ({ date: "d" + i, h: 11 + Math.sin(i), l: 9 - Math.cos(i), c: 10 + Math.sin(i / 2) }));
+  const base = s2Name(bars, { K: 2 });
+  const cut = s2Name(bars, { K: 2 }, new Set(["d30"]));
+  assert.equal(cut.skipped_near_bad_prints, 14);                        // d30 .. d43
+  assert.equal(cut.all.n, base.all.n - 14);
+});
+
+test("bad high/low prints: the IWM 2004-07-30 bar is flagged, an ordinary wide day is not", () => {
+  assert.deepEqual(badHighLow([
+    { date: "2004-07-30", o: 54.6, h: 5486.5, l: 54.5, c: 55 },         // served by the chart API
+    { date: "2008-10-10", o: 85, h: 90, l: 78, c: 89 },                  // a real 14% range
+    { date: "x", o: 111.78, h: 112.06, l: 11.7, c: 111.79 },             // SPY 2004-03-16's low
+  ]), ["2004-07-30", "x"]);
 });

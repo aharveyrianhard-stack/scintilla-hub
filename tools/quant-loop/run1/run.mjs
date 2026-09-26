@@ -3,7 +3,7 @@
 //   node tools/quant-loop/run1/run.mjs <cache-dir> <out.json>
 import fs from "node:fs"; import path from "node:path"; import crypto from "node:crypto";
 import { rsiWilder, historyCheck, BREAK_DAYS, quantile } from "../../../research/statistics/stats.mjs";
-import { indexVsMembers, percentileLineCoverage, shareAtOrBelow, s2Name, williamsR, prefixStable } from "./studies.mjs";
+import { indexVsMembers, percentileLineCoverage, shareAtOrBelow, s2Name, williamsR, prefixStable, badHighLow } from "./studies.mjs";
 import { TARGETS, FUNDS } from "../fetch-bars.mjs";
 
 const SEED = 20260925, B = 2000, BLOCK = 20, K = 50, THRESHOLD = 0.9;
@@ -63,7 +63,12 @@ for (const n of names) {
 // ---------------------------------------------------------------- S2
 const s2 = { claim: "#24 (card I-2): Counting correlated indicators as independent inflates confidence.",
   threshold: THRESHOLD, threshold_status: "placeholder from the checkup, not ratified", K, names: {} };
-for (const n of names) s2.names[n.sym] = s2Name(n.bars, { K, threshold: THRESHOLD });
+s2.excluding_bad_prints = {};
+for (const n of names) {
+  s2.names[n.sym] = s2Name(n.bars, { K, threshold: THRESHOLD });
+  const bad = badHighLow(n.bars);
+  if (bad.length) s2.excluding_bad_prints[n.sym] = { flagged: bad, ...s2Name(n.bars, { K, threshold: THRESHOLD }, new Set(bad)) };
+}
 
 // ---------------------------------------------------------------- G0 for the readings: no repaint
 const spy = by.SPY.bars;
@@ -85,7 +90,7 @@ const result = {
   params: { seed: SEED, bootstrap_B: B, block: BLOCK, K, threshold: THRESHOLD, percentile_window: 252 },
   bars: Object.fromEntries(names.map((n) => [n.sym, { provider: n.provider, price_basis: n.price_basis, served: n.served,
     kept: n.bars.length, dropped_before_listing_break: n.dropped, first: n.bars[0].date, last: n.bars.at(-1).date,
-    finality_verified: n.finality_verified, wild_moves_beyond_50pct: n.wild_moves_in_segment, response_sha256: n.response_sha256 }])),
+    finality_verified: n.finality_verified, wild_moves_beyond_50pct: n.wild_moves_in_segment, bad_high_low: badHighLow(n.bars), response_sha256: n.response_sha256 }])),
   g0, s1, s2,
 };
 fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -94,4 +99,5 @@ const pc = (x) => (x * 100).toFixed(2) + "%";
 for (const f of FUNDS) { const a = s1.a_primary[f]; console.log(`S1a ${f} n=${a.n_dates} ${a.first}..${a.last} idx ${pc(a.index_share)} med ${pc(a.member_median_share)} diff ${pc(a.diff)} CI [${pc(a.ci[0])}, ${pc(a.ci[1])}] ${a.verdict.split(" —")[0]} | sens n=${s1.a_sensitivity[f].n_dates} diff ${pc(s1.a_sensitivity[f].diff)} CI [${pc(s1.a_sensitivity[f].ci[0])}, ${pc(s1.a_sensitivity[f].ci[1])}]`); }
 for (const [k, v] of Object.entries(s1.b)) console.log(`S1b ${k} n=${v.n} fired ${v.fired} ${pc(v.share)} band [${pc(v.band[0])}, ${pc(v.band[1])}] ${v.verdict.split(" —")[0]}`);
 for (const [k, v] of Object.entries(s2.names)) console.log(`S2 ${k} rho ${v.all.rho.toFixed(3)} CI [${v.all.ci[0].toFixed(3)}, ${v.all.ci[1].toFixed(3)}] neff ${v.all.n_eff.toFixed(0)}/${v.all.n} ${v.all.stamp} | early ${v.early.rho.toFixed(3)} ${v.early.stamp} late ${v.late.rho.toFixed(3)} ${v.late.stamp} agree ${pc(v.all.agreement)} lift ${v.all.lift?.toFixed(2)}`);
+for (const [k, v] of Object.entries(s2.excluding_bad_prints)) console.log(`S2 excl ${k} flagged ${v.flagged.length} skipped ${v.skipped_near_bad_prints} rho ${v.all.rho.toFixed(3)} CI [${v.all.ci.map((x) => x.toFixed(3)).join(", ")}] early ${v.early.rho.toFixed(3)} ${v.early.stamp}`);
 console.log("G0", JSON.stringify({ rsi: g0.rsi.ok, wr: g0.williams_r.ok, line: g0.percentile_line.ok }));
