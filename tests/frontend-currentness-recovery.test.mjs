@@ -152,14 +152,36 @@ test('a stale or rejected Geiger read revokes rank readiness even with unchanged
 test('board cache restores layout without repainting remembered market data', () => {
   /* H-FRONT — seedBoardFromCache filters every list scope through the one list-scope helper */
   const c = context(['seedBoardFromCache', 'isListCoh', 'listMembers'], { S:{}, LIST_COHS:{ FAV:null, FAVORITES:'favorites', RADAR:'radar' },
-    LISTS:{ favorites:[], radar:[] }, cacheGet:() => ({
-    rows:[{ t:'AAPL', name:'Apple', price:271, c:7.31, g:0.8, rsi:61, fam:{ trend:0.9 } }], order:['AAPL']
+    LISTS:{ favorites:[], radar:[] }, SEED_MAX_AGE_MS:10 * 60000, cacheGet:() => ({ ts:Date.now() - 60000,
+    rows:[{ t:'AAPL', name:'Apple', price:271, c:7.31, g:0.8, rsi:61, fam:{ trend:0.9 },
+      fpe:31.2, rv:1.7, rvAsOf:'2026-09-24', nf:true, pc:156.7, hb:{ usual_day_60:2 }, mc:4e12, mcAsOf:'2026-09-24' }], order:['AAPL']
   }) });
   assert.equal(c.seedBoardFromCache('ALL', []), true);
   const row = c.S.rows[0];
   assert.equal(row.name, 'Apple');
-  for (const key of ['price', 'c', 'g', 'rsi', 'fam']) assert.equal(row[key], null);
+  /* H2 — a whitelist: every live or derived field is blank on the first frame, reference values keep their own dates */
+  for (const key of ['price', 'c', 'g', 'rsi', 'fam', 'fpe', 'rv', 'pc', 'hb']) assert.equal(row[key], null, key);
+  assert.equal(row.nf, false);
+  assert.equal(row.state, 'CONNECTING');
+  assert.equal(row.mc, 4e12);
+  assert.equal(typeof c.S.boardSeedAt, 'number');
   assert.deepEqual(Array.from(c.S.boardOrder), ['AAPL']);
+});
+
+test('H2: a board envelope older than the seed age cap is never painted', () => {
+  const c = context(['seedBoardFromCache', 'isListCoh', 'listMembers'], { S:{}, LIST_COHS:{ FAV:null }, LISTS:{},
+    SEED_MAX_AGE_MS:10 * 60000, cacheGet:() => ({ ts:Date.now() - 11 * 60000, rows:[{ t:'AAPL', fpe:31.2 }], order:['AAPL'] }) });
+  assert.equal(c.seedBoardFromCache('ALL', []), false);
+  assert.equal(c.S.rows, undefined);
+});
+
+test('H2: the 45 s merge keeps a resolved USUAL DAY instead of blanking it', () => {
+  const c = context(['mergeBoardRows'], { S:{ rows:[{ t:'AMD', hb:{ usual_day_60:4.3 }, rsi:61 }], sort:{ key:'t' } },
+    computeBoardOrder:() => ['AMD'] });
+  c.mergeBoardRows([{ t:'AMD', hb:null, rsi:null, price:1 }], false);
+  assert.equal(c.S.rows[0].hb.usual_day_60, 4.3);
+  assert.equal(c.S.rows[0].rsi, 61);
+  assert.equal(c.S.rows[0].price, 1);
 });
 
 test('a valid provider tick clears no-feed state and keeps observation age separate from request time', async () => {
