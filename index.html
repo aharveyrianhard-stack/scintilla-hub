@@ -4228,6 +4228,11 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 .sc-cofr__tf.on{color:#C9C9CE;border-color:#6E6E76}
 .sc-cofr__src{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:#6E6E76;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .sc-cofr__frame{flex:1 1 auto;display:block;width:100%;min-height:0;border:0;background:transparent}
+/* H2 — a Station without ?bare=hub draws its own 29 px toolbar (clipped at every Hub width): tuck it under the Hub's row */
+.sc-cofr.is-legacy .sc-cofr__bar{position:relative;z-index:1;background:var(--bg)}
+.sc-cofr.is-legacy .sc-cofr__frame{margin-top:-29px}
+.sc-cofr__asof{color:#8A8A92}
+@media (max-width:640px){ .sc-cofr__bar{flex-wrap:wrap} .sc-cofr__src{flex-basis:100%;margin-left:0;padding-top:4px} }
 .sc-cofl{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;padding:7px 0 7px;font-family:var(--mono);font-size:12px;color:#C9C9CE;flex:0 0 auto;font-variant-numeric:tabular-nums}
 .sc-cofl__t{font-weight:600;letter-spacing:.06em}
 .sc-cofl__c{white-space:nowrap}
@@ -5334,27 +5339,86 @@ const STATION_CHART_URL = "https://station.scintillahub.ai/chart/";
 const STATION_FUND_URL = "https://station.scintillahub.ai/station-shells/fundamentals-v1/";
 const CO_RANGES = ["1h", "4h", "1D", "3D", "1W"];
 const CO_RANGE_KEY = "hub.chart.range", CO_EXP_KEY = "hub.company.expanded";
-/* The Station's RSI fan (P2) is one more parameter on the same pane (&rsi=1). OFF until that ships: flip this. */
-const CO_CHART_RSI = false;
+/* H2 — the Station's RSI fan has shipped: the pane draws it under the price. "auto" = the fan's own rule (hidden when the
+   pane is 390 px wide or less, where the fan's 26% band would crush the price). */
+const CO_CHART_RSI = "auto";
 /* the embedded tabs need no company payload, and must not be re-rendered (= reloaded) when that payload lands */
 const CO_FRAME_TABS = new Set(["CHART", "FUNDAMENTALS"]);
 function coRange(stored) {
   return CO_RANGES.indexOf(stored) >= 0 ? stored : "1D";
 }
+/* H2 — ?bare=hub is the Station's pane mode FOR THE HUB (S1, 25 Sep): no range ladder or ticker strip of its own, its own
+   quote heartbeat, and no wait for a load permit the Hub can never grant (that wait was 5.5 s before the price and another
+   5.5 s before the clouds — MEASURED 5.76 s / 11.47 s after the click). A Station without S1 ignores the parameter and draws
+   exactly what it does today; while that is the case the Hub tucks the pane's own (clipped) toolbar under its timeframe row
+   (coPaneModeProbe below). Never ?bare=1: that means "inside the deck" and blanks the price badge in the Hub. */
 function coChartSrc(t, range, rsi) {
-  return STATION_CHART_URL + "?t=" + encodeURIComponent(String(t || "").toUpperCase()) +
-    "&range=" + encodeURIComponent(coRange(range)) + "&clouds=1" + (rsi ? "&rsi=1" : "");
+  return STATION_CHART_URL + "?bare=hub&t=" + encodeURIComponent(String(t || "").toUpperCase()) +
+    "&range=" + encodeURIComponent(coRange(range)) + "&clouds=1" + (rsi ? "&rsi=" + (rsi === true ? "1" : encodeURIComponent(rsi)) : "");
+}
+/* H2 — does the deployed Station chart know ?bare=hub? One read of the page (it answers CORS *), once per session.
+   Until it answers yes, .sc-cofr carries is-legacy and the pane's own 29 px toolbar sits under the Hub's row. */
+let CO_HUB_PANE = (function () { try { return sessionStorage.getItem("hub.station.hubpane") === "1"; } catch (_) { return false; } })();
+let CO_HUB_PANE_ASKED = false;
+function coPaneModeProbe() {
+  if (CO_HUB_PANE || CO_HUB_PANE_ASKED) return;
+  CO_HUB_PANE_ASKED = true;
+  fetch(STATION_CHART_URL, { cache: "no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined })
+    .then((r) => (r.ok ? r.text() : ""))
+    .then((html) => {
+      if (!/HUB_PANE\s*=\s*BARE_PARAM\s*===\s*"hub"/.test(html)) return;
+      CO_HUB_PANE = true;
+      try { sessionStorage.setItem("hub.station.hubpane", "1"); } catch (_) {}
+      document.querySelectorAll(".sc-cofr.is-legacy").forEach((x) => x.classList.remove("is-legacy"));
+    }).catch(() => {});
+}
+/* H2 — "last bar HH:MM ET · N min ago": the newest bar the chart API holds for this name and timeframe (the same Massive
+   bars the pane draws), so a stale chart is obvious from the Hub's own row. Daily and weekly bars print their date. */
+const CO_STAMP_TF = { "1h": "60", "4h": "240", "1D": "D", "3D": "D", "1W": "D" };
+const CO_TF_MS = { "60": 3600e3, "240": 4 * 3600e3 };
+/* ms = the bar's start (what the chart's axis labels); endMs = when it closed (the API's period end; a daily bar closes 16:00 ET).
+   The age counts from the close, so a finished session reads its real age, not the age of its 00:00 start. */
+function scBarStamp(ms, tf, now, endMs) {
+  if (!isFinite(ms)) return "last bar —";
+  const d = new Date(ms), n = now == null ? Date.now() : now;
+  const end = isFinite(endMs) ? endMs : ms + (CO_TF_MS[tf] || 0);
+  const when = (tf === "D")
+    ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })
+    : d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/New_York" }) + " ET";
+  const min = Math.max(0, Math.round((n - end) / 60000));
+  const ago = min < 90 ? min + " min ago" : min < 48 * 60 ? Math.round(min / 60) + " h ago" : Math.round(min / 1440) + " d ago";
+  return "last bar " + when + " · " + ago;
+}
+const CO_STAMP_AT = {};   // "T|tf" → { ms, at } — one read a minute at most
+/* the "N min ago" keeps counting while the tab is open (and a new bar is picked up within the minute) */
+setInterval(() => { try { const x = el("coChartAsOf"); if (x && LEFT_T) coChartStamp(LEFT_T, coRange(lsGet(CO_RANGE_KEY))); } catch (_) {} }, 60000);
+function coChartStamp(t, range) {
+  const tf = CO_STAMP_TF[coRange(range)] || "D", k = t + "|" + tf, slot = el("coChartAsOf");
+  const paint = (ms, endMs) => { const x = el("coChartAsOf"); if (x && x.dataset.k === k) { x.textContent = scBarStamp(ms, tf, null, endMs); x.title = "newest " + tf + " bar the chart API holds for " + t + " (Massive, completed bars); the pane's price badge ticks live on top of it"; } };
+  if (slot) slot.dataset.k = k;
+  const c = CO_STAMP_AT[k];
+  if (c) paint(c.ms, c.end);
+  if (c && Date.now() - c.at < 60000) return;
+  fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(t) + "&tf=" + tf + "&authority=provider&limit=1")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { const b = j && Array.isArray(j.series) && j.series[j.series.length - 1]; const ms = b ? +b.t : NaN;
+      const fin = j && j.bar_finality, end = fin && +fin.newest_t === ms ? Date.parse(fin.newest_period_end_utc) : NaN;
+      CO_STAMP_AT[k] = { ms, end, at: Date.now() }; paint(ms, end); })
+    .catch(() => {});
 }
 function coFundSrc(t) {
   return STATION_FUND_URL + "?t=" + encodeURIComponent(String(t || "").toUpperCase());
 }
 function coChartTabHTML(t) {
   const r = coRange(lsGet(CO_RANGE_KEY));
-  return '<div class="sc-cofr">' +
+  coPaneModeProbe();
+  setTimeout(() => coChartStamp(t, r), 0);   /* after the markup is in the DOM */
+  return '<div class="sc-cofr' + (CO_HUB_PANE ? "" : " is-legacy") + '">' +
     '<div class="sc-cofr__bar" role="group" aria-label="chart timeframe">' +
       CO_RANGES.map((x) => '<button type="button" class="sc-cofr__tf' + (x === r ? " on" : "") + '" aria-pressed="' + (x === r) +
         '" data-act="corange" data-r="' + x + '">' + x + "</button>").join("") +
-      '<span class="sc-cofr__src" title="the Station chart pane, embedded: the same bars and clouds the Station draws">station chart · ' + esc(t) + "</span>" +
+      '<span class="sc-cofr__src" title="the Station chart pane, embedded: the same Massive bars, clouds and RSI fan the Station draws">' +
+        '<span class="sc-cofr__asof" id="coChartAsOf">last bar …</span> · Massive</span>' +
     "</div>" +
     '<iframe class="sc-cofr__frame" id="coChartFrame" title="' + esc(t) + ' chart (Station chart pane)" src="' +
       esc(coChartSrc(t, r, CO_CHART_RSI)) + '" referrerpolicy="no-referrer"></iframe>' +
@@ -7279,7 +7343,9 @@ const L0_RRG_WIN = 14, L0_TAIL_STEP = 1, L0_TAIL_PTS = 8;
    coverage 2026-07-30: tf 60 → 1.6k bars/sym back to 2025-07 (newest 09:30 ET
    today) · 240 → 1.4k back to 2024-04 · D → 4.5k back to 2006 · W → 950 back to 2006. */
 const L0_TF_DEF = [
-  { k:"60",  l:"60M", bars:460 },
+  { k:"60",  l:"60M", bars:400 },   /* H2 — ≤ 400: MEASURED 26 Sep 03:10Z, the chart API serves a request above ~400 bars from
+                                       its FULL store, whose newest 1h bar was 22 Sep 16:00Z (3 days old); ≤ 400 comes from the
+                                       current TAIL store (newest 25 Sep 23:00Z). The "last bar" stamp exposed it. */
   { k:"240", l:"4H",  bars:320 },
   { k:"D",   l:"1D",  bars:320 },
   { k:"W",   l:"1W",  bars:220 },
@@ -7287,7 +7353,7 @@ const L0_TF_DEF = [
 /* RELATIVE window options per timeframe — [label, bar count]. Every count is ≤ that
    tf's `bars` above, so the window can never ask for bars that were never fetched. */
 const L0_REL_WIN = {
-  "60":  [["1W", 35], ["1M", 140], ["3M", 420]],
+  "60":  [["1W", 35], ["1M", 140], ["3M", 400]],
   "240": [["1M", 44], ["3M", 130], ["6M", 260]],
   "D":   [["1M", 21], ["3M", 63],  ["6M", 126]],
   "W":   [["6M", 26], ["1Y", 52],  ["3Y", 156]],
@@ -7335,6 +7401,18 @@ function l0RotSet() {
 function l0RotKey(tf) { return (tf || L0_TF) + "|" + l0RotSet().map((x) => x.t).join(","); }
 function l0RotScopeLbl(set) { return set === L0_SECTORS ? "sectors" : "names · " + (COH_ABBR[S.coh] || (S.coh === "FAV" ? "LIKED" : S.coh)); }
 function l0Ds() { return L0_CACHE[l0RotKey()] || null; }
+/* H2 — the right panel's charts say how old their newest bar is ("last bar HH:MM ET · N min ago"), in the house mono label.
+   tsSec = the newest bar's start in unix seconds (ohlcv / chart API), tf = ohlcv_history.tf. */
+function l0BarStampHTML(tsSec, tf) {
+  if (!(tsSec > 0) || typeof scBarStamp !== "function") return "";
+  const ms = tsSec * 1000, intraday = tf === "60" || tf === "240";
+  const end = intraday ? undefined : ms + (tf === "W" ? 4 * 86400e3 : 0) + 16 * 3600e3;   // a daily bar closes 16:00 ET
+  return ' · <span class="sc-l0asof sc-l0bar-asof">' + esc(scBarStamp(ms, intraday ? tf : "D", null, end)) + "</span>";
+}
+function l0DsStamp(D) {
+  const b = D && D.closes && D.closes[L0_BENCH];
+  return b && b.times && b.times.length ? l0BarStampHTML(b.times[b.times.length - 1], L0_TF) : "";
+}
 let L0_PAINTED_KEY = null;   // H2 — the rotation scope last mounted; updateBoard repaints when the scope's names change
 function l0RelWin() {
   const a = L0_REL_WIN[L0_TF] || L0_REL_WIN.D;
@@ -7526,7 +7604,8 @@ async function l0MapLoad(tf, tickers, key) {
         (series[t] = series[t] || new Map()).set(ts, cl);
       }
     }
-    const pct = {}; let hit = 0;
+    const pct = {}; let hit = 0, newest = 0;
+    for (const t in series) for (const ts of series[t].keys()) if (ts > newest) newest = ts;   // H2 — for the "last bar" stamp
     for (const t in series) {
       const a = Array.from(series[t].entries()).sort((x, y) => y[0] - x[0]);   // newest first
       if (a.length < back + 1) continue;                                        // too few bars → session %chg stands
@@ -7535,7 +7614,7 @@ async function l0MapLoad(tf, tickers, key) {
       pct[t] = (last / base - 1) * 100;
       hit++;
     }
-    L0_MAP_CACHE[key] = { pct: pct, hit: hit, n: tickers.length, tf: tf, at: Date.now() };
+    L0_MAP_CACHE[key] = { pct: pct, hit: hit, n: tickers.length, tf: tf, at: Date.now(), newest: newest };
   } catch (e) {
     /* honest AND terminating: the failure is CACHED as an empty result, so the header
        says "session %chg (4H series unavailable)" and the next repaint reads the
@@ -7567,9 +7646,9 @@ function l0MapBasis(n) {
       (err ? " (" + esc(def.l) + " series unavailable)" : " (" + esc(def.l) + " series loading…)");
   }
   const win = esc(def.l) + " %chg · " + (L0_MAP_BACK[L0_TF] || 1) + " bars " + (L0_MAP_SPAN[L0_TF] || "");
-  return (m.hit >= n)
+  return ((m.hit >= n)
     ? "color = " + win
-    : "color = " + win + " on " + m.hit + "/" + n + " · session %chg on the rest";
+    : "color = " + win + " on " + m.hit + "/" + n + " · session %chg on the rest") + l0BarStampHTML(m.newest, m.tf);
 }
 /* align a symbol onto the benchmark's timeline (forward-fill), exactly as the app does */
 function l0Aligned(t, ds) {
@@ -8778,12 +8857,12 @@ function l0BodyHTML() {
     : "";
   if (LAYER0_TAB === "ROTATION") {
     return head("ROTATION · <b>RRG</b> · " + kept + " " + esc(scopeLbl) + " vs " + L0_BENCH + " · " + esc(def.l) +
-        " · " + L0_TAIL_PTS + "-bar tail" + dropNote) +
+        " · " + L0_TAIL_PTS + "-bar tail" + dropNote + l0DsStamp(D)) +
       '<div class="sc-l0cv"><canvas id="l0rrg"></canvas></div>';
   }
   const w = l0RelWin();
   return head("RELATIVE · <b>% change</b> · " + kept + " " + esc(scopeLbl) + " vs " + L0_BENCH + " · rebased to 0% at the left edge · " +
-      esc(def.l) + " · last " + w[1] + " bars (" + esc(w[0]) + ")" + dropNote) +
+      esc(def.l) + " · last " + w[1] + " bars (" + esc(w[0]) + ")" + dropNote + l0DsStamp(D)) +
     '<div class="sc-l0cv"><canvas id="l0rel"></canvas></div>';
 }
 /* repaint the Layer-0 surface (tab switch / tf switch / window switch / data arrival).
@@ -19632,6 +19711,7 @@ document.addEventListener("click", (e) => {
       lsSet(CO_RANGE_KEY, r);
       document.querySelectorAll(".sc-cofr__tf").forEach((b) => { const on = b.dataset.r === r; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
       const f = el("coChartFrame"); if (f && LEFT_T) f.src = coChartSrc(LEFT_T, r, CO_CHART_RSI);
+      if (LEFT_T) coChartStamp(LEFT_T, r);   // H2 — the stamp follows the timeframe
       break;
     }
     case "coexpand": {  // H-FRONT — EXPAND / COLLAPSE

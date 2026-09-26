@@ -65,3 +65,18 @@ test('the rewind can always be left: null-safe stamp, guarded play loop, Esc, a 
   assert.doesNotMatch(page, /fan_daily\?select=ticker,read&asof=eq\."\+d\+"&ticker=in\./);
   assert.match(page, /LIVE_G=null;/, 'a second replay never restores the first replay\'s snapshot');
 });
+
+test('a chart says how old its newest bar is, counted from when that bar closed', () => {
+  const c = vm.createContext({});
+  vm.runInContext(page.match(/^const CO_TF_MS = [^\n]*/m)[0] + '\n' + fn('scBarStamp'), c);
+  const hourStart = Date.parse('2026-09-25T23:00:00Z');                     // 19:00 ET bar, closed 20:00 ET
+  assert.equal(c.scBarStamp(hourStart, '60', Date.parse('2026-09-26T00:25:00Z')), 'last bar 19:00 ET · 25 min ago');
+  const dayStart = Date.parse('2026-09-25T04:00:00Z'), close = Date.parse('2026-09-25T20:00:00Z');
+  assert.equal(c.scBarStamp(dayStart, 'D', Date.parse('2026-09-26T03:00:00Z'), close), 'last bar Sep 25 · 7 h ago');
+  assert.equal(c.scBarStamp(NaN, '60'), 'last bar —');
+});
+
+test('the 60M rotation read stays within the chart API\'s current store (≤ 400 bars)', () => {
+  assert.match(page, /\{ k:"60",  l:"60M", bars:400 \}/);
+  assert.match(page, /"60":  \[\["1W", 35\], \["1M", 140\], \["3M", 400\]\]/);
+});

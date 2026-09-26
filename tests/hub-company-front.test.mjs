@@ -40,21 +40,26 @@ test("a company opened from the board lands on CHART; GEIGER stays a tab but is 
 
 function chartKit(stored) {
   const store = { "hub.chart.range": stored };
-  return new Function("esc", "lsGet", FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + fn("coChartTabHTML") +
-    "\nreturn { coRange, coChartSrc, coChartTabHTML };")(esc, (k) => (k in store ? store[k] : null));
+  /* H2 — the tab also asks (once) whether the Station knows ?bare=hub and schedules its "last bar" stamp: stubbed here */
+  return new Function("esc", "lsGet", "coPaneModeProbe", "coChartStamp", "CO_HUB_PANE", "setTimeout", FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + fn("coChartTabHTML") +
+    "\nreturn { coRange, coChartSrc, coChartTabHTML };")(esc, (k) => (k in store ? store[k] : null), () => {}, () => {}, false, () => {});
 }
 test("the CHART tab is the Station chart pane, with the timeframe row 1h 4h 1D 3D 1W and the remembered range", () => {
   const k = chartKit("4h");
   const html = k.coChartTabHTML("MU");
   assert.deepEqual([...html.matchAll(/data-r="([^"]+)"/g)].map((m) => m[1]), ["1h", "4h", "1D", "3D", "1W"]);
   assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="4h"/, "the remembered range is lit");
-  assert.match(html, /<iframe class="sc-cofr__frame" id="coChartFrame"[^>]*src="https:\/\/station\.scintillahub\.ai\/chart\/\?t=MU&amp;range=4h&amp;clouds=1"/);
+  /* H2 — pane mode for the Hub (?bare=hub) and the RSI fan by its own width rule (rsi=auto) */
+  assert.match(html, /<iframe class="sc-cofr__frame" id="coChartFrame"[^>]*src="https:\/\/station\.scintillahub\.ai\/chart\/\?bare=hub&amp;t=MU&amp;range=4h&amp;clouds=1&amp;rsi=auto"/);
+  assert.match(html, /class="sc-cofr is-legacy"/, "until the Station answers that it knows ?bare=hub, its own toolbar is tucked under the Hub's row");
+  assert.match(html, /id="coChartAsOf">last bar …<\/span> · Massive/, "the bar source and its age are on the screen");
   assert.doesNotMatch(html, /tradingview/i, "never a TradingView embed");
   assert.equal(chartKit(null).coRange(null), "1D", "default 1D");
   assert.equal(chartKit("garbage").coRange("15m"), "1D", "a range outside the row falls back to 1D");
-  assert.doesNotMatch(k.coChartSrc("MU", "1D", false), /rsi/, "the RSI fan is off");
-  assert.match(k.coChartSrc("mu", "1W", true), /\?t=MU&range=1W&clouds=1&rsi=1$/, "and is one switch away");
-  assert.match(page, /^const CO_CHART_RSI = false;/m);
+  assert.doesNotMatch(k.coChartSrc("MU", "1D", false), /rsi/, "the RSI fan can still be switched off");
+  assert.match(k.coChartSrc("mu", "1W", true), /\?bare=hub&t=MU&range=1W&clouds=1&rsi=1$/);
+  assert.match(page, /^const CO_CHART_RSI = "auto";/m);
+  assert.doesNotMatch(page, /chart\/\?bare=1/, "never bare=1: that is the deck's mode and blanks the price badge in the Hub");
 });
 
 test("clicking a timeframe writes ONLY the iframe's src and the browser's memory", () => {
@@ -63,12 +68,12 @@ test("clicking a timeframe writes ONLY the iframe's src and the browser's memory
     classList: { toggle(c, v) { this.o.on = v; } }, setAttribute(k, v) { this.attrs[k] = v; } }));
   btns.forEach((b) => { b.classList.o = b; });
   const saved = {};
-  const run = new Function("a", "e", "el", "lsSet", "document", "LEFT_T", "esc",
+  const run = new Function("a", "e", "el", "lsSet", "document", "LEFT_T", "esc", "coChartStamp",
     FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + "\nswitch (\"corange\") {\n" + clickCase("corange") + "}");
   const e = { stopped: false, preventDefault() {}, stopPropagation() { this.stopped = true; } };
   run({ dataset: { r: "3D" } }, e, (id) => (id === "coChartFrame" ? frame : null), (k, v) => { saved[k] = v; },
-    { querySelectorAll: () => btns }, "MU", esc);
-  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?t=MU&range=3D&clouds=1");
+    { querySelectorAll: () => btns }, "MU", esc, () => {});
+  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=3D&clouds=1&rsi=auto");
   assert.deepEqual(saved, { "hub.chart.range": "3D" });
   assert.deepEqual(btns.filter((b) => b.on).map((b) => b.dataset.r), ["3D"]);
   assert.ok(e.stopped, "a timeframe click never reaches the board row underneath");
