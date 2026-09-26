@@ -80,3 +80,13 @@ test('the 60M rotation read stays within the chart API\'s current store (≤ 400
   assert.match(page, /\{ k:"60",  l:"60M", bars:400 \}/);
   assert.match(page, /"60":  \[\["1W", 35\], \["1M", 140\], \["3M", 400\]\]/);
 });
+
+test('every row reads its toggles in the tab order ⊙ RADAR · ★ FAVORITES · ♥ LIKED, and the three inks are greys', () => {
+  const body = fn('listCtlHTML');
+  const iR = body.indexOf('btn("radar"'), iF = body.indexOf('btn("favorites"'), iL = body.indexOf('class="sc-star ');
+  assert.ok(iR > 0 && iR < iF && iF < iL, 'radar, then favorites, then the ♥');
+  for (const hex of ['A0A8B8', 'B8B0A0', 'B4A4AC']) {
+    const ch = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    assert.ok(Math.max(...ch) - Math.min(...ch) <= 24 && Math.max(...ch) <= 210, hex + ' is a grey and not white');
+  }
+});

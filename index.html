@@ -558,6 +558,12 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-coh:hover{ color:var(--ink2); }
 .sc-coh.is-active{ color:var(--crk); box-shadow:inset 0 -2px 0 var(--crk); }
 .sc-coh--fav{ color:var(--sv3); }
+/* H2 — three list inks from the grey family (channels within 24 of each other, none above 210): a cool grey for RADAR,
+   a warm grey for FAVORITES, a rose grey for LIKED. The tab, its toggle on every row and the company bar share it. */
+:root{ --ink-radar:#A0A8B8; --ink-favs:#B8B0A0; --ink-liked:#B4A4AC; }
+.sc-coh--radar,.sc-coh--radar.is-active{ color:var(--ink-radar); }
+.sc-coh--favs,.sc-coh--favs.is-active{ color:var(--ink-favs); }
+.sc-coh--liked,.sc-coh--liked.is-active{ color:var(--ink-liked); }
 /* FIX 2 (R36) — compact search, hosted in the board header's fixed right zone
    (.cohtabctrls) beside ⛶. No margin-left:auto — the ctrls zone already pins right. */
 .sc-cohsearch{ display:inline-flex; align-items:center; gap:5px;
@@ -1813,6 +1819,10 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .sc-ihead.cohtabs .cohtabctrls{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding-left:8px; }
 .sc-ihead.cohtabs .sc-coh{ flex:0 0 auto; padding:9px 4px; font-size:7px; letter-spacing:.02em; text-transform:uppercase; white-space:nowrap; }   /* FIX 1 (R33) — match left ptabs .sc-it type (7px/.02em/pad 4px) so both strips read as one coherent system */
 .sc-ihead.cohtabs .sc-coh.is-active{ color:var(--crk); box-shadow:inset 0 -2px 0 var(--crk); }
+/* H2 — an active list tab keeps its own ink (the cyan underline still marks it as the active one) */
+.sc-ihead.cohtabs .sc-coh--radar.is-active{ color:var(--ink-radar); }
+.sc-ihead.cohtabs .sc-coh--favs.is-active{ color:var(--ink-favs); }
+.sc-ihead.cohtabs .sc-coh--liked.is-active{ color:var(--ink-liked); }
 .sc-ihead.cohtabs .sc-fsico{ flex:0 0 auto; }   /* STD: inherit base 10px inset */
 /* FIX 5 (R37) — NEWS cohort-tab row: full-width strip above the two news panels */
 .sc-newscohrow{ width:100%; margin:0 0 10px; border:.8px solid var(--hair); }
@@ -4239,6 +4249,8 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 .sc-cofl__c i{font-style:normal;font-size:11px;letter-spacing:.1em;color:#6E6E76;margin-right:6px}
 .sc-cofl__c.up{color:var(--bull)}
 .sc-cofl__c.dn{color:var(--bear)}
+.sc-cofl__src{flex-basis:100%;font-size:11px;color:#8A8A92;white-space:normal}
+.sc-cofl__src i{font-style:normal;letter-spacing:.1em;color:#6E6E76;margin-right:6px}
 .sc-coexp{font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:2px 8px;margin-right:6px;background:none;border:.5px solid #4A4A52;border-radius:2px;color:#C9C9CE;cursor:pointer;white-space:nowrap}
 .sc-coexp[aria-pressed="true"]{border-color:#8A8A92}
 body.co-exp .sc-body2{grid-template-columns:minmax(0,1fr) !important}
@@ -4247,6 +4259,10 @@ body.co-exp #boardPanel{display:none !important}
 .sc-lst{padding:0;background:none;border:0;cursor:pointer;font-size:11px;line-height:1;width:11px;flex:none;text-align:center;color:#4A4A52}
 @media(min-width:561px){ .sc-lists .sc-star{flex:none} }   /* on a phone the ♥ is alone in its cell and shrinks to it, as the star did */
 .sc-lst.is-on{color:#C9C9CE}
+.sc-lst--radar.is-on{color:var(--ink-radar)}
+.sc-lst--favorites.is-on{color:var(--ink-favs)}
+.sc-lists .sc-star{color:var(--ink-liked)}
+.sc-lists .sc-star:not(.is-fav):hover .sc-star__off{color:var(--ink-liked)}
 .sc-lists--co{gap:5px;margin:0 8px 0 0;flex:none}
 .sc-lists--co .sc-star,.sc-lists--co .sc-lst{font-size:13px;width:15px}
 /* the 60px these take comes out of the news queue on the right (built to clip its furthest item), never out of the
@@ -5443,7 +5459,18 @@ function coFundLineHTML(t, row, px) {
     cell("REVENUE TTM", r.rev != null ? fmtRevCell(r.rev) : (r.revCcy && r.revLocal != null ? fmtRevLocal(r.revLocal, r.revCcy) : "—"),
       revTitle(r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero)) +
     cell("MKT CAP", (num(r.mc) != null && num(r.mc) > 0) ? fmtCap(r.mc) : "—", "company_profile.market_cap") +
+    coFundSrcHTML(r) +
   "</div>";
+}
+/* H2 (Alan, 25 Sep: "what is this Google's FMP source date? I thought the stock price information was from Massive").
+   Both are true, and now the screen says which is which: the price and the day's change are Massive's live quote (the
+   board's), while revenue, market cap and every table in the pane below are FMP numbers we store, dated by their last
+   write. Dates are unix seconds from fundamentals.updated_ts / company_profile.updated_ts. */
+function coFundSrcHTML(r) {
+  const ts = [num(r && r.revAsOf), num(r && r.mcAsOf)].filter((x) => x != null && x > 0);
+  const upd = ts.length ? new Date(Math.max.apply(null, ts) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : null;
+  return '<span class="sc-cofl__src" title="prices: Massive (the chart API\'s live quote, the same one the board shows) · fundamentals: FMP (Financial Modeling Prep), stored in our tables and dated by their last write">' +
+    "<i>PRICE · DAY</i>Massive · live quote &nbsp;·&nbsp; <i>FUNDAMENTALS</i>FMP · " + (upd ? "updated " + esc(upd) : "no stored date") + "</span>";
 }
 function coFundTabHTML(t) {
   const px = (typeof PRICES !== "undefined" && PRICES) ? PRICES[t] : null;
@@ -5518,12 +5545,13 @@ function listCtlHTML(t, where) {
     '<button type="button" class="sc-lst sc-lst--' + list + (on ? " is-on" : "") + '" aria-pressed="' + on + '" aria-label="' +
       (on ? "Take " + esc(T) + " off " : "Put " + esc(T) + " on ") + name + '" title="' + name +
       (on ? " · on" : " · off (adding it likes it too)") + '" data-act="lst" data-l="' + list + '" data-t="' + esc(T) + '">' + (on ? gOn : gOff) + "</button>";
+  /* H2 — the row's toggles read in the tab order: ⊙ RADAR · ★ FAVORITES · ♥ LIKED */
   return '<span class="sc-lists' + (where === "co" ? " sc-lists--co" : "") + '"' + (where === "co" ? ' id="coLists"' : "") + ">" +
+    btn("radar", rd, "◉", "⊙", "RADAR") +
+    btn("favorites", fv, "★", "☆", "FAVORITES") +
     '<button class="sc-star ' + (liked ? "is-fav" : "") + '" aria-pressed="' + liked + '" aria-label="' +
       (liked ? "Unlike " : "Like ") + esc(T) + '" title="LIKED' + (liked ? " · on" : " · off") + '" data-act="star" data-t="' + esc(T) + '">' +
       '<span class="sc-star__on">♥</span><span class="sc-star__off">♡</span></button>' +
-    btn("favorites", fv, "★", "☆", "FAVORITES") +
-    btn("radar", rd, "◉", "◎", "RADAR") +
   "</span>";
 }
 /* the company view's ♥ ★ ◎ ride in the full-width ticker bar, right after the ticker (the tab header has no room left
@@ -6054,7 +6082,9 @@ function cohStripHTML() {
   const tab = (key, label, extra) =>
     '<button class="sc-coh ' + (extra || "") + (key === S.coh ? " is-active" : "") +
       '" data-act="coh" data-key="' + key + '">' + label + "</button>";
-  return tab("FAV", "♥ LIKED", "sc-coh--fav") + tab("FAVORITES", "★ FAVORITES", "sc-coh--fav") + tab("RADAR", "◎ RADAR", "sc-coh--fav") + tab("ALL", "ALL") +
+  /* H2 (Alan, 25 Sep) — RADAR first ("the ones on watch"), then FAVORITES, then LIKED; each list has its own grey ink
+     (the same ink as its toggle on every row), and the radar is a ring with a centre dot */
+  return tab("RADAR", "⊙ RADAR", "sc-coh--fav sc-coh--radar") + tab("FAVORITES", "★ FAVORITES", "sc-coh--fav sc-coh--favs") + tab("FAV", "♥ LIKED", "sc-coh--fav sc-coh--liked") + tab("ALL", "ALL") +
     COHORTS.map(([label, key]) => tab(key, label)).join("");
 }
 /* DASHBOARD MODEL — the cohort TAB row moved INTO the board header
@@ -6424,7 +6454,7 @@ function boardRowsHTML() {
     return boardHeaderHTML() + '<div class="sc-board__pending" role="status">loading ' + esc(COH_ABBR[S.boardPending] || S.boardPending) + ' …</div>';
   if (!rows.length && !S.tq && LIST_COHS[S.coh])   // H-FRONT — an empty (or not yet read) subset says which, and how to fill it
     return boardHeaderHTML() + '<div class="sc-board__pending" role="status">' + (LISTS_READ
-      ? 'nothing on ' + esc(S.coh) + ' yet — tap ' + (S.coh === "RADAR" ? "◎" : "☆") + ' on any row or company to add it (that likes it too)'
+      ? 'nothing on ' + esc(S.coh) + ' yet — tap ' + (S.coh === "RADAR" ? "⊙" : "☆") + ' on any row or company to add it (that likes it too)'
       : 'reading ' + esc(S.coh) + ' …') + '</div>';
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
   const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));

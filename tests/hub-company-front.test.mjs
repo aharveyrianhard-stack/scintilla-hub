@@ -170,7 +170,7 @@ test("sorting by REVENUE orders numerically; a name with no revenue sorts as low
 
 /* ── HF-3 · FUNDAMENTALS ────────────────────────────────────────────────────────────────────── */
 const fundKit = (rows) => new Function("S", "ALLROWS", "PRICES", "esc", "num", "fmtCap", "fmtC", "fmtPxIdent", "fmtRevCell", "fmtRevLocal", "revTitle",
-  FRONT_CONSTS + fn("coFundSrc") + fn("coBoardRow") + fn("coFundLineHTML") + fn("coFundTabHTML") + "\nreturn { coFundTabHTML, coFundLineHTML };")(
+  FRONT_CONSTS + fn("coFundSrc") + fn("coBoardRow") + fn("coFundLineHTML") + fn("coFundSrcHTML") + fn("coFundTabHTML") + "\nreturn { coFundTabHTML, coFundLineHTML };")(
   { rows }, [], {}, esc, num, fmtCap, (c) => (c >= 0 ? "+" + c.toFixed(2) + "%" : "(" + Math.abs(c).toFixed(2) + "%)"), (p) => p.toFixed(2), revKit.fmtRevCell, revKit.fmtRevLocal, revKit.revTitle);
 test("FUNDAMENTALS embeds the Station's fundamentals shell under one line of the Hub's own numbers", () => {
   const html = fundKit([{ t: "MU", price: 157.2, c: -1.25, rev: 90274000000, revAsOf: 1789884421, mc: 1041730560000 }]).coFundTabHTML("MU");
@@ -180,6 +180,8 @@ test("FUNDAMENTALS embeds the Station's fundamentals shell under one line of the
   assert.match(ln, /class="sc-cofl__c dn"[^>]*><i>DAY<\/i>\(1\.25%\)/, "down in red");
   assert.match(ln, /<i>REVENUE TTM<\/i>\$90\.3B/);
   assert.match(ln, /<i>MKT CAP<\/i>\$1\.0T/);
+  /* H2 — which numbers are Massive and which are FMP, with FMP's write date, on the screen */
+  assert.match(ln, /<i>PRICE · DAY<\/i>Massive · live quote &nbsp;·&nbsp; <i>FUNDAMENTALS<\/i>FMP · updated Sep \d+, 2026/);
   const tsm = fundKit([{ t: "TSM", price: 300, c: 0.5, rev: null, revCcy: "TWD", revLocal: 4450400000000, mc: 1.5e12 }]).coFundTabHTML("TSM");
   assert.match(tsm, /<i>REVENUE TTM<\/i>TWD 4\.5T/, "one company, its own currency, written with its code");
   const none = fundKit([]).coFundTabHTML("ZZZZ");
@@ -188,11 +190,12 @@ test("FUNDAMENTALS embeds the Station's fundamentals shell under one line of the
 
 /* ── HF-5 · LIKED / FAVORITES / RADAR ───────────────────────────────────────────────────────── */
 const pure = new Function(LISTS_SRC + fn("listApply") + fn("listRowsFor") + fn("listsFromRows") + "\nreturn { LIST_COHS, isListCoh, listApply, listRowsFor, listsFromRows };")();
-test("the strip reads ♥ LIKED · ★ FAVORITES · ◎ RADAR; LIKED keeps the FAV key so every scope rule still applies", () => {
+test("the strip reads ⊙ RADAR · ★ FAVORITES · ♥ LIKED (H2: radar leftmost); LIKED keeps the FAV key so every scope rule still applies", () => {
   const strip = new Function("S", "COHORTS", fn("cohStripHTML") + "\nreturn cohStripHTML();")({ coh: "RADAR" }, [["MEGACAP", "MEGACAP"]]);
   const tabs = [...strip.matchAll(/data-key="([^"]+)">([^<]+)</g)].map((m) => m[1] + "=" + m[2]);
-  assert.deepEqual(tabs.slice(0, 4), ["FAV=♥ LIKED", "FAVORITES=★ FAVORITES", "RADAR=◎ RADAR", "ALL=ALL"]);
-  assert.match(strip, /sc-coh--fav is-active" data-act="coh" data-key="RADAR"/);
+  assert.deepEqual(tabs.slice(0, 4), ["RADAR=⊙ RADAR", "FAVORITES=★ FAVORITES", "FAV=♥ LIKED", "ALL=ALL"]);
+  assert.match(strip, /sc-coh--fav sc-coh--radar is-active" data-act="coh" data-key="RADAR"/);
+  for (const ink of ["--ink-radar:#A0A8B8", "--ink-favs:#B8B0A0", "--ink-liked:#B4A4AC"]) assert.ok(page.includes(ink), ink);
   assert.deepEqual(Object.keys(pure.LIST_COHS), ["FAV", "FAVORITES", "RADAR"]);
   assert.match(page, /pg\("hub_favorites\?select=ticker"\)/, "LIKED is still hub_favorites");
 });
