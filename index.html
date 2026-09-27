@@ -10560,6 +10560,18 @@ async function sentiBreadthSnap() {
   const v = { snap, hist: Array.isArray(hist.readings) ? hist.readings : [] };
   SENTI_CACHE.brd = { at: Date.now(), v }; return v;
 }
+/* B1 (27 Sep) — WHOLE-MARKET breadth from public.breadth_daily: every US common stock (US_COMMON) and
+   the S&P 500 as of each session (SP500), one row per session, written by breadth-ingest from the chart
+   API /v1/breadth. Until that table has rows, the breadth rows fall back to the Hub's own list and are
+   labelled "Hub list only" — Alan, 11 Aug: "my Hub is not the market". */
+async function sentiWholeBreadth() {
+  if (SENTI_CACHE.wb && Date.now() - SENTI_CACHE.wb.at < SENTI_TTL) return SENTI_CACHE.wb.v;
+  const rows = await pg("breadth_daily?select=session_date,scope,advancers,decliners,unchanged,ad_line,trin,pct_above_50,members_50," +
+    "pct_above_200,members_200,new_highs,new_lows,members_highlow,members,computed_utc&order=session_date.desc,scope.asc&limit=520");
+  const v = { US_COMMON: [], SP500: [] };
+  for (const r of (Array.isArray(rows) ? rows : []).slice().reverse()) if (v[r.scope]) v[r.scope].push(r);
+  SENTI_CACHE.wb = { at: Date.now(), v }; return v;
+}
 function sentiSafe(p, ms) {
   const t = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms || 20000));
   return Promise.race([p, t]).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String((e && e.message) || e) }));
@@ -10972,7 +10984,7 @@ async function sentiComputeAll() {
 async function sentiComputeAllRun() {
   if (SENTI_CACHE.calc && Date.now() - SENTI_CACHE.calc.at < SENTI_TTL) return SENTI_CACHE.calc.v;
   const now = Date.now(), M = SENTI;
-  const [spy, vix, hyg, lqd, tlt, pcc, news, newsLast, yt, heads, x, cnn, cfg, q, rsp, brd] = await Promise.all([
+  const [spy, vix, hyg, lqd, tlt, pcc, news, newsLast, yt, heads, x, cnn, cfg, q, rsp, brd, qqqe, qqq, wbr] = await Promise.all([
     sentiSafe(sentiBars("SPY")), sentiSafe(sentiBars("VIX")), sentiSafe(sentiBars("HYG")), sentiSafe(sentiBars("LQD")), sentiSafe(sentiBars("TLT")),
     sentiSafe(sentiBars("PCC")),
     sentiSafe(pg("news_sentiment?select=ticker,score,n_articles,updated_ts")),
@@ -10984,7 +10996,10 @@ async function sentiComputeAllRun() {
     sentiSafe(fetch("https://api.alternative.me/fng/?limit=1").then((r) => r.ok ? r.json() : Promise.reject(new Error("fng " + r.status))), 8000),
     sentiSafe(sentiBreadth(), 25000),
     sentiSafe(sentiBars("RSP"), 25000),       /* equal weight, for the breadth reading */
-    sentiSafe(sentiBreadthSnap(), 15000),     /* the measured 364-name snapshot */
+    sentiSafe(sentiBreadthSnap(), 15000),     /* the measured 364-name snapshot — Hub list only */
+    sentiSafe(sentiBars("QQQE"), 25000),      /* B1 — equal-weight Nasdaq-100 … */
+    sentiSafe(sentiBars("QQQ"), 25000),       /* … against the cap-weighted one */
+    sentiSafe(sentiWholeBreadth(), 15000),    /* B1 — whole-market breadth, public.breadth_daily */
   ]);
   const inputs = [], voices = [];
   const closes = (b) => b.ok ? b.v.map((r) => +r.c) : null;
@@ -11016,25 +11031,55 @@ async function sentiComputeAllRun() {
       val = "equal weight \u2212 cap weight, 20-day return: " + sgn(g.cur) + " pts" + (g.cur < 0 ? " \u00b7 the average stock is behind the index" : " \u00b7 the average stock is ahead"); }
     inputs.push({ key: "eqw", name: "Equal weight vs the index", val, score, none, age: both(rsp, spy), fresh: MARKET_FRESH,
       src: "RSP vs SPY \u00b7 chart API daily bars \u00b7 session " + sessionOf(rsp) + " \u00b7 a rally only the biggest names join shows up here", why }); }
+  /* B1 — the same test on the Nasdaq-100: QQQE (every member at the same weight) against QQQ. Shown,
+     not folded into the market gauge (not in MARKET_KEYS), exactly like RSP vs SPY. */
+  { const a = closes(qqqe), b = closes(qqq); let score = null, val = "\u2014", none = true, why = !qqqe.ok ? "QQQE bars: " + qqqe.e : (!qqq.ok ? "QQQ bars: " + qqq.e : "");
+    if (a && b && a.length > 40 && b.length > 40) { const g = gap(a, b); score = M.dev(g.ser, g.cur); none = false;
+      val = "equal weight \u2212 cap weight, 20-day return: " + sgn(g.cur) + " pts" + (g.cur < 0 ? " \u00b7 the average Nasdaq-100 stock is behind the index" : " \u00b7 the average Nasdaq-100 stock is ahead"); }
+    inputs.push({ key: "eqwndx", name: "Equal weight vs the Nasdaq-100", val, score, none, age: both(qqqe, qqq), fresh: MARKET_FRESH,
+      src: "QQQE vs QQQ \u00b7 chart API daily bars \u00b7 session " + sessionOf(qqqe), why }); }
   const bs = brd.ok && brd.v && brd.v.snap ? brd.v.snap : null;
+  /* B1 — the whole market, when public.breadth_daily has rows; else the Hub list, labelled as such */
+  const wUS = wbr.ok && wbr.v && wbr.v.US_COMMON.length ? wbr.v.US_COMMON[wbr.v.US_COMMON.length - 1] : null;
+  const wSP = wbr.ok && wbr.v && wbr.v.SP500.length ? wbr.v.SP500[wbr.v.SP500.length - 1] : null;
+  const wAge = wUS ? now - Date.parse(wUS.session_date + "T20:00:00Z") : null;
+  const wSrc = wUS ? "whole market \u00b7 every US common stock (" + wUS.members + " names) \u00b7 session " + wUS.session_date +
+    " \u00b7 Massive daily bars, split-adjusted \u00b7 public.breadth_daily" : "";
+  const wSp = (k) => wSP && wSP[k] != null ? " \u00b7 S&P 500: " + wSP[k] + "%" : "";
   const bAge = bs && bs.measured_utc ? now - Date.parse(bs.measured_utc) : null;
   const bSrc = bs ? "our " + bs.universe + "-stock universe \u00b7 measured " + String(bs.measured_utc).slice(0, 16).replace("T", " ") + "Z \u00b7 session " + bs.session_et + " \u00b7 " + bs.measured + " names" : "data/breadth/latest.json \u00b7 not measured yet";
+  if (wUS && wUS.pct_above_50 != null) {
+    inputs.push({ key: "above50", name: "Above the 50-day average", val: (+wUS.pct_above_50).toFixed(1) + "% of " + wUS.members_50 + " US common stocks" + wSp("pct_above_50"),
+      score: Math.round(+wUS.pct_above_50), none: false, age: wAge, fresh: 4 * 86400e3, src: wSrc + " \u00b7 close against its own 50-day mean", why: "" });
+  } else
   { let score = null, val = "not measured yet", none = true;
     if (bs && bs.above50 && bs.above50.pct != null) { score = Math.round(bs.above50.pct); none = false;
       val = bs.above50.n + " of " + bs.above50.of + " names are above their 50-day average \u00b7 " + bs.above50.pct + "%"; }
-    inputs.push({ key: "above50", name: "Above the 50-day average", val, score, none, age: bAge, fresh: 36 * 3600e3,
+    inputs.push({ key: "above50", name: "Above the 50-day average \u00b7 Hub list only", val, score, none, age: bAge, fresh: 36 * 3600e3,
       src: bSrc + " \u00b7 closing price against its own 50-day mean", why: brd.ok ? "" : "breadth snapshot: " + brd.e }); }
+  if (wUS && wUS.pct_above_200 != null) {
+    inputs.push({ key: "above200", name: "Above the 200-day average", val: (+wUS.pct_above_200).toFixed(1) + "% of " + wUS.members_200 + " US common stocks" + wSp("pct_above_200"),
+      score: Math.round(+wUS.pct_above_200), none: false, age: wAge, fresh: 4 * 86400e3, src: wSrc + " \u00b7 close against its own 200-day mean", why: "" });
+  } else
   { let score = null, val = "not measured yet", none = true;
     if (bs && bs.above200 && bs.above200.pct != null) { score = Math.round(bs.above200.pct); none = false;
       val = bs.above200.n + " of " + bs.above200.of + " names are above their 200-day average \u00b7 " + bs.above200.pct + "%"; }
-    inputs.push({ key: "above200", name: "Above the 200-day average", val, score, none, age: bAge, fresh: 36 * 3600e3,
+    inputs.push({ key: "above200", name: "Above the 200-day average \u00b7 Hub list only", val, score, none, age: bAge, fresh: 36 * 3600e3,
       src: bSrc + " \u00b7 closing price against its own 200-day mean", why: "" }); }
+  if (wUS && M.fin(+wUS.new_highs) && M.fin(+wUS.new_lows)) {
+    const h = +wUS.new_highs, l = +wUS.new_lows, t = h + l;
+    inputs.push({ key: "strength", name: "52-week highs vs lows", val: h + " US common stocks made a new 52-week high, " + l + " a new low" +
+        (t ? " \u00b7 " + Math.round(100 * h / t) + "% of the extremes are highs" : "") + (wSP ? " \u00b7 S&P 500: " + wSP.new_highs + " / " + wSP.new_lows : ""),
+      score: t >= 5 ? Math.round(100 * h / t) : null, none: false, age: wAge, fresh: 4 * 86400e3,
+      src: wSrc + " \u00b7 today's high or low against the 252 sessions before it \u00b7 CNN counts NYSE listings only", cnn: cnnC("stock_price_strength"),
+      why: t >= 5 ? "" : "only " + t + " names sit at a 52-week extreme \u2014 too few to score" });
+  } else
   { let score = null, val = "not measured yet", none = true, why = "";
     if (bs && M.fin(+bs.new_highs) && M.fin(+bs.new_lows)) {
       const h = +bs.new_highs, l = +bs.new_lows, t = h + l; none = false;
       val = h + " made a new 52-week high, " + l + " a new low" + (t ? " \u00b7 " + Math.round(100 * h / t) + "% of the extremes are highs" : " \u00b7 no name at either extreme");
       if (t >= 5) score = Math.round(100 * h / t); else why = "only " + t + " names sit at a 52-week extreme \u2014 too few to score"; }
-    inputs.push({ key: "strength", name: "52-week highs vs lows", val, score, none, age: bAge, fresh: 36 * 3600e3,
+    inputs.push({ key: "strength", name: "52-week highs vs lows \u00b7 Hub list only", val, score, none, age: bAge, fresh: 36 * 3600e3,
       src: bSrc + " \u00b7 today's high or low against the 252 sessions before it \u00b7 our universe, not the NYSE count CNN uses", cnn: cnnC("stock_price_strength"), why }); }
   { let score = null, val = "no source", none = true, age = null, why = q.ok ? "" : "universe quotes: " + q.e;
     if (q.ok && q.v && q.v.up + q.v.down > 0) { const share = 100 * q.v.up / (q.v.up + q.v.down); score = Math.round(share); none = false; age = 0;
@@ -11097,7 +11142,7 @@ async function sentiComputeAllRun() {
   for (const i of inputs) { if (i.none || !M.fin(i.score)) i.status = "none"; else if (M.fin(i.age) && i.age > i.fresh) i.status = "stale"; else i.status = "live"; }
   for (const v of voices) { const i = inputs.find((q) => q.key === v.key); v.status = i ? i.status : "none"; }
   const H = M.headline(inputs);
-  const out = { now, inputs, voices, H, cnn, cfg, xPosts: x.ok ? x.v : [], brd: brd.ok ? brd.v : null };
+  const out = { now, inputs, voices, H, cnn, cfg, xPosts: x.ok ? x.v : [], brd: brd.ok ? brd.v : null, wb: wbr.ok ? wbr.v : null, wbErr: wbr.ok ? "" : wbr.e };
   SENTI_CACHE.calc = { at: Date.now(), v: out };
   return out;
 }
@@ -11425,7 +11470,7 @@ async function fillSentiment() {
     '<div class="sn-voice__txt">' + (C.xPosts || []).length + ' posts are stored in that feed in total; <b>' + xWin.length + '</b> of them fall in the last 24 hours and <b>' + stats[2].scored + '</b> carried a word the list knows. The collector runs on Alan\u2019s MacBook at 06:30, 08:30, 10:30, 12:30, 14:30, 16:30, 18:30, 21:00 and 23:30 ET and publishes the whole feed each time; this page only ever reads what it published.</div></div>';
   /* BREADTH, with its own history and the names behind it (lane M30) */
   const bsn = (C.brd && C.brd.snap) || null, bhist = (C.brd && C.brd.hist) || [];
-  const bCard = bsn ? '<div class="card"><h4>BREADTH \u00b7 THE WHOLE LIST, NOT THE INDEX</h4>' +
+  const bCard = bsn ? '<div class="card"><h4>BREADTH \u00b7 HUB LIST ONLY \u2014 NOT THE MARKET</h4>' +
       '<div class="sn-voice__txt">Measured over all <b>' + bsn.measured + '</b> of our names on session <b>' + esc(String(bsn.session_et)) + '</b>, ' +
         esc(String(bsn.measured_utc).slice(0, 16).replace("T", " ")) + 'Z. An index can rise while most of its names fall; these four readings are the ones that say so.</div>' +
       '<div class="sn-voice__txt" style="display:flex;gap:10px;align-items:center">' + snLeanBar((bsn.above50.pct - 50) / 50) +
@@ -11736,34 +11781,56 @@ function snSparkSVG(series, w, h) {
 }
 function snBreadthHTML(C, universeN) {
   const bsn = (C.brd && C.brd.snap) || null, bh = (C.brd && C.brd.hist) || [];
-  const cover = "the Hub's own " + (universeN || "—") + " companies · NOT the whole market";
+  const cover = "Hub list only · the Hub's own " + (universeN || "—") + " companies · NOT the whole market";
   const rows = [];
   const add = (m, reading, src, covers, series) => rows.push(
     "<tr><td class=\"m\">" + esc(m) + "</td><td>" + reading + "</td><td>" + esc(src) +
     '<span class="cov">' + esc(covers) + "</span></td><td>" + (series ? snSparkSVG(series, 72, 20) : '<span class="cov">no history stored</span>') + "</td></tr>");
+  /* B1 (27 Sep) — THE WHOLE MARKET first: public.breadth_daily, every US common stock and the S&P 500
+     members of each session, from Massive's daily bars (split-adjusted by the batch job). */
+  const us = (C.wb && C.wb.US_COMMON) || [], sp = (C.wb && C.wb.SP500) || [];
+  const u = us[us.length - 1] || null, s5 = sp[sp.length - 1] || null;
+  if (u) {
+    const src = "public.breadth_daily ← chart API /v1/breadth · Massive daily bars, split-adjusted · session " + u.session_date;
+    const scope = "whole market: " + u.members + " US common stocks" + (s5 ? " · S&P 500: its members on that session (" + s5.members + ")" : " · no S&P 500 row yet");
+    const spTxt = (k) => s5 && s5[k] != null ? " · S&amp;P 500 <b>" + (+s5[k]).toFixed(1) + "%</b>" : "";
+    add("Above the 50-day average · whole market", "<b>" + (+u.pct_above_50).toFixed(1) + "%</b> of " + u.members_50 + spTxt("pct_above_50"), src, scope, us.map((r) => +r.pct_above_50));
+    add("Above the 200-day average · whole market", "<b>" + (+u.pct_above_200).toFixed(1) + "%</b> of " + u.members_200 + spTxt("pct_above_200"), src, scope, us.map((r) => +r.pct_above_200));
+    add("52-week highs vs lows · whole market", "<b>" + u.new_highs + "</b> highs / <b>" + u.new_lows + "</b> lows" + (s5 ? " · S&amp;P 500 " + s5.new_highs + " / " + s5.new_lows : ""),
+      src + " · today's high or low against the 252 sessions before it", scope, us.map((r) => (+r.new_highs) - (+r.new_lows)));
+    add("Advancing / declining · whole market", "<b>" + u.advancers + "</b> up, <b>" + u.decliners + "</b> down" + (s5 ? " · S&amp;P 500 " + s5.advancers + " / " + s5.decliners : ""),
+      src + " · the line is the running total of (up − down) since 2003; its shape is the reading, not its level", scope, us.map((r) => +r.ad_line));
+    add("TRIN (Arms index) · whole market", u.trin == null ? "<b>no reading</b>" : "<b>" + (+u.trin).toFixed(2) + "</b>" + (+u.trin < 1 ? " · volume leaning to the risers" : " · volume leaning to the fallers"),
+      src + " · (up ÷ down) ÷ (up volume ÷ down volume)", scope, us.map((r) => r.trin == null ? null : -(+r.trin)));
+  } else {
+    add("Whole-market breadth", "<b>not filled yet</b>", "public.breadth_daily" + (C.wbErr ? " · " + C.wbErr : " is empty") +
+      " · the batch job and breadth-ingest have not run", "until it is filled, only the Hub list rows below exist", null);
+  }
   if (bsn) {
-    add("Above the 50-day average", "<b>" + bsn.above50.pct + "%</b> (" + bsn.above50.n + " of " + bsn.above50.of + ")",
+    add("Above the 50-day average · Hub list only", "<b>" + bsn.above50.pct + "%</b> (" + bsn.above50.n + " of " + bsn.above50.of + ")",
       "scripts/breadth-snapshot.mjs → data/breadth/latest.json · chart API daily bars · session " + bsn.session_et, cover,
       bh.map((r) => +r.above50_pct));
-    add("Above the 200-day average", "<b>" + bsn.above200.pct + "%</b> (" + bsn.above200.n + " of " + bsn.above200.of + ")",
+    add("Above the 200-day average · Hub list only", "<b>" + bsn.above200.pct + "%</b> (" + bsn.above200.n + " of " + bsn.above200.of + ")",
       "the same snapshot · each close against its own 200-day mean", cover, bh.map((r) => +r.above200_pct));
-    add("52-week highs vs lows", "<b>" + bsn.new_highs + "</b> highs / <b>" + bsn.new_lows + "</b> lows",
-      "the same snapshot · today's extreme against the 252 sessions before it", cover + " · CNN counts every NYSE listing, so the two are not comparable",
-      bh.map((r) => (+r.new_highs) - (+r.new_lows)));
+    add("52-week highs vs lows · Hub list only", "<b>" + bsn.new_highs + "</b> highs / <b>" + bsn.new_lows + "</b> lows",
+      "the same snapshot · today's extreme against the 252 sessions before it", cover + " · CNN counts every NYSE listing, so the two are not comparable", bh.map((r) => (+r.new_highs) - (+r.new_lows)));
   } else {
-    add("Above the 50-day / 200-day average", "<b>not measured yet</b>", "data/breadth/latest.json has not been written · run node scripts/breadth-snapshot.mjs", cover, null);
+    add("Above the 50-day / 200-day average · Hub list only", "<b>not measured yet</b>", "data/breadth/latest.json has not been written · run node scripts/breadth-snapshot.mjs", cover, null);
   }
   const up = C.inputs.find((i) => i.key === "breadth");
-  add("How many of our stocks are up today", up && SENTI.fin(up.score) ? "<b>" + up.val + "</b>" : "<b>no reading</b> · " + esc(up ? up.val : ""),
-    "one /quotes call on the chart API, counted per stock", cover + " · CNN weighs its own by volume", null);
+  add("How many of our stocks are up today · Hub list only", up && SENTI.fin(up.score) ? "<b>" + up.val + "</b>" : "<b>no reading</b> · " + esc(up ? up.val : ""),
+    "one /quotes call on the chart API, counted per stock, live", cover + " · CNN weighs its own by volume", null);
   const eq = C.inputs.find((i) => i.key === "eqw");
-  add("Equal weight vs the index", eq && SENTI.fin(eq.score) ? "<b>" + esc(eq.val) + "</b>" : "<b>no reading</b>",
+  add("Equal weight vs the index (S&P 500)", eq && SENTI.fin(eq.score) ? "<b>" + esc(eq.val) + "</b>" : "<b>no reading</b>",
     "RSP against SPY · chart API daily bars", "two funds, so this one IS market-wide", null);
+  const eqn = C.inputs.find((i) => i.key === "eqwndx");
+  add("Equal weight vs the index (Nasdaq-100)", eqn && SENTI.fin(eqn.score) ? "<b>" + esc(eqn.val) + "</b>" : "<b>no reading</b>" + (eqn && eqn.why ? " · " + esc(eqn.why) : ""),
+    "QQQE against QQQ · chart API daily bars", "two funds, so this one IS index-wide", null);
   return '<table class="sn-brd"><thead><tr><th>measure</th><th>reading</th><th>pulled from</th><th>over time</th></tr></thead><tbody>' +
     rows.join("") + "</tbody></table>" +
-    '<div class="sn-voice__txt">Every row above is measured on the names the Hub tracks, not on the market. ' +
-    "A rally in five big companies and a fall in three hundred small ones looks the same in an index and completely different here — that is the point of the table — " +
-    "but it is still <b>our list</b>, chosen for this desk, so it cannot be quoted as a market-wide breadth number.</div>";
+    '<div class="sn-voice__txt">Rows marked <b>whole market</b> count every US common stock (and, beside them, the S&amp;P 500 members of that day). ' +
+    "Rows marked <b>Hub list only</b> count the names this desk tracks — our list, chosen for this desk, so it cannot be quoted as a market-wide breadth number. " +
+    "The two equal-weight rows are funds, so they are index-wide by construction.</div>";
 }
 /* ── IS IT A NEWS-DRIVEN MARKET? ──────────────────────────────────────────────
    Alan: "its a news driven market how do we parametrize that". One number: how much of

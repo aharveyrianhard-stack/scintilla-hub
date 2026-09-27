@@ -120,6 +120,10 @@ test("the evaluation board carries every proposal Alan named, each with a purpos
 test("this lane leaves the Hub's own page and the Indicator Lab as they were", () => {
   let base;
   try { base = execFileSync("git", ["merge-base", "HEAD", "7c96a83"], { cwd: ROOT }).toString().trim(); } catch (_) { return; }   // not a git checkout: nothing to compare
-  const diff = execFileSync("git", ["diff", "--name-only", base, "--", "index.html", "prototypes/indicator-lab"], { cwd: ROOT }).toString().trim();
+  // 27 Sep (B1): scoped to THIS lane's own commit (8eed343). Compared against the working tree it failed
+  // for every later lane the brief authorises to edit index.html (B1's Sentiment breadth rows).
+  let end = "8eed343";
+  try { execFileSync("git", ["merge-base", "--is-ancestor", end, "HEAD"], { cwd: ROOT }); } catch (_) { end = null; }
+  const diff = execFileSync("git", ["diff", "--name-only", base, ...(end ? [end] : []), "--", "index.html", "prototypes/indicator-lab"], { cwd: ROOT }).toString().trim();
   assert.equal(diff, "", "index.html and prototypes/indicator-lab are unchanged");
 });

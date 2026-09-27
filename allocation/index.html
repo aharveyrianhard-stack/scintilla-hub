@@ -686,9 +686,17 @@ async function load() {
                    "&provider=eq.FMP&timeframe=eq.1day&indicator=in.(sma,rsi)&period_length=in.(14,50,200)&order=ticker.asc")
               .catch((e)=>{ D.missing.push("the 50- and 200-day averages ("+e.message+")"); return null; });
 
+  /* B1 (27 Sep) — WHOLE-MARKET breadth: the newest US_COMMON row of public.breadth_daily (every US
+     common stock, Massive daily bars, split-adjusted). When it is there, the 50/200-day legs use it;
+     when it is not, they fall back to the Hub's own names and the table says "Hub list only". */
+  const wbP = pg("breadth_daily?select=session_date,scope,pct_above_50,members_50,pct_above_200,members_200,members" +
+                 "&scope=eq.US_COMMON&order=session_date.desc&limit=1")
+              .then((r)=> (Array.isArray(r) && r[0]) || null).catch(()=> null);
+
   /* RSP joins the tape: the equal-weight S&P against the cap-weighted one is the breadth of the
-     rally itself, which is the thing Alan named. */
-  const funds = ["SPY", "RSP", ...Object.values(SECTOR_FUND)];
+     rally itself, which is the thing Alan named. QQQE against QQQ is the same test on the
+     Nasdaq-100 (B1): shown beside it, not counted into how much to own. */
+  const funds = ["SPY", "RSP", "QQQ", "QQQE", ...Object.values(SECTOR_FUND)];
   const tP = Promise.all(funds.map((s) =>
     api("/candles?symbol=" + s + "&tf=1d&limit=260")
       .then((j) => { D.tape[s] = (j.series || []).map((b)=>({ t:b.t, c:b.c })); })
@@ -737,6 +745,7 @@ async function load() {
     D.stagedNewest = newest || null;
   }
   await tP; await oP; await spP; await rgP;
+  D.wb = await wbP;
   D.fav = favList(favServer);
   D.favSource = (Array.isArray(favServer) && favServer.length) ? "server" : "browser";
   if (cohRows) {
@@ -951,8 +960,8 @@ function cohortsOf(t) {
      · how many names are above their own 50- and 200-day averages, from the published
        averages the Hub's own indicator table carries (one read, not 364 bar pulls).
    A reading with no data behind it is absent, never zero. */
-function rspRatio(days) {
-  const r = D.tape.RSP, spy = D.tape.SPY;
+function rspRatio(days, eq, cap) {
+  const r = D.tape[eq || "RSP"], spy = D.tape[cap || "SPY"];
   if (!r || !spy || r.length <= days || spy.length <= days) return null;
   const now  = r[r.length-1].c / spy[spy.length-1].c;
   const then = r[r.length-1-days].c / spy[spy.length-1-days].c;
@@ -961,8 +970,14 @@ function rspRatio(days) {
 }
 function breadthRead(eq) {
   const b = { share50:null, share200:null, n50:0, of50:0, n200:0, of200:0,
-              rspLong:rspRatio(T.lookback), rspShort:rspRatio(20), reading:null, parts:[] };
-  if (D.sma) {
+              rspLong:rspRatio(T.lookback), rspShort:rspRatio(20), reading:null, parts:[], shown:[],
+              scope:"Hub list only" };
+  const w = D.wb;
+  if (w && w.pct_above_50 != null && w.pct_above_200 != null) {
+    b.share50 = +w.pct_above_50 / 100; b.of50 = +w.members_50;
+    b.share200 = +w.pct_above_200 / 100; b.of200 = +w.members_200;
+    b.scope = "whole market · US common stocks · session " + w.session_date;
+  } else if (D.sma) {
     eq.forEach((x) => {
       const a = D.sma[x.t]; if (!a || x.price == null) return;
       if (a.s50 != null)  { b.of50++;  if (x.price > a.s50)  b.n50++; }
@@ -973,13 +988,17 @@ function breadthRead(eq) {
   }
   /* each leg lands on the same -1..+1 scale the Geiger uses, so they can be averaged
      without pretending a percentage and a ratio are the same thing */
-  if (b.share50  != null) b.parts.push({ k:"above the 50-day", v:(b.share50 -0.5)*2,
-    read: pct(b.share50*100) + " of " + b.of50 + " names" });
-  if (b.share200 != null) b.parts.push({ k:"above the 200-day", v:(b.share200-0.5)*2,
-    read: pct(b.share200*100) + " of " + b.of200 + " names" });
+  const scopeTag = b.scope === "Hub list only" ? " · Hub list only" : " · whole market";
+  if (b.share50  != null) b.parts.push({ k:"above the 50-day" + scopeTag, v:(b.share50 -0.5)*2,
+    read: pct(b.share50*100) + " of " + b.of50 + (scopeTag === " · whole market" ? " US common stocks, session " + D.wb.session_date : " of the Hub's names") });
+  if (b.share200 != null) b.parts.push({ k:"above the 200-day" + scopeTag, v:(b.share200-0.5)*2,
+    read: pct(b.share200*100) + " of " + b.of200 + (scopeTag === " · whole market" ? " US common stocks, session " + D.wb.session_date : " of the Hub's names") });
   if (b.rspLong != null) b.parts.push({ k:"equal weight vs the index", v:clamp(b.rspLong/5, -1, 1),
     read: "RSP " + sg(b.rspLong,1) + "% against SPY over " + T.lookback + " days" });
   if (b.parts.length) b.reading = mean(b.parts.map((x)=>x.v));
+  const ndx = rspRatio(T.lookback, "QQQE", "QQQ");
+  if (ndx != null) b.shown.push({ k:"equal weight vs the Nasdaq-100", v:clamp(ndx/5, -1, 1),
+    read: "QQQE " + sg(ndx,1) + "% against QQQ over " + T.lookback + " days" });
   return b;
 }
 
@@ -2353,8 +2372,11 @@ function sourcesHTML(m) {
       " names" + (D.barsFailed ? ", " + D.barsFailed + " came back empty" : "") + "<br>" +
     "Cohorts · scintilla-live ticker_cohorts, the whole table read in pages · " + (D.cohRowCount||0) +
       " memberships · the same table and the same means the dashboard's COHORT COMPARE strip uses<br>" +
-    "Breadth · scintilla-live provider_indicators_current, FMP 50- and 200-day averages dated " + esc(D.smaDate||"—") +
-      " · " + (D.sma ? Object.keys(D.sma).length : 0) + " names · and RSP against SPY on the chart API's daily bars<br>" +
+    (D.wb ? "Breadth · whole market · scintilla-live breadth_daily, US common stocks, session " + esc(D.wb.session_date) +
+      " · " + num(D.wb.members) + " names · Massive daily bars split-adjusted by the batch job<br>"
+      : "Breadth · Hub list only · scintilla-live provider_indicators_current, FMP 50- and 200-day averages dated " + esc(D.smaDate||"—") +
+      " · " + (D.sma ? Object.keys(D.sma).length : 0) + " names (breadth_daily has no row yet)<br>") +
+    "Equal weight · RSP against SPY, and QQQE against QQQ (shown, not counted), on the chart API's daily bars<br>" +
     (D.favSource === "server"
       ? "Favourites · scintilla-live hub_favorites, the board's cross-device list · " + D.fav.length + " names · the same stars on every device<br>"
       : "Favourites · the server list could not be read or is empty, so this browser's sc_fav list merged with the board's seed · " +
@@ -2446,6 +2468,8 @@ function drawBreadth(m) {
   host.innerHTML = '<div class="tw"><table><thead><tr><th>BREADTH</th><th>WHAT IT READS</th><th>ON THE GEIGER SCALE</th><th>EFFECT</th></tr></thead><tbody>' +
     b.parts.map((x)=>"<tr><td>" + esc(x.k) + "</td><td>" + esc(x.read) + "</td><td>" + sgc(x.v) + "</td>" +
       "<td>" + (x.v>=0 ? "adds to" : "takes from") + " how much to own</td></tr>").join("") +
+    b.shown.map((x)=>"<tr><td>" + esc(x.k) + "</td><td>" + esc(x.read) + "</td><td>" + sgc(x.v) + "</td>" +
+      "<td>shown beside RSP, not counted</td></tr>").join("") +
     "<tr class='pick'><td>the three together</td><td>weighted " + T.breadthW + "% against the board average</td>" +
       "<td>" + sgc(b.reading) + "</td><td>" +
       (Math.abs(m.breadthMoved) < 0.5 ? "moves the answer by less than a point"
@@ -2456,7 +2480,10 @@ function drawBreadth(m) {
       ? "Fewer than half the names are above their own 50-day average while the equal-weight index trails the " +
         "cap-weighted one — that is a narrow market, and the page owns less because of it."
       : "Each leg is measured tonight, not assumed.") +
-    " The averages are the published ones dated " + esc(D.smaDate || "—") + "; the equal-weight leg is RSP against SPY " +
+    (b.scope === "Hub list only"
+      ? " The 50/200-day legs are the Hub's own names (Hub list only — the whole-market table has no row yet), from the published averages dated " + esc(D.smaDate || "—") + "."
+      : " The 50/200-day legs are the whole market: " + esc(b.scope) + ", public.breadth_daily.") +
+    " The equal-weight leg is RSP against SPY " +
     "on the same daily bars the sector tape uses.</p>";
 }
 
