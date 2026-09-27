@@ -117,9 +117,11 @@ test("the evaluation board carries every proposal Alan named, each with a purpos
   assert.match(read("eval-board.html"), /keep[\s\S]*change[\s\S]*drop/, "the score row offers keep / change / drop");
 });
 
-test("this lane leaves the Hub's own page and the Indicator Lab as they were", () => {
+/* D2 (27 Sep) builds the company view on index.html, so the page itself is no longer frozen; the
+   Indicator Lab still is (the 23 Sep rule: byte-identical). */
+test("this lane leaves the Indicator Lab as it was", () => {
   let base;
   try { base = execFileSync("git", ["merge-base", "HEAD", "7c96a83"], { cwd: ROOT }).toString().trim(); } catch (_) { return; }   // not a git checkout: nothing to compare
-  const diff = execFileSync("git", ["diff", "--name-only", base, "--", "index.html", "prototypes/indicator-lab"], { cwd: ROOT }).toString().trim();
-  assert.equal(diff, "", "index.html and prototypes/indicator-lab are unchanged");
+  const diff = execFileSync("git", ["diff", "--name-only", base, "--", "prototypes/indicator-lab"], { cwd: ROOT }).toString().trim();
+  assert.equal(diff, "", "prototypes/indicator-lab is unchanged");
 });
