@@ -65,7 +65,9 @@ test("every served ticker matches the recorded /universe exactly, and every univ
   for (const n of D.nodes) {
     if (!n.ticker) { assert.equal(n.served, false); continue; }
     assert.equal(n.served, U.symbols.includes(n.ticker), `${n.ticker} served flag disagrees with /universe`);
-    assert.equal(n.tier === "FULL", n.served, `${n.ticker}: FULL must mean served, and served must mean FULL`);
+    // since the 27 Sep sitting a served line is FULL or (served) GEIGER-ONLY; FULL still always means served
+    if (n.tier === "FULL") assert.equal(n.served, true, `${n.ticker}: FULL must mean served`);
+    if (n.served) assert.ok(n.tier === "FULL" || n.tier === "GEIGER-ONLY", `${n.ticker}: served must be FULL or GEIGER-ONLY`);
   }
 });
 

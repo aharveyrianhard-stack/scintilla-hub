@@ -31,6 +31,8 @@ const universe = argU > 0
   ? JSON.parse(readFileSync(process.argv[argU + 1], "utf8"))
   : await (await fetch(CHART_API + "/universe", { headers: { Origin: "https://scintillahub.ai" } })).json();
 const SERVED = new Set(universe.symbols);
+// admission v2 (27 Sep sitting): /universe carries tiers.geiger_only — served, computed, shown only where Alan asks.
+const SERVED_GEIGER_ONLY = new Set((universe.tiers && universe.tiers.geiger_only) || []);
 const tree = JSON.parse(readFileSync(join(ROOT, "data/standard-tree-20260924.json"), "utf8"));
 const { HOLD, NAMES, HOLD_SRC } = new Function(readFileSync(HOLDINGS, "utf8") + ";return {HOLD,NAMES,HOLD_SRC}")();
 const adm = JSON.parse(readFileSync(ADMISSION, "utf8"));
@@ -91,6 +93,7 @@ function issuerOf(t) {
 // FULL = served today (in /universe). GEIGER-ONLY = on the 27 Sep admission list for a Geiger only, not served yet.
 // NOT_ADMITTED = everything else (named on the map, never admitted). `planned_tier` says what an admission would make it.
 function tierOf(t) {
+  if (SERVED.has(t) && SERVED_GEIGER_ONLY.has(t)) return { served: true, tier: "GEIGER-ONLY", planned_tier: null, admission: "served (Geiger only, admitted 27 Sep)" };
   if (SERVED.has(t)) return { served: true, tier: "FULL", planned_tier: null, admission: "served" };
   if (GEIGER_ONLY.has(t)) return { served: false, tier: "GEIGER-ONLY", planned_tier: "GEIGER-ONLY", admission: "on the 27 Sep admission list (Geiger only)" };
   if (FULL_CAND.has(t)) return { served: false, tier: "NOT_ADMITTED", planned_tier: "FULL", admission: "on the 27 Sep admission list (full)" };
