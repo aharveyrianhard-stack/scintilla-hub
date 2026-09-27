@@ -38,6 +38,13 @@ p{max-width:78ch;margin:0 0 10px}.note{font-family:var(--mono);font-size:12px;co
 .s6tip{position:fixed;pointer-events:none;background:rgba(10,10,15,.96);border:.6px solid var(--line2);color:var(--ink);font-family:var(--mono);font-size:11.5px;padding:6px 8px;line-height:1.5;display:none;z-index:9;white-space:nowrap}
 .s6banner{border:.8px solid var(--warn);border-left-width:3px;padding:10px 14px;margin:12px 0;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
 @media(max-width:600px){.s6row{grid-template-columns:1fr;gap:0}.s6row .l{margin-top:6px}}
+.s8{margin-top:56px;border-top:.6px solid var(--line2);padding-top:6px}
+.s8tab{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink);border:.6px solid var(--line2);border-bottom:0;padding:6px 12px;margin-top:-7px;background:var(--panel)}
+.s8 h3{font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin:26px 0 8px}
+.s8 ol{max-width:92ch;padding-left:20px;font-size:14px;color:var(--ink2)}.s8 ol li{margin-bottom:8px}
+.s8scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.s8scroll table{min-width:760px}.s8scroll td{white-space:nowrap}
+.s8 .up{color:var(--up)}.s8 .dn{color:var(--dn)}.s8 .q{color:var(--dim)}.s8 tr.base td{color:var(--ink)}
+.s8 a{color:var(--ink)}
 </style></head><body><main>
 <div data-scnav-slot style="margin-bottom:14px"></div>
 <h1>How unusual is this reading?</h1>
@@ -86,6 +93,23 @@ p{max-width:78ch;margin:0 0 10px}.note{font-family:var(--mono);font-size:12px;co
     <div id="s6strips"></div>
   </div>
   <div class="tip s6tip" id="s6tip"></div>
+</section>
+<section class="s8" id="s8">
+  <div class="s8tab">S8 · LADDER</div>
+  <h2>If I bought at this RSI level, how did it go? — forward, market first</h2>
+  <div class="meta">Every number is measured forward from the close of the day the condition was true (20 sessions later), read only from that day's bar and earlier. RSI(14) is ranked against the fund's or stock's own previous 3 years. Green = better than that row's any-day line, red = worse. Price only. Descriptive — nothing here predicts. The full study (averages, the extended case, the run to the report, the combinations with real trades, and what could be wrong) is on <a id="s8link" href="../../deliverables/20260927/ladder/LADDER.html">the S8 ladder page</a>.</div>
+  <div id="s8status" class="meta"></div>
+  <div id="s8body" hidden>
+    <h3>Five things to act on</h3><ol id="s8lead"></ol>
+    <div class="controls" style="margin:14px 0 4px"><div><label for="s8fund">fund</label><select id="s8fund"></select></div></div>
+    <h3 id="s8fundh">The staircase</h3>
+    <div class="note s6swipe">← swipe the table sideways for every column →</div><div class="s8scroll"><table id="s8table"></table></div>
+    <div class="note" id="s8fnote"></div>
+    <h3>Stocks — the same ladder, by the market's state that day</h3>
+    <div class="s8scroll"><table id="s8stocks"></table></div>
+    <h3>The five combinations that held in both halves of history</h3>
+    <div class="s8scroll"><table id="s8combos"></table></div>
+  </div>
 </section>
 </main>
 <script type="module">
@@ -225,6 +249,45 @@ function s6Strips(name, v, u) {
 }
 addEventListener("resize", () => { if (S6) s6Show($("#t").value.trim().toUpperCase()); });
 run();
+</script>
+<script>
+/* ---- S8 · ladder. Reads data/s8-summary.json (built by s8-page.mjs from data/s8-ladder.json). Self-contained. ---- */
+(function () {
+  var q = function (id) { return document.getElementById(id); };
+  var f1 = function (x) { return x == null ? "—" : (+x).toFixed(1); };
+  var sh = function (x, base) { if (!x || x.win == null) return "—"; var c = base == null ? "" : x.win > base ? "up" : x.win < base ? "dn" : ""; return '<span class="' + c + '">' + f1(x.win) + '%</span> <span class="q">· ' + x.n + '</span>'; };
+  var md = function (x) { if (!x || x.med == null) return "—"; return '<span class="' + (x.med > 0 ? "up" : x.med < 0 ? "dn" : "") + '">' + (x.med > 0 ? "+" : "") + x.med.toFixed(2) + '%</span>'; };
+  var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); };
+  var D = null;
+  function fund(sym) {
+    var F = D.funds[sym]; if (!F) return;
+    q("s8fundh").textContent = sym + " — its own RSI at or below each level, 20 sessions later (episodes)";
+    var h = '<tr><th>' + sym + ' RSI at or below</th><th>up · episodes</th><th>95% range</th><th>shuffle 95th</th><th>middle</th><th>trend on</th><th>trend off</th><th>last 5 years</th></tr>';
+    h += '<tr class="base"><td>any day</td><td>' + f1(F.any.all.win) + '% · ' + F.any.all.n + '</td><td></td><td></td><td>' + md(F.any.all) + '</td><td>' + f1(F.any.on.win) + '%</td><td>' + f1(F.any.off.win) + '%</td><td></td></tr>';
+    F.rows.forEach(function (r) {
+      h += '<tr><td>bottom ' + r.T + '%</td><td>' + sh(r.all, F.any.all.win) + '</td><td class="q">' + (r.ci && r.ci[0] != null ? f1(r.ci[0]) + '–' + f1(r.ci[1]) : '') + '</td><td class="q">' + f1(r.p95) + '</td><td>' + md(r.all) + '</td><td>' + sh(r.on, F.any.on.win) + '</td><td>' + sh(r.off, F.any.off.win) + '</td><td>' + sh(r.l5, F.any.all.win) + '</td></tr>';
+    });
+    q("s8table").innerHTML = h;
+    q("s8fnote").textContent = "Ranked from " + F.from + (F.note ? " · " + F.note : "") + ". Trend on = the fund closed above its own 200-day. 95% range resamples whole months; shuffle 95th = what random days of the same fund reach 1 time in 20.";
+  }
+  fetch("./data/s8-summary.json", { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) {
+    D = j;
+    q("s8lead").innerHTML = j.lead.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("");
+    q("s8fund").innerHTML = Object.keys(j.funds).map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
+    q("s8fund").addEventListener("change", function (e) { fund(e.target.value); });
+    fund("SPY");
+    var st = j.stocks.states, h = '<tr><th>stock RSI at or below</th>' + st.map(function (s) { return '<th>' + esc(s.label) + '</th>'; }).join("") + '</tr>';
+    h += '<tr class="base"><td>any day</td>' + st.map(function (s) { return '<td>' + f1(s.any.win) + '%</td>'; }).join("") + '</tr>';
+    st[0].rows.forEach(function (r, i) { h += '<tr><td>bottom ' + r.T + '%</td>' + st.map(function (s) { return '<td>' + sh(s.rows[i].x, s.any.win) + '</td>'; }).join("") + '</tr>'; });
+    q("s8stocks").innerHTML = h;
+    var b = j.base_halves;
+    q("s8combos").innerHTML = '<tr><th>stock condition · market</th><th>2004–2016 · up</th><th>2017–2026 · up</th><th>middle (2017→)</th></tr>' +
+      '<tr class="base"><td>any day</td><td>' + f1(b.disc.win) + '%</td><td>' + f1(b.conf.win) + '%</td><td>' + md(b.conf) + '</td></tr>' +
+      j.combos.map(function (c) { return '<tr><td>' + esc(c.cond) + '<br><span class="q">' + esc(c.state) + '</span></td><td>' + sh(c.disc, b.disc.win) + '</td><td>' + sh(c.conf, b.conf.win) + '</td><td>' + md(c.conf) + '</td></tr>'; }).join("");
+    q("s8status").textContent = j.stocks.count + " stocks and " + Object.keys(j.funds).length + " funds · built " + j.built_utc.slice(0, 16).replace("T", " ") + " UTC";
+    q("s8body").hidden = false;
+  }).catch(function () { q("s8status").innerHTML = '<span class="err">Not built yet.</span> Run research/statistics/s8-ladder.mjs, then s8-page.mjs.'; });
+})();
 </script>
 <style id="scnav-css">
 .scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
