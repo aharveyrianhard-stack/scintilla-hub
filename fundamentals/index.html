@@ -194,7 +194,7 @@ async function fetchCohortBundle(tickers){
     sb('balance_history?select=ticker,fiscal_date,total_equity,total_debt,cash_and_equiv,updated_ts&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*6+20)),
     sb('fundamentals_history?select=ticker,fiscal_date,period,revenue,ebitda,net_income,gross_profit&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*12+40)),
     sb('ratios_history?select=ticker,fiscal_date,dividend_yield&ticker=in.('+listQ+')&order=fiscal_date.desc&limit='+(tickers.length*4+20)),
-    sb('company_profile?select=ticker,beta,updated_ts&ticker=in.('+listQ+')')
+    sb('company_profile?select=ticker,beta,market_cap,updated_ts&ticker=in.('+listQ+')')
   ]);
   const fundByT={}; funds.forEach(f=>fundByT[f.ticker]=f);
   const balLatest={}; bal.forEach(b=>{ if(!balLatest[b.ticker]) balLatest[b.ticker]=b; });
@@ -217,7 +217,10 @@ async function fetchCohortBundle(tickers){
       const yrs=(new Date(last.fiscal_date)-new Date(first.fiscal_date))/(365.25*86400000);
       if(yrs>0.5 && first.revenue>0 && last.revenue>0) cagr=(Math.pow(last.revenue/first.revenue,1/yrs)-1)*100;
     }
-    const price=f?f.price:null, cap=f?f.market_cap:null, revTTM=f?f.revenue_ttm:null, pe=f?f.trailing_pe:null;
+    /* MARKET CAP IS TODAY'S (D2, 27 Sep): company_profile.market_cap (FMP /profile, refreshed daily - the Hub board's number) first;
+     fundamentals.market_cap is FMP's value at the last fiscal quarter end, in the filing currency for foreign filers, so it is only a fallback. */
+    const profCap=profByT[t]&&+profByT[t].market_cap>0?+profByT[t].market_cap:null;
+    const price=f?f.price:null, cap=profCap!=null?profCap:(f?f.market_cap:null), revTTM=f?f.revenue_ttm:null, pe=f?f.trailing_pe:null;
     const ps=(cap!=null&&revTTM)?cap/revTTM:null;
     const ev=(cap!=null&&b)?cap+(b.total_debt||0)-(b.cash_and_equiv||0):null;
     const evEbitda=(ev!=null&&ebitdaTTM)?ev/ebitdaTTM:null;
@@ -239,8 +242,11 @@ async function renderComps(sym){
   const cohortMembers = UNIVERSE.filter(u=>u.cohort===cohort && u.ticker!==sym).map(u=>u.ticker);
   // pull fundamentals for the whole cohort once to rank by market cap, then cap the peer table to the largest N
   const wholeCohort = [sym].concat(cohortMembers);
-  const capScan = await sb('fundamentals?select=ticker,market_cap&ticker=in.('+wholeCohort.map(encodeURIComponent).join(',')+')');
+  // ranked by TODAY's market cap (company_profile), the fundamentals period-end value only where the profile has none
+  const capQ=wholeCohort.map(encodeURIComponent).join(',');
+  const [capScan, capProf] = await Promise.all([sb('fundamentals?select=ticker,market_cap&ticker=in.('+capQ+')'), sb('company_profile?select=ticker,market_cap&ticker=in.('+capQ+')').catch(()=>[])]);
   const capByT={}; capScan.forEach(c=>capByT[c.ticker]=c.market_cap||0);
+  capProf.forEach(c=>{ if(+c.market_cap>0) capByT[c.ticker]=+c.market_cap; });
   const peersRanked = cohortMembers.slice().sort((a,b)=>(capByT[b]||0)-(capByT[a]||0)).slice(0,COMPS_PEER_CAP);
   const names = [sym].concat(peersRanked);
   const B = await fetchCohortBundle(names);
@@ -743,7 +749,7 @@ async function buildBase(sym){
     sb('balance_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6'),
     sb('fundamentals_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=12'),
     sb('cashflow_history?select=*&ticker=eq.'+sym+'&order=fiscal_date.desc&limit=6'),
-    sb('company_profile?select=beta,updated_ts&ticker=eq.'+sym)
+    sb('company_profile?select=beta,market_cap,updated_ts&ticker=eq.'+sym)
   ]);
   const f = fArr[0];
   if(!f) return null; // genuine gap: no fundamentals row for this ticker — caller shows the banner
@@ -776,7 +782,8 @@ async function buildBase(sym){
   const shares = qRows[0]&&qRows[0].shares_dil ? qRows[0].shares_dil/1e9 : (f.market_cap && f.price ? f.market_cap/f.price/1e9 : null);
   if(!qRows[0]||!qRows[0].shares_dil) flags.push('Diluted share count came from market_cap÷price (fundamentals_history.shares_dil missing) — a proxy, not a reported figure.');
   const netDebt = ((b.total_debt||0)-(b.cash_and_equiv||0))/1e9;
-  const cap = f.market_cap||0, debt=(b.total_debt||0);
+  /* MARKET CAP IS TODAY'S (D2, 27 Sep): company_profile.market_cap first; fundamentals.market_cap (the last fiscal quarter end's value) only as a fallback. */
+  const cap = (cpArr[0]&&+cpArr[0].market_cap>0 ? +cpArr[0].market_cap : f.market_cap)||0, debt=(b.total_debt||0);
   const eqW = (cap+debt)>0 ? cap/(cap+debt) : 1;
   const debtW = 1-eqW;
   const cp = cpArr[0];

@@ -24,15 +24,21 @@ const CO_TABS = JSON.parse(page.match(/^const CO_TABS = (\[[^\]]*\]);/m)[1]);
 const fmtCap = new Function("num", fn("fmtCap") + "\nreturn fmtCap;")(num);
 
 /* ── HF-1 · CHART first ─────────────────────────────────────────────────────────────────────── */
-test("a company opened from the board lands on CHART; GEIGER stays a tab but is never the landing tab", () => {
-  assert.deepEqual(CO_TABS.slice(0, 4), ["GEIGER", "CHART", "FUNDAMENTALS", "STATS"]);
-  const S = { coTab: "FINANCIALS", readTab: "BUSINESS" };
-  let seen = null;
-  const pinLeft = new Function("S", "clearRotate", "favList", "loadLeft", "LEFT_STATE", "ROT_INDEX", FRONT_CONSTS + fn("pinLeft") + "\nreturn pinLeft;")(
-    S, () => {}, () => ["MU"], () => { seen = S.coTab; }, "AUTO", 0);
-  pinLeft("NVDA");
-  assert.equal(seen, "CHART", "the tab is CHART by the time the company loads");
-  assert.equal(S.readTab, "VERDICT");
+/* D2 (27 Sep) replaced the landing rule: the chart is no longer a tab — it is always on top — so a company opens on the
+   tab this browser last used, GEIGER the first time. */
+test("a company opens on the tab this browser last used (GEIGER the first time); CHART is not a tab any more", () => {
+  assert.deepEqual(CO_TABS, ["GEIGER", "FUNDAMENTALS", "ESTIMATES", "FINANCIALS", "NEWS", "EVENTS", "READ"]);
+  const kit = (stored) => { const S = { coTab: "FINANCIALS", readTab: "BUSINESS" }; let seen = null;
+    const pinLeft = new Function("S", "clearRotate", "favList", "loadLeft", "LEFT_STATE", "ROT_INDEX", "lsGet", "CO_TABS",
+      FRONT_CONSTS + line(/^const CO_MORE_TABS = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m) + line(/^function coTabOk[^\n]*/m) + line(/^function coSavedTab[^\n]*/m) + fn("pinLeft") + "\nreturn pinLeft;")(
+      S, () => {}, () => ["MU"], () => { seen = S.coTab; }, "AUTO", 0, (k) => (k === "hub.company.tab" ? stored : null), CO_TABS);
+    pinLeft("NVDA"); return { seen, S }; };
+  assert.equal(kit(null).seen, "GEIGER", "first time: GEIGER");
+  assert.equal(kit("EVENTS").seen, "EVENTS", "then the remembered tab");
+  assert.equal(kit("STATS").seen, "STATS", "a MORE tab is remembered too");
+  assert.equal(kit("CHART").seen, "GEIGER", "a stored CHART (retired) falls back to GEIGER");
+  assert.equal(kit("SOCIAL").seen, "GEIGER", "a stored SOCIAL (retired) falls back to GEIGER");
+  assert.equal(kit(null).S.readTab, "VERDICT");
   /* every entry that opens a company goes through pinLeft: the board row, search, a ticker link */
   assert.match(fn("openCo"), /if \(wasDash\) pinLeft\(t\);/);
   assert.match(page, /LEFT_HEAT = false; openCo\(a\.dataset\.t\); break;/, "a board row opens through openCo");
@@ -50,7 +56,8 @@ test("the CHART tab is the Station chart pane, with the timeframe row 1h 4h 1D 3
   assert.deepEqual([...html.matchAll(/data-r="([^"]+)"/g)].map((m) => m[1]), ["1h", "4h", "1D", "3D", "1W"]);
   assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="4h"/, "the remembered range is lit");
   /* H2 — pane mode for the Hub (?bare=hub) and the RSI fan by its own width rule (rsi=auto) */
-  assert.match(html, /<iframe class="sc-cofr__frame" id="coChartFrame"[^>]*src="https:\/\/station\.scintillahub\.ai\/chart\/\?bare=hub&amp;t=MU&amp;range=4h&amp;clouds=1&amp;rsi=auto"/);
+  /* D2 — one RSI line of the chart's own timeframe (rsi=<range>) */
+  assert.match(html, /<iframe class="sc-cofr__frame" id="coChartFrame"[^>]*src="https:\/\/station\.scintillahub\.ai\/chart\/\?bare=hub&amp;t=MU&amp;range=4h&amp;clouds=1&amp;rsi=4h"/);
   assert.match(html, /class="sc-cofr is-legacy"/, "until the Station answers that it knows ?bare=hub, its own toolbar is tucked under the Hub's row");
   assert.match(html, /id="coChartAsOf">last bar …<\/span> · Massive/, "the bar source and its age are on the screen");
   assert.doesNotMatch(html, /tradingview/i, "never a TradingView embed");
@@ -58,7 +65,7 @@ test("the CHART tab is the Station chart pane, with the timeframe row 1h 4h 1D 3
   assert.equal(chartKit("garbage").coRange("15m"), "1D", "a range outside the row falls back to 1D");
   assert.doesNotMatch(k.coChartSrc("MU", "1D", false), /rsi/, "the RSI fan can still be switched off");
   assert.match(k.coChartSrc("mu", "1W", true), /\?bare=hub&t=MU&range=1W&clouds=1&rsi=1$/);
-  assert.match(page, /^const CO_CHART_RSI = "auto";/m);
+  assert.match(page, /^const CO_CHART_RSI = "match";/m);
   assert.doesNotMatch(page, /chart\/\?bare=1/, "never bare=1: that is the deck's mode and blanks the price badge in the Hub");
 });
 
@@ -73,7 +80,7 @@ test("clicking a timeframe writes ONLY the iframe's src and the browser's memory
   const e = { stopped: false, preventDefault() {}, stopPropagation() { this.stopped = true; } };
   run({ dataset: { r: "3D" } }, e, (id) => (id === "coChartFrame" ? frame : null), (k, v) => { saved[k] = v; },
     { querySelectorAll: () => btns }, "MU", esc, () => {});
-  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=3D&clouds=1&rsi=auto");
+  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=3D&clouds=1&rsi=3D");
   assert.deepEqual(saved, { "hub.chart.range": "3D" });
   assert.deepEqual(btns.filter((b) => b.on).map((b) => b.dataset.r), ["3D"]);
   assert.ok(e.stopped, "a timeframe click never reaches the board row underneath");
@@ -93,7 +100,7 @@ test("EXPAND hides the board and gives the company the full width; COLLAPSE rest
   const cls = new Set(), saved = {}, btn = { outerHTML: "" };
   const env = { LEFT_STATE: "PINNED", LEFT_T: "MU", LEFT_HEAT: false };
   const kit = new Function("S", "document", "lsGet", "lsSet", "el", "env",
-    line(/^const CO_RANGE_KEY = [^\n]*/m) + "let CO_EXPANDED = false;\n" +
+    line(/^const CO_RANGE_KEY = [^\n]*/m) + "let CO_EXPANDED = false;\nconst cvRailRepaint = () => {};\n" +   /* D2 — the expanded view's name rail is filled when it shows */
     "Object.defineProperty(globalThis, '__hf', { value: 1, configurable: true });\n" +
     fn("coExpandOn") + fn("coExpandBtnHTML") +
     fn("coExpandApply").replace("LEFT_STATE, LEFT_T, LEFT_HEAT", "env.LEFT_STATE, env.LEFT_T, env.LEFT_HEAT") +
@@ -116,7 +123,7 @@ test("EXPAND hides the board and gives the company the full width; COLLAPSE rest
   assert.ok(cls.has("co-exp"), "pin again → it comes back expanded");
   assert.match(page, /^let CO_EXPANDED = lsGet\(CO_EXP_KEY\) === "1";/m, "read from the browser at load");
   assert.match(fn("renderLeftPanel"), /coExpandApply\(\);/, "every left-panel paint re-applies it");
-  assert.match(fn("leftHeadHTML"), /coExpandBtnHTML\(\)/, "the control sits top-right on the company view");
+  assert.match(fn("cvLineHTML"), /coExpandBtnHTML\(\)/, "the control sits at the end of the company line (D2)");
 });
 
 /* ── HF-2 · REVENUE ─────────────────────────────────────────────────────────────────────────── */
