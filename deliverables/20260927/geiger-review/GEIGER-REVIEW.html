@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>SCINTILLA · Geiger review</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0F0F16;--line:#1C1C28;--line2:#2A2A3A;--ink:#C8C8D2;--ink2:#A0A0B0;--dim:#7A7A8C;--bar:#8E8E9C;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:16px;letter-spacing:.2em;text-transform:uppercase;margin:0 0 6px}
+h2{font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);margin:42px 0 12px;padding-top:14px;border-top:1px solid var(--line)}
+h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:22px 0 8px}
+p,li{max-width:92ch} p{margin:8px 0}
+.kicker{color:var(--dim);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:18px}
+.q{border-left:2px solid var(--line2);padding:2px 12px;color:var(--ink2);margin:10px 0;max-width:92ch}
+b{font-weight:600;color:var(--ink)}
+.rec{border:1px solid var(--line2);background:var(--panel);padding:14px 16px;margin:14px 0}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;margin:10px 0 14px;font-size:12px;width:100%}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:500;letter-spacing:.1em;text-transform:uppercase;font-size:12px}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.bars{width:22%}
+.hb{display:block;height:8px;background:var(--line);border-radius:0 4px 4px 0;margin-top:5px}
+.hb__f{display:block;height:8px;background:var(--bar);border-radius:0 4px 4px 0}
+.tag{font-size:12px;color:var(--dim);border:1px solid var(--line2);padding:0 5px;margin-left:6px}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:14px 0}
+.big>div{border:1px solid var(--line2);background:var(--panel);padding:12px 14px}
+.big .v{font-size:24px;letter-spacing:.02em}
+.big .l{font-size:12px;color:var(--dim)}
+code{font-size:12px;color:var(--ink2);overflow-wrap:anywhere}
+p,li,td{overflow-wrap:break-word}
+.small{font-size:12px;color:var(--dim)}
+ul{padding-left:18px} li{margin:4px 0}
+@media(max-width:700px){.wrap{padding:18px 16px 40px} td.bars{width:18%} .scroll table{min-width:680px} .scroll table[style]{min-width:0}}
+</style></head>
+<body><div class="wrap">
+<div class="kicker"><span data-scnav-slot></span>SCINTILLA · G2 · GEIGER REVIEW · 27 SEP 2026 · review only, nothing changed</div>
+<h1>How the Geiger is really built, and whether it leans short-term</h1>
+<p class="kicker">branch hub/geiger-review-20260927 · base 7c96a83 · opus · medium · nothing pushed, nothing deployed, no database written</p>
+
+<div class="q">"I believe the first moving average in our Geiger calculations is the two-day … I'm worried however we set up our Geiger originally is a little lopsided to short-term. My personal equalizer only really considers from 2 hours on, so it may have hacked around an error in the back end … What does the Geiger even measure intraday?" <span class="small">— Alan, 27 Sep</span></div>
+
+<h2>The short answer</h2>
+<ul>
+<li><b>There are two different "Geigers", and the two-day average belongs to the other one.</b> The live Geiger (the board, <code>/geiger</code>) builds each timeframe from that timeframe's own bars: nine averages, EMA 5 to SMA 200, plus RSI 14 and Williams %R 14 — all counted in the <i>same</i> bars. The <b>rewind history</b> (<code>fan_daily</code>, what the board replays) is a separate daily fan whose first line is an <b>EMA of 2 days</b>. That is the two-day average you remember. It never feeds the live number.</li>
+<li><b>No timeframe mixes a 2-day average with a 15-minute RSI.</b> On every timeframe, the averages and the RSI read the same bars. The 15-minute timeframe has RSI over 3.5 hours <i>and</i> averages from 1.25 hours; it is internally consistent. It is also switched off in your Equalizer.</li>
+<li><b>The flat default does lean short-term. Your saved Equalizer is not a hack around a bug. It is the fix.</b> With every timeframe at equal weight (the Equalizer's starting curve), the seven timeframes below 2 hours cause <b>69%</b> of the Geiger's day-to-day movement. Your saved row gives them zero weight, so their share is <b>0%</b>. The live Geiger runs on your row today; its receipt <code>f6cf97b5…</code> is echoed on every <code>/geiger</code> response.</li>
+<li><b>Even so, your Geiger is still driven day to day by the intraday bars.</b> 2h to 12h cause <b>86%</b> of its daily movement, though daily-and-up hold 40% of the weight. The 4h and 6h timeframes are near-copies (their readings correlate at <b>0.997</b>), and together they carry 32% of the weight.</li>
+<li><b>Dropping everything below 3h from your row changes almost nothing.</b> It only removes 2h, at 2.3% weight: the typical gap is 0.005 on a −1…+1 scale, and the sign differs on 0.8% of days.</li>
+<li><b>A daily-bars-only Geiger (daily, 3-day, weekly) is cheap and feasible.</b> Massive covers ETFs and ADRs; FMP covers indexes and commodities. The chart API already serves daily, 3-day and weekly bars for both. It tracks your full Geiger at correlation <b>0.87</b>, a clearly slower, calmer reading.</li>
+</ul>
+
+<div class="big">
+<div><div class="v">69%</div><div class="l">of day-to-day movement from rungs below 2h — flat default weights</div></div>
+<div><div class="v">0%</div><div class="l">the same share under your saved Equalizer (live today)</div></div>
+<div><div class="v">19 days</div><div class="l">typical time for your Geiger to swing from −0.5 to +0.5, or back</div></div>
+<div><div class="v">160/160</div><div class="l">rung readings where my replay equals live /geiger exactly (largest gap 0.0000)</div></div>
+</div>
+
+<h2>1 · The Geiger, written out</h2>
+<p><b>What happens, in order.</b> It runs every 4 minutes (<code>geiger-supervisor.sh:6</code>, 240 s). For each of the 364 names and each <i>participating</i> timeframe, it fetches the newest 230 completed provider bars from the chart API (<code>geiger-publish-artifact.mjs:123, :183</code>). Then:</p>
+<ol>
+<li><b>TREND</b>, the fan: up to nine averages, EMA 5, 8, 13, 21, 34 and SMA 50, 100, 150, 200, all measured in that timeframe's bars (<code>geiger-publish-artifact.mjs:52-62</code>). It counts how many of the 8 neighbouring pairs are stacked bullish (faster above slower) and maps that to −1…+1 (<code>:185-190</code>). A line joins only once enough bars exist.</li>
+<li><b>MOMENTUM</b>: RSI 14 is scored between 23 and 77, and Williams %R 14 between −90 and −10, each mapped to −1…+1. They are blended RSI 0.6 / Williams 0.4 (<code>geiger-publish-artifact.mjs:63, :192-197</code>; mix from the Equalizer snapshot <code>momentum_mix</code>, line 13).</li>
+<li><b>Timeframe reading</b> = TREND 0.5 + MOMENTUM 0.5 (<code>geiger-publish-artifact.mjs:200-201</code>; family weights from the snapshot <code>family_weights</code>, line 9). It is trend only if a young listing has under 15 bars.</li>
+<li><b>Composite</b> = the weighted average of the timeframe readings. The weights are your Equalizer's; a timeframe counts only if it is switched on <i>and</i> its weight is above zero (<code>geiger-source-contract.mjs:76-78, :194-211</code>). The weights are read from <code>operator_weights</code> (global row), frozen per run and stamped with a receipt (<code>geiger-publish-artifact.mjs:79-110</code>).</li>
+</ol>
+<p class="small">Files: provider repo <code>_worktrees/m67-provider-20260924</code> @ d72c472, <code>services/hot-query/</code>. Equalizer snapshot: <code>control/acceptance/EQUALIZER_SNAPSHOT_2026-08-18.json</code> lines 9, 13, 17. Hub Equalizer: <code>index.html</code> in this repo, lines 23157 (the 17 timeframes), 23160 (default handle 0.55 for every timeframe, i.e. flat), 23185 (how SAVE turns the curve into weights: share × 17, so flat = 1.0 each), 23193 (load). The older worker <code>geiger-from-massive.mjs:50</code> lists 10 rungs and writes <code>ribbon_signals</code>. It is not what <code>/geiger</code> serves.</p>
+
+<div class="scroll"><table>
+<tr><th>rung</th><th>bar</th><th>bars / session</th><th>fastest average</th><th>RSI and Williams span</th><th>slowest average</th><th>default wt</th><th>your wt</th><th>your share</th></tr>
+<tr><td><b>1m</b></td><td class=n>1m</td><td class=n>552.6</td><td>EMA 5 = 0.1 h of bars · 0.01 sessions</td><td>RSI 14 / W%R 14 = 0.2 h of bars · 0.03 sessions</td><td>SMA 200 = 3.3 h of bars · 0.36 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>3m</b></td><td class=n>3m</td><td class=n>230.2</td><td>EMA 5 = 0.2 h of bars · 0.02 sessions</td><td>RSI 14 / W%R 14 = 0.7 h of bars · 0.06 sessions</td><td>SMA 200 = 10.0 h of bars · 0.87 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>5m</b></td><td class=n>5m</td><td class=n>152.6</td><td>EMA 5 = 0.4 h of bars · 0.03 sessions</td><td>RSI 14 / W%R 14 = 1.2 h of bars · 0.09 sessions</td><td>SMA 200 = 16.7 h of bars · 1.31 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>10m</b></td><td class=n>10m</td><td class=n>85.2</td><td>EMA 5 = 0.8 h of bars · 0.06 sessions</td><td>RSI 14 / W%R 14 = 2.3 h of bars · 0.16 sessions</td><td>SMA 200 = 33.3 h of bars · 2.35 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>15m</b></td><td class=n>15</td><td class=n>59.6</td><td>EMA 5 = 1.2 h of bars · 0.08 sessions</td><td>RSI 14 / W%R 14 = 3.5 h of bars · 0.23 sessions</td><td>SMA 200 = 2.1 days of bars · 3.36 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>30m</b></td><td class=n>30</td><td class=n>31.3</td><td>EMA 5 = 2.5 h of bars · 0.16 sessions</td><td>RSI 14 / W%R 14 = 7.0 h of bars · 0.45 sessions</td><td>SMA 200 = 4.2 days of bars · 6.39 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>1h</b></td><td class=n>60</td><td class=n>16.0</td><td>EMA 5 = 5.0 h of bars · 0.31 sessions</td><td>RSI 14 / W%R 14 = 14.0 h of bars · 0.88 sessions</td><td>SMA 200 = 8.3 days of bars · 12 sessions</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>2h</b></td><td class=n>120</td><td class=n>8.0</td><td>EMA 5 = 10.0 h of bars · 0.62 sessions</td><td>RSI 14 / W%R 14 = 28.0 h of bars · 1.75 sessions</td><td>SMA 200 = 16.7 days of bars · 25 sessions</td><td class=n>1.00</td><td class=n>0.392</td><td class=n>2.3%</td></tr>
+<tr><td><b>3h</b></td><td class=n>180</td><td class=n>6.0</td><td>EMA 5 = 15.0 h of bars · 0.83 sessions</td><td>RSI 14 / W%R 14 = 42.0 h of bars · 2.33 sessions</td><td>SMA 200 = 25.0 days of bars · 33 sessions</td><td class=n>1.00</td><td class=n>1.236</td><td class=n>7.3%</td></tr>
+<tr><td><b>4h</b></td><td class=n>240</td><td class=n>4.0</td><td>EMA 5 = 20.0 h of bars · 1.25 sessions</td><td>RSI 14 / W%R 14 = 2.3 days of bars · 3.50 sessions</td><td>SMA 200 = 33.3 days of bars · 50 sessions</td><td class=n>1.00</td><td class=n>2.279</td><td class=n>13.4%</td></tr>
+<tr><td><b>6h</b></td><td class=n>6h</td><td class=n>4.0</td><td>EMA 5 = 30.0 h of bars · 1.25 sessions</td><td>RSI 14 / W%R 14 = 3.5 days of bars · 3.50 sessions</td><td>SMA 200 = 50.0 days of bars · 50 sessions</td><td class=n>1.00</td><td class=n>3.178</td><td class=n>18.7%</td></tr>
+<tr><td><b>12h</b></td><td class=n>12h</td><td class=n>2.0</td><td>EMA 5 = 2.5 days of bars · 2.50 sessions</td><td>RSI 14 / W%R 14 = 7.0 days of bars · 7.00 sessions</td><td>SMA 200 = 100.0 days of bars · 100 sessions</td><td class=n>1.00</td><td class=n>3.173</td><td class=n>18.7%</td></tr>
+<tr><td><b>1d</b></td><td class=n>D</td><td class=n>—</td><td>EMA 5 = 5 sessions</td><td>RSI 14 / W%R 14 = 14 sessions</td><td>SMA 200 = 200 sessions</td><td class=n>1.00</td><td class=n>3.178</td><td class=n>18.7%</td></tr>
+<tr><td><b>3d</b></td><td class=n>3D</td><td class=n>—</td><td>EMA 5 = 15 sessions</td><td>RSI 14 / W%R 14 = 42 sessions</td><td>SMA 200 = 600 sessions</td><td class=n>1.00</td><td class=n>2.577</td><td class=n>15.2%</td></tr>
+<tr><td><b>1w</b></td><td class=n>W</td><td class=n>—</td><td>EMA 5 = 5 weeks</td><td>RSI 14 / W%R 14 = 14 weeks</td><td>SMA 200 = 200 weeks</td><td class=n>1.00</td><td class=n>0.987</td><td class=n>5.8%</td></tr>
+<tr><td><b>2w</b></td><td class=n>2W</td><td class=n>—</td><td>EMA 5 = 10 weeks</td><td>RSI 14 / W%R 14 = 28 weeks</td><td>SMA 200 = 400 weeks</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+<tr><td><b>1M</b></td><td class=n>M</td><td class=n>—</td><td>EMA 5 = 5 months</td><td>RSI 14 / W%R 14 = 14 months</td><td>SMA 200 = 200 months</td><td class=n>1.00</td><td class=n>0.000</td><td class=n>0</td></tr>
+</table></div>
+<p class="small">"Bars / session" is measured: the median over 20 names for the last 90 sessions. Provider bars include pre- and after-market, 04:00–20:00 ET, on an Eastern-midnight grid. That is why a 15-minute RSI covers 3.5 clock-hours (not 3.75), and why <b>4h and 6h both produce 4 bars a session</b>. Your weights come from the live receipt <code>f6cf97b5…97ad1</code>; <code>/geiger</code> today echoes the same receipt (artifact computed 2026-09-27T16:29:19.158Z).</p>
+
+<h3>What the Geiger measures intraday</h3>
+<p>During the session, the Geiger moves only when a participating bar <b>completes</b>. Unfinished bars are withheld. Under your row, that means: the 2h, 3h, 4h and 6h readings step when each of their bars closes. The 12h reading steps at noon and midnight ET. The daily reading steps after the close. The 3-day and weekly readings step when their bucket ends. So intraday the number moves in a few steps a day, driven mostly by 4h/6h/3h. It is never a tick-by-tick meter.</p>
+
+<h2>2 · Does it lean short-term? Measured.</h2>
+<p><b>How.</b> For 20 names (AAPL MSFT NVDA AMZN GOOGL META TSLA JPM XOM UNH JNJ PG KO WMT HD CAT BA NFLX AMD COST) I rebuilt every timeframe's reading at each session's end (Eastern midnight). That covers 91 sessions, 2026-05-18 to 2026-09-25, from the same provider bars the live Geiger reads, with the live maths copied exactly. <b>Check:</b> recomputed "now", it equals live <code>/geiger</code> on all 160 name×timeframe readings and all 20 composites, to 4 decimals. Each day's composite change splits exactly into one piece per timeframe. Each piece's share of the movement is its covariance with the total change (the shares add to 100%). 1800 name-days.</p>
+<div class="scroll"><table>
+<tr><th>timeframe</th><th>share · flat default</th><th></th><th>share · your saved row</th><th></th></tr>
+<tr><td><b>1m</b> <span class=tag>below 2h</span></td><td class=n>7.8%</td><td class=bars><span class="hb" title="1m default 7.8%"><span class="hb__f" style="width:27.2%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="1m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>3m</b> <span class=tag>below 2h</span></td><td class=n>9.5%</td><td class=bars><span class="hb" title="3m default 9.5%"><span class="hb__f" style="width:32.9%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="3m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>5m</b> <span class=tag>below 2h</span></td><td class=n>10.2%</td><td class=bars><span class="hb" title="5m default 10.2%"><span class="hb__f" style="width:35.3%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="5m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>10m</b> <span class=tag>below 2h</span></td><td class=n>10.4%</td><td class=bars><span class="hb" title="10m default 10.4%"><span class="hb__f" style="width:36.1%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="10m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>15m</b> <span class=tag>below 2h</span></td><td class=n>10.5%</td><td class=bars><span class="hb" title="15m default 10.5%"><span class="hb__f" style="width:36.6%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="15m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>30m</b> <span class=tag>below 2h</span></td><td class=n>10.6%</td><td class=bars><span class="hb" title="30m default 10.6%"><span class="hb__f" style="width:36.8%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="30m saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>1h</b> <span class=tag>below 2h</span></td><td class=n>10.0%</td><td class=bars><span class="hb" title="1h default 10.0%"><span class="hb__f" style="width:34.9%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="1h saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>2h</b></td><td class=n>7.9%</td><td class=bars><span class="hb" title="2h default 7.9%"><span class="hb__f" style="width:27.4%"></span></span></td><td class=n>4.3%</td><td class=bars><span class="hb" title="2h saved 4.3%"><span class="hb__f" style="width:14.9%"></span></span></td></tr>
+<tr><td><b>3h</b></td><td class=n>6.9%</td><td class=bars><span class="hb" title="3h default 6.9%"><span class="hb__f" style="width:24.1%"></span></span></td><td class=n>12.8%</td><td class=bars><span class="hb" title="3h saved 12.8%"><span class="hb__f" style="width:44.3%"></span></span></td></tr>
+<tr><td><b>4h</b></td><td class=n>5.5%</td><td class=bars><span class="hb" title="4h default 5.5%"><span class="hb__f" style="width:19.0%"></span></span></td><td class=n>20.5%</td><td class=bars><span class="hb" title="4h saved 20.5%"><span class="hb__f" style="width:71.5%"></span></span></td></tr>
+<tr><td><b>6h</b></td><td class=n>5.5%</td><td class=bars><span class="hb" title="6h default 5.5%"><span class="hb__f" style="width:19.1%"></span></span></td><td class=n>28.8%</td><td class=bars><span class="hb" title="6h saved 28.8%"><span class="hb__f" style="width:100.0%"></span></span></td></tr>
+<tr><td><b>12h</b></td><td class=n>3.4%</td><td class=bars><span class="hb" title="12h default 3.4%"><span class="hb__f" style="width:11.8%"></span></span></td><td class=n>19.2%</td><td class=bars><span class="hb" title="12h saved 19.2%"><span class="hb__f" style="width:66.9%"></span></span></td></tr>
+<tr><td><b>1d</b></td><td class=n>1.9%</td><td class=bars><span class="hb" title="1d default 1.9%"><span class="hb__f" style="width:6.7%"></span></span></td><td class=n>12.3%</td><td class=bars><span class="hb" title="1d saved 12.3%"><span class="hb__f" style="width:42.6%"></span></span></td></tr>
+<tr><td><b>3d</b></td><td class=n>0.2%</td><td class=bars><span class="hb" title="3d default 0.2%"><span class="hb__f" style="width:0.7%"></span></span></td><td class=n>2.3%</td><td class=bars><span class="hb" title="3d saved 2.3%"><span class="hb__f" style="width:8.1%"></span></span></td></tr>
+<tr><td><b>1w</b></td><td class=n>-0.2%</td><td class=bars><span class="hb" title="1w default -0.2%"><span class="hb__f" style="width:0.0%"></span></span></td><td class=n>-0.1%</td><td class=bars><span class="hb" title="1w saved -0.1%"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>2w</b></td><td class=n>-0.1%</td><td class=bars><span class="hb" title="2w default -0.1%"><span class="hb__f" style="width:0.0%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="2w saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>1M</b></td><td class=n>-0.0%</td><td class=bars><span class="hb" title="1M default -0.0%"><span class="hb__f" style="width:0.0%"></span></span></td><td class=n>0 weight</td><td class=bars><span class="hb" title="1M saved 0"><span class="hb__f" style="width:0.0%"></span></span></td></tr>
+<tr><td><b>below 2h, total</b></td><td class=n><b>69.0%</b></td><td></td><td class=n><b>0%</b></td><td></td></tr>
+<tr><td><b>2h and up, total</b></td><td class=n><b>31.0%</b></td><td></td><td class=n><b>100%</b></td><td></td></tr>
+</table></div>
+<p class="small">A cruder view, the share of summed absolute movement, gives 65% below 2h for the default. Typical daily move of the composite: 0.20 for the default, 0.15 for your row. Small negative shares, such as weekly, mean that timeframe slightly damped the day's move.</p>
+
+<h3>If everything below 3h is dropped</h3>
+<div class="scroll"><table>
+<tr><th>starting from</th><th>readings agree (correlation)</th><th>typical gap</th><th>90th pct gap</th><th>sign differs</th><th>typical daily move, before → after</th></tr>
+<tr><td>flat default (drops 8 of 17 rungs)</td><td class=n>0.851</td><td class=n>0.148</td><td class=n>0.349</td><td class=n>18.6%</td><td class=n>0.20 → 0.11</td></tr>
+<tr><td>your saved row (drops only 2h, 2.3%)</td><td class=n>0.9999</td><td class=n>0.005</td><td class=n>0.012</td><td class=n>0.8%</td><td class=n>0.15 → 0.14</td></tr>
+</table></div>
+<p><b>Reading it:</b> on the flat default, removing the fast timeframes would change the answer a lot: the sign differs on nearly one day in five, and the daily jitter halves. On your row it is a rounding change. Your "from 2 hours on" curve already did the work.</p>
+
+<h3>How alike neighbouring timeframes are</h3>
+<p class="small">The correlation of daily readings, pooled over the 20 names and 91 sessions. Close to 1.000 means the two measure nearly the same thing.</p>
+<div class="scroll"><table style="max-width:420px"><tr><th>pair</th><th>correlation</th></tr>
+<tr><td>15m and 1h</td><td class=n>0.761</td></tr>
+<tr><td>1h and 2h</td><td class=n>0.926</td></tr>
+<tr><td>2h and 3h</td><td class=n>0.971</td></tr>
+<tr><td>3h and 4h</td><td class=n>0.961</td></tr>
+<tr><td>4h and 6h</td><td class=n>0.997</td></tr>
+<tr><td>6h and 12h</td><td class=n>0.913</td></tr>
+<tr><td>12h and 1d</td><td class=n>0.900</td></tr>
+<tr><td>1d and 3d</td><td class=n>0.868</td></tr>
+<tr><td>3d and 1w</td><td class=n>0.868</td></tr>
+</table></div>
+
+<h2>3 · The moving-average / RSI "mismatch"</h2>
+<ul>
+<li><b>Live Geiger:</b> on every timeframe, the fastest average is EMA 5 and the RSI is 14. Both are counted in that timeframe's own bars (table above). Nothing crosses timeframes. On 3h, the fastest average spans 15.0 h of bars · 0.83 sessions and the RSI spans 42.0 h of bars · 2.33 sessions. On 15m: 1.2 h of bars · 0.08 sessions and 3.5 h of bars · 0.23 sessions.</li>
+<li><b>Rewind history (<code>fan_daily</code>):</b> thirteen <i>daily-locked</i> lines, EMA 2/3/5/8/13/21/34/50, SMA 50/100/150/200 and SMA 200 weekly, scored over all 78 pairs (Hub <code>index.html:23303-23306</code>). Its fastest line is the <b>2-day EMA</b>. I could not see which RSI span <code>momentum_daily</code> uses: it is built in the database, and the Hub does not document it. <b>So the real mismatch is between the replay and the live number</b>: they are different indicators. The rewind is not a replay of the live Geiger.</li>
+<li><b>The Indicator Lab</b> offers source timeframes from 3H up (<code>prototypes/indicator-lab/briefs/DETAILED_INDICATORS_2026-09-24.md:9</code>). Under your row, the only live timeframe below 3h is 2h at 2.3%.</li>
+</ul>
+<div class="rec"><b>Recommended consistent set (not applied).</b>
+<ol>
+<li>Keep the rule "averages and RSI in the same bars". It is already consistent, and changing it would break comparability with every stored receipt.</li>
+<li>Match the Lab: Geiger timeframes <b>from 3h up</b>. Set 2h to zero in your Equalizer. Measured effect: 0.005 typical, sign change on 0.8% of days.</li>
+<li>Treat <b>4h and 6h as one measurement</b>: correlation 0.997, the same 4 bars a session. Either give their combined weight to one of them, or accept that together they are a single ~32% vote.</li>
+<li>Rebuild the rewind history with the live per-timeframe maths (the <code>research/geiger_history_v1</code> design in the provider repo's <code>contracts/DATA_ESTATE_AUTHORITY_MAP.md:38-42</code>). Then the replay is the Geiger. This review's replay shows it reproduces live exactly.</li>
+</ol></div>
+
+<h2>4 · How fast the Geiger changes</h2>
+<p><b>Stored history.</b> The live Geiger keeps <b>no history</b>: <code>/geiger</code> serves one snapshot (R2 <code>normalized/candidate_geiger_v1/geiger.json.gz</code>), replaced every cycle. The only stored history is <code>fan_daily</code> + <code>momentum_daily</code> in Supabase, the rewind's different fan. The extract already in this repo (<code>deliverables/20260925/geiger-visuals/data.js</code>, pulled 25 Sep) covers <b>87 names, 2026-07-15 .. 2026-08-20</b>, and MU alone 2025-11-05 .. 2026-08-20. The table stops 20 Aug for most names. Measured there: typical day-to-day change <b>0.11</b> (90th pct 0.43). 70 swings from −0.5 to +0.5 or back, typically <b>6 calendar days</b> (5–12). MU over 201 rows: 0.09 a day, 4 swings, typically 10.5 days.</p>
+<p><b>The live Geiger, rebuilt</b> (the replay above; 20 names). Composite, sampled once a session:</p>
+<div class="scroll"><table>
+<tr><th>weights</th><th>typical daily change</th><th>90th pct</th><th>swings −0.5↔+0.5</th><th>typical swing time</th><th>middle half</th></tr>
+<tr><td>Alan's saved row (live today)</td><td class=n>0.15</td><td class=n>0.41</td><td class=n>39</td><td class=n>19 days</td><td class=n>12 – 26 days</td></tr>
+<tr><td>saved row, 2h dropped</td><td class=n>0.14</td><td class=n>0.40</td><td class=n>39</td><td class=n>19 days</td><td class=n>12 – 26 days</td></tr>
+<tr><td>flat default (all 17 at 1.0)</td><td class=n>0.20</td><td class=n>0.49</td><td class=n>13</td><td class=n>32 days</td><td class=n>24 – 59 days</td></tr>
+<tr><td>flat default, below 3h dropped</td><td class=n>0.11</td><td class=n>0.30</td><td class=n>7</td><td class=n>60 days</td><td class=n>34 – 86 days</td></tr>
+</table></div>
+<p>Per timeframe, the daily change is between consecutive session ends. The swing time is measured bar by bar in the timeframe's own bars: over the last 90 sessions for intraday timeframes, and over 3 years for daily and slower. The daily change for 3d/1w/2w/1M is usually 0 because their bar has not closed yet.</p>
+<div class="scroll"><table>
+<tr><th>rung</th><th>typical daily change</th><th>90th pct</th><th>swings</th><th>typical swing time</th><th>middle half</th><th>window</th></tr>
+<tr><td><b>1m</b></td><td class=n>0.43</td><td class=n>1.09</td><td class=n>17994</td><td class=n>14 min</td><td class=n>9 min – 23 min</td><td>90 sessions</td></tr>
+<tr><td><b>3m</b></td><td class=n>0.45</td><td class=n>1.08</td><td class=n>6582</td><td class=n>45 min</td><td class=n>27 min – 1 h</td><td>90 sessions</td></tr>
+<tr><td><b>5m</b></td><td class=n>0.43</td><td class=n>1.05</td><td class=n>4049</td><td class=n>1 h</td><td class=n>45 min – 3 h</td><td>90 sessions</td></tr>
+<tr><td><b>10m</b></td><td class=n>0.41</td><td class=n>0.99</td><td class=n>2101</td><td class=n>3 h</td><td class=n>1 h – 9 h</td><td>90 sessions</td></tr>
+<tr><td><b>15m</b></td><td class=n>0.39</td><td class=n>0.96</td><td class=n>1545</td><td class=n>4 h</td><td class=n>2 h – 14 h</td><td>90 sessions</td></tr>
+<tr><td><b>30m</b></td><td class=n>0.42</td><td class=n>1.00</td><td class=n>815</td><td class=n>13 h</td><td class=n>4 h – 20 h</td><td>90 sessions</td></tr>
+<tr><td><b>1h</b></td><td class=n>0.40</td><td class=n>1.02</td><td class=n>442</td><td class=n>23 h</td><td class=n>12 h – 45 h</td><td>90 sessions</td></tr>
+<tr><td><b>2h</b></td><td class=n>0.32</td><td class=n>0.84</td><td class=n>251</td><td class=n>2 days</td><td class=n>26 h – 4 days</td><td>90 sessions</td></tr>
+<tr><td><b>3h</b></td><td class=n>0.28</td><td class=n>0.75</td><td class=n>190</td><td class=n>3 days</td><td class=n>33 h – 5 days</td><td>90 sessions</td></tr>
+<tr><td><b>4h</b></td><td class=n>0.21</td><td class=n>0.64</td><td class=n>133</td><td class=n>5 days</td><td class=n>2 days – 6 days</td><td>90 sessions</td></tr>
+<tr><td><b>6h</b></td><td class=n>0.21</td><td class=n>0.65</td><td class=n>139</td><td class=n>5 days</td><td class=n>2 days – 6 days</td><td>90 sessions</td></tr>
+<tr><td><b>12h</b></td><td class=n>0.14</td><td class=n>0.44</td><td class=n>62</td><td class=n>9 days</td><td class=n>6 days – 13 days</td><td>90 sessions</td></tr>
+<tr><td><b>1d</b></td><td class=n>0.09</td><td class=n>0.29</td><td class=n>220</td><td class=n>17 days</td><td class=n>11 days – 24 days</td><td>3 years</td></tr>
+<tr><td><b>3d</b></td><td class=n>0.00</td><td class=n>0.19</td><td class=n>109</td><td class=n>36 days</td><td class=n>24 days – 54 days</td><td>3 years</td></tr>
+<tr><td><b>1w</b></td><td class=n>0.00</td><td class=n>0.08</td><td class=n>33</td><td class=n>70 days</td><td class=n>42 days – 112 days</td><td>3 years</td></tr>
+<tr><td><b>2w</b></td><td class=n>0.00</td><td class=n>0.00</td><td class=n>12</td><td class=n>154 days</td><td class=n>126 days – 168 days</td><td>3 years</td></tr>
+<tr><td><b>1M</b></td><td class=n>0.00</td><td class=n>0.00</td><td class=n>3</td><td class=n>243 days</td><td class=n>212 days – 274 days</td><td>3 years</td></tr>
+</table></div>
+
+<h2>5 · A light, "Geiger-only" tier from daily bars</h2>
+<p><b>The smallest honest Geiger</b> is daily + 3-day + weekly, with the same maths, 230 bars each. Weekly needs 230 weeks, so a name needs about <b>4½ years of daily bars</b> (~1,150 sessions). Shorter histories still work: lines join as bars accrue.</p>
+<p><b>How it compares with your full Geiger</b> (same 20 names, 91 sessions): with your weights for those three rungs (3.18 / 2.58 / 0.99), correlation <b>0.87</b>, typical gap 0.18, same sign on 82% of days. It moves 0.05 a day against 0.15 for the full Geiger. With equal weights: correlation 0.81. It is a slower, calmer "where is this in its trend" gauge, fine for dashboards and aggregates. It is not a substitute on names you trade.</p>
+<div class="scroll"><table>
+<tr><th>instrument kind</th><th>first source (your rule)</th><th>what exists today</th></tr>
+<tr><td>ETFs, US-listed foreign ADRs</td><td><b>Massive</b></td><td>Already in the stocks feed; the chart API serves D / 3D / W for e.g. SPY (verified today). One "grouped daily" request returns every US stock and ETF for a session.</td></tr>
+<tr><td>Indexes, commodities, FX, rates</td><td><b>FMP</b></td><td>Massive's stocks plan cannot serve these (<code>fmp-macro-contract.mjs:3-5</code>). FMP is already wired: the chart API serves VIX and GCUSD D / 3D / W today (verified). 3D and weekly are composed from FMP daily on the provider's grid, which you approved on 22 Sep (<code>fmp-macro-contract.mjs:85-98</code>).</td></tr>
+<tr><td>Anything neither has (foreign ordinary shares, odd futures)</td><td><b>IBKR</b></td><td>Not wired. It needs the gateway session and market-data subscriptions per exchange.</td></tr>
+</table></div>
+<p><b>Cost per name [ESTIMATE].</b> Backfill: 1 request per name for ~1,150 daily bars. Daily upkeep: Massive, 1 request per day for the <i>whole</i> ETF/ADR set (grouped daily); FMP, 1 request per name per day. Compute: trivial, three readings per name per day. Storage, measured on today's responses: 230 bars take 15–25 KB raw and 3.5–8.6 KB gzipped per timeframe, so about <b>11–26 KB gzipped per name</b> for all three, or ~25–40 KB if you keep the 1,150 daily bars. It refreshes once a day, after the close, not every 4 minutes. Plan prices and FMP rate limits were not checked in this lane.</p>
+<p><b>Could it come from Yahoo Finance?</b> Technically yes, since the bars exist. I do not recommend it. Yahoo has no licensed API: the endpoints are unofficial, change without notice, and its terms restrict reuse. Massive and FMP already give the same daily bars under licence, through the pipe the Hub already reads.</p>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>The "share of movement" is measured once a session. Within a day, the fast timeframes move far more, so for anyone watching intraday, their weight on the default is larger still.</li>
+<li>20 large names over 91 sessions, May to September 2026. Small caps or a different market regime could shift the numbers by a few points. The ranking (fast rungs dominate the flat default) is very large and unlikely to flip.</li>
+<li>The "flat default" uses your saved momentum mix (0.6/0.4) and family split (0.5/0.5), so only the timeframe weights differ. The Hub's untouched slider would start at 0.5/0.5.</li>
+<li>The replay equals live on today's bars. On past days it assumes the provider bars have not been revised since. Late provider corrections would make the past slightly different from what was published then.</li>
+<li>The stored-history speed comes from a 25 Sep extract of a different indicator, and its window is short (34 days for the cohort).</li>
+<li>The ladder's 79 moving-average rungs are defined in the database table <code>ribbon_ladder</code>, which this lane did not read. If your "two-day" memory is of the ladder rather than the rewind fan, that is unverified here.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>I changed no weights, workers, tables or Hub rooms. The Indicator Lab is byte-identical. I pushed and deployed nothing, and wrote nothing to any database. I made no paid-model or account calls.</li>
+<li>I did not read <code>ribbon_ladder</code>, <code>fan_daily</code> or <code>momentum_daily</code> directly. That needs a database key, which this lane does not hold.</li>
+<li>I did not check provider plan prices or quotas.</li>
+</ul>
+<p class="small">Reproduce: <code>node deliverables/20260927/geiger-review/run-replay.mjs</code> (reads the public chart API only, GET) → <code>stored-history-speed.mjs</code> → <code>build-page.py</code>. The arithmetic is tested in <code>tests/geiger-review.test.mjs</code>. Results: <code>results.json</code>, generated 2026-09-27T16:35:15.492Z.</p>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
