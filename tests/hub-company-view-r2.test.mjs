@@ -18,29 +18,28 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":
 const num = (v) => { if (v == null) return null; const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
 const CO_TABS = JSON.parse(page.match(/^const CO_TABS = (\[[^\]]*\]);/m)[1]);
 const CONSTS = line(/^const STATION_CHART_URL = [^\n]*/m) + line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) +
-  line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const CO_MORE_TABS = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m);
+  line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m);
 
-test("seven tabs in one row, keys 1-7, STATS under MORE; no CHART tab (the chart is always on screen) and no SOCIAL", () => {
-  assert.deepEqual(CO_TABS, ["GEIGER", "FUNDAMENTALS", "ESTIMATES", "FINANCIALS", "NEWS", "EVENTS", "READ"]);
-  assert.match(page, /^const CO_MORE_TABS = \["STATS"\];/m);
-  const S = { coTab: "GEIGER" };
-  const tabs = new Function("S", "CO_TABS", CONSTS + "let CV_MORE_OPEN = false;\n" + fn("cvTabsHTML") + "\nreturn (open) => { CV_MORE_OPEN = open; return cvTabsHTML(); };")(S, CO_TABS);
-  const closed = tabs(false);
-  assert.deepEqual([...closed.matchAll(/data-tab="([A-Z]+)"/g)].map((m) => m[1]), [...CO_TABS, "STATS"]);
-  assert.match(closed, /class="cv-tabs" id="cvTabs"/, "MORE closed: STATS is in the markup but hidden (.cv-x)");
-  assert.match(closed, /data-act="cvmore" aria-expanded="false">MORE ▾/);
-  assert.match(tabs(true), /class="cv-tabs is-more"/);
-  S.coTab = "STATS"; assert.match(tabs(false), /class="cv-tabs is-more"/, "STATS open keeps MORE open");
-  assert.match(page, /\.cv-tabs \.cv-x\{display:none\}\n\.cv-tabs\.is-more \.cv-x\{display:inline-block\}/);
+/* R3 (27 Sep) replaced D2's "seven tabs + MORE (STATS)": Alan, "use what exists: all the tabs". */
+test("R3: nine tabs in one row, keys 1-9, no MORE; SOCIAL and STATS are in the row; no CHART tab (the chart is always on screen)", () => {
+  assert.deepEqual(CO_TABS, ["GEIGER", "FUNDAMENTALS", "ESTIMATES", "FINANCIALS", "STATS", "NEWS", "SOCIAL", "EVENTS", "READ"]);
+  assert.doesNotMatch(page, /CO_MORE_TABS|CV_MORE_OPEN|data-act="cvmore"|\.cv-x\{|cv-moreb/, "MORE is gone, with its CSS and its click");
+  const S = { coTab: "STATS" };
+  const tabs = new Function("S", "CO_TABS", CONSTS + fn("cvTabsHTML") + "\nreturn cvTabsHTML;")(S, CO_TABS)();
+  assert.deepEqual([...tabs.matchAll(/data-tab="([A-Z]+)"/g)].map((m) => m[1]), CO_TABS);
+  assert.deepEqual([...tabs.matchAll(/title="key (\d)"/g)].map((m) => +m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.match(tabs, /class="cv-tab on" aria-selected="true" data-act="cotab" data-tab="STATS"/);
+  assert.match(page, /const k = \/\^\[1-9\]\$\/\.test\(e\.key\) \? \+e\.key : 0;\n  if \(k && k <= CO_TABS\.length\)/, "keys 1-9 reach all nine");
 });
 
 test("the chart sits OUTSIDE the tab slot: the view is rail · (line, chart, numbers) · (tabs, slot)", () => {
-  const html = new Function("esc", "coPaneModeProbe", "cvRailHTML", "cvLineHTML", "cvChartHTML", "cvNumsHTML", "cvTabsHTML", "leftBodyHTML", fn("coViewHTML") + "\nreturn coViewHTML;")(
-    esc, () => {}, () => "RAIL", () => "LINE", () => '<div class="cv-chart" id="cvChart"><iframe id="coChartFrame"></iframe></div>', () => "NUMS", () => "TABS",
+  const html = new Function("esc", "coPaneModeProbe", "cvRailHTML", "cvLineHTML", "cvChartHTML", "cvTabsHTML", "leftBodyHTML", fn("coViewHTML") + "\nreturn coViewHTML;")(
+    esc, () => {}, () => "RAIL", () => "LINE", () => '<div class="cv-chart" id="cvChart"><iframe id="coChartFrame"></iframe></div>', () => "TABS",
     () => '<div class="sc-chartpanel__slot" id="coRailContent">BODY</div>')("MU");
   const iframe = html.indexOf('id="coChartFrame"'), side = html.indexOf('class="cv-side"'), slot = html.indexOf('id="coRailContent"');
   assert.ok(iframe > 0 && iframe < side && side < slot, "frame in cv-main, before the side column that holds the slot");
-  assert.ok(html.indexOf("LINE") < iframe && iframe < html.indexOf("NUMS"), "line above the chart, numbers under it");
+  assert.ok(html.indexOf("LINE") < iframe, "the line above the chart");
+  assert.doesNotMatch(html, /cv-nums|NUMS/, "R3 — no key-numbers row under the chart");
   assert.ok(html.indexOf("RAIL") < html.indexOf("LINE"), "the rail comes first (shown only when expanded)");
   /* a tab switch rewrites the slot only; nothing in it can reach the frame */
   assert.doesNotMatch(clickCase("cotab"), /coChartFrame|cvChart/);
@@ -55,57 +54,35 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
     CONSTS + fn("coRange") + fn("coChartSrc") + fn("cvUpdateInPlace").replace(/LEFT_T/g, "env.LEFT_T") + "\nreturn cvUpdateInPlace;")(
     env, (id) => dom[id] || null, (k) => store[k], () => {}, () => {}, () => "", () => "");
   assert.equal(run(), true);
-  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=1&rsi=1D");
+  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=1&rsi=1");
   assert.equal(frame.sets, 1);
   run(); run();
   assert.equal(frame.sets, 1, "same name, same timeframe: the frame is not touched (no reload)");
   env.LEFT_T = "NVDA"; run();
   assert.equal(frame.sets, 2); assert.match(frame.src, /t=NVDA&range=1D/);
   store["hub.chart.range"] = "4h"; run();
-  assert.equal(frame.sets, 3); assert.match(frame.src, /range=4h&clouds=1&rsi=4h$/);
+  assert.equal(frame.sets, 3); assert.match(frame.src, /range=4h&clouds=1&rsi=1$/);
   assert.match(fn("renderLeftPanel"), /const inPlace = !LEFT_HEAT && LEFT_STATE === "PINNED" && LEFT_T && cvUpdateInPlace\(\);\n  if \(!inPlace\) lp\.innerHTML = leftPanelInnerHTML\(\);/);
-  assert.match(fn("loadLeft"), /else cvRepaint\(\);/, "the payload landing on GEIGER or FUNDAMENTALS repaints the numbers, never the frame");
+  assert.match(fn("loadLeft"), /else cvRepaint\(\);/, "the payload landing on GEIGER or FUNDAMENTALS repaints the line, never the frame");
 });
 
-test("the RSI is one line of the chart's own timeframe for all five ranges; clouds always on; the Hub pane, never bare=1", () => {
+/* R3 — Alan, 27 Sep: "the Lab's MULTI-TIMEFRAME RSI FAN (six RSI lines — the Station already draws it with ?rsi=1) …
+   that should happen immediately. Not a single RSI line." */
+test("R3: the chart asks the Station for the Lab's six-line RSI fan (rsi=1) at every timeframe; clouds always on; the Hub pane, never bare=1", () => {
+  assert.match(page, /^const CO_CHART_RSI = true;/m);
   const src = new Function(CONSTS + fn("coRange") + fn("coChartSrc") + "\nreturn coChartSrc;")();
   for (const r of ["1h", "4h", "1D", "3D", "1W"])
-    assert.equal(src("mu", r, "match"), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=" + r + "&clouds=1&rsi=" + r);
-  assert.match(src("MU", "1D", true), /rsi=1$/, "the fan can still be asked for");
+    assert.equal(src("mu", r, true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=" + r + "&clouds=1&rsi=1");
+  assert.match(src("MU", "4h", "match"), /rsi=4h$/, "one line of the chart's own timeframe can still be asked for");
   assert.doesNotMatch(src("MU", "1D", false), /rsi/);
+  assert.match(fn("cvChartHTML"), /coChartSrc\(t, lsGet\(CO_RANGE_KEY\), CO_CHART_RSI\)/, "the view's frame uses the setting");
 });
 
-function numsKit(row, data, extra) {
-  const today = "2026-09-27";
-  const ctx = Object.assign({ S: { coData: data }, PRICES: { MU: 1085.02 }, coBoardRow: () => row, hbRowFor: () => ({ usual_day_60: 4.9 }),
-    hbPct: (v) => "±" + v.toFixed(1) + "%", hbXUsual: (m, u) => (m == null || !u ? null : m / u), fmtCap: (v) => "$" + (v / 1e12).toFixed(1) + "T",
-    fmtC: (c) => (c >= 0 ? "+" : "(") + Math.abs(c).toFixed(2) + "%" + (c >= 0 ? "" : ")"), fmtPxIdent: (p) => "$" + p.toFixed(2),
-    geigerMiniHTML: () => "<bar>", todayISO: () => today, ernWhen: () => "after the close", ernMonthDay: (d) => "SEP " + +d.slice(8, 10),
-    fwdTrailPE: (px, f, est) => ({ fwd: est && est.length ? px / 25 : null, next: { label: "NTM" }, ccy: "USD" }) }, extra || {});
-  const names = Object.keys(ctx);
-  return new Function(...names, "num", "esc", fn("cvQuote") + line(/^function cvLean[^\n]*/m) + line(/^function cvSgn[^\n]*/m) + fn("cvNextReport") + fn("cvNumsHTML") + "\nreturn cvNumsHTML;")(
-    ...names.map((k) => ctx[k]), num, esc);
-}
-test("six key numbers, in order, from data the Hub already holds; MKT CAP is company_profile (today's), never fundamentals", () => {
-  const data = { t: "MU", price: 1085.02, chg: 0.42, _profile: { market_cap: 1.22e12 }, _fund: { market_cap: 0.9e12 }, _est: [1],
-    events: [{ date: "2026-06-25" }, { date: "2026-09-30", report_time: "AMC" }, { date: "2026-12-17" }], _pt: { target_median: 1500, num_analysts: 24 } };
-  const html = numsKit({ t: "MU", g: 0.76, c: 0.42, mc: 1.0e12 }, data)("MU");
-  assert.deepEqual([...html.matchAll(/<i>([A-Z /]+)<\/i>/g)].map((m) => m[1]), ["GEIGER", "TODAY", "MKT CAP", "FWD P/E", "NEXT REPORT", "TARGET MEDIAN"]);
-  assert.match(html, /<i>GEIGER<\/i><b class="up">\+0\.76<\/b><span><bar> bull lean/);
-  assert.match(html, /<i>TODAY<\/i><b class="up">\+0\.42%<\/b><span>0\.1× its usual ±4\.9%/);
-  assert.match(html, /<i>MKT CAP<\/i><b>\$1\.2T<\/b>/, "company_profile's 1.22T, not fundamentals' 0.9T or the row's 1.0T");
-  assert.match(html, /<i>FWD P\/E<\/i><b>43\.4×<\/b><span>NTM EPS estimate/);
-  assert.match(html, /<i>NEXT REPORT<\/i><b>SEP 30<\/b><span>in 3 d · after the close/, "the next date on or after today");
-  assert.match(html, /<i>TARGET MEDIAN<\/i><b class="up">\$1500\.00<\/b><span>\+38% vs price · 24 analysts/);
-  assert.match(html, /title="company_profile\.market_cap: today&#39;s value/);
-});
-test("before the payload lands the tiles wait (…), a fund says so, and a name with no report on file says none", () => {
-  const wait = numsKit({ t: "MU", g: null, c: null }, { t: "MU", _loading: true })("MU");
-  assert.equal((wait.match(/<b>…<\/b>/g) || []).length, 4, "MKT CAP, FWD P/E, NEXT REPORT and TARGET wait");
-  const spy = numsKit({ t: "SPY", g: 0.79, c: 0.54, mc: 8.2e11 }, { t: "SPY", _profile: { market_cap: 8.2e11, is_etf: true }, events: [], _pt: null })("SPY");
-  assert.equal((spy.match(/<span>a fund<\/span>/g) || []).length, 3, "FWD P/E, NEXT REPORT, TARGET: a fund");
-  const none = numsKit({ t: "MU", g: 0.1, c: 0.1 }, { t: "MU", _profile: {}, events: [{ date: "2026-06-25" }], _est: [], _pt: null })("MU");
-  assert.match(none, /<i>NEXT REPORT<\/i><b>—<\/b><span>none on file/);
+/* R3 — Alan, 27 Sep: "who decides the key? you? I'm not ready for that." */
+test("R3: the six key numbers are gone — no tiles, no builder, no CSS; the line and the rail still repaint in place", () => {
+  assert.doesNotMatch(page, /function cvNumsHTML|function cvNextReport|id="cvNums"|\.cv-nums\{|\.cv-n\{/);
+  assert.match(fn("cvRepaint"), /cvSet\("cvLine", cvLineHTML\(LEFT_T\)\);/);
+  assert.doesNotMatch(fn("cvRepaint"), /cvNums/);
 });
 
 test("keys: Esc back to the board, ↑/↓ the next name in the board's own order, 1–7 a tab; never while typing or over another surface", () => {
@@ -132,8 +109,8 @@ test("keys: Esc back to the board, ↑/↓ the next name in the board's own orde
   assert.match(fn("pinLeft"), /S\.coTab = coSavedTab\(\);/, "a switch keeps the tab");
 });
 
-test("EXPAND: a name rail in the board's own order, chart + numbers ~60%, tabs ~40%; a rail click keeps the view", () => {
-  assert.match(page, /body\.co-exp \.cv\{display:grid;grid-template-columns:156px minmax\(0,60fr\) minmax\(0,40fr\)/);
+test("EXPAND: a name rail in the board's own order, the chart half, the tabs half (R3: the tabs get the numbers' room); a rail click keeps the view", () => {
+  assert.match(page, /body\.co-exp \.cv\{display:grid;grid-template-columns:156px minmax\(0,50fr\) minmax\(0,50fr\)/);
   assert.match(fn("cvRailHTML"), /const rows = orderedShownRows\(\);/);
   assert.match(clickCase("cvrail"), /if \(a\.dataset\.t && a\.dataset\.t !== LEFT_T\) pinLeft\(a\.dataset\.t\);/);
   assert.doesNotMatch(clickCase("cvrail"), /CO_EXPANDED|coExpandApply/, "switching names never collapses");
@@ -154,10 +131,10 @@ test("the company view's look: greys only (channels within 24, none above 210), 
 test("the GEIGER tab dropped the ring, the RSI / Williams / MACD / volume tiles and the rewind; every new name is declared once", () => {
   const g = fn("geigerSummaryHTML");
   for (const gone of ["gs-meterwrap", "rsitable", "wprtable", "data-gs=\"macd\"", "data-gs=\"vol\"", "gsladtoggle", "PLAY"]) assert.ok(!g.includes(gone), gone + " gone");
-  for (const n of ["coTabOk", "coSavedTab", "cvLean", "cvSgn", "cvQuote", "cvTabsHTML", "cvLineHTML", "cvNextReport", "cvNumsHTML", "cvRailHTML", "cvChartHTML",
+  for (const n of ["coTabOk", "coSavedTab", "cvLean", "cvSgn", "cvQuote", "cvTabsHTML", "cvLineHTML", "cvRailHTML", "cvChartHTML",
     "coViewHTML", "cvSet", "cvRepaint", "cvRailRepaint", "cvUpdateInPlace", "cvStep", "cvKeysBlocked", "gsCloudInk", "gsLadderHTML", "gsTfTableHTML"])
     assert.equal((page.match(new RegExp("(^|[^.\\w])function " + n + "\\(", "gm")) || []).length, 1, n);
-  for (const n of ["CO_MORE_TABS", "CO_TAB_KEY", "CV_MORE_OPEN", "GS_MA_ORDER", "GS_CLOUD_PAIR", "GS_CLOUD_INK", "GS_TF_ROWS"])
+  for (const n of ["CO_TAB_KEY", "GS_MA_ORDER", "GS_CLOUD_PAIR", "GS_CLOUD_INK", "GS_TF_ROWS"])
     assert.equal((page.match(new RegExp("(const|let|var) " + n + " ?=", "g")) || []).length, 1, n);
 });
 
