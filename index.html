@@ -4264,6 +4264,52 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 /* on a phone every company tab gets a 300px slot; an embedded page needs more to be read */
 @media(max-width:640px){ .sc-chartpanel__slot.cot-CHART{min-height:58vh} .sc-chartpanel__slot.cot-FUNDAMENTALS{min-height:82vh} }
 </style>
+<style id="tape-events-20260927">
+/* ── 27 SEP · THE SCINTILLATING TAPE + THE TICKER IN THE TITLE ─────────────────────────────────────────────────
+   The strip keeps the company bar's box (40px, the cyan frame) so nothing under it moves. Text 11px. */
+.sc-toptape{ flex:0 0 auto; width:100%; box-sizing:border-box; display:flex; align-items:stretch; min-width:0; height:40px;
+  border:.8px solid rgba(0,212,255,.5); box-shadow:inset 0 0 22px rgba(0,212,255,.05); background:var(--panel2); overflow:hidden; }
+.sc-toptape__slot{ flex:1 1 0; min-width:0; display:flex; overflow:hidden; }
+.sc-toptape .sc-tape{ flex:1 1 auto; min-width:0; border:0; background:none; font-size:11px; }
+.sc-toptape .sc-tape__lbl{ background:var(--panel2); flex-basis:92px; width:92px; }
+.sc-toptape .sc-tape__track{ padding:0; line-height:38px; }
+.sc-toptape .sc-tape__item{ display:inline-flex; align-items:baseline; gap:6px; }
+.sc-toptape .ecb-when, .sc-toptape .ern-when{ font-size:11px; }
+.sc-toptape .ern-tk{ font-weight:700; color:var(--ink); }
+.sc-toptape__next{ flex:0 0 auto; max-width:46%; min-width:0; align-self:center; padding:0 12px 0 10px;
+  border-left:.5px solid var(--line2); border-bottom:0; }
+.sc-toptape__next:empty{ display:none; }
+.sc-toptape__next .mn-lbl + .mn-it, .sc-toptape__next .mn-lbl + .mn-swarm{ border-left:0; }
+@media (max-width:900px){ .sc-toptape__next{ display:none; } .sc-toptape .sc-tape__lbl{ flex-basis:70px; width:70px; } }
+@media (max-width:560px){ .sc-toptape{ height:36px; } .sc-toptape .sc-tape__track{ line-height:34px; }
+  .sc-toptape .sc-tape__lbl{ flex-basis:58px; width:58px; padding-left:8px; letter-spacing:.08em; } }
+
+/* the pinned name takes the wordmark's place, centred in the header; ✕ brings the wordmark back */
+.sc-head__ident{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1;
+  max-width:calc(100% - 340px); min-width:0; display:flex; align-items:center; }
+.sc-head__ident[hidden]{ display:none; }
+body.tk-pinned .sc-head__wm{ visibility:hidden; }
+.sc-head__ident .sc-cident{ border:0; box-shadow:none; height:auto; min-height:0; padding:0; gap:14px; overflow:hidden; background:none; }
+.sc-head__ident .sc-ctkbig{ font-size:20px; letter-spacing:.16em; min-width:0; text-shadow:0 0 8px rgba(0,212,255,.45); }
+.sc-head__ident .sc-cname{ font-size:11px; max-width:26ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-head__ident .sc-cpx{ font-size:17px; }
+.sc-head__ident .sc-cchg{ font-size:13px; min-width:0; }
+.sc-head__ident .sc-cprev, .sc-head__ident .sc-chb{ font-size:11px; color:var(--ink3); white-space:nowrap; }
+.sc-head__ident .sc-chb{ flex:none; }
+.sc-hx{ flex:none; background:none; border:.5px solid var(--line2); border-radius:2px; color:var(--ink3); cursor:pointer;
+  font-family:var(--mono); font-size:12px; line-height:1; padding:4px 7px; }
+.sc-hx:hover, .sc-hx:focus-visible{ color:var(--crk); border-color:var(--crk); outline:0; }
+@media (max-width:900px){ .sc-head__ident{ max-width:calc(100% - 200px); } .sc-head__ident .sc-cname, .sc-head__ident .sc-cprev{ display:none; } }
+@media (max-width:560px){
+  .sc-head__ident{ max-width:calc(100% - 150px); }
+  .sc-head__ident .sc-cident{ gap:7px; min-height:0; padding:0; }
+  .sc-head__ident .sc-ctkbig{ font-size:13px; letter-spacing:.06em; }
+  .sc-head__ident .sc-cpx{ font-size:12px; }
+  .sc-head__ident .sc-cchg{ font-size:11px; }
+  .sc-head__ident .sc-chb, .sc-head__ident .sc-lists--co{ display:none; }
+  .sc-hx{ padding:3px 6px; font-size:11px; }
+}
+</style>
 </head>
 <body>
 
@@ -4294,6 +4340,9 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
     </svg>
   </button>
   <span class="sc-head__wm">S C I N T I L L A</span>
+  <!-- 27 Sep (Alan): "Selecting a ticker shows the ticker in the top-middle SCINTILLA title area (with a way to click
+       out back to the title)". Filled by identPaint() only while a name is pinned; empty and hidden otherwise. -->
+  <div class="sc-head__ident" id="headIdent" hidden></div>
   <!-- R18 — controls bunched right in one group; wordmark above is absolute-centered -->
   <div class="sc-head__ctrls">
     <span class="sc-head__live is-live" id="liveBadge">● LIVE</span>
@@ -6807,7 +6856,10 @@ function dashboardHTML() {
      cohort board (id=coIdentBar, updated in place by renderLeftPanel + patch()).
      The 50/50 row lives below it, unchanged. */
   return '<section class="sc-dashwrap" aria-label="Dashboard">' +
-    '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>" +
+    /* 27 Sep — the company bar goes; its strip is the SCINTILLATING TAPE (economic releases + earnings). The
+       pinned name moves up into the header title (identPaint). TOPTAPE_ON = false puts the old bar back. */
+    (TOPTAPE_ON ? topTapeWrapHTML()
+                : '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>") +
     /* M42 — TODAY'S SCINTILLAS. Filled by scintStripRender; while there is nothing stored it is an
        empty element and :empty hides it, so the dashboard is exactly as it is today. */
     (SCINT_FEED_ON ? '<div class="sc-scintstrip" id="scintStrip"></div>' : "") +
@@ -6885,11 +6937,7 @@ async function loadBoardHeartbeat(tickers) {
       const row = rowByT[t]; if (row) row.hb = hb;
       paintHbCell(t, hb, row ? row.c : null);
       /* the ident bar shows the pinned name's own heartbeat; refresh it in place when its row lands */
-      if (typeof LEFT_T !== "undefined" && t === LEFT_T) {
-        const ib = el("coIdentBar");
-        if (ib) ib.innerHTML = leftIdentHTML(identBarData());
-        coIdentLists(ib);                           // H-FRONT — the repaint keeps the pinned ticker's ♥ ★ ◎
-      }
+      if (typeof LEFT_T !== "undefined" && t === LEFT_T) identPaint();   // H-FRONT's ♥ ★ ◎ ride along
       cohHbDirty = true;
     }
     /* the cohort summary is built once, before any heartbeat exists; redraw it when its names
@@ -8948,14 +8996,18 @@ function leftPanelInnerHTML() {
 }
 /* ident line for the left panel — like identBarHTML but without a ← back button
    (the board is always visible; there is nothing to go back to). */
-function leftIdentHTML(data) {
+function leftIdentHTML(data, opts) {
   const chg = data.chg, live = S.state === "live";
+  /* 27 Sep — the SAME ident, drawn in the header title (opts.head): no queue (the tape carries it now), no LIVE badge
+     (the header's own badge says it), and a ✕ that goes back to the SCINTILLA title. Without opts the markup is
+     unchanged, byte for byte, which is what TOPTAPE_ON = false puts back. */
+  const head = !!(opts && opts.head);
   const pc = num(prevClose[data.t]);
   const col = chg != null ? (chg >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
   /* PORT — the nudge rides in this box (proposal v2); with the flag off this is production's markup, byte for byte.
      ECON TAPE 22 Sep — COMPANY is the SAME dashboard mount with a ticker pinned, and the proposal's own picture is the
      nudge beside a pinned ticker ("ticker on the left, beside the selector it belongs to"), so it rides there too. */
-  const nudge = ECON_TAPE_ON && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
+  const nudge = !head && ECON_TAPE_ON && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
   return '<div class="sc-cident' + (nudge ? " sc-cident--nudge" : "") + '">' +
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     '<span class="sc-cname">' + esc(data.name || "") + "</span>" +
@@ -8971,19 +9023,39 @@ function leftIdentHTML(data) {
             ? ' <b style="color:' + (chg >= 0 ? "var(--bull)" : "var(--bear)") + '">' +
               Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)).toFixed(1) + "\u00d7 today</b>" : "")
         : "\u2014") + "</span>" : "") +   /* with no ticker pinned there is nothing whose usual day this would be */
-    '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>" +
+    (head ? '<button class="sc-hx" type="button" data-act="headx" title="close ' + esc(data.t || "") +
+      ' and go back to the SCINTILLA title" aria-label="Close ' + esc(data.t || "") + '">✕</button>'
+      : '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>") +
     (nudge ? '<span class="sc-macronext" id="macroNext">' + macroNextHTML() + "</span>" : "") + "</div>";
 }
 
+/* 27 SEP — ONE PAINTER FOR THE IDENT, wherever it lives. With the tape on it is the header title: the pinned name
+   (ticker, name, price, change, prev, usual day, ♥ ★ ◎, ✕) replaces the SCINTILLA wordmark, and with nothing pinned
+   the wordmark comes back. With TOPTAPE_ON false it is the old full-width bar in the dashboard. */
+function identPaint() {
+  if (!TOPTAPE_ON) {
+    const ib = el("coIdentBar");
+    if (ib) ib.innerHTML = leftIdentHTML(identBarData());
+    coIdentLists(ib);
+    return ib;
+  }
+  const h = el("headIdent");
+  if (!h) return null;
+  const on = LEFT_STATE === "PINNED" && !!LEFT_T;
+  const html = on ? leftIdentHTML(identBarData(), { head: true }) : "";
+  if (h.innerHTML !== html || !on) h.innerHTML = html;
+  h.hidden = !on;
+  if (typeof document !== "undefined" && document.body) document.body.classList.toggle("tk-pinned", on);
+  if (on) coIdentLists(h);
+  return h;
+}
 /* repaint ONLY #leftPanel's inner content (never the board). */
 function renderLeftPanel() {
   const lp = el("leftPanel");
   if (!lp) return;
-  /* FIX 4 (R36) — refresh the full-width ident bar (now above the 50/50 row, not
-     inside #leftPanel) so the ticker/name/price stay in sync on every swap. */
-  const ib = el("coIdentBar");
-  if (ib) ib.innerHTML = leftIdentHTML(identBarData());
-  coIdentLists(ib);                                 // H-FRONT — ♥ ★ ◎ beside the pinned ticker
+  /* FIX 4 (R36) — refresh the ident (27 Sep: the header title, or the old bar with the tape off) so the
+     ticker/name/price stay in sync on every swap. H-FRONT's ♥ ★ ◎ ride along inside identPaint. */
+  identPaint();
   lp.innerHTML = leftPanelInnerHTML();
   /* R50 §3 — this line just destroyed the subtree, and .sc-layer0 can be the node
      currently holding .sc-secfs. A detached fullscreen target leaves body.secfs stuck
@@ -15327,7 +15399,10 @@ async function ecTapeRead() {
   } finally { MACRO_NEXT_BUSY = false; }
   ecTapePaint();
 }
-function ecTapePaint(nowSec) { ecNudgePaint(nowSec); renderEconBand(nowSec); }
+function ecTapePaint(nowSec) {
+  ecNudgePaint(nowSec); renderEconBand(nowSec);
+  if (typeof renderTopTape === "function") renderTopTape(nowSec);   // 27 Sep — the scintillating tape reads the same rows
+}
 function ecTapeTick() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
   ecTapePaint();
@@ -18735,6 +18810,8 @@ function ernBandHTML(todayIso, nowMs) {
     '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
 }
 function renderErnBand() {
+  if (typeof renderTopTape === "function") renderTopTape();          // 27 Sep — the scintillating tape reads the same rows
+  if (typeof renderErnRoomTape === "function") renderErnRoomTape(); //          and so does the earnings room's own tape
   const slot = el("ernBandSlot");
   if (!ERN_BAND_ON || !slot) return;
   if (!ERN_ROWS && !ERN_FAIL_AT) return;               // 23 Sep: no half-empty band while the first read is out — it appears whole
@@ -18786,6 +18863,94 @@ function ernBandStart() {
   }
   renderErnBand();
   ernRead();
+}
+/* ============================================================================
+   27 SEP · THE SCINTILLATING TAPE — the strip where the company bar was.
+   Alan, 27 Sep: "The top company bar (ticker, price, prev, usual…) goes. That strip becomes the SCINTILLATING
+   TAPE: economic events AND earnings events. Selecting a ticker shows the ticker in the top-middle SCINTILLA
+   title area … the tape stays."
+   WHAT RIDES IT: the economic releases the NEXT queue already watches (ECON_TAPE_RULE — US, High/Medium, M2, no
+   plumbing) and the earnings of the names the Hub tracks, in ONE time line: this week so far, then the next seven
+   days. Earnings carry a DAY and before-open / after-close, not a minute, so for ordering only a before-open report
+   sits at 07:00 ET, an after-close one at 16:05, a stated clock time at that time, and an unannounced one at the
+   end of its day. A "now" marker sits where what has happened ends.
+   HOW IT SCINTILLATES: nothing new. Every item is drawn by the renderer of the band it came from (ecBandItemHTML,
+   ernItemHTML), so it walks the SAME states at the SAME speeds — still until the hour, breathing inside it,
+   tightening inside ten minutes, one hard pulse at its minute — and an earnings surprise beyond that name's own
+   usual surprise wears the diamond and glows through scScint, exactly as on the band at the foot of the screen.
+   The NEXT queue stays pinned at its right-hand end.
+   WHAT IT READS: nothing of its own. MACRO_NEXT (the econ tape's one read) and ERN_ROWS (the earnings band's one
+   read) — so it cannot disagree with either band, and it adds no request. Rollback: TOPTAPE_ON = false.
+   ============================================================================ */
+const TOPTAPE_ON = true;
+let TOPTAPE_HTML = "";
+function ttWindow(todayIso) { return { from: ernWeek(todayIso)[0], to: ernShift(todayIso, 7) }; }
+/* minutes after midnight ET, for ordering only */
+function ttErnMinute(r) {
+  const w = ernWhen(r);
+  if (w === "before the open") return 7 * 60;
+  if (w === "after the close") return 16 * 60 + 5;
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(w);
+  return hm ? +hm[1] * 60 + +hm[2] : 24 * 60 - 1;
+}
+function ttEcMinute(ts) {
+  const hm = /(\d{1,2}):(\d{2})/.exec(ecTimeET(ts));
+  return hm ? +hm[1] * 60 + +hm[2] : 0;
+}
+function topTapeItems(nowSec, todayIso) {
+  const today = todayIso || todayISO(), w = ttWindow(today), out = [];
+  for (const it of ecTapeItems(MACRO_NEXT || []))
+    if (it.day >= w.from && it.day <= w.to) out.push({ kind: "ec", day: it.day, min: ttEcMinute(it.ts), it: it });
+  for (const r of (ERN_ROWS || []))
+    if (r && r.ticker && r.date >= w.from && r.date <= w.to && (!UNIVERSE || UNIVERSE.has(r.ticker)))
+      out.push({ kind: "ern", day: r.date, min: ttErnMinute(r), r: r });
+  return out.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0) || a.min - b.min ||
+    (a.kind === b.kind ? 0 : a.kind === "ec" ? -1 : 1) ||
+    (a.kind === "ern" ? (a.r.ticker < b.r.ticker ? -1 : a.r.ticker > b.r.ticker ? 1 : 0) : 0));
+}
+function topTapeHTML(nowSec, todayIso) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const today = todayIso || todayISO(), nowMin = ttEcMinute(now);
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!MACRO_NEXT && !ERN_ROWS) {
+    seg = '<span class="sc-tape__item ecb-note">' + (MACRO_NEXT_FAIL_AT && ERN_FAIL_AT
+      ? "the economic calendar and the earnings calendar could not be read" : "reading this week's releases and earnings…") + "</span>" + sep;
+  } else {
+    let crossed = false;
+    const items = topTapeItems(now, today);
+    seg = items.length ? items.map((x) => {
+      let pre = "";
+      if (!crossed && (x.day > today || (x.day === today && x.min > nowMin))) {
+        crossed = true;
+        pre = ecTapeNowHTML("now — everything to the left has happened. Earnings carry a day and before-open / after-close, not a minute");
+      }
+      return pre + (x.kind === "ec" ? ecBandItemHTML(x.it, ecBandState(x.it, now), today)
+                                    : ernItemHTML(x.r, today, now * 1000));
+    }).join("") : '<span class="sc-tape__item ecb-note">no releases on the watch list and no earnings for the names you track this week</span>' + sep;
+    if (!MACRO_NEXT) seg += '<span class="sc-tape__item ecb-note">' + (MACRO_NEXT_FAIL_AT ? "economic calendar could not be read" : "reading the economic calendar…") + "</span>" + sep;
+    if (!ERN_ROWS) seg += '<span class="sc-tape__item ern-note">' + (ERN_FAIL_AT ? "earnings could not be read" : "reading earnings…") + "</span>" + sep;
+  }
+  return '<div class="sc-tape sc-tape--top" id="topTapeBand"><b class="sc-tape__lbl" title="' +
+    esc("economic releases (a coloured dot: its category) and earnings (a ticker) in one time line — this week so far and the next seven days · tap a release for its day in ECONOMIC, a ticker for its company") +
+    '">EVENTS →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function topTapeWrapHTML() {
+  return '<div class="sc-toptape" id="topTape"><div class="sc-toptape__slot" id="topTapeSlot"></div>' +
+    '<span class="sc-macronext sc-toptape__next" id="macroNext">' + (ECON_TAPE_ON ? macroNextHTML() : "") + "</span></div>";
+}
+function renderTopTape(nowSec) {
+  const slot = el("topTapeSlot");
+  if (!TOPTAPE_ON || !slot) return;
+  const html = topTapeHTML(nowSec);
+  if (html === TOPTAPE_HTML && slot.innerHTML) return;       // unchanged: leave the marquee running where it is
+  TOPTAPE_HTML = html;
+  slot.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}   // the diamond + glow, as on the band
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = slot.querySelector(".sc-tape__track");
+  /* it opens a little before "now", so the last thing that happened is on screen beside what is next */
+  if (track) tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-soon, .ecb-it.is-near, .ern-it.is-today, .ern-it.is-up"));
 }
 /* ---- tapes ------------------------------------------------------------------- */
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
@@ -18968,6 +19133,7 @@ function afterMount() {
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
     if (ECON_TAPE_ON) fillMacroNext();           // the nudge into the ident box this mount just rebuilt (cached rows; reads only if stale)
+    if (TOPTAPE_ON) { TOPTAPE_HTML = ""; renderTopTape(); identPaint(); }   /* 27 Sep — the tape this mount just built, and the title */
     updateCohrow(); syncBoardSel();
     loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill RSI after the initial board mount
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
@@ -19782,6 +19948,10 @@ document.addEventListener("click", (e) => {
     }
     case "unpin": {   // R42 §7 — "◂ COHORT" back button: unpin → Layer 0 (identical to re-clicking the active row)
       S.sec = "DASHBOARD"; updateMtabs(); startRotate(); break;
+    }
+    case "headx": {   // 27 Sep — ✕ beside the ticker in the header title: back to the SCINTILLA title; the tape stays
+      if (S.sec === "COMPANY") { S.sec = "DASHBOARD"; updateMtabs(); }
+      startRotate(); identPaint(); break;             // startRotate repaints only where a left panel is mounted
     }
     /* R42 §6 — heattoggle now UNREACHABLE from the company header (button removed);
        case kept harmless for the heat-view's own "HEAT ▸ OFF" chip / stale markup. */
