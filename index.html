@@ -4612,8 +4612,18 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
 const COHORT_OF = {};
-const SC_EXPECTED_EQUITY_COUNT = 364;
-const SC_EQUITY_UNIVERSE_DIGEST = "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3";
+const SC_EXPECTED_EQUITY_COUNT = 486;
+const SC_EQUITY_UNIVERSE_DIGEST = "223dbb0ff58eda0363c7882d493ad09bef932fbf953f80d6849882242ecc316e";
+/* ADMISSION V2 (27 Sep) — COMPUTED, NOT SHOWN. A geiger-only name (the map's funds, the iShares/Vanguard
+   sector sets, IBIT) is in the provider's set like any other: priced, scored, counted in the digest above.
+   Alan: it is "shown only where I ask". So it never appears on ALL or a cohort tab; it does appear on
+   LIKED / FAVORITES / RADAR once he puts it there, in search, and on its company page. Two sources fill
+   this set and either is enough: the chart API's /universe `tiers.geiger_only` (same artifact as the
+   digest) and public.tickers.role. One rule reads it: boardScopeHas(). */
+const SC_GEIGER_ONLY = new Set();
+function scNoteGeigerOnly (list) {
+  for (const t of list || []) if (t) SC_GEIGER_ONLY.add(String(t).toUpperCase());
+}
 const SC_GEIGER_AUTHORITY = window.SCGeigerAuthority || null;
 const SC_OPERATOR_WEIGHT_PATH = "operator_weights?select=dim,key,weight,enabled,owner_id" +
   "&owner_id=eq.00000000-0000-0000-0000-000000000000" +
@@ -4805,7 +4815,9 @@ function fpeWithheldText(t) {
 /* one scope rule for the pull and for the snapshot. ★ Clicking a SECTOR column sets the scope to the ETF ticker (XLP), but
    membership is keyed by sector name (STAPLES); cohKey() resolves it. Falls back to the home cohort before membership loads. */
 function boardScopeHas(cohort, t, homeCohort) {
-  if (cohort === "ALL" || isListCoh(cohort)) return true;
+  if (isListCoh(cohort)) return true;                                   // Alan's own lists show whatever he put on them
+  if (typeof SC_GEIGER_ONLY !== "undefined" && SC_GEIGER_ONLY.has(t)) return false;   // admission v2: computed, not shown
+  if (cohort === "ALL") return true;
   const k = cohKey(cohort);
   if (COHSETS && COHSETS[k]) return COHSETS[k].has(t);
   return homeCohort === cohort;
@@ -4848,7 +4860,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      Individually optional, individually bounded, last-known-good on failure. No entry here can
      fail the board. live_quotes and composite_staged remain ONLY as non-equity enrichment: they
      are no longer the equity price or Geiger authority and no longer gate boot. */
-  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows] = await Promise.all([
+  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows, geoRows] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
     scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
@@ -4862,6 +4874,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('social_sentiment_detail', pg("social_sentiment?select=ticker,last_channel,last_published_at,last_video_id,window_days,method&source=eq.youtube", 1).catch(() => []), []),
     scOpt('board_volume',     pg("board_volume?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"), []),
     scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps,updated_ts"), []),
+    /* admission v2: the tier. One try, no retry: before the role column exists this is a 400, and it must cost nothing. */
+    scOpt('tickers_role',     pg("tickers?select=ticker&role=eq.geiger_only", 1).catch(() => []), []),
   ]);
   const seenF = new Set();                                     // first row per ticker = nearest FY
   for (const r of (fpeEst.annual || [])) if (r && r.ticker && !seenF.has(r.ticker)) {
@@ -4896,6 +4910,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      scDeclaredEquities() resolves null (it does not reject), so catch() alone is insufficient:
      spreading null crashed the whole board. Unknown stays an empty Set and the board remains in
      its honest connecting state until the resolver succeeds. */
+  scNoteGeigerOnly((geoRows || []).map((r) => r && r.ticker));
   const declaredSet = (await pDeclared.catch(() => null)) || new Set();
   const memberTickers = (members || []).map((m) => m.ticker).filter(Boolean);
   const universe = [...new Set([...declaredSet, ...memberTickers])];
@@ -22601,7 +22616,10 @@ async function scEqFromCache () {
     if (r && r.at && (Date.now() - r.at) < 7 * 864e5 &&
         Array.isArray(r.syms) && r.digest === SC_EQUITY_UNIVERSE_DIGEST &&
         r.syms.length === SC_EXPECTED_EQUITY_COUNT && Date.now() - r.at >= -60000 &&
-        await scUniverseDigest(r.syms) === SC_EQUITY_UNIVERSE_DIGEST) return new Set(r.syms);
+        await scUniverseDigest(r.syms) === SC_EQUITY_UNIVERSE_DIGEST) {
+      if (Array.isArray(r.geo) && typeof scNoteGeigerOnly === "function") scNoteGeigerOnly(r.geo);
+      return new Set(r.syms);
+    }
   } catch (_) {}
   return null;
 }
@@ -22623,7 +22641,10 @@ async function scDeclaredEquities () {
           j.universe_sha256 === SC_EQUITY_UNIVERSE_DIGEST &&
           syms.length === SC_EXPECTED_EQUITY_COUNT && digest === SC_EQUITY_UNIVERSE_DIGEST) {
         SC_EQ = new Set(syms);
-        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), digest, syms })); } catch (_) {}
+        /* admission v2: the tier rides on the same accepted artifact; a listed name outside the set is ignored */
+        const geo = (j.tiers && Array.isArray(j.tiers.geiger_only) ? j.tiers.geiger_only : []).filter((t) => SC_EQ.has(t));
+        if (typeof scNoteGeigerOnly === "function") scNoteGeigerOnly(geo);
+        try { localStorage.setItem(SC_EQ_KEY, JSON.stringify({ at: Date.now(), digest, syms, geo })); } catch (_) {}
       }
     }
   } catch (_) {}
