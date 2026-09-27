@@ -347,3 +347,20 @@ test("the page uses the Hub's tokens and no text smaller than the brief allows",
   assert.ok(sizes.length > 10);
   assert.ok(Math.min(...sizes) >= 10, "smallest font " + Math.min(...sizes) + "px");
 });
+
+test("NM: a peer multiple above the row's cap sits the row out and is named; the rule can be switched off", () => {
+  const me = company("ME");
+  const peers = [me, company("P1", { price: 150 }), company("P2", { price: 200 }), company("HOT", { price: 2000 })];   // HOT: P/E 400x
+  const on = compsRead(me, peers).rows.find((x) => x.key === "pe_ttm");
+  assert.deepEqual([on.band.n, on.band.max], [2, 40]);
+  assert.deepEqual(on.nm, [{ ticker: "HOT", value: 400 }]);
+  assert.deepEqual(on.missing, [], "an NM peer is not a missing number");
+  const off = compsRead(me, peers, { nm: false }).rows.find((x) => x.key === "pe_ttm");
+  assert.deepEqual([off.band.n, off.band.max], [3, 400]);
+});
+
+test("a row the company cannot price says so before it counts peers", () => {
+  const me = company("L", { eps: -1 });
+  const bar = compsRead(me, [me, company("P1")]).field.find((f) => f.key === "pe_ttm");
+  assert.equal(bar.ok, false); assert.match(bar.reason, /cannot be priced.*not positive/);
+});

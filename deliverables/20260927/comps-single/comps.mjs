@@ -19,6 +19,9 @@
      given peer multiple: P/E × EPS; for EV rows (m × sales or EBITDA − net debt) ÷ shares; for PEG
      m × EPS growth × forward EPS. A negative implied value is shown as zero: the equity would be
      worth nothing at that multiple.
+   · NM (not meaningful): a peer multiple above the row's cap (P/E 100x, EV/sales 50x, EV/EBITDA 100x,
+     PEG 10x) is a company with almost no earnings or sales yet, not a price anyone pays for a business;
+     it sits the row out and the row names it. The operator can switch the rule off.
    · the FAIR-VALUE BAND is the stretch of price where the most valuation bars overlap. When all
      overlap it is their intersection; when they split, the stretch covered by the most bars,
      and the page says how many of how many agree. */
@@ -55,6 +58,8 @@ export const COMPONENTS = [
   { key: "nd_ebitda",  group: "BAL",    label: "Net debt / EBITDA",           fmt: "x",   better: "low",  basis: "years of EBITDA to pay the net debt; below zero is net cash" },
 ];
 export const component = (key) => COMPONENTS.find((c) => c.key === key);
+export const NM_CAP = { pe_ttm: 100, pe_fwd: 100, ev_sales: 50, ev_ebitda: 100, peg: 10 };
+export const isNM = (key, v) => NM_CAP[key] != null && num(v) != null && v > NM_CAP[key];
 export const VALUATION = COMPONENTS.filter((c) => c.implied).map((c) => c.key);
 
 /* The eight numbers of card v2, always in this order so cards compare slot by slot. */
@@ -209,24 +214,27 @@ export function impliedPrice(key, m, inp) {
 
 /** subject: buildInputs() of the company; peers: buildInputs() of the others; out: tickers knocked out.
     Returns one row per component, and the valuation field with its overlap band. */
-export function compsRead(subject, peers, { out = new Set(), use = "mid" } = {}) {
+export function compsRead(subject, peers, { out = new Set(), use = "mid", nm = true } = {}) {
   const me = components(subject);
   const live = peers.filter((p) => p.ticker !== subject.ticker && !p.is_etf && !out.has(p.ticker));
   const pc = live.map((p) => ({ ticker: p.ticker, ...components(p) }));
   const rows = COMPONENTS.map((c) => {
-    const vals = pc.map((p) => ({ ticker: p.ticker, value: p.v[c.key] }));
+    const raw = pc.map((p) => ({ ticker: p.ticker, value: p.v[c.key] }));
+    const nmList = nm ? raw.filter((x) => isNM(c.key, x.value)) : [];
+    const vals = raw.map((x) => nmList.includes(x) ? { ...x, value: null, nm: x.value } : x);
     const b = peerBand(vals.map((x) => x.value));
     const value = me.v[c.key];
     return {
       key: c.key, group: c.group, label: c.label, fmt: c.fmt, better: c.better, basis: c.basis,
       value, why: me.why[c.key] || null, band: b,
-      peers: vals, missing: vals.filter((x) => x.value == null).map((x) => x.ticker),
+      peers: vals, missing: vals.filter((x) => x.value == null && x.nm == null).map((x) => x.ticker),
+      nm: nmList.map((x) => ({ ticker: x.ticker, value: x.value })), own_nm: nm && isNM(c.key, value),
       verdict: verdict(c, value, b.median),
     };
   });
   const field = VALUATION.map((k) => valuationBar(k, rows.find((r) => r.key === k), subject)).filter(Boolean);
   const band = overlapBand(field.filter((f) => f.ok).map((f) => ({ key: f.key, lo: use === "full" ? f.at.min : f.at.q1, hi: use === "full" ? f.at.max : f.at.q3, mid: f.at.median })));
-  return { ticker: subject.ticker, rows, field, band, use, peersIn: live.map((p) => p.ticker), price: subject.price, fair: fairSummary(band, field, subject.price) };
+  return { ticker: subject.ticker, rows, field, band, use, nm, peersIn: live.map((p) => p.ticker), price: subject.price, fair: fairSummary(band, field, subject.price) };
 }
 
 /** One valuation bar: the implied price at the peer low, quartiles, median and high. */
@@ -235,7 +243,7 @@ export function valuationBar(key, row, inp) {
   const b = row.band;
   const at = { min: impliedPrice(key, b.min, inp), q1: impliedPrice(key, b.q1, inp), median: impliedPrice(key, b.median, inp), q3: impliedPrice(key, b.q3, inp), max: impliedPrice(key, b.max, inp) };
   const ok = b.n >= 2 && at.min != null && at.max != null && at.median != null;
-  const reason = ok ? null : b.n < 2 ? `only ${b.n} peer${b.n === 1 ? "" : "s"} carr${b.n === 1 ? "ies" : "y"} this multiple — a range needs two` : `the company cannot be priced on this row: ${row.why || "its own number is missing"}`;
+  const reason = ok ? null : row.value == null && row.why && at.median == null ? `the company cannot be priced on this row: ${row.why}` : b.n < 2 ? `only ${b.n} peer${b.n === 1 ? "" : "s"} carr${b.n === 1 ? "ies" : "y"} this multiple — a range needs two` : `the company cannot be priced on this row: ${row.why || "its own number is missing"}`;
   return { key, label: row.label, n: b.n, band: b, at, ok, reason, own: row.value, upside: at.median != null && inp.price > 0 ? (at.median / inp.price - 1) * 100 : null };
 }
 
