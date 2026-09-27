@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D1 Station Tape</title>
+<meta name="description" content="D1 · the Station tape: an auto-hiding strip with the page's names and sparklines, earnings in the next N days, and the scintillas. A mockup on live reads; nothing is wired into the Station.">
+<link rel="stylesheet" href="d1.css">
+<style>
+/* the Station page behind the strip: six panes, as the deck's cohort page shows six names */
+body{overflow:hidden}
+.st{position:fixed;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:6px;padding:6px}
+.st-p{position:relative;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.st-p b{position:absolute;left:10px;top:8px;font-size:var(--t-title);letter-spacing:.06em;color:var(--ink)}
+.st-p span{position:absolute;right:10px;top:10px;font-size:var(--t-label)}
+.st-p svg{position:absolute;inset:34px 8px 8px 8px;width:calc(100% - 16px);height:calc(100% - 42px)}
+/* THE STRIP */
+.stt{position:fixed;left:0;right:0;bottom:0;height:34px;background:rgba(10,10,15,.94);border-top:1px solid var(--line2);
+  transform:translateY(0);transition:transform .3s ease;overflow:hidden;z-index:5}
+.stt.is-hidden{transform:translateY(100%)}
+.stt.is-hidden .stt-track{animation-play-state:paused}   /* hidden = still: no frames drawn for a strip nobody can see */
+.stt-lane{position:absolute;inset:0;display:flex;align-items:center;white-space:nowrap}
+.stt-track{flex:none;display:inline-flex;align-items:center;gap:26px;padding:0 26px;will-change:transform;animation:stt-rtl var(--stt-s,80s) linear infinite}
+.stt.ltr .stt-track{animation-name:stt-ltr}
+.stt:hover .stt-track{animation-play-state:paused}
+@keyframes stt-rtl{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes stt-ltr{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+.stt-track > *{flex:none}
+.sti{display:inline-flex;align-items:center;gap:7px;font-size:var(--t-label);color:var(--ink2)}
+.sti b{color:var(--ink);font-weight:var(--w-semi);letter-spacing:.04em}
+.sti i{font-style:normal;font-size:var(--t-micro);color:var(--dim);letter-spacing:var(--tr-lab);text-transform:uppercase}
+.stt-sec{font-size:var(--t-micro);letter-spacing:var(--tr-chrome);color:var(--dim)}
+.stt-edge{position:fixed;left:0;right:0;bottom:0;height:3px;background:var(--line2);opacity:.6;z-index:4}
+/* the knobs, top right, only for this mockup */
+.knobs{position:fixed;right:10px;top:10px;z-index:6;display:flex;gap:6px;align-items:center;background:rgba(10,10,15,.9);border:1px solid var(--line2);padding:6px 8px;font-size:var(--t-label)}
+.knobs.is-off{display:none}
+</style>
+</head><body>
+<div class="st" id="panes"></div>
+<div class="stt-edge" aria-hidden="true"></div>
+<div class="stt" id="stt" role="marquee" aria-label="Station tape: the page's names, earnings ahead, scintillas"><div class="stt-lane"><div class="stt-track" id="track"></div></div></div>
+<div class="knobs" id="knobs"><span data-scnav-slot></span>
+  <span class="lab">EARNINGS</span><span class="d1-seg" id="nDays"><button data-n="7">7D</button><button data-n="14" class="is-on">14D</button><button data-n="21">21D</button></span>
+  <span class="lab">SWIPE</span><span class="d1-seg" id="dir"><button data-d="ltr" class="is-on">L → R</button><button data-d="rtl">R → L</button></span>
+  <button class="d1-btn" id="show">SHOW NOW</button>
+</div>
+<script src="d1-live.js"></script>
+<script>
+/* URL: ?cohort=AI_HARDWARE&page=1 (six names a page, as the deck) · &days=14 · &dir=ltr|rtl · &hide=5 (seconds; 0 = never)
+   · &panes=0 (strip only, to measure its own cost) · &knobs=0 */
+(function () {
+  "use strict";
+  const Q = new URLSearchParams(location.search), $ = (s) => document.querySelector(s), D = window.D1, esc = D.esc;
+  const S = { days: +(Q.get("days") || 14), dir: Q.get("dir") || "ltr", hide: Q.get("hide") == null ? 5 : +Q.get("hide"), names: [], spark: {}, q: {}, tape: null };
+  if (Q.get("knobs") === "0") $("#knobs").classList.add("is-off");
+  const stt = $("#stt"); stt.classList.toggle("ltr", S.dir === "ltr");
+  [...$("#dir").children].forEach((b) => b.classList.toggle("is-on", b.dataset.d === S.dir));
+  [...$("#nDays").children].forEach((b) => b.classList.toggle("is-on", +b.dataset.n === S.days));
+
+  function paint() {
+    const n = S.names.map((t) => { const q = S.q[t] || {}, sp = S.spark[t] || [], up = q.chg != null ? q.chg >= 0 : true;
+      return '<span class="sti"><b>' + esc(t) + "</b>" + D.spark(sp, 64, 16, up) + '<span class="num">' + D.price(q.price) + '</span><span class="num ' + D.dirCls(q.chg) + '">' + D.pct(q.chg) + "</span></span>"; }).join("");
+    const items = S.tape ? S.tape.items : [];
+    const er = items.filter((i) => i.type === "earn" && i.at - Date.now() <= S.days * 864e5).map((i) => '<span class="sti"><span>▲</span><b>' + esc(i.ticker) + "</b>" + esc(D.dayName(i.at)) + " " + esc(i.date.slice(5)) + " " + esc(i.when || "") + "<i>" + D.ago(i.at) + "</i></span>").join("");
+    const sc = items.filter((i) => i.type === "scint").slice(0, 16).map((i) => { const d = i.detail || {};
+      return '<span class="sti"><span class="' + (i.dir > 0 ? "up" : i.dir < 0 ? "dn" : "flat") + '">◆</span><b>' + esc(i.ticker || i.subject) + "</b>" + (d.move_pct != null ? '<span class="num">' + D.pct(d.move_pct * (i.dir < 0 && d.move_pct > 0 ? -1 : 1), 1) + "</span>" : esc(i.kind.replace(/_/g, " "))) + "<i>" + esc(D.dayName(i.at)) + "</i></span>"; }).join("");
+    const one = '<span class="stt-sec">THIS PAGE</span>' + n + '<span class="stt-sec">EARNINGS · ' + S.days + " DAYS</span>" + (er || '<span class="sti dim">none</span>') + '<span class="stt-sec">SCINTILLAS</span>' + (sc || '<span class="sti dim">none</span>');
+    const tr = $("#track"); tr.innerHTML = one + one;
+    requestAnimationFrame(() => tr.style.setProperty("--stt-s", Math.max(30, tr.scrollWidth / 2 / 40).toFixed(0) + "s"));
+  }
+  function panes() {
+    if (Q.get("panes") === "0") { $("#panes").style.display = "none"; return; }
+    $("#panes").innerHTML = S.names.map((t) => { const q = S.q[t] || {}, sp = S.spark[t] || [];
+      return '<div class="st-p"><b>' + esc(t) + '</b><span class="num ' + D.dirCls(q.chg) + '">' + D.price(q.price) + " " + D.pct(q.chg) + "</span>" +
+        (sp.length > 1 ? D.spark(sp, 600, 260, q.chg == null || q.chg >= 0).replace("<svg ", '<svg preserveAspectRatio="none" ') : "") + "</div>"; }).join("");
+  }
+  /* auto-hide: gone after S.hide seconds with no pointer near the bottom; the pointer there, SHOW NOW, or a new scintilla brings it back */
+  let seen = Date.now(), lastScint = null;
+  function show(ms) { seen = Date.now() + (ms || 0); stt.classList.remove("is-hidden"); }
+  if (S.hide > 0) {
+    addEventListener("pointermove", (e) => { if (e.clientY > innerHeight - 70) show(); }, { passive: true });
+    setInterval(() => { if (Date.now() - seen > S.hide * 1000) stt.classList.add("is-hidden"); }, 1000);
+  }
+  $("#show").onclick = () => show(4000);
+  $("#dir").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.dir = b.dataset.d; stt.classList.toggle("ltr", S.dir === "ltr"); [...$("#dir").children].forEach((x) => x.classList.toggle("is-on", x === b)); show(); };
+  $("#nDays").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.days = +b.dataset.n; [...$("#nDays").children].forEach((x) => x.classList.toggle("is-on", x === b)); paint(); show(); };
+
+  async function names() {
+    const coh = Q.get("cohort"), page = Math.max(1, +(Q.get("page") || 1));
+    const list = coh ? ((await D.cohorts())[coh] || []) : await D.favorites();
+    return list.slice((page - 1) * 6, page * 6);
+  }
+  async function readSparks() {
+    await Promise.all(S.names.map(async (t) => { try { S.spark[t] = (await D.candles(t, "1d", 30)).bars.map((b) => b.c); } catch (_) { S.spark[t] = []; } }));
+  }
+  async function readQuotes() { try { Object.assign(S.q, await D.quotes(S.names)); } catch (_) {} }
+  async function readTape() {
+    try { S.tape = await D.tape({ days: 21 }); const s = S.tape.items.find((i) => i.type === "scint"); const k = s && s.at + s.subject;
+      if (lastScint && k !== lastScint) show(8000); lastScint = k; } catch (_) {}
+  }
+  (async function boot() {
+    S.names = await names();
+    await Promise.all([readSparks(), readQuotes(), readTape()]);
+    panes(); paint();
+    setInterval(async () => { if (document.hidden) return; await readQuotes(); paint(); panes(); }, 60000);          // prices: once a minute
+    setInterval(async () => { if (document.hidden) return; await readTape(); paint(); }, 120000);                    // tape: every two minutes
+    setInterval(async () => { if (document.hidden) return; await readSparks(); panes(); paint(); }, 300000);          // sparklines: every five minutes
+  })();
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
