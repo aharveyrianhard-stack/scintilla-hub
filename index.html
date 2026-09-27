@@ -4309,6 +4309,40 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
   .sc-head__ident .sc-chb, .sc-head__ident .sc-lists--co{ display:none; }
   .sc-hx{ padding:3px 6px; font-size:11px; }
 }
+
+/* ── 27 SEP · EARNINGS ROOM ───────────────────────────────────────────────────────────────────────────────── */
+.ern-roomtape{ flex:0 0 auto; margin:0 0 8px; }
+.ern-roomtape .sc-tape{ font-size:11px; }
+.ern-roomtape:empty{ display:none; }
+/* the TODAY line on the slider, now labelled and always drawn */
+.se-tlnow{ opacity:.95; width:1.5px; }
+.se-tlnow::before{ content:"TODAY"; position:absolute; top:14px; left:4px; font-family:var(--mono); font-size:11px;
+  letter-spacing:.1em; color:var(--crk); white-space:nowrap; pointer-events:none; }
+/* upcoming, as a table that keeps the list's look */
+.ev-uptbl{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
+.ev-uptbl th{ font-weight:400; font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:left; padding:0 4px 5px; border-bottom:.5px solid var(--line2); }
+.ev-uptbl td{ padding:5px 4px; border-bottom:.4px solid var(--line); color:var(--ink2); white-space:nowrap; }
+.ev-uptbl tr[data-act]{ cursor:pointer; }
+.ev-uptbl tr[data-act]:hover td{ background:rgba(0,212,255,.04); }
+.ev-uptbl .t b{ color:var(--ink); }
+.ev-uptbl .n{ text-align:right; }
+.ev-uptbl .d{ text-align:right; }
+.ev-uptbl .r{ text-align:right; width:1%; }
+.ev-uptbl .r .sc-evrel{ font-size:11px; margin-left:0; }
+.ev-uptbl .na{ color:var(--dim); }
+/* past · reported, scrolling inside its own card */
+.ev-pastscroll{ max-height:340px; overflow-y:auto; }
+.ev-pastrow{ display:grid; grid-template-columns:64px 58px minmax(0,1fr); align-items:baseline; gap:6px; padding:5px 2px;
+  border-bottom:.4px solid var(--line); font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; cursor:pointer; }
+.ev-pastrow:hover{ background:rgba(0,212,255,.04); }
+.ev-pd{ color:var(--dim); white-space:nowrap; }
+.ev-pastrow .ern-tk{ font-weight:700; color:var(--ink); }
+.ev-pv{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px 9px; min-width:0; }
+.ev-pv .ern-res{ color:var(--ink2); }
+.ev-pv .ern-res.beat b{ color:var(--bull); } .ev-pv .ern-res.miss b{ color:var(--bear); }
+.ev-pv .ern-sur.beat, .ev-prev.beat{ color:var(--bull); } .ev-pv .ern-sur.miss, .ev-prev.miss{ color:var(--bear); }
+.ev-prev{ color:var(--ink3); white-space:nowrap; }
+@media (max-width:560px){ .ev-uptbl th:nth-child(3), .ev-uptbl td:nth-child(3){ display:none; } }
 </style>
 </head>
 <body>
@@ -12504,6 +12538,10 @@ function eventsRoomHTML() {
     '<div class="body2 body2--ev">' +
       '<div class="panel">' +
         '<div class="sc-plabel sc-plabel--row"><span>earnings</span>' + SECFS_BTN + "</div>" +
+        /* 27 Sep — Alan: "an earnings scintillating tape like the economic one". The economic room opens on its NEXT
+           strip; this room now opens on the earnings tape — the band from the foot of the screen, same rows, same
+           states, same diamond on a result beyond its own usual surprise — so the two rooms read alike. */
+        '<div class="ern-roomtape" id="ernRoomTape"></div>' +
         /* M40 — the room is a dashboard with tabs. PAST REPORTED is a tab of its own
            again (Alan: "we lost the tracking of the past reported… we need it back"),
            and the section he had before this revamp is still one tap away, kept
@@ -12520,9 +12558,11 @@ function eventsRoomHTML() {
          calendar-rail look). This right panel is the fuller master extras column:
          AI-read slot (D) + upcoming digest + RELEASES (per single-ticker scope) +
          website/IR links. */
+      /* 27 Sep — Alan: REMOVE "AI read" (it was a reserved, empty placeholder here); the upcoming list becomes a
+         compact table (EPS and revenue estimates, BMO/AMC, "in 3d"); the scrollable PAST-REPORTED list goes below it. */
       '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>events extras</span>' + SECFS_BTN + '</div><div class="rail" id="evExtras">' +
-        AIREAD_SLOT("events") +
-        '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt" id="evUpcoming">—</div></div>' +
+        '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt ev-upwrap" id="evUpcoming">—</div></div>' +
+        '<div class="card"><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
         '<div id="evRelPanel"></div>' +
       "</div></div></div></div>";
 }
@@ -12666,17 +12706,62 @@ function evFillExtras(upS, scopedTk) {
       relP.innerHTML = '<div class="card"><h4>RELEASES</h4><div class="sc-senttxt">Search a single ticker to see its company releases (from <b>company_releases</b>) + investor-relations link.</div></div>';
   }
   const rail = el("evUpcoming");
-  if (rail) rail.innerHTML = (upS && upS.length)
-    ? upS.slice(0, 8).map((ev) => {
-        const rel = evRel(evDays(ev.date));
-        const est = num(ev.eps_estimate) != null
-          ? '<span style="font-size:8.5px;color:var(--dim)">eps est ' + (+ev.eps_estimate).toFixed(2) + "</span>" : "<span></span>";
-        const sess = (ev.report_time && ev.report_time !== "TBD") ? " " + esc(ev.report_time) : "";
-        return '<div class="ll"><span><b>' + esc(ev.ticker) + "</b></span>" + est +
-          "<span>" + esc(fmtEvDate(ev.date)) + sess +
-          (rel ? '<span class="sc-evrel up">' + rel + "</span>" : "") + "</span></div>";
-      }).join("")
-    : "Nothing upcoming for this scope.";
+  if (rail) rail.innerHTML = evUpTableHTML(upS);
+  const past = el("evPastRail");
+  if (past) {
+    const pastS = typeof EV_CACHE !== "undefined" && EV_CACHE && EV_CACHE.past
+      ? scopeItems(EV_CACHE.past, typeof ercCohort === "function" ? ercCohort() : S.coh, S.tq, S.fav, COHSETS) : null;
+    past.innerHTML = evPastListHTML(pastS);
+    if (pastS && pastS.length && typeof ernStatsEnsure === "function") ernStatsEnsure(pastS.slice(0, EV_PAST_RAIL_MAX).map((r) => r.ticker));
+    try { if (typeof ernScintPaint === "function") ernScintPaint(past); } catch (_) {}
+  }
+}
+/* 27 SEP — THE UPCOMING TABLE. The same rows and the same look as the list it replaces (bold ticker, BMO/AMC as
+   stored, the relative day in its own colour), now with a header and one column each for the EPS and the revenue
+   estimate. A column with nothing stored shows "—", never a zero. */
+const EV_UP_RAIL_MAX = 10, EV_PAST_RAIL_MAX = 60;
+function evUpTableHTML(upS) {
+  if (!upS || !upS.length) return "Nothing upcoming for this scope.";
+  const rows = upS.slice(0, EV_UP_RAIL_MAX).map((ev) => {
+    const rel = evRel(evDays(ev.date)), eps = num(ev.eps_estimate), rev = num(ev.revenue_estimate);
+    const sess = (ev.report_time && ev.report_time !== "TBD") ? String(ev.report_time) : "";
+    return '<tr data-act="row" data-t="' + esc(ev.ticker) + '" title="' + esc(ev.ticker + " · " + fmtEvDate(ev.date) +
+        (ernWhen(ev) ? ", " + ernWhen(ev) : ", time not announced") + " · tap for the company page") + '">' +
+      "<td class=\"t\"><b>" + esc(ev.ticker) + "</b></td>" +
+      '<td class="n">' + (eps != null ? esc(ernNum(eps)) : '<span class="na">—</span>') + "</td>" +
+      '<td class="n">' + (rev != null && rev > 0 ? esc(ercMoney(rev)) : '<span class="na">—</span>') + "</td>" +
+      '<td class="d">' + esc(fmtEvDate(ev.date)) + (sess ? " " + esc(sess) : "") + "</td>" +
+      '<td class="r">' + (rel ? '<span class="sc-evrel up">' + esc(rel) + "</span>" : "") + "</td></tr>";
+  }).join("");
+  return '<table class="ev-uptbl"><thead><tr><th class="t">TICKER</th><th class="n">EPS EST</th><th class="n">REV EST</th>' +
+    '<th class="d">DATE</th><th class="r">IN</th></tr></thead><tbody>' + rows + "</tbody></table>";
+}
+/* 27 SEP — PAST · REPORTED in the rail: newest first, scrolls inside its own card. EPS actual against its estimate
+   (ernResult — the same judgement as the band and the calendar) and the revenue beat or miss. A result beyond that
+   name's own usual surprise wears the diamond and scintillates once, through the same primitive as everywhere. */
+function evRevResult(r) {
+  const a = num(r.revenue_actual), e = num(r.revenue_estimate);
+  if (a == null || !(a > 0)) return null;
+  if (e == null || !(e > 0)) return { cls: "", act: a, pct: null };
+  const pct = ((a - e) / e) * 100;
+  return { cls: Math.abs(pct) < 0.05 ? "inline" : pct > 0 ? "beat" : "miss", act: a, pct: pct };
+}
+function evPastListHTML(pastS) {
+  if (pastS == null) return '<div class="soon">reading past reports…</div>';
+  const rows = pastS.filter((r) => r && num(r.eps_actual) != null).slice(0, EV_PAST_RAIL_MAX);
+  if (!rows.length) return '<div class="soon">no stored results for this scope yet</div>';
+  return '<div class="ev-pastscroll">' + rows.map((r) => {
+    const res = ernResult(r), rv = evRevResult(r), wild = typeof ernWildResult === "function" ? ernWildResult(r) : null;
+    const eps = res ? '<span class="ern-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
+        (res.est != null ? " vs " + esc(ernNum(res.est)) : "") + "</span>" +
+        (res.sur ? '<span class="ern-sur ' + res.cls + (wild ? " is-scint" : "") + '"' +
+          (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") + ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "") : "";
+    const rev = rv ? '<span class="ev-prev ' + rv.cls + '">rev ' + esc(ercMoney(rv.act)) +
+        (rv.pct != null ? " " + (rv.pct >= 0 ? "+" : "−") + Math.abs(rv.pct).toFixed(1) + "%" : "") + "</span>" : "";
+    return '<div class="ev-pastrow ern-it" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
+      '<span class="ev-pd">' + esc(fmtEvDate(r.date)) + '</span><span class="ern-tk">' + esc(r.ticker) + "</span>" +
+      '<span class="ev-pv">' + eps + rev + "</span></div>";
+  }).join("") + "</div>";
 }
 /* ============================================================================
    THE EARNINGS CALENDAR — MONTH · WEEK · DAY   (Alan, 23 Sep: the earnings proposal)
@@ -13267,6 +13352,10 @@ function ercTapeHTML() {
   const allRows = (ERC_TAPE_ROWS || []).filter((x) => x.date >= span.from && x.date <= span.to);
   const scoped = (!COHSETS && coh !== "ALL" && !isListCoh(coh) && !S.tq) ? null : scopeItems(allRows, coh, S.tq, S.fav, COHSETS);
   const dated = {}; allRows.forEach((x) => { dated[x.date] = 1; });
+  /* 27 Sep — Alan asked for a TODAY marker on this slider. It existed, but only inside today's bar, and the DAYS
+     zoom draws weekdays only — so on a Saturday or Sunday there was no bar for it to sit in and it vanished. Today
+     now always has its bar (an empty one on a weekend), exactly as a weekend day with a stored report already does. */
+  if (z === "DAYS" && today >= span.from && today <= span.to) dated[today] = 1;
   const buckets = ercBuckets(span.from, span.to, z, dated);
   const mcap = ercMcap();
   const idxS = ercTlIndex(scoped || [], z, mcap, S.fav);
@@ -18952,6 +19041,21 @@ function renderTopTape(nowSec) {
   /* it opens a little before "now", so the last thing that happened is on screen beside what is next */
   if (track) tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-soon, .ecb-it.is-near, .ern-it.is-today, .ern-it.is-up"));
 }
+/* 27 SEP — the earnings room's own tape: the EARNINGS band, drawn again at the top of the room. */
+let ERN_ROOM_HTML = "";
+function renderErnRoomTape() {
+  const host = el("ernRoomTape");
+  if (!host || !ERN_BAND_ON) return;
+  if (!ERN_ROWS && !ERN_FAIL_AT) { if (!host.innerHTML) host.innerHTML = '<div class="sc-tape"><span class="sc-tape__item ern-note" style="padding:8px 12px">reading this week\'s earnings…</span></div>'; return; }
+  const html = ernBandHTML(todayISO(), Date.now()).replace('id="ernBand"', 'id="ernRoomBand"');
+  if (html === ERN_ROOM_HTML && host.querySelector && host.querySelector("#ernRoomBand")) return;
+  ERN_ROOM_HTML = html;
+  host.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(host); } catch (_) {}
+  if (typeof host.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = host.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, host.querySelector(".ec-now--tape") || host.querySelector(".ern-it.is-today, .ern-it.is-up"));
+}
 /* ---- tapes ------------------------------------------------------------------- */
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
 let lastTapes = "";
@@ -19125,7 +19229,7 @@ function afterMount() {
     if (S.socTab === "YOUTUBE") fillYT();
     else if (S.socTab === "SENTIMENT") fillSocial();   // X loads within its iframe; STOCKTWITS is a reserved slot
   }
-  else if (S.sec === "EVENTS") fillEvents();
+  else if (S.sec === "EVENTS") { fillEvents(); ERN_ROOM_HTML = ""; renderErnRoomTape(); }
   else if (S.sec === "SENTIMENT") sentiDispatch();
   else if (S.sec === "ECONOMIC") { if (S.econView === "REGIME") rgMount(); else fillEcon(); }
   else if (S.sec === "FILES") filesWire();
