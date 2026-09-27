@@ -4343,6 +4343,41 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ev-pv .ern-sur.beat, .ev-prev.beat{ color:var(--bull); } .ev-pv .ern-sur.miss, .ev-prev.miss{ color:var(--bear); }
 .ev-prev{ color:var(--ink3); white-space:nowrap; }
 @media (max-width:560px){ .ev-uptbl th:nth-child(3), .ev-uptbl td:nth-child(3){ display:none; } }
+
+/* ── 27 SEP · USUAL DAY ROOM ─────────────────────────────────────────────────────────────────────────────── */
+.body2--ud{ grid-template-columns:1.9fr 1fr; }
+.ud-tape{ flex:0 0 auto; padding:4px 2px 8px; border-bottom:.5px solid var(--line2); }
+.ud-bars{ display:flex; align-items:stretch; gap:3px; height:164px; overflow-x:auto; padding:18px 8px 0 4px; }
+.ud-m{ flex:0 0 auto; height:14px; text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink3); letter-spacing:.04em; }
+.ud-bar{ flex:1 0 22px; min-width:22px; display:flex; flex-direction:column; cursor:pointer; }
+.ud-col{ position:relative; flex:1 1 auto; display:flex; flex-direction:column-reverse; border-bottom:.5px solid var(--line2); }
+.ud-col i{ display:block; width:100%; }
+.ud-col i.up{ background:var(--bull); opacity:.85; } .ud-col i.dn{ background:var(--bear); opacity:.85; } .ud-col i.nd{ background:#8A8A92; opacity:.6; }
+.ud-n{ position:absolute; left:0; right:0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink2); }
+.ud-x{ flex:0 0 auto; text-align:center; font-family:var(--mono); font-size:11px; color:var(--dim); padding-top:4px; white-space:nowrap; }
+.ud-bar:hover .ud-col{ background:rgba(0,212,255,.05); }
+.ud-bar.is-open .ud-col{ background:rgba(0,212,255,.09); box-shadow:inset 0 0 0 .5px rgba(0,212,255,.5); }
+.ud-bar.is-open .ud-x{ color:var(--ink); }
+.ud-bar.is-today .ud-x{ color:var(--bg); background:var(--crk); border-radius:4px; font-weight:700; }
+.ud-bar.is-pre .ud-col{ background:repeating-linear-gradient(135deg, transparent 0 4px, rgba(134,138,170,.12) 4px 5px); }
+.ud-now{ position:absolute; top:-16px; left:0; font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--crk); white-space:nowrap; }
+.ud-say{ display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline; padding:8px 4px 0; font-family:var(--mono); font-size:11px; color:var(--ink3); }
+.ud-say b{ color:var(--ink2); }
+.ud-note{ color:var(--dim); }
+.ud-dayhd{ font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--ink2); padding:10px 4px 6px; }
+.ud-dayhd b{ color:var(--ink); letter-spacing:.12em; }
+.ud-dayhd .up{ color:var(--bull); } .ud-dayhd .dn{ color:var(--bear); }
+.ud-tbl{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
+.ud-tbl th{ font-weight:400; letter-spacing:.1em; color:var(--dim); text-align:left; padding:4px 6px; border-bottom:.5px solid var(--line2);
+  position:sticky; top:0; background:var(--panel); }
+.ud-tbl td{ padding:5px 6px; border-bottom:.4px solid var(--line); color:var(--ink2); white-space:nowrap; }
+.ud-tbl .n{ text-align:right; } .ud-tbl .t b{ color:var(--ink); } .ud-tbl .d, .ud-tbl .dim{ color:var(--ink3); }
+.ud-tbl .up{ color:var(--bull); } .ud-tbl .dn{ color:var(--bear); } .ud-tbl .x{ font-weight:700; }
+.ud-tbl .w{ color:var(--ink3); white-space:normal; }
+.ud-tbl tr[data-act]{ cursor:pointer; } .ud-tbl tr[data-act]:hover td{ background:rgba(0,212,255,.04); }
+@media (max-width:900px){ .body2--ud{ grid-template-columns:1fr; } }
+@media (max-width:560px){ .ud-tbl th:nth-child(3), .ud-tbl td:nth-child(3), .ud-tbl th:nth-child(7), .ud-tbl td:nth-child(7){ display:none; }
+  .ud-tbl.ud-hb th:nth-child(3), .ud-tbl.ud-hb td:nth-child(3){ display:table-cell; } .ud-bars{ height:120px; } }
 </style>
 </head>
 <body>
@@ -5332,6 +5367,7 @@ function scEntryRoom() {
     if (h === "economic" || h === "calendar") return "ECONOMIC";
     if (h === "sentiment" || h === "fear-greed") return "SENTIMENT";
     if (h === "earnings" || h === "events") return "EVENTS";
+    if (h === "usual" || h === "usual-day" || h === "sigma") return "USUAL";   /* 27 Sep — the usual-day room */
     if (h === "past" || h === "past-reported" || h === "reported") return "EVENTS";
     return null;
   }
@@ -5356,6 +5392,7 @@ const S = {
      report" — his saved strip is FAV, three names). Nothing here is remembered between
      loads, so none of it replaces a choice Alan has saved. */
   ernSpan: "DAY", ernDay: null, ernPick: null, ernZoom: "DAYS", ernCohPick: null,
+  udDay: null, udCohPick: null,   /* 27 Sep — the USUAL DAY room: the day open on its slider, and its own cohort pick (null = ALL) */
   ernTlAt: null,        /* the TIMELINE's own centre — the grid's arrows never touch it (M40) */
   ernTab: scEntryTab(),  /* DASH the dashboard · PAST the full PAST REPORTED tab · OLD the older list, kept (M40) */
   ernPast: null,        /* the open name in PAST REPORTED */
@@ -5377,7 +5414,7 @@ const S = {
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
    full size, so it belongs beside the room whose cramped right pane it relieves. */
-const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"];   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
+const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "USUAL", "ECONOMIC"];   /* 27 Sep — USUAL DAY + sigma events, their own room beside EVENTS */   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
 const STATION_PUBLIC_URL = "https://station.scintillahub.ai/";
 const ALLOCATION_PUBLIC_URL = "/allocation/";   /* ALLOCATION is a master tab of its own, sitting between DASHBOARD and STATION (Alan, 22 Sep: "I would put portfolio allocation even before STATION"). */
 const COHORTS = [
@@ -6067,7 +6104,7 @@ function buildMtabs() {
   el("mtabs").innerHTML = SECTIONS.map((s) =>
     (s === "SCENES"
       ? '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_PUBLIC_URL + '" target="_blank" rel="noopener">STATION</a>'
-      : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + s + "</button>") +
+      : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + (s === "USUAL" ? "USUAL DAY" : s) + "</button>") +
     (s === "DASHBOARD" ? '<a role="tab" class="sc-mtab" data-sec="ALLOCATION" href="' + ALLOCATION_PUBLIC_URL + '">ALLOCATION</a>' : "")).join("");
 }
 function updateMtabs() {
@@ -19056,6 +19093,206 @@ function renderErnRoomTape() {
   const track = host.querySelector(".sc-tape__track");
   if (track) tapeSpeed(track, host.querySelector(".ec-now--tape") || host.querySelector(".ern-it.is-today, .ern-it.is-up"));
 }
+/* ============================================================================
+   27 SEP · USUAL DAY + SIGMA EVENTS — their own room.
+   Alan, 27 Sep: "USUAL DAY + SIGMA EVENTS: move out of the dashboard table into their own tab/screen with a
+   left-to-right slider like events (he saw Friday's sigma events, now they are gone)."
+   WHY THEY WERE GONE: TODAY'S SCINTILLAS shows today's rows only (scintToday), so on a weekend it is empty although
+   Friday's are stored. This room reads the stored rows by DAY and keeps every day on a slider.
+   WHAT A SIGMA EVENT IS HERE: a stored scintilla with a size — price_outlier (a move of 2× or more of that name's
+   usual day, and at least 1%, for equities — the rules file), earnings_surprise and econ_surprise. "about to print"
+   rows (econ_imminent) have no size and are left out. Nothing is detected in the browser.
+   WHAT IT READS: scintillas (the detector's table, the last 60 days, one read per 5 minutes while the room is open)
+   and ticker_heartbeat_daily (the stored usual day per name, the board's own read) — read only, nothing written.
+   ============================================================================ */
+const UD_KINDS = ["price_outlier", "earnings_surprise", "econ_surprise"];
+const UD_DAYS_BACK = 30;              // weekdays on the slider
+const UD_TTL_MS = 5 * 60e3;
+const UD_LIMIT = 3000;
+let UD_ROWS = null, UD_AT = 0, UD_FAIL = false, UD_BUSY = false, UD_TRUNC = false;
+const UD_HB = Object.create(null);    // ticker → newest heartbeat row
+let UD_HB_BUSY = false;
+const udCohort = () => S.udCohPick || "ALL";
+function udRoomHTML() {
+  return '<div style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0">' +
+    '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
+    '<div class="body2 body2--ud">' +
+      '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>sigma events · moves beyond each name\'s usual day</span>' + SECFS_BTN + "</div>" +
+        '<div id="udTape"><div class="soon">reading the stored sigma events…</div></div>' +
+        '<div class="scroller" id="udDayList"></div>' +
+      "</div>" +
+      '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>usual day · by name</span>' + SECFS_BTN + "</div>" +
+        '<div class="scroller" id="udHbList"><div class="soon">reading the stored usual day…</div></div>' +
+      "</div>" +
+    "</div></div>";
+}
+/* items with a .ticker so the board's own scope rules apply; a non-ticker subject (an economic release) only in ALL */
+function udScoped(rows) {
+  const coh = udCohort();
+  const withT = (rows || []).map((r) => Object.assign({}, r, { ticker: r.subject_kind === "ticker" ? String(r.subject).toUpperCase() : null }));
+  if (coh === "ALL" && !S.tq) return withT;
+  if (!COHSETS && !isListCoh(coh)) return null;               // the cohort map is still loading
+  return scopeItems(withT.filter((r) => r.ticker), coh, S.tq, S.fav, COHSETS);
+}
+function udWeekdays(todayIso, n) {
+  const out = [];
+  for (let d = todayIso; out.length < n; d = ernShift(d, -1)) {
+    const w = new Date(d + "T12:00:00Z").getUTCDay();
+    if ((w !== 0 && w !== 6) || d === todayIso) out.unshift(d);
+  }
+  return out;
+}
+/* PURE — day → { n, up, dn, rows } */
+function udByDay(rows) {
+  const by = Object.create(null);
+  for (const r of rows || []) {
+    const d = scintDayET(r.ts); if (!d) continue;
+    const b = by[d] || (by[d] = { n: 0, up: 0, dn: 0, rows: [] });
+    b.n++; if (+r.direction > 0) b.up++; else if (+r.direction < 0) b.dn++;
+    b.rows.push(r);
+  }
+  return by;
+}
+/* under each day's number: the month where one starts (and on the first bar), "M" on every other Monday */
+function udUnderLabel(d, isFirst) {
+  if (isFirst || d.slice(8, 10) === "01") return ERN_MO[+d.slice(5, 7) - 1];
+  return new Date(d + "T12:00:00Z").getUTCDay() === 1 ? "M" : "";
+}
+function udFirstDay(rows) {
+  if (!rows || !rows.length || UD_TRUNC) return null;
+  let f = null; for (const r of rows) { const d = scintDayET(r.ts); if (d && (!f || d < f)) f = d; }
+  return f;
+}
+function udTapeHTML(scoped, today) {
+  const days = udWeekdays(today, UD_DAYS_BACK), by = udByDay(scoped), first = udFirstDay(UD_ROWS);
+  const max = Math.max(1, ...days.map((d) => (by[d] ? by[d].n : 0)));
+  const open = S.udDay || days.slice().reverse().find((d) => by[d] && by[d].n) || today;
+  const bars = days.map((d, i) => {
+    const b = by[d], n = b ? b.n : 0, pre = first && d < first;
+    const hUp = b ? Math.round((b.up / max) * 100) : 0, hDn = b ? Math.round((b.dn / max) * 100) : 0;
+    const hN = b ? Math.max(0, Math.round((n / max) * 100) - hUp - hDn) : 0;
+    const ttl = ernWeekday(d) + " " + ernMonthDay(d) + " · " + (pre ? "not recorded — the detector's store begins " + ernMonthDay(first)
+      : n ? n + " sigma event" + (n === 1 ? "" : "s") + (b.up || b.dn ? " · " + b.up + " up · " + b.dn + " down" : "") : "none stored") + " · click to list them";
+    return '<div class="ud-bar' + (d === today ? " is-today" : "") + (d === open ? " is-open" : "") + (pre ? " is-pre" : "") +
+      '" data-act="udday" data-d="' + d + '" title="' + esc(ttl) + '"><span class="ud-col">' +
+      (d === today ? '<span class="ud-now">TODAY</span>' : "") +
+      (n ? '<span class="ud-n" style="bottom:calc(' + (hUp + hDn + hN) + '% + 3px)">' + n + "</span>" : "") +
+      '<i class="dn" style="height:' + hDn + '%"></i><i class="nd" style="height:' + hN + '%"></i><i class="up" style="height:' + hUp + '%"></i>' +
+      '</span><span class="ud-x">' + esc(String(+d.slice(8, 10))) + "</span>" +
+      '<span class="ud-m">' + esc(udUnderLabel(d, i === 0)) + "</span></div>";
+  }).join("");
+  const total = scoped.length, coh = udCohort();
+  return '<div class="ud-tape"><div class="ud-bars">' + bars + "</div>" +
+    '<div class="ud-say"><span>showing <b>' + esc(coh === "ALL" ? "ALL" : coh) + "</b> · " + total + " stored sigma event" + (total === 1 ? "" : "s") +
+      " over the last " + UD_DAYS_BACK + " weekdays</span>" +
+      (coh !== "ALL" ? '<span class="se-widen" data-act="udall">SHOW ALL NAMES</span>' : "") +
+      (first ? '<span class="ud-note">the store begins <b>' + esc(ernWeekday(first) + " " + ernMonthDay(first)) + "</b> — earlier days were never recorded, they are not quiet</span>" : "") +
+      (UD_TRUNC ? '<span class="ud-note">more rows than one read returns — the oldest days may be missing</span>' : "") +
+    "</div></div>";
+}
+function udMove(r) { const d = r.detail || {}; return d.move_pct != null && isFinite(+d.move_pct) ? +d.move_pct : null; }
+function udDayHTML(scoped, today) {
+  const by = udByDay(scoped), days = udWeekdays(today, UD_DAYS_BACK);
+  const open = S.udDay || days.slice().reverse().find((d) => by[d] && by[d].n) || today;
+  const b = by[open];
+  const head = '<div class="ud-dayhd"><b>' + esc(ernWeekday(open) + " " + ernMonthDay(open)) + "</b>" +
+    (b ? " · " + b.n + " sigma event" + (b.n === 1 ? "" : "s") + ' · <span class="up">' + b.up + ' up</span> · <span class="dn">' + b.dn + " down</span>" : " · none stored") + "</div>";
+  if (!b) return head + '<div class="soon">nothing moved further than its own usual day on this day' + (open === today ? " (yet)" : "") + ".</div>";
+  const rows = b.rows.slice().sort((x, y) => Math.abs(+y.magnitude || 0) - Math.abs(+x.magnitude || 0));
+  return head + '<table class="ud-tbl"><thead><tr><th>TIME</th><th>NAME</th><th>WHAT</th><th class="n">MOVE</th><th class="n">× USUAL</th><th class="n">USUAL DAY</th><th>WHY</th></tr></thead><tbody>' +
+    rows.map((r) => {
+      const d = r.detail || {}, mv = udMove(r), isT = r.subject_kind === "ticker";
+      const when = (() => { try { return ET_HM.format(new Date(r.ts)); } catch (_) { return ""; } })();
+      const act = isT ? ' data-act="row" data-t="' + esc(r.subject) + '"' : (d.event_ts ? ' data-act="mngoto" data-day="' + esc(scintDayET(d.event_ts)) + '"' : "");
+      const usual = r.kind === "price_outlier" && d.daily_vol_pct != null ? hbPct(d.daily_vol_pct) : "";
+      const why = scintWhyRule(r) || (Array.isArray(d.fired) && d.fired.indexOf("statistical") >= 0 ? "far beyond its usual day" : "");
+      return "<tr" + act + ' title="' + esc(scintSays(r)) + '"><td class="d">' + esc(when) + '</td><td class="t"><b>' + esc(r.subject) + "</b></td>" +
+        "<td>" + esc(scintWhat(r)) + '</td><td class="n ' + (mv == null ? "" : mv >= 0 ? "up" : "dn") + '">' + (mv != null ? esc(fmtC(mv)) : "—") + "</td>" +
+        '<td class="n x ' + (+r.direction > 0 ? "up" : +r.direction < 0 ? "dn" : "") + '">' + esc(scintMult(r) || "—") + "</td>" +
+        '<td class="n">' + esc(usual || "—") + '</td><td class="w">' + esc(why) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+/* the usual day of every name in scope, biggest first — the column that left the board */
+function udHbHTML() {
+  if (!UNIVERSE) return '<div class="soon">reading the names…</div>';
+  const scoped = udScopedTickers();
+  if (scoped == null) return '<div class="soon">cohort map loading…</div>';
+  const have = scoped.filter((t) => UD_HB[t]);
+  if (!have.length) return '<div class="soon">' + (UD_HB_BUSY ? "reading the stored usual day…" : "no usual day stored for these names") + "</div>";
+  have.sort((a, b) => (num(UD_HB[b].usual_day_60) || 0) - (num(UD_HB[a].usual_day_60) || 0));
+  const missing = scoped.length - have.length;
+  return '<div class="ud-say"><span><b>' + have.length + "</b> names · stored daily, the spread of each name's own daily moves" +
+      (missing ? " · " + missing + " without a stored row" : "") + "</span></div>" +
+    '<table class="ud-tbl ud-hb"><thead><tr><th>NAME</th><th class="n">USUAL DAY</th><th class="n">20 DAYS</th><th class="n">1 YEAR</th><th class="n">AS OF</th></tr></thead><tbody>' +
+    have.map((t) => {
+      const h = UD_HB[t];
+      return '<tr data-act="row" data-t="' + esc(t) + '" title="' + esc(hbTitle(t, h, null)) + '"><td class="t"><b>' + esc(t) + "</b></td>" +
+        '<td class="n">' + esc(hbPct(h.usual_day_60) || "—") + '</td><td class="n dim">' + esc(hbPct(h.usual_day_20) || "—") +
+        '</td><td class="n dim">' + esc(hbPct(h.usual_day_250) || "—") + '</td><td class="n dim">' + esc(ernMonthDay(String(h.date))) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+function udScopedTickers() {
+  const base = [...(UNIVERSE || [])].map((t) => ({ ticker: t }));
+  const coh = udCohort();
+  if (coh === "ALL" && !S.tq) return base.map((x) => x.ticker);
+  if (!COHSETS && !isListCoh(coh)) return null;
+  return scopeItems(base, coh, S.tq, S.fav, COHSETS).map((x) => x.ticker);
+}
+function udRender() {
+  const tape = el("udTape"), list = el("udDayList"), hb = el("udHbList");
+  if (!tape) return;
+  const today = todayISO();
+  if (!UD_ROWS) {
+    tape.innerHTML = '<div class="soon">' + (UD_FAIL ? "the stored sigma events could not be read — showing nothing rather than something stale" : "reading the stored sigma events…") + "</div>";
+    if (list) list.innerHTML = "";
+  } else {
+    const scoped = udScoped(UD_ROWS);
+    if (scoped == null) { tape.innerHTML = '<div class="soon">cohort map loading…</div>'; if (list) list.innerHTML = ""; }
+    else {
+      tape.innerHTML = udTapeHTML(scoped, today);
+      if (list) list.innerHTML = udDayHTML(scoped, today);
+      const bars = tape.querySelector && tape.querySelector(".ud-bars");
+      if (bars) bars.scrollLeft = bars.scrollWidth;          // newest at the right, in view
+    }
+  }
+  if (hb) hb.innerHTML = udHbHTML();
+}
+async function udRead(force) {
+  if (UD_BUSY || (!force && UD_ROWS && Date.now() - UD_AT < UD_TTL_MS)) return;
+  UD_BUSY = true;
+  try {
+    const from = new Date(Date.now() - 60 * 86400e3).toISOString();
+    const rows = await pg("scintillas?select=ts,kind,subject,subject_kind,direction,magnitude,detail&kind=in.(" + UD_KINDS.join(",") +
+      ")&ts=gte." + encodeURIComponent(from) + "&order=ts.desc&limit=" + UD_LIMIT);
+    UD_ROWS = Array.isArray(rows) ? rows : []; UD_TRUNC = UD_ROWS.length >= UD_LIMIT; UD_AT = Date.now(); UD_FAIL = false;
+  } catch (_) { UD_FAIL = true; }
+  finally { UD_BUSY = false; }
+}
+async function udHbEnsure() {
+  if (UD_HB_BUSY) return;
+  const want = (udScopedTickers() || []).filter((t) => !UD_HB[t]);
+  if (!want.length) return;
+  UD_HB_BUSY = true;
+  try {
+    const since = new Date(Date.now() - 21 * 86400e3).toISOString().slice(0, 10);
+    for (let i = 0; i < want.length; i += 35) {
+      const chunk = want.slice(i, i + 35);
+      const rows = await pg("ticker_heartbeat_daily?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
+        ")&date=gte." + since + "&order=ticker.asc,date.desc&select=ticker,date,usual_day_20,usual_day_60,usual_day_250,n").catch(() => []);
+      for (const r of (rows || [])) if (r && r.ticker && !UD_HB[r.ticker]) UD_HB[r.ticker] = r;   // date.desc: first is newest
+      if (S.sec === "USUAL") { const hb = el("udHbList"); if (hb) hb.innerHTML = udHbHTML(); }
+    }
+  } finally { UD_HB_BUSY = false; }
+  if (S.sec === "USUAL") { const hb = el("udHbList"); if (hb) hb.innerHTML = udHbHTML(); }
+}
+async function udFill() {
+  udRender();
+  try { if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker)); } catch (_) {}
+  if (!COHSETS) loadCohSets().then(() => { if (S.sec === "USUAL") { udRender(); udHbEnsure(); } }).catch(() => {});
+  await udRead(false);
+  if (S.sec === "USUAL") udRender();
+  udHbEnsure();
+}
 /* ---- tapes ------------------------------------------------------------------- */
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
 let lastTapes = "";
@@ -19171,6 +19408,7 @@ function viewKey() {
     case "ECONOMIC": return "ECON|" + (S.econView || "RELEASES");   // M44 — REGIME is its own mount, like SENTIMENT's sub-tabs
     case "ALERTS": case "SCREENER": return S.sec;
     case "FILES": return "FILES";
+    case "USUAL": return "USUAL";
   }
   return S.sec;
 }
@@ -19189,6 +19427,7 @@ function roomHTML() {
     case "SENTIMENT": return sentimentRoomHTML();   // one consolidated reading — see Room · SENTIMENT
     case "ECONOMIC":  return (S.econView === "REGIME") ? regimeRoomHTML() : econRoomHTML();
     case "FILES":     return filesRoomHTML();
+    case "USUAL":     return udRoomHTML();
   }
   return "";
 }
@@ -19233,6 +19472,7 @@ function afterMount() {
   else if (S.sec === "SENTIMENT") sentiDispatch();
   else if (S.sec === "ECONOMIC") { if (S.econView === "REGIME") rgMount(); else fillEcon(); }
   else if (S.sec === "FILES") filesWire();
+  else if (S.sec === "USUAL") udFill();
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
@@ -19560,6 +19800,7 @@ document.addEventListener("click", (e) => {
     case "mtab": {
       /* entering EVENTS starts the room wide and on today, so a narrow strip left
          behind in another room can never make this one look empty. */
+      if (a.dataset.sec === "USUAL" && S.sec !== "USUAL") { S.udCohPick = null; S.udDay = null; }   /* 27 Sep — enters wide, on the latest day */
       if (a.dataset.sec === "EVENTS" && S.sec !== "EVENTS") { S.ernCohPick = null; S.ernDay = null; S.ernPick = null; ERC_TAPE_AT = null; ERC_AUTO_DAY = null; }
       go(a.dataset.sec); break;
     }
@@ -19822,6 +20063,7 @@ document.addEventListener("click", (e) => {
       if (mountedKey === "DASH") { restartFeed(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
       else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); restartFeed(); }
       if (inEvents) renderEvents(S.coh);
+      if (S.sec === "USUAL") { S.udCohPick = a.dataset.key; udRender(); udHbEnsure(); }   /* 27 Sep — narrows the usual-day room too */
       break;
     }
     /* R43 §3 — Layer-0 sub-tabs. Tab state is a plain JS flag (no persistence); only
@@ -20053,6 +20295,8 @@ document.addEventListener("click", (e) => {
     case "unpin": {   // R42 §7 — "◂ COHORT" back button: unpin → Layer 0 (identical to re-clicking the active row)
       S.sec = "DASHBOARD"; updateMtabs(); startRotate(); break;
     }
+    case "udday": { S.udDay = a.dataset.d || null; udRender(); break; }        /* 27 Sep — a bar on the usual-day slider */
+    case "udall": { S.udCohPick = "ALL"; udRender(); udHbEnsure(); break; }
     case "headx": {   // 27 Sep — ✕ beside the ticker in the header title: back to the SCINTILLA title; the tape stays
       if (S.sec === "COMPANY") { S.sec = "DASHBOARD"; updateMtabs(); }
       startRotate(); identPaint(); break;             // startRotate repaints only where a left panel is mounted
