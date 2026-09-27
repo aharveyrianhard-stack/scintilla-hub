@@ -66,7 +66,9 @@ const sigmaToday = Object.keys(S).filter((s) => S[s].sigma.today_ratio != null &
 const v3 = (s) => { const x = S[s]; if (!x) return null; const t = x.today;
   return { sym: s, close: x.close, rsi: r2(t.rsi.v), rsiP3y: r2(t.rsi.p3y), rsiLine: r2(x.lines.rsi["3y"]?.q10), rsiLineHi: r2(x.lines.rsi["3y"]?.q90), fixed30: t.rsi.v != null && t.rsi.v <= 30,
     d200: r2(t.d200.v), d200Pall: r2(t.d200.pall), from_high: r2(x.pullbacks.current.from_high), usual_depth: r2(x.pullbacks.all?.depth?.med), vs_usual: r2(x.pullbacks.current.vs_usual),
-    usual_rsi_low: r2(x.pullbacks.all?.rsi?.med), lead: r2(t.lead), ratio: r2(x.sigma.today_ratio), ud: r2(t.ud), pullbacks_n: x.pullbacks.n }; };
+    usual_rsi_low: r2(x.pullbacks.all?.rsi?.med), lead: r2(t.lead), ratio: r2(x.sigma.today_ratio), ud: r2(t.ud), pullbacks_n: x.pullbacks.n,
+    state: t.d200.v == null ? null : t.d200.v >= 0 ? "above" : "below", stateLine: r2(t.d200.v == null ? null : t.d200.v >= 0 ? x.range_shift.above200.q10 : x.range_shift.below200.q10),
+    stateLineHi: r2(t.d200.v == null ? null : t.d200.v >= 0 ? x.range_shift.above200.q90 : x.range_shift.below200.q90) }; };
 const atP10 = Object.keys(S).filter((s) => S[s].today.rsi.p3y != null && S[s].today.rsi.p3y <= 10);
 const atP90 = Object.keys(S).filter((s) => S[s].today.rsi.p3y != null && S[s].today.rsi.p3y >= 90);
 const at30 = Object.keys(S).filter((s) => S[s].today.rsi.v != null && S[s].today.rsi.v <= 30);
