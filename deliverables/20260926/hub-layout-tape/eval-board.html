@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visuals Evaluation Board</title>
+<meta name="description" content="Every visual proposal made for Scintilla so far, on one page: a picture, what it is for, where it would live, what it costs to run, and a keep / change / drop row to fill in.">
+<link rel="stylesheet" href="d1.css">
+<style>
+body{padding:0 var(--gut) 40px;max-width:1500px;margin:0 auto}
+header.eb{padding:18px 0 12px;border-bottom:1px solid var(--line)}
+h1{font-size:var(--t-big);font-weight:var(--w-semi);letter-spacing:.12em;margin:10px 0 6px;color:var(--ink)}
+.lede{color:var(--ink2);max-width:980px;font-size:var(--t-body);line-height:1.5}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+.grp{margin-top:26px}
+.grp h2{font-size:var(--t-label);letter-spacing:var(--tr-chrome);color:var(--dim);font-weight:var(--w-reg);text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:6px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-top:12px}
+.card{background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column}
+.card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top left;border-bottom:1px solid var(--line);background:var(--panel2)}
+.card .b{padding:10px 12px;display:grid;gap:6px;flex:1}
+.card h3{margin:0;font-size:var(--t-title);color:var(--ink);font-weight:var(--w-semi)}
+.card h3 small{font-size:var(--t-label);color:var(--dim);font-weight:var(--w-reg);margin-left:6px}
+.card p{margin:0;font-size:var(--t-label);color:var(--ink2);line-height:1.45}
+.card p b{color:var(--dim);font-weight:var(--w-reg);letter-spacing:var(--tr-lab);text-transform:uppercase;font-size:var(--t-micro);margin-right:6px}
+.cost{display:flex;gap:14px;font-size:var(--t-label);color:var(--ink2);flex-wrap:wrap}
+.cost span b{color:var(--ink);font-weight:var(--w-semi)}
+.meter{height:4px;background:var(--line);position:relative}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--ink2)}
+.score{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:8px}
+.score .d1-seg button{padding:6px 12px}
+.score .d1-seg button.k.is-on{color:var(--bull)} .score .d1-seg button.d.is-on{color:var(--bear)}
+.score input{width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--ink);font:inherit;font-size:var(--t-label);padding:7px 8px;border-radius:2px}
+.card a.open{font-size:var(--t-label);color:var(--ink2)}
+table.sum{border-collapse:collapse;width:100%;font-size:var(--t-label);margin-top:10px}
+table.sum th,table.sum td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+table.sum th{color:var(--dim);font-weight:var(--w-reg);letter-spacing:var(--tr-lab);text-transform:uppercase;font-size:var(--t-micro)}
+table.sum td.r,table.sum th.r{text-align:right}
+.note{font-size:var(--t-label);color:var(--dim);line-height:1.5;max-width:980px}
+#out{width:100%;min-height:120px;background:var(--bg);color:var(--ink2);border:1px solid var(--line2);font:inherit;font-size:var(--t-label);padding:8px;display:none;margin-top:8px}
+</style>
+</head><body>
+<header class="eb"><span data-scnav-slot></span>
+  <div class="lab">SCINTILLA · THE VISUALS LAB · 27 SEP 2026</div>
+  <h1>Visuals evaluation board</h1>
+  <div class="lede">Every visual proposal made so far, on one page. Each card has a picture of it running, what it is for, where it would live, and what it costs your machine to keep it on screen. Under each card, pick <b>keep</b>, <b>change</b> or <b>drop</b> and write one line. When you are done, press <b>copy my scores</b> and paste the text to the coordinator: that text is what the revamp gets decided from.</div>
+  <div class="tools"><button class="d1-btn" id="copy">copy my scores</button><button class="d1-btn" id="dl">download as a file</button><button class="d1-btn" id="clear">clear my scores</button><span class="dim" style="font-size:var(--t-label)" id="saved"></span></div>
+  <textarea id="out" readonly aria-label="your scores as text"></textarea>
+  <div class="note">Your picks are kept in this browser only, until you copy them. Nobody else sees them, and nothing is sent anywhere. <b>Cost</b> is measured the same way for every card: the page opened headless on this MacBook at 1680 × 1050, the CPU used in its first 45 seconds (<b>load</b>), then the CPU it keeps using per minute once settled (<b>steady</b>), for the whole browser. An empty browser tab measures <span id="base"></span>, so read everything against that.</div>
+</header>
+<div id="groups"></div>
+<div class="grp"><h2>All costs, lowest to highest</h2><table class="sum" id="sum"></table></div>
+<script src="eval-data.js"></script>
+<script>
+(function () {
+  "use strict";
+  const E = window.EVAL || { items: [], baseline: null }, KEY = "d1.evalScores.v1", $ = (s) => document.querySelector(s);
+  let SC = {}; try { SC = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (_) { SC = {}; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(SC)); $("#saved").textContent = "kept in this browser"; } catch (_) { $("#saved").textContent = "this browser will not keep them: copy before you leave"; } };
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const max = Math.max(...E.items.map((i) => i.steady || 0), 1);
+  $("#base").textContent = E.baseline ? E.baseline.steady + " CPU-seconds a minute steady, " + E.baseline.load + " s to load" : "(not measured)";
+  const groups = [...new Set(E.items.map((i) => i.group))];
+  $("#groups").innerHTML = groups.map((g) => '<div class="grp"><h2>' + esc(g) + '</h2><div class="cards">' + E.items.filter((i) => i.group === g).map(card).join("") + "</div></div>").join("");
+  function card(i) {
+    const s = SC[i.id] || {};
+    return '<article class="card" data-id="' + esc(i.id) + '">' + (i.thumb ? '<a href="' + esc(i.url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(i.thumb) + '" alt="' + esc(i.title) + ' running"></a>' : "") +
+      '<div class="b"><h3>' + esc(i.title) + "<small>" + esc(i.by) + "</small></h3>" +
+      "<p><b>for</b>" + esc(i.for) + "</p><p><b>lives</b>" + esc(i.lives) + "</p>" + (i.note ? "<p><b>note</b>" + esc(i.note) + "</p>" : "") +
+      '<div class="cost"><span>load <b>' + (i.load != null ? i.load.toFixed(1) + " s" : "—") + '</b></span><span>steady <b>' + (i.steady != null ? i.steady.toFixed(2) + " CPU-s/min" : "—") + "</b></span>" + (i.where ? '<span class="dim">' + esc(i.where) + "</span>" : "") + "</div>" +
+      '<div class="meter" title="steady cost against the most expensive card"><i style="width:' + ((i.steady || 0) / max * 100).toFixed(0) + '%"></i></div>' +
+      '<a class="open" href="' + esc(i.url) + '" target="_blank" rel="noopener">open it ↗</a></div>' +
+      '<div class="score"><span class="d1-seg">' + ["keep", "change", "drop"].map((v) => '<button class="' + v[0] + (s.v === v ? " is-on" : "") + '" data-v="' + v + '">' + v.toUpperCase() + "</button>").join("") + "</span>" +
+      '<input type="text" maxlength="240" placeholder="one line: what to keep, change or why drop" value="' + esc(s.line || "") + '"></div></article>';
+  }
+  document.addEventListener("click", (e) => { const b = e.target.closest(".score button"); if (!b) return; const c = b.closest(".card"), id = c.dataset.id;
+    SC[id] = Object.assign(SC[id] || {}, { v: SC[id] && SC[id].v === b.dataset.v ? null : b.dataset.v, at: new Date().toISOString() });
+    c.querySelectorAll(".score button").forEach((x) => x.classList.toggle("is-on", x.dataset.v === SC[id].v)); save(); });
+  document.addEventListener("input", (e) => { const inp = e.target.closest(".score input"); if (!inp) return; const id = inp.closest(".card").dataset.id; SC[id] = Object.assign(SC[id] || {}, { line: inp.value, at: new Date().toISOString() }); save(); });
+  function asText() {
+    return "VISUALS EVALUATION · scores " + new Date().toISOString().slice(0, 16).replace("T", " ") + "Z\n" + E.items.map((i) => { const s = SC[i.id] || {};
+      return (s.v ? s.v.toUpperCase() : "—").padEnd(7) + i.title + (s.line ? " — " + s.line : ""); }).join("\n");
+  }
+  $("#copy").onclick = async () => { const t = asText(), o = $("#out"); o.style.display = "block"; o.value = t; o.select(); try { await navigator.clipboard.writeText(t); $("#saved").textContent = "copied"; } catch (_) { $("#saved").textContent = "select the text below and copy it"; } };
+  $("#dl").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ at: new Date().toISOString(), scores: SC, items: E.items.map((i) => ({ id: i.id, title: i.title })) }, null, 1)], { type: "application/json" })); a.download = "visuals-scores.json"; a.click(); };
+  $("#clear").onclick = () => { SC = {}; save(); document.querySelectorAll(".score button").forEach((x) => x.classList.remove("is-on")); document.querySelectorAll(".score input").forEach((x) => (x.value = "")); };
+  const rows = E.items.slice().sort((a, b) => (a.steady ?? 1e9) - (b.steady ?? 1e9));
+  $("#sum").innerHTML = '<tr><th>proposal</th><th>lives</th><th class="r">load, s</th><th class="r">steady, CPU-s/min</th></tr>' + rows.map((i) => "<tr><td>" + esc(i.title) + '</td><td class="dim">' + esc(i.lives) + '</td><td class="r num">' + (i.load != null ? i.load.toFixed(1) : "—") + '</td><td class="r num">' + (i.steady != null ? i.steady.toFixed(2) : "—") + "</td></tr>").join("") +
+    (E.baseline ? '<tr><td class="dim">empty browser tab (the floor)</td><td></td><td class="r num dim">' + E.baseline.load.toFixed(1) + '</td><td class="r num dim">' + E.baseline.steady.toFixed(2) + "</td></tr>" : "");
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
