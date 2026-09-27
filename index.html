@@ -2688,10 +2688,12 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .mn-swarm{ display:inline-flex; align-items:center; gap:9px; flex:none; cursor:pointer; padding:2px 10px;
   border-left:.5px solid var(--line); transition:opacity .3s ease, transform .45s cubic-bezier(.34,.02,.2,1); }
 .mn-dots{ display:inline-flex; gap:5px; align-items:center; }
-.mn-swarm .mn-dots i{ width:6px; height:6px; border-radius:50%; display:inline-block;
-  animation:mn-hard 1.1s ease-in-out infinite; }
-.mn-swarm .mn-dots i:nth-child(2n){ animation-duration:.9s; }                            /* not one metronome — a swarm */
-.mn-swarm .mn-dots i:nth-child(3n){ animation-duration:1.3s; }
+.mn-swarm .mn-dots i{ width:6px; height:6px; border-radius:50%; display:inline-block; opacity:.6; }   /* 27 Sep — still until the hour, like an item */
+.mn-swarm.s-soon .mn-dots i{ opacity:1; animation:mn-breathe 2.4s ease-in-out infinite; }
+.mn-swarm.s-near .mn-dots i{ opacity:1; animation:mn-breathe 1.1s ease-in-out infinite; }
+.mn-swarm.s-due  .mn-dots i{ opacity:1; animation:mn-hard 1.1s ease-in-out infinite; }
+.mn-swarm.s-due .mn-dots i:nth-child(2n){ animation-duration:.9s; }                      /* not one metronome — a swarm */
+.mn-swarm.s-due .mn-dots i:nth-child(3n){ animation-duration:1.3s; }
 .mn-slbl{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); }
 .mn-slbl b{ color:var(--ink2); }
 .mn-swarm:hover .mn-slbl{ color:var(--crk); }
@@ -15011,7 +15013,10 @@ function ecNudgeModel(nowSec) {
   const hot = Object.keys(byDay).sort().find((d) => byDay[d].length >= EC_NUDGE_AHEAD_MIN);
   if (sameDay.length >= EC_NUDGE_SWARM_MIN) {
     /* HEAVY DAY — it stops naming them: a swarm of category colours, a count, and where to go */
-    model.push({ kind: "swarm", key: "SWARM" + d0, day: d0, it: sameDay[0].it, group: sameDay, st: "swarm" });
+    /* 27 SEP — the swarm obeys the same four bands as a single item. It used to hard-flash at ANY distance, so
+       "3 due · in 15h" hammered fifteen hours early while a single release that far out sat still — the
+       opposite of the rule. Its pace is now the state of its SOONEST release: still until the hour. */
+    model.push({ kind: "swarm", key: "SWARM" + d0, day: d0, it: sameDay[0].it, group: sameDay, st: "swarm", pace: sameDay[0].st });
   } else {
     /* 16 Aug names the soonest day only; Alan's build carries three items across seven days and he kept that on
        22 Sep, so the queue stays seven days deep and only the COLLAPSE states come from the prototype. */
@@ -15065,7 +15070,7 @@ function ecAheadInnerHTML(m) {
     esc(ecWeekday(m.day).toUpperCase()) + " · <b>" + m.group.length + "</b> due</span>";
 }
 function ecNudgeClass(m) {
-  return m.kind === "swarm" ? "mn-swarm" : m.kind === "ahead" ? "mn-ahead"
+  return m.kind === "swarm" ? "mn-swarm" + (m.pace ? " s-" + m.pace : "") : m.kind === "ahead" ? "mn-ahead"
     : "mn-it s-" + m.st + (m.lane ? " mn-lane-end" : "");
 }
 function ecNudgeInner(m, nowSec) {
@@ -15073,8 +15078,12 @@ function ecNudgeInner(m, nowSec) {
     : m.kind === "ahead" ? ecAheadInnerHTML(m) : ecNudgeInnerHTML(m.it, m.st, nowSec);
 }
 function ecNudgeNodeTitle(m) {
-  return m.kind === "swarm" ? m.group.length + " releases due " + ecDayLbl(m.day) + " · go to the economic section"
-    : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) : ecNudgeTitle(m.it);
+  /* 27 SEP — Alan: "Fed Bowman, Dallas Fed, Barkin showed pink but were not scintillating." Pink is the CENTRAL BANK
+     colour of the calendar's legend, not a flash; the hover now names the releases and says when they will move. */
+  const who = (g) => g.slice(0, 6).map((x) => x.it.name + " (" + x.it.cat.toLowerCase() + ")").join(", ") + (g.length > 6 ? " …" : "");
+  const still = " · the dot colour is the release's category; the dots stay still until the hour before, then breathe";
+  return m.kind === "swarm" ? m.group.length + " releases due " + ecDayLbl(m.day) + ": " + who(m.group) + still + " · go to the economic section"
+    : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) + ": " + who(m.group) + still : ecNudgeTitle(m.it);
 }
 function ecNudgeNodeHTML(m, nowSec) {
   /* M55 — data-esub is the SAME key the ECONOMIC room's rows and month chips carry, so "the thing
