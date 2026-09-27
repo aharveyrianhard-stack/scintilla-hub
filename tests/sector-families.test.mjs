@@ -25,3 +25,9 @@ test("the family choice is remembered per browser, guarded", () => {
   assert.match(src, /try \{ var sf=localStorage\.getItem\("hub\.sector\.family"\)/);
   assert.match(src, /try \{ localStorage\.setItem\("hub\.sector\.family"/);
 });
+test("the strip header reads the published compare mode (CMP_MODE lives in a closure it cannot see)", () => {
+  assert.match(src, /var CMP_MODE="COHORTS"; window\.CMP_MODE_PUBLIC=CMP_MODE;/);
+  assert.equal((src.match(/CMP_MODE=b\.getAttribute\("data-gwxcmp"\); window\.CMP_MODE_PUBLIC=CMP_MODE;/g) || []).length, 2);
+  assert.match(src, /window\.CMP_MODE_PUBLIC === "SECTORS" && typeof SECT_FAMILIES !== "undefined"/);
+  assert.doesNotMatch(src, /typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS"/);
+});

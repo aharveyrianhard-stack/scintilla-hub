@@ -6756,14 +6756,14 @@ function cohortCompareStripHTML() {
      Clicks are delegated at document level (see the gwxcmp handler), so nothing needs
      re-binding either. */
   const cmpBtns = '<span class="gwx-cmp" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "COHORTS" ? " is-on" : "") +
+    '<button class="sc-l0chip' + (window.CMP_MODE_PUBLIC === "COHORTS" ? " is-on" : "") +
       '" data-gwxcmp="COHORTS">COHORTS</button>' +
-    '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" ? " is-on" : "") +
+    '<button class="sc-l0chip' + (window.CMP_MODE_PUBLIC === "SECTORS" ? " is-on" : "") +
       '" data-gwxcmp="SECTORS">SECTORS</button></span>' +
     /* 27 Sep, Alan: "when you add the iShares and Vanguard funds, I need to be able to see those as tabs in the
        sector compare." Under SECTORS: MEMBERS (the sector's constituents, as before) or one fund family's eleven
        sector funds, each with its OWN Geiger. The funds are geiger-only names: computed, shown only here. */
-    (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" && typeof SECT_FAMILIES !== "undefined"
+    (window.CMP_MODE_PUBLIC === "SECTORS" && typeof SECT_FAMILIES !== "undefined"
       ? '<span class="gwx-fam" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
         SECT_FAMILIES.map(function (f) { return '<button class="sc-l0chip' + (SECT_FAMILY === f[0] ? " is-on" : "") +
           '" data-gwxfam="' + f[0] + '" title="' + f[2] + '">' + f[1] + "</button>"; }).join("") + "</span>"
@@ -24184,7 +24184,7 @@ body.gwx-motion .gwx-pct{opacity:1}
   var SECT_KEY={XLB:"MATERIALS",XLE:"ENERGY",XLF:"FINANCIALS",XLI:"INDUSTRIAL",XLK:"TECH",
                 XLP:"STAPLES",XLRE:"REAL_ESTATE",XLU:"UTILITIES",XLV:"HEALTH",
                 XLY:"DISCRET",XLC:"COMMS"};
-  var CMP_MODE="COHORTS";
+  var CMP_MODE="COHORTS"; window.CMP_MODE_PUBLIC=CMP_MODE;   /* 27 Sep: the strip header lives outside this closure and must read the mode */
   /* sector fund families, in SECT order: MATERIALS ENERGY FINANCIALS INDUSTRIAL TECH STAPLES REAL EST UTILITIES HEALTH DISCRET COMMS */
   window.SECT_FAMILIES=[["MEMBERS","MEMBERS","each sector's member companies, averaged (the SPDR ticker labels the column)"],
     ["SPDR","SPDR","State Street Select Sector SPDR funds"],["ISHARES","iSHARES","iShares US sector funds"],
@@ -24286,7 +24286,7 @@ body.gwx-motion .gwx-pct{opacity:1}
         return; }
       var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
       ev.stopPropagation();
-      CMP_MODE=b.getAttribute("data-gwxcmp");
+      CMP_MODE=b.getAttribute("data-gwxcmp"); window.CMP_MODE_PUBLIC=CMP_MODE;
       var cc=E("cohCompare");
       if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
     }, true);
@@ -24301,7 +24301,7 @@ body.gwx-motion .gwx-pct{opacity:1}
     hd.appendChild(w);
     [].forEach.call(w.querySelectorAll("[data-gwxcmp]"),function(b){
       b.onclick=function(ev){ ev.stopPropagation();
-        CMP_MODE=b.getAttribute("data-gwxcmp");
+        CMP_MODE=b.getAttribute("data-gwxcmp"); window.CMP_MODE_PUBLIC=CMP_MODE;
         var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
           cc.innerHTML=cohortCompareStripHTML(); cmpToggle();
         }
