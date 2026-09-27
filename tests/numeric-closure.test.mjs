@@ -135,7 +135,8 @@ test("wiring: reads, row field, cells and tick path", () => {
   assert.match(page, /mcAsOf: \(function \(\) \{ const ts = num\(pf\[m\.ticker\] && pf\[m\.ticker\]\.updated_ts\);/);
   assert.match(page, /mcapCellHTML\(d\.t, d\.mc, d\.mcAsOf\) \+/);
   assert.doesNotMatch(page, /'<span class="sc-mcap" id="lmc_' \+ esc\(d\.t\) \+ '">' \+ fmtCap\(d\.mc\)/, "the undated cell is gone");
-  assert.match(page, /\(d\.fpe != null \? d\.fpe\.toFixed\(1\) \+ "×" : fpeWithheldText\(d\.t\)\)/);
+  /* H2 — a cached-layout row (CONNECTING) shows pending, not a remembered F P/E; otherwise the currency label as before */
+  assert.match(page, /\(d\.fpe != null \? d\.fpe\.toFixed\(1\) \+ "×" : d\.state === "CONNECTING" \? SC_PENDING : fpeWithheldText\(d\.t\)\)/);
   assert.match(page, /lf\.textContent = fv != null \? fv\.toFixed\(1\) \+ "×" : fpeWithheldText\(t\);/, "the price tick keeps the currency label");
   for (const c of ["fwdTrailPE(data.price, f, data._est, data.t)", "fwdTrailPE(data.price, data._fund, data._est, data.t)", "fwdTrailPE(price, fund, est, t)"])
     assert.ok(page.includes(c), c);
