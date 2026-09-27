@@ -26,7 +26,9 @@ Deno.serve(async (req)=>{try{
   if(now-busy<180&&!u.searchParams.get('force'))return J({skipped:'busy'})
   await sb.from('app_config').upsert({key:'analyst_busy',value:''+now},{onConflict:'key'})
   // v9: explicit stable universe. tickers.active is the frozen Hub map, never drained by derives.
-  const {data:tk,error:te}=await sb.from('tickers').select('ticker,type').eq('active',true)
+  // ADMISSION V2 (27 Sep): the same list minus geiger-only names (Alan: they "don't need analysts or
+  // financials"). fmp_full_universe applies the type and *USD exclusions below as well; kept for safety.
+  const {data:tk,error:te}=await sb.from('fmp_full_universe').select('ticker')
   if(te)throw new Error('universe: '+te.message)
   const eq=[...new Set((tk||[]).filter((x:any)=>!['crypto','future','index'].includes(x.type||'')).map((x:any)=>''+x.ticker))].filter(t=>!t.endsWith('USD')).sort()
   if(eq.length===0)throw new Error('universe EMPTY - refusing to run silently')

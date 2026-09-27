@@ -6,8 +6,11 @@ Deno.serve(async()=>{
   const {data:cfg}=await sb.from('app_config').select('value').eq('key','FMP_KEY').maybeSingle()
   const K=(cfg&&cfg.value)?cfg.value.trim():''
   if(!K)return new Response(JSON.stringify({error:'no FMP key'}),{status:500})
-  const {data:tk}=await sb.from('composite_staged').select('ticker').eq('tf','D')
+  // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since
+  // 24 Aug). An unreadable or empty list is now said out loud instead of refreshing nothing.
+  const {data:tk,error:te}=await sb.from('fmp_full_universe').select('ticker')
   const syms=(tk||[]).map((r:any)=>r.ticker).filter((t:string)=>!t.endsWith('USD'))
+  if(te||!syms.length)return new Response(JSON.stringify({error:'universe '+(te?te.message:'EMPTY')+' - refusing to run silently'}),{status:500})
   let updated=0; let e=null; let calls=0; let bytes=0
   for(let i=0;i<syms.length;i+=50){
     const batch=syms.slice(i,i+50).join(',')

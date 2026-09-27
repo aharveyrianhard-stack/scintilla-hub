@@ -24,7 +24,9 @@ Deno.serve(async (req)=>{try{
   let off=0
   if(symP){ slice=symP.split(',').map(s=>s.trim()).filter(Boolean) }
   else {
-    const {data:tk,error:te}=await sb.from('composite_staged').select('ticker').eq('tf','D')
+    // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since
+    // 24 Aug, so a newly admitted name never got fundamentals). Geiger-only names are skipped by design.
+    const {data:tk,error:te}=await sb.from('fmp_full_universe').select('ticker')
     if(te)throw new Error('universe: '+te.message)
     const eq=[...new Set((tk||[]).map((x:any)=>''+x.ticker))].filter(t=>!t.endsWith('USD')).sort()
     const L=Math.max(eq.length,1)

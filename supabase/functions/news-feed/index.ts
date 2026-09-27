@@ -89,8 +89,10 @@ async function run(req){
   else{
     const busy=cfgInt(C['news_busy']); if(now-busy<120) return J({skipped:true})
     await sb.from('app_config').upsert({key:'news_busy',value:''+now},{onConflict:'key'})
-    const {data:tk,error:te}=await sb.from('composite_staged').select('ticker').eq('tf','D')
-    if(te) throw new Error('composite read: '+te.message)
+    // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since
+    // 24 Aug, so a newly admitted name never got news). On-view mode (?t=) is unchanged.
+    const {data:tk,error:te}=await sb.from('fmp_full_universe').select('ticker')
+    if(te) throw new Error('universe read: '+te.message)
     eq=[...new Set((tk||[]).map(x=>''+x.ticker))].filter(t=>!t.endsWith('USD')).sort()
     L=Math.max(eq.length,1); const off=cfgInt(C['news_offset'])%L
     tickers=eq.slice(off,off+24); if(tickers.length<24)tickers=tickers.concat(eq.slice(0,24-tickers.length))

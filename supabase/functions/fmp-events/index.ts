@@ -47,7 +47,9 @@ Deno.serve(async (req)=>{try{
   const busy=parseInt(C['events_busy']||'0',10)
   if(now-busy<180&&!u.searchParams.get('force'))return J({skipped:'busy'})
   await sb.from('app_config').upsert({key:'events_busy',value:''+now},{onConflict:'key'})
-  const {data:tk,error:te}=await sb.from('composite_staged').select('ticker').eq('tf','D')
+  // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since
+  // 24 Aug, so a newly admitted name never got earnings dates, dividends or splits).
+  const {data:tk,error:te}=await sb.from('fmp_full_universe').select('ticker')
   if(te)throw new Error('universe: '+te.message)
   const eq=[...new Set((tk||[]).map((x:any)=>''+x.ticker))].filter(t=>!t.endsWith('USD')).sort()
   const L=Math.max(eq.length,1)

@@ -19,7 +19,8 @@ Deno.serve(async (req)=>{
   const symParam=(new URL(req.url).searchParams.get('sym')||'').toUpperCase().trim()
   let eq
   if(symParam){eq=[symParam]}
-  else{const {data:tk}=await sb.from('composite_staged').select('ticker').eq('tf','D');eq=((tk||[]).map((x)=>x.ticker)).filter((t)=>!(''+t).endsWith('USD'))}
+  // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since 24 Aug).
+  else{const {data:tk}=await sb.from('fmp_full_universe').select('ticker');eq=((tk||[]).map((x)=>x.ticker)).filter((t)=>!(''+t).endsWith('USD'))}
   const out={job,sym:symParam||null,wrote:0,errors:[]}
   const st={calls:0,bytes:0,errs:0} // CC-BOARD-003 C2: FMP bandwidth accounting (per invocation)
   try{
