@@ -4645,12 +4645,15 @@ async function scCurrentEqualizer () {
   finally { SC_EQUALIZER_READ = null; }
 }
 /* Existing FMP reference rows retain the identity stamped by their source artifact. Future rows
-   use the accepted identity. Both are reference-only and neither controls Geiger membership. */
-const SC_FMP_REFERENCE_DIGESTS = "(7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063," +
-  /* the 364-name digest: every provider_indicators_current row written before the 27 Sep admission carries it
-     (the builder's "keep_accepting_the_old_digest_for_fmp_reference_rows"); drop it only once new rows are stamped */
-  "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3," +
-  SC_EQUITY_UNIVERSE_DIGEST + ")";
+   use the accepted identity. All are reference-only and none controls Geiger membership.
+   The list is EVERY digest the set has had (the provider's CANONICAL_EQUITY_UNIVERSE digest_history,
+   oldest to current), written by scripts/build-canonical-universe.mjs --hub; do not edit by hand. */
+const SC_FMP_REFERENCE_DIGESTS = "(" + [
+  "7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063",
+  "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3",
+  "0c2abd57a836845ee120eba1e465cdb61db6a2cca5b3da1fcecbdc591936bb20",
+  "223dbb0ff58eda0363c7882d493ad09bef932fbf953f80d6849882242ecc316e"
+].join(",") + ")";
 async function scUniverseDigest (symbols) {
   const bytes = new TextEncoder().encode(JSON.stringify([...symbols].sort()));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
