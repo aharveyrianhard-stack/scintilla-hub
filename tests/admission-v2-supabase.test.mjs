@@ -37,7 +37,11 @@ test("the tickers rows are generated, additive, source-marked, and count-checked
   const rows = [...sql.matchAll(/\('([A-Z.]+)','([A-Z_]+)','(stock|etf)','(full|geiger_only)'\)/g)];
   const count = Number(sql.match(/if n <> (\d+) then/)[1]);
   const geo = Number(sql.match(/if g <> (\d+) then/)[1]);
-  assert.equal(rows.filter((r) => r[4] === "geiger_only").length, geo);
+  // UUP and VXX already exist switched off; the REACTIVATE file (run first, Alan's yes) turns them on as geiger_only,
+  // so the migration's in-database count (geo) = inserted geiger_only rows + reactivated rows.
+  let reactivated = 0;
+  try { reactivated = (read(MIG + "20260927_admission_v2_tickers_REACTIVATE_ALAN.sql").match(/where ticker in \(([^)]*)\)/) || ["", ""])[1].split(",").filter((s) => s.trim()).length; } catch (_) {}
+  assert.equal(rows.filter((r) => r[4] === "geiger_only").length + reactivated, geo);
   for (const r of rows) if (r[3] === "etf") assert.notEqual(r[2], "THEMATIC", r[1] + ": funds do not go to THEMATIC");
   for (const held of ["SIVE", "BJK", "TMRC", "CLSK"]) assert.ok(!rows.some((r) => r[1] === held), held + " was held by the gap report");
   assert.ok(count >= 420, "the set only grows from the 420");
