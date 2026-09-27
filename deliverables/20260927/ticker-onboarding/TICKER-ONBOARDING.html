@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticker Onboarding Map</title>
+<meta name="description" content="What adding one ticker to Scintilla means end to end, the three tiers (shown, computed, known), finishing the half-applied 420 admission, and the back-end clean-up list.">
+<style>
+:root{
+  --bg:#0d0e10; --surface:#15171a; --surface2:#1b1e22; --line:#2a2e33; --line2:#3a3f46;
+  --text:#dadde1; --strong:#f1f2f4; --muted:#8d939a; --faint:#646a72;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:16px/1.6 var(--sans);-webkit-text-size-adjust:100%}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 80px}
+h1{font-size:30px;line-height:1.2;margin:0 0 6px;color:var(--strong);letter-spacing:-.01em}
+h2{font-size:23px;margin:56px 0 6px;color:var(--strong);padding-top:18px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:26px 0 8px;color:var(--strong)}
+p{margin:8px 0}
+.sub{color:var(--muted);margin:0 0 18px}
+.lede{color:var(--muted);max-width:820px}
+code,.mono{font-family:var(--mono);font-size:.86em;background:var(--surface2);border:1px solid var(--line);border-radius:4px;padding:0 4px;word-break:break-word}
+a{color:var(--strong)}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+nav a{font-size:14px;text-decoration:none;border:1px solid var(--line2);border-radius:999px;padding:5px 12px;color:var(--text)}
+nav a:hover{border-color:var(--muted)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
+.box.key{border-color:var(--line2);border-left:4px solid var(--strong)}
+.box h3:first-child{margin-top:0}
+ul,ol{padding-left:22px;margin:8px 0}
+li{margin:4px 0}
+/* tags */
+.t{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.04em;padding:3px 5px;border-radius:3px;vertical-align:1px;white-space:nowrap}
+.t.me{background:var(--strong);color:var(--bg)}          /* MEASURED */
+.t.es{border:1px dashed var(--muted);color:var(--muted)}  /* ESTIMATE */
+.t.ve{border:1px solid var(--text);color:var(--text)}     /* VERIFIED */
+.t.th{border:1px dotted var(--faint);color:var(--faint);font-style:italic} /* THEORY */
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin:10px 0}
+/* steps */
+.steps{list-style:none;padding:0;margin:0;counter-reset:s}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px 12px;margin:12px 0;position:relative}
+.step .num{font:700 13px/1 var(--mono);color:var(--bg);background:var(--text);border-radius:4px;padding:4px 7px;margin-right:8px}
+.step .ttl{font-weight:650;color:var(--strong);font-size:17px}
+.step .phase{float:right;font:600 11px/1 var(--mono);color:var(--muted);border:1px solid var(--line2);padding:4px 6px;border-radius:4px}
+.grid{display:grid;grid-template-columns:150px 1fr;gap:4px 14px;margin-top:10px;font-size:14.5px}
+.grid dt{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.grid dd{margin:0}
+.warn{border-left:3px solid var(--muted);padding:6px 10px;background:var(--surface2);border-radius:0 6px 6px 0;font-size:14.5px;margin-top:10px}
+/* tiers */
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tier{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.tier h3{margin:0 0 4px}
+.tier .who{color:var(--muted);font-size:14px;margin-bottom:8px}
+.tier.s{border-top:4px solid var(--strong)}
+.tier.c{border-top:4px solid var(--muted)}
+.tier.k{border-top:4px dashed var(--faint)}
+/* tables */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:12px 0;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:640px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--surface2);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.n{font-family:var(--mono);white-space:nowrap}
+/* layer status */
+.layers{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:12px 0}
+.layer{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.layer b{display:block;color:var(--strong);font-size:15px}
+.layer .v{font:700 20px/1.3 var(--mono);color:var(--strong)}
+.layer.odd{border:2px solid var(--strong);background:var(--surface2)}
+.layer small{color:var(--muted);font-size:12.5px;display:block}
+/* cleanup verdicts */
+.vd{display:inline-block;font:700 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap}
+.vd.safe{background:var(--strong);color:var(--bg)}
+.vd.chk{border:1.5px solid var(--text);color:var(--text)}
+.vd.keep{border:1.5px dashed var(--muted);color:var(--muted)}
+.cl{list-style:none;padding:0;margin:0}
+.cl li{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 14px;margin:8px 0}
+.cl .h{display:flex;gap:10px;align-items:flex-start}
+.cl .h .what{font-weight:600;color:var(--strong)}
+.cl .ev{color:var(--muted);font-size:14px;margin-top:4px}
+.cl .rk{font-size:14px;margin-top:3px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+footer{margin-top:60px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+@media (max-width:820px){
+  .tiers,.two{grid-template-columns:1fr}
+  .grid{grid-template-columns:1fr}
+  .grid dt{padding-top:6px}
+  h1{font-size:25px} h2{font-size:21px}
+  .step .phase{float:none;display:inline-block;margin-top:6px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Adding a ticker to Scintilla: what it takes, and what to clean up</h1>
+<p class="sub">Read-only research draft, 27 Sep 2026 (live systems read about 15:35 UTC). Nothing was changed. Status: <b>UNADMITTED draft</b>. Every decision on this page belongs to Alan.</p>
+
+<div class="legend">
+  <span><span class="t me">MEASURED</span> counted or read from a live system</span>
+  <span><span class="t es">ESTIMATE</span> worked out from measured numbers, or a guess</span>
+  <span><span class="t ve">VERIFIED</span> checked live or in the code</span>
+  <span><span class="t th">THEORY</span> inferred, not proven</span>
+</div>
+
+<div class="box key">
+  <h3>The short version</h3>
+  <ol>
+    <li>A new ticker has to pass through <b>about 20 separate places</b> <span class="t es">ESTIMATE</span>: 3 cloud machines, about a dozen database tables, the Hub page, the Station page, and several tests. There is no working one-button path. The old "one-click" onboard function is broken <span class="t th">THEORY</span>.</li>
+    <li>The live universe (the official list of stock names) is <b>364 names</b> <span class="t me">MEASURED</span>. The 24 Sep attempt to add 56 more (to 420) was <b>half-applied</b>. Only one machine, the <b>bar service</b> (the robot that builds price bars), still runs on 420. Everything else is on 364.</li>
+    <li>That one mismatch is doing damage right now. Every refresh of the intraday frames (12h, 4h, 2h, 3h, 6h) expects 420 names, finishes 364, fails the other 56, and marks itself incomplete. So the chart API reports intraday bars as <b>BEHIND</b> <span class="t ve">VERIFIED</span>.</li>
+    <li><b>Recommendation:</b> move the bar service back to 364 now (3 coordinated changes, each with a rollback). Before adding anyone, <b>design the three tiers</b> (SHOWN / COMPUTED / KNOWN). Today the system has no way to say "calculate this name but don't show it".</li>
+  </ol>
+</div>
+
+<nav>
+  <a href="#now">Where things stand</a>
+  <a href="#s1">1 · Adding one ticker</a>
+  <a href="#s2">2 · Three tiers</a>
+  <a href="#s3">3 · The admission, finished</a>
+  <a href="#s4">4 · Clean-up list</a>
+  <a href="#s5">5 · What could be wrong</a>
+</nav>
+
+<h2 id="now">Where things stand right now</h2>
+<p class="lede">Each card is one part of the system and the size of the name list it is using today. The highlighted card is the odd one out.</p>
+<div class="layers">
+  <div class="layer odd"><b>Bar service</b><span class="v">420</span><small>machine 82d1d96a326548, image bar-service-dea6c88. Builds price bars. <span class="t ve">VERIFIED</span></small></div>
+  <div class="layer"><b>Geiger runner</b><span class="v">364</span><small>machine 820229b7795798, image b20ee49 plus an injected boot file pinned to 364. Scores momentum. <span class="t ve">VERIFIED</span></small></div>
+  <div class="layer"><b>Chart API</b><span class="v">364</span><small>2 machines, image chart-api-d72c472. Serves /universe, /candles, /geiger. <span class="t ve">VERIFIED</span></small></div>
+  <div class="layer"><b>Live stream</b><span class="v">364</span><small>machine 8e7eedf7719698. Live ticks for active names (capture watermark 364 rows). <span class="t ve">VERIFIED</span></small></div>
+  <div class="layer"><b>Provider name table</b><span class="v">364</span><small>instrument_map: 364 active, 60 hidden, 1 inactive (AVB). <span class="t me">MEASURED</span></small></div>
+  <div class="layer"><b>Hub master list</b><span class="v">364</span><small>public.tickers: 389 rows, 386 active, 364 of them equities, 0 of the 56 new names. <span class="t me">MEASURED</span></small></div>
+  <div class="layer"><b>Hub page</b><span class="v">364</span><small>scintillahub.ai pins count 364 and fingerprint ab8f7965. <span class="t ve">VERIFIED</span></small></div>
+  <div class="layer"><b>Station page</b><span class="v">364</span><small>provider.js pins 364 and ab8f7965. <span class="t ve">VERIFIED</span></small></div>
+</div>
+<div class="warn"><b>Correction to the brief:</b> the brief said the Geiger runner runs 420. Two separate checks found it on 364: the injected boot file decodes to count 364 and fingerprint ab8f7965, and the machine was relaunched on 24 Sep 06:36 UTC during the rollback <span class="t ve">VERIFIED</span>. No second Geiger runner was found.</div>
+<p>One more wrinkle. The <b>frame-due scope</b> (a short code the bar builder and its readers must share, derived from the name list) was moved on 25 Sep to the 420 code <code>305fe7c9…</code> on the chart API and the stream. That was done as a workaround to match the bar service, so the chart API serves 364 names while carrying the 420 scope <span class="t ve">VERIFIED</span>.</p>
+
+<!-- ============ SECTION 1 ============ -->
+<h2 id="s1">1 · Adding one ticker: from nothing to shown on the Hub and Station</h2>
+<p class="lede">This is the full path for a stock that must appear on screen. Phases A–C are the "provider side" (the robots that fetch and build prices). Phase D switches every layer at once. Phases E–F are the Hub's own data. Almost no step here has a measured duration, so times are marked <span class="t es">ESTIMATE</span> or "not measured".</p>
+
+<ol class="steps">
+<li class="step"><span class="num">1</span><span class="ttl">Decide the tier and the home group</span><span class="phase">A · DECIDE</span>
+<dl class="grid"><dt>Where</dt><dd>Alan's call: SHOWN, COMPUTED or KNOWN (section 2). Also the home cohort (the tab it lives on). The Hub list cannot hold a row with no cohort (<code>tickers.cohort</code> is NOT NULL), which is why 23 funds were forced into THEMATIC last time <span class="t ve">VERIFIED</span>.</dd>
+<dt>Auto / manual</dt><dd>Manual</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The choice is written down before step 2.</dd></dl></li>
+
+<li class="step"><span class="num">2</span><span class="ttl">Write the identity row, hidden</span><span class="phase">A · PROVIDER</span>
+<dl class="grid"><dt>Where</dt><dd>One row in <code>massive_stocks.instrument_map</code> (the table every provider robot reads to decide which names exist). Required fields: station_symbol, massive_symbol, mapping, active, universe_hash, frozen_at_utc, evidence, mapping_version, status. It starts hidden: active=false, universe_hash <code>EXPANSION-20260924</code>, status <code>EXPLICIT_UNRESOLVED</code>. Script: <code>scripts/expansion-sql.mjs</code>. Odd symbols (only BRK-B → BRK.B today) also go in the canonical file's provider_symbols and in <code>provider-symbol-contract.mjs</code>.</dd>
+<dt>Auto / manual</dt><dd>Manual script run</dd><dt>Time</dt><dd>Seconds per name <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>Select the row and confirm active=false and status EXPLICIT_UNRESOLVED. Hidden rows cost nothing at runtime, because every reader filters on active=true <span class="t ve">VERIFIED</span>.</dd></dl></li>
+
+<li class="step"><span class="num">3</span><span class="ttl">Fetch the history while hidden</span><span class="phase">A · PROVIDER</span>
+<dl class="grid"><dt>Where</dt><dd>Two batch workers pick up hidden rows. (a) The <b>1-minute library</b>: <code>priority-shard-worker.mjs</code>, 48 months back (about 200 weeks), one file per trading day. (b) <b>Provider-built bars</b>: <code>provider-bars-worker.mjs</code>, 24 bar widths <span class="t me">MEASURED</span>: 15 intraday widths (1m to 12h) at 200 weeks and 9 wide widths (D to 12 months) at 1,200 weeks. The deep daily set (<code>massive_provider_bars_deep_v1</code>) is a <b>separate</b> pull.</dd>
+<dt>Auto / manual</dt><dd>Manual batch-machine run</dd><dt>Time</dt><dd>Not measured</dd>
+<dt>Check</dt><dd>The gap report (step 4).</dd></dl>
+<div class="warn">New names already serve 1-hour bars but return <b>503 on daily</b> ("attempted before acquisition"); for example KRE and COHR <span class="t ve">VERIFIED</span>. The likely cause is that the deep daily pull was never run for them <span class="t th">THEORY</span>. Add it to this step until that is proven.</div></li>
+
+<li class="step"><span class="num">4</span><span class="ttl">Pass the gap report (the admission gate)</span><span class="phase">A · PROVIDER</span>
+<dl class="grid"><dt>Where</dt><dd><code>scripts/expansion-gap-report.mjs</code> compares stored 1-minute sessions with the provider's own date list. PASS needs 0 unresolved sessions, at least 60 stored sessions, a first and a last bar, and a factor version for any split.</dd>
+<dt>Auto / manual</dt><dd>Manual, read-only</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The verdict says PASS. Last time 56 passed and 4 were held: SIVE, BJK, TMRC and CLSK <span class="t ve">VERIFIED</span>.</dd></dl></li>
+
+<li class="step"><span class="num">5</span><span class="ttl">Rebuild the official list and its fingerprint</span><span class="phase">B · CODE</span>
+<dl class="grid"><dt>Where</dt><dd><code>scripts/build-canonical-universe.mjs --write</code> rewrites <code>control/CANONICAL_EQUITY_UNIVERSE_20260820.json</code> (count plus fingerprint, a SHA-256 of the sorted names) and 5 pinned files: provider-tail-refresh-universe.mjs (checked when the chart API starts, so a wrong value stops it booting), boot-geiger.sh, chart-api server.mjs, chart-api fly.toml, and geiger-readiness.mjs. It then <b>prints</b> the Hub and Station pins for a human to set.</dd>
+<dt>Auto / manual</dt><dd>Semi-automatic: the script edits, a human commits</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd><code>tests/universe-admit-pins.test.mjs</code> passes.</dd></dl></li>
+
+<li class="step"><span class="num">6</span><span class="ttl">Re-derive the frame-due scope code (the builder forgets this)</span><span class="phase">B · CODE</span>
+<dl class="grid"><dt>Where</dt><dd>The first 24 characters of a hash of the fingerprint plus the 17 scheduled frames. It lives in <b>4 places</b>: chart-api fly.toml, stocks-stream fly.toml, a Fly secret on the stream app, and the bar-service machine settings. For reference: 364 → <code>ad469e385029499fd4d3a2a5</code>, 420 → <code>305fe7c99487e284bd53ec9a</code> <span class="t ve">VERIFIED</span> (recomputed).</dd>
+<dt>Auto / manual</dt><dd>Manual; not in the builder</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>Chart API <code>/health</code> scope reads SCOPE_MATCHES_CONSUMER. If any one of the 4 is missed, intraday frames freeze (the 23 Sep incident).</dd></dl></li>
+
+<li class="step"><span class="num">7</span><span class="ttl">Admit: open the bar-service gate and flip the row to active</span><span class="phase">C · ADMIT</span>
+<dl class="grid"><dt>Where</dt><dd><code>scripts/expansion-admit.mjs --confirm</code> writes a membership file in cloud storage (R2: <code>…/_manifest/&lt;SYM&gt;.json</code>). The bar service checks for that file before serving the name. The script also sets the row active=true and status RESOLVED. Rollback: <code>--rollback --confirm</code> flips it back and deletes the file, and keeps all bars.</dd>
+<dt>Auto / manual</dt><dd>Manual, per symbol</dd><dt>Time</dt><dd>Seconds per name, plus up to <b>10 minutes</b> before the bar service notices (its "not found" answer is cached) <span class="t ve">VERIFIED</span></dd>
+<dt>Check</dt><dd>The bar service stops answering 404 SYMBOL_NOT_TRACKED for the name.</dd></dl>
+<div class="warn">The order matters. The database active count must already equal the new count before Geiger restarts (step 8), because Geiger refuses to boot on any mismatch.</div></li>
+
+<li class="step"><span class="num">8</span><span class="ttl">Geiger runner: new image AND new injected boot file</span><span class="phase">D · SWITCH</span>
+<dl class="grid"><dt>Where</dt><dd>Machine 820229b7795798. At every boot, <code>boot-geiger.sh</code> reads the active names and exits unless the count and fingerprint match <b>exactly</b>. It then writes <code>/app/universe365.json</code>, which the settled-close supervisor reads. Geiger scores 8 rungs per name: 364 × 8 = 2,912 cells today <span class="t me">MEASURED</span>, and 420 would be 3,360.</dd>
+<dt>Auto / manual</dt><dd>Manual (<code>fly machine update --file-local</code>)</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The boot log shows the new ticker count, and <code>/health</code> shows the expected cells = N × 8.</dd></dl></li>
+
+<li class="step"><span class="num">9</span><span class="ttl">Chart API: new image plus settings</span><span class="phase">D · SWITCH</span>
+<dl class="grid"><dt>Where</dt><dd>/universe comes from the list file baked into the image, so the change needs a new image plus the fly.toml settings (SETTLED_*, GEIGER_EXPECTED_COUNT, frame-due scope). Note that <code>/candles</code> is <b>not</b> gated on the list: any symbol with stored bars gets served.</dd>
+<dt>Auto / manual</dt><dd>Manual deploy</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd><code>/universe</code> shows the new count and fingerprint.</dd></dl></li>
+
+<li class="step"><span class="num">10</span><span class="ttl">Bar service on the same list and scope</span><span class="phase">D · SWITCH</span>
+<dl class="grid"><dt>Where</dt><dd>Machine 82d1d96a326548. Its list is baked into the image, and settings cannot override it.</dd>
+<dt>Auto / manual</dt><dd>Manual</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The log line <code>provider_tail_refresh_final</code> shows expected = refreshed, failed 0, complete true.</dd></dl></li>
+
+<li class="step"><span class="num">11</span><span class="ttl">Restart the live stream</span><span class="phase">D · SWITCH</span>
+<dl class="grid"><dt>Where</dt><dd>Machine 8e7eedf7719698. It reads the active names only when it starts, so a new name gets live ticks only after a restart. It is also the frame-due producer, so it must carry the matching scope secret.</dd>
+<dt>Auto / manual</dt><dd>Manual restart</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The stream log says "universe N", and the capture watermark table has N rows.</dd></dl></li>
+
+<li class="step"><span class="num">12</span><span class="ttl">Wait for the green light</span><span class="phase">D · SWITCH</span>
+<dl class="grid"><dt>Where</dt><dd>Chart API <code>/ready</code>.</dd>
+<dt>Auto / manual</dt><dd>Automatic</dd><dt>Time</dt><dd>Not measured; it needs a trading session</dd>
+<dt>Check</dt><dd>denominator_ready true, identity MATCH, frame currentness CURRENT. <b>If any layer is left on the old count, day-change goes blank for every name or intraday freezes.</b></dd></dl></li>
+
+<li class="step"><span class="num">13</span><span class="ttl">Hub master row</span><span class="phase">E · HUB DATA</span>
+<dl class="grid"><dt>Where</dt><dd><code>public.tickers</code>: ticker, cohort, type, exchange, currency, active=true. Four views are built on it (cohorts, all_tickers, v_fundamentals_universe, ticker_cohorts). No job ever inserts here: since 18 Aug it has had 0 inserts <span class="t me">MEASURED</span>. Set <b>type</b> properly; 90 live names have it blank today.</dd>
+<dt>Auto / manual</dt><dd>Manual (a migration)</dd><dt>Time</dt><dd>Seconds <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The Station compares /universe name by name against active non-crypto/future/index/rate tickers, and refuses any difference. So this row must land in the <b>same window</b> as step 9.</dd></dl></li>
+
+<li class="step"><span class="num">14</span><span class="ttl">Group membership (cohort tab, sector compare)</span><span class="phase">E · HUB DATA</span>
+<dl class="grid"><dt>Where</dt><dd><code>public.ticker_membership</code>, a row with kind=cohort. Sector rows come from <code>sync-sector-membership</code>, which has no schedule, so someone must run it. Without a cohort row the name shows on ALL but on no cohort tab. A <b>new</b> cohort or sector key also needs code edits in about 5 hard-coded places in the Hub and 1 in the Station.</dd>
+<dt>Auto / manual</dt><dd>Manual</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The name appears under its cohort tab.</dd></dl></li>
+
+<li class="step"><span class="num">15</span><span class="ttl">Hub and Station pins plus tests</span><span class="phase">E · FRONT</span>
+<dl class="grid"><dt>Where</dt><dd>Hub <code>index.html</code> SC_EXPECTED_EQUITY_COUNT and SC_EQUITY_UNIVERSE_DIGEST. Station <code>provider.js</code> EXPECTED_EQUITY_UNIVERSE and ACCEPTED_UNIVERSE_SHA256. About 10 Hub tests and 3 Station test files also pin 364.</dd>
+<dt>Auto / manual</dt><dd>Manual edit and deploy, in the same minute as the chart API switch</dd><dt>Time</dt><dd>Minutes <span class="t es">ESTIMATE</span></dd>
+<dt>Check</dt><dd>The live page source shows the new pins, and the board leaves "connecting". A mismatch makes the Hub throw the whole list away and the Station fail closed <span class="t ve">VERIFIED</span> (read in the code; not exercised live).</dd></dl></li>
+
+<li class="step"><span class="num">16</span><span class="ttl">Let the automatic fills arrive</span><span class="phase">F · AUTO</span>
+<dl class="grid"><dt>Where</dt><dd>
+<ul>
+<li><b>Geiger composite</b> (<code>composite_staged</code>): automatic once steps 7–13 are done. This is a <b>hidden gate</b>: profile, fundamentals, earnings dates, dividends, splits, news and market cap all pick their names from this table, so none of them arrive until the composite exists.</li>
+<li>Company profile: daily at 06:25. Fundamentals: every 6 hours. Events: every 6 hours. Market cap: every 15 minutes. News: 24 names per run.</li>
+<li>From the master row directly: analyst data every 4 hours, read blocks every 10 minutes, statistics every 30 minutes, FMP indicators daily.</li>
+<li>Usual-day layer (heartbeat, scintillas): daily, and only once the chart API's /universe lists the name.</li>
+<li>Live quote: once the stream subscribes (step 11).</li>
+<li>Logo: automatic from FMP's public image, with the ticker text as fallback.</li>
+</ul></dd>
+<dt>Auto / manual</dt><dd>Automatic</dd><dt>Time</dt><dd>Up to about 1 day for everything <span class="t es">ESTIMATE</span> (the slowest is the daily profile run)</dd>
+<dt>Check</dt><dd>The company page tabs fill. Missing data shows as an honest empty slot.</dd></dl></li>
+
+<li class="step"><span class="num">17</span><span class="ttl">The manual extras nothing does for you</span><span class="phase">F · MANUAL</span>
+<dl class="grid"><dt>Where</dt><dd>
+<ul>
+<li><b>Narrative</b> (<code>ticker_context</code>): only by running <code>dossier-refresh</code> by hand. Last update 22 Jul <span class="t me">MEASURED</span>.</li>
+<li><b>Earnings call transcripts</b>: no schedule found <span class="t th">THEORY</span>.</li>
+<li><b>ETF holdings</b>: only 1 of 47 live ETFs has them <span class="t me">MEASURED</span>, and <code>etf-data</code> is not scheduled.</li>
+<li><b>Foreign-currency reporters</b>: a hard-coded list of 11 in the Hub (EST_CCY_MEASURED). Without an entry, forward P/E can print a foreign figure as dollars. Candidates among the 56 (unchecked): NOK, STM, TSEM, SQM, TECK, HIVE <span class="t th">THEORY</span>.</li>
+<li><b>FMP indicator export</b>: its own pin is 365 names / <code>7ad595cc</code> in the repo, and it will not take new names until that moves. The deployed copy was not read <span class="t th">THEORY</span>.</li>
+<li><b>Station pages</b>: hard-coded ticker lists in <code>scenes.js</code>, or Alan's targets table.</li>
+</ul></dd>
+<dt>Auto / manual</dt><dd>Manual</dd><dt>Time</dt><dd>Not measured</dd>
+<dt>Check</dt><dd>The NEWS/READ/HOLDINGS tabs are not empty.</dd></dl></li>
+</ol>
+
+<div class="box">
+<h3>Not stocks: a separate path</h3>
+<p>Macro series (VIX, DXY, US10Y, oil, gold, silver, BTC, ES, NQ, and so on: 13 today <span class="t me">MEASURED</span>) are a hard-coded list (<code>FMP_MACRO_SERIES</code>). They never touch the name table. Adding one means a code edit plus redeploying the chart API and bar-service lines. Crypto and futures need matching entries in about 5 Hub constants and 4 Station constants.</p>
+<p><b>Broken shortcut:</b> the <code>ticker-onboard</code> function (deployed 21 Jul) calls 2 functions that no longer exist. Its first step inserts into a view that cannot take inserts, and it tags every name, ETFs included, as "stock" <span class="t th">THEORY</span> (the code was read; the function was not run). Replace it with this checklist; don't rely on it.</p>
+</div>
+
+<!-- ============ SECTION 2 ============ -->
+<h2 id="s2">2 · Three tiers: SHOWN, COMPUTED, KNOWN</h2>
+<p class="lede">Today there is only one switch: <code>active</code> on the provider name table. That one switch means all of these at once: "the stream subscribes", "Geiger scores it", "settled close covers it" and "the Hub shows it". No show/hide flag exists anywhere <span class="t ve">VERIFIED</span>. The three tiers below are a <b>proposal</b> that needs a design decision (a new column or table: a red-light schema change).</p>
+
+<div class="tiers">
+<div class="tier s"><h3>SHOWN</h3><div class="who">On the Hub board and the Station. Today's 364.</div>
+<p><b>Requires:</b> every step 1–17 above: identity row, full history, Geiger, chart API list, stream, Hub master row, cohort row, both page pins, and all the fundamentals, news and analyst feeds.</p>
+<p><b>Must be:</b> in /universe, an active equity in <code>tickers</code>, and in <code>ticker_membership</code>.</p></div>
+<div class="tier c"><h3>COMPUTED</h3><div class="who">Back-end only: bars and Geiger, used for blends and statistics, never on screen.</div>
+<p><b>Requires:</b> identity row, history (steps 2–4), bar service, Geiger scoring.</p>
+<p><b>Must NOT be:</b> in /universe, an active equity in <code>tickers</code> (or the Station's name-by-name check fails), or in <code>ticker_membership</code> (or it shows on a Station cohort scene as "not served") <span class="t ve">VERIFIED</span>.</p>
+<p><b>Blocker today:</b> Geiger demands an exact count of <em>every</em> active name, and settled close also covers every active row. Both would need separating.</p></div>
+<div class="tier k"><h3>KNOWN</h3><div class="who">Holdings only: we know it sits in a fund at some weight. Nothing is computed.</div>
+<p><b>Requires:</b> one holdings row per fund (fund, name, weight). Possible homes: <code>etf_holdings</code> (1 ETF filled today) or <code>index_constituents</code> (created 24 Sep, 0 rows) <span class="t me">MEASURED</span>.</p>
+<p><b>Missing:</b> nobody fills holdings on a schedule. This is a prerequisite for the fund map.</p></div>
+</div>
+
+<h3>Cost per name</h3>
+<p>No finding measured storage in bytes, so file and row counts are used as the honest stand-in. Per-name averages are measured totals divided by name counts, which makes them <span class="t es">ESTIMATE</span>.</p>
+<div class="tw"><table>
+<thead><tr><th>What</th><th>SHOWN</th><th>COMPUTED</th><th>KNOWN</th><th>Basis</th></tr></thead>
+<tbody>
+<tr><td>1-minute history files</td><td class="n">~1,000</td><td class="n">~1,000</td><td class="n">0</td><td>48 months × ~21 trading days, one file per day <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>Provider bar widths stored</td><td class="n">24</td><td class="n">24</td><td class="n">0</td><td>15 intraday at 200 weeks plus 9 wide at 1,200 weeks <span class="t me">MEASURED</span></td></tr>
+<tr><td>Bar refresh work per due cycle</td><td class="n">5 frames</td><td class="n">5 frames</td><td class="n">0</td><td>2,100 expected ÷ 420 names <span class="t me">MEASURED</span></td></tr>
+<tr><td>Geiger cells</td><td class="n">8</td><td class="n">8</td><td class="n">0</td><td>2,912 ÷ 364 <span class="t me">MEASURED</span></td></tr>
+<tr><td>Live stream subscription</td><td class="n">1</td><td class="n">open question</td><td class="n">0</td><td>Whether computed names need live ticks is undecided</td></tr>
+<tr><td>Usual-day rows (heartbeat)</td><td class="n">~500</td><td class="n">0</td><td class="n">0</td><td>181,213 ÷ 364 <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>Earnings event rows</td><td class="n">~63</td><td class="n">0</td><td class="n">0</td><td>22,172 ÷ 352 <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>News rows</td><td class="n">~1,090</td><td class="n">0</td><td class="n">0</td><td>513,145 ÷ 471 <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>FMP data calls per day</td><td class="n">~15–20</td><td class="n">0</td><td class="n">0</td><td>Profile 1, fundamentals ≤4, events ≤4, analyst ≤6, indicators 1, plus news passes <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>Holdings rows</td><td class="n">optional</td><td class="n">optional</td><td class="n">1 per fund</td><td>—</td></tr>
+</tbody></table></div>
+
+<h3>What the fund map would mean at scale</h3>
+<div class="tw"><table>
+<thead><tr><th>Scenario</th><th>Names</th><th>Geiger cells</th><th>Bar refresh frames per cycle</th></tr></thead>
+<tbody>
+<tr><td>Today (SHOWN)</td><td class="n">364</td><td class="n">2,912 <span class="t me">MEASURED</span></td><td class="n">1,820 <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>The stalled admission</td><td class="n">420</td><td class="n">3,360</td><td class="n">2,100 <span class="t me">MEASURED</span></td></tr>
+<tr><td>80% of the weight of the 31 sector/theme funds (SHOWN + COMPUTED)</td><td class="n">~594 (~340 new)</td><td class="n">~4,752 <span class="t es">ESTIMATE</span></td><td class="n">~2,970 <span class="t es">ESTIMATE</span></td></tr>
+<tr><td>Full Perplexity map (KNOWN)</td><td class="n">~7,800 holdings in ~60 funds</td><td class="n">0</td><td class="n">0</td></tr>
+</tbody></table></div>
+<p>Note: the ~594 / ~340 figures come from the Perplexity map in the brief, not from our systems <span class="t es">ESTIMATE</span>.</p>
+
+<!-- ============ SECTION 3 ============ -->
+<h2 id="s3">3 · The admission, finished: getting back to one consistent list</h2>
+
+<div class="box key">
+<h3>Recommendation: return to 364 now, and admit later as one planned change</h3>
+<ol>
+<li>Every other layer is already on 364. Only the bar service is on 420 <span class="t ve">VERIFIED</span>.</li>
+<li>That single mismatch is what keeps intraday frames BEHIND, 2–3.5 days behind for the 24 and 25 Sep sessions <span class="t me">MEASURED</span>.</li>
+<li>The 420 code line can't ship as it is. Compared with the live chart API line, it lacks the put/call work (285 lines) and the chart API changes (143 lines), and it drops the stream's frame-due settings <span class="t ve">VERIFIED</span>.</li>
+<li>The safety check before admission (preflight) has never been run against the real provider, only against stand-ins <span class="t ve">VERIFIED</span>.</li>
+<li>The 56 have zero Hub data: no profile, fundamentals, earnings or estimates <span class="t me">MEASURED</span>.</li>
+<li>The SHOWN / COMPUTED / KNOWN decision changes what "admit" means. Putting 56 on the Hub now would decide it by accident.</li>
+</ol>
+<p>All steps below are production changes (red light): Alan's go is needed first.</p>
+</div>
+
+<h3>Return to 364 (the recommended path)</h3>
+<ol class="steps">
+<li class="step"><span class="num">R0</span><span class="ttl">Record the baseline (read-only)</span>
+<dl class="grid"><dt>Do</dt><dd>Save the /ready frame currentness and one bar-service line showing expected 420 / failed 56. Confirm the 364 scope code is <code>ad469e385029499fd4d3a2a5</code>.</dd>
+<dt>Rollback</dt><dd>None needed (nothing changes).</dd></dl>
+<div class="warn">The findings disagree here. The admission check says this code was <b>not</b> recomputed <span class="t th">THEORY</span>. The provider check says it <b>was</b> recomputed locally and came out <code>ad469e…</code> <span class="t ve">VERIFIED</span>. Rerun it once against the d72c472 code before R1.</div></li>
+<li class="step"><span class="num">R1</span><span class="ttl">Put the bar service on a 364 image</span>
+<dl class="grid"><dt>Do</dt><dd>Build <code>bar-service-d72c472</code> from branch deploy/chart-api-20260926 (the 364 list plus the frame-due, ES/NQ and put/call fixes). Update <b>only</b> machine 82d1d96a326548, keeping its other settings and setting its scope to the 364 code. No existing 364 bar-service image with the latest fixes was found, and the registry was not listed <span class="t th">THEORY</span>.</dd>
+<dt>Rollback</dt><dd><code>fly machine update 82d1d96a326548 -a scintilla-massive-stocks-batch --image registry.fly.io/scintilla-massive-stocks-batch:bar-service-dea6c88</code>, and set its scope back to <code>305fe7c99487e284bd53ec9a</code>.</dd></dl></li>
+<li class="step"><span class="num">R2</span><span class="ttl">Move the scope code back, same window</span>
+<dl class="grid"><dt>Do</dt><dd>Set the stream's Fly secret and both chart API machines' PROVIDER_FRAME_DUE_SCOPE_ID to the 364 code. Commit the value into chart-api and stocks-stream fly.toml on the d72c472 line, so the next deploy doesn't undo it.</dd>
+<dt>Rollback</dt><dd>Set both back to <code>305fe7c9…</code> (chart API: 2 machine updates; stream: secret plus restart).</dd></dl></li>
+<li class="step"><span class="num">R3</span><span class="ttl">Verify, then watch for 3 minutes or more during a session</span>
+<dl class="grid"><dt>Do</dt><dd>The bar-service log should show expected 364, failed 0, complete true. /ready should show frames CURRENT and scope MATCHES, and /universe should still be 364 / ab8f7965. The 24 and 25 Sep markers exist only under the 420 scope, so those two sessions may need a one-off refresh. Check /ready before acting <span class="t th">THEORY</span>.</dd>
+<dt>Auto-revert</dt><dd>Run the R1 and R2 rollbacks if /ready loses its probe, frames go UNKNOWN, or day-change goes blank.</dd></dl></li>
+<li class="step"><span class="num">R4</span><span class="ttl">Bookkeeping (no runtime effect)</span>
+<dl class="grid"><dt>Do</dt><dd>Mark the branches expansion/universe-admit-20260924, m66/hub-admit-redo-20260924, m66/station-admit-redo-20260924 and deploy/bar-service-20260926 as SUPERSEDED-PENDING-REDESIGN. Do not delete them. Leave the 60 hidden rows and their bars as the cheap starting point for next time.</dd>
+<dt>Rollback</dt><dd>Edit the state file back.</dd></dl></li>
+</ol>
+
+<h3>If Alan chooses to finish at 420 instead (about 9 steps)</h3>
+<ol>
+<li><b>F0</b> Merge the admission commits (215598b and 6 follow-ups) onto d72c472, so one code line carries 420, put/call, frame-due and ES/NQ. Fix the chart-api scope to <code>305fe7c9</code>, restore the stream's producer lines, and run the pin test.</li>
+<li><b>F1</b> Preflight against the real provider on the Geiger machine. <b>Stop</b> unless drop_from_set is empty.</li>
+<li><b>F2</b> <code>expansion-admit.mjs --confirm</code> × 56.</li>
+<li><b>F3</b> Geiger image plus the 420 boot file.</li>
+<li><b>F4</b> Chart API from the merged line; check /universe = 420 / 0c2abd57.</li>
+<li><b>F5</b> Wait for /ready denominator_ready and identity MATCH.</li>
+<li><b>F6</b> Merge the Hub and Station branches onto their <b>current</b> heads (Hub is now b7dd99f, not 19d1870), then test and deploy.</li>
+<li><b>F7</b> Supabase: the tickers migration, then membership, then the chat function.</li>
+<li><b>F8</b> Restart the stream and check its log says "universe 420".</li>
+</ol>
+<p>Rollbacks follow the runbook, with one correction: roll the chart API back to <code>d72c472</code>, <b>not</b> <code>putcall-parts-3057e57</code> as the runbook says, because that one is older than what is live <span class="t ve">VERIFIED</span>.</p>
+
+<!-- ============ SECTION 4 ============ -->
+<h2 id="s4">4 · Clean-up list</h2>
+<p class="lede"><span class="vd safe">SAFE</span> evidence says nothing uses it; archive or remove with Alan's OK. <span class="vd chk">CHECK FIRST</span> something might still use it; check the named dependency first. <span class="vd keep">KEEP</span> it looks like garbage but it is load-bearing or evidence. Every delete or destroy is red-light and irreversible: archive first wherever possible.</p>
+
+<h3>Cloud machines and apps (Fly)</h3>
+<ul class="cl">
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">8 stopped one-shot machines on the batch app</span></div>
+<div class="ev">provider-tail-aapl-1m-gate, provider-tail-aapl-live8-gate, provider-tail-live8-hourly, provider-aph2w-inspect, provider-all17-acceptance, mirror-compare, native-ind-r2-prior, hot-loader-20260816. Stopped since 17 Aug–18 Sep <span class="t ve">VERIFIED</span>.</div>
+<div class="rk">Some carry "armed" write settings, so a stray start would re-run an old write on old code. Removing them removes that hazard. Their images are only old rollback references.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">provider-all17-catchup-20260910 s0–s3 and delicate-frost-2884</span></div>
+<div class="ev">Stopped. The catch-up machines are documented rerun templates. delicate-frost is the app's archive-supervisor process-group machine.</div>
+<div class="rk">Check whether a <code>fly deploy</code> expects delicate-frost before destroying it.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">App scintilla-jobs: running, purpose unknown</span></div>
+<div class="ev">Deployed 18 Aug and still started. There is no manifest in the repo.</div>
+<div class="rk">Identify it before any action.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Suspended apps: scintilla-fmp-poller, scintilla-market-stream, scintilla-massive-prices</span></div>
+<div class="ev">Suspended since 15 Aug and replaced by the stocks-stream app and the chart API.</div>
+<div class="rk">Low runtime risk, but their config may be the only record of the old pipeline. Leaving them suspended costs nothing.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">3 old preview origins in the chart API allow-list</span></div>
+<div class="ev">scintilla-cockpit-git-can-71054e…, scintilla-widgets-git-can-08b38b… and scintilla-cockpit-git-can-7edac8… The config's own comment says to remove abandoned candidates.</div>
+<div class="rk">Any preview still in use would show empty charts. Check the Vercel aliases first.</div></li>
+</ul>
+
+<h3>Code and repositories</h3>
+<ul class="cl">
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">Fix the runbook's rollback target</span></div><div class="ev">It says putcall-parts-3057e57, which is older than the live d72c472.</div><div class="rk">No risk; a text edit only.</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">Unapplied migration 0020_instrument_map_admit_state.sql</span></div><div class="ev">It was never applied (the writer login is not the table owner).</div><div class="rk">If someone applied it later, it would create a second, conflicting admission flag. Mark it "do not apply".</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">34 August sprint ledgers in control/ (CONT_018–CONT_030 and others)</span></div><div class="ev">79 files in the folder <span class="t me">MEASURED</span>. Only CANONICAL_EQUITY_UNIVERSE_20260820.json is used by code.</div><div class="rk">Move them to control/_archive; don't delete, because they are evidence. <b>KEEP</b> the canonical file in place.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Duplicate admission branches and worktrees</span></div><div class="ev">66 local branches <span class="t me">MEASURED</span>. About 250 worktrees <span class="t es">ESTIMATE</span>, including about 13 copies of the admission with conflicting 364/420 pins.</div><div class="rk">Keep expansion/universe-admit-20260924 (215598b); its builder, gap and admit scripts are the reusable machinery. Also keep rollback targets such as b20ee49. Check git status on each worktree before removing it.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">Hard-coded 364/365 numbers outside the builder</span></div><div class="ev">provider-full-rebuild-worker.mjs:129 (<code>364 * 8</code>), provider-tail-refresh-scheduled.mjs:141, live-prices-bench.mjs, and the filename <code>/app/universe365.json</code>.</div><div class="rk">Fix them, don't delete them. At 420 the rebuild flag would silently read false. Renaming universe365.json breaks Geiger.</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">Hub: unused cohortCompareHTML(), the dated file index.html.ROLLBACK-20260817, and 3 copies of the sector map</span></div><div class="ev">cohortCompareHTML is never called. git already keeps the old copy. The same 11 ETF→sector pairs appear in 3 places.</div><div class="rk">Low. Merge the sector maps into one constant.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Hub: pollFMP() and the legacy 'cohorts' read</span></div><div class="ev">pollFMP never calls FMP and throws away almost all of its reads. The cohorts read pulls in inactive UUP, VXX and BRK.A.</div><div class="rk">Both still carry non-equity rows. Narrow them; don't delete them.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Acceptance of the old 365 fingerprint 7ad595cc in the Hub and Station</span></div><div class="ev">No indicator row carries it any more (5,815 rows, all ab8f7965) <span class="t me">MEASURED</span>.</div><div class="rk">First check that no writer still stamps 7ad595cc. <b>KEEP</b> the pin inside the indicator-export function itself: it decides which names get FMP indicators.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Station: 8 retired curated pages and placeholders (ADD, CUMTICK, TICK, TRIN, SECTOR12), plus data/*-20260924.json</span></div><div class="ev">They are not in the rotation, and the page doesn't read the data files.</div><div class="rk">They can still be opened from the menu, and tests read the data files.</div></li>
+</ul>
+
+<h3>Database</h3>
+<ul class="cl">
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">FMP probe and observer tables (fmp_control: depth_probe, endpoint_probe, full_probe, raw_response, observer_*, ttm_*, about 16 more)</span></div><div class="ev">Last row 16–17 Aug. 0 writes since 18 Aug, and their feeding jobs are switched off <span class="t me">MEASURED</span>.</div><div class="rk">A few provider scripts reference futures_probe, raw_response and research_coverage. <b>KEEP</b> nonequity_dispatch and nonequity_freshness, which are live.</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">fmp_research.* and fmp_prices.price_only_shadow</span></div><div class="ev">One-off research from 16–17 Aug, with 0 writes since.</div><div class="rk">Keep fmp_prices.intraday_bar and daily_bar.</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">Measurement tables in market_control, massive.audit_1m / parity_1m, and hot_minute_coverage (0 rows)</span></div><div class="ev">12 Jun–17 Aug, with no readers and no writes.</div><div class="rk"><b>Check first</b> for ibkr.internals_1m, which may belong to the in-flight IBKR internals lane.</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">Experiment tables (wp3/wp6/wp9, sprint_*, parity_audit, ohlcv_quarantine, pattern_instance, geiger_rollback_20260815 and others)</span></div><div class="ev">Dated 28 Jun–15 Aug, most covering 1–5 tickers, with 0 writes since.</div><div class="rk"><b>Check first</b> for tv_ref_bars (read by 11 proof functions, cron 202) and pivot_union (used by Station worktrees).</div></li>
+<li><div class="h"><span class="vd safe">SAFE</span><span class="what">ticker_cohorts_legacy (253 rows) and composite_staged_v2 plus its view</span></div><div class="ev">No readers anywhere / no scheduled writer, last updated 15 Aug and 22 Jul.</div><div class="rk">Export the legacy table first (it is the only record of the old primary cohorts). Update the provider tests that reference geiger_board_testing.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Old backfill and repair bookkeeping (deep1m_*, dedup/prune/rebuild progress, tzfix_state 1 and 2, backfill_queue, coverage tables …)</span></div><div class="ev">Frozen 15 Jun–19 Aug. Many have exactly 194 rows, which is an old universe size.</div><div class="rk">Some are read by database functions, and crons 93, 211, 218 and 219 are active. <b>KEEP</b> coldstore_objects, which is live.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Orphan rows: news for 89 names not in tickers; fundamentals for SCPX and AVB (unknown) and UUP, VXX, BRK.A (inactive); 4 company_profile rows</span></div><div class="ev">Cross-check queries <span class="t me">MEASURED</span>.</div><div class="rk">Row deletes are irreversible; archive first.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">213 edge functions, many named probe or test (fmptest, fmpprobe, fmp-*-probe …)</span></div><div class="ev">Last updated Jun–Aug.</div><div class="rk">The callers are unknown. Read the invocation logs first. This belongs to the Supabase lane.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">ticker-onboard function and onboard_register</span></div><div class="ev">Broken (see section 1).</div><div class="rk">Replace it with a working checklist rather than deleting it silently.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Two favourites stores: hub_favorites (72 rows) and station_lists (0 rows)</span></div><div class="ev">Both are described as favourites.</div><div class="rk">The Hub writes station_lists from the browser. Merging them is a product decision.</div></li>
+<li><div class="h"><span class="vd chk">CHECK FIRST</span><span class="what">Blank type on 90 live tickers; source written as fmp / FMP / blank</span></div><div class="ev">Several filters treat a blank type as "equity".</div><div class="rk">Filling in types changes what those filters count.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">Stale data still shown as current: levels, regime_state, compression, mtf_summary, markings and others (frozen 14 Aug)</span></div><div class="ev">Their writers have no schedule. The Hub reads levels 26 times <span class="t ve">VERIFIED</span>.</div><div class="rk">Not garbage: it is six-week-old data on screen. Decide whether to restart the writers or retire the screens.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">Dead feeds the Hub still reads: alert_log, analyst_grades, insider_trades, social_posts, board_volume, fwd_eps_ntm, etf_holdings, ticker_context …</span></div><div class="ev">No live writer. The newest data runs from 7 Jun to 22 Jul.</div><div class="rk">New tickers will never get rows here. Restore the feed or retire the tab.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">scin_backup.*_20260918 (8 tables, about 230k rows)</span></div><div class="ev">Nothing reads them.</div><div class="rk">This is the rollback copy for the 18 Sep fundamentals repair. Keep it until Alan signs that off.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">ticker_membership with 5 mixed kinds (MEGA_CAP vs MEGACAP, 93 industry keys)</span></div><div class="ev">It is the one membership source for both front ends.</div><div class="rk">It is confusing, but the fix is to add "kind" to the view. Don't delete rows.</div></li>
+<li><div class="h"><span class="vd keep">KEEP</span><span class="what">The 60 hidden expansion rows in instrument_map, and the a4105904 label on the 364 rows</span></div><div class="ev">No reader filters on either <span class="t ve">VERIFIED</span>.</div><div class="rk">The hidden rows are the head start for the next admission. The old label is only cosmetic.</div></li>
+</ul>
+
+<!-- ============ SECTION 5 ============ -->
+<h2 id="s5">5 · What could be wrong</h2>
+<div class="two">
+<div class="box"><h3>Where the findings disagree</h3>
+<ul>
+<li><b>Geiger on 420?</b> The brief says yes; both live checks say 364. The live checks win.</li>
+<li><b>The 364 scope code.</b> One finding computed <code>ad469e…</code> locally <span class="t ve">VERIFIED</span>; another says it was never recomputed <span class="t th">THEORY</span>. Rerun it before R1.</li>
+<li><b>Stopped machines: 11 or 13?</b> One finding's heading says 11, but both findings list the same 13 names.</li>
+<li><b>Why the 56 fail.</b> One finding infers it from the order the cells are processed <span class="t th">THEORY</span>. The other saw 56 failed per frame in the log <span class="t ve">VERIFIED</span>, but with a misleading "frame must be one of" error whose real cause is unproven <span class="t th">THEORY</span>.</li>
+<li><b>Stream at 364.</b> One finding measured 364 in its tables <span class="t ve">VERIFIED</span>. The other could not read the stream's health page (it returned non-JSON), so it inferred the count <span class="t th">THEORY</span>.</li>
+<li><b>ETFs among the 56.</b> The text says "about 20" but lists 22 names <span class="t es">ESTIMATE</span>.</li>
+</ul></div>
+<div class="box"><h3>Not checked, still unknown</h3>
+<ul>
+<li>Whether the 56 cloud-storage membership files still exist after the rollbacks. There is no storage key on this Mac.</li>
+<li>Why new names get 1-hour bars but daily returns 503. Is the deep daily pull missing?</li>
+<li>Whether the deployed FMP indicator export is still pinned to 365.</li>
+<li>Whether 24 and 25 Sep need a one-off refresh after the scope moves back.</li>
+<li>Which process, on which image, calls the live-quote and Geiger publish functions.</li>
+<li>Whether the edge functions succeed. A cron "succeeded" only means the call was queued.</li>
+<li>Which of the 56 report in a foreign currency.</li>
+<li>Storage in bytes per name: never measured.</li>
+</ul></div>
+</div>
+<div class="box"><h3>Traps that would bite the next admission</h3>
+<ul>
+<li><b>Hidden gate.</b> Fundamentals, profile, news and events pick names from the Geiger composite table, not the master list. A name held back from Geiger silently loses all of them <span class="t ve">VERIFIED</span>.</li>
+<li><b>Sentiment runs ahead.</b> 24 of the 60 hidden names already have sentiment rows, and 34 are candidate cards. The Hub can therefore show a card for a name with no price <span class="t me">MEASURED</span>.</li>
+<li><b>Order.</b> If a page pin changes before or after the chart API, the board empties or freezes. If the database count differs from Geiger's pin, Geiger won't boot.</li>
+<li><b>The builder forgets the scope code</b>, in 4 places. This is exactly how the current split happened.</li>
+<li><b>Two deploy lines have split.</b> Deploying the chart API or the stream from the bar-service branch would drop the put/call work and re-split the scope <span class="t ve">VERIFIED</span>.</li>
+<li><b>A frozen filter.</b> <code>fan_daily</code> filters on a state table frozen at 20 Aug <span class="t me">MEASURED</span>.</li>
+<li><b>No show/hide switch exists.</b> Adding ~594 names before the tier design would put them all on the board.</li>
+</ul></div>
+
+<footer>
+Sources: four read-only investigations on 27 Sep 2026 of the provider repo (m67-provider-20260924 @ d72c472), Supabase project wadinxqplrggagkvrdag (215 relations, 213 edge functions, 124 cron jobs), the Hub (hub-release-20260923 @ 7c96a83) and the Station (station-merge-20260923 @ 38ebc19), live Fly machine lists and public endpoints, and the runbook ADMIT-REDO.html. No secret values were read into this page. File: /Users/alanharvey/AlanOS/Operating System/workspaces/scintilla/staging/ticker-onboarding/TICKER-ONBOARDING.html
+</footer>
+</div>
+</body>
+</html>
