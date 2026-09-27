@@ -6759,7 +6759,15 @@ function cohortCompareStripHTML() {
     '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "COHORTS" ? " is-on" : "") +
       '" data-gwxcmp="COHORTS">COHORTS</button>' +
     '<button class="sc-l0chip' + (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" ? " is-on" : "") +
-      '" data-gwxcmp="SECTORS">SECTORS</button></span>';
+      '" data-gwxcmp="SECTORS">SECTORS</button></span>' +
+    /* 27 Sep, Alan: "when you add the iShares and Vanguard funds, I need to be able to see those as tabs in the
+       sector compare." Under SECTORS: MEMBERS (the sector's constituents, as before) or one fund family's eleven
+       sector funds, each with its OWN Geiger. The funds are geiger-only names: computed, shown only here. */
+    (typeof CMP_MODE !== "undefined" && CMP_MODE === "SECTORS" && typeof SECT_FAMILIES !== "undefined"
+      ? '<span class="gwx-fam" style="margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle">' +
+        SECT_FAMILIES.map(function (f) { return '<button class="sc-l0chip' + (SECT_FAMILY === f[0] ? " is-on" : "") +
+          '" data-gwxfam="' + f[0] + '" title="' + f[2] + '">' + f[1] + "</button>"; }).join("") + "</span>"
+      : "");
   return '<div class="sc-cohstrip__hd">COHORT COMPARE · geiger composite · bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
@@ -24177,6 +24185,17 @@ body.gwx-motion .gwx-pct{opacity:1}
                 XLP:"STAPLES",XLRE:"REAL_ESTATE",XLU:"UTILITIES",XLV:"HEALTH",
                 XLY:"DISCRET",XLC:"COMMS"};
   var CMP_MODE="COHORTS";
+  /* sector fund families, in SECT order: MATERIALS ENERGY FINANCIALS INDUSTRIAL TECH STAPLES REAL EST UTILITIES HEALTH DISCRET COMMS */
+  window.SECT_FAMILIES=[["MEMBERS","MEMBERS","each sector's member companies, averaged (the SPDR ticker labels the column)"],
+    ["SPDR","SPDR","State Street Select Sector SPDR funds"],["ISHARES","iSHARES","iShares US sector funds"],
+    ["VANGUARD","VANGUARD","Vanguard sector funds"],["EQWT","EQUAL-WT","Invesco S&P 500 equal-weight sector funds"]];
+  var SECT_FAMILY_FUNDS={
+    SPDR:    ["XLB","XLE","XLF","XLI","XLK","XLP","XLRE","XLU","XLV","XLY","XLC"],
+    ISHARES: ["IYM","IYE","IYF","IYJ","IYW","IYK","IYR","IDU","IYH","IYC","IYZ"],
+    VANGUARD:["VAW","VDE","VFH","VIS","VGT","VDC","VNQ","VPU","VHT","VCR","VOX"],
+    EQWT:    ["RSPM","RSPG","RSPF","RSPN","RSPT","RSPS","RSPR","RSPU","RSPH","RSPD","RSPC"]};
+  window.SECT_FAMILY="MEMBERS";
+  try { var sf=localStorage.getItem("hub.sector.family"); if(sf && SECT_FAMILY_FUNDS[sf]) window.SECT_FAMILY=sf; } catch(e) {}
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
     var _rows=cohortCompareRows;
@@ -24208,6 +24227,15 @@ body.gwx-motion .gwx-pct{opacity:1}
            constituents, exactly as the cohort side works. Falls back to the ETF alone if
            membership has not loaded, so it degrades to the old behaviour rather than to a
            blank strip. */
+        if(SECT_FAMILY!=="MEMBERS" && SECT_FAMILY_FUNDS[SECT_FAMILY]){
+          var fam=SECT_FAMILY_FUNDS[SECT_FAMILY];
+          return SECT.map(function(p,i){
+            var fund=fam[i], g=gAt(fund);
+            return {key:fund, label:p[0], short:fund,
+                    full:p[0]+" \u00b7 "+fund+(g==null?" \u00b7 no Geiger yet (waiting for admission)":" \u00b7 the fund's own Geiger"),
+                    mean:g, n:1};
+          }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
+        }
         return SECT.map(function(p){
           var name=p[0], etf=p[1], vals=[];
           var set=(typeof COHSETS!=="undefined" && COHSETS) ? COHSETS[SECT_KEY[etf]] : null;
@@ -24251,6 +24279,11 @@ body.gwx-motion .gwx-pct{opacity:1}
   if(!window.__gwxCmpDelegated){
     window.__gwxCmpDelegated=true;
     document.addEventListener("click",function(ev){
+      var fb=ev.target.closest && ev.target.closest("[data-gwxfam]");
+      if(fb){ ev.stopPropagation(); window.SECT_FAMILY=fb.getAttribute("data-gwxfam");
+        try { localStorage.setItem("hub.sector.family", window.SECT_FAMILY); } catch(e) {}
+        var c2=E("cohCompare"); if(c2&&typeof cohortCompareStripHTML==="function") c2.innerHTML=cohortCompareStripHTML();
+        return; }
       var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
       ev.stopPropagation();
       CMP_MODE=b.getAttribute("data-gwxcmp");
