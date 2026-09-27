@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admission Hardening</title>
+<style>
+:root{--bg:#0c0c0d;--panel:#141516;--line:#26282a;--ink:#d2d2d2;--ink2:#a4a6a7;--ink3:#8e9091;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:28px 16px 80px}
+.wrap{max-width:1080px;margin:0 auto}h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:36px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+p,li{font-size:14px}.sub{color:var(--ink3);font-size:13px;margin:0 0 18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:14px 16px;margin:12px 0}
+.tw{overflow-x:auto;margin:10px 0}table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--ink3);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line);padding:6px 8px}
+td{padding:6px 8px;border-bottom:1px solid #1c1e1f;vertical-align:top}
+code{font-family:var(--mono);font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px 14px}
+.card .n{font-family:var(--mono);font-size:22px}.card .l{font-size:12.5px;color:var(--ink2)}
+.m{font-family:var(--mono);font-size:11.5px;color:var(--ink2);border:1px solid #3a3c3e;border-radius:3px;padding:0 4px;white-space:nowrap}
+.flag{border-left:2px solid #6e7072;padding-left:11px;color:var(--ink2)}
+@media(max-width:640px){body{padding:20px 16px 60px}h1{font-size:19px}
+table,thead,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:8px 0}
+td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l);display:inline-block;min-width:108px;font-family:var(--mono);font-size:12px;color:var(--ink3)}}
+</style></head><body><div class="wrap">
+<span data-scnav-slot></span><h1>Admission hardening — the next new names need no hand patches</h1>
+<p class="sub">27 September 2026 · built on two branches for the coordinator · nothing pushed, deployed, or written to the database, R2 or Fly.</p>
+
+<div class="panel"><p><b>In one breath.</b> On 27 Sep, three places still carried the old list of names after the 486 went in. The RSI column went blank and the indicator writer refused to run. Those places now read the list from the one master file, or get rewritten from it. A new check prints any place that still types the list by hand. A new tool trims the old company's prices off tickers that were reused, like SERV. It shows what it would trim before it touches anything.</p></div>
+
+<div class="cards">
+<div class="card"><div class="n">3</div><div class="l">places that broke on 27 Sep, now fixed at the source</div></div>
+<div class="card"><div class="n">27</div><div class="l">typed copies of the list the builder now rewrites itself</div></div>
+<div class="card"><div class="n">5</div><div class="l">tickers whose stored prices include an earlier company <span class="m">MEASURED</span></div></div>
+<div class="card"><div class="n">0</div><div class="l">prices changed tonight: the tool ran as a preview only</div></div>
+</div>
+
+<h2>1 · Adding names without patches</h2>
+<div class="tw"><table><thead><tr><th>Place</th><th>What went wrong on 27 Sep</th><th>What it does now</th></tr></thead><tbody>
+<tr><td data-l="Place">Indicator writer (FMP RSI, averages)</td><td data-l="Was">Had "486 names" typed in. Every new admission made it refuse until someone edited and redeployed it.</td><td data-l="Now">Reads the list the chart service serves and checks the Hub's list matches it name for name. No edit next time.</td></tr>
+<tr><td data-l="Place">Hub board RSI column</td><td data-l="Was">Accepted only the digests someone remembered to type. The column went blank until the old one was typed back.</td><td data-l="Now">Accepts every list the set has ever had: 365 → 364 → 420 → 486. The builder writes it.</td></tr>
+<tr><td data-l="Place">Trial company view</td><td data-l="Was">A copy of the board page the builder did not know about.</td><td data-l="Now">Rewritten with the board.</td></tr>
+<tr><td data-l="Place">Chat assistant's notes</td><td data-l="Was">Called the 364 list "current".</td><td data-l="Now">Names all four, current last.</td></tr>
+</tbody></table></div>
+<p class="flag">New check: <code>--audit</code> prints every typed copy of the list in the provider, Hub and Station code. It fails only when a copy of today's list sits somewhere the builder does not rewrite. On 27 Sep it found none left. Two old copies in the Station are harmless; they only accept older indicator rows.</p>
+
+<h2>2 · Tickers that used to belong to another company</h2>
+<p>The price source files history by ticker letters. SERV was ServiceMaster until 2020 and has been Serve Robotics since April 2024, so asking for "SERV since 2003" returns both companies in one line. Every long average, ladder rung and Geiger read over those years mixes them.</p>
+<div class="tw"><table><thead><tr><th>Ticker</th><th>Stored prices start</th><th>Silence in the middle</th><th>Reading</th></tr></thead><tbody>
+<tr><td data-l="Ticker">SERV</td><td data-l="Starts">2006</td><td data-l="Silence">Oct 2020 → 18 Apr 2024</td><td data-l="Reading">earlier company present</td></tr>
+<tr><td data-l="Ticker">PL</td><td data-l="Starts">2003</td><td data-l="Silence">Jan 2015 → 8 Dec 2021</td><td data-l="Reading">earlier company present</td></tr>
+<tr><td data-l="Ticker">SPIR</td><td data-l="Starts">2004</td><td data-l="Silence">Jul 2013 → 17 Aug 2021</td><td data-l="Reading">earlier company present</td></tr>
+<tr><td data-l="Ticker">SYM</td><td data-l="Starts">2003</td><td data-l="Silence">Jan 2008 → 8 Jun 2022</td><td data-l="Reading">earlier company present</td></tr>
+<tr><td data-l="Ticker">HIVE</td><td data-l="Starts">2014</td><td data-l="Silence">Aug 2019 → 14 Sep 2021</td><td data-l="Reading">earlier company present</td></tr>
+<tr><td data-l="Ticker">BTDR</td><td data-l="Starts">14 Apr 2023</td><td data-l="Silence">none</td><td data-l="Reading">clean</td></tr>
+<tr><td data-l="Ticker">TECK</td><td data-l="Starts">Dec 2016</td><td data-l="Silence">none</td><td data-l="Reading">needs the provider's date</td></tr>
+<tr><td data-l="Ticker">RSPT, RSPF, RSPC + 8 more</td><td data-l="Starts">7 Jun 2023</td><td data-l="Silence">none</td><td data-l="Reading">nothing to trim: short, not mixed</td></tr>
+</tbody></table></div>
+<p><b>How the trim works.</b> The tool asks the price provider for each company's own first day. That's the later of its listing date and the date it took the ticker. It checks that date against the silence in the stored prices, and trims only when the two agree. It saves a copy of every file before changing it. It also records the first day, so a future rebuild can never pull the old company's prices back in.</p>
+<p class="flag">The 11 RSP funds are the opposite case: their earlier years are stored under their old tickers (RYT and the others). Nothing wrong is mixed in; they just have fewer years. Joining the old ticker's years on would be a separate job.</p>
+
+<h2>3 · Bar-service update</h2>
+<p>Since Friday, the 2h, 3h, 4h, 6h and 12h frames have been behind. The live chart service still showed them behind at about 20:44 UTC tonight. The fix is already written (bb57891) and checked: no other place has the same fault. No setting needs to change: the live check shows the chart service and the bar service agree on the list. The update must replace the bar service's software on the same machine, because the chart service finds it by that machine's name.</p>
+
+<h2>Where each number comes from</h2>
+<ul>
+<li>Stored prices, starts and silences: the chart service's daily prices, read on the evening of 27 Sep. No provider key was used.</li>
+<li>"Behind since Friday": the chart service's own readiness page, read 27 Sep, about 20:44 UTC.</li>
+<li>The four lists (365, 364, 420, 486): recomputed from the master file by the tests, not typed.</li>
+</ul>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>The trim dates are not known yet. This machine has no price-provider key, so the tool could not ask. The dates in the table are where the stored prices go quiet. The real run takes them from the provider and trims only where the two agree.</li>
+<li>TECK's start might belong to another holder of the ticker; the stored prices do not show it either way.</li>
+<li>Scores already worked out from the old prices (Geiger history, statistics files) stay as they are until they are worked out again.</li>
+<li>The panel sentence "our 364-stock universe" on the sentiment board is now stale. It is listed, not changed.</li>
+</ul>
+
+<h2>What was not done</h2>
+<ul>
+<li>Nothing pushed or deployed. The indicator writer, bar service and Hub are unchanged live.</li>
+<li>No prices trimmed, no first days recorded, no database write.</li>
+<li>The Station was only read, not changed. It already needs nothing at an admission.</li>
+</ul>
+</div><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
