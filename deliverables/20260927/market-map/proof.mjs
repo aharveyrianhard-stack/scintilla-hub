@@ -34,10 +34,19 @@ const { sessionId } = await raw("Target.attachToTarget", { targetId, flatten: tr
 const send = (m, p = {}) => raw(m, p, sessionId);
 const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); return r.result && r.result.value; };
 await send("Emulation.setDeviceMetricsOverride", { width: +width, height: +height, deviceScaleFactor: 1, mobile: mobile === "1" });
+function treeCpu() { // cumulative CPU seconds of every process in this Chrome's tree (identified by its unique profile dir)
+  const lines = execSync(`ps -Ao time=,command= | grep -F -- "${dir}" | grep -v grep`).toString().trim().split("\n");
+  return lines.reduce((s, l) => { const t = l.trim().split(/\s+/)[0]; const p = t.split(":").map(Number); return s + (p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]); }, 0);
+}
+const taskTime = async () => (await send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value;
 await send("Page.enable"); await send("Performance.enable");
 await send("Page.navigate", { url });
-let st = null;
-for (let i = 0; i < 90; i++) { await sleep(1000); st = await evaluate("window.__mm ? JSON.stringify({ready:!!__mm.ready,settled:!!__mm.settled,paused:!!__mm.paused,counts:__mm.counts,geigerErr:__mm.geigerErr,quotesErr:__mm.quotesErr,quotes:Object.keys(__mm.quotes).length}) : null"); if (st && JSON.parse(st).paused) break; }
+let st = null, introCpu = null;
+// the opening turn (25 s of slow auto-rotate) is measured on its own, then cut short so the screenshot is the resting map
+for (let i = 0; i < 60; i++) { await sleep(500); if (await evaluate("!!(window.__mm && __mm.ready)")) break; }
+if (cpu === "cpu") { const c0 = treeCpu(), t0 = await taskTime(); await sleep(20000); introCpu = { chrome_tree_cpu_s_per_20s: +(treeCpu() - c0).toFixed(2), page_main_thread_s_per_20s: +((await taskTime()) - t0).toFixed(2), frames: await evaluate("__mm.frames") }; }
+await evaluate("__mm.stopIntro && __mm.stopIntro()");
+for (let i = 0; i < 60; i++) { await sleep(500); st = await evaluate("window.__mm ? JSON.stringify({ready:!!__mm.ready,settled:!!__mm.settled,paused:!!__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,quotesErr:__mm.quotesErr,quotes:Object.keys(__mm.quotes).length}) : null"); if (st && JSON.parse(st).paused) break; }
 const extra = process.argv[8];
 if (extra) { await evaluate(extra); await sleep(2500); }
 const gl = await evaluate("(()=>{const c=document.querySelector('#graph canvas');if(!c)return 'no canvas';const g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'context unavailable';const e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)})()");
@@ -47,15 +56,11 @@ writeFileSync(out, Buffer.from(shot.data, "base64"));
 console.log(JSON.stringify({ out, state: st && JSON.parse(st), renderer: gl, overflow: dims.sw > dims.cw }));
 
 if (cpu === "cpu") {
-  const tree = () => { // cumulative CPU seconds of every process in this Chrome's tree (identified by its unique profile dir)
-    const lines = execSync(`ps -Ao time=,command= | grep -F -- "${dir}" | grep -v grep`).toString().trim().split("\n");
-    return lines.reduce((s, l) => { const t = l.trim().split(/\s+/)[0]; const p = t.split(":").map(Number); return s + (p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]); }, 0);
-  };
-  const task = async () => (await send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value;
+  const tree = treeCpu, task = taskTime;
   let c0 = tree(), t0 = await task();
   await sleep(60000);
   let c1 = tree(), t1 = await task();
-  const idle = { chrome_tree_cpu_s_per_min: +(c1 - c0).toFixed(2), page_main_thread_s_per_min: +(t1 - t0).toFixed(2), paused: JSON.parse(await evaluate("JSON.stringify(__mm.paused)")) };
+  const idle = { chrome_tree_cpu_s_per_min: +(c1 - c0).toFixed(2), page_main_thread_s_per_min: +(t1 - t0).toFixed(2), paused: JSON.parse(await evaluate("JSON.stringify(__mm.paused)")), frames_drawn: await evaluate("__mm.frames") };
   const cx = +width / 2 - 190, cy = +height / 2;
   await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx, y: cy });
   await send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", buttons: 1, clickCount: 1 });
@@ -64,9 +69,9 @@ if (cpu === "cpu") {
   while (Date.now() < end) { k++; await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + 120 * Math.sin(k / 30), y: cy + 30 * Math.cos(k / 45), button: "left", buttons: 1 }); await sleep(16); }
   c1 = tree(); t1 = await task();
   await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: cx, y: cy, button: "left", buttons: 0, clickCount: 1 });
-  const rotating = { chrome_tree_cpu_s_per_min: +(c1 - c0).toFixed(2), page_main_thread_s_per_min: +(t1 - t0).toFixed(2), drag_events: k };
+  const rotating = { chrome_tree_cpu_s_per_min: +(c1 - c0).toFixed(2), page_main_thread_s_per_min: +(t1 - t0).toFixed(2), drag_events: k, frames_drawn: await evaluate("__mm.frames") };
   await sleep(3000);
   const back = JSON.parse(await evaluate("JSON.stringify(__mm.paused)"));
-  console.log(JSON.stringify({ cpu: { idle, rotating, paused_again_after_release: back, gl: process.env.MM_GL === "metal" ? "GPU (ANGLE/Metal)" : "software (SwiftShader)" } }));
+  console.log(JSON.stringify({ cpu: { intro_autorotate: introCpu, idle, rotating, paused_again_after_release: back, gl: process.env.MM_GL === "metal" ? "GPU (ANGLE/Metal)" : "software (SwiftShader)" } }));
 }
 done(0);
