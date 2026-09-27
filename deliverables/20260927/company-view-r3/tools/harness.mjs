@@ -83,7 +83,7 @@ try {
       });
     } catch (_) { return null; }
   };
-  await page.goto("https://scintillahub.ai/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto("https://scintillahub.ai" + (job.path || "/"), { waitUntil: "domcontentloaded", timeout: 60000 });   /* R3 — job.path: e.g. /preview/company-view/ */
   for (const s of job.steps) {
     const r = { step: s.do };
     if (s.do === "wait") await sleep(s.ms);

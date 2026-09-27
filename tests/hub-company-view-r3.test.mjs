@@ -153,7 +153,7 @@ test("STATS on one screen: the three groups side by side, no sub-tabs to click",
   assert.equal(html, '<div class="st1"><section class="st1-col"><h3 class="st1-h">PRICE &amp; VALUE</h3>P</section><section class="st1-col"><h3 class="st1-h">FUNDAMENTALS</h3>F</section>' +
     '<section class="st1-col"><h3 class="st1-h">BALANCE &amp; PROFILE</h3>B</section></div>');
   assert.doesNotMatch(fn("statsTabHTML"), /data-act="stattab"/);
-  assert.match(page, /\.cv-side \.st1\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(page, /\.cv-side \.st1\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(150px,1fr\)\)/, "three groups across the ~540 CSS px tab column");
 });
 
 test("the median target says where it comes from: the analysts' own targets, not the comps", () => {
