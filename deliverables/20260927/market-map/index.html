@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · MARKET MAP (3D)</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --panel3:#202020; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#6a6a6a;
+  --up:#35b06a; --dn:#d1483f;               /* direction only: daily up green, daily down red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:13px;letter-spacing:.14em;margin:0;font-weight:600}
+header .stamp{font-size:11px;color:var(--dim)}
+.ctrl{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+input[type=search]{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:3px;font:12px var(--mono);padding:5px 8px;width:190px}
+button{background:var(--panel2);color:var(--ink2);border:1px solid var(--line2);border-radius:3px;font:11px/1 var(--mono);letter-spacing:.08em;padding:7px 9px;cursor:pointer}
+button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 380px;height:calc(100% - 46px)}
+#graph{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
+#gl{position:absolute;inset:0}
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.88);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:330px}
+#legend div{display:flex;align-items:center;gap:7px;line-height:1.7}
+#legend summary{cursor:pointer;letter-spacing:.12em;color:var(--ink2);pointer-events:auto}
+#legend{pointer-events:auto}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+.sw.hol{border:1px solid var(--dim);background:transparent}
+#status{position:absolute;left:10px;top:10px;font-size:11px;color:var(--dim);pointer-events:none}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px 12px 24px}
+aside h2{font-size:14px;margin:0;letter-spacing:.06em}
+aside .sub{font-size:11px;color:var(--dim);margin:1px 0 10px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:12px;margin:8px 0}
+.kv > span:nth-child(odd){color:var(--mute);font-size:11px}
+.big{font-size:22px;font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .dn{color:var(--dn)} .dim{color:var(--dim)} .mute{color:var(--mute)}
+.wait{border:1px dashed var(--line2);border-radius:3px;padding:7px 9px;color:var(--ink2);margin:8px 0}
+.sec{font-size:11px;letter-spacing:.12em;color:var(--mute);margin:14px 0 4px;border-bottom:1px solid var(--line);padding-bottom:3px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+td{padding:3px 4px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+td:last-child{text-align:right}
+td.nm{max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);cursor:pointer}
+.float-tooltip-kap{background:#151515!important;color:var(--ink)!important;border:1px solid var(--line2);font:11px/1.4 var(--mono)!important;padding:4px 7px!important;border-radius:3px}
+@media (max-width:760px){
+  .main{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  input[type=search]{width:140px}
+  .ctrl{margin-left:0}
+  #legend{max-width:250px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SCINTILLA · MARKET MAP</h1><span data-scnav-slot></span>
+  <span class="stamp" id="stamp">loading the node list and the live Geigers…</span>
+  <div class="ctrl">
+    <input type="search" id="q" placeholder="find a ticker or name" list="tickers" autocomplete="off">
+    <datalist id="tickers"></datalist>
+    <button id="flat" title="lay the graph flat for reading">FLAT 2D</button>
+    <button id="reset" title="back to the whole map">WHOLE MAP</button>
+  </div>
+</header>
+<div class="main">
+  <div id="graph"><div id="gl"></div><div id="status"></div>
+    <details id="legend" open><summary>KEY</summary>
+      <div><span class="sw" style="background:var(--up)"></span>Geiger above zero · brighter = stronger</div>
+      <div><span class="sw" style="background:var(--dn)"></span>Geiger below zero · brighter = stronger</div>
+      <div><span class="sw" style="background:#5a5a5a"></span>heading (not tradable, no Geiger of its own)</div>
+      <div><span class="sw hol"></span>hollow = waiting for admission (no Geiger yet)</div>
+      <div class="mute">size = market value where known · lines = "belongs to"</div>
+    </details>
+  </div>
+  <aside id="card"><h2>Click any node</h2><div class="sub">Its Geiger, day change, parent and top holdings show here. Drag to turn the map, scroll to zoom.</div></aside>
+</div>
+
+<script type="module">
+/* T1-MARKET-MAP-3D (27 Sep). Structure: nodes.json (built by scripts/build-market-map.mjs). Readings: the chart API, live.
+   Nothing on this page is random: a node with no live Geiger is drawn hollow and says "waiting for admission". */
+import ForceGraph3D from "https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.0/+esm";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.183.2/+esm"; // the same module the graph itself imports
+
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const STATION_CHART = "https://station.scintillahub.ai/chart/?t=";
+const UP = [0x35, 0xb0, 0x6a], DN = [0xd1, 0x48, 0x3f], BASE = [0x26, 0x26, 0x26];
+const HEADING = 0x5a5a5a, HOLLOW = 0x8c8c8c, RING = 0xababab, LINK1 = "#4a4a4a", LINK2 = "#2c2c2c";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
+const fmtPct = (p) => (p > 0 ? "+" : "") + p.toFixed(2) + "%";
+const fmtCap = (v) => v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + "T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + (v / 1e6).toFixed(0) + "M";
+
+/* ---- colour: sign → hue (green / red), strength → brightness ---- */
+function geigerColor(g) {
+  const c = g >= 0 ? UP : DN, t = 0.22 + 0.78 * Math.min(1, Math.abs(g));
+  const mix = (i) => Math.round(BASE[i] + (c[i] - BASE[i]) * t);
+  return (mix(0) << 16) | (mix(1) << 8) | mix(2);
+}
+
+/* ---- SCINTILLATE HOOK (not built yet) ----
+   The "scintilla" idea: a node flashes when today's move is SCINTILLATE_MULTIPLE times its usual day.
+   Where it would plug in: after the quotes land, compare |change_pct| with the name's usual day (e.g. the 20-day average of
+   |daily change| from /candles) and call scintillate(node, multiple). Deliberately does nothing today: no animation. */
+const SCINTILLATE_MULTIPLE = 3;
+function scintillate(node, multiple) { /* intentionally empty until Alan asks for the flash */ return false; }
+window.scintillate = scintillate;
+
+/* ---- data ---- */
+async function getJSON(url, ms = 15000) {
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const state = { geiger: null, quotes: {}, geigerErr: null, quotesErr: null, flat: false, selected: null, byId: new Map(), children: new Map() };
+window.__mm = state; // read by the headless proof
+
+const nodesDoc = await getJSON("nodes.json");
+const [g, q] = await Promise.allSettled([
+  getJSON(CHART_API + "/geiger"),
+  (async () => {
+    const served = nodesDoc.nodes.filter((n) => n.served).map((n) => n.ticker);
+    const out = {};
+    for (let i = 0; i < served.length; i += 200) {
+      const r = await getJSON(CHART_API + "/quotes?symbols=" + encodeURIComponent(served.slice(i, i + 200).join(",")));
+      Object.assign(out, r.quotes || {});
+    }
+    return out;
+  })(),
+]);
+if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
+if (q.status === "fulfilled") state.quotes = q.value; else state.quotesErr = String(q.reason);
+const GS = (state.geiger && state.geiger.symbols) || {};
+
+/* ---- graph data ---- */
+const maxCap = Math.max(...nodesDoc.nodes.map((n) => n.market_value_usd || 0));
+const nodes = nodesDoc.nodes.map((n) => {
+  const gg = n.ticker && GS[n.ticker] && Number.isFinite(GS[n.ticker].composite) ? GS[n.ticker] : null;
+  const r = n.kind === "index" ? (n.id === "MARKET" ? 8 : 5)
+    : n.kind === "fund" ? 3.2
+    : n.market_value_usd ? 1.3 + 8 * Math.pow(n.market_value_usd / maxCap, 0.42) : 1.6;
+  return { ...n, g: gg, r, hollow: !!n.ticker && !gg };
+});
+nodes.forEach((n) => { state.byId.set(n.id, n); n.parents.forEach((p) => { if (!state.children.has(p)) state.children.set(p, []); state.children.get(p).push(n.id); }); });
+const links = [];
+nodes.forEach((n) => n.parents.forEach((p, i) => links.push({ source: p, target: n.id, primary: i === 0 })));
+state.counts = {
+  nodes: nodes.length, coloured: nodes.filter((n) => n.g).length, hollow: nodes.filter((n) => n.hollow).length,
+  up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length,
+};
+
+/* ---- stamp ---- */
+(() => {
+  const v = state.geiger && state.geiger.verification;
+  const any = Object.values(state.quotes)[0];
+  $("stamp").textContent = state.geiger
+    ? `Geiger computed ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.coloured} lit, ${state.counts.hollow} waiting for admission · ` +
+      (any ? `day change = session ${any.price_session_et}` : "day change unavailable") + (v ? ` · ${v.label.toLowerCase().replace(/_/g, " ")}` : "")
+    : `the live Geiger did not answer (${state.geigerErr}); every node is drawn without a reading, none is made up`;
+})();
+
+/* ---- node objects: shared geometry, one mesh per node, a canvas label for headings and funds ---- */
+const SOLID = new THREE.SphereGeometry(1, 18, 12), WIRE = new THREE.SphereGeometry(1, 10, 7);
+const matCache = new Map();
+function mat(color, wire) {
+  const k = color + (wire ? "w" : "");
+  if (!matCache.has(k)) matCache.set(k, wire ? new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.55 })
+    : new THREE.MeshLambertMaterial({ color }));
+  return matCache.get(k);
+}
+/* labels keep one on-screen size (sizeAttenuation off): headings always, fund tickers only once the camera is near them */
+const sprites = [];
+const LABEL_PX = { index: 20, fund: 16 };
+function label(text, kind, color) {
+  const c = document.createElement("canvas"), ctx = c.getContext("2d"), px = 40;
+  ctx.font = `${px}px ui-monospace, Menlo, monospace`;
+  const w = Math.ceil(ctx.measureText(text).width) + 8;
+  c.width = w; c.height = px + 12;
+  ctx.font = `${px}px ui-monospace, Menlo, monospace`; ctx.fillStyle = color; ctx.textBaseline = "middle"; ctx.fillText(text, 4, c.height / 2);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, sizeAttenuation: false }));
+  s.center.set(0.5, 0); s.userData = { kind, aspect: w / c.height };
+  sprites.push(s); sizeLabel(s);
+  return s;
+}
+function sizeLabel(s) {
+  const h = (el.getBoundingClientRect().height || 800), k = LABEL_PX[s.userData.kind] / h * 1.15;
+  s.scale.set(k * s.userData.aspect, k, 1);
+}
+const _v = new THREE.Vector3();
+function labelVisibility() {
+  const cam = G.camera(), near = state.nearDist || 400;
+  for (const s of sprites) if (s.userData.kind === "fund") { s.getWorldPosition(_v); s.visible = _v.distanceTo(cam.position) < near; }
+}
+function nodeObject(n) {
+  const grp = new THREE.Group();
+  const color = n.kind === "index" ? HEADING : n.g ? geigerColor(n.g.composite) : HOLLOW;
+  const m = new THREE.Mesh(n.hollow ? WIRE : SOLID, mat(color, n.hollow));
+  m.scale.setScalar(n.r); grp.add(m);
+  if (n.kind === "index" || n.kind === "fund") {
+    const txt = n.kind === "index" ? n.label.toUpperCase() : n.ticker;
+    const s = label(txt, n.kind, n.kind === "index" ? "#cdcdcd" : n.hollow ? "#8c8c8c" : "#ababab");
+    s.position.set(0, n.r + 1.5, 0); grp.add(s);
+  }
+  return grp;
+}
+function tip(n) {
+  const head = n.ticker ? `<b>${esc(n.ticker)}</b> · ${esc(n.label)}` : `<b>${esc(n.label)}</b>`;
+  if (n.kind === "index") return head + "<br><span style='color:#8c8c8c'>heading · no Geiger of its own</span>";
+  if (!n.g) return head + "<br><span style='color:#8c8c8c'>waiting for admission · no Geiger yet</span>";
+  const qq = state.quotes[n.ticker];
+  return head + `<br>Geiger <span style="color:${n.g.composite >= 0 ? "#35b06a" : "#d1483f"}">${fmtG(n.g.composite)}</span>` +
+    (qq && Number.isFinite(qq.change_pct) ? ` · day <span style="color:${qq.change_pct >= 0 ? "#35b06a" : "#d1483f"}">${fmtPct(qq.change_pct)}</span>` : "");
+}
+
+/* ---- the graph ---- */
+const el = $("gl");
+const G = new ForceGraph3D(el, { controlType: "orbit" })
+  .backgroundColor("#0d0d0d")
+  .showNavInfo(false)
+  .graphData({ nodes, links })
+  .nodeId("id")
+  .nodeThreeObject(nodeObject)
+  .nodeLabel(tip)
+  .linkColor((l) => (l.primary ? LINK1 : LINK2))
+  .linkOpacity(0.55)
+  .warmupTicks(80)
+  .cooldownTicks(220)
+  .d3AlphaDecay(0.03)
+  .onNodeClick((n) => select(n, true))
+  .onBackgroundClick(() => {});
+G.d3Force("link").distance((l) => { const s = typeof l.source === "object" ? l.source : state.byId.get(l.source); return s.kind === "index" ? 34 : 16; });
+G.d3Force("charge").strength((n) => (n.kind === "index" ? -160 : n.kind === "fund" ? -60 : -18));
+
+function fit() { const r = el.getBoundingClientRect(); G.width(r.width).height(r.height); sprites.forEach(sizeLabel); }
+/* frame the whole map: centre on the nodes and pull the camera in to the cloud's radius (zoomToFit is too timid in 3D) */
+function frame(ms = 0) {
+  const ns = G.graphData().nodes; if (!ns.length) return;
+  const c = { x: 0, y: 0, z: 0 }; ns.forEach((n) => { c.x += n.x; c.y += n.y; c.z += n.z || 0; }); c.x /= ns.length; c.y /= ns.length; c.z /= ns.length;
+  const d2 = ns.map((n) => Math.hypot(n.x - c.x, n.y - c.y, (n.z || 0) - c.z)).sort((a, b) => a - b);
+  const R = d2[Math.floor(d2.length * 0.98)] || 100; // ignore the last 2% of stragglers
+  state.nearDist = R * 1.1; // fund tickers show once the camera is inside about the map's own radius
+  const cam = G.camera(), r = el.getBoundingClientRect(), fov = cam.fov * Math.PI / 180;
+  const fit = Math.min(1, r.width / r.height);
+  const dist = (R * 1.05) / Math.tan(fov / 2) / fit;
+  const cp = cam.position, v = state.flat ? { x: 0, y: 0, z: 1 } : { x: cp.x - c.x, y: cp.y - c.y, z: cp.z - c.z };
+  const L = Math.hypot(v.x, v.y, v.z) || 1;
+  G.cameraPosition({ x: c.x + v.x / L * dist, y: c.y + v.y / L * dist, z: c.z + v.z / L * dist }, c, ms);
+  setTimeout(labelVisibility, ms + 30);
+}
+fit(); addEventListener("resize", () => { fit(); wake(); });
+
+/* ---- keep CPU low: stop the simulation when it settles, stop drawing when nobody touches the map ---- */
+let idleTimer = null, settled = false;
+state.paused = false;
+function sleepSoon(ms = 1500) { clearTimeout(idleTimer); idleTimer = setTimeout(() => { if (settled) { G.pauseAnimation(); state.paused = true; } }, ms); }
+function wake() { if (state.paused) { G.resumeAnimation(); state.paused = false; } sleepSoon(); }
+G.onEngineStop(() => { settled = true; state.settled = true; state.settledAt = performance.now(); sleepSoon(800); if (!state.framed) { state.framed = true; frame(0); wake(); } });
+function faceRing() { ring.quaternion.copy(G.camera().quaternion); }
+G.controls().addEventListener("change", () => { labelVisibility(); faceRing(); });
+["pointerdown", "pointermove", "wheel", "touchstart", "keydown"].forEach((ev) => el.addEventListener(ev, wake, { capture: true, passive: true }));
+
+/* ---- selection ring and camera ---- */
+/* a flat ring that always faces the camera — never a wireframe ball, which on this map means "waiting for admission" */
+const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.12, 48), new THREE.MeshBasicMaterial({ color: RING, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
+ring.visible = false; G.scene().add(ring);
+function select(n, fly) {
+  state.selected = n.id;
+  ring.visible = true; ring.position.set(n.x || 0, n.y || 0, n.z || 0); ring.scale.setScalar(n.r + 2.5); faceRing();
+  if (fly) {
+    const d = 90 + n.r * 8, cp = G.camera().position, nz = n.z || 0;
+    const v = state.flat ? { x: 0, y: 0, z: 1 } : { x: cp.x - n.x, y: cp.y - n.y, z: cp.z - nz };
+    const L = Math.hypot(v.x, v.y, v.z) || 1;
+    const pos = { x: n.x + v.x / L * d, y: n.y + v.y / L * d, z: nz + v.z / L * d };
+    G.cameraPosition(pos, { x: n.x, y: n.y, z: nz }, 900); setTimeout(() => { labelVisibility(); faceRing(); }, 930);
+    wake(); sleepSoon(1400);
+  } else wake();
+  renderCard(n);
+}
+
+/* ---- the side card ---- */
+function rowFor(id) {
+  const n = state.byId.get(id); if (!n) return "";
+  const gv = n.g ? `<span class="${n.g.composite >= 0 ? "up" : "dn"}">${fmtG(n.g.composite)}</span>` : n.kind === "index" ? `<span class="mute">heading</span>` : `<span class="mute">waiting</span>`;
+  return `<tr><td><span class="lnk" data-go="${esc(n.id)}">${esc(n.ticker || n.label)}</span></td><td class="nm">${esc(n.ticker ? n.label : "")}</td><td>${gv}</td></tr>`;
+}
+function renderCard(n) {
+  const qq = n.ticker ? state.quotes[n.ticker] : null;
+  const parents = n.parents.map((p) => { const pn = state.byId.get(p); return `<span class="lnk" data-go="${esc(p)}">${esc(pn.ticker || pn.label)}</span>`; });
+  let h = `<h2>${esc(n.ticker || n.label)}</h2><div class="sub">${esc(n.ticker ? n.label : "")}${n.issuer ? " · " + esc(n.issuer) : ""}${n.kind !== "index" ? " · " + n.kind : " · heading"}</div>`;
+  if (n.kind === "index") {
+    h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. Its funds below each carry their own.</div>`;
+  } else if (n.g) {
+    h += `<div class="kv"><span>GEIGER</span><span class="big ${n.g.composite >= 0 ? "up" : "dn"}">${fmtG(n.g.composite)}</span>` +
+      `<span>trend · momentum</span><span><span class="${n.g.trend >= 0 ? "up" : "dn"}">${fmtG(n.g.trend)}</span> · <span class="${n.g.momentum >= 0 ? "up" : "dn"}">${fmtG(n.g.momentum)}</span></span>` +
+      `<span>DAY CHANGE</span><span>${qq && Number.isFinite(qq.change_pct) ? `<span class="${qq.change_pct >= 0 ? "up" : "dn"}">${fmtPct(qq.change_pct)}</span> <span class="mute">session ${esc(qq.price_session_et)}</span>` : `<span class="mute">not available</span>`}</span>` +
+      (qq && Number.isFinite(qq.price) ? `<span>LAST PRICE</span><span>${qq.price.toFixed(2)}</span>` : "") +
+      (n.market_value_usd ? `<span>MARKET VALUE</span><span>${fmtCap(n.market_value_usd)}</span>` : "") +
+      `<span>TIER</span><span>${esc(n.tier)} · served</span></div>` +
+      `<div class="mute" style="font-size:11px">Geiger scale −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`;
+  } else {
+    h += `<div class="wait"><b>Waiting for admission.</b> No Geiger yet, so no colour and no number. ` +
+      `${esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1))}${n.planned_tier ? " · would be " + esc(n.planned_tier) : ""}${n.placed_by ? " · placed by " + esc(n.placed_by) : ""}.</div>`;
+  }
+  if (parents.length) h += `<div class="kv"><span>${parents.length > 1 ? "PARENTS" : "PARENT"}</span><span>${parents.join(" · ")}</span></div>`;
+  if (n.kind === "name" && n.served) h += `<div class="kv"><span>CHART</span><span><a href="${STATION_CHART + encodeURIComponent(n.ticker)}&range=1D&clouds=1" target="_blank" rel="noopener">open ${esc(n.ticker)} on the Station chart ↗</a></span></div>`;
+  if (n.holdings) {
+    h += `<div class="sec">TOP HOLDINGS · ${n.holdings.count_in_fund} in the fund · FMP ${esc(n.holdings.as_of)}</div><table>` +
+      n.holdings.top.map((x) => {
+        const hn = state.byId.get(x.ticker);
+        const gv = hn && hn.g ? `<span class="${hn.g.composite >= 0 ? "up" : "dn"}">${fmtG(hn.g.composite)}</span>` : `<span class="mute">·</span>`;
+        return `<tr><td>${hn ? `<span class="lnk" data-go="${esc(x.ticker)}">${esc(x.ticker)}</span>` : esc(x.ticker)}</td><td class="nm">${esc(x.name || "")}</td><td>${gv}</td><td>${x.weight_pct.toFixed(2)}%</td></tr>`;
+      }).join("") + `</table>`;
+  } else if (n.kind === "fund") {
+    h += `<div class="sec">TOP HOLDINGS</div><div class="mute">Not in the 26 Sep holdings file yet.</div>`;
+  }
+  const kids = state.children.get(n.id) || [];
+  if (kids.length) {
+    const sorted = kids.slice().sort((a, b) => { const A = state.byId.get(a), B = state.byId.get(b); const k = { index: 0, fund: 1, name: 2 }; return k[A.kind] - k[B.kind] || (B.market_value_usd || 0) - (A.market_value_usd || 0); });
+    h += `<div class="sec">UNDER IT · ${kids.length}</div><table>${sorted.slice(0, 60).map(rowFor).join("")}</table>` + (kids.length > 60 ? `<div class="mute">…and ${kids.length - 60} more</div>` : "");
+  }
+  $("card").innerHTML = h;
+}
+$("card").addEventListener("click", (e) => { const id = e.target.getAttribute && e.target.getAttribute("data-go"); if (id && state.byId.has(id)) select(state.byId.get(id), true); });
+
+/* ---- search ---- */
+$("tickers").innerHTML = nodes.map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : "heading")}</option>`).join("");
+function find(s) {
+  s = s.trim().toUpperCase(); if (!s) return null;
+  return state.byId.get(s) || nodes.find((n) => (n.ticker || "") === s) || nodes.find((n) => (n.label || "").toUpperCase() === s) ||
+    nodes.find((n) => (n.label || "").toUpperCase().includes(s));
+}
+$("q").addEventListener("change", () => { const n = find($("q").value); if (n) select(n, true); });
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { const n = find($("q").value); if (n) select(n, true); } });
+
+/* ---- flat 2D toggle ---- */
+function setFlat(on) {
+  state.flat = on; settled = false; state.settled = false; $("flat").classList.toggle("on", on);
+  wake(); G.numDimensions(on ? 2 : 3);
+  const ctl = G.controls(); if (ctl) ctl.enableRotate = !on;
+  G.onEngineStop(() => { settled = true; state.settled = true; frame(500); wake(); sleepSoon(1400); });
+}
+$("flat").addEventListener("click", () => setFlat(!state.flat));
+$("reset").addEventListener("click", () => { ring.visible = false; frame(700); wake(); sleepSoon(1400); });
+const p = new URLSearchParams(location.search);
+if (p.get("flat") === "1") setFlat(true);
+if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n, false), 400); }
+$("status").textContent = "";
+state.select = (id) => select(state.byId.get(id), true);
+if (innerWidth < 760) $("legend").removeAttribute("open");
+state.ready = true;
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
