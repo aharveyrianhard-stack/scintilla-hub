@@ -99,3 +99,12 @@ test("S7 output: the screen only promotes rules chosen on discover with at least
   for (const r of [...d.confluence.at65, ...d.confluence.at70]) { assert.ok(r.discover.trades >= 200); assert.ok(r.discover.share_up >= 65); }
   for (const r of d.rows) assert.ok(r.report.all.trades <= r.report.all.windows);
 });
+
+test("S7 page: built from the data, carries BACK / CLOSE, says it does not predict", () => {
+  const html = fs.readFileSync(new URL("../deliverables/20260927/entry-confluence/ENTRY-CONFLUENCE.html", import.meta.url), "utf8");
+  const d = JSON.parse(fs.readFileSync(new URL("../research/statistics/data/s7-entries.json", import.meta.url), "utf8"));
+  assert.match(html, /data-scnav/);
+  assert.ok(html.includes(d.report_windows.toLocaleString("en-US")));
+  assert.match(html, /Nothing here predicts/);
+  assert.doesNotMatch(html, /\bbuy\b/i);
+});
