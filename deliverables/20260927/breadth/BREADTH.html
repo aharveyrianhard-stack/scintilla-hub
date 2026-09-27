@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whole-Market Breadth</title>
+<style>
+:root{
+  --bg:#0b0b0e; --panel:#121216; --line:#26262c; --line2:#34343b;
+  --ink:#c8c8cc; --ink2:#a4a4aa; --dim:#808086;
+  --up:#2FBF71; --dn:#E8384F;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:22px 16px 60px}
+h1{font:600 20px/1.3 var(--mono);letter-spacing:.04em;margin:6px 0 4px}
+h2{font:600 12px/1.3 var(--mono);letter-spacing:.12em;color:var(--ink2);margin:30px 0 10px;text-transform:uppercase}
+p{margin:6px 0 10px;max-width:820px}
+.sub{color:var(--ink2);font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:14px 16px;margin:12px 0}
+.lbl{font:600 11px var(--mono);letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.state{font:12px var(--mono);color:var(--ink2)}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{font:600 11px var(--mono);letter-spacing:.08em;color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--mono);white-space:nowrap}
+.up{color:var(--up)} .dn{color:var(--dn)}
+.chart{position:relative;height:260px;margin-top:8px}
+.chart svg{display:block;width:100%;height:100%}
+.tip{position:absolute;pointer-events:none;background:#1b1b20;border:1px solid var(--line2);border-radius:3px;padding:5px 8px;font:11.5px var(--mono);color:var(--ink);white-space:nowrap;display:none;z-index:2}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;border:1px dashed var(--line2);border-radius:4px;color:var(--ink2);font:12px var(--mono);text-align:center;padding:14px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:8px}
+.kv div{background:#17171b;border:1px solid var(--line);border-radius:3px;padding:8px 10px}
+.kv b{display:block;font:600 18px var(--mono);color:var(--ink)}
+ul{margin:6px 0 10px 18px;padding:0;max-width:840px} li{margin:4px 0}
+code{font:12px var(--mono);color:var(--ink2)}
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span>
+<h1>WHOLE-MARKET BREADTH</h1>
+<p class="sub">Lane B1 · 27 Sep 2026 · every US common stock, and the S&amp;P 500 — not the Hub's own list.</p>
+
+<h2>What this page shows</h2>
+<p>How many stocks are taking part in a move. The index can rise because a handful of giants rise while most stocks fall. These numbers count the stocks themselves, so they show that split.</p>
+<p>Until now every breadth number on the Hub was measured on our own 364 names (bond funds included). As Alan put it on 11 Aug, "my Hub is not the market." This lane builds the market's own numbers: every US common stock (about 4,000–5,000 names on a given day), and separately the S&amp;P 500 members of that day, back to September 2003.</p>
+
+<div class="card">
+  <div class="lbl">Live state</div>
+  <div class="state" id="status">Asking the chart API…</div>
+</div>
+
+<h2>The advance / decline line · US common stocks · since 2003</h2>
+<div class="card">
+  <p class="sub">Each day, the number of stocks that closed higher minus the number that closed lower, added onto a running total. The height of the line means nothing; its direction does. When the S&amp;P 500 makes a new high and this line does not, fewer stocks are carrying the index. Green = the line rose that day, red = it fell.</p>
+  <div class="chart" id="c-ad"><div class="empty">loading…</div><div class="tip"></div></div>
+</div>
+
+<h2>% of stocks above their 200-day average · since 2003</h2>
+<div class="card">
+  <p class="sub">The share of stocks whose close is above their own 200-day average. Above 50% means most stocks are in long uptrends; below 20% has historically meant a washed-out market. Green = the share rose that day, red = it fell.</p>
+  <div class="chart" id="c-200"><div class="empty">loading…</div><div class="tip"></div></div>
+  <div class="chart" id="c-200sp" style="margin-top:14px"><div class="empty">loading…</div><div class="tip"></div></div>
+</div>
+
+<h2>The newest session</h2>
+<div class="card"><div class="kv" id="latest"><div>waiting for the first published row</div></div></div>
+
+<h2>What each number means, and where it comes from</h2>
+<div class="tw"><table>
+<tr><th>number</th><th>in plain words</th><th>how it is counted</th></tr>
+<tr><td>Advancing / declining</td><td>How many stocks closed up, and how many closed down.</td><td>Today's close against the previous session's close, after adjusting for splits. A stock that did not trade the day before is not counted.</td></tr>
+<tr><td>Up volume / down volume</td><td>How many shares traded in the rising stocks, and in the falling ones.</td><td>Today's share volume, summed on each side.</td></tr>
+<tr><td>A/D line</td><td>The running total of (up − down) since September 2003.</td><td>Adds one day at a time; the nightly run carries on from the last stored day.</td></tr>
+<tr><td>TRIN (Arms index)</td><td>Whether volume is flowing into the risers or the fallers. Below 1 leans toward the risers; above 1, toward the fallers.</td><td>(up ÷ down) ÷ (up volume ÷ down volume). Left blank on a day where one side is empty.</td></tr>
+<tr><td>% above the 50-day / 200-day</td><td>The share of stocks trading above their own 50-day or 200-day average.</td><td>Close above the simple average of its last 50 (or 200) closes, today included. A stock with less history than that is left out, and the row says how many were counted.</td></tr>
+<tr><td>52-week highs / lows</td><td>How many stocks hit a new one-year high, and how many a new one-year low.</td><td>Today's high above the highest high of the previous 252 sessions (and the same for lows). Only stocks with a full year of history count.</td></tr>
+<tr><td>Members counted</td><td>How many stocks went into the counts that day.</td><td>US common stock (Massive's reference list, type "CS": no ETFs, funds, warrants or preferreds) with a bar today and a bar the session before. For the S&amp;P 500: the members on that day.</td></tr>
+</table></div>
+<ul>
+  <li><b>Prices:</b> Massive's daily bars for every US stock.
+    <ul>
+      <li>2003-09-10 → 2026-08-17: the day files already in our R2 archive (5,770 sessions).</li>
+      <li>From 2026-08-18: Massive's "grouped daily" call, one call per session, which returns every stock at once.</li>
+    </ul>
+    Both are <b>raw prices</b>. We proved this on CRWD for 18 Jun 2026: the day file equals <code>adjusted=false</code>, and both are 4× the adjusted price. So the job adjusts for splits itself, using Massive's split list, before it computes any average.</li>
+  <li><b>S&amp;P 500 membership:</b> FMP's current member list plus FMP's list of changes, rolled back so each day uses the members of that day. If the batch app has no FMP key, the S&amp;P 500 rows are skipped and the status says so. They are never filled with today's list presented as history.</li>
+  <li><b>Where it lives:</b>
+    <ul>
+      <li>The job writes to R2 (<code>normalized/breadth_daily_v1/</code>).</li>
+      <li>The chart API serves it at <code>/v1/breadth</code>, with freshness at <code>/v1/breadth/status</code>.</li>
+      <li>The edge function <code>breadth-ingest</code> copies it into <code>public.breadth_daily</code> every hour, which the Sentiment room and /allocation read.</li>
+    </ul></li>
+  <li><b>Nightly:</b> A Fly machine starts every hour and does nothing unless it is after 16:45 ET on a trading day and a session is missing. It then fetches one grouped call plus that day's splits and appends one row per scope.
+    <ul>
+      <li>If a pass fails, the next hour retries it.</li>
+      <li>A second pass in the same evening finds nothing missing and writes nothing.</li>
+      <li>A test proves the nightly append gives exactly the same rows as rebuilding the whole history.</li>
+    </ul></li>
+</ul>
+
+<h2>What changed on the Hub</h2>
+<ul>
+  <li><b>Sentiment room, breadth table:</b>
+    <ul>
+      <li>New rows lead the table, marked <i>whole market</i>, each naming the session and the number of stocks it counted: % above 50-day, % above 200-day, 52-week highs vs lows, advancing/declining (with the A/D line as its sparkline) and TRIN. The S&amp;P 500 reading sits beside each one.</li>
+      <li>The old rows stay, now labelled <i>Hub list only</i>.</li>
+      <li><b>QQQE vs QQQ</b> (equal-weight against cap-weight Nasdaq-100) now sits next to RSP vs SPY. It is shown, not counted in the market gauge.</li>
+    </ul></li>
+  <li><b>The 52-week highs/lows input feeds the headline market gauge.</b> Once the table is filled it will count the whole market, not our list, so the headline number can move for that reason alone. That is intended — CNN's version counts the whole NYSE — but it is a real change.</li>
+  <li><b>/allocation:</b>
+    <ul>
+      <li>The 50/200-day breadth legs use the whole market when a row exists, and the table labels which list it used.</li>
+      <li>QQQE vs QQQ is shown beside RSP and not counted, so "how much to own" is still built from the same three legs.</li>
+    </ul></li>
+  <li><b>Until the coordinator runs the job and applies the migration, nothing on screen changes</b> except the labels. The whole-market rows say "not filled yet", and the Hub-list rows carry on exactly as before.</li>
+</ul>
+
+<h2>Cross-check 1 · against public.market_internals (FMP)</h2>
+<p><code>market_internals</code> holds 16 whole-market rows from FMP, 10 Aug → 24 Sep. They cover every NYSE, NASDAQ and AMEX listing (about 23,000, ETFs and funds included), so they will never equal our common-stock counts. The check is whether the two agree on direction and roughly on proportion.</p>
+<p><b>Something we found:</b> the date on those rows is the day the job <i>ran</i>, about 20:00 ET, not the session. Four rows are dated on a weekend; each actually describes the Friday before. Two rows (13 Aug and 3 Sep) have about half the usual volume, which looks like a partial read. The cross-check maps each row to its real session:</p>
+<div class="tw"><table id="mi"><tr><th>row dated</th><th>day</th><th>is really session</th><th>FMP up</th><th>FMP down</th><th>FMP TRIN</th><th>listings</th><th>ours</th></tr></table></div>
+<p class="sub">"Ours" fills in when the history run has been published. To run it: <code>node services/breadth/breadth-crosscheck.mjs https://scintilla-massive-chart-api.fly.dev/v1/breadth</code>. It marks a day AGREES when both say the same side won and the advancing shares are within 8 points.</p>
+
+<h2>Cross-check 2 · our S&amp;P 500 % above 200-day against a published one</h2>
+<div class="tw"><table>
+<tr><th>session</th><th>published</th><th>where from</th><th>ours</th></tr>
+<tr><td class="n">2026-08-28</td><td class="n">68.78%</td><td>Barchart <code>$S5TH</code> (S&amp;P 500 stocks above 200-day average), historical table on Investing.com, read 27 Sep 2026</td><td class="n" data-pub="2026-08-28">—</td></tr>
+<tr><td class="n">2026-09-11</td><td class="n">56.46%</td><td>same</td><td class="n" data-pub="2026-09-11">—</td></tr>
+<tr><td class="n">2026-09-25</td><td class="n">46.52%</td><td>same</td><td class="n" data-pub="2026-09-25">—</td></tr>
+</table></div>
+<p class="sub">The values were read with a summarising web tool, so check them once by eye at <code>investing.com/indices/sp-500-stocks-above-200-day-average-historical-data</code>. A gap of up to 5 points is expected: Barchart's member list and averaging convention are not published line by line. A larger gap means our S&amp;P membership or split handling needs a look.</p>
+
+<h2>Equal-weight funds for the admission list (listed, not admitted)</h2>
+<div class="tw"><table>
+<tr><th>ticker</th><th>what it is</th><th>launched</th><th>cap-weight partner</th><th>in our universe?</th></tr>
+<tr><td class="n">RSPT</td><td>S&amp;P 500 Equal Weight Technology (was RYT)</td><td class="n">2006-11-01</td><td class="n">XLK</td><td>no</td></tr>
+<tr><td class="n">RSPF</td><td>… Financials (was RYF)</td><td class="n">2006-11-01*</td><td class="n">XLF</td><td>no</td></tr>
+<tr><td class="n">RSPH</td><td>… Health Care (was RYH)</td><td class="n">2006-11-01*</td><td class="n">XLV</td><td>no</td></tr>
+<tr><td class="n">RSPN</td><td>… Industrials (was RGI)</td><td class="n">2006-11-01*</td><td class="n">XLI</td><td>no</td></tr>
+<tr><td class="n">RSPG</td><td>… Energy (was RYE)</td><td class="n">2006-11-01*</td><td class="n">XLE</td><td>no</td></tr>
+<tr><td class="n">RSPU</td><td>… Utilities (was RYU)</td><td class="n">2006-11-01*</td><td class="n">XLU</td><td>no</td></tr>
+<tr><td class="n">RSPS</td><td>… Consumer Staples (was RHS)</td><td class="n">2006-11-01*</td><td class="n">XLP</td><td>no</td></tr>
+<tr><td class="n">RSPD</td><td>… Consumer Discretionary (was RCD)</td><td class="n">2006-11-01*</td><td class="n">XLY</td><td>no</td></tr>
+<tr><td class="n">RSPM</td><td>… Materials (was RTM)</td><td class="n">2006-11-01*</td><td class="n">XLB</td><td>no</td></tr>
+<tr><td class="n">RSPR</td><td>… Real Estate (was EWRE)</td><td class="n">2015-08*</td><td class="n">XLRE</td><td>no</td></tr>
+<tr><td class="n">RSPC</td><td>… Communication Services (was EWCO)</td><td class="n">2018-11*</td><td class="n">XLC</td><td>no</td></tr>
+<tr><td class="n">EWSC</td><td>S&amp;P SmallCap 600 Equal Weight</td><td class="n">2010-12-08</td><td class="n">IJR</td><td>no (neither is IJR)</td></tr>
+<tr><td class="n">—</td><td>Mid-cap equal weight: <b>none left</b>. EWMC was the S&amp;P MidCap 400 Equal Weight fund until 28 Aug 2023, when Invesco turned it into a "GARP" fund, so its history is no longer equal weight.</td><td class="n">—</td><td class="n">MDY (in universe)</td><td>—</td></tr>
+</table></div>
+<p class="sub">Tickers changed on 6 Jun 2023 (Invesco, reported by ETF Trends and Nasdaq). RSPT/RYT's launch date is confirmed. Dates marked * are the same 2006 Rydex launch, or from memory for RSPR and RSPC, and are not confirmed one by one — check them before admission. RSP (2003-04-24) and QQQE are already in the universe.</p>
+
+<h2>What could be wrong</h2>
+<ul>
+  <li><b>A missed split</b> looks like a stock falling 75% (or jumping 4× on a reverse split). The job counts any name that moved more than 50% in a day (<code>suspect_moves</code>), so a spike in that count on a date points straight at a missing split.</li>
+  <li><b>What counts as common stock</b> comes from Massive's reference list today, including delisted names. A ticker that was once an ETF and later reused by a company could be counted on the wrong side. ADRs are left out on purpose.</li>
+  <li><b>S&amp;P 500 history</b> depends on FMP's change list. A company that changed its ticker (FB → META) may be missed on the old ticker for its earlier years. The <code>members</code> column shows it: a day far from ~500 means membership gaps.</li>
+  <li><b>Tiny stocks count the same as giants</b>, as in every breadth measure. No price or volume floor is applied.</li>
+  <li><b>The 27 sessions from 19 Aug to 25 Sep</b> come from grouped calls rather than the archive. The data is the same, but the source is different, and the status file records which days came from where.</li>
+  <li><b>The grouped call for tonight</b> may not be finished at 16:45 ET. An answer with fewer than 5,000 stocks is treated as not ready: nothing is written, and the next hour tries again.</li>
+</ul>
+
+<h2>What was not done</h2>
+<ul>
+  <li><b>Nothing was run against real data.</b> This Mac has no Massive or R2 key in its environment. A look at the local secret store was refused and was not attempted again another way. So the history run, the cross-check "ours" columns and the charts above wait for the coordinator to run the job (<code>runbooks/BREADTH.md</code> on the provider branch has the exact commands).</li>
+  <li>Nothing was pushed, deployed, scheduled or written to the database. The migration, rollback and schedule are files only.</li>
+  <li>The IBKR TICK feed ($2/month) was not touched; that is Alan's decision.</li>
+  <li>The Hub's other rooms were not changed.</li>
+</ul>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var API = "https://scintilla-massive-chart-api.fly.dev";
+  var MI = [["2026-08-10","Mon","2026-08-10",6846,8676,0.836,22925],["2026-08-13","Thu","2026-08-13",5774,3966,1.5873,22951],["2026-08-16","Sun","2026-08-14",7743,7810,0.9714,22960],["2026-08-19","Wed","2026-08-19",9285,6402,1.0466,22988],["2026-08-22","Sat","2026-08-21",9383,6172,1.114,22994],["2026-08-25","Tue","2026-08-25",9433,6178,1.0681,23004],["2026-08-28","Fri","2026-08-28",6074,9596,0.8266,23041],["2026-08-31","Mon","2026-08-31",6460,9246,0.8551,23047],["2026-09-03","Thu","2026-09-03",5835,3948,1.6638,23068],["2026-09-06","Sun","2026-09-04",7843,7793,1.1042,23073],["2026-09-09","Wed","2026-09-09",5198,10502,0.8271,23081],["2026-09-12","Sat","2026-09-11",9288,6554,1.1009,23240],["2026-09-15","Tue","2026-09-15",5645,10259,0.8477,23259],["2026-09-18","Fri","2026-09-18",6723,9263,0.9915,23332],["2026-09-21","Mon","2026-09-21",9439,6560,0.947,23332],["2026-09-24","Thu","2026-09-24",6556,9428,0.9801,23351]];
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var fmt = function (n) { return n == null ? "—" : Number(n).toLocaleString("en-US"); };
+
+  function miTable(ours) {
+    var by = {}; (ours || []).forEach(function (r) { by[r.session_date] = r; });
+    var t = document.getElementById("mi");
+    MI.forEach(function (m) {
+      var o = by[m[2]], tr = document.createElement("tr");
+      var weekend = m[1] === "Sat" || m[1] === "Sun";
+      var oursTxt = "—";
+      if (o) {
+        var same = Math.sign(o.advancers - o.decliners) === Math.sign(m[3] - m[4]);
+        oursTxt = fmt(o.advancers) + " / " + fmt(o.decliners) + " · " + (same ? "same side" : "OPPOSITE side");
+      }
+      tr.innerHTML = "<td class='n'>" + m[0] + "</td><td>" + m[1] + "</td><td class='n'>" + (weekend ? "<b>" + m[2] + "</b>" : m[2]) + "</td><td class='n'>" + fmt(m[3]) +
+        "</td><td class='n'>" + fmt(m[4]) + "</td><td class='n'>" + m[5] + "</td><td class='n'>" + fmt(m[6]) + "</td><td class='n'>" + oursTxt + "</td>";
+      t.appendChild(tr);
+    });
+  }
+
+  /* one series, each day's segment green if it rose and red if it fell; crosshair + tooltip */
+  function drawLine(host, rows, key, label, unit) {
+    var pts = rows.filter(function (r) { return r[key] != null && isFinite(+r[key]); });
+    var tip = host.querySelector(".tip");
+    if (pts.length < 2) { host.querySelector(".empty").textContent = label + ": no published rows yet"; return; }
+    host.querySelector(".empty").remove();
+    var W = 1000, H = 260, L = 54, R = 10, T = 18, B = 26;
+    var vals = pts.map(function (r) { return +r[key]; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals); if (hi === lo) hi = lo + 1;
+    var x = function (i) { return L + i * (W - L - R) / (pts.length - 1); };
+    var y = function (v) { return T + (hi - v) * (H - T - B) / (hi - lo); };
+    var up = "", dn = "";
+    for (var i = 1; i < pts.length; i++) {
+      var seg = "M" + x(i - 1).toFixed(1) + " " + y(vals[i - 1]).toFixed(1) + "L" + x(i).toFixed(1) + " " + y(vals[i]).toFixed(1);
+      if (vals[i] >= vals[i - 1]) up += seg; else dn += seg;
+    }
+    var ticks = "", yrs = {};
+    pts.forEach(function (r, i) { var yr = r.session_date.slice(0, 4); if (!(yr in yrs)) yrs[yr] = i; });
+    var ys = Object.keys(yrs), step = Math.max(1, Math.ceil(ys.length / 8));
+    ys.forEach(function (yr, k) { if (k % step) return; var xx = x(yrs[yr]).toFixed(1);
+      ticks += "<line x1='" + xx + "' x2='" + xx + "' y1='" + T + "' y2='" + (H - B) + "' stroke='#1f1f24'/><text x='" + xx + "' y='" + (H - 8) + "' fill='#808086' font-size='11' font-family='ui-monospace,Menlo,monospace'>" + yr + "</text>"; });
+    [lo, (lo + hi) / 2, hi].forEach(function (v) { ticks += "<text x='4' y='" + (y(v) + 4).toFixed(1) + "' fill='#808086' font-size='11' font-family='ui-monospace,Menlo,monospace'>" + (unit === "%" ? v.toFixed(0) + "%" : Math.round(v).toLocaleString("en-US")) + "</text>"; });
+    host.insertAdjacentHTML("afterbegin", "<svg viewBox='0 0 " + W + " " + H + "' preserveAspectRatio='none' role='img' aria-label='" + esc(label) + "'>" + ticks +
+      "<text x='" + L + "' y='12' fill='#a4a4aa' font-size='11' font-family='ui-monospace,Menlo,monospace'>" + esc(label) + "</text>" +
+      "<path d='" + up + "' stroke='var(--up)' stroke-width='1.4' fill='none' vector-effect='non-scaling-stroke'/>" +
+      "<path d='" + dn + "' stroke='var(--dn)' stroke-width='1.4' fill='none' vector-effect='non-scaling-stroke'/>" +
+      "<line class='xh' y1='" + T + "' y2='" + (H - B) + "' stroke='#808086' stroke-width='1' vector-effect='non-scaling-stroke' style='display:none'/></svg>");
+    var svg = host.querySelector("svg"), xh = svg.querySelector(".xh");
+    svg.addEventListener("pointermove", function (e) {
+      var b = svg.getBoundingClientRect(), fx = (e.clientX - b.left) / b.width * W;
+      var i = Math.max(0, Math.min(pts.length - 1, Math.round((fx - L) / (W - L - R) * (pts.length - 1))));
+      var v = vals[i], d = i ? v - vals[i - 1] : 0;
+      xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.style.display = "";
+      tip.style.display = "block";
+      tip.innerHTML = esc(pts[i].session_date) + " · " + (unit === "%" ? v.toFixed(1) + "%" : Math.round(v).toLocaleString("en-US")) +
+        " · <span class='" + (d >= 0 ? "up" : "dn") + "'>" + (d >= 0 ? "up " : "down ") + (unit === "%" ? Math.abs(d).toFixed(1) + " pts" : Math.abs(Math.round(d)).toLocaleString("en-US")) + "</span>";
+      var px = e.clientX - b.left; tip.style.left = Math.min(px + 12, b.width - tip.offsetWidth - 4) + "px"; tip.style.top = "6px";
+    });
+    svg.addEventListener("pointerleave", function () { tip.style.display = "none"; xh.style.display = "none"; });
+  }
+
+  function latest(us, sp) {
+    var u = us[us.length - 1], s = sp[sp.length - 1]; if (!u) return;
+    var k = function (t, v, sub) { return "<div><span class='lbl'>" + esc(t) + "</span><b>" + v + "</b><span class='sub'>" + sub + "</span></div>"; };
+    document.getElementById("latest").innerHTML =
+      k("session", esc(u.session_date), " · " + fmt(u.members) + " US common stocks") +
+      k("up / down", fmt(u.advancers) + " / " + fmt(u.decliners), s ? " · S&amp;P 500 " + fmt(s.advancers) + " / " + fmt(s.decliners) : "") +
+      k("above 50-day", u.pct_above_50 + "%", s ? " · S&amp;P 500 " + s.pct_above_50 + "%" : "") +
+      k("above 200-day", u.pct_above_200 + "%", s ? " · S&amp;P 500 " + s.pct_above_200 + "%" : "") +
+      k("52-wk highs / lows", fmt(u.new_highs) + " / " + fmt(u.new_lows), s ? " · S&amp;P 500 " + s.new_highs + " / " + s.new_lows : "") +
+      k("TRIN", u.trin == null ? "—" : (+u.trin).toFixed(2), " · below 1 leans to the risers");
+    (sp || []).forEach(function (r) { var c = document.querySelector("[data-pub='" + r.session_date + "']"); if (c) c.textContent = r.pct_above_200 + "%"; });
+  }
+
+  function get(path) { return fetch(API + path, { cache: "no-store" }).then(function (r) { return r.json().then(function (j) { return { code: r.status, j: j }; }); }); }
+  var st = document.getElementById("status");
+  get("/v1/breadth/status").then(function (s) {
+    var j = s.j || {};
+    st.innerHTML = j.state ? "State <b>" + esc(j.state) + "</b> · newest session " + esc(j.newest_session || "none") + " · expected " + esc(j.expected_session || "—") +
+      (j.last_run ? " · last run " + esc(j.last_run.written_utc) + " (" + esc(j.last_run.mode) + ")" + (j.last_run.sp500 ? " · " + esc(j.last_run.sp500) : "") : "")
+      : "The chart API answered " + s.code + " without a breadth status. The /v1/breadth route is not deployed yet.";
+  }).catch(function (e) { st.textContent = "Could not reach the chart API breadth status (" + e.message + "). The route is not deployed yet, or this page is not on scintillahub.ai."; });
+  var F = "&fields=advancers,decliners,ad_line,trin,pct_above_50,pct_above_200,new_highs,new_lows,members";
+  Promise.all([get("/v1/breadth?scope=US_COMMON" + F), get("/v1/breadth?scope=SP500" + F)]).then(function (a) {
+    var us = (a[0].j && a[0].j.rows) || [], sp = (a[1].j && a[1].j.rows) || [];
+    drawLine(document.getElementById("c-ad"), us, "ad_line", "A/D line · US common stocks", "");
+    drawLine(document.getElementById("c-200"), us, "pct_above_200", "% above 200-day · US common stocks", "%");
+    drawLine(document.getElementById("c-200sp"), sp, "pct_above_200", "% above 200-day · S&P 500 members of each day", "%");
+    latest(us, sp); miTable(us);
+  }).catch(function (e) {
+    ["c-ad", "c-200", "c-200sp"].forEach(function (id) { var el = document.querySelector("#" + id + " .empty"); if (el) el.textContent = "No published rows yet (" + e.message + "). The chart fills once the history run has been published and the chart API route is deployed."; });
+    miTable([]);
+  });
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
