@@ -210,6 +210,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 .sc-rsi{ text-align:center; font-family:var(--mono); font-size:10px;   /* FIX 4 — RSI cell, centered like FPE */
   font-variant-numeric:tabular-nums; color:var(--ink2); }
+/* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
+   Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
+.sc-rsi.is-xt{ animation:rsi-xt 4s ease-in-out infinite; }
+@keyframes rsi-xt{ 0%,100%{ text-shadow:none; } 50%{ text-shadow:0 0 6px currentColor; } }
+@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
   font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
@@ -6395,7 +6400,7 @@ function boardRowsHTML() {
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax)) +
@@ -6933,13 +6938,21 @@ async function loadBoardRsi(tickers) {
    identical to one at RSI 69. Now a continuous gradient centered on 50 (neutral) —
    opacity scales with distance from center, same convention as the heatmap's
    heatColorChg(), so the whole hub reads color intensity the same way. */
+/* 27 SEP — "My RSIs cannot go stale." They were not stale: the value is the stored daily RSI(14) and it
+   paints only when its session is current (loadBoardRsi → gsSessionCurrent). What made the column look
+   GREYED was this colour: opacity ran from 15% at RSI 50 to 90% at the ends, so an ordinary 63 drew at
+   ~35% on a dark panel, which reads as "switched off". The number is now always drawn at full strength
+   and the gradation moves into the HUE: a readable neutral that tints toward green (low) or red (high)
+   the further RSI sits from 50. Same direction, same continuous gradient, nothing dimmed. */
+const RSI_XT_LO = 30, RSI_XT_HI = 70;            // the textbook extremes — the only cells that breathe
+const rsiExtreme = (v) => { const n = num(v); return n != null && (n <= RSI_XT_LO || n >= RSI_XT_HI); };
 function rsiGradColor(v) {
   const n = num(v); if (n == null) return "";
   const d = (n - 50) / 50;                       // -1 (RSI 0, oversold) .. +1 (RSI 100, overbought)
-  const a = Math.min(1, Math.abs(d));
-  const alpha = (0.15 + a * 0.75).toFixed(2);
-  if (Math.abs(d) < 0.04) return "var(--ink3)";  // dead-center 48-52 stays neutral dim
-  return d < 0 ? "rgba(0,255,163," + alpha + ")" : "rgba(255,45,85," + alpha + ")";
+  if (Math.abs(d) < 0.04) return "var(--ink2)";  // dead-centre 48-52: neutral, and readable
+  const t = 0.35 + 0.65 * Math.min(1, Math.abs(d) / 0.6);   // 35% tinted just off 50, fully coloured by 20 / 80
+  const from = [178, 178, 186], to = d < 0 ? [0, 255, 163] : [255, 45, 85];
+  return "rgb(" + from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",") + ")";
 }
 /* M55 — is the board showing a past day? One reader, so every writer asks the same question. */
 /* Is the board rewound? The page's one reader of that state — shared plumbing, lifted into every
@@ -6955,6 +6968,7 @@ function paintRsiCell(t, v) {
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
   cell.style.color = rsiGradColor(v);
+  if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
 }
 
 /* ============================================================================
