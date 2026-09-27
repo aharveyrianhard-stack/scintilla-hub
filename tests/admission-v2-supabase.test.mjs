@@ -44,8 +44,13 @@ test("the tickers rows are generated, additive, source-marked, and count-checked
   assert.match(read(MIG + "20260927_admission_v2_tickers_ROLLBACK.sql"), /delete from public\.tickers where source = 'admission-v2-20260927'/);
 });
 
-test("the read engine reports the identity the rows were generated for", () => {
-  const digest = read(MIG + "20260927_admission_v2_tickers.sql").match(/for the set ([a-f0-9]{64})/)[1];
+test("the Hub's reported and pinned identities agree with the generated rows", () => {
+  const sql = read(MIG + "20260927_admission_v2_tickers.sql");
+  const digest = sql.match(/for the set ([a-f0-9]{64})/)[1];
+  const count = Number(sql.match(/-- \((\d+) names\)/)[1]);
+  const hub = read("index.html");
+  assert.match(hub, new RegExp(`const SC_EXPECTED_EQUITY_COUNT = ${count};`));
+  assert.match(hub, new RegExp(`const SC_EQUITY_UNIVERSE_DIGEST = "${digest}";`));
   assert.match(read("supabase/functions/read-engine/index.ts"), new RegExp(`HUB_PINNED_UNIVERSE_SHA256='${digest}'`));
 });
 
