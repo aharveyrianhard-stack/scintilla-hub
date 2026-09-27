@@ -227,5 +227,5 @@ test("the page reads the round-1 columns' tables, carries the way back, and neve
 
 test("the write-up exists and covers what the brief asks in plain words", () => {
   const html = readFileSync(join(DIR, "COMPS-R3.html"), "utf8");
-  for (const w of ["what the page shows", "where each number comes from", "what could be wrong", "what I did not do", "outlier", "allocation", "cohort", "decisions"]) assert.ok(html.toLowerCase().includes(w), "write-up covers: " + w);
+  for (const w of ["what the page shows", "where each number comes from", "what could be wrong", "what I did not do", "outlier", "allocation", "cohort", "decisions"]) assert.ok(html.toLowerCase().includes(w.toLowerCase()), "write-up covers: " + w);
 });
