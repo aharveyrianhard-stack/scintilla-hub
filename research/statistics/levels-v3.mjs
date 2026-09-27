@@ -33,7 +33,8 @@ for (const [dir, sym] of files) {
   const j = load(dir, sym); const all = Array.isArray(j.series) ? j.series : [];
   provenance[sym] = { provider: j.provider ?? null, price_basis: j.price_basis ?? null, newest: all.length ? day(all[all.length - 1].t) : null, served: all.length, full_series_count: j.full_series_count ?? null };
   if (all.length < 300) { missing.push({ sym, bars: all.length }); continue; }
-  const bars = all.slice(segmentStart(all));
+  const st = segmentStart(all), st0 = segmentStart(all, { splices: false });
+  const bars = all.slice(st);
   const c = bars.map((b) => +b.c), h = bars.map((b) => +b.h), l = bars.map((b) => +b.l);
   const bpy = barsPerYear(bars), W3 = 3 * bpy;
   const ud = usualDay(c, 60), mv = pctMoves(c), s200 = sma(c, 200);
@@ -41,6 +42,7 @@ for (const [dir, sym] of files) {
     rsi: rsiWilder(c, 14), wr: williamsR(h, l, c, 14), d200: distanceToSma(c, 200), d50: distanceToSma(c, 50) };
   x.ratio = sigmaRatio(mv, ud); x.s14 = sigma14(c, ud); x.d200s = sigmaD200(x.d200, ud);
   x.fund = FUND_SET.has(sym) || sym === "BTCUSD"; x.company = !x.fund;
+  x.cut = st > st0 ? { date: day(all[st].t), bars_dropped: st, move_pct: Math.round((all[st].c / all[st - 1].c - 1) * 1000) / 10 } : null;
   S[sym] = x;
 }
 const SPY = S.SPY; const spyIdx = new Map(SPY.dates.map((d, i) => [d, i]));
@@ -93,7 +95,7 @@ for (const x of Object.values(S)) {
     const qLo = s === "ratio" ? 0.025 : 0.10, qHi = s === "ratio" ? 0.975 : 0.90;
     walks[s] = { w3: walkLines(x[s], x.W3, { qLo, qHi }), all: walkLines(x[s], Infinity, { qLo, qHi }) };
   }
-  const rec = { bars: x.c.length, first_day: x.dates[0], last_day: x.dates[T], fund: x.fund, bpy: x.bpy, branches: branchOf[x.sym] || [], close: x.c[T] };
+  const rec = { bars: x.c.length, first_day: x.dates[0], last_day: x.dates[T], fund: x.fund, bpy: x.bpy, branches: branchOf[x.sym] || [], close: x.c[T], splice_cut: x.cut };
   /* today, against the prior window (exact percentiles, as stats.mjs computes them) */
   const prior = (arr, len) => { const a = []; for (let k = Math.max(0, T - len); k < T; k++) if (arr[k] != null && Number.isFinite(arr[k])) a.push(arr[k]); return a; };
   const today = {};
@@ -236,6 +238,7 @@ const never1y = syms.filter((s) => { const o = out.symbols[s].oos.rsi_low.last1y
 out.never30_1y = { count: never1y.length, funds: never1y.filter((s) => out.symbols[s].fund).length, companies: never1y.filter((s) => !out.symbols[s].fund).length,
   rows: never1y.map((s) => { const o = out.symbols[s].oos.rsi_low.last1y; return { sym: s, fund: out.symbols[s].fund, days: o.days, p3y_days: o.p3y.d, p3y_episodes: o.p3y.e, z_days: o.z3y.d, sig_days: o.sig.d, line_today: out.symbols[s].lines.rsi["3y"]?.q10, rsi_min_1y: out.symbols[s].today.rsi_min_1y }; })
     .sort((a, b) => (b.fund - a.fund) || a.sym.localeCompare(b.sym)) };
+out.splice_cuts = syms.filter((s) => out.symbols[s].splice_cut).map((s) => ({ sym: s, ...out.symbols[s].splice_cut }));
 out.never70 = syms.filter((s) => out.symbols[s].oos.rsi_high.last3y.fixed && out.symbols[s].oos.rsi_high.last3y.fixed.d === 0 && out.symbols[s].oos.rsi_high.last3y.days > 200);
 out.rsi_wr = { companies_median: med(comp.map((s) => out.symbols[s].rsi_wr_spearman)), companies_iqr: iqr(comp.map((s) => out.symbols[s].rsi_wr_spearman)),
   funds_median: med(funds.map((s) => out.symbols[s].rsi_wr_spearman)), min: r4(Math.min(...syms.map((s) => out.symbols[s].rsi_wr_spearman ?? 1))) };
@@ -296,6 +299,7 @@ function cohortRow(id, label, members) {
 }
 out.rotation = { date: dates[T0], spy: { r5: r4(ret(spyL, T0, 5)), r20: r4(ret(spyL, T0, 20)), r60: r4(ret(spyL, T0, 60)) },
   cohorts: BRANCHES.filter((b) => b.members.length >= 3).map((b) => cohortRow(b.id, b.label, b.members)).sort((a, b) => (b.rel20 ?? -1e9) - (a.rel20 ?? -1e9)),
+  ai_core: cohortRow("AI_CORE", "the AI core (the complex without AI_POWER, which is mostly regulated utilities)", [...new Set(AI_BRANCHES.filter((id) => id !== "AI_POWER").flatMap((id) => BRANCHES.find((b) => b.id === id)?.members || []))]),
   ai_complex: cohortRow("AI_COMPLEX", "the AI complex: " + AI_BRANCHES.join(", "), [...new Set(AI_BRANCHES.flatMap((id) => BRANCHES.find((b) => b.id === id)?.members || []))]) };
 { // the AI complex's own readings, for the AI-cycle context line (context only; the state is Alan's to set)
   const ai = [...new Set(AI_BRANCHES.flatMap((id) => BRANCHES.find((b) => b.id === id)?.members || []))].filter((s) => out.symbols[s] && !out.symbols[s].fund);

@@ -19,10 +19,17 @@ export const Z10 = -1.2815516;          // standard normal 10th percentile
 export const SQRT14 = Math.sqrt(14);
 export const D200_SCALE = Math.sqrt(200 / 3);
 
-/** Index where the analysed history starts: after the last hole longer than BREAK_DAYS calendar days. */
-export function segmentStart(bars) {
+/** Index where the analysed history starts: after the last hole longer than BREAK_DAYS calendar days (the
+    package's rule), and after the last single-day close-to-close move of +200% or more or −75% or less — on this
+    universe every such print is a ticker reused by another listing or an unadjusted corporate action (BNY 10.20 →
+    138.98 on 2026-05-21, SPCX, META 2022, SNOW 2020, COIN 2021 …), not a day that happened to the company. */
+export const SPLICE_UP = 200, SPLICE_DOWN = -75;
+export function segmentStart(bars, { splices = true } = {}) {
   let start = 0;
-  for (let i = 1; i < bars.length; i++) if (Math.round((bars[i].t - bars[i - 1].t) / 86400e3) > BREAK_DAYS) start = i;
+  for (let i = 1; i < bars.length; i++) {
+    if (Math.round((bars[i].t - bars[i - 1].t) / 86400e3) > BREAK_DAYS) start = i;
+    else if (splices && bars[i - 1].c > 0) { const m = (bars[i].c / bars[i - 1].c - 1) * 100; if (m >= SPLICE_UP || m <= SPLICE_DOWN) start = i; }
+  }
   return start;
 }
 

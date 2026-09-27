@@ -108,3 +108,12 @@ test("summarise: count, share above zero, median and quartiles", () => {
   const s = summarise([-2, -1, 1, 2, 3, null]);
   assert.equal(s.n, 5); assert.equal(s.up, 60); assert.equal(s.median, 1); assert.equal(s.q25, -1); assert.equal(s.q75, 2);
 });
+
+test("history start: a +200% or −75% one-day print restarts the history (a reused ticker), a +150% day does not", () => {
+  const d = (i) => Date.parse("2026-01-01T04:00:00Z") + i * 86400e3;
+  const bars = [10, 10.2, 138.98, 140, 141].map((c, i) => ({ t: d(i), c }));
+  assert.equal(segmentStart(bars), 2);
+  assert.equal(segmentStart(bars, { splices: false }), 0);
+  assert.equal(segmentStart([10, 25, 26].map((c, i) => ({ t: d(i), c }))), 0);                // +150%: kept, a real squeeze is possible
+  assert.equal(segmentStart([100, 20, 21].map((c, i) => ({ t: d(i), c }))), 1);               // −80%
+});
