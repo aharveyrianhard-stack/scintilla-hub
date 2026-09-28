@@ -85,7 +85,7 @@ test("SOCIAL is a tab again, with the keywords printed on it; nothing is written
   assert.match(fn("coTabHTML"), /case "SOCIAL":\s+return coSocialHTML\(data\);/);
   const h = fn("coSocialHTML");
   assert.match(h, /<i>KEYWORDS<\/i>/);
-  assert.match(h, /is a word-list lean, not an AI read/, "R4: the lean is shown per mention, and says what it is");
+  assert.match(h, /= a word-list lean, not AI/, "R4: the lean is shown per mention, and says what it is");
   const load = fn("coSocialLoad");
   assert.match(load, /sentiX\(\)/, "the X feed through the SENTIMENT room's shared ten-minute cache");
   assert.match(load, /pg\("youtube_videos\?select=video_id,ticker,channel_id,channel_title,title,published_at,source,subscription_accounts&published_at=gte\./, "R4: each video carries where it came from");

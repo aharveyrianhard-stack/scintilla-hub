@@ -4446,7 +4446,7 @@ body.co-exp .cv-side{flex:initial;min-height:0}
 .es-h b{font-size:12px;letter-spacing:.14em;color:#D2D2D2}
 .es-h span{font-size:11px;color:#8A8A92}
 .es-row{display:flex;gap:4px;overflow-x:auto;padding:6px 0 4px;scrollbar-width:thin}
-.es-c{flex:0 0 104px;display:grid;gap:3px;padding:6px 7px;border:.5px solid #2B2B31;border-radius:2px;background:#0E0E12}
+.es-c{flex:0 0 124px;display:grid;gap:3px;padding:6px 7px;border:.5px solid #2B2B31;border-radius:2px;background:#0E0E12}
 .es-c.is-next{border-style:dashed;border-color:#6E6E76}
 .es-d{font-size:11px;color:#A8A8AE;white-space:nowrap}
 .es-v{font-size:11px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
@@ -19135,17 +19135,16 @@ function coSocialHTML(data) {
         '<button type="button" class="soc-vw' + (v === "ALL" ? " on" : "") + '" aria-pressed="' + (v === "ALL") + '" data-act="socview" data-v="ALL" title="YouTube: your channels plus the videos the collector finds by searching YouTube for tickers">+ YOUTUBE SEARCH</button>' +
       "</span></div>" +
     '<div class="soc-src-note" id="coSocialSrc">' + socSourceNoteHTML(v, c && c.d) + "</div>" +
-    '<div class="soc-how">A post or video counts once, on its New York day, when its text or title holds a keyword' +
-      (isFund ? " (a fund: the cashtag only)" : "") + ", or when the collector filed it under $" + esc(t) + ". " +
-      "▲ BULLISH / ▼ BEARISH is a word-list lean, not an AI read: stored by the sentiment job where it scored the video, otherwise worked out on this page (marked ·p). Nothing is stored for X posts.</div>" +
+    '<div class="soc-how">Counted once, on its New York day, when it names a keyword' + (isFund ? " (a fund: the cashtag only)" : "") +
+      " or is filed under $" + esc(t) + ". ▲ BULLISH / ▼ BEARISH = a word-list lean, not AI: stored by the sentiment job, or worked out on this page (·p).</div>" +
     '<div id="coSocialBody">' + (c ? socBodyHTML(c.d, v) : '<div class="soc-empty">reading the X feed and the YouTube tables…</div>') + "</div></div>";
 }
 /* WHERE EACH SIDE COMES FROM, printed on the tab */
 function socSourceNoteHTML(v, d) {
   const yt = v === "ALL"
-    ? "<b>YOUTUBE · YOUR CHANNELS + SEARCH</b> the channels your YouTube accounts subscribe to, <u>plus</u> videos the collector finds by searching YouTube for tickers — mostly channels you do not follow (e.g. Bera Finance). Those rows are marked YT · SEARCH."
-    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out — switch to + YOUTUBE SEARCH to see them.";
-  const x = "<b>X · YOUR LIST</b> posts the collector reads from your X list" + (d && d.xHandles ? " (" + d.xHandles + " accounts)" : "") + ".";
+    ? "<b>YOUTUBE · YOUR CHANNELS + SEARCH</b> your subscribed channels <u>plus</u> channels the collector finds by searching YouTube for the ticker (e.g. Bera Finance) — marked YT · SEARCH."
+    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out.";
+  const x = "<b>X · YOUR LIST</b> the X list the collector reads" + (d && d.xHandles ? " (" + d.xHandles + " accounts)" : "") + ".";
   return '<span>' + yt + "</span><span>" + x + "</span>";
 }
 function socBodyHTML(d, v) {
@@ -26686,9 +26685,11 @@ body.gwx-motion .gwx-pct{opacity:1}
 .sc-toptape__next.sc-macronext{flex-wrap:wrap;align-content:flex-start;overflow:hidden;height:40px;padding-top:0;padding-bottom:0}
 .sc-toptape__next .mn-lbl, .sc-toptape__next .mn-it, .sc-toptape__next .mn-swarm{height:40px;display:inline-flex;align-items:center}
 .sc-toptape__next .mn-it .mn-nm{max-width:none;overflow:visible}
-/* the pinned name in the header title: the short name has room ("Micron Technology", full name on hover) */
+/* the pinned name in the header title: the short name has room ("Micron Technology", full name on hover); a fund's long
+   name ("State Street SPDR S&P 500 ETF Trust") gets the room a desk has */
 .sc-head__ident .sc-cname{max-width:30ch}
 .cv-name{flex:0 1 30ch}
+@media (min-width:1280px){ .sc-head__ident .sc-cname{max-width:40ch} .cv-name{flex:0 1 40ch} }
 @media (max-width:900px){
   .sc-toptape__next.sc-macronext{display:none}
 }
@@ -26731,6 +26732,16 @@ body.gwx-motion .gwx-pct{opacity:1}
   .sc-ss__one .sc-ss__d{white-space:normal;overflow:visible;flex:1 1 100%;order:5}
   /* the company tabs ran off the edge ("NEWS S"): they wrap */
   .cv-tabs{flex-wrap:wrap !important;overflow:visible !important}
+  /* the earnings strip: on a phone a sideways scroller always shows a sliced card at its edge, so the last eight reports
+     sit two to a row, still oldest to newest (left to right, top to bottom), the next report last */
+  .es-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
+  .es-row > .es-c:nth-last-child(n+10){display:none}
+  /* the report cards' numbers ("$41.5B" read "$41…"): they take the width they need */
+  .sc-ern__metrics{grid-template-columns:32px repeat(3,auto) !important;justify-content:start}
+  .sc-ern__v{overflow:visible !important;text-overflow:clip !important}
+  /* a long fund or company name wraps under the ticker rather than being cut */
+  .cv-name{white-space:normal !important;flex:1 1 100% !important}
+  .soc-who{white-space:normal !important}
 }
 </style>
 </body>
