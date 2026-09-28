@@ -81,7 +81,7 @@ export function pairStudy(d, ew, cw, cwFwdSeries = null) {
   const loT = L.quantile(st, STRETCH_PCT / 100), hiT = L.quantile(st, 1 - STRETCH_PCT / 100);
   const lowIdx = L.entries(stretch.map((x) => x != null && x <= loT), EPISODE_SEP), highIdx = L.entries(stretch.map((x) => x != null && x >= hiT), EPISODE_SEP);
   const follow = (idxs) => idxs.map((i) => ({ d: d[i], stretch: L.r1(stretch[i]), ratio63: L.r1(L.fwd(ratio, i, 63)), ratio126: L.r1(L.fwd(ratio, i, 126)), ratio252: L.r1(L.fwd(ratio, i, 252)), cw63: L.r1(L.fwd(cw, i, 63)), cw252: L.r1(L.fwd(cw, i, 252)) }));
-  const allR = (h) => L.summarise(ratio.map((_, i) => stretch[i] == null ? null : L.fwd(ratio, i, h)), d.map(ym));
+  const allR = (h) => L.summariseH(ratio.map((_, i) => stretch[i] == null ? null : L.fwd(ratio, i, h)), d, h);
   const sumF = (eps, k) => { const v = eps.map((e) => e[k]).filter((x) => x != null); return { n: v.length, median: L.r1(L.median(v)), up: L.r1(L.shareUp(v)) }; };
   const lows = follow(lowIdx), highs = follow(highIdx);
   const tail = d.map((_, i) => i).filter((i) => i >= last - 755);
@@ -127,18 +127,27 @@ export function vixStudy(vix, vix3m, spyBars, spyCloseByDate) {
   });
   const inEp = (x) => eps.some((e) => x >= L.addDays(e.start, -7) && x <= L.addDays(e.end, 14));
   const lowsHit = lows.filter((x) => inEp(x.d));
-  const coverage = L.r1(100 * S.filter((b) => b.d >= d[0] && inEp(b.d)).length / S.filter((b) => b.d >= d[0]).length);   // chance rate: share of all sessions inside those windows
-  const keys = d.map(ym); const fw = {};
+  const coverage = L.r1(100 * S.filter((b) => b.d >= d[0] && inEp(b.d)).length / S.filter((b) => b.d >= d[0]).length);   // unconditional rate: share of ALL sessions inside those windows
+  // The fair comparison: a swing low is by definition a session deep in a fall, and a sharp fall is what inverts the curve.
+  // So compare with sessions at a similar depth — SPY closing ≥X% below its own recent closing high — and ask how often THOSE sit in a window.
+  const sc = S.map((b) => b.c); const hiN = (i, n) => { let m = -Infinity; for (let j = Math.max(0, i - n + 1); j <= i; j++) m = Math.max(m, sc[j]); return m; };
+  const conditional = [[21, 5], [63, 5], [21, 7]].map(([n, x]) => { const sel = S.filter((b, i) => b.d >= d[0] && 100 * (sc[i] / hiN(i, n) - 1) <= -x);
+    return { lookback: n, depth: x, sessions: sel.length, inWindowPct: L.r1(100 * sel.filter((b) => inEp(b.d)).length / sel.length) }; });
+  // Timing of each hit against its inversion: a low before the inversion began would be a lead; during / after is coincidence with the fall.
+  const timing = { before: 0, during: 0, after: 0 };
+  for (const x of lowsHit) { const e = eps.find((e) => x.d >= L.addDays(e.start, -7) && x.d <= L.addDays(e.end, 14)); timing[x.d < e.start ? "before" : x.d <= e.end ? "during" : "after"]++; }
+  const fw = {};
   for (const h of HORIZONS) {
     const all = spyC.map((_, i) => spyC[i] == null || spyC[i + h] == null ? null : 100 * (spyC[i + h] / spyC[i] - 1));
-    fw[h] = { all: L.summarise(all, keys), inverted: L.summarise(all.map((x, i) => inv[i] ? x : null), keys), contango: L.summarise(all.map((x, i) => !inv[i] ? x : null), keys),
-      deep: L.summarise(all.map((x, i) => r[i] >= 1.1 ? x : null), keys) };
+    const sH = (xs) => L.summariseH(xs, d, h);
+    fw[h] = { all: sH(all), inverted: sH(all.map((x, i) => inv[i] ? x : null)), contango: sH(all.map((x, i) => !inv[i] ? x : null)),
+      deep: sH(all.map((x, i) => r[i] >= 1.1 ? x : null)) };
     fw[h].invertedVsAll = L.versus(fw[h].inverted, fw[h].all);
   }
   const last = d.length - 1; const lastInv = inv.lastIndexOf(true);
   return { from: d[0], to: d[last], sessions: d.length, invertedDays: inv.filter(Boolean).length, invertedPct: L.r1(100 * inv.filter(Boolean).length / d.length),
     byYear: Object.fromEntries(Object.entries(byYear).map(([y, [a, b]]) => [y, L.r1(100 * a / b)])),
-    episodes: eps, lows: { n: lows.length, nearInversion: lowsHit.length, chanceCoverage: coverage, list: lows.map((x) => ({ ...x, depth: L.r1(x.depth), nearInversion: inEp(x.d) })) },
+    episodes: eps, lows: { n: lows.length, nearInversion: lowsHit.length, chanceCoverage: coverage, conditional, timing, list: lows.map((x) => ({ ...x, depth: L.r1(x.depth), nearInversion: inEp(x.d) })) },
     episodesWithSwingLow: eps.filter((e) => e.swingLowNear).length, fwd: fw,
     now: { vix: vix.at(-1).c, vix3m: vix3m.at(-1).c, ratio: L.r3(r[last]), pctAll: L.r1(L.percentileOf(r.slice(0, last), r[last])), lastInverted: lastInv >= 0 ? d[lastInv] : null },
     weekly: weekly(d, r) };
@@ -184,7 +193,6 @@ export function macroStudy(gspc, tnx, dxy) {
   for (let i = 2520; i < tnx.length; i++) tPct.set(tnx[i].d, L.percentileOf(tv.slice(i - 2520, i), tv[i]));
   const rsi = L.rsiWilder(gc), avg200 = L.sma(gc, 200);
   const hi = []; for (let i = 0; i < gc.length; i++) { hi.push(Math.max(...gc.slice(Math.max(0, i - 251), i + 1))); }
-  const keys = gd.map(ym);
   const start = gd.findIndex((x) => x >= "1971-01-04");
   const rows = []; for (let i = start; i < gc.length; i++) {
     const d = gd[i], t = tMap.get(d), x = xMap.get(d), ta = tAvg.get(d), xa = xAvg.get(d);
@@ -192,7 +200,7 @@ export function macroStudy(gspc, tnx, dxy) {
       dd: 100 * (gc[i] / hi[i] - 1), rsi: rsi[i], ext: avg200[i] ? 100 * (gc[i] / avg200[i] - 1) : null });
   }
   const H = [21, 63, 126, 252];
-  const group = (f) => { const o = {}; for (const h of H) { const v = gc.map(() => null); for (const r of rows) if (f(r)) v[r.i] = L.fwd(gc, r.i, h); o[h] = L.summarise(v, keys); } return o; };
+  const group = (f) => { const o = {}; for (const h of H) { const v = gc.map(() => null); for (const r of rows) if (f(r)) v[r.i] = L.fwd(gc, r.i, h); o[h] = L.summariseH(v, gd, h); } return o; };
   const base = group((r) => true);
   const cmp = (o) => { for (const h of H) o[h].vs = L.versus(o[h], base[h]); return o; };
   const regimes = {
@@ -203,7 +211,7 @@ export function macroStudy(gspc, tnx, dxy) {
   };
   const thesisFor = (since) => {
     const rs = rows.filter((r) => r.d >= since);
-    const grp = (f) => { const o = {}; for (const h of H) { const v = gc.map(() => null); for (const r of rs) if (f(r)) v[r.i] = L.fwd(gc, r.i, h); o[h] = L.summarise(v, keys); } return o; };
+    const grp = (f) => { const o = {}; for (const h of H) { const v = gc.map(() => null); for (const r of rs) if (f(r)) v[r.i] = L.fwd(gc, r.i, h); o[h] = L.summariseH(v, gd, h); } return o; };
     const bs = grp(() => true); const cm = (o) => { for (const h of H) o[h].vs = L.versus(o[h], bs[h]); return o; };
   const HIGH = (r) => r.yPct != null && r.yPct >= 67, LOW = (r) => r.yPct != null && r.yPct < 33, ABS4 = (r) => r.y != null && r.y >= 4;
   const PB = (r) => r.dd <= -5 && r.dd > -10, PB10 = (r) => r.dd <= -10 && r.dd > -20, PB20 = (r) => r.dd <= -20;

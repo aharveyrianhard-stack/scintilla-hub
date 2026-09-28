@@ -143,3 +143,33 @@ test("spin-off correction scales the bars before the date so that day's move mat
   assert.ok(Math.abs(a.bars[2].c / a.bars[1].c - 1.01) < 1e-9);
   assert.equal(a.bars[2].c, 19.3);
 });
+
+test("cluster block grows with the forward horizon (month → quarter → half-year → year)", () => {
+  assert.deepEqual([5, 21, 63, 126, 252].map(L.blockName), ["month", "month", "quarter", "half-year", "year"]);
+  assert.equal(L.horizonKey("2024-05-17", 21), "2024-05");
+  assert.equal(L.horizonKey("2024-05-17", 63), "2024-Q2");
+  assert.equal(L.horizonKey("2024-05-17", 126), "2024-H1");
+  assert.equal(L.horizonKey("2024-11-02", 126), "2024-H2");
+  assert.equal(L.horizonKey("2024-05-17", 252), "2024");
+  // A 252-session forward return from a smooth series with a slow cycle: year blocks must give a wider range than month blocks
+  const dates = [], xs = []; let t = Date.UTC(1990, 0, 2);
+  while (dates.length < 252 * 20) { const d = new Date(t); if (d.getUTCDay() % 6) { dates.push(d.toISOString().slice(0, 10)); xs.push(10 * Math.sin(dates.length / 400) + Math.sin(dates.length * 1.7)); } t += 864e5; }
+  const byMonth = L.summarise(xs, dates.map((d) => d.slice(0, 7))), byYear = L.summariseH(xs, dates, 252);
+  assert.equal(byYear.block, "year"); assert.equal(byYear.blocks, 20); assert.equal(byYear.months, byMonth.months);
+  assert.ok(byYear.ci[1] - byYear.ci[0] > 2 * (byMonth.ci[1] - byMonth.ci[0]));
+  // fewer than 5 blocks → no interval at all, rather than a falsely tight one
+  const four = L.summariseH(xs.slice(0, 1000), dates.slice(0, 1000), 252); assert.equal(four.blocks, 4); assert.equal(four.ci, null);
+});
+
+test("the VIX section compares swing lows with days of a comparable fall and splits their timing", () => {
+  const D = JSON.parse(fs.readFileSync(path.join(root, "research/statistics/data/regime-20260928.json"), "utf8"));
+  const lw = D.vix.lows; const t = lw.timing;
+  assert.equal(t.before + t.during + t.after, lw.nearInversion);
+  assert.ok(lw.conditional.length >= 3 && lw.conditional.every((c) => c.sessions > 0 && c.inWindowPct > lw.chanceCoverage));
+  // headline stays honest: the swing-low hit rate does not beat the rate for ordinary days 5%+ below their 21-day high
+  const c21 = lw.conditional.find((c) => c.lookback === 21 && c.depth === 5);
+  assert.ok(100 * lw.nearInversion / lw.n <= c21.inWindowPct);
+  // one-year thesis cells carry year blocks, and 63-session cells quarter blocks
+  assert.equal(D.macro.thesis.pullback5to10.highYield[252].block, "year");
+  assert.equal(D.macro.thesis.pullback5to10.highYield[63].block, "quarter");
+});

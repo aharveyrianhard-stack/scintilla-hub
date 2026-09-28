@@ -4,8 +4,9 @@
    Conventions (the page repeats them in plain words)
    · A series is an array of { d: "YYYY-MM-DD", c: close } in date order (h/l optional). Returns are close to close, price only.
    · fwd(closes, i, h) = closes[i+h] / closes[i] − 1, in %; null when the future bar does not exist yet.
-   · "Month-cluster bootstrap": days are grouped by calendar month and whole months are resampled, because overlapping
-     forward windows from neighbouring days are not independent. It widens the interval honestly; it does not remove bias.
+   · "Cluster bootstrap": days are grouped into calendar blocks at least as long as the forward window (month for ≤21
+     sessions, quarter for 63, half-year for 126, year for 252) and whole blocks are resampled, because overlapping forward
+     windows from neighbouring days are not independent. It widens the interval honestly; it does not remove bias.
    · Every random draw uses a fixed seed (mulberry32), so the page is reproducible bit for bit. */
 
 export const r1 = (x) => x == null || !Number.isFinite(x) ? null : Math.round(x * 10) / 10;
@@ -61,14 +62,26 @@ export function clusterMeanCI(values, keys, { B = 1000, seed = 11, lo = 0.05, hi
   for (let b = 0; b < B; b++) { let s = 0, n = 0; for (let i = 0; i < G.length; i++) { const g = G[Math.floor(rnd() * G.length)]; s += g[0]; n += g[1]; } ms.push(s / n); }
   ms.sort((p, q) => p - q); return [quantile(ms, lo), quantile(ms, hi)];
 }
-/** Summary of a set of forward returns: n, mean, median, % up, 90% interval (cluster by month when keys are given). */
+/** Cluster block for a forward horizon of h sessions: the block must be at least as long as the window it resamples, or
+    neighbouring blocks share most of their future and the interval comes out too narrow (a 252-session window spans ~12
+    months, so month blocks understate it about threefold). ≤21 → month, ≤63 → quarter, ≤126 → half-year, longer → year. */
+export function blockName(h) { return h <= 21 ? "month" : h <= 63 ? "quarter" : h <= 126 ? "half-year" : "year"; }
+export function horizonKey(d, h) { const y = d.slice(0, 4), m = +d.slice(5, 7); const b = blockName(h); return b === "month" ? d.slice(0, 7) : b === "quarter" ? `${y}-Q${Math.ceil(m / 3)}` : b === "half-year" ? `${y}-H${m <= 6 ? 1 : 2}` : y; }
+export const horizonKeys = (dates, h) => dates.map((d) => horizonKey(d, h));
+/** Summary of a set of forward returns: n, mean, median, % up, 90% interval (cluster by `keys` when given).
+    months = distinct calendar months behind the numbers (from opt.dates, else the keys); blocks = distinct resampled clusters. */
 export function summarise(xs, keys = null, opt = {}) {
   const idx = xs.map((x, i) => i).filter((i) => xs[i] != null && Number.isFinite(xs[i]));
   const v = idx.map((i) => xs[i]); if (!v.length) return { n: 0 };
   const ci = keys ? clusterMeanCI(v, idx.map((i) => keys[i]), opt) : bootMeanCI(v, opt);
-  const months = keys ? new Set(idx.map((i) => keys[i])).size : null;
-  return { n: v.length, months, mean: r2(mean(v)), median: r2(median(v)), up: r1(shareUp(v)), ci: ci ? [r2(ci[0]), r2(ci[1])] : null };
+  const blocks = keys ? new Set(idx.map((i) => keys[i])).size : null;
+  const months = opt.dates ? new Set(idx.map((i) => opt.dates[i].slice(0, 7))).size : blocks;
+  const out = { n: v.length, months, mean: r2(mean(v)), median: r2(median(v)), up: r1(shareUp(v)), ci: ci ? [r2(ci[0]), r2(ci[1])] : null };
+  if (opt.block) Object.assign(out, { blocks, block: opt.block });
+  return out;
 }
+/** Forward-return summary with the cluster block matched to the horizon (see blockName). */
+export const summariseH = (xs, dates, h, opt = {}) => summarise(xs, horizonKeys(dates, h), { ...opt, dates, block: blockName(h) });
 /** Did the condition's interval clear the all-days average? "above" / "below" / "overlaps". */
 export function versus(s, base) { if (!s?.ci || base?.mean == null) return null; return s.ci[0] > base.mean ? "above" : s.ci[1] < base.mean ? "below" : "overlaps"; }
 
