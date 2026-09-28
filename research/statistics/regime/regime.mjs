@@ -35,7 +35,7 @@ export function loadCache(ROOT) {
   const fed = {}; const fdir = path.join(ROOT, "fed"); if (fs.existsSync(fdir)) for (const f of fs.readdirSync(fdir)) fed[f.replace(".htm", "")] = fs.readFileSync(path.join(fdir, f), "utf8");
   const js = (f) => fs.existsSync(path.join(ROOT, f)) ? JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8")) : null;
   const fetchedAt = fs.existsSync(path.join(ROOT, "markets-fetched-at.txt")) ? fs.readFileSync(path.join(ROOT, "markets-fetched-at.txt"), "utf8").trim() : null;
-  return { chart, fm, econ, fed, markets: { polyOct: js("polymarket-oct.json"), polyDec: js("polymarket-dec.json"), kalshi: js("kalshi-feddecision.json"), fetchedAt } };
+  return { chart, fm, econ, fed, markets: { polyOct: js("polymarket-oct.json"), polyDec: js("polymarket-dec.json"), kalshi: js("kalshi-feddecision.json"), zq: js("fmp-zq-quote.json"), fetchedAt } };
 }
 const ym = (d) => d.slice(0, 7);
 const weekly = (dates, vals) => { const out = []; for (let i = 0; i < dates.length; i++) { const nxt = dates[i + 1]; const endOfWeek = !nxt || new Date(nxt + "T12:00:00Z").getUTCDay() <= new Date(dates[i] + "T12:00:00Z").getUTCDay() || (Date.parse(nxt) - Date.parse(dates[i])) > 3 * 864e5; if (endOfWeek) out.push([dates[i], L.r3(vals[i]) ?? vals[i]]); } return out; };
@@ -191,19 +191,25 @@ export function macroStudy(gspc, tnx, dxy) {
     "yield down · dollar up": cmp(group((r) => r.yUp === false && r.dUp === true)),
     "yield down · dollar down": cmp(group((r) => r.yUp === false && r.dUp === false)),
   };
+  const thesisFor = (since) => {
+    const rs = rows.filter((r) => r.d >= since);
+    const grp = (f) => { const o = {}; for (const h of H) { const v = gc.map(() => null); for (const r of rs) if (f(r)) v[r.i] = L.fwd(gc, r.i, h); o[h] = L.summarise(v, keys); } return o; };
+    const bs = grp(() => true); const cm = (o) => { for (const h of H) o[h].vs = L.versus(o[h], bs[h]); return o; };
   const HIGH = (r) => r.yPct != null && r.yPct >= 67, LOW = (r) => r.yPct != null && r.yPct < 33, ABS4 = (r) => r.y != null && r.y >= 4;
   const PB = (r) => r.dd <= -5 && r.dd > -10, PB10 = (r) => r.dd <= -10 && r.dd > -20, PB20 = (r) => r.dd <= -20;
-  const thesis = {
-    pullback5to10: { highYield: cmp(group((r) => PB(r) && HIGH(r))), midYield: cmp(group((r) => PB(r) && !HIGH(r) && !LOW(r) && r.yPct != null)), lowYield: cmp(group((r) => PB(r) && LOW(r))), all: cmp(group(PB)) },
-    pullback10to20: { highYield: cmp(group((r) => PB10(r) && HIGH(r))), lowYield: cmp(group((r) => PB10(r) && LOW(r))), all: cmp(group(PB10)) },
-    pullback20plus: { highYield: cmp(group((r) => PB20(r) && HIGH(r))), lowYield: cmp(group((r) => PB20(r) && LOW(r))), all: cmp(group(PB20)) },
-    pullbackAbs4: { yieldAtLeast4: cmp(group((r) => PB(r) && ABS4(r))), yieldUnder4: cmp(group((r) => PB(r) && r.y != null && !ABS4(r))) },
-    overbought: { all: cmp(group((r) => r.rsi >= 70)), highYield: cmp(group((r) => r.rsi >= 70 && HIGH(r))), lowYield: cmp(group((r) => r.rsi >= 70 && LOW(r))), yieldRising: cmp(group((r) => r.rsi >= 70 && r.yUp === true)), yieldFalling: cmp(group((r) => r.rsi >= 70 && r.yUp === false)) },
-    extended: { all: cmp(group((r) => r.ext != null && r.ext >= 10)), highYield: cmp(group((r) => r.ext != null && r.ext >= 10 && HIGH(r))), lowYield: cmp(group((r) => r.ext != null && r.ext >= 10 && LOW(r))), yieldRising: cmp(group((r) => r.ext != null && r.ext >= 10 && r.yUp === true)), yieldFalling: cmp(group((r) => r.ext != null && r.ext >= 10 && r.yUp === false)) },
+    return { base: bs,
+    pullback5to10: { highYield: cm(grp((r) => PB(r) && HIGH(r))), midYield: cm(grp((r) => PB(r) && !HIGH(r) && !LOW(r) && r.yPct != null)), lowYield: cm(grp((r) => PB(r) && LOW(r))), all: cm(grp(PB)) },
+    pullback10to20: { highYield: cm(grp((r) => PB10(r) && HIGH(r))), lowYield: cm(grp((r) => PB10(r) && LOW(r))), all: cm(grp(PB10)) },
+    pullback20plus: { highYield: cm(grp((r) => PB20(r) && HIGH(r))), lowYield: cm(grp((r) => PB20(r) && LOW(r))), all: cm(grp(PB20)) },
+    pullbackAbs4: { yieldAtLeast4: cm(grp((r) => PB(r) && ABS4(r))), yieldUnder4: cm(grp((r) => PB(r) && r.y != null && !ABS4(r))) },
+    overbought: { all: cm(grp((r) => r.rsi >= 70)), highYield: cm(grp((r) => r.rsi >= 70 && HIGH(r))), lowYield: cm(grp((r) => r.rsi >= 70 && LOW(r))), yieldRising: cm(grp((r) => r.rsi >= 70 && r.yUp === true)), yieldFalling: cm(grp((r) => r.rsi >= 70 && r.yUp === false)) },
+    extended: { all: cm(grp((r) => r.ext != null && r.ext >= 10)), highYield: cm(grp((r) => r.ext != null && r.ext >= 10 && HIGH(r))), lowYield: cm(grp((r) => r.ext != null && r.ext >= 10 && LOW(r))), yieldRising: cm(grp((r) => r.ext != null && r.ext >= 10 && r.yUp === true)), yieldFalling: cm(grp((r) => r.ext != null && r.ext >= 10 && r.yUp === false)) },
+    };
   };
+  const thesis = thesisFor("1971-01-01"), thesis1990 = thesisFor("1990-01-01");
   const lastRow = rows.at(-1);
   const tl = tnx.at(-1), xl = dxy.at(-1);
-  return { from: rows[0].d, to: lastRow.d, base, regimes, thesis,
+  return { from: rows[0].d, to: lastRow.d, base, regimes, thesis, thesis1990,
     now: { gspc: gc.at(-1), drawdown: L.r1(lastRow.dd), rsi: L.r1(lastRow.rsi), ext200: L.r1(lastRow.ext), y10: tl.c, y10Avg200: L.r2(tAvg.get(tl.d)), y10Pct10y: L.r1(tPct.get(tl.d)), yieldUp: tl.c > tAvg.get(tl.d),
       dxy: xl.c, dxyAvg200: L.r2(xAvg.get(xl.d)), dollarUp: xl.c > xAvg.get(xl.d) },
     weeklyY: weekly(tnx.filter((x) => x.d >= "1990-01-01").map((x) => x.d), tnx.filter((x) => x.d >= "1990-01-01").map((x) => x.c)),
@@ -252,11 +258,13 @@ export function fomcDates(fedPages, econ) {
     for (let y = 2021; y <= 2027; y++) {
       const i = t.indexOf(`${y} FOMC Meetings`); if (i < 0) continue; const j = t.indexOf("FOMC Meetings", i + 20);
       const seg = t.slice(i, j > 0 ? j : i + 20000).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-      for (const m of seg.matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan\/Feb|Apr\/May|Jul\/Aug|Oct\/Nov)\s+(\d{1,2}-\d{1,2})\*?/g)) { const dt = L.fedDecisionDate(`${m[1]} ${m[2]}`, y); if (dt) out.set(dt, { d: dt, src: "Fed calendar page" }); }
+      let lastM = 0;   // the page lists the year's meetings in order; a month going backwards is a footnote about the next year — stop there
+      for (const m of seg.matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan\/Feb|Apr\/May|Jul\/Aug|Oct\/Nov)\s+(\d{1,2}-\d{1,2})\*?/g)) { const dt = L.fedDecisionDate(`${m[1]} ${m[2]}`, y); if (!dt) continue; const mo = +dt.slice(5, 7); if (mo < lastM) break; lastM = mo; out.set(dt, { d: dt, src: "Fed calendar page" }); }
     }
   }
-  for (const e of econ) { if (e.event !== "Fed Interest Rate Decision") continue; const dt = e.date.slice(0, 10); const o = out.get(dt); if (o) Object.assign(o, { prev: e.previous, actual: e.actual, estimate: e.estimate, change: e.change }); }
-  return [...out.values()].sort((a, b) => a.d < b.d ? -1 : 1);
+  const notOnFed = [];
+  for (const e of econ) { if (e.event !== "Fed Interest Rate Decision") continue; const dt = e.date.slice(0, 10); const o = out.get(dt); if (o) Object.assign(o, { prev: e.previous, actual: e.actual, estimate: e.estimate, change: e.change }); else notOnFed.push(dt); }
+  const list = [...out.values()].sort((a, b) => a.d < b.d ? -1 : 1); list.fmpNotOnFedSchedule = notOnFed.sort(); return list;
 }
 export function fedStudy(gspc, meetings) {
   const dates = gspc.map((x) => x.d), c = gspc.map((x) => x.c), idx = new Map(dates.map((x, i) => [x, i]));
@@ -275,7 +283,7 @@ export function fedStudy(gspc, meetings) {
   const absDay = past.map((m) => { const i = idx.get(m.d); return Math.abs(100 * (c[i] / c[i - 1] - 1)); });
   const absAll = []; for (let i = from + 1; i < c.length; i++) absAll.push(Math.abs(100 * (c[i] / c[i - 1] - 1)));
   const next = meetings.filter((m) => m.d > "2026-09-28").slice(0, 3);
-  return { meetings: past.length, first: past[0]?.d, last: past.at(-1)?.d, windows: res, decisionDayMove: { meetingsMedianAbs: L.r2(L.median(absDay)), allDaysMedianAbs: L.r2(L.median(absAll)) },
+  return { fmpNotOnFedSchedule: meetings.fmpNotOnFedSchedule ?? [], meetings: past.length, first: past[0]?.d, last: past.at(-1)?.d, windows: res, decisionDayMove: { meetingsMedianAbs: L.r2(L.median(absDay)), allDaysMedianAbs: L.r2(L.median(absAll)) },
     recent: past.slice(-8).map((m) => ({ d: m.d, change: m.change ?? null, actual: m.actual ?? null })), next };
 }
 /** What the markets price for the next meetings — public snapshots only. */
@@ -288,6 +296,7 @@ export function marketOdds(mk) {
   for (const p of [mk.polyOct, mk.polyDec]) { const e = p?.[0]; if (!e) continue;
     out.polymarket.push({ title: e.title, slug: e.slug, ends: e.endDate, volumeUsd: Math.round(e.volume), volume24hUsd: Math.round(e.volume24hr || 0),
       markets: e.markets.map((m) => ({ outcome: m.groupItemTitle, yes: +JSON.parse(m.outcomePrices)[0], bid: m.bestBid, ask: m.bestAsk, volumeUsd: Math.round(+m.volume) })) }); }
+  if (mk.zq) { const implied = L.r3(100 - mk.zq.price); out.futures = { symbol: mk.zq.symbol, price: mk.zq.price, impliedRate: implied, asOf: new Date(mk.zq.timestamp * 1000).toISOString(), effrRecent: mk.zq.effr?.["2026-08-01"] ?? null, contractMonth: mk.zq.contractMonth }; }
   return out;
 }
 
