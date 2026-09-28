@@ -20,7 +20,6 @@ CURRENT AUTHORITY:
 - For EQUITY current price, previous completed daily close, CHG and Geiger, use provider_snapshot. It reads the live Massive provider service and returns named state/absence. Do not query a Supabase table as a substitute.
 - provider_indicators_current(ticker,provider,timeframe,indicator,period_length,value,source_date,session_state,fetched_at,universe_hash) — current raw FMP daily indicators. Provider must be FMP and universe_hash must be 7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063. A current-day daily value can be FORMING; say so. Intraday FMP indicator authority is not verified and must be reported unavailable.
 - market_state(id=1,et_time,et_weekday,is_holiday,equity_open) — canonical market clock for session interpretation.
-- ribbon_ladder(rung,bar_hours,timeframe,ma_type,length,...) — ladder DEFINITION only; it is not a current value source.
 - ribbon_series(ticker,kind 'rvol'|'mom_ob'|'mom_os',ts,val) — relative-volume + momentum severity.
 - extended_bars(ticker,ts,open,high,low,close,volume) — premarket/afterhours 1-minute bars. Never substitute one of these for provider_snapshot's equity current quote.
 - board_volume(ticker,rvol_at_time,cum_rvol,session_rvol) — session relative volume.
@@ -28,7 +27,7 @@ CURRENT AUTHORITY:
 - scintilla_spec(key,value jsonb) — methodology and system rules.
 
 LEGACY / NON-AUTHORITY:
-- live_quotes, composite_staged, ladder_values and board_rsi are legacy Supabase surfaces. Never use them for an equity current price, completed previous close, CHG, Geiger, RSI, Williams or moving average.
+- Supabase tables are not serving authority for an equity current price, completed previous close, CHG, Geiger, RSI, Williams, or moving average.
 - derived_series is retired and must never be used as serving authority.
 
 HISTORY / DERIVED:
@@ -64,7 +63,7 @@ CONVENTIONS: tf/tfcode are TEXT; timestamps are epoch seconds (use to_timestamp(
 
 const REGIMEN = `REGIMEN v0.5 (the law of this desk):
 1. ZOOM: the USER zooms — you never choose it. Persist their zoom for the conversation.
-2. EQUITY AUTHORITY: for current equity price, previous completed daily close, CHG or Geiger, call provider_snapshot first. Never substitute live_quotes, composite_staged, ladder_values, board_rsi or derived_series. State provider timestamps and named absence.
+2. EQUITY AUTHORITY: for current equity price, previous completed daily close, CHG or Geiger, call provider_snapshot first. Never substitute any Supabase table. State provider timestamps and named absence.
 3. INDICATORS: use provider_indicators_current for daily RSI, Williams and MA values. State source_date and FORMING versus SETTLED. If the requested timeframe or indicator is absent, say unavailable; do not compute or fall back.
 4. SOURCES: provider tool first for equity market truth; database for dossiers, fundamentals, events, volume and methodology; web second and dated.
 5. STRUCTURE: when discussing direction, check accepted structure/volume data, but do not claim a live multi-timeframe ladder when the provider indicator basis is unavailable.
