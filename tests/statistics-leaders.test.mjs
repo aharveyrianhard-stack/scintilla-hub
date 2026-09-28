@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
-import { cutAtHoles, percentiles, pctRank } from "../research/statistics/leaders-lib.mjs";
+import { cutAtHoles, percentiles, pctRank, s9Series } from "../research/statistics/leaders-lib.mjs";
+import { swings } from "../research/statistics/s9-research.mjs";
 import { yearBlock, companiesOf, holdingsReturn } from "../research/statistics/leaders-concentration.mjs";
 import { ttmGrowth, summarize } from "../research/statistics/leaders-traits.mjs";
-import { prep, volBetween, forwardPath, basketPath, align } from "../research/statistics/leaders-rotation.mjs";
+import { prep, volBetween, forwardPath, basketPath, align, realtimeUpSwings, WHist, singleBlock } from "../research/statistics/leaders-rotation.mjs";
 import { slopeLine, UP, DN } from "../research/statistics/leaders-page.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url)), root = path.resolve(here, "..");
@@ -95,8 +96,69 @@ test("leaders: the page exists, carries the four plain-words parts, and every ch
   const h = fs.readFileSync(f, "utf8");
   for (const s of ["What it says, in plain words", "Where every number comes from", "What could be wrong", "What was not done"]) assert.ok(h.includes(s), s);
   const imgs = [...h.matchAll(/<img class="chart" src="([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(imgs.length >= 8);
+  assert.ok(imgs.length >= 10);
   for (const i of imgs) { assert.ok(fs.existsSync(path.join(DIR, i)), i); const svg = fs.readFileSync(path.join(DIR, i), "utf8"); assert.ok(svg.startsWith("<svg") && !/#fff\b|#ffffff|white/i.test(svg), i + " is a dark chart with no white"); }
   const C = JSON.parse(fs.readFileSync(path.join(DIR, "leaders-concentration.json"), "utf8"));
   for (const q of C.quarterCheck) assert.ok(Math.abs(q.gap) < 1.5, `measured quarter ${q.from} adds up to the index within 1.5 pts`);
+});
+
+test("leaders: rotation events are built in real time — a later, higher high cannot remove or move an earlier decision", () => {
+  const v = [];
+  for (let k = 0; k <= 10; k++) v.push(30 - k);                    // a low at bar 10
+  for (let k = 11; k <= 20; k++) v.push(20 + (k - 10));            // first high at bar 20
+  v.push(29.5, 29.2, 29.4);                                         // shallow dip: no pivot low
+  for (let k = 24; k <= 40; k++) v.push(29.4 + (k - 23) * 0.6);     // a higher high at bar 40
+  for (let k = 41; k <= 55; k++) v.push(v[40] - (k - 40));
+  for (let k = 56; k <= 70; k++) v.push(v[55] + (k - 55) * 0.5);
+  const h = v, l = v.map((x) => x - 1);
+  // the S9 swing list (alternation + refinement, which uses later pivots) drops the first high altogether
+  assert.ok(!swings(h, l, 3).some((p) => p.type === "H" && p.k === 20), "S9 swings merge the bar-20 high into the later bar-40 high");
+  const full = realtimeUpSwings(h, l, 3);
+  assert.deepEqual(full.map((e) => [e.kL, e.kH, e.kc]), [[10, 20, 23], [10, 40, 43]]);
+  // every prefix sees exactly the events already confirmed inside it, unchanged
+  for (let n = 5; n <= h.length; n++) {
+    const pre = realtimeUpSwings(h.slice(0, n), l.slice(0, n), 3);
+    assert.deepEqual(pre, full.filter((e) => e.kc <= n - 1), `prefix ${n}`);
+  }
+});
+
+test("leaders: weighted histogram percentiles, and one-name switching counts every event once", () => {
+  const H = new WHist(); for (let i = 1; i <= 100; i++) H.add(i);
+  assert.equal(H.q(0.5), 50); assert.equal(H.q(0.9), 90); assert.equal(H.summary().aboveZero, 100);
+  const W = new WHist(); W.add(-10, 0.5); W.add(10, 0.5); W.add(20, 1);
+  assert.equal(W.q(0.25), -10); assert.equal(W.q(0.5), 10); assert.equal(W.q(0.75), 20);
+  const path = (r, d) => ({ ret: Array.from({ length: 251 }, () => r), dd: Array.from({ length: 251 }, () => d) });
+  const at = (r, d) => ({ ret: [r, r, r, r], dd: [d, d, d, d] });
+  // event 1: two candidates (+30, -10), hold +10; event 2: one candidate (+0), hold +20 → weights ½, ½, 1
+  const ev = [{ hold: path(10, -20), sw: path(10, -5), spy: path(5, -5), oneCalm: [at(30, -5), at(-10, -15)], oneAny: [at(10, -20)] },
+              { hold: path(20, -20), sw: path(10, -5), spy: path(5, -5), oneCalm: [at(0, -10)], oneAny: [at(20, -20)] }];
+  const S = singleBlock(ev);
+  assert.equal(S.oneCalm.ret[3].weight, 2, "each event weighs 1 however many candidates it has");
+  assert.equal(S.oneCalm.minusHold[3].aboveZero, 25, "only the +30 name (weight ½ of 2) beat its hold");
+  assert.equal(S.oneAny.minusHold[3].p50, 0);
+});
+
+test("leaders: the RSI percentile reads the whole prior history, not a rolling 3-year window", () => {
+  // 1,200 sessions of a steady rise, then 400 of a steady fall: a rolling 756-reading window would forget the early
+  // highs; the expanding one keeps them. Today's reading is never inside its own sample.
+  const t0 = Date.UTC(2010, 0, 4), bars = [];
+  let p = 100; for (let i = 0; i < 1600; i++) { p *= i < 1200 ? (i % 3 ? 1.004 : 0.995) : (i % 3 ? 0.998 : 1.003); bars.push({ t: t0 + i * 864e5, o: p, h: p * 1.005, l: p * 0.995, c: p, v: 1 }); }
+  const S = s9Series(bars);
+  assert.equal(S.pct[200], null, "fewer than 250 earlier readings → no percentile");
+  assert.ok(S.pct[300] != null);
+  const rsi = S.rsi, i = 1599, prior = rsi.slice(0, i).filter((x) => x != null);
+  const below = prior.filter((x) => x < rsi[i]).length, eq = prior.filter((x) => x === rsi[i]).length;
+  assert.ok(Math.abs(S.pct[i] - 100 * (below + eq / 2) / prior.length) < 1e-9, "percentile against every earlier reading");
+});
+
+test("leaders: pre-2020 concentration years carry their coverage and are marked as floors", () => {
+  const f = path.join(DIR, "leaders-concentration.json"); if (!fs.existsSync(f)) return;
+  const C = JSON.parse(fs.readFileSync(f, "utf8"));
+  for (const y of C.years.filter((x) => x.regime === "estimated")) {
+    assert.ok(y.coverage && y.coverage.floor === true && y.coverage.weight > 0 && y.coverage.weight < 100, `${y.year} coverage`);
+    assert.equal(y.coverage.points, y.sumAll);
+  }
+  const h = fs.readFileSync(path.join(DIR, "LEADERS.html"), "utf8");
+  assert.ok(!h.includes("larger than either"), "no unsupported claim about the size of the rise");
+  assert.ok(h.includes("at least") && h.includes("floor"));
 });

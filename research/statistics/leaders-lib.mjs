@@ -2,7 +2,8 @@
    Read-only: reads the durable bar cache (chart API bars) and the FMP snapshots cached for this study.
    Nothing here touches the network or a database. */
 import fs from "node:fs"; import path from "node:path"; import os from "node:os";
-import { cleanBars, seriesOf as s9Series, swings, cloudState, PIVOT_LEN } from "./s9-research.mjs";
+import { cleanBars, seriesOf as s9SeriesWindowed, swings, cloudState, PIVOT_LEN } from "./s9-research.mjs";
+import { rsiOwnPercentile, RSI_PCT_MIN } from "./entries.mjs";
 
 export const BAR_ROOT = path.join(os.homedir(), "Library/Application Support/scintilla/stats-cache");
 export const dstr = (t) => new Date(t).toISOString().slice(0, 10);
@@ -66,4 +67,7 @@ export function percentiles(xs) { const out = []; for (let p = 1; p <= 100; p++)
 /** Percentile rank (0..100, mid-rank for ties) of x inside a sample. */
 export function pctRank(sample, x) { if (x == null || !sample.length) return null; let below = 0, eq = 0; for (const v of sample) { if (v < x) below++; else if (v === x) eq++; } return 100 * (below + eq / 2) / sample.length; }
 
-export { s9Series, swings, cloudState, PIVOT_LEN };
+/** S9 series, but the RSI own-history percentile reads the stock's WHOLE prior history (expanding, today excluded),
+    not S9's rolling last 756 readings — no chosen look-back window. It still needs RSI_PCT_MIN earlier readings. */
+export function s9Series(bars) { const S = s9SeriesWindowed(bars); S.pct = rsiOwnPercentile(S.rsi, Infinity, RSI_PCT_MIN); return S; }
+export { swings, cloudState, PIVOT_LEN, RSI_PCT_MIN };

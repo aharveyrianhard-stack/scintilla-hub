@@ -13,7 +13,8 @@
      (median over the top 50 companies of cap ÷ (weight × level)); the factor drifts, so the estimate is checked against
      the measured years (the "backtest" block in the output). Only 113 of today's large companies have cap histories
      here (a survivor list), and they count only while they were S&P members (FMP's add/remove list). Caps before
-     Nov 2006 are the first FMP cap scaled back by price (share counts held fixed).
+     Nov 2006 are the first FMP cap scaled back by price (share counts held fixed). Each estimated year carries its
+     coverage (the survivors' share of index weight and of index points): the top-N figures are floors ("at least").
    Returns are price only, from the chart API's split-adjusted daily closes; the index return is ^GSPC (price). */
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
 import { loadBars, listCachedSymbols, idxOnOrBefore, closeOn, median, r2, r4, BAR_ROOT, dstr, setPatchDir } from "./leaders-lib.mjs";
@@ -127,7 +128,12 @@ export function run(fmpDir) {
     const d0 = IDX.dates[idxOnOrBefore(IDX.dates, `${Y - 1}-12-31`)], d1 = IDX.dates[idxOnOrBefore(IDX.dates, `${Y}-12-31`)], L0 = idxOn(d0);
     const rows = [];
     for (const sym of caps.keys()) { if (!member(sym, d0)) { notMember.push(`${Y}:${sym}`); continue; } const cap = capOn(sym, d0); let r = priceRet(sym, d0, d1); if (r == null) { const c1 = capOn(sym, d1); if (cap && c1) { r = c1 / cap - 1; capRatioUsed.push(`${Y}:${sym}`); } } if (cap == null || r == null) continue; const w = 100 * cap / (k * L0); rows.push({ sym, name: sym, c: (w / 100) * r, wStart: w }); }
-    const blk = yearBlock(Y, d0, d1, idxOn(d1) / L0 - 1, rows, "estimated", false); blk.allWeights = rows.map((r) => [r.sym, r4(r.wStart)]); return blk;
+    const blk = yearBlock(Y, d0, d1, idxOn(d1) / L0 - 1, rows, "estimated", false); blk.allWeights = rows.map((r) => [r.sym, r4(r.wStart)]);
+    // how much of the index the survivor list can see: its estimated weight, and the points its companies explain.
+    // A top-N taken from a subset can only be smaller than the true top-N (up to the weight error the backtest
+    // measures), so pre-2020 top-N sums and shares are "at least" figures; how much larger the truth is, is NOT measured.
+    blk.coverage = { weight: r2(rows.reduce((a, r) => a + r.wStart, 0)), points: blk.sumAll, index: blk.index, companies: rows.length, floor: true };
+    return blk;
   };
   const estimatedYears = []; for (let Y = 2004; Y <= 2019; Y++) estimatedYears.push(estimate(Y, kEarliest));
   // backtest: the estimate method on the measured years, against the measured answer

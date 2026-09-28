@@ -8,7 +8,8 @@
    Everything is read on the last close of Y−1 from data available then (no look-ahead):
    · relative strength = the stock's price return over the prior 252 sessions minus SPY's, and its rank in the pool;
    · distance from the 52-week high = close ÷ highest high of the prior 252 sessions − 1;
-   · RSI(14) own-history percentile (entries.mjs: the prior 756 readings of that stock);
+   · RSI(14) own-history percentile over the stock's WHOLE prior history (expanding; leaders-lib s9Series, needs 250
+     earlier readings) — not the S9 rolling 3-year window;
    · cloud order (Station vocabulary, s9-research cloudState): bull order e13>e21>s50>s200, bear order, or mixed; price
      above all four lines / between / below all;
    · growth: trailing-four-quarter revenue and net income against the four quarters a year earlier, using only
@@ -100,7 +101,7 @@ export function run(fmpDir, conc) {
 const slim = (m) => ({ y: m.year, s: m.sym, L: m.leader ? 1 : 0, w: r2(m.w), rs: r1(m.rs), rsR: r1(m.rsRank), fh: r1(m.fromHigh), rp: r1(m.rsiPct), o: m.order, p: m.position, rg: r1(m.revG), ng: r1(m.niG), wR: r1(m.wRank), cs: m.comparableSize ? 1 : 0 });
 
 /** Distribution + base-rate summaries for every trait. */
-export function summarize(rows) {
+export function summarize(rows, nested = false) {
   const out = { n: rows.length, leaders: rows.filter((r) => r.leader).length, baseRate: null, traits: {}, categorical: {} };
   out.baseRate = r1(100 * out.leaders / out.n);
   const groups = { all: rows, comparable: rows.filter((r) => r.comparableSize) };
@@ -122,6 +123,19 @@ export function summarize(rows) {
     const posRev = (r) => r.revG != null && r.revG > 0;
     C.revenueGrowing = [true, false].map((v) => { const sel = g.filter((r) => r.revG != null && posRev(r) === v); return { value: v ? "revenue up" : "revenue flat/down", n: sel.length, chance: sel.length ? r1(100 * sel.filter((r) => r.leader).length / sel.length) : null }; });
     out.traits[gname] = { n: g.length, leaders: L.length, baseRate: r1(base), T, C };
+  }
+  // the two pools have very different base rates (survivor list before 2020, the whole index after), so pooled chances
+  // mix them: every number is also given for each pool on its own. Growth data covers every pre-2020 row, but after
+  // 2020 only the 119 companies whose statements were fetched — mostly names that led in some year — so the 2020+
+  // growth comparison is NOT on equal terms (growthCoverage says how uneven).
+  if (!nested) {
+    const reg = (r) => r.regime ?? (r.year < 2020 ? "estimated" : "measured");
+    out.byRegime = {};
+    for (const k of ["estimated", "measured"]) { const sub = rows.filter((r) => reg(r) === k); if (!sub.length) continue; const S = summarize(sub, true);
+      const cov = (sel) => sel.length ? r1(100 * sel.filter((r) => r.revG != null).length / sel.length) : null;
+      S.growthCoverage = { leaders: cov(sub.filter((r) => r.leader)), others: cov(sub.filter((r) => !r.leader)) };
+      S.years = [Math.min(...sub.map((r) => r.year)), Math.max(...sub.map((r) => r.year))];
+      out.byRegime[k] = S; }
   }
   return out;
 }
