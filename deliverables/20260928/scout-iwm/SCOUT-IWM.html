@@ -42,7 +42,7 @@ tr:hover td{background:#12121A}
 .served{font-size:11px;color:var(--ink);border:1px solid var(--ink2);padding:0 4px}
 .note{color:var(--ink2);max-width:110ch;font-size:12px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media (max-width:900px){.tiles{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}main{padding:12px 10px 40px}h1{font-size:15px}.tile .v{font-size:21px}}
+@media (max-width:900px){.hm{display:none}td.facts{min-width:260px}.tiles{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}main{padding:12px 10px 40px}h1{font-size:15px}.tile .v{font-size:21px}}
 .sum{margin:8px 0 12px;font-size:13px}
 .sum b{color:var(--ink)}
 .plain p{max-width:110ch;color:var(--ink2);margin:6px 0}
@@ -113,8 +113,8 @@ $('tiles').innerHTML = [
 const COLS = [
   ['rank', '#', '', r => '', 'n'],
   ['t', 'Ticker', '', r => r.t + (r.served ? ' <span class="served">HUB</span>' : ''), 't'],
-  ['name', 'Name', '', r => r.name || '', 'nm'],
-  ['sector', 'Sector', '', r => r.sector || '', ''],
+  ['name', 'Name', '', r => r.name || '', 'nm hm'],
+  ['sector', 'Sector', '', r => r.sector || '', 'hm'],
   ['w', 'IWM wt', '% of fund', r => num(r.w, 2), 'n'],
   ['mcap', 'Mkt cap', '', r => money(r.mcap), 'n'],
   ['dv', '$ traded', '/ day, 20d', r => money(r.dv), 'n'],
@@ -152,7 +152,7 @@ function sorter (a, b) {
   return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sortDir
 }
 function table (el, rows, cols) {
-  el.innerHTML = '<thead><tr>' + cols.map(c => `<th data-k="${c[0]}" class="${c[0] === sortKey ? 'on' : ''}${c[4] === 'n' ? ' r' : ''}">${c[1]}${c[0] === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
+  el.innerHTML = '<thead><tr>' + cols.map(c => `<th data-k="${c[0]}" class="${c[0] === sortKey ? 'on' : ''}${c[4] === 'n' ? ' r' : ''}${c[4].includes('hm') ? ' hm' : ''}">${c[1]}${c[0] === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
     rows.map((r, i) => '<tr>' + cols.map(c => `<td class="${c[4]}">${c[0] === 'rank' ? i + 1 : c[3](r)}</td>`).join('') + '</tr>').join('') + '</tbody>'
 }
 function render () {
@@ -196,7 +196,7 @@ function facts (r) {
   return t.map(([s, c]) => `<span class="tag ${c}">${s}</span>`).join('')
 }
 const SC = [
-  ['t', 'Ticker', '', r => r.t, 't'], ['name', 'Name', '', r => r.name || '', 'nm'], ['sector', 'Sector', '', r => r.sector || '', ''],
+  ['t', 'Ticker', '', r => r.t, 't'], ['name', 'Name', '', r => r.name || '', 'nm hm'], ['sector', 'Sector', '', r => r.sector || '', 'hm'],
   ['w', 'IWM wt', '%', r => num(r.w, 2), 'n'],
   ['geiger', 'Geiger', '−1…+1', r => `<span class="${cls(r.geiger)}">${r.geiger == null ? '' : (r.geiger > 0 ? '+' : '') + r.geiger.toFixed(2)}</span>`, 'n'],
   ['gt', 'trend', '', r => `<span class="${cls(r.gt)}">${r.gt == null ? '' : r.gt.toFixed(2)}</span>`, 'n'],
@@ -211,7 +211,7 @@ const SC = [
   ['facts', 'The facts', '', facts, 'facts'],
 ]
 const S2 = S.slice().sort((a, b) => (a.rsip ?? 999) - (b.rsip ?? 999))
-$('served').innerHTML = '<thead><tr>' + SC.map(c => `<th class="${c[4] === 'n' ? 'r' : ''}">${c[1]}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
+$('served').innerHTML = '<thead><tr>' + SC.map(c => `<th class="${c[4] === 'n' ? 'r' : ''}${c[4].includes('hm') ? ' hm' : ''}">${c[1]}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
   S2.map(r => '<tr>' + SC.map(c => `<td class="${c[4]}">${c[3](r)}</td>`).join('') + '</tr>').join('') + '</tbody>'
 
 // ---- section 3: sectors
