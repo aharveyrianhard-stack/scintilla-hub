@@ -536,7 +536,7 @@ function tip(n) {
   if (n.kind === "index") return head + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to fly in</span>`;
   let s = head;
   if (n.g) s += `<br>Geiger ${gHTML(n.g.composite)}`; else s += "<br><span style='color:#8c8c8c'>waiting for admission · no Geiger yet</span>";
-  if (n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of weight</span>`;
+  if (n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of weight${n.agg.coverage_pct < 50 ? " (less than half served)" : ""}</span>`;
   const qq = state.quotes[n.ticker];
   if (n.g && qq && Number.isFinite(qq.change_pct)) s += `<br>day <span style="color:${qq.change_pct >= 0 ? "#35b06a" : "#d1483f"}">${fmtPct(qq.change_pct)}</span>`;
   return s;
@@ -616,6 +616,7 @@ function renderCard(n) {
         `<div class="kv"><span>HOLDINGS</span><div class="gbrow">${bar(a.value, "lg agg")}<span class="big ${a.value >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.value)}</span></div></div>` +
         `<div style="font-size:12px">aggregate of <b>${a.count}</b> holdings = <b>${a.coverage_pct.toFixed(0)}%</b> of the fund's weight</div>` +
         `<div class="mute" style="font-size:11px">each holding's Geiger × its weight, divided by the weight of the holdings that went in · the other ${Math.max(0, 100 - a.coverage_pct).toFixed(0)}% (${hd.rows_in_file - a.count} of ${hd.rows_in_file} lines in the file, cash included) is not served, so it is left out — nothing is filled in</div>` +
+        (a.coverage_pct < 50 ? `<div class="wait">Less than half of this fund is served (${a.coverage_pct.toFixed(0)}%). The holdings bar speaks for that ${a.coverage_pct.toFixed(0)}% only, not for the whole fund — read the divergence with that in mind.</div>` : "") +
         (dv ? `<div class="div">DIVERGENCE · <span class="${dv.diff > 0 ? "up" : dv.diff < 0 ? "dn" : ""}">${esc(dv.text)}</span><div class="mute" style="font-size:11px">fund ${fmtG(n.g.composite)} · holdings ${fmtG(a.value)}</div></div>` : "") +
         (a.not_read.length ? `<div class="mute" style="font-size:11px">served but no Geiger reading right now: ${a.not_read.map(esc).join(", ")}</div>` : "");
     } else if (hd) {
