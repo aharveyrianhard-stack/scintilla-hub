@@ -148,11 +148,13 @@ const ud = (() => {
 test("the usual-day slider: weekdays left to right, today always on it, days grouped with up and down counted", () => {
   const days = ud.udWeekdays("2026-09-27", 6);
   assert.deepEqual(days, ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-27"]);
+  /* 28 Sep — up and down count MOVES (price_outlier) only; a surprise is listed on its day but is not a name going up or down */
   const by = ud.udByDay([
-    { ts: "2026-09-25T20:50:03Z", direction: 1 }, { ts: "2026-09-25T15:50:00Z", direction: -1 },
-    { ts: "2026-09-25T14:00:00Z", direction: 1 }, { ts: "2026-09-24T14:00:00Z", direction: 0 },
+    { ts: "2026-09-25T20:50:03Z", direction: 1, kind: "price_outlier" }, { ts: "2026-09-25T15:50:00Z", direction: -1, kind: "price_outlier" },
+    { ts: "2026-09-25T14:00:00Z", direction: 1, kind: "price_outlier" }, { ts: "2026-09-24T14:00:00Z", direction: 0, kind: "price_outlier" },
+    { ts: "2026-09-25T13:00:00Z", direction: 1, kind: "earnings_surprise" },
   ]);
-  assert.deepEqual([by["2026-09-25"].n, by["2026-09-25"].up, by["2026-09-25"].dn], [3, 2, 1], "Friday's are kept, not only today's");
+  assert.deepEqual([by["2026-09-25"].n, by["2026-09-25"].up, by["2026-09-25"].dn], [4, 2, 1], "Friday's are kept, not only today's; the surprise is listed but not counted up");
   assert.deepEqual([by["2026-09-24"].n, by["2026-09-24"].up, by["2026-09-24"].dn], [1, 0, 0]);
   assert.equal(ud.udUnderLabel("2026-10-01", false), "OCT");
   assert.equal(ud.udUnderLabel("2026-09-28", false), "M");
