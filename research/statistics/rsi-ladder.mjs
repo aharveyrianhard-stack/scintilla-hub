@@ -31,6 +31,13 @@
      pullbacks (0–100). RSI at the low and its rung. Time to a new high = sessions from the low (and from the top)
      until the first day whose high trades above the old top; "legs" = how many rallies it took (1 = the very next
      leg, S9's measure). Pullbacks still underwater are kept and marked open (censored), never dropped.
+   · "Time to a new high" for a swing pullback means back above THE TOP IT FELL FROM, which may itself sit below an
+     earlier top (a bear-market rally high). Each pullback carries fromRecord (its top was the highest high so far).
+   · RECORD DECLINES: the companion view from the running record high — every decline from a record high to its
+     lowest low before the next record, with the time to a NEW RECORD; open ones kept. This is the view that holds
+     whole bear markets (1929–54, 2000–15, 2007–13) as one decline each.
+   · SLOPES: rank correlation between rung and the rung's median result, with a 90% range from resampling whole
+     calendar quarters (1,000 draws). The S&P since 1928 is also split at SPY's first counted day (2004-02-04).
    Nothing here is a buy rule; these are research questions answered with counts. */
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { fileURLToPath } from "node:url";
 import { rsiWilder } from "./stats.mjs";
@@ -39,7 +46,7 @@ import { segment } from "./ladder.mjs";
 
 export const WARMUP = 100, OWN_MIN = 250, PIVOT_LEN = 10, HORIZONS = [5, 10, 20, 60], BOOT_N = 1000, SEED = 20260928;
 export const INSTRUMENTS = [
-  { key: "SPX", name: "S&P 500 index", short: "S&P 500", src: "fmp", sym: "^GSPC", group: "Stock indexes" },
+  { key: "SPX", name: "S&P 500 index", short: "S&P 500", src: "fmp", sym: "^GSPC", group: "Stock indexes", eraSplit: "2004-02-04" },
   { key: "SPY", name: "SPY (S&P 500 fund)", short: "SPY", src: "api", sym: "SPY", group: "Stock indexes" },
   { key: "NDX", name: "Nasdaq 100 index", short: "Nasdaq 100", src: "fmp", sym: "^NDX", group: "Stock indexes" },
   { key: "QQQ", name: "QQQ (Nasdaq 100 fund)", short: "QQQ", src: "api", sym: "QQQ", group: "Stock indexes" },
@@ -240,6 +247,7 @@ export function recoverTimes(S, len = PIVOT_LEN) {
 export function pullbacks(S, unit = "pct", len = PIVOT_LEN, sortedRsi = null, own = null) {
   const sw = swings(S.h, S.l, len), n = S.c.length, firstAbove = maxFinder(S.h), out = [];
   const swingHighKs = sw.filter((p) => p.type === "H").map((p) => p.k);
+  const recBefore = new Float64Array(n); { let m = -Infinity; for (let i = 0; i < n; i++) { recBefore[i] = m; if (fin(S.h[i]) && S.h[i] > m) m = S.h[i]; } }   // highest high BEFORE day i
   for (let i = 0; i + 1 < sw.length; i++) {
     const a = sw[i], b = sw[i + 1]; if (a.type !== "H" || b.type !== "L") continue;
     let depth = unit === "bp" ? (b.price - a.price) * 100 : (b.price / a.price - 1) * 100;
@@ -251,6 +259,7 @@ export function pullbacks(S, unit = "pct", len = PIVOT_LEN, sortedRsi = null, ow
     out.push({ top: S.dates[a.k], low: S.dates[b.k], topPrice: r2(a.price), lowPrice: r2(b.price), depth: r2(depth), capped,
       fallBars: b.k - a.k, rsiLow: r1(S.rsi[b.k]), rsiMin: r1(rsiMin), rungLow: sortedRsi && S.rsi[b.k] != null ? rungOf(percentileOf(sortedRsi, S.rsi[b.k])) : null,
       ownPctLow: own && own[b.k] != null ? r1(own[b.k]) : null,
+      fromRecord: a.price >= recBefore[a.k], recordThen: r2(recBefore[a.k] === -Infinity ? a.price : Math.max(a.price, recBefore[a.k])),
       newHigh: nh < 0 ? null : S.dates[nh], done: nh >= 0,
       lowToNew: nh < 0 ? n - 1 - b.k : nh - b.k, topToNew: nh < 0 ? n - 1 - a.k : nh - a.k,
       lowToNewDays: dd(b.k, nh < 0 ? n - 1 : nh), topToNewDays: dd(a.k, nh < 0 ? n - 1 : nh), legs, nextLeg: legs == null ? (sw[i + 2] ? false : null) : legs === 1 });
@@ -278,6 +287,46 @@ export function pullbackSummary(P) {
     everNewHigh: r1(100 * done.length / Math.max(1, P.length)), nextLegShare: r1(100 * nextLeg.filter((p) => p.nextLeg).length / Math.max(1, nextLeg.length)),
     depthLadder: (() => { const m = P.map((p) => p.depth).sort((a, b) => b - a); const v = []; for (let q = 0; q <= 100; q++) v.push(r2(quantile(m, q / 100))); return v; })(),   // depth at each rank 0..100 (0 = shallowest)
     atLeast, curves };
+}
+
+/** Every decline from a RECORD high (the highest high so far) to its lowest low before the next record, and the
+ *  time to that next record. No pivots, no minimum depth: every record-to-record gap is one decline; the last one is
+ *  open (censored) when no new record has printed yet. Depth = low ÷ record − 1 (bp for yields). */
+export function recordDeclines(S, unit = "pct", sortedRsi = null) {
+  const n = S.c.length, out = []; let recK = -1, lowK = -1;
+  const close = (k, endK) => {
+    const top = S.h[recK], low = S.l[lowK]; let depth = unit === "bp" ? (low - top) * 100 : (low / top - 1) * 100;
+    const capped = unit !== "bp" && !(low > 0); if (capped) depth = -100;
+    let rsiMin = null; for (let j = recK; j <= lowK; j++) if (S.rsi[j] != null && (rsiMin == null || S.rsi[j] < rsiMin)) rsiMin = S.rsi[j];
+    const done = k >= 0, e = done ? k : endK;
+    const dd = (x, y) => Math.round((Date.parse(S.dates[y]) - Date.parse(S.dates[x])) / 864e5);
+    out.push({ top: S.dates[recK], low: S.dates[lowK], topPrice: r2(top), lowPrice: r2(low), depth: r2(depth), capped, fallBars: lowK - recK,
+      rsiLow: r1(S.rsi[lowK]), rsiMin: r1(rsiMin), rungLow: sortedRsi && S.rsi[lowK] != null ? rungOf(percentileOf(sortedRsi, S.rsi[lowK])) : null,
+      newRecord: done ? S.dates[k] : null, done, lowToNew: e - lowK, topToNew: e - recK, lowToNewDays: dd(lowK, e), topToNewDays: dd(recK, e) });
+  };
+  for (let i = 0; i < n; i++) {
+    if (!fin(S.h[i]) || !fin(S.l[i])) continue;
+    if (recK < 0 || S.h[i] > S.h[recK]) { if (lowK >= 0) close(i, i); recK = i; lowK = -1; continue; }
+    if (lowK < 0 || S.l[i] < S.l[lowK]) lowK = i;
+  }
+  if (lowK >= 0) close(-1, n - 1);
+  const mags = out.map((p) => -p.depth).sort((x, y) => x - y);
+  for (const p of out) p.depthRank = r1(percentileOf(mags, -p.depth));
+  return out;
+}
+
+/** Slope of "what came next" across the 100 rungs, with a 90% cluster-bootstrap range.
+ *  For each measure: rank correlation between the rung (1..100) and that rung's median result. Whole calendar
+ *  quarters of days are resampled together (a stress that spans weeks moves many neighbouring rungs at once). */
+export function slopeBand(days, keys, reps = BOOT_N, seed = SEED, clusterOf = (d) => d.quarter) {
+  const med = (a) => { if (!a.length) return null; a.sort((p, q) => p - q); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  const rhoOf = (pick) => { const out = {}; for (const k of keys) { const per = Array.from({ length: 101 }, () => []); for (const grp of pick) for (const d of grp) if (d.rung != null && fin(d[k])) per[d.rung].push(d[k]); const xs = [], ys = []; for (let q = 1; q <= 100; q++) { const m = med(per[q]); if (m != null) { xs.push(q); ys.push(m); } } out[k] = xs.length >= 3 ? spearman(xs, ys) : null; } return out; };
+  const byC = new Map(); for (const d of days) { const c = clusterOf(d); if (!byC.has(c)) byC.set(c, []); byC.get(c).push(d); }
+  const groups = [...byC.values()], G = groups.length, point = rhoOf(groups), out = { clusters: G, days: days.length };
+  const draws = Object.fromEntries(keys.map((k) => [k, []]));
+  if (G >= 2) { const R = rng(seed); for (let b = 0; b < reps; b++) { const pick = []; for (let g = 0; g < G; g++) pick.push(groups[Math.floor(R() * G)]); const r = rhoOf(pick); for (const k of keys) if (r[k] != null) draws[k].push(r[k]); } }
+  for (const k of keys) { const v = draws[k].sort((a, b) => a - b); out[k] = { rho: point[k] == null ? null : r2(point[k]), band: v.length ? [r2(quantile(v, 0.05)), r2(quantile(v, 0.95))] : null }; }
+  return out;
 }
 
 export function analyse(S, I, opts = {}) {
@@ -324,11 +373,17 @@ export function analyse(S, I, opts = {}) {
   for (let q = 1; q <= 100; q++) { const g = day.filter((d) => d.ownRung === q), s = summ(g); byOwnRung.push({ q, n: s.n, f20: s.f20, f60: s.f60, up20: s.up20, up60: s.up60, w60: s.w60, rec: s.rec.median }); }
 
   const P = pullbacks(S, unit, PIVOT_LEN, sorted, own);
+  const Rec = recordDeclines(S, unit, sorted), recSum = pullbackSummary(Rec); recSum.nextLegShare = null;
+  const SLOPE_KEYS = ["f20", "f60", "w60"];
+  const slope = slopeBand(day, SLOPE_KEYS, reps, SEED + 7);
+  const slopeEra = I.eraSplit ? { split: I.eraSplit, before: slopeBand(day.filter((d) => S.dates[d.i] < I.eraSplit), SLOPE_KEYS, reps, SEED + 8), after: slopeBand(day.filter((d) => S.dates[d.i] >= I.eraSplit), SLOPE_KEYS, reps, SEED + 9) } : null;
   const lastRsi = S.rsi[n - 1];
   const sorted3 = S.rsi.slice(last3).filter((x) => x != null).sort((a, b) => a - b);
   return { key: I.key, name: I.name, short: I.short, group: I.group, unit, calendar: !!I.calendar, from: S.dates[first], to: S.dates[n - 1], sessions: n - first, years: r1(years), recentFrom: S.dates[last3],
     ladder: { full: full.v, last3: recent.v, nFull: full.n, n3: recent.n }, visits, base, byRung, byOwnRung,
-    pullbacks: P, pull: pullbackSummary(P),
+    slope, slopeEra,
+    pullbacks: P, pull: { ...pullbackSummary(P), fromRecord: P.filter((p) => p.fromRecord).length, belowEarlierTop: P.filter((p) => !p.fromRecord).length },
+    records: Rec, rec: recSum,
     now: { date: S.dates[n - 1], close: r2(S.c[n - 1]), rsi: r1(lastRsi), pctFull: r1(percentileOf(sorted, lastRsi)), rung: rungOf(percentileOf(sorted, lastRsi)), pct3y: r1(percentileOf(sorted3, lastRsi)), ownPct: r1(own[n - 1]) } };
 }
 

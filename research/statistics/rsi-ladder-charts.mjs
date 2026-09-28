@@ -143,27 +143,30 @@ export function outcomePanel(A, { key, bandKey, title, sub, yLabel, unit, baseVa
 
 /** Pullbacks: every one as a dot (depth vs time to a new high), open ones hollow red at their time so far,
  *  plus the median time for "every pullback at least this deep". */
-export function pullbackScatter(A) {
-  const P = A.pullbacks, bp = A.unit === "bp", mag = (p) => Math.max(bp ? 1 : 0.3, -p.depth);
+export function pullbackScatter(A, which = "pull") {
+  const rec = which === "rec", P = rec ? A.records : A.pullbacks, SUM = rec ? A.rec : A.pull, bp = A.unit === "bp", mag = (p) => Math.max(bp ? 1 : 0.3, -p.depth);
   const xmax = Math.max(...P.map(mag)) * 1.15, xmin = bp ? Math.max(1, Math.min(...P.map(mag)) * 0.8) : Math.max(0.3, Math.min(...P.map(mag)) * 0.8);
   const ymax = Math.max(10, ...P.map((p) => p.lowToNew)) * 1.4;
   const unit = bp ? " bp" : "%";
-  const rankTicks = [50, 75, 90, 99].map((q) => [q, -A.pull.depthLadder[q]]);
-  return panel({ w: 1600, h: 620, title: `${A.name}: every pullback — how deep, and how long until a new high`, sub: `${P.length} pullbacks ${A.from.slice(0, 4)}–${A.to.slice(0, 4)} · green dot = back above the old top · red ring = still under it (wait so far) · line = middle wait, all pullbacks at least this deep`,
-    xLabel: `pullback depth, top to low (${bp ? "basis points" : "%"}, log scale)`, yLabel: `${A.calendar ? "days" : "sessions"} from the low to a new high (log)`, x: [xmin, xmax, "log"], y: [1, ymax, "log"],
+  const rankTicks = [50, 75, 90, 99].map((q) => [q, -SUM.depthLadder[q]]);
+  const title = rec ? `${A.name}: every decline from a record high — how deep, and how long until a NEW RECORD` : `${A.name}: every swing pullback — how deep, and how long until back above the top it fell from`;
+  const sub = rec ? `${P.length} declines ${A.from.slice(0, 4)}–${A.to.slice(0, 4)}, record to lowest low before the next record · green = new record · red ring = not yet · line = middle wait, at least this deep`
+    : `${P.length} swing pullbacks ${A.from.slice(0, 4)}–${A.to.slice(0, 4)} (${SUM.belowEarlierTop ?? "?"} began below an earlier top) · green = back above own top · red ring = not yet · line = middle wait, at least this deep`;
+  return panel({ w: 1600, h: 620, title, sub,
+    xLabel: `${rec ? "decline, record to low" : "pullback depth, top to low"} (${bp ? "basis points" : "%"}, log scale${bp ? "" : "; under 0.3% drawn at 0.3%"})`, yLabel: `${A.calendar ? "days" : "sessions"} from the low to ${rec ? "a new record" : "back above its top"} (log)`, x: [xmin, xmax, "log"], y: [1, ymax, "log"],
     xFmt: (v) => `${v}${unit}`, yFmt: (v) => `${v}`,
     xTicks: (bp ? [5, 10, 20, 50, 100, 200, 500] : [0.5, 1, 2, 3, 5, 10, 20, 30, 50, 80]).filter((v) => v >= xmin && v <= xmax),
     draw: (X, Y) => {
       let s = "";
       rankTicks.forEach(([q, v], j) => { const x = X(v), right = x > 1250; s += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(ymax)}" y2="${Y(1)}" stroke="${COL.dn}" stroke-opacity="0.45" stroke-dasharray="3 5"/>` + label(x + (right ? -5 : 5), Y(1) - 12 - (j % 2) * 20, `deeper than ${q}%: ${fx(v, bp ? 0 : 1)}${unit}`, { color: COL.dn, size: 13, anchor: right ? "end" : "start" }); });
       for (const p of P) { const x = X(mag(p)), y = Y(Math.max(1, p.lowToNew)); s += p.done ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.2" fill="${COL.up}" fill-opacity="0.8"/>` : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="none" stroke="${COL.dn}" stroke-width="2.2"/>`; }
-      const pts = A.pull.atLeast.filter((r) => r[2] != null).map((r) => [Math.max(xmin, -r[0]), Math.max(1, r[2])]).sort((a, b) => a[0] - b[0]);
+      const pts = SUM.atLeast.filter((r) => r[2] != null).map((r) => [Math.max(xmin, -r[0]), Math.max(1, r[2])]).sort((a, b) => a[0] - b[0]);
       if (pts.length > 1) s += `<polyline points="${pts.map(([a, b]) => `${X(a).toFixed(1)},${Y(b).toFixed(1)}`).join(" ")}" fill="none" stroke="${COL.up}" stroke-width="3" stroke-linejoin="round"/>`;
       const pick = [...P].sort((a, b) => a.depth - b.depth).slice(0, 3), longest = [...P].sort((a, b) => b.lowToNew - a.lowToNew)[0];
       if (longest && !pick.includes(longest)) pick.push(longest);
       const labs = pick.map((p) => ({ p, x: X(mag(p)), y: Math.max(84, Y(Math.max(1, p.lowToNew)) + 5) })).sort((a, b) => a.y - b.y);
       for (let j = 1; j < labs.length; j++) if (labs[j].y - labs[j - 1].y < 19) labs[j].y = labs[j - 1].y + 19;
-      for (const L of labs) { const p = L.p; s += label(L.x - 10, L.y, `${p.top.slice(0, 7)} top: ${fx(p.depth, bp ? 0 : 1)}${unit}, ${p.done ? `${p.lowToNew} ${A.calendar ? "days" : "sessions"} to a new high` : `${p.lowToNew}+ so far`}`, { color: p.done ? COL.up : COL.dn, anchor: "end", size: 13 }); }
+      for (const L of labs) { const p = L.p; s += label(L.x - 10, L.y, `${p.top.slice(0, 7)} ${rec ? "record" : "top"}: ${fx(p.depth, bp ? 0 : 1)}${unit}, ${p.done ? `${p.lowToNew} ${A.calendar ? "days" : "sessions"} to ${rec ? "a new record" : "back above it"}` : `${p.lowToNew}+ so far`}`, { color: p.done ? COL.up : COL.dn, anchor: "end", size: 13 }); }
       return s;
     } });
 }
@@ -172,9 +175,9 @@ export function pullbackScatter(A) {
 export function recoveryCurves(A) {
   const C = A.pull.curves, tmax = Math.max(20, ...A.pullbacks.map((p) => p.lowToNew)) * 1.2;
   const styles = [{ w: 4, d: null }, { w: 2.8, d: "10 6" }, { w: 2.4, d: "3 5" }, { w: 2.2, d: "14 4 2 4" }];
-  const nameOf = (q) => q === 0 ? "every pullback" : q === 50 ? "the deeper half" : q === 75 ? "the deepest quarter" : "the deepest tenth";
-  return panel({ w: 1600, h: 560, title: `${A.name}: how long until a new high — by depth, no next-leg cut-off`, sub: `Share of pullbacks whose price had traded back above the old top, by ${A.calendar ? "days" : "sessions"} after the low. Groups are ranked by each one's own depth, not fixed % bins.`,
-    xLabel: `${A.calendar ? "days" : "sessions"} after the low (log scale)`, yLabel: "% back above the old top", x: [1, tmax, "log"], y: [0, 100], yTicks: [0, 25, 50, 75, 100], yFmt: (v) => v + "%",
+  const nameOf = (q) => q === 0 ? "every pullback" : `display group: depth rank ≥ ${q}`;
+  return panel({ w: 1600, h: 560, title: `${A.name}: how long until back above the top it fell from — no next-leg cut-off`, sub: `Share back above their own top, by ${A.calendar ? "days" : "sessions"} after the low. Not a new record (see 3b). Rank groups are display points; the scatter line is continuous.`,
+    xLabel: `${A.calendar ? "days" : "sessions"} after the low (log scale)`, yLabel: "% back above its own top", x: [1, tmax, "log"], y: [0, 100], yTicks: [0, 25, 50, 75, 100], yFmt: (v) => v + "%",
     draw: (X, Y) => {
       let s = `<line x1="${X(1)}" x2="${X(tmax)}" y1="${Y(50)}" y2="${Y(50)}" stroke="${COL.axis}" stroke-dasharray="4 4"/>`;
       C.forEach((c, i) => {
@@ -186,6 +189,30 @@ export function recoveryCurves(A) {
       });
       return s;
     } });
+}
+
+/** Slope of "what came next" across the rungs, one row per instrument: dot = rank correlation between rung and the
+ *  rung's median result, bar = 90% range from resampling whole quarters. Red = negative (the lower the rung, the
+ *  better the next result), green = positive. Faint bar = the range crosses zero. */
+export function slopeForest(d, key = "f20", keys) {
+  const I = d.instruments, rows = [];
+  for (const k of keys) { const A = I[k]; if (!A?.slope?.[key]) continue; rows.push({ name: A.name, ...A.slope[key] });
+    if (A.slopeEra) { rows.push({ name: `  ${A.short} before ${A.slopeEra.split.slice(0, 4)}`, ...A.slopeEra.before[key] }); rows.push({ name: `  ${A.short} from ${A.slopeEra.split.slice(0, 4)}`, ...A.slopeEra.after[key] }); } }
+  const w = 1600, rh = 26, top = 96, left = 420, right = 300, h = top + rows.length * rh + 64, X = scale(-1, 1, left, w - right);
+  const what = key === "f20" ? "the change 20 sessions later" : key === "f60" ? "the change 60 sessions later" : "the worst close in the next 60 sessions";
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" ${FONT}><rect width="${w}" height="${h}" fill="${COL.bg}"/>`;
+  s += `<text x="24" y="30" font-size="20" fill="${COL.hi}" font-weight="600">Slope across the 100 rungs: rung vs ${esc(what)}, with a 90% range</text>`;
+  s += `<text x="24" y="56" font-size="14" fill="${COL.dim}">Dot = rank correlation of rung (1..100) with that rung's middle result. Bar = 90% range, whole calendar quarters resampled. Red = negative (lower rung, higher result);</text>`;
+  s += `<text x="24" y="76" font-size="14" fill="${COL.dim}">green = positive. Faint = the range crosses zero. The US funds share one market and one period (2004–2026): read them as one observation, not many.</text>`;
+  for (const v of [-1, -0.5, 0, 0.5, 1]) s += `<line x1="${X(v)}" x2="${X(v)}" y1="${top - 6}" y2="${h - 50}" stroke="${v === 0 ? COL.axis : COL.grid}" stroke-width="${v === 0 ? 2 : 1}"/><text x="${X(v)}" y="${h - 30}" font-size="14" fill="${COL.dim}" text-anchor="middle">${v > 0 ? "+" : ""}${v}</text>`;
+  rows.forEach((r, i) => {
+    const y = top + i * rh + rh / 2, c = (r.rho ?? 0) >= 0 ? COL.up : COL.dn, b = r.band, crosses = b ? b[0] <= 0 && b[1] >= 0 : true;
+    s += `<text x="${left - 14}" y="${y + 5}" font-size="14" fill="${r.name.startsWith("  ") ? COL.dim : COL.hi}" text-anchor="end">${esc(r.name.trim() === r.name ? r.name : "↳ " + r.name.trim())}</text>`;
+    if (b) s += `<line x1="${X(b[0]).toFixed(1)}" x2="${X(b[1]).toFixed(1)}" y1="${y}" y2="${y}" stroke="${c}" stroke-opacity="${crosses ? 0.3 : 0.75}" stroke-width="6"/>`;
+    if (r.rho != null) s += `<circle cx="${X(r.rho).toFixed(1)}" cy="${y}" r="5.5" fill="${c}"/>`;
+    s += `<text x="${w - right + 20}" y="${y + 5}" font-size="14" fill="${c}">${r.rho == null ? "—" : (r.rho > 0 ? "+" : "") + r.rho.toFixed(2)}${b ? `  (${b[0].toFixed(2)} to ${b[1].toFixed(2)})` : ""}</text>`;
+  });
+  return s + "</svg>";
 }
 
 /* ============================ runner ============================ */
@@ -201,6 +228,7 @@ export function writeAll(d, dir) {
   put("ladder-long-view.svg", ladderLines([{ name: "Bitcoin", v: I.BTCUSD.ladder.full }, { name: "S&P 500 since 1928", v: I.SPX.ladder.full }, { name: "Nasdaq 100 since 1985", v: I.NDX.ladder.full }],
     { title: "Bitcoin against the long stock records", sub: "The S&P 500 since 1928 (with the 1929–32 crash) and the Nasdaq 100 since 1985 (with the 2000–02 bust)." }));
   put("gap-btc-vs-spy.svg", gapBars(X.SPY_sinceBTC.ladder, I.BTCUSD.ladder.full, { title: "Bitcoin minus SPY, rung by rung (same years)", sub: "Red bar = Bitcoin's RSI is LOWER (deeper) than SPY's at that rung; green = higher.", aName: "SPY", bName: "Bitcoin" }));
+  for (const key of ["f20", "f60", "w60"]) put(`slope-${key}.svg`, slopeForest(d, key, keys));
   const vsSpy = keys.filter((k) => k !== "SPY");
   for (const k of vsSpy) put(`gap-${k}-vs-spy.svg`, gapBars(I.SPY.ladder.full, I[k].ladder.full, { title: `${I[k].name} minus SPY, rung by rung`, sub: `${I[k].name} ${I[k].from.slice(0, 4)}–${I[k].to.slice(0, 4)} vs SPY ${I.SPY.from.slice(0, 4)}–${I.SPY.to.slice(0, 4)}. Red = lower (deeper) than SPY at that rung; green = higher.`, aName: "SPY", bName: I[k].short }));
   for (const k of keys) {
@@ -209,10 +237,11 @@ export function writeAll(d, dir) {
     put(`out-${k}-f60.svg`, outcomePanel(A, { key: (r) => r.f60, bandKey: "f60", title: `60 ${sess} later: middle result`, sub: `${A.name} · band from whole quarters resampled`, yLabel: `change${u === "%" ? " %" : ", bp"}`, unit: u, baseVal: B.f60, pivot: 0 }));
     put(`out-${k}-up20.svg`, outcomePanel(A, { key: (r) => r.up20, bandKey: "up20", title: `Higher 20 ${sess} later: share of days`, sub: `${A.name} · green = above the any-day share`, yLabel: "% of days higher", unit: "%", baseVal: B.up20 }));
     put(`out-${k}-up60.svg`, outcomePanel(A, { key: (r) => r.up60, bandKey: "up60", title: `Higher 60 ${sess} later: share of days`, sub: `${A.name} · green = above the any-day share`, yLabel: "% of days higher", unit: "%", baseVal: B.up60 }));
-    put(`out-${k}-w60.svg`, outcomePanel(A, { key: (r) => r.w60, bandKey: "w60", title: `Worst close inside the next 60 ${sess}`, sub: `${A.name} · middle of the worst dips · green = shallower than any day`, yLabel: `below the entry close${u === "%" ? ", %" : ", bp"}`, unit: u, baseVal: B.w60 }));
-    put(`out-${k}-rec.svg`, outcomePanel(A, { key: (r) => r.rec?.median, bandKey: "none", title: `Wait until back above the prior swing high`, sub: `${A.name} · middle wait (Kaplan–Meier) · green = shorter than any day`, yLabel: `${sess} (log)`, unit: "", baseVal: Math.max(1, B.rec.median ?? 1), good: "down", log: true }));
+    put(`out-${k}-w60.svg`, outcomePanel(A, { key: (r) => r.w60, bandKey: "w60", title: `Worst close inside the next 60 ${sess}`, sub: `${A.name} · middle worst dip · green = shallower than any day`, yLabel: `below the entry close${u === "%" ? ", %" : ", bp"}`, unit: u, baseVal: B.w60 }));
+    put(`out-${k}-rec.svg`, outcomePanel(A, { key: (r) => r.rec?.median, bandKey: "none", title: `Wait until back above the prior swing high`, sub: `${A.name} · middle wait, open ones counted · green = shorter`, yLabel: `${sess} (log)`, unit: "", baseVal: Math.max(1, B.rec.median ?? 1), good: "down", log: true }));
     put(`pull-${k}-scatter.svg`, pullbackScatter(A));
     put(`pull-${k}-curves.svg`, recoveryCurves(A));
+    put(`record-${k}-scatter.svg`, pullbackScatter(A, "rec"));
   }
   return files;
 }

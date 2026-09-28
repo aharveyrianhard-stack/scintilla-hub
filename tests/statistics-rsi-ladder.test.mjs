@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
-import { ladder, percentileOf, rungOf, expandingPercentile, runs, fwd, worstAhead, maxFinder, kaplanMeier, kmDoneBy, spearman, clusterBand, recoverTimes, pullbacks, pullbackSummary, rng, analyse } from "../research/statistics/rsi-ladder.mjs";
+import { ladder, percentileOf, rungOf, expandingPercentile, runs, fwd, worstAhead, maxFinder, kaplanMeier, kmDoneBy, spearman, clusterBand, recoverTimes, pullbacks, pullbackSummary, rng, analyse, recordDeclines, slopeBand } from "../research/statistics/rsi-ladder.mjs";
 import { rungSummary, vsAnyDay, mv, build } from "../research/statistics/rsi-ladder-page.mjs";
 import { signLine, COL } from "../research/statistics/rsi-ladder-charts.mjs";
 
@@ -93,6 +93,50 @@ test("pullbacks: depth, new high, rallies needed, and still-open ones kept", () 
   const sum = pullbackSummary(P); assert.equal(sum.n, 2); assert.equal(sum.open, 1); assert.equal(sum.everNewHigh, 50);
 });
 
+/* a bear market in steps: record at 30, lower rally top at 90, new record only at the very end */
+function bear() {
+  const c = []; let p = 100;
+  const leg = (n, step) => { for (let i = 0; i < n; i++) { p += step; c.push(p); } };
+  leg(30, 1); leg(30, -1); leg(30, 0.5); leg(30, -1); leg(60, 1);
+  return { c, h: c.map((x) => x + 0.2), l: c.map((x) => x - 0.2), dates: c.map((_, i) => new Date(Date.UTC(2020, 0, 1) + i * 864e5).toISOString().slice(0, 10)), rsi: c.map(() => 50) };
+}
+test("swing pullbacks flag a top that sits below an earlier top (not a record)", () => {
+  const S = bear(), P = pullbacks(S, "pct", 10);
+  assert.equal(P.length, 2);
+  assert.equal(P[0].fromRecord, true); assert.equal(P[1].fromRecord, false);
+  assert.ok(P[1].recordThen > P[1].topPrice);                        // the record in force was higher
+  assert.equal(P[1].done, true);                                      // "back above its top" happens well before a new record
+  const firstRecord = S.h.findIndex((x, i) => i > 30 && x > S.h[29]);
+  assert.ok(Date.parse(P[1].newHigh) < Date.parse(S.dates[firstRecord]));
+});
+
+test("record declines: one decline per record-to-record gap, whole bear market in one, open one kept", () => {
+  const S = bear(), R = recordDeclines(S, "pct");
+  const big = [...R].sort((a, b) => a.depth - b.depth)[0];
+  assert.equal(big.top, S.dates[29]); assert.equal(big.low, S.dates[119]);   // the second, lower low — not the first swing low
+  assert.ok(Math.abs(big.depth - (S.l[119] / S.h[29] - 1) * 100) < 0.01);
+  assert.equal(big.done, true); assert.ok(S.h[119 + big.lowToNew] > S.h[29] && S.h[119 + big.lowToNew - 1] <= S.h[29]);
+  // every record-to-record gap in the rising legs is too small to exist (each bar makes a new record)
+  assert.equal(R.length, 1);
+  // a series ending under its record keeps the open decline
+  const Z = zig(), RZ = recordDeclines(Z, "pct"), last = RZ.at(-1);
+  assert.equal(last.done, false); assert.equal(last.newRecord, null); assert.equal(last.topToNew, Z.c.length - 1 - 104);
+  const sum = pullbackSummary(RZ); assert.equal(sum.open, 1);
+  // yields: basis points
+  const Y = { c: [4, 4.5, 4.1, 4.6], h: [4, 4.5, 4.1, 4.6], l: [4, 4.5, 3.9, 4.6], dates: ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"], rsi: [50, 50, 50, 50] };
+  assert.equal(Math.round(recordDeclines(Y, "bp")[0].depth), -60);
+});
+
+test("slope band: point correlation with a quarter-resampled range, reproducible", () => {
+  const R = rng(5), days = [];
+  for (let i = 0; i < 4000; i++) { const rung = 1 + Math.floor(R() * 100), q = "Q" + Math.floor(i / 60); days.push({ rung, quarter: q, f20: -0.05 * rung + (R() - 0.5) * 4, w60: (R() - 0.5) }); }
+  const a = slopeBand(days, ["f20", "w60"], 200, 9), b = slopeBand(days, ["f20", "w60"], 200, 9);
+  assert.deepEqual(a, b);
+  assert.ok(a.f20.rho < -0.5 && a.f20.band[1] < 0, JSON.stringify(a.f20));   // a real slope: range stays below zero
+  assert.ok(a.w60.band[0] < 0 && a.w60.band[1] > 0, JSON.stringify(a.w60)); // no slope: range crosses zero
+  assert.equal(a.clusters, Math.ceil(4000 / 60));
+});
+
 test("wait back above the prior swing high uses only pivots already confirmed", () => {
   const S = zig(), R = recoverTimes(S, 10);
   assert.equal(R[35], null);                                          // top at 29 is only known at 39
@@ -150,5 +194,24 @@ test("the deliverable: page, data and every chart file are there; no grey series
   assert.ok(html.includes(`RSI of <b>${d.instruments.SPY.ladder.full[1].toFixed(1)}</b>`));
   assert.ok(html.includes(`<b>${d.instruments.SPY.pull.n - d.instruments.SPY.pull.open} of ${d.instruments.SPY.pull.n}</b>`));
   assert.equal(rungSummary(d.instruments.SPY, "f20", "f20").rungs, 100);
+  // review fixes (28 Sep): no overclaims
+  assert.doesNotMatch(html, /The one record that matches Bitcoin's floor/);
+  assert.doesNotMatch(html, /deepest tenth within/);
+  assert.doesNotMatch(html, /The deeper the RSI, the deeper the next dip first/);
+  assert.match(html, /back above the top it fell from/i);
+  assert.match(html, /Every decline from a record high/);
+  for (const k of keys) { const A = d.instruments[k]; assert.ok(A.records.length >= 1 && A.rec.n === A.records.length, k); assert.ok(A.slope.f20.band, k); assert.ok(A.pull.fromRecord + A.pull.belowEarlierTop === A.pull.n, k); }
+  // Bitcoin sentence names every instrument whose bottom rung is at or below Bitcoin's
+  const btc1 = d.instruments.BTCUSD.ladder.full[1];
+  for (const k of keys) if (k !== "BTCUSD" && d.instruments[k].ladder.full[1] <= btc1) assert.ok(html.includes(`${d.instruments[k].short.replace(/&/g, "&amp;")} ${d.instruments[k].ladder.full[1].toFixed(1)}`), k);
+  // chart titles and subtitles fit their panel (mono ≈ 0.61 × font size per character)
+  for (const f of fs.readdirSync(path.join(DIR, "charts"))) {
+    const svg = fs.readFileSync(path.join(DIR, "charts", f), "utf8"), W = +svg.match(/viewBox="0 0 (\d+)/)[1];
+    for (const m of svg.matchAll(/<text x="([\d.]+)" y="(?:26|30|48|56|76)" font-size="(\d+)"[^>]*>([^<]*)<\/text>/g)) {
+      const txt = m[3].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      assert.ok(+m[1] + txt.length * +m[2] * 0.61 <= W, `${f}: "${txt.slice(0, 50)}…" runs off the panel`);
+    }
+  }
+  for (const f of ["slope-f20.svg", "slope-f60.svg", "slope-w60.svg", "record-SPY-scatter.svg", "record-SPX-scatter.svg"]) assert.ok(fs.existsSync(path.join(DIR, "charts", f)), f);
   assert.equal(typeof build(d), "string");
 });
