@@ -3,179 +3,215 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>SCINTILLA · Workshop</title>
 <style>
-:root{ --bg:#0A0A0F; --panel:#0D0D14; --panel2:#0F0F1A; --line:#1A1A2A; --line2:#252538;
-  --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --crk:#00D4FF; --bull:#00FFA3; --bear:#FF2D55; --sv3:#FFE500;
+:root{ --bg:#0A0A0F; --panel:#0D0D14; --panel2:#0F0F1A; --line:#1A1A2A; --line2:#252538; --line3:#34344c;
+  --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --ink4:#6A6C86; --crk:#00D4FF; --bull:#00FFA3; --sv3:#FFE500;
   --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; }
 *{ box-sizing:border-box; }
 html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--mono); }
-body{ padding:28px 32px 60px; font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
-header{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap;
-  border-bottom:1px solid var(--line2); padding-bottom:14px; margin-bottom:22px; }
-h1{ margin:0; font-size:22px; letter-spacing:.32em; font-weight:600; }
+body{ padding:24px 28px 60px; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+header{ display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; border-bottom:1px solid var(--line2); padding-bottom:12px; margin-bottom:14px; }
+h1{ margin:0; font-size:21px; letter-spacing:.32em; font-weight:600; }
 h1 span{ color:var(--crk); }
-.sub{ color:var(--ink2); font-size:14px; }
-h2{ font-size:14px; letter-spacing:.2em; color:var(--crk); margin:30px 0 12px; font-weight:600; }
-.grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
-a.card{ display:block; text-decoration:none; color:var(--ink); background:var(--panel2); border:1px solid var(--line2);
-  border-radius:6px; padding:16px 18px; transition:border-color .15s; }
-a.card:hover, a.card:focus{ border-color:var(--crk); outline:none; }
-.t{ font-size:17px; font-weight:600; letter-spacing:.04em; margin-bottom:6px; }
-.d{ color:var(--ink2); font-size:14px; margin-bottom:10px; }
-.m{ display:flex; gap:10px; flex-wrap:wrap; font-size:12px; letter-spacing:.08em; }
-.pill{ border:1px solid var(--line2); border-radius:999px; padding:2px 10px; color:var(--ink); }
-.live{ border-color:var(--bull); color:var(--bull); }
-.ws{ border-color:var(--crk); color:var(--crk); }
-.run{ border-color:var(--sv3); color:var(--sv3); }
-.note{ color:var(--ink2); font-size:14px; margin-top:34px; border-top:1px solid var(--line2); padding-top:14px; }
-@media (max-width:520px){ body{ padding:18px 16px 40px; } .grid{ grid-template-columns:1fr; } h1{ font-size:18px; } }
+.sub{ color:var(--ink3); font-size:13px; }
+.views{ display:flex; gap:6px; margin-left:auto; }
+.views button{ background:var(--panel2); color:var(--ink3); border:1px solid var(--line2); border-radius:3px; font:600 11px/1 var(--mono); letter-spacing:.14em; padding:8px 11px; cursor:pointer; }
+.views button.on{ color:var(--ink); border-color:var(--crk); }
+.rail{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 18px; font-size:12px; }
+.rail .k{ color:var(--ink4); letter-spacing:.16em; font-size:11px; margin-right:2px; }
+.chip{ display:inline-flex; gap:7px; align-items:center; border:1px solid var(--line2); border-radius:999px; padding:3px 10px 3px 8px; color:var(--ink2); text-decoration:none; }
+.chip:hover{ border-color:var(--ink3); }
+.chip.ask{ border-color:rgba(255,229,0,.45); }
+.chip.ask b{ color:var(--sv3); font-weight:600; letter-spacing:.06em; font-size:11px; }
+.chip.new b{ color:var(--crk); font-weight:600; letter-spacing:.06em; font-size:11px; }
 
-.strip{ border:1px solid var(--line2); background:var(--panel); padding:14px 16px 16px; margin:0 0 16px; border-radius:6px; }
-.strip h2{ margin:0 0 12px; display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
-.strip h2 small{ font-size:12px; letter-spacing:.06em; color:var(--ink3); font-weight:400; }
-.new h2{ color:var(--crk); } .dec h2{ color:var(--sv3); } .bld h2{ color:var(--ink2); }
-.row{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-.row a.card{ padding:12px 14px; } .row .t{ font-size:16px; } .row .d{ font-size:13.5px; }
-.ask{ border-color:var(--sv3); color:var(--sv3); }
-ul.building{ margin:0; padding:0; list-style:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 18px; font-size:14px; color:var(--ink2); }
-ul.building b{ color:var(--ink); font-weight:600; }
-details.grp{ border-top:1px solid var(--line2); padding:10px 0; }
-details.grp summary{ cursor:pointer; font-size:14px; letter-spacing:.18em; color:var(--ink2); list-style:none; }
-details.grp summary::-webkit-details-marker{ display:none; }
-details.grp summary::before{ content:"\25B8  "; color:var(--crk); } details.grp[open] summary::before{ content:"\25BE  "; }
-details.grp summary b{ color:var(--ink3); font-weight:400; letter-spacing:.04em; margin-left:8px; }
-details.grp .grid{ margin-top:12px; }
-@media (max-width:1100px){ .row{ grid-template-columns:repeat(2,minmax(0,1fr)); } ul.building{ grid-template-columns:1fr 1fr; } }
-@media (max-width:520px){ .row, ul.building{ grid-template-columns:1fr; } }
+/* the branch map */
+.map{ position:relative; display:grid; grid-template-columns:minmax(0,1fr) 250px minmax(0,1fr); gap:0 54px; align-items:start; }
+.map svg{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+.side{ display:flex; flex-direction:column; gap:26px; position:relative; z-index:1; }
+.spine{ position:relative; z-index:1; align-self:center; }
+.root{ border:1px solid var(--line3); background:var(--panel); border-radius:8px; padding:16px 18px; text-align:center; }
+.root .t{ font-size:15px; letter-spacing:.3em; font-weight:600; }
+.root .t span{ color:var(--crk); }
+.root .n{ color:var(--ink3); font-size:12px; margin-top:6px; line-height:1.6; }
+.root .n b{ color:var(--ink); font-weight:600; }
+.area{ position:relative; }
+.side.L .area{ text-align:right; }
+.ah{ display:flex; align-items:baseline; gap:10px; margin:0 0 6px; }
+.side.L .ah{ flex-direction:row-reverse; }
+.ah .dot{ width:12px; height:12px; border-radius:50%; border:2px solid var(--crk); background:var(--bg); flex:0 0 12px; position:relative; top:1px; }
+.ah h2{ margin:0; font-size:14px; letter-spacing:.2em; color:var(--ink); font-weight:600; }
+.ah small{ color:var(--ink4); font-size:11px; letter-spacing:.06em; }
+.ab{ color:var(--ink4); font-size:12px; margin:0 0 8px 22px; }
+.side.L .ab{ margin:0 22px 8px 0; }
+.leaves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
+.leaf{ display:flex; align-items:flex-start; gap:10px; padding:5px 0 5px 22px; }
+.side.L .leaf{ flex-direction:row-reverse; padding:5px 22px 5px 0; }
+.leaf .dot{ width:9px; height:9px; border-radius:50%; background:var(--ink4); flex:0 0 9px; margin-top:6px; }
+.leaf.live .dot{ background:var(--bull); }
+.leaf.preview .dot{ background:var(--bull); box-shadow:inset 0 0 0 2px var(--bg), 0 0 0 1px var(--bull); }
+.leaf.decision .dot{ background:var(--sv3); }
+.leaf.building .dot{ background:transparent; border:1px dashed var(--ink3); }
+.leaf.corrected .dot{ background:var(--ink2); }
+.leaf.archive{ opacity:.5; }
+.leaf .body{ min-width:0; }
+.leaf a.t, .leaf span.t{ color:var(--ink); text-decoration:none; font-size:14px; line-height:1.35; display:inline; }
+.leaf a.t:hover{ text-decoration:underline; text-decoration-color:var(--ink3); }
+.leaf .m{ color:var(--ink4); font-size:11px; letter-spacing:.06em; margin-top:1px; display:flex; gap:8px; flex-wrap:wrap; }
+.side.L .leaf .m{ justify-content:flex-end; }
+.leaf .m .st{ text-transform:uppercase; }
+.leaf.live .m .st, .leaf.preview .m .st{ color:var(--bull); }
+.leaf.decision .m .st{ color:var(--sv3); }
+.leaf .m .new{ color:var(--crk); font-weight:600; }
+.leaf .m .ask{ color:var(--sv3); font-weight:600; }
+.leaf .b{ display:none; color:var(--ink3); font-size:12.5px; line-height:1.45; margin-top:3px; max-width:46ch; }
+.side.L .leaf .b{ margin-left:auto; }
+.leaf.open .b, .leaf:hover .b{ display:block; }
+.arch{ margin:6px 0 0 22px; background:none; border:0; color:var(--ink4); font:11px var(--mono); letter-spacing:.1em; cursor:pointer; padding:0; text-decoration:underline; text-decoration-color:var(--line3); }
+.side.L .arch{ margin:6px 22px 0 0; }
+.area.folded .leaf.archive{ display:none; }
+
+/* the plain list */
+#list{ display:none; }
+#list h2{ font-size:13px; letter-spacing:.2em; color:var(--crk); margin:26px 0 8px; font-weight:600; }
+#list ul{ margin:0; padding:0 0 0 18px; }
+#list li{ margin:4px 0; }
+#list li small{ color:var(--ink4); font-size:11px; letter-spacing:.06em; margin-left:6px; }
+#list li.archive{ opacity:.55; }
+body.list .map{ display:none; } body.list #list{ display:block; }
+
+.legend{ display:flex; gap:14px 18px; flex-wrap:wrap; color:var(--ink3); font-size:12px; margin-top:34px; border-top:1px solid var(--line2); padding-top:14px; }
+.legend i{ display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--ink4); margin-right:6px; vertical-align:-1px; }
+.note{ color:var(--ink3); font-size:13px; margin-top:16px; }
+.note a{ color:var(--ink2); }
+#err{ display:none; border:1px solid var(--line3); padding:12px 14px; border-radius:6px; color:var(--ink2); margin:8px 0 18px; }
+noscript p{ color:var(--ink2); }
+@media (max-width:1000px){
+  body{ padding:18px 16px 40px; }
+  .map{ grid-template-columns:1fr; gap:22px 0; }
+  .spine{ align-self:stretch; order:-1; }
+  .side{ gap:22px; }
+  .side.L .area{ text-align:left; } .side.L .ah{ flex-direction:row; } .side.L .leaf{ flex-direction:row; padding:5px 0 5px 22px; }
+  .side.L .leaf .m{ justify-content:flex-start; } .side.L .leaf .b{ margin-left:0; } .side.L .ab{ margin:0 0 8px 22px; } .side.L .arch{ margin:6px 0 0 22px; }
+  h1{ font-size:17px; letter-spacing:.24em; }
+  .leaf .b{ display:block; }
+}
 </style>
 </head>
 <body>
 <header><span data-scnav-slot></span>
   <h1>SCINTILLA <span>·</span> WORKSHOP</h1>
-  <div class="sub">What’s new, what needs your call, what’s being built. Everything else is folded below.</div>
+  <div class="sub" id="sub">reading manifest.json…</div>
+  <div class="views"><button id="vb" class="on" type="button">BRANCHES</button><button id="vl" type="button">LIST</button></div>
 </header>
+<div class="rail" id="rail"></div>
+<div id="err"></div>
+<noscript><p>This page draws itself from <a href="manifest.json" style="color:#C6C8DE">manifest.json</a>; with scripts off, open that file: every branch and leaf is listed there in plain words.</p></noscript>
+<div class="map" id="map"><svg id="wires" aria-hidden="true"></svg><div class="side L" id="L"></div><div class="spine"><div class="root" id="root"></div></div><div class="side R" id="R"></div></div>
+<section id="list" aria-label="Plain list"></section>
+<div class="legend" id="legend"></div>
+<div class="note">Every branch and leaf comes from <a href="manifest.json">workshop/manifest.json</a>. A lane that ships a page adds one line there (<code>node scripts/workshop-add.mjs</code>) and this page is current; nothing here is written by hand. Hover a leaf for what it is; click to open it.</div>
 
-<section class="strip new"><h2>NEW <small>27 Sep evening · newest first</small></h2>
-<div class="row">
-  <a class="card" href="/deliverables/20260927/ladder/LADDER.html"><div class="t">Statistics · the ladder</div>
-    <div class="d">If you bought at RSI level 5, 10 … 70, or at each cloud average, how did it go — market first, stock vs SPY, full history vs last 5 years vs last 12 reports, with example trades (losers too).</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/market-map/index.html"><div class="t">Market map · 3D</div>
-    <div class="d">544 nodes from the market down to the names; live Geiger colours; hollow = waiting for admission. Drag to turn, click a node for its card, FLAT 2D if you prefer.</div>
-    <div class="m"><span class="pill live">LIVE DATA</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="https://station.scintillahub.ai/deliverables/20260927/lens-ship/LENS-SHIP.html"><div class="t">Context lens · on the Station now</div>
-    <div class="d">60% of the old size, bottom-left, only on the nine 3-day pages; last 3 sessions of 30-minute candles; dims and says STALE when behind.</div>
-    <div class="m"><span class="pill live">LIVE</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/comps-single/index.html?t=MU"><div class="t">Comps · one company · football field</div>
-    <div class="d">Each valuation measure a bar of the peers’ range; dashed line = today’s price; the overlap = fair value. CapEx section. Type any ticker.</div>
-    <div class="m"><span class="pill live">LIVE DATA</span><span class="pill">27 SEP</span></div></a>
-</div></section>
+<script>
+/* T2-MAP-WORKSHOP (27 Sep). The workshop as a branch map, in the manner of an estate vault: seven branches, each leaf a page
+   with its status and date, all drawn from manifest.json. "NEW" is anything dated within the last two days, so it fades on
+   its own. Decisions are whatever the manifest says is waiting on Alan. The plain list is the same data as a list. */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const fmt = (d) => { const [y, m, dd] = d.split("-").map(Number); return `${dd} ${MON[m - 1]}`; };
+  const NEW_DAYS = 2, today = new Date(); today.setHours(0, 0, 0, 0);
+  const isNew = (d, st) => (today - new Date(d + "T00:00:00")) / 86400000 <= NEW_DAYS && !["archive", "building"].includes(st || "");
+  let M = null;
 
-<section class="strip dec"><h2>WAITING ON YOUR DECISION <small>5 open</small></h2>
-<div class="row">
-  <a class="card" href="/preview/company-view/"><div class="t">Company view round 2 · try it</div>
-    <div class="d">The Station chart always on top with the clouds and one RSI pane, your ladder of averages back (all nine), six key numbers, EXPAND with a name rail, arrow keys between names. A trial copy; the live Hub is unchanged until you say so.</div>
-    <div class="m"><span class="pill ask">SWITCH IT ON?</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/geiger-review/GEIGER-REVIEW.html"><div class="t">Geiger: start at 3h, count 4h + 6h once</div>
-    <div class="d">The review recommends yes to both: the measured effect is tiny and it matches the Lab’s RSI from 3h up. Your Equalizer, your call.</div>
-    <div class="m"><span class="pill ask">YES / NO</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/comps-single/COMPS-SINGLE.html"><div class="t">Comps: a saved peer list per company</div>
-    <div class="d">AI POWERTRAIN is a theme, not a peer group (turbines next to uranium and fuel cells). Recommend one saved peer list per company before aggregating.</div>
-    <div class="m"><span class="pill ask">YES / NO</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260926/hub-layout-tape/eval-board.html"><div class="t">Score the visuals</div>
-    <div class="d">Sixteen proposals, each with a picture and its running cost. Keep / change / drop on each.</div>
-    <div class="m"><span class="pill ask">0 OF 16</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260925/knockout/index.html"><div class="t">Comps round 1: the pick</div>
-    <div class="d">Pick, pass or later on the names that came through three rounds. The table now fits the screen.</div>
-    <div class="m"><span class="pill ask">0 DECIDED</span><span class="pill">26 SEP</span></div></a>
-</div></section>
+  function view(list) {
+    document.body.classList.toggle("list", list); $("vb").classList.toggle("on", !list); $("vl").classList.toggle("on", list);
+    try { localStorage.setItem("workshop-view", list ? "list" : "branches"); } catch (e) {}
+    if (!list) requestAnimationFrame(wires);
+  }
+  $("vb").addEventListener("click", () => view(false)); $("vl").addEventListener("click", () => view(true));
 
-<section class="strip bld"><h2>BEING BUILT RIGHT NOW <small>lands here when it returns</small></h2>
-<ul class="building">
-<li><b>Admission</b> — the 56 names (full treatment → LIKED) + 68 funds (iShares/Vanguard sectors + industries, the map’s parents, IBIT, equal-weight sectors). History pulled; switch-on with the market closed</li>
-<li><b>Market breadth</b> — built; runs after the admission: whole-market % above 50/200-day, advance/decline, highs/lows, back to 2003</li>
-</ul>
-</section>
-<details class="grp"><summary>COMPARABLE COMPANIES <b>2 · round 1</b></summary>
-<div class="grid">
-  <a class="card" href="/deliverables/20260925/knockout/KNOCKOUT.html"><div class="t">Comps round 1 · the write-up</div>
-    <div class="d">How the knockout ran and what each round measured.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">26 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/comps-single/COMPS-SINGLE.html"><div class="t">Comps round 2 · the write-up</div>
-    <div class="d">Where every number on the football field comes from, what could be wrong, the aggregation proposal.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">27 SEP</span></div></a>
-</div></details>
-<details class="grp"><summary>STATISTICS · RULEBOOK <b>4</b></summary>
-<div class="grid">
-  <a class="card" href="/deliverables/20260925/rulebook-stats-deep/RULEBOOK-STATS-DEEP.html"><div class="t">Rulebook + statistics · deep</div>
-    <div class="d">Levels measured against each instrument’s own history, the study catalogue, the morning template.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260927/between-reports/BETWEEN-REPORTS.html"><div class="t">Between reports · first pass (corrected)</div>
-    <div class="d">The first pass, with a correction at the top: the “post-report drop” was a random-walk effect and report times were missing. Being replaced by the ladder.</div>
-    <div class="m"><span class="pill ask">CORRECTED</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260925/stats-s6/STATS-S6.html"><div class="t">Run-up into the report</div>
-    <div class="d">The 20 sessions before a report against ordinary stretches. Morning reporters are being re-timed.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">26 SEP</span></div></a>
-  <a class="card" href="/research/statistics/"><div class="t">Statistics page</div>
-    <div class="d">One ticker, one indicator: the distribution and where today sits.</div>
-    <div class="m"><span class="pill live">LIVE</span></div></a>
-</div></details>
-<details class="grp"><summary>GEIGER · VISUALS · SENTIMENT <b>4</b></summary>
-<div class="grid">
-  <a class="card" href="/deliverables/20260927/geiger-review/GEIGER-REVIEW.html"><div class="t">Geiger review · what moves it</div>
-    <div class="d">Your Equalizer already keeps the short frames out; 2h–12h drive 86% of its daily movement; 4h and 6h are near-copies.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260925/geiger-visuals/GEIGER-VISUALS.html"><div class="t">Geiger in motion + company Geiger tab</div>
-    <div class="d">The motion proposals and the first Geiger-tab design.</div>
-    <div class="m"><span class="pill ws">WORKSHOP</span><span class="pill">25 SEP</span></div></a>
-  <a class="card" href="/deliverables/20260925/sentiment-feed/SENTIMENT-FEED.html"><div class="t">Sentiment · how it works + a feed</div>
-    <div class="d">Each stage drawn with a real example, and the room redrawn as a feed.</div>
-    <div class="m"><span class="pill ws">WORKSHOP</span><span class="pill">25 SEP</span></div></a>
-  <a class="card" href="https://station.scintillahub.ai/deliverables/20260926/context-lens-3/CONTEXT-LENS-3.html"><div class="t">Context lens · round 3</div>
-    <div class="d">The bubble you liked. The page now scrolls with the mouse over the charts.</div>
-    <div class="m"><span class="pill ws">WORKSHOP</span><span class="pill">26 SEP</span></div></a>
-</div></details>
-<details class="grp"><summary>STATION <b>2 · live</b></summary>
-<div class="grid">
-  <a class="card" href="https://station.scintillahub.ai/station-shells/fundamentals-v1/?t=META"><div class="t">Market cap fixed</div>
-    <div class="d">One number everywhere: today’s (META 1.91T, not its 30 June 1.43T).</div>
-    <div class="m"><span class="pill live">LIVE</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="https://station.scintillahub.ai/deliverables/20260927/geiger-bar/GEIGER-BAR.html"><div class="t">Geiger bar on every chart</div>
-    <div class="d">The Hub’s composite bar beside each Station chart’s price.</div>
-    <div class="m"><span class="pill live">LIVE</span><span class="pill">27 SEP</span></div></a>
-</div></details>
-<details class="grp"><summary>ALLOCATION <b>1</b></summary>
-<div class="grid">
-  <a class="card" href="https://scintilla-allocation-i79tyxi9f-aharveyrianhard-8432s-projects.vercel.app/ground-up.html"><div class="t">Allocation · ground up</div>
-    <div class="d">Heat → themes × rotation → knockout → picks, inside the original tool. Preview address (no permanent one yet).</div>
-    <div class="m"><span class="pill ws">PREVIEW</span><span class="pill">26 SEP</span></div></a>
-</div></details>
-<details class="grp"><summary>THE BACK END <b>2</b></summary>
-<div class="grid">
-  <a class="card" href="/deliverables/20260927/ticker-onboarding/TICKER-ONBOARDING.html"><div class="t">What it takes to add a ticker</div>
-    <div class="d">The 17 steps, the tiers, the clean-up list.</div>
-    <div class="m"><span class="pill ws">READ</span><span class="pill">27 SEP</span></div></a>
-  <a class="card" href="/prototypes/report-library/"><div class="t">The company report library</div>
-    <div class="d">Every company report we hold, by name.</div>
-    <div class="m"><span class="pill live">LIVE</span></div></a>
-</div></details>
-<details class="grp"><summary>ARCHIVE <b>4 · replaced by a newer page</b></summary>
-<div class="grid">
-  <a class="card" href="/deliverables/20260926/hub-layout-tape/HUB-LAYOUT-TAPE.html#company-view"><div class="t">Company view · first proposal</div>
-    <div class="d">Round 2 is being built from it.</div>
-    <div class="m"><span class="pill">ROUND 1</span></div></a>
-  <a class="card" href="/deliverables/20260925/rulebook-stats/RULEBOOK-STATS.html"><div class="t">Rulebook v2 + statistics package</div>
-    <div class="d">Replaced by the deep version.</div>
-    <div class="m"><span class="pill">ARCHIVE</span></div></a>
-  <a class="card" href="/deliverables/20260927/entry-confluence/ENTRY-CONFLUENCE.html"><div class="t">Entry confluence · first pass</div>
-    <div class="d">178 fixed rules, none reached 65%. Replaced.</div>
-    <div class="m"><span class="pill">ARCHIVE</span></div></a>
-  <a class="card" href="/deliverables/20260926/hub-layout-tape/layout-a.html"><div class="t">Layouts A and B (mockups)</div>
-    <div class="d">Superseded by company view round 2.</div>
-    <div class="m"><span class="pill">ARCHIVE</span></div></a>
-</div></details>
-<div class="note">Every card appears once. NEW is rewritten each time something lands; a decision card leaves when you decide.</div>
+  function leafHTML(it, side) {
+    const cls = ["leaf", it.status, isNew(it.date, it.status) ? "new" : ""].join(" ");
+    const t = it.href ? `<a class="t" href="${esc(it.href)}"${/^https:/.test(it.href) ? ' target="_blank" rel="noopener"' : ""}>${esc(it.title)}</a>` : `<span class="t">${esc(it.title)}</span>`;
+    const meta = [`<span>${fmt(it.date)}</span>`, `<span class="st">${esc(it.status)}</span>`,
+      it.ask ? `<span class="ask">${esc(it.ask)}</span>` : "", isNew(it.date, it.status) ? `<span class="new">NEW</span>` : "",
+      /^https:\/\/station\./.test(it.href || "") ? `<span>station ↗</span>` : ""].filter(Boolean).join("");
+    return `<li class="${cls}" data-id="${esc(it.id)}"><span class="dot"></span><div class="body">${t}<div class="m">${meta}</div><div class="b">${esc(it.blurb)}</div></div></li>`;
+  }
+  function areaHTML(a, items) {
+    const live = items.filter((i) => i.status !== "archive"), arch = items.length - live.length;
+    const newest = items.map((i) => i.date).sort().pop();
+    return `<section class="area folded" data-area="${esc(a.id)}"><div class="ah"><span class="dot"></span><h2>${esc(a.label).toUpperCase()}</h2><small>${live.length}${arch ? ` + ${arch} archived` : ""} · newest ${fmt(newest)}</small></div>` +
+      `<div class="ab">${esc(a.blurb)}</div><ul class="leaves">${items.map((i) => leafHTML(i)).join("")}</ul>` +
+      (arch ? `<button class="arch" type="button">show ${arch} archived</button>` : "") + `</section>`;
+  }
+  function render() {
+    const items = M.items.slice().sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+    const byArea = new Map(M.areas.map((a) => [a.id, items.filter((i) => i.area === a.id)]));
+    const newest = items.map((i) => i.date).sort().pop();
+    const fresh = items.filter((i) => isNew(i.date, i.status)), asks = items.filter((i) => i.status === "decision"), building = items.filter((i) => i.status === "building");
+    $("sub").textContent = `${items.length} pages on ${M.areas.length} branches · newest ${fmt(newest)} · from manifest.json`;
+    $("root").innerHTML = `<div class="t">WORK<span>·</span>SHOP</div><div class="n"><b>${items.filter((i) => i.status !== "archive").length}</b> pages · <b>${fresh.length}</b> new this week<br><b>${asks.length}</b> waiting on you · <b>${building.length}</b> being built<br>newest ${fmt(newest)}</div>`;
+    $("rail").innerHTML = asks.length ? `<span class="k">YOUR CALL</span>` + asks.map((i) => `<a class="chip ask" href="#${esc(i.id)}" data-go="${esc(i.id)}"><b>${esc(i.ask)}</b>${esc(i.title)}</a>`).join("") : "";
+    // balance the two sides by leaf count: biggest branch first, onto the lighter side, manifest order kept within a side
+    const wide = matchMedia("(min-width:1001px)").matches;
+    const order = M.areas.map((a, i) => ({ a, i, n: byArea.get(a.id).length + 2 })).sort((x, y) => y.n - x.n);
+    const L = [], R = []; let nl = 0, nr = 0;
+    for (const o of order) { if (!wide || nl > nr) { R.push(o); nr += o.n; } else { L.push(o); nl += o.n; } }
+    const html = (arr) => arr.sort((x, y) => x.i - y.i).map((o) => areaHTML(o.a, byArea.get(o.a.id))).join("");
+    $("L").innerHTML = html(L); $("R").innerHTML = html(R);
+    $("list").innerHTML = M.areas.map((a) => `<h2>${esc(a.label).toUpperCase()} · ${byArea.get(a.id).length}</h2><ul>` +
+      byArea.get(a.id).map((i) => `<li class="${esc(i.status)}">${i.href ? `<a href="${esc(i.href)}" style="color:#F2F2F8">${esc(i.title)}</a>` : esc(i.title)}<small>${fmt(i.date)} · ${esc(i.status)}${i.ask ? " · " + esc(i.ask) : ""}</small><br><span style="color:#9A9AB6;font-size:12.5px">${esc(i.blurb)}</span></li>`).join("") + `</ul>`).join("");
+    $("legend").innerHTML = Object.entries(M.statuses).map(([k, v]) => `<span><i class="${k}" style="${dotStyle(k)}"></i><b>${k}</b> · ${esc(v)}</span>`).join("") + `<span><i style="background:transparent;border:1px solid #00D4FF"></i><b>branch</b> · one of the seven areas</span>`;
+    document.querySelectorAll(".arch").forEach((b) => b.addEventListener("click", () => { const s = b.closest(".area"); s.classList.toggle("folded"); b.textContent = (s.classList.contains("folded") ? "show " : "hide ") + b.textContent.replace(/^(show|hide) /, ""); wires(); }));
+    document.querySelectorAll(".leaf").forEach((li) => li.addEventListener("click", (e) => { if (e.target.closest("a")) return; li.classList.toggle("open"); wires(); }));
+    $("rail").addEventListener("click", (e) => { const a = e.target.closest("[data-go]"); if (!a) return; e.preventDefault(); const li = document.querySelector(`.leaf[data-id="${a.dataset.go}"]`); if (!li) return; view(false); li.closest(".area").classList.remove("folded"); li.classList.add("open"); li.scrollIntoView({ behavior: "smooth", block: "center" }); wires(); });
+    requestAnimationFrame(wires);
+  }
+  function dotStyle(k) { return { live: "background:#00FFA3", preview: "background:#00FFA3;box-shadow:inset 0 0 0 2px #0A0A0F,0 0 0 1px #00FFA3", decision: "background:#FFE500", building: "background:transparent;border:1px dashed #9A9AB6", corrected: "background:#C6C8DE", archive: "opacity:.5" }[k] || ""; }
+
+  /* the wires: root → each branch dot → each leaf dot, as curves, measured from where the page put things */
+  function wires() {
+    const svg = $("wires"), map = $("map"); if (document.body.classList.contains("list")) return;
+    const mr = map.getBoundingClientRect(), root = $("root").getBoundingClientRect();
+    const wide = matchMedia("(min-width:1001px)").matches;
+    const P = (r, side) => ({ x: (side === "L" ? r.left : r.right) - mr.left, y: r.top + r.height / 2 - mr.top });
+    let d = "", d2 = "";
+    const cubic = (a, b) => { const k = Math.max(24, Math.abs(b.x - a.x) * 0.5); return `M${a.x},${a.y} C${a.x + (b.x > a.x ? k : -k)},${a.y} ${b.x - (b.x > a.x ? k : -k)},${b.y} ${b.x},${b.y}`; };
+    const vert = (a, b) => `M${a.x},${a.y} C${a.x},${a.y + (b.y - a.y) * 0.5} ${b.x},${a.y + (b.y - a.y) * 0.5} ${b.x},${b.y}`;
+    document.querySelectorAll(".area").forEach((sec) => {
+      const side = sec.closest(".side").id, dot = sec.querySelector(".ah .dot").getBoundingClientRect();
+      const bd = { x: dot.left + dot.width / 2 - mr.left, y: dot.top + dot.height / 2 - mr.top };
+      const from = wide ? { x: (side === "L" ? root.left : root.right) - mr.left, y: root.top + root.height / 2 - mr.top } : { x: root.left + 18 - mr.left, y: root.bottom - mr.top };
+      d += wide ? cubic(from, bd) : vert(from, bd);
+      sec.querySelectorAll(".leaf").forEach((li) => {
+        if (li.offsetParent === null) return;
+        const ld = li.querySelector(".dot").getBoundingClientRect(), lp = { x: ld.left + ld.width / 2 - mr.left, y: ld.top + ld.height / 2 - mr.top };
+        d2 += `M${bd.x},${bd.y} C${bd.x},${(bd.y + lp.y) / 2} ${lp.x},${(bd.y + lp.y) / 2} ${lp.x},${lp.y}`;
+      });
+    });
+    svg.setAttribute("viewBox", `0 0 ${mr.width} ${mr.height}`);
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="#34344c" stroke-width="1.5"/><path d="${d2}" fill="none" stroke="#252538" stroke-width="1"/>`;
+  }
+  addEventListener("resize", () => { render(); });
+
+  fetch("manifest.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((m) => {
+    M = m; render();
+    let v = null; try { v = localStorage.getItem("workshop-view"); } catch (e) {}
+    if (v === "list") view(true);
+    if (location.hash) { const li = document.querySelector(`.leaf[data-id="${CSS.escape(location.hash.slice(1))}"]`); if (li) { li.closest(".area").classList.remove("folded"); li.classList.add("open"); li.scrollIntoView({ block: "center" }); wires(); } }
+    window.__ws = { items: m.items.length, areas: m.areas.length, ready: true };
+  }).catch((e) => {
+    $("sub").textContent = "the manifest could not be read";
+    $("err").style.display = "block"; $("err").innerHTML = `This page draws itself from <a href="manifest.json" style="color:#C6C8DE">manifest.json</a> and could not read it (${esc(e.message)}). Open that file directly: every branch and leaf is listed there.`;
+    window.__ws = { ready: false, error: String(e) };
+  });
+})();
+</script>
 <!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
      scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
      must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
