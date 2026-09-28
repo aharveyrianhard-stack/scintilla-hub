@@ -117,7 +117,9 @@ export function geigerHistory(bars, nextT, W = DAILY_RUNG_W) {
     }
     // a reading needs at least the 1d rung with a full 230-bar window, as the publisher reads 230 bars
     if (!r1 || i < 229 || !ws) continue;
-    out[i] = { g: s / ws, tr: st / ws, mo: wm ? sm / wm : null, d1: r1.composite, d3: r3 ? r3.composite : null, w1: rw ? rw.composite : null };
+    // full = every rung has all nine fan lines (the weekly rung needs 200 weeks); only full readings are comparable
+    out[i] = { g: s / ws, tr: st / ws, mo: wm ? sm / wm : null, d1: r1.composite, d3: r3 ? r3.composite : null, w1: rw ? rw.composite : null,
+      full: r1.fanLines === 9 && !!r3 && r3.fanLines === 9 && !!rw && rw.fanLines === 9 };
   }
   return out;
 }
