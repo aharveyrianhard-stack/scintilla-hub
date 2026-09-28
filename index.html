@@ -4564,6 +4564,8 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 /* ── 29 SEP · THE BOARD (P2-HUB-FIXES item 4). Selectors carry body/panel classes so they outrank the r4-fit sheet,
    which must stay last in the page. ───────────────────────────────────────────────────────────────────────────── */
 .sc-gnum{ display:none; }
+/* a difference of two funds has no trend/momentum read of its own: the rows keep their height (the zero line stays level) */
+.sc-cohstrip--bowtie .sc-cohstrip__read, .sc-cohstrip--bowtie .sc-cohstrip__tm{ visibility:hidden; }
 /* FULL SCREEN, both sets: the cohort selectors wrap inside the frame at a readable size, and every number sits
    right-aligned in a track sized to what it holds (it was centred in some columns, right-aligned in others, and MOM's
    number ran into READ's words) */
@@ -7649,7 +7651,8 @@ function cohortCompareStripHTML() {
     const ttl = r.full || r.label;
     /* SWITCH-ON — OUR NAMES columns end with how many of our names the bar averages ("96 names"); every column carries the
        row, so the bars and their zero line stay level across the strip */
-    const nTag = r.names != null ? '<span class="sc-cohstrip__n" title="' + (r.names ? r.names + " of our names averaged in this column" : "none of our names has a Geiger yet: the fund") + '">' + (r.names ? r.names : "fund") + "</span>" : "";
+    /* 29 Sep — a BOW TIE column: the sector's name on the column, the pair and both Geigers in its hover (r.full) */
+    const nTag = r.pair ? "" : (r.names != null ? '<span class="sc-cohstrip__n" title="' + (r.names ? r.names + " of our names averaged in this column" : "none of our names has a Geiger yet: the fund") + '">' + (r.names ? r.names : "fund") + "</span>" : "");
     if (r.mean == null) {
       /* same three-part skeleton, so a column with no data does not shift its neighbours' bars */
       return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
@@ -7707,7 +7710,7 @@ function cohortCompareStripHTML() {
       '<i>/</i>' +
       '<b style="color:' + ((g.mo ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.mo) + "</b></span>";
 
-    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + " · " + r.n + " tickers · scale ±" + span.toFixed(2) + '">' +
+    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + (r.pair ? "" : " · " + r.n + " tickers") + " · scale ±" + span.toFixed(2) + '">' +
       '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
       vminiHTML(r.mean, span) +
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
@@ -7735,6 +7738,10 @@ function cohortCompareStripHTML() {
       : "");
   const ourNames = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "MEMBERS";
   const idxFam = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "INDEXES";
+  const bowTie = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "BOWTIE";   /* 29 Sep */
+  if (bowTie) return '<div class="sc-cohstrip__hd">BOW TIE · equal-weight Geiger minus cap-weight · above zero = the average stock is stronger than the index · below = carried by the biggest names · scale ±' +
+           span.toFixed(2) + cmpBtns + "</div>" +
+         '<div class="sc-cohstrip sc-cohstrip--bowtie" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
   return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? (idxFam ? "INDEX FUND" : "SECTOR") : "COHORT") + ' COMPARE · geiger composite · ' +
            (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · the number under each column = how many of our names · " : "") + 'bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
@@ -21736,11 +21743,11 @@ function toggleSecFs(panel) {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (document.querySelector(".sc-cohwrap.is-open")) return;   /* 28 Sep — the COHORT ▾ menu closes itself; nothing else moves */
-  /* 29 Sep — measured BEFORE anything closes: an open overlay or ⛶ takes this Esc, and REGIME only goes back on the next one */
-  const rgBack = S.sec === "ECONOMIC" && S.econView === "REGIME" && !cvKeysBlocked(e);
   const fh = el("trFullHost"), sh = el("ernSumHost");
   if (fh && fh.firstChild) { fh._gen = (fh._gen || 0) + 1; fh.innerHTML = ""; return; }   // topmost first: a transcript opened from a call summary sits above it
   if (sh && sh.firstChild) { sh._gen = (sh._gen || 0) + 1; sh.innerHTML = ""; return; }   // the summary panel sits on top of everything else: Esc closes it and leaves what is under it alone
+  /* 29 Sep — measured BEFORE the ⛶ and the TV modal close: either takes this Esc, and REGIME only goes back on the next one */
+  const rgBack = S.sec === "ECONOMIC" && S.econView === "REGIME" && !cvKeysBlocked(e);
   closeTvModal(); clearSecFs();                             // FIX 5 — Esc closes the TV modal too
   if (rgBack) { S.econView = "RELEASES"; sync(); }           // 29 Sep — Esc in REGIME (nothing else open) = ← RELEASES
 });
@@ -26935,6 +26942,7 @@ body.gwx-motion .gwx-pct{opacity:1}
   window.SECT_FAMILIES=[["SPDR","SPDR","State Street Select Sector SPDR funds, each fund's own Geiger"],["ISHARES","iSHARES","iShares US sector funds"],
     ["VANGUARD","VANGUARD","Vanguard sector funds"],["EQWT","EQUAL-WT","Invesco S&P 500 equal-weight sector funds"],
     ["INDEXES","INDEXES","the broad index funds side by side, each fund's own Geiger: cap-weight against equal-weight, large against small"],
+    ["BOWTIE","BOW TIE","equal-weight minus cap-weight: each bar is the equal-weight fund's Geiger minus its cap-weight twin's (above zero = the average stock is stronger than the index)"],
     ["MEMBERS","OUR NAMES","the names on OUR list in each sector, averaged: not a fund (the count under each column)"]];
   /* 28 Sep (N6) — Alan: "index-funds bow tie tab". INDEXES is not eleven sector slots, so it carries its own labels.
      The brief's list, kept to the funds the chart API serves a Geiger for (measured 28 Sep 17:33Z, 486-name /geiger):
@@ -26943,13 +26951,25 @@ body.gwx-motion .gwx-pct{opacity:1}
     ["IJR","S&P SMALLCAP 600"],["RSP","S&P 500 EQUAL-WEIGHT"],["QQQE","NASDAQ-100 EQUAL-WEIGHT"],["IWV","RUSSELL 3000"],
     ["ITOT","S&P TOTAL MARKET"],["VTI","CRSP TOTAL MARKET"]];
   window.SC_INDEX_FUNDS=INDEX_FUNDS;
+  /* 29 Sep (P2-HUB-FIXES item 5) — Alan, 28 Sep: "a cap-weight vs equal-weight BOW TIE view in Cohort Compare".
+     Each bar = the EQUAL-WEIGHT fund's Geiger minus the CAP-WEIGHT fund's (the chart API's own /geiger for both, the
+     same GCOMP the other families read; while rewound, the same as-of blend). Above zero: the average stock is doing
+     better than the index — breadth. Below: the index is carried by its biggest names. Sorted high to low, the bars
+     fan out from the widest positive gap to the widest negative one: the bow tie. A pair with either Geiger missing
+     says so and draws nothing. [equal-weight, cap-weight, what it is, the column's short name] */
+  /* the column's name is four letters so it is never cut in a ~45 px column; the hover names the sector in full */
+  var BOWTIE_PAIRS=[["RSP","SPY","S&P 500","S&P"],["QQQE","QQQ","NASDAQ-100","NDX"],["EQAL","IWB","RUSSELL 1000","R1K"],
+    ["RSPM","XLB","MATERIALS","MATL"],["RSPG","XLE","ENERGY","ENRG"],["RSPF","XLF","FINANCIALS","FINL"],["RSPN","XLI","INDUSTRIAL","INDU"],
+    ["RSPT","XLK","TECH","TECH"],["RSPS","XLP","STAPLES","STPL"],["RSPR","XLRE","REAL ESTATE","REAL"],["RSPU","XLU","UTILITIES","UTIL"],
+    ["RSPH","XLV","HEALTH","HLTH"],["RSPD","XLY","DISCRETIONARY","DISC"],["RSPC","XLC","COMMS","COMM"]];
+  window.SC_BOWTIE_PAIRS=BOWTIE_PAIRS;
   var SECT_FAMILY_FUNDS={
     SPDR:    ["XLB","XLE","XLF","XLI","XLK","XLP","XLRE","XLU","XLV","XLY","XLC"],
     ISHARES: ["IYM","IYE","IYF","IYJ","IYW","IYK","IYR","IDU","IYH","IYC","IYZ"],
     VANGUARD:["VAW","VDE","VFH","VIS","VGT","VDC","VNQ","VPU","VHT","VCR","VOX"],
     EQWT:    ["RSPM","RSPG","RSPF","RSPN","RSPT","RSPS","RSPR","RSPU","RSPH","RSPD","RSPC"]};
   window.SECT_FAMILY="SPDR";   /* SWITCH-ON — the funds by default; the last choice (OUR NAMES included) is remembered */
-  try { var sf=localStorage.getItem("hub.sector.family"); if(sf && (SECT_FAMILY_FUNDS[sf] || sf==="MEMBERS" || sf==="INDEXES")) window.SECT_FAMILY=sf; } catch(e) {}
+  try { var sf=localStorage.getItem("hub.sector.family"); if(sf && (SECT_FAMILY_FUNDS[sf] || sf==="MEMBERS" || sf==="INDEXES")) window.SECT_FAMILY=sf; if(sf==="BOWTIE") window.SECT_FAMILY=sf; } catch(e) {}   /* 29 Sep — a stored BOW TIE too */
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
     var _rows=cohortCompareRows;
@@ -26981,6 +27001,16 @@ body.gwx-motion .gwx-pct{opacity:1}
            constituents, exactly as the cohort side works. Falls back to the ETF alone if
            membership has not loaded, so it degrades to the old behaviour rather than to a
            blank strip. */
+        if(SECT_FAMILY==="BOWTIE"){
+          return BOWTIE_PAIRS.map(function(p){
+            var ew=gAt(p[0]), cw=gAt(p[1]), d=(ew==null||cw==null)?null:ew-cw;
+            var f2=function(v){ return v==null?"no Geiger yet":(v>=0?"+":"\u2212")+Math.abs(v).toFixed(2); };
+            return {key:p[0], label:p[2], short:p[3], pair:p[0]+" \u2212 "+p[1],
+                    full:p[2]+" \u00b7 "+p[0]+" (equal-weight) "+f2(ew)+" \u2212 "+p[1]+" (cap-weight) "+f2(cw)+
+                      (d==null?" \u00b7 no difference: a Geiger is missing":" = "+f2(d)+(d>=0?" \u00b7 the average stock is stronger than the index":" \u00b7 the index is carried by its biggest names")),
+                    mean:d, n:2};
+          }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
+        }
         if(SECT_FAMILY==="INDEXES"){
           return INDEX_FUNDS.map(function(p){
             var g=gAt(p[0]);

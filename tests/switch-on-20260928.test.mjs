@@ -126,7 +126,7 @@ test("F9: the company EVENTS tab has no 'AI READ · coming' placeholder on any p
 test("SECTORS: MEMBERS reads 'OUR NAMES' with a count per column, the SPDR funds are the default, and the choice (OUR NAMES too) is remembered", () => {
   const fam = page.match(/window\.SECT_FAMILIES=\[([\s\S]*?)\]\];/)[1];
   const rows = [...fam.matchAll(/\["([A-Z]+)","([^"]+)"/g)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(rows.map((r) => r[0]), ["SPDR", "ISHARES", "VANGUARD", "EQWT", "INDEXES", "MEMBERS"]);   /* N6 — INDEXES, 28 Sep */
+  assert.deepEqual(rows.map((r) => r[0]), ["SPDR", "ISHARES", "VANGUARD", "EQWT", "INDEXES", "BOWTIE", "MEMBERS"]);   /* N6 — INDEXES, 28 Sep · 29 Sep — BOW TIE */
   assert.deepEqual(rows.find((r) => r[0] === "MEMBERS"), ["MEMBERS", "OUR NAMES"]);
   assert.doesNotMatch(fam, /SPDR ticker labels the column/);
   assert.match(page, /window\.SECT_FAMILY="SPDR";/);

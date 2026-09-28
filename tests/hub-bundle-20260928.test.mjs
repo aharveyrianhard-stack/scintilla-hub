@@ -21,7 +21,7 @@ const IDX = [...idxSrc.matchAll(/\["([A-Z]+)","([^"]+)"/g)].map((m) => [m[1], m[
 test("INDEXES is a family of its own, between the sector families and OUR NAMES", () => {
   const fam = page.match(/window\.SECT_FAMILIES=\[([\s\S]*?)\]\];/)[1];
   const keys = [...fam.matchAll(/\["([A-Z]+)","([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ["SPDR", "ISHARES", "VANGUARD", "EQWT", "INDEXES", "MEMBERS"]);
+  assert.deepEqual(keys, ["SPDR", "ISHARES", "VANGUARD", "EQWT", "INDEXES", "BOWTIE", "MEMBERS"]);   /* 29 Sep (P2-HUB-FIXES) — BOW TIE beside INDEXES */
 });
 test("the index funds are the brief's list, kept to those the chart API serves a Geiger for", () => {
   assert.deepEqual(IDX.map((r) => r[0]), ["SPY", "QQQ", "DIA", "IWM", "MDY", "IJR", "RSP", "QQQE", "IWV", "ITOT", "VTI"]);

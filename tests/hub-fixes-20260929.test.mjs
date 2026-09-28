@@ -33,7 +33,7 @@ test("REGIME: Esc goes back to RELEASES only when nothing else (⛶, an overlay,
   assert.ok(s > 0);
   const handler = page.slice(page.lastIndexOf('document.addEventListener("keydown"', s), page.indexOf("\n});", s));
   assert.match(handler, /const rgBack = S\.sec === "ECONOMIC" && S\.econView === "REGIME" && !cvKeysBlocked\(e\);/);
-  assert.ok(handler.indexOf("const rgBack") < handler.indexOf("clearSecFs()"), "measured before the ⛶ closes, so one Esc = one step");
+  assert.ok(handler.indexOf("const rgBack") < handler.indexOf("closeTvModal(); clearSecFs()"), "measured before the ⛶ closes, so one Esc = one step");
   assert.match(handler, /if \(rgBack\) \{ S\.econView = "RELEASES"; sync\(\); \}/);
   assert.match(fnSrc("cvKeysBlocked"), /SECFS \|\| document\.fullscreenElement/, "an open ⛶ blocks it");
 });
@@ -209,4 +209,23 @@ test("full screen: the panel follows the header's drawn edges; clearing resets t
   assert.match(fnSrc("clearSecFs"), /SECFS\.style\.left = ""; SECFS\.style\.right = "";/);
   assert.match(page, /body\.secfs \.sc-secfs \.cohtabstrip\{ flex-wrap:wrap !important; overflow:visible !important; row-gap:2px; \}/);
   assert.match(page, /body\.secfs \.sc-secfs \.cohtabstrip \.sc-coh\{ font-size:11px; \}/);
+});
+
+/* ── 5 · COHORT COMPARE: the cap-weight vs equal-weight BOW TIE ──────────────────────────────────── */
+test("BOW TIE: 14 pairs (RSP/SPY, QQQE/QQQ, EQAL/IWB and the eleven RSP* vs XL*), each bar = equal-weight Geiger − cap-weight", () => {
+  const pairs = new Function(page.match(/var BOWTIE_PAIRS=\[[\s\S]*?\]\];/)[0] + "; return BOWTIE_PAIRS;")();
+  assert.equal(pairs.length, 14);
+  assert.deepEqual(pairs.slice(0, 3).map((p) => p[0] + "/" + p[1]), ["RSP/SPY", "QQQE/QQQ", "EQAL/IWB"]);
+  const eqwt = page.match(/EQWT:\s+\[([^\]]+)\]/)[1].replace(/"/g, "").split(",");
+  const spdr = page.match(/SPDR:\s+\[([^\]]+)\]/)[1].replace(/"/g, "").split(",");
+  assert.deepEqual(pairs.slice(3).map((p) => p[0]).sort(), eqwt.slice().sort(), "the eleven RSP* sector funds");
+  for (const p of pairs.slice(3)) assert.equal(spdr.indexOf(p[1]), eqwt.indexOf(p[0]), p[0] + " pairs with its own sector's XL*");
+  for (const p of pairs) assert.ok(p[3].length <= 4, p[3] + " fits a ~45 px column");
+  const src = page.slice(page.indexOf('if(SECT_FAMILY==="BOWTIE"){'), page.indexOf('if(SECT_FAMILY==="INDEXES"){'));
+  assert.match(src, /var ew=gAt\(p\[0\]\), cw=gAt\(p\[1\]\), d=\(ew==null\|\|cw==null\)\?null:ew-cw;/, "the same Geiger reader (and rewind) as every family");
+  assert.match(src, /full:p\[2\]\+" \\u00b7 "\+p\[0\]\+" \(equal-weight\) "\+f2\(ew\)\+" \\u2212 "\+p\[1\]\+" \(cap-weight\) "\+f2\(cw\)/, "the pair and both Geigers on hover");
+  assert.match(src, /\.sort\(function\(a,b\)\{return \(b\.mean==null\?-99:b\.mean\)-\(a\.mean==null\?-99:a\.mean\);\}\)/, "high to low: the bow tie");
+  assert.match(page, /\["BOWTIE","BOW TIE",/);
+  assert.match(page, /if\(sf==="BOWTIE"\) window\.SECT_FAMILY=sf;/, "remembered like the other families");
+  assert.match(fnSrc("cohortCompareStripHTML"), /if \(bowTie\) return '<div class="sc-cohstrip__hd">BOW TIE · equal-weight Geiger minus cap-weight/);
 });
