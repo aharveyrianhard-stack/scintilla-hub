@@ -125,6 +125,20 @@ test("EARNINGS strip: oldest left, newest right, the next report last; transcrip
   assert.equal(cells[3].epsEst, 31.62);
 });
 
+test("EARNINGS strip on a report day: once today's numbers are stored they are a result card, and NEXT moves on", () => {
+  const est = { ticker: "MU", date: "2026-09-30", eps_actual: null, eps_estimate: 31.62, revenue_estimate: 51192760000, report_time: "AMC" };
+  const prior = { ticker: "MU", date: "2026-06-24", eps_actual: 25.11, eps_estimate: 20.98, revenue_actual: 41456000000, revenue_estimate: 35911900000 };
+  const later = { ticker: "MU", date: "2026-12-16", eps_actual: null, eps_estimate: 33.1 };
+  /* evening of Sep 30, before the result is stored: the day's report is still NEXT */
+  let cells = ern.ernStripCells([est, prior, later], "2026-09-30", [], 16);
+  assert.deepEqual(cells.map((c) => [c.date, !!c.next]), [["2026-06-24", false], ["2026-09-30", true]]);
+  /* the result lands the same evening: Sep 30 is a result card, and NEXT is the following report */
+  const landed = Object.assign({}, est, { eps_actual: 33.4, revenue_actual: 52000000000 });
+  cells = ern.ernStripCells([landed, prior, later], "2026-09-30", [], 16);
+  assert.deepEqual(cells.map((c) => [c.date, !!c.next]), [["2026-06-24", false], ["2026-09-30", false], ["2026-12-16", true]]);
+  assert.equal(cells[1].verdict, "DOUBLE BEAT", "EPS +5.6% and revenue +1.6% against estimates");
+});
+
 test("EARNINGS strip leads the company EVENTS tab, with its legend, and the AI READ placeholder is gone from it", () => {
   const ev = fn("coEventsHTML");
   assert.match(ev, /'<div class="sc-evfix">' \+ ernStripHTML\(data\) \+ topRow/);
