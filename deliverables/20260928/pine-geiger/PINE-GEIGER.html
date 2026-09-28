@@ -1,0 +1,591 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Geiger table for TradingView</title>
+<style>:root{--bg:#0D0D14;--panel:#14141C;--line:#26263A;--axis:#3A3A52;--ink:#C6C8D2;--dim:#8A8A9E;--head:#6E6E82;
+--bull:#00FFA3;--bear:#FF2D55}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:56px 16px 64px}
+h1{font:600 22px/1.3 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.04em;margin:0 0 6px}
+h2{font:600 12px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:40px 0 10px;border-top:1px solid var(--line);padding-top:18px}
+.kick{font:600 11px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--head)}
+p,li{max-width:72ch} li{margin:0 0 10px} b{color:var(--ink)}
+.dim{color:var(--dim)} .up{color:var(--bull)} .dn{color:var(--bear)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:14px 16px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.c{border-collapse:collapse;font:12px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;min-width:760px;width:100%}
+table.c th{color:var(--head);font-weight:400;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:bottom}
+table.c td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.c .l{text-align:left}
+img.mock{width:100%;height:auto;border:1px solid var(--line);border-radius:3px;display:block}
+ol.steps li{margin-bottom:6px}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:12px;overflow:auto;max-height:420px;font:11px/1.45 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink)}
+button.copy{font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;background:var(--panel);color:var(--ink);border:1px solid var(--axis);border-radius:3px;padding:9px 12px;cursor:pointer}
+code{font:12px ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink)}
+</style></head><body><main>
+<span data-scnav-slot></span>
+<div class="kick">N8 · 28 Sep 2026 · for the Chrome rotation</div>
+<h1>The Geiger, as a table on TradingView</h1>
+<p>A TradingView indicator that draws the Hub's Geiger for a list of symbols in one table: a bar centred at zero
+(<span class="up">green</span> when the Geiger is above zero, <span class="dn">red</span> below), the Geiger value, and its two families,
+TREND and MOMENTUM. It uses the same seven timeframes and today's saved Equalizer weights as the Hub.</p>
+
+<h2>What it will look like</h2>
+<a href="mock-table.png"><img class="mock" src="mock-table.png" alt="Mock of the Geiger table: sixteen rows, sorted from XLV and XLK at the top in green down to XLRE and XLU at the bottom in red."></a>
+<p class="dim">This is a <b>mock drawn in a web browser</b> with the script's own glyphs, colours and order, filled with the values the script's
+maths gives on today's bars (28 Sep, from the bars the Hub's Geiger read at 18:25 UTC). It is not a TradingView
+screenshot: I did not open or touch your TradingView.</p>
+
+<h2>How to put it on the rotation</h2>
+<ol class="steps">
+<li>In TradingView open the Pine Editor, start a new indicator, select everything and paste the script (the file
+<code>SCINTILLA-GEIGER-TABLE.pine</code>, or the copy at the bottom of this page). Save, then Add to chart.</li>
+<li>Use a chart with <b>extended hours on</b>, at 30 minutes or faster. SPY at 30 minutes is a good choice.</li>
+<li>In the indicator's settings, <b>List</b> picks the rows: <b>Sectors + indexes</b> (the 11 SPDR sectors + SPY QQQ IWM DIA RSP),
+<b>Alan's names</b> (the first 20 names on your LIKED list, in the order you liked them), or <b>Custom</b> (20 boxes; type
+<code>EXCHANGE:SYMBOL</code>, e.g. <code>NASDAQ:NVDA</code>).</li>
+<li>Rows are sorted from the highest Geiger down; untick <b>Sort by Geiger</b> to keep your list order. <b>R</b> shows how many of the
+seven timeframes gave a reading.</li>
+</ol>
+<p class="dim">The header of the script says <b>PLOTS 0/64</b> (it only draws a table) and <b>REQUESTS 40/40</b> (two per row, twenty rows).</p>
+
+<h2>Where each number comes from</h2>
+<ul>
+<li><b>The seven timeframes and their weights</b> are the Hub's saved Equalizer, read today from the database and matching what the live
+Geiger reports: 3h 1.24 · 4h 2.28 · 6h 3.18 · 12h 3.17 · D 3.18 · 3D 2.58 · W 0.99. TREND and MOMENTUM count half each; inside
+MOMENTUM, RSI counts 0.6 and Williams %R 0.4. They are editable in the settings under “Equalizer”, so if you move a slider in the Hub,
+type the same number here.</li>
+<li><b>TREND</b> on each timeframe: nine averages of the close (5, 8, 13, 21, 34-bar exponential; 50, 100, 150, 200-bar simple). The more of them sit
+in order, fastest on top, the closer to +1; fully upside down is −1.</li>
+<li><b>MOMENTUM</b> on each timeframe: RSI(14) scaled so 23 is −1 and 77 is +1, blended with Williams %R(14) scaled so −90 is −1 and −10 is +1.</li>
+<li><b>The Geiger</b> is the weighted average over the seven timeframes. Only finished bars count, never the bar still forming, exactly as the Hub.</li>
+<li><b>The bars</b> are TradingView's. The script builds the 3h, 4h, 6h and 12h bars itself from 30-minute bars, on the same New York clock as the Hub, and
+the 3-day and weekly bars from daily bars, on the same calendar as the Hub.</li>
+</ul>
+
+<h2>Check against the live Geiger · 10 symbols · today</h2>
+<p>TradingView can't be run from here, so I tested the script's method in three parts, all on the Hub's own bars. First, the maths: a line-for-line copy of the script's
+maths, run on the exact bars the live Geiger read. Second, the rebuilt bars: the script's bucket rules applied to the Hub's 30-minute and daily bars, then
+compared with the 3h/4h/6h/12h/3D/W bars the Hub serves. Third, the daily bar: whether the Hub's daily bar is built like TradingView's regular-session daily bar.</p>
+<div class="panel scroll"><table class="c">
+<tr><th class="l">Symbol</th><th>Hub Geiger<br>(live)</th><th>Script maths<br>(same bars)</th><th>Gap</th><th>Timeframes<br>identical</th>
+<th>3h–12h bars<br>rebuilt = served</th><th>3D + W bars<br>rebuilt = served</th><th>Daily open/high/low<br>= regular session</th><th>1-cent noise<br>moves it (95%)</th></tr>
+<tr><td class="l">SPY</td><td style="color:var(--bull)">+0.3334</td><td style="color:var(--bull)">+0.3334</td><td>&lt;0.000001</td><td>7/7</td><td>all 112</td><td>all 460</td><td>6/6</td><td>0.0003</td></tr><tr><td class="l">QQQ</td><td style="color:var(--bull)">+0.4072</td><td style="color:var(--bull)">+0.4072</td><td>&lt;0.000001</td><td>7/7</td><td>all 112</td><td>all 460</td><td>6/6</td><td>0.0001</td></tr><tr><td class="l">IWM</td><td style="color:var(--bear)">-0.6028</td><td style="color:var(--bear)">-0.6028</td><td>&lt;0.000001</td><td>7/7</td><td>all 112</td><td>all 460</td><td>6/6</td><td>0.0003</td></tr><tr><td class="l">DIA</td><td style="color:var(--bear)">-0.2973</td><td style="color:var(--bear)">-0.2973</td><td>&lt;0.000001</td><td>7/7</td><td>all 113</td><td>all 460</td><td>6/6</td><td>0.0003</td></tr><tr><td class="l">RSP</td><td style="color:var(--bear)">-0.5566</td><td style="color:var(--bear)">-0.5566</td><td>&lt;0.000001</td><td>7/7</td><td>all 142</td><td>all 460</td><td>7/7</td><td>0.0004</td></tr><tr><td class="l">XLK</td><td style="color:var(--bull)">+0.6342</td><td style="color:var(--bull)">+0.6342</td><td>&lt;0.000001</td><td>7/7</td><td>all 120</td><td>all 460</td><td>6/6</td><td>0.0005</td></tr><tr><td class="l">XLE</td><td style="color:var(--dim)">-0.0049</td><td style="color:var(--dim)">-0.0049</td><td>&lt;0.000001</td><td>7/7</td><td>all 112</td><td>all 460</td><td>6/6</td><td>0.0014</td></tr><tr><td class="l">XLF</td><td style="color:var(--bear)">-0.5757</td><td style="color:var(--bear)">-0.5757</td><td>&lt;0.000001</td><td>7/7</td><td>all 112</td><td>all 460</td><td>6/6</td><td>0.0027</td></tr><tr><td class="l">XLV</td><td style="color:var(--bull)">+0.6841</td><td style="color:var(--bull)">+0.6841</td><td>&lt;0.000001</td><td>7/7</td><td>all 145</td><td>all 460</td><td>7/7</td><td>0.0009</td></tr><tr><td class="l">XLU</td><td style="color:var(--bear)">-0.8796</td><td style="color:var(--bear)">-0.8796</td><td>&lt;0.000001</td><td>7/7</td><td>all 116</td><td>all 460</td><td>6/6</td><td>0.0015</td></tr>
+</table></div>
+<p class="dim">Live Geiger computed 2026-09-28T18:21:02.262Z; check run 2026-09-28T18:24:34.073Z. The largest gap is 0.0000004, which is only the
+rounding of the published numbers (the Hub publishes six decimals). The rebuilt-bar columns count every finished bucket both sides had (intraday: the ~7 days of
+30-minute bars the API serves; 3D and weekly: 230 each). The daily close is the official closing price in both places, not the last 30-minute trade, so only open/high/low are compared.</p>
+<p><b>What this proves:</b> if TradingView's prices equal the Hub's, the table shows the Hub's Geiger. <b>What it does not prove:</b> that TradingView's prices
+<i>are</i> equal. That can only be checked on TradingView itself, by putting the table and the Hub side by side on the same symbols.</p>
+
+<h2>What could be wrong</h2>
+<ul><li><b>Prices come from TradingView, not Massive.</b> The Hub reads Massive&#x27;s bars. TradingView has its own feed, and an after-hours print or a daily high can differ by a cent. I nudged every bar of the ten symbols by up to a cent in either direction, 300 times: the Geiger moved at most 0.0046, below the 0.01 the table shows. A bigger feed difference (a missing after-hours bar, a bad print) would move it more.</li><li><b>The daily bar counts as finished at the 16:00 close.</b> The Hub waits for its settled-close step before it uses the day. Between 16:00 and that step, the table on TradingView already uses today&#x27;s daily bar and the Hub still uses yesterday&#x27;s, so the two can differ for those hours.</li><li><b>The intraday rungs are rebuilt, not taken from TradingView&#x27;s own 3h/6h/12h bars.</b> TradingView starts its multi-hour bars at the session open (04:00). The Hub&#x27;s start on the New York clock (3h at 00, 03, 06 …). The script rolls 30-minute extended-hours bars into the Hub&#x27;s buckets instead. On the ten symbols this rebuild matched every bucket the API served.</li><li><b>Daylight-saving change days.</b> On the two days a year the clocks change, the end time of the last bucket of the day is off by one hour. Which bucket each bar falls in is still right; only the moment a bucket counts as finished shifts.</li><li><b>How much history your TradingView plan loads.</b> The 12h rung needs about 3,200 thirty-minute bars for its full nine-line fan. TradingView plans load 5,000 to 20,000 bars, which is enough; if a symbol has less, the rung uses fewer lines, as the Hub does for young listings.</li><li><b>The chart the table sits on.</b> Put it on a chart with extended hours on, at 30 minutes or faster (or a 24-hour symbol). On a regular-hours-only chart the script reads the other symbols as of that chart&#x27;s last bar, so after 16:00 it can miss the after-hours buckets.</li><li><b>Twenty rows at most.</b> Each row needs two TradingView data requests and TradingView allows 40. More rows would need a second copy of the script with its own list.</li></ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li><b>The script has not been compiled on TradingView.</b> There is no TradingView checker in this session, and the brief says not to use your editor.
+I read it through line by line for Pine v6 rules, but the first paste is its first compile. If TradingView shows an error, send me the line and message.</li>
+<li>I did not open, inject into or change anything on your TradingView, and I did not deploy this page.</li>
+<li>Your FAVORITES and RADAR lists are empty today, so “Alan's names” uses the first 20 of your 128 LIKED names, leaving out non-stock
+codes (BTCUSD, SIUSD, GCUSD, CLUSD, VIX), SPY and QQQ (already in the first list) and DRAM (I'm not sure of its exchange).
+TSM, the next name, takes the last row.</li>
+<li>The exchange for each preset symbol is written in by hand (AMEX for the SPDR funds, SPY, IWM, DIA and RSP; NASDAQ for QQQ and most names; NYSE for ANET
+and TSM). If one shows “n/a”, retype it in a Custom box with the exchange TradingView shows.</li>
+</ul>
+
+<h2>The script</h2>
+<p><button class="copy" id="cp">Copy script</button> <span class="dim" id="cpm"></span></p>
+<pre id="src">//@version=6
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// SCINTILLA · GEIGER TABLE  ·  v1 · 28 Sep 2026 · dispatch SCINTILLA-20260928-N8
+// PLOTS 0/64  (a table only — no plot(), no fill(); tables are outside the plot budget)
+// REQUESTS 40/40  (2 per row × 20 rows: one 30-minute extended-hours call, one daily call)
+//
+// WHAT IT IS. The Hub&#x27;s Geiger (chart API /geiger) rebuilt in Pine for a list of symbols, shown as
+// a table: a bar centred at zero (green up, red down), the Geiger value, TREND and MOMENTUM.
+//
+// THE MATHS (copied in behaviour from the provider&#x27;s services/hot-query/geiger-publish-artifact.mjs):
+//   · Seven rungs with today&#x27;s saved Equalizer weights: 3h 1.235817 · 4h 2.278755 · 6h 3.178477 ·
+//     12h 3.172702 · D 3.178477 · 3D 2.576738 · W 0.987499 (public.operator_weights, 28 Sep).
+//   · Each rung reads its newest 230 COMPLETED bars (the forming bar is never used).
+//   · TREND: the 9-line fan EMA 5/8/13/21/34 + SMA 50/100/150/200 (a line exists only when the rung
+//     has that many bars). trend = (2 × pairs in order − pairs) / pairs, where &quot;in order&quot; means
+//     line i is above line i+1. −1 … +1.
+//   · MOMENTUM: RSI(14) (Wilder, seeded at the window start) mapped 23→−1 … 77→+1, and Williams %R(14)
+//     mapped −90→−1 … −10→+1, each clamped, mixed RSI 0.6 / Williams 0.4.
+//   · Rung value = 0.5 × TREND + 0.5 × MOMENTUM (TREND alone when momentum cannot be computed).
+//   · GEIGER = weighted mean of the rung values; TREND and MOMENTUM columns = the same weighted means
+//     of each family (MOMENTUM only over rungs that computed it).
+//   · A 3h/4h/6h/12h rung whose newest bar is on an older New York date than the D rung&#x27;s newest
+//     bar is left out, as the publisher does.
+//
+// HOW THE RUNGS ARE BUILT (why this fits 20 symbols in 40 requests).
+//   · 3h 4h 6h 12h are rolled up here from 30-minute EXTENDED-HOURS bars into New York clock buckets
+//     (3h: 00 03 06 … · 4h: 00 04 08 … · 6h: 00 06 12 18 · 12h: 00 12), exactly as the chart API
+//     builds them. TradingView&#x27;s own 3h/6h/12h bars start at the session open instead, so they
+//     would not match.
+//   · D is TradingView&#x27;s regular-session daily bar. 3D is rolled up from D into calendar 3-day
+//     buckets (bucket = floor((epoch day − 2) / 3)); W into Sunday-anchored weeks — both as the API.
+//
+// KNOWN DIFFERENCES FROM THE HUB (read the page for the numbers):
+//   1. Prices come from TradingView&#x27;s feed, not Massive. Extended-hours prints and daily highs/lows
+//      can differ by a cent or two, which can flip a close fan pair or nudge Williams %R.
+//   2. The D bar counts as finished at the 16:00 close; the Hub waits for its settled-close step,
+//      so between the close and that step the two can read different days.
+//   3. On the two daylight-saving change days the end time of the last intraday bucket is off
+//      by an hour (which bucket a bar belongs to is still correct).
+//   4. Intraday history is limited by your TradingView plan. The 12h rung needs about 3,200
+//      30-minute bars for its full nine-line fan; with less, it uses fewer lines (as the Hub does
+//      for young listings).
+//   5. Put it on a chart with EXTENDED HOURS ON (any timeframe from 1 minute to 30 minutes works
+//      best), or on a 24-hour symbol. On a regular-hours-only chart after 16:00 the table can lag
+//      the after-hours buckets until the next session.
+//
+// PASTE: Pine Editor → new indicator → select all → paste → Save → Add to chart.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+indicator(&quot;SCINTILLA · GEIGER TABLE&quot;, shorttitle = &quot;GEIGER TABLE&quot;, overlay = true)
+
+// ── constants ──────────────────────────────────────────────────────────────────────────────────
+const string TZ        = &quot;America/New_York&quot;
+const int    DAY_MS    = 86400000
+const int    RECENT_I  = 4 * 86400000      // intraday readings are computed on the last four days of bars only (speed; covers a long weekend)
+const int    RECENT_D  = 10 * 86400000     // daily readings: the last ten days of bars
+const int    WINDOW    = 230
+const float  RSI_OS    = 23.0
+const float  RSI_OB    = 77.0
+const float  W_OS      = -90.0
+const float  W_OB      = -10.0
+
+const string P_A = &quot;Sectors + indexes&quot;
+const string P_B = &quot;Alan&#x27;s names&quot;
+const string P_C = &quot;Custom&quot;
+
+// colours — greys (channels within 24 of each other, none above 210) + the Hub&#x27;s bull/bear
+const color C_BULL  = #00FFA3
+const color C_BEAR  = #FF2D55
+const color C_PANEL = #0D0D14
+const color C_FRAME = #252538
+const color C_AXIS  = #3A3A52
+const color C_INK   = #C6C8D2
+const color C_DIM   = #8A8A9E
+const color C_HEAD  = #6E6E82
+
+// ── inputs ─────────────────────────────────────────────────────────────────────────────────────
+const string G_ROWS = &quot;Rows&quot;
+string preset  = input.string(P_A, &quot;List&quot;, options = [P_A, P_B, P_C], group = G_ROWS,
+     tooltip = &quot;Sectors + indexes: the 11 SPDR sectors + SPY QQQ IWM DIA RSP. Alan&#x27;s names: the first 20 LIKED equities in the order they were liked. Custom: the 20 boxes below (EXCHANGE:SYMBOL, e.g. NASDAQ:NVDA; leave a box empty to hide the row).&quot;)
+bool   sortRows = input.bool(true, &quot;Sort by Geiger (high → low)&quot;, group = G_ROWS)
+string c01 = input.string(&quot;&quot;, &quot;Custom 1&quot;,  group = G_ROWS, inline = &quot;c1&quot;)
+string c02 = input.string(&quot;&quot;, &quot;2&quot;,         group = G_ROWS, inline = &quot;c1&quot;)
+string c03 = input.string(&quot;&quot;, &quot;3&quot;,         group = G_ROWS, inline = &quot;c2&quot;)
+string c04 = input.string(&quot;&quot;, &quot;4&quot;,         group = G_ROWS, inline = &quot;c2&quot;)
+string c05 = input.string(&quot;&quot;, &quot;5&quot;,         group = G_ROWS, inline = &quot;c3&quot;)
+string c06 = input.string(&quot;&quot;, &quot;6&quot;,         group = G_ROWS, inline = &quot;c3&quot;)
+string c07 = input.string(&quot;&quot;, &quot;7&quot;,         group = G_ROWS, inline = &quot;c4&quot;)
+string c08 = input.string(&quot;&quot;, &quot;8&quot;,         group = G_ROWS, inline = &quot;c4&quot;)
+string c09 = input.string(&quot;&quot;, &quot;9&quot;,         group = G_ROWS, inline = &quot;c5&quot;)
+string c10 = input.string(&quot;&quot;, &quot;10&quot;,        group = G_ROWS, inline = &quot;c5&quot;)
+string c11 = input.string(&quot;&quot;, &quot;11&quot;,        group = G_ROWS, inline = &quot;c6&quot;)
+string c12 = input.string(&quot;&quot;, &quot;12&quot;,        group = G_ROWS, inline = &quot;c6&quot;)
+string c13 = input.string(&quot;&quot;, &quot;13&quot;,        group = G_ROWS, inline = &quot;c7&quot;)
+string c14 = input.string(&quot;&quot;, &quot;14&quot;,        group = G_ROWS, inline = &quot;c7&quot;)
+string c15 = input.string(&quot;&quot;, &quot;15&quot;,        group = G_ROWS, inline = &quot;c8&quot;)
+string c16 = input.string(&quot;&quot;, &quot;16&quot;,        group = G_ROWS, inline = &quot;c8&quot;)
+string c17 = input.string(&quot;&quot;, &quot;17&quot;,        group = G_ROWS, inline = &quot;c9&quot;)
+string c18 = input.string(&quot;&quot;, &quot;18&quot;,        group = G_ROWS, inline = &quot;c9&quot;)
+string c19 = input.string(&quot;&quot;, &quot;19&quot;,        group = G_ROWS, inline = &quot;c10&quot;)
+string c20 = input.string(&quot;&quot;, &quot;20&quot;,        group = G_ROWS, inline = &quot;c10&quot;)
+
+const string G_EQ = &quot;Equalizer (today&#x27;s saved weights)&quot;
+float w3h  = input.float(1.235817, &quot;3h&quot;,  minval = 0, group = G_EQ, inline = &quot;e1&quot;)
+float w4h  = input.float(2.278755, &quot;4h&quot;,  minval = 0, group = G_EQ, inline = &quot;e1&quot;)
+float w6h  = input.float(3.178477, &quot;6h&quot;,  minval = 0, group = G_EQ, inline = &quot;e2&quot;)
+float w12h = input.float(3.172702, &quot;12h&quot;, minval = 0, group = G_EQ, inline = &quot;e2&quot;)
+float w1d  = input.float(3.178477, &quot;D&quot;,   minval = 0, group = G_EQ, inline = &quot;e3&quot;)
+float w3d  = input.float(2.576738, &quot;3D&quot;,  minval = 0, group = G_EQ, inline = &quot;e3&quot;)
+float w1w  = input.float(0.987499, &quot;W&quot;,   minval = 0, group = G_EQ, inline = &quot;e4&quot;)
+float famT = input.float(0.5, &quot;TREND&quot;,     minval = 0, group = G_EQ, inline = &quot;f1&quot;)
+float famM = input.float(0.5, &quot;MOMENTUM&quot;,  minval = 0, group = G_EQ, inline = &quot;f1&quot;)
+float mixR = input.float(0.6, &quot;RSI&quot;,       minval = 0, group = G_EQ, inline = &quot;f2&quot;)
+float mixW = input.float(0.4, &quot;Williams&quot;,  minval = 0, group = G_EQ, inline = &quot;f2&quot;)
+
+const string G_LOOK = &quot;Look&quot;
+string baseTf = input.string(&quot;30&quot;, &quot;Intraday base bars&quot;, options = [&quot;30&quot;, &quot;60&quot;], group = G_LOOK,
+     tooltip = &quot;30 minutes always lines up with the New York clock buckets. 60 is lighter but only matches if TradingView&#x27;s extended-hours hourly bars start on the hour.&quot;)
+int    barW   = input.int(8, &quot;Bar width (blocks per side)&quot;, minval = 3, maxval = 20, group = G_LOOK)
+string tPos   = input.string(&quot;top_right&quot;, &quot;Position&quot;, options = [&quot;top_right&quot;, &quot;top_left&quot;, &quot;middle_right&quot;, &quot;middle_left&quot;, &quot;bottom_right&quot;, &quot;bottom_left&quot;], group = G_LOOK)
+string tSize  = input.string(&quot;small&quot;, &quot;Text size&quot;, options = [&quot;tiny&quot;, &quot;small&quot;, &quot;normal&quot;], group = G_LOOK)
+
+// ── symbol slots (simple strings; empty = hidden row) ──────────────────────────────────────────
+pick(string a, string b, string c) =&gt; preset == P_A ? a : preset == P_B ? b : c
+
+string s01 = pick(&quot;AMEX:XLB&quot;,  &quot;NASDAQ:SNDK&quot;, c01)
+string s02 = pick(&quot;AMEX:XLE&quot;,  &quot;NASDAQ:NBIS&quot;, c02)
+string s03 = pick(&quot;AMEX:XLF&quot;,  &quot;NASDAQ:MU&quot;,   c03)
+string s04 = pick(&quot;AMEX:XLI&quot;,  &quot;NASDAQ:CRDO&quot;, c04)
+string s05 = pick(&quot;AMEX:XLK&quot;,  &quot;NASDAQ:GOOGL&quot;, c05)
+string s06 = pick(&quot;AMEX:XLP&quot;,  &quot;NASDAQ:CIFR&quot;, c06)
+string s07 = pick(&quot;AMEX:XLRE&quot;, &quot;NASDAQ:USAR&quot;, c07)
+string s08 = pick(&quot;AMEX:XLU&quot;,  &quot;NASDAQ:ARM&quot;,  c08)
+string s09 = pick(&quot;AMEX:XLV&quot;,  &quot;NASDAQ:AMAT&quot;, c09)
+string s10 = pick(&quot;AMEX:XLY&quot;,  &quot;NASDAQ:ASTS&quot;, c10)
+string s11 = pick(&quot;AMEX:XLC&quot;,  &quot;NASDAQ:APLD&quot;, c11)
+string s12 = pick(&quot;AMEX:SPY&quot;,  &quot;NASDAQ:CRWV&quot;, c12)
+string s13 = pick(&quot;NASDAQ:QQQ&quot;, &quot;NASDAQ:MSTR&quot;, c13)
+string s14 = pick(&quot;AMEX:IWM&quot;,  &quot;NYSE:ANET&quot;,   c14)
+string s15 = pick(&quot;AMEX:DIA&quot;,  &quot;NASDAQ:ASML&quot;, c15)
+string s16 = pick(&quot;AMEX:RSP&quot;,  &quot;NASDAQ:AMD&quot;,  c16)
+string s17 = pick(&quot;&quot;,          &quot;NASDAQ:ALAB&quot;, c17)
+string s18 = pick(&quot;&quot;,          &quot;NASDAQ:IREN&quot;, c18)
+string s19 = pick(&quot;&quot;,          &quot;NASDAQ:TSLA&quot;, c19)
+string s20 = pick(&quot;&quot;,          &quot;NYSE:TSM&quot;,    c20)
+
+// ── one rung&#x27;s reading from its newest completed bars (oldest → newest) ────────────────────────
+clamp1(float x) =&gt; math.max(-1.0, math.min(1.0, x))
+
+rungRead(array&lt;float&gt; c, array&lt;float&gt; h, array&lt;float&gt; l) =&gt;
+    int   n     = array.size(c)
+    float trend = na
+    float mom   = na
+    float comp  = na
+    if n &gt;= 8
+        // fan: EMAs seeded at the first bar of the window, SMAs over their own length
+        float x0  = array.get(c, 0)
+        float e5  = x0
+        float e8  = x0
+        float e13 = x0
+        float e21 = x0
+        float e34 = x0
+        for i = 1 to n - 1
+            float x = array.get(c, i)
+            e5  := x * (2.0 / 6.0)  + e5  * (1.0 - 2.0 / 6.0)
+            e8  := x * (2.0 / 9.0)  + e8  * (1.0 - 2.0 / 9.0)
+            e13 := x * (2.0 / 14.0) + e13 * (1.0 - 2.0 / 14.0)
+            e21 := x * (2.0 / 22.0) + e21 * (1.0 - 2.0 / 22.0)
+            e34 := x * (2.0 / 35.0) + e34 * (1.0 - 2.0 / 35.0)
+        array&lt;float&gt; fan = array.new&lt;float&gt;()
+        array.push(fan, e5)
+        array.push(fan, e8)
+        if n &gt;= 13
+            array.push(fan, e13)
+        if n &gt;= 21
+            array.push(fan, e21)
+        if n &gt;= 34
+            array.push(fan, e34)
+        array&lt;int&gt; smaLens = array.from(50, 100, 150, 200)
+        for len in smaLens
+            if n &gt;= len
+                float s = 0.0
+                for j = n - len to n - 1
+                    s += array.get(c, j)
+                array.push(fan, s / len)
+        int pairs   = array.size(fan) - 1
+        int inOrder = 0
+        for i = 0 to pairs - 1
+            if array.get(fan, i) &gt; array.get(fan, i + 1)
+                inOrder += 1
+        trend := (2.0 * inOrder - pairs) / pairs
+        comp  := trend
+        if n &gt;= 15
+            // RSI(14), Wilder, seeded with the simple average of the first 14 changes
+            float g  = 0.0
+            float ls = 0.0
+            for i = 1 to 14
+                float d = array.get(c, i) - array.get(c, i - 1)
+                if d &gt; 0
+                    g += d
+                else
+                    ls -= d
+            g  /= 14.0
+            ls /= 14.0
+            if n &gt; 15
+                for i = 15 to n - 1
+                    float d = array.get(c, i) - array.get(c, i - 1)
+                    g  := (g  * 13.0 + (d &gt; 0 ? d : 0.0)) / 14.0
+                    ls := (ls * 13.0 + (d &lt; 0 ? -d : 0.0)) / 14.0
+            float rsi = 100.0 - 100.0 / (1.0 + (ls == 0 ? 1e9 : g / ls))
+            // Williams %R(14)
+            float hh = -1e18
+            float ll = 1e18
+            for j = n - 14 to n - 1
+                hh := math.max(hh, array.get(h, j))
+                ll := math.min(ll, array.get(l, j))
+            float close0 = array.get(c, n - 1)
+            float wr = hh &gt; ll ? (hh - close0) / (hh - ll) * -100.0 : -50.0
+            float mw = mixR + mixW &gt; 0 ? mixR + mixW : 1.0
+            mom  := (clamp1((rsi - RSI_OS) / (RSI_OB - RSI_OS) * 2.0 - 1.0) * mixR + clamp1((wr - W_OS) / (W_OB - W_OS) * 2.0 - 1.0) * mixW) / mw
+            float fw = famT + famM &gt; 0 ? famT + famM : 1.0
+            comp := (famT * trend + famM * mom) / fw
+    [trend, mom, comp]
+
+// ── roll incoming bars into buckets; read the newest 230 completed ones ────────────────────────
+// bid      : this bar&#x27;s bucket id (changes when a new bucket starts)
+// curDone  : the bucket this bar sits in has already ended by the clock (so it counts as completed)
+// bdate    : the New York date (yyyymmdd) of this bucket&#x27;s first bar
+// doCalc   : compute the reading on this bar (only the newest few days, to save time)
+rollRung(int bid, bool curDone, int bdate, bool doCalc) =&gt;
+    var array&lt;float&gt; cA = array.new&lt;float&gt;()
+    var array&lt;float&gt; hA = array.new&lt;float&gt;()
+    var array&lt;float&gt; lA = array.new&lt;float&gt;()
+    var int   curId    = na
+    var float curH     = na
+    var float curL     = na
+    var float curC     = na
+    var int   curDate  = na
+    var int   lastDate = na
+    if na(curId) or bid != curId
+        if not na(curId)
+            array.push(cA, curC)
+            array.push(hA, curH)
+            array.push(lA, curL)
+            if array.size(cA) &gt; WINDOW
+                array.shift(cA)
+                array.shift(hA)
+                array.shift(lA)
+            lastDate := curDate
+        curId   := bid
+        curH    := high
+        curL    := low
+        curC    := close
+        curDate := bdate
+    else
+        curH := math.max(curH, high)
+        curL := math.min(curL, low)
+        curC := close
+    float tr = na
+    float mo = na
+    float co = na
+    int   nd = na
+    if doCalc
+        array&lt;float&gt; c2 = array.copy(cA)
+        array&lt;float&gt; h2 = array.copy(hA)
+        array&lt;float&gt; l2 = array.copy(lA)
+        nd := lastDate
+        if curDone
+            array.push(c2, curC)
+            array.push(h2, curH)
+            array.push(l2, curL)
+            if array.size(c2) &gt; WINDOW
+                array.shift(c2)
+                array.shift(h2)
+                array.shift(l2)
+            nd := curDate
+        [t1, m1, k1] = rungRead(c2, h2, l2)
+        tr := t1
+        mo := m1
+        co := k1
+    [tr, mo, co, nd]
+
+// New York clock bucket of N hours for the current bar: [start, end]
+clockBucket(int nh) =&gt;
+    int y  = year(time, TZ)
+    int mo = month(time, TZ)
+    int d  = dayofmonth(time, TZ)
+    int k  = math.floor(hour(time, TZ) / nh)
+    int s  = timestamp(TZ, y, mo, d, k * nh, 0)
+    int e  = (k + 1) * nh &gt;= 24 ? timestamp(TZ, y, mo, d, 0, 0) + DAY_MS : timestamp(TZ, y, mo, d, (k + 1) * nh, 0)
+    [s, e]
+
+// evaluated on the 30-minute extended-hours bars of one symbol
+intraRungs() =&gt;
+    int  dkey   = year(time, TZ) * 10000 + month(time, TZ) * 100 + dayofmonth(time, TZ)
+    bool doCalc = time &gt;= timenow - RECENT_I
+    [s3, e3]   = clockBucket(3)
+    [s4, e4]   = clockBucket(4)
+    [s6, e6]   = clockBucket(6)
+    [s12, e12] = clockBucket(12)
+    [t3, m3, k3, n3]     = rollRung(s3,  timenow &gt;= e3,  dkey, doCalc)
+    [t4, m4, k4, n4]     = rollRung(s4,  timenow &gt;= e4,  dkey, doCalc)
+    [t6, m6, k6, n6]     = rollRung(s6,  timenow &gt;= e6,  dkey, doCalc)
+    [t12, m12, k12, n12] = rollRung(s12, timenow &gt;= e12, dkey, doCalc)
+    [t3, m3, k3, n3, t4, m4, k4, n4, t6, m6, k6, n6, t12, m12, k12, n12]
+
+// evaluated on the regular-session daily bars of one symbol
+epochDay(int t) =&gt; math.floor(timestamp(&quot;UTC&quot;, year(t, TZ), month(t, TZ), dayofmonth(t, TZ), 0, 0) / DAY_MS)
+
+dailyRungs() =&gt;
+    int  dkey    = year(time, TZ) * 10000 + month(time, TZ) * 100 + dayofmonth(time, TZ)
+    bool doCalc  = time &gt;= timenow - RECENT_D
+    int  ed      = epochDay(time)
+    int  today   = epochDay(timenow)
+    bool dayDone = timenow &gt;= time_close
+    int  b3      = math.floor((ed - 2) / 3)
+    int  bw      = math.floor((ed + 4) / 7)
+    [tD, mD, kD, nD] = rollRung(ed, dayDone, dkey, doCalc)
+    [t3, m3, k3, n3] = rollRung(b3, dayDone and b3 &lt; math.floor((today - 2) / 3), dkey, doCalc)
+    [tW, mW, kW, nW] = rollRung(bw, dayDone and bw &lt; math.floor((today + 4) / 7), dkey, doCalc)
+    [tD, mD, kD, nD, t3, m3, k3, tW, mW, kW]
+
+// ── one row: two requests, then the Equalizer-weighted mean ────────────────────────────────────
+addW(float w, float v) =&gt; w &gt; 0 and not na(v) ? w : 0.0
+addV(float w, float v) =&gt; w &gt; 0 and not na(v) ? w * v : 0.0
+
+geigerRow(string sym) =&gt;
+    string s   = sym == &quot;&quot; ? syminfo.tickerid : sym
+    string sx  = ticker.modify(s, session.extended)
+    [t3, m3, k3, n3, t4, m4, k4, n4, t6, m6, k6, n6, t12, m12, k12, n12] = request.security(sx, baseTf, intraRungs(), lookahead = barmerge.lookahead_on)
+    [tD, mD, kD, nD, t3d, m3d, k3d, tW, mW, kW] = request.security(s, &quot;D&quot;, dailyRungs(), lookahead = barmerge.lookahead_on)
+    // an intraday rung whose newest bucket is on an older New York date than the D rung is left out
+    bool ok3  = not na(k3)  and (na(nD) or n3  &gt;= nD)
+    bool ok4  = not na(k4)  and (na(nD) or n4  &gt;= nD)
+    bool ok6  = not na(k6)  and (na(nD) or n6  &gt;= nD)
+    bool ok12 = not na(k12) and (na(nD) or n12 &gt;= nD)
+    float a3  = ok3  ? w3h  : 0.0
+    float a4  = ok4  ? w4h  : 0.0
+    float a6  = ok6  ? w6h  : 0.0
+    float a12 = ok12 ? w12h : 0.0
+    float ws = addW(a3, k3) + addW(a4, k4) + addW(a6, k6) + addW(a12, k12) + addW(w1d, kD) + addW(w3d, k3d) + addW(w1w, kW)
+    float gc = addV(a3, k3) + addV(a4, k4) + addV(a6, k6) + addV(a12, k12) + addV(w1d, kD) + addV(w3d, k3d) + addV(w1w, kW)
+    float gt = addV(a3, t3) + addV(a4, t4) + addV(a6, t6) + addV(a12, t12) + addV(w1d, tD) + addV(w3d, t3d) + addV(w1w, tW)
+    float wm = addW(a3, m3) + addW(a4, m4) + addW(a6, m6) + addW(a12, m12) + addW(w1d, mD) + addW(w3d, m3d) + addW(w1w, mW)
+    float gm = addV(a3, m3) + addV(a4, m4) + addV(a6, m6) + addV(a12, m12) + addV(w1d, mD) + addV(w3d, m3d) + addV(w1w, mW)
+    int   nr = (addW(a3, k3) &gt; 0 ? 1 : 0) + (addW(a4, k4) &gt; 0 ? 1 : 0) + (addW(a6, k6) &gt; 0 ? 1 : 0) + (addW(a12, k12) &gt; 0 ? 1 : 0) + (addW(w1d, kD) &gt; 0 ? 1 : 0) + (addW(w3d, k3d) &gt; 0 ? 1 : 0) + (addW(w1w, kW) &gt; 0 ? 1 : 0)
+    [ws &gt; 0 ? gc / ws : na, ws &gt; 0 ? gt / ws : na, wm &gt; 0 ? gm / wm : na, nr]
+
+[g01, tr01, mo01, r01] = geigerRow(s01)
+[g02, tr02, mo02, r02] = geigerRow(s02)
+[g03, tr03, mo03, r03] = geigerRow(s03)
+[g04, tr04, mo04, r04] = geigerRow(s04)
+[g05, tr05, mo05, r05] = geigerRow(s05)
+[g06, tr06, mo06, r06] = geigerRow(s06)
+[g07, tr07, mo07, r07] = geigerRow(s07)
+[g08, tr08, mo08, r08] = geigerRow(s08)
+[g09, tr09, mo09, r09] = geigerRow(s09)
+[g10, tr10, mo10, r10] = geigerRow(s10)
+[g11, tr11, mo11, r11] = geigerRow(s11)
+[g12, tr12, mo12, r12] = geigerRow(s12)
+[g13, tr13, mo13, r13] = geigerRow(s13)
+[g14, tr14, mo14, r14] = geigerRow(s14)
+[g15, tr15, mo15, r15] = geigerRow(s15)
+[g16, tr16, mo16, r16] = geigerRow(s16)
+[g17, tr17, mo17, r17] = geigerRow(s17)
+[g18, tr18, mo18, r18] = geigerRow(s18)
+[g19, tr19, mo19, r19] = geigerRow(s19)
+[g20, tr20, mo20, r20] = geigerRow(s20)
+
+// ── the table ──────────────────────────────────────────────────────────────────────────────────
+dirColor(float v) =&gt; na(v) or math.abs(v) &lt; 0.005 ? C_DIM : v &gt; 0 ? C_BULL : C_BEAR
+fmt(float v) =&gt; na(v) ? &quot;n/a&quot; : math.abs(v) &lt; 0.005 ? &quot;0.00&quot; : (v &gt; 0 ? &quot;+&quot; : &quot;&quot;) + str.tostring(v, &quot;0.00&quot;)
+shortName(string s) =&gt;
+    array&lt;string&gt; parts = str.split(s, &quot;:&quot;)
+    array.get(parts, array.size(parts) - 1)
+blocks(int n) =&gt;
+    string out = &quot;&quot;
+    if n &gt; 0
+        for i = 1 to n
+            out := out + &quot;█&quot;
+    out
+// right-hand (positive) bar: whole blocks plus an eighth-block tail
+barPos(float v) =&gt;
+    float u = math.max(0.0, v) * barW
+    int   f = math.floor(u)
+    int   e = math.round((u - f) * 8)
+    string tail = e &lt;= 0 ? &quot;&quot; : e == 1 ? &quot;▏&quot; : e == 2 ? &quot;▎&quot; : e == 3 ? &quot;▍&quot; : e == 4 ? &quot;▌&quot; : e == 5 ? &quot;▋&quot; : e == 6 ? &quot;▊&quot; : e == 7 ? &quot;▉&quot; : &quot;█&quot;
+    blocks(math.min(f, barW)) + (f &gt;= barW ? &quot;&quot; : tail)
+// left-hand (negative) bar, right-aligned: a half-block tail on the zero side is the finest glyph that hugs the right
+barNeg(float v) =&gt;
+    float u = math.max(0.0, -v) * barW
+    int   f = math.floor(u)
+    string tail = u - f &gt;= 0.75 ? &quot;█&quot; : u - f &gt;= 0.25 ? &quot;▐&quot; : &quot;&quot;
+    (f &gt;= barW ? &quot;&quot; : tail) + blocks(math.min(f, barW))
+
+posOf(string p) =&gt;
+    switch p
+        &quot;top_left&quot;     =&gt; position.top_left
+        &quot;middle_right&quot; =&gt; position.middle_right
+        &quot;middle_left&quot;  =&gt; position.middle_left
+        &quot;bottom_right&quot; =&gt; position.bottom_right
+        &quot;bottom_left&quot;  =&gt; position.bottom_left
+        =&gt; position.top_right
+sizeOf(string s) =&gt; s == &quot;tiny&quot; ? size.tiny : s == &quot;normal&quot; ? size.normal : size.small
+
+var table T = na
+
+cellTxt(int col, int row, string txt, color tc, string ha) =&gt;
+    table.cell(T, col, row, txt, text_color = tc, text_halign = ha, text_size = sizeOf(tSize), text_font_family = font.family_monospace, bgcolor = C_PANEL)
+
+if barstate.islast
+    // rebuilt on every update, so the footer merge never meets an already-merged range
+    if not na(T)
+        table.delete(T)
+    T := table.new(posOf(tPos), 8, 23, bgcolor = C_PANEL, frame_color = C_FRAME, frame_width = 1, border_color = C_PANEL, border_width = 1)
+    array&lt;string&gt; syms = array.from(s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20)
+    array&lt;float&gt;  gs   = array.from(g01, g02, g03, g04, g05, g06, g07, g08, g09, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20)
+    array&lt;float&gt;  trs  = array.from(tr01, tr02, tr03, tr04, tr05, tr06, tr07, tr08, tr09, tr10, tr11, tr12, tr13, tr14, tr15, tr16, tr17, tr18, tr19, tr20)
+    array&lt;float&gt;  mos  = array.from(mo01, mo02, mo03, mo04, mo05, mo06, mo07, mo08, mo09, mo10, mo11, mo12, mo13, mo14, mo15, mo16, mo17, mo18, mo19, mo20)
+    array&lt;int&gt;    rs   = array.from(r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20)
+    // sort key: hidden rows last, then no-reading rows, then Geiger high → low
+    array&lt;float&gt; sortKey = array.new&lt;float&gt;()
+    for i = 0 to 19
+        float g = array.get(gs, i)
+        array.push(sortKey, array.get(syms, i) == &quot;&quot; ? -99.0 : na(g) ? -9.0 : g)
+    array&lt;int&gt; idx = sortRows ? array.sort_indices(sortKey, order.descending) : array.from(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+    cellTxt(0, 0, &quot;GEIGER&quot;, C_HEAD, text.align_left)
+    cellTxt(1, 0, &quot;−&quot;, C_HEAD, text.align_right)
+    cellTxt(2, 0, &quot;│&quot;, C_AXIS, text.align_center)
+    cellTxt(3, 0, &quot;+&quot;, C_HEAD, text.align_left)
+    cellTxt(4, 0, &quot;VALUE&quot;, C_HEAD, text.align_right)
+    cellTxt(5, 0, &quot;TREND&quot;, C_HEAD, text.align_right)
+    cellTxt(6, 0, &quot;MOM&quot;, C_HEAD, text.align_right)
+    cellTxt(7, 0, &quot;R&quot;, C_HEAD, text.align_right)
+    int row = 1
+    for k = 0 to 19
+        int    i = array.get(idx, k)
+        string s = array.get(syms, i)
+        if s != &quot;&quot;
+            float g  = array.get(gs, i)
+            float tv = array.get(trs, i)
+            float mv = array.get(mos, i)
+            cellTxt(0, row, shortName(s), C_INK, text.align_left)
+            cellTxt(1, row, na(g) ? &quot;&quot; : barNeg(g), C_BEAR, text.align_right)
+            cellTxt(2, row, &quot;│&quot;, C_AXIS, text.align_center)
+            cellTxt(3, row, na(g) ? &quot;&quot; : barPos(g), C_BULL, text.align_left)
+            cellTxt(4, row, fmt(g),  dirColor(g),  text.align_right)
+            cellTxt(5, row, fmt(tv), dirColor(tv), text.align_right)
+            cellTxt(6, row, fmt(mv), dirColor(mv), text.align_right)
+            cellTxt(7, row, str.tostring(array.get(rs, i)) + &quot;/7&quot;, C_DIM, text.align_right)
+            row += 1
+    string asOf = str.format_time(timenow, &quot;dd MMM HH:mm&quot;, TZ)
+    cellTxt(0, row, &quot;7 rungs · 3h 4h 6h 12h D 3D W · completed bars only · &quot; + asOf + &quot; ET&quot;, C_HEAD, text.align_left)
+    table.merge_cells(T, 0, row, 7, row)
+</pre>
+<script>
+document.getElementById("cp").addEventListener("click", async () => {
+  const t = document.getElementById("src").textContent, m = document.getElementById("cpm");
+  try { await navigator.clipboard.writeText(t); m.textContent = "copied — paste into a new Pine indicator"; }
+  catch (e) { m.textContent = "copy blocked — select the text below and copy it"; }
+});
+</script>
+</main><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
