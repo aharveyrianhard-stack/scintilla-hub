@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scout Tier · Design</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0F0F16;--line:#1C1C28;--line2:#2A2A3A;--ink:#C8C8D2;--ink2:#A0A0B0;--dim:#8A8A9A;--up:#35b06a;--dn:#d1483f;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:1240px;margin:0 auto;padding:18px 20px 60px}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;letter-spacing:.22em;text-transform:uppercase;margin:0}
+h2{font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);margin:36px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+.kicker{color:var(--dim);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 16px}
+.lead{font-size:15px;max-width:96ch;margin:10px 0 18px}
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tier{border:1px solid var(--line2);background:var(--panel);padding:14px 16px}
+.tier .k{font-size:12px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase}
+.tier .v{font-size:24px;margin:2px 0 6px}
+.tier ul{margin:6px 0 0 16px;padding:0;color:var(--ink2)}
+.tier b{color:var(--ink)}
+.arrow{font-size:12px;color:var(--ink2);text-align:center;margin:8px 0}
+table{border-collapse:collapse;font-size:12px;width:100%;margin:6px 0 10px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto}
+p{max-width:100ch;color:var(--ink2);margin:6px 0}
+p b,li b{color:var(--ink)}
+.rec{border:1px solid var(--line2);background:var(--panel);padding:12px 16px;margin:10px 0;max-width:100ch}
+.rec b{color:var(--ink)}
+a{color:var(--ink)}
+svg text{font-family:var(--mono)}
+@media (max-width:900px){.tiers{grid-template-columns:1fr}main{padding:12px 10px 40px}h1{font-size:15px}.lead{font-size:14px}}
+</style>
+</head>
+<body>
+<main>
+<header><span data-scnav-slot></span><h1>Scout tier · design</h1></header>
+<div class="kicker">28 Sep 2026 · answer to "we need a more lightweight method" · working prototype: <a href="../scout-iwm/SCOUT-IWM.html">Scout · IWM</a> · <a href="../etf-valuation/ETF-VALUATION.html">Fund valuation</a></div>
+
+<p class="lead">The Hub gives every name the full treatment — live bars on seven timeframes, the Geiger, financials, estimates, the company view. That is why we carry 486 names and only 31 of IWM's ~1,970 stocks (3.3% of its weight). The suggestion: add a <b>third, cheap tier underneath</b> that screens <b>every US stock every night</b> from data we already receive in bulk, with <b>no admission per ticker</b>. You look at any list through it — IWM, a branch of the market map, a fund's holdings — and only the names you pick move up.</p>
+
+<h2>1 · Three tiers, one direction of travel</h2>
+<div class="tiers">
+  <div class="tier"><div class="k">Scout · new</div><div class="v" id="t-scout">every US stock</div>
+    <ul><li><b>Daily</b> numbers only, as of the last close</li><li>RSI 14 + where it sits in its own history, distance from 50/200-day, from the 1-year high, 3-month strength vs its fund, $ traded, P/E, earnings, debt, next report</li><li>No Geiger, no intraday, no company view</li><li>Cost per extra name: <b>zero</b></li></ul></div>
+  <div class="tier"><div class="k">Geiger-only · exists</div><div class="v">66 names</div>
+    <ul><li>Served bars on every timeframe + a live Geiger</li><li>Shown where you ask (map, cohorts), not in every room</li><li>Needs an admission sitting (bars history cut, stream scope)</li></ul></div>
+  <div class="tier"><div class="k">Full · exists</div><div class="v">420 names</div>
+    <ul><li>Everything: charts, Geiger, financials, estimates, comps, company view, events</li><li>The most expensive: bar service, streams, nightly fundamentals per ticker</li></ul></div>
+</div>
+<div class="arrow">SCOUT &nbsp;→ you pick a name from a scout list →&nbsp; GEIGER-ONLY &nbsp;→ you want the company view →&nbsp; FULL</div>
+<p><b>Promotion is your click, never automatic.</b> The scout page gets a "promote" mark per row that writes the ticker onto the next admission sitting's candidate list (the same list the 27 Sep sitting used). Nothing drops down automatically either; a name leaves a tier only when you say so.</p>
+
+<h2>2 · Why it is cheap — everything arrives in bulk</h2>
+<div class="scroll"><table>
+<tr><th>What</th><th>From</th><th>Calls per night</th><th>Already paid for?</th></tr>
+<tr><td>Daily bar of every US stock</td><td>Massive grouped-daily (one call = the whole market for one day); history from our R2 copy of Massive's day files, 2003 → 17 Aug 2026</td><td class="n">1</td><td>Yes — the breadth job (B1) makes the same call and stores the day; the scout reads that copy, so <b>zero extra</b> Massive calls</td></tr>
+<tr><td>Company numbers for every listed company</td><td>FMP bulk: profiles (4 files), ratios TTM, key metrics TTM</td><td class="n">6</td><td>Yes — our FMP plan answers the bulk files (checked 28 Sep). Asking for the same file again within a few minutes answers "too many requests", so the job waits and retries; once a night is far inside that</td></tr>
+<tr><td>Which stocks are in which fund, with weights</td><td>FMP ETF holdings, one call per fund</td><td class="n">~100 weekly</td><td>Yes — holdings change slowly; weekly is enough</td></tr>
+<tr><td>Next earnings report</td><td>FMP earnings calendar, next 14 days</td><td class="n">1</td><td>Yes</td></tr>
+<tr><td>Today's move (optional, intraday)</td><td>Massive whole-market snapshot</td><td class="n">1 per look</td><td>Yes</td></tr>
+</table></div>
+<p id="measured"><b>Measured on the 28 Sep prototype run:</b> see section 5.</p>
+
+<h2>3 · Where the result lives — an R2 file, not a database table</h2>
+<div class="rec"><b>Choice: one compressed JSON file per night in R2</b> (<code>normalized/scout_v1/&lt;date&gt;.json.gz</code> + <code>latest.json.gz</code>), served read-only by the chart API as <code>/v1/scout?list=IWM</code>.<br>
+<b>Why:</b> the scout is one whole-market snapshot that is always read whole (a page filters ~2,000–5,000 rows in the browser in milliseconds); no query ever needs one row. A file needs no migration, no new permission, no row-by-row writes, and old nights stay as dated files for free. The chart API already reads R2 for prices, so the Hub reaches it the same way it reaches everything else.<br>
+<b>When a table would be better:</b> if the Allocation tool needs to join scout numbers with saved picks in SQL. Then an additive <code>public.scout_daily</code> table is filled from the same file by the same edge-function pattern B1 uses for breadth. Not written, not applied — no database was touched.</div>
+<p><b>One small permission to decide:</b> the provider's R2 writer refuses every folder except FMP, Cboe (and, on the breadth branch, breadth). The scout needs <code>normalized/scout_v1</code> added to that list — the same one-line change B1 made. It is not made on this branch; the prototype wrote nothing to R2.</p>
+
+<h2>4 · How it runs</h2>
+<div class="scroll"><table>
+<tr><th>Step</th><th>Where</th><th>When</th></tr>
+<tr><td>1 · Breadth nightly stores the day's whole-market bars</td><td>Fly, batch app (B1's scheduled job)</td><td>after 16:45 ET</td></tr>
+<tr><td>2 · Scout job: reads ~830 day files + FMP bulk + holdings, computes every column, writes the night's file</td><td>Fly, same app, <code>--schedule hourly</code> with a calendar gate (does nothing until breadth has the day, then runs once)</td><td>~17:00–18:00 ET</td></tr>
+<tr><td>3 · Chart API serves <code>/v1/scout?list=…</code> (a fund, a map branch, "all")</td><td>Fly, chart API (read-only)</td><td>on request</td></tr>
+<tr><td>4 · Hub page: the list, editable filters, sector cap, promote marks</td><td>Hub (static page)</td><td>on open</td></tr>
+</table></div>
+<p><b>Lists it can screen with no extra work:</b> any fund FMP has holdings for (IWM, IJR, VB, sector and industry funds, international), every branch of the market map (it already lists funds per branch), and "all US common stocks".</p>
+
+<h2>5 · The 28 Sep prototype run</h2>
+<div id="run"></div>
+
+<h2>6 · In plain words</h2>
+<p><b>What this page is.</b> A proposal with a working prototype. The prototype ran once today on a temporary Fly machine that borrowed the batch app's keys and was removed afterwards. Its numbers are on the IWM page and the fund-valuation page.</p>
+<p><b>What could be wrong.</b> The scout is only as fresh as the last close; it is a screen, not a signal. FMP's holdings and trailing numbers can lag by days or a quarter. The RSI percentile uses about three years of history — enough to say "low for this stock lately", not "low for all time".</p>
+<p><b>What was not done.</b> No schedule installed, no chart API route deployed, no R2 or database write, no promote button (the page shows the design only). Those three steps wait for your go.</p>
+</main>
+<script src="scout-run.js"></script>
+<script>
+(function(){
+const R = window.SCOUT_RUN; if (!R) return
+const el = document.getElementById('run')
+el.innerHTML = `<div class="scroll"><table>
+<tr><th>What</th><th>Measured</th></tr>
+${R.rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}
+</table></div>`
+document.getElementById('measured').innerHTML = '<b>Measured on the 28 Sep prototype run:</b> ' + R.headline
+document.getElementById('t-scout').textContent = R.scout_count
+})()
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
