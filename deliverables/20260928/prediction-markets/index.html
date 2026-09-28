@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Prediction Markets</title>
-<meta name="description" content="What Polymarket and Kalshi expect on the Fed, yields, the S&P, recession, Iran, Russia–Ukraine, tariffs and the midterms — tracked over time, with a flash when odds jump.">
+<meta name="description" content="What Polymarket (and, when switched on, Kalshi) expects on the Fed, yields, the S&P, inflation prints, recession, Japan and the carry trade, China–Taiwan, oil, Iran, Russia–Ukraine, tariffs, Washington, AI and the midterms — tracked over time, with a flash when odds jump.">
 <style>
 :root{--bg:#07070C;--panel:#0B0B12;--line:#1E1E28;--line2:#24242E;--ink:#B8B8C8;--ink2:#A0A0B2;--mut:#8A8A9C;--head:#D2D2D2;--up:#00FFA3;--dn:#FF2D55}
 *{box-sizing:border-box}
@@ -51,7 +51,7 @@ dl{max-width:1100px}dt{color:#C8C8D2;font-weight:600;margin-top:12px}dd{margin:2
 </style></head>
 <body>
 <span data-scnav-slot></span><h1>What the prediction markets expect</h1>
-<p class="lede">The Fed, yields, the S&amp;P, recession, Iran, Russia–Ukraine, tariffs and the midterms, as priced by people betting real money on Polymarket and Kalshi. A number here is the market's chance, in percent, that the outcome happens. We read the markets every 15 minutes in US hours and every hour otherwise, keep every move, and flag any outcome whose chance moved more than a set number of points in a day.</p>
+<p class="lede">The Fed and other central banks, yields, the S&amp;P, inflation prints, recession, Japan and the carry trade, China–Taiwan, oil and OPEC, Iran, Russia–Ukraine, tariffs, Washington (shutdown, debt), AI and the midterms, as priced by people betting real money on Polymarket. Kalshi stays switched off. This is a workshop page, not a Hub tab. A number here is the market's chance, in percent, that the outcome happens. We read the markets every 15 minutes in US hours and every hour otherwise, keep every move, and flag any outcome whose chance moved more than a set number of points in a day.</p>
 <div class="status" id="status">Loading…</div>
 
 <div class="bar" id="groups" role="group" aria-label="Show one group"></div>
@@ -73,13 +73,14 @@ dl{max-width:1100px}dt{color:#C8C8D2;font-weight:600;margin-top:12px}dd{margin:2
 <dt>1 day, 1 week</dt><dd>How many percentage points the chance moved since the same time yesterday and a week ago. +8.0 means it went from, say, 60% to 68%. "—" means we have no reading that far back yet.</dd>
 <dt>The small line</dt><dd>The chance over the last 7 days, same 0–100% scale in every cell, green if it is up on the day and red if down. It is a step line: it holds each value until the next reading that differed.</dd>
 <dt>✦ Flash</dt><dd>Alan's scintillation: an outcome whose chance moved at least the number of points you set above within one day, up or down. The default comes from the topic list (10 points).</dd>
+<dt>Market expiry</dt><dd>Every market has a last day, after which it stops trading and pays out; when a market we track reaches it, the page moves that topic to the next market of the same kind by itself (after the 28 Oct Fed meeting, the December meeting), and its line starts again from the new market's first reading.</dd>
 <dt>"Not the same question"</dt><dd>Some topics are asked differently on each venue (for example, where the S&amp;P closes on 31 Dec versus which levels it touches before then). Read those side by side; do not subtract one from the other.</dd>
 <dt>Where the history comes from</dt><dd>Everything from our first live read (28 Sep 2026, 16:22 UTC) onward is our own reading. The week before that, for Polymarket, is Polymarket's own hourly price history, loaded once so the 1-week change works from day one. Kalshi numbers come from the older 6-hourly catalyst-odds reader until Kalshi is switched on here.</dd>
 </dl>
 <div class="tip" id="tip"></div>
 
 <script type="module">
-import { valueAt, changes, isFlash, fmtPts, fmtPct, sparkPath } from "./pm.mjs";
+import { valueAt, changes, isFlash, fmtPts, fmtPct, sparkPath, currentEventRows } from "./pm.mjs";
 
 const SB = "https://wadinxqplrggagkvrdag.supabase.co";
 let KEY = null;
@@ -113,7 +114,7 @@ const state = { group: null, n: 10 };
 try { const s = JSON.parse(localStorage.getItem("pm-master") || "{}"); if (s.group) state.group = s.group; if (s.n) state.n = s.n; } catch (_) {}
 const save = () => { try { localStorage.setItem("pm-master", JSON.stringify({ group: state.group, n: state.n })); } catch (_) {} };
 
-let REG, series = new Map(), meta = new Map();   // key topic|venue|outcomeKey -> [{ts,p}]
+let REG, series = new Map(), meta = new Map(), NOWREAD = new Map();   // NOWREAD: topic|venue -> the market the newest row came from   // key topic|venue|outcomeKey -> [{ts,p}]
 
 function add(key, ts, p, m) {
   if (!series.has(key)) series.set(key, []);
@@ -159,9 +160,13 @@ function card(t) {
     };
     body = `<div class="two">${side("polymarket", "Polymarket")}${side("kalshi", "Kalshi")}</div>`;
   }
-  const ids = [...(t.polymarket?.events || []).map((e) => "Polymarket " + e), ...(t.kalshi?.events || []).map((e) => "Kalshi " + e)].join(" · ");
+  const nr = NOWREAD.get(t.id + "|polymarket");
+  const pmIds = nr ? [nr.event_id] : (t.polymarket?.events || []);
+  const ids = [...pmIds.map((e) => "Polymarket " + e), ...(t.kalshi?.events || []).map((e) => "Kalshi " + e)].join(" · ");
+  const rolls = t.polymarket?.roll ? `<div class="src">${nr && nr.end_date ? "Reading the market that ends " + esc(new Date(nr.end_date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })) + ". " : ""}` +
+    `When it expires this topic moves to the next market in its Polymarket series by itself.</div>` : "";
   return `<div class="card" data-group="${esc(t.group)}"><h3>${esc(t.label)}${t.same_question ? "" : '<span class="pill">not the same question</span>'}${anyFlash ? '<span class="pill flash">✦ flash</span>' : ""}</h3>
-    <p class="plain">${esc(t.plain)}</p>${body}<div class="src">Market ids: ${esc(ids)}</div></div>`;
+    <p class="plain">${esc(t.plain)}</p>${body}${rolls}<div class="src">Market ids: ${esc(ids)}</div></div>`;
 }
 
 function flashes() {
@@ -204,19 +209,26 @@ async function main() {
   if (!(await readKey())) throw new Error("could not find the Hub's public read key on /pip.html or /index.html");
   const since = new Date(NOW - 8 * 86400e3).toISOString();
   const [snaps, runs, legacy] = await Promise.all([
-    pgAll(`prediction_market_snapshots?select=topic,venue,market_id,outcome,align_key,probability,ts,question,volume_24h&ts=gte.${since}&order=ts.asc`),
+    pgAll(`prediction_market_snapshots?select=topic,venue,event_id,end_date,market_id,outcome,align_key,probability,ts,question,volume_24h&ts=gte.${since}&order=ts.asc`),
     pgAll(`prediction_market_runs?select=run_id,ts,mode,written,unchanged,problems&mode=eq.pass&order=ts.desc&limit=1`),
     pgAll(`catalyst_odds?select=ts,market,outcome,probability&source=eq.kalshi&ts=gte.${since}&order=ts.asc`),
   ]);
   const topicIds = new Set(REG.topics.map((t) => t.id));
   let lastDisc = { polymarket: null, kalshi: null };
+  /* N6 — one line per market: a topic that rolled keeps only the rows of the market it reads now */
+  const cur = currentEventRows(snaps.filter((r) => r.topic !== "discover"));
+  NOWREAD = cur.latest;
+  const keep = new Set(cur.kept);
   for (const r of snaps) {
+    if (r.topic !== "discover" && !keep.has(r)) continue;
     if (r.topic === "discover") { if (!lastDisc[r.venue] || r.ts > lastDisc[r.venue]) lastDisc[r.venue] = r.ts; continue; }
     if (!topicIds.has(r.topic)) continue;
     add(`${r.topic}|${r.venue}|${r.align_key || r.outcome}`, r.ts, r.probability);
   }
   // Kalshi from the older 6-hourly reader (catalyst_odds), matched to our topics by event ticker
-  if (!REG.venues.kalshi.enabled) for (const t of REG.topics) for (const ev of t.kalshi?.events || []) {
+  /* N6 — a topic whose Polymarket side has rolled no longer asks the question its pinned Kalshi ticker asks: leave it out */
+  const rolledAway = (t) => { const nr = NOWREAD.get(t.id + "|polymarket"); return !!(t.polymarket?.roll && nr && nr.event_id !== (t.polymarket.events || [])[0]); };
+  if (!REG.venues.kalshi.enabled) for (const t of REG.topics.filter((x) => !rolledAway(x))) for (const ev of t.kalshi?.events || []) {
     for (const r of legacy) {
       if (r.market !== ev && !r.market.startsWith(ev + "-")) continue;
       const a = (t.align || []).find((x) => x.kalshi && new RegExp(x.kalshi).test(r.outcome));

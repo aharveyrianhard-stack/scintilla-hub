@@ -170,3 +170,62 @@ test("page maths: 1-day / 1-week change from a step history, and the flash rule"
   assert.equal(P.fmtPts(15), "+15.0");
   assert.equal(P.fmtPts(-0.04), "0.0");
 });
+
+/* ---- N6 (28 Sep): market expiry — topics roll to the next market in their Polymarket series ------------------------ */
+const FOMC = [
+  { id: "606422", endDate: "2026-10-29T03:59:00Z", closed: false },
+  { id: "770450", endDate: "2026-12-10T04:59:00Z", closed: false },
+  { id: "770451", endDate: "2027-01-28T04:59:00Z", closed: false },
+];
+test("roll 'next': the Fed topics are the next three meetings; after 28 Oct each moves up one, and the third waits", () => {
+  const before = new Date("2026-09-28T18:00:00Z"), after = new Date("2026-10-30T12:00:00Z");
+  const ids = (id, now) => L.polymarketIdsFor(topic(id), FOMC, now, null);
+  assert.deepEqual(["fed-2026-10", "fed-2026-12", "fed-2027-01"].map((x) => ids(x, before).ids), [["606422"], ["770450"], ["770451"]]);
+  assert.deepEqual(ids("fed-2026-10", after), { ids: ["770450"], rolled: true });
+  assert.deepEqual(ids("fed-2026-12", after), { ids: ["770451"], rolled: true });
+  assert.deepEqual(ids("fed-2027-01", after), { ids: [], rolled: true, waiting: true }, "the March market is not listed yet: read nothing, never a stale one");
+  /* an event past its end date is expired even while Polymarket still shows it open (it stays open until settled) */
+  assert.equal(L.pickRolled(FOMC, { series_id: "35", mode: "next", rank: 0 }, new Date("2026-10-29T04:00:00Z")), "770450");
+  /* a failed series read keeps the pinned market */
+  assert.deepEqual(L.polymarketIdsFor(topic("fed-2026-10"), undefined, after), { ids: ["606422"], rolled: false });
+});
+test("roll 'follow': keeps the pinned market while it is live, then the next one in its series; companions stay", () => {
+  const S = [{ id: "a", endDate: "2026-12-31T00:00:00Z" }, { id: "b", endDate: "2027-06-30T00:00:00Z" }, { id: "z", endDate: "2026-10-15T00:00:00Z" }];
+  const r = { series_id: "x", mode: "follow" };
+  assert.equal(L.pickRolled(S, r, new Date("2026-09-28T00:00:00Z"), { id: "a", endDate: "2026-12-31T00:00:00Z" }), "a");
+  assert.equal(L.pickRolled(S, r, new Date("2027-01-02T00:00:00Z"), { id: "a", endDate: "2026-12-31T00:00:00Z" }), "b");
+  assert.equal(L.pickRolled(S, r, new Date("2026-09-28T00:00:00Z"), { id: "a", endDate: "2026-12-31T00:00:00Z" }) === "z", false, "never an earlier market");
+  const ust = topic("ust10-2026");
+  const got = L.polymarketIdsFor(ust, [{ id: "79104", endDate: "2027-01-01T00:00:00Z" }, { id: "99999", endDate: "2027-12-31T00:00:00Z" }], new Date("2027-01-02T00:00:00Z"), { id: "79104", endDate: "2027-01-01T00:00:00Z" });
+  assert.deepEqual(got, { ids: ["99999", "79123"], rolled: true }, "the first event rolls, the 'how low' companion stays");
+});
+test("registry v2: Polymarket-only additions, Kalshi still off, every roll names a series and a mode", () => {
+  assert.equal(REG.version, 2);
+  for (const id of ["boj-next", "usdjpy-2026", "taiwan-invade", "taiwan-blockade", "wti-month", "opec-exit", "cpi-annual", "core-pce",
+    "shutdown", "us-debt", "ai-bubble", "ai-regulation", "house-2026", "senate-2026", "recession-2026"]) assert.ok(topic(id), id);
+  const added = REG.topics.slice(REG.topics.findIndex((t) => t.id === "ust30-2026"));
+  assert.equal(added.length, 23);
+  for (const t of added) { assert.deepEqual(t.kalshi.events, [], t.id + ": Polymarket only"); assert.ok(t.polymarket.events.length > 0, t.id); }
+  for (const t of REG.topics) if (t.polymarket?.roll) {
+    assert.match(t.polymarket.roll.series_id, /^\d+$/, t.id);
+    assert.ok(["next", "follow"].includes(t.polymarket.roll.mode), t.id);
+  }
+  for (const g of ["Japan & the carry trade", "China–Taiwan", "Oil & OPEC", "Inflation prints", "Washington", "AI"]) assert.ok(REG.topics.some((t) => t.group === g), g);
+});
+test("page: one line per market (a rolled topic never joins two markets), and market expiry is explained in one sentence", async () => {
+  const P = await import("../deliverables/20260928/prediction-markets/pm.mjs");
+  const rows = [
+    { topic: "fed-2026-10", venue: "polymarket", event_id: "606422", ts: "2026-10-28T10:00:00Z", p: 0.7 },
+    { topic: "fed-2026-10", venue: "polymarket", event_id: "770450", ts: "2026-10-29T10:00:00Z", p: 0.2 },
+    { topic: "spy-month", venue: "polymarket", event_id: "907961", ts: "2026-09-28T10:00:00Z", p: 0.5 },
+    { topic: "legacy", venue: "kalshi", ts: "2026-09-28T10:00:00Z", p: 0.5 },
+  ];
+  const { kept, latest } = P.currentEventRows(rows);
+  assert.deepEqual(kept.map((r) => r.event_id || "none"), ["770450", "907961", "none"]);
+  assert.equal(latest.get("fed-2026-10|polymarket").event_id, "770450");
+  const page = read("deliverables/20260928/prediction-markets/index.html");
+  assert.match(page, /<dt>Market expiry<\/dt><dd>Every market has a last day, after which it stops trading and pays out; when a market we track reaches it, the page moves that topic to the next market of the same kind by itself \(after the 28 Oct Fed meeting, the December meeting\)/);
+  assert.match(page, /select=topic,venue,event_id,end_date,/);
+  assert.match(page, /This is a workshop page, not a Hub tab\./);
+  assert.doesNotMatch(read("index.html"), /prediction-markets\/index\.html/, "not linked as a Hub tab");
+});
