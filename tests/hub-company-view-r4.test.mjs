@@ -195,6 +195,27 @@ test("LIKED list: sorts by the day's % or by Geiger, highest first, a missing va
   assert.match(fn("cvStep"), /document\.body\.classList\.contains\("co-exp"\) \? cvRailRows\(\) : orderedShownRows\(\)/);
 });
 
+test("LIKED list (review fix): the order holds still between explicit sorts — ticks update values, not places", () => {
+  const S = { coh: "FAV", tq: "" }, ls = { "hub.company.railsort": "CHG" };
+  let live = [{ t: "A", c: 1.0 }, { t: "B", c: 2.0 }, { t: "VIX", c: null }, { t: "D", c: 0.5 }];
+  const m = new Function("num", "S", "lsGet", "orderedShownRows",
+    line(/^const CV_RAIL_SORT_KEY = [^\n]*/m) + fn("cvRailSort") + fn("cvRailOrder") + line(/^let CV_RAIL_FROZEN = [^\n]*/m) +
+    fn("cvRailKey") + fn("cvRailFreeze") + fn("cvRailHeld") + fn("cvRailRows") + "\nreturn { cvRailRows, cvRailFreeze };")(num, S, (k) => ls[k], () => live);
+  assert.deepEqual(m.cvRailRows().map((r) => r.t), ["B", "A", "D", "VIX"], "first look: sorted by DAY %, no value last");
+  /* ticks: D jumps to the top of the day, VIX gets a value, a new name E arrives, A leaves */
+  live = [{ t: "B", c: 2.0 }, { t: "VIX", c: 9.9 }, { t: "D", c: 5.5 }, { t: "E", c: 7.0 }];
+  const held = m.cvRailRows();
+  assert.deepEqual(held.map((r) => r.t), ["B", "D", "VIX", "E"], "places hold; the newcomer goes last; the leaver is dropped");
+  assert.equal(held[1].c, 5.5, "values are the live ones");
+  m.cvRailFreeze();   /* a click on DAY % */
+  assert.deepEqual(m.cvRailRows().map((r) => r.t), ["VIX", "E", "D", "B"], "an explicit click re-sorts");
+  ls["hub.company.railsort"] = "GEIGER";
+  assert.equal(m.cvRailRows().length, 4, "switching the sort (or the cohort, or a search) takes a fresh order");
+  assert.match(page, /case "cvrailsort": \{[\s\S]{0,260}cvRailFreeze\(\);[\s\S]{0,120}cvRailRepaint\(\);/);
+  assert.match(page, /if \(CO_EXPANDED\) cvRailFreeze\(\);/);
+  assert.doesNotMatch(fn("cvRailRepaint"), /cvRailFreeze/, "a repaint (every tick) never re-sorts");
+});
+
 /* ── cropped things ──────────────────────────────────────────────────────────────────────────────── */
 test("CROPPED: short names where the legal name was cut, a K tier for small revenue, the one-line scintilla fits", () => {
   const short = new Function(fn("scShortName") + "\nreturn scShortName;")();

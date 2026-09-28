@@ -5950,15 +5950,30 @@ function cvRailOrder(rows, by) {
     .sort((a, b) => (a.v == null) - (b.v == null) || (b.v != null && a.v != null ? b.v - a.v : 0) || a.i - b.i)
     .map((x) => x.r);
 }
-function cvRailRows() { return cvRailOrder(orderedShownRows(), cvRailSort()); }
+/* review fix (28 Sep): the list is sorted ONCE and then holds still, like the board (S.boardOrder). Before, every price tick
+   of the open name re-sorted it by live change, so names jumped under the cursor and ↑/↓ followed a moving order (measured:
+   29–39 of the first 40 places changed between reads 8 s apart). The order is taken when you click DAY % or GEIGER (clicking
+   the lit one again re-sorts now), when the expanded view opens, or when the list itself changes (another cohort, a search).
+   Values still update in place; a name that joins the list goes to the end, a name that leaves is dropped. */
+let CV_RAIL_FROZEN = null;   // { key: sort|cohort|search, order: [tickers] }
+function cvRailKey() { return cvRailSort() + "|" + (S.coh || "") + "|" + (S.tq || ""); }
+function cvRailFreeze() { const rows = cvRailOrder(orderedShownRows(), cvRailSort()); CV_RAIL_FROZEN = { key: cvRailKey(), order: rows.map((r) => r.t) }; return rows; }
+function cvRailHeld(rows, frozen) {
+  const at = new Map(frozen.order.map((t, i) => [t, i])), n = frozen.order.length;
+  return (rows || []).map((r, i) => ({ r, k: at.has(r.t) ? at.get(r.t) : n + i })).sort((a, b) => a.k - b.k).map((x) => x.r);
+}
+function cvRailRows() {
+  if (!CV_RAIL_FROZEN || CV_RAIL_FROZEN.key !== cvRailKey()) return cvRailFreeze();
+  return cvRailHeld(orderedShownRows(), CV_RAIL_FROZEN);
+}
 function cvRailHTML() {
   const by = cvRailSort(), rows = cvRailRows();
   const sw = (k, lbl, tip) => '<button type="button" class="cv-rail__s' + (by === k ? " on" : "") + '" aria-pressed="' + (by === k) +
     '" data-act="cvrailsort" data-s="' + k + '" title="' + tip + '">' + lbl + "</button>";
   return '<div class="cv-rail__h"><span>' + esc(S.tq ? "SEARCH" : S.coh === "FAV" ? "LIKED" : S.coh) + " · " + rows.length + "</span>" +
       '<span class="cv-rail__sw" role="group" aria-label="sort the list">' +
-        sw("CHG", "DAY %", "sort by today's change against yesterday's close, biggest gain first") +
-        sw("GEIGER", "GEIGER", "sort by the Geiger reading, strongest first") + "</span></div>" +
+        sw("CHG", "DAY %", "sort by today's change against yesterday's close, biggest gain first; the order then holds still — click again to re-sort") +
+        sw("GEIGER", "GEIGER", "sort by the Geiger reading, strongest first; the order then holds still — click again to re-sort") + "</span></div>" +
     rows.map((r) => '<button type="button" class="cv-rail__r' + (r.t === LEFT_T ? " on" : "") + '" data-act="cvrail" data-t="' + esc(r.t) + '"' +
       (r.t === LEFT_T ? ' aria-current="true"' : "") + "><b>" + esc(r.t) + '</b><span class="' + (num(r.c) == null ? "" : num(r.c) >= 0 ? "up" : "dn") + '">' +
       (num(r.c) != null ? fmtC(num(r.c)) : "—") + "</span>" + geigerMiniHTML(num(r.g), 1) + "</button>").join("");
@@ -19177,7 +19192,7 @@ function coSocialHTML(data) {
 function socSourceNoteHTML(v, d) {
   const yt = v === "ALL"
     ? "<b>YOUTUBE · YOUR CHANNELS + SEARCH</b> your subscribed channels <u>plus</u> channels the collector finds by searching YouTube for the ticker (e.g. Bera Finance) — marked YT · SEARCH."
-    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out.";
+    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out. A video from a channel you follow counts as yours however the collector found it.";
   const x = "<b>X · YOUR LIST</b> the X list the collector reads" + (d && d.xHandles ? " (" + d.xHandles + " accounts)" : "") + ".";
   return '<span>' + yt + "</span><span>" + x + "</span>";
 }
@@ -20937,6 +20952,7 @@ document.addEventListener("click", (e) => {
     case "cvrailsort": {   // R4 — the LIKED list: DAY % or GEIGER
       e.preventDefault(); e.stopPropagation();
       lsSet(CV_RAIL_SORT_KEY, a.dataset.s === "CHG" ? "CHG" : "GEIGER");
+      cvRailFreeze();   // review fix — a click is the one moment the list re-sorts
       cvRailRepaint();
       break;
     }
@@ -20951,6 +20967,7 @@ document.addEventListener("click", (e) => {
       lsSet(CO_EXP_KEY, CO_EXPANDED ? "1" : "0");
       const b = el("coExpBtn"); if (b) b.outerHTML = coExpandBtnHTML();
       coExpandApply();
+      if (CO_EXPANDED) cvRailFreeze();   // review fix — opening the expanded view takes a fresh order
       cvRailRepaint();   // D2 — the rail is filled when it becomes visible
       break;
     }
