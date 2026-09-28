@@ -181,7 +181,7 @@ test("R3's new CSS is greys only (channels within 24, none above 210), text 11 p
   for (const m of css.matchAll(/font(?:-size)?:[^;}]*?(\d+(?:\.\d+)?)px/g)) assert.ok(+m[1] >= 11, "font " + m[0]);
 });
 
-test("the trial copy carries <base href=\"/\"> and the grey TRIAL banner; the live page is not the trial", () => {
+test("the trial copy carries <base href=\"/\"> and the grey TRIAL banner; the live page carries no banner (switched on 28 Sep)", () => {
   assert.match(trial, BASE_RE, "base href line");
   assert.match(trial, BANNER_RE, "TRIAL banner");
   const banner = trial.match(/<div id="trialBanner" style="([^"]+)"/)[1];
@@ -191,5 +191,7 @@ test("the trial copy carries <base href=\"/\"> and the grey TRIAL banner; the li
   }
   const live = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.ok(!live.includes('id="trialBanner"'), "no trial banner on the live page");
-  assert.ok(!/^function socBlockHTML\b/m.test(live), "R3's SOCIAL block stays off the live page until Alan approves it");
+  /* SWITCH-ON (28 Sep) — Alan approved it: "Let's switch on the company view… let's switch it on safely." The live page now
+     carries the company view (SOCIAL included); the trial copy is the same page plus its <base> line and banner. */
+  assert.ok(/^function socBlockHTML\b/m.test(live), "the company view (and its SOCIAL block) is on the live page after the switch-on");
 });
