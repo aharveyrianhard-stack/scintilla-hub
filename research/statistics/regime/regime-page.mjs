@@ -19,7 +19,7 @@ const ordinal = (x) => x == null ? "—" : x < 1 ? "<1st" : `${Math.round(x)}${[
 
 /* ---------- SVG helpers: dark panel, mono labels; every data line follows its own direction (up green, down red) ---------- */
 const UP = "#00FFA3", DN = "#FF2D55", INK = "#A8A8BA", DIM = "#6E6E80", GRID = "#1F1F29", REF = "#7A7A8C";
-const T = (x, y, s, a = "start", c = INK, fs = 12, w = 400) => `<text x="${x}" y="${y}" fill="${c}" font-size="${fs}" font-weight="${w}" font-family="ui-monospace,Menlo,monospace" text-anchor="${a}">${esc(s)}</text>`;
+const T = (x, y, s, a = "start", c = INK, fs = 12, w = 400) => `<text x="${x}" y="${y}" fill="${c}" font-size="${fs}" font-weight="${w}" font-family="ui-monospace,Menlo,monospace" text-anchor="${a}" paint-order="stroke" stroke="#0B0B12" stroke-width="4" stroke-linejoin="round">${esc(s)}</text>`;
 function lineChart(series, { W = 1400, H = 360, title = "", refs = [], marks = [], yfmt = (v) => f2(v), log = false, subtitle = "" } = {}) {
   if (!series?.length) return "";
   const Lm = 64, R = 18, Tp = 40, B = 30;
@@ -31,16 +31,16 @@ function lineChart(series, { W = 1400, H = 360, title = "", refs = [], marks = [
   const step = niceStep(y1 - y0); for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${GRID}"/>` + T(Lm - 8, Y(v) + 4, yfmt(v), "end", DIM, 11);
   let ly = ""; const every = series.length > 700 ? 2 : 1;
   for (let i = 0; i < series.length; i++) { const yr = series[i][0].slice(0, 4); if (yr !== ly) { if (+yr % every === 0 || series.length < 300) { s += `<line x1="${X(i)}" x2="${X(i)}" y1="${Tp}" y2="${H - B}" stroke="${GRID}"/>` + T(X(i) + 3, H - 10, yr, "start", DIM, 11); } ly = yr; } }
-  for (const r of refs) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(r.v)}" y2="${Y(r.v)}" stroke="${REF}" stroke-dasharray="6 5" stroke-width="1.3"/>` + T(W - R - 4, Y(r.v) - 6, r.label, "end", "#C4C4D0", 12, 600);
+  for (const r of refs) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(r.v)}" y2="${Y(r.v)}" stroke="${REF}" stroke-dasharray="6 5" stroke-width="1.3"/>` + T(Lm + 8, Y(r.v) - 7, r.label, "start", "#C4C4D0", 12, 600);
   for (let i = 1; i < series.length; i++) s += `<line x1="${X(i - 1).toFixed(1)}" y1="${Y(series[i - 1][1]).toFixed(1)}" x2="${X(i).toFixed(1)}" y2="${Y(series[i][1]).toFixed(1)}" stroke="${series[i][1] >= series[i - 1][1] ? UP : DN}" stroke-width="1.6"/>`;
   const idx = new Map(series.map((p, i) => [p[0], i]));
   const near = (d) => { if (idx.has(d)) return idx.get(d); let k = series.findIndex((p) => p[0] >= d); return k < 0 ? null : k; };
   for (const m of marks) { const k = near(m.d); if (k == null) continue; const cx = X(k), cy = Y(series[k][1]);
-    s += m.shape === "tri" ? `<path d="M${cx - 6},${cy - (m.up ? -12 : 12)} L${cx + 6},${cy - (m.up ? -12 : 12)} L${cx},${cy - (m.up ? -3 : 3)} Z" fill="${m.up ? UP : DN}"><title>${esc(m.tip)}</title></path>`
+    s += m.shape === "tri" ? (m.up ? `<path d="M${cx - 6},${cy - 15} L${cx + 6},${cy - 15} L${cx},${cy - 5} Z" fill="${UP}"><title>${esc(m.tip)}</title></path>` : `<path d="M${cx - 6},${cy + 15} L${cx + 6},${cy + 15} L${cx},${cy + 5} Z" fill="${DN}"><title>${esc(m.tip)}</title></path>`)
       : `<circle cx="${cx}" cy="${cy}" r="5" fill="${m.up ? UP : DN}" stroke="#07070C" stroke-width="2"><title>${esc(m.tip)}</title></circle>`; }
   const lastV = series.at(-1)[1]; s += `<circle cx="${X(series.length - 1)}" cy="${Y(lastV)}" r="4.5" fill="#D2D2D2"/>` + T(X(series.length - 1) - 8, Y(lastV) - 9, `now ${yfmt(lastV)}`, "end", "#D2D2D2", 12, 600);
   s += T(Lm, 22, title, "start", "#D2D2D2", 15, 600); if (subtitle) s += T(W - R, 22, subtitle, "end", INK, 12);
-  return s + "</svg>";
+  return `<div class="cwrap${W < 1000 ? " small" : ""}">` + s + "</svg></div>";
 }
 function niceStep(range) { const raw = range / 6, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p; }
 function barChart(items, { W = 1400, H = 300, title = "", base = null, baseLabel = "", ymin = null, ymax = null } = {}) {
@@ -51,13 +51,13 @@ function barChart(items, { W = 1400, H = 300, title = "", base = null, baseLabel
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">`;
   const step = niceStep(y1 - y0); for (let v = Math.ceil(y0 / step) * step; v <= y1 + 1e-9; v += step) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${GRID}"/>` + T(Lm - 8, Y(v) + 4, (v > 0 ? "+" : "") + (+v.toFixed(2)) + "%", "end", DIM, 11);
   s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}" stroke="#34343F"/>`;
-  items.forEach((it, i) => { const x = Lm + i * bw + bw * 0.2, w = bw * 0.6; if (it.v == null) return; const y = Math.min(Y(it.v), Y(0)), h = Math.max(2, Math.abs(Y(it.v) - Y(0)));
+  items.forEach((it, i) => { const x = Lm + i * bw + bw * 0.2, w = bw * 0.6; if (it.v == null || it.v === 0) { s += T(Lm + i * bw + bw / 2, H - 12, it.label, "middle", "#C4C4D0", 12, 600); return; } const y = Math.min(Y(it.v), Y(0)), h = Math.max(2, Math.abs(Y(it.v) - Y(0)));
     s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="${it.v >= 0 ? UP : DN}" fill-opacity=".78"><title>${esc(it.tip ?? "")}</title></rect>`;
     if (it.ci) s += `<line x1="${x + w / 2}" x2="${x + w / 2}" y1="${Y(it.ci[0])}" y2="${Y(it.ci[1])}" stroke="#D2D2D2" stroke-width="2"/><line x1="${x + w / 2 - 7}" x2="${x + w / 2 + 7}" y1="${Y(it.ci[0])}" y2="${Y(it.ci[0])}" stroke="#D2D2D2" stroke-width="2"/><line x1="${x + w / 2 - 7}" x2="${x + w / 2 + 7}" y1="${Y(it.ci[1])}" y2="${Y(it.ci[1])}" stroke="#D2D2D2" stroke-width="2"/>`;
     s += T(x + w / 2, H - 12, it.label, "middle", "#C4C4D0", 12, 600); });
-  if (base != null) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(base)}" y2="${Y(base)}" stroke="${REF}" stroke-dasharray="6 5" stroke-width="1.3"/>` + T(W - R - 4, Y(base) - 6, baseLabel, "end", "#C4C4D0", 12, 600);
+  if (base != null) s += `<line x1="${Lm}" x2="${W - R}" y1="${Y(base)}" y2="${Y(base)}" stroke="${REF}" stroke-dasharray="6 5" stroke-width="1.3"/>` + T(W - R, 22, `- - - ${baseLabel}`, "end", "#C4C4D0", 12, 600);
   s += T(Lm, 22, title, "start", "#D2D2D2", 15, 600);
-  return s + "</svg>";
+  return `<div class="cwrap">` + s + "</svg></div>";
 }
 
 /* ---------- the numbers the text quotes ---------- */
@@ -104,7 +104,7 @@ const vixYears = barChart(years.map(([y, v]) => ({ label: "'" + y.slice(2), v: -
 
 /* ---------- 3 · credit ---------- */
 const spySw = CR[0].leadLag;
-const creditCharts = CR.map((c) => lineChart(c.weekly, { W: 1400, H: 330, title: c.name, subtitle: `now ${f1(c.now.fromAllTimeHigh)}% from its high · triangles = S&P tops (green) and bottoms (red) of 7%+ drops`, yfmt: (v) => v.toFixed(3),
+const creditCharts = CR.map((c) => lineChart(c.weekly, { W: 1400, H: 330, title: c.name, subtitle: `now ${f1(c.now.fromAllTimeHigh)}% from its high · ▼ green above = S&P top · ▲ red below = S&P bottom (drops of 7%+)`, yfmt: (v) => v.toFixed(3),
   marks: spySw.flatMap((x) => [{ d: x.spyHigh, up: true, shape: "tri", tip: `S&P top ${x.spyHigh} (drop ${x.spyDepth}%)` }, { d: x.spyLow, up: false, shape: "tri", tip: `S&P bottom ${x.spyLow}` }]) })).join("");
 const ddTable = (c) => `<table><tr><th>Ratio peak</th><th>Trough</th><th>Depth</th><th>Sessions down</th><th>Back at the peak</th></tr>${c.drawdowns.slice(0, 8).map((x) => `<tr><td>${date(x.peak)}</td><td>${date(x.trough)}</td><td class="dn">${f1(x.depth)}%</td><td>${x.sessionsDown}</td><td>${x.recovered ? date(x.recovered) : "not yet"}</td></tr>`).join("")}</table>`;
 const leadTable = `<div class="scroll"><table><tr><th>Ratio</th><th>S&P drops of 7%+</th><th>Ratio peaked BEFORE the S&P top</th><th>median lead (sessions)</th><th>by chance: "before" share · median</th><th>Ratio bottomed AFTER the S&P bottom</th><th>median lag</th><th>by chance: "after" share · median</th></tr>
@@ -145,12 +145,12 @@ const oddsRows = (k, p, when) => { const outs = [["Cut >25", "Cut >25bps", "50+ 
   return outs.map(([lab, ko, po]) => { const km = k?.markets.find((m) => m.outcome === ko), pm = p?.markets.find((m) => m.outcome === po); const hi = Math.max(km?.last ?? 0, pm?.yes ?? 0) > 0.5;
     return `<tr${hi ? ' class="nowrow"' : ""}><td>${when}</td><td><b>${lab}</b></td><td>${km ? `<b>${f1(100 * km.last)}%</b> <span class="mut">(bid ${f1(100 * km.bid)} / ask ${f1(100 * km.ask)})</span>` : "—"}</td><td>${km ? n0(km.volume) : "—"}</td><td>${pm ? `<b>${f1(100 * pm.yes)}%</b> <span class="mut">(bid ${f1(100 * pm.bid)} / ask ${f1(100 * pm.ask)})</span>` : "—"}</td><td>${pm ? "$" + n0(pm.volumeUsd) : "—"}</td></tr>`; }).join(""); };
 const oddsTable = `<div class="scroll"><table><tr><th>Meeting</th><th>Outcome</th><th>Kalshi (last price = implied chance)</th><th>Kalshi contracts traded</th><th>Polymarket ("yes" price)</th><th>Polymarket volume</th></tr>${oddsRows(kOct, pOct, "28 Oct 2026")}${oddsRows(kDec, pDec, "9 Dec 2026")}</table></div>`;
-const oddsBars = (() => { const W = 1400, H = 150; const items = [["Kalshi · 28 Oct", kOct, "k"], ["Polymarket · 28 Oct", pOct, "p"], ["Kalshi · 9 Dec", kDec, "k"], ["Polymarket · 9 Dec", pDec, "p"]]; let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Market-implied odds">`; const Lm = 200, R = 20, rowH = 26;
+const oddsBars = (() => { const W = 900, H = 150; const items = [["Kalshi · 28 Oct", kOct, "k"], ["Polymarket · 28 Oct", pOct, "p"], ["Kalshi · 9 Dec", kDec, "k"], ["Polymarket · 9 Dec", pDec, "p"]]; let s = `<svg class="chart" style="max-width:1100px" viewBox="0 0 ${W} ${H}" role="img" aria-label="Market-implied odds">`; const Lm = 200, R = 20, rowH = 26;
   items.forEach(([lab, e, t], i) => { const y = 20 + i * (rowH + 6); const hold = t === "k" ? kHold(e)?.last : pHold(e)?.yes, hike = t === "k" ? kHike(e)?.last : pHike(e)?.yes; const w = W - Lm - R;
     s += T(Lm - 10, y + 18, lab, "end", "#C4C4D0", 13, 600);
     s += `<rect x="${Lm}" y="${y}" width="${w * hold}" height="${rowH}" fill="#3A3A48"><title>hold ${f1(100 * hold)}%</title></rect>` + T(Lm + 8, y + 18, `hold ${f1(100 * hold)}%`, "start", "#D2D2D2", 13, 600);
     s += `<rect x="${Lm + w * hold + 2}" y="${y}" width="${w * hike}" height="${rowH}" fill="${DN}" fill-opacity=".8"><title>hike 25 ${f1(100 * hike)}%</title></rect>` + T(Lm + w * hold + 10, y + 18, `hike 25 bp ${f1(100 * hike)}%`, "start", "#0B0B12", 13, 700); });
-  return s + "</svg>"; })();
+  return `<div class="cwrap">` + s + "</svg></div>"; })();
 const W6 = { into5: "5 sessions before (close D−6 → D−1)", day: "decision day (close D−1 → D)", next1: "day after (D → D+1)", after5: "next 5 sessions (D → D+5)", after21: "next 21 sessions (D → D+21)" };
 const fedTable = `<div class="scroll"><table><tr><th>Window around the decision day D</th><th>All ${F.meetings} scheduled meetings, 1994 →</th><th>Any window of the same length</th><th>vs any window</th><th>2013 → hikes</th><th>holds</th><th>cuts</th></tr>
 ${Object.entries(W6).map(([k, lab]) => { const w = F.windows[k]; const b = w.byType2013; return `<tr><td>${lab}</td><td>${pct(w.meetings.mean, 2)} avg · ${f1(w.meetings.up)}% up<br>${ci(w.meetings)}</td><td>${pct(w.anyWindow.mean, 2)}</td><td>${vs(w.meetings.vs)}</td><td>${b.hike.n ? `${pct(b.hike.mean, 2)} <span class="mut">(${b.hike.n})</span>` : "—"}</td><td>${b.hold.n ? `${pct(b.hold.mean, 2)} <span class="mut">(${b.hold.n})</span>` : "—"}</td><td>${b.cut.n ? `${pct(b.cut.mean, 2)} <span class="mut">(${b.cut.n})</span>` : "—"}</td></tr>`; }).join("")}</table></div>`;
@@ -186,17 +186,19 @@ table{border-collapse:collapse;font-size:14px;margin:10px 0;font-variant-numeric
 tr.base td{background:#0F0F18}tr.nowrow td{background:#141420}tr.closed td{color:#9090A2}
 .chart{display:block;width:100%;height:auto;background:#0B0B12;border:1px solid #1E1E28;margin:12px 0;max-width:1400px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:1400px}.grid .chart{margin:0}
+.cwrap{overflow-x:auto;max-width:100%}.grid>*{min-width:0}.swipe{display:none}
 .up{color:#00FFA3}.dn{color:#FF2D55}
 .key{font-size:14px;color:#B0B0C2}.key i{display:inline-block;width:12px;height:12px;border-radius:6px;vertical-align:-1px;margin:0 4px 0 12px}
 dl{max-width:1120px}dt{color:#C8C8D2;font-weight:600;margin-top:10px}dd{margin:2px 0 0 0}
 a{color:#C8C8D2}
-@media(max-width:700px){body{padding:18px 16px 60px;font-size:16px}h1{font-size:26px}h2{font-size:22px}ol.lead{font-size:16px}.tiles{grid-template-columns:repeat(2,1fr)}.tv{font-size:22px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:5px 6px}}
+@media(max-width:700px){.cwrap .chart{min-width:900px}.cwrap.small .chart{min-width:620px}.swipe{display:block;font-size:13px;color:#A0A0B2}body{padding:18px 16px 60px;font-size:16px}h1{font-size:26px}h2{font-size:22px}ol.lead{font-size:16px}.tiles{grid-template-columns:repeat(2,1fr)}.tv{font-size:22px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:5px 6px}}
 </style></head><body>
 <h1>Market regime: six questions, measured</h1>
 <div class="q">28 Sep 2026 · closes to Fri ${date(D.asOf)} · research, not buy rules · built ${D.generated.slice(0, 16).replace("T", " ")} UTC · the numbers live in <a href="regime.json">regime.json</a> · a proposal for a Hub panel: <a href="PROPOSAL.html">PROPOSAL.html</a></div>
 
 <div class="status"><b>STATUS · all six studies ran on real data.</b> Equal vs cap weight (17 pairs), the VIX curve, credit stress, dollar and 10-year yield with Alan's thesis, seasonality, and the Fed — including what prediction markets price for 28 Oct. Every average carries a 90% range; "not different" means the range includes the ordinary-day average. Green = up / better, red = down / worse. Nothing here says buy or sell.</div>
 
+<p class="swipe">On a phone, swipe a chart sideways to see all of it.</p>
 <h2>Where things stand today</h2>
 <div class="tiles">${tiles}</div>
 
@@ -249,7 +251,7 @@ ${calTable}
 <p class="q">September 2026 is not finished, so it is left out. Monthly returns are month-end close to month-end close. "90% range" = the middle 90% of 2,000 re-draws of the history (bootstrap): if a month's range sits entirely above or below the all-months line, the month looks genuinely different; otherwise it does not.</p>
 
 <h2>6 · The Fed</h2>
-<h3>What markets price for the next two meetings (read ${esc(O.fetchedAt)})</h3>
+<h3>What markets price for the next two meetings (read ${esc(O.fetchedAt.slice(0, 16).replace("T", " "))} UTC, Monday during the session)</h3>
 ${oddsBars}
 ${oddsTable}
 <p><b>Fed-funds futures:</b> FMP's continuous 30-day fed-funds future (ZQUSD) was ${f2(O.futures?.price)} at ${esc(O.futures?.asOf?.slice(0, 16).replace("T", " "))} UTC, i.e. an average overnight rate of <b>${f3(O.futures?.impliedRate)}%</b>; the effective rate was ${f2(O.futures?.effrRecent)}% in August and the Fed raised its range by 0.25 on 16 Sep. FMP does not say which contract month that quote is, so it is <b>not</b> turned into meeting odds here. If it is the November contract, it prices roughly a two-in-three chance of another 0.25 in October — consistent with the prediction markets, but that is an inference. CME's FedWatch page blocks automated reading (its terms forbid it), so the official FedWatch odds are not on this page.</p>
@@ -316,7 +318,7 @@ table{border-collapse:collapse;font-size:14px;margin:10px 0}th,td{border:1px sol
 <div class="status"><b>The idea in one line:</b> seven gauges, one row, the backdrop Alan checks before trading — breadth, fear curve, credit, rates, dollar, calendar, Fed — each showing today's reading, its rank in its own history, a one-year line, and a <b>flash</b> when it enters the zone that only its most extreme 5% of history reached. No buy or sell words.</div>
 <h2>What it would look like</h2>
 <div class="strip">${mock}</div>
-<p class="q">Mock-up drawn from today's data. The breadth gauge is flashing because RSP ÷ SPY is in the lowest 5% of its 23 years. Each gauge opens the matching section of the research page (what followed past extremes, with the uncertainty).</p>
+<p class="q">Mock-up drawn from today's data. Two gauges are flashing: breadth (RSP ÷ SPY is in the lowest 5% of its 23 years) and the 10-year (the highest yield of its last 10 years). Each gauge opens the matching section of the research page (what followed past extremes, with the uncertainty).</p>
 <h2>How each gauge works</h2>
 <div class="scroll"><table><tr><th>Gauge</th><th>Reading</th><th>Flashes when</th><th>Data today</th><th>Missing</th></tr>
 <tr><td>Breadth</td><td>RSP ÷ SPY percentile; tap = the 11 sector pairs as a heat row</td><td>bottom or top 5% of its history</td><td>chart API (RSP, SPY, XL*)</td><td>RSP* sector history before Jun 2023 (reused-ticker cut, coordinator item)</td></tr>
