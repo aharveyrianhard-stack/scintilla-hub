@@ -46,7 +46,7 @@ def sources(k): return '<p class="k">STOLEN FROM</p><p>' + " · ".join(link(n, u
 def section_calm():
     t = CT["today"]; st = CT["state_today"]; m = CT["model"]; o = CT["oos_by_state"]; ah = CT["calm_ahead_prob"]; vw = CT["vol_weights"]; b = CT["breadth"]
     fresh = CT["new_sessions_since_cache"]
-    src = ("the S&amp;P 500 and VIX to the 25 Sep close, then " + ", ".join(fresh) + " from the chart API (SPY's return standing in for the index)") if fresh else "the S&amp;P 500 and VIX to the 25 Sep close (today's bar was not yet served when this ran)"
+    src = ("the S&amp;P 500 and VIX to the 25 Sep close, then " + ", ".join(fresh) + " from the chart API (SPY's return standing in for the index; today's 16:00 close read from the API's last 30-minute bar, because the daily bar is published overnight)") if fresh else "the S&amp;P 500 and VIX to the 25 Sep close (today's bar was not yet served when this ran)"
     vd = CT["oos_vol_diff"]; rd = CT["oos_ret_diff"]
     side = CT["oos_by_200day_side"]
     rows = [[n, pc(o[n]["share_of_days"]), f"{o[n]['duration_median']:.0f} · {o[n]['duration_p90']:.0f}", pc(o[n]["next20_realised_vol_ann_pct"]), sgn(o[n]["next20_median_pct"], 2, "%"), sgn(o[n]["next20_p10_pct"], 2, "%"), pc(o[n]["next20_share_up"])] for n in ("CALM", "STRESS")]
@@ -237,7 +237,7 @@ def build():
 
 <h2>What this page says, in plain words</h2>
 <ol class="lead">
-<li><b>Today is {CT['state_today']}</b> (STRESS probability {ct['STRESS']:.3f} at the {ct['date']} close). For sizing, that means full positions under the volatility rule, with one caution: breadth is thin ({pc(CT['breadth']['pit']['above50'])} of S&amp;P members above their 50-day). The state predicts how wild the next month is, not its direction.</li>
+<li><b>Today is {CT['state_today']}</b> (STRESS probability {ct['STRESS']:.3f} at the {ct['date']} close, a day SPY fell {-ct.get('spy_ret_pct', 0):.2f}% and the VIX rose to {ct.get('vix', 0):.2f}). For sizing, that means full positions under the volatility rule, with one caution: breadth is thin ({pc(CT['breadth']['pit']['above50'])} of S&amp;P members above their 50-day). The state predicts how wild the next month is, not its direction.</li>
 <li><b>Sizing by volatility is a way to survive, not to win.</b> It cut SPY's worst fall from {I4['SPY']['buy_and_hold']['max_dd_pct']:.0f}% to {I4['SPY']['rules'][P4['headline_rule']]['max_dd_pct']:.0f}% and cost about {I4['SPY']['buy_and_hold']['cagr_pct'] - I4['SPY']['rules'][P4['headline_rule']]['cagr_pct']:.1f} points a year. Better return for the risk in every market tested, but not beyond luck once the 28-rule search is counted.</li>
 <li><b>Stepping aside below the 10-month / 200-day average cuts the deep holes almost everywhere</b>: a median {f10['median_dd_cut_pts']:.0f} points off the worst fall across {f10['instruments']} markets, for about {-f10['median_cagr_cost_pts']:.1f} points a year. It is a drawdown cutter, not a return booster, which is what the public work says too.</li>
 <li><b>Holes take years.</b> A 20% fall in an index takes a median {P7['groups']['index']['20']['median_under_water_sessions_km'] / 252:.1f} years to recover, and an S&amp;P stock's about {P7['groups']['S&P 500 stocks, point in time']['20']['median_under_water_sessions_km'] / 252:.1f}. <b>After a stock triples in two years, about half ({r200['crash_pct']:.0f}%) lose 40% from a high within the next two, against {base:.0f}% for any stock on any day</b>, though most first climb higher. Gold's doubling is still open; silver's already fell {-P7['instruments']['Silver since 1970']['open_now']['depth_pct']:.0f}%.</li>
@@ -267,7 +267,7 @@ def build():
 <li><b>Bitcoin</b> is measured on weekday closes from 2013, so "20 sessions" means about four weeks for every instrument.</li>
 <li><b>Today's leaders</b> (NVDA, AAPL and the others) were chosen because they won, so their rows are lists, never evidence. The point-in-time LEADERS10 basket and the point-in-time S&amp;P members are the evidence.</li>
 <li><b>Breadth before 2004 and outside the S&amp;P 500</b> is not measured. Our Zweig uses 500 large companies, not the NYSE's 3,000 issues, so it fires more often than the original.</li>
-<li><b>The CALM/STRESS state after 25 Sep</b> uses SPY's daily return in place of the S&amp;P index's (the chart API does not carry ^GSPC). They differ by basis points on a day without a dividend.</li>
+<li><b>The CALM/STRESS state after 25 Sep</b> uses SPY's daily return in place of the S&amp;P index's (the chart API does not carry ^GSPC). They differ by basis points on a day without a dividend. Today's closes are the close of the API's 15:30–16:00 ET 30-minute bar, because the daily bar is published overnight. For the VIX that is its 16:00 level; the official VIX close comes at 16:15. A 0.0007 reading is far from the 0.5 line, so a small difference cannot change the answer. The other studies read the cache to 25 Sep.</li>
 <li><b>Costs</b> are flat (5 bps per unit traded in P4, 10 bps per switch in P5). Taxes are not counted. For a taxable account, P5's switching and P4's constant trimming would cost more than shown.</li>
 </ul>
 <h2>What was not done</h2>

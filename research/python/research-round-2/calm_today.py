@@ -43,6 +43,20 @@ def main():
 
     # today's bars as served
     served = {s: fetch(s) for s in ("VIX", "SPY", "QQQ")}
+    # The daily bar for a session is published overnight (the API's refresh policy still called 25 Sep "current" at 16:08 ET).
+    # When today's daily bar is missing after the close, take today's close from the same API's finished 30-minute bars:
+    # the close of the 15:30-16:00 ET bar is the 16:00 close (for the VIX it is the 16:00 level; its official close is 16:15).
+    now_et = pd.Timestamp.now(tz="America/New_York")
+    today = str(now_et.date())
+    if now_et.hour >= 16 and now_et.dayofweek < 5:
+        for s in served:
+            if served[s]["rows"][-1]["date"] < today:
+                req = urllib.request.Request(f"{API}?symbol={s}&tf=30m&limit=20", headers={"Origin": "https://scintillahub.ai", "User-Agent": "scintilla-research-round-2"})
+                d = json.load(urllib.request.urlopen(req, timeout=30))
+                last = [r for r in d["series"] if pd.Timestamp(r["t"], unit="ms", tz="UTC").tz_convert("America/New_York").strftime("%Y-%m-%d %H:%M") == f"{today} 15:30"]
+                if last:
+                    served[s]["rows"].append({"date": today, "c": last[0]["c"], "from": "30m bar 15:30-16:00 ET (daily bar not yet published)"})
+                    served[s]["intraday_close"] = {"provider": d.get("provider"), "bar_start_et": f"{today} 15:30", "close": last[0]["c"]}
     json.dump(served, open(os.path.join(L.DATA, "today-bars.json"), "w"), indent=1)
     spy_s = pd.Series({pd.Timestamp(r["date"]): r["c"] for r in served["SPY"]["rows"]}).sort_index()
     vix_s = pd.Series({pd.Timestamp(r["date"]): r["c"] for r in served["VIX"]["rows"]}).sort_index()
@@ -53,7 +67,7 @@ def main():
         r = np.log(spy_s[d] / spy_s[spy_s.index < d].iloc[-1]); lv = np.log(vix_s[d])
         b = np.array([multivariate_normal(mw.means_[k], mw.covars_[k]).pdf([r, lv]) for k in range(2)])
         alpha = (alpha @ mw.transmat_) * b; alpha /= alpha.sum()
-        path.append({"date": str(d.date()), "STRESS": round(float(alpha[1]), 4), "spy_ret_pct": round(100 * float(np.expm1(r)), 2), "vix": float(vix_s[d]), "source": "SPY return + VIX (chart API)"})
+        path.append({"date": str(d.date()), "STRESS": round(float(alpha[1]), 4), "spy_ret_pct": round(100 * float(np.expm1(r)), 2), "vix": float(vix_s[d]), "source": "SPY return + VIX (chart API" + (", 16:00 close from the last 30-minute bar)" if "intraday_close" in served["SPY"] and str(d.date()) == served["SPY"]["intraday_close"]["bar_start_et"][:10] else " daily bars)")})
     today = path[-1]
     A_ = mw.transmat_; stay = {n: float(A_[i, i]) for i, n in enumerate(("CALM", "STRESS"))}
     k2 = PUBLISHED["models"]["A_gspc_vix_1990"]["k2"]
