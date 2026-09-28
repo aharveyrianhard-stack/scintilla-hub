@@ -10,7 +10,11 @@
                       (their weights are re-scaled to add to 100% — nothing is filled in for the rest)
      count            how many holdings went in
      weight_pct       their weight in the fund
-     coverage_pct     that weight as a share of the whole fund (weight_pct / total_weight_pct × 100)
+     coverage_pct     that weight as a share of the WHOLE fund: weight_pct / max(100, total_weight_pct) × 100. The file's own
+                      total is NOT the denominator: when FMP's file lists only part of a fund (DRAM: 9 rows = 35.7% of a
+                      26-line fund; VT capped at 4,000 rows = 91.8%), dividing by the file total would overstate coverage.
+     file_pct         how much of the fund the holdings file lists (total_weight_pct, capped at 100)
+     file_short       true when the file lists less than 98% of the fund — the card then says so
      not_read         served holdings the Geiger had no reading for (listed, never guessed)
    or null when no holding has a reading.
 
@@ -27,7 +31,9 @@ export function holdingsAggregate(fund, geigerOf) {
     sw += w; swg += w * g; count++;
   }
   if (!count) return null;
-  return { value: swg / sw, count, weight_pct: sw, coverage_pct: (100 * sw) / h.total_weight_pct, not_read: notRead };
+  const filePct = Math.min(100, h.total_weight_pct);
+  return { value: swg / sw, count, weight_pct: sw, coverage_pct: (100 * sw) / Math.max(100, h.total_weight_pct),
+    file_pct: filePct, file_short: filePct < 98, not_read: notRead };
 }
 
 export function divergence(fundG, aggG) {

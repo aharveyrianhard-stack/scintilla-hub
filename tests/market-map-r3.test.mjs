@@ -66,7 +66,7 @@ test("no reading is stored in the node list: Geigers, prices and changes are rea
   for (const k of ["composite", "geiger", "change_pct", "price", "trend", "momentum"]) assert.ok(!txt.includes(`"${k}"`), `node list stores ${k}`);
 });
 
-test("aggregate maths on a fixture: weight-blended over the holdings with a reading, coverage against the whole fund", () => {
+test("aggregate maths on a fixture: weight-blended over the holdings with a reading, coverage against the whole fund (not the file)", () => {
   const fund = { holdings: { total_weight_pct: 100, served_weights: [["A", 50], ["B", 30], ["C", 10], ["Z", 0]] } };
   const G = { A: 0.5, B: -0.5, C: null };
   const a = holdingsAggregate(fund, (t) => (t in G ? G[t] : null));
@@ -75,9 +75,18 @@ test("aggregate maths on a fixture: weight-blended over the holdings with a read
   assert.equal(a.weight_pct, 80);
   assert.equal(a.coverage_pct, 80);
   assert.deepEqual(a.not_read, ["C"]);
-  // coverage is against the fund's whole file (cash included), not against the served part
+  // coverage is against the WHOLE fund (100%), never against the file's own total: a file that lists only part of the
+  // fund must not inflate coverage. DRAM's 26 Sep file: 9 rows adding to 35.7221% of a 26-line fund; the served ones
+  // (SNDK 4.72, STX 4.63, WDC 3.57, MU 0.41) are 13.33% of the fund — not 13.33 / 35.72 = 37%.
+  const dram = holdingsAggregate({ holdings: { total_weight_pct: 35.7221, served_weights: [["SNDK", 4.72], ["STX", 4.63], ["WDC", 3.57], ["MU", 0.41]] } }, () => 0.2);
+  assert.ok(Math.abs(dram.coverage_pct - 13.33) < 1e-9, "DRAM coverage is 13.33% of the fund, got " + dram.coverage_pct);
+  assert.ok(Math.abs(dram.file_pct - 35.7221) < 1e-9); assert.equal(dram.file_short, true);
+  // a nearly complete file (cash rounding) is not flagged short, and coverage still divides by 100
   const b = holdingsAggregate({ holdings: { total_weight_pct: 99.7, served_weights: [["A", 41.2]] } }, () => -0.3);
-  assert.ok(Math.abs(b.coverage_pct - (100 * 41.2) / 99.7) < 1e-9); assert.equal(b.value, -0.3);
+  assert.ok(Math.abs(b.coverage_pct - 41.2) < 1e-9); assert.equal(b.value, -0.3); assert.equal(b.file_short, false);
+  // a file adding to more than 100% (rounding, derivatives) divides by its own total, so coverage never passes 100%
+  const c = holdingsAggregate({ holdings: { total_weight_pct: 102, served_weights: [["A", 102]] } }, () => 0.1);
+  assert.ok(Math.abs(c.coverage_pct - 100) < 1e-9); assert.equal(c.file_pct, 100);
   // nothing read, or no holdings file → no bar at all (never a zero that looks like a reading)
   assert.equal(holdingsAggregate(fund, () => null), null);
   assert.equal(holdingsAggregate({ holdings: null }, () => 1), null);
@@ -103,6 +112,15 @@ test("the aggregate on the real list: XLK blends its served holdings, a fund wit
   assert.equal(x.count, byId.get("XLK").holdings.served_weights.length);
   assert.ok(x.coverage_pct > 85 && x.coverage_pct <= 100);
   assert.equal(holdingsAggregate(byId.get("GLD"), G), null, "GLD has no holdings file");
+  // funds whose FMP file is incomplete: coverage is a share of the whole fund, and the card is told the file is short
+  const d = holdingsAggregate(byId.get("DRAM"), G);
+  assert.ok(d.coverage_pct < 15 && d.file_short && d.file_pct < 40, "DRAM: " + JSON.stringify(d));
+  const vt = holdingsAggregate(byId.get("VT"), G);
+  assert.ok(vt.file_short && vt.coverage_pct <= vt.weight_pct + 1e-9, "VT: " + JSON.stringify(vt));
+  for (const f of R3.nodes.filter((n) => n.kind === "fund" && n.holdings)) {
+    const a = holdingsAggregate(f, G); if (!a) continue;
+    assert.ok(a.coverage_pct <= a.file_pct + 1e-9 && a.coverage_pct <= 100 + 1e-9, f.id + " coverage above what the file lists");
+  }
 });
 
 test("tree layout: deterministic, top-down (every child below its parent), upper tree flat, depth only where rows need it", () => {
@@ -153,6 +171,7 @@ test("the page: Geiger bars on the Hub scale, the holdings bar, click again or E
   assert.match(PAGE, /if \(n\.id === state\.selected\) release\(\); else select\(n\);/, "clicking the picked ball again lets go");
   assert.match(PAGE, /e\.key === "Escape" && state\.selected/, "Esc lets go");
   assert.match(PAGE, /aggregate of <b>\$\{a\.count\}<\/b> holdings = <b>\$\{a\.coverage_pct\.toFixed\(0\)\}%<\/b> of the fund's weight/);
+  assert.match(PAGE, /a\.file_short \? `<div class="wait">FMP's holdings file lists only/, "a short holdings file must be said on the card");
   assert.match(PAGE, /DIVERGENCE/);
   assert.match(PAGE, /not served/);
   assert.ok(!/Math\.random/.test(PAGE), "the page must never invent a reading");
