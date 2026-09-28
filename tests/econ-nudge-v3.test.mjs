@@ -132,10 +132,17 @@ test("three or more the same day: the names collapse to a swarm of category colo
   assert.equal(model[0].kind, "swarm");
   assert.equal(model[0].group.length, 5);
   const html = api.macroNextHTML(before);
-  assert.match(html, /<span class="mn-swarm" data-act="mngoto" data-day="2026-09-24"/);
+  /* 27 Sep — the swarm walks the same bands as an item: an hour and a half out it is STILL (s-ahead), and the
+     dots only start to move inside the hour. It used to hard-flash at any distance ("3 due · in 15h"). */
+  assert.match(html, /<span class="mn-swarm s-ahead" data-act="mngoto" data-day="2026-09-24"/);
+  assert.equal(model[0].pace, "ahead");
+  assert.equal(api.ecNudgeModel(ts("2026-09-24T12:00:00Z"))[0].pace, "soon", "inside the hour it breathes");
+  assert.equal(api.ecNudgeModel(ts("2026-09-24T12:25:00Z"))[0].pace, "near", "inside ten minutes it tightens");
   assert.equal((html.match(/<i style="background:/g) || []).length, 5, "one dot per release, in its own category hue");
   assert.match(html, /<b>5 due<\/b> · in 1h 30m · go to economic<\/span>/, "the count, the wait, and where to go");
-  assert.doesNotMatch(html, /Jobless|Michigan|New Home/, "no names at all on a heavy day");
+  const shown = html.replace(/ title="[^"]*"/g, "");
+  assert.doesNotMatch(shown, /Jobless|Michigan|New Home/, "no names on screen on a heavy day");
+  assert.match(html, /title="5 releases due [^"]*Jobless Claims[^"]*the dot colour is the release&#39;s category/, "27 Sep — the hover says which releases and what the colour means");
   /* 23 Sep: the prototype's CODE (nudge.html: sameDay.length>=3) and Alan's notes say three; its page text said four. */
   assert.equal(api.EC_NUDGE_SWARM_MIN, 3, "three or more, as the prototype's own code does");
   const three = heavy.slice(0, 3);
@@ -165,7 +172,7 @@ test("a loaded day up to three days out is one quiet cluster — a warning, not 
   const html = api.macroNextHTML(NOW);
   assert.match(html, /<span class="mn-ahead" data-act="mngoto" data-day="2026-09-26"/);
   assert.match(html, /<span class="mn-albl">SAT · <b>3<\/b> due<\/span>/, "the day and the count, nothing else");
-  assert.doesNotMatch(html, /Core PCE|Personal Income/, "the loaded day is collapsed, not named");
+  assert.doesNotMatch(html.replace(/ title="[^"]*"/g, ""), /Core PCE|Personal Income/, "the loaded day is collapsed, not named on screen");
   /* nothing in the cluster moves: no state class, so no animation can key off it */
   assert.doesNotMatch(html.slice(html.indexOf("mn-ahead")), /s-due|s-near|s-soon/);
   /* four days out says nothing at all */

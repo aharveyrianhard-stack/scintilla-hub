@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Market Area</title>
+<style>
+:root{ --bg:#0A0A0F; --panel:#101016; --line:#24242C; --ink:#D0D0D2; --ink2:#B4B4BA; --ink3:#8A8A92; --crk:#00D4FF; --up:#00FFA3; --dn:#FF2D55; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink2); font:14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
+main{ max-width:980px; margin:0 auto; padding:20px 16px 60px; }
+h1{ font-size:20px; letter-spacing:.14em; color:var(--ink); margin:8px 0 4px; }
+h2{ font-size:13px; letter-spacing:.18em; color:var(--crk); margin:28px 0 10px; text-transform:uppercase; }
+p, li{ font-size:13px; } .sub{ color:var(--ink3); font-size:12px; } b{ color:var(--ink); }
+.mock{ background:var(--panel); border:.5px solid var(--line); padding:12px; margin:12px 0; }
+.row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; border-bottom:.5px solid var(--line); }
+.row:last-child{ border-bottom:0; }
+.lbl{ width:64px; flex:none; color:var(--ink3); font-size:11px; letter-spacing:.14em; }
+.chip{ border:.5px solid #3A3A42; padding:3px 9px; font-size:11px; letter-spacing:.1em; color:var(--ink2); }
+.chip.on{ border-color:var(--crk); color:var(--crk); }
+.sep{ width:1px; height:16px; background:var(--line); margin:0 6px; }
+.body{ height:120px; display:grid; place-items:center; color:var(--ink3); font-size:12px; border:.5px dashed #3A3A42; margin-top:8px; }
+table{ width:100%; border-collapse:collapse; font-size:12px; } td, th{ text-align:left; padding:6px; border-bottom:.5px solid var(--line); vertical-align:top; } th{ color:var(--ink3); font-weight:400; }
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>ONE MARKET AREA: A PROPOSAL</h1>
+<p class="sub">27 Sep 2026 · design only, nothing built (your note: "too many tabs and sub-tabs… same coin")</p>
+
+<h2>The problem, counted</h2>
+<p>Comparing groups of stocks is spread across <b>4 tabs</b> (COHORT COMPARE · MAP · ROTATION · RELATIVE), <b>2 modes</b> inside COHORT COMPARE (COHORTS · SECTORS), and <b>5 families</b> under SECTORS (MEMBERS · SPDR · iSHARES · VANGUARD · EQUAL-WT). The same four tabs appear twice: in the dashboard's right pane and full-screen in SCENES. The timeframe chips (60M · 4H · 1D · 1W) drive MAP, ROTATION and RELATIVE, but <b>not</b> COHORT COMPARE. That one has its own scale, so switching tabs can silently change the time you are looking at.</p>
+
+<h2>The idea: one area, three questions, always in the same order</h2>
+<div class="mock">
+  <div class="row"><span class="lbl">WHAT</span><span class="chip on">COHORTS</span><span class="chip">SECTORS</span><span class="sep"></span><span class="sub">under SECTORS only:</span><span class="chip on">MEMBERS</span><span class="chip">SPDR</span><span class="chip">iSHARES</span><span class="chip">VANGUARD</span><span class="chip">EQUAL-WT</span></div>
+  <div class="row"><span class="lbl">WHEN</span><span class="chip">60M</span><span class="chip on">4H</span><span class="chip">1D</span><span class="chip">1W</span><span class="sep"></span><span class="sub">the MAP's selector, now for every view · REWIND rides here too</span></div>
+  <div class="row"><span class="lbl">HOW</span><span class="chip on">STRENGTH</span><span class="chip">MAP</span><span class="chip">ROTATION</span><span class="chip">RELATIVE</span><span class="sep"></span><span class="sub">four lenses on the same set, at the same time</span></div>
+  <div class="body">the chosen lens, drawn for the chosen set at the chosen timeframe</div>
+</div>
+<ul>
+  <li><b>WHAT</b> is the set of groups: cohorts, or sectors in one fund family.</li>
+  <li><b>WHEN</b> is one clock for everything. It is the MAP's selector, as you asked.</li>
+  <li><b>HOW</b> is the picture: STRENGTH (today's COHORT COMPARE bars), MAP (tiles), ROTATION (the quadrant chart), RELATIVE (the lines).</li>
+</ul>
+<p>Changing HOW never changes WHAT or WHEN, and changing WHEN changes every picture together. That is the "same coin". Every chip row is one line, and there is never a chip row inside a chip row.</p>
+
+<h2>What moves where</h2>
+<table>
+<tr><th>Today</th><th>In the one area</th></tr>
+<tr><td>COHORT COMPARE tab</td><td>HOW = STRENGTH</td></tr>
+<tr><td>COHORTS · SECTORS toggle inside it</td><td>WHAT row, for every lens (so ROTATION can show sectors too)</td></tr>
+<tr><td>SECTORS family chips</td><td>WHAT row, shown only when SECTORS is on</td></tr>
+<tr><td>MAP / ROTATION / RELATIVE tabs</td><td>HOW = MAP / ROTATION / RELATIVE</td></tr>
+<tr><td>TF chips (not used by COHORT COMPARE)</td><td>WHEN row, used by all four</td></tr>
+<tr><td>MAP mode (GRID, FISHEYE…), RELATIVE window, ROTATION play</td><td>stay with their own lens, at the end of the HOW row</td></tr>
+<tr><td>SCENES room</td><td>the same area, full screen (the ⛶ button), not a second copy</td></tr>
+</table>
+
+<h2>What has to be true first</h2>
+<ul>
+  <li><b>STRENGTH at a timeframe.</b> Cohort compare averages the Geiger, which today is one daily number. The store has a Geiger per timeframe (<code>composite_staged</code> carries a tf), so this can follow WHEN. It needs checking that 60M and 4H rows are fresh before it is built.</li>
+  <li><b>Sectors in ROTATION and RELATIVE.</b> Both need price series for the fund families. The SPDR set exists; the other three families need checking on the chart API.</li>
+</ul>
+
+<h2>Your decisions</h2>
+<ol>
+  <li><b>Name of the area.</b> Recommended: <b>MARKET</b>. It replaces the four tabs in the right pane, and SCENES becomes its full-screen view.</li>
+  <li><b>Should STRENGTH follow the timeframe?</b> Recommended: <b>yes</b>, once the 60M / 4H Geiger rows are confirmed fresh. Until then it would say "daily only" beside the chip.</li>
+  <li><b>Default lens.</b> Recommended: <b>MAP</b>, which is what the pane opens on today.</li>
+</ol>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

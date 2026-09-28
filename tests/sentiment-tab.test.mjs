@@ -85,7 +85,7 @@ test("age text", () => {
 });
 
 test("the room is wired into the master tabs, the view key, the mount and the entry hash", () => {
-  assert.ok(html.includes('const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"]'));
+  assert.ok(html.includes('const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "USUAL", "ECONOMIC"]'), "27 Sep — USUAL DAY sits between EVENTS and ECONOMIC");
   assert.ok(html.includes('case "SENTIMENT": return "SENTI|" + S.sentiTab;'), "each sub-tab is its own mount");
   assert.ok(html.includes('case "SENTIMENT": return sentimentRoomHTML();'));
   assert.ok(html.includes('else if (S.sec === "SENTIMENT") sentiDispatch();'), "the mount dispatches to the open sub-tab");

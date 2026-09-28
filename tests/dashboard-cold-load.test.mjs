@@ -56,14 +56,14 @@ test("the header and every row are built from ONE static column model: same cell
     { t: "SIUSD", state: "NON_EQUITY_OWNER", priceSource: "NON_EQUITY_OWNER", price: 66.74, c: null, fpe: null, mc: null, rsi: null, g: null, nf: true },   // values unavailable
   ] };
   const api = boardRenderer(S);
-  assert.equal(api.BOARD_COLS.length, 15, "15 columns from the first render (Trend/Mom/Read are no longer spliced in later; M52 added USUAL DAY; H-FRONT added REVENUE)");
-  assert.deepEqual(api.BOARD_COLS.slice(8, 13).map((c) => c[0]), ["RSI", "Trend", "Mom", "Read", "Geiger"]);
+  assert.equal(api.BOARD_COLS.length, 14, "14 columns from the first render (Trend/Mom/Read are no longer spliced in later; H-FRONT added REVENUE; 27 Sep moved USUAL DAY to its own room)");
+  assert.deepEqual(api.BOARD_COLS.slice(7, 12).map((c) => c[0]), ["RSI", "Trend", "Mom", "Read", "Geiger"]);
   const html = api.boardRowsHTML();
   const header = html.slice(0, html.indexOf('<div class="ch sc-board__row'));
   const rows = html.slice(header.length).split(/(?=<div class="ch sc-board__row)/);
   assert.equal(rows.length, 3);
   const headerCells = topLevelChildren(header);
-  assert.equal(headerCells, 15);
+  assert.equal(headerCells, 14);
   for (const r of rows) assert.equal(topLevelChildren(r), headerCells, "row cells = header cells: " + r.slice(0, 80));
   // the Geiger cell sits in the Geiger column (index 10) in each state, not under TREND (index 7)
   for (const r of rows) {
@@ -76,7 +76,7 @@ test("the header and every row are built from ONE static column model: same cell
 test("a pending board (no rows yet) still renders the full header from the model", () => {
   const S = { sort: { key: "g", dir: -1 }, fav: [], boardPending: "MEGACAP", rows: [] };
   const html = boardRenderer(S).boardRowsHTML();
-  assert.equal(topLevelChildren(html.slice(0, html.indexOf('<div class="sc-board__pending"'))), 15);
+  assert.equal(topLevelChildren(html.slice(0, html.indexOf('<div class="sc-board__pending"'))), 14);
   assert.match(html, /loading MEGACAP …/);
 });
 
@@ -84,7 +84,7 @@ test("the final board geometry is in the head stylesheet, before any script can 
   const head = page.slice(0, page.indexOf("</head>"));
   const tracks = head.match(/\n\.ch\{grid-template-columns:([^;]*) !important;gap:5px\}/);
   assert.ok(tracks, "the .ch track rule is static");
-  assert.equal(tracks[1].split("minmax(").length - 1, 15, "one track per column, M52 and H-FRONT's REVENUE included");
+  assert.equal(tracks[1].split("minmax(").length - 1, 14, "one track per column, H-FRONT's REVENUE included, USUAL DAY gone to its own room (27 Sep)");
   assert.match(head, /\n\.gwx-tm\{[^}]*text-align:right/);
   assert.match(head, /\n\.sc-cohstrip__read\{[^}]*height:16px !important/, "the compare strip's final height is static too (it grew 5px after first paint)");
   assert.match(head, /\n\.gwx\{display:flex;align-items:center;gap:7px;padding:6px 10px;border-bottom:\.4px solid var\(--line\)\}/, "the rewind bar's box exists for the reserved slot");
