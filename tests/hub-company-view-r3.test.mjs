@@ -85,10 +85,10 @@ test("SOCIAL is a tab again, with the keywords printed on it; nothing is written
   assert.match(fn("coTabHTML"), /case "SOCIAL":\s+return coSocialHTML\(data\);/);
   const h = fn("coSocialHTML");
   assert.match(h, /<i>KEYWORDS<\/i>/);
-  assert.match(h, /Counts only — the lean is in SENTIMENT/);
+  assert.match(h, /is a word-list lean, not an AI read/, "R4: the lean is shown per mention, and says what it is");
   const load = fn("coSocialLoad");
   assert.match(load, /sentiX\(\)/, "the X feed through the SENTIMENT room's shared ten-minute cache");
-  assert.match(load, /pg\("youtube_videos\?select=video_id,ticker,channel_title,title,published_at&published_at=gte\./);
+  assert.match(load, /pg\("youtube_videos\?select=video_id,ticker,channel_id,channel_title,title,published_at,source,subscription_accounts&published_at=gte\./, "R4: each video carries where it came from");
   assert.doesNotMatch(load, /method:\s*"(POST|PATCH|DELETE)"/);
 });
 
@@ -176,8 +176,8 @@ test("R3's new CSS is greys only (channels within 24, none above 210), text 11 p
 
 test("the trial copy is this page plus <base href=\"/\"> and the TRIAL banner, nothing else", () => {
   const trial = fs.readFileSync(new URL("../preview/company-view/index.html", import.meta.url), "utf8");
-  const stripped = trial.replace(/<base href="\/">\n<!-- TRIAL COPY \(27 Sep\): company view round 3 \(R3, candidate\/company-view-r3-20260927, built from [0-9a-f]+\)[^\n]*-->\n/, "")
-    .replace(/<div id="trialBanner"[^\n]*TRIAL · company view round 3[^\n]*<\/div>\n<\/body>/, "</body>");
+  const stripped = trial.replace(/<base href="\/">\n<!-- TRIAL COPY \((?:27|28) Sep\): company view round [34] \(R[34], candidate\/company-view-r[34]-2026092[78], built from [0-9a-f]+\)[^\n]*-->\n/, "")
+    .replace(/<div id="trialBanner"[^\n]*TRIAL · company view round [34][^\n]*<\/div>\n<\/body>/, "</body>");
   assert.notEqual(stripped, trial, "the two additions are there");
   assert.equal(stripped.length, page.length, "the rest is byte-for-byte this branch's index.html (rebuild: deliverables/20260927/company-view-r3/tools/build-trial.py)");
   assert.ok(stripped === page);

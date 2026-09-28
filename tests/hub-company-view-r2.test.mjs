@@ -101,7 +101,9 @@ test("keys: Esc back to the board, ↑/↓ the next name in the board's own orde
   assert.equal(none({ target: { tagName: "DIV" } }), false);
   assert.equal(blocked((id) => (id === "chatPop" ? { classList: { contains: (c) => c === "open" } } : null), null, -1, doc)({ target: {} }), true, "the chat panel owns Esc");
   assert.equal(blocked(() => null, {}, -1, doc)({ target: {} }), true, "a fullscreen section owns Esc");
-  const step = []; const cvStep = new Function("orderedShownRows", "pinLeft", "LEFT_T", fn("cvStep") + "\nreturn cvStep;");
+  /* R4 — with the list on screen (EXPAND) the keys follow the list's own sort (cvRailRows); collapsed, the board's order */
+  const docC = { body: { classList: { contains: () => false } } };
+  const step = []; const cvStep = (rows, pin, T) => new Function("orderedShownRows", "cvRailRows", "pinLeft", "LEFT_T", "document", fn("cvStep") + "\nreturn cvStep;")(rows, () => [], pin, T, docC);
   const rows = () => [{ t: "AMD" }, { t: "MU" }, { t: "BE" }];
   cvStep(rows, (t) => step.push(t), "MU")(1); cvStep(rows, (t) => step.push(t), "MU")(-1);
   cvStep(rows, (t) => step.push(t), "BE")(1); cvStep(rows, (t) => step.push(t), "AMD")(-1);
@@ -111,7 +113,8 @@ test("keys: Esc back to the board, ↑/↓ the next name in the board's own orde
 
 test("EXPAND: a name rail in the board's own order, the chart half, the tabs half (R3: the tabs get the numbers' room); a rail click keeps the view", () => {
   assert.match(page, /body\.co-exp \.cv\{display:grid;grid-template-columns:156px minmax\(0,50fr\) minmax\(0,50fr\)/);
-  assert.match(fn("cvRailHTML"), /const rows = orderedShownRows\(\);/);
+  assert.match(fn("cvRailRows"), /cvRailOrder\(orderedShownRows\(\), cvRailSort\(\)\)/, "R4: the board's rows, in the list's own sort (DAY % or GEIGER)");
+  assert.match(fn("cvRailHTML"), /const by = cvRailSort\(\), rows = cvRailRows\(\);/);
   assert.match(clickCase("cvrail"), /if \(a\.dataset\.t && a\.dataset\.t !== LEFT_T\) pinLeft\(a\.dataset\.t\);/);
   assert.doesNotMatch(clickCase("cvrail"), /CO_EXPANDED|coExpandApply/, "switching names never collapses");
 });

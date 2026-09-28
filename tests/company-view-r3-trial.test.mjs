@@ -13,8 +13,8 @@ import fs from "node:fs";
    Taken from candidate/company-view-r3-20260927 tests/hub-company-view-r3.test.mjs; only the page source and the last
    test changed. */
 const trial = fs.readFileSync(new URL("../preview/company-view/index.html", import.meta.url), "utf8");
-const BASE_RE = /<base href="\/">\n<!-- TRIAL COPY \(27 Sep\): company view round 3 \(R3, candidate\/company-view-r3-20260927, built from [0-9a-f]+\)[^\n]*-->\n/;
-const BANNER_RE = /<div id="trialBanner"[^\n]*TRIAL · company view round 3[^\n]*<\/div>\n<\/body>/;
+const BASE_RE = /<base href="\/">\n<!-- TRIAL COPY \((?:27|28) Sep\): company view round [34] \(R[34], candidate\/company-view-r[34]-2026092[78], built from [0-9a-f]+\)[^\n]*-->\n/;
+const BANNER_RE = /<div id="trialBanner"[^\n]*TRIAL · company view round [34][^\n]*<\/div>\n<\/body>/;
 const page = trial.replace(BASE_RE, "").replace(BANNER_RE, "</body>");
 function fn(name) {
   const start = page.search(new RegExp("^(async )?function " + name + "\\b", "m"));
@@ -92,10 +92,10 @@ test("SOCIAL is a tab again, with the keywords printed on it; nothing is written
   assert.match(fn("coTabHTML"), /case "SOCIAL":\s+return coSocialHTML\(data\);/);
   const h = fn("coSocialHTML");
   assert.match(h, /<i>KEYWORDS<\/i>/);
-  assert.match(h, /Counts only — the lean is in SENTIMENT/);
+  assert.match(h, /is a word-list lean, not an AI read/, "R4: the lean is shown per mention, and says what it is");
   const load = fn("coSocialLoad");
   assert.match(load, /sentiX\(\)/, "the X feed through the SENTIMENT room's shared ten-minute cache");
-  assert.match(load, /pg\("youtube_videos\?select=video_id,ticker,channel_title,title,published_at&published_at=gte\./);
+  assert.match(load, /pg\("youtube_videos\?select=video_id,ticker,channel_id,channel_title,title,published_at,source,subscription_accounts&published_at=gte\./, "R4: each video carries where it came from");
   assert.doesNotMatch(load, /method:\s*"(POST|PATCH|DELETE)"/);
 });
 
