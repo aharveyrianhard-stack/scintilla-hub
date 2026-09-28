@@ -5,7 +5,8 @@
 // REQUESTS 40/40  (2 per row × 20 rows: one 30-minute extended-hours call, one daily call)
 //
 // WHAT IT IS. The Hub's Geiger (chart API /geiger) rebuilt in Pine for a list of symbols, shown as
-// a table: a bar centred at zero (green up, red down), the Geiger value, TREND and MOMENTUM.
+// a table: a bar centred at zero (green up, red down) and the Geiger value — nothing else (Alan, 28 Sep:
+// "I literally just want the Geiger bar. If it has a numerical value, great.")
 //
 // THE MATHS (copied in behaviour from the provider's services/hot-query/geiger-publish-artifact.mjs):
 //   · Seven rungs with today's saved Equalizer weights: 3h 1.235817 · 4h 2.278755 · 6h 3.178477 ·
@@ -411,7 +412,7 @@ if barstate.islast
     // rebuilt on every update, so the footer merge never meets an already-merged range
     if not na(T)
         table.delete(T)
-    T := table.new(posOf(tPos), 8, 23, bgcolor = C_PANEL, frame_color = C_FRAME, frame_width = 1, border_color = C_PANEL, border_width = 1)
+    T := table.new(posOf(tPos), 5, 23, bgcolor = C_PANEL, frame_color = C_FRAME, frame_width = 1, border_color = C_PANEL, border_width = 1)
     array<string> syms = array.from(s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20)
     array<float>  gs   = array.from(g01, g02, g03, g04, g05, g06, g07, g08, g09, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20)
     array<float>  trs  = array.from(tr01, tr02, tr03, tr04, tr05, tr06, tr07, tr08, tr09, tr10, tr11, tr12, tr13, tr14, tr15, tr16, tr17, tr18, tr19, tr20)
@@ -428,9 +429,6 @@ if barstate.islast
     cellTxt(2, 0, "│", C_AXIS, text.align_center)
     cellTxt(3, 0, "+", C_HEAD, text.align_left)
     cellTxt(4, 0, "VALUE", C_HEAD, text.align_right)
-    cellTxt(5, 0, "TREND", C_HEAD, text.align_right)
-    cellTxt(6, 0, "MOM", C_HEAD, text.align_right)
-    cellTxt(7, 0, "R", C_HEAD, text.align_right)
     int row = 1
     for k = 0 to 19
         int    i = array.get(idx, k)
@@ -444,10 +442,7 @@ if barstate.islast
             cellTxt(2, row, "│", C_AXIS, text.align_center)
             cellTxt(3, row, na(g) ? "" : barPos(g), C_BULL, text.align_left)
             cellTxt(4, row, fmt(g),  dirColor(g),  text.align_right)
-            cellTxt(5, row, fmt(tv), dirColor(tv), text.align_right)
-            cellTxt(6, row, fmt(mv), dirColor(mv), text.align_right)
-            cellTxt(7, row, str.tostring(array.get(rs, i)) + "/7", C_DIM, text.align_right)
             row += 1
     string asOf = str.format_time(timenow, "dd MMM HH:mm", TZ)
     cellTxt(0, row, "7 rungs · 3h 4h 6h 12h D 3D W · completed bars only · " + asOf + " ET", C_HEAD, text.align_left)
-    table.merge_cells(T, 0, row, 7, row)
+    table.merge_cells(T, 0, row, 4, row)
