@@ -114,6 +114,20 @@ code{ color:var(--ink); }
   <li><b>What is counted:</b> moves beyond a name's usual day, earnings surprises and economic surprises — the same as USUAL DAY, so the number matches where the tap lands. "About to print" notices are left out (Friday had 25 rows in all; 14 are events with a size).</li>
 </ul>
 
+<h2>5 · Two fixes after review</h2>
+<p>An independent reviewer found two things my first version got wrong. Both are fixed and each has a test.</p>
+<p><b>Fix 1: a big earnings surprise stopped glowing on the new tapes.</b> The page stores a "scintilla" when a company's result is far outside its usual surprise, and that name's ticker glows on every earnings tape. The new drawing gave the tape items a different label, so the glow only found the old bottom band. With the bottom swap switched on, it found nothing. It now finds the new items on the EVENTS tape, the earnings room tape and the swapped bottom band, and it runs again whenever one of them redraws.</p>
+<div class="grid">
+  <figure><img src="shots/review-glow-roomtape-before-1680.png" alt="before"><figcaption>Before, earnings room tape, with a surprise for MU stored for the test: "MU" stays plain white [MEASURED: 1 glow on the page, landing only on the old bottom band].</figcaption></figure>
+  <figure><img src="shots/review-glow-roomtape-after-1680.png" alt="after"><figcaption>After, the same stored surprise: "MU" on the room tape glows [MEASURED: it now lands on the room tape and the bottom band; with <code>?ernbottom=new</code> it lands on the EVENTS tape and the new bottom tape, where before it landed nowhere].</figcaption></figure>
+</div>
+<p><b>Fix 2: a report with no announced time could still flash in NEXT.</b> If the result of a report with no announced time was already stored, NEXT kept listing it as "time not set · today". From 23:00 New York time it breathed and then tightened, as if it were about to report. Now it lands the moment a result is stored: the result sits on the left with ✕, as a release's number does, and after a quarter of an hour it drops off. Also, a group of three or more reports with no announced time on the same day never glows.</p>
+<div class="grid">
+  <figure><img src="shots/review-next-untimed-before-1680.png" alt="before"><figcaption>Before, test clock set to Tue 13 Oct 23:10 ET with a WFC result stored for the test: NEXT shows "WFC TIME NOT SET <span class="org">today</span>" and its dot breathes [MEASURED: <code>s-soon</code>, <code>mn-breathe</code>; at 23:55 ET it tightens to <code>near</code>].</figcaption></figure>
+  <figure><img src="shots/review-next-untimed-after-1680.png" alt="after"><figcaption>After, same clock and data: "WFC 1.60 vs 1.85 −13.5% ✕" sits in the landed lane on the left, and BLK (no time, no result) is still [MEASURED: no animation anywhere in NEXT; at 23:55 ET WFC has dropped off].</figcaption></figure>
+</div>
+<p>How this was checked: a local copy of the page in a headless browser, with the chart service's cross-origin check relaxed. The WFC result and the MU surprise were added in the browser for the test only. Nothing was written to the database.</p>
+
 <h2>Phone (390 wide)</h2>
 <div class="phones">
   <figure><img src="shots/after-dash-390.png" alt="dash phone"><figcaption>Dashboard: EVENTS tape at the top (NEXT hides on a phone, as before).</figcaption></figure>
