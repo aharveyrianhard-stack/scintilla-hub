@@ -144,7 +144,8 @@ test("the earnings tape and the timeline glow from the same stored surprise", ()
   const surprise = ev({ kind: "earnings_surprise", subject: "COST", direction: 1, magnitude: 3.1, source: "earnings_events",
     detail: { measure: "eps", measures: [{ name: "eps", surprise_pct: 30, z: 3.1, usual_pct: 1.2 }], beat: true } });
   const { api, glows } = world({ rows: [surprise],
-    sel: { ".ern-it[data-t], .sc-evrow[data-t]": [tapeIt, tapeCopy, timeline, other] } });
+    /* 28 Sep — the pass also reads ".ern-ec", the earnings item in the economic drawing (tapes-20260928.test.mjs) */
+    sel: { ".ern-it[data-t], .ern-ec[data-t], .sc-evrow[data-t]": [tapeIt, tapeCopy, timeline, other] } });
   assert.equal(api.ernScintPass(), 1, "one glow for the event, not one per copy of the marquee");
   assert.equal(glows[0].node, tapeIt.kids[".ern-sur"], "the surprise itself is what glows");
   assert.ok(tapeIt.classes.has("is-scint") && tapeCopy.classes.has("is-scint") && timeline.classes.has("is-scint"),

@@ -709,7 +709,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 }
 /* A row whose glow has faded still SAYS it was a scintilla — a shadow on the text it happened to,
    never a border, a size or a background that would shift anything. */
-.ec-row.is-scint .nm, .ec-ev.is-scint .nm, .ern-it.is-scint .ern-tk, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
+.ec-row.is-scint .nm, .ec-ev.is-scint .nm, .ern-it.is-scint .ern-tk, .ern-ec.is-scint .ecb-nm, .sc-chg.is-scint{ text-shadow:0 0 7px rgba(200,200,200,.4); }
 .ec-row.is-scint.res-up .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
 .ec-row.is-scint.res-dn .nm{ text-shadow:0 0 7px rgba(0,255,163,.4); }
 .ec-ev.is-scint.miss .nm{ text-shadow:0 0 7px rgba(255,48,96,.45); }
@@ -19120,6 +19120,7 @@ function renderTopTape(nowSec) {
   TOPTAPE_HTML = html;
   slot.innerHTML = html;
   try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}   // the diamond + glow, as on the band
+  try { if (typeof ernScintPass === "function") ernScintPass(); } catch (_) {}     // 28 Sep — and a stored surprise keeps its glow on a rebuild
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = slot.querySelector(".sc-tape__track");
   /* it opens a little before "now", so the last thing that happened is on screen beside what is next */
@@ -19139,6 +19140,7 @@ function renderErnRoomTape(nowSec) {
     if (slot && (html !== ERN_ROOM_HTML || !slot.querySelector("#ernRoomBand"))) {
       ERN_ROOM_HTML = html; slot.innerHTML = html;
       try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}
+      try { if (typeof ernScintPass === "function") ernScintPass(); } catch (_) {}   /* a stored surprise glows on the tape it rebuilt */
       const track = slot.querySelector(".sc-tape__track");
       if (track && typeof tapeSpeed === "function")
         tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));
@@ -19303,7 +19305,15 @@ function ernLaterHTML(nIn, todayIso, winTo) {
 }
 /* THE EARNINGS NEXT — the economic queue's own model over the earnings items */
 function ernNudgeState(it, nowSec, seenSec) {
-  if (!it.timed && it.actual == null) return it.day < ecDateKey(nowSec) ? "gone" : "ahead";
+  /* a stored result ends the countdown whatever the clock says: BMO/AMC are conventions and an untimed report's
+     23:59 is only a sort key, so a printed report is never "upcoming" — it lands (today, for the release's quarter of
+     an hour from when this page saw it) or it is gone, exactly as the tape draws it ("past"). */
+  if (it.actual != null) {
+    const seen = Number.isFinite(seenSec) ? seenSec : nowSec;
+    return it.day === ecDateKey(nowSec) && nowSec - seen < EC_NUDGE_SHOW_S &&
+      (!it.timed || seen - it.ts < EC_NUDGE_RECENT_S) ? "landed" : "gone";
+  }
+  if (!it.timed) return it.day < ecDateKey(nowSec) ? "gone" : "ahead";
   return ecNudgeState(it, nowSec, seenSec);
 }
 function ernNudgeItems(nowSec) {
@@ -19379,6 +19389,7 @@ function renderErnBandNew(nowSec) {
   ERN_BOTTOM_HTML = html;
   slot.innerHTML = html;
   try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}
+  try { if (typeof ernScintPass === "function") ernScintPass(); } catch (_) {}      /* as renderErnBand does (M42) */
   if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return true;
   const track = slot.querySelector(".sc-tape__track");
   if (track) tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));
@@ -21861,12 +21872,14 @@ function ecScintPass() {
 function ernScintPass() {
   if (typeof document === "undefined" || !document.querySelectorAll) return 0;
   const by = scintBy(); let n = 0;
-  for (const it of document.querySelectorAll(".ern-it[data-t], .sc-evrow[data-t]")) {
+  /* 28 Sep — ".ern-ec" is the earnings item in the economic drawing (ernEcItemHTML): the EVENTS tape, the room's tape
+     and, behind its switch, the bottom band. Without it a stored surprise stopped glowing on all three. */
+  for (const it of document.querySelectorAll(".ern-it[data-t], .ern-ec[data-t], .sc-evrow[data-t]")) {
     const ev = by.get(scintKey("earnings_surprise", it.dataset.t));
     if (!ev) continue;
     if (it.classList) it.classList.add("is-scint");
     const cell = (it.querySelector && (it.querySelector(".ern-sur") || it.querySelector(".ern-res") ||
-                  it.querySelector(".ern-tk"))) || it;
+                  it.querySelector(".ecb-res") || it.querySelector(".ern-tk") || it.querySelector(".ecb-nm"))) || it;
     if (n < SCINT_GLOW_CAP && scintGlow("earnings", ev, cell)) n++;
   }
   return n;
@@ -21923,6 +21936,8 @@ function mnScintPlan(it, st, nowSec) {
              tone: !s || s.cls === "inline" ? "soon" : s.cls === "miss" ? "hot" : "cool" };
   }
   if (st === "ahead" || st === "cluster") return null;   /* a day still to come is a warning, not an alarm */
+  if (it.timed === false) return null;                    /* 28 Sep — an earnings report with no announced time has no minute
+                                                             to count to (its ts is a 23:59 sort key), alone or leading a swarm */
   const dt = +it.ts - nowSec;
   if (dt > MN_SCINT_SOON_S) return null;
   if (dt > MN_SCINT_NEAR_S) return { phase: "soon", once: false, everyMs: MN_SCINT_SOON_MS, tone: "soon" };

@@ -15,10 +15,13 @@ const cut = (a, b) => {
 };
 const ECON = cut("/* ---- Room 9 · ECONOMIC", "/* ---- Room 3 · COMPANY");
 const ERN = cut("const ERN_BAND_ON = true;", "/* ============================================================================\n   27 SEP · USUAL DAY + SIGMA EVENTS");
+const MNPLAN = cut("const MN_SCINT_SOON_S", "/* the cell that carries the glow");
+const ERNPASS = cut("function ernScintPass()", "/* THE BOARD");
 const escSrc = page.match(/const esc = \(s\) => [\s\S]*?;\n/)[0];
 const numSrc = page.match(/const num = \(x\) => [^\n]*\n/)[0];
 const ts = (iso) => Math.floor(Date.parse(iso) / 1000);
 
+let SCINT_ROWS = new Map(), GLOWS = [];
 function load({ rows = [], today = "2026-09-28", search = "", wild = null } = {}) {
   const ctx = vm.createContext({
     console, setTimeout, URLSearchParams,
@@ -27,11 +30,12 @@ function load({ rows = [], today = "2026-09-28", search = "", wild = null } = {}
     document: { querySelectorAll: () => [] },
     todayISO: () => today,
     ernWildResult: (r) => (wild && wild[r.ticker]) || null,
+    SCINT_GLOW_CAP: 12, scintKey: (k, sub) => k + "|" + sub, scintBy: () => SCINT_ROWS, scintGlow: (surf, ev, node) => (GLOWS.push(node), true),
   });
-  const api = vm.runInContext(escSrc + numSrc + "let UNIVERSE = null;\n" + ECON + ERN +
+  const api = vm.runInContext(escSrc + numSrc + "let UNIVERSE = null;\n" + ECON + ERN + MNPLAN + ERNPASS +
     "\n;({ ernEcItem, ernEcItems, ernEcState, ernEcItemHTML, ernEcTapeHTML, ernNudgeModel, ernNudgeInnerHTML, ernNudgeNodeHTML," +
-    " ernLaterHTML, ernEtSec, ecNudgeModel, topTapeHTML, ERN_ECON_STYLE_ON, ERN_BOTTOM_NEW_ON, ERN_EC_HUE, ERN_NEXT_CLEARED," +
-    " set rows(v) { ERN_ROWS = v; }, set macro(v) { MACRO_NEXT = v; }, set uni(v) { UNIVERSE = v; } })", ctx);
+    " ernLaterHTML, ernEtSec, ecNudgeModel, topTapeHTML, ernNudgeState, mnScintPlan, ernScintPass, ERN_ECON_STYLE_ON, ERN_BOTTOM_NEW_ON, ERN_EC_HUE, ERN_NEXT_CLEARED," +
+    " set doc(v) { document = v; }, set rows(v) { ERN_ROWS = v; }, set macro(v) { MACRO_NEXT = v; }, set uni(v) { UNIVERSE = v; } })", ctx);
   api.rows = rows;
   api.macro = [];
   api.uni = new Set(rows.map((r) => r.ticker));
@@ -206,4 +210,73 @@ test("before the open it says so too; once the session has run, an empty day is 
   assert.match(holiday.scintStripHTML(), /market closed<\/span><span class="sc-ss__n">Wed 25 Nov: 1 scintilla</);
   const quietFri = strip("2026-09-27T18:00:00Z", []);
   assert.match(quietFri.scintStripHTML(), /market closed<\/span><span class="sc-ss__d">Fri 25 Sep: nothing moved further than its own history/);
+});
+
+/* ── 7 · review fixes (28 Sep) ────────────────────────────────────────────────────────────────────── */
+/* a node as ernScintPass meets it: its classes, its data-t, and the cells it can pick for the glow */
+function fakeItem(cls, t, cells) {
+  const set = new Set(cls.split(" "));
+  return { dataset: { t }, classes: set, classList: { add: (c) => set.add(c) },
+    querySelector: (sel) => (cells.includes(sel) ? { cell: sel } : null) };
+}
+test("a stored earnings surprise glows on an item in the new drawing — the EVENTS tape, the room's tape, the bottom swap", () => {
+  const K = load({ rows: [MU] });
+  const html = K.ernEcItemHTML(K.ernEcItem({ ...MU, eps_actual: 33.1 }, "2026-09-30"), "past", "2026-09-30");
+  assert.match(html, /class="sc-tape__item ecb-it ern-ec is-past is-high" data-act="row" data-t="MU"/, "the node the pass must find");
+  assert.match(html, /<span class="ecb-res /, "with a result cell to carry the glow");
+  const printed = fakeItem("sc-tape__item ecb-it ern-ec is-past is-high", "MU", [".ecb-res", ".ecb-nm"]);
+  const coming = fakeItem("sc-tape__item ecb-it ern-ec is-up is-high", "NKE", [".ecb-nm"]);
+  const other = fakeItem("sc-tape__item ecb-it ern-ec is-up is-high", "GIS", [".ecb-nm"]);
+  let asked = "";
+  K.doc = { querySelectorAll: (sel) => { asked = sel; return /\.ern-ec\[data-t\]/.test(sel) ? [printed, coming, other] : []; } };
+  SCINT_ROWS = new Map([["earnings_surprise|MU", { kind: "earnings_surprise", subject: "MU" }],
+                        ["earnings_surprise|NKE", { kind: "earnings_surprise", subject: "NKE" }]]);
+  GLOWS = [];
+  assert.equal(K.ernScintPass(), 2);
+  assert.match(asked, /\.ern-it\[data-t\], \.ern-ec\[data-t\], \.sc-evrow\[data-t\]/, "the old drawing and the timeline are still read");
+  assert.ok(printed.classes.has("is-scint") && coming.classes.has("is-scint"), "both stored surprises wear is-scint");
+  assert.ok(!other.classes.has("is-scint"), "a name with no stored surprise does not");
+  assert.deepEqual(GLOWS.map((g) => g.cell), [".ecb-res", ".ecb-nm"], "the glow lands on the result, or on the ticker");
+  /* every surface that rebuilds new-style items runs the pass after it, as renderErnBand always has (M42) */
+  for (const fn of ["function renderErnRoomTape(", "function renderErnBandNew(", "function renderTopTape("]) {
+    const body = page.slice(page.indexOf(fn), page.indexOf("\n}\n", page.indexOf(fn)));
+    assert.match(body, /ernScintPass\(\)/, fn + " runs ernScintPass after it redraws");
+  }
+  assert.match(page, /\.ern-ec\.is-scint \.ecb-nm/, "the ticker of a new-style item glows like the old one's");
+});
+test("a report with no announced time never counts down in NEXT — not with a result stored, not in a swarm", () => {
+  const K = load();
+  const WFC = { ticker: "WFC", date: "2026-10-13", report_time: null, eps_estimate: 1.55 };
+  const done = K.ernEcItem({ ...WFC, eps_actual: 1.6 }, "2026-10-13");
+  const seen = ts("2026-10-13T13:50:00Z");
+  assert.equal(K.ernEcState(done, ts("2026-10-13T14:00:00Z")), "past", "the tape draws it as printed");
+  assert.equal(K.ernNudgeState(done, ts("2026-10-13T14:00:00Z"), seen), "landed", "NEXT: it lands, it is not upcoming");
+  for (const iso of ["2026-10-13T14:30:00Z", "2026-10-14T03:10:00Z", "2026-10-14T03:55:00Z"])
+    assert.equal(K.ernNudgeState(done, ts(iso), seen), "gone", iso + " — never soon, never near");
+  /* the reviewer's exact case, a page opened late that evening: the printed result lands ONCE (its one glow, as a
+     release's number does) and never enters the soon / near countdown */
+  for (const iso of ["2026-10-14T03:10:00Z", "2026-10-14T03:55:00Z"]) {
+    const st = K.ernNudgeState(done, ts(iso), ts(iso) - 60);
+    assert.equal(st, "landed", iso);
+    const plan = K.mnScintPlan(done, st, ts(iso));
+    assert.equal(plan.phase, "landed"); assert.equal(plan.once, true, "one glow, not a pulse");
+  }
+  const open = K.ernEcItem(WFC, "2026-10-13");
+  assert.equal(K.ernNudgeState(open, ts("2026-10-14T03:55:00Z"), undefined), "ahead", "no result, no time: still, named");
+  assert.equal(K.mnScintPlan(open, "ahead", ts("2026-10-14T03:55:00Z")), null);
+  /* a swarm led by an untimed report plans no glow at any minute of its day */
+  for (const iso of ["2026-10-14T03:50:00Z", "2026-10-14T03:58:00Z", "2026-10-14T04:00:30Z"])
+    assert.equal(K.mnScintPlan(open, "swarm", ts(iso)), null, iso);
+  const sw = load({ rows: ["BLK", "WFC", "PGR"].map((t) => ({ ticker: t, date: "2026-10-13", report_time: null })), today: "2026-10-13" });
+  const m = sw.ernNudgeModel(ts("2026-10-14T03:55:00Z"));
+  assert.equal(m[0].kind, "swarm");
+  assert.equal(m[0].pace, "ahead", "its dots stay still");
+  assert.equal(sw.mnScintPlan(m[0].it, m[0].st, ts("2026-10-14T03:55:00Z")), null, "and it never glows");
+  /* a timed report and an economic release still count down exactly as before */
+  const mu = K.ernEcItem(MU, "2026-09-30");
+  assert.equal(K.mnScintPlan(mu, "soon", ts("2026-09-30T19:55:00Z")).phase, "soon");
+  assert.equal(K.mnScintPlan({ ts: ts("2026-09-30T12:30:00Z") }, "due", ts("2026-09-30T12:31:00Z")).phase, "due");
+  /* a timed report whose result is stored before its conventional slot lands, it does not keep counting */
+  const early = K.ernEcItem({ ...MU, eps_actual: 33.1 }, "2026-09-30");
+  assert.equal(K.ernNudgeState(early, ts("2026-09-30T20:03:00Z"), ts("2026-09-30T20:02:00Z")), "landed");
 });
