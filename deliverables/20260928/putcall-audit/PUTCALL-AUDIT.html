@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Put/Call Audit</title>
+<style>
+:root{--bg:#0c0c0d;--panel:#141516;--line:#26282a;--ink:#d2d2d2;--ink2:#a4a6a7;--ink3:#8e9091;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--up:#3fae6a;--down:#d2524a;--amber:#c8953a}
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:28px 16px 80px}
+.wrap{max-width:1200px;margin:0 auto}h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:40px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+p,li{font-size:14px}.sub{color:var(--ink3);font-size:13px;margin:0 0 18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:14px 16px;margin:12px 0}
+.fig{margin:14px 0}.fig img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px}
+.fig .cap{font-size:12.5px;color:var(--ink3);margin-top:6px}
+.tw{overflow-x:auto;margin:10px 0}table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--ink3);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--line);padding:6px 8px}
+td{padding:6px 8px;border-bottom:1px solid #1c1e1f;vertical-align:top}
+code{font-family:var(--mono);font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px 14px}
+.card .n{font-family:var(--mono);font-size:24px}.card .l{font-size:12.5px;color:var(--ink2)}
+.ok{color:var(--up)}.bad{color:var(--down)}.warn{color:var(--amber)}
+.tag{font-family:var(--mono);font-size:11.5px;color:var(--ink2);border:1px solid #3a3c3e;border-radius:3px;padding:0 4px;white-space:nowrap}
+.flag{border-left:2px solid var(--amber);padding-left:11px;color:var(--ink2)}
+ol.fix li{margin:0 0 10px}
+@media(max-width:640px){body{padding:20px 16px 60px}h1{font-size:19px}
+table,thead,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:8px 0}
+td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l);display:inline-block;min-width:108px;font-family:var(--mono);font-size:12px;color:var(--ink3)}}
+</style></head><body><div class="wrap">
+<span data-scnav-slot></span><h1>Put/call audit — is it accurate, and why do some names have it and others not?</h1>
+<p class="sub">Monday 28 September 2026, measured between 09:53 and 10:10 ET during the session · read-only: nothing was restarted, written, deployed or changed · lane PUT/CALL AUDIT</p>
+
+<div class="panel">
+<p><b>The short answer.</b> The numbers that <i>are</i> produced are added up correctly, and at the close our equity line lands within 1–2% of Cboe's own published equity number. But three things are wrong today:</p>
+<ol>
+<li><b class="bad">21 names stopped being read at 00:12 ET last night</b> (TTWO through WBD, alphabetically in one block: TXN, UBER, UNH, V, VZ, VST, VRT…). The IB Gateway blinked at that moment; the reader kept running but never picked those 21 back up. Every other name is fresh to the second.</li>
+<li><b class="bad">122 of the 486 names on the Hub are not on the reader's list at all</b> — the list was frozen at 364 names on 24 September. 33 of them are companies with busy options (RIOT, GLW, COHR, KTOS, TECK, LUNR, ALB…); 89 are funds.</li>
+<li><b class="warn">The line called "index" is not index options.</b> It is SPY + QQQ + IWM (funds). Cboe's index number it is compared with is mostly SPX and VIX options, which the reader never reads.</li>
+<li><b class="bad">The cohort lines switch between two member lists.</b> In 2 of the 51 stored minutes since 09:31 (10:04 and 10:06 ET), 53 of the 119 cohorts were built from a shorter list — AI_HARDWARE 35 names instead of 43, BLUE_CHIP 106 instead of 128 — so the ratio jumps down and back. On 24 and 25 Sep, 70 of 119 cohorts did the same.</li>
+</ol>
+<p>And to the question "some tickers have put/call, others not": <b>no screen on the Station or the Hub shows a single ticker's put/call today.</b> The readings exist per name in the database, but only the group lines (equity, index, sectors, cohorts) and Cboe's daily numbers are served and drawn. The gaps you would notice are in those group lines: the 21 silent names, and cohorts that jump when they are built from the shorter member list.</p>
+</div>
+
+<div class="cards">
+<div class="card"><div class="n ok">343</div><div class="l">names with a fresh reading in the last 10 minutes (10:10 ET)</div></div>
+<div class="card"><div class="n warn">21</div><div class="l">names silent since 00:12 ET — reader missed them after a Gateway blink</div></div>
+<div class="card"><div class="n bad">122</div><div class="l">Hub names never on the reader's list (33 companies, 89 funds)</div></div>
+<div class="card"><div class="n">0.3 s</div><div class="l">typical delay from IBKR reading to the database (median of 6,517 rows)</div></div>
+</div>
+
+<h2>1 · Where put/call shows up</h2>
+<div class="tw"><table>
+<thead><tr><th>Place</th><th>What it shows</th><th>Where the number comes from</th><th>Live?</th></tr></thead>
+<tbody>
+<tr><td data-l="Place">Station · MACRO 4H page (last pane) and INTERNALS page</td><td data-l="Shows">PCC — Cboe's total put/call, one number per day, with a small puts/calls table in the corner</td><td data-l="Source">Cboe's published daily print, through the chart API</td><td data-l="Live?">No — the last finished session (Friday 25 Sep today)</td></tr>
+<tr><td data-l="Place">Station · any chart where you type PCCE, PCCI or PCSPX</td><td data-l="Shows">Cboe equity / index / SPX put/call, daily; PCCE and PCCI carry our intraday line as a companion underneath</td><td data-l="Source">Cboe print + <code>ibkr_putcall_minute</code></td><td data-l="Live?">Companion line yes</td></tr>
+<tr><td data-l="Place">Station · SCPCE / SCPCI typed as a symbol</td><td data-l="Shows">Scintilla equity and "index" put/call, minute by minute</td><td data-l="Source">IBKR readings → minute job → <code>ibkr_putcall_minute</code> → chart API</td><td data-l="Live?">Yes, about 1 minute behind</td></tr>
+<tr><td data-l="Place">Chart API only (no pane uses it)</td><td data-l="Shows">One line per sector (11) and per cohort (119): <code>SCPC.SECTOR.Technology</code>, <code>SCPC.COHORT.AI_HARDWARE</code>…</td><td data-l="Source">same minute table</td><td data-l="Live?">Yes, served; not drawn anywhere</td></tr>
+<tr><td data-l="Place">Hub · Sentiment tab, "Put / call ratio" card</td><td data-l="Shows">PCC five-day average, scored like CNN's dial</td><td data-l="Source">Cboe daily PCC through the chart API</td><td data-l="Live?">Daily</td></tr>
+<tr><td data-l="Place">Hub · Regime card</td><td data-l="Shows">"equity put/call (20d)" 0.572, 79.8th percentile</td><td data-l="Source">a saved file, <code>data/regime/regime-static.json</code></td><td data-l="Live?">No — a snapshot</td></tr>
+<tr><td data-l="Place">Anywhere, per single ticker</td><td data-l="Shows"><b>nothing</b> — the chart API answers "not tracked" for a ticker put/call</td><td data-l="Source">rows exist in <code>ibkr_option_volume</code>, unserved</td><td data-l="Live?">—</td></tr>
+</tbody></table></div>
+
+<h2>2 · Who gets a reading today, and why the others don't</h2>
+<div class="fig"><img src="coverage.svg" alt="coverage of the 486 names"><div class="cap">Green: read in the last minute. Amber: on the list but silent since 00:12 ET. Red: never on the reader's list.</div></div>
+<div class="tw"><table>
+<thead><tr><th>Group</th><th>Names</th><th>Why no reading</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td data-l="Group">Silent since 00:12 ET (21)</td><td data-l="Names"><code>TTWO TXN UBER UNH UNP UPS URI USAR USB USO V VICI VLO VMC VRT VRTX VST VTI VTR VZ WBD</code></td><td data-l="Why">At 00:12 ET the Gateway lost its link to IBKR for a moment ("connectivity lost", then "restored - data maintained"); 39 requests failed to send while it was down. These 21 were the names being subscribed at that instant (positions 320–340 of the list, all in one batch). The reader never reconnects or re-resolves them, so every sweep since asks and gets nothing back. <span class="tag">[VERIFIED silence]</span> <span class="tag">[THEORY cause]</span></td><td data-l="Evidence">Last row of each: 04:12:12 UTC. Reader health file lists exactly these 21 as "absent" every sweep since (sweep 1,467 at 10:10 ET). No error has been written since 00:15 ET, so nothing tells anyone.</td></tr>
+<tr><td data-l="Group">Companies never on the list (33)</td><td data-l="Names"><code>AAOI ACHR ALB AMKR AVAV BKSY BTDR COHR CRML GLW HIVE HUBB KTOS LEU LUNR NOK NVTS OUST PL POET RDW RIOT SATL SERV SIDU SPIR SQM STM SYM TECK TSEM UUUU VSH</code></td><td data-l="Why">The reader's list (<code>spool/universe.json</code>) has 364 names from 24 Sep. The Hub admitted 122 more on 26–27 Sep; nobody refreshed the reader's list.</td><td data-l="Evidence">Chart API <code>/universe</code> = 486 names; reader list = 364; every reader name is still on the live list.</td></tr>
+<tr><td data-l="Group">Funds never on the list (89)</td><td data-l="Names">the sector and style funds: IYW, IGV, KRE, XBI, VGT, RSPT, VXX, URA, TAN, SCHD, AGG…</td><td data-l="Why">Same frozen list. Funds are left out of the equity and sector lines on purpose, but they would feed the "all names" estimate and their own cohorts.</td><td data-l="Evidence">same</td></tr>
+<tr><td data-l="Group">Weekend</td><td data-l="Names">all</td><td data-l="Why">The Gateway was logged out Sunday 05:0x → 21:2x ET (hourly counts drop from ~39,000 to 67, then back). No trading-day number was lost: Sunday is not a session.</td><td data-l="Evidence">reader file for 27 Sep, hourly counts</td></tr>
+<tr><td data-l="Group">"No options" / "no volume yet"</td><td data-l="Names">none today</td><td data-l="Why">Every one of the 343 live names returned a call and a put count. No name was refused by IBKR for lack of options or permissions.</td><td data-l="Evidence">no subscription errors in the reader's health file</td></tr>
+</tbody></table></div>
+<p class="flag">What this does to the lines you see: the equity line says "297 of 316" — the 19 missing are the silent companies above. The 122 never-listed names are also missing from the cohort table the lines are built from (<code>ticker_cohorts</code> holds none of them), so no cohort line counts them in its "of".</p>
+
+<h3 style="font-size:14px;color:var(--ink2)">2.1 The cohort lines switch between two member lists</h3>
+<p>A cohort line should have one member count all day. Today 53 of the 119 cohort lines carry two different counts. The minute job normally builds AI_HARDWARE from its 43 members; in two minutes it built it from 35:</p>
+<div class="tw"><table>
+<thead><tr><th>Minute (ET)</th><th>AI_HARDWARE counted</th><th>Put/call</th></tr></thead>
+<tbody>
+<tr><td data-l="Minute">10:02</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3831</td></tr>
+<tr><td data-l="Minute">10:03</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3852</td></tr>
+<tr><td data-l="Minute">10:04</td><td data-l="Counted" class="bad">34 of 35</td><td data-l="Put/call" class="bad">0.3718</td></tr>
+<tr><td data-l="Minute">10:05</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3895</td></tr>
+<tr><td data-l="Minute">10:06</td><td data-l="Counted" class="bad">34 of 35</td><td data-l="Put/call" class="bad">0.3774</td></tr>
+<tr><td data-l="Minute">10:07</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3943</td></tr>
+</tbody></table></div>
+<p>At 10:04 and 10:06 ET all 53 of those cohorts lost members at once — 197 member slots, the same 197 both times — and 5 one-member cohorts vanished for that minute: 1,054 member slots in all instead of 1,256. Other examples: BLUE_CHIP 106 vs 128, LARGE_CAP 188 vs 226, AI_SOFTWARE 9 vs 13. The sector, equity and index lines never change count. On 24 and 25 Sep, 70 of the 119 cohorts had more than one count each day (AI_HARDWARE: 43, 35 and 31). All 43 AI_HARDWARE members are among the 364 names the reader reached today, so this is not a reading gap. <span class="tag">[VERIFIED switching]</span></p>
+<p>Likely cause <span class="tag">[THEORY]</span>: the minute job reads the cohort table (<code>ticker_cohorts</code>, 1,282 rows) in pages of 1,000 with no fixed order. Without a fixed order, the database can hand back the second page overlapping the first, so some members are skipped. The sector list comes from <code>company_profile</code>, which has 440 rows, fits in one page, and never switches. That fits, but I have not reproduced a bad read.</p>
+
+<h2>3 · Is it accurate?</h2>
+<h3 style="font-size:14px;color:var(--ink2)">3.1 Are the sums right? Yes.</h3>
+<p>I rebuilt the equity line from the raw IBKR readings for the first 33 stored minutes since 09:30 (each company's newest reading, not older than 15 minutes; add the puts, add the calls, divide once). With one fixed cut-off a few seconds into each minute, 22 of 33 minutes checked match to the unit and the median gap is 0.0%; the rest differ only because the minute job starts at a slightly different second each time. The running totals never fell inside the session, on any name or any line. <span class="tag">[VERIFIED]</span></p>
+<p>Two small wrinkles: the <b>09:30 point</b> was computed in the first seconds of the open, when only 83 of 316 companies had been read, and it is never recomputed — the first point of the day's chart is built on a quarter of the names. And <b>Realty Income (O)</b> is flagged as a fund in the company table, so it is left out of the equity and Real Estate lines.</p>
+<div class="fig"><img src="scpce-today.svg" alt="SCPCE minute by minute today"><div class="cap">Scintilla equity put/call today. Numbers over the points: companies counted. Green where it rose, red where it fell.</div></div>
+
+<h3 style="font-size:14px;color:var(--ink2)">3.2 Does it agree with Cboe at the close? Equity: yes, within 1–2%.</h3>
+<div class="fig"><img src="close-vs-cboe.svg" alt="closing lines vs Cboe"><div class="cap">24 Sep: equity 0.544 vs Cboe 0.55; 25 Sep: 0.509 vs 0.52. The "all 364" estimate runs 5–6% under Cboe's total (0.762 vs 0.80; 0.704 vs 0.75). The index pair is not the same product.</div></div>
+<p>Cboe's <i>daily prints</i> (PCC, PCCE, PCCI) count only trades on Cboe's own exchanges, but every stock; we count every exchange but only our names. Agreement within 1–2% on the equity line is as good as that comparison can be. <b>The database's own comparison table has only 24 Sep filled</b>: 25 Sep still says "no Cboe print" because the 08:45 ET catch-up job builds a broken address (see fixes). Cboe's 25 Sep print is on the chart API.</p>
+
+<h3 style="font-size:14px;color:var(--ink2)">3.3 Single names against Cboe's own option chain: the calls agree, but IBKR counts fewer puts on AAPL, NVDA and MSFT</h3>
+<div class="fig"><img src="ibkr-vs-cboe-names.svg" alt="IBKR vs Cboe by name"><div class="cap">Cboe's free delayed chain (every contract's volume, summed) against our IBKR readings. Each bar is taken at the moment IBKR's running call total equals Cboe's call total, so the two feeds are lined up on the calls and the bar shows how far apart the puts are. Amber outline: that name's own delay is more than 1 minute from the other names' shared delay, so it is not compared.</div></div>
+<div class="tw"><table>
+<thead><tr><th>Name</th><th>Cboe chain ratio (09:55 · 10:07)</th><th>Own delay (09:55 · 10:07)</th><th>IBKR minus Cboe, puts (09:55 · 10:07)</th><th>Reading</th></tr></thead>
+<tbody>
+<!-- names-table:start (generated by align-names.mjs) -->
+<tr><td data-l="Name">AAPL</td><td data-l="Cboe">0.385 · 0.373</td><td data-l="Own delay">14.1 · 13.6 min</td><td data-l="IBKR − Cboe puts">−8% · −8%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">NVDA</td><td data-l="Cboe">0.265 · 0.287</td><td data-l="Own delay">13.2 · 13.1 min</td><td data-l="IBKR − Cboe puts">−9% · −7%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">TSLA</td><td data-l="Cboe">0.707 · 0.807</td><td data-l="Own delay">14.2 · 13.7 min</td><td data-l="IBKR − Cboe puts">−4% · not aligned</td><td data-l="Reading">close, then not aligned</td></tr>
+<tr><td data-l="Name">AMZN</td><td data-l="Cboe">0.416 · 0.475</td><td data-l="Own delay">13.2 · 10.9 min</td><td data-l="IBKR − Cboe puts">−14% · not aligned</td><td data-l="Reading">IBKR puts low, then not aligned</td></tr>
+<tr><td data-l="Name">MSFT</td><td data-l="Cboe">0.454 · 0.571</td><td data-l="Own delay">13.3 · 13.2 min</td><td data-l="IBKR − Cboe puts">−14% · −13%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">SPY</td><td data-l="Cboe">1.373 · 1.298</td><td data-l="Own delay">12.3 · 12.1 min</td><td data-l="IBKR − Cboe puts">+1% · −8%</td><td data-l="Reading">close, then IBKR puts low</td></tr>
+<tr><td data-l="Name">QQQ</td><td data-l="Cboe">1.168 · 1.230</td><td data-l="Own delay">12.4 · 12.3 min</td><td data-l="IBKR − Cboe puts">+7% · −3%</td><td data-l="Reading">IBKR puts high, then close</td></tr>
+<tr><td data-l="Name">IWM</td><td data-l="Cboe">1.603 · 1.428</td><td data-l="Own delay">11.0 · 9.2 min</td><td data-l="IBKR − Cboe puts">not aligned · not aligned</td><td data-l="Reading">not aligned either time: its call totals disagree with Cboe's at the shared delay</td></tr>
+<!-- names-table:end -->
+</tbody></table></div>
+<p><b>How the two feeds are lined up.</b> Cboe's delayed chain carries every exchange's volume, not just Cboe's: IBKR's running call total reaches Cboe’s call number 12.1–14.2 minutes before Cboe’s stamp for 13 of the 16 checks, the same delay for names fetched seconds apart. (If the chain were Cboe-only, its totals would be a fraction of IBKR's and would match readings from minutes after the open.) So I take IBKR's running totals at the moment its calls equal Cboe's calls, and compare the puts. The shared delay of a check is the median of the eight names' own delays (13.2 min at 09:55, 12.7 min at 10:07). A name whose own delay is more than 1 minute — two IBKR readings — from that is marked "not aligned": at the shared delay its call totals already disagree with Cboe's, so a put gap would mix timing with counting. Every cell above is generated from <code>putcall-audit.json</code> by <code>align-names.mjs</code>, and a test pins them.</p>
+<p><b>What it shows.</b> With the calls matched, <b>IBKR counts 7–15% fewer puts than Cboe on AAPL, NVDA and MSFT at both checks</b>, and on AMZN at the first. Their single-name ratios therefore look more bullish than Cboe's chain says. The index funds do not show one direction: SPY +1% then −8%, QQQ +7% then −3%. IWM is not aligned at either check (own delay 11.0 and 9.2 min), and AMZN (10.9 min) and TSLA (13.7 min, 1.06 min from the shared delay — on the edge) are not aligned at 10:07. For those, IBKR's and Cboe's call totals disagree, so the comparison cannot say anything about their puts. <span class="tag">[MEASURED differences]</span> <span class="tag">[THEORY cause]</span> — I cannot tell yet whether IBKR's per-underlying put total leaves some trades out, or Cboe's chain counts some (for example spread legs) differently. This matters only if single-ticker put/call is ever put on screen; the equity line's close-of-day match says the sum over 316 names is sound.</p>
+<p>An earlier version of this page averaged IBKR's ratio over a fixed 12–16 minute delay window. That did not line the feeds up for IWM, SPY, QQQ and AMZN at 10:07 (their best matches sat 10–11 minutes before Cboe's stamp), and it read IWM's +17% as first-hour noise. That was the method, not the market; it is replaced here.</p>
+<p>Index options for reference (Cboe chain, 09:57 ET): SPX 1.34, VIX 2.34, NDX 1.29, RUT 1.34. None of these are read by our reader.</p>
+
+<h2>4 · Freshness right now (10:10 ET)</h2>
+<div class="tw"><table>
+<thead><tr><th>Check</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td data-l="Check">Names with a reading in the last 10 minutes</td><td data-l="Result"><span class="ok">343 of 364</span> on the reader's list (6,243 rows); the other 21 are the silent block, last seen 00:12 ET</td></tr>
+<tr><td data-l="Check">One full pass over the list</td><td data-l="Result">about 40 seconds (4 batches of 90, 6 s each)</td></tr>
+<tr><td data-l="Check">Reading → database</td><td data-l="Result">0.23 s median, 0.34 s at the 90th percentile</td></tr>
+<tr><td data-l="Check">Newest stored minute line</td><td data-l="Result">14:09 UTC (10:09 ET), written every minute</td></tr>
+<tr><td data-l="Check">Alarms</td><td data-l="Result"><span class="warn">both green</span> — the Gateway watch only asks "is the newest reading recent?" and the minute check only asks "is there a minute?". Neither notices that 21 names went silent.</td></tr>
+</tbody></table></div>
+
+<h2>5 · What to fix, smallest first</h2>
+<ol class="fix">
+<li><b>Restart the put/call reader</b> (one command on this Mac: <code>launchctl kickstart -k gui/501/com.scintilla.ibkr-putcall</code>). It re-subscribes everything, so the 21 silent names come back within a minute. <span class="tag">coordinator · 🟡 reversible</span></li>
+<li><b>Pin the cohort membership to one read</b>: find why the minute job sometimes builds cohorts from a shorter member list (53 of 119 cohorts at 10:04 and 10:06 ET today). First thing to try: read <code>ticker_cohorts</code> in a fixed order (order by ticker, cohort) when paging, and refuse a run whose total member count differs from the last good run.</li>
+<li><b>Make the reader exit with a failure code when it loses the Gateway</b>. launchd only restarts it after a <i>failed</i> exit (<code>KeepAlive: SuccessfulExit false</code>, at most once every 120 s). Today, when the link to the Gateway drops, the sweep loop ends and the reader exits with code 0 — "success" — so launchd leaves it dead, and the health file only says "reader stopped". <span class="tag">[THEORY from code + config]</span> Change: return 1 when the loop ended because the connection dropped. Then add: when the same names come back empty for, say, 5 sweeps in a row — or right after a "connectivity restored" message — exit with code 1 too. About ten lines in <code>option-volume.py</code>.</li>
+<li><b>Fix the 08:45 ET catch-up job</b> (<code>putcall-vs-cboe-morning</code>). Its address glues a date onto the word "previous" (<code>session=previous2026-09-25</code>), so today it failed with "Invalid time value" and 25 Sep's comparison with Cboe never filled in. Use either <code>session=previous</code> or <code>session=&lt;date&gt;</code>, not both.</li>
+<li><b>Refresh the reader's list to the 486 live names</b> (and keep it tied to the chart API's <code>/universe</code>). About 6 batches instead of 4: a pass takes ~50 s instead of ~40 s.</li>
+<li><b>Make the "index" line honest</b>: either add SPX and VIX to the reader's list (the reader already knows how to ask for them) so SCPCI is real index options, or rename it "index funds (SPY, QQQ, IWM)" and stop comparing it with Cboe's index number.</li>
+<li><b>Count the real membership</b> (only after fix 2): add the newly admitted names to <code>ticker_cohorts</code>, and let each line's "of" be the group's full membership, not only the names the reader reached, so a cohort with unread members says so.</li>
+<li><b>Add one alarm</b>: during the session, fewer than 95% of the list read in the last 10 minutes → alert.</li>
+<li>Small: compute each minute once it has finished (so 09:30 is not built on 83 names); unflag Realty Income (O) as a fund.</li>
+</ol>
+
+<h2>6 · What could be wrong in this audit</h2>
+<ul>
+<li>Cboe's free delayed chain has no exact "as of" for its volumes. I line the feeds up on the calls, name by name, and report each name's own delay; the 1-minute tolerance for "aligned" is a judgement (two IBKR readings), and TSLA at 10:07 sits just outside it.</li>
+<li>The cause of the 21-name silence is inferred from the log and the timing (they were mid-subscription when the link dropped). The silence itself is measured.</li>
+<li>Single-name comparison covers 8 names at two moments in the first 40 minutes of one session. Fitting a delay per name leaves each comparison with little power: a real put gap and a timing error can look alike.</li>
+<li>The cause of the cohort switching (unordered paging) is inferred from the code and the table sizes; the switching itself is measured in the minute table.</li>
+<li>Cboe's daily prints (PCC, PCCE, PCCI) are Cboe-exchanges only; ours are all exchanges, so for the daily prints only the ratios compare, not the amounts. The delayed option chain is different: its amounts match IBKR's all-exchange calls (NVDA 507,625 vs 507,339 at the best match), so it is compared amount for amount.</li>
+</ul>
+
+<h2>7 · What I did not do</h2>
+<ul>
+<li>Did not restart the reader, touch the Gateway, edit any cron job, or write to any table — this lane is read-only.</li>
+<li>Did not check FMP or Massive for per-name option volume: the FMP connector has no option volume, and the Massive key is not entitled to options (answered "not entitled" from the Fly machine).</li>
+<li>Did not open the Station or Hub in a browser to photograph the panes; the map in section 1 is from the live code (Station dedbc31, Hub d31504a, chart API fcal-2b7e953) and the chart API's live answers.</li>
+<li>Did not check open-interest numbers (also read), only volumes.</li>
+</ul>
+<p class="sub">Data behind this page: <code>putcall-audit.json</code> (next to this page). Sources: reader spool and health file on this Mac (read only), <code>ibkr_option_volume</code>, <code>ibkr_putcall_minute</code>, <code>putcall_daily</code>, <code>putcall_vs_cboe</code>, <code>cron.job</code> and <code>net._http_response</code> (read only), chart API <code>/candles</code> and <code>/universe</code>, Cboe's public delayed option chains.</p>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

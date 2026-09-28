@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · MARKET MAP · TREE (r3)</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --panel3:#202020; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#6a6a6a; --track:#1f1f1f;
+  --up:#35b06a; --dn:#d1483f;               /* direction only: Geiger up = green, down = red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+body{display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:46px}
+header h1{font-size:13px;letter-spacing:.14em;margin:0;font-weight:600}
+header .stamp{font-size:11px;color:var(--dim)}
+.ctrl{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+input[type=search]{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:3px;font:12px var(--mono);padding:5px 8px;width:190px}
+button{background:var(--panel2);color:var(--ink2);border:1px solid var(--line2);border-radius:3px;font:11px/1 var(--mono);letter-spacing:.08em;padding:7px 9px;cursor:pointer}
+button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 400px;flex:1;min-height:0}
+#graph{position:relative;min-width:0;overflow:hidden;background:var(--bg);cursor:grab}
+#graph.dragging{cursor:grabbing}
+#gl,#labels{position:absolute;inset:0}
+#gl canvas{display:block}
+#labels{pointer-events:none;overflow:hidden}
+/* labels live in the page, not on the canvas: crisp at every zoom, and the browser lays out the text */
+.lb{position:absolute;left:0;top:0;white-space:nowrap;will-change:transform;transform:translate3d(-1000px,-1000px,0);color:var(--ink2);font-size:11px;line-height:1.25;letter-spacing:.02em;text-shadow:0 0 3px #0d0d0d,0 0 6px #0d0d0d,0 1px 2px #0d0d0d}
+.lb.h{color:var(--ink);font-size:12px;letter-spacing:.14em;font-weight:600;text-align:center}
+.lb.h.top{font-size:13px;letter-spacing:.18em}
+.lb.h small{display:block;font-size:11px;letter-spacing:.04em;font-weight:400;color:var(--dim)}
+.lb.f{color:var(--ink);font-size:12px}
+.lb.n{color:var(--ink2)}
+.lb.w{color:var(--dim)}
+.lb .up{color:var(--up)} .lb .dn{color:var(--dn)}
+#tip{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.92);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:360px;pointer-events:auto;z-index:2}
+#legend div{display:flex;align-items:center;gap:8px;line-height:1.75}
+#legend summary{cursor:pointer;letter-spacing:.12em;color:var(--ink2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#7a7a7a}
+.sw.head{background:#4a4a4a;width:12px;height:12px;flex-basis:12px}
+.sw.hol{border:1px solid var(--dim);background:transparent}
+.kb{flex:0 0 46px}
+#hint{position:absolute;right:10px;bottom:10px;font-size:11px;color:var(--mute);pointer-events:none;text-align:right;z-index:2}
+#fallback{display:none;padding:14px;color:var(--ink2);overflow:auto;height:100%}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px 12px 24px}
+aside h2{font-size:15px;margin:0;letter-spacing:.06em}
+aside .sub{font-size:11px;color:var(--dim);margin:1px 0 10px}
+.path{font-size:11px;color:var(--mute);margin:0 0 8px;line-height:1.7}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:4px 8px;font-size:12px;margin:8px 0;align-items:center}
+.kv > span:nth-child(odd){color:var(--mute);font-size:11px}
+.big{font-size:20px;font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .dn{color:var(--dn)} .dim{color:var(--dim)} .mute{color:var(--mute)}
+.wait{border:1px dashed var(--line2);border-radius:3px;padding:7px 9px;color:var(--ink2);margin:8px 0}
+.sec{font-size:11px;letter-spacing:.12em;color:var(--mute);margin:14px 0 4px;border-bottom:1px solid var(--line);padding-bottom:3px}
+.release{float:right;font-size:11px;padding:5px 8px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+td{padding:3px 4px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.r{text-align:right}
+td.nm{max-width:118px;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+td.bc{width:96px}
+a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);cursor:pointer}
+.split{height:4px;background:var(--line);border-radius:2px;overflow:hidden;display:flex;margin:6px 0 2px}
+.split i{display:block;height:100%}
+/* the Geiger bar, the Hub's way: a track centred at zero, filled from the middle to the value, ±1 = the full half.
+   Solid = the line's own Geiger. Striped = its holdings, blended by weight (funds only). */
+.gb{position:relative;height:14px;background:var(--track);border-radius:2px;overflow:hidden;min-width:60px}
+.gb.lg{height:20px}
+.gb .mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--dim);z-index:1}
+.gb i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
+.gb i.u{left:50%;background:var(--up);box-shadow:0 0 5px var(--up)}
+.gb i.d{right:50%;background:var(--dn);box-shadow:0 0 5px var(--dn)}
+.gb.agg i.u{background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gb.agg i.d{background:repeating-linear-gradient(135deg,var(--dn) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gbrow{display:grid;grid-template-columns:1fr 62px;gap:8px;align-items:center}
+.gbrow b{font-weight:400;text-align:right;font-variant-numeric:tabular-nums}
+.div{margin:8px 0 2px;padding:7px 9px;border:1px solid var(--line2);border-radius:3px;font-size:13px}
+.lgbar{display:inline-block;width:46px;height:9px;background:var(--track);position:relative;border-radius:2px;overflow:hidden}
+.lgbar i{position:absolute;top:1px;bottom:1px;left:50%;width:34%}
+.lgbar s{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--dim)}
+@media (max-width:760px){
+  body{display:block}
+  .main{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  input[type=search]{width:140px}
+  .ctrl{margin-left:0}
+  #legend{max-width:260px}
+  #hint{display:none}
+  .lb.h.top{font-size:12px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SCINTILLA · MARKET MAP</h1><span data-scnav-slot></span>
+  <span class="stamp" id="stamp">loading the node list and the live Geigers…</span>
+  <div class="ctrl">
+    <input type="search" id="q" placeholder="find a ticker or name" list="tickers" autocomplete="off">
+    <datalist id="tickers"></datalist>
+    <button id="flat" title="the same tree, flat, seen straight on">FLAT 2D</button>
+    <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
+  </div>
+</header>
+<div class="main">
+  <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
+    <details id="legend" open><summary>KEY</summary>
+      <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
+      <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped second bar (funds) = its holdings, blended by weight</div>
+      <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
+      <div><span class="sw"></span>a served line · size = market value</div>
+      <div><span class="sw head"></span>a heading (no Geiger of its own)</div>
+      <div><span class="sw hol"></span>cage = waiting for admission</div>
+    </details>
+    <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go</div>
+    <div id="fallback"></div>
+  </div>
+  <aside id="card"></aside>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/" } }
+</script>
+<script type="module">
+/* MARKET-MAP r3 (28 Sep). Structure: nodes.json (built by scripts/build-market-map-r3.mjs from the 27 Sep node list).
+   Readings: the chart API, live. Nothing on this page is random, and nothing is made up: a node with no live Geiger has no bar.
+
+   The picture. A tree read from the top down. THE MARKET at the top; the regions and asset classes below it; then the
+   headings (US sectors, broad market, style, the world); then each heading's funds in a small block; then the names.
+   The top of the tree is flat. It becomes 3D lower down: where a heading has more names than fit in one row, the rows
+   step forward toward you, so a big sector (Technology) is a deep block and a small one (Real Estate) is two rows.
+   FLAT 2D lays the same rows downward instead and looks straight on.
+   Every position comes from the tree by arithmetic (no simulation, no randomness): the same map every time.
+   The Geiger is a BAR under each ball, the Hub's bar: centred at zero, filled to the value, ±1 = the full half.
+   Funds carry a second, striped bar: their holdings' Geigers blended by weight (aggregate.js — the same code the tests run).
+   Rendering is on demand: the page draws only while something moves. Every ball of a kind is one draw call; every bar is
+   one draw call. */
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { holdingsAggregate, divergence } from "./aggregate.js";
+import { prepareTree, layout as layoutTree, bestRows, LAYOUT } from "./layout.js";
+
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const STATION_CHART = "https://station.scintillahub.ai/chart/?t=";
+const LIT = 0x7a7a7a, HEADING = 0x4a4a4a, HOLLOW = 0x6a6a6a, RING = 0xababab;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
+const fmtPct = (p) => (p > 0 ? "+" : "") + p.toFixed(2) + "%";
+const fmtCap = (v) => v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + "T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + (v / 1e6).toFixed(0) + "M";
+const PHONE = matchMedia("(max-width:760px)").matches;
+
+/* ---- SCINTILLATE HOOK (not built yet) ----
+   The "scintilla" idea: a node flashes when today's move is SCINTILLATE_MULTIPLE times its usual day. Deliberately does
+   nothing today: no animation until Alan asks for the flash. */
+const SCINTILLATE_MULTIPLE = 3;
+function scintillate(node, multiple) { /* intentionally empty until Alan asks for the flash */ return false; }
+window.scintillate = scintillate;
+
+/* ---- data ---- */
+async function getJSON(url, ms = 15000) {
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const state = { geiger: null, quotes: {}, geigerErr: null, quotesErr: null, flat: false, selected: null, byId: new Map(), children: new Map(), paused: false, frames: 0 };
+window.__mm = state; // read by the headless proof
+
+const nodesDoc = await getJSON("nodes.json");
+const [g, q] = await Promise.allSettled([
+  getJSON(CHART_API + "/geiger"),
+  (async () => {
+    const served = nodesDoc.nodes.filter((n) => n.served).map((n) => n.ticker);
+    const out = {};
+    for (let i = 0; i < served.length; i += 200) {
+      const r = await getJSON(CHART_API + "/quotes?symbols=" + encodeURIComponent(served.slice(i, i + 200).join(",")));
+      Object.assign(out, r.quotes || {});
+    }
+    return out;
+  })(),
+]);
+if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
+if (q.status === "fulfilled") state.quotes = q.value; else state.quotesErr = String(q.reason);
+const GS = (state.geiger && state.geiger.symbols) || {};
+const geigerOf = (t) => (GS[t] && Number.isFinite(GS[t].composite) ? GS[t].composite : null);
+
+/* ---- graph data ---- */
+const maxCap = Math.max(...nodesDoc.nodes.map((n) => n.market_value_usd || 0));
+const nodes = nodesDoc.nodes.map((n, idx) => {
+  const gg = n.ticker && GS[n.ticker] && Number.isFinite(GS[n.ticker].composite) ? GS[n.ticker] : null;
+  const r = n.kind === "index" ? (n.id === "MARKET" ? 9 : n.parents[0] === "MARKET" ? 6.5 : 5.5)
+    : n.kind === "fund" ? (n.role === "sector" ? 3.9 : 3.4)
+    : n.market_value_usd ? 2.2 + 6.3 * Math.pow(n.market_value_usd / maxCap, 0.4) : 2.2;
+  return { ...n, idx, g: gg, r, hollow: !!n.ticker && !gg, pos: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3() };
+});
+nodes.forEach((n) => { state.byId.set(n.id, n); n.parents.forEach((p) => { if (!state.children.has(p)) state.children.set(p, []); state.children.get(p).push(n.id); }); });
+const kids = (id) => (state.children.get(id) || []).map((k) => state.byId.get(k));
+const primaryKids = (id) => kids(id).filter((c) => c.parents[0] === id);
+// the holdings blend of every fund that has a holdings file
+nodes.forEach((n) => { if (n.kind === "fund") n.agg = holdingsAggregate(n, geigerOf); });
+state.counts = {
+  nodes: nodes.length, lit: nodes.filter((n) => n.g).length, hollow: nodes.filter((n) => n.hollow).length,
+  up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length,
+  blends: nodes.filter((n) => n.agg).length,
+};
+
+/* ---- stamp ---- */
+(() => {
+  const v = state.geiger && state.geiger.verification;
+  const any = Object.values(state.quotes)[0];
+  $("stamp").textContent = state.geiger
+    ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} bars (${state.counts.up} up · ${state.counts.down} down) · ${state.counts.blends} funds with a holdings bar · ${state.counts.hollow} waiting for admission · ` +
+      (any ? `day = session ${any.price_session_et}` : "day change unavailable") + (v ? ` · ${v.label.toLowerCase().replace(/_/g, " ")}` : "")
+    : `the live Geiger did not answer (${state.geigerErr}); no bar is drawn and none is made up`;
+})();
+
+/* ---- layout: a top-down tree, deterministic, from the node list (layout.js — the same code the tests run) ----
+   The upper tree is flat; a heading's funds and names sit in blocks of rows under it, one row when they fit, more rows
+   only when there are many. In 3D the extra rows step toward you; in FLAT 2D they step down.
+   The 11 sectors wrap into as many rows as make the whole tree the shape of the screen (2 on a wide screen, 4 on a
+   phone), so the opening view fills the canvas instead of a thin band (28 Sep review). Chosen once, at load. */
+const shapeOf = (() => { const r = document.getElementById("graph").getBoundingClientRect(); return r.width > 10 && r.height > 10 ? r.width / r.height : innerWidth / Math.max(1, innerHeight - 80); })();
+state.sectorRows = bestRows(nodes.map((n) => ({ id: n.id, kind: n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker })), shapeOf);
+const heads = prepareTree(nodes, { rows: state.sectorRows });
+const layout = (k, into) => layoutTree(heads, k, into);
+layout(1, (n, x, y, z) => n.pos.set(x, y, z));
+
+/* ---- the scene ---- */
+const el = $("gl"), graph = $("graph");
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "low-power" });
+} catch (e) { plainFallback(String(e)); throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5)); // an old iMac's 5K screen: cap the pixels we draw
+renderer.setClearColor(0x0d0d0d, 1);
+el.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0d0d0d, 900, 2600);
+const camera = new THREE.PerspectiveCamera(38, 1, 1, 12000);
+scene.add(new THREE.HemisphereLight(0xb4b4b4, 0x1e1e1e, 1.1));
+const key = new THREE.DirectionalLight(0xc8c8c8, 1.3); key.position.set(500, 900, 700); scene.add(key);
+
+/* balls: neutral greys. One InstancedMesh per kind: served line, waiting cage, heading */
+const litL = nodes.filter((n) => n.g), holL = nodes.filter((n) => n.hollow), headL = heads;
+const M = new THREE.Matrix4();
+function instanced(list, geom, mat) {
+  const im = new THREE.InstancedMesh(geom, mat, list.length);
+  list.forEach((n, i) => { n.inst = { mesh: im, i }; });
+  im.userData.list = list; scene.add(im); return im;
+}
+const litMesh = instanced(litL, new THREE.SphereGeometry(1, 16, 11), new THREE.MeshLambertMaterial({ color: LIT }));
+const holMesh = instanced(holL, new THREE.IcosahedronGeometry(1.15, 1), new THREE.MeshBasicMaterial({ color: HOLLOW, wireframe: true, transparent: true, opacity: 0.6 }));
+const headMesh = instanced(headL, new THREE.SphereGeometry(1, 16, 11), new THREE.MeshLambertMaterial({ color: HEADING }));
+
+/* ---- the Geiger bars: one instanced, camera-facing quad per bar, drawn by a small shader ----
+   Each bar hangs under its ball in screen space (so it stays under it whatever the angle). Width 2·BAR_W world units,
+   never narrower than BAR_MIN_PX on screen, so the colours still read from the whole-map view. */
+const BAR_W = 9, BAR_H = 1.7, BAR_GAP = 0.9, BAR_TOP = 1.1, BAR_MIN_PX = 7;
+const bars = [];
+nodes.forEach((n) => {
+  if (n.g) bars.push({ n, v: n.g.composite, kind: 0 });
+  if (n.agg) bars.push({ n, v: n.agg.value, kind: 1 });
+});
+const barGeo = new THREE.InstancedBufferGeometry();
+barGeo.copy(new THREE.PlaneGeometry(2, 2));
+barGeo.instanceCount = bars.length;
+const aCenter = new THREE.InstancedBufferAttribute(new Float32Array(bars.length * 3), 3);
+const aVal = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => Math.max(-1, Math.min(1, b.v)))), 1);
+const aKind = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => b.kind)), 1);
+const aR = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => b.n.r)), 1);
+const aTwo = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => (b.n.g && b.n.agg ? 1 : 0))), 1);
+barGeo.setAttribute("aCenter", aCenter); barGeo.setAttribute("aVal", aVal); barGeo.setAttribute("aKind", aKind); barGeo.setAttribute("aR", aR); barGeo.setAttribute("aTwo", aTwo);
+const barMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: true,
+  uniforms: { uScaleH: { value: 1 }, uW: { value: BAR_W }, uH: { value: BAR_H }, uMinPx: { value: BAR_MIN_PX }, uGap: { value: BAR_GAP }, uTop: { value: BAR_TOP } },
+  vertexShader: `attribute vec3 aCenter; attribute float aVal; attribute float aKind; attribute float aR; attribute float aTwo;
+    uniform float uScaleH; uniform float uW; uniform float uH; uniform float uMinPx; uniform float uGap; uniform float uTop;
+    varying vec2 vUv; varying float vVal; varying float vKind;
+    void main(){
+      vec4 mv = viewMatrix * vec4(aCenter, 1.0);
+      float ppu = uScaleH / max(1.0, -mv.z);
+      float s = max(1.0, uMinPx / (uW * ppu));
+      // own bar first, the holdings bar under it; a fund whose own Geiger is missing shows its holdings bar in the first slot
+      float slot = aKind * aTwo;
+      float off = aR + s * (uTop + uH + slot * (2.0 * uH + uGap));
+      mv.xy += vec2(position.x * uW * s, position.y * uH * s - off);
+      vUv = position.xy; vVal = aVal; vKind = aKind;
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `varying vec2 vUv; varying float vVal; varying float vKind;
+    void main(){
+      vec3 track = vec3(0.12); vec3 col = vVal >= 0.0 ? vec3(0.208, 0.690, 0.416) : vec3(0.820, 0.282, 0.247);
+      vec3 c = track; float a = 0.92;
+      float x = vUv.x;
+      bool inFill = abs(vUv.y) < 0.62 && ((vVal >= 0.0 && x >= 0.0 && x <= vVal) || (vVal < 0.0 && x <= 0.0 && x >= vVal));
+      if (inFill) {
+        c = col;
+        if (vKind > 0.5 && mod(gl_FragCoord.x + gl_FragCoord.y, 5.0) < 2.0) c = track;   // the holdings bar is striped
+      }
+      if (abs(x) < 0.035) c = vec3(0.55);                                                  // the zero line
+      gl_FragColor = vec4(c, a);
+    }`,
+});
+const barMesh = new THREE.Mesh(barGeo, barMat); barMesh.frustumCulled = false; barMesh.renderOrder = 3; scene.add(barMesh);
+
+/* lines: the tree's edges (heading → heading, heading → fund) and, for names, one stem to a thin tray round the block.
+   The "also held by" links of a name show only when you pick it. */
+const links = [];
+nodes.forEach((n) => n.parents.forEach((p, i) => links.push({ s: state.byId.get(p), t: n, primary: i === 0 })));
+const treeLinks = links.filter((l) => l.primary && l.t.kind !== "name");
+const trayHeads = heads.filter((h) => h.names.length);
+/* wrapped sub-headings (the sectors, in rows) hang from a rail instead of a long line through the row above:
+   parent → trunk top, the trunk down the gap left of the rows, one rail above each later row, a short drop to each heading */
+const wrapHeads = heads.filter((h) => h.rows.length > 1);
+const RAIL = LAYOUT.ROWGAP / 2;
+const hangs = (l) => l.t.kind === "index" && l.t.rowOf > 0 && l.s.rows && l.s.rows.length > 1;
+const railCount = wrapHeads.reduce((s, h) => s + 2 * h.rows.length - 1, 0);
+const lineGeo = new THREE.BufferGeometry();
+const railStart = treeLinks.length + trayHeads.length * 5;
+const lineCount = railStart + railCount; // tray: stem + four sides
+lineGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
+lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
+{
+  const col = lineGeo.attributes.color.array, C = new THREE.Color();
+  treeLinks.forEach((l, i) => { C.setHex(l.t.kind === "index" ? 0x3c3c3c : 0x2c2c2c); col.set([C.r, C.g, C.b, C.r, C.g, C.b], i * 6); });
+  for (let j = treeLinks.length; j < lineCount; j++) { C.setHex(j >= railStart ? 0x3c3c3c : 0x2a2a2a); col.set([C.r, C.g, C.b, C.r, C.g, C.b], j * 6); }
+}
+scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 })));
+const selGeo = new THREE.BufferGeometry(); selGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6 * 64), 3)); selGeo.setDrawRange(0, 0);
+const selLines = new THREE.LineSegments(selGeo, new THREE.LineBasicMaterial({ color: 0x8c8c8c, transparent: true, opacity: 0.95 })); scene.add(selLines);
+/* the selection ring: flat, always facing the camera — never a cage, which on this map means "waiting" */
+const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.1, 48), new THREE.MeshBasicMaterial({ color: RING, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
+ring.visible = false; ring.renderOrder = 5; scene.add(ring);
+
+/* write every position-dependent buffer from n.pos (after a layout, or each frame of the 2D ↔ 3D change) */
+function applyPositions() {
+  for (const mesh of [litMesh, holMesh, headMesh]) {
+    mesh.userData.list.forEach((n, i) => { M.makeScale(n.r, n.r, n.r).setPosition(n.pos); mesh.setMatrixAt(i, M); });
+    mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
+  }
+  bars.forEach((b, i) => aCenter.setXYZ(i, b.n.pos.x, b.n.pos.y, b.n.pos.z)); aCenter.needsUpdate = true;
+  const a = lineGeo.attributes.position.array;
+  treeLinks.forEach((l, i) => a.set(hangs(l) ? [l.t.pos.x, l.t.pos.y + RAIL, l.t.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z]
+    : [l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
+  trayHeads.forEach((h, j) => {
+    const f = h.names[0], last = h.names[(h.nRows - 1) * h.cols] || h.names[h.names.length - 1];
+    const x0 = h.bx0 - 4, x1 = h.bx0 + h.leafW + 4, top = f.pos.y + 16, bot = last.pos.y - 16, z0 = f.pos.z - 6, z1 = last.pos.z + 10;
+    const segs = [[h.pos.x, h.pos.y, h.pos.z, h.cx, top, z0],
+      [x0, top, z0, x1, top, z0], [x1, top, z0, x1, bot, z1], [x1, bot, z1, x0, bot, z1], [x0, bot, z1, x0, top, z0]];
+    // a heading with funds hangs its tray from the funds block, not through it
+    if (h.funds.length) { const lf = h.funds[h.funds.length - 1]; segs[0] = [h.cx, lf.pos.y - 8, lf.pos.z, h.cx, top, z0]; }
+    segs.forEach((s, k) => a.set(s, (treeLinks.length + j * 5 + k) * 6));
+  });
+  let ri = railStart;
+  for (const h of wrapHeads) {
+    const z = h.pos.z, g = h.trunkX;
+    a.set([h.pos.x, h.pos.y, z, g[0], h.pos.y, z], ri++ * 6);
+    let prevY = h.pos.y;
+    for (let r = 1; r < h.rows.length; r++) {
+      const row = h.rows[r], ry = row[0].pos.y + RAIL, next = r < g.length ? g[r] : row[0].pos.x;
+      a.set([g[r - 1], prevY, z, g[r - 1], ry, z], ri++ * 6);
+      a.set([Math.min(g[r - 1], next, row[0].pos.x), ry, z, Math.max(g[r - 1], next, row[row.length - 1].pos.x), ry, z], ri++ * 6);
+      prevY = ry;
+    }
+  }
+  lineGeo.attributes.position.needsUpdate = true;
+  if (state.selected) drawSelection(state.byId.get(state.selected));
+}
+applyPositions();
+
+/* ---- camera and controls ---- */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.rotateSpeed = 0.55; controls.zoomSpeed = 0.9;
+controls.minDistance = 30; controls.maxDistance = 9000;
+const view = { w: 1, h: 1 };
+function fit() {
+  const r = graph.getBoundingClientRect(); view.w = Math.max(1, r.width); view.h = Math.max(1, r.height);
+  renderer.setSize(view.w, view.h, false); camera.aspect = view.w / view.h; camera.updateProjectionMatrix();
+  view.scaleH = view.h / (2 * Math.tan((camera.fov * Math.PI) / 360));
+  barMat.uniforms.uScaleH.value = view.scaleH;
+  wake();
+}
+addEventListener("resize", fit);
+
+/* smooth camera moves, without a tween library */
+let move = null;
+function flyTo(to, ms = 900) { move = { from: { p: camera.position.clone(), t: controls.target.clone() }, to, t0: performance.now(), ms }; wake(); }
+const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+function stepMove(now) {
+  if (!move) return false;
+  const k = ease(Math.min(1, (now - move.t0) / move.ms));
+  camera.position.lerpVectors(move.from.p, move.to.p, k); controls.target.lerpVectors(move.from.t, move.to.t, k);
+  if (k >= 1) move = null; return true;
+}
+/* frame a set of balls for real: project them from the chosen direction, then pull in and slide until they fill the view */
+const _cam = camera.clone(), _p = new THREE.Vector3();
+function framing(list, dir, fill = 0.86, getPos = (n) => n.pos, bottom = 0) { // bottom: share of the canvas height kept clear at the foot (the open KEY)
+  const tgt = new THREE.Vector3(); list.forEach((n) => tgt.add(getPos(n))); tgt.divideScalar(list.length);
+  let rad = 1; list.forEach((n) => { rad = Math.max(rad, getPos(n).distanceTo(tgt)); });
+  let d = (rad * 1.1) / Math.tan((camera.fov * Math.PI) / 360) / Math.min(1, camera.aspect);
+  for (let it = 0; it < 5; it++) {
+    _cam.aspect = camera.aspect; _cam.fov = camera.fov; _cam.updateProjectionMatrix();
+    _cam.position.copy(tgt).add(dir.clone().multiplyScalar(d)); _cam.lookAt(tgt); _cam.updateMatrixWorld();
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const n of list) { _p.copy(getPos(n)).project(_cam); x0 = Math.min(x0, _p.x); x1 = Math.max(x1, _p.x); y0 = Math.min(y0, _p.y); y1 = Math.max(y1, _p.y); }
+    const span = Math.max((x1 - x0) / 2 / fill, (y1 - y0) / 2 / (fill * (1 - bottom)));
+    const right = new THREE.Vector3().setFromMatrixColumn(_cam.matrixWorld, 0), up = new THREE.Vector3().setFromMatrixColumn(_cam.matrixWorld, 1);
+    const half = d * Math.tan((camera.fov * Math.PI) / 360);
+    tgt.add(right.multiplyScalar(((x0 + x1) / 2) * half * camera.aspect)).add(up.multiplyScalar(((y0 + y1) / 2 - 0.03 - bottom) * half));
+    d *= span;
+  }
+  return { p: tgt.clone().add(dir.clone().multiplyScalar(d)), t: tgt };
+}
+const DIR3 = new THREE.Vector3(0.12, 0.62, 1).normalize(), DIR2 = new THREE.Vector3(0, 0, 1);
+function subtree(h) { const out = [h]; (function walk(id) { for (const c of primaryKids(id)) { out.push(c); walk(c.id); } })(h.id); return out; }
+function frameWhole(ms = 0, getPos) {
+  // the whole tree now fills the canvas (sectors in rows), so keep it clear of the KEY box at the foot while that is open
+  const lg = $("legend"), keyH = lg && lg.open ? lg.getBoundingClientRect().height + 14 : 0;
+  const to = framing(nodes, state.flat ? DIR2 : DIR3, 0.9, getPos, Math.min(0.3, keyH / Math.max(1, view.h)));
+  if (!ms) { camera.position.copy(to.p); controls.target.copy(to.t); move = null; wake(); } else flyTo(to, ms);
+}
+
+/* ---- labels: DOM text, placed each frame the camera moves, tiered by how big the ball is on screen, no two overlapping ---- */
+const labelLayer = $("labels");
+const measure = (() => { const c = document.createElement("canvas").getContext("2d"); return (txt, px, sp) => { c.font = `${px}px ui-monospace, Menlo, monospace`; return c.measureText(txt).width + sp * txt.length; }; })();
+const SHORT = { SEC_TECH: "TECHNOLOGY", SEC_FIN: "FINANCIALS", SEC_HLTH: "HEALTH CARE", SEC_ENGY: "ENERGY", SEC_INDU: "INDUSTRIALS", SEC_STPL: "STAPLES",
+  SEC_DISC: "DISCRETIONARY", SEC_UTIL: "UTILITIES", SEC_MATL: "MATERIALS", SEC_REIT: "REAL ESTATE", SEC_COMM: "COMMUNICATION", US_BROAD: "BROAD MARKET",
+  US_STYLE: "STYLE · FACTOR", INTL_DEV: "INTL DEVELOPED", EM: "EMERGING", MACRO: "DOLLAR · VOL", WORLD: "THE WORLD" };
+nodes.forEach((n) => {
+  const top = n.kind === "index" && (n.id === "MARKET" || n.parents[0] === "MARKET");
+  n.lbl = { kind: n.kind === "index" ? "h" : n.kind === "fund" ? "f" : "n", top, text: n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.ticker, el: null, shown: false };
+  const px = n.lbl.kind === "h" ? (top ? 13 : 12) : n.lbl.kind === "f" ? 12 : 11, sp = n.lbl.kind === "h" ? (top ? 2.3 : 1.7) : 0.2;
+  n.lbl.w = measure(n.lbl.text, px, sp) + 4; n.lbl.h = n.lbl.kind === "h" ? 16 : 14;
+  n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : top ? 92 : 84) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) : 0;
+});
+function labelEl(n) {
+  if (n.lbl.el) return n.lbl.el;
+  const d = document.createElement("div"); d.className = "lb " + n.lbl.kind + (n.lbl.top ? " top" : "") + (n.hollow ? " w" : "");
+  d.textContent = n.lbl.text; labelLayer.appendChild(d); n.lbl.el = d; return d;
+}
+function headSub(n) {
+  const deep = []; (function walk(id) { for (const c of primaryKids(id)) { if (c.g) deep.push(c); walk(c.id); } })(n.id);
+  if (!deep.length) return "";
+  const up = deep.filter((c) => c.g.composite > 0).length, dn = deep.length - up;
+  return `<span class="up">▲${up}</span> <span class="dn">▼${dn}</span>`;
+}
+const V = new THREE.Vector3(), rects = [];
+const MAXL = PHONE ? 70 : 220, PXN = PHONE ? 4.6 : 3.4, PXF = PHONE ? 2.4 : 1.6;
+function barsBelowPx(n, ppu) { // how far below the ball's centre the bars reach, in screen pixels (same sums as the shader)
+  const nb = (n.g ? 1 : 0) + (n.agg ? 1 : 0); if (!nb) return n.r * ppu;
+  const s = Math.max(1, BAR_MIN_PX / (BAR_W * ppu));
+  return n.r * ppu + s * ppu * (BAR_TOP + 2 * BAR_H * nb + BAR_GAP * (nb - 1));
+}
+function placeLabels() {
+  const camD = camera.position.distanceTo(controls.target), cand = [];
+  camera.updateMatrixWorld();
+  for (const n of nodes) {
+    V.copy(n.pos).applyMatrix4(camera.matrixWorldInverse); const depth = -V.z;
+    if (depth <= 1) { hide(n); continue; }
+    V.copy(n.pos).project(camera);
+    if (V.x < -1.15 || V.x > 1.15 || V.y < -1.15 || V.y > 1.15) { hide(n); continue; }
+    const ppu = view.scaleH / depth, rpx = n.r * ppu;
+    let show = false, p = n.lbl.prio;
+    if (n.lbl.kind === "h") show = true;
+    else if (n.lbl.kind === "f") show = rpx >= PXF || n.id === state.selected;
+    else { show = rpx >= PXN || n.id === state.selected; p = 36 + rpx * 2.2; }
+    if (n.id === state.selected) p += 300;
+    if (!show) { hide(n); continue; }
+    const sx = (V.x + 1) * view.w / 2, sy = (1 - V.y) * view.h / 2;
+    cand.push({ n, sx, sy, rpx, below: barsBelowPx(n, ppu), p, dist: depth / camD });
+  }
+  cand.sort((a, b) => b.p - a.p);
+  rects.length = 0; let shown = 0;
+  for (const c of cand) {
+    if (shown >= MAXL) { hide(c.n); continue; }
+    const n = c.n, w = n.lbl.w, sub = n.lbl.kind === "h" && c.rpx > 2.2 && !n.lbl.top && n.id !== "US" ? headSub(n) : "";
+    const h = n.lbl.h + (sub ? 14 : 0);
+    const x = Math.max(2, Math.min(view.w - w - 2, c.sx - w / 2)); // never cut off at the canvas edge
+    // headings try under the ball, then a second line lower (neighbouring sectors stagger instead of hiding each other)
+    const tries = n.lbl.kind === "h" ? [c.below + 3, c.below + 3 + h + 2, -c.rpx - h - 3] : [c.below + 2];
+    let y = null;
+    for (const dy of tries) {
+      const yy = c.sy + dy; let ok = true;
+      for (const r of rects) if (x < r.x + r.w && x + w > r.x && yy < r.y + r.h && yy + h > r.y) { ok = false; break; }
+      if (ok) { y = yy; break; }
+    }
+    if (y == null) { hide(n); continue; }
+    rects.push({ x, y, w, h }); shown++;
+    const e = labelEl(n);
+    if (n.lbl.kind === "h" && e.dataset.sub !== sub) { e.innerHTML = esc(n.lbl.text) + (sub ? `<small>${sub}</small>` : ""); e.dataset.sub = sub; }
+    e.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
+    e.style.opacity = Math.max(0.45, Math.min(1, 1.6 - c.dist * 0.6)).toFixed(2);
+    if (!n.lbl.shown) { e.style.display = "block"; n.lbl.shown = true; }
+  }
+  state.labelsShown = shown;
+}
+function hide(n) { if (n.lbl.shown) { n.lbl.el.style.display = "none"; n.lbl.shown = false; } }
+
+/* ---- render on demand: draw while something moves, then stop (the CPU rule) ---- */
+let running = false, still = 0, morph = null;
+function pauseAnimation() { running = false; state.paused = true; }
+function resumeAnimation() { if (!running) { running = true; state.paused = false; requestAnimationFrame(tick); } still = 0; }
+function wake() { resumeAnimation(); }
+function stepMorph(now) {
+  if (!morph) return false;
+  const k = ease(Math.min(1, (now - morph.t0) / morph.ms));
+  nodes.forEach((n) => n.pos.lerpVectors(n.from, n.to, k)); applyPositions();
+  if (k >= 1) morph = null; return true;
+}
+function tick(now) {
+  if (!running) return;
+  const moved = stepMove(now) | stepMorph(now) | controls.update();
+  if (moved) still = 0; else still++;
+  if (still < 2 || state.dirty) {
+    const camD = camera.position.distanceTo(controls.target); scene.fog.near = camD * 0.9; scene.fog.far = camD * 3.2;
+    ring.quaternion.copy(camera.quaternion);
+    renderer.render(scene, camera); placeLabels(); state.frames++; state.dirty = false;
+  }
+  if (still > 30 && !move && !morph) { pauseAnimation(); state.settled = true; return; }
+  requestAnimationFrame(tick);
+}
+controls.addEventListener("start", () => { graph.classList.add("dragging"); wake(); });
+controls.addEventListener("end", () => { graph.classList.remove("dragging"); wake(); });
+controls.addEventListener("change", wake);
+["wheel", "touchstart"].forEach((ev) => renderer.domElement.addEventListener(ev, () => { move = null; wake(); }, { passive: true }));
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseAnimation(); else wake(); });
+
+/* ---- picking: hover for a tip, click to pick; click the picked ball again (or Esc) to let go ---- */
+const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+let hoverN = null, downAt = null;
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObjects([litMesh, headMesh, holMesh], false)[0];
+  return hit ? hit.object.userData.list[hit.instanceId] : null;
+}
+const tipEl = $("tip");
+renderer.domElement.addEventListener("pointermove", (ev) => {
+  if (downAt) return;
+  const n = pick(ev);
+  if (n !== hoverN) { hoverN = n; graph.style.cursor = n ? "pointer" : ""; }
+  if (n) { tipEl.innerHTML = tip(n); tipEl.style.display = "block"; const r = graph.getBoundingClientRect(); tipEl.style.left = Math.min(ev.clientX - r.left + 14, view.w - 310) + "px"; tipEl.style.top = (ev.clientY - r.top + 14) + "px"; }
+  else tipEl.style.display = "none";
+});
+renderer.domElement.addEventListener("pointerleave", () => { tipEl.style.display = "none"; hoverN = null; });
+renderer.domElement.addEventListener("pointerdown", (ev) => { downAt = { x: ev.clientX, y: ev.clientY, t: performance.now() }; tipEl.style.display = "none"; });
+addEventListener("pointerup", (ev) => {
+  if (!downAt) return; const d = downAt; downAt = null;
+  if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6 || performance.now() - d.t > 600) return;
+  const n = pick(ev); if (!n) return;
+  if (n.id === state.selected) release(); else select(n);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) { e.preventDefault(); release(); } });
+const gHTML = (v) => `<span style="color:${v >= 0 ? "#35b06a" : "#d1483f"}">${fmtG(v)}</span>`;
+function tip(n) {
+  const head = n.ticker ? `<b>${esc(n.ticker)}</b> · ${esc(n.label)}` : `<b>${esc(n.label)}</b>`;
+  if (n.kind === "index") return head + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to fly in</span>`;
+  let s = head;
+  if (n.g) s += `<br>Geiger ${gHTML(n.g.composite)}`; else s += "<br><span style='color:#8c8c8c'>waiting for admission · no Geiger yet</span>";
+  if (n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of the fund${n.agg.coverage_pct < 50 ? " (less than half served)" : ""}${n.agg.file_short ? ` · file lists only ${Math.round(n.agg.file_pct)}%` : ""}</span>`;
+  const qq = state.quotes[n.ticker];
+  if (n.g && qq && Number.isFinite(qq.change_pct)) s += `<br>day <span style="color:${qq.change_pct >= 0 ? "#35b06a" : "#d1483f"}">${fmtPct(qq.change_pct)}</span>`;
+  return s;
+}
+
+/* ---- selection and release ---- */
+let beforePick = null; // where the camera was before the first pick: letting go flies back there
+function drawSelection(n) {
+  ring.position.copy(n.pos); ring.scale.setScalar(n.r + 2.2);
+  const mine = links.filter((l) => l.s === n || l.t === n).slice(0, 64), a = selGeo.attributes.position.array;
+  mine.forEach((l, i) => a.set([l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
+  selGeo.attributes.position.needsUpdate = true; selGeo.setDrawRange(0, mine.length * 2);
+}
+function select(n) {
+  if (!state.selected) beforePick = { p: camera.position.clone(), t: controls.target.clone() };
+  state.selected = n.id; ring.visible = true; drawSelection(n);
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  if (n.kind === "index") flyTo(framing(subtree(n), dir, 0.82), 1000);
+  else { const d = n.kind === "fund" ? 240 : 170 + n.r * 8; flyTo({ p: n.pos.clone().add(dir.multiplyScalar(d)), t: n.pos.clone() }, 900); }
+  state.dirty = true; wake();
+  renderCard(n);
+}
+function release(fly = true) {
+  if (!state.selected) return;
+  state.selected = null; ring.visible = false; selGeo.setDrawRange(0, 0); tipEl.style.display = "none";
+  if (fly && beforePick) flyTo(beforePick, 800);
+  beforePick = null; state.dirty = true; wake();
+  renderCard(null);
+}
+
+/* ---- the side card ---- */
+function bar(v, cls = "") {
+  const w = (Math.min(1, Math.abs(v)) * 50).toFixed(1);
+  return `<div class="gb ${cls}"><span class="mid"></span><i class="${v >= 0 ? "u" : "d"}" style="width:${w}%"></i></div>`;
+}
+const num = (v) => `<b class="${v >= 0 ? "up" : "dn"}">${fmtG(v)}</b>`;
+function pathOf(n) { const out = []; let cur = n; while (cur.parents.length) { cur = state.byId.get(cur.parents[0]); out.unshift(cur); } return out; }
+function rowFor(id) {
+  const n = state.byId.get(id); if (!n) return "";
+  const gv = n.g ? `<div class="gbrow">${bar(n.g.composite)}${num(n.g.composite)}</div>` : n.kind === "index" ? `<span class="mute">heading</span>` : `<span class="mute">waiting</span>`;
+  return `<tr><td><span class="lnk" data-go="${esc(n.id)}">${esc(n.ticker || n.label)}</span></td><td class="nm">${esc(n.ticker ? n.label : "")}</td><td class="bc">${gv}</td></tr>`;
+}
+function renderCard(n) {
+  if (!n) {
+    $("card").innerHTML = `<h2>Click any ball</h2><div class="sub">Its Geiger bar, and for a fund its holdings bar and top holdings, show here. Click the same ball again, or press Esc, to let go. Drag to turn, scroll to zoom, FLAT 2D for the same tree seen straight on.</div>` +
+      `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>OWN GEIGER</span>${bar(0.42, "lg")}<span>HOLDINGS BLEND</span>${bar(0.42, "lg agg")}</div>` +
+      `<div class="mute" style="font-size:11px">Both bars are centred at zero and use the Hub's composite scale: the full half is ±1. These two examples are drawn at +0.42.</div>`;
+    return;
+  }
+  const qq = n.ticker ? state.quotes[n.ticker] : null;
+  const crumbs = pathOf(n).map((p) => `<span class="lnk" data-go="${esc(p.id)}">${esc(p.ticker || p.label)}</span>`).join(" › ");
+  let h = `<button class="release" id="letgo" title="let go (Esc)">LET GO ✕</button>` + (crumbs ? `<div class="path">${crumbs} ›</div>` : "") +
+    `<h2>${esc(n.ticker || n.label)}</h2><div class="sub">${esc(n.ticker ? n.label : "")}${n.issuer ? " · " + esc(n.issuer) : ""}${n.kind !== "index" ? " · " + n.kind : " · heading"}</div>`;
+  if (n.kind === "index") {
+    const deep = []; (function walk(id) { for (const c of primaryKids(id)) { if (c.g) deep.push(c); walk(c.id); } })(n.id);
+    const dup = deep.filter((c) => c.g.composite > 0).length, ddn = deep.length - dup;
+    h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. Every line under it carries its own bar.</div>`;
+    if (deep.length) h += `<div class="kv"><span>UNDER IT, LIT</span><span>${deep.length} lines · <span class="up">${dup} up</span> · <span class="dn">${ddn} down</span></span></div>` +
+      `<div class="split"><i style="width:${(100 * dup / deep.length).toFixed(1)}%;background:var(--up)"></i><i style="width:${(100 * ddn / deep.length).toFixed(1)}%;background:var(--dn)"></i></div>`;
+  } else if (n.g) {
+    h += `<div class="kv"><span>GEIGER</span><div class="gbrow">${bar(n.g.composite, "lg")}<span class="big ${n.g.composite >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(n.g.composite)}</span></div>` +
+      `<span>trend · momentum</span><span><span class="${n.g.trend >= 0 ? "up" : "dn"}">${fmtG(n.g.trend)}</span> · <span class="${n.g.momentum >= 0 ? "up" : "dn"}">${fmtG(n.g.momentum)}</span></span>` +
+      `<span>DAY CHANGE</span><span>${qq && Number.isFinite(qq.change_pct) ? `<span class="${qq.change_pct >= 0 ? "up" : "dn"}">${fmtPct(qq.change_pct)}</span> <span class="mute">session ${esc(qq.price_session_et)}</span>` : `<span class="mute">not available</span>`}</span>` +
+      (qq && Number.isFinite(qq.price) ? `<span>LAST PRICE</span><span>${qq.price.toFixed(2)}</span>` : "") +
+      (n.market_value_usd ? `<span>MARKET VALUE</span><span>${fmtCap(n.market_value_usd)}</span>` : "") +
+      (n.gics_industry ? `<span>INDUSTRY</span><span>${esc(n.gics_industry)}</span>` : "") + `</div>` +
+      `<div class="mute" style="font-size:11px">Geiger −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`;
+  } else {
+    h += `<div class="wait"><b>Waiting for admission.</b> No Geiger yet, so no bar and no number. ` +
+      `${esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1))}${n.planned_tier ? " · would be " + esc(n.planned_tier) : ""}${n.placed_by ? " · placed by " + esc(n.placed_by) : ""}.</div>`;
+  }
+  if (n.kind === "fund") {
+    const hd = n.holdings;
+    if (hd && n.agg) {
+      const a = n.agg, dv = n.g ? divergence(n.g.composite, a.value) : null;
+      h += `<div class="sec">HOLDINGS BLEND · FMP ${esc(hd.as_of)}</div>` +
+        `<div class="kv"><span>HOLDINGS</span><div class="gbrow">${bar(a.value, "lg agg")}<span class="big ${a.value >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.value)}</span></div></div>` +
+        `<div style="font-size:12px">aggregate of <b>${a.count}</b> holdings = <b>${a.coverage_pct.toFixed(0)}%</b> of the fund's weight</div>` +
+        (a.file_short ? `<div class="wait">FMP's holdings file lists only <b>${a.file_pct.toFixed(0)}%</b> of this fund (${hd.rows_in_file} of its ${hd.count_in_fund} lines). The other ${(100 - a.file_pct).toFixed(0)}% is not in the file, so it counts as not served.</div>` : "") +
+        `<div class="mute" style="font-size:11px">each holding's Geiger × its weight, divided by the weight of the holdings that went in · the other ${Math.max(0, 100 - a.coverage_pct).toFixed(0)}% of the fund is left out, nothing is filled in: ${hd.rows_in_file - a.count} of the ${hd.rows_in_file} lines in the file (cash included) are not served or have no reading${a.file_short ? `, and ${(100 - a.file_pct).toFixed(0)}% of the fund is not in the file at all` : ""}</div>` +
+        (a.coverage_pct < 50 ? `<div class="wait">Less than half of this fund is served (${a.coverage_pct.toFixed(0)}%). The holdings bar speaks for that ${a.coverage_pct.toFixed(0)}% only, not for the whole fund — read the divergence with that in mind.</div>` : "") +
+        (dv ? `<div class="div">DIVERGENCE · <span class="${dv.diff > 0 ? "up" : dv.diff < 0 ? "dn" : ""}">${esc(dv.text)}</span><div class="mute" style="font-size:11px">fund ${fmtG(n.g.composite)} · holdings ${fmtG(a.value)}</div></div>` : "") +
+        (a.not_read.length ? `<div class="mute" style="font-size:11px">served but no Geiger reading right now: ${a.not_read.map(esc).join(", ")}</div>` : "");
+    } else if (hd) {
+      h += `<div class="sec">HOLDINGS BLEND</div><div class="mute">None of this fund's holdings is served, so there is no holdings bar.</div>`;
+    }
+    if (hd) {
+      const notServed = hd.top.filter((x) => !(state.byId.get(x.ticker) || {}).g);
+      h += `<div class="sec">TOP HOLDINGS · ${hd.count_in_fund} in the fund</div><table>` +
+        hd.top.map((x) => {
+          const hn = state.byId.get(x.ticker);
+          const gv = hn && hn.g ? `<div class="gbrow">${bar(hn.g.composite)}${num(hn.g.composite)}</div>` : `<span class="mute">not served</span>`;
+          return `<tr><td>${hn ? `<span class="lnk" data-go="${esc(x.ticker)}">${esc(x.ticker)}</span>` : esc(x.ticker)}</td><td class="nm">${esc(x.name || "")}</td><td class="bc">${gv}</td><td class="r">${x.weight_pct.toFixed(1)}%</td></tr>`;
+        }).join("") + `</table>` +
+        (notServed.length ? `<div class="mute" style="font-size:11px;margin-top:4px">not served (no Geiger): ${notServed.map((x) => esc(x.ticker)).join(", ")} · ${notServed.reduce((s, x) => s + x.weight_pct, 0).toFixed(1)}% of the fund</div>` : "");
+    } else {
+      h += `<div class="sec">TOP HOLDINGS</div><div class="mute">Not in the 26 Sep holdings file (FMP, 51 funds), so no holdings bar.</div>`;
+    }
+  }
+  const parents = n.parents.map((p) => { const pn = state.byId.get(p); return `<span class="lnk" data-go="${esc(p)}">${esc(pn.ticker || pn.label)}</span>`; });
+  if (parents.length) h += `<div class="kv"><span>${parents.length > 1 ? "PARENTS" : "PARENT"}</span><span>${parents.join(" · ")}</span></div>`;
+  if (n.kind === "name" && n.served) h += `<div class="kv"><span>CHART</span><span><a href="${STATION_CHART + encodeURIComponent(n.ticker)}&range=1D&clouds=1" target="_blank" rel="noopener">open ${esc(n.ticker)} on the Station chart ↗</a></span></div>`;
+  const ch = state.children.get(n.id) || [];
+  if (ch.length) {
+    const sorted = ch.slice().sort((a, b) => { const A = state.byId.get(a), B = state.byId.get(b); const k = { index: 0, fund: 1, name: 2 }; return k[A.kind] - k[B.kind] || (B.market_value_usd || 0) - (A.market_value_usd || 0); });
+    h += `<div class="sec">UNDER IT · ${ch.length}</div><table>${sorted.slice(0, 60).map(rowFor).join("")}</table>` + (ch.length > 60 ? `<div class="mute">…and ${ch.length - 60} more</div>` : "");
+  }
+  $("card").innerHTML = h;
+}
+$("card").addEventListener("click", (e) => {
+  if (e.target.id === "letgo") { release(); return; }
+  const id = e.target.getAttribute && e.target.getAttribute("data-go");
+  if (id && state.byId.has(id)) select(state.byId.get(id));
+});
+
+/* ---- search ---- */
+$("tickers").innerHTML = nodes.map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : "heading")}</option>`).join("");
+function find(s) {
+  s = s.trim().toUpperCase(); if (!s) return null;
+  return state.byId.get(s) || nodes.find((n) => (n.ticker || "") === s) || nodes.find((n) => (n.label || "").toUpperCase() === s) ||
+    nodes.find((n) => (n.label || "").toUpperCase().includes(s));
+}
+const go = () => { const n = find($("q").value); if (n) select(n); };
+$("q").addEventListener("change", go);
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+
+/* ---- FLAT 2D and whole map ---- */
+function setFlat(on, ms = 800) {
+  state.flat = on; $("flat").classList.toggle("on", on);
+  nodes.forEach((n) => n.from.copy(n.pos));
+  layout(on ? 0 : 1, (n, x, y, z) => n.to.set(x, y, z));
+  release(false);
+  frameWhole(ms, (n) => n.to);
+  if (ms) morph = { t0: performance.now(), ms }; else { nodes.forEach((n) => n.pos.copy(n.to)); applyPositions(); }
+  wake();
+}
+$("flat").addEventListener("click", () => setFlat(!state.flat));
+$("reset").addEventListener("click", () => { release(false); frameWhole(900); });
+
+/* ---- plain fallback when WebGL is not there ---- */
+function plainFallback(why) {
+  $("fallback").style.display = "block"; $("gl").style.display = "none"; $("labels").style.display = "none";
+  $("fallback").innerHTML = `<p>This browser could not draw the 3D map (${esc(why)}). The same numbers, as a list:</p>` +
+    heads.filter((h) => h.id.startsWith("SEC_")).map((s) => `<div class="sec">${esc(s.label.toUpperCase())}</div><table>${kids(s.id).map((c) => rowFor(c.id)).join("")}</table>`).join("");
+}
+
+/* ---- go ---- */
+fit();
+renderCard(null);
+if (PHONE) $("legend").removeAttribute("open"); // before the first framing, which keeps clear of an open KEY
+frameWhole(0);
+const p = new URLSearchParams(location.search);
+if (p.get("flat") === "1") setFlat(true, 0);
+if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n), 300); }
+state.select = (id) => { const n = state.byId.get(id); if (n) select(n); };
+state.release = () => release();
+state.setFlat = (on) => setFlat(on, 0);
+state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }); layout(state.flat ? 0 : 1, () => {}); return out; };
+state.screenOf = (id) => { const n = state.byId.get(id); if (!n) return null; V.copy(n.pos).project(camera); const r = renderer.domElement.getBoundingClientRect();
+  return [r.left + (V.x + 1) * r.width / 2, r.top + (1 - V.y) * r.height / 2]; };
+state.stopIntro = () => { if (move) { camera.position.copy(move.to.p); controls.target.copy(move.to.t); move = null; } state.dirty = true; wake(); };
+state.ready = true;
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

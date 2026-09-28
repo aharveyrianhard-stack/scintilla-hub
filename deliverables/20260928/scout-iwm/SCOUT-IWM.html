@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scout · IWM</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0F0F16;--line:#1C1C28;--line2:#2A2A3A;--ink:#C8C8D2;--ink2:#A0A0B0;--dim:#8A8A9A;--up:#35b06a;--dn:#d1483f;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased}
+main{max-width:1640px;margin:0 auto;padding:18px 20px 60px}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:18px;letter-spacing:.22em;text-transform:uppercase;margin:0}
+h2{font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);margin:34px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+.kicker{color:var(--dim);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 16px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:8px 0 16px}
+.tile{border:1px solid var(--line2);background:var(--panel);padding:12px 14px}
+.tile .v{font-size:26px;letter-spacing:.02em}
+.tile .l{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+.tile .s{font-size:12px;color:var(--ink2)}
+.filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;border:1px solid var(--line2);background:var(--panel);padding:10px 12px;margin:6px 0 10px}
+.filters label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);text-transform:uppercase;letter-spacing:.08em}
+.filters input[type=number],.filters select{width:78px;background:var(--bg);color:var(--ink);border:1px solid var(--line2);font:inherit;font-size:13px;padding:3px 6px}
+.filters select{width:auto}
+.filters input[type=checkbox]{accent-color:#8E8E9C;width:15px;height:15px}
+.filters .count{margin-left:auto;color:var(--ink);font-size:13px}
+.scroll{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;font-size:12px;width:100%;min-width:1180px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--dim);font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:11px;position:sticky;top:0;background:var(--bg);cursor:pointer;user-select:none}
+th .u{display:block;font-size:11px;letter-spacing:.02em;text-transform:none;color:var(--dim)}
+th.on{color:var(--ink)}
+th.r{text-align:right}
+td.facts{white-space:normal;min-width:330px;max-width:420px}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.t{font-weight:600;color:var(--ink)}
+td.nm{max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}
+tr:hover td{background:#12121A}
+.up{color:var(--up)}.dn{color:var(--dn)}.dim{color:var(--dim)}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--line2);padding:0 5px;margin:1px 3px 1px 0;color:var(--ink2)}
+.tag.dn{border-color:#4a2a2a;color:var(--dn)}.tag.up{border-color:#23402f;color:var(--up)}
+.served{font-size:11px;color:var(--ink);border:1px solid var(--ink2);padding:0 4px}
+.note{color:var(--ink2);max-width:110ch;font-size:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:900px){.hm{display:none}td.facts{min-width:260px}.tiles{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}main{padding:12px 10px 40px}h1{font-size:15px}.tile .v{font-size:21px}}
+.sum{margin:8px 0 12px;font-size:13px}
+.sum b{color:var(--ink)}
+.plain p{max-width:110ch;color:var(--ink2);margin:6px 0}
+.plain b{color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+<header><span data-scnav-slot></span><h1>Scout · IWM</h1></header>
+<div class="kicker" id="kicker"></div>
+<div class="tiles" id="tiles"></div>
+
+<h2>1 · The Russell 2000 fund's holdings, screened</h2>
+<div class="filters" id="filters">
+  <label><input type="checkbox" id="f_prof" checked> earnings or free cash flow &gt; 0</label>
+  <label>debt ÷ equity ≤ <input type="number" id="f_de" value="2" step="0.25" min="0"></label>
+  <label>traded ≥ $<input type="number" id="f_dv" value="20" step="5" min="0">M / day</label>
+  <label>market cap ≥ $<input type="number" id="f_mc" value="300" step="100" min="0">M</label>
+  <label>no report in next <input type="number" id="f_rep" value="5" step="1" min="0"> days</label>
+  <label>max per sector <input type="number" id="f_cap" value="5" step="1" min="1"></label>
+  <label>show <select id="f_show"><option value="short">shortlist (40)</option><option value="pass">all that pass</option><option value="all">all holdings</option></select></label>
+  <span class="count" id="count"></span>
+</div>
+<div class="note" id="sortnote">Ranked by <b>RSI percentile</b> — lowest first (most oversold against the stock's own 3-year history). Click any column title to rank by it instead. Empty box = that filter is off.</div>
+<div class="scroll"><table id="main"></table></div>
+
+<h2>2 · The names we already serve — oversold? decent?</h2>
+<div class="sum" id="servedsum"></div>
+<div class="scroll"><table id="served"></table></div>
+
+<h2>3 · Where the screen lands, by sector</h2>
+<div class="scroll"><table id="sectors" style="min-width:760px"></table></div>
+
+<h2>4 · In plain words</h2>
+<div class="plain" id="plain">
+<p><b>What this page shows.</b> Every stock inside IWM (the iShares Russell 2000 small-cap fund), with the few numbers you need to decide whether a name deserves a closer look — without adding it to the Hub. Section 1 is a screen you can change. Section 2 looks only at the Russell 2000 names the Hub already carries. Section 3 shows where the screen's survivors come from. Nothing here says buy or sell.</p>
+<p><b>Where each number comes from.</b>
+Holdings and weights: FMP ETF holdings for IWM (dated in the header).
+Prices: every US stock's daily bar, read in one piece per trading day — our own copy of Massive's whole-market day files (to 17 Aug 2026) and Massive's grouped-daily call after that — adjusted for splits. From those: <b>RSI 14</b> (the standard Wilder RSI on daily closes); <b>RSI percentile</b> = where today's RSI sits among every daily RSI that stock has printed since June 2023 (0 = its lowest, 100 = its highest); <b>vs 50-day / vs 200-day</b> = how far the close is above or below its 50- and 200-day average; <b>from 1-yr high</b> = how far below the highest price of the last 252 trading days; <b>3-mo vs IWM</b> = the stock's last-63-day return against IWM's over the same days (+10% = it beat IWM by 10%); <b>$ traded / day</b> = average of price × shares over the last 20 days.
+Company numbers: FMP bulk files (one download for all companies) — market value, trailing-twelve-month earnings and free cash flow, P/E, debt ÷ equity.
+Next report: FMP earnings calendar. Geiger (section 2): the live Geiger the Hub already shows (-1 to +1).</p>
+<p><b>What could be wrong.</b> FMP's holdings file can lag the fund by days. Company numbers are trailing twelve months and can be a quarter old. Debt ÷ equity is misleading for banks and for companies with negative equity (shown as a blank or an extreme). A stock with less than about a year of trading has no RSI percentile (blank). "Today" is Massive's snapshot at the time in the header — before 09:30 it is yesterday's move. A ticker spelled differently at FMP and Massive can miss its prices (listed as blank rows at the bottom of "all holdings").</p>
+<p><b>What was not done.</b> No name was added to the Hub, the database, or the Geiger. Nothing here is refreshed automatically yet — this is one run on 28 Sep. The page does not rank "best" names; the order is only the column you choose.</p>
+</div>
+</main>
+<script src="scout-iwm-data.js"></script>
+<script>
+(function(){
+const D = window.SCOUT_IWM, M = D.meta
+const $ = id => document.getElementById(id)
+const fmtPct = (x, d = 1, sign = true) => x == null ? '' : (sign && x > 0 ? '+' : '') + (x * 100).toFixed(d) + '%'
+const cls = x => x == null ? '' : x > 0 ? 'up' : x < 0 ? 'dn' : ''
+const money = x => { if (x == null) return ''; const a = Math.abs(x); const s = x < 0 ? '−' : ''; return a >= 1e12 ? s + '$' + (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? s + '$' + (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? s + '$' + (a / 1e6).toFixed(0) + 'M' : s + '$' + Math.round(a / 1e3) + 'K' }
+const num = (x, d = 1) => x == null ? '' : x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+const dayName = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+$('kicker').textContent = `Russell 2000 fund · ${M.holdings.toLocaleString('en-US')} holdings (FMP, ${M.holdings_updated}) · prices to ${dayName(M.as_of)} close · today = Massive snapshot ${M.snapshot_et} · run ${M.run_label} · facts, no buy calls`
+
+const I = M.iwm
+$('tiles').innerHTML = [
+  ['Holdings', M.holdings.toLocaleString('en-US'), 'stocks inside IWM'],
+  ['We serve', `${M.served_count}`, `${num(M.served_weight, 1)}% of IWM's weight`],
+  ['IWM RSI 14', num(I.rsi14, 1), I.rsi_pct != null ? `higher than ${num(I.rsi_pct, 0)}% of its own days since Jun 2023` : ''],
+  ['IWM vs 200-day', `<span class="${cls(I.pct_vs_200)}">${fmtPct(I.pct_vs_200)}</span>`, `vs 50-day <span class="${cls(I.pct_vs_50)}">${fmtPct(I.pct_vs_50)}</span> · from 1-yr high <span class="dn">${fmtPct(I.from_52w_high)}</span>`],
+  ['Pass the filters', '<span id="passn">–</span>', 'with today\'s filter settings'],
+].map(([l, v, s]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('')
+
+const COLS = [
+  ['rank', '#', '', r => '', 'n'],
+  ['t', 'Ticker', '', r => r.t + (r.served ? ' <span class="served">HUB</span>' : ''), 't'],
+  ['name', 'Name', '', r => r.name || '', 'nm hm'],
+  ['sector', 'Sector', '', r => r.sector || '', 'hm'],
+  ['w', 'IWM wt', '% of fund', r => num(r.w, 2), 'n'],
+  ['mcap', 'Mkt cap', '', r => money(r.mcap), 'n'],
+  ['dv', '$ traded', '/ day, 20d', r => money(r.dv), 'n'],
+  ['rsi', 'RSI 14', 'daily', r => num(r.rsi, 1), 'n'],
+  ['rsip', 'RSI pct', 'own history', r => r.rsip == null ? '' : num(r.rsip, r.rsip < 10 ? 1 : 0), 'n'],
+  ['v50', 'vs 50d', '', r => `<span class="${cls(r.v50)}">${fmtPct(r.v50)}</span>`, 'n'],
+  ['v200', 'vs 200d', '', r => `<span class="${cls(r.v200)}">${fmtPct(r.v200)}</span>`, 'n'],
+  ['hi', 'from 1-yr', 'high', r => `<span class="${cls(r.hi)}">${fmtPct(r.hi)}</span>`, 'n'],
+  ['rs3', '3-mo', 'vs IWM', r => `<span class="${cls(r.rs3)}">${fmtPct(r.rs3)}</span>`, 'n'],
+  ['pe', 'P/E', 'TTM', r => r.pe == null ? '' : r.pe <= 0 ? '<span class="dn">loss</span>' : num(r.pe, 1), 'n'],
+  ['de', 'Debt ÷', 'equity', r => num(r.de, 2), 'n'],
+  ['rep', 'Next', 'report', r => r.rep ? r.rep.slice(5) : '', 'n'],
+  ['chg', 'Today', '', r => `<span class="${cls(r.chg)}">${fmtPct(r.chg, 2)}</span>`, 'n'],
+  ['why', 'Out because', '', r => (r._why || []).map(w => `<span class="tag">${w}</span>`).join(''), ''],
+]
+let sortKey = 'rsip', sortDir = 1
+function filters () {
+  const v = id => { const x = $(id).value; return x === '' ? null : Number(x) }
+  return { prof: $('f_prof').checked, de: v('f_de'), dv: v('f_dv'), mc: v('f_mc'), rep: v('f_rep'), cap: v('f_cap'), show: $('f_show').value }
+}
+function why (r, f) {
+  const w = []
+  if (f.prof && !((r.earn ?? -1) > 0 || (r.fcf ?? -1) > 0)) w.push('no profit / FCF')
+  if (f.de != null && r.de != null && r.de > f.de) w.push('debt')
+  if (f.de != null && r.de != null && r.de < 0) w.push('negative equity')
+  if (f.dv != null && !((r.dv ?? 0) >= f.dv * 1e6)) w.push('thin trading')
+  if (f.mc != null && !((r.mcap ?? 0) >= f.mc * 1e6)) w.push('small')
+  if (f.rep != null && r.rep) { const d = (Date.parse(r.rep + 'T12:00:00Z') - Date.parse(M.today + 'T12:00:00Z')) / 864e5; if (d >= 0 && d <= f.rep) w.push('reports ' + r.rep.slice(5)) }
+  if (r.rsip == null && r.rsi == null) w.push('no prices')
+  return w
+}
+function sorter (a, b) {
+  const x = a[sortKey], y = b[sortKey]
+  if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1
+  return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sortDir
+}
+function table (el, rows, cols) {
+  el.innerHTML = '<thead><tr>' + cols.map(c => `<th data-k="${c[0]}" class="${c[0] === sortKey ? 'on' : ''}${c[4] === 'n' ? ' r' : ''}${c[4].includes('hm') ? ' hm' : ''}">${c[1]}${c[0] === sortKey ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
+    rows.map((r, i) => '<tr>' + cols.map(c => `<td class="${c[4]}">${c[0] === 'rank' ? i + 1 : c[3](r)}</td>`).join('') + '</tr>').join('') + '</tbody>'
+}
+function render () {
+  const f = filters()
+  for (const r of D.rows) r._why = why(r, f)
+  const pass = D.rows.filter(r => r._why.length === 0)
+  $('passn').textContent = pass.length.toLocaleString('en-US')
+  let rows
+  if (f.show === 'all') rows = D.rows.slice().sort(sorter)
+  else {
+    rows = pass.slice().sort(sorter)
+    if (f.cap != null) { const per = {}; rows = rows.filter(r => { const s = r.sector || '—'; per[s] = (per[s] || 0) + 1; return per[s] <= f.cap }) }
+    if (f.show === 'short') rows = rows.slice(0, 40)
+  }
+  const cols = f.show === 'all' ? COLS : COLS.filter(c => c[0] !== 'why')
+  $('count').innerHTML = `<b>${pass.length.toLocaleString('en-US')}</b> of ${D.rows.length.toLocaleString('en-US')} pass · showing ${rows.length.toLocaleString('en-US')}`
+  table($('main'), rows, cols)
+  sectors(pass)
+}
+document.addEventListener('click', e => {
+  const th = e.target.closest('#main th'); if (!th || th.dataset.k === 'rank') return
+  const k = th.dataset.k
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = ['t', 'name', 'sector', 'rsip', 'rsi', 'v50', 'v200', 'hi', 'rs3', 'pe', 'de', 'chg', 'rep'].includes(k) ? 1 : -1 }
+  $('sortnote').innerHTML = `Ranked by <b>${th.childNodes[0].textContent.replace(/[↑↓]/g, '').trim()}</b> — ${sortDir > 0 ? 'lowest' : 'highest'} first. Click again to flip.`
+  render()
+})
+$('filters').addEventListener('input', render)
+
+// ---- section 2: the names we serve
+const S = D.served
+const n = x => S.filter(x).length
+$('servedsum').innerHTML = `Of the <b>${S.length}</b> IWM names on the Hub: <b>${n(r => r.rsip != null && r.rsip <= 20)}</b> have their RSI in the bottom 20% of their own history · <b>${n(r => r.v200 != null && r.v200 < 0)}</b> are below their 200-day average · <b>${n(r => r.hi != null && r.hi <= -0.3)}</b> are 30% or more below their 1-year high · <b>${n(r => (r.earn ?? -1) > 0)}</b> have positive trailing earnings (<b>${n(r => (r.earn ?? -1) > 0 || (r.fcf ?? -1) > 0)}</b> earnings or free cash flow) · <b>${n(r => r.geiger != null && r.geiger < 0)}</b> have a negative Geiger.`
+function facts (r) {
+  const t = []
+  if (r.rsip != null && r.rsip <= 10) t.push(['RSI bottom 10% of own history', 'dn']); else if (r.rsip != null && r.rsip <= 20) t.push(['RSI bottom 20%', 'dn']); else if (r.rsip != null && r.rsip >= 80) t.push(['RSI top 20%', 'up'])
+  if (r.v200 != null) t.push([r.v200 < 0 ? 'below 200-day' : 'above 200-day', r.v200 < 0 ? 'dn' : 'up'])
+  if (r.hi != null && r.hi <= -0.3) t.push(['≥30% off 1-yr high', 'dn'])
+  t.push((r.earn ?? -1) > 0 ? ['profitable', 'up'] : (r.fcf ?? -1) > 0 ? ['FCF positive, loss-making', ''] : ['loss-making, FCF negative', 'dn'])
+  if (r.de != null && r.de > 2) t.push(['debt ÷ equity > 2', 'dn'])
+  if (r.dv != null && r.dv < 20e6) t.push(['< $20M / day', 'dn'])
+  return t.map(([s, c]) => `<span class="tag ${c}">${s}</span>`).join('')
+}
+const SC = [
+  ['t', 'Ticker', '', r => r.t, 't'], ['name', 'Name', '', r => r.name || '', 'nm hm'], ['sector', 'Sector', '', r => r.sector || '', 'hm'],
+  ['w', 'IWM wt', '%', r => num(r.w, 2), 'n'],
+  ['geiger', 'Geiger', '−1…+1', r => `<span class="${cls(r.geiger)}">${r.geiger == null ? '' : (r.geiger > 0 ? '+' : '') + r.geiger.toFixed(2)}</span>`, 'n'],
+  ['gt', 'trend', '', r => `<span class="${cls(r.gt)}">${r.gt == null ? '' : r.gt.toFixed(2)}</span>`, 'n'],
+  ['gm', 'momentum', '', r => `<span class="${cls(r.gm)}">${r.gm == null ? '' : r.gm.toFixed(2)}</span>`, 'n'],
+  ['rsi', 'RSI 14', '', r => num(r.rsi, 1), 'n'], ['rsip', 'RSI pct', 'own hist.', r => r.rsip == null ? '' : num(r.rsip, r.rsip < 10 ? 1 : 0), 'n'],
+  ['v200', 'vs 200d', '', r => `<span class="${cls(r.v200)}">${fmtPct(r.v200)}</span>`, 'n'],
+  ['hi', 'from 1-yr', 'high', r => `<span class="${cls(r.hi)}">${fmtPct(r.hi)}</span>`, 'n'],
+  ['rs3', '3-mo', 'vs IWM', r => `<span class="${cls(r.rs3)}">${fmtPct(r.rs3)}</span>`, 'n'],
+  ['pe', 'P/E', '', r => r.pe == null ? '' : r.pe <= 0 ? '<span class="dn">loss</span>' : num(r.pe, 1), 'n'],
+  ['dv', '$ traded', '/ day', r => money(r.dv), 'n'],
+  ['rep', 'Next', 'report', r => r.rep ? r.rep.slice(5) : '', 'n'],
+  ['facts', 'The facts', '', facts, 'facts'],
+]
+const S2 = S.slice().sort((a, b) => (a.rsip ?? 999) - (b.rsip ?? 999))
+$('served').innerHTML = '<thead><tr>' + SC.map(c => `<th class="${c[4] === 'n' ? 'r' : ''}${c[4].includes('hm') ? ' hm' : ''}">${c[1]}<span class="u">${c[2] || '&nbsp;'}</span></th>`).join('') + '</tr></thead><tbody>' +
+  S2.map(r => '<tr>' + SC.map(c => `<td class="${c[4]}">${c[3](r)}</td>`).join('') + '</tr>').join('') + '</tbody>'
+
+// ---- section 3: sectors
+function sectors (pass) {
+  const by = {}
+  for (const r of D.rows) { const s = r.sector || '(no sector at FMP)'; const o = by[s] || (by[s] = { w: 0, n: 0, p: 0, served: 0, rsip: [] }); o.w += r.w || 0; o.n++; if (r.served) o.served++; if (r.rsip != null) o.rsip.push(r.rsip) }
+  for (const r of pass) { const s = r.sector || '(no sector at FMP)'; by[s].p++ }
+  const med = a => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)] }
+  const rows = Object.entries(by).sort((a, b) => b[1].w - a[1].w)
+  $('sectors').innerHTML = '<thead><tr><th>Sector</th><th class="r">IWM weight</th><th class="r">Names</th><th class="r">Pass the filters</th><th class="r">On the Hub</th><th class="r">Median RSI pct<span class="u">own history</span></th></tr></thead><tbody>' +
+    rows.map(([s, o]) => `<tr><td>${s}</td><td class="n">${num(o.w, 1)}%</td><td class="n">${o.n}</td><td class="n">${o.p}</td><td class="n">${o.served}</td><td class="n">${med(o.rsip) == null ? '' : num(med(o.rsip), 0)}</td></tr>`).join('') + '</tbody>'
+}
+render()
+})()
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
