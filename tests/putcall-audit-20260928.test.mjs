@@ -64,3 +64,70 @@ test("no credential shape appears in the page or the data", () => {
     assert.doesNotMatch(text, /apiKey=|service_role|Bearer [A-Za-z0-9]/);
   }
 });
+
+/* ---- review fixes, 28 Sep: single names lined up on the calls, table pinned to the data ---- */
+const align = await import(join(DIR, "align-names.mjs"));
+
+test("the call-matched comparison in the JSON is what the saved IBKR readings give", () => {
+  const fresh = align.alignAll(data);
+  assert.deepEqual(data.single_names_aligned, JSON.parse(JSON.stringify(fresh)));
+});
+
+test("at the matched moment IBKR's call total equals Cboe's, and the moment lies between two real readings", () => {
+  for (const [key] of align.CHECKS) for (const s of align.NAMES) {
+    const cboe = data[key][s].cboe, rows = data.ibkr_series_since_open.rows[s];
+    const m = align.callMatch(rows, cboe);
+    assert.ok(m, `${key} ${s}`);
+    assert.ok(m.bracket_s > 0 && m.bracket_s < 40, `${key} ${s} readings ~32 s apart`);
+    const i = rows.findIndex((r) => r[0] >= m.t);
+    assert.ok(rows[i - 1][1] <= cboe.call_vol && cboe.call_vol <= rows[i][1], `${key} ${s}`);
+  }
+});
+
+test("every cell of table 3.3 is generated from the aligned data", () => {
+  const i = html.indexOf(align.TABLE_START), j = html.indexOf(align.TABLE_END);
+  assert.ok(i > 0 && j > i);
+  const rows = html.slice(i + align.TABLE_START.length, j).trim();
+  assert.equal(rows, align.tableRows(data.single_names_aligned));
+  assert.equal((rows.match(/<tr>/g) || []).length, align.NAMES.length);
+});
+
+test("a name is compared only when its own delay is within the tolerance of the check's shared delay", () => {
+  for (const per of Object.values(data.single_names_aligned.checks)) {
+    for (const s of align.NAMES) {
+      const p = per[s];
+      if (!p.aligned) assert.equal(align.cell(p), "not aligned", s);
+      else assert.match(align.cell(p), /^[+−±]\d+%$/, s);
+    }
+  }
+  const c = data.single_names_aligned.checks;
+  assert.equal(c["09:55 ET"].IWM.aligned, false);
+  assert.equal(c["10:07 ET"].IWM.aligned, false);
+  assert.equal(c["10:07 ET"].AMZN.aligned, false);
+  for (const s of ["AAPL", "NVDA", "MSFT"]) for (const per of Object.values(c)) {
+    assert.equal(per[s].aligned, true, s);
+    assert.ok(per[s].put_gap_pct < -5, `${s} puts read low`);
+  }
+});
+
+test("the old delay-window reading of IWM as noise is gone from the page", () => {
+  assert.doesNotMatch(html, /noisy a single name/);
+  assert.doesNotMatch(html, /34 of 35", but it really has 43/);
+});
+
+test("cohort switching evidence is internally consistent", () => {
+  const c = data.cohort_membership_switching;
+  assert.equal(c.member_slots_normal - c.member_slots_short, c.member_slots_lost_in_remaining_cohorts + c.one_member_cohorts_vanished);
+  assert.equal(c.cohort_lines_normal - c.cohort_lines_in_short_minutes, c.one_member_cohorts_vanished);
+  const short = c.ai_hardware_minutes.filter((r) => r.of_members === 35).map((r) => r.utc);
+  assert.deepEqual(short, c.short_minutes_utc);
+  assert.equal(c.ai_hardware_members_not_reached_today, 0);
+  assert.ok(c.ticker_cohorts_rows > c.page_size && c.company_profile_rows <= c.page_size);
+  assert.match(html, /53 of the 119 cohort/);
+});
+
+test("fix list says the reader must exit with a failure code for launchd to restart it", () => {
+  assert.equal(data.reader_exit.plist_keepalive.SuccessfulExit, false);
+  assert.match(html, /exit with a failure code/i);
+  assert.match(html, /return 1 when the loop ended because the connection dropped/);
+});

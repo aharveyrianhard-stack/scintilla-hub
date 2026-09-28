@@ -35,8 +35,9 @@ td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l)
 <li><b class="bad">21 names stopped being read at 00:12 ET last night</b> (TTWO through WBD, alphabetically in one block: TXN, UBER, UNH, V, VZ, VST, VRT…). The IB Gateway blinked at that moment; the reader kept running but never picked those 21 back up. Every other name is fresh to the second.</li>
 <li><b class="bad">122 of the 486 names on the Hub are not on the reader's list at all</b> — the list was frozen at 364 names on 24 September. 33 of them are companies with busy options (RIOT, GLW, COHR, KTOS, TECK, LUNR, ALB…); 89 are funds.</li>
 <li><b class="warn">The line called "index" is not index options.</b> It is SPY + QQQ + IWM (funds). Cboe's index number it is compared with is mostly SPX and VIX options, which the reader never reads.</li>
+<li><b class="bad">The cohort lines switch between two member lists.</b> In 2 of the 51 stored minutes since 09:31 (10:04 and 10:06 ET), 53 of the 119 cohorts were built from a shorter list — AI_HARDWARE 35 names instead of 43, BLUE_CHIP 106 instead of 128 — so the ratio jumps down and back. On 24 and 25 Sep, 70 of 119 cohorts did the same.</li>
 </ol>
-<p>And to the question "some tickers have put/call, others not": <b>no screen on the Station or the Hub shows a single ticker's put/call today.</b> The readings exist per name in the database, but only the group lines (equity, index, sectors, cohorts) and Cboe's daily numbers are served and drawn. The gaps you would notice are in those group lines: a cohort counts fewer names than it has.</p>
+<p>And to the question "some tickers have put/call, others not": <b>no screen on the Station or the Hub shows a single ticker's put/call today.</b> The readings exist per name in the database, but only the group lines (equity, index, sectors, cohorts) and Cboe's daily numbers are served and drawn. The gaps you would notice are in those group lines: the 21 silent names, and cohorts that jump when they are built from the shorter member list.</p>
 </div>
 
 <div class="cards">
@@ -70,7 +71,22 @@ td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l)
 <tr><td data-l="Group">Weekend</td><td data-l="Names">all</td><td data-l="Why">The Gateway was logged out Sunday 05:0x → 21:2x ET (hourly counts drop from ~39,000 to 67, then back). No trading-day number was lost: Sunday is not a session.</td><td data-l="Evidence">reader file for 27 Sep, hourly counts</td></tr>
 <tr><td data-l="Group">"No options" / "no volume yet"</td><td data-l="Names">none today</td><td data-l="Why">Every one of the 343 live names returned a call and a put count. No name was refused by IBKR for lack of options or permissions.</td><td data-l="Evidence">no subscription errors in the reader's health file</td></tr>
 </tbody></table></div>
-<p class="flag">What this does to the lines you see: the equity line says "297 of 316" — the 19 missing are the silent companies above. A cohort such as AI_HARDWARE says "34 of 35", but it really has 43 members: the 8 never-listed names are not counted in the "of" at all, because the line only counts names the reader reached. So the coverage figures look better than they are.</p>
+<p class="flag">What this does to the lines you see: the equity line says "297 of 316" — the 19 missing are the silent companies above. The 122 never-listed names are also missing from the cohort table the lines are built from (<code>ticker_cohorts</code> holds none of them), so no cohort line counts them in its "of".</p>
+
+<h3 style="font-size:14px;color:var(--ink2)">2.1 The cohort lines switch between two member lists</h3>
+<p>A cohort line should have one member count all day. Today 53 of the 119 cohort lines carry two different counts. The minute job normally builds AI_HARDWARE from its 43 members; in two minutes it built it from 35:</p>
+<div class="tw"><table>
+<thead><tr><th>Minute (ET)</th><th>AI_HARDWARE counted</th><th>Put/call</th></tr></thead>
+<tbody>
+<tr><td data-l="Minute">10:02</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3831</td></tr>
+<tr><td data-l="Minute">10:03</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3852</td></tr>
+<tr><td data-l="Minute">10:04</td><td data-l="Counted" class="bad">34 of 35</td><td data-l="Put/call" class="bad">0.3718</td></tr>
+<tr><td data-l="Minute">10:05</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3895</td></tr>
+<tr><td data-l="Minute">10:06</td><td data-l="Counted" class="bad">34 of 35</td><td data-l="Put/call" class="bad">0.3774</td></tr>
+<tr><td data-l="Minute">10:07</td><td data-l="Counted">42 of 43</td><td data-l="Put/call">0.3943</td></tr>
+</tbody></table></div>
+<p>At 10:04 and 10:06 ET all 53 of those cohorts lost members at once — 197 member slots, the same 197 both times — and 5 one-member cohorts vanished for that minute: 1,054 member slots in all instead of 1,256. Other examples: BLUE_CHIP 106 vs 128, LARGE_CAP 188 vs 226, AI_SOFTWARE 9 vs 13. The sector, equity and index lines never change count. On 24 and 25 Sep, 70 of the 119 cohorts had more than one count each day (AI_HARDWARE: 43, 35 and 31). All 43 AI_HARDWARE members are among the 364 names the reader reached today, so this is not a reading gap. <span class="tag">[VERIFIED switching]</span></p>
+<p>Likely cause <span class="tag">[THEORY]</span>: the minute job reads the cohort table (<code>ticker_cohorts</code>, 1,282 rows) in pages of 1,000 with no fixed order. Without a fixed order, the database can hand back the second page overlapping the first, so some members are skipped. The sector list comes from <code>company_profile</code>, which has 440 rows, fits in one page, and never switches. That fits, but I have not reproduced a bad read.</p>
 
 <h2>3 · Is it accurate?</h2>
 <h3 style="font-size:14px;color:var(--ink2)">3.1 Are the sums right? Yes.</h3>
@@ -80,23 +96,27 @@ td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l)
 
 <h3 style="font-size:14px;color:var(--ink2)">3.2 Does it agree with Cboe at the close? Equity: yes, within 1–2%.</h3>
 <div class="fig"><img src="close-vs-cboe.svg" alt="closing lines vs Cboe"><div class="cap">24 Sep: equity 0.544 vs Cboe 0.55; 25 Sep: 0.509 vs 0.52. The "all 364" estimate runs 5–6% under Cboe's total (0.762 vs 0.80; 0.704 vs 0.75). The index pair is not the same product.</div></div>
-<p>Cboe counts only trades on its own exchanges and every stock; we count every exchange but only our names. Agreement within 1–2% on the equity line is as good as that comparison can be. <b>The database's own comparison table has only 24 Sep filled</b>: 25 Sep still says "no Cboe print" because the 08:45 ET catch-up job builds a broken address (see fixes). Cboe's 25 Sep print is on the chart API.</p>
+<p>Cboe's <i>daily prints</i> (PCC, PCCE, PCCI) count only trades on Cboe's own exchanges, but every stock; we count every exchange but only our names. Agreement within 1–2% on the equity line is as good as that comparison can be. <b>The database's own comparison table has only 24 Sep filled</b>: 25 Sep still says "no Cboe print" because the 08:45 ET catch-up job builds a broken address (see fixes). Cboe's 25 Sep print is on the chart API.</p>
 
-<h3 style="font-size:14px;color:var(--ink2)">3.3 Single names against Cboe's own option chain: close, but single-stock puts read low.</h3>
-<div class="fig"><img src="ibkr-vs-cboe-names.svg" alt="IBKR vs Cboe by name"><div class="cap">Cboe's free delayed chain (every contract's volume, summed) against our IBKR readings. Cboe's chain runs roughly 12–16 minutes behind, so each bar shows the IBKR ratio over that whole window rather than one moment.</div></div>
+<h3 style="font-size:14px;color:var(--ink2)">3.3 Single names against Cboe's own option chain: the calls agree, but IBKR counts fewer puts on AAPL, NVDA and MSFT</h3>
+<div class="fig"><img src="ibkr-vs-cboe-names.svg" alt="IBKR vs Cboe by name"><div class="cap">Cboe's free delayed chain (every contract's volume, summed) against our IBKR readings. Each bar is taken at the moment IBKR's running call total equals Cboe's call total, so the two feeds are lined up on the calls and the bar shows how far apart the puts are. Amber outline: that name's own delay is more than 1 minute from the other names' shared delay, so it is not compared.</div></div>
 <div class="tw"><table>
-<thead><tr><th>Name</th><th>Cboe chain ratio (09:55 · 10:07)</th><th>IBKR minus Cboe (09:55 · 10:07)</th><th>Reading</th></tr></thead>
+<thead><tr><th>Name</th><th>Cboe chain ratio (09:55 · 10:07)</th><th>Own delay (09:55 · 10:07)</th><th>IBKR minus Cboe, puts (09:55 · 10:07)</th><th>Reading</th></tr></thead>
 <tbody>
-<tr><td data-l="Name">AAPL</td><td data-l="Cboe">0.385 · 0.373</td><td data-l="IBKR − Cboe">−6% · −8%</td><td data-l="Reading">reads low both times</td></tr>
-<tr><td data-l="Name">NVDA</td><td data-l="Cboe">0.265 · 0.287</td><td data-l="IBKR − Cboe">−9% · −9%</td><td data-l="Reading">reads low both times</td></tr>
-<tr><td data-l="Name">MSFT</td><td data-l="Cboe">0.454 · 0.571</td><td data-l="IBKR − Cboe">−13% · −12%</td><td data-l="Reading">reads low both times</td></tr>
-<tr><td data-l="Name">TSLA</td><td data-l="Cboe">0.707 · 0.807</td><td data-l="IBKR − Cboe">+0% · −4%</td><td data-l="Reading">close</td></tr>
-<tr><td data-l="Name">AMZN</td><td data-l="Cboe">0.416 · 0.475</td><td data-l="IBKR − Cboe">−12% · −2%</td><td data-l="Reading">low, then close</td></tr>
-<tr><td data-l="Name">SPY</td><td data-l="Cboe">1.373 · 1.298</td><td data-l="IBKR − Cboe">+2% · −6%</td><td data-l="Reading">close, then low</td></tr>
-<tr><td data-l="Name">QQQ</td><td data-l="Cboe">1.168 · 1.230</td><td data-l="IBKR − Cboe">+3% · −2%</td><td data-l="Reading">close</td></tr>
-<tr><td data-l="Name">IWM</td><td data-l="Cboe">1.603 · 1.428</td><td data-l="IBKR − Cboe">−2% · +17%</td><td data-l="Reading">close, then high</td></tr>
+<!-- names-table:start (generated by align-names.mjs) -->
+<tr><td data-l="Name">AAPL</td><td data-l="Cboe">0.385 · 0.373</td><td data-l="Own delay">14.1 · 13.6 min</td><td data-l="IBKR − Cboe puts">−8% · −8%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">NVDA</td><td data-l="Cboe">0.265 · 0.287</td><td data-l="Own delay">13.2 · 13.1 min</td><td data-l="IBKR − Cboe puts">−9% · −7%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">TSLA</td><td data-l="Cboe">0.707 · 0.807</td><td data-l="Own delay">14.2 · 13.7 min</td><td data-l="IBKR − Cboe puts">−4% · not aligned</td><td data-l="Reading">close, then not aligned</td></tr>
+<tr><td data-l="Name">AMZN</td><td data-l="Cboe">0.416 · 0.475</td><td data-l="Own delay">13.2 · 10.9 min</td><td data-l="IBKR − Cboe puts">−14% · not aligned</td><td data-l="Reading">IBKR puts low, then not aligned</td></tr>
+<tr><td data-l="Name">MSFT</td><td data-l="Cboe">0.454 · 0.571</td><td data-l="Own delay">13.3 · 13.2 min</td><td data-l="IBKR − Cboe puts">−14% · −13%</td><td data-l="Reading">IBKR puts low both times</td></tr>
+<tr><td data-l="Name">SPY</td><td data-l="Cboe">1.373 · 1.298</td><td data-l="Own delay">12.3 · 12.1 min</td><td data-l="IBKR − Cboe puts">+1% · −8%</td><td data-l="Reading">close, then IBKR puts low</td></tr>
+<tr><td data-l="Name">QQQ</td><td data-l="Cboe">1.168 · 1.230</td><td data-l="Own delay">12.4 · 12.3 min</td><td data-l="IBKR − Cboe puts">+7% · −3%</td><td data-l="Reading">IBKR puts high, then close</td></tr>
+<tr><td data-l="Name">IWM</td><td data-l="Cboe">1.603 · 1.428</td><td data-l="Own delay">11.0 · 9.2 min</td><td data-l="IBKR − Cboe puts">not aligned · not aligned</td><td data-l="Reading">not aligned either time: its call totals disagree with Cboe's at the shared delay</td></tr>
+<!-- names-table:end -->
 </tbody></table></div>
-<p>Most checks land within about 5%. But <b>AAPL, NVDA and MSFT read 6–13% under Cboe in both checks</b> — IBKR counts fewer puts for the same calls — so their single-name ratios look more bullish than Cboe's chain says. IWM swung from −2% to +17% between the two checks, which says how noisy a single name is in the first hour. <span class="tag">[MEASURED differences]</span> <span class="tag">[THEORY cause]</span> — I cannot tell yet whether IBKR's per-underlying put total leaves some trades out, or Cboe's delayed chain counts some (for example spread legs) differently. This matters only if single-ticker put/call is ever put on screen; the equity line's close-of-day match says the sum over 316 names is sound.</p>
+<p><b>How the two feeds are lined up.</b> Cboe's delayed chain carries every exchange's volume, not just Cboe's: IBKR's running call total reaches Cboe’s call number 12.1–14.2 minutes before Cboe’s stamp for 13 of the 16 checks, the same delay for names fetched seconds apart. (If the chain were Cboe-only, its totals would be a fraction of IBKR's and would match readings from minutes after the open.) So I take IBKR's running totals at the moment its calls equal Cboe's calls, and compare the puts. The shared delay of a check is the median of the eight names' own delays (13.2 min at 09:55, 12.7 min at 10:07). A name whose own delay is more than 1 minute — two IBKR readings — from that is marked "not aligned": at the shared delay its call totals already disagree with Cboe's, so a put gap would mix timing with counting. Every cell above is generated from <code>putcall-audit.json</code> by <code>align-names.mjs</code>, and a test pins them.</p>
+<p><b>What it shows.</b> With the calls matched, <b>IBKR counts 7–15% fewer puts than Cboe on AAPL, NVDA and MSFT at both checks</b>, and on AMZN at the first. Their single-name ratios therefore look more bullish than Cboe's chain says. The index funds do not show one direction: SPY +1% then −8%, QQQ +7% then −3%. IWM is not aligned at either check (own delay 11.0 and 9.2 min), and AMZN (10.9 min) and TSLA (13.7 min, 1.06 min from the shared delay — on the edge) are not aligned at 10:07. For those, IBKR's and Cboe's call totals disagree, so the comparison cannot say anything about their puts. <span class="tag">[MEASURED differences]</span> <span class="tag">[THEORY cause]</span> — I cannot tell yet whether IBKR's per-underlying put total leaves some trades out, or Cboe's chain counts some (for example spread legs) differently. This matters only if single-ticker put/call is ever put on screen; the equity line's close-of-day match says the sum over 316 names is sound.</p>
+<p>An earlier version of this page averaged IBKR's ratio over a fixed 12–16 minute delay window. That did not line the feeds up for IWM, SPY, QQQ and AMZN at 10:07 (their best matches sat 10–11 minutes before Cboe's stamp), and it read IWM's +17% as first-hour noise. That was the method, not the market; it is replaced here.</p>
 <p>Index options for reference (Cboe chain, 09:57 ET): SPX 1.34, VIX 2.34, NDX 1.29, RUT 1.34. None of these are read by our reader.</p>
 
 <h2>4 · Freshness right now (10:10 ET)</h2>
@@ -113,21 +133,23 @@ td{border:0;padding:2px 0;overflow-wrap:anywhere}td::before{content:attr(data-l)
 <h2>5 · What to fix, smallest first</h2>
 <ol class="fix">
 <li><b>Restart the put/call reader</b> (one command on this Mac: <code>launchctl kickstart -k gui/501/com.scintilla.ibkr-putcall</code>). It re-subscribes everything, so the 21 silent names come back within a minute. <span class="tag">coordinator · 🟡 reversible</span></li>
-<li><b>Make the reader heal itself</b>: when the same names come back empty for, say, 5 sweeps in a row — or right after a "connectivity restored" message — exit, and launchd starts it again. About ten lines in <code>option-volume.py</code>.</li>
+<li><b>Pin the cohort membership to one read</b>: find why the minute job sometimes builds cohorts from a shorter member list (53 of 119 cohorts at 10:04 and 10:06 ET today). First thing to try: read <code>ticker_cohorts</code> in a fixed order (order by ticker, cohort) when paging, and refuse a run whose total member count differs from the last good run.</li>
+<li><b>Make the reader exit with a failure code when it loses the Gateway</b>. launchd only restarts it after a <i>failed</i> exit (<code>KeepAlive: SuccessfulExit false</code>, at most once every 120 s). Today, when the link to the Gateway drops, the sweep loop ends and the reader exits with code 0 — "success" — so launchd leaves it dead, and the health file only says "reader stopped". <span class="tag">[THEORY from code + config]</span> Change: return 1 when the loop ended because the connection dropped. Then add: when the same names come back empty for, say, 5 sweeps in a row — or right after a "connectivity restored" message — exit with code 1 too. About ten lines in <code>option-volume.py</code>.</li>
 <li><b>Fix the 08:45 ET catch-up job</b> (<code>putcall-vs-cboe-morning</code>). Its address glues a date onto the word "previous" (<code>session=previous2026-09-25</code>), so today it failed with "Invalid time value" and 25 Sep's comparison with Cboe never filled in. Use either <code>session=previous</code> or <code>session=&lt;date&gt;</code>, not both.</li>
 <li><b>Refresh the reader's list to the 486 live names</b> (and keep it tied to the chart API's <code>/universe</code>). About 6 batches instead of 4: a pass takes ~50 s instead of ~40 s.</li>
 <li><b>Make the "index" line honest</b>: either add SPX and VIX to the reader's list (the reader already knows how to ask for them) so SCPCI is real index options, or rename it "index funds (SPY, QQQ, IWM)" and stop comparing it with Cboe's index number.</li>
-<li><b>Count the real membership</b>: let each line's "of" be the group's full membership, not only the names the reader reached, so 34 of 43 reads as 34 of 43.</li>
+<li><b>Count the real membership</b> (only after fix 2): add the newly admitted names to <code>ticker_cohorts</code>, and let each line's "of" be the group's full membership, not only the names the reader reached, so a cohort with unread members says so.</li>
 <li><b>Add one alarm</b>: during the session, fewer than 95% of the list read in the last 10 minutes → alert.</li>
 <li>Small: compute each minute once it has finished (so 09:30 is not built on 83 names); unflag Realty Income (O) as a fund.</li>
 </ol>
 
 <h2>6 · What could be wrong in this audit</h2>
 <ul>
-<li>Cboe's free delayed chain has no exact "as of" for its volumes; I bracketed 12–16 minutes. If its delay is outside that, the single-name gaps could be larger or smaller.</li>
+<li>Cboe's free delayed chain has no exact "as of" for its volumes. I line the feeds up on the calls, name by name, and report each name's own delay; the 1-minute tolerance for "aligned" is a judgement (two IBKR readings), and TSLA at 10:07 sits just outside it.</li>
 <li>The cause of the 21-name silence is inferred from the log and the timing (they were mid-subscription when the link dropped). The silence itself is measured.</li>
-<li>Single-name comparison covers 8 names at two moments in the first 40 minutes of one session.</li>
-<li>Cboe's published volumes are Cboe-exchanges only; ours are all exchanges. Only the ratios are comparable, not the amounts.</li>
+<li>Single-name comparison covers 8 names at two moments in the first 40 minutes of one session. Fitting a delay per name leaves each comparison with little power: a real put gap and a timing error can look alike.</li>
+<li>The cause of the cohort switching (unordered paging) is inferred from the code and the table sizes; the switching itself is measured in the minute table.</li>
+<li>Cboe's daily prints (PCC, PCCE, PCCI) are Cboe-exchanges only; ours are all exchanges, so for the daily prints only the ratios compare, not the amounts. The delayed option chain is different: its amounts match IBKR's all-exchange calls (NVDA 507,625 vs 507,339 at the best match), so it is compared amount for amount.</li>
 </ul>
 
 <h2>7 · What I did not do</h2>
