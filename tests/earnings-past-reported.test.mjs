@@ -107,12 +107,11 @@ test("PAST REPORTED pages back to 1996 with a keyset cursor, not an offset", () 
   assert.match(read, /ERP_DONE = \(got \|\| \[\]\)\.length < ERP_PAGE;/, "it knows when it has reached the oldest row");
 });
 
-test("the room has three tabs, and the filters are the room's own cohort strip", () => {
-  assert.match(src, /const ernTab = \(\) => \(S\.ernTab === "PAST" \|\| S\.ernTab === "OLD" \? S\.ernTab : "DASH"\);/);
-  assert.match(src, /one\("DASH", "DASHBOARD"/);
-  assert.match(src, /one\("PAST", "PAST REPORTED"/);
-  assert.match(src, /one\("OLD", "THE OLDER LIST"/);
-  assert.match(src, /case "erntab": \{/);
+test("28 Sep — the room is one dashboard (PAST REPORTED and THE OLDER LIST tabs are gone), and the filters are the room's own cohort strip", () => {
+  /* Alan, 28 Sep: "PAST REPORTED — we moved it, that tab is empty." Past results live once, in the list on the right */
+  assert.match(src, /const ernTab = \(\) => "DASH";/);
+  assert.match(src, /function ernTabsHTML\(\) \{ return ""; \}/);
+  assert.match(src, /<h4>PAST · REPORTED<\/h4>/);
   assert.match(src, /ernTab: scEntryTab\(\),/, "the room opens on the dashboard, or on the tab the address asks for");
   /* Alan: "either we lost it or I don't know how to get to it" — so there is a way in */
   assert.match(src, /if \(h === "earnings" \|\| h === "events"\) return "EVENTS";/);

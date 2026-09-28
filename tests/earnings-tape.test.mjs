@@ -95,9 +95,11 @@ test("M40 — five zoom levels, and the timeline pages instead of re-reading a f
   assert.deepEqual(fn("ERC_ZOOMS"), ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"]);
   assert.match(src, /ernZoom: "DAYS"/, "the room still opens on days");
   const Z = fn("ERC_ZOOM");
-  assert.equal(Z.DAYS.back + Z.DAYS.fwd, 120, "four months of days on the first screen");
-  assert.ok(Z.YEARS.back >= 2920, "a bar-a-year opens on at least eight years of season");
-  for (const k of ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"]) assert.ok(Z[k].page > 0 && Z[k].w > 0);
+  /* 28 Sep — each zoom is ONE fixed stretch counted from today (no growing at the edges, no loop): a year of
+     days back, five years of weeks, and months, quarters and years back to the 1996 floor. */
+  assert.ok(Z.DAYS.back >= 365, "a year of days to drag back through");
+  assert.ok(Z.YEARS.back >= 2920 && Z.MONTHS.back >= 11000, "months and years reach back to the stored floor");
+  for (const k of ["DAYS", "WEEKS", "MONTHS", "QUARTERS", "YEARS"]) assert.ok(Z[k].page > 0 && Z[k].w > 0 && Z[k].win > 0 && Z[k].fwd > 0);
   /* Alan: "the lookback should be way longer, months doesn't even fill the screen."
      The window is no longer pinned to the anchor's month: it GROWS as it is dragged,
      and only the stretches it does not already hold are asked for. */
@@ -179,8 +181,13 @@ test("NOTHING ON THE TAPE IS MYSTERIOUS: every bar says what it is, and now says
   /* THE BLUE LINE — Alan: "I'm trying to click on it and it doesn't say… nothing." */
   const today = ercTlBarHTML("2026-09-23", "DAYS", bucket(1, { names: ["MU"] }), 1, "2026-09-23", null, "ALL", sc, w0);
   assert.match(today, /class="se-tlday is-today/);
-  assert.match(today, /class="se-tlnow" title="the cyan line is TODAY, WED SEP 23 — everything left of it has happened/);
+  assert.doesNotMatch(today, /se-tlnow/, "28 Sep — the line is no longer inside today's bar, where it vanished whenever that bar was off screen");
   assert.match(today, /this is where today sits/);
+  /* it is ONE line over the whole tape, with its words on it, placed at today's own share of its bucket */
+  assert.match(src, /'<span class="se-tltoday" id="ernTlTodayLine" title="' \+ esc\("TODAY, "/);
+  assert.match(src, /'"><b>TODAY · ' \+/);
+  assert.match(src, /function ercTlTodayX\(sc\) \{/);
+  assert.match(src, /\.se-tltoday\{ position:absolute;/);
   /* M40 — THE MARKET-CAP WEIGHT (Alan: "a graphic or measure in the timeline that
      measures like the market cap weight of the companies reporting"). */
   const wsc = sc1(4e12, 1e11);
@@ -318,19 +325,27 @@ test("the timeline's own read is small, wide, unscoped — and paged", () => {
   assert.match(src, /ERC_TL_Q\.sort\(\(a, b\) => ercTlDist\(c, a\) - ercTlDist\(c, b\)\);/, "the season nearest the reader arrives first");
 });
 
-test("the tape keeps its place, pages at its edges, and a drag never opens the bar it ended on", () => {
+test("28 Sep — the tape keeps its place, never grows or loops, glides, and always shows where today is", () => {
   assert.match(src, /sc\.addEventListener\("scroll", \(\) => \{\s*\n\s*ERC_TAPE_AT = sc\.scrollLeft;/);
-  assert.match(src, /if \(ERC_TAPE_AT == null\) centre\(\);/);
+  assert.match(src, /if \(ERC_TAPE_AT == null \|\| !ERC_TL_LEFT\) centre\(\);/);
   assert.match(src, /sc\.addEventListener\("click", \(e\) => \{ if \(moved > 4\) \{ e\.stopPropagation\(\); e\.preventDefault\(\); \} \}, true\);/);
-  /* M40 — dragging towards an end asks for the next stretch instead of stopping dead */
-  const edge = src.slice(src.indexOf("function ercTlEdgeCheck"), src.indexOf("/* after every paint"));
-  assert.match(edge, /if \(sc\.scrollLeft < ERC_TL_EDGE_PX && span\.from > ercTlFloor\(\)\)/);
-  assert.match(edge, /if \(sc\.scrollWidth - sc\.clientWidth - sc\.scrollLeft < ERC_TL_EDGE_PX && span\.to < ercTlCeil\(\)\)/);
-  assert.match(edge, /ERC_TAPE_AT = sc\.scrollLeft;/, "the offset is kept, so the season grows without moving under the thumb");
-  assert.match(src, /rafid = requestAnimationFrame\(\(\) => \{ rafid = 0; ercTapeRescale\(\); ercTlEdgeCheck\(sc\); \}\);/);
-  /* the re-scale moves heights only: a bar's colour cannot change because of what
-     else happens to be on screen */
-  const rescale = src.slice(src.indexOf("function ercTapeRescale"), src.indexOf("/* PAGING AS YOU MOVE"));
+  /* Alan: "I feel like I'm scrolling in a loop" — the stretch is counted from today and never grows */
+  assert.doesNotMatch(src, /function ercTlEdgeCheck/);
+  assert.doesNotMatch(src, /ERC_TL_KEEP|ERC_TL_GROWING/);
+  const span = src.slice(src.indexOf("function ercTlSpan()"), src.indexOf("function ercTlWant()"));
+  assert.match(span, /const z = ERC_ZOOM\[ercZoom\(\)\], t = todayISO\(\);/, "from today, not from wherever the reader is");
+  /* reads follow the screen; a redraw of the same stretch keeps the same scroller and the date under the left edge */
+  assert.match(src, /const span = ercTlWant\(\), c = ercTlCentre\(\);/);
+  assert.match(src, /if \(nsc && nsc\.dataset\.key === sc\.dataset\.key\) \{/);
+  assert.match(src, /rafid = requestAnimationFrame\(\(\) => \{ rafid = 0; ERC_TL_LEFT = ercTlLeftAnchor\(sc\); ercTapeRescale\(\); ercTlOrient\(sc\); ercTlEnsure\(\); \}\);/);
+  /* "steps and weird stuff": a wheel notch glides, and a glide at an end stops instead of spinning */
+  assert.match(src, /ercTlGlide\(sc, \(ERC_TL_GLIDE && ERC_TL_GLIDE\.sc === sc \? ERC_TL_GLIDE\.tgt : sc\.scrollLeft\) \+ px\);/);
+  assert.match(src, /if \(sc\.scrollLeft === before\) \{ ERC_TL_GLIDE = null; return; \}/);
+  /* a way back: a chip on the side today went to, and both TODAYs bring the timeline home */
+  assert.match(src, /id="ernTlGoL" data-act="erntlnow"/);
+  assert.match(src, /id="ernTlGoR" data-act="erntlnow"/);
+  assert.match(src, /case "erntoday": \{[^\n]*ercTlToday\(\); break; \}/);
+  const rescale = src.slice(src.indexOf("function ercTapeRescale"), src.indexOf("/* after a full paint"));
   assert.doesNotMatch(rescale, /ercTlLevel|className|classList\.(add|remove)/);
   assert.match(rescale, /wash\.style\.height = wscale\.pct/, "the weight wash rescales with the bars it sits behind");
 });
@@ -346,7 +361,9 @@ test("DAY reads across the screen, and nothing that was in it is lost", () => {
   /* M40 — the older list moved from a <details> under the day to a TAB of its own.
      Alan: "the slider tape of earnings is not a replacement for the earnings section
      we had before… not ready to trash what I had." */
-  assert.match(src, /one\("OLD", "THE OLDER LIST", "the earnings section as it was before this revamp — kept, not thrown away"\)/);
+  /* 28 Sep — Alan: "The older list: if it's covered in the scrolling thing on the right, we're good." The tab is
+     gone; the function stays in the file, unreachable, for one release. */
+  assert.match(src, /function ernTabsHTML\(\) \{ return ""; \}/);
   assert.match(src, /function ercOldListHTML\(cohort\) \{/);
   assert.match(src, /the earnings section as it was before the 24 Sep revamp · kept here until you say it can go/);
   assert.match(src, /\(open \? ercCardHTML\(open\) : ""\)/, "a name still opens the same full card the other views draw");
