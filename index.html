@@ -24022,10 +24022,16 @@ loadSentiment(); setInterval(loadSentiment, 300000);
     var bell = document.getElementById("alertBell"), panel = document.getElementById("alertPanel");
     if(!bell||!panel) return;
     var r = bell.getBoundingClientRect();
-    var w = panel.offsetWidth || 320, vw = document.documentElement.clientWidth || window.innerWidth;
-    var left = Math.max(8, Math.min(r.right - w, vw - w - 8));
-    panel.style.top = (r.bottom + 6) + "px";
-    panel.style.left = left + "px";
+    var vw = document.documentElement.clientWidth || window.innerWidth;
+    /* 28 Sep — MEASURED at 1680: the panel lives inside the header, which is drawn scaled (offsetWidth 322, drawn 412),
+       so a left/top in CSS pixels landed ~340 px to the right, three quarters off screen. It is placed by its DRAWN
+       box: put it at 0, read where that lands and how much it is scaled, then move it to where it belongs. */
+    panel.style.left = "0px"; panel.style.top = "0px";
+    var p0 = panel.getBoundingClientRect(), sc = panel.offsetWidth ? p0.width / panel.offsetWidth : 1;
+    if (!(sc > 0)) sc = 1;
+    var wantL = Math.max(8, Math.min(r.right - p0.width, vw - p0.width - 8));
+    panel.style.left = ((wantL - p0.left) / sc) + "px";
+    panel.style.top = ((r.bottom + 6 - p0.top) / sc) + "px";
   }
   function markAllRead(){
     var alerts = jget(ALERTS_KEY, []);

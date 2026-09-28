@@ -127,7 +127,8 @@ test("TODAY'S SCINTILLAS: the count opens USUAL DAY on today; the bell panel ope
   assert.match(page, /case "scintlast": \{ S\.udCohPick = null; S\.udDay = a\.dataset\.day \|\| null; UD_JUMP = true; go\("USUAL"\); break; \}/);
   const open = page.slice(page.indexOf("  function openPanel(){"), page.indexOf("  function closePanel(){"));
   assert.ok(open.indexOf('panel.classList.add("is-open")') < open.indexOf("positionPanel();"), "placed after it is shown, at its real width");
-  assert.match(page, /var left = Math\.max\(8, Math\.min\(r\.right - w, vw - w - 8\)\);/);
+  assert.match(page, /var wantL = Math\.max\(8, Math\.min\(r\.right - p0\.width, vw - p0\.width - 8\)\);/, "placed by its DRAWN box: the header it sits in is scaled");
+  assert.match(page, /panel\.style\.left = \(\(wantL - p0\.left\) \/ sc\) \+ "px";/);
   assert.match(open, /udGoLine\(panel\);/);
 });
 
