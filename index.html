@@ -674,7 +674,7 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   /* MEASURED at 390 on the shipped bytes: the label wrapped to two lines and the count, the cohort
      and the ticker all landed on top of each other. On a phone the line keeps what a glance needs —
      how many, when, which name, what happened — and drops the rest, which is one tap away in the bell. */
-  .sc-ss__one .sc-ss__k, .sc-ss__one .sc-ss__go, .sc-ss--one .sc-ss__coh{ display:none; }
+  .sc-ss__one .sc-ss__k, .sc-ss__one .sc-ss__go, .sc-ss--one .sc-ss__coh, .sc-ss__last .sc-ss__t{ display:none; }
   .sc-ss--one .sc-ss__lbl{ font-size:9px; letter-spacing:.1em; }
   .sc-ss--one .sc-ss__spark{ display:none; }
   .sc-ss__one{ gap:6px; }
@@ -4325,6 +4325,8 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .sc-tape--ernec .ecb-it{ cursor:pointer; }
 .sc-tape--ernec .ecb-it:hover .ecb-nm{ color:var(--crk); }
 .sc-tape--ernec .ecb-nm{ letter-spacing:.06em; }
+.ern-ec--later .ecb-dot, .ern-ec--later .ecb-nm{ opacity:.6; }
+.ern-later{ font-size:.9em; }
 .ern-roomtape .sc-toptape--ern{ height:40px; }
 .ern-roomtape .sc-toptape--ern .sc-tape{ font-size:11px; }
 /* the TODAY line on the slider, now labelled and always drawn */
@@ -19266,7 +19268,7 @@ function ernEcTapeHTML(nowSec, todayIso, id) {
           pre = ecTapeNowHTML("now — everything to the left has reported or has had its slot. Earnings carry a day and before-open / after-close, not a minute");
         }
         return pre + ernEcItemHTML(it, ernEcState(it, now), today);
-      }).join("");
+      }).join("") + ernLaterHTML(items.length, today, w.to);
     } else {
       /* a quiet week says where the next one is, instead of an empty strip */
       const next = ernEcItems(today, ernShift(w.to, 1), ernShift(today, ERN_AHEAD_DAYS))[0];
@@ -19277,6 +19279,27 @@ function ernEcTapeHTML(nowSec, todayIso, id) {
   return '<div class="sc-tape sc-tape--ern sc-tape--ernec" id="' + esc(id || "ernEcBand") + '"><b class="sc-tape__lbl" title="' +
     esc("earnings of the names the Hub tracks — this week so far and the next seven days · drawn and flashing like the economic releases: still until the hour before its slot, breathing inside it, a hard pulse at it · tap a ticker for its company") +
     '">EARNINGS →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+/* A THIN WEEK. Between seasons the seven days can hold two names, and a two-item loop reads "NOW · MU · NKE ·
+   NOW · MU · NKE". Under ERN_LATER_MIN reports, the tape then names the next few after its window, dimmed and
+   still, with the full date, and how many more follow in the three weeks the band reads — so the loop says
+   what comes next instead of repeating itself. */
+var ERN_LATER_MIN = 6, ERN_LATER_SHOW = 4;
+function ernLaterHTML(nIn, todayIso, winTo) {
+  if (nIn >= ERN_LATER_MIN) return "";
+  const later = ernEcItems(todayIso, ernShift(winTo, 1), ernShift(todayIso, ERN_AHEAD_DAYS));
+  if (!later.length) return "";
+  const sep = '<span class="sc-tape__dot">·</span>';
+  const shown = later.slice(0, ERN_LATER_SHOW);
+  const last = later[later.length - 1];
+  return '<span class="sc-tape__item ecb-wk ern-later" title="the seven days hold fewer than ' + ERN_LATER_MIN +
+      ' reports, so the next ones after them are named here, still and dimmed">LATER</span>' + sep +
+    shown.map((it) => '<span class="sc-tape__item ecb-it ern-ec ern-ec--later is-up" data-act="row" data-t="' + esc(it.ticker) +
+      '" title="' + esc(ernTitle(it.r, null)) + '"><span class="ecb-dot" style="color:' + ERN_EC_HUE + '">●</span>' +
+      '<span class="ecb-when">' + esc(ernWeekday(it.day) + " " + ernMonthDay(it.day) + (it.slot ? " " + it.slot : "")) + "</span>" +
+      '<span class="ecb-nm">' + esc(it.ticker) + "</span></span>" + sep).join("") +
+    (later.length > shown.length
+      ? '<span class="sc-tape__item ern-note">+' + (later.length - shown.length) + " more by " + esc(ernMonthDay(last.day)) + "</span>" + sep : "");
 }
 /* THE EARNINGS NEXT — the economic queue's own model over the earnings items */
 function ernNudgeState(it, nowSec, seenSec) {
@@ -21728,7 +21751,10 @@ function scintLastSession(nowMs) {
   const s = scintSessionToday(nowMs);
   if (s.ran || typeof gsPrevTradingDay !== "function") return null;
   const day = gsPrevTradingDay(s.date);
-  const rows = (SCINT_ROWS || []).filter((r) => r && scintDayET(r.ts) === day);
+  /* counted the way USUAL DAY counts a day (UD_KINDS: moves, earnings surprises, economic surprises — events with a
+     size), so the number here is the number he lands on when he taps it; "about to print" notices are left out */
+  const kinds = typeof UD_KINDS !== "undefined" && Array.isArray(UD_KINDS) ? UD_KINDS : null;
+  const rows = (SCINT_ROWS || []).filter((r) => r && scintDayET(r.ts) === day && (!kinds || kinds.indexOf(r.kind) >= 0));
   /* the read keeps the newest 300; if the last session reaches back to the oldest row kept, its count may be cut */
   const all = SCINT_ROWS || [], oldest = all.length ? scintDayET(all[all.length - 1].ts) : null;
   return { why: s.why, day: day, rows: rows, capped: all.length >= 300 && oldest === day };
@@ -21741,7 +21767,8 @@ function scintDayShort(iso) {
 function scintLastSessionHTML(last) {
   const n = last.rows.length, day = scintDayShort(last.day);
   const count = n + (last.capped ? "+" : "") + " scintilla" + (n === 1 ? "" : "s");
-  const title = last.why + " — no session has run today, so this is the last one (" + day + "). Tap to open that day in USUAL DAY.";
+  const title = last.why + " — no session has run today, so this is the last one (" + day + "): moves beyond a name's usual day, " +
+    "earnings surprises and economic surprises, counted as USUAL DAY counts them. Tap to open that day there.";
   if (!n)
     return scintOneLineHTML('<button class="sc-ss__one sc-ss__last" data-act="scintlast" data-day="' + esc(last.day) + '">' +
       '<span class="sc-ss__why">' + esc(last.why) + "</span>" +
