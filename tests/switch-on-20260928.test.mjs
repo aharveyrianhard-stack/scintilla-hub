@@ -133,9 +133,10 @@ test("SECTORS: MEMBERS reads 'OUR NAMES' with a count per column, the SPDR funds
   assert.match(page, /if\(sf && \(SECT_FAMILY_FUNDS\[sf\] \|\| sf==="MEMBERS"\)\) window\.SECT_FAMILY=sf;/, "a stored OUR NAMES is honoured");
   assert.match(page, /localStorage\.setItem\("hub\.sector\.family", window\.SECT_FAMILY\)/);
   /* the OUR NAMES column never wears a fund ticker: the sector's name, and how many names it averages */
-  assert.match(page, /return \{key:etf, label:name, short:name, names:vals\.length,/);
+  assert.match(page, /return \{key:etf, label:name, short:SHORT\[name\]\|\|name, names:vals\.length,/);
   const strip = fn("cohortCompareStripHTML");
-  assert.match(strip, /r\.names \? r\.names \+ " names" : "fund only"/);
+  assert.match(strip, /r\.names \? r\.names \+ " of our names averaged in this column"/);
+  assert.match(strip, /the number under each column = how many of our names/);
   assert.match(strip, /readTag \+ tmTag \+ nTag \+/);
   assert.match(strip, /OUR NAMES in each sector, averaged \(not the funds\)/);
 });

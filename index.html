@@ -4296,9 +4296,10 @@ body.co-exp #boardPanel{display:none !important}
 .cv-line .sc-coexp{margin-right:0}
 /* SWITCH-ON — the controls line: COHORT ▾ reads as a button (greys; its menu too, no cyan here), the eleven timeframes
    and CLOUDS sit together, ⛶ beside EXPAND. The facts line (name · Prev · usual · ♥ ★ ◎) is a phone-only line. */
-.cv-line .sc-cohwrap .sc-it{font:600 11px var(--mono);letter-spacing:.1em;padding:3px 8px;border:.5px solid #4A4A52;border-radius:2px;color:#C9C9CE;cursor:pointer;white-space:nowrap}
+.cv-line .sc-cohwrap{align-self:center}
+.cv-line .sc-cohwrap .sc-it{min-height:0 !important;height:auto !important;line-height:1.4;font:600 11px var(--mono);letter-spacing:.1em;padding:3px 8px;border:.5px solid #4A4A52;border-radius:2px;color:#C9C9CE;cursor:pointer;white-space:nowrap}
 .cv-line .sc-cohwrap.is-open > .sc-it,.cv-line .sc-cohwrap .sc-it:hover{color:#CFCFD2;border-color:#8A8A92}
-.cv-line .sc-cohsaved{font-size:11px;color:#A8A8AE;margin-left:6px}
+.cv-line .sc-cohsaved{position:absolute;left:0;top:100%;margin:2px 0 0;font-size:11px;color:#A8A8AE;z-index:2}   /* under the chip, so the hidden note takes no room in the row */
 .cv-line .sc-cohmenu{background:#0E0E12;border:.5px solid #4A4A52;border-radius:2px;box-shadow:0 8px 26px rgba(0,0,0,.6)}
 .cv-line .sc-cohopt{font-size:11px;color:#A8A8AE}
 .cv-line .sc-cohopt:hover{background:#1E1E23;color:#CFCFD2}
@@ -4312,7 +4313,7 @@ body.co-exp #boardPanel{display:none !important}
 .cv-prev{color:#8A8A92;font-size:11px;white-space:nowrap}
 @media (max-width:560px){
   .cv-facts{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:4px 8px;border-bottom:.5px solid #2B2B31;font-size:11px;font-variant-numeric:tabular-nums}
-  .cv-facts .cv-name{flex:1 1 100%}
+  .cv-facts .cv-name{flex:1 1 100%;order:-1}
   .cv-facts .sc-lists{margin-left:auto}
 }
 .cv-chart{position:relative;flex:1 1 0;height:auto;min-height:160px;overflow:hidden;border-bottom:.5px solid #2B2B31}
@@ -4322,7 +4323,7 @@ body.co-exp #boardPanel{display:none !important}
 /* R3 — the six key numbers are gone; their room goes to the tabs: 44 chart / 56 tabs down the collapsed panel */
 .cv-side{display:flex;flex-direction:column;flex:56 1 0;min-height:240px}
 /* a narrow panel (the collapsed desk view, a phone): the timeframes step down a size */
-@container (max-width:700px){ .cv-line .sc-cofr__tf{padding:3px 6px} .cv-line{gap:5px 9px} }
+@container (max-width:700px){ .cv-line .sc-cofr__tf{padding:3px 5px} .cv-line{gap:5px 8px} .cv-tfs{gap:2px} }
 .cv-tabs{display:flex;gap:0;padding:0 4px;border-bottom:.5px solid #2B2B31;overflow-x:auto;scrollbar-width:none;flex:0 0 auto}
 .cv-tabs::-webkit-scrollbar{display:none}
 .cv-tab{font:500 11px var(--mono);letter-spacing:0;padding:8px 4px 6px;background:none;border:0;border-bottom:2px solid transparent;color:#8A8A92;cursor:pointer;white-space:nowrap;flex:0 0 auto}
@@ -7400,7 +7401,7 @@ function cohortCompareStripHTML() {
     const ttl = r.full || r.label;
     /* SWITCH-ON — OUR NAMES columns end with how many of our names the bar averages ("96 names"); every column carries the
        row, so the bars and their zero line stay level across the strip */
-    const nTag = r.names != null ? '<span class="sc-cohstrip__n">' + (r.names ? r.names + " names" : "fund only") + "</span>" : "";
+    const nTag = r.names != null ? '<span class="sc-cohstrip__n" title="' + (r.names ? r.names + " of our names averaged in this column" : "none of our names has a Geiger yet: the fund") + '">' + (r.names ? r.names : "fund") + "</span>" : "";
     if (r.mean == null) {
       /* same three-part skeleton, so a column with no data does not shift its neighbours' bars */
       return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
@@ -7486,7 +7487,7 @@ function cohortCompareStripHTML() {
       : "");
   const ourNames = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "MEMBERS";
   return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? "SECTOR" : "COHORT") + ' COMPARE · geiger composite · ' +
-           (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · " : "") + 'bull ◂ ▸ bear · scale ±' +
+           (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · the number under each column = how many of our names · " : "") + 'bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
 }
@@ -26081,7 +26082,8 @@ body.gwx-motion .gwx-pct{opacity:1}
           if(set) set.forEach(function(t){ var v=gAt(t); if(v!=null) vals.push(v); });
           var mean = vals.length ? vals.reduce(function(a,b){return a+b;},0)/vals.length : gAt(etf);
           /* SWITCH-ON — OUR NAMES: the column says the sector and how many of our names it averages, never the fund's ticker */
-          return {key:etf, label:name, short:name, names:vals.length,
+          var SHORT={INDUSTRIAL:"INDUSTRY",FINANCIALS:"FINANCE",MATERIALS:"MATERIAL"};   /* the three that did not fit a column */
+          return {key:etf, label:name, short:SHORT[name]||name, names:vals.length,
                   full:name+" \u00b7 "+(vals.length?vals.length+" of our names, averaged \u00b7 not the "+etf+" fund":"none of our names has a Geiger yet \u00b7 showing the "+etf+" fund"),
                   mean:mean, n:vals.length||1};
         })
