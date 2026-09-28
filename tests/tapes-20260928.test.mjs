@@ -198,7 +198,7 @@ test("a closed day says so and shows the last session, counted as USUAL DAY coun
   assert.match(html, /data-act="scintlast" data-day="2026-09-25"/, "tap: that day in USUAL DAY");
   assert.match(html, /<span class="sc-ss__w">UNH<\/span>/, "the newest one of that day");
   assert.doesNotMatch(html, /nothing has moved further than its own history today/);
-  assert.match(page, /case "scintlast": \{ S\.udCohPick = null; S\.udDay = a\.dataset\.day \|\| null; go\("USUAL"\); break; \}/);
+  assert.match(page, /case "scintlast": \{ S\.udCohPick = null; S\.udDay = a\.dataset\.day \|\| null; UD_JUMP = true; go\("USUAL"\); break; \}/);
 });
 test("before the open it says so too; once the session has run, an empty day is still an honest 0", () => {
   const pre = strip("2026-09-28T12:00:00Z", FRI);                     // Monday 08:00 ET
