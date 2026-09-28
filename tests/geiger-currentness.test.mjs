@@ -17,8 +17,11 @@ test('the Hub carries and visibly renders every provider-bar Geiger rung as-of',
 test('the Hub displays FMP date-state and explains unavailable native features', () => {
   assert.match(source, /indicatorSourceDate, indicatorSessionState/)
   assert.match(source, /raw FMP provider" \+ \(indStamp/)
-  assert.match(source, /FMP stable API has no MACD · Massive oracle is separate/)
-  assert.match(source, /Momentum · RSI \+ Williams/)
+  /* D2 (27 Sep): the RSI / Williams / MACD tiles are gone from the GEIGER tab (the RSI is the chart's own pane; MACD
+     was never served). The FMP date-state now rides the moving-average ladder, which is the FMP data left on the tab. */
+  assert.match(source, /data-gs="ladsub"/)
+  assert.doesNotMatch(source, /data-gs="macd"/)
+  assert.doesNotMatch(source, /data-gs="rsitable"/)
   assert.doesNotMatch(source, /Struct · legacy/)
   assert.doesNotMatch(source, /data-gs="f_struc"/)
 })

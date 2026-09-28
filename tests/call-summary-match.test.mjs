@@ -136,7 +136,7 @@ test("the transcript panel asks for exactly the call it was opened for", () => {
 test("a company's own EVENTS tab brings its own call dates, so the Transcript control no longer depends on the master feed having been opened", () => {
   assert.match(page, /const coCallKeysPath = \(e\) => "earnings_call_transcripts\?ticker=eq\." \+ e \+ "&select=ticker,quarter,call_date&order=call_date\.desc&limit=40";/, "keys only - no transcript text, no summary text");
   assert.match(page, /pg\(coCallKeysPath\(e\)\)\.catch\(\(\) => \[\]\),/);
-  assert.match(page, /grds, etfi, etfh, csum, ckeys\] = \(await Promise\.all\(\[/, "destructured in the order the requests are listed");
+  assert.match(page, /grds, etfi, etfh, csum, ckeys(, balq)?\] = \(await Promise\.all\(\[/, "destructured in the order the requests are listed (R3 appends the newest quarterly balance sheet)");
   assert.match(page, /_callDays: \(ckeys \|\| \[\]\)\.map\(\(c\) => c && c\.call_date\)\.filter\(Boolean\),/);
   assert.match(page, /const toBlock = \(r\) => earningsRowToBlock\(r, data\._callsum, data\._callDays\);/);
   assert.match(page, /const arr = Array\.isArray\(callDays\) \? callDays : TRANSCRIPT_IDX\.get\(String\(ticker\)\.toUpperCase\(\)\);/, "the master feed keeps using its one shared index");
