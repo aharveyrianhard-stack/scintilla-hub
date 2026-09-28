@@ -4656,7 +4656,7 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ev-uptbl .na{ color:var(--dim); }
 /* past · reported, scrolling inside its own card */
 .ev-pastscroll{ max-height:340px; overflow-y:auto; }
-.ev-pastrow{ display:grid; grid-template-columns:64px 58px minmax(0,1fr); align-items:baseline; gap:6px; padding:5px 2px;
+.ev-pastrow, .ev-pasthd{ display:grid; grid-template-columns:64px 58px minmax(0,1fr) 54px; align-items:baseline; gap:6px; padding:5px 2px;
   border-bottom:.4px solid var(--line); font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; cursor:pointer; }
 .ev-pastrow:hover{ background:rgba(0,212,255,.04); }
 .ev-pd{ color:var(--dim); white-space:nowrap; }
@@ -4666,6 +4666,12 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ev-pv .ern-res.beat b{ color:var(--bull); } .ev-pv .ern-res.miss b{ color:var(--bear); }
 .ev-pv .ern-sur.beat, .ev-prev.beat{ color:var(--bull); } .ev-pv .ern-sur.miss, .ev-prev.miss{ color:var(--bear); }
 .ev-prev{ color:var(--ink3); white-space:nowrap; }
+/* 28 Sep (N6) — the REACTION column: the first tradable session's move, green up / red down like every daily move */
+.ev-pasthd{ position:sticky; top:0; z-index:1; background:var(--bg); cursor:default; padding-top:0; color:var(--dim); letter-spacing:.1em; border-bottom:.5px solid var(--line2); }
+.ev-pasthd .r{ text-align:right; }
+.ev-rx{ text-align:right; white-space:nowrap; color:var(--ink2); }
+.ev-rx.up{ color:var(--bull); } .ev-rx.dn{ color:var(--bear); } .ev-rx.na{ color:var(--dim); }
+.ev-rx.is-assumed{ text-decoration:underline dotted; text-underline-offset:3px; }   /* no report time stored: the session after is assumed */
 @media (max-width:560px){ .ev-uptbl th:nth-child(3), .ev-uptbl td:nth-child(3){ display:none; } }
 
 /* ── 27 SEP · USUAL DAY ROOM ─────────────────────────────────────────────────────────────────────────────── */
@@ -5826,6 +5832,10 @@ const COHORTS = [
    constituents instead of from the ETF's own price. Cohorts are Alan's, sectors are fact,
    and each has its own strip. */   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
 const CO_TABS = ["GEIGER","FUNDAMENTALS","ESTIMATES","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"];   /* R3 (Alan, 27 Sep: "use what exists: all the tabs") — every tab in one row, keys 1–9, no MORE; SOCIAL = keyword mentions on X and YouTube (coSocialHTML). D2: the chart is always on screen (no CHART tab) */
+/* 28 Sep (N6) — the company view's EVENTS tab reads EARNINGS, like the master tab (MTAB_LABEL). The key stays EVENTS so
+   saved state, keys 1–9 and every handler keep working; only the word on the tab changes. */
+const CO_TAB_LABEL = { EVENTS: "EARNINGS" };
+const coTabLabel = (x) => CO_TAB_LABEL[x] || x;
 const READ_TABS = ["BUSINESS", "VERDICT", "CATALYSTS", "WATCH"];   // R48 — Alan: business first, left-most
 
 /* ── H-FRONT (Alan, 25 Sep) · THE COMPANY FRONT ──────────────────────────────────────────────────────
@@ -6019,7 +6029,7 @@ function cvQuote(t) {
 function cvTabsHTML() {
   return '<div class="cv-tabs" id="cvTabs" role="tablist" aria-label="company tabs">' +
     CO_TABS.map((x, i) => '<button type="button" role="tab" class="cv-tab' + (x === S.coTab ? " on" : "") + '" aria-selected="' + (x === S.coTab) +
-      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i + 1) + '">' + x + "</button>").join("") +
+      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i + 1) + '">' + coTabLabel(x) + "</button>").join("") +
   "</div>";
 }
 /* SWITCH-ON (28 Sep, Alan: "switch it on… just confirm I'm not losing anything") — the name is shown ONCE: the header title
@@ -7438,6 +7448,9 @@ function scinGroupTM(tickers) {
 /* the ticker list behind one strip column — the same membership the column's mean is
    built from, so the read can never describe a different set than the bar does */
 function scinGroupTickers(key) {
+  /* 28 Sep (N6) — an INDEXES column is one fund, so its read is that fund's own trend and momentum */
+  if (typeof window !== "undefined" && window.SC_INDEX_FUNDS && window.SECT_FAMILY === "INDEXES" && scCmpMode() === "SECTORS" &&
+      window.SC_INDEX_FUNDS.some((f) => f[0] === key)) return [key];
   if (typeof COHSETS !== "undefined" && COHSETS) {
     const direct = COHSETS[key];
     if (direct) return Array.from(direct);
@@ -7549,7 +7562,8 @@ function cohortCompareStripHTML() {
           '" data-gwxfam="' + f[0] + '" title="' + f[2] + '">' + f[1] + "</button>"; }).join("") + "</span>"
       : "");
   const ourNames = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "MEMBERS";
-  return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? "SECTOR" : "COHORT") + ' COMPARE · geiger composite · ' +
+  const idxFam = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "INDEXES";
+  return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? (idxFam ? "INDEX FUND" : "SECTOR") : "COHORT") + ' COMPARE · geiger composite · ' +
            (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · the number under each column = how many of our names · " : "") + 'bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
@@ -7975,7 +7989,7 @@ function favList() { return (S.fav && S.fav.length) ? S.fav.slice() : []; }
 function leftHeadHTML(t) {
   const tabs = CO_TABS.map((x) =>
     '<button role="tab" aria-selected="' + (x === S.coTab) + '" class="sc-it ' + (x === S.coTab ? "on" : "") +
-    '" data-act="cotab" data-tab="' + x + '">' + x + "</button>").join("");
+    '" data-act="cotab" data-tab="' + x + '">' + coTabLabel(x) + "</button>").join("");
   const playing = (LEFT_STATE === "AUTO");
   const autoBox =
     '<span class="sc-autobox" id="scAutoBox" data-act="autotoggle" title="' +
@@ -13475,11 +13489,82 @@ function evRevResult(r) {
   const pct = ((a - e) / e) * 100;
   return { cls: Math.abs(pct) < 0.05 ? "inline" : pct > 0 ? "beat" : "miss", act: a, pct: pct };
 }
+/* 28 Sep (N6) — Alan: "a small REACTION column (next-session move after each report)". The move is erpReaction's: the first
+   session the market could trade the news, close against the close before it, from the chart API's daily bars (never a price
+   table). The rail asks only for as many daily bars as reach its oldest row, so sixty names cost kilobytes, not megabytes; a
+   name whose full series is already loaded (ERP_PX) is reused. */
+const ERN_RX = new Map();          /* ticker -> { bars:[{d,c}] | null, err, from } the rail's short daily series */
+let ERN_RXQ = [], ERN_RXIN = 0, ERN_RX_LAST = null, ERN_RX_TIMER = 0;
+function ernRxBarsFor(t) {
+  const k = erpPxKey(t), full = ERP_PX.get(k);
+  if (full && full.bars) return full;
+  return ERN_RX.get(k) || null;
+}
+/* how many daily bars reach back to a date: trading days are about 5 in 7 calendar days, plus room for the session before it */
+function ernRxLimit(oldest) {
+  const days = Math.max(0, (Date.now() - Date.parse(oldest + "T00:00:00Z")) / 864e5);
+  return Math.min(ERP_PX_LIMIT, Math.ceil(days * 5 / 7) + 12);
+}
+function ernRxEnsure(rows) {
+  if (!rows || !rows.length || typeof fetch !== "function") return;
+  const oldest = rows.reduce((m, r) => (r.date < m ? r.date : m), rows[0].date);
+  const limit = ernRxLimit(oldest);
+  rows.forEach((r) => {
+    const k = erpPxKey(r.ticker), have = ernRxBarsFor(k);
+    if (!k || ERN_RXQ.some((q) => q.k === k)) return;
+    if (have && (have.err || (have.bars && have.bars.length && have.bars[0].d <= oldest) || have.limit >= limit || have.pending)) return;
+    ERN_RXQ.push({ k, limit });
+  });
+  ernRxPump();
+}
+function ernRxPump() {
+  while (ERN_RXIN < ERP_PX_MAX_AT_ONCE && ERN_RXQ.length) {
+    const q = ERN_RXQ.shift();
+    ERN_RXIN++;
+    ERN_RX.set(q.k, Object.assign({}, ERN_RX.get(q.k) || {}, { pending: true }));
+    fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(q.k) + "&tf=1d&limit=" + q.limit, { cache: "no-store" })
+      .then((r) => { if (!r.ok) throw new Error("HTTP_" + r.status); return r.json(); })
+      .then((j) => {
+        const bars = ((j && j.series) || []).map((b) => ({ d: new Date(b.t).toISOString().slice(0, 10), c: +b.c }))
+          .filter((b) => b.d && isFinite(b.c)).sort((a, b) => (a.d < b.d ? -1 : 1));
+        ERN_RX.set(q.k, { bars, err: false, limit: q.limit });
+      })
+      .catch(() => { ERN_RX.set(q.k, { bars: null, err: true, limit: q.limit }); })
+      .then(() => { ERN_RXIN--; ernRxPump(); ernRxRepaintSoon(); });
+  }
+}
+/* repaint the rail once the answers settle, keeping its scroll place; never the whole room */
+function ernRxRepaintSoon() {
+  if (ERN_RX_TIMER) return;
+  ERN_RX_TIMER = setTimeout(() => {
+    ERN_RX_TIMER = 0;
+    const past = el("evPastRail");
+    if (!past || ERN_RX_LAST == null) return;
+    const sc = past.querySelector(".ev-pastscroll"), top = sc ? sc.scrollTop : 0;
+    past.innerHTML = evPastListHTML(ERN_RX_LAST);
+    const sc2 = past.querySelector(".ev-pastscroll"); if (sc2) sc2.scrollTop = top;
+    try { if (typeof ernScintPaint === "function") ernScintPaint(past); } catch (_) {}
+  }, ERN_RXQ.length || ERN_RXIN ? 400 : 0);
+}
+/* PURE — the rail's REACTION cell for one report */
+function ernRxCellHTML(r, px) {
+  if (!px || px.pending && !px.bars) return '<span class="ev-rx na" title="reading this name\'s daily bars from the chart API">…</span>';
+  if (px.err || !px.bars) return '<span class="ev-rx na" title="the chart API did not answer for this name">—</span>';
+  const rx = erpReaction(px.bars, r.date, r.report_time);
+  if (rx.reason) return '<span class="ev-rx na" title="' + esc(rx.reason) + '">' + (/not stored yet/.test(rx.reason) ? "next" : "—") + "</span>";
+  const assumed = !ernWhen({ report_time: r.report_time });   /* no report time stored: the next session is assumed */
+  return '<span class="ev-rx ' + (rx.pct > 0 ? "up" : rx.pct < 0 ? "dn" : "") + (assumed ? " is-assumed" : "") + '" title="' +
+    esc("close to close on " + rx.day + " against " + rx.prev + " · " + rx.basis + " · chart API daily bars") + '">' + esc(erpPct(rx.pct)) + "</span>";
+}
 function evPastListHTML(pastS) {
   if (pastS == null) return '<div class="soon">reading past reports…</div>';
+  ERN_RX_LAST = pastS;
   const rows = pastS.filter((r) => r && num(r.eps_actual) != null).slice(0, EV_PAST_RAIL_MAX);
   if (!rows.length) return '<div class="soon">no stored results for this scope yet</div>';
-  return '<div class="ev-pastscroll">' + rows.map((r) => {
+  ernRxEnsure(rows);
+  return '<div class="ev-pastscroll"><div class="ev-pasthd"><span>DATE</span><span>TICKER</span><span class="r">RESULT</span>' +
+    '<span class="r" title="' + esc("what the price did in the first session that could trade the news: the report day itself when it came before the open, " +
+      "otherwise the next session · close against the close before · chart API daily bars") + '">REACTION</span></div>' + rows.map((r) => {
     const res = ernResult(r), rv = evRevResult(r), wild = typeof ernWildResult === "function" ? ernWildResult(r) : null;
     const eps = res ? '<span class="ern-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
         (res.est != null ? " vs " + esc(ernNum(res.est)) : "") + "</span>" +
@@ -13489,7 +13574,7 @@ function evPastListHTML(pastS) {
         (rv.pct != null ? " " + (rv.pct >= 0 ? "+" : "−") + Math.abs(rv.pct).toFixed(1) + "%" : "") + "</span>" : "";
     return '<div class="ev-pastrow ern-it" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
       '<span class="ev-pd">' + esc(fmtEvDate(r.date)) + '</span><span class="ern-tk">' + esc(r.ticker) + "</span>" +
-      '<span class="ev-pv">' + eps + rev + "</span></div>";
+      '<span class="ev-pv">' + eps + rev + "</span>" + ernRxCellHTML(r, ernRxBarsFor(r.ticker)) + "</div>";
   }).join("") + "</div>";
 }
 /* ============================================================================
@@ -19527,7 +19612,7 @@ function infoRailHTML(data) {
     '<div class="sc-ihead"><div class="sc-itabs" role="tablist">' +
       CO_TABS.map((x) =>
         '<button role="tab" aria-selected="' + (x === S.coTab) + '" class="sc-it ' + (x === S.coTab ? "on" : "") +
-        '" data-act="cotab" data-tab="' + x + '">' + x + "</button>").join("") +
+        '" data-act="cotab" data-tab="' + x + '">' + coTabLabel(x) + "</button>").join("") +
     "</div>" + SECFS_BTN0 + "</div>" +    /* R21 FIX B — coexpand migrated to secfs */
     '<div class="sc-iscroll" id="coRailContent">' + coTabHTML(data) + "</div></div>";
 }
@@ -19811,7 +19896,7 @@ function companyHTML() {
   const isEtfTicker = !!(data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true"));
   const tabbar = CO_TABS.map((x) =>
     '<button role="tab" aria-selected="' + (x === S.coTab) + '" class="sc-it ' + (x === S.coTab ? "on" : "") +
-    '" data-act="cotab" data-tab="' + x + '">' + (x === "FINANCIALS" && isEtfTicker ? "HOLDINGS" : x) + "</button>").join("");
+    '" data-act="cotab" data-tab="' + x + '">' + (x === "FINANCIALS" && isEtfTicker ? "HOLDINGS" : coTabLabel(x)) + "</button>").join("");
   return '<div class="cwrap">' + identBarHTML(data) +
     '<div class="cscroll">' +
       '<section class="sc-body2 coview" aria-label="Company · ' + esc(data.t) + '">' +
@@ -26469,14 +26554,22 @@ body.gwx-motion .gwx-pct{opacity:1}
      and "N names", and the default is the SPDR funds themselves. The key stays "MEMBERS" (the stored choice, the tests). */
   window.SECT_FAMILIES=[["SPDR","SPDR","State Street Select Sector SPDR funds, each fund's own Geiger"],["ISHARES","iSHARES","iShares US sector funds"],
     ["VANGUARD","VANGUARD","Vanguard sector funds"],["EQWT","EQUAL-WT","Invesco S&P 500 equal-weight sector funds"],
+    ["INDEXES","INDEXES","the broad index funds side by side, each fund's own Geiger: cap-weight against equal-weight, large against small"],
     ["MEMBERS","OUR NAMES","the names on OUR list in each sector, averaged: not a fund (the count under each column)"]];
+  /* 28 Sep (N6) — Alan: "index-funds bow tie tab". INDEXES is not eleven sector slots, so it carries its own labels.
+     The brief's list, kept to the funds the chart API serves a Geiger for (measured 28 Sep 17:33Z, 486-name /geiger):
+     QQEW and EQAL have no Geiger yet, so QQQE stands for the equal-weight Nasdaq-100. */
+  var INDEX_FUNDS=[["SPY","S&P 500"],["QQQ","NASDAQ-100"],["DIA","DOW 30"],["IWM","RUSSELL 2000"],["MDY","S&P MIDCAP 400"],
+    ["IJR","S&P SMALLCAP 600"],["RSP","S&P 500 EQUAL-WEIGHT"],["QQQE","NASDAQ-100 EQUAL-WEIGHT"],["IWV","RUSSELL 3000"],
+    ["ITOT","S&P TOTAL MARKET"],["VTI","CRSP TOTAL MARKET"]];
+  window.SC_INDEX_FUNDS=INDEX_FUNDS;
   var SECT_FAMILY_FUNDS={
     SPDR:    ["XLB","XLE","XLF","XLI","XLK","XLP","XLRE","XLU","XLV","XLY","XLC"],
     ISHARES: ["IYM","IYE","IYF","IYJ","IYW","IYK","IYR","IDU","IYH","IYC","IYZ"],
     VANGUARD:["VAW","VDE","VFH","VIS","VGT","VDC","VNQ","VPU","VHT","VCR","VOX"],
     EQWT:    ["RSPM","RSPG","RSPF","RSPN","RSPT","RSPS","RSPR","RSPU","RSPH","RSPD","RSPC"]};
   window.SECT_FAMILY="SPDR";   /* SWITCH-ON — the funds by default; the last choice (OUR NAMES included) is remembered */
-  try { var sf=localStorage.getItem("hub.sector.family"); if(sf && (SECT_FAMILY_FUNDS[sf] || sf==="MEMBERS")) window.SECT_FAMILY=sf; } catch(e) {}
+  try { var sf=localStorage.getItem("hub.sector.family"); if(sf && (SECT_FAMILY_FUNDS[sf] || sf==="MEMBERS" || sf==="INDEXES")) window.SECT_FAMILY=sf; } catch(e) {}
   if(typeof cohortCompareRows==="function" && !window.__gwxWrapped){
     window.__gwxWrapped=true;
     var _rows=cohortCompareRows;
@@ -26508,6 +26601,14 @@ body.gwx-motion .gwx-pct{opacity:1}
            constituents, exactly as the cohort side works. Falls back to the ETF alone if
            membership has not loaded, so it degrades to the old behaviour rather than to a
            blank strip. */
+        if(SECT_FAMILY==="INDEXES"){
+          return INDEX_FUNDS.map(function(p){
+            var g=gAt(p[0]);
+            return {key:p[0], label:p[1], short:p[0],
+                    full:p[1]+" \u00b7 "+p[0]+(g==null?" \u00b7 no Geiger yet":" \u00b7 the fund's own Geiger"),
+                    mean:g, n:1};
+          }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
+        }
         if(SECT_FAMILY!=="MEMBERS" && SECT_FAMILY_FUNDS[SECT_FAMILY]){
           var fam=SECT_FAMILY_FUNDS[SECT_FAMILY];
           return SECT.map(function(p,i){

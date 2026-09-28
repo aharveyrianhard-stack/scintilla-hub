@@ -1,0 +1,101 @@
+/* N6 (28 Sep) — small Hub items from Alan's afternoon notes: the INDEXES family in SECTORS compare, the REACTION column in
+   the earnings room's past-reports list, and the company view's EVENTS tab reading EARNINGS.
+   Offline: functions are sliced out of the page by name and run with stubs; nothing leaves the process. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+function fn(name) {
+  const start = page.search(new RegExp("^function " + name + "\\b", "m"));
+  assert.ok(start >= 0, name + " present");
+  return page.slice(start, page.indexOf("\n}\n", start) + 3);
+}
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const line = (re) => { const m = page.match(re); assert.ok(m, String(re)); return m[0] + "\n"; };
+
+/* ---- 1 · INDEXES ---------------------------------------------------------------------------------------------------- */
+const idxSrc = page.match(/var INDEX_FUNDS=\[([\s\S]*?)\]\];/)[1];
+const IDX = [...idxSrc.matchAll(/\["([A-Z]+)","([^"]+)"/g)].map((m) => [m[1], m[2]]);
+
+test("INDEXES is a family of its own, between the sector families and OUR NAMES", () => {
+  const fam = page.match(/window\.SECT_FAMILIES=\[([\s\S]*?)\]\];/)[1];
+  const keys = [...fam.matchAll(/\["([A-Z]+)","([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(keys, ["SPDR", "ISHARES", "VANGUARD", "EQWT", "INDEXES", "MEMBERS"]);
+});
+test("the index funds are the brief's list, kept to those the chart API serves a Geiger for", () => {
+  assert.deepEqual(IDX.map((r) => r[0]), ["SPY", "QQQ", "DIA", "IWM", "MDY", "IJR", "RSP", "QQQE", "IWV", "ITOT", "VTI"]);
+  assert.equal(new Set(IDX.map((r) => r[0])).size, IDX.length, "no fund twice");
+  for (const [, label] of IDX) assert.ok(label.length > 2, "each fund names its index");
+  assert.doesNotMatch(idxSrc, /QQEW|EQAL/, "no column that could only ever read 'no Geiger'");
+});
+test("INDEXES builds one column per fund from the fund's own Geiger, sorted bull to bear, and is remembered", () => {
+  const block = page.slice(page.indexOf('if(SECT_FAMILY==="INDEXES"){'), page.indexOf('if(SECT_FAMILY!=="MEMBERS" && SECT_FAMILY_FUNDS[SECT_FAMILY]){'));
+  assert.match(block, /return INDEX_FUNDS\.map\(function\(p\)\{\s*var g=gAt\(p\[0\]\);/);
+  assert.match(block, /return \{key:p\[0\], label:p\[1\], short:p\[0\],/);
+  /* run it: gAt is the rewind-aware Geiger lookup; a missing Geiger sorts last and says so */
+  const G = { SPY: 0.33, QQQ: 0.41, IWM: -0.6 };
+  const rows = new Function("INDEX_FUNDS", "gAt", block.replace('if(SECT_FAMILY==="INDEXES"){', "") .replace(/\}\s*$/, "") )(IDX, (t) => (t in G ? G[t] : null));
+  assert.deepEqual(rows.slice(0, 3).map((r) => r.key), ["QQQ", "SPY", "IWM"]);
+  assert.equal(rows.length, IDX.length);
+  assert.match(rows[rows.length - 1].full, /no Geiger yet/);
+  assert.match(page, /sf==="MEMBERS" \|\| sf==="INDEXES"\)\) window\.SECT_FAMILY=sf;/);
+});
+test("the strip header says INDEX FUND COMPARE under INDEXES, and a column reads its own fund's trend and momentum", () => {
+  assert.match(fn("cohortCompareStripHTML"), /idxFam \? "INDEX FUND" : "SECTOR"/);
+  const g = new Function("window", "scCmpMode", "COHSETS", "COHORT_OF", fn("scinGroupTickers") + "\nreturn scinGroupTickers;")(
+    { SC_INDEX_FUNDS: IDX, SECT_FAMILY: "INDEXES" }, () => "SECTORS", {}, {});
+  assert.deepEqual(g("IWM"), ["IWM"]);
+  const g2 = new Function("window", "scCmpMode", "COHSETS", "COHORT_OF", fn("scinGroupTickers") + "\nreturn scinGroupTickers;")(
+    { SC_INDEX_FUNDS: IDX, SECT_FAMILY: "SPDR" }, () => "SECTORS", {}, {});
+  assert.deepEqual(g2("IWM"), [], "other families keep their own rule");
+});
+
+/* ---- 4 · REACTION --------------------------------------------------------------------------------------------------- */
+const REACT = new Function("esc", "num",
+  fn("ernWhen") + line(/^const erpPct = [^\n]*/m) + fn("erpReaction") + fn("ernRxCellHTML") + fn("ernRxLimit") +
+  line(/^const ERP_PX_LIMIT = [^\n]*/m).replace(/\/\*.*$/, "") +
+  "\nreturn { erpReaction, ernRxCellHTML, ernRxLimit };")(esc, (v) => (v == null ? null : +v));
+const bars = [{ d: "2026-09-22", c: 100 }, { d: "2026-09-23", c: 110 }, { d: "2026-09-24", c: 99 }, { d: "2026-09-25", c: 99 }];
+
+test("REACTION: before the open reads the report day itself; after the close reads the next session", () => {
+  const bmo = REACT.ernRxCellHTML({ date: "2026-09-23", report_time: "BMO" }, { bars });
+  assert.match(bmo, /class="ev-rx up"[^>]*>\+10\.0%</);
+  const amc = REACT.ernRxCellHTML({ date: "2026-09-23", report_time: "AMC" }, { bars });
+  assert.match(amc, /class="ev-rx dn"[^>]*>−10\.0%</);
+  assert.match(amc, /close to close on 2026-09-24 against 2026-09-23/);
+});
+test("REACTION: no report time stored is the honest default (the next session) and the cell is marked as assumed", () => {
+  const c = REACT.ernRxCellHTML({ date: "2026-09-23", report_time: null }, { bars });
+  assert.match(c, /class="ev-rx dn is-assumed"/);
+  assert.match(c, /assumes the news landed after the close/);
+});
+test("REACTION: a report whose next session has not traded yet says 'next'; a flat day is neither colour; failures are a dash", () => {
+  assert.match(REACT.ernRxCellHTML({ date: "2026-09-25", report_time: "AMC" }, { bars }), />next</);
+  assert.match(REACT.ernRxCellHTML({ date: "2026-09-25", report_time: "BMO" }, { bars }), /class="ev-rx "[^>]*>0\.0%</);
+  assert.match(REACT.ernRxCellHTML({ date: "2026-09-23", report_time: "BMO" }, { bars: null, err: true }), /did not answer[^>]*>—</);
+  assert.match(REACT.ernRxCellHTML({ date: "2026-09-23", report_time: "BMO" }, null), />…</);
+});
+test("REACTION: the rail asks only for the bars that reach its oldest row (no fixed window), capped by the full series", () => {
+  const d = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  assert.ok(REACT.ernRxLimit(d(7)) >= 5 + 1 && REACT.ernRxLimit(d(7)) <= 20);
+  assert.ok(REACT.ernRxLimit(d(70)) >= 50);
+  assert.equal(REACT.ernRxLimit("1996-01-02"), 1500);
+});
+test("REACTION: the rail has a header and a fourth column, and reuses a name's full series when it is already loaded", () => {
+  const list = fn("evPastListHTML");
+  assert.match(list, /<span class="r"[^>]*>REACTION<\/span>/);
+  assert.match(list, /ernRxCellHTML\(r, ernRxBarsFor\(r\.ticker\)\)/);
+  assert.match(list, /ernRxEnsure\(rows\)/);
+  assert.match(fn("ernRxBarsFor"), /ERP_PX\.get\(k\)/);
+  assert.match(page, /\.ev-pastrow, \.ev-pasthd\{ display:grid; grid-template-columns:64px 58px minmax\(0,1fr\) 54px;/);
+  assert.match(fn("ernRxPump"), /SC_CHART_API \+ "\/candles\?symbol="/, "prices come from the chart API only");
+});
+
+/* ---- 5 · EARNINGS tab ----------------------------------------------------------------------------------------------- */
+test("the company view's EVENTS tab reads EARNINGS in all four tab bars; the key stays EVENTS", () => {
+  assert.match(page, /^const CO_TAB_LABEL = \{ EVENTS: "EARNINGS" \};/m);
+  assert.equal((page.match(/coTabLabel\(x\)/g) || []).length, 4);
+  assert.match(page, /^const CO_TABS = \[[^\]]*"EVENTS"[^\]]*\];/m);
+  assert.match(page, /^const MTAB_LABEL = \{ USUAL: "USUAL DAY", EVENTS: "EARNINGS" \};/m, "the master tab it matches");
+});

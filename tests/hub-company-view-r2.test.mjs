@@ -19,7 +19,7 @@ const num = (v) => { if (v == null) return null; const n = typeof v === "number"
 const CO_TABS = JSON.parse(page.match(/^const CO_TABS = (\[[^\]]*\]);/m)[1]);
 const CONSTS = line(/^const STATION_CHART_URL = [^\n]*/m) + line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) +
   line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m) +
-  line(/^const CO_CLOUDS_KEY = [^\n]*/m) + fn("coCloudsOn").replace("lsGet(", '(typeof lsGet === "function" ? lsGet : () => null)(');   /* SWITCH-ON */
+  line(/^const CO_CLOUDS_KEY = [^\n]*/m) + line(/^const CO_TAB_LABEL = [^\n]*/m) + line(/^const coTabLabel = [^\n]*/m) + fn("coCloudsOn").replace("lsGet(", '(typeof lsGet === "function" ? lsGet : () => null)(');   /* SWITCH-ON */
 
 /* R3 (27 Sep) replaced D2's "seven tabs + MORE (STATS)": Alan, "use what exists: all the tabs". */
 test("R3: nine tabs in one row, keys 1-9, no MORE; SOCIAL and STATS are in the row; no CHART tab (the chart is always on screen)", () => {
@@ -30,6 +30,9 @@ test("R3: nine tabs in one row, keys 1-9, no MORE; SOCIAL and STATS are in the r
   assert.deepEqual([...tabs.matchAll(/data-tab="([A-Z]+)"/g)].map((m) => m[1]), CO_TABS);
   assert.deepEqual([...tabs.matchAll(/title="key (\d)"/g)].map((m) => +m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.match(tabs, /class="cv-tab on" aria-selected="true" data-act="cotab" data-tab="STATS"/);
+  /* N6 (28 Sep) — the EVENTS tab reads EARNINGS like the master tab; its key (data-tab) stays EVENTS */
+  assert.match(tabs, /data-tab="EVENTS" title="key 8">EARNINGS<\/button>/);
+  assert.doesNotMatch(tabs, />EVENTS<\/button>/);
   assert.match(page, /const k = \/\^\[1-9\]\$\/\.test\(e\.key\) \? \+e\.key : 0;\n  if \(k && k <= CO_TABS\.length\)/, "keys 1-9 reach all nine");
 });
 
