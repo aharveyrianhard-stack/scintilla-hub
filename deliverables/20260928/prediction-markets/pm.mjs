@@ -39,3 +39,18 @@ export function sparkPath(hist, t0, t1, w, h) {
   }
   return d + ` H${w}`;
 }
+
+/** 28 Sep (N6) — a topic that rolled to a new market must not draw one line through two markets (the October and the
+ *  December Fed meetings are different questions; joining them would show a fake jump and a false flash). rows: snapshot
+ *  rows with {topic, venue, event_id, ts}. Returns, per "topic|venue", the event the NEWEST row came from, and keeps only
+ *  that event's rows. Rows without an event_id (older readers) are kept as they are. */
+export function currentEventRows(rows) {
+  const latest = new Map();
+  for (const r of rows) {
+    if (!r.event_id) continue;
+    const k = r.topic + "|" + r.venue, cur = latest.get(k);
+    if (!cur || r.ts > cur.ts) latest.set(k, { ts: r.ts, event_id: r.event_id, end_date: r.end_date || null });
+  }
+  const kept = rows.filter((r) => !r.event_id || latest.get(r.topic + "|" + r.venue)?.event_id === r.event_id);
+  return { kept, latest };
+}

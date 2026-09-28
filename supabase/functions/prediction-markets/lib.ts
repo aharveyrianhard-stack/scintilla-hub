@@ -8,9 +8,14 @@
 
 export type Venue = "polymarket" | "kalshi";
 export type Align = { key: string; label: string; kalshi?: string; polymarket?: string };
+/** 28 Sep (N6) — how a Polymarket topic follows its market when that market expires (reaches its end date).
+ *  "next":   the rank-th soonest open market in the series (0 = the next Fed meeting, 1 = the one after…)
+ *  "follow": keep the pinned market while it is open; once it expires, the soonest open market in the same series
+ *            that ends no earlier than it did */
+export type Roll = { series_id: string; mode: "next" | "follow"; rank?: number };
 export type Topic = {
   id: string; group: string; label: string; plain: string; same_question: boolean;
-  kalshi?: { events: string[] }; polymarket?: { events: string[] }; align?: Align[];
+  kalshi?: { events: string[] }; polymarket?: { events: string[]; roll?: Roll }; align?: Align[];
 };
 export type Limits = { max_outcomes_per_event: number; min_probability: number; heartbeat_hours: number; change_threshold: number };
 export type Row = {
@@ -166,4 +171,36 @@ export function isUsHours(d: Date): boolean {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", hourCycle: "h23" }).formatToParts(d);
   const wd = parts.find((p) => p.type === "weekday")!.value, hr = Number(parts.find((p) => p.type === "hour")!.value);
   return !["Sat", "Sun"].includes(wd) && hr >= 8 && hr <= 17;
+}
+
+/** 28 Sep (N6) — MARKET EXPIRY. Every market has a last day (its end date); after it, the market stops trading and pays
+ *  out. seriesEvents are the open events Polymarket lists for the topic's series; an event whose end date has passed is
+ *  expired even while Polymarket still shows it open (it stays open until it is settled). Returns the event id to read
+ *  now, or null when the series has nothing live (the caller then keeps the pinned id and reports it). */
+export function pickRolled(seriesEvents: any[], roll: Roll, now: Date, pinned?: { id: string; endDate: string | null } | null): string | null {
+  const t = now.getTime();
+  const live = (seriesEvents || [])
+    .filter((e: any) => e && !e.closed && e.endDate && Date.parse(e.endDate) > t)
+    .sort((a: any, b: any) => (Date.parse(a.endDate) - Date.parse(b.endDate)) || (Number(a.id) - Number(b.id)));
+  if (roll.mode === "next") { const e = live[roll.rank || 0]; return e ? String(e.id) : null; }
+  const floor = pinned?.endDate ? Date.parse(pinned.endDate) : -Infinity;
+  const same = live.find((e: any) => String(e.id) === String(pinned?.id));
+  if (same) return String(same.id);
+  const e = live.find((x: any) => Date.parse(x.endDate) >= floor);
+  return e ? String(e.id) : null;
+}
+
+/** the Polymarket event ids a topic reads on this pass. The roll applies to the FIRST pinned event (the one in the
+ *  series); any further pinned events are companions (the 10-year's "how low" beside its "how high") and stay as they
+ *  are. With no live market in the series the pinned list is read unchanged. `rolled` says whether the read moved. */
+export function polymarketIdsFor(topic: Topic, seriesEvents: any[] | undefined, now: Date, pinnedEvent?: any): { ids: string[]; rolled: boolean; waiting?: boolean } {
+  const pinned = topic.polymarket?.events || [];
+  const roll = topic.polymarket?.roll;
+  if (!roll || !seriesEvents) return { ids: pinned, rolled: false };
+  const id = pickRolled(seriesEvents, roll, now, pinnedEvent ? { id: String(pinnedEvent.id), endDate: pinnedEvent.endDate || null } : (pinned[0] ? { id: pinned[0], endDate: null } : null));
+  /* "next" with nothing at that rank (the market for that meeting or print is not listed yet): read nothing and say so,
+     rather than fall back to an expired market or duplicate the topic one rank up */
+  if (!id && roll.mode === "next") return { ids: pinned.slice(1), rolled: true, waiting: true };
+  if (!id) return { ids: pinned, rolled: false };
+  return { ids: [id, ...pinned.slice(1).filter((x) => x !== id)], rolled: pinned[0] !== id };
 }

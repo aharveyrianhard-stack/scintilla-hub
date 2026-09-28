@@ -16,14 +16,14 @@
 
 import REG from "./topics.json" with { type: "json" };
 import { type Limits, type Prior, type Row, type Topic, kalshiDiscovery, polymarketDiscovery, priorKey,
-  rowsFromKalshiMarkets, rowsFromPolymarketEvent, toWrite, isUsHours } from "./lib.ts";
+  rowsFromKalshiMarkets, rowsFromPolymarketEvent, toWrite, isUsHours, polymarketIdsFor } from "./lib.ts";
 
 const SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PM = "https://gamma-api.polymarket.com", PMDATA = "https://data-api.polymarket.com", CLOB = "https://clob.polymarket.com";
 const KS = "https://api.elections.kalshi.com/trade-api/v2";
 const UA = { "User-Agent": "scintilla-prediction-markets/1.0" };
-const VERSION = "prediction-markets-v1";
+const VERSION = "prediction-markets-v2";   // v2 (28 Sep, N6): topics roll to the next market in their series at expiry
 
 const limits = REG.limits as Limits;
 const topics = REG.topics as Topic[];
@@ -71,18 +71,39 @@ async function pass(now: Date) {
   const rows: Row[] = [], problems: any[] = [];
   const pmEvents = new Map<string, any>();
 
+  const rolls: any[] = [];
+  const idsFor = new Map<string, string[]>();
   if (on("polymarket")) {
-    const ids = [...new Set(topics.flatMap((t) => t.polymarket?.events || []))];
-    await Promise.all(ids.map(async (id) => {
+    const pinnedIds = [...new Set(topics.flatMap((t) => t.polymarket?.events || []))];
+    await Promise.all(pinnedIds.map(async (id) => {
       try { pmEvents.set(id, await j(`${PM}/events/${id}`)); }
       catch (e) { problems.push({ venue: "polymarket", event: id, reason: String(e).slice(0, 120) }); }
     }));
+    /* ROLL (N6): one read per series a topic follows; each rolling topic then reads the market its rule picks */
+    const seriesIds = [...new Set(topics.map((t) => t.polymarket?.roll?.series_id).filter(Boolean) as string[])];
+    const series = new Map<string, any[]>();
+    await Promise.all(seriesIds.map(async (sid) => {
+      try { series.set(sid, await j(`${PM}/events?series_id=${encodeURIComponent(sid)}&closed=false&limit=100`)); }
+      catch (e) { problems.push({ venue: "polymarket", series: sid, reason: "SERIES_READ " + String(e).slice(0, 100) }); }
+    }));
+    for (const t of topics) {
+      const pinned = t.polymarket?.events || [];
+      const r = polymarketIdsFor(t, t.polymarket?.roll ? series.get(t.polymarket.roll.series_id) : undefined, now, pmEvents.get(pinned[0]));
+      idsFor.set(t.id, r.ids);
+      if (r.rolled) rolls.push({ topic: t.id, pinned, reading: r.ids, ...(r.waiting ? { waiting: "the next market in its series is not listed yet" } : {}) });
+    }
+    const extra = [...new Set([...idsFor.values()].flat())].filter((id) => !pmEvents.has(id));
+    await Promise.all(extra.map(async (id) => {
+      try { pmEvents.set(id, await j(`${PM}/events/${id}`)); }
+      catch (e) { problems.push({ venue: "polymarket", event: id, reason: String(e).slice(0, 120) }); }
+    }));
+    const ids = [...new Set([...pinnedIds, ...[...idsFor.values()].flat()])];
     const cids = [...pmEvents.values()].flatMap((ev) => (ev?.markets || []).filter((m: any) => !m.closed).map((m: any) => m.conditionId)).filter(Boolean);
     const oi = await polymarketOI(cids);
-    for (const t of topics) for (const id of t.polymarket?.events || []) {
+    for (const t of topics) for (const id of idsFor.has(t.id) ? idsFor.get(t.id)! : t.polymarket?.events || []) {
       const ev = pmEvents.get(id);
       if (!ev) continue;
-      if (ev.closed) { problems.push({ venue: "polymarket", topic: t.id, event: id, reason: "EVENT_CLOSED — re-point this topic in topics.json" }); continue; }
+      if (ev.closed) { problems.push({ venue: "polymarket", topic: t.id, event: id, reason: t.polymarket?.roll ? "EVENT_CLOSED — its series has no live market yet" : "EVENT_CLOSED — this topic has no series to roll to; re-point it in topics.json" }); continue; }
       const got = rowsFromPolymarketEvent(ev, t, oi, limits);
       if (got.length) rows.push(...got); else problems.push({ venue: "polymarket", topic: t.id, event: id, reason: "NO_PRICED_MARKET" });
     }
@@ -117,7 +138,7 @@ async function pass(now: Date) {
   const ts = now.toISOString();
   const write_error = out.length ? await insert("prediction_market_snapshots", out.map((r) => ({ ...r, ts, run_id }))) : null;
   const summary = { run_id, version: VERSION, us_hours: isUsHours(now), venues: { polymarket: on("polymarket"), kalshi: on("kalshi") },
-    read: rows.length, written: write_error ? 0 : out.length, unchanged, problems, write_error };
+    read: rows.length, written: write_error ? 0 : out.length, unchanged, problems, rolls, write_error };
   await insert("prediction_market_runs", [{ run_id, ts, mode: "pass", version: VERSION, read: summary.read, written: summary.written,
     unchanged, problems, ms: Date.now() - now.getTime() }]);
   return summary;

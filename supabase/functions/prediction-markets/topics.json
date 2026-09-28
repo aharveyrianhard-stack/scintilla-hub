@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "updated": "2026-09-28",
-  "about": "Scintilla prediction-markets topic registry. Edit this file to add, drop or re-point a topic; the collector (supabase/functions/prediction-markets) reads it on every pass after a redeploy, and the master-tab page reads its copy at deliverables/20260928/prediction-markets/topics.json (a test keeps the two identical). Every id below was checked open and priced on 28 Sep 2026 ~16:30Z.",
+  "about": "Scintilla prediction-markets topic registry. Edit this file to add, drop or re-point a topic; the collector (supabase/functions/prediction-markets) reads it on every pass after a redeploy, and the master-tab page reads its copy at deliverables/20260928/prediction-markets/topics.json (a test keeps the two identical). Every id below was checked open and priced on 28 Sep 2026 ~16:30Z. 28 Sep (N6): 23 Polymarket-only topics added (Japan and the carry trade, China–Taiwan, oil and OPEC, inflation prints, Washington, AI, the ECB, gold, the 30-year yield, GDP, the largest company). A topic with a 'roll' follows its market at expiry: mode 'next' reads the rank-th soonest live market in the Polymarket series (the Fed topics are the next three meetings), mode 'follow' keeps the pinned market until it expires and then the next one in its series. Topic ids keep their first name so the history stays joined; the event actually read is stored on every row (event_id).",
   "flash_points": 10,
   "venues": {
     "polymarket": {
@@ -29,11 +29,11 @@
   },
   "topics": [
     {
-      "id": "fed-2026-10", "group": "The Fed", "label": "Fed decision, 28 Oct 2026",
-      "plain": "What the Fed does to its policy rate at the 28 Oct meeting. Each row is the chance of that one result.",
+      "id": "fed-2026-10", "group": "The Fed", "label": "Fed decision · the next meeting",
+      "plain": "What the Fed does to its policy rate at its next meeting (28 Oct 2026 today). Each row is the chance of that one result. When the meeting's market expires, this topic moves to the next meeting by itself; the topic id keeps its first date so the history stays joined.",
       "same_question": true,
       "kalshi": { "events": ["KXFEDDECISION-26OCT"] },
-      "polymarket": { "events": ["606422"] },
+      "polymarket": { "events": ["606422"], "roll": { "series_id": "35", "mode": "next", "rank": 0 } },
       "align": [
         { "key": "hike25", "label": "Hike 0.25 pt", "kalshi": "^Hike 25bps$", "polymarket": "^25 bps increase$" },
         { "key": "hold", "label": "No change", "kalshi": "^Fed maintains rate$", "polymarket": "^No change$" },
@@ -43,11 +43,11 @@
       ]
     },
     {
-      "id": "fed-2026-12", "group": "The Fed", "label": "Fed decision, 9 Dec 2026",
-      "plain": "What the Fed does at the 9 Dec meeting (Kalshi) / 10 Dec resolution (Polymarket). Same five results as October.",
+      "id": "fed-2026-12", "group": "The Fed", "label": "Fed decision · the meeting after",
+      "plain": "The meeting after the next one (9–10 Dec 2026 today). Same five results. Moves up one meeting by itself when the next one's market expires.",
       "same_question": true,
       "kalshi": { "events": ["KXFEDDECISION-26DEC"] },
-      "polymarket": { "events": ["770450"] },
+      "polymarket": { "events": ["770450"], "roll": { "series_id": "35", "mode": "next", "rank": 1 } },
       "align": [
         { "key": "hike25", "label": "Hike 0.25 pt", "kalshi": "^Hike 25bps$", "polymarket": "^25 bps increase$" },
         { "key": "hold", "label": "No change", "kalshi": "^Fed maintains rate$", "polymarket": "^No change$" },
@@ -57,11 +57,11 @@
       ]
     },
     {
-      "id": "fed-2027-01", "group": "The Fed", "label": "Fed decision, 27 Jan 2027",
-      "plain": "What the Fed does at the first meeting of 2027.",
+      "id": "fed-2027-01", "group": "The Fed", "label": "Fed decision · the third meeting out",
+      "plain": "Three meetings out (27 Jan 2027 today). Moves up one meeting by itself when the next one's market expires.",
       "same_question": true,
       "kalshi": { "events": ["KXFEDDECISION-27JAN"] },
-      "polymarket": { "events": ["770451"] },
+      "polymarket": { "events": ["770451"], "roll": { "series_id": "35", "mode": "next", "rank": 2 } },
       "align": [
         { "key": "hike25", "label": "Hike 0.25 pt", "kalshi": "^Hike 25bps$", "polymarket": "^25 bps increase$" },
         { "key": "hold", "label": "No change", "kalshi": "^Fed maintains rate$", "polymarket": "^No change$" },
@@ -98,7 +98,7 @@
       "plain": "Kalshi asks where the 10-year CLOSES on 31 Dec ('at or above'). Polymarket asks how high or low it TOUCHES before 2027. Different questions: read them next to each other, do not subtract them.",
       "same_question": false,
       "kalshi": { "events": ["KXNOTE10Y-26DEC31"] },
-      "polymarket": { "events": ["79104", "79123"] }
+      "polymarket": { "events": ["79104", "79123"], "roll": { "series_id": "10067", "mode": "follow" } }
     },
     {
       "id": "ust2-q3", "group": "Yields", "label": "2-year Treasury yield, end of Q3 2026",
@@ -116,10 +116,10 @@
     },
     {
       "id": "spy-month", "group": "Stocks", "label": "S&P (SPY) this month",
-      "plain": "Which SPY prices get touched during the month. Polymarket only; Kalshi has no open monthly S&P market today. Monthly: re-point to next month's event id on the 1st.",
+      "plain": "Which SPY prices get touched during the month. Polymarket only; Kalshi has no open monthly S&P market today. Rolls to next month's market by itself when this month's expires.",
       "same_question": false,
       "kalshi": { "events": [] },
-      "polymarket": { "events": ["907961"] }
+      "polymarket": { "events": ["907961"], "roll": { "series_id": "11909", "mode": "next", "rank": 0 } }
     },
     {
       "id": "recession-2026", "group": "Economy", "label": "US recession in 2026",
@@ -142,7 +142,7 @@
       "plain": "Chance the US–Iran ceasefire is still holding at each date. Polymarket only.",
       "same_question": false,
       "kalshi": { "events": [] },
-      "polymarket": { "events": ["1038648"] }
+      "polymarket": { "events": ["1038648"], "roll": { "series_id": "12792", "mode": "follow" } }
     },
     {
       "id": "iran-israel-ceasefire", "group": "Iran", "label": "Israel–Iran ceasefire holds through…",
@@ -163,7 +163,7 @@
       "plain": "Chance of a US ground invasion of Iran before 2027. Polymarket only.",
       "same_question": false,
       "kalshi": { "events": [] },
-      "polymarket": { "events": ["73130"] }
+      "polymarket": { "events": ["73130"], "roll": { "series_id": "10135", "mode": "follow" } }
     },
     {
       "id": "iran-nuclear-deal", "group": "Iran", "label": "US–Iran nuclear deal by…",
@@ -203,7 +203,7 @@
       "plain": "Chance Putin is no longer president by each date. Polymarket only.",
       "same_question": false,
       "kalshi": { "events": [] },
-      "polymarket": { "events": ["31195"] }
+      "polymarket": { "events": ["31195"], "roll": { "series_id": "10521", "mode": "follow" } }
     },
     {
       "id": "china-tariff", "group": "Tariffs & trade", "label": "US tariff rate on China, year-end",
@@ -260,6 +260,167 @@
         { "key": "rsweep", "label": "Republicans win both", "kalshi": "^Republicans sweep$", "polymarket": "^Republicans Sweep$" },
         { "key": "rhouse", "label": "R House, D Senate", "kalshi": "^R-House, D-Senate$", "polymarket": "^D Senate, R House$" }
       ]
+    },
+    {
+      "id": "ust30-2026", "group": "Yields", "label": "30-year Treasury yield, highest before 2027",
+      "plain": "How high the 30-year yield TOUCHES before 2027. Polymarket only. Each row is one level.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["956929"] }
+    },
+    {
+      "id": "gdp-2026", "group": "Economy", "label": "US GDP growth in 2026",
+      "plain": "Which band US economic growth for 2026 lands in, as first reported. Polymarket only; rolls to the next market in its series when this one expires.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["79137"], "roll": { "series_id": "10076", "mode": "follow" } }
+    },
+    {
+      "id": "largest-company", "group": "Stocks", "label": "Largest company in the world, end of 2026",
+      "plain": "Which company is the biggest by market value on 31 Dec. Polymarket only. Rolls to the next market in its series after it expires.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["79041"], "roll": { "series_id": "10029", "mode": "follow" } }
+    },
+    {
+      "id": "boj-next", "group": "Japan & the carry trade", "label": "Bank of Japan decision · the next meeting",
+      "plain": "What the Bank of Japan does at its next meeting (30 Oct 2026 today). A Japanese hike makes borrowing yen dearer, which is what unwinds the carry trade. Polymarket only; moves to the next meeting by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["779132"], "roll": { "series_id": "10474", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "boj-after", "group": "Japan & the carry trade", "label": "Bank of Japan decision · the meeting after",
+      "plain": "The Bank of Japan meeting after the next one (18 Dec 2026 today). Polymarket only; moves up one meeting by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["1045438"], "roll": { "series_id": "10474", "mode": "next", "rank": 1 } }
+    },
+    {
+      "id": "usdjpy-2026", "group": "Japan & the carry trade", "label": "Dollar–yen (USD/JPY) levels touched in 2026",
+      "plain": "Which dollar–yen levels get touched before the end of 2026. A fast fall in USD/JPY (a stronger yen) is the carry-trade alarm. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["199695"] }
+    },
+    {
+      "id": "taiwan-invade", "group": "China–Taiwan", "label": "China invades Taiwan before 2027",
+      "plain": "Chance of a Chinese invasion of Taiwan before 2027. Polymarket only; rolls to the next market in its series after it expires.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["34044"], "roll": { "series_id": "10171", "mode": "follow" } }
+    },
+    {
+      "id": "taiwan-blockade", "group": "China–Taiwan", "label": "China blockades Taiwan in 2026",
+      "plain": "Chance China blockades Taiwan in 2026. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["536282"], "roll": { "series_id": "10318", "mode": "follow" } }
+    },
+    {
+      "id": "taiwan-clash", "group": "China–Taiwan", "label": "China–Taiwan military clash before 2027",
+      "plain": "Chance of a direct military clash between China and Taiwan before 2027. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["79230"], "roll": { "series_id": "10653", "mode": "follow" } }
+    },
+    {
+      "id": "wti-month", "group": "Oil & OPEC", "label": "WTI crude oil · levels touched this month",
+      "plain": "Which oil prices get touched during the month. Polymarket only; rolls to next month's market by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["907966"], "roll": { "series_id": "10820", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "oil-ath", "group": "Oil & OPEC", "label": "Crude oil at an all-time high by…",
+      "plain": "Chance oil sets a new all-time high by each date. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["435099"] }
+    },
+    {
+      "id": "opec-exit", "group": "Oil & OPEC", "label": "Another country leaves OPEC in 2026",
+      "plain": "Chance another member quits OPEC this year. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["427694"] }
+    },
+    {
+      "id": "hormuz", "group": "Oil & OPEC", "label": "Strait of Hormuz traffic back to normal by…",
+      "plain": "Chance shipping through the Strait of Hormuz, where about a fifth of the world's oil passes, is back to normal by the soonest date listed. Polymarket only; moves to the next date by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["660109"], "roll": { "series_id": "11492", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "cpi-annual", "group": "Inflation prints", "label": "US inflation (CPI, year on year) · the next print",
+      "plain": "Which band the next US consumer-price print lands in (September's, out 15 Oct today). Polymarket only; moves to the next month's print by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["1005013"], "roll": { "series_id": "10007", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "core-cpi", "group": "Inflation prints", "label": "US core CPI (year on year) · the next print",
+      "plain": "Core inflation (without food and energy) for the next print. Polymarket only; moves to the next print by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["1005022"], "roll": { "series_id": "11905", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "core-pce", "group": "Inflation prints", "label": "US core PCE (year on year) · the next print",
+      "plain": "The Fed's preferred inflation gauge for the next print (August's, out 30 Sep today). Polymarket only; moves to the next print by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["922343"], "roll": { "series_id": "12062", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "inflation-peak-2026", "group": "Inflation prints", "label": "How high US inflation gets in 2026",
+      "plain": "Chance US inflation goes above each level at some point in 2026. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["80773"] }
+    },
+    {
+      "id": "shutdown", "group": "Washington", "label": "US government shutdown",
+      "plain": "Chance the federal government shuts down when its funding runs out on 1 Oct, and a second market pairing another shutdown with who wins the House. Polymarket only; these markets have no series, so when they expire the card keeps its last reading and says so.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["580520", "101106"] }
+    },
+    {
+      "id": "us-debt", "group": "Washington", "label": "US debt: default or another downgrade before 2027",
+      "plain": "No debt-ceiling market is open (the ceiling was raised in 2025). These two are the nearest: the US missing a debt payment, and another credit-rating downgrade, before 2027. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["73331", "73338"] }
+    },
+    {
+      "id": "ai-bubble", "group": "AI", "label": "The AI bubble bursts by…",
+      "plain": "Chance the market judges the AI bubble to have burst by each date, as Polymarket's rules define it. The \"AI slowdown\" story in one number. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["85299"] }
+    },
+    {
+      "id": "ai-regulation", "group": "AI", "label": "AI regulation: a US safety bill, or a federal framework",
+      "plain": "Chance the US enacts an AI safety bill before 2027, and a comprehensive federal AI law before 2028. Polymarket only.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["79075", "1040000"] }
+    },
+    {
+      "id": "ecb-next", "group": "Other central banks", "label": "ECB decision · the next meeting",
+      "plain": "What the European Central Bank does at its next meeting (30 Oct 2026 today). Polymarket only; moves to the next meeting by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["743554"], "roll": { "series_id": "10013", "mode": "next", "rank": 0 } }
+    },
+    {
+      "id": "gold-month", "group": "Gold", "label": "Gold · levels touched this month",
+      "plain": "Which gold prices get touched during the month. Polymarket only; rolls to next month's market by itself.",
+      "same_question": false,
+      "kalshi": { "events": [] },
+      "polymarket": { "events": ["907964"], "roll": { "series_id": "12052", "mode": "next", "rank": 0 } }
     }
   ]
 }
