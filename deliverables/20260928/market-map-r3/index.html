@@ -73,6 +73,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
 .gb .mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--dim);z-index:1}
 .gb i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
 .gb i.u{left:50%;background:var(--up);box-shadow:0 0 5px var(--up)}
+.gb.sc i{top:32%;bottom:32%}
 .gb i.d{right:50%;background:var(--dn);box-shadow:0 0 5px var(--dn)}
 .gb.agg i.u{background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
 .gb.agg i.d{background:repeating-linear-gradient(135deg,var(--dn) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
@@ -110,6 +111,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <details id="legend" open><summary>KEY</summary>
       <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
       <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped second bar (funds) = its holdings, blended by weight</div>
+      <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = scout Geiger (daily, 3-day, weekly only; off the Hub) where the full Geiger is missing</div>
       <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
       <div><span class="sw"></span>a served line · size = market value</div>
       <div><span class="sw head"></span>a heading (no Geiger of its own)</div>
@@ -184,6 +186,13 @@ const [g, q] = await Promise.allSettled([
   })(),
 ]);
 if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
+/* SCOUT GEIGER (N4, 28 Sep): the Hub Geiger's maths on its three daily rungs (D, 3D, W), computed off the Hub for every US
+   stock and every tree fund. Drawn ONLY where the full Geiger has no reading, as a slimmer bar, and named SCOUT on the card.
+   The file is a nightly snapshot written next to this page; when it is missing the map is exactly the round-3 map. */
+try { state.scout = await getJSON("scout-geiger.json"); } catch (e) { state.scout = null; state.scoutErr = String(e); }
+const SV = (state.scout && state.scout.v) || {}, SF = (state.scout && state.scout.funds) || {};
+const scoutOf = (t) => { if (!t) return null; const r = SV[t] || SV[t.replace(/-/g, ".")]; return r && Number.isFinite(r[0]) ? { composite: r[0], trend: r[1], momentum: r[2] } : null; };
+const scoutFund = (t) => (t && (SF[t] || SF[t.replace(/-/g, ".")])) || null;
 if (q.status === "fulfilled") state.quotes = q.value; else state.quotesErr = String(q.reason);
 const GS = (state.geiger && state.geiger.symbols) || {};
 const geigerOf = (t) => (GS[t] && Number.isFinite(GS[t].composite) ? GS[t].composite : null);
@@ -195,7 +204,7 @@ const nodes = nodesDoc.nodes.map((n, idx) => {
   const r = n.kind === "index" ? (n.id === "MARKET" ? 9 : n.parents[0] === "MARKET" ? 6.5 : 5.5)
     : n.kind === "fund" ? (n.role === "sector" ? 3.9 : 3.4)
     : n.market_value_usd ? 2.2 + 6.3 * Math.pow(n.market_value_usd / maxCap, 0.4) : 2.2;
-  return { ...n, idx, g: gg, r, hollow: !!n.ticker && !gg, pos: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3() };
+  return { ...n, idx, g: gg, sg: gg ? null : scoutOf(n.ticker), sf: scoutFund(n.ticker), r, hollow: !!n.ticker && !gg, pos: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3() };
 });
 nodes.forEach((n) => { state.byId.set(n.id, n); n.parents.forEach((p) => { if (!state.children.has(p)) state.children.set(p, []); state.children.get(p).push(n.id); }); });
 const kids = (id) => (state.children.get(id) || []).map((k) => state.byId.get(k));
@@ -206,6 +215,7 @@ state.counts = {
   nodes: nodes.length, lit: nodes.filter((n) => n.g).length, hollow: nodes.filter((n) => n.hollow).length,
   up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length,
   blends: nodes.filter((n) => n.agg).length,
+  scout: nodes.filter((n) => n.sg).length, scoutBlends: nodes.filter((n) => !n.agg && n.sf && Number.isFinite(n.sf.blend)).length,
 };
 
 /* ---- stamp ---- */
@@ -213,7 +223,7 @@ state.counts = {
   const v = state.geiger && state.geiger.verification;
   const any = Object.values(state.quotes)[0];
   $("stamp").textContent = state.geiger
-    ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} bars (${state.counts.up} up · ${state.counts.down} down) · ${state.counts.blends} funds with a holdings bar · ${state.counts.hollow} waiting for admission · ` +
+    ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} bars (${state.counts.up} up · ${state.counts.down} down) · ${state.counts.blends} funds with a holdings bar · ${state.counts.hollow} waiting for admission` + (state.scout ? ` (${state.counts.scout} of them with a slim scout bar, as of ${state.scout.as_of})` : "") + ` · ` +
       (any ? `day = session ${any.price_session_et}` : "day change unavailable") + (v ? ` · ${v.label.toLowerCase().replace(/_/g, " ")}` : "")
     : `the live Geiger did not answer (${state.geigerErr}); no bar is drawn and none is made up`;
 })();
@@ -262,8 +272,11 @@ const headMesh = instanced(headL, new THREE.SphereGeometry(1, 16, 11), new THREE
 const BAR_W = 9, BAR_H = 1.7, BAR_GAP = 0.9, BAR_TOP = 1.1, BAR_MIN_PX = 7;
 const bars = [];
 nodes.forEach((n) => {
-  if (n.g) bars.push({ n, v: n.g.composite, kind: 0 });
-  if (n.agg) bars.push({ n, v: n.agg.value, kind: 1 });
+  // kind 0 own full · 1 holdings (full) · 2 own SCOUT (slim) · 3 holdings SCOUT (slim, striped) — scout only where full is absent
+  const own = n.g ? { v: n.g.composite, kind: 0 } : n.sg ? { v: n.sg.composite, kind: 2 } : null;
+  const hold = n.agg ? { v: n.agg.value, kind: 1 } : n.sf && Number.isFinite(n.sf.blend) ? { v: n.sf.blend, kind: 3 } : null;
+  if (own) bars.push({ n, ...own, slot: 0 });
+  if (hold) bars.push({ n, ...hold, slot: own ? 1 : 0 });
 });
 const barGeo = new THREE.InstancedBufferGeometry();
 barGeo.copy(new THREE.PlaneGeometry(2, 2));
@@ -272,7 +285,7 @@ const aCenter = new THREE.InstancedBufferAttribute(new Float32Array(bars.length 
 const aVal = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => Math.max(-1, Math.min(1, b.v)))), 1);
 const aKind = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => b.kind)), 1);
 const aR = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => b.n.r)), 1);
-const aTwo = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => (b.n.g && b.n.agg ? 1 : 0))), 1);
+const aTwo = new THREE.InstancedBufferAttribute(new Float32Array(bars.map((b) => b.slot)), 1);
 barGeo.setAttribute("aCenter", aCenter); barGeo.setAttribute("aVal", aVal); barGeo.setAttribute("aKind", aKind); barGeo.setAttribute("aR", aR); barGeo.setAttribute("aTwo", aTwo);
 const barMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, depthTest: true,
@@ -285,7 +298,7 @@ const barMat = new THREE.ShaderMaterial({
       float ppu = uScaleH / max(1.0, -mv.z);
       float s = max(1.0, uMinPx / (uW * ppu));
       // own bar first, the holdings bar under it; a fund whose own Geiger is missing shows its holdings bar in the first slot
-      float slot = aKind * aTwo;
+      float slot = aTwo;
       float off = aR + s * (uTop + uH + slot * (2.0 * uH + uGap));
       mv.xy += vec2(position.x * uW * s, position.y * uH * s - off);
       vUv = position.xy; vVal = aVal; vKind = aKind;
@@ -296,10 +309,11 @@ const barMat = new THREE.ShaderMaterial({
       vec3 track = vec3(0.12); vec3 col = vVal >= 0.0 ? vec3(0.208, 0.690, 0.416) : vec3(0.820, 0.282, 0.247);
       vec3 c = track; float a = 0.92;
       float x = vUv.x;
-      bool inFill = abs(vUv.y) < 0.62 && ((vVal >= 0.0 && x >= 0.0 && x <= vVal) || (vVal < 0.0 && x <= 0.0 && x >= vVal));
+      float fillH = vKind > 1.5 ? 0.34 : 0.62;                                          // a scout bar is slimmer
+      bool inFill = abs(vUv.y) < fillH && ((vVal >= 0.0 && x >= 0.0 && x <= vVal) || (vVal < 0.0 && x <= 0.0 && x >= vVal));
       if (inFill) {
         c = col;
-        if (vKind > 0.5 && mod(gl_FragCoord.x + gl_FragCoord.y, 5.0) < 2.0) c = track;   // the holdings bar is striped
+        if ((abs(vKind - 1.0) < 0.5 || vKind > 2.5) && mod(gl_FragCoord.x + gl_FragCoord.y, 5.0) < 2.0) c = track;   // holdings bars are striped
       }
       if (abs(x) < 0.035) c = vec3(0.55);                                                  // the zero line
       gl_FragColor = vec4(c, a);
@@ -608,8 +622,9 @@ function rowFor(id) {
 function renderCard(n) {
   if (!n) {
     $("card").innerHTML = `<h2>Click any ball</h2><div class="sub">Its Geiger bar, and for a fund its holdings bar and top holdings, show here. Click the same ball again, or press Esc, to let go. Drag to turn, scroll to zoom, FLAT 2D for the same tree seen straight on.</div>` +
-      `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>OWN GEIGER</span>${bar(0.42, "lg")}<span>HOLDINGS BLEND</span>${bar(0.42, "lg agg")}</div>` +
-      `<div class="mute" style="font-size:11px">Both bars are centred at zero and use the Hub's composite scale: the full half is ±1. These two examples are drawn at +0.42.</div>`;
+      `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>OWN GEIGER</span>${bar(0.42, "lg")}<span>HOLDINGS BLEND</span>${bar(0.42, "lg agg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}</div>` +
+      `<div class="mute" style="font-size:11px">A slim bar is the <b>scout Geiger</b>: the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund. It is drawn only where the full Geiger has no reading.</div>` +
+      `<div class="mute" style="font-size:11px">Both bars are centred at zero and use the Hub's composite scale: the full half is ±1. These examples are drawn at +0.42.</div>`;
     return;
   }
   const qq = n.ticker ? state.quotes[n.ticker] : null;
@@ -631,11 +646,23 @@ function renderCard(n) {
       (n.gics_industry ? `<span>INDUSTRY</span><span>${esc(n.gics_industry)}</span>` : "") + `</div>` +
       `<div class="mute" style="font-size:11px">Geiger −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`;
   } else {
-    h += `<div class="wait"><b>Waiting for admission.</b> No Geiger yet, so no bar and no number. ` +
+    h += `<div class="wait"><b>Waiting for admission.</b> No full Geiger yet. ` +
       `${esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1))}${n.planned_tier ? " · would be " + esc(n.planned_tier) : ""}${n.placed_by ? " · placed by " + esc(n.placed_by) : ""}.</div>`;
+    if (n.sg) h += `<div class="kv"><span>SCOUT GEIGER</span><div class="gbrow">${bar(n.sg.composite, "lg sc")}<span class="big ${n.sg.composite >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(n.sg.composite)}</span></div>` +
+      `<span>trend · momentum</span><span><span class="${n.sg.trend >= 0 ? "up" : "dn"}">${fmtG(n.sg.trend)}</span> · <span class="${n.sg.momentum >= 0 ? "up" : "dn"}">${fmtG(n.sg.momentum)}</span></span></div>` +
+      `<div class="mute" style="font-size:11px">scout = daily, 3-day and weekly rungs only (40% of the full Geiger's weight), off the Hub · as of the ${esc(state.scout.as_of)} close</div>`;
   }
   if (n.kind === "fund") {
     const hd = n.holdings;
+    if (n.sf && Number.isFinite(n.sf.blend)) {
+      // like with like: the fund's own SCOUT reading against its holdings' scout readings (same rungs, same close)
+      const f = n.sf, own = Number.isFinite(f.own) ? f.own : null, dv = own != null ? divergence(own, f.blend) : null;
+      h += `<div class="sec">SCOUT · ALL HOLDINGS · as of ${esc(state.scout.as_of)}</div>` +
+        `<div class="kv"><span>HOLDINGS (scout)</span><div class="gbrow">${bar(f.blend, "lg sc agg")}<span class="big ${f.blend >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(f.blend)}</span></div>` +
+        (Number.isFinite(f.own) ? `<span>FUND (scout)</span><span>${num(f.own)}</span>` : "") + `</div>` +
+        `<div style="font-size:12px">scout Geiger of <b>${f.n}</b> holdings = <b>${f.cov.toFixed(0)}%</b> of the fund's weight (served or not)</div>` +
+        (dv ? `<div class="div">SCOUT DIVERGENCE · <span class="${dv.diff > 0 ? "up" : dv.diff < 0 ? "dn" : ""}">${esc(dv.text)}</span><div class="mute" style="font-size:11px">fund ${fmtG(own)} · holdings ${fmtG(f.blend)} · both scout, same close${n.g ? " (the full Geiger above also carries today's intraday rungs)" : ""}</div></div>` : "");
+    }
     if (hd && n.agg) {
       const a = n.agg, dv = n.g ? divergence(n.g.composite, a.value) : null;
       h += `<div class="sec">HOLDINGS BLEND · FMP ${esc(hd.as_of)}</div>` +
