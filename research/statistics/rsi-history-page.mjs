@@ -96,7 +96,7 @@ function cmpTable(c, title) {
 }
 function lowsTable(c, ofB = false) {
   const rows = (ofB ? c.lowsOfB : c.lows).slice(-14).reverse(), who = ofB ? "Nasdaq 100" : "S&P";
-  return `<div class="scroll"><table><thead><tr><th>${who} swing low</th><th>fall</th><th>S&P lowest RSI (±10 sessions)</th><th>Nasdaq 100 lowest RSI (±10 sessions)</th><th>deeper</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.low}</td><td>${mv(r.depth)}</td><td>${f1(r.rsiA)}</td><td>${f1(r.rsiB)}</td><td>${(ofB ? !r.deeperA : r.deeperB) ? "Nasdaq" : "S&P"}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="scroll"><table><thead><tr><th>${who} swing low</th><th>fall</th><th>S&P RSI low (±10 days)</th><th>Nasdaq 100 RSI low (±10 days)</th><th>deeper</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.low}</td><td>${mv(r.depth)}</td><td>${f1(r.rsiA)}</td><td>${f1(r.rsiB)}</td><td>${(ofB ? !r.deeperA : r.deeperB) ? "Nasdaq" : "S&P"}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function swingTable(A) {
   const row = (b) => `<tr><td>${b.bucket}</td><td>${b.n}</td><td>${f1(b.rsiMed)}</td><td>${f1(b.rsiQ1)} to ${f1(b.rsiQ3)}</td><td>${f1(b.rsiMin)}</td><td>${f1(b.rsiMax)}</td><td>${b.pctMed == null ? "—" : f1(b.pctMed) + "%"}</td><td>${b.barsMed ?? "—"}</td></tr>`;
