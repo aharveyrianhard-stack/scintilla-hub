@@ -1,0 +1,147 @@
+{
+ "what": "Ten studies Scintilla has not run, each stolen from named public work. The first three ran today (sections 2-4 of RESEARCH-DIRECTOR.html). Value is to Alan's trading in his four words: execution, patience, market-first, leaders.",
+ "studies": [
+  {
+   "n": 1, "ran_today": true,
+   "title": "Market states that name themselves (hidden Markov regimes), with today's probability",
+   "inspired_by": [
+    {"name": "hmmlearn", "url": "https://github.com/hmmlearn/hmmlearn"},
+    {"name": "Hamilton (1989) regime switching, as in statsmodels' Markov regression notebook", "url": "https://www.statsmodels.org/stable/examples/notebooks/generated/markov_regression.html"},
+    {"name": "Kritzman, Page & Turkington (2012), Regime shifts: implications for dynamic strategies, FAJ", "url": "https://www.tandfonline.com/doi/abs/10.2469/faj.v68.n3.3"},
+    {"name": "QuantStart, Market regime detection using hidden Markov models", "url": "https://www.quantstart.com/articles/market-regime-detection-using-hidden-markov-models-in-qstrader/"}
+   ],
+   "question": "Do two or three market states fall out of the S&P's own returns and the VIX without anyone drawing a line, how long does each last, and which state are we in today, using only bars up to today?",
+   "method": "Gaussian hidden Markov model (2 and 3 states) on daily log return + log VIX (1990→), on returns alone (1928→), and on SPY + equal-weight spread + VIX÷VIX3M (2006→). Parameters fitted on the first half only; every later day's probability is filtered forward (no smoothing, no lookahead). Forward return and forward realised volatility by state, block-bootstrap ranges. Change points in realised volatility as a second opinion (ruptures PELT).",
+   "data": "^GSPC 1927→, ^VIX 1990→, ^VIX3M 2006→, SPY and RSP 2003→ — all in the chart-API cache already.",
+   "value": "MARKET-FIRST and PATIENCE: one number each morning that says whether the tape is in its calm or its stressed state, with how long such states usually last. It is the second regime label the statistician asked for (N8), next to the Station's cloud order.",
+   "cost": "Ran today in about 2 minutes of compute; nightly refresh is a 10-second job."
+  },
+  {
+   "n": 2, "ran_today": true,
+   "title": "When did each sector's trend last change (change points), and where do Alan's cohorts sit on the rotation wheel",
+   "inspired_by": [
+    {"name": "ruptures (PELT: Killick, Fearnhead & Eckley 2012)", "url": "https://github.com/deepcharles/ruptures"},
+    {"name": "RRG-Lite (JdK RS-Ratio / RS-Momentum, open approximation)", "url": "https://github.com/BennyThadikaran/RRG-Lite"},
+    {"name": "StockCharts, Relative Rotation Graphs", "url": "https://school.stockcharts.com/doku.php?id=chart_analysis:rrg_charts"},
+    {"name": "Adams & MacKay (2007), Bayesian online changepoint detection — the streaming form for a notification", "url": "https://arxiv.org/abs/0710.3742"}
+   ],
+   "question": "Instead of a fixed 16/72/646-session window, let a change-point search say when each sector's pace against SPY changed. Does a freshly detected change carry forward? And this week, which of Alan's 20 cohorts are leading, weakening, lagging or improving against SPY?",
+   "method": "PELT on weekly relative returns per sector (penalty stated at two strengths). An online version that only sees bars to each decision week, flags a change under 8 weeks old, and measures the next 13 weeks, split 2008–2016 / 2017–2026. RRG under the public JdK approximation for the 20 cohorts (equal-weight of today's members) and the 11 sectors, with 8-week tails and the quadrant checked at three windows.",
+   "data": "11 SPDR sectors and SPY 2003→ (sector-rotation cache); the 364 served names 2003→ (candles-f5 cache); the M45 cohort list.",
+   "value": "LEADERS and MARKET-FIRST: which cohorts to be patient in and which to rotate toward; a dated 'trend changed' flag rather than a rank that reshuffles every quarter.",
+   "cost": "Ran today in about 3 minutes. The online flag as a nightly job is cheap; the Bayesian streaming form is a day's work."
+  },
+  {
+   "n": 3, "ran_today": true,
+   "title": "A Reality Check / SPA over every rule family we have published",
+   "inspired_by": [
+    {"name": "White (2000), A Reality Check for Data Snooping, Econometrica", "url": "https://doi.org/10.1111/1468-0262.00152"},
+    {"name": "Hansen (2005), A test for superior predictive ability, JBES", "url": "https://doi.org/10.1198/073500105000000063"},
+    {"name": "Sullivan, Timmermann & White (1999), Data-snooping, technical trading rule performance, and the bootstrap, J. Finance — 7,846 rules on the Dow", "url": "https://doi.org/10.1111/0022-1082.00163"},
+    {"name": "arch: SPA, StepM, MCS", "url": "https://bashtage.github.io/arch/multiple-comparison/multiple-comparisons.html"}
+   ],
+   "question": "Of the RSI rungs, RSI-with-200-day states, 200-day distance bands, VIX levels and calendar months our studies searched, does the best rule beat 'any day' once the whole search is counted?",
+   "method": "Each rule = long h sessions after it fires (h = 5, 20, 60), benchmark = long the same share of days unconditionally. Hansen's SPA and White's Reality Check p-values per family and over the union (stationary bootstrap, block 60); Romano–Wolf StepM for the set of survivors; the best rule chosen on the first half judged on the second.",
+   "data": "SPY, QQQ, IWM, DIA 2003→; the S&P index 1928→; VIX, VIX3M.",
+   "value": "EVERYTHING: it says which of our findings deserve a card on the stats tab and which are the best of a hundred coin flips.",
+   "cost": "Ran today in about 4 minutes. Rerun for every new family is minutes."
+  },
+  {
+   "n": 4, "ran_today": false,
+   "title": "Volatility-managed sizing: scale exposure by recent volatility, not by conviction",
+   "inspired_by": [
+    {"name": "Moreira & Muir (2017), Volatility-Managed Portfolios, J. Finance (NBER w22208)", "url": "https://www.nber.org/papers/w22208"},
+    {"name": "Harvey, Hoyle, Korgaonkar, Rattray, Sargaison & van Hemert (2018), The impact of volatility targeting", "url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3175538"}
+   ],
+   "question": "If Alan sized every position by the inverse of last month's realised volatility (or the VIX), holding more when calm and less when stressed, what would it have done to the drawdowns and the Sharpe of SPY, QQQ, the sectors and the cohort indexes, and how often would it have him trading?",
+   "method": "Weight_t = target vol ÷ realised vol over the last 20 sessions, capped; compare with buy-and-hold on return, worst drawdown, time under water; SPA over the target-vol and window grid; turnover as the cost line.",
+   "data": "Every daily series in the cache; the 364 names for the cohort indexes.",
+   "value": "PATIENCE and EXECUTION: the 'dynamic position sizing to market behaviour' Alan asked for, from a published rule rather than a hunch, with the trading it costs.",
+   "cost": "Half a day in Python; the tearsheet tool (quantstats) is on the adopt list."
+  },
+  {
+   "n": 5, "ran_today": false,
+   "title": "The 200-day / 10-month trend rule as a drawdown cutter, tested the way the public work tests it",
+   "inspired_by": [
+    {"name": "Faber (2007), A Quantitative Approach to Tactical Asset Allocation", "url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=962461"},
+    {"name": "Hurst, Ooi & Pedersen (2017), A Century of Evidence on Trend-Following Investing (AQR)", "url": "https://www.aqr.com/Insights/Research/Journal-Article/A-Century-of-Evidence-on-Trend-Following-Investing"},
+    {"name": "Moskowitz, Ooi & Pedersen (2012), Time Series Momentum, JFE", "url": "https://doi.org/10.1016/j.jfineco.2011.11.003"}
+   ],
+   "question": "Is 'deep below the 200-day is a problem' the same fact the trend-following literature reports — that being out below the 10-month average cuts the worst drawdowns by half at the price of a lower win rate — and does it hold across our indexes, sectors, commodities and cohorts, not just SPY?",
+   "method": "Faber's monthly rule and a daily 200-day version on 30+ instruments pooled with an instrument effect; outcome distributions in the instrument's own usual days; SPA over the lookback grid; the S&P since 1928 as the walk-forward check. This is the statistician's N5 given a published yardstick.",
+   "data": "^GSPC 1928→, ^NDX, ^RUT, ^DJI, SPY/QQQ/IWM/DIA, 11 sectors, gold, oil, BTC, TLT — all cached.",
+   "value": "PATIENCE and MARKET-FIRST: a measured risk-cut rule, with the cost of whipsaws counted.",
+   "cost": "One day."
+  },
+  {
+   "n": 6, "ran_today": false,
+   "title": "'Overbought is overbought' against the 52-week-high evidence",
+   "inspired_by": [
+    {"name": "George & Hwang (2004), The 52-Week High and Momentum Investing, J. Finance", "url": "https://doi.org/10.1111/j.1540-6261.2004.00695.x"},
+    {"name": "Jegadeesh & Titman (1993), Returns to buying winners and selling losers, J. Finance", "url": "https://doi.org/10.1111/j.1540-6261.1993.tb04702.x"}
+   ],
+   "question": "Alan's thesis says extended is extended. The published evidence says names near their 52-week high keep going for 6–12 months. Which is right for our names, by market-cap tranche and by market state?",
+   "method": "Monthly cross-section of the served names: nearness to the 52-week high and own RSI percentile as two rankings; forward 1/3/6/12-month returns by decile; alphalens tear sheet (quantile returns, information coefficient, turnover); conditioned on the 200-day side and the HMM state; FDR over deciles and horizons.",
+   "data": "The 364 names 2003→ and the FMP caps file (meta-cohorts-caps) for the tranches; the scout's whole-market file when the Fly job runs.",
+   "value": "LEADERS and PATIENCE: whether to trim leaders because they are extended, or hold them because that is what leaders do.",
+   "cost": "One day; survivorship caveat until the point-in-time universe exists."
+  },
+  {
+   "n": 7, "ran_today": false,
+   "title": "Drawdown and recovery statistics, and what follows a parabolic run (gold today)",
+   "inspired_by": [
+    {"name": "Goldberg & Mahmoud (2017), Drawdown: from practice to theory and back again", "url": "https://arxiv.org/abs/1404.7493"},
+    {"name": "Bailey & López de Prado (2014), Drawdown-based stop-outs and the triple penance rule", "url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2201302"},
+    {"name": "Greenwood, Shleifer & You (2019), Bubbles for Fama, JFE (NBER w23191)", "url": "https://www.nber.org/papers/w23191"}
+   ],
+   "question": "For every index, sector, commodity and cohort: the whole distribution of drawdown depth × time to the low × time back to the high, as survival curves. And for the sigma runs Alan sees in gold: after a 100%-in-two-years run, how often did a 40% fall follow within two years, and how long did recovery take?",
+   "method": "Drawdown episodes from swing highs; Kaplan–Meier curves for time-under-water with open episodes censored; the triple-penance ratio (recovery takes about three times the fall's duration) tested; Greenwood–Shleifer–You run-up events on gold, silver, oil, BTC and the AI cohorts.",
+   "data": "All cached daily series; ^GSPC to 1928 for the long record.",
+   "value": "PATIENCE: how long a hole usually takes to climb out of, as a curve, not a rule; and a measured answer to 'gold parabolic — what followed'.",
+   "cost": "One day."
+  },
+  {
+   "n": 8, "ran_today": false,
+   "title": "Momentum crashes: why leaders trail SPY after bottoms, and how long it lasts",
+   "inspired_by": [
+    {"name": "Daniel & Moskowitz (2016), Momentum Crashes, JFE (NBER w20439)", "url": "https://www.nber.org/papers/w20439"},
+    {"name": "Kenneth French's data library (momentum factor, 1927→)", "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html"}
+   ],
+   "question": "Alan noticed leaders trail SPY after bottoms. The published fact is that past winners lag hardest in the rebound out of a bear market, then lead again. How many weeks does the lag last for our leaders and cohorts, and is it the 'move to another good name' moment or the moment to wait?",
+   "method": "Event study on SPY swing lows (S9 pivots) with the prior-12-month top decile vs the rest, weekly relative returns for 52 weeks after, conditioned on the 200-day side and the HMM state; French's momentum factor as the century-long check.",
+   "data": "The 364 names and SPY (cache); French's factor is a public CSV (no key).",
+   "value": "LEADERS and EXECUTION: a measured window in which buying the leaders after a low is early.",
+   "cost": "Half a day."
+  },
+  {
+   "n": 9, "ran_today": false,
+   "title": "Overnight versus intraday: where the return actually arrives, per cohort",
+   "inspired_by": [
+    {"name": "Lou, Polk & Skouras (2019), A tug of war: Overnight versus intraday expected returns, JFE", "url": "https://doi.org/10.1016/j.jfineco.2019.03.011"},
+    {"name": "Cliff, Cooper & Gulen (2008), Return differences between trading and non-trading hours", "url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1004081"}
+   ],
+   "question": "For the indexes and each cohort, how much of the return came overnight (close to open) against during the session (open to close), and does it change with the market state? If most of a leader's return is the gap, a limit order at yesterday's close never fills the good days.",
+   "method": "Split every daily bar into close→open and open→close; cumulative lines and yearly shares; by cohort, by HMM state, by earnings-week or not; block-bootstrap ranges.",
+   "data": "Daily open and close in every cached bar; the chart API's intraday bars for a finer cut.",
+   "value": "EXECUTION: whether the tranche orders should rest at the open, at the close, or as gaps.",
+   "cost": "Half a day; data already in hand."
+  },
+  {
+   "n": 10, "ran_today": false,
+   "title": "Breadth thrusts and participation from our own 364-name history",
+   "inspired_by": [
+    {"name": "Zweig breadth thrust (1986, Winning on Wall Street); StockCharts definition", "url": "https://school.stockcharts.com/doku.php?id=market_indicators:zweig_breadth_thrust"},
+    {"name": "IslamBaraka90, cumulative advance–decline line built without look-ahead", "url": "https://github.com/IslamBaraka90/Fintech-Cumulative-Advance-Decline-Line-Market-Breadth-algorithm"}
+   ],
+   "question": "The breadth file starts on 23 Sep 2026, but the cache holds daily bars for 364 names back to 2003: rebuild % above the 50-day and 200-day, the advance–decline line and new highs/lows for 23 years, then ask whether a breadth thrust (share above the 50-day from under 40% to over 60% inside 10 sessions) preceded anything, with false alarms counted.",
+   "method": "Breadth series from the cached panel (survivorship: today's names); thrust events as episodes; hit rate and false-alarm rate at every threshold (ROC), lead times, block bootstrap; the whole-market file from the scout job replaces the panel when it exists.",
+   "data": "candles-f5 cache (364 names 2003→).",
+   "value": "MARKET-FIRST: the 'rising tide' gauge with 23 years of history instead of five days.",
+   "cost": "Half a day now; the survivorship fix waits on the Fly one-off."
+  }
+ ],
+ "also_considered": [
+  "Tranches at technical levels versus a lump sum (Vanguard 2012, Dollar-cost averaging just means taking risk later): simulate Alan's ladder of levels against buying at once, per pullback depth.",
+  "The Geiger composite and its components as a factor: alphalens tear sheet and the deflated Sharpe ratio (Bailey & López de Prado 2014) over the parameter grid that made it."
+ ]
+}
