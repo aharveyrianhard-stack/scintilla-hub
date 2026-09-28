@@ -100,7 +100,7 @@ test("EXPAND hides the board and gives the company the full width; COLLAPSE rest
   const cls = new Set(), saved = {}, btn = { outerHTML: "" };
   const env = { LEFT_STATE: "PINNED", LEFT_T: "MU", LEFT_HEAT: false };
   const kit = new Function("S", "document", "lsGet", "lsSet", "el", "env",
-    line(/^const CO_RANGE_KEY = [^\n]*/m) + "let CO_EXPANDED = false;\nconst cvRailRepaint = () => {};\n" +   /* D2 — the expanded view's name rail is filled when it shows */
+    line(/^const CO_RANGE_KEY = [^\n]*/m) + "let CO_EXPANDED = false;\nconst cvRailRepaint = () => {};\nconst cvRailFreeze = () => {};\n" +   /* D2 — the expanded view's name rail is filled when it shows; R4 review fix — opening EXPAND takes a fresh list order */
     "Object.defineProperty(globalThis, '__hf', { value: 1, configurable: true });\n" +
     fn("coExpandOn") + fn("coExpandBtnHTML") +
     fn("coExpandApply").replace("LEFT_STATE, LEFT_T, LEFT_HEAT", "env.LEFT_STATE, env.LEFT_T, env.LEFT_HEAT") +
