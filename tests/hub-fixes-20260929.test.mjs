@@ -114,3 +114,43 @@ test("GOOG: every surface says which number it is — the strip, the board's tit
   assert.match(day, /const nowLbl = open === today \? "NOW" : "AT THE CLOSE";/);
   assert.match(fnSrc("udRowsForDay"), /why: po && why0 \? "at the flash: " \+ why0 \+ \(now && now\.x != null && Math\.abs\(now\.x\) < now\.thr \? " · back inside " \+ now\.thr \+ "× now" : ""\) : why0,/);
 });
+
+/* ── 3 · ONE EVENTS STRUCTURE: the economic room opens on its own sliding tape, like EARNINGS ─────────── */
+test("ECONOMIC room: tape in the EVENTS frame (NEXT at its right end) + the earnings rail's two lists; one switch", () => {
+  assert.match(page, /const ECON_ROOM_TAPE_ON = true;/);
+  const room = fnSrc("econRoomHTML");
+  assert.match(room, /\(ECON_ROOM_TAPE_ON \? ecRoomTapeWrapHTML\(\) : ""\)/);
+  assert.match(room, /\(ECON_ROOM_TAPE_ON \? "" : '<div class="ec-next" id="ecRoomQueue"><\/div>'\)/, "switch off = the M55 queue strip, as it was");
+  assert.match(room, /id="ecRoomUp"/); assert.match(room, /id="ecRoomPast"/);
+  assert.match(fnSrc("ecRoomTapeWrapHTML"), /class="sc-toptape sc-toptape--ec"><div class="sc-toptape__slot" id="ecRoomTapeSlot"><\/div>' \+\s+'<span class="sc-macronext sc-toptape__next" id="ecNext">/);
+  assert.match(fnSrc("ecRoomWindow"), /ttWindow\(today\)/, "the same days as the earnings tape");
+});
+
+test("ECONOMIC room tape: the SAME items, states and colours as every other economic surface; nothing new is read", () => {
+  const t = fnSrc("ecRoomTapeHTML");
+  assert.match(t, /ecBandItemHTML\(it, ecBandState\(it, now\), today\)/, "the band's own item: category dot, High heavier, release states");
+  assert.match(t, /ecTapeNowHTML\(/, "a NOW marker where the past ends");
+  assert.match(fnSrc("ecRoomTapeItems"), /ecTapeItems\(MACRO_NEXT \|\| \[\]\)/, "the one shared US read");
+  assert.match(fnSrc("ecNudgePaint"), /ecNudgePaintBox\(el\("ecNext"\), nowSec\);/, "NEXT is the header's own queue");
+  assert.match(fnSrc("ecRoomScintPass"), /mnScintPass\(now, ecNextBox, ecNudgeModel\(nowSec\), "ecnext"\)/, "and flashes on the same clock");
+  assert.match(fnSrc("ecTapePaint"), /renderEcRoomTape\(nowSec\)/, "repainted on the shared 15 s tick");
+  const fill = fnSrc("fillEcon");
+  assert.doesNotMatch(fill, /ecTapeRead|ecTapeArm/, "no read and no timer of its own");
+});
+
+test("ECONOMIC room lists: UPCOMING (est, prior, countdown) and PRINTED (actual vs est, the calendar's read), each row goes to its day", () => {
+  const MACRO_NEXT = null;
+  const L = fnSrc("ecRoomListsHTML");
+  assert.match(L, /it\.actual == null && it\.ts > now - EC_NUDGE_DUE_S && it\.ts - now <= EC_TAPE_DAYS \* 86400/);
+  assert.match(L, /it\.actual != null && it\.ts <= now/);
+  assert.match(L, /ecTapeSurprise\(it\)/, "beat / miss read exactly as the calendar reads it");
+  assert.match(L, /data-act="mngoto" data-day="/);
+  assert.match(L, /it\.impact === "High" \? "ec-li-hi"/);
+  void MACRO_NEXT;
+});
+
+test("room tapes on a phone: NEXT drops under the tape instead of disappearing (both rooms), overriding the r4-fit hide", () => {
+  assert.match(page, /\.ec-roomtape \.sc-toptape__next\.sc-macronext, \.ern-roomtape \.sc-toptape__next\.sc-macronext\{ display:flex; flex:1 0 100%;/);
+  const late = page.indexOf('<style id="r4-fit">');
+  assert.match(page.slice(late), /\.sc-toptape__next\.sc-macronext\{display:none\}/, "the rule it outranks (0,2,0 < 0,3,0)");
+});

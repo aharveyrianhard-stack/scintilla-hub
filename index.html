@@ -4621,6 +4621,28 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ern-ec--later .ecb-dot, .ern-ec--later .ecb-nm{ opacity:.6; }
 .ern-later{ font-size:.9em; }
 .ern-roomtape .sc-toptape--ern{ height:40px; }
+/* 29 Sep — the economic room's tape, in the same frame; a High release is drawn heavier; NEXT stays visible on a phone
+   in BOTH room tapes (it drops under the tape instead of disappearing) */
+.ec-roomtape{ flex:0 0 auto; margin:0 0 8px; }
+.ec-roomtape .sc-toptape--ec{ height:40px; }
+.sc-tape--ecroom .ecb-it{ cursor:pointer; } .sc-tape--ecroom .ecb-it:hover .ecb-nm{ color:var(--crk); }
+.ec-li-hi{ font-weight:700; color:var(--ink); } .ec-li-note{ font-style:normal; color:var(--dim); font-size:11px; letter-spacing:.06em; margin-left:6px; }
+.ec-uptbl .n{ text-align:right; } .ec-uptbl .dim{ color:var(--ink3); }
+.ev-uptbl.ec-uptbl td:nth-child(2), .ev-uptbl.ec-uptbl td:last-child{ white-space:normal; }   /* a long name or a read wraps; it is never cut */
+@media (min-width:901px){ .ec-roomtape .sc-toptape__next.sc-macronext{ max-width:38%; } }
+@media (max-width:900px){
+  .ec-roomtape .sc-toptape, .ern-roomtape .sc-toptape{ height:auto; flex-wrap:wrap; }
+  .ec-roomtape .sc-toptape__slot, .ern-roomtape .sc-toptape__slot{ flex:1 0 100%; height:36px; }
+  /* .sc-macronext in the selector: the r4-fit sheet (last in the page) hides .sc-toptape__next.sc-macronext here */
+  .ec-roomtape .sc-toptape__next.sc-macronext, .ern-roomtape .sc-toptape__next.sc-macronext{ display:flex; flex:1 0 100%; max-width:none; border-left:0;
+    border-top:.5px solid var(--line2); padding:0 8px; height:32px; flex-wrap:nowrap; overflow-x:auto; white-space:nowrap; }
+  .ec-roomtape .sc-toptape__next .mn-lbl, .ec-roomtape .sc-toptape__next .mn-it, .ec-roomtape .sc-toptape__next .mn-swarm,
+  .ern-roomtape .sc-toptape__next .mn-lbl, .ern-roomtape .sc-toptape__next .mn-it, .ern-roomtape .sc-toptape__next .mn-swarm{ height:32px; flex:none; }
+  .ec-roomtape .sc-toptape__next.sc-macronext:empty, .ern-roomtape .sc-toptape__next.sc-macronext:empty{ display:none; } }
+/* the rail's two tables on a phone: ACTUAL / EST stay (3rd column), the 4th gives way instead; the tape's label keeps its word */
+@media (max-width:560px){ .ec-roomtape .sc-toptape .sc-tape__lbl{ flex-basis:96px; width:96px; }
+  .ev-uptbl.ec-uptbl th:nth-child(3), .ev-uptbl.ec-uptbl td:nth-child(3){ display:table-cell; }
+  .ev-uptbl.ec-uptbl th:nth-child(4), .ev-uptbl.ec-uptbl td:nth-child(4){ display:none; } }
 .ern-roomtape .sc-toptape--ern .sc-tape{ font-size:11px; }
 /* the TODAY line on the slider, now labelled and always drawn */
 .se-tlnow{ opacity:.95; width:1.5px; }
@@ -15521,11 +15543,19 @@ function ecNearestDays(reg, cat) {
            next: nextD ? { day: nextD, count: byDay[nextD] } : null };
 }
 
+/* 29 Sep — the one RELEASES | REGIME switch, drawn by both headers (see regimeRoomHTML) */
+function econViewTabsHTML(){
+  return '<span class="ec-span rg-vtabs">'+
+    ["RELEASES","REGIME"].map((v)=>
+      '<span class="ec-sp '+(v===(S.econView||"RELEASES")?"on":"")+'" data-act="ecview" data-v="'+v+'" role="button" tabindex="0">'+v+"</span>").join("")+
+    "</span>";
+}
 function econRoomHTML() {
   return '<div class="body2">' +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>economic releases · <b>market-wide</b></span>' +
         econViewTabsHTML() + SECFS_BTN + "</div>" +
+      (ECON_ROOM_TAPE_ON ? ecRoomTapeWrapHTML() : "") +   /* 29 Sep — the room opens on its tape, like EARNINGS */
       '<div class="ec-ctry" id="econCtry"></div>' +
       '<div class="ec-cat" id="econCat"></div>' +
       '<div class="ec-daybar">' +
@@ -15546,7 +15576,7 @@ function econRoomHTML() {
          by the same ecNudgePaintBox() and flashed by the same mnScintPass(), so the two surfaces
          cannot drift in what they name, what colour the dot is, or how fast it moves. It sits above
          the table so it is there in DAY, WEEK and MONTH — MONTH has no table rows at all. */
-      '<div class="ec-next" id="ecRoomQueue"></div>' +
+      (ECON_ROOM_TAPE_ON ? "" : '<div class="ec-next" id="ecRoomQueue"></div>') +
       '<div class="scroller" id="econTbl"><div class="soon">loading economic calendar…</div></div>' +
     "</div>" +
     /* PORT — the rail is PRODUCTION's (579dee5 · c40fbc8 · 211a1ec · 3c4e0b1): stored prints with their
@@ -15554,6 +15584,8 @@ function econRoomHTML() {
        "Source (live)" card and undated prints list are NOT ported — they predate that review. The ladder keeps
        3d69248's own card; the releases source is named in the same footer. */
     '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>stored prints</b></span>' + SECFS_BTN + '</div><div class="rail">' +
+      (ECON_ROOM_TAPE_ON ? '<div class="card"><h4>UPCOMING · RELEASES <i class="ec-li-note">US watch list · 7 days</i></h4><div class="ev-upwrap" id="ecRoomUp">—</div></div>' +
+        '<div class="card"><h4>PRINTED · THIS WEEK</h4><div class="ev-pastwrap" id="ecRoomPast">—</div></div>' : "") +   /* 29 Sep — the earnings rail's two lists */
       '<div class="card"><h4>Treasury curve</h4><div class="sc-senttxt" id="econCurve">—</div></div>' +
       '<div class="card" id="econLadder"><h4>UST ladder</h4><div class="sc-senttxt">—</div></div>' +
       '<div class="card"><div id="econList"><div class="soon">loading economic data…</div></div></div>' +
@@ -16217,6 +16249,7 @@ function macroNextHTML(nowSec) {
    mounted; the work itself moved into ecNudgePaintBox(). */
 function ecNudgePaint(nowSec) {
   ecNudgePaintBox(el("macroNext"), nowSec);
+  ecNudgePaintBox(el("ecNext"), nowSec);            // 29 Sep — the economic room tape's NEXT: the header's own queue
   const room = el("ecRoomQueue");
   if (room) ecNudgePaintBox(room, nowSec, ecRoomModel(Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000)));
 }
@@ -16438,6 +16471,7 @@ function ecTapePaint(nowSec) {
   ecNudgePaint(nowSec); renderEconBand(nowSec);
   if (typeof renderTopTape === "function") renderTopTape(nowSec);   // 27 Sep — the scintillating tape reads the same rows
   if (typeof ernEcPaint === "function") ernEcPaint(nowSec);         // 28 Sep — earnings walk the same states on the same 15 s tick
+  if (typeof renderEcRoomTape === "function") renderEcRoomTape(nowSec);   // 29 Sep — the economic room's tape and lists, same tick
 }
 function ecTapeTick() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
@@ -16589,9 +16623,103 @@ async function fillEconRail() {
   } catch (err) { list.innerHTML = '<div class="soon">economic pull failed — check connection.</div>'; }
 }
 /* PORT — one room mount, two independent reads: the releases window (left) and production's rail (right). */
+/* ============================================================================
+   29 SEP · ONE EVENTS STRUCTURE (P2-HUB-FIXES item 3).
+   Alan, 28 Sep ~18:45: "Economic events have never had a left-to-right colour-coded sliding tape like earnings —
+   consolidate events + economic under one structure (best of both)."
+   THE SHAPE BOTH ROOMS NOW SHARE, top to bottom:
+     1. a sliding tape in the EVENTS tape's frame (.sc-toptape): this week so far + the next seven days, a NOW marker
+        where the past ends, each item in its own colour, and NEXT still at the right-hand end;
+     2. the room's own controls and table (economic: region, category, day bar, DAY / WEEK / MONTH; earnings: the
+        season slider and its squares) — untouched;
+     3. on the right, two lists: what is coming (UPCOMING) and what has landed (PRINTED / REPORTED).
+   THE COLOURS: a release's dot is its category (EC_CAT_COLOR, the calendar's legend); a High-importance release is
+   drawn heavier. THE RULES: the tape items walk ecBandState, NEXT is ecNudgeModel — the dashboard header's own queue,
+   so "what flashes" and "when" are one rule on every surface (still until the hour, breathing inside it, a hard pulse
+   at the minute). WHAT IT READS: nothing new — MACRO_NEXT, the one US read the header and the bottom band share.
+   HOW TO TURN IT OFF: ECON_ROOM_TAPE_ON = false puts back the M55 queue strip exactly as it was. */
+const ECON_ROOM_TAPE_ON = true;
+const EC_ROOM_UP_MAX = 12, EC_ROOM_PAST_MAX = 12;
+let EC_ROOM_TAPE_HTML = "", EC_ROOM_LISTS_HTML = "";
+/* the earnings tape's own window (ttWindow: this week so far + seven days), so both room tapes cover the same days */
+function ecRoomWindow(today, nowSec) {
+  return typeof ttWindow === "function" ? ttWindow(today) : { from: ecBandWeek(nowSec)[0], to: ecShift(today, 7) };
+}
+function ecRoomTapeItems(nowSec, todayIso) {
+  const today = todayIso || ecDateKey(nowSec), w = ecRoomWindow(today, nowSec);
+  return ecTapeItems(MACRO_NEXT || []).filter((it) => it.day >= w.from && it.day <= w.to);
+}
+function ecRoomTapeHTML(nowSec, todayIso) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const today = todayIso || ecDateKey(now);
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!MACRO_NEXT) {
+    seg = '<span class="sc-tape__item ecb-note">' + (MACRO_NEXT_FAIL_AT ? "the economic calendar could not be read" : "reading this week's releases…") + "</span>" + sep;
+  } else {
+    const items = ecRoomTapeItems(now, today);
+    let crossed = false;
+    seg = items.length ? items.map((it) => {
+      let pre = "";
+      if (!crossed && it.ts > now) { crossed = true; pre = ecTapeNowHTML("now — everything to the left has printed or had its minute"); }
+      return pre + ecBandItemHTML(it, ecBandState(it, now), today);
+    }).join("") : '<span class="sc-tape__item ecb-note">no US releases on the watch list this week or next</span>' + sep;
+  }
+  return '<div class="sc-tape sc-tape--econ sc-tape--ecroom" id="ecRoomBand"><b class="sc-tape__lbl" title="' +
+    esc("US releases on the watch list — this week so far and the next seven days · the dot is the release's category (the legend below), a heavier name is High importance · still until the hour before, breathing inside it, a hard pulse at the minute · tap one for its day") +
+    '">ECONOMIC →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function ecRoomTapeWrapHTML() {
+  return '<div class="ec-roomtape" id="ecRoomTape"><div class="sc-toptape sc-toptape--ec"><div class="sc-toptape__slot" id="ecRoomTapeSlot"></div>' +
+    '<span class="sc-macronext sc-toptape__next" id="ecNext"></span></div></div>';
+}
+/* the two lists, in the earnings room's own table look (.ev-uptbl) */
+function ecRoomListsHTML(nowSec) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000), today = ecDateKey(now);
+  if (!MACRO_NEXT) return { up: '<div class="soon">' + (MACRO_NEXT_FAIL_AT ? "could not be read" : "reading…") + "</div>", past: "" };
+  const all = ecTapeItems(MACRO_NEXT);
+  const dot = (it) => '<span class="ecb-dot" style="color:' + ecHue(it.cat) + '">●</span> ';
+  const nm = (it) => '<span class="' + (it.impact === "High" ? "ec-li-hi" : "") + '">' + esc(it.name) + "</span>";
+  const when = (it) => esc((it.day === today ? "TODAY" : ecWeekday(it.day).toUpperCase()) + " " + ecTimeET(it.ts));
+  const row = (it, cells) => '<tr data-act="mngoto" data-day="' + esc(it.day) + '" data-esub="' + esc(ecBase(it.event)) + '" title="' + esc(ecNudgeTitle(it)) + '">' + cells + "</tr>";
+  const up = all.filter((it) => it.actual == null && it.ts > now - EC_NUDGE_DUE_S && it.ts - now <= EC_TAPE_DAYS * 86400).slice(0, EC_ROOM_UP_MAX);
+  const past = all.filter((it) => it.actual != null && it.ts <= now && it.day >= ecRoomWindow(today, now).from).slice(-EC_ROOM_PAST_MAX).reverse();
+  const upH = up.length ? '<table class="ev-uptbl ec-uptbl"><thead><tr><th>WHEN (ET)</th><th>RELEASE</th><th class="n">EST</th><th class="n">PRIOR</th><th class="n">IN</th></tr></thead><tbody>' +
+      up.map((it) => row(it, "<td>" + when(it) + "</td><td>" + dot(it) + nm(it) + '</td><td class="n">' + esc(it.estimate != null ? ecNum(it.estimate) : "—") +
+        '</td><td class="n dim">' + esc(it.previous != null ? ecNum(it.previous) : "—") + '</td><td class="n dim">' + esc(ecCountdown(it.ts, now)) + "</td>")).join("") + "</tbody></table>"
+    : '<div class="soon">nothing on the watch list in the next seven days</div>';
+  const pastH = past.length ? '<table class="ev-uptbl ec-uptbl"><thead><tr><th>WHEN (ET)</th><th>RELEASE</th><th class="n">ACTUAL</th><th class="n">EST</th><th>READ</th></tr></thead><tbody>' +
+      past.map((it) => { const s = ecTapeSurprise(it);
+        return row(it, "<td>" + when(it) + "</td><td>" + dot(it) + nm(it) + '</td><td class="n ecb-res ' + (s ? s.cls : "") + '"><b>' + esc(ecNum(it.actual)) + "</b></td>" +
+          '<td class="n dim">' + esc(it.estimate != null ? ecNum(it.estimate) : it.previous != null ? "prior " + ecNum(it.previous) : "—") + "</td>" +
+          '<td class="ecb-res ' + (s ? s.cls : "") + '">' + esc(s ? s.txt : "") + "</td>"); }).join("") + "</tbody></table>"
+    : '<div class="soon">nothing printed yet this week</div>';
+  return { up: upH, past: pastH };
+}
+function renderEcRoomTape(nowSec) {
+  if (!ECON_ROOM_TAPE_ON) return;
+  const slot = el("ecRoomTapeSlot");
+  if (!slot) return;
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const html = ecRoomTapeHTML(now);
+  if (html !== EC_ROOM_TAPE_HTML || !slot.firstChild) {
+    EC_ROOM_TAPE_HTML = html; slot.innerHTML = html;
+    const track = slot.querySelector && slot.querySelector(".sc-tape__track");
+    if (track && typeof tapeSpeed === "function")
+      tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));
+  }
+  const up = el("ecRoomUp"), past = el("ecRoomPast");
+  if (up || past) {
+    const L = ecRoomListsHTML(now), key = L.up + "|" + L.past;
+    if (key !== EC_ROOM_LISTS_HTML || (up && !up.firstChild)) { EC_ROOM_LISTS_HTML = key; if (up) up.innerHTML = L.up; if (past) past.innerHTML = L.past; }
+  }
+}
 async function fillEcon() {
   if (!el("econTbl")) return;
   ecArmRefresh();                                           // RELEASE CLOSURE — idempotent: one timer, one listener
+  /* 29 Sep — the room's own tape, from the shared read. No read and no timer of its own: the boot (ecTapeStart) already
+     runs the one US read and the one 15 s tick, which repaints this tape until the rows are in. */
+  if (ECON_ROOM_TAPE_ON) { EC_ROOM_TAPE_HTML = ""; EC_ROOM_LISTS_HTML = ""; renderEcRoomTape(); if (typeof ecNudgePaint === "function") ecNudgePaint(); }
   await Promise.all([ecLoadWindow(), fillEconRail()]);
 }
 
@@ -16975,12 +17103,6 @@ async function rgMount(){
    header carried only ⛶: no RELEASES switch, and the ECONOMIC tab reopened REGIME. Both headers now draw the one
    RELEASES | REGIME switch, REGIME adds the grey ← RELEASES / ✕ CLOSE pair (the scnav look), Esc goes back to
    RELEASES, and the ECONOMIC master tab always opens on RELEASES. */
-function econViewTabsHTML(){
-  return '<span class="ec-span rg-vtabs">'+
-    ["RELEASES","REGIME"].map((v)=>
-      '<span class="ec-sp '+(v===(S.econView||"RELEASES")?"on":"")+'" data-act="ecview" data-v="'+v+'" role="button" tabindex="0">'+v+"</span>").join("")+
-    "</span>";
-}
 function regimeRoomHTML(){
   return '<div class="body2"><div class="panel"><div class="sc-plabel sc-plabel--row rg-head">'+
     '<span class="rg-nav"><button type="button" class="rg-navb" data-act="ecview" data-v="RELEASES" title="Back to the economic releases (Esc)"><i>←</i>RELEASES</button>'+
@@ -23044,7 +23166,7 @@ function scintWhat(ev) {
 /* R4 — the ONE-LINE strip's wording: the move and how many usual days it is, "(usual ±3.3% a day)"; the history length and
    the rule that fired stay in the tooltip (scintSays), so the line fits instead of being cut mid-sentence. */
 function scintSaysShort(ev) {
-  const now = scintNowSays(ev);
+  const now = typeof scintNowSays === "function" ? scintNowSays(ev) : "";
   return scintSays(ev).replace(/, measured over its last \d+ sessions/, "").replace(/ over its last \d+ (reports|prints)/, "")
     .replace(/ · (big move, and far beyond its usual day|a big move on its own[^·]*)$/, "")
     .replace(/ at the flash \d{1,2}:\d{2} ET(, (after hours|pre-market|market closed))?/, (m, a, w) => w ? " " + w : "") + (now ? " · " + now : "");
@@ -23513,6 +23635,8 @@ function ecRoomScintPass(nowMs, modelIn) {
   let model = modelIn;
   if (!model) { try { model = ecRoomModel(nowSec); } catch (_) { return 0; } }
   let n = mnScintPass(now, (typeof el === "function" ? el("ecRoomQueue") : null), model, "room");
+  const ecNextBox = typeof el === "function" ? el("ecNext") : null;   /* 29 Sep — the room tape's NEXT flashes on the same clock */
+  if (ecNextBox) { try { n += mnScintPass(now, ecNextBox, ecNudgeModel(nowSec), "ecnext"); } catch (_) {} }
   const rows = Array.prototype.slice.call(document.querySelectorAll(".ec-row[data-esub], .ec-ev[data-esub]"));
   if (!rows.length) return n;
   for (const m of model || []) {
