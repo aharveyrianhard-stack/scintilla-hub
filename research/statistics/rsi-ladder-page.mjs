@@ -115,12 +115,12 @@ table.g10{font-size:13px}table.g10 td,table.g10 th{padding:3px 6px}table.g10 th{
 details{border-top:1px solid var(--line);padding:8px 0}details>summary{cursor:pointer;color:var(--ink);font-size:15px;line-height:1.6}details[open]>summary{color:var(--hi)}
 details.inst>summary{font-size:16px}
 .three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.three>div{min-width:0;overflow-x:auto}
-.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 figure.chart{margin:12px 0;overflow-x:auto}figure.chart img{display:block;width:100%;height:auto;border:1px solid #1E1E28;background:var(--panel)}
 figure.chart.cell{margin:0}figcaption{font:11px ui-monospace,Menlo,monospace;color:var(--dim);margin-top:3px}figcaption a{color:var(--dim)}
 dl{max-width:1180px}dt{color:var(--hi);font-weight:600;margin-top:12px}dd{margin:2px 0 0 0}
 code{font:14px ui-monospace,Menlo,monospace;color:#BEBECE}
-@media(max-width:1100px){.grid3{grid-template-columns:1fr 1fr}.three{grid-template-columns:1fr}}
+@media(max-width:1100px){.three{grid-template-columns:1fr}}
 @media(max-width:700px){body{padding:20px 16px 60px;font-size:16px}h1{font-size:26px}h2{font-size:22px}ol.lead{font-size:16.5px}.grid3{grid-template-columns:1fr}
  figure.chart.wide img{min-width:880px}figure.chart.cell img{min-width:560px}table,table.big{font-size:12px}th,td{padding:4px 5px}code{overflow-wrap:anywhere}}
 </style></head><body><main>
@@ -136,7 +136,7 @@ code{font:14px ui-monospace,Menlo,monospace;color:#BEBECE}
 ${img("ladder-heat-full.svg", "RSI at every rung, full history")}
 ${img("ladder-heat-3y.svg", "RSI at every rung, last 3 years")}
 <h3>Does Bitcoin's RSI go deeper?</h3>
-<p>Yes, at every rung below about 83, and it also runs hotter at the very top. Same years for all three lines; the bar chart shows the gap to SPY one rung at a time.</p>
+<p>Yes, at every rung up to ${btc.ladder.full.findIndex((v, q) => q > 0 && v >= X.SPY_sinceBTC.ladder[q]) - 1}, and it also runs hotter at the very top. Same years for all three lines; the bar chart shows the gap to SPY one rung at a time.</p>
 ${img("ladder-btc-spy-qqq.svg", "Bitcoin vs SPY vs QQQ ladders")}
 ${img("gap-btc-vs-spy.svg", "Bitcoin minus SPY, rung by rung")}
 ${img("ladder-long-view.svg", "Bitcoin vs the S&P since 1928 and the Nasdaq 100 since 1985")}
