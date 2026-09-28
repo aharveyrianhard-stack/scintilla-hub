@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · T2 · THE MARKET MAP REDESIGNED, THE WORKSHOP AS BRANCHES</title>
+<style>
+:root{--bg:#0d0d0d;--panel:#151515;--line:#272727;--line2:#333333;--ink:#cdcdcd;--ink2:#ababab;--dim:#8c8c8c;
+ --up:#35b06a;--dn:#d1483f;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font:13px/1.65 var(--mono)}
+.wrap{max-width:1060px;margin:0 auto;padding:0 16px 80px}
+.top{padding:14px 0 10px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.brand{font-size:12px;letter-spacing:.2em;color:var(--dim)}.brand b{color:var(--ink)}
+h1{font:600 19px/1.35 var(--mono);color:var(--ink);margin:24px 0 8px}
+h2{font:600 12px/1.4 var(--mono);letter-spacing:.18em;color:var(--ink);margin:34px 0 10px;text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:5px}
+h3{font:600 13px/1.4 var(--mono);color:var(--ink);margin:20px 0 6px}
+p,li{max-width:88ch} b{color:var(--ink)}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.box{border:1px solid var(--line);background:var(--panel);padding:12px 14px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.1em;color:var(--dim);font-weight:400;text-transform:uppercase}
+td.n{text-align:right;white-space:nowrap;color:var(--ink)}
+.scroll{overflow-x:auto}
+figure{margin:12px 0 22px} figure img{width:100%;border:1px solid var(--line2);display:block}
+figure.phone{display:inline-block;width:calc(33% - 10px);min-width:180px;margin-right:10px;vertical-align:top}
+figcaption{font-size:12px;color:var(--dim);margin-top:6px}
+pre{background:var(--panel);border:1px solid var(--line);padding:10px 12px;overflow-x:auto;font:12px/1.5 var(--mono);color:var(--ink)}
+a{color:var(--ink)}
+code{color:var(--ink);overflow-wrap:anywhere}
+@media (max-width:600px){figure.phone{width:100%;margin-right:0}}
+td,th{overflow-wrap:anywhere}
+</style></head>
+<body><div class="wrap">
+<div class="top"><span class="brand"><b>SCINTILLA</b> · T2 · MAP + WORKSHOP</span><span data-scnav-slot></span><span class="brand">27 Sep 2026 evening · branch candidate/map-workshop-20260927 · not deployed</span></div>
+
+<h1>The market map redesigned as a wheel, and the workshop as branches that cannot go stale</h1>
+<p>Two things from Alan's Sunday notes. On the map: "make it into the design… really make something very strong. Please wow me." On the workshop: "a scatter of things without classifications, without order… goes stale easily", so organise it with branches like the Obsidian estate vault, and make it impossible to go stale by hand.</p>
+<div class="box">
+<b>In one line:</b> the <a href="/deliverables/20260927/market-map/index.html">map</a> is now a fixed wheel (axle, rim of eleven sectors, a crown above) drawn from the tree with no simulation, halos for strong readings, a glow per sector for its average, labels that never overlap and appear as you zoom, and a page that costs nothing while it sits. The <a href="/workshop/">workshop</a> is a branch map of seven areas drawn from <b>one file</b>, <code>workshop/manifest.json</code>; a lane adds one line to that file and the page is current. A plain list of the same data is one click away.
+</div>
+
+<h2>1 · The map</h2>
+<p>The full account of what the map shows, where every number comes from and what could be wrong is in <a href="/deliverables/20260927/market-map/MARKET-MAP.html">MARKET-MAP.html</a>, which was updated for this design. The short version:</p>
+<ul>
+<li><b>544 balls</b>: 486 lit with the live Geiger from the chart API (175 up, 311 down at 20:48 UTC, labelled VERIFIED by the API), 35 hollow cages "waiting for admission", 23 grey headings. Nothing is invented.</li>
+<li><b>The picture</b>: THE MARKET, US STOCKS and US SECTORS on a short spine; SPY, QQQ, IWM and the style funds hugging it; the eleven sectors on a rim, each a ball of names with the biggest companies nearest the middle and its funds close to the heading; the world, bonds, commodities, crypto and the dollar on a higher ring above. Depth from fog, size and the tilt of the wheel.</li>
+<li><b>Colour</b>: green above zero, red below, brighter the stronger, a halo past ±0.45. Each sector glows with the plain average of its lit lines and prints it under its heading ("99 lines · avg +0.27 · ▲69 ▼27 · 3 waiting"). That is labelled a summary, not a Geiger of the heading's own.</li>
+<li><b>Labels</b>: page text, crisp at every zoom, tiered by how big the ball is on screen, and never overlapping. Zoom in and the names appear by size.</li>
+<li><b>Cheap</b>: five draw calls for all the balls, one for the lines, one for the halos; draws only while something moves.</li>
+</ul>
+
+<h3>CPU, measured on this MacBook (headless, never the iMac)</h3>
+<div class="scroll"><table>
+<tr><th>case</th><th class="n">whole Chrome · CPU-s per min</th><th class="n">the page's own thread</th><th>first build, same case</th></tr>
+<tr><td>opening turn (first 20 s, the wheel turning by itself) · GPU</td><td class="n">17.1</td><td class="n">4.9</td><td>not measured</td></tr>
+<tr><td>idle after it rests · GPU</td><td class="n">0.5</td><td class="n">0.01</td><td>1.2 · 0.01</td></tr>
+<tr><td>60 s of nonstop dragging · GPU</td><td class="n">17.7</td><td class="n">6.0</td><td>23.3 · 14.0</td></tr>
+<tr><td>60 s of nonstop dragging · software graphics</td><td class="n">700</td><td class="n">0.8</td><td>638 · 3.3</td></tr>
+</table></div>
+<p>60 would be one core fully busy. Idle is zero. Dragging costs about a third of a core on a real GPU, with the page's own share less than half the first build's. The headless GPU run drew 82 frames a second; a real screen stops at 60, so it is lower on a screen. The software row only says that painting pixels on the CPU is expensive; no real screen does that. <b>The old iMac itself was not measured</b>, by the rule that nobody touches it, so "cheap on an old iMac" is expected from these figures, not proven.</p>
+
+<h3>What the screenshots show</h3>
+<figure><img src="/deliverables/20260927/market-map/shots/desktop-1680.png" alt="whole map"><figcaption>1680, the whole wheel. Axle in the middle, sectors round the rim in their bubbles, the crown above. Technology glows green at the back; Utilities ("24 lines · avg −0.7 · ▲0 ▼24"), Consumer Discretionary and Staples glow red at the front. Top line: "486 lit (175 up · 311 down) · 35 waiting for admission · day = session 2026-09-25 · verified".</figcaption></figure>
+<figure><img src="/deliverables/20260927/market-map/shots/desktop-1680-tech.png" alt="Information Technology"><figcaption>1680, Information Technology flown into: NVDA, AAPL, MSFT, MU with green halos near the middle, ORCL and CSCO red, hollow cages FTNT, NTNX and DOCN at the edge. Card: 150 lines under it lit, 108 up, 42 down.</figcaption></figure>
+<figure><img src="/deliverables/20260927/market-map/shots/desktop-1680-top.png" alt="top view"><figcaption>1680, TOP VIEW: the wheel from above, all headings readable, nothing overlapping.</figcaption></figure>
+<figure class="phone"><img src="/deliverables/20260927/market-map/shots/phone-390.png" alt="phone"><figcaption>390: the wheel fits the width; KEY folded; card below; no sideways scroll.</figcaption></figure>
+<figure class="phone"><img src="/deliverables/20260927/market-map/shots/phone-390-card.png" alt="phone card"><figcaption>390, XLK clicked: inside Technology, XLK <span class="up">+0.87</span> on the card.</figcaption></figure>
+<p>All shots are from a headless browser with no window on Alan's screen. The chart API only answers the scintillahub.ai address, so the throwaway headless browser ran with its cross-origin check relaxed; the page is unchanged. Every browser started was killed before returning.</p>
+
+<h2>2 · The workshop as branches</h2>
+<p>Open <a href="/workshop/">/workshop/</a>. It is a mind map: WORK·SHOP in the middle, seven branches (Comps, Allocation, Statistics, Station, Hub, Geiger, Back end) split across the two sides so they balance, and each page a leaf on its branch with a dot for its status, its date, its state in a word, and the question if it is waiting on you. Hover a leaf for what it is; click to open it. A row of chips at the top lists everything waiting on your call; the centre card counts pages, new this week, waiting on you and being built. Archived leaves are folded under "show N archived". On a phone it becomes one column with the same wires. <b>LIST</b> at the top right shows the same data as a plain list, and with scripts off the page points at the manifest file itself.</p>
+<figure><img src="shots/workshop-1680.png" alt="workshop at 1680"><figcaption>1680: 31 pages on 7 branches. Left: Allocation (1), Station (4), Hub (6 + 2 archived), Geiger (3). Right: Comps (5), Statistics (5 + 2 archived), Back end (3). Yellow dots are the five decisions; green dots are live; the dashed dots are the two things being built. The YOUR CALL row at the top lists the five decisions with their asks. Wires run from the centre to each branch and from each branch to its leaves.</figcaption></figure>
+<figure class="phone"><img src="shots/workshop-390.png" alt="workshop at 390"><figcaption>390: one column, the centre card first, then each branch with its leaves and their blurbs open. No sideways scroll.</figcaption></figure>
+
+<h3>Why it cannot go stale by hand</h3>
+<p>The page has <b>no cards written into it</b>. It reads <code>workshop/manifest.json</code> when it opens and draws everything from that: the branches, the leaves, the counts, the YOUR CALL row, the legend. "NEW" is anything dated within the last two days, so it fades on its own. A test fails if a hand-written card ever comes back, if a leaf points at a page that is not in the repo, if a date is not a date, or if a decision has no question.</p>
+
+<h3>The manifest format: how every lane adds itself</h3>
+<p>One command, from the Hub repo, when a lane ships a page:</p>
+<pre>node scripts/workshop-add.mjs --id ladder-20260927 --area statistics \
+  --title "Statistics · the ladder" --status read --date 2026-09-27 \
+  --href /deliverables/20260927/ladder/LADDER.html \
+  --blurb "If you bought at RSI level 5, 10 … 70, how did it go." \
+  [--ask "YES / NO"] [--lane S8] [--supersedes entry-confluence]</pre>
+<p>It validates, appends (or updates the leaf with that id), archives the leaf it supersedes, sorts by date and writes the file. <code>--check</code> validates without writing. The same checks run in <code>tests/workshop-manifest.test.mjs</code>. A leaf, by hand if you prefer, is one JSON object in the <code>items</code> list:</p>
+<pre>{ "id": "ladder-20260927",              kebab-case, unique
+  "area": "statistics",                 one of: comps · allocation · statistics · station · hub · geiger · backend
+  "title": "Statistics · the ladder",   what the leaf says
+  "blurb": "If you bought at …",        one or two plain sentences, shown on hover
+  "href": "/deliverables/…/LADDER.html",  a site path that exists in the repo, or a full https:// address
+                                        (Station and preview pages); may be left out only while status is "building"
+  "status": "read",                     one of the statuses below
+  "date": "2026-09-27",                 the day it landed or last changed; drives NEW and the order
+  "ask": "YES / NO",                    required when status is "decision": the question on the chip
+  "lane": "S8",                         optional: who built it
+  "supersedes": "entry-confluence" }    optional: the leaf this replaces; it is archived automatically</pre>
+<table>
+<tr><th>status</th><th>meaning</th><th>drawn as</th></tr>
+<tr><td>live</td><td>on the Hub or the Station now, on real data</td><td>green dot, LIVE</td></tr>
+<tr><td>preview</td><td>a trial copy at its own address; the live page is unchanged</td><td>green ring</td></tr>
+<tr><td>read</td><td>a write-up or report to read</td><td>grey dot</td></tr>
+<tr><td>proposal</td><td>a design proposal to look at; nothing built into the Hub yet</td><td>grey dot</td></tr>
+<tr><td>decision</td><td>waiting on Alan's call; the ask says what</td><td>yellow dot, on the YOUR CALL row</td></tr>
+<tr><td>building</td><td>a lane is on it now; lands here when it returns</td><td>dashed ring</td></tr>
+<tr><td>corrected</td><td>a report that carries a correction at the top</td><td>light dot</td></tr>
+<tr><td>archive</td><td>replaced by a newer page; kept for the record</td><td>dimmed, folded</td></tr>
+</table>
+<p>Branches are fixed at the seven Alan named. A new branch is a new object in <code>areas</code> (id, label, blurb) and needs the test's list updated, on purpose, so branches do not multiply by accident.</p>
+<p><b>Seeded today</b> with every card that was on the workshop page this afternoon (31 leaves), including this write-up and the map. The statuses and dates are as the page had them; a decision leaf is removed from the row by changing its status when Alan decides.</p>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>The workshop keeps the Hub's dark look with cyan chrome and green / yellow status dots, as the 27 Sep afternoon page did. The 23 Sep house rule for sub-pages is greys only; if the coordinator wants the workshop grey too, it is a token change at the top of the file.</li>
+<li>Each sector's glow and "avg" is an unweighted average of its lit lines. Ten small caps can outweigh NVDA in it.</li>
+<li>Label collision is solved greedily each frame: the winner is the more important label, so a small company's name can flicker in and out as you turn.</li>
+<li>The manifest dates for the seeded leaves are the dates the old page printed, not the commit times.</li>
+<li>Screenshots of the wheel were taken in software graphics (no GPU headless); on a real screen the halos are the same shape and a little smoother.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>No push, no deploy, no database write, no paid model call, no touch of the iMac.</li>
+<li>Did not add the map to the prototypes library index (it is on the workshop).</li>
+<li>Did not add the other lanes' pages beyond what the workshop page already carried; each lane adds itself from now on.</li>
+<li>Did not cap the frame rate while dragging; a 30-frames-a-second cap would halve the dragging cost on an old machine at some smoothness. See decision 2.</li>
+<li>Did not build the "scintillate" flash; the hook stays defined and unwired, as before.</li>
+</ul>
+
+<h2>Files</h2>
+<ul>
+<li><code>deliverables/20260927/market-map/index.html</code>: the map, rewritten (three.js directly, no simulation).</li>
+<li><code>deliverables/20260927/market-map/proof.mjs</code>: headless screenshots and the three CPU cases.</li>
+<li><code>deliverables/20260927/market-map/MARKET-MAP.html</code>: the map's plain-words account, updated.</li>
+<li><code>workshop/index.html</code>: the branch map; no cards in it.</li>
+<li><code>workshop/manifest.json</code>: the one list.</li>
+<li><code>scripts/workshop-add.mjs</code>: add or check a leaf.</li>
+<li><code>tests/workshop-manifest.test.mjs</code>: six checks on the manifest, the page and the script.</li>
+</ul>
+</div>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

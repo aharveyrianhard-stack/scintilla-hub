@@ -14,13 +14,15 @@ function fn(name) {
 test("board header has one cell per row cell, relative volume labelled, and the same rank reserve as the rows", () => {
   const cols = page.match(/const BOARD_COLS = (\[[^\n]*\]);/)[1];
   const labels = [...cols.matchAll(/\["([^"]*)",/g)].map((m) => m[1]);
-  // row template: lists (♥ ★ ◎), ticker, last, chg, USUAL DAY, fpe, mcap, REVENUE, rsi, trend, mom, read, geiger, vol, mkt dot = 15
+  // row template: lists (♥ ★ ◎), ticker, last, chg, fpe, mcap, REVENUE, rsi, trend, mom, read, geiger, vol, mkt dot = 14
+  // (27 Sep: USUAL DAY left the board for its own room — Alan: "move out of the dashboard table into their own tab")
   // (H-FRONT, 25 Sep, added REVENUE after MKT CAP; M52 added the
   // usual-day column after CHG). Trend/Mom/Read are part of
   // the static model and the row template (tests/dashboard-cold-load.test.mjs counts the rendered cells); they are no longer injected.
-  assert.equal(labels.length, 15, "15 header cells for 15 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY; H-FRONT added REVENUE)");
+  assert.equal(labels.length, 14, "14 header cells for 14 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY; H-FRONT added REVENUE; 27 Sep moved USUAL DAY to its own room)");
   assert.equal(labels[labels.indexOf("Mkt Cap") + 1], "Revenue", "REVENUE sits beside the other size column");
-  assert.equal(labels[labels.indexOf("Chg") + 1], "Usual day", "the usual day sits beside the change it gives meaning to");
+  assert.ok(!labels.includes("Usual day"), "27 Sep — the usual day has its own room now, not a board column");
+  assert.equal(labels[labels.indexOf("Chg") + 1], "F P/E");
   assert.equal(labels[labels.indexOf("Geiger") + 1], "RVol", "relative-volume header sits over the volume cell");
   assert.equal(labels.at(-1), "Mkt", "Mkt stays over the market dot");
   assert.match(page, /\.sc-board__row, \.ch\.hdr\{padding-right:18px\}/, "header and rows share one geometry");

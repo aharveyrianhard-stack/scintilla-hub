@@ -210,6 +210,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 .sc-rsi{ text-align:center; font-family:var(--mono); font-size:10px;   /* FIX 4 — RSI cell, centered like FPE */
   font-variant-numeric:tabular-nums; color:var(--ink2); }
+/* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
+   Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
+.sc-rsi.is-xt{ animation:rsi-xt 4s ease-in-out infinite; }
+@keyframes rsi-xt{ 0%,100%{ text-shadow:none; } 50%{ text-shadow:0 0 6px currentColor; } }
+@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
   font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
@@ -2695,10 +2700,12 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .mn-swarm{ display:inline-flex; align-items:center; gap:9px; flex:none; cursor:pointer; padding:2px 10px;
   border-left:.5px solid var(--line); transition:opacity .3s ease, transform .45s cubic-bezier(.34,.02,.2,1); }
 .mn-dots{ display:inline-flex; gap:5px; align-items:center; }
-.mn-swarm .mn-dots i{ width:6px; height:6px; border-radius:50%; display:inline-block;
-  animation:mn-hard 1.1s ease-in-out infinite; }
-.mn-swarm .mn-dots i:nth-child(2n){ animation-duration:.9s; }                            /* not one metronome — a swarm */
-.mn-swarm .mn-dots i:nth-child(3n){ animation-duration:1.3s; }
+.mn-swarm .mn-dots i{ width:6px; height:6px; border-radius:50%; display:inline-block; opacity:.6; }   /* 27 Sep — still until the hour, like an item */
+.mn-swarm.s-soon .mn-dots i{ opacity:1; animation:mn-breathe 2.4s ease-in-out infinite; }
+.mn-swarm.s-near .mn-dots i{ opacity:1; animation:mn-breathe 1.1s ease-in-out infinite; }
+.mn-swarm.s-due  .mn-dots i{ opacity:1; animation:mn-hard 1.1s ease-in-out infinite; }
+.mn-swarm.s-due .mn-dots i:nth-child(2n){ animation-duration:.9s; }                      /* not one metronome — a swarm */
+.mn-swarm.s-due .mn-dots i:nth-child(3n){ animation-duration:1.3s; }
 .mn-slbl{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); }
 .mn-slbl b{ color:var(--ink2); }
 .mn-swarm:hover .mn-slbl{ color:var(--crk); }
@@ -4193,9 +4200,9 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
    ("down 4.8%" means nothing until you know this name normally moves 1.5%). The width comes from
    READ (10->8) and GEIGER (15->13), the two widest cells that lose the least by narrowing: READ is
    words that truncate gracefully and GEIGER is a bar, not a number. */
-.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr) minmax(0,14fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr) minmax(0,6fr) minmax(0,10fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}
+.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr) minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}
 .ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,13fr) minmax(0,9fr) minmax(0,10fr) minmax(0,9fr) minmax(0,6fr) minmax(0,8fr) minmax(0,8fr) minmax(0,5fr) minmax(0,8fr) minmax(0,7fr) minmax(0,5fr) !important}}
+@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,8fr) minmax(0,11fr) minmax(0,7fr) minmax(0,5fr) !important}}
 /* M52 · THE PHONE BOARD. MEASURED at 390 px: with 14 tracks the row collided exactly the way the
    2026-06 "+5.82%98.3x$314[" bug did — "(0.83%)" and "±1.8%" printed on top of each other — because
    CHG, F P/E, RSI (and, as first written, USUAL DAY) are allowed to overflow their track so they
@@ -4207,12 +4214,12 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
        moment there is room for them. Header and rows share one child order, so hiding the 11th cell
        in both keeps every value under its own label. */
 @media(max-width:560px){
-  .ch{grid-template-columns:minmax(0,5fr) minmax(0,10fr) minmax(0,12fr) minmax(0,17fr) minmax(0,12fr) minmax(0,9fr) minmax(0,10fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,10fr) minmax(0,6fr) minmax(0,4fr) !important; gap:4px !important}
+  .ch{grid-template-columns:minmax(0,5fr) minmax(0,10fr) minmax(0,12fr) minmax(0,19fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,7fr) minmax(0,7fr) minmax(0,10fr) minmax(0,6fr) minmax(0,4fr) !important; gap:4px !important}
   /* TWO columns step aside at 390, and they are the two that were ALREADY unreadable there:
      READ (6th-from-last; the words version of TREND and MOM, which keep their numbers) and F P/E,
      which at this width printed "36…". What that buys is the two numbers a phone is actually read
      for: the change in full — "(1.39%)", not "(1…" — and the usual day beside it. */
-  .ch > *:nth-child(6), .ch > *:nth-child(12){ display:none !important; }   /* H-FRONT — REVENUE is cell 8, so READ moved from 11 to 12 */
+  .ch > *:nth-child(5), .ch > *:nth-child(11){ display:none !important; }   /* 27 Sep — USUAL DAY left the board, so F P/E is cell 5 and READ cell 11 (H-FRONT had them at 6 and 12) */
   .ch > .sc-hb, .ch > .sc-chg, .ch > .sc-fpe{ overflow:hidden !important; text-overflow:ellipsis; }
   /* the sign goes, the number stays; F P/E and MKT CAP give up the width, since at this size they
      already read "36…" and "$5…" — nothing legible is lost and one more real number is gained. */
@@ -4461,6 +4468,125 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 /* on a phone every company tab gets a 300px slot; an embedded page needs more to be read */
 @media(max-width:640px){ .sc-chartpanel__slot.cot-CHART{min-height:58vh} .sc-chartpanel__slot.cot-FUNDAMENTALS{min-height:82vh} }
 </style>
+<style id="tape-events-20260927">
+/* ── 27 SEP · THE SCINTILLATING TAPE + THE TICKER IN THE TITLE ─────────────────────────────────────────────────
+   The strip keeps the company bar's box (40px, the cyan frame) so nothing under it moves. Text 11px. */
+.sc-toptape{ flex:0 0 auto; width:100%; box-sizing:border-box; display:flex; align-items:stretch; min-width:0; height:40px;
+  border:.8px solid rgba(0,212,255,.5); box-shadow:inset 0 0 22px rgba(0,212,255,.05); background:var(--panel2); overflow:hidden; }
+.sc-toptape__slot{ flex:1 1 0; min-width:0; display:flex; overflow:hidden; }
+.sc-toptape .sc-tape{ flex:1 1 auto; min-width:0; border:0; background:none; font-size:11px; }
+.sc-toptape .sc-tape__lbl{ background:var(--panel2); flex-basis:92px; width:92px; }
+.sc-toptape .sc-tape__track{ padding:0; line-height:38px; }
+.sc-toptape .sc-tape__item{ display:inline-flex; align-items:baseline; gap:6px; }
+.sc-toptape .ecb-when, .sc-toptape .ern-when{ font-size:11px; }
+.sc-toptape .ern-tk{ font-weight:700; color:var(--ink); }
+.sc-toptape__next{ flex:0 0 auto; max-width:46%; min-width:0; align-self:center; padding:0 12px 0 10px;
+  border-left:.5px solid var(--line2); border-bottom:0; }
+.sc-toptape__next:empty{ display:none; }
+.sc-toptape__next .mn-lbl + .mn-it, .sc-toptape__next .mn-lbl + .mn-swarm{ border-left:0; }
+@media (max-width:900px){ .sc-toptape__next{ display:none; } .sc-toptape .sc-tape__lbl{ flex-basis:70px; width:70px; } }
+@media (max-width:560px){ .sc-toptape{ height:36px; } .sc-toptape .sc-tape__track{ line-height:34px; }
+  .sc-toptape .sc-tape__lbl{ flex-basis:58px; width:58px; padding-left:8px; letter-spacing:.08em; } }
+
+/* the pinned name takes the wordmark's place, centred in the header; ✕ brings the wordmark back */
+.sc-head__ident{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1;
+  max-width:calc(100% - 340px); min-width:0; display:flex; align-items:center; }
+.sc-head__ident[hidden]{ display:none; }
+body.tk-pinned .sc-head__wm{ visibility:hidden; }
+.sc-head__ident .sc-cident{ border:0; box-shadow:none; height:auto; min-height:0; padding:0; gap:14px; overflow:hidden; background:none; }
+.sc-head__ident .sc-ctkbig{ font-size:20px; letter-spacing:.16em; min-width:0; text-shadow:0 0 8px rgba(0,212,255,.45); }
+.sc-head__ident .sc-cname{ font-size:11px; max-width:26ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-head__ident .sc-cpx{ font-size:17px; }
+.sc-head__ident .sc-cchg{ font-size:13px; min-width:0; }
+.sc-head__ident .sc-cprev, .sc-head__ident .sc-chb{ font-size:11px; color:var(--ink3); white-space:nowrap; }
+.sc-head__ident .sc-chb{ flex:none; }
+.sc-hx{ flex:none; background:none; border:.5px solid var(--line2); border-radius:2px; color:var(--ink3); cursor:pointer;
+  font-family:var(--mono); font-size:12px; line-height:1; padding:4px 7px; }
+.sc-hx:hover, .sc-hx:focus-visible{ color:var(--crk); border-color:var(--crk); outline:0; }
+@media (max-width:900px){ .sc-head__ident{ max-width:calc(100% - 200px); } .sc-head__ident .sc-cname, .sc-head__ident .sc-cprev{ display:none; } }
+@media (max-width:560px){
+  /* a phone header has no centre to spare (the wordmark is already clipped there): the name sits just right of the
+     logo, the controls keep their corner, and the change is the part that gives way — never the ✕ */
+  .sc-head__ident{ left:50px; transform:translateY(-50%); max-width:calc(100% - 50px - 152px); }
+  .sc-head__ident .sc-cident{ gap:6px; min-height:0; padding:0; width:100%; }
+  .sc-head__ident .sc-ctkbig, .sc-head__ident .sc-cpx, .sc-hx{ flex:none; }
+  .sc-head__ident .sc-cchg{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sc-head__ident .sc-ctkbig{ font-size:13px; letter-spacing:.06em; }
+  .sc-head__ident .sc-cpx{ font-size:12px; }
+  .sc-head__ident .sc-cchg{ font-size:11px; }
+  .sc-head__ident .sc-chb, .sc-head__ident .sc-lists--co{ display:none; }
+  .sc-hx{ padding:3px 6px; font-size:11px; }
+}
+
+/* ── 27 SEP · EARNINGS ROOM ───────────────────────────────────────────────────────────────────────────────── */
+.ern-roomtape{ flex:0 0 auto; margin:0 0 8px; }
+.ern-roomtape .sc-tape{ font-size:11px; }
+.ern-roomtape:empty{ display:none; }
+/* the TODAY line on the slider, now labelled and always drawn */
+.se-tlnow{ opacity:.95; width:1.5px; }
+.se-tlnow::before{ content:"TODAY"; position:absolute; top:14px; left:4px; font-family:var(--mono); font-size:11px;
+  letter-spacing:.1em; color:var(--crk); white-space:nowrap; pointer-events:none; }
+/* upcoming, as a table that keeps the list's look */
+.ev-uptbl{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
+.ev-uptbl th{ font-weight:400; font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:left; padding:0 4px 5px; border-bottom:.5px solid var(--line2); }
+.ev-uptbl td{ padding:5px 4px; border-bottom:.4px solid var(--line); color:var(--ink2); white-space:nowrap; }
+.ev-uptbl tr[data-act]{ cursor:pointer; }
+.ev-uptbl tr[data-act]:hover td{ background:rgba(0,212,255,.04); }
+.ev-uptbl .t b{ color:var(--ink); }
+.ev-uptbl .n{ text-align:right; }
+.ev-uptbl .d{ text-align:right; }
+.ev-uptbl .r{ text-align:right; width:1%; }
+.ev-uptbl .r .sc-evrel{ font-size:11px; margin-left:0; }
+.ev-uptbl .na{ color:var(--dim); }
+/* past · reported, scrolling inside its own card */
+.ev-pastscroll{ max-height:340px; overflow-y:auto; }
+.ev-pastrow{ display:grid; grid-template-columns:64px 58px minmax(0,1fr); align-items:baseline; gap:6px; padding:5px 2px;
+  border-bottom:.4px solid var(--line); font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; cursor:pointer; }
+.ev-pastrow:hover{ background:rgba(0,212,255,.04); }
+.ev-pd{ color:var(--dim); white-space:nowrap; }
+.ev-pastrow .ern-tk{ font-weight:700; color:var(--ink); }
+.ev-pv{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px 9px; min-width:0; }
+.ev-pv .ern-res{ color:var(--ink2); }
+.ev-pv .ern-res.beat b{ color:var(--bull); } .ev-pv .ern-res.miss b{ color:var(--bear); }
+.ev-pv .ern-sur.beat, .ev-prev.beat{ color:var(--bull); } .ev-pv .ern-sur.miss, .ev-prev.miss{ color:var(--bear); }
+.ev-prev{ color:var(--ink3); white-space:nowrap; }
+@media (max-width:560px){ .ev-uptbl th:nth-child(3), .ev-uptbl td:nth-child(3){ display:none; } }
+
+/* ── 27 SEP · USUAL DAY ROOM ─────────────────────────────────────────────────────────────────────────────── */
+.body2--ud{ grid-template-columns:1.9fr 1fr; }
+.ud-tape{ flex:0 0 auto; padding:4px 2px 8px; border-bottom:.5px solid var(--line2); }
+.ud-bars{ display:flex; align-items:stretch; gap:3px; height:164px; overflow-x:auto; padding:18px 8px 0 4px; }
+.ud-m{ flex:0 0 auto; height:14px; text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink3); letter-spacing:.04em; }
+.ud-bar{ flex:1 0 22px; min-width:22px; display:flex; flex-direction:column; cursor:pointer; }
+.ud-col{ position:relative; flex:1 1 auto; display:flex; flex-direction:column-reverse; border-bottom:.5px solid var(--line2); }
+.ud-col i{ display:block; width:100%; }
+.ud-col i.up{ background:var(--bull); opacity:.85; } .ud-col i.dn{ background:var(--bear); opacity:.85; } .ud-col i.nd{ background:#8A8A92; opacity:.6; }
+.ud-n{ position:absolute; left:0; right:0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink2); }
+.ud-x{ flex:0 0 auto; text-align:center; font-family:var(--mono); font-size:11px; color:var(--dim); padding-top:4px; white-space:nowrap; }
+.ud-bar:hover .ud-col{ background:rgba(0,212,255,.05); }
+.ud-bar.is-open .ud-col{ background:rgba(0,212,255,.09); box-shadow:inset 0 0 0 .5px rgba(0,212,255,.5); }
+.ud-bar.is-open .ud-x{ color:var(--ink); }
+.ud-bar.is-today .ud-x{ color:var(--bg); background:var(--crk); border-radius:4px; font-weight:700; }
+.ud-bar.is-pre .ud-col{ background:repeating-linear-gradient(135deg, transparent 0 4px, rgba(134,138,170,.12) 4px 5px); }
+.ud-now{ position:absolute; top:-16px; left:0; font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--crk); white-space:nowrap; }
+.ud-say{ display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline; padding:8px 4px 0; font-family:var(--mono); font-size:11px; color:var(--ink3); }
+.ud-say b{ color:var(--ink2); }
+.ud-note{ color:var(--dim); }
+.ud-dayhd{ font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--ink2); padding:10px 4px 6px; }
+.ud-dayhd b{ color:var(--ink); letter-spacing:.12em; }
+.ud-dayhd .up{ color:var(--bull); } .ud-dayhd .dn{ color:var(--bear); }
+.ud-tbl{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
+.ud-tbl th{ font-weight:400; letter-spacing:.1em; color:var(--dim); text-align:left; padding:4px 6px; border-bottom:.5px solid var(--line2);
+  position:sticky; top:0; background:var(--panel); }
+.ud-tbl td{ padding:5px 6px; border-bottom:.4px solid var(--line); color:var(--ink2); white-space:nowrap; }
+.ud-tbl .n{ text-align:right; } .ud-tbl .t b{ color:var(--ink); } .ud-tbl .d, .ud-tbl .dim{ color:var(--ink3); }
+.ud-tbl .up{ color:var(--bull); } .ud-tbl .dn{ color:var(--bear); } .ud-tbl .x{ font-weight:700; }
+.ud-tbl .w{ color:var(--ink3); white-space:normal; }
+.ud-tbl tr[data-act]{ cursor:pointer; } .ud-tbl tr[data-act]:hover td{ background:rgba(0,212,255,.04); }
+@media (max-width:900px){ .body2--ud{ grid-template-columns:1fr; } }
+@media (max-width:560px){ .ud-tbl th:nth-child(3), .ud-tbl td:nth-child(3), .ud-tbl th:nth-child(7), .ud-tbl td:nth-child(7){ display:none; }
+  .ud-tbl.ud-hb th:nth-child(3), .ud-tbl.ud-hb td:nth-child(3){ display:table-cell; } .ud-bars{ height:120px; } }
+</style>
 </head>
 <body>
 
@@ -4491,6 +4617,9 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
     </svg>
   </button>
   <span class="sc-head__wm">S C I N T I L L A</span>
+  <!-- 27 Sep (Alan): "Selecting a ticker shows the ticker in the top-middle SCINTILLA title area (with a way to click
+       out back to the title)". Filled by identPaint() only while a name is pinned; empty and hidden otherwise. -->
+  <div class="sc-head__ident" id="headIdent" hidden></div>
   <!-- R18 — controls bunched right in one group; wordmark above is absolute-centered -->
   <div class="sc-head__ctrls">
     <span class="sc-head__live is-live" id="liveBadge">● LIVE</span>
@@ -4849,12 +4978,15 @@ async function scCurrentEqualizer () {
   finally { SC_EQUALIZER_READ = null; }
 }
 /* Existing FMP reference rows retain the identity stamped by their source artifact. Future rows
-   use the accepted identity. Both are reference-only and neither controls Geiger membership. */
-const SC_FMP_REFERENCE_DIGESTS = "(7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063," +
-  /* the 364-name digest: every provider_indicators_current row written before the 27 Sep admission carries it
-     (the builder's "keep_accepting_the_old_digest_for_fmp_reference_rows"); drop it only once new rows are stamped */
-  "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3," +
-  SC_EQUITY_UNIVERSE_DIGEST + ")";
+   use the accepted identity. All are reference-only and none controls Geiger membership.
+   The list is EVERY digest the set has had (the provider's CANONICAL_EQUITY_UNIVERSE digest_history,
+   oldest to current), written by scripts/build-canonical-universe.mjs --hub; do not edit by hand. */
+const SC_FMP_REFERENCE_DIGESTS = "(" + [
+  "7ad595cc4db5e1fd0bb63bb3780ac1450a938e6fa068df944aeec71445556063",
+  "ab8f7965258d939f0a97fbfeac9a271547c258df7a2616aff6ccff746bb5d9d3",
+  "0c2abd57a836845ee120eba1e465cdb61db6a2cca5b3da1fcecbdc591936bb20",
+  "223dbb0ff58eda0363c7882d493ad09bef932fbf953f80d6849882242ecc316e"
+].join(",") + ")";
 async function scUniverseDigest (symbols) {
   const bytes = new TextEncoder().encode(JSON.stringify([...symbols].sort()));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -5458,6 +5590,7 @@ function scEntryRoom() {
     if (h === "economic" || h === "calendar") return "ECONOMIC";
     if (h === "sentiment" || h === "fear-greed") return "SENTIMENT";
     if (h === "earnings" || h === "events") return "EVENTS";
+    if (h === "usual" || h === "usual-day" || h === "sigma") return "USUAL";   /* 27 Sep — the usual-day room */
     if (h === "past" || h === "past-reported" || h === "reported") return "EVENTS";
     return null;
   }
@@ -5483,6 +5616,7 @@ const S = {
      report" — his saved strip is FAV, three names). Nothing here is remembered between
      loads, so none of it replaces a choice Alan has saved. */
   ernSpan: "DAY", ernDay: null, ernPick: null, ernZoom: "DAYS", ernCohPick: null,
+  udDay: null, udCohPick: null,   /* 27 Sep — the USUAL DAY room: the day open on its slider, and its own cohort pick (null = ALL) */
   ernTlAt: null,        /* the TIMELINE's own centre — the grid's arrows never touch it (M40) */
   ernTab: scEntryTab(),  /* DASH the dashboard · PAST the full PAST REPORTED tab · OLD the older list, kept (M40) */
   ernPast: null,        /* the open name in PAST REPORTED */
@@ -5504,7 +5638,7 @@ const S = {
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
    full size, so it belongs beside the room whose cramped right pane it relieves. */
-const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "ECONOMIC"];   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
+const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "USUAL", "ECONOMIC"];   /* 27 Sep — USUAL DAY + sigma events, their own room beside EVENTS */   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
 const STATION_PUBLIC_URL = "https://station.scintillahub.ai/";
 const ALLOCATION_PUBLIC_URL = "/allocation/";   /* ALLOCATION is a master tab of its own, sitting between DASHBOARD and STATION (Alan, 22 Sep: "I would put portfolio allocation even before STATION"). */
 const COHORTS = [
@@ -6401,7 +6535,7 @@ function buildMtabs() {
   el("mtabs").innerHTML = SECTIONS.map((s) =>
     (s === "SCENES"
       ? '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_PUBLIC_URL + '" target="_blank" rel="noopener">STATION</a>'
-      : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + s + "</button>") +
+      : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + (s === "USUAL" ? "USUAL DAY" : s) + "</button>") +
     (s === "DASHBOARD" ? '<a role="tab" class="sc-mtab" data-sec="ALLOCATION" href="' + ALLOCATION_PUBLIC_URL + '">ALLOCATION</a>' : "")).join("");
 }
 function updateMtabs() {
@@ -6527,7 +6661,7 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
    until the next 45 s pull) the header had 13 cells over 10-cell rows: the Geiger bar sat under TREND, RVol under MOM,
    the market dot under READ, and the GEIGER / RVOL / MKT columns were empty. The model is now complete from the first
    render and boardRowsHTML() emits one cell per column; the rewind module still OWNS the three cells' values (paintTM). */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["Usual day","hb"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
    dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
 function boardTMCellsHTML() {
@@ -6816,12 +6950,13 @@ function boardRowsHTML() {
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
-      (d.state === "CONNECTING" ? '<span class="sc-hb">' + SC_PENDING + '</span>' : hbCellHTML(d.t, d.hb, d.c)) +   /* H2 — pending, not "—" · M52 — USUAL DAY, beside the change it gives meaning to */
+      /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
+         tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax)) +
@@ -7229,7 +7364,10 @@ function dashboardHTML() {
      cohort board (id=coIdentBar, updated in place by renderLeftPanel + patch()).
      The 50/50 row lives below it, unchanged. */
   return '<section class="sc-dashwrap" aria-label="Dashboard">' +
-    '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>" +
+    /* 27 Sep — the company bar goes; its strip is the SCINTILLATING TAPE (economic releases + earnings). The
+       pinned name moves up into the header title (identPaint). TOPTAPE_ON = false puts the old bar back. */
+    (TOPTAPE_ON ? topTapeWrapHTML()
+                : '<div class="sc-identfull" id="coIdentBar">' + leftIdentHTML(identBarData()) + "</div>") +
     /* M42 — TODAY'S SCINTILLAS. Filled by scintStripRender; while there is nothing stored it is an
        empty element and :empty hides it, so the dashboard is exactly as it is today. */
     (SCINT_FEED_ON ? '<div class="sc-scintstrip" id="scintStrip"></div>' : "") +
@@ -7310,11 +7448,7 @@ async function loadBoardHeartbeat(tickers) {
       const row = rowByT[t]; if (row) row.hb = hb;
       paintHbCell(t, hb, row ? row.c : null);
       /* the ident bar shows the pinned name's own heartbeat; refresh it in place when its row lands */
-      if (typeof LEFT_T !== "undefined" && t === LEFT_T) {
-        const ib = el("coIdentBar");
-        if (ib) ib.innerHTML = leftIdentHTML(identBarData());
-        coIdentLists(ib);                           // H-FRONT — the repaint keeps the pinned ticker's ♥ ★ ◎
-      }
+      if (typeof LEFT_T !== "undefined" && t === LEFT_T) identPaint();   // H-FRONT's ♥ ★ ◎ ride along
       cohHbDirty = true;
     }
     /* the cohort summary is built once, before any heartbeat exists; redraw it when its names
@@ -7365,13 +7499,21 @@ async function loadBoardRsi(tickers) {
    identical to one at RSI 69. Now a continuous gradient centered on 50 (neutral) —
    opacity scales with distance from center, same convention as the heatmap's
    heatColorChg(), so the whole hub reads color intensity the same way. */
+/* 27 SEP — "My RSIs cannot go stale." They were not stale: the value is the stored daily RSI(14) and it
+   paints only when its session is current (loadBoardRsi → gsSessionCurrent). What made the column look
+   GREYED was this colour: opacity ran from 15% at RSI 50 to 90% at the ends, so an ordinary 63 drew at
+   ~35% on a dark panel, which reads as "switched off". The number is now always drawn at full strength
+   and the gradation moves into the HUE: a readable neutral that tints toward green (low) or red (high)
+   the further RSI sits from 50. Same direction, same continuous gradient, nothing dimmed. */
+const RSI_XT_LO = 30, RSI_XT_HI = 70;            // the textbook extremes — the only cells that breathe
+const rsiExtreme = (v) => { const n = num(v); return n != null && (n <= RSI_XT_LO || n >= RSI_XT_HI); };
 function rsiGradColor(v) {
   const n = num(v); if (n == null) return "";
   const d = (n - 50) / 50;                       // -1 (RSI 0, oversold) .. +1 (RSI 100, overbought)
-  const a = Math.min(1, Math.abs(d));
-  const alpha = (0.15 + a * 0.75).toFixed(2);
-  if (Math.abs(d) < 0.04) return "var(--ink3)";  // dead-center 48-52 stays neutral dim
-  return d < 0 ? "rgba(0,255,163," + alpha + ")" : "rgba(255,45,85," + alpha + ")";
+  if (Math.abs(d) < 0.04) return "var(--ink2)";  // dead-centre 48-52: neutral, and readable
+  const t = 0.35 + 0.65 * Math.min(1, Math.abs(d) / 0.6);   // 35% tinted just off 50, fully coloured by 20 / 80
+  const from = [178, 178, 186], to = d < 0 ? [0, 255, 163] : [255, 45, 85];
+  return "rgb(" + from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",") + ")";
 }
 /* M55 — is the board showing a past day? One reader, so every writer asks the same question. */
 /* Is the board rewound? The page's one reader of that state — shared plumbing, lifted into every
@@ -7387,6 +7529,7 @@ function paintRsiCell(t, v) {
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
   cell.style.color = rsiGradColor(v);
+  if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
 }
 
 /* ============================================================================
@@ -9395,14 +9538,18 @@ function leftPanelInnerHTML() {
 }
 /* ident line for the left panel — like identBarHTML but without a ← back button
    (the board is always visible; there is nothing to go back to). */
-function leftIdentHTML(data) {
+function leftIdentHTML(data, opts) {
   const chg = data.chg, live = S.state === "live";
+  /* 27 Sep — the SAME ident, drawn in the header title (opts.head): no queue (the tape carries it now), no LIVE badge
+     (the header's own badge says it), and a ✕ that goes back to the SCINTILLA title. Without opts the markup is
+     unchanged, byte for byte, which is what TOPTAPE_ON = false puts back. */
+  const head = !!(opts && opts.head);
   const pc = num(prevClose[data.t]);
   const col = chg != null ? (chg >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
   /* PORT — the nudge rides in this box (proposal v2); with the flag off this is production's markup, byte for byte.
      ECON TAPE 22 Sep — COMPANY is the SAME dashboard mount with a ticker pinned, and the proposal's own picture is the
      nudge beside a pinned ticker ("ticker on the left, beside the selector it belongs to"), so it rides there too. */
-  const nudge = ECON_TAPE_ON && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
+  const nudge = !head && ECON_TAPE_ON && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
   return '<div class="sc-cident' + (nudge ? " sc-cident--nudge" : "") + '">' +
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     '<span class="sc-cname">' + esc(data.name || "") + "</span>" +
@@ -9418,19 +9565,39 @@ function leftIdentHTML(data) {
             ? ' <b style="color:' + (chg >= 0 ? "var(--bull)" : "var(--bear)") + '">' +
               Math.abs(hbXUsual(chg, hbRowFor(data.t).usual_day_60)).toFixed(1) + "\u00d7 today</b>" : "")
         : "\u2014") + "</span>" : "") +   /* with no ticker pinned there is nothing whose usual day this would be */
-    '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>" +
+    (head ? '<button class="sc-hx" type="button" data-act="headx" title="close ' + esc(data.t || "") +
+      ' and go back to the SCINTILLA title" aria-label="Close ' + esc(data.t || "") + '">✕</button>'
+      : '<span class="sc-clive' + (live ? "" : " is-off") + '">● ' + (live ? "LIVE" : "OFFLINE") + "</span>") +
     (nudge ? '<span class="sc-macronext" id="macroNext">' + macroNextHTML() + "</span>" : "") + "</div>";
 }
 
+/* 27 SEP — ONE PAINTER FOR THE IDENT, wherever it lives. With the tape on it is the header title: the pinned name
+   (ticker, name, price, change, prev, usual day, ♥ ★ ◎, ✕) replaces the SCINTILLA wordmark, and with nothing pinned
+   the wordmark comes back. With TOPTAPE_ON false it is the old full-width bar in the dashboard. */
+function identPaint() {
+  if (!TOPTAPE_ON) {
+    const ib = el("coIdentBar");
+    if (ib) ib.innerHTML = leftIdentHTML(identBarData());
+    coIdentLists(ib);
+    return ib;
+  }
+  const h = el("headIdent");
+  if (!h) return null;
+  const on = LEFT_STATE === "PINNED" && !!LEFT_T;
+  const html = on ? leftIdentHTML(identBarData(), { head: true }) : "";
+  if (h.innerHTML !== html || !on) h.innerHTML = html;
+  h.hidden = !on;
+  if (typeof document !== "undefined" && document.body) document.body.classList.toggle("tk-pinned", on);
+  if (on) coIdentLists(h);
+  return h;
+}
 /* repaint ONLY #leftPanel's inner content (never the board). */
 function renderLeftPanel() {
   const lp = el("leftPanel");
   if (!lp) return;
-  /* FIX 4 (R36) — refresh the full-width ident bar (now above the 50/50 row, not
-     inside #leftPanel) so the ticker/name/price stay in sync on every swap. */
-  const ib = el("coIdentBar");
-  if (ib) ib.innerHTML = leftIdentHTML(identBarData());
-  coIdentLists(ib);                                 // H-FRONT — ♥ ★ ◎ beside the pinned ticker
+  /* FIX 4 (R36) — refresh the ident (27 Sep: the header title, or the old bar with the tape off) so the
+     ticker/name/price stay in sync on every swap. H-FRONT's ♥ ★ ◎ ride along inside identPaint. */
+  identPaint();
   /* D2 — a pinned view already on screen is patched in place, so its chart frame is never rebuilt (= reloaded) */
   const inPlace = !LEFT_HEAT && LEFT_STATE === "PINNED" && LEFT_T && cvUpdateInPlace();
   if (!inPlace) lp.innerHTML = leftPanelInnerHTML();
@@ -12881,6 +13048,10 @@ function eventsRoomHTML() {
     '<div class="body2 body2--ev">' +
       '<div class="panel">' +
         '<div class="sc-plabel sc-plabel--row"><span>earnings</span>' + SECFS_BTN + "</div>" +
+        /* 27 Sep — Alan: "an earnings scintillating tape like the economic one". The economic room opens on its NEXT
+           strip; this room now opens on the earnings tape — the band from the foot of the screen, same rows, same
+           states, same diamond on a result beyond its own usual surprise — so the two rooms read alike. */
+        '<div class="ern-roomtape" id="ernRoomTape"></div>' +
         /* M40 — the room is a dashboard with tabs. PAST REPORTED is a tab of its own
            again (Alan: "we lost the tracking of the past reported… we need it back"),
            and the section he had before this revamp is still one tap away, kept
@@ -12897,9 +13068,11 @@ function eventsRoomHTML() {
          calendar-rail look). This right panel is the fuller master extras column:
          AI-read slot (D) + upcoming digest + RELEASES (per single-ticker scope) +
          website/IR links. */
+      /* 27 Sep — Alan: REMOVE "AI read" (it was a reserved, empty placeholder here); the upcoming list becomes a
+         compact table (EPS and revenue estimates, BMO/AMC, "in 3d"); the scrollable PAST-REPORTED list goes below it. */
       '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>events extras</span>' + SECFS_BTN + '</div><div class="rail" id="evExtras">' +
-        AIREAD_SLOT("events") +
-        '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt" id="evUpcoming">—</div></div>' +
+        '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt ev-upwrap" id="evUpcoming">—</div></div>' +
+        '<div class="card"><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
         '<div id="evRelPanel"></div>' +
       "</div></div></div></div>";
 }
@@ -13043,17 +13216,62 @@ function evFillExtras(upS, scopedTk) {
       relP.innerHTML = '<div class="card"><h4>RELEASES</h4><div class="sc-senttxt">Search a single ticker to see its company releases (from <b>company_releases</b>) + investor-relations link.</div></div>';
   }
   const rail = el("evUpcoming");
-  if (rail) rail.innerHTML = (upS && upS.length)
-    ? upS.slice(0, 8).map((ev) => {
-        const rel = evRel(evDays(ev.date));
-        const est = num(ev.eps_estimate) != null
-          ? '<span style="font-size:8.5px;color:var(--dim)">eps est ' + (+ev.eps_estimate).toFixed(2) + "</span>" : "<span></span>";
-        const sess = (ev.report_time && ev.report_time !== "TBD") ? " " + esc(ev.report_time) : "";
-        return '<div class="ll"><span><b>' + esc(ev.ticker) + "</b></span>" + est +
-          "<span>" + esc(fmtEvDate(ev.date)) + sess +
-          (rel ? '<span class="sc-evrel up">' + rel + "</span>" : "") + "</span></div>";
-      }).join("")
-    : "Nothing upcoming for this scope.";
+  if (rail) rail.innerHTML = evUpTableHTML(upS);
+  const past = el("evPastRail");
+  if (past) {
+    const pastS = typeof EV_CACHE !== "undefined" && EV_CACHE && EV_CACHE.past
+      ? scopeItems(EV_CACHE.past, typeof ercCohort === "function" ? ercCohort() : S.coh, S.tq, S.fav, COHSETS) : null;
+    past.innerHTML = evPastListHTML(pastS);
+    if (pastS && pastS.length && typeof ernStatsEnsure === "function") ernStatsEnsure(pastS.slice(0, EV_PAST_RAIL_MAX).map((r) => r.ticker));
+    try { if (typeof ernScintPaint === "function") ernScintPaint(past); } catch (_) {}
+  }
+}
+/* 27 SEP — THE UPCOMING TABLE. The same rows and the same look as the list it replaces (bold ticker, BMO/AMC as
+   stored, the relative day in its own colour), now with a header and one column each for the EPS and the revenue
+   estimate. A column with nothing stored shows "—", never a zero. */
+const EV_UP_RAIL_MAX = 10, EV_PAST_RAIL_MAX = 60;
+function evUpTableHTML(upS) {
+  if (!upS || !upS.length) return "Nothing upcoming for this scope.";
+  const rows = upS.slice(0, EV_UP_RAIL_MAX).map((ev) => {
+    const rel = evRel(evDays(ev.date)), eps = num(ev.eps_estimate), rev = num(ev.revenue_estimate);
+    const sess = (ev.report_time && ev.report_time !== "TBD") ? " " + esc(ev.report_time) : "";
+    return '<tr data-act="row" data-t="' + esc(ev.ticker) + '" title="' + esc(ev.ticker + " · " + fmtEvDate(ev.date) +
+        (ernWhen(ev) ? ", " + ernWhen(ev) : ", time not announced") + " · tap for the company page") + '">' +
+      "<td class=\"t\"><b>" + esc(ev.ticker) + "</b></td>" +
+      '<td class="n">' + (eps != null ? esc(ernNum(eps)) : '<span class="na">—</span>') + "</td>" +
+      '<td class="n">' + (rev != null && rev > 0 ? esc(ercMoney(rev)) : '<span class="na">—</span>') + "</td>" +
+      '<td class="d">' + esc(fmtEvDate(ev.date)) + sess + "</td>" +
+      '<td class="r">' + (rel ? '<span class="sc-evrel up">' + esc(rel) + "</span>" : "") + "</td></tr>";
+  }).join("");
+  return '<table class="ev-uptbl"><thead><tr><th class="t">TICKER</th><th class="n">EPS EST</th><th class="n">REV EST</th>' +
+    '<th class="d">DATE</th><th class="r">IN</th></tr></thead><tbody>' + rows + "</tbody></table>";
+}
+/* 27 SEP — PAST · REPORTED in the rail: newest first, scrolls inside its own card. EPS actual against its estimate
+   (ernResult — the same judgement as the band and the calendar) and the revenue beat or miss. A result beyond that
+   name's own usual surprise wears the diamond and scintillates once, through the same primitive as everywhere. */
+function evRevResult(r) {
+  const a = num(r.revenue_actual), e = num(r.revenue_estimate);
+  if (a == null || !(a > 0)) return null;
+  if (e == null || !(e > 0)) return { cls: "", act: a, pct: null };
+  const pct = ((a - e) / e) * 100;
+  return { cls: Math.abs(pct) < 0.05 ? "inline" : pct > 0 ? "beat" : "miss", act: a, pct: pct };
+}
+function evPastListHTML(pastS) {
+  if (pastS == null) return '<div class="soon">reading past reports…</div>';
+  const rows = pastS.filter((r) => r && num(r.eps_actual) != null).slice(0, EV_PAST_RAIL_MAX);
+  if (!rows.length) return '<div class="soon">no stored results for this scope yet</div>';
+  return '<div class="ev-pastscroll">' + rows.map((r) => {
+    const res = ernResult(r), rv = evRevResult(r), wild = typeof ernWildResult === "function" ? ernWildResult(r) : null;
+    const eps = res ? '<span class="ern-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
+        (res.est != null ? " vs " + esc(ernNum(res.est)) : "") + "</span>" +
+        (res.sur ? '<span class="ern-sur ' + res.cls + (wild ? " is-scint" : "") + '"' +
+          (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") + ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "") : "";
+    const rev = rv ? '<span class="ev-prev ' + rv.cls + '">rev ' + esc(ercMoney(rv.act)) +
+        (rv.pct != null ? " " + (rv.pct >= 0 ? "+" : "−") + Math.abs(rv.pct).toFixed(1) + "%" : "") + "</span>" : "";
+    return '<div class="ev-pastrow ern-it" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
+      '<span class="ev-pd">' + esc(fmtEvDate(r.date)) + '</span><span class="ern-tk">' + esc(r.ticker) + "</span>" +
+      '<span class="ev-pv">' + eps + rev + "</span></div>";
+  }).join("") + "</div>";
 }
 /* ============================================================================
    THE EARNINGS CALENDAR — MONTH · WEEK · DAY   (Alan, 23 Sep: the earnings proposal)
@@ -13644,6 +13862,10 @@ function ercTapeHTML() {
   const allRows = (ERC_TAPE_ROWS || []).filter((x) => x.date >= span.from && x.date <= span.to);
   const scoped = (!COHSETS && coh !== "ALL" && !isListCoh(coh) && !S.tq) ? null : scopeItems(allRows, coh, S.tq, S.fav, COHSETS);
   const dated = {}; allRows.forEach((x) => { dated[x.date] = 1; });
+  /* 27 Sep — Alan asked for a TODAY marker on this slider. It existed, but only inside today's bar, and the DAYS
+     zoom draws weekdays only — so on a Saturday or Sunday there was no bar for it to sit in and it vanished. Today
+     now always has its bar (an empty one on a weekend), exactly as a weekend day with a stored report already does. */
+  if (z === "DAYS" && today >= span.from && today <= span.to) dated[today] = 1;
   const buckets = ercBuckets(span.from, span.to, z, dated);
   const mcap = ercMcap();
   const idxS = ercTlIndex(scoped || [], z, mcap, S.fav);
@@ -15462,7 +15684,10 @@ function ecNudgeModel(nowSec) {
   const hot = Object.keys(byDay).sort().find((d) => byDay[d].length >= EC_NUDGE_AHEAD_MIN);
   if (sameDay.length >= EC_NUDGE_SWARM_MIN) {
     /* HEAVY DAY — it stops naming them: a swarm of category colours, a count, and where to go */
-    model.push({ kind: "swarm", key: "SWARM" + d0, day: d0, it: sameDay[0].it, group: sameDay, st: "swarm" });
+    /* 27 SEP — the swarm obeys the same four bands as a single item. It used to hard-flash at ANY distance, so
+       "3 due · in 15h" hammered fifteen hours early while a single release that far out sat still — the
+       opposite of the rule. Its pace is now the state of its SOONEST release: still until the hour. */
+    model.push({ kind: "swarm", key: "SWARM" + d0, day: d0, it: sameDay[0].it, group: sameDay, st: "swarm", pace: sameDay[0].st });
   } else {
     /* 16 Aug names the soonest day only; Alan's build carries three items across seven days and he kept that on
        22 Sep, so the queue stays seven days deep and only the COLLAPSE states come from the prototype. */
@@ -15516,7 +15741,7 @@ function ecAheadInnerHTML(m) {
     esc(ecWeekday(m.day).toUpperCase()) + " · <b>" + m.group.length + "</b> due</span>";
 }
 function ecNudgeClass(m) {
-  return m.kind === "swarm" ? "mn-swarm" : m.kind === "ahead" ? "mn-ahead"
+  return m.kind === "swarm" ? "mn-swarm" + (m.pace ? " s-" + m.pace : "") : m.kind === "ahead" ? "mn-ahead"
     : "mn-it s-" + m.st + (m.lane ? " mn-lane-end" : "");
 }
 function ecNudgeInner(m, nowSec) {
@@ -15524,8 +15749,12 @@ function ecNudgeInner(m, nowSec) {
     : m.kind === "ahead" ? ecAheadInnerHTML(m) : ecNudgeInnerHTML(m.it, m.st, nowSec);
 }
 function ecNudgeNodeTitle(m) {
-  return m.kind === "swarm" ? m.group.length + " releases due " + ecDayLbl(m.day) + " · go to the economic section"
-    : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) : ecNudgeTitle(m.it);
+  /* 27 SEP — Alan: "Fed Bowman, Dallas Fed, Barkin showed pink but were not scintillating." Pink is the CENTRAL BANK
+     colour of the calendar's legend, not a flash; the hover now names the releases and says when they will move. */
+  const who = (g) => g.slice(0, 6).map((x) => x.it.name + " (" + x.it.cat.toLowerCase() + ")").join(", ") + (g.length > 6 ? " …" : "");
+  const still = " · the dot colour is the release's category; the dots stay still until the hour before, then breathe";
+  return m.kind === "swarm" ? m.group.length + " releases due " + ecDayLbl(m.day) + ": " + who(m.group) + still + " · go to the economic section"
+    : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) + ": " + who(m.group) + still : ecNudgeTitle(m.it);
 }
 function ecNudgeNodeHTML(m, nowSec) {
   /* M55 — data-esub is the SAME key the ECONOMIC room's rows and month chips carry, so "the thing
@@ -15769,7 +15998,10 @@ async function ecTapeRead() {
   } finally { MACRO_NEXT_BUSY = false; }
   ecTapePaint();
 }
-function ecTapePaint(nowSec) { ecNudgePaint(nowSec); renderEconBand(nowSec); }
+function ecTapePaint(nowSec) {
+  ecNudgePaint(nowSec); renderEconBand(nowSec);
+  if (typeof renderTopTape === "function") renderTopTape(nowSec);   // 27 Sep — the scintillating tape reads the same rows
+}
 function ecTapeTick() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
   ecTapePaint();
@@ -19200,6 +19432,8 @@ function ernBandHTML(todayIso, nowMs) {
     '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
 }
 function renderErnBand() {
+  if (typeof renderTopTape === "function") renderTopTape();          // 27 Sep — the scintillating tape reads the same rows
+  if (typeof renderErnRoomTape === "function") renderErnRoomTape(); //          and so does the earnings room's own tape
   const slot = el("ernBandSlot");
   if (!ERN_BAND_ON || !slot) return;
   if (!ERN_ROWS && !ERN_FAIL_AT) return;               // 23 Sep: no half-empty band while the first read is out — it appears whole
@@ -19251,6 +19485,309 @@ function ernBandStart() {
   }
   renderErnBand();
   ernRead();
+}
+/* ============================================================================
+   27 SEP · THE SCINTILLATING TAPE — the strip where the company bar was.
+   Alan, 27 Sep: "The top company bar (ticker, price, prev, usual…) goes. That strip becomes the SCINTILLATING
+   TAPE: economic events AND earnings events. Selecting a ticker shows the ticker in the top-middle SCINTILLA
+   title area … the tape stays."
+   WHAT RIDES IT: the economic releases the NEXT queue already watches (ECON_TAPE_RULE — US, High/Medium, M2, no
+   plumbing) and the earnings of the names the Hub tracks, in ONE time line: this week so far, then the next seven
+   days. Earnings carry a DAY and before-open / after-close, not a minute, so for ordering only a before-open report
+   sits at 07:00 ET, an after-close one at 16:05, a stated clock time at that time, and an unannounced one at the
+   end of its day. A "now" marker sits where what has happened ends.
+   HOW IT SCINTILLATES: nothing new. Every item is drawn by the renderer of the band it came from (ecBandItemHTML,
+   ernItemHTML), so it walks the SAME states at the SAME speeds — still until the hour, breathing inside it,
+   tightening inside ten minutes, one hard pulse at its minute — and an earnings surprise beyond that name's own
+   usual surprise wears the diamond and glows through scScint, exactly as on the band at the foot of the screen.
+   The NEXT queue stays pinned at its right-hand end.
+   WHAT IT READS: nothing of its own. MACRO_NEXT (the econ tape's one read) and ERN_ROWS (the earnings band's one
+   read) — so it cannot disagree with either band, and it adds no request. Rollback: TOPTAPE_ON = false.
+   ============================================================================ */
+const TOPTAPE_ON = true;
+let TOPTAPE_HTML = "";
+function ttWindow(todayIso) { return { from: ernWeek(todayIso)[0], to: ernShift(todayIso, 7) }; }
+/* minutes after midnight ET, for ordering only */
+function ttErnMinute(r) {
+  const w = ernWhen(r);
+  if (w === "before the open") return 7 * 60;
+  if (w === "after the close") return 16 * 60 + 5;
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(w);
+  return hm ? +hm[1] * 60 + +hm[2] : 24 * 60 - 1;
+}
+function ttEcMinute(ts) {
+  const hm = /(\d{1,2}):(\d{2})/.exec(ecTimeET(ts));
+  return hm ? +hm[1] * 60 + +hm[2] : 0;
+}
+function topTapeItems(nowSec, todayIso) {
+  const today = todayIso || todayISO(), w = ttWindow(today), out = [];
+  for (const it of ecTapeItems(MACRO_NEXT || []))
+    if (it.day >= w.from && it.day <= w.to) out.push({ kind: "ec", day: it.day, min: ttEcMinute(it.ts), it: it });
+  for (const r of (ERN_ROWS || []))
+    if (r && r.ticker && r.date >= w.from && r.date <= w.to && (!UNIVERSE || UNIVERSE.has(r.ticker)))
+      out.push({ kind: "ern", day: r.date, min: ttErnMinute(r), r: r });
+  return out.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0) || a.min - b.min ||
+    (a.kind === b.kind ? 0 : a.kind === "ec" ? -1 : 1) ||
+    (a.kind === "ern" ? (a.r.ticker < b.r.ticker ? -1 : a.r.ticker > b.r.ticker ? 1 : 0) : 0));
+}
+function topTapeHTML(nowSec, todayIso) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const today = todayIso || todayISO(), nowMin = ttEcMinute(now);
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!MACRO_NEXT && !ERN_ROWS) {
+    seg = '<span class="sc-tape__item ecb-note">' + (MACRO_NEXT_FAIL_AT && ERN_FAIL_AT
+      ? "the economic calendar and the earnings calendar could not be read" : "reading this week's releases and earnings…") + "</span>" + sep;
+  } else {
+    let crossed = false;
+    const items = topTapeItems(now, today);
+    seg = items.length ? items.map((x) => {
+      let pre = "";
+      if (!crossed && (x.day > today || (x.day === today && x.min > nowMin))) {
+        crossed = true;
+        pre = ecTapeNowHTML("now — everything to the left has happened. Earnings carry a day and before-open / after-close, not a minute");
+      }
+      return pre + (x.kind === "ec" ? ecBandItemHTML(x.it, ecBandState(x.it, now), today)
+                                    : ernItemHTML(x.r, today, now * 1000));
+    }).join("") : '<span class="sc-tape__item ecb-note">no releases on the watch list and no earnings for the names you track this week</span>' + sep;
+    if (!MACRO_NEXT) seg += '<span class="sc-tape__item ecb-note">' + (MACRO_NEXT_FAIL_AT ? "economic calendar could not be read" : "reading the economic calendar…") + "</span>" + sep;
+    if (!ERN_ROWS) seg += '<span class="sc-tape__item ern-note">' + (ERN_FAIL_AT ? "earnings could not be read" : "reading earnings…") + "</span>" + sep;
+  }
+  return '<div class="sc-tape sc-tape--top" id="topTapeBand"><b class="sc-tape__lbl" title="' +
+    esc("economic releases (a coloured dot: its category) and earnings (a ticker) in one time line — this week so far and the next seven days · tap a release for its day in ECONOMIC, a ticker for its company") +
+    '">EVENTS →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function topTapeWrapHTML() {
+  return '<div class="sc-toptape" id="topTape"><div class="sc-toptape__slot" id="topTapeSlot"></div>' +
+    '<span class="sc-macronext sc-toptape__next" id="macroNext">' + (ECON_TAPE_ON ? macroNextHTML() : "") + "</span></div>";
+}
+function renderTopTape(nowSec) {
+  const slot = el("topTapeSlot");
+  if (!TOPTAPE_ON || !slot) return;
+  const html = topTapeHTML(nowSec);
+  if (html === TOPTAPE_HTML && slot.innerHTML) return;       // unchanged: leave the marquee running where it is
+  TOPTAPE_HTML = html;
+  slot.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}   // the diamond + glow, as on the band
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = slot.querySelector(".sc-tape__track");
+  /* it opens a little before "now", so the last thing that happened is on screen beside what is next */
+  if (track) tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-soon, .ecb-it.is-near, .ern-it.is-today, .ern-it.is-up"));
+}
+/* 27 SEP — the earnings room's own tape: the EARNINGS band, drawn again at the top of the room. */
+let ERN_ROOM_HTML = "";
+function renderErnRoomTape() {
+  const host = el("ernRoomTape");
+  if (!host || !ERN_BAND_ON) return;
+  if (!ERN_ROWS && !ERN_FAIL_AT) { if (!host.innerHTML) host.innerHTML = '<div class="sc-tape"><span class="sc-tape__item ern-note" style="padding:8px 12px">reading this week\'s earnings…</span></div>'; return; }
+  const html = ernBandHTML(todayISO(), Date.now()).replace('id="ernBand"', 'id="ernRoomBand"');
+  if (html === ERN_ROOM_HTML && host.querySelector && host.querySelector("#ernRoomBand")) return;
+  ERN_ROOM_HTML = html;
+  host.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(host); } catch (_) {}
+  if (typeof host.querySelector !== "function" || typeof tapeSpeed !== "function") return;
+  const track = host.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, host.querySelector(".ec-now--tape") || host.querySelector(".ern-it.is-today, .ern-it.is-up"));
+}
+/* ============================================================================
+   27 SEP · USUAL DAY + SIGMA EVENTS — their own room.
+   Alan, 27 Sep: "USUAL DAY + SIGMA EVENTS: move out of the dashboard table into their own tab/screen with a
+   left-to-right slider like events (he saw Friday's sigma events, now they are gone)."
+   WHY THEY WERE GONE: TODAY'S SCINTILLAS shows today's rows only (scintToday), so on a weekend it is empty although
+   Friday's are stored. This room reads the stored rows by DAY and keeps every day on a slider.
+   WHAT A SIGMA EVENT IS HERE: a stored scintilla with a size — price_outlier (a move of 2× or more of that name's
+   usual day, and at least 1%, for equities — the rules file), earnings_surprise and econ_surprise. "about to print"
+   rows (econ_imminent) have no size and are left out. Nothing is detected in the browser.
+   WHAT IT READS: scintillas (the detector's table, the last 60 days, one read per 5 minutes while the room is open)
+   and ticker_heartbeat_daily (the stored usual day per name, the board's own read) — read only, nothing written.
+   ============================================================================ */
+const UD_KINDS = ["price_outlier", "earnings_surprise", "econ_surprise"];
+const UD_DAYS_BACK = 30;              // weekdays on the slider
+const UD_TTL_MS = 5 * 60e3;
+const UD_LIMIT = 3000;
+let UD_ROWS = null, UD_AT = 0, UD_FAIL = false, UD_BUSY = false, UD_TRUNC = false;
+const UD_HB = Object.create(null);    // ticker → newest heartbeat row
+let UD_HB_BUSY = false;
+const udCohort = () => S.udCohPick || "ALL";
+function udRoomHTML() {
+  return '<div style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0">' +
+    '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
+    '<div class="body2 body2--ud">' +
+      '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>sigma events · moves beyond each name\'s usual day</span>' + SECFS_BTN + "</div>" +
+        '<div id="udTape"><div class="soon">reading the stored sigma events…</div></div>' +
+        '<div class="scroller" id="udDayList"></div>' +
+      "</div>" +
+      '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>usual day · by name</span>' + SECFS_BTN + "</div>" +
+        '<div class="scroller" id="udHbList"><div class="soon">reading the stored usual day…</div></div>' +
+      "</div>" +
+    "</div></div>";
+}
+/* items with a .ticker so the board's own scope rules apply; a non-ticker subject (an economic release) only in ALL */
+function udScoped(rows) {
+  const coh = udCohort();
+  const withT = (rows || []).map((r) => Object.assign({}, r, { ticker: r.subject_kind === "ticker" ? String(r.subject).toUpperCase() : null }));
+  if (coh === "ALL" && !S.tq) return withT;
+  if (!COHSETS && !isListCoh(coh)) return null;               // the cohort map is still loading
+  return scopeItems(withT.filter((r) => r.ticker), coh, S.tq, S.fav, COHSETS);
+}
+function udWeekdays(todayIso, n) {
+  const out = [];
+  for (let d = todayIso; out.length < n; d = ernShift(d, -1)) {
+    const w = new Date(d + "T12:00:00Z").getUTCDay();
+    if ((w !== 0 && w !== 6) || d === todayIso) out.unshift(d);
+  }
+  return out;
+}
+/* PURE — day → { n, up, dn, rows } */
+function udByDay(rows) {
+  const by = Object.create(null);
+  for (const r of rows || []) {
+    const d = scintDayET(r.ts); if (!d) continue;
+    const b = by[d] || (by[d] = { n: 0, up: 0, dn: 0, rows: [] });
+    b.n++; if (+r.direction > 0) b.up++; else if (+r.direction < 0) b.dn++;
+    b.rows.push(r);
+  }
+  return by;
+}
+/* under each day's number: the month where one starts (and on the first bar), "M" on every other Monday */
+function udUnderLabel(d, isFirst) {
+  if (isFirst || d.slice(8, 10) === "01") return ERN_MO[+d.slice(5, 7) - 1];
+  return new Date(d + "T12:00:00Z").getUTCDay() === 1 ? "M" : "";
+}
+function udFirstDay(rows) {
+  if (!rows || !rows.length || UD_TRUNC) return null;
+  let f = null; for (const r of rows) { const d = scintDayET(r.ts); if (d && (!f || d < f)) f = d; }
+  return f;
+}
+function udTapeHTML(scoped, today) {
+  const days = udWeekdays(today, UD_DAYS_BACK), by = udByDay(scoped), first = udFirstDay(UD_ROWS);
+  const max = Math.max(1, ...days.map((d) => (by[d] ? by[d].n : 0)));
+  const open = S.udDay || days.slice().reverse().find((d) => by[d] && by[d].n) || today;
+  const bars = days.map((d, i) => {
+    const b = by[d], n = b ? b.n : 0, pre = first && d < first;
+    const hUp = b ? Math.round((b.up / max) * 100) : 0, hDn = b ? Math.round((b.dn / max) * 100) : 0;
+    const hN = b ? Math.max(0, Math.round((n / max) * 100) - hUp - hDn) : 0;
+    const ttl = ernWeekday(d) + " " + ernMonthDay(d) + " · " + (pre ? "not recorded — the detector's store begins " + ernMonthDay(first)
+      : n ? n + " sigma event" + (n === 1 ? "" : "s") + (b.up || b.dn ? " · " + b.up + " up · " + b.dn + " down" : "") : "none stored") + " · click to list them";
+    return '<div class="ud-bar' + (d === today ? " is-today" : "") + (d === open ? " is-open" : "") + (pre ? " is-pre" : "") +
+      '" data-act="udday" data-d="' + d + '" title="' + esc(ttl) + '"><span class="ud-col">' +
+      (d === today ? '<span class="ud-now">TODAY</span>' : "") +
+      (n ? '<span class="ud-n" style="bottom:calc(' + (hUp + hDn + hN) + '% + 3px)">' + n + "</span>" : "") +
+      '<i class="dn" style="height:' + hDn + '%"></i><i class="nd" style="height:' + hN + '%"></i><i class="up" style="height:' + hUp + '%"></i>' +
+      '</span><span class="ud-x">' + esc(String(+d.slice(8, 10))) + "</span>" +
+      '<span class="ud-m">' + esc(udUnderLabel(d, i === 0)) + "</span></div>";
+  }).join("");
+  const total = scoped.length, coh = udCohort();
+  return '<div class="ud-tape"><div class="ud-bars">' + bars + "</div>" +
+    '<div class="ud-say"><span>showing <b>' + esc(coh === "ALL" ? "ALL" : coh) + "</b> · " + total + " stored sigma event" + (total === 1 ? "" : "s") +
+      " over the last " + UD_DAYS_BACK + " weekdays</span>" +
+      (coh !== "ALL" ? '<span class="se-widen" data-act="udall">SHOW ALL NAMES</span>' : "") +
+      (first ? '<span class="ud-note">the store begins <b>' + esc(ernWeekday(first) + " " + ernMonthDay(first)) + "</b> — earlier days were never recorded, they are not quiet</span>" : "") +
+      (UD_TRUNC ? '<span class="ud-note">more rows than one read returns — the oldest days may be missing</span>' : "") +
+    "</div></div>";
+}
+function udMove(r) { const d = r.detail || {}; return d.move_pct != null && isFinite(+d.move_pct) ? +d.move_pct : null; }
+function udDayHTML(scoped, today) {
+  const by = udByDay(scoped), days = udWeekdays(today, UD_DAYS_BACK);
+  const open = S.udDay || days.slice().reverse().find((d) => by[d] && by[d].n) || today;
+  const b = by[open];
+  const head = '<div class="ud-dayhd"><b>' + esc(ernWeekday(open) + " " + ernMonthDay(open)) + "</b>" +
+    (b ? " · " + b.n + " sigma event" + (b.n === 1 ? "" : "s") + ' · <span class="up">' + b.up + ' up</span> · <span class="dn">' + b.dn + " down</span>" : " · none stored") + "</div>";
+  if (!b) return head + '<div class="soon">nothing moved further than its own usual day on this day' + (open === today ? " (yet)" : "") + ".</div>";
+  const rows = b.rows.slice().sort((x, y) => Math.abs(+y.magnitude || 0) - Math.abs(+x.magnitude || 0));
+  return head + '<table class="ud-tbl"><thead><tr><th>TIME</th><th>NAME</th><th>WHAT</th><th class="n">MOVE</th><th class="n">× USUAL</th><th class="n">USUAL DAY</th><th>WHY</th></tr></thead><tbody>' +
+    rows.map((r) => {
+      const d = r.detail || {}, mv = udMove(r), isT = r.subject_kind === "ticker";
+      const when = (() => { try { return ET_HM.format(new Date(r.ts)); } catch (_) { return ""; } })();
+      const act = isT ? ' data-act="row" data-t="' + esc(r.subject) + '"' : (d.event_ts ? ' data-act="mngoto" data-day="' + esc(scintDayET(d.event_ts)) + '"' : "");
+      const usual = r.kind === "price_outlier" && d.daily_vol_pct != null ? hbPct(d.daily_vol_pct) : "";
+      const why = scintWhyRule(r) || (Array.isArray(d.fired) && d.fired.indexOf("statistical") >= 0 ? "far beyond its usual day" : "");
+      return "<tr" + act + ' title="' + esc(scintSays(r)) + '"><td class="d">' + esc(when) + '</td><td class="t"><b>' + esc(r.subject) + "</b></td>" +
+        "<td>" + esc(scintWhat(r)) + '</td><td class="n ' + (mv == null ? "" : mv >= 0 ? "up" : "dn") + '">' + (mv != null ? esc(fmtC(mv)) : "—") + "</td>" +
+        '<td class="n x ' + (+r.direction > 0 ? "up" : +r.direction < 0 ? "dn" : "") + '">' + esc(scintMult(r) || "—") + "</td>" +
+        '<td class="n">' + esc(usual || "—") + '</td><td class="w">' + esc(why) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+/* the usual day of every name in scope, biggest first — the column that left the board */
+function udHbHTML() {
+  if (!UNIVERSE) return '<div class="soon">reading the names…</div>';
+  const scoped = udScopedTickers();
+  if (scoped == null) return '<div class="soon">cohort map loading…</div>';
+  const have = scoped.filter((t) => UD_HB[t]);
+  if (!have.length) return '<div class="soon">' + (UD_HB_BUSY ? "reading the stored usual day…" : "no usual day stored for these names") + "</div>";
+  have.sort((a, b) => (num(UD_HB[b].usual_day_60) || 0) - (num(UD_HB[a].usual_day_60) || 0));
+  const missing = scoped.length - have.length;
+  return '<div class="ud-say"><span><b>' + have.length + "</b> names · stored daily, the spread of each name's own daily moves" +
+      (missing ? " · " + missing + " without a stored row" : "") + "</span></div>" +
+    '<table class="ud-tbl ud-hb"><thead><tr><th>NAME</th><th class="n">USUAL DAY</th><th class="n">20 DAYS</th><th class="n">1 YEAR</th><th class="n">AS OF</th></tr></thead><tbody>' +
+    have.map((t) => {
+      const h = UD_HB[t];
+      return '<tr data-act="row" data-t="' + esc(t) + '" title="' + esc(hbTitle(t, h, null)) + '"><td class="t"><b>' + esc(t) + "</b></td>" +
+        '<td class="n">' + esc(hbPct(h.usual_day_60) || "—") + '</td><td class="n dim">' + esc(hbPct(h.usual_day_20) || "—") +
+        '</td><td class="n dim">' + esc(hbPct(h.usual_day_250) || "—") + '</td><td class="n dim">' + esc(ernMonthDay(String(h.date))) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+function udScopedTickers() {
+  const base = [...(UNIVERSE || [])].map((t) => ({ ticker: t }));
+  const coh = udCohort();
+  if (coh === "ALL" && !S.tq) return base.map((x) => x.ticker);
+  if (!COHSETS && !isListCoh(coh)) return null;
+  return scopeItems(base, coh, S.tq, S.fav, COHSETS).map((x) => x.ticker);
+}
+function udRender() {
+  const tape = el("udTape"), list = el("udDayList"), hb = el("udHbList");
+  if (!tape) return;
+  const today = todayISO();
+  if (!UD_ROWS) {
+    tape.innerHTML = '<div class="soon">' + (UD_FAIL ? "the stored sigma events could not be read — showing nothing rather than something stale" : "reading the stored sigma events…") + "</div>";
+    if (list) list.innerHTML = "";
+  } else {
+    const scoped = udScoped(UD_ROWS);
+    if (scoped == null) { tape.innerHTML = '<div class="soon">cohort map loading…</div>'; if (list) list.innerHTML = ""; }
+    else {
+      tape.innerHTML = udTapeHTML(scoped, today);
+      if (list) list.innerHTML = udDayHTML(scoped, today);
+      const bars = tape.querySelector && tape.querySelector(".ud-bars");
+      if (bars) bars.scrollLeft = bars.scrollWidth;          // newest at the right, in view
+    }
+  }
+  if (hb) hb.innerHTML = udHbHTML();
+}
+async function udRead(force) {
+  if (UD_BUSY || (!force && UD_ROWS && Date.now() - UD_AT < UD_TTL_MS)) return;
+  UD_BUSY = true;
+  try {
+    const from = new Date(Date.now() - 60 * 86400e3).toISOString();
+    const rows = await pg("scintillas?select=ts,kind,subject,subject_kind,direction,magnitude,detail&kind=in.(" + UD_KINDS.join(",") +
+      ")&ts=gte." + encodeURIComponent(from) + "&order=ts.desc&limit=" + UD_LIMIT);
+    UD_ROWS = Array.isArray(rows) ? rows : []; UD_TRUNC = UD_ROWS.length >= UD_LIMIT; UD_AT = Date.now(); UD_FAIL = false;
+  } catch (_) { UD_FAIL = true; }
+  finally { UD_BUSY = false; }
+}
+async function udHbEnsure() {
+  if (UD_HB_BUSY) return;
+  const want = (udScopedTickers() || []).filter((t) => !UD_HB[t]);
+  if (!want.length) return;
+  UD_HB_BUSY = true;
+  try {
+    const since = new Date(Date.now() - 21 * 86400e3).toISOString().slice(0, 10);
+    for (let i = 0; i < want.length; i += 35) {
+      const chunk = want.slice(i, i + 35);
+      const rows = await pg("ticker_heartbeat_daily?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
+        ")&date=gte." + since + "&order=ticker.asc,date.desc&select=ticker,date,usual_day_20,usual_day_60,usual_day_250,n").catch(() => []);
+      for (const r of (rows || [])) if (r && r.ticker && !UD_HB[r.ticker]) UD_HB[r.ticker] = r;   // date.desc: first is newest
+      if (S.sec === "USUAL") { const hb = el("udHbList"); if (hb) hb.innerHTML = udHbHTML(); }
+    }
+  } finally { UD_HB_BUSY = false; }
+  if (S.sec === "USUAL") { const hb = el("udHbList"); if (hb) hb.innerHTML = udHbHTML(); }
+}
+async function udFill() {
+  udRender();
+  try { if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker)); } catch (_) {}
+  if (!COHSETS) loadCohSets().then(() => { if (S.sec === "USUAL") { udRender(); udHbEnsure(); } }).catch(() => {});
+  await udRead(false);
+  if (S.sec === "USUAL") udRender();
+  udHbEnsure();
 }
 /* ---- tapes ------------------------------------------------------------------- */
 /* FIX 2 — pinned label cell at left, scrolling track lives in its own window */
@@ -19367,6 +19904,7 @@ function viewKey() {
     case "ECONOMIC": return "ECON|" + (S.econView || "RELEASES");   // M44 — REGIME is its own mount, like SENTIMENT's sub-tabs
     case "ALERTS": case "SCREENER": return S.sec;
     case "FILES": return "FILES";
+    case "USUAL": return "USUAL";
   }
   return S.sec;
 }
@@ -19385,6 +19923,7 @@ function roomHTML() {
     case "SENTIMENT": return sentimentRoomHTML();   // one consolidated reading — see Room · SENTIMENT
     case "ECONOMIC":  return (S.econView === "REGIME") ? regimeRoomHTML() : econRoomHTML();
     case "FILES":     return filesRoomHTML();
+    case "USUAL":     return udRoomHTML();
   }
   return "";
 }
@@ -19429,16 +19968,19 @@ function afterMount() {
   else if (S.sec === "SENTIMENT") sentiDispatch();
   else if (S.sec === "ECONOMIC") { if (S.econView === "REGIME") rgMount(); else fillEcon(); }
   else if (S.sec === "FILES") filesWire();
+  else if (S.sec === "USUAL") udFill();
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
     if (ECON_TAPE_ON) fillMacroNext();           // the nudge into the ident box this mount just rebuilt (cached rows; reads only if stale)
+    if (TOPTAPE_ON) { TOPTAPE_HTML = ""; renderTopTape(); identPaint(); }   /* 27 Sep — the tape this mount just built, and the title */
     updateCohrow(); syncBoardSel();
     loadBoardRsi(shownRows().map((r) => r.t));   // FIX A — lazy-fill RSI after the initial board mount
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
     else startRotate();
     try { scintStripRender(); boardScintPass(); } catch (_) {}   /* M42 — the strip and the outlier marks on a fresh mount */
   }
+  if (S.sec === "EVENTS") { ERN_ROOM_HTML = ""; renderErnRoomTape(); }   /* 27 Sep — the earnings room opens on its own tape */
 }
 
 /* ---- actions (App.jsx handlers) -------------------------------------------------- */
@@ -19778,6 +20320,7 @@ document.addEventListener("click", (e) => {
     case "mtab": {
       /* entering EVENTS starts the room wide and on today, so a narrow strip left
          behind in another room can never make this one look empty. */
+      if (a.dataset.sec === "USUAL" && S.sec !== "USUAL") { S.udCohPick = null; S.udDay = null; }   /* 27 Sep — enters wide, on the latest day */
       if (a.dataset.sec === "EVENTS" && S.sec !== "EVENTS") { S.ernCohPick = null; S.ernDay = null; S.ernPick = null; ERC_TAPE_AT = null; ERC_AUTO_DAY = null; }
       go(a.dataset.sec); break;
     }
@@ -20020,6 +20563,7 @@ document.addEventListener("click", (e) => {
       if (mountedKey === "DASH") { restartFeed(); if (LEFT_HEAT || LEFT_STATE !== "PINNED") renderLeftPanel(); }   // #133 heat + R41 Layer 0 both track the cohort switch
       else { if (S.sec === "COMPANY") S.sec = "DASHBOARD"; sync(); restartFeed(); }
       if (inEvents) renderEvents(S.coh);
+      if (S.sec === "USUAL") { S.udCohPick = a.dataset.key; udRender(); udHbEnsure(); }   /* 27 Sep — narrows the usual-day room too */
       break;
     }
     /* R43 §3 — Layer-0 sub-tabs. Tab state is a plain JS flag (no persistence); only
@@ -20257,6 +20801,12 @@ document.addEventListener("click", (e) => {
     }
     case "unpin": {   // R42 §7 — "◂ COHORT" back button: unpin → Layer 0 (identical to re-clicking the active row)
       S.sec = "DASHBOARD"; updateMtabs(); startRotate(); break;
+    }
+    case "udday": { S.udDay = a.dataset.d || null; udRender(); break; }        /* 27 Sep — a bar on the usual-day slider */
+    case "udall": { S.udCohPick = "ALL"; udRender(); udHbEnsure(); break; }
+    case "headx": {   // 27 Sep — ✕ beside the ticker in the header title: back to the SCINTILLA title; the tape stays
+      if (S.sec === "COMPANY") { S.sec = "DASHBOARD"; updateMtabs(); }
+      startRotate(); identPaint(); break;             // startRotate repaints only where a left panel is mounted
     }
     /* R42 §6 — heattoggle now UNREACHABLE from the company header (button removed);
        case kept harmless for the heat-view's own "HEAT ▸ OFF" chip / stale markup. */
@@ -24893,13 +25443,13 @@ body.gwx-motion .gwx-pct{opacity:1}
       /* TREND and MOM need four characters ("+1.0") and were clipping to "+1..." at 8fr.
          READ is the words version of the same two numbers, so it is the column that can
          afford to lose width - it truncates gracefully and says nothing the pair does not. */
-      ".ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,11fr)"+
-      " minmax(0,14fr) minmax(0,10fr) minmax(0,11fr) minmax(0,10fr) minmax(0,6fr) minmax(0,9fr) minmax(0,9fr)"+
-      " minmax(0,6fr) minmax(0,10fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}"+
+      ".ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr)"+
+      " minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr)"+
+      " minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}"+   /* 27 Sep — 14 tracks: USUAL DAY left the board */
       ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
       "@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr)"+
-      " minmax(0,11fr) minmax(0,10fr) minmax(0,13fr) minmax(0,9fr) minmax(0,10fr) minmax(0,9fr) minmax(0,6fr)"+
-      " minmax(0,8fr) minmax(0,8fr) minmax(0,5fr) minmax(0,8fr) minmax(0,7fr)"+
+      " minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,7fr)"+
+      " minmax(0,8fr) minmax(0,8fr) minmax(0,8fr) minmax(0,11fr) minmax(0,7fr)"+
       " minmax(0,5fr) !important}}"+
       ".gwx-read{font-family:var(--mono);font-size:9px;letter-spacing:.02em;"+
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+

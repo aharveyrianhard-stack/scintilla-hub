@@ -304,7 +304,11 @@ test("every board row and the company view carry ♥ ★ ◎; a list click never
   assert.match(ctl.listCtlHTML("MU", "co"), /^<span class="sc-lists sc-lists--co" id="coLists">/);
   assert.match(fn("boardRowsHTML"), /listCtlHTML\(d\.t, "row"\)/);
   assert.match(fn("coIdentLists"), /tk\.insertAdjacentHTML\("afterend", listCtlHTML\(LEFT_T, "co"\)\)/, "company view: beside the pinned ticker");
-  assert.match(fn("renderLeftPanel"), /ib\.innerHTML = leftIdentHTML\(identBarData\(\)\);\n  coIdentLists\(ib\);/);
+  /* 27 Sep — the ident moved into the header title; renderLeftPanel hands it to ONE painter, which still carries
+     the ♥ ★ ◎ beside the pinned ticker in both places the ident can live (header title, or the old bar with the tape off). */
+  assert.match(fn("renderLeftPanel"), /\n  identPaint\(\);\n/);
+  assert.match(fn("identPaint"), /ib\.innerHTML = leftIdentHTML\(identBarData\(\)\);\n    coIdentLists\(ib\);/);
+  assert.match(fn("identPaint"), /if \(on\) coIdentLists\(h\);/);
   assert.doesNotMatch(fn("leftHeadHTML"), /listCtlHTML/, "not in the tab header: the tabs keep their room");
   assert.match(page, /case "lst":\s+e\.preventDefault\(\); e\.stopPropagation\(\); toggleList\(a\.dataset\.l, a\.dataset\.t\); break;/);
 });
