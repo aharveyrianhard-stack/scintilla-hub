@@ -19023,7 +19023,7 @@ function socMatchX(posts, kws, sinceIso) {
    153 subscribed channels across five accounts (personal 44, scintilla 46, soundscapes 41, ai_research 31, golf 14) against
    1,883 search-found channels. Bera Finance: 43 videos, every one source = search, subscription_accounts = []. youtube_feed is NOT a subset of the
    subscriptions (R3's note was wrong): it holds both kinds (12,191 rows, 6,299 with is_sub = false). */
-function socMatchYT(vids, t, kws) {
+function socMatchYT(vids, t, kws, subCh) {
   const T = String(t || "").toUpperCase(), seen = new Set(), out = [];
   const add = (r, title, channel, tagged, url) => {
     const k = r.video_id || String(channel || "").toLowerCase() + "|" + String(title || "").toLowerCase(); if (seen.has(k)) return; seen.add(k);
@@ -19032,12 +19032,37 @@ function socMatchYT(vids, t, kws) {
       id: r.video_id || null, sub: r.source == null ? null : r.source === "subscription", accts: Array.isArray(r.subscription_accounts) ? r.subscription_accounts : [] });
   };
   for (const r of vids || []) add(r, r.title, r.channel_title, String(r.ticker || "").toUpperCase() === T, r.video_id ? "https://www.youtube.com/watch?v=" + r.video_id : "");
-  /* a search-found video from a channel you DO subscribe to (21 channels appear both ways, measured 28 Sep) counts as
-     yours when that channel shows up as a subscription in the same read */
-  const subIds = new Set((vids || []).filter((r) => r.source === "subscription" && r.channel_id).map((r) => r.channel_id));
+  /* a search-found video from a channel you DO subscribe to counts as yours. Review fix (28 Sep): being yours is a property
+     of the CHANNEL, not of this read — subCh (channel_id → the accounts that subscribe, from socSubChannels) is the whole
+     subscribed set; subscription rows in this read are added to it. Before the fix SPY showed 0 of YOUR videos although 37
+     search-found SPY videos in 30 days came from five channels you subscribe to (Rey Jay's Trades 'scintilla', …). */
+  const subIds = new Map(subCh instanceof Map ? subCh : []);
+  for (const r of vids || []) if (r.source === "subscription" && r.channel_id && !subIds.has(r.channel_id)) subIds.set(r.channel_id, Array.isArray(r.subscription_accounts) ? r.subscription_accounts : []);
   const chOf = new Map((vids || []).map((r) => [r.video_id, r.channel_id]));
-  for (const it of out) if (it.sub === false && subIds.has(chOf.get(it.id))) it.sub = true;
+  for (const it of out) if (it.sub === false && subIds.has(chOf.get(it.id))) { it.sub = true; if (!it.accts.length) it.accts = subIds.get(chOf.get(it.id)) || []; }
   return out;
+}
+/* which of these channels one of your YouTube accounts subscribes to. youtube_videos has no channel table, so it asks for the
+   subscription rows of just these channels (60 ids per read) and remembers the answer for the session: a channel is known
+   subscribed (SOC_SUBCH, with its accounts) or known not (SOC_NOTSUB). Read-only. Returns false when a read failed, and
+   the page then says so under YOUTUBE rather than guessing. */
+const SOC_SUBCH = new Map(), SOC_NOTSUB = new Set();
+async function socSubChannels(ids) {
+  const want = [...new Set((ids || []).filter(Boolean))].filter((c) => !SOC_SUBCH.has(c) && !SOC_NOTSUB.has(c) && /^[A-Za-z0-9_-]+$/.test(c));
+  let ok = true;
+  for (let i = 0; i < want.length; i += 60) {
+    const chunk = want.slice(i, i + 60);
+    try {
+      const rows = await pg("youtube_videos?select=channel_id,subscription_accounts&source=eq.subscription&channel_id=in.(" + chunk.join(",") + ")&limit=5000");
+      for (const r of rows || []) {
+        const a = SOC_SUBCH.get(r.channel_id) || [];
+        for (const x of Array.isArray(r.subscription_accounts) ? r.subscription_accounts : []) if (!a.includes(x)) a.push(x);
+        SOC_SUBCH.set(r.channel_id, a);
+      }
+      for (const c of chunk) if (!SOC_SUBCH.has(c)) SOC_NOTSUB.add(c);
+    } catch (_) { ok = false; }
+  }
+  return ok;
 }
 /* R4 — BULLISH OR BEARISH, PER MENTION. Word-list leans, never an AI read, each labelled with where it came from:
    STORED   youtube_video_sentiment (the youtube-sentiment job, method lm-v1: a finance word list with negation). MEASURED
@@ -19161,7 +19186,9 @@ function socBodyHTML(d, v) {
   const hidden = v === "ALL" ? 0 : d.ys.length - ys.length;
   const all = d.xs.concat(ys).filter((i) => Date.parse(i.at) <= d.nowMs + 60e3).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const yFresh = d.vidsOk ? (v === "ALL" ? "youtube_videos · subscribed channels and ticker searches" : "youtube_videos · subscribed channels only" +
-      (hidden ? " · " + hidden + " search-found video" + (hidden === 1 ? "" : "s") + " left out" : "")) : "youtube_videos did not answer";
+      (hidden ? " · " + hidden + " search-found video" + (hidden === 1 ? "" : "s") + " left out" : "")) +
+      (d.subOk === false ? ' · <b class="dn">the subscribed-channel check did not answer</b> — a search-found video from a channel you follow may be missing here' : "")
+    : "youtube_videos did not answer";
   const yLean = socLeanTally(ys, d.nowMs, 7), xLean = socLeanTally(d.xs, d.nowMs, 7);
   return '<div class="soc-grid">' +
       socBlockHTML("X", "posts on your X list", socSeries(d.xs, d.days, d.nowMs), d.days, d.xFresh,
@@ -19188,14 +19215,15 @@ async function coSocialLoad(t, kws) {
     pg("youtube_videos?select=video_id,ticker,channel_id,channel_title,title,published_at,source,subscription_accounts&published_at=gte." + since + "&or=(ticker.eq." + T + "," + like + ")&order=published_at.desc&limit=1000").catch(() => null),
     pg("youtube_video_sentiment?select=video_id,lean,sample_src&ticker=eq." + T + "&limit=2000").catch(() => null),
   ]);
+  const subOk = await socSubChannels((vids || []).filter((r) => r.source !== "subscription").map((r) => r.channel_id));
   const xs = x.ok ? socMatchX(x.v, kws, since) : [];
   socLeanX(xs, typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
-  const ys = socLeanYT(socMatchYT(vids || [], t, kws), yvs || [], typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
+  const ys = socLeanYT(socMatchYT(vids || [], t, kws, SOC_SUBCH), yvs || [], typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
   const newestX = x.ok ? x.v.reduce((m, p) => (p && p.created_at > m ? p.created_at : m), "") : "";
   const xStale = newestX && nowMs - Date.parse(newestX) > 36 * 3600e3;
   const xFresh = !x.ok ? "the X feed did not answer (" + esc(x.why) + ")" :
     newestX ? (xStale ? '<b class="dn">STALE</b> · ' : "") + "newest post anywhere in the X feed: " + esc(newsTS(newestX)) + " ET · " + socAgo(nowMs - Date.parse(newestX)) + " ago · " + x.v.length.toLocaleString("en-US") + " posts held" : "";
-  const d = { nowMs, days, xs, ys, xFresh, vidsOk: vids != null, yvsOk: yvs != null,
+  const d = { nowMs, days, xs, ys, xFresh, vidsOk: vids != null, yvsOk: yvs != null, subOk,
     xHandles: x.ok ? new Set(x.v.map((p) => p && p.handle).filter(Boolean)).size : null };
   SOC_MEM[t] = { at: Date.now(), d };
   socRepaint(t);

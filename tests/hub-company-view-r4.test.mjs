@@ -37,6 +37,37 @@ test("SOCIAL YouTube: every video says whether it is from a channel you subscrib
   assert.equal(yours.length, 2, "YOUR CHANNELS leaves Bera Finance out");
 });
 
+test("SOCIAL YouTube (review fix): a search-found SPY video from a channel you subscribe to is YOURS even when no subscription video matched", () => {
+  const kws = soc.socKeywords("SPY", "SPDR S&P 500 ETF Trust", true);
+  const vids = [
+    { video_id: "r1", ticker: "SPY", channel_id: "UClGy2KQicZBAcNWVk1pOKYA", channel_title: "Rey Jay's Trades", title: "SPY levels for Monday", published_at: "2026-09-27T10:00:00Z", source: "search", subscription_accounts: [] },
+    { video_id: "b1", ticker: "SPY", channel_id: "UCbera", channel_title: "Bera Finance", title: "SPY prediction", published_at: "2026-09-27T09:00:00Z", source: "search", subscription_accounts: [] },
+  ];
+  /* before the fix: nothing in the read is a subscription, so nothing could be yours */
+  assert.deepEqual(soc.socMatchYT(vids, "SPY", kws).map((y) => y.sub), [false, false]);
+  /* with the channel-level set (what socSubChannels fills from youtube_videos, source = subscription) */
+  const ys = soc.socMatchYT(vids, "SPY", kws, new Map([["UClGy2KQicZBAcNWVk1pOKYA", ["scintilla"]]]));
+  assert.deepEqual(ys.map((y) => [y.who, y.sub, y.accts]), [["Rey Jay's Trades", true, ["scintilla"]], ["Bera Finance", false, []]]);
+  assert.match(fn("socListHTML"), /it\.sub === false \? "YT · SEARCH" : "YT · YOURS"/);
+});
+
+test("SOCIAL YouTube (review fix): the subscribed-channel check asks only for these channels, 60 at a time, read-only, and remembers the answer", async () => {
+  const calls = [];
+  const pg = async (path) => { calls.push(path); const ids = path.match(/channel_id=in\.\(([^)]*)\)/)[1].split(",");
+    return ids.filter((c) => c.startsWith("SUB")).map((c) => ({ channel_id: c, subscription_accounts: ["personal"] })); };
+  const m = new Function("pg", page.match(/^const SOC_SUBCH = [^\n]*\n/m)[0] + fn("socSubChannels") + "\nreturn { socSubChannels, SOC_SUBCH, SOC_NOTSUB };")(pg);
+  const ids = Array.from({ length: 130 }, (_, i) => (i % 13 === 0 ? "SUB" : "UC") + i);
+  assert.equal(await m.socSubChannels(ids.concat([null, "bad id)"])), true);
+  assert.equal(calls.length, 3, "130 channels → three reads");
+  for (const c of calls) assert.match(c, /^youtube_videos\?select=channel_id,subscription_accounts&source=eq\.subscription&channel_id=in\.\([A-Za-z0-9_,-]+\)&limit=5000$/);
+  assert.equal(m.SOC_SUBCH.size, 10); assert.equal(m.SOC_NOTSUB.size, 120);
+  assert.equal(await m.socSubChannels(ids), true); assert.equal(calls.length, 3, "known channels are not asked again");
+  const bad = new Function("pg", page.match(/^const SOC_SUBCH = [^\n]*\n/m)[0] + fn("socSubChannels") + "\nreturn { socSubChannels };")(async () => { throw new Error("503"); });
+  assert.equal(await bad.socSubChannels(["UCx"]), false, "a failed read is reported, not guessed");
+  assert.match(fn("socBodyHTML"), /the subscribed-channel check did not answer/);
+  assert.match(fn("coSocialLoad"), /await socSubChannels\(\(vids \|\| \[\]\)\.filter\(\(r\) => r\.source !== "subscription"\)/);
+});
+
 test("SOCIAL: the tab defaults to YOUR CHANNELS, keeps + YOUTUBE SEARCH as a labelled second view, and prints each source", () => {
   assert.match(fn("socView"), /=== "ALL" \? "ALL" : "YOURS"/, "anything but an explicit ALL is YOURS");
   const note = fn("socSourceNoteHTML");
