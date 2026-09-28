@@ -5,7 +5,7 @@
 
    node proof.mjs <url> <width> <height> <mobile 0|1> '<steps JSON>'
    steps: {"shot":"out.png","full":true} · {"click":"XLK"} (a real mouse click on that ball) · {"key":"Escape"} ·
-          {"eval":"js"} · {"wait":ms} · {"cpu":true} (60 s idle, then 60 s of mouse-drag turning) · {"state":true} */
+          {"eval":"js"} · {"wait":ms} · {"box":true} (share of the canvas the whole tree covers) · {"cpu":true} (60 s idle, then 60 s of mouse-drag turning) · {"state":true} */
 import { spawn, execSync } from "node:child_process";
 import { writeFileSync, rmSync } from "node:fs";
 const [url, width, height, mobile, stepsJSON] = process.argv.slice(2);
@@ -69,6 +69,15 @@ for (const s of steps) {
     log.push({ key: s.key, after: await stateNow() });
   }
   if (s.state) log.push({ state: await stateNow() });
+  if (s.box) { // how much of the canvas the whole tree covers: projected box of every node vs the canvas box (28 Sep review)
+    const bx = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector('#graph').getBoundingClientRect(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      const k = document.querySelector('#legend'), kr = k && k.open ? k.getBoundingClientRect() : null; let underKey = 0;
+      for (const id of __mm.byId.keys()) { const [x, y] = __mm.screenOf(id); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+        if (kr && x >= kr.left && x <= kr.right && y >= kr.top && y <= kr.bottom) underKey++; }
+      return { canvas: [Math.round(c.left), Math.round(c.top), Math.round(c.right), Math.round(c.bottom)], nodes: [x0, y0, x1, y1].map(Math.round),
+        height_share: +((y1 - y0) / c.height).toFixed(3), width_share: +((x1 - x0) / c.width).toFixed(3), sector_rows: __mm.sectorRows, labels: __mm.labelsShown, key_open: !!kr, balls_under_key: underKey }; })())`));
+    log.push({ box: bx });
+  }
   if (s.shot) {
     const params = { format: "png" };
     if (s.full) { const m = await send("Page.getLayoutMetrics"); const cs = m.cssContentSize || m.contentSize; params.captureBeyondViewport = true; params.clip = { x: 0, y: 0, width: +width, height: Math.ceil(cs.height), scale: 1 }; }

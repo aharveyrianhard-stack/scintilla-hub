@@ -14,7 +14,7 @@ const OLD = JSON.parse(readFileSync(join(ROOT, "deliverables/20260927/market-map
 const PAGE = readFileSync(join(DIR, "index.html"), "utf8");
 const DOC = readFileSync(join(DIR, "MARKET-MAP-R3.html"), "utf8");
 const { holdingsAggregate, divergence } = await import(pathToFileURL(join(DIR, "aggregate.js")));
-const { prepareTree, layout, LAYOUT } = await import(pathToFileURL(join(DIR, "layout.js")));
+const { prepareTree, layout, bestRows, LAYOUT } = await import(pathToFileURL(join(DIR, "layout.js")));
 const byId = new Map(R3.nodes.map((n) => [n.id, n]));
 const SERVED = new Set(R3.provenance.universe.symbols);
 
@@ -123,9 +123,9 @@ test("the aggregate on the real list: XLK blends its served holdings, a fund wit
   }
 });
 
-test("tree layout: deterministic, top-down (every child below its parent), upper tree flat, depth only where rows need it", () => {
+for (const ROWS of [1, 2, 3, 4]) test(`tree layout (sectors in ${ROWS} row${ROWS > 1 ? "s" : ""}): deterministic, top-down (every child below its parent), upper tree flat, depth only where rows need it`, () => {
   const run = (k) => {
-    const nodes = structuredClone(R3.nodes), heads = prepareTree(nodes), out = new Map();
+    const nodes = structuredClone(R3.nodes), heads = prepareTree(nodes, { rows: ROWS }), out = new Map();
     layout(heads, k, (n, x, y, z) => { assert.ok(!out.has(n.id), `${n.id} placed twice`); out.set(n.id, [x, y, z]); });
     return { out, heads };
   };
@@ -151,15 +151,41 @@ test("tree layout: deterministic, top-down (every child below its parent), upper
   assert.ok(tech.nRows > reit.nRows, "a big sector is deeper than a small one");
 });
 
-test("tree layout: no two balls on top of each other, in 3D or flat", () => {
+for (const ROWS of [1, 2, 3, 4]) test(`tree layout (sectors in ${ROWS} row${ROWS > 1 ? "s" : ""}): no two balls on top of each other, in 3D or flat`, () => {
   for (const k of [1, 0]) {
-    const nodes = structuredClone(R3.nodes), heads = prepareTree(nodes), pts = [];
+    const nodes = structuredClone(R3.nodes), heads = prepareTree(nodes, { rows: ROWS }), pts = [];
     layout(heads, k, (n, x, y, z) => pts.push([n.id, x, y, z]));
     const min = LAYOUT.SP * 0.5;
     for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
       const d = Math.hypot(pts[i][1] - pts[j][1], pts[i][2] - pts[j][2], pts[i][3] - pts[j][3]);
       assert.ok(d >= min, `${k ? "3D" : "flat"}: ${pts[i][0]} and ${pts[j][0]} are ${d.toFixed(1)} apart`);
     }
+  }
+});
+
+test("wrapped sectors: the tree takes the screen's shape — 2 rows at 1680, more on a phone; each row clear of the row above", () => {
+  const plain = () => structuredClone(R3.nodes);
+  assert.equal(bestRows(plain(), 1280 / 918), 2, "a 1680 × 1000 screen (canvas 1280 × 918 beside the card) gets the sectors in 2 rows");
+  assert.ok(bestRows(plain(), 390 / 523) >= 3, "a phone gets 3 or more rows");
+  assert.equal(bestRows(plain(), 1280 / 918), bestRows(plain(), 1280 / 918), "same screen → same choice");
+  for (const [aspect, k] of [[1280 / 918, 1], [390 / 523, 1], [1280 / 918, 0]]) {
+    const nodes = plain(), heads = prepareTree(nodes, { rows: bestRows(plain(), aspect) }), pos = new Map();
+    layout(heads, k, (n, x, y, z) => pos.set(n.id, [x, y, z]));
+    const box = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const [, [x, y, z]] of pos) { const sy = y - z * LAYOUT.ZPROJ; box[0] = Math.min(box[0], x); box[1] = Math.max(box[1], x); box[2] = Math.min(box[2], sy); box[3] = Math.max(box[3], sy); }
+    const shape = (box[1] - box[0]) / (box[3] - box[2]);
+    if (k) assert.ok(shape / aspect > 0.5 && shape / aspect < 2, `3D whole tree ${shape.toFixed(2)} wide per tall, screen ${aspect.toFixed(2)}`);
+    const sec = heads.find((h) => h.id === "US_SECTORS");
+    assert.ok(sec.rows.length > 1 && sec.rows.flat().length === 11, "all 11 sectors placed, in rows");
+    const all = (h) => { const out = [h.id]; for (let i = 0; i < out.length; i++) for (const c of nodes) if (c.parents[0] === out[i]) out.push(c.id); return out; };
+    for (let r = 1; r < sec.rows.length; r++) {
+      const topNext = Math.max(...sec.rows[r].map((h) => pos.get(h.id)[1]));
+      const lowPrev = Math.min(...sec.rows[r - 1].flatMap((h) => all(h).map((id) => { const [, y, z] = pos.get(id); return y - z * LAYOUT.ZPROJ; })));
+      assert.ok(topNext + LAYOUT.ROWGAP / 2 < lowPrev, `row ${r + 1} (rail at ${topNext + LAYOUT.ROWGAP / 2}) must sit below everything in row ${r} (${lowPrev.toFixed(0)})`);
+    }
+    // the line down to each rail runs through a gap in the row above: no ball of that row sits on it
+    assert.equal(sec.trunkX.length, sec.rows.length - 1, "one line down per later row");
+    sec.trunkX.forEach((tx, r) => { for (const h of sec.rows[r]) for (const id of all(h)) assert.ok(Math.abs(pos.get(id)[0] - tx) > LAYOUT.SP / 2, `${id} (row ${r + 1}) is on the line down`); });
   }
 });
 
@@ -173,6 +199,7 @@ test("the page: Geiger bars on the Hub scale, the holdings bar, click again or E
   assert.match(PAGE, /aggregate of <b>\$\{a\.count\}<\/b> holdings = <b>\$\{a\.coverage_pct\.toFixed\(0\)\}%<\/b> of the fund's weight/);
   assert.match(PAGE, /a\.file_short \? `<div class="wait">FMP's holdings file lists only/, "a short holdings file must be said on the card");
   assert.match(PAGE, /DIVERGENCE/);
+  assert.match(PAGE, /prepareTree\(nodes, \{ rows: state\.sectorRows \}\)/, "the page wraps the sectors to the screen's shape");
   assert.match(PAGE, /not served/);
   assert.ok(!/Math\.random/.test(PAGE), "the page must never invent a reading");
   assert.match(PAGE, /pauseAnimation\(\)/, "the render loop must stop when idle");

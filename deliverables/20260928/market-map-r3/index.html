@@ -142,7 +142,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { holdingsAggregate, divergence } from "./aggregate.js";
-import { prepareTree, layout as layoutTree } from "./layout.js";
+import { prepareTree, layout as layoutTree, bestRows, LAYOUT } from "./layout.js";
 
 const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
 const STATION_CHART = "https://station.scintillahub.ai/chart/?t=";
@@ -220,8 +220,12 @@ state.counts = {
 
 /* ---- layout: a top-down tree, deterministic, from the node list (layout.js — the same code the tests run) ----
    The upper tree is flat; a heading's funds and names sit in blocks of rows under it, one row when they fit, more rows
-   only when there are many. In 3D the extra rows step toward you; in FLAT 2D they step down. */
-const heads = prepareTree(nodes);
+   only when there are many. In 3D the extra rows step toward you; in FLAT 2D they step down.
+   The 11 sectors wrap into as many rows as make the whole tree the shape of the screen (2 on a wide screen, 4 on a
+   phone), so the opening view fills the canvas instead of a thin band (28 Sep review). Chosen once, at load. */
+const shapeOf = (() => { const r = document.getElementById("graph").getBoundingClientRect(); return r.width > 10 && r.height > 10 ? r.width / r.height : innerWidth / Math.max(1, innerHeight - 80); })();
+state.sectorRows = bestRows(nodes.map((n) => ({ id: n.id, kind: n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker })), shapeOf);
+const heads = prepareTree(nodes, { rows: state.sectorRows });
 const layout = (k, into) => layoutTree(heads, k, into);
 layout(1, (n, x, y, z) => n.pos.set(x, y, z));
 
@@ -309,14 +313,21 @@ const links = [];
 nodes.forEach((n) => n.parents.forEach((p, i) => links.push({ s: state.byId.get(p), t: n, primary: i === 0 })));
 const treeLinks = links.filter((l) => l.primary && l.t.kind !== "name");
 const trayHeads = heads.filter((h) => h.names.length);
+/* wrapped sub-headings (the sectors, in rows) hang from a rail instead of a long line through the row above:
+   parent → trunk top, the trunk down the gap left of the rows, one rail above each later row, a short drop to each heading */
+const wrapHeads = heads.filter((h) => h.rows.length > 1);
+const RAIL = LAYOUT.ROWGAP / 2;
+const hangs = (l) => l.t.kind === "index" && l.t.rowOf > 0 && l.s.rows && l.s.rows.length > 1;
+const railCount = wrapHeads.reduce((s, h) => s + 2 * h.rows.length - 1, 0);
 const lineGeo = new THREE.BufferGeometry();
-const lineCount = treeLinks.length + trayHeads.length * 5; // tray: stem + four sides
+const railStart = treeLinks.length + trayHeads.length * 5;
+const lineCount = railStart + railCount; // tray: stem + four sides
 lineGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
 lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
 {
   const col = lineGeo.attributes.color.array, C = new THREE.Color();
   treeLinks.forEach((l, i) => { C.setHex(l.t.kind === "index" ? 0x3c3c3c : 0x2c2c2c); col.set([C.r, C.g, C.b, C.r, C.g, C.b], i * 6); });
-  for (let j = treeLinks.length; j < lineCount; j++) { C.setHex(0x2a2a2a); col.set([C.r, C.g, C.b, C.r, C.g, C.b], j * 6); }
+  for (let j = treeLinks.length; j < lineCount; j++) { C.setHex(j >= railStart ? 0x3c3c3c : 0x2a2a2a); col.set([C.r, C.g, C.b, C.r, C.g, C.b], j * 6); }
 }
 scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 })));
 const selGeo = new THREE.BufferGeometry(); selGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6 * 64), 3)); selGeo.setDrawRange(0, 0);
@@ -333,7 +344,8 @@ function applyPositions() {
   }
   bars.forEach((b, i) => aCenter.setXYZ(i, b.n.pos.x, b.n.pos.y, b.n.pos.z)); aCenter.needsUpdate = true;
   const a = lineGeo.attributes.position.array;
-  treeLinks.forEach((l, i) => a.set([l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
+  treeLinks.forEach((l, i) => a.set(hangs(l) ? [l.t.pos.x, l.t.pos.y + RAIL, l.t.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z]
+    : [l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
   trayHeads.forEach((h, j) => {
     const f = h.names[0], last = h.names[(h.nRows - 1) * h.cols] || h.names[h.names.length - 1];
     const x0 = h.bx0 - 4, x1 = h.bx0 + h.leafW + 4, top = f.pos.y + 16, bot = last.pos.y - 16, z0 = f.pos.z - 6, z1 = last.pos.z + 10;
@@ -343,6 +355,18 @@ function applyPositions() {
     if (h.funds.length) { const lf = h.funds[h.funds.length - 1]; segs[0] = [h.cx, lf.pos.y - 8, lf.pos.z, h.cx, top, z0]; }
     segs.forEach((s, k) => a.set(s, (treeLinks.length + j * 5 + k) * 6));
   });
+  let ri = railStart;
+  for (const h of wrapHeads) {
+    const z = h.pos.z, g = h.trunkX;
+    a.set([h.pos.x, h.pos.y, z, g[0], h.pos.y, z], ri++ * 6);
+    let prevY = h.pos.y;
+    for (let r = 1; r < h.rows.length; r++) {
+      const row = h.rows[r], ry = row[0].pos.y + RAIL, next = r < g.length ? g[r] : row[0].pos.x;
+      a.set([g[r - 1], prevY, z, g[r - 1], ry, z], ri++ * 6);
+      a.set([Math.min(g[r - 1], next, row[0].pos.x), ry, z, Math.max(g[r - 1], next, row[row.length - 1].pos.x), ry, z], ri++ * 6);
+      prevY = ry;
+    }
+  }
   lineGeo.attributes.position.needsUpdate = true;
   if (state.selected) drawSelection(state.byId.get(state.selected));
 }
@@ -374,7 +398,7 @@ function stepMove(now) {
 }
 /* frame a set of balls for real: project them from the chosen direction, then pull in and slide until they fill the view */
 const _cam = camera.clone(), _p = new THREE.Vector3();
-function framing(list, dir, fill = 0.86, getPos = (n) => n.pos) {
+function framing(list, dir, fill = 0.86, getPos = (n) => n.pos, bottom = 0) { // bottom: share of the canvas height kept clear at the foot (the open KEY)
   const tgt = new THREE.Vector3(); list.forEach((n) => tgt.add(getPos(n))); tgt.divideScalar(list.length);
   let rad = 1; list.forEach((n) => { rad = Math.max(rad, getPos(n).distanceTo(tgt)); });
   let d = (rad * 1.1) / Math.tan((camera.fov * Math.PI) / 360) / Math.min(1, camera.aspect);
@@ -383,10 +407,10 @@ function framing(list, dir, fill = 0.86, getPos = (n) => n.pos) {
     _cam.position.copy(tgt).add(dir.clone().multiplyScalar(d)); _cam.lookAt(tgt); _cam.updateMatrixWorld();
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     for (const n of list) { _p.copy(getPos(n)).project(_cam); x0 = Math.min(x0, _p.x); x1 = Math.max(x1, _p.x); y0 = Math.min(y0, _p.y); y1 = Math.max(y1, _p.y); }
-    const span = Math.max((x1 - x0) / 2, (y1 - y0) / 2) / fill;
+    const span = Math.max((x1 - x0) / 2 / fill, (y1 - y0) / 2 / (fill * (1 - bottom)));
     const right = new THREE.Vector3().setFromMatrixColumn(_cam.matrixWorld, 0), up = new THREE.Vector3().setFromMatrixColumn(_cam.matrixWorld, 1);
     const half = d * Math.tan((camera.fov * Math.PI) / 360);
-    tgt.add(right.multiplyScalar(((x0 + x1) / 2) * half * camera.aspect)).add(up.multiplyScalar(((y0 + y1) / 2 - 0.03) * half));
+    tgt.add(right.multiplyScalar(((x0 + x1) / 2) * half * camera.aspect)).add(up.multiplyScalar(((y0 + y1) / 2 - 0.03 - bottom) * half));
     d *= span;
   }
   return { p: tgt.clone().add(dir.clone().multiplyScalar(d)), t: tgt };
@@ -394,7 +418,9 @@ function framing(list, dir, fill = 0.86, getPos = (n) => n.pos) {
 const DIR3 = new THREE.Vector3(0.12, 0.62, 1).normalize(), DIR2 = new THREE.Vector3(0, 0, 1);
 function subtree(h) { const out = [h]; (function walk(id) { for (const c of primaryKids(id)) { out.push(c); walk(c.id); } })(h.id); return out; }
 function frameWhole(ms = 0, getPos) {
-  const to = framing(nodes, state.flat ? DIR2 : DIR3, 0.9, getPos);
+  // the whole tree now fills the canvas (sectors in rows), so keep it clear of the KEY box at the foot while that is open
+  const lg = $("legend"), keyH = lg && lg.open ? lg.getBoundingClientRect().height + 14 : 0;
+  const to = framing(nodes, state.flat ? DIR2 : DIR3, 0.9, getPos, Math.min(0.3, keyH / Math.max(1, view.h)));
   if (!ms) { camera.position.copy(to.p); controls.target.copy(to.t); move = null; wake(); } else flyTo(to, ms);
 }
 
@@ -686,11 +712,11 @@ function plainFallback(why) {
 /* ---- go ---- */
 fit();
 renderCard(null);
+if (PHONE) $("legend").removeAttribute("open"); // before the first framing, which keeps clear of an open KEY
 frameWhole(0);
 const p = new URLSearchParams(location.search);
 if (p.get("flat") === "1") setFlat(true, 0);
 if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n), 300); }
-if (PHONE) $("legend").removeAttribute("open");
 state.select = (id) => { const n = state.byId.get(id); if (n) select(n); };
 state.release = () => release();
 state.setFlat = (on) => setFlat(on, 0);
