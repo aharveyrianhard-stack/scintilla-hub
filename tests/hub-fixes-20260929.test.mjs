@@ -154,3 +154,59 @@ test("room tapes on a phone: NEXT drops under the tape instead of disappearing (
   const late = page.indexOf('<style id="r4-fit">');
   assert.match(page.slice(late), /\.sc-toptape__next\.sc-macronext\{display:none\}/, "the rule it outranks (0,2,0 < 0,3,0)");
 });
+
+/* ── 4 · THE BOARD: the race, TSM, the two column sets, the full-screen frame ───────────────────────── */
+test("F P/E race: a late estimates answer is kept and repaints the cells; it is never read twice", () => {
+  const L = fnSrc("loadEstimates");
+  assert.match(L, /scOpt\('analyst_estimates_annual',  pA, null\)/);
+  assert.match(L, /if \(!annual \|\| !quarter\) \{/);
+  assert.match(L, /Promise\.all\(\[pA\.catch\(\(\) => null\), pQ\.catch\(\(\) => null\)\]\)\.then/, "the SAME promises, no second read");
+  assert.match(page, /EST_LATE_HOOK = \(est\) => \{ try \{ applyEstimates\(est\); fpeRepaint\(\); \} catch \(_\) \{\} \};/);
+  assert.match(fnSrc("fpeRepaint"), /const p = r\.price != null \? r\.price : \(PRICES\[r\.t\] != null \? PRICES\[r\.t\] : null\);/, "the latest known price");
+  assert.match(page, /applyEstimates\(fpeEst\);/, "the pull uses the same fill");
+});
+
+test("TSM: the supplier's own paired rate is used only when the EPS and revenue ratios agree; the cell says ≈", () => {
+  const pair = new Function("num", "EST_FX_TOL", fnSrc("estFxPair") + "; return estFxPair;")((x) => (x == null ? null : Number(x)), 0.03);
+  /* TSM, as stored on 28 Sep */
+  const ev = [{ date: "2026-10-15", eps_estimate: 4.39, revenue_estimate: 45287550000 }];
+  const q = [{ fiscal_date: "2026-09-30", est_eps_avg: 139.57701, est_revenue_avg: 1439395000000 }, { fiscal_date: "2026-12-30", est_eps_avg: 153.04, est_revenue_avg: 1579925526117 }];
+  const p = pair(ev, q);
+  assert.equal(p.q, "2026-09-30");
+  assert.equal(p.f.toFixed(5), "0.03145");
+  assert.ok(Math.abs(p.fxR - 0.03146) < 0.00002);
+  /* an ADR-ratio mismatch (EPS ratio 5× the revenue ratio) is refused */
+  assert.equal(pair([{ date: "2026-10-15", eps_estimate: 21.95, revenue_estimate: 45287550000 }], q), null);
+  assert.equal(pair(ev, [{ fiscal_date: "2026-03-30", est_eps_avg: 100, est_revenue_avg: 1e12 }]), null, "no quarter within 110 days of the report");
+  assert.match(fnSrc("fpeVal"), /if \(estNonUsd\(t\) && !fx\) return null;/, "no pair → still no multiple");
+  assert.match(fnSrc("fpeVal"), /if \(fx\) e = e \* fx\.f;/);
+  assert.match(fnSrc("fpeCellText"), /"≈"/);
+  assert.match(fnSrc("fpeTitle"), /the rate is the supplier's own for the quarter to/);
+});
+
+test("board v2: behind ?board=v2 (off by default); 11 columns beside the panel, 14 in full screen; READ icon + ◆; Geiger number", () => {
+  assert.match(page, /return lsGet\("sc_board_v2"\) === "1";/);
+  assert.match(page, /if \(BOARD_V2_ON && typeof document !== "undefined" && document\.body\) document\.body\.classList\.add\("brd-v2"\);/);
+  const css = page.slice(page.indexOf('<style id="board-v2-20260929">'), page.indexOf('<style id="tape-events-20260927">'));
+  assert.match(css, /body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(7\), body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(9\),\s+body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(10\)\{ display:none !important; \}/, "REVENUE, TREND, MOM step out");
+  const tracks = (sel) => (css.match(new RegExp(sel + "\\{ grid-template-columns:([^!]+)!important")) || [])[1].match(/minmax/g).length;
+  assert.equal(tracks("body\\.brd-v2:not\\(\\.secfs\\) \\.ch"), 11);
+  assert.equal(tracks("body\\.secfs \\.sc-secfs \\.ch"), 14);
+  assert.match(css, /\.gwx-read::before\{ content:attr\(data-icon\);/);
+  assert.match(css, /\.gwx-read\[data-div\]::after\{ content:"◆";/);
+  const icons = new Function(page.match(/const READ_ICON = \{[\s\S]*?\};/)[0] + "; return READ_ICON;")();
+  for (const w of ["aligned bull", "constructive", "stalling", "pullback", "turning up", "mom leads", "mixed", "broken", "aligned bear"]) assert.ok(icons[w], w);
+  assert.match(page, /rd\.setAttribute\("data-icon", READ_ICON\[R\.txt\]\|\|"·"\);/, "the icon is scinRead's own answer");
+  assert.match(page, /geigerMiniHTML\(d\.g, gMax, true\)\)/);
+  assert.match(page, /var gn=cell\.querySelector\("\.sc-gnum"\);/, "the number follows the bar in a rewind");
+  assert.ok(page.indexOf('<style id="r4-fit">') > page.indexOf('<style id="board-v2-20260929">'), "r4-fit stays last");
+});
+
+test("full screen: the panel follows the header's drawn edges; clearing resets them; selectors wrap at 11px", () => {
+  const t = fnSrc("toggleSecFs");
+  assert.match(t, /const hb = head\.getBoundingClientRect\(\), pb = panel\.getBoundingClientRect\(\);/);
+  assert.match(t, /innerWidth <= 900\)\) return;/, "phones keep their own inset");
+  assert.match(fnSrc("clearSecFs"), /SECFS\.style\.left = ""; SECFS\.style\.right = "";/);
+  assert.match(page, /body\.secfs \.sc-secfs \.cohtabstrip\{ flex-wrap:wrap !important; overflow:visible !important; row-gap:2px; \}/);
+  assert.match(page, /body\.secfs \.sc-secfs \.cohtabstrip \.sc-coh\{ font-size:11px; \}/);
+});

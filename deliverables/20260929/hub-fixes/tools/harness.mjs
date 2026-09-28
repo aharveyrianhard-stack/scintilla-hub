@@ -73,6 +73,8 @@ try {
     if (SIG && m === "GET" && /\/rest\/v1\/sigma_(day_counts|events_daily)$/.test(u.pathname)) {
       return route.fulfill({ status: 200, headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: JSON.stringify(sigmaAnswer(u)) });
     }
+    /* 29 Sep — job.delay: [{ "re": "analyst_estimates", "ms": 6000 }] holds matching GETs back, to replay a slow database */
+    for (const dl of (job.delay || [])) if (new RegExp(dl.re).test(req.url())) { await sleep(dl.ms); break; }
     if (m !== "GET" && m !== "HEAD" && m !== "OPTIONS") {
       writes.push({ method: m, url: u.host + u.pathname });
       return route.fulfill({ status: 201, headers: { "access-control-allow-origin": "*", "content-type": "application/json" }, body: "[]" });

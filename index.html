@@ -4560,6 +4560,36 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 /* on a phone every company tab gets a 300px slot; an embedded page needs more to be read */
 @media(max-width:640px){ .sc-chartpanel__slot.cot-CHART{min-height:58vh} .sc-chartpanel__slot.cot-FUNDAMENTALS{min-height:82vh} }
 </style>
+<style id="board-v2-20260929">
+/* ── 29 SEP · THE BOARD (P2-HUB-FIXES item 4). Selectors carry body/panel classes so they outrank the r4-fit sheet,
+   which must stay last in the page. ───────────────────────────────────────────────────────────────────────────── */
+.sc-gnum{ display:none; }
+/* FULL SCREEN, both sets: the cohort selectors wrap inside the frame at a readable size, and every number sits
+   right-aligned in a track sized to what it holds (it was centred in some columns, right-aligned in others, and MOM's
+   number ran into READ's words) */
+body.secfs .sc-secfs .cohtabstrip{ flex-wrap:wrap !important; overflow:visible !important; row-gap:2px; }
+body.secfs .sc-secfs .cohtabstrip .sc-coh{ font-size:11px; }
+@media (min-width:901px){
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,7fr) minmax(0,8fr) minmax(0,9fr) minmax(0,8fr) minmax(0,7fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,6fr) minmax(0,7fr) minmax(0,12fr) minmax(0,15fr) minmax(0,6fr) minmax(0,3fr) !important; column-gap:10px; }
+  body.secfs .sc-secfs .ch > :nth-child(2){ text-align:left !important; }
+  body.secfs .sc-secfs .ch > :nth-child(n+3):nth-child(-n+10){ text-align:right !important; justify-content:flex-end; }
+  body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; padding-left:12px; }
+}
+/* v2 · BESIDE THE LEFT PANEL: REVENUE, TREND and MOM step out; 11 tracks for 11 cells */
+@media (min-width:561px){
+  body.brd-v2:not(.secfs) .ch > :nth-child(7), body.brd-v2:not(.secfs) .ch > :nth-child(9),
+  body.brd-v2:not(.secfs) .ch > :nth-child(10){ display:none !important; }
+  body.brd-v2:not(.secfs) .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,10fr) minmax(0,7fr) minmax(0,7fr) minmax(0,19fr) minmax(0,8fr) minmax(0,5fr) !important; }
+  /* READ as its icon, and ◆ when trend and momentum disagree (the words stay in its title and in full screen) */
+  body.brd-v2:not(.secfs) .sc-board__row .gwx-read{ font-size:0 !important; text-align:center; overflow:visible; }
+  body.brd-v2:not(.secfs) .sc-board__row .gwx-read::before{ content:attr(data-icon); font-size:15px; }
+  body.brd-v2:not(.secfs) .sc-board__row .gwx-read[data-div]::after{ content:"◆"; font-size:11px; color:var(--warn,#e0a24a); margin-left:3px; }
+}
+/* v2 · the Geiger carries its number, left of the bar, in its own colour (both sets) */
+body.brd-v2 .sc-board__row .sc-gmini{ overflow:visible; margin-left:46px; }
+body.brd-v2 .sc-board__row .sc-gnum{ display:block; position:absolute; right:calc(100% + 6px); top:50%; transform:translateY(-50%);
+  font:600 11px var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+</style>
 <style id="tape-events-20260927">
 /* ── 27 SEP · THE SCINTILLATING TAPE + THE TICKER IN THE TITLE ─────────────────────────────────────────────────
    The strip keeps the company bar's box (40px, the cyan frame) so nothing under it moves. Text 11px. */
@@ -5259,17 +5289,65 @@ async function pgAll(path) {
   return out;
 }
 function plusMonthsISO(iso, months) { const d = new Date(iso + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + months); return d.toISOString().slice(0, 10); }
+/* 29 Sep — THE BLANK F P/E (Alan, 28 Sep: "forward P/E sometimes missing until refresh"). THE RACE: every optional read
+   has a 4 s deadline (SC_OPT_MS), and this read is PAGED (1,000 rows at a time, one page after another). When the
+   database is slow (the page's own market-hours record: 17.5 s median for a full pull), the deadline won, the answer
+   that arrived a second later was thrown away, and on a first load there was no earlier answer to fall back on, so
+   every F P/E read "—" until a later pull. Now the deadline still frees the board, but the late answer is KEPT: it
+   fills the cache and repaints the F P/E cells where they stand (estLate). Nothing is read twice. */
+let EST_LATE_HOOK = null;
 async function loadEstimates() {
   const now = Date.now();
   if (EST_CACHE.annual && now - EST_CACHE.at < EST_TTL_MS) return EST_CACHE;
+  if (typeof loadEstFx === "function") loadEstFx();   /* 29 Sep — the foreign reporters' measured rate, beside it (never awaited) */
   const today = todayISO(), until = plusMonthsISO(today, 15);
+  const pA = pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.annual&fiscal_date=gte." + today + "&order=ticker.asc,fiscal_date.asc");
+  const pQ = pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.quarter&fiscal_date=gte." + today + "&fiscal_date=lte." + until + "&order=ticker.asc,fiscal_date.asc");
   const [annual, quarter] = await Promise.all([
-    scOpt('analyst_estimates_annual',  pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.annual&fiscal_date=gte." + today + "&order=ticker.asc,fiscal_date.asc"), null),
-    scOpt('analyst_estimates_quarter', pgAll("analyst_estimates?select=ticker,est_eps_avg,fiscal_date,updated_ts&period=eq.quarter&fiscal_date=gte." + today + "&fiscal_date=lte." + until + "&order=ticker.asc,fiscal_date.asc"), null),
+    scOpt('analyst_estimates_annual',  pA, null),
+    scOpt('analyst_estimates_quarter', pQ, null),
   ]);
   if (annual || quarter) { EST_CACHE.at = now; EST_CACHE.annual = annual || EST_CACHE.annual || []; EST_CACHE.quarter = quarter || EST_CACHE.quarter || []; }
+  if (!annual || !quarter) {
+    /* one of them missed the deadline: when it does answer, keep it and repaint */
+    Promise.all([pA.catch(() => null), pQ.catch(() => null)]).then(([a, q]) => {
+      if (!a && !q) return;
+      EST_CACHE.at = Date.now(); EST_CACHE.annual = a || EST_CACHE.annual || []; EST_CACHE.quarter = q || EST_CACHE.quarter || [];
+      if (typeof EST_LATE_HOOK === "function") EST_LATE_HOOK({ annual: EST_CACHE.annual, quarter: EST_CACHE.quarter });
+    });
+  }
   return { annual: EST_CACHE.annual || [], quarter: EST_CACHE.quarter || [] };
 }
+/* the estimates → FEPS / NTMLIVE, one place (the pull and a late answer both come here) */
+function applyEstimates(fpeEst) {
+  const seenF = new Set();                                     // first row per ticker = nearest FY
+  for (const r of (fpeEst.annual || [])) if (r && r.ticker && !seenF.has(r.ticker)) {
+    seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg);
+    FEPS_META[r.ticker] = { fy: String(r.fiscal_date || ""), at: r.updated_ts };
+  }
+  /* NTM = the next four quarterly consensus EPS from today, summed — exactly fwdTrailPE()'s rule, so the board and the
+     STATS tab show the same multiple. Fewer than four future quarters → no NTM (annual fallback below). */
+  const qByT = {};
+  for (const r of (fpeEst.quarter || [])) if (r && r.ticker && num(r.est_eps_avg) != null) (qByT[r.ticker] = qByT[r.ticker] || []).push(r);
+  for (const t in qByT) {
+    const q4 = qByT[t].sort((a, b) => String(a.fiscal_date).localeCompare(String(b.fiscal_date))).slice(0, 4);
+    if (q4.length === 4) {
+      NTMLIVE[t] = q4.reduce((sum, r) => sum + num(r.est_eps_avg), 0);
+      NTMLIVE_META[t] = { through: String(q4[3].fiscal_date || ""), at: Math.max.apply(null, q4.map((r) => +r.updated_ts || 0)) || null };
+    }
+  }
+}
+/* every F P/E cell on screen, from the latest known price — the late estimates and a pull that ran before a price
+   was in both end here (the price tick alone never repaints a name that is not trading, e.g. after hours) */
+function fpeRepaint() {
+  for (const r of (S.rows || [])) {
+    const p = r.price != null ? r.price : (PRICES[r.t] != null ? PRICES[r.t] : null);
+    r.fpe = fpeVal(r.t, p);
+    const lf = el("lf_" + r.t);
+    if (lf) { lf.textContent = r.fpe != null ? fpeCellText(r.t, r.fpe) : fpeWithheldText(r.t); scSetTitle(lf, fpeTitle(r.t)); }
+  }
+}
+EST_LATE_HOOK = (est) => { try { applyEstimates(est); fpeRepaint(); } catch (_) {} };
 const NTM_STORED_MAX_AGE_MS = 14 * 86400e3;
 /* ESTIMATE CURRENCY BASIS. analyst_estimates (fmp-analyst) and fundamentals.eps_ttm (fmp-fundamentals) are stored exactly as
    FMP serves them: in the company's REPORTING currency, with no currency column. Board and company prices are USD, so the
@@ -5310,10 +5388,59 @@ function fpeBasis(t) {
   if (FEPS[t] != null) return { eps: FEPS[t], label: "FY" + (FEPS_META[t] && FEPS_META[t].fy ? FEPS_META[t].fy.slice(2, 4) : "") + " consensus (annual)", at: FEPS_META[t] && FEPS_META[t].at };
   return null;
 }
+/* 29 Sep — TSM "EPS TWD" (Alan, 28 Sep). A foreign reporter's estimates are stored in its own currency. The page had no
+   dated FX rate, so the multiple was withheld. THE SUPPLIER'S OWN PAIR IS A RATE: for the same quarter it serves the USD
+   EPS estimate per ADR (earnings_events) and the local EPS estimate (analyst_estimates). MEASURED 28 Sep, TSM Q3 26:
+   4.39 USD ÷ 139.58 TWD = 0.03145, and revenue 45.29B USD ÷ 1,439.4B TWD = 0.03146 — the same number, so the TWD
+   figures are already per ADR and the ratio is the rate. ASML: 1.140 EPS vs 1.141 revenue. A pair is used ONLY when its
+   EPS ratio and revenue ratio agree within 3% (anything else — an ADR ratio, a stale row — fails and the cell keeps
+   "EPS TWD"). The converted multiple is marked ≈ and its title says the rate, the quarter and both ratios. */
+const EST_FX = {};             // ticker -> { f, ccy, q, fxE, fxR }  (measured, per session)
+const EST_FX_TOL = 0.03;
+let EST_FX_AT = 0;
+/* PURE — the newest quarter whose EPS and revenue ratios agree */
+function estFxPair(events, quarters) {
+  const qs = (quarters || []).filter((q) => q && num(q.est_eps_avg) > 0 && num(q.est_revenue_avg) > 0)
+    .sort((a, b) => String(b.fiscal_date).localeCompare(String(a.fiscal_date)));
+  const evs = (events || []).filter((e) => e && num(e.eps_estimate) > 0 && num(e.revenue_estimate) > 0)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  for (const e of evs) {
+    const d = Date.parse(e.date + "T12:00:00Z");
+    const q = qs.find((x) => { const g = (d - Date.parse(String(x.fiscal_date).slice(0, 10) + "T12:00:00Z")) / 864e5; return g >= 3 && g <= 110; });
+    if (!q) continue;
+    const fxE = num(e.eps_estimate) / num(q.est_eps_avg), fxR = num(e.revenue_estimate) / num(q.est_revenue_avg);
+    if (Math.abs(fxE / fxR - 1) <= EST_FX_TOL) return { f: fxE, q: String(q.fiscal_date).slice(0, 10), fxE: fxE, fxR: fxR, on: e.date };
+  }
+  return null;
+}
+async function loadEstFx() {
+  if (Date.now() - EST_FX_AT < 6 * 3600e3) return;
+  EST_FX_AT = Date.now();
+  const names = Object.keys(EST_CCY_MEASURED).concat(Object.keys(EST_CCY)).filter((t, i, a) => a.indexOf(t) === i && estNonUsd(t));
+  if (!names.length) return;
+  const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10), inList = names.map(encodeURIComponent).join(",");
+  try {
+    const [ev, aq] = await Promise.all([
+      pg("earnings_events?select=ticker,date,eps_estimate,revenue_estimate&ticker=in.(" + inList + ")&date=gte." + since + "&order=date.desc&limit=400"),
+      pg("analyst_estimates?select=ticker,fiscal_date,est_eps_avg,est_revenue_avg&period=eq.quarter&ticker=in.(" + inList + ")&fiscal_date=gte." + since + "&order=fiscal_date.desc&limit=800"),
+    ]);
+    for (const t of names) {
+      const pr = estFxPair((ev || []).filter((r) => r.ticker === t), (aq || []).filter((r) => r.ticker === t));
+      if (pr) EST_FX[t] = Object.assign({ ccy: estCcy(t) }, pr); else delete EST_FX[t];
+    }
+    if (typeof fpeRepaint === "function") fpeRepaint();
+  } catch (_) { EST_FX_AT = 0; }
+}
+const estFx = (t) => (typeof EST_FX !== "undefined" && EST_FX[t]) || null;
+function fpeCellText(t, pe) { return (estNonUsd(t) && estFx(t) ? "≈" : "") + pe.toFixed(1) + "×"; }
 function fpeTitle(t) {
   if (cryptoSet.has(t)) return "no forward P/E for a non-equity";
   const b = fpeBasis(t);
   if (!b) return "no forward EPS estimate stored for " + t;
+  const fx = estNonUsd(t) && typeof estFx === "function" ? estFx(t) : null;
+  if (fx) return "≈ fwd P/E, converted · consensus EPS " + (+b.eps).toFixed(2) + " " + fx.ccy + " (" + b.label + ") × " + fx.f.toPrecision(4) +
+    " = $" + (b.eps * fx.f).toFixed(2) + " · the rate is the supplier's own for the quarter to " + fx.q + ": its USD EPS estimate ÷ its " + fx.ccy +
+    " one (" + fx.fxE.toPrecision(4) + "), confirmed by revenue (" + fx.fxR.toPrecision(4) + ") · estimate as of " + (estDate(b.at) || "unknown");
   if (estNonUsd(t)) return notComparable(estCcy(t)) + " · consensus EPS " + (+b.eps).toFixed(2) + " " + estCcy(t) + " (" + b.label +
     " · estimate as of " + (estDate(b.at) || "unknown") + ") against a USD price · no FX rate is stored, so no multiple is shown";
   const pe = fpeVal(t, PRICES[t] != null ? PRICES[t] : null);
@@ -5322,10 +5449,12 @@ function fpeTitle(t) {
 }
 function fpeVal(t, price) {
   if (cryptoSet.has(t)) return null;
-  if (estNonUsd(t)) return null;          // EPS and price are in different currencies: no multiple (ESTIMATE CURRENCY BASIS)
+  const fx = estNonUsd(t) && typeof estFx === "function" ? estFx(t) : null;
+  if (estNonUsd(t) && !fx) return null;   // EPS and price are in different currencies and no measured pair: no multiple (ESTIMATE CURRENCY BASIS)
   const b = fpeBasis(t);
-  const e = b ? b.eps : null;
+  let e = b ? b.eps : null;
   if (e == null || e <= 0) return null;
+  if (fx) e = e * fx.f;                   // 29 Sep — the supplier's own paired rate (EST_FX)
   if (price == null || price <= 0) return null;
   const pe = price / e;
   /* a forward P/E under ~2.5× on a going concern is impossible — it means the estimate
@@ -5414,22 +5543,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     /* admission v2: the tier. One try, no retry: before the role column exists this is a 400, and it must cost nothing. */
     scOpt('tickers_role',     pg("tickers?select=ticker&role=eq.geiger_only", 1).catch(() => []), []),
   ]);
-  const seenF = new Set();                                     // first row per ticker = nearest FY
-  for (const r of (fpeEst.annual || [])) if (r && r.ticker && !seenF.has(r.ticker)) {
-    seenF.add(r.ticker); FEPS[r.ticker] = num(r.est_eps_avg);
-    FEPS_META[r.ticker] = { fy: String(r.fiscal_date || ""), at: r.updated_ts };
-  }
-  /* NTM = the next four quarterly consensus EPS from today, summed — exactly fwdTrailPE()'s rule, so the board and the
-     STATS tab show the same multiple. Fewer than four future quarters → no NTM (annual fallback below). */
-  const qByT = {};
-  for (const r of (fpeEst.quarter || [])) if (r && r.ticker && num(r.est_eps_avg) != null) (qByT[r.ticker] = qByT[r.ticker] || []).push(r);
-  for (const t in qByT) {
-    const q4 = qByT[t].sort((a, b) => String(a.fiscal_date).localeCompare(String(b.fiscal_date))).slice(0, 4);
-    if (q4.length === 4) {
-      NTMLIVE[t] = q4.reduce((sum, r) => sum + num(r.est_eps_avg), 0);
-      NTMLIVE_META[t] = { through: String(q4[3].fiscal_date || ""), at: Math.max.apply(null, q4.map((r) => +r.updated_ts || 0)) || null };
-    }
-  }
+  applyEstimates(fpeEst);                                      // 29 Sep — one place, shared with a late answer (loadEstimates)
   for (const r of fpeTtm) {
     EPSTTM[r.ticker] = num(r.eps_ttm);
     const rv = num(r.revenue_ttm), at = num(r.updated_ts);
@@ -7102,12 +7216,13 @@ function boardHeaderHTML() {
         label + (S.sort.key === key ? (S.sort.dir < 0 ? " ▼" : " ▲") : "") + "</button>"
       : '<span' + (label ? "" : ' aria-hidden="true"') + ">" + label + "</span>").join("") + "</div>";
 }
-function geigerMiniHTML(g, max) {
+function geigerMiniHTML(g, max, withNum) {
   if (g == null) return '<span style="text-align:center;color:var(--mute)">—</span>';   // FIX 1 — honest dash, not an empty box
   const bull = g >= 0;
   const width = (Math.min(Math.abs(g) / max, 1) * 50) + "%";
   const color = bull ? "var(--bull)" : "var(--bear)";
   return '<span class="sc-gmini sc-clip"><span class="sc-gmini__mid"></span>' +
+    (withNum ? '<b class="sc-gnum" style="color:' + color + '">' + (g >= 0 ? "+" : "−") + Math.abs(g).toFixed(2) + "</b>" : "") +   /* 29 Sep — the board's number, shown by the v2 column set */
     '<i style="' + (bull ? "left" : "right") + ':50%;width:' + width + ';background:' + color +
     ';box-shadow:0 0 5px ' + color + '"></i></span>';
 }
@@ -7209,14 +7324,14 @@ function boardRowsHTML() {
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
          tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
-      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? d.fpe.toFixed(1) + "×" : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
+      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? (typeof fpeCellText === "function" ? fpeCellText(d.t, d.fpe) : d.fpe.toFixed(1) + "×") : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
       '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
-      (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax)) +
+      (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) +
       (d.rv == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
@@ -7448,6 +7563,26 @@ function cohortCompareSpan(list) {
    The two disagreeing is not noise, it is the most informative state on the board:
      strong trend + weak momentum  -> a pullback inside an uptrend, not a top
      weak trend  + strong momentum -> turning up before the structure confirms */
+/* ============================================================================
+   29 SEP · THE BOARD'S TWO COLUMN SETS (P2-HUB-FIXES item 4 — a proposal, built behind a switch, OFF by default).
+   Alan, 28 Sep: "agree a non-full-screen column set (keep market cap and % change; revenue can go; READ as an icon;
+   spot trend vs momentum divergence); columns can grow in full screen … give the Geiger its numeric value".
+   v2 · BESIDE THE LEFT PANEL (11 columns): ⊙★♥ · TICKER · LAST · CHG · F P/E · MKT CAP · RSI · READ (icon, and ◆ when
+     trend and momentum disagree) · GEIGER (bar + its number) · RVOL · MKT. REVENUE, TREND and MOM step out.
+   v2 · FULL SCREEN (⛶, 14 columns): everything, READ in words, TREND and MOM numbers back, the Geiger number kept,
+     numbers right-aligned in tracks sized to what they hold.
+   Nothing is computed differently: the icon and the ◆ are scinRead()'s own answer (the same rule as the compare strip).
+   TO TRY IT: open the Hub with ?board=v2 (remembered on this device); ?board=v1 goes back. */
+const READ_ICON = { "aligned bull": "⇈", "constructive": "↗", "stalling": "→", "pullback": "⤵", "turning up": "⤴",
+  "mom leads": "↑", "mixed": "↔", "broken": "↘", "aligned bear": "⇊" };
+const BOARD_V2_ON = (function () {
+  try {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("board") : null;
+    if (q === "v2") lsSet("sc_board_v2", "1"); else if (q === "v1") try { localStorage.removeItem("sc_board_v2"); } catch (_) {}
+    return lsGet("sc_board_v2") === "1";
+  } catch (_) { return false; }
+})();
+if (BOARD_V2_ON && typeof document !== "undefined" && document.body) document.body.classList.add("brd-v2");
 function scinRead(T, M) {
   if (T == null || !isFinite(T)) return { txt: "—", col: "var(--mute)", div: false };
   if (M == null || !isFinite(M)) return { txt: "trend only", col: "var(--dimmer,#5a6270)", div: false };
@@ -21546,7 +21681,7 @@ function doSearch(tq) {                        // FIX #16: search acts
    "sizes UP" rules keep working. Esc / same ⛶ / room switch all clear it. */
 let SECFS = null;                              // the panel element currently fullscreen
 function clearSecFs() {
-  if (SECFS) { SECFS.classList.remove("sc-secfs"); SECFS.style.top = ""; SECFS = null; }
+  if (SECFS) { SECFS.classList.remove("sc-secfs"); SECFS.style.top = ""; SECFS.style.left = ""; SECFS.style.right = ""; SECFS = null; }   /* 29 Sep — and the frame fit */
   var xC = document.querySelector(".sc-fsclose"); if (xC) xC.style.top = "";
   document.body.classList.remove("secfs");
   document.body.classList.remove("exp");
@@ -21582,6 +21717,18 @@ function toggleSecFs(panel) {
   settle();
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
   setTimeout(settle, 320);                     // once more after the tabs' own fold (0.22 s) has finished
+  /* 29 Sep — Alan: "the full-screen cohort board overflows". MEASURED at 1680: the panel was drawn 29 → 1652 while the page
+     frame (the header) runs 46 → 1634, so its edges and its cohort selectors ran past the frame. Left and right now follow
+     the header's drawn edges, corrected for the page's scale the same way the top is. Phones keep their own inset. */
+  const fitX = () => {
+    if (SECFS !== panel || !head || (typeof innerWidth === "number" && innerWidth <= 900)) return;
+    const hb = head.getBoundingClientRect(), pb = panel.getBoundingClientRect();
+    const k = panel.offsetWidth ? pb.width / panel.offsetWidth : 1;
+    const cs = getComputedStyle(panel), dl = pb.left - hb.left, dr = hb.right - pb.right;
+    if (Math.abs(dl) > 1) panel.style.left = (parseFloat(cs.left) - dl / (k || 1)) + "px";
+    if (Math.abs(dr) > 1) panel.style.right = (parseFloat(cs.right) - dr / (k || 1)) + "px";
+  };
+  fitX(); setTimeout(fitX, 330);
   var xC = document.querySelector(".sc-fsclose"); if (xC) xC.style.top = (top + 8) + "px";   // ✕ sits just inside the panel's top-right, below the header — never overlaps LIVE/bell
   if (panel.classList.contains("sc-co-left") || panel.classList.contains("sc-co-right"))
     document.body.classList.add("exp");        // companion class — section grow rules (est tiles stay 2-col, no hooks needed)
@@ -23898,7 +24045,7 @@ function patch(t, price, src) {
   const fv = fpeVal(t, price);
   if (r) r.fpe = fv;
   const lf = el("lf_" + t);
-  if (lf) lf.textContent = fv != null ? fv.toFixed(1) + "×" : fpeWithheldText(t);   /* R27 — × suffix on tick path too */
+  if (lf) lf.textContent = fv != null ? fpeCellText(t, fv) : fpeWithheldText(t);   /* R27 — × suffix on tick path too; 29 Sep — ≈ on a converted one */
   /* DASHBOARD MODEL — the LEFT panel's ident line shows LEFT_T (the pinned or the
      currently-rotating ticker), whether S.sec is COMPANY or DASHBOARD. */
   if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
@@ -26608,6 +26755,8 @@ body.gwx-motion .gwx-pct{opacity:1}
         var css=tr+(bull?"left:50%;":"right:50%;")+"width:"+(Math.min(Math.abs(v)/mx,1)*50).toFixed(2)+"%;"+
                 "background:"+col+";box-shadow:0 0 5px "+col;
         if(r.__gwxCss!==css){ bar.style.cssText=css; r.__gwxCss=css; }
+        var gn=cell.querySelector(".sc-gnum");   /* 29 Sep — the number rides with the bar (rewind included) */
+        if(gn){ var gs=(v>=0?"+":"\u2212")+Math.abs(v).toFixed(2); if(gn.textContent!==gs){ gn.textContent=gs; gn.style.color=col; } }
         /* ★ THE CROSSING IS THE EVENT. A name that walks from +0.02 to -0.02 has changed
            SIDE - bull to bear - and on a bipolar board that is the one move worth a glow.
            It goes through the page's own scScint (its keyframe carries offset 0, so the
@@ -27077,8 +27226,8 @@ body.gwx-motion .gwx-pct{opacity:1}
          Both agreeing is the quiet case. */
       var rd=r.querySelector(".gwx-read");
       if(!rd){ rd=document.createElement("span"); rd.className="gwx-read"; }
-      if(!d||d.tr==null){ rd.textContent=NONE; rd.style.color="var(--mute)"; }
-      else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
+      if(!d||d.tr==null){ rd.textContent=NONE; rd.style.color="var(--mute)"; rd.setAttribute("data-icon", NONE); rd.removeAttribute("data-div"); }
+      else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)"; rd.setAttribute("data-icon","↕"); rd.removeAttribute("data-div");
         rd.title="rewound - momentum has no history to compare against"; }
       else {
         /* ONE definition, shared with the compare strip — see scinRead(). The word ladder
@@ -27086,6 +27235,8 @@ body.gwx-motion .gwx-pct{opacity:1}
            the board. */
         var T=d.tr, M=d.mo, R=scinRead(T,M);
         rd.textContent=R.txt; rd.style.color=R.col;
+        rd.setAttribute("data-icon", READ_ICON[R.txt]||"·");                 /* 29 Sep — the v2 column set draws READ as this icon */
+        if(R.div) rd.setAttribute("data-div","1"); else rd.removeAttribute("data-div");
         rd.title="trend "+fmt2(T)+" (slow, daily-locked) · momentum "+fmt2(M)+" (fast, 6h/12h/1D)";
       }
       if(fresh){
