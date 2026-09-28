@@ -6,7 +6,7 @@
   const pth = (e) => { const a = []; let n = e; for (let i = 0; n && i < 3; i++, n = n.parentElement) a.unshift(name(n)); return a.join(" > "); };
   const vis = (e, r) => r.width > 2 && r.height > 2 && r.bottom > 0 && r.right > 0 && r.top < innerHeight * 3 && r.left < innerWidth;
   for (const e of document.querySelectorAll("body *")) {
-    if (e.closest("svg,canvas,iframe,script,style,#trialBanner")) continue;
+    if (e.closest("svg,canvas,iframe,script,style")) continue;
     const own = [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
     if (!own) continue;
     const cs = getComputedStyle(e); if (cs.display === "none" || cs.visibility === "hidden") continue;
@@ -35,5 +35,17 @@
     const rng2 = document.createRange(); rng2.selectNodeContents(lp); const pr = rng2.getBoundingClientRect();
     if (tr.right > pr.left - 2 || tr.right > a.right + 1) ov.push(row.dataset.t + " ticker ends " + Math.round(tr.right) + " price text starts " + Math.round(pr.left));
   }
-  return { n: out.length, clipped: out.slice(0, 80), boardOverlap: ov.slice(0, 20), vw: innerWidth };
+  /* review fix: the TRIAL banner must not sit over anything — any visible text element it overlaps is listed */
+  const cover = [], tb = document.getElementById("trialBanner");
+  if (tb) {
+    const b = tb.getBoundingClientRect();
+    for (const e of document.querySelectorAll("body *")) {
+      if (tb.contains(e) || e.contains(tb) || e.closest("script,style")) continue;
+      const own = [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim(); if (!own) continue;
+      const r = e.getBoundingClientRect(); if (!vis(e, r)) continue;
+      const cs = getComputedStyle(e); if (cs.display === "none" || cs.visibility === "hidden") continue;
+      if (r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top) cover.push(pth(e) + " · " + own.slice(0, 30));
+    }
+  }
+  return { n: out.length, clipped: out.slice(0, 80), boardOverlap: ov.slice(0, 20), bannerCovers: cover.slice(0, 20), banner: tb ? Object.fromEntries(Object.entries(tb.getBoundingClientRect().toJSON()).map(([k, v]) => [k, Math.round(v)])) : null, vw: innerWidth };
 })()

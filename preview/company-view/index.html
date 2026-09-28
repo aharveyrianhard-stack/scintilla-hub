@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from 4b99863) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from 4144a6d) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5952,15 +5952,30 @@ function cvRailOrder(rows, by) {
     .sort((a, b) => (a.v == null) - (b.v == null) || (b.v != null && a.v != null ? b.v - a.v : 0) || a.i - b.i)
     .map((x) => x.r);
 }
-function cvRailRows() { return cvRailOrder(orderedShownRows(), cvRailSort()); }
+/* review fix (28 Sep): the list is sorted ONCE and then holds still, like the board (S.boardOrder). Before, every price tick
+   of the open name re-sorted it by live change, so names jumped under the cursor and ↑/↓ followed a moving order (measured:
+   29–39 of the first 40 places changed between reads 8 s apart). The order is taken when you click DAY % or GEIGER (clicking
+   the lit one again re-sorts now), when the expanded view opens, or when the list itself changes (another cohort, a search).
+   Values still update in place; a name that joins the list goes to the end, a name that leaves is dropped. */
+let CV_RAIL_FROZEN = null;   // { key: sort|cohort|search, order: [tickers] }
+function cvRailKey() { return cvRailSort() + "|" + (S.coh || "") + "|" + (S.tq || ""); }
+function cvRailFreeze() { const rows = cvRailOrder(orderedShownRows(), cvRailSort()); CV_RAIL_FROZEN = { key: cvRailKey(), order: rows.map((r) => r.t) }; return rows; }
+function cvRailHeld(rows, frozen) {
+  const at = new Map(frozen.order.map((t, i) => [t, i])), n = frozen.order.length;
+  return (rows || []).map((r, i) => ({ r, k: at.has(r.t) ? at.get(r.t) : n + i })).sort((a, b) => a.k - b.k).map((x) => x.r);
+}
+function cvRailRows() {
+  if (!CV_RAIL_FROZEN || CV_RAIL_FROZEN.key !== cvRailKey()) return cvRailFreeze();
+  return cvRailHeld(orderedShownRows(), CV_RAIL_FROZEN);
+}
 function cvRailHTML() {
   const by = cvRailSort(), rows = cvRailRows();
   const sw = (k, lbl, tip) => '<button type="button" class="cv-rail__s' + (by === k ? " on" : "") + '" aria-pressed="' + (by === k) +
     '" data-act="cvrailsort" data-s="' + k + '" title="' + tip + '">' + lbl + "</button>";
   return '<div class="cv-rail__h"><span>' + esc(S.tq ? "SEARCH" : S.coh === "FAV" ? "LIKED" : S.coh) + " · " + rows.length + "</span>" +
       '<span class="cv-rail__sw" role="group" aria-label="sort the list">' +
-        sw("CHG", "DAY %", "sort by today's change against yesterday's close, biggest gain first") +
-        sw("GEIGER", "GEIGER", "sort by the Geiger reading, strongest first") + "</span></div>" +
+        sw("CHG", "DAY %", "sort by today's change against yesterday's close, biggest gain first; the order then holds still — click again to re-sort") +
+        sw("GEIGER", "GEIGER", "sort by the Geiger reading, strongest first; the order then holds still — click again to re-sort") + "</span></div>" +
     rows.map((r) => '<button type="button" class="cv-rail__r' + (r.t === LEFT_T ? " on" : "") + '" data-act="cvrail" data-t="' + esc(r.t) + '"' +
       (r.t === LEFT_T ? ' aria-current="true"' : "") + "><b>" + esc(r.t) + '</b><span class="' + (num(r.c) == null ? "" : num(r.c) >= 0 ? "up" : "dn") + '">' +
       (num(r.c) != null ? fmtC(num(r.c)) : "—") + "</span>" + geigerMiniHTML(num(r.g), 1) + "</button>").join("");
@@ -18766,14 +18781,16 @@ function ernQuarterVerdict(eps, rev) {
 /* PURE: the strip's cells from earnings_events rows (any order), oldest first; the next upcoming report last */
 function ernStripCells(evs, today, callDays, max) {
   const rows = (evs || []).filter((r) => r && r.date && /^\d{4}-\d{2}-\d{2}$/.test(String(r.date)));
-  const past = rows.filter((r) => String(r.date) < today && num(r.eps_actual) != null)
+  /* review fix (28 Sep): a report dated TODAY whose numbers have landed is a result, not NEXT — a row is past once it has an
+     actual EPS and its date is today or earlier; NEXT is the earliest row from today on that still has no actual */
+  const past = rows.filter((r) => String(r.date) <= today && num(r.eps_actual) != null)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const cells = past.slice(-(max || 16)).map((r) => {
     const eps = ernMetricVerdict(r.eps_actual, r.eps_estimate), rev = ernMetricVerdict(r.revenue_actual, r.revenue_estimate);
     return { date: String(r.date), when: r.report_time || null, eps, rev, verdict: ernQuarterVerdict(eps, rev),
       transcript: transcriptExists(r.ticker, String(r.date), callDays), release: r.release_link || null, ticker: r.ticker };
   });
-  const next = rows.filter((r) => String(r.date) >= today).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+  const next = rows.filter((r) => String(r.date) >= today && num(r.eps_actual) == null).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
   if (next) cells.push({ date: String(next.date), when: next.report_time || null, next: true,
     epsEst: num(next.eps_estimate), revEst: num(next.revenue_estimate), ticker: next.ticker });
   return cells;
@@ -19023,7 +19040,7 @@ function socMatchX(posts, kws, sinceIso) {
    153 subscribed channels across five accounts (personal 44, scintilla 46, soundscapes 41, ai_research 31, golf 14) against
    1,883 search-found channels. Bera Finance: 43 videos, every one source = search, subscription_accounts = []. youtube_feed is NOT a subset of the
    subscriptions (R3's note was wrong): it holds both kinds (12,191 rows, 6,299 with is_sub = false). */
-function socMatchYT(vids, t, kws) {
+function socMatchYT(vids, t, kws, subCh) {
   const T = String(t || "").toUpperCase(), seen = new Set(), out = [];
   const add = (r, title, channel, tagged, url) => {
     const k = r.video_id || String(channel || "").toLowerCase() + "|" + String(title || "").toLowerCase(); if (seen.has(k)) return; seen.add(k);
@@ -19032,12 +19049,37 @@ function socMatchYT(vids, t, kws) {
       id: r.video_id || null, sub: r.source == null ? null : r.source === "subscription", accts: Array.isArray(r.subscription_accounts) ? r.subscription_accounts : [] });
   };
   for (const r of vids || []) add(r, r.title, r.channel_title, String(r.ticker || "").toUpperCase() === T, r.video_id ? "https://www.youtube.com/watch?v=" + r.video_id : "");
-  /* a search-found video from a channel you DO subscribe to (21 channels appear both ways, measured 28 Sep) counts as
-     yours when that channel shows up as a subscription in the same read */
-  const subIds = new Set((vids || []).filter((r) => r.source === "subscription" && r.channel_id).map((r) => r.channel_id));
+  /* a search-found video from a channel you DO subscribe to counts as yours. Review fix (28 Sep): being yours is a property
+     of the CHANNEL, not of this read — subCh (channel_id → the accounts that subscribe, from socSubChannels) is the whole
+     subscribed set; subscription rows in this read are added to it. Before the fix SPY showed 0 of YOUR videos although 37
+     search-found SPY videos in 30 days came from five channels you subscribe to (Rey Jay's Trades 'scintilla', …). */
+  const subIds = new Map(subCh instanceof Map ? subCh : []);
+  for (const r of vids || []) if (r.source === "subscription" && r.channel_id && !subIds.has(r.channel_id)) subIds.set(r.channel_id, Array.isArray(r.subscription_accounts) ? r.subscription_accounts : []);
   const chOf = new Map((vids || []).map((r) => [r.video_id, r.channel_id]));
-  for (const it of out) if (it.sub === false && subIds.has(chOf.get(it.id))) it.sub = true;
+  for (const it of out) if (it.sub === false && subIds.has(chOf.get(it.id))) { it.sub = true; if (!it.accts.length) it.accts = subIds.get(chOf.get(it.id)) || []; }
   return out;
+}
+/* which of these channels one of your YouTube accounts subscribes to. youtube_videos has no channel table, so it asks for the
+   subscription rows of just these channels (60 ids per read) and remembers the answer for the session: a channel is known
+   subscribed (SOC_SUBCH, with its accounts) or known not (SOC_NOTSUB). Read-only. Returns false when a read failed, and
+   the page then says so under YOUTUBE rather than guessing. */
+const SOC_SUBCH = new Map(), SOC_NOTSUB = new Set();
+async function socSubChannels(ids) {
+  const want = [...new Set((ids || []).filter(Boolean))].filter((c) => !SOC_SUBCH.has(c) && !SOC_NOTSUB.has(c) && /^[A-Za-z0-9_-]+$/.test(c));
+  let ok = true;
+  for (let i = 0; i < want.length; i += 60) {
+    const chunk = want.slice(i, i + 60);
+    try {
+      const rows = await pg("youtube_videos?select=channel_id,subscription_accounts&source=eq.subscription&channel_id=in.(" + chunk.join(",") + ")&limit=5000");
+      for (const r of rows || []) {
+        const a = SOC_SUBCH.get(r.channel_id) || [];
+        for (const x of Array.isArray(r.subscription_accounts) ? r.subscription_accounts : []) if (!a.includes(x)) a.push(x);
+        SOC_SUBCH.set(r.channel_id, a);
+      }
+      for (const c of chunk) if (!SOC_SUBCH.has(c)) SOC_NOTSUB.add(c);
+    } catch (_) { ok = false; }
+  }
+  return ok;
 }
 /* R4 — BULLISH OR BEARISH, PER MENTION. Word-list leans, never an AI read, each labelled with where it came from:
    STORED   youtube_video_sentiment (the youtube-sentiment job, method lm-v1: a finance word list with negation). MEASURED
@@ -19152,7 +19194,7 @@ function coSocialHTML(data) {
 function socSourceNoteHTML(v, d) {
   const yt = v === "ALL"
     ? "<b>YOUTUBE · YOUR CHANNELS + SEARCH</b> your subscribed channels <u>plus</u> channels the collector finds by searching YouTube for the ticker (e.g. Bera Finance) — marked YT · SEARCH."
-    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out.";
+    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out. A video from a channel you follow counts as yours however the collector found it.";
   const x = "<b>X · YOUR LIST</b> the X list the collector reads" + (d && d.xHandles ? " (" + d.xHandles + " accounts)" : "") + ".";
   return '<span>' + yt + "</span><span>" + x + "</span>";
 }
@@ -19161,7 +19203,9 @@ function socBodyHTML(d, v) {
   const hidden = v === "ALL" ? 0 : d.ys.length - ys.length;
   const all = d.xs.concat(ys).filter((i) => Date.parse(i.at) <= d.nowMs + 60e3).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const yFresh = d.vidsOk ? (v === "ALL" ? "youtube_videos · subscribed channels and ticker searches" : "youtube_videos · subscribed channels only" +
-      (hidden ? " · " + hidden + " search-found video" + (hidden === 1 ? "" : "s") + " left out" : "")) : "youtube_videos did not answer";
+      (hidden ? " · " + hidden + " search-found video" + (hidden === 1 ? "" : "s") + " left out" : "")) +
+      (d.subOk === false ? ' · <b class="dn">the subscribed-channel check did not answer</b> — a search-found video from a channel you follow may be missing here' : "")
+    : "youtube_videos did not answer";
   const yLean = socLeanTally(ys, d.nowMs, 7), xLean = socLeanTally(d.xs, d.nowMs, 7);
   return '<div class="soc-grid">' +
       socBlockHTML("X", "posts on your X list", socSeries(d.xs, d.days, d.nowMs), d.days, d.xFresh,
@@ -19188,14 +19232,15 @@ async function coSocialLoad(t, kws) {
     pg("youtube_videos?select=video_id,ticker,channel_id,channel_title,title,published_at,source,subscription_accounts&published_at=gte." + since + "&or=(ticker.eq." + T + "," + like + ")&order=published_at.desc&limit=1000").catch(() => null),
     pg("youtube_video_sentiment?select=video_id,lean,sample_src&ticker=eq." + T + "&limit=2000").catch(() => null),
   ]);
+  const subOk = await socSubChannels((vids || []).filter((r) => r.source !== "subscription").map((r) => r.channel_id));
   const xs = x.ok ? socMatchX(x.v, kws, since) : [];
   socLeanX(xs, typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
-  const ys = socLeanYT(socMatchYT(vids || [], t, kws), yvs || [], typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
+  const ys = socLeanYT(socMatchYT(vids || [], t, kws, SOC_SUBCH), yvs || [], typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
   const newestX = x.ok ? x.v.reduce((m, p) => (p && p.created_at > m ? p.created_at : m), "") : "";
   const xStale = newestX && nowMs - Date.parse(newestX) > 36 * 3600e3;
   const xFresh = !x.ok ? "the X feed did not answer (" + esc(x.why) + ")" :
     newestX ? (xStale ? '<b class="dn">STALE</b> · ' : "") + "newest post anywhere in the X feed: " + esc(newsTS(newestX)) + " ET · " + socAgo(nowMs - Date.parse(newestX)) + " ago · " + x.v.length.toLocaleString("en-US") + " posts held" : "";
-  const d = { nowMs, days, xs, ys, xFresh, vidsOk: vids != null, yvsOk: yvs != null,
+  const d = { nowMs, days, xs, ys, xFresh, vidsOk: vids != null, yvsOk: yvs != null, subOk,
     xHandles: x.ok ? new Set(x.v.map((p) => p && p.handle).filter(Boolean)).size : null };
   SOC_MEM[t] = { at: Date.now(), d };
   socRepaint(t);
@@ -20909,6 +20954,7 @@ document.addEventListener("click", (e) => {
     case "cvrailsort": {   // R4 — the LIKED list: DAY % or GEIGER
       e.preventDefault(); e.stopPropagation();
       lsSet(CV_RAIL_SORT_KEY, a.dataset.s === "CHG" ? "CHG" : "GEIGER");
+      cvRailFreeze();   // review fix — a click is the one moment the list re-sorts
       cvRailRepaint();
       break;
     }
@@ -20923,6 +20969,7 @@ document.addEventListener("click", (e) => {
       lsSet(CO_EXP_KEY, CO_EXPANDED ? "1" : "0");
       const b = el("coExpBtn"); if (b) b.outerHTML = coExpandBtnHTML();
       coExpandApply();
+      if (CO_EXPANDED) cvRailFreeze();   // review fix — opening the expanded view takes a fresh order
       cvRailRepaint();   // D2 — the rail is filled when it becomes visible
       break;
     }
@@ -26756,6 +26803,8 @@ body.gwx-motion .gwx-pct{opacity:1}
   /* today's scintillas: the one line may take two lines on a phone rather than end in "· 1…" */
   .sc-ss__one{flex-wrap:wrap;row-gap:2px}
   .sc-ss__one .sc-ss__d{white-space:normal;overflow:visible;flex:1 1 100%;order:5}
+  /* a long event name (28 Sep: "Dallas Fed Manufacturing Index") wraps inside its slot instead of running out of the line */
+  .sc-ss__one > .sc-ss__w{white-space:normal;flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
   /* the company tabs ran off the edge ("NEWS S"): they wrap */
   .cv-tabs{flex-wrap:wrap !important;overflow:visible !important}
   /* the earnings strip: on a phone a sideways scroller always shows a sliced card at its edge, so the last eight reports
@@ -26773,6 +26822,6 @@ body.gwx-motion .gwx-pct{opacity:1}
   .cv-side .rtabs{flex-wrap:wrap !important;overflow:visible !important}
 }
 </style>
-<div id="trialBanner" style="position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:100000;background:#1E1E23;border:1px solid #8A8A92;color:#D2D2D2;font:600 12px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.08em;padding:6px 14px;border-radius:4px;pointer-events:none">TRIAL · company view round 4 · click any name · the live Hub is unchanged</div>
+<div id="trialBanner" style="order:-1;flex:0 0 auto;align-self:flex-start;max-width:100%;overflow:hidden;white-space:nowrap;margin:0 0 6px;background:#1E1E23;border:1px solid #8A8A92;color:#D2D2D2;font:600 11px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.08em;padding:2px 10px;border-radius:4px;pointer-events:none"><style>@media(max-width:900px){#trialBanner{font-size:10px!important;padding:2px 8px!important}#trialBanner .tb-x{display:none}}</style>TRIAL · company view round 4<span class="tb-x"> · click any name · the live Hub is unchanged</span></div>
 </body>
 </html>
