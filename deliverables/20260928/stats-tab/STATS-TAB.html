@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Statistics tab · design</title>
+<meta name="description" content="Design of the curated Statistics tab for the Hub: what a findings card is, what may enter and what never does, the standard for saved charts, and how the tab plugs into the Hub's navigation. With a working prototype.">
+<style>
+:root{--bg:#07070C;--panel:#0F0F18;--hair:#2A2A36;--ink:#C8C8D2;--muted:#8A8A9E;--faint:#5C5C6C;--up:#00FFA3;--dn:#FF2D55;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#B4B4C6;font:17px/1.55 -apple-system,"Helvetica Neue",Arial,sans-serif;padding:28px 34px 80px;max-width:1500px}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px}
+h1{font-size:30px;line-height:1.15;margin:8px 0 6px;color:var(--ink)}
+h2{font-size:22px;margin:38px 0 10px;color:var(--ink);padding-top:18px;border-top:1px solid var(--hair)}
+h3{font-size:17px;margin:22px 0 6px;color:var(--ink)}
+.sub{font:12px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--muted);letter-spacing:.04em}
+.status{border-left:3px solid var(--muted);background:var(--panel);padding:12px 16px;margin:14px 0 8px;font-size:15px;max-width:1120px}
+p,li{max-width:1120px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px;color:var(--ink)}
+pre{background:var(--panel);border:1px solid var(--hair);border-radius:6px;padding:12px 14px;overflow-x:auto;font:12.5px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink);max-width:1120px}
+table{border-collapse:collapse;width:100%;max-width:1120px;font-size:14px;margin:8px 0 14px}
+th,td{border:1px solid var(--hair);padding:7px 9px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+code{overflow-wrap:anywhere}
+table{table-layout:fixed}
+th{font:600 11px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--hair);border-radius:6px;padding:14px 18px;margin:10px 0;max-width:1120px}
+.up{color:var(--up)}.dn{color:var(--dn)}
+figure{margin:14px 0 22px;max-width:1400px}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--hair);border-radius:4px;background:var(--bg)}
+figure.phone img{max-width:390px}
+figcaption{font:12px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--muted);margin-top:6px}
+.two{display:grid;grid-template-columns:1fr 390px;gap:22px;align-items:start;max-width:1400px}
+.two figure{margin:0}
+.q{color:var(--ink);font-weight:600}
+@media (max-width:900px){body{padding:20px 16px 60px;font-size:16px}h1{font-size:24px}.two{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div data-scnav-slot></div>
+<h1>A Statistics tab for the Hub: six findings, one chart each, nothing unreviewed</h1>
+<p class="sub">28 Sep 2026 · lane stats-tab · branch hub/stats-tab-20260928 · design + a working prototype · built from the two published studies only (S8 the ladder, S9 the research program, both 27 Sep) · nothing here predicts</p>
+
+<div class="status"><b>STATUS · the prototype works and is measured against its own rules.</b> Six findings cards on <a href="index.html">index.html</a>, twelve saved chart files (each chart at 1200 wide for the desk and redrawn at 390 for the phone), a manifest (<a href="findings.json">findings.json</a>) that is the only door onto the tab, and 14 tests that refuse a card missing any of its five parts, a grey mark, or a retyped number. Nothing was downloaded, nothing was re-measured, nothing was deployed. Alan's words this morning: “start to see visuals of the statistical analysis, graphics that get saved. Maybe a statistics master tab on the Hub — careful, don't make it a dump yard.”</div>
+
+<h2>1 · What the tab is (and what it is not)</h2>
+<p>The Hub already has plenty of numbers. What it does not have is a place where a finding from the statistics work survives the session that made it. Today the S8 and S9 pages are long research documents: 105,000 characters for the ladder, 46,000 for the program. They are the right thing for the study; they are the wrong thing to open at 09:35 to remember what the market usually does after a 5–10% dip.</p>
+<p>So the tab is a <b>small, fixed set of findings cards</b>. A card is one question, one chart, one plain sentence with the numbers, one line on how sure the number is, the sample and dates, the study it came from and who checked it. Six themes, in Alan's order: market first (the rising tide) · pullbacks and bottoms · RSI percentiles · fear, greed and macro · leaders · execution. A theme with nothing reviewed under it says so, in a dashed box, rather than filling itself.</p>
+<p>It is <b>not</b> a library of every study (that is the prototypes page), not a live indicator (nothing on it updates intraday; a card changes only when a study is re-run and re-reviewed), and not a set of buy rules (every card is a research question with a measured answer, and the sentence says how sure).</p>
+
+<div class="card"><b>The card, exactly.</b> Reading top to bottom on the prototype:
+<ol>
+<li><span class="q">The question</span>, as a question, e.g. “When SPY pulls back, does the depth of the decline tell whether the next swing makes a new high?”</li>
+<li><span class="q">The chart</span>, big, the width of the card. The same picture is saved as a file next to the page; the page inlines those exact bytes, so hovering a bar shows its count and 95% range without the picture and the file ever differing.</li>
+<li><span class="q">The answer</span>, one plain paragraph with the numbers: “3–5% declines (36 since 2003): 80.6% of the rebounds made a new high. 5–10% (50): 70.0%. 10–20% (24): 25.0%.”</li>
+<li><span class="q">How sure</span>: the range, the sample's real size (sell-offs make many days fire together), what is still missing, and which in-flight lane could change the card.</li>
+<li><span class="q">Sample · study · review · chart file</span>, in a quiet four-cell footer, each a link.</li>
+</ol></div>
+
+<h2>2 · What may enter, and what never does</h2>
+<table>
+<tr><th>A card needs all of these</th><th>Where it is checked</th></tr>
+<tr><td>A stated question, phrased as a question</td><td><code>tests/stats-tab.test.mjs</code> · “every card carries the five things a finding needs”</td></tr>
+<tr><td>A measured answer <b>with its uncertainty</b>: a range, or the honest count when the bucket is too small for a rate (“20%+ has 4 declines, which is a list, not a rate”)</td><td>same test: the answer and the uncertainty must each carry a number</td></tr>
+<tr><td>A saved chart in both sizes, dated in its file name and inside the picture, parsing as XML</td><td>same test, plus the build refuses to write a card without one</td></tr>
+<tr><td>The sample: instrument, date range, days and episodes</td><td>same test</td></tr>
+<tr><td>A link to the study page and to its numbers file, both existing on disk</td><td>same test</td></tr>
+<tr><td>A review by a second lane or a second method (S9 restated S8's reading; S8 split history in two halves; S9 ran pivot windows 5 and 20)</td><td>same test: <code>review.status === "reviewed"</code></td></tr>
+</table>
+<table>
+<tr><th>Never on the tab</th><th>Why</th></tr>
+<tr><td>A raw table or a JSON dump</td><td>That is the study page's job. The tab shows one picture per question.</td></tr>
+<tr><td>A study nobody reviewed</td><td>Today's in-flight lanes (rsi-full-history, market-regime, rsi-ladder, bottoms, leaders, scout) appear by name only, under “measuring now”, until a second lane has read them. The test holds that a candidate lane's name never appears as a card id.</td></tr>
+<tr><td>A number without a chart, or a chart without a date</td><td>Alan: “graphics that get saved.” A picture that cannot be found again in a folder is not saved.</td></tr>
+<tr><td>A grey line or bar</td><td>The 23 Sep rule: daily up green, down red; a share green above its any-day line and red below; a fear measure in red. The drawing code throws on a mark with no reference, rather than painting it grey.</td></tr>
+<tr><td>A buy rule, a fixed window, a forced cut-off</td><td>Alan, 28 Sep: percentiles 1..100, pivots, own history — research questions, not rules.</td></tr>
+<tr><td>A thirteenth card</td><td>At most twelve. A new card that answers an old question replaces the old one; the old chart stays in its study folder. That is the dump-yard guard.</td></tr>
+</table>
+
+<h2>3 · The standard for saved visuals</h2>
+<table>
+<tr><th>Rule</th><th>Value</th></tr>
+<tr><td>File name</td><td><code>YYYYMMDD-&lt;theme&gt;-&lt;question-slug&gt;-&lt;1200|390&gt;.svg</code>, e.g. <code>20260928-pullbacks-spy-depth-to-new-high-1200.svg</code>. The date is the build date; the theme is one of the six; the slug is the card id.</td></tr>
+<tr><td>Where</td><td><code>charts/</code> next to the page that shows it. A card links its own file (download) and the page inlines the same bytes.</td></tr>
+<tr><td>Format</td><td>SVG (text, diffable in git, crisp at any size). A PNG export can be added by the screenshot script when a picture must go to Notion or a phone; the SVG stays the source.</td></tr>
+<tr><td>Sizes</td><td>1200 × 440 for the desk (two-panel charts 1200 × 660); <b>redrawn</b> at 390 wide for the phone with 13px labels, rotated axis labels when eight or more groups, rounded value labels when bars are under 40px. Never a shrunk desk chart: 12px text at a third of its size is 4px.</td></tr>
+<tr><td>Surface and greys</td><td>Background <code>#07070C</code>, panel <code>#0F0F18</code>, hairline <code>#2A2A36</code>, ink <code>#C8C8D2</code>, muted <code>#8A8A9E</code>, faint <code>#5C5C6C</code>. Every grey has its channels within 24 of each other and none above 210; no white. The test holds every hex on the page to that rule.</td></tr>
+<tr><td>Direction colours</td><td>Up <span class="up">#00FFA3</span> · down <span class="dn">#FF2D55</span>, the S8/S9 colours. A share is green at or above its own any-day line, red below it. A gain is green, a loss red. A fear measure (VIX, a drawdown share) is red, darker when higher. Two series are told apart by texture (solid vs 45° stripes), never by hue, so hue keeps one meaning.</td></tr>
+<tr><td>Text</td><td>Title 16px bold, subtitle and labels 12px mono (13px on the phone), footer 11.5px. Nothing under 11px. Values printed in ink with a dark halo, never in the series colour. Axis ticks are round numbers (40, 50, 60), never 53, 65, 78.</td></tr>
+<tr><td>Inside every file</td><td>The title, the subtitle (what is measured and what green/red mean here), a legend for any second series or reference line, and a footer: study · study date · instrument · date range · build time · card id. The picture stands alone in a folder.</td></tr>
+<tr><td>Reference lines</td><td>The any-day line dashed in ink, named in the legend, never labelled on the plot (it collided with values in the first cut).</td></tr>
+<tr><td>Hover</td><td>Every bar carries a <code>&lt;title&gt;</code> (native tooltip) and a <code>data-tip</code> that the page repeats in a readout line under the chart, so a phone tap reads the same count and range.</td></tr>
+<tr><td>One drawing module</td><td><a href="charts.mjs">charts.mjs</a>: pure functions, tested on a fixture with numbers chosen so every colour can be worked by hand. A new chart kind is a new function there, not a new page.</td></tr>
+</table>
+
+<h2>4 · The six cards on the prototype, and where each number comes from</h2>
+<table>
+<tr><th>Theme</th><th>Question</th><th>Study · the field</th></tr>
+<tr><td>Market first</td><td>Does a low SPY RSI mean more when SPY is above its 200-day than below it?</td><td>S8 <code>funds.SPY.rows[T].on / .off</code>, any-day lines <code>funds.SPY.any.on / .off</code></td></tr>
+<tr><td>Pullbacks and bottoms</td><td>When SPY pulls back, does the depth of the decline tell whether the next swing makes a new high?</td><td>S9 <code>instruments.SPY.depthTable[].newHigh</code>; the all-declines line is the share over <code>instruments.SPY.all[].newHigh</code></td></tr>
+<tr><td>Pullbacks and bottoms</td><td>How far below its 200-day does SPY have to be before “deep below” becomes a problem?</td><td>S9 <code>band.SPY.full.bands[].up60 / .mdd60Bad</code>, any day <code>band.SPY.full.base.up60</code></td></tr>
+<tr><td>RSI percentiles</td><td>Does a stock's own low RSI beat any day, and how far down its own ladder does the edge last?</td><td>S8 <code>stocks.states[0].rows[].x.win</code>, any day <code>stocks.states[0].any.win</code></td></tr>
+<tr><td>Fear, greed and macro</td><td>How high is the VIX at the low, given how far SPY has fallen so far?</td><td>S9 <code>instruments.SPY.depthTable[].vixLowMed</code>; quartiles in the hover from <code>instruments.SPY.all[].vixLow</code></td></tr>
+<tr><td>Execution</td><td>Did the best entry combination hold in both halves of history?</td><td>S8 <code>combos[0].disc / .conf</code>, any day <code>base_halves</code></td></tr>
+<tr><td>Leaders</td><td>— no reviewed finding yet; the stats-leaders lane (S9 E1) is measuring today</td><td>shown as a candidate name only</td></tr>
+</table>
+<p>The only arithmetic added on top of the published files: the all-declines share (a count over the published per-decline records), a Wilson 95% range on a published share and count (the honest width of a percentage from n cases), and the quarter-to-three-quarter VIX range per bucket from the published per-decline records. The test “card numbers are read from S8/S9, not retyped” re-reads the two JSON files and checks every headline number in every answer against them.</p>
+
+<h2>5 · How it plugs into the Hub</h2>
+<p>The Hub's master tabs are one list in <code>index.html</code>: <code>const SECTIONS = ["DASHBOARD","SCENES","NEWS","SOCIAL","SENTIMENT","ALERTS","SCREENER","EVENTS","USUAL","ECONOMIC"]</code>. <code>buildMtabs()</code> draws a button per entry, <code>roomKey()</code> gives each room a mount key and <code>roomHTML()</code> returns the room's markup. USUAL DAY was added exactly this way on 27 Sep. The proposal is the same move, in two steps, and nothing in the Hub computes a statistic:</p>
+<h3>Step 1 · a STATS master tab that shows the manifest (one wave)</h3>
+<ol>
+<li>Add <code>"STATS"</code> to <code>SECTIONS</code> after <code>"USUAL"</code>; <code>buildMtabs()</code> then draws it with no other change (label “STATS”).</li>
+<li><code>roomKey()</code>: <code>case "STATS": return "STATS";</code> — one mount, like USUAL.</li>
+<li><code>roomHTML()</code>: <code>case "STATS": return statsRoomHTML();</code> where <code>statsRoomHTML()</code> fetches <code>/data/stats/findings.json</code> (the manifest, moved from this folder into <code>data/</code> when Alan approves the tab) and, per card, inlines the saved SVG by fetching its file. The room is the six themes with their cards; an empty theme shows the dashed “nothing reviewed yet” box; candidates show as names. The card markup and CSS are the prototype's, lifted as they are.</li>
+<li>The Hub never draws a chart. The build in the study's lane draws it; the manifest points at the file; the room shows the file. If the file is missing the card does not render and the room says which card is missing. That is what keeps the tab from becoming a dump yard: a study lane cannot push a number onto it, only a reviewed card with a picture.</li>
+<li>A test in <code>tests/</code> holds the Hub's copy of the manifest to the same five-part rule as this prototype's test, so a bad card fails the suite before it ships.</li>
+</ol>
+<h3>Step 2 · the cards reach the rooms that need them (later, if Alan wants it)</h3>
+<p>Each card carries a theme and an instrument. The dashboard's SPY panel could show the two pullback cards' pictures in a fold-out; the company view's Stats tab could show the RSI-percentile card with the stock's own current percentile marked on it. That needs one more field per card (which live reading marks the chart) and is a separate decision. Not built.</p>
+<h3>Also, now</h3>
+<p>The prototypes library card: <code>scripts/build-prototypes-index.py</code> adds a “Statistics · findings” card pointing at <code>/deliverables/20260928/stats-tab/</code> with readiness “review”, and the BACK / CLOSE pair is on both pages via <code>scripts/inject-scnav.py</code> (done on this branch).</p>
+<pre>// the whole Hub change for step 1, in outline (not applied on this branch — proposal only)
+const SECTIONS = [..., "USUAL", "STATS", "ECONOMIC"];
+function roomKey(){ …; case "STATS": return "STATS"; }
+function roomHTML(){ …; case "STATS": return statsRoomHTML(); }
+async function statsRoomHTML(){ const m = await (await fetch("/data/stats/findings.json")).json(); /* themes → cards → inline the saved SVG */ }</pre>
+
+<h2>6 · Shown at 1680 and at 390</h2>
+<div class="two">
+<figure><img src="shots/stats-tab-1680.png" alt="The Statistics tab prototype at 1680 wide"><figcaption>index.html at 1680 · headless Chrome, one run, killed after · the whole page</figcaption></figure>
+<figure class="phone"><img src="shots/stats-tab-390.png" alt="The Statistics tab prototype at 390 wide"><figcaption>index.html at 390 · the phone redraws each chart</figcaption></figure>
+</div>
+<div class="two">
+<figure><img src="shots/stats-tab-design-1680.png" alt="This design page at 1680 wide"><figcaption>STATS-TAB.html at 1680</figcaption></figure>
+<figure class="phone"><img src="shots/stats-tab-design-390.png" alt="This design page at 390 wide"><figcaption>STATS-TAB.html at 390</figcaption></figure>
+</div>
+<p id="seen"><b>What is actually visible, having opened each shot.</b> At 1680 (page 1680 × 6,830, no sideways scroll, smallest HTML text 11px): the grey BACK / CLOSE pair top-left, the title, the six-theme strip with a count per theme (Leaders shows “–”), the status box, then the six cards in Alan's order, each chart the full width of its card with green and red bars, the dashed any-day line, the striped second series on the first card with its legend, the count under every bar, the answer paragraph, the “How sure” line and the four-cell footer; Leaders is a dashed box saying no finding has passed review, followed by the stats-leaders candidate; every theme except Fear/greed and RSI shows a “measuring now” list under its cards; the rules block closes the page. At 390 (390 × 8,743, no sideways scroll): the same order stacked, each chart redrawn at phone size (title wrapped, 13px labels, the eight band labels and the eleven RSI-step labels hanging at 38°, values rounded to whole numbers on crowded bars, counts joined tight under the two-series bars), the footer cells one under another. The design page shot at 390 was taken <b>before</b> the fix for its own sideways scroll (788px wide, caused by long file names in table cells; wrapping added afterwards) and was not re-shot, because the brief allowed one browser run; the prototype pages were clean in that run.</p>
+
+<h2>7 · What could be wrong</h2>
+<ul>
+<li><b>The numbers are only as good as S8 and S9.</b> Both were published 27 Sep on bars to 25 Sep; S9 clamped 14 bad prints in the deep history; S8's report-timing fix inferred 9,473 report times from gaps. A card inherits every caveat of its study. The RSI full-history lane (28 Sep) already reports “no reliable gain over any day” for SPY's bottom 10% once the 90% range is drawn; when that lane is reviewed, the market-first card's “how sure” line should tighten or the card should change. This is by design: the tab shows the reviewed state, not the newest.</li>
+<li><b>“Reviewed” is thin today.</b> The reviews named on the cards are second methods inside the same two studies (halves of history, pivot-window sensitivity, a restatement by S9). A real second-lane review has not happened for any card. The rule is right; the evidence bar for these six is the minimum that met it.</li>
+<li><b>Colouring against the any-day line is a judgement.</b> A bar 0.3 points above the line is green; the same bar with its range straddling the line is still green. The “how sure” line is where that is said; the picture alone can over-sell. A future rule could hatch a bar whose range crosses its line.</li>
+<li><b>Small buckets.</b> SPY 20%+ declines: 4. The chart draws them; the sentence says they are a list, not a rate.</li>
+<li><b>The manifest is generated, not curated by hand.</b> Today the build script decides what is on the tab. When the tab goes live, the manifest should be a file a human edits (add a card = add an entry pointing at a study's chart), with the build only checking it.</li>
+<li><b>The Hub integration is a proposal, not code.</b> Nothing in <code>index.html</code> was touched.</li>
+</ul>
+
+<h2>8 · What was not done</h2>
+<ul>
+<li>No new measurement, no download, no chart-API call, no FMP call, no Fly job (Alan is trading on this MacBook; the brief allowed one short headless run, used for the four screenshots and killed after).</li>
+<li>Nothing from today's lanes (rsi-full-history, market-regime, rsi-ladder, bottoms, leaders, scout) is on the tab; they are named as candidates.</li>
+<li>No Hub code change, no prototypes-index rebuild (the sha pin in <code>tests/prototypes-catalogue.test.mjs</code> would move; that is the coordinator's merge step), no deploy.</li>
+<li>No PNG export of the charts (SVG only); the screenshot script can add it in a line if a picture must travel to Notion.</li>
+<li>Leaders theme: empty by rule, not by oversight.</li>
+</ul>
+<p class="sub">Files: index.html (the tab) · findings.json (the manifest) · charts/ (12 SVG) · charts.mjs (drawing) · build.mjs (build from S8/S9 JSON) · shots.mjs (one headless Chrome, several shots) · tests/stats-tab.test.mjs + tests/fixtures/stats-tab-fixture.json</p>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
