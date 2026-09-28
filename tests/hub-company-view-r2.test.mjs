@@ -18,7 +18,8 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":
 const num = (v) => { if (v == null) return null; const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
 const CO_TABS = JSON.parse(page.match(/^const CO_TABS = (\[[^\]]*\]);/m)[1]);
 const CONSTS = line(/^const STATION_CHART_URL = [^\n]*/m) + line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) +
-  line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m);
+  line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const CO_TAB_KEY = [^\n]*/m) +
+  line(/^const CO_CLOUDS_KEY = [^\n]*/m) + fn("coCloudsOn").replace("lsGet(", '(typeof lsGet === "function" ? lsGet : () => null)(');   /* SWITCH-ON */
 
 /* R3 (27 Sep) replaced D2's "seven tabs + MORE (STATS)": Alan, "use what exists: all the tabs". */
 test("R3: nine tabs in one row, keys 1-9, no MORE; SOCIAL and STATS are in the row; no CHART tab (the chart is always on screen)", () => {
@@ -33,9 +34,9 @@ test("R3: nine tabs in one row, keys 1-9, no MORE; SOCIAL and STATS are in the r
 });
 
 test("the chart sits OUTSIDE the tab slot: the view is rail · (line, chart, numbers) · (tabs, slot)", () => {
-  const html = new Function("esc", "coPaneModeProbe", "cvRailHTML", "cvLineHTML", "cvChartHTML", "cvTabsHTML", "leftBodyHTML", fn("coViewHTML") + "\nreturn coViewHTML;")(
+  const html = new Function("esc", "coPaneModeProbe", "cvRailHTML", "cvLineHTML", "cvChartHTML", "cvTabsHTML", "leftBodyHTML", "cvFactsHTML", fn("coViewHTML") + "\nreturn coViewHTML;")(
     esc, () => {}, () => "RAIL", () => "LINE", () => '<div class="cv-chart" id="cvChart"><iframe id="coChartFrame"></iframe></div>', () => "TABS",
-    () => '<div class="sc-chartpanel__slot" id="coRailContent">BODY</div>')("MU");
+    () => '<div class="sc-chartpanel__slot" id="coRailContent">BODY</div>', () => "FACTS")("MU");
   const iframe = html.indexOf('id="coChartFrame"'), side = html.indexOf('class="cv-side"'), slot = html.indexOf('id="coRailContent"');
   assert.ok(iframe > 0 && iframe < side && side < slot, "frame in cv-main, before the side column that holds the slot");
   assert.ok(html.indexOf("LINE") < iframe, "the line above the chart");
@@ -71,7 +72,7 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
 test("R3: the chart asks the Station for the Lab's six-line RSI fan (rsi=1) at every timeframe; clouds always on; the Hub pane, never bare=1", () => {
   assert.match(page, /^const CO_CHART_RSI = true;/m);
   const src = new Function(CONSTS + fn("coRange") + fn("coChartSrc") + "\nreturn coChartSrc;")();
-  for (const r of ["1h", "4h", "1D", "3D", "1W"])
+  for (const r of ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1D", "3D", "1W"])   /* SWITCH-ON — all eleven Station timeframes */
     assert.equal(src("mu", r, true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=" + r + "&clouds=1&rsi=1");
   assert.match(src("MU", "4h", "match"), /rsi=4h$/, "one line of the chart's own timeframe can still be asked for");
   assert.doesNotMatch(src("MU", "1D", false), /rsi/);

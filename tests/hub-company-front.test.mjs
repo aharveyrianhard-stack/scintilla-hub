@@ -19,7 +19,9 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":
 const num = (v) => { if (v == null) return null; const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
 const LISTS_SRC = page.slice(page.indexOf("const LIST_COHS = "), page.indexOf("/* apply one intent"));
 const FRONT_CONSTS = line(/^const CO_LANDING_TAB = [^\n]*/m) + line(/^const STATION_CHART_URL = [^\n]*/m) + line(/^const STATION_FUND_URL = [^\n]*/m) +
-  line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) + line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_FRAME_TABS = [^\n]*/m);
+  line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) + line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_FRAME_TABS = [^\n]*/m) +
+  /* SWITCH-ON — the clouds switch (hub.chart.clouds) feeds coChartSrc; with no lsGet in scope it reads as "on" */
+  line(/^const CO_CLOUDS_KEY = [^\n]*/m) + fn("coCloudsOn").replace("lsGet(", '(typeof lsGet === "function" ? lsGet : () => null)(');
 const CO_TABS = JSON.parse(page.match(/^const CO_TABS = (\[[^\]]*\]);/m)[1]);
 const fmtCap = new Function("num", fn("fmtCap") + "\nreturn fmtCap;")(num);
 
@@ -50,10 +52,10 @@ function chartKit(stored) {
   return new Function("esc", "lsGet", "coPaneModeProbe", "coChartStamp", "CO_HUB_PANE", "setTimeout", FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + fn("coChartTabHTML") +
     "\nreturn { coRange, coChartSrc, coChartTabHTML };")(esc, (k) => (k in store ? store[k] : null), () => {}, () => {}, false, () => {});
 }
-test("the CHART tab is the Station chart pane, with the timeframe row 1h 4h 1D 3D 1W and the remembered range", () => {
+test("the CHART tab is the Station chart pane, with the Station's eleven timeframes (SWITCH-ON) and the remembered range", () => {
   const k = chartKit("4h");
   const html = k.coChartTabHTML("MU");
-  assert.deepEqual([...html.matchAll(/data-r="([^"]+)"/g)].map((m) => m[1]), ["1h", "4h", "1D", "3D", "1W"]);
+  assert.deepEqual([...html.matchAll(/data-r="([^"]+)"/g)].map((m) => m[1]), ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1D", "3D", "1W"]);
   assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="4h"/, "the remembered range is lit");
   /* H2 — pane mode for the Hub (?bare=hub) and the RSI fan by its own width rule (rsi=auto) */
   /* R3 — the Lab's six-line RSI fan (rsi=1), whatever the timeframe (D2 had sent one line: rsi=<range>) */
@@ -62,7 +64,8 @@ test("the CHART tab is the Station chart pane, with the timeframe row 1h 4h 1D 3
   assert.match(html, /id="coChartAsOf">last bar …<\/span> · Massive/, "the bar source and its age are on the screen");
   assert.doesNotMatch(html, /tradingview/i, "never a TradingView embed");
   assert.equal(chartKit(null).coRange(null), "1D", "default 1D");
-  assert.equal(chartKit("garbage").coRange("15m"), "1D", "a range outside the row falls back to 1D");
+  assert.equal(chartKit("garbage").coRange("2m"), "1D", "a range outside the row falls back to 1D");
+  assert.equal(chartKit(null).coRange("15m"), "15m", "SWITCH-ON — 15m is in the row now");
   assert.doesNotMatch(k.coChartSrc("MU", "1D", false), /rsi/, "the RSI fan can still be switched off");
   assert.match(k.coChartSrc("mu", "1W", true), /\?bare=hub&t=MU&range=1W&clouds=1&rsi=1$/);
   assert.match(page, /^const CO_CHART_RSI = true;/m, "R3 — the six-line fan");
