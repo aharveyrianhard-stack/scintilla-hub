@@ -15,7 +15,7 @@ const ci = (s) => s?.ci ? `<span class="ci">${s.ci[0] > 0 ? "+" : ""}${f2(s.ci[0
 const VS = { above: `<span class="up">better than usual</span>`, below: `<span class="dn">worse than usual</span>`, overlaps: `<span class="mut">not different</span>` };
 const vs = (v) => v ? VS[v] : "—";
 const plural = (b) => b === "half-year" ? "half-years" : b + "s";
-const nInfo = (s) => s.blocks != null ? `${s.months} months · ${s.blocks} separate ${plural(s.block)}` : `${s.months} months`;
+const nInfo = (s) => s.blocks != null && s.block !== "month" ? `${s.months} months · ${s.blocks} separate ${plural(s.block)}` : `${s.months} months`;
 const tooFew = (s) => `<span class="mut">too few separate ${plural(s.block ?? "month")} (${s.blocks ?? s.months}) to judge</span>`;
 const date = (d) => { if (!d) return "—"; const [y, m, dd] = d.split("-"); return `${+dd} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m - 1]} ${y}`; };
 const ordinal = (x) => x == null ? "—" : x < 1 ? "<1st" : `${Math.round(x)}${["th","st","nd","rd"][(Math.round(x) % 100 > 10 && Math.round(x) % 100 < 14) ? 0 : Math.min(Math.round(x) % 10, 4) > 3 ? 0 : Math.round(x) % 10] || "th"}`;
@@ -268,6 +268,12 @@ ${oddsTable}
 ${fedTable}
 <p class="q">Decision day move: the median absolute S&P move was ${f2(F.decisionDayMove.meetingsMedianAbs)}% on decision days vs ${f2(F.decisionDayMove.allDaysMedianAbs)}% on all days. Dates: the Fed's own published schedules (scheduled meetings only; the emergency moves of 3 and 15 Mar 2020 are left out); hike / hold / cut from FMP's decision rows, which start in 2013. Recent: ${F.recent.map((r) => `${date(r.d)} ${r.change > 0 ? "+" : ""}${r.change}`).join(" · ")}. Next: ${F.next.map((m) => date(m.d)).join(" · ")}.</p>
 
+<h2>Corrected after an independent review (28 Sep)</h2>
+<ul>
+<li><b>VIX inversion and swing lows.</b> The first version compared the 43-of-60 hits with <i>all</i> sessions (about 20 expected) and called it the strongest link on the page. Against days of a comparable fall the hit rate is no higher, and no low came before an inversion began. Finding 2 and section 2 now say so; the link is no longer recommended as a next step. Before: <a href="before/regime-1680-04.png">section 2 as first published</a>.</li>
+<li><b>Ranges at 63, 126 and 252 sessions were too narrow.</b> They resampled calendar months while a one-year return spans twelve of them. They now resample quarters (63), half-years (126) and years (252). The one-year "worse than usual" for high-yield pullbacks since 1971 did not survive, and several one-year "better than usual" rows became "not different". Finding 4 is rewritten. Before: <a href="before/regime-1680-06.png">section 4 as first published</a>.</li>
+<li><b>Fed odds labels.</b> The hike percentages were dark text on a red bar and could not be read, and the hold bar was grey. Labels now have no dark outline, hike is white on deep red, hold is dark on green. Before: <a href="before/regime-1680-08.png">section 6 as first published</a>.</li>
+</ul>
 <h2>What could be wrong</h2>
 <ul>
 <li><b>Overlap.</b> Forward returns from neighbouring days share most of their future, so thousands of "days" are really a few dozen episodes. The ranges resample whole blocks of the calendar at least as long as the window being measured — months for 5–21 sessions, quarters for 63, half-years for 126, years for 252 — and the tables show how many separate blocks sit behind each number. With fewer than 5 the page says "too few to judge"; treat anything under ~10 as a hint. The one-year rows therefore carry wide ranges: a year-long result from 1990 onward has only about 36 separate years to draw on in total.</li>
