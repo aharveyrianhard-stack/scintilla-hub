@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { fileURLToPath } from "node:url";
-import { percentileTable, percentileOf, episodes, fwd, worstAhead, clusterBoot, divergences, swingRsi, analyse, seriesOf, rng, INSTRUMENTS, PIVOT_LEN, run } from "../research/statistics/rsi-history.mjs";
+import { percentileTable, percentileOf, episodes, fwd, worstAhead, clusterBoot, divergences, swingRsi, analyse, seriesOf, rng, INSTRUMENTS, PIVOT_LEN, run, beatsAnyDay, nasdaqVsSp } from "../research/statistics/rsi-history.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url)), root = path.resolve(here, "..");
 const DAY = 864e5, T0 = Date.UTC(2015, 0, 5);
@@ -116,4 +116,33 @@ test("RSI history: the page carries every instrument, the BACK/CLOSE pair, and n
   assert.ok(html.includes("scnav"), "BACK / CLOSE pair placed");
   assert.ok(!/#fff\b|#ffffff\b|:\s*white\b/i.test(html), "no white");
   assert.ok(html.includes(`RSI of ${j.instruments.SPY.lo10.toFixed(1)} or lower`), "headline reads the JSON");
+});
+
+test("RSI history: a signal only beats any day when the any-day median sits outside the signal's 90% range", () => {
+  assert.equal(beatsAnyDay({ med: 2.05, medLo: 1.16, medHi: 2.44, base: { med: 1.34 } }), "inside", "SPY 20-session case from review: may be luck");
+  assert.equal(beatsAnyDay({ med: 2.48, medLo: 1.56, medHi: 3.13, base: { med: 1.5 } }), "above");
+  assert.equal(beatsAnyDay({ med: 0.08, medLo: -0.13, medHi: 0.25, base: { med: 0.3 } }), "below");
+  assert.equal(beatsAnyDay({ med: 1, medLo: null, medHi: null, base: { med: 0.5 } }), null);
+});
+
+test("RSI history: the Nasdaq-vs-S&P comparison is symmetric — swapping the two sides swaps the swing-low counts", () => {
+  // two synthetic markets with different drawdown timing, so each has swing lows the other does not
+  const n = 1200, ca = [], cb = [];
+  for (let i = 0; i < n; i++) { ca.push(100 * Math.exp(0.0003 * i) * (1 + 0.14 * Math.sin(i / 37))); cb.push(100 * Math.exp(0.0004 * i) * (1 + 0.16 * Math.sin(i / 53 + 1))); }
+  const A = seriesOf(bars(ca)), B = seriesOf(bars(cb));
+  const ab = nasdaqVsSp(A, B, "A", "B"), ba = nasdaqVsSp(B, A, "B", "A");
+  assert.ok(ab.lows.length > 0 && ab.lowsOfB.length > 0, "both sides' own lows are measured");
+  assert.equal(ab.lows.length, ba.lowsOfB.length); assert.equal(ab.lowsOfB.length, ba.lows.length);
+  assert.equal(ab.lowsBDeeper, ba.lowsADeeper); assert.equal(ab.lowsADeeper, ba.lowsBDeeper);
+  assert.equal(ab.shareBLowerWhenA10, ba.shareALowerWhenB10); assert.equal(ab.shareALowerWhenB10, ba.shareBLowerWhenA10);
+  for (const x of ab.lowsOfB) assert.equal(x.deeperA, x.rsiA < x.rsiB);
+});
+
+test("RSI history: the page states the no-hindsight figure and the range beside SPY's headline, and reports the Nasdaq lows both ways", () => {
+  const html = fs.readFileSync(path.join(root, "deliverables/20260928/rsi-full-history/index.html"), "utf8");
+  const lead = html.match(/<ol class="lead">([\s\S]*?)<\/ol>/)[1].replace(/<[^>]+>/g, "");
+  assert.ok(/no reliable gain over any day/.test(lead) && /range \+1\.2% to \+2\.4%/.test(lead) && /shrinks to \+1\.5%/.test(lead));
+  assert.ok(!/\bedge\b/.test(lead.split("\n").find((l) => l.startsWith("What SPY did next"))), "no 'edge' claim on the SPY answer");
+  assert.ok(/at the Nasdaq 100's own \d+ falls of 10%\+ the S&P went deeper \d+ times/.test(lead));
+  assert.ok(!/No — not over the full history either/.test(lead));
 });

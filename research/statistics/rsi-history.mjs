@@ -242,23 +242,40 @@ export function analyse(S, I) {
 }
 
 /* ---------------- Nasdaq vs S&P ---------------- */
-export function nasdaqVsSp(Sa, Sb, labelA, labelB, from = null) {
+/** Did a signal's middle result beat any day beyond its own 90% range? "above" / "below" when the any-day
+ *  median sits outside the range, "inside" when it sits inside it (the difference may be luck), null without a range. */
+export function beatsAnyDay(f) {
+  if (!f || f.medLo == null || f.medHi == null || f.base?.med == null) return null;
+  return f.base.med < f.medLo ? "above" : f.base.med > f.medHi ? "below" : "inside";
+}
+/* At X's own swing lows of 10%+: the lowest RSI of X and of Y within ±10 sessions of X's low. */
+function lowsAt(Sx, Sy, rx, from, to) {
+  const mapY = new Map(Sy.dates.map((d, i) => [d, i])), idxX = new Map(Sx.dates.map((d, i) => [d, i]));
+  const minNear = (rsi, c) => { let m = Infinity; for (let k = Math.max(0, c - 10); k <= Math.min(rsi.length - 1, c + 10); k++) if (rsi[k] != null) m = Math.min(m, rsi[k]); return m; };
+  return swingRsi(Sx, PIVOT_LEN, rx).allDowns.filter((r) => r.move <= -10 && (!from || r.to >= from) && (!to || r.to <= to))
+    .map((r) => { const i = idxX.get(r.to), j = mapY.get(r.to); if (j == null) return null;
+      const mx = minNear(Sx.rsi, i), my = minNear(Sy.rsi, j); return { low: r.to, depth: r.move, rsiX: r1(mx), rsiY: r1(my), otherDeeper: my < mx }; })
+    .filter(Boolean);
+}
+/** Compares A (the S&P) and B (a Nasdaq index) on shared days, symmetrically: every-day percentiles, the share of
+ *  days one reads lower, and each one's own 10%+ swing lows (conditioning on one side's lows makes that side look
+ *  deeper almost by construction, so both directions are reported). */
+export function nasdaqVsSp(Sa, Sb, labelA, labelB, from = null, to = null) {
   const mapB = new Map(Sb.dates.map((d, i) => [d, i]));
-  const both = []; for (let i = 0; i < Sa.dates.length; i++) { const j = mapB.get(Sa.dates[i]); if (j != null && Sa.rsi[i] != null && Sb.rsi[j] != null && (!from || Sa.dates[i] >= from)) both.push([i, j]); }
+  const both = []; for (let i = 0; i < Sa.dates.length; i++) { const j = mapB.get(Sa.dates[i]); if (j != null && Sa.rsi[i] != null && Sb.rsi[j] != null && (!from || Sa.dates[i] >= from) && (!to || Sa.dates[i] <= to)) both.push([i, j]); }
   const ra = both.map(([i]) => Sa.rsi[i]).sort((p, q) => p - q), rb = both.map(([, j]) => Sb.rsi[j]).sort((p, q) => p - q);
   const tbl = [1, 5, 10, 20, 50, 80, 90, 95, 99].map((q) => ({ pct: q, a: r1(quantile(ra, q / 100)), b: r1(quantile(rb, q / 100)) }));
-  // on the S&P's (A's) swing lows of 10%+: B's lowest RSI within ±10 sessions of A's low
-  const swA = swingRsi(Sa, PIVOT_LEN, ra).allDowns.filter((r) => r.move <= -10 && (!from || r.to >= from));
-  const idxA = new Map(Sa.dates.map((d, i) => [d, i]));
-  const lows = swA.map((r) => { const i = idxA.get(r.to), j = mapB.get(r.to); if (j == null) return null;
-    let mb = Infinity; for (let k = Math.max(0, j - 10); k <= Math.min(Sb.rsi.length - 1, j + 10); k++) if (Sb.rsi[k] != null) mb = Math.min(mb, Sb.rsi[k]);
-    let ma = Infinity; for (let k = Math.max(0, i - 10); k <= Math.min(Sa.rsi.length - 1, i + 10); k++) if (Sa.rsi[k] != null) ma = Math.min(ma, Sa.rsi[k]);
-    return { low: r.to, depth: r.move, rsiA: r1(ma), rsiB: r1(mb), deeperB: mb < ma }; }).filter(Boolean);
-  const inA10 = both.filter(([i]) => Sa.rsi[i] <= quantile(ra, 0.1));
+  const lowsA = lowsAt(Sa, Sb, ra, from, to), lowsB = lowsAt(Sb, Sa, rb, from, to);
+  const a10 = quantile(ra, 0.1), b10 = quantile(rb, 0.1);
+  const inA10 = both.filter(([i]) => Sa.rsi[i] <= a10), inB10 = both.filter(([, j]) => Sb.rsi[j] <= b10);
   return { a: labelA, b: labelB, from: Sa.dates[both[0][0]], to: Sa.dates[both[both.length - 1][0]], days: both.length, table: tbl,
     shareBLower: r1(100 * both.filter(([i, j]) => Sb.rsi[j] < Sa.rsi[i]).length / both.length),
     shareBLowerWhenA10: r1(100 * inA10.filter(([i, j]) => Sb.rsi[j] < Sa.rsi[i]).length / Math.max(1, inA10.length)),
-    lows, lowsBDeeper: lows.filter((x) => x.deeperB).length };
+    shareALowerWhenB10: r1(100 * inB10.filter(([i, j]) => Sa.rsi[i] < Sb.rsi[j]).length / Math.max(1, inB10.length)),
+    lows: lowsA.map((x) => ({ low: x.low, depth: x.depth, rsiA: x.rsiX, rsiB: x.rsiY, deeperB: x.otherDeeper })),
+    lowsBDeeper: lowsA.filter((x) => x.otherDeeper).length,
+    lowsOfB: lowsB.map((x) => ({ low: x.low, depth: x.depth, rsiB: x.rsiX, rsiA: x.rsiY, deeperA: x.otherDeeper })),
+    lowsADeeper: lowsB.filter((x) => x.otherDeeper).length };
 }
 
 /* ---------------- runner ---------------- */
@@ -279,7 +296,11 @@ export function run(ROOT) {
     out.compare.since2003Index = nasdaqVsSp(S_.SPX, S_.NDX, "S&P 500 index", "Nasdaq 100 index", "2003-09-11");
   }
   if (S_.SPY && S_.QQQ) out.compare.funds = nasdaqVsSp(S_.SPY, S_.QQQ, "SPY", "QQQ");
-  if (S_.SPX && S_.IXIC) out.compare.composite = nasdaqVsSp(S_.SPX, S_.IXIC, "S&P 500 index", "Nasdaq Composite");
+  if (S_.SPX && S_.IXIC) {
+    out.compare.composite = nasdaqVsSp(S_.SPX, S_.IXIC, "S&P 500 index", "Nasdaq Composite");
+    out.compare.compositeTo2003 = nasdaqVsSp(S_.SPX, S_.IXIC, "S&P 500 index", "Nasdaq Composite", null, "2003-09-10");
+    out.compare.compositeSince2003 = nasdaqVsSp(S_.SPX, S_.IXIC, "S&P 500 index", "Nasdaq Composite", "2003-09-11");
+  }
   // cross-check: SPY vs the S&P index on the same dates (they should agree closely)
   if (S_.SPX && S_.SPY) { const m = new Map(S_.SPX.dates.map((d, i) => [d, S_.SPX.rsi[i]])); const diffs = S_.SPY.dates.map((d, i) => m.has(d) && S_.SPY.rsi[i] != null && m.get(d) != null ? Math.abs(S_.SPY.rsi[i] - m.get(d)) : null).filter((x) => x != null).sort((a, b) => a - b);
     out.compare.spyVsIndex = { days: diffs.length, medAbsDiff: r2(median(diffs)), p95AbsDiff: r2(quantile(diffs, 0.95)) }; }
