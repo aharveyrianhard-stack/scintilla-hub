@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · COMPS · LABELS, ROUND 2</title>
+<style>
+/* greys only: every channel within 24 of the others, none above 210 (the 23 Sep rule) */
+:root{color-scheme:dark;
+ --bg:#0e0e0e;--panel:#141414;--sunk:#0a0a0a;
+ --line:#2a2a2a;--line2:#363636;--line3:#4a4a4a;
+ --ink:#cfcfcf;--ink2:#acacac;--dim:#8c8c8c;--mute:#6c6c6c;
+ --box:#2a2a2e;--boxline:#5a5a60;
+ --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font-family:var(--mono);font-size:13px;line-height:1.5;letter-spacing:.02em;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+.wrap{max-width:1640px;margin:0 auto;padding:0 20px 80px;overflow-x:hidden}
+.top{padding:16px 0 12px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.brand{font:400 12px/1.4 var(--mono);letter-spacing:.2em;color:var(--dim)}.brand b{color:var(--ink);font-weight:600}
+.stamp{margin-left:auto;font:400 11px/1.5 var(--mono);color:var(--dim);letter-spacing:.06em;text-align:right}.stamp b{color:var(--ink2);font-weight:400}
+h2{font:600 12px/1.4 var(--mono);letter-spacing:.22em;color:var(--ink);margin:30px 0 8px;text-transform:uppercase}
+h2 small{font-weight:400;letter-spacing:.06em;color:var(--dim);text-transform:none;margin-left:10px;font-size:12px}
+.panel{border:1px solid var(--line);background:var(--panel)}
+.words{padding:12px 16px 14px;font-size:12.5px;line-height:1.6;color:var(--ink2)}
+.words b{color:var(--ink);font-weight:600}
+.words ul,.words ol{margin:4px 0 8px;padding-left:20px}
+.words li{margin:4px 0}
+.words li::marker{color:var(--mute)}
+.words q{quotes:"“" "”";color:var(--ink)}
+.shot{padding:12px 16px 14px}
+.shot img{display:block;width:100%;height:auto;border:1px solid var(--line2)}
+.shot .clip{max-height:1200px;overflow:hidden;border:1px solid var(--line2)}
+.shot .clip img{border:0}
+.shot .clip.phone{width:390px;max-width:100%}
+.shot small{display:block;margin-top:6px;font-size:11px;color:var(--dim)}
+.two{display:grid;grid-template-columns:1fr 1fr}
+.two > div + div{border-left:1px solid var(--line)}
+.err{border:1px solid var(--line3);padding:14px;color:var(--ink);margin-top:20px}
+.loading{padding:40px 0;color:var(--dim);letter-spacing:.2em}
+
+/* ---- the row: header | chart | values ---- */
+.colhead,.row{display:grid;grid-template-columns:250px minmax(0,1fr) 230px;gap:0 24px;align-items:center;padding:0 16px}
+.colhead{padding-top:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.colhead span{font:400 10.5px/1.4 var(--mono);letter-spacing:.16em;color:var(--mute);text-transform:uppercase}
+.colhead span:last-child{text-align:right}
+.row{padding-top:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .hd .nm{font:600 14px/1.3 var(--mono);color:var(--ink)}
+.row .hd .bs{font:400 11.5px/1.5 var(--mono);color:var(--dim);margin-top:3px}
+.row .ch{position:relative}
+.row .ch svg{display:block;width:100%;height:auto;overflow:visible}
+.row .vals{display:grid;grid-template-columns:auto 1fr;gap:1px 12px;font-size:12.5px;line-height:1.45}
+.row .vals span{color:var(--dim)}
+.row .vals b{color:var(--ink);font-weight:400;text-align:right;font-variant-numeric:tabular-nums}
+.row .vals .own{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;gap:12px;border-top:1px solid var(--line2);margin-top:5px;padding-top:5px}
+.row .vals .own b{font-weight:600}
+/* the hero: the same row, larger */
+.row.big{padding-top:22px;padding-bottom:22px}
+.row.big .hd .nm{font-size:18px}
+.row.big .hd .bs{font-size:12.5px}
+.row.big .vals{font-size:14px;line-height:1.6}
+.legend{display:flex;gap:22px;flex-wrap:wrap;padding:8px 16px 10px;font-size:11px;color:var(--dim);border-top:1px solid var(--line)}
+.legend i{display:inline-block;vertical-align:-2px;margin-right:6px}
+/* the svg */
+.wh{stroke:var(--ink2);stroke-width:2}
+.box{fill:var(--box);stroke:var(--boxline);stroke-width:1}
+.med{stroke:var(--ink);stroke-width:3}
+.own-line{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:3 3}
+.tie{stroke:var(--line3);stroke-width:1}
+.num{font:400 11.5px var(--mono);fill:var(--ink2)}
+.num.bold{font-weight:600;fill:var(--ink)}
+.big .num{font-size:13.5px}
+.note{padding:8px 16px 10px;font-size:11.5px;color:var(--dim);border-top:1px solid var(--line)}
+.note b{color:var(--ink2);font-weight:400}
+
+@media(max-width:900px){
+ .colhead{display:none}
+ .row{grid-template-columns:1fr;gap:10px 0}
+ .row .vals{grid-template-columns:auto 1fr auto 1fr auto 1fr;gap:2px 10px}
+ .row .vals .own{grid-column:1/-1}
+ .row.big .hd .nm{font-size:16px}
+}
+@media(max-width:760px){
+ .wrap{padding:0 12px 60px}
+ .two{grid-template-columns:1fr}.two > div + div{border-left:0;border-top:1px solid var(--line)}
+ .stamp{margin-left:0;text-align:left}
+ .row .vals{grid-template-columns:auto 1fr auto 1fr}
+ .row .vals b{padding-right:8px}
+}
+</style></head>
+<body>
+<div class="wrap">
+<div class="top"><span class="brand"><b>SCINTILLA</b> · COMPS · LABELS, ROUND 2</span><span data-scnav-slot></span><span class="stamp" id="stamp">reading…</span></div>
+<div id="app" class="loading">READING…</div>
+</div>
+
+<script type="module">
+import { rowMarks, rowScale, spread, rowValues, basisLine } from "./labels-r2.mjs";
+import { fmt, dateWord } from "../../20260927/comps-r3/r3.mjs";
+
+const SNAP = "snapshot-2026-09-28.json";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const X = (v) => fmt("x", v), P = (v) => fmt("price", v), MONEY = (v) => fmt("money", v), USD = (v) => fmt("usd2", v);
+const SVG = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, text) => { const e = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+
+let D = null;
+async function load() { D = await (await fetch(SNAP, { cache: "no-store" })).json(); }
+
+/* ---- one row ---------------------------------------------------------------------------------- */
+function rowNode(row, { big = false } = {}) {
+  const div = document.createElement("div");
+  div.className = "row" + (big ? " big" : "");
+  const vals = rowValues(row, D.ticker);
+  div.innerHTML = `
+    <div class="hd"><div class="nm">${esc(row.label)}</div><div class="bs">${esc(basisLine(row, MONEY, USD))}</div></div>
+    <div class="ch"><svg></svg></div>
+    <div class="vals">${vals.filter((v) => v.id !== "own").map((v) => `<span>${esc(v.word)}</span><b>${esc(P(v.price))}</b>`).join("")}
+      ${vals.filter((v) => v.id === "own").map((v) => `<div class="own"><span>${esc(v.word)}</span><b>${esc(P(v.price))}</b></div>`).join("")}</div>`;
+  const svg = div.querySelector("svg");
+  const draw = () => drawChart(svg, row, { big, width: div.querySelector(".ch").clientWidth || 600 });
+  new ResizeObserver(draw).observe(div.querySelector(".ch"));
+  requestAnimationFrame(draw);
+  return div;
+}
+
+/* The chart: a line from the lowest peer to the highest, a box for the middle half, a tick at the
+   median, a dashed line where the company sits. Six numbers, one per horizontal limit; nothing else. */
+function drawChart(svg, row, { big, width }) {
+  const W = Math.max(200, Math.floor(width));
+  const H = big ? 112 : 86, boxH = big ? 28 : 20, capH = big ? 16 : 12;
+  const mid = H / 2 + 6;
+  const laneUp = mid - boxH / 2 - 12, laneDown = mid + boxH / 2 + 18;
+  const numW = big ? 8.3 : 7.1;                     // px per character, mono; re-measured below
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const s = rowScale(row, { width: W, pad: 12 });
+  const b = row.band, x = (m) => Math.round(s.x(m) * 10) / 10;
+  const own = row.own && row.own.multiple;
+  // the shapes
+  svg.appendChild(el("line", { class: "wh", x1: x(b.min), x2: x(b.max), y1: mid, y2: mid }));
+  svg.appendChild(el("line", { class: "wh", x1: x(b.min), x2: x(b.min), y1: mid - capH / 2, y2: mid + capH / 2 }));
+  svg.appendChild(el("line", { class: "wh", x1: x(b.max), x2: x(b.max), y1: mid - capH / 2, y2: mid + capH / 2 }));
+  svg.appendChild(el("rect", { class: "box", x: x(b.q1), y: mid - boxH / 2, width: Math.max(1, x(b.q3) - x(b.q1)), height: boxH }));
+  svg.appendChild(el("line", { class: "med", x1: x(b.median), x2: x(b.median), y1: mid - boxH / 2, y2: mid + boxH / 2 }));
+  // the numbers: measured, then spread so none sits on another
+  const marks = rowMarks(row).map((m) => ({ ...m, text: X(m.x), px: x(m.x) }));
+  const texts = new Map();
+  for (const m of marks) {
+    const t = el("text", { class: "num" + (m.weight === "bold" ? " bold" : ""), x: 0, y: m.lane === "above" ? laneUp : laneDown }, m.text);
+    svg.appendChild(t); texts.set(m.id, t);
+  }
+  const widthOf = (m) => { const t = texts.get(m.id); try { const w = t.getComputedTextLength(); if (w > 0) return w; } catch (_) {} return m.text.length * numW; };
+  for (const lane of ["above", "below"]) {
+    const items = marks.filter((m) => m.lane === lane).map((m) => ({ id: m.id, x: m.px, w: widthOf(m), anchor: m.anchor }));
+    const res = spread(items, { width: W, gap: 8 });
+    for (const r of res) {
+      const t = texts.get(r.id); t.setAttribute("x", r.left);
+      const m = marks.find((k) => k.id === r.id);
+      const cx = m.anchor === "start" ? r.left : m.anchor === "end" ? r.right : (r.left + r.right) / 2;
+      if (m.id === "own") {                                        // the company's own line: from its number down to the peer line
+        const yTop = laneUp + 4;
+        if (Math.abs(cx - m.px) > 2) svg.appendChild(el("line", { class: "tie", x1: cx, x2: m.px, y1: yTop, y2: yTop }));
+        svg.appendChild(el("line", { class: "own-line", x1: m.px, x2: m.px, y1: yTop, y2: mid + boxH / 2 + 4 }));
+      } else if (Math.abs(cx - m.px) > 4) {                       // a number that had to move: a thin tie back to its mark
+        const y1 = lane === "above" ? laneUp + 4 : laneDown - 11, y2 = lane === "above" ? mid - boxH / 2 - 2 : mid + boxH / 2 + 2;
+        svg.appendChild(el("polyline", { class: "tie", fill: "none", points: `${cx},${y1} ${cx},${(y1 + y2) / 2} ${m.px},${(y1 + y2) / 2} ${m.px},${y2}` }));
+      }
+    }
+  }
+}
+
+/* ---- the page ---------------------------------------------------------------------------------- */
+function legend() {
+  return `<div class="legend">
+    <span><i style="width:22px;border-top:2px solid var(--ink2)"></i>lowest to highest peer</span>
+    <span><i style="width:18px;height:11px;background:var(--box);border:1px solid var(--boxline)"></i>the middle half of the peers (25th to 75th percentile)</span>
+    <span><i style="width:3px;height:12px;background:var(--ink)"></i>the peer median</span>
+    <span><i style="width:0;height:12px;border-left:2px dashed var(--ink)"></i>${esc(D.ticker)} today</span>
+    <span>numbers on the chart are multiples · the dollars are on the right</span></div>`;
+}
+function build() {
+  const pe = D.rows.find((r) => r.key === "pe_ttm");
+  const app = document.getElementById("app");
+  app.className = "";
+  const stamp = document.getElementById("stamp");
+  stamp.innerHTML = `<b>${esc(D.ticker)}</b> · ${esc(D.name)} · cohort ${esc(D.cohort)} · price ${esc(P(D.price))} on ${esc(dateWord(D.price_date))} · snapshot ${esc(new Date(D.taken).toLocaleString("en-GB", { timeZone: "America/New_York", hour12: false }))} ET`;
+  const E = pe.ends;
+  const html = [];
+  html.push(`<h2>One row, as for a board meeting <small>${esc(D.ticker)} · ${esc(pe.label)} · ${pe.n} peers · this afternoon's numbers</small></h2>`);
+  html.push(`<div class="panel"><div class="colhead"><span>Row</span><span>Multiple, across the peers</span><span>Price it implies for ${esc(D.ticker)}</span></div><div id="hero"></div>${legend()}</div>`);
+  html.push(`<h2>The same design on four rows <small>so it can carry the full comps table, one football field per metric</small></h2>`);
+  html.push(`<div class="panel"><div class="colhead"><span>Row</span><span>Multiple, across the peers</span><span>Price it implies for ${esc(D.ticker)}</span></div><div id="table"></div>${legend()}
+    <div class="note">Outliers are left in on every row, as asked (<b>no "without TSM" or "without CMO" variants</b>: those come once the full table is agreed). P/S is not on the live page (it carries EV/sales); it is computed here on the same inputs so the four rows show the design, not a new metric.</div></div>`);
+  html.push(`<h2>What changed from round 1</h2><div class="panel"><div class="words"><ul>
+    <li><b>One football field per metric.</b> Round 1 drew the P/E-trailing row three times (with everything in, without TSM, without TSM and SIMO). Here it is drawn once.</li>
+    <li><b>Numbers only on the chart.</b> Six of them, one at each horizontal limit: the two ends of the line (${esc(X(E.min.multiple))} and ${esc(X(E.max.multiple))}), the two edges of the box (${esc(X(E.q1.multiple))} and ${esc(X(E.q3.multiple))}), the median tick (${esc(X(E.median.multiple))}) and ${esc(D.ticker)}'s own dashed line (<b>${esc(X(pe.own.multiple))}</b>). No ticker names at the edges, no dots, no arrows, no words on the chart.</li>
+    <li><b>The row header on the left.</b> The metric's name and one short line saying what the multiple is applied to. The EPS is written once, there, and nowhere else on the row.</li>
+    <li><b>The dollars in their own column on the right,</b> stacked top to bottom: low, 25th, median, 75th, high, then ${esc(D.ticker)}'s price today under a rule. Anything that needs letters or width lives there, not on the chart.</li>
+    <li><b>Nothing runs off the chart.</b> The axis starts at the lowest thing drawn and ends at the highest, so the ${esc(X(E.min.multiple))} end is on the chart, not <q>off the chart</q> as on the live row.</li>
+    <li><b>Two numbers that would touch are pushed apart</b> along their lane and tied back to their mark with a thin line; the rule is in <code>labels-r2.mjs</code> and has tests at 1000 and 340 pixels wide.</li>
+    <li><b>Not done, on purpose:</b> no outlier variants; the live comps page is untouched; this page is a design to agree, not a room.</li>
+  </ul></div></div>`);
+  html.push(`<h2>Screens <small>real headless browser, this page, at 1680 and at 390 wide</small></h2>
+    <div class="panel two"><div class="shot"><div class="clip"><img src="shots/R2-1680.png" alt="the page at 1680 wide"></div><small>1680 wide (desktop): the top of the page; the whole screen is shots/R2-1680.png</small></div><div class="shot"><div class="clip phone"><img src="shots/R2-390.png" alt="the page at 390 wide"></div><small>390 wide (phone), at its real width: the header, the chart and the values stack top to bottom; the whole screen is shots/R2-390.png</small></div></div>`);
+  html.push(`<h2>What the page shows</h2><div class="panel"><div class="words">
+    <p>The first panel is ${esc(D.ticker)}'s <b>${esc(pe.label)}</b> row against its ${pe.n} ${esc(D.cohort)} peers that carry a positive trailing P/E, drawn large. ${esc(D.ticker)} trades at <b>${esc(P(D.price))}</b> (${esc(dateWord(D.price_date))}), which is ${esc(X(pe.own.multiple))} its EPS of the last twelve months (${esc(USD(D.eps_ttm))}, the fundamentals row dated ${esc(dateWord(D.eps_date))}). The peers run from ${esc(X(E.min.multiple))} to ${esc(X(E.max.multiple))}; the middle half sits between ${esc(X(E.q1.multiple))} and ${esc(X(E.q3.multiple))}; the median is ${esc(X(E.median.multiple))}. Each multiple times ${esc(D.ticker)}'s EPS gives the price on the right: ${esc(P(E.min.price))} at the low end, ${esc(P(E.q1.price))} at the 25th percentile, <b>${esc(P(E.median.price))}</b> at the median, ${esc(P(E.q3.price))} at the 75th, ${esc(P(E.max.price))} at the high end.</p>
+    <p>The second panel is the same row design applied to four metrics (P/E trailing, EV/EBITDA, P/S, P/E forward), at the size the full table would use. Every row reads the same way: the header on the left, six numbers on the chart, the dollars on the right.</p>
+    <p><b>Round 1's numbers were the morning's.</b> Round 1 read ${esc(D.ticker)} at $1,071 (24.2x, median 44.9x, high 85.3x). This snapshot was taken in the afternoon; ${esc(D.ticker)} had moved to ${esc(P(D.price))}, so the row now reads ${esc(X(pe.own.multiple))}, ${esc(X(E.median.multiple))} and ${esc(X(E.max.multiple))}. The design is what is up for a decision; the numbers move with the tape.</p>
+  </div></div>`);
+  html.push(`<h2>Where each number comes from</h2><div class="panel"><div class="words"><ul>
+    <li><b>The multiples</b> are computed by the same code the live comps page runs (<code>deliverables/20260927/comps-r3/r3.mjs</code>), on the same tables: <code>ticker_cohorts</code> for who is in ${esc(D.cohort)}, <code>fundamentals</code> for each company's EPS TTM, revenue TTM, market value and the price on that row (which gives the share count), <code>analyst_estimates</code> for this fiscal year's EPS (forward P/E), <code>fundamentals_history</code> for revenue and EBITDA by quarter (added up to the last twelve months), <code>balance_history</code> for net debt at the newest balance date (enterprise value), and the chart API for today's price of every name. The snapshot is <code>snapshot-2026-09-28.json</code>, next to this page, taken by <code>snapshot.mjs</code>.</li>
+    <li><b>The dollars on the right</b> are ${esc(D.ticker)}'s own figure times each multiple. P/E rows: multiple × EPS. EV/EBITDA: (multiple × EBITDA TTM ${esc(MONEY(D.ebitda_ttm))} − net debt) ÷ shares; ${esc(D.ticker)}'s net debt is ${esc(MONEY(D.net_debt))} (net cash) at ${esc(dateWord(D.net_debt_date))}, and its shares are ${esc((D.shares / 1e6).toFixed(0))}M. P/S: multiple × revenue TTM ${esc(MONEY(D.revenue_ttm))} ÷ shares.</li>
+    <li><b>The 25th and 75th percentiles and the median</b> are the same percentile arithmetic the live page uses (<code>peerBand</code>), on the peers left in the row (positive multiples only; a P/E above 100x, an EV/EBITDA above 100x or a P/S above 50x is set aside as not meaningful, as on the live page).</li>
+    <li><b>Forward P/E</b> uses analysts' EPS for the fiscal year ending ${esc(dateWord(D.fy1_date))} ${esc(String(D.fy1_date).slice(0, 4))}: ${esc(USD(D.eps_fy1))} for ${esc(D.ticker)}.</li>
+  </ul></div></div>`);
+  html.push(`<h2>What could be wrong</h2><div class="panel"><div class="words"><ul>
+    <li><b>The low end of the P/E rows is still TSM at about 1x.</b> Round 1 found that TSM's EPS on the fundamentals row is in a different unit from its price (a data fault, not a cheap stock). Alan asked to leave the outliers alone until the full table is agreed, so it stays in and it sets the ${esc(X(E.min.multiple))} end and the ${esc(P(E.min.price))} low. The same fault shows on the forward P/E row (0.9x).</li>
+    <li><b>Forward P/E implies very large prices</b> (the median gives ${esc(P(D.rows.find((r) => r.key === "pe_fwd").ends.median.price))}) because the analysts' FY${esc(String(D.fy1_date).slice(0, 4))} EPS for ${esc(D.ticker)} (${esc(USD(D.eps_fy1))}) is more than three times its trailing EPS. That is what the estimates table says; whether it is right is a data question for the estimates feed, not for this row.</li>
+    <li><b>P/S is my computation,</b> not the live page's: market value ÷ revenue TTM, with the same 50x cap the live page uses for EV/sales. If the table is to carry P/S rather than EV/sales, that is a decision.</li>
+    <li><b>The numbers are a snapshot</b> of this afternoon; the live page recomputes on every open. The two will differ by the tape's moves.</li>
+    <li><b>The chart API was reached with the Hub's origin header</b> from this Mac, as the round-1 snapshot did, because the API only answers the Hub's origin. Nothing was written anywhere.</li>
+  </ul></div></div>`);
+  html.push(`<h2>What was not done</h2><div class="panel"><div class="words"><ul>
+    <li>The live comps page (<code>deliverables/20260927/comps-r3/</code>) is not changed. This design is not wired into it; that is the next step once the labels are agreed.</li>
+    <li>No outlier variants and no data-fault marks on the chart (round 1's red TSM/SIMO marks are gone, as asked). The faults are named in words above, not drawn.</li>
+    <li>Nothing was deployed. The branch was pushed for the coordinator to merge and deploy.</li>
+    <li>No test browser was ever visible: both screens were taken headless and the browser was killed afterwards.</li>
+  </ul></div></div>`);
+  app.innerHTML = html.join("");
+  document.getElementById("hero").appendChild(rowNode(pe, { big: true }));
+  const table = document.getElementById("table");
+  for (const r of D.rows) table.appendChild(rowNode(r));
+}
+load().then(build).catch((e) => { document.getElementById("app").className = ""; document.getElementById("app").innerHTML = `<div class="err">The page could not read its snapshot: ${esc(e.message || e)}</div>`; });
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
