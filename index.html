@@ -2424,6 +2424,14 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .rg-cat__p b{ font:600 13px var(--mono); color:var(--ink); }
 .rg-cat__l .rg-svg{ margin:0; } .rg-one{ font:400 9px var(--mono); color:var(--dim); font-style:normal; }
 .rg-vtabs{ display:flex; gap:6px; }
+.rg-head{ flex-wrap:wrap; row-gap:6px; }
+.rg-nav{ display:flex; gap:6px; margin-right:10px; flex:0 0 auto; }
+.rg-navb{ -webkit-appearance:none; appearance:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; height:24px; margin:0; padding:0 10px;
+  background:rgba(10,11,13,.92); color:#9a9ea3; border:1px solid rgba(150,154,160,.35); border-radius:3px; font:600 11px/1 var(--mono); letter-spacing:.14em; }
+.rg-navb:hover, .rg-navb:focus-visible{ color:#c4c7cb; border-color:rgba(190,194,198,.75); outline:none; }
+.rg-navb i{ font-style:normal; color:#c4c7cb; }
+.rg-navb{ flex:0 0 auto; white-space:nowrap; }
+@media (max-width:900px){ .rg-nav{ flex:1 0 100%; margin-right:0; } .rg-navb{ height:32px; } }
 @media (max-width:900px){
   .rg-cat{ grid-template-columns:1fr 44px; } .rg-cat__l{ display:none; }
   .rg-tbl{ font-size:10px; } .rg-tbl th,.rg-tbl td{ padding:2px; }
@@ -15510,10 +15518,7 @@ function econRoomHTML() {
   return '<div class="body2">' +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>economic releases · <b>market-wide</b></span>' +
-        '<span class="ec-span rg-vtabs">' +
-          ["RELEASES", "REGIME"].map((v) =>
-            '<span class="ec-sp ' + (v === (S.econView || "RELEASES") ? "on" : "") + '" data-act="ecview" data-v="' + v + '">' + v + "</span>").join("") +
-        "</span>" + SECFS_BTN + "</div>" +
+        econViewTabsHTML() + SECFS_BTN + "</div>" +
       '<div class="ec-ctry" id="econCtry"></div>' +
       '<div class="ec-cat" id="econCat"></div>' +
       '<div class="ec-daybar">' +
@@ -16959,9 +16964,21 @@ async function rgMount(){
   if(RG.timer) clearInterval(RG.timer);
   RG.timer=setInterval(rgTick,RG_LIVE_MS);
 }
+/* 29 Sep — Alan (28 Sep, ~18:45): stuck in ECONOMIC → REGIME, "no way back or close; had to reload". The REGIME
+   header carried only ⛶: no RELEASES switch, and the ECONOMIC tab reopened REGIME. Both headers now draw the one
+   RELEASES | REGIME switch, REGIME adds the grey ← RELEASES / ✕ CLOSE pair (the scnav look), Esc goes back to
+   RELEASES, and the ECONOMIC master tab always opens on RELEASES. */
+function econViewTabsHTML(){
+  return '<span class="ec-span rg-vtabs">'+
+    ["RELEASES","REGIME"].map((v)=>
+      '<span class="ec-sp '+(v===(S.econView||"RELEASES")?"on":"")+'" data-act="ecview" data-v="'+v+'" role="button" tabindex="0">'+v+"</span>").join("")+
+    "</span>";
+}
 function regimeRoomHTML(){
-  return '<div class="body2"><div class="panel"><div class="sc-plabel sc-plabel--row">'+
-    '<span>the broad market · <b>regime</b></span>'+SECFS_BTN+"</div>"+
+  return '<div class="body2"><div class="panel"><div class="sc-plabel sc-plabel--row rg-head">'+
+    '<span class="rg-nav"><button type="button" class="rg-navb" data-act="ecview" data-v="RELEASES" title="Back to the economic releases (Esc)"><i>←</i>RELEASES</button>'+
+    '<button type="button" class="rg-navb" data-act="rgclose" title="Close the regime view and return to the dashboard"><i>✕</i>CLOSE</button></span>'+
+    '<span>the broad market · <b>regime</b></span>'+econViewTabsHTML()+SECFS_BTN+"</div>"+
     '<div class="rg-wrap" id="rgBody"><div class="soon">loading the regime read…</div></div></div></div>';
 }
 
@@ -21408,10 +21425,13 @@ function toggleSecFs(panel) {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (document.querySelector(".sc-cohwrap.is-open")) return;   /* 28 Sep — the COHORT ▾ menu closes itself; nothing else moves */
+  /* 29 Sep — measured BEFORE anything closes: an open overlay or ⛶ takes this Esc, and REGIME only goes back on the next one */
+  const rgBack = S.sec === "ECONOMIC" && S.econView === "REGIME" && !cvKeysBlocked(e);
   const fh = el("trFullHost"), sh = el("ernSumHost");
   if (fh && fh.firstChild) { fh._gen = (fh._gen || 0) + 1; fh.innerHTML = ""; return; }   // topmost first: a transcript opened from a call summary sits above it
   if (sh && sh.firstChild) { sh._gen = (sh._gen || 0) + 1; sh.innerHTML = ""; return; }   // the summary panel sits on top of everything else: Esc closes it and leaves what is under it alone
   closeTvModal(); clearSecFs();                             // FIX 5 — Esc closes the TV modal too
+  if (rgBack) { S.econView = "RELEASES"; sync(); }           // 29 Sep — Esc in REGIME (nothing else open) = ← RELEASES
 });
 /* KEYBOARD ACTIVATION FOR THE DISCLOSURE CONTROLS.
    These tiles are div-based headers carrying data-act, so they were mouse-only: reachable by no
@@ -21485,7 +21505,8 @@ document.addEventListener("click", (e) => {
     case "mtab": {
       /* entering EVENTS starts the room wide and on today, so a narrow strip left
          behind in another room can never make this one look empty. */
-      if (a.dataset.sec === "USUAL" && S.sec !== "USUAL") { S.udCohPick = null; S.udDay = null; }   /* 27 Sep — enters wide, on the latest day */
+      if (a.dataset.sec === "USUAL" && S.sec !== "USUAL") { S.udCohPick = null; S.udDay = null; }
+      if (a.dataset.sec === "ECONOMIC") S.econView = "RELEASES";   /* 29 Sep — the ECONOMIC tab always opens on RELEASES: the tab itself is a way out of REGIME */   /* 27 Sep — enters wide, on the latest day */
       if (a.dataset.sec === "EVENTS" && S.sec !== "EVENTS") { S.ernCohPick = null; S.ernDay = null; S.ernPick = null; S.ernTlAt = null; ERC_TAPE_AT = null; ERC_TL_LEFT = null; ERC_AUTO_DAY = null; }
       go(a.dataset.sec); break;
     }
@@ -22221,6 +22242,7 @@ document.addEventListener("click", (e) => {
     }
     /* M44 — RELEASES | REGIME. A view switch is a remount (viewKey carries it), so the
        releases room keeps its own state and the regime view starts its own live timer. */
+    case "rgclose": { S.econView = "RELEASES"; go("DASHBOARD"); break; }   /* 29 Sep — ✕ on the REGIME header */
     case "ecview": {
       const v = a.dataset.v === "REGIME" ? "REGIME" : "RELEASES";
       if (v === (S.econView || "RELEASES")) break;
