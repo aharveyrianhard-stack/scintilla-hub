@@ -101,13 +101,14 @@ export function rowsFromKalshiMarkets(eventTicker: string, markets: any[], topic
   return trim(out, limits);
 }
 
-/** Polymarket's most-traded open events in the last 24 h, sports and games left out; one row per
- *  event: its most-traded market's Yes price */
-export function polymarketDiscovery(events: any[], excludeTags: string[], n: number): Row[] {
+/** Polymarket's most-traded open events in the last 24 h, sports and games and already-tracked events
+ *  left out; one row per event: its most-traded market's Yes price */
+export function polymarketDiscovery(events: any[], excludeTags: string[], n: number, tracked: Set<string> = new Set()): Row[] {
   const ex = new Set(excludeTags.map((t) => t.toLowerCase()));
   const out: Row[] = [];
   for (const ev of events || []) {
     if (out.length >= n) break;
+    if (tracked.has(String(ev?.id))) continue;            // already a topic: discovery is for what we are NOT tracking
     if ((ev?.tags || []).some((t: any) => ex.has(String(t?.label || "").toLowerCase()))) continue;
     const ms = (ev?.markets || []).filter((m: any) => polymarketYes(m));
     if (!ms.length) continue;
@@ -123,11 +124,11 @@ export function polymarketDiscovery(events: any[], excludeTags: string[], n: num
 
 /** Kalshi has no "sort by activity" on events, so discovery ranks the open events the caller paged
  *  through by their summed 24 h volume */
-export function kalshiDiscovery(events: any[], excludeCategories: string[], n: number): Row[] {
+export function kalshiDiscovery(events: any[], excludeCategories: string[], n: number, tracked: Set<string> = new Set()): Row[] {
   const ex = new Set(excludeCategories);
   const scored: { v: number; row: Row }[] = [];
   for (const ev of events || []) {
-    if (ex.has(ev?.category)) continue;
+    if (ex.has(ev?.category) || tracked.has(String(ev?.event_ticker))) continue;
     const ms = (ev?.markets || []).filter((m: any) => kalshiPrice(m) !== null);
     if (!ms.length) continue;
     const v = ms.reduce((s: number, m: any) => s + (num(m.volume_24h_fp) || 0), 0);
@@ -142,7 +143,7 @@ export function kalshiDiscovery(events: any[], excludeCategories: string[], n: n
   return scored.sort((a, b) => b.v - a.v).slice(0, n).map((s) => s.row);
 }
 
-export const priorKey = (r: { venue: string; market_id: string; outcome: string }) => `${r.venue}|${r.market_id}|${r.outcome}`;
+export const priorKey = (r: { topic: string; venue: string; market_id: string; outcome: string }) => `${r.topic}|${r.venue}|${r.market_id}|${r.outcome}`;
 
 /** the change-only rule: first sighting, a real move, or a heartbeat so every live line has a point
  *  at least every heartbeat_hours */

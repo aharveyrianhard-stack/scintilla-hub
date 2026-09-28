@@ -64,11 +64,11 @@ test("rows from Kalshi markets carry open interest and skip closed legs", () => 
 
 test("change-only writes: first sighting, a real move, a 6-hour heartbeat — and nothing else", () => {
   const now = new Date("2026-09-28T16:00:00Z");
-  const r = (market_id, probability) => ({ venue: "polymarket", market_id, outcome: "x", probability });
+  const r = (market_id, probability) => ({ topic: "t", venue: "polymarket", market_id, outcome: "x", probability });
   const prior = new Map([
-    ["polymarket|a|x", { probability: 0.5, ts: "2026-09-28T15:45:00Z" }],
-    ["polymarket|b|x", { probability: 0.5, ts: "2026-09-28T15:45:00Z" }],
-    ["polymarket|c|x", { probability: 0.5, ts: "2026-09-28T09:59:00Z" }],
+    ["t|polymarket|a|x", { probability: 0.5, ts: "2026-09-28T15:45:00Z" }],
+    ["t|polymarket|b|x", { probability: 0.5, ts: "2026-09-28T15:45:00Z" }],
+    ["t|polymarket|c|x", { probability: 0.5, ts: "2026-09-28T09:59:00Z" }],
   ]);
   const { rows, unchanged } = L.toWrite([r("a", 0.5), r("b", 0.501), r("c", 0.5), r("d", 0.2)], prior, now, LIM);
   assert.deepEqual(rows.map((x) => x.market_id + ":" + x.kind), ["b:change", "c:heartbeat", "d:first"]);
@@ -101,6 +101,16 @@ test("discovery leaves sports out and takes each event's most-traded leg", () =>
     { event_ticker: "E", category: "Economics", title: "CPI", markets: [{ ticker: "e", last_price_dollars: "0.4", volume_24h_fp: "5" }] },
   ], REG.discovery.exclude_kalshi_categories, 15);
   assert.deepEqual(ks.map((x) => x.event_id), ["E"]);
+});
+
+test("discovery skips events that are already topics (28 Sep: the October Fed event was both, and collided)", () => {
+  const ev = { id: "606422", title: "Fed Decision in October?", tags: [{ label: "Fed" }], markets: [
+    { id: "2589813", outcomes: '["Yes","No"]', outcomePrices: '["0.7","0.3"]', groupItemTitle: "25 bps increase" } ] };
+  assert.equal(L.polymarketDiscovery([ev], REG.discovery.exclude_tags, 15, new Set(["606422"])).length, 0);
+  assert.equal(L.polymarketDiscovery([ev], REG.discovery.exclude_tags, 15).length, 1);
+  // and even if one market sits under two topics, the prior key keeps them apart
+  const a = { topic: "fed-2026-10", venue: "polymarket", market_id: "2589813", outcome: "25 bps increase" };
+  assert.notEqual(L.priorKey(a), L.priorKey({ ...a, topic: "discover" }));
 });
 
 test("registry: unique ids, every topic mapped somewhere, every pattern compiles, Alan's topics all present", () => {

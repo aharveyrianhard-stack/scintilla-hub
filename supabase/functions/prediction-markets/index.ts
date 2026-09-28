@@ -38,7 +38,7 @@ const sbHeaders = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Conten
 
 async function priors(): Promise<Map<string, Prior>> {
   const m = new Map<string, Prior>();
-  const r = await fetch(`${SB}/rest/v1/prediction_market_latest?select=venue,market_id,outcome,probability,ts&limit=20000`, { headers: sbHeaders });
+  const r = await fetch(`${SB}/rest/v1/prediction_market_latest?select=topic,venue,market_id,outcome,probability,ts&limit=20000`, { headers: sbHeaders });
   if (!r.ok) throw new Error("PRIORS_HTTP_" + r.status);
   for (const x of await r.json()) m.set(priorKey(x), { probability: Number(x.probability), ts: x.ts });
   return m;
@@ -46,7 +46,7 @@ async function priors(): Promise<Map<string, Prior>> {
 
 async function insert(table: string, rows: any[], ignoreDuplicates = false): Promise<string | null> {
   for (let i = 0; i < rows.length; i += 500) {
-    const q = ignoreDuplicates ? "?on_conflict=venue,market_id,outcome,ts" : "";
+    const q = ignoreDuplicates ? "?on_conflict=topic,venue,market_id,outcome,ts" : "";
     const r = await fetch(`${SB}/rest/v1/${table}${q}`, { method: "POST",
       headers: { ...sbHeaders, Prefer: "return=minimal" + (ignoreDuplicates ? ",resolution=ignore-duplicates" : "") },
       body: JSON.stringify(rows.slice(i, i + 500)) });
@@ -88,7 +88,7 @@ async function pass(now: Date) {
     }
     try {
       const top = await j(`${PM}/events?closed=false&active=true&archived=false&order=volume24hr&ascending=false&limit=80`);
-      rows.push(...polymarketDiscovery(top, REG.discovery.exclude_tags, REG.discovery.per_venue));
+      rows.push(...polymarketDiscovery(top, REG.discovery.exclude_tags, REG.discovery.per_venue, new Set(ids)));
     } catch (e) { problems.push({ venue: "polymarket", topic: "discover", reason: String(e).slice(0, 120) }); }
   }
 
@@ -108,7 +108,7 @@ async function pass(now: Date) {
           evs.push(...(d?.events || [])); cursor = d?.cursor || "";
           if (!cursor) break;
         }
-        rows.push(...kalshiDiscovery(evs, REG.discovery.exclude_kalshi_categories, REG.discovery.per_venue));
+        rows.push(...kalshiDiscovery(evs, REG.discovery.exclude_kalshi_categories, REG.discovery.per_venue, new Set(topics.flatMap((t) => t.kalshi?.events || []))));
       } catch (e) { problems.push({ venue: "kalshi", topic: "discover", reason: String(e).slice(0, 120) }); }
     }
   }

@@ -28,14 +28,14 @@ create table if not exists public.prediction_market_snapshots (
   open_interest  numeric      null,                       -- Polymarket data-api /oi (USD) / Kalshi open_interest_fp (contracts)
   end_date       timestamptz  null,
   kind           text         not null default 'change' check (kind in ('first','change','heartbeat','backfill')),
-  constraint prediction_market_snapshots_uniq unique (venue, market_id, outcome, ts)
+  constraint prediction_market_snapshots_uniq unique (topic, venue, market_id, outcome, ts)
 );
 
 comment on table public.prediction_market_snapshots is
   'L4 prediction markets. Append-only, change-only readings of Polymarket (gamma/data-api/clob) and Kalshi (trade-api v2) public data, no API key. Topics: supabase/functions/prediction-markets/topics.json.';
 
 create index if not exists prediction_market_snapshots_topic_ts_idx  on public.prediction_market_snapshots (topic, ts desc);
-create index if not exists prediction_market_snapshots_key_ts_idx    on public.prediction_market_snapshots (venue, market_id, outcome, ts desc);
+create index if not exists prediction_market_snapshots_key_ts_idx    on public.prediction_market_snapshots (topic, venue, market_id, outcome, ts desc);
 
 create table if not exists public.prediction_market_runs (
   run_id     text primary key,
@@ -53,10 +53,10 @@ comment on table public.prediction_market_runs is 'L4 prediction markets: one ro
 -- the collector's "what did I store last" read, and the page's "now" read: latest row per leg in the
 -- last 8 hours (every live leg has a heartbeat at least every 6 h)
 create or replace view public.prediction_market_latest with (security_invoker = true) as
-  select distinct on (venue, market_id, outcome) *
+  select distinct on (topic, venue, market_id, outcome) *
   from public.prediction_market_snapshots
   where ts > now() - interval '8 hours'
-  order by venue, market_id, outcome, ts desc;
+  order by topic, venue, market_id, outcome, ts desc;
 
 alter table public.prediction_market_snapshots enable row level security;
 alter table public.prediction_market_runs      enable row level security;
@@ -65,3 +65,8 @@ create policy prediction_market_snapshots_read on public.prediction_market_snaps
 drop policy if exists prediction_market_runs_read on public.prediction_market_runs;
 create policy prediction_market_runs_read on public.prediction_market_runs for select to anon, authenticated using (true);
 grant select on public.prediction_market_snapshots, public.prediction_market_runs, public.prediction_market_latest to anon, authenticated;
+
+-- the collector writes as service_role; on this project new tables get no default grant for it
+-- (catalyst_odds carries the same explicit grant). Append-only: select + insert, no update/delete.
+grant select, insert on public.prediction_market_snapshots, public.prediction_market_runs to service_role;
+grant select on public.prediction_market_latest to service_role;
