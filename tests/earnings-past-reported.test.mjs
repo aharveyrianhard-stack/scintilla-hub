@@ -55,8 +55,8 @@ test("a result is unusual against THIS name's own habit, never against a round n
   assert.match(src, /function ernWildResult\(r\) \{/, "one judgement, shared by the grid, the band and the list");
   assert.ok(new RegExp(String.raw`const wild = typeof ernWildResult === "function" \? ernWildResult\(r\) : null;`).test(src),
     "the band and the chips call it guarded, because tests extract those blocks on their own");
-  assert.equal((src.match(/typeof ernWildResult === "function"/g) || []).length, 4,
-    "the week chip, the day row, the bottom band and (27 Sep) the PAST · REPORTED rail — all four guarded the same way");
+  assert.equal((src.match(/typeof ernWildResult === "function"/g) || []).length, 5,
+    "the week chip, the day row, the bottom band, (27 Sep) the PAST · REPORTED rail and (28 Sep) the concise earnings tape — all five guarded the same way");
 });
 
 test("the price reaction is the first session the market could trade the news", () => {
