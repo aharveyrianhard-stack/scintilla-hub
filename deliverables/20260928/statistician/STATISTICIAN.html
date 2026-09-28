@@ -1,0 +1,212 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Being the statistician · 28 Sep 2026</title><style>body{margin:0;background:#07070C;color:#B4B4C6;font:17px/1.55 -apple-system,"Helvetica Neue",Arial,sans-serif;padding:28px 34px 80px;max-width:1500px}
+h1{font-size:34px;margin:0 0 6px;color:#C8C8D2}h2{font-size:26px;margin:46px 0 8px;color:#C8C8D2}h3{font-size:19px;margin:26px 0 6px;color:#C8C8D2}
+p,li{max-width:1080px}.q{color:#9C9CAE;font-size:13px}
+ol.lead{font-size:19px;color:#C8C8D2;max-width:1120px;padding-left:24px}ol.lead li{margin:0 0 12px}
+.status{border:1px solid #2A2A36;border-left:4px solid #8A8A9E;padding:12px 16px;margin:18px 0;max-width:1080px;color:#C8C8D2}
+code{font:14px ui-monospace,Menlo,monospace;color:#BEBECE}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;font-size:14px;margin:10px 0;font-variant-numeric:tabular-nums}th,td{border:1px solid #24242E;padding:6px 9px;text-align:left;vertical-align:top;max-width:520px}th{color:#A8A8BA;font-weight:600;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+figure{margin:14px 0;max-width:1400px}figure img{display:block;width:100%;height:auto;background:#0B0B12;border:1px solid #1E1E28}figcaption{color:#9C9CAE;font-size:12px;margin-top:4px;font-family:ui-monospace,Menlo,monospace}
+.up{color:#00FFA3}.dn{color:#FF2D55}.rule{border:1px solid #24242E;padding:10px 14px;margin:8px 0;max-width:1080px}.rule b{color:#C8C8D2}.why{color:#9C9CAE;font-size:14px;margin-top:3px}
+dl{max-width:1120px}dt{color:#C8C8D2;font-weight:600;margin-top:12px}dd{margin:2px 0 0 0}
+.tag{font:12px ui-monospace,Menlo,monospace;border:1px solid #2A2A36;padding:1px 6px;color:#A8A8BA;margin-left:6px}
+@media(max-width:600px){figure{overflow-x:auto}figure img{min-width:900px}body{padding:20px 16px 60px;font-size:16px}h1{font-size:26px}h2{font-size:22px}ol.lead{font-size:17px}table{font-size:12px}th,td{padding:5px 6px}code{overflow-wrap:anywhere}}</style></head><body>
+<span data-scnav-slot></span><h1>Being the statistician: the method standard, the public tools, the critique, and the next studies</h1>
+<div class="q">U1 · 28 Sep 2026 · reasoning first, computed only to test the method · SPY bars to 2026-09-25 from the chart API cache · research, not rules · nothing here predicts</div>
+<div class="status"><b>STATUS · written and tested.</b> The standard is ten rules, each with its reason. Three of them were run on SPY today to show what they change (section 2): the honest range around a number we already published is 3 to 5 times wider than the one shown; of 100 RSI rungs, none survives a false-discovery check; and the best-known S8 result holds in both halves of history but cannot yet be told from luck. Every public library named in the brief was read on GitHub or PyPI (section 3; the Kimi breadth survey was used and corrected in two places). Every study so far, and today's in-flight ones, is graded against the standard with a concrete fix (section 4). Eight next studies are designed with question, data, method, test, decision, cost and lane (section 5), and the same plan is in <code>plan.json</code>. Nothing was deployed; no key, database or price table was touched.</div>
+<h2>What this page says</h2><ol class="lead">
+<li><b>Alan is right that the statistics are weak, and the weakness has a shape.</b> Our studies count days as if they were independent, test dozens of cut-offs and report the ones that cross a line, measure today's winners backwards, and stop the clock at the next leg. Each of those has a standard fix, and the fixes are cheap.</li>
+<li><b>"Deep below the 200-day is a problem" is not yet a fact; it is five bear markets.</b> SPY's 275 days more than 10% below its 200-day are worth about 5.4 independent observations (33 visits in 8 years). Its "up 60 sessions later 61.5%" has an honest 90% range of 41.6–89.6%, not 56.5–66.1%. To establish the fact Alan wants, the study must pool many instruments and eras (N5).</li>
+<li><b>The RSI ladder shows no rung that beats luck once the 100 tests are counted.</b> 14 rungs look "different from any day" on their own; about 10 would by chance; 0 survive a 10% false-discovery check. The slope across rungs is the finding, not any rung.</li>
+<li><b>S8's best number, low RSI in an uptrend, is "leaning", not "luck-proof".</b> Up 74.8% of 103 episodes; 74.1% in 2004–2015 and 75.5% in 2016–2026, both above their period's any-day line, so the direction is consistent. But each half's resampled range covers its any-day line. That is the honest reading and it should be the wording on the stats tab.</li>
+<li><b>Adopt Python for the checks, keep Node for the studies.</b> <code>arch</code> (block bootstrap, SPA/Reality Check, StepM, MCS), <code>statsmodels</code> (false-discovery correction, Newey–West errors, Markov regimes), <code>alphalens-reloaded</code> (the leaders as a factor), <code>ruptures</code> (change points). Nothing else is needed now; RRG is reimplemented in about 50 lines because no maintained library exists.</li>
+<li><b>The universe problem has a cheap solution already on the table.</b> The scout design's nightly whole-market file, built from the R2 copy of Massive's day files (2003 →), is exactly the survivorship-free, point-in-time universe every leader and stock study needs. One Fly one-off builds the monthly history.</li></ol>
+<h2>1 · The method standard for Scintilla statistics</h2><p>Ten rules in plain words, each with the one-line reason. The technical version is section 7.</p>
+<div class="rule"><b>R1 · Universe without survivorship: point-in-time membership from the whole-market day files; leader sets are percentiles recomputed each month</b><div class="why">Why: A list of today&#x27;s winners measured backwards can only show winning</div></div>
+<div class="rule"><b>R2 · Full distributions, never one cut-off: every percentile 1..100, every depth, every horizon; report the whole curve</b><div class="why">Why: A cut-off chosen by eye is a test we ran without counting it</div></div>
+<div class="rule"><b>R3 · Count what is independent: episodes and years, not days; report the effective sample size</b><div class="why">Why: 275 days deep below the 200-day are five bear markets, not 275 coin flips</div></div>
+<div class="rule"><b>R4 · Resample runs of days (stationary block bootstrap, block at least the horizon) for every range</b><div class="why">Why: Overlapping forward windows and clustered episodes make coin-flip ranges too narrow by 3 to 5 times</div></div>
+<div class="rule"><b>R5 · Count the tests: false-discovery control (Benjamini-Hochberg) over every rung, bucket and rule tried; SPA / Reality Check when rules are searched</b><div class="why">Why: 100 rungs at a 10% line give 10 winners by luck; 254 rules give 25</div></div>
+<div class="rule"><b>R6 · Walk-forward: choose on the first half, report the second; both halves shown side by side</b><div class="why">Why: A rule that only holds where it was found is a description, not a finding</div></div>
+<div class="rule"><b>R7 · Condition on the market state first (above/below and slope of the 200-day, VIX percentile, breadth); pooled numbers come after</b><div class="why">Why: Rising tide lifts all boats: most stock outcomes are the market&#x27;s outcome</div></div>
+<div class="rule"><b>R8 · Effect size before significance: the shift of the whole outcome distribution against any day, in the instrument&#x27;s own usual days</b><div class="why">Why: A tiny, certain edge and a big, uncertain one need different decisions</div></div>
+<div class="rule"><b>R9 · Outcomes with no lookahead and no truncation: read only from bars up to the entry close; open episodes are censored, not dropped; waits are survival curves</b><div class="why">Why: &#x27;Every pullback made a new high&#x27; is true of any index that went up; the wait is the finding</div></div>
+<div class="rule"><b>R10 · Report to Alan in three numbers and one word: how many (independent episodes), how sure (90% resampled range against any day), how big (middle shift), and a status word: luck-proof / leaning / a list</b><div class="why">Why: A non-technical reader needs to know whether to act, watch, or ignore</div></div>
+<h3>How a result is reported to Alan</h3><p>Every finding carries three numbers and one word. <b>How many</b>: independent episodes (and years), never days. <b>How sure</b>: the 90% range from resampled runs of days, against the any-day line. <b>How big</b>: the middle shift against any day, in the instrument's usual days. And the word: <b>luck-proof</b> (the range clears the any-day line after the test count is corrected, in both halves of history), <b>leaning</b> (same direction in both halves, range still touches the line), or <b>a list</b> (fewer than 20 episodes: the cases are shown one by one and no rate is claimed).</p>
+<h2>2 · The standard, tested on SPY today</h2><p class="q">On a phone, swipe a chart sideways to see all of it.</p><p>Three numbers we already published, re-read the honest way. Code: <code>research/statistics/method/</code> (a 40-line stationary bootstrap, effective sample size, Benjamini–Hochberg, walk-forward); numbers in <code>method-demo.json</code>; pinned tests in <code>tests/statistician-method.test.mjs</code>. Read-only from the cached daily bars.</p>
+<h3>2a · One number, three ways of saying how sure</h3>
+<figure><img src="charts/a-200day-intervals.svg" alt="SPY more than 10% below its 200-day: naive interval, resampled interval, effective sample size"><figcaption><a href="charts/a-200day-intervals.svg">charts/a-200day-intervals.svg</a></figcaption></figure>
+<p>S9 reported that on days when SPY sat more than 10% below its 200-day, it was up 60 sessions later 61.5% of the time (169 of 275 days; any day 72.1%). Counted as 275 coin flips, the 90% range is 56.5–66.1%, which reads as "clearly worse than any day". But those days come in runs (middle run 2 sessions; the 2008–09 run was 146), in 33 visits over 8 years (2008, 2011, 2016, 2018, 2019, 2020, 2022, 2025). Resampling whole runs of days (mean block 60 sessions, the forward horizon) gives 41.6–89.6%, and the chance of a gap this size from any day by luck is 0.575. The 275 days are worth about 5.4 independent observations. <b>Verdict: a list, not a rate.</b> The fact Alan asked for needs the pooled study (N5).</p>
+<h3>2b · A hundred rungs, and how many are real</h3>
+<figure><img src="charts/b-rungs-fdr.svg" alt="100 RSI rungs: median 20-session result with 90% band, and each rung's p-value against the false-discovery line"><figcaption><a href="charts/b-rungs-fdr.svg">charts/b-rungs-fdr.svg</a></figcaption></figure>
+<p>Alan asked for every percentile 1 to 100 instead of a forced 10%. That is right, and it brings the second half of the rule: a hundred rungs are a hundred tests. On SPY (own prior-3-year percentile, the S8 rule; median 20-session result against any day's 1.39%): 14 rungs have a resampled p-value under 0.10 (rungs 3, 5, 11, 12, 25, 32, 53, 66, 71, 78, 84, 87, 99, 100); luck alone gives about 10. With Benjamini–Hochberg at a 10% false-discovery rate, 0 survive. The rsi-ladder lane saw the same thing from the other side (207 above and 200 below out of 2,600 pooled rungs, "about equally on both sides"). <b>The finding is the slope</b>: the low rungs lean up and the top rungs lean down, which is a trend test across rungs, not a claim about any one rung. That is how the ladder should be read on the stats tab.</p>
+<h3>2c · The same rule in each half of history</h3>
+<figure><img src="charts/c-walk-forward.svg" alt="SPY RSI bottom 10% above the 200-day, up 20 sessions later, each half of history"><figcaption><a href="charts/c-walk-forward.svg">charts/c-walk-forward.svg</a></figcaption></figure>
+<p>S8's headline: SPY RSI in its bottom 10% while above the 200-day was up 20 sessions later 74.8% of 103 episodes (any uptrend day 67.2%). Re-measured here to the same number. Split: 2004–2015 74.1% of 54 (any uptrend day 64.4%; resampled 90% range 60.4–85.7%, p 0.217); 2016–2026 75.5% of 49 (69.8%; 57.5–87.5%, p 0.756). The direction repeats, the size is not proven. <b>Verdict: leaning.</b> The stats tab card that calls it "yes, on the record so far" should carry that word and both halves.</p>
+<h2>3 · The public tools: what to adopt, for what, and how</h2><p>Each repository or documentation page was read today (GitHub, PyPI, readthedocs). The Kimi breadth survey (<code>staging/kimi-repos-20260928/REPOS.md</code>, 33 tools) was used as the list; two of its claims are corrected below. The split: <b>Node stays the study language</b> (the bars, the pivot rule, the cloud lines and the pages are already there and match the Station exactly); <b>Python is the checking language</b>, in a research virtual environment on this Mac for cached data, or in a Fly one-off when a key is needed. A Node study exports its per-episode table as JSON; the Python check reads it and returns the honest ranges and the test-count correction.</p>
+<div class="scroll"><table><tr><th>Tool</th><th>Adopt?</th><th>For</th><th>How</th><th>Notes from reading it</th></tr>
+<tr><td><b>arch</b></td><td>yes</td><td>StationaryBootstrap / CircularBlockBootstrap, optimal_block_length, SPA (Hansen) and Reality Check, StepM, MCS</td><td>Python research venv; fed with loss arrays exported by Node studies</td><td>The Kimi survey said SPA is not pre-built; it is (arch.bootstrap.SPA, StepM, MCS)</td></tr>
+<tr><td><b>statsmodels</b></td><td>yes</td><td>multipletests (fdr_bh), OLS with HAC (Newey-West), MarkovRegression regimes, QuantReg</td><td>Python research venv</td><td>0.15.0, Aug 2026, BSD-3</td></tr>
+<tr><td><b>alphalens-reloaded</b></td><td>yes, for the leaders study</td><td>factor tear sheets: quantile forward returns, information coefficient, turnover of a monthly ranking</td><td>Python; input = factor value per (date, ticker) + prices</td><td>Apache-2.0, maintained by Stefan Jansen</td></tr>
+<tr><td><b>quantstats</b></td><td>later</td><td>tear sheet of any rule turned into a return series</td><td>Python</td><td>only once there is a strategy to report; period-level win rate, not trade-level</td></tr>
+<tr><td><b>empyrical-reloaded / pyfolio-reloaded</b></td><td>no</td><td>covered by quantstats</td><td></td><td></td></tr>
+<tr><td><b>vectorbt (OSS)</b></td><td>later, pinned</td><td>parameter sweeps whose results feed SPA</td><td>Python, pinned numba</td><td>Apache-2.0 with Commons Clause; the free edition is frozen</td></tr>
+<tr><td><b>ruptures</b></td><td>yes</td><td>change points in relative-strength ratios, breadth and VIX term structure (PELT, penalty chosen on the first half)</td><td>Python</td><td>BSD-2, offline only</td></tr>
+<tr><td><b>hmmlearn</b></td><td>try after statsmodels</td><td>2-3 state regimes on SPY returns</td><td>Python</td><td>limited-maintenance mode; label switching; prefer MarkovRegression which gives transition matrix and expected duration</td></tr>
+<tr><td><b>PyPortfolioOpt / Riskfolio-Lib / skfolio</b></td><td>not now</td><td>portfolio construction</td><td></td><td>Allocation presents options, not portfolios (24 Sep); borrow skfolio&#x27;s combinatorial purged CV idea for walk-forward</td></tr>
+<tr><td><b>pandas-ta</b></td><td>no</td><td></td><td></td><td>0.4.71b0 beta (Sep 2025), one maintainer; our Node RSI/EMA/SMA already match the Station</td></tr>
+<tr><td><b>TA-Lib</b></td><td>as a reference only</td><td>one-time fixture that pins our Node RSI(14), EMA13/21, SMA50/200 against TA-Lib values</td><td>Python, brew ta-lib</td><td>BSD-2</td></tr>
+<tr><td><b>RRG (rrg-kit, RRG-Lite, RRGPy, tuhuynh27 gist)</b></td><td>reimplement in Node</td><td>JdK RS-Ratio / RS-Momentum approximation: RS = 100·price/benchmark, z-score over a window +100, momentum = ROC of the ratio z-scored</td><td>~50 lines in research/statistics</td><td>no maintained library; JdK&#x27;s exact constants are proprietary, numbers will not match StockCharts tick for tick</td></tr>
+<tr><td><b>seasonality tools</b></td><td>no library</td><td>month / turn-of-month / expiry-week dummies with HAC errors and FDR across the 12 months</td><td>statsmodels</td><td>ranaroussi/seasonality draws averages only, no uncertainty</td></tr>
+<tr><td><b>OpenBB</b></td><td>no</td><td></td><td></td><td>AGPL data layer; we already hold the data</td></tr>
+</table></div>
+<p><b>Corrections to the Kimi survey.</b> (1) It says the SPA / Reality Check "is not pre-built" in <code>arch</code>; the multiple-comparison module ships <code>SPA</code> (Hansen 2005, with White's Reality Check as the "upper" p-value), <code>StepM</code> and <code>MCS</code>, taking a benchmark loss series and a matrix of model losses with a block size. (2) It dates pandas-ta's last release to ~2023; PyPI shows 0.4.71b0 from 14 Sep 2025, a beta with one maintainer requiring Python 3.12, which is a reason not to depend on it rather than a sign of health. Its ranking (arch, statsmodels first) agrees with this page.</p>
+<p><b>The RRG formula we will use</b> (the public approximation every open implementation shares; JdK's constants are proprietary): RS = 100 × price ÷ benchmark; RS-Ratio = 100 + (RS − mean over the window) ÷ standard deviation over the window; RS-Momentum = the same z-score applied to the rate of change of RS-Ratio. Window and momentum period are parameters, so N1 reports every window from 4 to 26 weeks rather than picking one.</p>
+<p><b>Setup, when the coordinator says go</b> (no install was made today): <code>python3 -m venv research/python/.venv && research/python/.venv/bin/pip install arch statsmodels alphalens-reloaded ruptures</code>, with a <code>requirements.txt</code> pinned to the versions that install. TA-Lib only for the one-time fixture that pins our Node RSI/EMA/SMA against reference values.</p>
+<h2>4 · Every study so far, graded against the standard</h2><p>"Sound" is what to keep. "Weak" names the rule broken. "Fix" is concrete and cheap unless it says otherwise.</p>
+<div class="scroll"><table><tr><th>Study</th><th>Sound</th><th>Weak</th><th>Fix</th></tr>
+<tr><td><b>S6 run-up into earnings (25 Sep)</b></td><td>large pooled sample; corrected report timing in S8</td><td>fixed 20-session window; today&#x27;s 313 names measured backwards (survivors); unweighted by size or era</td><td>R1 universe from the day files; window = pivot to report; cap-weight by era</td></tr>
+<tr><td><b>S7 entry confluence (27 Sep)</b></td><td>discover/check split; every trade defined</td><td>178 rules, best 64.3% reported without a test-count correction; 1% touch bands and 20-session window are cut-offs</td><td>SPA with window-start entry as the benchmark; touch band as a percentile of usual days</td></tr>
+<tr><td><b>S7b between reports (27 Sep)</b></td><td>corrected itself: shuffled-price control killed the post-report-drop claim; lift table is descriptive</td><td>254 rules, 10 pass both halves at 65%: at a 5% level 254 rules give ~13 false passes per half, so 10 is what luck looks like</td><td>SPA / StepM over the 254; report the count that survives; hindsight lows only as description</td></tr>
+<tr><td><b>S8 ladder (27 Sep)</b></td><td>month-clustered bootstrap, 200-draw shuffle, episodes not days, recency columns, no lookahead percentiles</td><td>about 130 fund tests (11 rungs x 4 states x 3 horizons) read against a 1-in-20 line: 6-7 cross it by luck; 20-session horizon fixed; 313 survivors pooled unweighted</td><td>FDR over the whole ladder (this page shows the result: 0 rungs survive on SPY); add to-next-swing horizon; R1 universe</td></tr>
+<tr><td><b>S9 research program (27 Sep)</b></td><td>pivot rule with sensitivity rows; confirmation dates; bad prints cleaned and listed; questions ranked</td><td>depth buckets are cut-offs; next-leg-only outcome (fixed by rsi-ladder); 200-day band: 275 days = ~5 independent, ranges not shown; leader definition proposed but not tested</td><td>continuous depth; survival curves; block bootstrap and effective n on the band table; N4 and N5 below</td></tr>
+<tr><td><b>rsi-full-history (28 Sep, in flight)</b></td><td>full histories, no-hindsight percentiles, 90% ranges, &#x27;may be luck&#x27; wording</td><td>17 instruments x 4 horizons = 68 ranges uncorrected; bullish divergence n=11 on SPY is a list; bottom-10% zone still a cut-off (the ladder fixes it)</td><td>FDR over the 68; state &#x27;a list&#x27; when n&lt;20 episodes</td></tr>
+<tr><td><b>rsi-ladder (28 Sep, in flight)</b></td><td>rungs 1..100; honest note that 207/200 pooled hits mean narrow bands; time-to-new-high curves</td><td>&#x27;1335 of 1336 made a new high&#x27; is a statement about indexes that went up; the wait is the finding; open pullbacks must be censored, not counted as failures or dropped</td><td>Kaplan-Meier curves with censoring; FDR over rungs (0 survive on SPY at 20 sessions, this page)</td></tr>
+<tr><td><b>market-regime (28 Sep, in flight)</b></td><td>six questions with 90% ranges; counts separate years behind one-year windows; measures Alan&#x27;s thesis instead of assuming it</td><td>equal-weight extremes n=3-9 per pair (a list); 12 months + expiry weeks + Fed days = many tests; block length for 63-session overlapping returns not stated</td><td>stationary bootstrap with block &gt;= horizon; FDR across months; pool the 17 pairs into one estimate with a pair effect</td></tr>
+<tr><td><b>bottoms (28 Sep, in flight)</b></td><td>expanding own-history percentiles (no window); stress orientation; false-alarm counts are in the design</td><td>not yet published; &#x27;turned first&#x27; by pivots depends on the 10-bar rule for both series; lead-time offsets need a shuffle control (as S7b did)</td><td>publish hit rate AND false-alarm rate at every threshold (N3); shuffle the condition series in blocks as the control</td></tr>
+<tr><td><b>leaders (28 Sep, in flight)</b></td><td>2020-&gt;2026 from N-PORT holdings is point-in-time; share classes merged; quarters chained exactly</td><td>2004-2019 &#x27;estimated&#x27; from 113 survivors&#x27; caps (82 companies measured in 2004): concentration is understated and the top-20 is a survivor list</td><td>N4: point-in-time universe from the Massive day files + FMP historical constituents; mark the estimated years as such on the page</td></tr>
+<tr><td><b>stats-tab (28 Sep, in flight)</b></td><td>one card per question, &#x27;how sure&#x27; line, review pending state</td><td>a card can carry a number that fails the standard (74.8% is &#x27;leaning&#x27;, not &#x27;luck-proof&#x27;)</td><td>each card carries the status word and the FDR result; only luck-proof or leaning cards get a chart; lists stay text</td></tr>
+<tr><td><b>scout (28 Sep, design)</b></td><td>not a study, but its nightly whole-market file from the R2 Massive day files IS the survivorship-free universe R1 needs</td><td>history job not yet run for 2003-&gt;2026</td><td>one Fly one-off builds the monthly point-in-time universe (ticker, $-volume, close, 6/12-month return) from the day files</td></tr>
+</table></div>
+<p><b>The pattern across all of them.</b> Three faults recur: days counted as independent (R3/R4), cut-offs and rules tested without counting the tests (R2/R5), and a universe of today's names (R1). The in-flight lanes have already moved on two fronts — expanding own-history percentiles with no window (bottoms), and rungs 1..100 with time-to-new-high curves (rsi-ladder) — and their honesty about ranges is good. What none of them has yet is the test-count correction and the walk-forward split shown side by side, and that is the smallest change with the biggest effect on what Alan reads.</p>
+<h2>5 · The next studies, designed like a statistician</h2><p>Ordered by value to how Alan trades. Each says what result would change a decision, so a study with no such result is not run.</p>
+<h3>N1 · Sector rotation at three horizons</h3><dl>
+<dt>Question</dt><dd>How long does a leading sector stay leading, how do sectors move between rank quintiles / RRG quadrants, and what does a shift in the Hub&#x27;s cohort-compare bow tie mean historically?</dd>
+<dt>Data</dt><dd>11 SPDR sectors (Dec 1998-&gt;) + SMH, SOXX, XBI, KRE, ITB, XOP, IGV; SPY benchmark; weekly and daily closes from the chart API cache</dd>
+<dt>Method</dt><dd>RS = ETF/SPY. Horizons 1, 3, 12 months. (a) rank persistence: Spearman of rank(t) vs rank(t+h) at every h from 1 to 52 weeks; (b) transition matrices of rank quintiles and of RRG quadrants at weekly steps, with expected time in each quadrant; (c) RRG reimplemented in Node (z-scored RS over the window +100, momentum = ROC of the ratio z-scored); (d) bow tie: cross-sectional dispersion of 3-month RS across sectors; its own percentile; what SPY and the leaders did after dispersion widened or narrowed</dd>
+<dt>Test</dt><dd>shuffle sectors within each date (keeps the market, kills persistence) for the null; stationary bootstrap by week; walk-forward halves 1999-2012 / 2013-2026; FDR over the 52 horizons</dd>
+<dt>What result changes Alan's decision</dt><dd>whether &#x27;move to another good name with lower risk&#x27; should be read from sector rank; how many weeks a leading sector can be trusted; whether a bow-tie shift is a signal or noise</dd>
+<dt>Cost</dt><dd>cheap: bars cached; ~1 day</dd>
+<dt>Lane / model</dt><dd>Urth (Fable or Opus, medium) in Node; Python check with statsmodels</dd>
+</dl>
+<h3>N2 · Rising-tide gauges</h3><dl>
+<dt>Question</dt><dd>When the market rises, how many boats does it lift, and at what levels of breadth / market strength does a stock&#x27;s own setup stop mattering?</dd>
+<dt>Data</dt><dd>SPY swings (S9 pivots); every US common stock from the Massive day files (R2, 2003-&gt;) via a Fly one-off, else the 313 cached names as a first cut; sector ETFs</dd>
+<dt>Method</dt><dd>for every SPY swing: distribution of stock returns over the same swing; share of names up; quantile regression of stock return on SPY return (slopes at the 10th/50th/90th percentiles); pooled R-squared by regime (above/below 200-day, VIX percentile); gauge = percentile of &#x27;share of names above their 50-day&#x27; with what SPY did next at every percentile 1..100</dd>
+<dt>Test</dt><dd>block bootstrap by swing; walk-forward halves; effect size as the shift of the whole return distribution</dd>
+<dt>What result changes Alan's decision</dt><dd>dynamic position sizing to market behaviour: at which gauge level to be patient and at which to be aggressive</dd>
+<dt>Cost</dt><dd>medium: one Fly one-off over ~5,800 day files, then cheap</dd>
+<dt>Lane / model</dt><dd>Urth reasoning + Node job; coordinator runs the Fly one-off</dd>
+</dl>
+<h3>N3 · Bottoms as conditions with base rates</h3><dl>
+<dt>Question</dt><dd>For each stress gauge (VIX percentile, VIX/VIX3M, put/call, breadth, RSI, distance to the 200-day, credit), at every threshold 1..100: how often did a confirmed low follow, how often was it a false alarm, how long was the lead, and what did all of them together say?</dd>
+<dt>Data</dt><dd>the bottoms lane&#x27;s series (cached); SPY/QQQ/IWM swing lows</dd>
+<dt>Method</dt><dd>hit rate and false-alarm rate per threshold (ROC curve), base rate of lows on any day; lead-time distribution; logistic model of &#x27;low within 10 bars&#x27; on the gauges, fitted on 2003-2015, scored on 2016-2026; calibration table (&#x27;when it said 30%, lows came x% of the time&#x27;)</dd>
+<dt>Test</dt><dd>Brier score against the base rate; block-shuffled gauge series as the null; FDR over thresholds</dd>
+<dt>What result changes Alan's decision</dt><dd>the level at which to switch from patient to aggressive buying, with its false-alarm cost</dd>
+<dt>Cost</dt><dd>cheap; ~1 day</dd>
+<dt>Lane / model</dt><dd>Urth in Node; statsmodels Logit for the check</dd>
+</dl>
+<h3>N4 · Leaders as a point-in-time percentile set</h3><dl>
+<dt>Question</dt><dd>Each month, who were the leaders (top 10%, and every percentile, by 6- and 12-month return among liquid US stocks), did they stay leaders, what share of the market&#x27;s return did they carry, and what did they look like (distance to the 200-day, RSI percentile, sector)?</dd>
+<dt>Data</dt><dd>Massive whole-market day files 2003-&gt; (R2) for prices and dollar volume; FMP historical S&amp;P constituents and shares outstanding for caps; SPY N-PORT holdings 2019-&gt;</dd>
+<dt>Method</dt><dd>monthly cross-section, liquidity floor = dollar volume above the month&#x27;s 20th percentile; leader = percentile rank of trailing return; persistence = share still in the top decile after 3/6/12 months vs 10% by chance; contribution = weight x return chained by quarter; alphalens tear sheet of the rank as a factor (quantile returns, IC, turnover)</dd>
+<dt>Test</dt><dd>Newey-West errors on the monthly series; walk-forward halves; FDR across percentiles</dd>
+<dt>What result changes Alan's decision</dt><dd>which names count as leaders for every other study; whether to buy leaders on pullbacks or rotate into the next set</dd>
+<dt>Cost</dt><dd>medium: the Fly one-off from N2 builds the same universe; then cheap</dd>
+<dt>Lane / model</dt><dd>Urth designs; Node job on Fly; alphalens in Python</dd>
+</dl>
+<h3>N5 · The 200-day as a pooled fact</h3><dl>
+<dt>Question</dt><dd>Is &#x27;deep below the 200-day is a problem&#x27; true across a statistically relevant set, and where does the problem begin?</dd>
+<dt>Data</dt><dd>SPY, QQQ, IWM, DIA, 11 sectors, S&amp;P 500 index 1928-&gt;, Nasdaq 100 1985-&gt;, Russell 2000 1987-&gt;, Dow 1985-&gt;, EFA/EEM, gold, oil, Bitcoin; the leaders set from N4</dd>
+<dt>Method</dt><dd>distance = close/SMA200-1, continuous, and as the instrument&#x27;s own percentile; outcome distributions (20/60/120/250 sessions and to the next swing high): median, 10th percentile, share with a 10% lower close; every 1% band; &#x27;first close below -X&#x27; event study for X = 0..20; slope of the 200-day as the second dimension; pooled across instruments with an instrument effect (hierarchical: each instrument&#x27;s curve shrinks toward the pooled curve)</dd>
+<dt>Test</dt><dd>stationary bootstrap by episode with block &gt;= horizon; effective n reported per band; monotonic-trend test of the lower tail against depth; walk-forward halves; FDR across bands</dd>
+<dt>What result changes Alan's decision</dt><dd>a risk-cut rule: the depth below which the lower tail rises for the pooled set, stated with its range</dd>
+<dt>Cost</dt><dd>cheap to medium; ~1-2 days</dd>
+<dt>Lane / model</dt><dd>Urth in Node; arch/statsmodels check in Python</dd>
+</dl>
+<h3>N6 · Data-snooping audit of S7 and S7b</h3><dl>
+<dt>Question</dt><dd>Of the 178 + 254 entry rules tried, how many beat the window-start entry once the search is counted?</dd>
+<dt>Data</dt><dd>s7-entries.json, s7b-between.json (in the repo)</dd>
+<dt>Method</dt><dd>export per-report loss series per rule; arch SPA with the window-start entry as benchmark; StepM for which rules; MCS for the set that cannot be told apart</dd>
+<dt>Test</dt><dd>SPA consistent p-value; block = 20</dd>
+<dt>What result changes Alan's decision</dt><dd>whether any entry trigger before a report deserves a card on the stats tab</dd>
+<dt>Cost</dt><dd>cheap; half a day in Python</dd>
+<dt>Lane / model</dt><dd>Urth Python venv locally (no keys needed)</dd>
+</dl>
+<h3>N7 · Seasonality with real statistics</h3><dl>
+<dt>Question</dt><dd>Which calendar effects (month, turn of month, expiry week, Fed days, pre-holiday) survive once all of them are tested together?</dd>
+<dt>Data</dt><dd>S&amp;P 500 index 1928-&gt; (cached), FOMC dates, expiry calendar</dd>
+<dt>Method</dt><dd>daily return on calendar dummies with HAC errors; effect sizes in usual days; last 30 years separately</dd>
+<dt>Test</dt><dd>FDR across all dummies; walk-forward halves</dd>
+<dt>What result changes Alan's decision</dt><dd>whether the calendar belongs on the stats tab at all</dd>
+<dt>Cost</dt><dd>cheap</dd>
+<dt>Lane / model</dt><dd>Python statsmodels</dd>
+</dl>
+<h3>N8 · Regime states from the data</h3><dl>
+<dt>Question</dt><dd>Do two or three market states fall out of SPY returns and VIX on their own, how long do they last, and do the other studies&#x27; answers differ by state?</dd>
+<dt>Data</dt><dd>SPY daily returns 1993-&gt;, VIX 1990-&gt;</dd>
+<dt>Method</dt><dd>MarkovRegression (2-3 states, switching variance) and ruptures PELT on realised volatility; compare the states with the cloud-order states the Station uses</dd>
+<dt>Test</dt><dd>expected durations with ranges; out-of-sample filtered (not smoothed) probabilities in the second half</dd>
+<dt>What result changes Alan's decision</dt><dd>whether the Station&#x27;s cloud order is a good enough regime label or the studies need a second one</dd>
+<dt>Cost</dt><dd>cheap</dd>
+<dt>Lane / model</dt><dd>Python statsmodels + ruptures</dd>
+</dl>
+<p><b>On the Geiger bow tie.</b> The cohort-compare view shifts when the Geiger readings of one cohort spread apart from another's. To say what that meant historically needs a daily history of the Geiger per ticker, which is not captured today (an additive capture table, the same pattern as breadth). Until it exists, N1 uses the closest thing we can compute from bars: the cross-sectional dispersion of 3-month relative strength across sectors and cohorts, and what followed when it widened or narrowed.</p>
+<p><b>On routing.</b> The 24 Sep correction stands: Urth lanes do not delegate to Kimi until Alan approves the rollout, so the "lane" column names Urth (Node) or a local Python check, with the coordinator running any Fly one-off. Nothing here needs a key on this Mac.</p>
+<h2>6 · What was not done, and decisions for Alan</h2><ul>
+<li>No study in section 5 was run; the brief asked for design, with computation only to test the method. The three demonstrations use SPY only.</li>
+<li>No Python package was installed and no virtual environment created; the Python checks are proposed with exact commands.</li>
+<li>The three in-flight lanes without a published page (bottoms, leaders, stats-tab) were graded from their code and data files as they stood at about 10:10 ET; their final pages may already answer some of the points.</li>
+<li>The full test suite on this branch: 1,105 tests, 1,098 pass, 5 fail. Two are the known production failures (age function, xfeed-publish). Three are Indicator Lab checkpoint tests (<code>econ-tape</code>, <code>indicator-lab-methods</code>) that fail on the untouched base commit as well: <code>prototypes/indicator-lab/</code> is byte-identical to <code>origin/hub/release-20260923</code> on this branch. The six new toolbox tests pass.</li>
+<li>Pushed the branch as the U1 brief asks; the 23 Sep common rule says not to push, so the coordinator should treat the push as the brief's exception. No deploy.</li></ul>
+<p><b>Decisions for Alan</b> (recommendation in bold):</p><ol>
+<li>Adopt the ten rules as the bar for a stats-tab card, with the status word on every card. <b>Yes</b>: it costs one Python check per study and stops the tab becoming a dump yard.</li>
+<li>Approve the one Fly one-off that builds the monthly point-in-time universe from the R2 day files (N2/N4/N5 all need it). <b>Yes</b>: it is read-only on data we already pay for.</li>
+<li>Order of the next studies. <b>N5 (200-day pooled) and N1 (sector rotation) first</b>: both run from cached bars tomorrow, and both answer things Alan said today; N4 (leaders) as soon as the universe exists.</li></ol>
+<h2>7 · Technical appendix</h2><dl>
+<dt>Universe (R1)</dt><dd>Monthly cross-section from the Massive grouped-daily files: every ticker that traded that month with median dollar volume above the month's 20th percentile; membership is decided from data known at month end. Dead and renamed tickers stay in the months they existed. Reused tickers are cut at holes longer than 20 calendar days (leaders-lib rule). Leader = percentile rank of trailing 6- and 12-month return within that month's set.</dd>
+<dt>Dependence (R3/R4)</dt><dd>Stationary bootstrap (Politis &amp; Romano 1994): resample index positions in blocks of geometric length with mean b, wrapping; b = max(horizon, first Bartlett-insignificant autocorrelation lag + 1). Effective n = n ÷ (1 + 2Σρ_k) over the same lags. 90% range = 5th–95th percentile of 1,000–2,000 statistic draws; two-sided p against a base value = 2 × the smaller tail share. In <code>arch</code>: <code>StationaryBootstrap(block_size, x).conf_int(func, reps, method="percentile")</code> with <code>optimal_block_length</code>.</dd>
+<dt>Test count (R5)</dt><dd>Benjamini–Hochberg over every rung, bucket or horizon reported on one page (q = 0.10 for "leaning", 0.05 for "luck-proof"). For searched rules (S7, S7b, parameter sweeps): Hansen's SPA with the naive rule as the benchmark, StepM for which rules, MCS for the set that cannot be told apart. <code>statsmodels.stats.multitest.multipletests(p, method="fdr_bh")</code>; <code>arch.bootstrap.SPA(benchmark_losses, model_losses, block_size)</code>.</dd>
+<dt>Walk-forward (R6)</dt><dd>Two fixed halves (2003–2015, 2016–2026) always shown side by side; for searched rules, choose on the first half only. For monthly cross-sections, expanding-window fits scored on the next 12 months.</dd>
+<dt>Regime conditioning (R7)</dt><dd>Market state at every date: SPY above/below and slope sign of its 200-day; VIX own-history percentile; breadth percentile once the daily capture exists. Every stock result is split by state before pooling; the pooled number is shown last.</dd>
+<dt>Effect size (R8)</dt><dd>Shift of the outcome distribution: median and 10th/90th percentile differences against any day, expressed in the instrument's usual days (60-session spread of daily moves, S7 convention). A shift under 0.25 usual days is reported as "no practical difference" whatever its p-value.</dd>
+<dt>Outcomes (R9)</dt><dd>Forward returns from the entry close, read only from bars up to that close; pivots count from their confirmation date. Waits (to a new high, to a reclaim of a line) are survival curves with censoring for open cases (Kaplan–Meier); the median wait is reported with its range. Hindsight lows are description only, with a shuffled-price control as in S7b.</dd>
+<dt>Weighting (R1, Alan 27 Sep)</dt><dd>Recency: full history and the last 5 years side by side, never blended. Size: cap-weighted variants once historical caps exist (FMP shares outstanding × price), reported beside the unweighted.</dd>
+<dt>Data faults</dt><dd>Impossible wicks clamped and listed (S9 rule); holes over a year cut (S6 rule); every page names its source, first and last bar, and the bars it cleaned.</dd>
+</dl>
+<p class="q">Sources read today: github.com/ranaroussi/quantstats · stefan-jansen/empyrical-reloaded, pyfolio-reloaded, alphalens-reloaded · arch.readthedocs.io (bootstrap, multiple-comparison) · polakowo/vectorbt · deepcharles/ruptures · hmmlearn/hmmlearn · robertmartin8/PyPortfolioOpt · dcajasn/Riskfolio-Lib · skfolio/skfolio · pypi.org/project/pandas-ta · TA-Lib/ta-lib-python · milesfai/rrg-kit · BennyThadikaran/RRG-Lite (wiki) · ranaroussi/seasonality · statsmodels.org (MarkovRegression, multipletests) · OpenBB-finance/OpenBB · staging/kimi-repos-20260928/REPOS.md.</p>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
