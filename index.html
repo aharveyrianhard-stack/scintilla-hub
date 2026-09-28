@@ -667,6 +667,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__one.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__go{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); white-space:nowrap; }
 .sc-ss--one .sc-ss__spark{ flex:0 0 auto; }
+/* 28 Sep — no session has run today: the line says why, then the last session's count and its newest one */
+.sc-ss__why{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--sv4); }
+.sc-ss__last .sc-ss__n{ color:var(--ink); }
 @media(max-width:700px){
   /* MEASURED at 390 on the shipped bytes: the label wrapped to two lines and the count, the cohort
      and the ticker all landed on top of each other. On a phone the line keeps what a glance needs —
@@ -4318,6 +4321,12 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ern-roomtape{ flex:0 0 auto; margin:0 0 8px; }
 .ern-roomtape .sc-tape{ font-size:11px; }
 .ern-roomtape:empty{ display:none; }
+/* 28 Sep — the concise earnings tape: the release's item parts (.ecb-*) and the EVENTS tape's frame (.sc-toptape) */
+.sc-tape--ernec .ecb-it{ cursor:pointer; }
+.sc-tape--ernec .ecb-it:hover .ecb-nm{ color:var(--crk); }
+.sc-tape--ernec .ecb-nm{ letter-spacing:.06em; }
+.ern-roomtape .sc-toptape--ern{ height:40px; }
+.ern-roomtape .sc-toptape--ern .sc-tape{ font-size:11px; }
 /* the TODAY line on the slider, now labelled and always drawn */
 .se-tlnow{ opacity:.95; width:1.5px; }
 .se-tlnow::before{ content:"TODAY"; position:absolute; top:14px; left:4px; font-family:var(--mono); font-size:11px;
@@ -15196,13 +15205,18 @@ function ecNudgeState(it, nowSec, seenSec) {
    a count — the density is the message. A loaded day still up to three days out gets a quiet, non-flashing cluster. */
 const ECON_TAPE_CLEARED = Object.create(null);     // landed keys dismissed with the ✕
 const ecHue = (cat) => (cat === "OTHER" ? "var(--dim)" : EC_CAT_COLOR[cat] || "var(--dim)");
-function ecNudgeModel(nowSec) {
+/* 28 SEP — `src` (optional) runs the SAME queue logic over another list: the earnings tape's NEXT passes its own
+   items, its own seen/cleared memories and its own state function (ernNudgeModel). With no `src` this is exactly
+   the economic queue it always was. */
+function ecNudgeModel(nowSec, src) {
   const landed = [], up = [], today = ecDateKey(nowSec);
-  for (const it of ecTapeItems(MACRO_NEXT)) {
+  const SEEN = src ? src.seen : ECON_TAPE_SEEN, CLEARED = src ? src.cleared : ECON_TAPE_CLEARED;
+  const stateOf = src && src.state ? src.state : ecNudgeState;
+  for (const it of (src ? src.items : ecTapeItems(MACRO_NEXT))) {
     if (it.ts - nowSec > EC_TAPE_DAYS * 86400) break;        // sorted by time: nothing further out qualifies either
-    const st = ecNudgeState(it, nowSec, ECON_TAPE_SEEN[it.key]);
+    const st = stateOf(it, nowSec, SEEN[it.key]);
     if (st === "gone") continue;
-    if (st === "landed") { if (!ECON_TAPE_CLEARED[it.key] && it.day === today) landed.push(it); continue; }
+    if (st === "landed") { if (!CLEARED[it.key] && it.day === today) landed.push(it); continue; }
     up.push({ kind: "item", key: it.key, it: it, st: st });
   }
   const keep = landed.slice(-EC_NUDGE_LANDED_MAX);
@@ -15239,6 +15253,7 @@ function ecNudgeModel(nowSec) {
 }
 const ecWeekday = (day) => new Date(ecAnchor(day) * 1000).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" });
 function ecNudgeInnerHTML(it, st, nowSec) {
+  if (it && it.ern && typeof ernNudgeInnerHTML === "function") return ernNudgeInnerHTML(it, st, nowSec);   /* 28 Sep — an earnings item */
   /* the dot is ALWAYS the category's own hue (EC_CAT_COLOR, the calendar's legend); the speed is what the state says */
   const head = '<span class="mn-dot" style="color:' + ecHue(it.cat) + '">●</span><span class="mn-nm">' + esc(it.name) + "</span>";
   if (st === "landed") {
@@ -15263,17 +15278,18 @@ function ecSwarmInnerHTML(m, nowSec) {
   const dt = m.it.ts - nowSec;
   /* M55 — the same chip rides inside the ECONOMIC room, where "go to economic" would be telling the
      reader to go where he already is. In the room it says which day it is instead. */
-  const here = typeof S !== "undefined" && S && S.sec === "ECONOMIC";
+  const ern = !!(m.it && m.it.ern);   /* 28 Sep — the earnings NEXT runs the same swarm; it says "report", and its room is EARNINGS */
+  const here = typeof S !== "undefined" && S && S.sec === (ern ? "EVENTS" : "ECONOMIC");
   return '<span class="mn-dots">' + dots + "</span>" +
-    '<span class="mn-slbl"><b>' + m.group.length + " due</b> · " +
-    esc(dt <= 0 ? "now" : ecCountdown(m.it.ts, nowSec)) +
-    (here ? " · " + esc(ecWeekday(m.day || m.it.day).toUpperCase()) : " · go to economic") + "</span>";
+    '<span class="mn-slbl"><b>' + m.group.length + (ern ? " report" : " due") + "</b> · " +
+    esc(dt <= 0 ? "now" : ern && m.it.cdTxt ? m.it.cdTxt : ecCountdown(m.it.ts, nowSec)) +
+    (here ? " · " + esc(ecWeekday(m.day || m.it.day).toUpperCase()) : ern ? " · go to earnings" : " · go to economic") + "</span>";
 }
 /* the heavy day still to come: a warning, not an alarm — so nothing here moves at all */
 function ecAheadInnerHTML(m) {
   const dots = m.group.slice(0, 6).map((x) => '<i style="background:' + ecHue(x.it.cat) + '"></i>').join("");
   return '<span class="mn-dots">' + dots + "</span><span class=\"mn-albl\">" +
-    esc(ecWeekday(m.day).toUpperCase()) + " · <b>" + m.group.length + "</b> due</span>";
+    esc(ecWeekday(m.day).toUpperCase()) + " · <b>" + m.group.length + "</b> " + (m.it && m.it.ern ? "report" : "due") + "</span>";
 }
 function ecNudgeClass(m) {
   return m.kind === "swarm" ? "mn-swarm" + (m.pace ? " s-" + m.pace : "") : m.kind === "ahead" ? "mn-ahead"
@@ -15284,6 +15300,7 @@ function ecNudgeInner(m, nowSec) {
     : m.kind === "ahead" ? ecAheadInnerHTML(m) : ecNudgeInnerHTML(m.it, m.st, nowSec);
 }
 function ecNudgeNodeTitle(m) {
+  if (m && m.it && m.it.ern && typeof ernNudgeNodeTitle === "function") return ernNudgeNodeTitle(m);   /* 28 Sep */
   /* 27 SEP — Alan: "Fed Bowman, Dallas Fed, Barkin showed pink but were not scintillating." Pink is the CENTRAL BANK
      colour of the calendar's legend, not a flash; the hover now names the releases and says when they will move. */
   const who = (g) => g.slice(0, 6).map((x) => x.it.name + " (" + x.it.cat.toLowerCase() + ")").join(", ") + (g.length > 6 ? " …" : "");
@@ -15292,6 +15309,7 @@ function ecNudgeNodeTitle(m) {
     : m.kind === "ahead" ? m.group.length + " releases due " + ecDayLbl(m.day) + ": " + who(m.group) + still : ecNudgeTitle(m.it);
 }
 function ecNudgeNodeHTML(m, nowSec) {
+  if (m && m.it && m.it.ern && typeof ernNudgeNodeHTML === "function") return ernNudgeNodeHTML(m, nowSec);   /* 28 Sep — earnings go to their company / their day */
   /* M55 — data-esub is the SAME key the ECONOMIC room's rows and month chips carry, so "the thing
      the tape is pointing at" and "the row in the room" are one identity, not two lookups. */
   return '<span class="' + ecNudgeClass(m) + '" data-act="mngoto" data-day="' + esc(m.kind === "item" ? m.it.day : m.day) +
@@ -15371,6 +15389,10 @@ function ecNudgePaintBox(box, nowSec, modelIn) {
       n.className = cls + " mn-new";
       n.setAttribute("data-act", "mngoto"); n.setAttribute("data-day", m.kind === "item" ? m.it.day : m.day);
       n.setAttribute("data-k", m.key); n.setAttribute("title", ecNudgeNodeTitle(m));
+      if (m.it && m.it.ern) {             /* 28 Sep — an earnings node: a ticker opens its company, a heavy day opens that week */
+        if (m.kind === "item") { n.setAttribute("data-act", "row"); n.setAttribute("data-t", m.it.ticker); }
+        else { n.setAttribute("data-act", "ernday"); n.setAttribute("data-d", m.day); }
+      } else
       if (m.kind === "item") n.setAttribute("data-esub", ecBase(m.it.event));   /* M55 — same identity as the room's rows */
       n.innerHTML = inner; n.__mn = inner;
     } else {
@@ -15536,6 +15558,7 @@ async function ecTapeRead() {
 function ecTapePaint(nowSec) {
   ecNudgePaint(nowSec); renderEconBand(nowSec);
   if (typeof renderTopTape === "function") renderTopTape(nowSec);   // 27 Sep — the scintillating tape reads the same rows
+  if (typeof ernEcPaint === "function") ernEcPaint(nowSec);         // 28 Sep — earnings walk the same states on the same 15 s tick
 }
 function ecTapeTick() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;   // hidden tab: no paint, no read
@@ -18949,6 +18972,14 @@ function renderErnBand() {
   const slot = el("ernBandSlot");
   if (!ERN_BAND_ON || !slot) return;
   if (!ERN_ROWS && !ERN_FAIL_AT) return;               // 23 Sep: no half-empty band while the first read is out — it appears whole
+  /* 28 Sep — ERN_BOTTOM_NEW_ON (default OFF): the bottom band is the concise tape instead. The surprise habits are
+     still asked for, so a result beyond its own usual surprise still wears the diamond there. */
+  if (typeof ERN_BOTTOM_NEW_ON !== "undefined" && ERN_BOTTOM_NEW_ON && typeof renderErnBandNew === "function") {
+    if (typeof ernStatsEnsure === "function")
+      ernStatsEnsure((ERN_ROWS || []).filter((r) => r && num(r.surprise_pct) != null).map((r) => r.ticker));
+    renderErnBandNew();
+    return;
+  }
   const html = ernBandHTML(todayISO(), Date.now());
   if (html === ERN_HTML && slot.innerHTML) return;          // unchanged: leave the marquee running where it is
   ERN_HTML = html;
@@ -19059,6 +19090,12 @@ function topTapeHTML(nowSec, todayIso) {
         crossed = true;
         pre = ecTapeNowHTML("now — everything to the left has happened. Earnings carry a day and before-open / after-close, not a minute");
       }
+      /* 28 Sep — with ERN_ECON_STYLE_ON an earnings report is drawn and flashes like a release (ernEcItemHTML);
+         off, it is the 27 Sep drawing (ernItemHTML) */
+      if (x.kind === "ern" && typeof ERN_ECON_STYLE_ON !== "undefined" && ERN_ECON_STYLE_ON) {
+        const ei = ernEcItem(x.r, today);
+        return pre + ernEcItemHTML(ei, ernEcState(ei, now), today);
+      }
       return pre + (x.kind === "ec" ? ecBandItemHTML(x.it, ecBandState(x.it, now), today)
                                     : ernItemHTML(x.r, today, now * 1000));
     }).join("") : '<span class="sc-tape__item ecb-note">no releases on the watch list and no earnings for the names you track this week</span>' + sep;
@@ -19088,9 +19125,25 @@ function renderTopTape(nowSec) {
 }
 /* 27 SEP — the earnings room's own tape: the EARNINGS band, drawn again at the top of the room. */
 let ERN_ROOM_HTML = "";
-function renderErnRoomTape() {
+function renderErnRoomTape(nowSec) {
   const host = el("ernRoomTape");
   if (!host || !ERN_BAND_ON) return;
+  if (typeof ERN_ECON_STYLE_ON !== "undefined" && ERN_ECON_STYLE_ON) {
+    /* 28 Sep — the concise tape in the EVENTS tape's frame, with the earnings NEXT at its right-hand end. The frame is
+       built once, so the NEXT box keeps its nodes (they slide, they do not flicker); only the tape is redrawn. */
+    if (!host.querySelector || !host.querySelector("#ernNext")) { host.innerHTML = ernRoomEcHTML(nowSec); ERN_ROOM_HTML = ""; }
+    const slot = host.querySelector(".sc-toptape__slot");
+    const html = ernEcTapeHTML(nowSec, null, "ernRoomBand");
+    if (slot && (html !== ERN_ROOM_HTML || !slot.querySelector("#ernRoomBand"))) {
+      ERN_ROOM_HTML = html; slot.innerHTML = html;
+      try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}
+      const track = slot.querySelector(".sc-tape__track");
+      if (track && typeof tapeSpeed === "function")
+        tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));
+    }
+    try { ernNextPaint(nowSec); } catch (_) {}
+    return;
+  }
   if (!ERN_ROWS && !ERN_FAIL_AT) { if (!host.innerHTML) host.innerHTML = '<div class="sc-tape"><span class="sc-tape__item ern-note" style="padding:8px 12px">reading this week\'s earnings…</span></div>'; return; }
   const html = ernBandHTML(todayISO(), Date.now()).replace('id="ernBand"', 'id="ernRoomBand"');
   if (html === ERN_ROOM_HTML && host.querySelector && host.querySelector("#ernRoomBand")) return;
@@ -19100,6 +19153,213 @@ function renderErnRoomTape() {
   if (typeof host.querySelector !== "function" || typeof tapeSpeed !== "function") return;
   const track = host.querySelector(".sc-tape__track");
   if (track) tapeSpeed(track, host.querySelector(".ec-now--tape") || host.querySelector(".ern-it.is-today, .ern-it.is-up"));
+}
+/* ============================================================================
+   28 SEP · EARNINGS WALK THE ECONOMIC TAPE'S RULES — and the concise tape can take the bottom band's place.
+   Alan's notes, 28 Sep (HUB-TAPES): "Make the earnings tape(s) at the top BEHAVE like the economic events tape
+   (same movement, same NEXT logic, same flash rules, same item drawing). Keep the old behaviour one switch away."
+   and "the new concise earnings tape at the BOTTOM in place of the old bottom one … behind a single switch, OFF".
+   WHAT CHANGES WITH ERN_ECON_STYLE_ON (default ON):
+     · ITEM DRAWING — an earnings report is drawn exactly like a release: a dot, the day and its slot, the name,
+       and once it has printed the number against its estimate in the calendar's three result colours
+       ("● WED AMC  MU", "● TODAY BMO  GIS  1.09 vs 1.06 +2.8%"). The dot's hue is the earnings colour (gold).
+     · STATES + FLASH — the release's four bands at the release's speeds: still until the hour before its slot,
+       breathing inside it, tightening inside ten minutes, a hard pulse at the slot until a result is stored (an
+       hour at most), then faded. A report whose time is not announced has no minute to count to, so it stays
+       still. A result beyond that name's own usual surprise still wears the ◆ and glows (ernScintPaint).
+     · WINDOW + MOVEMENT — the top tape's window (this week so far and the next seven days), the NOW marker, the
+       same 45 px/s marquee opening just before now.
+     · NEXT — the earnings room's tape gets the economic NEXT queue beside it, built by the SAME ecNudgeModel:
+       three names, a swarm of dots when three or more report the same day, a quiet cluster for a heavy day up to
+       three days out, a landed lane for a result this page has just seen. Its nodes flash through mnScintPass.
+     · WHERE — the earnings on the EVENTS tape at the top, and the earnings room's own tape.
+   ERN_BOTTOM_NEW_ON (default OFF — Alan decides): the bottom EARNINGS band becomes that same concise tape.
+   (They are `var`, not `const`: a paint that runs before these lines are evaluated reads them as undefined, which
+   is the old drawing, instead of throwing.)
+   ONE SWITCH EACH, in the code and in the address: ?ernstyle=old puts the 27 Sep drawing back; ?ernbottom=new
+   shows the swap. Nothing here reads anything: ERN_ROWS and UNIVERSE are the earnings band's own one read.
+   ============================================================================ */
+var ERN_ECON_STYLE_DEFAULT = true;
+var ERN_BOTTOM_NEW_DEFAULT = false;
+function ernSwitchFromUrl(name, onWord, offWord, dflt) {
+  try {
+    const v = typeof location !== "undefined" && location.search ? new URLSearchParams(location.search).get(name) : null;
+    if (v === onWord) return true;
+    if (v === offWord) return false;
+  } catch (_) {}
+  return dflt;
+}
+var ERN_ECON_STYLE_ON = ernSwitchFromUrl("ernstyle", "econ", "old", ERN_ECON_STYLE_DEFAULT);
+var ERN_BOTTOM_NEW_ON = ernSwitchFromUrl("ernbottom", "new", "old", ERN_BOTTOM_NEW_DEFAULT);
+var ERN_EC_HUE = "#D4A72C";                 /* the earnings dot — gold, a hue no economic category uses */
+var ERN_NEXT_SEEN = Object.create(null);    /* item key → when THIS page first saw its result (sec), as ECON_TAPE_SEEN */
+var ERN_NEXT_CLEARED = Object.create(null); /* landed results dismissed with the ✕ */
+/* seconds since the epoch for a New York wall-clock minute on a date (DST-proof: try both offsets) */
+function ernEtSec(iso, min) {
+  const base = Date.parse(iso + "T00:00:00Z") / 1000 + min * 60;
+  const hh = String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0");
+  for (const h of [4, 5]) { const t = base + h * 3600; if (ecDateKey(t) === iso && ecTimeET(t) === hh) return t; }
+  return base + 4 * 3600;
+}
+/* BMO / AMC / the stated clock time / nothing — the slot as the tape prints it */
+function ernSlotTxt(r) {
+  const w = ernWhen(r);
+  return w === "before the open" ? "BMO" : w === "after the close" ? "AMC" : w;
+}
+/* one earnings row → the shape a release has on the tape (ts, day, name, actual, estimate, expects) */
+function ernEcItem(r, todayIso) {
+  const slot = ernSlotTxt(r), min = ttErnMinute(r), timed = !!slot, res = ernResult(r);
+  const gap = ernDayGap(r.date, todayIso);
+  return { ern: true, key: "E|" + r.ticker + "|" + r.date, ticker: r.ticker, name: r.ticker, event: r.ticker,
+           cat: "EARNINGS", impact: "High", day: r.date, min: min, timed: timed, slot: slot,
+           ts: ernEtSec(r.date, timed ? min : 23 * 60 + 59),
+           actual: res ? res.act : null, estimate: num(r.eps_estimate), previous: null, expects: true,
+           cdTxt: timed ? "" : gap == null ? "" : gap === 0 ? "today" : gap > 0 ? "in " + gap + "d" : "",
+           res: res, r: r };
+}
+function ernEcItems(todayIso, from, to) {
+  return (ERN_ROWS || []).filter((r) => r && r.ticker && r.date >= from && r.date <= to && (!UNIVERSE || UNIVERSE.has(r.ticker)))
+    .map((r) => ernEcItem(r, todayIso))
+    .sort((a, b) => a.ts - b.ts || (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0));
+}
+/* THE BAND STATE — the release's own (ecBandState). A stored result is "past", like a release that has printed;
+   a report with no announced time never counts down, so it never flashes. */
+function ernEcState(it, nowSec) {
+  if (it.res) return "past";
+  if (!it.timed) return it.day < ecDateKey(nowSec) ? "past" : "up";
+  return ecBandState(it, nowSec);
+}
+/* THE ITEM — drawn like ecBandItemHTML: dot · WHEN · NAME · result */
+function ernEcItemHTML(it, st, todayIso) {
+  const res = it.res;
+  const wild = res && typeof ernWildResult === "function" ? ernWildResult(it.r) : null;
+  const resHTML = res
+    ? '<span class="ecb-res ' + res.cls + '"><b>' + esc(ernNum(res.act)) + "</b>" +
+      (res.est != null ? " vs " + esc(ernNum(res.est)) : "") + "</span>" +
+      (res.sur ? '<span class="ern-sur ' + res.cls + (wild ? " is-scint" : "") + '"' +
+        (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") + ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "")
+    : st === "due" ? '<span class="ecb-res">now</span>' : "";
+  const day = it.day === todayIso ? "TODAY" : ernWeekday(it.day);
+  return '<span class="sc-tape__item ecb-it ern-ec is-' + st + ' is-high" data-act="row" data-t="' + esc(it.ticker) +
+    '" title="' + esc(ernTitle(it.r, res)) + '">' +
+    '<span class="ecb-dot" style="color:' + ERN_EC_HUE + '">●</span>' +
+    '<span class="ecb-when' + (it.day === todayIso ? " is-today" : "") + '">' + esc(day + (it.slot ? " " + it.slot : "")) + "</span>" +
+    '<span class="ecb-nm">' + esc(it.ticker) + "</span>" + resHTML +
+    "</span>" + '<span class="sc-tape__dot">·</span>';
+}
+/* THE CONCISE EARNINGS TAPE — the EVENTS tape's window and NOW marker, earnings only */
+function ernEcTapeHTML(nowSec, todayIso, id) {
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const today = todayIso || todayISO(), w = ttWindow(today);
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (!ERN_ROWS) {
+    seg = '<span class="sc-tape__item ern-note">' + (ERN_FAIL_AT ? "this week's earnings could not be read" : "reading this week's earnings…") + "</span>" + sep;
+  } else {
+    const items = ernEcItems(today, w.from, w.to);
+    let crossed = false;
+    if (items.length) {
+      seg = items.map((it) => {
+        let pre = "";
+        if (!crossed && it.ts > now) {       /* the EVENTS tape's own rule: where what has happened ends */
+          crossed = true;
+          pre = ecTapeNowHTML("now — everything to the left has reported or has had its slot. Earnings carry a day and before-open / after-close, not a minute");
+        }
+        return pre + ernEcItemHTML(it, ernEcState(it, now), today);
+      }).join("");
+    } else {
+      /* a quiet week says where the next one is, instead of an empty strip */
+      const next = ernEcItems(today, ernShift(w.to, 1), ernShift(today, ERN_AHEAD_DAYS))[0];
+      seg = '<span class="sc-tape__item ern-note">no earnings for the names you track in the next seven days' +
+        (next ? " · next " + esc(next.ticker) + " " + esc(ernWeekday(next.day) + " " + ernMonthDay(next.day)) : "") + "</span>" + sep;
+    }
+  }
+  return '<div class="sc-tape sc-tape--ern sc-tape--ernec" id="' + esc(id || "ernEcBand") + '"><b class="sc-tape__lbl" title="' +
+    esc("earnings of the names the Hub tracks — this week so far and the next seven days · drawn and flashing like the economic releases: still until the hour before its slot, breathing inside it, a hard pulse at it · tap a ticker for its company") +
+    '">EARNINGS →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+/* THE EARNINGS NEXT — the economic queue's own model over the earnings items */
+function ernNudgeState(it, nowSec, seenSec) {
+  if (!it.timed && it.actual == null) return it.day < ecDateKey(nowSec) ? "gone" : "ahead";
+  return ecNudgeState(it, nowSec, seenSec);
+}
+function ernNudgeItems(nowSec) {
+  const today = ecDateKey(nowSec), seen = Math.floor(Date.now() / 1000);
+  const items = ernEcItems(today, ernWeek(today)[0], ernShift(today, EC_TAPE_DAYS));
+  for (const it of items) if (it.actual != null && ERN_NEXT_SEEN[it.key] == null) ERN_NEXT_SEEN[it.key] = seen;
+  return items;
+}
+function ernNudgeModel(nowSec) {
+  if (!ERN_ROWS) return [];
+  return ecNudgeModel(nowSec, { items: ernNudgeItems(nowSec), seen: ERN_NEXT_SEEN, cleared: ERN_NEXT_CLEARED, state: ernNudgeState });
+}
+function ernNudgeInnerHTML(it, st, nowSec) {
+  const head = '<span class="mn-dot" style="color:' + ERN_EC_HUE + '">●</span><span class="mn-nm">' + esc(it.ticker) + "</span>";
+  if (st === "landed") {
+    const res = it.res || {};
+    return head + '<span class="mn-res"><b>' + esc(ernNum(it.actual)) + "</b>" +
+      (it.estimate != null ? " vs " + esc(ernNum(it.estimate)) : "") + "</span>" +
+      (res.sur ? '<span class="mn-sur ' + (res.cls === "beat" ? "beat" : res.cls === "miss" ? "miss" : "inline") + '">' + esc(res.sur) + "</span>" : "") +
+      '<span class="mn-x" data-act="ernnextclear" data-k="' + esc(it.key) + '" title="clear">✕</span>';
+  }
+  const when = (it.day === ecDateKey(nowSec) ? "" : ecWeekday(it.day) + " ") + (it.slot || "time not set");
+  return head + '<span class="mn-when">' + esc(when) + '</span><span class="mn-cd">' +
+    esc(st === "due" ? "now" : it.cdTxt || ecCountdown(it.ts, nowSec)) + "</span>";
+}
+function ernNudgeNodeTitle(m) {
+  const names = (g) => g.slice(0, 8).map((x) => x.it.ticker + (x.it.slot ? " " + x.it.slot : "")).join(", ") + (g.length > 8 ? " …" : "");
+  const still = " · the gold dot is earnings; the dots stay still until the hour before the slot, then breathe";
+  if (m.kind === "swarm" || m.kind === "ahead")
+    return m.group.length + " reports " + ecDayLbl(m.day) + ": " + names(m.group) + still + " · tap to open that week";
+  return ernTitle(m.it.r, m.it.res) + (m.it.estimate != null && !m.it.res ? " · EPS estimate " + ernNum(m.it.estimate) : "");
+}
+function ernNudgeNodeHTML(m, nowSec) {
+  const act = m.kind === "item" ? ' data-act="row" data-t="' + esc(m.it.ticker) + '"' : ' data-act="ernday" data-d="' + esc(m.day) + '"';
+  return '<span class="' + ecNudgeClass(m) + '"' + act + ' data-day="' + esc(m.kind === "item" ? m.it.day : m.day) +
+    '" data-k="' + esc(m.key) + '" title="' + esc(ernNudgeNodeTitle(m)) + '">' + ecNudgeInner(m, nowSec) + "</span>";
+}
+function ernNextPaint(nowSec) {
+  const box = el("ernNext");
+  if (!box || !ERN_ECON_STYLE_ON) return;
+  const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
+  const model = ernNudgeModel(now);
+  if (!model.length) { if (box.innerHTML) box.innerHTML = ""; return; }   /* "silence is information" */
+  ecNudgePaintBox(box, now, model);
+}
+/* the earnings NEXT flashes on the tape's own 2 s clock, through the same plan and primitive (mnScintPass) */
+function ernNextScintPass(nowMs) {
+  if (!ERN_ECON_STYLE_ON || typeof el !== "function") return 0;
+  const box = el("ernNext");
+  if (!box) return 0;
+  const now = nowMs == null ? Date.now() : nowMs;
+  return mnScintPass(now, box, ernNudgeModel(Math.floor(now / 1000)), "ern");
+}
+/* the earnings room's tape, in the new drawing, with its NEXT at the right-hand end (the EVENTS tape's own frame) */
+function ernRoomEcHTML(nowSec) {
+  return '<div class="sc-toptape sc-toptape--ern"><div class="sc-toptape__slot">' + ernEcTapeHTML(nowSec, null, "ernRoomBand") +
+    '</div><span class="sc-macronext sc-toptape__next" id="ernNext"></span></div>';
+}
+/* one paint for everything this block draws — called from the economic tape's 15 s tick, so a state change
+   (still → breathing → pulse) lands within 15 s, exactly as a release's does */
+function ernEcPaint(nowSec) {
+  if (ERN_ECON_STYLE_ON) { try { renderErnRoomTape(nowSec); } catch (_) {} try { ernNextPaint(nowSec); } catch (_) {} }
+  if (ERN_BOTTOM_NEW_ON) { try { renderErnBandNew(nowSec); } catch (_) {} }
+}
+/* ERN_BOTTOM_NEW_ON — the bottom EARNINGS band drawn as the concise tape (no NEXT: the ECON band beside it has none) */
+var ERN_BOTTOM_HTML = "";
+function renderErnBandNew(nowSec) {
+  const slot = el("ernBandSlot");
+  if (!ERN_BOTTOM_NEW_ON || !ERN_BAND_ON || !slot) return false;
+  if (!ERN_ROWS && !ERN_FAIL_AT) return true;
+  const html = ernEcTapeHTML(nowSec, null, "ernBand");
+  if (html === ERN_BOTTOM_HTML && slot.innerHTML) return true;
+  ERN_BOTTOM_HTML = html;
+  slot.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return true;
+  const track = slot.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, slot.querySelector(".ec-now--tape") || slot.querySelector(".ecb-it.is-due, .ecb-it.is-near, .ecb-it.is-soon, .ecb-it.is-up"));
+  return true;
 }
 /* ============================================================================
    27 SEP · USUAL DAY + SIGMA EVENTS — their own room.
@@ -20479,9 +20739,12 @@ document.addEventListener("click", (e) => {
     }
     /* M55 — the one-line strip is the presence; the list is the bell. */
     case "scintbell": { try { if (typeof window.scAlertsOpen === "function") window.scAlertsOpen(); } catch (_) {} break; }
+    case "scintlast": { S.udCohPick = null; S.udDay = a.dataset.day || null; go("USUAL"); break; }   /* 28 Sep — the last session's day in USUAL DAY */
     case "mnclear":                            // the ✕ on a landed number: clear it, leave the rest alone
       ECON_TAPE_CLEARED[a.dataset.k] = 1; ecTapePaint(); break;
     case "mnhist": ecHistShow(a); break;       // the number itself: two years of this print
+    case "ernnextclear":                       // 28 Sep — the ✕ on a landed earnings result in the earnings NEXT
+      ERN_NEXT_CLEARED[a.dataset.k] = 1; ernNextPaint(); break;
     case "mnhistx": ecHistClose(); break;
     case "mngoto": {                           // the nudge or the ECON band → open that day in ECONOMIC
       ecHistClose();
@@ -21392,9 +21655,9 @@ function scintSessions() {
    the presence, not the list — the list is the bell, which now carries every scintilla as its own
    notification (scintNotify). Tapping the line opens the bell. What "usual day" means still travels
    with it, in the line's own tooltip, instead of a paragraph under the board. */
-function scintOneLineHTML(inner, title) {
+function scintOneLineHTML(inner, title, lbl) {
   return '<div class="sc-ss sc-ss--one"' + (title ? ' title="' + esc(title) + '"' : "") + ">" +
-    '<span class="sc-ss__lbl">TODAY’S SCINTILLAS</span>' + inner + "</div>";
+    '<span class="sc-ss__lbl">' + (lbl || "TODAY’S SCINTILLAS") + "</span>" + inner + "</div>";
 }
 function scintUsualNote() {
   const sessions = (SCINT_RULES && SCINT_RULES.usual_day && SCINT_RULES.usual_day.sessions) || 60;
@@ -21428,9 +21691,15 @@ function scintStripHTML() {
         c.intensity + "× usual, added up").join(" · ") +
         " · a name counts in every cohort it belongs to") + '">' + esc(coh[0].cohort) + " " + coh[0].count + "</span>"
     : "";
-  if (!rows.length)
+  if (!rows.length) {
+    /* 28 Sep — Alan: "TODAY'S SCINTILLAS 0 · nothing has moved further than its own history today" confused him on a
+       closed day. When no session has run today (a weekend, a market holiday, or a weekday before 09:30 ET) the line
+       says so and shows the LAST session's scintillas instead of a 0; tapping it opens that day in USUAL DAY. */
+    const last = scintLastSession(Date.now());
+    if (last) return scintLastSessionHTML(last);
     return scintOneLineHTML('<span class="sc-ss__n">0</span><span class="sc-ss__empty">nothing has moved further than its own history today.</span>' +
       scintSpark(crit), scintUsualNote());
+  }
   const ev = rows[0], d = ev.detail || {};
   const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
   const line = '<button class="sc-ss__one ' + scintClass(ev) + '" data-act="scintbell" data-kind="' + esc(ev.kind) +
@@ -21443,6 +21712,49 @@ function scintStripHTML() {
     '<span class="sc-ss__go">all ' + rows.length + " ›</span></button>";
   return scintOneLineHTML('<span class="sc-ss__n">' + rows.length + "</span>" + cohHTML + line + scintSpark(crit),
     scintUsualNote());
+}
+/* 28 Sep — HAS A SESSION RUN TODAY? The regular session opens at 09:30 ET on a trading day (the page's own NYSE
+   calendar, gsIsTradingDay). If it has not, the strip reads the last session instead of today. Returns null when a
+   session has run (or when the calendar helpers are not on the page), so today's line stays exactly as it was. */
+const SCINT_OPEN_MIN = 9 * 60 + 30;
+function scintSessionToday(nowMs) {
+  if (typeof gsNyClock !== "function" || typeof gsIsTradingDay !== "function") return { ran: true };
+  const ny = gsNyClock(nowMs == null ? Date.now() : nowMs);
+  const trading = gsIsTradingDay(ny.date);
+  if (trading && ny.minutes >= SCINT_OPEN_MIN) return { ran: true, date: ny.date };
+  return { ran: false, date: ny.date, why: trading ? "before the open" : "market closed" };
+}
+function scintLastSession(nowMs) {
+  const s = scintSessionToday(nowMs);
+  if (s.ran || typeof gsPrevTradingDay !== "function") return null;
+  const day = gsPrevTradingDay(s.date);
+  const rows = (SCINT_ROWS || []).filter((r) => r && scintDayET(r.ts) === day);
+  /* the read keeps the newest 300; if the last session reaches back to the oldest row kept, its count may be cut */
+  const all = SCINT_ROWS || [], oldest = all.length ? scintDayET(all[all.length - 1].ts) : null;
+  return { why: s.why, day: day, rows: rows, capped: all.length >= 300 && oldest === day };
+}
+function scintDayShort(iso) {
+  const d = new Date(iso + "T12:00:00Z");
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()] + " " + d.getUTCDate() + " " +
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()];
+}
+function scintLastSessionHTML(last) {
+  const n = last.rows.length, day = scintDayShort(last.day);
+  const count = n + (last.capped ? "+" : "") + " scintilla" + (n === 1 ? "" : "s");
+  const title = last.why + " — no session has run today, so this is the last one (" + day + "). Tap to open that day in USUAL DAY.";
+  if (!n)
+    return scintOneLineHTML('<button class="sc-ss__one sc-ss__last" data-act="scintlast" data-day="' + esc(last.day) + '">' +
+      '<span class="sc-ss__why">' + esc(last.why) + "</span>" +
+      '<span class="sc-ss__d">' + esc(day) + ": nothing moved further than its own history</span></button>", title, "SCINTILLAS");
+  const ev = last.rows[0];
+  const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
+  return scintOneLineHTML('<button class="sc-ss__one sc-ss__last ' + scintClass(ev) + '" data-act="scintlast" data-day="' + esc(last.day) + '">' +
+    '<span class="sc-ss__why">' + esc(last.why) + "</span>" +
+    '<span class="sc-ss__n">' + esc(day) + ": " + esc(count) + "</span>" +
+    '<span class="sc-ss__t">last ' + esc(when) + "</span>" +
+    '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
+    '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
+    '<span class="sc-ss__go">open ' + esc(day) + " ›</span></button>", title, "SCINTILLAS");
 }
 function scintStripRender() {
   const host = el("scintStrip");
@@ -21674,6 +21986,7 @@ function mnScintArm() {
     MN_SCINT_TIMER = setInterval(() => {
       try { mnScintPass(); } catch (_) {}
       try { ecRoomScintPass(); } catch (_) {}      /* M55 — the room, on the tape's own clock */
+      try { if (typeof ernNextScintPass === "function") ernNextScintPass(); } catch (_) {}   /* 28 Sep — the earnings NEXT, same clock */
     }, MN_SCINT_TICK_MS);
 }
 
