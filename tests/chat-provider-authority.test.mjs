@@ -8,7 +8,7 @@ test('equity chat requires the Massive provider snapshot', () => {
   assert.match(source, /name: "provider_snapshot"/);
   assert.match(source, /scintilla-massive-chart-api\.fly\.dev/);
   assert.match(source, /previous completed provider daily session only/);
-  assert.match(source, /Never substitute live_quotes, composite_staged, ladder_values, board_rsi or derived_series/);
+  assert.match(source, /Never substitute any Supabase table/);
 });
 
 test('daily indicators use the exact FMP provider universe', () => {
