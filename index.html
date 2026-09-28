@@ -6157,7 +6157,10 @@ function cvKeysBlocked(e) {
   if ((typeof YT_IDX !== "undefined" && YT_IDX >= 0) || SECFS || document.fullscreenElement) return true;
   if (document.body.classList.contains("focus") || document.body.classList.contains("tvmodal-open")) return true;
   const open = (id, c) => { const n = el(id); return !!(n && (c ? n.classList.contains(c) : n.firstChild)); };
-  return open("trFullHost") || open("ernSumHost") || open("chatPop", "open") || open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal");
+  /* 28 Sep — reviewer: Esc with the COHORT ▾ menu open closed the whole company view. The open menu owns Esc: its own
+     handler closes it, and the view (and a ⛶ full-screen panel) stays exactly as it was. */
+  return open("trFullHost") || open("ernSumHost") || open("chatPop", "open") || open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal") ||
+    !!document.querySelector(".sc-cohwrap.is-open");
 }
 /* capture phase: this runs BEFORE the page's other Esc handlers, so it sees an overlay while it is still open */
 window.addEventListener("keydown", (e) => {
@@ -21212,6 +21215,23 @@ function openCo(t) {
   updateMtabs();                               // master-tab active state (DASHBOARD stays lit)
   if (wasDash) pinLeft(t);                     // swap the left panel only — board untouched
   else sync();                                 // build the DASH frame; afterMount() pins the ticker
+  coBringIntoView();
+}
+/* 28 Sep — reviewer: on the phone, opening a company from a board row must bring the company view on screen.
+   MEASURED at 390x844 on live bc09f7a: the switched-on company view is drawn under the stacked rooms, at y=1063 —
+   below the first screen, so a tap on a row looked like nothing happened. On a narrow screen the page now scrolls the
+   company view's top to just under the sticky chrome. Wide screens are untouched (the view is already beside the board). */
+function coBringIntoView() {
+  if (typeof window === "undefined" || !window.matchMedia || !window.matchMedia("(max-width:900px)").matches) return;
+  const go = () => {
+    const p = el("leftPanel");
+    if (!p || typeof p.getBoundingClientRect !== "function" || S.sec !== "COMPANY") return;
+    const r = p.getBoundingClientRect();
+    if (r.top >= 0 && r.top < window.innerHeight * 0.5) return;          // already on screen
+    try { p.scrollIntoView({ block: "start", behavior: "auto" }); } catch (_) { p.scrollIntoView(true); }
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(go)); else setTimeout(go, 0);
+  setTimeout(go, 400);                                                    // once more, after the view has drawn its first rows
 }
 /* R61 — any element carrying data-tkopen (e.g. an earnings-block ticker) opens that company page. */
 document.addEventListener("click", function (e) {
@@ -21271,17 +21291,38 @@ function toggleSecFs(panel) {
   clearSecFs();
   if (off) return;
   const head = document.querySelector(".sc-head");
-  const top = head ? Math.max(0, Math.round(head.getBoundingClientRect().bottom)) : 42;
+  /* 28 Sep — reviewer: at 1680 the ⛶ panel started at the header's foot and cut the EVENTS tape (still shown under the
+     header) in half. The tabs and cohort row hide first, THEN the panel is placed under whichever is lower: the header
+     or a top tape that stays on screen. */
+  document.body.classList.add("secfs");
+  let top = head ? Math.max(0, Math.round(head.getBoundingClientRect().bottom)) : 42;
+  /* top to bottom, so each band that stays on screen pushes the next check down (the EVENTS tape, then TODAY'S SCINTILLAS) */
+  [].slice.call(document.querySelectorAll(".sc-toptape, .sc-scintstrip"))
+    .sort((x, y) => x.getBoundingClientRect().top - y.getBoundingClientRect().top).forEach((tp) => {
+      if (panel.contains(tp) || !tp.offsetParent) return;
+      const b = tp.getBoundingClientRect();
+      if (b.height > 0 && b.top < top + 80) top = Math.max(top, Math.round(b.bottom) + 4);
+    });
   panel.style.top = top + "px";
-  var xC = document.querySelector(".sc-fsclose"); if (xC) xC.style.top = (top + 8) + "px";   // ✕ sits just inside the panel's top-right, below the header — never overlaps LIVE/bell
   panel.classList.add("sc-secfs");
   SECFS = panel;
-  document.body.classList.add("secfs");
+  /* MEASURED: the fixed panel is placed against a containing ancestor, not the window, so it landed 39-58 px lower
+     than the top it was given (86 → 125 on live). Its drawn top is read back and the difference taken off. */
+  const settle = () => {
+    if (SECFS !== panel) return;
+    const drift = Math.round(panel.getBoundingClientRect().top) - top;
+    if (Math.abs(drift) > 1) panel.style.top = (parseFloat(panel.style.top) - drift) + "px";
+  };
+  settle();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+  setTimeout(settle, 320);                     // once more after the tabs' own fold (0.22 s) has finished
+  var xC = document.querySelector(".sc-fsclose"); if (xC) xC.style.top = (top + 8) + "px";   // ✕ sits just inside the panel's top-right, below the header — never overlaps LIVE/bell
   if (panel.classList.contains("sc-co-left") || panel.classList.contains("sc-co-right"))
     document.body.classList.add("exp");        // companion class — section grow rules (est tiles stay 2-col, no hooks needed)
 }
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (document.querySelector(".sc-cohwrap.is-open")) return;   /* 28 Sep — the COHORT ▾ menu closes itself; nothing else moves */
   const fh = el("trFullHost"), sh = el("ernSumHost");
   if (fh && fh.firstChild) { fh._gen = (fh._gen || 0) + 1; fh.innerHTML = ""; return; }   // topmost first: a transcript opened from a call summary sits above it
   if (sh && sh.firstChild) { sh._gen = (sh._gen || 0) + 1; sh.innerHTML = ""; return; }   // the summary panel sits on top of everything else: Esc closes it and leaves what is under it alone
