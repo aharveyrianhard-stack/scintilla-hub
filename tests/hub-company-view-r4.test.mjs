@@ -20,7 +20,7 @@ const num = (v) => { if (v == null) return null; const n = typeof v === "number"
 /* ── SOCIAL: where it comes from ──────────────────────────────────────────────────────────────────── */
 const soc = new Function("esc", "num",
   line(/^const SOC_LEGAL = [^\n]*/m) + page.match(/^const SOC_GENERIC = new Set\(\[[\s\S]*?\]\);\n/m)[0] +
-  fn("socKeywords") + fn("socHits") + fn("socMatchYT") + fn("socLeanOf") + fn("socLeanX") + fn("socLeanYT") + fn("socLeanTally") + fn("socLeanChip") +
+  fn("socKeywords") + fn("socHits") + fn("socMatchYT") + fn("socLeanOf") + fn("socLeanX") + fn("socLeanYT") + fn("socLeanTally") + fn("socLeanHow") + fn("socLeanChip") +
   "\nreturn { socKeywords, socMatchYT, socLeanX, socLeanYT, socLeanTally, socLeanChip };")(esc, num);
 
 test("SOCIAL YouTube: every video says whether it is from a channel you subscribe to or from the ticker search", () => {
@@ -52,28 +52,29 @@ test("SOCIAL: the tab defaults to YOUR CHANNELS, keeps + YOUTUBE SEARCH as a lab
   assert.match(page, /case "socview": \{[\s\S]{0,200}lsSet\(SOC_VIEW_KEY, a\.dataset\.v === "ALL" \? "ALL" : "YOURS"\);/);
 });
 
-test("SOCIAL lean: YouTube's is the STORED lean (youtube_video_sentiment); X's is computed on the page; unscored says so", () => {
+test("SOCIAL lean: a scored video carries its STORED lean; anything else is read on the page and marked ·p; nothing is written", () => {
   const items = [
-    { src: "YT", id: "v1", sub: true, at: "2026-09-27T10:00:00Z" },
-    { src: "YT", id: "v2", sub: true, at: "2026-09-27T10:00:00Z" },
-    { src: "YT", id: "v3", sub: false, at: "2026-09-27T10:00:00Z" },
-    { src: "YT", id: "v4", sub: true, at: "2026-09-27T10:00:00Z" },
+    { src: "YT", id: "v1", sub: false, text: "MU crash coming", at: "2026-09-27T10:00:00Z" },
+    { src: "YT", id: "v2", sub: false, text: "MU to the moon", at: "2026-09-27T10:00:00Z" },
+    { src: "YT", id: "v3", sub: true, text: "Micron breakout, strong buy", at: "2026-09-27T10:00:00Z" },
+    { src: "YT", id: "v4", sub: true, text: "Micron earnings preview", at: "2026-09-27T10:00:00Z" },
     { src: "X", text: "breakout, strong buy", at: "2026-09-27T10:00:00Z" },
     { src: "X", text: "weak guide, sell", at: "2026-09-27T10:00:00Z" },
   ];
-  soc.socLeanYT(items, [{ video_id: "v1", lean: 0.5, sample_src: "transcript" }, { video_id: "v2", lean: -0.25 }, { video_id: "v4", lean: 0 }]);
-  soc.socLeanX(items, (t) => (/buy|breakout/.test(t) ? 2 : 0) - (/sell|weak/.test(t) ? 2 : 0));
-  assert.deepEqual(items.map((i) => i.lean), ["bull", "bear", null, "flat", "bull", "bear"]);
-  assert.deepEqual(items.map((i) => i.leanHow), ["stored", "stored", "none", "stored", "page", "page"]);
+  const lex = (t) => (/buy|breakout/.test(t) ? 2 : 0) - (/sell|weak/.test(t) ? 2 : 0);
+  soc.socLeanYT(items, [{ video_id: "v1", lean: 0.5, sample_src: "title" }, { video_id: "v2", lean: -0.25, sample_src: "title" }], lex);
+  soc.socLeanX(items, lex);
+  assert.deepEqual(items.map((i) => i.lean), ["bull", "bear", "bull", "flat", "bull", "bear"], "the STORED lean wins over the page's reading of the same title");
+  assert.deepEqual(items.map((i) => i.leanHow), ["stored", "stored", "page", "page", "page", "page"]);
   const tally = soc.socLeanTally(items, Date.parse("2026-09-28T10:00:00Z"), 7);
-  assert.deepEqual(tally, { bull: 2, bear: 2, flat: 1, none: 1 });
-  assert.match(soc.socLeanChip(items[0]), /▲ BULLISH/);
-  assert.match(soc.socLeanChip(items[1]), /▼ BEARISH/);
-  assert.match(soc.socLeanChip(items[2]), /NOT SCORED/);
-  assert.match(soc.socLeanChip(items[2]), /search videos are not scored/);
+  assert.deepEqual(tally, { bull: 3, bear: 2, flat: 1, none: 0 });
+  assert.match(soc.socLeanChip(items[0]), /▲ BULLISH<\/span>/, "a stored lean has no ·p mark");
+  assert.match(soc.socLeanChip(items[2]), /▲ BULLISH<i>·p<\/i>/, "a page reading is marked ·p");
+  assert.match(soc.socLeanChip(items[2]), /worked out on this page from the title/);
+  assert.match(soc.socLeanChip({ src: "YT", lean: null, leanHow: "none" }), /NOT SCORED/);
   const load = fn("coSocialLoad");
   assert.match(load, /pg\("youtube_video_sentiment\?select=video_id,lean,sample_src&ticker=eq\." \+ T/, "one read of the stored leans for this name");
-  assert.match(load, /SENTI\.lexLean/, "X uses the SENTIMENT room's own word list");
+  assert.match(load, /SENTI\.lexLean/, "the page's reading is the SENTIMENT room's own word list");
   assert.doesNotMatch(load, /method:\s*"(POST|PATCH|DELETE)"/, "nothing is written");
 });
 

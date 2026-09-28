@@ -4478,6 +4478,7 @@ body.co-exp .cv-side{flex:initial;min-height:0}
 .soc-lean.bull{color:var(--bull);border-color:var(--bull)}
 .soc-lean.bear{color:var(--bear);border-color:var(--bear)}
 .soc-lean.none{color:#8A8A92;border-style:dashed}
+.soc-lean i{font-style:normal;font-weight:400;color:#8A8A92;margin-left:3px;letter-spacing:0}
 @container (max-width:520px){ .soc-row{grid-template-columns:86px minmax(0,1fr) auto} .soc-txt,.soc-hit,.soc-lean{grid-column:1 / -1} .soc-kpis{grid-template-columns:repeat(3,minmax(0,1fr))} }
 /* PHONE — one column: the line wraps, the chart, three-by-two numbers, tabs that scroll sideways */
 @media (max-width:760px){
@@ -19029,25 +19030,26 @@ function socMatchYT(vids, t, kws) {
   for (const it of out) if (it.sub === false && subIds.has(chOf.get(it.id))) it.sub = true;
   return out;
 }
-/* R4 — BULLISH OR BEARISH, PER MENTION. Two different instruments, never mixed, each named where it is shown:
-   YOUTUBE  the STORED lean from youtube_video_sentiment (the scheduled youtube-sentiment job, method lm-v1: a finance word
-            list, with negation, over the transcript window around each mention of the ticker — or the title when no
-            transcript is held). Only the SUBSCRIBED channels' videos of the job's last 7 days are scored; a search video, or an
-            older one, says "not scored" instead of pretending to be neutral.
-   X        NOTHING IS STORED for X posts. The lean shown is computed on this page with the SENTIMENT room's own word list
-            (SENTI.lexLean: bullish words minus bearish words, with negation) over the post and the post it quotes.
-   Neither is an AI read. lean > 0 BULLISH · lean < 0 BEARISH · 0 NO LEAN (its words cancel, or it has none). */
+/* R4 — BULLISH OR BEARISH, PER MENTION. Word-list leans, never an AI read, each labelled with where it came from:
+   STORED   youtube_video_sentiment (the youtube-sentiment job, method lm-v1: a finance word list with negation). MEASURED
+            28 Sep: 1,050 rows, every one a SEARCH-found video published 17–28 Sep, every one scored from its TITLE — the job
+            has stored no per-video lean for a subscribed channel yet (youtube_transcripts is empty).
+   PAGE     everything else — X posts (nothing is stored for X) and any YouTube video the job has not scored — gets the
+            SENTIMENT room's own word list (SENTI.lexLean: bullish words minus bearish words, with negation) over the post
+            (and the post it quotes) or the video's title, worked out on this page and stored nowhere.
+   lean > 0 BULLISH · lean < 0 BEARISH · 0 NO LEAN (its words cancel, or it has none) · NOT SCORED only when neither exists. */
 function socLeanOf(v) { const n = num(v); return n == null ? null : n > 0 ? "bull" : n < 0 ? "bear" : "flat"; }
 function socLeanX(items, leanFn) {
   for (const it of items) if (it.src === "X") { let n = null; try { n = leanFn ? leanFn(it.text + " " + (it.orig || "")) : null; } catch (_) { n = null; } it.lean = socLeanOf(n); it.leanHow = "page"; }
   return items;
 }
-function socLeanYT(items, rows) {
+function socLeanYT(items, rows, leanFn) {
   const by = new Map(); for (const r of rows || []) if (r && r.video_id) by.set(r.video_id, r);
   for (const it of items) if (it.src === "YT") {
     const r = it.id ? by.get(it.id) : null;
-    if (r) { it.lean = socLeanOf(r.lean) || "flat"; it.leanHow = "stored"; it.leanSrc = r.sample_src || ""; }
-    else { it.lean = null; it.leanHow = "none"; }
+    if (r) { it.lean = socLeanOf(r.lean) || "flat"; it.leanHow = "stored"; it.leanSrc = r.sample_src || ""; continue; }
+    let n = null; try { n = leanFn ? leanFn(it.text) : null; } catch (_) { n = null; }
+    it.lean = socLeanOf(n); it.leanHow = it.lean ? "page" : "none"; it.leanSrc = "title";
   }
   return items;
 }
@@ -19056,11 +19058,16 @@ function socLeanTally(items, nowMs, days) {
   for (const it of items) { if (nowMs - Date.parse(it.at) > days * 86400e3) continue; o[it.lean || "none"]++; }
   return o;
 }
+function socLeanHow(it) {
+  return it.leanHow === "stored" ? "stored by the sentiment job (youtube_video_sentiment · lm-v1 word list · from the " + (it.leanSrc || "title") + ")"
+    : "word list worked out on this page from the " + (it.src === "X" ? "post" : "title") + " (SENTI.lexLean) — not stored";
+}
 function socLeanChip(it) {
-  if (it.lean === "bull") return '<span class="soc-lean bull" title="' + esc(it.leanHow === "stored" ? "stored lean (youtube_video_sentiment · lm-v1 word list · " + (it.leanSrc || "transcript") + ")" : "word-list lean computed on this page (SENTI.lexLean) — not stored") + '">▲ BULLISH</span>';
-  if (it.lean === "bear") return '<span class="soc-lean bear" title="' + esc(it.leanHow === "stored" ? "stored lean (youtube_video_sentiment · lm-v1 word list · " + (it.leanSrc || "transcript") + ")" : "word-list lean computed on this page (SENTI.lexLean) — not stored") + '">▼ BEARISH</span>';
-  if (it.lean === "flat") return '<span class="soc-lean flat" title="its bullish and bearish words cancel, or it has none">NO LEAN</span>';
-  return '<span class="soc-lean none" title="' + esc(it.src === "YT" ? (it.sub === false ? "search videos are not scored by the sentiment job" : "the sentiment job scores the last 7 days of subscribed videos; this one is not scored") : "no lean") + '">NOT SCORED</span>';
+  const tag = it.leanHow === "stored" ? "" : "<i>·p</i>";   /* ·p = worked out on this page */
+  if (it.lean === "bull") return '<span class="soc-lean bull" title="' + esc(socLeanHow(it)) + '">▲ BULLISH' + tag + "</span>";
+  if (it.lean === "bear") return '<span class="soc-lean bear" title="' + esc(socLeanHow(it)) + '">▼ BEARISH' + tag + "</span>";
+  if (it.lean === "flat") return '<span class="soc-lean flat" title="' + esc(socLeanHow(it) + " · its bullish and bearish words cancel, or it has none") + '">NO LEAN' + tag + "</span>";
+  return '<span class="soc-lean none" title="no stored lean and no text to read">NOT SCORED</span>';
 }
 /* per-day counts over the window, plus the last 24 h / 7 d / 30 d and the 7 days before that */
 function socSeries(items, days, nowMs) {
@@ -19130,7 +19137,7 @@ function coSocialHTML(data) {
     '<div class="soc-src-note" id="coSocialSrc">' + socSourceNoteHTML(v, c && c.d) + "</div>" +
     '<div class="soc-how">A post or video counts once, on its New York day, when its text or title holds a keyword' +
       (isFund ? " (a fund: the cashtag only)" : "") + ", or when the collector filed it under $" + esc(t) + ". " +
-      "▲ BULLISH / ▼ BEARISH is a word-list lean, not an AI read: YouTube's is stored by the sentiment job, X's is worked out on this page.</div>" +
+      "▲ BULLISH / ▼ BEARISH is a word-list lean, not an AI read: stored by the sentiment job where it scored the video, otherwise worked out on this page (marked ·p). Nothing is stored for X posts.</div>" +
     '<div id="coSocialBody">' + (c ? socBodyHTML(c.d, v) : '<div class="soc-empty">reading the X feed and the YouTube tables…</div>') + "</div></div>";
 }
 /* WHERE EACH SIDE COMES FROM, printed on the tab */
@@ -19152,7 +19159,7 @@ function socBodyHTML(d, v) {
       socBlockHTML("X", "posts on your X list", socSeries(d.xs, d.days, d.nowMs), d.days, d.xFresh,
         Object.assign(xLean, { how: "computed on this page with the SENTIMENT room's word list; nothing is stored for X posts" })) +
       socBlockHTML("YOUTUBE", v === "ALL" ? "videos · yours + search" : "videos · your channels", socSeries(ys, d.days, d.nowMs), d.days, yFresh,
-        Object.assign(yLean, { how: "stored by the youtube-sentiment job (youtube_video_sentiment, lm-v1); it scores the last 7 days of subscribed videos only" + (d.yvsOk ? "" : " — the table did not answer") })) +
+        Object.assign(yLean, { how: "a video the sentiment job has scored carries its STORED lean (youtube_video_sentiment, lm-v1, from the title); any other is read on this page from its title with the SENTIMENT room's word list (marked ·p)" + (d.yvsOk ? "" : " — the stored table did not answer") })) +
     "</div>" +
     '<div class="soc-lh">LATEST MENTIONS</div>' + socListHTML(all, d.nowMs);
 }
@@ -19175,7 +19182,7 @@ async function coSocialLoad(t, kws) {
   ]);
   const xs = x.ok ? socMatchX(x.v, kws, since) : [];
   socLeanX(xs, typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
-  const ys = socLeanYT(socMatchYT(vids || [], t, kws), yvs || []);
+  const ys = socLeanYT(socMatchYT(vids || [], t, kws), yvs || [], typeof SENTI !== "undefined" && SENTI && SENTI.lexLean ? SENTI.lexLean : null);
   const newestX = x.ok ? x.v.reduce((m, p) => (p && p.created_at > m ? p.created_at : m), "") : "";
   const xStale = newestX && nowMs - Date.parse(newestX) > 36 * 3600e3;
   const xFresh = !x.ok ? "the X feed did not answer (" + esc(x.why) + ")" :
