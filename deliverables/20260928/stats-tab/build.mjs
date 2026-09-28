@@ -10,12 +10,14 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { stepsChart, twoPanelChart, barsChart, pct, signed, thousands, esc, PAL } from "./charts.mjs";
+import { ENTRY, entryFaults } from "./entry.mjs";
+import { twoPanelChart, barsChart, rangeChart, curveChart, rangeVerdict, pct, signed, thousands, esc, PAL } from "./charts.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
 const S8 = JSON.parse(readFileSync(join(ROOT, "research/statistics/data/s8-summary.json"), "utf8"));
 const S9 = JSON.parse(readFileSync(join(ROOT, "research/statistics/data/s9-research.json"), "utf8"));
+const L = JSON.parse(readFileSync(join(ROOT, "research/statistics/data/s8-ladder.json"), "utf8"));   // the ladder's full rows: ranges, shuffles, the combination search
 const BUILT = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
 const STAMP = "20260928";
 const DATA_TO = "2026-09-25";
@@ -46,99 +48,132 @@ const THEMES = [
   { id: "execution", title: "Execution", why: "The setups that held in both halves of history, how rare they are, and what an entry into a report is worth." },
 ];
 
-/* ── the six cards, every number from the two JSON files ─────────────────────────────────────────────── */
-const spy8 = S8.funds.SPY, spy9 = S9.instruments.SPY, band = S9.band.SPY.full;
-const rows = (T) => spy8.rows.find((r) => r.T === T);
+/* ── the cards, every number from the published JSON files ───────────────────────────────────────────────
+   28 Sep review round: each card now carries its METHOD (what the horizon is, how the condition is cut). The entry
+   rules below admit a card to the tab only if its horizon is a pivot/swing (not a fixed count of sessions), its
+   condition is read over the full distribution (not a forced cut-off), and it has a named review. Cards that fail
+   are kept, fixed and drawn, but HELD BACK below the tab with the reason printed. */
+const spy8 = S8.funds.SPY, band = S9.band.SPY.full;
+const ladRow = (key) => L.indexes.SPY.rows[key];
 const stocksAny = S8.stocks.states[0];
+const INST = ["SPY", "QQQ", "IWM"];
+const rebounds = (t) => S9.instruments[t].all.filter((d) => typeof d.newHigh === "boolean");
+const share = (a, f) => (a.length ? (100 * a.filter(f).length) / a.length : null);
 
-/* 1 · market: SPY low RSI above vs below the 200-day */
-const c1steps = [5, 10, 15, 20, 25, 30].map((T) => { const r = rows(T); return { label: `bottom ${T}%`, short: `≤${T}%`, values: [r.on.win, r.off.win], n: [r.on.n, r.off.n] }; });
-const r10 = rows(10);
+/* Spearman rank correlation (ties share their average rank). */
+export function spearman(xs, ys) {
+  const rank = (a) => { const idx = a.map((v, i) => [v, i]).sort((p, q) => p[0] - q[0]), r = new Array(a.length); for (let i = 0; i < idx.length;) { let j = i; while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++; for (let k = i; k <= j; k++) r[idx[k][1]] = (i + j) / 2 + 1; i = j + 1; } return r; };
+  const rx = rank(xs), ry = rank(ys), n = xs.length, mx = (n + 1) / 2;
+  let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < n; i++) { sxy += (rx[i] - mx) * (ry[i] - mx); sxx += (rx[i] - mx) ** 2; syy += (ry[i] - mx) ** 2; }
+  return sxy / Math.sqrt(sxx * syy);
+}
+/* "Has fallen at least X% from its last swing high": every whole percent from 0 to the deepest decline, no buckets. */
+export function fallenCurve(recs) {
+  const deepest = Math.max(...recs.map((d) => -d.depth)), out = [];
+  for (let X = 0; X <= Math.floor(deepest); X++) { const g = recs.filter((d) => -d.depth >= X); out.push({ X, n: g.length, share: share(g, (d) => d.newHigh), range: wilson(share(g, (d) => d.newHigh), g.length) }); }
+  return out;
+}
+
+/* 1 · market: SPY low RSI above vs below the 200-day — dots with S8's month-clustered 95% ranges */
+const c1T = [5, 10, 15, 20, 25, 30];
+const c1rows = c1T.map((T) => ({ T, on: ladRow(`rsi<=${T}|on|20`), off: ladRow(`rsi<=${T}|off|20`) }));
+const anyOn = spy8.any.on.win, anyOff = spy8.any.off.win;
+const crossCount = c1rows.reduce((k, r) => k + (rangeVerdict(r.on.ci[0], r.on.ci[1], anyOn) === "crosses") + (rangeVerdict(r.off.ci[0], r.off.ci[1], anyOff) === "crosses"), 0);
+const r10 = c1rows.find((r) => r.T === 10), r5 = c1rows.find((r) => r.T === 5), r20 = c1rows.find((r) => r.T === 20);
+const ov = [Math.max(r10.on.ci[0], r10.off.ci[0]), Math.min(r10.on.ci[1], r10.off.ci[1])];
 const c1 = {
   id: "market-spy-low-rsi-vs-200day", theme: "market",
   question: "Does a low SPY RSI mean more when SPY is above its 200-day than below it?",
-  answer: `Yes, on the record so far. SPY's RSI in its bottom 10% while SPY was above its 200-day was up 20 sessions later ${pct(r10.on.win)} of ${r10.on.n} times (any uptrend day ${pct(spy8.any.on.win)}). The same reading below the 200-day: ${pct(r10.off.win)} of ${r10.off.n}, a coin flip against ${pct(spy8.any.off.win)} for any downtrend day.`,
-  uncertainty: `The bottom-10% share over all days is ${pct(r10.all.win)} with a 95% range of ${rng(r10.ci)} (months resampled), and ${pct(r10.on.win)} is right at the level random uptrend days reach 1 time in 20 (S8), so read it as suggestive, not settled. The RSI full-history lane (28 Sep, in flight) is re-measuring this zone with a 90% range; if it disagrees, this card changes.`,
-  sample: { instrument: "SPY", from: spy8.from, to: DATA_TO, days: spy8.any.all.n, episodes: r10.all.n, unit: "days · episodes at bottom 10%" },
-  study: "S8", review: { by: "S9 research program, 27 Sep (restated the reading, added the 3%-above check: 84.2% of 57)", status: "reviewed" },
-  chart: { kind: "steps", args: { title: "SPY: up 20 sessions after its RSI reached its bottom X% — above vs below the 200-day", subtitle: `share of episodes up after 20 sessions · own 3-year RSI percentile · green = above that state's any-day line, red = below`, steps: c1steps, series: [{ label: "SPY above its 200-day" }, { label: "SPY below its 200-day" }], refs: [{ value: spy8.any.on.win, label: `any uptrend day ${pct(spy8.any.on.win)}` }, { value: spy8.any.off.win, label: `any downtrend day ${pct(spy8.any.off.win)}` }], yMin: 40, yMax: 90 } },
+  answer: `Not in a way that can be told apart from chance, at any step. At SPY's RSI bottom 10%: above its 200-day, up 20 sessions later ${pct(r10.on.ep.win)} of ${r10.on.ep.n} times, 95% range ${rng(r10.on.ci)}, which contains any uptrend day's ${pct(anyOn)}; below it, ${pct(r10.off.ep.win)} of ${r10.off.ep.n}, range ${rng(r10.off.ci)}, which contains any downtrend day's ${pct(anyOff)}. The two ranges overlap from ${pct(ov[0])} to ${pct(ov[1])}. The steps do not even agree with each other: at the bottom 5% the below-200 reading sits further above its line (${pct(r5.off.ep.win)} vs ${pct(anyOff)}) than the above-200 one (${pct(r5.on.ep.win)} vs ${pct(anyOn)}), and at the bottom 20% the above-200 reading is under its line (${pct(r20.on.ep.win)} vs ${pct(anyOn)}). ${crossCount} of the ${c1rows.length * 2} ranges on the chart cross their any-day line.`,
+  uncertainty: `Ranges are S8's month-clustered 95% ranges. The above-200 reading at the bottom 10% (${pct(r10.on.ep.win)}) is exactly the level random uptrend days reach 1 time in 20 (S8 shuffle, 95th percentile ${pct(r10.on.shuffle.p95)}). The RSI full-history lane (28 Sep, in flight) reports no reliable gain over any day in this zone.`,
+  sample: { instrument: "SPY", from: spy8.from, to: DATA_TO, days: spy8.any.all.n, episodes: r10.on.ep.n + r10.off.ep.n, unit: "days · episodes at bottom 10% (above + below)" },
+  method: { horizon: { kind: "sessions", text: "up after a fixed 20 sessions" }, cutoffs: { kind: "fixed", text: "fixed steps of the RSI percentile (bottom 5, 10, … 30%) and a fixed 200-day line" } },
+  study: "S8", review: { by: "S8's own month-clustered ranges and 200-draw shuffle (inside the study, not a second lane)", status: "reviewed", level: "in-study" },
+  chart: { kind: "range", args: { title: "SPY: up 20 sessions after its RSI reached its bottom X% — above vs below the 200-day, with 95% ranges", subtitle: "dot = share of episodes up after 20 sessions · line = S8's month-clustered 95% range · green/red = dot above/below that state's any-day line", groups: c1rows.map((r) => ({ label: `bottom ${r.T}%`, short: `≤${r.T}%`, sub: `${r.on.ep.n} · ${r.off.ep.n}`, marks: [{ value: r.on.ep.win, lo: r.on.ci[0], hi: r.on.ci[1], n: r.on.ep.n, ref: anyOn, tip: `bottom ${r.T}% · above 200-day: ${pct(r.on.ep.win)} of ${r.on.ep.n} · 95% range ${rng(r.on.ci)} · any uptrend day ${pct(anyOn)}` }, { value: r.off.ep.win, lo: r.off.ci[0], hi: r.off.ci[1], n: r.off.ep.n, ref: anyOff, tip: `bottom ${r.T}% · below 200-day: ${pct(r.off.ep.win)} of ${r.off.ep.n} · 95% range ${rng(r.off.ci)} · any downtrend day ${pct(anyOff)}` }] })), series: [{ label: "SPY above its 200-day" }, { label: "SPY below its 200-day" }], refs: [{ value: anyOn, label: `any uptrend day ${pct(anyOn)}` }, { value: anyOff, label: `any downtrend day ${pct(anyOff)}` }], yMin: 30, yMax: 95 } },
 };
 
-/* 2 · pullbacks: depth of the decline → the rebound made a new high */
-const allRebounds = spy9.all.filter((d) => typeof d.newHigh === "boolean");
-const newHighAll = (100 * allRebounds.filter((d) => d.newHigh).length) / allRebounds.length;
-const c2groups = spy9.depthTable.map((b) => ({ label: b.bucket, sub: `${b.n} declines`, bars: [{ value: b.newHigh, n: b.n, tip: `${b.bucket}: ${pct(b.newHigh)} of ${b.n} rebounds made a new high · 95% range ${rng(wilson(b.newHigh, b.n))}` }] }));
-const dt = (bucket) => spy9.depthTable.find((b) => b.bucket === bucket);
+/* 2 · pullbacks: once SPY has fallen X% from its last swing high, how often did the next swing make a new high? */
+const curves = Object.fromEntries(INST.map((t) => [t, fallenCurve(rebounds(t))]));
+const refNH = Object.fromEntries(INST.map((t) => [t, share(rebounds(t), (d) => d.newHigh)]));
+const at = (t, X) => curves[t].find((p) => p.X === X);
+const firstBelow = (t) => curves[t].find((p) => p.share < refNH[t])?.X;
+const sens = S9.sensitivity.SPY;
 const c2 = {
-  id: "pullbacks-spy-depth-to-new-high", theme: "pullbacks",
-  question: "When SPY pulls back, does the depth of the decline tell whether the next swing makes a new high?",
-  answer: `It does, sharply. Declines of 3–5% (${dt("3–5%").n} since 2003): ${pct(dt("3–5%").newHigh)} of the rebounds made a new high. 5–10% (${dt("5–10%").n}): ${pct(dt("5–10%").newHigh)}. 10–20% (${dt("10–20%").n}): ${pct(dt("10–20%").newHigh)}. Across all ${allRebounds.length} declines: ${pct(newHighAll)}. That is the “selling too early” question in numbers: on a 3–5% pullback the next swing usually makes a new high; on a 10%+ decline it usually does not.`,
-  uncertainty: `Counts are small in the deep buckets: 10–20% has ${dt("10–20%").n} declines (95% range ${rng(wilson(dt("10–20%").newHigh, dt("10–20%").n))}) and 20%+ has ${dt("20%+").n}, which is a list, not a rate. Swings are 10/10 pivots, known only 10 bars later.`,
-  sample: { instrument: "SPY", from: "2003-09-11", to: DATA_TO, days: 5797, episodes: allRebounds.length, unit: "bars · declines (pivot to pivot)" },
-  study: "S9", review: { by: "S9 lane's own sensitivity rows (pivot windows 5 and 20: the counts change, the big declines do not)", status: "reviewed" },
-  chart: { kind: "bars", args: { title: "SPY: share of rebounds that made a new high, by depth of the decline", subtitle: "every decline since 2003 between 10/10 pivots · green = above the all-declines share, red = below", groups: c2groups, ref: { value: newHighAll, label: `all declines ${pct(newHighAll)}` }, yMax: 100 } },
+  id: "pullbacks-spy-fallen-so-far-to-new-high", theme: "pullbacks",
+  question: "Once SPY has fallen X% from its last swing high, how often did the next swing go on to make a new high?",
+  answer: `The further it has already fallen, the less often the rebound made a new high, and this uses only what is known during the fall. Of all ${rebounds("SPY").length} SPY declines since 2003, ${pct(refNH.SPY)} were followed by a new high. Of the ${at("SPY", 5).n} that got at least 5% deep, ${pct(at("SPY", 5).share)}; of the ${at("SPY", 10).n} that got at least 10% deep, ${pct(at("SPY", 10).share)}. QQQ and IWM fall the same way but less steeply: at 10% down, QQQ ${pct(at("QQQ", 10).share)} of ${at("QQQ", 10).n} and IWM ${pct(at("IWM", 10).share)} of ${at("IWM", 10).n}, so SPY's ${pct(at("SPY", 10).share)} is not repeated in its siblings. ${(() => { const a = Math.min(...INST.map(firstBelow)), b = Math.max(...INST.map(firstBelow)); return `All three drop under their own all-declines line from about ${a === b ? a : a + "–" + b}% down.`; })()}`,
+  uncertainty: `Counts shrink along the curve: SPY has ${at("SPY", 10).n} declines that got 10% deep (95% range ${rng(at("SPY", 10).range)}, not clustered) and ${at("SPY", 20).n} that got 20% deep, which is a list, not a rate; the chart fades points as their count falls instead of cutting them off. Swings are 10/10 pivots: the swing high is confirmed 10 bars after it, and one long fall can be split into several pivot declines (SPY's deepest here is ${(-Math.min(...rebounds("SPY").map((d) => d.depth))).toFixed(1)}%, not 2008's full fall). With a 20-bar pivot the count of SPY declines that reached 10% goes from ${sens["10"].big10} to ${sens["20"].big10} (S9 sensitivity), so the deep end depends on the pivot width.`,
+  sample: { instrument: "SPY · QQQ · IWM", from: "2003-09-11", to: DATA_TO, days: 5797, episodes: rebounds("SPY").length, unit: "SPY bars · SPY declines (pivot to pivot)" },
+  method: { horizon: { kind: "pivot", text: "the next swing high after the decline's low (10/10 pivots)" }, cutoffs: { kind: "full", text: "every whole percent of fall from 0 to the deepest decline" } },
+  study: "S9", review: { by: `Same measurement on QQQ and IWM, drawn on the chart (inside the study, not a second lane): all three fall as the decline deepens; SPY's deep end is lower than both siblings'`, status: "reviewed", level: "in-study" },
+  chart: { kind: "curve", args: { title: "Once the index had fallen X% from its last swing high: how often the next swing made a new high", subtitle: "every decline between 10/10 pivots since 2003 · each point = the declines that got at least X% deep · green/red = above/below that index's own all-declines share · faint = few declines · dotted line = SPY's all-declines share", xLabel: "fallen so far from the last swing high", xMax: Math.ceil(Math.max(...INST.map((t) => curves[t].at(-1).X)) / 5) * 5, yMin: 0, yMax: 100, series: INST.map((t, i) => ({ label: t, ref: { value: refNH[t], label: `all declines SPY ${refNH.SPY.toFixed(1)} · QQQ ${refNH.QQQ.toFixed(1)} · IWM ${pct(refNH.IWM)}` }, showRef: i === 0, points: curves[t].map((p) => ({ x: p.X, y: p.share, n: p.n, tip: `${t} at least ${p.X}% down: ${pct(p.share)} of ${p.n} went on to a new high · 95% range ${rng(p.range)} · all ${t} declines ${pct(refNH[t])}` })) })) } },
 };
 
-/* 3 · pullbacks: the 200-day band */
+/* 3 · pullbacks: the 200-day band — up after 60 drawn as the DIFFERENCE from any day, so bars start at zero */
 const shortBand = (b) => (b.includes("more than") ? (b.includes("below") ? "−10%+" : "+10%+") : (b.includes("below") ? "−" : "+") + b.replace(/ (below|above)/, ""));
-const c3groups = band.bands.map((b) => ({ label: b.band.replace("more than ", ">"), short: shortBand(b.band), sub: `${b.shareDays}% of days`, days: b.days, up60: b.up60, mdd60Bad: b.mdd60Bad }));
+const c3groups = band.bands.map((b) => ({ label: b.band.replace("more than ", ">"), short: shortBand(b.band), sub: `${b.shareDays}% of days`, days: b.days, up60: b.up60, up60d: +(b.up60 - band.base.up60).toFixed(1), mdd60Bad: b.mdd60Bad }));
 const bb = (name) => band.bands.find((b) => b.band === name);
+const dmin = Math.min(...c3groups.map((g) => g.up60d)), dmax = Math.max(...c3groups.map((g) => g.up60d));
 const c3 = {
   id: "pullbacks-spy-200day-band", theme: "pullbacks",
   question: "How far below its 200-day does SPY have to be before “deep below” becomes a problem?",
   answer: `More than 10% below (${bb("more than 10% below").shareDays}% of SPY's days) is where the wide outcomes live: up 60 sessions later ${pct(bb("more than 10% below").up60)} of the time (any day ${pct(band.base.up60)}) with a middle result of ${signed(bb("more than 10% below").med60)}, but ${pct(bb("more than 10% below").mdd60Bad)} of those days saw a close 10% lower inside the 60 sessions. Days 2–5% above the line: up ${pct(bb("2–5% above").up60)}, and only ${pct(bb("2–5% above").mdd60Bad)} saw a 10% drop.`,
-  uncertainty: `Days cluster: the ${bb("more than 10% below").days} days more than 10% below come from a handful of bear markets (2008–09, 2020, 2022), so the shares are those episodes, not ${bb("more than 10% below").days} independent draws. Slope of the 200-day and the 50/200 order are not yet a second dimension (S9 C3).`,
+  uncertainty: `Days cluster: the ${bb("more than 10% below").days} days more than 10% below come from a handful of bear markets (2008–09, 2020, 2022), so the shares are those episodes, not ${bb("more than 10% below").days} independent draws. No range is published per band. Slope of the 200-day and the 50/200 order are not yet a second dimension (S9 C3).`,
   sample: { instrument: "SPY", from: band.from, to: band.to, days: band.days, episodes: band.bands.length, unit: "days · bands" },
-  study: "S9", review: { by: "S9 breaking-point table (first close below / 5% / 10% below) tells the same story from the other side", status: "reviewed" },
-  chart: { kind: "twoPanel", args: { title: "SPY by its distance from the 200-day: up after 60 sessions, and how often a 10% drop followed", subtitle: "close ÷ 200-day SMA − 1 · every day 2004–2026 · green = above the any-day line, red = below; the drop share is drawn in the down colour", groups: c3groups, panels: [{ key: "up60", label: "up 60 sessions later", mode: "vsRef", ref: { value: band.base.up60, label: `any day ${pct(band.base.up60)}` }, yMax: 100, yMin: 40 }, { key: "mdd60Bad", label: "a close 10% lower within 60 sessions", mode: "down", yMax: 50 }] } },
+  method: { horizon: { kind: "sessions", text: "a fixed 60 sessions, and a fixed 10% drop inside them" }, cutoffs: { kind: "fixed", text: "fixed distance bands (0–2, 2–5, 5–10, >10% from the 200-day)" } },
+  study: "S9", review: { by: "S9 breaking-point table (first close below the 200-day, then 1..15% below) tells the same story from the other side (inside the study)", status: "reviewed", level: "in-study" },
+  chart: { kind: "twoPanel", args: { title: "SPY by its distance from the 200-day: up after 60 sessions vs any day, and how often a 10% drop followed", subtitle: `close ÷ 200-day SMA − 1 · every day 2004–2026 · top: share up after 60 sessions MINUS any day's ${pct(band.base.up60)}, in points (green above, red below) · bottom: the drop share, in the down colour`, groups: c3groups, panels: [{ key: "up60d", label: `up 60 sessions later, points vs any day (${pct(band.base.up60)})`, mode: "sign", unit: "pts", yMin: Math.floor(dmin / 5) * 5, yMax: Math.max(5, Math.ceil(dmax / 5) * 5), valueFmt: (v) => (v > 0 ? "+" : "") + v.toFixed(1), tip: (g) => `${g.label}: up 60 sessions later ${pct(g.up60)} vs any day ${pct(band.base.up60)} (${g.up60d > 0 ? "+" : ""}${g.up60d.toFixed(1)} points) · ${thousands(g.days)} days` }, { key: "mdd60Bad", label: "a close 10% lower within 60 sessions", mode: "down", yMax: 50 }] } },
 };
 
-/* 4 · rsi: a stock's own RSI percentile, pooled over 313 stocks */
-const c4groups = stocksAny.rows.map((r) => ({ label: `≤${r.T}%`, sub: thousands(r.x.n), bars: [{ value: r.x.win, n: r.x.n, tip: `own RSI at or below its ${r.T}th percentile: up after 20 in ${pct(r.x.win)} of ${thousands(r.x.n)} episodes (any day ${pct(stocksAny.any.win)})` }] }));
-const s5 = stocksAny.rows.find((r) => r.T === 5), s30 = stocksAny.rows.find((r) => r.T === 30);
+/* 4 · rsi: a stock's own RSI percentile, pooled over the stocks — dots with S8's month-clustered ranges */
+const c4rows = stocksAny.rows.map((r) => { const f = L.names.fwd[`rsi<=${r.T}|all|20`]; return { T: r.T, win: r.x.win, n: r.x.n, ci: f?.ep?.ci || f?.ci || null, p95: f?.shuffle?.p95 }; });
+const s5 = c4rows.find((r) => r.T === 5), s30 = c4rows.find((r) => r.T === 30), anyStock = stocksAny.any.win;
+const c4cross = c4rows.filter((r) => rangeVerdict(r.ci?.[0], r.ci?.[1], anyStock) === "crosses").length;
 const c4 = {
   id: "rsi-stock-own-percentile-vs-any-day", theme: "rsi",
   question: "Does a stock's own low RSI beat any day, and how far down its own ladder does the edge last?",
-  answer: `A stock's RSI in the bottom 5% of its own 3-year history was up 20 sessions later ${pct(s5.x.win)} of ${thousands(s5.x.n)} times, against ${pct(stocksAny.any.win)} for any day. The edge shrinks step by step and is gone by the bottom 30% (${pct(s30.x.win)}). S8 adds that at the bottom 5% the stock beat SPY over the same days only 51.6% of the time: it mostly rode the tide.`,
-  uncertainty: `Episodes fire together in sell-offs (many names on the same days), so the effective sample is far smaller than the count; S8's month-clustered ranges for the fund rows are 8–20 points wide. Pooled over 313 names, unweighted by size or era.`,
-  sample: { instrument: `${S8.stocks.count} stocks`, from: "2004", to: DATA_TO, days: stocksAny.any.n, episodes: s5.x.n, unit: "stock-days · episodes at bottom 5%" },
-  study: "S8", review: { by: "S8 lane: month-clustered 95% ranges and a 200-draw shuffle on every fund row; the pooled stock rows carry the same method", status: "reviewed" },
-  chart: { kind: "bars", args: { title: "313 stocks: up 20 sessions after the stock's own RSI reached its bottom X%", subtitle: "own 3-year percentile · pooled episodes · green = above the any-day line, red = below", groups: c4groups, ref: { value: stocksAny.any.win, label: `any day ${pct(stocksAny.any.win)}` }, yMin: 50, yMax: 65 } },
+  answer: `A stock's RSI in the bottom 5% of its own 3-year history was up 20 sessions later ${pct(s5.win)} of ${thousands(s5.n)} times, against ${pct(anyStock)} for any day: a ${(s5.win - anyStock).toFixed(1)}-point gap whose 95% range (${rng(s5.ci)}) reaches ${s5.ci[0] < anyStock ? "just below" : "down to"} the any-day line. It shrinks step by step and is gone by the bottom 30% (${pct(s30.win)}). ${c4cross} of the ${c4rows.length} steps have a range that crosses the line. At the bottom 5% the stock beat SPY over the same days only ${pct(L.names.fwd["rsi<=5|all|20"].ep.vs_spy.beat)} of the time: it mostly rode the tide.`,
+  uncertainty: `Episodes fire together in sell-offs (many names on the same days), so the month-clustered range is the one that counts: ${rng(s5.ci)} at the bottom 5%, touching the any-day ${pct(anyStock)}. Random same-size draws of days reach ${pct(s5.p95)} 1 time in 20 (S8 shuffle), which ${pct(s5.win)} beats; the two checks disagree, so this is not settled. Pooled over ${S8.stocks.count} names, unweighted by size or era.`,
+  sample: { instrument: `${S8.stocks.count} stocks`, from: "2004", to: DATA_TO, days: stocksAny.any.n, episodes: s5.n, unit: "stock-days · episodes at bottom 5%" },
+  method: { horizon: { kind: "sessions", text: "up after a fixed 20 sessions" }, cutoffs: { kind: "fixed", text: "fixed steps of the own-RSI percentile (bottom 5, 10, … 70%)" } },
+  study: "S8", review: { by: "S8 lane: month-clustered 95% ranges and a 200-draw shuffle on the pooled stock rows, both drawn or quoted here (inside the study)", status: "reviewed", level: "in-study" },
+  chart: { kind: "range", args: { title: `${S8.stocks.count} stocks: up 20 sessions after the stock's own RSI reached its bottom X%, with 95% ranges`, subtitle: "own 3-year percentile · pooled episodes · dot = share up · line = S8's month-clustered 95% range · green/red = dot above/below the any-day line · hollow = range crosses it", groups: c4rows.map((r) => ({ label: `≤${r.T}%`, sub: thousands(r.n), marks: [{ value: r.win, lo: r.ci?.[0], hi: r.ci?.[1], n: r.n, ref: anyStock, tip: `own RSI at or below its ${r.T}th percentile: up after 20 in ${pct(r.win)} of ${thousands(r.n)} episodes · 95% range ${rng(r.ci)} · any day ${pct(anyStock)}` }] })), series: [], refs: [{ value: anyStock, label: `any day ${pct(anyStock)}` }], yMin: 50, yMax: 65 } },
 };
 
-/* 5 · fear: VIX at the SPY swing low by depth (median and quartiles from the per-decline records) */
-const bucketOf = (d) => { const x = -d.depth; return x < 3 ? "0–3%" : x < 5 ? "3–5%" : x < 10 ? "5–10%" : x < 20 ? "10–20%" : "20%+"; };
-const c5groups = spy9.depthTable.map((b) => {
-  const v = spy9.all.filter((d) => bucketOf(d) === b.bucket).map((d) => d.vixLow);
-  return { label: b.bucket, sub: `${b.n} declines`, bars: [{ value: b.vixLowMed, n: b.n, mode: "down", opacity: 0.35 + 0.6 * Math.min(1, b.vixLowMed / 70), tip: `${b.bucket}: VIX at the low, middle ${b.vixLowMed} · quarter to three-quarter ${quart(v, 0.25)?.toFixed(1)}–${quart(v, 0.75)?.toFixed(1)} · ${b.n} declines` }] };
-});
+/* 5 · fear: every SPY decline, how deep it went against the VIX on the day of its low — one dot per decline */
+const vixRecs = (t) => S9.instruments[t].all.filter((d) => d.vixLow != null);
+const rho = Object.fromEntries(INST.map((t) => [t, spearman(vixRecs(t).map((d) => -d.depth), vixRecs(t).map((d) => d.vixLow))]));
+const spyV = vixRecs("SPY"), vSorted = spyV.map((d) => d.vixLow).sort((a, b) => a - b);
+const vq = (q) => quart(vSorted, q);
+const midFifth = spyV.filter((d) => d.vixLow >= vq(0.4) && d.vixLow <= vq(0.6)).map((d) => -d.depth);
 const c5 = {
   id: "fear-vix-at-spy-swing-lows", theme: "fear",
-  question: "How high is the VIX at the low, given how far SPY has fallen so far?",
-  answer: `The VIX at SPY's swing low rises with the depth: middle ${dt("0–3%").vixLowMed} on 0–3% dips, ${dt("3–5%").vixLowMed} on 3–5%, ${dt("5–10%").vixLowMed} on 5–10%, ${dt("10–20%").vixLowMed} on 10–20% and ${dt("20%+").vixLowMed} on the ${dt("20%+").n} declines of 20% or more. A VIX in the low 20s has marked the low of a 5–10% decline far more often than of a 10%+ one.`,
-  uncertainty: `These are the VIX on the day of the low, not a level that calls the low in advance; the quarter-to-three-quarter ranges (in the hover) overlap between neighbouring buckets. VIX 3-month, put/call and Fear & Greed are not yet on this card (S9 D1–D3; the market-regime lane, 28 Sep, in flight).`,
-  sample: { instrument: "SPY swing lows · VIX", from: "2003-09-11", to: DATA_TO, days: 5797, episodes: spy9.all.length, unit: "bars · declines" },
-  study: "S9", review: { by: "S9 depth tables for QQQ and IWM show the same ordering", status: "reviewed" },
-  chart: { kind: "bars", args: { title: "VIX at SPY's swing low, by how far SPY fell (middle of each bucket)", subtitle: "the VIX is a fear measure, so it is drawn in the down colour; darker = higher", groups: c5groups, mode: "down", yMax: 70, unit: "", valueFmt: (v) => v.toFixed(1) } },
+  question: "How high was the VIX at SPY's swing lows, against how far SPY had fallen?",
+  answer: `Deeper declines ended with a higher VIX: the rank correlation between how far SPY fell and the VIX on the day of the low is ${rho.SPY.toFixed(2)} over ${spyV.length} declines since 2003 (QQQ ${rho.QQQ.toFixed(2)}, IWM ${rho.IWM.toFixed(2)}). The middle VIX at a SPY low was ${vq(0.5).toFixed(1)}. But the spread is wide: the ${midFifth.length} declines whose VIX at the low sat in the middle fifth of SPY's own lows (${vq(0.4).toFixed(1)}–${vq(0.6).toFixed(1)}) ranged from ${Math.min(...midFifth).toFixed(1)}% to ${Math.max(...midFifth).toFixed(1)}% deep.`,
+  uncertainty: `The VIX on the day of the low is known only once the low is confirmed (10 bars later), so this is a description of past lows, not a level that calls one. The four deepest declines carry the top-right of the chart on their own. VIX 3-month, put/call and Fear & Greed are not on this card yet (S9 D1–D3; the market-regime lane, 28 Sep, in flight).`,
+  sample: { instrument: "SPY swing lows · VIX", from: "2003-09-11", to: DATA_TO, days: 5797, episodes: spyV.length, unit: "bars · declines" },
+  method: { horizon: { kind: "pivot", text: "the swing low itself (10/10 pivots)" }, cutoffs: { kind: "full", text: "every decline drawn, no depth buckets" } },
+  study: "S9", review: { by: `S9's depth tables for QQQ and IWM order the same way (QQQ's 6 shallowest dips excepted); the rank correlation on QQQ and IWM is computed the same way (inside the study)`, status: "reviewed", level: "in-study" },
+  chart: { kind: "curve", args: { title: "Every SPY decline since 2003: how far it fell, and the VIX on the day of its low", subtitle: "one dot per decline between 10/10 pivots · the VIX is a fear measure, so it is drawn in the down colour; brighter = higher", xLabel: "depth of the decline (swing high to swing low)", xMax: Math.ceil(Math.max(...spyV.map((d) => -d.depth)) / 5) * 5, yMin: 0, yMax: Math.ceil(Math.max(...spyV.map((d) => d.vixLow)) / 10) * 10, yUnit: "", line: false, mode: "down", series: [{ label: "SPY declines", points: spyV.map((d) => ({ x: -d.depth, y: d.vixLow, n: 1, mode: "down", opacity: 0.35 + 0.6 * Math.min(1, d.vixLow / 70), tip: `${d.hi} → ${d.lo}: fell ${(-d.depth).toFixed(1)}% · VIX at the low ${d.vixLow.toFixed(1)}${d.newHigh === true ? " · next swing made a new high" : d.newHigh === false ? " · next swing did not make a new high" : ""}` })) }] } },
 };
 
-/* 6 · execution: the best combination in both halves of history */
-const combo = S8.combos[0];
-const c6groups = [
-  { label: "2004–2016", sub: `${combo.disc.n} trades`, bars: [{ value: combo.disc.win, n: combo.disc.n, ref: S8.base_halves.disc.win, tip: `2004–2016: up after 20 in ${pct(combo.disc.win)} of ${combo.disc.n} (any day ${pct(S8.base_halves.disc.win)})` }] },
-  { label: "2017–2026", sub: `${combo.conf.n} trades`, bars: [{ value: combo.conf.win, n: combo.conf.n, ref: S8.base_halves.conf.win, tip: `2017–2026: up after 20 in ${pct(combo.conf.win)} of ${combo.conf.n} (any day ${pct(S8.base_halves.conf.win)})` }] },
-];
+/* 6 · execution: the best combination — picked on BOTH halves, so neither half is a check */
+const comboL = L.combos.chosen[0], combo = S8.combos[0], tested = L.combos.tested;
+const discR = wilson(comboL.disc.win, comboL.disc.n);
 const c6 = {
   id: "execution-best-combo-both-halves", theme: "execution",
-  question: "Did the best entry combination hold in both halves of history, or was it found in one and fitted to the other?",
-  answer: `It held. ${combo.cond}, while ${combo.state}: up 20 sessions later ${pct(combo.disc.win)} in 2004–2016 (found there) and ${pct(combo.conf.win)} in 2017–2026 (checked there), against ${pct(S8.base_halves.disc.win)} and ${pct(S8.base_halves.conf.win)} for any day. But only ${combo.disc.n + combo.conf.n} trades in 85 entry months: a rare setup, not a daily one.`,
-  uncertainty: `${combo.disc.n + combo.conf.n} trades that mostly fired in the same sell-off months; a 95% range on ${combo.conf.n} trades is ${rng(wilson(combo.conf.win, combo.conf.n))}. Middle result ${signed(combo.disc.med)} and ${signed(combo.conf.med)}. Price only, no costs.`,
-  sample: { instrument: `${S8.stocks.count} stocks`, from: "2004", to: DATA_TO, days: S8.base_halves.disc.n + S8.base_halves.conf.n, episodes: combo.disc.n + combo.conf.n, unit: "any-day entries (both halves) · trades" },
-  study: "S8", review: { by: "S8 lane: the half-and-half split is the review (discovery half, confirmation half)", status: "reviewed" },
-  chart: { kind: "bars", args: { title: "The best combination, found in 2004–2016 and checked in 2017–2026", subtitle: "stock RSI bottom 20% + close in the top 10% of its distance above its 200-day + SPY RSI bottom 30% · green = above that half's any-day line", groups: c6groups, ref: { value: S8.base_halves.disc.win, label: `any day ${pct(S8.base_halves.disc.win)} · ${pct(S8.base_halves.conf.win)}` }, yMin: 40, yMax: 80 } },
+  question: "What did the best-scoring entry combination do, and has it been tested on data it was not chosen on?",
+  answer: `It has not. This is the best of ${thousands(tested)} combinations, chosen on the weaker of its two halves: ${combo.cond}, while ${combo.state}. Up 20 sessions later ${pct(comboL.disc.win)} of ${comboL.disc.n} trades in 2004–2016 and ${pct(comboL.conf.win)} of ${comboL.conf.n} in 2017–2026, against ${pct(L.combos.base_halves.disc.win)} and ${pct(L.combos.base_halves.conf.win)} for any day. Both halves were used to pick it, so neither half is a check, and no untouched period was held back. ${comboL.disc.n + comboL.conf.n} trades in ${comboL.disc.months + comboL.conf.months} entry months: a rare setup.`,
+  uncertainty: `Picking the best of ${thousands(tested)} on both halves lifts both halves' numbers by an unknown amount (the winner's curse). The 95% range on all ${comboL.full.n} trades (${rng(comboL.ci)}) and the shuffle (random days in the same market state reach ${pct(comboL.shuffle.p95)} 1 time in 20) do not correct for that choice. A fair test: choose on 2004–2016 only and report 2017–2026 untouched. Price only, no costs.`,
+  sample: { instrument: `${S8.stocks.count} stocks`, from: "2004", to: DATA_TO, days: L.combos.base_halves.disc.n + L.combos.base_halves.conf.n, episodes: comboL.disc.n + comboL.conf.n, unit: "any-day entries (both halves) · trades" },
+  method: { horizon: { kind: "sessions", text: "up after a fixed 20 sessions" }, cutoffs: { kind: "fixed", text: "fixed cut-offs: stock RSI bottom 20%, top 10% extension above the 200-day, SPY RSI bottom 30%" } },
+  study: "S8", review: { by: "none — the half-and-half split was part of how it was chosen, so it is not a review; no hold-out test exists", status: "unreviewed", level: "none" },
+  chart: { kind: "range", args: { title: `The best of ${thousands(tested)} combinations, picked using both halves — not a hold-out test`, subtitle: "stock RSI bottom 20% + top-10% extension above its 200-day + SPY RSI bottom 30% · dot = share up after 20 sessions · line = 95% range (2004–2016: plain count range, not month-clustered; 2017–2026: S8's)", groups: [{ label: "2004–2016", sub: `${comboL.disc.n} trades`, marks: [{ value: comboL.disc.win, lo: discR[0], hi: discR[1], n: comboL.disc.n, ref: L.combos.base_halves.disc.win, tip: `2004–2016: up after 20 in ${pct(comboL.disc.win)} of ${comboL.disc.n} · plain 95% range ${rng(discR)} · any day ${pct(L.combos.base_halves.disc.win)} · used to pick it` }] }, { label: "2017–2026", sub: `${comboL.conf.n} trades`, marks: [{ value: comboL.conf.win, lo: comboL.ci_conf[0], hi: comboL.ci_conf[1], n: comboL.conf.n, ref: L.combos.base_halves.conf.win, tip: `2017–2026: up after 20 in ${pct(comboL.conf.win)} of ${comboL.conf.n} · 95% range ${rng(comboL.ci_conf)} · any day ${pct(L.combos.base_halves.conf.win)} · also used to pick it` }] }], series: [], refs: [{ value: L.combos.base_halves.disc.win, label: `any day ${pct(L.combos.base_halves.disc.win)} (2004–2016) · ${pct(L.combos.base_halves.conf.win)} (2017–2026)` }], yMin: 40, yMax: 85 } },
 };
 
 const CARDS = [c1, c2, c3, c4, c5, c6];
+
+
 
 /* Lanes measuring today: named as candidates, never rendered as findings. */
 const CANDIDATES = [
@@ -153,13 +188,14 @@ const CANDIDATES = [
 /* ── render ───────────────────────────────────────────────────────────────────────────────────────────── */
 const draw = (card, compact) => {
   const a = { ...card.chart.args, id: card.id + (compact ? "-390" : "-1200"), compact, footer: `${card.study} · ${STUDIES[card.study].date} · ${card.sample.instrument} · ${card.sample.from} → ${card.sample.to} · built ${BUILT} · ${card.id}` };
-  if (card.chart.kind === "steps") return stepsChart(a);
+  if (card.chart.kind === "range") return rangeChart(a);
+  if (card.chart.kind === "curve") return curveChart(a);
   if (card.chart.kind === "twoPanel") return twoPanelChart(a);
   return barsChart(a);
 };
 mkdirSync(join(HERE, "charts"), { recursive: true });
-const REQUIRED = ["id", "theme", "question", "answer", "uncertainty", "sample", "study", "review", "chart"];
-const manifest = { built: BUILT, dataTo: DATA_TO, stamp: STAMP, rules: REQUIRED, themes: THEMES, studies: STUDIES, cards: [], candidates: CANDIDATES };
+const REQUIRED = ["id", "theme", "question", "answer", "uncertainty", "sample", "method", "study", "review", "chart"];
+const manifest = { built: BUILT, dataTo: DATA_TO, stamp: STAMP, rules: REQUIRED, entry: ENTRY, themes: THEMES, studies: STUDIES, cards: [], heldBack: [], candidates: CANDIDATES };
 const inline = {};
 for (const c of CARDS) {
   for (const k of REQUIRED) if (c[k] == null) throw new Error(`card ${c.id} lacks ${k}`);
@@ -171,20 +207,24 @@ for (const c of CARDS) {
     files[compact ? "phone" : "desk"] = "charts/" + name;
     inline[c.id + (compact ? ":p" : ":d")] = svg;
   }
-  const { chart, ...rest } = c;
-  manifest.cards.push({ ...rest, chart: { kind: chart.kind, files, title: chart.args.title } });
+  const { chart, ...rest } = c, faults = entryFaults(c);
+  const entry = { ...rest, chart: { kind: chart.kind, files, title: chart.args.title } };
+  if (faults.length) manifest.heldBack.push({ ...entry, heldBecause: faults }); else manifest.cards.push(entry);
 }
+if (manifest.cards.length > 12) throw new Error("at most twelve cards on the tab");
 writeFileSync(join(HERE, "findings.json"), JSON.stringify(manifest, null, 2));
 
 /* ── the page ─────────────────────────────────────────────────────────────────────────────────────────── */
 const themeCards = (t) => manifest.cards.filter((c) => c.theme === t.id);
+const themeHeld = (t) => manifest.heldBack.filter((c) => c.theme === t.id);
 const cardHTML = (c) => `
-<article class="card" id="${esc(c.id)}" data-theme="${esc(c.theme)}">
+<article class="card${c.heldBecause ? " held" : ""}" id="${esc(c.id)}" data-theme="${esc(c.theme)}">
+  ${c.heldBecause ? `<p class="hold"><b>Held back from the tab:</b> ${c.heldBecause.map(esc).join(" · ")}</p>` : ""}
   <h3 class="q">${esc(c.question)}</h3>
   <div class="viz">
     <div class="desk">${inline[c.id + ":d"]}</div>
     <div class="phone">${inline[c.id + ":p"]}</div>
-    <div class="readout" aria-live="polite">hover a bar for its count and range</div>
+    <div class="readout" aria-live="polite">hover or tap a mark for its count and range</div>
   </div>
   <p class="a">${esc(c.answer)}</p>
   <p class="u"><b>How sure:</b> ${esc(c.uncertainty)}</p>
@@ -192,16 +232,18 @@ const cardHTML = (c) => `
     <div><dt>Sample</dt><dd>${esc(c.sample.instrument)} · ${esc(c.sample.from)} → ${esc(c.sample.to)} · ${thousands(c.sample.days)} · ${thousands(c.sample.episodes)} (${esc(c.sample.unit)})</dd></div>
     <div><dt>Study</dt><dd><a href="${esc(STUDIES[c.study].page)}">${esc(c.study)} · ${esc(STUDIES[c.study].title)}</a> · <a href="${esc(STUDIES[c.study].json)}">the numbers</a></dd></div>
     <div><dt>Review</dt><dd>${esc(c.review.by)}</dd></div>
+    <div><dt>Method</dt><dd>${esc(c.method.horizon.text)} · ${esc(c.method.cutoffs.text)}</dd></div>
     <div><dt>Chart file</dt><dd><a href="${esc(c.chart.files.desk)}" download>${esc(c.chart.files.desk.replace("charts/", ""))}</a> · <a href="${esc(c.chart.files.phone)}" download>phone</a></dd></div>
   </dl>
 </article>`;
 const candHTML = (t) => CANDIDATES.filter((x) => x.theme === t.id).map((x) => `<li><b>${esc(x.lane)}</b> — ${esc(x.what)} <span class="st">${esc(x.state)}</span></li>`).join("");
 const themeHTML = (t) => {
-  const cs = themeCards(t), cand = candHTML(t);
+  const cs = themeCards(t), cand = candHTML(t), held = themeHeld(t);
   return `
 <section class="theme" id="t-${esc(t.id)}">
   <header><h2>${esc(t.title)}</h2><p class="why">${esc(t.why)}</p></header>
-  ${cs.map(cardHTML).join("") || `<div class="empty">No finding has passed review under this theme yet. Nothing is drawn here until one does.</div>`}
+  ${cs.map(cardHTML).join("") || `<div class="empty">No finding has passed the entry rules under this theme yet. Nothing is drawn here until one does.</div>`}
+  ${held.length ? `<p class="heldline">Held back under this theme: ${held.map((c) => `<a href="#${esc(c.id)}">${esc(c.question)}</a>`).join(" · ")} (shown below the tab, with the reason)</p>` : ""}
   ${cand ? `<div class="cand"><h4>Measuring now · not on the tab until reviewed</h4><ul>${cand}</ul></div>` : ""}
 </section>`;
 };
@@ -240,6 +282,12 @@ h1{font-size:30px;line-height:1.15;margin:8px 0 6px;color:#C8C8D2;font-weight:70
 .meta dt{flex:0 0 70px;color:var(--faint);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding-top:2px}
 .meta dd{margin:0;color:var(--muted);overflow-wrap:anywhere}
 .empty{border:1px dashed var(--hair);border-radius:6px;padding:16px 18px;color:var(--muted);font-size:14px}
+.heldline{font-size:13px;color:var(--muted);margin:8px 0 0}
+.hold{margin:0 0 10px;padding:8px 12px;border-left:3px solid var(--dn);background:var(--bg);font-size:13.5px;color:var(--ink)}
+.card.held{border-style:dashed}
+details.heldback{margin:40px 0 0;padding-top:18px;border-top:1px solid var(--hair)}
+details.heldback summary{cursor:pointer;font-size:18px;color:#C8C8D2;font-weight:700;margin-bottom:10px}
+details.heldback .why{margin-top:6px}
 .cand{margin:4px 0 0;padding:10px 0 0}
 .cand h4{margin:0 0 6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .cand ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
@@ -261,20 +309,28 @@ h1{font-size:30px;line-height:1.15;margin:8px 0 6px;color:#C8C8D2;font-weight:70
 <body>
 <div data-scnav-slot></div>
 <h1>Statistics · findings</h1>
-<p class="sub">${manifest.cards.length} findings · from ${Object.keys(STUDIES).length} reviewed studies (S8, S9 · 27 Sep 2026) · data to ${DATA_TO} · built ${BUILT} · research questions, not buy rules · nothing here predicts</p>
+<p class="sub">${manifest.cards.length} findings on the tab · ${manifest.heldBack.length} held back · from ${Object.keys(STUDIES).length} studies (S8, S9 · 27 Sep 2026) · data to ${DATA_TO} · built ${BUILT} · research questions, not buy rules · nothing here predicts</p>
 <nav class="strip" aria-label="Themes">${THEMES.map((t) => `<a href="#t-${t.id}">${esc(t.title.split(" · ")[0])} <b>${themeCards(t).length || "–"}</b></a>`).join("")}<a href="STATS-TAB.html">the rules of this tab →</a></nav>
-<div class="status"><b>What this tab is.</b> One card per question. Each card carries one chart that is also saved as a file next to this page, one plain sentence with the numbers, how sure the number is, the sample and the dates, the study it came from and who reviewed it. A study that has not been reviewed shows up only as a name under “measuring now”. Green is up or better than any day; red is down or worse. A fear measure is drawn in red.</div>
+<div class="status"><b>What this tab is.</b> One card per question. Each card carries one chart that is also saved as a file next to this page, one plain sentence with the numbers, how sure the number is, the sample and the dates, the study it came from and who reviewed it. A study that has not been reviewed shows up only as a name under “measuring now”. A card measured over a fixed window (“up after 20 sessions”) or a forced cut-off (“the bottom 10%”) is held back below the tab until it is re-measured on pivots and full percentiles. Green is up or better than any day; red is down or worse. A dot is hollow when its 95% range crosses its any-day line. A fear measure is drawn in red.</div>
 ${THEMES.map(themeHTML).join("")}
+<details class="heldback" id="held-back"><summary>Held back from the tab · ${manifest.heldBack.length} cards</summary>
+<p class="why">These are fixed and drawn honestly, but they fail an entry rule: a fixed window of sessions, a forced cut-off, or no review. Each says which. They stay here as the record of what the window studies showed, until a pivot and percentile 1..100 re-measure replaces them.</p>
+${manifest.heldBack.map(cardHTML).join("")}
+</details>
 <div class="rules"><h2>What may enter, and what never does</h2>
 <ul>
-<li>A card needs all of: a stated question · a measured answer with its uncertainty · a saved chart (both sizes) · the sample and date range · a link to the study and its numbers · a review by a second lane or a second method. Missing one, the build refuses it.</li>
-<li>Never: a raw table dump, a study nobody has reviewed, a number without a chart, a chart without a date, a grey line, a buy rule.</li>
+<li>A card needs all of: a stated question · a measured answer with its uncertainty · a saved chart (both sizes) · the sample and date range · its method (horizon and cut) · a link to the study and its numbers · a named review. Missing one, the build refuses it.</li>
+<li>To be on the tab (not held back): ${ENTRY.map(esc).join(" · ")}.</li>
+<li>Never: a raw table dump, a study nobody has reviewed, a number without a chart, a chart without a date, a grey line, a bar that starts above zero, a buy rule, a fixed window, a forced cut-off.</li>
 <li>At most twelve cards on the tab. A new card that answers an old question replaces it; the old chart stays in the study's folder.</li>
 </ul>
 <p>The full rules, the visual standard and the Hub proposal: <a href="STATS-TAB.html">STATS-TAB.html</a>. The manifest: <a href="findings.json">findings.json</a>. The drawing code: <a href="charts.mjs">charts.mjs</a>.</p></div>
 <script>
-/* hover readout: the bar's <title> already gives a native tooltip; this repeats it in text under the chart so the
+/* hover readout: the mark's <title> already gives a native tooltip; this repeats it in text under the chart so the
    phone (no hover) can tap a bar and read it. */
+/* a link to a held-back card (or to #held-back) opens the fold it sits in */
+function openHeld() { var h = location.hash && document.getElementById(location.hash.slice(1)); var d = h && (h.tagName === "DETAILS" ? h : h.closest("details")); if (d) { d.open = true; h.scrollIntoView(); } }
+window.addEventListener("hashchange", openHeld); openHeld();
 document.querySelectorAll(".card").forEach(function (card) {
   var out = card.querySelector(".readout");
   card.querySelectorAll(".mark").forEach(function (m) {
@@ -285,5 +341,8 @@ document.querySelectorAll(".card").forEach(function (card) {
 </script>
 </body></html>
 `;
-writeFileSync(join(HERE, "index.html"), page);
+/* the BACK / CLOSE pair, from the one shared snippet, placed exactly as scripts/inject-scnav.py places it — so a rebuild
+   never strips it */
+const SCNAV = readFileSync(join(ROOT, "scripts", "scnav-snippet.html"), "utf8").trim();
+writeFileSync(join(HERE, "index.html"), page.replace("</body>", SCNAV + "\n</body>"));
 console.log(`built ${manifest.cards.length} cards, ${manifest.cards.length * 2} chart files, index.html, findings.json`);
