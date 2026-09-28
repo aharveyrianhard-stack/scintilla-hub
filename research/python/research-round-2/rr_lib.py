@@ -14,6 +14,9 @@ ROOT = os.path.abspath(os.path.join(HERE, "../../.."))
 sys.path.insert(0, os.path.join(ROOT, "research/python/research-director"))
 import rd_data as D  # noqa: E402  (the research director's loader: same files, same hashes)
 import rd_style as S  # noqa: E402,F401
+import matplotlib.pyplot as _plt  # noqa: E402
+# per-glyph fallback: Helvetica Neue has no "→" or "±"; DejaVu Sans fills those glyphs only (matplotlib >= 3.6)
+_plt.rcParams["font.family"] = ["Helvetica Neue", "DejaVu Sans"]
 
 OUT = os.path.join(ROOT, "deliverables/20260928/research-round-2")
 CH = os.path.join(OUT, "charts"); DATA = os.path.join(OUT, "data")

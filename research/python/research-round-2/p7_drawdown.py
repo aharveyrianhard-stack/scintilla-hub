@@ -272,7 +272,7 @@ def charts(RES, groups, closes, pit_events):
             ax.annotate(f"{e['date'][:7]} · {'40% fall followed' if e['crash_from_peak'] else ('no 40% fall' if e['complete'] else 'open')}", (d, y), xytext=(6, 8), textcoords="offset points", fontsize=9, color=S.INK2)
         na = RES["named_assets"][name]
         ax.set_title(f"{name}: dots = the day the 2-year gain first passed +100% · today: up {na['runup_2y_now_pct']:.0f}% in 2 years, {na['runup_1y_now_pct']:.0f}% in 1 year")
-    S.caption(f, "Red dot = a 40% fall from the high came within the next two years; green = it did not; 'open' = fewer than two years have passed. Source: FMP GCUSD / SIUSD futures via the chart-API cache.")
+    S.caption(f, "Red dot = a 40% fall from the high came within two years; green = it did not; 'open' = under two years have passed. FMP GCUSD / SIUSD futures.")
     S.save(f, os.path.join(L.CH, "p7-5-gold-silver-runs.png"))
 
 

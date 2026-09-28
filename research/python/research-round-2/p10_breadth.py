@@ -199,7 +199,7 @@ def charts(RES, Bp, Bs, px, idx):
     ab.fill_between(idx, 0, Bp.above50.values, color=S.MUTE, alpha=0.35, lw=0, label="% above 50-day"); ab.plot(idx, Bp.above200.values, color=S.INK, lw=1.0, label="% above 200-day")
     ab.axhline(40, color=S.DN, lw=0.8, ls="--"); ab.axhline(60, color=S.UP, lw=0.8, ls="--"); ab.set_ylim(0, 100); ab.set_ylabel("% of S&P 500 members"); ab.legend(loc="lower left", fontsize=10)
     ax.set_title("P10-1 · 22 years of S&P 500 breadth, rebuilt point in time: the thrust days marked (triangles: Zweig; dots: above-50-day 40%→60%)")
-    S.caption(f, "Members as they were on each day (FMP historical constituents; Massive bars built on Fly). Signals one per 60 sessions. The 200-day line is not coloured by direction: it is a share, not a price.")
+    S.caption(f, "Members as they were on each day (FMP constituents, Massive bars, built on Fly). One signal per 60 sessions. The 200-day line is a share, not a price.")
     S.save(f, os.path.join(L.CH, "p10-1-breadth-history.png"))
     # P10-2 · what followed each classic Zweig thrust, path by path, against the any-day band
     f, ax = S.fig(14, 6); c = px.values; H = 252
@@ -223,7 +223,7 @@ def charts(RES, Bp, Bs, px, idx):
         r = R["rules"][n]; ax.text(max(vals[i], base) + 0.3 if np.isfinite(vals[i]) else base + 0.3, i, f"{r['episodes']} signals · {r['fwd126']['false_alarms']} below any-day", va="center", fontsize=9, color=S.INK2)
     ax.axvline(base, color=S.MUTE, lw=1.5); ax.set_yticks(y); ax.set_yticklabels(names, fontsize=10); ax.invert_yaxis()
     ax.set_xlabel(f"S&P 500 median change over the next 126 sessions, % (any day: {base:.1f}%)"); ax.set_xlim(None, np.nanmax(vals) + 9)
-    ax.set_title(f"P10-3 · The whole family of 23 breadth rules: none is a rate, all are lists (SPA over {R['spa']['n_rules']} rule-horizons: p = {R['spa']['consistent']:.2f})")
+    ax.set_title(f"P10-3 · The whole family of 23 breadth rules against any day: none survives the counted search (SPA over {R['spa']['n_rules']} rule-horizons: p = {R['spa']['consistent']:.2f})")
     S.caption(f, "Point-in-time S&P 500 breadth. 'below any-day' = signals whose next 126 sessions did worse than the median day: the false alarms.")
     S.save(f, os.path.join(L.CH, "p10-3-rule-family.png"))
     # P10-4 · survivorship made visible: share above the 200-day, served universe vs point in time
