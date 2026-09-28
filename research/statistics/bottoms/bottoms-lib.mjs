@@ -86,7 +86,9 @@ export function lowFlags(n, lowKs, len = PIVOT_LEN) {
     `on` may be passed instead of a stress series for a yes/no condition (then only t = 0 is reported). */
 export function baseRateCurve(stress, lowKs, { len = PIVOT_LEN, thresholds = null, start = 0 } = {}) {
   const n = stress.length, { near, usable, nextLow } = lowFlags(n, lowKs, len);
-  const lows = lowKs.filter((k) => k >= start && k + len < n);
+  // a low counts only when the condition could have been on over the whole look-back before it (k − len ≥ start):
+  // lows before a series' first usable reading are "no data", never "not caught" (reviewer, 28 Sep)
+  const lows = lowKs.filter((k) => k - len >= start && k + len < n);
   const days = []; for (let i = start; i < n; i++) if (usable[i] && stress[i] != null) days.push(i);
   const base = days.length ? days.filter((i) => near[i]).length / days.length : null;
   const ts = thresholds ?? Array.from({ length: 99 }, (_, i) => i + 1);
@@ -107,6 +109,8 @@ export function curvePoint(stress, test, days, near, lows, len, n, t, nextLow) {
   return { t, days: fire.length, hit: fire.length ? 100 * hit / fire.length : null, episodes: eps, epHit: eps ? 100 * epHit / eps : null,
     falseAlarm: eps ? 100 - 100 * epHit / eps : null, caught: lows.length ? 100 * caught / lows.length : null };
 }
+/** First index holding a usable reading (the start to pass to baseRateCurve). */
+export function firstIdx(arr) { for (let i = 0; i < arr.length; i++) if (arr[i] != null && Number.isFinite(arr[i])) return i; return arr.length; }
 /** Combination: every listed stress series at or above t on the same day. */
 export function combine(list) { const n = list[0].length; return Array.from({ length: n }, (_, i) => { let m = Infinity; for (const s of list) { if (s[i] == null) return null; m = Math.min(m, s[i]); } return m; }); }
 
@@ -129,9 +133,46 @@ export function dayOutcomes(c, d, swingHighKs) {
     if (d[i] < 0) {
       const R = reclaim[i];
       if (R != null) { let m = c[i]; for (let k = i + 1; k <= R; k++) m = Math.min(m, c[k]); r.furtherFall = (m / c[i] - 1) * 100; r.toReclaim = R - i; }
-      else r.censored = true;
+      else { // still below at the end of the data: the wait and the fall so far are LOWER BOUNDS, kept for the survival median
+        let m = c[i]; for (let k = i + 1; k < n; k++) m = Math.min(m, c[k]);
+        r.censored = true; r.toReclaimLB = n - 1 - i; r.furtherFallLB = (m / c[i] - 1) * 100;
+      }
     }
     out[i] = r;
+  }
+  return out;
+}
+/** Kaplan–Meier median. items: [{t, ev}] — t = time (or size) reached, ev = true when the event happened at t,
+    false when the record stops at t without it (censored: the true value is at least t). Returns the smallest t
+    where the estimated share still waiting falls to one half or below; null when it never does (more than half
+    still waiting at the last observation — then the median is only known to exceed that). */
+export function kmMedian(items) {
+  const a = items.filter((x) => x.t != null && Number.isFinite(x.t)).sort((p, q) => p.t - q.t || (q.ev ? 1 : 0) - (p.ev ? 1 : 0));
+  let atRisk = a.length, S = 1, i = 0;
+  while (i < a.length) {
+    const t = a[i].t; let d = 0, c = 0; while (i < a.length && a[i].t === t) { if (a[i].ev) d++; else c++; i++; }
+    if (d) { S *= 1 - d / atRisk; if (S <= 0.5 + 1e-12) return t; }
+    atRisk -= d + c;
+  }
+  return null;
+}
+/** Arithmetic-keeping null for "deep below the 200-day": from day i, run `reps` random futures built from blocks of
+    the instrument's OWN daily log returns (block length `block`, drift and volatility kept), carrying the real 200
+    closes up to i, until a close is back above the rolling 200-day or `maxSteps` pass. A random walk that starts
+    deeper must travel further — this measures how much of the further fall and the wait that alone explains.
+    Returns [{furtherFall, toReclaim, censored}]. */
+export function simulateReclaim(c, i, logRets, { reps = 20, block = 20, maxSteps = 1500, R = rng(1) } = {}) {
+  const out = [], N = logRets.length; if (i < 199 || N < block * 2) return out;
+  const win0 = c.slice(i - 199, i + 1); let sum0 = 0; for (const x of win0) sum0 += x;
+  for (let r = 0; r < reps; r++) {
+    const win = win0.slice(); let sum = sum0, head = 0, p = c[i], lo = p, pos = Math.floor(R() * (N - block)), inBlock = 0, steps = 0, done = false;
+    while (steps < maxSteps) {
+      if (inBlock === block) { pos = Math.floor(R() * (N - block)); inBlock = 0; }
+      p *= Math.exp(logRets[pos + inBlock]); inBlock++; steps++;
+      sum += p - win[head]; win[head] = p; head = (head + 1) % 200; lo = Math.min(lo, p);
+      if (p > sum / 200) { done = true; break; }
+    }
+    out.push({ furtherFall: (lo / c[i] - 1) * 100, toReclaim: steps, censored: !done });
   }
   return out;
 }
@@ -173,10 +214,10 @@ export function shiftTest(groups, reps = 400, seed = 17) {
 }
 /** Binned medians of y by x-percentile bin (width w, over 1..100), with an episode block-bootstrap band.
     items: [{x, y, ep}] where ep = an episode id (instrument + stretch); episodes are resampled whole. */
-export function binnedBootstrap(items, { w = 5, reps = 300, seed = 23 } = {}) {
-  const bins = Math.ceil(100 / w), byEp = new Map();
+export function binnedBootstrap(items, { w = 5, reps = 300, seed = 23, stat: statFn = null } = {}) {
+  const bins = Math.ceil(100 / w), byEp = new Map(), agg = statFn ?? ((its) => med(its.map((it) => it.y)));
   for (const it of items) { if (!byEp.has(it.ep)) byEp.set(it.ep, []); byEp.get(it.ep).push(it); }
-  const eps = [...byEp.values()], stat = (sample) => { const b = Array.from({ length: bins }, () => []); for (const it of sample) b[Math.min(bins - 1, Math.floor((Math.max(0.0001, it.x) - 0.0001) / w))].push(it.y); return b.map((ys) => ys.length ? med(ys) : null); };
+  const eps = [...byEp.values()], stat = (sample) => { const b = Array.from({ length: bins }, () => []); for (const it of sample) b[Math.min(bins - 1, Math.floor((Math.max(0.0001, it.x) - 0.0001) / w))].push(it); return b.map((its) => its.length ? agg(its) : null); };
   const obs = stat(items), counts = Array.from({ length: bins }, () => 0);
   for (const it of items) counts[Math.min(bins - 1, Math.floor((Math.max(0.0001, it.x) - 0.0001) / w))]++;
   const R = rng(seed), boots = Array.from({ length: bins }, () => []);
@@ -185,6 +226,33 @@ export function binnedBootstrap(items, { w = 5, reps = 300, seed = 23 } = {}) {
     stat(s).forEach((v, i) => { if (v != null) boots[i].push(v); });
   }
   return obs.map((m, i) => { const b = boots[i].sort((x, y) => x - y); return { lo: i * w, hi: (i + 1) * w, n: counts[i], med: m, bandLo: q(b, 0.05), bandHi: q(b, 0.95) }; });
+}
+
+/* ------------------------------ data faults ------------------------------ */
+/** Bars that cannot both be the same security: a close more than `jump`× or less than 1/`jump`× the previous close
+    (a ticker taken over by another company, an unadjusted split) or a hole of more than `hole` calendar days.
+    Returns [{i, date, kind, x}] with i = index of the first bar AFTER the fault. */
+export function dataFaults(bars, { jump = 2, hole = 20 } = {}) {
+  const out = [];
+  for (let i = 1; i < bars.length; i++) {
+    const r = +bars[i].c / +bars[i - 1].c, gap = (bars[i].t - bars[i - 1].t) / 864e5, date = new Date(bars[i].t).toISOString().slice(0, 10);
+    if (r > jump || r < 1 / jump) out.push({ i, date, kind: "jump", x: Math.round(r * 1000) / 1000 });
+    if (gap > hole) out.push({ i, date, kind: "hole", x: Math.round(gap) });
+  }
+  return out;
+}
+/** Keep only the history after the LAST fault (the part that is surely one security, adjusted consistently). */
+export function trimAtFaults(bars, opts) { const f = dataFaults(bars, opts); const cut = f.length ? f.at(-1).i : 0; return { bars: bars.slice(cut), faults: f, dropped: cut }; }
+/** Point-in-time membership: for each year, the `top` symbols by market cap on the first date of that year.
+    caps: {sym: [{date, marketCap}]} sorted by date. Returns {year: [syms]}. */
+export function topByYear(caps, years, top = 20) {
+  const out = {};
+  for (const y of years) {
+    const at = [];
+    for (const [sym, rows] of Object.entries(caps)) { const r = rows.find((x) => x.date >= `${y}-01-01`); if (r && r.date < `${y}-01-15` && r.marketCap > 0) at.push([sym, r.marketCap]); }
+    out[y] = at.sort((a, b) => b[1] - a[1]).slice(0, top).map((a) => a[0]);
+  }
+  return out;
 }
 
 /* ------------------------------ rising tide ------------------------------ */

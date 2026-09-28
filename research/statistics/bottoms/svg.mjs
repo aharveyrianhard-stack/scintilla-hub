@@ -80,7 +80,7 @@ export function stackChart({ title, sub = "", rows, w = 1100, rowH = 38, legend 
   rows.forEach((r, i) => {
     const y = m.t + i * rowH + 6; let x = m.l;
     s += `<text x="${m.l - 10}" y="${y + rowH / 2}" fill="${TXT}" font-size="14" text-anchor="end">${esc(r.label)}</text>`;
-    for (const p of r.parts) { const ww = iw * (p.v || 0) / 100; if (ww > 0) { s += `<rect x="${f(x)}" y="${y}" width="${f(ww)}" height="${rowH - 12}" fill="${p.col}"/>`; if (ww > 34) s += `<text x="${f(x + ww / 2)}" y="${y + rowH / 2}" fill="#07070C" font-size="13" font-weight="700" text-anchor="middle">${Math.round(p.v)}%</text>`; } x += ww; }
+    for (const p of r.parts) { const ww = iw * (p.v || 0) / 100; if (ww > 0) { s += `<rect x="${f(x)}" y="${y}" width="${f(ww)}" height="${rowH - 12}" fill="${p.col}"/>`; if (ww > 34) s += `<text x="${f(x + ww / 2)}" y="${y + rowH / 2}" fill="${p.dark ? TXT : "#07070C"}" font-size="13" font-weight="700" text-anchor="middle">${Math.round(p.v)}%</text>`; } x += ww; }
   });
   return s + "</svg>";
 }

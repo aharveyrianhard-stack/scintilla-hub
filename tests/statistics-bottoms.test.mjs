@@ -36,6 +36,43 @@ test("base-rate curve: hit, false alarm by episode, and lows caught", () => {
   const both = B.combine([[1, 5, null], [3, 2, 4]]); assert.deepEqual(both, [1, 2, null]);
 });
 
+test("review fix · lows before a series' first usable reading are left out, not counted as missed", () => {
+  const n = 300, stress = new Array(n).fill(null); for (let i = 100; i < n; i++) stress[i] = i >= 195 && i <= 200 ? 95 : 10;
+  const lows = [50, 200, 260];  // the low at 50 predates the series; 260 has a reading but the condition was off
+  const c = B.baseRateCurve(stress, lows, { len: 10, thresholds: [90], start: B.firstIdx(stress) });
+  assert.equal(B.firstIdx(stress), 100); assert.equal(c.lows, 2); assert.equal(c.rows[0].caught, 50);
+  const old = B.baseRateCurve(stress, lows, { len: 10, thresholds: [90] }); assert.ok(old.rows[0].caught < 50, "counting from 0 understates it");
+});
+
+test("review fix · survival median keeps still-open stretches as lower bounds", () => {
+  assert.equal(B.kmMedian([{ t: 1, ev: true }, { t: 2, ev: true }, { t: 3, ev: true }]), 2);
+  // two finished early, three still open at 10: the true median is beyond the finished ones
+  assert.equal(B.kmMedian([{ t: 1, ev: true }, { t: 2, ev: true }, { t: 10, ev: false }, { t: 10, ev: false }, { t: 10, ev: false }]), null);
+  assert.equal(B.kmMedian([{ t: 1, ev: true }, { t: 4, ev: false }, { t: 5, ev: true }, { t: 6, ev: true }]), 5);
+  const o = B.dayOutcomes([100, 95, 90, 92, 101, 99, 98, 97], [1, -2, -5, -3, 2, -1, -2, -3], [4]);
+  assert.equal(o[5].censored, true); assert.equal(o[5].toReclaimLB, 2); assert.ok(Math.abs(o[5].furtherFallLB - (97 / 99 - 1) * 100) < 1e-9);
+});
+
+test("review fix · the random-walk yardstick: starting further below the average means a longer wait", () => {
+  const c = Array.from({ length: 400 }, (_, i) => 100 + 10 * Math.sin(i / 25));
+  const R = B.rng(5), lr = Array.from({ length: 2000 }, () => (R() - 0.5) * 0.02);
+  const mk = (drop) => { const cc = c.slice(); cc[399] = cc[398] * (1 - drop); return B.simulateReclaim(cc, 399, lr, { reps: 200, block: 20, maxSteps: 3000, R: B.rng(7) }); };
+  const med = (a) => B.kmMedian(a.map((z) => ({ t: z.toReclaim, ev: !z.censored })));
+  const shallow = mk(0.02), deep = mk(0.25);
+  assert.ok(med(deep) > med(shallow), `${med(deep)} > ${med(shallow)}`);
+  assert.ok(deep.every((z) => z.furtherFall <= 0));
+});
+
+test("review fix · data faults: a ticker change or unadjusted split cuts the history; point-in-time top N", () => {
+  const d = (s) => Date.parse(s + "T00:00:00Z");
+  const bars = [["2022-06-06", 15], ["2022-06-07", 15.2], ["2022-06-09", 184], ["2022-06-10", 175], ["2022-08-01", 170], ["2022-08-02", 171]].map(([t, c]) => ({ t: d(t), c }));
+  const f = B.dataFaults(bars); assert.deepEqual(f.map((x) => x.kind), ["jump", "hole"]);
+  const T = B.trimAtFaults(bars); assert.equal(T.bars.length, 2); assert.equal(T.dropped, 4);
+  assert.equal(B.trimAtFaults(bars.slice(2, 4)).dropped, 0);
+  const caps = { A: [{ date: "2010-01-04", marketCap: 5 }, { date: "2011-01-03", marketCap: 1 }], B: [{ date: "2010-01-04", marketCap: 3 }, { date: "2011-01-03", marketCap: 9 }], C: [{ date: "2011-01-03", marketCap: 4 }] };
+  assert.deepEqual(B.topByYear(caps, [2010, 2011], 2), { 2010: ["A", "B"], 2011: ["B", "C"] });
+});
+
 test("event-aligned paths: quartiles per offset, and % vs the anchor day", () => {
   const arr = Array.from({ length: 50 }, (_, i) => 100 + i);
   const e = B.eventAligned(arr, [10, 20], { from: -2, to: 2, rel: "pct" });
@@ -84,6 +121,12 @@ test("the delivered page: every chart it shows is a saved file, the data is ther
   const J = JSON.parse(fs.readFileSync(path.join(DIR, "data/bottoms.json"), "utf8"));
   for (const s of ["SPY", "QQQ", "IWM"]) { assert.ok(J.part1[s].nLows > 50); assert.ok(J.part1[s].lows.every((r) => r.date && r.vixTurn !== undefined)); }
   assert.equal(J.caps.top20.length, 20); assert.ok(J.part2.groups.pooled.furtherFall.bins.length > 5); assert.equal(J.part3.universe.served, 486);
+  // review fixes are in the data: no-data kept apart, shared lows, point-in-time top 20, random-walk yardstick, META repaired
+  const t = J.part1.SPY.summary.all.turns.credit; assert.equal(t.withData + t.noData, t.n); assert.ok(t.noData > 0);
+  assert.ok(J.part1.SPY.common.curves.vix.lows === J.part1.SPY.common.curves.credit.lows);
+  assert.ok(J.part2.groups.stocks.furtherFall.sim.bins.length > 5 && J.part2.groups.pooled.toReclaim.excess.n > 1000);
+  assert.ok(Object.keys(J.part2.pit.years).length >= 20 && J.part2.pit.years["2008"].includes("XOM"));
+  assert.equal(J.part2.per.META.from, "2012-05-18"); assert.ok(J.faults.WM && !J.faults.SPY);
 });
 
 test("chart colours: greys only (channels within 24, none above 210) plus the up green and down red", () => {
