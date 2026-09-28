@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from 8dfeac0) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from 00dabfb) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -4447,19 +4447,26 @@ body.co-exp .cv-side{flex:initial;min-height:0}
 .es-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding-bottom:5px;border-bottom:.5px solid #4A4A52}
 .es-h b{font-size:12px;letter-spacing:.14em;color:#D2D2D2}
 .es-h span{font-size:11px;color:#8A8A92}
-.es-row{display:flex;gap:4px;overflow-x:auto;padding:6px 0 4px;scrollbar-width:thin}
-.es-c{flex:0 0 124px;display:grid;gap:3px;padding:6px 7px;border:.5px solid #2B2B31;border-radius:2px;background:#0E0E12}
+.es-h .es-sc{font-style:normal;color:#A8A8AE}
+/* whole cards only: the row is exactly 4 cards wide (5 or 6 when there is room) and scrolls a card at a time, so no card is
+   ever shown sliced at the edge; it opens on the newest */
+.es{container-type:inline-size}
+.es-row{display:flex;gap:4px;overflow-x:auto;padding:6px 0 4px;scrollbar-width:thin;scroll-snap-type:x mandatory}
+.es-c{scroll-snap-align:start}
+.es-c{flex:0 0 calc((100cqw - 12px) / 4);min-width:0;box-sizing:border-box;display:grid;gap:3px;padding:6px 7px;border:.5px solid #2B2B31;border-radius:2px;background:#0E0E12}
 .es-c.is-next{border-style:dashed;border-color:#6E6E76}
-.es-d{font-size:11px;color:#A8A8AE;white-space:nowrap}
+.es-d{font-size:11px;color:#A8A8AE;white-space:normal;line-height:1.3}
 .es-v{font-size:11px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
 .es-v.up{color:var(--bull)} .es-v.dn{color:var(--bear)} .es-v.mid{color:#C9C9CE} .es-v.next{color:#A8A8AE}
 .es-m{display:flex;justify-content:space-between;gap:4px;font-size:12px}
-.es-m i{font-style:normal;font-size:11px;color:#8A8A92}
+.es-m i{font-style:normal;font-size:11px;color:#8A8A92;white-space:nowrap}
 .es-n{color:#C9C9CE;font-variant-numeric:tabular-nums}
 .es-n.up{color:var(--bull)} .es-n.dn{color:var(--bear)}
 .es-l{display:flex;flex-direction:column;gap:1px;min-height:14px}
 .es-a{background:none;border:0;padding:0;text-align:left;color:#A8A8AE;font:11px var(--mono);cursor:pointer;text-decoration:none}
 .es-a:hover{color:#D2D2D2}
+@container (min-width:700px){ .es-c{flex-basis:calc((100cqw - 16px) / 5)} }
+@container (min-width:860px){ .es-c{flex-basis:calc((100cqw - 20px) / 6)} }
 .es-leg{display:flex;flex-wrap:wrap;gap:3px 14px;font-size:11px;color:#8A8A92;line-height:1.5;padding-top:4px}
 .es-leg b{font-weight:700;letter-spacing:.05em;margin-right:4px}
 .es-leg b.up{color:var(--bull)} .es-leg b.dn{color:var(--bear)} .es-leg b.mid{color:#C9C9CE}
@@ -18779,7 +18786,7 @@ function ernStripPct(m) {
 function ernStripHTML(data) {
   const cells = ernStripCells(data.events, todayISO(), data._callDays, 16);
   if (!cells.length) return "";
-  const md = (d) => ET_MD.format(new Date(d + "T12:00:00Z")).toUpperCase() + " ’" + d.slice(2, 4);
+  const md = (d) => (ET_MD.format(new Date(d + "T12:00:00Z")).toUpperCase() + " ’" + d.slice(2, 4)).replace(/ /g, "\u00a0");   /* the date never breaks; " · AMC" may drop under it */
   const cls = (v) => v === "DOUBLE BEAT" || v === "BEAT" ? "up" : v === "DOUBLE MISS" || v === "MISS" ? "dn" : "mid";
   const nRep = cells.filter((c) => !c.next).length, nTr = cells.filter((c) => c.transcript).length;
   const body = cells.map((c) => c.next
@@ -18797,7 +18804,7 @@ function ernStripHTML(data) {
           (c.release ? '<a class="es-a" href="' + esc(c.release) + '" target="_blank" rel="noopener">◹ release</a>' : "") +
         "</span></div>").join("");
   return '<section class="es" aria-label="earnings history, oldest left, newest right">' +
-    '<div class="es-h"><b>EARNINGS · OLDEST → NEWEST</b><span>' + nRep + " reports · surprise = actual vs the analysts’ estimate · " +
+    '<div class="es-h"><b>EARNINGS · OLDEST → NEWEST</b><span>' + nRep + " reports · " + (nRep > 4 ? '<i class="es-sc">scroll ◂ for older · </i>' : "") + "surprise = actual vs the analysts’ estimate · " +
       nTr + " with a stored call transcript</span></div>" +
     '<div class="es-row" id="esRow">' + body + "</div>" +
     '<div class="es-leg">' +
@@ -26750,6 +26757,7 @@ body.gwx-motion .gwx-pct{opacity:1}
      sit two to a row, still oldest to newest (left to right, top to bottom), the next report last */
   .es-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
   .es-row > .es-c:nth-last-child(n+10){display:none}
+  .es-h .es-sc{display:none}
   /* the report cards' numbers ("$41.5B" read "$41…"): they take the width they need */
   .sc-ern__metrics{grid-template-columns:32px repeat(3,auto) !important;justify-content:start}
   .sc-ern__v{overflow:visible !important;text-overflow:clip !important}
