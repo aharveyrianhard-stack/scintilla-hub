@@ -47,3 +47,70 @@ test("REGIME: the back pair is grey (channels within 24, none above 210) and wra
   assert.match(page, /\.rg-head\{ flex-wrap:wrap; row-gap:6px; \}/);
   assert.match(page, /@media \(max-width:900px\)\{ \.rg-nav\{ flex:1 0 100%; margin-right:0; \} \.rg-navb\{ height:32px; \} \}/);
 });
+
+/* ── 2 · USUAL DAY: sort, the lists as a column, the flash vs now ─────────────────────────────── */
+const udSortWorld = () => new Function("S", fnSrc("udSortRows") + page.match(/const UD_SORT_DEF = \{[^}]*\};/)[0] + fnSrc("udSort") +
+  "; return { udSortRows, udSort };");
+const R = (t, move, x) => ({ t, move, x, flash: null, row: null });
+
+test("USUAL DAY sort: × USUAL biggest first by default; MOVE and NAME on a tap; a second tap reverses; blanks sink", () => {
+  const S = {}; const { udSortRows, udSort } = udSortWorld()(S);
+  const rows = () => [R("MSFT", 1.2, 0.4), R("AAPL", -5, -2.5), R("ZM", null, null), R("BA", 3, 3.1)];
+  assert.deepEqual(udSortRows(rows(), udSort()).map((r) => r.t), ["BA", "AAPL", "MSFT", "ZM"]);
+  S.udSort = { k: "move", dir: -1 };
+  assert.deepEqual(udSortRows(rows(), udSort()).map((r) => r.t), ["BA", "MSFT", "AAPL", "ZM"], "move vs previous close, highest first");
+  S.udSort = { k: "move", dir: 1 };
+  assert.deepEqual(udSortRows(rows(), udSort()).map((r) => r.t), ["AAPL", "MSFT", "BA", "ZM"], "reversed; the blank still last");
+  S.udSort = { k: "name", dir: 1 };
+  assert.deepEqual(udSortRows(rows(), udSort()).map((r) => r.t), ["AAPL", "BA", "MSFT", "ZM"], "A→Z");
+  assert.match(page, /case "udsort": \{ const k = a\.dataset\.k, so = udSort\(\); S\.udSort = \{ k: k, dir: so\.k === k \? -so\.dir : UD_SORT_DEF\[k\] \}; udRender\(\); break; \}/);
+});
+
+test("USUAL DAY lists: the chips are gone; every name row carries the dashboard's own ⊙ ★ ♥ and repaints in place", () => {
+  const day = fnSrc("udDayHTML");
+  assert.doesNotMatch(day, /ud-sel|data-act="udlist"/);
+  assert.match(day, /const lists = r\.isT \? listCtlHTML\(r\.t\) : "";/, "the same buttons as the board rows (data-act lst / star)");
+  assert.match(day, /<th class="ud-lsth"[^>]*>LISTS<\/th>/);
+  assert.match(fnSrc("coListsRepaint"), /if \(S\.sec === "USUAL" && typeof udRender === "function"\) udRender\(\);/);
+  assert.match(fnSrc("toggleFav"), /coListsRepaint\(\);/, "a ♥ toggle reaches the repaint");
+});
+
+/* the exact GOOG row of 28 Sep, as stored */
+const GOOG = { ts: "2026-09-28T20:50:01.605+00:00", kind: "price_outlier", subject: "GOOG", subject_kind: "ticker", direction: -1, magnitude: 2.08,
+  detail: { fired: ["statistical"], price: 325.8864, n_days: 250, session: "2026-09-28", x_usual: 2.08, move_pct: -4.455, prev_close: 341.08,
+    thresholds: { x_usual: 2, raw_move_pct: 8, needs_move_pct: 1 }, asset_class: "equity", daily_vol_pct: 2.142 } };
+function flashWorld(prices) {
+  const clock = page.slice(page.indexOf("function gsNyClock("), page.indexOf("function gsIsTradingDay("));
+  const src = page.match(/const SCINT_CLOSE_MIN = [^\n]*/)[0] + "\n" + fnSrc("scintFlashAt") + fnSrc("scintNow") + fnSrc("scintNowSays");
+  return new Function("PRICES", "prevClose", "todayISO", "fmtC",
+    "const SCINT_OPEN_MIN = 570; const ET_HM = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false});" +
+    "const GS_NYSE_HOLIDAYS = []; function gsIsTradingDay(d){ const w = new Date(d + 'T12:00:00Z').getUTCDay(); return w >= 1 && w <= 5; }" +
+    clock + src + "; return { scintFlashAt, scintNow, scintNowSays };")(
+    prices, {}, () => "2026-09-28", (c) => (c >= 0 ? "+" + c.toFixed(2) + "%" : "(" + Math.abs(c).toFixed(2) + "%)"));
+}
+
+test("GOOG 28 Sep: the flash is 16:50 ET after hours; now is the latest price vs the SAME previous close ÷ the SAME usual day", () => {
+  const w = flashWorld({ GOOG: 339.05 });
+  assert.deepEqual(w.scintFlashAt(GOOG), { hm: "16:50", afterHours: true, off: "after hours" });
+  const n = w.scintNow(GOOG);
+  assert.equal(n.move.toFixed(2), "-0.60", "339.05 / 341.08 − 1");
+  assert.equal(Math.abs(n.x).toFixed(1), "0.3", "−0.60 ÷ 2.142 — the 0.3 Alan saw");
+  assert.equal(w.scintNowSays(GOOG), "now (0.60%), 0.3× usual — back inside 2×");
+  assert.equal(w.scintFlashAt(Object.assign({}, GOOG, { ts: "2026-09-28T13:00:00Z" })).off, "pre-market", "09:00 ET");
+  assert.equal(w.scintFlashAt(Object.assign({}, GOOG, { ts: "2026-09-28T15:00:00Z" })).off, "", "11:00 ET is the session");
+  assert.equal(w.scintFlashAt(Object.assign({}, GOOG, { ts: "2026-09-27T15:00:00Z" })).off, "market closed", "a Sunday");
+  assert.equal(flashWorld({}).scintNow(GOOG), null, "no live price → no NOW (the flash stays, labelled)");
+  assert.equal(flashWorld({ GOOG: 339 }).scintNow(Object.assign({}, GOOG, { detail: Object.assign({}, GOOG.detail, { session: "2026-09-25" }) })), null,
+    "an older session's flash is never set against today's price");
+});
+
+test("GOOG: every surface says which number it is — the strip, the board's title, the table's two columns", () => {
+  assert.match(fnSrc("scintSays"), /" at the flash " \+ f\.hm \+ " ET" \+ \(f\.off \? ", " \+ f\.off : ""\)/);
+  assert.match(fnSrc("scintSaysShort"), /\(now \? " · " \+ now : ""\)/);
+  assert.match(page, /scSetTitle\(cell, "outlier of the day · " \+ scintSaysLive\(ev\)\);/);
+  assert.match(fnSrc("scintNotifyItems"), /says: scintSays\(ev\)/, "the bell keeps no live price");
+  const day = fnSrc("udDayHTML");
+  assert.match(day, /th\("flash", '<span class="ud-long">AT THE <\/span>FLASH', "n"\)/);
+  assert.match(day, /const nowLbl = open === today \? "NOW" : "AT THE CLOSE";/);
+  assert.match(fnSrc("udRowsForDay"), /why: po && why0 \? "at the flash: " \+ why0 \+ \(now && now\.x != null && Math\.abs\(now\.x\) < now\.thr \? " · back inside " \+ now\.thr \+ "× now" : ""\) : why0,/);
+});

@@ -160,7 +160,8 @@ test("the board marks the outliers of the day on the percentage cell that IS the
   assert.equal(glows[0].node, lc);
   assert.equal(glows[0].tone, true);
   assert.ok(lc.classes.has("is-scint"));
-  assert.match(lc.attrs.title, /outlier of the day · \+3\.20% · 2\.6× its usual day \(usual: ±1\.2% a day, measured over its last 40 sessions\)/,
+  /* 29 Sep (P2-HUB-FIXES) — the stored move now says WHEN it was measured: "at the flash HH:MM ET" */
+  assert.match(lc.attrs.title, /outlier of the day · \+3\.20% at the flash \d{1,2}:\d{2} ET · 2\.6× its usual day \(usual: ±1\.2% a day, measured over its last 40 sessions\)/,
     "hovering says what made it one, in plain words");
   assert.equal(api.boardScintPass(), 0, "a board repaint keeps the mark and does not re-flash");
 });

@@ -4710,6 +4710,11 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ud-chip.on{ color:var(--ink); border-color:var(--crk); }
 .ud-tbl .lg{ letter-spacing:.2em; }
 .ud-g{ color:var(--ink2); font-size:12px; }
+.ud-tbl .lg .sc-lists{ display:inline-flex; gap:2px; letter-spacing:0; }
+.ud-tbl .lg .sc-lst, .ud-tbl .lg .sc-star{ font-size:13px; width:18px; }
+.ud-th{ cursor:pointer; user-select:none; } .ud-th:hover, .ud-th.is-on{ color:var(--ink2); }
+.ud-arw{ font-style:normal; font-size:9px; margin-left:4px; }
+.ud-ah{ font-weight:600; color:var(--ink2); letter-spacing:.06em; }
 .ud-fs{ display:block; font-style:normal; font-size:11px; color:var(--dim); }
 .ud-reg{ margin-top:14px; border-top:.5px solid var(--line2); }
 .ud-reg > summary{ cursor:pointer; font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--ink3); padding:10px 4px; }
@@ -4745,9 +4750,10 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .ud-tbl .w{ color:var(--ink3); white-space:normal; }
 .ud-tbl tr[data-act]{ cursor:pointer; } .ud-tbl tr[data-act]:hover td{ background:rgba(0,212,255,.04); }
 @media (max-width:900px){ .body2--ud{ grid-template-columns:1fr; } }
-@media (max-width:560px){ .ud-tbl th:nth-child(3), .ud-tbl td:nth-child(3), .ud-tbl th:nth-child(5), .ud-tbl td:nth-child(5), .ud-tbl th:nth-child(8), .ud-tbl td:nth-child(8){ display:none; }
-  .ud-tbl.ud-hb th:nth-child(5), .ud-tbl.ud-hb td:nth-child(5){ display:table-cell; } .ud-hero__c{ font-size:22px; }
-  .ud-tbl.ud-hb th:nth-child(3), .ud-tbl.ud-hb td:nth-child(3){ display:table-cell; } .ud-bars{ height:120px; } }
+@media (max-width:560px){ .ud-tbl .c-what, .ud-tbl .c-prev, .ud-tbl .c-usual, .ud-tbl .c-why{ display:none; }   /* 29 Sep — by name, not position: the columns moved */
+  .ud-hero__c{ font-size:22px; } .ud-bars{ height:120px; }
+  .ud-tbl td, .ud-tbl th{ padding:5px 3px; } .ud-tbl .lg .sc-lst, .ud-tbl .lg .sc-star{ min-width:22px; width:22px; }
+  .ud-long{ display:none; } .ud-tbl .ud-flash{ white-space:normal; } }
 </style>
 </head>
 <body>
@@ -6256,6 +6262,7 @@ function coIdentLists(ib) {
   if (tk) tk.insertAdjacentHTML("afterend", listCtlHTML(LEFT_T, "co"));
 }
 function coListsRepaint() {
+  if (S.sec === "USUAL" && typeof udRender === "function") udRender();   /* 29 Sep — USUAL DAY's ⊙ ★ ♥ column follows in place */
   const c = el("coLists");
   if (c && LEFT_T) c.outerHTML = listCtlHTML(LEFT_T, "co");
   if (LEFT_T && el("cvFacts")) cvSet("cvFacts", cvFactsHTML(LEFT_T));   /* SWITCH-ON — the phone's copy of ♥ ★ ◎ follows too */
@@ -20740,11 +20747,17 @@ function udRowsForDay(open, today, scoped) {
     const b = liveBy[open];
     return (b ? b.rows : []).map((r) => {
       const d = r.detail || {}, isT = r.subject_kind === "ticker", t = isT ? String(r.subject).toUpperCase() : r.subject;
-      const lm = open === today && isT && r.kind === "price_outlier" ? udLiveMove(t) : null;
-      return { t, isT, kind: r.kind, move: lm != null ? lm : udMove(r), firstSight: lm == null && r.kind === "price_outlier",
-        prev: d.prev_close != null ? +d.prev_close : null, usual: r.kind === "price_outlier" && d.daily_vol_pct != null ? +d.daily_vol_pct : null,
-        x: lm != null && d.daily_vol_pct ? lm / +d.daily_vol_pct : null, mult: scintMult(r), dir: +r.direction, row: r,
-        why: scintWhyRule(r) || (Array.isArray(d.fired) && d.fired.indexOf("statistical") >= 0 ? "far beyond its usual day" : ""), what: scintWhat(r) };
+      /* 29 Sep — NOW is scintNow (latest price vs the STORED previous close, ÷ the stored usual day); the flash is kept
+         beside it with its own minute, never overwritten by it */
+      const now = open === today && isT ? scintNow(r) : null, po = r.kind === "price_outlier";
+      const f = po ? scintFlashAt(r) : null;
+      const why0 = scintWhyRule(r) || (Array.isArray(d.fired) && d.fired.indexOf("statistical") >= 0 ? "far beyond its usual day" : "");
+      return { t, isT, kind: r.kind, move: now ? now.move : udMove(r), firstSight: !now && po,
+        prev: d.prev_close != null ? +d.prev_close : null, usual: po && d.daily_vol_pct != null ? +d.daily_vol_pct : null,
+        x: now ? now.x : null, mult: scintMult(r), dir: +r.direction, row: r,
+        flash: po ? { hm: f ? f.hm : "", ah: f ? f.off : "", move: udMove(r), x: r.magnitude != null ? +r.magnitude * (+r.direction < 0 ? -1 : 1) : null } : null,
+        why: po && why0 ? "at the flash: " + why0 + (now && now.x != null && Math.abs(now.x) < now.thr ? " · back inside " + now.thr + "× now" : "") : why0,
+        what: scintWhat(r) };
     });
   }
   const rows = UD_HDAY[open];
@@ -20759,36 +20772,65 @@ function udDayHTML(scoped, today) {
   const liveBy = udByDay(scoped), open = udOpenDay(today, liveBy);
   const rows = udRowsForDay(open, today, scoped);
   const head = '<div class="ud-dayhd"><b>' + esc(ernWeekday(open) + " " + ernMonthDay(open) + " " + open.slice(0, 4)) + "</b>" +
-    " · move = " + (open === today ? "latest price" : "close") + " vs the previous close</div>";
+    (open === today ? " · <b>now</b> = latest price vs the previous close · <b>at the flash</b> = the minute the detector first saw the move cross"
+      : " · move = close vs the previous close") + "</div>";
   if (rows == null) { udHistDayEnsure(open); return head + '<div class="soon">reading ' + esc(ernMonthDay(open)) + " from the stored history…</div>"; }
-  /* the selector like the dashboard's: how many of this day's names sit in each of Alan's lists, each one a tap */
-  const all = open === today || !UD_CNT ? (liveBy[open] ? liveBy[open].rows.filter((r) => r.subject_kind === "ticker").map((r) => String(r.subject).toUpperCase()) : [])
-    : (UD_HDAY[open] || []).map((e) => e.ticker);
+  /* 29 Sep — Alan: "instead of tab filters, a column with the LIKED/FAVORITE/RADAR selectors (add/remove) like the dashboard —
+     we have a ton of space". The ALL · ⊙ RADAR · ★ FAVORITES · ♥ LIKED chips are gone (the cohort strip above still
+     scopes the room); every row carries the dashboard's own ⊙ ★ ♥ (listCtlHTML), and a tap adds or removes in place. */
   const coh = udCohort();
-  const sel = '<div class="ud-sel"><span class="ud-sel__l">in your lists:</span>' +
-    '<span class="ud-chip' + (coh === "ALL" ? " on" : "") + '" data-act="udlist" data-k="ALL">ALL ' + all.length + "</span>" +
-    UD_LISTS.map(([k, g, name]) => {
-      const mem = listMembers(k, S.fav).map((x) => String(x).toUpperCase());
-      const cnt = all.filter((t) => mem.indexOf(t) >= 0).length;
-      return '<span class="ud-chip ud-chip--' + k.toLowerCase() + (coh === k ? " on" : "") + '" data-act="udlist" data-k="' + k + '" title="' +
-        esc(cnt + " of this day's names are on " + name + " · tap to show only those") + '">' + g + " " + name + " " + cnt + "</span>";
-    }).join("") + "</div>";
-  if (!rows.length) return head + sel + '<div class="soon">nothing ' + (coh === "ALL" ? "" : "on " + esc(udCohName(coh)) + " ") +
+  if (!rows.length) return head + '<div class="soon">nothing ' + (coh === "ALL" ? "" : "on " + esc(udCohName(coh)) + " ") +
     "moved further than its own usual day on this day" + (open === today ? " (yet)" : "") + ".</div>";
-  rows.sort((a, b) => Math.abs(b.x != null ? b.x : +((b.row && b.row.magnitude) || 0)) - Math.abs(a.x != null ? a.x : +((a.row && a.row.magnitude) || 0)));
-  return head + sel + '<table class="ud-tbl"><thead><tr><th>NAME</th><th>LISTS</th><th>WHAT</th><th class="n">MOVE vs PREV CLOSE</th><th class="n">PREV CLOSE</th><th class="n">× USUAL</th><th class="n">USUAL DAY</th><th>WHY</th></tr></thead><tbody>' +
+  udSortRows(rows, udSort());
+  const hasFlash = rows.some((r) => r.flash);
+  const th = (k, label, cls) => {
+    const so = udSort(), on = so.k === k;
+    return '<th class="ud-th' + (cls ? " " + cls : "") + (on ? " is-on" : "") + '" data-act="udsort" data-k="' + k + '" role="button" tabindex="0" aria-sort="' +
+      (on ? (so.dir > 0 ? "ascending" : "descending") : "none") + '" title="sort by ' + esc(UD_SORT_SAY[k]) + ' · tap again to reverse">' + label +
+      '<i class="ud-arw">' + (on ? (so.dir > 0 ? "▲" : "▼") : "") + "</i></th>";
+  };
+  const nowLbl = open === today ? "NOW" : "AT THE CLOSE";
+  return head + '<table class="ud-tbl"><thead><tr><th class="ud-lsth" title="⊙ RADAR · ★ FAVORITES · ♥ LIKED — tap to add or remove, the same buttons as the dashboard">LISTS</th>' +
+    th("name", "NAME") + '<th class="c-what">WHAT</th>' + th("move", nowLbl + '<span class="ud-long"> · MOVE vs PREV CLOSE</span>', "n") + th("x", "× USUAL", "n") +
+    (hasFlash ? th("flash", '<span class="ud-long">AT THE </span>FLASH', "n") : "") + '<th class="n c-prev">PREV CLOSE</th><th class="n c-usual">USUAL DAY</th><th class="c-why">WHY</th></tr></thead><tbody>' +
     rows.map((r) => {
       const act = r.isT ? ' data-act="row" data-t="' + esc(r.t) + '"' : (r.row && r.row.detail && r.row.detail.event_ts ? ' data-act="mngoto" data-day="' + esc(scintDayET(r.row.detail.event_ts)) + '"' : "");
-      const lists = r.isT ? udListsOf(r.t).map(([k, g, name]) => '<span class="ud-g ud-g--' + k.toLowerCase() + '" title="' + esc(name) + '">' + g + "</span>").join("") : "";
-      const xs = r.x != null && isFinite(r.x) ? Math.abs(r.x).toFixed(1) + "×" : r.mult || "—";
-      const ttl = r.row ? scintSays(r.row) : r.t + " · " + fmtC(r.move) + " vs the previous close " + (r.prev != null ? r.prev : "") + " · usual day ±" + (r.usual != null ? r.usual.toFixed(2) : "?") + "%";
-      return "<tr" + act + ' title="' + esc(ttl) + '"><td class="t"><b>' + esc(r.t) + '</b></td><td class="lg">' + lists + "</td>" +
-        "<td>" + esc(r.what || "") + '</td><td class="n ' + (r.move == null ? "" : r.move >= 0 ? "up" : "dn") + '">' + (r.move != null ? esc(fmtC(r.move)) : "—") +
-          (r.firstSight ? '<i class="ud-fs" title="the board has no live price for this name; this is the move when the detector first saw it">at first sight</i>' : "") + "</td>" +
-        '<td class="n dim">' + (r.prev != null && isFinite(+r.prev) ? esc((+r.prev).toFixed(2)) : "—") + "</td>" +
-        '<td class="n x ' + (r.dir > 0 ? "up" : r.dir < 0 ? "dn" : "") + '">' + esc(xs) + "</td>" +
-        '<td class="n">' + esc(r.usual != null ? hbPct(r.usual) : "—") + '</td><td class="w">' + esc(r.why || "") + "</td></tr>";
+      const lists = r.isT ? listCtlHTML(r.t) : "";
+      const nowX = r.x != null && isFinite(r.x) ? Math.abs(r.x).toFixed(1) + "×" : null;
+      const xs = nowX || (r.flash && r.flash.x != null ? Math.abs(r.flash.x).toFixed(1) + "×" : r.mult || "—");
+      const xTag = !nowX && r.flash ? '<i class="ud-fs">at the flash</i>' : "";
+      const xDir = r.x != null && isFinite(r.x) ? (r.x > 0 ? "up" : r.x < 0 ? "dn" : "") : (r.dir > 0 ? "up" : r.dir < 0 ? "dn" : "");
+      const fl = r.flash ? '<td class="n ud-flash ' + (r.flash.move == null ? "" : r.flash.move >= 0 ? "up" : "dn") + '" title="' +
+          esc("the minute the detector first saw this move cross its usual day" + (r.flash.ah ? " — " + r.flash.ah + ", outside 09:30–16:00 ET, so on an extended-hours price" : "")) + '">' +
+          (r.flash.move != null ? esc(fmtC(r.flash.move)) : "—") + (r.flash.x != null ? " · " + esc(Math.abs(r.flash.x).toFixed(1)) + "×" : "") +
+          '<i class="ud-fs">' + esc(r.flash.hm ? r.flash.hm + " ET" : "") + (r.flash.ah ? ' <b class="ud-ah">' + esc(r.flash.ah) + "</b>" : "") + "</i></td>"
+        : (hasFlash ? '<td class="n dim" title="measured at the close">—</td>' : "");
+      const ttl = r.row ? scintSaysLive(r.row) : r.t + " · " + fmtC(r.move) + " vs the previous close " + (r.prev != null ? r.prev : "") + " · usual day ±" + (r.usual != null ? r.usual.toFixed(2) : "?") + "%";
+      return "<tr" + act + ' title="' + esc(ttl) + '"><td class="lg">' + lists + '</td><td class="t"><b>' + esc(r.t) + "</b></td>" +
+        '<td class="c-what">' + esc(r.what || "") + '</td><td class="n ' + (r.move == null ? "" : r.move >= 0 ? "up" : "dn") + '">' + (r.move != null ? esc(fmtC(r.move)) : "—") +
+          (r.firstSight ? '<i class="ud-fs" title="the board has no live price for this name; this is the move at the flash">at the flash</i>' : "") + "</td>" +
+        '<td class="n x ' + xDir + '">' + esc(xs) + xTag + "</td>" + fl +
+        '<td class="n dim c-prev">' + (r.prev != null && isFinite(+r.prev) ? esc((+r.prev).toFixed(2)) : "—") + "</td>" +
+        '<td class="n c-usual">' + esc(r.usual != null ? hbPct(r.usual) : "—") + '</td><td class="w c-why">' + esc(r.why || "") + "</td></tr>";
     }).join("") + "</tbody></table>";
+}
+/* 29 Sep — the sortable columns. Alan: "sort by move vs previous close and alphabetically". Default is × USUAL, biggest
+   first (the order the table always had). A second tap on the same header reverses it. Kept for the session. */
+const UD_SORT_SAY = { move: "the move vs the previous close", name: "name, A→Z", x: "how many usual days, biggest first", flash: "the move at the flash" };
+const UD_SORT_DEF = { move: -1, name: 1, x: -1, flash: -1 };
+function udSort() { const k = S.udSort && UD_SORT_DEF[S.udSort.k] ? S.udSort.k : "x"; return { k: k, dir: S.udSort && S.udSort.k === k ? S.udSort.dir : UD_SORT_DEF[k] }; }
+/* PURE — sorts in place. Blank values always sink to the bottom, whichever way the column runs. */
+function udSortRows(rows, so) {
+  const val = (r) => so.k === "name" ? String(r.t || "")
+    : so.k === "move" ? (r.move != null && isFinite(r.move) ? +r.move : null)
+    : so.k === "flash" ? (r.flash && r.flash.move != null ? +r.flash.move : null)
+    : (r.x != null && isFinite(r.x) ? Math.abs(r.x) : r.flash && r.flash.x != null ? Math.abs(r.flash.x) : r.row && r.row.magnitude != null ? Math.abs(+r.row.magnitude) : null);
+  return rows.sort((a, b) => {
+    const A = val(a), B = val(b);
+    if (A == null || B == null) return (A == null) - (B == null);
+    const c = so.k === "name" ? A.localeCompare(B) : A - B;
+    return c ? c * so.dir : String(a.t).localeCompare(String(b.t));
+  });
 }
 /* the usual day of every name in scope, biggest first — the column that left the board */
 function udHbHTML() {
@@ -22012,6 +22054,7 @@ document.addEventListener("click", (e) => {
     }
     case "udday": { S.udDay = a.dataset.d || null; udRender(); break; }        /* 27 Sep — a bar on the usual-day slider */
     case "udall": { S.udCohPick = "ALL"; udRender(); udHbEnsure(); break; }
+    case "udsort": { const k = a.dataset.k, so = udSort(); S.udSort = { k: k, dir: so.k === k ? -so.dir : UD_SORT_DEF[k] }; udRender(); break; }   /* 29 Sep */
     case "udlist": { S.udCohPick = a.dataset.k || "ALL"; udRender(); udHbEnsure(); break; }   /* 28 Sep — ALL · ⊙ RADAR · ★ FAVORITES · ♥ LIKED, like the dashboard */
     case "headx": {   // 27 Sep — ✕ beside the ticker in the header title: back to the SCINTILLA title; the tape stays
       if (S.sec === "COMPANY") { S.sec = "DASHBOARD"; updateMtabs(); }
@@ -23001,15 +23044,57 @@ function scintWhat(ev) {
 /* R4 — the ONE-LINE strip's wording: the move and how many usual days it is, "(usual ±3.3% a day)"; the history length and
    the rule that fired stay in the tooltip (scintSays), so the line fits instead of being cut mid-sentence. */
 function scintSaysShort(ev) {
+  const now = scintNowSays(ev);
   return scintSays(ev).replace(/, measured over its last \d+ sessions/, "").replace(/ over its last \d+ (reports|prints)/, "")
-    .replace(/ · (big move, and far beyond its usual day|a big move on its own[^·]*)$/, "");
+    .replace(/ · (big move, and far beyond its usual day|a big move on its own[^·]*)$/, "")
+    .replace(/ at the flash \d{1,2}:\d{2} ET(, (after hours|pre-market|market closed))?/, (m, a, w) => w ? " " + w : "") + (now ? " · " + now : "");
+}
+/* the full sentence plus NOW — for the places that are looked at live (titles on the strip, the board cell, the ident);
+   the bell keeps scintSays alone, because a stored notification must not carry a price that goes stale */
+function scintSaysLive(ev) { const now = scintNowSays(ev); return scintSays(ev) + (now ? " · " + now : ""); }
+/* 29 Sep — GOOG, 28 Sep: the strip said "(4.46%) · 2.1× its usual day", USUAL DAY said "(0.60%)" and "0.3×". All three were
+   true and none said WHEN. The detector stores the FIRST minute a move crossed (here 16:50 ET, after the close, on an
+   after-hours print of 325.89 vs a previous close of 341.08); USUAL DAY recomputes today's move from the board's latest
+   price (339.05). So every surface now says which one it shows: AT THE FLASH (the stored minute, and "after hours" when
+   it fell outside 09:30–16:00 ET) and NOW (latest price vs the same previous close, ÷ the same usual day). */
+const SCINT_CLOSE_MIN = 16 * 60;
+function scintFlashAt(ev) {
+  const ms = Date.parse(ev && ev.ts);
+  if (!isFinite(ms)) return null;
+  const ny = typeof gsNyClock === "function" ? gsNyClock(ms) : null;
+  const hm = (() => { try { return ET_HM.format(new Date(ms)); } catch (_) { return ""; } })();
+  /* "pre-market" before 09:30, "after hours" after 16:00, "market closed" on a weekend or NYSE holiday */
+  const word = !ny ? "" : typeof gsIsTradingDay === "function" && !gsIsTradingDay(ny.date) ? "market closed"
+    : ny.minutes < SCINT_OPEN_MIN ? "pre-market" : ny.minutes > SCINT_CLOSE_MIN ? "after hours" : "";
+  return { hm: hm, afterHours: !!word, off: word };
+}
+/* NOW for a stored price outlier of TODAY's session: the board's latest price against the stored previous close,
+   divided by the stored usual day — the same two numbers the flash used, so the two can be read side by side */
+function scintNow(ev) {
+  const d = (ev && ev.detail) || {};
+  if (!ev || ev.kind !== "price_outlier" || ev.subject_kind !== "ticker") return null;
+  if (d.session && typeof todayISO === "function" && d.session !== todayISO()) return null;
+  const t = String(ev.subject).toUpperCase();
+  const p = typeof PRICES !== "undefined" && PRICES && PRICES[t] != null ? +PRICES[t] : NaN;   /* self-contained: this block also runs in the tests' sandbox */
+  const pc = d.prev_close != null && isFinite(+d.prev_close) ? +d.prev_close
+    : typeof prevClose !== "undefined" && prevClose && prevClose[t] != null ? +prevClose[t] : NaN;
+  if (!isFinite(p) || !(p > 0) || !isFinite(pc) || !(pc > 0)) return null;
+  const mv = (p / pc - 1) * 100, u = +d.daily_vol_pct;
+  return { move: mv, x: u > 0 ? mv / u : null, thr: d.thresholds && d.thresholds.x_usual != null ? +d.thresholds.x_usual : 2 };
+}
+function scintNowSays(ev) {
+  const n = scintNow(ev);
+  if (!n) return "";
+  return "now " + fmtC(n.move) + (n.x != null ? ", " + Math.abs(n.x).toFixed(1) + "× usual" : "") +
+    (n.x != null && Math.abs(n.x) < n.thr ? " — back inside " + n.thr + "×" : "");
 }
 function scintSays(ev) {
   const d = (ev && ev.detail) || {};
   const u = scintUsualIs(ev);
   const unusual = [scintUnusual(ev), u ? "(" + u + ")" : ""].filter(Boolean).join(" ");
   if (ev.kind === "price_outlier") {
-    const mv = d.move_pct != null ? fmtC(+d.move_pct) : "";
+    const f = scintFlashAt(ev);
+    const mv = d.move_pct != null ? fmtC(+d.move_pct) + (f ? " at the flash " + f.hm + " ET" + (f.off ? ", " + f.off : "") : "") : "";
     return [mv, unusual, scintWhyRule(ev)].filter(Boolean).join(" · ");
   }
   if (ev.kind === "earnings_surprise") {
@@ -23162,7 +23247,7 @@ function scintStripHTML() {
     esc(d.event_ts ? scintDayET(d.event_ts) : "") + '">' +
     '<span class="sc-ss__t">' + esc(when) + "</span>" +
     '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
-    '<span class="sc-ss__d" title="' + esc(scintSays(ev)) + '">' + esc(scintSaysShort(ev)) + "</span>" +   /* R4 — the one line no longer ends in "a big …" */
+    '<span class="sc-ss__d" title="' + esc(scintSaysLive(ev)) + '">' + esc(scintSaysShort(ev)) + "</span>" +   /* R4 — the one line no longer ends in "a big …" */
     '<span class="sc-ss__k">' + esc(scintWhat(ev)) + "</span>" +
     '<span class="sc-ss__go">all ' + rows.length + " ›</span></button>";
   /* 28 Sep — Alan: "TODAY'S SCINTILLAS 23 — clicking this red thing does nothing." The count is now a button: it
@@ -23217,7 +23302,7 @@ function scintLastSessionHTML(last) {
     '<span class="sc-ss__n">' + esc(day) + ": " + esc(count) + "</span>" +
     '<span class="sc-ss__t">last ' + esc(when) + "</span>" +
     '<span class="sc-ss__w">' + esc(ev.subject) + "</span>" +
-    '<span class="sc-ss__d">' + esc(scintSays(ev)) + "</span>" +
+    '<span class="sc-ss__d">' + esc(scintSaysShort(ev)) + "</span>" +
     '<span class="sc-ss__go">open ' + esc(day) + " ›</span></button>", title, "SCINTILLAS");
 }
 function scintStripRender() {
@@ -23270,7 +23355,7 @@ function identScintPass() {
   const node = el("coChg") || el("coPx");
   if (!node) return 0;
   if (node.classList) node.classList.add("is-scint");
-  scSetTitle(node, scintWhat(ev) + " · " + scintSays(ev));
+  scSetTitle(node, scintWhat(ev) + " · " + scintSaysLive(ev));
   return scintGlow("ident", ev, node) ? 1 : 0;
 }
 
@@ -23318,7 +23403,7 @@ function boardScintPass() {
     const cell = el("lc_" + ev.subject);
     if (!cell) continue;
     if (cell.classList) cell.classList.add("is-scint");
-    scSetTitle(cell, "outlier of the day · " + scintSays(ev));
+    scSetTitle(cell, "outlier of the day · " + scintSaysLive(ev));
     if (n < SCINT_GLOW_CAP && scintGlow("board", ev, cell)) n++;
   }
   return n;
