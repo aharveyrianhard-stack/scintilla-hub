@@ -101,8 +101,11 @@ test("sigma backfill writes only its two new tables, additive, with a rollback",
 test("USUAL DAY: moves vs the previous close (no TIME column), the lists selector, the registry folded away", () => {
   const day = fnSrc("udDayHTML");
   assert.doesNotMatch(day, /<th>TIME<\/th>/);
-  assert.match(day, /<th class="n">MOVE vs PREV CLOSE<\/th><th class="n">PREV CLOSE<\/th>/);
-  assert.match(day, /data-act="udlist" data-k="ALL"/);
+  /* 29 Sep (P2-HUB-FIXES) — superseded on Alan's word: the columns became sortable and the ALL/RADAR/FAVORITES/LIKED chips
+     became a LISTS column of ⊙ ★ ♥ toggles; see tests/hub-fixes-20260929.test.mjs */
+  assert.match(day, /th\("move", nowLbl \+ '<span class="ud-long"> · MOVE vs PREV CLOSE<\/span>', "n"\)/);
+  assert.match(day, /<th class="n c-prev">PREV CLOSE<\/th>/);
+  assert.doesNotMatch(day, /data-act="udlist"/);
   assert.match(page, /const UD_LISTS = \[\["RADAR", "⊙", "RADAR"\], \["FAVORITES", "★", "FAVORITES"\], \["FAV", "♥", "LIKED"\]\];/);
   assert.match(page, /case "udlist": \{ S\.udCohPick = a\.dataset\.k \|\| "ALL";/);
   assert.match(fnSrc("udLiveMove"), /\(p \/ pc - 1\) \* 100/, "today's move is the live price against the served previous close");
