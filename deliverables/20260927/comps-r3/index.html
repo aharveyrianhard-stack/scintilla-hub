@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · COMPS · THE FULL FIELD</title>
+<style>
+/* The Hub's own :root (index.html); the two direction steps validated for marks on the panel; every other colour a grey. */
+:root{color-scheme:dark;
+ --bg:#0A0A0F;--panel:#0D0D14;--panel2:#0F0F1A;--sunk:#08080C;
+ --line:#1A1A2A;--line2:#252538;--line3:#3A3F5C;
+ --ink:#F2F2F8;--ink2:#C6C8DE;--ink3:#9A9AB6;
+ --crk:#00D4FF;--good:#1DC98B;--bad:#FF2D55;--fv:#1AA8D0;--fvfill:rgba(26,168,208,.17);
+ --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink2)}
+body{font-family:var(--mono);font-size:13px;line-height:1.5;letter-spacing:.02em;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input[type=text]{font:inherit;color:var(--ink);background:var(--sunk);border:1px solid var(--line2);padding:6px 8px;width:96px;text-transform:uppercase}
+.wrap{max-width:1420px;margin:0 auto;padding:0 20px 80px;overflow-x:hidden}
+.top{padding:16px 0 12px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.brand{font:400 12px/1.4 var(--mono);letter-spacing:.2em;color:var(--ink3)}.brand b{color:var(--ink);font-weight:600}
+.stamp{margin-left:auto;font:400 11px/1.5 var(--mono);color:var(--ink3);letter-spacing:.06em;text-align:right}.stamp b{color:var(--ink2);font-weight:400}
+h2{font:600 12px/1.4 var(--mono);letter-spacing:.22em;color:var(--crk);margin:30px 0 4px;text-transform:uppercase}
+h2 small{font-weight:400;letter-spacing:.06em;color:var(--ink3);text-transform:none;margin-left:10px;font-size:12px}
+.panel{border:1px solid var(--line);background:var(--panel)}
+.lbl{font:400 10.5px/1.4 var(--mono);letter-spacing:.16em;color:var(--ink3);text-transform:uppercase}
+.good{color:var(--good)}.bad{color:var(--bad)}.neu{color:var(--ink)}
+.banner{border:1px solid var(--line2);border-left:2px solid var(--bad);padding:10px 14px;margin:14px 0 0;font-size:12.5px;color:var(--ink2)}
+.err{border:1px solid var(--bad);padding:14px;color:var(--ink);margin-top:20px}
+.loading{padding:40px 0;color:var(--ink3);letter-spacing:.2em}
+/* tabs and the one control row */
+.tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 0}
+.tabs button.tk{padding:8px 14px;border:1px solid var(--line2);color:var(--ink2);letter-spacing:.14em;font-size:12px}
+.tabs button.tk.on{border-color:var(--crk);color:var(--ink)}
+.tabs button.tk small{display:block;font-size:10px;color:var(--ink3);letter-spacing:.06em;margin-top:2px}
+.tabs form{display:flex;gap:6px;align-items:center;margin-left:6px}
+.tabs .coh{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-block;padding:5px 9px;border:1px solid var(--line2);font-size:11px;letter-spacing:.1em;color:var(--ink2);text-decoration:none;text-transform:uppercase}
+.chip.on{border-color:var(--crk);color:var(--ink)}
+.ctl{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;margin:12px 0 0;padding:10px 14px;border:1px solid var(--line);background:var(--panel2)}
+.ctl > div{display:flex;flex-direction:column;gap:4px}
+.seg{display:inline-flex;border:1px solid var(--line2)}
+.seg button{padding:5px 10px;font-size:11px;letter-spacing:.12em;color:var(--ink3)}
+.seg button.on{background:var(--line2);color:var(--ink)}
+.ctl .hint{font-size:11px;color:var(--ink3);max-width:46ch}
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr;gap:0 28px;padding:16px 18px;align-items:start}
+.hero .tk{font:600 34px/1 var(--mono);color:var(--ink);letter-spacing:.04em}
+.hero .nm{font-size:12px;color:var(--ink3);margin-top:6px;max-width:26ch}
+.hero .px{font:600 24px/1.1 var(--mono);color:var(--ink);margin-top:10px}
+.hero .px small{display:block;font:400 11px/1.5 var(--mono);color:var(--ink3);margin-top:3px}
+.hero .fv{font-size:13px;color:var(--ink2);line-height:1.6}
+.hero .fv b{font-size:20px;color:var(--ink);font-weight:600}
+.hero .fv .big{display:flex;gap:26px;flex-wrap:wrap;margin:4px 0 10px}
+.hero .fv .big div{font:400 10.5px/1.4 var(--mono);letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.hero .fv .big b{display:block;font:600 20px/1.2 var(--mono);color:var(--ink);letter-spacing:0;text-transform:none;margin-top:2px}
+/* a field row (shared by the size strip, the $ field and the component field) */
+.frow{display:grid;grid-template-columns:270px 1fr 230px;gap:14px;align-items:start;padding:10px 16px 6px}
+.frow + .frow{border-top:1px solid var(--line)}
+.frow .m{font:400 12.5px/1.35 var(--mono);color:var(--ink);padding-top:16px}
+.frow .m small{display:block;font-size:10.5px;color:var(--ink3);line-height:1.4;margin-top:3px}
+.frow .ends{font:400 12px/1.45 var(--mono);color:var(--ink2);text-align:right;padding-top:16px}
+.frow .ends b{font-size:16px;font-weight:600}
+.frow .ends em{display:block;font-style:normal;font-size:11.5px}
+.frow .ends small{display:block;font-size:10.5px;color:var(--ink3)}
+.frow.na .track{display:flex;align-items:center;font-size:12px;color:var(--ink3);min-height:40px}
+.track{position:relative;height:92px}
+.track .base{position:absolute;left:0;right:0;top:41px;height:1px;background:var(--line2)}
+.track .rng{position:absolute;top:36px;height:11px;background:#222538;border-radius:2px}
+.track .iq{position:absolute;top:36px;height:11px;background:#353A55;border-radius:2px}
+.track .med{position:absolute;top:30px;height:23px;width:2px;margin-left:-1px;background:var(--ink2)}
+.track .fence{position:absolute;top:33px;height:17px;width:0;border-left:1px dashed var(--line3)}
+.track .lab{position:absolute;font:400 10.5px/1.15 var(--mono);color:var(--ink3);white-space:nowrap;pointer-events:none}
+.track .lab.t0{top:0}.track .lab.t{top:14px}.track .lab.b{top:52px}.track .lab.b2{top:64px}.track .lab.b3{top:76px}
+.track .lab.c{transform:translateX(-50%)}.track .lab.r{transform:translateX(-100%)}
+.track .lab b{color:var(--ink2);font-weight:400}
+.track .lab.me{color:var(--ink);font-weight:600;top:11px}
+.pd{position:absolute;top:36.5px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--ink3);border:2px solid var(--panel);z-index:1}
+.pd:hover{background:var(--ink)}
+.pd::after{content:"";position:absolute;inset:-8px}
+.pd.out{background:transparent;border:2px solid var(--ink2);border-radius:0;transform:rotate(45deg);width:11px;height:11px;margin-left:-5.5px;top:36px}
+.pd.off{background:transparent;border:2px solid var(--line3);border-radius:50%;transform:none}
+.me{position:absolute;top:32px;width:19px;height:19px;margin-left:-9.5px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 2px var(--ink);z-index:2}
+.me.good{background:var(--good)}.me.bad{background:var(--bad)}.me.neu{background:var(--ink)}
+.axis{position:relative;height:16px;border-top:1px solid var(--line2);margin-top:0}
+.axis span{position:absolute;top:3px;transform:translateX(-50%);font:400 10px/1 var(--mono);color:var(--ink3);white-space:nowrap}
+.axis span.l{transform:none}.axis span.r{transform:translateX(-100%)}
+.axword{display:flex;justify-content:space-between;font:400 10px/1 var(--mono);color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;margin-top:3px}
+.axword i{font-style:normal;color:var(--ink3)}
+.oline{grid-column:1 / -1;font-size:11.5px;color:var(--ink3);line-height:1.45;padding:2px 0 4px;border-top:1px dotted var(--line)}
+.oline b{color:var(--ink2);font-weight:400}
+.oline .o{color:var(--ink)}
+.grp{font:600 11px/1.4 var(--mono);letter-spacing:.18em;color:var(--crk);text-transform:uppercase;padding:14px 16px 6px;border-top:1px solid var(--line)}
+.grp:first-child{border-top:0}
+.grp small{display:block;font:400 11px/1.4 var(--mono);letter-spacing:.02em;color:var(--ink3);text-transform:none;margin-top:2px}
+/* the $ field */
+.ff{padding:6px 0 0}
+.ff .frow{grid-template-columns:270px 1fr 200px}
+.ff .track{height:92px}
+.ff .track .wh{position:absolute;top:40px;height:2px;background:var(--ink3)}
+.ff .track .wh.cutr::after,.ff .track .wh.cutl::before{content:"›";position:absolute;top:-9px;color:var(--ink2);font-size:14px;line-height:1}
+.ff .track .wh.cutr::after{right:-8px}.ff .track .wh.cutl::before{content:"‹";left:-8px}
+.ff .track .box{position:absolute;top:33px;height:16px;background:#2E3248;border:1px solid #474C6A;border-radius:2px}
+.ff .track .vmed{position:absolute;top:29px;height:24px;width:2px;margin-left:-1px;background:var(--ink)}
+.ff .track .avg{position:absolute;top:35px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--ink2);border:2px solid var(--panel)}
+.ff .track .pxl{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--ink)}
+.ff .track .ovl{position:absolute;top:0;bottom:0;background:var(--fvfill)}
+.ff .frow.fvrow .m{color:var(--crk);font-weight:600}
+.ff .frow.fvrow .track .fvbar{position:absolute;top:31px;height:20px;background:var(--fv);border-radius:2px}
+.ff .frow.tgt .track .wh{background:var(--ink2)}
+.ff .axishead{display:grid;grid-template-columns:270px 1fr 200px;gap:14px;padding:12px 16px 0}
+.ff .axishead .axt{font:400 10.5px/1.4 var(--mono);letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.ff .axishead .pxlab{position:relative;height:16px}
+.ff .axishead .pxlab span{position:absolute;transform:translateX(-50%);font:600 10.5px/1 var(--mono);color:var(--ink);white-space:nowrap}
+.ff .axisfoot{display:grid;grid-template-columns:270px 1fr 200px;gap:14px;padding:0 16px 10px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:10px 16px 12px;font-size:11.5px;color:var(--ink3);border-top:1px solid var(--line)}
+.legend i{display:inline-block;vertical-align:-2px;margin-right:6px}
+.how{padding:0 16px 14px;font-size:12px;color:var(--ink2);line-height:1.55}
+.how b{color:var(--ink);font-weight:600}
+/* worked ends */
+.scroll{overflow-x:auto;border:1px solid var(--line);background:var(--panel)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{text-align:right;padding:8px 9px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+.tbl th{font:400 10.5px/1.35 var(--mono);letter-spacing:.06em;color:var(--ink3);vertical-align:bottom;white-space:normal;min-width:74px}
+.tbl th:first-child,.tbl td:first-child{text-align:left;position:sticky;left:0;background:var(--panel)}
+.tbl td{color:var(--ink)}
+.tbl td small{display:block;color:var(--ink3);font-size:10.5px;white-space:normal;max-width:34ch}
+.tbl tr.subj td{background:#121626}.tbl tr.subj td:first-child{background:#121626;color:var(--crk)}
+.tbl tr.medrow td{color:var(--ink2);border-top:1px solid var(--line2)}
+.tbl tr.off td{color:var(--ink3);text-decoration:line-through}
+.tbl.worked td{text-align:left;white-space:normal}
+.tbl.worked td.n{white-space:nowrap}
+/* proposals */
+.props{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.props > div{padding:14px 16px;font-size:12.5px;line-height:1.55;color:var(--ink2)}
+.props > div + div{border-left:1px solid var(--line)}
+.props b{color:var(--ink);font-weight:600}
+.props ol{padding-left:18px;margin:6px 0}
+.props li{margin:3px 0}
+.src{margin-top:14px}
+.src table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}.src td{overflow-wrap:anywhere}.src td:first-child{width:30%}.src td:last-child{width:22%}
+.src td{padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+.src td:first-child{color:var(--ink)}
+.annex{margin-top:36px;border-top:1px solid var(--line2);padding-top:6px}
+@media(max-width:1100px){.hero{grid-template-columns:1fr}.props{grid-template-columns:1fr}.props > div + div{border-left:0;border-top:1px solid var(--line)}}
+@media(max-width:760px){
+ .wrap{padding:0 12px 60px}
+ .frow,.ff .frow,.ff .axishead,.ff .axisfoot{grid-template-columns:1fr;gap:2px;padding:8px 12px}
+ .frow .m,.frow .ends{padding-top:0}.frow .ends{text-align:left}
+ .ff .axishead .axt{margin-bottom:6px}
+ .tabs .coh{margin-left:0}.stamp{margin-left:0;text-align:left}
+ .ctl{gap:14px}
+}
+</style></head>
+<body>
+<div class="wrap">
+<div class="top"><span class="brand"><b>SCINTILLA</b> · COMPS · THE FULL FIELD</span><span data-scnav-slot></span><span class="stamp" id="stamp">reading the Hub's own tables…</span></div>
+<div id="app" class="loading">READING…</div>
+</div>
+
+<script type="module">
+import { ROWS, GROUPS, row, VALUATION, buildInputs, components, compsRead, rowScale, niceTicks, fmt, endWords, outlierWords, cohortFor, OUTLIER_K, LOG_SPAN } from "./r3.mjs";
+import { basisWord } from "../comps-single/comps.mjs";
+import { capClass, dateWord, tsToISO, num, themeWord } from "../../20260925/knockout/field.mjs";
+
+/* ---- where the reads go (the round-1 and round-2 pages' own path) ---------------------------------- */
+const SB = "https://wadinxqplrggagkvrdag.supabase.co";
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+const API = window.SC_CHART_API || "https://scintilla-massive-chart-api.fly.dev";
+let KEY = null;
+async function readKey() {           // the same runtime discovery as rounds 1 and 2; nothing is stored in this file
+  if (window.SC_ANON_KEY) return (KEY = window.SC_ANON_KEY);
+  for (const page of ["/pip.html", "/index.html"]) {
+    try {
+      const t = await (await fetch(page, { cache: "no-store" })).text();
+      const m = t.match(/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_.\-]+/);
+      if (m) return (KEY = m[0]);
+    } catch (_) {}
+  }
+  return null;
+}
+async function pg(path) {
+  const r = await fetch(SB + "/rest/v1/" + path, { headers: { apikey: KEY, Authorization: "Bearer " + KEY } });
+  if (!r.ok) throw new Error(path.split("?")[0] + " → " + r.status);
+  return r.json();
+}
+async function api(path) { const r = await fetch(API + path); if (!r.ok) throw new Error(path.split("?")[0] + " → " + r.status); return r.json(); }
+
+/* ---- state ------------------------------------------------------------------------------------ */
+const Q = new URLSearchParams(location.search);
+const TODAY = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+const daysAgo = (n) => new Date(Date.parse(TODAY + "T00:00:00Z") - n * 86400e3).toISOString().slice(0, 10);
+const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? d : v; } catch (_) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+const TICKER = (Q.get("t") || "MU").toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+const S = {
+  ticker: TICKER, cohortAsked: Q.get("cohort"), cohort: null, cohortOptions: [], members: [], src: new Map(), today: TODAY,
+  out: new Set(lsGet("k3.out." + TICKER, [])), nm: lsGet("k3.nm", true), use: Q.get("use") === "full" ? "full" : lsGet("k3.use", "mid"),
+  outOut: Q.has("outliers") ? Q.get("outliers") === "out" : lsGet("k3.outOut", false),
+  mode: null, sources: [], quotesErr: null, readAt: null,
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = (x) => (Math.max(0, Math.min(1, x)) * 100).toFixed(2) + "%";
+const SIZE = ["MEGA_CAP", "MEGACAP", "LARGE_CAP", "MID_CAP", "SMALL_CAP", "BLUE_CHIP"];
+
+/* ---- reads ------------------------------------------------------------------------------------- */
+async function load() {
+  if (LOCAL && Q.get("live") !== "1") return snapshot();
+  return live();
+}
+
+/* On the Hub: every table round 2 reads, plus the round-1 columns' own tables
+   (fundamentals.adjusted_pe, price_target_consensus, composite_staged, ticker_heartbeat_daily). */
+async function live() {
+  if (!(await readKey())) throw new Error("no read key could be found on this site");
+  S.mode = "LIVE";
+  const own = await pg(`ticker_cohorts?select=ticker,cohort&ticker=eq.${encodeURIComponent(S.ticker)}`);
+  const ownTags = [...new Set(own.map((x) => x.cohort))];
+  S.cohort = cohortFor(S.ticker, ownTags, S.cohortAsked);
+  S.cohortOptions = [...new Set([S.cohort, ...ownTags.filter((t) => !SIZE.includes(t))])].filter(Boolean);
+  if (!S.cohort) throw new Error(S.ticker + " carries no cohort tag, so it has no peers on file");
+  const mem = await pg(`ticker_cohorts?select=ticker&cohort=eq.${encodeURIComponent(S.cohort)}&order=ticker.asc`);
+  const T = [...new Set([S.ticker, ...mem.map((m) => m.ticker)])];
+  S.members = T;
+  const inq = "in.(" + T.map(encodeURIComponent).join(",") + ")";
+  const [tags, fund, est, incH, cfH, bal, prof, earn, tgt, gg, hb, quotes] = await Promise.all([
+    pg(`ticker_cohorts?select=ticker,cohort&ticker=${inq}`),
+    pg(`fundamentals?select=ticker,price,market_cap,eps_ttm,revenue_ttm,trailing_pe,adjusted_pe,updated_ts&ticker=${inq}`),
+    pg(`analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg,est_revenue_avg,price_target_avg,updated_ts&period=eq.annual&ticker=${inq}&fiscal_date=gte.${TODAY}&order=ticker.asc,fiscal_date.asc`),
+    pg(`fundamentals_history?select=ticker,period,fiscal_year,fiscal_date,revenue,gross_profit,operating_income,ebitda&ticker=${inq}&fiscal_date=gte.${daysAgo(1100)}&order=fiscal_date.desc`),
+    pg(`cashflow_history?select=ticker,period,fiscal_year,fiscal_date,operating_cf,capex,free_cf&ticker=${inq}&fiscal_date=gte.${daysAgo(2200)}&order=fiscal_date.desc`),
+    pg(`balance_history?select=ticker,period,fiscal_date,net_debt,total_debt,cash_and_equiv&ticker=${inq}&fiscal_date=gte.${daysAgo(800)}&order=fiscal_date.desc`),
+    pg(`company_profile?select=ticker,name,industry,is_etf&ticker=${inq}`),
+    pg(`earnings_events?select=ticker,date,eps_estimate&ticker=${inq}&date=gte.${TODAY}&order=ticker.asc,date.asc`),
+    pg(`price_target_consensus?select=ticker,target_high,target_low,target_avg,target_median,num_analysts,updated_ts&ticker=${inq}`).catch(() => []),
+    pg(`composite_staged?select=ticker,composite,updated_ts&tf=eq.D&ticker=${inq}&order=ticker.asc,updated_ts.desc`).catch(() => []),
+    pg(`ticker_heartbeat_daily?select=ticker,date,usual_day_60&ticker=${inq}&date=gte.${daysAgo(10)}&order=date.desc`).catch(() => []),
+    api(`/quotes?symbols=${encodeURIComponent(T.join(","))}`).catch((e) => ({ quotes: {}, error: String(e.message || e) })),
+  ]);
+  const first = (rows, t) => rows.find((r) => r.ticker === t) || null;
+  const qmap = quotes.quotes && typeof quotes.quotes === "object" ? quotes.quotes : {};
+  S.quotesErr = quotes.error || null;
+  S.readAt = new Date();
+  for (const t of T) {
+    const f = first(fund, t) || {};
+    const q = qmap[t] && qmap[t].price != null ? qmap[t] : null;
+    const inc = incH.filter((r) => r.ticker === t), cf = cfH.filter((r) => r.ticker === t);
+    const next = earn.find((e) => e.ticker === t) || null;
+    const g = first(gg, t), h = first(hb, t), tg = first(tgt, t);
+    S.src.set(t, {
+      ticker: t, profile: first(prof, t) || {}, tags: tags.filter((x) => x.ticker === t).map((x) => x.cohort),
+      fundamentals: { ...f, date: tsToISO(f.updated_ts) }, quote: q,
+      price_date: q && q.price_observation_utc ? String(q.price_observation_utc).slice(0, 10) : tsToISO(f.updated_ts),
+      estimates: est.filter((e) => e.ticker === t),
+      incQ: inc.filter((r) => r.period !== "FY"), incFY: inc.filter((r) => r.period === "FY"),
+      cfQ: cf.filter((r) => r.period !== "FY"), cfFY: cf.filter((r) => r.period === "FY"),
+      balance: bal.filter((r) => r.ticker === t),
+      next_report: next ? { date: next.date, eps_estimate: num(next.eps_estimate) } : null,
+      target: tg ? { ...tg, updated_ts: tsToISO(tg.updated_ts) } : null,
+      geiger: g ? { composite: g.composite, updated_ts: tsToISO(g.updated_ts) } : null,
+      heartbeat: h ? { usual_day_60: h.usual_day_60, date: h.date } : null,
+    });
+  }
+  const dates = (arr) => { const v = arr.filter(Boolean).sort(); return v.length ? (v[0] === v[v.length - 1] ? dateWord(v[0]) : dateWord(v[0]) + " – " + dateWord(v[v.length - 1])) : "none"; };
+  S.sources = [
+    ["ticker_cohorts", "the cohort's members, and every tag a name carries (cap class, themes)", S.cohort],
+    ["fundamentals", "market value and the price on the same row (→ shares), EPS TTM, revenue TTM, adjusted P/E", dates(fund.map((f) => tsToISO(f.updated_ts)))],
+    ["analyst_estimates (annual)", "EPS and revenue for this fiscal year and the next → forward P/E, PEG, growth next FY; the average price target when no consensus row exists", dates(est.map((e) => tsToISO(e.updated_ts)))],
+    ["price_target_consensus", "analysts' lowest, median, average and highest price targets and how many analysts → the analyst band, the target-over-price row", dates(tgt.map((r) => tsToISO(r.updated_ts)))],
+    ["fundamentals_history (Q1–Q4, FY)", "revenue, gross profit, operating income, EBITDA → TTM, growth, margins, EV/EBITDA", "newest period " + dates(incH.map((r) => r.fiscal_date).slice(0, 1))],
+    ["cashflow_history (Q1–Q4, FY)", "CapEx, operating and free cash flow → CapEx, CapEx / revenue, CapEx growth, FCF margin", "newest period " + dates(cfH.map((r) => r.fiscal_date).slice(0, 1))],
+    ["balance_history", "net debt at the newest balance date → EV, net debt / EBITDA", "newest " + dates(bal.map((r) => r.fiscal_date).slice(0, 1))],
+    ["composite_staged tf=D", "the Geiger, as the board reads it", dates(gg.map((r) => tsToISO(r.updated_ts)))],
+    ["ticker_heartbeat_daily", "the usual day over 60 sessions", dates(hb.map((r) => r.date))],
+    ["company_profile", "name, industry, fund or not", "as stored"],
+    ["earnings_events", "next report date → days to the report", "from " + TODAY],
+    ["chart API /quotes", "today's price" + (S.quotesErr ? " — NOT REACHED: " + S.quotesErr : ""), "live"],
+  ];
+}
+
+/* On this machine without ?live=1: the committed round-1 run of 26 Sep, never the database. It carries price,
+   market value, EPS, adjusted P/E, the estimates' growth, revenue TTM, net debt, the average target, the Geiger
+   and the usual day — not the income or cash-flow history. */
+async function snapshot() {
+  const j = await (await fetch("../../20260925/knockout/run-20260926.json", { cache: "no-store" })).json();
+  S.mode = "SNAPSHOT"; S.today = j.today;
+  const rows = new Map();
+  for (const sc of Object.values(j.scenarios)) for (const r of sc.rows) if (!rows.has(r.ticker)) rows.set(r.ticker, r);
+  const subj = rows.get(S.ticker);
+  if (!subj) throw new Error(`${S.ticker} is not in the 26 Sep snapshot this machine draws (it holds ${[...rows.keys()].join(", ")}). On the Hub the page reads any ticker live; on this machine add ?live=1.`);
+  S.cohort = cohortFor(S.ticker, subj.all_tags, S.cohortAsked);
+  S.cohortOptions = [...new Set([S.cohort, ...(subj.all_tags || []).filter((t) => !SIZE.includes(t))])];
+  S.members = [...rows.values()].filter((r) => (r.all_tags || []).includes(S.cohort)).map((r) => r.ticker);
+  if (!S.members.includes(S.ticker)) S.members.unshift(S.ticker);
+  for (const r of rows.values()) S.src.set(r.ticker, fromSnapshot(r));
+  S.sources = [
+    ["deliverables/20260925/knockout/run-20260926.json", "the round-1 run of 26 Sep, as committed: price (chart API, 25 Sep), market value, EPS TTM, P/E trailing and adjusted, the forward EPS and the growth rates next FY, revenue TTM, net debt at the last fiscal year end, the average analyst target, the Geiger, the usual day, cohort tags", "run " + dateWord(j.today)],
+    ["— not in the snapshot", "income and cash-flow history (fundamentals_history, cashflow_history): EBITDA, margins, TTM growth, CapEx; the analysts' low / median / high targets — the Hub page reads them live", "empty on this render"],
+  ];
+}
+function fromSnapshot(r) {
+  const m = r.metrics || {};
+  const fprice = (num(m.pe_ttm) && r.eps_ttm > 0) ? m.pe_ttm * r.eps_ttm : r.price;
+  const est = [];
+  if (r.fwd && r.fwd.fiscal_date) {
+    const e1 = num(r.fwd.eps), g = num(r.egrowth && r.egrowth.value), rg = num(r.growth && r.growth.value);
+    est.push({ period: "annual", fiscal_date: r.fwd.fiscal_date, est_eps_avg: e1, est_revenue_avg: rg != null ? 100 : null, price_target_avg: r.upside && r.upside.target, updated_ts: r.dates && r.dates.target_upside });
+    const to = (r.egrowth && r.egrowth.to) || (r.growth && r.growth.to);
+    if (to) est.push({ period: "annual", fiscal_date: to, est_eps_avg: e1 != null && g != null ? e1 * (1 + g / 100) : null, est_revenue_avg: rg != null ? 100 * (1 + rg / 100) : null });
+  }
+  return {
+    ticker: r.ticker, profile: { name: r.name, is_etf: r.is_etf }, tags: r.all_tags || [],
+    fundamentals: { price: fprice, market_cap: r.mcap, eps_ttm: r.eps_ttm, revenue_ttm: m.rev_ttm, adjusted_pe: m.pe_adj, date: r.mcap_date },
+    quote: { price: r.price }, price_date: r.price_date, estimates: est,
+    incQ: [], incFY: [], cfQ: [], cfFY: [],
+    balance: m.net_debt != null ? [{ fiscal_date: r.dates && r.dates.net_debt, net_debt: m.net_debt }] : [],
+    next_report: r.next_report || null, target: null,
+    geiger: m.geiger != null ? { composite: m.geiger, updated_ts: r.dates && r.dates.geiger } : null,
+    heartbeat: m.usual != null ? { usual_day_60: m.usual, date: r.dates && r.dates.usual } : null,
+  };
+}
+
+/* ---- derived ------------------------------------------------------------------------------------ */
+const inputsOf = () => S.members.map((t) => buildInputs(S.src.get(t), S.today)).filter((i) => i && i.ticker);
+const vc = (side) => side === 1 ? "good" : side === -1 ? "bad" : "neu";
+const opts = () => ({ out: S.out, use: S.use, nm: S.nm, outOut: S.outOut });
+
+/* ---- drawing -------------------------------------------------------------------------------------- */
+function render() {
+  const all = inputsOf();
+  const me = all.find((i) => i.ticker === S.ticker);
+  const read = compsRead(me, all, opts());
+  document.getElementById("stamp").innerHTML = S.mode === "LIVE"
+    ? `<b>LIVE</b> · read ${S.readAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} · price ${esc(dateWord(me.price_date))}`
+    : `<b>SNAPSHOT</b> · the committed round-1 run of ${esc(dateWord(S.today))} · price ${esc(dateWord(me.price_date))} · this machine never reads the database`;
+  const app = document.getElementById("app");
+  app.className = "";
+  app.innerHTML =
+    (S.mode === "SNAPSHOT" ? `<div class="banner">This render draws the committed 26 Sep snapshot, which holds price, market value, EPS, the estimates, net debt, the average target, the Geiger and the usual day — not the income and cash-flow history, and not the analysts' low / high targets. Those rows say so instead of drawing; on the Hub they read live.</div>` : "")
+    + tabsHTML() + ctlHTML() + heroHTML(me, read) + fieldHTML(me, read) + workedHTML(me, read) + componentsHTML(me, read, all) + proposalsHTML(me, read) + annexHTML(me, all, read);
+  layoutLabels();
+  keepInside();
+}
+
+/* The price label above the $ field and the last axis tick stay inside their box. */
+function keepInside() {
+  for (const sp of document.querySelectorAll(".pxlab span, .axis span")) {
+    const box = sp.parentElement.getBoundingClientRect(), r = sp.getBoundingClientRect();
+    if (r.left < box.left) { sp.style.transform = "none"; sp.style.left = "0"; }
+    else if (r.right > box.right) { sp.style.transform = "translateX(-100%)"; sp.style.left = "100%"; }
+  }
+  for (const ax of document.querySelectorAll(".axis")) {          // ticks that touch: drop every other one
+    const t = [...ax.querySelectorAll("span")]; let last = null;
+    for (const sp of t) { const r = sp.getBoundingClientRect(); if (last && r.left < last + 6) sp.style.visibility = "hidden"; else last = r.right; }
+  }
+}
+/* Labels never sit on each other: each track has five lanes (two above the bar, three below). A label keeps its
+   lane unless it would overlap one already placed; then it takes the nearest free lane on its side, then any.
+   Measured in the browser after drawing, so it holds at every width. */
+const LANES = { t0: 0, t: 14, b: 52, b2: 64, b3: 76 };
+function layoutLabels() {
+  for (const track of document.querySelectorAll(".track")) {
+    const labs = [...track.querySelectorAll(".lab")];
+    if (labs.length < 2) continue;
+    const rank = (l) => l.classList.contains("me") ? 0 : /\blow\b|\bhigh\b|lowest|highest|^[A-Z.\-]+ /.test(l.textContent) ? 1 : l.textContent.startsWith("◇") ? 3 : 2;
+    const laneOf = (l) => Object.keys(LANES).find((k) => l.classList.contains(k)) || "t";
+    const placed = {}; for (const k in LANES) placed[k] = [];
+    const rect = (l) => { const r = l.getBoundingClientRect(); return { l: r.left - 4, r: r.right + 4 }; };
+    const hits = (k, r) => placed[k].some((o) => r.l < o.r && o.l < r.r);
+    const setLane = (l, k) => { for (const c in LANES) l.classList.remove(c); l.classList.add(k); l.style.top = LANES[k] + "px"; };
+    const T = track.getBoundingClientRect();
+    for (const l of labs.sort((a, b) => rank(a) - rank(b))) {
+      const own = laneOf(l);
+      let r = rect(l);
+      if (r.l < T.left - 2) { l.classList.remove("r", "c"); l.style.left = "0"; r = rect(l); }
+      else if (r.r > T.right + 2) { l.classList.remove("c"); l.classList.add("r"); l.style.left = "100%"; r = rect(l); }
+      const up = own === "t" || own === "t0" || own === "me";
+      const order = up ? ["t", "t0", "b2", "b3", "b"] : own === "b" ? ["b", "b2", "b3", "t", "t0"] : ["b2", "b3", "b", "t", "t0"];
+      const want = l.classList.contains("me") ? ["t", "t0", "b3", "b2", "b"] : [own, ...order.filter((k) => k !== own)];
+      const k = want.find((k) => !hits(k, r)) || own;
+      setLane(l, k); placed[k].push(r);
+    }
+  }
+}
+
+function tabsHTML() {
+  const picks = [["MU", "semiconductors"], ["GEV", "AI powertrain"], ["NVDA", "semiconductors"]];
+  const chips = S.cohortOptions.map((c) => `<a class="chip ${c === S.cohort ? "on" : ""}" href="?t=${esc(S.ticker)}&cohort=${encodeURIComponent(c)}${LOCAL && Q.get("live") === "1" ? "&live=1" : ""}">${esc(themeWord(c))}</a>`).join("");
+  return `<div class="tabs">${picks.map(([t, w]) => `<button class="tk ${t === S.ticker ? "on" : ""}" data-act="go" data-v="${t}">${t}<small>${w}</small></button>`).join("")}
+    ${picks.some(([t]) => t === S.ticker) ? "" : `<button class="tk on">${esc(S.ticker)}<small>${esc(themeWord(S.cohort))}</small></button>`}
+    <form data-form="go"><span class="lbl">any ticker</span><input type="text" name="t" maxlength="8" placeholder="${esc(S.ticker)}" aria-label="ticker"></form>
+    <div class="coh"><span class="lbl">compared inside</span>${chips}</div></div>`;
+}
+function ctlHTML() {
+  return `<div class="ctl">
+    <div><span class="lbl">outliers (Tukey: beyond ${OUTLIER_K}× the middle half)</span><span class="seg"><button data-act="outOut" data-v="0" class="${S.outOut ? "" : "on"}">IN THE BAND</button><button data-act="outOut" data-v="1" class="${S.outOut ? "on" : ""}">OUT OF THE BAND</button></span><span class="hint">an outlier is always drawn as a hollow diamond and named under its row; OUT recomputes every band, median and implied price without it</span></div>
+    <div><span class="lbl">not-meaningful multiples</span><span class="seg"><button data-act="nm" data-v="1" class="${S.nm ? "on" : ""}">SET ASIDE</button><button data-act="nm" data-v="0" class="${S.nm ? "" : "on"}">KEEP</button></span><span class="hint">P/E over 100x, EV/sales over 50x, EV/EBITDA over 100x, PEG over 10x: almost no earnings or sales yet</span></div>
+    <div><span class="lbl">fair value overlaps on</span><span class="seg"><button data-act="use" data-v="mid" class="${S.use === "mid" ? "on" : ""}">MIDDLE HALF</button><button data-act="use" data-v="full" class="${S.use === "full" ? "on" : ""}">LOW – HIGH</button></span><span class="hint">the 25th–75th percentile of each bar, or its whole low–high</span></div>
+    <div><span class="lbl">peers</span><span class="hint" style="max-width:34ch">click any peer dot to take that name out of every row; click again to bring it back${S.out.size ? ` · out now: ${[...S.out].map(esc).join(", ")}` : ""}</span></div>
+  </div>`;
+}
+
+/* ---- the hero: price, fair value, and the size strip ---- */
+function heroHTML(me, read) {
+  const b = read.band, f = read.fair, t = read.target;
+  const cap = capClass(me.tags, me.mcap_on_file);
+  const fv = b.lo == null ? `<b>—</b> ${esc(b.reason || "no band")}`
+    : `<b>${fmt("price", b.lo)} – ${fmt("price", b.hi)}</b> · ${b.count} of ${b.of} valuation rows overlap here · the price is <span class="${f.where === "below" ? "good" : f.where === "above" ? "bad" : "neu"}" style="font-weight:600">${f.where} the band</span>${f.toMid != null ? ` (${fmt("pct", f.toMid)} to its middle)` : ""}`;
+  const tg = t.ok ? `<b>${t.hasRange ? fmt("price", t.low) + " – " + fmt("price", t.high) : fmt("price", t.avg)}</b> · ${t.hasRange ? `median ${fmt("price", t.median)} · average ${fmt("price", t.avg)} ${t.n ? ` · ${t.n} analysts` : ""}` : "average only on file"} · ${fmt("pct", t.upside.mid)} to the ${t.median != null ? "median" : "average"}${t.vsBand ? " · " + esc(t.vsBand) : ""}` : `<b>—</b> ${esc(t.reason)}`;
+  const judged = read.rows.filter((r) => r.verdict.side === 1 || r.verdict.side === -1);
+  const wins = judged.filter((r) => r.verdict.side === 1).length;
+  return `<div class="panel" style="margin-top:14px"><div class="hero">
+    <div><div class="tk">${esc(me.ticker)}</div><div class="nm">${esc(me.name || "")}<br>${esc(cap.label)} · ${esc(themeWord(S.cohort))}</div>
+      <div class="px">${fmt("price", me.price)}<small>price ${esc(dateWord(me.price_date))} · market value ${fmt("money", me.mcap)} · net debt ${fmt("money", me.net_debt)}</small></div></div>
+    <div class="fv">
+      <div class="big">
+        <div>comps fair value · priced at the peers' multiples<b>${b.lo == null ? "—" : fmt("price", b.lo) + " – " + fmt("price", b.hi)}</b></div>
+        <div>analysts' price targets<b>${t.ok ? (t.hasRange ? fmt("price", t.low) + " – " + fmt("price", t.high) : fmt("price", t.avg)) : "—"}</b></div>
+        <div>rows on the favourable side of the peer median<b><span class="good">${wins}</span> of ${judged.length}</b></div>
+      </div>
+      <div>${fv}</div><div style="margin-top:4px">${tg}</div>
+      <div style="margin-top:6px;font-size:11.5px;color:var(--ink3)">Against ${read.peersIn.length} peer${read.peersIn.length === 1 ? "" : "s"}: ${read.peersIn.map(esc).join(", ") || "none"}.</div>
+    </div></div>
+    ${sizeStripHTML(me, read)}</div>`;
+}
+function sizeStripHTML(me, read) {
+  const r = read.size, p = r.position;
+  if (!r.n) return "";
+  const sc = rowScale(r.peers.map((x) => x.value), r.value, { log: true });
+  const X = sc.x;
+  const words = p ? `${esc(me.ticker)} ${fmt("money", r.value)} is <b>${ordinal(p.rank)} largest of ${p.of}</b>, ${esc(p.where)} — ${(() => { const a = sc.log ? (X(r.value) - X(r.band.min)) / Math.max(1e-9, X(r.band.max) - X(r.band.min)) : p.along; return a <= 0 ? "at the small end" : a >= 1 ? "beyond the largest peer" : Math.round(a * 100) + "% of the way from the smallest peer to the largest" + (sc.log ? " on the log axis" : ""); })()}` : "";
+  return `<div class="grp" style="border-top:1px solid var(--line)">market-cap range of the comp set, and where ${esc(me.ticker)} sits<small>${words}. Smallest peer ${esc(r.sets.low)} ${fmt("money", r.band.min)} · median ${fmt("money", r.band.median)} (${esc(r.sets.median.join(" & "))}) · largest ${esc(r.sets.high)} ${fmt("money", r.band.max)}${sc.log ? " · log axis: each tick is ten times the one before" : ""}.</small></div>
+    ${trackHTML(me, r, sc, { compact: true })}`;
+}
+const ordinal = (n) => n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");
+
+/* ---- the $ football field ---- */
+function fieldHTML(me, read) {
+  const ok = read.bars.filter((x) => x.ok);
+  const lo_k = S.use === "full" ? "min" : "q1", hi_k = S.use === "full" ? "max" : "q3";
+  const t = read.target;
+  if (!ok.length) return `<h2>the fair value field<small>implied price per share, $</small></h2><div class="panel"><p class="how" style="padding-top:14px">No valuation row has two peers and a figure for ${esc(me.ticker)}, so there is no field to draw${S.mode === "SNAPSHOT" ? " on this render" : ""}.</p></div>`;
+  /* The axis is a window around what matters — the price, the comps band and the analyst band: half the lowest of
+     them to 2.5× the highest. A bar end beyond the window is cut and its number written at the edge, so one wild
+     multiple cannot squash the rest of the field. The window is written on the axis title. */
+  const core = [me.price, read.band.lo, read.band.hi, t.ok ? t.low : null, t.ok ? t.high : null, t.ok ? t.avg : null].filter((v) => v != null && v > 0);
+  const lo = Math.min(...core) * 0.5, hi = Math.max(...core) * 2.5;
+  const X = (v) => (v - lo) / (hi - lo);
+  const inWin = (v) => v != null && v >= lo && v <= hi;
+  const band = read.band;
+  const ovl = band.lo != null ? `<i class="ovl" style="left:${pct(X(band.lo))};width:${pct(X(band.hi) - X(band.lo))}"></i>` : "";
+  const pxl = `<i class="pxl" style="left:${pct(X(me.price))}"></i>`;
+  const ticks = niceTicks(lo, hi, 6).map((v) => `<span style="left:${pct(X(v))}">${fmt("price", v)}</span>`).join("");
+  const axisRow = (cls) => `<div class="${cls}"><div class="axt">${cls === "axishead" ? "implied price per share, $ →" : ""}</div><div class="axis" style="margin-top:0;border-top:${cls === "axishead" ? "0" : "1px solid var(--line2)"};border-bottom:${cls === "axishead" ? "1px solid var(--line2)" : "0"}">${ticks}</div><div></div></div>`;
+  const rows = read.bars.map((f) => {
+    const rf = row(f.key).fmt;
+    if (!f.ok) return `<div class="frow na"><div class="m">${esc(f.label)}<small>${f.n} peer${f.n === 1 ? "" : "s"}</small></div><div class="track">${esc(f.reason)}</div><div class="ends"></div></div>`;
+    const e = f.ends;
+    const oNote = f.outliers.out.length ? ` · outlier${f.outliers.out.length === 1 ? "" : "s"} ${f.outliers.out.map((o) => esc(o.ticker) + " " + fmt(rf, o.value)).join(", ")} ${S.outOut ? "left out" : "kept in"}` : "";
+    const xl = X(e.min.price), xr = X(e.max.price), xm = X(e.median.price);
+    const cutL = xl < 0, cutR = xr > 1;
+    const bl = Math.max(0, xl), br = Math.min(1, xr);
+    const q1 = Math.max(0, Math.min(1, X(e.q1.price))), q3 = Math.max(0, Math.min(1, X(e.q3.price)));
+    const medIn = inWin(e.median.price);
+    const lowLab = `low ${fmt(rf, e.min.m)} (${esc(e.min.who.join("&"))}) → <b>${fmt("price", e.min.price)}</b>${cutL ? " ← off the chart" : ""}`;
+    const highLab = `high ${fmt(rf, e.max.m)} (${esc(e.max.who.join("&"))}) → <b>${fmt("price", e.max.price)}</b>${cutR ? " off the chart →" : ""}`;
+    const medLab = `median ${fmt(rf, e.median.m)} (${esc(e.median.who.join(" & "))}) → <b>${fmt("price", e.median.price)}</b>${medIn ? "" : xm > 1 ? " off the chart →" : " ← off the chart"}`;
+    return `<div class="frow"><div class="m">${esc(f.label)}<small>${esc(me.ticker)} today ${fmt(rf, f.own)} · price = ${esc(f.figure.formula)}<br>${esc(f.figure.word)} ${fmt(f.figure.fmt, f.figure.value)} · ${f.n} peers${oNote}</small></div>
+      <div class="track">${ovl}
+        <i class="wh ${cutL ? "cutl" : ""} ${cutR ? "cutr" : ""}" style="left:${pct(bl)};width:${pct(Math.max(0, br - bl))}"></i>
+        ${q3 > q1 ? `<i class="box" style="left:${pct(q1)};width:${pct(q3 - q1)}" title="middle half of the peers: ${fmt(rf, e.q1.m)} – ${fmt(rf, e.q3.m)} → ${fmt("price", e.q1.price)} – ${fmt("price", e.q3.price)}"></i>` : ""}
+        ${medIn ? `<i class="vmed" style="left:${pct(xm)}"></i>` : ""}${pxl}
+        <span class="lab b" style="left:${pct(bl)}">${lowLab}</span>
+        <span class="lab b r" style="left:${pct(br)}">${highLab}</span>
+        <span class="lab t ${medIn ? "c" : xm > 1 ? "r" : ""}" style="left:${pct(Math.max(0, Math.min(1, xm)))}">${medLab}</span>
+      </div>
+      <div class="ends"><b class="${f.upside >= 0 ? "good" : "bad"}">${fmt("pct", f.upside)}</b> to the median<em>middle half (25th–75th) ${fmt("price", e.q1.price)} – ${fmt("price", e.q3.price)}</em><small>low – high ${fmt("price", e.min.price)} – ${fmt("price", e.max.price)}</small></div></div>`;
+  }).join("");
+  const fvrow = band.lo != null ? `<div class="frow fvrow"><div class="m">COMPS FAIR VALUE<small>where the most bars overlap: ${band.count} of ${band.of} rows (${band.keys.map((k) => esc(row(k).label)).join(", ")})${band.outside.length ? `<br>outside it: ${band.outside.map((o) => esc(o.label) + " — " + esc(o.where)).join("; ")}` : ""}</small></div>
+      <div class="track"><i class="fvbar" style="left:${pct(X(band.lo))};width:${pct(Math.max(0.004, X(band.hi) - X(band.lo)))}"></i>${pxl}
+        <span class="lab b" style="left:${pct(X(band.lo))}"><b>${fmt("price", band.lo)}</b> ← ${band.edge.lo ? esc(band.edge.lo.word) + " " + fmt(row(band.edge.lo.key).fmt, band.edge.lo.m) : ""}</span>
+        <span class="lab b2 r" style="left:${pct(X(band.hi))}">${band.edge.hi ? esc(band.edge.hi.word) + " " + fmt(row(band.edge.hi.key).fmt, band.edge.hi.m) : ""} → <b>${fmt("price", band.hi)}</b></span>
+        <span class="lab t c" style="left:${pct((X(band.lo) + X(band.hi)) / 2)}">the stretch every one of the ${band.count} agreeing bars covers</span></div>
+      <div class="ends"><b>${fmt("price", band.lo)} – ${fmt("price", band.hi)}</b><em class="${f2(read).cls}">price ${esc(read.fair.where)} the band${read.fair.toMid != null ? ", " + fmt("pct", read.fair.toMid) + " to its middle" : ""}</em></div></div>`
+    : `<div class="frow fvrow na"><div class="m">COMPS FAIR VALUE</div><div class="track">${esc(band.reason || "")}</div><div class="ends"></div></div>`;
+  const tgrow = t.ok ? (() => {
+    const l = t.low ?? t.avg, h = t.high ?? t.avg, m = t.median ?? t.avg;
+    return `<div class="frow tgt"><div class="m">ANALYSTS' PRICE TARGETS<small>${esc(t.from)}${t.n ? ` · ${t.n} analysts` : ""}${t.date ? ` · updated ${esc(dateWord(t.date))}` : ""}<br>not a comps bar: the analysts' own opinion, on the same $ axis</small></div>
+      <div class="track"><i class="wh" style="left:${pct(X(l))};width:${pct(Math.max(0.002, X(h) - X(l)))}"></i>${t.median != null ? `<i class="vmed" style="left:${pct(X(t.median))}"></i>` : ""}${t.avg != null ? `<i class="avg" style="left:${pct(X(t.avg))}" title="average target ${fmt("price", t.avg)}"></i>` : ""}${pxl}
+        ${t.hasRange ? `<span class="lab b" style="left:${pct(X(t.low))}">lowest target <b>${fmt("price", t.low)}</b> (${fmt("pct", t.upside.low)})</span><span class="lab b r" style="left:${pct(X(t.high))}">highest target <b>${fmt("price", t.high)}</b> (${fmt("pct", t.upside.high)})</span>` : ""}
+        <span class="lab t c" style="left:${pct(X(m))}">${t.median != null ? "median" : "average"} target <b>${fmt("price", m)}</b> (${fmt("pct", t.upside.mid)})${t.median != null && t.avg != null ? ` · average ${fmt("price", t.avg)} ●` : ""}</span></div>
+      <div class="ends"><b class="${t.upside.mid >= 0 ? "good" : "bad"}">${fmt("pct", t.upside.mid)}</b> to the ${t.median != null ? "median" : "average"} target<em>${t.vsBand ? esc(t.vsBand) : ""}</em></div></div>`;
+  })() : `<div class="frow tgt na"><div class="m">ANALYSTS' PRICE TARGETS</div><div class="track">${esc(t.reason)}${S.mode === "SNAPSHOT" ? " on this render" : ""}</div><div class="ends"></div></div>`;
+  return `<h2>the fair value field<small>what ${esc(me.ticker)} would be worth per share at the peers' multiples, row by row; every bar end is a peer's multiple applied to ${esc(me.ticker)}'s own figure</small></h2>
+    <div class="panel ff">
+    <div class="axishead"><div class="axt">implied price per share, $ →<br>axis ${fmt("price", lo)} – ${fmt("price", hi)}</div><div class="pxlab"><span style="left:${pct(X(me.price))}">▼ price ${fmt("price", me.price)} · ${esc(dateWord(me.price_date))}</span></div><div></div></div>
+    ${rows}${fvrow}${tgrow}
+    ${axisRow("axisfoot")}</div>
+    <div class="panel" style="border-top:0"><div class="legend"><span><i style="width:26px;height:2px;background:var(--ink3)"></i>peer low → peer high, each applied to ${esc(me.ticker)}</span>
+      <span><i style="width:18px;height:12px;background:#2E3248;border:1px solid #474C6A"></i>middle half of the peers (25th–75th percentile)</span>
+      <span><i style="width:2px;height:14px;background:var(--ink)"></i>at the peer median</span>
+      <span><i style="width:0;height:14px;border-left:2px dashed var(--ink)"></i>today's price</span>
+      <span><i style="width:18px;height:12px;background:var(--fvfill);border:1px solid var(--fv)"></i>where the most bars overlap = comps fair value</span>
+      <span><i style="width:10px;height:10px;border-radius:50%;background:var(--ink2)"></i>analysts' average target</span></div>
+    <div class="how"><b>The axis</b> runs ${fmt("price", lo)} – ${fmt("price", hi)}: half the lowest of the price, the comps band and the analyst band, to 2.5× the highest of them. A bar end beyond it is cut (‹ ›) and its number is written at the edge, so one wild multiple cannot squash the rest of the field. <b>How a bar is built.</b> Take a valuation multiple, say forward P/E. Line up every peer's multiple from lowest to highest; that is the bar. Multiply each by ${esc(me.ticker)}'s own figure (its EPS, or its revenue or EBITDA less net debt, per share) and the bar becomes a price. The left end is the cheapest peer's multiple on ${esc(me.ticker)}; the right end the dearest peer's; the tick is the median peer's. <b>The fair-value band</b> is the stretch of price that the most bars cover at once, on their ${S.use === "full" ? "whole low–high" : "middle half"}: its left edge is the highest ${S.use === "full" ? "low" : "25th-percentile price"} among those bars and its right edge the lowest ${S.use === "full" ? "high" : "75th-percentile price"} — both are named on the band. ${S.outOut ? `<b>Outliers are out:</b> a peer beyond ${OUTLIER_K}× the middle half is dropped from every bar before it is priced.` : `<b>Outliers are in:</b> a peer beyond ${OUTLIER_K}× the middle half still sets its end of the bar; the row says who, and the control above takes them out.`}</div></div>`;
+}
+const f2 = (read) => ({ cls: read.fair.where === "below" ? "good" : read.fair.where === "above" ? "bad" : "neu" });
+
+/* ---- every end, worked out in a table ---- */
+function workedHTML(me, read) {
+  const ok = read.bars.filter((x) => x.ok);
+  if (!ok.length) return "";
+  const cols = [["min", "peer low"], ["q1", "25th percentile"], ["median", "median"], ["q3", "75th percentile"], ["max", "peer high"]];
+  const body = ok.map((f) => `<tr><td>${esc(f.label)}<small>${esc(f.figure.formula)}${f.outliers.out.length ? ` · outliers ${S.outOut ? "out" : "in"}: ${f.outliers.out.map((o) => esc(o.ticker)).join(", ")}` : ""}</small></td>${cols.map(([k]) => `<td>${esc(endWords(f, k))}</td>`).join("")}</tr>`).join("");
+  return `<h2>every bar end, worked<small>the multiple, whose it is, and ${esc(me.ticker)}'s figure it is applied to — so each dollar on the field can be checked by hand</small></h2>
+    <div class="scroll"><table class="tbl worked"><tr><th>row</th>${cols.map(([, l]) => `<th style="text-align:left">${l}</th>`).join("")}</tr>${body}</table></div>`;
+}
+
+/* ---- the component field: every row of the round-1 table, grouped ---- */
+function componentsHTML(me, read, all) {
+  const groups = GROUPS.filter((g) => g.key !== "SIZE" || true).map((g) => {
+    const rows = read.rows.filter((r) => r.group === g.key && r.key !== "mcap").map((r) => frowHTML(me, r, all)).join("");
+    return rows ? `<div class="grp">${esc(g.label)}</div>${rows}` : "";
+  }).join("");
+  return `<h2>every row of the comps table, as a field<small>each bar is the peers' low → high on that row, the darker part their middle half, the tick their median; the big dot is ${esc(me.ticker)} — green on the favourable side of the median, red on the other, white where the row describes rather than judges; a hollow diamond is an outlier</small></h2>
+    <div class="panel">${groups}</div>`;
+}
+function frowHTML(me, r, all) {
+  const b = r.band;
+  if (b.n === 0 && r.value == null) return `<div class="frow na"><div class="m">${esc(r.label)}<small>${esc(r.basis)}</small></div><div class="track">no peer and no ${esc(me.ticker)} number: ${esc(r.why || "")}${S.mode === "SNAPSHOT" ? " (on this render)" : ""}</div><div class="ends"></div></div>`;
+  const offVals = [];
+  for (const t of S.members) if (t !== me.ticker && S.out.has(t)) { const i = all.find((x) => x.ticker === t); if (i) offVals.push({ ticker: t, value: components(i).v[r.key] }); }
+  const every = [...r.peers.map((p) => ({ ...p, off: false })), ...r.outliers.out.filter((o) => S.outOut).map((o) => ({ ticker: o.ticker, value: o.value, off: false })), ...offVals.map((p) => ({ ...p, off: true }))].filter((p) => p.value != null);
+  const sc = rowScale(every.map((p) => p.value), r.value, { log: r.log });
+  if (!sc) return "";
+  const missing = (r.missing.length ? ` · no number: ${r.missing.map(esc).join(", ")}` : "") + (r.nm.length ? ` · set aside as NM: ${r.nm.map((x) => esc(x.ticker) + " " + fmt(r.fmt, x.value)).join(", ")}` : "");
+  const ends = r.value != null
+    ? `<b class="${vc(r.verdict.side)}">${fmt(r.fmt, r.value)}</b> ${esc(me.ticker)}<em class="${vc(r.verdict.side)}">${esc(r.verdict.word)}</em><small>median ${fmt(r.fmt, b.median)}${r.position ? ` · ${ordinal(r.position.rank)} of ${r.position.of}, ${esc(r.position.where)}` : ""}</small>`
+    : `<b class="neu">—</b> ${esc(me.ticker)}<em>${esc(r.why || "")}</em><small>median ${fmt(r.fmt, b.median)}</small>`;
+  return `<div class="frow"><div class="m">${esc(r.label)}<small>${esc(r.basis)}<br>${b.n} peer${b.n === 1 ? "" : "s"}${missing}${sc.log ? " · log axis: each tick is ten times the one before" : ""}</small></div>
+    ${trackHTML(me, r, sc, { every })}<div class="ends">${ends}</div>
+    <div class="oline">${outlierLine(r)}</div></div>`;
+}
+function outlierLine(r) {
+  const w = outlierWords(r);
+  return w.replace(/outliers?: [^·]+/, (m) => `<span class="o">${esc(m)}</span>`).replace(/^([^·]+)·/, (m, a) => `<b>${esc(a)}</b>·`);
+}
+/** One field track with its own axis: the peers' band, every peer dot (outliers hollow), the company, and the labels. */
+function trackHTML(me, r, sc, { every = null, compact = false } = {}) {
+  const b = r.band, X = sc.x;
+  const dots = every || r.peers.map((p) => ({ ...p, off: false }));
+  const outSet = new Set(r.outliers.out.map((o) => o.ticker));
+  const named = new Set([r.sets.low, r.sets.high, ...(r.sets.median || []), ...outSet]);
+  const xMed = X(b.median), xMe = X(r.value);
+  const peerDots = dots.sort((a, z) => a.value - z.value).map((p) => {
+    const x = X(p.value); if (x == null) return "";
+    const isOut = outSet.has(p.ticker);
+    return `<button class="pd ${isOut ? "out" : ""} ${p.off ? "off" : ""}" data-act="peer" data-v="${esc(p.ticker)}" style="left:${pct(x)}" title="${esc(p.ticker)} ${fmt(r.fmt, p.value)}${isOut ? " — outlier" : ""}${p.off ? " — out, click to bring back" : " — click to take out"}"></button>`;
+  }).join("");
+  const labelAt = (t, v, cls) => `<span class="lab ${cls}" style="left:${pct(X(v))}">${esc(t)} ${fmt(r.fmt, v)}</span>`;
+  const endLabs = b.n ? (b.n === 1 ? labelAt(r.sets.low, b.min, "b")
+    : `${labelAt(r.sets.low, b.min, "b")}${labelAt(r.sets.high, b.max, "b r")}`) : "";
+  const medNearEnd = b.n > 1 && Math.min(xMed - X(b.min), X(b.max) - xMed) < 0.14;
+  const medNearMe = xMe != null && Math.abs(xMe - xMed) < 0.12;
+  const medLab = b.n > 1 ? `<span class="lab ${medNearEnd ? (medNearMe ? "b2" : "t") : "b2"} c" style="left:${pct(xMed)}">median ${fmt(r.fmt, b.median)} · ${esc((r.sets.median || []).join(" & "))}</span>` : "";
+  const outLabs = r.outliers.out.map((o) => { const x = X(o.value); const nearMe = xMe != null && Math.abs(x - xMe) < 0.1; return `<span class="lab ${nearMe ? "b2" : "t"} ${x > 0.85 ? "r" : x < 0.15 ? "" : "c"}" style="left:${pct(x)}">◇ ${esc(o.ticker)} ${fmt(r.fmt, o.value)}</span>`; }).join("");
+  const meLab = r.value != null ? `<span class="lab me ${xMe > 0.85 ? "r" : xMe < 0.15 ? "" : "c"}" style="left:${pct(xMe)}">${esc(me.ticker)} ${fmt(r.fmt, r.value)}</span>` : "";
+  const range = b.n ? `<i class="rng" style="left:${pct(X(b.min))};width:${pct(Math.max(0.006, X(b.max) - X(b.min)))}"></i><i class="iq" style="left:${pct(X(b.q1))};width:${pct(Math.max(0.006, X(b.q3) - X(b.q1)))}"></i><i class="med" style="left:${pct(xMed)}"></i>` : "";
+  const fences = r.outliers.fence ? [r.outliers.fence.lo, r.outliers.fence.hi].map((v) => { const x = X(v); return x != null && x >= 0 && x <= 1 ? `<i class="fence" style="left:${pct(x)}" title="outlier fence ${fmt(r.fmt, v)}"></i>` : ""; }).join("") : "";
+  const meDot = r.value != null && xMe != null ? `<span class="me ${vc(r.verdict.side)}" style="left:${pct(xMe)}" title="${esc(me.ticker)} ${fmt(r.fmt, r.value)}"></span>` : "";
+  const ticks = sc.ticks.map((v, i, arr) => `<span class="${i === 0 ? "l" : i === arr.length - 1 ? "r" : ""}" style="left:${pct(X(v))}">${fmt(r.fmt === "money" ? "money" : r.fmt, v)}</span>`).join("");
+  const axw = r.axis ? `<div class="axword"><i>← ${esc(r.axis[0])}</i><i>${esc(r.axis[1])} →</i></div>` : "";
+  return `<div${compact ? ' style="padding:0 16px 10px"' : ""}><div class="track"><i class="base"></i>${range}${fences}${peerDots}${meDot}${endLabs}${medLab}${outLabs}${meLab}</div><div class="axis">${ticks}</div>${axw}</div>`;
+}
+
+/* ---- proposed, not built ---- */
+function proposalsHTML(me, read) {
+  return `<h2>proposed, not built<small>two things this view could feed; the write-up (COMPS-R3.html) says more</small></h2>
+    <div class="panel props">
+    <div><b>Price targets into the allocation tool.</b> The analyst band on this page (low – median – high, with how many analysts, dated) is one number per name: <b>room to the median target</b>, in %. Proposal: the allocation tool's per-name sleeve takes it as a third input beside the condition read and the cap class —
+      <ol><li>a name whose price is <b>above its highest target</b> cannot enter a sleeve (greyed with the reason, like the earnings rule);</li><li>inside a sleeve, weight tilts by room to the median target, capped at ±25% of the sleeve's equal weight, so no one target can swing the book;</li><li>the comps fair-value band is shown beside it but does <b>not</b> weight: two measures, two bars, the operator reads both.</li></ol>
+      Nothing here is computed or stored yet; the tool would read price_target_consensus exactly as this page does.</div>
+    <div><b>This view, aggregated to a cohort.</b> Every row here is one company against its peers. For the cohort itself:
+      <ol><li>run this read once per member (the same functions, no new table), keeping each name's fair-value band and its analyst band;</li><li>the cohort's <b>score</b> on a row is how many members sit on the favourable side of the cohort median — and which ones, named;</li><li>the cohort's <b>field</b> is one row per member: its comps band, its analyst band, its price, on one $ axis indexed to price = 100, so the names line up;</li><li>the outlier rule then names which members move the cohort medians, so "picking between comps" starts from the names that set the ends.</li></ol>
+      Cost: ${read.peersIn.length + 1} reads of the same tables for ${esc(themeWord(S.cohort))}; no new data.</div></div>`;
+}
+
+/* ---- the annex: the full table ---- */
+function annexHTML(me, all, read) {
+  const order = [me, ...all.filter((i) => i.ticker !== me.ticker && !i.is_etf)];
+  const head = `<tr><th>company</th>${ROWS.map((c) => `<th title="${esc(c.basis)}">${esc(c.label)}</th>`).join("")}<th>price</th><th>history basis</th></tr>`;
+  const body = order.map((i) => {
+    const v = components(i).v;
+    return `<tr class="${i.ticker === me.ticker ? "subj" : ""} ${S.out.has(i.ticker) ? "off" : ""}"><td>${esc(i.ticker)}</td>${ROWS.map((c) => { const rd = read.rows.find((x) => x.key === c.key); const isOut = rd.outliers.out.some((o) => o.ticker === i.ticker); const isNM = rd.nm.some((o) => o.ticker === i.ticker); return `<td title="${isOut ? "outlier" : isNM ? "not meaningful" : ""}">${fmt(c.fmt, v[c.key])}${isOut ? " ◇" : ""}${isNM ? " NM" : ""}</td>`; }).join("")}<td>${fmt("price", i.price)}<br><small>${esc(dateWord(i.price_date))}</small></td><td>${esc(basisWord(i.rev))}</td></tr>`;
+  }).join("");
+  const med = `<tr class="medrow"><td>peer median${S.outOut ? " (outliers out)" : ""}</td>${read.rows.map((r) => `<td>${fmt(r.fmt, r.band.median)}</td>`).join("")}<td></td><td>${read.peersIn.length} peers</td></tr>`;
+  const src = S.sources.map((s) => `<tr><td>${esc(s[0])}</td><td>${esc(s[1])}</td><td>${esc(s[2])}</td></tr>`).join("");
+  return `<div class="annex"><h2>annex · the full table<small>every company of the cohort on every row; ◇ marks an outlier by the rule, NM a multiple set aside; the peer median excludes ${esc(me.ticker)} and any name taken out</small></h2>
+    <div class="scroll"><table class="tbl">${head}${body}${med}</table></div>
+    <div class="src"><span class="lbl">where each number comes from · measured dates</span><table>${src}</table></div></div>`;
+}
+
+/* ---- interaction ---- */
+function go(t) { const u = new URL(location.href); u.searchParams.set("t", t); u.searchParams.delete("cohort"); location.href = u.toString(); }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, v = b.dataset.v;
+  if (act === "go") return go(v);
+  if (act === "use") { S.use = v; lsSet("k3.use", v); return render(); }
+  if (act === "nm") { S.nm = v === "1"; lsSet("k3.nm", S.nm); return render(); }
+  if (act === "outOut") { S.outOut = v === "1"; lsSet("k3.outOut", S.outOut); return render(); }
+  if (act === "peer") { if (S.out.has(v)) S.out.delete(v); else S.out.add(v); lsSet("k3.out." + S.ticker, [...S.out]); return render(); }
+});
+document.addEventListener("submit", (e) => { const f = e.target.closest("[data-form=go]"); if (!f) return; e.preventDefault(); const t = String(new FormData(f).get("t") || "").trim().toUpperCase(); if (t) go(t); });
+
+load().then(render).catch((e) => {
+  document.getElementById("app").className = "";
+  document.getElementById("app").innerHTML = `<div class="err">${esc(e.message || e)}</div>`;
+  document.getElementById("stamp").textContent = "not read";
+});
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
