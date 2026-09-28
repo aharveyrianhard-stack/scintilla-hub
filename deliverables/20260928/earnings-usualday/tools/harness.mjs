@@ -46,8 +46,32 @@ try {
   const context = await browser.newContext({ viewport: { width: job.width || 1680, height: job.height || 1050 }, deviceScaleFactor: 1,
     serviceWorkers: "block", isMobile: !!job.mobile, hasTouch: !!job.mobile });
   if (job.localStorage) await context.addInitScript((kv) => { try { for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); } catch (_) {} }, job.localStorage);
+  /* 28 Sep — the two sigma-history tables are not installed until the coordinator applies the migration, so for the
+     local proof their GETs are answered from scripts/sigma-history-backfill.mjs --dry --out (the same rows the
+     backfill would write). Only these two tables; every other read goes to the live Supabase as usual. */
+  const SIG = job.sigmaFile ? JSON.parse(fs.readFileSync(job.sigmaFile, "utf8")) : null;
+  const sigmaAnswer = (u) => {
+    const tbl = u.pathname.split("/").pop(), q = u.searchParams;
+    let rows = tbl === "sigma_day_counts" ? SIG.counts : SIG.events;
+    for (const [k, v] of q) {
+      if (["select", "order", "limit"].includes(k)) continue;
+      const [op, ...rest] = v.split("."); const val = rest.join(".");
+      if (op === "eq") rows = rows.filter((r) => String(r[k]) === val);
+      else if (op === "gt") rows = rows.filter((r) => String(r[k]) > val);
+      else if (op === "gte") rows = rows.filter((r) => String(r[k]) >= val);
+      else if (op === "lte") rows = rows.filter((r) => String(r[k]) <= val);
+      else if (op === "in") { const set = new Set(val.replace(/^\(|\)$/g, "").split(",").map(decodeURIComponent)); rows = rows.filter((r) => set.has(String(r[k]))); }
+    }
+    const ord = q.get("order"); if (ord) { const [f, dir] = ord.split("."); rows = rows.slice().sort((a, b) => (a[f] < b[f] ? -1 : a[f] > b[f] ? 1 : 0) * (dir === "desc" ? -1 : 1)); }
+    const lim = +q.get("limit") || 1000; rows = rows.slice(0, Math.min(lim, 1000));
+    const sel = q.get("select"); if (sel) { const f = sel.split(","); rows = rows.map((r) => Object.fromEntries(f.map((k) => [k, r[k]]))); }
+    return rows;
+  };
   await context.route("**/*", async (route) => {
     const req = route.request(), u = new URL(req.url()), m = req.method();
+    if (SIG && m === "GET" && /\/rest\/v1\/sigma_(day_counts|events_daily)$/.test(u.pathname)) {
+      return route.fulfill({ status: 200, headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: JSON.stringify(sigmaAnswer(u)) });
+    }
     if (m !== "GET" && m !== "HEAD" && m !== "OPTIONS") {
       writes.push({ method: m, url: u.host + u.pathname });
       return route.fulfill({ status: 201, headers: { "access-control-allow-origin": "*", "content-type": "application/json" }, body: "[]" });
