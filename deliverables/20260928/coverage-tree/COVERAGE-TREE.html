@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · COVERAGE TREE</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --panel3:#202020; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#6a6a6a; --track:#1f1f1f;
+  --up:#35b06a; --dn:#d1483f;               /* direction only: Geiger up = green, down = red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.55 var(--mono)}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:13px;letter-spacing:.14em;margin:0;font-weight:600}
+header .stamp{font-size:11px;color:var(--dim)}
+nav{display:flex;flex-wrap:wrap;gap:4px 10px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--panel2);font-size:11px;letter-spacing:.08em}
+nav a{color:var(--ink2);text-decoration:none;padding:3px 0}
+nav a:hover{color:var(--ink)}
+main{max-width:1620px;margin:0 auto;padding:12px 16px 60px}
+section{margin:22px 0;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:4px}
+h2{font-size:13px;letter-spacing:.16em;margin:0 0 10px;color:var(--ink);font-weight:600}
+h3{font-size:12px;letter-spacing:.1em;margin:16px 0 6px;color:var(--ink2);font-weight:600}
+p,li{font-size:12px;color:var(--ink2);max-width:980px}
+p b,li b{color:var(--ink);font-weight:600}
+.quote{border-left:2px solid var(--line2);padding:4px 10px;margin:8px 0;color:var(--dim);font-style:italic}
+.up{color:var(--up)} .dn{color:var(--dn)} .dim{color:var(--dim)} .mute{color:var(--mute)}
+.num{font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-size:10px;letter-spacing:.1em;padding:1px 6px;border:1px solid var(--line2);border-radius:3px;color:var(--dim);margin-left:6px;vertical-align:middle}
+.tag.good{color:var(--ink);border-color:var(--dim)} .tag.poor{color:var(--ink2);border-color:var(--ink2)}
+button{background:var(--panel2);color:var(--ink2);border:1px solid var(--line2);border-radius:3px;font:11px/1 var(--mono);letter-spacing:.08em;padding:6px 9px;cursor:pointer}
+button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
+.ctrl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+input[type=search]{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:3px;font:12px var(--mono);padding:5px 8px;width:200px}
+/* the Geiger bar, the Hub's way: a track centred at zero, filled from the middle to the value, ±1 = the full half.
+   Solid = the line's own Geiger. Striped = the aggregate of what sits under it. */
+.gb{position:relative;height:12px;background:var(--track);border-radius:2px;overflow:hidden;min-width:60px;width:100%}
+.gb.lg{height:18px}
+.gb .mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--dim);z-index:1}
+.gb i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
+.gb i.u{left:50%;background:var(--up);box-shadow:0 0 5px var(--up)}
+.gb i.d{right:50%;background:var(--dn);box-shadow:0 0 5px var(--dn)}
+.gb.agg i.u{background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gb.agg i.d{background:repeating-linear-gradient(135deg,var(--dn) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gb.none{background:repeating-linear-gradient(90deg,var(--track) 0 4px,var(--panel) 4px 6px)}
+.gbrow{display:grid;grid-template-columns:1fr 46px;gap:6px;align-items:center}
+.gbrow b{font-weight:400;text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+/* tables */
+.tw{overflow:auto;border:1px solid var(--line);border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:11.5px}
+th{position:sticky;top:0;background:var(--panel3);color:var(--dim);font-weight:400;text-align:left;padding:6px 7px;border-bottom:1px solid var(--line2);white-space:nowrap;letter-spacing:.06em;cursor:pointer;user-select:none}
+th.r,td.r{text-align:right}
+td{padding:4px 7px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums;vertical-align:middle}
+tr.fund{cursor:pointer} tr.fund:hover td{background:var(--panel2)}
+tr.detail td{white-space:normal;background:var(--panel2);padding:10px 12px}
+.cell{width:110px}
+.miss{color:var(--dim)} .miss b{color:var(--ink2);font-weight:400}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.box{border:1px solid var(--line);border-radius:3px;padding:8px 10px;background:var(--panel)}
+.box h4{margin:0 0 6px;font-size:11px;letter-spacing:.12em;color:var(--dim);font-weight:400}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:3px 8px;font-size:11.5px;align-items:center}
+.kv > span:nth-child(odd){color:var(--mute);font-size:11px}
+.list{display:flex;flex-wrap:wrap;gap:4px 8px}
+.list span{color:var(--ink2)} .list span.x{color:var(--mute);text-decoration:line-through}
+/* the tree */
+.tree{font-size:12px}
+.node{display:grid;grid-template-columns:18px minmax(180px,1fr) 150px 150px 200px;gap:8px;align-items:center;padding:3px 4px;border-bottom:1px solid var(--line)}
+.node:hover{background:var(--panel2)}
+.node .tg{color:var(--dim);cursor:pointer;width:18px;text-align:center;user-select:none}
+.node .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node .lb .tk{color:var(--ink);font-weight:600;letter-spacing:.04em} .node .lb .nm{color:var(--dim);margin-left:6px}
+.node .lb .tag{margin-left:6px}
+.node .meta{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kids{margin-left:18px;border-left:1px solid var(--line);padding-left:4px}
+.node.k-index .lb .tk{letter-spacing:.14em}
+.node.k-cohort .lb .tk{color:var(--ink2);letter-spacing:.1em}
+.node.k-name .lb .tk{font-weight:400}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:11px;color:var(--dim);margin:6px 0 10px}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.lgbar{display:inline-block;width:46px;height:9px;background:var(--track);position:relative;border-radius:2px;overflow:hidden}
+.lgbar i{position:absolute;top:1px;bottom:1px;left:50%;width:34%}
+.lgbar s{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--dim)}
+.small{font-size:11px}
+@media (max-width:760px){
+  main{padding:8px 10px 40px}
+  section{padding:10px}
+  .node{grid-template-columns:16px minmax(120px,1fr) 90px;gap:6px}
+  .node .c4,.node .meta{display:none}
+  .kids{margin-left:10px}
+  input[type=search]{width:140px}
+  .cell{width:80px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SCINTILLA · COVERAGE TREE</h1><span data-scnav-slot></span>
+  <span class="stamp" id="stamp">loading the node list and the live Geigers…</span>
+</header>
+<nav>
+  <a href="#s1">1 · IN PLAIN WORDS</a><a href="#s2">2 · COVERAGE BY FUND</a><a href="#s3">3 · THE TREE</a><a href="#s4">4 · THE STATE STREET PROCESS, FOR THE OTHERS</a>
+  <a href="#s5">5 · PROPOSED ADMISSIONS</a><a href="#s6">6 · MDB AND APLD</a><a href="#s7">7 · WHERE THE NUMBERS COME FROM</a>
+</nav>
+<main>
+
+<section id="s1">
+  <h2>1 · IN PLAIN WORDS</h2>
+  <div class="quote">Alan, 28 Sep: "OUR NAMES tells me our coverage is weak… What are the names we have in IWM, how do they compare by market-cap weight of the ~2,000 IWM names? Do we have the leaders of the space? … I think in real estate and utilities we are well covered — probably too well. I went through a process to have a statistically relevant mix for the State Street funds; we need to do the same for the others. I'm not sure we need so many tickers. MongoDB — what family does it belong to, IGV rather than IWM? Applied Digital?"</div>
+  <div id="plain"></div>
+</section>
+
+<section id="s2">
+  <h2>2 · COVERAGE BY FUND <span class="tag" id="fundCount"></span></h2>
+  <p>Every fund we serve or draw on the map that has a holdings file. <b>Served</b> is how many of its holdings the Hub carries (in the chart API's /universe). <b>Coverage</b> is the share of the fund's weight those names are. <b>Top 10</b> says how many of the fund's ten heaviest lines we serve. <b>Weight per name</b> is coverage ÷ served names: low means many names carrying little weight (over-covered by count). <b>Tracks</b> is the correlation of the fund's own daily Geiger with the weight-blend of our names' daily Geigers over the last 500 sessions (section 4 explains). <b>Smallest set</b> is how few of our names reach that same correlation. Click a row for its names and its misses. Click a column title to sort.</p>
+  <div class="ctrl" id="famBtns"></div>
+  <div class="tw"><table id="covTable"><thead><tr>
+    <th data-k="ticker">FUND</th><th data-k="group">GROUP</th><th data-k="fund_lines" class="r">LINES</th><th data-k="served_count" class="r">SERVED</th>
+    <th data-k="coverage_pct" class="r">COVERAGE</th><th class="cell">OWN GEIGER</th><th class="cell">OUR NAMES</th><th data-k="top10_served" class="r">TOP 10</th>
+    <th data-k="weight_per_served_name_pct" class="r">WEIGHT / NAME</th><th data-k="corr" class="r">TRACKS</th><th data-k="smallest_set_n" class="r">SMALLEST SET</th><th data-k="redundant" class="r">REDUNDANT</th><th>HEAVIEST MISSES</th>
+  </tr></thead><tbody id="covBody"></tbody></table></div>
+</section>
+
+<section id="s3">
+  <h2>3 · THE TREE, GEIGER BASED</h2>
+  <p>The market at the top, then regions and asset classes, then the eleven sectors, then each sector's funds (the State Street fund, its iShares, Vanguard and equal-weight twins, and the industry and theme funds), then <b>Alan's cohorts under the fund that is their ETF parent</b>, then the names. Every line carries two bars: <b>solid</b> = its own live Geiger; <b>striped</b> = the aggregate of what sits under it (a fund: its served holdings blended by weight; a cohort: the plain mean of its members; a heading: the mean of the lines directly under it). A cohort with no fund holding at least a third of its members sits under <b>COHORTS WITH NO ETF PARENT</b>. Click ▸ to open a branch.</p>
+  <div class="legend">
+    <span><i class="lgbar"><s></s><i style="background:var(--up);position:absolute;top:1px;bottom:1px;left:50%;width:34%"></i></i>own Geiger · green up, red down · full half = ±1</span>
+    <span><i class="lgbar"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px);position:absolute;top:1px;bottom:1px;left:50%;width:34%"></i></i>striped = aggregate of its children</span>
+    <span><i class="lgbar" style="background:repeating-linear-gradient(90deg,var(--track) 0 4px,var(--panel) 4px 6px)"></i>no Geiger (heading, or waiting for admission)</span>
+  </div>
+  <div class="ctrl"><input type="search" id="q" placeholder="find a ticker, cohort or fund" autocomplete="off"><button id="openSectors">OPEN TO SECTOR FUNDS</button><button id="openCohorts">OPEN TO COHORTS</button><button id="closeAll">CLOSE ALL</button></div>
+  <div class="tree" id="tree"></div>
+</section>
+
+<section id="s4">
+  <h2>4 · THE STATE STREET PROCESS, RESTATED — AND THE SAME FOR THE OTHERS</h2>
+  <div id="process"></div>
+</section>
+
+<section id="s5">
+  <h2>5 · PROPOSED ADMISSIONS <span class="tag">PROPOSED · NOTHING ADMITTED</span></h2>
+  <p>The heaviest lines we do not serve in the priority funds (IWM, IJR, MDY, IGV, QQQ, SPY, the iShares and Vanguard sector funds, SMH/SOXX, IBB/XBI, KRE/KBE, IHI, ITA), each with the weight it would add to every fund it sits in. Ranked by the weight added across those funds. US listings only. Nothing here is admitted; the admission runbook decides.</p>
+  <div class="tw"><table id="admTable"><thead><tr><th>#</th><th>TICKER</th><th>NAME</th><th class="r">WEIGHT ADDED (SUM)</th><th class="r">LARGEST</th><th>ADDS TO</th></tr></thead><tbody id="admBody"></tbody></table></div>
+</section>
+
+<section id="s6">
+  <h2>6 · MONGODB AND APPLIED DIGITAL — WHICH FAMILY</h2>
+  <div class="cols" id="mdbapld"></div>
+</section>
+
+<section id="s7">
+  <h2>7 · WHERE THE NUMBERS COME FROM · WHAT COULD BE WRONG · WHAT WAS NOT DONE</h2>
+  <div id="prov"></div>
+</section>
+</main>
+
+<script>window.__ct_errors=[];window.addEventListener("error",(e)=>window.__ct_errors.push(String(e.message||e)));window.addEventListener("unhandledrejection",(e)=>window.__ct_errors.push(String(e.reason&&e.reason.message||e.reason)));</script>
+<script type="module">
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
+const pct = (x, d = 1) => (x == null ? "—" : x.toFixed(d) + "%");
+async function getJSON(url, ms = 20000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
+
+const DOC = await getJSON("coverage-tree.json");
+let GEI = null, geigerSource = "";
+try { GEI = await getJSON(CHART_API + "/geiger"); geigerSource = "live Geiger " + GEI.computed_utc.replace("T", " ").slice(0, 16) + " UTC"; }
+catch (e) { GEI = await getJSON("data/geiger-snapshot-20260928.json"); geigerSource = "the live Geiger did not answer (" + e.message + "); showing the snapshot of " + GEI.computed_utc.replace("T", " ").slice(0, 16) + " UTC"; }
+const GS = GEI.symbols || {};
+const gOf = (t) => (t && GS[t] && Number.isFinite(GS[t].composite) ? GS[t].composite : null);
+window.__ct = { DOC, geigerSource };
+
+const nodes = DOC.nodes, byId = new Map(nodes.map((n) => [n.id, n])), kids = new Map();
+for (const n of nodes) for (const p of n.parents) { if (!kids.has(p)) kids.set(p, []); kids.get(p).push(n.id); }
+const byTicker = new Map(); for (const n of nodes) if (n.ticker && n.kind !== "cohort") byTicker.set(n.ticker, n);
+
+/* aggregate of a node's children (the striped bar) */
+function fundBlend(n) { const sw = n.holdings && n.holdings.served_weights; if (!sw) return null; let W = 0, S = 0, c = 0; for (const [t, w] of sw) { const g = gOf(t); if (g == null || !(w > 0)) continue; W += w; S += w * g; c++; } return c ? { value: S / W, count: c, weight_pct: W, coverage_pct: (100 * W) / Math.max(100, n.holdings.total_weight_pct || 100) } : null; }
+function meanOf(ids, roll = false) { let s = 0, c = 0; for (const id of ids) { const ch = byId.get(id); let g = gOf(ch.kind === "cohort" ? null : ch.ticker); if (g == null && roll && ch.kind === "index") { const a = aggregate(ch); g = a ? a.value : null; } if (g != null) { s += g; c++; } } return c ? { value: s / c, count: c } : null; }
+function aggregate(n) {
+  if (n.kind === "fund") return fundBlend(n);
+  if (n.kind === "cohort") return meanOf(n.members.map((t) => (byTicker.get(t) || {}).id).filter(Boolean));
+  if (n.kind === "index") return meanOf((kids.get(n.id) || []).filter((id) => byId.get(id).kind !== "cohort"), true);   // headings roll up through sub-headings
+  return null;
+}
+function bar(v, cls = "") { if (v == null || !Number.isFinite(v)) return `<div class="gb none ${cls}"><div class="mid"></div></div>`; const w = Math.min(50, Math.abs(v) * 50); return `<div class="gb ${cls}"><div class="mid"></div><i class="${v >= 0 ? "u" : "d"}" style="width:${w.toFixed(2)}%"></i></div>`; }
+function num(v) { return v == null ? `<b class="mute">—</b>` : `<b class="${v >= 0 ? "up" : "dn"}">${fmtG(v)}</b>`; }
+function gbrow(v, cls = "") { return `<div class="gbrow">${bar(v, cls)}${num(v)}</div>`; }
+
+/* ---- header ---- */
+const lit = nodes.filter((n) => n.ticker && n.kind !== "cohort" && gOf(n.ticker) != null).length;
+$("stamp").textContent = `${geigerSource} · ${lit} served lines with a bar · holdings: ${DOC.provenance.holdings.funds} funds (${DOC.provenance.holdings.from_file_26sep} from the 26 Sep file, ${DOC.provenance.holdings.fresh_28sep} pulled 28 Sep) · built ${DOC.built_utc.replace("T", " ").slice(0, 16)} UTC`;
+
+/* ---- groups ---- */
+const GROUP = (t) => {
+  const n = byTicker.get(t); const p = n && n.parents[0];
+  if (/^XL/.test(t) && t.length <= 4) return "SPDR sectors";
+  if (["SPY", "QQQ", "IWM", "IJR", "MDY", "DIA", "VTI", "ITOT", "IWV", "RSP", "QQEW", "QQQE", "MAGS"].includes(t)) return "broad US";
+  if (/^SEC_/.test(p || "")) { if (/^(IY|ID|IA|IE|IH|IT|IB|IG)/.test(t) && n.issuer !== "Global X") return "iShares"; if (/^V[A-Z]{2}$/.test(t)) return "Vanguard"; if (/^RSP/.test(t)) return "equal-weight"; return "industry / theme"; }
+  if (p === "US_STYLE") return "style / factor"; if (["WORLD", "INTL_DEV", "EM"].includes(p)) return "world"; return "other";
+};
+const COV = Object.values(DOC.coverage).map((c) => {
+  const t = DOC.tracking[c.ticker] || {}; const n = byTicker.get(c.ticker) || {};
+  return { ...c, group: GROUP(c.ticker), label: n.label || c.ticker, tier: n.tier, corr: t.full_set ? t.full_set.corr : null, verdict: t.verdict || null, smallest_set_n: t.smallest_set_n ?? null, members_in_study: t.members_in_study ?? null, redundant: t.redundant_for_tracking ? t.redundant_for_tracking.length : null, track: t };
+});
+$("fundCount").textContent = COV.length + " FUNDS";
+
+/* ---- 1 · plain words ---- */
+(function plain() {
+  const c = (t) => DOC.coverage[t], tr = (t) => DOC.tracking[t] || {};
+  const iwm = c("IWM"), ijr = c("IJR"), mdy = c("MDY"), xlre = c("XLRE"), xlu = c("XLU"), xlk = c("XLK"), igv = c("IGV"), spy = c("SPY"), qqq = c("QQQ");
+  const mdb = byTicker.get("MDB"), apld = byTicker.get("APLD");
+  const cohNo = DOC.cohorts.filter((x) => !x.etf_parent);
+  const fundLine = (x) => `<b>${x.ticker}</b>: ${x.served_count} of ${x.fund_lines} lines served = <b>${pct(x.coverage_pct)}</b> of the fund's weight; ${x.top10_served} of its 10 heaviest lines; ${tr(x.ticker).full_set ? "our names' Geiger correlates " + tr(x.ticker).full_set.corr.toFixed(2) + " with the fund's (" + tr(x.ticker).verdict + ")" : "no tracking study"}`;
+  $("plain").innerHTML = `
+  <h3>IWM, IJR, MDY — the small and mid caps: thin, and not the leaders</h3>
+  <ul>
+    <li>${fundLine(iwm)}. The 30 we serve are <b>${iwm.served.map((s) => s[0]).join(", ")}</b> — together ${pct(iwm.served_weight_pct, 2)} of IWM. None is among IWM's ten heaviest lines; the heaviest we serve (${iwm.served[0][0]}) is ${pct(iwm.served[0][1], 2)} of the fund. Our IWM names are the speculative small caps of the cohorts (quantum, space, crypto miners, eVTOL, nuclear), not the leaders of the Russell 2000 by weight. The heaviest we miss: ${iwm.missed_top.slice(0, 8).map((m) => `${m[0]} ${pct(m[1], 2)}`).join(", ")}.</li>
+    <li>${fundLine(ijr)}.</li>
+    <li>${fundLine(mdy)}.</li>
+    <li>By weight IWM is flat: its heaviest line is ${pct(iwm.missed_top[0][1], 2)} and the top ten are ${pct(iwm.top10_weight_pct)} of the fund, so no small set of names can carry it. The fund's own Geiger is the honest read of small caps; names are for the cohorts. Section 4 proposes the mix.</li>
+  </ul>
+  <h3>Real estate and utilities — well covered, by count more than by need</h3>
+  <ul>
+    <li>${fundLine(xlre)}. Weight per served name ${pct(xlre.weight_per_served_name_pct)}. The smallest set of our names that tracks XLRE's Geiger as well as all ${tr("XLRE").members_in_study} do is <b>${tr("XLRE").smallest_set_n}</b> (${tr("XLRE").smallest_set.join(", ")}); the other ${tr("XLRE").redundant_for_tracking.length} add no tracking.</li>
+    <li>${fundLine(xlu)}. Smallest tracking set <b>${tr("XLU").smallest_set_n}</b> of ${tr("XLU").members_in_study} (${tr("XLU").smallest_set.join(", ")}); ${tr("XLU").redundant_for_tracking.length} redundant for tracking. So yes: both are covered more than the Geiger needs. Whether to keep the extra names is a product call (they are the AI power cohort's homes), not a statistical one.</li>
+  </ul>
+  <h3>Technology and IGV</h3>
+  <ul>
+    <li>${fundLine(xlk)}. ${fundLine(igv)}. IGV's heaviest misses: ${igv.missed_top.slice(0, 5).map((m) => `${m[0]} ${pct(m[1], 2)}`).join(", ")}.</li>
+    <li>Tech is split in the tree the way Alan asked: under Information Technology sit XLK and its twins, then SMH/SOXX/XSD (semiconductors), DRAM (memory), IGV/IGM/SKYY (software and cloud), CIBR (cyber), QTUM (quantum), AGIX (AI); and under those the cohorts — AI accelerators under SMH, semiconductor equipment under SMH, memory under DRAM, AI software under IGV, cyber under CIBR, quantum under QTUM. Space sits under ARKX in Industrials, nuclear under URA in Energy, the AI power under XLU.</li>
+  </ul>
+  <h3>The broad funds</h3>
+  <ul><li>${fundLine(spy)}. ${fundLine(qqq)}. The S&P and Nasdaq-100 are well covered by weight, and for their Geiger a handful of names is enough (section 4).</li></ul>
+  <h3>Cohorts with no ETF parent (${cohNo.length})</h3>
+  <ul><li>${cohNo.map((x) => `<b>${x.label}</b> (${x.members.length} served) — ${x.no_parent_reason}`).join("; ")}.</li></ul>
+  <h3>MongoDB and Applied Digital</h3>
+  <ul>
+    <li><b>MDB</b> is a $${(mdb.gics.cap / 1e9).toFixed(0)}B software company (GICS ${mdb.gics.industry}). It is <b>not in IWM</b> (too large for the Russell 2000) and, by FMP's 26 Sep file, <b>not in IGV either</b> — IGV's file lists 106 lines and MongoDB is not one of them. The funds that hold it: ${mdb.in_funds.slice(0, 6).map((f) => `${f[0]} ${pct(f[1], 2)}`).join(", ")}. Its family is software/cloud: SKYY is its ETF parent by weight; on the Hub it sits in ${mdb.cohorts.join(", ")}.</li>
+    <li><b>APLD</b> is an $${(apld.gics.cap / 1e9).toFixed(0)}B data-centre builder (GICS ${apld.gics.industry}). It is <b>not in IWM's 26 Sep file</b> and not in IGV. Funds that hold it: ${apld.in_funds.slice(0, 5).map((f) => `${f[0]} ${pct(f[1], 2)}`).join(", ")}. Its family is AI data centres (AGIX is the closest fund); on the Hub it sits in ${apld.cohorts.join(", ")}.</li>
+  </ul>`;
+})();
+
+/* ---- 2 · coverage table ---- */
+let sortK = "coverage_pct", sortDir = -1, fam = "all", openRow = null;
+const FAMS = ["all", "SPDR sectors", "iShares", "Vanguard", "equal-weight", "industry / theme", "broad US", "style / factor", "world"];
+$("famBtns").innerHTML = FAMS.map((f) => `<button data-f="${f}" class="${f === fam ? "on" : ""}">${f.toUpperCase()}</button>`).join("");
+$("famBtns").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; fam = b.dataset.f; [...$("famBtns").children].forEach((x) => x.classList.toggle("on", x === b)); drawCov(); };
+$("covTable").querySelector("thead").onclick = (e) => { const th = e.target.closest("th"); if (!th || !th.dataset.k) return; if (sortK === th.dataset.k) sortDir = -sortDir; else { sortK = th.dataset.k; sortDir = th.dataset.k === "ticker" || th.dataset.k === "group" ? 1 : -1; } drawCov(); };
+function drawCov() {
+  const rows = COV.filter((c) => fam === "all" || c.group === fam).sort((a, b) => { const x = a[sortK], y = b[sortK]; if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === "string" ? x.localeCompare(y) : x - y) * sortDir; });
+  $("covBody").innerHTML = rows.map((c) => {
+    const n = byTicker.get(c.ticker); const agg = n ? fundBlend(n) : null; const g = gOf(c.ticker);
+    const ver = c.verdict ? `<span class="tag ${c.verdict === "GOOD" ? "good" : c.verdict === "POOR" ? "poor" : ""}">${c.verdict}</span>` : "";
+    return `<tr class="fund" data-t="${c.ticker}"><td><b>${c.ticker}</b> <span class="dim small">${esc(c.label).slice(0, 34)}</span></td><td class="dim">${c.group}</td><td class="r">${c.fund_lines}</td><td class="r">${c.served_count}</td>
+      <td class="r"><b>${pct(c.coverage_pct)}</b>${c.file_short ? ' <span class="tag">FILE SHORT</span>' : ""}</td><td class="cell">${gbrow(g)}</td><td class="cell">${gbrow(agg ? agg.value : null, "agg")}</td>
+      <td class="r">${c.top10_served}/10</td><td class="r">${c.weight_per_served_name_pct == null ? "—" : pct(c.weight_per_served_name_pct, 2)}</td>
+      <td class="r">${c.corr == null ? `<span class="mute">${c.track.skipped ? "—" : ""}</span>` : c.corr.toFixed(2)}${ver}</td><td class="r">${c.smallest_set_n == null ? "—" : c.smallest_set_n + " of " + c.members_in_study}</td><td class="r">${c.redundant == null ? "—" : c.redundant}</td>
+      <td class="miss">${c.missed_top.slice(0, 5).map((m) => `<b>${m[0]}</b> ${pct(m[1], 2)}`).join(" · ")}</td></tr>` + (openRow === c.ticker ? detailRow(c) : "");
+  }).join("");
+}
+function detailRow(c) {
+  const t = c.track || {}; const srv = c.served.map(([tk, w]) => `<tr><td><b>${tk}</b> <span class="dim">${esc((byTicker.get(tk) || {}).label || "").slice(0, 30)}</span></td><td class="r">${pct(w, 2)}</td><td class="cell">${gbrow(gOf(tk))}</td><td class="dim">${t.smallest_set && t.smallest_set.includes(tk) ? "in the smallest set" : t.redundant_for_tracking && t.redundant_for_tracking.includes(tk) ? "redundant for tracking" : t.short_history && t.short_history.includes(tk) ? "short history" : ""}</td></tr>`).join("");
+  const miss = c.missed_top.map((m) => `<tr><td><b>${m[0]}</b> <span class="dim">${esc(m[2] || "").slice(0, 34)}</span></td><td class="r">${pct(m[1], 2)}</td></tr>`).join("");
+  const track = t.full_set ? `<div class="kv"><span>SESSIONS</span><span>${t.sessions} daily sessions, each read on the newest ${t.window_bars} bars</span><span>ALL OUR NAMES</span><span>correlation ${t.full_set.corr.toFixed(3)} · mean gap ${t.full_set.mae.toFixed(3)} · same sign ${(100 * t.full_set.sign_agreement).toFixed(0)}% of days · ${pct(t.full_set.weight_pct)} of the fund · <b>${t.verdict}</b></span>
+    <span>SMALLEST SET</span><span>${t.smallest_set_n} names = ${pct(t.smallest_set_weight_pct)} of the fund reach correlation ${t.smallest_set_stats.corr.toFixed(3)} (within ${t.near.corr} of all ${t.members_in_study}): ${t.smallest_set.join(", ")}</span>
+    <span>REDUNDANT</span><span>${t.redundant_for_tracking.length ? t.redundant_for_tracking.join(", ") : "none"}</span>${t.short_history.length ? `<span>SHORT HISTORY</span><span>${t.short_history.join(", ")} (not in the study: fewer than ${t.window_bars + t.sessions} daily bars)</span>` : ""}</div>` : `<p class="mute">No tracking study: ${esc(t.skipped || "no served holding")}.</p>`;
+  return `<tr class="detail"><td colspan="13"><div class="cols"><div class="box"><h4>SERVED HOLDINGS (${c.served_count}) · ${pct(c.served_weight_pct)} of the fund · ${esc(c.source)}</h4><div class="tw" style="max-height:340px"><table><tbody>${srv || "<tr><td class=mute>none</td></tr>"}</tbody></table></div></div>
+    <div class="box"><h4>HEAVIEST LINES WE DO NOT SERVE (${c.missed_count} missed = ${pct(c.missed_weight_pct)})</h4><div class="tw" style="max-height:340px"><table><tbody>${miss}</tbody></table></div></div>
+    <div class="box"><h4>TRACKING — OUR NAMES' GEIGER AGAINST THE FUND'S</h4>${track}</div></div></td></tr>`;
+}
+$("covBody").onclick = (e) => { const tr = e.target.closest("tr.fund"); if (!tr) return; openRow = openRow === tr.dataset.t ? null : tr.dataset.t; drawCov(); };
+drawCov();
+
+/* ---- 3 · the tree ---- */
+const open = new Set(["MARKET", "US", "US_SECTORS", "US_BROAD", "WORLD", "BONDS", "CMDTY", "CRYPTO", "MACRO", "COHORTS_NO_ETF"]);
+const KIND_ORDER = { index: 0, fund: 1, cohort: 2, name: 3 };
+const ORDER = new Map(nodes.map((n, i) => [n.id, i]));   // headings and funds keep the r3 list's order (US stocks before the world, bonds, …)
+function childIds(id) { return (kids.get(id) || []).slice().sort((a, b) => { const A = byId.get(a), B = byId.get(b); if (KIND_ORDER[A.kind] !== KIND_ORDER[B.kind]) return KIND_ORDER[A.kind] - KIND_ORDER[B.kind]; if (A.kind === "index" || A.kind === "fund") return ORDER.get(a) - ORDER.get(b); return ((B.market_value_usd || 0) - (A.market_value_usd || 0)) || String(A.label).localeCompare(String(B.label)); }); }
+function nodeRow(n, depth, parentId) {
+  const ch = childIds(n.id); const g = gOf(n.ticker); const agg = aggregate(n);
+  let meta = "";
+  if (n.kind === "fund" && n.holdings && n.holdings.served_weights) { const c = DOC.coverage[n.ticker]; meta = `${c.served_count} of ${c.fund_lines} served · ${pct(c.coverage_pct)} of weight` + (DOC.tracking[n.ticker] && DOC.tracking[n.ticker].verdict ? ` · tracks ${DOC.tracking[n.ticker].full_set.corr.toFixed(2)} ${DOC.tracking[n.ticker].verdict}` : ""); }
+  else if (n.kind === "fund") meta = n.tier === "GEIGER-ONLY" ? "Geiger only · no holdings file" : n.served ? "no holdings file" : "waiting for admission";
+  else if (n.kind === "cohort") meta = `${n.members.length} served` + (n.not_served && n.not_served.length ? ` · ${n.not_served.length} listed but not served` : "") + (n.etf_parent ? ` · parent ${n.etf_parent} holds ${Math.round(100 * n.etf_parent_share)}% of members = ${pct(n.etf_parent_weight_pct)} of the fund` : ` · ${n.no_parent_reason || "no ETF parent"}`);
+  else if (n.kind === "name") meta = (n.gics ? n.gics.industry + " · " : "") + (n.in_funds && n.in_funds.length ? "in " + n.in_funds.slice(0, 3).map((f) => f[0] + " " + pct(f[1], 1)).join(", ") : "in none of the 125 funds");
+  else meta = ch.length + " under it";
+  const tags = (n.kind === "cohort" ? `<span class="tag">COHORT</span>` : "") + (n.kind === "fund" && n.tier === "GEIGER-ONLY" ? `<span class="tag">GEIGER ONLY</span>` : "") + (n.ticker && !n.served ? `<span class="tag">WAITING</span>` : "");
+  const label = n.ticker && n.kind !== "cohort" ? `<span class="tk">${n.ticker}</span><span class="nm">${esc(n.label).slice(0, 44)}</span>` : `<span class="tk">${esc(n.label).toUpperCase()}</span>`;
+  const isOpen = open.has(n.id + "@" + parentId) || (depth < 3 && open.has(n.id));
+  return `<div class="node k-${n.kind}" data-id="${n.id}" data-p="${parentId}"><span class="tg">${ch.length ? (isOpen ? "▾" : "▸") : ""}</span><span class="lb">${label}${tags}</span>
+    <div class="c3">${gbrow(g)}</div><div class="c4">${gbrow(agg ? agg.value : null, "agg")}</div><span class="meta" title="${esc(meta)}">${esc(meta)}</span></div>` +
+    (ch.length && isOpen ? `<div class="kids">${ch.map((id) => nodeRow(byId.get(id), depth + 1, n.id)).join("")}</div>` : "");
+}
+function drawTree() { $("tree").innerHTML = nodeRow(byId.get("MARKET"), 0, ""); }
+$("tree").onclick = (e) => { const row = e.target.closest(".node"); if (!row) return; const key = row.dataset.id + "@" + row.dataset.p; const k2 = row.dataset.id; if (open.has(key) || open.has(k2)) { open.delete(key); open.delete(k2); } else open.add(key); drawTree(); };
+function openTo(pred) { open.clear(); for (const n of nodes) if (pred(n)) { let cur = n; const chain = []; while (cur) { chain.push(cur.id); cur = cur.parents[0] ? byId.get(cur.parents[0]) : null; } chain.forEach((id) => open.add(id)); } drawTree(); }
+$("openSectors").onclick = () => openTo((n) => n.kind === "index");
+$("openCohorts").onclick = () => openTo((n) => n.kind === "cohort" || n.kind === "index");
+$("closeAll").onclick = () => { open.clear(); open.add("MARKET"); drawTree(); };
+$("q").oninput = () => { const q = $("q").value.trim().toUpperCase(); if (!q) return; openTo((n) => (n.ticker && n.ticker.toUpperCase() === q) || String(n.label).toUpperCase().includes(q) || (n.cohort_key && n.cohort_key.includes(q))); const hit = nodes.find((n) => (n.ticker && n.ticker.toUpperCase() === q) || (n.cohort_key && n.cohort_key === q)); if (hit) { const el = document.querySelector(`.node[data-id="${hit.id}"]`); if (el) el.scrollIntoView({ block: "center" }); } };
+drawTree();
+
+/* ---- 4 · the process ---- */
+(function process() {
+  const ordered = ["IWM", "IJR", "MDY", "IGV", "QQQ", "SPY", "RSP", "IYW", "VGT", "RSPT", "IYF", "VFH", "RSPF", "IYH", "VHT", "RSPH", "IYC", "VCR", "RSPD", "IYJ", "VIS", "RSPN", "IYK", "VDC", "RSPS", "IYE", "VDE", "RSPG", "IDU", "VPU", "RSPU", "IYM", "VAW", "RSPM", "IYR", "VNQ", "RSPR", "IYZ", "VOX", "RSPC", "SMH", "SOXX", "IBB", "XBI", "IHI", "ITA", "KRE", "KBE"];
+  const rows = ordered.filter((t) => DOC.coverage[t]).map((t) => { const c = DOC.coverage[t], k = DOC.tracking[t] || {}; const adds = c.missed_top.slice(0, 6);
+    return `<tr><td><b>${t}</b> <span class="dim small">${esc((byTicker.get(t) || {}).label || "").slice(0, 30)}</span></td><td class="r">${c.served_count}</td><td class="r">${pct(c.coverage_pct)}</td>
+      <td class="r">${k.full_set ? k.full_set.corr.toFixed(2) + ` <span class="tag ${k.verdict === "GOOD" ? "good" : k.verdict === "POOR" ? "poor" : ""}">${k.verdict}</span>` : `<span class="mute">${esc(k.skipped || "—")}</span>`}</td>
+      <td>${k.smallest_set ? `<b>${k.smallest_set_n}</b> of ${k.members_in_study} (${pct(k.smallest_set_weight_pct)}): <span class="dim">${k.smallest_set.join(", ")}</span>` : "—"}</td>
+      <td class="r">${k.redundant_for_tracking ? k.redundant_for_tracking.length : "—"}</td>
+      <td class="miss">${adds.map((m) => `<b>${m[0]}</b> ${pct(m[1], 2)}`).join(" · ")}</td></tr>`; }).join("");
+  $("process").innerHTML = `
+  <h3>What the State Street process was (24 Sep, TREE-2, branch hub/tree-20260924)</h3>
+  <ol>
+    <li><b>Anchor each of the eleven GICS sectors to its Select Sector SPDR</b> (XLK, XLF, XLV, XLY, XLP, XLB, XLI, XLE, XLU, XLRE, XLC), all served, so the sector's Geiger is a real instrument's.</li>
+    <li><b>Measure like with like.</b> Take State Street's own SPY holdings file, give every member its GICS sector, and compare the Hub's names against the index <b>by weight, not by count</b>. The 24 Sep result: 247 of 505 S&P members served = 89.7% of the index by weight; technology 42 of 74 names = 96% of the sector's weight; the thin sectors by weight were Industrials 75%, Health Care 80%, Financials 81%, Utilities 81%, Real Estate 81%.</li>
+    <li><b>Read each sector two ways</b> — cap-weighted and equal-weighted — and when the Hub holds few names on a branch, read the fund, not the names.</li>
+    <li><b>Fill by weight</b>: the 24 Sep expansion and the 27 Sep admission (the 56 FULL names and 66 GEIGER-ONLY funds) added the heaviest missing lines per sector and the iShares / Vanguard / equal-weight twins of each SPDR, so every sector reads three fund families plus OUR NAMES.</li>
+  </ol>
+  <p>That process picked names by <b>index weight</b>. It never asked the second question: <b>how many names does the Geiger actually need?</b> This lane adds that measurement.</p>
+  <h3>The same for the others — measured, then proposed</h3>
+  <p><b>How it is measured.</b> For each fund and each of its served holdings, the daily Geiger is replayed for the last ${DOC.provenance.tracking.sessions} sessions (${DOC.provenance.tracking.dates[0]} → ${DOC.provenance.tracking.dates[1]}) with the publisher's own maths on the newest ${DOC.provenance.tracking.window_bars} daily bars (geiger-replay.mjs, the G2 review's code). Our names' Geigers are blended by their weight in the fund and set beside the fund's own. <b>Correlation</b> says whether they move together; <b>same sign</b> says how often they agree on up or down. The level gap (mean absolute error, ~0.15–0.30) is structural: a fund's Geiger is not a linear blend of its members' Geigers, because the fan ordering and the RSI are non-linear, so it is not the test. Then a <b>forward greedy pick</b> adds, one at a time, the name that most raises the correlation, and stops when the set is within ${DOC.provenance.tracking.near.corr} of what all our names reach: that is the <b>smallest set</b>. Names outside it are <b>redundant for tracking</b> (not for the cohorts, not for the desk: only for the fund's Geiger). Verdict: GOOD ≥ 0.9, FAIR ≥ 0.8, POOR below.</p>
+  <p><b>What it says.</b> For every sector fund a few names — four to nine — reach the correlation that all our names reach, which is Alan's point: we do not need so many tickers <i>for the fund's Geiger</i>. The smallest sets are picked by fit, not by weight, so they are a statistical mix, not a list of leaders; the heaviest lines still belong on the Hub for the desk. Where the verdict is POOR (IWM, IJR, MDY, IBB), no subset of our names tracks the fund at all: those funds need the fund's own Geiger as the read, and the additions on the right if we want names.</p>
+  <p><b>Proposal (nothing admitted):</b> for each fund below, (a) keep the fund's own Geiger as the branch read; (b) keep the smallest set as the names that stand for it in OUR NAMES; (c) treat the redundant names as cohort members, not sector representatives — candidates to drop from a sector's OUR NAMES average, not from the Hub; (d) add the heaviest misses only where the verdict is FAIR or POOR or the top-10 count is under 8. To test a candidate's tracking gain before admitting it we need its daily bars, which this Mac does not have for un-served names: that is a Fly one-off (FMP daily history for the candidates, then the same replay), written up in section 7.</p>
+  <div class="tw"><table><thead><tr><th>FUND</th><th class="r">SERVED</th><th class="r">COVERAGE</th><th class="r">TRACKS</th><th>SMALLEST SET (names · weight)</th><th class="r">REDUNDANT</th><th>HEAVIEST MISSES (weight each would add)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+})();
+
+/* ---- 5 · admissions ---- */
+$("admBody").innerHTML = DOC.admissions.slice(0, 60).map((a, i) => `<tr><td class="dim">${i + 1}</td><td><b>${a.ticker}</b></td><td class="dim">${esc(a.name || "")}</td><td class="r"><b>${pct(a.sum_weight_pct, 2)}</b></td><td class="r">${pct(a.max_weight_pct, 2)}</td><td class="miss">${a.adds.map((x) => `<b>${x[0]}</b> ${pct(x[1], 2)}`).join(" · ")}</td></tr>`).join("");
+
+/* ---- 6 · MDB and APLD ---- */
+(function two() {
+  const card = (t) => { const n = byTicker.get(t); const coh = DOC.cohorts.filter((c) => c.members.includes(t));
+    return `<div class="box"><h4>${t} · ${esc(n.label)}</h4><div class="kv"><span>GEIGER</span>${gbrow(gOf(t), "lg")}<span>GICS</span><span>${n.gics ? n.gics.sector + " · " + n.gics.industry : "—"}</span><span>MARKET VALUE</span><span>$${(n.gics.cap / 1e9).toFixed(1)}B</span>
+      <span>IN IWM</span><span>${DOC.coverage.IWM.served.some((s) => s[0] === t) || DOC.coverage.IWM.missed_top.some((m) => m[0] === t) || n.in_funds.some((f) => f[0] === "IWM") ? "yes" : "<b>no</b> — not in IWM's 26 Sep file (" + DOC.coverage.IWM.rows_in_file + " lines)"}</span>
+      <span>IN IGV</span><span>${n.in_funds.some((f) => f[0] === "IGV") ? "yes, " + pct(n.in_funds.find((f) => f[0] === "IGV")[1], 2) : "<b>no</b> — not in IGV's 26 Sep file (" + DOC.coverage.IGV.rows_in_file + " lines)"}</span>
+      <span>FUNDS THAT HOLD IT</span><span>${n.in_funds.map((f) => `${f[0]} ${pct(f[1], 2)}`).join(" · ")}</span>
+      <span>HUB COHORTS</span><span>${coh.map((c) => `${c.label}${c.etf_parent ? " (parent " + c.etf_parent + ")" : " (no ETF parent)"}`).join(" · ") || "none"}</span>
+      <span>FAMILY</span><span>${t === "MDB" ? "<b>Software / cloud</b>: it belongs with IGV's names (database software) even though iShares' file does not list it; SKYY (cloud) and QTUM hold it by weight. Not a Russell 2000 name." : "<b>AI data centres</b>: a data-centre landlord for AI compute, GICS IT Services. AGIX is the only theme fund that holds it at weight. Not in IWM's file today; not software, so not IGV."}</span></div></div>`; };
+  $("mdbapld").innerHTML = card("MDB") + card("APLD");
+})();
+
+/* ---- 7 · provenance ---- */
+(function prov() {
+  const p = DOC.provenance;
+  $("prov").innerHTML = `
+  <h3>Where each number comes from</h3>
+  <ul>
+    <li><b>Which names we serve</b>: the chart API's <code>/universe</code>, ${p.universe.count} symbols, digest ${p.universe.sha256.slice(0, 12)}…; tiers ${Object.entries(p.universe.tiers).map(([k, v]) => k + " " + v).join(", ")}.</li>
+    <li><b>Holdings and weights</b>: FMP. ${p.holdings.from_file_26sep} funds from the 26 Sep file the market map uses (pplx-holdings.js); ${p.holdings.fresh_28sep} more pulled on 28 Sep through the Fly bar-service machine (FMP <code>/stable/etf/holdings</code>, weights only, no key left this page). FMP writes BRK.B where the Hub writes BRK-B; that is mapped. International funds keep rows down to 0.02%.</li>
+    <li><b>Geigers</b>: the chart API's <code>/geiger</code>, live when the page opens; the snapshot of ${GEI.computed_utc.replace("T", " ").slice(0, 16)} UTC otherwise (the stamp says which). Rungs in the composite today: ${(p.geiger_snapshot.rungs || []).join(", ")}.</li>
+    <li><b>Tracking</b>: daily bars from the chart API <code>/candles?tf=D</code> for all ${p.universe.count} served symbols; the replay is deliverables/20260927/geiger-review/geiger-replay.mjs (the publisher's per-rung maths), daily rung only, newest ${p.tracking.window_bars} bars per session, ${p.tracking.sessions} sessions. This is the daily rung, not the live seven-rung composite — the composite's intraday rungs are not replayable from daily bars.</li>
+    <li><b>Cohorts</b>: Supabase <code>ticker_cohorts</code> (${p.cohorts.ticker_cohorts_rows} rows, ${p.cohorts.distinct} distinct labels). ${p.cohorts.machine_made_skipped} labels that are FMP industry names and the ${p.cohorts.sector_keys_skipped} sector keys are left out (they are the sectors, already in the tree); the 30 theme branches of the 24 Sep tree (quantum, space, photonics…) are added as cohorts, seeded from the same table. ${p.cohorts.cohort_nodes} cohort nodes.</li>
+    <li><b>ETF parents</b>: for each cohort and each of the ${p.holdings.funds} funds, fit = (share of the cohort's members the fund holds) × (share of the fund those members are). The parent is the best fit that holds at least two members and a third of them with fit ≥ 1. Broad and total-market funds are not candidates except for the size cohorts. The three best candidates are kept on every cohort node.</li>
+    <li><b>Structure</b>: the r3 market-map node list (${p.structure.nodes} nodes) unchanged, plus the cohort nodes and a heading for cohorts with no parent; names gain their cohorts as extra parents.</li>
+    <li><b>The State Street process</b>: deliverables/20260924/tree-2/TREE-2.html and data/standard-tree-20260924.json (branch hub/tree-20260924), the 24 Sep admission briefs M53/M57, and the 27 Sep admission v2 receipt.</li>
+  </ul>
+  <h3>What could be wrong</h3>
+  <ul>
+    <li>FMP's holdings can lag the fund by days; the 51-file funds are as of 26 Sep and IWM's file has 1,972 of 1,988 lines (cash and futures lines are not in it).</li>
+    <li>MDB missing from IGV's file is what FMP reports; iShares' own file may differ. Worth a check against iShares before anyone treats it as fact.</li>
+    <li>The tracking study replays the <b>daily</b> rung. The live composite blends seven rungs (3h to 1w), so a live fund bar and the blend of live name bars can disagree by more than the study shows.</li>
+    <li>Correlation of Geigers is a direction test. A set that tracks the fund's Geiger is not a set that tracks its price, and it is chosen by fit, so an odd small name can appear in a smallest set.</li>
+    <li>Names with fewer than ${p.tracking.window_bars + p.tracking.sessions} daily bars (recent listings) are outside the study and are listed as such per fund.</li>
+    <li>Heading aggregates are plain means of the lines directly under a heading (funds), so a heading with one fund reads that fund.</li>
+  </ul>
+  <h3>What was not done</h3>
+  <ul>
+    <li>Nothing was admitted, no table was written, nothing was deployed. The market map's own pages are untouched.</li>
+    <li>The tracking gain of the <b>proposed additions</b> is not measured: their daily bars are not on this Mac (un-served names answer SYMBOL_NOT_TRACKED). It needs a Fly one-off that pulls FMP daily history for the candidate list and runs the same replay.</li>
+    <li>Funds without a holdings file (bond, commodity, dollar, volatility, IBIT) have no coverage row; they read their own Geiger only.</li>
+    <li>The Hub's OUR NAMES average was not changed; this page proposes which names should stand for a sector, it does not switch them.</li>
+  </ul>`;
+})();
+window.__ct_ready = true;   // read by the headless proof
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
