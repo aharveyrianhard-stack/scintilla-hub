@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prediction Markets Report</title>
+<style>
+body{margin:0;background:#07070C;color:#B8B8C8;font:16px/1.55 -apple-system,"Helvetica Neue",Arial,sans-serif;padding:58px 34px 80px;max-width:1150px}
+h1{font-size:32px;margin:0 0 6px;color:#D2D2D2}h2{font-size:22px;margin:40px 0 8px;color:#D2D2D2;border-top:1px solid #1E1E28;padding-top:18px}
+.status{border:1px solid #2A2A36;border-left:4px solid #8A8A9E;padding:12px 16px;margin:18px 0;color:#C8C8D2}
+code,.mono{font:13px ui-monospace,"SF Mono",Menlo,monospace;color:#C8C8D2}
+table{border-collapse:collapse;font-size:14px;margin:10px 0;font-variant-numeric:tabular-nums;width:100%}th,td{border:1px solid #24242E;padding:6px 9px;text-align:left;vertical-align:top}th{color:#B0B0C2;font-weight:500}
+a{color:#C8C8D2}li{margin:0 0 8px}.mut{color:#8A8A9C}
+img{max-width:100%;border:1px solid #1E1E28;display:block;margin:10px 0}
+.scroll{overflow-x:auto}
+@media(max-width:700px){body{padding:56px 16px 60px;font-size:15px}h1{font-size:24px}}
+</style></head><body>
+<span data-scnav-slot></span><h1>Prediction markets: a master tab, tracked over time</h1>
+<p class="mut">L4 · 28 Sep 2026 · the page: <a href="./index.html">deliverables/20260928/prediction-markets/index.html</a></p>
+
+<div class="status"><b>Live since 28 Sep 2026, 16:22 UTC.</b> Polymarket is read every 15 minutes in US hours (New York weekdays 08:00–17:59) and every hour otherwise, into a new table. <b>Kalshi is mapped but switched off</b>, because Kalshi's API terms appear to limit its data to a member's own trading; that is your decision (below). The page itself is on the branch, not yet on the Hub; the coordinator deploys it.</div>
+
+<h2>What the page shows</h2>
+<ul>
+<li><b>26 topics in 8 groups</b>: the Fed (the next three meetings, number of hikes, number of cuts), yields (10-year to year-end, 2-year end of September), stocks (S&amp;P year-end, SPY this month), recession (2026, 2027), Iran (both ceasefires, the blockade, invasion, nuclear deal), Russia–Ukraine (ceasefire, peace talks, NATO clash, Putin out), tariffs and trade (China tariff, new trade deals, effective tariff rate), and the midterms (House, Senate, balance of power).</li>
+<li>For each outcome: the chance <b>now</b> on each venue, side by side; the change over <b>1 day</b> and <b>1 week</b> in percentage points; and a small <b>7-day line</b>, green if up on the day, red if down.</li>
+<li><b>Flashing now</b>: every outcome whose chance moved at least N points in a day, up or down — your scintillation idea. N starts at 10 and you can change it on the page.</li>
+<li><b>What the busiest markets are</b>: the 15 most-traded Polymarket markets of the last 24 hours that we do not already track, with sports and games removed — the "most-mentioned topics" list, for spotting the next topic.</li>
+</ul>
+<img src="shots/v2-1680-top.png" alt="The master tab at desktop width: status line, group filters, three flashes, and the Fed October and December cards with Polymarket and Kalshi side by side">
+<p class="mut">Above, at 1680 wide, live data at 16:31 UTC. Fed on 28 Oct: Polymarket 71% for a 0.25-point hike (+6.0 on the day, +22.0 on the week) beside Kalshi 67% (+3.0). Three flashes: SPY this month −16 points, a January hike +13, the 10-year touching 5.5% +12.7.</p>
+
+<h2>Do Kalshi and Polymarket have APIs we can connect to?</h2>
+<div class="scroll"><table>
+<tr><th></th><th>Polymarket</th><th>Kalshi</th></tr>
+<tr><td>Public, no account, no key</td><td>Yes: Gamma (<code>gamma-api.polymarket.com</code>) for markets and prices, Data API (<code>data-api.polymarket.com/oi</code>) for open interest, CLOB (<code>clob.polymarket.com</code>) for midpoints and price history. All checked today.</td><td>Yes: Trade API v2 (<code>api.elections.kalshi.com/trade-api/v2</code>; the docs now also name <code>external-api.kalshi.com</code>, both answer) for series, events, markets, candlesticks. All checked today.</td></tr>
+<tr><td>Rate limits</td><td>Published: Gamma /events 500 requests per 10 s, /markets 300, search 350; CLOB price history 1,000; Data API 800. We use about 30 requests a pass.</td><td>Published as a token budget per tier; Basic is 200 read tokens per second. The cost per request is not stated. We would use about 30 requests a pass, plus about 60 every 6 hours for discovery.</td></tr>
+<tr><td>Terms</td><td><b>Not verified.</b> The Terms of Use page renders by script and its text could not be read from here. Nothing found forbids reading the public data.</td><td><b>A problem.</b> The docs say using the API binds you to Kalshi's Developer Agreement. Two independent summaries quote its section 3 as limiting API use to "facilitating a member's own trading", with caching or redistributing the data disallowed. Kalshi's own page refused our read (HTTP 429), so we could not read the wording ourselves.</td></tr>
+<tr><td>Coverage of your topics</td><td>Everything except the 2-year yield and the effective tariff rate. The only venue with Iran war/ceasefire and Russia–Ukraine ceasefire markets.</td><td>The Fed, yields including the 2-year, S&amp;P, recession, Iran nuclear deal, tariffs, elections. No Iran war or Ukraine ceasefire market is open.</td></tr>
+</table></div>
+
+<h2>Where each number comes from</h2>
+<ul>
+<li><b>Polymarket chance</b>: the "Yes" price Polymarket publishes for each outcome (the middle of its best offers, or the last trade when the offers are far apart). Open interest from Polymarket's Data API.</li>
+<li><b>Kalshi chance (while switched off)</b>: the older 6-hourly reader (<code>catalyst_odds</code>, running since 24 Sep) — only the Fed and recession topics, and only the four most-held Fed outcomes. Cells it does not cover say "not read".</li>
+<li><b>History</b>: our own readings from 28 Sep 16:22 UTC on; before that, for Polymarket, Polymarket's own hourly price history for the 8 days before, loaded once so the 1-week change works today.</li>
+<li><b>Topic list</b>: <code>supabase/functions/prediction-markets/topics.json</code>, a plain file with each topic's exact market ids on each venue, its wording, and the rows lined up between venues. Edit it and redeploy to add or change a topic.</li>
+</ul>
+
+<h2>What is live now</h2>
+<div class="scroll"><table>
+<tr><th>Piece</th><th>Exact state</th></tr>
+<tr><td>Table</td><td><code>public.prediction_market_snapshots</code> (topic, venue, event id, market id, outcome, probability, bid, ask, volume, 24 h volume, open interest, end date, time, kind), plus <code>public.prediction_market_runs</code> (one row per pass) and the view <code>public.prediction_market_latest</code>. Read-only to the public key; the collector can only add rows.</td></tr>
+<tr><td>Function</td><td><code>prediction-markets</code> on scintilla-live, <b>version 3</b>, JWT required.</td></tr>
+<tr><td>Schedule</td><td>pg_cron job <b>278</b>, <code>prediction-markets</code>, every 15 minutes; it calls only in US hours or at the top of the hour. First scheduled run 16:30:00 UTC, succeeded: 140 read, 32 moved and written, 108 unchanged, no problems.</td></tr>
+<tr><td>Rows so far</td><td id="size">See the return notes: measured after the 16:45 pass.</td></tr>
+<tr><td>Rollback</td><td><code>supabase/migrations/20260928_prediction_market_snapshots_ROLLBACK.sql</code> (stops job 278, drops the view and both tables), then <code>supabase functions delete prediction-markets</code>. Nothing else is touched.</td></tr>
+</table></div>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>A market's price is only as good as its trading. Thin outcomes (under 1%, or with wide offers) can sit at a stale price; that is why tails under 1% are left out unless they line up with the other venue.</li>
+<li>"Not the same question" topics (yields, S&amp;P, China tariff) are worded differently on each venue. The page says so on the card; the numbers must not be subtracted.</li>
+<li>Some rows are self-describing only with the card's text: on the 10-year card a bare Polymarket "5.2%" means "touches 5.2% before 2027" and "Below 4.7%" means "touches below 4.7%".</li>
+<li>Fixed ids go out of date as markets settle: the 2-year (30 Sep), SPY this month (1 Oct) and the October Fed meeting (28 Oct). The collector reports a closed event as a problem on the run row; the topic list then needs the next id.</li>
+<li>The week of history before 28 Sep is Polymarket's hourly record, not our reading; a move inside an hour will not show there.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>Did not switch Kalshi on (your decision below). The Kalshi reading and discovery code is written and tested; every Kalshi id is mapped and was checked open today.</li>
+<li>Did not put the page on the Hub or in the Prototypes library; the coordinator deploys from the branch.</li>
+<li>Did not change the older <code>catalyst-odds</code> reader or its 6-hourly job 265.</li>
+<li>Did not add alerts to your phone for flashes; the page shows them.</li>
+</ul>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

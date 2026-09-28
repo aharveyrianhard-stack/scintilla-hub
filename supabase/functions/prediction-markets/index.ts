@@ -11,7 +11,7 @@
 // Kalshi ships DISABLED in topics.json (terms question for Alan); the Kalshi code path is tested.
 //
 // Modes:  POST /prediction-markets             one pass (the cron calls this)
-//         POST /prediction-markets?mode=backfill  one-off: 7 days of Polymarket's own hourly price
+//         POST /prediction-markets?mode=backfill  one-off: 8 days of Polymarket's own hourly price
 //                                                  history for every mapped market, kind='backfill'
 
 import REG from "./topics.json" with { type: "json" };
@@ -123,12 +123,12 @@ async function pass(now: Date) {
   return summary;
 }
 
-/** one-off: Polymarket's own hourly history for the last 7 days, so the 1-day and 1-week changes mean
+/** one-off: Polymarket's own hourly history for the last 8 days (so a reading exists at the 7-day mark), so the 1-day and 1-week changes mean
  *  something on day one. Same change-only rule, applied along each series; stops 20 minutes before
  *  now so it never overlaps the live reads. */
 async function backfill(now: Date) {
   const run_id = "pm-backfill-" + now.toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
-  const endTs = Math.floor(now.getTime() / 1000) - 1200, startTs = endTs - 7 * 86400;
+  const endTs = Math.floor(now.getTime() / 1000) - 1200, startTs = endTs - 8 * 86400;
   const out: any[] = [], problems: any[] = [];
   for (const t of topics) for (const id of t.polymarket?.events || []) {
     let ev: any;
