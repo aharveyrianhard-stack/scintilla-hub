@@ -50,7 +50,7 @@ img{max-width:100%;border:1px solid #1E1E28;display:block;margin:10px 0}
 <tr><td>Table</td><td><code>public.prediction_market_snapshots</code> (topic, venue, event id, market id, outcome, probability, bid, ask, volume, 24 h volume, open interest, end date, time, kind), plus <code>public.prediction_market_runs</code> (one row per pass) and the view <code>public.prediction_market_latest</code>. Read-only to the public key; the collector can only add rows.</td></tr>
 <tr><td>Function</td><td><code>prediction-markets</code> on scintilla-live, <b>version 3</b>, JWT required.</td></tr>
 <tr><td>Schedule</td><td>pg_cron job <b>278</b>, <code>prediction-markets</code>, every 15 minutes; it calls only in US hours or at the top of the hour. First scheduled run 16:30:00 UTC, succeeded: 140 read, 32 moved and written, 108 unchanged, no problems.</td></tr>
-<tr><td>Rows so far</td><td id="size">See the return notes: measured after the 16:45 pass.</td></tr>
+<tr><td>Rows so far</td><td id="size">At 16:46 UTC: 213 live rows plus 8,247 rows of loaded history; 4.3 MB in all including indexes (about 514 bytes a row). Scheduled passes at 16:30 and 16:45 each read 140 outcomes and stored only the ones that moved (32 and 41). At that pace a weekday adds about 2,300 rows, about <b>1.2 MB a day</b> (about 0.4 GB a year); the hard ceiling, if every outcome moved on every pass, is 7,560 rows, about 3.9 MB a day.</td></tr>
 <tr><td>Rollback</td><td><code>supabase/migrations/20260928_prediction_market_snapshots_ROLLBACK.sql</code> (stops job 278, drops the view and both tables), then <code>supabase functions delete prediction-markets</code>. Nothing else is touched.</td></tr>
 </table></div>
 
