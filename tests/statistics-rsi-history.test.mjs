@@ -108,3 +108,12 @@ test("RSI history: the published JSON matches the engine's shape", () => {
   assert.ok(j.instruments.SPY.bottom.fwd[20].med != null && j.instruments.SPX.full.steps.length === 19);
   assert.ok(j.compare.fullIndex.table.length === 9);
 });
+
+test("RSI history: the page carries every instrument, the BACK/CLOSE pair, and no white", () => {
+  const html = fs.readFileSync(path.join(root, "deliverables/20260928/rsi-full-history/index.html"), "utf8");
+  const j = JSON.parse(fs.readFileSync(path.join(root, "deliverables/20260928/rsi-full-history/rsi-full-history.json"), "utf8"));
+  for (const I of INSTRUMENTS) assert.ok(html.includes(`id="c-${I.key}"`), I.key);
+  assert.ok(html.includes("scnav"), "BACK / CLOSE pair placed");
+  assert.ok(!/#fff\b|#ffffff\b|:\s*white\b/i.test(html), "no white");
+  assert.ok(html.includes(`RSI of ${j.instruments.SPY.lo10.toFixed(1)} or lower`), "headline reads the JSON");
+});
