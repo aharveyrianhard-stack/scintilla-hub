@@ -88,7 +88,7 @@ test("REACTION: the rail has a header and a fourth column, and reuses a name's f
   assert.match(list, /ernRxCellHTML\(r, ernRxBarsFor\(r\.ticker\)\)/);
   assert.match(list, /ernRxEnsure\(rows\)/);
   assert.match(fn("ernRxBarsFor"), /ERP_PX\.get\(k\)/);
-  assert.match(page, /\.ev-pastrow, \.ev-pasthd\{ display:grid; grid-template-columns:64px 58px minmax\(0,1fr\) 54px;/);
+  assert.match(page, /\.ev-pastrow, \.ev-pasthd\{ display:grid; grid-template-columns:64px 58px minmax\(0,1fr\) 64px;/);
   assert.match(fn("ernRxPump"), /SC_CHART_API \+ "\/candles\?symbol="/, "prices come from the chart API only");
 });
 
