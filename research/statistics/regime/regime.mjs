@@ -41,6 +41,16 @@ const ym = (d) => d.slice(0, 7);
 const weekly = (dates, vals) => { const out = []; for (let i = 0; i < dates.length; i++) { const nxt = dates[i + 1]; const endOfWeek = !nxt || new Date(nxt + "T12:00:00Z").getUTCDay() <= new Date(dates[i] + "T12:00:00Z").getUTCDay() || (Date.parse(nxt) - Date.parse(dates[i])) > 3 * 864e5; if (endOfWeek) out.push([dates[i], L.r3(vals[i]) ?? vals[i]]); } return out; };
 const fwdSet = (closes, idxs, h) => idxs.map((i) => L.fwd(closes, i, h));
 
+/* Price events the chart API's split adjustment does not cover. Each is corrected by scaling the bars BEFORE the date so the
+   fund's move that day equals SPY's move that day (a spin-off is value handed to holders, not a loss). */
+export const SPINOFFS = [{ sym: "XLF", date: "2016-09-19", note: "XLF handed its real-estate stocks to holders as the new XLRE fund (a 'special distribution'); its price fell about 7% that morning with no loss to holders" }];
+export function adjustSpinoff(bars, spy, ev) {
+  const i = bars.findIndex((b) => b.d === ev.date); if (i < 1) return { bars, factor: null };
+  const s = new Map(spy.map((b) => [b.d, b.c])); const sp = s.get(ev.date) / s.get(bars[i - 1].d);
+  const factor = (bars[i].c / bars[i - 1].c) / sp;
+  return { factor, bars: bars.map((b, k) => k < i ? { ...b, o: b.o * factor, h: b.h * factor, l: b.l * factor, c: b.c * factor } : b) };
+}
+
 /* ------------------------- 1 · equal weight vs cap weight ------------------------- */
 export const PAIRS = [
   { ew: "RSP", cw: "SPY", label: "S&P 500", src: ["chart", "chart"] },
@@ -303,7 +313,9 @@ export function marketOdds(mk) {
 /* ------------------------- runner ------------------------- */
 export function run(ROOT) {
   const C = loadCache(ROOT); const src = {};
-  const get = (sym, where) => { const s = where === "chart" ? C.chart(sym) : C.fm(sym); if (s) src[sym] = { from: s[0].d, to: s.at(-1).d, bars: s.length, provider: where === "chart" ? "chart API" : "FMP (pulled on Fly)" }; return s; };
+  const spyForAdj = C.chart("SPY"); const adjustments = [];
+  const get = (sym, where) => { let s = where === "chart" ? C.chart(sym) : C.fm(sym);
+    for (const ev of SPINOFFS) if (s && ev.sym === sym && where === "chart") { const a = adjustSpinoff(s, spyForAdj, ev); s = a.bars; adjustments.push({ ...ev, factor: L.r3(a.factor) }); } if (s) src[sym] = { from: s[0].d, to: s.at(-1).d, bars: s.length, provider: where === "chart" ? "chart API" : "FMP (pulled on Fly)" }; return s; };
   const spyRaw = C.chart("SPY"); const spyBars = cleanBars(spyRaw.map((b) => ({ t: Date.parse(b.d), o: b.o, h: b.h, l: b.l, c: b.c }))).bars.map((b, i) => ({ ...spyRaw[i], h: b.h, l: b.l }));
   src.SPY = { from: spyRaw[0].d, to: spyRaw.at(-1).d, bars: spyRaw.length, provider: "chart API" };
   const spyClose = new Map(spyRaw.map((b) => [b.d, b.c]));
@@ -329,7 +341,9 @@ export function run(ROOT) {
     { what: "Equal-weight sector funds (RSPT, RSPF, RSPC …) on the chart API start 2023-06-07", detail: "Invesco renamed them in 2023 (RYT→RSPT etc.). FMP carries the full history under the new tickers, split-adjusted; on the 829 overlapping sessions FMP and the chart API agree to within 0.02%." },
     { what: "Mid- and small-cap equal-weight funds stopped", detail: "FMP's last prints: EWMC 2023-10-05, EWSC 2023-04-06 (zero volume). No live US mid/small equal-weight vs cap-weight pair was found on FMP; those two rows are history only." },
   ];
-  return { generated: new Date().toISOString(), asOf: AS_OF, kind: "Market regime research — descriptive; nothing here is a buy or sell rule.", sources: src, dataFaults,
+  dataFaults.push({ what: "XLF's 2016 spin-off", detail: `On 2016-09-19 XLF handed its real-estate holdings to its owners as the new XLRE fund. The chart API's XLF drops about 7% that day with no loss to holders. This study scales XLF's bars before that day by ${adjustments.find((a) => a.sym === "XLF")?.factor ?? "?"} (its move that day relative to SPY), so the RSPF ÷ XLF line has no false step.` });
+  dataFaults.push({ what: "Thin trading in 2008–2009 in the old equal-weight sector funds", detail: "Their closing prints then sometimes lagged the market by a day (e.g. RSPF ÷ XLF −15% then +26% on 28–29 Oct 2008). The jumps reverse the next day; they add noise to the 2008 ends of those lines and to the 'far below / far above' dots from that year." });
+  return { generated: new Date().toISOString(), asOf: AS_OF, adjustments, kind: "Market regime research — descriptive; nothing here is a buy or sell rule.", sources: src, dataFaults,
     pairs, vix: vixS, credit, macro, season, fed: { ...fed, schedule: meetings.filter((m) => m.d >= "2026-01-01") }, odds };
 }
 

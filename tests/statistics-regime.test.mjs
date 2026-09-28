@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as L from "../research/statistics/regime/regime-lib.mjs";
-import { pairStudy, fomcDates, marketOdds, fedStudy, seasonality } from "../research/statistics/regime/regime.mjs";
+import { pairStudy, fomcDates, marketOdds, fedStudy, seasonality, adjustSpinoff } from "../research/statistics/regime/regime.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -134,4 +134,12 @@ test("the built JSON has every section and the stated as-of date", () => {
   assert.ok(j.odds.kalshi.length && j.odds.polymarket.length);
   // no key-looking strings leaked into the data file
   assert.ok(!/apikey|api_key|FMP_API_KEY=/.test(fs.readFileSync(f, "utf8")));
+});
+
+test("spin-off correction scales the bars before the date so that day's move matches SPY", () => {
+  const bars = [{ d: "2016-09-15", o: 21, h: 21, l: 21, c: 21 }, { d: "2016-09-16", o: 20.7, h: 20.8, l: 20.6, c: 20.7 }, { d: "2016-09-19", o: 19.3, h: 19.4, l: 19.2, c: 19.3 }];
+  const spy = [{ d: "2016-09-16", c: 200 }, { d: "2016-09-19", c: 202 }];
+  const a = adjustSpinoff(bars, spy, { date: "2016-09-19" });
+  assert.ok(Math.abs(a.bars[2].c / a.bars[1].c - 1.01) < 1e-9);
+  assert.equal(a.bars[2].c, 19.3);
 });
