@@ -2,7 +2,8 @@
    leave the chart, and the words on each label carry the mark, the multiple, whose it is and the price. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { placeLabels, placeStrip, rowLabels, withoutPeers } from "../deliverables/20260928/comps-labels/labels.mjs";
+import { readFileSync } from "node:fs";
+import { placeLabels, placeStrip, rowLabels, withoutPeers, sanity } from "../deliverables/20260928/comps-labels/labels.mjs";
 import { peerBand, fmt } from "../deliverables/20260927/comps-r3/r3.mjs";
 
 const overlap = (a, b) => a.side === b.side && a.lane === b.lane && a.left < b.right && b.left < a.right;
@@ -24,8 +25,9 @@ test("labels on one row never overlap and never leave the chart, at 1600 and at 
 
 test("the most important label keeps its spot; a label pushed off its mark gets a leader line", () => {
   const res = placeLabels([{ id: "a", x: 100, w: 120, side: "above", prio: 0 }, { id: "b", x: 110, w: 120, side: "above", prio: 1 }], { width: 800, lanes: 3 });
-  assert.equal(res[0].lane, 0); assert.equal(res[0].leader, false);
-  assert.equal(res[1].lane, 1); assert.equal(res[1].leader, true);
+  assert.equal(res[0].lane, 0); assert.equal(res[0].side, "above"); assert.equal(res[0].leader, false);
+  // b cannot go out a lane above: its pointer would pass behind a. It takes the other side of the bar instead, and says it moved.
+  assert.equal(res[1].side, "below"); assert.equal(res[1].leader, true);
 });
 
 test("a label at the chart's edge is pulled inside and marked as moved", () => {
@@ -41,10 +43,66 @@ test("when every lane is taken the label slides along the outer lane instead of 
   assert.ok(extra.left >= 0 && extra.right <= 1000);
 });
 
-test("the peer strip spreads close names into rows", () => {
+test("the peer strip: names too close to point at one by one are joined, and no pointer runs through a name", () => {
   const names = ["AVGO", "ADI", "RMBS", "TXN", "AMAT"].map((id, i) => ({ id, x: 500 + i * 9, w: 34 }));
   const res = placeStrip(names, { width: 1000, rows: 4 });
-  for (let i = 0; i < res.length; i++) for (let j = i + 1; j < res.length; j++) assert.ok(!(res[i].row === res[j].row && res[i].left < res[j].left + 34 && res[j].left < res[i].left + 34), `${res[i].id} sits on ${res[j].id}`);
+  assert.ok(res.length < names.length, "close names are joined");
+  assert.deepEqual(res.flatMap((r) => r.ids).sort(), names.map((n) => n.id).sort(), "every name is still on the strip");
+  for (const a of res) {
+    assert.ok(a.ok);
+    assert.ok(a.left < a.x && a.x < a.right, a.id + " sits over its own pointer");
+    for (const b of res) if (b !== a && b.row < a.row) assert.ok(!(b.left - 3 < a.x && a.x < b.right + 3), `${a.id}'s pointer runs through ${b.id}`);
+  }
+  const far = placeStrip(["TSM", "TEL", "AVGO", "MRVL"].map((id, i) => ({ id, x: 20 + i * 300, w: 38 })), { width: 1000, rows: 4 });
+  assert.equal(far.length, 4, "names with room keep their own labels");
+});
+
+/* the rules the reviewer found broken at 390: a pointer must never pass behind a label, and no label may cover the company's dashed line */
+function assertRules(res, blocked, label) {
+  for (const a of res) {
+    assert.ok(a.ok, `${label}: ${a.id} could not honour every rule`);
+    assert.ok(a.left <= a.x && a.x <= a.right, `${label}: ${a.id} is not over its own mark`);
+    for (const b of blocked) if (b.side === a.side) assert.ok(!(a.left - 3 < b.x && b.x < a.right + 3), `${label}: ${a.id} covers the dashed line`);
+    for (const b of res) {
+      if (b === a || b.side !== a.side) continue;
+      if (b.lane < a.lane) assert.ok(!(b.left - 3 < a.x && a.x < b.right + 3), `${label}: ${a.id}'s pointer passes behind ${b.id}`);
+      if (b.lane === a.lane) assert.ok(a.right <= b.left || b.right <= a.left, `${label}: ${a.id} sits on ${b.id}`);
+    }
+  }
+}
+
+test("MU's own row at phone and desktop width: no label covers the dashed line, no pointer passes behind a label", () => {
+  const eps = 44.18, me = 1071.29;
+  const rows = { A: { min: 45.5, q1: 1144.9, median: 1984.6, q3: 2317.5, max: 3768.7 }, B: { min: 940.2, q1: 1821.1, median: 2051.8, q3: 2397.6, max: 3768.7 } };
+  // label widths as measured in the headless browser (compact labels at 390, full labels at 1680)
+  const widths = { 312: { me: 117, min: 94, q1: 75, median: 86, q3: 75, max: 86 }, 1506: { me: 218, min: 224, q1: 119, median: 156, q3: 119, max: 156 } };
+  for (const [IW, w] of Object.entries(widths).map(([k, v]) => [+k, v])) for (const [name, r] of Object.entries(rows)) {
+    const hi = 4000, px = (v) => (v / hi) * IW;
+    const ww = name === "B" ? { ...w, min: IW === 312 ? 78 : 150 } : w;          // chart B's lowest peer (TEL) carries no data-fault line
+    const marks = [{ id: "me", x: px(me), side: "above", prio: 0 }, { id: "median", x: px(r.median), side: "above", prio: 1 }, { id: "min", x: px(r.min), side: "above", prio: 2 },
+      { id: "max", x: px(r.max), side: "above", prio: 2 }, { id: "q1", x: px(r.q1), side: "below", prio: 3 }, { id: "q3", x: px(r.q3), side: "below", prio: 3 }].map((m) => ({ ...m, w: ww[m.id] }));
+    const blocked = [{ x: px(me), side: "below" }];
+    const res = placeLabels(marks, { width: IW, lanes: 6, gap: 8, blocked });
+    assertRules(res, blocked, `chart ${name} at ${IW}`);
+    assert.equal(res[0].lane, 0, "MU's flag sits in the lane nearest the bar, so its dashed line hangs from it");
+  }
+  void eps;
+});
+
+test("a label pushed out a lane keeps a clear pointer, even when the lane nearest the bar is crowded", () => {
+  const res = placeLabels([{ id: "wide", x: 200, w: 300, side: "above", prio: 0 }, { id: "a", x: 120, w: 80, side: "above", prio: 1 }, { id: "b", x: 330, w: 80, side: "above", prio: 1 }], { width: 600, lanes: 4 });
+  assertRules(res, [], "crowded");
+});
+
+test("data sanity: TSM and SIMO fail, the clean peers pass (checks-2026-09-28.json)", () => {
+  const C = JSON.parse(readFileSync(new URL("../deliverables/20260928/comps-labels/checks-2026-09-28.json", import.meta.url)));
+  const got = Object.fromEntries(C.peers.map((p) => [p.ticker, sanity(p).faults.map((f) => f.check)]));
+  assert.deepEqual(got.TSM, ["eps"]);
+  assert.deepEqual(got.SIMO, ["eps", "mcap"]);
+  for (const t of Object.keys(got)) if (!["TSM", "SIMO"].includes(t)) assert.deepEqual(got[t], [], t + " should hold together");
+  const simo = sanity(C.peers.find((p) => p.ticker === "SIMO"));
+  assert.ok(simo.pe_mcap > 30 && simo.pe_mcap < 34, "SIMO at today's market value over its net income is about 32x");
+  assert.deepEqual(C.faulty, ["TSM", "SIMO"]);
 });
 
 test("every label says what the mark is, the multiple, whose it is, and the price", () => {
@@ -69,4 +127,18 @@ test("without one peer the ends move on the same arithmetic as the live row", ()
   assert.ok(Math.abs(r.ends.median.price - 44.9 * 44.18) < 1e-9);
   const even = withoutPeers(peers, [], 44.18, peerBand);
   assert.deepEqual(even.ends.median.who, ["TEL", "AVGO"]);
+});
+
+test("phone labels: short heads, price on its own line, a data fault named on the end it sets", () => {
+  const read = {
+    ends: { min: { multiple: 1.03, who: ["TSM"], price: 45.5 }, q1: { multiple: 25.9, who: [], price: 1144.9 }, median: { multiple: 44.9, who: ["AVGO"], price: 1984.6 }, q3: { multiple: 52.5, who: [], price: 2317.5 }, max: { multiple: 85.3, who: ["MRVL"], price: 3768.7 } },
+    own: { price: 1071.29, multiple: 24.2 }, upside: 85.3,
+  };
+  const L = rowLabels(read, { ticker: "MU", eps: "$44.18", fmtX: (v) => fmt("x", v), fmtPrice: (v) => fmt("price", v), fmtPct: (v) => fmt("pct", v), faulty: ["TSM", "SIMO"], compact: true });
+  const by = Object.fromEntries(L.map((l) => [l.id, l]));
+  assert.equal(by.min.head, "LOWEST"); assert.equal(by.min.text, "TSM 1.0x"); assert.equal(by.min.text2, "→ $45.50"); assert.equal(by.min.tail, "DATA FAULT *"); assert.equal(by.min.good, false);
+  assert.equal(by.q1.head, "25TH PCTL"); assert.equal(by.me.text, "$1,071"); assert.equal(by.me.text2, "24.2x × $44.18"); assert.equal(by.me.tail, "+85% to median");
+  assert.equal(by.max.tail, undefined);
+  const wide = rowLabels(read, { ticker: "MU", eps: "$44.18", fmtX: (v) => fmt("x", v), fmtPrice: (v) => fmt("price", v), fmtPct: (v) => fmt("pct", v), faulty: ["TSM"] });
+  assert.equal(wide.find((l) => l.id === "min").tail, "DATA FAULT (TSM): see the note");
 });

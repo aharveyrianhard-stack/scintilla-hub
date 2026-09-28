@@ -69,6 +69,8 @@ h2 small{font-weight:400;letter-spacing:.06em;color:var(--ink3);text-transform:n
 .pn.end{fill:var(--ink2)}
 .pt{stroke:var(--line3);stroke-width:1}
 .pt.end{stroke:var(--ink3)}
+.pn .bad{fill:var(--bad)}
+
 @media(max-width:760px){
  .wrap{padding:0 12px 60px}
  .two{grid-template-columns:1fr}.two > div + div{border-left:0;border-top:1px solid var(--line)}
@@ -83,10 +85,10 @@ h2 small{font-weight:400;letter-spacing:.06em;color:var(--ink3);text-transform:n
 </div>
 
 <script type="module">
-import { placeLabels, placeStrip, rowLabels, withoutPeers } from "./labels.mjs";
+import { placeLabels, placeStrip, rowLabels, withoutPeers, sanity } from "./labels.mjs";
 import { peerBand, niceTicks, fmt, dateWord } from "../../20260927/comps-r3/r3.mjs";
 
-const SNAP = "snapshot-2026-09-28.json";
+const SNAP = "snapshot-2026-09-28.json", CHECKS = "checks-2026-09-28.json";
 const Q = new URLSearchParams(location.search);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const X = (v) => fmt("x", v), P = (v) => fmt("price", v), PC = (v) => fmt("pct", v);
@@ -97,6 +99,7 @@ async function load() {
   if (Q.get("live") === "1" && !["localhost", "127.0.0.1"].includes(location.hostname)) return live();
   D = await (await fetch(SNAP, { cache: "no-store" })).json();
   D.mode = "SNAPSHOT";
+  D.checks = await (await fetch(CHECKS, { cache: "no-store" })).json();
 }
 /* Live: the same tables and the same arithmetic as snapshot.mjs, read in the browser with the Hub's own runtime key discovery. */
 async function live() {
@@ -114,7 +117,7 @@ async function live() {
   const mem = await pg(`ticker_cohorts?select=ticker&cohort=eq.${encodeURIComponent(cohort)}&order=ticker.asc`);
   const T = [...new Set([TICKER, ...mem.map((m) => m.ticker)])], inq = "in.(" + T.join(",") + ")";
   const [fund, prof, quotes] = await Promise.all([
-    pg(`fundamentals?select=ticker,price,market_cap,eps_ttm,revenue_ttm,trailing_pe,adjusted_pe,updated_ts&ticker=${inq}`),
+    pg(`fundamentals?select=ticker,price,market_cap,eps_ttm,adjusted_eps_ttm,revenue_ttm,trailing_pe,adjusted_pe,updated_ts&ticker=${inq}`),
     pg(`company_profile?select=ticker,name,industry,is_etf&ticker=${inq}`),
     fetch(`${API}/quotes?symbols=${encodeURIComponent(T.join(","))}`).then((r) => r.json()).catch((e) => ({ quotes: {}, error: String(e.message || e) })),
   ]);
@@ -130,6 +133,9 @@ async function live() {
   D = { mode: "LIVE", taken: new Date().toISOString(), today: TODAY, ticker: TICKER, name: (first(prof, TICKER) || {}).name || TICKER, cohort, label: "P/E, trailing", basis: "price ÷ EPS over the last twelve months",
     own: { multiple: compsRead(me, inputs).rows.find((x) => x.key === "pe_ttm").value, price: num(me.price), price_date: me.price_date, eps_ttm: num(me.eps_ttm), eps_date: src(TICKER).fundamentals.date },
     in: take(false), out: take(true), quotes_error: quotes.error || null };
+  /* live: only the EPS check can run in the browser (today's market value comes from FMP, which the page cannot read) */
+  const cp = D.in.peers.map((p) => { const s = sanity({ ticker: p.ticker, multiple: p.multiple, eps: p.eps, eps_adj: (first(fund, p.ticker) || {}).adjusted_eps_ttm ?? null }); return { ...p, eps_adj: (first(fund, p.ticker) || {}).adjusted_eps_ttm ?? null, pe_mcap: null, faults: s.faults }; });
+  D.checks = { peers: cp, faulty: cp.filter((p) => p.faults.length).map((p) => p.ticker), live_only_eps: true };
 }
 
 /* ---- one labelled row --------------------------------------------------------------------------------------- */
@@ -137,7 +143,7 @@ const NS = "http://www.w3.org/2000/svg";
 const el = (tag, attrs = {}, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
 
 /** read: {ends, own:{price,multiple}, upside, peers:[{ticker,implied}], n}. Draws into host at its width; returns the height. */
-function drawRow(host, read, { ticker, eps, endsOnly = [] }) {
+function drawRow(host, read, { ticker, eps, faulty = [] }) {
   host.innerHTML = "";
   const W = Math.max(300, host.clientWidth - 32), narrow = W < 600;
   const ML = narrow ? 10 : 30, MR = narrow ? 10 : 30, IW = W - ML - MR;
@@ -151,18 +157,22 @@ function drawRow(host, read, { ticker, eps, endsOnly = [] }) {
   host.appendChild(svg);
 
   /* labels: measure first, then place */
-  const labs = rowLabels(read, { ticker, eps: fmt("usd2", eps), fmtX: X, fmtPrice: P, fmtPct: PC });
+  const labs = rowLabels(read, { ticker, eps: fmt("usd2", eps), fmtX: X, fmtPrice: P, fmtPct: PC, faulty, compact: narrow });
   const measured = labs.map((l) => {
     const g = el("g", { class: "lab" + (l.id === "me" ? " me" : "") });
-    const h = el("text", { class: "h", x: 0, y: 0 }, l.head), v = el("text", { class: "v", x: 0, y: 14 }, l.text);
-    g.appendChild(h); g.appendChild(v);
-    let t = null; if (l.tail) { t = el("text", { class: "t" + (l.good === false ? " bad" : ""), x: 0, y: 28 }, l.tail); g.appendChild(t); }
+    const lines = [el("text", { class: "h", x: 0, y: 0 }, l.head), el("text", { class: "v", x: 0, y: 14 }, l.text)];
+    if (l.text2) lines.push(el("text", { class: "v", x: 0, y: 28 }, l.text2));
+    if (l.tail) lines.push(el("text", { class: "t" + (l.good === false ? " bad" : ""), x: 0, y: 14 * lines.length }, l.tail));
+    for (const t of lines) g.appendChild(t);
     svg.appendChild(g);
-    const w = Math.max(h.getBBox().width, v.getBBox().width, t ? t.getBBox().width : 0);
-    return { ...l, g, w: w + 8, hpx: l.tail ? 42 : 30, px: x(l.x) - ML };
+    const w = Math.max(...lines.map((t) => t.getBBox().width));
+    return { ...l, g, w: w + 8, hpx: 16 + 14 * (lines.length - 1), px: x(l.x) - ML };
   });
-  const LANE = 46;                                              // taller than the tallest label (the company's own flag has three lines)
-  const placed = placeLabels(measured.map((m) => ({ id: m.id, x: m.px, w: m.w, side: m.side, prio: m.prio })), { width: IW, lanes: 5, gap: 8 });
+  const LANE = Math.max(...measured.map((m) => m.hpx)) + 4;       // every lane is taller than the tallest label
+  /* the company's dashed line runs down through every lane under the bar, so no label below the bar may cover it */
+  const mePx = read.own.price != null ? x(read.own.price) - ML : null;
+  const placed = placeLabels(measured.map((m) => ({ id: m.id, x: m.px, w: m.w, side: m.side, prio: m.prio })), { width: IW, lanes: 6, gap: 8, blocked: mePx != null ? [{ x: mePx, side: "below" }] : [] });
+  host.__placed = { IW, mePx, labels: measured.map((m, i) => ({ id: m.id, w: m.w, px: m.px, ...placed[i] })) };   // read by the headless proof
   const lanesAbove = Math.max(0, ...placed.filter((p) => p.side === "above").map((p) => p.lane + 1));
   const lanesBelow = Math.max(0, ...placed.filter((p) => p.side === "below").map((p) => p.lane + 1));
   const meAbove = measured.find((m) => m.id === "me") && placed[measured.findIndex((m) => m.id === "me")].side === "above";
@@ -170,14 +180,14 @@ function drawRow(host, read, { ticker, eps, endsOnly = [] }) {
   /* vertical plan */
   const yTopAxis = 42;                                          // the multiple axis
   const aboveTop = yTopAxis + 14;
-  const yBar = aboveTop + lanesAbove * LANE + (meAbove ? 14 : 0) + 22;
+  const yBar = aboveTop + lanesAbove * LANE + 18;
   const boxH = 26, capH = 18;
   const belowTop = yBar + 24;
   const yAxis = belowTop + lanesBelow * LANE + 6;               // the $ axis
-  const stripTop = yAxis + 64;
-  const peersPlaced = placeStrip(read.peers.filter((p) => p.implied != null).map((p) => ({ id: p.ticker, x: x(p.implied) - ML, w: p.ticker.length * 7.4 + 8 })), { width: IW, rows: narrow ? 7 : 5, gap: 4 });
+  const stripTop = yAxis + 74;                                 // room for the strip title above the brackets
+  const peersPlaced = placeStrip(read.peers.filter((p) => p.implied != null).map((p) => ({ id: p.ticker, x: x(p.implied) - ML, w: p.ticker.length * 7.4 + 8 })), { width: IW, rows: narrow ? 6 : 4, gap: 6, charW: 7.4 });
   const stripRows = Math.max(1, ...peersPlaced.map((p) => p.row + 1));
-  const H = stripTop + stripRows * 14 + 8;
+  const H = stripTop + stripRows * 16 + 8;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
 
   /* the multiple axis on top: what multiple of EPS each $ is */
@@ -196,7 +206,6 @@ function drawRow(host, read, { ticker, eps, endsOnly = [] }) {
   svg.appendChild(el("rect", { class: "box", x: x(E.q1.price), y: yBar - boxH / 2, width: Math.max(1, x(E.q3.price) - x(E.q1.price)), height: boxH }));
   svg.appendChild(el("line", { class: "med", x1: x(E.median.price), x2: x(E.median.price), y1: yBar - boxH / 2 - 4, y2: yBar + boxH / 2 + 4 }));
   for (const p of read.peers) if (p.implied != null) svg.appendChild(el("circle", { class: "dot" + ([E.min.who[0], E.max.who[0], ...E.median.who].includes(p.ticker) ? " end" : ""), cx: x(p.implied), cy: yBar, r: 3.5 }));
-  if (read.own.price != null) svg.appendChild(el("line", { class: "me-line", x1: x(read.own.price), x2: x(read.own.price), y1: yTopAxis + 2, y2: yAxis }));
 
   /* the $ axis */
   svg.appendChild(el("line", { class: "ax", x1: ML, x2: ML + IW, y1: yAxis, y2: yAxis }));
@@ -207,29 +216,40 @@ function drawRow(host, read, { ticker, eps, endsOnly = [] }) {
   svg.appendChild(el("text", { class: "axt", x: ML, y: yAxis + 34 }, narrow ? `$ PER ${ticker} SHARE (P/E × EPS ${fmt("usd2", eps)})` : `$ PER ${ticker} SHARE AT EACH PEER MULTIPLE (MULTIPLE × ${ticker} EPS ${fmt("usd2", eps)})`));
 
   /* the peers, each at the price its multiple gives the company */
-  svg.appendChild(el("text", { class: "axt", x: ML, y: stripTop - 4 }, narrow ? `THE ${read.n} PEERS AT THEIR P/E` : `THE ${read.n} PEERS, EACH AT THE PRICE ITS OWN P/E GIVES ${ticker}`));
+  svg.appendChild(el("text", { class: "axt", x: ML, y: stripTop - 16 }, narrow ? `THE ${read.n} PEERS AT THEIR P/E` : `THE ${read.n} PEERS, EACH AT THE PRICE ITS OWN P/E GIVES ${ticker}`));
   for (const p of peersPlaced) {
-    const end = [E.min.who[0], E.max.who[0], ...E.median.who].includes(p.id);
-    const yTxt = stripTop + p.row * 14 + 11;
-    svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + p.x, x2: ML + p.x, y1: yAxis, y2: yAxis + 4 }));
-    svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + p.x, x2: ML + p.cx, y1: stripTop - 2, y2: yTxt - 10 }));
-    svg.appendChild(el("text", { class: "pn" + (end ? " end" : ""), x: ML + p.cx, y: yTxt, "text-anchor": "middle" }, p.id));
+    const end = p.ids.some((t) => [E.min.who[0], E.max.who[0], ...E.median.who].includes(t));
+    const bad = p.ids.some((t) => faulty.includes(t));
+    const yTxt = stripTop + p.row * 16 + 12, yCol = stripTop - 2;
+    for (const px of p.xs) svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + px, x2: ML + px, y1: yAxis, y2: yAxis + 4 }));
+    if (p.xs.length > 1) {                                        // several peers too close to point at one by one: one bracket, one pointer
+      svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + p.xs[0], x2: ML + p.xs[p.xs.length - 1], y1: yCol, y2: yCol }));
+      for (const px of p.xs) svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + px, x2: ML + px, y1: yCol - 4, y2: yCol }));
+    }
+    svg.appendChild(el("line", { class: "pt" + (end ? " end" : ""), x1: ML + p.x, x2: ML + p.x, y1: yCol, y2: yTxt - 11 }));
+    const t = el("text", { class: "pn" + (end ? " end" : ""), x: ML + p.cx, y: yTxt, "text-anchor": "middle" });
+    p.ids.forEach((id, k) => { if (k) t.appendChild(el("tspan", { class: "sep" }, "·")); t.appendChild(el("tspan", faulty.includes(id) ? { class: "bad" } : {}, id + (faulty.includes(id) ? "*" : ""))); });
+    if (bad) t.setAttribute("data-fault", "1");
+    svg.appendChild(t);
   }
 
-  /* place the labels and draw their leader lines */
+  /* place the labels and draw their pointers: a straight vertical line from the label's edge to its own mark */
+  let meBottom = null;
   measured.forEach((m, i) => {
     const p = placed[i];
-    const left = ML + p.left, top = p.side === "above" ? yBar - 22 - p.lane * LANE - (m.hpx - 4) - (m.id !== "me" && meAbove && p.lane === lanesAbove - 1 ? 0 : 0) : belowTop + p.lane * LANE;
-    const g = m.g;
-    const ay = m.id === "me" ? (p.side === "above" ? yTopAxis + 2 : yAxis) : m.id === "min" || m.id === "max" ? (p.side === "above" ? yBar - capH / 2 : yBar + capH / 2) : m.id === "median" ? (p.side === "above" ? yBar - boxH / 2 - 4 : yBar + boxH / 2 + 4) : (p.side === "above" ? yBar - boxH / 2 : yBar + boxH / 2);
-    const lx = ML + p.cx, ly = p.side === "above" ? top + m.hpx - 2 : top - 2;
-    if (m.id === "me" && p.side === "above") { /* MU's own flag sits at the top of its dotted line: no leader needed when it is on the line */ }
-    if (p.leader || m.id === "me") svg.insertBefore(el("line", { class: "lead" + (m.id === "me" ? " me" : ""), x1: lx, y1: ly, x2: x(m.x), y2: ay }), g);
+    const left = ML + p.left, top = p.side === "above" ? yBar - 22 - p.lane * LANE - (m.hpx - 4) : belowTop + p.lane * LANE;
+    const g = m.g, mx = x(m.x);
+    const edge = p.side === "above" ? top + m.hpx - 1 : top - 1;   // the label background's edge nearest the bar
+    const ay = m.id === "me" ? null : m.id === "min" || m.id === "max" ? (p.side === "above" ? yBar - capH / 2 : yBar + capH / 2) : m.id === "median" ? (p.side === "above" ? yBar - boxH / 2 - 4 : yBar + boxH / 2 + 4) : (p.side === "above" ? yBar - boxH / 2 : yBar + boxH / 2);
+    if (m.id === "me") meBottom = p.side === "above" ? edge : null;
+    else if (p.leader) svg.appendChild(el("line", { class: "lead", x1: p.ok ? mx : Math.max(left + 4, Math.min(left + m.w - 4, mx)), y1: edge, x2: mx, y2: ay }));
     g.setAttribute("transform", `translate(${left + 4},${top + 10})`);
-    const bg = el("rect", { class: "bg", x: -4, y: -11, width: m.w, height: m.hpx - 2, rx: 2 });
+    const bg = el("rect", { class: "bg", x: -4, y: -11, width: m.w, height: m.hpx, rx: 2 });
     g.insertBefore(bg, g.firstChild);
     svg.appendChild(g);                                         // on top of everything
   });
+  /* the company's own dashed line: from the bottom of its flag down to the $ axis (never up past its flag) */
+  if (read.own.price != null) svg.insertBefore(el("line", { class: "me-line", x1: x(read.own.price), x2: x(read.own.price), y1: meBottom != null ? meBottom : yBar - boxH / 2 - 8, y2: yAxis }), svg.querySelector("g.lab"));
   return H;
 }
 
@@ -240,28 +260,51 @@ function render() {
     ? `<b>LIVE</b> · read ${esc(new Date(d.taken).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }))} · price ${esc(dateWord(me.price_date))}`
     : `<b>SNAPSHOT</b> · taken ${esc(dateWord(d.today))} on the live comps page's arithmetic · price ${esc(dateWord(me.price_date))}`;
   const IN = { ...d.in, own: me, ticker: d.ticker };
-  /* OUT: the live page's rule (Tukey) first; when it drops nobody, the one peer whose figure is a data fault is set aside instead, and the page says so. */
+  /* OUT: the live page's rule (Tukey) drops real outliers; the data-sanity check (labels.mjs sanity(), run by checks.mjs)
+     sets aside every peer whose figures do not hold together. Both are named on the page. */
   const tukey = d.out.outliers.out;
-  const fault = d.in.peers.filter((p) => p.eps != null && p.price != null && p.eps > p.price * 0.5);   // EPS above half the share price: the earnings are not in the price's currency
-  const dropped = tukey.length ? tukey.map((o) => o.ticker) : fault.map((p) => p.ticker);
+  const C = d.checks || { peers: [], faulty: [] };
+  const faultyP = C.peers.filter((p) => p.faults && p.faults.length);
+  const faulty = faultyP.map((p) => p.ticker);
+  const dropped = [...new Set([...tukey.map((o) => o.ticker), ...faulty])];
   const OUTr = withoutPeers(d.in.peers.map((p) => ({ ticker: p.ticker, multiple: p.multiple })), dropped, eps, peerBand);
   const OUT = { ...OUTr, peers: OUTr.peers.map((p) => ({ ...p, implied: p.multiple * eps })), own: me, ticker: d.ticker, upside: OUTr.ends.median.price != null && me.price > 0 ? (OUTr.ends.median.price / me.price - 1) * 100 : null };
+  const names = (list) => list.join(" and ");
+  const faultLine = (p) => {
+    const f = p.faults.map((x) => x.check);
+    const words = [];
+    if (f.includes("eps")) words.push(`its two trailing EPS figures on the same Hub row disagree: ${esc(fmt("usd2", p.eps))} reported against ${esc(fmt("usd2", p.eps_adj))} adjusted (${p.faults.find((x) => x.check === "eps").ratio.toFixed(1)}× apart)`);
+    if (f.includes("mcap")) words.push(`today's market value over its last four quarters' net income gives <b>${esc(X(p.pe_mcap))}</b>, not ${esc(X(p.multiple))} (${p.faults.find((x) => x.check === "mcap").ratio.toFixed(1)}× apart), so the share count behind its EPS is wrong`);
+    return `<li><b>${esc(p.ticker)} at ${esc(X(p.multiple))}</b>: ${words.join("; and ")}.${p.ticker === "TSM" && !f.includes("mcap") ? ` The market-value check does not catch ${esc(p.ticker)}: its net income on file is in Taiwan dollars too, so both views of its P/E are wrong in the same way (${esc(X(p.pe_mcap))}).` : ""}</li>`;
+  };
   const app = document.getElementById("app"); app.className = "";
   const legend = `<div class="legend"><span><i style="width:26px;height:2px;background:var(--ink3)"></i>whisker: from the lowest peer to the highest</span><span><i style="width:22px;height:12px;background:#2E3248;border:1px solid #5A6088"></i>box: the middle half of the peers (25th to 75th percentile)</span><span><i style="width:3px;height:14px;background:var(--ink)"></i>median: the middle peer</span><span><i style="width:0;height:14px;border-left:2px dashed var(--ink)"></i>${esc(d.ticker)}'s price today, at its own multiple</span><span><i style="width:7px;height:7px;border-radius:50%;background:var(--ink3)"></i>one peer, at the price its P/E gives ${esc(d.ticker)}</span></div>`;
   app.innerHTML = `
-<h2>One row, every mark labelled<small>the recommended design · ${esc(d.ticker)} · ${esc(d.label)} · ${d.in.n} peers in ${esc(String(d.cohort).replace(/_/g, " ").toLowerCase())}</small></h2>
+<h2>One row, every mark labelled<small>the recommended design · ${esc(d.ticker)} · ${esc(d.label)} · ${d.in.n} peers in ${esc(String(d.cohort).replace(/_/g, " ").toLowerCase())} · the live page's numbers</small></h2>
 <div class="panel">
   <div class="cap"><span class="t">${esc(d.ticker)} · ${esc(d.label)}</span><span class="s">what one ${esc(d.ticker)} share would be worth at each peer's P/E · <b>price = peer multiple × ${esc(d.ticker)} EPS ${esc(fmt("usd2", eps))}</b> (${esc(d.basis)})</span></div>
   <div class="chart" id="chartA"></div>${legend}
+  ${faulty.length ? `<div class="note"><b class="bad">${esc(faulty.map((t) => t + "*").join(" "))}</b> in red: ${faulty.length === 1 ? "this peer's figures fail" : "these peers' figures fail"} the data-sanity check below. This chart draws them as the live page does today, so their errors are in its ends, its box and its median.</div>` : ""}
 </div>
-<h2>The same row with the outlier out<small>${tukey.length ? `the live page's rule (Tukey, beyond 1.5× the middle half) drops ${esc(tukey.map((o) => o.ticker).join(", "))}` : `the live page's outlier rule drops nobody on this row, so the one data fault is set aside instead`}</small></h2>
+<h2>The same row with the bad data out<small>${tukey.length ? `the live page's rule (Tukey, beyond 1.5× the middle half) drops ${esc(names(tukey.map((o) => o.ticker)))}; ` : `the live page's outlier rule drops nobody on this row; `}the data-sanity check sets aside ${faulty.length ? esc(names(faulty)) : "nobody"}</small></h2>
 <div class="panel">
   <div class="cap"><span class="t">${esc(d.ticker)} · ${esc(d.label)} · without ${esc(dropped.join(", ") || "anyone")}</span><span class="s">${OUT.n} peers · every end, the box and the median recomputed without ${esc(dropped.join(", ") || "anyone")}</span></div>
   <div class="chart" id="chartB"></div>${legend}
-  <div class="note">${tukey.length ? `<b>${esc(tukey.map((o) => o.ticker).join(", "))}</b> is beyond the Tukey fence (${esc(X(d.in.outliers.fence.lo))} to ${esc(X(d.in.outliers.fence.hi))}) and is the outlier the live page's OUT button drops.`
-    : `<b>Under the live page's rule nothing changes:</b> Tukey's fence on this row runs from ${esc(X(d.in.outliers.fence.lo))} to ${esc(X(d.in.outliers.fence.hi))}, and every peer, ${esc(d.in.sets.low)} at ${esc(X(d.in.band.min))} included, sits inside it. Pressing OUT OF THE BAND on the live page redraws this row exactly as it is.
-      ${fault.length ? `<br><b>${esc(fault.map((p) => p.ticker).join(", "))} is a data fault, not a cheap stock:</b> ${fault.map((p) => `its EPS on file is ${esc(fmt("usd2", p.eps))} against a share price of ${esc(P(p.price))}`).join("; ")} — earnings recorded in another currency next to a US-dollar price. No chipmaker trades at one times earnings. The row above sets it aside for that reason, and the median moves from ${esc(X(d.in.band.median))} (${esc(d.in.sets.median.join(" & "))}) to ${esc(X(OUT.band.median))} (${esc(OUT.ends.median.who.join(" & "))}), ${esc(P(d.in.ends.median.price))} → ${esc(P(OUT.ends.median.price))} for ${esc(d.ticker)}.` : ""}`}</div>
+  <div class="note">${tukey.length ? `<b>${esc(names(tukey.map((o) => o.ticker)))}</b> ${tukey.length > 1 ? "are" : "is"} beyond the Tukey fence (${esc(X(d.in.outliers.fence.lo))} to ${esc(X(d.in.outliers.fence.hi))}), the outliers the live page's OUT button drops.`
+    : `<b>Under the live page's rule nothing changes:</b> Tukey's fence on this row runs from ${esc(X(d.in.outliers.fence.lo))} to ${esc(X(d.in.outliers.fence.hi))}, and every peer, ${esc(d.in.sets.low)} at ${esc(X(d.in.band.min))} included, sits inside it. Pressing OUT OF THE BAND on the live page redraws this row exactly as it is.`}
+    ${faulty.length ? `<br><b>${faulty.length} peers are data faults, not cheap stocks.</b> Two checks look at each peer's figures from a second direction; a peer is set aside when either disagrees:
+    <ul style="margin:6px 0 4px">${faultyP.map(faultLine).join("")}</ul>
+    Without them the median moves from ${esc(X(d.in.band.median))} (${esc(d.in.sets.median.join(" & "))}) to ${esc(X(OUT.band.median))} (${esc(OUT.ends.median.who.join(" & "))}), ${esc(P(d.in.ends.median.price))} → ${esc(P(OUT.ends.median.price))} for ${esc(d.ticker)}; the 25th percentile moves from ${esc(X(d.in.band.q1))} to ${esc(X(OUT.band.q1))}, and the lowest peer is now ${esc(OUT.ends.min.who[0])} at ${esc(X(OUT.band.min))}.` : ""}</div>
 </div>
+
+<h2>The data-sanity check, peer by peer<small>${C.live_only_eps ? "live: only the EPS check can run in the browser" : "from checks-" + esc(d.today) + ".json"}</small></h2>
+<div class="panel"><div class="words" style="overflow-x:auto">
+  <table style="border-collapse:collapse;font-size:12px;min-width:560px">
+   <tr style="color:var(--ink3);text-align:right"><td style="text-align:left;padding:3px 10px 3px 0">peer</td><td style="padding:3px 10px">P/E on file</td><td style="padding:3px 10px">market value ÷ net income</td><td style="padding:3px 10px">EPS reported</td><td style="padding:3px 10px">EPS adjusted</td><td style="text-align:left;padding:3px 0 3px 10px">verdict</td></tr>
+   ${C.peers.map((p) => `<tr style="text-align:right;border-top:1px solid var(--line)"><td style="text-align:left;padding:3px 10px 3px 0;color:var(--ink)">${esc(p.ticker)}</td><td style="padding:3px 10px">${esc(X(p.multiple))}</td><td style="padding:3px 10px">${p.pe_mcap != null ? esc(X(p.pe_mcap)) : "—"}</td><td style="padding:3px 10px">${p.eps != null ? esc(fmt("usd2", p.eps)) : "—"}</td><td style="padding:3px 10px">${p.eps_adj != null ? esc(fmt("usd2", p.eps_adj)) : "—"}</td><td style="text-align:left;padding:3px 0 3px 10px" class="${p.faults.length ? "bad" : "good"}">${p.faults.length ? "SET ASIDE: " + esc(p.faults.map((f) => f.check === "eps" ? "the two EPS disagree" : "market value says otherwise").join(" + ")) : "holds together"}</td></tr>`).join("")}
+  </table>
+  <div style="margin-top:8px;color:var(--ink3)">The rule: set a peer aside when its reported and adjusted trailing EPS differ more than 2× (clean peers here sit between 0.7× and 1.4×), or when today's market value ÷ its last four quarters' net income and its P/E differ more than 1.5× (clean peers: within 1.15×). Market value: FMP's quote, stamped at Friday's close (25 Sep). Net income: the Hub's fundamentals_history, last four quarters. Adjusted EPS: the Hub's fundamentals row.</div>
+</div></div>
 
 <h2>Labels dropped, and why</h2>
 <div class="panel"><div class="words">
@@ -270,6 +313,7 @@ function render() {
     <li><b>"off the chart"</b> is gone: the $ axis now starts at $0, so the lowest peer (${esc(d.in.sets.low)} at ${esc(P(d.in.ends.min.price))}) is drawn where it is instead of being cut and explained in words.</li>
     <li><b>The side column</b> ("+86% to the median · middle half · low – high") is gone: each of those numbers now sits on its own mark.</li>
     <li><b>The left description block</b> ("${esc(d.ticker)} today 24.2x · price = multiple × EPS · EPS $44.18 · 15 peers") is reduced to the one line above the chart; the multiple and the EPS are on ${esc(d.ticker)}'s own flag and on the axis titles.</li>
+    <li><b>Peer names too close to point at one by one</b> are joined into one label with one bracket (for example "AVGO·ADI") so no pointer runs through a name.</li>
     <li><b>Not drawn:</b> the ${d.in.nm.length} peers whose P/E is over 100x (${esc(d.in.nm.map((x) => x.ticker).join(", "))}: almost no earnings yet, so the live page sets them aside as not meaningful) and the ${d.in.missing.length} with no P/E on file (${esc(d.in.missing.join(", "))}). They are named here instead of on the chart.</li>
   </ul>
 </div></div>
@@ -277,34 +321,43 @@ function render() {
 <h2>Before<small>the row as it is on the live page today, from Alan's screenshot</small></h2>
 <div class="panel"><div class="shot"><img src="shots/before-alan-row-20260928.webp" alt="the P/E trailing row on the live comps page: labels in a side column and stacked under the bar"><small>the live comps round-3 page, MU, P/E trailing row: the numbers sit in a column on the right and in text under the bar, the lowest peer is cut off and explained in words, and the teal stripe is unexplained</small></div></div>
 
+<h2>Fixed after review<small>the phone layout, before and after</small></h2>
+<div class="two panel">
+<div class="shot"><img src="shots/MU-390-before-review.png" alt="the page at phone width before the fix"><small>before: MU's pointer ran to the top axis behind the median label, its dashed line passed behind four labels, the lowest- and highest-peer pointers passed behind MU's flag, and pointers ran through AVGO, ADI and RMBS in the peer strip</small></div>
+<div class="shot"><img src="shots/chartA-390.png" alt="the first chart at phone width after the fix"><small>after: MU's dashed line hangs from its own flag, no label covers it, every pointer is a short straight line that passes behind nothing, and close peers share one bracketed label; checked by a headless probe at 390 and 1680 (0 crossings on both charts)</small></div>
+</div>
+
 <div class="two panel" style="margin-top:30px">
 <div class="words"><b>What it shows</b>
   <ul>
     <li>One row of the comps football field, drawn large: ${esc(d.ticker)}'s <b>${esc(d.label)}</b> against its ${d.in.n} peers in ${esc(String(d.cohort).replace(/_/g, " ").toLowerCase())}.</li>
     <li>Each peer's P/E is applied to ${esc(d.ticker)}'s own earnings per share (${esc(fmt("usd2", eps))}), which gives the price one ${esc(d.ticker)} share would carry at that multiple. That is the $ axis. The top axis shows the same positions as multiples.</li>
-    <li>The whisker runs from the lowest peer to the highest; the box is the middle half (25th to 75th percentile); the thick tick is the median; the dashed line is ${esc(d.ticker)}'s price today, which is the same as its own multiple.</li>
+    <li>The whisker runs from the lowest peer to the highest; the box is the middle half (25th to 75th percentile); the thick tick is the median; the dashed line, hanging from ${esc(d.ticker)}'s flag, is its price today, which is the same as its own multiple.</li>
+    <li>Every label sits over (or under) its own mark; when it had to move out a lane, a straight pointer drops from it to the mark. No label covers the dashed line or another label's pointer.</li>
     <li>Green on ${esc(d.ticker)}'s flag: the peer median is above today's price, the favourable side for a buyer (cheaper than the peers). It would be red the other way.</li>
   </ul>
   <b>Where the numbers come from</b>
   <ul>
-    <li><b>${d.mode === "LIVE" ? "Read live" : "A snapshot taken " + esc(dateWord(d.today))}</b> on the exact arithmetic of the live comps page (deliverables/20260927/comps-r3/r3.mjs), so the ends, the box and the median are the live page's.</li>
+    <li><b>${d.mode === "LIVE" ? "Read live" : "A snapshot taken " + esc(dateWord(d.today))}</b> on the exact arithmetic of the live comps page (deliverables/20260927/comps-r3/r3.mjs), so the ends, the box and the median of the first chart are the live page's.</li>
     <li>Who is in the cohort: the Hub's ticker_cohorts table. Each company's earnings per share over the last twelve months: the Hub's fundamentals table (eps_ttm). Names: company_profile.</li>
     <li>Today's prices: the chart API's /quotes. ${d.mode === "LIVE" ? "" : "The API only answers requests from the Hub's own address, so the snapshot script sent that origin header when it read the prices, and this page draws the saved numbers."} Add <b>?live=1</b> on the Hub to read everything live instead.</li>
+    <li>The data-sanity check: adjusted EPS from the fundamentals row, net income from fundamentals_history, today's market value from FMP's quote (read through the FMP connector; stamped at Friday's close), all saved in checks-${esc(d.today)}.json.</li>
     <li>Percentiles: straight-line between the two nearest peers, as on the live page. The 25th and 75th percentiles are not one peer's number, which is why no name sits on those two labels.</li>
   </ul>
 </div>
 <div class="words"><b>What could be wrong</b>
   <ul>
-    ${fault.length ? `<li><b>${esc(fault.map((p) => p.ticker).join(", "))} at ${esc(X(d.in.band.min))}</b> is a data fault (earnings on file in the wrong currency), and the live page's outlier rule does not catch it: Tukey's fence is wide because the middle half is wide. Until the source row is fixed, the low end of this row on the live page is wrong and the median is one peer lower than it should be.</li>` : ""}
+    ${faulty.length ? `<li><b>${esc(names(faulty))}</b> are data faults on the Hub's rows, and the live page's outlier rule does not catch them: Tukey's fence is wide because the middle half is wide. Until the source rows are fixed, the low end, the 25th percentile and the median of this row on the live page are wrong.</li>` : ""}
+    <li>The data-sanity check can be wrong both ways. A company with a real, large gap between reported and adjusted earnings (a big write-off) would fail the EPS check though its P/E is right; a fault that hits the EPS and the net income the same way (as TSM's currency does) passes the market-value check. Each set-aside peer is named with its reason so it can be looked at.</li>
     <li>Trailing EPS on the fundamentals row carries its own date; a peer that has reported since then is drawn on its older earnings.</li>
     <li>${esc(d.ticker)}'s EPS of ${esc(fmt("usd2", eps))} against a ${esc(P(me.price))} price is the Hub's own row; this page does not check it against the filings.</li>
-    <li>A label that had to move away from its mark carries a leader line back to it; on a phone several labels stack in lanes. If a leader line is hard to follow, that is the design's limit at that width, not a wrong number.</li>
+    <li>On a phone the labels stack into more lanes and the chart gets taller; the pointers stay straight and never cross a label.</li>
     ${d.quotes_error ? `<li>The chart API was not reached (${esc(d.quotes_error)}); prices are the fundamentals rows' own.</li>` : ""}
   </ul>
   <b>What was not done</b>
   <ul>
     <li>The live comps page was <b>not changed</b>. This is one row, drawn for agreement on the labels; the other 25 rows and the $ field are untouched.</li>
-    <li>No table was written; the ${fault.length ? esc(fault.map((p) => p.ticker).join(", ")) + " " : ""}data fault was not fixed at the source.</li>
+    <li>No table was written; the ${faulty.length ? esc(names(faulty)) + " " : ""}rows were not fixed at the source.</li>
     <li>Only ${esc(d.ticker)}, only ${esc(d.label)}. The same labelling for EV/sales, EV/EBITDA and PEG rows needs the rows' own words (net debt and shares enter those prices) and is a next step.</li>
   </ul>
 </div>
@@ -312,13 +365,13 @@ function render() {
 
 <h2>Decisions for Alan<small>three, recommendation first</small></h2>
 <div class="panel"><div class="words"><ol>
-  <li><b>Take this labelling to every row of the live comps page?</b> Recommended: yes, as drawn above (labels on the marks, leader lines when they move, the $ axis from $0, the peer strip under each valuation row, the side column gone).</li>
+  <li><b>Take this labelling to every row of the live comps page?</b> Recommended: yes, as drawn above (labels over their marks, straight pointers when they move, the $ axis from $0, the peer strip under each valuation row, the side column gone).</li>
   <li><b>The shaded fair-value band:</b> recommended: draw it once, as its own labelled bar at the top of the $ field ("where 4 of 5 valuation rows agree"), and take it off the individual rows.</li>
-  <li><b>The outlier rule:</b> the live page's Tukey rule keeps a peer whose earnings are in the wrong currency. Recommended: keep Tukey for real outliers and add a data-sanity check (a peer whose EPS is more than half its own price is set aside and named), plus a fix of the source row.</li>
+  <li><b>Bad peer data:</b> the live page's Tukey rule keeps peers whose figures are wrong (TSM: earnings in Taiwan dollars; SIMO: earnings per share on about a quarter of its real share count). Recommended: keep Tukey for real outliers and add the two-direction data-sanity check shown here (the two EPS figures agree within 2×, and market value ÷ net income agrees with the P/E within 1.5×), setting aside and naming any peer that fails; plus fix the TSM and SIMO rows at the source.</li>
 </ol></div></div>`;
   const draw = () => {
-    drawRow(document.getElementById("chartA"), IN, { ticker: d.ticker, eps });
-    drawRow(document.getElementById("chartB"), OUT, { ticker: d.ticker, eps });
+    drawRow(document.getElementById("chartA"), IN, { ticker: d.ticker, eps, faulty });
+    drawRow(document.getElementById("chartB"), OUT, { ticker: d.ticker, eps, faulty });
   };
   draw();
   let t = null; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
