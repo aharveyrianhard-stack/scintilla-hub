@@ -82,11 +82,79 @@ export function runSummary (scout, iwm) {
   }
 }
 
+// ---- corrections for a run made before the provider's valuation_rev 2 (provider/scout-20260928 4f85a7c) ----
+// The 28 Sep 09:41 ET run predates three fixes the reviewer asked for. Everything needed to apply them is in
+// the run itself, so the pages are corrected here the same way the job now computes them:
+//  1. total earnings counted a company once per LINE: FMP puts the whole company's market cap on each share
+//     class (GOOGL and GOOG both ≈ $4.1T), so Alphabet's ~$245B was added twice in SPY and QQQ. Lines are grouped
+//     by the company they were priced from (same ticker, or same FMP company name — the run carries no ISINs)
+//     and only the largest-weight line is kept. Only US$ lines are removed; any other currency is left and counted.
+//  2. "fund's share" used FMP's per-holding dollar values, which are in the wrong units for some funds (IJR's
+//     summed to $101,989 against $104.2B). When the sum is outside 0.5–2× the fund's assets, each holding's
+//     dollars are weight ÷ total weight × assets instead.
+//  3. FMP's "nav" field has no date and is often a copied close: no premium is computed; the page says which
+//     close it equals (to the cent) or is nearest to.
+const MV_AUM_OK = [0.5, 2]
+export function lookThrough (list, aum) {
+  const L = list.filter(h => Number.isFinite(h.w) && h.w > 0)
+  const W = L.reduce((a, h) => a + h.w, 0)
+  const mvSum = L.reduce((a, h) => a + (Number.isFinite(h.mv) ? h.mv : 0), 0)
+  const ratio = aum > 0 ? mvSum / aum : null
+  const source = ratio == null ? (mvSum > 0 ? 'fmp_unchecked' : null) : (ratio >= MV_AUM_OK[0] && ratio <= MV_AUM_OK[1]) ? 'fmp' : 'weight_x_aum'
+  let e = 0, v = 0
+  if (source) for (const h of L) {
+    if (!Number.isFinite(h.ey)) continue
+    const mv = source === 'weight_x_aum' ? h.w / W * aum : h.mv
+    if (Number.isFinite(mv)) { e += mv * h.ey; v += mv }
+  }
+  return { fund_look_through_earnings_ttm: source ? Math.round(e) : null, fund_look_through_value: source ? Math.round(v) : null,
+    market_value_to_aum: ratio == null ? null : Math.round(ratio * 1e4) / 1e4, market_value_source: source }
+}
+export function duplicateEarnings (list, byT) {
+  const groups = new Map()
+  for (const h of list) {
+    const s = byT.get(h.t)
+    if (!s || !Number.isFinite(s.earnings_ttm) || !(h.w > 0)) continue
+    const key = (s.name || h.t).toLowerCase()
+    ;(groups.get(key) || groups.set(key, []).get(key)).push({ t: h.t, w: h.w, e: s.earnings_ttm, usd: (s.currency || 'USD') === 'USD' })
+  }
+  let removed = 0, lines = 0; const pairs = []
+  for (const g of groups.values()) {
+    if (g.length < 2) continue
+    g.sort((a, b) => b.w - a.w)
+    const extra = g.slice(1).filter(x => x.usd)
+    if (!extra.length) continue
+    removed += extra.reduce((a, x) => a + x.e, 0); lines += extra.length
+    pairs.push([g[0].t, ...extra.map(x => x.t)].join('+'))
+  }
+  return { removed: Math.round(removed), lines, pairs }
+}
+export function navFieldReading (nav, recentCloses = []) {
+  const rc = (recentCloses || []).filter(c => c && Number.isFinite(c.c) && c.c > 0)
+  if (!(nav > 0) || !rc.length) return { nav_field_equals_close: null, nav_field_nearest_close: null, nav_field_gap_to_nearest: null }
+  let best = rc[0]
+  for (const c of rc) if (Math.abs(c.c - nav) < Math.abs(best.c - nav)) best = c
+  return { nav_field_equals_close: Math.abs(best.c - nav) < 0.005 ? best.d : null, nav_field_nearest_close: best.d,
+    nav_field_gap_to_nearest: Math.round((nav / best.c - 1) * 1e5) / 1e5 }
+}
+export function correctFund (f, list, byT, legacy) {
+  const { premium_vs_nav_live, premium_vs_nav_prev_close, ...rest } = f
+  if (!legacy) return rest
+  const dup = duplicateEarnings(list, byT)
+  return { ...rest, ...lookThrough(list, f.aum), ...navFieldReading(f.nav, f.recent_closes),
+    holdings_total_earnings_ttm: f.holdings_total_earnings_ttm - dup.removed,
+    holdings_total_earnings_as_run: f.holdings_total_earnings_ttm,
+    total_earnings_duplicate_lines: dup.lines, total_earnings_duplicates: dup.pairs }
+}
+
 export function buildFunds (scout, universe) {
   const served = new Set(universe.symbols.map(toMassive))
+  const legacy = !(scout.valuation_rev >= 2)
+  const byT = new Map(scout.stocks.map(s => [s.t, s]))
   return {
-    meta: { computed_utc: scout.computed_utc, snapshot_utc: scout.snapshot_utc, as_of: scout.as_of_session, sources: scout.sources, code_commit: scout.code_commit },
-    funds: (scout.funds || []).map(f => ({ ...f, served: served.has(toMassive(f.fund)), ...drags(scout.lists[f.fund] || []),
+    meta: { computed_utc: scout.computed_utc, snapshot_utc: scout.snapshot_utc, as_of: scout.as_of_session, sources: scout.sources, code_commit: scout.code_commit,
+      corrected_in_build: legacy ? ['total earnings: one line per company', "fund's share: holding dollars checked against assets", "FMP nav field: which close it matches, no premium"] : [] },
+    funds: (scout.funds || []).map(f => ({ ...correctFund(f, scout.lists[f.fund] || [], byT, legacy), served: served.has(toMassive(f.fund)), ...drags(scout.lists[f.fund] || []),
       tech: f.tech ? { rsi14: f.tech.rsi14, rsi_pct: f.tech.rsi_pct, pct_vs_200: f.tech.pct_vs_200, ret_3m: f.tech.ret_3m } : null })),
   }
 }

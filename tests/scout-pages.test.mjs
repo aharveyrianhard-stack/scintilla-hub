@@ -70,3 +70,39 @@ test('fund P/E is harmonic: recomputing it from the fund\'s own coverage and ear
   const direct = E.funds.filter(f => f.fmp_direct_pe != null && f.coverage_pct > 50).map(f => f.fund)
   assert.equal(direct.length, 0, 'FMP began answering a direct P/E for an equity fund — update the page text: ' + direct.join())
 })
+
+// Reviewer findings on the 28 Sep run (fixed in provider 4f85a7c; applied to this run in the build).
+test('total earnings count each company once: GOOGL + GOOG is one Alphabet in SPY and QQQ', async () => {
+  const { duplicateEarnings } = await import('../deliverables/20260928/scout-iwm/build-scout-iwm.mjs')
+  const byT = new Map([['GOOGL', { name: 'Alphabet Inc.', earnings_ttm: 245e9, currency: 'USD' }], ['GOOG', { name: 'Alphabet Inc.', earnings_ttm: 244e9, currency: 'USD' }], ['AAPL', { name: 'Apple Inc.', earnings_ttm: 110e9, currency: 'USD' }]])
+  const d = duplicateEarnings([{ t: 'GOOGL', w: 2 }, { t: 'GOOG', w: 1.6 }, { t: 'AAPL', w: 7 }], byT)
+  assert.equal(d.removed, 244e9); assert.equal(d.lines, 1); assert.deepEqual(d.pairs, ['GOOGL+GOOG'])
+  const E = load('etf-valuation/etf-valuation-data.js', 'ETF_VAL')
+  for (const f of ['SPY', 'QQQ']) {
+    const x = E.funds.find(y => y.fund === f)
+    assert.ok(x.total_earnings_duplicates.includes('GOOGL+GOOG'), f)
+    assert.ok(x.holdings_total_earnings_as_run - x.holdings_total_earnings_ttm > 240e9, `${f}: Alphabet still counted twice`)
+  }
+})
+
+test("fund's share: holding dollars agree with the fund's assets, or weight × assets is used", async () => {
+  const { lookThrough } = await import('../deliverables/20260928/scout-iwm/build-scout-iwm.mjs')
+  const bad = lookThrough([{ w: 60, ey: 0.05, mv: 606 }, { w: 40, ey: -0.01, mv: 404 }], 1e9)
+  assert.equal(bad.market_value_source, 'weight_x_aum'); assert.equal(bad.fund_look_through_earnings_ttm, Math.round(0.6e9 * 0.05 - 0.4e9 * 0.01))
+  const E = load('etf-valuation/etf-valuation-data.js', 'ETF_VAL')
+  for (const f of E.funds.filter(x => x.market_value_source === 'fmp')) assert.ok(f.market_value_to_aum >= 0.5 && f.market_value_to_aum <= 2, f.fund)
+  for (const t of ['IJR', 'IAI', 'IAK']) assert.equal(E.funds.find(x => x.fund === t).market_value_source, 'weight_x_aum', t)
+  const ijr = E.funds.find(x => x.fund === 'IJR')
+  assert.ok(ijr.fund_look_through_earnings_ttm > 1e9, `IJR fund's share ${ijr.fund_look_through_earnings_ttm}`)
+})
+
+test("FMP's nav field: no premium anywhere; the page says which close it equals", async () => {
+  const { navFieldReading } = await import('../deliverables/20260928/scout-iwm/build-scout-iwm.mjs')
+  assert.equal(navFieldReading(137.78, [{ d: '2026-09-25', c: 138.29 }, { d: '2026-09-24', c: 137.78 }]).nav_field_equals_close, '2026-09-24')
+  const E = load('etf-valuation/etf-valuation-data.js', 'ETF_VAL')
+  assert.ok(E.funds.every(f => !Object.keys(f).some(k => /premium/.test(k))), 'a premium field is still in the data')
+  assert.equal(E.funds.find(f => f.fund === 'IJR').nav_field_equals_close, '2026-09-24')
+  const html = read('etf-valuation/ETF-VALUATION.html')
+  assert.doesNotMatch(html, /with its date/); assert.doesNotMatch(html, /◂ nearest/)
+  assert.match(html, /no premium or discount is computed/)
+})
