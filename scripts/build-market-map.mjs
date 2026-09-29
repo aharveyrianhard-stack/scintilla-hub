@@ -10,6 +10,12 @@
    - sector / industry / market cap of the 317 served companies: data/standard-tree-20260924.json (the tree work of 24 Sep)
    - fund holdings: FMP, 26 Sep, 51 funds — ~/Library/Application Support/scintilla/market-map/pplx-holdings.js
    - the admission list: _worktrees/provider-admission-v2-20260927/control/ADMISSION_V2_CANDIDATES.json
+   - admission v3 (29 Sep sitting, 486 -> 590): _worktrees/provider-admission-v3-20260928/control/ADMISSION_V3_CANDIDATES.json
+     (cohort, theme, funds per row), counted only for the 104 names on the S1 admit list
+     (_archive/admission-v3-20260928/S1-admit-candidates.txt)
+   - sector / industry / market cap of those 104: data/market-map-profiles-v3-20260929.json — FMP company profile, read on
+     Fly, translated to GICS with the tree's own table (scripts/build-market-map-profiles.py). Never guessed: a served name
+     with no profile stops the build.
    Nothing here carries a Geiger reading: the page reads those live. No number is invented.
 
    Usage: node scripts/build-market-map.mjs [--universe path/to/universe.json] */
@@ -22,6 +28,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "deliverables/20260927/market-map/nodes.json");
 const HOLDINGS = join(homedir(), "Library/Application Support/scintilla/market-map/pplx-holdings.js");
 const ADMISSION = "/Users/alanharvey/SCINTILLA 0.5/_worktrees/provider-admission-v2-20260927/control/ADMISSION_V2_CANDIDATES.json";
+const ADMISSION_V3 = "/Users/alanharvey/SCINTILLA 0.5/_worktrees/provider-admission-v3-20260928/control/ADMISSION_V3_CANDIDATES.json";
+const ADMIT_V3_S1 = "/Users/alanharvey/SCINTILLA 0.5/_archive/admission-v3-20260928/S1-admit-candidates.txt";
+const PROFILES_V3 = join(ROOT, "data/market-map-profiles-v3-20260929.json");
 const CHART_API = "https://scintilla-massive-chart-api.fly.dev";
 const TOP_HOLDINGS = 10;
 
@@ -39,6 +48,11 @@ const adm = JSON.parse(readFileSync(ADMISSION, "utf8"));
 const GEIGER_ONLY = new Map(adm.geiger_only.map((x) => [x.symbol, x]));
 const FULL_CAND = new Map(adm.full.map((x) => [x.symbol, x]));
 const OPTIONAL = new Set(Object.values(adm.optional_not_in_list).find(Array.isArray) || []);
+// admission v3 (29 Sep): the candidates file has 119 rows; only the 104 on the S1 admit list were admitted and served
+const adm3 = JSON.parse(readFileSync(ADMISSION_V3, "utf8"));
+const ADMIT_V3 = readFileSync(ADMIT_V3_S1, "utf8").trim().split(",").map((s) => s.trim()).filter(Boolean);
+const V3_ROW = new Map(adm3.full.filter((x) => ADMIT_V3.includes(x.symbol)).map((x) => [x.symbol, x]));
+const PROF3 = JSON.parse(readFileSync(PROFILES_V3, "utf8"));
 
 /* ---------- the fund skeleton (hand-kept: this IS the map's structure) ---------- */
 const SECTORS = [
@@ -94,6 +108,7 @@ function issuerOf(t) {
 // NOT_ADMITTED = everything else (named on the map, never admitted). `planned_tier` says what an admission would make it.
 function tierOf(t) {
   if (SERVED.has(t) && SERVED_GEIGER_ONLY.has(t)) return { served: true, tier: "GEIGER-ONLY", planned_tier: null, admission: "served (Geiger only, admitted 27 Sep)" };
+  if (SERVED.has(t) && V3_ROW.has(t)) return { served: true, tier: "FULL", planned_tier: null, admission: "served (admitted 29 Sep, admission v3)" };
   if (SERVED.has(t)) return { served: true, tier: "FULL", planned_tier: null, admission: "served" };
   if (GEIGER_ONLY.has(t)) return { served: false, tier: "GEIGER-ONLY", planned_tier: "GEIGER-ONLY", admission: "on the 27 Sep admission list (Geiger only)" };
   if (FULL_CAND.has(t)) return { served: false, tier: "NOT_ADMITTED", planned_tier: "FULL", admission: "on the 27 Sep admission list (full)" };
@@ -104,7 +119,8 @@ function tierOf(t) {
 
 /* ---------- holdings (FMP, 26 Sep) ---------- */
 const CASHLIKE = /money market|treasury oblig|govt oblig|cash|usd\b|liquidity fund|margin/i;
-const usTicker = (t) => (/^[A-Z]{1,5}\.[A-Z]$/.test(t) ? t.replace(".", "-") : t); // FMP writes BRK.B, the Hub BRK-B
+// FMP writes BRK.B, the Hub BRK-B; but a line the Hub serves with the dot (MOG.A, admitted 29 Sep) keeps it
+const usTicker = (t) => (SERVED.has(t) ? t : /^[A-Z]{1,5}\.[A-Z]$/.test(t) ? t.replace(".", "-") : t);
 function topHoldings(fund) {
   const h = HOLD[fund];
   if (!h) return null;
@@ -192,6 +208,19 @@ for (const nm of Object.values(tree.names)) {
     ...tierOf(nm.ticker), gics_industry: nm.gics_industry || null,
     market_value_usd: Number.isFinite(nm.cap) ? nm.cap : null, holdings: null });
 }
+/* the 104 names admission v3 served on 29 Sep: placed under their GICS sector from FMP's company profile (the same
+   translation the tree uses), with their admission cohort / theme / funds kept on the node. No profile → stop, never guess. */
+for (const t of ADMIT_V3) {
+  if (!SERVED.has(t) || nodes.has(t)) continue;
+  const p = PROF3.names[t], x = V3_ROW.get(t);
+  if (!p || !p.gics_sector || !p.gics_industry) throw new Error("admission v3 name without an FMP sector / industry: " + t + " (run scripts/build-market-map-profiles.py)");
+  const sec = SECTOR_OF[p.gics_sector];
+  if (!sec) throw new Error("no sector group for " + t + " " + p.gics_sector);
+  add({ id: t, ticker: t, label: p.name || t, parents: [sec], kind: "name", issuer: null,
+    ...tierOf(t), gics_industry: p.gics_industry, placed_by: "FMP company profile (sector, industry), admitted 29 Sep",
+    admission_v3: { cohort: x ? x.cohort : null, theme: x ? x.theme : null, funds: x ? x.funds : [] },
+    market_value_usd: Number.isFinite(p.cap) ? p.cap : null, holdings: null });
+}
 /* candidate names on the admission list (FULL), placed by their cohort — approximate until admitted */
 const COHORT_SECTOR = { AI_HARDWARE: "SEC_TECH", THEMATIC: "SEC_INDU", MATERIALS: "SEC_MATL", CRYPTO: "CRYPTO", BLUE_CHIP: "SEC_INDU" };
 const URANIUM = new Set(["LEU", "UUUU"]);
@@ -242,6 +271,9 @@ const out = {
     names: "data/standard-tree-20260924.json (GICS sector and industry, market cap from company_profile)",
     holdings: { source: HOLD_SRC, as_of: "2026-09-26", funds_with_holdings: Object.keys(HOLD).length, top_kept: TOP_HOLDINGS },
     admission: { source: "provider-admission-v2-20260927/control/ADMISSION_V2_CANDIDATES.json", status: adm.status },
+    admission_v3: { source: "provider-admission-v3-20260928/control/ADMISSION_V3_CANDIDATES.json", built: adm3.built,
+      admitted: "_archive/admission-v3-20260928/S1-admit-candidates.txt", admitted_count: ADMIT_V3.length,
+      profiles: { source: "data/market-map-profiles-v3-20260929.json", fetched_utc: PROF3.provenance.fetched_utc, translation: PROF3.provenance.translation } },
   },
   tiers: {
     "FULL": "served today: in /universe, so it has a live Geiger",

@@ -19,12 +19,17 @@ const SERVED = new Set(UNI.symbols);
 const usTicker = (t) => (/^[A-Z]{1,5}\.[A-Z]$/.test(t) ? t.replace(".", "-") : t);
 
 test("structure: the r3 nodes are all present, unchanged in id, kind, ticker and first parent", () => {
-  for (const o of R3.nodes) {
+  // the coverage tree is a 28 Sep study frozen at 486 served names; on 29 Sep the r3 list grew by the names admission v3
+  // added (each carries `admission_v3`; 11 of them were already on the map as waiting lines). Check against exactly the
+  // r3 structure this tree grew from — its recorded node count — so any other change to the r3 list still fails here.
+  const R3_AT_BUILD = R3.nodes.filter((n) => !n.admission_v3 || byId.has(n.id));
+  assert.equal(R3_AT_BUILD.length, CT.provenance.structure.nodes, "the r3 list changed other than by the 29 Sep admission");
+  for (const o of R3_AT_BUILD) {
     const n = byId.get(o.id);
     assert.ok(n, `${o.id} missing`);
     assert.equal(n.kind, o.kind); assert.equal(n.ticker, o.ticker); assert.equal(n.parents[0], o.parents[0]);
   }
-  assert.equal(CT.nodes.filter((n) => n.kind !== "cohort" && n.id !== "COHORTS_NO_ETF").length, R3.nodes.length);
+  assert.equal(CT.nodes.filter((n) => n.kind !== "cohort" && n.id !== "COHORTS_NO_ETF").length, R3_AT_BUILD.length);
 });
 
 test("structure: unique ids, every parent exists, one root, every served symbol placed once as a line", () => {
