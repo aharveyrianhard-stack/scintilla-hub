@@ -29,6 +29,25 @@ import { loadBars, setPatchDir, listCachedSymbols, idxOnOrBefore, quantile, medi
 import { pivotPoints } from "./s9-research.mjs";
 import { stationAverages } from "./ladder.mjs";
 
+/* --pit (R4, 29 Sep): the same study on the point-in-time universe. The names are that study's leaders read from the
+   point-in-time concentration file (AIG, Bell South and every other name the survivor list could not see); the
+   candidates are the S&P 500 members ON THE DECISION DAY with point-in-time bars (repaired closes), not today's cache;
+   a leader's swing counts only if it was a member that day. Everything else — the swings, the calm rule, the paths,
+   the summaries — is the same code. Without the switch the run is unchanged. */
+export async function pitUniverse(cal) {
+  const { loadPit, repairedBars } = await import("./point-in-time/pit-data.mjs"), { everMembers } = await import("./point-in-time/pit-core.mjs");
+  const PD = loadPit(), IV = PD.M.membership.SP500.intervals, P = new Map(), member = new Map();
+  for (const sym of everMembers(IV, "2003-01-02")) {
+    const S = PD.series(sym); if (!S) continue;
+    const bars = repairedBars(S); if (bars.length < MIN_HISTORY) continue;
+    P.set(sym, prep(align(cal, bars)));
+    const m = new Uint8Array(cal.length), mine = IV.filter((iv) => iv.sym === sym);
+    for (let i = 0; i < cal.length; i++) { const d = cal[i]; if (mine.some((iv) => (iv.from == null || iv.from <= d) && (iv.to == null || iv.to >= d))) m[i] = 1; }
+    member.set(sym, m);
+  }
+  return { P, member };
+}
+
 export const H_MAX = 250, MIN_PRIOR_SWINGS = 8, MIN_HISTORY = 260;
 
 /** Put one stock on the SPY calendar: closes forward-filled after listing, null before. */
@@ -122,13 +141,14 @@ export const H_SINGLE = [21, 63, 126, 250];
 /** Forward return and worst drop at the H_SINGLE horizons only (null past the data). */
 export function forwardAt(c, i) { const f = forwardPath(c, i, H_SINGLE.at(-1)); return { ret: H_SINGLE.map((h) => f.ret[h]), dd: H_SINGLE.map((h) => f.dd[h]) }; }
 
-export function run(fmpDir, conc) {
-  setPatchDir(path.join(fmpDir, "bars-patch"));
+export async function run(fmpDir, conc, { pit = null } = {}) {
+  if (fmpDir) setPatchDir(path.join(fmpDir, "bars-patch"));
   const spyL = loadBars("SPY"), cal = spyL.bars.map((b) => dstr(b.t)), spyC = spyL.bars.map((b) => +b.c);
   const leaders = [...new Set(conc.years.flatMap((y) => y.top20.map((x) => x.sym)))];
-  const universe = listCachedSymbols().filter((s) => !NOT_STOCKS.has(s));
-  const P = new Map();
-  for (const s of universe) { const L = loadBars(s); if (!L || L.bars.length < MIN_HISTORY) continue; P.set(s, prep(align(cal, L.bars))); }
+  let P = new Map(), member = null;
+  if (pit) ({ P, member } = pit.P ? pit : await pitUniverse(cal));
+  else { const universe = listCachedSymbols().filter((s) => !NOT_STOCKS.has(s)); for (const s of universe) { const L = loadBars(s); if (!L || L.bars.length < MIN_HISTORY) continue; P.set(s, prep(align(cal, L.bars))); } }
+  const isMem = (s, k) => !member || member.get(s)?.[k] === 1;
   const events = [], fwdCache = new Map();
   for (const sym of leaders) {
     const X = P.get(sym); if (!X || X.first < 0) continue;
@@ -136,11 +156,12 @@ export function run(fmpDir, conc) {
     const legs = realtimeUpSwings(h, l, PIVOT_LEN).map((g) => ({ kL: g.kL + off, kH: g.kH + off, gain: g.gain }));
     legs.forEach((g, idx) => {
       const kc = g.kH + PIVOT_LEN; if (kc >= cal.length - 1) return;
+      if (!isMem(sym, kc)) return;   // (--pit) the leader was in the index on the decision day
       const prior = legs.slice(0, idx).map((x) => x.gain);
       const gainPct = prior.length >= MIN_PRIOR_SWINGS ? 100 * prior.filter((x) => x < g.gain).length / prior.length : null;
       const vName = volBetween(X, g.kL, kc); if (vName == null) return;
       const cands = [], anyVol = [];
-      for (const [s, Q] of P) { if (s === sym || !Q.strong[kc] || Q.c[kc] == null) continue; anyVol.push(s); const v = volBetween(Q, g.kL, kc); if (v != null && v < vName) cands.push({ s, v }); }
+      for (const [s, Q] of P) { if (s === sym || !Q.strong[kc] || Q.c[kc] == null || !isMem(s, kc)) continue; anyVol.push(s); const v = volBetween(Q, g.kL, kc); if (v != null && v < vName) cands.push({ s, v }); }
       if (!cands.length) return;
       const hold = forwardPath(X.c, kc), sw_ = basketPath(cands.map((q) => P.get(q.s).c), kc), spy = forwardPath(spyC, kc);
       const one = (list) => list.map((s) => { const key = s + "|" + kc; let f = fwdCache.get(key); if (!f) { f = forwardAt(P.get(s).c, kc); fwdCache.set(key, f); } return f; });
@@ -149,7 +170,7 @@ export function run(fmpDir, conc) {
         oneCalm: one(cands.map((q) => q.s)), oneAny: one(anyVol) });
     });
   }
-  return summarise(events);
+  const out = summarise(events); if (pit) out.universe = { kind: "point-in-time S&P 500 members (N9): leaders from the point-in-time concentration, candidates = members on the decision day", names: P.size }; return out;
 }
 
 /** One-name switch vs hold at the H_SINGLE horizons: each event weight 1, split equally over its candidates. */
@@ -192,7 +213,7 @@ export function summarise(events) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const args = process.argv.slice(2), opt = (k) => args.includes(k) ? args[args.indexOf(k) + 1] : null;
   const conc = JSON.parse(fs.readFileSync(opt("--conc"), "utf8"));
-  const t0 = Date.now(), out = run(opt("--fmp"), conc); fs.writeFileSync(opt("--out") ?? "leaders-rotation.json", JSON.stringify(out));
+  const t0 = Date.now(), out = await run(opt("--fmp"), conc, { pit: args.includes("--pit") }); fs.writeFileSync(opt("--out") ?? "leaders-rotation.json", JSON.stringify(out));
   console.log(`done in ${Date.now() - t0} ms; events ${out.all.n} from ${out.all.names} names; upper half ${out.upperHalf.n}`);
   for (const k of ["all", "upperHalf"]) for (const h of [21, 63, 126, 250]) { const B = out[k]; console.log(k, h, "hold", JSON.stringify(B.hold.ret[h - 1]), "switch", JSON.stringify(B.switch.ret[h - 1]), "spy", JSON.stringify(B.spy.ret[h - 1]), "diff", JSON.stringify(B.switchMinusHold[h - 1]), "DD hold/sw", B.hold.dd[h - 1]?.[2], B.switch.dd[h - 1]?.[2], "DD10 hold/sw", B.hold.dd[h - 1]?.[0], B.switch.dd[h - 1]?.[0]); }
   for (const g of out.byGain) console.log("gain", g.from, g.to, "n", g.n, "diff250", JSON.stringify(g.h250), "hold250", g.holdRet250, "sw250", g.switchRet250, "DD", g.holdDD250, g.switchDD250);

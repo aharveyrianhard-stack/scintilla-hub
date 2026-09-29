@@ -1,9 +1,22 @@
 """Q5 · USUAL DAY history as data: 23 years of sigma-day counts (public.sigma_day_counts) and per-name sigma events
 (public.sigma_events_daily), read through the Hub's public key. What followed one-sided days like today's; per-name
 events as scan / notification triggers; leaders."""
-import os, json, numpy as np, pandas as pd, lib, pooled, charts as C
-S = lib.SCRATCH; OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../deliverables/20260928/stats-3")); CH = os.path.join(OUT, "charts"); os.makedirs(os.path.join(OUT, "data"), exist_ok=True)
-P = pd.read_csv(os.path.join(S, "panel.csv"), index_col=0, parse_dates=True); res = {}
+import os, sys, json, numpy as np, pandas as pd, lib, pooled, charts as C
+# --pit (R4, 29 Sep): the Hub's USUAL DAY test replayed on the point-in-time bars of every S&P 500 member on its member
+# days (the same rule numbers, data/scintilla-rules.json equity), so both the day counts (5a, 5b) and the per-name
+# events (5c) come from the members of the day, typed by the cap of the day, with a name that stopped trading scored to
+# its last close. SPY, the panel and every rule are unchanged. Without the switch this file runs exactly as before.
+PIT = "--pit" in sys.argv
+if PIT: sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "point-in-time")); import pit_source as PS
+S = lib.SCRATCH; OUT = PS.OUT if PIT else os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../deliverables/20260928/stats-3")); CH = os.path.join(OUT, "charts"); os.makedirs(os.path.join(OUT, "data"), exist_ok=True); os.makedirs(CH, exist_ok=True)
+PFX = "pit-" if PIT else ""; DATA_FILE = "pit-q5.json" if PIT else "q5.json"
+P = pd.read_csv(os.path.join(S, "panel.csv"), index_col=0, parse_dates=True); res = {"universe": "point-in-time S&P 500 members (N9), the Hub's test replayed"} if PIT else {}
+if PIT:
+    EQ_RULE = lib.rules()["price"]["equity"]
+    PIT_EV, PIT_DC = PS.sigma_all(EQ_RULE); print("pit sigma events", len(PIT_EV), "names", PIT_EV.ticker.nunique(), "days", len(PIT_DC))
+    for k in ("names_measured", "n", "up", "dn"): P["sg_" + k] = PIT_DC[k].reindex(P.index)
+    P["sg_dn_share"] = 100 * P.sg_dn / P.sg_names_measured; P["sg_up_share"] = 100 * P.sg_up / P.sg_names_measured; P["sg_n_share"] = 100 * P.sg_n / P.sg_names_measured
+    P["sg_dn_pct"] = lib.own_pct(P.sg_dn_share.values); P["sg_up_pct"] = lib.own_pct(P.sg_up_share.values)
 Q = P.dropna(subset=["sg_dn_share"]).copy(); Q = Q[Q.sg_names_measured >= 100]
 res["counts"] = {"from": Q.index[0].strftime("%Y-%m-%d"), "to": Q.index[-1].strftime("%Y-%m-%d"), "days": int(len(Q)), "names_now": int(Q.sg_names_measured.iloc[-1]), "names_2004": int(Q.sg_names_measured.iloc[0])}
 # ---- 5a · the ladder of the down-share (own percentile, rungs of 5) → SPY next 5 / 21 / 63, worst fall in 21
@@ -49,19 +62,20 @@ t23 = P.loc["2026-09-23"]; res["today"] = {"date_last_row": Q.index[-1].strftime
 like = (Q.sg_up_share <= 0.5) & (Q.sg_dn_share >= 4); res["likeToday"] = {"n": int(like.sum()), "dates": [d.strftime("%Y-%m-%d") for d in Q.index[like][-25:]], "spy_dd_from_high_med": lib.r1(Q[like].spy_dd_from_high.median()), "vix_pct_med": lib.r1(Q[like].vix_pct.median()), "spy_above200_share": lib.r1(100 * Q[like].spy_above200.mean()),
     "ret20_before_med": lib.r1((100 * (Q.spy / Q.spy.shift(20) - 1))[like].median())}
 # ---- 5c · per-name sigma events as triggers
-ev = pd.DataFrame(json.load(open(os.path.join(S, "db", "sigma_events_daily.json")))); ev["date"] = pd.to_datetime(ev.date); ev = ev[ev.date <= Q.index[-1]]
-prof = lib.profiles(); pit = json.load(open(os.path.join(S, "pit_top20.json"))); leaderOf = {int(y): set(v) for y, v in pit.items()}
+ev = PIT_EV if PIT else pd.DataFrame(json.load(open(os.path.join(S, "db", "sigma_events_daily.json")))); ev["date"] = pd.to_datetime(ev.date); ev = ev[ev.date <= Q.index[-1]]
+prof = lib.profiles(); pit = json.load(open(os.path.join(S, "pit_top20.json"))); leaderOf = {y: set(v) for y, v in PS.pit_top20().items()} if PIT else {int(y): set(v) for y, v in pit.items()}
 rows = []
 for sym, e in ev.groupby("ticker"):
-    d = lib.load_bars(sym)
+    d = PS.load_daily(sym) if PIT else lib.load_bars(sym)
     if d is None or len(d) < 300: continue
+    stop = PIT and PS.stopped(d); FR, FD = (PS.fwd_to_exit, PS.fwd_maxdd_to_exit) if stop else (lib.fwd_ret, lib.fwd_maxdd)
     c = d.c; s200 = c.rolling(200).mean(); s50 = c.rolling(50).mean(); rs = lib.rsi(c.values)
     df = pd.DataFrame(index=d.index); df["above200"] = (c > s200).where(s200.notna()); df["order"] = (s50 > s200).where(s200.notna()); df["dist200"] = 100 * (c / s200 - 1); df["rsi_pct"] = lib.own_pct(rs)
-    for h in (5, 21, 63): df[f"f{h}"] = lib.fwd_ret(c.values, h); df[f"x{h}"] = df[f"f{h}"] - P[f"fwd_{h}"].reindex(df.index).values
-    df["dd21"] = lib.fwd_maxdd(c.values, 21)
-    g = lib.load_geiger(sym); 
+    for h in (5, 21, 63): df[f"f{h}"] = FR(c.values, h); df[f"x{h}"] = df[f"f{h}"] - P[f"fwd_{h}"].reindex(df.index).values
+    df["dd21"] = FD(c.values, 21)
+    g = None if PIT else lib.load_geiger(sym)
     if g is not None: df["tr"] = g.tr.reindex(df.index); df["mo"] = g.mo.reindex(df.index)
-    j = e.set_index("date").join(df, how="inner"); j.index.name = "date"; j["sym"] = sym; j["type"] = lib.security_type(sym, prof); j["leader"] = [s in leaderOf.get(y, set()) for y, s in zip(j.index.year, j.sym)]
+    j = e.set_index("date").join(df, how="inner"); j.index.name = "date"; j["sym"] = sym; j["type"] = [PS.tranche(x) for x in j.cap_m.values] if PIT else lib.security_type(sym, prof); j["leader"] = [s in leaderOf.get(y, set()) for y, s in zip(j.index.year, j.sym)]
     rows.append(j.reset_index())
 E = pd.concat(rows, ignore_index=True); E["absx"] = E.x_usual.abs()
 E["band"] = pd.cut(E.absx, [0, 2, 3, 4, 100], labels=["raw only (<2× usual)", "2–3× usual", "3–4× usual", "4×+ usual"], right=False)
@@ -95,7 +109,7 @@ for name, m in (("leader · above 200-day · down day", (stocksE.leader) & (stoc
     trig.append(row)
 for o in ("x5", "x21", "x63"): pooled.fdr_over([r[o] for r in trig])
 res["triggers"] = trig
-json.dump(lib.clean(res), open(os.path.join(OUT, "data", "q5.json"), "w"))
+json.dump(lib.clean(res), open(os.path.join(OUT, "data", DATA_FILE), "w"))
 # ---- charts
 f, axs = C.fig(14, 5.2, 1, 2); L = res["dnLadder"]["rungs"]; x = [r["from"] + 0.5 for r in L]
 for k, (o, ttl) in enumerate((("fwd_21", "SPY next 21 sessions, median %"), ("fwd_63", "SPY next 63 sessions, median %"))):
@@ -103,23 +117,23 @@ for k, (o, ttl) in enumerate((("fwd_21", "SPY next 21 sessions, median %"), ("fw
     for r in L:
         if r[o]["fdr"]: axs[k].plot([r["from"] + 0.5], [r[o]["med"]], "o", color=C.UP if r[o]["med"] > res["dnLadder"]["base"][o]["p50"] else C.DN, ms=6)
     axs[k].set_xticks([r["from"] + 0.5 for r in L]); axs[k].set_xticklabels([r["label"] for r in L]); axs[k].set_xlabel("share of names with a DOWN sigma day that session (23 Sep: 5.1%)"); axs[k].set_ylabel(ttl); axs[k].grid(axis="y"); C.title(axs[k], ttl, "band = 90% range · dot = clears the false-discovery check · dashed = any day")
-C.save(f, os.path.join(CH, "q5-down-ladder.png"))
+C.save(f, os.path.join(CH, PFX + "q5-down-ladder.png"))
 f, ax = C.fig(14, 5.4); labs = [s["name"].replace("today's class: ", "") for s in sides]
 C.range_bars(ax, labs, [s["fwd_21"]["med"] for s in sides], [s["fwd_21"]["lo"] for s in sides], [s["fwd_21"]["hi"] for s in sides], base=sides[0]["fwd_21"]["base"], ylabel="SPY next 21 sessions, median %", color_by_sign=False); ax.tick_params(axis="x", labelsize=7.5, rotation=18)
 for i, s in enumerate(sides):
     w = s["fwd_21"]["word"]; ax.plot([i], [s["fwd_21"]["med"]], "o", ms=8, color=C.UP if w == "luck-proof" else C.ACCENT if w == "leaning" else C.PANEL, markeredgecolor=C.LINE, markeredgewidth=1.2); ax.text(i, s["fwd_21"]["hi"], f"{s['runs']} visits", ha="center", va="bottom", fontsize=7, color=C.DIM, family="monospace")
 ax.text(0.01, 0.97, "filled green = luck-proof · grey = leaning · hollow = not shown · visits = separate episodes", transform=ax.transAxes, color=C.DIM, fontsize=8.5, va="top")
 C.title(ax, "One-sided sigma days like 23 / 28 Sep (0 up, many down): what SPY did next", "every threshold shown · dot = median, bar = 90% block-bootstrap range")
-C.save(f, os.path.join(CH, "q5-one-sided.png"))
+C.save(f, os.path.join(CH, PFX + "q5-one-sided.png"))
 f, ax = C.fig(14, 4.8); ax.plot(Q.index, Q.sg_dn_share, color=C.DN, lw=0.6, label="down-sigma share of names, %"); ax.plot(Q.index, -Q.sg_up_share, color=C.UP, lw=0.6, label="up-sigma share (drawn downward)"); ax.axhline(0, color=C.DIM, lw=0.6)
 ax.scatter(Q.index[like], Q.sg_dn_share[like], s=14, color=C.ACCENT, zorder=3, label=f"days like 23 Sep ({int(like.sum())})"); ax.legend(loc="upper left"); ax.grid(axis="y")
 C.title(ax, "23 years of USUAL DAY: the share of names beyond their usual day, up and down", "public.sigma_day_counts · share, not count (the universe was smaller in 2003)")
-C.save(f, os.path.join(CH, "q5-history.png"))
+C.save(f, os.path.join(CH, PFX + "q5-history.png"))
 f, ax = C.fig(14, 5.4); labs = [t["name"] for t in trig]
 C.range_bars(ax, labs, [t["x21"]["med"] for t in trig], [t["x21"]["lo"] for t in trig], [t["x21"]["hi"] for t in trig], base=res["byDirBandState"]["base"]["x21"]["med"], ylabel="the name's next 21 sessions vs SPY, points", color_by_sign=False); ax.tick_params(axis="x", labelsize=7.5, rotation=14)
 for i, t in enumerate(trig):
     w = t["x21"]["word"]; ax.plot([i], [t["x21"]["med"]], "o", ms=8, color=C.UP if w == "luck-proof" else C.ACCENT if w == "leaning" else C.PANEL, markeredgecolor=C.LINE, markeredgewidth=1.2); ax.text(i, t["x21"]["hi"], f"{t['n']} events", ha="center", va="bottom", fontsize=7, color=C.DIM, family="monospace")
 ax.text(0.01, 0.97, "filled green = luck-proof · grey = leaning · hollow = not shown · dashed = all sigma events' any-day", transform=ax.transAxes, color=C.DIM, fontsize=8.5, va="top")
 C.title(ax, "Per-name sigma events as triggers: what the name did in the next 21 sessions, against SPY", "single companies · date-block bootstrap · leaders = each year's top 20 by market cap at the time")
-C.save(f, os.path.join(CH, "q5-triggers.png"))
+C.save(f, os.path.join(CH, PFX + "q5-triggers.png"))
 print("DONE q5"); print(json.dumps(lib.clean({"today": res["today"], "like": res["likeToday"]["n"], "sides": [(s["name"], s["n"], s["fwd_21"]["med"], s["fwd_21"]["word"]) for s in sides], "trig": [(t["name"], t["n"], t["x21"]["med"], t["x21"]["word"]) for t in trig]}), indent=0)[:3000])
