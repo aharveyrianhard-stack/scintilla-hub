@@ -31,3 +31,11 @@ test('the bar shader uses no GLSL reserved word as a name (a "half" once blanked
   const frag = html.slice(html.indexOf('fragmentShader:'), html.indexOf('const barMesh'))
   for (const w of ['half', 'input', 'output', 'filter', 'sample', 'fixed', 'common', 'partition', 'active']) assert.doesNotMatch(frag, new RegExp(`\\b(float|vec[234]|int|bool)\\s+${w}\\b`), w)
 })
+
+test('N12: readings come from the chart API route first, the snapshot is the fallback, and snapshot fund blends never sit beside a different close', () => {
+  assert.ok(html.includes('getJSON(CHART_API + "/v1/scout-geiger")'))
+  assert.ok(html.includes('snap && snap.as_of === sr.value.as_of ? snap.funds || {} : {}'))
+  assert.match(html, /source: "route"/)
+  assert.match(html, /source: "snapshot"/)
+  assert.match(html, /"chart API" : "page snapshot"/)
+})

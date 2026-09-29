@@ -189,7 +189,17 @@ if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = Str
 /* SCOUT GEIGER (N4, 28 Sep): the Hub Geiger's maths on its three daily rungs (D, 3D, W), computed off the Hub for every US
    stock and every tree fund. Drawn ONLY where the full Geiger has no reading, as a slimmer bar, and named SCOUT on the card.
    The file is a nightly snapshot written next to this page; when it is missing the map is exactly the round-3 map. */
-try { state.scout = await getJSON("scout-geiger.json"); } catch (e) { state.scout = null; state.scoutErr = String(e); }
+/* N12 (28 Sep): the readings come from the chart API's read-only /v1/scout-geiger (the nightly file); the snapshot next to
+   this page is the fallback. The fund holdings blends exist only in the snapshot, so they are kept only when the snapshot
+   is the same close as the route — a 25 Sep blend is never shown beside 28 Sep readings. */
+const [sr, ss] = await Promise.allSettled([getJSON(CHART_API + "/v1/scout-geiger"), getJSON("scout-geiger.json")]);
+if (sr.status === "fulfilled" && Array.isArray(sr.value.rows)) {
+  const c = sr.value.row_columns || [], ix = (k) => c.indexOf(k), v = {};
+  for (const r of sr.value.rows) v[r[ix("ticker")]] = [r[ix("composite")], r[ix("trend")], r[ix("momentum")]];
+  const snap = ss.status === "fulfilled" ? ss.value : null;
+  state.scout = { as_of: sr.value.as_of, run_id: sr.value.run_id, v, funds: snap && snap.as_of === sr.value.as_of ? snap.funds || {} : {}, source: "route" };
+} else if (ss.status === "fulfilled") { state.scout = { ...ss.value, source: "snapshot" }; state.scoutErr = sr.status === "rejected" ? String(sr.reason) : "route had no rows"; }
+else { state.scout = null; state.scoutErr = String(ss.reason); }
 const SV = (state.scout && state.scout.v) || {}, SF = (state.scout && state.scout.funds) || {};
 const scoutOf = (t) => { if (!t) return null; const r = SV[t] || SV[t.replace(/-/g, ".")]; return r && Number.isFinite(r[0]) ? { composite: r[0], trend: r[1], momentum: r[2] } : null; };
 const scoutFund = (t) => (t && (SF[t] || SF[t.replace(/-/g, ".")])) || null;
@@ -223,7 +233,7 @@ state.counts = {
   const v = state.geiger && state.geiger.verification;
   const any = Object.values(state.quotes)[0];
   $("stamp").textContent = state.geiger
-    ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} bars (${state.counts.up} up · ${state.counts.down} down) · ${state.counts.blends} funds with a holdings bar · ${state.counts.hollow} waiting for admission` + (state.scout ? ` (${state.counts.scout} of them with a slim scout bar, as of ${state.scout.as_of})` : "") + ` · ` +
+    ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} bars (${state.counts.up} up · ${state.counts.down} down) · ${state.counts.blends} funds with a holdings bar · ${state.counts.hollow} waiting for admission` + (state.scout ? ` (${state.counts.scout} of them with a slim scout bar, as of ${state.scout.as_of}, ${state.scout.source === "route" ? "chart API" : "page snapshot"})` : "") + ` · ` +
       (any ? `day = session ${any.price_session_et}` : "day change unavailable") + (v ? ` · ${v.label.toLowerCase().replace(/_/g, " ")}` : "")
     : `the live Geiger did not answer (${state.geigerErr}); no bar is drawn and none is made up`;
 })();
