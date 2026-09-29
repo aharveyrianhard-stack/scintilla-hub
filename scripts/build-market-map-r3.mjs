@@ -24,7 +24,8 @@ const HOLDINGS = join(homedir(), "Library/Application Support/scintilla/market-m
 const base = JSON.parse(readFileSync(SRC, "utf8"));
 const { HOLD, HOLD_SRC } = new Function(readFileSync(HOLDINGS, "utf8") + ";return {HOLD,NAMES,HOLD_SRC}")();
 const SERVED = new Set(base.provenance.universe.symbols);
-const usTicker = (t) => (/^[A-Z]{1,5}\.[A-Z]$/.test(t) ? t.replace(".", "-") : t); // FMP writes BRK.B, the Hub BRK-B
+// FMP writes BRK.B, the Hub BRK-B; a line the Hub serves with the dot (MOG.A, admitted 29 Sep) keeps it
+const usTicker = (t) => (SERVED.has(t) ? t : /^[A-Z]{1,5}\.[A-Z]$/.test(t) ? t.replace(".", "-") : t);
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 
 let funds = 0;
