@@ -69,16 +69,20 @@ const spyAt = (d) => at(SPY, d);
 log("leaders basket");
 const CAPDIR = path.join(LIB, "leaders-fmp-20260928/caps"), capHist = {};
 for (const f of fs.readdirSync(CAPDIR)) if (f.endsWith(".json")) capHist[f.slice(0, -5)] = readJ(path.join(CAPDIR, f)).sort((a, b) => (a.date < b.date ? -1 : 1));
-const YEARS = Array.from({ length: 2026 - 2007 + 1 }, (_, i) => 2007 + i), pitTop = topByYear(capHist, YEARS, 20);
+// --pit-leaders <file> (N9): the members and closes come from the point-in-time universe instead (every S&P member of
+// the day, not the survivor cap files); without the flag this block runs exactly as before.
+const PIT_LEADERS = opt("--pit-leaders"), PITL = PIT_LEADERS ? readJ(PIT_LEADERS) : null;
+const YEARS = Array.from({ length: 2026 - 2007 + 1 }, (_, i) => 2007 + i), pitTop = PITL ? PITL.top : topByYear(capHist, YEARS, 20);
 const leaderSyms = [...new Set(Object.values(pitTop).flat())], LEADC = {};
 const patch = path.join(LIB, "leaders-fmp-20260928/bars-patch/META-pre-20220609.json");
-for (const s of leaderSyms) { let raw = loadApi(s); if (!raw) continue;
+if (PITL) for (const s of leaderSyms) { const rows = PITL.closes[s]; if (!rows) continue; const I = prep({ bars: rows.map(([d, o, h, l, c, v]) => ({ t: Date.parse(d + "T00:00:00Z"), o, h, l, c, v })), src: "point-in-time bars (N9)" }, { name: s }); if (I) LEADC[s] = I.byDate; }
+for (const s of PITL ? [] : leaderSyms) { let raw = loadApi(s); if (!raw) continue;
   if (s === "META" && fs.existsSync(patch)) { const P = readJ(patch); const rows = (P.series ?? P.bars ?? P).map((b) => (b.t != null ? b : { t: Date.parse(b.date + "T00:00:00Z"), o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume })); raw = { bars: [...rows.filter((b) => dstr(b.t) < "2022-06-09"), ...raw.bars.filter((b) => dstr(b.t) >= "2022-06-09")], src: raw.src + " + FMP FB-era patch" }; }
   const I = prep(raw, { faults: true, name: s }); if (I) LEADC[s] = I.byDate; }
 const SPYd = SPY.dates.filter((d) => d >= "2007-01-01");
 const basketRets = X.basketReturns(SPYd, pitTop, LEADC), basketLevel = X.chain(basketRets.map((b) => b.ret));
 const LEAD = { name: "LEADERS", dates: SPYd, c: basketLevel, h: basketLevel, l: basketLevel, bars: SPYd.map((d, i) => ({ t: Date.parse(d + "T00:00:00Z"), o: basketLevel[i], h: basketLevel[i], l: basketLevel[i], c: basketLevel[i], v: 0 })), idx: new Map(SPYd.map((d, i) => [d, i])), byDate: new Map(SPYd.map((d, i) => [d, basketLevel[i]])) };
-SOURCES.LEADERS = { src: "equal-weight basket of each year's top-20 S&P names by market cap on 1 Jan (FMP caps, leaders lane), members rebalanced each calendar year; closes from the chart API cache", from: SPYd[0], to: SPYd.at(-1), bars: SPYd.length, members: leaderSyms.length, thisYear: pitTop[2026] };
+SOURCES.LEADERS = PITL ? { src: "equal-weight basket of each year's 20 largest S&P 500 members by full market cap on the prior year's last session — point-in-time (N9), repaired closes", from: SPYd[0], to: SPYd.at(-1), bars: SPYd.length, members: leaderSyms.length, thisYear: pitTop[2026] } : { src: "equal-weight basket of each year's top-20 S&P names by market cap on 1 Jan (FMP caps, leaders lane), members rebalanced each calendar year; closes from the chart API cache", from: SPYd[0], to: SPYd.at(-1), bars: SPYd.length, members: leaderSyms.length, thisYear: pitTop[2026] };
 
 /* ================================ S1 · where this pullback is ================================ */
 log("S1 depth");
