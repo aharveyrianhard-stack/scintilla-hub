@@ -97,6 +97,7 @@ export function build() {
   fs.writeFileSync(path.join(DATA, "manifest.json"), JSON.stringify(man, null, 1));
   fs.writeFileSync(path.join(DATA, "membership-sp500-ndx.json"), JSON.stringify({ note: "intervals: one row per membership stretch, from/to = first/last member session (null = before 2003-01-02 / still a member). Tickers are FMP's (renamed members carry today's ticker).", SP500: { intervals: M.membership.SP500.intervals, anomalies: M.membership.SP500.anomalies, lackingBars: M.lacking.SP500 }, NDX: { intervals: M.membership.NDX.intervals, anomalies: M.membership.NDX.anomalies, lackingBars: M.lacking.NDX }, spyHoldingsCheck: spyCheck.map((r) => ({ d: r.d, pit: r.pit, pitOnly: r.pitOnly, heldOnly: r.heldOnly })), guardFlags: flags }));
 
+  const RERUN = { growth: !!NEWT.growth, growthText: NEWT.growth ? `before 2020 a growing top line lifted the chance of leading from ${f1(NEWT.growth.estimated.revenueGrowing[1].chance)}% to ${f1(NEWT.growth.estimated.revenueGrowing[0].chance)}% (old: 18.6% → 20.6%); after 2020, on equal terms now, ${f1(NEWT.growth.measured.revenueGrowing[1].chance)}% → ${f1(NEWT.growth.measured.revenueGrowing[0].chance)}%` : null };
   const built = new Date().toISOString().slice(0, 16).replace("T", " ");
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Point-in-time universe · 28 Sep 2026</title>
@@ -179,6 +180,21 @@ ${table(["pullback", "way of buying", "campaigns", "entry vs buying at once (%) 
 ${table(["pullback", "way", "measure", "old: median difference, passes?", "new"], flips.map((k) => { const [d, s, m] = k.split("|"), a = so.get(k), b = sn.get(k); return [`${d}%`, s, m, `${sg(a?.med)} · ${a?.survives ? "yes" : "no"}`, `${sg(b?.med)} · ${b?.survives ? "<b>yes</b>" : "no"}`]; }))}
 <p><b>What changed.</b> At 5% and 7% pullbacks, laddering (fan lines, state-sized) now shows up as a clear cost against buying at once, where before it was not significant. At 7–10% its small benefit to the worst paper loss no longer passes the check; at 2% it now does. <b>What did not:</b> no way of laddering beat buying at once on return at any depth; its one benefit is a slightly smaller worst paper loss on shallow pullbacks.</p>
 
+<h2 id="studies">6 · Every study, and whether it has been re-run on this universe</h2>
+<p>This universe is the default for studies from 28 Sep (N9's recommendation, adopted by the coordinator). The list below says, for every study that was published on today's names, whether it has been re-run here and what the re-run found. The re-run of 29 Sep (R4) is written up on its own page: <a href="../pit-rerun/PIT-RERUN.html">point-in-time re-run</a>.</p>
+${table(["study · section", "what it read on today's names", "re-run on point-in-time?", "what the re-run found", "where"], [
+    ["Leaders §1 · concentration", "top-10 share of an up year's gain (pre-2020 a floor)", "<b>re-run</b> (N9, 28 Sep)", "small correction: the floor was close (33.9% → 36.1%)", "<a href='#studies'>this page §2</a>"],
+    ["Leaders §2 · chart traits", "leaders looked no different beforehand", "<b>re-run</b> (N9, 28 Sep)", "small correction: a small strength edge the survivor pool hid", "<a href='#studies'>this page §3</a>"],
+    ["Leaders §2 · growth", "a growing top line lifted the chance of leading by under 2.5 points", RERUN.growth ? "<b>re-run</b> (R4, 29 Sep)" : "<b>not yet</b> — needs statements for every member (a keyed pull on Fly; script written)", RERUN.growth ? RERUN.growthText : "—", "<a href='../pit-rerun/PIT-RERUN.html#traits'>re-run page §5</a>"],
+    ["Leaders §3 · rotation", "one calm name: a little less pain, a little less return; the basket halves the pain", "<b>re-run</b> (R4, 29 Sep)", "holds; small correction on the cost of moving", "<a href='../pit-rerun/PIT-RERUN.html#rot'>re-run page §4</a>"],
+    ["Stats 3 §1d · size tranches", "mega caps beat SPY, small caps doomed", "<b>re-run</b> (N9, 28 Sep)", "<b>reversed</b>", "<a href='#studies'>this page §4</a>"],
+    ["Stats 3 §3 · below a falling 200-day", "one in six fell another third; marks at entry; flags; tranches; leaders in the state", "<b>re-run</b> (R4, 29 Sep)", "marks hold; tail a little fatter; <b>flag-count rule reversed</b>; <b>small-cap tranche reversed</b>; persistence smaller", "<a href='../pit-rerun/PIT-RERUN.html#q3'>re-run page §1</a>"],
+    ["Stats 3 §4 · leaders after lows", "leaders trail SPY for a quarter; the worst fallers' rebound explains it; sleeve rules", "<b>re-run</b> (R4, 29 Sep)", "the lag holds (clearer); <b>the fallers' year-long rebound reversed</b>; sleeve rules downgraded to leaning", "<a href='../pit-rerun/PIT-RERUN.html#q4'>re-run page §2</a>"],
+    ["Stats 3 §5 · USUAL DAY history", "one-sided days say little; sigma days are not triggers; size cells", "<b>re-run</b> (R4, 29 Sep)", "triggers hold; strict one-sided days now clear the check; <b>size cells reversed</b>", "<a href='../pit-rerun/PIT-RERUN.html#q5'>re-run page §3</a>"],
+    ["Pullback playbook §4 · tranches on the leaders basket", "laddering never beat buying at once", "<b>re-run</b> (N9, 28 Sep)", "same answer, a little sharper", "<a href='#studies'>this page §5</a>"],
+    ["Stats 3 §1a–c, §2, §6 · Geiger widths, confluence, gold", "index-level or fund-level readings", "not needed — no single-company universe in them", "—", "—"],
+    ["Statistician 2, RSI history, bottoms, regime, sector rotation", "index, fund and macro series", "not needed — no single-company universe in them", "—", "—"]])}
+
 <h2>Where each number comes from</h2>
 <dl>
 <dt>Member lists</dt><dd>FMP <code>/stable/sp500-constituent</code>, <code>/stable/historical-sp500-constituent</code> (1,528 records), <code>/stable/nasdaq-constituent</code>, <code>/stable/historical-nasdaq-constituent</code> (451), pulled ${esc(man.sources.membership.match(/pulled ([^ ]+)/)?.[1] ?? "")} inside Fly on the batch machine with its own key (values printed, key never).</dd>
@@ -204,7 +220,7 @@ ${table(["pullback", "way", "measure", "old: median difference, passes?", "new"]
 <ol>
 <li>The R2 copy under <code>research/point_in_time_v1/</code> is not written. The job, its research-only writer and tests are on <code>provider/point-in-time-20260928</code>; the coordinator builds the image and runs it (commands in <code>runbooks/POINT-IN-TIME.md</code>). Nothing was deployed.</li>
 <li>The R2 grouped-daily mirror (5,770 day files) was not read: Massive by ticker plus FMP filled ${cov(SP)}% of member-days, and the ${none.length} members with no prices are listed above. Reading the mirror for them is a follow-up the job could add.</li>
-<li>Leader growth traits, stats 3 sections 3–5 and the leaders rotation study were not re-run.</li>
+<li>${RERUN.growth ? "Stats 3 sections 3–5, the leaders rotation study and the growth trait were re-run on 29 Sep (R4): see section 6 and the <a href='../pit-rerun/PIT-RERUN.html'>re-run page</a>." : "Stats 3 sections 3–5 and the leaders rotation study were re-run on 29 Sep (R4): see section 6 and the <a href='../pit-rerun/PIT-RERUN.html'>re-run page</a>. The growth trait is not yet re-run (it needs statements for every member, a keyed pull on Fly; the script is written)."}</li>
 <li>No Hub room changed; no page other than this one and the studies index.</li>
 </ol>
 </body></html>`;

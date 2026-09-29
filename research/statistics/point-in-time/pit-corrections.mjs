@@ -1,0 +1,60 @@
+/* R4 · dated correction boxes on the published pages whose readings changed on the point-in-time re-run. Every number
+   in a box is read from the data files (old from the published JSON, new from data/pit-*.json); nothing is retyped.
+   Each box sits between markers so running this again replaces it in place; the pages' own numbers are never edited.
+   node research/statistics/point-in-time/pit-corrections.mjs */
+import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, "../../..");
+const J = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
+const f1 = (x) => x == null ? "—" : (+x).toFixed(1), f2 = (x) => x == null ? "—" : (+x).toFixed(2), sg = (x, d = 2) => x == null ? "—" : (x > 0 ? "+" : x < 0 ? "-" : "") + Math.abs(x).toFixed(d), pc = (x) => x == null ? "—" : (+x).toFixed(1) + "%";
+const LINK = (anchor) => `<a href="../pit-rerun/PIT-RERUN.html#${anchor}">point-in-time re-run</a>`;
+const DATE = "29 Sep";
+
+export function boxes() {
+  const Q3o = J("deliverables/20260928/stats-3/data/q3.json"), Q3n = J("deliverables/20260928/point-in-time/data/pit-q3.json");
+  const Q4o = J("deliverables/20260928/stats-3/data/q4.json"), Q4n = J("deliverables/20260928/point-in-time/data/pit-q4.json");
+  const Q5o = J("deliverables/20260928/stats-3/data/q5.json"), Q5n = J("deliverables/20260928/point-in-time/data/pit-q5.json");
+  const Ro = J("deliverables/20260928/leaders/leaders-rotation.json"), Rn = J("deliverables/20260928/point-in-time/data/pit-rotation.json");
+  const Tn = J("deliverables/20260928/point-in-time/data/pit-traits.json");
+  const wf = (Q, k) => Q.walkForward[1].rows.find((r) => r.flags === k), bt = (Q, v) => Q.byType.find((t) => t.value.startsWith(v)), rel = (Q, k, h) => Q.relSPY[k][h], rule = (Q, n) => Q.rules.find((r) => r.rule === n), os_ = (Q, n) => Q.oneSided.find((s) => s.name === n), bdt = (Q, k) => Q.byDirType.cells.find((c) => c.key === k);
+  const L3o = Q3o.leadersState, L3n = Q3n.leadersState, R25 = "move 25% to the worst-decile fallers for 63 sessions";
+  const box = (id, text) => `<!-- pit-rerun-correction:${id} --><div class="ask"><b>Correction, ${DATE} (point-in-time re-run).</b> ${text}</div><!-- /pit-rerun-correction:${id} -->`;
+  const out = {};
+  out["stats-3"] = [
+    ["q3", `<h3>3a ·`, box("q3", `Re-run on every S&amp;P 500 member since 2003 on its member days, typed by the cap of the day, with names that stopped trading scored to their last close (${Q3n.n.toLocaleString("en-US")} entries, ${Q3n.names} names; above: ${Q3o.n.toLocaleString("en-US")}, ${Q3o.names}). <b>Small correction</b>: the one-in-ten line is ${f1(Q3n.bad_line)}% (not ${f1(Q3o.bad_line)}%), ${pc(Q3n.share_33)} fell 33%+ within a year (not ${pc(Q3o.share_33)}), and the next-year median is ${sg(Q3n.f252.p50, 1)}% (not ${sg(Q3o.f252.p50, 1)}%): the tail is fatter, as this section warned. The marks at entry <b>hold</b>. Full numbers: ${LINK("q3")}.`)],
+    ["q3b", `<h3>3c ·`, box("q3b", `The flag count <b>reverses</b> out of sample. On the members of the day, 2016 → entries with no flag fell 33%+ ${pc(wf(Q3n, 0).share_33)} of the time (not ${pc(wf(Q3o, 0).share_33)}), four flags ${pc(wf(Q3n, 4).share_33)} (not ${pc(wf(Q3o, 4).share_33)}), and five to eight flags ${Q3n.walkForward[1].rows.filter((r) => r.flags >= 5).map((r) => pc(r.share_33)).join(", ")}: the flags lean, weakly and not in order. The "avoid list at three or more of the name's own flags" rule should not be built on the numbers above. What holds is 3a: the marks read one by one. ${LINK("q3")}.`)],
+    ["q3c", `<h3>3d ·`, box("q3c", `Typed by the size on the day, the tranche rows <b>reverse in size</b>: small caps in the state fell 33%+ ${pc(bt(Q3n, "small").share_33)} of the time (not ${pc(bt(Q3o, "small").share_33)}), mid caps ${pc(bt(Q3n, "mid").share_33)} (not ${pc(bt(Q3o, "mid").share_33)}), large ${pc(bt(Q3n, "large").share_33)}, mega ${pc(bt(Q3n, "mega").share_33)} — smaller is still worse, mildly. The market split <b>holds</b> (${pc(bt(Q3n, "large") && Q3n.byMarket.find((m) => m.value.includes("below")).share_33)} below SPY's 200-day against ${pc(Q3n.byMarket.find((m) => m.value.includes("above")).share_33)} above). ${LINK("q3")}.`)],
+    ["q3d", `<h3>3e ·`, box("q3d", `On every member of the day: the state still does not disqualify a name (top-decile winner ${pc(L3n.winner_given_state.est)} given in the state on 1 January, ${pc(L3n.winner_base.est)} any name) — <b>holds</b>. Persistence gets a <b>small correction</b>: last year's winners won again ${pc(L3n.winner_given_prevWinner.est)} of the time (not ${pc(L3o.winner_given_prevWinner.est)}), ${f1(L3n.winner_given_prevWinner.est / L3n.winner_base.est)}× the base rate rather than ${f1(L3o.winner_given_prevWinner.est / L3o.winner_base.est)}×. ${LINK("q3")}.`)],
+    ["q4", `<h3>4a ·`, box("q4", `With the point-in-time leaders basket and the worst-decile fallers drawn from the members on the day of the low: the leaders' lag over the quarter <b>holds</b> and is clearer (${sg(rel(Q4n, "leaders", "63").est)} points, p ${f2(rel(Q4n, "leaders", "63").p)}; above ${sg(rel(Q4o, "leaders", "63").est)}, p ${f2(rel(Q4o, "leaders", "63").p)}); by the year they sit at ${sg(rel(Q4n, "leaders", "252").est)} with a range across zero (<b>small correction</b> to "level"). The why <b>reverses beyond a quarter</b>: the worst fallers beat SPY by ${sg(rel(Q4n, "laggards", "63").est)} points at 63 sessions (not ${sg(rel(Q4o, "laggards", "63").est)}), ${sg(rel(Q4n, "laggards", "126").est)} at 126 (not ${sg(rel(Q4o, "laggards", "126").est)}) and ${sg(rel(Q4n, "laggards", "252").est)} at 252 (not ${sg(rel(Q4o, "laggards", "252").est)}) — the survivor inflation this paragraph predicted, now measured. ${LINK("q4")}.`)],
+    ["q4a", `<h3>4b ·`, box("q4a", `The faller-sleeve rules drop from luck-proof to leaning: a quarter of the book to the worst-decile fallers for 63 sessions gained ${sg(rule(Q4n, R25).gain_med)} points per low in ${pc(rule(Q4n, R25).win)} of lows (not ${sg(rule(Q4o, R25).gain_med)} in ${pc(rule(Q4o, R25).win)}) — <b>small correction</b>, downward. Equal weight after a low is still a wash (<b>holds</b>). ${LINK("q4")}.`)],
+    ["q4b", `<h2 id="q5">`, box("q4b", `On the point-in-time basket the leaders wing still carries the return (${pc(Q4n.bowtie[0].rebalanced_daily.cagr)} a year against ${pc(Q4n.bowtie[4].rebalanced_daily.cagr)} for equal weight) but not the shallower worst fall: ${pc(Q4n.bowtie[0].rebalanced_daily.maxdd)}, the same as equal weight (above: ${pc(Q4o.bowtie[0].rebalanced_daily.maxdd)}), because AIG and Citigroup were in the 2008 basket — <b>small correction</b>. ${LINK("q4")}.`)],
+    ["q5b", `<h3>5c ·`, box("q5b", `The Hub's own test replayed on every S&amp;P member of the day (${Q5n.counts.names_2004} names measured in 2004, not ${Q5o.counts.names_2004}) gives the strict one-sided day more weight: with no member up beyond its usual day and 2% or more down, SPY's next 21 sessions were ${sg(os_(Q5n, "0 up · down share ≥ 2%").fwd_21.med)}% to ${sg(os_(Q5n, "0 up · down share ≥ 10%").fwd_21.med)}% (any day ${sg(Q5n.oneSided[0].fwd_21.base)}%) and every threshold from 2% clears the false-discovery check (above: none did) — <b>small correction</b>, upward; the looser class built for 23 Sep still does not clear it (${sg(os_(Q5n, "today's class: up share ≤ 0.5% · down share ≥ 4%").fwd_21.med)}%). The clustering line <b>holds</b> (${pc(os_(Q5n, "today's class: up share ≤ 0.5% · down share ≥ 4%").more_ahead)} against ${pc(Q5n.oneSided[0].more_ahead_base)}). Note the lists differ: on 23 Sep the members' count was 0 up / ${Q5n.today.sep23.dn} down of ${Q5n.today.sep23.names}. ${LINK("q5")}.`)],
+    ["q5c", `<h2 id="q6">`, box("q5c", `The triggers <b>hold</b> (nothing works; the leaders' rows carry nothing). The size cells <b>reverse</b>: typed by the cap on the day, mega caps after a down day are ${sg(bdt(Q5n, "down day · mega cap (>200bn)").x21.med)} points against SPY over 21 sessions (not ${sg(bdt(Q5o, "down day · mega cap (>200bn)").x21.med)}, luck-proof) and small caps ${sg(bdt(Q5n, "down day · small cap (<2bn)").x21.med)} (not ${sg(bdt(Q5o, "down day · small cap (<2bn)").x21.med)}, luck-proof); neither is shown now. Today's-size typing again. ${LINK("q5")}.`)],
+  ];
+  const So = Ro.all.single, Sn = Rn.all.single, bh = (R) => R.all.switchMinusHold[249];
+  out["leaders"] = [
+    ["rot", `<h2>Where every number comes from`, box("rot", `Re-run with the ${Rn.all.names} point-in-time leaders and the members of the index on each decision day as candidates (${Rn.all.n.toLocaleString("en-US")} events; above ${Ro.all.n.toLocaleString("en-US")}): the shape <b>holds</b> — one calm name a little less pain (worst drop ${pc(Sn.oneCalm.dd[3].p50)} against ${pc(Sn.hold.dd[3].p50)} for holding) and a little less return, the basket halves the pain (${pc(Sn.basket.dd[3].p50)}) because it is diversification, the control behaves like holding. <b>Small correction</b> on the cost of moving: at a year the basket trails holding by ${sg(bh(Rn)[2])} points (above ${sg(bh(Ro)[2])}) and one calm name by ${sg(Sn.oneCalm.minusHold[3].p50, 1)} (above ${sg(So.oneCalm.minusHold[3].p50, 1)}); after the biggest swings holding wins by ${sg(Rn.byGain.at(-1).h250.med)} points (above ${sg(Ro.byGain.at(-1).h250.med)}). ${LINK("rot")}.`)],
+  ];
+  if (Tn.growth) { const g = Tn.growth, e = g.estimated.revenueGrowing, m = g.measured.revenueGrowing;
+    out["leaders"].push(["growth", `<h3>Looking back:`, box("growth", `Growth re-read on every member with a statement history (${g.namesWithStatements} of ${g.namesInPool} pool names; statements pulled inside Fly on ${DATE}). Before 2020 a growing top line lifted the chance of leading from ${pc(e[1].chance)} to ${pc(e[0].chance)} (above, 113 survivors: 18.6% → 20.6%); after 2020, now on equal terms (statements for ${pc(g.measured.coverage.leaders)} of leader-years and ${pc(g.measured.coverage.others)} of the rest, above 97.0% vs 51.0%), from ${pc(m[1].chance)} to ${pc(m[0].chance)}. ${Math.abs((e[0].chance - e[1].chance) - 2.0) < 2.5 && Math.abs((m[0].chance - m[1].chance)) < 5 ? "<b>Holds</b>: growth helps a little, size helps a lot." : "<b>Small correction</b> to the size of the growth effect."} ${LINK("traits")}.`)]); }
+  return out;
+}
+
+export function apply() {
+  const B = boxes(), FILES = { "stats-3": "deliverables/20260928/stats-3/STATS-3.html", leaders: "deliverables/20260928/leaders/LEADERS.html" }, done = [];
+  for (const [k, file] of Object.entries(FILES)) {
+    let html = fs.readFileSync(path.join(ROOT, file), "utf8");
+    for (const [id, before, box] of B[k]) {
+      const re = new RegExp(`\\n?<!-- pit-rerun-correction:${id} -->[\\s\\S]*?<!-- /pit-rerun-correction:${id} -->\\n?`);
+      if (re.test(html)) html = html.replace(re, "\n"); // refresh in place
+      const i = html.indexOf(before); if (i < 0) throw new Error(`${file}: anchor not found for ${id}: ${before}`);
+      html = html.slice(0, i) + box + "\n" + html.slice(i); done.push(`${k}:${id}`);
+    }
+    fs.writeFileSync(path.join(ROOT, file), html);
+  }
+  // the F1 follow-up line on stats 3: say that 3, 4 and 5 are done too (the old text stays, struck through by the date)
+  const s3 = path.join(ROOT, FILES["stats-3"]); let h = fs.readFileSync(s3, "utf8");
+  const f1old = `<i>Done 28 Sep for 1d (see the correction under 1d and the <a href="../point-in-time/POINT-IN-TIME.html">point-in-time page</a>); 3, 4 and 5 are next.</i>`;
+  if (h.includes(f1old)) { h = h.replace(f1old, `${f1old} <i>Done 29 Sep for 3, 4 and 5 and the leaders studies: <a href="../pit-rerun/PIT-RERUN.html">point-in-time re-run</a>.</i>`); fs.writeFileSync(s3, h); done.push("stats-3:F1"); }
+  return done;
+}
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) console.log(apply().join(" "));
