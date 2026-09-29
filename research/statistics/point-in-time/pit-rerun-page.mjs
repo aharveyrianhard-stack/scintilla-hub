@@ -30,7 +30,7 @@ function bars(title, rows, { lo, hi, unit = "", fmt = (x) => sg(x) } = {}) {
     for (const [v, dy, op, lab] of [[r.old, 4, 0.4, "old"], [r.new, 26, 1, "new"]]) {
       if (!Number.isFinite(v)) continue; const a = x(Math.min(0, v)), b = x(Math.max(0, v));
       g += `<rect x="${a}" y="${y0 + dy}" width="${Math.max(2, b - a)}" height="18" rx="3" fill="${v >= 0 ? "#00FFA3" : "#FF2D55"}" fill-opacity="${op}"><title>${esc(r.label)} · ${lab}: ${fmt(v)}${unit}</title></rect>`;
-      g += `<text x="${v >= 0 ? b + 6 : a - 6}" y="${y0 + dy + 14}" fill="#B4B4C6" font-size="13" text-anchor="${v >= 0 ? "start" : "end"}" font-family="ui-monospace,Menlo,monospace">${fmt(v)}${unit}${v < lo || v > hi ? " (clipped)" : ""}</text>`;
+      g += `<text x="${b + 6}" y="${y0 + dy + 14}" fill="#B4B4C6" font-size="13" text-anchor="start" font-family="ui-monospace,Menlo,monospace">${fmt(v)}${unit}${v < lo || v > hi ? " (clipped)" : ""}</text>`;   // always to the right of the bar's end (for a negative bar, right of zero), so it never runs into the row label
     }
   });
   return g + `<text x="${L}" y="24" fill="#C8C8D2" font-size="16">${esc(title)}</text><text x="${W - R}" y="24" fill="#8A8A9A" font-size="13" text-anchor="end">faint = published (today's names) · solid = point-in-time</text></svg>`;
