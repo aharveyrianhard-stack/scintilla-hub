@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · TREE MAP · market → cohorts</title>
+<style>
+:root{
+  --bg:#0d0d0d; --panel:#151515; --panel2:#1b1b1b; --panel3:#202020; --line:#272727; --line2:#333333;
+  --ink:#cdcdcd; --ink2:#ababab; --dim:#8c8c8c; --mute:#6a6a6a; --track:#1f1f1f;
+  --up:#35b06a; --dn:#d1483f;               /* direction only: Geiger up = green, down = red */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:12px/1.5 var(--mono)}
+body{display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:46px}
+header h1{font-size:13px;letter-spacing:.14em;margin:0;font-weight:600}
+header .stamp{font-size:11px;color:var(--dim)}
+.ctrl{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+input[type=search]{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:3px;font:12px var(--mono);padding:5px 8px;width:210px}
+button{background:var(--panel2);color:var(--ink2);border:1px solid var(--line2);border-radius:3px;font:11px/1 var(--mono);letter-spacing:.08em;padding:7px 9px;cursor:pointer}
+button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 400px;flex:1;min-height:0}
+#view{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
+#outline{position:absolute;inset:0;overflow:auto;padding:10px 12px 40px}
+#graph{position:absolute;inset:0;display:none;cursor:grab}
+#graph.dragging{cursor:grabbing}
+#gl,#labels{position:absolute;inset:0}
+#gl canvas{display:block}
+#labels{pointer-events:none;overflow:hidden}
+.lb{position:absolute;left:0;top:0;white-space:nowrap;will-change:transform;transform:translate3d(-1000px,-1000px,0);color:var(--ink2);font-size:11px;line-height:1.25;letter-spacing:.02em;text-shadow:0 0 3px #0d0d0d,0 0 6px #0d0d0d,0 1px 2px #0d0d0d}
+.lb.h{color:var(--ink);font-size:12px;letter-spacing:.14em;font-weight:600;text-align:center}
+.lb.h.top{font-size:13px;letter-spacing:.18em}
+.lb.c{color:var(--ink);font-size:11px;letter-spacing:.1em;font-weight:600;text-align:center}
+.lb.h small,.lb.c small{display:block;font-size:11px;letter-spacing:.04em;font-weight:400;color:var(--dim)}
+.lb.f{color:var(--ink);font-size:12px}
+.lb.n{color:var(--ink2)}
+.lb.w{color:var(--dim)}
+.lb .up{color:var(--up)} .lb .dn{color:var(--dn)}
+#tip{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.92);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:auto;z-index:2}
+#legend div{display:flex;align-items:center;gap:8px;line-height:1.75}
+#legend summary{cursor:pointer;letter-spacing:.12em;color:var(--ink2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#7a7a7a}
+.sw.head{background:#4a4a4a;width:12px;height:12px;flex-basis:12px}
+.sw.coh{background:#9a9a9a;width:11px;height:11px;flex-basis:11px}
+.sw.hol{border:1px solid var(--dim);background:transparent}
+.kb{flex:0 0 46px}
+#hint{position:absolute;right:10px;bottom:10px;font-size:11px;color:var(--mute);pointer-events:none;text-align:right;z-index:2}
+#fallback{display:none;padding:14px;color:var(--ink2);overflow:auto;height:100%}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px 12px 24px}
+aside h2{font-size:15px;margin:0;letter-spacing:.06em}
+aside .sub{font-size:11px;color:var(--dim);margin:1px 0 10px}
+.path{font-size:11px;color:var(--mute);margin:0 0 8px;line-height:1.7}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:4px 8px;font-size:12px;margin:8px 0;align-items:center}
+.kv > span:nth-child(odd){color:var(--mute);font-size:11px}
+.big{font-size:20px;font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .dn{color:var(--dn)} .dim{color:var(--dim)} .mute{color:var(--mute)}
+.wait{border:1px dashed var(--line2);border-radius:3px;padding:7px 9px;color:var(--ink2);margin:8px 0}
+.sec{font-size:11px;letter-spacing:.12em;color:var(--mute);margin:14px 0 4px;border-bottom:1px solid var(--line);padding-bottom:3px}
+.release{float:right;font-size:11px;padding:5px 8px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+td{padding:3px 4px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.r{text-align:right}
+td.nm{max-width:118px;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+td.bc{width:96px}
+a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);cursor:pointer}
+.split{height:4px;background:var(--line);border-radius:2px;overflow:hidden;display:flex;margin:6px 0 2px}
+.split i{display:block;height:100%}
+/* the Geiger bar, the Hub's way: a track centred at zero, filled from the middle to the value, ±1 = the full half.
+   Solid = the line's own full Geiger. Slim = the scout Geiger. Striped = an aggregate (holdings blend, cohort mean). */
+.gb{position:relative;height:14px;background:var(--track);border-radius:2px;overflow:hidden;min-width:60px}
+.gb.lg{height:20px}
+.gb .mid{position:absolute;left:50%;top:0;bottom:0;width:1.3px;background:var(--dim);z-index:1}
+.gb i{position:absolute;top:2px;bottom:2px;border-radius:2px;max-width:50%}
+.gb i.u{left:50%;background:var(--up);box-shadow:0 0 5px var(--up)}
+.gb i.d{right:50%;background:var(--dn);box-shadow:0 0 5px var(--dn)}
+.gb.sc i{top:32%;bottom:32%;box-shadow:none}
+.gb.agg i.u{background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gb.agg i.d{background:repeating-linear-gradient(135deg,var(--dn) 0 3px,#1f1f1f 3px 5px);box-shadow:none}
+.gbrow{display:grid;grid-template-columns:1fr 62px;gap:8px;align-items:center}
+.gbrow b{font-weight:400;text-align:right;font-variant-numeric:tabular-nums}
+.div{margin:8px 0 2px;padding:7px 9px;border:1px solid var(--line2);border-radius:3px;font-size:13px}
+.lgbar{display:inline-block;width:46px;height:9px;background:var(--track);position:relative;border-radius:2px;overflow:hidden}
+.lgbar i{position:absolute;top:1px;bottom:1px;left:50%;width:34%}
+.lgbar s{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--dim)}
+.tag{display:inline-block;font-size:11px;letter-spacing:.06em;padding:0 5px;border:1px solid var(--line2);border-radius:2px;color:var(--ink2);line-height:16px;white-space:nowrap}
+.tag.diff{border-color:var(--dim);color:var(--ink)}
+.tag.k{color:var(--mute);border-color:var(--line)}
+/* ---- the OUTLINE: the same tree as an indented list with the bars ---- */
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) 120px 58px;gap:8px;align-items:center;padding:2px 4px;border-radius:2px;min-height:22px}
+.row:hover{background:var(--panel2)}
+.row.sel{background:var(--panel3);outline:1px solid var(--dim)}
+.row .tg{width:14px;text-align:center;color:var(--mute);cursor:pointer;user-select:none;font-size:11px}
+.row .tg.leaf{visibility:hidden}
+.row .lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.row.h .lab{color:var(--ink);letter-spacing:.12em;font-weight:600}
+.row.top .lab{font-size:13px;letter-spacing:.16em}
+.row.c .lab{color:var(--ink);letter-spacing:.08em;font-weight:600}
+.row.c.pseudo .lab{color:var(--ink2);font-weight:400}
+.row.f .lab{color:var(--ink)}
+.row.n .lab{color:var(--ink2)}
+.row.w .lab{color:var(--dim)}
+.row .lab small{color:var(--dim);font-weight:400;letter-spacing:.02em;margin-left:6px}
+.row .val{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+.row .val small{color:var(--mute);font-size:11px;display:block;line-height:1.1}
+.row .bar .gb{height:12px}
+.kids{margin-left:18px;border-left:1px solid var(--line);padding-left:4px}
+.kids.closed{display:none}
+.grp{color:var(--mute);font-size:11px;letter-spacing:.1em;padding:3px 4px 1px 22px;cursor:pointer;user-select:none}
+.grp:hover{color:var(--ink2)}
+#outline .note{font-size:11px;color:var(--mute);margin:0 0 8px 4px}
+@media (max-width:760px){
+  body{display:block}
+  .main{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto}
+  #view{position:static;height:auto;min-height:40vh}
+  #outline{position:static;padding:8px 8px 20px}
+  #graph{height:62vh;position:relative;display:none}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  input[type=search]{width:150px}
+  .ctrl{margin-left:0}
+  #legend{max-width:260px}
+  #hint{display:none}
+  .row{grid-template-columns:auto minmax(0,1fr) 84px 50px;gap:6px}
+  .kids{margin-left:10px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SCINTILLA · TREE MAP</h1><span data-scnav-slot></span>
+  <span class="stamp" id="stamp">loading the tree and the live Geigers…</span>
+  <div class="ctrl">
+    <input type="search" id="q" placeholder="find a ticker (path + who holds it)" list="tickers" autocomplete="off">
+    <datalist id="tickers"></datalist>
+    <button id="v-outline" class="on" title="the tree as an indented list with the bars">OUTLINE</button>
+    <button id="v-3d" title="the same tree in 3D (desktop)">3D</button>
+    <button id="flat" title="the 3D tree, flat, seen straight on" style="display:none">FLAT 2D</button>
+    <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
+  </div>
+</header>
+<div class="main">
+  <div id="view">
+    <div id="outline"></div>
+    <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
+      <details id="legend" open><summary>KEY</summary>
+        <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
+        <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = SCOUT Geiger (daily, 3-day, weekly only; off the Hub), where the full Geiger is missing</div>
+        <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped bar = an aggregate: a cohort's mean, a heading's mean, a fund's holdings blend</div>
+        <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
+        <div><span class="sw coh"></span>a cohort (the adopted registry) · <span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
+      </details>
+      <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go</div>
+      <div id="fallback"></div>
+    </div>
+  </div>
+  <aside id="card"></aside>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/" } }
+</script>
+<script type="module">
+/* TREE MAP (29 Sep). Structure: tree.json (scripts/build-tree-map.mjs): the r3 market tree plus the cohort level Alan
+   adopted on 28 Sep. Readings: the chart API, live — the full Geiger (/geiger) for every served line, the scout Geiger
+   (/v1/scout-geiger, nightly, daily/3-day/weekly rungs only) where the full one is missing. Nothing is made up: a line
+   with neither reading has no bar and says so.
+
+   Two views of the same tree. OUTLINE: an indented list with a bar on every line, fast, works on a phone (the default
+   there). 3D: the r3 picture with the cohorts hung under their registry parents (map3d.js, loaded only when asked).
+   The finder types a ticker and answers with its path market → … → cohort → name and every fund that holds it. */
+import { holdingsAggregate, divergence } from "./aggregate.js";
+
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const STATION_CHART = "https://station.scintillahub.ai/chart/?t=";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
+const fmtPct = (p) => (p > 0 ? "+" : "") + p.toFixed(2) + "%";
+const fmtCap = (v) => v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + "T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + (v / 1e6).toFixed(0) + "M";
+const PHONE = matchMedia("(max-width:760px)").matches;
+const nice = (s) => String(s || "").replace(/_/g, " ");
+
+/* ---- data ---- */
+async function getJSON(url, ms = 15000) {
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const state = { geiger: null, quotes: {}, geigerErr: null, quotesErr: null, scout: null, scoutErr: null, view: "outline", selected: null, byId: new Map(), children: new Map(), ready: false, paused: true, frames: 0, flat: false };
+window.__mm = state; // read by the headless proof
+
+const T = await getJSON("tree.json");
+const [g, sr, ss] = await Promise.allSettled([getJSON(CHART_API + "/geiger"), getJSON(CHART_API + "/v1/scout-geiger", 20000), getJSON("scout-geiger-snapshot.json")]);
+if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
+const scoutFrom = (doc, source) => { const c = doc.row_columns || [], ix = (k) => c.indexOf(k), v = {}; for (const r of doc.rows) v[r[ix("ticker")]] = [r[ix("composite")], r[ix("trend")], r[ix("momentum")]]; return { as_of: doc.as_of, run_id: doc.run_id, computed_utc: doc.computed_utc, v, source }; };
+if (sr.status === "fulfilled" && Array.isArray(sr.value.rows)) state.scout = scoutFrom(sr.value, "chart API");
+else if (ss.status === "fulfilled" && Array.isArray(ss.value.rows)) { state.scout = scoutFrom(ss.value, "page snapshot"); state.scoutErr = sr.status === "rejected" ? String(sr.reason) : "route had no rows"; }
+else state.scoutErr = String(sr.status === "rejected" ? sr.reason : ss.reason);
+const GS = (state.geiger && state.geiger.symbols) || {}, SV = (state.scout && state.scout.v) || {};
+const geigerOf = (t) => (GS[t] && Number.isFinite(GS[t].composite) ? GS[t].composite : null);
+const scoutOf = (t) => { if (!t) return null; const r = SV[t] || SV[t.replace(/-/g, ".")]; return r && Number.isFinite(r[0]) ? { composite: r[0], trend: r[1], momentum: r[2] } : null; };
+
+/* ---- graph data: every node carries its own reading (full or scout) and, for cohorts / headings / funds, an aggregate ---- */
+const maxCap = Math.max(...T.nodes.map((n) => n.market_value_usd || 0));
+const nodes = T.nodes.map((n, idx) => {
+  const gg = n.ticker && GS[n.ticker] && Number.isFinite(GS[n.ticker].composite) ? GS[n.ticker] : null;
+  const r = n.kind === "index" ? (n.id === "MARKET" ? 9 : n.parents[0] === "MARKET" ? 6.5 : 5.5)
+    : n.kind === "cohort" ? (n.pseudo ? 3.6 : 4.6)
+    : n.kind === "fund" ? (n.role === "sector" ? 3.9 : 3.4)
+    : n.market_value_usd ? 2.2 + 6.3 * Math.pow(n.market_value_usd / maxCap, 0.4) : 2.2;
+  return { ...n, idx, g: gg, sg: gg ? null : scoutOf(n.ticker), r, hollow: !!n.ticker && !gg };
+});
+nodes.forEach((n) => { state.byId.set(n.id, n); n.parents.forEach((p) => { if (!state.children.has(p)) state.children.set(p, []); state.children.get(p).push(n.id); }); });
+const kids = (id) => (state.children.get(id) || []).map((k) => state.byId.get(k));
+const primaryKids = (id) => kids(id).filter((c) => c.parents[0] === id);
+// the reading a line carries: its own full Geiger, else its scout Geiger, else nothing
+const readingOf = (n) => n.g ? { v: n.g.composite, kind: "full", trend: n.g.trend, momentum: n.g.momentum } : n.sg ? { v: n.sg.composite, kind: "scout", trend: n.sg.trend, momentum: n.sg.momentum } : null;
+// the members of a cohort as nodes (names, then funds)
+const membersOf = (c) => [...c.members, ...c.member_funds].map((t) => state.byId.get(t)).filter(Boolean);
+// an aggregate over a list of instruments: the mean of the FULL readings (count, up, down) and, apart, the mean of the
+// scout readings of those with no full one. Never mixed: the two are not the same maths.
+function aggregate(list) {
+  const full = list.filter((n) => n.g), sc = list.filter((n) => !n.g && n.sg);
+  const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
+  return { n: list.length, full: full.length ? { v: mean(full.map((n) => n.g.composite)), n: full.length, up: full.filter((n) => n.g.composite > 0).length, down: full.filter((n) => n.g.composite < 0).length } : null,
+    scout: sc.length ? { v: mean(sc.map((n) => n.sg.composite)), n: sc.length, up: sc.filter((n) => n.sg.composite > 0).length, down: sc.filter((n) => n.sg.composite < 0).length } : null,
+    none: list.filter((n) => !n.g && !n.sg).length };
+}
+// every instrument under a heading, down the primary tree (cohort members included, once)
+function beneath(id) { const out = []; (function walk(x) { for (const c of primaryKids(x)) { if (c.ticker) out.push(c); walk(c.id); } })(id); return out; }
+nodes.forEach((n) => {
+  if (n.kind === "cohort") n.agg = aggregate(membersOf(n));
+  else if (n.kind === "index") n.agg = aggregate(beneath(n.id));
+  else if (n.kind === "fund") n.agg = holdingsAggregate(n, geigerOf);
+});
+// the bar an aggregate node shows: its full mean when any member has one, else its scout mean
+const aggBar = (n) => n.kind === "fund" ? (n.agg ? { v: n.agg.value, kind: "full" } : null) : n.agg && n.agg.full ? { v: n.agg.full.v, kind: "full" } : n.agg && n.agg.scout ? { v: n.agg.scout.v, kind: "scout" } : null;
+state.counts = {
+  nodes: nodes.length, cohorts: nodes.filter((n) => n.kind === "cohort" && !n.pseudo).length, pseudo: nodes.filter((n) => n.kind === "cohort" && n.pseudo).length,
+  lit: nodes.filter((n) => n.g).length, up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length,
+  scout: nodes.filter((n) => n.sg).length, none: nodes.filter((n) => n.ticker && !n.g && !n.sg).length,
+  differences: T.counts.differences, differences_in_real_cohorts: T.counts.differences_in_real_cohorts, differences_no_cohort: T.counts.differences_no_cohort,
+};
+state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar;
+
+/* ---- stamp ---- */
+$("stamp").textContent = state.geiger
+  ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} full bars (${state.counts.up} up · ${state.counts.down} down)` +
+    (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of}, ${state.scout.source})` : ` · scout Geiger did not answer (${state.scoutErr})`) +
+    ` · ${state.counts.cohorts} cohorts · ${state.counts.differences} board ≠ registry`
+  : `the live Geiger did not answer (${state.geigerErr}); no full bar is drawn and none is made up` + (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of})` : "");
+
+/* ---- shared pieces: bars, paths, the card ---- */
+function bar(v, cls = "") {
+  const w = (Math.min(1, Math.abs(v)) * 50).toFixed(1);
+  return `<div class="gb ${cls}"><span class="mid"></span><i class="${v >= 0 ? "u" : "d"}" style="width:${w}%"></i></div>`;
+}
+const num = (v) => `<b class="${v >= 0 ? "up" : "dn"}">${fmtG(v)}</b>`;
+function pathOf(n) { const out = []; let cur = n; while (cur.parents.length) { cur = state.byId.get(cur.parents[0]); out.unshift(cur); } return out; }
+const nameOf = (n) => n.ticker || n.label;
+function ownBarHTML(n, cls = "") {
+  const rd = readingOf(n);
+  if (rd) return `<div class="gbrow">${bar(rd.v, cls + (rd.kind === "scout" ? " sc" : ""))}${num(rd.v)}</div>`;
+  const ab = aggBar(n);
+  if (ab) return `<div class="gbrow">${bar(ab.v, cls + " agg" + (ab.kind === "scout" ? " sc" : ""))}${num(ab.v)}</div>`;
+  return `<span class="mute">${n.ticker ? "no reading" : n.kind === "index" ? "heading" : "empty"}</span>`;
+}
+function rowFor(n, extra = "") {
+  return `<tr><td><span class="lnk" data-go="${esc(n.id)}">${esc(nameOf(n))}</span>${extra}</td><td class="nm">${esc(n.ticker ? n.label : "")}</td><td class="bc">${ownBarHTML(n)}</td></tr>`;
+}
+const kindWord = (n) => n.kind === "index" ? "heading" : n.kind === "cohort" ? (n.pseudo ? "not a cohort" : "cohort") : n.kind;
+function aggHTML(n, what) {
+  const a = n.agg; if (!a) return "";
+  let h = "";
+  if (a.full) h += `<div class="kv"><span>${what} · FULL</span><div class="gbrow">${bar(a.full.v, "lg agg")}<span class="big ${a.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.full.v)}</span></div>` +
+    `<span>COUNT</span><span>${a.full.n} of ${a.n} with a full Geiger · <span class="up">${a.full.up} up</span> · <span class="dn">${a.full.down} down</span></span></div>` +
+    `<div class="split"><i style="width:${(100 * a.full.up / a.full.n).toFixed(1)}%;background:var(--up)"></i><i style="width:${(100 * a.full.down / a.full.n).toFixed(1)}%;background:var(--dn)"></i></div>`;
+  if (a.scout) h += `<div class="kv"><span>${what} · SCOUT</span><div class="gbrow">${bar(a.scout.v, "lg agg sc")}<span class="big ${a.scout.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.scout.v)}</span></div>` +
+    `<span>COUNT</span><span>${a.scout.n} with a scout Geiger only · <span class="up">${a.scout.up} up</span> · <span class="dn">${a.scout.down} down</span></span></div>`;
+  if (a.none) h += `<div class="mute" style="font-size:11px">${a.none} with no reading at all</div>`;
+  h += `<div class="mute" style="font-size:11px">the striped bar is a plain mean of the members' composites (each name counts once, no weights); full and scout are never mixed</div>`;
+  return h;
+}
+function renderCard(n) {
+  if (!n) {
+    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. A cohort shows its members and the names whose board tab differs (Alan's step-2 list). Type a ticker in the finder for its path and every fund that holds it.</div>` +
+      `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
+      `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
+      `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → the registry parent (the fund whose Geiger tracked the cohort best, or the sector heading) → cohort → names. Structure above the cohorts: the r3 market map. Cohorts, parents and merges: the registry Alan adopted on 28 Sep (step 1). Members: the 28 Sep tree lists plus the 29 Sep admissions. A name in no adopted cohort sits in its sector's NO COHORT YET line.</div>`;
+    return;
+  }
+  const qq = n.ticker ? state.quotes[n.ticker] : null;
+  const crumbs = pathOf(n).map((p) => `<span class="lnk" data-go="${esc(p.id)}">${esc(nameOf(p))}</span>`).join(" › ");
+  let h = `<button class="release" id="letgo" title="let go (Esc)">LET GO ✕</button>` + (crumbs ? `<div class="path">${crumbs} ›</div>` : "") +
+    `<h2>${esc(nameOf(n))}</h2><div class="sub">${esc(n.ticker ? n.label : n.kind === "cohort" && !n.pseudo ? "cohort · " + nice(n.cohort) : "")}${n.issuer ? " · " + esc(n.issuer) : ""} · ${kindWord(n)}</div>`;
+  const rd = readingOf(n);
+  if (n.kind === "index") {
+    h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
+  } else if (n.kind === "cohort") {
+    if (n.pseudo) h += `<div class="wait">${esc(n.admission)}. Every name here is a step-2 question: the board has a tab for it, the adopted registry has no cohort for it.</div>`;
+    else h += `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
+      (n.merged_from.length ? `<span>MERGED IN</span><span>${n.merged_from.map(nice).map(esc).join(", ")}</span>` : "") +
+      (Number.isFinite(n.cohesion) ? `<span>COHESION</span><span>${n.cohesion.toFixed(2)} <span class="mute">vs ${n.null95.toFixed(2)} for a random set of the same size</span></span>` : "") +
+      (n.step2_pending ? `<span>STEP 2 PENDING</span><span class="dim" style="font-size:11px">${esc(n.step2_pending)}</span>` : "") + `</div>`;
+    h += aggHTML(n, "MEMBERS");
+    const ms = membersOf(n);
+    if (n.diff_count) {
+      h += `<div class="sec">BOARD ≠ REGISTRY · ${n.diff_count} of ${ms.length}</div><div class="mute" style="font-size:11px;margin-bottom:4px">${n.pseudo ? "names the board files under a tab the registry does not have as a cohort" : "members whose board tab today is not this cohort — Alan's step-2 list; nothing here is rewritten"}</div><table>` +
+        n.step2.map((s) => `<tr><td><span class="lnk" data-go="${esc(s.ticker)}">${esc(s.ticker)}</span></td><td class="nm">board: ${esc(nice(s.board) || "—")}</td><td class="nm">${esc(s.note || "")}</td></tr>`).join("") + `</table>`;
+    } else if (!n.pseudo) h += `<div class="sec">BOARD = REGISTRY</div><div class="mute">every member's board tab is this cohort</div>`;
+    h += `<div class="sec">MEMBERS · ${ms.length}</div><table>${ms.map((m) => rowFor(m, m.differs ? ` <span class="tag diff" title="board cohort">${esc(nice(m.board_cohort) || "—")}</span>` : "")).join("")}</table>`;
+    $("card").innerHTML = h; return;
+  } else if (rd) {
+    h += `<div class="kv"><span>${rd.kind === "full" ? "GEIGER · FULL" : "GEIGER · SCOUT"}</span><div class="gbrow">${bar(rd.v, "lg" + (rd.kind === "scout" ? " sc" : ""))}<span class="big ${rd.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(rd.v)}</span></div>` +
+      `<span>trend · momentum</span><span><span class="${rd.trend >= 0 ? "up" : "dn"}">${fmtG(rd.trend)}</span> · <span class="${rd.momentum >= 0 ? "up" : "dn"}">${fmtG(rd.momentum)}</span></span>` +
+      `<span>DAY CHANGE</span><span>${qq && Number.isFinite(qq.change_pct) ? `<span class="${qq.change_pct >= 0 ? "up" : "dn"}">${fmtPct(qq.change_pct)}</span> <span class="mute">session ${esc(qq.price_session_et)}</span>` : `<span class="mute">not loaded</span>`}</span>` +
+      (qq && Number.isFinite(qq.price) ? `<span>LAST PRICE</span><span>${qq.price.toFixed(2)}</span>` : "") +
+      (n.market_value_usd ? `<span>MARKET VALUE</span><span>${fmtCap(n.market_value_usd)}</span>` : "") +
+      (n.gics_industry ? `<span>INDUSTRY</span><span>${esc(n.gics_industry)}</span>` : "") + `</div>` +
+      (rd.kind === "full" ? `<div class="mute" style="font-size:11px">the full Hub Geiger · −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`
+        : `<div class="mute" style="font-size:11px">the SCOUT Geiger: daily, 3-day and weekly rungs only (40% of the full Geiger's weight), computed off the Hub · as of the ${esc(state.scout.as_of)} close · ${n.served ? "served, but the full Geiger had no reading for it right now" : "not served: " + esc(n.admission)}</div>`);
+  } else {
+    h += `<div class="wait"><b>No reading.</b> ${n.served ? "Served, but neither the full nor the scout Geiger has a reading for it right now." : esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1)) + " · no scout reading either."}</div>`;
+  }
+  if (n.kind === "name") {
+    const c = state.byId.get(n.parents[0]);
+    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>COHORT</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span>${n.registry_cohort ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'}</span>` +
+      `<span>BOARD TAB</span><span>${n.board_cohort ? `${esc(nice(n.board_cohort))}${n.differs ? ' <span class="tag diff">differs</span>' : ' <span class="mute">same</span>'}` : '<span class="mute">none (not on the board)</span>'}</span>` +
+      (n.also_in && n.also_in.length ? `<span>ALSO IN</span><span>${n.also_in.map(nice).map(esc).join(", ")} <span class="mute">(broader; it sits in the most specific)</span></span>` : "") +
+      (n.filters && n.filters.length ? `<span>ATTRIBUTES</span><span>${n.filters.map((f) => `<span class="tag k">${esc(nice(f))}</span>`).join(" ")} <span class="mute">filters, not cohorts</span></span>` : "") +
+      `<span>SECTOR</span><span>${esc(n.sector_label)}</span></div>`;
+  }
+  if (n.kind === "fund") {
+    const hd = n.holdings;
+    if (n.registry_cohort) h += `<div class="kv"><span>COHORT</span><span><span class="lnk" data-go="COHORT_${esc(n.registry_cohort)}">${esc(nice(n.registry_cohort))}</span> <span class="mute">(a fund that is also a cohort member)</span></span></div>`;
+    if (hd && n.agg) {
+      const a = n.agg, dv = n.g ? divergence(n.g.composite, a.value) : null;
+      h += `<div class="sec">HOLDINGS BLEND · FMP ${esc(hd.as_of)}</div><div class="kv"><span>HOLDINGS</span><div class="gbrow">${bar(a.value, "lg agg")}<span class="big ${a.value >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.value)}</span></div></div>` +
+        `<div style="font-size:12px">aggregate of <b>${a.count}</b> served holdings = <b>${a.coverage_pct.toFixed(0)}%</b> of the fund's weight (full Geigers, blended by weight; the rest is left out, nothing filled in)</div>` +
+        (a.coverage_pct < 50 ? `<div class="wait">Less than half of this fund is served (${a.coverage_pct.toFixed(0)}%): the holdings bar speaks for that part only.</div>` : "") +
+        (dv ? `<div class="div">DIVERGENCE · <span class="${dv.diff > 0 ? "up" : dv.diff < 0 ? "dn" : ""}">${esc(dv.text)}</span><div class="mute" style="font-size:11px">fund ${fmtG(n.g.composite)} · holdings ${fmtG(a.value)}</div></div>` : "");
+    }
+    const cs = primaryKids(n.id).filter((c) => c.kind === "cohort");
+    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length}</div><table>${cs.map((c) => rowFor(c)).join("")}</table>`;
+    if (hd) h += `<div class="sec">TOP HOLDINGS · ${hd.count_in_fund} in the fund</div><table>` + hd.top.map((x) => { const hn = state.byId.get(x.ticker); return `<tr><td>${hn ? `<span class="lnk" data-go="${esc(x.ticker)}">${esc(x.ticker)}</span>` : esc(x.ticker)}</td><td class="nm">${esc(x.name || "")}</td><td class="bc">${hn ? ownBarHTML(hn) : '<span class="mute">not on the tree</span>'}</td><td class="r">${x.weight_pct.toFixed(1)}%</td></tr>`; }).join("") + `</table>`;
+  }
+  const held = n.ticker && T.held_by[n.ticker];
+  if (held && held.length) h += `<div class="sec">HELD BY · ${held.length} funds</div><table>` + held.map(([f, w]) => { const fn = state.byId.get(f); return `<tr><td><span class="lnk" data-go="${esc(f)}">${esc(f)}</span></td><td class="nm">${esc(fn ? fn.label : "")}</td><td class="bc">${fn ? ownBarHTML(fn) : ""}</td><td class="r">${w == null ? '<span class="mute">on the map</span>' : w.toFixed(2) + "%"}</td></tr>`; }).join("") + `</table><div class="mute" style="font-size:11px">weights from FMP's holdings files (26 Sep); "on the map" = an industry fund the r3 map already hangs it from</div>`;
+  if (n.kind === "name" && n.served) h += `<div class="kv"><span>CHART</span><span><a href="${STATION_CHART + encodeURIComponent(n.ticker)}&range=1D&clouds=1" target="_blank" rel="noopener">open ${esc(n.ticker)} on the Station chart ↗</a></span></div>`;
+  const ch = primaryKids(n.id).filter((c) => c.kind !== "cohort");
+  if (ch.length && n.kind === "index") {
+    const k = { index: 0, cohort: 1, fund: 2, name: 3 };
+    const sorted = ch.slice().sort((a, b) => k[a.kind] - k[b.kind] || (b.market_value_usd || 0) - (a.market_value_usd || 0));
+    const cs = primaryKids(n.id).filter((c) => c.kind === "cohort");
+    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length}</div><table>${cs.map((c) => rowFor(c, c.diff_count ? ` <span class="tag k">${c.diff_count} ≠</span>` : "")).join("")}</table>`;
+    h += `<div class="sec">UNDER IT · ${ch.length}</div><table>${sorted.slice(0, 60).map((c) => rowFor(c)).join("")}</table>` + (ch.length > 60 ? `<div class="mute">…and ${ch.length - 60} more</div>` : "");
+  }
+  $("card").innerHTML = h;
+}
+$("card").addEventListener("click", (e) => {
+  if (e.target.id === "letgo") { release(); return; }
+  const id = e.target.getAttribute && e.target.getAttribute("data-go");
+  if (id && state.byId.has(id)) select(state.byId.get(id));
+});
+
+/* ---- OUTLINE: the same tree as an indented list, every line with its bar ---- */
+const O = $("outline");
+const open = new Set(); // ids whose children are shown
+function outlineRow(n) {
+  const rd = readingOf(n), ab = rd ? null : aggBar(n);
+  const cls = n.kind === "index" ? "h" + (n.id === "MARKET" || n.parents[0] === "MARKET" ? " top" : "") : n.kind === "cohort" ? "c" + (n.pseudo ? " pseudo" : "") : n.kind === "fund" ? "f" : "n" + (n.hollow ? " w" : "");
+  const hasKids = n.kind === "index" || n.kind === "cohort" || (n.kind === "fund" && primaryKids(n.id).length);
+  let small = "";
+  if (n.kind === "cohort") small = `<small>${membersOf(n).length} members${n.diff_count ? ` · ${n.diff_count} board ≠` : ""}</small>`;
+  else if (n.kind === "fund" && hasKids) small = `<small>${n.label} · ${primaryKids(n.id).filter((k) => k.kind === "cohort").length} cohorts under it</small>`;
+  else if (n.kind === "index" && n.agg && n.agg.full) small = `<small>${n.agg.full.n} lines · <span class="up">▲${n.agg.full.up}</span> <span class="dn">▼${n.agg.full.down}</span></small>`;
+  else if (n.kind === "name" && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
+  else if (n.kind === "fund" && n.registry_cohort && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
+  const b = rd ? bar(rd.v, rd.kind === "scout" ? "sc" : "") : ab ? bar(ab.v, "agg" + (ab.kind === "scout" ? " sc" : "")) : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`;
+  const v = rd ? `${fmtG(rd.v)}<small>${rd.kind.toUpperCase()}</small>` : ab ? `${fmtG(ab.v)}<small>${n.kind === "fund" ? "HOLDINGS" : "MEAN " + ab.kind.toUpperCase()}</small>` : `<small>${n.ticker ? "no reading" : ""}</small>`;
+  const label = n.kind === "index" || n.kind === "cohort" ? esc(n.label.toUpperCase()) : `${esc(n.ticker)} <small>${esc(n.label)}</small>`;
+  return `<div class="row ${cls}" data-id="${esc(n.id)}"><span class="tg ${hasKids ? "" : "leaf"}">${open.has(n.id) ? "▾" : "▸"}</span><span class="lab">${label}${small}</span><span class="bar">${b}</span><span class="val ${rd || ab ? ((rd || ab).v >= 0 ? "up" : "dn") : "mute"}">${v}</span></div>`;
+}
+function outlineKids(n) {
+  const ch = primaryKids(n.id);
+  const heads = ch.filter((c) => c.kind === "index"), cohorts = ch.filter((c) => c.kind === "cohort").sort((a, b) => a.pseudo - b.pseudo || membersOf(b).length - membersOf(a).length);
+  // a fund that parents cohorts (SMH, IGV, GDX, …) is a branch of the heading, listed with the cohorts; the other funds sit in one FUNDS group
+  const branchFunds = ch.filter((c) => c.kind === "fund" && primaryKids(c.id).some((k) => k.kind === "cohort"));
+  const funds = ch.filter((c) => c.kind === "fund" && !branchFunds.includes(c)), names = ch.filter((c) => c.kind === "name").sort((a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0));
+  let h = "";
+  for (const c of cohorts.filter((x) => !x.pseudo)) h += outlineNode(c);
+  for (const c of branchFunds) h += outlineNode(c);
+  for (const c of cohorts.filter((x) => x.pseudo)) h += outlineNode(c);
+  for (const c of heads) h += outlineNode(c);
+  if (funds.length) { const fid = n.id + "__funds"; h += `<div class="grp" data-grp="${esc(fid)}">${open.has(fid) ? "▾" : "▸"} FUNDS · ${funds.length}</div><div class="kids ${open.has(fid) ? "" : "closed"}">${funds.map(outlineNode).join("")}</div>`; }
+  if (n.kind === "cohort") { const ms = membersOf(n); h += ms.map((m) => outlineRow(m)).join(""); }
+  else for (const c of names) h += outlineRow(c);
+  return h;
+}
+function outlineNode(n) {
+  const hasKids = n.kind === "index" || n.kind === "cohort" || (n.kind === "fund" && primaryKids(n.id).length);
+  return outlineRow(n) + (hasKids ? `<div class="kids ${open.has(n.id) ? "" : "closed"}" data-kids="${esc(n.id)}">${open.has(n.id) ? outlineKids(n) : ""}</div>` : "");
+}
+function renderOutline() {
+  const root = state.byId.get("MARKET");
+  O.innerHTML = `<div class="note">market → asset class / region → sector fund → registry parent → COHORT → names · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a tag on a name is its board tab where it differs from the cohort it sits in</div>` + outlineNode(root);
+}
+function toggle(id) {
+  if (open.has(id)) open.delete(id); else open.add(id);
+  const n = state.byId.get(id);
+  const box = O.querySelector(`[data-kids="${CSS.escape(id)}"]`), tg = O.querySelector(`.row[data-id="${CSS.escape(id)}"] .tg`);
+  if (box) { box.classList.toggle("closed", !open.has(id)); if (open.has(id) && !box.innerHTML) box.innerHTML = outlineKids(n); }
+  if (tg) tg.textContent = open.has(id) ? "▾" : "▸";
+}
+O.addEventListener("click", (e) => {
+  const grp = e.target.closest(".grp");
+  if (grp) { const id = grp.dataset.grp; if (open.has(id)) open.delete(id); else open.add(id); grp.nextElementSibling.classList.toggle("closed", !open.has(id)); grp.textContent = (open.has(id) ? "▾" : "▸") + grp.textContent.slice(1); return; }
+  const row = e.target.closest(".row"); if (!row) return;
+  const id = row.dataset.id, n = state.byId.get(id);
+  if (e.target.classList.contains("tg")) { toggle(id); return; }
+  if (n.kind === "index" || n.kind === "cohort") { if (!open.has(id)) toggle(id); }
+  select(n, false);
+});
+function revealInOutline(n, scroll = true) {
+  for (const p of pathOf(n)) if (!open.has(p.id)) toggle(p.id);
+  if (n.kind === "fund" && !primaryKids(n.id).some((k) => k.kind === "cohort")) { const par = state.byId.get(n.parents[0]); const fid = par.id + "__funds"; if (!open.has(fid)) { const g = O.querySelector(`[data-grp="${CSS.escape(fid)}"]`); if (g) g.click(); } }
+  if ((n.kind === "index" || n.kind === "cohort") && !open.has(n.id)) toggle(n.id);
+  O.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel"));
+  const row = O.querySelector(`.row[data-id="${CSS.escape(n.id)}"]`);
+  if (row) { row.classList.add("sel"); if (scroll) row.scrollIntoView({ block: "center", behavior: "smooth" }); }
+}
+["MARKET", "US", "US_SECTORS", "WORLD", "BONDS", "CMDTY", "CRYPTO", "MACRO", "US_BROAD"].forEach((id) => open.add(id));
+if (!PHONE) nodes.filter((n) => n.id.startsWith("SEC_")).forEach((n) => open.add(n.id));
+renderOutline();
+
+/* ---- selection: one for both views ---- */
+let m3 = null; // the 3D module, once loaded
+function select(n, fly = true) {
+  state.selected = n.id;
+  renderCard(n);
+  if (state.view === "outline") revealInOutline(n, true);
+  else if (m3) m3.select(n, fly);
+}
+function release() {
+  state.selected = null; renderCard(null);
+  O.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel"));
+  if (m3) m3.release();
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) { e.preventDefault(); release(); } });
+
+/* ---- the finder: a ticker → its path and every fund that holds it ---- */
+$("tickers").innerHTML = nodes.filter((n) => n.ticker || n.kind === "cohort").map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : n.kind)}</option>`).join("");
+function find(s) {
+  s = s.trim().toUpperCase(); if (!s) return null;
+  return state.byId.get(s) || nodes.find((n) => (n.ticker || "") === s) || nodes.find((n) => n.kind === "cohort" && n.label.toUpperCase() === s) ||
+    nodes.find((n) => (n.label || "").toUpperCase() === s) || nodes.find((n) => (n.label || "").toUpperCase().includes(s));
+}
+const go = () => { const n = find($("q").value); if (n) select(n); };
+$("q").addEventListener("change", go);
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).map((p) => p.id), held_by: (T.held_by[n.ticker] || []).map((x) => x[0]) } : null; };
+
+/* ---- views ---- */
+async function setView(v) {
+  state.view = v;
+  $("v-outline").classList.toggle("on", v === "outline"); $("v-3d").classList.toggle("on", v === "3d");
+  $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "3d" ? "block" : "none"; $("flat").style.display = v === "3d" ? "" : "none";
+  if (v === "3d" && !m3) {
+    try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); }, onRelease: () => { state.selected = null; renderCard(null); } }); }
+    catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the 3D map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
+  }
+  if (v === "3d" && m3) { m3.fit(); if (state.selected) m3.select(state.byId.get(state.selected), false); }
+  if (v === "outline" && state.selected) revealInOutline(state.byId.get(state.selected), true);
+}
+$("v-outline").addEventListener("click", () => setView("outline"));
+$("v-3d").addEventListener("click", () => setView("3d"));
+$("flat").addEventListener("click", () => { if (m3) m3.setFlat(!state.flat); });
+$("reset").addEventListener("click", () => { release(); if (state.view === "3d" && m3) m3.frameWhole(900); else O.scrollTo({ top: 0, behavior: "smooth" }); });
+
+/* ---- go ---- */
+renderCard(null);
+const p = new URLSearchParams(location.search);
+const wanted = p.get("view") || (PHONE ? "outline" : "3d");
+state.ready = true;
+if (wanted === "3d") await setView("3d"); else await setView("outline");
+if (p.get("flat") === "1" && m3) m3.setFlat(true, 0);
+if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n), 300); }
+state.select = (id) => { const n = state.byId.get(id); if (n) select(n); };
+state.release = () => release();
+state.setView = (v) => setView(v);
+state.setFlat = (on) => { if (m3) m3.setFlat(on, 0); };
+state.toggle = (id) => toggle(id);
+/* the day change, after the tree is on the screen: three quote calls, never in the way of the first paint */
+(async () => {
+  try {
+    const served = nodes.filter((n) => n.served).map((n) => n.ticker);
+    for (let i = 0; i < served.length; i += 200) { const r = await getJSON(CHART_API + "/quotes?symbols=" + encodeURIComponent(served.slice(i, i + 200).join(","))); Object.assign(state.quotes, r.quotes || {}); }
+    if (state.selected) renderCard(state.byId.get(state.selected));
+  } catch (e) { state.quotesErr = String(e); }
+})();
+</script>
+<!-- scnav placed by scripts/inject-scnav.py -->
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

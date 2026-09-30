@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · TREE MAP · what it is (29 Sep)</title>
+<style>
+:root{--bg:#0d0d0d;--panel:#151515;--line:#272727;--line2:#333;--ink:#cdcdcd;--ink2:#ababab;--dim:#8c8c8c;--mute:#6a6a6a;--up:#35b06a;--dn:#d1483f;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 var(--mono);padding:0 16px 60px}
+header{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+h1{font-size:14px;letter-spacing:.14em;margin:0;font-weight:600}
+h2{font-size:12px;letter-spacing:.12em;color:var(--dim);border-bottom:1px solid var(--line);padding-bottom:4px;margin:28px 0 8px}
+p,li{max-width:900px}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2)}
+table{border-collapse:collapse;font-size:12px;margin:8px 0}
+td,th{padding:3px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-weight:400}
+th{color:var(--mute);font-size:11px;letter-spacing:.08em}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .dn{color:var(--dn)} .mute{color:var(--mute)} .dim{color:var(--dim)}
+.box{border:1px solid var(--line2);border-radius:3px;padding:8px 12px;margin:10px 0;max-width:900px}
+figure{margin:12px 0}
+figure img{max-width:100%;border:1px solid var(--line);display:block}
+figcaption{font-size:11px;color:var(--dim);margin-top:4px}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+code{background:var(--panel);padding:0 4px;border-radius:2px;font-size:12px}
+</style>
+</head>
+<body>
+<header><h1>SCINTILLA · TREE MAP · MARKET → COHORTS</h1><span data-scnav-slot></span><span class="dim">29 Sep 2026 · branch hub/tree-map-20260929 · page: <a href="index.html">deliverables/20260929/tree-map/</a></span></header>
+
+<h2>WHAT THE PAGE SHOWS</h2>
+<p>One tree, read from the top down: <b>the market → asset class or region → sector fund → the registry parent → cohort → names</b>. Every tradable line on it (a fund or a name) carries a Geiger bar, and every cohort and heading carries the mean of the lines under it with an up/down count. There are two ways to look at the same tree:</p>
+<ul>
+  <li><b>OUTLINE</b> — an indented list with a bar on every line. Loads without three.js, works at phone width (it is the default on a phone), and every cohort opens to its members.</li>
+  <li><b>3D</b> — the r3 market map with the cohorts hung under their registry parents. The upper tree is flat; a big cohort's rows step toward you. Desktop default. FLAT 2D shows it straight on.</li>
+</ul>
+<p>The <b>finder</b> (top right) takes a ticker and answers with its path, market → … → cohort → name, and every fund that holds it with its weight. <code>?t=NVDA</code> in the address does the same.</p>
+<p>The 28 Sep market map (<a href="../../20260928/market-map-r3/index.html">market-map-r3</a>) is untouched: this is a new page beside it.</p>
+
+<h2>WHERE EACH LEVEL COMES FROM</h2>
+<table>
+<tr><th>level</th><th>source</th><th>notes</th></tr>
+<tr><td>the market → regions / asset classes → sector funds → industry funds → names' sectors</td><td>the r3 market map's node list (<code>deliverables/20260928/market-map-r3/nodes.json</code>, 29 Sep, 637 nodes, 590 served)</td><td>copied, not changed. Same headings, same funds, same FMP holdings (26 Sep).</td></tr>
+<tr><td>the cohorts, their parents, the merges, the filters</td><td><code>data/cohort-registry-step1.json</code> — the 38 rows the 28 Sep migration wrote to <code>public.cohort_registry</code>: 27 cohorts, 6 merged labels, 5 filters</td><td>this is the structure Alan adopted on 28 Sep, step 1. Each cohort hangs under the parent the registry names (e.g. AI ACCELERATORS → SMH, AI POWER → VPU, AI DATACENTER → the Technology heading). A merged label (PRECIOUS METALS → METALS) is not a node; the target says "merged in". A filter (BLUE CHIP, the cap tranches) is a tag on a name, never a node.</td></tr>
+<tr><td>who is in each cohort</td><td>the registry carries no member lists (step 1 moved no name). Members come from the 28 Sep tree work the registry was derived from: <code>coverage-tree.json cohorts[].members</code>, merges folded in; plus the 104 names admitted on 29 Sep by the cohort on their admission row where that is a registry cohort (35 of them; the other 69 say BLUE_CHIP, UTILITIES, COMMS, MATERIALS or REAL_ESTATE, which the registry has no cohort for)</td><td>a name in several cohorts (86 of them, e.g. NVDA in AI HARDWARE, AI ACCELERATORS and MEGACAP) sits <b>once</b>, in the <b>smallest</b> of them — the most specific — and lists the broader ones as "also in". So AI ACCELERATORS has its 16 names, and AI HARDWARE keeps the 17 nobody cut out.</td></tr>
+<tr><td>the board tag</td><td><code>public.tickers.cohort</code> — the 17 tabs the Hub board uses today — read on 30 Sep 00:36 UTC through the same public read the Hub page itself makes (613 rows)</td><td>shown on a name only where it differs from the cohort it sits in. Nothing is written back.</td></tr>
+<tr><td>names in no adopted cohort</td><td>—</td><td>246 names (224 served, 22 waiting) are claimed by no registry cohort. Each sits in its sector's <b>NO COHORT YET</b> line, so every served name is on the tree exactly once (a test checks this). These are step-2 material too.</td></tr>
+</table>
+
+<h2>WHICH GEIGER EACH BAR IS</h2>
+<table>
+<tr><th>bar</th><th>what it is</th><th>where it comes from</th><th>tonight</th></tr>
+<tr><td><b>solid</b> = FULL</td><td>the Hub Geiger, all its timeframes</td><td>chart API <code>/geiger</code>, live at page load</td><td class="r">590 lines (174 up · 416 down)</td></tr>
+<tr><td><b>slim</b> = SCOUT</td><td>the same maths on the daily, 3-day and weekly rungs only (40% of the full weight), computed off the Hub every night for every US stock and tree fund. Drawn <b>only</b> where the full Geiger has no reading; the card names it SCOUT and says why (waiting for admission, or served with no reading right now)</td><td>chart API <code>/v1/scout-geiger</code> (as of the 29 Sep close), with <code>scout-geiger-snapshot.json</code> next to the page as the fallback; the stamp says which was used</td><td class="r">23 lines: the 24 waiting names and funds (QQEW, IBIT, DOCN, …) minus BDXA, which neither Geiger has</td></tr>
+<tr><td><b>striped</b> = AGGREGATE</td><td>a cohort's or heading's mean of its members' full composites (each name once, no weights), with the count and ▲/▼; funds: the holdings blend by weight, as on r3. Where members only have scout readings, a separate slim striped bar says SCOUT — full and scout are never mixed</td><td>computed on the page from the readings above</td><td class="r">27 cohorts + 12 NO COHORT YET lines + 23 headings</td></tr>
+</table>
+<p class="dim">The Geiger's own scale everywhere: centred at zero, the full half of a bar is ±1. Green = up, red = down, nothing else is coloured.</p>
+
+<h2>THE STEP-2 LIST: BOARD ≠ REGISTRY</h2>
+<p>Alan adopted step 1 (parents and merges) and left step 2 (splits and moves) open. This page does not decide it; it counts it. A served name whose board tab today is not the cohort it sits in is a <b>difference</b>, tagged on the name and counted on the cohort. Tonight:</p>
+<div class="box">
+<b>386 differences</b> among 590 served lines.<br>
+<b>162</b> inside the 27 adopted cohorts — names the board files under another tab (AI HARDWARE 39, THEMATIC 38, BLUE CHIP 35, UTILITIES 16, GROWTH 14, CRYPTO 6, MATERIALS 5, MEGACAP 3, AI SOFTWARE 2, COMMS 1) plus three funds (GLD and SLV sit in MACRO, the board says METALS; DRAM sits in MEMORY &amp; SEMI EQUIPMENT, the board says AI HARDWARE).<br>
+<b>224</b> in the NO COHORT YET lines — served names no adopted cohort claims (the board says BLUE CHIP for 138 of them, then MATERIALS 16, REAL ESTATE 14, UTILITIES 14, COMMS 13, STAPLES 11, AI HARDWARE 7, THEMATIC 7, GROWTH 2, CRYPTO 2).
+</div>
+<table>
+<tr><th>cohort</th><th>parent</th><th class="r">names</th><th class="r">funds</th><th class="r">board ≠</th><th>the board says</th></tr>
+<tr><td>AI POWER</td><td>VPU</td><td class="r">23</td><td class="r">0</td><td class="r">23</td><td>UTILITIES 16 · THEMATIC 5 · AI HARDWARE 1 · BLUE CHIP 1</td></tr>
+<tr><td>BANKS MARKETS</td><td>IYG</td><td class="r">17</td><td class="r">0</td><td class="r">17</td><td>BLUE CHIP 17</td></tr>
+<tr><td>AI ACCELERATORS</td><td>SMH</td><td class="r">16</td><td class="r">0</td><td class="r">16</td><td>AI HARDWARE 13 · BLUE CHIP 3</td></tr>
+<tr><td>CRYPTO EQUITIES</td><td>Crypto heading</td><td class="r">11</td><td class="r">0</td><td class="r">11</td><td>CRYPTO 6 · AI HARDWARE 4 · GROWTH 1</td></tr>
+<tr><td>MEMORY &amp; SEMI EQUIPMENT</td><td>SMH</td><td class="r">10</td><td class="r">1</td><td class="r">11</td><td>AI HARDWARE 11</td></tr>
+<tr><td>EVTOL AUTONOMY</td><td>Discretionary heading</td><td class="r">10</td><td class="r">0</td><td class="r">10</td><td>THEMATIC 9 · MEGACAP 1</td></tr>
+<tr><td>DEFENCE AEROSPACE</td><td>ITA</td><td class="r">9</td><td class="r">0</td><td class="r">9</td><td>BLUE CHIP 7 · MEGACAP 1 · THEMATIC 1</td></tr>
+<tr><td>MEGACAP PLATFORMS</td><td>FDN</td><td class="r">8</td><td class="r">0</td><td class="r">8</td><td>GROWTH 5 · BLUE CHIP 1 · THEMATIC 1 · COMMS 1</td></tr>
+<tr><td>SPACE</td><td>ARKX</td><td class="r">8</td><td class="r">0</td><td class="r">8</td><td>THEMATIC 7 · MEGACAP 1</td></tr>
+<tr><td>AI SOFTWARE</td><td>IGV</td><td class="r">12</td><td class="r">0</td><td class="r">6</td><td>GROWTH 6</td></tr>
+<tr><td>AI DATACENTER · CRITICAL MINERALS · PAYMENTS FINTECH</td><td>heading · REMX · IPAY</td><td class="r">6 each</td><td class="r">0</td><td class="r">6 each</td><td>AI HARDWARE, THEMATIC, BLUE CHIP, MATERIALS, GROWTH</td></tr>
+<tr><td>COPPER STEEL · NUCLEAR URANIUM · QUANTUM</td><td>IYM · URA · QTUM</td><td class="r">4 each</td><td class="r">0</td><td class="r">4 each</td><td>MATERIALS, THEMATIC</td></tr>
+<tr><td>PHOTONICS · SOLAR · SECURITY &amp; DATA</td><td>IYZ · TAN · CIBR</td><td class="r">3 each</td><td class="r">0</td><td class="r">3 each</td><td>AI HARDWARE, THEMATIC, BLUE CHIP, AI SOFTWARE</td></tr>
+<tr><td>MEGACAP</td><td>VUG</td><td class="r">9</td><td class="r">0</td><td class="r">2</td><td>AI HARDWARE 2 (NVDA, TSM)</td></tr>
+<tr><td>MACRO</td><td>Dollar · vol heading</td><td class="r">0</td><td class="r">10</td><td class="r">2</td><td>METALS 2 (GLD, SLV)</td></tr>
+<tr><td>GROWTH · AI HARDWARE · METALS · THEMATIC · WORLD · INDEXES</td><td>IGV · SMH · GDX · ARKX · headings</td><td class="r">23 · 17 · 10 · 5 · 3 · 0</td><td class="r">0 · 3 · 5 · 0 · 10 · 9</td><td class="r">0</td><td>board = registry</td></tr>
+</table>
+<p class="dim">The full list per cohort is on the page: click a cohort, section BOARD ≠ REGISTRY. Every row says what the board tab is and, where the name is in several cohorts, which broader ones.</p>
+
+<h2>SCREENSHOTS (headless Chrome, software GL; examined)</h2>
+<div class="shots">
+<figure><img src="shots/desktop-1680-3d-whole.png" alt=""><figcaption>1680 · 3D · the whole tree. The market at the top; the 11 sectors in three rows; under Technology the SMH branch carries AI ACCELERATORS, AI HARDWARE and MEMORY &amp; SEMI EQUIPMENT, each with its striped mean and ▲/▼. 52 labels shown, none overlapping, no page errors.</figcaption></figure>
+<figure><img src="shots/desktop-1680-3d-cohort-ai-accelerators.png" alt=""><figcaption>1680 · 3D · AI ACCELERATORS picked: the tray of 16 balls each with a solid bar; the card: parent SMH and why, cohesion 0.37 vs 0.19, mean +0.26 (12 up · 4 down), and BOARD ≠ REGISTRY 16 of 16 (13 say AI HARDWARE, 3 say BLUE CHIP).</figcaption></figure>
+<figure><img src="shots/desktop-1680-3d-smh.png" alt=""><figcaption>1680 · 3D · SMH picked: a fund that is a branch. Its own bar +0.70, holdings blend +0.50, divergence "holdings weaker than the fund by 0.21", the three cohorts under it, top holdings.</figcaption></figure>
+<figure><img src="shots/desktop-1680-3d-finder-nvda.png" alt=""><figcaption>1680 · 3D · the finder with NVDA: flies to MEGACAP; the card gives the path The market › US stocks › US style and factor › VUG › MEGACAP, board tab AI HARDWARE (differs), also in AI ACCELERATORS and AI HARDWARE, attribute MEGA CAP, and HELD BY 16 funds with weights (SMH 19.28% … RSP 0.20%).</figcaption></figure>
+<figure><img src="shots/desktop-1680-outline-whole.png" alt=""><figcaption>1680 · OUTLINE · the same tree as a list: a striped mean on every heading with its ▲/▼ count, cohorts and NO COHORT YET lines under each sector, a FUNDS group per heading.</figcaption></figure>
+<figure><img src="shots/desktop-1680-outline-cohort-ai-accelerators.png" alt=""><figcaption>1680 · OUTLINE · AI ACCELERATORS opened under SMH: 16 names, each with its solid bar, its value and FULL, and a board tag (AI HARDWARE or BLUE CHIP) on every one.</figcaption></figure>
+<figure><img src="shots/phone-390-outline-whole.png" alt=""><figcaption>390 · OUTLINE · the phone default. No horizontal scroll; the market, US stocks, broad market, style, the sectors, each with its bar.</figcaption></figure>
+<figure><img src="shots/phone-390-outline-cohort-ai-accelerators.png" alt=""><figcaption>390 · OUTLINE · the same cohort opened on a phone: SMH › AI HARDWARE · AI ACCELERATORS with its members and bars.</figcaption></figure>
+<figure><img src="shots/phone-390-outline-finder-nvda.png" alt=""><figcaption>390 · the finder with NVDA on a phone (full page): the tree opens to MEGACAP, the row is highlighted, and the card below carries the path, the board tag and the 16 holders.</figcaption></figure>
+</div>
+
+<h2>WHAT COULD BE WRONG</h2>
+<ul>
+  <li><b>Membership is from the 28 Sep lists, not from a table.</b> The registry (step 1) carries no member lists, so the page uses the lists the registry was derived from, plus the 29 Sep admissions. If a name was moved on the board since 28 Sep, the tag shows it, the placement does not.</li>
+  <li><b>The "smallest cohort" home rule</b> is mine, stated on the page. It puts NVDA in MEGACAP (9 names) rather than AI ACCELERATORS (16) or AI HARDWARE, because MEGACAP is the smallest of the three that claim it. Alan may prefer themes over MEGACAP; see decisions.</li>
+  <li><b>The live <code>public.cohort_registry</code> could not be read</b> with the Hub's public key (permission denied: no SELECT grant to the anon role). The page uses <code>data/cohort-registry-step1.json</code>, which is the same 38 rows the migration inserted. Worth knowing: any Hub page that later reads the registry from the browser will hit the same wall until the grant is added.</li>
+  <li><b>The board read is a snapshot in tree.json</b> (30 Sep 00:36 UTC, 613 rows, BLUE_CHIP 174 where the brief said 173). Rebuild with <code>node scripts/build-tree-map.mjs</code> to refresh it; the page does not read the board live.</li>
+  <li><b>Cohort means are unweighted</b> (each name once). A fund's bar is weighted by holdings, so a cohort mean and its parent fund's blend are not the same thing; the card says so.</li>
+  <li><b>The fund cohorts (R8, the 49 automatic industry-fund cohorts)</b> are not in the adopted registry and are not on the tree as cohorts; the industry funds are there with their holdings blend, as on r3.</li>
+  <li>The scout route answered tonight (as of 29 Sep); when it does not, the snapshot next to the page is used and the stamp says "page snapshot". BDXA has neither reading and says so.</li>
+  <li>Screenshots come from headless Chrome with the API's origin check relaxed for that throwaway browser only (as the r3 proof does); the page is unchanged.</li>
+</ul>
+
+<h2>WHAT I DID NOT DO</h2>
+<ul>
+  <li>Did not deploy, push, or write to any table, the registry, <code>tickers.cohort</code> or R2. Did not touch market-map-r3, prototypes/indicator-lab, lab.html or INDICATOR_LAB.</li>
+  <li>Did not decide step 2: no split, move or merge is applied; the differences are counted and listed only.</li>
+  <li>Did not measure CPU idle/turning for the 3D view (r3 did; the rendering code is the same, with 39 more balls and 62 more bars).</li>
+  <li>Did not put a two-bar divergence (fund vs cohort) on the 3D ball; it is on the card (fund holdings blend vs own Geiger, as on r3).</li>
+</ul>
+
+<h2>FILES</h2>
+<ul>
+  <li><code>deliverables/20260929/tree-map/index.html</code> — the page (outline + finder + card); <code>map3d.js</code> the 3D view; <code>layout.js</code>, <code>aggregate.js</code> copied from r3.</li>
+  <li><code>deliverables/20260929/tree-map/tree.json</code> — the structure (676 nodes: 23 headings, 138 funds, 27 cohorts, 12 NO COHORT YET lines, 476 names; held_by; provenance). No reading in it.</li>
+  <li><code>scripts/build-tree-map.mjs</code> — builds tree.json and the scout snapshot. <code>tests/tree-map.test.mjs</code> — 8 tests. <code>proof.mjs</code> — the headless proof.</li>
+</ul>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
