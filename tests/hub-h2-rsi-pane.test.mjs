@@ -32,3 +32,12 @@ test("the collapsed desk chart keeps 300 px so the RSI panel is not squashed; EX
   /* the Station's own share: 26% of 300 px, less its 6 px gap = 72 px, above its compact eight-up wall's 66 px */
   assert.ok(Math.floor(300 * 0.26) - 6 >= 66);
 });
+
+test("the expanded view fills the dashboard's own height (never 100vh - 230 px under the desk zoom), so its bottom is not under the tapes", () => {
+  /* MEASURED 1680 x 1050: main ended at 961 px, the expanded view at 1010 — the chart's dates, the RSI's floor and the LIKED
+     list's last row and a half were under the tapes. The row takes what is left and the view is 100% of it. */
+  assert.match(page, /^@media \(min-width:761px\)\{ body\.co-exp \.sc-body2\{flex:1 1 0\} body\.co-exp \.cv\{height:100%;min-height:400px\} \}/m);
+  const at = (re) => page.search(re);
+  assert.ok(at(/@media \(min-width:761px\)\{ body\.co-exp \.sc-body2/) > at(/body\.co-exp \.cv\{display:grid;[^}]*height:calc\(100vh - 230px\)/), "it overrides the old height");
+  assert.match(page, /body\.co-exp \.cv\{display:flex;height:auto;min-height:0\}/, "the phone and small tablet keep their own");
+});
