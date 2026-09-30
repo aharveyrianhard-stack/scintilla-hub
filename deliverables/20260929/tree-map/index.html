@@ -26,6 +26,13 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 #view{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
 #outline{position:absolute;inset:0;overflow:auto;padding:10px 12px 40px}
 #graph{position:absolute;inset:0;display:none;cursor:grab}
+#layers{position:absolute;inset:0;display:none;overflow:hidden;cursor:grab}
+#crumbs{position:absolute;left:10px;top:8px;z-index:3;display:flex;gap:4px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--dim);pointer-events:auto;max-width:70%}
+#crumbs span.lnk{color:var(--ink2);text-decoration:none;border:1px solid var(--line2);border-radius:2px;padding:1px 6px;background:rgba(21,21,21,.9)}
+#crumbs span.lnk.here{color:var(--ink);border-color:var(--dim)}
+#levels{display:none;gap:2px}
+#levels button{padding:7px 7px;min-width:26px}
+#tip-l{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
 #graph.dragging{cursor:grabbing}
 #gl,#labels{position:absolute;inset:0}
 #gl canvas{display:block}
@@ -123,6 +130,8 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   #view{position:static;height:auto;min-height:40vh}
   #outline{position:static;padding:8px 8px 20px}
   #graph{height:62vh;position:relative;display:none}
+  #layers{height:62vh;position:relative;display:none}
+  #crumbs{position:static;padding:6px 8px 2px;max-width:none}
   aside{border-left:0;border-top:1px solid var(--line)}
   input[type=search]{width:150px}
   .ctrl{margin-left:0}
@@ -141,14 +150,18 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <input type="search" id="q" placeholder="find a ticker (path + who holds it)" list="tickers" autocomplete="off">
     <datalist id="tickers"></datalist>
     <button id="v-outline" class="on" title="the tree as an indented list with the bars">OUTLINE</button>
-    <button id="v-3d" title="the same tree in 3D (desktop)">3D</button>
+    <button id="v-layers" title="the broad levels as one flat map: drag, zoom, click to fly in">LAYERS</button>
+    <button id="v-3d" title="the whole market in 3D">3D</button>
+    <span id="levels" title="how deep the flat map shows"><button data-l="1">1</button><button data-l="2">2</button><button data-l="3">3</button><button data-l="4" class="on">4</button></span>
     <button id="flat" title="the 3D tree, flat, seen straight on" style="display:none">FLAT 2D</button>
     <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
   </div>
 </header>
 <div class="main">
   <div id="view">
+    <div id="crumbs"></div>
     <div id="outline"></div>
+    <div id="layers"><div id="tip-l"></div></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
       <details id="legend" open><summary>KEY</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
@@ -158,7 +171,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
         <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (28 Sep proposal) · FUND SET (R8) · NONE YET</div>
         <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
       </details>
-      <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go</div>
+      <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go · in a cluster: Esc or the breadcrumb goes back</div>
       <div id="fallback"></div>
     </div>
   </div>
@@ -252,7 +265,7 @@ state.counts = {
   scout: nodes.filter((n) => n.sg).length, none: nodes.filter((n) => n.ticker && !n.g && !n.sg).length,
   differences: T.counts.differences, differences_in_real_cohorts: T.counts.differences_in_real_cohorts, differences_no_cohort: T.counts.differences_no_cohort,
 };
-state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar;
+state.tree = T; state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar;
 
 /* ---- stamp ---- */
 $("stamp").textContent = state.geiger
@@ -475,14 +488,18 @@ function select(n, fly = true) {
   state.selected = n.id;
   renderCard(n);
   if (state.view === "outline") revealInOutline(n, true);
+  else if (state.view === "layers" && mL) { if (n.kind === "cohort" && fly) openCluster(n); else mL.select(n); }
   else if (m3) m3.select(n, fly);
+  crumbs();
 }
 function release() {
   state.selected = null; renderCard(null);
   O.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel"));
-  if (m3) m3.release();
+  if (m3 && !m3.inCluster()) m3.release();
+  if (mL) mL.release();
+  crumbs();
 }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) { e.preventDefault(); release(); } });
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.inCluster()) { closeCluster(); return; } if (state.selected) release(); });
 
 /* ---- the finder: a ticker → its path and every fund that holds it ---- */
 $("tickers").innerHTML = nodes.filter((n) => n.ticker || n.kind === "cohort").map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : n.kind)}</option>`).join("");
@@ -496,34 +513,80 @@ $("q").addEventListener("change", go);
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
 state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).map((p) => p.id), held_by: (T.held_by[n.ticker] || []).map((x) => x[0]) } : null; };
 
-/* ---- views ---- */
+/* ---- views: OUTLINE (phone default) · LAYERS (desktop default: the flat map of the broad levels) · 3D (the whole market)
+   A cohort opened from LAYERS shows its CLUSTER: only its names, in 3D, in the 3D module; Esc or the breadcrumb comes back. ---- */
+let mL = null, cameFrom = null;
+async function load3d() {
+  if (m3) return m3;
+  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); }, onRelease: () => { state.selected = null; renderCard(null); } }); }
+  catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the 3D map (${esc(String(e))}). The OUTLINE and LAYERS views carry the same tree and the same bars.</p>`; state.err3d = String(e); }
+  return m3;
+}
+async function loadLayers() {
+  if (mL) return mL;
+  const mod = await import("./layers.js");
+  mL = mod.mount({ nodes, state, readingOf, aggBar, membersOf, onPick: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onOpenCluster: (n) => openCluster(n) });
+  return mL;
+}
 async function setView(v) {
   state.view = v;
-  $("v-outline").classList.toggle("on", v === "outline"); $("v-3d").classList.toggle("on", v === "3d");
-  $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "3d" ? "block" : "none"; $("flat").style.display = v === "3d" ? "" : "none";
-  if (v === "3d" && !m3) {
-    try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); }, onRelease: () => { state.selected = null; renderCard(null); } }); }
-    catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the 3D map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
-  }
-  if (v === "3d" && m3) { m3.fit(); if (state.selected) m3.select(state.byId.get(state.selected), false); }
+  for (const k of ["outline", "layers", "3d"]) $("v-" + k).classList.toggle("on", v === k);
+  $("outline").style.display = v === "outline" ? "" : "none"; $("layers").style.display = v === "layers" ? "block" : "none"; $("graph").style.display = v === "3d" ? "block" : "none";
+  $("flat").style.display = v === "3d" ? "" : "none"; $("levels").style.display = v === "layers" ? "inline-flex" : "none";
+  if (v === "3d") { await load3d(); if (m3) { m3.fit(); if (state.selected && !m3.inCluster()) m3.select(state.byId.get(state.selected), false); } }
+  if (v === "layers") { await loadLayers(); mL.fit(); if (state.selected) mL.select(state.byId.get(state.selected)); }
   if (v === "outline" && state.selected) revealInOutline(state.byId.get(state.selected), true);
+  crumbs();
 }
+async function openCluster(n) {
+  cameFrom = state.view === "3d" ? "3d" : "layers";
+  const m = await load3d(); if (!m) return;
+  state.selected = n.id; renderCard(n);
+  await setView("3d"); m.enterCluster(n); crumbs();
+}
+function closeCluster() {
+  if (!m3 || !m3.inCluster()) return;
+  m3.exitCluster(cameFrom === "3d");
+  if (cameFrom === "layers") setView("layers"); else crumbs();
+}
+function crumbs() {
+  const c = $("crumbs"), sel = state.selected ? state.byId.get(state.selected) : null;
+  if (state.view === "outline") { c.innerHTML = ""; return; }
+  const trail = sel ? [...pathOf(sel), sel] : [state.byId.get("MARKET")];
+  const inC = m3 && m3.inCluster();
+  c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") + (inC ? `<span>›</span><span class="lnk here">CLUSTER</span><span class="lnk" data-crumb="__back">← back</span>` : "");
+}
+$("crumbs").addEventListener("click", (e) => {
+  const id = e.target.getAttribute && e.target.getAttribute("data-crumb"); if (!id) return;
+  if (id === "__back") { closeCluster(); return; }
+  const n = state.byId.get(id); if (!n) return;
+  if (m3 && m3.inCluster()) { closeCluster(); }
+  state.selected = n.id; renderCard(n);
+  if (state.view === "layers" && mL) mL.flyTo(n); else if (state.view === "3d" && m3) m3.select(n, true);
+  crumbs();
+});
+$("levels").addEventListener("click", (e) => { const l = e.target.getAttribute && e.target.getAttribute("data-l"); if (!l || !mL) return; mL.setLevel(+l); $("levels").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.l === l)); });
 $("v-outline").addEventListener("click", () => setView("outline"));
-$("v-3d").addEventListener("click", () => setView("3d"));
+$("v-layers").addEventListener("click", () => setView("layers"));
+$("v-3d").addEventListener("click", () => { if (m3 && m3.inCluster()) closeCluster(); setView("3d"); });
 $("flat").addEventListener("click", () => { if (m3) m3.setFlat(!state.flat); });
-$("reset").addEventListener("click", () => { release(); if (state.view === "3d" && m3) m3.frameWhole(900); else O.scrollTo({ top: 0, behavior: "smooth" }); });
+$("reset").addEventListener("click", () => { if (m3 && m3.inCluster()) m3.exitCluster(false); release(); if (state.view === "3d" && m3) m3.frameWhole(900); else if (state.view === "layers" && mL) { mL.frameWhole(600); mL.redraw(); } else O.scrollTo({ top: 0, behavior: "smooth" }); crumbs(); });
 
 /* ---- go ---- */
 renderCard(null);
 const p = new URLSearchParams(location.search);
-const wanted = p.get("view") || (PHONE ? "outline" : "3d");
+const wanted = p.get("view") || (PHONE ? "outline" : "layers");
 state.ready = true;
-if (wanted === "3d") await setView("3d"); else await setView("outline");
+await setView(["3d", "layers", "outline"].includes(wanted) ? wanted : "layers");
 if (p.get("flat") === "1" && m3) m3.setFlat(true, 0);
 if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n), 300); }
 state.select = (id) => { const n = state.byId.get(id); if (n) select(n); };
 state.release = () => release();
 state.setView = (v) => setView(v);
+state.openCluster = (id) => { const n = state.byId.get(id); if (n) return openCluster(n); };
+state.closeCluster = () => closeCluster();
+state.setLevel = (l) => { if (mL) { mL.setLevel(l); $("levels").querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.l === l)); } };
+state.crumbs = () => [...document.querySelectorAll("#crumbs .lnk")].map((e) => e.textContent);
 state.setFlat = (on) => { if (m3) m3.setFlat(on, 0); };
 state.toggle = (id) => toggle(id);
 /* the day change, after the tree is on the screen: three quote calls, never in the way of the first paint */

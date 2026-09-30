@@ -116,7 +116,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   { const col = lineGeo.attributes.color.array, C = new THREE.Color();
     treeLinks.forEach((l, i) => { C.setHex(l.t.kind === "index" ? 0x3c3c3c : l.t.kind === "cohort" ? 0x484848 : 0x2c2c2c); col.set([C.r, C.g, C.b, C.r, C.g, C.b], i * 6); });
     for (let j = treeLinks.length; j < lineCount; j++) { C.setHex(j >= railStart ? 0x3c3c3c : 0x2a2a2a); col.set([C.r, C.g, C.b, C.r, C.g, C.b], j * 6); } }
-  scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 })));
+  const treeLines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 })); scene.add(treeLines);
   const selGeo = new THREE.BufferGeometry(); selGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6 * 64), 3)); selGeo.setDrawRange(0, 0);
   const selLines = new THREE.LineSegments(selGeo, new THREE.LineBasicMaterial({ color: 0x8c8c8c, transparent: true, opacity: 0.95 })); scene.add(selLines);
   const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.1, 48), new THREE.MeshBasicMaterial({ color: RING, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
@@ -215,11 +215,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   function placeLabels() {
     const camD = camera.position.distanceTo(controls.target), cand = [];
     camera.updateMatrixWorld();
-    for (const n of nodes) {
+    const pool = cluster ? [cluster.c, ...cluster.members, ...cluster.nbs] : nodes;
+    for (const n of pool) {
       V.copy(n.pos).applyMatrix4(camera.matrixWorldInverse); const depth = -V.z;
       if (depth <= 1) { hide(n); continue; }
       V.copy(n.pos).project(camera);
-      if (V.x < -1.15 || V.x > 1.15 || V.y < -1.15 || V.y > 1.15) { hide(n); continue; }
+      if (V.x < -1.02 || V.x > 1.02 || V.y < -1.02 || V.y > 1.02) { hide(n); continue; } // off-screen or behind: no label (30 Sep: labels used to pile up at the edge)
       const ppu = view.scaleH / depth, rpx = n.r * ppu;
       let show = false, p = n.lbl.prio;
       if (n.lbl.kind === "h" || n.lbl.kind === "c") show = true;
@@ -234,12 +235,13 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     for (const c of cand) {
       if (shown >= MAXL) { hide(c.n); continue; }
       const n = c.n, w = n.lbl.w, s = (n.lbl.kind === "h" && c.rpx > 2.2 && !n.lbl.top && n.id !== "US") || (n.lbl.kind === "c" && c.rpx > 1.6) ? sub(n) : "";
-      const h = n.lbl.h + (s ? 14 : 0), x = Math.max(2, Math.min(view.w - w - 2, c.sx - w / 2));
+      const h = n.lbl.h + (s ? 14 : 0), x = c.sx - w / 2; // centred on the ball, never pushed along the edge
+      if (x < 0 || x + w > view.w) { hide(n); continue; } // printed whole or not at all
       const tries = n.lbl.kind === "h" || n.lbl.kind === "c" ? [c.below + 3, c.below + 3 + h + 2, -c.rpx - h - 3] : [c.below + 2];
       let y = null;
-      for (const dy of tries) { const yy = c.sy + dy; let ok = true; for (const r of rects) if (x < r.x + r.w && x + w > r.x && yy < r.y + r.h && yy + h > r.y) { ok = false; break; } if (ok) { y = yy; break; } }
+      for (const dy of tries) { const yy = c.sy + dy; let ok = yy >= 0 && yy + h <= view.h; for (const r of rects) if (x < r.x + r.w && x + w > r.x && yy < r.y + r.h && yy + h > r.y) { ok = false; break; } if (ok) { y = yy; break; } }
       if (y == null) { hide(n); continue; }
-      rects.push({ x, y, w, h }); shown++;
+      rects.push({ x, y, w, h, id: n.id, nx: c.sx, ny: c.sy, text: n.lbl.text }); shown++;
       const e = labelEl(n);
       if ((n.lbl.kind === "h" || n.lbl.kind === "c") && e.dataset.sub !== s) { e.innerHTML = esc(n.lbl.text) + (s ? `<small>${s}</small>` : ""); e.dataset.sub = s; }
       e.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
@@ -247,6 +249,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       if (!n.lbl.shown) { e.style.display = "block"; n.lbl.shown = true; }
     }
     state.labelsShown = shown;
+    state.labelsNow = () => rects.map((r) => ({ ...r }));
   }
   function hide(n) { if (n.lbl && n.lbl.shown) { n.lbl.el.style.display = "none"; n.lbl.shown = false; } }
 
@@ -277,6 +280,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     const r = renderer.domElement.getBoundingClientRect();
     mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(mouse, camera);
+    if (cluster) { const h2 = ray.intersectObjects(cluster.balls, false)[0]; return h2 ? h2.object.userData.node : null; }
     const hit = ray.intersectObjects([litMesh, cohMesh, headMesh, holMesh], false)[0];
     return hit ? hit.object.userData.list[hit.instanceId] : null;
   }
@@ -315,6 +319,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     selGeo.attributes.position.needsUpdate = true; selGeo.setDrawRange(0, mine.length * 2);
   }
   function select(n, fly = true) {
+    if (cluster) { state.selected = n.id; ring.visible = true; drawSelection(n); state.dirty = true; wake(); return; }
     if (!beforePick) beforePick = { p: camera.position.clone(), t: controls.target.clone() };
     state.selected = n.id; ring.visible = true; drawSelection(n);
     if (fly) {
@@ -337,11 +342,78 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (ms) morph = { t0: performance.now(), ms }; else { nodes.forEach((n) => n.pos.copy(n.to)); applyPositions(); }
     wake();
   }
+  /* ---- CLUSTER: one cohort's names in 3D, each with its bar, a link from each name to every other cohort and fund it is
+     also in ("also in", held by), those neighbours faint on an outer ring. Whole-tree objects are hidden meanwhile; the
+     involved nodes borrow cluster positions and get their tree positions back on exit. ---- */
+  let cluster = null;
+  const saved = new Map();
+  const sph = new THREE.SphereGeometry(1, 16, 11);
+  function enterCluster(c) {
+    exitCluster(false);
+    const members = membersOf(c);
+    const nbIds = new Set();
+    for (const m of members) { for (const a of m.also_in || []) nbIds.add(a.id); for (const [f] of (T_HELD[m.ticker] || [])) nbIds.add(f); }
+    nbIds.delete(c.id);
+    // cohorts first (where else it is filed), then the funds that hold it; at most 30 so the ring stays readable
+    const nbs = [...nbIds].map((id) => state.byId.get(id)).filter(Boolean).sort((a, b) => (a.kind === "cohort" ? 0 : 1) - (b.kind === "cohort" ? 0 : 1)).slice(0, 30);
+    const group = new THREE.Group();
+    // members on a flat spiral in the middle; neighbours on a wide ring above, so the links fan out in 3D
+    const R0 = 26 + members.length * 2.2;
+    members.forEach((m, i) => { const a = i * 2.39996, r = R0 * Math.sqrt((i + 0.5) / members.length); if (!saved.has(m.id)) saved.set(m.id, m.pos.clone()); m.pos.set(r * Math.cos(a), 0, r * Math.sin(a)); });
+    nbs.forEach((nb, i) => { const a = (i / nbs.length) * Math.PI * 2, r = R0 + 70; if (!saved.has(nb.id)) saved.set(nb.id, nb.pos.clone()); nb.pos.set(r * Math.cos(a), 46, r * Math.sin(a)); });
+    if (!saved.has(c.id)) saved.set(c.id, c.pos.clone()); c.pos.set(0, 70, 0);
+    const mkBall = (n, col, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: col, transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(n.r); b.userData.node = n; group.add(b); return b; };
+    const balls = members.map((m) => mkBall(m, m.g || m.sg ? LIT : HOLLOW)); balls.push(mkBall(c, COHORT));
+    nbs.forEach((nb) => balls.push(mkBall(nb, nb.kind === "cohort" ? COHORT : LIT, 0.35)));
+    // bars for the members (the same shader)
+    const cb = [];
+    members.forEach((m) => { const rd = readingOf(m); if (rd) cb.push({ n: m, v: rd.v, kind: rd.kind === "full" ? 0 : 2, slot: 0 }); });
+    const ab = aggBar(c); if (ab) cb.push({ n: c, v: ab.v, kind: ab.kind === "full" ? 1 : 3, slot: 0 });
+    if (cb.length) {
+      const g2 = new THREE.InstancedBufferGeometry(); g2.copy(new THREE.PlaneGeometry(2, 2)); g2.instanceCount = cb.length;
+      g2.setAttribute("aCenter", new THREE.InstancedBufferAttribute(new Float32Array(cb.flatMap((b) => [b.n.pos.x, b.n.pos.y, b.n.pos.z])), 3));
+      g2.setAttribute("aVal", new THREE.InstancedBufferAttribute(new Float32Array(cb.map((b) => Math.max(-1, Math.min(1, b.v)))), 1));
+      g2.setAttribute("aKind", new THREE.InstancedBufferAttribute(new Float32Array(cb.map((b) => b.kind)), 1));
+      g2.setAttribute("aR", new THREE.InstancedBufferAttribute(new Float32Array(cb.map((b) => b.n.r)), 1));
+      g2.setAttribute("aTwo", new THREE.InstancedBufferAttribute(new Float32Array(cb.map((b) => b.slot)), 1));
+      const bm = new THREE.Mesh(g2, barMat); bm.frustumCulled = false; bm.renderOrder = 3; group.add(bm);
+    }
+    // links: cohort → each member (grey), member → each neighbour it is in (faint)
+    const segs = [], cols = [], C1 = new THREE.Color(0x3c3c3c), C2 = new THREE.Color(0x262626);
+    const nbPos = new Map(nbs.map((nb) => [nb.id, nb.pos]));
+    for (const m of members) {
+      segs.push(c.pos.x, c.pos.y, c.pos.z, m.pos.x, m.pos.y, m.pos.z); cols.push(C1.r, C1.g, C1.b, C1.r, C1.g, C1.b);
+      const mine = new Set([...(m.also_in || []).map((a) => a.id), ...(T_HELD[m.ticker] || []).map((x) => x[0])]);
+      for (const id of mine) { const p = nbPos.get(id); if (!p) continue; segs.push(m.pos.x, m.pos.y, m.pos.z, p.x, p.y, p.z); cols.push(C2.r, C2.g, C2.b, C2.r, C2.g, C2.b); }
+    }
+    const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs), 3)); lg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(cols), 3));
+    group.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 })));
+    scene.add(group);
+    for (const o of [litMesh, holMesh, headMesh, cohMesh, barMesh, selLines, treeLines]) o.visible = false;
+    cluster = { c, group, balls, members, nbs, before: { p: camera.position.clone(), t: controls.target.clone() } };
+    state.cluster = c.id; state.clusterCount = { members: members.length, neighbours: nbs.length };
+    nodes.forEach(hide);
+    const list = [c, ...members, ...nbs];
+    flyTo(framing(list, new THREE.Vector3(0.15, 0.9, 1).normalize(), 0.8), 900);
+    state.dirty = true; wake();
+  }
+  function exitCluster(fly = true) {
+    if (!cluster) return;
+    scene.remove(cluster.group);
+    cluster.group.traverse((o) => { if (o.geometry && o.geometry !== sph) o.geometry.dispose(); });
+    for (const [id, p] of saved) state.byId.get(id).pos.copy(p); saved.clear();
+    for (const o of [litMesh, holMesh, headMesh, cohMesh, barMesh, selLines, treeLines]) o.visible = true;
+    applyPositions();
+    const b = cluster.before; cluster = null; state.cluster = null; nodes.forEach(hide);
+    if (fly) flyTo(b, 700);
+    state.dirty = true; wake();
+  }
+  const T_HELD = (state.tree && state.tree.held_by) || {};
   state.screenOf = (id) => { const n = state.byId.get(id); camera.updateMatrixWorld(); const v = n.pos.clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) * r.width / 2, r.top + (1 - v.y) * r.height / 2]; };
   state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }); layout(state.flat ? 0 : 1, () => {}); return out; };
 
   fit();
   if (PHONE) $("legend").removeAttribute("open");
   frameWhole(0);
-  return { select, release, setFlat, fit, frameWhole };
+  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, inCluster: () => !!cluster };
 }
