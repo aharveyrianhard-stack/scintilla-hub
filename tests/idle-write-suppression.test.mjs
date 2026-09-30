@@ -71,11 +71,11 @@ test("the cohort average states its contributor coverage when some rows carry no
 });
 
 test("the map reuses a symbol's series across cohorts under the same freshness rule", async () => {
-  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\nfunction l0SeriesFor \([\s\S]*?\n\}\n/)[0];
   const calls = [];
   const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, now: 0,
     scCleanRows: async (sym, tf, per) => { calls.push(sym + "|" + tf + "|" + per); return [{ ticker: sym }] } };
-  const make = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+  const make = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const sparkPaced = (run) => Promise.resolve().then(() => run(undefined));   /* H2 — the pacer, pass-through */ const Date = { now: () => ctx.now };
     ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")} ; return l0SeriesFor;`);
   const l0SeriesFor = make(ctx);
 
@@ -95,16 +95,18 @@ test("the map reuses a symbol's series across cohorts under the same freshness r
   assert.equal(calls.length, 4, "a request needing more bars is not served from a shorter cached one");
 
   const mapLoad = html.match(/async function l0MapLoad\([\s\S]*?\n\}\n/)[0];
-  assert.match(mapLoad, /part\.map\(\(t\) => l0SeriesFor\(t, tf, per\)\)/);
+  assert.match(mapLoad, /const got = await l0SeriesMany\(part, tf, per\);/);   /* H2 — a chunk: one /sparklines request when offered */
+  const many = html.match(/async function l0SeriesMany\([\s\S]*?\n\}\n/)[0];
+  assert.match(many, /return Promise\.all\(syms\.map\(function \(s\) \{ return l0SeriesFor\(s, tf, per\); \}\)\);/, "...then every symbol through the shared cache");
   assert.doesNotMatch(mapLoad, /part\.map\(\(t\) => scCleanRows\(/);
 });
 
 test("a null series still routes the symbol to its retained owner", async () => {
-  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\nfunction l0SeriesFor \([\s\S]*?\n\}\n/)[0];
   let hits = 0;
   const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, now: 0,
     scCleanRows: async () => { hits++; return null } };
-  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const sparkPaced = (run) => Promise.resolve().then(() => run(undefined));   /* H2 — the pacer, pass-through */ const Date = { now: () => ctx.now };
     ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")} ; return l0SeriesFor;`)(ctx);
   assert.equal(await l0SeriesFor("CLUSD", "240", 13), null);
   assert.equal(await l0SeriesFor("CLUSD", "240", 13), null, "the non-equity answer is cached too");
@@ -115,12 +117,12 @@ test("a null series still routes the symbol to its retained owner", async () => 
 });
 
 test("two cohorts loading at once pull a symbol's series only once", async () => {
-  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\n\}\n[\s\S]*?\n\}\n/)[0];
+  const src = html.match(/const L0_SERIES_CACHE = \{\};[\s\S]*?\nfunction l0SeriesFor \([\s\S]*?\n\}\n/)[0];
   let calls = 0, release;
   const gate = new Promise((r) => { release = r });
   const ctx = { L0_MAP_TTL: 90000, L0_SERIES_CACHE: {}, L0_SERIES_INFLIGHT: {}, now: 0,
     scCleanRows: async () => { calls++; await gate; return [{ ticker: "AAPL" }] } };
-  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const Date = { now: () => ctx.now };
+  const l0SeriesFor = new Function("ctx", `const { L0_MAP_TTL, scCleanRows } = ctx; const sparkPaced = (run) => Promise.resolve().then(() => run(undefined));   /* H2 — the pacer, pass-through */ const Date = { now: () => ctx.now };
     ${src.replace("const L0_SERIES_CACHE = {};", "const L0_SERIES_CACHE = ctx.L0_SERIES_CACHE;")
          .replace("const L0_SERIES_INFLIGHT = {};", "const L0_SERIES_INFLIGHT = ctx.L0_SERIES_INFLIGHT;")} ; return l0SeriesFor;`)(ctx);
   const a = l0SeriesFor("AAPL", "240", 13), b = l0SeriesFor("AAPL", "240", 13);

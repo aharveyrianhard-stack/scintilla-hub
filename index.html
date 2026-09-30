@@ -6097,6 +6097,7 @@ function coFundSrc(t) {
 function coChartTabHTML(t) {
   const r = coRange(lsGet(CO_RANGE_KEY));
   coPaneModeProbe();
+  scChartFirstHold();   /* H2 — the chart's reads go first */
   setTimeout(() => coChartStamp(t, r), 0);   /* after the markup is in the DOM */
   return '<div class="sc-cofr' + (CO_HUB_PANE ? "" : " is-legacy") + '">' +
     '<div class="sc-cofr__bar" role="group" aria-label="chart timeframe">' +
@@ -6271,6 +6272,7 @@ function cvRailHTML() {
       (num(r.c) != null ? fmtC(num(r.c)) : "—") + "</span>" + geigerMiniHTML(num(r.g), 1) + "</button>").join("");
 }
 function cvChartHTML(t) {
+  scChartFirstHold();   /* H2 — the chart's reads go first */
   return '<div class="cv-chart' + (CO_HUB_PANE ? "" : " is-legacy") + '" id="cvChart">' +
     '<iframe class="cv-frame" id="coChartFrame" title="' + esc(t) + ' chart (Station chart pane)" src="' +
       esc(coChartSrc(t, lsGet(CO_RANGE_KEY), CO_CHART_RSI)) + '" referrerpolicy="no-referrer"></iframe></div>';
@@ -6317,7 +6319,7 @@ function cvUpdateInPlace() {
   const cv = el("cv"); if (!cv) return false;
   cv.dataset.t = LEFT_T;
   const f = el("coChartFrame"), want = coChartSrc(LEFT_T, lsGet(CO_RANGE_KEY), CO_CHART_RSI);
-  if (f && f.getAttribute("src") !== want) f.setAttribute("src", want);
+  if (f && f.getAttribute("src") !== want) { scChartFirstHold(); f.setAttribute("src", want); }   /* H2 — the chart's reads go first */
   if (f) f.title = LEFT_T + " chart (Station chart pane)";
   cvRepaint();
   cvRailRepaint();
@@ -8393,7 +8395,7 @@ async function l0LoadData(tf) {
          "&order=timestamp.desc&limit=" + def.bars);
     const res = await Promise.all(syms.map((sym) =>
       (window.SC_CLEAN_READS
-        ? scCleanRows(sym, tf, def.bars).then((r) => (r === null ? l0Legacy(sym) : r))
+        ? sparkPaced((sig) => scCleanRows(sym, tf, def.bars, sig)).then((r) => (r === null ? l0Legacy(sym) : r))   /* H2 — paced, the chart first */
         : l0Legacy(sym))
         .then((rows) => ({ sym, rows: Array.isArray(rows) ? rows : [] }))
         .catch(() => ({ sym, rows: [] }))
@@ -8476,7 +8478,7 @@ function l0SeriesFor (sym, tf, per) {
      One pull per symbol, shared by every waiter. */
   const flight = L0_SERIES_INFLIGHT[k];
   if (flight && flight.per >= per) return flight.promise;
-  const promise = Promise.resolve(scCleanRows(sym, tf, per)).then(function (rows) {
+  const promise = sparkPaced(function (signal) { return scCleanRows(sym, tf, per, signal); }).then(function (rows) {
     L0_SERIES_CACHE[k] = { rows: rows, per: per, at: Date.now() };
     if (L0_SERIES_INFLIGHT[k] && L0_SERIES_INFLIGHT[k].promise === promise) delete L0_SERIES_INFLIGHT[k];
     return rows;
@@ -8486,6 +8488,90 @@ function l0SeriesFor (sym, tf, per) {
   });
   L0_SERIES_INFLIGHT[k] = { promise: promise, per: per };
   return promise;
+}
+/* H2 (Alan, 30 Sep: "charts on ticker selection in dashboard are very slow it showed data delayed for a while") — THE CHART
+   GOES FIRST. The map's series were fired a chunk at a time (73 at once, ~590 on ALL), and the chart server answers one
+   request after another (P6, 30 Sep: ~0.12 s of work each), so a company chart opened during the burst queued behind it
+   (MEASURED 30 Sep 10:30 ET: 1.3-1.7 s per read while it ran; a chart opened 15 s later drew its price in 0.7 s).
+   Now: at most SPARK_PACE.max of these reads are out at once; when a company chart is pointed at a name (scChartFirstHold)
+   the ones in flight are aborted and go back to the FRONT of the queue, and none start until the chart has had the server:
+   SPARK_HOLD_AFTER_LOAD_MS after its frame loads, SPARK_HOLD_MAX_MS after the click at most. The Station pane sends the Hub
+   nothing (?bare=hub), so the frame's load is the one signal the Hub can see. Values are unchanged; only the order is. */
+/* 12 at a time: at the 10:30 load (one request after another, ~0.12 s each) at most ~1.4 s of them can sit ahead of a chart
+   when it is clicked, against ~14 s for the 114 measured in flight; on a quiet server the ALL map's 4H colours still land in
+   ~9-10 s (6 at a time: ~28 s; all at once: ~5 s). */
+const SPARK_PACE = { max: 12, running: 0, queue: [], inflight: new Set(), holdUntil: 0, timer: null };
+const SPARK_HOLD_AFTER_LOAD_MS = 3000, SPARK_HOLD_MAX_MS = 8000;
+function sparkPaced(run) {
+  return new Promise(function (resolve, reject) { SPARK_PACE.queue.push({ run: run, resolve: resolve, reject: reject }); sparkPump(); });
+}
+function sparkPump() {
+  clearTimeout(SPARK_PACE.timer); SPARK_PACE.timer = null;
+  const wait = SPARK_PACE.holdUntil - Date.now();
+  if (wait > 0) { if (SPARK_PACE.queue.length) SPARK_PACE.timer = setTimeout(sparkPump, wait + 5); return; }
+  while (SPARK_PACE.running < SPARK_PACE.max && SPARK_PACE.queue.length) sparkRun(SPARK_PACE.queue.shift());
+}
+function sparkRun(job) {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null, j = { ctl: ctl };
+  SPARK_PACE.running++; SPARK_PACE.inflight.add(j);
+  Promise.resolve().then(function () { return job.run(ctl ? ctl.signal : undefined); })
+    .then(function (v) { return { v: v }; }, function (e) { return { e: e }; })
+    .then(function (r) {
+      SPARK_PACE.running--; SPARK_PACE.inflight.delete(j);
+      if (ctl && ctl.signal.aborted) SPARK_PACE.queue.unshift(job);   // held back for a chart: asked again right after it
+      else if (r.e) job.reject(r.e); else job.resolve(r.v);
+      sparkPump();
+    });
+}
+/* a company chart is being pointed at a name: give it the server */
+function scChartFirstHold() {
+  SPARK_PACE.holdUntil = Math.max(SPARK_PACE.holdUntil, Date.now() + SPARK_HOLD_MAX_MS);
+  SPARK_PACE.inflight.forEach(function (j) { if (j.ctl) j.ctl.abort(); });
+  sparkPump();
+}
+/* its frame has loaded: the pane's own reads are out; the queue resumes a little after */
+function scChartFirstLoaded() {
+  const now = Date.now();
+  if (SPARK_PACE.holdUntil > now) SPARK_PACE.holdUntil = Math.min(SPARK_PACE.holdUntil, now + SPARK_HOLD_AFTER_LOAD_MS);
+  sparkPump();
+}
+try { document.addEventListener("load", function (e) { if (e.target && e.target.id === "coChartFrame") scChartFirstLoaded(); }, true); } catch (_) {}
+/* ONE REQUEST FOR MANY — GET /sparklines?tf=&limit=&authority=provider&symbols=A,B,… (chart API lane P6): each symbol's entry
+   is byte for byte its /candles answer; a symbol it does not track is refused by name with 404 (→ null, the caller keeps its
+   owner, exactly as scCleanRows), any other refusal → [] (a real failure). Feature-detected once per tab: a server without
+   the route answers 404 "unknown path", and the Hub goes on one request per symbol, paced as above. */
+let SPARK_BATCH = (function () { try { return sessionStorage.getItem("hub.chart.sparklines") === "0" ? false : null; } catch (_) { return null; } })();
+async function l0SeriesBatch(syms, tf, per, signal) {
+  const r = await fetch(SC_CHART_API + "/sparklines?tf=" + encodeURIComponent(tf) + "&limit=" + per + "&authority=provider&symbols=" +
+    syms.map(encodeURIComponent).join(","), { signal: signal });
+  const j = await r.json().catch(function () { return null; });
+  if (!r.ok || !j || typeof j.candles !== "object" || !j.candles) {
+    if (r.status === 404) { SPARK_BATCH = false; try { sessionStorage.setItem("hub.chart.sparklines", "0"); } catch (_) {} }
+    return null;                                           // no batch answer: the caller asks per symbol
+  }
+  SPARK_BATCH = true;
+  const out = {};
+  for (const sym of syms) {
+    const c = j.candles[sym];
+    if (c && Array.isArray(c.series)) {
+      const rows = [];
+      for (let i = c.series.length - 1; i >= 0; i--) rows.push({ ticker: sym, timestamp: Math.floor(c.series[i].t / 1000), close: +c.series[i].c, volume: +c.series[i].v });
+      out[sym] = rows;
+    } else {
+      const why = (j.refused || []).find(function (x) { return x && x.symbol === sym; });
+      out[sym] = why && why.status === 404 ? null : [];
+    }
+  }
+  return out;
+}
+/* the map's series for a chunk: the fresh cache first, then one batch request for the rest (when offered), else per symbol */
+async function l0SeriesMany(syms, tf, per) {
+  const need = syms.filter(function (s) { const h = L0_SERIES_CACHE[tf + "|" + s]; return !(h && (Date.now() - h.at) < L0_MAP_TTL && h.per >= per) && !L0_SERIES_INFLIGHT[tf + "|" + s]; });
+  if (need.length > 1 && SPARK_BATCH !== false) {
+    const got = await sparkPaced(function (signal) { return l0SeriesBatch(need, tf, per, signal); }).catch(function () { return null; });
+    if (got) { const at = Date.now(); for (const s of need) L0_SERIES_CACHE[tf + "|" + s] = { rows: got[s], per: per, at: at }; }
+  }
+  return Promise.all(syms.map(function (s) { return l0SeriesFor(s, tf, per); }));
 }
 let L0_MAP_NOW = null;                   // the resolved entry for what is CURRENTLY on screen (null → session basis)
 let L0_MAP_NOWK = "";
@@ -8527,7 +8613,7 @@ async function l0MapLoad(tf, tickers, key) {
          replaces. Any symbol with no Massive series falls back to the batched legacy read. */
       let rows;
       if (window.SC_CLEAN_READS) {
-        const got = await Promise.all(part.map((t) => l0SeriesFor(t, tf, per)));
+        const got = await l0SeriesMany(part, tf, per);   /* H2 — one /sparklines request when offered, else paced per symbol */
         const missing = part.filter((t, i) => got[i] === null);
         rows = got.filter(Boolean).flat().filter((r) => r.timestamp >= cut);
         if (missing.length) {
@@ -22197,7 +22283,7 @@ document.addEventListener("click", (e) => {
       const r = coRange(a.dataset.r);
       lsSet(CO_RANGE_KEY, r);
       document.querySelectorAll(".sc-cofr__tf[data-r]").forEach((b) => { const on = b.dataset.r === r; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });   /* [data-r]: the CLOUDS switch shares the look, not the choice */
-      const f = el("coChartFrame"); if (f && LEFT_T) f.src = coChartSrc(LEFT_T, r, CO_CHART_RSI);
+      const f = el("coChartFrame"); if (f && LEFT_T) { scChartFirstHold(); f.src = coChartSrc(LEFT_T, r, CO_CHART_RSI); }   /* H2 — the chart's reads go first */
       if (LEFT_T) coChartStamp(LEFT_T, r);   // H2 — the stamp follows the timeframe
       break;
     }
@@ -22206,7 +22292,7 @@ document.addEventListener("click", (e) => {
       lsSet(CO_CLOUDS_KEY, coCloudsOn() ? "0" : "1");
       const on = coCloudsOn();
       document.querySelectorAll(".cv-clouds").forEach((b) => { b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
-      const f = el("coChartFrame"); if (f && LEFT_T) f.src = coChartSrc(LEFT_T, lsGet(CO_RANGE_KEY), CO_CHART_RSI);
+      const f = el("coChartFrame"); if (f && LEFT_T) { scChartFirstHold(); f.src = coChartSrc(LEFT_T, lsGet(CO_RANGE_KEY), CO_CHART_RSI); }   /* H2 — the chart's reads go first */
       break;
     }
     case "socview": {   // R4 — SOCIAL: YOUR CHANNELS / + YOUTUBE SEARCH (the same read, re-rendered; nothing refetched)
@@ -25507,7 +25593,7 @@ async function scApplyProviderQuotes (index, tickers) {
   window.SC_LAST_QUOTE_OVERLAY = { applied, blanked };
   return applied;
 }
-async function scCleanRows (sym, tf, bars) {
+async function scCleanRows (sym, tf, bars, signal) {   /* H2 — signal: the map's paced reads can be aborted for a chart */
   try {
     /* authority=provider is NOT optional. The API's default lane is the local audit roll-up, which
        is measurably STALER than the legacy table it replaces on intraday widths (XLRE tf=240,
@@ -25515,7 +25601,7 @@ async function scCleanRows (sym, tf, bars) {
        Defaulting clean reads ON without this parameter would make the Hub staler, not cleaner. */
     const r = await fetch(SC_CHART_API + "/candles?symbol=" + encodeURIComponent(sym) +
                           "&tf=" + encodeURIComponent(tf) + "&authority=provider" +
-                          "&limit=" + (bars || 200));
+                          "&limit=" + (bars || 200), signal ? { signal: signal } : undefined);
     if (r.status === 404) return null;                 // not a Massive equity — caller keeps its owner
     if (!r.ok) return [];                              // real failure: empty, never silently legacy
     const j = await r.json();
@@ -25525,7 +25611,7 @@ async function scCleanRows (sym, tf, bars) {
       out.push({ ticker: sym, timestamp: Math.floor(s[i].t / 1000), close: +s[i].c, volume: +s[i].v });
     }
     return out;
-  } catch (_) { return []; }
+  } catch (e) { if (signal && signal.aborted) throw e; return []; }   /* H2 — an abort is not a failure: the pacer asks again */
 }
 window.SC_BUILD = "2026-08-20T1420";
 (function () {

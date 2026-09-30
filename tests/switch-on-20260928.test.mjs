@@ -89,7 +89,7 @@ test("D3/D2: the Station chart's eleven timeframes and the CLOUDS switch are rea
   const frame = { src: "" }, saved = {}, btns = [];
   const store = { "hub.chart.range": "1D" };
   new Function("a", "e", "el", "lsSet", "lsGet", "document", "LEFT_T",
-    CONSTS + fn("coRange") + fn("coCloudsOn") + fn("coChartSrc") + "\nswitch (\"coclouds\") {\n" + clickCase("coclouds") + "}")(
+    "const scChartFirstHold = () => {};   /* H2 — the sparkline pacer's hold: stubbed */\n" + CONSTS + fn("coRange") + fn("coCloudsOn") + fn("coChartSrc") + "\nswitch (\"coclouds\") {\n" + clickCase("coclouds") + "}")(
     {}, { preventDefault() {}, stopPropagation() {} }, (id) => (id === "coChartFrame" ? frame : null), (k, v) => { saved[k] = v; store[k] = v; }, (k) => store[k],
     { querySelectorAll: () => btns }, "MU");
   assert.deepEqual(saved, { "hub.chart.clouds": "0" });

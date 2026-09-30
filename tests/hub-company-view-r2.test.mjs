@@ -55,6 +55,7 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
   const store = { "hub.chart.range": "1D" }; const env = { LEFT_T: "MU" };
   const dom = { cv: { dataset: {} }, coChartFrame: frame };
   const run = new Function("env", "el", "lsGet", "cvRepaint", "cvRailRepaint", "cvTabsHTML", "leftBodyHTML",
+    "const scChartFirstHold = () => { env.holds = (env.holds || 0) + 1; };   /* H2 — counted: the chart first, only when it moves */\n" +
     CONSTS + fn("coRange") + fn("coChartSrc") + fn("cvUpdateInPlace").replace(/LEFT_T/g, "env.LEFT_T") + "\nreturn cvUpdateInPlace;")(
     env, (id) => dom[id] || null, (k) => store[k], () => {}, () => {}, () => "", () => "");
   assert.equal(run(), true);
@@ -64,6 +65,7 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
   assert.equal(frame.sets, 1, "same name, same timeframe: the frame is not touched (no reload)");
   env.LEFT_T = "NVDA"; run();
   assert.equal(frame.sets, 2); assert.match(frame.src, /t=NVDA&range=1D/);
+  assert.equal(env.holds, 2, "H2 — the sparkline reads step aside each time the frame moves, and only then");
   store["hub.chart.range"] = "4h"; run();
   assert.equal(frame.sets, 3); assert.match(frame.src, /range=4h&clouds=1&rsi=1$/);
   assert.match(fn("renderLeftPanel"), /const inPlace = !LEFT_HEAT && LEFT_STATE === "PINNED" && LEFT_T && cvUpdateInPlace\(\);\n  if \(!inPlace\) lp\.innerHTML = leftPanelInnerHTML\(\);/);
