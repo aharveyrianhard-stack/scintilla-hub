@@ -17,7 +17,9 @@ const CT = JSON.parse(readFileSync(join(ROOT, "deliverables/20260928/coverage-tr
 const PAGE = readFileSync(join(DIR, "index.html"), "utf8");
 const byId = new Map(T.nodes.map((n) => [n.id, n]));
 const cohorts = T.nodes.filter((n) => n.kind === "cohort");
-const real = cohorts.filter((c) => !c.pseudo), pseudo = cohorts.filter((c) => c.pseudo);
+const real = cohorts.filter((c) => c.ckind === "adopted"), pseudo = cohorts.filter((c) => c.ckind === "none");
+const proposed = cohorts.filter((c) => c.ckind === "proposed"), fundsets = cohorts.filter((c) => c.ckind === "fundset");
+const PROP = JSON.parse(readFileSync(join(ROOT, "deliverables/20260928/tree-cohorts/proposed-cohorts.json"), "utf8"));
 const names = T.nodes.filter((n) => n.kind === "name");
 const funds = T.nodes.filter((n) => n.kind === "fund");
 const SERVED = new Set(R3.provenance.universe.symbols);
@@ -64,7 +66,9 @@ test("every served name is on the tree exactly once, as a member of exactly one 
   assert.equal(servedNames.length, T.counts.served_names);
   for (const n of servedNames) assert.equal(seen.get(n.ticker), 1, `${n.ticker} is a member ${seen.get(n.ticker) || 0} times`);
   for (const n of names) {
-    assert.equal(n.parents[0], n.registry_cohort ? "COHORT_" + n.registry_cohort : "NOCOHORT_" + n.sector, `${n.ticker}: primary parent is not its cohort`);
+    assert.equal(n.parents[0], n.home_id, `${n.ticker}: primary parent is not its home`);
+    assert.equal(n.home_id, n.home_kind === "adopted" ? "COHORT_" + n.registry_cohort : n.home_kind === "none" ? "NOCOHORT_" + n.sector : n.home_id);
+    assert.equal(byId.get(n.home_id).ckind, n.home_kind, `${n.ticker}: home kind`);
     assert.ok(byId.get(n.parents[0]).members.includes(n.ticker), `${n.ticker}: not listed by its cohort`);
     assert.ok(n.sector.startsWith("SEC_") || n.sector === "CRYPTO", `${n.ticker}: sector ${n.sector}`);
   }
@@ -81,7 +85,7 @@ test("a fund is a structural node once and a member of at most one cohort; fund 
   const asMember = new Map();
   for (const c of cohorts) for (const t of c.member_funds) asMember.set(t, (asMember.get(t) || 0) + 1);
   for (const [t, k] of asMember) { assert.equal(k, 1, `${t} is a member of ${k} cohorts`); assert.equal(byId.get(t).kind, "fund"); }
-  for (const f of funds) if (f.registry_cohort) assert.ok(byId.get("COHORT_" + f.registry_cohort).member_funds.includes(f.ticker), `${f.ticker}: cohort does not list it`);
+  for (const f of funds) if (f.home_id) assert.ok(byId.get(f.home_id).member_funds.includes(f.ticker), `${f.ticker}: cohort does not list it`);
   assert.equal(asMember.size, T.counts.funds_in_a_registry_cohort);
 });
 
@@ -98,14 +102,14 @@ test("membership is the 28 Sep member lists with the merges folded in, plus the 
       assert.ok(from28 || fromV3, `${t} in ${c.cohort}: not on the 28 Sep list and not its admission cohort`);
     }
   }
-  // the home rule is stated and followed: a name in several cohorts sits in the smallest of them, size = the member
-  // list as it stands before placement (the 28 Sep list plus the 29 Sep admissions), the same size the build compared
-  const rawSize = new Map();
-  for (const [c, set] of listed) rawSize.set(c, new Set(set));
-  for (const n of T.nodes) if (n.admission_v3 && n.served) { const c = canon.get(n.admission_v3.cohort); if (c) { if (!rawSize.has(c)) rawSize.set(c, new Set()); rawSize.get(c).add(n.ticker); } }
+  // the home rule is stated and followed: adopted > proposed > fund set; theme beats size (MEGACAP) within a kind
+  const RANK = { adopted: 0, proposed: 1, fundset: 2 };
   for (const n of names.filter((x) => x.also_in && x.also_in.length)) {
-    const hs = rawSize.get(n.registry_cohort).size;
-    for (const o of n.also_in) { assert.ok(rawSize.get(o).size >= hs, `${n.ticker}: ${o} (${rawSize.get(o).size}) is smaller than its home ${n.registry_cohort} (${hs})`); assert.ok(rawSize.get(o).has(n.ticker), `${n.ticker}: also_in ${o} unsupported`); }
+    for (const o of n.also_in) {
+      assert.ok(RANK[o.kind] >= RANK[n.home_kind], `${n.ticker}: at home in ${n.home_kind} but also in a ${o.kind} cohort ${o.cohort}`);
+      assert.ok(byId.get(o.id), `${n.ticker}: also_in ${o.id} is not a node`);
+      if (o.kind === "adopted" && n.home_kind === "adopted") assert.ok(o.cohort === "MEGACAP" || n.registry_cohort !== "MEGACAP", `${n.ticker}: sits in MEGACAP while a theme cohort ${o.cohort} claims it`);
+    }
   }
   assert.equal(names.filter((x) => x.also_in && x.also_in.length).length, T.counts.names_in_several);
 });
@@ -120,14 +124,16 @@ test("the board cohort is carried as a tag and counted per cohort; the step-2 li
     assert.deepEqual(c.step2.map((s) => s.ticker).sort(), differing.map((m) => m.ticker).sort(), `${c.id} step2 list`);
     for (const m of ms) {
       if (!m.served) { assert.equal(m.differs, false, `${m.ticker} is waiting and cannot differ`); continue; }
-      if (m.kind === "name") assert.equal(m.differs, c.pseudo ? true : m.board_cohort !== c.cohort, `${m.ticker} differs flag`);
+      if (m.kind === "name") assert.equal(m.differs, c.ckind !== "adopted" ? true : m.board_cohort !== c.cohort, `${m.ticker} differs flag`);
       if (m.board_cohort) assert.ok(T.provenance.board.counts[m.board_cohort] > 0, `${m.ticker}: board cohort ${m.board_cohort} unknown`);
     }
     total += c.diff_count;
   }
   assert.equal(total, T.counts.differences);
-  assert.equal(T.counts.differences, T.counts.differences_in_real_cohorts + T.counts.differences_no_cohort);
-  assert.equal(pseudo.reduce((s, c) => s + c.members.length, 0), T.counts.names_in_no_registry_cohort);
+  assert.equal(T.counts.differences, T.counts.differences_in_real_cohorts + T.counts.differences_outside_adopted);
+  assert.equal(pseudo.reduce((s, c) => s + c.members.length, 0), T.counts.names_at_home_in.none);
+  assert.equal(proposed.reduce((s, c) => s + c.members.length, 0), T.counts.names_at_home_in.proposed);
+  assert.equal(fundsets.reduce((s, c) => s + c.members.length, 0), T.counts.names_at_home_in.fundset);
 });
 
 test("the finder resolves every served line to a path from THE MARKET and every fund that holds it", () => {
@@ -138,13 +144,40 @@ test("the finder resolves every served line to a path from THE MARKET and every 
     assert.ok(n && n.ticker === t, `${t} not resolvable`);
     const p = pathOf(n);
     assert.equal(p[0], "MARKET", `${t}: path does not start at the market`);
-    if (n.kind === "name") { assert.ok(p.length >= 3, `${t}: path too short ${p.join(" › ")}`); assert.ok(p[p.length - 1].startsWith("COHORT_") || p[p.length - 1].startsWith("NOCOHORT_"), `${t}: last step is not a cohort`); }
+    if (n.kind === "name") { assert.ok(p.length >= 3, `${t}: path too short ${p.join(" › ")}`); assert.ok(/^(COHORT|NOCOHORT|PROPOSED|FUNDSET)_/.test(p[p.length - 1]), `${t}: last step is not a cohort`); }
     const held = T.held_by[t];
     if (held) { withFunds++; for (const [f, w] of held) { assert.equal(byId.get(f).kind, "fund", `${t}: held by ${f} which is not a fund`); assert.ok(w == null || w > 0); } }
   }
   assert.ok(withFunds >= 400, `only ${withFunds} served lines have a holder list`);
   // every served weight in a fund's file is answered by held_by, and vice versa
   for (const f of funds) if (f.holdings && f.holdings.served_weights) for (const [t, w] of f.holdings.served_weights) assert.ok((T.held_by[t] || []).some(([x, y]) => x === f.ticker && y === w), `${t}: ${f.ticker} weight missing from held_by`);
+});
+
+test("every proposed cohort and every fund set is on the tree exactly once, under its proposed parent / its fund, with all its members accounted for", () => {
+  const regLabels = new Set(REG.map((r) => r.label));
+  const standsFor = T.provenance.proposal.stands_for_adopted;
+  for (const c of PROP.cohorts) {
+    const on = proposed.filter((p) => p.cohort === c.id);
+    if (standsFor[c.id]) { assert.equal(on.length, 0, `${c.id} stands for adopted ${standsFor[c.id]} and must not be a proposed node`); assert.ok(regLabels.has(standsFor[c.id])); continue; }
+    assert.equal(on.length, 1, `${c.id} appears ${on.length} times`);
+    assert.equal(on[0].parents[0], c.parent); assert.ok(byId.has(c.parent));
+    const served = c.members.filter((t) => byId.has(t));
+    assert.deepEqual(on[0].all_members, served, `${c.id}: all_members`);
+    for (const t of on[0].members) assert.ok(served.includes(t), `${c.id}: ${t} at home here but not a proposal member`);
+    for (const t of served) { const n = byId.get(t); assert.ok(n.home_id === on[0].id || n.also_in.some((a) => a.id === on[0].id), `${t}: proposal ${c.id} not on its card`); }
+  }
+  assert.equal(proposed.length, PROP.cohorts.filter((c) => !standsFor[c.id]).length);
+  assert.equal(fundsets.length, PROP.fund_cohorts.length);
+  for (const f of PROP.fund_cohorts) {
+    const on = fundsets.filter((p) => p.cohort === f.fund);
+    assert.equal(on.length, 1, f.fund); assert.equal(on[0].parents[0], f.fund); assert.equal(byId.get(f.fund).kind, "fund");
+    assert.equal(on[0].tracking, f.tracking); assert.deepEqual(on[0].smallest_set, f.smallest_set);
+    for (const t of on[0].members) assert.ok(f.served_holdings.includes(t), `${f.fund}: ${t} is not a served holding`);
+    for (const t of on[0].all_members) { const n = byId.get(t); assert.ok(n.home_id === on[0].id || n.also_in.some((a) => a.id === on[0].id), `${t}: fund set ${f.fund} not on its card`); }
+  }
+  // the page names the four kinds and counts them
+  for (const w of ["ADOPTED", "PROPOSED", "FUND SET", "NONE YET"]) assert.match(PAGE, new RegExp(w));
+  assert.match(PAGE, /names at home/);
 });
 
 test("the structure file carries no reading, and the page draws full, scout and aggregate bars and says which", () => {

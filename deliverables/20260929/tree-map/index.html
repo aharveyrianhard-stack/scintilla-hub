@@ -100,6 +100,11 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
 .row.top .lab{font-size:13px;letter-spacing:.16em}
 .row.c .lab{color:var(--ink);letter-spacing:.08em;font-weight:600}
 .row.c.pseudo .lab{color:var(--ink2);font-weight:400}
+.row.c.proposed .lab{color:var(--ink2)}
+.row.c.fundset .lab{color:var(--ink2);font-weight:400;letter-spacing:.04em}
+.tag.kd{color:var(--dim);border-color:var(--line2);letter-spacing:.1em}
+#counts{font-size:11px;color:var(--dim);margin:0 0 8px 4px;display:flex;gap:14px;flex-wrap:wrap}
+#counts b{color:var(--ink);font-weight:400}
 .row.f .lab{color:var(--ink)}
 .row.n .lab{color:var(--ink2)}
 .row.w .lab{color:var(--dim)}
@@ -150,7 +155,8 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
         <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = SCOUT Geiger (daily, 3-day, weekly only; off the Hub), where the full Geiger is missing</div>
         <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped bar = an aggregate: a cohort's mean, a heading's mean, a fund's holdings blend</div>
         <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
-        <div><span class="sw coh"></span>a cohort (the adopted registry) · <span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
+        <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (28 Sep proposal) · FUND SET (R8) · NONE YET</div>
+        <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
       </details>
       <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go</div>
       <div id="fallback"></div>
@@ -209,7 +215,7 @@ const maxCap = Math.max(...T.nodes.map((n) => n.market_value_usd || 0));
 const nodes = T.nodes.map((n, idx) => {
   const gg = n.ticker && GS[n.ticker] && Number.isFinite(GS[n.ticker].composite) ? GS[n.ticker] : null;
   const r = n.kind === "index" ? (n.id === "MARKET" ? 9 : n.parents[0] === "MARKET" ? 6.5 : 5.5)
-    : n.kind === "cohort" ? (n.pseudo ? 3.6 : 4.6)
+    : n.kind === "cohort" ? (n.ckind === "adopted" ? 4.6 : n.ckind === "proposed" ? 4.2 : n.ckind === "fundset" ? 3.4 : 3.2)
     : n.kind === "fund" ? (n.role === "sector" ? 3.9 : 3.4)
     : n.market_value_usd ? 2.2 + 6.3 * Math.pow(n.market_value_usd / maxCap, 0.4) : 2.2;
   return { ...n, idx, g: gg, sg: gg ? null : scoutOf(n.ticker), r, hollow: !!n.ticker && !gg };
@@ -240,7 +246,8 @@ nodes.forEach((n) => {
 // the bar an aggregate node shows: its full mean when any member has one, else its scout mean
 const aggBar = (n) => n.kind === "fund" ? (n.agg ? { v: n.agg.value, kind: "full" } : null) : n.agg && n.agg.full ? { v: n.agg.full.v, kind: "full" } : n.agg && n.agg.scout ? { v: n.agg.scout.v, kind: "scout" } : null;
 state.counts = {
-  nodes: nodes.length, cohorts: nodes.filter((n) => n.kind === "cohort" && !n.pseudo).length, pseudo: nodes.filter((n) => n.kind === "cohort" && n.pseudo).length,
+  nodes: nodes.length, cohorts: nodes.filter((n) => n.kind === "cohort" && n.ckind === "adopted").length, proposed: nodes.filter((n) => n.kind === "cohort" && n.ckind === "proposed").length,
+  fundsets: nodes.filter((n) => n.kind === "cohort" && n.ckind === "fundset").length, pseudo: nodes.filter((n) => n.kind === "cohort" && n.ckind === "none").length, at_home: T.counts.names_at_home_in,
   lit: nodes.filter((n) => n.g).length, up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length,
   scout: nodes.filter((n) => n.sg).length, none: nodes.filter((n) => n.ticker && !n.g && !n.sg).length,
   differences: T.counts.differences, differences_in_real_cohorts: T.counts.differences_in_real_cohorts, differences_no_cohort: T.counts.differences_no_cohort,
@@ -251,7 +258,7 @@ state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.r
 $("stamp").textContent = state.geiger
   ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} full bars (${state.counts.up} up · ${state.counts.down} down)` +
     (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of}, ${state.scout.source})` : ` · scout Geiger did not answer (${state.scoutErr})`) +
-    ` · ${state.counts.cohorts} cohorts · ${state.counts.differences} board ≠ registry`
+    ` · ${state.counts.cohorts} adopted · ${state.counts.proposed} proposed · ${state.counts.fundsets} fund sets · ${state.counts.pseudo} none yet · ${state.counts.differences_in_real_cohorts} board ≠ adopted`
   : `the live Geiger did not answer (${state.geigerErr}); no full bar is drawn and none is made up` + (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of})` : "");
 
 /* ---- shared pieces: bars, paths, the card ---- */
@@ -272,7 +279,9 @@ function ownBarHTML(n, cls = "") {
 function rowFor(n, extra = "") {
   return `<tr><td><span class="lnk" data-go="${esc(n.id)}">${esc(nameOf(n))}</span>${extra}</td><td class="nm">${esc(n.ticker ? n.label : "")}</td><td class="bc">${ownBarHTML(n)}</td></tr>`;
 }
-const kindWord = (n) => n.kind === "index" ? "heading" : n.kind === "cohort" ? (n.pseudo ? "not a cohort" : "cohort") : n.kind;
+const KIND_WORD = { adopted: "ADOPTED", proposed: "PROPOSED", fundset: "FUND SET", none: "NONE YET" };
+const kindWord = (n) => n.kind === "index" ? "heading" : n.kind === "cohort" ? (n.ckind === "adopted" ? "adopted cohort" : n.ckind === "proposed" ? "proposed cohort" : n.ckind === "fundset" ? "fund set" : "not a cohort") : n.kind;
+const kindTag = (n) => n.kind === "cohort" ? `<span class="tag kd">${KIND_WORD[n.ckind]}</span>` : "";
 function aggHTML(n, what) {
   const a = n.agg; if (!a) return "";
   let h = "";
@@ -290,28 +299,48 @@ function renderCard(n) {
     $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. A cohort shows its members and the names whose board tab differs (Alan's step-2 list). Type a ticker in the finder for its path and every fund that holds it.</div>` +
       `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
       `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
-      `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → the registry parent (the fund whose Geiger tracked the cohort best, or the sector heading) → cohort → names. Structure above the cohorts: the r3 market map. Cohorts, parents and merges: the registry Alan adopted on 28 Sep (step 1). Members: the 28 Sep tree lists plus the 29 Sep admissions. A name in no adopted cohort sits in its sector's NO COHORT YET line.</div>`;
+      `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
     return;
   }
   const qq = n.ticker ? state.quotes[n.ticker] : null;
   const crumbs = pathOf(n).map((p) => `<span class="lnk" data-go="${esc(p.id)}">${esc(nameOf(p))}</span>`).join(" › ");
   let h = `<button class="release" id="letgo" title="let go (Esc)">LET GO ✕</button>` + (crumbs ? `<div class="path">${crumbs} ›</div>` : "") +
-    `<h2>${esc(nameOf(n))}</h2><div class="sub">${esc(n.ticker ? n.label : n.kind === "cohort" && !n.pseudo ? "cohort · " + nice(n.cohort) : "")}${n.issuer ? " · " + esc(n.issuer) : ""} · ${kindWord(n)}</div>`;
+    `<h2>${esc(nameOf(n))}</h2><div class="sub">${esc(n.ticker ? n.label : n.kind === "cohort" && n.ckind !== "none" ? nice(n.cohort) : "")}${n.issuer ? " · " + esc(n.issuer) : ""} · ${kindWord(n)}</div>`;
   const rd = readingOf(n);
   if (n.kind === "index") {
     h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
   } else if (n.kind === "cohort") {
-    if (n.pseudo) h += `<div class="wait">${esc(n.admission)}. Every name here is a step-2 question: the board has a tab for it, the adopted registry has no cohort for it.</div>`;
-    else h += `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
+    h = h.replace("</h2>", ` ${kindTag(n)}</h2>`);
+    if (n.ckind === "none") h += `<div class="wait">${esc(n.admission)}. Every name here is a step-2 question: the board has a tab for it, no cohort on the tree claims it.</div>`;
+    else if (n.ckind === "adopted") h += `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
       (n.merged_from.length ? `<span>MERGED IN</span><span>${n.merged_from.map(nice).map(esc).join(", ")}</span>` : "") +
       (Number.isFinite(n.cohesion) ? `<span>COHESION</span><span>${n.cohesion.toFixed(2)} <span class="mute">vs ${n.null95.toFixed(2)} for a random set of the same size</span></span>` : "") +
-      (n.step2_pending ? `<span>STEP 2 PENDING</span><span class="dim" style="font-size:11px">${esc(n.step2_pending)}</span>` : "") + `</div>`;
+      (n.step2_pending ? `<span>STEP 2 PENDING</span><span class="dim" style="font-size:11px">${esc(n.step2_pending)}</span>` : "") +
+      (n.dissolve ? `<span>PROPOSAL SAYS</span><span class="dim" style="font-size:11px">dissolve → ${esc(n.dissolve.becomes)}: ${esc(n.dissolve.reason)}</span>` : "") +
+      (n.proposal_note ? `<span>PROPOSAL NOTE</span><span class="dim" style="font-size:11px">${esc(n.proposal_note)}</span>` : "") + `</div>`;
+    else if (n.ckind === "proposed") h += `<div class="wait"><b>Proposed, not adopted.</b> From the 28 Sep tree proposal${n.split_of ? `, a split of ${esc(nice(n.split_of))}` : ""}${n.from_cohorts && n.from_cohorts.length ? ` (from ${n.from_cohorts.map(nice).map(esc).join(", ")})` : ""}. Nothing here is written anywhere: this is what adopting it would give.</div>` +
+      `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
+      (n.proposal_note ? `<span>NOTE</span><span class="dim" style="font-size:11px">${esc(n.proposal_note)}</span>` : "") +
+      (n.groups && n.groups.length ? `<span>CO-MOVEMENT</span><span class="dim" style="font-size:11px">${n.groups.length} group${n.groups.length > 1 ? "s" : ""}; largest ${n.groups.slice().sort((a, b) => b.n_here - a.n_here)[0].n_here} of ${membersOf(n).length} (reproducibility ${n.groups.slice().sort((a, b) => b.n_here - a.n_here)[0].reproducibility.toFixed(2)})</span>` : "") +
+      (n.moves && n.moves.length ? `<span>MOVES</span><span class="dim" style="font-size:11px">${n.moves.map((m) => esc(typeof m === "string" ? m : m.t ? `${m.t} → ${m.to || m.best_other || ""}` : JSON.stringify(m))).join(" · ")}</span>` : "") +
+      (n.not_served && n.not_served.length ? `<span>NOT SERVED</span><span class="dim" style="font-size:11px">${n.not_served.map(esc).join(", ")}</span>` : "") + `</div>`;
+    else if (n.ckind === "fundset") h += `<div class="wait"><b>A fund set (R8, automatic).</b> ${esc(n.fund_label)}: its served holdings, the home of names no adopted or proposed cohort claims. Tracking of the fund by its served set: <b>${esc(n.tracking)}</b>. Smallest set that tracks it: ${n.smallest_set.map((t) => `<span class="lnk" data-go="${esc(t)}">${esc(t)}</span>`).join(", ") || "—"}.</div>` +
+      `<div class="kv"><span>FUND</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(n.cohort)}</span> ${(() => { const f = state.byId.get(n.parents[0]); return f ? ownBarHTML(f) : ""; })()}</span><span>COVERAGE</span><span>${n.coverage_pct.toFixed(0)}% of the fund's weight is served</span><span>AT HOME HERE</span><span>${n.members.length} names <span class="mute">(the fund's other served holdings are at home in an adopted or proposed cohort)</span></span></div>`;
     h += aggHTML(n, "MEMBERS");
     const ms = membersOf(n);
+    if (n.all_members && n.all_members.length) {
+      // what adopting a PROPOSED cohort (or reading a FUND SET whole) would give: every member, and where each one is at home today
+      const away = n.all_members.filter((t) => !ms.some((m) => m.ticker === t));
+      const aggAll = aggregate(n.all_members.map((t) => state.byId.get(t)).filter(Boolean));
+      h += `<div class="sec">${n.ckind === "proposed" ? "WOULD HOLD" : "THE WHOLE SET"} · ${n.all_members.length}</div>` +
+        (aggAll.full ? `<div class="kv"><span>MEAN OF ALL ${n.all_members.length}</span><div class="gbrow">${bar(aggAll.full.v, "lg agg")}<span class="big ${aggAll.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(aggAll.full.v)}</span></div><span>COUNT</span><span>${aggAll.full.n} full · <span class="up">${aggAll.full.up} up</span> · <span class="dn">${aggAll.full.down} down</span></span></div>` : "") +
+        `<div class="mute" style="font-size:11px;margin-bottom:4px">${ms.length} at home here · ${away.length} at home elsewhere (listed with where)</div>` +
+        (away.length ? `<table>${away.map((t) => { const m = state.byId.get(t), hm = state.byId.get(m.home_id); return `<tr><td><span class="lnk" data-go="${esc(t)}">${esc(t)}</span></td><td class="nm">→ <span class="lnk" data-go="${esc(hm.id)}">${esc(hm.label)}</span> ${kindTag(hm)}</td><td class="bc">${ownBarHTML(m)}</td></tr>`; }).join("")}</table>` : "");
+    }
     if (n.diff_count) {
-      h += `<div class="sec">BOARD ≠ REGISTRY · ${n.diff_count} of ${ms.length}</div><div class="mute" style="font-size:11px;margin-bottom:4px">${n.pseudo ? "names the board files under a tab the registry does not have as a cohort" : "members whose board tab today is not this cohort — Alan's step-2 list; nothing here is rewritten"}</div><table>` +
+      h += `<div class="sec">${n.ckind === "adopted" ? "BOARD ≠ REGISTRY" : "BOARD TAB"} · ${n.diff_count} of ${ms.length}</div><div class="mute" style="font-size:11px;margin-bottom:4px">${n.ckind === "adopted" ? "members whose board tab today is not this cohort — Alan's step-2 list; nothing here is rewritten" : "where the board files these names today; none of them is in an adopted cohort"}</div><table>` +
         n.step2.map((s) => `<tr><td><span class="lnk" data-go="${esc(s.ticker)}">${esc(s.ticker)}</span></td><td class="nm">board: ${esc(nice(s.board) || "—")}</td><td class="nm">${esc(s.note || "")}</td></tr>`).join("") + `</table>`;
-    } else if (!n.pseudo) h += `<div class="sec">BOARD = REGISTRY</div><div class="mute">every member's board tab is this cohort</div>`;
+    } else if (n.ckind === "adopted") h += `<div class="sec">BOARD = REGISTRY</div><div class="mute">every member's board tab is this cohort</div>`;
     h += `<div class="sec">MEMBERS · ${ms.length}</div><table>${ms.map((m) => rowFor(m, m.differs ? ` <span class="tag diff" title="board cohort">${esc(nice(m.board_cohort) || "—")}</span>` : "")).join("")}</table>`;
     $("card").innerHTML = h; return;
   } else if (rd) {
@@ -328,15 +357,15 @@ function renderCard(n) {
   }
   if (n.kind === "name") {
     const c = state.byId.get(n.parents[0]);
-    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>COHORT</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span>${n.registry_cohort ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'}</span>` +
+    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>HOME</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span> ${kindTag(c)}${n.home_kind === "adopted" ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'} <span class="mute">· ${esc(n.home_rule)}</span></span>` +
       `<span>BOARD TAB</span><span>${n.board_cohort ? `${esc(nice(n.board_cohort))}${n.differs ? ' <span class="tag diff">differs</span>' : ' <span class="mute">same</span>'}` : '<span class="mute">none (not on the board)</span>'}</span>` +
-      (n.also_in && n.also_in.length ? `<span>ALSO IN</span><span>${n.also_in.map(nice).map(esc).join(", ")} <span class="mute">(broader; it sits in the most specific)</span></span>` : "") +
+      (n.also_in && n.also_in.length ? `<span>ALSO IN</span><span>${n.also_in.map((a) => `<span class="lnk" data-go="${esc(a.id)}">${esc(nice(a.cohort))}</span> <span class="tag kd">${KIND_WORD[a.kind]}</span>`).join(" · ")}</span>` : "") +
       (n.filters && n.filters.length ? `<span>ATTRIBUTES</span><span>${n.filters.map((f) => `<span class="tag k">${esc(nice(f))}</span>`).join(" ")} <span class="mute">filters, not cohorts</span></span>` : "") +
       `<span>SECTOR</span><span>${esc(n.sector_label)}</span></div>`;
   }
   if (n.kind === "fund") {
     const hd = n.holdings;
-    if (n.registry_cohort) h += `<div class="kv"><span>COHORT</span><span><span class="lnk" data-go="COHORT_${esc(n.registry_cohort)}">${esc(nice(n.registry_cohort))}</span> <span class="mute">(a fund that is also a cohort member)</span></span></div>`;
+    if (n.home_id) h += `<div class="kv"><span>COHORT</span><span><span class="lnk" data-go="${esc(n.home_id)}">${esc(state.byId.get(n.home_id).label)}</span> ${kindTag(state.byId.get(n.home_id))} <span class="mute">(a fund that is also a cohort member)</span></span></div>`;
     if (hd && n.agg) {
       const a = n.agg, dv = n.g ? divergence(n.g.composite, a.value) : null;
       h += `<div class="sec">HOLDINGS BLEND · FMP ${esc(hd.as_of)}</div><div class="kv"><span>HOLDINGS</span><div class="gbrow">${bar(a.value, "lg agg")}<span class="big ${a.value >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.value)}</span></div></div>` +
@@ -372,29 +401,30 @@ const O = $("outline");
 const open = new Set(); // ids whose children are shown
 function outlineRow(n) {
   const rd = readingOf(n), ab = rd ? null : aggBar(n);
-  const cls = n.kind === "index" ? "h" + (n.id === "MARKET" || n.parents[0] === "MARKET" ? " top" : "") : n.kind === "cohort" ? "c" + (n.pseudo ? " pseudo" : "") : n.kind === "fund" ? "f" : "n" + (n.hollow ? " w" : "");
+  const cls = n.kind === "index" ? "h" + (n.id === "MARKET" || n.parents[0] === "MARKET" ? " top" : "") : n.kind === "cohort" ? "c " + n.ckind + (n.ckind === "none" ? " pseudo" : "") : n.kind === "fund" ? "f" : "n" + (n.hollow ? " w" : "");
   const hasKids = n.kind === "index" || n.kind === "cohort" || (n.kind === "fund" && primaryKids(n.id).length);
   let small = "";
-  if (n.kind === "cohort") small = `<small>${membersOf(n).length} members${n.diff_count ? ` · ${n.diff_count} board ≠` : ""}</small>`;
-  else if (n.kind === "fund" && hasKids) small = `<small>${n.label} · ${primaryKids(n.id).filter((k) => k.kind === "cohort").length} cohorts under it</small>`;
+  if (n.kind === "cohort") small = ` ${kindTag(n)}<small>${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} board ≠` : ""}${n.ckind === "fundset" ? ` · tracking ${esc(n.tracking)}` : ""}</small>`;
+  else if (n.kind === "fund" && hasKids) { const k = primaryKids(n.id).filter((x) => x.kind === "cohort"); small = `<small>· ${k.length} cohort${k.length > 1 ? "s" : ""} under it: ${k.map((x) => KIND_WORD[x.ckind]).filter((v, i, a) => a.indexOf(v) === i).join(", ")}</small>`; }
   else if (n.kind === "index" && n.agg && n.agg.full) small = `<small>${n.agg.full.n} lines · <span class="up">▲${n.agg.full.up}</span> <span class="dn">▼${n.agg.full.down}</span></small>`;
   else if (n.kind === "name" && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
   else if (n.kind === "fund" && n.registry_cohort && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
   const b = rd ? bar(rd.v, rd.kind === "scout" ? "sc" : "") : ab ? bar(ab.v, "agg" + (ab.kind === "scout" ? " sc" : "")) : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`;
   const v = rd ? `${fmtG(rd.v)}<small>${rd.kind.toUpperCase()}</small>` : ab ? `${fmtG(ab.v)}<small>${n.kind === "fund" ? "HOLDINGS" : "MEAN " + ab.kind.toUpperCase()}</small>` : `<small>${n.ticker ? "no reading" : ""}</small>`;
-  const label = n.kind === "index" || n.kind === "cohort" ? esc(n.label.toUpperCase()) : `${esc(n.ticker)} <small>${esc(n.label)}</small>`;
+  const label = n.kind === "index" || n.kind === "cohort" ? esc(n.label.toUpperCase()) + (n.kind === "cohort" && n.ckind === "fundset" ? ` <small>${esc(n.fund_label)}</small>` : "") : `${esc(n.ticker)} <small>${esc(n.label)}</small>`;
   return `<div class="row ${cls}" data-id="${esc(n.id)}"><span class="tg ${hasKids ? "" : "leaf"}">${open.has(n.id) ? "▾" : "▸"}</span><span class="lab">${label}${small}</span><span class="bar">${b}</span><span class="val ${rd || ab ? ((rd || ab).v >= 0 ? "up" : "dn") : "mute"}">${v}</span></div>`;
 }
 function outlineKids(n) {
   const ch = primaryKids(n.id);
-  const heads = ch.filter((c) => c.kind === "index"), cohorts = ch.filter((c) => c.kind === "cohort").sort((a, b) => a.pseudo - b.pseudo || membersOf(b).length - membersOf(a).length);
+  const KR = { adopted: 0, proposed: 1, fundset: 2, none: 3 };
+  const heads = ch.filter((c) => c.kind === "index"), cohorts = ch.filter((c) => c.kind === "cohort").sort((a, b) => KR[a.ckind] - KR[b.ckind] || membersOf(b).length - membersOf(a).length);
   // a fund that parents cohorts (SMH, IGV, GDX, …) is a branch of the heading, listed with the cohorts; the other funds sit in one FUNDS group
   const branchFunds = ch.filter((c) => c.kind === "fund" && primaryKids(c.id).some((k) => k.kind === "cohort"));
   const funds = ch.filter((c) => c.kind === "fund" && !branchFunds.includes(c)), names = ch.filter((c) => c.kind === "name").sort((a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0));
   let h = "";
-  for (const c of cohorts.filter((x) => !x.pseudo)) h += outlineNode(c);
+  for (const c of cohorts.filter((x) => x.ckind !== "none")) h += outlineNode(c);
   for (const c of branchFunds) h += outlineNode(c);
-  for (const c of cohorts.filter((x) => x.pseudo)) h += outlineNode(c);
+  for (const c of cohorts.filter((x) => x.ckind === "none")) h += outlineNode(c);
   for (const c of heads) h += outlineNode(c);
   if (funds.length) { const fid = n.id + "__funds"; h += `<div class="grp" data-grp="${esc(fid)}">${open.has(fid) ? "▾" : "▸"} FUNDS · ${funds.length}</div><div class="kids ${open.has(fid) ? "" : "closed"}">${funds.map(outlineNode).join("")}</div>`; }
   if (n.kind === "cohort") { const ms = membersOf(n); h += ms.map((m) => outlineRow(m)).join(""); }
@@ -407,7 +437,9 @@ function outlineNode(n) {
 }
 function renderOutline() {
   const root = state.byId.get("MARKET");
-  O.innerHTML = `<div class="note">market → asset class / region → sector fund → registry parent → COHORT → names · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a tag on a name is its board tab where it differs from the cohort it sits in</div>` + outlineNode(root);
+  const ah = state.counts.at_home;
+  O.innerHTML = `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a tag on a name is its board tab where it differs from the cohort it sits in</div>` +
+    `<div id="counts"><span><b>${state.counts.cohorts}</b> ADOPTED · ${ah.adopted} names at home</span><span><b>${state.counts.proposed}</b> PROPOSED · ${ah.proposed} names</span><span><b>${state.counts.fundsets}</b> FUND SETS · ${ah.fundset} names</span><span><b>${state.counts.pseudo}</b> NONE YET · ${ah.none} names</span><span><b>${state.counts.differences_in_real_cohorts}</b> board ≠ adopted (step 2)</span></div>` + outlineNode(root);
 }
 function toggle(id) {
   if (open.has(id)) open.delete(id); else open.add(id);
