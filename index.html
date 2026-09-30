@@ -4343,7 +4343,7 @@ body.co-exp #boardPanel{display:none !important}
 .cv-side > .sc-chartpanel__slot.cot-FUNDAMENTALS{overflow:hidden !important;padding:0 10px}
 /* EXPANDED — the name rail · the chart (half) · the tabs (half: R3 gives the tabs the room the six numbers had) */
 body.co-exp .cv{display:grid;grid-template-columns:156px minmax(0,50fr) minmax(0,50fr);grid-template-rows:minmax(0,1fr);height:calc(100vh - 230px);min-height:560px}
-body.co-exp .cv-rail{display:flex;flex-direction:column;overflow-y:auto;border-right:.5px solid #2B2B31;min-height:0;scrollbar-width:thin}
+body.co-exp .cv-rail{display:flex;flex-direction:column;overflow-y:auto;border-right:.5px solid #2B2B31;min-height:0;scrollbar-width:thin;overscroll-behavior:contain}   /* H2 — the list's ends never hand the scroll to the page behind */
 body.co-exp .cv-main{min-height:0;border-right:.5px solid #2B2B31}
 body.co-exp .cv-chart{flex:1 1 auto;height:auto;min-height:0}
 body.co-exp .cv-side{flex:initial;min-height:0}
@@ -6285,11 +6285,17 @@ function cvRepaint() {
   cvSet("cvFacts", cvFactsHTML(LEFT_T));
   if (document.body.classList.contains("co-exp")) cvRailRepaint();
 }
-function cvRailRepaint() {
+/* H2 (Alan, 30 Sep: "the liked 128 has a weird scrolling thing it doesnt let me scroll well") — this ran on every live tick
+   of the open name and every board refresh, and each time pulled the open name back into view: a list scrolled away from
+   it snapped back within 1-3 s (MEASURED with 128 liked: wheel, trackpad and touch never reached the last row). The open
+   name is now brought into view only when it CHANGES (a rail click, ↑/↓, another company) or when asked (the view opens,
+   a re-sort); a tick or a board refresh leaves the list exactly where it was scrolled. */
+function cvRailRepaint(reveal) {
   const rail = el("cvRail"); if (!rail) return;
   cvSet("cvRail", cvRailHTML());
+  if (!reveal && rail._revealT === LEFT_T) return;
   const on = rail.querySelector(".cv-rail__r.on");
-  if (on && rail.offsetParent) { const b = on.getBoundingClientRect(), rb = rail.getBoundingClientRect();
+  if (on && rail.offsetParent) { rail._revealT = LEFT_T; const b = on.getBoundingClientRect(), rb = rail.getBoundingClientRect();
     if (b.top < rb.top || b.bottom > rb.bottom) rail.scrollTop += b.top - rb.top - (rb.height - b.height) / 2;
     if (b.left < rb.left || b.right > rb.right) rail.scrollLeft += b.left - rb.left - (rb.width - b.width) / 2; }   /* keep the open name in view (down the side on a desk, across on a phone), without scrolling the page */
 }
@@ -22201,7 +22207,7 @@ document.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       lsSet(CV_RAIL_SORT_KEY, a.dataset.s === "CHG" ? "CHG" : "GEIGER");
       cvRailFreeze();   // review fix — a click is the one moment the list re-sorts
-      cvRailRepaint();
+      cvRailRepaint(true);
       break;
     }
     case "cvrail": {   // D2 — a name on the expanded view's rail: switch names, keep the tab, the timeframe and EXPAND
@@ -22216,7 +22222,7 @@ document.addEventListener("click", (e) => {
       const b = el("coExpBtn"); if (b) b.outerHTML = coExpandBtnHTML();
       coExpandApply();
       if (CO_EXPANDED) cvRailFreeze();   // review fix — opening the expanded view takes a fresh order
-      cvRailRepaint();   // D2 — the rail is filled when it becomes visible
+      cvRailRepaint(true);   // D2 — the rail is filled when it becomes visible
       break;
     }
     case "addchart": {  // R18 — soft swap: refetch + redraw the canvas chart, patch the label
