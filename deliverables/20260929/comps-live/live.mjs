@@ -35,6 +35,7 @@ export async function mountCompsLive(root, opts) {
   ensureCSS();
   const T = String(opts.ticker).toUpperCase();
   root.classList.add("cl");
+  root.classList.toggle("cl-narrow", root.clientWidth < 1000); root.classList.toggle("cl-phone", root.clientWidth < 600);
   root.dataset.mounted = T;
   root.innerHTML = `<div class="cl-loading">READING THE PEERS OF ${esc(T)}…</div>`;
   let snap;
@@ -75,8 +76,8 @@ function render(root, snap, opts) {
   const cmp = document.createElement("div"); root.appendChild(cmp);
   renderCompare(cmp, snap, opts);
   // wide: the ladder beside the field
-  const ro = new ResizeObserver(() => { const w = root.clientWidth; grid.classList.toggle("cl-wide", w >= 1180); });
-  ro.observe(root);
+  const fit = () => { const w = root.clientWidth; grid.classList.toggle("cl-wide", w >= 1180); root.classList.toggle("cl-narrow", w < 1000); root.classList.toggle("cl-phone", w < 600); };
+  fit(); new ResizeObserver(fit).observe(root);
 }
 
 async function renderCompare(box, snap, opts) {
@@ -106,7 +107,7 @@ async function renderCompare(box, snap, opts) {
       const d = document.createElement("div");
       d.innerHTML = `<div class="cl-nm">${esc(s.ticker)} <small style="color:var(--cl-dim);font-weight:400">${esc(s.name)}</small></div>
         <dl><dt>cohort</dt><dd>${esc(s.cohort)} · ${L.steps[0].peers.length} peers</dd><dt>today</dt><dd>${esc(P(s.price))}</dd>
-        ${B ? `<dt>low edge</dt><dd>${esc(P0(B.lo))} · <span class="${U.lo.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.lo.pct))}</span></dd><dt>centre</dt><dd><b>${esc(P0(B.mid))} · <span class="${U.mid.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.mid.pct))}</span></b></dd><dt>high edge</dt><dd>${esc(P0(B.hi))} · <span class="${U.hi.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.hi.pct))}</span></dd><dt>rows priced</dt><dd>${L.steps[4].used.length} of 6</dd><dt>outliers</dt><dd>${L.outliers.outliers.length ? L.outliers.outliers.map((o) => o.ticker).join(", ") : "none"}${L.outliers.without && L.outliers.changed ? ` · without: ${esc(PCT(L.without.upside.mid.pct))}` : ""}</dd>` : `<dt>band</dt><dd>none</dd>`}</dl>
+        ${B ? `<dt>low edge</dt><dd>${esc(P0(B.lo))} · <span class="${U.lo.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.lo.pct))}</span></dd><dt>centre</dt><dd><b>${esc(P0(B.mid))} · <span class="${U.mid.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.mid.pct))}</span></b></dd><dt>high edge</dt><dd>${esc(P0(B.hi))} · <span class="${U.hi.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(U.hi.pct))}</span></dd><dt>rows priced</dt><dd>${L.steps[4].used.length} of 6</dd><dt>outliers</dt><dd>${L.outliers.outliers.length ? [...new Set(L.outliers.outliers.map((o) => o.ticker))].join(", ") : "none"}${L.outliers.without && L.outliers.changed ? ` · without: ${esc(PCT(L.without.upside.mid.pct))}` : ""}</dd>` : `<dt>band</dt><dd>none</dd>`}</dl>
         <div class="cl-sentence">${esc(L.steps[6].sentence)}</div>
         <details class="cl-step"><summary><span class="cl-stepn">1–7</span><span class="cl-stept">the ladder for ${esc(s.ticker)}</span></summary><div class="cl-body">${ladderHTML(L, { compact: true })}</div></details>`;
       grid.appendChild(d);

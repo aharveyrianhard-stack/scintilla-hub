@@ -99,7 +99,10 @@ export const CSS = `
 .cl table.cl-t th:first-child,.cl table.cl-t td:first-child{text-align:left}
 .cl table.cl-t td{color:var(--cl-ink2)}.cl table.cl-t td.cl-k{color:var(--cl-ink)}
 .cl table.cl-t td.cl-blank{color:var(--cl-mute);font-style:italic}
-.cl .cl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.cl .cl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;position:relative}
+.cl .cl-twwrap{position:relative}
+.cl .cl-twwrap::after{content:"";position:absolute;top:0;right:0;bottom:0;width:26px;background:linear-gradient(90deg,transparent,var(--cl-panel));pointer-events:none}
+.cl .cl-twhint{font-size:10.5px;color:var(--cl-mute);letter-spacing:.1em;text-align:right;padding:2px 0 0}
 .cl .cl-sentence{font:600 12.5px/1.6 var(--mono,monospace);color:var(--cl-ink);border-left:3px solid var(--cl-ink2);padding:6px 10px;margin:6px 0}
 .cl .cl-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .cl .cl-chip{display:inline-block;font:400 11px/1 var(--mono,monospace);color:var(--cl-ink2);border:1px solid var(--cl-line2);padding:4px 7px;border-radius:2px}
@@ -120,23 +123,24 @@ export const CSS = `
 .cl .cl-cmpgrid > div:last-child{border-right:0}
 .cl .cl-cmpgrid .cl-nm{font:600 13px/1.3 var(--mono,monospace);color:var(--cl-ink)}
 .cl .cl-cmpgrid dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0;font-size:11px;font-variant-numeric:tabular-nums}
-.cl .cl-cmpgrid dt{color:var(--cl-dim)}.cl .cl-cmpgrid dd{margin:0;color:var(--cl-ink);text-align:right;white-space:nowrap}
+.cl .cl-cmpgrid dt{color:var(--cl-dim)}.cl .cl-cmpgrid dd{margin:0;color:var(--cl-ink);text-align:right;overflow-wrap:anywhere}
 .cl .cl-grid{display:grid;grid-template-columns:1fr;gap:0 18px}
 .cl .cl-grid.cl-wide{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
 .cl .cl-err{border:1px solid var(--cl-line3);padding:10px 12px;color:var(--cl-ink);font-size:11.5px}
 .cl .cl-loading{padding:16px 12px;color:var(--cl-dim);letter-spacing:.2em}
-@media(max-width:1000px){
- .cl .cl-colhead{display:none}
- .cl .cl-row{grid-template-columns:1fr;gap:8px 0}
- .cl .cl-ups{grid-template-columns:auto 1fr auto 1fr;gap:2px 8px}
- .cl .cl-ups .cl-today{grid-column:1/-1}
- .cl .cl-cmprow{grid-template-columns:1fr;gap:6px 0}
-}
-@media(max-width:600px){
- .cl .cl-ups{grid-template-columns:auto 1fr}
- .cl .cl-step .cl-body,.cl .cl-step .cl-stepr{margin-left:0}
- .cl .cl-cmpgrid > div{border-right:0;border-top:1px solid var(--cl-line)}
-}`;
+/* the pane's width decides the layout, not the window's: on the Hub the ESTIMATES pane is a ~450px column even on a
+   1680 screen. live.mjs sets cl-narrow under 1000px and cl-phone under 600px of the box's own width. */
+.cl.cl-narrow .cl-colhead{display:none}
+.cl.cl-narrow .cl-row{grid-template-columns:1fr;gap:8px 0}
+.cl.cl-narrow .cl-ups{grid-template-columns:auto 1fr auto 1fr;gap:2px 8px}
+.cl.cl-narrow .cl-ups .cl-today{grid-column:1/-1}
+.cl.cl-narrow .cl-cmprow{grid-template-columns:1fr;gap:6px 0}
+.cl.cl-phone .cl-ups{grid-template-columns:auto 1fr}
+.cl.cl-phone .cl-step .cl-body,.cl.cl-phone .cl-step .cl-stepr{margin-left:0}
+.cl.cl-phone .cl-cmpgrid > div{border-right:0;border-top:1px solid var(--cl-line)}
+.cl.cl-phone .cl-cmpgrid{grid-template-columns:1fr}
+.cl .cl-step p{overflow-wrap:anywhere}
+.cl .cl-words,.cl .cl-note,.cl .cl-sentence,.cl .cl-stamp{overflow-wrap:anywhere}`;
 
 /* ---- one valuation row --------------------------------------------------------------------------- */
 export function rowNode(row, T, { big = false } = {}) {
@@ -436,12 +440,12 @@ export function ladderHTML(L, { compact = false } = {}) {
     const cellHTML = (c) => c.state === "in" ? `<td class="cl-k">${esc(X(c.multiple))}</td>` : c.state === "nm" ? `<td class="cl-blank" title="${esc(c.why)}">${esc(X(c.multiple))} NM</td>` : `<td class="cl-blank" title="${esc(c.why || "")}">—</td>`;
     const body = s2.table.map((p) => `<tr><td class="cl-k" title="${esc(p.name)}">${esc(p.ticker)}</td>${s2.rows.map((r) => cellHTML(p.cells[r.key])).join("")}<td>${p.dates ? esc([p.dates.fundamentals ? "EPS " + D(p.dates.fundamentals) : null, p.dates.ttm_to ? (p.dates.ttm_basis || "TTM") + " to " + D(p.dates.ttm_to) : null, p.dates.balance ? "balance " + D(p.dates.balance) : null].filter(Boolean).join(" · ")) || "—" : "dates not in this snapshot"}</td><td>${p.dates && p.dates.price ? esc(D(p.dates.price)) + (p.dates.price_from && !/chart API/.test(p.dates.price_from) ? " · " + esc(p.dates.price_from) : "") : "—"}</td></tr>`).join("");
     const legendRows = s2.rows.map((r) => `<li><b>${esc(SHORT[r.key])}</b> ${esc(r.label)} — ${esc(r.basis || "")}: ${r.n} peers carry it${r.nm.length ? `; set aside as not meaningful (above the cap): ${r.nm.map((x) => `${esc(x.ticker)} ${esc(X(x.value))}`).join(", ")}` : ""}${r.missing.length ? `; blank (${esc(missingWord(r.key))}): ${r.missing.map(esc).join(", ")}` : ""}.</li>`).join("");
-    out.push(step(s2, `<div class="cl-tw"><table class="cl-t"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    out.push(step(s2, `<div class="cl-twwrap"><div class="cl-tw"><table class="cl-t"><thead>${head}</thead><tbody>${body}</tbody></table></div></div><div class="cl-twhint">wide table · scrolls sideways →</div>
       <p>Source: ${esc(s2.source)}. Taken ${s2.taken ? esc(new Date(s2.taken).toLocaleString("en-GB", { timeZone: "America/New_York", hour12: false })) + " ET" : "—"}. "NM" is a multiple above the row's cap (P/E 100x, EV/sales and P/S 50x, EV/EBITDA 100x, PEG 10x): named, kept out of the percentiles. "—" is a blank: the figure is absent or not positive.</p><ul>${legendRows}</ul>`, { open: !compact }));
   }
   // 3
-  out.push(step(s3, `<div class="cl-tw"><table class="cl-t"><thead><tr><th>Metric</th><th>Peers</th><th>Lowest</th><th>25th</th><th>Median</th><th>75th</th><th>Highest</th><th>${esc(T)} today</th></tr></thead><tbody>
-    ${s3.rows.map((r) => r.n ? `<tr><td class="cl-k">${esc(r.label)}</td><td>${r.n}</td><td>${esc(X(r.band.min))}${esc(who(r.who.min))}</td><td>${esc(X(r.band.q1))}</td><td class="cl-k">${esc(X(r.band.median))}${esc(who(r.who.median))}</td><td>${esc(X(r.band.q3))}</td><td>${esc(X(r.band.max))}${esc(who(r.who.max))}</td><td class="cl-k">${r.own != null ? esc(X(r.own)) : "—"}</td></tr>` : `<tr><td class="cl-k">${esc(r.label)}</td><td colspan="7" class="cl-blank">no peer carries this row</td></tr>`).join("")}</tbody></table></div>
+  out.push(step(s3, `<div class="cl-twwrap"><div class="cl-tw"><table class="cl-t"><thead><tr><th>Metric</th><th>Peers</th><th>Lowest</th><th>25th</th><th>Median</th><th>75th</th><th>Highest</th><th>${esc(T)} today</th></tr></thead><tbody>
+    ${s3.rows.map((r) => r.n ? `<tr><td class="cl-k">${esc(r.label)}</td><td>${r.n}</td><td>${esc(X(r.band.min))}${esc(who(r.who.min))}</td><td>${esc(X(r.band.q1))}</td><td class="cl-k">${esc(X(r.band.median))}${esc(who(r.who.median))}</td><td>${esc(X(r.band.q3))}</td><td>${esc(X(r.band.max))}${esc(who(r.who.max))}</td><td class="cl-k">${r.own != null ? esc(X(r.own)) : "—"}</td></tr>` : `<tr><td class="cl-k">${esc(r.label)}</td><td colspan="7" class="cl-blank">no peer carries this row</td></tr>`).join("")}</tbody></table></div></div><div class="cl-twhint">wide table · scrolls sideways →</div>
     ${compact ? "" : `<p>Read the sorted peers to check a median by eye: ${s3.rows.filter((r) => r.n).map((r) => `<b>${esc(SHORT[r.key])}</b> ${r.sorted.map((p) => `${esc(p.ticker)} ${esc(X(p.multiple))}`).join(" · ")}`).join("<br>")}</p>`}`, { rule: s3.rule }));
   // 4
   const lines = (r) => r.lines.map((l) => `<tr><td>${esc(l.word)}</td><td>${l.multiple != null ? esc(X(l.multiple)) : "—"}</td><td>×</td><td>${r.denominator.value != null ? esc(fmtBy(r.denominator.fmt, r.denominator.value)) : `<span class="cl-blank">blank</span>`}</td><td>=</td><td class="cl-k">${l.price != null ? esc(P0(l.price)) : `<span class="cl-blank">—</span>`}</td></tr>`).join("");
@@ -456,8 +460,8 @@ export function ladderHTML(L, { compact = false } = {}) {
     <tr><td class="cl-k">Way B, the median of each column</td><td class="cl-k">${esc(P0(s5.band.lo))}</td><td class="cl-k">${esc(P0(s5.band.mid))}</td><td class="cl-k">${esc(P0(s5.band.hi))}</td></tr></tbody></table></div>
     <p>Sorted, so the median can be checked by eye — 25ths: ${list(s5.q1s)} → <b>${esc(P0(s5.band.lo))}</b>; medians: ${list(s5.medians)} → <b>${esc(P0(s5.band.mid))}</b>; 75ths: ${list(s5.q3s)} → <b>${esc(P0(s5.band.hi))}</b>. ${s5.band.overlap ? `Every metric's middle half agrees between ${esc(P0(s5.band.overlap.lo))} and ${esc(P0(s5.band.overlap.hi))}.` : "There is no price where every metric's middle half agrees; the band uses the median of the edges."}</p>` : `<p class="cl-blank">${esc(s5.reason || "no row can be priced")}</p>`, { rule: s5.rule }));
   // 6
-  const u = (x, word) => x ? `<tr><td class="cl-k">${esc(word)}</td><td>${esc(P0(x.dollars + s6.price))}</td><td>÷ ${esc(P(s6.price))} − 1 =</td><td class="cl-k ${x.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(x.pct))}</td><td class="${x.pct >= 0 ? "cl-up" : "cl-dn"}">${esc((x.dollars >= 0 ? "+" : "−") + P0(Math.abs(x.dollars)))}</td></tr>` : "";
-  out.push(step(s6, s5.band ? `<div class="cl-tw"><table class="cl-t"><thead><tr><th>Edge</th><th>Implied price</th><th>Arithmetic</th><th>Upside %</th><th>Upside $</th></tr></thead><tbody>${u(s6.lo, "Low edge (25th)")}${u(s6.mid, "Centre")}${u(s6.hi, "High edge (75th)")}</tbody></table></div>` : `<p class="cl-blank">no band, so no upside</p>`, { rule: s6.rule }));
+  const u = (x, word) => x ? `<p><b>${esc(word)}</b> ${esc(P0(x.dollars + s6.price))} ÷ ${esc(P(s6.price))} − 1 = <b class="${x.pct >= 0 ? "cl-up" : "cl-dn"}">${esc(PCT(x.pct))}</b> · ${esc(P0(x.dollars + s6.price))} − ${esc(P(s6.price))} = <b class="${x.pct >= 0 ? "cl-up" : "cl-dn"}">${esc((x.dollars >= 0 ? "+" : "−") + P0(Math.abs(x.dollars)))}</b></p>` : "";
+  out.push(step(s6, s5.band ? `${u(s6.lo, "Low edge (25th):")}${u(s6.mid, "Centre:")}${u(s6.hi, "High edge (75th):")}` : `<p class="cl-blank">no band, so no upside</p>`, { rule: s6.rule }));
   // 7
   out.push(step(s7, `<div class="cl-sentence">${esc(s7.sentence)}</div>
     ${O.outliers.length || O.nm.length || O.missing.length ? `<p><b>Outliers and blanks, named.</b> ${O.outliers.length ? `Outliers by the rule (${esc(O.rule)}): ${O.outliers.map((o) => `${esc(o.ticker)} ${esc(X(o.multiple))} on ${esc(o.label)} (${esc(o.side)})`).join(", ")}.` : "No peer is an outlier by the rule."} ${O.nm.length ? `Set aside as not meaningful: ${O.nm.map((o) => `${esc(o.ticker)} ${esc(X(o.multiple))} on ${esc(o.label)}`).join(", ")}.` : ""} ${O.missing.length ? `Blank: ${O.missing.map((o) => `${esc(o.ticker)} on ${esc(o.label)}`).join(", ")}.` : ""}</p>` : ""}
