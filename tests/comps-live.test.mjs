@@ -162,12 +162,11 @@ test("cohortChoice: the coordinator's defaults for the four named companies, the
   assert.equal(cohortChoice("XYZ", ["A", "B"], "b").cohort, "B");
 });
 
-test("the Hub's ESTIMATES tab carries the COMPS section and mounts the module; the deliverable and its shots exist", () => {
+test("the Hub: the C1 section moved to its own COMPS tab on 30 Sep (C2); ESTIMATES is what it was before C1; the C1 deliverable and its shots still exist", () => {
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+ estCompsHTML\(data\)/);
-  assert.match(html, /estSechead\("02·c", "Comps"/);
-  assert.match(html, /import\("\/deliverables\/20260929\/comps-live\/live\.mjs"\)/);
-  assert.match(html, /id="scCompsLive"/);
+  assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+\n\s+estValuationHTML\(data\)/, "ESTIMATES as before C1");
+  assert.ok(!/estCompsHTML|compsLiveMount|scCompsLive/.test(html), "the C1 section is gone from ESTIMATES");
+  assert.match(html, /case "COMPS":/, "the comps are their own tab (C2)");
   assert.ok(existsSync(here("../deliverables/20260929/comps-live/COMPS-LIVE.html")));
   const page = readFileSync(here("../deliverables/20260929/comps-live/COMPS-LIVE.html"), "utf8");
   assert.match(page, /<!-- scnav ·/, "the BACK / CLOSE pair is on the page");

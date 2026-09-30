@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from b2b1c66) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (28 Sep): company view round 4 (R4, candidate/company-view-r4-20260928, built from 9b999a4) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -748,8 +748,6 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-est-sechead .rule{ flex:1; height:1px; background:linear-gradient(90deg,rgba(0,212,255,.18),transparent); }
 .sc-est-sechead .meta{ font-family:var(--mono); font-size:8px; color:var(--ink3); letter-spacing:.1em; text-transform:uppercase; }
 .sc-est-zone{ border:.8px solid rgba(0,212,255,.22); padding:10px; }
-.sc-est-zone.sc-comps-live{ padding:0; overflow:visible; }
-.sc-est-zone.sc-comps-live .cl-panel{ border-left:0; border-right:0; }
 .sc-est-toggle{ display:inline-flex; border:.8px solid rgba(0,212,255,.12); border-radius:2px; overflow:hidden; margin-left:auto; }
 .sc-est-toggle b{ font-family:var(--mono); font-weight:400; font-size:8px; letter-spacing:.14em;
   text-transform:uppercase; padding:5px 11px; color:var(--dim); cursor:pointer; }
@@ -5988,7 +5986,7 @@ const COHORTS = [
    of that toggle, which is a real upgrade: the sector read is computed from its actual
    constituents instead of from the ETF's own price. Cohorts are Alan's, sectors are fact,
    and each has its own strip. */   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
-const CO_TABS = ["GEIGER","FUNDAMENTALS","ESTIMATES","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"];   /* R3 (Alan, 27 Sep: "use what exists: all the tabs") — every tab in one row, keys 1–9, no MORE; SOCIAL = keyword mentions on X and YouTube (coSocialHTML). D2: the chart is always on screen (no CHART tab) */
+const CO_TABS = ["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"];   /* C2 (Alan, 30 Sep): COMPS is its own tab, beside ESTIMATES; ten tabs, keys 1–9 and 0 */   /* R3 (Alan, 27 Sep: "use what exists: all the tabs") — every tab in one row, keys 1–9, no MORE; SOCIAL = keyword mentions on X and YouTube (coSocialHTML). D2: the chart is always on screen (no CHART tab) */
 /* 28 Sep (N6) — the company view's EVENTS tab reads EARNINGS, like the master tab (MTAB_LABEL). The key stays EVENTS so
    saved state, keys 1–9 and every handler keep working; only the word on the tab changes. */
 const CO_TAB_LABEL = { EVENTS: "EARNINGS" };
@@ -6186,7 +6184,7 @@ function cvQuote(t) {
 function cvTabsHTML() {
   return '<div class="cv-tabs" id="cvTabs" role="tablist" aria-label="company tabs">' +
     CO_TABS.map((x, i) => '<button type="button" role="tab" class="cv-tab' + (x === S.coTab ? " on" : "") + '" aria-selected="' + (x === S.coTab) +
-      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i + 1) + '">' + coTabLabel(x) + "</button>").join("") +
+      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i === 9 ? 0 : i + 1) + '">' + coTabLabel(x) + "</button>").join("") +   /* C2 — the tenth tab is on 0 */
   "</div>";
 }
 /* SWITCH-ON (28 Sep, Alan: "switch it on… just confirm I'm not losing anything") — the name is shown ONCE: the header title
@@ -6336,7 +6334,7 @@ window.addEventListener("keydown", (e) => {
   if (cvKeysBlocked(e)) return;
   if (e.key === "Escape") { e.preventDefault(); S.sec = "DASHBOARD"; updateMtabs(); startRotate(); return; }
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); cvStep(e.key === "ArrowDown" ? 1 : -1); return; }
-  const k = /^[1-9]$/.test(e.key) ? +e.key : 0;
+  const k = /^[1-9]$/.test(e.key) ? +e.key : e.key === "0" ? 10 : 0;   /* C2 — the tenth tab on 0 */
   if (k && k <= CO_TABS.length) { e.preventDefault(); const b = document.querySelector('#cvTabs [data-tab="' + CO_TABS[k - 1] + '"]'); if (b) b.click(); }
 }, true);
 
@@ -18738,46 +18736,54 @@ function estPTGaugeHTML(data) {
     '<span class="sc-est-ptsub">' + upTxt + "</span></div>" +
     gauge + nums + "</div>";
 }
-function estimatesTabHTML(data) {   // reference order: 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 02c COMPS → 03 VALUATION → 04 SCENARIOS → 05 GRADES
+function estimatesTabHTML(data) {   // reference order: 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 03 VALUATION → 04 SCENARIOS → 05 GRADES
   return estForecastHTML(data) + estConsensusGridHTML(data) +
-    estConvictionHTML(data) + estPTGaugeHTML(data) + estCompsHTML(data) +
+    estConvictionHTML(data) + estPTGaugeHTML(data) +
     estValuationHTML(data) + estScenariosHTML(data) + estGradesHTML(data);
 }
-/* 02·c COMPS — C1 (Alan, 29 Sep): "the comps as we've discussed labeled clearly and a clear step by step breakdown of
-   getting to the price range". The section is an empty box here; deliverables/20260929/comps-live/live.mjs fills it
-   after the tab paints: the six round-3 rows (every mark named, multiples on top, implied prices below, the diamond for
-   today, the arrow to the median), way B as the tranche band, the seven-step ladder, and COMPARE (two or three
-   companies on one % axis). It reads the Hub's own tables through pg() and today's prices from the chart API, and keeps
-   one snapshot per ticker for ten minutes. The analysts' MEDIAN TARGET above is a different measure and never enters
-   the band (the note on 02 CONVICTION says so). Sits right under the target it is not, so the two are never confused. */
-function estCompsHTML(data) {
-  if (!data || !data.t || data._loading) return "";
-  setTimeout(compsLiveMount, 0);   // the box is in the DOM by then; the module mounts into it
-  return estSechead("02·c", "Comps", '<span class="meta">peers in the cohort · FMP tables · chart API price</span>') +
-    '<div class="sc-est-zone sc-comps-live" id="scCompsLive" data-t="' + esc(data.t) + '"><div style="font:11px/1.5 var(--mono);color:var(--dim);letter-spacing:.2em">READING THE PEERS OF ' + esc(data.t) + '…</div></div>';
+/* C2 (Alan, 30 Sep: "why there to begin with thats analyst estimates… lets separate comps into a new tab") — the COMPS
+   section C1 put here (02·c) is gone; ESTIMATES is exactly what it was before C1. The comps are their own tab: compsTabHTML. */
+/* ── C2 · THE COMPS TAB (Alan, 30 Sep) ──────────────────────────────────────────────────────────────
+   "lets separate comps into a new tab… it does not have scintilla look and feel… the capacity to toggle off and on certain
+   edges or outliers of the comparable companies list… at the comps table level… that operator decision should be saved but
+   we should also be able to add that outlier back later on." The tab is an empty box here; deliverables/20260930/comps-tab/
+   tab.mjs fills it: the comps TABLE first (one row per peer, the six multiples, the flags, on/off per peer and per cell),
+   the field under it (ALL PEERS over YOUR SELECTION), ways A / B / C explained and drawn (B a proposal), the upside, and
+   the cohort table (the feed for the knockout step). Decisions go to public.comps_decisions when the coordinator has
+   applied supabase/migrations/20260930_comps_decisions.sql (the same shape as the Hub's lists: one dated row per state,
+   latest wins, put back = a new row); until then they stay in this browser (localStorage sc_comps_decisions) and the tab
+   says so. Reads: the Hub's pg() and the chart API's /quotes; nothing is set aside by a rule (no cap, no Tukey): the flags
+   only suggest. The Geiger COMPOSITE (data-gs="comp") on the GEIGER tab is not the comps and is untouched. */
+function compsTabHTML(data) {
+  if (!data || !data.t || data._loading) return '<div class="sc-senttxt" style="padding:10px 4px">loading ' + esc((data && data.t) || "") + "…</div>";
+  setTimeout(compsTabMount, 0);   // the box is in the DOM by then
+  return '<div class="sc-comps-tab" id="scCompsTab" data-t="' + esc(data.t) + '"><div class="sc-senttxt" style="letter-spacing:.2em">READING THE PEERS OF ' + esc(data.t) + "…</div></div>";
 }
-let COMPS_LIVE_MOD = null;
-function compsLiveMount() {
-  const box = document.getElementById("scCompsLive");
+let COMPS_TAB_MOD = null;
+function compsTabMount() {
+  const box = document.getElementById("scCompsTab");
   if (!box || !box.isConnected) return;
   const t = box.dataset.t;
   if (!t || box.dataset.mounted === t) return;
   box.dataset.mounted = t;
-  const load = COMPS_LIVE_MOD || (COMPS_LIVE_MOD = import("/deliverables/20260929/comps-live/live.mjs"));
+  const load = COMPS_TAB_MOD || (COMPS_TAB_MOD = import("/deliverables/20260930/comps-tab/tab.mjs"));
   load.then((m) => {
-    const live = document.getElementById("scCompsLive");
-    if (!live || live.dataset.t !== t) return;              // the tab or the company changed while the module loaded
+    const live = document.getElementById("scCompsTab");
+    if (!live || live.dataset.t !== t) return;
     const api = (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
-    return m.mountCompsLive(live, {
+    const hdr = { apikey: ANON, Authorization: "Bearer " + ANON, "Content-Type": "application/json", Prefer: "return=minimal" };
+    return m.mountCompsTab(live, {
       ticker: t, pg, today: todayISO(),
       quotes: (syms) => fetch(api + "/quotes?symbols=" + encodeURIComponent(syms.join(","))).then((r) => { if (!r.ok) throw new Error("quotes → " + r.status); return r.json(); }),
-      livePrice: (typeof PRICES !== "undefined" && PRICES[t] != null) ? num(PRICES[t]) : null,
-      priceOf: (x) => (typeof PRICES !== "undefined" && PRICES[x] != null) ? num(PRICES[x]) : null,
+      livePrices: (typeof PRICES !== "undefined") ? PRICES : {},
+      read: (path) => pg(path, 1),
+      write: (path, rows) => fetch(SB + "/rest/v1/" + path, { method: "POST", headers: hdr, body: JSON.stringify(rows) }).then((r) => { if (!r.ok) throw new Error("comps_decisions write → " + r.status); return r; }),
+      open: (x) => openCo(x),
     });
   }).catch((e) => {
-    const live = document.getElementById("scCompsLive");
-    if (live && live.dataset.t === t) live.innerHTML = '<div style="font:11px/1.5 var(--mono);color:var(--ink2)">The comps module could not be loaded: ' + esc(String(e && e.message || e)) + "</div>";
-    COMPS_LIVE_MOD = null;
+    const live = document.getElementById("scCompsTab");
+    if (live && live.dataset.t === t) live.innerHTML = '<div class="sc-senttxt">The comps tab could not be loaded: ' + esc(String(e && e.message || e)) + "</div>";
+    COMPS_TAB_MOD = null;
   });
 }
 
@@ -19927,6 +19933,7 @@ function coTabHTML(data) {
     case "FUNDAMENTALS": return coFundTabHTML(data.t);         // H-FRONT — the Station fundamentals shell under one line of the Hub's own numbers
     case "STATS":      return statsTabHTML(data);
     case "ESTIMATES":  return nonOp ? nonOpTabHTML(data) : estimatesTabHTML(data);
+    case "COMPS":      return nonOp ? nonOpTabHTML(data) : compsTabHTML(data);   // C2 — the comps, their own tab
     case "FINANCIALS": return (data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")) ? etfPanelHTML(data) : (nonOp ? nonOpTabHTML(data) : financialsTabHTML(data));   // FIX 4 — wired from fundamentals_history; ETF/fund → real holdings+AUM panel, not the honest-empty stub
     case "NEWS":       return (data.news && data.news.length)
                          ? dedupeNews(data.news).map((n) => newsArtHTML(n)).join("")   // R21 FIX 5 — company tab deduped too
