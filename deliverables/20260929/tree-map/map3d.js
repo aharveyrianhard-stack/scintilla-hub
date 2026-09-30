@@ -198,16 +198,16 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   nodes.forEach((n) => {
     const top = n.kind === "index" && (n.id === "MARKET" || n.parents[0] === "MARKET");
     const kind = n.kind === "index" ? "h" : n.kind === "cohort" ? "c" : n.kind === "fund" ? "f" : "n";
-    const text = n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.kind === "cohort" ? (n.pseudo ? "NO COHORT YET" : n.label) : n.ticker;
+    const text = n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.kind === "cohort" ? (n.ckind === "none" ? "NONE YET" : n.ckind === "fundset" ? n.cohort + " SET" : n.ckind === "proposed" ? n.label + " ?" : n.label) : n.ticker;
     n.lbl = { kind, top, text, el: null, shown: false };
     const px = kind === "h" ? (top ? 13 : 12) : kind === "f" ? 12 : 11, sp = kind === "h" ? (top ? 2.3 : 1.7) : kind === "c" ? 1.2 : 0.2;
     n.lbl.w = measure(text, px, sp) + 4; n.lbl.h = kind === "h" || kind === "c" ? 16 : 14;
-    n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : top ? 92 : 84) : n.kind === "cohort" ? 80 : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
+    n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : top ? 92 : 84) : n.kind === "cohort" ? (n.ckind === "adopted" ? 80 : n.ckind === "proposed" ? 76 : n.ckind === "fundset" ? 62 : 70) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
   });
   function labelEl(n) { if (n.lbl.el) return n.lbl.el; const d = document.createElement("div"); d.className = "lb " + n.lbl.kind + (n.lbl.top ? " top" : "") + (n.hollow ? " w" : ""); d.textContent = n.lbl.text; labelLayer.appendChild(d); n.lbl.el = d; return d; }
   function sub(n) {
     const a = n.agg && n.agg.full; if (!a) return "";
-    return (n.kind === "cohort" ? `${fmtG(a.v)} · ` : "") + `<span class="up">▲${a.up}</span> <span class="dn">▼${a.down}</span>` + (n.kind === "cohort" && n.diff_count ? ` · ${n.diff_count}≠` : "");
+    return (n.kind === "cohort" ? `${fmtG(a.v)} · ` : "") + `<span class="up">▲${a.up}</span> <span class="dn">▼${a.down}</span>` + (n.kind === "cohort" && n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count}≠` : "");
   }
   const V = new THREE.Vector3(), rects = [];
   const MAXL = PHONE ? 70 : 240, PXN = PHONE ? 4.6 : 3.4, PXF = PHONE ? 2.4 : 1.6;
@@ -285,7 +285,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   function tip(n) {
     const head = n.ticker ? `<b>${esc(n.ticker)}</b> · ${esc(n.label)}` : `<b>${esc(n.label)}</b>`;
     if (n.kind === "index") return head + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to fly in</span>`;
-    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${n.pseudo ? "not a cohort" : "cohort"} · ${membersOf(n).length} members${n.diff_count ? ` · ${n.diff_count} board ≠` : ""}</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ▲${a.up} ▼${a.down}</span>` : ""); }
+    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${{ adopted: "ADOPTED cohort", proposed: "PROPOSED cohort", fundset: "FUND SET", none: "not a cohort" }[n.ckind]} · ${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} board ≠` : ""}</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ▲${a.up} ▼${a.down}</span>` : ""); }
     const rd = readingOf(n); let s = head;
     if (rd) s += `<br>Geiger ${gHTML(rd.v)} <span style='color:#8c8c8c'>${rd.kind === "scout" ? "· SCOUT" : ""}</span>`; else s += "<br><span style='color:#8c8c8c'>no reading</span>";
     if (n.kind === "fund" && n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of the fund</span>`;

@@ -83,86 +83,135 @@ for (const n of R3.nodes) {
   else v3NoCohort.push([n.ticker, n.admission_v3.cohort]);
 }
 
-/* ---------- one home per served instrument ----------
-   A name in several registry cohorts (AI HARDWARE still holds the names AI ACCELERATORS and MEMORY & SEMI EQUIPMENT were cut
-   from; GROWTH and AI SOFTWARE share seven) sits ONCE on the tree: in the SMALLEST of them, the most specific one (a tie
-   goes to its board cohort, then alphabetical). The broader ones are listed on it as "also in". So the tree already reads
-   the way the pending step-2 splits would, and every name whose board tab is not that cohort is a step-2 difference. */
-const cohortsOf = new Map();
-for (const [c, m] of members) for (const t of m.keys()) { if (!cohortsOf.has(t)) cohortsOf.set(t, []); cohortsOf.get(t).push(c); }
-const size = (c) => members.get(c).size;
+/* ---------- the four kinds of cohort ----------
+   ADOPTED  — the 27 registry cohorts (step 1, Alan's).
+   PROPOSED — the cohorts in the 28 Sep proposal that are not in the registry (a proposal id that IS a registry label, or a
+              rename of one — WORLD for INTL, PHOTONICS for PHOTONICS_OPTICAL, PRECIOUS_METALS for METALS — is the adopted
+              cohort and is not repeated). Under their proposed parent, with their members and the proposal's numbers.
+   FUND SET — the 49 automatic fund cohorts (R8): every industry fund on the tree, members = its served holdings, with the
+              smallest tracking set and the tracking verdict. Under the fund itself.
+   NONE YET — whatever is still unclaimed, under its sector heading.
+   Home rule (coordinator, 29 Sep): adopted > proposed > fund set > none; within a kind THEME BEATS SIZE (a name in a theme
+   cohort and in MEGACAP is at home in the theme), then the smallest; every other membership is "also in". */
+const PROP = JSON.parse(readFileSync(join(ROOT, "deliverables/20260928/tree-cohorts/proposed-cohorts.json"), "utf8"));
+const SIZE_COHORTS = new Set(["MEGACAP"]); // the one adopted cohort that is a size bucket, not a theme
+const proposedMap = new Map(); // proposal id → registry label it stands for (adopted), or null when it is new
+for (const c of PROP.cohorts) {
+  const r = regBy.get(c.id);
+  if (r && r.kind === "cohort") { proposedMap.set(c.id, c.id); continue; }
+  if (r && r.kind === "merged") { proposedMap.set(c.id, r.merged_into); continue; }
+  const f = c.from_cohorts || [];
+  if (f.length === 1 && regBy.get(f[0]) && regBy.get(f[0]).kind === "cohort" && c.split_of !== f[0] && !PROP.cohorts.some((o) => o.id === f[0])) { proposedMap.set(c.id, f[0]); continue; }
+  proposedMap.set(c.id, null);
+}
+const PROPOSED = PROP.cohorts.filter((c) => proposedMap.get(c.id) === null);
+const proposalFor = new Map(); // registry label → the proposal row that describes it (its note, groups, moves)
+for (const [id, lab] of proposedMap) if (lab) proposalFor.set(lab, PROP.cohorts.find((c) => c.id === id));
+const dissolvedFor = new Map(PROP.dissolved.map((d) => [d.key, d]));
+for (const c of PROPOSED) if (!byIdR3().has(c.parent)) throw new Error(`proposed parent ${c.parent} of ${c.id} is not on the r3 tree`);
+for (const f of PROP.fund_cohorts) if (!byIdR3().has(f.fund)) throw new Error(`fund set ${f.fund} is not on the r3 tree`);
+function byIdR3() { return byIdR3.m || (byIdR3.m = new Map(R3.nodes.map((n) => [n.id, n]))); }
+
+// every membership of every ticker, by kind
+const memberships = new Map(); // ticker → [{kind, id, label, size}]
+const addM = (t, m) => { if (!memberships.has(t)) memberships.set(t, []); memberships.get(t).push(m); };
+for (const [c, m] of members) for (const t of m.keys()) addM(t, { kind: "adopted", id: "COHORT_" + c, cohort: c, size: m.size, theme: !SIZE_COHORTS.has(c) });
+for (const c of PROPOSED) for (const t of c.members) addM(t, { kind: "proposed", id: "PROPOSED_" + c.id, cohort: c.id, size: c.members.length, theme: true });
+const TRACK_RANK = { GOOD: 0, FAIR: 1, POOR: 2 };
+// a fund set holds NAMES only: the 28 Sep files list the sector's own ETF among its holdings, and a fund is never its own member
+const FUND_IDS = new Set(R3.nodes.filter((n) => n.kind === "fund").map((n) => n.id));
+for (const f of PROP.fund_cohorts) { const ms = f.served_holdings.filter((t) => SERVED.has(t) && !FUND_IDS.has(t)); for (const t of ms) addM(t, { kind: "fundset", id: "FUNDSET_" + f.fund, cohort: f.fund, size: ms.length, theme: true, track: TRACK_RANK[f.tracking] ?? 3 }); }
+const KIND_RANK = { adopted: 0, proposed: 1, fundset: 2 };
 const homeOf = (t) => {
-  const cs = cohortsOf.get(t) || [];
-  if (!cs.length) return null;
+  const ms = memberships.get(t) || [];
+  if (!ms.length) return null;
   const b = BOARD.get(t);
-  const sorted = cs.slice().sort((a, b2) => size(a) - size(b2) || (a === b ? -1 : b2 === b ? 1 : 0) || (a < b2 ? -1 : 1));
-  return { home: sorted[0], also: sorted.slice(1), rule: cs.length > 1 ? "smallest of several" : "only one" };
+  const sorted = ms.slice().sort((x, y) => KIND_RANK[x.kind] - KIND_RANK[y.kind] || (y.theme - x.theme) || ((x.track ?? 0) - (y.track ?? 0)) || x.size - y.size || (x.cohort === b ? -1 : y.cohort === b ? 1 : 0) || (x.cohort < y.cohort ? -1 : 1));
+  const home = sorted[0];
+  const rule = ms.length === 1 ? "only one" : sorted[1].kind !== home.kind ? `${home.kind} beats ${sorted[1].kind}` : (!sorted[1].theme && home.theme) ? "theme beats size" : home.kind === "fundset" ? "best tracking, then smallest set" : "smallest of several";
+  return { home, also: sorted.slice(1), rule };
 };
 
 /* ---------- the node list ---------- */
-const byId = new Map(R3.nodes.map((n) => [n.id, n]));
+const byId = byIdR3();
 for (const c of COHORTS) if (!byId.has(c.parent)) throw new Error(`registry parent ${c.parent} of ${c.label} is not on the r3 tree`);
 const nodes = [];
 const headings = R3.nodes.filter((n) => n.kind === "index");
 const funds = R3.nodes.filter((n) => n.kind === "fund");
 const names = R3.nodes.filter((n) => n.kind === "name");
 const sectorOf = (n) => { let c = n; while (c && c.kind !== "index") c = byId.get(c.parents[0]); return c; };
-// headings and funds: as on r3, unchanged (structure above the cohorts)
 for (const n of headings) nodes.push({ ...n });
 for (const n of funds) nodes.push({ ...n, board_cohort: BOARD.get(n.ticker) ?? null });
-// cohort nodes: one per registry cohort, under the registry parent
+const base = (id, label, parent, ckind) => ({ id, cohort: null, ticker: null, label, parents: [parent], kind: "cohort", ckind, pseudo: ckind === "none",
+  served: false, tier: null, planned_tier: null, market_value_usd: null, holdings: null, members: [], member_funds: [], step2: [], diff_count: 0, board_counts: {}, merged_from: [] });
 const cohortNodes = new Map();
 for (const c of COHORTS) {
-  const node = { id: "COHORT_" + c.label, cohort: c.label, ticker: null, label: c.display_label, parents: [c.parent], kind: "cohort", pseudo: false,
+  const pr = proposalFor.get(c.label), dv = dissolvedFor.get(c.label);
+  const node = { ...base("COHORT_" + c.label, c.display_label, c.parent, "adopted"), cohort: c.label,
     parent_reason: c.parent_reason, rule: c.rule, cohesion: c.cohesion, null95: c.null95, step2_pending: c.step2_pending,
     merged_from: REG.rows.filter((r) => r.kind === "merged" && r.merged_into === c.label).map((r) => r.label),
-    served: false, tier: null, planned_tier: null, admission: "a cohort: its bar is the mean of its members' Geigers", market_value_usd: null, holdings: null,
-    members: [], member_funds: [], step2: [], diff_count: 0, board_counts: {} };
-  cohortNodes.set(c.label, node); nodes.push(node);
+    admission: "an adopted cohort (the registry, step 1): its bar is the mean of its members' Geigers",
+    proposal_note: pr ? pr.note : null, proposal_moves: pr ? pr.moves : [], proposal_id: pr ? pr.id : null, dissolve: dv ? { reason: dv.reason, becomes: dv.becomes } : null };
+  cohortNodes.set(node.id, node); nodes.push(node);
 }
-// the names that are in no registry cohort: one pseudo-cohort per sector heading, so every name is on the tree once
+for (const c of PROPOSED) {
+  const node = { ...base("PROPOSED_" + c.id, c.id.replace(/_/g, " "), c.parent, "proposed"), cohort: c.id,
+    parent_reason: c.parent_reason, rule: null, cohesion: null, null95: null, step2_pending: null,
+    admission: "a PROPOSED cohort (28 Sep proposal, not adopted): its bar shows what adopting it would give",
+    proposal_kind: c.kind, proposal_note: c.note, split_of: c.split_of, from_cohorts: c.from_cohorts, groups: c.groups, moves: c.moves, sector_odd: c.sector_odd, not_served: c.not_served,
+    all_members: c.members.filter((t) => byId.has(t)) };
+  cohortNodes.set(node.id, node); nodes.push(node);
+}
+for (const f of PROP.fund_cohorts) {
+  const node = { ...base("FUNDSET_" + f.fund, f.fund + " SET", f.fund, "fundset"), cohort: f.fund,
+    parent_reason: `R8: every industry fund on the tree is a cohort of its served holdings (${f.n} · ${f.coverage_pct.toFixed(0)}% of the fund's weight)`, rule: "R8", cohesion: null, null95: null, step2_pending: null,
+    admission: "a FUND SET (R8, automatic): the fund's served holdings; the home of names no adopted or proposed cohort claims",
+    tracking: f.tracking, coverage_pct: f.coverage_pct, smallest_set: f.smallest_set, fund_label: f.label, all_members: f.served_holdings.filter((t) => SERVED.has(t) && byId.has(t) && !FUND_IDS.has(t)) };
+  cohortNodes.set(node.id, node); nodes.push(node);
+}
 const pseudo = new Map();
 const pseudoFor = (sec) => {
   if (!pseudo.has(sec.id)) {
-    const node = { id: "NOCOHORT_" + sec.id, cohort: null, ticker: null, label: "NO COHORT YET · " + sec.label.toUpperCase(), parents: [sec.id], kind: "cohort", pseudo: true,
-      parent_reason: "not a registry cohort: the names under this sector heading that no adopted cohort claims", rule: null, cohesion: null, null95: null, step2_pending: null, merged_from: [],
-      served: false, tier: null, planned_tier: null, admission: "not a cohort: names the registry has not placed yet, kept under their GICS sector", market_value_usd: null, holdings: null,
-      members: [], member_funds: [], step2: [], diff_count: 0, board_counts: {} };
+    const node = { ...base("NOCOHORT_" + sec.id, "NONE YET · " + sec.label.toUpperCase(), sec.id, "none"),
+      parent_reason: "not a cohort: the names under this sector heading that no adopted, proposed or fund-set cohort claims", rule: null, cohesion: null, null95: null, step2_pending: null,
+      admission: "not a cohort: names no adopted, proposed or fund-set cohort claims, kept under their GICS sector" };
     pseudo.set(sec.id, node); nodes.push(node);
   }
   return pseudo.get(sec.id);
 };
-const placed = new Map(); // ticker → cohort node id
+const placed = new Map();
 for (const n of names) {
   const sec = sectorOf(n);
   if (!sec) throw new Error(`${n.id} has no sector heading`);
   const h = homeOf(n.ticker);
-  const cn = h ? cohortNodes.get(h.home) : pseudoFor(sec);
+  const cn = h ? cohortNodes.get(h.home.id) : pseudoFor(sec);
   const board = BOARD.get(n.ticker) ?? null;
-  // a served name whose board tab is not the cohort it sits in is a difference; so is a served name in no registry cohort at all
-  // (the board has a tab for it, the registry has not). A waiting name has no board row and is not counted.
-  const differs = n.served ? (h ? board !== h.home : true) : false;
+  const adopted = h && h.home.kind === "adopted";
+  // a served name in an adopted cohort whose board tab is another: a step-2 difference. A served name outside every adopted
+  // cohort: also counted (the board has a tab for it, the registry has not). A waiting name has no board row: not counted.
+  const differs = n.served ? (adopted ? board !== h.home.cohort : true) : false;
   const row = { ...n, parents: [cn.id, ...n.parents.filter((p) => p !== sec.id)], sector: sec.id, sector_label: sec.label, board_cohort: board,
-    registry_cohort: h ? h.home : null, also_in: h ? h.also : [], home_rule: h ? h.rule : "no registry cohort", filters: filterOf.get(n.ticker) || [],
-    member_source: h ? members.get(h.home).get(n.ticker) : null, differs };
+    home_kind: h ? h.home.kind : "none", home_id: cn.id, registry_cohort: adopted ? h.home.cohort : null,
+    also_in: h ? h.also.map((m) => ({ kind: m.kind, id: m.id, cohort: m.cohort })) : [], home_rule: h ? h.rule : "no cohort claims it",
+    filters: filterOf.get(n.ticker) || [], member_source: adopted ? members.get(h.home.cohort).get(n.ticker) : null, differs };
   nodes.push(row); placed.set(n.ticker, cn.id);
   cn.members.push(n.ticker);
   cn.board_counts[board ?? "—"] = (cn.board_counts[board ?? "—"] || 0) + 1;
-  if (differs) { cn.diff_count++; cn.step2.push({ ticker: n.ticker, board: board, note: h ? (h.also.length ? "also in " + h.also.join(", ") : null) : (board && regBy.get(board) ? `${board} is a ${regBy.get(board).kind} in the registry` : `${board} is a board tab only`) }); }
+  if (differs) { cn.diff_count++; cn.step2.push({ ticker: n.ticker, board, note: adopted ? (h.also.length ? "also in " + h.also.map((m) => m.cohort).join(", ") : null) : (board && regBy.get(board) ? `${board} is a ${regBy.get(board).kind} in the registry` : `${board} is a board tab only`) }); }
 }
 // funds that are cohort members (INDEXES, MACRO, INTL, METALS, AI HARDWARE hold funds): listed in the cohort, once
 for (const f of funds) {
   const h = homeOf(f.ticker); if (!h) continue;
-  const cn = cohortNodes.get(h.home);
+  const cn = cohortNodes.get(h.home.id);
   cn.member_funds.push(f.ticker);
   const fn = nodes.find((x) => x.id === f.id);
-  fn.registry_cohort = h.home; fn.also_in = h.also; fn.home_rule = h.rule;
-  fn.differs = BOARD.get(f.ticker) !== h.home;
+  fn.home_kind = h.home.kind; fn.home_id = cn.id; fn.registry_cohort = h.home.kind === "adopted" ? h.home.cohort : null; fn.also_in = h.also.map((m) => ({ kind: m.kind, id: m.id, cohort: m.cohort })); fn.home_rule = h.rule;
+  fn.differs = h.home.kind === "adopted" ? BOARD.get(f.ticker) !== h.home.cohort : true;
   if (fn.differs) { cn.diff_count++; cn.step2.push({ ticker: f.ticker, board: BOARD.get(f.ticker) ?? null, note: "a fund" }); }
 }
-// members named in a cohort list but not served and not on the map (none today: the 28 Sep lists were served-only): kept honest
 const unservedMembers = [];
 for (const [c, m] of members) for (const t of m.keys()) if (!byId.has(t)) unservedMembers.push([c, t]);
+for (const c of PROPOSED) for (const t of c.members) if (!byId.has(t)) unservedMembers.push([c.id, t]);
 
 /* ---------- who holds what: the reverse of every fund's served holdings (FMP 26 Sep) + the r3 fund parents ---------- */
 const heldBy = {};
@@ -177,17 +226,22 @@ for (const t of Object.keys(heldBy)) heldBy[t].sort((a, b) => (b[1] ?? -1) - (a[
 const servedNames = names.filter((n) => n.served).map((n) => n.ticker);
 const missing = universe.symbols.filter((s) => !byId.has(s));
 const cohortList = nodes.filter((n) => n.kind === "cohort");
+const ofKind = (k) => cohortList.filter((c) => c.ckind === k);
+const namesOfKind = (k) => names.filter((n) => (placed.get(n.ticker) || "").startsWith({ adopted: "COHORT_", proposed: "PROPOSED_", fundset: "FUNDSET_", none: "NOCOHORT_" }[k]));
 const counts = {
-  nodes: nodes.length, headings: headings.length, funds: funds.length, names: names.length, cohorts: COHORTS.length, pseudo_cohorts: pseudo.size,
-  served: universe.count, served_names: servedNames.length, served_funds: funds.filter((f) => f.served).length, universe_missed: missing,
-  names_in_a_registry_cohort: names.filter((n) => cohortsOf.has(n.ticker)).length,
-  names_in_no_registry_cohort: names.filter((n) => !cohortsOf.has(n.ticker)).length,
-  names_in_several: names.filter((n) => (cohortsOf.get(n.ticker) || []).length > 1).length,
-  funds_in_a_registry_cohort: funds.filter((f) => cohortsOf.has(f.ticker)).length,
+  nodes: nodes.length, headings: headings.length, funds: funds.length, names: names.length,
+  cohorts: ofKind("adopted").length, proposed_cohorts: ofKind("proposed").length, fund_sets: ofKind("fundset").length, pseudo_cohorts: ofKind("none").length,
+  served: universe.count, served_names: names.filter((n) => n.served).length, served_funds: funds.filter((f) => f.served).length, universe_missed: missing,
+  names_at_home_in: { adopted: namesOfKind("adopted").length, proposed: namesOfKind("proposed").length, fundset: namesOfKind("fundset").length, none: namesOfKind("none").length },
+  names_in_a_registry_cohort: names.filter((n) => (memberships.get(n.ticker) || []).some((m) => m.kind === "adopted")).length,
+  names_in_no_registry_cohort: names.filter((n) => !(memberships.get(n.ticker) || []).some((m) => m.kind === "adopted")).length,
+  names_in_several: names.filter((n) => (memberships.get(n.ticker) || []).length > 1).length,
+  funds_in_a_registry_cohort: funds.filter((f) => (memberships.get(f.ticker) || []).some((m) => m.kind === "adopted")).length,
   admitted_29sep_placed_by_admission_cohort: v3Placed.length, admitted_29sep_with_no_registry_cohort: v3NoCohort.length,
   differences: cohortList.reduce((s, c) => s + c.diff_count, 0),
-  differences_in_real_cohorts: cohortList.filter((c) => !c.pseudo).reduce((s, c) => s + c.diff_count, 0),
-  differences_no_cohort: cohortList.filter((c) => c.pseudo).reduce((s, c) => s + c.diff_count, 0),
+  differences_in_real_cohorts: ofKind("adopted").reduce((s, c) => s + c.diff_count, 0),
+  differences_outside_adopted: cohortList.filter((c) => c.ckind !== "adopted").reduce((s, c) => s + c.diff_count, 0),
+  differences_no_cohort: ofKind("none").reduce((s, c) => s + c.diff_count, 0),
   unserved_members: unservedMembers.length,
 };
 if (missing.length) throw new Error("served but not on the r3 tree: " + missing.join(" "));
@@ -196,7 +250,7 @@ for (const t of servedNames) if (!placed.has(t)) throw new Error(`served name ${
 const doc = {
   artifact_kind: "SCINTILLA_TREE_MAP_NODES",
   built_utc: new Date().toISOString(),
-  what: "The market tree with the cohort level: the r3 node list (headings, funds, names) plus one node per adopted registry cohort, every name re-hung under exactly one cohort (or the sector's NO COHORT YET bucket). Structure only: no Geiger, price or change is stored here — the page reads those live.",
+  what: "The market tree with the cohort level: the r3 node list (headings, funds, names) plus one node per cohort of four kinds — ADOPTED (registry), PROPOSED (28 Sep proposal, not adopted), FUND SET (R8 fund tracking sets), NONE YET — every name re-hung under exactly one of them. Structure only: no Geiger, price or change is stored here — the page reads those live.",
   provenance: {
     structure: { source: "deliverables/20260928/market-map-r3/nodes.json", built_utc: R3.built_utc, universe_sha256: R3.provenance.universe.sha256 },
     registry: { source: "data/cohort-registry-step1.json", rows: REG.rows.length, cohorts: COHORTS.length, merged: REG.rows.filter((r) => r.kind === "merged").length, filters: FILTERS.length, note: "the same 38 rows the 28 Sep migration wrote to public.cohort_registry (step 1: parents and merges; step 2 splits/moves pending)" },
@@ -204,7 +258,8 @@ const doc = {
     board: { source: boardSource, rows: BOARD.size, counts: boardCounts },
     universe: { source: arg("--universe") ? "file" : CHART_API + "/universe", count: universe.count, sha256: universe.universe_sha256 },
     holdings: R3.provenance.holdings,
-    home_rule: "a name in several registry cohorts sits in the smallest of them (the most specific; a tie goes to its board cohort); the broader ones are listed as also_in",
+    home_rule: "adopted > proposed > fund set > none; within a kind theme beats size (MEGACAP is the size bucket), then best tracking (fund sets), then the smallest; every other membership is also_in",
+    proposal: { source: "deliverables/20260928/tree-cohorts/proposed-cohorts.json", proposed_new: PROPOSED.map((c) => c.id), stands_for_adopted: Object.fromEntries([...proposedMap].filter(([, v]) => v)), fund_sets: PROP.fund_cohorts.length, dissolved_notes_on: [...dissolvedFor.keys()] },
   },
   counts, filters: FILTERS.map((f) => ({ label: f.label, attribute: f.filter_attribute, value: f.filter_value })),
   held_by: heldBy, unserved_members: unservedMembers, nodes,
