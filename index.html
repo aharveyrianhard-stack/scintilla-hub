@@ -746,6 +746,8 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-est-sechead .rule{ flex:1; height:1px; background:linear-gradient(90deg,rgba(0,212,255,.18),transparent); }
 .sc-est-sechead .meta{ font-family:var(--mono); font-size:8px; color:var(--ink3); letter-spacing:.1em; text-transform:uppercase; }
 .sc-est-zone{ border:.8px solid rgba(0,212,255,.22); padding:10px; }
+.sc-est-zone.sc-comps-live{ padding:0; overflow:visible; }
+.sc-est-zone.sc-comps-live .cl-panel{ border-left:0; border-right:0; }
 .sc-est-toggle{ display:inline-flex; border:.8px solid rgba(0,212,255,.12); border-radius:2px; overflow:hidden; margin-left:auto; }
 .sc-est-toggle b{ font-family:var(--mono); font-weight:400; font-size:8px; letter-spacing:.14em;
   text-transform:uppercase; padding:5px 11px; color:var(--dim); cursor:pointer; }
@@ -18734,10 +18736,47 @@ function estPTGaugeHTML(data) {
     '<span class="sc-est-ptsub">' + upTxt + "</span></div>" +
     gauge + nums + "</div>";
 }
-function estimatesTabHTML(data) {   // reference order: 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 03 VALUATION → 04 SCENARIOS → 05 GRADES
+function estimatesTabHTML(data) {   // reference order: 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 02c COMPS → 03 VALUATION → 04 SCENARIOS → 05 GRADES
   return estForecastHTML(data) + estConsensusGridHTML(data) +
-    estConvictionHTML(data) + estPTGaugeHTML(data) +
+    estConvictionHTML(data) + estPTGaugeHTML(data) + estCompsHTML(data) +
     estValuationHTML(data) + estScenariosHTML(data) + estGradesHTML(data);
+}
+/* 02·c COMPS — C1 (Alan, 29 Sep): "the comps as we've discussed labeled clearly and a clear step by step breakdown of
+   getting to the price range". The section is an empty box here; deliverables/20260929/comps-live/live.mjs fills it
+   after the tab paints: the six round-3 rows (every mark named, multiples on top, implied prices below, the diamond for
+   today, the arrow to the median), way B as the tranche band, the seven-step ladder, and COMPARE (two or three
+   companies on one % axis). It reads the Hub's own tables through pg() and today's prices from the chart API, and keeps
+   one snapshot per ticker for ten minutes. The analysts' MEDIAN TARGET above is a different measure and never enters
+   the band (the note on 02 CONVICTION says so). Sits right under the target it is not, so the two are never confused. */
+function estCompsHTML(data) {
+  if (!data || !data.t || data._loading) return "";
+  setTimeout(compsLiveMount, 0);   // the box is in the DOM by then; the module mounts into it
+  return estSechead("02·c", "Comps", '<span class="meta">peers in the cohort · FMP tables · chart API price</span>') +
+    '<div class="sc-est-zone sc-comps-live" id="scCompsLive" data-t="' + esc(data.t) + '"><div style="font:11px/1.5 var(--mono);color:var(--dim);letter-spacing:.2em">READING THE PEERS OF ' + esc(data.t) + '…</div></div>';
+}
+let COMPS_LIVE_MOD = null;
+function compsLiveMount() {
+  const box = document.getElementById("scCompsLive");
+  if (!box || !box.isConnected) return;
+  const t = box.dataset.t;
+  if (!t || box.dataset.mounted === t) return;
+  box.dataset.mounted = t;
+  const load = COMPS_LIVE_MOD || (COMPS_LIVE_MOD = import("/deliverables/20260929/comps-live/live.mjs"));
+  load.then((m) => {
+    const live = document.getElementById("scCompsLive");
+    if (!live || live.dataset.t !== t) return;              // the tab or the company changed while the module loaded
+    const api = (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+    return m.mountCompsLive(live, {
+      ticker: t, pg, today: todayISO(),
+      quotes: (syms) => fetch(api + "/quotes?symbols=" + encodeURIComponent(syms.join(","))).then((r) => { if (!r.ok) throw new Error("quotes → " + r.status); return r.json(); }),
+      livePrice: (typeof PRICES !== "undefined" && PRICES[t] != null) ? num(PRICES[t]) : null,
+      priceOf: (x) => (typeof PRICES !== "undefined" && PRICES[x] != null) ? num(PRICES[x]) : null,
+    });
+  }).catch((e) => {
+    const live = document.getElementById("scCompsLive");
+    if (live && live.dataset.t === t) live.innerHTML = '<div style="font:11px/1.5 var(--mono);color:var(--ink2)">The comps module could not be loaded: ' + esc(String(e && e.message || e)) + "</div>";
+    COMPS_LIVE_MOD = null;
+  });
 }
 
 /* NEWS article — DB row → .sc-art (also used by the NEWS room) */
