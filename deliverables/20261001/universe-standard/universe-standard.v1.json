@@ -1,0 +1,566 @@
+{
+ "artifact_kind": "SCINTILLA_UNIVERSE_STANDARD",
+ "version": "1.0.0",
+ "status": "PROPOSED",
+ "proposed_utc": "2026-10-01T16:47:20.864Z",
+ "proposed_by": "U1 lane (Fable · Urth), 1 Oct 2026",
+ "decided_by": "Alan — not yet",
+ "question": "Which companies belong together, by which rule, from which source — answered once; read by the tree, the cohorts and the comp sets.",
+ "placement_record": {
+  "key": [
+   "ticker",
+   "as_of"
+  ],
+  "refreshed": "nightly after the close (after 20:00 ET), one job, never edited by hand",
+  "parts": {
+   "identity": {
+    "fields": [
+     "name",
+     "exchange",
+     "primary_exchange_mic",
+     "country",
+     "is_adr",
+     "listing_currency",
+     "statement_currency",
+     "statement_date",
+     "cik"
+    ],
+    "sources": {
+     "profile": "FMP /stable/profile",
+     "reference": "Massive /v3/reference/tickers",
+     "statement": "FMP /stable/income-statement"
+    },
+    "status": {
+     "today": "public.company_profile, public.filer_currency (36)",
+     "gap": "statement currency for the other served names: one job away"
+    }
+   },
+   "classification": {
+    "fields": [
+     "sic_code",
+     "sic_description",
+     "fmp_sector",
+     "fmp_industry"
+    ],
+    "sources": {
+     "sic": "Massive /v3/reference/tickers (the SEC's code)",
+     "fmp": "FMP /stable/profile"
+    },
+    "status": {
+     "today": "FMP on company_profile",
+     "gap": "SIC: one job away (C4's ticker_industry migration)"
+    }
+   },
+   "size": {
+    "fields": [
+     "market_value_usd",
+     "source",
+     "date",
+     "check_other_provider",
+     "disagreement_pct"
+    ],
+    "authority": "Massive reference market_cap (all share classes)",
+    "check": "FMP profile marketCap; flag when the gap ≥ 5%",
+    "status": "FMP in a table; Massive one job away"
+   },
+   "membership": {
+    "fields": [
+     "funds[] {fund, weight_pct, source, as_of}"
+    ],
+    "source": "FMP etf-holdings for the 138 tree funds",
+    "status": "in tree.json (26 Sep); a table is new"
+   },
+   "relations": {
+    "fields": [
+     "fmp_peers[] in FMP's order",
+     "massive_related[] in Massive's order"
+    ],
+    "sources": {
+     "fmp": "FMP /stable/stock-peers → public.fmp_peers",
+     "massive": "Massive /v1/related-companies → public.peer_sources (C4 job)"
+    },
+    "status": "FMP in a table; Massive one job away"
+   },
+   "readings": {
+    "fields": [
+     "close_geiger {composite, trend, momentum, rungs}",
+     "hub_geiger where served"
+    ],
+    "source": "chart API /v1/scout-geiger (seven rungs after P8; three today); /geiger",
+    "status": "three-rung in a table; seven-rung is P8 (built, not applied)"
+   },
+   "comps_measures_usd": {
+    "fields": [
+     "pe_ttm",
+     "pe_fwd",
+     "ev_ebitda",
+     "ev_sales",
+     "ps",
+     "peg",
+     "rev_g_ttm",
+     "rev_g_fy",
+     "eps_g_fy",
+     "gm",
+     "om",
+     "fcfm",
+     "nd_ebitda",
+     "capex_rev",
+     "capex_g",
+     "rev_per_capex"
+    ],
+    "basis": "USD at the statement-date rate (public.fx_rates at filer_currency.statement_date)",
+    "source": "C3's reader (deliverables/20261001/comps-template/cohort.mjs)",
+    "status": "computed on demand today; stored nightly: one job away"
+   },
+   "provenance": {
+    "fields": [
+     "per part: source, fetched_at",
+     "as_of",
+     "inputs_sha256"
+    ],
+    "status": "new"
+   }
+  },
+  "served_false_records": "names the screener returns that the Hub does not serve get identity, classification and size only, served:false"
+ },
+ "authorities": {
+  "industry": {
+   "authority": "FMP industry",
+   "tag": "SIC code + description (Massive / SEC)",
+   "tie_break": "same SIC ranks a peer closer; SIC is the fallback where FMP has no industry",
+   "disagreement_flag": true,
+   "decision": 1,
+   "recommendation": "FMP rules, SIC tags"
+  },
+  "market_value": {
+   "authority": "Massive reference market_cap (all share classes)",
+   "check": "FMP profile marketCap",
+   "flag_when_gap_pct_at_least": 5,
+   "standin_until_job": "FMP"
+  },
+  "holdings": {
+   "authority": "FMP etf-holdings",
+   "check": null
+  },
+  "peers": {
+   "authority": null,
+   "rule": "both are votes; orders kept"
+  },
+  "readings": {
+   "authority": "the off-Hub Geiger at the close, seven rungs (P8)",
+   "check": "the Hub Geiger, live, 590"
+  }
+ },
+ "tree": {
+  "levels": [
+   "L0 market",
+   "L1 asset class / region",
+   "L2 sector (sector fund)",
+   "L3 industry fund(s) (≤ 60 served holdings; broad and style funds excluded)",
+   "L4 cohort (ADOPTED | PROPOSED | FUND SET | NONE YET)",
+   "L5 names"
+  ],
+  "sic_on_the_tree": {
+   "L2": "SIC division (first two digits) as a check on the heading",
+   "L3": "the fund's holdings' SIC codes, counted",
+   "L4": "majority SIC and the odd ones out on the card",
+   "L5": "SIC code + description under every name; FMP industry beside it; disagreement flag"
+  },
+  "home_path_rule": [
+   "1 the ADOPTED cohort that claims it; if several, the one whose industry (by the authority) matches, then the smallest",
+   "2 else the PROPOSED cohort that claims it",
+   "3 else the FUND SET of the industry fund holding it at the highest weight",
+   "4 else the sector heading's NONE YET line",
+   "theme beats size: a size cohort (MEGACAP) is 'also in', never home, when an industry cohort claims the name"
+  ],
+  "also_in_edges": [
+   "other cohort (adopted or proposed)",
+   "fund set",
+   "comp-set edge: the name is in another company's kept set (new)"
+  ],
+  "decision": 3
+ },
+ "cohorts": {
+  "proposal_rule": {
+   "shared_industry": "same FMP industry, or the same SIC code where FMP's label spans several",
+   "shared_funds": "at least one industry fund holds ≥ half of the set",
+   "co_movement": "mean pair correlation of the close-Geiger readings over N sessions above the 95th point of 200 random draws of the same size from the served universe",
+   "windows": {
+    "nightly_proposal_and_moves": 60,
+    "put_to_alan": 250,
+    "adoption_record": 750
+   },
+   "decision": 4
+  },
+  "naming_rule": "upper snake id; label = the parenting fund's theme in plain words where Alan named it, else the SIC description in plain words; ≤ 3 words; never a vendor label verbatim; a split keeps the parent's first word",
+  "states": [
+   "ADOPTED (public.cohort_registry, Alan)",
+   "PROPOSED (passes the rule tonight)",
+   "FUND SET (an industry fund's served holdings, automatic)",
+   "NONE YET"
+  ],
+  "promotion": "20 consecutive passing nights → put to Alan; 20 failing → withdrawn; nothing adopts or dissolves itself (R5)",
+  "move_rule": "leave-one-out: another cohort's mean tracks the name better than its own by ≥ 0.10 → listed; Alan decides",
+  "dry_run_1oct": {
+   "provisional": true,
+   "stand_in": "60 sessions of daily close returns (chart API) + today's three-rung scout for the one-day agreement",
+   "counts": {
+    "cohorts": 102,
+    "cohesive": 45,
+    "not_above_random": 11,
+    "too_few": 46,
+    "industry_groups": 39,
+    "industry_cohesive": 38,
+    "moves": 45
+   },
+   "window": [
+    "2026-07-08",
+    "2026-09-30"
+   ]
+  },
+  "dependency": "P8 (seven-rung close Geiger) for the co-movement half"
+ },
+ "comp_sets": {
+  "candidates": [
+   "FMP peers",
+   "Massive related",
+   "same industry by the authority (the screener; served names today)",
+   "served holdings of the industry funds that hold the company"
+  ],
+  "keep": {
+   "same_industry": "FMP industry equal, or the same SIC code",
+   "fund_is": "a vote, never an industry match (departs from C4 as built)",
+   "band_default": 10,
+   "band_options": [
+    3,
+    10,
+    30,
+    "any"
+   ],
+   "thin_set_rule": "fewer than 5 survive at ×10 → widen one step, say so"
+  },
+  "rank": [
+   "votes desc",
+   "closeness |log10(peer ÷ own market value)| asc",
+   "ticker"
+  ],
+  "n_default": 10,
+  "n_options": [
+   6,
+   8,
+   10,
+   12,
+   15
+  ],
+  "operator": "public.comps_decisions on top; a switched-off peer stays listed, greyed, out of the medians",
+  "outliers": "per measure, beyond 1.5 × IQR of the peers' middle half → flag only (July spec §1); never removed by the rule",
+  "worked": {
+   "LRCX": {
+    "industry": "Semiconductors",
+    "sic": "3559",
+    "band_used": "×10",
+    "counts": {
+     "candidates": 76,
+     "served": 74,
+     "same_industry_by_authority": 41,
+     "in_band": 21,
+     "kept": 10
+    },
+    "kept": [
+     "AMAT",
+     "KLAC",
+     "MU",
+     "ARM",
+     "INTC",
+     "TXN",
+     "QCOM",
+     "AMD",
+     "ASML",
+     "MRVL"
+    ],
+    "c4_as_built": [
+     "AMAT",
+     "ARM",
+     "INTC",
+     "TXN",
+     "KLAC",
+     "ASML",
+     "MRVL",
+     "QCOM",
+     "ADI",
+     "AMD"
+    ]
+   },
+   "MSFT": {
+    "industry": "Software - Infrastructure",
+    "sic": "7372",
+    "band_used": "×30",
+    "counts": {
+     "candidates": 96,
+     "served": 92,
+     "same_industry_by_authority": 22,
+     "in_band": 7,
+     "kept": 7
+    },
+    "kept": [
+     "ORCL",
+     "CRM",
+     "FTNT",
+     "PLTR",
+     "PANW",
+     "CRWD",
+     "NOW"
+    ],
+    "c4_as_built": [
+     "PLTR",
+     "ORCL",
+     "GOOGL",
+     "AAPL",
+     "AMZN",
+     "NVDA",
+     "SPCX",
+     "META",
+     "AVGO",
+     "TSLA"
+    ]
+   },
+   "TSM": {
+    "industry": "Semiconductors",
+    "sic": null,
+    "band_used": "×10",
+    "counts": {
+     "candidates": 46,
+     "served": 44,
+     "same_industry_by_authority": 41,
+     "in_band": 11,
+     "kept": 10
+    },
+    "kept": [
+     "AVGO",
+     "MU",
+     "ASML",
+     "LRCX",
+     "AMAT",
+     "NVDA",
+     "AMD",
+     "INTC",
+     "ARM",
+     "TXN"
+    ],
+    "c4_as_built": [
+     "AVGO",
+     "MU",
+     "NVDA",
+     "AMD",
+     "ASML",
+     "INTC",
+     "LRCX",
+     "AMAT",
+     "ARM",
+     "TXN"
+    ]
+   },
+   "MU": {
+    "industry": "Semiconductors",
+    "sic": "3674",
+    "band_used": "×10",
+    "counts": {
+     "candidates": 92,
+     "served": 91,
+     "same_industry_by_authority": 43,
+     "in_band": 14,
+     "kept": 10
+    },
+    "kept": [
+     "AMD",
+     "AVGO",
+     "INTC",
+     "LRCX",
+     "AMAT",
+     "ARM",
+     "NVDA",
+     "TXN",
+     "KLAC",
+     "QCOM"
+    ],
+    "c4_as_built": [
+     "AMD",
+     "AVGO",
+     "ASML",
+     "TSM",
+     "INTC",
+     "LRCX",
+     "AMAT",
+     "ARM",
+     "NVDA",
+     "TXN"
+    ]
+   },
+   "JPM": {
+    "industry": "Banks - Diversified",
+    "sic": "6021",
+    "band_used": "any",
+    "counts": {
+     "candidates": 48,
+     "served": 42,
+     "same_industry_by_authority": 3,
+     "in_band": 3,
+     "kept": 3
+    },
+    "kept": [
+     "BAC",
+     "WFC",
+     "C"
+    ],
+    "c4_as_built": [
+     "BAC",
+     "WFC",
+     "C",
+     "BRK-B",
+     "V",
+     "MA",
+     "MS",
+     "GS",
+     "AXP",
+     "SCHW"
+    ]
+   },
+   "XOM": {
+    "industry": "Oil & Gas Integrated",
+    "sic": "2911",
+    "band_used": "any",
+    "counts": {
+     "candidates": 29,
+     "served": 15,
+     "same_industry_by_authority": 2,
+     "in_band": 2,
+     "kept": 2
+    },
+    "kept": [
+     "CVX",
+     "COP"
+    ],
+    "c4_as_built": [
+     "CVX",
+     "COP",
+     "MPC",
+     "VLO",
+     "PSX",
+     "WMB",
+     "EOG",
+     "SLB"
+    ]
+   }
+  },
+  "decision": 2
+ },
+ "agreement_view": {
+  "flat": "rows = candidates by votes then closeness; columns = the four sources; the kept band shaded; a verdict per row",
+  "three_d": "the company on the spine; rings by votes (1 bottom … 4 top); radius = closeness; angle = the source signature; the kept set = the bright inner ring; in the tree's 3D area a name lifts into its comp cloud",
+  "mocks": [
+   "agreement-ladder.html",
+   "agreement-3d.html"
+  ]
+ },
+ "screener": {
+  "rule": "a filter over placement records: industry/SIC, size band, country, ADR, fund, measure ranges, Geiger range, cohort state; no provider call",
+  "hub_tab": "the SCREENER tab is a view of it, with 'use as comp set' and 'show on the tree'",
+  "comps": "the fourth comps source is this screen with industry = the company's and size inside the band"
+ },
+ "hub": {
+  "could_move_to_the_tree_layer": [
+   "cohort boards",
+   "universe-wide Geiger (already off)",
+   "comps computation",
+   "screener",
+   "rotation / relative / breadth"
+  ],
+  "stays_live": [
+   "served names' board",
+   "Station charts and the company chart",
+   "alerts",
+   "scintillas",
+   "tapes",
+   "news, social, X and YouTube feeds"
+  ],
+  "decision": 5,
+  "recommendation": "the comps computation first"
+ },
+ "queue": [
+  "E1 placement record + nightly job",
+  "E2 authority tags on the tree",
+  "E3 comps rule reads the record",
+  "E4 P8 lands",
+  "E5 cohort rule nightly + moves",
+  "E6 screener over the record",
+  "E7 comp-set edges + 3D agreement in the tree",
+  "E8 Hub streamlining (discussion first)"
+ ],
+ "decisions_open": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "sources_read": {
+  "profile_count": 543,
+  "fmp_peers_rows": 4455,
+  "fmp_peers_companies": 452,
+  "board_rows": 613,
+  "filer_rows": 36,
+  "probe": "keyed reads run on the Fly bar service scintilla-massive-stocks-batch (machine 82d1d96a326548) on 1 Oct 2026 ~16:45Z: Massive /v3/reference/tickers/{t} (sic_code, sic_description, market_cap, primary_exchange, locale, type, cik), Massive /v1/related-companies/{t}, FMP /stable/company-screener (industry, marketCapMoreThan=2e9, exchange NASDAQ,NYSE,AMEX), FMP /stable/profile. Values only; no key left the machine.",
+  "scout": {
+   "as_of": "2026-09-30",
+   "computed_utc": "2026-10-01T12:52:12.666Z",
+   "run_id": "scout-geiger-nightly-20261001T125212Z-7b8272",
+   "rungs": [
+    "1d",
+    "3d",
+    "1w"
+   ]
+  },
+  "hub_geiger": {
+   "computed_utc": "2026-10-01T16:38:25.216Z",
+   "rungs": [
+    {
+     "equalizer_key": "12h",
+     "tf_token": "12h",
+     "weight": 3.172702
+    },
+    {
+     "equalizer_key": "1d",
+     "tf_token": "D",
+     "weight": 3.178477
+    },
+    {
+     "equalizer_key": "1w",
+     "tf_token": "W",
+     "weight": 0.987499
+    },
+    {
+     "equalizer_key": "3d",
+     "tf_token": "3D",
+     "weight": 2.576738
+    },
+    {
+     "equalizer_key": "3h",
+     "tf_token": "180",
+     "weight": 1.235817
+    },
+    {
+     "equalizer_key": "4h",
+     "tf_token": "240",
+     "weight": 2.278755
+    },
+    {
+     "equalizer_key": "6h",
+     "tf_token": "6h",
+     "weight": 3.178477
+    }
+   ]
+  },
+  "tree_built": "2026-09-30T06:17:20.563Z",
+  "proposal_status": "PROPOSED — nothing here is written to the registry, the Hub or the database; Alan decides"
+ }
+}
