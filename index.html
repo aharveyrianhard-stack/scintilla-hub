@@ -6278,8 +6278,21 @@ function coExpandBtnHTML() {
 function coExpandApply() {
   const on = coExpandOn(CO_EXPANDED, LEFT_STATE, LEFT_T, LEFT_HEAT) && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
   if (typeof document !== "undefined" && document.body) document.body.classList.toggle("co-exp", on);
+  if (typeof coOscTell === "function") coOscTell();   /* S6 — the embedded pane: merged, or the three when EXPANDED */
   return on;
 }
+/* S6 (Alan, 1 Oct: "wherever we have oscillators on Station and on Hub present the merged; as I expand into more real estate,
+   present the individuals") — the embedded Station pane draws the MERGED RSI + Williams %R oscillator, and the three stacked
+   (merged · RSI · Williams %R) while the company view is EXPANDED. The Hub says which, by message, so EXPAND never reloads the
+   chart: once when the frame loads and on every EXPAND / COLLAPSE. A Station without S6 ignores the message. */
+function coOscTell() {
+  if (typeof document === "undefined") return;
+  const f = document.getElementById("coChartFrame");
+  if (!f || !f.contentWindow) return;
+  try { f.contentWindow.postMessage({ sc: "osc", split: !!(document.body && document.body.classList.contains("co-exp")) },
+    new URL(STATION_CHART_URL).origin); } catch (_) {}
+}
+if (typeof document !== "undefined") document.addEventListener("load", (e) => { if (e.target && e.target.id === "coChartFrame") coOscTell(); }, true);
 
 /* ── D2 (Alan, 27 Sep) · THE COMPANY VIEW, ROUND 2 ──────────────────────────────────────────────────────────────
    "there's a company view there, I don't get it… it is very hard to navigate." · "I don't care about the MACD, but I
