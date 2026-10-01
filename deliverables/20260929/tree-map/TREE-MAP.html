@@ -39,6 +39,26 @@ code{background:var(--panel);padding:0 4px;border-radius:2px;font-size:12px}
 <p>The <b>finder</b> (top right) takes a ticker and answers with its path, market → … → cohort → name, and every fund that holds it with its weight. <code>?t=NVDA</code> in the address does the same.</p>
 <p>The 28 Sep market map (<a href="../../20260928/market-map-r3/index.html">market-map-r3</a>) is untouched: this is a new page beside it.</p>
 
+<h2>1 OCT · T4: THE CANVAS ON A RETINA SCREEN — LABELS AND NODES ON ONE PLANE</h2>
+<p>Alan opened the canvas on his Mac and the labels sat on a different plane from the balls and lines. The cause: on a scale-2 (Retina) screen the drawing buffer was made twice the CSS size, but the canvas element was never told its CSS size, so it took its buffer size as its CSS size — the picture spilled out of its box to the right and down while the labels, projected in CSS pixels, stayed where the box said. At scale 1 the two sizes are the same, so nothing showed.</p>
+<p><b>Fixed:</b> the canvas's CSS size is always the box's; the drawing buffer is CSS × the device scale (1, 1.5, 2, 3); the pixel ratio is set at start and again on every resize, and once a second if the window moves to a screen with another scale; every label is projected in CSS pixels from that same size. The same code draws the canvas, the whole-market 3D and a lifted area, so all three are covered. On open the canvas fits the whole tree in view. The hint line now reads "drag to pan · scroll to zoom · click an area to lift it into 3D" on the canvas and "drag to turn …" in the 3D.</p>
+<table>
+<tr><th>run</th><th>box (CSS px)</th><th>canvas CSS</th><th>buffer</th><th>labels off their node, sideways</th></tr>
+<tr><td>before · 1680 · scale 2</td><td>1280 × 918</td><td class="dn">1920 × 1377</td><td>1920 × 1377</td><td>0 px to the projected point, but the picture itself was drawn 1.5× too large</td></tr>
+<tr><td>after · 1680 · scale 2</td><td>1280 × 918</td><td>1280 × 918</td><td>2560 × 1836</td><td>0 px</td></tr>
+<tr><td>after · 1680 · scale 1</td><td>1280 × 918</td><td>1280 × 918</td><td>1280 × 918</td><td>0 px</td></tr>
+<tr><td>after · 390 · scale 2</td><td>390 × 523</td><td>390 × 523</td><td>780 × 1046</td><td>0 px</td></tr>
+<tr><td>after · 390 · scale 1</td><td>390 × 523</td><td>390 × 523</td><td>390 × 523</td><td>0 px</td></tr>
+</table>
+<p>The navigation run (canvas, pan, finder to Information Technology, wheel zoom, SMH lifted, back, finder with NVDA, the whole 3D) was made at scale 1 and 2, at 1680 and 390; in every shot the proof read back the canvas's box, CSS size and buffer and every printed label against its ball. <code>shots/nav-proof.json</code> holds the four runs and <code>tests/tree-map-canvas.test.mjs</code> checks all of it: CSS = box, buffer = CSS × scale, labels within pixels, pose restored after back.</p>
+<div class="shots">
+<figure><img src="shots/retina-before-1680-dpr2.png" alt=""><figcaption>BEFORE · 1680 · scale 2: the picture overflows the box (the tree is drawn one and a half times too large and runs under the card) while the labels sit where the box says — two planes.</figcaption></figure>
+<figure><img src="shots/retina-after-1680-dpr2.png" alt=""><figcaption>AFTER · 1680 · scale 2: the whole tree fits the box, each label under its ball.</figcaption></figure>
+<figure><img src="shots/retina-1680-dpr2-area-smh.png" alt=""><figcaption>AFTER · 1680 · scale 2 · SMH lifted into 3D: the same check holds in a lifted area.</figcaption></figure>
+<figure><img src="shots/retina-390-dpr2-whole.png" alt=""><figcaption>AFTER · 390 · scale 2.</figcaption></figure>
+</div>
+<p><b>Could be wrong (T4):</b> the buffer is now the full device scale (capped at 3), so a 5K screen draws four times the pixels of before on the whole-market view; the page still draws only while something moves. The headless proof uses software GL, where the pixel count costs more than on a real GPU.</p>
+
 <h2>1 OCT · T3: THE TREE AS A CANVAS — THE SAME TREE, FLAT; AN AREA LIFTS INTO 3D ON CLICK</h2>
 <p>Alan, 1 Oct: "How it was presented in 3D, I loved it. I just wanted it flat so that I can zoom into a specific area, then I click in one area, and then it's a 3D… like an Obsidian canvas." The boxed LAYERS map of 30 Sep is removed (button, code, tests).</p>
 <table>
