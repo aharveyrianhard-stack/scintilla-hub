@@ -29,7 +29,7 @@ const fmtCap = new Function("num", fn("fmtCap") + "\nreturn fmtCap;")(num);
 /* D2 (27 Sep) replaced the landing rule: the chart is no longer a tab — it is always on top — so a company opens on the
    tab this browser last used, GEIGER the first time. */
 test("a company opens on the tab this browser last used (GEIGER the first time); CHART is not a tab any more", () => {
-  assert.deepEqual(CO_TABS, ["GEIGER", "FUNDAMENTALS", "ESTIMATES", "FINANCIALS", "STATS", "NEWS", "SOCIAL", "EVENTS", "READ"], "R3 — every tab in one row");
+  assert.deepEqual(CO_TABS, ["GEIGER", "FUNDAMENTALS", "ESTIMATES", "COMPS", "FINANCIALS", "STATS", "NEWS", "SOCIAL", "EVENTS", "READ"], "R3 — every tab in one row; C2 (30 Sep) — COMPS beside ESTIMATES");
   const kit = (stored) => { const S = { coTab: "FINANCIALS", readTab: "BUSINESS" }; let seen = null;
     const pinLeft = new Function("S", "clearRotate", "favList", "loadLeft", "LEFT_STATE", "ROT_INDEX", "lsGet", "CO_TABS",
       FRONT_CONSTS + line(/^const CO_TAB_KEY = [^\n]*/m) + line(/^function coTabOk[^\n]*/m) + line(/^function coSavedTab[^\n]*/m) + fn("pinLeft") + "\nreturn pinLeft;")(
