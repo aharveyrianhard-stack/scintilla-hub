@@ -72,7 +72,7 @@ test("the table on top carries all 16 columns with the company's row, and TSM is
 
 test("the Hub: the COMPS tab loads the C3b module; the fmp_peers migration, rollback and Fly job exist; the tab has no legend sentences; the deliverable and the shots exist", () => {
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /import\("\/deliverables\/20261001\/comps-table-first\/tab\.mjs"\)/);
+  assert.match(html, /import\("\/deliverables\/20261001\/comps-(table-first|mechanic)\/tab\.mjs"\)/, "the COMPS tab loads C3b or C4 built on it");
   for (const f of ["../supabase/migrations/20261001_fmp_peers.sql", "../supabase/migrations/20261001_fmp_peers_ROLLBACK.sql", "../scripts/fmp-peers-sync.mjs", "../deliverables/20261001/comps-table-first/COMPS-TABLE-FIRST.html"]) assert.ok(existsSync(here(f)), f);
   const job = readFileSync(here("../scripts/fmp-peers-sync.mjs"), "utf8"); assert.match(job, /stock_peers/); assert.ok(!/apikey=[A-Za-z0-9]{10,}/.test(job));
   const src = readFileSync(here("../deliverables/20261001/comps-table-first/tab.mjs"), "utf8");

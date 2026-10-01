@@ -120,7 +120,7 @@ test("the cohort table on the chosen way: every member, price, Geiger, both sets
 
 test("the Hub: the COMPS tab loads the C3 module; migration, rollback and Fly job exist; the C2 tab list and ESTIMATES untouched", () => {
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /import\("\/deliverables\/20261001\/comps-(template|table-first)\/tab\.mjs"\)/, "the COMPS tab loads the C3 template or the C3b table-first module built on it");
+  assert.match(html, /import\("\/deliverables\/20261001\/comps-(template|table-first|mechanic)\/tab\.mjs"\)/, "the COMPS tab loads the C3 template or a module built on it (C3b, C4)");
   assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);
   assert.ok(!/estCompsHTML|scCompsLive/.test(html));
   for (const f of ["../supabase/migrations/20261001_fx_filer.sql", "../supabase/migrations/20261001_fx_filer_ROLLBACK.sql", "../scripts/fx-filer-sync.mjs", "../deliverables/20261001/comps-template/fx-standin-ecb-2026-10-01.json", "../deliverables/20261001/comps-template/COMPS-TEMPLATE.html"]) assert.ok(existsSync(here(f)), f);
