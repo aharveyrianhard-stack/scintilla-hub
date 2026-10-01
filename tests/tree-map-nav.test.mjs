@@ -58,7 +58,7 @@ test("a label is anchored ON its node: a region's title strip, a leaf's middle; 
 
 test("the page has the three views, the level steps, the breadcrumb and the cluster; LAYERS is the desktop default, OUTLINE the phone default", () => {
   for (const id of ["v-outline", "v-layers", "v-3d", "levels", "crumbs", "layers"]) assert.match(PAGE, new RegExp(`id="${id}"`));
-  assert.match(PAGE, /PHONE \? "outline" : "layers"/);
+  assert.match(PAGE, /PHONE \? "outline" : "3d"/);   // 1 Oct: Alan rejected the boxed LAYERS map as the default; the 3D tree is the desktop default again
   assert.match(PAGE, /enterCluster/); assert.match(M3, /function enterCluster/); assert.match(M3, /function exitCluster/);
   assert.match(PAGE, /e\.key !== "Escape"[\s\S]*closeCluster/);
 });
