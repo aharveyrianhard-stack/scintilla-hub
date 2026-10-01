@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 49d85e5) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from dec218c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -7390,14 +7390,14 @@ function scRvolCurrent(ts) { const at = Date.parse(ts || ""); return isFinite(at
    sess = board_volume.session_rvol — today's volume so far ÷ the usual WHOLE session: the BATTERY's charge (fills through
           the day). The five dots use July's scale unchanged (rb(): <0.8 → 1 · <1.2 → 2 · <1.8 → 3 · <2.5 → 4 · else 5) and
           July's cyan (.sc-vol__dots, commit 7b53b15).
-   Both are null when the row is older than scRvolCurrent() allows (or missing). */
+   Both are null when the row is older than scRvolCurrent() allows (or missing): the battery is drawn EMPTY with a dash —
+   never a stale charge — and the tooltip says when the newest row was written. */
 function volCellHTML(at, sess, asOf) {
   const dots = (on) => '<span class="sc-vol__dots" aria-hidden="true">' +
     [0,1,2,3,4].map((i) => "<i" + (i < on ? ' class="on"' : "") + "></i>").join("") + "</span>";
-  /* H3 — "no reading yet": a muted ellipsis (waiting, not absent) with the words in its tooltip */
-  if (at == null && sess == null) return '<span class="sc-vol sc-vol--none" style="color:var(--mute)" title="' +
+  if (at == null && sess == null) return '<span class="sc-vol sc-vol--none" title="' +
     esc("no reading yet — " + (asOf ? "the newest relative-volume row for this name was written " + String(asOf).slice(0, 10) + ", not this session"
-      : "no relative-volume row for this name yet")) + '">…</span>';
+      : "no relative-volume row for this name yet")) + '">' + dots(0) + '<span class="sc-vol__n">—</span></span>';
   const t = Date.parse(asOf || ""), by = isFinite(t)
     ? new Date(t).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/New_York" }) : null;
   const words = (sess != null ? "today " + Math.round(sess * 100) + "% of a usual session so far" : "no whole-session figure yet") + " · " +
@@ -28749,6 +28749,7 @@ body.gwx-motion .gwx-pct{opacity:1}
 .sc-board__row .sc-vol__n{display:inline-block;min-width:4ch;text-align:right}
 .sc-cohgeiger__n{text-align:right}
 .sc-cohgeiger__n .sc-rvnote{display:block;margin-top:2px}
+.sc-board__row .sc-vol--none .sc-vol__n{color:var(--mute);text-align:center}
 /* phone full screen: the cohort Geiger box and the rewind bar were squeezed under their own content (63 px drawn in 50) by the
    list's fixed 500 px, so "MEAN" sat on "REWIND" — and the RVOL line made it worse. They keep their height; the list takes
    the rest of the screen. */

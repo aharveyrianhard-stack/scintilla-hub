@@ -199,8 +199,8 @@ test("RVOL: a current board_volume row shows its at-this-minute reading; a stale
   assert.equal(pick({ rvol_at_time: null, session_rvol: 0.4, updated_ts: now }), null, "H5: the number is the at-time value only (the session ratio is the battery)");
   assert.equal(pick({ rvol_at_time: 1.7, session_rvol: 0.4, updated_ts: "2026-07-06T18:03:29Z" }), null, "a 6 Jul row is no reading");
   assert.equal(pick(undefined), null);
-  assert.match(K.volCellHTML(null, null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">…<\/span>/);
-  assert.match(K.volCellHTML(null, null, null), /title="no reading yet — no relative-volume row for this name yet">…<\/span>/);
+  assert.match(K.volCellHTML(null, null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">/);
+  assert.match(K.volCellHTML(null, null, null), /title="no reading yet — no relative-volume row for this name yet">/);
   assert.match(K.volCellHTML(1.7, 0.4, now), /1\.7×<\/span><\/span>$/);
   assert.match(K.rvolNoteHTML([{ t: "A", rv: null }, { t: "B", rv: null }]), / · no reading yet<\/span>$/);
   assert.match(K.rvolNoteHTML([{ t: "A", rv: 1.2 }, { t: "B", rv: null }]), / · 1 of 2 read<\/span>$/);
