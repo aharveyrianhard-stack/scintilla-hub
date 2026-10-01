@@ -161,3 +161,21 @@ test("once the Station answers that it knows ?bare=hub, the company view's frame
   const probe = page.match(/function coPaneModeProbe\(\) \{[\s\S]*?\n\}\n/)[0];
   assert.match(probe, /querySelectorAll\("\.sc-cofr\.is-legacy, \.cv-chart\.is-legacy"\)/);
 });
+
+/* ── a path to the tree map ─────────────────────────────────────────────────────────────────────── */
+test("TREE is a master tab, after STATION, opening the tree map in this tab (its BACK returns here); the studies index has its card", () => {
+  const SECTIONS = JSON.parse(page.match(/^const SECTIONS = (\[[^\]]*\]);/m)[1]);
+  const box = { innerHTML: "" };
+  new Function("el", "SECTIONS", page.match(/^const STATION_PUBLIC_URL = [^\n]*/m)[0] + "\n" + page.match(/^const TREE_MAP_URL = [^\n]*/m)[0] + "\n" +
+    page.match(/^const ALLOCATION_PUBLIC_URL = [^\n]*/m)[0] + "\n" + page.match(/^const MTAB_LABEL = [^\n]*/m)[0] + "\n" +
+    page.match(/function buildMtabs\(\) \{[\s\S]*?\n\}\n/)[0] + "buildMtabs();")(() => box, SECTIONS);
+  const tabs = [...box.innerHTML.matchAll(/data-sec="([A-Z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(tabs.slice(0, 4), ["DASHBOARD", "ALLOCATION", "STATION", "TREE"]);
+  assert.match(box.innerHTML, /<a role="tab" class="sc-mtab" data-sec="TREE" href="\/deliverables\/20260929\/tree-map\/" title="[^"]+">TREE<\/a>/);
+  assert.doesNotMatch(box.innerHTML.match(/<a[^>]*data-sec="TREE"[^>]*>/)[0], /target=/, "same tab, so the page's BACK comes home");
+  assert.ok(fs.existsSync(new URL("../deliverables/20260929/tree-map/index.html", import.meta.url)));
+  assert.match(fs.readFileSync(new URL("../deliverables/20260929/tree-map/index.html", import.meta.url), "utf8"), /data-go="back"/, "the grey BACK / CLOSE pair");
+  const studies = fs.readFileSync(new URL("../deliverables/20260928/studies-index/STUDIES.html", import.meta.url), "utf8");
+  assert.match(studies, /href="\/deliverables\/20260929\/tree-map\/"[^>]*><img src="thumbs\/tree-map\.png"/);
+  assert.ok(fs.existsSync(new URL("../deliverables/20260928/studies-index/thumbs/tree-map.png", import.meta.url)));
+});
