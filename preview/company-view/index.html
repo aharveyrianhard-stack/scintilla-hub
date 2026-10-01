@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9b4ea8d) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from ca9674c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -7189,7 +7189,9 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
    the market dot under READ, and the GEIGER / RVOL / MKT columns were empty. The model is now complete from the first
    render and boardRowsHTML() emits one cell per column; the rewind module still OWNS the three cells' values (paintTM). */
 /* H4 (1 Oct) — TREND and MOMENTUM carry sort keys (tr / mo): drawn as bars in full screen, re-ranked like any other column */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* F1 (1 Oct; Alan on relative volume: "I've been begging for it") — RVOL carries a sort key too (rv): the PACE, board_volume.
+   rvol_at_time, the number beside the battery. A name with no current reading (rv null: stale or no row) sorts last either way. */
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
    dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
 function boardTMCellsHTML() {
@@ -7437,8 +7439,12 @@ function computeBoardOrder() {
      when the real ones arrived. */
   if (key !== "t" && !window.SC_RANK_READY) return (S.rows || []).map((r) => r.t);
   const val = (r) => { const v = boardSortValue(r, key); return v == null || !isFinite(v) ? -Infinity : v; };
+  /* F1 — RVOL: rows with no current reading go to the bottom in BOTH directions (ascending would otherwise lead with them) */
+  const emptyLast = key === "rv";
   return (S.rows || []).slice().sort((a, b) =>
-    key === "t" ? dir * a.t.localeCompare(b.t) : dir * (val(a) - val(b)))
+    key === "t" ? dir * a.t.localeCompare(b.t)
+      : emptyLast ? ((val(a) === -Infinity) - (val(b) === -Infinity)) || (val(a) === -Infinity ? 0 : dir * (val(a) - val(b)))
+      : dir * (val(a) - val(b)))
     .map((r) => r.t);
 }
 /* H4 — TREND (tr) and MOMENTUM (mo) are not on the row: they are the values the board is SHOWING for that name
