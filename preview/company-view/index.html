@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from da5ac34) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 1aed0c1) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -6269,8 +6269,21 @@ function coExpandBtnHTML() {
 function coExpandApply() {
   const on = coExpandOn(CO_EXPANDED, LEFT_STATE, LEFT_T, LEFT_HEAT) && (S.sec === "DASHBOARD" || S.sec === "COMPANY");
   if (typeof document !== "undefined" && document.body) document.body.classList.toggle("co-exp", on);
+  if (typeof coOscTell === "function") coOscTell();   /* S6 — the embedded pane: merged, or the three when EXPANDED */
   return on;
 }
+/* S6 (Alan, 1 Oct: "wherever we have oscillators on Station and on Hub present the merged; as I expand into more real estate,
+   present the individuals") — the embedded Station pane draws the MERGED RSI + Williams %R oscillator, and the three stacked
+   (merged · RSI · Williams %R) while the company view is EXPANDED. The Hub says which, by message, so EXPAND never reloads the
+   chart: once when the frame loads and on every EXPAND / COLLAPSE. A Station without S6 ignores the message. */
+function coOscTell() {
+  if (typeof document === "undefined") return;
+  const f = document.getElementById("coChartFrame");
+  if (!f || !f.contentWindow) return;
+  try { f.contentWindow.postMessage({ sc: "osc", split: !!(document.body && document.body.classList.contains("co-exp")) },
+    new URL(STATION_CHART_URL).origin); } catch (_) {}
+}
+if (typeof document !== "undefined") document.addEventListener("load", (e) => { if (e.target && e.target.id === "coChartFrame") coOscTell(); }, true);
 
 /* ── D2 (Alan, 27 Sep) · THE COMPANY VIEW, ROUND 2 ──────────────────────────────────────────────────────────────
    "there's a company view there, I don't get it… it is very hard to navigate." · "I don't care about the MACD, but I
