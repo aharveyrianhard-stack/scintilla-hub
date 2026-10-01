@@ -179,3 +179,28 @@ test("TREE is a master tab, after STATION, opening the tree map in this tab (its
   assert.match(studies, /href="\/deliverables\/20260929\/tree-map\/"[^>]*><img src="thumbs\/tree-map\.png"/);
   assert.ok(fs.existsSync(new URL("../deliverables/20260928/studies-index/thumbs/tree-map.png", import.meta.url)));
 });
+
+/* ── RVOL ───────────────────────────────────────────────────────────────────────────────────────── */
+test("RVOL: a current board_volume row shows its at-this-minute reading; a stale or missing one says no reading yet (no inflated fallback)", () => {
+  const fnSrc = (name) => page.match(new RegExp("function " + name + "\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n"))[0];
+  const K = new Function("esc", page.match(/^const RVOL_MAX_AGE_MS = [^\n]*/m)[0] + "\n" + fnSrc("rvolNoteHTML") + fnSrc("scRvolCurrent") +
+    "const rb = (v) => (v < 0.8 ? 1 : v < 1.2 ? 2 : v < 1.8 ? 3 : v < 2.5 ? 4 : 5);\n" + fnSrc("volCellHTML") + "return { rvolNoteHTML, scRvolCurrent, volCellHTML };")(
+    (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])));
+  const rvSrc = page.match(/        rv:    \(function \(\) \{[\s\S]*?\}\)\(\),\n/)[0];
+  assert.doesNotMatch(rvSrc, /live_quotes|lqv|avg_volume/, "the ~3.5× inflated live/avg ratio is gone");
+  const pick = (bv) => new Function("BOARDVOL", "m", "num", "scRvolCurrent", "return " + rvSrc.trim().replace(/^rv:\s*/, "").replace(/,$/, ""))(
+    { MU: bv }, { ticker: "MU" }, (v) => (v == null ? null : Number.isFinite(+v) ? +v : null), K.scRvolCurrent);
+  const now = new Date().toISOString();
+  assert.equal(pick({ rvol_at_time: 1.7, session_rvol: 0.4, updated_ts: now }), 1.7, "at this minute first");
+  assert.equal(pick({ rvol_at_time: null, session_rvol: 0.4, updated_ts: now }), 0.4, "the session ratio where there is no at-time value");
+  assert.equal(pick({ rvol_at_time: 1.7, session_rvol: 0.4, updated_ts: "2026-07-06T18:03:29Z" }), null, "a 6 Jul row is no reading");
+  assert.equal(pick(undefined), null);
+  assert.match(K.volCellHTML(null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">…<\/span>/);
+  assert.match(K.volCellHTML(null, null), /title="no reading yet — no relative-volume row for this name yet">…<\/span>/);
+  assert.match(K.volCellHTML(1.7, now), /1\.7×<\/span>$/);
+  assert.match(K.rvolNoteHTML([{ t: "A", rv: null }, { t: "B", rv: null }]), />RVOL no reading yet<\/span>$/);
+  assert.match(K.rvolNoteHTML([{ t: "A", rv: 1.2 }, { t: "B", rv: null }]), />RVOL 1 of 2 read<\/span>$/);
+  assert.equal(K.rvolNoteHTML([{ t: "A", rv: 1.2 }]), "", "all read: nothing to say");
+  assert.match(page, /scOpt\('board_volume',\s+pg\("board_volume\?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"\)/, "read on every board pull");
+  assert.match(page, /\.sc-board__row \.sc-vol \.sc-vol__dots\{display:none\}/, "the number is never cut by the battery in a 29 px cell");
+});

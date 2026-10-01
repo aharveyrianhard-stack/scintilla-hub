@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from c40aace) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from c33fba1) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5758,22 +5758,19 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         hb:    null,                                                    // M52 — the stored heartbeat row, filled by loadBoardHeartbeat()
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
         fam:   gg[m.ticker] || null,
-        /* rvol (battery) = board_volume.session_rvol = today's REAL traded volume ÷ avg
-           daily volume, computed from the ohlcv bars — NOT the dirty live_quotes.volume
-           field (that carries a rolling/extended-hours number, ~3.5× inflated intraday).
-           Falls back to the old live/avg ratio only if the table has no row for this ticker. */
+        /* rvol (battery) — H3 (1 Oct; Alan: "Why is relative volume still not there?"): board_volume, written for the 590
+           names by lane P7 from the Massive minute bars. The board shows rvol_at_time — today's volume so far ÷ the usual
+           volume by this same minute over the last 20 sessions — which is what "relative volume" means mid-session, and
+           falls back to session_rvol (today's volume ÷ the usual whole session) only where a row has no at-time value.
+           A SESSION RATIO IS ONLY TRUE FOR ITS SESSION: a row older than scRvolCurrent() allows is no reading (the newest
+           row was 2026-07-06 on 1 Oct, 193 names). The old fallback to live_quotes.volume ÷ avg_volume is gone: its own
+           note called it ~3.5× inflated intraday, and a name with no current row now says "no reading yet" instead.
+           The table is read on every board pull (45 s), so a current row shows within one pull of being written. */
         rv:    (function () {
                  const bv = BOARDVOL[String(m.ticker).toUpperCase()];
-                 /* A SESSION RATIO IS ONLY TRUE FOR ITS SESSION. board_volume has not been written since
-                    2026-07-06 (MEASURED 2026-09-18, 190 rows), yet every row painted e.g. "0.9×" as today's
-                    relative volume. A row older than scRvolCurrent() allows is shown as absent (dash + the
-                    source date in the tooltip) and does NOT fall through to another ratio. */
-                 if (bv && !scRvolCurrent(bv.updated_ts)) return null;
-                 const sr = bv && num(bv.session_rvol);
-                 if (sr != null) return sr;
-                 const lqv = num(px[m.ticker] && px[m.ticker].volume);
-                 const av = pf[m.ticker] && Number(pf[m.ticker].avg_volume);
-                 return (lqv != null && lqv > 0 && av > 0) ? lqv / av : null;
+                 if (!bv || !scRvolCurrent(bv.updated_ts)) return null;
+                 const at = num(bv.rvol_at_time);
+                 return at != null ? at : num(bv.session_rvol);
                })(),
         rvAsOf: (function () { const bv = BOARDVOL[String(m.ticker).toUpperCase()]; return bv && bv.updated_ts ? String(bv.updated_ts) : null; })(),
         mc:    num(pf[m.ticker] && pf[m.ticker].market_cap),   // #133 (fix) — real market cap, feeds heatmap tile size
@@ -7308,10 +7305,22 @@ function geigerMiniHTML(g, max, withNum) {
 /* relative volume is a SESSION ratio: current only if its source row was written within 36 h (covers an evening
    read of the day's session; a weekend or a stopped writer reads as absent, never as today's number). */
 const RVOL_MAX_AGE_MS = 36 * 3600e3;
+/* H3 — said once, on the board's own summary line: while none of the names on the board has a current reading, or only some do */
+function rvolNoteHTML(rows) {
+  const list = (rows || []).filter((r) => r && r.t);
+  if (!list.length) return "";
+  const have = list.filter((r) => r.rv != null).length;
+  if (have === list.length) return "";
+  return ' \u00b7 <span class="sc-rvnote" title="relative volume (RVOL) comes from board_volume, which the minute-bar writer fills for the 590 names; a reading counts only for its own session">RVOL ' +
+    (have ? have + " of " + list.length + " read" : "no reading yet") + "</span>";
+}
 function scRvolCurrent(ts) { const at = Date.parse(ts || ""); return isFinite(at) && Date.now() - at <= RVOL_MAX_AGE_MS; }
 function volCellHTML(rv, asOf) {
-  if (rv == null) return '<span class="sc-vol" style="color:var(--mute)" title="' +
-    (asOf ? "relative volume not current — source last written " + esc(String(asOf).slice(0, 10)) : "relative volume unavailable") + '">—</span>';   // FIX 1 — honest dash, not an empty box
+  /* H3 — "no reading yet", not a bare dash: the cell is 29 px wide, so it carries a muted ellipsis (waiting, not absent) and
+     the words in its tooltip; the board's summary line says it once in full (rvolNoteHTML) */
+  if (rv == null) return '<span class="sc-vol sc-vol--none" style="color:var(--mute)" title="' +
+    esc("no reading yet — " + (asOf ? "the newest relative-volume row for this name was written " + String(asOf).slice(0, 10) + ", not this session"
+      : "no relative-volume row for this name yet")) + '">…</span>';
   const on = rb(rv);
   return '<span class="sc-vol sc-clip"><span class="sc-vol__dots">' +
     [0,1,2,3,4].map((i) => "<i" + (i < on ? ' class="on"' : "") + "></i>").join("") +
@@ -7495,7 +7504,7 @@ function cohortGeigerHTML() {
          FAV read "5 tickers" while showing 46 rows, so the number looked like the cohort had
          shrunk instead of saying how much of it the average covers. Aggregation math unchanged. */
       '<span class="sc-cohgeiger__n">' + (total > n ? n + "/" + total + " contributors" : n + " tickers") +
-        (hbGroupLabel(S.rows, total) ? " \u00b7 " + esc(hbGroupLabel(S.rows, total)) : "") + "</span>" +
+        (hbGroupLabel(S.rows, total) ? " \u00b7 " + esc(hbGroupLabel(S.rows, total)) : "") + (typeof rvolNoteHTML === "function" ? rvolNoteHTML(S.rows) : "") + "</span>" +
       '<span class="sc-cohgeiger__car">' + (open ? "▲" : "▼") + "</span>" +
     "</button>" +
     (open
@@ -28517,6 +28526,10 @@ body.gwx-motion .gwx-pct{opacity:1}
 .sc-toptape__next .mn-swarm:has(.mn-cyc){flex:1 1 0;min-width:0}
 .sc-toptape__next .mn-swarm .mn-cyc{flex:1 1 auto;max-width:none}
 .sc-toptape__next .mn-swarm .mn-dots, .sc-toptape__next .mn-dots i{flex:none}   /* the shrinking is the slide's, never the dots' */
+/* H3 — RVOL on the board: the cell is 29 px at 1680 and 23 px at 1280, and the five-dot battery alone is 28 px, so a reading
+   showed as "▮▮0" (the number cut). On the board the number stands alone ("0.9×"); the battery stays where it has room. */
+.sc-board__row .sc-vol .sc-vol__dots{display:none}
+.sc-board__row .sc-vol{font-variant-numeric:tabular-nums;white-space:nowrap}
 /* the pinned name in the header title: the short name has room ("Micron Technology", full name on hover); a fund's long
    name ("State Street SPDR S&P 500 ETF Trust") gets the room a desk has */
 .sc-head__ident .sc-cname{max-width:30ch}
