@@ -16,8 +16,11 @@ test("beside the left panel: TREND, MOM and READ are not drawn and the Geiger ta
   const sel = "body:not\\(\\.secfs\\):not\\(\\.gwx-motion\\) \\.ch";
   assert.equal(tracks(sel), 11, "11 tracks for 11 drawn cells");
   assert.match(css, /body:not\(\.secfs\):not\(\.gwx-motion\) \.ch > :nth-child\(9\), body:not\(\.secfs\):not\(\.gwx-motion\) \.ch > :nth-child\(10\),\s+body:not\(\.secfs\):not\(\.gwx-motion\) \.ch > :nth-child\(11\)\{ display:none !important; \}/);
-  /* the old board: TREND 9 + MOM 9 + READ 15 + GEIGER 13 = 46 — all of it is the Geiger's now */
-  assert.equal(fr(sel, 8), 46);
+  /* the old board: TREND 9 + MOM 9 + READ 15 + GEIGER 13 = 46 — all of it is the Geiger's now.
+     H5 (1 Oct) — the RVOL battery and its number take 11 fr of that back (RVOL 5 → 16, Geiger 46 → 35): the pair still sums
+     to what H4 gave them, so every other column is untouched. */
+  assert.equal(fr(sel, 8), 35);
+  assert.equal(fr(sel, 8) + fr(sel, 9), 46 + 5);
   assert.match(css, /@media \(min-width:561px\)\{\s+body:not\(\.secfs\)/, "the phone keeps its own seven cells");
   assert.ok(page.indexOf('<style id="r4-fit">') > page.indexOf('<style id="board-h4-20261001">'), "r4-fit stays last");
 });
@@ -25,7 +28,8 @@ test("beside the left panel: TREND, MOM and READ are not drawn and the Geiger ta
 test("full screen: 14 columns (TREND and MOMENTUM as bars, READ in words, the Geiger number); a phone keeps six", () => {
   assert.equal(tracks("body\\.secfs \\.sc-secfs \\.ch"), 14);
   const phone = css.slice(css.indexOf("@media (max-width:560px){\n  body.secfs"));
-  assert.match(phone, /grid-template-columns:minmax\(0,3fr\) minmax\(0,8fr\) minmax\(0,10fr\) minmax\(0,12fr\) minmax\(0,12fr\) minmax\(0,12fr\) !important/);
+  /* H5 (1 Oct) — the phone's full screen adds RVOL as a seventh column, its width from the Geiger (12 → 6 + 6) */
+  assert.match(phone, /grid-template-columns:minmax\(0,3fr\) minmax\(0,8fr\) minmax\(0,10fr\) minmax\(0,12fr\) minmax\(0,12fr\) minmax\(0,6fr\) minmax\(0,6fr\) !important/);
   assert.match(phone, /\.ch > :nth-child\(9\), body\.secfs \.sc-secfs \.ch > :nth-child\(10\)\{ display:flex !important; \}/);
   assert.match(css, /body\.secfs \.sc-secfs \.sc-board__row \.sc-gnum\{ display:block;/);
   assert.match(css, /\.gwx-tmb i\{[^}]*\}/);

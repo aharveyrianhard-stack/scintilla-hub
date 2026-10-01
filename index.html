@@ -4599,7 +4599,9 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 @media (min-width:561px){
   body:not(.secfs):not(.gwx-motion) .ch > :nth-child(9), body:not(.secfs):not(.gwx-motion) .ch > :nth-child(10),
   body:not(.secfs):not(.gwx-motion) .ch > :nth-child(11){ display:none !important; }
-  body:not(.secfs):not(.gwx-motion) .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,9fr) minmax(0,10fr) minmax(0,7fr) minmax(0,46fr) minmax(0,5fr) minmax(0,5fr) !important; }
+  /* H5 (1 Oct) — RVOL carries the battery AND the number again: 5 → 16 fr, paid by the Geiger alone (46 → 35 fr), so the
+     total is unchanged and every other column keeps its exact width. */
+  body:not(.secfs):not(.gwx-motion) .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,9fr) minmax(0,10fr) minmax(0,7fr) minmax(0,35fr) minmax(0,16fr) minmax(0,5fr) !important; }
 }
 /* FULL SCREEN (⛶): every column, TREND and MOMENTUM as their own bars (sortable), READ in words, the Geiger with its
    number. Every number sits right-aligned in a track sized to what it holds. */
@@ -4609,16 +4611,18 @@ body.secfs .sc-secfs .sc-board__row .sc-gmini{ overflow:visible; margin-left:46p
 body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; right:calc(100% + 6px); top:50%; transform:translateY(-50%);
   font:600 11px var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
 @media (min-width:561px){
-  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,17fr) minmax(0,5fr) minmax(0,3fr) !important; column-gap:10px; }
+  /* H5 — RVOL 5 → 8 fr for the battery and the number, from the Geiger (17 → 14 fr); the total is unchanged */
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,14fr) minmax(0,8fr) minmax(0,3fr) !important; column-gap:10px; }
   body.secfs .sc-secfs .ch > :nth-child(2){ text-align:left !important; }
   body.secfs .sc-secfs .ch > :nth-child(n+3):nth-child(-n+8){ text-align:right !important; justify-content:flex-end; }
   body.secfs .sc-secfs .ch.hdr > :nth-child(9), body.secfs .sc-secfs .ch.hdr > :nth-child(10){ text-align:left !important; }
   body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; }
   body.secfs .sc-secfs .sc-board__row .gwx-read{ font-size:11px; }
 }
-/* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER */
+/* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER — and (H5) RVOL, its
+   width taken from the Geiger (12 → 6 fr); the gap goes 6 → 5 px so the seventh gap costs the other columns nothing */
 @media (max-width:560px){
-  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,12fr) !important; gap:6px !important; }
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,6fr) minmax(0,6fr) !important; gap:5px !important; }
   body.secfs .sc-secfs .ch > :nth-child(9), body.secfs .sc-secfs .ch > :nth-child(10){ display:flex !important; }
   body.secfs .sc-secfs .ch > :nth-child(3), body.secfs .sc-secfs .ch > :nth-child(8), body.secfs .sc-secfs .ch > :nth-child(14){ display:none !important; }
   body.secfs .sc-secfs .sc-board__row .sc-gmini{ margin-left:0; }
@@ -5818,12 +5822,19 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
            A SESSION RATIO IS ONLY TRUE FOR ITS SESSION: a row older than scRvolCurrent() allows is no reading (the newest
            row was 2026-07-06 on 1 Oct, 193 names). The old fallback to live_quotes.volume ÷ avg_volume is gone: its own
            note called it ~3.5× inflated intraday, and a name with no current row now says "no reading yet" instead.
-           The table is read on every board pull (45 s), so a current row shows within one pull of being written. */
+           The table is read on every board pull (45 s), so a current row shows within one pull of being written.
+           H5 (1 Oct; Alan: "used to be a super sick battery") — the two ratios are no longer folded into one: rv is the
+           NUMBER (rvol_at_time, the pace by this time of day) and rvS is the BATTERY's charge (session_rvol, today so far ÷
+           a usual whole session — it fills through the day). Each is null when the row is stale or missing. */
         rv:    (function () {
                  const bv = BOARDVOL[String(m.ticker).toUpperCase()];
                  if (!bv || !scRvolCurrent(bv.updated_ts)) return null;
-                 const at = num(bv.rvol_at_time);
-                 return at != null ? at : num(bv.session_rvol);
+                 return num(bv.rvol_at_time);
+               })(),
+        rvS:   (function () {
+                 const bv = BOARDVOL[String(m.ticker).toUpperCase()];
+                 if (!bv || !scRvolCurrent(bv.updated_ts)) return null;
+                 return num(bv.session_rvol);
                })(),
         rvAsOf: (function () { const bv = BOARDVOL[String(m.ticker).toUpperCase()]; return bv && bv.updated_ts ? String(bv.updated_ts) : null; })(),
         mc:    num(pf[m.ticker] && pf[m.ticker].market_cap),   // #133 (fix) — real market cap, feeds heatmap tile size
@@ -7360,26 +7371,37 @@ function geigerMiniHTML(g, max, withNum) {
 /* relative volume is a SESSION ratio: current only if its source row was written within 36 h (covers an evening
    read of the day's session; a weekend or a stopped writer reads as absent, never as today's number). */
 const RVOL_MAX_AGE_MS = 36 * 3600e3;
-/* H3 — said once, on the board's own summary line: while none of the names on the board has a current reading, or only some do */
+/* H3 — said once, on the board's own summary line. H5 — it now always says what the battery and the number are (the cells
+   carry no legend of their own), and still how many names have a current reading when not all do. It is its own line under
+   the count line (.sc-rvnote is a block): on one line the two ran into the cohort's name at 1680. */
 function rvolNoteHTML(rows) {
   const list = (rows || []).filter((r) => r && r.t);
   if (!list.length) return "";
-  const have = list.filter((r) => r.rv != null).length;
-  if (have === list.length) return "";
-  return ' \u00b7 <span class="sc-rvnote" title="relative volume (RVOL) comes from board_volume, which the minute-bar writer fills for the 590 names; a reading counts only for its own session">RVOL ' +
-    (have ? have + " of " + list.length + " read" : "no reading yet") + "</span>";
+  const have = list.filter((r) => r.rv != null || r.rvS != null).length;
+  return '<span class="sc-rvnote" title="relative volume (RVOL) comes from board_volume, which the minute-bar writer fills for the 590 names; a reading counts only for its own session">' +
+    "RVOL: battery = today so far vs a usual full day · number = pace vs usual by now" +
+    (have === list.length ? "" : " · " + (have ? have + " of " + list.length + " read" : "no reading yet")) + "</span>";
 }
 function scRvolCurrent(ts) { const at = Date.parse(ts || ""); return isFinite(at) && Date.now() - at <= RVOL_MAX_AGE_MS; }
-function volCellHTML(rv, asOf) {
-  /* H3 — "no reading yet", not a bare dash: the cell is 29 px wide, so it carries a muted ellipsis (waiting, not absent) and
-     the words in its tooltip; the board's summary line says it once in full (rvolNoteHTML) */
-  if (rv == null) return '<span class="sc-vol sc-vol--none" style="color:var(--mute)" title="' +
+/* H5 (1 Oct; Alan: "relative volume… used to be a super sick battery") — THE BATTERY IS BACK, THE NUMBER BESIDE IT.
+   at   = board_volume.rvol_at_time — today's volume so far ÷ the usual volume by this time of day: the NUMBER ("1.4×").
+   sess = board_volume.session_rvol — today's volume so far ÷ the usual WHOLE session: the BATTERY's charge (fills through
+          the day). The five dots use July's scale unchanged (rb(): <0.8 → 1 · <1.2 → 2 · <1.8 → 3 · <2.5 → 4 · else 5) and
+          July's cyan (.sc-vol__dots, commit 7b53b15).
+   Both are null when the row is older than scRvolCurrent() allows (or missing): the battery is drawn EMPTY with a dash —
+   never a stale charge — and the tooltip says when the newest row was written. */
+function volCellHTML(at, sess, asOf) {
+  const dots = (on) => '<span class="sc-vol__dots" aria-hidden="true">' +
+    [0,1,2,3,4].map((i) => "<i" + (i < on ? ' class="on"' : "") + "></i>").join("") + "</span>";
+  if (at == null && sess == null) return '<span class="sc-vol sc-vol--none" title="' +
     esc("no reading yet — " + (asOf ? "the newest relative-volume row for this name was written " + String(asOf).slice(0, 10) + ", not this session"
-      : "no relative-volume row for this name yet")) + '">…</span>';
-  const on = rb(rv);
-  return '<span class="sc-vol sc-clip"><span class="sc-vol__dots">' +
-    [0,1,2,3,4].map((i) => "<i" + (i < on ? ' class="on"' : "") + "></i>").join("") +
-    "</span>" + rv.toFixed(1) + "×</span>";
+      : "no relative-volume row for this name yet")) + '">' + dots(0) + '<span class="sc-vol__n">—</span></span>';
+  const t = Date.parse(asOf || ""), by = isFinite(t)
+    ? new Date(t).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/New_York" }) : null;
+  const words = (sess != null ? "today " + Math.round(sess * 100) + "% of a usual session so far" : "no whole-session figure yet") + " · " +
+    (at != null ? at.toFixed(1) + "× its usual pace" + (by ? " by " + by + " ET" : "") : "no by-this-time figure yet");
+  return '<span class="sc-vol" title="' + esc(words) + '">' + dots(sess != null ? rb(sess) : 0) +
+    '<span class="sc-vol__n">' + (at != null ? (at >= 10 ? Math.round(at) : at.toFixed(1)) + "×" : "—") + "</span></span>";   /* 10× and up without the decimal ("12×"): the number is never wider than 4 characters, so it is never cut (the tooltip keeps one decimal) */
 }
 /* FIX 3 (R36) — BOARD ORDER IS FROZEN. It changes ONLY when the operator clicks a
    sort header (computeBoardOrder → sortBoardBy). Every other repaint — the 45 s feed
@@ -7582,7 +7604,7 @@ function boardRowsHTML() {
       '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
         ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
         (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) + "</span>" +
-      (d.rv == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvAsOf)) +
+      (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
   }).join("");
@@ -21932,7 +21954,7 @@ function seedBoardFromCache(cohort, fav) {
      prev close, heartbeat) leak into the first frame as if current. */
   rows = rows.map((r) => ({ t: r.t, name: r.name, exchange: r.exchange, mc: r.mc, mcAsOf: r.mcAsOf,
     rev: r.rev, revAsOf: r.revAsOf, revCcy: r.revCcy, revLocal: r.revLocal, revZero: r.revZero,
-    price: null, c: null, pc: null, fpe: null, rsi: null, hb: null, g: null, fam: null, rv: null, rvAsOf: null,
+    price: null, c: null, pc: null, fpe: null, rsi: null, hb: null, g: null, fam: null, rv: null, rvS: null, rvAsOf: null,
     nf: false, quoteObservation: null, state: "CONNECTING", priceSource: "UNKNOWN" }));
   S.boardSeedAt = env.ts;
   /* AND NEVER RANK FROM CACHE. mergeBoardRows() would call computeBoardOrder() here, sorting the
@@ -28716,10 +28738,27 @@ body.gwx-motion .gwx-pct{opacity:1}
 .sc-toptape__next .mn-swarm:has(.mn-cyc){flex:1 1 0;min-width:0}
 .sc-toptape__next .mn-swarm .mn-cyc{flex:1 1 auto;max-width:none}
 .sc-toptape__next .mn-swarm .mn-dots, .sc-toptape__next .mn-dots i{flex:none}   /* the shrinking is the slide's, never the dots' */
-/* H3 — RVOL on the board: the cell is 29 px at 1680 and 23 px at 1280, and the five-dot battery alone is 28 px, so a reading
-   showed as "▮▮0" (the number cut). On the board the number stands alone ("0.9×"); the battery stays where it has room. */
-.sc-board__row .sc-vol .sc-vol__dots{display:none}
-.sc-board__row .sc-vol{font-variant-numeric:tabular-nums;white-space:nowrap}
+/* H5 (1 Oct; Alan: "relative volume… used to be a super sick battery… what you added was kind of shit") — THE BATTERY IS
+   BACK ON EVERY ROW, THE NUMBER BESIDE IT. H3 had hidden the dots because the cell was 29 px; the track now has the room
+   (see the H5 grid rules), so the five July dots (session_rvol, the day's charge) and the number (rvol_at_time, the pace)
+   both show, at the row's own type size. The number keeps a 4-character box ("1.4×", "12×"), right-aligned, so the batteries
+   and the numbers line up down the column. On a phone the battery stands upright (July's R27b) with the number under it. */
+.sc-board__row .sc-vol{font-size:inherit;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible;gap:5px;color:var(--ink2)}
+.sc-board__row .sc-vol__n{display:inline-block;min-width:4ch;text-align:right}
+.sc-cohgeiger__n{text-align:right}
+.sc-cohgeiger__n .sc-rvnote{display:block;margin-top:2px}
+.sc-board__row .sc-vol--none .sc-vol__n{color:var(--mute);text-align:center}
+/* phone full screen: the cohort Geiger box and the rewind bar were squeezed under their own content (63 px drawn in 50) by the
+   list's fixed 500 px, so "MEAN" sat on "REWIND" — and the RVOL line made it worse. They keep their height; the list takes
+   the rest of the screen. */
+@media (max-width:560px){
+  body.secfs #boardPanel.sc-secfs > #cohGeiger, body.secfs #boardPanel.sc-secfs > #gwxBar{flex-shrink:0 !important}
+  body.secfs #boardPanel.sc-secfs > #boardScroll{flex:1 1 0 !important;height:auto !important;min-height:0 !important}
+}
+@media (max-width:640px){
+  .sc-board__row .sc-vol{flex-direction:column;gap:2px;font-size:10px;line-height:1}
+  .sc-board__row .sc-vol__n{min-width:0;text-align:center}
+}
 /* the pinned name in the header title: the short name has room ("Micron Technology", full name on hover); a fund's long
    name ("State Street SPDR S&P 500 ETF Trust") gets the room a desk has */
 .sc-head__ident .sc-cname{max-width:30ch}
@@ -28762,9 +28801,16 @@ body.gwx-motion .gwx-pct{opacity:1}
   #cohTabsHead .sc-coh{flex:0 0 auto !important;min-height:30px !important;padding:6px 6px !important}
   /* THE PHONE BOARD: 12 tracks in 366 px printed "AMD624…" and "$4…". A phone keeps the six columns it is read for —
      ♥ · TICKER · LAST · CHG · RSI · GEIGER — plus the market dot; the rest come back on a wider screen. */
-  .ch{grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,9fr) minmax(0,9fr) minmax(0,5fr) minmax(0,8fr) minmax(0,2fr) !important;gap:6px !important}
+  /* H5 (1 Oct) — RVOL is back on the phone board (July's upright battery, the number under it), between GEIGER and MKT:
+     4.5 fr, from the Geiger (8 → 5 fr) and RSI's spare room (5 → 3.5 fr — it prints two digits); the gap goes 6 → 4 px so
+     the eighth track costs TICKER, LAST and CHG nothing (they come out a pixel wider). */
+  .ch{grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,9fr) minmax(0,9fr) minmax(0,3.5fr) minmax(0,5fr) minmax(0,4.5fr) minmax(0,2fr) !important;gap:4px !important}
   .ch > *:nth-child(5), .ch > *:nth-child(6), .ch > *:nth-child(7), .ch > *:nth-child(9), .ch > *:nth-child(10),
   .ch > *:nth-child(11), .ch > *:nth-child(13){display:none !important}
+  #boardPanel .ch.hdr > :nth-child(13){display:block !important}
+  /* the narrower GEIGER track (33 px) printed its label as "GEIGER…": the phone board's labels are set a little tighter */
+  #boardPanel .ch.hdr{letter-spacing:.03em !important}
+  #boardPanel .sc-board__row > .sc-vol{display:flex !important}
   .ch > .sc-last, .ch > .sc-chg{overflow:visible !important;text-overflow:clip !important}
   .ch.hdr > *{white-space:nowrap}
   /* the phone board panel was a fixed 340 px, so after the (now wrapped) cohort row and the rewind bar only one or two
