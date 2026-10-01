@@ -107,7 +107,18 @@ code{font:12px var(--mono);color:var(--ink2);background:#18181C;padding:1px 4px;
 <p>Yes. In every run, the board's tile colours went out as <code>/sparklines</code> batches (3 to 8 requests) and no single-symbol tile reads were sent. H2's switch picked the route up by itself.</p>
 
 <h3>Click a row at 0 s, 3 s and 15 s after load, in session</h3>
-<!--TIMING-->
+<p>Measured in session, 1 Oct 09:32–09:35 ET, on your ALL board (590 names, so the biggest burst), NVDA clicked 0, 3 and 15 seconds after the board appeared. A fresh browser each time; times are from the click.</p>
+<div class="tscroll"><table>
+<tr><th>build</th><th>click at</th><th>price on screen</th><th>clouds on screen</th><th>DATA DELAYED</th></tr>
+<tr><td>live code (H2's hold), round 1 · round 2</td><td>0 s</td><td>0.49 · 0.22 s</td><td>0.53 · 0.31 s</td><td>never</td></tr>
+<tr><td></td><td>3 s</td><td>0.29 · 0.26 s</td><td>0.37 · 0.36 s</td><td>never</td></tr>
+<tr><td></td><td>15 s</td><td>0.32 · 0.37 s</td><td>0.37 · 0.42 s</td><td>never</td></tr>
+<tr><td>hold removed, aborts kept (test build)</td><td>0 / 3 / 15 s</td><td>0.29–0.61 s</td><td>0.34–0.78 s</td><td>never</td></tr>
+<tr><td><b>this branch</b> (no hold while /sparklines is in use), round 1 · round 2</td><td>0 s</td><td>0.40 · 0.30 s</td><td>0.71 · 0.43 s</td><td>never</td></tr>
+<tr><td></td><td>3 s</td><td>0.26 · 0.32 s</td><td>0.35 · 0.38 s</td><td>never</td></tr>
+<tr><td></td><td>15 s</td><td>0.41 · 0.29 s</td><td>0.61 · 0.34 s</td><td>never</td></tr>
+</table></div>
+<p>For comparison, on 30 Sep (before the new chart server) a click during the burst waited 1.3–1.7 s per read and showed DATA DELAYED. Now the whole 590-name burst is about 10 requests, and every build answers a click in well under a second. The hold made no consistent difference (the run-to-run spread is bigger than any gap), while it still kept the board's tiles waiting up to 8 seconds after every click. So <b>I dropped it wherever the board is using <code>/sparklines</code></b>. It stays, unchanged, as the fallback if the chart server ever stops offering that route.</p>
 
 <h3>Station: MACRO · WEEK clouds in one read</h3>
 <p>Each pane used to read its price, and only then its daily bars for the clouds, two steps one after the other. The Station's deck knows the page's six names before any pane loads, so it now asks for all six daily series in <b>one</b> <code>/candles-multi</code> read the moment the page is chosen. Each answer is filed under the same address the pane's own read would use, so the pane finds it there (or waits for it if it's still on its way). The multi answer is field for field the single answer (checked on VIX: every field and all 995 bars equal).</p>

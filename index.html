@@ -8584,8 +8584,13 @@ function sparkRun(job) {
       sparkPump();
     });
 }
-/* a company chart is being pointed at a name: give it the server */
+/* a company chart is being pointed at a name: give it the server.
+   H3 (1 Oct) — only where the board still reads one series per symbol. With the chart API's /sparklines (live 1 Oct
+   07:45 ET) the whole ALL burst is about 10 requests, and in session the hold no longer helped: MEASURED 1 Oct 09:32 ET,
+   NVDA clicked 0, 3 and 15 s after load, price 0.22-0.49 s with the hold and 0.29-0.61 s without it, clouds 0.31-0.53 s
+   and 0.34-0.78 s, DATA DELAYED never — while the hold kept the board's tiles waiting up to 8 s after every click. */
 function scChartFirstHold() {
+  if (SPARK_BATCH === true) return;
   SPARK_PACE.holdUntil = Math.max(SPARK_PACE.holdUntil, Date.now() + SPARK_HOLD_MAX_MS);
   SPARK_PACE.inflight.forEach(function (j) { if (j.ctl) j.ctl.abort(); });
   sparkPump();

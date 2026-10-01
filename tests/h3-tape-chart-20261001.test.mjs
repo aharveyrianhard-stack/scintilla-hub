@@ -204,3 +204,17 @@ test("RVOL: a current board_volume row shows its at-this-minute reading; a stale
   assert.match(page, /scOpt\('board_volume',\s+pg\("board_volume\?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"\)/, "read on every board pull");
   assert.match(page, /\.sc-board__row \.sc-vol \.sc-vol__dots\{display:none\}/, "the number is never cut by the battery in a 29 px cell");
 });
+
+/* ── speed ──────────────────────────────────────────────────────────────────────────────────────── */
+test("with /sparklines in use, a clicked chart no longer holds or aborts the board's tiles; without it the H2 hold stays", () => {
+  const src = page.match(/function scChartFirstHold\(\) \{[\s\S]*?\n\}\n/)[0];
+  const run = (batch) => {
+    let aborted = 0;
+    const PACE = { holdUntil: 0, inflight: new Set([{ ctl: { abort: () => aborted++ } }]) };
+    new Function("SPARK_PACE", "SPARK_BATCH", "SPARK_HOLD_MAX_MS", "sparkPump", src + "scChartFirstHold();")(PACE, batch, 8000, () => {});
+    return { held: PACE.holdUntil > 0, aborted };
+  };
+  assert.deepEqual(run(true), { held: false, aborted: 0 });
+  assert.deepEqual(run(null), { held: true, aborted: 1 }, "route not known yet: the hold, as before");
+  assert.deepEqual(run(false), { held: true, aborted: 1 }, "no /sparklines: the hold, as before");
+});
