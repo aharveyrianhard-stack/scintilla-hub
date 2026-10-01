@@ -4611,16 +4611,18 @@ body.secfs .sc-secfs .sc-board__row .sc-gmini{ overflow:visible; margin-left:46p
 body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; right:calc(100% + 6px); top:50%; transform:translateY(-50%);
   font:600 11px var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
 @media (min-width:561px){
-  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,17fr) minmax(0,5fr) minmax(0,3fr) !important; column-gap:10px; }
+  /* H5 — RVOL 5 → 8 fr for the battery and the number, from the Geiger (17 → 14 fr); the total is unchanged */
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,14fr) minmax(0,8fr) minmax(0,3fr) !important; column-gap:10px; }
   body.secfs .sc-secfs .ch > :nth-child(2){ text-align:left !important; }
   body.secfs .sc-secfs .ch > :nth-child(n+3):nth-child(-n+8){ text-align:right !important; justify-content:flex-end; }
   body.secfs .sc-secfs .ch.hdr > :nth-child(9), body.secfs .sc-secfs .ch.hdr > :nth-child(10){ text-align:left !important; }
   body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; }
   body.secfs .sc-secfs .sc-board__row .gwx-read{ font-size:11px; }
 }
-/* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER */
+/* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER — and (H5) RVOL, its
+   width taken from the Geiger (12 → 6 fr); the gap goes 6 → 5 px so the seventh gap costs the other columns nothing */
 @media (max-width:560px){
-  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,12fr) !important; gap:6px !important; }
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,6fr) minmax(0,6fr) !important; gap:5px !important; }
   body.secfs .sc-secfs .ch > :nth-child(9), body.secfs .sc-secfs .ch > :nth-child(10){ display:flex !important; }
   body.secfs .sc-secfs .ch > :nth-child(3), body.secfs .sc-secfs .ch > :nth-child(8), body.secfs .sc-secfs .ch > :nth-child(14){ display:none !important; }
   body.secfs .sc-secfs .sc-board__row .sc-gmini{ margin-left:0; }
@@ -7369,14 +7371,16 @@ function geigerMiniHTML(g, max, withNum) {
 /* relative volume is a SESSION ratio: current only if its source row was written within 36 h (covers an evening
    read of the day's session; a weekend or a stopped writer reads as absent, never as today's number). */
 const RVOL_MAX_AGE_MS = 36 * 3600e3;
-/* H3 — said once, on the board's own summary line: while none of the names on the board has a current reading, or only some do */
+/* H3 — said once, on the board's own summary line. H5 — it now always says what the battery and the number are (the cells
+   carry no legend of their own), and still how many names have a current reading when not all do. It is its own line under
+   the count line (.sc-rvnote is a block): on one line the two ran into the cohort's name at 1680. */
 function rvolNoteHTML(rows) {
   const list = (rows || []).filter((r) => r && r.t);
   if (!list.length) return "";
   const have = list.filter((r) => r.rv != null || r.rvS != null).length;
-  if (have === list.length) return "";
-  return ' \u00b7 <span class="sc-rvnote" title="relative volume (RVOL) comes from board_volume, which the minute-bar writer fills for the 590 names; a reading counts only for its own session">RVOL ' +
-    (have ? have + " of " + list.length + " read" : "no reading yet") + "</span>";
+  return '<span class="sc-rvnote" title="relative volume (RVOL) comes from board_volume, which the minute-bar writer fills for the 590 names; a reading counts only for its own session">' +
+    "RVOL: battery = today so far vs a usual full day · number = pace vs usual by now" +
+    (have === list.length ? "" : " · " + (have ? have + " of " + list.length + " read" : "no reading yet")) + "</span>";
 }
 function scRvolCurrent(ts) { const at = Date.parse(ts || ""); return isFinite(at) && Date.now() - at <= RVOL_MAX_AGE_MS; }
 /* H5 (1 Oct; Alan: "relative volume… used to be a super sick battery") — THE BATTERY IS BACK, THE NUMBER BESIDE IT.
@@ -28741,6 +28745,15 @@ body.gwx-motion .gwx-pct{opacity:1}
    and the numbers line up down the column. On a phone the battery stands upright (July's R27b) with the number under it. */
 .sc-board__row .sc-vol{font-size:inherit;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible;gap:5px;color:var(--ink2)}
 .sc-board__row .sc-vol__n{display:inline-block;min-width:4ch;text-align:right}
+.sc-cohgeiger__n{text-align:right}
+.sc-cohgeiger__n .sc-rvnote{display:block;margin-top:2px}
+/* phone full screen: the cohort Geiger box and the rewind bar were squeezed under their own content (63 px drawn in 50) by the
+   list's fixed 500 px, so "MEAN" sat on "REWIND" — and the RVOL line made it worse. They keep their height; the list takes
+   the rest of the screen. */
+@media (max-width:560px){
+  body.secfs #boardPanel.sc-secfs > #cohGeiger, body.secfs #boardPanel.sc-secfs > #gwxBar{flex-shrink:0 !important}
+  body.secfs #boardPanel.sc-secfs > #boardScroll{flex:1 1 0 !important;height:auto !important;min-height:0 !important}
+}
 @media (max-width:640px){
   .sc-board__row .sc-vol{flex-direction:column;gap:2px;font-size:10px;line-height:1}
   .sc-board__row .sc-vol__n{min-width:0;text-align:center}

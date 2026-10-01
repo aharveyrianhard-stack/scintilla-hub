@@ -202,9 +202,9 @@ test("RVOL: a current board_volume row shows its at-this-minute reading; a stale
   assert.match(K.volCellHTML(null, null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">…<\/span>/);
   assert.match(K.volCellHTML(null, null, null), /title="no reading yet — no relative-volume row for this name yet">…<\/span>/);
   assert.match(K.volCellHTML(1.7, 0.4, now), /1\.7×<\/span><\/span>$/);
-  assert.match(K.rvolNoteHTML([{ t: "A", rv: null }, { t: "B", rv: null }]), />RVOL no reading yet<\/span>$/);
-  assert.match(K.rvolNoteHTML([{ t: "A", rv: 1.2 }, { t: "B", rv: null }]), />RVOL 1 of 2 read<\/span>$/);
-  assert.equal(K.rvolNoteHTML([{ t: "A", rv: 1.2 }]), "", "all read: nothing to say");
+  assert.match(K.rvolNoteHTML([{ t: "A", rv: null }, { t: "B", rv: null }]), / · no reading yet<\/span>$/);
+  assert.match(K.rvolNoteHTML([{ t: "A", rv: 1.2 }, { t: "B", rv: null }]), / · 1 of 2 read<\/span>$/);
+  assert.doesNotMatch(K.rvolNoteHTML([{ t: "A", rv: 1.2 }]), / · (\d+ of \d+ read|no reading yet)<\/span>$/, "all read: no count to give");
   assert.match(page, /scOpt\('board_volume',\s+pg\("board_volume\?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"\)/, "read on every board pull");
   assert.doesNotMatch(page, /\.sc-board__row \.sc-vol \.sc-vol__dots\{display:none\}/, "H5: the battery is back on the board (the track now has the room)");
 });
