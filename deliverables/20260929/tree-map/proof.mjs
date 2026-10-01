@@ -40,7 +40,8 @@ const { targetId } = await raw("Target.createTarget", { url: "about:blank" });
 const { sessionId } = await raw("Target.attachToTarget", { targetId, flatten: true });
 const send = (m, p = {}) => raw(m, p, sessionId);
 const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); return r.result && r.result.value; };
-await send("Emulation.setDeviceMetricsOverride", { width: +width, height: +height, deviceScaleFactor: 1, mobile: mobile === "1" });
+const DPR = +(process.env.PROOF_DPR || 1); // 1 Oct: Alan's Retina screens are scale 2; the run is made at 1 and 2
+await send("Emulation.setDeviceMetricsOverride", { width: +width, height: +height, deviceScaleFactor: DPR, mobile: mobile === "1" });
 function treeCpu() {
   const lines = execSync(`ps -Ao time=,command= | grep -F -- "${dir}" | grep -v grep`).toString().trim().split("\n");
   return lines.reduce((s, l) => { const t = l.trim().split(/\s+/)[0]; const p = t.split(":").map(Number); return s + (p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]); }, 0);
@@ -80,9 +81,9 @@ for (const s of steps) {
   if (s.pose) log.push({ pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
   if (s.labels) { // every printed label against the node it is anchored to (screen px): the "labels don't match nodes" check
     const L = JSON.parse(await evaluate(`JSON.stringify(__mm.labelsNow ? __mm.labelsNow() : [])`));
-    const canvas = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector("#graph").getBoundingClientRect(); return { w: c.width, h: c.height }; })())`));
+    const canvas = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector("#graph").getBoundingClientRect(); const cv = document.querySelector("#gl canvas"); const r = cv ? cv.getBoundingClientRect() : null; return { w: c.width, h: c.height, buffer: cv ? [cv.width, cv.height] : null, css: r ? [Math.round(r.width), Math.round(r.height)] : null, dpr: devicePixelRatio }; })())`));
     const rows = L.map((l) => { const cx = l.align === "left" ? l.x : l.x + l.w / 2; const dx = l.align === "left" ? Math.abs(l.x - l.nx) : Math.abs(cx - l.nx); const dy = l.y + (l.align ? l.h / 2 : 0) - l.ny; return { id: l.id, text: l.text, dx: +dx.toFixed(1), dy: +dy.toFixed(1), inside: l.x >= -1 && l.y >= -1 && l.x + l.w <= canvas.w + 1 && l.y + l.h <= canvas.h + 1 }; });
-    log.push({ labels: { view: await evaluate("__mm.view"), count: rows.length, max_dx: Math.max(0, ...rows.map((r) => r.dx)), max_dy: Math.max(0, ...rows.map((r) => r.dy)), min_dy: Math.min(0, ...rows.map((r) => r.dy)), outside: rows.filter((r) => !r.inside).length, rows } });
+    log.push({ labels: { view: await evaluate("__mm.view"), canvas, count: rows.length, max_dx: Math.max(0, ...rows.map((r) => r.dx)), max_dy: Math.max(0, ...rows.map((r) => r.dy)), min_dy: Math.min(0, ...rows.map((r) => r.dy)), outside: rows.filter((r) => !r.inside).length, rows } });
   }
   if (s.crumbs) log.push({ crumbs: JSON.parse(await evaluate("JSON.stringify(__mm.crumbs())")) });
   if (s.find) { const r = await evaluate(`JSON.stringify(__mm.find(${JSON.stringify(s.find)}))`); await evaluate(`__mm.select(${JSON.stringify(s.find)})`); await sleep(500); await settle(); log.push({ find: s.find, result: JSON.parse(r), after: await stateNow() }); }
@@ -122,5 +123,5 @@ for (const s of steps) {
   }
 }
 const gl = await evaluate("(()=>{const c=document.querySelector('#graph canvas');if(!c)return 'no canvas';const g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'context unavailable';const e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)})()");
-console.log(JSON.stringify({ url, width, renderer: gl, log, page_errors: pageErrors }, null, 1));
+console.log(JSON.stringify({ url, width, dpr: DPR, renderer: gl, log, page_errors: pageErrors }, null, 1));
 done(0);

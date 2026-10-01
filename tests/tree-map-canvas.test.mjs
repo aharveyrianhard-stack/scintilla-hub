@@ -40,18 +40,32 @@ test("a click lifts an area into 3D with the subtree's own 3D positions and the 
   assert.match(PAGE, /← back to the canvas/);
 });
 
-test("the headless navigation run: canvas, pan, zoom, area, back, finder — every label within a few pixels of its node at 1680 and 390, the pose restored after back", () => {
+test("the renderer sizes for any device scale: CSS size = the box, buffer = CSS × scale, the ratio set on resize, labels in CSS px", () => {
+  assert.match(M3, /renderer\.setPixelRatio\(dprNow\(\)\); renderer\.setSize\(view\.w, view\.h, true\)/, "setSize must update the canvas CSS size (the Retina bug)");
+  assert.doesNotMatch(M3, /renderer\.setSize\(view\.w, view\.h, false\)/);
+  assert.match(M3, /const dprNow = \(\) => Math\.max\(1, Math\.min\(3, devicePixelRatio \|\| 1\)\)/);
+  assert.match(M3, /watchScale/, "a window moved between screens re-fits");
+  assert.match(M3, /sx: \(V\.x \+ 1\) \* view\.w \/ 2, sy: \(1 - V\.y\) \* view\.h \/ 2/, "labels are projected in CSS px from the same view size");
+  assert.match(PAGE, /drag to pan · scroll to zoom · click an area to lift it into 3D/);
+});
+
+test("the headless navigation run at device scale 1 AND 2, 1680 and 390: every label within a few pixels of its node, the canvas CSS size is the box and the buffer is CSS × scale, the pose restored after back", () => {
   const f = join(DIR, "shots/nav-proof.json");
   assert.ok(existsSync(f), "shots/nav-proof.json (written by the navigation proof) is missing");
   const runs = JSON.parse(readFileSync(f, "utf8"));
-  assert.ok(runs.length >= 2);
+  assert.ok(runs.length >= 4, "four runs: 1680 and 390 at scale 1 and 2");
+  assert.deepEqual([...new Set(runs.map((r) => r.dpr))].sort(), [1, 2]);
   let checks = 0;
   for (const run of runs) {
-    assert.deepEqual(run.page_errors, [], `${run.width}: page errors`);
+    assert.deepEqual(run.page_errors, [], `${run.width}@${run.dpr}: page errors`);
     const views = new Set();
     for (const step of run.log) if (step.labels) {
       const L = step.labels; checks++; views.add(L.view);
-      assert.ok(L.count > 0, `${run.width} ${L.view}: no labels printed`);
+      const c = L.canvas;
+      assert.ok(c && c.css && c.buffer, `${run.width}@${run.dpr}: no canvas sizes recorded`);
+      assert.ok(Math.abs(c.css[0] - c.w) <= 1 && Math.abs(c.css[1] - c.h) <= 1, `${run.width}@${run.dpr} ${L.view}: canvas CSS ${c.css} is not the box ${[c.w, c.h]}`);
+      assert.ok(Math.abs(c.buffer[0] - c.css[0] * c.dpr) <= 2 && Math.abs(c.buffer[1] - c.css[1] * c.dpr) <= 2, `${run.width}@${run.dpr} ${L.view}: buffer ${c.buffer} is not CSS × ${c.dpr}`);
+      assert.ok(L.count > 0, `${run.width}@${run.dpr} ${L.view}: no labels printed`);
       assert.ok(L.max_dx <= 3, `${run.width} ${L.view}: a label is ${L.max_dx}px off its node sideways`);
       assert.ok(L.min_dy >= -50 && L.max_dy <= 80, `${run.width} ${L.view}: a label is ${L.min_dy}…${L.max_dy}px off its node vertically`);
       assert.equal(L.outside, 0, `${run.width} ${L.view}: ${L.outside} labels outside the canvas`);

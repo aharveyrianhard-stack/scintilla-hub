@@ -36,7 +36,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   /* ---- the scene ---- */
   const el = $("gl"), graph = $("graph");
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "low-power" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+  /* 1 Oct (Alan's Retina Mac, scale 2): the drawing buffer was CSS × ratio but the canvas element kept its buffer size as
+     its CSS size, so the picture overflowed the box while the labels (CSS px) stayed put — two planes. Now: the CSS size is
+     the container's, the buffer is CSS × device scale, the ratio is set here and again on every resize (a window dragged
+     between a Retina and a plain screen changes it), and every label is projected in CSS pixels from the same size. */
+  const dprNow = () => Math.max(1, Math.min(3, devicePixelRatio || 1));
+  renderer.setPixelRatio(dprNow());
   renderer.setClearColor(0x0d0d0d, 1);
   el.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
@@ -157,10 +162,13 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const view = { w: 1, h: 1 };
   function fit() {
     const r = graph.getBoundingClientRect(); view.w = Math.max(1, r.width); view.h = Math.max(1, r.height);
-    renderer.setSize(view.w, view.h, false); camera.aspect = view.w / view.h; camera.updateProjectionMatrix();
+    renderer.setPixelRatio(dprNow()); renderer.setSize(view.w, view.h, true); // CSS = the box; buffer = CSS × scale
+    camera.aspect = view.w / view.h; camera.updateProjectionMatrix();
     view.scaleH = view.h / (2 * Math.tan((camera.fov * Math.PI) / 360)); barMat.uniforms.uScaleH.value = view.scaleH; wake();
   }
   addEventListener("resize", fit);
+  (function watchScale() { let last = dprNow(); setInterval(() => { const d = dprNow(); if (d !== last) { last = d; fit(); } }, 1000); })();
+  state.sizes = () => { const c = renderer.domElement, r = c.getBoundingClientRect(), b = graph.getBoundingClientRect(); return { box: [Math.round(b.width), Math.round(b.height)], css: [Math.round(r.width), Math.round(r.height)], buffer: [c.width, c.height], ratio: renderer.getPixelRatio(), view: [view.w, view.h] }; };
   let move = null;
   function flyTo(to, ms = 900) { move = { from: { p: camera.position.clone(), t: controls.target.clone() }, to, t0: performance.now(), ms }; wake(); }
   const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
