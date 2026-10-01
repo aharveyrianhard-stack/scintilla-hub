@@ -4623,7 +4623,6 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
   body.secfs .sc-secfs .ch > :nth-child(3), body.secfs .sc-secfs .ch > :nth-child(8), body.secfs .sc-secfs .ch > :nth-child(14){ display:none !important; }
   body.secfs .sc-secfs .sc-board__row .sc-gmini{ margin-left:0; }
   body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:none; }
-  body.secfs .sc-secfs .ch.hdr > :nth-child(10){ font-size:0; } body.secfs .sc-secfs .ch.hdr > :nth-child(10)::before{ content:"Mom"; font-size:10px; }
 }
 /* TREND and MOMENTUM cells: a plain fill bar (no glow — the glow is the Geiger's alone) and the number beside it */
 .gwx-tm{ display:flex; align-items:center; gap:5px; }
@@ -4656,6 +4655,8 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .gp-read b{ font-weight:700; letter-spacing:.04em; }
 .gp-read .gp-div{ color:var(--warn,#e0a24a); margin-left:4px; }
 .gp-foot{ margin-top:5px; font-size:11px; color:#6E6E76; line-height:1.4; }
+.gp-hu{ background:none; border:0; padding:0; color:#A8A8AE; font:11px var(--mono); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+.gp-hu:hover, .gp-hu:focus-visible{ color:#D2D2D2; outline:0; }
 /* THE HEADER TICKER's day change: direction colour and a minus sign for a down day, at every width */
 .sc-head__ident .sc-cchg.is-up{ color:var(--bull) !important; }
 .sc-head__ident .sc-cchg.is-dn{ color:var(--bear) !important; }
@@ -7451,7 +7452,8 @@ function gpopHTML(t) {
       '<span class="gp-sub">RSI and Williams %R, where price sits in its range</span></div>' +
     '<div class="gp-read">' + (R ? '<b style="color:' + R.col + '">' + esc(R.txt) + "</b>" + (R.div ? '<span class="gp-div" title="trend and momentum disagree">\u25c6</span>' : "") +
       " \u2014 " + esc(READ_LINE[R.txt] || "") : '<span style="color:var(--mute)">no trend or momentum reading yet</span>') + "</div>" +
-    '<div class="gp-foot">the Geiger blends the two, trend ' + share(wT) + " \u00b7 momentum " + share(wM) + ", across the Equalizer's timeframes; all three bars run \u22121 to +1</div>";
+    '<div class="gp-foot">the Geiger blends the two, trend ' + share(wT) + " \u00b7 momentum " + share(wM) + ", across the Equalizer's timeframes; all three bars run \u22121 to +1" +
+      ' \u00b7 <button class="gp-hu" type="button" data-act="huopen" data-t="' + esc(t) + '">how unusual is this reading?</button></div>';
 }
 function gpopClose(refocus) {
   const p = typeof document !== "undefined" && document.getElementById("gPop");
@@ -7470,14 +7472,16 @@ function gpopOpen(anchor) {
   p.setAttribute("aria-label", "Geiger breakdown for " + t);
   p.innerHTML = gpopHTML(t);
   p.hidden = false; p.style.visibility = "hidden"; p.style.left = "0px"; p.style.top = "0px";
-  /* placed by the bar: under it when there is room, else above it; never past the window's edges */
-  const r = anchor.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight;
+  /* placed by the bar: under it when there is room, else above it; never past the window's edges. Measured in screen
+     pixels; the body is drawn at a zoom on wide screens (1.12 / 1.28 / 1.45), so left/top are written in its units. */
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  const r = anchor.getBoundingClientRect(), pr = p.getBoundingClientRect(), w = pr.width, h = pr.height;
   const vw = window.innerWidth || document.documentElement.clientWidth, vh = window.innerHeight || document.documentElement.clientHeight;
   const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, vw - w - 8));
   const below = r.bottom + 6 + h <= vh - 8;
   const top = below ? r.bottom + 6 : Math.max(8, r.top - 6 - h);
-  p.style.left = Math.round(left) + "px"; p.style.top = Math.round(top) + "px";
-  p.style.setProperty("--gp-ox", Math.round(r.left + r.width / 2 - left) + "px");
+  p.style.left = (left / z).toFixed(1) + "px"; p.style.top = (top / z).toFixed(1) + "px";
+  p.style.setProperty("--gp-ox", ((r.left + r.width / 2 - left) / z).toFixed(1) + "px");
   p.style.setProperty("--gp-oy", below ? "0" : "100%");
   p.style.visibility = "";
   p.classList.remove("is-in"); void p.offsetWidth; p.classList.add("is-in");
@@ -7496,6 +7500,7 @@ if (typeof document !== "undefined" && document.addEventListener) {
     if (!GPOP_T) return;
     const tg = e.target;
     if (tg && tg.closest && tg.closest("[data-gpop-close]")) { e.preventDefault(); gpopClose(true); return; }
+    if (tg && tg.closest && tg.closest("#gPop [data-act=\"huopen\"]")) { gpopClose(false); return; }   // the history panel opens; the overlay steps away
     if (tg && tg.closest && (tg.closest("#gPop") || tg.closest('[data-act="gpop"]'))) return;
     gpopClose(false);
   }, true);
@@ -28438,7 +28443,8 @@ body.gwx-motion .gwx-pct{opacity:1}
     var cell = e.target.closest && e.target.closest(".sc-rsi");
     if (cell && cell.id && cell.id.indexOf("lr_") === 0) { e.preventDefault(); e.stopPropagation(); open(cell.id.slice(3)); return; }
     var gm = e.target.closest && e.target.closest(".sc-gmini");
-    var row = gm && gm.closest("[data-act='row']");
+    /* H4 (1 Oct) — a board row's Geiger bar now opens its breakdown (Alan's call); this panel is one link away inside it */
+    var row = gm && !gm.closest(".sc-gcell") && gm.closest("[data-act='row']");
     if (row && row.getAttribute("data-t")) { e.preventDefault(); e.stopPropagation(); open(row.getAttribute("data-t")); }
   }, true);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });

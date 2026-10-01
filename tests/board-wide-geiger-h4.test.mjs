@@ -82,6 +82,7 @@ test("one overlay, fixed to the window (never moves a row); Esc, ✕, a click aw
   assert.match(open, /let p = document\.getElementById\("gPop"\);/, "one element, reused");
   assert.match(open, /if \(GPOP_T === t && GPOP_ANCHOR === anchor\) \{ gpopClose\(false\); return; \}/, "the same bar again closes it");
   assert.match(open, /const below = r\.bottom \+ 6 \+ h <= vh - 8;/);
+  assert.match(open, /p\.style\.left = \(left \/ z\)\.toFixed\(1\) \+ "px"/, "placed in the zoomed body's own units (1.28 at 1680)");
   assert.match(page, /if \(e\.key !== "Escape" \|\| !GPOP_T\) return;\s+e\.preventDefault\(\); e\.stopImmediatePropagation\(\); gpopClose\(true\);/);
   assert.match(fn("cvKeysBlocked"), /if \(typeof GPOP_T !== "undefined" && GPOP_T\) return true;/, "the company view's Esc waits for it");
   assert.match(page, /document\.addEventListener\("scroll", \(e\) => \{ if \(GPOP_T/);
