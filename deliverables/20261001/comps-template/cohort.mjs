@@ -25,18 +25,20 @@ export function cohortChoice(ticker, tags, asked) { const cohort = cohortFor(tic
 
 /** Read one cohort. pg: PostgREST GET; quotes: tickers → {quotes}; fxStandin: { CCY: [[date, rate]] } with a `source` word
     (used only for a currency fx_rates does not carry, and named as such on the row). */
-export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null }) {
+export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null, membersAsked = null, labelAsked = null }) {
   const TICKER = String(ticker).toUpperCase(), TODAY = today;
   const [own, home] = await Promise.all([pg(`ticker_cohorts?select=ticker,cohort&ticker=eq.${encodeURIComponent(TICKER)}`), pg(`tickers?select=cohort&ticker=eq.${encodeURIComponent(TICKER)}`).catch(() => [])]);
   /* the peer set is the company's HOME cohort on our board (tickers.cohort, the one the board files it under), unless asked
      otherwise; the other tags it carries are offered as alternatives */
   const homeCohort = home && home[0] && home[0].cohort ? String(home[0].cohort).toUpperCase() : null;
   const tags = [...new Set(own.map((x) => x.cohort))];
-  const { cohort, options } = cohortChoice(TICKER, tags, cohortAsked || homeCohort);
+  let { cohort, options } = cohortChoice(TICKER, tags, cohortAsked || homeCohort);
   if (homeCohort && !options.includes(homeCohort)) options.unshift(homeCohort);
   if (!cohort) throw new Error(`${TICKER} carries no cohort tag in ticker_cohorts, so it has no peers on file`);
-  const mem = await pg(`ticker_cohorts?select=ticker&cohort=eq.${encodeURIComponent(cohort)}&order=ticker.asc`);
-  const T = [...new Set([TICKER, ...mem.map((m) => m.ticker)])];
+  /* C3b/C4 — a set given by name (FMP peers, the mechanic's kept list): its members are read as they are */
+  const mem = membersAsked ? membersAsked.map((t) => ({ ticker: t })) : await pg(`ticker_cohorts?select=ticker&cohort=eq.${encodeURIComponent(cohort)}&order=ticker.asc`);
+  if (membersAsked && labelAsked) cohort = labelAsked;
+  const T = [...new Set([TICKER, ...mem.map((m) => String(m.ticker).toUpperCase())])];
   if (T.length < 2) throw new Error(`${TICKER} is the only name tagged ${cohort}: no peers`);
   const inq = "in.(" + T.map(encodeURIComponent).join(",") + ")";
   const opt = (p) => pg(p).catch(() => null);
@@ -49,7 +51,8 @@ export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes
     pg(`company_profile?select=ticker,name,industry,sector,is_etf,is_adr,country,price,market_cap&ticker=${inq}`),
     opt(`composite_staged?select=ticker,composite,updated_ts&tf=eq.D&ticker=${inq}&order=ticker.asc,updated_ts.desc`),
     opt(`filer_currency?select=ticker,reported_currency,listing_currency,is_adr,shares_dil,statement_date,source&ticker=${inq}`),
-    opt(`fx_rates?select=pair,date,rate&date=gte.${daysBefore(TODAY, 1200)}&order=date.asc`),
+    (async () => { /* C4 — paged: fx_rates holds thousands of rows and PostgREST serves 1,000 per request */
+      const all = []; for (let off = 0; off < 50000; off += 1000) { const page = await opt(`fx_rates?select=pair,date,rate&date=gte.${daysBefore(TODAY, 1200)}&order=date.asc,pair.asc&limit=1000&offset=${off}`); if (page == null) return off ? all : null; all.push(...page); if (page.length < 1000) break; } return all; })(),
     Promise.resolve().then(() => quotes(T)).catch((e) => ({ quotes: {}, error: String((e && e.message) || e) })),
   ]);
   const qmap = quotesRes && quotesRes.quotes && typeof quotesRes.quotes === "object" ? quotesRes.quotes : {};
