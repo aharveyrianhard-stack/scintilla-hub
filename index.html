@@ -6016,9 +6016,10 @@ const READ_TABS = ["BUSINESS", "VERDICT", "CATALYSTS", "WATCH"];   // R48 — Al
 const CO_LANDING_TAB = "GEIGER";
 const STATION_CHART_URL = "https://station.scintillahub.ai/chart/";
 const STATION_FUND_URL = "https://station.scintillahub.ai/station-shells/fundamentals-v1/";
-/* SWITCH-ON — the Station chart's own eleven timeframes (its CHART_RANGES), so 15m, 30m, 2h, 3h, 6h and 12h, which the Station
-   pane's toolbar used to offer inside the frame before ?bare=hub tucked it away, are reachable from the Hub again */
-const CO_RANGES = ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1D", "3D", "1W"];
+/* H3 (Alan, 1 Oct: "they don't need to have a bazillion time frames but they do need to have the clouds and the treatment and
+   the context lens, the full treatment of the station charts") — five timeframes, short to long. SWITCH-ON (28 Sep) had carried
+   all eleven of the Station's; a browser that remembered one of the six that left (15m, 30m, 2h, 3h, 6h, 12h) opens on 1D. */
+const CO_RANGES = ["1h", "4h", "1D", "3D", "1W"];
 const CO_RANGE_KEY = "hub.chart.range", CO_EXP_KEY = "hub.company.expanded";
 /* R3 (Alan, 27 Sep: "the Lab's MULTI-TIMEFRAME RSI FAN … that should happen immediately. Not a single RSI line") — ?rsi=1
    asks the Station pane for the Indicator Lab's six-line RSI fan, the same fan the Station draws on its own chart.
@@ -6039,10 +6040,16 @@ function coRange(stored) {
 /* SWITCH-ON — the clouds switch the Station pane's toolbar carried, remembered per browser (hub.chart.clouds; on unless "0") */
 const CO_CLOUDS_KEY = "hub.chart.clouds";
 function coCloudsOn() { return lsGet(CO_CLOUDS_KEY) !== "0"; }
+/* H3 — THE CONTEXT LENS (?bubble=), the zoomed view the chart itself cannot show, by the Station's own rule
+   (/_indicators/station-lens.mjs LENS_FOR_RANGE, 29 Sep): a 1h or 4h chart gets about three months of daily candles, 1D the
+   last three sessions of 30-minute candles, 3D twelve sessions of 4-hour candles, 1W the last twenty daily candles. The pane
+   swaps in its range's own lens whenever the one asked for does not fit, so the Hub only has to ask. */
 function coChartSrc(t, range, rsi) {
   const r = coRange(range);
+  const lens = { "1h": "1d:60", "4h": "1d:60", "1D": "30m:3", "3D": "4h:12", "1W": "1d:20" }[r];
   return STATION_CHART_URL + "?bare=hub&t=" + encodeURIComponent(String(t || "").toUpperCase()) +
-    "&range=" + encodeURIComponent(r) + "&clouds=" + (coCloudsOn() ? "1" : "0") + (rsi ? "&rsi=" + (rsi === true ? "1" : encodeURIComponent(rsi === "match" ? r : rsi)) : "");
+    "&range=" + encodeURIComponent(r) + "&clouds=" + (coCloudsOn() ? "1" : "0") + (rsi ? "&rsi=" + (rsi === true ? "1" : encodeURIComponent(rsi === "match" ? r : rsi)) : "") +
+    (lens ? "&bubble=" + encodeURIComponent(lens) : "");
 }
 /* H2 — does the deployed Station chart know ?bare=hub? One read of the page (it answers CORS *), once per session.
    Until it answers yes, .sc-cofr carries is-legacy and the pane's own 29 px toolbar sits under the Hub's row. */
@@ -6057,7 +6064,9 @@ function coPaneModeProbe() {
       if (!/HUB_PANE\s*=\s*BARE_PARAM\s*===\s*"hub"/.test(html)) return;
       CO_HUB_PANE = true;
       try { sessionStorage.setItem("hub.station.hubpane", "1"); } catch (_) {}
-      document.querySelectorAll(".sc-cofr.is-legacy").forEach((x) => x.classList.remove("is-legacy"));
+      /* H3 — the company view's frame too (.cv-chart). Only the old tab frame was released, so on a browser's first visit the
+         company chart kept its 29 px tuck and the pane's top row — the price badge and the Geiger chip — sat cut off above it */
+      document.querySelectorAll(".sc-cofr.is-legacy, .cv-chart.is-legacy").forEach((x) => x.classList.remove("is-legacy"));
     }).catch(() => {});
 }
 /* H2 — "last bar HH:MM ET · N min ago": the newest bar the chart API holds for this name and timeframe (the same Massive

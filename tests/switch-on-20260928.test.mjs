@@ -17,7 +17,7 @@ const clickCase = (name) => { const m = page.match(new RegExp('    case "' + nam
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const num = (v) => { if (v == null) return null; const n = typeof v === "number" ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
 const head = page.slice(0, page.indexOf("</head>"));
-const RANGES = ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1D", "3D", "1W"];
+const RANGES = ["1h", "4h", "1D", "3D", "1W"];   /* H3 (1 Oct) — five timeframes, short to long */
 const CONSTS = line(/^const STATION_CHART_URL = [^\n]*/m) + line(/^const CO_RANGES = [^\n]*/m) + line(/^const CO_RANGE_KEY = [^\n]*/m) +
   line(/^const CO_CHART_RSI = [^\n]*/m) + line(/^const CO_CLOUDS_KEY = [^\n]*/m);
 
@@ -72,18 +72,18 @@ test("C6: ⛶ fullscreen is on the company line and uses the one section-fullscr
   assert.match(fn("cvKeysBlocked"), /SECFS/, "while fullscreen, Esc closes the fullscreen first");
 });
 
-test("D3/D2: the Station chart's eleven timeframes and the CLOUDS switch are reachable from the Hub, both remembered", () => {
-  const html = lineKit({ "hub.chart.range": "2h" })("MU");
+test("D3/D2 · H3: the company chart's five timeframes and the CLOUDS switch are reachable from the Hub, both remembered", () => {
+  const html = lineKit({ "hub.chart.range": "4h" })("MU");
   assert.deepEqual([...html.matchAll(/data-act="corange" data-r="([^"]+)"/g)].map((m) => m[1]), RANGES);
-  assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="2h"/);
+  assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="4h"/);
   assert.match(html, /cv-clouds on" aria-pressed="true" data-act="coclouds"/, "clouds on by default");
   assert.match(lineKit({ "hub.chart.clouds": "0" })("MU"), /cv-clouds" aria-pressed="false" data-act="coclouds"/);
   const src = (store) => new Function("lsGet", CONSTS + fn("coRange") + fn("coCloudsOn") + fn("coChartSrc") + "\nreturn coChartSrc;")((k) => store[k]);
-  assert.equal(src({})("mu", "15m", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=15m&clouds=1&rsi=1");
-  assert.equal(src({ "hub.chart.clouds": "0" })("MU", "12h", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=12h&clouds=0&rsi=1");
+  assert.equal(src({})("mu", "1h", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1h&clouds=1&rsi=1&bubble=1d%3A60");
+  assert.equal(src({ "hub.chart.clouds": "0" })("MU", "4h", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=4h&clouds=0&rsi=1&bubble=1d%3A60");
   /* the last-bar stamp knows every timeframe's chart-API token */
   const STAMP = new Function(line(/^const CO_STAMP_TF = [^\n]*/m) + "return CO_STAMP_TF;")();
-  assert.deepEqual(Object.keys(STAMP), RANGES);
+  for (const r of RANGES) assert.ok(r in STAMP, r);
   /* a timeframe click lights only timeframes; the CLOUDS switch writes only its memory and the frame's src */
   assert.match(clickCase("corange"), /querySelectorAll\("\.sc-cofr__tf\[data-r\]"\)/);
   const frame = { src: "" }, saved = {}, btns = [];
@@ -93,7 +93,7 @@ test("D3/D2: the Station chart's eleven timeframes and the CLOUDS switch are rea
     {}, { preventDefault() {}, stopPropagation() {} }, (id) => (id === "coChartFrame" ? frame : null), (k, v) => { saved[k] = v; store[k] = v; }, (k) => store[k],
     { querySelectorAll: () => btns }, "MU");
   assert.deepEqual(saved, { "hub.chart.clouds": "0" });
-  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=0&rsi=1");
+  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=0&rsi=1&bubble=30m%3A3");
 });
 
 /* F3 — STATS market cap date */
