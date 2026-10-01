@@ -4576,37 +4576,92 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 /* on a phone every company tab gets a 300px slot; an embedded page needs more to be read */
 @media(max-width:640px){ .sc-chartpanel__slot.cot-CHART{min-height:58vh} .sc-chartpanel__slot.cot-FUNDAMENTALS{min-height:82vh} }
 </style>
-<style id="board-v2-20260929">
-/* ── 29 SEP · THE BOARD (P2-HUB-FIXES item 4). Selectors carry body/panel classes so they outrank the r4-fit sheet,
-   which must stay last in the page. ───────────────────────────────────────────────────────────────────────────── */
+<style id="board-h4-20261001">
+/* ── 1 OCT · ONE BOARD (H4). Alan, 1 Oct ~10:00 ET: "the Geiger takes up the full space between trend, momentum, read, and
+   Geiger. Makes it wide… which is what really matters at the front of the page. And when I click on the Geiger bar, it
+   expands… the breakdown of the trend Geiger, the momentum Geiger, and that little description, as a little overlay. And if
+   we full screen the cohort board section… add all of the Geigers as columns and re-rank them by trend and momentum."
+   This replaces the hidden ?board=v2 column set (29 Sep) — there is one board. Header and rows keep ONE 14-cell child
+   order everywhere; what changes is which cells are drawn. Selectors carry body/panel classes so they outrank the r4-fit
+   sheet, which must stay last in the page. ───────────────────────────────────────────────────────────────────────── */
 .sc-gnum{ display:none; }
 /* a difference of two funds has no trend/momentum read of its own: the rows keep their height (the zero line stays level) */
 .sc-cohstrip--bowtie .sc-cohstrip__read, .sc-cohstrip--bowtie .sc-cohstrip__tm{ visibility:hidden; }
-/* FULL SCREEN, both sets: the cohort selectors wrap inside the frame at a readable size, and every number sits
-   right-aligned in a track sized to what it holds (it was centred in some columns, right-aligned in others, and MOM's
-   number ran into READ's words) */
+/* the Geiger cell is the button that opens the breakdown; the bar inside it fills the cell */
+.sc-gcell{ display:flex; align-items:center; min-width:0; cursor:pointer; border-radius:2px; }
+.sc-gcell > .sc-gmini{ display:block; flex:1 1 auto; min-width:0; }
+.sc-gcell > span:not(.sc-gmini){ flex:1 1 auto; }
+.sc-gcell:hover > .sc-gmini{ background:#1C1C22; }
+.sc-gcell:focus-visible{ outline:1.5px solid var(--crk); outline-offset:1px; }
+.sc-gcell[aria-expanded="true"] > .sc-gmini{ box-shadow:0 0 0 1px #6E6E76; }
+/* BESIDE THE LEFT PANEL: TREND, MOM and READ are not drawn; the Geiger takes their width (11 tracks for 11 drawn cells:
+   ♥ · TICKER · LAST · CHG · F P/E · MKT CAP · REVENUE · RSI · GEIGER · RVOL · MKT). The phone keeps its own seven. */
+@media (min-width:561px){
+  body:not(.secfs):not(.gwx-motion) .ch > :nth-child(9), body:not(.secfs):not(.gwx-motion) .ch > :nth-child(10),
+  body:not(.secfs):not(.gwx-motion) .ch > :nth-child(11){ display:none !important; }
+  body:not(.secfs):not(.gwx-motion) .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,9fr) minmax(0,10fr) minmax(0,7fr) minmax(0,46fr) minmax(0,5fr) minmax(0,5fr) !important; }
+}
+/* FULL SCREEN (⛶): every column, TREND and MOMENTUM as their own bars (sortable), READ in words, the Geiger with its
+   number. Every number sits right-aligned in a track sized to what it holds. */
 body.secfs .sc-secfs .cohtabstrip{ flex-wrap:wrap !important; overflow:visible !important; row-gap:2px; }
 body.secfs .sc-secfs .cohtabstrip .sc-coh{ font-size:11px; }
-@media (min-width:901px){
-  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,7fr) minmax(0,8fr) minmax(0,9fr) minmax(0,8fr) minmax(0,7fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,6fr) minmax(0,7fr) minmax(0,12fr) minmax(0,15fr) minmax(0,6fr) minmax(0,3fr) !important; column-gap:10px; }
-  body.secfs .sc-secfs .ch > :nth-child(2){ text-align:left !important; }
-  body.secfs .sc-secfs .ch > :nth-child(n+3):nth-child(-n+10){ text-align:right !important; justify-content:flex-end; }
-  body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; padding-left:12px; }
-}
-/* v2 · BESIDE THE LEFT PANEL: REVENUE, TREND and MOM step out; 11 tracks for 11 cells */
-@media (min-width:561px){
-  body.brd-v2:not(.secfs) .ch > :nth-child(7), body.brd-v2:not(.secfs) .ch > :nth-child(9),
-  body.brd-v2:not(.secfs) .ch > :nth-child(10){ display:none !important; }
-  body.brd-v2:not(.secfs) .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,10fr) minmax(0,7fr) minmax(0,7fr) minmax(0,19fr) minmax(0,8fr) minmax(0,5fr) !important; }
-  /* READ as its icon, and ◆ when trend and momentum disagree (the words stay in its title and in full screen) */
-  body.brd-v2:not(.secfs) .sc-board__row .gwx-read{ font-size:0 !important; text-align:center; overflow:visible; }
-  body.brd-v2:not(.secfs) .sc-board__row .gwx-read::before{ content:attr(data-icon); font-size:15px; }
-  body.brd-v2:not(.secfs) .sc-board__row .gwx-read[data-div]::after{ content:"◆"; font-size:11px; color:var(--warn,#e0a24a); margin-left:3px; }
-}
-/* v2 · the Geiger carries its number, left of the bar, in its own colour (both sets) */
-body.brd-v2 .sc-board__row .sc-gmini{ overflow:visible; margin-left:46px; }
-body.brd-v2 .sc-board__row .sc-gnum{ display:block; position:absolute; right:calc(100% + 6px); top:50%; transform:translateY(-50%);
+body.secfs .sc-secfs .sc-board__row .sc-gmini{ overflow:visible; margin-left:46px; }
+body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; right:calc(100% + 6px); top:50%; transform:translateY(-50%);
   font:600 11px var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+@media (min-width:561px){
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,17fr) minmax(0,5fr) minmax(0,3fr) !important; column-gap:10px; }
+  body.secfs .sc-secfs .ch > :nth-child(2){ text-align:left !important; }
+  body.secfs .sc-secfs .ch > :nth-child(n+3):nth-child(-n+8){ text-align:right !important; justify-content:flex-end; }
+  body.secfs .sc-secfs .ch.hdr > :nth-child(9), body.secfs .sc-secfs .ch.hdr > :nth-child(10){ text-align:left !important; }
+  body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; }
+  body.secfs .sc-secfs .sc-board__row .gwx-read{ font-size:11px; }
+}
+/* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER */
+@media (max-width:560px){
+  body.secfs .sc-secfs .ch{ grid-template-columns:minmax(0,3fr) minmax(0,8fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,12fr) !important; gap:6px !important; }
+  body.secfs .sc-secfs .ch > :nth-child(9), body.secfs .sc-secfs .ch > :nth-child(10){ display:flex !important; }
+  body.secfs .sc-secfs .ch > :nth-child(3), body.secfs .sc-secfs .ch > :nth-child(8), body.secfs .sc-secfs .ch > :nth-child(14){ display:none !important; }
+  body.secfs .sc-secfs .sc-board__row .sc-gmini{ margin-left:0; }
+  body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:none; }
+}
+/* TREND and MOMENTUM cells: a plain fill bar (no glow — the glow is the Geiger's alone) and the number beside it */
+.gwx-tm{ display:flex; align-items:center; gap:5px; }
+.gwx-tmb{ position:relative; flex:1 1 auto; min-width:14px; height:9px; background:var(--panel); border-radius:2px; overflow:hidden; }
+.gwx-tmb::before{ content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#4A4A52; }
+.gwx-tmb i{ position:absolute; top:1.5px; bottom:1.5px; border-radius:1px; max-width:50%; }
+.gwx-tmn{ flex:0 0 auto; font-variant-numeric:tabular-nums; min-width:5ch; text-align:right; }
+/* THE BREAKDOWN — one small overlay, fixed to the window (it never moves a row), beside the bar that opened it */
+.sc-gpop{ position:fixed; z-index:9000; box-sizing:border-box; width:min(320px, calc(100vw - 16px)); padding:10px 12px 9px;
+  background:#121216; border:.5px solid #4A4A52; border-radius:6px; box-shadow:0 10px 28px rgba(0,0,0,.55);
+  font-family:var(--mono); color:#C9C9CE; transform-origin:var(--gp-ox,50%) var(--gp-oy,0); }
+.sc-gpop[hidden]{ display:none; }
+.sc-gpop.is-in{ animation:scGpopIn .13s ease-out; }
+@keyframes scGpopIn{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
+@media (prefers-reduced-motion:reduce){ .sc-gpop.is-in{ animation:none; } }
+.gp-h{ display:flex; align-items:baseline; gap:8px; margin-bottom:7px; }
+.gp-h b{ font-size:13px; letter-spacing:.12em; color:#D2D2D2; }
+.gp-h span{ font-size:11px; letter-spacing:.14em; color:#8A8A92; }
+.gp-h em{ font-style:normal; font-weight:700; font-size:13px; font-variant-numeric:tabular-nums; margin-left:auto; }
+.gp-x{ background:none; border:.5px solid #3A3A42; border-radius:2px; color:#8A8A92; font:11px var(--mono); line-height:1; padding:3px 6px; cursor:pointer; }
+.gp-x:hover, .gp-x:focus-visible{ color:#D2D2D2; border-color:#8A8A92; outline:0; }
+.gp-comp .sc-gmini{ height:16px; }
+.gp-comp .sc-gmini i{ top:2.5px; bottom:2.5px; }
+.gp-row{ display:grid; grid-template-columns:76px minmax(0,1fr) 44px; align-items:center; gap:8px; margin-top:7px; }
+.gp-l{ font-size:11px; letter-spacing:.12em; color:#8A8A92; }
+.gp-row .gwx-tmb{ height:10px; }
+.gp-row b{ font-size:12px; font-variant-numeric:tabular-nums; text-align:right; }
+.gp-sub{ grid-column:2 / -1; font-size:11px; color:#6E6E76; margin-top:-4px; }
+.gp-read{ margin-top:9px; padding-top:7px; border-top:.5px solid #2B2B31; font-size:11px; line-height:1.45; color:#A8A8AE; }
+.gp-read b{ font-weight:700; letter-spacing:.04em; }
+.gp-read .gp-div{ color:var(--warn,#e0a24a); margin-left:4px; }
+.gp-foot{ margin-top:5px; font-size:11px; color:#6E6E76; line-height:1.4; }
+.gp-hu{ background:none; border:0; padding:0; color:#A8A8AE; font:11px var(--mono); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+.gp-hu:hover, .gp-hu:focus-visible{ color:#D2D2D2; outline:0; }
+/* THE HEADER TICKER's day change: direction colour and a minus sign for a down day, at every width */
+.sc-head__ident .sc-cchg.is-up{ color:var(--bull) !important; }
+.sc-head__ident .sc-cchg.is-dn{ color:var(--bear) !important; }
+.sc-head__ident .sc-cpx.is-up{ color:var(--bull) !important; }
+.sc-head__ident .sc-cpx.is-dn{ color:var(--bear) !important; }
 </style>
 <style id="tape-events-20260927">
 /* ── 27 SEP · THE SCINTILLATING TAPE + THE TICKER IN THE TITLE ─────────────────────────────────────────────────
@@ -6392,6 +6447,7 @@ function cvKeysBlocked(e) {
   const open = (id, c) => { const n = el(id); return !!(n && (c ? n.classList.contains(c) : n.firstChild)); };
   /* 28 Sep — reviewer: Esc with the COHORT ▾ menu open closed the whole company view. The open menu owns Esc: its own
      handler closes it, and the view (and a ⛶ full-screen panel) stays exactly as it was. */
+  if (typeof GPOP_T !== "undefined" && GPOP_T) return true;   /* H4 — the open Geiger breakdown owns Esc */
   return open("trFullHost") || open("ernSumHost") || open("chatPop", "open") || open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal") ||
     !!(document.querySelector && document.querySelector(".sc-cohwrap.is-open"));
 }
@@ -7106,7 +7162,8 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
    until the next 45 s pull) the header had 13 cells over 10-cell rows: the Geiger bar sat under TREND, RVol under MOM,
    the market dot under READ, and the GEIGER / RVOL / MKT columns were empty. The model is now complete from the first
    render and boardRowsHTML() emits one cell per column; the rewind module still OWNS the three cells' values (paintTM). */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend", null], ["Mom", null], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* H4 (1 Oct) — TREND and MOMENTUM carry sort keys (tr / mo): drawn as bars in full screen, re-ranked like any other column */
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol", null], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
    dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
 function boardTMCellsHTML() {
@@ -7342,10 +7399,114 @@ function computeBoardOrder() {
      age, so a cold boot could rank the entire board on day-old numbers and then visibly reorder
      when the real ones arrived. */
   if (key !== "t" && !window.SC_RANK_READY) return (S.rows || []).map((r) => r.t);
+  const val = (r) => { const v = boardSortValue(r, key); return v == null || !isFinite(v) ? -Infinity : v; };
   return (S.rows || []).slice().sort((a, b) =>
-    key === "t" ? dir * a.t.localeCompare(b.t)
-      : dir * (((a[key] == null ? -Infinity : a[key])) - ((b[key] == null ? -Infinity : b[key]))))
+    key === "t" ? dir * a.t.localeCompare(b.t) : dir * (val(a) - val(b)))
     .map((r) => r.t);
+}
+/* H4 — TREND (tr) and MOMENTUM (mo) are not on the row: they are the values the board is SHOWING for that name
+   (window.SCIN_TM_SHOWN, written by paintTM, so a rewound board ranks by the rewound day), else the live store. */
+function boardSortValue(r, key) {
+  if (key === "tr" || key === "mo") {
+    const shown = typeof window !== "undefined" && window.SCIN_TM_SHOWN && window.SCIN_TM_SHOWN[r.t];
+    const live = typeof window !== "undefined" && window.SCIN_TM && window.SCIN_TM[r.t];
+    const d = shown || live;
+    return d ? num(d[key]) : null;
+  }
+  return r[key];
+}
+/* ── H4 (1 Oct) · THE GEIGER BREAKDOWN ──────────────────────────────────────────────────────────────────────────────
+   Alan: "when I click on the Geiger bar, it expands BetterTouchTool style… the breakdown of the trend Geiger, the momentum
+   Geiger, and that little description, as a little overlay." ONE overlay (#gPop), fixed to the window beside the bar that
+   opened it, so it never moves a row. Esc, ✕, a click anywhere else, or a scroll closes it; clicking the same bar again
+   closes it; clicking another bar moves it there. The numbers are the ones the board is showing (SCIN_TM_SHOWN, which
+   paintTM writes — a rewound day included) and the row's own Geiger; all three bars are on the fixed -1..+1 scale. */
+let GPOP_T = null, GPOP_ANCHOR = null;
+function gpopRowFor(t) {
+  const pick = (list) => (list || []).find((r) => r && r.t === t) || null;
+  return pick(S.rows) || pick(typeof ALLROWS !== "undefined" ? ALLROWS : null);
+}
+function gpopBarHTML(v) {
+  if (v == null || !isFinite(v)) return '<span class="gwx-tmb"></span>';
+  const col = v >= 0 ? "var(--bull)" : "var(--bear)";
+  return '<span class="gwx-tmb"><i style="' + (v >= 0 ? "left" : "right") + ":50%;width:" + (Math.min(Math.abs(v), 1) * 50).toFixed(1) +
+    "%;background:" + col + '"></i></span>';
+}
+function gpopNum(v) { return v == null || !isFinite(v) ? "—" : (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(2); }
+function gpopCol(v) { return v == null || !isFinite(v) ? "var(--mute)" : v >= 0 ? "var(--bull)" : "var(--bear)"; }
+function gpopHTML(t) {
+  const row = gpopRowFor(t), g = row ? num(row.g) : null;
+  const shown = (typeof window !== "undefined" && window.SCIN_TM_SHOWN && window.SCIN_TM_SHOWN[t]) ||
+                (typeof window !== "undefined" && window.SCIN_TM && window.SCIN_TM[t]) || null;
+  const T = shown ? num(shown.tr) : null, M = shown ? num(shown.mo) : null;
+  const R = T == null ? null : M == null ? { txt: "trend only", col: "var(--dimmer,#5a6270)", div: false } : scinRead(T, M);
+  const fw = (typeof window !== "undefined" && window.SCIN_FAMW) || null;
+  const wT = fw && isFinite(fw.trend) ? fw.trend : 0.5, wM = fw && isFinite(fw.mom) ? fw.mom : 0.5;
+  const share = (w) => { const f = w / ((wT + wM) || 1); return Math.abs(f - 0.5) < 1e-9 ? "half" : Math.round(f * 100) + "%"; };
+  return '<div class="gp-h"><b>' + esc(t) + '</b><span>GEIGER</span><em style="color:' + gpopCol(g) + '">' + gpopNum(g) + "</em>" +
+      '<button class="gp-x" type="button" data-gpop-close aria-label="Close the breakdown">\u2715</button></div>' +
+    '<div class="gp-comp">' + (g == null ? '<span class="sc-gmini"><span class="sc-gmini__mid"></span></span>' : geigerMiniHTML(g, 1)) + "</div>" +
+    '<div class="gp-row"><span class="gp-l">TREND</span>' + gpopBarHTML(T) + '<b style="color:' + gpopCol(T) + '">' + gpopNum(T) + "</b>" +
+      '<span class="gp-sub">how the moving averages are stacked</span></div>' +
+    '<div class="gp-row"><span class="gp-l">MOMENTUM</span>' + gpopBarHTML(M) + '<b style="color:' + gpopCol(M) + '">' + gpopNum(M) + "</b>" +
+      '<span class="gp-sub">RSI and Williams %R, where price sits in its range</span></div>' +
+    '<div class="gp-read">' + (R ? '<b style="color:' + R.col + '">' + esc(R.txt) + "</b>" + (R.div ? '<span class="gp-div" title="trend and momentum disagree">\u25c6</span>' : "") +
+      " \u2014 " + esc(READ_LINE[R.txt] || "") : '<span style="color:var(--mute)">no trend or momentum reading yet</span>') + "</div>" +
+    '<div class="gp-foot">the Geiger blends the two, trend ' + share(wT) + " \u00b7 momentum " + share(wM) + ", across the Equalizer's timeframes; all three bars run \u22121 to +1" +
+      ' \u00b7 <button class="gp-hu" type="button" data-act="huopen" data-t="' + esc(t) + '">how unusual is this reading?</button></div>';
+}
+function gpopClose(refocus) {
+  const p = typeof document !== "undefined" && document.getElementById("gPop");
+  if (p) { p.hidden = true; p.classList.remove("is-in"); p.innerHTML = ""; }
+  const a = GPOP_ANCHOR;
+  if (a) { a.setAttribute("aria-expanded", "false"); if (refocus && a.isConnected && a.focus) a.focus(); }
+  GPOP_T = null; GPOP_ANCHOR = null;
+}
+function gpopOpen(anchor) {
+  const t = anchor && anchor.getAttribute("data-t");
+  if (!t) return;
+  if (GPOP_T === t && GPOP_ANCHOR === anchor) { gpopClose(false); return; }    // the same bar again closes it
+  if (GPOP_ANCHOR) GPOP_ANCHOR.setAttribute("aria-expanded", "false");
+  let p = document.getElementById("gPop");
+  if (!p) { p = document.createElement("div"); p.id = "gPop"; p.className = "sc-gpop"; p.setAttribute("role", "dialog"); document.body.appendChild(p); }
+  p.setAttribute("aria-label", "Geiger breakdown for " + t);
+  p.innerHTML = gpopHTML(t);
+  p.hidden = false; p.style.visibility = "hidden"; p.style.left = "0px"; p.style.top = "0px";
+  /* placed by the bar: under it when there is room, else above it; never past the window's edges. Measured in screen
+     pixels; the body is drawn at a zoom on wide screens (1.12 / 1.28 / 1.45), so left/top are written in its units. */
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  const r = anchor.getBoundingClientRect(), pr = p.getBoundingClientRect(), w = pr.width, h = pr.height;
+  const vw = window.innerWidth || document.documentElement.clientWidth, vh = window.innerHeight || document.documentElement.clientHeight;
+  const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, vw - w - 8));
+  const below = r.bottom + 6 + h <= vh - 8;
+  const top = below ? r.bottom + 6 : Math.max(8, r.top - 6 - h);
+  p.style.left = (left / z).toFixed(1) + "px"; p.style.top = (top / z).toFixed(1) + "px";
+  p.style.setProperty("--gp-ox", ((r.left + r.width / 2 - left) / z).toFixed(1) + "px");
+  p.style.setProperty("--gp-oy", below ? "0" : "100%");
+  p.style.visibility = "";
+  p.classList.remove("is-in"); void p.offsetWidth; p.classList.add("is-in");
+  anchor.setAttribute("aria-expanded", "true");
+  GPOP_T = t; GPOP_ANCHOR = anchor;
+}
+if (typeof document !== "undefined" && document.addEventListener) {
+  /* Esc closes the breakdown and nothing else: it runs first (capture, on the window) and keeps the key from the page's
+     other Esc handlers, so an open ⛶ full screen or company view stays as it was */
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !GPOP_T) return;
+    e.preventDefault(); e.stopImmediatePropagation(); gpopClose(true);
+  }, true);
+  /* a click anywhere outside the overlay (and not on a Geiger bar, which opens or moves it) closes it */
+  document.addEventListener("click", (e) => {
+    if (!GPOP_T) return;
+    const tg = e.target;
+    if (tg && tg.closest && tg.closest("[data-gpop-close]")) { e.preventDefault(); gpopClose(true); return; }
+    if (tg && tg.closest && tg.closest("#gPop [data-act=\"huopen\"]")) { gpopClose(false); return; }   // the history panel opens; the overlay steps away
+    if (tg && tg.closest && (tg.closest("#gPop") || tg.closest('[data-act="gpop"]'))) return;
+    gpopClose(false);
+  }, true);
+  /* it is fixed to the window, so a scroll or a resize would leave it beside the wrong row: it closes instead */
+  document.addEventListener("scroll", (e) => { if (GPOP_T && !(e.target && e.target.id === "gPop")) gpopClose(false); }, true);
+  window.addEventListener("resize", () => { if (GPOP_T) gpopClose(false); });
 }
 /* Re-sort explicitly (header click) — recompute + store the frozen order, then repaint. */
 function sortBoardBy(key) {
@@ -7417,7 +7578,10 @@ function boardRowsHTML() {
       '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
-      (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) +
+      /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
+      '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+        ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
+        (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) + "</span>" +
       (d.rv == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
@@ -7649,26 +7813,20 @@ function cohortCompareSpan(list) {
    The two disagreeing is not noise, it is the most informative state on the board:
      strong trend + weak momentum  -> a pullback inside an uptrend, not a top
      weak trend  + strong momentum -> turning up before the structure confirms */
-/* ============================================================================
-   29 SEP · THE BOARD'S TWO COLUMN SETS (P2-HUB-FIXES item 4 — a proposal, built behind a switch, OFF by default).
-   Alan, 28 Sep: "agree a non-full-screen column set (keep market cap and % change; revenue can go; READ as an icon;
-   spot trend vs momentum divergence); columns can grow in full screen … give the Geiger its numeric value".
-   v2 · BESIDE THE LEFT PANEL (11 columns): ⊙★♥ · TICKER · LAST · CHG · F P/E · MKT CAP · RSI · READ (icon, and ◆ when
-     trend and momentum disagree) · GEIGER (bar + its number) · RVOL · MKT. REVENUE, TREND and MOM step out.
-   v2 · FULL SCREEN (⛶, 14 columns): everything, READ in words, TREND and MOM numbers back, the Geiger number kept,
-     numbers right-aligned in tracks sized to what they hold.
-   Nothing is computed differently: the icon and the ◆ are scinRead()'s own answer (the same rule as the compare strip).
-   TO TRY IT: open the Hub with ?board=v2 (remembered on this device); ?board=v1 goes back. */
-const READ_ICON = { "aligned bull": "⇈", "constructive": "↗", "stalling": "→", "pullback": "⤵", "turning up": "⤴",
-  "mom leads": "↑", "mixed": "↔", "broken": "↘", "aligned bear": "⇊" };
-const BOARD_V2_ON = (function () {
-  try {
-    const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("board") : null;
-    if (q === "v2") lsSet("sc_board_v2", "1"); else if (q === "v1") try { localStorage.removeItem("sc_board_v2"); } catch (_) {}
-    return lsGet("sc_board_v2") === "1";
-  } catch (_) { return false; }
-})();
-if (BOARD_V2_ON && typeof document !== "undefined" && document.body) document.body.classList.add("brd-v2");
+/* 1 OCT (H4) — ONE BOARD. The 29 Sep ?board=v2 column set (READ as an icon) is folded away: Alan chose the wide Geiger
+   with the breakdown on click instead of an icon. A device that had tried v2 forgets it here. */
+try { if (typeof localStorage !== "undefined") localStorage.removeItem("sc_board_v2"); } catch (_) {}
+/* the read in one plain line, for the Geiger breakdown — the same words scinRead() returns, said as a sentence */
+const READ_LINE = { "aligned bull": "trend and momentum both pointing up",
+  "aligned bear": "trend and momentum both pointing down",
+  "pullback": "the uptrend holds; the fast frames have rolled over",
+  "turning up": "momentum is turning up before the trend confirms",
+  "mom leads": "momentum is strong while the trend is still flat",
+  "stalling": "the uptrend holds; momentum has gone flat",
+  "constructive": "trend up, momentum not against it",
+  "broken": "trend down, momentum not helping",
+  "mixed": "trend and momentum do not agree on a direction",
+  "trend only": "momentum has no history for this day" };
 function scinRead(T, M) {
   if (T == null || !isFinite(T)) return { txt: "—", col: "var(--mute)", div: false };
   if (M == null || !isFinite(M)) return { txt: "trend only", col: "var(--dimmer,#5a6270)", div: false };
@@ -10127,6 +10285,26 @@ function scShortName(name) {
   while (s && s !== prev) { prev = s; s = s.replace(tail, "").trim(); }
   return s || String(name || "");
 }
+/* H4 (1 Oct) — THE HEADER TICKER'S DAY CHANGE. Alan, 1 Oct 08:40: "the ticker we select takes over the Scintilla header
+   logo… it doesn't have the daily percentage change. It doesn't have the color formatting… the color and the percentage
+   price change is extremely important." In the header it reads +0.55% green on an up day and −0.55% red (a minus sign,
+   not brackets) on a down day. A class carries the colour, so no later write can leave a down day painted green: the
+   unchanged-price path of patch() used to rewrite the text without touching the colour. Elsewhere (the old full-width
+   bar) the change keeps the board's own fmtC, byte for byte. */
+function fmtChgHead(c) { return (c >= 0 ? "+" : "\u2212") + Math.abs(c).toFixed(2) + "%"; }
+function identDirClass(node, c) {
+  if (!node || !node.classList || !(node.closest && node.closest("#headIdent"))) return;
+  const ok = c != null && isFinite(c);
+  node.classList.toggle("is-up", ok && c >= 0); node.classList.toggle("is-dn", ok && c < 0);
+}
+function identChgSet(node, c, glowUp) {
+  if (!node) return;
+  const head = !!(node.closest && node.closest("#headIdent"));
+  const txt = c == null || !isFinite(c) ? "\u2014" : head ? fmtChgHead(c) : fmtC(c);
+  if (glowUp === true || glowUp === false) scScintSet(node, txt, glowUp); else scSetText(node, txt);
+  if (node.style) node.style.color = c == null || !isFinite(c) ? "var(--ink)" : c >= 0 ? "var(--bull)" : "var(--bear)";
+  identDirClass(node, c);
+}
 function leftIdentHTML(data, opts) {
   const chg = data.chg, live = S.state === "live";
   /* 27 Sep — the SAME ident, drawn in the header title (opts.head): no queue (the tape carries it now), no LIVE badge
@@ -10143,8 +10321,8 @@ function leftIdentHTML(data, opts) {
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     (head ? '<span class="sc-cname" title="' + esc(data.name || "") + '">' + esc(scShortName(data.name)) + "</span>"
           : '<span class="sc-cname">' + esc(data.name || "") + "</span>") +
-    '<span class="sc-cpx" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
-    '<span class="sc-cchg" id="coChg" style="color:' + col + '">' + (chg != null ? fmtC(chg) : "") + "</span>" +
+    '<span class="sc-cpx' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
+    '<span class="sc-cchg' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coChg" style="color:' + col + '">' + (chg != null ? (head ? fmtChgHead(chg) : fmtC(chg)) : "") + "</span>" +
     '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
     /* M52 — the name's usual day, read from the store, right where its price and change are. It is
        the answer to "is this move big?" and it belongs beside the move, not three rooms away. */
@@ -22367,6 +22545,9 @@ document.addEventListener("click", (e) => {
       sortBoardBy(a.dataset.key);   // FIX 3 (R36) — the ONLY place the board order is recomputed
       break;
     }
+    case "gpop": {   // H4 — the Geiger bar opens its breakdown; it never opens the company page
+      e.preventDefault(); e.stopPropagation(); gpopOpen(a); break;
+    }
     case "star":       e.preventDefault(); e.stopPropagation(); toggleFav(a.dataset.t); break;   // FIX F — never opens the company page
     case "lst":        e.preventDefault(); e.stopPropagation(); toggleList(a.dataset.l, a.dataset.t); break;   // H-FRONT — ★ FAVORITES / ◎ RADAR, never opens the company page
     case "corange": {  // H-FRONT — the timeframe row changes ONLY the embedded pane's range, remembered per browser
@@ -24392,7 +24573,8 @@ function patch(t, price, src) {
     if (typeof LEFT_T !== "undefined" && LEFT_T === t) {
       if (S.coData && S.coData.t === t) S.coData.chg = sameChange;
       const sameCompany = el("coChg"), samePrev = el("coPrev");
-      scSetText(sameCompany, sameChange == null ? "—" : fmtC(sameChange));
+      if (typeof identChgSet === "function") { identChgSet(sameCompany, sameChange); identDirClass(el("coPx"), sameChange); }   /* H4 — text AND colour */
+      else scSetText(sameCompany, sameChange == null ? "—" : fmtC(sameChange));
       scSetText(samePrev, pc0 && isFinite(pc0) ? "Prev " + fmtPxIdent(pc0) : "");
     }
     return;
@@ -24459,8 +24641,8 @@ function patch(t, price, src) {
     const col = cc != null ? (cc >= 0 ? "var(--bull)" : "var(--bear)") : "var(--ink)";
     const px = el("coPx"), ch = el("coChg"), pc = el("coPrev");
     if (el("cv")) cvRepaint();   // D2 — the company line and the six numbers follow the same tick
-    if (px) { scScintSet(px, fmtPxIdent(price), prev != null && +prev !== price ? price > +prev : null); px.style.color = col; }
-    if (ch) { scScintSet(ch, cc != null ? fmtC(cc) : "—", (prevC != null && cc != null && cc !== prevC) ? cc > prevC : null); ch.style.color = col; }
+    if (px) { scScintSet(px, fmtPxIdent(price), prev != null && +prev !== price ? price > +prev : null); px.style.color = col; identDirClass(px, cc); }
+    if (ch) identChgSet(ch, cc, (prevC != null && cc != null && cc !== prevC) ? cc > prevC : null);   /* H4 — the header's −/+ and its colour */
     if (pc) {
       const base = num(prevClose[t]);
       pc.textContent = base != null && base !== 0 ? "Prev " + fmtPxIdent(base) : "";
@@ -27526,6 +27708,7 @@ body.gwx-motion .gwx-pct{opacity:1}
      a dash is kept for a ticker the completed read - or the rewound day - really has nothing for. */
   var TM_LOADED=false;
   window.SCIN_TM = TM;
+  var SHOWN={}; window.SCIN_TM_SHOWN = SHOWN;   /* H4 — the trend/momentum each row is showing right now (see paintTM) */
   /* the family weights the live Geiger blends with - read once so a rewound composite is
      mixed exactly as refresh_geiger mixes the live one */
   api("operator_weights?select=key,weight&dim=eq.family&enabled=is.true").then(function(rows){
@@ -27534,8 +27717,8 @@ body.gwx-motion .gwx-pct{opacity:1}
       if(String(r.key).toUpperCase()==='TREND') w.trend=+r.weight;
       if(String(r.key).toUpperCase()==='MOMENTUM') w.mom=+r.weight;
     });
-    GWX_W=w;
-  }).catch(function(){ GWX_W={trend:0.5,mom:0.5}; });
+    GWX_W=w; window.SCIN_FAMW=w;   /* H4 — the Geiger breakdown says the blend from these */
+  }).catch(function(){ GWX_W={trend:0.5,mom:0.5}; window.SCIN_FAMW=GWX_W; });
   function fmt2(v){ return (v>=0?"+":"") + v.toFixed(2); }
   function addCols(){
     if(typeof BOARD_COLS==="undefined") return;
@@ -27611,41 +27794,39 @@ body.gwx-motion .gwx-pct{opacity:1}
          for ever once the data arrived. */
       var ex=r.querySelectorAll(".gwx-tm");
       var tr,mo,fresh=false;
-      if(ex.length>=2){ tr=ex[0]; mo=ex[1]; mo.innerHTML=""; }
+      if(ex.length>=2){ tr=ex[0]; mo=ex[1]; }
       else { tr=document.createElement("span"); mo=document.createElement("span"); fresh=true; }
       tr.className="gwx-tm"; mo.className="gwx-tm";
+      /* H4 (1 Oct) — what this row SHOWS is recorded, so a TREND / MOMENTUM re-rank and the Geiger breakdown read the very
+         numbers on screen (a rewound day included), never a second copy */
+      SHOWN[t] = (d && d.tr!=null) ? {tr:d.tr, mo:(d.mo==null?null:d.mo)} : null;
       /* ★ FLASH FIX. Alan sent a screen recording; differencing the frames showed a
          baseline ~1% change (the ticker tape, normal) with 8.3% SPIKES exactly one second
          apart, in the band where the board rows sit. That was this function: it rewrote
          every cell on every row every 1100ms whether or not anything had changed, and each
          write repaints. Now it computes the strings first and returns early if they match
          what is already on screen. */
-      var wantT, wantM, wantR;
       var NONE=(TM_LOADED||ASOF)?"—":"…";
-      if(!d||d.tr==null){ wantT=NONE; wantM=NONE; }
-      else if(d.mo==null){ wantT=fmt2(d.tr); wantM="—"; }
-      else { wantT=fmt2(d.tr); wantM=fmt2(d.mo); }
-      if(!fresh && tr.textContent===wantT && mo.firstChild && mo.firstChild.nodeValue===wantM){
+      var wantT=(!d||d.tr==null)?NONE:fmt2(d.tr), wantM=(!d||d.tr==null)?NONE:(d.mo==null?"—":fmt2(d.mo));
+      var wantR=(!d||d.tr==null)?NONE:(d.mo==null?"trend only":scinRead(d.tr,d.mo).txt);
+      if(!fresh && tr.__k===wantT && mo.__k===wantM && r.__rk===wantR){
         prevPainted[t]=1; return;          // nothing changed for this row - do not touch it
       }
-      if(!d||d.tr==null){ tr.textContent=NONE; mo.textContent=NONE;
-        tr.style.color="var(--mute)"; mo.style.color="var(--mute)"; }
-      else if(d.mo==null){                       // rewound: trend is real, momentum has no history
-        tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
-        mo.textContent="—"; mo.style.color="var(--mute)"; mo.title="momentum has no history yet";
+      /* H4 — TREND and MOMENTUM are each drawn as a plain fill bar on the fixed -1..+1 scale, centre = 0, with the number
+         beside it (full screen shows them; beside the left panel the Geiger has their width). No glow: that is the Geiger's. */
+      function tmCell(cell, v, want, dashTitle){
+        cell.__k=want;
+        if(v==null){ cell.innerHTML='<span class="gwx-tmb"></span><span class="gwx-tmn" style="color:var(--mute)">'+want+'</span>';
+          if(dashTitle) cell.title=dashTitle; else cell.removeAttribute("title"); return; }
+        var col=v>=0?"var(--bull)":"var(--bear)", w=(Math.min(Math.abs(v),1)*50).toFixed(1)+"%";
+        cell.innerHTML='<span class="gwx-tmb"><i style="'+(v>=0?"left":"right")+':50%;width:'+w+';background:'+col+'"></i></span>'+
+          '<span class="gwx-tmn" style="color:'+col+'">'+want+'</span>';
+        cell.removeAttribute("title");
       }
-      else{
-        tr.textContent=fmt2(d.tr); tr.style.color=d.tr>=0?"var(--bull)":"var(--bear)";
-        mo.textContent=fmt2(d.mo); mo.style.color=d.mo>=0?"var(--bull)":"var(--bear)";
-        /* ◆ = trend and momentum disagree by more than 0.60, or point opposite ways.
-           A slow uptrend with a fast pullback lights up; tech, both engines running,
-           does not. */
-        if(Math.abs(d.tr-d.mo)>0.60 || (d.tr>0)!==(d.mo>0)){
-          var m=document.createElement("span"); m.className="gwx-div"; m.textContent="◆";
-          m.title="trend and momentum disagree: "+fmt2(d.tr)+" vs "+fmt2(d.mo);
-          mo.appendChild(m);
-        }
-      }
+      if(!d||d.tr==null){ tmCell(tr,null,NONE); tmCell(mo,null,NONE); }
+      else if(d.mo==null){ tmCell(tr,d.tr,wantT); tmCell(mo,null,"—","momentum has no history yet"); }   // rewound: trend is real, momentum has no history
+      else { tmCell(tr,d.tr,wantT); tmCell(mo,d.mo,wantM); }
+      r.__rk=wantR;
       /* THE READ — the shape in words. Trend is a SLOW, daily-locked measure; momentum
          is FAST (Alan's equalizer puts its weight on 6h/12h/1D). So the two disagreeing
          is not noise, it is the most informative state on the board:
@@ -27654,21 +27835,20 @@ body.gwx-motion .gwx-pct{opacity:1}
          Both agreeing is the quiet case. */
       var rd=r.querySelector(".gwx-read");
       if(!rd){ rd=document.createElement("span"); rd.className="gwx-read"; }
-      if(!d||d.tr==null){ rd.textContent=NONE; rd.style.color="var(--mute)"; rd.setAttribute("data-icon", NONE); rd.removeAttribute("data-div"); }
-      else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)"; rd.setAttribute("data-icon","↕"); rd.removeAttribute("data-div");
+      if(!d||d.tr==null){ rd.textContent=NONE; rd.style.color="var(--mute)"; rd.removeAttribute("title"); }
+      else if(d.mo==null){ rd.textContent="trend only"; rd.style.color="var(--dimmer)";
         rd.title="rewound - momentum has no history to compare against"; }
       else {
         /* ONE definition, shared with the compare strip — see scinRead(). The word ladder
            used to live here and only here, which is exactly why the strip never mirrored
-           the board. */
+           the board. ◆ = trend and momentum disagree by more than 0.60, or point opposite ways. */
         var T=d.tr, M=d.mo, R=scinRead(T,M);
         rd.textContent=R.txt; rd.style.color=R.col;
-        rd.setAttribute("data-icon", READ_ICON[R.txt]||"·");                 /* 29 Sep — the v2 column set draws READ as this icon */
-        if(R.div) rd.setAttribute("data-div","1"); else rd.removeAttribute("data-div");
-        rd.title="trend "+fmt2(T)+" (slow, daily-locked) · momentum "+fmt2(M)+" (fast, 6h/12h/1D)";
+        if(R.div){ var m=document.createElement("span"); m.className="gwx-div"; m.textContent="◆"; rd.appendChild(m); }
+        rd.title="trend "+fmt2(T)+" · momentum "+fmt2(M)+(R.div?" · ◆ the two disagree":"")+" — "+(READ_LINE[R.txt]||"");
       }
       if(fresh){
-        var g=r.querySelector(".sc-gmini")||r.children[7];
+        var g=r.querySelector(".sc-gcell")||r.children[7];
         if(g&&g.parentNode===r){ r.insertBefore(tr,g); r.insertBefore(mo,g); r.insertBefore(rd,g); }
       }
     });
@@ -28263,7 +28443,8 @@ body.gwx-motion .gwx-pct{opacity:1}
     var cell = e.target.closest && e.target.closest(".sc-rsi");
     if (cell && cell.id && cell.id.indexOf("lr_") === 0) { e.preventDefault(); e.stopPropagation(); open(cell.id.slice(3)); return; }
     var gm = e.target.closest && e.target.closest(".sc-gmini");
-    var row = gm && gm.closest("[data-act='row']");
+    /* H4 (1 Oct) — a board row's Geiger bar now opens its breakdown (Alan's call); this panel is one link away inside it */
+    var row = gm && !gm.closest(".sc-gcell") && gm.closest("[data-act='row']");
     if (row && row.getAttribute("data-t")) { e.preventDefault(); e.stopPropagation(); open(row.getAttribute("data-t")); }
   }, true);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
