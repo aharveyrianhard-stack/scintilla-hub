@@ -59,7 +59,7 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
     CONSTS + fn("coRange") + fn("coChartSrc") + fn("cvUpdateInPlace").replace(/LEFT_T/g, "env.LEFT_T") + "\nreturn cvUpdateInPlace;")(
     env, (id) => dom[id] || null, (k) => store[k], () => {}, () => {}, () => "", () => "");
   assert.equal(run(), true);
-  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=1&rsi=1");
+  assert.equal(frame.src, "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1D&clouds=1&rsi=1&bubble=30m%3A3");
   assert.equal(frame.sets, 1);
   run(); run();
   assert.equal(frame.sets, 1, "same name, same timeframe: the frame is not touched (no reload)");
@@ -67,7 +67,7 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
   assert.equal(frame.sets, 2); assert.match(frame.src, /t=NVDA&range=1D/);
   assert.equal(env.holds, 2, "H2 — the sparkline reads step aside each time the frame moves, and only then");
   store["hub.chart.range"] = "4h"; run();
-  assert.equal(frame.sets, 3); assert.match(frame.src, /range=4h&clouds=1&rsi=1$/);
+  assert.equal(frame.sets, 3); assert.match(frame.src, /range=4h&clouds=1&rsi=1&bubble=1d%3A60$/);
   assert.match(fn("renderLeftPanel"), /const inPlace = !LEFT_HEAT && LEFT_STATE === "PINNED" && LEFT_T && cvUpdateInPlace\(\);\n  if \(!inPlace\) lp\.innerHTML = leftPanelInnerHTML\(\);/);
   assert.match(fn("loadLeft"), /else cvRepaint\(\);/, "the payload landing on GEIGER or FUNDAMENTALS repaints the line, never the frame");
 });
@@ -77,9 +77,9 @@ test("a repaint of a pinned view patches in place: the frame element is kept and
 test("R3: the chart asks the Station for the Lab's six-line RSI fan (rsi=1) at every timeframe; clouds always on; the Hub pane, never bare=1", () => {
   assert.match(page, /^const CO_CHART_RSI = true;/m);
   const src = new Function(CONSTS + fn("coRange") + fn("coChartSrc") + "\nreturn coChartSrc;")();
-  for (const r of ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1D", "3D", "1W"])   /* SWITCH-ON — all eleven Station timeframes */
-    assert.equal(src("mu", r, true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=" + r + "&clouds=1&rsi=1");
-  assert.match(src("MU", "4h", "match"), /rsi=4h$/, "one line of the chart's own timeframe can still be asked for");
+  for (const [r, lens] of Object.entries({"1h": "1d%3A60", "4h": "1d%3A60", "1D": "30m%3A3", "3D": "4h%3A12", "1W": "1d%3A20"}))   /* H3 — five timeframes, each with the Station's own context lens */
+    assert.equal(src("mu", r, true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=" + r + "&clouds=1&rsi=1&bubble=" + lens);
+  assert.match(src("MU", "4h", "match"), /rsi=4h&bubble=1d%3A60$/, "one line of the chart's own timeframe can still be asked for");
   assert.doesNotMatch(src("MU", "1D", false), /rsi/);
   assert.match(fn("cvChartHTML"), /coChartSrc\(t, lsGet\(CO_RANGE_KEY\), CO_CHART_RSI\)/, "the view's frame uses the setting");
 });

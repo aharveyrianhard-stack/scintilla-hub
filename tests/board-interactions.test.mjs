@@ -37,9 +37,10 @@ test("relative volume older than its session is shown absent with its source dat
   assert.equal(scRvolCurrent(new Date(Date.now() - 3600e3).toISOString()), true);
   assert.equal(scRvolCurrent(null), false);
   const stale = volCellHTML(null, "2026-07-06T18:03:29+00:00");
-  assert.match(stale, />—</); assert.match(stale, /not current — source last written 2026-07-06/);
+  /* H3 (1 Oct) — "no reading yet" rather than a bare dash: a muted … with the words and the source date in the tooltip */
+  assert.match(stale, />…</); assert.match(stale, /no reading yet — the newest relative-volume row for this name was written 2026-07-06/);
   assert.match(volCellHTML(0.9, new Date().toISOString()), /0\.9×/);
-  assert.match(page, /if \(bv && !scRvolCurrent\(bv\.updated_ts\)\) return null;/, "board column gated");
+  assert.match(page, /if \(!bv \|\| !scRvolCurrent\(bv\.updated_ts\)\) return null;/, "board column gated (H3: no row is no reading too)");
   assert.match(page, /scRvolCurrent\(bvol\[0\]\.updated_ts\) && num\(bvol\[0\]\.rvol_at_time\)/, "GEIGER-tab rings gated");
   assert.match(page, /board_volume\?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts/);
 });
