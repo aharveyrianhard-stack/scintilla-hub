@@ -181,6 +181,10 @@ test("TREE is a master tab, after STATION, opening the tree map in this tab (its
 });
 
 /* ── RVOL ───────────────────────────────────────────────────────────────────────────────────────── */
+/* H5 (1 Oct) superseded three H3 details on purpose (BRIEF-20261001-H5-RVOL-BATTERY): the number is rvol_at_time only and the
+   battery is session_rvol (no folding of one into the other), a stale row draws the EMPTY battery and a dash (not "…"), and
+   the dots are back on the board. What H3 established still holds and is still asserted here: a stale or missing row is no
+   reading, the inflated live/avg fallback is gone, the words carry the source date, the table is read on every pull. */
 test("RVOL: a current board_volume row shows its at-this-minute reading; a stale or missing one says no reading yet (no inflated fallback)", () => {
   const fnSrc = (name) => page.match(new RegExp("function " + name + "\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n"))[0];
   const K = new Function("esc", page.match(/^const RVOL_MAX_AGE_MS = [^\n]*/m)[0] + "\n" + fnSrc("rvolNoteHTML") + fnSrc("scRvolCurrent") +
@@ -192,17 +196,17 @@ test("RVOL: a current board_volume row shows its at-this-minute reading; a stale
     { MU: bv }, { ticker: "MU" }, (v) => (v == null ? null : Number.isFinite(+v) ? +v : null), K.scRvolCurrent);
   const now = new Date().toISOString();
   assert.equal(pick({ rvol_at_time: 1.7, session_rvol: 0.4, updated_ts: now }), 1.7, "at this minute first");
-  assert.equal(pick({ rvol_at_time: null, session_rvol: 0.4, updated_ts: now }), 0.4, "the session ratio where there is no at-time value");
+  assert.equal(pick({ rvol_at_time: null, session_rvol: 0.4, updated_ts: now }), null, "H5: the number is the at-time value only (the session ratio is the battery)");
   assert.equal(pick({ rvol_at_time: 1.7, session_rvol: 0.4, updated_ts: "2026-07-06T18:03:29Z" }), null, "a 6 Jul row is no reading");
   assert.equal(pick(undefined), null);
-  assert.match(K.volCellHTML(null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">…<\/span>/);
-  assert.match(K.volCellHTML(null, null), /title="no reading yet — no relative-volume row for this name yet">…<\/span>/);
-  assert.match(K.volCellHTML(1.7, now), /1\.7×<\/span>$/);
+  assert.match(K.volCellHTML(null, null, "2026-07-06T18:03:29Z"), /title="no reading yet — the newest relative-volume row for this name was written 2026-07-06, not this session">…<\/span>/);
+  assert.match(K.volCellHTML(null, null, null), /title="no reading yet — no relative-volume row for this name yet">…<\/span>/);
+  assert.match(K.volCellHTML(1.7, 0.4, now), /1\.7×<\/span><\/span>$/);
   assert.match(K.rvolNoteHTML([{ t: "A", rv: null }, { t: "B", rv: null }]), />RVOL no reading yet<\/span>$/);
   assert.match(K.rvolNoteHTML([{ t: "A", rv: 1.2 }, { t: "B", rv: null }]), />RVOL 1 of 2 read<\/span>$/);
   assert.equal(K.rvolNoteHTML([{ t: "A", rv: 1.2 }]), "", "all read: nothing to say");
   assert.match(page, /scOpt\('board_volume',\s+pg\("board_volume\?select=ticker,rvol_at_time,cum_rvol,session_rvol,updated_ts"\)/, "read on every board pull");
-  assert.match(page, /\.sc-board__row \.sc-vol \.sc-vol__dots\{display:none\}/, "the number is never cut by the battery in a 29 px cell");
+  assert.doesNotMatch(page, /\.sc-board__row \.sc-vol \.sc-vol__dots\{display:none\}/, "H5: the battery is back on the board (the track now has the room)");
 });
 
 /* ── speed ──────────────────────────────────────────────────────────────────────────────────────── */
