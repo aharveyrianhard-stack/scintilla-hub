@@ -211,7 +211,7 @@ test("LIKED list (review fix): the order holds still between explicit sorts — 
   assert.deepEqual(m.cvRailRows().map((r) => r.t), ["VIX", "E", "D", "B"], "an explicit click re-sorts");
   ls["hub.company.railsort"] = "GEIGER";
   assert.equal(m.cvRailRows().length, 4, "switching the sort (or the cohort, or a search) takes a fresh order");
-  assert.match(page, /case "cvrailsort": \{[\s\S]{0,260}cvRailFreeze\(\);[\s\S]{0,120}cvRailRepaint\(\);/);
+  assert.match(page, /case "cvrailsort": \{[\s\S]{0,260}cvRailFreeze\(\);[\s\S]{0,120}cvRailRepaint\(true\);/);   /* H2 (30 Sep) — a re-sort also brings the open name into view */
   assert.match(page, /if \(CO_EXPANDED\) cvRailFreeze\(\);/);
   assert.doesNotMatch(fn("cvRailRepaint"), /cvRailFreeze/, "a repaint (every tick) never re-sorts");
 });

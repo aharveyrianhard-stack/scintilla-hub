@@ -49,7 +49,7 @@ test("a company opens on the tab this browser last used (GEIGER the first time);
 function chartKit(stored) {
   const store = { "hub.chart.range": stored };
   /* H2 — the tab also asks (once) whether the Station knows ?bare=hub and schedules its "last bar" stamp: stubbed here */
-  return new Function("esc", "lsGet", "coPaneModeProbe", "coChartStamp", "CO_HUB_PANE", "setTimeout", FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + fn("coChartTabHTML") +
+  return new Function("esc", "lsGet", "coPaneModeProbe", "coChartStamp", "CO_HUB_PANE", "setTimeout", "const scChartFirstHold = () => {};   /* H2 — the sparkline pacer's hold: stubbed */\n" + FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + fn("coChartTabHTML") +
     "\nreturn { coRange, coChartSrc, coChartTabHTML };")(esc, (k) => (k in store ? store[k] : null), () => {}, () => {}, false, () => {});
 }
 test("the CHART tab is the Station chart pane, with the Station's eleven timeframes (SWITCH-ON) and the remembered range", () => {
@@ -79,7 +79,7 @@ test("clicking a timeframe writes ONLY the iframe's src and the browser's memory
   btns.forEach((b) => { b.classList.o = b; });
   const saved = {};
   const run = new Function("a", "e", "el", "lsSet", "document", "LEFT_T", "esc", "coChartStamp",
-    FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + "\nswitch (\"corange\") {\n" + clickCase("corange") + "}");
+    "const scChartFirstHold = () => {};   /* H2 — the sparkline pacer's hold: stubbed */\n" + FRONT_CONSTS + fn("coRange") + fn("coChartSrc") + "\nswitch (\"corange\") {\n" + clickCase("corange") + "}");
   const e = { stopped: false, preventDefault() {}, stopPropagation() { this.stopped = true; } };
   run({ dataset: { r: "3D" } }, e, (id) => (id === "coChartFrame" ? frame : null), (k, v) => { saved[k] = v; },
     { querySelectorAll: () => btns }, "MU", esc, () => {});

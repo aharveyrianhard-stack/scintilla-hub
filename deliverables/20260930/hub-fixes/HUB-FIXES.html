@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub fixes · 30 Sep</title>
+<style>
+:root{--bg:#0A0A0C;--panel:#121216;--line:#2B2B31;--ink:#C9C9CE;--ink2:#A8A8AE;--dim:#8A8A92;--up:#2BD49A;--dn:#E0506A;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:28px 16px 80px}
+h1{font:600 20px var(--mono);letter-spacing:.08em;margin:0 0 4px;color:#CFCFD2}
+h2{font:600 15px var(--mono);letter-spacing:.08em;margin:40px 0 8px;padding-top:18px;border-top:.5px solid var(--line);color:#CFCFD2}
+h3{font:600 12px var(--mono);letter-spacing:.1em;margin:22px 0 6px;color:var(--ink2);text-transform:uppercase}
+p,li{max-width:78ch}
+.sub{color:var(--dim);font:12px var(--mono);letter-spacing:.04em}
+.quote{border-left:2px solid var(--line);padding:4px 12px;color:var(--ink2);font-style:italic;margin:10px 0}
+.box{background:var(--panel);border:.5px solid var(--line);border-radius:3px;padding:12px 14px;margin:12px 0}
+table{border-collapse:collapse;font:12px var(--mono);font-variant-numeric:tabular-nums;margin:10px 0;width:100%;max-width:900px}
+th,td{border-bottom:.5px solid var(--line);padding:6px 8px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:500;letter-spacing:.06em}
+.up{color:var(--up)} .dn{color:var(--dn)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.pair figure,.one{margin:0}
+figure img{display:block;width:100%;height:auto;border:.5px solid var(--line);border-radius:2px;background:#000}
+figcaption{font:12px var(--mono);color:var(--dim);margin-top:6px;line-height:1.5}
+.narrow{max-width:390px}
+.pair.phone{grid-template-columns:repeat(2,minmax(0,390px))}
+code{font:12px var(--mono);color:var(--ink2);background:#18181C;padding:1px 4px;border-radius:2px}
+.tscroll{overflow-x:auto}
+@media (max-width:700px){.pair,.pair.phone{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>HUB FIXES · 30 SEP</h1>
+<div class="sub">branch hub/h2-fixes-20260930 · from the live Hub 9b999a4 · the Station is untouched (75e653c) · not deployed</div>
+
+<p>Your three notes from this morning, and what changed for each. Everything below was measured in a hidden test browser on this Mac (never on your screen), with your real 128 liked names and live prices, between 10:55 and 11:35 ET.</p>
+
+<div class="box">
+<b>In one line each</b>
+<ol>
+<li><b>The LIKED list scrolls now.</b> It kept jumping back to the name you had open every time that name's price ticked (about every 1-3 s), so you could never get to the bottom. It now stays where you leave it. The page behind it no longer moves either.</li>
+<li><b>The RSI is the pink one and it is no longer cut off.</b> The Hub was already showing yesterday's pink RSI-only panel (it went live at 10:40), but it was squeezed into a 40-47 px strip on the normal dashboard, and in the expanded view its bottom half sat under the tapes at the bottom of the screen. Both are fixed.</li>
+<li><b>A clicked chart goes first.</b> The dashboard fires one small price-history read per name for the market map (about 590 on ALL). They used to go out 73 at once; they now go 12 at a time, and the moment you click a name they step aside until your chart has its price and clouds.</li>
+</ol>
+</div>
+
+<h2>1 · THE LIKED LIST IN THE EXPANDED VIEW</h2>
+<div class="quote">"this thing in the expanded view with the liked 128 has a weird scrolling thing it doesnt let me scroll well."</div>
+<h3>What was wrong</h3>
+<p>Every time the open name's price ticked, and every time the board refreshed, the list was redrawn and then scrolled back so that the open name was in view. If you had scrolled away from it, you were pulled back within 1-3 seconds. With the mouse wheel, a trackpad or a finger the list never reached its last name.</p>
+<p>Two smaller things made it worse. When the list hit its end, the leftover scroll moved the page behind it (70 px measured). And the expanded view was 49 px taller than the space it has at 1680 × 1050, so the last name and a half were hidden under the tapes and could only be reached by scrolling the page.</p>
+<h3>What changed</h3>
+<ul>
+<li>The list only brings the open name into view when the name <i>changes</i> (you click another, or use ↑/↓), when the expanded view opens, or when you press DAY % / GEIGER. A price tick or a board refresh no longer moves it.</li>
+<li>When the list reaches its end, the scroll stops there. It is not passed on to the page.</li>
+<li>The expanded view now fills exactly the room between the top and the tapes, whatever size the window is. It no longer uses a fixed height that ignored the desk zoom.</li>
+</ul>
+<h3>Proof (128 liked names, 1680 wide)</h3>
+<div class="tscroll"><table>
+<tr><th>how you scroll</th><th>before: furthest it got</th><th>before: then</th><th>after: furthest</th><th>after: then</th></tr>
+<tr><td>mouse wheel over the list</td><td>1,016-1,953 of 3,492 px</td><td class="dn">jumped back to the top in 1.3-1.8 s</td><td class="up">the last name (VIX)</td><td>stayed; wheel up returns to the top</td></tr>
+<tr><td>trackpad (many small steps)</td><td>408-1,083 px</td><td class="dn">jumped back in 1.3 s</td><td class="up">the last name</td><td>stayed; back to the top</td></tr>
+<tr><td>finger swipes</td><td>363-1,486 px</td><td class="dn">jumped back in 0.8-2.0 s</td><td class="up">the last name</td><td>stayed; back to the top</td></tr>
+<tr><td>left halfway, 60 s of live ticks</td><td>—</td><td class="dn">jumped back after ~1 s</td><td>—</td><td class="up">did not move in 60 s</td></tr>
+<tr><td>the page behind the list</td><td colspan="2" class="dn">moved 70 px when the list hit its end</td><td colspan="2" class="up">never moved (it has nothing to scroll now)</td></tr>
+<tr><td>phone (390): the list runs across the top</td><td>3,018 px</td><td class="dn">jumped back to the open name in &lt;3 s</td><td class="up">the last name (11,910 px)</td><td>stayed; swipe back returns to the start</td></tr>
+</table></div>
+<div class="pair">
+<figure><img src="shots/before-rail-1680.png" alt="before: the list is stuck part way down, the last names are not reachable"><figcaption>BEFORE · wheeled to the bottom, photographed 3 s later: the list has been pulled back up part way (NVTS … NOW), and the last names are out of reach under the tapes.</figcaption></figure>
+<figure><img src="shots/after-rail-1680.png" alt="after: the list at its last name, VIX, above the tapes"><figcaption>AFTER · same scroll, 3 s later: the list is at its last name (VIX), fully above the tapes. The chart's dates and the whole RSI panel are also visible.</figcaption></figure>
+</div>
+<div class="pair phone">
+<figure><img src="shots/before-rail-390.png" alt="before on the phone: the strip snapped back to MU"><figcaption>BEFORE · phone: swiped to the end, 3 s later the strip is back at MU (the open name).</figcaption></figure>
+<figure><img src="shots/after-rail-390.png" alt="after on the phone: the strip at its last name"><figcaption>AFTER · phone: the strip stays at the last names (REMX, SMR, KTOS, VIX).</figcaption></figure>
+</div>
+
+<h2>2 · THE RSI UNDER THE COMPANY CHART</h2>
+<div class="quote">"oscillators rsi is all like cropped and horrible doesnt match yesterdays rsi instructions the pink."</div>
+<h3>What was wrong</h3>
+<p>Your note came at 10:20, twenty minutes before the Station's new pink RSI-only panel went live (10:40). Since then the Hub already shows it: six pink lines (3H 4H 6H 8H 12H dotted, the daily solid), the slow pink cloud, the 30 and 70 lines, a fixed 0-100 scale and the <code>RSI D</code> tag. I checked the live Hub: it asks the Station for the full six-line version, not the old single line. So the remaining problem was room:</p>
+<ul>
+<li><b>Normal dashboard (not expanded):</b> the chart box was 207-229 px tall and the Station gives the RSI a quarter of it, so the RSI got 40-47 px. The 30 and 70 lines were 14-17 px apart, the "RSI 14" title sat on top of the 70 line, and the six lines were squashed into one pink smear.</li>
+<li><b>Expanded view:</b> the RSI had plenty of height, but the chart's bottom ran under the tapes (see item 1), so the lower half of the RSI and the dates were cut off.</li>
+</ul>
+<h3>What changed</h3>
+<ul>
+<li>On the normal dashboard the chart keeps at least 300 px. The RSI panel is now 72 px, a little more than the Station gives it on its own eight-chart wall (66 px). The 30 and 70 lines are 26 px apart, the title is clear of them, and the tag sits at its true value. The tabs underneath (GEIGER, FUNDAMENTALS …) start lower but are still on screen.</li>
+<li>The expanded view fits above the tapes (item 1), so its RSI (74-89 px, depending on how many tape rows are showing) is whole, dates included.</li>
+<li>Phone: already fine (98-105 px), and unchanged.</li>
+</ul>
+<div class="pair">
+<figure><img src="shots/live-rsi-1680-e0-chart.png" alt="live Hub today: the RSI is a thin pink strip"><figcaption>BEFORE · the live Hub today, normal dashboard, MU daily: the RSI is a 47 px strip and the six lines are a smear.</figcaption></figure>
+<figure><img src="shots/after-rsi-1680-e0-chart.png" alt="after: the RSI panel with six pink lines, cloud, 30 and 70, RSI D 59.7"><figcaption>AFTER · same view: six pink lines (dotted fast, solid daily), the pink cloud, solid 30/70, dotted 50, "RSI D 59.7" at its value.</figcaption></figure>
+</div>
+<div class="pair">
+<figure><img src="shots/before-rsi-1680-e1.png" alt="before, expanded: the RSI bottom cut off under the tapes"><figcaption>BEFORE · expanded: the RSI's lower part and the dates run under the MACRO tape.</figcaption></figure>
+<figure><img src="shots/after-rsi-1680-e1.png" alt="after, expanded: the whole chart above the tapes"><figcaption>AFTER · expanded: the whole chart, RSI and dates included, ends above the tapes.</figcaption></figure>
+</div>
+<div class="pair">
+<figure><img src="shots/before-rsi-1680-e0.png" alt="before, normal dashboard"><figcaption>BEFORE · the whole page, normal dashboard.</figcaption></figure>
+<figure><img src="shots/after-rsi-1680-e0.png" alt="after, normal dashboard"><figcaption>AFTER · the whole page: the chart is taller, the tabs start lower and are still visible.</figcaption></figure>
+</div>
+<div class="pair phone">
+<figure><img src="shots/live-rsi-390-e0-chart.png" alt="phone before"><figcaption>PHONE · before (live): already readable.</figcaption></figure>
+<figure><img src="shots/after-rsi-390-e0-chart.png" alt="phone after"><figcaption>PHONE · after: unchanged, nothing clipped.</figcaption></figure>
+</div>
+
+<h2>3 · A CLICKED TICKER'S CHART GOES FIRST</h2>
+<div class="quote">"charts on ticker selection in dashboard are very slow it showed data delayed for a while."</div>
+<h3>What was wrong</h3>
+<p>For the market map's colours, the dashboard reads a small piece of price history for every name on the board: 128 on LIKED, about 546-590 on ALL. They went out 73 at a time, as fast as they could. The chart server answers one request after another (lane P6 measured about 0.12 s of work each at 10:30). So a chart you clicked during that burst waited behind up to 114 of them. At 10:30 each of those reads took 1.3-1.7 s.</p>
+<h3>What changed</h3>
+<ul>
+<li>At most <b>12</b> of these reads are out at once.</li>
+<li>The moment a company chart is pointed at a name (a click, ↑/↓, a timeframe, CLOUDS), the ones already out are <b>cancelled</b>, and no new ones start. They resume 3 s after the chart's frame has loaded (8 s at the most). The cancelled ones go first when they resume, so nothing is lost.</li>
+<li>When the chart server offers one request for many names (<code>/sparklines</code>, lane P6, not live yet), the Hub uses it automatically: about 8 requests for all of ALL instead of about 590. If the server doesn't have it, the Hub notices once and goes on as above.</li>
+</ul>
+<h3>Measured, real network, 11:10-11:25 ET (market open)</h3>
+<p>Click NVDA at 0 s, 3 s and 15 s after the board's rows are on screen. Price = the chart's price line is drawn. Clouds = its moving-average clouds are drawn. Times in milliseconds after the click; a range covers the repeat runs.</p>
+<div class="tscroll"><table>
+<tr><th>board · click at</th><th>map reads in flight at the click</th><th>price · before</th><th>price · after</th><th>clouds · before</th><th>clouds · after</th></tr>
+<tr><td>ALL · 0 s</td><td>108-114 → 1</td><td>353-616</td><td>343-473</td><td class="dn">436-2,418</td><td>557-641</td></tr>
+<tr><td>ALL · 3 s</td><td>1-68 → 12</td><td>343-630</td><td>325-495</td><td>480-686</td><td>373-538</td></tr>
+<tr><td>ALL · 15 s</td><td>0 → 0</td><td>293-1,025</td><td>426-556</td><td>497-1,117</td><td>600-606</td></tr>
+<tr><td>LIKED · 0 s</td><td>73 → 1</td><td>415-797</td><td>308-383</td><td>501-1,051</td><td>473-602</td></tr>
+<tr><td>LIKED · 3 s</td><td>0-1 → 0-8</td><td>323-670</td><td>400-2,116*</td><td>753-872</td><td>654-2,199*</td></tr>
+<tr><td>LIKED · 15 s</td><td>0 → 0</td><td>305-401</td><td>410-447</td><td>483-514</td><td>494-656</td></tr>
+</table></div>
+<p class="sub">* one run where the server was slow for everything (its /universe read took 0.67 s with none of the map reads out); the repeat was 400 / 654. DATA DELAYED did not show in any run, before or after. 4 runs per cell before on ALL, 2 after; 2 each on LIKED.</p>
+<p><b>Honest reading:</b> at 11:10 the chart server was much quicker than at 10:30 (these reads took 0.3-0.75 s, not 1.3-1.7 s). So today's live numbers only show the edge of the problem: the slow tail (clouds up to 2.4 s) goes away, and the rest is within the noise. To show what happens under the 10:30 load, I also ran a <b>model</b>: the same real data, but every reply waits its turn in a single queue at 0.12 s per request (P6's measurement).</p>
+<div class="tscroll"><table>
+<tr><th>MODEL: 10:30-style server · ALL · click at</th><th>price · before</th><th>price · after</th><th>clouds · before</th><th>clouds · after</th></tr>
+<tr><td>0 s</td><td class="dn">28.7 s</td><td class="up">2.1 s</td><td class="dn">not within 30 s</td><td class="up">2.4 s</td></tr>
+<tr><td>3 s</td><td class="dn">25.9 s</td><td class="up">2.2 s</td><td class="dn">not within 30 s</td><td class="up">2.5 s</td></tr>
+<tr><td>15 s</td><td class="dn">22.2 s</td><td class="up">2.4 s</td><td class="dn">not within 30 s</td><td class="up">2.5 s</td></tr>
+</table></div>
+<p class="sub">The model is harsher than 10:30 was (its reads waited ~8 s; you measured 1.3-1.7 s), so read it as the worst case, not a forecast.</p>
+<h3>The cost</h3>
+<p>On a quiet server, the market map's 4-hour colours for all of ALL now finish about 13-14 s after the board appears, instead of 4-7 s. Until then the map shows its session colours and says so in its header, exactly as it already does while loading. On a busy server there is no cost, because the server was the limit anyway. Once P6's one-request read is live, this shrinks to about 8 requests.</p>
+
+<h2>WHERE EACH NUMBER COMES FROM</h2>
+<ul>
+<li>List positions, page movement, chart and panel sizes: read out of the page in a hidden Chrome at 1680 × 1050 and 390 × 844, using your real 128 liked names (read only). The RSI panel's size, lines, 30/70 positions and "RSI D" tag come from the Station pane's own record of what it drew.</li>
+<li>Chart timings: the page under test served as scintillahub.ai inside the hidden browser, so every chart and price read went to the live chart API from the real address. Times run from the click to the moment the Station pane had drawn its price and its clouds.</li>
+<li>For the list and RSI shots only, the chart API was reached through a small local relay that adds the scintillahub.ai address (the API accepts only that address). The timing runs did not use the relay.</li>
+<li>Nothing was written anywhere. The test browser blocked every write request. Your liked list, favourites and radar were only read.</li>
+</ul>
+
+<h2>WHAT COULD BE WRONG</h2>
+<ul>
+<li>The chart hold uses the frame's "loaded" moment plus 3 s. The Station pane tells the Hub nothing about when its price and clouds are drawn, so a very slow chart (more than 3 s after its frame loads) will share the server with the map reads again, 12 at a time.</li>
+<li>Cancelling a read stops the browser waiting for it. A server that already started working on one still finishes it, so up to 12 can still be ahead of your chart.</li>
+<li>The normal dashboard's tabs now start about 150 px lower at 1680 × 1050. On a shorter window you may need to scroll to see much of a tab's content. The expanded view is unaffected.</li>
+<li>The <code>/sparklines</code> path is written against P6's branch (its tests: same answer as one read per name, unknown names refused by name). It has not run against a live server, because it is not deployed yet.</li>
+</ul>
+
+<h2>WHAT I DID NOT DO</h2>
+<ul>
+<li>No deploy, no push. The Station, Indicator Lab, <code>lab.html</code> and <code>prototypes/indicator-lab/</code> are untouched. No Station branch was needed.</li>
+<li>No change to how the RSI is calculated or drawn; that is the Station's (S3). I only gave it room.</li>
+<li>I did not see DATA DELAYED in any run, so I could not reproduce that exact message. The 10:30 conditions were gone by the time I measured.</li>
+<li>I did not add a "chart is ready" signal from the Station to the Hub (see decisions).</li>
+</ul>
+
+<h2>TESTS</h2>
+<p class="sub">node --test tests/ → 1,573 tests, 1,566 pass, 5 fail. The 5 are the known production failures (Indicator Lab checkpoint · age function · readiness · saved review charts · xfeed-publish). New: hub-h2-rail-scroll, hub-h2-rsi-pane, hub-h2-chart-first (11 tests). Updated: five older tests that now need the pacer's stub. The trial copy at /preview/company-view/ has been rebuilt.</p>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
