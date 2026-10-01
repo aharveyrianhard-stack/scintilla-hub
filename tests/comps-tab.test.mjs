@@ -125,7 +125,7 @@ test("the Hub: COMPS is its own tab beside ESTIMATES, ESTIMATES is exactly what 
   assert.match(html, /case "COMPS":\s+return nonOp \? nonOpTabHTML\(data\) : compsTabHTML\(data\)/);
   assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+\n\s+estValuationHTML\(data\)/, "the ESTIMATES tab as before C1");
   assert.ok(!/estCompsHTML|compsLiveMount|sc-comps-live|scCompsLive/.test(html), "no trace of the C1 section");
-  assert.match(html, /import\("\/deliverables\/20260930\/comps-tab\/tab\.mjs"\)/);
+  assert.match(html, /import\("\/deliverables\/2026(0930\/comps-tab|1001\/comps-template)\/tab\.mjs"\)/, "the COMPS tab loads the comps module (C3 moved it to the template, 1 Oct)");
   assert.match(html, /e\.key === "0" \? 10 : 0/);
   for (const f of ["../supabase/migrations/20260930_comps_decisions.sql", "../supabase/migrations/20260930_comps_decisions_ROLLBACK.sql"]) assert.ok(existsSync(here(f)), f);
   const mig = readFileSync(here("../supabase/migrations/20260930_comps_decisions.sql"), "utf8");
