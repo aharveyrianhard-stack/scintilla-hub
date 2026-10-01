@@ -184,22 +184,12 @@ test("TSM: the supplier's own paired rate is used only when the EPS and revenue 
   assert.match(fnSrc("fpeTitle"), /the rate is the supplier's own for the quarter to/);
 });
 
-test("board v2: behind ?board=v2 (off by default); 11 columns beside the panel, 14 in full screen; READ icon + ◆; Geiger number", () => {
-  assert.match(page, /return lsGet\("sc_board_v2"\) === "1";/);
-  assert.match(page, /if \(BOARD_V2_ON && typeof document !== "undefined" && document\.body\) document\.body\.classList\.add\("brd-v2"\);/);
-  const css = page.slice(page.indexOf('<style id="board-v2-20260929">'), page.indexOf('<style id="tape-events-20260927">'));
-  assert.match(css, /body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(7\), body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(9\),\s+body\.brd-v2:not\(\.secfs\) \.ch > :nth-child\(10\)\{ display:none !important; \}/, "REVENUE, TREND, MOM step out");
-  const tracks = (sel) => (css.match(new RegExp(sel + "\\{ grid-template-columns:([^!]+)!important")) || [])[1].match(/minmax/g).length;
-  assert.equal(tracks("body\\.brd-v2:not\\(\\.secfs\\) \\.ch"), 11);
-  assert.equal(tracks("body\\.secfs \\.sc-secfs \\.ch"), 14);
-  assert.match(css, /\.gwx-read::before\{ content:attr\(data-icon\);/);
-  assert.match(css, /\.gwx-read\[data-div\]::after\{ content:"◆";/);
-  const icons = new Function(page.match(/const READ_ICON = \{[\s\S]*?\};/)[0] + "; return READ_ICON;")();
-  for (const w of ["aligned bull", "constructive", "stalling", "pullback", "turning up", "mom leads", "mixed", "broken", "aligned bear"]) assert.ok(icons[w], w);
-  assert.match(page, /rd\.setAttribute\("data-icon", READ_ICON\[R\.txt\]\|\|"·"\);/, "the icon is scinRead's own answer");
+test("board v2 is folded away (H4, 1 Oct): one board, no ?board switch; the Geiger number now rides in full screen", () => {
+  assert.doesNotMatch(page, /BOARD_V2_ON|READ_ICON|brd-v2|<style id="board-v2-20260929">/);
+  assert.match(page, /localStorage\.removeItem\("sc_board_v2"\)/, "a device that tried v2 forgets it");
   assert.match(page, /geigerMiniHTML\(d\.g, gMax, true\)\)/);
   assert.match(page, /var gn=cell\.querySelector\("\.sc-gnum"\);/, "the number follows the bar in a rewind");
-  assert.ok(page.indexOf('<style id="r4-fit">') > page.indexOf('<style id="board-v2-20260929">'), "r4-fit stays last");
+  assert.ok(page.indexOf('<style id="r4-fit">') > page.indexOf('<style id="board-h4-20261001">'), "r4-fit stays last");
 });
 
 test("full screen: the panel follows the header's drawn edges; clearing resets them; selectors wrap at 11px", () => {

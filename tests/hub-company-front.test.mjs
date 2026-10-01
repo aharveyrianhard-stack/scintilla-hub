@@ -172,8 +172,8 @@ test("every function and store this change adds is declared exactly once in the 
 });
 test("sorting by REVENUE orders numerically; a name with no revenue sorts as lowest, exactly like every other column", () => {
   const rows = [{ t: "A", rev: 2e9 }, { t: "B", rev: null }, { t: "C", rev: 90e9 }, { t: "D", rev: 845e6 }, { t: "E", rev: 12.3e9 }];
-  const order = (dir) => new Function("S", "window", fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
-    { sort: { key: "rev", dir }, rows }, { SC_RANK_READY: true });
+  const order = (dir) => new Function("S", "window", "num", fn("boardSortValue") + fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
+    { sort: { key: "rev", dir }, rows }, { SC_RANK_READY: true }, (x) => (x == null ? null : Number(x)));
   assert.deepEqual(order(-1), ["C", "E", "A", "D", "B"], "largest first, numerically (not $845M above $2.0B as text would)");
   assert.deepEqual(order(1), ["B", "D", "A", "E", "C"], "ascending: the blank first (the shared rule: absent = lowest), then smallest to largest");
 });

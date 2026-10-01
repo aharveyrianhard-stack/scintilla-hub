@@ -57,7 +57,7 @@ test("the header and every row are built from ONE static column model: same cell
   ] };
   const api = boardRenderer(S);
   assert.equal(api.BOARD_COLS.length, 14, "14 columns from the first render (Trend/Mom/Read are no longer spliced in later; H-FRONT added REVENUE; 27 Sep moved USUAL DAY to its own room)");
-  assert.deepEqual(api.BOARD_COLS.slice(7, 12).map((c) => c[0]), ["RSI", "Trend", "Mom", "Read", "Geiger"]);
+  assert.deepEqual(api.BOARD_COLS.slice(7, 12).map((c) => c[0]), ["RSI", "Trend", "Momentum", "Read", "Geiger"]);
   const html = api.boardRowsHTML();
   const header = html.slice(0, html.indexOf('<div class="ch sc-board__row'));
   const rows = html.slice(header.length).split(/(?=<div class="ch sc-board__row)/);
