@@ -26,12 +26,9 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 #view{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
 #outline{position:absolute;inset:0;overflow:auto;padding:10px 12px 40px}
 #graph{position:absolute;inset:0;display:none;cursor:grab}
-#layers{position:absolute;inset:0;display:none;overflow:hidden;cursor:grab}
 #crumbs{position:absolute;left:10px;top:8px;z-index:3;display:flex;gap:4px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--dim);pointer-events:auto;max-width:70%}
 #crumbs span.lnk{color:var(--ink2);text-decoration:none;border:1px solid var(--line2);border-radius:2px;padding:1px 6px;background:rgba(21,21,21,.9)}
 #crumbs span.lnk.here{color:var(--ink);border-color:var(--dim)}
-#levels{display:none;gap:2px}
-#levels button{padding:7px 7px;min-width:26px}
 #tip-l{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
 #graph.dragging{cursor:grabbing}
 #gl,#labels{position:absolute;inset:0}
@@ -130,7 +127,6 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   #view{position:static;height:auto;min-height:40vh}
   #outline{position:static;padding:8px 8px 20px}
   #graph{height:62vh;position:relative;display:none}
-  #layers{height:62vh;position:relative;display:none}
   #crumbs{position:static;padding:6px 8px 2px;max-width:none}
   aside{border-left:0;border-top:1px solid var(--line)}
   input[type=search]{width:150px}
@@ -150,9 +146,8 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <input type="search" id="q" placeholder="find a ticker (path + who holds it)" list="tickers" autocomplete="off">
     <datalist id="tickers"></datalist>
     <button id="v-outline" class="on" title="the tree as an indented list with the bars">OUTLINE</button>
-    <button id="v-layers" style="display:none" title="the broad levels as one flat map: drag, zoom, click to fly in">LAYERS</button>
+    <button id="v-canvas" title="the same tree, flat, like a canvas: drag to pan, wheel or pinch to zoom, click an area to lift it into 3D">CANVAS</button>
     <button id="v-3d" title="the whole market in 3D">3D</button>
-    <span id="levels" title="how deep the flat map shows"><button data-l="1">1</button><button data-l="2">2</button><button data-l="3">3</button><button data-l="4" class="on">4</button></span>
     <button id="flat" title="the 3D tree, flat, seen straight on" style="display:none">FLAT 2D</button>
     <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
   </div>
@@ -161,7 +156,6 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   <div id="view">
     <div id="crumbs"></div>
     <div id="outline"></div>
-    <div id="layers"><div id="tip-l"></div></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
       <details id="legend" open><summary>KEY</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
@@ -171,7 +165,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
         <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (28 Sep proposal) · FUND SET (R8) · NONE YET</div>
         <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
       </details>
-      <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go · in a cluster: Esc or the breadcrumb goes back</div>
+      <div id="hint">drag to turn · scroll to zoom · click to pick · click again or Esc to let go · in a 3D area: Esc or the breadcrumb drops back to the canvas</div>
       <div id="fallback"></div>
     </div>
   </div>
@@ -309,7 +303,7 @@ function aggHTML(n, what) {
 }
 function renderCard(n) {
   if (!n) {
-    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. A cohort shows its members and the names whose board tab differs (Alan's step-2 list). Type a ticker in the finder for its path and every fund that holds it.</div>` +
+    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; click a sector, a fund or a cohort and that area lifts into 3D (Esc drops it back). A cohort shows its members and the names whose board tab differs (Alan's step-2 list). Type a ticker in the finder for its path and every fund that holds it.</div>` +
       `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
       `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
       `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
@@ -488,7 +482,6 @@ function select(n, fly = true) {
   state.selected = n.id;
   renderCard(n);
   if (state.view === "outline") revealInOutline(n, true);
-  else if (state.view === "layers" && mL) { if (n.kind === "cohort" && fly) openCluster(n); else mL.select(n); }
   else if (m3) m3.select(n, fly);
   crumbs();
 }
@@ -496,10 +489,9 @@ function release() {
   state.selected = null; renderCard(null);
   O.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel"));
   if (m3 && !m3.inCluster()) m3.release();
-  if (mL) mL.release();
   crumbs();
 }
-document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.inCluster()) { closeCluster(); return; } if (state.selected) release(); });
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.inArea()) { closeArea(); return; } if (state.selected) release(); });
 
 /* ---- the finder: a ticker → its path and every fund that holds it ---- */
 $("tickers").innerHTML = nodes.filter((n) => n.ticker || n.kind === "cohort").map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : n.kind)}</option>`).join("");
@@ -513,80 +505,72 @@ $("q").addEventListener("change", go);
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
 state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).map((p) => p.id), held_by: (T.held_by[n.ticker] || []).map((x) => x[0]) } : null; };
 
-/* ---- views: OUTLINE (phone default) · LAYERS (desktop default: the flat map of the broad levels) · 3D (the whole market)
-   A cohort opened from LAYERS shows its CLUSTER: only its names, in 3D, in the 3D module; Esc or the breadcrumb comes back. ---- */
-let mL = null, cameFrom = null;
+/* ---- views: OUTLINE (phone default) · CANVAS (desktop default: the same tree as the 3D, laid flat; click an area and it
+   lifts into 3D) · 3D (the whole market). Alan, 1 Oct: "How it was presented in 3D, I loved it. I just wanted it flat so
+   that I can zoom into a specific area, then I click in one area, and then it's a 3D… like an Obsidian canvas." ---- */
+let cameFrom = null;
 async function load3d() {
   if (m3) return m3;
-  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); }, onRelease: () => { state.selected = null; renderCard(null); } }); }
-  catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the 3D map (${esc(String(e))}). The OUTLINE and LAYERS views carry the same tree and the same bars.</p>`; state.err3d = String(e); }
+  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); } }); }
+  catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
   return m3;
 }
-async function loadLayers() {
-  if (mL) return mL;
-  const mod = await import("./layers.js");
-  mL = mod.mount({ nodes, state, readingOf, aggBar, membersOf, onPick: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onOpenCluster: (n) => openCluster(n) });
-  return mL;
-}
 async function setView(v) {
-  state.view = v;
-  for (const k of ["outline", "layers", "3d"]) $("v-" + k).classList.toggle("on", v === k);
-  $("outline").style.display = v === "outline" ? "" : "none"; $("layers").style.display = v === "layers" ? "block" : "none"; $("graph").style.display = v === "3d" ? "block" : "none";
-  $("flat").style.display = v === "3d" ? "" : "none"; $("levels").style.display = v === "layers" ? "inline-flex" : "none";
-  if (v === "3d") { await load3d(); if (m3) { m3.fit(); if (state.selected && !m3.inCluster()) m3.select(state.byId.get(state.selected), false); } }
-  if (v === "layers") { await loadLayers(); mL.fit(); if (state.selected) mL.select(state.byId.get(state.selected)); }
+  const was = state.view; state.view = v;
+  for (const k of ["outline", "canvas", "3d"]) $("v-" + k).classList.toggle("on", v === k);
+  $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "outline" ? "none" : "block";
+  $("flat").style.display = v === "3d" ? "" : "none";
+  if (v === "canvas" || v === "3d") {
+    await load3d();
+    if (m3) { if (m3.inArea() && was !== v) m3.exitArea(false); m3.fit(); m3.setCanvas(v === "canvas", was === "outline" || !was ? 0 : 700); if (state.selected && !m3.inArea() && v === "3d") m3.select(state.byId.get(state.selected), false); }
+  }
   if (v === "outline" && state.selected) revealInOutline(state.byId.get(state.selected), true);
   crumbs();
 }
-async function openCluster(n) {
-  cameFrom = state.view === "3d" ? "3d" : "layers";
+async function openArea(n) {
+  cameFrom = state.view;
+  if (state.view === "outline") await setView("canvas");
   const m = await load3d(); if (!m) return;
-  state.selected = n.id; renderCard(n);
-  await setView("3d"); m.enterCluster(n); crumbs();
+  state.selected = n.id; renderCard(n); m.enterArea(n); crumbs();
 }
-function closeCluster() {
-  if (!m3 || !m3.inCluster()) return;
-  m3.exitCluster(cameFrom === "3d");
-  if (cameFrom === "layers") setView("layers"); else crumbs();
-}
+function closeArea() { if (!m3 || !m3.inArea()) return; m3.exitArea(true); crumbs(); }
 function crumbs() {
   const c = $("crumbs"), sel = state.selected ? state.byId.get(state.selected) : null;
   if (state.view === "outline") { c.innerHTML = ""; return; }
   const trail = sel ? [...pathOf(sel), sel] : [state.byId.get("MARKET")];
-  const inC = m3 && m3.inCluster();
-  c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") + (inC ? `<span>›</span><span class="lnk here">CLUSTER</span><span class="lnk" data-crumb="__back">← back</span>` : "");
+  const inA = m3 && m3.inArea();
+  c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") + (inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "");
 }
 $("crumbs").addEventListener("click", (e) => {
   const id = e.target.getAttribute && e.target.getAttribute("data-crumb"); if (!id) return;
-  if (id === "__back") { closeCluster(); return; }
+  if (id === "__back") { closeArea(); return; }
   const n = state.byId.get(id); if (!n) return;
-  if (m3 && m3.inCluster()) { closeCluster(); }
+  if (m3 && m3.inArea()) m3.exitArea(false);
   state.selected = n.id; renderCard(n);
-  if (state.view === "layers" && mL) mL.flyTo(n); else if (state.view === "3d" && m3) m3.select(n, true);
+  if (m3) m3.select(n, true);
   crumbs();
 });
-$("levels").addEventListener("click", (e) => { const l = e.target.getAttribute && e.target.getAttribute("data-l"); if (!l || !mL) return; mL.setLevel(+l); $("levels").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.l === l)); });
 $("v-outline").addEventListener("click", () => setView("outline"));
-$("v-layers").addEventListener("click", () => setView("layers"));
-$("v-3d").addEventListener("click", () => { if (m3 && m3.inCluster()) closeCluster(); setView("3d"); });
+$("v-canvas").addEventListener("click", () => setView("canvas"));
+$("v-3d").addEventListener("click", () => setView("3d"));
 $("flat").addEventListener("click", () => { if (m3) m3.setFlat(!state.flat); });
-$("reset").addEventListener("click", () => { if (m3 && m3.inCluster()) m3.exitCluster(false); release(); if (state.view === "3d" && m3) m3.frameWhole(900); else if (state.view === "layers" && mL) { mL.frameWhole(600); mL.redraw(); } else O.scrollTo({ top: 0, behavior: "smooth" }); crumbs(); });
+$("reset").addEventListener("click", () => { if (m3 && m3.inArea()) m3.exitArea(false); release(); if (m3 && state.view !== "outline") m3.frameWhole(900); else O.scrollTo({ top: 0, behavior: "smooth" }); crumbs(); });
 
 /* ---- go ---- */
 renderCard(null);
 const p = new URLSearchParams(location.search);
 /* 1 Oct (Alan): "How it was presented in 3D, I loved it… this is more like a heat map… I hate it." The boxed LAYERS map is no longer the default and its button is hidden; the tree itself is the view. */
-const wanted = p.get("view") || (PHONE ? "outline" : "3d");
+const wanted = p.get("view") || (PHONE ? "outline" : "canvas");
 state.ready = true;
-await setView(["3d", "layers", "outline"].includes(wanted) ? wanted : "3d");
+await setView(["3d", "canvas", "outline"].includes(wanted) ? wanted : "canvas");
 if (p.get("flat") === "1" && m3) m3.setFlat(true, 0);
 if (p.get("t")) { const n = find(p.get("t")); if (n) setTimeout(() => select(n), 300); }
 state.select = (id) => { const n = state.byId.get(id); if (n) select(n); };
 state.release = () => release();
 state.setView = (v) => setView(v);
-state.openCluster = (id) => { const n = state.byId.get(id); if (n) return openCluster(n); };
-state.closeCluster = () => closeCluster();
-state.setLevel = (l) => { if (mL) { mL.setLevel(l); $("levels").querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.l === l)); } };
+state.openArea = (id) => { const n = state.byId.get(id); if (n) return openArea(n); };
+state.closeArea = () => closeArea();
+state.openCluster = state.openArea; state.closeCluster = state.closeArea;
 state.crumbs = () => [...document.querySelectorAll("#crumbs .lnk")].map((e) => e.textContent);
 state.setFlat = (on) => { if (m3) m3.setFlat(on, 0); };
 state.toggle = (id) => toggle(id);

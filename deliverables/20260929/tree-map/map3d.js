@@ -307,7 +307,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (!downAt) return; const d = downAt; downAt = null;
     if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6 || performance.now() - d.t > 600) return;
     const n = pick(ev); if (!n) return;
-    if (n.id === state.selected) { release(); onRelease(); } else { onSelect(n); select(n, true); }
+    if (n.id === state.selected && !state.canvas) { release(); onRelease(); } else { onSelect(n); select(n, true, true); }
   });
 
   /* ---- selection ---- */
@@ -318,12 +318,13 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     mine.forEach((l, i) => a.set([l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
     selGeo.attributes.position.needsUpdate = true; selGeo.setDrawRange(0, mine.length * 2);
   }
-  function select(n, fly = true) {
+  function select(n, fly = true, lift = false) { // lift: a click on the canvas lifts a branch into 3D; the finder and the card only fly there
     if (cluster) { state.selected = n.id; ring.visible = true; drawSelection(n); state.dirty = true; wake(); return; }
+    if (state.canvas && lift && isBranch(n)) { state.selected = n.id; onSelect(n); enterArea(n); return; }
     if (!beforePick) beforePick = { p: camera.position.clone(), t: controls.target.clone() };
     state.selected = n.id; ring.visible = true; drawSelection(n);
     if (fly) {
-      const dir = camera.position.clone().sub(controls.target).normalize();
+      const dir = state.canvas ? DIR2.clone() : camera.position.clone().sub(controls.target).normalize();
       if (isBranch(n)) flyTo(framing(subtree(n), dir, 0.82), 1000);
       else { const d = n.kind === "fund" ? 240 : 170 + n.r * 8; flyTo({ p: n.pos.clone().add(dir.multiplyScalar(d)), t: n.pos.clone() }, 900); }
     }
@@ -342,33 +343,42 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (ms) morph = { t0: performance.now(), ms }; else { nodes.forEach((n) => n.pos.copy(n.to)); applyPositions(); }
     wake();
   }
-  /* ---- CLUSTER: one cohort's names in 3D, each with its bar, a link from each name to every other cohort and fund it is
-     also in ("also in", held by), those neighbours faint on an outer ring. Whole-tree objects are hidden meanwhile; the
-     involved nodes borrow cluster positions and get their tree positions back on exit. ---- */
+  /* ---- AREA (1 Oct, T3): click an area on the canvas and it becomes 3D. A sector, a fund that parents cohorts, or a cohort
+     lifts into the 3D view of just that subtree — its own balls, bars, labels and lines, placed by the tree's own 3D layout —
+     plus, for every name in it, a faint line to each other cohort or fund set the name is also in (its "also in"; the funds
+     that hold it stay on the card). Whole-tree objects are hidden meanwhile; the involved nodes borrow area positions and get
+     their canvas positions back on exit. (T2's CLUSTER was the cohort-only case of this.) ---- */
   let cluster = null;
   const saved = new Map();
   const sph = new THREE.SphereGeometry(1, 16, 11);
-  function enterCluster(c) {
+  function subtreeOf(root) {
+    const out = []; const seen = new Set();
+    (function walk(id) { for (const c of primaryKids(id)) { if (seen.has(c.id)) continue; seen.add(c.id); out.push(c); walk(c.id); if (c.kind === "cohort") for (const m of membersOf(c)) if (!seen.has(m.id)) { seen.add(m.id); out.push(m); } } })(root.id);
+    if (root.kind === "cohort") for (const m of membersOf(root)) if (!seen.has(m.id)) { seen.add(m.id); out.push(m); }
+    return out;
+  }
+  function enterCluster(root) {
     exitCluster(false);
-    const members = membersOf(c);
+    const sub = subtreeOf(root), inSub = new Set([root.id, ...sub.map((n) => n.id)]);
+    const names = sub.filter((n) => n.kind === "name");
     const nbIds = new Set();
-    for (const m of members) { for (const a of m.also_in || []) nbIds.add(a.id); for (const [f] of (T_HELD[m.ticker] || [])) nbIds.add(f); }
-    nbIds.delete(c.id);
-    // cohorts first (where else it is filed), then the funds that hold it; at most 30 so the ring stays readable
-    const nbs = [...nbIds].map((id) => state.byId.get(id)).filter(Boolean).sort((a, b) => (a.kind === "cohort" ? 0 : 1) - (b.kind === "cohort" ? 0 : 1)).slice(0, 30);
+    for (const m of names) for (const a of m.also_in || []) if (!inSub.has(a.id)) nbIds.add(a.id);
+    // cohorts first (where else it is filed), fund sets next; at most 30 so the ring stays readable
+    const nbs = [...nbIds].map((id) => state.byId.get(id)).filter(Boolean).sort((a, b) => (a.ckind === "adopted" ? 0 : a.ckind === "proposed" ? 1 : 2) - (b.ckind === "adopted" ? 0 : b.ckind === "proposed" ? 1 : 2)).slice(0, 30);
+    // the subtree in its own 3D arrangement: the tree's 3D layout, re-centred on the area's root
+    const L3 = state.layoutOf(1), o = L3[root.id];
+    const put = (n, x, y, z) => { if (!saved.has(n.id)) saved.set(n.id, n.pos.clone()); n.pos.set(x, y, z); };
+    put(root, 0, 0, 0);
+    for (const n of sub) { const p = L3[n.id] || o; put(n, p[0] - o[0], p[1] - o[1], p[2] - o[2]); }
+    let rad = 40; for (const n of sub) rad = Math.max(rad, Math.hypot(n.pos.x, n.pos.z));
+    const depth = sub.reduce((m, n) => Math.min(m, n.pos.y), 0);
+    nbs.forEach((nb, i) => { const a = (i / nbs.length) * Math.PI * 2, r = rad + 70; put(nb, r * Math.cos(a), depth - 30, r * Math.sin(a)); });
     const group = new THREE.Group();
-    // members on a flat spiral in the middle; neighbours on a wide ring above, so the links fan out in 3D
-    const R0 = 26 + members.length * 2.2;
-    members.forEach((m, i) => { const a = i * 2.39996, r = R0 * Math.sqrt((i + 0.5) / members.length); if (!saved.has(m.id)) saved.set(m.id, m.pos.clone()); m.pos.set(r * Math.cos(a), 0, r * Math.sin(a)); });
-    nbs.forEach((nb, i) => { const a = (i / nbs.length) * Math.PI * 2, r = R0 + 70; if (!saved.has(nb.id)) saved.set(nb.id, nb.pos.clone()); nb.pos.set(r * Math.cos(a), 46, r * Math.sin(a)); });
-    if (!saved.has(c.id)) saved.set(c.id, c.pos.clone()); c.pos.set(0, 70, 0);
-    const mkBall = (n, col, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: col, transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(n.r); b.userData.node = n; group.add(b); return b; };
-    const balls = members.map((m) => mkBall(m, m.g || m.sg ? LIT : HOLLOW)); balls.push(mkBall(c, COHORT));
-    nbs.forEach((nb) => balls.push(mkBall(nb, nb.kind === "cohort" ? COHORT : LIT, 0.35)));
-    // bars for the members (the same shader)
-    const cb = [];
-    members.forEach((m) => { const rd = readingOf(m); if (rd) cb.push({ n: m, v: rd.v, kind: rd.kind === "full" ? 0 : 2, slot: 0 }); });
-    const ab = aggBar(c); if (ab) cb.push({ n: c, v: ab.v, kind: ab.kind === "full" ? 1 : 3, slot: 0 });
+    const colOf = (n) => n.kind === "index" ? HEADING : n.kind === "cohort" ? COHORT : n.g || n.sg ? LIT : HOLLOW;
+    const mkBall = (n, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: colOf(n), transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(n.r); b.userData.node = n; group.add(b); return b; };
+    const balls = [root, ...sub].map((n) => mkBall(n)); nbs.forEach((nb) => balls.push(mkBall(nb, 0.35)));
+    // bars: the same ones the whole tree draws, for the nodes in the area (own full / scout, holdings blend, cohort and heading means)
+    const cb = bars.filter((b) => inSub.has(b.n.id));
     if (cb.length) {
       const g2 = new THREE.InstancedBufferGeometry(); g2.copy(new THREE.PlaneGeometry(2, 2)); g2.instanceCount = cb.length;
       g2.setAttribute("aCenter", new THREE.InstancedBufferAttribute(new Float32Array(cb.flatMap((b) => [b.n.pos.x, b.n.pos.y, b.n.pos.z])), 3));
@@ -378,25 +388,26 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       g2.setAttribute("aTwo", new THREE.InstancedBufferAttribute(new Float32Array(cb.map((b) => b.slot)), 1));
       const bm = new THREE.Mesh(g2, barMat); bm.frustumCulled = false; bm.renderOrder = 3; group.add(bm);
     }
-    // links: cohort → each member (grey), member → each neighbour it is in (faint)
+    // lines: the tree's own edges inside the area (parent → child, cohort → member), and the faint "also in" links
     const segs = [], cols = [], C1 = new THREE.Color(0x3c3c3c), C2 = new THREE.Color(0x262626);
-    const nbPos = new Map(nbs.map((nb) => [nb.id, nb.pos]));
-    for (const m of members) {
-      segs.push(c.pos.x, c.pos.y, c.pos.z, m.pos.x, m.pos.y, m.pos.z); cols.push(C1.r, C1.g, C1.b, C1.r, C1.g, C1.b);
-      const mine = new Set([...(m.also_in || []).map((a) => a.id), ...(T_HELD[m.ticker] || []).map((x) => x[0])]);
-      for (const id of mine) { const p = nbPos.get(id); if (!p) continue; segs.push(m.pos.x, m.pos.y, m.pos.z, p.x, p.y, p.z); cols.push(C2.r, C2.g, C2.b, C2.r, C2.g, C2.b); }
-    }
+    const push = (a, b, C) => { segs.push(a.pos.x, a.pos.y, a.pos.z, b.pos.x, b.pos.y, b.pos.z); cols.push(C.r, C.g, C.b, C.r, C.g, C.b); };
+    for (const n of sub) { const p = state.byId.get(n.parents[0]); if (p && inSub.has(p.id)) push(p, n, C1); }
+    for (const n of sub) if (n.kind === "cohort") for (const m of membersOf(n)) if (m.kind === "fund" && inSub.has(m.id)) push(n, m, C1);
+    if (root.kind === "cohort") for (const m of membersOf(root)) if (m.kind === "fund") push(root, m, C1);
+    const nbPos = new Set(nbs.map((nb) => nb.id));
+    for (const m of names) for (const a of m.also_in || []) if (nbPos.has(a.id)) push(m, state.byId.get(a.id), C2);
     const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs), 3)); lg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(cols), 3));
     group.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 })));
     scene.add(group);
     for (const o of [litMesh, holMesh, headMesh, cohMesh, barMesh, selLines, treeLines]) o.visible = false;
-    cluster = { c, group, balls, members, nbs, before: { p: camera.position.clone(), t: controls.target.clone() } };
-    state.cluster = c.id; state.clusterCount = { members: members.length, neighbours: nbs.length };
+    cluster = { c: root, group, balls, members: sub, nbs, before: { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate };
+    controls.enableRotate = true; // orbit is allowed inside an area, whatever the canvas allows
+    state.cluster = root.id; state.clusterCount = { members: sub.length, names: names.length, neighbours: nbs.length };
     nodes.forEach(hide);
-    const list = [c, ...members, ...nbs];
-    flyTo(framing(list, new THREE.Vector3(0.15, 0.9, 1).normalize(), 0.8), 900);
+    flyTo(framing([root, ...sub, ...nbs], DIR3, 0.8), 900);
     state.dirty = true; wake();
   }
+  const enterArea = enterCluster;
   function exitCluster(fly = true) {
     if (!cluster) return;
     scene.remove(cluster.group);
@@ -404,10 +415,24 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     for (const [id, p] of saved) state.byId.get(id).pos.copy(p); saved.clear();
     for (const o of [litMesh, holMesh, headMesh, cohMesh, barMesh, selLines, treeLines]) o.visible = true;
     applyPositions();
+    controls.enableRotate = cluster.rotate;
     const b = cluster.before; cluster = null; state.cluster = null; nodes.forEach(hide);
-    if (fly) flyTo(b, 700);
+    if (fly) flyTo(b, 700); // back to the same spot and zoom
     state.dirty = true; wake();
   }
+  /* ---- CANVAS (1 Oct): the same tree laid flat — the FLAT 2D layout, the camera straight on, rotation locked. Drag pans,
+     wheel and pinch zoom toward the pointer. Nothing is boxed and nothing rotates. ---- */
+  function setCanvas(on, ms = 0) {
+    state.canvas = on;
+    controls.enableRotate = !on; controls.zoomToCursor = on; controls.screenSpacePanning = true;
+    controls.mouseButtons = { LEFT: on ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: on ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN };
+    controls.touches = { ONE: on ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    if (on !== state.flat) setFlat(on, ms); else frameWhole(ms);
+  }
+  // the proof drives these: pan by screen pixels, zoom by a factor toward a screen point (what the wheel does)
+  state.pose = () => ({ p: camera.position.toArray().map((v) => +v.toFixed(1)), t: controls.target.toArray().map((v) => +v.toFixed(1)), d: +camera.position.distanceTo(controls.target).toFixed(1), rotate: controls.enableRotate });
+  state.panBy = (dx, dy) => { const d = camera.position.distanceTo(controls.target), ppu = view.scaleH / d; const v = new THREE.Vector3(-dx / ppu, dy / ppu, 0).applyQuaternion(camera.quaternion); camera.position.add(v); controls.target.add(v); state.dirty = true; wake(); };
+  state.zoomAt = (sx, sy, f) => { const nd = new THREE.Vector3((sx / view.w) * 2 - 1, -(sy / view.h) * 2 + 1, 0.5).unproject(camera); const dir = nd.sub(camera.position).normalize(); const d = camera.position.distanceTo(controls.target); const hit = camera.position.clone().add(dir.multiplyScalar(d)); camera.position.lerp(hit, 1 - 1 / f); controls.target.lerp(hit, 1 - 1 / f); state.dirty = true; wake(); };
   const T_HELD = (state.tree && state.tree.held_by) || {};
   state.screenOf = (id) => { const n = state.byId.get(id); camera.updateMatrixWorld(); const v = n.pos.clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) * r.width / 2, r.top + (1 - v.y) * r.height / 2]; };
   state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }); layout(state.flat ? 0 : 1, () => {}); return out; };
@@ -415,5 +440,5 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   fit();
   if (PHONE) $("legend").removeAttribute("open");
   frameWhole(0);
-  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, inCluster: () => !!cluster };
+  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, enterArea, exitArea: exitCluster, setCanvas, inCluster: () => !!cluster, inArea: () => !!cluster };
 }

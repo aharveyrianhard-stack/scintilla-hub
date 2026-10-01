@@ -51,7 +51,7 @@ await send("Page.navigate", { url });
 for (let i = 0; i < 80; i++) { await sleep(500); if (await evaluate("!!(window.__mm && __mm.ready)")) break; }
 const settle = async () => { for (let i = 0; i < 60; i++) { await sleep(300); if (await evaluate("!!(window.__mm && __mm.paused)")) return; } };
 await settle();
-const stateNow = () => evaluate("JSON.stringify({view:__mm.view,cluster:__mm.cluster||null,clusterCount:__mm.clusterCount||null,layersLevel:__mm.layersLevel||null,layersLabels:__mm.layersLabels||null,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length})").then(JSON.parse);
+const stateNow = () => evaluate("JSON.stringify({view:__mm.view,area:__mm.cluster||null,areaCount:__mm.clusterCount||null,canvas:!!__mm.canvas,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length})").then(JSON.parse);
 const log = [];
 for (const s of steps) {
   if (s.wait) await sleep(s.wait);
@@ -69,12 +69,18 @@ for (const s of steps) {
     log.push({ key: s.key, after: await stateNow() });
   }
   if (s.state) log.push({ state: await stateNow() });
-  if (s.level) { await evaluate(`__mm.setLevel(${+s.level})`); await sleep(400); log.push({ level: s.level, after: await stateNow() }); }
-  if (s.cluster) { await evaluate(`__mm.openCluster(${JSON.stringify(s.cluster)})`); await sleep(1800); await settle(); log.push({ cluster: s.cluster, after: await stateNow() }); }
-  if (s.back) { await evaluate(`__mm.closeCluster()`); await sleep(1200); await settle(); log.push({ back: true, after: await stateNow() }); }
+  if (s.area) { await evaluate(`__mm.openArea(${JSON.stringify(s.area)})`); await sleep(1800); await settle(); log.push({ area: s.area, after: await stateNow() }); }
+  if (s.back) { const before = await evaluate("JSON.stringify(__mm.pose ? __mm.pose() : null)"); await evaluate(`__mm.closeArea()`); await sleep(1400); await settle(); log.push({ back: true, after: await stateNow(), pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose ? __mm.pose() : null)")) }); }
+  if (s.pan) { await evaluate(`__mm.panBy(${+s.pan[0]}, ${+s.pan[1]})`); await sleep(500); await settle(); log.push({ pan: s.pan, pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) }); }
+  if (s.zoom) { await evaluate(`__mm.zoomAt(${+s.zoom[0]}, ${+s.zoom[1]}, ${+s.zoom[2]})`); await sleep(500); await settle(); log.push({ zoom: s.zoom, pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) }); }
+  if (s.wheel) { // a real wheel event on the canvas, toward the pointer
+    for (let i = 0; i < (s.wheel[2] || 5); i++) { await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: +s.wheel[0], y: +s.wheel[1], deltaX: 0, deltaY: -120 }); await sleep(60); }
+    await sleep(600); await settle(); log.push({ wheel: s.wheel, pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
+  }
+  if (s.pose) log.push({ pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
   if (s.labels) { // every printed label against the node it is anchored to (screen px): the "labels don't match nodes" check
-    const L = JSON.parse(await evaluate(`JSON.stringify(__mm.view === "layers" ? __mm.layersLabelsNow() : (__mm.labelsNow ? __mm.labelsNow() : []))`));
-    const canvas = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector(__mm.view === "layers" ? "#layers" : "#graph").getBoundingClientRect(); return { w: c.width, h: c.height }; })())`));
+    const L = JSON.parse(await evaluate(`JSON.stringify(__mm.labelsNow ? __mm.labelsNow() : [])`));
+    const canvas = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector("#graph").getBoundingClientRect(); return { w: c.width, h: c.height }; })())`));
     const rows = L.map((l) => { const cx = l.align === "left" ? l.x : l.x + l.w / 2; const dx = l.align === "left" ? Math.abs(l.x - l.nx) : Math.abs(cx - l.nx); const dy = l.y + (l.align ? l.h / 2 : 0) - l.ny; return { id: l.id, text: l.text, dx: +dx.toFixed(1), dy: +dy.toFixed(1), inside: l.x >= -1 && l.y >= -1 && l.x + l.w <= canvas.w + 1 && l.y + l.h <= canvas.h + 1 }; });
     log.push({ labels: { view: await evaluate("__mm.view"), count: rows.length, max_dx: Math.max(0, ...rows.map((r) => r.dx)), max_dy: Math.max(0, ...rows.map((r) => r.dy)), min_dy: Math.min(0, ...rows.map((r) => r.dy)), outside: rows.filter((r) => !r.inside).length, rows } });
   }
