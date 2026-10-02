@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 964071c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from ef6dc20) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -6020,7 +6020,7 @@ function scEntryRoom() {
   catch (_) { return null; }
 }
 const S = {
-  sec: scEntryRoom() || "DASHBOARD", coh: "FAV", tq: "", focusT: "MU",   /* DASHBOARD MODEL — FAV is the default board scope on boot */
+  sec: scEntryRoom() || "DASHBOARD", coh: "FAVORITES", tq: "", focusT: "MU",   /* S7 (2 Oct) — ★ FAVORITES is the default board scope on boot (Alan: "default to the FAVORITES from now on instead of LIKED… It's a cleaner list"); an empty one falls back to ♥ LIKED, then ALL (cohBootFor) */
   fav: ["MU", "NBIS", "SNDK"],
   rows: [], tapes: { macro: [], all: [] }, coData: null,
   state: "live", focus: false, chartT: "MU", chartRange: "1D",   // R18 — scChart range tabs
@@ -6283,10 +6283,10 @@ function coExpandApply() {
   if (typeof coOscTell === "function") coOscTell();   /* S6 — the embedded pane: merged, or the three when EXPANDED */
   return on;
 }
-/* S6 (Alan, 1 Oct: "wherever we have oscillators on Station and on Hub present the merged; as I expand into more real estate,
-   present the individuals") — the embedded Station pane draws the MERGED RSI + Williams %R oscillator, and the three stacked
-   (merged · RSI · Williams %R) while the company view is EXPANDED. The Hub says which, by message, so EXPAND never reloads the
-   chart: once when the frame loads and on every EXPAND / COLLAPSE. A Station without S6 ignores the message. */
+/* S6 / S7 — the embedded Station pane draws ONE oscillator pane, the Indicator Lab's RSI + Williams %R (S7, 2 Oct: Alan, "take it
+   as the guide… the merged one is enough"), collapsed and on EXPAND alike. The Hub still says by message whether the company view
+   is EXPANDED, so the pane's hover can show every timeframe there (the Daily alone when collapsed) without reloading the chart:
+   once when the frame loads and on every EXPAND / COLLAPSE. The message keeps its S6 shape ({ sc:"osc", split }). */
 function coOscTell() {
   if (typeof document === "undefined") return;
   const f = document.getElementById("coChartFrame");
@@ -6500,6 +6500,27 @@ const LIST_COHS = { FAV: null, FAVORITES: "favorites", RADAR: "radar" };
 const SUB_LISTS = ["favorites", "radar"];
 const LISTS = { favorites: [], radar: [] };
 let LISTS_READ = false;                     // an unread list is not an empty one
+/* S7 (2 Oct) — THE BOOT SCOPE. The board opens on ★ FAVORITES. If FAVORITES is known to be empty it opens on ♥ LIKED instead,
+   and on ALL if LIKED is empty too; while FAVORITES is not yet known (first visit, nothing remembered) it stays on FAVORITES
+   and shows "reading FAVORITES …" — a reading state, never an empty board. The lists the last visit read are remembered in
+   this browser (sc_lists, a display seed only: the server read replaces it and nothing is ever written back from it), so a
+   return visit paints its favorites at once. Only the boot pick falls back: once you choose a tab yourself it stays chosen. */
+const LISTS_LS_KEY = "sc_lists";
+let COH_BOOT_PICK = true;                   // true until the operator picks a tab, or the first list read has settled the boot scope
+function cohBootFor(lists, fav, known) {
+  if (!known || ((lists && lists.favorites) || []).length) return "FAVORITES";
+  return (fav || []).length ? "FAV" : "ALL";
+}
+function listsRemember() { try { lsSet(LISTS_LS_KEY, JSON.stringify({ favorites: LISTS.favorites, radar: LISTS.radar })); } catch (_) {} }
+/* the remembered lists, or null when there are none (pure apart from the read) */
+function listsRecall() {
+  try {
+    const o = JSON.parse(lsGet(LISTS_LS_KEY) || "null");
+    if (!o || !Array.isArray(o.favorites) || !Array.isArray(o.radar)) return null;
+    const clean = (a) => a.map((t) => String(t).toUpperCase()).filter((t) => /^[A-Z0-9.^=:-]{1,20}$/.test(t));
+    return { favorites: clean(o.favorites), radar: clean(o.radar) };
+  } catch (_) { return null; }
+}
 const LISTS_SEL = "station_lists?select=list,position,ticker&list=in.(favorites,radar)&order=list.asc,position.asc";
 function isListCoh(c) {
   return Object.prototype.hasOwnProperty.call(LIST_COHS, c);
@@ -6569,6 +6590,14 @@ async function listsLoad() {
     SUB_LISTS.forEach((l) => { LISTS[l] = got[l]; });
     const first = !LISTS_READ;
     LISTS_READ = true;
+    listsRemember();
+    /* S7 — the boot scope settles on the first read: an empty FAVORITES moves the board to LIKED (or ALL) before its empty
+       state is ever painted; a tab the operator picked is never moved */
+    if (first && COH_BOOT_PICK) {
+      COH_BOOT_PICK = false;
+      const pick = !S.tq ? cohBootFor(LISTS, S.fav, true) : S.coh;   // also back to FAVORITES when a remembered-empty list now has names
+      if (pick !== S.coh) { S.coh = pick; restartFeed(); coListsRepaint(); return; }
+    }
     if (changed.length || (first && LIST_COHS[S.coh])) listsRepaint(changed.some((l) => LIST_COHS[S.coh] === l) || (first && !!LIST_COHS[S.coh]));
   } catch (e) { console.error("station_lists read failed", e); }
 }
@@ -6592,6 +6621,7 @@ let LIST_WRITES = Promise.resolve();          // one write at a time, in click o
 function listIntent(list, t, on) {
   const T = String(t).toUpperCase();
   LISTS[list] = listApply(LISTS[list], T, on);                  // the screen moves now
+  listsRemember();
   listsRepaint(LIST_COHS[S.coh] === list);
   LIST_WRITES = LIST_WRITES.then(async () => {
     try {
@@ -7438,14 +7468,24 @@ function computeBoardOrder() {
      age, so a cold boot could rank the entire board on day-old numbers and then visibly reorder
      when the real ones arrived. */
   if (key !== "t" && !window.SC_RANK_READY) return (S.rows || []).map((r) => r.t);
-  const val = (r) => { const v = boardSortValue(r, key); return v == null || !isFinite(v) ? -Infinity : v; };
-  /* F1 — RVOL: rows with no current reading go to the bottom in BOTH directions (ascending would otherwise lead with them) */
-  const emptyLast = key === "rv";
-  return (S.rows || []).slice().sort((a, b) =>
-    key === "t" ? dir * a.t.localeCompare(b.t)
-      : emptyLast ? ((val(a) === -Infinity) - (val(b) === -Infinity)) || (val(a) === -Infinity ? 0 : dir * (val(a) - val(b)))
-      : dir * (val(a) - val(b)))
-    .map((r) => r.t);
+  /* S7 (2 Oct) — EMPTY LAST ON EVERY COLUMN, BOTH DIRECTIONS (F1 did it for RVOL on 1 Oct; the coordinator's call for the rest).
+     A row whose cell shows a dash (or nothing) for the sorted column goes to the bottom whether the column is sorted highest
+     first or lowest first, keeping its arrival order among the other empty rows. Before, an empty value counted as the lowest,
+     so a lowest-first sort opened on a block of dashes. Same rule on the normal board, full screen and the phone (one order). */
+  const val = (r) => boardSortNumber(r, key);
+  return (S.rows || []).slice().sort((a, b) => {
+    if (key === "t") return dir * a.t.localeCompare(b.t);
+    const va = val(a), vb = val(b);
+    return (va == null) - (vb == null) || (va == null ? 0 : dir * (va - vb));
+  }).map((r) => r.t);
+}
+/* the value a row is ranked by, or null when its cell shows no number: missing, not a number, or - for MKT CAP and REVENUE,
+   whose cells print a value only above zero (fmtCap, fmtRevCell) - zero or below */
+function boardSortNumber(r, key) {
+  const v = boardSortValue(r, key);
+  if (v == null || v === "" || !isFinite(v)) return null;
+  if ((key === "mc" || key === "rev") && !(+v > 0)) return null;
+  return +v;
 }
 /* H4 — TREND (tr) and MOMENTUM (mo) are not on the row: they are the values the board is SHOWING for that name
    (window.SCIN_TM_SHOWN, written by paintTM, so a rewound board ranks by the rewound day), else the live store. */
@@ -22513,6 +22553,7 @@ document.addEventListener("click", (e) => {
        another room's mount, fall back to sync() to build the DASH frame. */
     case "coh": {
       S.coh = a.dataset.key; S.tq = "";
+      COH_BOOT_PICK = false;   // S7 — a tab the operator picks is never moved by the boot fallback
       /* tapping the strip while the earnings room is open narrows THAT room too —
          until it is entered again, when it starts wide. The room is repainted after
          the remount below, because a cohort change alone does not re-enter it. */
@@ -24915,6 +24956,9 @@ window.SC_CHART_API = "https://scintilla-massive-chart-api.fly.dev";
 var SC_CHART_API = window.SC_CHART_API;
 window.SC_CLEAN_READS = scComputeCleanReads();
 
+/* S7 — the remembered lists seed FAVORITES / RADAR for the first paint, and pick the boot scope (cohBootFor): FAVORITES, or
+   LIKED / ALL when the remembered FAVORITES is empty. LISTS_READ stays false until the server answers. */
+try { const seen = listsRecall(); if (seen) { LISTS.favorites = seen.favorites; LISTS.radar = seen.radar; } S.coh = cohBootFor(LISTS, S.fav, !!seen); } catch (_) {}
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup

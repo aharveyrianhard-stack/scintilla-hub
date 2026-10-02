@@ -25,7 +25,7 @@ const BOARDVOL = {
   OLD: { rvol_at_time: 9.9, session_rvol: 9.9, updated_ts: "2026-07-06T18:03:29Z" },
 };
 const ROWS = ["OLD", "AAA", "NONE", "BBB", "CCC", "DDD"].map((t) => ({ t, rv: rvOf(BOARDVOL, t) }));
-const order = (key, dir, rows = ROWS) => new Function("S", "window", "num", fn("boardSortValue") + fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
+const order = (key, dir, rows = ROWS) => new Function("S", "window", "num", fn("boardSortValue") + fn("boardSortNumber") + fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
   { sort: { key, dir }, rows }, { SC_RANK_READY: true }, num);
 
 test("the RVol header carries the sort key rv; every other column keeps its key", () => {
@@ -51,16 +51,18 @@ test("the stale 6 Jul row is NOT ranked by its old 9.9×: it sorts with the empt
   assert.ok(desc.indexOf("OLD") > desc.indexOf("CCC"), "a 9.9× from July never leads today's board");
 });
 
-test("the other columns sort exactly as before (absent lowest, so first in ascending)", () => {
+/* S7 (2 Oct): the coordinator extended F1's rule to every column - empty last in both directions (was: absent lowest, so first
+   when ascending). The per-column proof is tests/hub-s7-empty-last-20261002.test.mjs. */
+test("the other columns now follow the same rule: empty last both ways (S7)", () => {
   const rows = [{ t: "A", g: 0.2 }, { t: "B", g: null }, { t: "C", g: 0.9 }];
   assert.deepEqual(order("g", -1, rows), ["C", "A", "B"]);
-  assert.deepEqual(order("g", 1, rows), ["B", "A", "C"]);
+  assert.deepEqual(order("g", 1, rows), ["A", "C", "B"]);
 });
 
 test("the mark moves: click RVol → ▼ on RVol and off Geiger; click again → ▲; another column takes it back", () => {
   const S = { sort: { key: "g", dir: -1 }, rows: ROWS };
   const api = new Function("S", "BOARD_COLS", "window", "num", "updateBoard",
-    fn("boardHeaderHTML") + fn("boardSortValue") + fn("computeBoardOrder") + fn("sortBoardBy") + "\nreturn { boardHeaderHTML, sortBoardBy };")(
+    fn("boardHeaderHTML") + fn("boardSortValue") + fn("boardSortNumber") + fn("computeBoardOrder") + fn("sortBoardBy") + "\nreturn { boardHeaderHTML, sortBoardBy };")(
     S, BOARD_COLS, { SC_RANK_READY: true }, num, () => {});
   const cell = (html, label) => (html.match(new RegExp('<button class="sc-hcell ?(is-sorted)?" data-act="sort" data-key="[a-z]+">' + label + '( [▼▲])?</button>')) || []);
   let h = api.boardHeaderHTML();
