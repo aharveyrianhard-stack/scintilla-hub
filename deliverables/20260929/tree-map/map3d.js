@@ -7,7 +7,14 @@
    step toward you (3D) exactly as r3's sector blocks do. Every position comes from the tree by arithmetic: no randomness.
 
    Bars: kind 0 own FULL · 1 aggregate (striped: a fund's holdings blend, a cohort's or heading's mean) · 2 own SCOUT (slim)
-   · 3 aggregate of SCOUT readings (slim, striped). Scout only where full is absent. */
+   · 3 aggregate of SCOUT readings (slim, striped). Scout only where full is absent.
+
+   T5 (2 Oct). Two pictures of the same tree, CLEAN and DETAILED (state.detail): CLEAN lays out only the nodes that carry
+   a reading of their own or an aggregate — headings, cohorts and funds with a bar — and no names, so there are no boxes;
+   what a node folds away is counted on it as "＋N more". DETAILED is the full tree. Inside every parent the children run
+   green → red by reading (state.order = "geiger"; "size" keeps the old order). A section heading carries a 3D chip on
+   the canvas; a cohort of more than 24 names opens into the COIL (two snakes: the greens coil up to the highest reading
+   at the tip, the base near zero runs flat, the reds coil down to the most negative at the other tip). */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { prepareTree, layout as layoutTree, bestRows, LAYOUT } from "./layout.js";
@@ -22,15 +29,43 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
 
   /* ---- layout: the r3 tree with cohorts and cohort-parent funds as branches ---- */
   const parentsCohort = new Set(nodes.filter((n) => n.kind === "cohort").map((n) => n.parents[0]));
-  const lay = nodes.map((n) => ({ id: n.id, kind: n.kind === "cohort" || (n.kind === "fund" && parentsCohort.has(n.id)) ? "index" : n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker }));
+  // the reading a node is ordered and kept by: its own (full or scout), else its aggregate, else none
+  const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBar(n); return ab ? ab.v : null; };
+  const layNode = (n) => ({ id: n.id, kind: n.kind === "cohort" || (n.kind === "fund" && parentsCohort.has(n.id)) ? "index" : n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker, v: valueOf(n), name: n.label });
   // a cohort's members hang from it as its names block: give each member a primary parent of its cohort in the layout copy
   // (names already have it; member FUNDS keep their own place on the tree and are not moved)
   const shapeOf = (() => { const r = $("graph").getBoundingClientRect(); return r.width > 10 && r.height > 10 ? r.width / r.height : innerWidth / Math.max(1, innerHeight - 80); })();
-  state.sectorRows = bestRows(lay, shapeOf);
-  const heads = prepareTree(lay, { rows: state.sectorRows });
-  const layById = new Map(lay.map((n) => [n.id, n]));
+  state.detail = state.detail === "detailed" ? "detailed" : "clean"; state.order = state.order === "size" ? "size" : "geiger";
+  // CLEAN keeps a heading, and any cohort or fund that has a bar; it drops every name, every fund set with no names at
+  // home (no bar), every waiting fund. A dropped node sits on its nearest kept ancestor, scaled to nothing, and is counted there.
+  const cleanKeep = (n) => n.kind === "index" || (n.kind !== "name" && valueOf(n) != null);
+  const modes = {};
+  function buildMode(key) {
+    const list = (key === "clean" ? nodes.filter(cleanKeep) : nodes).map(layNode);
+    const ids = new Set(list.map((n) => n.id));
+    const kept = list.filter((n) => !n.parents.length || ids.has(n.parents[0]));
+    const opts = { order: state.order };
+    const rows = bestRows(kept, shapeOf, opts);
+    const heads = prepareTree(kept, { ...opts, rows });
+    return { key, heads, byId: new Map(kept.map((n) => [n.id, n])), rows, trayHeads: heads.filter((h) => h.names.length), wrapHeads: heads.filter((h) => h.rows.length > 1) };
+  }
+  modes.full = buildMode("full"); modes.clean = buildMode("clean");
+  const modeOf = (m) => (m === "detailed" ? modes.full : modes.clean);
+  let cur = modeOf(state.detail); state.sectorRows = cur.rows;
   const isBranch = (n) => n.kind === "index" || n.kind === "cohort" || parentsCohort.has(n.id);
-  const layout = (k, into) => layoutTree(heads, k, (ln, x, y, z) => into(state.byId.get(ln.id), x, y, z));
+  const isSection = (n) => n.kind === "index" && n.id !== "MARKET" && !primaryKids(n.id).some((c) => c.kind === "index"); // a heading with no sub-headings: Technology, Financials, Broad Market, …
+  function layout(k, into, mode = cur) {
+    const placed = new Map();
+    layoutTree(mode.heads, k, (ln, x, y, z) => placed.set(ln.id, [x, y, z]));
+    nodes.forEach((n) => { n.fold = null; });
+    for (const n of nodes) {
+      let p = placed.get(n.id), a = null;
+      n.hid = !p;
+      if (!p) { a = n; while (a && !placed.has(a.id)) a = a.parents.length ? state.byId.get(a.parents[0]) : null; p = a ? placed.get(a.id) : [0, 0, 0]; }
+      if (a) { const f = a.fold || (a.fold = { names: 0, sets: 0, waiting: 0, funds: 0, total: 0 }); f.total++; if (n.kind === "name") { if (n.hollow) f.waiting++; else f.names++; } else if (n.kind === "cohort") f.sets++; else f.funds++; }
+      into(n, p[0], p[1], p[2]);
+    }
+  }
   layout(1, (n, x, y, z) => n.pos.set(x, y, z));
 
   /* ---- the scene ---- */
@@ -109,13 +144,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const links = [];
   nodes.forEach((n) => n.parents.forEach((p, i) => links.push({ s: state.byId.get(p), t: n, primary: i === 0 })));
   const treeLinks = links.filter((l) => l.primary && l.t.kind !== "name");
-  const trayHeads = heads.filter((h) => h.names.length);
-  const wrapHeads = heads.filter((h) => h.rows.length > 1);
   const RAIL = LAYOUT.ROWGAP / 2;
-  const hangs = (l) => { const lt = layById.get(l.t.id), ls = layById.get(l.s.id); return lt.kind === "index" && lt.rowOf > 0 && ls.rows && ls.rows.length > 1; };
-  const railCount = wrapHeads.reduce((s, h) => s + 2 * h.rows.length - 1, 0);
+  const hangs = (l) => { const lt = cur.byId.get(l.t.id), ls = cur.byId.get(l.s.id); return !!lt && !!ls && lt.kind === "index" && lt.rowOf > 0 && ls.rows && ls.rows.length > 1; };
+  const railsOf = (m) => m.wrapHeads.reduce((s, h) => s + 2 * h.rows.length - 1, 0);
+  const railCount = Math.max(railsOf(modes.full), railsOf(modes.clean)), trayMax = Math.max(modes.full.trayHeads.length, modes.clean.trayHeads.length);
   const lineGeo = new THREE.BufferGeometry();
-  const railStart = treeLinks.length + trayHeads.length * 5, lineCount = railStart + railCount;
+  const railStart = treeLinks.length + trayMax * 5, lineCount = railStart + railCount;
   lineGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
   lineGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(lineCount * 6), 3));
   { const col = lineGeo.attributes.color.array, C = new THREE.Color();
@@ -128,11 +162,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   ring.visible = false; ring.renderOrder = 5; scene.add(ring);
   const P = (id) => state.byId.get(id).pos;
   function applyPositions() {
-    for (const mesh of [litMesh, holMesh, headMesh, cohMesh]) { mesh.userData.list.forEach((n, i) => { M.makeScale(n.r, n.r, n.r).setPosition(n.pos); mesh.setMatrixAt(i, M); }); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); }
-    bars.forEach((b, i) => aCenter.setXYZ(i, b.n.pos.x, b.n.pos.y, b.n.pos.z)); aCenter.needsUpdate = true;
+    for (const mesh of [litMesh, holMesh, headMesh, cohMesh]) { mesh.userData.list.forEach((n, i) => { const r = n.hid ? 0 : n.r; M.makeScale(r, r, r).setPosition(n.pos); mesh.setMatrixAt(i, M); }); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); }
+    bars.forEach((b, i) => aCenter.setXYZ(i, b.n.pos.x, b.n.hid ? 1e6 : b.n.pos.y, b.n.pos.z)); aCenter.needsUpdate = true; // a folded node's bar is parked far out of view
     const a = lineGeo.attributes.position.array;
-    treeLinks.forEach((l, i) => a.set(hangs(l) ? [l.t.pos.x, l.t.pos.y + RAIL, l.t.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z] : [l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
-    trayHeads.forEach((h, j) => {
+    treeLinks.forEach((l, i) => a.set(l.t.hid ? [l.s.pos.x, l.s.pos.y, l.s.pos.z, l.s.pos.x, l.s.pos.y, l.s.pos.z] : hangs(l) ? [l.t.pos.x, l.t.pos.y + RAIL, l.t.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z] : [l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
+    a.fill(0, treeLinks.length * 6, lineCount * 6); // trays and rails of the mode not on the screen stay empty
+    cur.trayHeads.forEach((h, j) => {
       const hp = P(h.id), f = P(h.names[0].id), last = P((h.names[(h.nRows - 1) * h.cols] || h.names[h.names.length - 1]).id);
       const x0 = h.bx0 - 4, x1 = h.bx0 + h.leafW + 4, top = f.y + 16, bot = last.y - 16, z0 = f.z - 6, z1 = last.z + 10;
       const segs = [[hp.x, hp.y, hp.z, h.cx, top, z0], [x0, top, z0, x1, top, z0], [x1, top, z0, x1, bot, z1], [x1, bot, z1, x0, bot, z1], [x0, bot, z1, x0, top, z0]];
@@ -140,7 +175,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       segs.forEach((s, k) => a.set(s, (treeLinks.length + j * 5 + k) * 6));
     });
     let ri = railStart;
-    for (const h of wrapHeads) {
+    for (const h of cur.wrapHeads) {
       const hp = P(h.id), z = hp.z, g = h.trunkX;
       a.set([hp.x, hp.y, z, g[0], hp.y, z], ri++ * 6);
       let prevY = hp.y;
@@ -206,17 +241,30 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   nodes.forEach((n) => {
     const top = n.kind === "index" && (n.id === "MARKET" || n.parents[0] === "MARKET");
     const kind = n.kind === "index" ? "h" : n.kind === "cohort" ? "c" : n.kind === "fund" ? "f" : "n";
-    const text = n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.kind === "cohort" ? (n.ckind === "none" ? "NONE YET" : n.ckind === "fundset" ? n.cohort + " SET" : n.ckind === "proposed" ? n.label + " ?" : n.label) : n.ticker;
+    // 2 Oct: a proposed cohort used to print "NAME ?" — the question mark is gone; its small line says "proposed, not adopted"
+    const text = n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.kind === "cohort" ? (n.ckind === "none" ? "NONE YET" : n.ckind === "fundset" ? n.cohort + " SET" : n.label) : n.ticker;
     n.lbl = { kind, top, text, el: null, shown: false };
     const px = kind === "h" ? (top ? 13 : 12) : kind === "f" ? 12 : 11, sp = kind === "h" ? (top ? 2.3 : 1.7) : kind === "c" ? 1.2 : 0.2;
     n.lbl.w = measure(text, px, sp) + 4; n.lbl.h = kind === "h" || kind === "c" ? 16 : 14;
     n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : top ? 92 : 84) : n.kind === "cohort" ? (n.ckind === "adopted" ? 80 : n.ckind === "proposed" ? 76 : n.ckind === "fundset" ? 62 : 70) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
   });
-  function labelEl(n) { if (n.lbl.el) return n.lbl.el; const d = document.createElement("div"); d.className = "lb " + n.lbl.kind + (n.lbl.top ? " top" : "") + (n.hollow ? " w" : ""); d.textContent = n.lbl.text; labelLayer.appendChild(d); n.lbl.el = d; return d; }
+  function labelEl(n) { if (n.lbl.el) return n.lbl.el; const d = document.createElement("div"); d.className = "lb " + n.lbl.kind + (n.lbl.top ? " top" : "") + (n.hollow ? " w" : ""); d.textContent = n.lbl.text; d.dataset.id = n.id; labelLayer.appendChild(d); n.lbl.el = d; return d; }
+  /* the small line under a heading or cohort, in words: "86 up · 40 down" (how many lines under it read up / down — the
+     ▲▼ arrows Alan could not read are gone), "proposed, not adopted", "no names at home here" (a fund set whose served
+     holdings all live in an adopted or proposed cohort), and in CLEAN "＋N more" = what the box folds away. */
   function sub(n) {
-    const a = n.agg && n.agg.full; if (!a) return "";
-    return (n.kind === "cohort" ? `${fmtG(a.v)} · ` : "") + `<span class="up">▲${a.up}</span> <span class="dn">▼${a.down}</span>` + (n.kind === "cohort" && n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count}≠` : "");
+    const a = n.agg && n.agg.full; const parts = [];
+    if (a) parts.push((n.kind === "cohort" ? `${fmtG(a.v)} · ` : "") + `<span class="up">${a.up} up</span> · <span class="dn">${a.down} down</span>`);
+    if (n.kind === "cohort" && n.ckind === "proposed") parts.push("proposed, not adopted");
+    if (n.kind === "cohort" && n.ckind === "fundset" && !membersOf(n).length) parts.push("no names at home here");
+    if (n.kind === "cohort" && n.ckind === "none") parts.push("names no group claims yet");
+    let s = parts.join(" · ");
+    if (n.fold && n.fold.total && !cluster) s += (s ? "<br>" : "") + `＋${n.fold.total} more`; // not inside an area or the coil: there everything is drawn
+    return s;
   }
+  const foldWords = (f) => [f.names ? `${f.names} name${f.names > 1 ? "s" : ""}` : "", f.sets ? `${f.sets} empty set${f.sets > 1 ? "s" : ""}` : "", f.funds ? `${f.funds} fund${f.funds > 1 ? "s" : ""} with no reading` : "", f.waiting ? `${f.waiting} waiting` : ""].filter(Boolean).join(" · ");
+  const CHIP = `<i class="lb3d" title="lift this section into 3D (Esc drops it back)">3D</i>`;
+  labelLayer.addEventListener("click", (ev) => { const c = ev.target.closest(".lb3d"); if (!c) return; const el = c.closest(".lb"), n = el && state.byId.get(el.dataset.id); if (!n) return; ev.stopPropagation(); onSelect(n); state.selected = n.id; enterArea(n); });
   const V = new THREE.Vector3(), rects = [];
   const MAXL = PHONE ? 70 : 240, PXN = PHONE ? 4.6 : 3.4, PXF = PHONE ? 2.4 : 1.6;
   function barsBelowPx(n, ppu) { const nb = bars.filter((b) => b.n === n).length; if (!nb) return n.r * ppu; const s = Math.max(1, BAR_MIN_PX / (BAR_W * ppu)); return n.r * ppu + s * ppu * (BAR_TOP + 2 * BAR_H * nb + BAR_GAP * (nb - 1)); }
@@ -235,6 +283,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       else if (n.lbl.kind === "f") show = rpx >= PXF || n.id === state.selected;
       else { show = rpx >= PXN || n.id === state.selected; p = 36 + rpx * 2.2; }
       if (n.id === state.selected) p += 300;
+      if (n.hid) show = false;
+      if (cluster && cluster.coil && n !== cluster.c) { show = true; p = 40 + n.r; }
       if (!show) { hide(n); continue; }
       cand.push({ n, sx: (V.x + 1) * view.w / 2, sy: (1 - V.y) * view.h / 2, rpx, below: barsBelowPx(n, ppu), p, dist: depth / camD });
     }
@@ -242,8 +292,10 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     rects.length = 0; let shown = 0;
     for (const c of cand) {
       if (shown >= MAXL) { hide(c.n); continue; }
-      const n = c.n, w = n.lbl.w, s = (n.lbl.kind === "h" && c.rpx > 2.2 && !n.lbl.top && n.id !== "US") || (n.lbl.kind === "c" && c.rpx > 1.6) ? sub(n) : "";
-      const h = n.lbl.h + (s ? 14 : 0), x = c.sx - w / 2; // centred on the ball, never pushed along the edge
+      const n = c.n, s = (n.lbl.kind === "h" && c.rpx > 2.2 && !n.lbl.top && n.id !== "US") || (n.lbl.kind === "c" && c.rpx > 1.6) ? sub(n) : "";
+      const chip = state.canvas && !cluster && isSection(n); // every section carries its 3D chip on the canvas, at any zoom
+      const w = n.lbl.w + (chip ? 26 : 0);
+      const h = n.lbl.h + (s ? 14 * (1 + (s.match(/<br>/g) || []).length) : 0), x = c.sx - w / 2; // centred on the ball, never pushed along the edge
       if (x < 0 || x + w > view.w) { hide(n); continue; } // printed whole or not at all
       const tries = n.lbl.kind === "h" || n.lbl.kind === "c" ? [c.below + 3, c.below + 3 + h + 2, -c.rpx - h - 3] : [c.below + 2];
       let y = null;
@@ -251,7 +303,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       if (y == null) { hide(n); continue; }
       rects.push({ x, y, w, h, id: n.id, nx: c.sx, ny: c.sy, text: n.lbl.text }); shown++;
       const e = labelEl(n);
-      if ((n.lbl.kind === "h" || n.lbl.kind === "c") && e.dataset.sub !== s) { e.innerHTML = esc(n.lbl.text) + (s ? `<small>${s}</small>` : ""); e.dataset.sub = s; }
+      const key = s + (chip ? "|3d" : "");
+      if ((n.lbl.kind === "h" || n.lbl.kind === "c") && e.dataset.sub !== key) { e.innerHTML = esc(n.lbl.text) + (chip ? CHIP : "") + (s ? `<small>${s}</small>` : ""); e.dataset.sub = key; }
       e.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
       e.style.opacity = Math.max(0.45, Math.min(1, 1.6 - c.dist * 0.6)).toFixed(2);
       if (!n.lbl.shown) { e.style.display = "block"; n.lbl.shown = true; }
@@ -294,15 +347,21 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   }
   const tipEl = $("tip");
   const gHTML = (v) => `<span style="color:${v >= 0 ? "#35b06a" : "#d1483f"}">${fmtG(v)}</span>`;
+  const barHTML = (v) => `<span style="display:inline-block;width:64px;height:9px;background:#1f1f1f;position:relative;vertical-align:middle;border-radius:2px"><span style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#8c8c8c"></span><span style="position:absolute;top:1px;bottom:1px;${v >= 0 ? "left:50%" : "right:50%"};width:${(Math.min(1, Math.abs(v)) * 50).toFixed(1)}%;background:${v >= 0 ? "#35b06a" : "#d1483f"}"></span></span>`;
+  const pathWords = (n) => { const out = []; let c = n; while (c.parents.length) { c = state.byId.get(c.parents[0]); out.unshift(c.ticker || (SHORT[c.id] || c.label)); } return out.join(" › "); };
   function tip(n) {
     const head = n.ticker ? `<b>${esc(n.ticker)}</b> · ${esc(n.label)}` : `<b>${esc(n.label)}</b>`;
-    if (n.kind === "index") return head + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to fly in</span>`;
-    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${{ adopted: "ADOPTED cohort", proposed: "PROPOSED cohort", fundset: "FUND SET", none: "not a cohort" }[n.ckind]} · ${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} board ≠` : ""}</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ▲${a.up} ▼${a.down}</span>` : ""); }
+    const fold = n.fold && n.fold.total ? `<br><span style='color:#8c8c8c'>＋${n.fold.total} more inside: ${foldWords(n.fold)} — DETAILED shows them</span>` : "";
+    const words = state.wordsOf ? state.wordsOf(n) : "";
+    if (n.kind === "index") return head + (words ? `<br><span style='color:#ababab'>${esc(words)}</span>` : "") + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to lift it into 3D</span>` + fold;
+    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${{ adopted: "ADOPTED cohort", proposed: "PROPOSED cohort, not adopted", fundset: "FUND SET: the fund's served holdings no cohort claims", none: "NONE YET: names no group claims, grouped under their sector" }[n.ckind]} · ${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} filed elsewhere on the board` : ""}</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ${a.up} up · ${a.down} down</span>` : "") + fold; }
     const rd = readingOf(n); let s = head;
-    if (rd) s += `<br>Geiger ${gHTML(rd.v)} <span style='color:#8c8c8c'>${rd.kind === "scout" ? "· SCOUT" : ""}</span>`; else s += "<br><span style='color:#8c8c8c'>no reading</span>";
+    if (rd) s += `<br>${barHTML(rd.v)} Geiger ${gHTML(rd.v)} <span style='color:#8c8c8c'>${rd.kind === "scout" ? "· SCOUT" : ""}</span>`; else s += "<br><span style='color:#8c8c8c'>waiting: no reading yet</span>";
     if (n.kind === "fund" && n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of the fund</span>`;
-    if (n.kind === "name" && n.differs) s += `<br><span style='color:#8c8c8c'>board tab: ${esc(String(n.board_cohort || "—").replace(/_/g, " "))}</span>`;
-    return s;
+    if (n.kind === "name") { const ind = state.industryOf ? state.industryOf(n.ticker) : null; if (ind && (ind.fmp_industry || ind.sic_code)) s += `<br><span style='color:#8c8c8c'>${esc(ind.fmp_industry || "industry —")}${ind.sic_code ? " · SIC " + esc(ind.sic_code) : ""}${ind.disagreement ? " · the two authorities differ" : ""}</span>`; }
+    if (n.kind === "name" && (cluster && cluster.coil)) s += `<br><span style='color:#8c8c8c'>${esc(pathWords(n))}</span>`;
+    if (n.kind === "name" && n.differs) s += `<br><span style='color:#8c8c8c'>board tab today: ${esc(String(n.board_cohort || "—").replace(/_/g, " "))}</span>`;
+    return s + fold;
   }
   renderer.domElement.addEventListener("pointermove", (ev) => {
     if (downAt) return; const n = pick(ev);
@@ -328,7 +387,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   }
   function select(n, fly = true, lift = false) { // lift: a click on the canvas lifts a branch into 3D; the finder and the card only fly there
     if (cluster) { state.selected = n.id; ring.visible = true; drawSelection(n); state.dirty = true; wake(); return; }
-    if (state.canvas && lift && isBranch(n)) { state.selected = n.id; onSelect(n); enterArea(n); return; }
+    if (state.canvas && lift && isBranch(n)) { state.selected = n.id; onSelect(n); if (coilWorthy(n)) enterCoil(n); else enterArea(n); return; }
     if (!beforePick) beforePick = { p: camera.position.clone(), t: controls.target.clone() };
     state.selected = n.id; ring.visible = true; drawSelection(n);
     if (fly) {
@@ -372,7 +431,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     const nbIds = new Set();
     for (const m of names) for (const a of m.also_in || []) if (!inSub.has(a.id)) nbIds.add(a.id);
     // cohorts first (where else it is filed), fund sets next; at most 30 so the ring stays readable
-    const nbs = [...nbIds].map((id) => state.byId.get(id)).filter(Boolean).sort((a, b) => (a.ckind === "adopted" ? 0 : a.ckind === "proposed" ? 1 : 2) - (b.ckind === "adopted" ? 0 : b.ckind === "proposed" ? 1 : 2)).slice(0, 30);
+    // the ring runs green → red by the neighbour's reading (2 Oct), no reading last; at most 30 so it stays readable
+    const nbs = [...nbIds].map((id) => state.byId.get(id)).filter(Boolean).sort((a, b) => { const av = valueOf(a), bv = valueOf(b); if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; return bv - av || (a.label < b.label ? -1 : 1); }).slice(0, 30);
     // the subtree in its own 3D arrangement: the tree's 3D layout, re-centred on the area's root
     const L3 = state.layoutOf(1), o = L3[root.id];
     const put = (n, x, y, z) => { if (!saved.has(n.id)) saved.set(n.id, n.pos.clone()); n.pos.set(x, y, z); };
@@ -416,6 +476,51 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     state.dirty = true; wake();
   }
   const enterArea = enterCluster;
+  /* ---- the COIL (2 Oct, Alan): a long ordered list drawn as two snakes. Every name with a reading is a bead; its height is
+     its reading (×H), so the beads near zero lie flat round the base ring and the strong ones climb; the angle grows with
+     the rank from the base, so the greens coil upward to the highest reading at the top tip and the reds coil downward,
+     mirrored, to the most negative at the bottom tip; the radius narrows toward the tips. Colour = the reading (green up,
+     red down, stronger = brighter). Names with no reading lie in a grey row under the base. Hover = the bar and the path;
+     click = the name's card. Opened by a cohort of more than 24 names, or from the card of any parent. ---- */
+  const COIL_MIN = 24;
+  function beneathNames(root) { const out = []; const seen = new Set(); (function walk(id) { for (const c of primaryKids(id)) { if (c.kind === "name" && !seen.has(c.id)) { seen.add(c.id); out.push(c); } walk(c.id); if (c.kind === "cohort") for (const m of membersOf(c)) if (m.kind === "name" && !seen.has(m.id)) { seen.add(m.id); out.push(m); } } })(root.id); if (root.kind === "cohort") for (const m of membersOf(root)) if (m.kind === "name" && !seen.has(m.id)) { seen.add(m.id); out.push(m); } return out; }
+  const coilWorthy = (n) => n.kind === "cohort" && beneathNames(n).length > COIL_MIN;
+  const UPC = new THREE.Color(0x35b06a), DNC = new THREE.Color(0xd1483f), GREYC = new THREE.Color(0x4a4a4a);
+  function enterCoil(root) {
+    exitCluster(false);
+    const all = beneathNames(root);
+    const withV = all.map((n) => ({ n, v: valueOf(n) })).filter((x) => x.v != null).sort((a, b) => b.v - a.v || (a.n.ticker < b.n.ticker ? -1 : 1));
+    const none = all.filter((n) => valueOf(n) == null);
+    const H = 320, R = 150, STEP = (Math.PI * 2) / 11;
+    const put = (n, x, y, z) => { if (!saved.has(n.id)) saved.set(n.id, n.pos.clone()); n.pos.set(x, y, z); };
+    const ups = withV.filter((x) => x.v >= 0), dns = withV.filter((x) => x.v < 0);
+    const place = (x, i, sign) => { const a = sign * i * STEP, r = R * (1 - 0.72 * Math.min(1, Math.abs(x.v))); put(x.n, r * Math.cos(a), x.v * H, r * Math.sin(a)); };
+    ups.slice().reverse().forEach((x, i) => place(x, i, 1));   // from the base (nearest zero) up to the tip
+    dns.forEach((x, i) => place(x, i, -1));                     // from the base down to the other tip, mirrored
+    const top = ups.length ? ups[0].v * H : 0, bottom = dns.length ? dns[dns.length - 1].v * H : 0;
+    none.forEach((n, i) => put(n, -R + (i % 24) * 13, bottom - 60 - Math.floor(i / 24) * 14, 0));
+    put(root, 0, top + 70, 0);
+    const group = new THREE.Group();
+    const balls = [];
+    const mkBall = (n, col, r, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: col, transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(r); b.userData.node = n; group.add(b); balls.push(b); return b; };
+    for (const x of withV) { const k = 0.3 + 0.7 * Math.min(1, Math.abs(x.v)); mkBall(x.n, GREYC.clone().lerp(x.v >= 0 ? UPC : DNC, k), 4.6); }
+    for (const n of none) mkBall(n, HOLLOW, 3, 0.5);
+    mkBall(root, root.kind === "index" ? HEADING : COHORT, root.r);
+    // the snakes' bodies: one line through the greens base → tip, one through the reds; the base ring; the spine
+    const line = (pts, col) => { if (pts.length < 2) return; const g = new THREE.BufferGeometry().setFromPoints(pts); group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.55 }))); };
+    line(ups.slice().reverse().map((x) => x.n.pos.clone()), 0x2f6f48); line(dns.map((x) => x.n.pos.clone()), 0x7a3a34);
+    const ringPts = []; for (let i = 0; i <= 64; i++) ringPts.push(new THREE.Vector3(R * Math.cos((i / 64) * Math.PI * 2), 0, R * Math.sin((i / 64) * Math.PI * 2)));
+    line(ringPts, 0x2a2a2a); line([new THREE.Vector3(0, bottom - 20, 0), new THREE.Vector3(0, top + 50, 0)], 0x2a2a2a);
+    scene.add(group);
+    for (const o of [litMesh, holMesh, headMesh, cohMesh, barMesh, selLines, treeLines]) o.visible = false;
+    cluster = { c: root, group, balls, members: [...withV.map((x) => x.n), ...none], nbs: [], before: { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate, coil: true };
+    controls.enableRotate = true;
+    state.cluster = root.id; state.clusterCount = { members: all.length, names: all.length, neighbours: 0, read: withV.length, up: ups.length, down: dns.length, none: none.length, top: withV.length ? withV[0].n.ticker : null, bottom: withV.length ? withV[withV.length - 1].n.ticker : null };
+    state.coilOrder = withV.map((x) => x.n.ticker);
+    nodes.forEach(hide);
+    flyTo(framing([root, ...cluster.members], new THREE.Vector3(1, 0.28, 0.9).normalize(), 0.78), 900);
+    state.dirty = true; wake();
+  }
   function exitCluster(fly = true) {
     if (!cluster) return;
     scene.remove(cluster.group);
@@ -443,10 +548,27 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   state.zoomAt = (sx, sy, f) => { const nd = new THREE.Vector3((sx / view.w) * 2 - 1, -(sy / view.h) * 2 + 1, 0.5).unproject(camera); const dir = nd.sub(camera.position).normalize(); const d = camera.position.distanceTo(controls.target); const hit = camera.position.clone().add(dir.multiplyScalar(d)); camera.position.lerp(hit, 1 - 1 / f); controls.target.lerp(hit, 1 - 1 / f); state.dirty = true; wake(); };
   const T_HELD = (state.tree && state.tree.held_by) || {};
   state.screenOf = (id) => { const n = state.byId.get(id); camera.updateMatrixWorld(); const v = n.pos.clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) * r.width / 2, r.top + (1 - v.y) * r.height / 2]; };
-  state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }); layout(state.flat ? 0 : 1, () => {}); return out; };
+  state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }, modes.full); layout(state.flat ? 0 : 1, () => {}); return out; }; // an area is always the DETAILED subtree
+  /* ---- CLEAN | DETAILED and the order (2 Oct): the other picture of the same tree, morphed to ---- */
+  function remorph(ms) {
+    if (cluster) exitCluster(false);
+    nodes.forEach((n) => n.from.copy(n.pos));
+    layout(state.flat ? 0 : 1, (n, x, y, z) => n.to.set(x, y, z));
+    release(false); nodes.forEach(hide);
+    if (ms) { morph = { t0: performance.now(), ms }; frameWhole(ms, (n) => n.to); } else { nodes.forEach((n) => n.pos.copy(n.to)); applyPositions(); frameWhole(0); }
+    state.dirty = true; wake();
+  }
+  function setDetail(mode, ms = 700) { mode = mode === "detailed" ? "detailed" : "clean"; if (mode === state.detail) return; state.detail = mode; cur = modeOf(mode); state.sectorRows = cur.rows; remorph(ms); }
+  function setOrder(o, ms = 700) { o = o === "size" ? "size" : "geiger"; if (o === state.order) return; state.order = o; modes.full = buildMode("full"); modes.clean = buildMode("clean"); cur = modeOf(state.detail); state.sectorRows = cur.rows; remorph(ms); }
+  state.folds = () => { const out = {}; for (const n of nodes) if (n.fold) out[n.id] = { ...n.fold }; return out; };
+  state.hidden = () => nodes.filter((n) => n.hid).map((n) => n.id);
+  state.shownKinds = () => { const k = {}; for (const n of nodes) if (!n.hid) { const key = n.kind + (n.ckind ? "/" + n.ckind : "") + (n.ticker && !readingOf(n) ? "/noreading" : ""); k[key] = (k[key] || 0) + 1; } return k; };
+  state.sectionsWithChip = () => nodes.filter((n) => isSection(n) && !n.hid).map((n) => n.id);
+  state.chipsDrawn = () => [...labelLayer.querySelectorAll(".lb .lb3d")].filter((c) => c.closest(".lb").style.display !== "none").map((c) => c.closest(".lb").dataset.id);
+  state.orderOnScreen = (id) => { const h = cur.heads.find((x) => x.id === id); if (!h) return null; const row = (list) => list.map((c) => ({ id: c.id, v: c.v, x: +state.byId.get(c.id).pos.x.toFixed(1) })); return { subs: row(h.subs), funds: row(h.funds), names: row(h.names) }; };
 
   fit();
   if (PHONE) $("legend").removeAttribute("open");
   frameWhole(0);
-  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, enterArea, exitArea: exitCluster, setCanvas, inCluster: () => !!cluster, inArea: () => !!cluster };
+  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, enterArea, exitArea: exitCluster, setCanvas, inCluster: () => !!cluster, inArea: () => !!cluster, inCoil: () => !!(cluster && cluster.coil), enterCoil, coilWorthy, beneathNames, setDetail, setOrder, valueOf };
 }

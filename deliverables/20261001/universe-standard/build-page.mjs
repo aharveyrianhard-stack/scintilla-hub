@@ -85,7 +85,7 @@ function ladderHTML(T, { full = false } = {}) {
 /* ---------- the 3D form (LRCX): the company at the centre; height = votes; radius = closeness; inner ring = kept ---------- */
 function threeDSVG(T) {
   const s = CS[T], kept = new Set(s.standard.kept.map((k) => k.ticker));
-  const W = 1000, H = 640, cx = 500, cy = 420, rx = 380, ry = 118, lift = 92;            // four levels stacked: votes 1 (bottom) … 4 (top)
+  const W = 1240, H = 640, cx = 560, cy = 420, rx = 380, ry = 118, lift = 92;   // 2 Oct: wider, so the ring labels on the right fit whole            // four levels stacked: votes 1 (bottom) … 4 (top)
   const lvlY = (v) => cy - (v - 1) * lift;
   const rows = s.ladder.filter((r) => r.served && r.closeness != null);
   // angle by the source signature so the same kind of agreement sits on the same side; spread inside the sector by rank
@@ -101,9 +101,13 @@ function threeDSVG(T) {
     const y = lvlY(v);
     svg += `<ellipse cx="${cx}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="#2a2a2a" stroke-width="1"/>`;
     svg += `<ellipse cx="${cx}" cy="${y}" rx="${rx * 0.32}" ry="${ry * 0.32}" fill="none" stroke="#383838" stroke-width="1" stroke-dasharray="3 3"/>`;
-    svg += `<text x="${cx + rx + 10}" y="${y + 4}" fill="#8c8c8c" letter-spacing="2">${v} VOTE${v > 1 ? "S" : ""}</text>`;
+    // 2 Oct (Alan: "more labels on what each ring is"): every ring says what it is where it is drawn
+    svg += `<text x="${cx + rx + 10}" y="${y + 4}" fill="#acacac" letter-spacing="2">${v === 1 ? "1 SOURCE NAMES IT" : v + " SOURCES AGREE"}</text>`;
+    svg += `<text x="${cx + rx + 10}" y="${y + 17}" fill="#6c6c6c" font-size="9.5" letter-spacing="1">${{ 4: "all four: peer list, related, same industry, shared fund", 3: "three of the four", 2: "two of the four", 1: "one source only" }[v]}</text>`;
+    svg += `<text x="${cx - rx - 10}" y="${y + 4}" text-anchor="end" fill="#6c6c6c" font-size="10" letter-spacing="1">${v === 4 ? "TOP RING" : v === 1 ? "BOTTOM RING" : ""}</text>`;
   }
-  svg += `<text x="${cx + rx * 0.32 + 40}" y="${lvlY(4) + ry * 0.32 + 14}" fill="#6c6c6c" font-size="10" letter-spacing="2">DASHED = THE KEPT BAND</text>`;
+  svg += `<text x="${cx + rx * 0.32 + 40}" y="${lvlY(4) + ry * 0.32 + 14}" fill="#8c8c8c" font-size="10" letter-spacing="2">DASHED RING = THE SIZE BAND</text><text x="${cx + rx * 0.32 + 40}" y="${lvlY(4) + ry * 0.32 + 27}" fill="#6c6c6c" font-size="9.5" letter-spacing="1">÷10 … ×10 of ${T}'s market value (${money(s.market_cap)}); outside it, dropped</text>`;
+  svg += `<text x="${cx - rx * 0.32 - 40}" y="${lvlY(4) - ry * 0.32 - 18}" text-anchor="end" fill="#cfcfcf" font-size="10" letter-spacing="2">BRIGHT DOTS = THE ${s.standard.kept.length} KEPT</text><text x="${cx - rx * 0.32 - 40}" y="${lvlY(4) - ry * 0.32 - 5}" text-anchor="end" fill="#6c6c6c" font-size="9.5" letter-spacing="1">the nearest ${s.standard.kept.length} in size of those that pass</text>`;
   // the spine
   svg += `<line x1="${cx}" y1="${lvlY(4) - 60}" x2="${cx}" y2="${cy + 10}" stroke="#383838" stroke-width="1"/>`;
   // candidates: radius by closeness (nearer in size → nearer the centre), capped at the rim
@@ -120,10 +124,23 @@ function threeDSVG(T) {
   }
   // the company at the top of the spine
   svg += `<circle cx="${cx}" cy="${lvlY(4) - 60}" r="9" fill="#0e0e0e" stroke="#cfcfcf" stroke-width="2"/><text x="${cx + 14}" y="${lvlY(4) - 56}" fill="#cfcfcf" font-size="13" font-weight="600">${T}</text><text x="${cx + 14}" y="${lvlY(4) - 42}" fill="#8c8c8c" font-size="10">${esc(s.industry)} · SIC ${s.sic || "—"} · ${money(s.market_cap)}</text>`;
+  svg += `<text x="24" y="22" fill="#acacac" font-size="10" letter-spacing="2">THE FOUR SOURCES</text><text x="24" y="37" fill="#8c8c8c" font-size="10">FMP's peer list · Massive's related companies · the same industry (by the authority, FMP) · a shared industry fund</text>`;
   // legend
-  svg += `<g transform="translate(24,${H - 70})" fill="#8c8c8c" font-size="10" letter-spacing="1"><text y="0">UP = MORE SOURCES AGREE (4 rings: one vote at the bottom, four at the top)</text><text y="16">IN = NEARER IN MARKET VALUE (|log10 of the size ratio|; the dashed ring is the kept band)</text><text y="32">AROUND = THE KIND OF AGREEMENT (each source signature keeps its own side)</text><text y="48">BRIGHT = KEPT (${s.standard.kept.length} of ${rows.length} served candidates) · MID = 3 VOTES, NOT KEPT · DARK = THE REST</text></g>`;
+  svg += `<g transform="translate(24,${H - 70})" fill="#8c8c8c" font-size="10" letter-spacing="1"><text y="0">UP = MORE SOURCES AGREE (four rings: one source at the bottom, all four at the top)</text><text y="16">IN = NEARER IN MARKET VALUE (the dashed ring is the size band: ÷10 … ×10 of the company)</text><text y="32">AROUND = THE KIND OF AGREEMENT (names the same sources name sit on the same side)</text><text y="48">BRIGHT = THE ${s.standard.kept.length} KEPT (of ${rows.length} served candidates) · MID = 3 SOURCES, NOT KEPT · DARK = THE REST</text></g>`;
   svg += `</svg>`;
   return svg;
+}
+
+/* ---------- the four plain lines above the cone and the ladder (2 Oct, Alan: "it's the eliminations of comps. I'd like a little bit of description of that") ---------- */
+function fourLines(T) {
+  const s = CS[T], c = s.standard.counts, kept = s.standard.kept;
+  const tooBig = s.standard.dropped.filter((d) => /too (big|small)/.test(d.why)).length, otherInd = s.standard.dropped.filter((d) => /other industry/.test(d.why)).length, beyond = s.standard.dropped.filter((d) => /beyond the nearest/.test(d.why)).length;
+  return `<div class="panel"><div class="words"><ol style="margin:0;padding-left:22px">
+<li><b>What goes in.</b> Every name any of four sources offers for ${T}: FMP's peer list, Massive's related companies, every served name in the same industry (${esc(s.industry)}, by the authority), and every served holding of an industry fund that holds ${T}. ${c.candidates} candidates; ${c.served} of them served.</li>
+<li><b>What each ring removes.</b> A name rises one ring for each source that names it, so the top ring is where all four agree. Then the cuts: a name outside ${T}'s industry by the authority is dropped whatever its votes (${otherInd} here; a fund vote alone does not make a peer), a name outside the size band — more than ten times bigger or smaller than ${T} — is dropped (${tooBig} here, the dashed ring), and of the ${c.in_band} that pass, only the nearest ${c.kept} in size stay, ranked by votes then closeness (${beyond} beyond the nearest ${c.kept}).</li>
+<li><b>What is left.</b> ${kept.length} names, the bright dots: ${kept.map((k) => `${k.ticker} (${k.votes})`).join(", ")} — the number is how many of the four sources name it.</li>
+<li><b>Why.</b> A comp set should be names that several independent sources agree are alike, in the same business, of a comparable size — not one provider's list, and not every name in a sector. The rings show where the sources agree and where they do not, and what the cuts take away.</li>
+</ol></div></div>`;
 }
 
 /* ---------- a worked comp set ---------- */
@@ -339,8 +356,8 @@ writeFileSync(join(HERE, "UNIVERSE-STANDARD.html"), html);
 
 /* ---------- the two standalone mocks ---------- */
 const mockHead = (title) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body><div class="wrap">`;
-writeFileSync(join(HERE, "agreement-ladder.html"), `${mockHead("Agreement Ladder")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT LADDER · LRCX <span class="proposed">MOCK</span></div><div class="stamp">rows = candidates by votes then closeness · columns = the four sources · the shaded band = the kept set · 1 Oct 2026, real data</div></div><div class="panel"><div class="tw" style="padding-top:10px">${ladderHTML("LRCX", { full: true })}</div></div></div></body></html>`);
-writeFileSync(join(HERE, "agreement-3d.html"), `${mockHead("Agreement 3D")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT VIEW, 3D · LRCX <span class="proposed">MOCK</span></div><div class="stamp">up = votes · in = closeness in market value · around = the kind of agreement · the bright inner ring = the kept set · 1 Oct 2026, real data</div></div><div class="panel"><div class="svgwrap">${threeDSVG("LRCX")}</div></div></div></body></html>`);
+writeFileSync(join(HERE, "agreement-ladder.html"), `${mockHead("Agreement Ladder")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT LADDER · LRCX <span class="proposed">MOCK</span></div><div class="stamp">rows = candidates by votes then closeness · columns = the four sources · the shaded band = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}<div class="panel"><div class="tw" style="padding-top:10px">${ladderHTML("LRCX", { full: true })}</div></div></div></body></html>`);
+writeFileSync(join(HERE, "agreement-3d.html"), `${mockHead("Agreement 3D")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT VIEW, 3D · LRCX <span class="proposed">MOCK</span></div><div class="stamp">up = how many sources agree · in = closeness in market value · around = the kind of agreement · the bright dots = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}<div class="panel"><div class="svgwrap">${threeDSVG("LRCX")}</div></div></div></body></html>`);
 
 /* ---------- the machine copy ---------- */
 const std = {

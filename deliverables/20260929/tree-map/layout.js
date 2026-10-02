@@ -14,10 +14,15 @@
    (bestRows) — 2 rows on a 1680 screen, more on a phone. The later rows hang from rails: one horizontal rail above each later row, reached by a line
    down a gap in the row above (the gap nearest the heading's centre), and a short drop from the rail to each sub-heading.
 
-   prepareTree(nodes, {rows}) — nodes: [{id, kind, parents, role, issuer, market_value_usd, ticker}] (node list order kept);
+   Order (2 Oct, T5): inside every parent the children run green → red by their reading (the highest first, ties by name,
+   no reading last) — sub-headings, funds and names alike. {order: "size"} keeps the old order: sub-headings as listed,
+   funds by role and issuer, names by market value. A node's reading is its `v` (own Geiger, else its aggregate; null = none).
+
+   prepareTree(nodes, {rows, order}) — nodes: [{id, kind, parents, role, issuer, market_value_usd, ticker, v, name}];
                         adds to every heading: subs, rows, funds, names, cols, leafW, depth, w, x0, cx, bx0. Returns the headings.
    layout(heads, k, into) — calls into(node, x, y, z) once for every node; sets rowOf on wrapped sub-headings.
    bestRows(nodes, aspect) — the row count (1…4) whose 3D whole-tree box is closest in shape to the canvas (width/height). */
+export { byReading };
 export const LAYOUT = { SP: 22, GAP: 26, LEVEL: 120, DZ3: 28, DY3: 6, ROW2: 36, NAMES_DROP: 70, ROWGAP: 110, WRAP_MIN: 8, ZPROJ: 0.9 };
 const ISSUER_ORDER = { "State Street SPDR": 0, iShares: 1, Vanguard: 2, "Invesco (equal weight)": 3 };
 export const colsFor = (n) => (n <= 3 ? n : Math.min(9, Math.max(3, Math.ceil(Math.sqrt(n)))));
@@ -34,8 +39,12 @@ function splitRows(list, widths, rows, gap) {
 }
 const rowW = (row, gap) => row.reduce((s, c) => s + c.w, 0) + gap * Math.max(0, row.length - 1);
 
+const byReading = (a, b) => { const av = Number.isFinite(a.v) ? a.v : null, bv = Number.isFinite(b.v) ? b.v : null;
+  if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; if (bv !== av) return bv - av;
+  const an = a.ticker || a.name || a.id, bn = b.ticker || b.name || b.id; return an < bn ? -1 : an > bn ? 1 : 0; };
 export function prepareTree(nodes, opts = {}) {
   const wrap = Math.max(1, Math.min(4, opts.rows || 1));
+  const bySize = opts.order === "size";
   const byId = new Map(nodes.map((n) => [n.id, n])), order = new Map(nodes.map((n, i) => [n.id, i]));
   const primary = new Map();
   for (const n of nodes) if (n.parents.length) { const p = n.parents[0]; if (!primary.has(p)) primary.set(p, []); primary.get(p).push(n); }
@@ -48,6 +57,7 @@ export function prepareTree(nodes, opts = {}) {
     h.funds = ch.filter((c) => c.kind === "fund").sort((a, b) => (a.role === "sector" ? 0 : 1) - (b.role === "sector" ? 0 : 1) ||
       (ISSUER_ORDER[a.issuer] ?? 9) - (ISSUER_ORDER[b.issuer] ?? 9) || order.get(a.id) - order.get(b.id));
     h.names = ch.filter((c) => c.kind === "name").sort((a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0) || (a.ticker < b.ticker ? -1 : 1));
+    if (!bySize) { h.subs = h.subs.slice().sort(byReading); h.funds = h.funds.slice().sort(byReading); h.names = h.names.slice().sort(byReading); }
     h.cols = Math.max(colsFor(h.funds.length), colsFor(h.names.length));
     h.leafW = h.cols * SP;
     h.depth = depthOf(h);
@@ -118,10 +128,10 @@ export function layout(heads, k, into) { // k = 1: 3D (extra rows step toward yo
   place(heads.find((h) => !h.parents.length), 0);
 }
 
-export function bestRows(nodes, aspect) {
+export function bestRows(nodes, aspect, opts = {}) {
   let best = 1, bestErr = Infinity;
   for (let r = 1; r <= 4; r++) {
-    const heads = prepareTree(nodes, { rows: r });
+    const heads = prepareTree(nodes, { ...opts, rows: r });
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     layout(heads, 1, (n, x, y, z) => { const sy = y - z * LAYOUT.ZPROJ; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); });
     const err = Math.abs(Math.log((x1 - x0) / Math.max(1, y1 - y0) / aspect));
