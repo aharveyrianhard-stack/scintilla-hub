@@ -303,7 +303,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     n.lbl = { kind, top, text, el: null, shown: false };
     const px = kind === "h" ? (top ? 13 : 12) : kind === "f" ? 12 : 11, sp = kind === "h" ? (top ? 2.3 : 1.7) : kind === "c" ? 1.2 : 0.2;
     n.lbl.w = measure(text, px, sp) + 4; n.lbl.h = kind === "h" || kind === "c" ? 16 : 14;
-    n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : isSection(n) ? 96 : top ? 92 : 84) : n.kind === "cohort" ? // a section's name and its OPEN 3D button win every collision (n.ckind === "adopted" ? 80 : n.ckind === "proposed" ? 76 : n.ckind === "fundset" ? 62 : 70) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
+    // a section's name and its OPEN 3D button (96) win every collision but THE MARKET's
+    n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : isSection(n) ? 96 : top ? 92 : 84) : n.kind === "cohort" ? (n.ckind === "adopted" ? 80 : n.ckind === "proposed" ? 76 : n.ckind === "fundset" ? 62 : 70) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
   });
   function labelEl(n) { if (n.lbl.el) return n.lbl.el; const d = document.createElement("div"); d.className = "lb " + n.lbl.kind + (n.lbl.top ? " top" : "") + (n.hollow ? " w" : "") + (isSection(n) ? " sec" : ""); d.textContent = n.lbl.text; d.dataset.id = n.id; if (isSection(n)) d.title = "click the name: open only this section in 3D"; labelLayer.appendChild(d); n.lbl.el = d; return d; }
   /* the small line under a heading or cohort, in words: "86 up · 40 down" (how many lines under it read up / down — the
