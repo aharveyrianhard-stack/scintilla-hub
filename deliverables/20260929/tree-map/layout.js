@@ -18,8 +18,11 @@
    no reading last) — sub-headings, funds and names alike. {order: "size"} keeps the old order: sub-headings as listed,
    funds by role and issuer, names by market value. A node's reading is its `v` (own Geiger, else its aggregate; null = none).
 
-   prepareTree(nodes, {rows, order}) — nodes: [{id, kind, parents, role, issuer, market_value_usd, ticker, v, name}];
-                        adds to every heading: subs, rows, funds, names, cols, leafW, depth, w, x0, cx, bx0. Returns the headings.
+   Spacing (2 Oct, T6): {sp} sets how far apart the lines of a leaf block sit (default LAYOUT.SP = 22). CLEAN passes a
+   wider value so every box has room for a Geiger bar that reads at the zoom-out; DETAILED keeps the default.
+
+   prepareTree(nodes, {rows, order, sp}) — nodes: [{id, kind, parents, role, issuer, market_value_usd, ticker, v, name}];
+                        adds to every heading: subs, rows, funds, names, cols, leafW, sp, depth, w, x0, cx, bx0. Returns the headings.
    layout(heads, k, into) — calls into(node, x, y, z) once for every node; sets rowOf on wrapped sub-headings.
    bestRows(nodes, aspect) — the row count (1…4) whose 3D whole-tree box is closest in shape to the canvas (width/height). */
 export { byReading };
@@ -49,7 +52,8 @@ export function prepareTree(nodes, opts = {}) {
   const primary = new Map();
   for (const n of nodes) if (n.parents.length) { const p = n.parents[0]; if (!primary.has(p)) primary.set(p, []); primary.get(p).push(n); }
   const depthOf = (n) => { let d = 0, c = n; while (c.parents.length) { c = byId.get(c.parents[0]); d++; } return d; };
-  const { SP, GAP, WRAP_MIN } = LAYOUT;
+  const { GAP } = LAYOUT, SP = opts.sp > 0 ? opts.sp : LAYOUT.SP, MINW = opts.minW > 0 ? opts.minW : SP * 2, ROW = opts.row > 0 ? opts.row : 0;
+  const WRAP_MIN = opts.wrapMin > 0 ? opts.wrapMin : LAYOUT.WRAP_MIN; // T6: CLEAN lets any heading with 2+ sub-headings wrap (the top level was one 7,000-unit row)
   const heads = nodes.filter((n) => n.kind === "index");
   for (const h of heads) {
     const ch = primary.get(h.id) || [];
@@ -59,7 +63,7 @@ export function prepareTree(nodes, opts = {}) {
     h.names = ch.filter((c) => c.kind === "name").sort((a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0) || (a.ticker < b.ticker ? -1 : 1));
     if (!bySize) { h.subs = h.subs.slice().sort(byReading); h.funds = h.funds.slice().sort(byReading); h.names = h.names.slice().sort(byReading); }
     h.cols = Math.max(colsFor(h.funds.length), colsFor(h.names.length));
-    h.leafW = h.cols * SP;
+    h.leafW = h.cols * SP; h.sp = SP; h.rowStep = ROW;
     h.depth = depthOf(h);
     h.w = null; h.rows = null; h.rowOf = 0;
   }
@@ -68,7 +72,7 @@ export function prepareTree(nodes, opts = {}) {
     h.subs.forEach(widthOf);
     h.rows = h.subs.length >= WRAP_MIN && wrap > 1 ? splitRows(h.subs, h.subs.map((c) => c.w), wrap, GAP) : [h.subs];
     const subsW = Math.max(0, ...h.rows.map((r) => rowW(r, GAP)));
-    h.w = Math.max(SP * 2, h.leafW + (h.leafW && h.subs.length ? GAP : 0) + subsW);
+    h.w = Math.max(MINW, h.leafW + (h.leafW && h.subs.length ? GAP : 0) + subsW);
     return h.w;
   };
   const placeX = (h, x0) => {
@@ -91,11 +95,11 @@ export function prepareTree(nodes, opts = {}) {
 
 export function layout(heads, k, into) { // k = 1: 3D (extra rows step toward you) · k = 0: flat (extra rows step down)
   const { SP, LEVEL, DZ3, DY3, ROW2, NAMES_DROP, ROWGAP, ZPROJ } = LAYOUT;
-  const dy = k ? DY3 : ROW2;
+  const dyOf = (h) => (k ? DY3 : h.rowStep || ROW2); // the step between the rows of a leaf block (T6: CLEAN passes a taller one for its boxes)
   // how far below a heading its subtree reaches (in 3D the rows that step toward you also look lower: ZPROJ of their depth)
   const below = new Map();
   const leafH = (h) => {
-    const fRows = h.cols ? Math.ceil(h.funds.length / h.cols) : 0, nRows = h.cols ? Math.ceil(h.names.length / h.cols) : 0;
+    const fRows = h.cols ? Math.ceil(h.funds.length / h.cols) : 0, nRows = h.cols ? Math.ceil(h.names.length / h.cols) : 0, dy = dyOf(h);
     let d = 0;
     if (h.funds.length) d = LEVEL + (fRows - 1) * dy + (h.names.length ? NAMES_DROP + (nRows - 1) * dy : 0);
     else if (h.names.length) d = LEVEL + (nRows - 1) * dy;
@@ -111,9 +115,10 @@ export function layout(heads, k, into) { // k = 1: 3D (extra rows step toward yo
   }
   const place = (h, y) => {
     into(h, h.cx, y, 0);
+    const sp = h.sp || SP, dy = dyOf(h);
     const grid = (list, y0) => list.forEach((n, i) => {
       const col = i % h.cols, row = Math.floor(i / h.cols), inRow = Math.min(h.cols, list.length - row * h.cols);
-      const x = h.bx0 + (h.leafW - inRow * SP) / 2 + (col + 0.5) * SP;
+      const x = h.bx0 + (h.leafW - inRow * sp) / 2 + (col + 0.5) * sp;
       into(n, x, y0 - row * dy, row * (k ? DZ3 : 0));
     });
     const fy = y - LEVEL;
@@ -133,7 +138,8 @@ export function bestRows(nodes, aspect, opts = {}) {
   for (let r = 1; r <= 4; r++) {
     const heads = prepareTree(nodes, { ...opts, rows: r });
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    layout(heads, 1, (n, x, y, z) => { const sy = y - z * LAYOUT.ZPROJ; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); });
+    const k = opts.k == null ? 1 : opts.k; // T6: the flat canvas judges its shape flat (k = 0), where block rows step down instead of toward you
+    layout(heads, k, (n, x, y, z) => { const sy = y - z * LAYOUT.ZPROJ; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); });
     const err = Math.abs(Math.log((x1 - x0) / Math.max(1, y1 - y0) / aspect));
     if (err < bestErr - 1e-9) { bestErr = err; best = r; }
   }

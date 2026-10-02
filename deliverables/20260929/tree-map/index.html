@@ -43,8 +43,19 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .lb.n{color:var(--ink2)}
 .lb.w{color:var(--dim)}
 .lb .up{color:var(--up)} .lb .dn{color:var(--dn)}
-.lb .lb3d{pointer-events:auto;cursor:pointer;display:inline-block;margin-left:6px;padding:0 4px;border:1px solid var(--dim);border-radius:2px;font-style:normal;font-size:10px;letter-spacing:.1em;color:var(--ink2);line-height:14px;vertical-align:1px;background:rgba(21,21,21,.9)}
-.lb .lb3d:hover{color:var(--ink);border-color:var(--ink)}
+/* T6: the OPEN 3D button on every section — a real button with the cube, big enough for a thumb; the section's name is clickable too */
+.lb .lb3d{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:3px 9px;border:1px solid var(--dim);border-radius:3px;font-style:normal;font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--ink);line-height:18px;vertical-align:middle;background:rgba(27,27,27,.96);min-height:26px}
+.lb .lb3d:hover{color:var(--ink);border-color:var(--ink);background:var(--panel3)}
+.lb .lb3d .cube{width:12px;height:12px;flex:0 0 12px;fill:#7a7a7a} .lb .lb3d .cube path:first-child{fill:#b4b4b4} .lb .lb3d .cube path:last-child{fill:#5a5a5a}
+.lb.sec{pointer-events:auto;cursor:pointer}
+.lb .chipline{display:block;margin:3px 0 1px;text-align:center} .lb .chipline .lb3d{margin-left:0}
+.lb.onbox{color:var(--ink)}                               /* a name printed on its box (CLEAN) or on its podium bar */
+.lb.n.onbox{font-size:11px;letter-spacing:.06em;font-weight:600;text-align:center}
+.lb.sel{outline:1px solid var(--ink);outline-offset:3px;border-radius:2px}   /* the picked box */
+#gl canvas:focus{outline:none}
+#areabar{position:absolute;left:50%;top:38px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;background:rgba(21,21,21,.96);border:1px solid var(--line2);border-radius:3px;padding:5px 8px 5px 12px;font-size:12px;letter-spacing:.06em;color:var(--ink);white-space:nowrap;max-width:calc(100% - 20px)}
+#areabar b{font-weight:600;letter-spacing:.1em;overflow:hidden;text-overflow:ellipsis} #areabar .mode{color:var(--dim)} #areabar button{font-size:11px;padding:6px 10px}
+.keybtn{margin:4px 8px 2px 0}
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
 .seg button{border:0;border-radius:0;padding:7px 8px}
 .seg button+button{border-left:1px solid var(--line2)}
@@ -54,8 +65,8 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .say{font-size:12px;color:var(--ink2);margin:0 0 8px;line-height:1.6}
 .coilbtn{font-size:11px;padding:5px 8px;margin:6px 0}
 #tip{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
-#legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.92);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:auto;z-index:2}
-#legend div{display:flex;align-items:center;gap:8px;line-height:1.75}
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.95);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:720px;pointer-events:auto;z-index:2}
+#legend div{display:flex;align-items:center;gap:8px;line-height:1.5}
 #legend summary{cursor:pointer;letter-spacing:.12em;color:var(--ink2)}
 .sw{display:inline-block;width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#7a7a7a}
 .sw.head{background:#4a4a4a;width:12px;height:12px;flex-basis:12px}
@@ -143,6 +154,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   .ctrl{margin-left:0}
   #legend{max-width:260px}
   #hint{display:none}
+  #areabar{position:static;transform:none;white-space:normal;margin:4px 8px;max-width:none}
   .row{grid-template-columns:auto minmax(0,1fr) 84px 50px;gap:6px}
   .kids{margin-left:10px}
 }
@@ -156,9 +168,8 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <input type="search" id="q" placeholder="find a ticker (path + who holds it)" list="tickers" autocomplete="off">
     <datalist id="tickers"></datalist>
     <button id="v-outline" class="on" title="the tree as an indented list with the bars">OUTLINE</button>
-    <button id="v-canvas" title="the same tree, flat, like a canvas: drag to pan, wheel or pinch to zoom, click an area to lift it into 3D">CANVAS</button>
-    <button id="v-3d" title="the whole market in 3D (one section at a time is the usual way: the 3D chip on a section)">3D</button>
-    <span class="seg" id="detail-seg" title="CLEAN: every box with its own name and Geiger bar, nothing inside it, nothing without a reading — what a box folds away is counted on it as ＋N more. DETAILED: the whole tree, names and all."><button id="d-clean">CLEAN</button><button id="d-detailed">DETAILED</button></span>
+    <button id="v-canvas" title="the same tree, flat, like a canvas: drag to pan, wheel or pinch to zoom; OPEN 3D on a section lifts only that section">CANVAS</button>
+    <span class="seg" id="detail-seg" title="CLEAN: every box IS its Geiger bar with the name on it, nothing inside it — what a box folds away is counted on it as ＋N more. DETAILED: the whole tree, names and all."><button id="d-clean">CLEAN</button><button id="d-detailed">DETAILED</button></span>
     <span class="seg" id="order-seg" title="the order of the children inside every parent — canvas, outline and the 3D ring"><span class="lbl">ORDER</span><button id="o-geiger">GREEN → RED</button><button id="o-size">BY SIZE</button></span>
     <button id="flat" title="the 3D tree, flat, seen straight on" style="display:none">FLAT 2D</button>
     <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
@@ -169,6 +180,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <div id="crumbs"></div>
     <div id="outline"></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
+      <div id="areabar"></div>
       <details id="legend"><summary>KEY · what every mark means</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
         <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = SCOUT Geiger (daily, 3-day, weekly only; off the Hub), where the full Geiger is missing</div>
@@ -178,10 +190,12 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
         <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting = a name with no reading yet</div>
         <div><span class="kb" style="text-align:center"><span class="up">86 up</span> · <span class="dn">40 down</span></span>under a heading or cohort: how many lines under it read up / down (the ▲▼ arrows are gone)</div>
         <div><span class="kb" style="text-align:center">＋N more</span>CLEAN only: what the box folds away — names, empty fund sets, waiting lines; hover for the split, DETAILED shows them</div>
-        <div><span class="kb" style="text-align:center;color:var(--ink2);border:1px solid var(--dim);border-radius:2px;font-size:10px;line-height:14px;flex-basis:30px;margin:0 8px">3D</span>on a section (Technology, Financials, Broad Market…): click to lift only that section into 3D; Esc drops it back</div>
+        <div><span class="lgbar kb"><s></s></span>CLEAN: every box IS its Geiger bar with the name on it (a fund's ticker appears as you zoom in); an empty track = no reading yet</div>
+        <div><span class="kb" style="text-align:center;color:var(--ink);border:1px solid var(--dim);border-radius:3px;font-size:10px;line-height:16px;flex-basis:64px;margin:0 8px">OPEN 3D</span>on every section (Technology, Financials, Broad Market…): press it, or click the section's name, and only that section lifts into 3D; Esc, the breadcrumb or ← BACK TO THE CANVAS drops back</div>
         <div><span class="kb" style="text-align:center;color:var(--mute)">─ │</span>a line joins a parent (above) to a child (below); a horizontal rail carries a second row of sections hung from the heading above; a box frames a cohort's names (DETAILED)</div>
+        <div><button id="v-3d" class="keybtn" title="the whole market in 3D at once — heavy and crowded; the usual way is OPEN 3D on one section">WHOLE MAP 3D</button><span>the whole tree in 3D at once (the usual way is OPEN 3D on one section)</span></div>
       </details>
-      <div id="hint">drag to pan · scroll to zoom · click an area to lift it into 3D · in a 3D area: drag to turn, Esc or the breadcrumb drops back to the canvas</div>
+      <div id="hint">drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section · inside: drag to turn, Esc or ← BACK TO THE CANVAS drops back</div>
       <div id="fallback"></div>
     </div>
   </div>
@@ -322,7 +336,8 @@ const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab 
 const byReading = (a, b) => { const av = valueOf(a), bv = valueOf(b); if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; if (bv !== av) return bv - av; const an = nameOf(a), bn = nameOf(b); return an < bn ? -1 : an > bn ? 1 : 0; };
 const bySize = (a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0) || (nameOf(a) < nameOf(b) ? -1 : 1);
 const ordered = (list) => list.slice().sort(state.order === "size" ? bySize : byReading);
-const industryHTML = (n) => { const i = state.industryOf(n.ticker); if (!i) return ""; return `<span>INDUSTRY</span><span>${esc(i.fmp_industry || "—")} <span class="mute">FMP, the authority</span></span><span>SIC</span><span>${i.sic_code ? `${esc(i.sic_code)} <span class="mute">${esc(i.sic_description || "")}</span>` : '<span class="mute">not on this Mac yet (the 1 Oct probe covered 97 names; the table holds 426)</span>'}</span>` + (i.disagreement ? `<span>DISAGREE</span><span><span class="tag dis">the two authorities differ</span> <span class="mute">${esc(i.disagreement)}</span></span>` : ""); };
+// T6 (Alan, 2 Oct): the card shows the SIC code and the FMP industry, both labelled, and no longer says when they disagree ("that's our job")
+const industryHTML = (n) => { const i = state.industryOf(n.ticker); if (!i) return ""; return `<span>INDUSTRY</span><span>${esc(i.fmp_industry || "—")} <span class="mute">FMP, the authority</span></span><span>SIC</span><span>${i.sic_code ? `${esc(i.sic_code)} <span class="mute">${esc(i.sic_description || "")}</span>` : '<span class="mute">not on this Mac yet (the 1 Oct probe covered 97 names; the table holds 426)</span>'}</span>`; };
 
 /* ---- shared pieces: bars, paths, the card ---- */
 function bar(v, cls = "") {
@@ -360,7 +375,7 @@ function aggHTML(n, what) {
 const ms0 = (c) => membersOf(c).filter((m) => m.kind === "name").length;
 function renderCard(n) {
   if (!n) {
-    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; click a section's 3D chip (or the section) and only that section lifts into 3D (Esc drops it back). CLEAN shows every box with its name and bar and nothing inside; DETAILED shows the names. Inside every parent the children run green → red. A cohort of more than 24 names opens as the COIL. Type a ticker in the finder for its path and every fund that holds it.</div>` +
+    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; press OPEN 3D on a section (or click its name) and only that section lifts into 3D (Esc or ← BACK TO THE CANVAS drops back). CLEAN: every box IS its Geiger bar with the name on it; DETAILED shows the names too. Inside every parent the children run green → red. A cohort of more than 24 names opens as the PODIUM coil: every name a Geiger bar, the highest at the centre-top, winding down and out. Type a ticker in the finder for its path and every fund that holds it.</div>` +
       `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
       `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
       `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
@@ -371,15 +386,20 @@ function renderCard(n) {
   let h = `<button class="release" id="letgo" title="let go (Esc)">LET GO ✕</button>` + (crumbs ? `<div class="path">${crumbs} ›</div>` : "") +
     `<h2>${esc(nameOf(n))}</h2><div class="sub">${esc(n.ticker ? n.label : n.kind === "cohort" && n.ckind !== "none" ? nice(n.cohort) : "")}${n.issuer ? " · " + esc(n.issuer) : ""} · ${kindWord(n)}</div>`;
   const rd = readingOf(n);
+  // T6: inside a section's 3D or the podium, the panel repeats the way back in one line
+  if (m3 && m3.inArea() && state.cluster) { const root = state.byId.get(state.cluster); h += m3.inCoil()
+    ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>: every name is its Geiger bar, the highest at the centre-top, winding down and outwards · hover a bar for its full bar and path · click a bar for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
+    : `<div class="wait">Inside <b>${esc(root ? root.label : "")}</b> in 3D · drag to turn, scroll to zoom · Esc, the breadcrumb or ← BACK TO THE CANVAS drops back to the canvas</div>`; }
   if (wordsOf(n)) h += `<div class="say">${esc(wordsOf(n))}</div>`;
+  const COIL_TITLE = "the names as the PODIUM coil: every name its Geiger bar, the highest reading at the centre-top, winding down and outwards to the lowest";
   if (n.kind === "index") {
     h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
     const nb = m3 ? m3.beneathNames(n).length : beneath(n.id).filter((x) => x.kind === "name").length;
-    if (nb > 24) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="the names under it drawn as two snakes: greens coil up to the highest reading, reds coil down to the most negative">COIL · ${nb} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
+    if (nb > 12) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="${COIL_TITLE}">PODIUM COIL · ${nb} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
   } else if (n.kind === "cohort") {
     h = h.replace("</h2>", ` ${kindTag(n)}</h2>`);
     if (n.ckind === "none") h += `<div class="wait">${esc(n.admission)}. No cohort on the tree claims these names yet.</div>`;
-    if (ms0(n) > 24) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="the members drawn as two snakes">COIL · ${ms0(n)} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
+    if (ms0(n) > 12) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="${COIL_TITLE}">PODIUM COIL · ${ms0(n)} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
     else if (n.ckind === "adopted") h += `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
       (n.merged_from.length ? `<span>MERGED IN</span><span>${n.merged_from.map(nice).map(esc).join(", ")}</span>` : "") +
       (Number.isFinite(n.cohesion) ? `<span>COHESION</span><span>${n.cohesion.toFixed(2)} <span class="mute">vs ${n.null95.toFixed(2)} for a random set of the same size</span></span>` : "") +
@@ -580,7 +600,9 @@ state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).
 let cameFrom = null;
 async function load3d() {
   if (m3) return m3;
-  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); } }); }
+  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); },
+    onArea: () => { if (state.selected) renderCard(state.byId.get(state.selected)); crumbs(); }, // an area or the podium opened or closed: the card's one-line instruction and the top bar follow
+    onTree: (n) => showOnTree(n) }); } // a podium bar clicked: that name on the tree
   catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
   return m3;
 }
@@ -589,7 +611,7 @@ async function setView(v) {
   for (const k of ["outline", "canvas", "3d"]) $("v-" + k).classList.toggle("on", v === k);
   $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "outline" ? "none" : "block";
   $("flat").style.display = v === "3d" ? "" : "none"; $("detail-seg").style.display = v === "outline" ? "none" : "";
-  $("hint").textContent = v === "3d" ? "drag to turn · scroll to zoom · click to pick · click again or Esc to let go" : "drag to pan · scroll to zoom · click an area to lift it into 3D · in a 3D area or the coil: drag to turn, Esc or the breadcrumb drops back to the canvas";
+  $("hint").textContent = v === "3d" ? "drag to turn · scroll to zoom · click to pick · click again or Esc to let go" : "drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section · inside: drag to turn, Esc or ← BACK TO THE CANVAS drops back";
   if (v === "canvas" || v === "3d") {
     await load3d();
     if (m3) { if (m3.inArea() && was !== v) m3.exitArea(false); m3.fit(); m3.setCanvas(v === "canvas", was === "outline" || !was ? 0 : 700); if (state.selected && !m3.inArea() && v === "3d") m3.select(state.byId.get(state.selected), false); }
@@ -601,14 +623,14 @@ async function openArea(n) {
   cameFrom = state.view;
   if (state.view === "outline") await setView("canvas");
   const m = await load3d(); if (!m) return;
-  state.selected = n.id; renderCard(n); m.enterArea(n); crumbs();
+  state.selected = n.id; m.enterArea(n); // the card and the top bar follow through onArea
 }
 function closeArea() { if (!m3 || !m3.inArea()) return; m3.exitArea(true); crumbs(); }
-async function openCoil(n) { // the coil: a parent's names as two snakes (a cohort of more than 24 opens into it by itself; any parent from its card)
+async function openCoil(n) { // the PODIUM coil: a parent's names as one spiral of Geiger bars (a cohort of more than 24 opens into it by itself; any parent from its card)
   cameFrom = state.view;
   if (state.view === "outline") await setView("canvas");
   const m = await load3d(); if (!m) return;
-  state.selected = n.id; renderCard(n); m.enterCoil(n); crumbs();
+  state.selected = n.id; m.enterCoil(n);
 }
 function showOnTree(n) { // from a bead or a card: the name where it sits on the tree, in DETAILED (names are folded in CLEAN)
   if (m3 && m3.inArea()) m3.exitArea(false);
@@ -622,9 +644,18 @@ function crumbs() {
   const trail = sel ? [...pathOf(sel), sel] : [state.byId.get("MARKET")];
   const inA = m3 && m3.inArea(), inC = m3 && m3.inCoil();
   c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") +
-    (inC ? `<span>›</span><span class="lnk here">COIL</span><span class="lnk" data-crumb="__list" title="the same names as a plain ordered list, on the card">≡ LIST</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "") +
+    (inC ? `<span>›</span><span class="lnk here">PODIUM COIL</span><span class="lnk" data-crumb="__list" title="the same names as a plain ordered list, on the card">≡ LIST</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "") +
     (!inA && state.view === "canvas" ? `<span class="lnk" style="color:var(--mute);border-color:var(--line)">${state.detail === "clean" ? "CLEAN" : "DETAILED"}</span>` : "");
+  // T6: the bar at the top of an opened section or podium says where you are and carries the way back
+  const ab = $("areabar"), root = inA && state.cluster ? state.byId.get(state.cluster) : null;
+  if (root) { ab.style.display = "flex"; ab.innerHTML = `<b>${esc(root.label)}</b><span class="mode">· ${inC ? "PODIUM COIL" : "3D"} ·</span>` + (inC ? `<button data-go="list" title="the same names as a plain ordered list, on the card">≡ LIST</button>` : "") + `<button data-go="back" title="Esc does the same">← BACK TO THE CANVAS</button>`; }
+  else { ab.style.display = "none"; ab.innerHTML = ""; }
 }
+$("areabar").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.go === "back") closeArea();
+  else if (b.dataset.go === "list") { const root = state.byId.get(state.cluster); if (root) { state.selected = root.id; renderCard(root); crumbs(); } }
+});
 $("crumbs").addEventListener("click", (e) => {
   const id = e.target.getAttribute && e.target.getAttribute("data-crumb"); if (!id) return;
   if (id === "__back") { closeArea(); return; }
@@ -665,6 +696,7 @@ if (p.get("order") === "size" || p.get("order") === "geiger") setOrder(p.get("or
 if (p.get("coil")) { const n = state.byId.get(p.get("coil")); if (n) setTimeout(() => openCoil(n), 400); }
 state.crumbs = () => [...document.querySelectorAll("#crumbs .lnk")].map((e) => e.textContent);
 state.setFlat = (on) => { if (m3) m3.setFlat(on, 0); };
+state.focusCanvas = () => { if (m3) m3.focusCanvas(); return document.activeElement ? document.activeElement.tagName : null; };
 state.toggle = (id) => toggle(id);
 /* the day change, after the tree is on the screen: three quote calls, never in the way of the first paint */
 (async () => {
