@@ -4653,6 +4653,45 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .sc-head__ident .sc-cpx.is-up{ color:var(--bull) !important; }
 .sc-head__ident .sc-cpx.is-dn{ color:var(--bear) !important; }
 </style>
+<style id="prediction-reel-20261002">
+/* ── P1 · 2 OCT · THE PREDICTION MARKETS REEL — the band in the EARNINGS → frame, its status chip, the topic pane ──── */
+.sc-tape--pm .sc-tape__lbl{ flex-basis:152px; width:152px; letter-spacing:.05em; }
+.pm-status{ flex:0 0 auto; display:flex; align-items:center; padding:0 10px; border-right:.8px solid var(--hair); color:var(--dim);
+  font-variant-numeric:tabular-nums; white-space:nowrap; letter-spacing:.04em; cursor:help; }
+.pm-status.is-red{ color:var(--bear); font-weight:600; }
+.sc-tape--pm .pm-it{ cursor:pointer; }
+.sc-tape--pm .pm-it:hover .pm-nm{ color:var(--crk); }
+.pm-dot{ font-size:7px; padding-right:5px; color:var(--dim); }
+.pm-nm{ color:var(--ink); font-weight:600; }
+.pm-out{ color:var(--dim); padding-left:5px; }
+.pm-p{ color:var(--ink); padding-left:6px; font-variant-numeric:tabular-nums; }
+.pm-chg{ padding-left:5px; font-variant-numeric:tabular-nums; }
+.pm-chg.up{ color:var(--bull); } .pm-chg.dn{ color:var(--bear); } .pm-chg--none{ color:var(--dim); }
+.pm-it.is-wild .pm-dot{ color:var(--crk); animation:mn-breathe 1.1s ease-in-out infinite; }   /* the flash: the same breath a release makes inside its hour */
+.pm-it.is-wild .pm-chg{ font-weight:700; letter-spacing:.02em; }
+@media (prefers-reduced-motion:reduce){ .pm-it .pm-dot{ animation:none; } }
+@media (max-width:560px){ .sc-tape--pm .sc-tape__lbl{ flex-basis:98px; width:98px; letter-spacing:.02em; } .pm-status{ padding:0 7px; } }
+/* the topic pane, in the right-side pane: the REGIME card's own row grid */
+.pm-panel{ display:flex; flex-direction:column; min-height:0; height:100%; }
+.pm-panel__head{ flex:0 0 auto; }
+.pm-panel__grp{ font-style:normal; color:var(--dim); font-weight:400; margin-left:6px; }
+.pm-panel__body{ flex:1 1 auto; min-height:0; overflow:auto; padding:6px 10px 10px; }
+.pm-panel__sub{ font:400 11px/1.5 var(--mono); color:var(--dim); margin:4px 0 8px; }
+.pm-panel__sub b{ color:var(--ink2); font-weight:600; }
+.pm-row{ display:grid; grid-template-columns:1fr 64px 150px; gap:8px; align-items:center; padding:4px 0; border-bottom:.6px solid var(--line); }
+.pm-row__q{ font:400 11px/1.45 var(--mono); color:var(--ink2); white-space:normal; overflow-wrap:anywhere; }
+.pm-row__q i{ display:block; color:var(--dim); font-style:normal; font-size:10px; margin-top:1px; }
+.pm-row__lnk{ color:var(--crk); text-decoration:none; } .pm-row__lnk:hover{ text-decoration:underline; }
+.pm-row__p b{ font:600 13px var(--mono); color:var(--ink); display:block; }
+.pm-row__p u{ display:block; text-decoration:none; font:600 10px var(--mono); }
+.pm-row__p u.up{ color:var(--bull); } .pm-row__p u.dn{ color:var(--bear); }
+.pm-row__l .rg-svg{ margin:0; }
+.pm-panel__foot{ font:400 11px/1.6 var(--mono); color:var(--dim); margin-top:8px; }
+.pm-panel__foot a{ color:var(--crk); text-decoration:none; } .pm-panel__foot a:hover{ text-decoration:underline; }
+.rg-dimnote{ color:var(--dim); font-style:italic; }
+.rg-cat__p u{ display:block; text-decoration:none; font:600 10px var(--mono); }
+@media (max-width:900px){ .pm-row{ grid-template-columns:1fr 64px; } .pm-row__l{ grid-column:1 / -1; } }
+</style>
 <style id="tape-events-20260927">
 /* ── 27 SEP · THE SCINTILLATING TAPE + THE TICKER IN THE TITLE ─────────────────────────────────────────────────
    The strip keeps the company bar's box (40px, the cyan frame) so nothing under it moves. Text 11px. */
@@ -5145,7 +5184,7 @@ a.sc-menu__item{text-decoration:none}   /* the Prototypes entry is a plain link 
 
 <!-- 1.5 / 1.6 tapes — #bandsPx holds the MACRO / ALL price bands (repainted every 45 s), #econBandSlot the ECON week band
      (repainted only when the week's events change, so its marquee is not restarted by a price tick). -->
-<div class="bands" id="bands"><div id="bandsPx"></div><div id="econBandSlot"></div><div id="ernBandSlot"></div></div>
+<div class="bands" id="bands"><div id="bandsPx"></div><div id="econBandSlot"></div><div id="ernBandSlot"></div><div id="pmBandSlot"></div></div>
 
 <!-- 1.7 Helm — REMOVED (vestigial empty "Controls" footer; zoom controls gone since R27) -->
 
@@ -10370,6 +10409,7 @@ function scenesTick() {
 }
 function leftPanelInnerHTML() {
   if (LEFT_HEAT) return heatHeadHTML() + heatmapHTML();   // #133 — whole-scope heatmap replaces the single-ticker view
+  if (typeof PM !== "undefined" && PM && PM.open && (LEFT_STATE !== "PINNED" || !LEFT_T)) return pmPanelNow(PM.open);   // P1 (2 Oct) — a prediction-market topic, until ✕ or a company
   if (LEFT_STATE !== "PINNED" || !LEFT_T) return layer0HTML();   // R41 — Layer 0 is the no-ticker default
   return coViewHTML(LEFT_T);   // D2 — company line · chart · six numbers · tabs (leftHeadHTML is the retired header)
 }
@@ -10584,6 +10624,7 @@ function startRotate() {
 /* pin the left panel to a ticker: stop motion, no re-render of the board. */
 function pinLeft(t) {
   clearRotate();
+  if (typeof PM !== "undefined" && PM) PM.open = null;   // P1 (2 Oct) — a company takes the pane back from a prediction-market topic
   LEFT_STATE = "PINNED";
   const favs = favList();
   const fi = favs.indexOf(t);
@@ -17625,30 +17666,28 @@ function rgRenderCredit(){
     '<div class="rg-note">'+esc(f.note||"")+"</div></div>";
 }
 function rgRenderCatalysts(){
-  const rows=RG.cats&&RG.cats.rows||[], snap=RG.stat&&RG.stat.catalysts;
-  const stored=rows.length>0;
-  const src=stored?rows:(snap&&snap.rows||[]).map((r)=>({ts:snap.taken_utc,catalyst:r.catalyst,source:r.source,market:r.market,
-    question:r.question,outcome:r.outcome,probability:r.probability,volume:r.volume,end_date:r.end_date}));
-  if(!src.length) return '<div class="rg-card"><h4>catalysts</h4><div class="rg-nofeed">NO FEED · the collector has not been scheduled yet</div></div>';
-  const byKey={};
-  for(const r of src){ const k=r.catalyst+"|"+r.market+"|"+r.outcome; (byKey[k]=byKey[k]||[]).push(r); }
-  const latest=Object.keys(byKey).map((k)=>{ const a=byKey[k].slice().sort((x,y)=>String(x.ts).localeCompare(String(y.ts)));
-    return {k,rows:a,last:a[a.length-1]}; }).sort((a,b)=>(b.last.probability||0)-(a.last.probability||0));
-  let h='<div class="rg-card"><h4>catalysts <span class="rg-sub">'+(stored?"stored readings, newest first":"a one-off read taken by hand — the line starts when the collector is scheduled")+'</span></h4>';
-  const cats={};
-  for(const g of latest){ (cats[g.last.catalyst]=cats[g.last.catalyst]||[]).push(g); }
-  for(const c of Object.keys(cats)){
-    h+='<div class="rg-tbl-l">'+esc(c.replace(/_/g," "))+"</div>";
-    for(const g of cats[c].slice(0,4)){
-      const pts=g.rows.map((r)=>[Date.parse(r.ts)||0,Number(r.probability)*100]);
-      const line=pts.length>2?rgChart([{pts:pts,cls:rgTrendCls(pts)}],{h:52,l:26,b:8,dp:0,alt:"probability over time"}):"";
-      h+='<div class="rg-cat"><span class="rg-cat__q">'+esc(String(g.last.question||g.last.market).slice(0,90))+
-        ' <i>'+esc(g.last.outcome)+" · "+esc(g.last.source)+(g.last.end_date?" · by "+esc(String(g.last.end_date).slice(0,10)):"")+"</i></span>"+
-        '<span class="rg-cat__p"><b>'+rgFmt(Number(g.last.probability)*100,0)+"%</b></span>"+
-        '<span class="rg-cat__l">'+(line||'<i class="rg-one">one reading</i>')+"</span></div>";
+  /* P1 (2 Oct) — the same six headings, each drawn from the registry topic(s) that ask the question (RG_PM_MAP):
+     question · outcome · venue · by date | the probability and today's change | the last 20 days. A heading whose
+     topic has no live market says so in the dim style; nothing is left blank. */
+  const c=RG.cats||{};
+  if(c.err) return '<div class="rg-card"><h4>prediction markets</h4><div class="rg-nofeed">NO FEED · '+esc(c.err)+"</div></div>";
+  if(!c.rows) return '<div class="rg-card"><h4>prediction markets</h4><div class="soon">reading the prediction markets…</div></div>';
+  const rows=c.rows||[], hist=c.hist||{}, nowMs=Date.now();
+  const newest=rows.reduce((m,r)=>(r.ts&&(!m||r.ts>m)?r.ts:m),null);
+  let h='<div class="rg-card"><h4>prediction markets <span class="rg-sub">the registry\'s macro topics · prediction_market_latest, every 15 minutes'+
+    (newest?' · newest reading '+esc(pmClock(newest))+' ET':'')+' · the change is since yesterday\'s 16:00 ET close · the line is the last 20 days</span></h4>';
+  for(const [name,ids] of RG_PM_MAP){
+    h+='<div class="rg-tbl-l">'+esc(name)+"</div>";
+    let any=false;
+    for(const id of ids){
+      const mine=rows.filter((r)=>r.topic===id).sort((a,b)=>Number(b.probability)-Number(a.probability)).slice(0,4);
+      for(const r of mine){ any=true; h+=pmRegimeRowHTML(r,hist[r.market_id]||[],nowMs); }
     }
+    if(!any) h+='<div class="rg-cat"><span class="rg-cat__q rg-dimnote">not in the registry yet</span><span></span><span></span></div>';
   }
-  return h+"</div>";
+  const shown=RG_PM_MAP.reduce((a,m)=>a.concat(m[1]),[]);
+  const more=Object.keys(PM_SHORT).filter((id)=>shown.indexOf(id)<0).length;
+  return h+'<div class="rg-note">'+more+' more topics (yields, stocks, Iran, Russia–Ukraine, China–Taiwan, oil, gold, Japan, AI, the ECB…) ride the dashboard\'s PREDICTION MARKETS → band; a chip there opens every outcome.</div></div>';
 }
 function rgSources(){
   const s=(RG.stat&&RG.stat.sources)||{}, g=RG.stat&&RG.stat.generated_utc;
@@ -17656,7 +17695,7 @@ function rgSources(){
     "<b>curve, live:</b> chart API /macro (FMP quotes for ^IRX, ^FVX, ^TNX, ^TYX), the same route the board’s macro rail uses, read every 30 seconds. "+
     "<b>curve, the rest:</b> treasury_rates, written daily by the job treasury-curve-daily. "+
     "<b>cycles:</b> "+esc(s.cycles||"")+" <b>liquidity:</b> "+esc(s.liquidity||"")+" <b>credit:</b> "+esc(s.credit||"")+
-    " <b>catalysts:</b> "+esc(s.catalysts||"")+
+    " <b>prediction markets:</b> prediction_market_latest and prediction_market_snapshots, written every 15 minutes by the prediction-markets collector (cron 278); the REGIME card shows the registry's macro topics."+
     (g?" Everything that is not live was computed "+esc(String(g).slice(0,16))+"Z and is dated on screen.":"")+"</div></div>";
 }
 
@@ -17671,11 +17710,11 @@ async function rgLoadStatic(){
 async function rgLoadStored(){
   try{ RG.rows=await pg("treasury_rates?select=*&order=date.desc&limit=520"); }
   catch(e){ RG.rows=null; RG.err=RG.err||"treasury_rates did not load"; }
-  /* the table may not exist yet: the migration is written and the coordinator applies it.
-     An absent table is NOT an error on screen - it is "no readings yet". */
-  try{ const rows=await pg("catalyst_odds?select=ts,source,catalyst,market,question,outcome,probability,volume,end_date&order=ts.asc&limit=4000");
-       RG.cats={rows:rows||[]}; }
-  catch(e){ RG.cats={rows:[]}; }
+  /* P1 (2 Oct) — the prediction markets come from the registry's own tables (prediction_market_latest + snapshots,
+     cron 278 every 15 minutes); the 6-hourly catalyst collector this card read since M44 is being retired. A failed
+     read is NO FEED on the card, never a blank. */
+  try{ RG.cats=await pmRegimeLoad(); }
+  catch(e){ RG.cats={rows:[],hist:{},err:String((e&&e.message)||e)}; }
 }
 async function rgLive(){
   try{
@@ -21452,6 +21491,433 @@ function renderErnBandNew(nowSec) {
   return true;
 }
 /* ============================================================================
+   P1 · 2 OCT 2026 · THE PREDICTION MARKETS REEL (Alan, 2 Oct, pasted: "Polymarket status / topics / news reel").
+   A fourth band under the dashboard, in the EARNINGS → / ECONOMIC strip's own frame: one chip per topic of the
+   registry (supabase/functions/prediction-markets/topics.json, 48 topics, Polymarket only while Kalshi is off).
+   WHAT A CHIP SAYS: the topic's short name · the headline outcome · its probability as a whole percent · the change
+   since YESTERDAY'S 16:00 ET CLOSE in points, green up / red down (a flat day is "+0", green — the Hub's one colour
+   rule has no grey case) · a ◆ and a breathing dot when today's move is bigger than that market's USUAL DAY.
+   THE HEADLINE OUTCOME: the one the market rates most likely, skipping anything at 97% or above (as good as settled:
+   a "Bitcoin above 74,000 today" at 99.95% says nothing). So the Fed chip reads "No change 83%", gold reads the
+   nearest level, a yes/no topic reads its Yes.
+   THE USUAL DAY: the middle of |close − previous weekday's close| over the last 20 weekdays ending yesterday, from
+   prediction_market_snapshots (a step line: a reading holds until the next row, so a day's close is the last reading
+   at or before 16:00 ET that day). Never smaller than one point, never claimed from fewer than three days. The hover
+   prints "N× its usual day" (Alan: never a sigma).
+   ORDER: biggest move first, then by probability. STATUS CHIP at the strip's left edge: the collector's newest pass
+   from prediction_market_runs — "16:00 · 240 read · 0 problems" — red when that pass is older than 45 minutes or
+   logged a problem (the collector writes every 15 minutes, cron 278).
+   A CHIP TAPPED: the right-side pane (where the cohort compare lives, and where a company opens) shows the topic:
+   every outcome with bid / ask, the venue, the question in full, a 20-day line from the snapshots, and a plain link
+   to the market on polymarket.com (a new tab). ✕ CLOSE gives the pane back. On a phone the band finger-scrolls like
+   the earnings band and the pane stacks under the board, as a company does.
+   WHAT IT READS: prediction_market_latest (one row per market, every 15 minutes), prediction_market_runs (the status),
+   prediction_market_snapshots (the history: only the headline markets for the band, one topic for the pane) — all
+   through the page's own anon client, read-only. HOW TO TURN IT OFF: PM_ON = false.
+   ========================================================================== */
+const PM_ON = true;
+const PM_TTL_MS = 5 * 60000;          // re-read the tables every 5 minutes (the collector writes every 15)
+const PM_STALE_MIN = 45;              // the status chip is red past this age
+const PM_HIST_DAYS = 21;              // calendar days of snapshots read for the closes
+const PM_USUAL_DAYS = 20;             // weekdays in "its usual day"
+const PM_USUAL_MIN_N = 3;             // fewer daily changes than this and nothing is "usual" yet: no flash
+const PM_USUAL_FLOOR = 1;             // a usual day is never smaller than one point
+const PM_FAV_CAP = 0.97;              // an outcome at or above this is as good as settled: never the headline
+const PM_LINK = "https://polymarket.com/event/";
+/* the short name on a chip (≤ 18 characters), one per registry topic; an unknown topic is its id cut to fit */
+const PM_SHORT = {
+  "fed-2026-10": "Fed · next", "fed-2026-12": "Fed · after", "fed-2027-01": "Fed · 3rd out", "fed-hikes-2026": "Fed hikes 2026",
+  "fed-cuts-2026": "Fed cuts 2026", "ust10-2026": "10Y yield 2026", "spx-2026": "S&P year-end", "spy-month": "S&P this month",
+  "recession-2026": "Recession 2026", "recession-2027": "Recession 2027", "iran-us-ceasefire": "US–Iran ceasefire",
+  "iran-israel-ceasefire": "Israel–Iran truce", "iran-blockade": "Iran blockade end", "iran-invasion": "US invades Iran",
+  "iran-nuclear-deal": "Iran nuclear deal", "ukraine-ceasefire": "Ukraine ceasefire", "ukraine-talks": "Ukraine talks",
+  "nato-russia": "NATO–Russia clash", "putin-out": "Putin out", "china-tariff": "China tariff rate", "trade-deals": "US trade deals",
+  "effective-tariff": "US tariff rate Q3", "house-2026": "House 2026", "senate-2026": "Senate 2026", "congress-2026": "Congress 2026",
+  "ust30-2026": "30Y yield high", "gdp-2026": "US GDP 2026", "largest-company": "Largest company", "boj-next": "BoJ · next",
+  "boj-after": "BoJ · after", "usdjpy-2026": "USD/JPY 2026", "taiwan-invade": "China invades TW", "taiwan-blockade": "China blockade TW",
+  "taiwan-clash": "China–TW clash", "wti-month": "WTI this month", "oil-ath": "Oil all-time high", "opec-exit": "OPEC exit 2026",
+  "hormuz": "Hormuz normal", "cpi-annual": "CPI · next print", "core-cpi": "Core CPI · next", "core-pce": "Core PCE · next",
+  "inflation-peak-2026": "Inflation peak", "shutdown": "Shutdown", "us-debt": "US debt downgrade", "ai-bubble": "AI bubble bursts",
+  "ai-regulation": "AI regulation", "ecb-next": "ECB · next", "gold-month": "Gold this month" };
+/* the band's state: the latest rows, the newest run, the headline markets' history, the open topic and its history */
+var PM = { latest: null, run: null, hist: null, at: 0, err: null, busy: false, html: "", open: null, panelHist: null,
+  panelFor: null, panelBusy: false, reg: null, slugs: {}, timer: null };
+
+function pmShort(id) {
+  const s = PM_SHORT[id];
+  if (s) return s;
+  const raw = String(id || "");
+  return raw.length <= 18 ? raw : raw.slice(0, 17) + "…";
+}
+function pmCut(s, n) { s = String(s == null ? "" : s); return s.length <= n ? s : s.slice(0, n - 1) + "…"; }
+function pmEtDay(ms) { return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" }); }
+/* 16:00 New York on a calendar day. New York is four hours behind UTC in summer and five in winter: try the summer
+   offset and keep it when it lands on 16:00 in New York, else take the winter one. */
+function pmEtClose(day) {
+  for (const off of ["-04:00", "-05:00"]) {
+    const ms = Date.parse(day + "T16:00:00" + off);
+    const h = new Date(ms).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" });
+    if (Number(h) === 16) return ms;
+  }
+  return Date.parse(day + "T16:00:00-04:00");
+}
+function pmDayShift(day, n) { const d = new Date(day + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function pmIsWeekday(day) { const w = new Date(day + "T12:00:00Z").getUTCDay(); return w >= 1 && w <= 5; }
+/* the step line: the last stored reading at or before the instant; null before the first reading */
+function pmCloseAt(points, ms) {
+  let v = null;
+  for (const p of points || []) { if (p.t <= ms) v = p.p; else break; }
+  return v;
+}
+function pmMedian(a) {
+  if (!a || !a.length) return null;
+  const s = a.slice().sort((x, y) => x - y), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+/* ONE judgement for the band, the pane and the REGIME card: today's change in points since yesterday's 16:00 ET close,
+   the market's usual day, how many weekdays that rests on, "N× its usual day", and whether today is wild.
+   points: the market's readings, ascending [{t, p}] · last: the newest probability (prediction_market_latest can be
+   newer than the history read) · a flat day is a change of 0 */
+function pmDayMaths(points, nowMs, last) {
+  const pts = points || [];
+  const today = pmEtDay(nowMs), yday = pmDayShift(today, -1);
+  const cur = last != null && isFinite(Number(last)) ? Number(last) : (pts.length ? pts[pts.length - 1].p : null);
+  const yc = pts.length ? pmCloseAt(pts, pmEtClose(yday)) : null;
+  const r4 = (v) => Math.round(v * 1e4) / 1e4;                       // points to four decimals: no 0.5000000000000004 on a hover
+  const chg = cur != null && yc != null ? r4((cur - yc) * 100) : null;
+  const diffs = [];
+  let d = yday, n = 0, guard = 0;
+  while (n < PM_USUAL_DAYS && guard++ < 60) {
+    if (pmIsWeekday(d)) {
+      let prev = pmDayShift(d, -1);
+      while (!pmIsWeekday(prev)) prev = pmDayShift(prev, -1);
+      const a = pmCloseAt(pts, pmEtClose(d)), b = pmCloseAt(pts, pmEtClose(prev));
+      if (a != null && b != null) diffs.push(r4(Math.abs(a - b) * 100));
+      n++;
+    }
+    d = pmDayShift(d, -1);
+  }
+  const usual = diffs.length ? pmMedian(diffs) : null;
+  const bar = usual == null ? null : Math.max(usual, PM_USUAL_FLOOR);
+  const x = chg != null && usual != null && usual > 0 ? Math.abs(chg) / usual : null;
+  const wild = !!(chg != null && bar != null && diffs.length >= PM_USUAL_MIN_N && Math.abs(chg) > bar);
+  return { cur, yc, chg, usual, n: diffs.length, x, wild };
+}
+/* the headline outcome of a topic: the most likely one under PM_FAV_CAP; with every outcome settled, the most likely */
+function pmFavourite(rows) {
+  const sorted = (rows || []).slice().sort((a, b) => Number(b.probability) - Number(a.probability));
+  const live = sorted.filter((r) => Number(r.probability) < PM_FAV_CAP);
+  return (live.length ? live : sorted)[0] || null;
+}
+function pmFmtChg(c) {
+  if (c == null || !isFinite(c)) return "";
+  const a = Math.abs(c);
+  return (c >= 0 ? "+" : "−") + (a < 10 ? a.toFixed(1) : a.toFixed(0));
+}
+function pmFmtPts(v) { return v == null ? "—" : (Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)) + (Math.abs(v) === 1 ? " point" : " points"); }
+/* the chips, in the band's order: the biggest move first, then the most likely */
+function pmChips(latest, hist, nowMs) {
+  const by = {};
+  for (const r of latest || []) { if (!r || !r.topic || r.topic === "discover") continue; (by[r.topic] = by[r.topic] || []).push(r); }
+  const out = [];
+  for (const topic of Object.keys(by)) {
+    const rows = by[topic].slice().sort((a, b) => Number(b.probability) - Number(a.probability));
+    const head = pmFavourite(rows);
+    if (!head) continue;
+    const m = pmDayMaths((hist && hist[head.market_id]) || [], nowMs, head.probability);
+    out.push({ topic, short: pmShort(topic), head, rows, p: Number(head.probability), chg: m.chg, yc: m.yc, usual: m.usual, n: m.n, x: m.x, wild: m.wild });
+  }
+  out.sort((a, b) => (Math.abs(b.chg || 0) - Math.abs(a.chg || 0)) || (b.p - a.p) || (a.short < b.short ? -1 : a.short > b.short ? 1 : 0));
+  return out;
+}
+function pmClock(iso) {
+  try { return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York", hour12: false }); }
+  catch (_) { return String(iso || "").slice(11, 16); }
+}
+/* the status chip: the collector's newest pass; red past PM_STALE_MIN minutes or with a logged problem */
+function pmStatus(run, nowMs) {
+  if (!run || !run.ts) return { text: "no pass yet", red: true, title: "prediction_market_runs holds no pass by the collector yet", ageMin: null };
+  const ageMin = (nowMs - Date.parse(run.ts)) / 60000;
+  const probs = Array.isArray(run.problems) ? run.problems : [];
+  const red = ageMin > PM_STALE_MIN || probs.length > 0;
+  const text = pmClock(run.ts) + " · " + (run.read == null ? "—" : run.read) + " read · " + probs.length + (probs.length === 1 ? " problem" : " problems");
+  const title = "the collector's newest pass (prediction_market_runs): " + (run.run_id || "") + " at " + pmClock(run.ts) + " ET, " +
+    Math.round(ageMin) + " min ago · " + (run.read == null ? "—" : run.read) + " markets read, " + (run.written == null ? "—" : run.written) +
+    " written, " + (run.unchanged == null ? "—" : run.unchanged) + " unchanged, " + (run.ms == null ? "—" : run.ms) + " ms" +
+    (probs.length ? " · problems: " + probs.map((p) => (p.topic || p.venue || "") + ": " + (p.reason || "")).join(" | ") : " · no problems") +
+    (ageMin > PM_STALE_MIN ? " · OLDER THAN " + PM_STALE_MIN + " MINUTES — the collector may have stopped" : "");
+  return { text, red, title, ageMin };
+}
+function pmChipTitle(c) {
+  const out = c.head.outcome ? " · " + c.head.outcome : "";
+  const hist = c.chg == null ? "no reading from yesterday yet, so no change is printed"
+    : pmFmtChg(c.chg) + " points since yesterday's 16:00 ET close (" + Math.round(c.yc * 100) + "%)" +
+      (c.usual != null ? " · its usual day is " + pmFmtPts(c.usual) + " over " + c.n + " weekday" + (c.n === 1 ? "" : "s") +
+        (c.x != null && c.usual > 0 ? " · today is " + c.x.toFixed(1) + "× its usual day" : "") : " · no usual day yet");
+  return String(c.head.question || c.topic) + out + " · " + Math.round(c.p * 100) + "% · " + hist + (c.wild ? " · WILD: bigger than its usual day" : "") +
+    " · " + (c.rows.length === 1 ? "one market" : c.rows.length + " outcomes") + " on " + String(c.head.venue || "polymarket") + " · tap for every outcome";
+}
+/* one chip: dot · short name · headline outcome (a Yes is left unsaid) · percent · change in its colour */
+function pmChipHTML(c) {
+  const up = c.chg == null ? true : c.chg >= 0;
+  const outc = c.head.outcome && !/^yes$/i.test(String(c.head.outcome).trim()) ? pmCut(c.head.outcome, 14) : "";
+  return '<span class="sc-tape__item pm-it' + (c.wild ? " is-wild" : "") + '" data-act="pmchip" data-topic="' + esc(c.topic) + '" title="' + esc(pmChipTitle(c)) + '">' +
+    '<span class="pm-dot">●</span><span class="pm-nm">' + esc(c.short) + "</span>" +
+    (outc ? '<span class="pm-out">' + esc(outc) + "</span>" : "") +
+    '<span class="pm-p">' + Math.round(c.p * 100) + "%</span>" +
+    (c.chg != null
+      ? '<span class="pm-chg ' + (up ? "up" : "dn") + (c.wild ? " is-scint" : "") + '"' + (c.wild ? ' data-up="' + (up ? "1" : "0") + '"' : "") + ">" + (c.wild ? "◆" : "") + pmFmtChg(c.chg) + "</span>"
+      : '<span class="pm-chg pm-chg--none">·</span>') +
+    "</span>" + '<span class="sc-tape__dot">·</span>';
+}
+/* the band: label · status chip · the chips twice (the marquee's two equal halves) */
+function pmStripHTML(chips, status, state) {
+  const sep = '<span class="sc-tape__dot">·</span>';
+  let seg;
+  if (state && state.err) seg = '<span class="sc-tape__item ecb-note">the prediction markets could not be read · ' + esc(state.err) + "</span>" + sep;
+  else if (!chips) seg = '<span class="sc-tape__item ecb-note">reading the prediction markets…</span>' + sep;
+  else if (!chips.length) seg = '<span class="sc-tape__item ecb-note">no topic has a live market</span>' + sep;
+  else seg = chips.map(pmChipHTML).join("");
+  const st = status ? '<span class="pm-status' + (status.red ? " is-red" : "") + '" title="' + esc(status.title) + '">' + esc(status.text) + "</span>" : "";
+  return '<div class="sc-tape sc-tape--pm" id="pmBand"><b class="sc-tape__lbl" title="' +
+    esc("prediction markets (Polymarket) — one chip per topic the registry follows: its short name, the outcome the market rates most likely, the probability, and the change since yesterday's 16:00 ET close in points (green up, red down) · a ◆ and a breathing dot: today's move is bigger than that market's usual day · biggest move first · the chip at the left edge is the collector's newest pass, red when it is older than 45 minutes or logged a problem · tap a chip for every outcome, bid / ask, the question in full and the market on polymarket.com") +
+    '">PREDICTION MARKETS →</b>' + st + '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+/* the 20-day line: the stored readings in the window, the newest reading at "now" so the line ends today */
+function pmLinePts(points, nowMs, cur) {
+  const from = nowMs - PM_USUAL_DAYS * 86400000;
+  const all = points || [];
+  const pts = all.filter((p) => p.t >= from).map((p) => [p.t, p.p * 100]);
+  if (all.length && !pts.length) pts.push([from, all[all.length - 1].p * 100]);
+  if (cur != null && isFinite(Number(cur))) pts.push([nowMs, Number(cur) * 100]);
+  return pts;
+}
+function pmLineHTML(points, nowMs, cur) {
+  const pts = pmLinePts(points, nowMs, cur);
+  return pts.length > 2 ? rgChart([{ pts, cls: rgTrendCls(pts) }], { h: 52, l: 26, b: 8, dp: 0, alt: "probability over the last 20 days" }) : "";
+}
+function pmEnds(iso) { return iso ? String(iso).slice(0, 10) : ""; }
+function pmPct(v) { return v == null || !isFinite(Number(v)) ? "—" : Math.round(Number(v) * 100) + "%"; }
+/* the market's page on polymarket.com, once the public API has given the slugs (pmSlugs); nothing is guessed */
+function pmLinkFor(row, slugs) {
+  const s = slugs && slugs[String(row.event_id)];
+  if (!s || !s.event) return null;
+  const m = s.markets && s.markets[String(row.market_id)];
+  return PM_LINK + s.event + (m ? "/" + m : "");
+}
+/* the topic pane (pure: everything it draws comes in as arguments, so a test can draw it from a fixture) */
+function pmPanelHTML(topic, rows, hist, meta, slugs, nowMs, state) {
+  const now = nowMs || Date.now();
+  const list = (rows || []).filter((r) => r && r.topic === topic).sort((a, b) => Number(b.probability) - Number(a.probability));
+  const short = pmShort(topic), label = (meta && meta.label) || (list[0] && list[0].question) || topic;
+  const group = (meta && meta.group) || "";
+  const newest = list.reduce((m, r) => (r.ts && (!m || r.ts > m) ? r.ts : m), null);
+  const venue = list.length ? String(list[0].venue || "polymarket") : "polymarket";
+  let body = "";
+  if (!list.length) {
+    body = '<div class="rg-cat"><span class="rg-cat__q rg-dimnote">not in the registry yet — no live market for this topic</span><span></span><span></span></div>';
+  } else {
+    for (const r of list) {
+      const pts = (hist && hist[r.market_id]) || null;
+      const m = pmDayMaths(pts || [], now, r.probability);
+      const line = state && state.histBusy && !pts ? '<i class="rg-one">reading the last 20 days…</i>' : (pmLineHTML(pts || [], now, r.probability) || '<i class="rg-one">' + (pts ? "one reading" : "no history yet") + "</i>");
+      const href = pmLinkFor(r, slugs);
+      body += '<div class="pm-row' + (m.wild ? " is-wild" : "") + '" title="' + esc(String(r.question || "") + (m.chg != null ? " · " + pmFmtChg(m.chg) + " points since yesterday's 16:00 ET close" +
+          (m.usual != null ? " · usual day " + pmFmtPts(m.usual) + " over " + m.n + " weekdays" + (m.x != null && m.usual > 0 ? " · " + m.x.toFixed(1) + "× its usual day" : "") : "") : " · no reading from yesterday yet")) + '">' +
+        '<span class="pm-row__q">' + esc(r.question || "") + "<i>" + esc(r.outcome || "") + " · bid " + esc(pmPct(r.bid)) + " / ask " + esc(pmPct(r.ask)) +
+          " · " + esc(venue) + (r.end_date ? " · ends " + esc(pmEnds(r.end_date)) : "") +
+          (href ? ' · <a class="pm-row__lnk" href="' + esc(href) + '" target="_blank" rel="noopener">polymarket.com ↗</a>' : "") + "</i></span>" +
+        '<span class="pm-row__p"><b>' + esc(pmPct(r.probability)) + "</b>" +
+          (m.chg != null ? '<u class="' + (m.chg >= 0 ? "up" : "dn") + '">' + (m.wild ? "◆" : "") + esc(pmFmtChg(m.chg)) + "</u>" : "") + "</span>" +
+        '<span class="pm-row__l">' + line + "</span></div>";
+    }
+  }
+  const ev = list.length ? pmLinkFor({ event_id: list[0].event_id, market_id: null }, slugs) : null;
+  const foot = (ev ? '<a href="' + esc(ev) + '" target="_blank" rel="noopener">open on polymarket.com ↗</a>'
+      : (list.length && state && state.slugBusy ? "finding its page on polymarket.com…" : (list.length ? "its page on polymarket.com could not be found" : ""))) +
+    (list.length ? " · " + list.length + (list.length === 1 ? " market" : " outcomes") + " · newest reading " + pmClock(newest) + " ET" : "") +
+    " · the change is since yesterday's 16:00 ET close · the line is the last 20 days (prediction_market_snapshots)";
+  return '<div class="pm-panel" id="pmPanel" data-topic="' + esc(topic) + '">' +
+    '<div class="sc-plabel sc-plabel--row rg-head pm-panel__head">' +
+      '<span class="rg-nav"><button type="button" class="rg-navb" data-act="pmclose" title="Close this topic and give the pane back"><i>✕</i>CLOSE</button></span>' +
+      '<span>prediction markets · <b>' + esc(short) + "</b>" + (group ? ' <i class="pm-panel__grp">' + esc(group) + "</i>" : "") + "</span></div>" +
+    '<div class="pm-panel__body"><div class="pm-panel__sub"><b>' + esc(label) + "</b>" + (meta && meta.plain ? " · " + esc(meta.plain) : "") + "</div>" +
+      body + '<div class="pm-panel__foot">' + foot + "</div></div></div>";
+}
+function pmPanelNow(topic) {
+  const meta = PM.reg && PM.reg[topic];
+  return pmPanelHTML(topic, PM.latest, PM.panelFor === topic ? PM.panelHist : null, meta, PM.slugs, Date.now(),
+    { histBusy: PM.panelBusy && PM.panelFor !== topic, slugBusy: !!PM.slugBusy });
+}
+
+/* ---- reads (anon, read-only) ------------------------------------------------ */
+const PM_LATEST_SEL = "topic,venue,event_id,market_id,outcome,align_key,question,probability,bid,ask,volume,volume_24h,end_date,ts";
+async function pmPage(path, pages) {
+  const out = [];
+  for (let i = 0; i < (pages || 8); i++) {
+    const rows = await pg(path + "&limit=1000&offset=" + (i * 1000));
+    if (!Array.isArray(rows)) break;
+    out.push.apply(out, rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+/* the readings of a set of markets over the last PM_HIST_DAYS days, as market_id → ascending [{t, p}] */
+async function pmHistory(filter) {
+  const since = new Date(Date.now() - PM_HIST_DAYS * 86400000).toISOString();
+  const rows = await pmPage("prediction_market_snapshots?select=market_id,probability,ts&" + filter + "&ts=gte." + encodeURIComponent(since) + "&order=ts.asc");
+  const out = {};
+  for (const r of rows) {
+    const t = Date.parse(r.ts), p = Number(r.probability);
+    if (!isFinite(t) || !isFinite(p)) continue;
+    (out[r.market_id] = out[r.market_id] || []).push({ t, p });
+  }
+  for (const k of Object.keys(out)) out[k].sort((a, b) => a.t - b.t);
+  return out;
+}
+async function pmLoad(force) {
+  if (!PM_ON || PM.busy) return;
+  if (!force && PM.at && Date.now() - PM.at < PM_TTL_MS) return;
+  PM.busy = true;
+  try {
+    const [latest, runs] = await Promise.all([
+      pg("prediction_market_latest?select=" + PM_LATEST_SEL + "&topic=neq.discover&order=topic.asc,probability.desc&limit=1000"),
+      pg("prediction_market_runs?select=run_id,ts,mode,read,written,unchanged,ms,problems&mode=eq.pass&order=ts.desc&limit=1"),
+    ]);
+    PM.latest = Array.isArray(latest) ? latest : []; PM.run = (Array.isArray(runs) && runs[0]) || null; PM.err = null; PM.at = Date.now();
+    pmPaint();                                                        // the band first: probabilities now, changes when the history lands
+    const heads = pmChips(PM.latest, null, Date.now()).map((c) => c.head.market_id).filter(Boolean);
+    PM.hist = heads.length ? await pmHistory("venue=eq.polymarket&market_id=in.(" + heads.map(encodeURIComponent).join(",") + ")") : {};
+    pmPaint();
+  } catch (e) { PM.err = String((e && e.message) || e); pmPaint(); }
+  finally { PM.busy = false; }
+}
+async function pmPanelLoad(topic) {
+  if (PM.panelFor === topic && PM.panelHist) return;
+  PM.panelBusy = true; PM.panelFor = topic; PM.panelHist = null;
+  try { const h = await pmHistory("venue=eq.polymarket&topic=eq." + encodeURIComponent(topic)); if (PM.panelFor === topic) PM.panelHist = h; }
+  catch (_) { if (PM.panelFor === topic) PM.panelHist = {}; }
+  finally { PM.panelBusy = false; pmPanelPaint(); }
+}
+/* the registry file the collector is bundled with, mirrored under deliverables (a test keeps the two identical): the long
+   label, the group and the plain-words line of each topic for the pane's header */
+async function pmRegistry() {
+  if (PM.reg) return;
+  try {
+    const r = await fetch("/deliverables/20260928/prediction-markets/topics.json", { cache: "no-cache" });
+    if (!r.ok) throw new Error("HTTP_" + r.status);
+    const j = await r.json(), by = {};
+    for (const t of (j && j.topics) || []) if (t && t.id) by[t.id] = { label: t.label, group: t.group, plain: t.plain, same_question: !!t.same_question };
+    PM.reg = by; pmPanelPaint();
+  } catch (_) { PM.reg = PM.reg || null; }
+}
+/* the event's page slug and its markets' slugs from Polymarket's public API (no key); the pane links once they arrive */
+async function pmSlugs(eventId) {
+  const id = String(eventId || "");
+  if (!id || PM.slugs[id] !== undefined) return;
+  PM.slugs[id] = null; PM.slugBusy = true;
+  try {
+    const r = await fetch("https://gamma-api.polymarket.com/events/" + encodeURIComponent(id), { cache: "no-cache" });
+    if (!r.ok) throw new Error("HTTP_" + r.status);
+    const ev = await r.json(), markets = {};
+    for (const m of (ev && ev.markets) || []) if (m && m.id && m.slug) markets[String(m.id)] = String(m.slug);
+    PM.slugs[id] = ev && ev.slug ? { event: String(ev.slug), markets } : null;
+  } catch (_) { PM.slugs[id] = null; }
+  finally { PM.slugBusy = false; pmPanelPaint(); }
+}
+
+/* ---- paint ----------------------------------------------------------------- */
+function pmPaint() {
+  const slot = el("pmBandSlot");
+  if (!PM_ON || !slot) return false;
+  const now = Date.now();
+  const chips = PM.latest ? pmChips(PM.latest, PM.hist, now) : null;
+  const html = pmStripHTML(chips, PM.run || PM.err ? pmStatus(PM.run, now) : null, { err: PM.err });
+  if (html === PM.html && slot.innerHTML) return true;                 // unchanged: leave the marquee running where it is
+  PM.html = html;
+  slot.innerHTML = html;
+  try { if (typeof ernScintPaint === "function") ernScintPaint(slot); } catch (_) {}   // the ◆ glows once, through the Hub's one primitive
+  if (typeof slot.querySelector !== "function" || typeof tapeSpeed !== "function") return true;
+  const track = slot.querySelector(".sc-tape__track");
+  if (track) tapeSpeed(track, null);
+  return true;
+}
+function pmPanelPaint() {
+  const p = el("pmPanel");
+  if (!p || !PM.open || p.dataset.topic !== PM.open) return false;
+  const d = document.createElement("div");
+  d.innerHTML = pmPanelNow(PM.open);
+  p.replaceWith(d.firstChild);
+  return true;
+}
+/* a chip tapped: the topic takes the right-side pane (a pinned company steps aside, Layer 0 comes back on ✕) */
+function pmOpen(topic) {
+  if (!topic) return;
+  PM.open = topic;
+  if (typeof clearRotate === "function") clearRotate();
+  LEFT_STATE = "AUTO"; LEFT_T = null; S.focusT = null;
+  if (typeof mountedKey !== "undefined" && mountedKey === "DASH") renderLeftPanel();
+  else go("DASHBOARD");
+  pmPanelLoad(topic);
+  const row = (PM.latest || []).find((r) => r && r.topic === topic);
+  if (row) pmSlugs(row.event_id);
+  pmBringIntoView();
+}
+function pmClose() {
+  PM.open = null;
+  if (el("leftPanel")) renderLeftPanel();
+}
+/* on a phone the pane is stacked under the board: bring it on screen, as a company is (coBringIntoView) */
+function pmBringIntoView() {
+  if (typeof window === "undefined" || !window.matchMedia || !window.matchMedia("(max-width:900px)").matches) return;
+  const go2 = () => {
+    const p = el("leftPanel");
+    if (!p || typeof p.getBoundingClientRect !== "function" || !PM.open) return;
+    const r = p.getBoundingClientRect();
+    if (r.top >= 0 && r.top < window.innerHeight * 0.5) return;
+    try { p.scrollIntoView({ block: "start", behavior: "auto" }); } catch (_) { p.scrollIntoView(true); }
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(go2)); else setTimeout(go2, 0);
+  setTimeout(go2, 400);
+}
+function pmTick() {
+  if (typeof document !== "undefined" && document.hidden) return;
+  pmLoad(false).then(pmPaint);                                        // the status chip's age moves every minute even when nothing was re-read
+}
+if (PM_ON && typeof document !== "undefined") {
+  const pmStart = () => { pmLoad(true); pmRegistry(); if (!PM.timer) PM.timer = setInterval(pmTick, 60000); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pmStart); else setTimeout(pmStart, 0);
+}
+
+/* ---- the REGIME card: the registry's macro topics, where the 6-hourly catalyst collector's six used to be ---------- */
+/* the six headings the REGIME card has carried since M44, each pointed at the registry topic(s) that ask the same
+   question. Old: cpi · fomc · midterms_house · midterms_senate · recession · shutdown (catalyst_odds). */
+const RG_PM_MAP = [
+  ["the Fed · the next meeting", ["fed-2026-10"]],
+  ["inflation · CPI, the next print", ["cpi-annual", "core-cpi"]],
+  ["the midterms · the House", ["house-2026"]],
+  ["the midterms · the Senate", ["senate-2026"]],
+  ["recession", ["recession-2026", "recession-2027"]],
+  ["government shutdown", ["shutdown"]],
+];
+async function pmRegimeLoad() {
+  const ids = RG_PM_MAP.reduce((a, m) => a.concat(m[1]), []);
+  const list = "topic=in.(" + ids.map(encodeURIComponent).join(",") + ")";
+  const rows = await pg("prediction_market_latest?select=" + PM_LATEST_SEL + "&" + list + "&order=topic.asc,probability.desc&limit=1000");
+  const hist = await pmHistory("venue=eq.polymarket&" + list);
+  return { rows: Array.isArray(rows) ? rows : [], hist, at: Date.now() };
+}
+function pmRegimeRowHTML(r, points, nowMs) {
+  const m = pmDayMaths(points || [], nowMs, r.probability);
+  const line = pmLineHTML(points || [], nowMs, r.probability);
+  return '<div class="rg-cat" title="' + esc(String(r.question || "") + (m.chg != null ? " · " + pmFmtChg(m.chg) + " points since yesterday's 16:00 ET close" +
+      (m.usual != null ? " · usual day " + pmFmtPts(m.usual) + " over " + m.n + " weekdays" + (m.x != null && m.usual > 0 ? " · " + m.x.toFixed(1) + "× its usual day" : "") : "") : "")) + '">' +
+    '<span class="rg-cat__q">' + esc(String(r.question || "").slice(0, 90)) + " <i>" + esc(r.outcome || "") + " · " + esc(r.venue || "") +
+      (r.end_date ? " · by " + esc(pmEnds(r.end_date)) : "") + "</i></span>" +
+    '<span class="rg-cat__p"><b>' + esc(pmPct(r.probability)) + "</b>" + (m.chg != null ? '<u class="' + (m.chg >= 0 ? "rg-up" : "rg-dn") + '">' + (m.wild ? "◆" : "") + esc(pmFmtChg(m.chg)) + "</u>" : "") + "</span>" +
+    '<span class="rg-cat__l">' + (line || '<i class="rg-one">one reading</i>') + "</span></div>";
+}
+/* ============================================================================
    27 SEP · USUAL DAY + SIGMA EVENTS — their own room.
    Alan, 27 Sep: "USUAL DAY + SIGMA EVENTS: move out of the dashboard table into their own tab/screen with a
    left-to-right slider like events (he saw Friday's sigma events, now they are gone)."
@@ -23221,6 +23687,9 @@ document.addEventListener("click", (e) => {
     /* M44 — RELEASES | REGIME. A view switch is a remount (viewKey carries it), so the
        releases room keeps its own state and the regime view starts its own live timer. */
     case "rgclose": { S.econView = "RELEASES"; go("DASHBOARD"); break; }   /* 29 Sep — ✕ on the REGIME header */
+    /* P1 (2 Oct) — the prediction markets reel: a chip opens its topic in the right-side pane; ✕ gives the pane back */
+    case "pmchip": { pmOpen(a.dataset.topic); break; }
+    case "pmclose": { pmClose(); break; }
     case "ecview": {
       const v = a.dataset.v === "REGIME" ? "REGIME" : "RELEASES";
       if (v === (S.econView || "RELEASES")) break;
