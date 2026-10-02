@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub · the STATS tab's missing facts · 2 Oct</title>
+<style>
+:root{--bg:#0B0B0E;--panel:#111114;--line:#2A2A30;--ink:#CFCFD2;--ink2:#A8A8AE;--dim:#6E6E76;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55;padding:28px 24px 80px;max-width:1180px;margin:0 auto}
+h1{font-size:15px;letter-spacing:.18em;font-weight:600;color:#D2D2D6;margin:0 0 4px}
+h2{font-size:12px;letter-spacing:.16em;font-weight:600;color:#A8A8AE;margin:38px 0 10px;padding-bottom:6px;border-bottom:.5px solid var(--line)}
+h3{font-size:12px;letter-spacing:.08em;font-weight:600;color:#BEBEC4;margin:18px 0 6px}
+p{margin:6px 0 10px;max-width:92ch}
+.sub{color:var(--dim);font-size:11px;letter-spacing:.06em;margin-bottom:22px}
+.q{border-left:2px solid var(--line);padding:4px 12px;color:var(--ink2);margin:8px 0 14px;max-width:92ch}
+figure{margin:14px 0 18px;padding:10px;background:var(--panel);border:.5px solid var(--line)}
+figure img{display:block;width:100%;height:auto;border:.5px solid var(--line)}
+figcaption{font-size:11px;color:var(--ink2);margin-top:8px;line-height:1.5}
+figcaption b{color:#D2D2D6;font-weight:600}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:900px){.pair{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0 14px}
+th,td{text-align:left;padding:5px 8px;border-bottom:.5px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:600;letter-spacing:.08em;font-size:10.5px}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dim{color:var(--dim)}
+.ok{color:#BEBEC4;font-weight:600}
+code{font-family:var(--mono);font-size:11.5px;color:#BEBEC4;background:#17171B;padding:1px 4px;border-radius:2px}
+ul{padding-left:20px;margin:6px 0 10px}
+li{margin:3px 0;max-width:92ch}
+.small{font-size:11px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<span data-scnav-slot></span><h1>THE STATS TAB'S MISSING FACTS, AND NO EARNINGS ROWS FOR FUNDS · HUB · 2 OCT</h1>
+<div class="sub">branch hub/h8-stats-facts-20261002 · from live b2d0b5e · built and checked headless, nothing deployed · pictures are real browser shots at 1680 wide, drawn at double scale · the database was changed (additive only) and the rollback is written</div>
+
+<p>H7 rebuilt the STATS tab as six blocks, and left dashes where the store had no number: MU said <code>shares out —</code>, and the float, the short interest and the dividend were not drawn at all because no table held them. Your standing rule for the company view is that every fact shown is a real fact or a plain "not stored" — never a silent dash. This branch does three things: it reads the missing facts from FMP into the database, it makes every empty cell say <em>why</em> it is empty, and it stops funds from showing "earnings" they never had.</p>
+<div class="q">"Your note also asked for visuals of the day's range, short interest and the float. None of those is in our tables or in the live quote … Adding them means a new FMP read into company_profile." — the H7 report, 2 Oct. Your delegation the same morning: "do whatever you want, man … whatever's safe, let's just roll."</div>
+
+<h2>1 · THE PICTURES — MU AND SPY, BEFORE AND AFTER</h2>
+<div class="pair">
+<figure><img src="screens/zoom-before-MU-1680-STATS.png" alt="MU STATS before"><figcaption><b>BEFORE · MU</b> (the live page). SIZE prints <code>shares out —</code>. There is no float, no short interest, no dividend row anywhere on the tab. PRICE prints <code>today —</code> too: after the close the stored quote row carries no change figure.</figcaption></figure>
+<figure><img src="screens/zoom-after-MU-1680-STATS.png" alt="MU STATS after"><figcaption><b>AFTER · MU</b> (this branch, same browser, same hour). <code>shares out 1.13B</code> and <code>float 1.12B</code> are FMP's numbers of 2 Oct; <code>short interest · not stored</code> says in dim grey that FMP carries none (hover tells you so). <code>today (2.17%)</code> now comes from the board's own reading when the quote row has none — the same figure the header shows.</figcaption></figure>
+</div>
+<div class="pair">
+<figure><img src="screens/zoom-before-SPY-1680-STATS.png" alt="SPY STATS before"><figcaption><b>BEFORE · SPY</b> (a fund, live page). <code>revenue TTM —</code>, <code>shares out —</code>, and none of the fund's own facts: the etf_info table held one row in total (AGIX), so there was nothing to draw. Lower on the tab, hidden under the fold here, sat <code>last report Nov 29 2017</code> — an old FMP calendar row, not a report.</figcaption></figure>
+<figure><img src="screens/zoom-after-SPY-1680-STATS.png" alt="SPY STATS after"><figcaption><b>AFTER · SPY</b>. SIZE lists what a fund is: <code>shares out 1.07B</code>, <code>fund assets (AUM) $809.22B</code>, <code>NAV $762.27</code>, <code>holdings 504</code>, <code>expense ratio 0.09%</code>, <code>inception Jan 22 1993</code>. No revenue row (not a fund's fact), no VALUE / GROWTH / BALANCE blocks, and no "report" dates. Its dividend is kept: <code>$1.89 · ex Sep 18</code>, yield 1.0%.</figcaption></figure>
+</div>
+<figure><img src="screens/after-MU-1680-STATS.png" alt="the whole Hub page, MU open on STATS, after"><figcaption><b>The whole page, after</b> — MU open in the right-side view (collapsed, as H7 made the click do), STATS tab, at 1680. The tab's slot scrolls (594 px of blocks in a 210 px slot, as before H8); the first screen holds PRICE and SIZE. <span class="dim">screens/after-MU-1680-STATS.png · the SPY page is screens/after-SPY-1680-STATS.png</span></figcaption></figure>
+
+<h2>2 · THE COUNT — EVERY DASH ON THE TAB, FOR 50 SERVED NAMES</h2>
+<p>A headless probe opened the company data for 50 of the board's names — 40 companies and 10 funds (SPY, QQQ, IWM, SMH, XLK always in), picked the same way before and after — drew the STATS tab with the page's own function, and read every row back. The served set it drew from is the page's whole-universe list: <b>546 names</b> (468 companies, 71 funds, and 7 with no company_profile row at all — MOG.A and the six treasury-yield series, which the tab answers with its "no stats inputs" line and which the probe therefore skipped).</p>
+<table><tr><th>row</th><th>BEFORE · cells printing "—"</th><th>why (before)</th><th>AFTER · cells printing "not stored" / "no reading"</th><th>why (after)</th></tr><tr><td>shares out</td><td class='n'>50</td><td class='dim'>column empty 50</td><td class='n'>0</td><td class='dim'>a value now</td></tr><tr><td>today</td><td class='n'>50</td><td class='dim'>live quote carries no change figure 50</td><td class='n'>0</td><td class='dim'>a value now</td></tr><tr><td>revenue TTM</td><td class='n'>13</td><td class='dim'>column empty 10 · row missing (fundamentals) 3</td><td class='n'>3</td><td class='dim'>row missing (fundamentals) 3</td></tr><tr><td>trailing P/E</td><td class='n'>12</td><td class='dim'>column empty 9 · row missing (fundamentals) 3</td><td class='n'>3</td><td class='dim'>row missing (fundamentals) 3</td></tr><tr><td>earnings yield</td><td class='n'>12</td><td class='dim'>column empty 9 · row missing (fundamentals) 3</td><td class='n'>3</td><td class='dim'>row missing (fundamentals) 3</td></tr><tr><td>forward P/E</td><td class='n'>9</td><td class='dim'>column empty 8 · row missing (analyst_estimates) 1</td><td class='n'>0</td><td class='dim'>a value now</td></tr><tr><td>EPS (ttm)</td><td class='n'>4</td><td class='dim'>row missing (fundamentals) 3 · column empty 1</td><td class='n'>3</td><td class='dim'>row missing (fundamentals) 3</td></tr><tr><td>PT · avg</td><td class='n'>1</td><td class='dim'>—</td><td class='n'>0</td><td class='dim'>a value now</td></tr><tr><td>short interest</td><td class='n'>0</td><td class='dim'>—</td><td class='n'>40</td><td class='dim'>not carried by FMP (no source) 40</td></tr>
+<tr><th>all rows</th><th class="n">151 of 1568 cells drawn</th><th></th><th class="n">52 of 1765 cells drawn · dashes: 0</th><th></th></tr>
+<tr><th>fund "report" rows (SPY, QQQ, XLK, EWY)</th><th class="n">4</th><th>old FMP calendar rows drawn as reports</th><th class="n">0</th><th>the fund rule</th></tr></table>
+<p class="small">"column empty" = the row exists in its table but that field is NULL · "row missing" = the name has no row in that table at all · "never stored" = no table had a column for it before H8 · "not carried by FMP" = no source we read carries it. After H8 a loss-making company's P/E prints <code>none · loss</code> — a fact (its EPS is at or below zero), counted as a value, not as "not stored".</p>
+
+<h2>3 · THE FACTS FROM FMP — WHAT CAME, FROM WHICH ROUTE, AND WHAT DID NOT</h2>
+<p>A throw-away Fly machine of the batch app read FMP for every one of the 543 names in company_profile and printed numbers only (1,158 calls, every one answered 200; the key never left Fly and never appears in any file). The Mac loaded the printout with UPDATE statements keyed by ticker, 100 names per transaction.</p>
+<table>
+<tr><th>fact</th><th>FMP route · field</th><th>names with a value</th><th>what it did not give</th></tr>
+<tr><td>shares outstanding</td><td><code>/stable/shares-float</code> · outstandingShares</td><td class="n">526 of 543</td><td>the 17 non-equity names: 11 crypto pairs, the 6 futures (CL, ES, NQ, GC, SI, DX) and VIX, plus BRK.A</td></tr>
+<tr><td>the float</td><td><code>/stable/shares-float</code> · floatShares</td><td class="n">462 of 543</td><td>the same 17, and 64 of the 72 funds (a fund's float is not a fact FMP keeps; the tab does not draw a float row for funds)</td></tr>
+<tr><td>last dividend per share, its ex-date</td><td><code>/stable/dividends</code> · the newest row's dividend and date</td><td class="n">364 of 543</td><td>179 names come back with an empty list — stored as "none on record" (0), which the tab prints as a fact, not as "not stored". 48 of the 364 ex-dates are still ahead (a declared dividend not yet gone ex).</td></tr>
+<tr><td>dividend yield</td><td><code>/stable/dividends</code> · the newest row's yield (annualised at that day's price)</td><td class="n">364 of 543</td><td>a yield at the ex-date's price, not today's — said so on hover</td></tr>
+<tr><td>short interest</td><td>none</td><td class="n">0</td><td><b>FMP does not carry it.</b> <code>/stable/short-interest</code> answers 404; <code>/stable/profile</code>, <code>/stable/quote</code> and <code>/stable/key-metrics-ttm</code> have no such field (probed 2 Oct, the key names of every answer recorded). The row prints "not stored" with that reason on hover.</td></tr>
+<tr><td>fund facts (fee, AUM, holdings, inception, NAV)</td><td><code>/stable/etf/info</code></td><td class="n">72 of 72 funds</td><td>nothing missing; the dividend frequency ("Quarterly") was read but has no column, so it is not shown</td></tr>
+</table>
+<p class="small">The printout is kept beside this page, numbers only: <code>deliverables/20261002/stats-facts/data/h8-fmp-facts.json</code>. The Fly script is <code>scripts/h8-fmp-facts.mjs</code>; the load step that turns the printout into SQL is <code>scripts/h8-load-facts.py</code>.</p>
+
+<h2>4 · THE DATABASE — WHAT WAS ADDED, AND HOW TO UNDO IT</h2>
+<p>Additive only, as your standing rule allows. The rollback was written <em>before</em> the ALTER ran:</p>
+<p><code>/Users/alanharvey/SCINTILLA 0.5/_archive/backend-fix-20260928/ROLLBACK-company-profile-h8-20261002.sql</code></p>
+<table>
+<tr><th>table</th><th>change</th><th>measured after the load</th></tr>
+<tr><td>company_profile</td><td>six new nullable columns: <code>shares_outstanding</code>, <code>float_shares</code>, <code>dividend_per_share</code>, <code>dividend_yield</code>, <code>ex_dividend_date</code>, <code>facts_as_of</code> (the moment FMP gave the facts)</td><td>543 of 543 rows stamped facts_as_of 2026-10-02 20:24Z · 526 with shares · 462 with a float · 543 with a dividend fact (179 of them "none on record")</td></tr>
+<tr><td>company_profile</td><td>the older, empty <code>shares_out</code> column filled with the same share count (0 of 543 rows had a value before; the Station's DCF template reads this column)</td><td>526 of 543 filled</td></tr>
+<tr><td>etf_info</td><td>71 fund rows inserted (fee, AUM, holdings, inception, NAV, sector weights); AGIX, the one row that existed, untouched</td><td>72 rows, every one with fee, AUM, holdings, inception and NAV</td></tr>
+<tr><td>not added</td><td><code>short_interest</code> and <code>short_ratio</code> — FMP carries neither, so a column nothing could fill was not created; the row on the tab says "not stored" instead</td><td>—</td></tr>
+</table>
+<p class="small">Nothing existing was dropped, renamed or overwritten. A side effect worth knowing: the FINANCIALS tab of every fund, which reads the same etf_info table, now has its overview facts too (it used to say "pending backfill").</p>
+
+<h2>5 · THE TWO RULES ON THE TAB</h2>
+<h3>Never a silent dash</h3>
+<p>A row with no value prints <code>not stored</code> in the dim grey of the "as of" notes, and its hover says which table and column is empty. A live reading that is not there says <code>no reading</code>. A loss-maker's P/E says <code>none · loss</code>. A name FMP lists no dividend for says <code>none on record</code>. The one thing H7 did right is kept: a block with no value at all (a fund's GROWTH) is not drawn — not a column of "not stored" either.</p>
+<h3>A fund has no earnings</h3>
+<p>Any name the page already treats as non-operating (company_profile.is_etf, or a crypto name) gets no "next report" / "last report" rows, no VALUE, GROWTH or BALANCE block, no revenue row, no float row — and lists its own five facts every time, "not stored" where etf_info lacks one. Checked in the walk: SPY, QQQ, IWM, SMH, XLK. One trap avoided: FMP also flags <b>O (Realty Income)</b> as a fund (is_fund = true) — it is a REIT that reports every quarter, so that flag is read but never used as the gate.</p>
+
+<h2>6 · WHAT COULD BE WRONG, OR LOOKS ODD</h2>
+<ul>
+<li><b>"today" after the close.</b> The probe found the stored quote row carries no change figure on all 50 names after 16:00 ET, while the header showed MU −2.15%. The tab now falls back to the board row's reading and says so on hover. Why the quote row loses its change after the close was not chased here.</li>
+<li><b>The dividend yield is FMP's at the ex-date</b>, not today's price. The year's dividends paid against today's market cap (the older row, from cashflow_history) stays beside it for companies.</li>
+<li><b>The facts are a snapshot of 2 Oct.</b> Nothing refreshes them yet; shares and dividends move. The hover on every fact row carries "facts as of Oct 2 2026 (FMP)" so a stale number is never mistaken for a fresh one.</li>
+<li><b>The seven names without a profile row</b> (MOG.A and the six treasury-yield series) still get the tab's "No stats inputs loaded" line; nothing on this branch fills them.</li>
+<li>Not verified by hand on your screen — all proof is headless, from this branch served locally against the live data.</li>
+</ul>
+
+<h2>7 · TESTS</h2>
+<p>Before (live b2d0b5e): 1719 tests, 1712 pass, 5 fail — the five known on live (the Indicator Lab checkpoint, the age function, readiness, saved review charts, xfeed-publish). After, on the final files: 1725 tests, 1717 pass, 6 fail — the same five plus "the Clock: rewind, play to the end, and the 45-second return to live", a timing test that passes when its file runs alone (6 of 6; the full run shared the machine with three headless browsers). Nothing new is broken.</p>
+<p>Six new tests (<code>tests/h8-stats-facts-20261002.test.mjs</code>): the "not stored" rule in the row, bar, rule and fill builders; MU with the loaded facts and no dash anywhere; a company whose facts are not loaded, a name with no dividend, a loss-maker; the fund rule on SPY; a fund with no etf_info row, a crypto name and the REIT trap; the wider read, the dim grey and the trial copy. Four older assertions that pinned the retired dash or the old fund behaviour were moved to the new rule (H7's SPY and margin-bar checks, the R3 one-screen stubs, numeric-closure's loss-maker).</p>
+
+<h2>8 · WHAT I DID NOT DO</h2>
+<ul>
+<li>Nothing deployed. The Indicator Lab, the Station and every other tab untouched. The trial copy at /preview/company-view/ was rebuilt from this page, as the rules require.</li>
+<li>No refresh job for the facts (see decision 3). No short-interest source (none in FMP; see decision 2).</li>
+<li>The older <code>shares_out</code> column was filled, not retired (see decision 1).</li>
+</ul>
+
+<h2>9 · THREE DECISIONS FOR YOU</h2>
+<table>
+<tr><th>#</th><th>decision</th><th>my recommendation</th></tr>
+<tr><td class="n">1</td><td>company_profile now carries the share count twice: the new <code>shares_outstanding</code> (with its date) and the older <code>shares_out</code>, filled so the Station's DCF keeps reading it. Retiring <code>shares_out</code> is a destructive change — yours to call.</td><td>Leave both for now; retire <code>shares_out</code> in a later Station lane once its DCF reads <code>shares_outstanding</code>.</td></tr>
+<tr><td class="n">2</td><td>The <code>short interest · not stored</code> row is permanent until a source exists — a reminder on every company, or noise?</td><td>Keep it: it is exactly your rule (a plain "not stored", never a silent gap), and it names the missing source. If a source is wanted, FINRA's twice-monthly file or Massive would be the read, a separate lane.</td></tr>
+<tr><td class="n">3</td><td>The facts are a one-off snapshot. Shares, floats and dividends change weekly.</td><td>A weekly Fly run of <code>scripts/h8-fmp-facts.mjs</code> followed by the load step (about 1,200 FMP calls, four minutes) — infrastructure you should know exists before it is scheduled, so it waits for your word.</td></tr>
+</table>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
