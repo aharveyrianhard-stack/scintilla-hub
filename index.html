@@ -7631,7 +7631,7 @@ function boardRowsHTML() {
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
-      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '"' + (SC_HELD_PREV[d.t] ? ' data-sc-prev-close-state="HELD" title="' + esc(scHeldPrevTitle(d.t)) + '"' : "") + '>' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
+      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '"' + (typeof SC_HELD_PREV !== "undefined" && SC_HELD_PREV[d.t] ? ' data-sc-prev-close-state="HELD" title="' + esc(scHeldPrevTitle(d.t)) + '"' : "") + '>' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
          tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
@@ -25498,10 +25498,11 @@ async function scProviderTick () {
          displayed provider trade against the provider's own completed daily close. */
       if (q.previous_close != null && isFinite(prev) && prev > 0) prevClose[t] = prev;
       else delete prevClose[t];
-      if (q.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE") SC_HELD_PREV[t] = q.previous_close_hold || {};
-      else delete SC_HELD_PREV[t];
+      const heldPrev = typeof SC_HELD_PREV !== "undefined" ? SC_HELD_PREV : null;
+      if (heldPrev && q.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE") heldPrev[t] = q.previous_close_hold || {};
+      else if (heldPrev) delete heldPrev[t];
       patch(t, price, "PROVIDER");
-      scHeldPrevPaint(t);
+      if (typeof scHeldPrevPaint === "function") scHeldPrevPaint(t);
       /* patch() returns early on an identical re-quote, which is correct for repaint suppression
          but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
          it here from the same contract so price and percentage can never disagree. */

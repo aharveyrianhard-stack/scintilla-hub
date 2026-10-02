@@ -55,6 +55,6 @@ test('painting sets and clears the hover and the HELD stamp on the CHG cell', ()
 })
 
 test('wiring: the quote tick records the held state and repaints; the row template carries it', () => {
-  assert.match(html, /if \(q\.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE"\) SC_HELD_PREV\[t\] = q\.previous_close_hold \|\| \{\};\n\s+else delete SC_HELD_PREV\[t\];\n\s+patch\(t, price, "PROVIDER"\);\n\s+scHeldPrevPaint\(t\);/)
-  assert.match(html, /id="lc_' \+ esc\(d\.t\) \+ '"' \+ \(SC_HELD_PREV\[d\.t\] \? ' data-sc-prev-close-state="HELD" title="' \+ esc\(scHeldPrevTitle\(d\.t\)\)/)
+  assert.match(html, /if \(heldPrev && q\.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE"\) heldPrev\[t\] = q\.previous_close_hold \|\| \{\};\n\s+else if \(heldPrev\) delete heldPrev\[t\];\n\s+patch\(t, price, "PROVIDER"\);\n\s+if \(typeof scHeldPrevPaint === "function"\) scHeldPrevPaint\(t\);/)
+  assert.match(html, /id="lc_' \+ esc\(d\.t\) \+ '"' \+ \(typeof SC_HELD_PREV !== "undefined" && SC_HELD_PREV\[d\.t\] \? ' data-sc-prev-close-state="HELD" title="' \+ esc\(scHeldPrevTitle\(d\.t\)\)/)
 })
