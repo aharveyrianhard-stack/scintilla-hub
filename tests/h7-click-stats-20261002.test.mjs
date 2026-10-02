@@ -146,7 +146,7 @@ test("the pictures: the range bar, the rule and the filled bar carry the mark wh
   assert.equal(api.stFillHTML("gross margin", 80.7, "t"), '<div class="st-fill" title="t"><span>gross margin</span><span class="st-fill__track" aria-hidden="true"><i class="up" style="width:80.7%"></i></span><b>80.7%</b></div>');
   assert.equal(api.stFillHTML("net margin", -37.4, "t"), '<div class="st-fill" title="t"><span>net margin</span><span class="st-fill__track" aria-hidden="true"><i class="dn" style="width:37.4%"></i></span><b class="neg">(37.4%)</b></div>');
   assert.match(api.stFillHTML("gross margin", 140, "t"), /width:100\.0%/, "a share over 100 fills the bar, never spills");
-  assert.equal(api.stFillHTML("gross margin", null, "t"), '<div class="st-fill" title="t"><span>gross margin</span><span class="st-fill__track" aria-hidden="true"></span><b>—</b></div>');
+  assert.equal(api.stFillHTML("gross margin", null, "t"), '<div class="st-fill" title="t"><span>gross margin</span><span class="st-fill__track" aria-hidden="true"></span><b class="ns">not stored</b></div>');   /* H8 — never a dash */
 });
 
 test("the blocks from a fixture (MU): six blocks, the facts of R3's three columns, the 52-week string replaced by its bar, every row with its source on hover", () => {
@@ -217,7 +217,7 @@ test("a fund (SPY): PRICE, SIZE with the fund's own facts, ACTIVITY — no colum
   assert.match(html, /<span>expense ratio<\/span><b>0\.09%<\/b>/);
   assert.match(html, /<span>inception<\/span><b>Jan 22 1993<\/b>/);
   assert.match(html, /class="sc-vol sc-vol--none"/, "no relative-volume row: the empty battery, never a borrowed charge");
-  assert.doesNotMatch(html, /next report|dividends|trailing P\/E/);
+  assert.doesNotMatch(html, /next report|last report|dividends FY|buybacks|trailing P\/E/);   /* H8 — a fund keeps its own dividend row (the last dividend, ex-date, yield); the earnings rows and the year's money stay off */
   /* nothing at all: no crash, the honest line */
   assert.equal(statsApi().statsTabHTML({ t: "X" }).includes('<section class="st-blk"><h3 class="st1-h">PRICE</h3>'), false);
 });
