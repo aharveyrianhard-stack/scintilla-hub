@@ -43,6 +43,16 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .lb.n{color:var(--ink2)}
 .lb.w{color:var(--dim)}
 .lb .up{color:var(--up)} .lb .dn{color:var(--dn)}
+.lb .lb3d{pointer-events:auto;cursor:pointer;display:inline-block;margin-left:6px;padding:0 4px;border:1px solid var(--dim);border-radius:2px;font-style:normal;font-size:10px;letter-spacing:.1em;color:var(--ink2);line-height:14px;vertical-align:1px;background:rgba(21,21,21,.9)}
+.lb .lb3d:hover{color:var(--ink);border-color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:7px 8px}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg .lbl{font-size:10px;letter-spacing:.1em;color:var(--mute);padding:0 6px;align-self:center}
+.tag.hub{color:var(--mute);border-color:var(--line);font-size:10px}
+.tag.dis{color:var(--ink);border-color:var(--dim)}
+.say{font-size:12px;color:var(--ink2);margin:0 0 8px;line-height:1.6}
+.coilbtn{font-size:11px;padding:5px 8px;margin:6px 0}
 #tip{position:absolute;pointer-events:none;background:rgba(21,21,21,.95);border:1px solid var(--line2);border-radius:3px;padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:300px;z-index:3}
 #legend{position:absolute;left:10px;bottom:10px;background:rgba(21,21,21,.92);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:auto;z-index:2}
 #legend div{display:flex;align-items:center;gap:8px;line-height:1.75}
@@ -147,7 +157,9 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <datalist id="tickers"></datalist>
     <button id="v-outline" class="on" title="the tree as an indented list with the bars">OUTLINE</button>
     <button id="v-canvas" title="the same tree, flat, like a canvas: drag to pan, wheel or pinch to zoom, click an area to lift it into 3D">CANVAS</button>
-    <button id="v-3d" title="the whole market in 3D">3D</button>
+    <button id="v-3d" title="the whole market in 3D (one section at a time is the usual way: the 3D chip on a section)">3D</button>
+    <span class="seg" id="detail-seg" title="CLEAN: every box with its own name and Geiger bar, nothing inside it, nothing without a reading — what a box folds away is counted on it as ＋N more. DETAILED: the whole tree, names and all."><button id="d-clean">CLEAN</button><button id="d-detailed">DETAILED</button></span>
+    <span class="seg" id="order-seg" title="the order of the children inside every parent — canvas, outline and the 3D ring"><span class="lbl">ORDER</span><button id="o-geiger">GREEN → RED</button><button id="o-size">BY SIZE</button></span>
     <button id="flat" title="the 3D tree, flat, seen straight on" style="display:none">FLAT 2D</button>
     <button id="reset" title="let go of the selection and show the whole tree">WHOLE MAP</button>
   </div>
@@ -157,13 +169,17 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <div id="crumbs"></div>
     <div id="outline"></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
-      <details id="legend" open><summary>KEY</summary>
+      <details id="legend"><summary>KEY · what every mark means</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
         <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = SCOUT Geiger (daily, 3-day, weekly only; off the Hub), where the full Geiger is missing</div>
         <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped bar = an aggregate: a cohort's mean, a heading's mean, a fund's holdings blend</div>
         <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
-        <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (28 Sep proposal) · FUND SET (R8) · NONE YET</div>
-        <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting</div>
+        <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (not adopted; was printed with a "?") · FUND SET (a fund's served holdings no cohort claims) · NONE YET (names no group claims, under their sector)</div>
+        <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting = a name with no reading yet</div>
+        <div><span class="kb" style="text-align:center"><span class="up">86 up</span> · <span class="dn">40 down</span></span>under a heading or cohort: how many lines under it read up / down (the ▲▼ arrows are gone)</div>
+        <div><span class="kb" style="text-align:center">＋N more</span>CLEAN only: what the box folds away — names, empty fund sets, waiting lines; hover for the split, DETAILED shows them</div>
+        <div><span class="kb" style="text-align:center;color:var(--ink2);border:1px solid var(--dim);border-radius:2px;font-size:10px;line-height:14px;flex-basis:30px;margin:0 8px">3D</span>on a section (Technology, Financials, Broad Market…): click to lift only that section into 3D; Esc drops it back</div>
+        <div><span class="kb" style="text-align:center;color:var(--mute)">─ │</span>a line joins a parent (above) to a child (below); a horizontal rail carries a second row of sections hung from the heading above; a box frames a cohort's names (DETAILED)</div>
       </details>
       <div id="hint">drag to pan · scroll to zoom · click an area to lift it into 3D · in a 3D area: drag to turn, Esc or the breadcrumb drops back to the canvas</div>
       <div id="fallback"></div>
@@ -207,6 +223,11 @@ const state = { geiger: null, quotes: {}, geigerErr: null, quotesErr: null, scou
 window.__mm = state; // read by the headless proof
 
 const T = await getJSON("tree.json");
+const IND = await getJSON("industry-20261002.json").catch(() => null); // per name: FMP industry (the authority), SIC (the tag), the standard's disagreement note
+const remembered = (k, def, ok) => { try { const v = localStorage.getItem(k); return ok.includes(v) ? v : def; } catch { return def; } };
+const remember = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+state.detail = remembered("tree.detail", "clean", ["clean", "detailed"]); state.order = remembered("tree.order", "geiger", ["geiger", "size"]);
+state.industryOf = (t) => (IND && IND.rows && IND.rows[t]) || null;
 const [g, sr, ss] = await Promise.allSettled([getJSON(CHART_API + "/geiger"), getJSON(CHART_API + "/v1/scout-geiger", 20000), getJSON("scout-geiger-snapshot.json")]);
 if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
 const scoutFrom = (doc, source) => { const c = doc.row_columns || [], ix = (k) => c.indexOf(k), v = {}; for (const r of doc.rows) v[r[ix("ticker")]] = [r[ix("composite")], r[ix("trend")], r[ix("momentum")]]; return { as_of: doc.as_of, run_id: doc.run_id, computed_utc: doc.computed_utc, v, source }; };
@@ -265,8 +286,43 @@ state.tree = T; state.nodes = nodes; state.kids = kids; state.primaryKids = prim
 $("stamp").textContent = state.geiger
   ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} full bars (${state.counts.up} up · ${state.counts.down} down)` +
     (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of}, ${state.scout.source})` : ` · scout Geiger did not answer (${state.scoutErr})`) +
-    ` · ${state.counts.cohorts} adopted · ${state.counts.proposed} proposed · ${state.counts.fundsets} fund sets · ${state.counts.pseudo} none yet · ${state.counts.differences_in_real_cohorts} board ≠ adopted`
+    ` · ${state.counts.cohorts} adopted · ${state.counts.proposed} proposed · ${state.counts.fundsets} fund sets · ${state.counts.pseudo} none yet`
   : `the live Geiger did not answer (${state.geigerErr}); no full bar is drawn and none is made up` + (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of})` : "");
+
+/* ---- names of things (2 Oct): one plain sentence per heading, shown on its card and on hover ---- */
+const WORDS = {
+  MARKET: "Everything the Hub serves, in one tree: US stocks by sector, the world, bonds, commodities, crypto, the dollar and volatility.",
+  US: "US-listed stocks and the funds that hold them: the broad market, the style and factor funds, and the eleven sectors.",
+  US_BROAD: "Funds that hold the whole US market or a big slice of it (S&P 500, Nasdaq 100, total market, equal weight, dividends).",
+  US_STYLE: "Funds that slice the market by style — growth, value, momentum, quality, size — instead of by industry.",
+  US_SECTORS: "The eleven sectors of the US market, each with its sector fund, its industry funds and its cohorts of names.",
+  WORLD: "Stocks outside the US, through the funds that hold them: developed markets and emerging markets.",
+  INTL_DEV: "Developed markets outside the US: Europe, Japan, the UK, Canada, Australia.",
+  EM: "Emerging markets: China, India, Brazil, Taiwan, Korea and the rest, through their funds.",
+  BONDS: "Bonds, through their funds: Treasuries by maturity, corporate, high yield, inflation-linked.",
+  CMDTY: "Commodities, through their funds: gold, silver, oil, gas, agriculture, and the miners.",
+  CRYPTO: "Bitcoin, Ether and the companies whose business is crypto: miners, exchanges, treasuries.",
+  MACRO: "The dollar and volatility: the funds that track the US dollar and the VIX.",
+  SEC_TECH: "Information technology: semiconductors, software, hardware, cloud and cyber security.",
+  SEC_FIN: "Financials: banks, insurers, capital markets, payments.",
+  SEC_HLTH: "Health care: pharma, biotech, medical devices, insurers and providers.",
+  SEC_ENGY: "Energy: oil and gas producers, services, pipelines, refiners, and uranium.",
+  SEC_INDU: "Industrials: aerospace and defence, machinery, transport, space, automation.",
+  SEC_STPL: "Consumer staples: food, drink, household goods, the supermarkets.",
+  SEC_DISC: "Consumer discretionary: retail, cars, travel, homebuilders, what people buy when they can.",
+  SEC_UTIL: "Utilities: power, water and gas companies, regulated and not.",
+  SEC_MATL: "Materials: metals and mining, chemicals, steel, copper, lithium.",
+  SEC_REIT: "Real estate: the REITs — towers, data centres, warehouses, homes, offices.",
+  SEC_COMM: "Communication services: the platforms, media, telecoms, games.",
+};
+const wordsOf = (n) => n.kind === "index" ? (WORDS[n.id] || "") : n.kind === "cohort" ? ({ adopted: "A cohort from the standard: names that move together, adopted on 28 Sep.", proposed: "A proposed cohort from the 28 Sep proposal: shown so you can see what adopting it would give; nothing is written.", fundset: "A fund set: this fund's served holdings that no adopted or proposed cohort claims.", none: "No group yet: names under this sector that no cohort, proposed cohort or fund set claims." })[n.ckind] : "";
+state.wordsOf = wordsOf;
+const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBar(n); return ab ? ab.v : null; };
+// inside every parent the children run green → red by reading, the highest first, ties by name, no reading last (2 Oct); BY SIZE keeps the old order
+const byReading = (a, b) => { const av = valueOf(a), bv = valueOf(b); if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; if (bv !== av) return bv - av; const an = nameOf(a), bn = nameOf(b); return an < bn ? -1 : an > bn ? 1 : 0; };
+const bySize = (a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0) || (nameOf(a) < nameOf(b) ? -1 : 1);
+const ordered = (list) => list.slice().sort(state.order === "size" ? bySize : byReading);
+const industryHTML = (n) => { const i = state.industryOf(n.ticker); if (!i) return ""; return `<span>INDUSTRY</span><span>${esc(i.fmp_industry || "—")} <span class="mute">FMP, the authority</span></span><span>SIC</span><span>${i.sic_code ? `${esc(i.sic_code)} <span class="mute">${esc(i.sic_description || "")}</span>` : '<span class="mute">not on this Mac yet (the 1 Oct probe covered 97 names; the table holds 426)</span>'}</span>` + (i.disagreement ? `<span>DISAGREE</span><span><span class="tag dis">the two authorities differ</span> <span class="mute">${esc(i.disagreement)}</span></span>` : ""); };
 
 /* ---- shared pieces: bars, paths, the card ---- */
 function bar(v, cls = "") {
@@ -301,9 +357,10 @@ function aggHTML(n, what) {
   h += `<div class="mute" style="font-size:11px">the striped bar is a plain mean of the members' composites (each name counts once, no weights); full and scout are never mixed</div>`;
   return h;
 }
+const ms0 = (c) => membersOf(c).filter((m) => m.kind === "name").length;
 function renderCard(n) {
   if (!n) {
-    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; click a sector, a fund or a cohort and that area lifts into 3D (Esc drops it back). A cohort shows its members and the names whose board tab differs (Alan's step-2 list). Type a ticker in the finder for its path and every fund that holds it.</div>` +
+    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; click a section's 3D chip (or the section) and only that section lifts into 3D (Esc drops it back). CLEAN shows every box with its name and bar and nothing inside; DETAILED shows the names. Inside every parent the children run green → red. A cohort of more than 24 names opens as the COIL. Type a ticker in the finder for its path and every fund that holds it.</div>` +
       `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
       `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
       `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
@@ -314,11 +371,15 @@ function renderCard(n) {
   let h = `<button class="release" id="letgo" title="let go (Esc)">LET GO ✕</button>` + (crumbs ? `<div class="path">${crumbs} ›</div>` : "") +
     `<h2>${esc(nameOf(n))}</h2><div class="sub">${esc(n.ticker ? n.label : n.kind === "cohort" && n.ckind !== "none" ? nice(n.cohort) : "")}${n.issuer ? " · " + esc(n.issuer) : ""} · ${kindWord(n)}</div>`;
   const rd = readingOf(n);
+  if (wordsOf(n)) h += `<div class="say">${esc(wordsOf(n))}</div>`;
   if (n.kind === "index") {
     h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
+    const nb = m3 ? m3.beneathNames(n).length : beneath(n.id).filter((x) => x.kind === "name").length;
+    if (nb > 24) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="the names under it drawn as two snakes: greens coil up to the highest reading, reds coil down to the most negative">COIL · ${nb} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
   } else if (n.kind === "cohort") {
     h = h.replace("</h2>", ` ${kindTag(n)}</h2>`);
-    if (n.ckind === "none") h += `<div class="wait">${esc(n.admission)}. Every name here is a step-2 question: the board has a tab for it, no cohort on the tree claims it.</div>`;
+    if (n.ckind === "none") h += `<div class="wait">${esc(n.admission)}. No cohort on the tree claims these names yet.</div>`;
+    if (ms0(n) > 24) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="the members drawn as two snakes">COIL · ${ms0(n)} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
     else if (n.ckind === "adopted") h += `<div class="kv"><span>PARENT</span><span><span class="lnk" data-go="${esc(n.parents[0])}">${esc(nameOf(state.byId.get(n.parents[0])))}</span></span><span>WHY</span><span class="dim" style="font-size:11px">${esc(n.parent_reason)}</span>` +
       (n.merged_from.length ? `<span>MERGED IN</span><span>${n.merged_from.map(nice).map(esc).join(", ")}</span>` : "") +
       (Number.isFinite(n.cohesion) ? `<span>COHESION</span><span>${n.cohesion.toFixed(2)} <span class="mute">vs ${n.null95.toFixed(2)} for a random set of the same size</span></span>` : "") +
@@ -342,13 +403,11 @@ function renderCard(n) {
       h += `<div class="sec">${n.ckind === "proposed" ? "WOULD HOLD" : "THE WHOLE SET"} · ${n.all_members.length}</div>` +
         (aggAll.full ? `<div class="kv"><span>MEAN OF ALL ${n.all_members.length}</span><div class="gbrow">${bar(aggAll.full.v, "lg agg")}<span class="big ${aggAll.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(aggAll.full.v)}</span></div><span>COUNT</span><span>${aggAll.full.n} full · <span class="up">${aggAll.full.up} up</span> · <span class="dn">${aggAll.full.down} down</span></span></div>` : "") +
         `<div class="mute" style="font-size:11px;margin-bottom:4px">${ms.length} at home here · ${away.length} at home elsewhere (listed with where)</div>` +
-        (away.length ? `<table>${away.map((t) => { const m = state.byId.get(t), hm = state.byId.get(m.home_id); return `<tr><td><span class="lnk" data-go="${esc(t)}">${esc(t)}</span></td><td class="nm">→ <span class="lnk" data-go="${esc(hm.id)}">${esc(hm.label)}</span> ${kindTag(hm)}</td><td class="bc">${ownBarHTML(m)}</td></tr>`; }).join("")}</table>` : "");
+        (away.length ? `<table>${ordered(away.map((t) => state.byId.get(t))).map((m) => { const hm = state.byId.get(m.home_id); return `<tr><td><span class="lnk" data-go="${esc(m.id)}">${esc(m.ticker)}</span></td><td class="nm">at home in <span class="lnk" data-go="${esc(hm.id)}">${esc(hm.label)}</span> ${kindTag(hm)}</td><td class="bc">${ownBarHTML(m)}</td></tr>`; }).join("")}</table>` : "");
     }
-    if (n.diff_count) {
-      h += `<div class="sec">${n.ckind === "adopted" ? "BOARD ≠ REGISTRY" : "BOARD TAB"} · ${n.diff_count} of ${ms.length}</div><div class="mute" style="font-size:11px;margin-bottom:4px">${n.ckind === "adopted" ? "members whose board tab today is not this cohort — Alan's step-2 list; nothing here is rewritten" : "where the board files these names today; none of them is in an adopted cohort"}</div><table>` +
-        n.step2.map((s) => `<tr><td><span class="lnk" data-go="${esc(s.ticker)}">${esc(s.ticker)}</span></td><td class="nm">board: ${esc(nice(s.board) || "—")}</td><td class="nm">${esc(s.note || "")}</td></tr>`).join("") + `</table>`;
-    } else if (n.ckind === "adopted") h += `<div class="sec">BOARD = REGISTRY</div><div class="mute">every member's board tab is this cohort</div>`;
-    h += `<div class="sec">MEMBERS · ${ms.length}</div><table>${ms.map((m) => rowFor(m, m.differs ? ` <span class="tag diff" title="board cohort">${esc(nice(m.board_cohort) || "—")}</span>` : "")).join("")}</table>`;
+    // the standard's groups come first; the old Hub tabs are only a small grey tag on a member (Alan, 2 Oct: "let's not think of them in reference to my actual cohorts")
+    h += `<div class="sec">MEMBERS · ${ms.length} <span class="mute" style="letter-spacing:0">· green → red</span></div><table>${ordered(ms).map((m) => rowFor(m, m.differs ? ` <span class="tag hub" title="the old Hub tab this name sits in today; a tag, not a group">hub tab: ${esc(nice(m.board_cohort) || "—")}</span>` : "")).join("")}</table>`;
+    if (n.diff_count) h += `<div class="mute" style="font-size:11px;margin-top:6px">${n.diff_count} of ${ms.length} sit in another old Hub tab today (the grey tags); nothing is rewritten</div>`;
     $("card").innerHTML = h; return;
   } else if (rd) {
     h += `<div class="kv"><span>${rd.kind === "full" ? "GEIGER · FULL" : "GEIGER · SCOUT"}</span><div class="gbrow">${bar(rd.v, "lg" + (rd.kind === "scout" ? " sc" : ""))}<span class="big ${rd.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(rd.v)}</span></div>` +
@@ -356,7 +415,7 @@ function renderCard(n) {
       `<span>DAY CHANGE</span><span>${qq && Number.isFinite(qq.change_pct) ? `<span class="${qq.change_pct >= 0 ? "up" : "dn"}">${fmtPct(qq.change_pct)}</span> <span class="mute">session ${esc(qq.price_session_et)}</span>` : `<span class="mute">not loaded</span>`}</span>` +
       (qq && Number.isFinite(qq.price) ? `<span>LAST PRICE</span><span>${qq.price.toFixed(2)}</span>` : "") +
       (n.market_value_usd ? `<span>MARKET VALUE</span><span>${fmtCap(n.market_value_usd)}</span>` : "") +
-      (n.gics_industry ? `<span>INDUSTRY</span><span>${esc(n.gics_industry)}</span>` : "") + `</div>` +
+      industryHTML(n) + `</div>` +
       (rd.kind === "full" ? `<div class="mute" style="font-size:11px">the full Hub Geiger · −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`
         : `<div class="mute" style="font-size:11px">the SCOUT Geiger: daily, 3-day and weekly rungs only (40% of the full Geiger's weight), computed off the Hub · as of the ${esc(state.scout.as_of)} close · ${n.served ? "served, but the full Geiger had no reading for it right now" : "not served: " + esc(n.admission)}</div>`);
   } else {
@@ -364,8 +423,8 @@ function renderCard(n) {
   }
   if (n.kind === "name") {
     const c = state.byId.get(n.parents[0]);
-    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>HOME</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span> ${kindTag(c)}${n.home_kind === "adopted" ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'} <span class="mute">· ${esc(n.home_rule)}</span></span>` +
-      `<span>BOARD TAB</span><span>${n.board_cohort ? `${esc(nice(n.board_cohort))}${n.differs ? ' <span class="tag diff">differs</span>' : ' <span class="mute">same</span>'}` : '<span class="mute">none (not on the board)</span>'}</span>` +
+    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>HOME</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span> ${kindTag(c)}${n.home_kind === "adopted" ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'} <span class="mute">· ${esc(n.home_rule)}</span> <span class="lnk" data-tree="${esc(n.id)}" style="margin-left:6px">show on the tree</span></span>` +
+      (n.board_cohort ? `<span>OLD HUB TAB</span><span><span class="tag hub">${esc(nice(n.board_cohort))}</span> <span class="mute">${n.differs ? "a different group from its home here; a tag, not a group" : "the same"}</span></span>` : "") +
       (n.also_in && n.also_in.length ? `<span>ALSO IN</span><span>${n.also_in.map((a) => `<span class="lnk" data-go="${esc(a.id)}">${esc(nice(a.cohort))}</span> <span class="tag kd">${KIND_WORD[a.kind]}</span>`).join(" · ")}</span>` : "") +
       (n.filters && n.filters.length ? `<span>ATTRIBUTES</span><span>${n.filters.map((f) => `<span class="tag k">${esc(nice(f))}</span>`).join(" ")} <span class="mute">filters, not cohorts</span></span>` : "") +
       `<span>SECTOR</span><span>${esc(n.sector_label)}</span></div>`;
@@ -381,8 +440,8 @@ function renderCard(n) {
         (dv ? `<div class="div">DIVERGENCE · <span class="${dv.diff > 0 ? "up" : dv.diff < 0 ? "dn" : ""}">${esc(dv.text)}</span><div class="mute" style="font-size:11px">fund ${fmtG(n.g.composite)} · holdings ${fmtG(a.value)}</div></div>` : "");
     }
     const cs = primaryKids(n.id).filter((c) => c.kind === "cohort");
-    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length}</div><table>${cs.map((c) => rowFor(c)).join("")}</table>`;
-    if (hd) h += `<div class="sec">TOP HOLDINGS · ${hd.count_in_fund} in the fund</div><table>` + hd.top.map((x) => { const hn = state.byId.get(x.ticker); return `<tr><td>${hn ? `<span class="lnk" data-go="${esc(x.ticker)}">${esc(x.ticker)}</span>` : esc(x.ticker)}</td><td class="nm">${esc(x.name || "")}</td><td class="bc">${hn ? ownBarHTML(hn) : '<span class="mute">not on the tree</span>'}</td><td class="r">${x.weight_pct.toFixed(1)}%</td></tr>`; }).join("") + `</table>`;
+    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length}</div><table>${ordered(cs).map((c) => rowFor(c)).join("")}</table>`;
+    if (hd) h += `<div class="sec">TOP HOLDINGS · ${hd.count_in_fund} in the fund <span class="mute" style="letter-spacing:0">· by weight</span></div><table>` + hd.top.map((x) => { const hn = state.byId.get(x.ticker); return `<tr><td>${hn ? `<span class="lnk" data-go="${esc(x.ticker)}">${esc(x.ticker)}</span>` : esc(x.ticker)}</td><td class="nm">${esc(x.name || "")}</td><td class="bc">${hn ? ownBarHTML(hn) : '<span class="mute">not on the tree</span>'}</td><td class="r">${x.weight_pct.toFixed(1)}%</td></tr>`; }).join("") + `</table>`;
   }
   const held = n.ticker && T.held_by[n.ticker];
   if (held && held.length) h += `<div class="sec">HELD BY · ${held.length} funds</div><table>` + held.map(([f, w]) => { const fn = state.byId.get(f); return `<tr><td><span class="lnk" data-go="${esc(f)}">${esc(f)}</span></td><td class="nm">${esc(fn ? fn.label : "")}</td><td class="bc">${fn ? ownBarHTML(fn) : ""}</td><td class="r">${w == null ? '<span class="mute">on the map</span>' : w.toFixed(2) + "%"}</td></tr>`; }).join("") + `</table><div class="mute" style="font-size:11px">weights from FMP's holdings files (26 Sep); "on the map" = an industry fund the r3 map already hangs it from</div>`;
@@ -390,15 +449,17 @@ function renderCard(n) {
   const ch = primaryKids(n.id).filter((c) => c.kind !== "cohort");
   if (ch.length && n.kind === "index") {
     const k = { index: 0, cohort: 1, fund: 2, name: 3 };
-    const sorted = ch.slice().sort((a, b) => k[a.kind] - k[b.kind] || (b.market_value_usd || 0) - (a.market_value_usd || 0));
+    const sorted = ordered(ch).sort((a, b) => k[a.kind] - k[b.kind]);
     const cs = primaryKids(n.id).filter((c) => c.kind === "cohort");
-    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length}</div><table>${cs.map((c) => rowFor(c, c.diff_count ? ` <span class="tag k">${c.diff_count} ≠</span>` : "")).join("")}</table>`;
-    h += `<div class="sec">UNDER IT · ${ch.length}</div><table>${sorted.slice(0, 60).map((c) => rowFor(c)).join("")}</table>` + (ch.length > 60 ? `<div class="mute">…and ${ch.length - 60} more</div>` : "");
+    if (cs.length) h += `<div class="sec">COHORTS UNDER IT · ${cs.length} <span class="mute" style="letter-spacing:0">· ${state.order === "size" ? "by size" : "green → red"}</span></div><table>${ordered(cs).map((c) => rowFor(c)).join("")}</table>`;
+    h += `<div class="sec">UNDER IT · ${ch.length} <span class="mute" style="letter-spacing:0">· ${state.order === "size" ? "by size" : "green → red"}</span></div><table>${sorted.slice(0, 60).map((c) => rowFor(c)).join("")}</table>` + (ch.length > 60 ? `<div class="mute">…and ${ch.length - 60} more</div>` : "");
   }
   $("card").innerHTML = h;
 }
 $("card").addEventListener("click", (e) => {
   if (e.target.id === "letgo") { release(); return; }
+  const coil = e.target.getAttribute && e.target.getAttribute("data-coil"); if (coil && state.byId.has(coil)) { openCoil(state.byId.get(coil)); return; }
+  const tree = e.target.getAttribute && e.target.getAttribute("data-tree"); if (tree && state.byId.has(tree)) { showOnTree(state.byId.get(tree)); return; }
   const id = e.target.getAttribute && e.target.getAttribute("data-go");
   if (id && state.byId.has(id)) select(state.byId.get(id));
 });
@@ -411,11 +472,11 @@ function outlineRow(n) {
   const cls = n.kind === "index" ? "h" + (n.id === "MARKET" || n.parents[0] === "MARKET" ? " top" : "") : n.kind === "cohort" ? "c " + n.ckind + (n.ckind === "none" ? " pseudo" : "") : n.kind === "fund" ? "f" : "n" + (n.hollow ? " w" : "");
   const hasKids = n.kind === "index" || n.kind === "cohort" || (n.kind === "fund" && primaryKids(n.id).length);
   let small = "";
-  if (n.kind === "cohort") small = ` ${kindTag(n)}<small>${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} board ≠` : ""}${n.ckind === "fundset" ? ` · tracking ${esc(n.tracking)}` : ""}</small>`;
+  if (n.kind === "cohort") small = ` ${kindTag(n)}<small>${membersOf(n).length} members${n.ckind === "proposed" ? " · not adopted" : ""}${n.ckind === "fundset" && !membersOf(n).length ? " · no names at home here" : ""}${n.ckind === "fundset" && membersOf(n).length ? ` · tracking ${esc(n.tracking)}` : ""}</small>`;
   else if (n.kind === "fund" && hasKids) { const k = primaryKids(n.id).filter((x) => x.kind === "cohort"); small = `<small>· ${k.length} cohort${k.length > 1 ? "s" : ""} under it: ${k.map((x) => KIND_WORD[x.ckind]).filter((v, i, a) => a.indexOf(v) === i).join(", ")}</small>`; }
-  else if (n.kind === "index" && n.agg && n.agg.full) small = `<small>${n.agg.full.n} lines · <span class="up">▲${n.agg.full.up}</span> <span class="dn">▼${n.agg.full.down}</span></small>`;
-  else if (n.kind === "name" && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
-  else if (n.kind === "fund" && n.registry_cohort && n.differs) small = `<span class="tag diff" title="board cohort today">${esc(nice(n.board_cohort) || "—")}</span>`;
+  else if (n.kind === "index" && n.agg && n.agg.full) small = `<small>${n.agg.full.n} lines · <span class="up">${n.agg.full.up} up</span> · <span class="dn">${n.agg.full.down} down</span></small>`;
+  else if (n.kind === "name" && n.differs) small = `<span class="tag hub" title="the old Hub tab this name sits in today; a tag, not a group">hub tab: ${esc(nice(n.board_cohort) || "—")}</span>`;
+  else if (n.kind === "fund" && n.registry_cohort && n.differs) small = `<span class="tag hub" title="the old Hub tab this fund sits in today">hub tab: ${esc(nice(n.board_cohort) || "—")}</span>`;
   const b = rd ? bar(rd.v, rd.kind === "scout" ? "sc" : "") : ab ? bar(ab.v, "agg" + (ab.kind === "scout" ? " sc" : "")) : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`;
   const v = rd ? `${fmtG(rd.v)}<small>${rd.kind.toUpperCase()}</small>` : ab ? `${fmtG(ab.v)}<small>${n.kind === "fund" ? "HOLDINGS" : "MEAN " + ab.kind.toUpperCase()}</small>` : `<small>${n.ticker ? "no reading" : ""}</small>`;
   const label = n.kind === "index" || n.kind === "cohort" ? esc(n.label.toUpperCase()) + (n.kind === "cohort" && n.ckind === "fundset" ? ` <small>${esc(n.fund_label)}</small>` : "") : `${esc(n.ticker)} <small>${esc(n.label)}</small>`;
@@ -424,17 +485,18 @@ function outlineRow(n) {
 function outlineKids(n) {
   const ch = primaryKids(n.id);
   const KR = { adopted: 0, proposed: 1, fundset: 2, none: 3 };
-  const heads = ch.filter((c) => c.kind === "index"), cohorts = ch.filter((c) => c.kind === "cohort").sort((a, b) => KR[a.ckind] - KR[b.ckind] || membersOf(b).length - membersOf(a).length);
+  // 2 Oct: inside every parent the children run green → red (BY SIZE: the old order — adopted first, then by size)
+  const heads = ordered(ch.filter((c) => c.kind === "index"));
+  const cohorts = state.order === "size" ? ch.filter((c) => c.kind === "cohort").sort((a, b) => KR[a.ckind] - KR[b.ckind] || membersOf(b).length - membersOf(a).length) : ordered(ch.filter((c) => c.kind === "cohort"));
   // a fund that parents cohorts (SMH, IGV, GDX, …) is a branch of the heading, listed with the cohorts; the other funds sit in one FUNDS group
-  const branchFunds = ch.filter((c) => c.kind === "fund" && primaryKids(c.id).some((k) => k.kind === "cohort"));
-  const funds = ch.filter((c) => c.kind === "fund" && !branchFunds.includes(c)), names = ch.filter((c) => c.kind === "name").sort((a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0));
+  const branchFunds = ordered(ch.filter((c) => c.kind === "fund" && primaryKids(c.id).some((k) => k.kind === "cohort")));
+  const funds = ordered(ch.filter((c) => c.kind === "fund" && !branchFunds.includes(c))), names = ordered(ch.filter((c) => c.kind === "name"));
   let h = "";
-  for (const c of cohorts.filter((x) => x.ckind !== "none")) h += outlineNode(c);
-  for (const c of branchFunds) h += outlineNode(c);
-  for (const c of cohorts.filter((x) => x.ckind === "none")) h += outlineNode(c);
+  if (state.order === "size") { for (const c of cohorts.filter((x) => x.ckind !== "none")) h += outlineNode(c); for (const c of branchFunds) h += outlineNode(c); for (const c of cohorts.filter((x) => x.ckind === "none")) h += outlineNode(c); }
+  else for (const c of ordered([...cohorts, ...branchFunds])) h += outlineNode(c);
   for (const c of heads) h += outlineNode(c);
   if (funds.length) { const fid = n.id + "__funds"; h += `<div class="grp" data-grp="${esc(fid)}">${open.has(fid) ? "▾" : "▸"} FUNDS · ${funds.length}</div><div class="kids ${open.has(fid) ? "" : "closed"}">${funds.map(outlineNode).join("")}</div>`; }
-  if (n.kind === "cohort") { const ms = membersOf(n); h += ms.map((m) => outlineRow(m)).join(""); }
+  if (n.kind === "cohort") { const ms = ordered(membersOf(n)); h += ms.map((m) => outlineRow(m)).join(""); }
   else for (const c of names) h += outlineRow(c);
   return h;
 }
@@ -445,8 +507,8 @@ function outlineNode(n) {
 function renderOutline() {
   const root = state.byId.get("MARKET");
   const ah = state.counts.at_home;
-  O.innerHTML = `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a tag on a name is its board tab where it differs from the cohort it sits in</div>` +
-    `<div id="counts"><span><b>${state.counts.cohorts}</b> ADOPTED · ${ah.adopted} names at home</span><span><b>${state.counts.proposed}</b> PROPOSED · ${ah.proposed} names</span><span><b>${state.counts.fundsets}</b> FUND SETS · ${ah.fundset} names</span><span><b>${state.counts.pseudo}</b> NONE YET · ${ah.none} names</span><span><b>${state.counts.differences_in_real_cohorts}</b> board ≠ adopted (step 2)</span></div>` + outlineNode(root);
+  O.innerHTML = `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · inside every parent the children run ${state.order === "size" ? "by size" : "green → red by reading"} · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a grey "hub tab" tag on a name is the old Hub tab it sits in, where that differs from its group here</div>` +
+    `<div id="counts"><span><b>${state.counts.cohorts}</b> ADOPTED · ${ah.adopted} names at home</span><span><b>${state.counts.proposed}</b> PROPOSED, not adopted · ${ah.proposed} names</span><span><b>${state.counts.fundsets}</b> FUND SETS · ${ah.fundset} names</span><span><b>${state.counts.pseudo}</b> NONE YET · ${ah.none} names</span></div>` + outlineNode(root);
 }
 function toggle(id) {
   if (open.has(id)) open.delete(id); else open.add(id);
@@ -492,6 +554,13 @@ function release() {
   crumbs();
 }
 document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.inArea()) { closeArea(); return; } if (state.selected) release(); });
+/* ---- CLEAN | DETAILED and the order (2 Oct): remembered per viewer; the 3D module morphs between the two pictures ---- */
+function paintModes() { $("d-clean").classList.toggle("on", state.detail === "clean"); $("d-detailed").classList.toggle("on", state.detail === "detailed"); $("o-geiger").classList.toggle("on", state.order !== "size"); $("o-size").classList.toggle("on", state.order === "size"); }
+function setDetail(mode) { remember("tree.detail", mode); if (m3) m3.setDetail(mode, 700); state.detail = mode; paintModes(); crumbs(); }
+function setOrder(o) { remember("tree.order", o); if (m3) m3.setOrder(o, 700); state.order = o; renderOutline(); if (state.selected) { renderCard(state.byId.get(state.selected)); if (state.view === "outline") revealInOutline(state.byId.get(state.selected), false); } paintModes(); }
+$("d-clean").addEventListener("click", () => setDetail("clean")); $("d-detailed").addEventListener("click", () => setDetail("detailed"));
+$("o-geiger").addEventListener("click", () => setOrder("geiger")); $("o-size").addEventListener("click", () => setOrder("size"));
+paintModes();
 
 /* ---- the finder: a ticker → its path and every fund that holds it ---- */
 $("tickers").innerHTML = nodes.filter((n) => n.ticker || n.kind === "cohort").map((n) => `<option value="${esc(n.ticker || n.label)}">${esc(n.ticker ? n.label : n.kind)}</option>`).join("");
@@ -519,8 +588,8 @@ async function setView(v) {
   const was = state.view; state.view = v;
   for (const k of ["outline", "canvas", "3d"]) $("v-" + k).classList.toggle("on", v === k);
   $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "outline" ? "none" : "block";
-  $("flat").style.display = v === "3d" ? "" : "none";
-  $("hint").textContent = v === "3d" ? "drag to turn · scroll to zoom · click to pick · click again or Esc to let go" : "drag to pan · scroll to zoom · click an area to lift it into 3D · in a 3D area: drag to turn, Esc or the breadcrumb drops back to the canvas";
+  $("flat").style.display = v === "3d" ? "" : "none"; $("detail-seg").style.display = v === "outline" ? "none" : "";
+  $("hint").textContent = v === "3d" ? "drag to turn · scroll to zoom · click to pick · click again or Esc to let go" : "drag to pan · scroll to zoom · click an area to lift it into 3D · in a 3D area or the coil: drag to turn, Esc or the breadcrumb drops back to the canvas";
   if (v === "canvas" || v === "3d") {
     await load3d();
     if (m3) { if (m3.inArea() && was !== v) m3.exitArea(false); m3.fit(); m3.setCanvas(v === "canvas", was === "outline" || !was ? 0 : 700); if (state.selected && !m3.inArea() && v === "3d") m3.select(state.byId.get(state.selected), false); }
@@ -535,16 +604,31 @@ async function openArea(n) {
   state.selected = n.id; renderCard(n); m.enterArea(n); crumbs();
 }
 function closeArea() { if (!m3 || !m3.inArea()) return; m3.exitArea(true); crumbs(); }
+async function openCoil(n) { // the coil: a parent's names as two snakes (a cohort of more than 24 opens into it by itself; any parent from its card)
+  cameFrom = state.view;
+  if (state.view === "outline") await setView("canvas");
+  const m = await load3d(); if (!m) return;
+  state.selected = n.id; renderCard(n); m.enterCoil(n); crumbs();
+}
+function showOnTree(n) { // from a bead or a card: the name where it sits on the tree, in DETAILED (names are folded in CLEAN)
+  if (m3 && m3.inArea()) m3.exitArea(false);
+  if (state.detail !== "detailed") setDetail("detailed");
+  if (state.view === "outline") { select(n); return; }
+  state.selected = n.id; renderCard(n); if (m3) setTimeout(() => m3.select(n, true), state.detail === "detailed" ? 0 : 750); crumbs();
+}
 function crumbs() {
   const c = $("crumbs"), sel = state.selected ? state.byId.get(state.selected) : null;
   if (state.view === "outline") { c.innerHTML = ""; return; }
   const trail = sel ? [...pathOf(sel), sel] : [state.byId.get("MARKET")];
-  const inA = m3 && m3.inArea();
-  c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") + (inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "");
+  const inA = m3 && m3.inArea(), inC = m3 && m3.inCoil();
+  c.innerHTML = trail.map((p, i) => `<span class="lnk${i === trail.length - 1 ? " here" : ""}" data-crumb="${esc(p.id)}">${esc(nameOf(p))}</span>`).join("<span>›</span>") +
+    (inC ? `<span>›</span><span class="lnk here">COIL</span><span class="lnk" data-crumb="__list" title="the same names as a plain ordered list, on the card">≡ LIST</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "") +
+    (!inA && state.view === "canvas" ? `<span class="lnk" style="color:var(--mute);border-color:var(--line)">${state.detail === "clean" ? "CLEAN" : "DETAILED"}</span>` : "");
 }
 $("crumbs").addEventListener("click", (e) => {
   const id = e.target.getAttribute && e.target.getAttribute("data-crumb"); if (!id) return;
   if (id === "__back") { closeArea(); return; }
+  if (id === "__list") { const root = state.byId.get(state.cluster); if (root) { state.selected = root.id; renderCard(root); crumbs(); } return; }
   const n = state.byId.get(id); if (!n) return;
   if (m3 && m3.inArea()) m3.exitArea(false);
   state.selected = n.id; renderCard(n);
@@ -572,6 +656,13 @@ state.setView = (v) => setView(v);
 state.openArea = (id) => { const n = state.byId.get(id); if (n) return openArea(n); };
 state.closeArea = () => closeArea();
 state.openCluster = state.openArea; state.closeCluster = state.closeArea;
+state.openCoil = (id) => { const n = state.byId.get(id); if (n) return openCoil(n); };
+state.setDetail = (m) => setDetail(m); state.setOrder = (o) => setOrder(o);
+state.showOnTree = (id) => { const n = state.byId.get(id); if (n) showOnTree(n); };
+state.outlineOrder = (id) => [...document.querySelectorAll(`[data-kids="${CSS.escape(id)}"] > .row, [data-kids="${CSS.escape(id)}"] > .kids > .row`)].map((r) => r.dataset.id);
+if (p.get("detail") === "detailed" || p.get("detail") === "clean") setDetail(p.get("detail"));
+if (p.get("order") === "size" || p.get("order") === "geiger") setOrder(p.get("order"));
+if (p.get("coil")) { const n = state.byId.get(p.get("coil")); if (n) setTimeout(() => openCoil(n), 400); }
 state.crumbs = () => [...document.querySelectorAll("#crumbs .lnk")].map((e) => e.textContent);
 state.setFlat = (on) => { if (m3) m3.setFlat(on, 0); };
 state.toggle = (id) => toggle(id);
