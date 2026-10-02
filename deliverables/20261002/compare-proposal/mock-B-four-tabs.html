@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>X1 · MOCK B · the same four tabs, sub-selections consolidated</title><link rel="stylesheet" href="mock.css"></head><body><div class="frame">
+<div class="topbar"><span data-scnav-slot></span><h1>SCINTILLA · DASHBOARD · right pane</h1><span class="mocktag">MOCK B · the smallest change · static · real data</span><span class="stamp" id="stamp"></span></div>
+<div class="split">
+ <div class="pane"><h2>TODAY <span class="r">what the live pane carries above its picture</span></h2>
+  <div class="tabs"><button>COHORT COMPARE</button><button class="on">MAP</button><button>ROTATION</button><button>RELATIVE</button></div>
+  <div class="row"><span class="lbl">TF</span><span class="chip">60M</span><span class="chip on">4H</span><span class="chip">1D</span><span class="chip">1W</span><span class="sep"></span><span class="lbl">Mode</span><span class="chip">TREEMAP</span><span class="chip on">GRID</span><span class="chip">FISHEYE</span><span class="chip">DOCK</span><span class="chip">BUBBLES</span><span class="chip">TILT</span></div>
+  <div class="row"><span class="chip on">GRAIN</span><span class="chip">FILL · OPACITY</span><span class="chip">LEVEL</span></div>
+  <div class="body"><div class="head">MAP · GRID · 118 tickers · LIKED · sorted by mkt cap · color = 4H %chg</div><div class="note">three control rows (13 chips) before the first square; COHORT COMPARE adds its own two rows (COHORTS · SECTORS, then seven fund families). Measured on the live Hub, 2 Oct.</div><div class="note">The scope is the board's tab (LIKED · ALL · AI HW …), not a choice made here.</div></div></div>
+ <div class="pane" id="b"><h2>PROPOSED <span class="r" id="head"></span></h2>
+  <div class="tabs" id="tabs"><button class="on" data-tab="COMPARE">COMPARE</button><button data-tab="MAP">MAP</button><button data-tab="ROTATION">ROTATION</button><button data-tab="RELATIVE">RELATIVE</button></div>
+  <div class="row" id="scope"><span class="lbl">SCOPE</span><button class="chip" data-scope="FAVORITES">★ FAVORITES</button><button class="chip on" data-scope="SECTORS">SECTORS</button><button class="chip" data-scope="TECH">PATH ▸ TECHNOLOGY</button></div>
+  <div class="row" id="ctl"></div>
+  <div class="body" id="body"></div></div>
+</div>
+<div class="clicks"><h3>WHAT ALAN CLICKS</h3><ol>
+<li><b>Which sector leads?</b> COMPARE tab (SECTORS is the default scope). The bow tie of the eleven SPDRs, as today, one row of chips instead of two.</li>
+<li><b>What leads inside it?</b> SCOPE ▸ PATH · TECHNOLOGY → COMPARE shows the industry funds. One level only in this arrangement: deeper means the tree page.</li>
+<li><b>Is FAVORITES strong or weak versus its industries?</b> SCOPE ★ FAVORITES → COMPARE orders the list and the control row states the list's mean against its home cohorts'.</li>
+</ol><div class="lost"><b>What is lost:</b> MAP keeps GRID · TREEMAP · TILT (FISHEYE, DOCK, BUBBLES fold into TREEMAP's cursor), FILL becomes one switch (GRAIN / FILL; LEVEL goes). The fund-family row becomes one dropdown (SPDR ▾). The path goes one level deep only. Rotation still runs on the Hub's own series pull.</div></div>
+</div>
+<script src="data/mock-data.js"></script><script src="mock.js"></script><script>
+let tab = "COMPARE", scope = "SECTORS";
+$("#stamp").textContent = "close Geiger " + M.as_of_close + " · closes to " + M.closes_newest;
+const SPDR = M.ladder.L2_spdr, TECH = M.ladder.L3.children, FAV = M.lists.FAVORITES;
+function favRows() { const br = Object.fromEntries(M.board_rows.map((r) => [r.t, r])); return FAV.rows.map((r) => ({ t: r.t, g: r.g_close, g_live: r.g_live, chg1d: br[r.t] ? br[r.t].chg : null, mcap: r.mcap, home_label: r.home_label, home_g: r.home_g })); }
+function render() {
+  const rows = scope === "SECTORS" ? SPDR : scope === "TECH" ? TECH : favRows(); const bench = scope === "SECTORS" ? "SPY" : scope === "TECH" ? "XLK" : "SPY";
+  $("#head").textContent = tab + " · " + scope + " · " + rows.length;
+  let ctl = "", body = "";
+  if (tab === "COMPARE") { ctl = '<span class="lbl">AS</span><span class="chip on">FUNDS · SPDR ▾</span><span class="chip">OUR NAMES</span><span class="chip">BOW TIE · breadth</span>' + (scope === "FAVORITES" ? '<span class="sep"></span><span class="note">list mean ' + fG(FAV.mean_g_close) + " · home cohorts' mean " + fG(FAV.mean_home_g) + " · " + FAV.above_home + " of " + FAV.compared + " above home</span>" : "");
+    body = '<div class="head"><b>COMPARE</b> · ' + (scope === "SECTORS" ? "the eleven sector funds, each fund's own Geiger" : scope === "TECH" ? "Technology's industry funds, each fund's own Geiger" : "FAVORITES in Geiger order") + " · green → red · white tick = live Hub reading</div>" + bowtieHTML(rows, { sub: scope === "FAVORITES" ? "chg" : "quad", live: true }); }
+  if (tab === "MAP") { ctl = '<span class="lbl">TF</span><span class="chip">60M</span><span class="chip on">4H</span><span class="chip">1D</span><span class="chip">1W</span><span class="sep"></span><span class="lbl">Mode</span><span class="chip on">GRID</span><span class="chip">TREEMAP</span><span class="chip">TILT</span><span class="sep"></span><span class="chip on">GRAIN</span><span class="chip">FILL</span>';
+    body = '<div class="head"><b>MAP</b> · GRID · ' + rows.length + " · colour = Geiger · text = 1D %</div>" + gridHTML(rows); }
+  if (tab === "ROTATION") { const w = rows.filter((r) => r.rrg); ctl = '<span class="lbl">TF</span><span class="chip">60M</span><span class="chip">4H</span><span class="chip on">1D</span><span class="chip">1W</span><span class="sep"></span><span class="chip">▶ PLAY</span><span class="note">live · ' + M.closes_newest + "</span>";
+    body = '<div class="head"><b>ROTATION</b> · RRG · ' + w.length + " vs " + bench + " · 1D · 8-bar tail</div>" + (w.length ? rrgSVG(w, bench) : '<div class="note">the Hub pulls this list\'s series itself (its twelve largest, as today)</div>'); }
+  if (tab === "RELATIVE") { const syms = (scope === "SECTORS" ? SPDR : TECH).map((r) => r.ticker).filter((t) => M.closes_tail[t]); ctl = '<span class="lbl">TF</span><span class="chip">60M</span><span class="chip">4H</span><span class="chip on">1D</span><span class="chip">1W</span><span class="sep"></span><span class="lbl">Window</span><span class="chip">1M</span><span class="chip on">3M</span><span class="chip">6M</span>';
+    body = '<div class="head"><b>RELATIVE</b> · % change · ' + syms.length + " vs " + bench + " · rebased to 0% at the left edge · 1D · last 63 bars</div>" + relSVG(syms.concat([bench]), bench, 63); }
+  $("#ctl").innerHTML = ctl; $("#body").innerHTML = body;
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-tab],[data-scope]"); if (!a) return; if (a.dataset.tab) { tab = a.dataset.tab; document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b === a)); } if (a.dataset.scope) { scope = a.dataset.scope; document.querySelectorAll("[data-scope]").forEach((b) => b.classList.toggle("on", b === a)); } render(); });
+render();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>

@@ -1,0 +1,84 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>X1 · MOCK A · one COMPARE panel · path + three lenses</title><link rel="stylesheet" href="mock.css"></head><body><div class="frame">
+<div class="topbar"><span data-scnav-slot></span><h1>SCINTILLA · DASHBOARD</h1><span class="mocktag">MOCK A · static · real data as of the 1 Oct close</span><span class="stamp" id="stamp"></span></div>
+<div class="split">
+ <div class="pane" id="board"><h2>BOARD <span class="r" id="boardHead"></span></h2>
+  <div class="row"><span class="lbl">MY LISTS</span><button class="chip on" data-list="FAVORITES">★ FAVORITES</button><button class="chip" data-list="RADAR">⊙ RADAR</button><button class="chip" data-list="LIKED">♥ LIKED</button><span class="sep"></span><span class="lbl">PATH</span><button class="chip ghost" id="boardPath">▸ follows the compare panel</button></div>
+  <div class="board"><table id="boardTbl"></table></div></div>
+ <div class="pane" id="cmp"><h2>COMPARE <span class="r" id="cmpHead"></span></h2>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="tabs" id="lenses"><button class="on" data-lens="ORDER">ORDER · bow tie</button><button data-lens="MAP">MAP</button><button data-lens="ROTATION">ROTATION</button></div>
+  <div class="row" id="ctl"></div>
+  <div class="body" id="body"></div></div>
+</div>
+<div class="clicks"><h3>WHAT ALAN CLICKS</h3><ol>
+<li><b>Which sector leads?</b> PATH crumb <i>US sectors</i> → ORDER. One click. The eleven sector bars, green → red; the white tick on each bar is the Hub's live reading where it has one.</li>
+<li><b>What leads inside it?</b> click the leading column (Information Technology) → ORDER shows its industry funds; click SMH → its cohorts; click a cohort → its names. Each step is one click, the crumbs are the way back.</li>
+<li><b>Is my FAVORITES list strong or weak versus its own industries?</b> MY LISTS ★ → ORDER shows the list's names in Geiger order, and the control row says the list's mean against the mean of their home cohorts (the standard's placement record).</li>
+</ol><div class="lost"><b>What is lost:</b> the six MAP drawings become two (GRID · TREEMAP); FISHEYE, DOCK, BUBBLES and TILT go; the RELATIVE lines tab goes (its 1M / 3M numbers ride under ROTATION's heads instead); the fund-family chips (iShares · Vanguard · equal-weight) go — the families live on the tree as L3 siblings.</div></div>
+</div>
+<script src="data/mock-data.js"></script><script src="mock.js"></script><script>
+let node = "US_SECTORS", lens = "ORDER", list = null, win = 21;
+$("#stamp").textContent = "close Geiger " + M.as_of_close + " · Hub live " + M.hub_computed.slice(11, 16) + "Z · closes to " + M.closes_newest;
+function rows() { if (list) { const ts = M.board_lists[list.toLowerCase()]; const br = Object.fromEntries(M.board_rows.map((r) => [r.t, r])); return ts.map((t) => ({ t, label: br[t] && br[t].name, g: (M.lists[list].rows.find((x) => x.t === t) || {}).g_close ?? (br[t] ? br[t].g : null), g_live: br[t] ? br[t].g : null, chg1d: br[t] ? br[t].chg : null, home_label: (M.lists[list].rows.find((x) => x.t === t) || {}).home_label, home_g: (M.lists[list].rows.find((x) => x.t === t) || {}).home_g, rrg: ((M.ladder.L5.names.find((x) => x.t === t) || {}).rrg) || null })); } return CHILDREN[node] || []; }
+function render() {
+  const rs = rows(), bench = list ? "SPY" : BENCH[node];
+  $("#crumbs").innerHTML = list ? '<span class="c here">★ ' + list + " · " + rs.length + " names</span><span class=\"arrow\">·</span><span class=\"c\" data-node=\"US_SECTORS\">back to the tree</span>" : crumbsHTML(node);
+  $("#cmpHead").textContent = (list ? "my list" : LEVEL[node]) + " · " + rs.length + " · vs " + bench;
+  let ctl = "";
+  if (lens === "ORDER") { const lr = list && M.lists[list]; ctl = '<span class="lbl">ORDER</span><span class="chip on">GEIGER · close</span><span class="chip ghost">live where served</span>' + (lr ? '<span class="sep"></span><span class="note">list mean ' + fG(lr.mean_g_close) + " · their home cohorts' mean " + fG(lr.mean_home_g) + " · " + lr.above_home + " of " + lr.compared + " above their home</span>" : ""); }
+  if (lens === "MAP") ctl = '<span class="lbl">MAP</span><span class="chip on">GRID</span><span class="chip">TREEMAP</span><span class="sep"></span><span class="lbl">fill</span><span class="chip on">GEIGER</span><span class="note">text = the day\'s move · size order = market value</span>';
+  if (lens === "ROTATION") ctl = '<span class="lbl">WINDOW</span><button class="chip' + (win === 21 ? " on" : "") + '" data-win="21">1M</button><button class="chip' + (win === 63 ? " on" : "") + '" data-win="63">3M</button><span class="sep"></span><span class="chip">▶ PLAY</span><span class="note">daily bars · 14-bar RRG as the Hub draws it · vs ' + bench + "</span>";
+  $("#ctl").innerHTML = ctl;
+  if (lens === "ORDER") $("#body").innerHTML = '<div class="head"><b>ORDER</b> · the children of <b>' + esc(list ? list : M.path_labels[node] || node) + "</b> · Geiger composite at the close, green → red · scale ±" + Math.max(0.2, ...rs.map(gOf).filter((v) => v != null).map(Math.abs)).toFixed(2) + "</div>" + bowtieHTML(rs, { sub: list ? "chg" : "n", live: true });
+  if (lens === "MAP") $("#body").innerHTML = '<div class="head"><b>MAP</b> · GRID · ' + rs.length + ' · colour = Geiger at the close · text = 1D % change</div>' + gridHTML(rs);
+  if (lens === "ROTATION") { const withR = rs.filter((r) => r.rrg); $("#body").innerHTML = '<div class="head"><b>ROTATION</b> · ' + withR.length + " of " + rs.length + " vs " + bench + ' · heads = newest bar, tails = 8 bars</div>' + rrgSVG(withR, bench) + '<table><tr><th>line</th><th class="n">RS-ratio</th><th class="n">RS-mom</th><th>quadrant</th><th class="n">vs ' + bench + " · " + (win === 21 ? "1M" : "3M") + '</th></tr>' + withR.slice().sort((a, b) => (b[win === 21 ? "rel21" : "rel63"] ?? -99) - (a[win === 21 ? "rel21" : "rel63"] ?? -99)).map((r) => "<tr><td>" + esc(short(r)) + '</td><td class="n">' + r.rrg.ratio.toFixed(2) + '</td><td class="n">' + r.rrg.mom.toFixed(2) + "</td><td>" + r.rrg.quadrant.toLowerCase() + '</td><td class="n ' + ((r[win === 21 ? "rel21" : "rel63"] ?? 0) >= 0 ? "up" : "dn") + '">' + fP(r[win === 21 ? "rel21" : "rel63"]) + "</td></tr>").join("") + "</table>"; }
+  /* the board follows: the list, or the names under the picked node */
+  const br = Object.fromEntries(M.board_rows.map((r) => [r.t, r]));
+  const names = list ? M.board_lists[list.toLowerCase()].map((t) => br[t] || { t }) : (rs[0] && rs[0].t ? rs : (M.ladder.L5.names));
+  $("#boardHead").textContent = (list || ("path · " + (rs[0] && rs[0].t ? M.path_labels[node] || node : "AI ACCELERATORS (deepest on this path)"))) + " · " + names.length;
+  $("#boardPath").textContent = list ? "▸ " + list : "▸ " + (M.path_labels[node] || node);
+  $("#boardTbl").innerHTML = "<tr><th>ticker</th><th>geiger</th><th class=\"n\">1D</th><th>tags</th></tr>" + names.slice(0, 60).map((r) => { const g = r.g != null ? r.g : r.g_close; return "<tr><td><b>" + esc(r.t) + "</b></td><td>" + gmini(g) + '<span class="' + ((g || 0) >= 0 ? "up" : "dn") + '">' + fG(g) + '</span></td><td class="n ' + ((r.chg ?? r.chg1d ?? 0) >= 0 ? "up" : "dn") + '">' + fP(r.chg ?? r.chg1d) + "</td><td>" + (r.tags || []).map((t) => '<span class="tag">' + esc(t) + "</span>").join("") + "</td></tr>"; }).join("");
+}
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-node],[data-lens],[data-list],[data-win]"); if (!a) return;
+  if (a.dataset.lens) { lens = a.dataset.lens; document.querySelectorAll("#lenses button").forEach((b) => b.classList.toggle("on", b === a)); }
+  if (a.dataset.list) { list = list === a.dataset.list ? null : a.dataset.list; document.querySelectorAll("[data-list]").forEach((b) => b.classList.toggle("on", b.dataset.list === list)); }
+  if (a.dataset.node && CHILDREN[a.dataset.node]) { node = a.dataset.node; list = null; document.querySelectorAll("[data-list]").forEach((b) => b.classList.remove("on")); }
+  if (a.dataset.win) win = +a.dataset.win;
+  render(); });
+render();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
