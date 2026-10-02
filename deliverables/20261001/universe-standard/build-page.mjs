@@ -6,6 +6,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const D = JSON.parse(readFileSync(join(HERE, "derived-20261001.json"), "utf8"));
+/* C5 (2 Oct, Alan: "is there any gauge of which sources are better?"): the source scorecard, measured on every served
+   company by deliverables/20261002/source-scorecard/build.mjs. Read if present; the pages build without it. */
+const SC_PATH = join(HERE, "../../20261002/source-scorecard/scorecard-2026-10-02.json");
+const SC = existsSync(SC_PATH) ? JSON.parse(readFileSync(SC_PATH, "utf8")) : null;
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const money = (v) => v == null ? "—" : v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + " T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(0) + " B" : "$" + (v / 1e6).toFixed(0) + " M";
 const pct = (v) => v == null ? "—" : (v < 0 ? "(" + Math.abs(v).toFixed(1) + "%)" : v.toFixed(1) + "%");
@@ -31,6 +35,7 @@ h3{font:600 12px/1.4 var(--mono);letter-spacing:.14em;color:var(--ink);margin:22
 .words{padding:12px 16px 14px;font-size:12.5px;line-height:1.7}.words b{color:var(--ink);font-weight:600}
 .words ul,.words ol{margin:4px 0 8px;padding-left:22px}.words li{margin:5px 0}.words li::marker{color:var(--mute)}
 .words q{quotes:"\\201C" "\\201D";color:var(--ink)}.up{color:var(--up)}.dn{color:var(--dn)}code{font-size:12px;color:var(--ink)}
+.words a{color:var(--ink)}.sc-rings{display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px 12px}.sc-rings .tile{flex:1 1 200px}.sc-rings .tile b{font-size:20px}
 .lead{font-size:13.5px;color:var(--ink);max-width:1000px}
 .tiles{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tile{border:1px solid var(--line);background:var(--panel);padding:8px 14px;min-width:120px}
 .tile b{display:block;font-size:22px;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:600}.tile span{font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
@@ -82,10 +87,27 @@ function ladderHTML(T, { full = false } = {}) {
   return h;
 }
 
+/* ---------- C5: the scorecard block under the four lines (cone and ladder pages), and the ring shares under the picture ---------- */
+const SC_WORDS = { FMP: "FMP's peer list", MASSIVE: "Massive's related companies", INDUSTRY: "the same industry (the authority)", FUND: "a shared industry fund" };
+const scPct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
+function scorecardHTML() {
+  if (!SC) return "";
+  const M = SC.measures;
+  const rows = ["FMP", "MASSIVE", "INDUSTRY", "FUND"].map((S) => `<tr><td class="k">${SC_WORDS[S]}</td><td class="r">${M.reach[S].covered} of ${M.reach[S].companies}</td><td class="r">${M.reach[S].mean_offered.toFixed(1)}${M.reach[S].mean_served < M.reach[S].mean_offered - 0.05 ? ` <span style="color:var(--dim)">(${M.reach[S].mean_served.toFixed(1)} with figures)</span>` : ""}</td><td class="r">${scPct(M.precision[S].kept_of_served)}</td><td class="r">${scPct(M.per_source[S].corroborated_share)}</td></tr>`).join("");
+  return `<div class="panel" id="scorecard"><div class="words"><b>SCORECARD · the four sources, measured on all ${SC.universe.with_set} served companies with a comp set (${SC.as_of.ticker_industry}).</b> ${esc(SC.verdict.sentence)} <span style="color:var(--dim)">The full scorecard — a picture per measure, the worked cases, the method, what could be wrong: <a href="../../20261002/source-scorecard/SOURCE-SCORECARD.html">SOURCE-SCORECARD.html</a>.</span></div>
+<div class="tw"><table class="t"><tr><th>source</th><th class="r">companies covered</th><th class="r">names offered per company</th><th class="r">kept share</th><th class="r">agreement with the others</th></tr>${rows}</table></div>
+<div class="words" style="padding-top:0;font-size:11.5px;color:var(--dim)">kept share = of the served names a source offers, the share that ends in the kept ten · agreement = the share of its names that at least one other source also offers · the industry source offers every served name of the industry, so it can only ever keep ten of them.</div></div>`;
+}
+function ringSharesHTML() {
+  if (!SC) return "";
+  const bv = SC.measures.provenance.by_votes;
+  return `<div class="panel"><div class="sc-rings">${[4, 3, 2, 1].map((v) => `<div class="tile"><b>${scPct(bv[v].kept_share)}</b><span>${v === 1 ? "1 source names it" : v + " sources agree"} · ${bv[v].kept.toLocaleString("en-US")} of ${bv[v].served_candidates.toLocaleString("en-US")} such names kept, Hub-wide</span></div>`).join("")}</div><div class="words" style="padding-top:0;font-size:11.5px;color:var(--dim)">The share of names on each ring that end in the kept ten, counted across all ${SC.universe.with_set} companies with a comp set — not only ${SIX[0]}.</div></div>`;
+}
+
 /* ---------- the 3D form (LRCX): the company at the centre; height = votes; radius = closeness; inner ring = kept ---------- */
 function threeDSVG(T) {
   const s = CS[T], kept = new Set(s.standard.kept.map((k) => k.ticker));
-  const W = 1240, H = 640, cx = 560, cy = 420, rx = 380, ry = 118, lift = 92;   // 2 Oct: wider, so the ring labels on the right fit whole            // four levels stacked: votes 1 (bottom) … 4 (top)
+  const W = 1300, H = 640, cx = 560, cy = 420, rx = 360, ry = 118, lift = 92;   // 2 Oct: wider and the rings pulled in a touch, so the ring labels on the right (now with the kept share, C5) fit whole            // four levels stacked: votes 1 (bottom) … 4 (top)
   const lvlY = (v) => cy - (v - 1) * lift;
   const rows = s.ladder.filter((r) => r.served && r.closeness != null);
   // angle by the source signature so the same kind of agreement sits on the same side; spread inside the sector by rank
@@ -102,8 +124,10 @@ function threeDSVG(T) {
     svg += `<ellipse cx="${cx}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="#2a2a2a" stroke-width="1"/>`;
     svg += `<ellipse cx="${cx}" cy="${y}" rx="${rx * 0.32}" ry="${ry * 0.32}" fill="none" stroke="#383838" stroke-width="1" stroke-dasharray="3 3"/>`;
     // 2 Oct (Alan: "more labels on what each ring is"): every ring says what it is where it is drawn
-    svg += `<text x="${cx + rx + 10}" y="${y + 4}" fill="#acacac" letter-spacing="2">${v === 1 ? "1 SOURCE NAMES IT" : v + " SOURCES AGREE"}</text>`;
-    svg += `<text x="${cx + rx + 10}" y="${y + 17}" fill="#6c6c6c" font-size="9.5" letter-spacing="1">${{ 4: "all four: peer list, related, same industry, shared fund", 3: "three of the four", 2: "two of the four", 1: "one source only" }[v]}</text>`;
+    // C5 (Alan: "is there any gauge of which sources are better?"): each ring label carries the kept share of that ring, Hub-wide
+    const rs = SC ? SC.measures.provenance.by_votes[v] : null;
+    svg += `<text x="${cx + rx + 10}" y="${y + 4}" fill="#acacac" letter-spacing="2">${v === 1 ? "1 SOURCE NAMES IT" : v + " SOURCES AGREE"}${rs ? ` · ${scPct(rs.kept_share)} OF THESE ARE KEPT` : ""}</text>`;
+    svg += `<text x="${cx + rx + 10}" y="${y + 17}" fill="#6c6c6c" font-size="9.5" letter-spacing="1">${{ 4: "all four name it", 3: "three of the four", 2: "two of the four", 1: "one source only" }[v]}${rs ? ` · ${rs.kept.toLocaleString("en-US")} of ${rs.served_candidates.toLocaleString("en-US")} kept, Hub-wide` : ""}</text>`;
     svg += `<text x="${cx - rx - 10}" y="${y + 4}" text-anchor="end" fill="#6c6c6c" font-size="10" letter-spacing="1">${v === 4 ? "TOP RING" : v === 1 ? "BOTTOM RING" : ""}</text>`;
   }
   svg += `<text x="${cx + rx * 0.32 + 40}" y="${lvlY(4) + ry * 0.32 + 14}" fill="#8c8c8c" font-size="10" letter-spacing="2">DASHED RING = THE SIZE BAND</text><text x="${cx + rx * 0.32 + 40}" y="${lvlY(4) + ry * 0.32 + 27}" fill="#6c6c6c" font-size="9.5" letter-spacing="1">÷10 … ×10 of ${T}'s market value (${money(s.market_cap)}); outside it, dropped</text>`;
@@ -357,8 +381,9 @@ writeFileSync(join(HERE, "UNIVERSE-STANDARD.html"), html);
 
 /* ---------- the two standalone mocks ---------- */
 const mockHead = (title) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${CSS}</style></head><body><div class="wrap">`;
-writeFileSync(join(HERE, "agreement-ladder.html"), `${mockHead("Agreement Ladder")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT LADDER · LRCX <span class="proposed">MOCK</span></div><div class="stamp">rows = candidates by votes then closeness · columns = the four sources · the shaded band = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}<div class="panel"><div class="tw" style="padding-top:10px">${ladderHTML("LRCX", { full: true })}</div></div></div></body></html>`);
-writeFileSync(join(HERE, "agreement-3d.html"), `${mockHead("Agreement 3D")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT VIEW, 3D · LRCX <span class="proposed">MOCK</span></div><div class="stamp">up = how many sources agree · in = closeness in market value · around = the kind of agreement · the bright dots = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}<div class="panel"><div class="svgwrap">${threeDSVG("LRCX")}</div></div></div></body></html>`);
+// C5: the scorecard sits under the four plain lines and above the picture; the ring shares sit under the picture
+writeFileSync(join(HERE, "agreement-ladder.html"), `${mockHead("Agreement Ladder")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT LADDER · LRCX <span class="proposed">MOCK</span></div><div class="stamp">rows = candidates by votes then closeness · columns = the four sources · the shaded band = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}${scorecardHTML()}<div class="panel"><div class="tw" style="padding-top:10px">${ladderHTML("LRCX", { full: true })}</div></div>${ringSharesHTML()}</div></body></html>`);
+writeFileSync(join(HERE, "agreement-3d.html"), `${mockHead("Agreement 3D")}<div class="top"><div data-scnav-slot></div><div class="brand"><b>SCINTILLA</b> · COMPS · THE AGREEMENT VIEW, 3D · LRCX <span class="proposed">MOCK</span></div><div class="stamp">up = how many sources agree · in = closeness in market value · around = the kind of agreement · the bright dots = the kept set · 1 Oct 2026, real data</div></div>${fourLines("LRCX")}${scorecardHTML()}<div class="panel"><div class="svgwrap">${threeDSVG("LRCX")}</div></div>${ringSharesHTML()}</div></body></html>`);
 
 /* ---------- the machine copy ---------- */
 const std = {
