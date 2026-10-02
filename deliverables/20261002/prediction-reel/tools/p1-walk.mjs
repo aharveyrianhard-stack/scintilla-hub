@@ -83,10 +83,12 @@ try {
   out.dashboard = await shot("dashboard", null);
   out.bandZoom = await shot("band", "#pmBand");
   /* the pane: tap the first chip (the biggest move) */
+  /* the chips ride a marquee, so Playwright's own click never finds them "stable": the tap goes through the page's
+     click() (the same document-level dispatcher a finger reaches) */
   const first = await page.$("#pmBand .pm-it");
   if (first) {
     out.tapped = await first.getAttribute("data-topic");
-    await first.click();
+    await page.evaluate(() => { const c = document.querySelector("#pmBand .pm-it"); if (c) c.click(); });
     try { await page.waitForSelector("#pmPanel", { timeout: 20000 }); } catch (_) { out.noPanel = true; }
     try { await page.waitForFunction(() => document.querySelector("#pmPanel .rg-svg") && document.querySelector("#pmPanel a[href*='polymarket.com/event/']"), null, { timeout: 30000 }); } catch (_) { out.panelIncomplete = true; }
     await sleep(1500);
