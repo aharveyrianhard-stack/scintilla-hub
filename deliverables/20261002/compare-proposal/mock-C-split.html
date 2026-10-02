@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>X1 · MOCK C · the split: Hub keeps my lists and the parents, the tree owns everything below</title><link rel="stylesheet" href="mock.css"></head><body><div class="frame">
+<div class="topbar"><span data-scnav-slot></span><h1>SCINTILLA · DASHBOARD + TREE</h1><span class="mocktag">MOCK C · the split · static · real data</span><span class="stamp" id="stamp"></span></div>
+<div class="split">
+ <div class="pane"><h2>HUB · live <span class="r">minute-fresh prices · the Hub Geiger on 590</span></h2>
+  <div class="row"><span class="lbl">MY LISTS</span><span class="chip on">★ FAVORITES</span><span class="chip">⊙ RADAR</span><span class="chip">♥ LIKED</span><span class="sep"></span><span class="lbl">PARENTS</span><span class="chip on">SECTORS</span><span class="chip">ASSET CLASSES</span></div>
+  <div class="body" id="hubBody"></div></div>
+ <div class="pane"><h2>TREE · daily <span class="r">off-Hub Geiger at the close · 5,641 lines</span></h2>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="body" id="treeBody"></div></div>
+</div>
+<div class="clicks"><h3>WHAT ALAN CLICKS</h3><ol>
+<li><b>Which sector leads?</b> On the Hub: the PARENTS strip. Live, eleven bars, nothing else to pick.</li>
+<li><b>What leads inside it?</b> Click the sector bar → the TREE opens at that node (one tab away, grey BACK returns). Industry funds, cohorts, names, comp-set edges, all at the close.</li>
+<li><b>Is FAVORITES strong or weak versus its industries?</b> On the Hub the list is live; the "vs home" number comes from the nightly placement record and is stamped with its date.</li>
+</ol><div class="lost"><b>What is lost:</b> the Hub's MAP, ROTATION and RELATIVE tabs below the parents go to the tree (daily, not live). Intraday rotation of names is only on the Hub for the lists. The six MAP drawings go.</div></div>
+</div>
+<script src="data/mock-data.js"></script><script src="mock.js"></script><script>
+$("#stamp").textContent = "Hub live " + M.hub_computed.slice(11, 16) + "Z · tree at the " + M.as_of_close + " close";
+const SPDR = M.ladder.L2_spdr, FAV = M.lists.FAVORITES, br = Object.fromEntries(M.board_rows.map((r) => [r.t, r]));
+/* the Hub side: the parents' live bow tie (the Hub reading where it has the fund, the close where it does not), then the list */
+const parents = SPDR.map((r) => ({ ...r, g: r.g_live != null ? r.g_live : r.g, live: r.g_live != null }));
+parents.sort((a, b) => b.g - a.g);
+$("#hubBody").innerHTML = '<div class="head"><b>PARENTS</b> · the eleven sector funds · ' + parents.filter((p) => p.live).length + " of 11 read live by the Hub, the rest at the close · green → red</div>" + bowtieHTML(parents, { sub: "quad" }) +
+ '<div class="head" style="margin-top:8px"><b>★ FAVORITES</b> · ' + FAV.n + " · live Geiger · vs home cohort from the placement record (" + M.as_of_close + ")</div><table><tr><th>ticker</th><th>live</th><th class=\"n\">1D</th><th>home (standard)</th><th class=\"n\">home at close</th><th class=\"n\">name − home</th></tr>" +
+ FAV.rows.slice().sort((a, b) => (b.g_live ?? -9) - (a.g_live ?? -9)).slice(0, 18).map((r) => "<tr><td><b>" + r.t + "</b></td><td>" + gmini(r.g_live) + '<span class="' + ((r.g_live || 0) >= 0 ? "up" : "dn") + '">' + fG(r.g_live) + '</span></td><td class="n ' + (((br[r.t] || {}).chg || 0) >= 0 ? "up" : "dn") + '">' + fP((br[r.t] || {}).chg) + "</td><td>" + esc(r.home_label || "—") + '</td><td class="n">' + fG(r.home_g) + '</td><td class="n ' + ((r.g_close ?? 0) - (r.home_g ?? 0) >= 0 ? "up" : "dn") + '">' + (r.g_close != null && r.home_g != null ? fG(r.g_close - r.home_g) : "—") + "</td></tr>").join("") + "</table><div class=\"note\">18 of " + FAV.n + " shown · list mean at the close " + fG(FAV.mean_g_close) + " · their home cohorts' mean " + fG(FAV.mean_home_g) + " · " + FAV.above_home + " of " + FAV.compared + " above their home</div>";
+/* the tree side: opened at Technology, one click from the Hub's leading bar */
+$("#crumbs").innerHTML = crumbsHTML("SEC_TECH");
+const funds = M.ladder.L3.children, cohorts = M.ladder.L4.children, names = M.ladder.L5.names;
+$("#treeBody").innerHTML = '<div class="head"><b>L3</b> · Technology\'s industry funds · each fund\'s own close Geiger</div>' + bowtieHTML(funds, { sub: "rel" }) +
+ '<div class="head" style="margin-top:8px"><b>L4</b> · the cohorts under SMH · mean of members</div>' + bowtieHTML(cohorts, { sub: "n" }) +
+ '<div class="head" style="margin-top:8px"><b>L5</b> · AI ACCELERATORS · ' + names.length + ' names · rotation vs SMH</div>' + rrgSVG(names.filter((r) => r.rrg).slice(0, 12), "SMH") + '<div class="note">everything on this side is as of the ' + M.as_of_close + " close; the next reading lands after 20:00 ET.</div>";
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
