@@ -18,7 +18,7 @@ const profile = Object.fromEntries(PROF.map((r) => [r.ticker, r]));
 const SIX = ["LRCX", "MSFT", "TSM", "MU", "JPM", "XOM"];
 
 test("the machine copy is a proposal, versioned, with the five decisions open", () => {
-  assert.equal(STD.status, "PROPOSED");
+  assert.equal(STD.status, "DECIDED");   /* 2 Oct 2026: Alan delegated the five decisions ("do whatever you want… it's your call"); they are taken as recommended */
   assert.equal(STD.artifact_kind, "SCINTILLA_UNIVERSE_STANDARD");
   assert.match(STD.version, /^\d+\.\d+\.\d+$/);
   assert.deepEqual(STD.decisions_open, [1, 2, 3, 4, 5]);
@@ -90,7 +90,7 @@ test("the placement examples carry the SIC where probed, both market values, and
 test("the page prints the standard: numbered sections, the six names, the decisions, the proposal mark, the shots", () => {
   for (const h of ["1 · The placement record", "2 · Authorities", "3 · The tree, derived", "4 · Cohorts", "5 · Comp sets", "6 · The agreement view", "7 · The screener", "8 · What this does to the Hub", "9 · The implementation queue", "10 · Decisions for Alan"]) assert.ok(PAGE.includes(h), h);
   for (const T of SIX) assert.ok(PAGE.includes(`<h3>${T} · `), T + " worked");
-  assert.ok(PAGE.includes('class="proposed">PROPOSED'));
+  assert.ok(PAGE.includes('class="proposed">DECIDED'));
   assert.equal((PAGE.match(/\[ESTIMATE\]/g) || []).length >= 8, true, "every epic carries an estimate tag");
   assert.ok(!/undefined|NaN|\[object/.test(PAGE));
   for (const f of ["standard-1680.png", "standard-390.png", "ladder-1680.png", "ladder-390.png", "3d-1680.png", "3d-390.png"]) assert.ok(existsSync(join(DIR, "shots", f)), f);
