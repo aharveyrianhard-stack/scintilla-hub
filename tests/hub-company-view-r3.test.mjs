@@ -146,14 +146,14 @@ test("FINANCIALS reads only tables the payload already reads; the extra columns 
 });
 
 /* ── STATS · ESTIMATES ──────────────────────────────────────────────────────────────────────────── */
-test("STATS on one screen: the three groups side by side, no sub-tabs to click", () => {
-  const st = new Function("ST_TABS", "statsPriceHTML", "statsFundHTML", "statsBalHTML", "esc", fn("statsTabHTML") + "\nreturn statsTabHTML;")(
-    ["PRICE &amp; VALUE", "FUNDAMENTALS", "BALANCE &amp; PROFILE"], () => "P", () => "F", () => "B", esc);
-  const html = st({ t: "MU" });
-  assert.equal(html, '<div class="st1"><section class="st1-col"><h3 class="st1-h">PRICE &amp; VALUE</h3>P</section><section class="st1-col"><h3 class="st1-h">FUNDAMENTALS</h3>F</section>' +
-    '<section class="st1-col"><h3 class="st1-h">BALANCE &amp; PROFILE</h3>B</section></div>');
+test("STATS on one screen: no sub-tabs to click (H7, 2 Oct: six blocks in one grid, the sector · industry line under them)", () => {
+  const st = new Function("statsPriceHTML", "statsFundHTML", "statsBalHTML", "statsActivityHTML", "coBoardRow", "esc", fn("statsTabHTML") + "\nreturn statsTabHTML;")(
+    () => "P", () => "F", () => "B", () => "A", () => ({}), esc);
+  assert.equal(st({ t: "MU" }), '<div class="st1">PAFB</div>', "PRICE · SIZE · VALUE, ACTIVITY & DATES, GROWTH & MARGINS, BALANCE");
+  assert.equal(st({ t: "MU", _profile: { sector: "Technology", industry: "Semiconductors", exchange: "NASDAQ" } }),
+    '<div class="st1">PAFB<div class="st-foot" title="sector · industry · exchange (company_profile, FMP)">Technology · Semiconductors · NASDAQ</div></div>');
   assert.doesNotMatch(fn("statsTabHTML"), /data-act="stattab"/);
-  assert.match(page, /\.cv-side \.st1\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(150px,1fr\)\)/, "three groups across the ~540 CSS px tab column");
+  assert.match(page, /\.cv-side \.st1\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(210px,1fr\)\)/, "two blocks across the ~640 CSS px tab column, three when EXPANDED, one on a phone");
 });
 
 test("the median target says where it comes from: the analysts' own targets, not the comps", () => {

@@ -2113,10 +2113,6 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
 .stb{font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;padding:9px 6px;white-space:nowrap;cursor:pointer}
 .stb.on{color:var(--crk);border-bottom:2px solid var(--crk)}
 .estsec{font-size:8px;letter-spacing:.18em;color:var(--crk);text-transform:uppercase;margin:13px 0 7px;border-top:0.6px solid var(--line);padding-top:9px}
-.kv2{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:5px 22px;padding:0 0 6px}
-.kv2 div{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink2);border-bottom:0.4px solid var(--line);padding-bottom:5px}
-.kv2 b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums}
-.kv2 b.neg{color:var(--bear)}
 
 /* SCINTILLA · scChart — R18 native canvas renderer (iOS-Stocks style, FMP history).
    Replaces the TV iframe (mobile scroll trap). touch-action:pan-y = vertical swipes
@@ -3210,9 +3206,6 @@ html{ font-size:16px; }
   .cgrid{ grid-template-columns:1fr; }
   .body2{ grid-template-columns:1fr; }
   .sc-body2{ grid-template-columns:1fr; }   /* dashboard 50/50 → stacked */
-}
-@media (max-width:640px){
-  .kv2{ grid-template-columns:1fr; }
 }
 
 /* ============================================================================
@@ -4419,18 +4412,11 @@ body.co-exp .cv-side{flex:initial;min-height:0}
 .gsum2 .gs-unwhy{display:block;margin-top:2px;color:#6E6E76}
 /* the two GEIGER sections sit side by side only where the tab column is wide enough; otherwise they stack */
 .cv-side{container-type:inline-size}
-/* R3 · STATS on one screen — the three groups side by side */
-.cv-side .st1{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px 16px;font-family:var(--mono)}   /* CSS px: the Hub zooms the page (~1.28× at 1680), so the tab column is ~540 px here: three groups */
+/* R3 · STATS on one screen. H7 (2 Oct) — six small blocks instead of three columns (the block and row rules are the H7 block
+   near the end of the file): two across in the tab column, three when EXPANDED, one on a phone */
+.cv-side .st1{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:4px 18px;align-content:start;font-family:var(--mono)}   /* CSS px: the Hub zooms the page (~1.28× at 1680), so the tab column is ~640 px here (two blocks) and ~690 px EXPANDED (three) */
 .cv-side .st1-h{font-size:11px;font-weight:600;letter-spacing:.14em;color:#A8A8AE;margin:2px 0 0;padding-bottom:5px;border-bottom:.5px solid #4A4A52}
-.cv-side .st1 .estsec{font-size:11px;letter-spacing:.1em;color:#8A8A92;margin:9px 0 4px;padding-top:0;border-top:0}
-.cv-side .st1 .kv2{grid-template-columns:minmax(0,1fr);gap:0;padding:0}
-.cv-side .st1 .kv2 div{font-size:11px;color:#A8A8AE;border-bottom:.5px solid #1E1E23;padding:3px 0;gap:8px}
-.cv-side .st1 .kv2 span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.cv-side .st1 .kv2 b{color:#CFCFD2;text-align:right;flex:0 0 auto;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* a number never breaks across lines */
-.cv-side .st1 .kv2 b.neg{color:var(--bear)}
-.cv-side .st1 .kv2 div:has(.sc-asof){flex-wrap:wrap}   /* SWITCH-ON — the market cap's "as of" date is shown again (it was hidden in R3): on its own line under the value */
-.cv-side .st1 .kv2 div:has(.sc-asof) b{max-width:100%;white-space:normal;text-align:right}
-.cv-side .st1 .sc-asof{display:block;font-size:11px !important;white-space:nowrap}
+.cv-side .st1 .sc-asof{display:block;font-size:11px !important;white-space:nowrap}   /* SWITCH-ON — the market cap's "as of" date is shown (it was hidden in R3): on its own line under the value */
 /* R3 · FINANCIALS — quarters as bars, then the four tables */
 .fn3{font-family:var(--mono);color:#C9C9CE}
 .fn3-src{font-size:11px;color:#8A8A92;margin:0 0 6px}
@@ -6287,9 +6273,17 @@ function coFundTabHTML(t) {
   "</div>";
 }
 /* EXPAND — "an EXPAND makes the entire thing — with the tabs and all that — bigger … takes over cohort board".
-   Remembered per browser. It only applies while a company is pinned: with nothing pinned there is nothing to
-   give the room to, so the board is never hidden behind an empty pane. */
-let CO_EXPANDED = lsGet(CO_EXP_KEY) === "1";
+   H7 (2 Oct; Alan: "clicking on a ticker is not supposed to send me automatically to the EXPANDED state. It's supposed to
+   open the view that replaces the cohort-compare section (the right side); then we expand.") — EXPAND is a choice per
+   visit, never a remembered state. D2 had remembered it per browser (hub.company.expanded), so one press of EXPAND made
+   every later ticker click open full width (MEASURED 2 Oct, headless on live f86e01e: with the flag set, a click on the
+   NVDA row opened with body.co-exp and the button reading COLLAPSE). The page no longer reads or writes that key; a stale
+   value is cleared once below. A fresh open (openCo: a board row, search, the map, the tapes, any data-tkopen) always
+   starts collapsed; walking the names with the expanded view's own rail or ↑/↓ keeps it, because those stay inside the
+   view. It only applies while a company is pinned: with nothing pinned there is nothing to give the room to, so the board
+   is never hidden behind an empty pane. */
+let CO_EXPANDED = false;
+try { localStorage.removeItem(CO_EXP_KEY); } catch (_) {}
 function coExpandOn(expanded, leftState, leftT, heat) {
   return !!(expanded && leftState === "PINNED" && leftT && !heat);
 }
@@ -18261,47 +18255,100 @@ const fmtBig = (v) => v == null ? null
   : Math.abs(v) >= 1e9  ? (v / 1e9).toFixed(2) + "B"
   : Math.abs(v) >= 1e6  ? (v / 1e6).toFixed(1) + "M"
   : (+v).toLocaleString("en-US");
-const kvRow = (k, v) => "<div><span>" + k + "</span><b>" + (v == null || v === "" ? "—" : v) + "</b></div>";
-
-/* STATS — cupcake subtab structure restored: 3 .stabs subtabs over .estsec/.kv2 rails.
-   All rows computed from data already in the company payload (no extra pulls). */
-const ST_TABS = ["PRICE &amp; VALUE", "FUNDAMENTALS", "BALANCE &amp; PROFILE"];
-const kvRowN = (k, v, neg) =>                  // kvRow with optional neg (bear-red) value
-  "<div><span>" + k + "</span><b" + (neg ? ' class="neg"' : "") + ">" +
-  (v == null || v === "" ? "—" : v) + "</b></div>";
-const stSec = (title, rows) => rows.length
-  ? '<div class="estsec">' + title + '</div><div class="kv2">' + rows.join("") + "</div>" : "";
+/* H7 (2 Oct) — THE STATS TAB, READABLE. Alan: "We have really good space in the back tab for the stickers on the dashboard,
+   but it's very hard to read — disorganized, like this 52-week range; the table is a little messy; the text is too big, which
+   makes it disorganized; we should find some visual ways to show some stuff too."
+   Six small blocks, a quiet heading each — PRICE · SIZE · VALUE · GROWTH & MARGINS · BALANCE · ACTIVITY & DATES — two across
+   in the tab column, three when EXPANDED, one on a phone. The same facts as R3's three columns (nothing dropped, no new read:
+   every number is already in the company payload or the board row), the row type one step smaller where the Hub zooms the
+   page, the label left and the value right on every row, and a picture where it reads faster than a number: the 52-week
+   range as a bar with today's price on it (the raw "179.61-1255" string is gone), the analysts' target range the same way,
+   beta on a −1 … 3 rule, margins as filled bars, today's volume as the board's own battery. Every row says on hover which
+   table its number comes from, and the date where the store records one. NOT drawn, because the store has no such field:
+   the day's high and low (the live quote carries price and previous close only), float, short interest and the dividend
+   per share (the fiscal year's dividends paid and buybacks, from cashflow_history, stand in). */
+const stRow = (k, v, title, neg) => "<div" + (title ? ' title="' + esc(title) + '"' : "") + "><span>" + k + "</span><b" +
+  (neg === true ? ' class="neg"' : neg === "pos" ? ' class="pos"' : "") + ">" + (v == null || v === "" ? "—" : v) + "</b></div>";
+/* a block is drawn only when at least one of its rows has a value: a fund with no income statement gets no GROWTH block,
+   not a column of dashes */
+const stBlock = (title, rows) => rows.some((h) => !/<b>—<\/b>/.test(h))
+  ? '<section class="st-blk"><h3 class="st1-h">' + title + "</h3>" + rows.join("") + "</section>" : "";
 const stSigned = (v, dp) => (v == null || !isFinite(v)) ? null
   : v < 0 ? "(" + Math.abs(v).toFixed(dp) + "%)" : "+" + v.toFixed(dp) + "%";
 const stPct1 = (v) => (v == null || !isFinite(v)) ? null
   : v < 0 ? "(" + Math.abs(v).toFixed(1) + "%)" : v.toFixed(1) + "%";
 const byFYasc = (rows) => (rows || []).slice().sort((a, b) => a.fiscal_year - b.fiscal_year);
+const ST_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const stDate = (d, short) => { const m = String(d || "").match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? ST_MON[+m[2] - 1] + " " + (+m[3]) + (short ? "" : " " + m[1]) : String(d || ""); };
+/* THE BAR MATHS — where a price sits between a low and a high, as 0 … 100 of the bar's width. Clamped at the ends (a price
+   outside the range sits on the end), null when there is no bar (no price, no range, or a range of zero width). */
+function stBarPos(px, lo, hi) {
+  const p = num(px), a = num(lo), b = num(hi);
+  if (p == null || a == null || b == null || !(b > a)) return null;
+  return Math.max(0, Math.min(100, (p - a) / (b - a) * 100));
+}
+/* FMP's company_profile.range_52wk is a string ("179.61-1255", "1,019.5 – 1,255.00"): the low and the high as numbers */
+function stRange52(s) {
+  const m = String(s || "").match(/([\d.,]+)\s*[-–—]\s*\$?([\d.,]+)/);
+  if (!m) return null;
+  const lo = parseFloat(m[1].replace(/,/g, "")), hi = parseFloat(m[2].replace(/,/g, ""));
+  return (isFinite(lo) && isFinite(hi) && lo > 0 && hi > lo) ? [lo, hi] : null;
+}
+/* a low … high bar with today's price on it (the mark takes the day's colour: green up, red down) and an optional thin tick
+   (the analysts' average target). The label and the words on the first line, the low and the high at the bar's two ends. */
+function stBarHTML(label, right, lo, hi, px, dir, title, tick) {
+  const pos = stBarPos(px, lo, hi), tp = tick != null ? stBarPos(tick, lo, hi) : null;
+  const f = (v) => fmtPxIdent(num(v));
+  return '<div class="st-vis"' + (title ? ' title="' + esc(title) + '"' : "") + '><span class="st-vis__l">' + label + "</span>" +
+    '<b class="st-vis__v">' + (right == null || right === "" ? "—" : right) + "</b>" +
+    '<em class="st-bar__lo">' + f(lo) + '</em><span class="st-bar" aria-hidden="true">' +
+    (tp != null ? '<i class="st-bar__tick" style="left:' + tp.toFixed(1) + '%"></i>' : "") +
+    (pos != null ? '<i class="st-bar__mark' + (dir ? " " + dir : "") + '" style="left:' + pos.toFixed(1) + '%"></i>' : "") +
+    '</span><em class="st-bar__hi">' + f(hi) + "</em></div>";
+}
+/* a value on a fixed rule (beta on −1 … 3): the same picture with the rule's own ends and ticks, the mark in the ink colour */
+function stRuleHTML(label, right, v, lo, hi, ticks, title) {
+  const pos = stBarPos(v, lo, hi);
+  return '<div class="st-vis"' + (title ? ' title="' + esc(title) + '"' : "") + '><span class="st-vis__l">' + label + "</span>" +
+    '<b class="st-vis__v">' + (right == null || right === "" ? "—" : right) + "</b>" +
+    '<em class="st-bar__lo">' + lo + '</em><span class="st-bar st-bar--rule" aria-hidden="true">' +
+    (ticks || []).map((x) => { const p = stBarPos(x, lo, hi); return p == null ? "" : '<i class="st-bar__tick" style="left:' + p.toFixed(1) + '%"></i>'; }).join("") +
+    (pos != null ? '<i class="st-bar__mark" style="left:' + pos.toFixed(1) + '%"></i>' : "") +
+    '</span><em class="st-bar__hi">' + hi + "</em></div>";
+}
+/* a share as a filled bar between the label and the number (margins): filled green at or above zero, red below */
+function stFillHTML(label, pct, title) {
+  const v = num(pct), txt = stPct1(v);
+  return '<div class="st-fill"' + (title ? ' title="' + esc(title) + '"' : "") + "><span>" + label + '</span><span class="st-fill__track" aria-hidden="true">' +
+    (v == null ? "" : '<i class="' + (v < 0 ? "dn" : "up") + '" style="width:' + Math.min(100, Math.abs(v)).toFixed(1) + '%"></i>') +
+    "</span><b" + (v != null && v < 0 ? ' class="neg"' : "") + ">" + (txt == null ? "—" : txt) + "</b></div>";
+}
 
-function statsPriceHTML(data) {
-  const p = data._profile || {}, f = data._fund || {};
-  const px = num(data.price);
-  const rows1 = [
-    kvRow("last", px != null ? fmtPxIdent(px) : null),
-    kvRow("52wk range", esc(p.range_52wk || "")),
+function statsPriceHTML(data, row) {   // PRICE · SIZE · VALUE. row = the board row (revenue TTM in the right currency); optional
+  const t = data.t, p = data._profile || {}, f = data._fund || {}, r = row || {};
+  const px = num(data.price), chg = num(data.chg), dir = chg == null ? "" : chg >= 0 ? "up" : "dn";
+  const pa = scCapAge(p.updated_ts), pdate = pa.known ? "profile stored " + pa.date : "profile date not recorded";   // company_profile.updated_ts, epoch seconds
+  /* PRICE */
+  const pc = (typeof prevClose !== "undefined" && prevClose) ? num(prevClose[t]) : null;
+  const price = [
+    stRow("last", px != null ? fmtPxIdent(px) : null, "last price · Massive live quote (the board's), ticks live"),
+    stRow("today", chg != null ? fmtC(chg) : null, "today's change against the previous close · Massive live quote", chg == null ? null : chg < 0 ? true : "pos"),
   ];
-  const rg = String(p.range_52wk || "").match(/([\d.,]+)\s*[-–—]\s*\$?([\d.,]+)/);
-  if (rg && px != null) {
-    const lo = parseFloat(rg[1].replace(/,/g, "")), hi = parseFloat(rg[2].replace(/,/g, ""));
-    if (isFinite(lo) && isFinite(hi) && lo > 0 && hi > 0) {
-      const dh = (px / hi - 1) * 100, dl = (px / lo - 1) * 100;
-      rows1.push(kvRowN("from 52w high", stSigned(dh, 1), dh < 0));
-      rows1.push(kvRowN("from 52w low", stSigned(dl, 1), dl < 0));
-    }
-  }
-  rows1.push(kvRow("avg volume", fmtBig(num(p.avg_volume))));
-  rows1.push(kvRow("shares out", fmtBig(num(p.shares_out))));
-  const { trail, fwd, next, ccy } = fwdTrailPE(data.price, f, data._est, data.t);
-  const pt = data._pt;
-  /* a multiple withheld because EPS and price are in different currencies says so; a real absence keeps the dash */
-  const nonUsd = !!ccy && ccy !== "USD";
-  const ncTrail = nonUsd && num(f.eps_ttm) != null ? notComparable(ccy) : null;
-  const ncFwd = nonUsd && next && next.est_eps_avg != null ? notComparable(ccy) : null;
-  const rows2 = [
+  if (pc != null && pc > 0) price.push(stRow("prev close", fmtPxIdent(pc), "the previous session's settled close · Massive"));
+  const rg = stRange52(p.range_52wk);
+  if (rg) {
+    const lo = rg[0], hi = rg[1], dh = px != null ? (px / hi - 1) * 100 : null, dl = px != null ? (px / lo - 1) * 100 : null;
+    price.push(stBarHTML("52-week range", dh != null ? stSigned(dh, 1) + " from high" : null, lo, hi, px, dir,   /* the from-low is on the hover: a block is ~236 CSS px, both did not fit (MEASURED) */
+      "the 52-week low and high (company_profile.range_52wk, FMP, " + pdate + ") with today's price on the bar" +
+      (dh != null ? " · " + stSigned(dh, 1) + " from the high, " + stSigned(dl, 1) + " from the low" : "")));
+  } else if (p.range_52wk) price.push(stRow("52-week range", esc(p.range_52wk), "company_profile.range_52wk (FMP), " + pdate));
+  if (num(p.beta) != null) price.push(stRuleHTML("beta", num(p.beta).toFixed(2), num(p.beta), -1, 3, [0, 1, 2],
+    "beta · how far this name moves for a 1% move of the market, on a −1 … 3 rule (company_profile.beta, FMP, " + pdate + ") · 1 = like the market · 0 = unrelated · below 0 = the other way"));
+  const hb = (typeof hbRowFor === "function") ? hbRowFor(t) : null, usual = hb ? num(hb.usual_day_60) : null;
+  if (usual != null && usual > 0) price.push(stRow("usual day", hbPct(usual) + (chg != null ? " · " + (Math.abs(chg) / usual).toFixed(1) + "× today" : ""),
+    "the size of a typical daily move over 60 sessions (ticker_heartbeat_daily.usual_day_60) · today's move as a multiple of it"));
+  /* SIZE */
+  const size = [
     /* Same value precedence as before (profile, then fundamentals) - no number changes. The row states the age of what it
        shows. The fundamentals fallback is labelled WITHOUT a date on purpose: fundamentals.updated_ts is an ingestion stamp
        shared by every writer of that row, not the market cap's source time (MEASURED 2026-09-18: 292 rows stamped 01:45Z
@@ -18309,100 +18356,147 @@ function statsPriceHTML(data) {
     (function () {
       const fromProfile = num(p.market_cap) != null;
       const v = fromProfile ? num(p.market_cap) : num(f.market_cap);
-      if (v == null) return kvRow("market cap", null);
+      if (v == null) return stRow("market cap", null, "company_profile.market_cap (FMP) · no stored value");
       const a = fromProfile ? scCapAge(p.updated_ts) : null;
       const note = !fromProfile ? "stored fundamentals value · source date not recorded"
         : !a.known ? "stored · source date not recorded"
         : a.aged ? "as of " + a.date + " · " + a.days + "d old" : "as of " + a.date;
-      return kvRow("market cap", fmtBig(v) + ' <i class="sc-asof" style="font-style:normal;font-weight:400;color:var(--mute);font-size:.85em" title="' +
-        esc(fromProfile ? scCapTitle(p.updated_ts) : "market cap from the fundamentals row; its source date is not recorded") + '">' + esc(note) + "</i>");
+      return stRow("market cap", fmtBig(v) + ' <i class="sc-asof" style="font-style:normal;font-weight:400;color:var(--mute);font-size:.85em" title="' +
+        esc(fromProfile ? scCapTitle(p.updated_ts) : "market cap from the fundamentals row; its source date is not recorded") + '">' + esc(note) + "</i>",
+        fromProfile ? scCapTitle(p.updated_ts) : "market cap from the fundamentals row (FMP); its source date is not recorded");
     })(),
-    kvRow("trailing P/E", trail != null ? trail.toFixed(1) : ncTrail),
-    kvRow("forward P/E", fwd != null ? fwd.toFixed(1) : ncFwd),
-    kvRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : ncTrail),
-    kvRow("EPS (ttm)", num(f.eps_ttm) != null ? (nonUsd ? ccy + " " + num(f.eps_ttm).toFixed(2) : "$" + num(f.eps_ttm).toFixed(2)) : null),   // the currency the figure is stored in
-    kvRow("PT · avg", pt && num(pt.target_avg) != null ? "$" + num(pt.target_avg).toFixed(2) : null),
   ];
-  return stSec("price &amp; range", rows1) + stSec("valuation", rows2);
+  /* revenue TTM: the board row's figure (USD; a non-USD reporter shows its own currency), as the FUNDAMENTALS line does */
+  const revV = r.rev != null ? fmtRevCell(r.rev) : (r.revCcy && r.revLocal != null ? fmtRevLocal(r.revLocal, r.revCcy) : (num(f.revenue_ttm) != null ? fmtBig(num(f.revenue_ttm)) : null));
+  size.push(stRow("revenue TTM", revV, (r.rev != null || r.revCcy) ? revTitle(r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero)
+    : "revenue over the last four quarters · fundamentals.revenue_ttm (FMP), stored value"));
+  size.push(stRow("shares out", fmtBig(num(p.shares_out)), "shares outstanding · company_profile.shares_out (FMP), " + pdate));
+  const etf = data._etf || null;
+  if (etf) {
+    if (num(etf.aum) != null) size.push(stRow("fund assets (AUM)", "$" + fmtBig(num(etf.aum)), "assets under management · etf_info.aum (FMP)"));
+    if (num(etf.nav) != null) size.push(stRow("NAV", fmtPxIdent(num(etf.nav)), "net asset value per share · etf_info.nav (FMP)"));
+    if (num(etf.holdings_count) != null) size.push(stRow("holdings", num(etf.holdings_count).toLocaleString("en-US"), "number of holdings · etf_info.holdings_count (FMP)"));
+    if (num(etf.expense_ratio) != null) size.push(stRow("expense ratio", num(etf.expense_ratio).toFixed(2) + "%", "the fund's yearly fee · etf_info.expense_ratio (FMP)"));
+    if (etf.inception_date) size.push(stRow("inception", esc(stDate(etf.inception_date)), "etf_info.inception_date (FMP)"));
+  }
+  /* VALUE */
+  const { trail, fwd, next, ccy } = fwdTrailPE(data.price, f, data._est, data.t);
+  /* a multiple withheld because EPS and price are in different currencies says so; a real absence keeps the dash */
+  const nonUsd = !!ccy && ccy !== "USD";
+  const ncTrail = nonUsd && num(f.eps_ttm) != null ? notComparable(ccy) : null;
+  const ncFwd = nonUsd && next && next.est_eps_avg != null ? notComparable(ccy) : null;
+  const value = [
+    stRow("trailing P/E", trail != null ? trail.toFixed(1) : ncTrail, "price ÷ EPS of the last four quarters (fundamentals.eps_ttm, FMP) · computed live, never the stored multiple"),
+    stRow("forward P/E", fwd != null ? fwd.toFixed(1) : ncFwd, "price ÷ the next four quarters' average EPS estimate (analyst_estimates, FMP)"),
+    stRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : ncTrail, "EPS (ttm) ÷ price · the trailing P/E turned around"),
+    stRow("EPS (ttm)", num(f.eps_ttm) != null ? (nonUsd ? ccy + " " + num(f.eps_ttm).toFixed(2) : "$" + num(f.eps_ttm).toFixed(2)) : null,
+      "earnings per share over the last four quarters · fundamentals.eps_ttm (FMP), in the currency the figure is stored in"),
+  ];
+  const pt = data._pt, ptLo = pt ? num(pt.target_low) : null, ptHi = pt ? num(pt.target_high) : null, ptAvg = pt ? num(pt.target_avg) : null, ptN = pt ? num(pt.num_analysts) : null;
+  if (ptLo != null && ptHi != null && ptHi > ptLo)
+    value.push(stBarHTML("price targets", ptAvg != null ? "avg $" + ptAvg.toFixed(2) : null, ptLo, ptHi, px, dir,
+      "the analysts' lowest and highest 12-month price targets, the average as a thin tick, today's price on the bar · price_target_consensus (FMP)" +
+      (ptN ? " · " + ptN + " analysts" : "") + (num(pt.target_median) != null ? " · median $" + num(pt.target_median).toFixed(2) : ""), ptAvg));
+  else value.push(stRow("PT · avg", ptAvg != null ? "$" + ptAvg.toFixed(2) : null, "the analysts' average 12-month price target · price_target_consensus (FMP)"));
+  const rt = data._ratings, cnt = (k) => (rt && num(rt[k]) != null ? num(rt[k]) : "—");
+  if (rt && rt.consensus) value.push(stRow("consensus", esc(String(rt.consensus)), "analyst_ratings (FMP) · strong buy " + cnt("strong_buy") + " · buy " + cnt("buy") +
+    " · hold " + cnt("hold") + " · sell " + cnt("sell") + " · strong sell " + cnt("strong_sell")));
+  return stBlock("PRICE", price) + stBlock("SIZE", size) + stBlock("VALUE", value);
 }
-function statsFundHTML(data) {
-  const fy = byFYasc(data._finhist), cfh = byFYasc(data._cfhist);
+function statsFundHTML(data) {   // GROWTH &amp; MARGINS — fundamentals_history (fiscal-year actuals) and the next fiscal year's estimates
+  const fy = byFYasc(data._finhist);
   const L = fy[fy.length - 1] || null, P = fy.length > 1 ? fy[fy.length - 2] : null;
-  const rev = L ? num(L.revenue) : null;
-  /* profitability · latest FY — line / revenue × 100 only when both present */
+  const rev = L ? num(L.revenue) : null, src = L ? "fundamentals_history FY" + L.fiscal_year + " (FMP)" : "";
+  /* profitability · latest FY — line / revenue × 100 only when both present; drawn as filled bars */
   const margin = (k) => { const v = L ? num(L[k]) : null;
     return (v != null && rev != null && rev !== 0) ? v / rev * 100 : null; };
-  const profRows = [
-    ["gross margin", margin("gross_profit")],
-    ["operating margin", margin("operating_income")],
-    ["net margin", margin("net_income")],
-  ].filter((r) => r[1] != null).map((r) => kvRowN(r[0], stPct1(r[1]), r[1] < 0));
+  const rows = [
+    ["gross margin", margin("gross_profit"), "gross profit ÷ revenue"],
+    ["operating margin", margin("operating_income"), "operating income ÷ revenue"],
+    ["net margin", margin("net_income"), "net income ÷ revenue"],
+  ].filter((x) => x[1] != null).map((x) => stFillHTML(x[0], x[1], x[2] + " · " + src));
   /* growth · YoY — latest FY vs prior FY */
   const yoy = (k) => { const a = L ? num(L[k]) : null, b = P ? num(P[k]) : null;
     return (a != null && b != null && b !== 0) ? (a - b) / Math.abs(b) * 100 : null; };
-  const yoyRows = [
-    ["revenue YoY", yoy("revenue")], ["ebitda YoY", yoy("ebitda")],
-    ["net income YoY", yoy("net_income")], ["eps YoY", yoy("eps_diluted")],
-  ].filter((r) => r[1] != null).map((r) => kvRowN(r[0], stSigned(r[1], 1), r[1] < 0));
+  const ysrc = (L && P) ? "FY" + L.fiscal_year + " against FY" + P.fiscal_year + " · fundamentals_history (FMP)" : "";
+  [["revenue YoY", yoy("revenue")], ["ebitda YoY", yoy("ebitda")], ["net income YoY", yoy("net_income")], ["eps YoY", yoy("eps_diluted")]]
+    .filter((x) => x[1] != null).forEach((x) => rows.push(stRow(x[0], stSigned(x[1], 1), x[0].replace(" YoY", "") + ", " + ysrc, x[1] < 0)));
   /* growth · CAGR & forward — 5y revenue CAGR + next-FY estimate vs latest actual */
-  const cagrRows = [];
   if (fy.length >= 5 && rev != null) {
     const O = fy[Math.max(0, fy.length - 6)];
     const r0 = num(O.revenue), yrs = (+L.fiscal_year) - (+O.fiscal_year);
     if (r0 != null && r0 > 0 && rev > 0 && yrs > 0) {
       const cagr = (Math.pow(rev / r0, 1 / yrs) - 1) * 100;
-      cagrRows.push(kvRowN("revenue " + yrs + "y CAGR", stSigned(cagr, 1), cagr < 0));
+      rows.push(stRow("revenue " + yrs + "y CAGR", stSigned(cagr, 1), "compound yearly revenue growth FY" + O.fiscal_year + " → FY" + L.fiscal_year + " · fundamentals_history (FMP)", cagr < 0));
     }
   }
   const nextA = (data._est || [])
     .filter((r) => r.period === "annual" && String(r.fiscal_date) >= todayISO())
     .sort((a, b) => String(a.fiscal_date).localeCompare(String(b.fiscal_date)))[0] || null;
   if (nextA) {
-    const fyl = "FY" + String(nextA.fiscal_date).slice(2, 4);
+    const fyl = "FY" + String(nextA.fiscal_date).slice(2, 4), esrc = "the analysts' average estimate for " + fyl + " against the last reported year · analyst_estimates (FMP)";
     const er = num(nextA.est_revenue_avg);
     if (er != null && rev != null && rev !== 0) {
       const g = (er - rev) / Math.abs(rev) * 100;
-      cagrRows.push(kvRowN("revenue fwd " + fyl + "e", stSigned(g, 1), g < 0));
+      rows.push(stRow("revenue fwd " + fyl + "e", stSigned(g, 1), esrc, g < 0));
     }
     const ee = num(nextA.est_eps_avg), ea = L ? num(L.eps_diluted) : null;
     if (ee != null && ea != null && ea !== 0) {
       const g = (ee - ea) / Math.abs(ea) * 100;
-      cagrRows.push(kvRowN("eps fwd " + fyl + "e", stSigned(g, 1), g < 0));
+      rows.push(stRow("eps fwd " + fyl + "e", stSigned(g, 1), esrc, g < 0));
     }
   }
-  /* financial summary · latest FY */
-  const C = cfh[cfh.length - 1] || null;
-  const sumRows = [
-    ["revenue", rev], ["net income", L ? num(L.net_income) : null],
-    ["ebitda", L ? num(L.ebitda) : null], ["free cash flow", C ? num(C.free_cf) : null],
-  ].filter((r) => r[1] != null).map((r) => kvRowN(r[0], (r[1] < 0 ? "(" : "") + fmtBig(Math.abs(r[1])) + (r[1] < 0 ? ")" : ""), r[1] < 0));
-  return stSec("profitability · latest FY", profRows) +
-    stSec("growth · YoY", yoyRows) +
-    stSec("growth · CAGR &amp; forward", cagrRows) +
-    stSec("financial summary · latest FY", sumRows);
+  return stBlock("GROWTH &amp; MARGINS" + (L ? " · FY" + esc(L.fiscal_year) : ""), rows);
 }
-function statsBalHTML(data) {
-  const p = data._profile || {};
-  const bh = byFYasc(data._balhist);
-  const B = bh[bh.length - 1] || null;
-  const cash = B ? num(B.cash_and_equiv) : null, debt = B ? num(B.total_debt) : null;
+function statsBalHTML(data) {   // BALANCE — the latest fiscal year's balance sheet, income and cash flow (beta moved to PRICE, sector and industry to the foot line)
+  const bh = byFYasc(data._balhist), B = bh[bh.length - 1] || null;
+  const fy = byFYasc(data._finhist), L = fy[fy.length - 1] || null;
+  const cfh = byFYasc(data._cfhist), C = cfh[cfh.length - 1] || null;
+  const cash = B ? num(B.cash_and_equiv) : null, debt = B ? num(B.total_debt) : null, eq = B ? num(B.total_equity) : null;
   let nd = B ? num(B.net_debt) : null;
   if (nd == null && cash != null && debt != null) nd = debt - cash;   // net debt = debt − cash
-  const eq = B ? num(B.total_equity) : null;
-  const rows1 = [];
-  if (cash != null) rows1.push(kvRow("cash &amp; equiv", fmtBig(cash)));
-  if (debt != null) rows1.push(kvRow("total debt", fmtBig(debt)));
-  if (nd != null) rows1.push(nd < 0
-    ? kvRowN("net debt", "($" + fmtBig(Math.abs(nd)) + ") net cash", true)
-    : kvRow("net debt", "$" + fmtBig(nd)));
+  const bsrc = B ? "balance_history FY" + B.fiscal_year + " (FMP)" : "", rows = [];
+  if (cash != null) rows.push(stRow("cash &amp; equiv", "$" + fmtBig(cash), "cash and equivalents · " + bsrc));
+  if (debt != null) rows.push(stRow("total debt", "$" + fmtBig(debt), bsrc));
+  if (nd != null) rows.push(nd < 0
+    ? stRow("net debt", "($" + fmtBig(Math.abs(nd)) + ") net cash", "debt minus cash: more cash than debt · " + bsrc, true)
+    : stRow("net debt", "$" + fmtBig(nd), "debt minus cash · " + bsrc));
   if (debt != null && eq != null && eq !== 0)
-    rows1.push(kvRowN("debt / equity", Math.abs(debt / eq).toFixed(2), debt / eq < 0));
-  const rows2 = [
-    kvRow("beta", num(p.beta) != null ? num(p.beta).toFixed(2) : null),
-    kvRow("sector", esc(p.sector || "")),
-    kvRow("industry", esc(p.industry || "")),
-  ];
-  return stSec("balance &amp; leverage", rows1) + stSec("profile", rows2);
+    rows.push(stRow("debt / equity", Math.abs(debt / eq).toFixed(2), "total debt ÷ total equity · " + bsrc, debt / eq < 0));
+  /* the year's income and cash flow, in dollars, with a loss in brackets */
+  const money = (v) => (v < 0 ? "(" : "") + "$" + fmtBig(Math.abs(v)) + (v < 0 ? ")" : "");
+  const isrc = L ? "fundamentals_history FY" + L.fiscal_year + " (FMP)" : "";
+  [["revenue", L ? num(L.revenue) : null, isrc], ["net income", L ? num(L.net_income) : null, isrc], ["ebitda", L ? num(L.ebitda) : null, isrc],
+   ["free cash flow", C ? num(C.free_cf) : null, C ? "cashflow_history FY" + C.fiscal_year + " (FMP)" : ""]]
+    .filter((x) => x[1] != null).forEach((x) => rows.push(stRow(x[0], money(x[1]), x[0] + " for the fiscal year · " + x[2], x[1] < 0)));
+  const yr = (B && B.fiscal_year) || (L && L.fiscal_year) || null;
+  return stBlock("BALANCE" + (yr ? " · FY" + esc(yr) : ""), rows);
+}
+function statsActivityHTML(data, row) {   // ACTIVITY &amp; DATES — today's volume as the board's battery, the report dates, the year's dividends and buybacks
+  const p = data._profile || {}, r = row || {}, rows = [];
+  if (typeof volCellHTML === "function") rows.push(stRow("volume today", volCellHTML(r.rv != null ? r.rv : null, r.rvS != null ? r.rvS : null, r.rvAsOf || null),
+    "today's volume against this name's usual, the board's own reading: the battery = today so far against a usual whole session · the number = the pace against usual by this time of day (board_volume, from the Massive minute bars)"));
+  rows.push(stRow("avg volume", fmtBig(num(p.avg_volume)), "average daily volume · company_profile.avg_volume (FMP)"));
+  /* the dates: the next report and the last one, from the company's own earnings events (already in the payload) */
+  const today = todayISO(), evs = (data.events || []).filter((e) => e && e.date);
+  const nextEv = evs.filter((e) => String(e.date) >= today).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0] || null;
+  const lastEv = evs.filter((e) => String(e.date) < today).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
+  if (nextEv) rows.push(stRow("next report", esc(stDate(nextEv.date)) + (nextEv.report_time ? " · " + esc(String(nextEv.report_time).toUpperCase()) : ""),
+    "the next earnings report · earnings_events (FMP) · " + (nextEv.confirmed ? "confirmed by the company" : "estimated, not yet confirmed")));
+  const sp = lastEv ? num(lastEv.surprise_pct) : null;
+  if (lastEv) rows.push(stRow("last report", esc(stDate(lastEv.date, true)) + (sp != null ? " · EPS " + stSigned(sp, 1) : ""),
+    "the last earnings report, " + stDate(lastEv.date) + (sp != null ? ", EPS " + stSigned(sp, 1) + " against the estimate" : "") + " · earnings_events (FMP)", sp != null && sp < 0));
+  /* money returned: the fiscal year's dividends paid and buybacks (cashflow_history), the dividend yield against the market cap */
+  const cfh = byFYasc(data._cfhist), C = cfh[cfh.length - 1] || null;
+  if (C) {
+    const dv = num(C.dividends_paid), bb = num(C.buybacks), fyl = "FY" + String(C.fiscal_year).slice(2);
+    const mc = num(p.market_cap) != null ? num(p.market_cap) : num((data._fund || {}).market_cap);
+    const yld = (dv != null && dv !== 0 && mc != null && mc > 0) ? Math.abs(dv) / mc * 100 : null;   /* under 0.1% two decimals, so a small yield never prints as "0.0%" (MU: 0.05%) */
+    if (dv != null) rows.push(stRow("dividends " + esc(fyl), dv === 0 ? "none" : "$" + fmtBig(Math.abs(dv)) + (yld != null ? " · " + (yld < 0.1 ? yld.toFixed(2) : yld.toFixed(1)) + "% yield" : ""),
+      "dividends paid in fiscal " + C.fiscal_year + " · cashflow_history.dividends_paid (FMP) · the yield ≈ the year's dividends ÷ today's market cap"));
+    if (bb != null) rows.push(stRow("buybacks " + esc(fyl), bb === 0 ? "none" : "$" + fmtBig(Math.abs(bb)), "shares bought back in fiscal " + C.fiscal_year + " · cashflow_history.buybacks (FMP)"));
+  }
+  return stBlock("ACTIVITY &amp; DATES", rows);
 }
 /* R22 FIX 5 — COHORT EDITOR (the cupcake had this; Alan: "Need it to save").
    Distinct cohorts come from the SAME cohorts pull that builds COHSETS (DB
@@ -18439,12 +18533,15 @@ function cohortChipHTML(t) {
     '<span class="sc-cohsaved" id="cohSaved">saved ✓</span>' +
     '<div class="sc-cohmenu" id="cohMenu">' + opts + "</div></span>";
 }
-/* R3 (Alan, 27 Sep: "Stats can fit one screen") — the three groups side by side, no sub-tabs to click through.
-   Same rows, same sources as before (statsPriceHTML · statsFundHTML · statsBalHTML); only the arrangement changed. */
+/* R3 (Alan, 27 Sep: "Stats can fit one screen") — no sub-tabs to click through. H7 (2 Oct) — the six blocks in one grid,
+   PRICE · SIZE · VALUE · ACTIVITY & DATES (today's volume and the next report before the fiscal-year blocks, since the
+   collapsed slot shows about two rows of blocks) · GROWTH & MARGINS · BALANCE, then the sector · industry · exchange line. */
 function statsTabHTML(data) {
-  const cols = [[ST_TABS[0], statsPriceHTML(data)], [ST_TABS[1], statsFundHTML(data)], [ST_TABS[2], statsBalHTML(data)]].filter((c) => c[1]);
-  if (!cols.length) return '<div class="sc-senttxt">No stats inputs loaded for $' + esc(data.t) + ".</div>";
-  return '<div class="st1">' + cols.map((c) => '<section class="st1-col"><h3 class="st1-h">' + c[0] + "</h3>" + c[1] + "</section>").join("") + "</div>";
+  const row = (typeof coBoardRow === "function" ? coBoardRow(data.t) : null) || {};
+  const html = statsPriceHTML(data, row) + statsActivityHTML(data, row) + statsFundHTML(data) + statsBalHTML(data);
+  if (!html) return '<div class="sc-senttxt">No stats inputs loaded for $' + esc(data.t) + ".</div>";
+  const p = data._profile || {}, foot = [p.sector, p.industry, p.exchange].filter(Boolean).map((x) => esc(x)).join(" · ");
+  return '<div class="st1">' + html + (foot ? '<div class="st-foot" title="sector · industry · exchange (company_profile, FMP)">' + foot + "</div>" : "") + "</div>";
 }
 
 /* ESTIMATES — 01 FORECAST · 02 CONVICTION · 03 VALUATION · 04 SCENARIOS.
@@ -22135,6 +22232,7 @@ function go(sec) {
    (e.g. arriving from another room), sync() builds it and afterMount() pins. */
 function openCo(t) {
   clearSecFs();                                // R21 FIX B — defensive reset
+  CO_EXPANDED = false;                         // H7 — a fresh open starts collapsed (the right-side view); EXPAND is pressed per visit
   const wasDash = (mountedKey === "DASH");
   S.sec = "COMPANY"; S.focusT = t; revealTabs();
   updateMtabs();                               // master-tab active state (DASHBOARD stays lit)
@@ -22690,10 +22788,9 @@ document.addEventListener("click", (e) => {
       if (a.dataset.t && a.dataset.t !== LEFT_T) pinLeft(a.dataset.t);
       break;
     }
-    case "coexpand": {  // H-FRONT — EXPAND / COLLAPSE
+    case "coexpand": {  // H-FRONT — EXPAND / COLLAPSE. H7 — for this visit only: nothing is written to the browser
       e.preventDefault(); e.stopPropagation();
       CO_EXPANDED = !CO_EXPANDED;
-      lsSet(CO_EXP_KEY, CO_EXPANDED ? "1" : "0");
       const b = el("coExpBtn"); if (b) b.outerHTML = coExpandBtnHTML();
       coExpandApply();
       if (CO_EXPANDED) cvRailFreeze();   // review fix — opening the expanded view takes a fresh order
@@ -28860,10 +28957,45 @@ body.gwx-motion .gwx-pct{opacity:1}
 .fn3-t.is-q th:first-child,.fn3-t.is-q td:first-child{width:27%}
 .fn3-bar{grid-template-rows:16px minmax(0,1fr) auto 15px !important}
 .fn3-bar em{white-space:normal !important;overflow:visible !important;line-height:1.15}
-/* STATS: labels wrap instead of being cut ("revenue fwd FY27e", "industry"); the value keeps its whole width and still
-   never breaks across lines (R3). */
-.cv-side .st1 .kv2 span{white-space:normal !important;overflow:visible !important;text-overflow:clip !important;line-height:1.25}
-.cv-side .st1 .kv2 b{max-width:none !important;overflow:visible !important;text-overflow:clip !important}
+/* H7 (2 Oct; Alan: "very hard to read — disorganized, like this 52-week range; the table is a little messy; the text is too
+   big") — STATS AS SIX SMALL BLOCKS. A block is a quiet heading, then rows with the label left and the value right on one
+   line. The row type is one step smaller than R3's 11 px where the Hub zooms the page (≥1400 px: 10 CSS px × 1.12 = 11.2 px
+   drawn; at 1680, × 1.28 = 12.8 px) and stays 11 px where it does not (a phone), so it is never drawn under 11 px. */
+.cv-side .st1 .st-blk{min-width:0}
+.cv-side .st1 .st-blk .st1-h{margin:5px 0 1px;padding-bottom:3px;font-size:11px}
+.cv-side .st1 .st-blk > div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;line-height:1.35;color:#A8A8AE;border-bottom:.5px solid #1E1E23;padding:2px 0}
+.cv-side .st1 .st-blk > div > span{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-side .st1 .st-blk > div > b{flex:0 0 auto;max-width:72%;color:#CFCFD2;font-weight:400;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-side .st1 .st-blk b.neg{color:var(--bear)}
+.cv-side .st1 .st-blk b.pos{color:var(--bull)}
+.cv-side .st1 .st-blk .sc-asof{font-size:inherit !important;color:#6E6E76}
+.cv-side .st1 .st-blk .sc-vol{display:inline-flex;flex-direction:row;align-items:center;gap:5px;font-size:inherit;color:#CFCFD2;font-variant-numeric:tabular-nums}   /* the board's battery, lying down at the row's size on a phone too (the board's own phone rule stands it upright at 8 px) */
+.cv-side .st1 .st-blk .sc-vol__dots{flex-direction:row;gap:2px}
+.cv-side .st1 .st-blk .sc-vol__dots i{width:4px;height:10px}
+/* a picture row: the label and the words on the first line, the bar with its two ends on the second. The words and the
+   number keep their whole width (a grid cell's auto track squeezed them to an ellipsis: MEASURED "+49…" at 1680, "80…" at 390). */
+.cv-side .st1 .st-blk > .st-vis{display:grid;grid-template-columns:auto minmax(40px,1fr) auto;grid-template-areas:"l l v" "lo bar hi";column-gap:6px;row-gap:3px;align-items:center;padding:3px 0 4px}
+.cv-side .st1 .st-blk > .st-vis > .st-vis__l{grid-area:l}
+.cv-side .st1 .st-blk > .st-vis > .st-vis__v{grid-area:v;max-width:none;overflow:visible}
+.cv-side .st1 .st-blk > .st-fill > b{max-width:none;overflow:visible}
+.cv-side .st1 .st-blk > .st-vis > em{font-style:normal;color:#8A8A92;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cv-side .st1 .st-blk > .st-vis > .st-bar__lo{grid-area:lo}
+.cv-side .st1 .st-blk > .st-vis > .st-bar__hi{grid-area:hi;text-align:right}
+.cv-side .st1 .st-bar{grid-area:bar;position:relative;height:6px;background:#26262C;border-radius:1px;min-width:40px}
+.cv-side .st1 .st-bar i{position:absolute;top:50%;transform:translate(-50%,-50%);display:block}
+.cv-side .st1 .st-bar .st-bar__mark{width:3px;height:12px;border-radius:1px;background:#CFCFD2}
+.cv-side .st1 .st-bar .st-bar__mark.up{background:var(--bull);box-shadow:0 0 4px rgba(0,255,163,.45)}   /* the day's colour: up green, down red */
+.cv-side .st1 .st-bar .st-bar__mark.dn{background:var(--bear);box-shadow:0 0 4px rgba(255,45,85,.45)}
+.cv-side .st1 .st-bar .st-bar__tick{width:1px;height:10px;background:#8A8A92}
+.cv-side .st1 .st-bar--rule{height:2px;background:#4A4A52}
+.cv-side .st1 .st-bar--rule .st-bar__tick{height:6px;background:#6E6E76}
+/* a share as a filled bar between the label and the number (the margins) */
+.cv-side .st1 .st-blk > .st-fill{display:grid;grid-template-columns:minmax(0,1fr) 64px auto;gap:8px;align-items:center}
+.cv-side .st1 .st-fill .st-fill__track{height:5px;background:#26262C;border-radius:1px;overflow:hidden}
+.cv-side .st1 .st-fill .st-fill__track i{display:block;height:100%;background:var(--bull)}
+.cv-side .st1 .st-fill .st-fill__track i.dn{background:var(--bear)}
+.cv-side .st1 .st-foot{grid-column:1 / -1;font-size:11px;color:#8A8A92;padding:5px 0 2px;white-space:normal;line-height:1.35}
+@media (min-width:1400px){ .cv-side .st1 .st-blk > div, .cv-side .st1 .st-foot{font-size:10px} }   /* the page is zoomed ×1.12 and up from here: drawn at 11.2 px and up */
 /* SOCIAL: a channel name wraps rather than being cut */
 .soc-who{white-space:normal !important;overflow:visible !important}
 @media (max-width:900px){
