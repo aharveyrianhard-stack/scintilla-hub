@@ -39,7 +39,7 @@ const raw = (method, params = {}, sessionId) => new Promise((res) => { const i =
 const { targetId } = await raw("Target.createTarget", { url: "about:blank" });
 const { sessionId } = await raw("Target.attachToTarget", { targetId, flatten: true });
 const send = (m, p = {}) => raw(m, p, sessionId);
-const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); return r.result && r.result.value; };
+const evaluate = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) pageErrors.push("eval: " + (r.exceptionDetails.exception ? r.exceptionDetails.exception.description : r.exceptionDetails.text)); return r.result && r.result.value; };
 const DPR = +(process.env.PROOF_DPR || 1); // 1 Oct: Alan's Retina screens are scale 2; the run is made at 1 and 2
 await send("Emulation.setDeviceMetricsOverride", { width: +width, height: +height, deviceScaleFactor: DPR, mobile: mobile === "1" });
 function treeCpu() {
@@ -52,7 +52,7 @@ await send("Page.navigate", { url });
 for (let i = 0; i < 80; i++) { await sleep(500); if (await evaluate("!!(window.__mm && __mm.ready)")) break; }
 const settle = async () => { for (let i = 0; i < 60; i++) { await sleep(300); if (await evaluate("!!(window.__mm && __mm.paused)")) return; } };
 await settle();
-const stateNow = () => evaluate("JSON.stringify({view:__mm.view,area:__mm.cluster||null,areaCount:__mm.clusterCount||null,canvas:!!__mm.canvas,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length})").then(JSON.parse);
+const stateNow = () => evaluate("JSON.stringify({view:__mm.view,area:__mm.cluster||null,areaCount:__mm.clusterCount||null,canvas:!!__mm.canvas,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length,detail:__mm.detail,order:__mm.order,hidden:__mm.hidden?__mm.hidden().length:null,shown:__mm.shownKinds?__mm.shownKinds():null,folds:__mm.folds?Object.keys(__mm.folds()).length:null,chips:__mm.chipsDrawn?__mm.chipsDrawn():null,sections:__mm.sectionsWithChip?__mm.sectionsWithChip():null,coil:__mm.coilOrder||null})").then(JSON.parse);
 const log = [];
 for (const s of steps) {
   if (s.wait) await sleep(s.wait);
@@ -63,6 +63,14 @@ for (const s of steps) {
     await sleep(400); await settle();
     log.push({ click: s.click, at: xy.map(Math.round), after: await stateNow() });
   }
+  if (s.clickSel) { // a real mouse click on a DOM element (the 3D chip on a section label, a button)
+    const r = JSON.parse(await evaluate(`JSON.stringify((() => { const e = document.querySelector(${JSON.stringify(s.clickSel)}); if (!e) return null; const b = e.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2, getComputedStyle(e).display]; })())`));
+    if (r) for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", buttons: type === "mousePressed" ? 1 : 0, clickCount: 1 });
+    await sleep(1600); await settle();
+    log.push({ clickSel: s.clickSel, at: r && r.slice(0, 2).map(Math.round), found: !!r, after: await stateNow() });
+  }
+  if (s.hover) { const xy = await evaluate(`JSON.stringify(__mm.screenOf(${JSON.stringify(s.hover)}))`).then(JSON.parse); await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: xy[0], y: xy[1] }); await sleep(300); log.push({ hover: s.hover, tip: await evaluate("(document.getElementById('tip')||{}).innerText||''") }); }
+  if (s.unhover) { await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 4, y: +height - 4 }); await sleep(200); }
   if (s.key) {
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: s.key, code: s.key, windowsVirtualKeyCode: s.key === "Escape" ? 27 : 0 });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: s.key, code: s.key, windowsVirtualKeyCode: s.key === "Escape" ? 27 : 0 });
@@ -86,6 +94,7 @@ for (const s of steps) {
     log.push({ labels: { view: await evaluate("__mm.view"), canvas, count: rows.length, max_dx: Math.max(0, ...rows.map((r) => r.dx)), max_dy: Math.max(0, ...rows.map((r) => r.dy)), min_dy: Math.min(0, ...rows.map((r) => r.dy)), outside: rows.filter((r) => !r.inside).length, rows } });
   }
   if (s.crumbs) log.push({ crumbs: JSON.parse(await evaluate("JSON.stringify(__mm.crumbs())")) });
+  if (s.order) { const o = JSON.parse(await evaluate(`JSON.stringify(__mm.orderOnScreen ? __mm.orderOnScreen(${JSON.stringify(s.order)}) : null)`)); log.push({ order: s.order, on_screen: o, outline: JSON.parse(await evaluate(`JSON.stringify(__mm.outlineOrder ? __mm.outlineOrder(${JSON.stringify(s.order)}) : null)`)) }); }
   if (s.find) { const r = await evaluate(`JSON.stringify(__mm.find(${JSON.stringify(s.find)}))`); await evaluate(`__mm.select(${JSON.stringify(s.find)})`); await sleep(500); await settle(); log.push({ find: s.find, result: JSON.parse(r), after: await stateNow() }); }
   if (s.view) { await evaluate(`__mm.setView(${JSON.stringify(s.view)})`); await sleep(1500); await settle(); log.push({ view: s.view, after: await stateNow() }); }
   if (s.type) { await evaluate(`(() => { const q = document.getElementById('q'); q.value = ${JSON.stringify(s.type)}; q.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); })()`); await sleep(600); await settle(); log.push({ typed: s.type, after: await stateNow() }); }
@@ -123,5 +132,4 @@ for (const s of steps) {
   }
 }
 const gl = await evaluate("(()=>{const c=document.querySelector('#graph canvas');if(!c)return 'no canvas';const g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'context unavailable';const e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)})()");
-console.log(JSON.stringify({ url, width, dpr: DPR, renderer: gl, log, page_errors: pageErrors }, null, 1));
-done(0);
+process.stdout.write(JSON.stringify({ url, width, dpr: DPR, renderer: gl, log, page_errors: pageErrors }, null, 1) + "\n", () => done(0)); // flushed before exit: a big log was cut short when piped
