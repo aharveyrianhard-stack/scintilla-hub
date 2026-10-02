@@ -12,6 +12,10 @@ const page = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const START = "/* ---- Room 9b · REGIME view (M44", END = "/* ---- Room 3 · COMPANY";
 const src = page.slice(page.indexOf(START), page.indexOf(END));
 assert.ok(src.length > 4000, "the REGIME block must be in the page");
+/* P1 (2 Oct) — the card's rows and lines come from the reel's own script (the day maths, the row drawing, the six
+   headings); its pure part rides along so rgRenderCatalysts can draw from a fixture. The boot and the reads stay out. */
+const PM_PURE = page.slice(page.indexOf("const PM_ON = true;"), page.indexOf("function pmPanelNow(")) +
+  page.slice(page.indexOf("const RG_PM_MAP = ["), page.indexOf("</script>", page.indexOf("const RG_PM_MAP = [")));
 
 const EXPORTS = ["rgCurve","rgScore","rgSessionsBehind","rgRowAt","rgChart","rgTrendCls","rgRenderCatalysts",
   "rgParagraph","RG","RG_TENORS","RG_LIVE_MAP","RG_LIVE_STALE_MS","rgMarketOpen","rgFmt","rgPct"];
@@ -29,7 +33,7 @@ function load(nowISO) {
     document: { hidden: false }, SECFS_BTN: "", S: {},
   };
   ctx.globalThis = ctx; vm.createContext(ctx);
-  vm.runInContext(src + "\n;({" + EXPORTS.map((k) => k + ":typeof " + k + '!=="undefined"?' + k + ":undefined").join(",") + "})", ctx);
+  vm.runInContext(src + "\n" + PM_PURE + "\n;({" + EXPORTS.map((k) => k + ":typeof " + k + '!=="undefined"?' + k + ":undefined").join(",") + "})", ctx);
   return vm.runInContext("({" + EXPORTS.map((k) => k + ":" + k).join(",") + "})", ctx);
 }
 test("the regime view writes nothing, and reads only what it names", () => {
@@ -39,7 +43,14 @@ test("the regime view writes nothing, and reads only what it names", () => {
                    /localStorage\.setItem/, /sessionStorage/])
     assert.doesNotMatch(src, w, "no write path: " + w);
   const tables = new Set([...src.matchAll(/"([a-z_]+)\?select=/g)].map((m) => m[1]));
-  assert.deepEqual([...tables].sort(), ["catalyst_odds", "treasury_rates"]);
+  /* P1 (2 Oct) — the prediction markets come through pmRegimeLoad (the reel's own script): prediction_market_latest and
+     the snapshots, read-only; catalyst_odds (the retired 6-hourly collector) is gone from this view */
+  assert.deepEqual([...tables].sort(), ["treasury_rates"]);
+  assert.match(src, /RG\.cats=await pmRegimeLoad\(\)/, "the card's rows come from pmRegimeLoad");
+  assert.doesNotMatch(src, /catalyst_odds/);
+  const pmReads = page.slice(page.indexOf("async function pmHistory("), page.indexOf("function pmRegimeRowHTML("));
+  const pmTables = new Set([...pmReads.matchAll(/"([a-z_]+)\?select=/g)].map((m) => m[1]));
+  assert.deepEqual([...pmTables].sort(), ["prediction_market_latest", "prediction_market_runs", "prediction_market_snapshots"]);
   const urls = [...src.matchAll(/fetch\("([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(urls, ["/data/regime/regime-static.json"], "one file, no other network of its own");
   assert.match(src, /SC_CHART_API\s*\+\s*"\/macro/, "the live tenors come from the board's own macro route");
@@ -141,13 +152,19 @@ test("every chart line follows the board's colour rule: last step up is green, d
   assert.equal(R.rgTrendCls([[0, 2], [1, 1]]), "rg-dn");
 });
 
-test("catalysts: nothing stored and no snapshot is NO FEED, and a snapshot says it is one read", () => {
-  const R = load("2026-09-24T01:30:00Z");
-  R.RG.cats = { rows: [] }; R.RG.stat = null;
+test("prediction markets (P1, 2 Oct): a failed read is NO FEED, no read yet is 'reading…', a heading without a live market is the dim line, a row says its percent", () => {
+  const R = load("2026-10-02T19:30:00Z");
+  R.RG.cats = { rows: [], hist: {}, err: "pg prediction_market_latest → 503" }; R.RG.stat = null;
   assert.match(R.rgRenderCatalysts(), /NO FEED/);
-  R.RG.stat = { catalysts: { taken_utc: "2026-09-24T01:40:00Z", rows: [
-    { catalyst: "midterms_house", source: "polymarket", market: "m", question: "Democrats take the House?", outcome: "Yes", probability: 0.925, volume: 7e6, end_date: "2026-11-04" }] } };
+  R.RG.cats = null;
+  assert.match(R.rgRenderCatalysts(), /reading the prediction markets/);
+  R.RG.cats = { rows: [{ topic: "house-2026", venue: "polymarket", event_id: "32225", market_id: "562802", outcome: "Democratic", align_key: "dem",
+    question: "Will the Democratic Party control the House after the 2026 Midterm elections?", probability: "0.925", bid: "0.92", ask: "0.93",
+    end_date: "2026-11-04T04:59:00Z", ts: "2026-10-02T19:15:00Z" }], hist: {} };
   const h = R.rgRenderCatalysts();
-  assert.match(h, /one-off read/);
   assert.match(h, /93%/);
+  assert.match(h, /the midterms · the House/);
+  assert.match(h, /Will the Democratic Party control the House/);
+  assert.equal((h.match(/not in the registry yet/g) || []).length, 5, "the other five headings say so in the dim style — none is blank");
+  assert.doesNotMatch(h, /catalyst_odds|one-off read/);
 });

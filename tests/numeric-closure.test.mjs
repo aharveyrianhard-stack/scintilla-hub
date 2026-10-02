@@ -149,5 +149,5 @@ test("wiring: reads, row field, cells and tick path", () => {
 test("every inline script still parses", () => {
   const re = /<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g; let m, n = 0;
   while ((m = re.exec(page))) { n++; assert.doesNotThrow(() => new vm.Script(m[2], { filename: "inline" + n }), "inline script " + n); }
-  assert.equal(n, 8);   // 24 Sep 2026: the eighth is the company tab's Geiger-in-motion module (M47)
+  assert.equal(n, 9);   // 24 Sep 2026: the eighth is the company tab's Geiger-in-motion module (M47) · 2 Oct 2026 (P1): the ninth is the prediction markets reel, its own script after the main one
 });
