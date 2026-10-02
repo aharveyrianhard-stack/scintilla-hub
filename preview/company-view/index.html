@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from ef6dc20) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8385271) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5192,6 +5192,29 @@ const cryptoSet = new Set(Object.values(CB));
 
 let PRICES   = {};   // ticker → latest live price (WS / FMP / realtime — wins over DB pull)
 let prevClose = {};  // ticker → SERVED live_quotes.prev_close (FIX 2 — the ONLY chg recompute base for live patches)
+/* P9 (2 Oct) — A HELD PREVIOUS CLOSE. When the provider's own surfaces disagree about one name's close by more than
+   the cent rule, the settled file holds that name instead of refusing the whole board: the API serves
+   previous_close_state PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE with the numbers. Its CHG cell stays "—" (there is no
+   baseline) and says why on hover; every other row keeps its %. ticker → previous_close_hold. */
+const SC_HELD_PREV = {};
+function scHeldPrevTitle (t) {
+  const h = SC_HELD_PREV[t];
+  if (!h) return "";
+  const src = h.sources || {}, n = (v) => (typeof v === "number" && isFinite(v) ? v.toFixed(2) : null);
+  const parts = [];
+  if (n(src.daily)) parts.push("daily " + n(src.daily));
+  if (n(src.prev) && n(src.prev) !== n(src.daily)) parts.push("prev " + n(src.prev));
+  if (n(src.print)) parts.push("print " + n(src.print));
+  const by = (typeof h.spread_abs === "number" && isFinite(h.spread_abs)) ? "$" + h.spread_abs.toFixed(2) : "more than a cent";
+  return "previous close held: sources disagree by " + by + (parts.length ? " (" + parts.join(" · ") + ")" : "");
+}
+function scHeldPrevPaint (t) {
+  const cell = el("lc_" + t);
+  if (!cell) return;
+  scSetTitle(cell, scHeldPrevTitle(t));
+  if (SC_HELD_PREV[t]) scSetAttr(cell, "data-sc-prev-close-state", "HELD");
+  else cell.removeAttribute("data-sc-prev-close-state");
+}
 let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…} } (ribbon_signals tf=D). VOLUME deleted by Alan 2026-08-17.
 let eqSyms   = [];   // equity symbols for the 3 s FMP batch poll
 let UNIVERSE = null; // Set of cohort tickers (events-room scope)
@@ -7650,7 +7673,7 @@ function boardRowsHTML() {
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
-      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '">' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
+      (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '"' + (typeof SC_HELD_PREV !== "undefined" && SC_HELD_PREV[d.t] ? ' data-sc-prev-close-state="HELD" title="' + esc(scHeldPrevTitle(d.t)) + '"' : "") + '>' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
          tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
@@ -25521,7 +25544,11 @@ async function scProviderTick () {
          displayed provider trade against the provider's own completed daily close. */
       if (q.previous_close != null && isFinite(prev) && prev > 0) prevClose[t] = prev;
       else delete prevClose[t];
+      const heldPrev = typeof SC_HELD_PREV !== "undefined" ? SC_HELD_PREV : null;
+      if (heldPrev && q.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE") heldPrev[t] = q.previous_close_hold || {};
+      else if (heldPrev) delete heldPrev[t];
       patch(t, price, "PROVIDER");
+      if (typeof scHeldPrevPaint === "function") scHeldPrevPaint(t);
       /* patch() returns early on an identical re-quote, which is correct for repaint suppression
          but would leave a row that has just RECEIVED its baseline without a percentage. Recompute
          it here from the same contract so price and percentage can never disagree. */
