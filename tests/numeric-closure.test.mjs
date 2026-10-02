@@ -96,9 +96,10 @@ test("C1 STATS: TSM EPS is labelled TWD and both multiples read 'not comparable:
   // a served currency on the fundamentals row wins over the ticker map
   const served = api.fwdTrailPE(12.12, { eps_ttm: -1.87, reported_currency: "CNY" }, est(Q.map((d) => [d, 0.0954])), "ZZZ");
   assert.equal(served.ccy, "CNY"); assert.equal(served.fwd, null);
-  // a USD loss-maker keeps the plain dash (no fake 'not comparable')
+  // a USD loss-maker says why there is no multiple (no fake 'not comparable') — H8: "none · loss", never a dash, never "not stored"
   const loss = api.statsPriceHTML({ t: "CRWV", price: 100, _profile: {}, _fund: { eps_ttm: -2 }, _est: [] });
-  assert.match(loss, /<span>trailing P\/E<\/span><b>—<\/b>/);
+  assert.match(loss, /<span>trailing P\/E<\/span><b>none · loss<\/b>/);
+  assert.doesNotMatch(loss, /not comparable|<b>—<\/b>/);
 });
 
 test("OP-E: the market cap carries its source date (epoch SECONDS); a fresh value is never dimmed", () => {

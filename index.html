@@ -5886,7 +5886,7 @@ async function fetchCompanyData(t) {
   ]);
   const [quote, prof, comp, rib, fund, est, rat, pt, nws, evs, ctx, finh, finq, balh, cfh, rblk, ratios, tran, rels, grds, etfi, etfh, csum, ckeys, balq] = (await Promise.all([
     pg("live_quotes?ticker=eq." + e + "&select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes),   // FIX 2 — DB serves chg_pct + prev_close
-    pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,website,description,ir_url,updated_ts"),   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
+    pg("company_profile?ticker=eq." + e + "&select=ticker,name,exchange,sector,industry,market_cap,beta,avg_volume,range_52wk,shares_out,price,is_etf,is_fund,website,description,shares_outstanding,float_shares,dividend_per_share,dividend_yield,ex_dividend_date,facts_as_of,ir_url,updated_ts"),   // H8 (2 Oct) — the STATS facts: shares outstanding, the float, the last dividend / ex-date / yield, and the date FMP gave them (facts_as_of); is_fund is read but never gates earnings (FMP flags O, a REIT, as a fund)   // GO-LIVE FIX 3 — is_etf gates the financial tabs; R43 — website,description feed the EVENTS header; NEW — ir_url feeds the investor-relations link (honest: only shown when present)
     pg("composite_staged?ticker=eq." + e + "&tf=eq.D&select=composite,trend,momentum,updated_ts&order=updated_ts.desc&limit=1"),
     pg("ribbon_signals?ticker=eq." + e + "&tf=eq.D&select=family,read,center,spread,sev_pos,top,bottom"),
     pg("fundamentals?ticker=eq." + e + "&select=trailing_pe,eps_ttm,revenue_ttm,market_cap"),
@@ -18267,12 +18267,22 @@ const fmtBig = (v) => v == null ? null
    table its number comes from, and the date where the store records one. NOT drawn, because the store has no such field:
    the day's high and low (the live quote carries price and previous close only), float, short interest and the dividend
    per share (the fiscal year's dividends paid and buybacks, from cashflow_history, stand in). */
-const stRow = (k, v, title, neg) => "<div" + (title ? ' title="' + esc(title) + '"' : "") + "><span>" + k + "</span><b" +
-  (neg === true ? ' class="neg"' : neg === "pos" ? ' class="pos"' : "") + ">" + (v == null || v === "" ? "—" : v) + "</b></div>";
-/* a block is drawn only when at least one of its rows has a value: a fund with no income statement gets no GROWTH block,
-   not a column of dashes */
-const stBlock = (title, rows) => rows.some((h) => !/<b>—<\/b>/.test(h))
+/* H8 (2 Oct) — NEVER A SILENT DASH. Alan's standing rule for the company view: every fact shown is a real fact or a plain
+   "not stored". A row with no value prints "not stored" in the dim style (or the word the caller gives — a live reading that is
+   not there says "no reading"); the "—" is gone from these blocks. A block is still drawn only when at least one of its rows
+   has a real value: a fund with no income statement gets no GROWTH block, not a column of "not stored". */
+const ST_NS = '<b class="ns">';
+const stRow = (k, v, title, neg, absent) => "<div" + (title ? ' title="' + esc(title) + '"' : "") + "><span>" + k + "</span>" +
+  (v == null || v === "" ? ST_NS + (absent || "not stored") + "</b>"
+    : "<b" + (neg === true ? ' class="neg"' : neg === "pos" ? ' class="pos"' : "") + ">" + v + "</b>") + "</div>";
+const stBlock = (title, rows) => rows.some((h) => !/<b class="[^"]*\bns\b[^"]*">[^<]*<\/b>/.test(h))
   ? '<section class="st-blk"><h3 class="st1-h">' + title + "</h3>" + rows.join("") + "</section>" : "";
+/* a fund for the STATS tab = the page's own non-operating test (company_profile.is_etf, or a crypto name): no income statement,
+   no earnings calendar, no per-share earnings. company_profile.is_fund is NOT used: FMP sets it on O (Realty Income, a REIT that
+   reports earnings every quarter), so it would hide real reports. */
+const stIsFund = (data) => (typeof isNonOp === "function" ? !!isNonOp(data) : false) ||
+  !!(data && data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true"));
+const stFactsDate = (p) => (p && p.facts_as_of) ? "facts as of " + stDate(p.facts_as_of) + " (FMP)" : "no facts date stored";
 const stSigned = (v, dp) => (v == null || !isFinite(v)) ? null
   : v < 0 ? "(" + Math.abs(v).toFixed(dp) + "%)" : "+" + v.toFixed(dp) + "%";
 const stPct1 = (v) => (v == null || !isFinite(v)) ? null
@@ -18300,7 +18310,7 @@ function stBarHTML(label, right, lo, hi, px, dir, title, tick) {
   const pos = stBarPos(px, lo, hi), tp = tick != null ? stBarPos(tick, lo, hi) : null;
   const f = (v) => fmtPxIdent(num(v));
   return '<div class="st-vis"' + (title ? ' title="' + esc(title) + '"' : "") + '><span class="st-vis__l">' + label + "</span>" +
-    '<b class="st-vis__v">' + (right == null || right === "" ? "—" : right) + "</b>" +
+    (right == null || right === "" ? '<b class="st-vis__v ns">not stored</b>' : '<b class="st-vis__v">' + right + "</b>") +
     '<em class="st-bar__lo">' + f(lo) + '</em><span class="st-bar" aria-hidden="true">' +
     (tp != null ? '<i class="st-bar__tick" style="left:' + tp.toFixed(1) + '%"></i>' : "") +
     (pos != null ? '<i class="st-bar__mark' + (dir ? " " + dir : "") + '" style="left:' + pos.toFixed(1) + '%"></i>' : "") +
@@ -18310,7 +18320,7 @@ function stBarHTML(label, right, lo, hi, px, dir, title, tick) {
 function stRuleHTML(label, right, v, lo, hi, ticks, title) {
   const pos = stBarPos(v, lo, hi);
   return '<div class="st-vis"' + (title ? ' title="' + esc(title) + '"' : "") + '><span class="st-vis__l">' + label + "</span>" +
-    '<b class="st-vis__v">' + (right == null || right === "" ? "—" : right) + "</b>" +
+    (right == null || right === "" ? '<b class="st-vis__v ns">not stored</b>' : '<b class="st-vis__v">' + right + "</b>") +
     '<em class="st-bar__lo">' + lo + '</em><span class="st-bar st-bar--rule" aria-hidden="true">' +
     (ticks || []).map((x) => { const p = stBarPos(x, lo, hi); return p == null ? "" : '<i class="st-bar__tick" style="left:' + p.toFixed(1) + '%"></i>'; }).join("") +
     (pos != null ? '<i class="st-bar__mark" style="left:' + pos.toFixed(1) + '%"></i>' : "") +
@@ -18321,18 +18331,21 @@ function stFillHTML(label, pct, title) {
   const v = num(pct), txt = stPct1(v);
   return '<div class="st-fill"' + (title ? ' title="' + esc(title) + '"' : "") + "><span>" + label + '</span><span class="st-fill__track" aria-hidden="true">' +
     (v == null ? "" : '<i class="' + (v < 0 ? "dn" : "up") + '" style="width:' + Math.min(100, Math.abs(v)).toFixed(1) + '%"></i>') +
-    "</span><b" + (v != null && v < 0 ? ' class="neg"' : "") + ">" + (txt == null ? "—" : txt) + "</b></div>";
+    "</span>" + (txt == null ? ST_NS + "not stored</b>" : "<b" + (v < 0 ? ' class="neg"' : "") + ">" + txt + "</b>") + "</div>";   /* H8 — never a dash */
 }
 
 function statsPriceHTML(data, row) {   // PRICE · SIZE · VALUE. row = the board row (revenue TTM in the right currency); optional
   const t = data.t, p = data._profile || {}, f = data._fund || {}, r = row || {};
-  const px = num(data.price), chg = num(data.chg), dir = chg == null ? "" : chg >= 0 ? "up" : "dn";
+  /* H8 — today's change: the payload's quote row first; when that carries none (MEASURED 2 Oct, after the close: null on all 50
+     probed names while the header showed MU −2.15%), the board row's own change, the same provider reading the header uses */
+  const chgQ = num(data.chg), chgB = chgQ == null && r.c != null ? num(r.c) : null;
+  const px = num(data.price), chg = chgQ != null ? chgQ : chgB, dir = chg == null ? "" : chg >= 0 ? "up" : "dn";
   const pa = scCapAge(p.updated_ts), pdate = pa.known ? "profile stored " + pa.date : "profile date not recorded";   // company_profile.updated_ts, epoch seconds
   /* PRICE */
   const pc = (typeof prevClose !== "undefined" && prevClose) ? num(prevClose[t]) : null;
   const price = [
-    stRow("last", px != null ? fmtPxIdent(px) : null, "last price · Massive live quote (the board's), ticks live"),
-    stRow("today", chg != null ? fmtC(chg) : null, "today's change against the previous close · Massive live quote", chg == null ? null : chg < 0 ? true : "pos"),
+    stRow("last", px != null ? fmtPxIdent(px) : null, "last price · Massive live quote (the board's), ticks live" + (px == null ? " · the live quote carries no price right now" : ""), null, "no reading"),
+    stRow("today", chg != null ? fmtC(chg) : null, "today's change against the previous close · " + (chgB != null ? "the board row's reading (the quote row carried none)" : "Massive live quote") + (chg == null ? " · neither the quote row nor the board carries a change figure right now" : ""), chg == null ? null : chg < 0 ? true : "pos", "no reading"),
   ];
   if (pc != null && pc > 0) price.push(stRow("prev close", fmtPxIdent(pc), "the previous session's settled close · Massive"));
   const rg = stRange52(p.range_52wk);
@@ -18366,18 +18379,33 @@ function statsPriceHTML(data, row) {   // PRICE · SIZE · VALUE. row = the boar
         fromProfile ? scCapTitle(p.updated_ts) : "market cap from the fundamentals row (FMP); its source date is not recorded");
     })(),
   ];
-  /* revenue TTM: the board row's figure (USD; a non-USD reporter shows its own currency), as the FUNDAMENTALS line does */
+  const fund = stIsFund(data), fa = stFactsDate(p);
+  /* revenue TTM: the board row's figure (USD; a non-USD reporter shows its own currency), as the FUNDAMENTALS line does. Not a fund's fact. */
   const revV = r.rev != null ? fmtRevCell(r.rev) : (r.revCcy && r.revLocal != null ? fmtRevLocal(r.revLocal, r.revCcy) : (num(f.revenue_ttm) != null ? fmtBig(num(f.revenue_ttm)) : null));
-  size.push(stRow("revenue TTM", revV, (r.rev != null || r.revCcy) ? revTitle(r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero)
+  if (!fund) size.push(stRow("revenue TTM", revV, (r.rev != null || r.revCcy) ? revTitle(r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero)
     : "revenue over the last four quarters · fundamentals.revenue_ttm (FMP), stored value"));
-  size.push(stRow("shares out", fmtBig(num(p.shares_out)), "shares outstanding · company_profile.shares_out (FMP), " + pdate));
+  /* H8 — shares outstanding from company_profile.shares_outstanding (FMP /stable/shares-float, loaded 2 Oct 2026; the older
+     shares_out column, empty on every row until then, is read second), the float beside it, and short interest named as not
+     stored: FMP's stable routes do not carry it (checked 2 Oct 2026 — /stable/short-interest answers 404, and neither the
+     profile, the quote nor key-metrics has such a field), so the row says so instead of a dash. */
+  const so = num(p.shares_outstanding) != null ? num(p.shares_outstanding) : num(p.shares_out);
+  size.push(stRow("shares out", fmtBig(so), "shares outstanding · company_profile.shares_outstanding (FMP /stable/shares-float) · " + fa));
+  if (!fund) {
+    const fl = num(p.float_shares);
+    size.push(stRow("float", fmtBig(fl), "shares free to trade (the float)" + (fl != null && so != null && so > 0 ? " · " + (fl / so * 100).toFixed(1) + "% of shares out" : "") +
+      " · company_profile.float_shares (FMP /stable/shares-float) · " + fa));
+    size.push(stRow("short interest", null, "not in our tables: FMP's stable routes carry no short interest (checked 2 Oct 2026: /stable/short-interest answers 404; the profile, the quote and key-metrics have no such field) · a future source would fill company_profile here"));
+  }
+  /* a fund lists its own facts, every one — etf_info (FMP /stable/etf/info, 72 funds loaded 2 Oct 2026); a missing one says so */
   const etf = data._etf || null;
-  if (etf) {
-    if (num(etf.aum) != null) size.push(stRow("fund assets (AUM)", "$" + fmtBig(num(etf.aum)), "assets under management · etf_info.aum (FMP)"));
-    if (num(etf.nav) != null) size.push(stRow("NAV", fmtPxIdent(num(etf.nav)), "net asset value per share · etf_info.nav (FMP)"));
-    if (num(etf.holdings_count) != null) size.push(stRow("holdings", num(etf.holdings_count).toLocaleString("en-US"), "number of holdings · etf_info.holdings_count (FMP)"));
-    if (num(etf.expense_ratio) != null) size.push(stRow("expense ratio", num(etf.expense_ratio).toFixed(2) + "%", "the fund's yearly fee · etf_info.expense_ratio (FMP)"));
-    if (etf.inception_date) size.push(stRow("inception", esc(stDate(etf.inception_date)), "etf_info.inception_date (FMP)"));
+  if (fund) {
+    const e = etf || {}, esrc = etf ? " · etf_info (FMP /stable/etf/info)" + (etf.updated_ts ? ", stored " + stDate(etf.updated_ts) : "") : " · no etf_info row for this fund yet";
+    size.push(stRow("fund assets (AUM)", num(e.aum) != null ? "$" + fmtBig(num(e.aum)) : null, "assets under management" + esrc));
+    size.push(stRow("NAV", num(e.nav) != null ? fmtPxIdent(num(e.nav)) : null, "net asset value per share" + esrc));
+    size.push(stRow("holdings", num(e.holdings_count) != null ? num(e.holdings_count).toLocaleString("en-US") : null, "number of holdings" + esrc));
+    size.push(stRow("expense ratio", num(e.expense_ratio) != null ? num(e.expense_ratio).toFixed(2) + "%" : null, "the fund's yearly fee" + esrc));
+    size.push(stRow("inception", e.inception_date ? esc(stDate(e.inception_date)) : null, "the fund's first day" + esrc));
+    return stBlock("PRICE", price) + stBlock("SIZE", size);   /* a fund has no per-share earnings: no VALUE block */
   }
   /* VALUE */
   const { trail, fwd, next, ccy } = fwdTrailPE(data.price, f, data._est, data.t);
@@ -18385,10 +18413,13 @@ function statsPriceHTML(data, row) {   // PRICE · SIZE · VALUE. row = the boar
   const nonUsd = !!ccy && ccy !== "USD";
   const ncTrail = nonUsd && num(f.eps_ttm) != null ? notComparable(ccy) : null;
   const ncFwd = nonUsd && next && next.est_eps_avg != null ? notComparable(ccy) : null;
+  /* H8 — a loss-maker has no multiple: a known EPS at or below zero prints "none · loss" (a fact), never "not stored" */
+  const epsT = num(f.eps_ttm), lossT = trail == null && ncTrail == null && epsT != null && epsT <= 0 ? "none · loss" : null;
+  const epsN = next && next.est_eps_avg != null ? num(next.est_eps_avg) : null, lossN = fwd == null && ncFwd == null && epsN != null && epsN <= 0 ? "none · loss est." : null;
   const value = [
-    stRow("trailing P/E", trail != null ? trail.toFixed(1) : ncTrail, "price ÷ EPS of the last four quarters (fundamentals.eps_ttm, FMP) · computed live, never the stored multiple"),
-    stRow("forward P/E", fwd != null ? fwd.toFixed(1) : ncFwd, "price ÷ the next four quarters' average EPS estimate (analyst_estimates, FMP)"),
-    stRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : ncTrail, "EPS (ttm) ÷ price · the trailing P/E turned around"),
+    stRow("trailing P/E", trail != null ? trail.toFixed(1) : (ncTrail || lossT), "price ÷ EPS of the last four quarters (fundamentals.eps_ttm, FMP) · computed live, never the stored multiple" + (lossT ? " · no multiple: EPS over the last four quarters is at or below zero" : "")),
+    stRow("forward P/E", fwd != null ? fwd.toFixed(1) : (ncFwd || lossN), "price ÷ the next four quarters' average EPS estimate (analyst_estimates, FMP)" + (lossN ? " · no multiple: the estimate is at or below zero" : "")),
+    stRow("earnings yield", trail != null && trail > 0 ? (100 / trail).toFixed(1) + "%" : (ncTrail || lossT), "EPS (ttm) ÷ price · the trailing P/E turned around" + (lossT ? " · no yield: EPS over the last four quarters is at or below zero" : "")),
     stRow("EPS (ttm)", num(f.eps_ttm) != null ? (nonUsd ? ccy + " " + num(f.eps_ttm).toFixed(2) : "$" + num(f.eps_ttm).toFixed(2)) : null,
       "earnings per share over the last four quarters · fundamentals.eps_ttm (FMP), in the currency the figure is stored in"),
   ];
@@ -18398,7 +18429,7 @@ function statsPriceHTML(data, row) {   // PRICE · SIZE · VALUE. row = the boar
       "the analysts' lowest and highest 12-month price targets, the average as a thin tick, today's price on the bar · price_target_consensus (FMP)" +
       (ptN ? " · " + ptN + " analysts" : "") + (num(pt.target_median) != null ? " · median $" + num(pt.target_median).toFixed(2) : ""), ptAvg));
   else value.push(stRow("PT · avg", ptAvg != null ? "$" + ptAvg.toFixed(2) : null, "the analysts' average 12-month price target · price_target_consensus (FMP)"));
-  const rt = data._ratings, cnt = (k) => (rt && num(rt[k]) != null ? num(rt[k]) : "—");
+  const rt = data._ratings, cnt = (k) => (rt && num(rt[k]) != null ? num(rt[k]) : "not stored");   /* H8 — never a dash, on the hover either */
   if (rt && rt.consensus) value.push(stRow("consensus", esc(String(rt.consensus)), "analyst_ratings (FMP) · strong buy " + cnt("strong_buy") + " · buy " + cnt("buy") +
     " · hold " + cnt("hold") + " · sell " + cnt("sell") + " · strong sell " + cnt("strong_sell")));
   return stBlock("PRICE", price) + stBlock("SIZE", size) + stBlock("VALUE", value);
@@ -18477,8 +18508,10 @@ function statsActivityHTML(data, row) {   // ACTIVITY &amp; DATES — today's vo
   if (typeof volCellHTML === "function") rows.push(stRow("volume today", volCellHTML(r.rv != null ? r.rv : null, r.rvS != null ? r.rvS : null, r.rvAsOf || null),
     "today's volume against this name's usual, the board's own reading: the battery = today so far against a usual whole session · the number = the pace against usual by this time of day (board_volume, from the Massive minute bars)"));
   rows.push(stRow("avg volume", fmtBig(num(p.avg_volume)), "average daily volume · company_profile.avg_volume (FMP)"));
-  /* the dates: the next report and the last one, from the company's own earnings events (already in the payload) */
-  const today = todayISO(), evs = (data.events || []).filter((e) => e && e.date);
+  /* the dates: the next report and the last one, from the company's own earnings events (already in the payload).
+     H8 — never for a fund: earnings_events holds old FMP rows for SPY (2017), QQQ and XLK (2008) that are not reports. */
+  const fund = stIsFund(data), fa = stFactsDate(p);
+  const today = todayISO(), evs = fund ? [] : (data.events || []).filter((e) => e && e.date);
   const nextEv = evs.filter((e) => String(e.date) >= today).sort((a, b) => String(a.date).localeCompare(String(b.date)))[0] || null;
   const lastEv = evs.filter((e) => String(e.date) < today).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
   if (nextEv) rows.push(stRow("next report", esc(stDate(nextEv.date)) + (nextEv.report_time ? " · " + esc(String(nextEv.report_time).toUpperCase()) : ""),
@@ -18486,9 +18519,17 @@ function statsActivityHTML(data, row) {   // ACTIVITY &amp; DATES — today's vo
   const sp = lastEv ? num(lastEv.surprise_pct) : null;
   if (lastEv) rows.push(stRow("last report", esc(stDate(lastEv.date, true)) + (sp != null ? " · EPS " + stSigned(sp, 1) : ""),
     "the last earnings report, " + stDate(lastEv.date) + (sp != null ? ", EPS " + stSigned(sp, 1) + " against the estimate" : "") + " · earnings_events (FMP)", sp != null && sp < 0));
-  /* money returned: the fiscal year's dividends paid and buybacks (cashflow_history), the dividend yield against the market cap */
+  /* H8 — the last dividend per share with its ex-date, and FMP's annualised yield at that date (company_profile, loaded from
+     FMP /stable/dividends on 2 Oct 2026). "none on record" is a fact too: FMP's dividend list for the name is empty. */
+  const dps = num(p.dividend_per_share), dy = num(p.dividend_yield), exd = p.ex_dividend_date || null;
+  const dpsTxt = dps == null ? null : dps === 0 ? "none on record" : "$" + (dps < 0.01 ? dps.toFixed(4) : dps.toFixed(2)) + (exd ? " · ex " + esc(stDate(exd, true)) : "");
+  rows.push(stRow("dividend", dpsTxt, dps === 0 ? "FMP lists no dividend for this name (its dividend list is empty) · company_profile.dividend_per_share · " + fa
+    : "the last dividend declared, per share" + (exd ? ", ex-dividend " + stDate(exd) : "") + " · company_profile.dividend_per_share / ex_dividend_date (FMP /stable/dividends) · " + fa));
+  if (dps != null && dps > 0) rows.push(stRow("div. yield", dy != null ? (dy < 0.1 ? dy.toFixed(2) : dy.toFixed(1)) + "%" : null,
+    "FMP's annualised yield at the last ex-date: the dividend × its yearly count ÷ that day's price · company_profile.dividend_yield · " + fa));
+  /* money returned: the fiscal year's dividends paid and buybacks (cashflow_history), the dividend yield against the market cap. Not for a fund. */
   const cfh = byFYasc(data._cfhist), C = cfh[cfh.length - 1] || null;
-  if (C) {
+  if (C && !fund) {
     const dv = num(C.dividends_paid), bb = num(C.buybacks), fyl = "FY" + String(C.fiscal_year).slice(2);
     const mc = num(p.market_cap) != null ? num(p.market_cap) : num((data._fund || {}).market_cap);
     const yld = (dv != null && dv !== 0 && mc != null && mc > 0) ? Math.abs(dv) / mc * 100 : null;   /* under 0.1% two decimals, so a small yield never prints as "0.0%" (MU: 0.05%) */
@@ -18538,7 +18579,7 @@ function cohortChipHTML(t) {
    collapsed slot shows about two rows of blocks) · GROWTH & MARGINS · BALANCE, then the sector · industry · exchange line. */
 function statsTabHTML(data) {
   const row = (typeof coBoardRow === "function" ? coBoardRow(data.t) : null) || {};
-  const html = statsPriceHTML(data, row) + statsActivityHTML(data, row) + statsFundHTML(data) + statsBalHTML(data);
+  const html = statsPriceHTML(data, row) + statsActivityHTML(data, row) + (stIsFund(data) ? "" : statsFundHTML(data) + statsBalHTML(data));   /* H8 — a fund has no income statement: no GROWTH, no BALANCE */
   if (!html) return '<div class="sc-senttxt">No stats inputs loaded for $' + esc(data.t) + ".</div>";
   const p = data._profile || {}, foot = [p.sector, p.industry, p.exchange].filter(Boolean).map((x) => esc(x)).join(" · ");
   return '<div class="st1">' + html + (foot ? '<div class="st-foot" title="sector · industry · exchange (company_profile, FMP)">' + foot + "</div>" : "") + "</div>";
@@ -28995,6 +29036,7 @@ body.gwx-motion .gwx-pct{opacity:1}
 .cv-side .st1 .st-fill .st-fill__track i{display:block;height:100%;background:var(--bull)}
 .cv-side .st1 .st-fill .st-fill__track i.dn{background:var(--bear)}
 .cv-side .st1 .st-foot{grid-column:1 / -1;font-size:11px;color:#8A8A92;padding:5px 0 2px;white-space:normal;line-height:1.35}
+.cv-side .st1 .st-blk b.ns, .cv-side .st1 .st-vis__v.ns{color:#6E6E76;font-weight:400}   /* H8 — "not stored" / "no reading": the dim grey of the as-of notes, never a dash */
 @media (min-width:1400px){ .cv-side .st1 .st-blk > div, .cv-side .st1 .st-foot{font-size:10px} }   /* the page is zoomed ×1.12 and up from here: drawn at 11.2 px and up */
 /* SOCIAL: a channel name wraps rather than being cut */
 .soc-who{white-space:normal !important;overflow:visible !important}

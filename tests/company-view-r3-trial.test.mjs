@@ -154,9 +154,10 @@ test("FINANCIALS reads only tables the payload already reads; the extra columns 
 
 /* ── STATS · ESTIMATES ──────────────────────────────────────────────────────────────────────────── */
 test("STATS on one screen: no sub-tabs to click (H7, 2 Oct: six blocks in one grid, the sector · industry line under them)", () => {
-  const st = new Function("statsPriceHTML", "statsFundHTML", "statsBalHTML", "statsActivityHTML", "coBoardRow", "esc", fn("statsTabHTML") + "\nreturn statsTabHTML;")(
-    () => "P", () => "F", () => "B", () => "A", () => ({}), esc);
+  const st = new Function("statsPriceHTML", "statsFundHTML", "statsBalHTML", "statsActivityHTML", "coBoardRow", "esc", "stIsFund", fn("statsTabHTML") + "\nreturn statsTabHTML;")(
+    () => "P", () => "F", () => "B", () => "A", () => ({}), esc, (d) => d.t === "SPY");   /* H8 — stIsFund: a fund gets no GROWTH / BALANCE */
   assert.equal(st({ t: "MU" }), '<div class="st1">PAFB</div>', "PRICE · SIZE · VALUE, ACTIVITY & DATES, GROWTH & MARGINS, BALANCE");
+  assert.equal(st({ t: "SPY" }), '<div class="st1">PA</div>', "H8 — a fund: PRICE · SIZE and ACTIVITY & DATES only");
   assert.equal(st({ t: "MU", _profile: { sector: "Technology", industry: "Semiconductors", exchange: "NASDAQ" } }),
     '<div class="st1">PAFB<div class="st-foot" title="sector · industry · exchange (company_profile, FMP)">Technology · Semiconductors · NASDAQ</div></div>');
   assert.doesNotMatch(fn("statsTabHTML"), /data-act="stattab"/);
