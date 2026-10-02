@@ -55,6 +55,16 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 #gl canvas:focus{outline:none}
 #areabar{position:absolute;left:50%;top:38px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;background:rgba(21,21,21,.96);border:1px solid var(--line2);border-radius:3px;padding:5px 8px 5px 12px;font-size:12px;letter-spacing:.06em;color:var(--ink);white-space:nowrap;max-width:calc(100% - 20px)}
 #areabar b{font-weight:600;letter-spacing:.1em;overflow:hidden;text-overflow:ellipsis} #areabar .mode{color:var(--dim)} #areabar button{font-size:11px;padding:6px 10px}
+#areabar .seg button{padding:6px 8px}
+/* T7: the Hub's lists at the top of the tree — ★ FAVORITES and ♥ LIKED, each opening straight as a podium */
+#listbar{position:absolute;right:10px;top:8px;z-index:3;display:flex;gap:6px}
+#listbar button{font-size:11px;padding:5px 9px;letter-spacing:.1em;background:rgba(27,27,27,.96)}
+#listbar button.on{color:var(--ink);border-color:var(--dim)}
+#listbar button.empty{color:var(--dim)}
+.row.list{border:1px solid var(--line2);margin:0 0 4px;background:var(--panel2);cursor:pointer}
+.row.list .lab{letter-spacing:.12em;font-weight:600;color:var(--ink)}
+.row.list.empty .lab{color:var(--dim)}
+#lists-note{font-size:11px;color:var(--mute);margin:0 0 8px 4px}
 .keybtn{margin:4px 8px 2px 0}
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
 .seg button{border:0;border-radius:0;padding:7px 8px}
@@ -155,6 +165,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   #legend{max-width:260px}
   #hint{display:none}
   #areabar{position:static;transform:none;white-space:normal;margin:4px 8px;max-width:none}
+  #listbar{position:static;padding:4px 8px 2px;flex-wrap:wrap}
   .row{grid-template-columns:auto minmax(0,1fr) 84px 50px;gap:6px}
   .kids{margin-left:10px}
 }
@@ -178,6 +189,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
 <div class="main">
   <div id="view">
     <div id="crumbs"></div>
+    <div id="listbar" style="display:none"></div>
     <div id="outline"></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
       <div id="areabar"></div>
@@ -296,6 +308,31 @@ state.counts = {
 };
 state.tree = T; state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar;
 
+/* ---- T7 (2 Oct) · the Hub's own lists as podiums: ★ FAVORITES and ♥ LIKED. The Hub keeps both on the server (Supabase:
+   station_lists holds FAVORITES and RADAR, hub_favorites holds LIKED) and mirrors them into this browser on every read —
+   "sc_lists" = {favorites, radar} and "sc_fav" = the LIKED tickers (index.html: LISTS_LS_KEY, lsSet("sc_fav", …)). This page
+   is served from the same origin, so it reads that mirror; nothing is written and no key is copied. A ticker the tree does
+   not serve is counted and named, never drawn. ---- */
+const HUB_LISTS = [
+  { id: "LIST_FAVORITES", glyph: "★", name: "FAVORITES", key: "sc_lists", read: (raw) => { const o = JSON.parse(raw || "null"); return o && Array.isArray(o.favorites) ? o.favorites : null; } },
+  { id: "LIST_LIKED", glyph: "♥", name: "LIKED", key: "sc_fav", read: (raw) => { const a = JSON.parse(raw || "null"); return Array.isArray(a) ? a : null; } },
+];
+const byTicker = new Map(nodes.filter((n) => n.kind === "name" && n.ticker).map((n) => [n.ticker, n]));
+const listEmptyNote = (n) => (n.name === "FAVORITES" ? "no favorites in this browser yet" : "no liked names in this browser yet") + (n.known ? "" : " — open the Hub once in this browser and they appear here");
+function readList(def) {
+  let raw = null; try { raw = localStorage.getItem(def.key); } catch {}
+  let tickers = null; try { tickers = def.read(raw); } catch {}
+  const seen = new Set(), clean = (tickers || []).map((t) => String(t).trim().toUpperCase()).filter((t) => t && !seen.has(t) && seen.add(t));
+  const onTree = (t) => byTicker.get(t) || byTicker.get(t.replace(/\./g, "-")) || null;
+  const n = state.byId.get(def.id) || { id: def.id, kind: "list", glyph: def.glyph, name: def.name, label: `${def.glyph} ${def.name}`, parents: [], r: 6.5, key: def.key };
+  const members = clean.map(onTree).filter(Boolean);
+  Object.assign(n, { tickers: clean, listMembers: members, missing: clean.filter((t) => !onTree(t)), known: tickers != null, agg: members.length ? aggregate(members) : null });
+  state.byId.set(def.id, n); return n;
+}
+const hubLists = () => HUB_LISTS.map(readList);
+hubLists();
+state.lists = () => hubLists().map((n) => ({ id: n.id, label: n.label, key: n.key, on_hub_list: n.tickers.length, on_tree: n.listMembers.length, missing: n.missing, known: n.known, note: n.listMembers.length ? null : listEmptyNote(n) }));
+
 /* ---- stamp ---- */
 $("stamp").textContent = state.geiger
   ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} full bars (${state.counts.up} up · ${state.counts.down} down)` +
@@ -329,7 +366,7 @@ const WORDS = {
   SEC_REIT: "Real estate: the REITs — towers, data centres, warehouses, homes, offices.",
   SEC_COMM: "Communication services: the platforms, media, telecoms, games.",
 };
-const wordsOf = (n) => n.kind === "index" ? (WORDS[n.id] || "") : n.kind === "cohort" ? ({ adopted: "A cohort from the standard: names that move together, adopted on 28 Sep.", proposed: "A proposed cohort from the 28 Sep proposal: shown so you can see what adopting it would give; nothing is written.", fundset: "A fund set: this fund's served holdings that no adopted or proposed cohort claims.", none: "No group yet: names under this sector that no cohort, proposed cohort or fund set claims." })[n.ckind] : "";
+const wordsOf = (n) => n.kind === "index" ? (WORDS[n.id] || "") : n.kind === "list" ? `The Hub's ${n.label} list as you keep it on the Hub, read from this browser; its names as a podium, with the Geiger readings the tree already has.` : n.kind === "cohort" ? ({ adopted: "A cohort from the standard: names that move together, adopted on 28 Sep.", proposed: "A proposed cohort from the 28 Sep proposal: shown so you can see what adopting it would give; nothing is written.", fundset: "A fund set: this fund's served holdings that no adopted or proposed cohort claims.", none: "No group yet: names under this sector that no cohort, proposed cohort or fund set claims." })[n.ckind] : "";
 state.wordsOf = wordsOf;
 const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBar(n); return ab ? ab.v : null; };
 // inside every parent the children run green → red by reading, the highest first, ties by name, no reading last (2 Oct); BY SIZE keeps the old order
@@ -375,7 +412,7 @@ function aggHTML(n, what) {
 const ms0 = (c) => membersOf(c).filter((m) => m.kind === "name").length;
 function renderCard(n) {
   if (!n) {
-    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; press OPEN 3D on a section (or click its name) and only that section lifts into 3D (Esc or ← BACK TO THE CANVAS drops back). CLEAN: every box IS its Geiger bar with the name on it; DETAILED shows the names too. Inside every parent the children run green → red. A cohort of more than 24 names opens as the PODIUM coil: every name a Geiger bar, the highest at the centre-top, winding down and out. Type a ticker in the finder for its path and every fund that holds it.</div>` +
+    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; press OPEN 3D on a section (or click its name) and only that section lifts into 3D (Esc or ← BACK TO THE CANVAS drops back). CLEAN: every box IS its Geiger bar with the name on it; DETAILED shows the names too. Inside every parent the children run green → red. A cohort of more than 24 names opens as the PODIUM: every name a standing Geiger column on a spiral ramp, the highest at the centre-top, winding down and out (FROM ABOVE on its top bar is the flat picture). ★ FAVORITES and ♥ LIKED at the top of the tree are the Hub's own lists, each a podium. Type a ticker in the finder for its path and every fund that holds it.</div>` +
       `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
       `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
       `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
@@ -388,10 +425,19 @@ function renderCard(n) {
   const rd = readingOf(n);
   // T6: inside a section's 3D or the podium, the panel repeats the way back in one line
   if (m3 && m3.inArea() && state.cluster) { const root = state.byId.get(state.cluster); h += m3.inCoil()
-    ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>: every name is its Geiger bar, the highest at the centre-top, winding down and outwards · hover a bar for its full bar and path · click a bar for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
+    ? (m3.podiumMode() === "above"
+      ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, FROM ABOVE: every name is its Geiger bar, the highest at the centre-top, winding down and outwards · PODIUM 3D on the top bar stands it up · hover a bar for its full bar and path · click a bar for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
+      : `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, standing: every name is a Geiger column on a spiral ramp — first place at the centre, highest; each next one a step lower and further out; the column's height is the reading (green rises above the ramp, red hangs below it; the ramp is zero) · drag to turn, scroll to zoom · FROM ABOVE on the top bar is the flat picture · hover a column for its full bar and path · click one for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`)
     : `<div class="wait">Inside <b>${esc(root ? root.label : "")}</b> in 3D · drag to turn, scroll to zoom · Esc, the breadcrumb or ← BACK TO THE CANVAS drops back to the canvas</div>`; }
   if (wordsOf(n)) h += `<div class="say">${esc(wordsOf(n))}</div>`;
-  const COIL_TITLE = "the names as the PODIUM coil: every name its Geiger bar, the highest reading at the centre-top, winding down and outwards to the lowest";
+  const COIL_TITLE = "the names as the PODIUM: every name its Geiger bar standing on a spiral ramp (PODIUM 3D) or flat seen from above, the highest reading at the centre-top, winding down and outwards to the lowest";
+  if (n.kind === "list") { // T7: a Hub list — what it holds, its mean, the podium button; an empty one shows its one-line note, never a blank
+    h += `<div class="kv"><span>ON THE HUB</span><span>${n.tickers.length} name${n.tickers.length === 1 ? "" : "s"} <span class="mute">· read from this browser (${esc(n.key)}); the Hub's server copy is the source of truth</span></span><span>ON THE TREE</span><span>${n.listMembers.length}${n.missing.length ? ` <span class="mute">· ${n.missing.length} not served here: ${n.missing.map(esc).join(", ")}</span>` : ""}</span></div>`;
+    if (!n.listMembers.length) { h += `<div class="wait">${esc(listEmptyNote(n))}</div>`; $("card").innerHTML = h; return; }
+    h += aggHTML(n, "ON THE LIST") + `<button class="coilbtn" data-coil="${esc(n.id)}" title="${COIL_TITLE}">PODIUM · ${n.listMembers.length} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
+    h += `<div class="sec">NAMES · ${n.listMembers.length} <span class="mute" style="letter-spacing:0">· green → red</span></div><table>${ordered(n.listMembers).map((m) => rowFor(m)).join("")}</table>`;
+    $("card").innerHTML = h; return;
+  }
   if (n.kind === "index") {
     h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
     const nb = m3 ? m3.beneathNames(n).length : beneath(n.id).filter((x) => x.kind === "name").length;
@@ -524,10 +570,20 @@ function outlineNode(n) {
   const hasKids = n.kind === "index" || n.kind === "cohort" || (n.kind === "fund" && primaryKids(n.id).length);
   return outlineRow(n) + (hasKids ? `<div class="kids ${open.has(n.id) ? "" : "closed"}" data-kids="${esc(n.id)}">${open.has(n.id) ? outlineKids(n) : ""}</div>` : "");
 }
+/* T7: the two Hub lists at the top of the tree; each opens straight as a podium (PODIUM 3D); an empty one says so in one line */
+function listRowsHTML() {
+  return hubLists().map((n) => { const ab = aggBar(n), empty = !n.listMembers.length;
+    return `<div class="row h list${empty ? " empty" : ""}" data-list="${esc(n.id)}" title="${empty ? esc(listEmptyNote(n)) : `open the ${esc(n.label)} podium`}"><span class="tg leaf"></span><span class="lab">${esc(n.label)} (${n.tickers.length})<small>${empty ? esc(listEmptyNote(n)) : `the Hub's list · ${n.listMembers.length} on the tree${n.missing.length ? ` · ${n.missing.length} not served` : ""} · opens as a podium`}</small></span><span class="bar">${ab ? bar(ab.v, "agg") : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`}</span><span class="val ${ab ? (ab.v >= 0 ? "up" : "dn") : "mute"}">${ab ? `${fmtG(ab.v)}<small>MEAN</small>` : ""}</span></div>`; }).join("");
+}
+function paintLists() { // the same two entries as chips at the top of the canvas
+  $("listbar").innerHTML = hubLists().map((n) => `<button data-list="${esc(n.id)}" class="${state.cluster === n.id ? "on" : ""}${n.listMembers.length ? "" : " empty"}" title="${n.listMembers.length ? `the Hub's ${esc(n.label)} list as a podium` : esc(listEmptyNote(n))}">${esc(n.label)} (${n.tickers.length})</button>`).join("");
+}
+$("listbar").addEventListener("click", (e) => { const b = e.target.closest("button[data-list]"); if (b) openList(b.dataset.list); });
+addEventListener("storage", (e) => { if (e.key === "sc_lists" || e.key === "sc_fav") { if (state.view === "outline") renderOutline(); paintLists(); } }); // the Hub, in another tab, changed a list
 function renderOutline() {
   const root = state.byId.get("MARKET");
   const ah = state.counts.at_home;
-  O.innerHTML = `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · inside every parent the children run ${state.order === "size" ? "by size" : "green → red by reading"} · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a grey "hub tab" tag on a name is the old Hub tab it sits in, where that differs from its group here</div>` +
+  O.innerHTML = listRowsHTML() + `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · inside every parent the children run ${state.order === "size" ? "by size" : "green → red by reading"} · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a grey "hub tab" tag on a name is the old Hub tab it sits in, where that differs from its group here</div>` +
     `<div id="counts"><span><b>${state.counts.cohorts}</b> ADOPTED · ${ah.adopted} names at home</span><span><b>${state.counts.proposed}</b> PROPOSED, not adopted · ${ah.proposed} names</span><span><b>${state.counts.fundsets}</b> FUND SETS · ${ah.fundset} names</span><span><b>${state.counts.pseudo}</b> NONE YET · ${ah.none} names</span></div>` + outlineNode(root);
 }
 function toggle(id) {
@@ -538,6 +594,7 @@ function toggle(id) {
   if (tg) tg.textContent = open.has(id) ? "▾" : "▸";
 }
 O.addEventListener("click", (e) => {
+  const lr = e.target.closest(".row.list"); if (lr) { openList(lr.dataset.list); return; } // T7: a Hub list → its podium
   const grp = e.target.closest(".grp");
   if (grp) { const id = grp.dataset.grp; if (open.has(id)) open.delete(id); else open.add(id); grp.nextElementSibling.classList.toggle("closed", !open.has(id)); grp.textContent = (open.has(id) ? "▾" : "▸") + grp.textContent.slice(1); return; }
   const row = e.target.closest(".row"); if (!row) return;
@@ -610,6 +667,7 @@ async function setView(v) {
   const was = state.view; state.view = v;
   for (const k of ["outline", "canvas", "3d"]) $("v-" + k).classList.toggle("on", v === k);
   $("outline").style.display = v === "outline" ? "" : "none"; $("graph").style.display = v === "outline" ? "none" : "block";
+  $("listbar").style.display = v === "outline" ? "none" : "flex"; paintLists(); // T7: the list chips sit on the canvas; the outline has its rows
   $("flat").style.display = v === "3d" ? "" : "none"; $("detail-seg").style.display = v === "outline" ? "none" : "";
   $("hint").textContent = v === "3d" ? "drag to turn · scroll to zoom · click to pick · click again or Esc to let go" : "drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section · inside: drag to turn, Esc or ← BACK TO THE CANVAS drops back";
   if (v === "canvas" || v === "3d") {
@@ -632,6 +690,13 @@ async function openCoil(n) { // the PODIUM coil: a parent's names as one spiral 
   const m = await load3d(); if (!m) return;
   state.selected = n.id; m.enterCoil(n);
 }
+async function openList(id) { // T7: a Hub list as a podium (PODIUM 3D by default); an empty list shows its one-line note on the card and in its row, never a blank
+  const def = HUB_LISTS.find((d) => d.id === id); if (!def) return;
+  const n = readList(def); state.selected = n.id; renderCard(n); crumbs(); paintLists();
+  if (state.view === "outline") { O.querySelectorAll(".row.sel").forEach((r) => r.classList.remove("sel")); const row = O.querySelector(`.row[data-list="${CSS.escape(id)}"]`); if (row) row.classList.add("sel"); }
+  if (!n.listMembers.length) return;
+  await openCoil(n);
+}
 function showOnTree(n) { // from a bead or a card: the name where it sits on the tree, in DETAILED (names are folded in CLEAN)
   if (m3 && m3.inArea()) m3.exitArea(false);
   if (state.detail !== "detailed") setDetail("detailed");
@@ -647,12 +712,15 @@ function crumbs() {
     (inC ? `<span>›</span><span class="lnk here">PODIUM COIL</span><span class="lnk" data-crumb="__list" title="the same names as a plain ordered list, on the card">≡ LIST</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : inA ? `<span>›</span><span class="lnk here">3D AREA</span><span class="lnk" data-crumb="__back">← back to the canvas</span>` : "") +
     (!inA && state.view === "canvas" ? `<span class="lnk" style="color:var(--mute);border-color:var(--line)">${state.detail === "clean" ? "CLEAN" : "DETAILED"}</span>` : "");
   // T6: the bar at the top of an opened section or podium says where you are and carries the way back
-  const ab = $("areabar"), root = inA && state.cluster ? state.byId.get(state.cluster) : null;
-  if (root) { ab.style.display = "flex"; ab.innerHTML = `<b>${esc(root.label)}</b><span class="mode">· ${inC ? "PODIUM COIL" : "3D"} ·</span>` + (inC ? `<button data-go="list" title="the same names as a plain ordered list, on the card">≡ LIST</button>` : "") + `<button data-go="back" title="Esc does the same">← BACK TO THE CANVAS</button>`; }
+  const ab = $("areabar"), root = inA && state.cluster ? state.byId.get(state.cluster) : null, pm = m3 && m3.podiumMode ? m3.podiumMode() : "3d";
+  // T7: inside the podium the top bar carries FROM ABOVE | PODIUM 3D (standing is the default when a podium opens)
+  if (root) { ab.style.display = "flex"; ab.innerHTML = `<b>${esc(root.label)}</b><span class="mode">· ${inC ? "PODIUM COIL" : "3D"} ·</span>` + (inC ? `<span class="seg" id="podium-seg" title="PODIUM 3D: standing Geiger columns on a spiral ramp, drag to turn · FROM ABOVE: the flat spiral seen from above"><button data-go="above"${pm === "above" ? ' class="on"' : ""}>FROM ABOVE</button><button data-go="3d"${pm !== "above" ? ' class="on"' : ""}>PODIUM 3D</button></span><button data-go="list" title="the same names as a plain ordered list, on the card">≡ LIST</button>` : "") + `<button data-go="back" title="Esc does the same">← BACK TO THE CANVAS</button>`; }
   else { ab.style.display = "none"; ab.innerHTML = ""; }
+  if (state.view !== "outline") paintLists();
 }
 $("areabar").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.go === "above" || b.dataset.go === "3d") { if (m3) m3.setPodium(b.dataset.go); return; }
   if (b.dataset.go === "back") closeArea();
   else if (b.dataset.go === "list") { const root = state.byId.get(state.cluster); if (root) { state.selected = root.id; renderCard(root); crumbs(); } }
 });
@@ -688,6 +756,8 @@ state.openArea = (id) => { const n = state.byId.get(id); if (n) return openArea(
 state.closeArea = () => closeArea();
 state.openCluster = state.openArea; state.closeCluster = state.closeArea;
 state.openCoil = (id) => { const n = state.byId.get(id); if (n) return openCoil(n); };
+state.openList = (id) => openList(id); state.setPodium = (m) => { if (m3) m3.setPodium(m); }; state.podiumMode = () => (m3 ? m3.podiumMode() : null); // T7
+if (p.get("list")) setTimeout(() => openList(p.get("list")), 400);
 state.setDetail = (m) => setDetail(m); state.setOrder = (o) => setOrder(o);
 state.showOnTree = (id) => { const n = state.byId.get(id); if (n) showOnTree(n); };
 state.outlineOrder = (id) => [...document.querySelectorAll(`[data-kids="${CSS.escape(id)}"] > .row, [data-kids="${CSS.escape(id)}"] > .kids > .row`)].map((r) => r.dataset.id);

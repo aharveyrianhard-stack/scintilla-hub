@@ -48,6 +48,7 @@ function treeCpu() {
 }
 const taskTime = async () => (await send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value;
 await send("Page.enable"); await send("Performance.enable"); await send("Runtime.enable");
+if (process.env.PROOF_INIT) await send("Page.addScriptToEvaluateOnNewDocument", { source: process.env.PROOF_INIT }); // T7: plant this browser's storage (the Hub's list mirrors) before the page's own scripts run
 await send("Page.navigate", { url });
 for (let i = 0; i < 80; i++) { await sleep(500); if (await evaluate("!!(window.__mm && __mm.ready)")) break; }
 for (let i = 0; i < 80; i++) { if (await evaluate("!!(window.__mm && (__mm.view === 'outline' || __mm.screenOf))")) break; await sleep(300); } // T6: the 3D module is mounted before the walk starts (paused is true before it mounts)

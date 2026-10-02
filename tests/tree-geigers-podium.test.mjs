@@ -24,7 +24,7 @@ test("1 · Geigers in CLEAN: every kept node is drawn as a box = its bar (a floo
   assert.match(M3, /ballMeshes\.forEach\(\(m\) => \{ m\.visible = !on && !cluster; \}\)/, "the balls go in CLEAN");
   assert.match(M3, /kind: n\.kind === "cohort" \? \(clean \? "fund" : "index"\)/, "in CLEAN a cohort is a leaf of its parent");
   assert.match(M3, /sp: CLEAN_SP, row: CLEAN_ROW, minW: CLEAN_MINW, wrapMin:/);
-  assert.match(M3, /const tries = c\.bx \? \[-n\.lbl\.h \/ 2, c\.bx\.h \/ 2 \+ 2\]/, "the name sits on the box");
+  assert.match(M3, /: c\.bx \? \[-n\.lbl\.h \/ 2, c\.bx\.h \/ 2 \+ 2\]/, "the name sits on the box (T7: the standing column's case comes first on the same line)");
   assert.match(M3, /if \(boxRects\.length\) \{/, "boxes are picked by their rectangles");
   assert.ok(PAGE.includes("CLEAN: every box IS its Geiger bar with the name on it"), "the KEY says so");
   // the layout module: {sp, row, minW, wrapMin, k} change the picture only when asked
@@ -57,7 +57,7 @@ test("2 · the PODIUM coil: one spiral of Geiger bars, the highest reading at th
   assert.match(M3, /withV\.forEach\(\(x, i\) => \{ const \{ th, r \} = spiralAt\(i\); put\(x\.n, r \* Math\.cos\(th\), x\.v \* H, r \* Math\.sin\(th\)\); \}\)/, "height = the reading");
   assert.match(M3, /const coilBarMat = mkBarMat\(/, "the podium's names are bars");
   assert.match(M3, /const bm = new THREE\.Mesh\(barGeometry\(cb\), coilBarMat\)/);
-  assert.match(M3, /const zeroR = flip > 0 \? spiralAt\(flip - 0\.5\)\.r/, "the zero line is the ring where green turns to red");
+  assert.match(M3, /zeroR = flip > 0 \? spiralAt\(flip - 0\.5\)\.r/, "the zero line is the ring where green turns to red (T7: in the FROM ABOVE picture; standing, the ramp is the zero line)");
   assert.match(M3, /if \(cluster && cluster\.coil && n\.kind === "name" && onTree\) \{ onTree\(n\); return; \}/, "click = that name on the tree");
   assert.match(PAGE, /onTree: \(n\) => showOnTree\(n\)/);
   assert.match(PAGE, /data-crumb="__list"/); assert.match(PAGE, /<button data-go="list"[^>]*>≡ LIST<\/button>/, "≡ LIST on the top bar too");
