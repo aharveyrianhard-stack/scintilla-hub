@@ -96,7 +96,7 @@ test("the embedded tabs are not reloaded when the company payload lands, and nev
   assert.match(clickCase("cotab"), /S\.coTab !== "GEIGER" && !CO_FRAME_TABS\.has\(S\.coTab\) && !heavyReady/);
 });
 
-test("EXPAND hides the board and gives the company the full width; COLLAPSE restores it; remembered per browser", () => {
+test("EXPAND hides the board and gives the company the full width; COLLAPSE restores it; a choice per visit, never remembered (H7, 2 Oct)", () => {
   const head = page.slice(0, page.indexOf("</head>"));
   assert.match(head, /body\.co-exp #boardPanel\{display:none !important\}/);
   assert.match(head, /body\.co-exp \.sc-body2\{grid-template-columns:minmax\(0,1fr\) !important\}/);
@@ -113,18 +113,19 @@ test("EXPAND hides the board and gives the company the full width; COLLAPSE rest
   const e = { preventDefault() {}, stopPropagation() {} };
   kit.click(e);
   assert.ok(cls.has("co-exp"), "expanded: the board hides");
-  assert.equal(saved["hub.company.expanded"], "1");
+  assert.deepEqual(saved, {}, "H7 — nothing is written to the browser: EXPAND is pressed per visit (Alan, 2 Oct: a ticker click must open the right-side view, never the expanded state)");
   assert.match(btn.outerHTML, />COLLAPSE</);
   kit.click(e);
   assert.ok(!cls.has("co-exp"), "collapsed: the board is back");
-  assert.equal(saved["hub.company.expanded"], "0");
+  assert.deepEqual(saved, {});
   assert.match(btn.outerHTML, />EXPAND</);
-  /* expanded is remembered but only applies while a company is pinned: never an empty pane over a hidden board */
+  /* the choice only applies while a company is pinned: never an empty pane over a hidden board */
   kit.click(e); env.LEFT_STATE = "AUTO"; kit.apply();
   assert.ok(!cls.has("co-exp"), "no company pinned → the board is never hidden");
   env.LEFT_STATE = "PINNED"; kit.apply();
   assert.ok(cls.has("co-exp"), "pin again → it comes back expanded");
-  assert.match(page, /^let CO_EXPANDED = lsGet\(CO_EXP_KEY\) === "1";/m, "read from the browser at load");
+  assert.match(page, /^let CO_EXPANDED = false;/m, "H7 — never read from the browser at load: every page load, and every fresh open (openCo), starts collapsed");
+  assert.doesNotMatch(page, /lsGet\(CO_EXP_KEY\)/);
   assert.match(fn("renderLeftPanel"), /coExpandApply\(\);/, "every left-panel paint re-applies it");
   assert.match(fn("cvLineHTML"), /coExpandBtnHTML\(\)/, "the control sits at the end of the company line (D2)");
 });
