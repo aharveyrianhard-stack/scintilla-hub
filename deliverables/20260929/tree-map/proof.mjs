@@ -50,6 +50,7 @@ const taskTime = async () => (await send("Performance.getMetrics")).metrics.find
 await send("Page.enable"); await send("Performance.enable"); await send("Runtime.enable");
 await send("Page.navigate", { url });
 for (let i = 0; i < 80; i++) { await sleep(500); if (await evaluate("!!(window.__mm && __mm.ready)")) break; }
+for (let i = 0; i < 80; i++) { if (await evaluate("!!(window.__mm && (__mm.view === 'outline' || __mm.screenOf))")) break; await sleep(300); } // T6: the 3D module is mounted before the walk starts (paused is true before it mounts)
 const settle = async () => { for (let i = 0; i < 60; i++) { await sleep(300); if (await evaluate("!!(window.__mm && __mm.paused)")) return; } };
 await settle();
 const stateNow = () => evaluate("JSON.stringify({view:__mm.view,area:__mm.cluster||null,areaCount:__mm.clusterCount||null,canvas:!!__mm.canvas,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length,detail:__mm.detail,order:__mm.order,hidden:__mm.hidden?__mm.hidden().length:null,shown:__mm.shownKinds?__mm.shownKinds():null,folds:__mm.folds?Object.keys(__mm.folds()).length:null,chips:__mm.chipsDrawn?__mm.chipsDrawn():null,sections:__mm.sectionsWithChip?__mm.sectionsWithChip():null,coil:__mm.coilOrder||null})").then(JSON.parse);
@@ -78,6 +79,7 @@ for (const s of steps) {
     log.push({ key: s.key, after: await stateNow() });
   }
   if (s.state) log.push({ state: await stateNow() });
+  if (s.probe) log.push({ probe: s.probe, value: JSON.parse(await evaluate(`JSON.stringify((() => (${s.probe}))())`) || "null") }); // T6: any page fact, logged (an expression)
   if (s.area) { await evaluate(`__mm.openArea(${JSON.stringify(s.area)})`); await sleep(1800); await settle(); log.push({ area: s.area, after: await stateNow() }); }
   if (s.back) { const before = await evaluate("JSON.stringify(__mm.pose ? __mm.pose() : null)"); await evaluate(`__mm.closeArea()`); await sleep(1400); await settle(); log.push({ back: true, after: await stateNow(), pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose ? __mm.pose() : null)")) }); }
   if (s.pan) { await evaluate(`__mm.panBy(${+s.pan[0]}, ${+s.pan[1]})`); await sleep(500); await settle(); log.push({ pan: s.pan, pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) }); }
@@ -110,6 +112,7 @@ for (const s of steps) {
   if (s.shot) {
     const params = { format: "png" };
     if (s.full) { const m = await send("Page.getLayoutMetrics"); const cs = m.cssContentSize || m.contentSize; params.captureBeyondViewport = true; params.clip = { x: 0, y: 0, width: +width, height: Math.ceil(cs.height), scale: 1 }; }
+    if (s.clip) params.clip = { x: s.clip[0], y: s.clip[1], width: s.clip[2], height: s.clip[3], scale: s.clip[4] || 2 }; // T6: a zoomed crop, to look closely
     const shot = await send("Page.captureScreenshot", params);
     writeFileSync(s.shot, Buffer.from(shot.data, "base64"));
     const dims = JSON.parse(await evaluate("JSON.stringify({sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth})"));

@@ -45,8 +45,8 @@ test("the renderer sizes for any device scale: CSS size = the box, buffer = CSS 
   assert.doesNotMatch(M3, /renderer\.setSize\(view\.w, view\.h, false\)/);
   assert.match(M3, /const dprNow = \(\) => Math\.max\(1, Math\.min\(3, devicePixelRatio \|\| 1\)\)/);
   assert.match(M3, /watchScale/, "a window moved between screens re-fits");
-  assert.match(M3, /sx: \(V\.x \+ 1\) \* view\.w \/ 2, sy: \(1 - V\.y\) \* view\.h \/ 2/, "labels are projected in CSS px from the same view size");
-  assert.match(PAGE, /drag to pan · scroll to zoom · click an area to lift it into 3D/);
+  assert.match(M3, /const sx = \(V\.x \+ 1\) \* view\.w \/ 2, sy = \(1 - V\.y\) \* view\.h \/ 2/, "labels are projected in CSS px from the same view size");
+  assert.match(PAGE, /drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section/); // T6: the hint names the button
 });
 
 test("the headless navigation run at device scale 1 AND 2, 1680 and 390: every label within a few pixels of its node, the canvas CSS size is the box and the buffer is CSS × scale, the pose restored after back", () => {
