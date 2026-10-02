@@ -60,33 +60,31 @@ test("3 · order: inside every parent the children run green → red by reading,
   assert.match(M3, /the ring runs green → red by the neighbour's reading/);
 });
 
-test("4 · the coil: beads by reading (height = reading, angle = rank from the base), greens up to the top tip, reds down to the bottom tip mirrored, colour = the reading; a cohort of more than 24 names opens into it; the list is one click away", () => {
+test("4 · the coil (T6: the PODIUM — one spiral of Geiger bars, height = reading, rank = place along the spiral, colour = the reading); a cohort of more than 24 names opens into it; the list is one click away", () => {
   assert.match(M3, /const COIL_MIN = 24;/);
   assert.match(M3, /const coilWorthy = \(n\) => n\.kind === "cohort" && beneathNames\(n\)\.length > COIL_MIN/);
   assert.match(M3, /if \(coilWorthy\(n\)\) enterCoil\(n\); else enterArea\(n\)/);
-  assert.match(M3, /put\(x\.n, r \* Math\.cos\(a\), x\.v \* H, r \* Math\.sin\(a\)\)/, "height is the reading");
-  assert.match(M3, /ups\.slice\(\)\.reverse\(\)\.forEach\(\(x, i\) => place\(x, i, 1\)\)/, "the greens wind from the base up");
-  assert.match(M3, /dns\.forEach\(\(x, i\) => place\(x, i, -1\)\)/, "the reds wind from the base down, mirrored");
-  assert.match(M3, /GREYC\.clone\(\)\.lerp\(x\.v >= 0 \? UPC : DNC, k\)/, "colour is the reading");
+  assert.match(M3, /put\(x\.n, r \* Math\.cos\(th\), x\.v \* H, r \* Math\.sin\(th\)\)/, "height is the reading");
+  assert.match(M3, /GREYC\.clone\(\)\.lerp\(x\.v >= 0 \? UPC : DNC, 0\.35 \+ 0\.65/, "the thread's colour is the reading");
   assert.match(PAGE, /data-crumb="__list"/, "≡ LIST on the crumbs");
   assert.match(PAGE, /data-coil="\$\{esc\(n\.id\)\}"/, "the card opens the coil for any parent");
   assert.match(M3, /if \(n\.kind === "name" && \(cluster && cluster\.coil\)\) s \+= `<br><span style='color:#8c8c8c'>\$\{esc\(pathWords\(n\)\)\}<\/span>`/, "hover = the path");
 });
 
-test("5 · 3D per section: every section heading carries a 3D chip on the canvas; the chip lifts only that section; the header 3D stays", () => {
+test("5 · 3D per section: every section heading carries its OPEN 3D button on the canvas (T6); the button lifts only that section; the whole-map 3D button lives in the KEY", () => {
   assert.match(M3, /const isSection = \(n\) => n\.kind === "index" && n\.id !== "MARKET" && !primaryKids\(n\.id\)\.some\(\(c\) => c\.kind === "index"\)/);
   assert.match(M3, /const chip = state\.canvas && !cluster && isSection\(n\);/);
-  assert.match(M3, /labelLayer\.addEventListener\("click"[^\n]*\.lb3d[^\n]*enterArea\(n\)/);
+  assert.match(M3, /labelLayer\.addEventListener\("click"[\s\S]{0,600}?\.lb3d[\s\S]{0,400}?enterArea\(n\)/);
   assert.match(PAGE, /\.lb \.lb3d\{pointer-events:auto/);
   assert.match(PAGE, /<button id="v-3d"/);
 });
 
-test("6 · names of things: a sentence per heading, STYLE · FACTOR included; the old Hub tabs as a small grey tag; SIC, FMP industry and the disagreement flag on every name's card", () => {
+test("6 · names of things: a sentence per heading, STYLE · FACTOR included; the old Hub tabs as a small grey tag; SIC and FMP industry on every name's card (T6: the disagreement flag is gone — Alan: \"that's our job\")", () => {
   assert.match(PAGE, /US_STYLE: "Funds that slice the market by style — growth, value, momentum, quality, size — instead of by industry\."/);
   const IND = JSON.parse(readFileSync(join(DIR, "industry-20261002.json"), "utf8"));
   assert.ok(IND.counts.with_fmp_industry >= 440 && IND.counts.with_sic >= 90 && IND.counts.with_disagreement >= 60, JSON.stringify(IND.counts));
-  assert.equal(IND.rows.NVDA.sic_code, "3674"); assert.equal(IND.rows.NVDA.fmp_industry, "Semiconductors"); assert.ok(IND.rows.NVDA.disagreement);
-  assert.match(PAGE, /industryHTML\(n\)/); assert.match(PAGE, /the two authorities differ/);
+  assert.equal(IND.rows.NVDA.sic_code, "3674"); assert.equal(IND.rows.NVDA.fmp_industry, "Semiconductors"); assert.ok(IND.rows.NVDA.disagreement, "the data still records it; the page no longer prints it");
+  assert.match(PAGE, /industryHTML\(n\)/); assert.doesNotMatch(PAGE, /the two authorities differ/);
   assert.match(PAGE, /class="tag hub"[^\n]*hub tab:/, "the old Hub tab is a small grey tag");
   assert.doesNotMatch(PAGE, /board ≠ adopted`/, "the stamp no longer counts the board differences");
 });
