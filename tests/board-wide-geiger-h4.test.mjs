@@ -36,16 +36,18 @@ test("full screen: 14 columns (TREND and MOMENTUM as bars, READ in words, the Ge
   assert.doesNotMatch(css.match(/\.gwx-tmb i\{[^}]*\}/)[0], /box-shadow/, "a plain fill: the glow is the Geiger's alone");
 });
 
-test("TREND and MOMENTUM carry sort keys and re-rank by what the board shows (a rewound day included); absent sorts lowest", () => {
+test("TREND and MOMENTUM carry sort keys and re-rank by what the board shows (a rewound day included); absent sorts last both ways (S7)", () => {
   const cols = new Function("return " + page.match(/const BOARD_COLS = (\[[^\n]*\]);/)[1])();
   assert.deepEqual(cols.slice(8, 11), [["Trend", "tr"], ["Momentum", "mo"], ["Read", null]]);
   const rows = [{ t: "A" }, { t: "B" }, { t: "C" }, { t: "D" }];
-  const order = (key, dir, win) => new Function("S", "window", "num", fn("boardSortValue") + fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
+  const order = (key, dir, win) => new Function("S", "window", "num", fn("boardSortValue") + fn("boardSortNumber") + fn("computeBoardOrder") + "\nreturn computeBoardOrder();")(
     { sort: { key, dir }, rows }, Object.assign({ SC_RANK_READY: true }, win), num);
   const live = { A: { tr: 0.2, mo: -0.5 }, B: { tr: 0.9, mo: 0.1 }, C: { tr: -0.4, mo: 0.8 } };
   assert.deepEqual(order("tr", -1, { SCIN_TM: live }), ["B", "A", "C", "D"]);
   assert.deepEqual(order("mo", -1, { SCIN_TM: live }), ["C", "B", "A", "D"]);
-  assert.deepEqual(order("mo", 1, { SCIN_TM: live }), ["D", "A", "B", "C"], "ascending: the name with no reading first");
+  /* S7 (2 Oct): empty last on every column in BOTH directions (the coordinator's call after F1's RVOL); before, "absent = lowest"
+     led an ascending sort with the names that had no reading */
+  assert.deepEqual(order("mo", 1, { SCIN_TM: live }), ["A", "B", "C", "D"], "ascending: the name with no reading still last");
   const shown = { A: { tr: 1, mo: 0 }, B: { tr: 0, mo: 0 }, C: { tr: 0.5, mo: 0 }, D: null };
   assert.deepEqual(order("tr", -1, { SCIN_TM: live, SCIN_TM_SHOWN: shown }), ["A", "C", "B", "D"], "the numbers on screen win");
   assert.match(fn("computeBoardOrder"), /if \(key !== "t" && !window\.SC_RANK_READY\)/, "still no ranking before an authoritative snapshot");

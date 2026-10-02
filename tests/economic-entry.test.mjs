@@ -11,7 +11,9 @@ test("direct entry: #economic and #calendar open ECONOMIC; anything else keeps t
   for (const h of ["#economic", "#ECONOMIC", "#calendar", "#Calendar"]) assert.equal(entry(h), "ECONOMIC", h);
   for (const h of ["", "#", "#dashboard", "#economics", "#economic/x", "#news"]) assert.equal(entry(h), null, JSON.stringify(h));
   assert.equal(new Function(fnSrc("scEntryRoom") + "return scEntryRoom();")(), null, "no location at all (tests, workers) is harmless");
-  assert.match(page, /const S = \{\n  sec: scEntryRoom\(\) \|\| "DASHBOARD", coh: "FAV",/, "the default landing is still DASHBOARD");
+  /* S7 (2 Oct): the board's default scope is now ★ FAVORITES (Alan: "default to the FAVORITES from now on instead of LIKED");
+     the room is still DASHBOARD. The fallback to LIKED / ALL is tested in tests/hub-s7-favorites-default-20261002.test.mjs. */
+  assert.match(page, /const S = \{\n  sec: scEntryRoom\(\) \|\| "DASHBOARD", coh: "FAVORITES",/, "the default landing is still DASHBOARD");
 });
 test("direct entry: one hashchange listener, which switches only to a room scEntryRoom names (ECONOMIC, and since 23 Sep SENTIMENT)", () => {
   const n = (page.match(/addEventListener\("hashchange"/g) || []).length;
