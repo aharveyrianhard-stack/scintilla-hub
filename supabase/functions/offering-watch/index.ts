@@ -9,9 +9,14 @@
 // Modes:  POST /offering-watch?mode=backfill&from=YYYY-MM-DD&to=YYYY-MM-DD   history; writes NO alert_log rows.
 //                                                                           Stops near its time budget and answers
 //                                                                           next_from — call again from there.
-//         POST /offering-watch?mode=pass                                     the previous weekday + today (New York):
-//                                                                           also ONE alert_log row per filing seen
-//                                                                           for the first time (kind offering_filed).
+//         POST /offering-watch?mode=pass                                     the previous weekday + today (New York).
+//                                                                           Writes NO alert_log rows: Alan, 2 Oct —
+//                                                                           "before alerts, things need to have a home
+//                                                                           on hub … when it has a home, it can feed
+//                                                                           alerts." The home is the company view's
+//                                                                           CAPITAL & DILUTION block; the alert path was
+//                                                                           removed (classify.mjs keeps the severity map
+//                                                                           and the message builder, not called yet).
 //         &reclassify=1 (backfill only)                                     re-read stored filings and update their class
 //
 // The FMP key is read from public.app_config with the service-role client, the way fmp-analyst reads it. It is never
@@ -24,7 +29,7 @@
 // sec_refused + next_from; the next run reads them (a filing is only stored once it has been read).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { FORMS, HEAD_BYTES, HEAD_BYTES_MAX, HEAD_CHARS, VERSION, alertRow, classify, cleanHtml, filingFromFmp, passDays,
+import { FORMS, HEAD_BYTES, HEAD_BYTES_MAX, HEAD_CHARS, VERSION, classify, cleanHtml, filingFromFmp, passDays,
   weekdays } from "./classify.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -127,7 +132,7 @@ Deno.serve(async (req) => {
 
     const out: any = { ok: true, version: VERSION, mode, universe: uni.size, from: days[0], to: days[days.length - 1],
       days_done: 0, fmp_calls: 0, fmp_rows: 0, universe_hits: 0, already_stored: 0, sec_reads: 0, written: 0,
-      alerts_written: 0, classes: {}, new_rows: [], errors: [], next_from: null, sec_refused: false,
+      classes: {}, new_rows: [], errors: [], next_from: null, sec_refused: false,
       region: Deno.env.get("SB_REGION") || null };
 
     for (const day of days) {
@@ -192,12 +197,6 @@ Deno.serve(async (req) => {
       for (const r of inserted) {
         out.classes[r.class] = (out.classes[r.class] || 0) + 1;
         if (out.new_rows.length < 200) out.new_rows.push({ ticker: r.ticker, form: r.form, filed_date: r.filed_date, class: r.class, size_text: r.size_text });
-      }
-      // 5 · pass mode only: one alert_log row per filing seen for the first time (the brief's one exception)
-      if (mode === "pass" && inserted.length) {
-        const alerts = inserted.map((r) => alertRow(r, Date.now()));
-        const { error } = await sb.from("alert_log").insert(alerts);
-        if (error) out.errors.push(`alert_log ${day}: ${error.message}`); else out.alerts_written += alerts.length;
       }
       out.days_done++;
     }

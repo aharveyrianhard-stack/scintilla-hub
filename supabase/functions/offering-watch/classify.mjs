@@ -20,7 +20,9 @@ export const VERSION = "offering-watch-v1";
 export const FORMS = ["424B5", "424B4", "S-3", "S-3ASR", "S-1"];
 export const CLASSES = ["EQUITY", "CONVERTIBLE", "ATM", "DEBT", "UNCLASSIFIED"];
 /** alert_log severity by class (the brief: EQUITY/CONVERTIBLE/ATM high, DEBT low/info, UNCLASSIFIED medium).
- *  alert_log already uses high / medium / info — DEBT takes "info". */
+ *  alert_log already uses high / medium / info — DEBT takes "info".
+ *  NOT CALLED YET (Alan, 2 Oct: the filings get a home first — the company view's CAPITAL & DILUTION block; "when it has
+ *  a home, it can feed alerts"). index.ts writes no alert_log rows; this map and alertRow() wait for that decision. */
 export const SEVERITY = { EQUITY: "high", CONVERTIBLE: "high", ATM: "high", DEBT: "info", UNCLASSIFIED: "medium" };
 export const HEAD_BYTES = 61440;        // the first ~60 KB of the document
 export const HEAD_BYTES_MAX = 245760;   // a cover drowned in markup may read on to 240 KB (same request, still streamed)
@@ -223,7 +225,7 @@ export function filingFromFmp(r, universe) {
 export function alertMessage(row) {
   return [row.form, row.class, row.size_text || "size not printed on the cover", "filed " + row.filed_date, row.url].join(" · ");
 }
-/** the alert_log row for a filing seen for the first time (pass mode only) */
+/** the alert_log row for a filing seen for the first time — not called yet (see SEVERITY) */
 export function alertRow(row, nowMs) {
   const at = row.accepted_utc ? Date.parse(row.accepted_utc) : NaN;
   return { ticker: row.ticker, kind: "offering_filed", severity: SEVERITY[row.class] || "medium", message: alertMessage(row),

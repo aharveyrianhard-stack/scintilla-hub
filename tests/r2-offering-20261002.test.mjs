@@ -1,7 +1,9 @@
 /* R2 Part A (2 Oct 2026) — THE OFFERING ALERT. Alan, 2 Oct (pasted notes): "dilution announcements".
    offering-watch (supabase/functions/offering-watch) lists every 424B5 / 424B4 / S-3 / S-3ASR / S-1 a Hub stock files,
-   reads the first ~60 KB at the SEC and sorts it EQUITY / CONVERTIBLE / ATM / DEBT / UNCLASSIFIED (classify.mjs); the Hub
-   shows it in the ALERTS room, the company EVENTS tab and as a ◆ beside the ticker on the board.
+   reads the first ~60 KB at the SEC and sorts it EQUITY / CONVERTIBLE / ATM / DEBT / UNCLASSIFIED (classify.mjs). Its home
+   on the Hub is the company view's FINANCIALS tab, a CAPITAL & DILUTION block with the cash on hand and the last four
+   quarters of capex beside the filings (Alan, 2 Oct: "before alerts, things need to have a home on hub"). No alert_log
+   rows, no ALERTS-tab section, no board mark — those were built and removed the same evening.
    Everything here runs on fixtures — the opening text of 30 real filings (tests/fixtures/r2-offering-20261002.json) and
    the page's own functions pulled out of index.html. No network. */
 import { test } from "node:test";
@@ -100,7 +102,7 @@ test("an FMP row becomes a table row only for a Hub stock with an SEC document l
   assert.equal(C.filingFromFmp({ ...fmp, finalLink: "" }, uni).url, fmp.link);
 });
 
-test("alert rows (pass mode only): severity by class as the brief sets it; the message carries form, class, size, date and the SEC link", () => {
+test("the alert row, kept for later and NOT called (alerts wait for the home): severity by class as the brief set it, the message", () => {
   assert.deepEqual(C.SEVERITY, { EQUITY: "high", CONVERTIBLE: "high", ATM: "high", DEBT: "info", UNCLASSIFIED: "medium" });
   const row = { ticker: "ZETA", form: "424B5", class: "EQUITY", size_text: "Up to $25,000,000", filed_date: "2026-09-11",
     accepted_utc: "2026-09-11T20:05:00.000Z", url: "https://www.sec.gov/Archives/edgar/data/1851003/000119312526389369/zeta-20260911.htm" };
@@ -112,7 +114,7 @@ test("alert rows (pass mode only): severity by class as the brief sets it; the m
   assert.equal(C.alertRow({ ...row, class: "DEBT" }, 0).severity, "info");
 });
 
-test("the function: key from app_config with the service role, never printed; /stable/ routes; the SEC agent; alert_log only in pass mode", () => {
+test("the function: key from app_config with the service role, never printed; /stable/ routes; the SEC agent; NO alert_log write", () => {
   assert.match(fnSrc, /from\("app_config"\)\.select\("key,value"\)\.in\("key", \["FMP_KEY"\]\)/);
   assert.match(fnSrc, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(fnSrc, /console\.(log|error|warn)/);                                   // nothing logged at all
@@ -120,78 +122,75 @@ test("the function: key from app_config with the service role, never printed; /s
   for (const m of fnSrc.matchAll(/financialmodelingprep\.com\/(\w+)\//g)) assert.equal(m[1], "stable");
   assert.match(fnSrc, /"ScintillaHub research research@scintillahub\.ai"/);
   assert.match(fnSrc, /SEC_GAP_MS = 260/);                                                   // ≤ 4 requests a second
-  const alertWrites = [...fnSrc.matchAll(/from\("alert_log"\)/g)];
-  assert.equal(alertWrites.length, 1);
-  const at = fnSrc.indexOf('from("alert_log")');
-  assert.match(fnSrc.slice(at - 260, at), /if \(mode === "pass" && inserted\.length\)/);
+  assert.equal((fnSrc.match(/from\("alert_log"\)/g) || []).length, 0);                    // Alan, 2 Oct: alerts come later
+  assert.ok(!/\balertRow\b/.test(fnSrc));
+  assert.equal((fnSrc.match(/\.from\("(\w+)"\)/g) || []).filter((x) => !/app_config|tickers|company_profile|offering_filings/.test(x)).length, 0);
   assert.match(fnSrc, /x-region: us-west-2/);                                                // the SEC wall is written down where it bites
   assert.match(fnSrc, /\.upsert\(rows, \{ onConflict: "url", ignoreDuplicates: true \}\)/);  // a filing is filed once
   for (const f of ["424B5", "424B4", "S-3", "S-3ASR", "S-1"]) assert.ok(C.FORMS.includes(f));
 });
 
-/* ── the Hub ──────────────────────────────────────────────────────────────────────────────────────────── */
+/* ── the Hub: CAPITAL & DILUTION in FINANCIALS ─────────────────────────────────────────────────────────── */
 const grab = (re) => { const m = page.match(re); assert.ok(m, "not found in index.html: " + re); return m[0]; };
 const hubSrc =
   grab(/const esc = \(s\) => String[\s\S]*?&#39;"\);/) + "\n" +
-  grab(/const OF_ROOM_DAYS = [\s\S]*?\nfunction ofBoardPass\(\) \{[\s\S]*?\n\}/) + "\n";
-function hub(today) {
-  const ctx = { S: { sec: "ALERTS" }, todayISO: () => today, el: () => null, pg: async () => [], document: undefined, console };
+  grab(/const OF_TTL_MS = [\s\S]*?\nfunction ofCapFill\(t, balq\) \{[\s\S]*?\n\}/) + "\n";
+function hub() {
+  const ctx = { el: () => null, pg: async () => [], console };
   vm.createContext(ctx); vm.runInContext(hubSrc + "\nthis.OF = OF;", ctx); return ctx;
 }
 const R = (o) => ({ ticker: "CRWV", form: "424B5", filed_date: "2026-09-17", accepted_utc: null, class: "ATM",
   sentence: "sell up to 35,000,000 shares of our Class A common stock … under an Equity Distribution Agreement", size_text: "Up to 35,000,000 shares",
   url: "https://www.sec.gov/Archives/edgar/data/1769628/000162828026062362/coreweave-424b5.htm", ...o });
+const CFQ = [{ period: "Q2", fiscal_year: 2026, fiscal_date: "2026-06-30", capex: -6422000000 }, { period: "Q1", fiscal_year: 2026, fiscal_date: "2026-03-31", capex: -7695000000 },
+  { period: "Q4", fiscal_year: 2025, fiscal_date: "2025-12-31", capex: -4060000000 }, { period: "Q3", fiscal_year: 2025, fiscal_date: "2025-09-30", capex: -2388888000 }];
+const BALQ = { period: "Q2", fiscal_date: "2026-06-30", cash_and_equiv: 6397000000 };
 
-test("Hub · the board ◆: EQUITY / CONVERTIBLE / ATM within 10 days only; hover = class · size · date", () => {
-  const h = hub("2026-09-24");
-  const rows = [R({}), R({ ticker: "KR", class: "DEBT", filed_date: "2026-09-23" }), R({ ticker: "ZETA", class: "EQUITY", filed_date: "2026-09-11", size_text: "Up to $25,000,000" })];
-  const m = h.ofMarkHTML("CRWV", rows, "2026-09-24");
-  assert.match(m, /class="of-mark of-atm"/); assert.match(m, /title="ATM · Up to 35,000,000 shares · Sep 17, 2026 · 424B5/); assert.match(m, />◆</);
-  assert.equal(h.ofMarkHTML("KR", rows, "2026-09-24"), "");                        // bonds: no mark
-  assert.equal(h.ofMarkHTML("ZETA", rows, "2026-09-24"), "");                      // 13 days old: no mark
-  assert.match(h.ofMarkHTML("ZETA", rows, "2026-09-21"), /of-equity/);            // 10 days old: still marked
-  assert.equal(h.ofMarkHTML("NVDA", rows, "2026-09-24"), "");
+test("Hub · one filing row reads date · form · class chip · size, then the deciding sentence and the SEC link (sec.gov only, escaped)", () => {
+  const h = hub();
+  const html = h.ofRowHTML(R({ sentence: 'say "<b>hi</b>"' }));
+  assert.match(html, /<span class="of-date">Sep 17, 2026<\/span><span class="of-meta">424B5<\/span><span class="of-chip of-atm" title="shares sold over time \(at-the-market\)">ATM<\/span><span class="of-size">Up to 35,000,000 shares<\/span>/);
+  assert.match(html, /“say &quot;&lt;b&gt;hi&lt;\/b&gt;&quot;” <a class="of-sec" href="https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/1769628\/000162828026062362\/coreweave-424b5\.htm"/);
+  assert.ok(!h.ofRowHTML(R({ url: "javascript:alert(1)" })).includes("href="));
+  assert.match(h.ofRowHTML(R({ sentence: null, size_text: null })), /size not printed on the cover[\s\S]*no deciding sentence/);
+  for (const c of ["EQUITY", "CONVERTIBLE", "ATM", "DEBT", "UNCLASSIFIED"]) assert.match(h.ofChipHTML(c), new RegExp('class="of-chip of-' + c.toLowerCase() + '"[^>]*>' + c + "<"));
+  assert.match(h.ofChipHTML("NONSENSE"), /UNCLASSIFIED/);
 });
 
-test("Hub · a filing row: chip, size, form and date, the quoted sentence, an SEC link only to sec.gov, everything escaped", () => {
-  const h = hub("2026-10-02");
-  const html = h.ofRowHTML(R({ sentence: 'say "<b>hi</b>"' }), true);
-  assert.match(html, /<span class="of-chip of-atm" title="shares sold over time \(at-the-market\)">ATM<\/span>/);
-  assert.match(html, /data-tkopen="CRWV"/); assert.match(html, /Up to 35,000,000 shares/); assert.match(html, /424B5 · filed Sep 17, 2026/);
-  assert.match(html, /href="https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/1769628\/000162828026062362\/coreweave-424b5\.htm"/);
-  assert.ok(!html.includes("<b>hi</b>")); assert.match(html, /&lt;b&gt;hi&lt;\/b&gt;/);
-  assert.ok(!h.ofRowHTML(R({ url: "javascript:alert(1)" }), true).includes("href="));
-  assert.match(h.ofRowHTML(R({ sentence: null, size_text: null }), false), /size not printed on the cover[\s\S]*no deciding sentence/);
-  assert.ok(!h.ofRowHTML(R({}), false).includes("data-tkopen"));                  // the company tab does not repeat the ticker
+test("Hub · cash on hand and the last four quarters of capex, plain numbers, no projection", () => {
+  const h = hub();
+  const cash = h.ofCashHTML(BALQ, CFQ);
+  assert.match(cash, /CASH ON HAND<\/div><div class="of-v">\$6\.40B<\/div><div class="of-d">cash and equivalents · Jun 30, 2026 balance sheet/);
+  assert.match(cash, /<td>Q2·26<\/td><td>Jun 30, 2026<\/td><td>\$6\.42B<\/td>/);
+  assert.match(cash, /<td>Q3·25<\/td><td>Sep 30, 2025<\/td><td>\$2\.39B<\/td>/);
+  assert.match(cash, /the four together<\/td><td>\$20\.57B</);
+  assert.ok(!/dilution|runway|months|project/i.test(cash));                       // no model yet (a decision for Alan)
+  assert.match(h.ofCashHTML(null, []), /—<\/div>[\s\S]*no quarterly balance sheet stored[\s\S]*no quarterly cash-flow rows stored/);
+  assert.match(h.ofCashHTML(BALQ, null), /CAPITAL SPENDING · LAST 4 QUARTERS<\/div><div class="of-d">reading …/);
+  assert.ok(!h.ofCashHTML(BALQ, CFQ.slice(0, 2)).includes("the four together"));   // a sum only over four real quarters
+  assert.equal(h.ofMoney(850000000), "$850M"); assert.equal(h.ofMoney(null), "—"); assert.equal(h.ofMoney(-2.5e11), "$250B");
 });
 
-test("Hub · the ALERTS room: counts per class, newest first as given, honest reading / empty / error states", () => {
-  const h = hub("2026-10-02");
-  assert.match(h.ofRoomBodyHTML(null, null), /reading the filings/);
-  assert.match(h.ofRoomBodyHTML(null, "pg offering_filings → 500"), /could not read offering_filings — pg offering_filings → 500/);
-  assert.match(h.ofRoomBodyHTML([], null), /no offering filing by a Hub stock in the last 30 days/);
-  const body = h.ofRoomBodyHTML([R({}), R({ ticker: "AXON", class: "CONVERTIBLE" }), R({ ticker: "KR", class: "DEBT" }), R({ ticker: "SYY", class: "DEBT" })], null);
-  assert.match(body, /ATM<\/span><b>1<\/b>/); assert.match(body, /DEBT<\/span><b>2<\/b>/); assert.match(body, /EQUITY<\/span><b>0<\/b>/);
-  assert.ok(body.indexOf("CRWV") < body.indexOf("AXON") && body.indexOf("AXON") < body.indexOf(">KR<"));
-  assert.match(h.ofRoomHTML(), /alerts · offerings — dilution filings, last 30 days/);
+test("Hub · the block: reading, none since the record starts, the rows newest first as read, the legend", () => {
+  const h = hub();
+  assert.match(h.ofCapBodyHTML("NVDA", undefined, BALQ), /CAPITAL &amp; DILUTION[\s\S]*reading the filings/);
+  assert.match(h.ofCapBodyHTML("NVDA", { rows: [], cfq: [], at: 1 }, null), /no offering filing by \$NVDA since Jun 4, 2026 \(when the record starts\)/);
+  assert.match(h.ofCapBodyHTML("X", { rows: [], cfq: [], at: 1, err: "pg offering_filings → 500" }, null), /could not read offering_filings — pg offering_filings → 500/);
+  const b = h.ofCapBodyHTML("CRWV", { rows: [R({}), R({ filed_date: "2026-06-05", class: "UNCLASSIFIED", form: "S-3ASR" })], cfq: CFQ, at: 1 }, BALQ);
+  assert.ok(b.indexOf("Sep 17, 2026") < b.indexOf("Jun 5, 2026"));
+  assert.match(b, /<div class="of-grid"><div class="of-list">[\s\S]*<div class="of-cash">CASH|<div class="of-cash"><div class="of-k">CASH ON HAND/);
+  assert.match(b, /EQUITY new shares sold now · CONVERTIBLE notes that can turn into shares · ATM shares sold over time · DEBT bonds, no new shares/);
+  assert.match(h.ofCapSectionHTML({ t: "CRWV", _balq: BALQ }), /<section class="fn3-sec of-cap" id="ofCap_CRWV">/);
 });
 
-test("Hub · the company EVENTS list: reading, none since the record starts, the rows", () => {
-  const h = hub("2026-10-02");
-  assert.match(h.ofCoBodyHTML("NVDA", undefined), /reading the filings/);
-  assert.match(h.ofCoBodyHTML("NVDA", { rows: [], at: 1 }), /no offering filing by \$NVDA since Jun 4, 2026 \(when the record starts\)/);
-  assert.match(h.ofCoBodyHTML("CRWV", { rows: [R({})], at: 1 }), /OFFERINGS · SEC FILINGS[\s\S]*of-chip of-atm/);
-  assert.match(h.ofCoSectionHTML("CRWV"), /<div class="of-co" id="ofCo_CRWV">/);
-});
-
-test("Hub · wired into the three places and nowhere else: ALERTS room, afterMount, the board's ticker cell, the company EVENTS tab", () => {
-  assert.match(page, /case "ALERTS":\s+return ofRoomHTML\(\);/);
-  assert.match(page, /else if \(S\.sec === "ALERTS"\) ofRoomFill\(\);/);
-  assert.match(page, /try \{ ofLoad\(\)\.then\(ofBoardPass\); \} catch \(_\) \{\}/);
-  assert.match(page, /'<span class="sc-ctk' \+ \(d\.nf \? " has-nf" : ""\) \+ '">' \+ esc\(d\.t\) \+ \(typeof ofMarkHTML === "function" \? ofMarkHTML\(d\.t\) : ""\)/);
-  assert.match(page, /return '<div class="sc-evtab">' \+ fixed \+ ofCoSectionHTML\(data\.t\) \+ relScroll \+ pastScroll/);
-  assert.match(page, /setTimeout\(\(\) => ofCoFill\(data\.t\), 0\)/);
-  assert.match(page, /case "SCREENER":\s+return parkedRoomHTML\("SCREENER"\);/);       // the other parked room is untouched
-  assert.equal((page.match(/offering_filings\?select=/g) || []).length, 2);              // two reads: the 30 days, one name
-  assert.ok(!/offering_filings[^"\n]*(?:POST|PATCH|DELETE)/.test(page));
+test("Hub · its home is FINANCIALS only: the ALERTS room is still parked, the board row and the EVENTS tab are as they were", () => {
+  assert.match(page, /out \+= ofCapSectionHTML\(data\);/);
+  assert.match(page, /setTimeout\(\(\) => ofCapFill\(data\.t, data\._balq\), 0\);/);
+  assert.match(page, /return '<div class="fn3">' \+ ofCapSectionHTML\(data\) \+ '<\/div><div class="sc-senttxt">No rows in fundamentals_history/);
+  assert.match(page, /case "ALERTS":\s+return parkedRoomHTML\("ALERTS"\);/);
+  assert.match(page, /'<span class="sc-ctk' \+ \(d\.nf \? " has-nf" : ""\) \+ '">' \+ esc\(d\.t\) \+\n/);
+  assert.match(page, /return '<div class="sc-evtab">' \+ fixed \+ relScroll \+ pastScroll \+ "<\/div>";/);
+  for (const gone of ["ofRoomHTML", "ofMarkHTML", "ofBoardPass", "ofCoFill", "of-mark"]) assert.ok(!page.includes(gone), gone);
+  assert.equal((page.match(/offering_filings\?select=/g) || []).length, 1);              // one read: this company's filings
+  assert.match(page, /cashflow_history\?ticker=eq\." \+ e \+ "&period=in\.\(Q1,Q2,Q3,Q4\)&select=period,fiscal_year,fiscal_date,capex&order=fiscal_date\.desc&limit=4"/);
 });
