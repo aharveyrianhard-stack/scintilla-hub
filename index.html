@@ -2202,6 +2202,14 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
   padding:0 2px; white-space:nowrap;
 }
 .sc-stamp__hint{ color:var(--crk); }
+/* G1 — the Geiger age, on the stamp line: quiet, same grey, no colour of its own, tabular so it does not twitch. */
+.sc-stamp__age{ color:var(--dim); text-transform:none; letter-spacing:.16em; font-variant-numeric:tabular-nums; }
+/* the left half may now be long: it truncates with an ellipsis (the full line is in its title) rather than running
+   under the hint on the right, which keeps its own width. */
+.sc-stamp > span:first-child{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.sc-stamp__hint{ flex:0 0 auto; }
+.sc-gcell.is-carried > .sc-gmini{ opacity:.68; }
+.sc-gcell.is-carried{ border-left:1px dotted var(--dim); padding-left:3px; }
 
 /* Board column 1 · StarCell — 13px */
 .sc-star{ width:13px; padding:0; background:none; border:0; cursor:pointer;
@@ -5193,7 +5201,7 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
        economic events, and the six exact-symbol non-equity instruments — but naming it here read as
        the equity feed. The label is now driven by real feed state (see setFeedStamp) rather than
        hard-coded, so it can never again claim a provider the Hub is not actually reading. -->
-  <span>SCINTILLA · COCKPIT — clickable · <span id="scFeedStamp">equities · MASSIVE</span></span>
+  <span>SCINTILLA · COCKPIT — clickable · <span id="scFeedStamp">equities · MASSIVE</span> · <span id="scGeigerAge" class="sc-stamp__age" title="how old the Geiger readings on this board are (G1: the publisher now publishes every cycle; a name whose inputs failed keeps its last value and is counted here as carried)">geiger · reading…</span></span>
   <span class="sc-stamp__hint">click the master tabs &amp; cohorts</span>
 </div>
 
@@ -5994,10 +6002,11 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     !!(SC_CG.meta && SC_CG.meta.current_equalizer_validated === true &&
        SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
        SC_CG.meta.accounting && SC_CG.meta.accounting.failed === 0 &&
-       SC_CG.meta.accounting.unexplained === 0 &&
-       SC_CG.meta.accounting.named_absent === 0 &&
-       SC_CG.meta.accounting.computed === SC_CG.meta.accounting.expected_cells &&
-       SC_CG.meta.coverage && SC_CG.meta.coverage.complete === true);
+       SC_CG.meta.accounting.unexplained === 0);
+  /* G1 (3 Oct 2026, Alan: "a little bit wrong rather than a little bit old"): a name missing one rung or carried from
+     the previous cycle no longer stops the board from ranking. Completeness (named absences, every cell computed,
+     coverage.complete) stays VISIBLE — on the root stamp and in the Geiger age line — but it is a label, not a gate.
+     What still gates: the Equalizer receipt, the universe digest, and an artifact whose accounting does not add up. */
   try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
@@ -6100,6 +6109,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         hb:    null,                                                    // M52 — the stored heartbeat row, filled by loadBoardHeartbeat()
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
+        gl:    (gg[m.ticker] && gg[m.ticker].sc_geiger_liveness) || null,   // G1 — FRESH / CARRIED (+ age, cause) for the cell's mark
         fam:   gg[m.ticker] || null,
         /* rvol (battery) — H3 (1 Oct; Alan: "Why is relative volume still not there?"): board_volume, written for the 590
            names by lane P7 from the Massive minute bars. The board shows rvol_at_time — today's volume so far ÷ the usual
@@ -7962,8 +7972,8 @@ function boardRowsHTML() {
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
-      '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
-        ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
+      '<span class="sc-gcell' + (d.gl && d.gl.state === "CARRIED" ? " is-carried" : "") + '" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+        ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="' + esc(d.gl && d.gl.state === "CARRIED" ? "Geiger — " + scGeigerRowAgeTitle(d.gl) + " — click for trend, momentum and the read" : "Geiger — click for trend, momentum and the read") + '">' +
         (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) + "</span>" +
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
@@ -25928,6 +25938,7 @@ function scStampRoot () {
     "geiger-unexplained-cells": (cg.accounting && cg.accounting.unexplained != null) ?
       cg.accounting.unexplained : null,
     "geiger-validation-error": cg.validation_error || null,
+    "geiger-names-carried": (cg.freshness && cg.freshness.names_carried) || 0,   /* G1 */
     "geiger-scale": cg.scale || null,
     "geiger-computed-utc": cg.computed || null,
     "refused-legacy-equity": (window.SC_GUARD || {}).refused_legacy_equity,
@@ -27200,7 +27211,70 @@ function scRetainCandidateGeiger (reason, currentEqualizer) {
   });
   SC_CG.map = null; SC_CG.at = 0;
   window.SC_RANK_READY = false;
+  try { scPaintGeigerAge(); } catch (_) {}
   return {};
+}
+
+/* G1 — GEIGER AGE (Alan, 3 Oct 2026: "I prefer to have it a little bit wrong than to have it a little bit old").
+   The back end now publishes every cycle and puts the age IN THE DATA: computed_utc per name, a liveness block per
+   name (FRESH / CARRIED + age + cause) and a freshness summary on the artifact. This is the Hub's small display of it:
+   one line on the stamp bar, one wording for every age on this surface (scGeigerAgo), and a quiet mark on a carried
+   row's Geiger cell. It changes no number. The back end does not need it. */
+function scGeigerAgo(ms) {
+  if (!(ms >= 0)) return "";
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "<1m";
+  if (m < 60) return m + "m";
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + "h " + String(m - h * 60).padStart(2, "0") + "m";
+  return Math.floor(h / 24) + "d " + (h % 24) + "h";
+}
+function scGeigerClockET(iso) {
+  const t = Date.parse(iso || "");
+  if (!Number.isFinite(t)) return "";
+  try { return new Date(t).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }) + " ET"; }
+  catch (_) { return new Date(t).toISOString().slice(11, 16) + " UTC"; }
+}
+function scGeigerAgeText(meta, nowMs) {
+  const now = nowMs || Date.now();
+  if (!meta || meta.current_equalizer_validated !== true) {
+    return "geiger · not accepted" + (meta && meta.validation_error ? " · " + String(meta.validation_error).toLowerCase().replace(/_/g, " ").slice(0, 48) : "");
+  }
+  const t = Date.parse(meta.computed || "");
+  let out = "geiger as of " + (scGeigerClockET(meta.computed) || "—");
+  if (Number.isFinite(t)) out += " (" + scGeigerAgo(now - t) + " ago)";
+  const f = meta.freshness;
+  if (f && Number.isInteger(f.names_total)) {
+    out += " · " + (f.names_fresh | 0) + " fresh";
+    if (f.names_carried > 0) {
+      const oldest = Array.isArray(f.carried) && f.carried.length ? f.carried.reduce((a, b) => (b.age_s > a.age_s ? b : a)) : null;
+      out += " · " + f.names_carried + " carried";
+      if (oldest && oldest.symbol) out += ", oldest " + oldest.symbol + " " + scGeigerAgo((oldest.age_s || 0) * 1000 + (now - (Date.parse(f.published_utc || "") || now)));
+    }
+    if (f.names_unavailable > 0) out += " · " + f.names_unavailable + " no reading";
+    if (f.rungs_failed > 0) out += " · " + f.rungs_failed + (f.rungs_failed === 1 ? " rung" : " rungs") + " missing";
+  }
+  return out;
+}
+/* The row's own wording: a carried name says when its value is from and why. */
+function scGeigerRowAgeTitle(liveness, nowMs) {
+  if (!liveness || liveness.state !== "CARRIED") return "";
+  const now = nowMs || Date.now();
+  const from = Date.parse(liveness.carried_from_utc || "");
+  const age = Number.isFinite(from) ? now - from : (liveness.age_s || 0) * 1000;
+  return "carried from " + (scGeigerClockET(liveness.carried_from_utc) || "an earlier cycle") + " (" + scGeigerAgo(age) + " old) — " +
+    String(liveness.cause || "inputs failed").toLowerCase().replace(/_/g, " ");
+}
+let SC_GEIGER_AGE_TIMER = null;
+function scPaintGeigerAge() {
+  const node = document.getElementById("scGeigerAge");
+  if (!node) return;
+  const meta = (typeof SC_CG !== "undefined" && SC_CG && SC_CG.meta) || null;
+  const text = scGeigerAgeText(meta);
+  scSetText(node, text);
+  try { node.title = text + " — how old the Geiger readings on this board are (G1: the publisher publishes every cycle; a name whose inputs failed keeps its last value and is counted as carried)"; } catch (_) {}
+  try { scSetAttr(document.documentElement, "data-sc-geiger-age-s", meta && meta.computed ? String(Math.max(0, Math.round((Date.now() - Date.parse(meta.computed)) / 1000))) : null); } catch (_) {}
+  if (!SC_GEIGER_AGE_TIMER) SC_GEIGER_AGE_TIMER = setInterval(function () { try { scPaintGeigerAge(); } catch (_) {} }, 30000);
 }
 function scGeigerSnapshotCurrent (data) {
   try {
@@ -27240,8 +27314,12 @@ async function scCandidateGeiger () {
                    excluded_disabled: j.excluded_disabled,
                    computed: j.computed_utc, authority: j.bar_authority,
                    accounting, coverage, current_equalizer_validated: true,
-                   validation_error: null };
+                   validation_error: null,
+                   /* G1 — the age is in the data: the publisher's freshness block (names fresh / carried / unavailable,
+                      oldest name, max age) and its publication clock ride along for the stamp line. */
+                   freshness: (j && j.freshness) || null, published: (j && j.published_utc) || null };
     SC_CG.at = Date.now();
+    try { scPaintGeigerAge(); } catch (_) {}
     return SC_CG.map;
   } catch (e) { return scRetainCandidateGeiger(e && e.message, currentEqualizer); }
 }
@@ -27295,7 +27373,8 @@ async function scApplyCandidateGeiger (index) {
       delete index[t].structure;
       index[t].tf_contributors = v.tf_contributors;
       index[t].rungs = v.rungs || {};
-      index[t].updated_ts = (SC_CG.meta && SC_CG.meta.computed) || null;
+      index[t].updated_ts = v.computed_utc || (SC_CG.meta && SC_CG.meta.computed) || null;   /* G1: the name's own clock when it carries one */
+      index[t].sc_geiger_liveness = v.liveness || null;                                         /* G1: FRESH / CARRIED + age + cause */
       index[t].sc_geiger_source = "CANDIDATE_PROVIDER_EQUALIZER";
       index[t].sc_geiger_state = "OK";
       applied++;

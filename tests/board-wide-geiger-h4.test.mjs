@@ -55,7 +55,8 @@ test("TREND and MOMENTUM carry sort keys and re-rank by what the board shows (a 
 
 test("the Geiger cell is a keyboard-reachable button for its breakdown, and the row still opens the company", () => {
   const src = fn("boardRowsHTML");
-  assert.match(src, /'<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' \+ esc\(d\.t\) \+ '" aria-haspopup="dialog" aria-expanded="false"'/);
+  // G1 (3 Oct 2026): the class list gains " is-carried" when the row's Geiger is carried from an earlier cycle.
+  assert.match(src, /'<span class="sc-gcell' \+ \(d\.gl && d\.gl\.state === "CARRIED" \? " is-carried" : ""\) \+ '" role="button" tabindex="0" data-act="gpop" data-t="' \+ esc\(d\.t\) \+ '" aria-haspopup="dialog" aria-expanded="false"'/);
   assert.match(src, /data-act="row"/);
   assert.match(page, /case "gpop": \{[^}]*e\.preventDefault\(\); e\.stopPropagation\(\); gpopOpen\(a\); break;/);
   /* Enter / Space on any [data-act][role=button] synthesises the click: the one shared keyboard path */
