@@ -54,6 +54,17 @@ for sym, sector, industry, mcap, is_etf, is_fund, active, exch, country, name in
     t = norm(sym)
     if t in exists and (exists[t]["mcap"] or 0) >= (mcap or 0): continue
     exists[t] = {"t": t, "sector": SECTOR_MAP[sector], "industry": industry or "—", "mcap": float(mcap or 0), "name": name, "country": country, "exch": exch}
+# one company, one weight: FMP gives every share class (GOOG / GOOGL, PBR / PBR-A) and some parent-company notes (SOJE, SOMN)
+# the WHOLE company's market cap. Keep one symbol per company name — the computed one if any, else the shortest symbol.
+_computed_syms = {norm(r[0]) for r in scout["rows"] if r[1] is not None} | {norm(t) for t in hub["symbols"]}
+def _namekey(n): return re.sub(r"\s+", " ", re.sub(r"\b(class [abc]|ordinary shares|common stock|inc\.?|corp\.?|corporation|plc|ltd\.?|limited|the|s\.a\.|n\.v\.|ag|sa|co\.?)\b", "", (n or "").lower().replace(",", ""))).strip()
+_byname = defaultdict(list)
+for t, e in exists.items(): _byname[_namekey(e["name"])].append(t)
+dropped_classes = []
+for k, ts in _byname.items():
+    if len(ts) < 2 or not k: continue
+    ts.sort(key=lambda t: (t not in _computed_syms, len(t), t))
+    for t in ts[1:]: dropped_classes.append(t); exists.pop(t, None)
 # fallback classification for Hub names the screener lacks (e.g. foreign listings)
 for r in hubcls:
     t = norm(r["ticker"]); s = SECTOR_MAP.get(r["fmp_sector"])
@@ -115,7 +126,7 @@ def measure(members, label, kind, mode="blend", exists_members=None):
     # the names that would make it sound: biggest first, until the covered share reaches 90 %
     need, have = [], mv_have
     for r in missing:
-        if mv_exist > 0 and have / mv_exist >= 0.90 and len(need) >= 1: break
+        if mv_exist > 0 and have / mv_exist >= 0.90: break   # already covered: nothing is needed
         need.append({"t": r["t"], "name": r["name"], "mcap_bn": round(r["mcap"] / 1e9, 1), "country": r["country"], "industry": r["industry"],
                      "tier": "close tier" , "why": ("foreign listing (ADR): not in the Massive common-stock type the close job reads" if (r["country"] or "US") != "US" else "no bars in the close job's listing yet")})
         have += r["mcap"]
@@ -134,6 +145,7 @@ def measure(members, label, kind, mode="blend", exists_members=None):
             "mv_exist_bn": round(mv_exist / 1e9, 1), "mv_have_bn": round(mv_have / 1e9, 1), "mv_share": round(mv_share, 4) if mv_share is not None else None,
             "closes": closes, "swing": round(max(means) - min(means), 3) if means else None, "closes_pass": closes_pass,
             "rules": rules, "verdict": verdict, "weak": weak, "need": need, "missing_n": len(missing),
+            "missing_top": [{"t": r["t"], "name": r["name"], "mcap_bn": round(r["mcap"] / 1e9, 1), "country": r["country"]} for r in missing[:3]],
             "top": [{"t": r["t"], "g": round(r["g"], 3), "src": r["src"], "mcap_bn": round(r["mcap"] / 1e9, 1)} for r in top]}
 
 # ---- sectors and industries, from every name that exists (computed or not) plus computed names the screener lacks ----
@@ -149,8 +161,8 @@ out = {"what": "B1 · the market bow tie: sector, industry and cohort heat from 
        "rule": "sound = n with a reading ≥ 8 · standard error ≤ 0.10 · held on each of the 6 closes (T12's rule) · AND the names we read carry ≥ 90 % of the market value of the names that exist (B1's one neighbour) · thin = enough and steady but under-covered or disagreeing · not yet = too few or not steady",
        "counts": {"exist_common": len(exists), "computed_close_rows": len(close), "computed_stocks": len(computed_stocks), "live_hub": len(live),
                   "exist_not_computed": sum(1 for t in exists if t not in close and t not in live),
-                  "computed_not_classified": len(unclassified), "screener_rows": len(scr["rows"])},
-       "unclassified_sample": unclassified[:60], "modes": {}}
+                  "computed_not_classified": len(unclassified), "screener_rows": len(scr["rows"]), "second_classes_dropped": len(dropped_classes)},
+       "unclassified_sample": unclassified[:60], "second_classes_dropped_sample": sorted(dropped_classes)[:80], "modes": {}}
 for mode in ("blend", "close"):
     sectors = []
     for s in SECTOR_MAP.values():
