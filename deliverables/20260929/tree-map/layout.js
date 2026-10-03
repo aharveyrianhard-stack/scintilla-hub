@@ -20,6 +20,9 @@
 
    Spacing (2 Oct, T6): {sp} sets how far apart the lines of a leaf block sit (default LAYOUT.SP = 22). CLEAN passes a
    wider value so every box has room for a Geiger bar that reads at the zoom-out; DETAILED keeps the default.
+   T8 (2 Oct, night — Alan: "too much black space"): {L} overrides any of LAYOUT's distances (GAP, LEVEL, NAMES_DROP,
+   ROWGAP, …) for one picture; the headings carry the merged table as heads.L and layout() reads it, so CLEAN packs its
+   boxes close while DETAILED keeps the old distances.
 
    prepareTree(nodes, {rows, order, sp}) — nodes: [{id, kind, parents, role, issuer, market_value_usd, ticker, v, name}];
                         adds to every heading: subs, rows, funds, names, cols, leafW, sp, depth, w, x0, cx, bx0. Returns the headings.
@@ -52,7 +55,8 @@ export function prepareTree(nodes, opts = {}) {
   const primary = new Map();
   for (const n of nodes) if (n.parents.length) { const p = n.parents[0]; if (!primary.has(p)) primary.set(p, []); primary.get(p).push(n); }
   const depthOf = (n) => { let d = 0, c = n; while (c.parents.length) { c = byId.get(c.parents[0]); d++; } return d; };
-  const { GAP } = LAYOUT, SP = opts.sp > 0 ? opts.sp : LAYOUT.SP, MINW = opts.minW > 0 ? opts.minW : SP * 2, ROW = opts.row > 0 ? opts.row : 0;
+  const L = { ...LAYOUT, ...(opts.L || {}) };
+  const { GAP } = L, SP = opts.sp > 0 ? opts.sp : L.SP, MINW = opts.minW > 0 ? opts.minW : SP * 2, ROW = opts.row > 0 ? opts.row : 0;
   const WRAP_MIN = opts.wrapMin > 0 ? opts.wrapMin : LAYOUT.WRAP_MIN; // T6: CLEAN lets any heading with 2+ sub-headings wrap (the top level was one 7,000-unit row)
   const heads = nodes.filter((n) => n.kind === "index");
   for (const h of heads) {
@@ -90,11 +94,12 @@ export function prepareTree(nodes, opts = {}) {
   };
   const root = heads.find((h) => !h.parents.length);
   widthOf(root); placeX(root, -root.w / 2);
+  heads.L = L; // T8: the distances this picture was prepared with; layout() uses the same ones
   return heads;
 }
 
 export function layout(heads, k, into) { // k = 1: 3D (extra rows step toward you) · k = 0: flat (extra rows step down)
-  const { SP, LEVEL, DZ3, DY3, ROW2, NAMES_DROP, ROWGAP, ZPROJ } = LAYOUT;
+  const { SP, LEVEL, DZ3, DY3, ROW2, NAMES_DROP, ROWGAP, ZPROJ } = heads.L || LAYOUT;
   const dyOf = (h) => (k ? DY3 : h.rowStep || ROW2); // the step between the rows of a leaf block (T6: CLEAN passes a taller one for its boxes)
   // how far below a heading its subtree reaches (in 3D the rows that step toward you also look lower: ZPROJ of their depth)
   const below = new Map();
