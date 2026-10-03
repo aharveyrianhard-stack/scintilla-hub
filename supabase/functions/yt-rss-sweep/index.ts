@@ -203,10 +203,19 @@ Deno.serve(async () => {
 
   type Candidate = Record<string, unknown> & { video_id: string; accounts: Set<Account> };
   const candidates = new Map<string, Candidate>();
+  /* Y1 (2 Oct): YouTube's channel RSS answers 404 / 500 for a share of channels at a time (measured: a pass that
+     normally sees ~2,360 entries saw 0–255 from 01:05Z). One retry after a short pause, and the channels still
+     failing are COUNTED in the result (rss_failed) instead of vanishing silently. */
+  let rssFailed = 0;
+  const rssFetch = async (url: string) => {
+    let r = await fetch(url).catch(() => null);
+    if (!r || !r.ok) { await new Promise((ok) => setTimeout(ok, 700)); r = await fetch(url).catch(() => null); }
+    return r;
+  };
   await Promise.all(ACCOUNTS.flatMap((account) => accountChannels[account].map(async (channelId) => {
     try {
-      const r = await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + channelId);
-      if (!r.ok) return;
+      const r = await rssFetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + channelId);
+      if (!r || !r.ok) { rssFailed++; return; }
       const xml = await r.text();
       const author = unesc((xml.match(/<name>([^<]*)/) || [])[1] || "");
       for (const match of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
@@ -370,6 +379,8 @@ Deno.serve(async () => {
       error: accountErrors[account] || null,
     }])),
     rss_seen: ids.length,
+    rss_failed: rssFailed,
+    rss_channels: ACCOUNTS.reduce((n, account) => n + accountChannels[account].length, 0),
     new_videos: wrote,
     membership_updates: membershipUpdates,
     live_refreshed: refreshed,
