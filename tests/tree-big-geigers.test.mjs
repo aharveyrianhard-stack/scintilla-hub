@@ -64,12 +64,12 @@ test("4 · no black space: CLEAN packs with its own distances (columns 104, rows
 });
 
 test("5 · the staircase: steps touch (gap 0 between every pair of neighbours), the biggest drop is at most one tread (the height scale is lowered, never below H_MIN), treads fall from the first place at the centre-top to the last at the outer bottom, 70° camera", () => {
-  assert.match(M3, /const PARAMS = \{ stand: \{ A: qn\("sa", 46\), B: qn\("sb", 0\), D: qn\("sd", 30\), RW: qn\("srw", 30\), H: qn\("sh", 260\), H_MIN: 60, el: qn\("sel", 70\), az: qn\("saz", 28\) \}/, "70° up");
+  assert.match(M3, /const PARAMS = \{ stand: \{ A: qn\("sa", 30\), B: qn\("sb", 0\), D: qn\("sd", 30\), RW: qn\("srw", 30\), H: qn\("sh", 260\), H_MIN: 60, el: qn\("sel", 70\), az: qn\("saz", 28\) \}/, "70° up (T9: the inner radius 30, was 46)");
   assert.match(M3, /PARAMS\.stand\.B = \(PARAMS\.stand\.RW \* 1\.04\) \/ \(2 \* Math\.PI\);/, "one turn out = one tread's depth");
   assert.match(M3, /const H = Math\.max\(P\.H_MIN, Math\.min\(P\.H, maxGap > 0 \? P\.D \/ maxGap : P\.H\)\);/, "the drop cap");
   assert.match(M3, /const w = \(P\.D \* \(p\.r \+ P\.RW \/ 2\)\) \/ p\.r;/, "a step is one arc step wide, so the neighbours touch");
   assert.match(M3, /function stairMesh\(members, P, above\)/); assert.doesNotMatch(M3, /function rampMesh|standMat|rampY/, "T7's ramp and helix are gone");
-  assert.match(M3, /const floor = Math\.min\(0, vLow \* H\) - P\.D;/, "one common floor under the lowest tread");
+  assert.match(M3, /const floor = Math\.min\(0, members\.length \? treadOf\(members\.length - 1\) : 0\) - P\.D;/, "one common floor under the lowest tread (T9: under the lowest no-reading step too)");
   if (!runs) return;
   for (const r of desk()) {
     const P = probes(r, "neighbour_gap_px").filter((p) => p.count && !p.count.list && p.neighbour_gap_px);

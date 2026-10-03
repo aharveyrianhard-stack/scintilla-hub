@@ -66,7 +66,7 @@ test("4 · the coil (T8: the PODIUM — a staircase of Geiger columns, tread = r
   assert.match(M3, /const COIL_MIN = 24;/);
   assert.match(M3, /const coilWorthy = \(n\) => n\.kind === "cohort" && beneathNames\(n\)\.length > COIL_MIN/);
   assert.match(M3, /if \(coilWorthy\(n\)\) enterCoil\(n\); else enterArea\(n\)/);
-  assert.match(M3, /tread = v == null \? floor \+ 2 : v \* H/, "the tread's height is the reading");
+  assert.match(M3, /tread = treadOf\(i\)/, "the tread's height is the reading (T9: one formula, treadOf, above and below zero and for the no-reading steps)");
   assert.match(M3, /p\.none \? 0x4a4a4a : p\.v >= 0 \? 0x35b06a : 0xd1483f/, "the step's colour is the reading");
   assert.match(PAGE, /data-crumb="__list"/, "≡ LIST on the crumbs");
   assert.match(PAGE, /data-coil="\$\{esc\(n\.id\)\}"/, "the card opens the coil for any parent");
