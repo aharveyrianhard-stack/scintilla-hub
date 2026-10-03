@@ -82,13 +82,15 @@ function statsApi(opts) {
   const src = line(/^const MCAP_MAX_AGE_MS = [^\n]*/m) + fn("scCapAge") + fn("scCapTitle") + line(/^const rb = [^\n]*/m) + fn("volCellHTML") +
     page.slice(s0, s2) + fn("statsTabHTML") +
     "return { stBarPos, stRange52, stBarHTML, stRuleHTML, stFillHTML, statsPriceHTML, statsFundHTML, statsBalHTML, statsActivityHTML, statsTabHTML };";
-  return new Function("num", "esc", "todayISO", "fmtPxIdent", "fmtC", "fwdTrailPE", "notComparable", "prevClose", "hbRowFor", "hbPct", "fmtRevCell", "fmtRevLocal", "revTitle", "coBoardRow", src)(
+  return new Function("num", "esc", "todayISO", "fmtPxIdent", "fmtC", "fwdTrailPE", "notComparable", "prevClose", "hbRowFor", "hbPct", "fmtRevCell", "fmtRevLocal", "revTitle", "coBoardRow", "estNonUsd", "estCcy", src)(
     num, esc, todayISO, fmtPxIdent, fmtC,
     (price, fund) => ({ trail: fund && num(fund.eps_ttm) > 0 && price > 0 ? price / num(fund.eps_ttm) : null, fwd: null, next: null, ccy: "USD" }),
     (c) => "not comparable: EPS in " + c,
     o.prevClose || {}, () => o.hb || null, (v) => "±" + v.toFixed(1) + "%",
     (v) => "$" + (v / 1e9).toFixed(1) + "B", (v, c) => c + " " + (v / 1e9).toFixed(1) + "B", () => "revenue over the last four quarters · fundamentals.revenue_ttm (FMP)",
-    () => o.row || {});
+    () => o.row || {},
+    /* C5b — the reporting currency (index.html estNonUsd / estCcy): USD unless the case names one */
+    () => !!o.ccy && o.ccy !== "USD", () => o.ccy || null);
 }
 const NOW_S = Math.floor(Date.now() / 1000) - 3600;
 const MU = {
@@ -236,4 +238,15 @@ test("the look: the grid, greys only, the row type 10 CSS px only where the page
   assert.match(page, /@media \(min-width:1400px\)\{ body\{ zoom:1\.12;/, "…where the page is zoomed ×1.12 (11.2 px drawn) and ×1.28 at 1680 (12.8 px)");
   assert.match(css, /\.st-bar__mark\.up\{background:var\(--bull\)/); assert.match(css, /\.st-bar__mark\.dn\{background:var\(--bear\)/);
   assert.doesNotMatch(page, /\.kv2\b|kvRow|ST_TABS|stSec\(/, "R3's rails and their CSS are retired, not left dead");
+});
+
+test("C5b — a foreign reporter's BALANCE and ACTIVITY money carries its currency code, and no dividend yield is formed against the dollar market cap", () => {
+  const api = statsApi({ ccy: "CNY" });
+  const BABA = { ...MU, t: "BABA", _cfhist: [{ fiscal_year: 2026, fiscal_date: "2026-03-31", dividends_paid: -19.2e9, buybacks: -86.2e9, free_cf: 12e9 }],
+    _balhist: [{ fiscal_year: 2026, fiscal_date: "2026-03-31", cash_and_equiv: 150e9, total_debt: 240e9, net_debt: 90e9, total_equity: 1000e9 }] };
+  const act = api.statsActivityHTML(BABA, {}), bal = api.statsBalHTML(BABA);
+  assert.ok(act.includes("CNY 19.20B"), "dividends in CNY"); assert.ok(!/% yield/.test(act), "no yield across currencies");
+  assert.ok(bal.includes("CNY 150"), "cash in CNY"); assert.ok(!bal.includes("$150"), "never a dollar sign on yuan");
+  const usd = statsApi({}).statsActivityHTML({ ...BABA, t: "MU" }, {});
+  assert.ok(/% yield/.test(usd) && usd.includes("$19.20B"), "a USD reporter keeps its dollar amount and its yield");
 });

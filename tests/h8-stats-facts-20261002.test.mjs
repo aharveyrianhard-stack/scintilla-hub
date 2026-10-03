@@ -30,13 +30,14 @@ function statsApi(opts) {   // the same slice H7's tests run: everything from fm
   const src = line(/^const MCAP_MAX_AGE_MS = [^\n]*/m) + fn("scCapAge") + fn("scCapTitle") + line(/^const rb = [^\n]*/m) + fn("volCellHTML") +
     page.slice(s0, s2) + fn("statsTabHTML") +
     "return { stRow, stBlock, stIsFund, stFactsDate, stBarHTML, stRuleHTML, stFillHTML, statsPriceHTML, statsFundHTML, statsBalHTML, statsActivityHTML, statsTabHTML };";
-  return new Function("num", "esc", "todayISO", "fmtPxIdent", "fmtC", "fwdTrailPE", "notComparable", "prevClose", "hbRowFor", "hbPct", "fmtRevCell", "fmtRevLocal", "revTitle", "coBoardRow", "isNonOp", src)(
+  return new Function("num", "esc", "todayISO", "fmtPxIdent", "fmtC", "fwdTrailPE", "notComparable", "prevClose", "hbRowFor", "hbPct", "fmtRevCell", "fmtRevLocal", "revTitle", "coBoardRow", "isNonOp", "estNonUsd", "estCcy", src)(
     num, esc, todayISO, fmtPxIdent, fmtC,
     (price, fund) => ({ trail: fund && num(fund.eps_ttm) > 0 && price > 0 ? price / num(fund.eps_ttm) : null, fwd: null, next: null, ccy: "USD" }),
     (c) => "not comparable: EPS in " + c,
     o.prevClose || {}, () => o.hb || null, (v) => "±" + v.toFixed(1) + "%",
     (v) => "$" + (v / 1e9).toFixed(1) + "B", (v, c) => c + " " + (v / 1e9).toFixed(1) + "B", () => "revenue over the last four quarters · fundamentals.revenue_ttm (FMP)",
-    () => o.row || {}, o.isNonOp);
+    () => o.row || {}, o.isNonOp,
+    () => !!o.ccy && o.ccy !== "USD", () => o.ccy || null);   // C5b — the reporting currency: USD unless the case names one
 }
 const NOW_S = Math.floor(Date.now() / 1000) - 3600;
 const FACTS = { shares_outstanding: 1129390000, float_shares: 1124578798, dividend_per_share: 0.15, dividend_yield: 0.052649725569129543, ex_dividend_date: "2026-10-14", facts_as_of: "2026-10-02T20:24:37.405+00:00" };   // MU as loaded on 2 Oct (MEASURED)
