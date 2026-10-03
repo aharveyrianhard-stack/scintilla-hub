@@ -61,7 +61,7 @@ update public.feed_contract set note = 'Scintilla own intraday put/call.' where 
 create table public.youtube_transcripts (video_id text primary key, text text, status text);
 `)
 // the jobs as they stand on 3 Oct (the ids the staged files name); bearers are fake
-const BEARER = 'eyJFAKEFAKEFAKEFAKEFAKEFAKE.eyJyb2xlIjoiYW5vbiJ9.sig'
+const BEARER = 'FAKE_BEARER_FOR_TESTS_ONLY'
 const http = (fn, extra = '') => `select net.http_post(url := 'https://x.supabase.co/functions/v1/${fn}', headers := '{"Authorization":"Bearer ${BEARER}"}'::jsonb || '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb, timeout_milliseconds := 120000)${extra}`
 const jobs = [
   [7, 'ribbon-d-3m', '*/15 * * * *', `select scin_record('ribbon-d-3m', 'https://x.supabase.co/functions/v1/ribbon-engine', net.http_post(url:='https://x.supabase.co/functions/v1/ribbon-engine'))`],
