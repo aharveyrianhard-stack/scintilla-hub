@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9c74cbb) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 6af9c2c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2331,6 +2331,27 @@ body.tvmodal-open{ overflow:hidden; }
 .sc-board__scroll.is-seed .sc-board__row{ opacity:.6; }
 .no-feed{ font:700 7px var(--mono); color:var(--bear); border:1px solid rgba(255,45,85,.4);
   border-radius:3px; padding:0 4px; margin-left:6px; letter-spacing:.05em; vertical-align:middle; }
+/* R2 Part A (2 Oct) · CAPITAL & DILUTION — the company's offering filings in FINANCIALS, with cash and capex beside them */
+.of-chip{ font:700 8px var(--mono); letter-spacing:.08em; border:1px solid currentColor; border-radius:3px; padding:1px 5px; vertical-align:middle; white-space:nowrap; }
+.of-equity{ color:var(--sv5); } .of-convertible{ color:var(--sv4); } .of-atm{ color:var(--sv3); } .of-debt{ color:var(--trend); } .of-unclassified{ color:var(--coin); }
+.of-grid{ display:grid; grid-template-columns:minmax(0,1fr) 210px; gap:10px 16px; align-items:start; }
+.of-list{ max-height:340px; overflow-y:auto; overscroll-behavior:contain; border-left:2.5px solid var(--sv4); padding-left:9px; }
+.of-row{ padding:6px 0 7px; border-bottom:.5px solid var(--line); }
+.of-top{ display:flex; flex-wrap:wrap; align-items:center; gap:3px 8px; font:11px var(--mono); color:var(--ink); }
+.of-date{ color:var(--ink); } .of-meta{ color:var(--dim); font-size:10px; } .of-size{ color:var(--ink); }
+.of-sent{ margin-top:3px; font:11px/1.45 var(--sans); color:var(--ink2); overflow-wrap:anywhere; }
+.of-none{ color:var(--dim); }
+.of-sec{ color:var(--crk); font:10px var(--mono); text-decoration:none; white-space:nowrap; }
+.of-empty{ padding:8px 0; color:var(--dim); font:11px var(--mono); }
+.of-cash{ font-family:var(--mono); }
+.of-k{ font-size:9px; letter-spacing:.12em; color:var(--dim); margin-top:2px; }
+.of-v{ font-size:18px; color:var(--ink); margin:2px 0; }
+.of-d{ font-size:9px; color:#6E6E76; margin-bottom:10px; line-height:1.4; }
+.of-capex{ border-collapse:collapse; width:100%; font-size:11px; margin:3px 0 4px; }
+.of-capex td{ padding:2px 0; color:var(--ink2); } .of-capex td:last-child{ text-align:right; color:var(--ink); }
+.of-capex .of-sum td{ border-top:.5px solid var(--line2); color:var(--dim); } .of-capex .of-sum td:last-child{ color:var(--ink); }
+.of-legend{ margin-top:6px; }
+@media (max-width:700px){ .of-grid{ grid-template-columns:1fr; } .of-list{ max-height:300px; } }
 .sc-ctk.has-nf{ width:auto; white-space:nowrap; }
 @keyframes sc-newfl{ 0%{ background:rgba(0,212,255,.12); } 100%{ background:transparent; } }
 .sc-art.new{ animation:sc-newfl 1.6s; }
@@ -11760,6 +11781,97 @@ function parkedRoomHTML(sec) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   R2 Part A (2 Oct 2026) · CAPITAL & DILUTION — the company's offering filings, at home in FINANCIALS
+   Alan, 2 Oct: "dilution announcements" — and, the same evening: "before alerts, things need to have a home on hub …
+   when it has a home, it can feed alerts." So the home is here, in the company view, not the ALERTS tab or the board.
+   The Supabase job offering-watch lists every 424B5 / 424B4 / S-3 / S-3ASR / S-1 a Hub stock files (FMP), reads the
+   document's first page at the SEC and sorts it:
+     EQUITY        new shares sold now                         a dilution
+     CONVERTIBLE   notes that can turn into shares             a dilution later
+     ATM           shares sold "from time to time"             a slow dilution
+     DEBT          bonds and notes                             no new shares
+     UNCLASSIFIED  the first page did not say (a shelf, a resale, blanks) — open the SEC link
+   Beside the filings: the cash on hand (the newest quarterly balance sheet the page already reads) and the last four
+   quarters of capital spending (cashflow_history, the same table FINANCIALS reads by year), as plain numbers. No model:
+   "capex vs cash → expected dilution" is a later decision. Reads only (anon, pg). The record starts 4 Jun 2026.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const OF_TTL_MS = 10 * 60 * 1000, OF_RECORD_FROM = "2026-06-04";
+const OF_CLASSES = ["EQUITY", "CONVERTIBLE", "ATM", "DEBT", "UNCLASSIFIED"];
+const OF_WORD = { EQUITY: "new shares sold now", CONVERTIBLE: "notes that can turn into shares", ATM: "shares sold over time (at-the-market)",
+  DEBT: "bonds / notes — no new shares", UNCLASSIFIED: "the first page did not say — open the SEC link" };
+const OF_SEL = "ticker,form,filed_date,accepted_utc,class,sentence,size_text,url";
+var OF = { co: {} };
+function ofFmtDay(day) {
+  const d = new Date(String(day || "").slice(0, 10) + "T12:00:00Z");
+  return isNaN(d) ? String(day || "") : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+function ofSecUrl(u) { return /^https:\/\/www\.sec\.gov\//.test(String(u || "")) ? String(u) : ""; }
+function ofChipHTML(cls) {
+  const c = OF_WORD[cls] ? cls : "UNCLASSIFIED";
+  return '<span class="of-chip of-' + c.toLowerCase() + '" title="' + esc(OF_WORD[c]) + '">' + esc(c) + "</span>";
+}
+/* one filing: date · form · class · size, then the sentence that decided the class and the SEC link */
+function ofRowHTML(r) {
+  const u = ofSecUrl(r.url);
+  return '<div class="of-row" data-of-class="' + esc(r.class) + '">' +
+    '<div class="of-top"><span class="of-date">' + esc(ofFmtDay(r.filed_date)) + '</span><span class="of-meta">' + esc(r.form) + "</span>" +
+      ofChipHTML(r.class) + '<span class="of-size">' + esc(r.size_text || "size not printed on the cover") + "</span></div>" +
+    '<div class="of-sent">' + (r.sentence ? "“" + esc(r.sentence) + "”" : '<i class="of-none">the first page printed no deciding sentence</i>') +
+      (u ? ' <a class="of-sec" href="' + esc(u) + '" target="_blank" rel="noopener">SEC ◹</a>' : "") + "</div>" +
+  "</div>";
+}
+/* plain money: $6.40B · $850M (no sign: the label says which way the money went) */
+function ofMoney(v) {
+  if (v == null || v === "" || !isFinite(+v)) return "—";
+  const a = Math.abs(+v);
+  return a >= 1e9 ? "$" + (a / 1e9).toFixed(a >= 1e11 ? 0 : 2) + "B" : a >= 1e6 ? "$" + (a / 1e6).toFixed(0) + "M" : "$" + a.toLocaleString("en-US");
+}
+function ofCashHTML(balq, cfq) {
+  const cash = balq && balq.cash_and_equiv != null && isFinite(+balq.cash_and_equiv) ? +balq.cash_and_equiv : null;
+  let h = '<div class="of-k">CASH ON HAND</div>' +
+    '<div class="of-v">' + ofMoney(cash) + "</div>" +
+    '<div class="of-d">' + (cash != null ? "cash and equivalents · " + esc(ofFmtDay(balq.fiscal_date)) + " balance sheet" : "no quarterly balance sheet stored") + "</div>";
+  h += '<div class="of-k">CAPITAL SPENDING · LAST 4 QUARTERS</div>';
+  if (!cfq) return h + '<div class="of-d">reading …</div>';
+  const qs = cfq.filter((q) => q && q.capex != null && isFinite(+q.capex)).slice(0, 4);
+  if (!qs.length) return h + '<div class="of-d">no quarterly cash-flow rows stored</div>';
+  h += '<table class="of-capex"><tbody>' + qs.map((q) => "<tr><td>" + esc(String(q.period) + "·" + String(q.fiscal_year).slice(2)) + "</td><td>" +
+    esc(ofFmtDay(q.fiscal_date)) + "</td><td>" + ofMoney(q.capex) + "</td></tr>").join("") +
+    (qs.length === 4 ? '<tr class="of-sum"><td colspan="2">the four together</td><td>' + ofMoney(qs.reduce((a, q) => a + Math.abs(+q.capex), 0)) + "</td></tr>" : "") +
+    "</tbody></table>";
+  return h + '<div class="of-d">cash spent on property and equipment · cashflow_history</div>';
+}
+function ofCapBodyHTML(t, c, balq) {
+  const head = '<h3 class="fn3-h">CAPITAL &amp; DILUTION <span>offering filings at the SEC since ' + esc(ofFmtDay(OF_RECORD_FROM)) +
+    ", newest first · cash and capital spending from our statements</span></h3>";
+  let list;
+  if (!c) list = '<div class="of-empty">reading the filings …</div>';
+  else if (c.err) list = '<div class="of-empty">could not read offering_filings — ' + esc(c.err) + "</div>";
+  else if (!c.rows.length) list = '<div class="of-empty">no offering filing by $' + esc(t) + " since " + esc(ofFmtDay(OF_RECORD_FROM)) + " (when the record starts)</div>";
+  else list = c.rows.map(ofRowHTML).join("");
+  const legend = '<div class="fn3-note of-legend">EQUITY new shares sold now · CONVERTIBLE notes that can turn into shares · ATM shares sold over time · ' +
+    "DEBT bonds, no new shares · UNCLASSIFIED the first page did not say (a shelf, a resale) — open the SEC link · offering-watch reads each filing's first page at the SEC</div>";
+  return head + '<div class="of-grid"><div class="of-list">' + list + "</div>" +
+    '<div class="of-cash">' + ofCashHTML(balq, c ? c.cfq : null) + "</div></div>" + legend;
+}
+function ofCapSectionHTML(data) {
+  return '<section class="fn3-sec of-cap" id="ofCap_' + esc(data.t) + '">' + ofCapBodyHTML(data.t, OF.co[data.t], data._balq) + "</section>";
+}
+function ofCapFill(t, balq) {
+  if (!t) return;
+  const paint = () => { const n = el("ofCap_" + t); if (n) n.innerHTML = ofCapBodyHTML(t, OF.co[t], balq); };
+  const have = OF.co[t];
+  if (have && !have.err && Date.now() - have.at < OF_TTL_MS) { paint(); return; }
+  const e = encodeURIComponent(t);
+  Promise.all([
+    pg("offering_filings?select=" + OF_SEL + "&ticker=eq." + e + "&order=filed_date.desc,accepted_utc.desc.nullslast&limit=40"),
+    pg("cashflow_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,fiscal_date,capex&order=fiscal_date.desc&limit=4").catch(() => []),
+  ]).then(([rows, cfq]) => { OF.co[t] = { rows: Array.isArray(rows) ? rows : [], cfq: Array.isArray(cfq) ? cfq : [], at: Date.now() }; })
+    .catch((x) => { OF.co[t] = { rows: [], cfq: [], at: Date.now(), err: String((x && x.message) || x) }; })
+    .then(paint);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Room · SENTIMENT (master tab, market-wide) — ONE consolidated reading built
    from data Scintilla already holds, with every input, its age and its source
    on screen. Monochrome by house rule. Nothing here invents a number: a stale
@@ -19219,10 +19331,13 @@ function financialsTabHTML(data) {
   const inc = byFY(data._finhist), bal = byFY(data._balhist), cf = byFY(data._cfhist);
   const qs = finQuarters(data._finq, 8);
   const years = Array.from(new Set(Object.keys(inc).concat(Object.keys(bal), Object.keys(cf)).map(Number))).sort((a, b) => a - b).slice(-6);
-  if (!years.length && !qs.length) return '<div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
+  const ofCap = typeof ofCapSectionHTML === "function" ? ofCapSectionHTML(data) : "";      /* R2 Part A (2 Oct) — CAPITAL & DILUTION */
+  if (ofCap && typeof setTimeout === "function") setTimeout(() => ofCapFill(data.t, data._balq), 0);
+  if (!years.length && !qs.length) return (ofCap ? '<div class="fn3">' + ofCap + "</div>" : "") + '<div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
   const fyCols = years.map((y) => "FY" + String(y).slice(2));
   const col = (m, f) => years.map((y) => f(m[y] || null, y));
   let out = '<div class="fn3"><div class="fn3-src">FMP statements stored in our tables · $ billions unless marked · (brackets) = negative</div>';
+  out += ofCap;                                                                           /* R2 Part A (2 Oct) — the offering filings' home */
   if (qs.length) {
     out += '<section class="fn3-sec"><h3 class="fn3-h">QUARTERS · REVENUE <span>last ' + qs.length + " reported · green = bigger than the same quarter a year before, red = smaller</span></h3>" +
       finQBarsHTML(qs) +

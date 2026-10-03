@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offering watch · R2 A</title>
+<meta name="description" content="R2 Part A, 2 Oct 2026: a nightly job reads every SEC offering filing our stocks make and sorts it (new shares, convertible, at-the-market, bonds, unclassified); its home on the Hub is the company view's FINANCIALS tab, CAPITAL & DILUTION, with cash on hand and the last four quarters of capital spending beside it.">
+<style>
+  :root { --bg:#161616; --panel:#1e1e1e; --panel2:#242424; --line:#2e2e2e; --ink:#c8c8c8; --ink2:#9a9a9a; --ink3:#6e6e6e; --accent:#b4b4b4; --up:#4f9d5d; --down:#b4504f;
+          --eq:#ff3060; --cv:#ff8a00; --atm:#ffe500; --debt:#2d9cff; --un:#8b5cf6; }
+  * { box-sizing:border-box; }
+  html, body { background:var(--bg); color:var(--ink); margin:0; font:14px/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  body { padding:28px 16px 60px; max-width:1180px; margin:0 auto; }
+  h1 { font-size:22px; font-weight:600; letter-spacing:.02em; margin:0 0 4px; color:var(--accent); }
+  h2 { font-size:16px; font-weight:600; margin:0 0 10px; color:var(--accent); font-family:ui-monospace, Menlo, monospace; letter-spacing:.06em; }
+  h3 { font-size:13px; font-weight:600; margin:18px 0 6px; color:var(--ink); font-family:ui-monospace, Menlo, monospace; letter-spacing:.05em; text-transform:uppercase; }
+  .sub { color:var(--ink2); font-size:12px; font-family:ui-monospace, Menlo, monospace; margin-bottom:22px; overflow-wrap:anywhere; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:18px 18px 14px; margin:0 0 18px; }
+  p { margin:6px 0 10px; }
+  .k { font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--accent); background:var(--panel2); padding:1px 5px; border-radius:3px; overflow-wrap:anywhere; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; margin:8px 0 12px; display:block; overflow-x:auto; max-width:100%; }
+  table tbody { display:table; width:100%; min-width:560px; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--ink2); font-weight:500; font-family:ui-monospace, Menlo, monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  .box { background:var(--panel2); border:1px solid var(--line); border-radius:5px; padding:12px 14px; }
+  .box h4 { margin:0 0 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink2); font-family:ui-monospace, Menlo, monospace; }
+  ul { margin:4px 0 10px; padding-left:20px; } li { margin:3px 0; }
+  .muted { color:var(--ink2); } .dim { color:var(--ink3); }
+  .pic { background:#1a1a1a; border:1px solid var(--line); border-radius:5px; padding:10px 12px 8px; margin:8px 0 14px; }
+  .pic img { display:block; width:100%; height:auto; border:1px solid #333; background:#111; }
+  .pic .cap { font-size:11.5px; color:var(--ink2); margin-top:6px; }
+  .phone { max-width:360px; }
+  .decision { border-left:3px solid #4a4a4a; padding:8px 12px; margin:10px 0; background:var(--panel2); }
+  .decision b { color:var(--accent); }
+  .meas { font-family:ui-monospace, Menlo, monospace; font-size:10.5px; color:var(--ink3); letter-spacing:.05em; }
+  .chip { font:700 10px ui-monospace, Menlo, monospace; letter-spacing:.06em; border:1px solid currentColor; border-radius:3px; padding:0 5px; white-space:nowrap; }
+  .c-equity { color:var(--eq); } .c-convertible { color:var(--cv); } .c-atm { color:var(--atm); } .c-debt { color:var(--debt); } .c-unclassified { color:var(--un); }
+  .big { font:600 26px ui-monospace, Menlo, monospace; color:var(--ink); } .big small { font-size:12px; color:var(--ink2); font-weight:400; margin-left:6px; }
+  .tiles { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; margin:10px 0 6px; }
+  @media (max-width:760px) { .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  .tile { background:var(--panel2); border:1px solid var(--line); border-radius:5px; padding:10px 12px; }
+  .tile .w { font-size:11.5px; color:var(--ink2); margin-top:4px; }
+  .removed li { color:var(--ink2); }
+  code { font-family:ui-monospace, Menlo, monospace; font-size:12px; overflow-wrap:anywhere; }
+  pre { background:#111; border:1px solid var(--line); border-radius:5px; padding:10px 12px; overflow-x:auto; font-size:11.5px; line-height:1.45; }
+  a { color:#a8a8a8; } a:hover { color:#d0d0d0; }
+</style>
+</head>
+<body>
+<span data-scnav-slot></span><h1>Offering watch — who is selling new shares, read from the SEC every night</h1>
+<div class="sub">R2 Part A · built 2 Oct 2026, 20:53–21:45 ET · branch hub/r2-offering-20261002 · headless pictures at 1680 (scale 2) and 390 · nothing deployed to the Hub</div>
+
+<section>
+  <h2>01 · PICTURES</h2>
+  <div class="pic"><img src="screens/financials-crwv-wide-1680.png" alt="The Hub with CoreWeave open on the FINANCIALS tab; CAPITAL & DILUTION is the first block on the right"><div class="cap">CoreWeave open, FINANCIALS tab (1680 wide). The block sits at the top of the tab, under the chart: the 17 Sep filing on the left, cash and capital spending on the right.</div></div>
+  <div class="grid">
+    <div class="pic"><img src="screens/financials-crwv-1680.png" alt="CoreWeave's CAPITAL & DILUTION block close up"><div class="cap">Close up. 17 Sep · 424B5 · <span class="chip c-atm">ATM</span> · up to 35,000,000 shares, sold through sales agents over time. Cash $6.40B on 30 Jun 2026; capital spending $6.42B, $7.70B, $4.06B, $2.39B in the last four quarters — $20.57B together.</div></div>
+    <div class="pic"><img src="screens/financials-syy-1680.png" alt="Sysco's CAPITAL & DILUTION block close up"><div class="cap">Sysco: the newest are bonds (<span class="chip c-debt">DEBT</span>); further down the list sit its 14 and 16 Sep stock sale (<span class="chip c-equity">EQUITY</span> $1,000,000,000, then 12,345,679 shares) — the "stock sale, then bonds" R1 described.</div></div>
+  </div>
+  <div class="grid">
+    <div class="pic"><img src="screens/financials-axon-1680.png" alt="Axon's CAPITAL & DILUTION block close up"><div class="cap">Axon: the $1,000,000,000 convertible notes (<span class="chip c-convertible">CONVERTIBLE</span>, preliminary 15 Sep and final 17 Sep). No quarterly balance sheet or cash-flow rows are stored for Axon, so the right side says so instead of printing a number.</div></div>
+    <div class="pic phone"><img src="screens/financials-crwv-390.png" alt="The block on a phone"><div class="cap">On a phone (390 wide) the two halves stack: filings, then cash and capital spending, then the key to the five kinds.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>02 · THE SHORT VERSION</h2>
+  <p><b>Where you see it.</b> Open any company → <b>FINANCIALS</b> tab. It now opens with <b>CAPITAL &amp; DILUTION</b>: that company's offering paperwork at the SEC, newest first — the date, the form, what kind of sale it is, how big, the sentence on the document's first page that says so, and a link to the document. Beside it, as plain numbers: the <b>cash on hand</b> and the <b>capital spending of the last four quarters</b>.</p>
+  <p><b>What fills it.</b> A small robot in Supabase (<span class="k">offering-watch</span>) asks FMP for every offering filing made that day, keeps the 454 stocks we serve, reads the first page of each new one at the SEC (free), and sorts it into one of five kinds. It writes into a new notebook table (<span class="k">offering_filings</span>). Tonight it went back 120 days.</p>
+  <div class="tiles">
+    <div class="tile"><span class="chip c-equity">EQUITY</span><div class="big">29<small>20 companies</small></div><div class="w">new shares sold now — a dilution</div></div>
+    <div class="tile"><span class="chip c-convertible">CONVERTIBLE</span><div class="big">7<small>4 companies</small></div><div class="w">notes or preferred that can turn into shares — a dilution later</div></div>
+    <div class="tile"><span class="chip c-atm">ATM</span><div class="big">21<small>19 companies</small></div><div class="w">shares sold "from time to time" through brokers — a slow dilution</div></div>
+    <div class="tile"><span class="chip c-debt">DEBT</span><div class="big">86<small>50 companies</small></div><div class="w">bonds and notes — no new shares</div></div>
+    <div class="tile"><span class="chip c-unclassified">UNCLASSIFIED</span><div class="big">41<small>35 companies</small></div><div class="w">the first page did not say — mostly shelf permission slips; open the link</div></div>
+  </div>
+  <p class="meas">MEASURED · 4 Jun → 2 Oct 2026 · 87 weekdays · 435 FMP calls · 5,998 filings market-wide · 184 by our stocks (101 companies) · 184 SEC first-page reads · 0 errors</p>
+  <p><b>Changed tonight on your word</b> ("before alerts, things need to have a home on hub"): the first build also put an OFFERINGS list on the ALERTS tab, a ◆ beside the ticker on the board, a list in the EVENTS tab, and alert rows. All four were <b>removed</b> — see section 06.</p>
+</section>
+
+<section>
+  <h2>03 · WHAT THE JOB FOUND — EVERY DILUTIVE FILING IN THE LAST 120 DAYS</h2>
+  <p>57 filings by 39 of our companies sold, or set up the sale of, new shares. Sizes are as printed on the cover; a preliminary cover leaves the number blank, and the final one a day or two later carries it.</p>
+  <table><tbody><tr><th>filed</th><th>company</th><th>form</th><th>kind</th><th>size</th></tr>
+<tr><td>2 Oct</td><td><b>QCOM</b></td><td>S-3</td><td><span class="chip c-equity">EQUITY</span></td><td>25,000,000 Shares</td></tr>
+<tr><td>17 Sep</td><td><b>AXON</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>$1,000,000,000</td></tr>
+<tr><td>17 Sep</td><td><b>CRWV</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to 35,000,000 shares</td></tr>
+<tr><td>16 Sep</td><td><b>SYY</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>12,345,679 Shares</td></tr>
+<tr><td>15 Sep</td><td><b>AXON</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>$1,000,000,000</td></tr>
+<tr><td>15 Sep</td><td><b>OKE</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $1,000,000,000</td></tr>
+<tr><td>14 Sep</td><td><b>SYY</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>$1,000,000,000</td></tr>
+<tr><td>11 Sep</td><td><b>CRWD</b></td><td>S-3ASR</td><td><span class="chip c-equity">EQUITY</span></td><td>2,118,022 Shares</td></tr>
+<tr><td>11 Sep</td><td><b>GLW</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $2,000,000,000</td></tr>
+<tr><td>11 Sep</td><td><b>OKLO</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>UP TO $1,000,000,000</td></tr>
+<tr><td>11 Sep</td><td><b>ZETA</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>Up to $25,000,000</td></tr>
+<tr><td>9 Sep</td><td><b>LEU</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>not printed on the cover</td></tr>
+<tr><td>4 Sep</td><td><b>USAR</b></td><td>S-3</td><td><span class="chip c-equity">EQUITY</span></td><td>126,476,950 SHARES</td></tr>
+<tr><td>31 Aug</td><td><b>EOSE</b></td><td>S-3ASR</td><td><span class="chip c-equity">EQUITY</span></td><td>Up to 56,545,954 shares</td></tr>
+<tr><td>28 Aug</td><td><b>LOW</b></td><td>S-3ASR</td><td><span class="chip c-equity">EQUITY</span></td><td>2,500,000 shares</td></tr>
+<tr><td>21 Aug</td><td><b>AAOI</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>$600,000,000</td></tr>
+<tr><td>14 Aug</td><td><b>UCTT</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $400,000,000</td></tr>
+<tr><td>13 Aug</td><td><b>RKLB</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $1,944,369,826</td></tr>
+<tr><td>11 Aug</td><td><b>JOBY</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $750,000,000</td></tr>
+<tr><td>11 Aug</td><td><b>RHP</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>5,100,000 Shares</td></tr>
+<tr><td>11 Aug</td><td><b>SMR</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $750,000,000</td></tr>
+<tr><td>10 Aug</td><td><b>BTDR</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>Up to US$1,000,000,000</td></tr>
+<tr><td>10 Aug</td><td><b>EVTL</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>Up to 54,446,488 Ordinary Shares</td></tr>
+<tr><td>10 Aug</td><td><b>INTC</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>$15,000,000,000</td></tr>
+<tr><td>10 Aug</td><td><b>RHP</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>5,100,000 Shares</td></tr>
+<tr><td>6 Aug</td><td><b>GOOGL</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>up to $40,000,000,000</td></tr>
+<tr><td>5 Aug</td><td><b>TWST</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>3,125,000 Shares</td></tr>
+<tr><td>4 Aug</td><td><b>AEE</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $2,266,700,000</td></tr>
+<tr><td>4 Aug</td><td><b>OKE</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $1,000,000,000</td></tr>
+<tr><td>4 Aug</td><td><b>PNW</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up To $500,000,000</td></tr>
+<tr><td>4 Aug</td><td><b>TWST</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>$250,000,000</td></tr>
+<tr><td>28 Jul</td><td><b>WELL</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>$7,500,000,000</td></tr>
+<tr><td>10 Jul</td><td><b>DOW</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>5,410,000 shares</td></tr>
+<tr><td>8 Jul</td><td><b>RIVN</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>$ 1,162,500,000</td></tr>
+<tr><td>6 Jul</td><td><b>OUST</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>3,621,876 Shares</td></tr>
+<tr><td>6 Jul</td><td><b>RIVN</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>75,000,000 Shares</td></tr>
+<tr><td>2 Jul</td><td><b>OUST</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>not printed on the cover</td></tr>
+<tr><td>30 Jun</td><td><b>EOSE</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>not printed on the cover</td></tr>
+<tr><td>30 Jun</td><td><b>EOSE</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>13,683,634 shares</td></tr>
+<tr><td>30 Jun</td><td><b>VSH</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>15,000,000 Shares</td></tr>
+<tr><td>29 Jun</td><td><b>VSH</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>$750,000,000</td></tr>
+<tr><td>23 Jun</td><td><b>MSTR</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $21,000,000,000</td></tr>
+<tr><td>23 Jun</td><td><b>ORCL</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $20,000,000,000</td></tr>
+<tr><td>18 Jun</td><td><b>OKE</b></td><td>S-3ASR</td><td><span class="chip c-equity">EQUITY</span></td><td>4,324,663 shares</td></tr>
+<tr><td>18 Jun</td><td><b>TLN</b></td><td>S-3ASR</td><td><span class="chip c-equity">EQUITY</span></td><td>Up to 2,399,998 Shares</td></tr>
+<tr><td>12 Jun</td><td><b>SMCI</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>not printed on the cover</td></tr>
+<tr><td>12 Jun</td><td><b>SPCX</b></td><td>424B4</td><td><span class="chip c-equity">EQUITY</span></td><td>555,555,555 shares</td></tr>
+<tr><td>10 Jun</td><td><b>SMCI</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>$1,250,000,000</td></tr>
+<tr><td>10 Jun</td><td><b>SMCI</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>not printed on the cover</td></tr>
+<tr><td>9 Jun</td><td><b>RDW</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $500,000,000</td></tr>
+<tr><td>8 Jun</td><td><b>NVTS</b></td><td>S-3ASR</td><td><span class="chip c-atm">ATM</span></td><td>$500.0 million</td></tr>
+<tr><td>5 Jun</td><td><b>PL</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up to $1,500,000,000</td></tr>
+<tr><td>5 Jun</td><td><b>PNW</b></td><td>424B5</td><td><span class="chip c-atm">ATM</span></td><td>Up To $900,000,000</td></tr>
+<tr><td>5 Jun</td><td><b>USAR</b></td><td>S-3/A</td><td><span class="chip c-equity">EQUITY</span></td><td>up to 15,653,227 shares</td></tr>
+<tr><td>4 Jun</td><td><b>GOOGL</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>not printed on the cover</td></tr>
+<tr><td>4 Jun</td><td><b>GOOGL</b></td><td>424B5</td><td><span class="chip c-equity">EQUITY</span></td><td>25,459,689 shares</td></tr>
+<tr><td>4 Jun</td><td><b>GOOGL</b></td><td>424B5</td><td><span class="chip c-convertible">CONVERTIBLE</span></td><td>not printed on the cover</td></tr>
+  </tbody></table>
+  <h3>R1's check cases, tonight</h3>
+  <table><tbody><tr><th>company · date</th><th>R1 said</th><th>the job says</th><th>why</th></tr>
+    <tr><td><b>CoreWeave</b> · 17 Sep</td><td>EQUITY</td><td><span class="chip c-atm">ATM</span> up to 35,000,000 shares</td><td>The cover sells the shares "under an Equity Distribution Agreement … through the Sales Agents" — an at-the-market programme, R1's own third pattern. R1's code checked the share count first, so it printed EQUITY. Same loudness either way; the kind is what the document says.</td></tr>
+    <tr><td><b>Axon</b> · 15 &amp; 17 Sep</td><td>convertible</td><td><span class="chip c-convertible">CONVERTIBLE</span> $1,000,000,000</td><td>"0% Convertible Senior Notes due 2031" — matches.</td></tr>
+    <tr><td><b>Kroger</b> · 29 Sep</td><td>bonds</td><td><span class="chip c-debt">DEBT</span> $1,500,000,000</td><td>5.800% notes due 2032 and 6.200% notes due 2036 — matches.</td></tr>
+    <tr><td><b>Zeta</b> · 11 Sep</td><td>unclassified (the one R1 missed)</td><td><span class="chip c-equity">EQUITY</span> up to $25,000,000</td><td>"Up to $25,000,000 of Shares of Class A Common Stock" — a dollar amount, not a share count. The new fifth pattern reads it.</td></tr>
+    <tr><td><b>Sysco</b> · 14–24 Sep</td><td>a stock sale, then bonds</td><td><span class="chip c-equity">EQUITY</span> ×2, then <span class="chip c-debt">DEBT</span> ×8</td><td>matches.</td></tr>
+    <tr><td><b>Corning, ONEOK, Oklo</b></td><td>at-the-market</td><td><span class="chip c-atm">ATM</span> $2B · $1B · $1B</td><td>matches.</td></tr>
+    <tr><td><b>Amazon, Aon, FedEx, nVent</b></td><td>bonds</td><td><span class="chip c-debt">DEBT</span></td><td>matches.</td></tr>
+  </tbody></table>
+</section>
+
+<section>
+  <h2>04 · HOW IT WORKS, IN THREE CHARACTERS</h2>
+  <div class="grid">
+    <div class="box"><h4>The night clerk · offering-watch</h4><p>A Supabase function. Each weekday it asks FMP "which 424B5, 424B4, S-3, S-3ASR and S-1 forms were filed today?" — one question per form, one day at a time, because the whole market's list overflows FMP's 1,000-row page in a month. It keeps only our 454 stocks and skips anything it has already read.</p></div>
+    <div class="box"><h4>The reader · the first page at the SEC</h4><p>For each new filing it opens the document at sec.gov (free; at most 4 reads a second; it stops after about 60 KB) and reads the cover. The earliest decisive phrase wins: "Convertible Senior Notes" → CONVERTIBLE, "Senior Notes due" → DEBT, "35,000,000 shares of … common stock" or "$25,000,000 of Shares" → EQUITY, "equity distribution agreement / at the market" → ATM. It keeps the sentence that decided.</p></div>
+  </div>
+  <div class="box" style="margin-top:14px"><h4>The notebook · offering_filings</h4><p>One row per filing: company, form, date filed, the SEC acceptance time, the kind, the deciding sentence (300 characters at most), the size as printed, and when the clerk first saw it. The Hub reads it with its public read key; only the clerk can write. The universe it checks against is <span class="k">public.tickers</span>, active rows that are stocks or carry no type (the 90 untyped rows are core stocks — Apple, Nvidia, CoreWeave, Zeta), never a fund, never a crypto pair: 454 names. R1's "364 stocks" counted only rows typed "stock" and would have missed CoreWeave and Zeta.</p></div>
+</section>
+
+<section>
+  <h2>05 · WHAT COULD BE WRONG</h2>
+  <ul>
+    <li><b>The SEC refuses Supabase's default region.</b> From us-east-1 the SEC answered "Request Rate Threshold Exceeded" to the clerk's very first two reads — other customers' traffic shares those addresses. From us-west-2 every read worked (552 reads tonight across the history runs, none refused). The clerk must be called with the header <span class="k">x-region: us-west-2</span>. If the SEC ever refuses that region too, the clerk stops reading at once, writes nothing for the refused filings and picks them up on the next run.</li>
+    <li><b>A resale is filed as EQUITY.</b> Qualcomm's 2 Oct S-3 registers 25,000,000 shares for <i>resale by a selling stockholder</i> — shares coming to market, but not new shares. Lowe's 2,500,000 are for an employee plan. The sentence shown says so; the chip does not (decision 2).</li>
+    <li><b>Shelves are UNCLASSIFIED on purpose.</b> 32 of the 41 are S-3ASR shelf registrations — permission to sell "from time to time" any of common stock, preferred, debt, warrants. They are not a sale; the takedown comes later as a 424B5, which the clerk reads too.</li>
+    <li><b>Sizes are missing on 95 rows.</b> Preliminary covers leave the numbers blank ("$ % Notes due 20"); shelves rarely print one; Alphabet's and Super Micro's mandatory convertible preferred print their size in depositary shares, which the size reader does not pick up. The final filing a day later usually carries the number.</li>
+    <li><b>The class rule is a reading of one page, not a judgment.</b> 133 of the 134 424B5s were decided; one still says UNCLASSIFIED, and six S-1s by SHAZ printed nothing readable in their first 240 KB. Open the SEC link before acting on any row.</li>
+    <li><b>FMP's acceptance time is taken to be New York time</b> (EDGAR's clock) and converted to UTC — assumption, consistent with every row seen tonight.</li>
+    <li><b>Cash and capex are what our statement tables hold.</b> Axon has no quarterly rows, so its block says "no quarterly balance sheet stored". Sysco's fiscal year ends in June, so its quarters read Q1·26–Q4·26 for Sep 2025 – Jun 2026.</li>
+    <li><b>The search for S-1 and S-3 also returns their amendments</b> (S-1/A, S-3/A); they are kept and labelled as such.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>06 · WHAT WAS REMOVED, AND WHAT WAS NOT DONE</h2>
+  <h3>Removed tonight, on your instruction</h3>
+  <ul class="removed">
+    <li>The OFFERINGS section on the <b>ALERTS</b> tab — ALERTS is parked again, exactly as before.</li>
+    <li>The small ◆ beside a ticker on the <b>board</b> for a new-share filing in the last 10 days — the board row is untouched again.</li>
+    <li>The OFFERINGS list in the company <b>EVENTS</b> tab — one home (FINANCIALS), not two.</li>
+    <li>The clerk's <b>alert_log</b> rows in its nightly mode — the code path is gone and the clerk redeployed; it writes only its own notebook. The kind → loudness map (new shares, convertible, at-the-market loud; unclassified medium; bonds quiet) is kept, unused, for the day alerts are wanted. No alert row was ever written: 0 in alert_log.</li>
+  </ul>
+  <h3>Not done</h3>
+  <ul>
+    <li><b>No projection</b> of "capital spending vs cash → expected dilution" — the numbers sit side by side, nothing is computed from them (decision 1, section 07).</li>
+    <li><b>No schedule.</b> The coordinator turns on the nightly run after review; the line is in section 08.</li>
+    <li>The nightly mode (<span class="k">pass</span>: the previous weekday and today) was not run live — the brief allowed the history run only. It is the same code path over two days.</li>
+    <li>R1's "step two" — a same-day pre-alert from news headlines and a 1 % jump in share count as a backstop — not built.</li>
+    <li>The Hub was not deployed; this is on the branch for review.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>07 · DECISIONS FOR ALAN</h2>
+  <div class="decision"><b>1 · Capital spending vs cash → expected dilution.</b> The block now shows how much cash a company holds and how fast it is spending on equipment, next to the share sales it has filed. A projection would say "at this pace, the cash covers N quarters; the gap is likely filled by X". <i>Recommendation:</i> yes, as the next step — first the plain "quarters of spending the cash covers" line, then a model that takes your assumptions (no provider's number), shown in the same block.</div>
+  <div class="decision"><b>2 · Resales and employee plans read as EQUITY.</b> Qualcomm's 25,000,000-share resale and Lowe's plan shares carry the same red chip as a company selling new stock. <i>Recommendation:</i> keep the kind, add a small "resale" / "plan" tag when the cover says so — cheap, and it stops a false alarm.</div>
+  <div class="decision"><b>3 · When alerts come, which rows should ring?</b> <i>Recommendation:</i> only EQUITY, CONVERTIBLE and ATM from actual sales (424B5 / 424B4), never shelves, resales or bonds — about 48 rings in the last 120 days across 39 companies, roughly two or three a week.</div>
+</section>
+
+<section>
+  <h2>08 · FOR THE COORDINATOR</h2>
+  <p><b>Recommended schedule</b> — the nightly mode twice each weekday: 23:15 New York (catches the day's filings) and 07:15 New York (catches late filings and anything the SEC refused). In UTC while New York is on summer time; pg_cron runs in UTC. Call it the way job 278 calls prediction-markets, plus the region header:</p>
+<pre>select cron.schedule('offering-watch-evening', '15 3 * * 2-6', $$ select net.http_post(
+  url := 'https://wadinxqplrggagkvrdag.supabase.co/functions/v1/offering-watch?mode=pass',
+  headers := jsonb_build_object('Authorization', 'Bearer &lt;the same key job 278 uses&gt;', 'Content-Type', 'application/json', 'x-region', 'us-west-2'),
+  body := '{}'::jsonb, timeout_milliseconds := 150000) $$);
+select cron.schedule('offering-watch-morning', '15 11 * * 1-5', $$ … same call … $$);</pre>
+  <p><b>Rollback</b> (written before the table was made): <span class="k">/Users/alanharvey/SCINTILLA 0.5/_archive/backend-fix-20260928/ROLLBACK-offering_filings-20261002.sql</span> drops the table; <span class="k">supabase functions delete offering-watch --project-ref wadinxqplrggagkvrdag</span> removes the clerk. Nothing else was changed in the database: no existing table's columns, constraints or rows, no cron.</p>
+  <p><b>Tests.</b> <span class="k">tests/r2-offering-20261002.test.mjs</span> — 14 tests on fixtures (the opening text of 30 real filings; R1's literal four patterns shown to miss Zeta; the function's safety rules; the block's functions run in a sandbox), all pass. Full Hub suite: 1,754 tests, 1,747 pass, the same 5 known failures as the untouched release branch a389c7c (econ tape, YouTube age, two Indicator Lab, xfeed-publish — run on a clean copy tonight to be sure), 2 skipped; before this branch: 1,740 tests, 5 failures.</p>
+  <p class="meas">FILES · supabase/functions/offering-watch/{index.ts, classify.mjs} · supabase/migrations/20261002_offering_filings.sql · index.html (one block + the FINANCIALS hook) · preview/company-view/index.html (trial copy) · tests/r2-offering-20261002.test.mjs · tests/fixtures/r2-offering-20261002.json · this page and tools/r2a-walk.mjs</p>
+</section>
+
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
