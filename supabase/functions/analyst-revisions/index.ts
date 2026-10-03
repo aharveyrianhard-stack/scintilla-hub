@@ -230,7 +230,8 @@ Deno.serve(async (req) => {
           depth[t + ":" + f.k] = { pages, oldest, reached };
         }
         const clean = dedupe(rows);
-        n += await upsert(sb, "analyst_target_news", clean, "ticker,published_utc,firm,kind");
+        const done = await upsert(sb, "analyst_target_news", clean, "ticker,published_utc,firm,kind");   // not "n += await …": the batches run side by side
+        n += done;
         nT += clean.filter((r) => r.kind === "TARGET").length;
         nG += clean.filter((r) => r.kind === "GRADE").length;
       });
