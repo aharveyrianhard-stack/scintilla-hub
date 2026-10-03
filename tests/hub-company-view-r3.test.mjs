@@ -160,8 +160,9 @@ test("STATS on one screen: no sub-tabs to click (H7, 2 Oct: six blocks in one gr
 test("the median target says where it comes from: the analysts' own targets, not the comps", () => {
   /* A3 (3 Oct): the price target is the block at the top of ESTIMATES; the sentence moved to its PAGE SPECS (Alan: "remove descriptions") */
   const f = fn("estPtcSpecs");
-  assert.match(f, /MEDIAN = the middle of the price targets published by the firms that cover /);
-  assert.match(f, /\(price_target_consensus\)[\s\S]*?Not from the comps\./);
+  /* A4 (3 Oct): the block reads the firms' own notes, checked (analyst_target_news); FMP's consensus is shown beside it */
+  assert.match(f, /MEDIAN = the middle of those targets/);
+  assert.match(f, /\(analyst_target_news, A4\)[\s\S]*?Not from the comps\./);
 });
 
 /* ── LOOK · TRIAL COPY ──────────────────────────────────────────────────────────────────────────── */
