@@ -23,11 +23,15 @@ export type Tranche = {
   pct: string | null;              // "7%" when the row states a share of the locked stock
   conditional: boolean;            // the row only releases if a price test passes
   final: boolean;                  // the last row: everything still locked
+  sponsor?: boolean;               // C1: a former SPAC sponsor's founder-share lock-up (not the IPO underwriters')
+  clause?: string | null;          // C1: the sentence that sets the sponsor lock-up
+  price_rule?: string | null;      // C1: "or earlier if the price holds above $12.00 (20 of 30 trading days)"
 };
 export type Lockup = {
   days: number | null; months: number | null; clause: string | null;
   early_release: string | null; early_rule: string | null;
   prospectus_date: string | null; schedule: Tranche[]; direct_listing: boolean;
+  sponsor: Tranche | null;         // C1: a former SPAC's sponsor lock-up, when the text states one and the merger's closing date
 };
 
 const MON = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -206,6 +210,40 @@ export function focusClause(s: string | null, max = 420): string | null {
   return (from > 0 ? "… " : "") + out + (from + max < s.length ? " …" : "");
 }
 
+/** C1 (2 Oct 2026, night) · a former SPAC's SPONSOR lock-up — "one more clause shape". A company that listed through a
+    SPAC merger keeps the SPAC's own promise in its later prospectuses: SharonAI's 424B4 (18 Feb 2026) — "each of the
+    Former Sponsor and our independent directors agreed … not to transfer, assign, or sell any of their founder shares until
+    the earlier to occur of: (i) one year after the completion of our initial business combination …", released early "if
+    the closing price … exceeds $12.00 per share … for any 20 trading days within any 30-trading day period", and "The
+    Business Combination closed on December 17, 2025." → founder shares free on 17 Dec 2026. Null unless BOTH the term and
+    the closing date are printed: no date is ever assumed. */
+const SPONSOR_TERM = new RegExp("(?:founder\\s+shares|sponsor)[^.]{0,400}?until\\s+the\\s+(?:earlier|later)(?:\\s+to\\s+occur)?\\s+of:?\\s*(?:\\((?:i|A|1|a)\\)\\s*)?" +
+  "(one|two|three|six|nine|twelve|eighteen|\\d{1,2})\\s*(?:\\(\\d{1,2}\\)\\s*)?(years?|months?)\\s+(?:after|following)\\s+the\\s+(?:date\\s+of\\s+(?:the\\s+)?)?(?:completion|consummation|closing)\\s+of\\s+(?:our|an|the)\\s+(?:initial\\s+)?business\\s+combination", "i");
+const SPONSOR_CLOSED = new RegExp("Business\\s+Combination\\s+(?:closed|was\\s+consummated|was\\s+completed)\\s+on\\s+(" + MONTH_WORD + "\\s+\\d{1,2},\\s+\\d{4})" +
+  "|On\\s+(" + MONTH_WORD + "\\s+\\d{1,2},\\s+\\d{4}),\\s+(?:the\\s+Company|we)\\s+(?:consummated|completed|closed)\\s+the\\s+Business\\s+Combination", "i");
+const SPONSOR_PRICE = /(?:closing|last\s+reported\s+sale)\s+price[^.]{0,120}?(?:equals\s+or\s+)?exceeds?\s+\$(\d+(?:\.\d+)?)\s+per\s+share[^]{0,200}?(\d{1,2})\s+trading\s+days\s+within\s+any\s+(\d{1,2})[-\s]trading[-\s]day\s+period/i;
+export function sponsorLockup(text: string): Tranche | null {
+  const t = String(text || "");
+  const m = SPONSOR_TERM.exec(t);
+  if (!m) return null;
+  const c = SPONSOR_CLOSED.exec(t);
+  const closed = c ? isoFromWords(c[1] || c[2]) : null;
+  if (!closed) return null;
+  const W: Record<string, number> = { one: 1, two: 2, three: 3, six: 6, nine: 9, twelve: 12, eighteen: 18 };
+  const k = /^\d+$/.test(m[1]) ? +m[1] : W[m[1].toLowerCase()];
+  if (!k) return null;
+  const months = /^year/i.test(m[2]) ? k * 12 : k;
+  const date = addMonths(closed, months);
+  // the sentence: from the start of the sentence that holds the term to its end
+  const a = Math.max(t.lastIndexOf(". ", m.index) + 2, m.index - 400, 0), e = t.indexOf(". ", m.index + m[0].length);
+  const clause = focusClause(t.slice(a, e > 0 ? e + 1 : m.index + m[0].length + 300).trim(), 720);
+  const pr = SPONSOR_PRICE.exec(t.slice(m.index, m.index + 2500));
+  const price_rule = pr ? "or earlier if the price holds above $" + pr[1] + " (" + pr[2] + " of " + pr[3] + " trading days)" : null;
+  const span = months % 12 === 0 ? (months / 12) + " year" + (months === 12 ? "" : "s") : months + " months";
+  return { date, day: null, trigger: span + " after the SPAC merger closed (" + closed + ")", quarter_end: null, shares: null, pct: null,
+    conditional: false, final: false, sponsor: true, clause, price_rule };
+}
+
 /** read the lock-up out of prospectus text (already cleaned). Pure: the caller decides what text to pass. */
 export function findLockup(text: string, todayIso?: string): Lockup {
   text = String(text || "").replace(/\s{2,}/g, " ");                    // streamed pieces are joined with a space: never a run of them
@@ -261,8 +299,10 @@ export function findLockup(text: string, todayIso?: string): Lockup {
   const direct_listing = /\bdirect\s+listing\b/i.test(text.slice(0, 200000)) && !/\bunderwriters?\s+(?:have|has)\s+(?:severally\s+)?agreed\s+to\s+purchase/i.test(text);
   // a staged table's first row arrives glued to the table's heading: keep the row, drop the heading
   const earlyRow = early ? early.replace(/^[\s\S]*?Earliest\s+Date\s+Available\s+for\s+Sale\s+in\s+the\s+Public\s+Market\s+(?:Approximate\s+)?Number\s+of\s+Shares\s+of\s+(?:our\s+)?(?:Class\s+[A-Z]\s+)?Common\s+Stock\s+/i, "") : null;
+  const sponsor = sponsorLockup(text);
+  if (sponsor) early_rule = [early_rule, "founder shares (former SPAC sponsor) " + sponsor.date].filter(Boolean).join(" · ");
   return { days, months, clause: focusClause(clause), early_release: focusClause(earlyRow, 520),
-           early_rule, prospectus_date, schedule, direct_listing };
+           early_rule, prospectus_date, schedule, direct_listing, sponsor };
 }
 
 /** the unlock date and how it was found. A relisting or a direct listing gets none: there is no underwriters' lock-up. */
@@ -328,7 +368,7 @@ export async function lockupFromStream(reader: { read(): Promise<{ value?: Uint8
   todayIso: string, maxBytes = 16_000_000): Promise<{ bytes: number; complete: boolean; stoppedEarly: boolean; lk: Lockup }> {
   const dec = new TextDecoder();
   let carry = "", parts: string[] = [], textLen = 0, bytes = 0, done = false, stoppedEarly = false;
-  let lk: Lockup | null = null, checkedAt = 0, eiAt = -1, uwAt = -1, lockAfterUw = -1, tail = "";
+  let lk: Lockup | null = null, checkedAt = 0, eiAt = -1, uwAt = -1, lockAfterUw = -1, tail = "", spac = false;
   const text = () => parts.join(" ");
   while (!done) {
     const { value, done: d } = await reader.read();
@@ -343,6 +383,7 @@ export async function lockupFromStream(reader: { read(): Promise<{ value?: Uint8
     // the stop marks are looked for in the NEW piece only (plus a 64-character seam), never in the whole text again
     const base = textLen, probe = tail + piece, off = base - tail.length;
     parts.push(piece); textLen += piece.length + 1; tail = piece.slice(-64);
+    if (!spac && /initial\s+business\s+combination/i.test(probe)) spac = true;           // C1: a former SPAC — the sponsor clause may follow
     if (eiAt < 0) { const i = probe.search(/Earliest\s+Date\s+Available\s+for\s+Sale/i); if (i >= 0) eiAt = off + i; }
     if (uwAt < 0) { const j = probe.indexOf("UNDERWRITING"); if (j >= 0 && off + j > 60_000) uwAt = off + j; }
     if (uwAt >= 0 && lockAfterUw < 0) { const s = Math.max(0, uwAt - off), k = probe.slice(s).search(/lock-?\s?up/i); if (k >= 0) lockAfterUw = off + s + k; }
@@ -351,7 +392,7 @@ export async function lockupFromStream(reader: { read(): Promise<{ value?: Uint8
     if (done || !ready || textLen - checkedAt < 40_000) continue;
     checkedAt = textLen;
     lk = findLockup(text(), todayIso);
-    if (lk.days != null || lk.months != null) { stoppedEarly = true; break; }
+    if ((lk.days != null || lk.months != null) && (!spac || lk.sponsor)) { stoppedEarly = true; break; }
   }
   try { if (reader.cancel) await reader.cancel(); } catch (_) { /* already closed */ }
   if (!lk || (lk.days == null && lk.months == null)) lk = findLockup(text(), todayIso);

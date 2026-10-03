@@ -16,7 +16,7 @@
 //   3. preferred stock alone (R1 #4)                                                     → UNCLASSIFIED, the sentence says preferred
 //   4. nothing                                                                           → UNCLASSIFIED (a shelf, a resale, a miss)
 
-export const VERSION = "offering-watch-v1";
+export const VERSION = "offering-watch-v2";   // v2 (C1, 2 Oct night): the news step — offering headlines first, joined to the filing
 export const FORMS = ["424B5", "424B4", "S-3", "S-3ASR", "S-1"];
 export const CLASSES = ["EQUITY", "CONVERTIBLE", "ATM", "DEBT", "UNCLASSIFIED"];
 /** alert_log severity by class (the brief: EQUITY/CONVERTIBLE/ATM high, DEBT low/info, UNCLASSIFIED medium).
@@ -230,4 +230,77 @@ export function alertRow(row, nowMs) {
   const at = row.accepted_utc ? Date.parse(row.accepted_utc) : NaN;
   return { ticker: row.ticker, kind: "offering_filed", severity: SEVERITY[row.class] || "medium", message: alertMessage(row),
     ts: Math.floor((Number.isFinite(at) ? at : nowMs) / 1000) };
+}
+
+// ── C1 (2 Oct 2026, night) · the press release first ──────────────────────────────────────────────────────────
+// Alan ~22:00 ET: "If Massive news has the press release a day earlier — why would we design this on a source that is
+// slower?" Our news table (news-feed, cron 6) carries FMP's press-release feed (businesswire, globenewswire …), Google
+// News and investing.com — not Massive's /v2/reference/news, and no Massive key sits in app_config. Measured: CoreWeave's
+// "Announces At-the-Market Offering Program" (businesswire via FMP) was stored for 03:29 ET on 17 Sep; the 424B5 was
+// accepted at 07:11 ET. Its $3.0B convertible notes were a private (144A) sale: no SEC offering filing at all — the
+// headline is the only sighting. A headline counts when it names an offering AND a security or an amount, so a "cloud
+// offering" or "CEO holds convertible shares" does not.
+export const NEWS_DAYS = 2;
+const RE_NEWS_ACT = /\b(?:prices?|priced|pricing|announces?|announced|proposed?|proposes|launch(?:es|ed)?|upsized?|files?|filed|completes?|completed|closes?|closed|commences?|plans?)\b[^.!?]{0,90}\boffering\b/i;
+const RE_NEWS_DIRECT = /\b(?:public|secondary|follow-on|underwritten|stock|share|equity|common stock|notes?|debt|bond|convertible|registered direct|at-the-market|ATM)\s+(?:offering|program)\b|\b(?:convertible\s+)?(?:debt|notes?)\s+(?:sale|raise)\b|\bconvertible (?:senior |subordinated )?notes?\b|\bat-the-market\b|\bregistered direct\b|\bprivate placement\b|\b(?:mixed|universal)\s+shelf\b|\bshelf (?:registration|offering|filing)\b|\boffering (?:of )?up to \$/i;
+const RE_NEWS_WHAT = /\b(?:shares?|stock|notes?|debentures?|bonds?|convertible|at-the-market|ATM|units|warrants|ADSs?|private placement|registered direct|shelf|public offering|secondary offering)\b|\$\s?\d|\d\s?(?:million|billion|M|B)\b/i;
+const RE_NEWS_NOT = /\b(?:cloud|product|service|AI|software|platform|insurance|menu|solutions?)\s+offerings?\b/i;
+/** the offering kind a headline names, or null when it is not about raising money */
+export function newsKind(title) {
+  const t = String(title || "");
+  if (!(RE_NEWS_ACT.test(t) || RE_NEWS_DIRECT.test(t)) || !RE_NEWS_WHAT.test(t)) return null;
+  if (RE_NEWS_NOT.test(t) && !RE_NEWS_DIRECT.test(t.replace(RE_NEWS_NOT, ""))) return null;
+  if (/\b(?:redemption|redeems?|redeemed|repurchases?|buys? back|tender offer)\b/i.test(t)) return null;          // paying notes back, not raising money
+  if (/convertible|exchangeable/i.test(t)) return "CONVERTIBLE";
+  if (/at-the-market|\bATM\b|equity distribution/i.test(t)) return "ATM";
+  if (/registered direct|private placement/i.test(t)) return "PLACEMENT";
+  if (/\bshelf\b/i.test(t)) return "SHELF";
+  if (/\b(?:notes?|debentures?|bonds?|debt)\s+(?:offering|sale|raise)\b|\bsenior notes\b|\bnotes due\b/i.test(t) && !/\b(?:shares|common stock)\s+offering\b|\bof\s+[\d,.]+\s*(?:million\s+)?shares\b/i.test(t)) return "DEBT";
+  return "EQUITY";
+}
+// Google News files a headline under every ticker its query matched: measured on the first run (2 Oct, 21 days), COST got
+// "Yarrow Bioscience … Public Offering", LOW got Oklo's, TGT got "Agree Realty stock price target". So a headline must
+// name the company itself (its short name, as written, or its ticker in "(OKLO)" / "NYSE: OKLO" / "$OKLO" form).
+const GENERIC = /^(?:american|first|general|united|national|international|global|southern|western|eastern|northern|royal|federal|public|digital|applied|advanced|texas|pacific|atlantic|old|new|bank|the)$/i;
+/** "Axon Enterprise, Inc." → "Axon" · "American Tower Corporation" → "American Tower" · "SharonAI Holdings, Inc. Class A Common Stock" → "SharonAI" */
+export function shortName(name) {
+  const s = String(name || "").replace(/\b(?:Class [A-C] )?(?:Common|Ordinary) (?:Stock|Shares)\b.*$/i, "").replace(/\s*\(.*?\)\s*/g, " ")
+    .replace(/[,.]?\s+(?:Inc|Corp|Corporation|Incorporated|Company|Co|Holdings?|Group|plc|Ltd|Limited|N\.V|S\.A|SE|AG|L\.P|LP|Technologies|Enterprises?)\.?\b.*$/i, "").trim();
+  const w = s.split(/\s+/).filter(Boolean);
+  if (!w.length) return null;
+  return GENERIC.test(w[0]) && w[1] ? w[0] + " " + w[1] : w[0];
+}
+export function namesCompany(title, ticker, name) {
+  const t = String(title || ""), tk = String(ticker || "").toUpperCase();
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (tk && new RegExp("\\((?:[A-Z]+:\\s?)?" + esc(tk) + "\\)|\\b(?:NASDAQ|NYSE|NYSEARCA|AMEX|OTC)\\s?:\\s?" + esc(tk) + "\\b|\\$" + esc(tk) + "\\b").test(t)) return true;
+  if (tk.length >= 4 && new RegExp("(?:^|[^A-Za-z])" + esc(tk) + "(?![A-Za-z])").test(t)) return true;   // "CRWV Stock Drops …"
+  const n = shortName(name);
+  if (!n || n.length < 3) return false;
+  return new RegExp("(?:^|[^A-Za-z])(?:" + esc(n) + "|" + esc(n.toUpperCase()) + ")(?![A-Za-z])").test(t);   // as written: "Target" ≠ "price target"
+}
+/** one stored news row ∩ the Hub stocks → the offering_news row, or null. `names` maps ticker → company name; a headline
+ *  that does not name the company is dropped (when a name is known). */
+export function newsFromRow(r, universe, names) {
+  const tk = String((r && r.ticker) || "").toUpperCase();
+  if (!tk || !universe.has(tk)) return null;
+  if (names && names[tk] && !namesCompany(r.title, tk, names[tk])) return null;
+  const url = String(r.url || "").trim(), title = String(r.title || "").trim(), ts = Number(r.published_ts);
+  if (!/^https?:\/\//.test(url) || !title || !Number.isFinite(ts) || ts <= 0) return null;
+  const kind = newsKind(title);
+  if (!kind) return null;
+  return { ticker: tk, url, published_utc: new Date(ts * 1000).toISOString(), source: String(r.site || "").slice(0, 80) || null,
+    feed: String(r.feed || "").slice(0, 20) || null, title: title.slice(0, 400), kind };
+}
+const KIND_CLASS = { CONVERTIBLE: ["CONVERTIBLE"], ATM: ["ATM"], EQUITY: ["EQUITY", "ATM"], DEBT: ["DEBT"], PLACEMENT: ["EQUITY"], SHELF: ["UNCLASSIFIED", "EQUITY", "ATM"] };
+/** the filing a headline announced: same ticker, filed from the day before the headline (New York) to 7 days after,
+ *  a class that fits the headline's kind; the nearest one after the headline wins. null when none has arrived. */
+export function joinFiling(n, filings) {
+  const day = nyDay(Date.parse(n.published_utc));
+  const lo = shiftDay(day, -1), hi = shiftDay(day, 7), want = KIND_CLASS[n.kind] || [];
+  const at = (f) => (f.accepted_utc ? Date.parse(f.accepted_utc) : Date.parse(f.filed_date + "T21:00:00Z"));
+  const c = (filings || []).filter((f) => f && f.ticker === n.ticker && f.filed_date >= lo && f.filed_date <= hi && want.includes(f.class))
+    .sort((a, b) => Math.abs(at(a) - Date.parse(n.published_utc)) - Math.abs(at(b) - Date.parse(n.published_utc)));
+  const after = c.filter((f) => at(f) >= Date.parse(n.published_utc) - 86400e3);
+  return (after[0] || c[0] || null);
 }

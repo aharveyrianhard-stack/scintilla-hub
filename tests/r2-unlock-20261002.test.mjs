@@ -103,7 +103,7 @@ const html = read("index.html");
 const grab = (name) => { const s = html.indexOf("function " + name + "("); assert.ok(s > 0, name + " exists"); return html.slice(s, html.indexOf("\n}\n", s) + 3); };
 const ctx = {}; vm.createContext(ctx);
 const plain = (x) => JSON.parse(JSON.stringify(x));          // results made inside the vm carry its own prototypes
-vm.runInContext(["ulkTerms", "unlockStatsText", "unlockListModel"].map(grab).join("\n") + "; this.M = unlockListModel; this.T = unlockStatsText;", ctx);
+vm.runInContext(["ulkTerms", "unlockListModel"].map(grab).join("\n") + "; this.M = unlockListModel;", ctx);   /* C1: unlockStatsText is gone (the STATS line moved to CAPITAL) */
 const rowOf = (t, name, extra) => { const lk = L.findLockup(fx(name), TODAY); const u = L.unlockFrom("IPO", lk.prospectus_date, lk);
   return Object.assign({ ticker: t, company: t + " Inc.", listing_kind: "IPO", unlock_date: u.unlock_date, lockup_days: u.lockup_days, basis: u.basis, early_rule: lk.early_rule,
     early_release: lk.early_release, schedule: lk.schedule, prospectus_date: lk.prospectus_date, source_form: "424B4" }, extra || {}); };
@@ -131,19 +131,17 @@ test("the last 6 months, dimmed: ended lock-ups newest first, and a relisting th
   assert.equal(m.past[1].basis, "prospectus: 90 days");
 });
 
-test("the STATS line: 'lock-up ends … (prospectus: 180 days, or 2 trading days after the Q3 report)'; 'no lock-up (relisting)'; nothing once it is past", () => {
-  assert.deepEqual(plain(ctx.T(ROWS[0], TODAY)), { k: "lock-up ends", v: "9 Nov 2026 (prospectus: 180 days, or 2 trading days after the Q3 report · before it: 19.4M sh Oct 14, 19.4M sh Oct 28)" });
-  assert.deepEqual(plain(ctx.T(ROWS[1], TODAY)), { k: "lock-up ends", v: "8 Dec 2026 (prospectus: 180 days · before it: 7% Oct 9, 7% Oct 24, 28% 2 trading days after the Q3 report)" });
-  assert.equal(ctx.T(ROWS[2], TODAY), null, "Astera's lock-up ended in 2024: nothing for an older listing");
-  assert.deepEqual(plain(ctx.T(ROWS[6], TODAY)), { k: "lock-up", v: "no lock-up (relisting)" });
-  assert.match(ctx.T({ ticker: "X", listing_kind: "IPO", unlock_date: "2026-12-01", lockup_days: 180, basis: "ASSUMED_180", schedule: [] }, TODAY).v, /assumed: 180 days — the prospectus clause was not found/);
+/* C1 (2 Oct, night) — the STATS line moved to FINANCIALS → CAPITAL (one home per company fact); its words are now tested in
+   tests/c1-capital-block-20261002.test.mjs (ofLockModel). */
+test("C1: the STATS lock-up line is gone — its function, its row and its CSS", () => {
+  for (const gone of ["function unlockStatsText(", "function unlockStatsRowHTML(", "function unlockStatsRepaint(", "div.st-ulk", "unlockStatsRowHTML(data.t)"]) assert.equal(html.indexOf(gone), -1, gone + " is gone");
 });
 
-test("the homes: an IPO LOCK-UPS card on the EARNINGS page and the STATS line — and nothing on the dashboard's EARNINGS band", () => {
+test("the homes: an IPO LOCK-UPS card on the EARNINGS page (C1: the company's own lock-up is in CAPITAL) — and nothing on the dashboard's EARNINGS band", () => {
   const room = grab("eventsRoomHTML");
   assert.match(room, /<h4>IPO LOCK-UPS · NEXT 12 MONTHS<\/h4><div class="ev-ulkwrap" id="evLockups">' \+ unlockSectionHTML\(\)/);
   assert.ok(room.indexOf('id="evUpcoming"') < room.indexOf('id="evLockups"') && room.indexOf('id="evLockups"') < room.indexOf('id="evPastRail"'), "between UPCOMING and PAST");
-  assert.match(grab("statsActivityHTML"), /if \(!fund && typeof unlockStatsRowHTML === "function"\)/);
+  assert.doesNotMatch(grab("statsActivityHTML"), /unlockStats/);
   assert.doesNotMatch(grab("ernDayTapeHTML"), /unlock|ulk/i, "the band is exactly the live one");
   assert.doesNotMatch(grab("topTapeHTML"), /unlock|ulk/i);
   for (const gone of ["unlockChipHTML", "unlockMergeDay", "unlockRunHTML", "unlockEvents", ".ulk-it", "ULK_HUE"]) assert.equal(html.indexOf(gone), -1, gone + " is gone");
@@ -151,7 +149,6 @@ test("the homes: an IPO LOCK-UPS card on the EARNINGS page and the STATS line �
   const blk = html.slice(html.indexOf("R2 · 2 OCT · IPO LOCK-UPS — on the EARNINGS page"), html.indexOf("/* THE ECONOMIC SEGMENT'S SLIDE"));
   assert.match(blk, /pg\("ipo_lockups\?select=/);
   assert.doesNotMatch(blk, /pgPatch|method:\s*"(POST|PATCH|DELETE)"|renderTopTape/, "the Hub only reads, and never repaints the band");
-  assert.match(html, /\.st-blk > div\.st-ulk > b, \.cv-side \.st1 \.st-blk > div\.st-ulk > b\{ white-space:normal; flex:1 1 0; min-width:0;/);
   assert.match(html, /@media \(max-width:560px\)\{ \.ev-uptbl\.ulk-tbl th:nth-child\(3\), \.ev-uptbl\.ulk-tbl td:nth-child\(3\)\{ display:table-cell; \} \}/, "the days to go stay on a phone");
 });
 
