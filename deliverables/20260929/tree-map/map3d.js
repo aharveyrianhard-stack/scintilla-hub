@@ -21,12 +21,20 @@
    in CLEAN (layout.js {sp}) so the boxes have room. The COIL is the PODIUM: one spiral of Geiger bars, the highest reading
    at the centre-top, winding down and outwards as the readings fall, the lowest at the outer bottom; the zero line is the
    ring where the bars turn from green to red. OPEN 3D on every section; the canvas takes keyboard focus inside an area so
-   Esc works; the framing keeps the bottom band (KEY, hint, the lowest label) clear. */
+   Esc works; the framing keeps the bottom band (KEY, hint, the lowest label) clear.
+
+   T8 (2 Oct, night — Alan: "the Geigers need to be way bigger… just show me the Geiger of each tradeable instrument, no
+   aggregates… too much black space"). Only a TRADEABLE instrument (a fund, a company) carries a bar; a heading, a cohort or
+   a Hub list carries none (the aggregate bars stay in the code behind state.showAggregates, off). CLEAN now keeps every
+   company with a reading as a box = its Geiger (bigger: 96 × 30 units, a 60 × 19 px floor), the ticker printed on it in
+   white, and packs the tree with its own tighter distances (layout.js {L}); a cohort is a heading over its names in both
+   pictures. An opened section (OPEN 3D) is drawn the same way — boxes, no balls for tradeables. A label never sits on
+   another label or on another thing's box: it moves or it is not printed. The podium is a staircase (see enterCoil). */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { prepareTree, layout as layoutTree, bestRows, LAYOUT } from "./layout.js";
 
-export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, onSelect, onRelease, onArea, onTree }) {
+export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, onSelect, onRelease, onArea, onTree }) {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
@@ -38,27 +46,32 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const parentsCohort = new Set(nodes.filter((n) => n.kind === "cohort").map((n) => n.parents[0]));
   // the reading a node is ordered and kept by: its own (full or scout), else its aggregate, else none
   const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBar(n); return ab ? ab.v : null; };
-  // T6: in CLEAN a cohort folds its names away, so it is a LEAF — it sits in its parent's block like a fund (a compact grid of
-  // boxes) instead of being a wide sub-heading of its own; DETAILED keeps every cohort a branch with its names under it
-  const layNode = (n, clean = false) => ({ id: n.id, kind: n.kind === "cohort" ? (clean ? "fund" : "index") : (n.kind === "fund" && parentsCohort.has(n.id)) ? "index" : n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker, v: valueOf(n), name: n.label });
+  const orderOf = orderValue || valueOf; // T8: a heading is ORDERED by the mean of its lines (green → red, as T5 asked) but never DRAWS it
+  const SHOW_AGG = !!state.showAggregates; // T8: aggregate bars (a cohort's mean, a heading's mean, a fund's holdings blend) stay in the code, off
+  // T8: a cohort is a heading over its names in BOTH pictures (T6 folded it into a leaf box carrying its mean; the mean is gone)
+  const layNode = (n) => ({ id: n.id, kind: n.kind === "cohort" ? "index" : (n.kind === "fund" && parentsCohort.has(n.id)) ? "index" : n.kind, parents: n.parents, role: n.role, issuer: n.issuer, market_value_usd: n.market_value_usd, ticker: n.ticker, v: orderOf(n), name: n.label });
   // a cohort's members hang from it as its names block: give each member a primary parent of its cohort in the layout copy
   // (names already have it; member FUNDS keep their own place on the tree and are not moved)
   const shapeOf = (() => { const r = $("graph").getBoundingClientRect(); return r.width > 10 && r.height > 10 ? r.width / r.height : innerWidth / Math.max(1, innerHeight - 80); })();
   state.detail = state.detail === "detailed" ? "detailed" : "clean"; state.order = state.order === "size" ? "size" : "geiger";
   // CLEAN keeps a heading, and any cohort or fund that has a bar; it drops every name, every fund set with no names at
   // home (no bar), every waiting fund. A dropped node sits on its nearest kept ancestor, scaled to nothing, and is counted there.
-  const cleanKeep = (n) => n.kind === "index" || (n.kind !== "name" && valueOf(n) != null);
-  // T6: in CLEAN the lines of a leaf block sit wider apart and its rows step taller (DETAILED: 22 / 36) so every box is a bar that
-  // reads at the zoom-out; a heading's minimum width is its box, not two columns. (?sp= ?row= ?minw= let the proof tune them.)
+  // T8: CLEAN keeps every heading and cohort (as headings) and every TRADEABLE line with a reading — funds and companies —
+  // and drops only what has no reading (folded on its heading as "＋N waiting")
+  const cleanKeep = (n) => n.kind === "index" || n.kind === "cohort" || valueOf(n) != null;
+  // T8: CLEAN's distances — a box is 96 × 30 units; columns 104 apart, rows 36, so siblings sit close; the levels of the
+  // tree sit 70 apart (DETAILED: 120), wrapped rows 110 (was 110 + 36 px of label). (?sp= ?row= ?minw= ?gap= ?level= ?drop= ?rowgap= tune them.)
   const Q = new URLSearchParams(location.search);
-  const CLEAN_SP = +Q.get("sp") || 120, CLEAN_ROW = +Q.get("row") || 90, CLEAN_MINW = +Q.get("minw") || 200;
+  const qn = (k, d) => (Q.has(k) && Number.isFinite(+Q.get(k)) ? +Q.get(k) : d);
+  const CLEAN_SP = qn("sp", 104), CLEAN_ROW = qn("row", 36), CLEAN_MINW = qn("minw", 120);
+  const CLEAN_L = { GAP: qn("gap", 24), LEVEL: qn("level", 70), NAMES_DROP: qn("drop", 50), ROWGAP: qn("rowgap", 110) };
   const boxMode = () => state.detail !== "detailed"; // CLEAN draws boxes (bars with the name on them) instead of balls
   const modes = {};
   function buildMode(key) {
-    const list = (key === "clean" ? nodes.filter(cleanKeep) : nodes).map((n) => layNode(n, key === "clean"));
+    const list = (key === "clean" ? nodes.filter(cleanKeep) : nodes).map((n) => layNode(n));
     const ids = new Set(list.map((n) => n.id));
     const kept = list.filter((n) => !n.parents.length || ids.has(n.parents[0]));
-    const opts = key === "clean" ? { order: state.order, sp: CLEAN_SP, row: CLEAN_ROW, minW: CLEAN_MINW, wrapMin: +Q.get("wrap") || 2 } : { order: state.order };
+    const opts = key === "clean" ? { order: state.order, sp: CLEAN_SP, row: CLEAN_ROW, minW: CLEAN_MINW, wrapMin: qn("wrap", 2), L: CLEAN_L } : { order: state.order };
     const rows = bestRows(kept, shapeOf, key === "clean" ? { ...opts, k: 0 } : opts); // CLEAN is judged flat: that is how the canvas shows it
     const heads = prepareTree(kept, { ...opts, rows });
     return { key, heads, byId: new Map(kept.map((n) => [n.id, n])), rows, trayHeads: heads.filter((h) => h.names.length), wrapHeads: heads.filter((h) => h.rows.length > 1) };
@@ -112,7 +125,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   /* T6 · the boxes. A box is the same bar drawn big and centred on the node, with a floor in screen pixels so it reads at
      the zoom-out: a fund's box at least 26 × 7 px, a heading's or cohort's at least 56 × 13 px, a podium bar at least
      44 × 11 px (its ticker sits on it). Sizes are half-widths / half-heights in world units + the half-width floor in px. */
-  const BOX = { small: { w: 42, h: 14, min: 10.5 }, big: { w: 90, h: 20.9, min: 28 }, coil: { w: 15, h: 3.75, min: 22 } }; // a fund's box: 21 × 7 px floor, so the grids never touch at the zoom-out; a flat podium bar: 44 × 11 px (T7: was 54 × 13.5, part of why the middle turns touched)
+  const BOX = { small: { w: 48, h: 15, min: 30 }, big: { w: 90, h: 20.9, min: 28 }, coil: { w: 15, h: 3.75, min: 22 } }; // T8: a tradeable's box 96 × 30 units, a 60 × 19 px floor (T6: 84 × 28, 21 × 7 px) — the bar is the biggest thing on the screen
   const bars = [];
   nodes.forEach((n) => {
     const rd = readingOf(n);
@@ -121,8 +134,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (n.kind === "fund") agg = n.agg ? { v: n.agg.value, kind: 1 } : null;
     else if (n.kind === "cohort" || n.kind === "index") { const ab = aggBar(n); agg = ab ? { v: ab.v, kind: ab.kind === "full" ? 1 : 3 } : null; }
     if (own) bars.push({ n, ...own, slot: 0 });
-    if (agg) bars.push({ n, ...agg, slot: own ? 1 : 0 });
-    if (!own && !agg) bars.push({ n, v: 0, kind: 4, slot: 0 }); // no reading at all: the empty track, never nothing (T6)
+    if (agg && SHOW_AGG) bars.push({ n, ...agg, slot: own ? 1 : 0 }); // T8: off — a heading, a cohort, a fund's blend carry no bar of their own
+    if (!own && !(agg && SHOW_AGG) && n.ticker) bars.push({ n, v: 0, kind: 4, slot: 0 }); // a tradeable with no reading at all: the empty track, never nothing (T6)
   });
   const isBig = (n) => n.kind === "index"; // the 23 headings get the big box; cohorts and funds the small one (they sit in grids)
   function barGeometry(list) {
@@ -173,8 +186,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       }`,
   });
   const barMat = mkBarMat({ w: BAR_W, h: BAR_H, min: BAR_MIN_PX });                     // the whole tree: DETAILED look until applyBarMode says otherwise
-  const areaBarMat = mkBarMat({ w: BAR_W, h: BAR_H, min: BAR_MIN_PX });                 // an area always shows the DETAILED look (balls with bars under them)
-  const coilBarMat = mkBarMat({ w: BOX.coil.w, h: BOX.coil.h, min: BOX.coil.min, box: 1, center: 1, depthWrite: true }); // the podium's bars
+  const areaBarMat = mkBarMat({ w: BOX.small.w, h: BOX.small.h, min: BOX.small.min, box: 1, center: 1 }); // T8: an opened section draws boxes too (T6: balls with small bars under them)
   const barMesh = new THREE.Mesh(barGeo, barMat); barMesh.frustumCulled = false; barMesh.renderOrder = 3; scene.add(barMesh);
   const ballMeshes = [litMesh, holMesh, headMesh, cohMesh];
   function applyBarMode() { // CLEAN = boxes: the bars grow to their box sizes, centre on the nodes, and the balls go
@@ -216,7 +228,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     a.fill(0, treeLinks.length * 6, lineCount * 6); // trays and rails of the mode not on the screen stay empty
     cur.trayHeads.forEach((h, j) => {
       const hp = P(h.id), f = P(h.names[0].id), last = P((h.names[(h.nRows - 1) * h.cols] || h.names[h.names.length - 1]).id);
-      const x0 = h.bx0 - 4, x1 = h.bx0 + h.leafW + 4, top = f.y + 16, bot = last.y - 16, z0 = f.z - 6, z1 = last.z + 10;
+      const pad = (h.rowStep || LAYOUT.ROW2) / 2 + 2, x0 = h.bx0 - 4, x1 = h.bx0 + h.leafW + 4, top = f.y + pad, bot = last.y - pad, z0 = f.z - 6, z1 = last.z + 10; // T8: the frame clears the boxes
       const segs = [[hp.x, hp.y, hp.z, h.cx, top, z0], [x0, top, z0, x1, top, z0], [x1, top, z0, x1, bot, z1], [x1, bot, z1, x0, bot, z1], [x0, bot, z1, x0, top, z0]];
       if (h.funds.length) { const lf = P(h.funds[h.funds.length - 1].id); segs[0] = [h.cx, lf.y - 8, lf.z, h.cx, top, z0]; }
       segs.forEach((s, k) => a.set(s, (treeLinks.length + j * 5 + k) * 6));
@@ -246,7 +258,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     const r = graph.getBoundingClientRect(); view.w = Math.max(1, r.width); view.h = Math.max(1, r.height);
     renderer.setPixelRatio(dprNow()); renderer.setSize(view.w, view.h, true); // CSS = the box; buffer = CSS × scale
     camera.aspect = view.w / view.h; camera.updateProjectionMatrix();
-    view.scaleH = view.h / (2 * Math.tan((camera.fov * Math.PI) / 360)); for (const m of [barMat, areaBarMat, coilBarMat, standMat]) m.uniforms.uScaleH.value = view.scaleH; wake();
+    view.scaleH = view.h / (2 * Math.tan((camera.fov * Math.PI) / 360)); for (const m of [barMat, areaBarMat]) m.uniforms.uScaleH.value = view.scaleH; wake();
   }
   addEventListener("resize", fit);
   (function watchScale() { let last = dprNow(); setInterval(() => { const d = dprNow(); if (d !== last) { last = d; fit(); } }, 1000); })();
@@ -301,8 +313,9 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     // 2 Oct: a proposed cohort used to print "NAME ?" — the question mark is gone; its small line says "proposed, not adopted"
     const text = n.kind === "index" ? (SHORT[n.id] || n.label.toUpperCase()) : n.kind === "list" ? n.label : n.kind === "cohort" ? (n.ckind === "none" ? "NONE YET" : n.ckind === "fundset" ? n.cohort + " SET" : n.label) : n.ticker;
     n.lbl = { kind, top, text, el: null, shown: false };
-    const px = kind === "h" ? (top ? 13 : 12) : kind === "f" ? 12 : 11, sp = kind === "h" ? (top ? 2.3 : 1.7) : kind === "c" ? 1.2 : 0.2;
-    n.lbl.w = measure(text, px, sp) + 4; n.lbl.h = kind === "h" || kind === "c" ? 16 : 14;
+    // T8: a tradeable's ticker is large and white on its box (15 px; 12 on a phone); the titles keep their style
+    const px = kind === "h" ? (top ? 13 : 12) : kind === "c" ? 11 : PHONE ? 12 : 15, sp = kind === "h" ? (top ? 2.3 : 1.7) : kind === "c" ? 1.2 : 0.6;
+    n.lbl.w = measure(text, px, sp) + 4; n.lbl.h = kind === "h" || kind === "c" ? 16 : PHONE ? 15 : 18;
     // a section's name and its OPEN 3D button (96) win every collision but THE MARKET's
     n.lbl.prio = n.kind === "index" ? (n.id === "MARKET" ? 100 : isSection(n) ? 96 : top ? 92 : 84) : n.kind === "list" ? 90 : n.kind === "cohort" ? (n.ckind === "adopted" ? 80 : n.ckind === "proposed" ? 76 : n.ckind === "fundset" ? 62 : 70) : n.kind === "fund" ? (n.role === "sector" ? 60 : n.role === "broad" ? 58 : 50) + (n.g ? 5 : 0) + (parentsCohort.has(n.id) ? 12 : 0) : 0;
   }
@@ -313,7 +326,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
      holdings all live in an adopted or proposed cohort), and in CLEAN "＋N more" = what the box folds away. */
   function sub(n) {
     const a = n.agg && n.agg.full; const parts = [];
-    if (a) parts.push((n.kind === "cohort" ? `${fmtG(a.v)} · ` : "") + `<span class="up">${a.up} up</span> · <span class="dn">${a.down} down</span>`);
+    if (a) parts.push(`<span class="up">${a.up} up</span> · <span class="dn">${a.down} down</span>`); // T8: the counts stay; the mean (an aggregate) is gone
     if (n.kind === "cohort" && n.ckind === "proposed") parts.push("proposed, not adopted");
     if (n.kind === "cohort" && n.ckind === "fundset" && !membersOf(n).length) parts.push("no names at home here");
     if (n.kind === "cohort" && n.ckind === "none") parts.push("names no group claims yet");
@@ -335,8 +348,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const MAXL = PHONE ? 70 : 240, PXN = PHONE ? 4.6 : 3.4, PXF = PHONE ? 2.4 : 1.6;
   function barsBelowPx(n, ppu) { const nb = bars.filter((b) => b.n === n).length; if (!nb) return n.r * ppu; const s = Math.max(1, BAR_MIN_PX / (BAR_W * ppu)); return n.r * ppu + s * ppu * (BAR_TOP + 2 * BAR_H * nb + BAR_GAP * (nb - 1)); }
   // the box a node is drawn as, in screen px (full width and height), or null where it is a ball
-  function boxPx(n, ppu) {
-    const b = cluster ? (cluster.coil && n !== cluster.c && n.kind === "name" ? BOX.coil : null) : boxMode() && !n.hid ? (isBig(n) ? BOX.big : BOX.small) : null;
+  function boxPx(n, ppu) { // T8: only a tradeable has a box (CLEAN, and inside an opened section); the podium's steps have their own rectangles
+    const b = cluster ? (cluster.coil || !n.ticker ? null : BOX.small) : boxMode() && !n.hid && n.ticker ? BOX.small : null;
     if (!b) return null; const s = Math.max(1, b.min / (b.w * ppu)); return { w: 2 * b.w * s * ppu, h: 2 * b.h * s * ppu };
   }
   function placeLabels() {
@@ -352,14 +365,15 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       const ppu = view.scaleH / depth, rpx = n.r * ppu;
       const sx = (V.x + 1) * view.w / 2, sy = (1 - V.y) * view.h / 2;
       let stand = null, bx = null;
-      if (cluster && cluster.coil && n.podium) { // T7 · a standing column: its rectangle runs from the foot to the tip (the same floors as the shader); the ticker sits at the tip
-        const F = toScreen(n.podium.foot), Tt = toScreen(n.podium.tip), w = Math.max(2 * PARAMS.stand.minPx, 2 * PARAMS.stand.W * ppu), h = Math.max(PARAMS.stand.minH, Math.abs(Tt[1] - F[1]));
+      if (cluster && cluster.coil && n.podium) { // T8 · a step: its rectangle runs from the floor to the tread, one tread wide; the ticker sits above the tread
+        const F = toScreen(n.podium.foot), Tt = toScreen(n.podium.tip), w = Math.max(6, PARAMS.stand.D * ppu), h = Math.max(4, Math.abs(Tt[1] - F[1]));
         stand = { x: (F[0] + Tt[0]) / 2 - w / 2, y: Math.min(F[1], Tt[1]), w, h, tip: Tt, up: n.podium.v >= 0 };
         boxRects.push({ n, x: stand.x, y: stand.y, w, h, dist: depth });
       } else if ((bx = boxPx(n, ppu))) boxRects.push({ n, x: sx - bx.w / 2, y: sy - bx.h / 2, w: bx.w, h: bx.h, dist: depth });
       let show = false, p = n.lbl.prio;
       if (n.lbl.kind === "h" || n.lbl.kind === "c") show = true;
-      else if (n.lbl.kind === "f") show = (bx ? bx.w >= 38 : rpx >= PXF) || n.id === state.selected; // on a box: once the ticker fits on it
+      else if (bx) { show = bx.w >= n.lbl.w - 6 || n.id === state.selected; p = (n.lbl.kind === "f" ? 50 : 30) + bx.w; } // T8: on a box, once the ticker fits on it (fund or company alike)
+      else if (n.lbl.kind === "f") show = rpx >= PXF || n.id === state.selected;
       else { show = rpx >= PXN || n.id === state.selected; p = 36 + rpx * 2.2; }
       if (n.id === state.selected) p += 300;
       if (n.hid) show = false;
@@ -378,10 +392,18 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
       if (x < 0 || x + w > view.w) { hide(n); continue; } // printed whole or not at all
       // on a box the name sits ON the bar (its first line centred on the box); the sub-lines hang below; on a standing column the
       // ticker sits just past the tip (above a green one, below a red one; the other side if that is taken); else under the ball as before
-      const tries = c.stand ? (c.stand.up ? [c.stand.tip[1] - c.sy - h - 2, c.stand.tip[1] - c.sy + 3] : [c.stand.tip[1] - c.sy + 3, c.stand.tip[1] - c.sy - h - 2])
-        : c.bx ? [-n.lbl.h / 2, c.bx.h / 2 + 2] : n.lbl.kind === "h" || n.lbl.kind === "c" ? [c.below + 3, c.below + 3 + h + 2, -c.rpx - h - 3] : [c.below + 2];
+      // T8: on a step the ticker sits just above the tread (the step face is the fallback); on a box the name sits ON the bar; a heading's
+      // title goes ABOVE its point in the box pictures (its children's boxes sit right under it) and under its ball in DETAILED
+      const boxy = boxMode() || !!cluster;
+      const tries = c.stand ? [c.stand.tip[1] - c.sy - h - 2, c.stand.tip[1] - c.sy + 3]
+        : c.bx ? [-n.lbl.h / 2, c.bx.h / 2 + 2] : n.lbl.kind === "h" || n.lbl.kind === "c" ? (boxy ? [-c.rpx - h - 3, c.below + 3, c.below + 3 + h + 2] : [c.below + 3, c.below + 3 + h + 2, -c.rpx - h - 3]) : [c.below + 2];
+      // a label never sits on another label, and (outside the podium, where the steps touch by design) never on another thing's box
+      const avoidBoxes = !(cluster && cluster.coil);
       let y = null;
-      for (const dy of tries) { const yy = c.sy + dy; let ok = yy >= 0 && yy + h <= view.h; for (const r of rects) if (x < r.x + r.w && x + w > r.x && yy < r.y + r.h && yy + h > r.y) { ok = false; break; } if (ok) { y = yy; break; } }
+      for (const dy of tries) { const yy = c.sy + dy; let ok = yy >= 0 && yy + h <= view.h;
+        if (ok) for (const r of rects) if (x < r.x + r.w && x + w > r.x && yy < r.y + r.h && yy + h > r.y) { ok = false; break; }
+        if (ok && avoidBoxes) for (const b of boxRects) if (b.n !== n && x < b.x + b.w && x + w > b.x && yy < b.y + b.h && yy + h > b.y) { ok = false; break; }
+        if (ok) { y = yy; break; } }
       if (y == null) { hide(n); continue; }
       rects.push({ x, y, w, h, id: n.id, nx: c.stand ? c.stand.tip[0] : c.sx, ny: c.stand ? c.stand.tip[1] : c.sy, text: n.lbl.text, onbox: !!c.bx, attip: !!c.stand }); shown++;
       const e = labelEl(n);
@@ -425,7 +447,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   let hoverN = null, downAt = null;
   function pick(ev) {
     const r = renderer.domElement.getBoundingClientRect();
-    if (boxRects.length) { // boxes and podium bars are picked by their screen rectangles (the nearest one under the pointer)
+    if (cluster && cluster.coil && cluster.steps) { // T8: the steps touch, so a step is picked by a real ray against the staircase, never by its rectangle
+      mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(mouse, camera);
+      const hs = ray.intersectObject(cluster.steps, false)[0]; if (hs && hs.instanceId != null) return cluster.members[hs.instanceId] || null;
+      const hb = ray.intersectObjects(cluster.balls, false)[0]; return hb ? hb.object.userData.node : null;
+    }
+    if (boxRects.length) { // boxes are picked by their screen rectangles (the nearest one under the pointer)
       const px = ev.clientX - r.left, py = ev.clientY - r.top; let best = null;
       for (const b of boxRects) if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h && (!best || b.dist < best.dist)) best = b;
       if (best) return best.n;
@@ -445,11 +472,11 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     const fold = n.fold && n.fold.total ? `<br><span style='color:#8c8c8c'>＋${n.fold.total} more inside: ${foldWords(n.fold)} — DETAILED shows them</span>` : "";
     const words = state.wordsOf ? state.wordsOf(n) : "";
     if (n.kind === "index") return head + (words ? `<br><span style='color:#ababab'>${esc(words)}</span>` : "") + `<br><span style='color:#8c8c8c'>heading · ${kids(n.id).length} under it · click to lift it into 3D</span>` + fold;
-    if (n.kind === "list") { const a = n.agg && n.agg.full; return head + (words ? `<br><span style='color:#ababab'>${esc(words)}</span>` : "") + `<br><span style='color:#8c8c8c'>the Hub's list · ${(n.listMembers || []).length} names on the tree</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ${a.up} up · ${a.down} down</span>` : ""); } // T7
-    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${{ adopted: "ADOPTED cohort", proposed: "PROPOSED cohort, not adopted", fundset: "FUND SET: the fund's served holdings no cohort claims", none: "NONE YET: names no group claims, grouped under their sector" }[n.ckind]} · ${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} filed elsewhere on the board` : ""}</span>` + (a ? `<br>mean ${gHTML(a.v)} <span style='color:#8c8c8c'>· ${a.n} full · ${a.up} up · ${a.down} down</span>` : "") + fold; }
+    if (n.kind === "list") { const a = n.agg && n.agg.full; return head + (words ? `<br><span style='color:#ababab'>${esc(words)}</span>` : "") + `<br><span style='color:#8c8c8c'>the Hub's list · ${(n.listMembers || []).length} names on the tree</span>` + (a ? `<br><span style='color:#8c8c8c'>${a.up} up · ${a.down} down</span>` : ""); } // T7 · T8: counts, no mean
+    if (n.kind === "cohort") { const a = n.agg && n.agg.full; return head + `<br><span style='color:#8c8c8c'>${{ adopted: "ADOPTED cohort", proposed: "PROPOSED cohort, not adopted", fundset: "FUND SET: the fund's served holdings no cohort claims", none: "NONE YET: names no group claims, grouped under their sector" }[n.ckind]} · ${membersOf(n).length} members${n.ckind === "adopted" && n.diff_count ? ` · ${n.diff_count} filed elsewhere on the board` : ""}</span>` + (a ? `<br><span style='color:#8c8c8c'>${a.up} up · ${a.down} down</span>` : "") + fold; }
     const rd = readingOf(n); let s = head;
-    if (rd) s += `<br>${barHTML(rd.v)} Geiger ${gHTML(rd.v)} <span style='color:#8c8c8c'>${rd.kind === "scout" ? "· SCOUT" : ""}</span>`; else s += "<br><span style='color:#8c8c8c'>waiting: no reading yet</span>";
-    if (n.kind === "fund" && n.agg) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of the fund</span>`;
+    if (rd) s += `<br>${barHTML(rd.v)} Geiger ${gHTML(rd.v)} <span style='color:#8c8c8c'>${rd.kind === "scout" ? "· computed at the close" : ""}</span>`; else s += "<br><span style='color:#8c8c8c'>waiting: no reading yet</span>"; // T8: the off-Hub Geiger is drawn like the Hub's; its hover says when it was computed
+    if (n.kind === "fund" && n.agg && SHOW_AGG) s += `<br>holdings ${gHTML(n.agg.value)} <span style='color:#8c8c8c'>· ${n.agg.count} names = ${Math.round(n.agg.coverage_pct)}% of the fund</span>`;
     if (n.kind === "name") { const ind = state.industryOf ? state.industryOf(n.ticker) : null; if (ind && (ind.fmp_industry || ind.sic_code)) s += `<br><span style='color:#8c8c8c'>${esc(ind.fmp_industry || "industry —")}${ind.sic_code ? " · SIC " + esc(ind.sic_code) : ""}</span>`; } // T6: no disagreement note (Alan: "that's our job")
     if (n.kind === "name" && (cluster && cluster.coil)) s += `<br><span style='color:#8c8c8c'>${esc(pathWords(n))}</span>`;
     if (n.kind === "name" && n.differs) s += `<br><span style='color:#8c8c8c'>board tab today: ${esc(String(n.board_cohort || "—").replace(/_/g, " "))}</span>`;
@@ -466,7 +493,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (!downAt) return; const d = downAt; downAt = null;
     if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6 || performance.now() - d.t > 600) return;
     const n = pick(ev); if (!n) return;
-    if (cluster && cluster.coil && n.kind === "name" && onTree) { onTree(n); return; } // a podium bar: that name on the tree (T6)
+    if (cluster && cluster.coil && n.kind === "name") { onSelect(n); select(n, false); return; } // T8: a podium step = the card first (its SHOW ON THE TREE button jumps to the tree); T6 jumped straight away
     if (n.id === state.selected && !state.canvas) { release(); onRelease(); } else { onSelect(n); select(n, true, true); }
   });
   // Esc must work the moment an area opens, even in an installed-app window where nothing had keyboard focus: the canvas takes it
@@ -480,7 +507,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     mine.forEach((l, i) => a.set([l.s.pos.x, l.s.pos.y, l.s.pos.z, l.t.pos.x, l.t.pos.y, l.t.pos.z], i * 6));
     selGeo.attributes.position.needsUpdate = true; selGeo.setDrawRange(0, mine.length * 2);
   }
-  const ringOk = () => !boxMode() || (cluster && !cluster.coil); // on a box the selection is the box's outline, not a ring
+  const ringOk = () => !boxMode() && !cluster; // on a box the selection is the box's outline, not a ring (T8: inside an area too, everything tradeable is a box)
   function select(n, fly = true, lift = false) { // lift: a click on the canvas lifts a branch into 3D; the finder and the card only fly there
     if (cluster) { state.selected = n.id; ring.visible = ringOk(); drawSelection(n); state.dirty = true; wake(); return; }
     if (state.canvas && lift && isBranch(n)) { state.selected = n.id; onSelect(n); if (coilWorthy(n)) enterCoil(n); else enterArea(n); return; }
@@ -489,6 +516,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (fly) {
       const dir = state.canvas ? DIR2.clone() : camera.position.clone().sub(controls.target).normalize();
       if (isBranch(n)) flyTo(framing(subtree(n), dir, 0.82), 1000);
+      else if (boxMode() && n.parents.length) flyTo(framing(subtree(state.byId.get(n.parents[0])), dir, 0.7), 1000); // T8: a box is big — frame its whole block (the cohort or heading it sits in), not nine bars
       else { const d = n.kind === "fund" ? 240 : 170 + n.r * 8; flyTo({ p: n.pos.clone().add(dir.multiplyScalar(d)), t: n.pos.clone() }, 900); }
     }
     state.dirty = true; wake();
@@ -522,7 +550,9 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   }
   function enterCluster(root) {
     exitCluster(false);
-    const sub = subtreeOf(root), inSub = new Set([root.id, ...sub.map((n) => n.id)]);
+    // T8: the opened section is the CLEAN picture lifted: boxes for every tradeable with a reading; a line with no reading stays on the card (it would only pile on its cohort's point)
+    const waiting = subtreeOf(root).filter((n) => n.ticker && valueOf(n) == null).length;
+    const sub = subtreeOf(root).filter((n) => !(n.ticker && valueOf(n) == null)), inSub = new Set([root.id, ...sub.map((n) => n.id)]);
     const names = sub.filter((n) => n.kind === "name");
     const nbIds = new Set();
     for (const m of names) for (const a of m.also_in || []) if (!inSub.has(a.id)) nbIds.add(a.id);
@@ -540,7 +570,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     const group = new THREE.Group();
     const colOf = (n) => n.kind === "index" ? HEADING : n.kind === "cohort" ? COHORT : n.g || n.sg ? LIT : HOLLOW;
     const mkBall = (n, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: colOf(n), transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(n.r); b.userData.node = n; group.add(b); return b; };
-    const balls = [root, ...sub].map((n) => mkBall(n)); nbs.forEach((nb) => balls.push(mkBall(nb, 0.35)));
+    const balls = [root, ...sub].filter((n) => !n.ticker).map((n) => mkBall(n)); nbs.forEach((nb) => balls.push(mkBall(nb, 0.35))); // T8: a tradeable is its box, no ball
     // bars: the same ones the whole tree draws, for the nodes in the area (own full / scout, holdings blend, cohort and heading means)
     const cb = bars.filter((b) => inSub.has(b.n.id));
     if (cb.length) { const bm = new THREE.Mesh(barGeometry(cb), areaBarMat); bm.frustumCulled = false; bm.renderOrder = 3; group.add(bm); }
@@ -558,7 +588,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     showWhole(false);
     cluster = { c: root, group, balls, members: sub, nbs, before: { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate };
     controls.enableRotate = true; // orbit is allowed inside an area, whatever the canvas allows
-    state.cluster = root.id; state.clusterCount = { members: sub.length, names: names.length, neighbours: nbs.length };
+    state.cluster = root.id; state.clusterCount = { members: sub.length, names: names.length, neighbours: nbs.length, waiting };
     nodes.forEach(hide);
     focusCanvas();
     flyTo(framing([root, ...sub, ...nbs], DIR3, 0.8), 900);
@@ -578,174 +608,99 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const COIL_MIN = 24;
   function beneathNames(root) { const out = []; const seen = new Set(); (function walk(id) { for (const c of primaryKids(id)) { if (c.kind === "name" && !seen.has(c.id)) { seen.add(c.id); out.push(c); } walk(c.id); if (c.kind === "cohort") for (const m of membersOf(c)) if (m.kind === "name" && !seen.has(m.id)) { seen.add(m.id); out.push(m); } } })(root.id); if (root.kind === "cohort") for (const m of membersOf(root)) if (m.kind === "name" && !seen.has(m.id)) { seen.add(m.id); out.push(m); } return out; }
   const coilWorthy = (n) => n.kind === "cohort" && beneathNames(n).length > COIL_MIN;
-  const UPC = new THREE.Color(0x35b06a), DNC = new THREE.Color(0xd1483f), GREYC = new THREE.Color(0x4a4a4a);
-  /* T7 (2 Oct, evening — Alan: the podium "standing up in 3D"). Two pictures of the same podium, state.podium:
-       "3d" = PODIUM 3D, the default when a podium opens: every name is a STANDING Geiger column on a spiral RAMP — the first
-         place at the centre, highest; each next one a step lower (STEP) and a step further out, coiling down and outwards;
-         the last alone at the outer bottom. The column's height is the reading: green rising above the ramp for a positive
-         one, red hanging below it for a negative one — the ramp itself is the zero line. The ramp is a stepped ribbon, one
-         flat tread per place, like a podium's steps.
-       "above" = FROM ABOVE, T6's picture: the same spiral seen from above the front, every name a flat Hub bar at the height
-         of its reading, the grey ring the zero line.
-     Spacing: T6 measured 62 touching pairs at 1680 in the flat middle turns — the turn pitch (2πB = 63 units) was narrower
-     than the 54 px bar at that zoom. Each picture now has its own inner radius A, turn pitch B (one turn = 2πB apart) and
-     step along the spiral D, set so no two bars touch at 1680 wide for Technology (113 names); ?pa= ?pb= ?pd= (above) and
-     ?sa= ?sb= ?sd= ?ss= ?sel= ?saz= (standing: the ramp's step, the camera's elevation and azimuth in degrees) let the
-     proof tune them, and __mm.podiumTune(…) re-enters in place and counts the touching pairs. */
-  const PODIUM = { H: 260, A: 40, B: 10, D: 86 }; // T6's numbers, the record: height per unit of reading · inner radius · radius per radian · arc between bars
-  const qn = (k, d) => (Q.has(k) && Number.isFinite(+Q.get(k)) ? +Q.get(k) : d);
-  /* the settings below are the measured ones (2 Oct, 1680 × 1000 at device scale 2, Technology's 113 names, headless):
-     standing — camera 70° up, pitch 2π·23 = 145 units, 96 units between places, one turn 16 lower: 0 of 113 columns touch another, all 113 tickers printed;
-     from above — camera 66° up (T6 looked from 42°), pitch 2π·34 = 214, 112 between bars: 0 of 113 bars touch, 112 tickers printed.
-     Lower cameras were tried (30°–62° standing, 42°–60° from above) and always left touching pairs: a column's screen height must stay
-     shorter than the screen distance between one turn and the next, and only a high camera and a wide pitch give that. */
-  const PARAMS = { above: { A: qn("pa", 40), B: qn("pb", 34), D: qn("pd", 112), el: qn("pel", 66), az: qn("paz", 27) },
-    stand: { A: qn("sa", 60), B: qn("sb", 23), D: qn("sd", 96), STEP: qn("ss", 16), el: qn("sel", 70), az: qn("saz", 28), W: 4.5, minPx: 5, minH: 5, RW: 22 } }; // STEP = how much lower one full turn of the ramp sits (a helix: an even drop per turn, so every place is a little lower than the one before)
+  /* T8 (2 Oct, night — Alan: "if the winner of the race, number one, wanted to walk down those steps, he would fall at every
+     step. He can't fall. The winner has to take a glory walk down the steps, like a king."). The podium is ONE STAIRCASE.
+     Every name is a vertical column standing against its neighbours — no gap at all — on a spiral: first place at the
+     centre and the top, each next step a little lower and a little further out, coiling down to the last at the outer
+     bottom. The TREAD of a step (the column's top) sits at the name's reading × H; every column stands on one common floor
+     just under the lowest tread, so the treads form one continuous stair from the first place to the last. Green where the
+     tread is above zero, red where it is below; the zero level is a grey ring round the spiral at height 0.
+       Decision (for Alan): T7 drew the ramp as the zero line and hung the red columns below it, so the red half had no
+       steps to walk on — every red column's top was the ramp. Here the stair IS the readings: a red step's tread sits below
+       zero by its reading, and the ring marks zero beside the stair. The height of a step above or below the ring is still
+       its Geiger.
+       No cliffs: the drop between two neighbours is their Geiger difference × H. H starts at 260 (T6's scale) and is lowered
+       when the biggest drop would exceed one tread's width (DROP CAP = D, the step along the arc), never below H_MIN, so no
+       step is a cliff and high still reads as high. The step along the arc D is also the tread's width, so neighbours touch;
+       the turn pitch 2πB equals the tread's depth RW (a hair more), so the turns sit against each other too.
+       FROM ABOVE: the same steps as flat slabs at their tread heights, seen from straight above. PODIUM 3D is the default;
+       the camera sits 70° up (Alan: "70 — sounds like a good angle; I'll be able to drag anyway").
+       ?sa= ?sb= ?sd= ?srw= ?sh= ?sel= ?saz= tune: inner radius, radius per radian (0 = from RW), the step along the arc
+       (= tread width), tread depth, H, the camera's elevation and azimuth (degrees); __mm.podiumParams() reads them back. */
+  const PARAMS = { stand: { A: qn("sa", 46), B: qn("sb", 0), D: qn("sd", 30), RW: qn("srw", 30), H: qn("sh", 260), H_MIN: 60, el: qn("sel", 70), az: qn("saz", 28) }, above: { el: qn("pel", 88), az: qn("paz", 28) } };
+  if (!(PARAMS.stand.B > 0)) PARAMS.stand.B = (PARAMS.stand.RW * 1.04) / (2 * Math.PI); // one turn out = one tread's depth: the turns touch
   const dirOf = (P) => { const el = (P.el * Math.PI) / 180, az = (P.az * Math.PI) / 180; return new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).normalize(); }; // the camera's direction from an elevation and an azimuth (degrees)
-  const COIL_DIR = dirOf(PARAMS.above); // FROM ABOVE: T6 looked from (0.5, 1, 1) = 42° up, 27° round — the same by default
-  const standDir = () => dirOf(PARAMS.stand);
   state.podium = Q.get("podium") === "above" ? "above" : "3d";
-  const spiralP = () => (state.podium === "above" ? PARAMS.above : PARAMS.stand);
-  // the place of rank i along the spiral: an Archimedean spiral r = A + Bθ walked in even steps of arc length D (s ≈ Aθ + Bθ²/2)
-  const spiralAt = (i) => { const P = spiralP(), s = i * P.D, th = (-P.A + Math.sqrt(P.A * P.A + 2 * P.B * s)) / P.B; return { th, r: P.A + P.B * th }; };
-  /* the standing column: one billboarded strip per name from its foot (on the ramp) to its tip (the reading above or below
-     it), a fixed width in view units with a floor in px so it reads from any angle; solid green or red, a grey stub where
-     there is no reading, slim for a scout reading, a lighter cap at the tip. */
-  function standGeometry(list) {
-    const g = new THREE.InstancedBufferGeometry(); g.copy(new THREE.PlaneGeometry(2, 2)); g.instanceCount = list.length;
-    g.setAttribute("aFoot", new THREE.InstancedBufferAttribute(new Float32Array(list.flatMap((b) => b.n.podium.foot.toArray())), 3));
-    g.setAttribute("aTip", new THREE.InstancedBufferAttribute(new Float32Array(list.flatMap((b) => b.n.podium.tip.toArray())), 3));
-    g.setAttribute("aVal", new THREE.InstancedBufferAttribute(new Float32Array(list.map((b) => b.v)), 1));
-    g.setAttribute("aKind", new THREE.InstancedBufferAttribute(new Float32Array(list.map((b) => b.kind)), 1));
-    return g;
+  // the place of rank i along the spiral: an Archimedean spiral r = A + Bθ walked in even steps of arc length D (s ≈ Aθ + Bθ²/2); the first centre sits half a step in
+  const spiralAt = (i) => { const P = PARAMS.stand, s = (i + 0.5) * P.D, th = (-P.A + Math.sqrt(P.A * P.A + 2 * P.B * s)) / P.B; return { th, r: P.A + P.B * th }; };
+  const stepGeo = new THREE.BoxGeometry(1, 1, 1), Y_AXIS = new THREE.Vector3(0, 1, 0);
+  // the staircase: one box per step, turned to the spiral's tangent, one tread wide (a hair more on the outer edge, so the outer edges meet too), RW deep,
+  // from the common floor up to its tread (standing) or a thin slab at its tread (from above); green / red / grey for no reading
+  function stairMesh(members, P, above) {
+    const im = new THREE.InstancedMesh(stepGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, members.length)); im.count = members.length;
+    const M4 = new THREE.Matrix4(), Qt = new THREE.Quaternion(), S = new THREE.Vector3(), Pz = new THREE.Vector3(), C = new THREE.Color();
+    members.forEach((n, i) => { const p = n.podium, w = (P.D * (p.r + P.RW / 2)) / p.r;
+      const y0 = above ? p.tread - 1.5 : p.floor, y1 = above ? p.tread + 1.5 : p.tread;
+      Qt.setFromAxisAngle(Y_AXIS, -(p.th + Math.PI / 2)); S.set(w, Math.max(0.5, y1 - y0), P.RW); Pz.set(p.foot.x, (y0 + y1) / 2, p.foot.z);
+      M4.compose(Pz, Qt, S); im.setMatrixAt(i, M4);
+      im.setColorAt(i, C.setHex(p.none ? 0x4a4a4a : p.v >= 0 ? 0x35b06a : 0xd1483f).multiplyScalar(i % 2 ? 0.8 : 1)); }); // neighbours alternate a shade so each step reads without a gap
+    im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.userData.steps = true; return im;
   }
-  const standMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: true, depthTest: true, side: THREE.DoubleSide,
-    uniforms: { uScaleH: { value: 1 }, uW: { value: PARAMS.stand.W }, uMinPx: { value: PARAMS.stand.minPx }, uMinH: { value: PARAMS.stand.minH } },
-    vertexShader: `attribute vec3 aFoot; attribute vec3 aTip; attribute float aVal; attribute float aKind;
-      uniform float uScaleH; uniform float uW; uniform float uMinPx; uniform float uMinH;
-      varying vec2 vUv; varying float vVal; varying float vKind;
-      void main(){
-        vec4 f = viewMatrix * vec4(aFoot, 1.0); vec4 t = viewMatrix * vec4(aTip, 1.0); vec4 u = viewMatrix * vec4(aFoot + vec3(0.0, 1.0, 0.0), 1.0);
-        float ppu = uScaleH / max(1.0, -f.z);
-        vec2 up = u.xy - f.xy; up = length(up) > 1e-6 ? normalize(up) : vec2(0.0, 1.0);
-        vec2 e = t.xy - f.xy; float minL = uMinH / ppu;
-        if (length(e) < minL) e = up * (aVal < 0.0 ? -1.0 : 1.0) * minL;
-        vec2 en = normalize(e); vec2 px = vec2(en.y, -en.x); // across the column: the column's direction turned a quarter the way that keeps the quad front-facing (turned the other way it is mirrored and culled)
-        float s = max(1.0, uMinPx / (uW * ppu));
-        float k = (position.y + 1.0) * 0.5;
-        vec4 mv = mix(f, t, k);
-        mv.xy = f.xy + e * k + px * position.x * uW * s;
-        mv.z += 0.4;
-        vUv = position.xy; vVal = aVal; vKind = aKind;
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: `varying vec2 vUv; varying float vVal; varying float vKind;
-      void main(){
-        vec3 col = vVal >= 0.0 ? vec3(0.208, 0.690, 0.416) : vec3(0.820, 0.282, 0.247);
-        if (vKind > 3.5) col = vec3(0.30);
-        float x = abs(vUv.x);
-        if (vKind > 1.5 && vKind < 2.5 && x > 0.55) discard;
-        float shade = x > 0.74 ? 0.58 : (x > 0.42 ? 0.84 : 1.0);
-        if (vUv.y > 0.9) shade *= 1.18;
-        gl_FragColor = vec4(col * shade, 0.96);
-      }` });
-  // the ramp: a stepped ribbon — one flat tread per place (RW wide across the spiral), a riser down to the next tread; lit, so the treads read as steps
-  function rampMesh(members, P) {
-    const pos = [], idx = [], NS = 4;
-    const at = (s) => { const th = (-P.A + Math.sqrt(P.A * P.A + 2 * P.B * Math.max(0, s))) / P.B; return { th, r: P.A + P.B * th }; };
-    const edge = (th, r, y) => { const c = Math.cos(th), sn = Math.sin(th); pos.push((r - P.RW / 2) * c, y, (r - P.RW / 2) * sn, (r + P.RW / 2) * c, y, (r + P.RW / 2) * sn); };
-    members.forEach((n, i) => {
-      const y = n.podium.ramp, base = pos.length / 3;
-      for (let k = 0; k <= NS; k++) { const { th, r } = at((i - 0.5 + k / NS) * P.D); edge(th, r, y); }
-      for (let k = 0; k < NS; k++) { const a = base + k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-      if (i + 1 < members.length) { const { th, r } = at((i + 0.5) * P.D), b2 = pos.length / 3; edge(th, r, y); edge(th, r, members[i + 1].podium.ramp); idx.push(b2, b2 + 1, b2 + 2, b2 + 1, b2 + 3, b2 + 2); }
-    });
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const grp = new THREE.Group();
-    grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x5a5a5a, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })));
-    grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 1), new THREE.LineBasicMaterial({ color: 0x6a6a6a, transparent: true, opacity: 0.5 })));
-    return grp;
-  }
-  function initNode(n) { n.pos = new THREE.Vector3(); n.from = new THREE.Vector3(); n.to = new THREE.Vector3(); initLabel(n); } // a list root (★ FAVORITES, ♥ LIKED) lives off the tree: give it a place and a label on first use
+  function initNode(n) { n.pos = new THREE.Vector3(); n.from = new THREE.Vector3(); n.to = new THREE.Vector3(); initLabel(n); } // a list root (★ FAVORITES, ♥ LIKED, ◎ RADAR) lives off the tree: give it a place and a label on first use
   function enterCoil(root, mode, opts = {}) {
     exitCluster(false);
     if (mode === "above" || mode === "3d") state.podium = mode;
-    const above = state.podium === "above", P = spiralP();
+    const above = state.podium === "above", P = PARAMS.stand;
     if (!root.pos) initNode(root);
     const all = root.listMembers ? root.listMembers : beneathNames(root); // a Hub list carries its own members (T7); a parent's are the names under it
     const withV = all.map((n) => ({ n, v: valueOf(n) })).filter((x) => x.v != null).sort((a, b) => b.v - a.v || (a.n.ticker < b.n.ticker ? -1 : 1));
     const none = all.filter((n) => valueOf(n) == null);
-    const { H } = PODIUM;
     const put = (n, x, y, z) => { if (!saved.has(n.id)) saved.set(n.id, n.pos.clone()); n.pos.set(x, y, z); };
     const members = [...withV.map((x) => x.n), ...none];
-    let top, floor;
-    if (above) {
-      withV.forEach((x, i) => { const { th, r } = spiralAt(i); put(x.n, r * Math.cos(th), x.v * H, r * Math.sin(th)); });
-      top = withV.length ? withV[0].v * H : 0; floor = withV.length ? withV[withV.length - 1].v * H : 0;
-      none.forEach((n, i) => { const { th, r } = spiralAt(withV.length + i); put(n, r * Math.cos(th), floor - 18, r * Math.sin(th)); });
-      members.forEach((n) => { n.podium = null; });
-    } else {
-      // standing: the foot on the ramp (a helix — one turn round = STEP lower, so every place sits a little lower than the one before), the tip a reading above or below it; n.pos = the column's middle (what a click lands on)
-      const rampY = (th) => (-th / (2 * Math.PI)) * P.STEP;
-      members.forEach((n, i) => { const { th, r } = spiralAt(i), v = i < withV.length ? withV[i].v : 0, y0 = rampY(th), x = r * Math.cos(th), z = r * Math.sin(th);
-        put(n, x, y0 + (v * H) / 2, z); n.podium = { foot: new THREE.Vector3(x, y0, z), tip: new THREE.Vector3(x, y0 + v * H, z), v, i, ramp: y0, none: i >= withV.length }; });
-      top = withV.length ? withV[0].v * H : 0;
-      floor = members.length ? members[members.length - 1].podium.ramp + Math.min(0, withV.length ? withV[withV.length - 1].v * H : 0) : 0;
-      standMat.uniforms.uW.value = P.W; standMat.uniforms.uMinPx.value = P.minPx; standMat.uniforms.uMinH.value = P.minH;
-    }
-    put(root, 0, top + 130, 0); // the parent sits well above the peak so its label never lands on the top bars
+    // the height scale: T6's 260 per unit of reading, lowered until the biggest drop between neighbours is at most one tread's width (never below H_MIN)
+    let maxGap = 0; for (let i = 1; i < withV.length; i++) maxGap = Math.max(maxGap, withV[i - 1].v - withV[i].v);
+    const H = Math.max(P.H_MIN, Math.min(P.H, maxGap > 0 ? P.D / maxGap : P.H));
+    const vLow = withV.length ? withV[withV.length - 1].v : 0, vTop = withV.length ? withV[0].v : 0;
+    const floor = Math.min(0, vLow * H) - P.D; // the common floor: one tread's width under the lowest tread, and never above zero
+    members.forEach((n, i) => { const { th, r } = spiralAt(i), v = i < withV.length ? withV[i].v : null, tread = v == null ? floor + 2 : v * H, x = r * Math.cos(th), z = r * Math.sin(th);
+      put(n, x, (floor + tread) / 2, z); n.podium = { foot: new THREE.Vector3(x, floor, z), tip: new THREE.Vector3(x, tread, z), v: v == null ? 0 : v, i, th, r, tread, floor, none: v == null }; });
+    const top = vTop * H;
+    put(root, 0, top + 110, 0); // the parent sits well above the peak so its label never lands on the top steps
     const group = new THREE.Group();
     const balls = [];
     const mkBall = (n, col, r, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: col, transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(r); b.userData.node = n; group.add(b); balls.push(b); return b; };
-    mkBall(root, root.kind === "index" ? HEADING : COHORT, root.r); // the parent above the peak; the names are bars, picked by their rectangles
-    const cb = members.map((n) => { const rd = readingOf(n); const v = rd ? rd.v : (aggBar(n) ? aggBar(n).v : null); return { n, v: v == null ? 0 : v, kind: v == null ? 4 : rd && rd.kind === "scout" ? 2 : 0, slot: 0 }; });
-    if (above) { const bm = new THREE.Mesh(barGeometry(cb), coilBarMat); bm.frustumCulled = false; bm.renderOrder = 3; group.add(bm); }
-    else { const sm = new THREE.Mesh(standGeometry(cb), standMat); sm.frustumCulled = false; sm.renderOrder = 3; group.add(sm); group.add(rampMesh(members, P)); }
-    // FROM ABOVE: the spiral's thread through the bars, coloured by the reading; the zero ring where green turns to red; the spine
+    mkBall(root, root.kind === "index" ? HEADING : COHORT, root.r); // the parent above the peak; the steps are picked by their rectangles
+    const steps = stairMesh(members, P, above); group.add(steps);
+    // the zero level: a grey ring round the stair at height 0, and the spine
     const line = (pts, col, op = 0.55) => { if (pts.length < 2) return; const g = new THREE.BufferGeometry().setFromPoints(pts); group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: op }))); };
-    let zeroR = null;
-    if (above) {
-      if (withV.length > 1) {
-        const g = new THREE.BufferGeometry().setFromPoints(withV.map((x) => x.n.pos.clone())), cols = [];
-        for (const x of withV) { const c = GREYC.clone().lerp(x.v >= 0 ? UPC : DNC, 0.35 + 0.65 * Math.min(1, Math.abs(x.v))); cols.push(c.r, c.g, c.b); }
-        g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
-        group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6 })));
-      }
-      const flip = withV.findIndex((x) => x.v < 0);
-      zeroR = flip > 0 ? spiralAt(flip - 0.5).r : flip === 0 ? P.A : spiralAt(withV.length - 0.5).r;
-      const ringPts = []; for (let i = 0; i <= 96; i++) ringPts.push(new THREE.Vector3(zeroR * Math.cos((i / 96) * Math.PI * 2), 0, zeroR * Math.sin((i / 96) * Math.PI * 2)));
-      line(ringPts, 0x6a6a6a, 0.7);
-    }
-    line([new THREE.Vector3(0, Math.min(0, floor) - 30, 0), new THREE.Vector3(0, top + 116, 0)], 0x2a2a2a); // the spine, both pictures
+    const outerR = (members.length ? members[members.length - 1].podium.r : P.A) + P.RW / 2 + 6;
+    const ringPts = []; for (let i = 0; i <= 96; i++) ringPts.push(new THREE.Vector3(outerR * Math.cos((i / 96) * Math.PI * 2), 0, outerR * Math.sin((i / 96) * Math.PI * 2)));
+    line(ringPts, 0x8c8c8c, 0.8);
+    line([new THREE.Vector3(0, floor - 10, 0), new THREE.Vector3(0, top + 96, 0)], 0x2a2a2a); // the spine
     scene.add(group);
     showWhole(false);
-    cluster = { c: root, group, balls, members, nbs: [], before: opts.instant && cluster ? cluster.before : { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate, coil: true };
+    cluster = { c: root, group, balls, members, steps, nbs: [], before: opts.instant && cluster ? cluster.before : { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate, coil: true };
     controls.enableRotate = true;
     const ups = withV.filter((x) => x.v >= 0), dns = withV.filter((x) => x.v < 0);
-    state.cluster = root.id; state.clusterCount = { members: all.length, names: all.length, neighbours: 0, read: withV.length, up: ups.length, down: dns.length, none: none.length, top: withV.length ? withV[0].n.ticker : null, bottom: withV.length ? withV[withV.length - 1].n.ticker : null, zero_ring_r: zeroR == null ? null : +zeroR.toFixed(1), podium: state.podium, list: !!root.listMembers };
+    state.cluster = root.id; state.clusterCount = { members: all.length, names: all.length, neighbours: 0, read: withV.length, up: ups.length, down: dns.length, none: none.length, top: withV.length ? withV[0].n.ticker : null, bottom: withV.length ? withV[withV.length - 1].n.ticker : null, zero_ring_r: +outerR.toFixed(1), podium: state.podium, list: !!root.listMembers, H: +H.toFixed(1), max_gap: +maxGap.toFixed(3), max_drop: +(maxGap * H).toFixed(1), drop_cap: P.D };
     state.coilOrder = withV.map((x) => x.n.ticker);
-    // the proof reads every place: rank, reading, radius, the middle's height, and standing: the ramp's height (the foot) and the tip
-    state.coilPlaces = () => members.map((n, i) => ({ t: n.ticker, i, v: i < withV.length ? +withV[i].v.toFixed(3) : null, r: +Math.hypot(n.pos.x, n.pos.z).toFixed(1), y: +n.pos.y.toFixed(1), ...(n.podium ? { ramp: +n.podium.ramp.toFixed(1), tip: +n.podium.tip.y.toFixed(1) } : {}) }));
+    // the proof reads the gap between every pair of neighbouring steps, in world units along the outer edge of the spiral (0 = they touch; negative = they overlap a hair on the inside of the turn)
+    state.stepGaps = () => members.slice(1).map((n, i) => { const a = members[i].podium, b = n.podium, rm = (a.r + b.r) / 2, wa = (P.D * (a.r + P.RW / 2)) / a.r, wb = (P.D * (b.r + P.RW / 2)) / b.r; return +((b.th - a.th) * (rm + P.RW / 2) - (wa + wb) / 2).toFixed(2); });
+    state.podiumParams = () => ({ ...P, H: +H.toFixed(1), floor: +floor.toFixed(1), top: +top.toFixed(1), max_gap: +maxGap.toFixed(3), max_drop: +(maxGap * H).toFixed(1), turns: +(members.length ? members[members.length - 1].podium.th / (2 * Math.PI) : 0).toFixed(2), outer_r: +outerR.toFixed(1) });
+    // the proof reads every place: rank, reading, radius, the tread (the step's top) and the floor
+    state.coilPlaces = () => members.map((n, i) => ({ t: n.ticker, i, v: i < withV.length ? +withV[i].v.toFixed(3) : null, r: +Math.hypot(n.pos.x, n.pos.z).toFixed(1), y: +n.pos.y.toFixed(1), tread: +n.podium.tread.toFixed(1), floor: +n.podium.floor.toFixed(1), tip: +n.podium.tread.toFixed(1) }));
     nodes.forEach(hide);
     focusCanvas();
-    // the frame holds every foot and every tip (standing) or every bar (above); the parent's ball too
-    const frameList = above ? [root, ...members] : [root, ...members, ...members.map((n) => ({ pos: n.podium.foot })), ...members.map((n) => ({ pos: n.podium.tip }))];
-    const to = framing(frameList, above ? dirOf(PARAMS.above) : standDir(), 0.8);
+    // the frame holds every floor point and every tread, and the parent's ball
+    const frameList = [root, ...members, ...members.map((n) => ({ pos: n.podium.foot })), ...members.map((n) => ({ pos: n.podium.tip }))];
+    const to = framing(frameList, dirOf(above ? PARAMS.above : PARAMS.stand), 0.8);
     if (opts.instant) { camera.position.copy(to.p); controls.target.copy(to.t); move = null; } else flyTo(to, 900);
     state.dirty = true; wake();
     if (onArea) onArea(root);
   }
   // FROM ABOVE | PODIUM 3D: the other picture of the podium that is open (or the one the next podium opens in)
   function setPodium(mode) { if (mode !== "above" && mode !== "3d") return; if (cluster && cluster.coil) enterCoil(cluster.c, mode); else state.podium = mode; }
-  // the proof: set a spacing in place (above: {above:1, A, B, D} · standing: {A, B, D, STEP, el, az}), re-enter without the flight, render, count the touching pairs
-  state.podiumTune = (params = {}) => {
-    const tgt = params.above ? PARAMS.above : PARAMS.stand; for (const k of Object.keys(params)) if (k in tgt && Number.isFinite(+params[k])) tgt[k] = +params[k];
-    if (!(cluster && cluster.coil)) return null;
-    enterCoil(cluster.c, state.podium, { instant: true });
-    controls.update(); camera.updateMatrixWorld(); renderer.render(scene, camera); placeLabels();
-    const B = state.boxes(); let ov = 0; for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) { const a = B[i], b = B[j]; if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) ov++; }
-    return { params: { ...tgt }, mode: state.podium, bars: B.length, overlaps: ov, labels: state.labelsShown };
-  };
   function exitCluster(fly = true) {
     if (!cluster) return;
     scene.remove(cluster.group);
@@ -774,8 +729,8 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   state.panBy = (dx, dy) => { const d = camera.position.distanceTo(controls.target), ppu = view.scaleH / d; const v = new THREE.Vector3(-dx / ppu, dy / ppu, 0).applyQuaternion(camera.quaternion); camera.position.add(v); controls.target.add(v); state.dirty = true; wake(); };
   state.zoomAt = (sx, sy, f) => { const nd = new THREE.Vector3((sx / view.w) * 2 - 1, -(sy / view.h) * 2 + 1, 0.5).unproject(camera); const dir = nd.sub(camera.position).normalize(); const d = camera.position.distanceTo(controls.target); const hit = camera.position.clone().add(dir.multiplyScalar(d)); camera.position.lerp(hit, 1 - 1 / f); controls.target.lerp(hit, 1 - 1 / f); state.dirty = true; wake(); };
   const T_HELD = (state.tree && state.tree.held_by) || {};
-  state.screenOf = (id) => { const n = state.byId.get(id); camera.updateMatrixWorld(); const v = n.pos.clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) * r.width / 2, r.top + (1 - v.y) * r.height / 2]; };
-  state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }, modes.full); layout(state.flat ? 0 : 1, () => {}); return out; }; // an area is always the DETAILED subtree
+  state.screenOf = (id) => { const n = state.byId.get(id); camera.updateMatrixWorld(); const v = (n.podium ? n.podium.tip : n.pos).clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); /* T8: a step is aimed at its tread */ return [r.left + (v.x + 1) * r.width / 2, r.top + (1 - v.y) * r.height / 2]; };
+  state.layoutOf = (k) => { const out = {}; layout(k, (n, x, y, z) => { out[n.id] = [x, y, z]; }, modes.clean); layout(state.flat ? 0 : 1, () => {}); return out; }; // T8: an area lifts the CLEAN picture (boxes, packed); T6 lifted the DETAILED one
   /* ---- CLEAN | DETAILED and the order (2 Oct): the other picture of the same tree, morphed to ---- */
   function remorph(ms) {
     if (cluster) exitCluster(false);

@@ -23,6 +23,8 @@ input[type=search]{background:var(--panel2);color:var(--ink);border:1px solid va
 button{background:var(--panel2);color:var(--ink2);border:1px solid var(--line2);border-radius:3px;font:11px/1 var(--mono);letter-spacing:.08em;padding:7px 9px;cursor:pointer}
 button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .main{display:grid;grid-template-columns:minmax(0,1fr) 400px;flex:1;min-height:0}
+/* T8: the side panel shows only the thing clicked; until then it is gone and the canvas has the width (Alan: "this 'click any line' thing needs to go") */
+.main.nocard{grid-template-columns:minmax(0,1fr) 0} .main.nocard aside{display:none}
 #view{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
 #outline{position:absolute;inset:0;overflow:auto;padding:10px 12px 40px}
 #graph{position:absolute;inset:0;display:none;cursor:grab}
@@ -41,6 +43,10 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .lb.h small,.lb.c small{display:block;font-size:11px;letter-spacing:.04em;font-weight:400;color:var(--dim)}
 .lb.f{color:var(--ink);font-size:12px}
 .lb.n{color:var(--ink2)}
+/* T8 (Alan, 2 Oct night: "I need quite a bit bigger for the actual things, in white, and way bigger for the Geiger of each thing"):
+   a tradeable's ticker on its box is large and white — the one place white is asked for; the titles keep their style */
+.lb.n.onbox,.lb.f.onbox{color:#fff;font-size:15px;letter-spacing:.06em;font-weight:700;text-align:center;text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000}
+@media (max-width:760px){.lb.n.onbox,.lb.f.onbox{font-size:12px}}
 .lb.w{color:var(--dim)}
 .lb .up{color:var(--up)} .lb .dn{color:var(--dn)}
 /* T6: the OPEN 3D button on every section — a real button with the cube, big enough for a thumb; the section's name is clickable too */
@@ -50,15 +56,19 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 .lb.sec{pointer-events:auto;cursor:pointer}
 .lb .chipline{display:block;margin:3px 0 1px;text-align:center} .lb .chipline .lb3d{margin-left:0}
 .lb.onbox{color:var(--ink)}                               /* a name printed on its box (CLEAN) or on its podium bar */
-.lb.n.onbox{font-size:11px;letter-spacing:.06em;font-weight:600;text-align:center}
 .lb.sel{outline:1px solid var(--ink);outline-offset:3px;border-radius:2px}   /* the picked box */
 #gl canvas:focus{outline:none}
 #areabar{position:absolute;left:50%;top:38px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;background:rgba(21,21,21,.96);border:1px solid var(--line2);border-radius:3px;padding:5px 8px 5px 12px;font-size:12px;letter-spacing:.06em;color:var(--ink);white-space:nowrap;max-width:calc(100% - 20px)}
 #areabar b{font-weight:600;letter-spacing:.1em;overflow:hidden;text-overflow:ellipsis} #areabar .mode{color:var(--dim)} #areabar button{font-size:11px;padding:6px 10px}
 #areabar .seg button{padding:6px 8px}
 /* T7: the Hub's lists at the top of the tree — ★ FAVORITES and ♥ LIKED, each opening straight as a podium */
-#listbar{position:absolute;right:10px;top:8px;z-index:3;display:flex;gap:6px}
+/* T8: MY LISTS — a separate area (they are not part of the market's tree): one place, three buttons, each opens its podium */
+#listbar{position:absolute;right:10px;top:8px;z-index:3;display:flex;gap:6px;align-items:center;border:1px solid var(--line2);border-radius:3px;padding:4px 6px;background:rgba(21,21,21,.96)}
+#listbar .ttl{font-size:10px;letter-spacing:.16em;color:var(--mute);padding:0 4px}
 #listbar button{font-size:11px;padding:5px 9px;letter-spacing:.1em;background:rgba(27,27,27,.96)}
+#mylists{border:1px solid var(--line2);border-radius:3px;padding:6px 8px 4px;margin:0 0 10px;background:var(--panel2)}
+#mylists .ttl{font-size:10px;letter-spacing:.16em;color:var(--mute);margin:0 0 4px 4px}
+#mylists .row.list{border:0;margin:0;background:transparent}
 #listbar button.on{color:var(--ink);border-color:var(--dim)}
 #listbar button.empty{color:var(--dim)}
 .row.list{border:1px solid var(--line2);margin:0 0 4px;background:var(--panel2);cursor:pointer}
@@ -195,14 +205,12 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
       <div id="areabar"></div>
       <details id="legend"><summary>KEY · what every mark means</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
-        <div><span class="lgbar kb"><s></s><i style="top:35%;bottom:35%;background:var(--up)"></i></span>slim bar = SCOUT Geiger (daily, 3-day, weekly only; off the Hub), where the full Geiger is missing</div>
-        <div><span class="lgbar kb"><s></s><i style="background:repeating-linear-gradient(135deg,var(--up) 0 3px,#1f1f1f 3px 5px)"></i></span>striped bar = an aggregate: a cohort's mean, a heading's mean, a fund's holdings blend</div>
-        <div class="mute">full half of a bar = ±1, the Hub's composite scale</div>
+        <div class="mute">half of a bar = ±1, the Hub's composite scale · only a tradeable line (a fund, a company) carries a bar; a heading or a cohort carries none — its lines carry theirs · a name off the Hub shows the same Geiger, computed at the close (its hover says so)</div>
         <div><span class="sw coh"></span>a cohort: ADOPTED (registry) · PROPOSED (not adopted; was printed with a "?") · FUND SET (a fund's served holdings no cohort claims) · NONE YET (names no group claims, under their sector)</div>
         <div><span class="sw head"></span>a heading · <span class="sw"></span>a line · <span class="sw hol"></span>waiting = a name with no reading yet</div>
         <div><span class="kb" style="text-align:center"><span class="up">86 up</span> · <span class="dn">40 down</span></span>under a heading or cohort: how many lines under it read up / down (the ▲▼ arrows are gone)</div>
-        <div><span class="kb" style="text-align:center">＋N more</span>CLEAN only: what the box folds away — names, empty fund sets, waiting lines; hover for the split, DETAILED shows them</div>
-        <div><span class="lgbar kb"><s></s></span>CLEAN: every box IS its Geiger bar with the name on it (a fund's ticker appears as you zoom in); an empty track = no reading yet</div>
+        <div><span class="kb" style="text-align:center">＋N more</span>CLEAN only: what the heading folds away — lines with no reading yet; hover for the split, DETAILED shows them</div>
+        <div><span class="lgbar kb"><s></s></span>CLEAN: every box IS its Geiger bar with the name on it (a fund's or a company's ticker appears as you zoom in); an empty track = no reading yet</div>
         <div><span class="kb" style="text-align:center;color:var(--ink);border:1px solid var(--dim);border-radius:3px;font-size:10px;line-height:16px;flex-basis:64px;margin:0 8px">OPEN 3D</span>on every section (Technology, Financials, Broad Market…): press it, or click the section's name, and only that section lifts into 3D; Esc, the breadcrumb or ← BACK TO THE CANVAS drops back</div>
         <div><span class="kb" style="text-align:center;color:var(--mute)">─ │</span>a line joins a parent (above) to a child (below); a horizontal rail carries a second row of sections hung from the heading above; a box frames a cohort's names (DETAILED)</div>
         <div><button id="v-3d" class="keybtn" title="the whole market in 3D at once — heavy and crowded; the usual way is OPEN 3D on one section">WHOLE MAP 3D</button><span>the whole tree in 3D at once (the usual way is OPEN 3D on one section)</span></div>
@@ -297,8 +305,15 @@ nodes.forEach((n) => {
   else if (n.kind === "index") n.agg = aggregate(beneath(n.id));
   else if (n.kind === "fund") n.agg = holdingsAggregate(n, geigerOf);
 });
-// the bar an aggregate node shows: its full mean when any member has one, else its scout mean
-const aggBar = (n) => n.kind === "fund" ? (n.agg ? { v: n.agg.value, kind: "full" } : null) : n.agg && n.agg.full ? { v: n.agg.full.v, kind: "full" } : n.agg && n.agg.scout ? { v: n.agg.scout.v, kind: "scout" } : null;
+/* T8 (2 Oct, night — Alan: "just show me the Geiger of each tradeable instrument, no aggregates"): only a tradeable line draws a
+   bar. The aggregate bars (a cohort's mean, a heading's mean, a fund's holdings blend) stay in the code behind this flag, off.
+   The mean still ORDERS the headings green → red (T5), it is just never drawn. */
+const SHOW_AGGREGATES = false;
+const SCOUT_SLIM = false; // T8: the off-Hub names' Geiger (seven rungs, equal to the Hub's at the close) is drawn exactly like the Hub's
+// the bar an aggregate node WOULD show: its full mean when any member has one, else its scout mean
+const aggBarRaw = (n) => n.kind === "fund" ? (n.agg ? { v: n.agg.value, kind: "full" } : null) : n.agg && n.agg.full ? { v: n.agg.full.v, kind: "full" } : n.agg && n.agg.scout ? { v: n.agg.scout.v, kind: "scout" } : null;
+const aggBar = (n) => (SHOW_AGGREGATES ? aggBarRaw(n) : null);
+const orderValue = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBarRaw(n); return ab ? ab.v : null; };
 state.counts = {
   nodes: nodes.length, cohorts: nodes.filter((n) => n.kind === "cohort" && n.ckind === "adopted").length, proposed: nodes.filter((n) => n.kind === "cohort" && n.ckind === "proposed").length,
   fundsets: nodes.filter((n) => n.kind === "cohort" && n.ckind === "fundset").length, pseudo: nodes.filter((n) => n.kind === "cohort" && n.ckind === "none").length, at_home: T.counts.names_at_home_in,
@@ -306,19 +321,20 @@ state.counts = {
   scout: nodes.filter((n) => n.sg).length, none: nodes.filter((n) => n.ticker && !n.g && !n.sg).length,
   differences: T.counts.differences, differences_in_real_cohorts: T.counts.differences_in_real_cohorts, differences_no_cohort: T.counts.differences_no_cohort,
 };
-state.tree = T; state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar;
+state.tree = T; state.nodes = nodes; state.kids = kids; state.primaryKids = primaryKids; state.readingOf = readingOf; state.aggBar = aggBar; state.orderValue = orderValue; state.showAggregates = SHOW_AGGREGATES;
 
 /* ---- T7 (2 Oct) · the Hub's own lists as podiums: ★ FAVORITES and ♥ LIKED. The Hub keeps both on the server (Supabase:
    station_lists holds FAVORITES and RADAR, hub_favorites holds LIKED) and mirrors them into this browser on every read —
    "sc_lists" = {favorites, radar} and "sc_fav" = the LIKED tickers (index.html: LISTS_LS_KEY, lsSet("sc_fav", …)). This page
    is served from the same origin, so it reads that mirror; nothing is written and no key is copied. A ticker the tree does
    not serve is counted and named, never drawn. ---- */
-const HUB_LISTS = [
+const HUB_LISTS = [ // T8: ◎ RADAR joins, from the same mirror (sc_lists.radar); the three live in one MY LISTS area, apart from the market's tree
   { id: "LIST_FAVORITES", glyph: "★", name: "FAVORITES", key: "sc_lists", read: (raw) => { const o = JSON.parse(raw || "null"); return o && Array.isArray(o.favorites) ? o.favorites : null; } },
   { id: "LIST_LIKED", glyph: "♥", name: "LIKED", key: "sc_fav", read: (raw) => { const a = JSON.parse(raw || "null"); return Array.isArray(a) ? a : null; } },
+  { id: "LIST_RADAR", glyph: "◎", name: "RADAR", key: "sc_lists", read: (raw) => { const o = JSON.parse(raw || "null"); return o && Array.isArray(o.radar) ? o.radar : null; } },
 ];
 const byTicker = new Map(nodes.filter((n) => n.kind === "name" && n.ticker).map((n) => [n.ticker, n]));
-const listEmptyNote = (n) => (n.name === "FAVORITES" ? "no favorites in this browser yet" : "no liked names in this browser yet") + (n.known ? "" : " — open the Hub once in this browser and they appear here");
+const listEmptyNote = (n) => (n.name === "FAVORITES" ? "no favorites in this browser yet" : n.name === "RADAR" ? "no radar names in this browser yet" : "no liked names in this browser yet") + (n.known ? "" : " — open the Hub once in this browser and they appear here");
 function readList(def) {
   let raw = null; try { raw = localStorage.getItem(def.key); } catch {}
   let tickers = null; try { tickers = def.read(raw); } catch {}
@@ -335,10 +351,10 @@ state.lists = () => hubLists().map((n) => ({ id: n.id, label: n.label, key: n.ke
 
 /* ---- stamp ---- */
 $("stamp").textContent = state.geiger
-  ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} full bars (${state.counts.up} up · ${state.counts.down} down)` +
-    (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of}, ${state.scout.source})` : ` · scout Geiger did not answer (${state.scoutErr})`) +
+  ? `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC · ${state.counts.lit} Hub bars (${state.counts.up} up · ${state.counts.down} down)` +
+    (state.scout ? ` · ${state.counts.scout} computed at the close (as of ${state.scout.as_of})` : ` · the close-of-day Geiger did not answer (${state.scoutErr})`) +
     ` · ${state.counts.cohorts} adopted · ${state.counts.proposed} proposed · ${state.counts.fundsets} fund sets · ${state.counts.pseudo} none yet`
-  : `the live Geiger did not answer (${state.geigerErr}); no full bar is drawn and none is made up` + (state.scout ? ` · ${state.counts.scout} scout bars (as of ${state.scout.as_of})` : "");
+  : `the live Geiger did not answer (${state.geigerErr}); no Hub bar is drawn and none is made up` + (state.scout ? ` · ${state.counts.scout} computed at the close (as of ${state.scout.as_of})` : "");
 
 /* ---- names of things (2 Oct): one plain sentence per heading, shown on its card and on hover ---- */
 const WORDS = {
@@ -368,7 +384,7 @@ const WORDS = {
 };
 const wordsOf = (n) => n.kind === "index" ? (WORDS[n.id] || "") : n.kind === "list" ? `The Hub's ${n.label} list as you keep it on the Hub, read from this browser; its names as a podium, with the Geiger readings the tree already has.` : n.kind === "cohort" ? ({ adopted: "A cohort from the standard: names that move together, adopted on 28 Sep.", proposed: "A proposed cohort from the 28 Sep proposal: shown so you can see what adopting it would give; nothing is written.", fundset: "A fund set: this fund's served holdings that no adopted or proposed cohort claims.", none: "No group yet: names under this sector that no cohort, proposed cohort or fund set claims." })[n.ckind] : "";
 state.wordsOf = wordsOf;
-const valueOf = (n) => { const rd = readingOf(n); if (rd) return rd.v; const ab = aggBar(n); return ab ? ab.v : null; };
+const valueOf = orderValue; // the order uses the mean; the picture does not draw it
 // inside every parent the children run green → red by reading, the highest first, ties by name, no reading last (2 Oct); BY SIZE keeps the old order
 const byReading = (a, b) => { const av = valueOf(a), bv = valueOf(b); if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1; if (bv !== av) return bv - av; const an = nameOf(a), bn = nameOf(b); return an < bn ? -1 : an > bn ? 1 : 0; };
 const bySize = (a, b) => (b.market_value_usd || 0) - (a.market_value_usd || 0) || (nameOf(a) < nameOf(b) ? -1 : 1);
@@ -384,9 +400,10 @@ function bar(v, cls = "") {
 const num = (v) => `<b class="${v >= 0 ? "up" : "dn"}">${fmtG(v)}</b>`;
 function pathOf(n) { const out = []; let cur = n; while (cur.parents.length) { cur = state.byId.get(cur.parents[0]); out.unshift(cur); } return out; }
 const nameOf = (n) => n.ticker || n.label;
+const scoutCls = (rd) => (rd.kind === "scout" && SCOUT_SLIM ? " sc" : ""); // T8: drawn like the Hub's
 function ownBarHTML(n, cls = "") {
   const rd = readingOf(n);
-  if (rd) return `<div class="gbrow">${bar(rd.v, cls + (rd.kind === "scout" ? " sc" : ""))}${num(rd.v)}</div>`;
+  if (rd) return `<div class="gbrow">${bar(rd.v, cls + scoutCls(rd))}${num(rd.v)}</div>`;
   const ab = aggBar(n);
   if (ab) return `<div class="gbrow">${bar(ab.v, cls + " agg" + (ab.kind === "scout" ? " sc" : ""))}${num(ab.v)}</div>`;
   return `<span class="mute">${n.ticker ? "no reading" : n.kind === "index" ? "heading" : "empty"}</span>`;
@@ -398,7 +415,7 @@ const KIND_WORD = { adopted: "ADOPTED", proposed: "PROPOSED", fundset: "FUND SET
 const kindWord = (n) => n.kind === "index" ? "heading" : n.kind === "cohort" ? (n.ckind === "adopted" ? "adopted cohort" : n.ckind === "proposed" ? "proposed cohort" : n.ckind === "fundset" ? "fund set" : "not a cohort") : n.kind;
 const kindTag = (n) => n.kind === "cohort" ? `<span class="tag kd">${KIND_WORD[n.ckind]}</span>` : "";
 function aggHTML(n, what) {
-  const a = n.agg; if (!a) return "";
+  const a = n.agg; if (!a || !SHOW_AGGREGATES) return ""; // T8: off
   let h = "";
   if (a.full) h += `<div class="kv"><span>${what} · FULL</span><div class="gbrow">${bar(a.full.v, "lg agg")}<span class="big ${a.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.full.v)}</span></div>` +
     `<span>COUNT</span><span>${a.full.n} of ${a.n} with a full Geiger · <span class="up">${a.full.up} up</span> · <span class="dn">${a.full.down} down</span></span></div>` +
@@ -411,11 +428,11 @@ function aggHTML(n, what) {
 }
 const ms0 = (c) => membersOf(c).filter((m) => m.kind === "name").length;
 function renderCard(n) {
+  // T8: the side panel shows only the thing clicked; empty = gone, and the canvas takes the width
+  document.querySelector(".main").classList.toggle("nocard", !n);
+  if (m3) requestAnimationFrame(() => m3.fit());
   if (!n) {
-    $("card").innerHTML = `<h2>Click any line</h2><div class="sub">Its Geiger bar and its place on the tree show here. On the CANVAS, drag to pan and wheel or pinch to zoom; press OPEN 3D on a section (or click its name) and only that section lifts into 3D (Esc or ← BACK TO THE CANVAS drops back). CLEAN: every box IS its Geiger bar with the name on it; DETAILED shows the names too. Inside every parent the children run green → red. A cohort of more than 24 names opens as the PODIUM: every name a standing Geiger column on a spiral ramp, the highest at the centre-top, winding down and out (FROM ABOVE on its top bar is the flat picture). ★ FAVORITES and ♥ LIKED at the top of the tree are the Hub's own lists, each a podium. Type a ticker in the finder for its path and every fund that holds it.</div>` +
-      `<div class="sec">HOW TO READ A BAR</div><div class="kv"><span>FULL GEIGER</span>${bar(0.42, "lg")}<span>SCOUT (slim)</span>${bar(0.42, "lg sc")}<span>AGGREGATE (striped)</span>${bar(0.42, "lg agg")}</div>` +
-      `<div class="mute" style="font-size:11px">FULL = the Hub Geiger, all its timeframes, for every served line. SCOUT = the same maths on the daily, 3-day and weekly bars only, computed off the Hub every night for every US stock and tree fund; drawn only where the full Geiger has no reading. AGGREGATE = a mean of the lines under a cohort or heading, or a fund's holdings blended by weight. All centred at zero, ±1 = the full half. These examples are drawn at +0.42.</div>` +
-      `<div class="sec">THE TREE</div><div class="mute" style="font-size:11px">market → asset class / region → sector fund → parent → cohort → names. Structure above the cohorts: the r3 market map. Four kinds of cohort: ADOPTED (the registry Alan adopted on 28 Sep, step 1), PROPOSED (the 28 Sep proposal's cohorts not adopted yet, under their proposed parent), FUND SET (each industry fund's served holdings, R8), NONE YET (unclaimed, under the sector). Home rule: adopted > proposed > fund set > none; theme beats size; every other membership is "also in".</div>`;
+    $("card").innerHTML = "";
     return;
   }
   const qq = n.ticker ? state.quotes[n.ticker] : null;
@@ -426,20 +443,20 @@ function renderCard(n) {
   // T6: inside a section's 3D or the podium, the panel repeats the way back in one line
   if (m3 && m3.inArea() && state.cluster) { const root = state.byId.get(state.cluster); h += m3.inCoil()
     ? (m3.podiumMode() === "above"
-      ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, FROM ABOVE: every name is its Geiger bar, the highest at the centre-top, winding down and outwards · PODIUM 3D on the top bar stands it up · hover a bar for its full bar and path · click a bar for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
-      : `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, standing: every name is a Geiger column on a spiral ramp — first place at the centre, highest; each next one a step lower and further out; the column's height is the reading (green rises above the ramp, red hangs below it; the ramp is zero) · drag to turn, scroll to zoom · FROM ABOVE on the top bar is the flat picture · hover a column for its full bar and path · click one for that name on the tree · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`)
+      ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, FROM ABOVE: the same staircase seen from straight above — every name a step, the highest at the centre, coiling down and outwards to the lowest · PODIUM 3D on the top bar stands it up · hover a step for its bar and path · click a step for its card · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
+      : `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, standing: a staircase — every name is a column standing against the next, first place at the centre and the top, each next step a little lower and further out, coiling down to the last; the step's height is the reading (green above the zero ring, red below it) · drag to turn, scroll to zoom · FROM ABOVE on the top bar is the flat picture · hover a step for its bar and path · click a step for its card, then SHOW ON THE TREE · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`)
     : `<div class="wait">Inside <b>${esc(root ? root.label : "")}</b> in 3D · drag to turn, scroll to zoom · Esc, the breadcrumb or ← BACK TO THE CANVAS drops back to the canvas</div>`; }
   if (wordsOf(n)) h += `<div class="say">${esc(wordsOf(n))}</div>`;
-  const COIL_TITLE = "the names as the PODIUM: every name its Geiger bar standing on a spiral ramp (PODIUM 3D) or flat seen from above, the highest reading at the centre-top, winding down and outwards to the lowest";
+  const COIL_TITLE = "the names as the PODIUM: a staircase of Geiger columns, first place at the centre and the top, coiling down and outwards to the lowest (PODIUM 3D), or the same seen from above";
   if (n.kind === "list") { // T7: a Hub list — what it holds, its mean, the podium button; an empty one shows its one-line note, never a blank
-    h += `<div class="kv"><span>ON THE HUB</span><span>${n.tickers.length} name${n.tickers.length === 1 ? "" : "s"} <span class="mute">· read from this browser (${esc(n.key)}); the Hub's server copy is the source of truth</span></span><span>ON THE TREE</span><span>${n.listMembers.length}${n.missing.length ? ` <span class="mute">· ${n.missing.length} not served here: ${n.missing.map(esc).join(", ")}</span>` : ""}</span></div>`;
+    h += `<div class="say">MY LISTS · not part of the market's tree</div><div class="kv"><span>ON THE HUB</span><span>${n.tickers.length} name${n.tickers.length === 1 ? "" : "s"} <span class="mute">· read from this browser (${esc(n.key)}); the Hub's server copy is the source of truth</span></span><span>ON THE TREE</span><span>${n.listMembers.length}${n.missing.length ? ` <span class="mute">· ${n.missing.length} not served here: ${n.missing.map(esc).join(", ")}</span>` : ""}</span></div>`;
     if (!n.listMembers.length) { h += `<div class="wait">${esc(listEmptyNote(n))}</div>`; $("card").innerHTML = h; return; }
     h += aggHTML(n, "ON THE LIST") + `<button class="coilbtn" data-coil="${esc(n.id)}" title="${COIL_TITLE}">PODIUM · ${n.listMembers.length} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
     h += `<div class="sec">NAMES · ${n.listMembers.length} <span class="mute" style="letter-spacing:0">· green → red</span></div><table>${ordered(n.listMembers).map((m) => rowFor(m)).join("")}</table>`;
     $("card").innerHTML = h; return;
   }
   if (n.kind === "index") {
-    h += `<div class="wait">A heading, not a tradable line, so it has no Geiger of its own. The striped bar is the mean of every line under it.</div>` + aggHTML(n, "UNDER IT");
+    h += `<div class="wait">A heading, not a tradeable line: it carries no Geiger of its own. Its tradeable lines — the funds, then the companies under each fund — carry theirs.</div>` + aggHTML(n, "UNDER IT");
     const nb = m3 ? m3.beneathNames(n).length : beneath(n.id).filter((x) => x.kind === "name").length;
     if (nb > 12) h += `<button class="coilbtn" data-coil="${esc(n.id)}" title="${COIL_TITLE}">PODIUM COIL · ${nb} NAMES</button> <span class="mute" style="font-size:11px">or the ordered list below</span>`;
   } else if (n.kind === "cohort") {
@@ -467,7 +484,7 @@ function renderCard(n) {
       const away = n.all_members.filter((t) => !ms.some((m) => m.ticker === t));
       const aggAll = aggregate(n.all_members.map((t) => state.byId.get(t)).filter(Boolean));
       h += `<div class="sec">${n.ckind === "proposed" ? "WOULD HOLD" : "THE WHOLE SET"} · ${n.all_members.length}</div>` +
-        (aggAll.full ? `<div class="kv"><span>MEAN OF ALL ${n.all_members.length}</span><div class="gbrow">${bar(aggAll.full.v, "lg agg")}<span class="big ${aggAll.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(aggAll.full.v)}</span></div><span>COUNT</span><span>${aggAll.full.n} full · <span class="up">${aggAll.full.up} up</span> · <span class="dn">${aggAll.full.down} down</span></span></div>` : "") +
+        (aggAll.full && SHOW_AGGREGATES ? `<div class="kv"><span>MEAN OF ALL ${n.all_members.length}</span><div class="gbrow">${bar(aggAll.full.v, "lg agg")}<span class="big ${aggAll.full.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(aggAll.full.v)}</span></div><span>COUNT</span><span>${aggAll.full.n} full · <span class="up">${aggAll.full.up} up</span> · <span class="dn">${aggAll.full.down} down</span></span></div>` : "") +
         `<div class="mute" style="font-size:11px;margin-bottom:4px">${ms.length} at home here · ${away.length} at home elsewhere (listed with where)</div>` +
         (away.length ? `<table>${ordered(away.map((t) => state.byId.get(t))).map((m) => { const hm = state.byId.get(m.home_id); return `<tr><td><span class="lnk" data-go="${esc(m.id)}">${esc(m.ticker)}</span></td><td class="nm">at home in <span class="lnk" data-go="${esc(hm.id)}">${esc(hm.label)}</span> ${kindTag(hm)}</td><td class="bc">${ownBarHTML(m)}</td></tr>`; }).join("")}</table>` : "");
     }
@@ -476,20 +493,22 @@ function renderCard(n) {
     if (n.diff_count) h += `<div class="mute" style="font-size:11px;margin-top:6px">${n.diff_count} of ${ms.length} sit in another old Hub tab today (the grey tags); nothing is rewritten</div>`;
     $("card").innerHTML = h; return;
   } else if (rd) {
-    h += `<div class="kv"><span>${rd.kind === "full" ? "GEIGER · FULL" : "GEIGER · SCOUT"}</span><div class="gbrow">${bar(rd.v, "lg" + (rd.kind === "scout" ? " sc" : ""))}<span class="big ${rd.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(rd.v)}</span></div>` +
+    h += `<div class="kv"><span>${rd.kind === "full" ? "GEIGER" : "GEIGER · AT THE CLOSE"}</span><div class="gbrow">${bar(rd.v, "lg" + scoutCls(rd))}<span class="big ${rd.v >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(rd.v)}</span></div>` +
       `<span>trend · momentum</span><span><span class="${rd.trend >= 0 ? "up" : "dn"}">${fmtG(rd.trend)}</span> · <span class="${rd.momentum >= 0 ? "up" : "dn"}">${fmtG(rd.momentum)}</span></span>` +
       `<span>DAY CHANGE</span><span>${qq && Number.isFinite(qq.change_pct) ? `<span class="${qq.change_pct >= 0 ? "up" : "dn"}">${fmtPct(qq.change_pct)}</span> <span class="mute">session ${esc(qq.price_session_et)}</span>` : `<span class="mute">not loaded</span>`}</span>` +
       (qq && Number.isFinite(qq.price) ? `<span>LAST PRICE</span><span>${qq.price.toFixed(2)}</span>` : "") +
       (n.market_value_usd ? `<span>MARKET VALUE</span><span>${fmtCap(n.market_value_usd)}</span>` : "") +
       industryHTML(n) + `</div>` +
-      (rd.kind === "full" ? `<div class="mute" style="font-size:11px">the full Hub Geiger · −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`
-        : `<div class="mute" style="font-size:11px">the SCOUT Geiger: daily, 3-day and weekly rungs only (40% of the full Geiger's weight), computed off the Hub · as of the ${esc(state.scout.as_of)} close · ${n.served ? "served, but the full Geiger had no reading for it right now" : "not served: " + esc(n.admission)}</div>`);
+      (rd.kind === "full" ? `<div class="mute" style="font-size:11px">the Hub Geiger · −1 to +1 · ${n.g.tf_contributors} timeframes · computed ${esc(state.geiger.computed_utc.slice(0, 16).replace("T", " "))} UTC</div>`
+        : `<div class="mute" style="font-size:11px">the same Geiger, computed at the ${esc(state.scout.as_of)} close (seven rungs, equal to the Hub's at the close) · ${n.served ? "served, but the live Geiger had no reading for it right now" : "not served live: " + esc(n.admission)}</div>`);
   } else {
-    h += `<div class="wait"><b>No reading.</b> ${n.served ? "Served, but neither the full nor the scout Geiger has a reading for it right now." : esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1)) + " · no scout reading either."}</div>`;
+    h += `<div class="wait"><b>No reading.</b> ${n.served ? "Served, but neither the live Geiger nor the close-of-day one has a reading for it right now." : esc(n.admission.charAt(0).toUpperCase() + n.admission.slice(1)) + " · no close-of-day reading either."}</div>`;
   }
   if (n.kind === "name") {
     const c = state.byId.get(n.parents[0]);
-    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>HOME</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span> ${kindTag(c)}${n.home_kind === "adopted" ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'} <span class="mute">· ${esc(n.home_rule)}</span> <span class="lnk" data-tree="${esc(n.id)}" style="margin-left:6px">show on the tree</span></span>` +
+    // T8: from a podium step the card comes first; this button then jumps to the name on the tree
+    h += `<button class="coilbtn" data-tree="${esc(n.id)}" title="leave the podium and go to this name where it sits on the tree">SHOW ON THE TREE →</button>`;
+    h += `<div class="sec">ON THE TREE</div><div class="kv"><span>HOME</span><span><span class="lnk" data-go="${esc(c.id)}">${esc(c.label)}</span> ${kindTag(c)}${n.home_kind === "adopted" ? "" : ' <span class="mute">(no adopted cohort claims it)</span>'} <span class="mute">· ${esc(n.home_rule)}</span></span>` +
       (n.board_cohort ? `<span>OLD HUB TAB</span><span><span class="tag hub">${esc(nice(n.board_cohort))}</span> <span class="mute">${n.differs ? "a different group from its home here; a tag, not a group" : "the same"}</span></span>` : "") +
       (n.also_in && n.also_in.length ? `<span>ALSO IN</span><span>${n.also_in.map((a) => `<span class="lnk" data-go="${esc(a.id)}">${esc(nice(a.cohort))}</span> <span class="tag kd">${KIND_WORD[a.kind]}</span>`).join(" · ")}</span>` : "") +
       (n.filters && n.filters.length ? `<span>ATTRIBUTES</span><span>${n.filters.map((f) => `<span class="tag k">${esc(nice(f))}</span>`).join(" ")} <span class="mute">filters, not cohorts</span></span>` : "") +
@@ -498,7 +517,7 @@ function renderCard(n) {
   if (n.kind === "fund") {
     const hd = n.holdings;
     if (n.home_id) h += `<div class="kv"><span>COHORT</span><span><span class="lnk" data-go="${esc(n.home_id)}">${esc(state.byId.get(n.home_id).label)}</span> ${kindTag(state.byId.get(n.home_id))} <span class="mute">(a fund that is also a cohort member)</span></span></div>`;
-    if (hd && n.agg) {
+    if (hd && n.agg && SHOW_AGGREGATES) { // T8: off — the holdings blend is an aggregate
       const a = n.agg, dv = n.g ? divergence(n.g.composite, a.value) : null;
       h += `<div class="sec">HOLDINGS BLEND · FMP ${esc(hd.as_of)}</div><div class="kv"><span>HOLDINGS</span><div class="gbrow">${bar(a.value, "lg agg")}<span class="big ${a.value >= 0 ? "up" : "dn"}" style="text-align:right">${fmtG(a.value)}</span></div></div>` +
         `<div style="font-size:12px">aggregate of <b>${a.count}</b> served holdings = <b>${a.coverage_pct.toFixed(0)}%</b> of the fund's weight (full Geigers, blended by weight; the rest is left out, nothing filled in)</div>` +
@@ -543,8 +562,9 @@ function outlineRow(n) {
   else if (n.kind === "index" && n.agg && n.agg.full) small = `<small>${n.agg.full.n} lines · <span class="up">${n.agg.full.up} up</span> · <span class="dn">${n.agg.full.down} down</span></small>`;
   else if (n.kind === "name" && n.differs) small = `<span class="tag hub" title="the old Hub tab this name sits in today; a tag, not a group">hub tab: ${esc(nice(n.board_cohort) || "—")}</span>`;
   else if (n.kind === "fund" && n.registry_cohort && n.differs) small = `<span class="tag hub" title="the old Hub tab this fund sits in today">hub tab: ${esc(nice(n.board_cohort) || "—")}</span>`;
-  const b = rd ? bar(rd.v, rd.kind === "scout" ? "sc" : "") : ab ? bar(ab.v, "agg" + (ab.kind === "scout" ? " sc" : "")) : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`;
-  const v = rd ? `${fmtG(rd.v)}<small>${rd.kind.toUpperCase()}</small>` : ab ? `${fmtG(ab.v)}<small>${n.kind === "fund" ? "HOLDINGS" : "MEAN " + ab.kind.toUpperCase()}</small>` : `<small>${n.ticker ? "no reading" : ""}</small>`;
+  // T8: a bar only on a tradeable line; a heading or cohort shows nothing in the bar column (its lines carry theirs)
+  const b = rd ? bar(rd.v, scoutCls(rd)) : ab ? bar(ab.v, "agg" + (ab.kind === "scout" ? " sc" : "")) : n.ticker ? `<div class="gb" style="opacity:.35"><span class="mid"></span></div>` : "";
+  const v = rd ? `${fmtG(rd.v)}<small>${rd.kind === "scout" ? "AT THE CLOSE" : ""}</small>` : ab ? `${fmtG(ab.v)}<small>${n.kind === "fund" ? "HOLDINGS" : "MEAN"}</small>` : `<small>${n.ticker ? "no reading" : ""}</small>`;
   const label = n.kind === "index" || n.kind === "cohort" ? esc(n.label.toUpperCase()) + (n.kind === "cohort" && n.ckind === "fundset" ? ` <small>${esc(n.fund_label)}</small>` : "") : `${esc(n.ticker)} <small>${esc(n.label)}</small>`;
   return `<div class="row ${cls}" data-id="${esc(n.id)}"><span class="tg ${hasKids ? "" : "leaf"}">${open.has(n.id) ? "▾" : "▸"}</span><span class="lab">${label}${small}</span><span class="bar">${b}</span><span class="val ${rd || ab ? ((rd || ab).v >= 0 ? "up" : "dn") : "mute"}">${v}</span></div>`;
 }
@@ -573,17 +593,18 @@ function outlineNode(n) {
 /* T7: the two Hub lists at the top of the tree; each opens straight as a podium (PODIUM 3D); an empty one says so in one line */
 function listRowsHTML() {
   return hubLists().map((n) => { const ab = aggBar(n), empty = !n.listMembers.length;
-    return `<div class="row h list${empty ? " empty" : ""}" data-list="${esc(n.id)}" title="${empty ? esc(listEmptyNote(n)) : `open the ${esc(n.label)} podium`}"><span class="tg leaf"></span><span class="lab">${esc(n.label)} (${n.tickers.length})<small>${empty ? esc(listEmptyNote(n)) : `the Hub's list · ${n.listMembers.length} on the tree${n.missing.length ? ` · ${n.missing.length} not served` : ""} · opens as a podium`}</small></span><span class="bar">${ab ? bar(ab.v, "agg") : `<div class="gb" style="opacity:.35"><span class="mid"></span></div>`}</span><span class="val ${ab ? (ab.v >= 0 ? "up" : "dn") : "mute"}">${ab ? `${fmtG(ab.v)}<small>MEAN</small>` : ""}</span></div>`; }).join("");
+    return `<div class="row h list${empty ? " empty" : ""}" data-list="${esc(n.id)}" title="${empty ? esc(listEmptyNote(n)) : `open the ${esc(n.label)} podium`}"><span class="tg leaf"></span><span class="lab">${esc(n.label)} (${n.tickers.length})<small>${empty ? esc(listEmptyNote(n)) : `the Hub's list · ${n.listMembers.length} on the tree${n.missing.length ? ` · ${n.missing.length} not served` : ""} · opens as a podium`}</small></span><span class="bar">${ab ? bar(ab.v, "agg") : ""}</span><span class="val ${ab ? (ab.v >= 0 ? "up" : "dn") : "mute"}">${ab ? `${fmtG(ab.v)}<small>MEAN</small>` : `<small>${n.listMembers.length ? "PODIUM" : ""}</small>`}</span></div>`; }).join("");
 }
+const myListsHTML = () => `<div id="mylists"><div class="ttl">MY LISTS · ★ FAVORITES · ♥ LIKED · ◎ RADAR — the Hub's own lists, apart from the market's tree; each opens as a podium</div>${listRowsHTML()}</div>`; // T8
 function paintLists() { // the same two entries as chips at the top of the canvas
-  $("listbar").innerHTML = hubLists().map((n) => `<button data-list="${esc(n.id)}" class="${state.cluster === n.id ? "on" : ""}${n.listMembers.length ? "" : " empty"}" title="${n.listMembers.length ? `the Hub's ${esc(n.label)} list as a podium` : esc(listEmptyNote(n))}">${esc(n.label)} (${n.tickers.length})</button>`).join("");
+  $("listbar").innerHTML = `<span class="ttl">MY LISTS</span>` + hubLists().map((n) => `<button data-list="${esc(n.id)}" class="${state.cluster === n.id ? "on" : ""}${n.listMembers.length ? "" : " empty"}" title="${n.listMembers.length ? `the Hub's ${esc(n.label)} list as a podium` : esc(listEmptyNote(n))}">${esc(n.label)} (${n.tickers.length})</button>`).join("");
 }
 $("listbar").addEventListener("click", (e) => { const b = e.target.closest("button[data-list]"); if (b) openList(b.dataset.list); });
 addEventListener("storage", (e) => { if (e.key === "sc_lists" || e.key === "sc_fav") { if (state.view === "outline") renderOutline(); paintLists(); } }); // the Hub, in another tab, changed a list
 function renderOutline() {
   const root = state.byId.get("MARKET");
   const ah = state.counts.at_home;
-  O.innerHTML = listRowsHTML() + `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · inside every parent the children run ${state.order === "size" ? "by size" : "green → red by reading"} · a bar on every line: FULL where served, SCOUT where not, striped = a mean · a grey "hub tab" tag on a name is the old Hub tab it sits in, where that differs from its group here</div>` +
+  O.innerHTML = myListsHTML() + `<div class="note">market → asset class / region → sector fund → parent → COHORT → names · inside every parent the children run ${state.order === "size" ? "by size" : "green → red by reading"} · a bar on every tradeable line (a fund, a company); a heading carries none · a grey "hub tab" tag on a name is the old Hub tab it sits in, where that differs from its group here</div>` +
     `<div id="counts"><span><b>${state.counts.cohorts}</b> ADOPTED · ${ah.adopted} names at home</span><span><b>${state.counts.proposed}</b> PROPOSED, not adopted · ${ah.proposed} names</span><span><b>${state.counts.fundsets}</b> FUND SETS · ${ah.fundset} names</span><span><b>${state.counts.pseudo}</b> NONE YET · ${ah.none} names</span></div>` + outlineNode(root);
 }
 function toggle(id) {
@@ -657,7 +678,7 @@ state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).
 let cameFrom = null;
 async function load3d() {
   if (m3) return m3;
-  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); },
+  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); },
     onArea: () => { if (state.selected) renderCard(state.byId.get(state.selected)); crumbs(); }, // an area or the podium opened or closed: the card's one-line instruction and the top bar follow
     onTree: (n) => showOnTree(n) }); } // a podium bar clicked: that name on the tree
   catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
@@ -697,9 +718,9 @@ async function openList(id) { // T7: a Hub list as a podium (PODIUM 3D by defaul
   if (!n.listMembers.length) return;
   await openCoil(n);
 }
-function showOnTree(n) { // from a bead or a card: the name where it sits on the tree, in DETAILED (names are folded in CLEAN)
+function showOnTree(n) { // from a podium step's card: the name where it sits on the tree (T8: CLEAN draws every name with a reading; only a waiting name needs DETAILED)
   if (m3 && m3.inArea()) m3.exitArea(false);
-  if (state.detail !== "detailed") setDetail("detailed");
+  if (state.detail !== "detailed" && !readingOf(n)) setDetail("detailed");
   if (state.view === "outline") { select(n); return; }
   state.selected = n.id; renderCard(n); if (m3) setTimeout(() => m3.select(n, true), state.detail === "detailed" ? 0 : 750); crumbs();
 }
