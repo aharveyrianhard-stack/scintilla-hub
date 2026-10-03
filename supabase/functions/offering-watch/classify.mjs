@@ -250,6 +250,7 @@ export function newsKind(title) {
   const t = String(title || "");
   if (!(RE_NEWS_ACT.test(t) || RE_NEWS_DIRECT.test(t)) || !RE_NEWS_WHAT.test(t)) return null;
   if (RE_NEWS_NOT.test(t) && !RE_NEWS_DIRECT.test(t.replace(RE_NEWS_NOT, ""))) return null;
+  if (/\b(?:redemption|redeems?|redeemed|repurchases?|buys? back|tender offer)\b/i.test(t)) return null;          // paying notes back, not raising money
   if (/convertible|exchangeable/i.test(t)) return "CONVERTIBLE";
   if (/at-the-market|\bATM\b|equity distribution/i.test(t)) return "ATM";
   if (/registered direct|private placement/i.test(t)) return "PLACEMENT";
@@ -257,10 +258,33 @@ export function newsKind(title) {
   if (/\b(?:notes?|debentures?|bonds?|debt)\s+(?:offering|sale|raise)\b|\bsenior notes\b|\bnotes due\b/i.test(t) && !/\b(?:shares|common stock)\s+offering\b|\bof\s+[\d,.]+\s*(?:million\s+)?shares\b/i.test(t)) return "DEBT";
   return "EQUITY";
 }
-/** one stored news row ∩ the Hub stocks → the offering_news row, or null */
-export function newsFromRow(r, universe) {
+// Google News files a headline under every ticker its query matched: measured on the first run (2 Oct, 21 days), COST got
+// "Yarrow Bioscience … Public Offering", LOW got Oklo's, TGT got "Agree Realty stock price target". So a headline must
+// name the company itself (its short name, as written, or its ticker in "(OKLO)" / "NYSE: OKLO" / "$OKLO" form).
+const GENERIC = /^(?:american|first|general|united|national|international|global|southern|western|eastern|northern|royal|federal|public|digital|applied|advanced|texas|pacific|atlantic|old|new|bank|the)$/i;
+/** "Axon Enterprise, Inc." → "Axon" · "American Tower Corporation" → "American Tower" · "SharonAI Holdings, Inc. Class A Common Stock" → "SharonAI" */
+export function shortName(name) {
+  const s = String(name || "").replace(/\b(?:Class [A-C] )?(?:Common|Ordinary) (?:Stock|Shares)\b.*$/i, "").replace(/\s*\(.*?\)\s*/g, " ")
+    .replace(/[,.]?\s+(?:Inc|Corp|Corporation|Incorporated|Company|Co|Holdings?|Group|plc|Ltd|Limited|N\.V|S\.A|SE|AG|L\.P|LP|Technologies|Enterprises?)\.?\b.*$/i, "").trim();
+  const w = s.split(/\s+/).filter(Boolean);
+  if (!w.length) return null;
+  return GENERIC.test(w[0]) && w[1] ? w[0] + " " + w[1] : w[0];
+}
+export function namesCompany(title, ticker, name) {
+  const t = String(title || ""), tk = String(ticker || "").toUpperCase();
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (tk && new RegExp("\\((?:[A-Z]+:\\s?)?" + esc(tk) + "\\)|\\b(?:NASDAQ|NYSE|NYSEARCA|AMEX|OTC)\\s?:\\s?" + esc(tk) + "\\b|\\$" + esc(tk) + "\\b").test(t)) return true;
+  if (tk.length >= 4 && new RegExp("(?:^|[^A-Za-z])" + esc(tk) + "(?![A-Za-z])").test(t)) return true;   // "CRWV Stock Drops …"
+  const n = shortName(name);
+  if (!n || n.length < 3) return false;
+  return new RegExp("(?:^|[^A-Za-z])(?:" + esc(n) + "|" + esc(n.toUpperCase()) + ")(?![A-Za-z])").test(t);   // as written: "Target" ≠ "price target"
+}
+/** one stored news row ∩ the Hub stocks → the offering_news row, or null. `names` maps ticker → company name; a headline
+ *  that does not name the company is dropped (when a name is known). */
+export function newsFromRow(r, universe, names) {
   const tk = String((r && r.ticker) || "").toUpperCase();
   if (!tk || !universe.has(tk)) return null;
+  if (names && names[tk] && !namesCompany(r.title, tk, names[tk])) return null;
   const url = String(r.url || "").trim(), title = String(r.title || "").trim(), ts = Number(r.published_ts);
   if (!/^https?:\/\//.test(url) || !title || !Number.isFinite(ts) || ts <= 0) return null;
   const kind = newsKind(title);

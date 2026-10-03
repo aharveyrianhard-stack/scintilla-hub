@@ -127,12 +127,20 @@ async function newsStep(sb: any, uni: Set<string> & { hub?: Set<string> }, days:
   out.news = N;
   const since = Math.floor(Date.now() / 1000) - days * 86400;
   const keep = new Map<string, any>();
+  // the company names, so a headline Google filed under the wrong ticker is dropped (classify.mjs namesCompany)
+  const names: Record<string, string> = {};
+  const hubList = [...(uni.hub || uni)];
+  for (let i = 0; i < hubList.length; i += 300) {
+    const { data, error } = await sb.from("company_profile").select("ticker,name").in("ticker", hubList.slice(i, i + 300));
+    if (error) { out.errors.push("company_profile names: " + error.message); break; }
+    for (const r of data || []) if (r && r.ticker && r.name) names[String(r.ticker).toUpperCase()] = String(r.name);
+  }
   for (let page = 0; page < 20; page++) {
     const { data, error } = await sb.from("news").select("ticker,url,published_ts,title,site,feed").gte("published_ts", since).or(NEWS_OR)
       .order("published_ts", { ascending: true }).range(page * 1000, page * 1000 + 999);
     if (error) { out.errors.push("news read: " + error.message); return; }
     N.scanned += (data || []).length;
-    for (const r of data || []) { const n = newsFromRow(r, uni.hub || uni); if (n) keep.set(n.ticker + "|" + n.url, n); }
+    for (const r of data || []) { const n = newsFromRow(r, uni.hub || uni, names); if (n) keep.set(n.ticker + "|" + n.url, n); }
     if (!data || data.length < 1000) break;
   }
   const rows = [...keep.values()];
