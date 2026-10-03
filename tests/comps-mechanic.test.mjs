@@ -67,7 +67,7 @@ test("the tab: no status chips, no repeated price, no 'log axis', the price as t
   assert.ok(!/me-ring|me-dot/.test(src), "one mark for the company: the line");
   assert.match(src, /going down/);
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /import\("\/deliverables\/20261001\/comps-mechanic\/tab\.mjs"\)/);
+  assert.match(html, /import\("\/deliverables\/2026(1001\/comps-mechanic|1003\/comps-c5)\/tab\.mjs"\)/);
   for (const f of ["../supabase/migrations/20261001_peer_sources.sql", "../supabase/migrations/20261001_peer_sources_ROLLBACK.sql", "../scripts/peer-sources-sync.mjs", "../deliverables/20261001/comps-mechanic/COMPS-MECHANIC.html", "../deliverables/20261001/comps-mechanic/sources-20261001.json"]) assert.ok(existsSync(here(f)), f);
   const job = readFileSync(here("../scripts/peer-sources-sync.mjs"), "utf8"); assert.match(job, /\/stable\/stock-peers/); assert.match(job, /related-companies/); assert.ok(!/api\/v3\//.test(job), "stable paths only"); assert.ok(!/SUPABASE_SERVICE_ROLE_KEY/.test(job), "the job prints, it does not write");
   for (const t of ["LRCX", "MSFT", "TSM", "MU"]) for (const w of [1680, 390]) assert.ok(existsSync(here(`../deliverables/20261001/comps-mechanic/shots/${t}-${w}.png`)), `${t}-${w}`);

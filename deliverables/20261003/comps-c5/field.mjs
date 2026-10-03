@@ -158,11 +158,14 @@ export function fullField(rows, snap, mw, pw) {
   const lo = wquantile(pts, 0.25), mid = wquantile(pts, 0.5), hi = wquantile(pts, 0.75);
   return { ok: true, way: "C", name: "the whole field", lo, mid, hi, midpoint: (lo + hi) / 2, points: pts, n: pts.length, rowMid, weights: mw.weights, peerWeights: pw.weights, rule: "every peer's implied price on every priced measure, weighted by measure × peer; centre = the weighted median of all of them, low and high the weighted 25th and 75th" };
 }
-/** Weighted quantile of [{price, w}]. */
+/** Weighted quantile of [{price, w}]: each point sits at the middle of its weight on the cumulative scale
+    ((cum − w/2) ÷ W) and the quantile interpolates between neighbours — two equal points give their midpoint. */
 export function wquantile(pts, q) {
   const s = pts.filter((p) => p.price != null && p.w > 0).sort((a, b) => a.price - b.price), W = s.reduce((a, p) => a + p.w, 0);
-  if (!s.length) return null; let acc = 0;
-  for (let i = 0; i < s.length; i++) { const prev = acc; acc += s[i].w; if (acc / W >= q) { if (i > 0 && (prev / W) < q) { const f = (q * W - prev) / s[i].w; return s[i - 1].price + (s[i].price - s[i - 1].price) * Math.min(1, Math.max(0, f)); } return s[i].price; } }
+  if (!s.length) return null; if (s.length === 1) return s[0].price;
+  let cum = 0; const pos = s.map((p) => { cum += p.w; return (cum - p.w / 2) / W; });
+  if (q <= pos[0]) return s[0].price; if (q >= pos[pos.length - 1]) return s[s.length - 1].price;
+  for (let i = 1; i < s.length; i++) if (q <= pos[i]) { const f = (q - pos[i - 1]) / (pos[i] - pos[i - 1]); return s[i - 1].price + (s[i].price - s[i - 1].price) * f; }
   return s[s.length - 1].price;
 }
 /** The three ways on the field rows, each with its upside from today's price. */
