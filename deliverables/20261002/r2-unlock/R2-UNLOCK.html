@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unlock watch · R2</title>
+<meta name="description" content="IPO lock-up expiry for the stocks the Hub serves, read from each prospectus at the SEC by a nightly job (unlock-watch → ipo_lockups) and shown as UNLOCK chips on the EARNINGS band and one line in the company view's STATS. R2 Part B, 2 Oct 2026.">
+<style>
+  :root { --bg:#161616; --panel:#1e1e1e; --panel2:#242424; --line:#2e2e2e; --ink:#c8c8c8; --ink2:#9a9a9a; --ink3:#6e6e6e; --accent:#b4b4b4; --up:#4f9d5d; --down:#b4504f; }
+  * { box-sizing:border-box; }
+  html, body { background:var(--bg); color:var(--ink); margin:0; font:14px/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  body { padding:28px 16px 60px; max-width:1180px; margin:0 auto; }
+  h1 { font-size:22px; font-weight:600; letter-spacing:.02em; margin:0 0 4px; color:var(--accent); }
+  h2 { font-size:16px; font-weight:600; margin:0 0 10px; color:var(--accent); font-family:ui-monospace, Menlo, monospace; letter-spacing:.06em; }
+  h3 { font-size:13px; font-weight:600; margin:18px 0 6px; color:var(--ink); font-family:ui-monospace, Menlo, monospace; letter-spacing:.05em; text-transform:uppercase; }
+  .sub { color:var(--ink2); font-size:12px; font-family:ui-monospace, Menlo, monospace; margin-bottom:22px; overflow-wrap:anywhere; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:18px 18px 14px; margin:0 0 18px; }
+  p { margin:6px 0 10px; }
+  .k { font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--accent); background:var(--panel2); padding:1px 5px; border-radius:3px; overflow-wrap:anywhere; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; margin:8px 0 12px; display:block; overflow-x:auto; max-width:100%; }
+  table tbody { display:table; width:100%; min-width:680px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--ink2); font-weight:500; font-family:ui-monospace, Menlo, monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  ul { margin:4px 0 10px; padding-left:20px; } li { margin:3px 0; }
+  .muted { color:var(--ink2); } .dim { color:var(--ink3); }
+  .pic { background:#1a1a1a; border:1px solid var(--line); border-radius:5px; padding:10px 12px 8px; margin:8px 0 14px; }
+  .pic img { display:block; width:100%; height:auto; border:1px solid #333; background:#111; }
+  .pic .cap { font-size:11.5px; color:var(--ink2); margin-top:6px; }
+  .decision { border-left:3px solid #4a4a4a; padding:8px 12px; margin:10px 0; background:var(--panel2); }
+  .decision b { color:var(--accent); }
+  .meas { font-family:ui-monospace, Menlo, monospace; font-size:10.5px; color:var(--ink3); letter-spacing:.05em; }
+  a { color:#a8a8a8; } a:hover { color:#d0d0d0; }
+  .phone { max-width:420px; }
+</style>
+</head>
+<body>
+
+<span data-scnav-slot></span><h1>The UNLOCK watch: when the insiders' IPO shares become free to sell, read from the prospectus</h1>
+<div class="sub">R2 Part B · built 2 Oct 2026, 20:53–22:10 ET · branch <span class="k">hub/r2-unlock-20261002</span> from the live Hub (a389c7c) · one new table <span class="k">ipo_lockups</span> and one new nightly job <span class="k">unlock-watch</span> (deployed, run once by hand) · no schedule set, no other table touched, the Hub not deployed · pictures taken headless <span class="meas">[MEASURED 2 Oct 2026, 21:20–21:30 ET]</span></div>
+
+<section>
+  <h2>00 · WHAT YOU WILL SEE</h2>
+  <p>Your question on 2 Oct was <i>"Can we get pre-IPO unlock dates from FMP, Massive or somewhere else?"</i> Neither data company has them, so a nightly job now reads each recent IPO's prospectus (the sales document every IPO files at the SEC, free to read) and writes down when the lock-up ends. The <b>lock-up</b> is the promise insiders and early investors make not to sell for a set time after the IPO, usually 180 days. When it ends, a large block of shares may come to market at once.</p>
+  <p>The answer shows in two places. First, the <b>EARNINGS →</b> strip at the top of the dashboard gets UNLOCK entries in their own periwinkle colour for the next 90 days, in date order. Second, a company's <b>STATS</b> tab gets one line under ACTIVITY &amp; DATES.</p>
+  <div class="pic"><img src="screens/band-unlocks-1-1680.png" alt="The EARNINGS band showing the UNLOCKS · 90 DAYS heading and the first chip UNLOCK · SPCX · OCT 9 · 7% · 328.4M sh"><div class="cap">The strip held still on its UNLOCK run (1680 wide, zoomed). The heading <b>UNLOCKS · 90 DAYS</b>, then <b>UNLOCK · SPCX · OCT 9 · 7% · 328.4M sh</b>: SpaceX lets 7% of its locked shares go on 9 October. Normally the strip scrolls; it was paused only to take the picture.</div></div>
+  <div class="pic"><img src="screens/band-unlocks-2-1680.png" alt="UNLOCK · SPCX · OCT 24 · 7% · 328.4M sh, then UNLOCK · CBRS · OCT 28"><div class="cap">Next along: <b>SPCX · OCT 24</b>, another 7%. Before it, <b>CBRS · OCT 14 · 19.4M sh</b> (Cerebras, in the first picture's run). After it, <b>CBRS · OCT 28 · 19.4M sh</b>.</div></div>
+  <div class="pic"><img src="screens/band-unlocks-3-1680.png" alt="UNLOCK · CBRS · NOV 9 · or 2 days after Q3, then UNLOCK · SPCX · DEC 8"><div class="cap">The two main lock-up ends: <b>UNLOCK · CBRS · NOV 9 · or 2 days after Q3</b> (Cerebras: 9 November, or two trading days after its Q3 report if that comes first), then <b>SPCX · DEC 8</b> (the rest of SpaceX's 180-day lock-up). Hover over a chip to see the prospectus terms. Tap it to open the company.</div></div>
+  <div class="grid">
+    <div class="pic"><img src="screens/stats-CBRS-1680.png" alt="Cerebras STATS: lock-up ends 9 Nov 2026 (prospectus: 180 days, or 2 trading days after the Q3 report · before it: 19.4M sh Oct 14, 19.4M sh Oct 28)"><div class="cap">Cerebras · STATS · ACTIVITY &amp; DATES: <b>lock-up ends 9 Nov 2026 (prospectus: 180 days, or 2 trading days after the Q3 report · before it: 19.4M sh Oct 14, 19.4M sh Oct 28)</b>. The row above it shows the next report, 12 Nov (estimated). That falls after 9 Nov, so on today's dates the 9 Nov end comes first.</div></div>
+    <div class="pic"><img src="screens/stats-SPCX-1680.png" alt="SpaceX STATS: lock-up ends 8 Dec 2026 (prospectus: 180 days · before it: 7% Oct 9, 7% Oct 24, 28% 2 trading days after the Q3 report)"><div class="cap">SpaceX · STATS: <b>lock-up ends 8 Dec 2026 (prospectus: 180 days · before it: 7% Oct 9, 7% Oct 24, 28% 2 trading days after the Q3 report)</b>. The 28% step (about 1.3 billion shares) waits on the Q3 report. That report has no date in our calendar yet, so it is named here and in the strip's hover, not given its own chip.</div></div>
+  </div>
+  <div class="grid">
+    <div class="pic phone"><img src="screens/band-unlocks-390.png" alt="Phone: the EARNINGS band with UNLOCK · SPCX · OCT 9"><div class="cap">Phone, 390 wide: the same strip, opening on UNLOCK · SPCX · OCT 9.</div></div>
+    <div class="pic phone"><img src="screens/stats-CBRS-390.png" alt="Phone: Cerebras STATS lock-up line wrapping"><div class="cap">Phone: the Cerebras line wraps instead of being cut off.</div></div>
+  </div>
+  <p class="muted">The walk (<span class="k">tools/r2u-walk.mjs</span>, records in <span class="k">tools/walk-1680.json</span> and <span class="k">walk-390.json</span>) drew all six chips from the live table. It made one read of it, sent no writes and hit no page errors.</p>
+</section>
+
+<section>
+  <h2>01 · WHAT THE JOB FOUND TONIGHT</h2>
+  <p>It went through the stocks the Hub serves: the <span class="k">cohorts</span> list (613 names) without funds, indexes, futures, rates and crypto, which leaves <b>455 stocks</b>. It checked FMP's IPO calendar one month at a time for the last 18 months (2,470 IPOs in all) and each stock's stored IPO date. Three of our stocks listed in that window.</p>
+  <table><tbody>
+    <tr><th>stock</th><th>how it listed</th><th>prospectus dated</th><th>lock-up</th><th>main lock-up ends</th><th>steps before that, from the prospectus's own table</th></tr>
+    <tr><td><b>CBRS</b> Cerebras</td><td>IPO, first trade 14 May 2026</td><td>13 May 2026</td><td>180 days</td><td><b>9 Nov 2026</b>, or 6:00 a.m. on the 2nd trading day after the Q3 report if earlier</td><td>19.4M shares on 14 Oct · 19.4M on 28 Oct (earlier steps from Aug–Sep are past)</td></tr>
+    <tr><td><b>SPCX</b> SpaceX</td><td>IPO, first trade 12 Jun 2026</td><td>11 Jun 2026</td><td>180 days</td><td><b>8 Dec 2026</b>, the prospectus's own words: "December 8, 2026 (180th day after the date of this prospectus)"</td><td>7% (328.4M shares) on 9 Oct · 7% on 24 Oct · <b>28% (1.3 billion shares) 2 trading days after the Q3 report</b> · a longer lock-up for some holders continues in steps until 12 Jun 2027</td></tr>
+    <tr><td><b>SHAZ</b> SharonAI</td><td>SPAC merger Dec 2025, then an underwritten Nasdaq offering on 18 Feb 2026</td><td>18 Feb 2026</td><td>90 days</td><td>ended about 19 May 2026, so nothing is shown</td><td>(see 03: a merger lock-up of about one year may still apply)</td></tr>
+  </tbody></table>
+  <h3>R1's check cases (run without writing)</h3>
+  <table><tbody>
+    <tr><th>stock</th><th>R1 said</th><th>the job read</th></tr>
+    <tr><td>CBRS</td><td>10 Nov 2026, or 2 trading days after Q3</td><td><b>9 Nov 2026</b>, or 2 trading days after Q3 (one day earlier, see below)</td></tr>
+    <tr><td>SPCX</td><td>about 9 Dec 2026; 180 days assumed, the clause not found in the first 4 MB</td><td><b>8 Dec 2026</b>, clause found at 6.1 MB of a 12 MB prospectus, plus the staged steps</td></tr>
+    <tr><td>ARM · ALAB · RDDT · CRWV</td><td>all past</td><td>all past: 11 Mar 2024 · 15 Sep 2024 · 16 Sep 2024 (Reddit's term, which R1 could not isolate, is 180 days, or 3 trading days after its Q2 2024 report) · 23 Sep 2025</td></tr>
+    <tr><td>NBIS</td><td>a relisting, so no lock-up</td><td>Not seen as a relisting. FMP only knows Nebius's 2011 IPO (as Yandex), and its return to Nasdaq in 2024 is not on any IPO calendar. It is outside the 18-month window, so no row is written and nothing is shown, which is right for a relisting. The relisting rule itself is in place and tested.</td></tr>
+  </tbody></table>
+  <p><b>Why one day earlier than R1.</b> The prospectus counts "180 days after the date of this prospectus". That date is printed on the cover ("Prospectus dated May 13, 2026"). It is the evening the shares were priced, the day before trading began. R1 counted from the first trading day. SpaceX's prospectus settles it: its table says 8 December is the 180th day after its 11 June date.</p>
+</section>
+
+<section>
+  <h2>02 · HOW IT WORKS, AND WHERE EACH NUMBER COMES FROM</h2>
+  <ul>
+    <li><b>The clerk</b> (<span class="k">unlock-watch</span>, a small program on our database's server) runs once a night once scheduled. It asks FMP for the IPO calendar one month at a time, because asking for a whole year silently returns only the newest month. It keeps only stocks the Hub serves.</li>
+    <li>For each new listing it asks FMP for the company's filing list and picks the final prospectus (form 424B4). It then reads that document straight from the SEC, which is free and needs no key. It stops as soon as it has read the lock-up section: 6.0 of Cerebras's 8.5 MB, 6.3 of SpaceX's 12 MB.</li>
+    <li>From the text it keeps: the date on the cover, the lock-up length the sentences agree on, the sentence itself, any "or earlier if…" rule, and the prospectus's own <i>Earliest Date Available for Sale</i> table, row by row. All of it goes into one row per stock in <span class="k">ipo_lockups</span>.</li>
+    <li><b>The Hub</b> reads that small table once every six hours and writes nothing. The strip shows anything in the next 90 days. The STATS line shows a lock-up still ahead, says "no lock-up (relisting)" where that applies, and shows nothing once the lock-up is past.</li>
+    <li>Tonight's run: 24 FMP calls, 3 SEC reads (14.4 MB), 6.8 seconds, 3 rows written.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>03 · WHAT COULD BE WRONG</h2>
+  <ul>
+    <li><b>SPAC holders are not covered yet.</b> SharonAI's prospectus also says its former sponsor's shares stay locked until one year after the December 2025 merger (about December 2026), or earlier if the price holds above $12. The job does not read that kind of clause yet, so that date is missing.</li>
+    <li><b>A prospectus can contradict itself.</b> SharonAI's says 90 days in two places and 180 in another. The job took the majority. Both dates have passed.</li>
+    <li><b>Steps that wait on an earnings report have no fixed date.</b> SpaceX's biggest step (28%, about 1.3 billion shares) happens two trading days after its Q3 report. Our calendar has no date for that report yet, so the step is named in the hover and in STATS but has no chip. When a report date is stored, the chip appears marked "≈". That date counts weekdays and does not know market holidays.</li>
+    <li>Steps that only happen if the share price passes a test (for example "if the price is 30% above the IPO price") are marked conditional and never shown as chips.</li>
+    <li>A stock that listed under a different symbol, or came back to the market (like Nebius), is found only if FMP's IPO calendar lists it.</li>
+    <li>Some websites quote the unlock one day later, counted from the first trading day. This job follows the prospectus's own count.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>04 · WHAT WAS NOT DONE</h2>
+  <ul>
+    <li>No schedule was set: the nightly run is the coordinator's step after review. Suggested: every weekday night at 22:30 ET, <span class="k">unlock-watch?mode=pass</span>. That pass re-reads a prospectus only for a new name, or for a row older than a week.</li>
+    <li>The Hub was not deployed. The strip and STATS line exist on this branch and were checked headless.</li>
+    <li>The company view's EVENTS place and the ALERTS tab were not touched (they belong to tonight's other builds).</li>
+    <li>Massive's IPO data was not used. FMP plus the SEC answered every case.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>05 · DECISIONS FOR YOU</h2>
+  <div class="decision"><b>1 · Show the staged steps, or only the final date?</b> SpaceX and Cerebras release their shares in steps (SpaceX: 328 million shares on 9 Oct, again on 24 Oct). <b>Recommendation: keep the steps on the strip.</b> They are the near-term news; the final date alone would hide them.</div>
+  <div class="decision"><b>2 · Add SPAC holders' lock-ups?</b> These are the "one year after the merger" locks, like SharonAI's founder shares around December 2026. <b>Recommendation: yes, as the next small step.</b> It is one more kind of sentence for the clerk to read, and the same table holds it.</div>
+  <div class="decision"><b>3 · Run it every weekday night?</b> <b>Recommendation: yes.</b> 22:30 ET catches an IPO the night it prices, and SEC reading is free.</div>
+</section>
+
+<p class="dim">Files: <span class="k">supabase/functions/unlock-watch/index.ts</span> and <span class="k">lib.ts</span> · <span class="k">supabase/migrations/20261002_ipo_lockups.sql</span> (undo: <span class="k">…_ROLLBACK.sql</span>, also at <span class="k">_archive/backend-fix-20260928/ROLLBACK-ipo_lockups-20261002.sql</span>) · <span class="k">tests/r2-unlock-20261002.test.mjs</span> (13 tests on real prospectus text, no network) · the Hub: <span class="k">index.html</span>, the block "R2 · 2 OCT · UNLOCK". To turn it off: <span class="k">?unlock=off</span> or <span class="k">UNLOCK_ON = false</span>.</p>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
