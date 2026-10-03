@@ -124,7 +124,7 @@ test("the function: key from app_config with the service role, never printed; /s
   assert.match(fnSrc, /SEC_GAP_MS = 260/);                                                   // ≤ 4 requests a second
   assert.equal((fnSrc.match(/from\("alert_log"\)/g) || []).length, 0);                    // Alan, 2 Oct: alerts come later
   assert.ok(!/\balertRow\b/.test(fnSrc));
-  assert.equal((fnSrc.match(/\.from\("(\w+)"\)/g) || []).filter((x) => !/app_config|tickers|company_profile|offering_filings/.test(x)).length, 0);
+  assert.equal((fnSrc.match(/\.from\("(\w+)"\)/g) || []).filter((x) => !/app_config|tickers|company_profile|offering_filings|offering_news|"news"/.test(x)).length, 0);   // C1: + news (read) and offering_news
   assert.match(fnSrc, /x-region: us-west-2/);                                                // the SEC wall is written down where it bites
   assert.match(fnSrc, /\.upsert\(rows, \{ onConflict: "url", ignoreDuplicates: true \}\)/);  // a filing is filed once
   for (const f of ["424B5", "424B4", "S-3", "S-3ASR", "S-1"]) assert.ok(C.FORMS.includes(f));
@@ -164,8 +164,9 @@ test("Hub · cash on hand and the last four quarters of capex, plain numbers, no
   assert.match(cash, /<td>Q2·26<\/td><td>Jun 30, 2026<\/td><td>\$6\.42B<\/td>/);
   assert.match(cash, /<td>Q3·25<\/td><td>Sep 30, 2025<\/td><td>\$2\.39B<\/td>/);
   assert.match(cash, /the four together<\/td><td>\$20\.57B</);
-  assert.ok(!/dilution|runway|months|project/i.test(cash));                       // no model yet (a decision for Alan)
-  assert.match(h.ofCashHTML(null, []), /—<\/div>[\s\S]*no quarterly balance sheet stored[\s\S]*no quarterly cash-flow rows stored/);
+  assert.ok(!/dilution|runway|months|project/i.test(cash));                       // C1: a plain coverage count, no model
+  assert.match(cash, /cash \$6\.40B covers about 1\.2 quarters of capital spending at the last four quarters&#39; pace/);   // C1 (Alan's own example)
+  assert.match(h.ofCashHTML(null, []), /—<\/div>[\s\S]*not stored — no quarterly balance sheet \(balance_history\)[\s\S]*not stored — no quarterly cash-flow statement \(cashflow_history\)/);
   assert.match(h.ofCashHTML(BALQ, null), /CAPITAL SPENDING · LAST 4 QUARTERS<\/div><div class="of-d">reading …/);
   assert.ok(!h.ofCashHTML(BALQ, CFQ.slice(0, 2)).includes("the four together"));   // a sum only over four real quarters
   assert.equal(h.ofMoney(850000000), "$850M"); assert.equal(h.ofMoney(null), "—"); assert.equal(h.ofMoney(-2.5e11), "$250B");
@@ -173,7 +174,7 @@ test("Hub · cash on hand and the last four quarters of capex, plain numbers, no
 
 test("Hub · the block: reading, none since the record starts, the rows newest first as read, the legend", () => {
   const h = hub();
-  assert.match(h.ofCapBodyHTML("NVDA", undefined, BALQ), /CAPITAL &amp; DILUTION[\s\S]*reading the filings/);
+  assert.match(h.ofCapBodyHTML("NVDA", undefined, BALQ), /<h3 class="fn3-h">CAPITAL <span>[\s\S]*reading the filings/);   // C1: the short title
   assert.match(h.ofCapBodyHTML("NVDA", { rows: [], cfq: [], at: 1 }, null), /no offering filing by \$NVDA since Jun 4, 2026 \(when the record starts\)/);
   assert.match(h.ofCapBodyHTML("X", { rows: [], cfq: [], at: 1, err: "pg offering_filings → 500" }, null), /could not read offering_filings — pg offering_filings → 500/);
   const b = h.ofCapBodyHTML("CRWV", { rows: [R({}), R({ filed_date: "2026-06-05", class: "UNCLASSIFIED", form: "S-3ASR" })], cfq: CFQ, at: 1 }, BALQ);
