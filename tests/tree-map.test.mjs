@@ -184,7 +184,7 @@ test("the structure file carries no reading, and the page draws full, scout and 
   const txt = JSON.stringify(T.nodes);
   assert.doesNotMatch(txt, /"composite"|"geiger"|"price"|"change_pct"/, "tree.json must not carry a reading");
   assert.match(PAGE, /\/geiger/); assert.match(PAGE, /\/v1\/scout-geiger/); assert.match(PAGE, /scout-geiger-snapshot\.json/);
-  assert.match(PAGE, /GEIGER · SCOUT/); assert.match(PAGE, /GEIGER · FULL/); assert.match(PAGE, /full and scout are never mixed/);
+  assert.match(PAGE, /computed at the close/); assert.doesNotMatch(PAGE.replace(/<script type="module">[\s\S]*<\/script>/, ""), /GEIGER · SCOUT|GEIGER · FULL/, "T8 (2 Oct): the off-Hub Geiger is drawn like the Hub's; the page never says scout");
   assert.match(PAGE, /hub tab: /, "2 Oct (T5): the board difference is a small grey 'hub tab' tag on the member, no longer a BOARD ≠ REGISTRY section");
   assert.match(PAGE, /scnav ·/, "the BACK / CLOSE pair");
   assert.match(PAGE, /map3d\.js/); assert.ok(existsSync(join(DIR, "map3d.js")) && existsSync(join(DIR, "layout.js")) && existsSync(join(DIR, "aggregate.js")));
