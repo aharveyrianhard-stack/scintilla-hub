@@ -127,6 +127,11 @@ def cron_row(j):
     if name == 'rebuild-thin-dates':
         findings.append('Still retries 2026-09-07 (Labor Day) every hour overnight — calendar-blind (hand to Q2a).')
     lr = r.get('last_ok') or (d or {}).get('last_success')
+    if j['active'] and not r.get('last_run') and not d and status == 'ON TIME':
+        if j['jobid'] in (282, 284, 286):
+            status = 'NOT YET RUN'; findings.append('Created 2 Oct after its slot; its first scheduled run is still ahead.')
+        else:
+            findings.append('Weekly: its last run is older than the 72 h measured.')
     return {
       'job': name, 'where': 'Supabase pg_cron', 'id': j['jobid'], 'part': part, 'what': what, 'cadence_utc': j['schedule_utc'],
       'calls': j['calls'], 'writes': writes, 'read_by': reader, 'active': j['active'],

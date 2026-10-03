@@ -14,7 +14,7 @@
 -- (cron 236, ~10 s). Moving the vacuum to :43 (no sentiment run then) shows within a day whether that is the cause.
 --
 -- PRACTICE: spread scheduled work off the top of the hour (GitHub Actions docs warn of high load at the start of every hour;
--- Fly's own --schedule is deliberately "fuzzy" for the same reason, docs.fly.io/machines/flyctl/fly-machine-run); healthchecks.io judges by the schedule, so the heartbeat
+-- Fly's own --schedule is "fuzzy" by design, docs.fly.io/machines/flyctl/fly-machine-run); healthchecks.io judges by the schedule, so the heartbeat
 -- (job_heartbeat.collect reads cron.job each tick) follows the new minutes with no change.
 -- NEIGHBOURS checked: nothing reads these outputs at a fixed minute (ribbon_signals, statistics, feed_health are read on
 -- demand); the heartbeat re-reads schedules; no other job depends on their order.
