@@ -87,7 +87,13 @@ let lastSec = 0;
 async function secLockup(url: string, todayIso: string) {
   const wait = 260 - (Date.now() - lastSec); if (wait > 0) await sleep(wait);       // ≤ 4 requests a second
   lastSec = Date.now(); calls.sec++;
-  const r = await fetch(url, { headers: SEC_UA });
+  let r = await fetch(url, { headers: SEC_UA });
+  if (r.status === 429) {                       // the SEC is pacing this address: wait as it asks (at most 10 s), then ONE more try
+    const ra = Math.min(10, Math.max(2, Number(r.headers.get("retry-after")) || 5));
+    try { await r.body?.cancel(); } catch (_) { /* nothing to drain */ }
+    await sleep(ra * 1000); lastSec = Date.now(); calls.sec++;
+    r = await fetch(url, { headers: SEC_UA });
+  }
   if (!r.ok || !r.body) return { status: r.status, bytes: 0, complete: false, stoppedEarly: false, lk: null as L.Lockup | null };
   const out = await L.lockupFromStream(r.body.getReader(), todayIso, SEC_MAX_BYTES);
   calls.sec_bytes += out.bytes;
@@ -160,6 +166,11 @@ async function run(req: Request) {
       }
       let sec: Awaited<ReturnType<typeof secLockup>> | null = null;
       if (pick) sec = await secLockup(pick.url, today);
+      // a read the SEC refused (429 on 2 Oct) or that came back empty decides nothing: the stored row is kept as it is
+      if (pick && (!sec || sec.status !== 200 || !sec.bytes)) {
+        problems.push({ ticker: c.ticker, step: "SEC read", reason: "HTTP " + (sec ? sec.status : "none") + " — nothing written, the stored row is kept" });
+        continue;
+      }
       const lk = sec?.lk || null;
       const kind = L.classifyListing({ calendarIso: c.calendarIso, profileIpoIso: profIpo, prospectusKind: pick?.kind || null,
         directListing: !!lk?.direct_listing, olderAnnualReport: older, form10 });
@@ -168,6 +179,10 @@ async function run(req: Request) {
       // this ticker); without a cover date, from the listing date
       const anchor = kind === "SPAC" ? (profIpo || listing) : (lk?.prospectus_date || listing);
       const un = L.unlockFrom(kind, anchor, lk || { days: null, months: null });
+      if (prev && prev.basis === "PROSPECTUS" && un.basis === "ASSUMED_180") {      // never trade a read clause for an assumption
+        problems.push({ ticker: c.ticker, step: "lock-up clause", reason: "not found this time — the stored prospectus row is kept" });
+        continue;
+      }
       const row = {
         ticker: c.ticker, company: pr?.companyName || (uni.prof.get(c.ticker) as any)?.name || null, listing_kind: kind,
         ipo_date: listing, lockup_days: un.lockup_days, unlock_date: un.unlock_date, basis: un.basis,

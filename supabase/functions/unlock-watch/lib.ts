@@ -198,14 +198,17 @@ export function parseSchedule(tableText: string): Tranche[] {
 export function focusClause(s: string | null, max = 420): string | null {
   if (!s) return null;
   if (s.length <= max) return s;
-  const m = /(?:for\s+a\s+period|during\s+the\s+period|period\s+ending|the\s+earlier\s+of|the\s+later\s+of|until)\b/i.exec(s);
-  const from = m && m.index > 0 ? m.index : Math.max(0, s.length - max);
+  const m = /(?:for\s+a\s+period|during\s+the\s+period|period\s+ending|the\s+earlier\s+of|the\s+later\s+of|until)\b/i.exec(s)
+    || /\b(?:The\s+|the\s+)?(?:first|second|third|fourth)\s+(?:full\s+)?trading\s+day\b/.exec(s);       // a staged table's trigger row
+  let from = m && m.index > 0 ? m.index : Math.max(0, s.length - max);
+  if (!m && from > 0) { const sp = s.indexOf(" ", from); if (sp > 0) from = sp + 1; }                         // never start mid-word
   const out = s.slice(from, from + max);
   return (from > 0 ? "… " : "") + out + (from + max < s.length ? " …" : "");
 }
 
 /** read the lock-up out of prospectus text (already cleaned). Pure: the caller decides what text to pass. */
 export function findLockup(text: string, todayIso?: string): Lockup {
+  text = String(text || "").replace(/\s{2,}/g, " ");                    // streamed pieces are joined with a space: never a run of them
   const prospectus_date = parseProspectusDate(text);
   const sents = sentences(text).filter((s) => LOCK_RE.test(s) || new RegExp("\\d{2,3}(?:st|nd|rd|th)\\s+day\\s+" + ANCHOR, "i").test(s));
   // each day count's votes, and the sentence that states it best: "180 days after the date of this prospectus" (rank 3) over
@@ -256,7 +259,9 @@ export function findLockup(text: string, todayIso?: string): Lockup {
     early_rule = [finRule, steps ? "staged: " + steps : null, later ? "an extended lock-up runs to " + later : null].filter(Boolean).join(" · ") || null;
   }
   const direct_listing = /\bdirect\s+listing\b/i.test(text.slice(0, 200000)) && !/\bunderwriters?\s+(?:have|has)\s+(?:severally\s+)?agreed\s+to\s+purchase/i.test(text);
-  return { days, months, clause: focusClause(clause), early_release: focusClause(early, 520),
+  // a staged table's first row arrives glued to the table's heading: keep the row, drop the heading
+  const earlyRow = early ? early.replace(/^[\s\S]*?Earliest\s+Date\s+Available\s+for\s+Sale\s+in\s+the\s+Public\s+Market\s+(?:Approximate\s+)?Number\s+of\s+Shares\s+of\s+(?:our\s+)?(?:Class\s+[A-Z]\s+)?Common\s+Stock\s+/i, "") : null;
+  return { days, months, clause: focusClause(clause), early_release: focusClause(earlyRow, 520),
            early_rule, prospectus_date, schedule, direct_listing };
 }
 
