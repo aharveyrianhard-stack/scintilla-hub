@@ -3,12 +3,13 @@
 --
 -- MEASURED: cron 256 'mirror-gap-repair-daily' (05:30 UTC) failed on all 14 nights pg_cron still remembers (20 Sep -> 3 Oct),
 -- each after ~140 s: "canceling statement due to statement timeout". Its command is four net.http_get calls separated by
--- pg_sleep(20), pg_sleep(160), pg_sleep(160) = 340 s of sleeping, while the server's statement_timeout is 120 s.
--- pg_cron sends the whole command as ONE query, which PostgreSQL runs as one transaction and times as one statement
--- (postgresql.org/docs/current/protocol-flow.html "Multiple Statements in a Simple Query"; runtime-config-client
--- statement_timeout). When it is cancelled the transaction rolls back — and pg_net's queued requests roll back with it
--- (pg_net queues inside the caller's transaction; github.com/supabase/pg_net). So not one of the four repair calls has
--- been sent in at least 14 nights, and pg_cron's "failed" was the only trace.
+-- pg_sleep(20), pg_sleep(160), pg_sleep(160), and the server's statement_timeout is 120 s. Since PostgreSQL 13 that limit
+-- applies to each statement separately (postgresql.org/docs/current/runtime-config-client.html), so the first
+-- pg_sleep(160) is cancelled at 120 s — 20 s + 120 s = the 140 s measured every night. pg_cron sends the command as one
+-- simple query, which PostgreSQL runs as ONE transaction (protocol-flow.html, "Multiple Statements in a Simple Query"),
+-- so the cancel rolls back everything before it — including the requests pg_net had queued (pg_net queues inside the
+-- caller's transaction; github.com/supabase/pg_net). Not one of the four repair calls has been sent in at least
+-- 14 nights, and pg_cron's "failed" was the only trace.
 --
 -- FIX: one job per call, at the same spacing (0 s, ~1 min, ~3 min, ~6 min), each recording its real HTTP answer through
 -- scin_record (cron_dispatch, read by the heartbeat). The old job is switched OFF (definition kept), not deleted.
