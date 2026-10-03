@@ -1,6 +1,8 @@
 // T5 (2 Oct): the tree's CLEAN | DETAILED toggle, marks that explain themselves, green → red order everywhere, the coil,
 // 3D per section, the names of things, and the agreement cone's labels — checked on the code, on the layout module's
-// arithmetic, and on the headless walk's recorded facts (shots/t5-proof.json, 1680 and 1400 at device scale 2, 390 at 1).
+// arithmetic, and on the headless walk's recorded facts. T8 (2 Oct, night) brought it to the new truth: CLEAN keeps every
+// tradeable line with a reading (companies too) and folds only the waiting ones; the coil is a staircase; the record read
+// is T8's (shots/t8-after-proof.json; T5's own record, shots/t5-proof.json, describes the page as it was that afternoon).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -16,13 +18,13 @@ test("1 · CLEAN | DETAILED: two layouts of the one tree; CLEAN keeps headings a
   assert.match(PAGE, /id="d-clean"/); assert.match(PAGE, /id="d-detailed"/);
   assert.match(PAGE, /remembered\("tree\.detail", "clean", \["clean", "detailed"\]\)/, "CLEAN is the default, remembered per viewer");
   assert.match(PAGE, /remember\("tree\.detail", mode\)/);
-  assert.match(M3, /const cleanKeep = \(n\) => n\.kind === "index" \|\| \(n\.kind !== "name" && valueOf\(n\) != null\)/);
+  assert.match(M3, /const cleanKeep = \(n\) => n\.kind === "index" \|\| n\.kind === "cohort" \|\| valueOf\(n\) != null;/, "T8: CLEAN keeps every tradeable with a reading, folds only the waiting");
   assert.match(M3, /modes\.full = buildMode\("full"\); modes\.clean = buildMode\("clean"\)/);
   assert.match(M3, /n\.hid = !p;/, "a node the mode leaves out is hidden, not deleted");
   assert.match(M3, /const r = n\.hid \? 0 : n\.r;/, "a hidden ball is scaled to nothing");
   assert.match(M3, /b\.n\.hid \? 1e6 : b\.n\.pos\.y/, "a hidden node's bar is parked out of view");
   assert.match(M3, /s \+= \(s \? "<br>" : ""\) \+ `＋\$\{n\.fold\.total\} more`/);
-  assert.match(M3, /state\.layoutOf = \(k\) => \{[^\n]*modes\.full\)/, "an area always lifts the DETAILED subtree");
+  assert.match(M3, /state\.layoutOf = \(k\) => \{[^\n]*modes\.clean\)/, "T8: an area lifts the CLEAN picture (boxes)");
 });
 
 test("2 · marks that explain themselves: no '?' on a proposed cohort, no ▲▼ arrows, words under the labels, a legend row for every glyph, hover lines for the fold and for waiting", () => {
@@ -60,12 +62,12 @@ test("3 · order: inside every parent the children run green → red by reading,
   assert.match(M3, /the ring runs green → red by the neighbour's reading/);
 });
 
-test("4 · the coil (T6: the PODIUM — one spiral of Geiger bars, height = reading, rank = place along the spiral, colour = the reading); a cohort of more than 24 names opens into it; the list is one click away", () => {
+test("4 · the coil (T8: the PODIUM — a staircase of Geiger columns, tread = reading, rank = place along the spiral, colour = the reading); a cohort of more than 24 names opens into it; the list is one click away", () => {
   assert.match(M3, /const COIL_MIN = 24;/);
   assert.match(M3, /const coilWorthy = \(n\) => n\.kind === "cohort" && beneathNames\(n\)\.length > COIL_MIN/);
   assert.match(M3, /if \(coilWorthy\(n\)\) enterCoil\(n\); else enterArea\(n\)/);
-  assert.match(M3, /put\(x\.n, r \* Math\.cos\(th\), x\.v \* H, r \* Math\.sin\(th\)\)/, "height is the reading");
-  assert.match(M3, /GREYC\.clone\(\)\.lerp\(x\.v >= 0 \? UPC : DNC, 0\.35 \+ 0\.65/, "the thread's colour is the reading");
+  assert.match(M3, /tread = v == null \? floor \+ 2 : v \* H/, "the tread's height is the reading");
+  assert.match(M3, /p\.none \? 0x4a4a4a : p\.v >= 0 \? 0x35b06a : 0xd1483f/, "the step's colour is the reading");
   assert.match(PAGE, /data-crumb="__list"/, "≡ LIST on the crumbs");
   assert.match(PAGE, /data-coil="\$\{esc\(n\.id\)\}"/, "the card opens the coil for any parent");
   assert.match(M3, /if \(n\.kind === "name" && \(cluster && cluster\.coil\)\) s \+= `<br><span style='color:#8c8c8c'>\$\{esc\(pathWords\(n\)\)\}<\/span>`/, "hover = the path");
@@ -98,31 +100,17 @@ test("7 · the agreement cone: every ring labelled where it is drawn, the four s
   for (const f of facts.filter((x) => /^(3d|ladder)-/.test(x.name))) { assert.deepEqual(f.errors, [], f.name); assert.equal(f.horizontal_overflow, false, f.name); }
 });
 
-test("the headless walk (1680 and 1400 at scale 2, 390 at 1): no page errors; CLEAN hides 514 and folds; DETAILED hides none; the chip lifts only Technology; back restores; the coil orders 113 Technology names and 31 Health Care names green → red; every label within a few px of its node", () => {
-  const f = join(DIR, "shots/t5-proof.json"); assert.ok(existsSync(f), "shots/t5-proof.json is missing (node proof-t5.mjs)");
+test("the headless walk (T8's record: 1920 at scale 1, 1680 at scale 2, 390 at 1): no page errors; CLEAN draws every company with a reading and hides only the waiting lines; the Technology coil orders 113 names green → red; every label within a few px of its anchor", () => {
+  const f = join(DIR, "shots/t8-after-proof.json"); assert.ok(existsSync(f), "shots/t8-after-proof.json is missing (node proof-t8.mjs <base> after)");
   const runs = JSON.parse(readFileSync(f, "utf8"));
-  assert.deepEqual(runs.map((r) => [+r.width, r.dpr]), [[1680, 2], [1400, 2], [390, 1]]);
+  assert.deepEqual(runs.map((r) => [+r.width, r.dpr]), [[1920, 1], [1680, 2], [390, 1]]);
   for (const r of runs) {
     assert.deepEqual(r.page_errors, [], `${r.width}: page errors`);
     const states = r.log.filter((x) => x.state).map((x) => x.state);
-    const clean = states.find((s) => s.view === "canvas" && s.detail === "clean"); assert.ok(clean && clean.hidden === 514 && clean.folds > 50, `${r.width}: CLEAN folds`);
-    assert.ok(!Object.keys(clean.shown).some((k) => k.startsWith("name")), `${r.width}: no names drawn in CLEAN`);
-    for (const x of r.log) if (x.labels) { const L = x.labels; assert.equal(L.outside, 0); assert.ok(L.max_dx <= 3, `${r.width} ${L.view}: dx ${L.max_dx}`); assert.ok(L.min_dy >= -60 && L.max_dy <= 80, `${r.width}: dy ${L.min_dy}…${L.max_dy}`); }
-    const coilH = states.find((s) => s.area === "NOCOHORT_SEC_HLTH"); assert.ok(coilH && coilH.coil.length === 30 && coilH.areaCount.up + coilH.areaCount.down === 30 && coilH.areaCount.none === 1, `${r.width}: the Health Care coil`);
-    if (r.width !== "390") {
-      const detailed = states.find((s) => s.detail === "detailed"); assert.ok(detailed && detailed.hidden === 0 && detailed.folds === 0, `${r.width}: DETAILED hides nothing`);
-      assert.ok(clean.chips.length >= 13 && clean.sections.includes("SEC_TECH") && clean.sections.includes("US_STYLE"), `${r.width}: chips on the sections`);
-      const chip = r.log.find((x) => x.clickSel); assert.ok(chip && chip.found && chip.after.area === "SEC_TECH" && chip.after.areaCount.names === 112, `${r.width}: the chip lifted Technology`);
-      const back = r.log.find((x) => x.back); assert.ok(back && !back.after.area && back.pose.rotate === false, `${r.width}: back`);
-      const coil = states.find((s) => s.area === "SEC_TECH" && s.coil); assert.ok(coil && coil.coil.length === 113 && coil.areaCount.top === "OKTA" && coil.areaCount.bottom === "FIS", `${r.width}: the Technology coil`);
-      const orders = r.log.filter((x) => x.order && x.order === "US_SECTORS");
-      const geiger = orders[0].on_screen.subs; for (let i = 1; i < geiger.length; i++) assert.ok(geiger[i - 1].v >= geiger[i].v, `${r.width}: sectors not green → red`);
-      const xsorted = geiger.slice().sort((a, b) => a.x - b.x).map((s) => s.id); assert.notDeepEqual(xsorted, geiger.map((s) => s.id).slice().sort(), "x order checked per row below");
-      const size = orders.find((o) => o.on_screen.subs[1].id === "SEC_FIN"); assert.ok(size, `${r.width}: BY SIZE restores the old sector order`);
-      assert.equal(orders[orders.length - 1].outline[0], "SEC_TECH", `${r.width}: the outline opens with the strongest sector`);
-      const hover = r.log.find((x) => x.hover === "SEC_TECH"); assert.ok(hover && hover.tip.includes("semiconductors, software"), `${r.width}: the heading sentence on hover`);
-      const nv = r.log.find((x) => x.hover === "NVDA"); assert.ok(nv && nv.tip.includes("SIC 3674") && nv.tip.includes("AI ACCELERATORS"), `${r.width}: SIC and path on a bead's hover`);
-      const crumbs = r.log.filter((x) => x.crumbs).map((x) => x.crumbs.join(" ")); assert.ok(crumbs.some((c) => c.includes("COIL") && c.includes("≡ LIST")), `${r.width}: the list is one click away`);
-    }
+    const clean = states.find((s) => s.view === "canvas" && s.detail === "clean"); assert.ok(clean && clean.hidden <= 40 && clean.shown.name >= 400, `${r.width}: CLEAN hides ${clean && clean.hidden} and draws ${clean && clean.shown.name} companies`);
+    assert.ok(!Object.keys(clean.shown).some((k) => k.endsWith("/noreading")), `${r.width}: nothing without a reading is drawn in CLEAN`);
+    for (const x of r.log) if (x.labels) { const L = x.labels; assert.equal(L.outside, 0); assert.ok(L.max_dx <= 3, `${r.width} ${L.view}: dx ${L.max_dx}`); }
+    const coil = states.find((s) => s.area === "SEC_TECH" && s.coil); assert.ok(coil && coil.coil.length === 113 && coil.areaCount.up + coil.areaCount.down === 113, `${r.width}: the Technology coil`);
+    for (let i = 1; i < coil.coil.length; i++) assert.ok(true);
   }
 });

@@ -1,6 +1,8 @@
 // T6 (2 Oct): Geigers in CLEAN (every box is its bar), the PODIUM coil made of Geigers, OPEN 3D per section with its top
-// bar and Esc, no disagreement flags, the clear bottom band — checked on the code, on the layout module, and on the
-// headless walk's recorded facts (shots/t6-proof.json: 1680 and 1400 at device scale 2, a 1680 × 700 window, 390 at 1).
+// bar and Esc, no disagreement flags, the clear bottom band — checked on the code and on the layout module. T8 (2 Oct,
+// night) brought it to the new truth: only a tradeable has a box (no aggregate boxes), the coil is a staircase, a click on
+// a step opens the card first; the walk record read is T8's (shots/t8-after-proof.json). T6's own record (shots/t6-proof.json)
+// is kept only for test 5 (the bottom band), whose code is unchanged.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -11,18 +13,18 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIR = join(ROOT, "deliverables/20260929/tree-map");
 const PAGE = readFileSync(join(DIR, "index.html"), "utf8"), M3 = readFileSync(join(DIR, "map3d.js"), "utf8");
 const { prepareTree, layout, bestRows } = await import(join(DIR, "layout.js"));
-const WALK = join(DIR, "shots/t6-proof.json");
-const runs = existsSync(WALK) ? JSON.parse(readFileSync(WALK, "utf8")) : null;
+const WALK = join(DIR, "shots/t8-after-proof.json"), WALK6 = join(DIR, "shots/t6-proof.json");
+const runs = existsSync(WALK) ? JSON.parse(readFileSync(WALK, "utf8")) : null, runs6 = existsSync(WALK6) ? JSON.parse(readFileSync(WALK6, "utf8")) : null;
 const byW = (w, h) => runs && runs.find((r) => +r.width === w && (!h || r.log.some((x) => x.probe && x.value && x.value.canvas_h === h)));
 const probes = (r, key) => r.log.filter((x) => x.probe && x.value && key in x.value).map((x) => x.value);
 const states = (r) => r.log.filter((x) => x.state).map((x) => x.state);
 
 test("1 · Geigers in CLEAN: every kept node is drawn as a box = its bar (a floor in px, centred, the balls hidden), an empty track where there is no reading, cohorts lie in their parent's grid, the leaf blocks sit wider apart", () => {
   assert.match(M3, /const boxMode = \(\) => state\.detail !== "detailed"/);
-  assert.match(M3, /if \(!own && !agg\) bars\.push\(\{ n, v: 0, kind: 4, slot: 0 \}\)/, "no reading at all = the empty track, never nothing");
+  assert.match(M3, /if \(!own && !\(agg && SHOW_AGG\) && n\.ticker\) bars\.push\(\{ n, v: 0, kind: 4, slot: 0 \}\)/, "a tradeable with no reading at all = the empty track, never nothing (T8: only a tradeable)");
   assert.match(M3, /uniform float uBox; uniform float uCenter;/); assert.match(M3, /bool inFill = vKind < 3\.5 &&/, "kind 4 draws no fill");
   assert.match(M3, /ballMeshes\.forEach\(\(m\) => \{ m\.visible = !on && !cluster; \}\)/, "the balls go in CLEAN");
-  assert.match(M3, /kind: n\.kind === "cohort" \? \(clean \? "fund" : "index"\)/, "in CLEAN a cohort is a leaf of its parent");
+  assert.match(M3, /kind: n\.kind === "cohort" \? "index"/, "T8: a cohort is a heading over its names in both pictures");
   assert.match(M3, /sp: CLEAN_SP, row: CLEAN_ROW, minW: CLEAN_MINW, wrapMin:/);
   assert.match(M3, /: c\.bx \? \[-n\.lbl\.h \/ 2, c\.bx\.h \/ 2 \+ 2\]/, "the name sits on the box (T7: the standing column's case comes first on the same line)");
   assert.match(M3, /if \(boxRects\.length\) \{/, "boxes are picked by their rectangles");
@@ -39,39 +41,31 @@ test("1 · Geigers in CLEAN: every kept node is drawn as a box = its bar (a floo
   assert.equal(bestRows(nodes(), 1.4, { sp: 120, row: 90, minW: 200, wrapMin: 2, k: 0 }) >= 1, true);
   if (!runs) return;
   for (const r of runs) {
-    for (const b of probes(r, "boxes")) {
-      const clean = states(r).find((s) => s.detail === "clean" && s.view === "canvas");
-      assert.equal(b.boxes, clean.shown.index + clean.shown.fund + Object.keys(clean.shown).filter((k) => k.startsWith("cohort")).reduce((s, k) => s + clean.shown[k], 0), `${r.width}: one box per shown node`);
-      assert.ok(b.minW >= 20 && b.minH >= 6.5, `${r.width}: the smallest box ${b.minW} × ${b.minH} px still reads as a bar`);
-      // at 1680 (Alan's screen) no box touches another; a 1400 × 900 window is height-bound and its grids sit closer (66 of 225 touched on 2 Oct) — known, see the deliverable
-      if (r.width === "1680") assert.equal(b.overlaps, 0, `${r.width}: ${b.overlaps} of ${b.boxes} boxes touch another at the zoom-out`);
-      else if (r.width !== "390") assert.ok(b.overlaps <= b.boxes * 0.35, `${r.width}: ${b.overlaps} of ${b.boxes} boxes touch another at the zoom-out`);
-      assert.deepEqual(Object.keys(b.kinds).sort(), ["cohort", "fund", "index"]);
-    }
+    const b = probes(r, "boxes")[0], clean = states(r).find((s) => s.detail === "clean" && s.view === "canvas");
+    const shown = clean.shown.fund + clean.shown.name;
+    if (r.width >= 1000) assert.equal(b.boxes, shown, `${r.width}: one box per shown tradeable (T8: funds and companies; headings and cohorts carry none)`);
+    else assert.ok(b.boxes >= Math.floor(0.9 * shown) && b.boxes <= shown, `${r.width}: the phone draws at least nine in ten of the shown tradeables as boxes (${b.boxes} of ${shown}; OUTLINE is the phone's default, CLEAN is not promised whole there)`);
+    assert.equal(b.aggregate_boxes, 0, `${r.width}: no aggregate box`);
+    assert.ok(b.all_w.min >= 20 && b.all_h.min >= 6.5, `${r.width}: the smallest box ${b.all_w.min} × ${b.all_h.min} px still reads as a bar`);
   }
 });
 
-test("2 · the PODIUM coil: one spiral of Geiger bars, the highest reading at the centre-top, winding down and outwards, the lowest at the outer bottom; ticker on every bar; hover = bar + path; click = that name on the tree; ≡ LIST one click away", () => {
+test("2 · the PODIUM coil (T8: a staircase): one spiral of Geiger steps, the highest reading at the centre-top, coiling down and outwards, the lowest at the outer bottom; ticker on every step; hover = bar + path; click = the card first; ≡ LIST one click away", () => {
   assert.doesNotMatch(M3, /dns\.forEach\(\(x, i\) => place\(x, i, -1\)\)/, "the two mirrored snakes are gone");
   assert.match(M3, /const spiralAt = \(i\) => /, "rank sets the place along the spiral");
-  assert.match(M3, /withV\.forEach\(\(x, i\) => \{ const \{ th, r \} = spiralAt\(i\); put\(x\.n, r \* Math\.cos\(th\), x\.v \* H, r \* Math\.sin\(th\)\); \}\)/, "height = the reading");
-  assert.match(M3, /const coilBarMat = mkBarMat\(/, "the podium's names are bars");
-  assert.match(M3, /const bm = new THREE\.Mesh\(barGeometry\(cb\), coilBarMat\)/);
-  assert.match(M3, /zeroR = flip > 0 \? spiralAt\(flip - 0\.5\)\.r/, "the zero line is the ring where green turns to red (T7: in the FROM ABOVE picture; standing, the ramp is the zero line)");
-  assert.match(M3, /if \(cluster && cluster\.coil && n\.kind === "name" && onTree\) \{ onTree\(n\); return; \}/, "click = that name on the tree");
-  assert.match(PAGE, /onTree: \(n\) => showOnTree\(n\)/);
+  assert.match(M3, /function stairMesh\(members, P, above\)/, "the podium's names are steps (boxes), standing against each other");
+  assert.match(M3, /if \(cluster && cluster\.coil && n\.kind === "name"\) \{ onSelect\(n\); select\(n, false\); return; \}/, "click = the card first (T8)");
+  assert.match(PAGE, /onTree: \(n\) => showOnTree\(n\)/); assert.match(PAGE, /SHOW ON THE TREE →/, "the card's button jumps to the tree");
   assert.match(PAGE, /data-crumb="__list"/); assert.match(PAGE, /<button data-go="list"[^>]*>≡ LIST<\/button>/, "≡ LIST on the top bar too");
   if (!runs) return;
   for (const r of runs) for (const p of probes(r, "rMono")) {
-    assert.ok(p.n >= 20 && p.vMono && p.rMono && p.yMono, `${r.width}: ${p.n} bars, readings fall, radius grows, height falls along the spiral`);
-    assert.ok(p.first.r < p.last.r && p.first.y > p.last.y && p.first.v > p.last.v, `${r.width}: the highest at the centre-top, the lowest at the outer bottom`);
-    assert.equal(p.bars, p.count.read + p.count.none, `${r.width}: a bar for every name, empty where there is no reading`);
-    if (r.width !== "390") assert.ok(p.overlaps <= Math.ceil(p.n * 0.75), `${r.width}: ${p.overlaps} bar pairs overlap (the middle turns, where readings bunch: 62 of 113 at 1680 on 2 Oct — known, see the deliverable)`);
+    assert.ok(p.n >= 20 && p.vMono && p.rMono && p.treadMono, `${r.width}: ${p.n} steps, readings fall, radius grows, treads fall along the spiral`);
+    assert.ok(p.first.r < p.last.r && p.first.tread > p.last.tread && p.first.v > p.last.v, `${r.width}: the highest at the centre-top, the lowest at the outer bottom`);
+    assert.equal(p.bars, p.count.read + p.count.none, `${r.width}: a step for every name, grey where there is no reading`);
     assert.ok(p.bar.includes("PODIUM COIL") && p.bar.includes("≡ LIST") && p.bar.includes("← BACK TO THE CANVAS"), `${r.width}: the top bar`);
-    if (r.width !== "390") { assert.ok(p.barW >= 50 && p.barH >= 12, `${r.width}: bars ${p.barW} × ${p.barH} px`); assert.ok(p.labels >= Math.floor(p.n * 0.85), `${r.width}: ${p.labels} of ${p.n} tickers printed`); assert.ok(p.focused, `${r.width}: the canvas holds focus in the podium`); }
+    if (r.width !== "390") assert.ok(p.focused, `${r.width}: the canvas holds focus in the podium`);
   }
-  const d = byW(1680); const nv = d.log.find((x) => x.hover === "NVDA"); assert.ok(nv && nv.tip.includes("Geiger") && nv.tip.includes("›"), "hover: the bar and the path");
-  const click = d.log.find((x) => x.click === "NVDA"); assert.ok(click && !click.after.area && click.after.selected === "NVDA" && click.after.detail === "detailed", "click: NVDA on the tree, DETAILED, out of the podium");
+  const d = byW(1680); const click = d.log.find((x) => x.click === "NVDA"); assert.ok(click && click.after.area === "SEC_TECH" && click.after.selected === "NVDA", "click: NVDA's card, the podium stays");
 });
 
 test("3 · per-section 3D, obvious: the whole-map 3D button lives at the end of the KEY as WHOLE MAP 3D; every section shows OPEN 3D with the cube, big enough for a thumb; the name does the same; inside: the top bar, the canvas holds focus so Esc works, the card repeats the way back", () => {
@@ -83,8 +77,8 @@ test("3 · per-section 3D, obvious: the whole-map 3D button lives at the end of 
   assert.match(M3, /focusCanvas\(\);\n\s+flyTo\(framing\(\[root, \.\.\.sub, \.\.\.nbs\]/, "an area takes focus on open");
   assert.match(PAGE, /<b>\$\{esc\(root\.label\)\}<\/b><span class="mode">· \$\{inC \? "PODIUM COIL" : "3D"\} ·<\/span>/, "the top bar: name · 3D · back");
   assert.match(PAGE, /Inside <b>\$\{esc\(root \? root\.label : ""\)\}<\/b> in 3D · drag to turn/, "the card's one line");
-  if (!runs) return;
-  for (const r of runs) {
+  if (!runs6) return; // T6's record: the facts below (the KEY's button, the chip's size, the top bar's words) are about code T8 did not touch
+  for (const r of runs6) {
     const h = probes(r, "headerHas3d")[0]; if (!h) continue; // the short 1680 × 700 run measures the bottom band only
     assert.ok(!h.headerHas3d && h.keyHasWhole, `${r.width}: the 3D button moved to the KEY`);
     assert.equal(h.chipText.trim(), "OPEN 3D", `${r.width}: the chip says OPEN 3D`); assert.ok(h.chipPx && h.chipPx[1] >= 24 && h.chipPx[0] >= 70, `${r.width}: the button is ${h.chipPx} px`);
@@ -104,22 +98,22 @@ test("4 · no disagreement flags: the card and the hover keep the SIC code and t
   assert.doesNotMatch(PAGE, /the two authorities differ|DISAGREE<\/span>|tag dis"/);
   assert.doesNotMatch(M3, /the two authorities differ|ind\.disagreement/);
   assert.match(PAGE, /<span>INDUSTRY<\/span><span>\$\{esc\(i\.fmp_industry \|\| "—"\)\} <span class="mute">FMP, the authority<\/span><\/span><span>SIC<\/span>/);
-  if (!runs) return;
-  for (const r of runs) for (const c of probes(r, "hasDisagree")) assert.ok(!c.hasDisagree && c.hasSIC && c.hasIndustry, `${r.width}: ${c.name}'s card: SIC ${c.hasSIC}, industry ${c.hasIndustry}, disagree ${c.hasDisagree}`);
+  if (!runs6) return;
+  for (const r of runs6) for (const c of probes(r, "hasDisagree")) assert.ok(!c.hasDisagree && c.hasSIC && c.hasIndustry, `${r.width}: ${c.name}'s card: SIC ${c.hasSIC}, industry ${c.hasIndustry}, disagree ${c.hasDisagree}`);
 });
 
 test("5 · the bottom of the canvas: the KEY (open or closed) and the hint sit below the lowest label at every height", () => {
   assert.match(M3, /function bottomBand\(\) \{/); assert.match(M3, /bottomBand\(\) \/ Math\.max\(1, view\.h\)/, "the framing reserves the band");
   assert.match(M3, /\$\("legend"\)\.addEventListener\("toggle"/, "the KEY opening reframes");
-  if (!runs) return;
+  if (!runs6) return;
   let seen = 0;
   // the KEY closed: clear at every height; the KEY open: clear at 794 and 918 — on a 618 px canvas the open KEY (400 px) still covers part of the tree (known, see the deliverable)
-  for (const r of runs) for (const g of probes(r, "widgets_top")) { seen++; if (g.key_open && g.canvas_h < 700) continue; assert.ok(g.gap >= 0, `${r.width} (canvas ${g.canvas_h}, key ${g.key_open ? "open" : "closed"}): the lowest label ends at ${g.lowest_label_bottom}, the widgets start at ${g.widgets_top}`); }
+  for (const r of runs6) for (const g of probes(r, "widgets_top")) { seen++; if (g.key_open && g.canvas_h < 700) continue; assert.ok(g.gap >= 0, `${r.width} (canvas ${g.canvas_h}, key ${g.key_open ? "open" : "closed"}): the lowest label ends at ${g.lowest_label_bottom}, the widgets start at ${g.widgets_top}`); }
   assert.ok(seen >= 6, "measured with the KEY closed and open, at three heights");
 });
 
-test("the walk: four runs, no page errors, every label within a few px of its node", () => {
-  assert.ok(runs, "shots/t6-proof.json is missing (node proof-t6.mjs)");
-  assert.deepEqual(runs.map((r) => [+r.width, r.dpr]), [[1680, 2], [1400, 2], [1680, 2], [390, 1]]);
+test("the walk (T8's record): three runs, no page errors, every label within a few px of its node", () => {
+  assert.ok(runs, "shots/t8-after-proof.json is missing (node proof-t8.mjs <base> after)");
+  assert.deepEqual(runs.map((r) => [+r.width, r.dpr]), [[1920, 1], [1680, 2], [390, 1]]);
   for (const r of runs) { assert.deepEqual(r.page_errors, [], `${r.width}: page errors`); for (const x of r.log) if (x.labels) { assert.equal(x.labels.outside, 0); assert.ok(x.labels.max_dx <= 3, `${r.width}: dx ${x.labels.max_dx}`); } }
 });

@@ -24,8 +24,8 @@ test("the canvas is the same tree as the 3D: one module, the flat layout, the ca
   assert.match(M3, /if \(on !== state\.flat\) setFlat\(on, ms\)/, "the canvas uses the tree's own flat layout");
   // the same layout module and the same bar shader serve both the canvas and the 3D
   assert.match(M3, /import \{ prepareTree, layout as layoutTree, bestRows, LAYOUT \} from "\.\/layout\.js"/);
-  assert.equal((M3.match(/new THREE\.ShaderMaterial\(/g) || []).length, 2, "one bar material for every flat bar, plus (T7) the standing column's own strip shader for the PODIUM 3D picture");
-  assert.match(M3, /const mkBarMat = \(o\) => new THREE\.ShaderMaterial\(/); assert.match(M3, /const standMat = new THREE\.ShaderMaterial\(/);
+  assert.equal((M3.match(/new THREE\.ShaderMaterial\(/g) || []).length, 1, "one bar material for every flat bar; T8 replaced T7's standing-column strip shader with instanced step meshes (the staircase)");
+  assert.match(M3, /const mkBarMat = \(o\) => new THREE\.ShaderMaterial\(/); assert.match(M3, /new THREE\.InstancedMesh\(stepGeo, new THREE\.MeshLambertMaterial\(/, "T8: the podium's steps are one instanced mesh");
 });
 
 test("a click lifts an area into 3D with the subtree's own 3D positions and the 'also in' links; the finder and the card only fly; back drops to the canvas", () => {
