@@ -28,7 +28,8 @@ export function marks(rows) {
     return { t: r.subject, dir: r.direction > 0 ? 1 : r.direction < 0 ? -1 : 0, z, move, size, ts: r.ts, min: etMin(r.ts), rule: d.rule || "", fired: (d.fired || []).join("+"), price: d.price, kind: r.kind };
   });
 }
-const fmtX = (m) => (m.z >= 1 ? m.z.toFixed(1) + "×" : m.move != null ? (m.move > 0 ? "+" : "") + m.move.toFixed(1) + "%" : "");
+// the × column always prints "× its usual day" (pass 2: EWY had printed its % twice); the move % is its own column
+const fmtX = (m) => m.z.toFixed(1) + "×";
 const fmtMove = (m) => (m.move == null ? "" : (m.move > 0 ? "+" : "") + m.move.toFixed(1) + "%");
 
 /* T1 · the strip */
@@ -59,7 +60,7 @@ export function tapeStrip(host, ms, opts = {}) {
   function tick(now) { if (!host.isConnected) return; const dt = (now - last) / 1000; last = now; if (!paused && !drag) { x += (opts.speed == null ? 22 : opts.speed) * dt; draw(); } requestAnimationFrame(tick); }
   cv.addEventListener("pointerdown", (e) => { drag = { x0: e.clientX, at: x }; cv.setPointerCapture(e.pointerId); });
   cv.addEventListener("pointermove", (e) => { if (drag) { x = drag.at - (e.clientX - drag.x0); draw(); } });
-  cv.addEventListener("pointerup", () => (drag = null)); cv.addEventListener("pointerenter", () => (paused = true)); cv.addEventListener("pointerleave", () => (paused = false));
+  cv.addEventListener("pointerup", (e) => { const tap = drag && Math.abs(e.clientX - drag.x0) < 6; drag = null; if (tap && opts.onTap) opts.onTap(); }); // a press without a drag = open the bigger-screen mode cv.addEventListener("pointerenter", () => (paused = true)); cv.addEventListener("pointerleave", () => (paused = false));
   draw(); requestAnimationFrame(tick);
   return { draw, pause: (p) => (paused = p), offset: (v) => { x = v; draw(); } };
 }
@@ -92,13 +93,17 @@ export function spread(host, ms, opts = {}) {
   s += `</svg>`; host.innerHTML = s; return { points: pts.length, labels: lab.map((l) => ({ t: l.p.m.t, x: Math.round(l.x), y: Math.round(l.y), w: Math.round(l.w), h: l.h })) };
 }
 
-/* T3 · the ladder: the centre line stood up; ups to the right, downs to the left, ranked, one row per name */
+/* T3 · the ladder: the centre line stood up; ups to the right, downs to the left, ranked, one row per name.
+   Pass 2: both sides sorted by × its usual day (z); ONE scale for both sides — the longest bar on either side is the day's
+   biggest z, so a 2.2× down bar and a 2.3× up bar are the same length to within 5 %; the down row's cells are laid out in
+   their own order (move · × · bar · name) instead of a right-to-left grid, which had put the bar in the 44 px column. */
 export function ladder(host, ms, opts = {}) {
-  const ups = ms.filter((m) => m.dir >= 0).sort((a, b) => b.size - a.size), dns = ms.filter((m) => m.dir < 0).sort((a, b) => b.size - a.size);
-  const n = Math.max(ups.length, dns.length), rowH = Math.max(18, Math.min(26, Math.floor((opts.height || 520) / Math.max(1, n)))), maxS = Math.max(1, ...ms.map((m) => m.size));
-  const row = (m, side) => { const len = Math.max(4, Math.round((m.size / maxS) * 100)); const col = side > 0 ? C.bull : C.bear;
-    return `<div class="t3r ${side > 0 ? "up" : "dn"}" style="height:${rowH}px"><span class="t3n">${esc(m.t)}</span><span class="t3b"><i style="width:${len}%;background:${col}"></i></span><span class="t3x">${esc(fmtX(m))}</span><span class="t3m">${esc(fmtMove(m))}</span></div>`; };
+  const ups = ms.filter((m) => m.dir >= 0).sort((a, b) => b.z - a.z), dns = ms.filter((m) => m.dir < 0).sort((a, b) => b.z - a.z);
+  const n = Math.max(ups.length, dns.length), rowH = Math.max(18, Math.min(30, Math.floor((opts.height || 520) / Math.max(1, n)))), maxZ = Math.max(0.1, ...ms.map((m) => m.z));
+  const row = (m, side) => { const len = Math.max(2, +((m.z / maxZ) * 100).toFixed(1)); const col = side > 0 ? C.bull : C.bear;
+    const name = `<span class="t3n">${esc(m.t)}</span>`, bar = `<span class="t3b"><i style="width:${len}%;background:${col};color:${col}" data-z="${m.z}"></i></span>`, x = `<span class="t3x">${esc(fmtX(m))}</span>`, mv = `<span class="t3m">${esc(fmtMove(m))}</span>`;
+    return `<div class="t3r ${side > 0 ? "up" : "dn"}" style="height:${rowH}px">${side > 0 ? name + bar + x + mv : mv + x + bar + name}</div>`; };
   host.innerHTML = `<div class="t3"><div class="t3h"><span class="dn">${dns.length} DOWN</span><span class="mid">${ms.length} SCINTILLAS</span><span class="up">${ups.length} UP</span></div>
     <div class="t3cols"><div class="t3col dn">${dns.map((m) => row(m, -1)).join("")}</div><div class="t3line"></div><div class="t3col up">${ups.map((m) => row(m, 1)).join("")}</div></div></div>`;
-  return { rows: ms.length, rowH, ups: ups.length, dns: dns.length };
+  return { rows: ms.length, rowH, ups: ups.length, dns: dns.length, maxZ: +maxZ.toFixed(3), scale: "one scale for both sides: 100 % = " + maxZ.toFixed(2) + "× its usual day" };
 }
