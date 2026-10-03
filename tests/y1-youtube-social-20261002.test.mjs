@@ -199,3 +199,10 @@ test("the sweep counts channel feeds that do not answer instead of dropping them
   assert.match(RSS, /rss_failed: rssFailed/);
   assert.match(RSS, /if \(!r \|\| !r\.ok\) \{ rssFailed\+\+; return; \}/);
 });
+
+test("the Edit window fits the screen under the body zoom (its Save / Close row was off-screen at 1680)", () => {
+  for (const z of ["1.12", "1.28", "1.45"]) {
+    assert.match(SRC, new RegExp("body\\{ zoom:" + z.replace(".", "\\.")), "the body zoom step " + z + " exists");
+    assert.match(SRC, new RegExp("\\.sc-ytcfg__panel\\{ max-height:calc\\(100vh / " + z.replace(".", "\\.") + " - 48px\\); \\}"), "and the window divides by it");
+  }
+});

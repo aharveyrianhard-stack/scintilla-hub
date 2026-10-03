@@ -4110,7 +4110,7 @@ body.secfs .bands, body.secfs .sc-stamp{ display:none; }
   .sc-ytraw__row{ display:flex; flex-wrap:wrap; gap:4px 8px; padding:10px 10px; }
   .sc-ytraw__row .sc-ytraw__c.ttl{ order:-1; flex:1 0 100%; font-size:14px; }
   .sc-ytraw__c.ts{ font-size:10.5px; } .sc-ytraw__c.auth{ font-size:10.5px; max-width:42%; }
-  .sc-ytraw__c.tks, .sc-ytraw__c.sent{ flex:0 0 auto; } }
+  .sc-ytraw__c.tks, .sc-ytraw__c.sent{ flex:0 0 auto; } .sc-ytraw__nil{ display:none; } }
 /* FIX — the YT feed scrolls INSIDE its own pane (desktop) so the page never grows.
    With body scroll pinned, hover-to-top always reveals the master tabs IN VIEW —
    same behaviour as every other room. Touch keeps natural page scroll. */
@@ -4208,6 +4208,12 @@ body.ytm-open{ overflow:hidden; }
 .sc-ytcfg__chip{ font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--dim); border:1px dashed var(--line);
   background:transparent; padding:9px 12px; cursor:pointer; text-align:left; }
 .sc-ytcfg__chip:hover{ color:var(--ink2); border-color:var(--hair); }
+/* Y1 (2 Oct) — the body is zoomed 1.12 / 1.28 / 1.45 on wide screens (see body{ zoom } above). 100vh is not, so the
+   window grew 1.28x past the screen at 1680: its title and its Save / Close row were off-screen and the list was a
+   scroll you could not see the end of. The cap now divides by the same zoom. */
+@media (min-width:1400px){ .sc-ytcfg__panel{ max-height:calc(100vh / 1.12 - 48px); } }
+@media (min-width:1680px){ .sc-ytcfg__panel{ max-height:calc(100vh / 1.28 - 48px); } }
+@media (min-width:1920px){ .sc-ytcfg__panel{ max-height:calc(100vh / 1.45 - 48px); } }
 .sc-ytcfg__chip.ro{ cursor:default; }
 .sc-ytcfg__chip.ro.dis{ opacity:.55; }
 .sc-ytcfg__plan{ font-family:var(--mono); font-size:11px; line-height:1.55; color:var(--dim); border:1px solid var(--line); border-radius:4px; padding:9px 11px; margin-bottom:14px; }
@@ -11806,7 +11812,7 @@ function ytCfgRadarHTML(d) {
     "</b> times a day (every ~" + esc(p.hours_between_turns) + " h), one run every " + esc(p.every_min) + " min. At most " + esc(p.units_per_day_max) + " of the " +
     esc(p.daily_quota) + " daily YouTube units (" + esc(p.cost_per_search) + " per search)." +
     (p.searches_today != null ? " Searched today so far: <b>" + esc(p.searches_today) + "</b>." : "") + "</div>" : "";
-  return plan + groups.map((g) => '<div class="sc-ytcfg__grp">' + esc(String(g.cohort).replace(/_/g, " ")) + '</div><div class="sc-ytcfg__chips">' +
+  return plan + groups.map((g) => '<div class="sc-ytcfg__grp">' + esc(String(g.cohort).replace(/_{2,}/g, " · ").replace(/_/g, " ")) + '</div><div class="sc-ytcfg__chips">' +
     g.items.map((r) => ytCfgChip(r.ticker, r.searched, !r.searched, true)).join("") + "</div>").join("") +
     '<div class="sc-ytcfg__grp">never searched</div><div class="sc-ytcfg__note">' + esc((d.excluded || ["SPY", "QQQ"]).map((t) => "$" + t).join(" · ")) +
     " — they are in nearly every market video already. Videos from the channels you subscribe to come in untouched, whatever they mention.</div>";
