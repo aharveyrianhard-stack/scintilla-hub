@@ -146,7 +146,7 @@ export function snapshotFromCohort(ctx, ticker) {
     const rd = read.rows.find((r) => r.key === key), bar = read.bars.find((b) => b.key === key), r = rowOf(key);
     const values = {};
     for (const p of peersIn) { const inRow = (rd.peers || []).find((x) => x.ticker === p.ticker); values[p.ticker] = inRow ? { multiple: inRow.value, why: null } : { multiple: null, why: peerWhy(key, p, ctx.fx[p.ticker]) }; }
-    return { key, label: r.label, basis: r.basis, fmt: r.fmt, own: { multiple: rd.value, price: num(me.price) }, figure: bar.figure, own_why: rd.value == null ? (rd.why || peerWhy(key, me, ctx.fx[TICKER])) : null,
+    return { key, label: r.label, basis: r.basis, fmt: r.fmt, own: { multiple: rd.value, price: num(me.price) }, figure: bar.figure, own_why: rd.value == null ? ((ctx.fx[TICKER] && ctx.fx[TICKER].withheld ? peerWhy(key, me, ctx.fx[TICKER]) : null) || rd.why || peerWhy(key, me, ctx.fx[TICKER])) : null,
       n: rd.n, band: rd.band, ends: Object.fromEntries(Object.entries(bar.ends).map(([k, e]) => [k, { multiple: e.m, who: e.who, price: e.price }])),
       peers: (rd.sets.sorted || []).map((x) => ({ ticker: x.ticker, multiple: x.value })), nm: [], missing: rd.missing, values, outliers: noRule, upside: bar.upside, ok: bar.ok, reason: bar.reason };
   }
@@ -171,6 +171,7 @@ export function snapshotFromCohort(ctx, ticker) {
 }
 function peerWhy(key, p, fx) {
   if (fx && fx.currency && fx.currency !== "USD" && !fx.converted) return `statements in ${fx.currency}: no USD rate on file`;
+  if (fx && fx.withheld && !fx.currency) return "reporting currency unknown: withheld, never divided by a dollar price";   // C5b
   const revNow = p.rev?.now ?? p.revenue_ttm_on_file;
   if (key === "pe_ttm") return p.eps_ttm == null ? "no trailing EPS on file" : p.eps_ttm <= 0 ? "trailing EPS is negative or zero" : "no price";
   if (key === "pe_fwd") return p.eps_fy1 == null ? "no EPS estimate on file" : p.eps_fy1 <= 0 ? "estimated EPS is negative or zero" : "no price";
