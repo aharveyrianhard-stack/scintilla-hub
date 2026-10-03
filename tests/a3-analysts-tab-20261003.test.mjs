@@ -122,6 +122,11 @@ test("00 REVISIONS keeps the arrows and the estimates box; its sentence, note li
   const sp = ctx.revStripSpecs("NVDA", c).join(" ");
   assert.match(sp, /analysts are revising DOWN\. Only 3 targets this month — a thin read\./);
   assert.match(sp, /1 roundup-headline note set aside/);
+  /* the strip paints a second time when the reads land: that paint is split the same way (the estimates box's source line once leaked back) */
+  assert.match(r2, /const sp = estSpecSplit\(revStripBody\(t, c\)\); el\.outerHTML = sp\.html; ESPEC_NOTES\[t\] = sp\.notes;/);
+  const est = [{ fiscal_date: "2027-01-25", as_of_date: "2026-10-02", eps_avg: "9.27", revenue_avg: "409426638637" }, { fiscal_date: "2028-01-25", as_of_date: "2026-10-02", eps_avg: "15.75", revenue_avg: "691862290915" }];
+  const split = ctx.estSpecSplit(vm.runInContext("revStripBody", ctx)("NVDA", { rows, sum, est }, 2026));
+  assert.ok(!/sc-rvs-note/.test(split.html)); assert.ok(split.notes.some((n) => /analyst_estimates_daily/.test(n)));
 });
 
 /* ---------- the firm swipe ---------- */
@@ -164,6 +169,9 @@ test("a card shows the date, the firm, old → new, the move in %, the rating, t
   const g = ctx.estFcardHTML(gg, 2026, 230, "", NOW);
   assert.match(g, /<i>no target<\/i>/); assert.match(g, /class="fc-rt up"[^>]*>Neutral → Buy ▲</);
   assert.match(ctx.estFcardHTML(me, 2026, 230, "melius", NOW), /class="sc-fcard hot on"/, "the open firm is framed");
+  const rated = ctx.estFcardHTML({ ...me, ms: Date.parse("2026-10-01T12:00:00Z"), rating: { ms: Date.parse("2026-10-01T12:00:00Z"), to: "Buy", from: "Buy", action: "maintain" } }, 2026, 230, "", NOW);
+  assert.match(rated, /<b>1 Oct<\/b>[\s\S]*<div class="fc-tg">[\s\S]*?<\/div><div class="fc-ts">target of 20 Sep<\/div>/, "a newer rating dates the card; the target keeps its own date");
+  assert.match(ctx.estFcardHTML({ ...me, prior: null, mv: null, dir: 0 }, 2026, 230, "", NOW), /\$300 <i>first note<\/i>/);
   assert.ok(!/NaN|undefined/.test(h + g));
 });
 test("FIRMS: the swipe holds every card; a tapped firm's notes open under it; honest loading / empty states", () => {
