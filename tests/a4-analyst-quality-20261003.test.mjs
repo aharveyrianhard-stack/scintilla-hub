@@ -121,7 +121,7 @@ test("the ESTIMATES reads leave quarantined rows out (an unclassified row is kep
   assert.equal(ctx.revTgt({ target: 80, adj_target: 79 }), 79);
   assert.equal(ctx.revTgt({ target: 80 }), 80);
 });
-test("AMZN: with the FTC row quarantined the price target reads the checked notes — low $300, not $200 — and shows FMP's mean beside it", () => {
+test("AMZN: with the FTC row quarantined the price target reads the checked notes — low $300, not $200 — and shows FMP's mean in the header line", () => {
   const fx = JSON.parse(read("tests/fixtures/a3-target-notes-20261003.json"));
   const blk = (b, e) => html.slice(html.indexOf(b), html.indexOf(e));
   const ctx = { todayISO: () => "2026-10-03", pg: () => Promise.resolve([]), S: { estSub: null }, LS: {} };
@@ -139,5 +139,5 @@ test("AMZN: with the FTC row quarantined the price target reads the checked note
   const h = ctx.estPtcBody("AMZN", pt, 251.37, { hist: clean }, Date.parse(NOW));
   assert.match(h, /\$330\.77<\/span><span class="sc-ptc-l">mean/);
   assert.match(h, /low \$300/); assert.ok(!/low \$200/.test(h));
-  assert.match(h, /\$326\.83<\/span><span class="sc-ptc-l">FMP mean/);
+  assert.match(h, /<span class="asof">FMP \$326\.83 · /, "FMP's mean sits in the header line (the hero stays one row)");
 });

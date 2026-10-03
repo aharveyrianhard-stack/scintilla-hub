@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 6b6bf7e) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 2c41bc0) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -20339,8 +20339,8 @@ function estPtcBody(t, pt, px, c, nowMs) {
   const fmpMean = mean;   // A4: FMP's consensus is built from the same notes, junk included (AMZN 3 Oct: UBS "$200" = an FTC news item) —
   if (set && set.n) { mean = set.mean; med = set.med; lo = set.lo; hi = set.hi; fromNotes = true; }   // the checked notes lead, FMP's mean sits beside
   const open = '<div class="sc-ptc" data-rev-t="' + esc(t) + '">';
-  const k = '<div class="sc-ptc-k">Price target' + (fromNotes ? " · the firms' notes" : " · consensus") +
-    (pt && pt.updated_ts ? '<span class="asof">' + esc(revDay(new Date(anchor).toISOString(), yr)) + "</span>" : "") + "</div>";
+  const k = '<div class="sc-ptc-k">Price target' + (fromNotes ? " · checked" : " · consensus") +
+    (pt && pt.updated_ts ? '<span class="asof">' + (fromNotes && fmpMean != null ? "FMP " + esc(ptcPx(fmpMean)) + " · " : "") + esc(revDay(new Date(anchor).toISOString(), yr)) + "</span>" : "") + "</div>";   // A4: FMP's mean in the header line, so the hero stays one row in the 270 px rail
   if (mean == null) return open + k + '<div class="sc-rvs-wait">' + (c || pt ? "No price-target consensus for $" + esc(t) + "." : "reading…") + "</div></div>";
   const dist = px != null && px > 0 ? (mean / px - 1) * 100 : null, d = dist == null ? "" : dist >= 0 ? "up" : "dn";
   const cell = (v, l, cls) => '<div class="sc-ptc-c"><span class="sc-ptc-v2' + (cls ? " " + cls : "") + '">' + v + '</span><span class="sc-ptc-l">' + l + "</span></div>";
@@ -20349,7 +20349,6 @@ function estPtcBody(t, pt, px, c, nowMs) {
     cell(ptcPx(med), "median") +
     cell(set ? String(set.n) : "…", "firms") +
     (dist != null ? cell((dist >= 0 ? "▲ " : "▼ ") + revPct(dist), "vs " + ptcPx(px) + " now", d) : "") +
-    (fromNotes && fmpMean != null ? cell(ptcPx(fmpMean), "FMP mean") : "") +
     "</div>";   // low and high are labelled on the track under it
   /* one track: low to high, today's price, the mean and the median on it, the gap from today to the mean filled green / red */
   const cand = [lo, hi, mean, med, px].filter((v) => v != null && isFinite(v) && v > 0);
@@ -20381,7 +20380,7 @@ function estPtcHTML(data) {
 function estPtcSpecs(t, pt, c, nowMs) {
   const T = "$" + esc(t), out = [];
   out.push("PRICE TARGET = the firms' own notes for " + T + ", checked (analyst_target_news, A4): each firm's newest 12-month target dated in the " + PTC_DAYS + " days before FMP's update — the mean, the median, the lowest and the highest. MEDIAN = the middle of those targets. Rows the check quarantined are left out: a headline that is not about a target (AMZN, 17 Sep: an FTC news item filed as UBS $200), another firm's note filed under this one (NVDA, 2 Oct: Morgan Stanley's headline filed as Wells Fargo $210), a number the headline contradicts, another stock's note, a second copy of the same note. Targets are split-adjusted by our own splits table where FMP's adjustment lags. Not from the comps.");
-  out.push("FMP MEAN = FMP's own price-target consensus (price_target_consensus), for comparison. FMP builds it from the same notes without the check, so it moves with the junk (AMZN low $200 at FMP vs $300 checked).");
+  out.push("FMP (top right, beside the date) = FMP's own price-target consensus mean (price_target_consensus), for comparison. FMP builds it from the same notes without the check, so it moves with the junk (AMZN low $200 at FMP vs $300 checked).");
   out.push("The % beside it = the mean target against today's price (the live quote; the company payload's price when no quote is in).");
   if (c && !c.err) {
     const anchor = ptcAnchor(pt, nowMs || Date.now()), set = ptcFirmSet(c.hist || [], anchor, PTC_DAYS);

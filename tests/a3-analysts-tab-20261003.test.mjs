@@ -60,13 +60,13 @@ test("the target block: mean big, median, firms, the distance from today in colo
   assert.match(h, />30<\/span><span class="sc-ptc-l">firms/);
   assert.match(h, /sc-ptc-v2 up">▲ \+30%<\/span><span class="sc-ptc-l">vs \$251\.37 now/, "326.83 / 251.37 − 1 = +30.0%");
   assert.match(h, /low \$200/); assert.match(h, /high \$390/); assert.match(h, /now \$251\.37/);
-  assert.match(h, /class="sc-ptc-fill up"/); assert.match(h, /<span class="asof">2 Oct<\/span>/);
+  assert.match(h, /class="sc-ptc-fill up"/); assert.match(h, /<span class="asof">(FMP \$326\.83 · )?2 Oct<\/span>/);   // A4: FMP's mean beside the date
   assert.ok(!/NaN|undefined/.test(h));
   const dn = ctx.estPtcBody("AMZN", fx.consensus.AMZN, 400, c, Date.now());
   assert.match(dn, /sc-ptc-v2 dn">▼ −18%/); assert.match(dn, /sc-ptc-fill dn/);
   assert.match(ctx.estPtcBody("AMZN", fx.consensus.AMZN, 251.37, null, Date.now()), />…<\/span><span class="sc-ptc-l">firms/, "the count waits for the notes");
   const fromNotes = ctx.estPtcBody("AMZN", null, 251.37, c, Date.parse("2026-10-03T00:00:00Z"));
-  assert.match(fromNotes, /the firms' notes/); assert.match(fromNotes, /sc-ptc-v">\$/);
+  assert.match(fromNotes, / · checked/);   // A4: the firms' notes, checked (short enough for one line at 390) assert.match(fromNotes, /sc-ptc-v">\$/);
   assert.match(ctx.estPtcBody("ZZZ", null, 10, { rows: [], hist: [] }, Date.now()), /No price-target consensus for \$ZZZ/);
   assert.equal(ctx.ptcPx(1544.17), "$1,544"); assert.equal(ctx.ptcPx(322.5), "$322.50"); assert.equal(ctx.ptcPx(325), "$325");
 });
