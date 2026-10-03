@@ -26720,6 +26720,19 @@ function pmPanelNow(topic) {
 
 /* ---- reads (anon, read-only) ------------------------------------------------ */
 const PM_LATEST_SEL = "topic,venue,event_id,market_id,outcome,align_key,question,probability,bid,ask,volume,volume_24h,end_date,ts";
+/* P1b (2 Oct, 20:40 ET) — when Polymarket re-lists a market under a new id (SPY "hit $770 in October": 4936034 until
+   09:45, 5208206 from 13:00) the latest table carries both ids for a while and the pane printed the question twice.
+   One row per (topic, venue, question, outcome): the newest reading wins. */
+function pmDedupe(rows) {
+  const best = new Map();
+  for (const r of rows) {
+    if (!r) continue;
+    const k = [r.topic, r.venue, String(r.question || "").trim().toLowerCase(), String(r.outcome || "").trim().toLowerCase()].join("\u0001");
+    const have = best.get(k);
+    if (!have || String(r.ts || "") > String(have.ts || "")) best.set(k, r);
+  }
+  return [...best.values()];
+}
 async function pmPage(path, pages) {
   const out = [];
   for (let i = 0; i < (pages || 8); i++) {
@@ -26752,7 +26765,7 @@ async function pmLoad(force) {
       pg("prediction_market_latest?select=" + PM_LATEST_SEL + "&topic=neq.discover&order=topic.asc,probability.desc&limit=1000"),
       pg("prediction_market_runs?select=run_id,ts,mode,read,written,unchanged,ms,problems&mode=eq.pass&order=ts.desc&limit=1"),
     ]);
-    PM.latest = Array.isArray(latest) ? latest : []; PM.run = (Array.isArray(runs) && runs[0]) || null; PM.err = null; PM.at = Date.now();
+    PM.latest = pmDedupe(Array.isArray(latest) ? latest : []); PM.run = (Array.isArray(runs) && runs[0]) || null; PM.err = null; PM.at = Date.now();
     pmPaint();                                                        // the band first: probabilities now, changes when the history lands
     const heads = pmChips(PM.latest, null, Date.now()).map((c) => c.head.market_id).filter(Boolean);
     PM.hist = heads.length ? await pmHistory("venue=eq.polymarket&market_id=in.(" + heads.map(encodeURIComponent).join(",") + ")") : {};
