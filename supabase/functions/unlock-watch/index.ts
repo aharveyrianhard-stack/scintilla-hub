@@ -128,16 +128,18 @@ async function run(req: Request) {
     cands.set(t, c);
   };
   let calRows = 0, calMonths = 0;
-  if (!only.length) {
-    for (const [from, to] of L.monthWindows(today, months)) {
-      const rows = await fmp("ipos-calendar", { from, to }, K);
-      if (rows == null) { problems.push({ step: "ipos-calendar " + from, reason: "no answer" }); continue; }
-      calMonths++; calRows += rows.length;
-      for (const r of rows) {
-        const t = String(r.symbol || "").toUpperCase(), d = String(r.date || "").slice(0, 10);
-        if (uni.set.has(t) && d && d <= today && d >= since && !/expected|postponed|withdrawn/i.test(String(r.actions || ""))) add(t, "calendar", d, null);
-      }
+  // C1: the calendar is read for named tickers too — without it a named former SPAC (SharonAI) was anchored on its merger
+  // date, read the merger 424B3 instead of its IPO 424B4, and overwrote its row (2 Oct, 23:0x ET; restored by the re-run)
+  for (const [from, to] of L.monthWindows(today, months)) {
+    const rows = await fmp("ipos-calendar", { from, to }, K);
+    if (rows == null) { problems.push({ step: "ipos-calendar " + from, reason: "no answer" }); continue; }
+    calMonths++; calRows += rows.length;
+    for (const r of rows) {
+      const t = String(r.symbol || "").toUpperCase(), d = String(r.date || "").slice(0, 10);
+      if ((!only.length || only.includes(t)) && uni.set.has(t) && d && d <= today && d >= since && !/expected|postponed|withdrawn/i.test(String(r.actions || ""))) add(t, "calendar", d, null);
     }
+  }
+  if (!only.length) {
     for (const t of uni.set) {
       const d = String((uni.prof.get(t) as any)?.ipo_date || "").slice(0, 10);
       if (d && d >= since && d <= today) add(t, "profile", null, d);
