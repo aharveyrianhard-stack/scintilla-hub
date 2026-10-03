@@ -192,3 +192,13 @@ test("roundup headlines are set aside behind a closed fold, never in this stock'
   assert.match(main, /<i>target<\/i> \$210/, "Wells Fargo's own 2 Oct note has no old target: the roundup's $999 is never used as one");
   assert.match(fold, /2 roundup-headline notes set aside<\/summary>/); assert.match(fold, /Overweight → Underweight/);
 });
+test("one firm, two spellings (FMP: 'D.A. Davidson' in targets, 'DA Davidson' in ratings) is one note and one firm", () => {
+  const t = db(L.targetRow(MU_DAD, "MU"));
+  const g = db(L.gradeRow({ ...MU_CLSA_G, publishedDate: MU_DAD.publishedDate, gradingCompany: "DA Davidson", previousGrade: "Buy", newGrade: "Buy", action: "hold" }, "MU"));
+  const older = db(L.targetRow({ ...MU_DAD, publishedDate: "2026-09-01T12:00:00.000Z", priceTarget: 1800, adjPriceTarget: 1800, newsTitle: "DA Davidson note", analystCompany: "DA Davidson" }, "MU"));
+  const lines = ctx.revLines([t, g, older]);
+  assert.equal(lines.length, 2, "the target and the rating of 1 Oct are one line");
+  assert.equal(lines[0].grTo, "Buy"); assert.equal(lines[0].target, 2100);
+  const solo = ctx.revLines([db(L.targetRow({ ...MU_DAD, newsTitle: "DA Davidson keeps Buy" }, "MU")), older]);
+  assert.equal(solo[0].prior, 1800, "the previous note is found across the two spellings");
+});

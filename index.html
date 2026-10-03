@@ -19450,12 +19450,13 @@ function revDay(iso, nowYear) {
 /* rows (both kinds, any order) → one line per note, newest first. A TARGET row and a GRADE row from the same firm at the
    same minute are one note (FMP files the target and the rating of one note separately). The old target comes from the
    headline's "to $X from $Y" when X is this note's target; else from the same firm's previous stored target. */
+const revFirmKey = (f) => String(f || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");   // "D.A. Davidson" = "DA Davidson" (FMP spells a firm two ways across its two feeds)
 function revLines(rows) {
   const ok = (rows || []).filter((r) => r && r.published_utc && (r.kind === "TARGET" || r.kind === "GRADE"));
   ok.sort((a, b) => new Date(b.published_utc) - new Date(a.published_utc));
   const lines = [], byKey = new Map();
   for (const r of ok) {
-    const k = new Date(r.published_utc).getTime() + "|" + (r.firm || "");
+    const k = new Date(r.published_utc).getTime() + "|" + revFirmKey(r.firm);
     let L = byKey.get(k);
     if (!L) {
       L = { at: r.published_utc, firm: r.firm || "", analyst: null, target: null, adj: null, prior: null, priorSrc: null,
@@ -19477,7 +19478,7 @@ function revLines(rows) {
     if (t && Math.abs(t.to - L.target) <= Math.max(0.01, L.target * 0.005)) { L.prior = t.from; L.priorSrc = "headline"; continue; }
     for (let j = i + 1; j < lines.length; j++) {
       const P = lines[j];
-      if (P.target != null && L.firm && P.firm === L.firm) { L.prior = P.adj != null ? P.adj : P.target; L.priorSrc = "previous note"; break; }
+      if (P.target != null && L.firm && revFirmKey(P.firm) === revFirmKey(L.firm)) { L.prior = P.adj != null ? P.adj : P.target; L.priorSrc = "previous note"; break; }
     }
   }
   return lines;
