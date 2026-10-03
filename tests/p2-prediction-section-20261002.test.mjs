@@ -30,6 +30,7 @@ const shared =
   grab(/function pmFmtChg\(c\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function pmFmtPts\(v\) \{[^\n]*\n/) +
   grab(/function pmChips\(latest, hist, nowMs\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/function pmDiscoverChips\(latest, hist, nowMs\) \{[\s\S]*?\n\}/) + "\n" +   // P2b: the WHAT THE WORLD IS BETTING ON group
   grab(/function pmClock\(iso\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function pmStatus\(run, nowMs\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function pmChipTitle\(c\) \{[\s\S]*?\n\}/) + "\n" +
