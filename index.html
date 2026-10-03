@@ -27522,6 +27522,22 @@ function pmChips(latest, hist, nowMs) {
   out.sort((a, b) => (Math.abs(b.chg || 0) - Math.abs(a.chg || 0)) || (b.p - a.p) || (a.short < b.short ? -1 : a.short > b.short ? 1 : 0));
   return out;
 }
+/* 2 Oct, Alan ("complement it — both things … this top 15 tells us a little bit about the world"): Polymarket's
+   most-traded markets (the registry's "discover" topic) as their own group in the section — one row per event, the
+   favourite outcome, the same maths as every other row. They never become our topics by themselves. */
+function pmDiscoverChips(latest, hist, nowMs) {
+  const by = {};
+  for (const r of latest || []) { if (!r || r.topic !== "discover" || !r.event_id) continue; (by[r.event_id] = by[r.event_id] || []).push(r); }
+  const out = [];
+  for (const ev of Object.keys(by)) {
+    const rows = by[ev].slice().sort((a, b) => Number(b.probability) - Number(a.probability));
+    const head = pmFavourite(rows); if (!head) continue;
+    const m = pmDayMaths((hist && hist[head.market_id]) || [], nowMs, head.probability);
+    out.push({ topic: "discover", event: ev, short: pmCut(String(head.question || "").replace(/\?\s*$/, ""), 30), head, rows, p: Number(head.probability), chg: m.chg, yc: m.yc, usual: m.usual, n: m.n, x: m.x, wild: m.wild });
+  }
+  out.sort((a, b) => (Math.abs(b.chg || 0) - Math.abs(a.chg || 0)) || (b.p - a.p));
+  return out;
+}
 function pmClock(iso) {
   try { return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York", hour12: false }); }
   catch (_) { return String(iso || "").slice(11, 16); }
@@ -27927,6 +27943,11 @@ function pmSectionHTML(latest, hist, run, reg, slugs, props, nowMs, state) {
         rows.map((c) => pmSectionRowHTML(c, hist, reg, slugs, now)).join("") +
         q.map((id) => '<div class="pmx-row pmx-row--quiet" title="' + esc(((reg && reg[id] && reg[id].label) || id) + " · no live market reading in the last 8 hours") + '"><span class="pmx-row__n"><b>' + esc(pmShort(id)) + "</b><i>" + esc(pmCut((reg && reg[id] && reg[id].label) || id, 110)) + '</i></span><span class="pmx-row__o pmx-dim">no live market</span><span></span><span></span><span></span><span></span></div>').join("") +
         "</div>";
+    }
+    const world = pmDiscoverChips(latest, hist, now);
+    if (world.length) {
+      h += '<div class="pmx-grp pmx-grp--world"><div class="pmx-grp__h">WHAT THE WORLD IS BETTING ON <i>' + world.length + " of Polymarket’s most-traded markets right now · not our topics, kept beside them so we see what the crowd is busy with" + (world.some((c) => c.wild) ? " · ◆" : "") + "</i></div>" +
+        world.map((c) => pmSectionRowHTML(c, hist, reg, slugs, now)).join("") + "</div>";
     }
   }
   h += pmProposalsHTML(props, { busy: PMX.propsBusy, err: PMX.propsErr, src: PMX.propsSrc });
