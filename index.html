@@ -4751,7 +4751,7 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .pmx-grp{ padding:8px 0 2px; }
 .pmx-grp__h{ font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink3); padding:6px 0 3px; border-bottom:.6px solid var(--line2); }
 .pmx-grp__h i{ font-style:normal; letter-spacing:.04em; text-transform:none; color:var(--dim); margin-left:8px; }
-.pmx-row{ display:grid; grid-template-columns:minmax(220px,1.6fr) minmax(120px,.9fr) 56px 92px 150px 92px; gap:10px; align-items:center; padding:5px 0; border-bottom:.6px solid var(--line); cursor:pointer; }
+.pmx-row{ display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) 52px 84px minmax(90px,1fr) 78px; gap:10px; min-width:0; align-items:center; padding:5px 0; border-bottom:.6px solid var(--line); cursor:pointer; }
 .pmx-row:hover{ background:var(--mute); }
 .pmx-row.is-open{ box-shadow:inset 2px 0 0 var(--crk); padding-left:6px; }
 .pmx-row--quiet{ cursor:default; opacity:.75; }
@@ -4771,7 +4771,7 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .pmx-dim{ color:var(--dim); }
 .pmx-h2{ font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink3); padding:18px 0 4px; }
 .pmx-sub{ color:var(--dim); font-size:11px; line-height:1.6; margin-bottom:8px; } .pmx-sub b{ color:var(--ink2); font-weight:600; }
-.pmx-prop{ display:grid; grid-template-columns:64px minmax(200px,1fr) 92px minmax(260px,2fr); gap:10px; align-items:start; padding:7px 0; border-bottom:.6px solid var(--line); }
+.pmx-prop{ display:grid; grid-template-columns:64px minmax(0,1fr) 84px minmax(0,2fr); gap:10px; min-width:0; align-items:start; padding:7px 0; border-bottom:.6px solid var(--line); }
 .pmx-prop__k{ font:700 11px var(--mono); letter-spacing:.12em; color:var(--ink); border:.6px solid var(--line2); padding:2px 0; text-align:center; }
 .pmx-prop.is-add .pmx-prop__k{ color:var(--bull); border-color:var(--bull); } .pmx-prop.is-rm .pmx-prop__k{ color:var(--bear); border-color:var(--bear); }
 .pmx-prop.is-none .pmx-prop__k{ color:var(--dim); border-color:var(--line2); }
@@ -4780,7 +4780,7 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .pmx-prop__w{ color:var(--ink2); line-height:1.5; } .pmx-prop__w b{ color:var(--ink); }
 .pmx-foot{ color:var(--dim); font-size:10.5px; padding:8px 0 0; }
 @media (max-width:900px){
-  .pmx-row{ grid-template-columns:1fr 60px 76px; } .pmx-row__o, .pmx-row__v{ display:none; } .pmx-row__l{ grid-column:1 / -1; }
+  .pmx-row{ grid-template-columns:minmax(0,1fr) 52px 72px; } .pmx-row__o, .pmx-row__v{ display:none; } .pmx-row__l{ grid-column:1 / -1; }
   .pmx-prop{ grid-template-columns:56px 1fr 70px; } .pmx-prop__w{ grid-column:1 / -1; }
 }
 </style>
@@ -27082,7 +27082,7 @@ async function pmSlugs(eventId) {
     for (const m of (ev && ev.markets) || []) if (m && m.id && m.slug) markets[String(m.id)] = String(m.slug);
     PM.slugs[id] = ev && ev.slug ? { event: String(ev.slug), markets } : null;
   } catch (_) { PM.slugs[id] = null; }
-  finally { PM.slugBusy = false; pmPanelPaint(); pmSectionPaint(); }
+  finally { PM.slugBusy = false; pmPanelPaint(); pmSectionPaintSoon(); }
 }
 
 /* ---- paint ----------------------------------------------------------------- */
@@ -27151,7 +27151,8 @@ function pmTick() {
   pmLoad(false).then(pmPaint);                                        // the status chip's age moves every minute even when nothing was re-read
 }
 if (PM_ON && typeof document !== "undefined" && typeof setTimeout === "function") {
-  const pmStart = () => { pmLoad(true); pmRegistry(); if (!PM.timer) PM.timer = setInterval(pmTick, 60000); };
+  const pmStart = () => { pmLoad(true); pmRegistry(); if (!PM.timer) PM.timer = setInterval(pmTick, 60000);
+    if (typeof pmSectionOn === "function" && pmSectionOn()) fillSentiPrediction(); };   // P2 — on direct entry (#prediction) the room mounted before this script existed
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pmStart); else setTimeout(pmStart, 0);
 }
 
@@ -27239,7 +27240,7 @@ function pmSectionStatusHTML(run, chips, reg, nowMs, state) {
 function pmProposalsHTML(props, state) {
   const src = state && state.src;
   let body;
-  if (state && state.busy && !props) body = '<div class="pmx-dim">reading the proposals…</div>';
+  if (!props) body = '<div class="pmx-dim">reading the proposals…</div>';
   else if (!props || !props.length) body = '<div class="pmx-dim">' + (state && state.err ? "the proposals could not be read · " + esc(state.err) : "no proposal tonight: every heavy theme in our news has a topic, and every quiet topic still has a live market") + "</div>";
   else body = props.map((r) => {
     const add = r.kind === "add";
@@ -27292,6 +27293,12 @@ function pmSectionRailHTML(openTopic) {
     '<div class="card"><h4>THE YESTERDAY / THREE-DAY RULE, IN PLAIN WORDS</h4><div class="sn-voice__txt"><b>Yesterday:</b> the change on every row is today’s odds minus the odds at yesterday’s 16:00 ET close — the same clock the stock market closes on, so a prediction market’s day is a stock’s day. <b>Usual day:</b> we take that market’s last 20 weekdays, measure how far it moved each day, and keep the middle one. <b>Three days:</b> until a market has three such days we do not claim to know its usual move, so it cannot flash — one or two days is a guess, not a habit. The ◆ means today’s move is bigger than its usual day (never less than one point). The hover prints “N× its usual day”.</div></div>' +
     '<div class="card"><h4>TWO THREADS ON ONE TOPIC</h4><div class="sn-voice__txt">Polymarket sometimes lists the same question again under a new id (the SPY “hit $770 in October” market: one id until 09:45, a new one from 13:00 on 2 Oct). The collector keeps both, so the history is whole; the page shows one line per question and takes the newest reading, so you never see the same question twice. When a topic truly has two live questions (the Fed’s next meeting and the one after), both are rows, as Alan asked: “fine, we track them both.”</div></div>' +
     '<div class="card"><h4>HOW TOPICS ARE CHOSEN</h4><div class="sn-voice__txt">Our own news reel decides. The proposals under the rows say which heavy themes have no topic and which quiet topics have no market, each with its reason. Alan approves; the registry is edited by hand; a topic that is approved keeps its first id so its history stays joined.</div></div>';
+}
+/* the slugs arrive one by one (one GET per event): repaint once they settle, not forty times */
+function pmSectionPaintSoon() {
+  if (!pmSectionOn()) return;
+  if (PMX.paintT) clearTimeout(PMX.paintT);
+  PMX.paintT = setTimeout(() => { PMX.paintT = null; pmSectionPaint(); }, 400);
 }
 function pmSectionPaint() {
   if (!pmSectionOn()) return false;
