@@ -27,12 +27,19 @@
 // Writes ONLY public.analyst_target_news and public.price_target_summary_daily (both created 2 Oct by
 // supabase/migrations/20261002_analyst_revisions.sql) and, from v2, public.analyst_estimates_daily
 // (supabase/migrations/20261002_analyst_estimates_daily.sql). No other table, no alert, no cron. R2 is only read.
+//
+// v3 (A4, 3 Oct 2026): every analyst_target_news row is classified on the way in by quality.ts — the same rule set that filled the
+// stored rows — and stored with quality ('ok' | 'quarantine'), quality_reason (the named causes) and adj_target_checked (the target
+// ÷ the splits after the note), columns added by supabase/migrations/20261003_analyst_target_news_quality.sql. Context for the
+// check: the same stocks' stored rows of the last 400 days and their splits (public.splits, read only). Nothing is deleted. If the
+// check itself fails the rows are still stored, unclassified (quality NULL), and the error is reported in the run's errors.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { dedupe, dedupeEst, deepKeepPaging, estimateRow, type EstRow, gradeRow, inSnapshotWindow, keepPaging, mirrorEstimateRow, nyDate,
-  type NewsRow, oldestOf, parseCsv, slice, stockUniverse, summaryRow, type SummaryRow, targetRow } from "./lib.ts";
+  type NewsRow, oldestOf, parseCsv, rowKey, slice, stockUniverse, summaryRow, type SummaryRow, targetRow } from "./lib.ts";
+import { classify, type QRow, type Split } from "./quality.ts";
 
-const VERSION = "analyst-revisions-v2";
+const VERSION = "analyst-revisions-v3";
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const FMP = "https://financialmodelingprep.com/stable/";
@@ -75,6 +82,34 @@ async function upsert(sb: any, table: string, rows: any[], onConflict: string): 
     n += part.length;
   }
   return n;
+}
+
+/** A4: the new rows with quality, quality_reason and adj_target_checked, classified among the same stocks' stored rows of the
+ *  last 400 days (the firm's previous target, the neighbours' prices, an earlier copy of the same note) and their splits. */
+const CONTEXT_DAYS = 400;
+async function withQuality(sb: any, rows: NewsRow[], errs: string[]): Promise<NewsRow[]> {
+  if (!rows.length) return rows;
+  try {
+    const tickers = [...new Set(rows.map((r) => r.ticker))];
+    const oldest = rows.reduce((a, r) => (r.published_utc < a ? r.published_utc : a), rows[0].published_utc);
+    const since = new Date(new Date(oldest).getTime() - CONTEXT_DAYS * 86400e3).toISOString();
+    const ctx: QRow[] = [], splits: Split[] = [];
+    for (let i = 0; i < tickers.length; i += 50) {
+      const part = tickers.slice(i, i + 50);
+      ctx.push(...await readAll(sb, "analyst_target_news", "ticker,published_utc,kind,firm,target,adj_target,new_grade,price_when_posted,title",
+        (q) => q.in("ticker", part).gte("published_utc", since)));
+      splits.push(...await readAll(sb, "splits", "ticker,date,numerator,denominator", (q) => q.in("ticker", part)));
+    }
+    // a stored copy of a row being written again is replaced by the new one (published_utc compared as ISO instants)
+    const fresh = new Set(rows.map(rowKey));
+    const old = ctx.filter((r) => !fresh.has(rowKey({ ...r, published_utc: new Date(r.published_utc).toISOString() } as NewsRow)));
+    const all: QRow[] = [...old, ...rows];
+    const res = classify(all, splits);
+    return rows.map((r, i) => ({ ...r, ...res[old.length + i] }));
+  } catch (e) {
+    errs.push("quality check: " + String((e as any)?.message || e).slice(0, 160));
+    return rows;
+  }
 }
 
 async function inBatches<T>(items: T[], size: number, fn: (x: T) => Promise<void>) {
@@ -230,7 +265,7 @@ Deno.serve(async (req) => {
           depth[t + ":" + f.k] = { pages, oldest, reached };
         }
         const clean = dedupe(rows);
-        const done = await upsert(sb, "analyst_target_news", clean, "ticker,published_utc,firm,kind");   // not "n += await …": the batches run side by side
+        const done = await upsert(sb, "analyst_target_news", await withQuality(sb, clean, errs), "ticker,published_utc,firm,kind");   // not "n += await …": the batches run side by side
         n += done;
         nT += clean.filter((r) => r.kind === "TARGET").length;
         nG += clean.filter((r) => r.kind === "GRADE").length;
@@ -259,7 +294,7 @@ Deno.serve(async (req) => {
       out.tickers = part.length;
       out.offset = u.searchParams.get("offset") || "0";
       out.fmp_calls = calls;
-      out.rows_upserted = await upsert(sb, "analyst_target_news", clean, "ticker,published_utc,firm,kind");
+      out.rows_upserted = await upsert(sb, "analyst_target_news", await withQuality(sb, clean, errs), "ticker,published_utc,firm,kind");
       out.targets = clean.filter((r) => r.kind === "TARGET").length;
       out.grades = clean.filter((r) => r.kind === "GRADE").length;
     } else {
@@ -289,8 +324,10 @@ Deno.serve(async (req) => {
             if (!keepPaging(r.rows, newest)) break;
           }
           const clean = dedupe(rows);
+          const q = await withQuality(sb, clean, errs);
           feedOut[f.kind] = { newest_stored_before: newest, pages, feed_rows_read: seen, oldest_read: oldest, ours: clean.length,
-            upserted: await upsert(sb, "analyst_target_news", clean, "ticker,published_utc,firm,kind") };
+            quarantined: q.filter((r: any) => r.quality === "quarantine").length,
+            upserted: await upsert(sb, "analyst_target_news", q, "ticker,published_utc,firm,kind") };
         }
         out.feeds = feedOut;
       }
