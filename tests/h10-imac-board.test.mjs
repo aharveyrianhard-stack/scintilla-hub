@@ -152,11 +152,12 @@ test("item 3 — the company tabs wrap instead of running past the right edge; S
 
 test("item 4 — a '?' beside the company name in the header opens the business; Esc, ✕ and a click outside close it", () => {
   const li = fn("leftIdentHTML");
-  assert.match(li, /head && data\.t \? '<button class="sc-bizq sc-tab" type="button" data-bizq="/, "header only, in the tab look");
-  assert.match(li, /aria-haspopup="dialog" aria-expanded="false"/);
+  assert.match(li, /head && data\.t \? '<button class="sc-bizq sc-tab' \+ \(typeof BIZ_T !== "undefined" && BIZ_T === data\.t \? " on" : ""\)/, "header only, in the tab look");
+  assert.match(li, /aria-haspopup="dialog" aria-expanded="' \+ \(typeof BIZ_T !== "undefined" && BIZ_T === data\.t\)/, "the open state lives in the markup");
   assert.match(fn("identPaint"), /bizSync\(\)/, "an open panel follows the name, and closes when it changes");
   assert.match(page, /if \(e\.key !== "Escape" \|\| !BIZ_T\) return;\n    e\.preventDefault\(\); e\.stopImmediatePropagation\(\); bizClose\(true\);/);
   assert.match(page, /if \(tg && tg\.closest && tg\.closest\("#bizPop"\)\) return;\n    bizClose\(false\);/, "a click outside closes it");
+  assert.match(fn("cvKeysBlocked"), /if \(typeof BIZ_T !== "undefined" && BIZ_T\) return true;/, "Esc closes the panel, not the company view");
   /* the panel's three states, in order: READ's BUSINESS words; else the provider's description, named; else plain words */
   const esc = (x) => String(x == null ? "" : x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const mk = (coData) => new Function("S", "esc", "readAgeHTML", "sanitize", fn("bizPopHTML") + "\nreturn bizPopHTML;")({ coData }, esc, () => '<span class="readage">DOSSIER · 2 Oct</span>', (x) => x);

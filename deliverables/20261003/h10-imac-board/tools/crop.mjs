@@ -117,6 +117,26 @@ for (const [W, H] of SIZES) {
       if (tb === "READ") await page.screenshot({ path: path.join(shots, label + "-read-" + W + "x" + H + ".png") });
     }
     if (process.env.ALLTABS) { await page.evaluate(() => { const b = document.querySelector('#cvTabs [data-tab="GEIGER"]'); if (b) b.click(); }); await sleep(2000); }
+    if (process.env.BIZ) {
+      for (const T2 of process.env.BIZ.split(",")) {
+        if (T2 !== T) { await page.evaluate((t) => openCo(t), T2); await sleep(7000); }
+        await page.evaluate(() => { const b = document.querySelector("#headIdent [data-bizq]"); if (b) b.click(); });
+        await sleep(700);
+        r["biz_" + T2] = await page.evaluate(() => { const p = document.getElementById("bizPop"); const q = document.querySelector("#headIdent [data-bizq]");
+          return { open: !!(p && !p.hidden), expanded: q && q.getAttribute("aria-expanded"), text: p ? p.innerText.slice(0, 300) : null }; });
+        const hb = await page.evaluate(() => { const p = document.getElementById("bizPop"), h = document.getElementById("headIdent"); const a = h.getBoundingClientRect(), b = p.getBoundingClientRect();
+          return { x: Math.max(0, Math.min(a.x, b.x) - 12), y: Math.max(0, a.y - 8), w: Math.max(a.right, b.right) - Math.min(a.x, b.x) + 24, h: b.bottom - a.y + 16 }; });
+        await page.screenshot({ path: path.join(shots, label + "-biz-" + T2 + "-" + W + "x" + H + ".png"), clip: { x: hb.x, y: hb.y, width: Math.min(hb.w, W - hb.x), height: Math.min(hb.h, H - hb.y) } });
+        r["dbg_" + T2] = await page.evaluate(() => ({ bizT: BIZ_T, anchorConnected: !!(BIZ_ANCHOR && BIZ_ANCHOR.isConnected), active: document.activeElement && (document.activeElement.className || document.activeElement.tagName) }));
+        await page.keyboard.press("Escape"); await sleep(50);
+        r["dbg2_" + T2] = await page.evaluate(() => ({ bizT: BIZ_T, active: document.activeElement && (document.activeElement.className || document.activeElement.tagName) }));
+        await sleep(250);
+        r["dbg3_" + T2] = await page.evaluate(() => { const b = document.querySelector("#headIdent [data-bizq]"); const hi = document.getElementById("headIdent"); b.focus(); const cs = getComputedStyle(b);
+          return { same: document.activeElement === b, vis: cs.visibility, disp: cs.display, inert: !!b.closest("[inert]"), hidden: !!b.closest("[hidden]"), tabindex: b.tabIndex, hiHidden: hi.hidden, ae: document.activeElement.tagName + "." + document.activeElement.className }; });
+        r["biz_" + T2].afterEsc = await page.evaluate(() => { const p = document.getElementById("bizPop"); return { open: !!(p && !p.hidden), focus: document.activeElement && document.activeElement.getAttribute("data-bizq") }; });
+      }
+      await page.evaluate((t) => openCo(t), T); await sleep(5000);
+    }
     r.frames = [];
     for (const f of page.frames()) {
       if (f === page.mainFrame()) continue;

@@ -4840,6 +4840,7 @@ details.sc-pagespecs p{ margin:6px 0 0; line-height:1.5; color:#8A8A92; }
 .sc-bizpop .bz-n{ font-size:11px; color:#8A8A92; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sc-bizpop .bz-x{ margin-left:auto; background:none; border:0; color:#8A8A92; font:11px var(--mono); cursor:pointer; padding:0 2px; }
 .sc-bizpop .bz-x:hover{ color:#CFCFD2; }
+.sc-bizpop .bz-x:focus-visible, .sc-bizpop .bz-more:focus-visible{ outline:1px solid #8A8A92; outline-offset:1px; }
 .sc-bizpop .bz-sect{ font-size:11px; color:#8A8A92; letter-spacing:.04em; text-transform:uppercase; margin-bottom:5px; }
 .sc-bizpop .bz-src{ font-size:11px; color:#6E6E76; margin-bottom:3px; }
 .sc-bizpop .bz-body{ max-height:min(46vh, 340px); overflow-y:auto; font-size:11px; line-height:1.5; color:#B8B8BE; }
@@ -6818,6 +6819,7 @@ function cvKeysBlocked(e) {
   /* 28 Sep — reviewer: Esc with the COHORT ▾ menu open closed the whole company view. The open menu owns Esc: its own
      handler closes it, and the view (and a ⛶ full-screen panel) stays exactly as it was. */
   if (typeof GPOP_T !== "undefined" && GPOP_T) return true;   /* H4 — the open Geiger breakdown owns Esc */
+  if (typeof BIZ_T !== "undefined" && BIZ_T) return true;     /* H10 — the open "?" business panel owns Esc; the view stays */
   return open("trFullHost") || open("ernSumHost") || open("chatPop", "open") || open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal") ||
     !!(document.querySelector && document.querySelector(".sc-cohwrap.is-open"));
 }
@@ -7974,8 +7976,11 @@ function bizPopHTML(t) {
 }
 function bizClose(focus) {
   const p = document.getElementById("bizPop"); if (p) p.hidden = true;
-  if (BIZ_ANCHOR) { BIZ_ANCHOR.setAttribute("aria-expanded", "false"); BIZ_ANCHOR.classList.remove("on"); if (focus && BIZ_ANCHOR.isConnected) try { BIZ_ANCHOR.focus(); } catch (_) {} }
+  const was = BIZ_T;
+  if (BIZ_ANCHOR) { BIZ_ANCHOR.setAttribute("aria-expanded", "false"); BIZ_ANCHOR.classList.remove("on"); }
   BIZ_T = null; BIZ_ANCHOR = null;
+  /* focus goes back to the "?" — the one on screen a tick later (the header may have been repainted meanwhile) */
+  if (focus && was) setTimeout(() => { const b = document.querySelector('#headIdent [data-bizq="' + was + '"]'); if (b) try { b.focus({ preventScroll: true }); } catch (_) {} }, 0);
 }
 function bizOpen(t, anchor) {
   if (!t || !anchor) return;
@@ -11149,7 +11154,8 @@ function leftIdentHTML(data, opts) {
     (head ? '<span class="sc-cname" title="' + esc(data.name || "") + '">' + esc(scShortName(data.name)) + "</span>"
           : '<span class="sc-cname">' + esc(data.name || "") + "</span>") +
     /* H10 — "?" what is this business (bizOpen) */
-    (head && data.t ? '<button class="sc-bizq sc-tab" type="button" data-bizq="' + esc(data.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+    (head && data.t ? '<button class="sc-bizq sc-tab' + (typeof BIZ_T !== "undefined" && BIZ_T === data.t ? " on" : "") + '" type="button" data-bizq="' + esc(data.t) +
+      '" aria-haspopup="dialog" aria-expanded="' + (typeof BIZ_T !== "undefined" && BIZ_T === data.t) + '"' +   /* the open state is in the markup, so a price tick does not rebuild the header */
       ' aria-label="What does ' + esc(data.t) + ' do? The business, from READ" title="what is this business?">?</button>' : "") +
     '<span class="sc-cpx' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
     '<span class="sc-cchg' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coChg" style="color:' + col + '">' + (chg != null ? (head ? fmtChgHead(chg) : fmtC(chg)) : "") + "</span>" +
@@ -11183,7 +11189,9 @@ function identPaint() {
   if (!h) return null;
   const on = LEFT_STATE === "PINNED" && !!LEFT_T;
   const html = on ? leftIdentHTML(identBarData(), { head: true }) : "";
+  const fq = typeof document !== "undefined" && document.activeElement && h.contains(document.activeElement) ? document.activeElement.getAttribute("data-bizq") : null;
   if (h.innerHTML !== html || !on) h.innerHTML = html;
+  if (fq) { const nb = h.querySelector('[data-bizq="' + fq + '"]'); if (nb && document.activeElement !== nb) try { nb.focus({ preventScroll: true }); } catch (_) {} }   /* H10 — a repaint keeps the "?" focused */
   h.hidden = !on;
   if (typeof document !== "undefined" && document.body) document.body.classList.toggle("tk-pinned", on);
   if (on) coIdentLists(h);
