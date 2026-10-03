@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scintilla Status</title>
+<style>
+:root{--bg:#0b0c0d;--panel:#141517;--line:#2a2c2f;--dim:#7d8186;--text:#b9bcc0;--hi:#d2d2d2;--up:#3fae6a;--down:#d0504a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:56px 16px 40px}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--dim)}
+h1{margin:6px 0 2px;font-size:30px;font-weight:600;color:var(--hi);letter-spacing:-.01em}
+.answer{display:flex;align-items:center;gap:12px;margin:18px 0 6px;font-size:22px;color:var(--hi)}
+.big{width:16px;height:16px;border-radius:50%;flex:none}
+.broken{list-style:none;margin:10px 0 26px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:6px 18px}
+.broken li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;background:var(--panel);border-left:2px solid var(--down);font-size:13px}
+.broken li span:last-child{color:var(--dim);white-space:nowrap;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+.part{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px 6px}
+.part h2{margin:0 0 8px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
+.row{display:grid;grid-template-columns:14px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:5px}
+.green{background:var(--up)} .red{background:var(--down)}
+.amber,.grey{background:transparent;border:2px solid var(--dim)}
+.name{color:var(--hi);font-size:14px}
+.line{font-size:13px;color:var(--text);margin-top:2px}
+.since{font-size:12px;color:var(--dim);margin-top:3px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 14px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .dot{margin:0}
+details.sc-pagespecs{margin-top:28px;border-top:1px solid var(--line);padding-top:10px;color:var(--dim);font-size:13px}
+details.sc-pagespecs summary{cursor:pointer;font:600 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em;color:var(--dim)}
+details.sc-pagespecs p,details.sc-pagespecs li{max-width:900px}
+@media (max-width:520px){h1{font-size:24px}.answer{font-size:18px}.grid,.broken{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mono">Scintilla · status · <span id="measured"></span></div>
+  <span data-scnav-slot></span><h1>Is anything broken right now?</h1>
+  <div class="answer"><span class="big" id="bigdot"></span><span id="headline"></span></div>
+  <ul class="broken" id="broken"></ul>
+  <div class="legend mono"><span><i class="dot green"></i>working</span><span><i class="dot red"></i>broken</span><span><i class="dot amber"></i>watch / passed / not running yet</span></div>
+  <div class="grid" id="grid"></div>
+
+  <details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+    <p>What this page is: one line per part of the back end, in plain words — working (green), broken (red), or worth watching (ring) — and since when. It is a mock for Alan's review, not linked from the Hub.</p>
+    <p>Where the words come from: a read-only measurement on 3 Oct 2026, 11:00–11:30 ET — the database's own job history (pg_cron), the real answers of the web calls it makes (cron_dispatch), the newest row in each job's output table, the Fly machines and their own last log line, and the MacBook's scheduled jobs. The full register with every job is <code>deliverables/20261003/q2b-jobs/jobs.json</code>. The Geiger line refreshes itself from the chart API when this page is opened on scintillahub.ai.</p>
+    <p>When it goes live: the same lines come from the job heartbeat table (one row per job, judged every 5 minutes) and from Q2a's night verdict, instead of a snapshot.</p>
+    <p>What could be wrong: the "since" dates are the oldest the systems still remember (pg_cron keeps 14 days; web answers 14 days; raw answers 6 hours) — a fault may be older than its date here.</p>
+  </details>
+</div>
+<script id="snapshot" type="application/json">{"schema": "scintilla.q2b.status_snapshot.v1", "measured": "3 Oct 2026, 11:00\u201311:30 ET (read-only)", "headline": "6 things are broken right now", "broken": [{"name": "The backup repairman", "since": "at least Sun 20 Sep"}, {"name": "The X-feed collector (MacBook)", "since": "last good publish Fri 25 Sep 16:31 ET"}, {"name": "The X-mood reader", "since": "Mon 28 Sep"}, {"name": "The statistics clerk (STATS)", "since": "Mon 28 Sep"}, {"name": "The daily ribbon painter", "since": "Tue 29 Sep"}, {"name": "The old alert writer", "since": "Fri 18 Sep"}], "parts": [{"part": "Charts and prices", "items": [{"name": "The doorman (chart API, 2 machines)", "state": "green", "line": "Answering; both machines report ready.", "since": null, "job": "fly:chart-api (2 machines)"}, {"name": "The gatekeeper at the bar door (bar service)", "state": "green", "line": "Running on the 09:00 ET image; relative volume written after Friday's close.", "since": null, "job": "fly:provider-bar-service"}, {"name": "The stream listener", "state": "green", "line": "Beating every 30 seconds; marked minutes through Friday 19:59 ET (market closed since).", "since": null, "job": "fly:market-stream"}, {"name": "Friday evening intraday bars", "state": "amber", "line": "From about 16:20 to 20:00 ET Friday the extended-hours bars were reported behind. Handed to Q2a. The warning is still showing because it only clears during market hours.", "since": "Fri 2 Oct 16:20 ET", "job": "provider-frame-currentness-check"}]}, {"part": "The Geiger", "items": [{"name": "The 4-minute Geiger robot", "state": "green", "line": "Published 590 of 590 names, 4,130 rungs, VERIFIED (last at 15:20 UTC).", "since": null, "job": "fly:geiger-publisher"}, {"name": "This morning's hold", "state": "amber", "line": "From 06:13 to 08:57 ET it refused 42 times in a row and the Hub kept showing the last full reading. Nothing alarmed. Q2a owns the cause.", "since": "Sat 3 Oct 06:13 ET (over by 09:01)", "job": "fly:geiger-publisher"}, {"name": "The closing-bell clerk", "state": "green", "line": "Waiting: there is no trading session today.", "since": null, "job": "fly:settled-close-supervisor"}, {"name": "The scout and the seven-rung scout", "state": "green", "line": "Both fired on their minute this hour; Friday's readings were written at 20:17 and 20:21 ET.", "since": null, "job": "fly:scout-geiger-nightly"}, {"name": "The fan clerk (REWIND)", "state": "green", "line": "Fired on time; 586 of 590 names have a row for each day since 29 Sep (4 a day are missing, which its rule allows; sent to Q2a).", "since": null, "job": "fly:provider-fan-daily-hourly-i5"}]}, {"part": "Night work", "items": [{"name": "The night copyist (long chart histories)", "state": "green", "line": "Friday night's pass refreshed the long copies; today it skips (weekend).", "since": null, "job": "fly:provider-tail-scheduled-hourly-i5"}, {"name": "The night watchman (second opinion)", "state": "grey", "line": "Not running yet. It is built on Q2a's branch and will report here once Alan approves it.", "since": null, "job": "fly:nightly-verdict"}, {"name": "The backup clerks", "state": "green", "line": "All three nightly copies ran; the backup check found 4 tables short. The worst is the REWIND history, missing 1,080,400 of 1,230,600 rows in the backup.", "since": null, "job": "mirror-audit-nightly"}, {"name": "The backup repairman", "state": "red", "line": "Has not sent a single repair in at least 14 nights. Its own pauses are longer than the database allows, so every run is cancelled and undone. Fix written, waiting for Alan.", "since": "at least Sun 20 Sep", "job": "mirror-gap-repair-daily"}]}, {"part": "News, mood and X", "items": [{"name": "The news wire", "state": "green", "line": "New headlines every minute.", "since": null, "job": "news-feed-1m"}, {"name": "The news-mood reader", "state": "amber", "line": "On the :40 run in 4 of the last 6 hours, it could not read the news table. The :50 run caught up. Nothing recorded these errors until today.", "since": "today 06:40 ET (earlier not kept)", "job": "sentiment-news-10m"}, {"name": "The X-feed collector (MacBook)", "state": "red", "line": "Dead. Its program folder was deleted on 28 Sep, so it cannot start, and nobody was told. The newest X post we hold is from 27 Sep.", "since": "last good publish Fri 25 Sep 16:31 ET", "job": "mac:com.alanharvey.scintilla-xfeed-collector"}, {"name": "The X-mood reader", "state": "red", "line": "It reports success every 2 hours but has had nothing to read since 28 Sep, because its source is the dead collector.", "since": "Mon 28 Sep", "job": "sentiment-x-2h"}, {"name": "The YouTube scouts", "state": "green", "line": "Videos refreshed this hour.", "since": null, "job": "yt-rss-sweep-5m"}]}, {"part": "Board numbers", "items": [{"name": "The statistics clerk (STATS)", "state": "red", "line": "Only 6 to 26% of its runs reach the function since 28 Sep. They fire at :00 and :30 together with about 20 other jobs, and are cut off after 5 seconds. Fix written: move it to :13 and :43.", "since": "Mon 28 Sep", "job": "stats-engine-30m"}, {"name": "The daily ribbon painter", "state": "red", "line": "23 to 35% of its runs get through since 29 Sep, for the same reason (the quarter-hour rush). The ribbons are still fresh, because about one run in four lands.", "since": "Tue 29 Sep", "job": "ribbon-d-3m"}, {"name": "Put/call (IB, MacBook)", "state": "green", "line": "The counter is running; Friday's last minute arrived at 15:59 ET. Market closed.", "since": null, "job": "mac:com.scintilla.ibkr-putcall"}, {"name": "Prediction markets, analysts, dilution, lock-ups, sigma", "state": "green", "line": "Every nightly reader wrote its table on its last scheduled night.", "since": null, "job": "prediction-markets"}]}, {"part": "The watchers", "items": [{"name": "The dead-man's switch (job heartbeat)", "state": "amber", "line": "Watching 150 jobs every 5 minutes, but its alarms are off. It went live this morning before the \"nothing without Alan\" rule. Keeping it, and switching its alarms on, both need Alan's yes.", "since": "Sat 3 Oct 10:48 ET", "job": "job-heartbeat-check-5m"}, {"name": "The old alert writer", "state": "red", "line": "9,352 alerts stored and none ever delivered. Nothing new since 18 Sep.", "since": "Fri 18 Sep", "job": "feed-alerts-5m"}, {"name": "Weekend warnings", "state": "amber", "line": "Three warnings are stuck on red until Monday: two froze when their market-hours window closed, and one cannot tell a weekend from an outage.", "since": "Fri 2 Oct 16:05 ET", "job": "putcall-minute-session-check"}]}], "verdict_source": "deliverables/20261003/q2a-rules/verdict-format.json (agreed; not yet running)"}</script>
+<script>
+(function () {
+  var s = JSON.parse(document.getElementById('snapshot').textContent);
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+  function draw() {
+    $('measured').textContent = 'measured ' + s.measured;
+    $('headline').textContent = s.headline;
+    $('bigdot').className = 'big ' + (s.broken.length ? 'red' : 'green');
+    $('broken').innerHTML = s.broken.map(function (b) { return '<li><span>' + esc(b.name) + '</span><span>since ' + esc(b.since || '—') + '</span></li>'; }).join('');
+    $('grid').innerHTML = s.parts.map(function (p) {
+      var reds = p.items.filter(function (i) { return i.state === 'red'; }).length;
+      return '<section class="part"><h2><span>' + esc(p.part) + '</span><span>' + (reds ? reds + ' broken' : 'all working') + '</span></h2>' +
+        p.items.map(function (i) {
+          return '<div class="row"><i class="dot ' + i.state + '"></i><div><div class="name">' + esc(i.name) + '</div><div class="line">' + esc(i.line) + '</div>' +
+            (i.since ? '<div class="since">since ' + esc(i.since) + '</div>' : '') + '</div></div>';
+        }).join('') + '</section>';
+    }).join('');
+  }
+  draw();
+  // Live Geiger line (read-only GET; the chart API answers only scintillahub.ai, so elsewhere the snapshot stands).
+  if (location.hostname.slice(-15) === 'scintillahub.ai') {
+    fetch('https://scintilla-massive-chart-api.fly.dev/geiger').then(function (r) { return r.ok ? r.json() : null; }).then(function (g) {
+      if (!g) return;
+      var it = s.parts[1].items[0], n = Array.isArray(g.returned) ? g.returned.length : g.returned, q = Array.isArray(g.requested) ? g.requested.length : g.requested;
+      var age = (Date.now() - Date.parse(g.computed_utc)) / 60000;
+      it.state = age < 15 ? 'green' : 'red';
+      it.line = 'Published ' + n + ' of ' + q + ' names, ' + (g.accounting && g.accounting.rungs_computed) + ' rungs, ' + (g.verification && g.verification.label) + ' — ' + Math.round(age) + ' min ago (live).';
+      draw();
+    }).catch(function () {});
+  }
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
