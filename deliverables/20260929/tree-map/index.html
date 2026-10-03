@@ -61,6 +61,14 @@ button.on{background:var(--panel3);color:var(--ink);border-color:var(--dim)}
 #areabar{position:absolute;left:50%;top:38px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:10px;background:rgba(21,21,21,.96);border:1px solid var(--line2);border-radius:3px;padding:5px 8px 5px 12px;font-size:12px;letter-spacing:.06em;color:var(--ink);white-space:nowrap;max-width:calc(100% - 20px)}
 #areabar b{font-weight:600;letter-spacing:.1em;overflow:hidden;text-overflow:ellipsis} #areabar .mode{color:var(--dim)} #areabar button{font-size:11px;padding:6px 10px}
 #areabar .seg button{padding:6px 8px}
+#areabar button.on{color:var(--ink);border-color:var(--dim)}
+/* T9: the WALK hud — the step under your feet, large; ▲ ▼ walk a step up / down (the phone's buttons) */
+#walkhud{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:14px;background:rgba(21,21,21,.94);border:1px solid var(--line2);border-radius:4px;padding:8px 12px;pointer-events:auto}
+#walkhud .who{display:flex;flex-direction:column;align-items:center;min-width:180px;line-height:1.15}
+#walkhud .rank{font-size:11px;letter-spacing:.14em;color:var(--mute)} #walkhud .rank small{color:var(--mute);letter-spacing:.06em}
+#walkhud b{font-size:34px;letter-spacing:.08em;color:#fff;font-weight:600;margin:2px 0}
+#walkhud .v{font-size:20px;font-weight:600} #walkhud small{font-size:11px;color:var(--dim);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#walkhud button{font-size:18px;padding:10px 14px;line-height:1} #walkhud button:disabled{opacity:.3}
 /* T7: the Hub's lists at the top of the tree — ★ FAVORITES and ♥ LIKED, each opening straight as a podium */
 /* T8: MY LISTS — a separate area (they are not part of the market's tree): one place, three buttons, each opens its podium */
 #listbar{position:absolute;right:10px;top:8px;z-index:3;display:flex;gap:6px;align-items:center;border:1px solid var(--line2);border-radius:3px;padding:4px 6px;background:rgba(21,21,21,.96)}
@@ -175,6 +183,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
   #legend{max-width:260px}
   #hint{display:none}
   #areabar{position:static;transform:none;white-space:normal;margin:4px 8px;max-width:none}
+  #walkhud{bottom:12px;gap:18px;padding:8px 10px} #walkhud button{font-size:24px;padding:14px 18px} #walkhud b{font-size:30px}
   #listbar{position:static;padding:4px 8px 2px;flex-wrap:wrap}
   .row{grid-template-columns:auto minmax(0,1fr) 84px 50px;gap:6px}
   .kids{margin-left:10px}
@@ -203,6 +212,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
     <div id="outline"></div>
     <div id="graph"><div id="gl"></div><div id="labels"></div><div id="tip"></div>
       <div id="areabar"></div>
+      <div id="walkhud" style="display:none"></div>
       <details id="legend"><summary>KEY · what every mark means</summary>
         <div><span class="lgbar kb"><s></s><i style="background:var(--up)"></i></span>Geiger bar · centred at zero · green = up, red = down</div>
         <div class="mute">half of a bar = ±1, the Hub's composite scale · only a tradeable line (a fund, a company) carries a bar; a heading or a cohort carries none — its lines carry theirs · a name off the Hub shows the same Geiger, computed at the close (its hover says so)</div>
@@ -215,7 +225,7 @@ a,.lnk{color:var(--ink);text-decoration:underline;text-decoration-color:var(--li
         <div><span class="kb" style="text-align:center;color:var(--mute)">─ │</span>a line joins a parent (above) to a child (below); a horizontal rail carries a second row of sections hung from the heading above; a box frames a cohort's names (DETAILED)</div>
         <div><button id="v-3d" class="keybtn" title="the whole market in 3D at once — heavy and crowded; the usual way is OPEN 3D on one section">WHOLE MAP 3D</button><span>the whole tree in 3D at once (the usual way is OPEN 3D on one section)</span></div>
       </details>
-      <div id="hint">drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section · inside: drag to turn, Esc or ← BACK TO THE CANVAS drops back</div>
+      <div id="hint">drag to pan · scroll to zoom · OPEN 3D on a section lifts only that section · inside: drag to turn any way, WALK (or ↓) walks the podium's steps, RESET VIEW or a double-click = the 70° view, Esc or ← BACK TO THE CANVAS drops back</div>
       <div id="fallback"></div>
     </div>
   </div>
@@ -444,7 +454,7 @@ function renderCard(n) {
   if (m3 && m3.inArea() && state.cluster) { const root = state.byId.get(state.cluster); h += m3.inCoil()
     ? (m3.podiumMode() === "above"
       ? `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, FROM ABOVE: the same staircase seen from straight above — every name a step, the highest at the centre, coiling down and outwards to the lowest · PODIUM 3D on the top bar stands it up · hover a step for its bar and path · click a step for its card · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`
-      : `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, standing: a staircase — every name is a column standing against the next, first place at the centre and the top, each next step a little lower and further out, coiling down to the last; the step's height is the reading (green above the zero ring, red below it) · drag to turn, scroll to zoom · FROM ABOVE on the top bar is the flat picture · hover a step for its bar and path · click a step for its card, then SHOW ON THE TREE · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`)
+      : `<div class="wait">The PODIUM of <b>${esc(root ? root.label : "")}</b>, standing: a staircase — every name is a column standing against the next, first place at the centre and the top, each next step a little lower and further out, coiling down to the last; the step's height is the reading (green above the zero ring, red below it) · drag to turn any way (above, from the side, from below the rim), scroll to zoom, RESET VIEW or a double-click = the 70° view · WALK (or ↓) walks the steps down from the winner, ↑ back up, Esc leaves the walk · FROM ABOVE on the top bar is the flat picture · hover a step for its bar and path · click a step for its card, then SHOW ON THE TREE · ≡ LIST for the plain list · Esc or ← BACK TO THE CANVAS drops back</div>`)
     : `<div class="wait">Inside <b>${esc(root ? root.label : "")}</b> in 3D · drag to turn, scroll to zoom · Esc, the breadcrumb or ← BACK TO THE CANVAS drops back to the canvas</div>`; }
   if (wordsOf(n)) h += `<div class="say">${esc(wordsOf(n))}</div>`;
   const COIL_TITLE = "the names as the PODIUM: a staircase of Geiger columns, first place at the centre and the top, coiling down and outwards to the lowest (PODIUM 3D), or the same seen from above";
@@ -651,7 +661,7 @@ function release() {
   if (m3 && !m3.inCluster()) m3.release();
   crumbs();
 }
-document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.inArea()) { closeArea(); return; } if (state.selected) release(); });
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; e.preventDefault(); if (m3 && m3.walking && m3.walking()) { m3.walk(false); crumbs(); return; } /* T9: Esc leaves the walk first, the podium stays */ if (m3 && m3.inArea()) { closeArea(); return; } if (state.selected) release(); });
 /* ---- CLEAN | DETAILED and the order (2 Oct): remembered per viewer; the 3D module morphs between the two pictures ---- */
 function paintModes() { $("d-clean").classList.toggle("on", state.detail === "clean"); $("d-detailed").classList.toggle("on", state.detail === "detailed"); $("o-geiger").classList.toggle("on", state.order !== "size"); $("o-size").classList.toggle("on", state.order === "size"); }
 function setDetail(mode) { remember("tree.detail", mode); if (m3) m3.setDetail(mode, 700); state.detail = mode; paintModes(); crumbs(); }
@@ -678,7 +688,7 @@ state.find = (s) => { const n = find(s); return n ? { id: n.id, path: pathOf(n).
 let cameFrom = null;
 async function load3d() {
   if (m3) return m3;
-  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); },
+  try { const mod = await import("./map3d.js"); m3 = await mod.mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, renderCard, onSelect: (n) => { state.selected = n.id; renderCard(n); crumbs(); }, onRelease: () => { state.selected = null; renderCard(null); crumbs(); }, onWalk: () => crumbs(), // T9: the WALK button follows the walk
     onArea: () => { if (state.selected) renderCard(state.byId.get(state.selected)); crumbs(); }, // an area or the podium opened or closed: the card's one-line instruction and the top bar follow
     onTree: (n) => showOnTree(n) }); } // a podium bar clicked: that name on the tree
   catch (e) { $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the map (${esc(String(e))}). The OUTLINE view carries the same tree and the same bars.</p>`; state.err3d = String(e); }
@@ -735,13 +745,16 @@ function crumbs() {
   // T6: the bar at the top of an opened section or podium says where you are and carries the way back
   const ab = $("areabar"), root = inA && state.cluster ? state.byId.get(state.cluster) : null, pm = m3 && m3.podiumMode ? m3.podiumMode() : "3d";
   // T7: inside the podium the top bar carries FROM ABOVE | PODIUM 3D (standing is the default when a podium opens)
-  if (root) { ab.style.display = "flex"; ab.innerHTML = `<b>${esc(root.label)}</b><span class="mode">· ${inC ? "PODIUM COIL" : "3D"} ·</span>` + (inC ? `<span class="seg" id="podium-seg" title="PODIUM 3D: standing Geiger columns on a spiral ramp, drag to turn · FROM ABOVE: the flat spiral seen from above"><button data-go="above"${pm === "above" ? ' class="on"' : ""}>FROM ABOVE</button><button data-go="3d"${pm !== "above" ? ' class="on"' : ""}>PODIUM 3D</button></span><button data-go="list" title="the same names as a plain ordered list, on the card">≡ LIST</button>` : "") + `<button data-go="back" title="Esc does the same">← BACK TO THE CANVAS</button>`; }
+  const walking = !!(m3 && m3.walking && m3.walking()); // T9
+  if (root) { ab.style.display = "flex"; ab.innerHTML = `<b>${esc(root.label)}</b><span class="mode">· ${inC ? "PODIUM COIL" : "3D"} ·</span>` + (inC ? `<span class="seg" id="podium-seg" title="PODIUM 3D: the staircase standing, drag to turn any way · FROM ABOVE: the same steps seen from straight above"><button data-go="above"${pm === "above" ? ' class="on"' : ""}>FROM ABOVE</button><button data-go="3d"${pm !== "above" ? ' class="on"' : ""}>PODIUM 3D</button></span><button data-go="walk"${walking ? ' class="on"' : ""} title="walk the steps down from the winner: ↓ / J / the wheel / ▼ = a step down, ↑ / K / ▲ = a step up, Esc leaves the walk">${walking ? "WALKING · Esc leaves" : "WALK"}</button><button data-go="list" title="the same names as a plain ordered list, on the card">≡ LIST</button>` : "") + `<button data-go="reset" title="back to the starting view (a double-click on the canvas does the same)">RESET VIEW</button><button data-go="back" title="Esc does the same">← BACK TO THE CANVAS</button>`; }
   else { ab.style.display = "none"; ab.innerHTML = ""; }
   if (state.view !== "outline") paintLists();
 }
 $("areabar").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.go === "above" || b.dataset.go === "3d") { if (m3) m3.setPodium(b.dataset.go); return; }
+  if (b.dataset.go === "walk") { if (m3) m3.walk(!m3.walking()); crumbs(); return; } // T9
+  if (b.dataset.go === "reset") { if (m3) m3.resetView(); crumbs(); return; } // T9
   if (b.dataset.go === "back") closeArea();
   else if (b.dataset.go === "list") { const root = state.byId.get(state.cluster); if (root) { state.selected = root.id; renderCard(root); crumbs(); } }
 });
@@ -778,6 +791,7 @@ state.closeArea = () => closeArea();
 state.openCluster = state.openArea; state.closeCluster = state.closeArea;
 state.openCoil = (id) => { const n = state.byId.get(id); if (n) return openCoil(n); };
 state.openList = (id) => openList(id); state.setPodium = (m) => { if (m3) m3.setPodium(m); }; state.podiumMode = () => (m3 ? m3.podiumMode() : null); // T7
+state.walk = (on) => { const r = m3 ? m3.walk(on) : false; crumbs(); return r; }; state.walkStep = (d) => (m3 ? m3.walkStep(d) : false); state.resetView = () => (m3 ? m3.resetView() : false); // T9
 if (p.get("list")) setTimeout(() => openList(p.get("list")), 400);
 state.setDetail = (m) => setDetail(m); state.setOrder = (o) => setOrder(o);
 state.showOnTree = (id) => { const n = state.byId.get(id); if (n) showOnTree(n); };

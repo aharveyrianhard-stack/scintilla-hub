@@ -74,7 +74,7 @@ test("3 · per-section 3D, obvious: the whole-map 3D button lives at the end of 
   assert.match(M3, /const CHIP = `<i class="lb3d"[^`]*\$\{CUBE\}OPEN 3D<\/i>`/);
   assert.match(M3, /const onChip = !!ev\.target\.closest\("\.lb3d"\), onName = el\.classList\.contains\("sec"\) && state\.canvas && !cluster;/, "the button and the name both open the section");
   assert.match(M3, /function focusCanvas\(\) \{ const c = renderer\.domElement; if \(!c\.hasAttribute\("tabindex"\)\) c\.setAttribute\("tabindex", "-1"\);/);
-  assert.match(M3, /focusCanvas\(\);\n\s+flyTo\(framing\(\[root, \.\.\.sub, \.\.\.nbs\]/, "an area takes focus on open");
+  assert.match(M3, /focusCanvas\(\);\n\s+cluster\.home = framing\(\[root, \.\.\.sub, \.\.\.nbs\]/, "an area takes focus on open (T9: the frame is kept as the home view for RESET VIEW)");
   assert.match(PAGE, /<b>\$\{esc\(root\.label\)\}<\/b><span class="mode">· \$\{inC \? "PODIUM COIL" : "3D"\} ·<\/span>/, "the top bar: name · 3D · back");
   assert.match(PAGE, /Inside <b>\$\{esc\(root \? root\.label : ""\)\}<\/b> in 3D · drag to turn/, "the card's one line");
   if (!runs6) return; // T6's record: the facts below (the KEY's button, the chip's size, the top bar's words) are about code T8 did not touch

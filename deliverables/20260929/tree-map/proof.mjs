@@ -90,6 +90,27 @@ for (const s of steps) {
     await sleep(600); await settle(); log.push({ wheel: s.wheel, pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
   }
   if (s.pose) log.push({ pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
+  if (s.black) { // T9: the share of the canvas (#graph, CSS px, scale 1) that is empty black — a screenshot of the box, every pixel ≤ 22 in all three channels (the page's black is 13, 13, 13); labels and the KEY count as not black
+    const g = JSON.parse(await evaluate("JSON.stringify((() => { const r = document.getElementById('graph').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })())"));
+    const shot = await send("Page.captureScreenshot", { format: "png", clip: { x: g[0], y: g[1], width: g[2], height: g[3], scale: 1 } });
+    const v = await evaluate(`new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d"); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let k = 0; for (let i = 0; i < d.length; i += 4) if (d[i] <= 22 && d[i + 1] <= 22 && d[i + 2] <= 22) k++; res({ black_share: +(k / (d.length / 4)).toFixed(4), w: c.width, h: c.height }); }; im.src = "data:image/png;base64,${shot.data}"; })`);
+    log.push({ black: s.black, value: v, state: await stateNow() });
+  }
+  if (s.drag) { // T9: a real mouse drag on the canvas (x0, y0 → x1, y1 in 12 moves), then the camera's elevation / azimuth
+    const [x0, y0, x1, y1] = s.drag;
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x0, y: y0 });
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: x0, y: y0, button: "left", buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 12; i++) { await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x0 + ((x1 - x0) * i) / 12, y: y0 + ((y1 - y0) * i) / 12, button: "left", buttons: 1 }); await sleep(16); }
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x1, y: y1, button: "left", buttons: 0, clickCount: 1 });
+    await sleep(900); await settle();
+    log.push({ drag: s.drag, elevation: JSON.parse(await evaluate("JSON.stringify(__mm.elevation ? __mm.elevation() : null)")), pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")) });
+  }
+  if (s.dblclick) { // T9: a real double-click on the canvas at (x, y)
+    const [x, y] = s.dblclick;
+    for (const cc of [1, 2]) { await send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: cc }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: cc }); await sleep(40); }
+    await sleep(1200); await settle();
+    log.push({ dblclick: s.dblclick, elevation: JSON.parse(await evaluate("JSON.stringify(__mm.elevation ? __mm.elevation() : null)")), pose: JSON.parse(await evaluate("JSON.stringify(__mm.pose())")), home: JSON.parse(await evaluate("JSON.stringify(__mm.homeView ? __mm.homeView() : null)")) });
+  }
   if (s.labels) { // every printed label against the node it is anchored to (screen px): the "labels don't match nodes" check
     const L = JSON.parse(await evaluate(`JSON.stringify(__mm.labelsNow ? __mm.labelsNow() : [])`));
     const canvas = JSON.parse(await evaluate(`JSON.stringify((() => { const c = document.querySelector("#graph").getBoundingClientRect(); const cv = document.querySelector("#gl canvas"); const r = cv ? cv.getBoundingClientRect() : null; return { w: c.width, h: c.height, buffer: cv ? [cv.width, cv.height] : null, css: r ? [Math.round(r.width), Math.round(r.height)] : null, dpr: devicePixelRatio }; })())`));

@@ -35,7 +35,7 @@ test("a click lifts an area into 3D with the subtree's own 3D positions and the 
   assert.match(M3, /const L3 = state\.layoutOf\(1\)/, "the area uses the tree's 3D layout");
   assert.match(M3, /for \(const a of m\.also_in \|\| \[\]\) if \(!inSub\.has\(a\.id\)\) nbIds\.add\(a\.id\)/, "neighbours are the names' other cohorts and fund sets");
   assert.doesNotMatch(M3.slice(M3.indexOf("function enterCluster")), /T_HELD\[m\.ticker\]/, "holders are not drawn as neighbours (T2 decision 2)");
-  assert.match(M3, /controls\.enableRotate = true; \/\/ orbit is allowed inside an area/);
+  assert.match(M3, /controls\.enableRotate = true; freeOrbit\(\); \/\/ orbit is allowed inside an area/); // T9: the full orbit, left button turns
   assert.match(M3, /if \(fly\) flyTo\(b, 700\); \/\/ back to the same spot and zoom/);
   assert.match(PAGE, /e\.key !== "Escape"[\s\S]*closeArea/);
   assert.match(PAGE, /← back to the canvas/);
