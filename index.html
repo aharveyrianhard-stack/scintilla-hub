@@ -563,6 +563,11 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 #boardScroll{ overflow-anchor:none; }
 #boardScroll > .sc-board__row{ content-visibility:auto; contain-intrinsic-size:auto var(--sc-rowh, 37px); }
 #boardScroll > .sc-board__row.is-sliding{ content-visibility:visible; }
+#boardScroll.is-win{ position:relative; }
+#boardScroll.is-win > .sc-board__row{ height:var(--sc-rowh); box-sizing:border-box; }
+#boardScroll.is-win.is-measure > .sc-board__row{ height:auto; }
+#boardScroll.is-win > .sc-board__row.is-far{ display:none; }
+#boardScroll > .sc-board__ghost{ z-index:1; }
 
 /* 1.4 · CohortTabs */
 .sc-cohrow{ display:flex; align-items:center; gap:2px;
@@ -8476,12 +8481,6 @@ function boardWire(bs) {
   bs.addEventListener("pointermove", (e) => { BOARD_UI.ptrIn = true; BOARD_UI.x = e.clientX; BOARD_UI.y = e.clientY; act(); }, { passive: true });
   bs.addEventListener("pointerleave", () => { BOARD_UI.ptrIn = false; act(); }, { passive: true });
 }
-/* the row height the off-screen rows reserve (content-visibility), measured from a row on screen */
-function boardRowH(bs) {
-  const r = bs.querySelector(".sc-board__row");
-  const h = r && r.getBoundingClientRect().height;
-  if (h > 8 && Math.abs(h - (bs.__rowH || 0)) > 0.05) { bs.__rowH = h; bs.style.setProperty("--sc-rowh", h.toFixed(2) + "px"); }
-}
 function boardTpl(html) {
   if (!BOARD_TPL) BOARD_TPL = document.createElement("template");
   BOARD_TPL.innerHTML = html;
@@ -8523,57 +8522,161 @@ function boardLis(a) {
   for (let k = m.length ? m[m.length - 1] : -1; k >= 0; k = p[k]) keep.add(k);
   return keep;
 }
+/* WINDOWING — on a long board (ALL: 546 rows) only the rows within one screen of the view take part in layout; the rest stay
+   in the page (every reader of the rows still finds them) but are display:none, and the first / last shown rows carry
+   margins of exactly the height of the rows they stand for, so the scrollbar and every position are unchanged. Every row
+   has one measured height (--sc-rowh) while windowed, so a row's place is arithmetic: rowsStart + index x height.
+   MEASURED 6x CPU, ALL, 4 s of wheel scrolling: content-visibility alone 9 → ~15 frames/s; 40 rows in layout ~49. */
+const BOARD_WIN_MIN = 80;                        // shorter boards (RADAR, FAVORITES, LIKED) stay exactly as they were
+function boardRowList(bs) {   /* cached; any change to the board's children (a rebuild, the replay's own moves) drops it */
+  if (bs.__rows) return bs.__rows;
+  if (!bs.__rowsObs && window.MutationObserver) { bs.__rowsObs = new MutationObserver(() => { bs.__rows = null; }); bs.__rowsObs.observe(bs, { childList: true }); }
+  const a = []; for (const k of bs.children) if (k.classList.contains("sc-board__row") && k.getAttribute("data-t")) a.push(k);
+  return (bs.__rows = a);
+}
+/* the page states that change a row's height: the replay's motion mode and section full screen */
+const boardHMode = () => document.body ? (document.body.classList.contains("gwx-motion") ? "m" : "") + (document.body.classList.contains("secfs") ? "f" : "") : "";
+/* the page's CSS zoom (body zoom 1.12 / 1.28 / 1.45 by screen width): on-screen rectangles are zoomed, while scrollTop,
+   margins and a row's own transform are in layout pixels — every rectangle read below is divided by it */
+function boardZoom(bs) {
+  if (typeof bs.currentCSSZoom === "number" && bs.currentCSSZoom > 0) return bs.currentCSSZoom;
+  const h = bs.offsetHeight; return h ? (bs.getBoundingClientRect().height / h) || 1 : 1;
+}
+function boardMeasure(bs) {
+  const rows = boardRowList(bs), z = boardZoom(bs);
+  const win = bs.classList.contains("is-win");
+  if (win) bs.classList.add("is-measure");
+  let h = 0, seen = 0;
+  for (let i = 0; i < rows.length && seen < 8; i++) {
+    if (win && rows[i].classList.contains("is-far")) continue;
+    const r = rows[i].getBoundingClientRect().height / z; if (r > 0) { h = Math.max(h, r); seen++; }
+  }
+  if (win) bs.classList.remove("is-measure");
+  const hd = bs.firstElementChild;
+  bs.__start = hd && !hd.classList.contains("sc-board__row") ? hd.getBoundingClientRect().height / z : 0;
+  bs.__body = boardHMode();
+  bs.__w = bs.clientWidth;
+  if (h > 8) { bs.__rowH = h; bs.style.setProperty("--sc-rowh", h.toFixed(3) + "px"); }
+  return bs.__rowH || 0;
+}
+function boardWindow(bs, force) {
+  const rows = boardRowList(bs), n = rows.length;
+  if (n < BOARD_WIN_MIN) {
+    if (bs.classList.contains("is-win")) { bs.classList.remove("is-win"); for (const r of rows) { r.classList.remove("is-far"); r.style.marginTop = ""; r.style.marginBottom = ""; } bs.__wf = bs.__wl = undefined; }
+    if (!bs.__rowH || force === "measure") boardMeasure(bs);   // the height off-screen rows reserve (content-visibility)
+    return;
+  }
+  if (!bs.__rowH || force === "measure" || bs.__w !== bs.clientWidth || bs.__body !== boardHMode()) boardMeasure(bs);
+  const H = bs.__rowH; if (!H) return;
+  const vh = bs.clientHeight || 600, top = bs.scrollTop - (bs.__start || 0), B = Math.ceil(vh / H);
+  const wf = Math.max(0, Math.floor(top / H) - B), wl = Math.min(n - 1, Math.ceil((top + vh) / H) + B);
+  if (!force && bs.__wf === wf && bs.__wl === wl && bs.classList.contains("is-win")) return;
+  bs.classList.add("is-win");
+  /* a scroll moves the window: only the rows of the old and the new window can change */
+  let i0 = 0, i1 = n - 1;
+  if (!force && bs.__wf !== undefined && bs.__wn === n) { i0 = Math.min(bs.__wf, wf); i1 = Math.min(n - 1, Math.max(bs.__wl, wl)); }
+  bs.__wn = n;
+  for (let i = i0; i <= i1; i++) {
+    const r = rows[i], far = i < wf || i > wl;
+    if (r.classList.contains("is-far") !== far) r.classList.toggle("is-far", far);
+    const mt = i === wf ? wf * H + "px" : "", mb = i === wl ? (n - 1 - wl) * H + "px" : "";
+    if (r.style.marginTop !== mt) r.style.marginTop = mt;
+    if (r.style.marginBottom !== mb) r.style.marginBottom = mb;
+  }
+  bs.__wf = wf; bs.__wl = wl;
+}
+function boardWinWire(bs) {
+  if (!bs || bs.__h10win) return;
+  bs.__h10win = true;
+  let raf = 0;
+  bs.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (bs.isConnected) boardWindow(bs); }); }, { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (bs.isConnected) boardWindow(bs, "measure"); }).observe(bs);
+}
 /* MOVE the rows of #boardScroll into `want` (tickers, top to bottom) and slide what is or will be on screen.
    opts.anchor: a ticker whose row must stay where it is on screen (the row under the pointer); without one the
-   scroll position is kept. Returns the number of rows that changed place. */
+   scroll position is kept. A row leaving the view slides out as a ghost (a copy with no ids, gone when it lands).
+   Returns the number of rows that changed place. */
 function scBoardSlide(bs, want, opts) {
   opts = opts || {};
-  const els = new Map(), cur = [];
-  for (const k of bs.children) { const t = k.getAttribute("data-t"); if (t && k.classList.contains("sc-board__row")) { els.set(t, k); cur.push(t); } }
+  const cur = boardRowList(bs), els = new Map();
+  for (const r of cur) els.set(r.getAttribute("data-t"), r);
   const order = want.filter((t) => els.has(t));
   if (order.length !== cur.length) return -1;
-  let moved = 0; for (let i = 0; i < order.length; i++) if (order[i] !== cur[i]) moved++;
+  let moved = 0; for (let i = 0; i < order.length; i++) if (order[i] !== cur[i].getAttribute("data-t")) moved++;
   if (!moved) return 0;
+  const win = bs.classList.contains("is-win"), H = bs.__rowH || 26, z = boardZoom(bs), Hz = H * z;
   const box = bs.getBoundingClientRect(), vh = box.height, pad = vh;
-  const st0 = bs.scrollTop, oldTop = new Map();
+  const st0 = bs.scrollTop, oldTop = new Map(), oldIx = new Map();
+  /* where row i sits on screen (zoomed px) when the board is scrolled to st (layout px) — windowed rows are arithmetic */
+  const at = (i, st) => box.top + bs.clientTop * z + ((bs.__start || 0) - st + i * H) * z;
   /* FIRST — where every row is on screen now, mid-slide included (getBoundingClientRect carries the transform) */
-  for (const [t, r] of els) oldTop.set(t, r.getBoundingClientRect().top);
-  for (const r of BOARD_UI.flying) { r.style.transition = "none"; r.style.transform = ""; }
+  for (let i = 0; i < cur.length; i++) {
+    const r = cur[i], t = r.getAttribute("data-t"); oldIx.set(t, i);
+    oldTop.set(t, (!win || !r.classList.contains("is-far")) ? r.getBoundingClientRect().top : at(i, st0));
+  }
+  for (const r of BOARD_UI.flying) { clearTimeout(r.__h10T); r.style.transition = "none"; r.style.transform = ""; r.classList.remove("is-sliding"); }
+  BOARD_UI.flying.clear();
   const anchor = opts.anchor && els.has(opts.anchor) ? opts.anchor : null;
   /* the fewest moves: rows on the longest in-order run stay, every other row is inserted before its new neighbour */
-  const curIx = new Map(cur.map((t, i) => [t, i]));
-  const keep = boardLis(order.map((t) => curIx.get(t)));
+  const keep = boardLis(order.map((t) => oldIx.get(t)));
   let next = null;
   for (let i = order.length - 1; i >= 0; i--) {
     const r = els.get(order[i]);
     if (!keep.has(i)) bs.insertBefore(r, next ? next : null);
     next = r;
   }
+  bs.__rows = null;
   /* LAST — the anchor row stays under the pointer: the scroll follows it; otherwise the scroll position stays */
   BOARD_UI.selfAt = Date.now();
-  if (anchor) bs.scrollTop = st0 + (els.get(anchor).getBoundingClientRect().top - oldTop.get(anchor));
-  else if (bs.scrollTop !== st0) bs.scrollTop = st0;
-  const lo = box.top - pad, hi = box.bottom + pad, rh = bs.__rowH || 37;
-  const anim = [];
-  for (const [t, r] of els) {
-    const o = oldTop.get(t), n = r.getBoundingClientRect().top;
-    const oIn = o > lo && o < hi, nIn = n > box.top - rh && n < box.bottom;
-    if (!(oIn || nIn) || Math.abs(o - n) < 0.5) continue;
-    /* INVERT — a row arriving from far away starts just past the edge it comes from, so its travel is seen */
-    let from = o;
-    if (!oIn) from = o < n ? box.top - rh : box.bottom;
-    anim.push([r, from - n]);
+  if (win) boardWindow(bs, true);
+  let st1 = st0;
+  if (anchor) {
+    const ni = order.indexOf(anchor);
+    const nTop = win ? at(ni, st0) : els.get(anchor).getBoundingClientRect().top;
+    bs.scrollTop = st0 + (nTop - oldTop.get(anchor)) / z;
+    st1 = bs.scrollTop;
+    if (win) boardWindow(bs, true);
+  } else if (bs.scrollTop !== st0) bs.scrollTop = st0;
+  const lo = box.top - pad, hi = box.bottom + pad, ms = opts.ms || BOARD_SLIDE_MS;
+  const anim = [], ghosts = [];
+  for (let i = 0; i < order.length; i++) {
+    const t = order[i], r = els.get(t);
+    const o = oldTop.get(t), n = win ? at(i, st1) : r.getBoundingClientRect().top;
+    if (Math.abs(o - n) < 0.5) continue;
+    const oIn = o > lo && o < hi, nIn = n > box.top - Hz && n < box.bottom;
+    const shown = !win || !r.classList.contains("is-far");
+    if (shown && (oIn || nIn)) {
+      /* INVERT — a row arriving from far away starts just past the edge it comes from, so its travel is seen */
+      let from = o;
+      if (!oIn) from = o < n ? box.top - Hz : box.bottom;
+      anim.push([r, (from - n) / z]);
+    } else if (!shown && o > box.top - Hz && o < box.bottom) ghosts.push([r, o, n]);
   }
   for (const [r, dy] of anim) { r.classList.add("is-sliding"); r.style.transition = "none"; r.style.transform = "translateY(" + dy.toFixed(1) + "px)"; }
-  if (anim.length) void bs.offsetHeight;   // the one flush: the transforms above become the starting point
+  /* a row that leaves the view for a place far away: a copy slides toward it from where the row was, and fades */
+  const gs = [];
+  for (const [r, o, n] of ghosts) {
+    const g = r.cloneNode(true);
+    g.classList.remove("sc-board__row", "is-far", "sel"); g.classList.add("sc-board__ghost");
+    for (const x of [g, ...g.querySelectorAll("[id],[data-act],[data-t],[tabindex]")]) { x.removeAttribute("id"); x.removeAttribute("data-act"); x.removeAttribute("data-t"); x.removeAttribute("tabindex"); }
+    g.setAttribute("aria-hidden", "true");
+    g.style.cssText = "position:absolute;left:0;right:0;margin:0;top:" + ((o - box.top) / z - bs.clientTop + st1).toFixed(1) + "px;height:" + H.toFixed(2) + "px;pointer-events:none;transition:none;transform:none";
+    bs.appendChild(g); gs.push([g, (n < o ? -1 : 1) * Math.min(Math.abs(n - o), vh) / z]);
+  }
+  if (anim.length || gs.length) void bs.offsetHeight;   // the one flush: the transforms above become the starting point
   /* PLAY */
-  const ms = opts.ms || BOARD_SLIDE_MS;
+  const ease = "cubic-bezier(.33,0,.2,1)";
   for (const [r] of anim) {
-    r.style.transition = "transform " + ms + "ms cubic-bezier(.33,0,.2,1)";
+    r.style.transition = "transform " + ms + "ms " + ease;
     r.style.transform = "translateY(0)";
     BOARD_UI.flying.add(r);
     clearTimeout(r.__h10T);
-    r.__h10T = setTimeout(() => { r.style.transition = ""; r.style.transform = ""; r.classList.remove("is-sliding"); BOARD_UI.flying.delete(r); }, ms + 40);
+    r.__h10T = setTimeout(() => { r.style.transition = ""; r.style.transform = ""; r.classList.remove("is-sliding"); BOARD_UI.flying.delete(r); if (bs.isConnected && win) boardWindow(bs); }, ms + 40);
+  }
+  for (const [g, dy] of gs) {
+    g.style.transition = "transform " + ms + "ms " + ease + ",opacity " + ms + "ms linear";
+    g.style.transform = "translateY(" + dy.toFixed(1) + "px)"; g.style.opacity = "0";
+    setTimeout(() => { if (g.parentNode) g.parentNode.removeChild(g); }, ms + 40);
   }
   BOARD_UI.slides++;
   return moved;
@@ -8607,7 +8710,7 @@ function boardSettle(force) {
 function boardPatch(bs) {
   const m = boardRowsModel();
   if (m.html != null) return false;
-  const kids = bs.children, head = kids[0];
+  const kids = Array.from(bs.children).filter((k) => !k.classList.contains("sc-board__ghost")), head = kids[0];
   if (!head || !head.classList.contains("hdr") || kids.length !== m.rows.length + 1) return false;
   const els = new Map();
   for (let i = 1; i < kids.length; i++) {
@@ -8631,6 +8734,7 @@ function boardRender(bs) {
   bs.__hd = m.html != null ? undefined : m.head;
   if (m.rows) { let i = 0; for (const k of bs.children) if (k.getAttribute("data-t") && m.rows[i] && m.rows[i].t === k.getAttribute("data-t")) k.__h = m.rows[i++].html; }
   BOARD_UI.flying.clear(); BOARD_UI.held = false;
+  bs.__wf = bs.__wl = undefined; bs.__rows = null; bs.classList.remove("is-win");
   if (typeof SC_ROWNODE_AT !== "undefined") SC_ROWNODE_AT = 0;   // the price tick's row index rescans after a rebuild
 }
 /* FIX 4b — sorting / stars / feed ticks repaint ONLY the board's row container.
@@ -8638,10 +8742,10 @@ function boardRender(bs) {
 function updateBoard() {
   const bs = el("boardScroll");
   if (bs) {
-    boardWire(bs);
+    boardWire(bs); boardWinWire(bs);
     if (!boardPatch(bs)) boardRender(bs);
     bs.classList.toggle("is-seed", S.boardSeedAt != null);
-    boardRowH(bs);
+    boardWindow(bs, true);
   }
   const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
   const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
@@ -8653,7 +8757,7 @@ function updateBoard() {
   if (inL0 && LAYER0_TAB === "MAP") l0MapSync();
   /* H2 — ROTATION / RELATIVE follow the scope: if the names under it changed (rows landed after a cohort click), redraw */
   if (inL0 && (LAYER0_TAB === "ROTATION" || LAYER0_TAB === "RELATIVE") && L0_PAINTED_KEY !== l0RotKey()) paintL0Body();
-  const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(inL0 ? l0MapChg : null); wireHeatSizing(); }   // R41 — Layer-0 / heat-view grid tracks feed ticks too (R43 §1: re-measure after the swap)
+  const hg = el("heatGrid"); if (hg) { const hh = heatmapHTML(inL0 ? l0MapChg : null); if (hg.__h !== hh) { hg.outerHTML = hh; const ng = el("heatGrid"); if (ng) ng.__h = hh; wireHeatSizing(); } }   /* H10 — an unchanged map is not rebuilt (and re-measured) on every refresh */   // R41 — Layer-0 / heat-view grid tracks feed ticks too (R43 §1: re-measure after the swap)
   /* the MAP was mounted before this scope had rows, so it holds a note and no grid/canvas to update: build it now that
      the rows are here, instead of leaving the note up until the map's own TF series happens to land seconds later */
   else if (inL0 && LAYER0_TAB === "MAP" && shownRows().length && document.querySelector("#l0body > .sc-l0note")) paintL0Body();
@@ -8781,9 +8885,12 @@ function scRewoundNow() {
 function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
-  cell.textContent = Math.round(v);
-  cell.style.color = rsiGradColor(v);
-  if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
+  /* H10 — every board refresh repaints every resolved RSI: write only what differs (an unchanged text write still
+     replaces the text node — a mutation and a re-layout per row, 546 on ALL) */
+  const txt = String(Math.round(v)), col = rsiGradColor(v);
+  if (cell.textContent !== txt) cell.textContent = txt;
+  if (cell.__rC !== col) { cell.style.color = col; cell.__rC = col; }
+  if (cell.classList && cell.classList.contains("is-xt") !== rsiExtreme(v)) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
 }
 
 /* ============================================================================
@@ -29650,7 +29757,9 @@ body.gwx-motion .gwx-pct{opacity:1}
       if(!rows.length) return;
       var i,r,t,reads=0;
 
-      measurePitch(rows);
+      /* H10 — the live board measures its own row height (rows off screen are out of layout and have no rect) */
+      if(typeof window.scBoardSlide==="function" && bs.__rowH){ PITCH=bs.__rowH; PITCH_OK=true; }
+      else measurePitch(rows);
       /* ONE read of where the board is and how far it is scrolled. With the pitch known,
          every row's position on screen is arithmetic from its INDEX - so the tick reads
          geometry twice in total instead of twice per row (MEASURED: 729 rect reads a tick
@@ -29658,7 +29767,7 @@ body.gwx-motion .gwx-pct{opacity:1}
       var box=bs.getBoundingClientRect(); reads++;
       var scrolled=bs.scrollTop; reads++;
       var vh=(window.innerHeight||800);
-      var oldIx={}, rectMode=!PITCH_OK;
+      var oldIx={}, rectMode=!PITCH_OK && typeof window.scBoardSlide!=="function";
       for(i=0;i<rows.length;i++) oldIx[rows[i].getAttribute("data-t")]=i;
       var was={};
       if(rectMode){ for(i=0;i<rows.length;i++){ was[rows[i].getAttribute("data-t")]=rows[i].getBoundingClientRect().top; reads++; } }
@@ -29714,6 +29823,15 @@ body.gwx-motion .gwx-pct{opacity:1}
         var TO0=(window.performance&&performance.now)?performance.now():0;
         var keepSort=S.sort; S.sort={key:"g",dir:-1};
         try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
+        /* H10 (3 Oct) — THE REPLAY SLIDES THE WAY THE LIVE BOARD DOES. Alan: "the old rewind showed the entire table moving.
+           I would prefer to see that." This pass moved every row it could see and let every other row teleport: a row
+           arriving from below the fold just appeared. scBoardSlide moves the fewest rows, slides every row that is or
+           will be on screen (one arriving from far away comes in from the edge), lets a row that leaves slide out, and
+           keeps the board's windowing true. The old pass stays below for a page without it. */
+        var anim=[], moved=0;
+        if(typeof window.scBoardSlide==="function"){
+          moved=Math.max(0, window.scBoardSlide(bs, S.boardOrder||[], { ms: MD ? MD.r : 420 }));
+        } else {
         var frag=document.createDocumentFragment();
         (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
         bs.appendChild(frag);
@@ -29727,7 +29845,6 @@ body.gwx-motion .gwx-pct{opacity:1}
         /* WRITE PASS - put each row back where it was. No read in this loop, and a row
            that is off screen is MOVED but never animated: travel nobody can see is pure
            cost, the same rule scScint already applies to the glow. */
-        var anim=[], moved=0;
         for(i=0;i<rows.length;i++){
           r=rows[i]; t=r.getAttribute("data-t");
           var oi=oldIx[t], ni=newIx[t];
@@ -29757,6 +29874,7 @@ body.gwx-motion .gwx-pct{opacity:1}
           r.__gwxT=setTimeout((function(row){ return function(){
             row.style.transition=""; row.style.transform=""; row.style.willChange="";
           };})(r), 460);
+        }
         }
 
         var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();

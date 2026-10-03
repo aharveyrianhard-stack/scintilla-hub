@@ -159,10 +159,17 @@ try {
     await page.mouse.move(px, py); await sleep(800);
     m0 = await metrics(); await page.evaluate(() => __h10.start());
     r.scrollRefreshCalls = [];
+    if (process.env.PROFILE === "sr" && coh === "ALL") { await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 200 }); await cdp.send("Profiler.start"); }
     const wheelP = wheel(5200);
     for (let k = 0; k < 3; k++) { await sleep(1300); r.scrollRefreshCalls.push(await page.evaluate((s) => __h10.refresh(s, 0.12), 2000 + k)); }
     await wheelP;
     rec = await page.evaluate(() => __h10.stop()); m1 = await metrics();
+    if (process.env.PROFILE === "sr" && coh === "ALL") {
+      const { profile } = await cdp.send("Profiler.stop"); const byId = new Map(profile.nodes.map((n) => [n.id, n])); const parent = new Map();
+      for (const n of profile.nodes) for (const c of (n.children || [])) parent.set(c, n.id);
+      const incl = {}; profile.samples.forEach((id, i) => { const us = profile.timeDeltas[i] || 0; const seen = new Set(); for (let x = id; x != null; x = parent.get(x)) { const m = byId.get(x); const k = m.callFrame.functionName + "@" + m.callFrame.lineNumber; if (seen.has(k)) continue; seen.add(k); incl[k] = (incl[k] || 0) + us; } });
+      out.srIncl = Object.entries(incl).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, us]) => k + " " + Math.round(us / 1000) + "ms");
+    }
     r.scrollRefresh = summarize(rec, m0, m1);
     /* (d) the row under a resting pointer, and the scroll position, across one refresh */
     await sleep(2500);
