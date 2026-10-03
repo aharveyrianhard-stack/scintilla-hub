@@ -29,7 +29,7 @@ test("R3: every tab in one row (ten since C2, 30 Sep: COMPS beside ESTIMATES), k
   const tabs = new Function("S", "CO_TABS", CONSTS + fn("cvTabsHTML") + "\nreturn cvTabsHTML;")(S, CO_TABS)();
   assert.deepEqual([...tabs.matchAll(/data-tab="([A-Z]+)"/g)].map((m) => m[1]), CO_TABS);
   assert.deepEqual([...tabs.matchAll(/title="key (\d)"/g)].map((m) => +m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]);
-  assert.match(tabs, /class="cv-tab on" aria-selected="true" data-act="cotab" data-tab="STATS"/);
+  assert.match(tabs, /class="cv-tab sc-tab on" aria-selected="true" data-act="cotab" data-tab="STATS"/);   /* V1 (3 Oct): the company tabs carry the sheet's .sc-tab */
   /* N6 (28 Sep) — the EVENTS tab reads EARNINGS like the master tab; its key (data-tab) stays EVENTS */
   assert.match(tabs, /data-tab="EVENTS" title="key 9">EARNINGS<\/button>/);
   assert.doesNotMatch(tabs, />EVENTS<\/button>/);

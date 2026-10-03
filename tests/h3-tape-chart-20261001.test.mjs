@@ -171,7 +171,7 @@ test("TREE is a master tab, after STATION, opening the tree map in this tab (its
     page.match(/function buildMtabs\(\) \{[\s\S]*?\n\}\n/)[0] + "buildMtabs();")(() => box, SECTIONS);
   const tabs = [...box.innerHTML.matchAll(/data-sec="([A-Z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(tabs.slice(0, 4), ["DASHBOARD", "ALLOCATION", "STATION", "TREE"]);
-  assert.match(box.innerHTML, /<a role="tab" class="sc-mtab" data-sec="TREE" href="\/deliverables\/20260929\/tree-map\/" title="[^"]+">TREE<\/a>/);
+  assert.match(box.innerHTML, /<a role="tab" class="sc-mtab sc-tab" data-sec="TREE" href="\/deliverables\/20260929\/tree-map\/" title="[^"]+">TREE<\/a>/);   /* V1 (3 Oct): every master tab carries the sheet's .sc-tab */
   assert.doesNotMatch(box.innerHTML.match(/<a[^>]*data-sec="TREE"[^>]*>/)[0], /target=/, "same tab, so the page's BACK comes home");
   assert.ok(fs.existsSync(new URL("../deliverables/20260929/tree-map/index.html", import.meta.url)));
   assert.match(fs.readFileSync(new URL("../deliverables/20260929/tree-map/index.html", import.meta.url), "utf8"), /data-go="back"/, "the grey BACK / CLOSE pair");

@@ -75,9 +75,9 @@ test("C6: ⛶ fullscreen is on the company line and uses the one section-fullscr
 test("D3/D2 · H3: the company chart's five timeframes and the CLOUDS switch are reachable from the Hub, both remembered", () => {
   const html = lineKit({ "hub.chart.range": "4h" })("MU");
   assert.deepEqual([...html.matchAll(/data-act="corange" data-r="([^"]+)"/g)].map((m) => m[1]), RANGES);
-  assert.match(html, /class="sc-cofr__tf on" aria-pressed="true" data-act="corange" data-r="4h"/);
-  assert.match(html, /cv-clouds on" aria-pressed="true" data-act="coclouds"/, "clouds on by default");
-  assert.match(lineKit({ "hub.chart.clouds": "0" })("MU"), /cv-clouds" aria-pressed="false" data-act="coclouds"/);
+  assert.match(html, /class="sc-cofr__tf sc-tab on" aria-pressed="true" data-act="corange" data-r="4h"/);   /* V1 (3 Oct): every toolbar control carries the sheet's .sc-tab */
+  assert.match(html, /cv-clouds sc-tab on" aria-pressed="true" data-act="coclouds"/, "clouds on by default");
+  assert.match(lineKit({ "hub.chart.clouds": "0" })("MU"), /cv-clouds sc-tab" aria-pressed="false" data-act="coclouds"/);
   const src = (store) => new Function("lsGet", CONSTS + fn("coRange") + fn("coCloudsOn") + fn("coChartSrc") + "\nreturn coChartSrc;")((k) => store[k]);
   assert.equal(src({})("mu", "1h", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=1h&clouds=1&rsi=1&bubble=1d%3A60");
   assert.equal(src({ "hub.chart.clouds": "0" })("MU", "4h", true), "https://station.scintillahub.ai/chart/?bare=hub&t=MU&range=4h&clouds=0&rsi=1&bubble=1d%3A60");

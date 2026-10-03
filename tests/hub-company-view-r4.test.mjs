@@ -232,7 +232,8 @@ test("CROPPED: short names where the legal name was cut, a K tier for small reve
 
 test("CROPPED: the R4 fit sheet is last in the page — READ gets its width, the phone board keeps six columns, tabs wrap", () => {
   const i = page.indexOf('<style id="r4-fit">');
-  assert.ok(i > 0 && page.indexOf("<style", i + 10) < 0, "no stylesheet after it");
+  const after = page.indexOf("<style", i + 10);   /* V1 (3 Oct): the design sheet (sc-design-standard-20261003) is the one sheet allowed after it — it is the standard, last by design */
+  assert.ok(i > 0 && (after < 0 || (page.startsWith('<style id="sc-design-standard-20261003">', after) && page.indexOf("<style", after + 10) < 0)), "no stylesheet after it but the design sheet");
   const css = page.slice(i, page.indexOf("</style>", i));
   assert.match(css, /\.ch\{grid-template-columns:(minmax\(0,\d+fr\) ?){14} !important\}/, "14 desk tracks");
   assert.match(css, /minmax\(0,15fr\) minmax\(0,13fr\)/, "READ 15fr before GEIGER");
