@@ -5,6 +5,7 @@
 // NOW: universe = public.tickers where active (the explicit, stable 366-symbol map),
 // equities only. Everything else — sinks, dedupe, attribution log — unchanged.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { planSlice, fmpSymbolMap } from '../_shared/loader-slice.mjs'   // F1 (3 Oct): newcomers first, bounded; tickers.fmp_symbol honoured
 const SB_URL=Deno.env.get('SUPABASE_URL')||''
 const SB_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 const J=(o:any)=>new Response(JSON.stringify(o),{headers:{'Content-Type':'application/json'}})
@@ -35,16 +36,25 @@ Deno.serve(async (req)=>{try{
   const L=Math.max(eq.length,1)
   const offP=u.searchParams.get('offset')
   const off=((offP!=null?parseInt(offP,10):parseInt(C['analyst_offset']||'0',10))%L+L)%L
-  let slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))
-  if(offP==null)await sb.from('app_config').upsert({key:'analyst_offset',value:''+((off+SLICE)%L)},{onConflict:'key'})
+  let slice:string[]=[];let newcomers:string[]=[]
+  if(offP!=null){slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))}
+  else{
+    // F1 (3 Oct): a name with nothing in this loader's table yet goes first (at most 10 a run, rotated), then the old round-robin;
+    // funds are never newcomers here (they have no statements, estimates or earnings). Only the round-robin part moves the offset.
+    const [{data:hv},{data:ty}]=await Promise.all([sb.from('analyst_ratings').select('ticker'),sb.from('tickers').select('ticker,type').in('ticker',eq)])
+    const plan=planSlice({universe:eq,have:new Set((hv||[]).map((r:any)=>r.ticker)),newcomerPool:(ty||[]).filter((r:any)=>r.type!=='etf').map((r:any)=>r.ticker),offset:off,size:SLICE,cap:10})
+    slice=plan.slice;newcomers=plan.newcomers
+    await sb.from('app_config').upsert({key:'analyst_offset',value:''+plan.next},{onConflict:'key'})
+  }
+  const {data:fsr}=await sb.from('tickers').select('ticker,fmp_symbol').in('ticker',slice);const FSY=fmpSymbolMap(fsr||[])
   const counts:any={est:0,ratings:0,ptc:0};const errs:string[]=[]
   async function doT(t:string){
    try{
     const [ea,eqr,gr,pt]=await Promise.all([
-      fmp('analyst-estimates?symbol='+t+'&period=annual&limit=40',K),
-      fmp('analyst-estimates?symbol='+t+'&period=quarter&limit=120',K),
-      fmp('grades-consensus?symbol='+t,K),
-      fmp('price-target-consensus?symbol='+t,K)
+      fmp('analyst-estimates?symbol='+FSY(t)+'&period=annual&limit=40',K),
+      fmp('analyst-estimates?symbol='+FSY(t)+'&period=quarter&limit=120',K),
+      fmp('grades-consensus?symbol='+FSY(t),K),
+      fmp('price-target-consensus?symbol='+FSY(t),K)
     ])
     const p0=(pt&&pt[0])||null
     const mk=(arr:any[],period:string)=>(arr||[]).filter((x:any)=>x.date).map((x:any)=>({ticker:t,period,fiscal_date:''+x.date,est_eps_avg:num(x.epsAvg),est_eps_high:num(x.epsHigh),est_eps_low:num(x.epsLow),est_revenue_avg:num(x.revenueAvg),est_ebitda_avg:num(x.ebitdaAvg),est_ebit_avg:num(x.ebitAvg),est_net_income_avg:num(x.netIncomeAvg),num_analysts_eps:num(x.numAnalystsEps),num_analysts_rev:num(pick(x,['numAnalystsRevenue','numAnalystsRev'])),price_target_avg:p0?num(p0.targetConsensus):null,updated_ts:now}))

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { planSlice, fmpSymbolMap } from '../_shared/loader-slice.mjs'   // F1 (3 Oct): newcomers first, bounded; tickers.fmp_symbol honoured
 const SB_URL=Deno.env.get('SUPABASE_URL')||''
 const SB_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 const J=(o:any)=>new Response(JSON.stringify(o),{headers:{'Content-Type':'application/json'}})
@@ -32,9 +33,17 @@ Deno.serve(async (req)=>{try{
     const L=Math.max(eq.length,1)
     const offP=u.searchParams.get('offset')
     off=((offP!=null?parseInt(offP,10):parseInt(C['fund_offset']||'0',10))%L+L)%L
-    slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))
-    if(offP==null)await sb.from('app_config').upsert({key:'fund_offset',value:''+((off+SLICE)%L)},{onConflict:'key'})
+    if(offP!=null){slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))}
+    else{
+      // F1 (3 Oct): a company with no statements yet goes first (at most 5 a run, rotated), then the old round-robin. Measured 3 Oct:
+      // 70 of the 104 names admitted 28 Sep had none (a lap of this loader is ~13 days). Funds are never newcomers (no statements).
+      const [{data:hv},{data:ty}]=await Promise.all([sb.from('fundamentals').select('ticker').not('revenue_ttm','is',null),sb.from('tickers').select('ticker,type').in('ticker',eq)])
+      const plan=planSlice({universe:eq,have:new Set((hv||[]).map((r:any)=>r.ticker)),newcomerPool:(ty||[]).filter((r:any)=>r.type!=='etf').map((r:any)=>r.ticker),offset:off,size:SLICE,cap:5})
+      slice=plan.slice
+      await sb.from('app_config').upsert({key:'fund_offset',value:''+plan.next},{onConflict:'key'})
+    }
   }
+  const {data:fsr}=await sb.from('tickers').select('ticker,fmp_symbol').in('ticker',slice);const FSY=fmpSymbolMap(fsr||[])   // F1: MOG.A → MOG-A
   // PRICE COMES FROM THE PROVIDER QUOTE, NOT THE RETIRED live_quotes LANE.
   // live_quotes equity rows stopped being written at the provider cutover (last 2026-08-18), so every
   // fundamentals.price and the trailing P/E derived from it were a month old while carrying a fresh
@@ -50,16 +59,16 @@ Deno.serve(async (req)=>{try{
   async function doT(t:string){
    try{
     const [ia,iq,ba,bq,ca,cq,ra,rq,ka,kq]=await Promise.all([
-      fmp('income-statement?symbol='+t+'&period=annual&limit=50',K),
-      fmp('income-statement?symbol='+t+'&period=quarter&limit=160',K),
-      fmp('balance-sheet-statement?symbol='+t+'&period=annual&limit=50',K),
-      fmp('balance-sheet-statement?symbol='+t+'&period=quarter&limit=160',K),
-      fmp('cash-flow-statement?symbol='+t+'&period=annual&limit=50',K),
-      fmp('cash-flow-statement?symbol='+t+'&period=quarter&limit=160',K),
-      fmp('ratios?symbol='+t+'&period=annual&limit=50',K),
-      fmp('ratios?symbol='+t+'&period=quarter&limit=160',K),
-      fmp('key-metrics?symbol='+t+'&period=annual&limit=50',K),
-      fmp('key-metrics?symbol='+t+'&period=quarter&limit=160',K)
+      fmp('income-statement?symbol='+FSY(t)+'&period=annual&limit=50',K),
+      fmp('income-statement?symbol='+FSY(t)+'&period=quarter&limit=160',K),
+      fmp('balance-sheet-statement?symbol='+FSY(t)+'&period=annual&limit=50',K),
+      fmp('balance-sheet-statement?symbol='+FSY(t)+'&period=quarter&limit=160',K),
+      fmp('cash-flow-statement?symbol='+FSY(t)+'&period=annual&limit=50',K),
+      fmp('cash-flow-statement?symbol='+FSY(t)+'&period=quarter&limit=160',K),
+      fmp('ratios?symbol='+FSY(t)+'&period=annual&limit=50',K),
+      fmp('ratios?symbol='+FSY(t)+'&period=quarter&limit=160',K),
+      fmp('key-metrics?symbol='+FSY(t)+'&period=annual&limit=50',K),
+      fmp('key-metrics?symbol='+FSY(t)+'&period=quarter&limit=160',K)
     ])
     const inc=[...(ia||[]),...(iq||[])],bal=[...(ba||[]),...(bq||[])],cf=[...(ca||[]),...(cq||[])],rat=[...(ra||[]),...(rq||[])],km=[...(ka||[]),...(kq||[])]
     const KM:any={};for(const m of km)if(m.date)KM[m.date+'|'+m.period]=m

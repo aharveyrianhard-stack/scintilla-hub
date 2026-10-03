@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { planSlice, fmpSymbolMap } from '../_shared/loader-slice.mjs'   // F1 (3 Oct): newcomers first, bounded; tickers.fmp_symbol honoured
 const SB_URL=Deno.env.get('SUPABASE_URL')||''
 const SB_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 const J=(o:any)=>new Response(JSON.stringify(o),{headers:{'Content-Type':'application/json'}})
@@ -55,8 +56,17 @@ Deno.serve(async (req)=>{try{
   const L=Math.max(eq.length,1)
   const offP=u.searchParams.get('offset')
   const off=((offP!=null?parseInt(offP,10):parseInt(C['events_offset']||'0',10))%L+L)%L
-  let slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))
-  if(offP==null)await sb.from('app_config').upsert({key:'events_offset',value:''+((off+SLICE)%L)},{onConflict:'key'})
+  let slice:string[]=[];let newcomers:string[]=[]
+  if(offP!=null){slice=eq.slice(off,off+SLICE);if(slice.length<SLICE&&eq.length>SLICE)slice=slice.concat(eq.slice(0,SLICE-slice.length))}
+  else{
+    // F1 (3 Oct): a name with nothing in this loader's table yet goes first (at most 10 a run, rotated), then the old round-robin;
+    // funds are never newcomers here (they have no statements, estimates or earnings). Only the round-robin part moves the offset.
+    const [{data:hv},{data:ty}]=await Promise.all([sb.from('earnings_events').select('ticker').gte('date',new Date().toISOString().slice(0,10)).lte('date',new Date(Date.now()+120*86400000).toISOString().slice(0,10)).in('ticker',eq),sb.from('tickers').select('ticker,type').in('ticker',eq)])
+    const plan=planSlice({universe:eq,have:new Set((hv||[]).map((r:any)=>r.ticker)),newcomerPool:(ty||[]).filter((r:any)=>r.type!=='etf').map((r:any)=>r.ticker),offset:off,size:SLICE,cap:10})
+    slice=plan.slice;newcomers=plan.newcomers
+    await sb.from('app_config').upsert({key:'events_offset',value:''+plan.next},{onConflict:'key'})
+  }
+  const {data:fsr}=await sb.from('tickers').select('ticker,fmp_symbol').in('ticker',slice);const FSY=fmpSymbolMap(fsr||[])
   const counts:any={earnings:0,dividends:0,splits:0};const errs:string[]=[]
   const review:any={not_in_provider_list:[],same_result_twins:[],archived_dates_skipped:[],read_errors:[],suppression:null}
   // v10: NO EARNINGS ROW IS WRITTEN WITHOUT A COMPLETE SUPPRESSION LOOKUP (fail closed). The lookup covers exactly the tickers this
@@ -109,7 +119,7 @@ Deno.serve(async (req)=>{try{
   }
   async function doT(t:string){
    try{
-    const [er,dv,sp]=await Promise.all([sup.ok?fmpPer('earnings?symbol='+t+'&limit=80',K):Promise.resolve(null),fmpPer('dividends?symbol='+t+'&limit=300',K),fmpPer('splits?symbol='+t+'&limit=100',K)])
+    const [er,dv,sp]=await Promise.all([sup.ok?fmpPer('earnings?symbol='+FSY(t)+'&limit=80',K):Promise.resolve(null),fmpPer('dividends?symbol='+FSY(t)+'&limit=300',K),fmpPer('splits?symbol='+FSY(t)+'&limit=100',K)])
     if(er&&er.length){counts.earnings+=await upE(mkE(er,t));try{await look(t,er)}catch(e){review.read_errors.push(t+': '+String(e))}}
     if(dv&&dv.length){const rows=dv.filter((x:any)=>dstr(x.date)).map((x:any)=>({ticker:t,date:dstr(x.date),amount:num(x.adjDividend!=null?x.adjDividend:x.dividend),record_date:dstr(x.recordDate),payment_date:dstr(x.paymentDate),declaration_date:dstr(x.declarationDate),yield_pct:num(x.yield),frequency:x.frequency||null,updated_ts:now}))
       const s=new Set();const ded=rows.filter((r:any)=>{if(s.has(r.date))return false;s.add(r.date);return true})

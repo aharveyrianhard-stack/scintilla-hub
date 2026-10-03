@@ -86,6 +86,31 @@ Deno.serve(async (req)=>{
     const groups={};for(const r of fr){const k=Object.keys(r).sort().join(',');(groups[k]=groups[k]||[]).push(r)}
     for(const k of Object.keys(groups)){const {error}=await sb.from('company_profile').upsert(groups[k],{onConflict:'ticker'});if(error)out.errors.push('profile:'+error.message);else out.wrote+=groups[k].length}
   }
+  if(job==='etf'){
+    // F1 (3 Oct 2026) — FUND HOLDINGS. No job wrote etf_holdings after 22 Jul, so every served fund opened FINANCIALS → HOLDINGS on
+    // "No etf_holdings rows … yet" (measured 3 Oct: 69 of 70 full-treatment funds). For each fund in the list (tickers.type = 'etf'):
+    // the holdings are REPLACED only when FMP answered with at least one line (a failed or empty answer leaves the stored list as it
+    // was), and etf_info is upserted with only the columns FMP supplied (the H8 facts other jobs own are never blanked).
+    const {data:ty}=await sb.from('tickers').select('ticker,type,fmp_symbol').in('ticker',eq)
+    const funds=(ty||[]).filter((r)=>r.type==='etf'),FS={};for(const r of funds)if(r.fmp_symbol)FS[r.ticker]=r.fmp_symbol
+    const done={replaced:0,lines:0,no_answer:[]}
+    await chunked(funds.map((r)=>r.ticker),4,async(t)=>{
+      const sym=encodeURIComponent(FS[t]||t)
+      const [h,i]=await Promise.all([fj(base+'/etf/holdings?symbol='+sym+'&apikey='+K,st),fj(base+'/etf/info?symbol='+sym+'&apikey='+K,st)])
+      const seen=new Set(),rows=[]
+      for(const x of (Array.isArray(h)?h:[])){const name=String(x.name||x.asset||'');if(!x.asset||!name||seen.has(name))continue;seen.add(name)
+        rows.push({ticker:t,asset:x.asset,name,shares:N(x.sharesNumber),weight_pct:N(x.weightPercentage),market_value:N(x.marketValue),updated_ts:new Date().toISOString()})}
+      if(rows.length){await sb.from('etf_holdings').delete().eq('ticker',t);const {error}=await sb.from('etf_holdings').insert(rows);if(error)out.errors.push('etf_holdings '+t+':'+error.message);else{done.replaced++;done.lines+=rows.length}}
+      else done.no_answer.push(t)
+      const d=Array.isArray(i)?i[0]:null
+      if(d&&d.symbol){const row={ticker:t,updated_ts:new Date().toISOString()};const put=(k,v)=>{if(v!=null&&v!=='')row[k]=v}
+        put('name',d.name);put('description',d.description);put('website',d.website);put('etf_company',d.etfCompany);put('expense_ratio',d.expenseRatio==null?null:N(d.expenseRatio))
+        put('aum',d.assetsUnderManagement==null?null:N(d.assetsUnderManagement));put('avg_volume',d.avgVolume==null?null:N(d.avgVolume));put('inception_date',d.inceptionDate);put('nav',d.nav==null?null:N(d.nav))
+        put('holdings_count',d.holdingsCount==null?null:N(d.holdingsCount));if(Array.isArray(d.sectorsList))row.sectors=d.sectorsList
+        const {error}=await sb.from('etf_info').upsert(row,{onConflict:'ticker'});if(error)out.errors.push('etf_info '+t+':'+error.message)}
+    })
+    out.etf=done;out.wrote+=done.lines
+  }
   if(job==='earnings'){
     const rows=[]
     await chunked(eq,8,async(t)=>{const a=await fj(base+'/earnings-calendar?symbol='+t+'&apikey='+K,st);if(Array.isArray(a))for(const d of a.slice(0,12)){const ee=N(d.epsEstimated);rows.push({ticker:d.symbol||t,date:d.date,eps_actual:N(d.epsActual),eps_estimate:ee,revenue_actual:N(d.revenueActual),revenue_estimate:N(d.revenueEstimated),surprise_pct:(d.epsActual!=null&&ee)?+(((+d.epsActual-ee)/Math.abs(ee))*100).toFixed(2):null,updated_ts:now})}})
