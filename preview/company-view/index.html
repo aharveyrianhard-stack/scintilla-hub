@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from e8d3e2e) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 6b6bf7e) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -19914,7 +19914,13 @@ function estConsensusGridHTML(data) {
    so the company payload (fetchCompanyData) is untouched. FMP's own DCF number and its letter ratings stay off the Hub. */
 const REV_TTL = 10 * 60e3, REV_SHOW = 12, REV_MAX = 60;
 const REV_CACHE = {}, REV_INFLIGHT = {};
-const REV_SEL_NEWS = "published_utc,kind,firm,analyst,target,adj_target,prior_grade,new_grade,action,price_when_posted,title,url";
+const REV_SEL_NEWS = "published_utc,kind,firm,analyst,target,adj_target,adj_target_checked,prior_grade,new_grade,action,price_when_posted,title,url,quality";
+/* A4 (3 Oct 2026): every analyst_target_news row is classified (supabase/functions/analyst-revisions/quality.ts) — quarantined rows
+   (a headline not about a target, another firm's note, a number the headline contradicts, another stock's note, a duplicate) are
+   left out of every read here; a row not classified yet (NULL) is kept. adj_target_checked = the target ÷ the splits after the note,
+   because FMP's adj_target lags recent splits. */
+const REV_CLEAN = "&or=(quality.is.null,quality.neq.quarantine)";
+const revTgt = (r) => { const c = revNum(r && r.adj_target_checked), a = revNum(r && r.adj_target); return c != null ? c : a != null ? a : revNum(r && r.target); };
 const REV_SEL_SUM = "as_of_date,last_month_count,last_month_avg,last_quarter_count,last_quarter_avg,last_year_count,last_year_avg,all_time_count,all_time_avg";
 function revNum(v) { if (v == null || v === "") return null; const n = Number(v); return isFinite(n) ? n : null; }
 function revPx(v) {
@@ -19950,7 +19956,7 @@ function revLines(rows) {
       byKey.set(k, L); lines.push(L);
     }
     if (r.kind === "TARGET" && L.target == null && revNum(r.target) != null) {
-      L.target = revNum(r.target); L.adj = revNum(r.adj_target) != null ? revNum(r.adj_target) : L.target;
+      L.target = revNum(r.target); L.adj = revTgt(r) != null ? revTgt(r) : L.target;
       L.tAction = r.action || null; if (r.analyst) L.analyst = r.analyst;
     }
     if (r.kind === "GRADE" && L.grTo == null && r.new_grade) { L.grFrom = r.prior_grade || null; L.grTo = r.new_grade; L.action = r.action || null; }
@@ -20062,7 +20068,7 @@ function revStripLoad(t) {
   if (REV_INFLIGHT[t]) return REV_INFLIGHT[t];
   const e = encodeURIComponent(t);
   return (REV_INFLIGHT[t] = Promise.all([
-    pg("analyst_target_news?ticker=eq." + e + "&select=" + REV_SEL_NEWS + "&order=published_utc.desc&limit=160"),
+    pg("analyst_target_news?ticker=eq." + e + REV_CLEAN + "&select=" + REV_SEL_NEWS + "&order=published_utc.desc&limit=160"),
     pg("price_target_summary_daily?ticker=eq." + e + "&select=" + REV_SEL_SUM + "&order=as_of_date.desc&limit=1"),
     typeof revR3Reads === "function" ? revR3Reads(t) : null,   // R3: the firm history, the estimate snapshots, the daily closes
   ]).then(([rows, sum, r3]) => { REV_CACHE[t] = Object.assign({ at: Date.now(), rows: rows || [], sum: (sum && sum[0]) || null, err: null }, r3 || {}); },
@@ -20091,7 +20097,7 @@ function revStripHTML(data) {
                    public.analyst_estimates_daily (one copy a day from 2 Oct; one older copy, 11 Aug, rebuilt from the R2 mirror).
    Plain numbers; no advice wording. */
 const REV_DAY = 86400e3, REV_TAPE_DAYS = 120, REV_TAPE_MAX = 40, REV_HOT_DAYS = 30, REV_EST_TOL = 12;
-const REV_HIST_SEL = "published_utc,firm,analyst,target,adj_target,price_when_posted,title,url";
+const REV_HIST_SEL = "published_utc,firm,analyst,target,adj_target,adj_target_checked,price_when_posted,title,url,quality";
 const REV_EST_SEL = "fiscal_date,as_of_date,eps_avg,revenue_avg,analysts_eps,analysts_revenue";
 const REV_HIST_FIRM = {};                       // ticker → the firm whose notes are open (A3: under the firm swipe)
 const revIsoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
@@ -20149,7 +20155,7 @@ function revHistFirms(rows, nowMs) {
   const by = new Map();
   for (const r of rows || []) {
     if (!r || !r.published_utc || REV_ROUNDUP.test(r.title || "")) continue;
-    const v = revNum(r.adj_target) != null ? revNum(r.adj_target) : revNum(r.target);
+    const v = revTgt(r);
     if (v == null || v <= 0) continue;
     const k = revFirmKey(r.firm); if (!k) continue;
     if (!by.has(k)) by.set(k, { firm: r.firm, key: k, notes: [] });
@@ -20262,10 +20268,10 @@ function revR3Reads(t) {
   const since = revIsoDay(Date.now() - 735 * REV_DAY);
   const api = (typeof window !== "undefined" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
   return Promise.all([
-    pg("analyst_target_news?ticker=eq." + e + "&kind=eq.TARGET&published_utc=gte." + since + "&select=" + REV_HIST_SEL + "&order=published_utc.desc&limit=1000").catch(() => []),
+    pg("analyst_target_news?ticker=eq." + e + "&kind=eq.TARGET&published_utc=gte." + since + REV_CLEAN + "&select=" + REV_HIST_SEL + "&order=published_utc.desc&limit=1000").catch(() => []),
     pg("analyst_estimates_daily?ticker=eq." + e + "&period=eq.annual&select=" + REV_EST_SEL + "&order=as_of_date.desc&limit=600").catch(() => []),
     fetch(api + "/candles?symbol=" + e + "&tf=D&limit=520").then((r) => (r.ok ? r.json() : null)).then((j) => ((j && Array.isArray(j.series)) ? j.series.map((b) => ({ t: +b.t, c: +b.c })) : [])).catch(() => []),
-    pg("analyst_target_news?ticker=eq." + e + "&kind=eq.GRADE&published_utc=gte." + since + "&select=published_utc,firm,prior_grade,new_grade,action,title&order=published_utc.desc&limit=1000").catch(() => []),   // A3: each firm's rating on its card
+    pg("analyst_target_news?ticker=eq." + e + "&kind=eq.GRADE&published_utc=gte." + since + REV_CLEAN + "&select=published_utc,firm,prior_grade,new_grade,action,title&order=published_utc.desc&limit=1000").catch(() => []),   // A3: each firm's rating on its card
   ]).then(([hist, est, px, grades]) => ({ hist: hist || [], est: est || [], px: px || [], grades: grades || [] }));
 }
 function revR3Paint(t) {
@@ -20309,7 +20315,7 @@ function ptcFirmSet(hist, anchorMs, days) {
     if (!r || !r.published_utc || REV_ROUNDUP.test(r.title || "")) continue;
     const ms = new Date(r.published_utc).getTime();
     if (!(ms > since && ms <= anchorMs)) continue;
-    const v = revNum(r.adj_target) != null ? revNum(r.adj_target) : revNum(r.target);
+    const v = revTgt(r);
     if (v == null || v <= 0) continue;
     const k = revFirmKey(r.firm); if (!k) continue;
     const o = by.get(k); if (!o || o.ms < ms) by.set(k, { ms, v });
@@ -20330,7 +20336,8 @@ function estPtcBody(t, pt, px, c, nowMs) {
   let mean = pt ? revNum(pt.target_avg) : null, med = pt ? revNum(pt.target_median) : null, lo = pt ? revNum(pt.target_low) : null, hi = pt ? revNum(pt.target_high) : null;
   const anchor = ptcAnchor(pt, now), set = c && !c.err ? ptcFirmSet(c.hist || [], anchor, PTC_DAYS) : null;
   let fromNotes = false;
-  if (mean == null && set && set.n) { mean = set.mean; med = set.med; lo = set.lo; hi = set.hi; fromNotes = true; }
+  const fmpMean = mean;   // A4: FMP's consensus is built from the same notes, junk included (AMZN 3 Oct: UBS "$200" = an FTC news item) —
+  if (set && set.n) { mean = set.mean; med = set.med; lo = set.lo; hi = set.hi; fromNotes = true; }   // the checked notes lead, FMP's mean sits beside
   const open = '<div class="sc-ptc" data-rev-t="' + esc(t) + '">';
   const k = '<div class="sc-ptc-k">Price target' + (fromNotes ? " · the firms' notes" : " · consensus") +
     (pt && pt.updated_ts ? '<span class="asof">' + esc(revDay(new Date(anchor).toISOString(), yr)) + "</span>" : "") + "</div>";
@@ -20342,6 +20349,7 @@ function estPtcBody(t, pt, px, c, nowMs) {
     cell(ptcPx(med), "median") +
     cell(set ? String(set.n) : "…", "firms") +
     (dist != null ? cell((dist >= 0 ? "▲ " : "▼ ") + revPct(dist), "vs " + ptcPx(px) + " now", d) : "") +
+    (fromNotes && fmpMean != null ? cell(ptcPx(fmpMean), "FMP mean") : "") +
     "</div>";   // low and high are labelled on the track under it
   /* one track: low to high, today's price, the mean and the median on it, the gap from today to the mean filled green / red */
   const cand = [lo, hi, mean, med, px].filter((v) => v != null && isFinite(v) && v > 0);
@@ -20372,14 +20380,15 @@ function estPtcHTML(data) {
 }
 function estPtcSpecs(t, pt, c, nowMs) {
   const T = "$" + esc(t), out = [];
-  out.push("PRICE TARGET = FMP's price-target consensus for " + T + " (price_target_consensus): the mean and the median of the 12-month targets the firms covering it have published, the lowest and the highest. MEDIAN = the middle of the price targets published by the firms that cover " + T + ". Not from the comps.");
+  out.push("PRICE TARGET = the firms' own notes for " + T + ", checked (analyst_target_news, A4): each firm's newest 12-month target dated in the " + PTC_DAYS + " days before FMP's update — the mean, the median, the lowest and the highest. MEDIAN = the middle of those targets. Rows the check quarantined are left out: a headline that is not about a target (AMZN, 17 Sep: an FTC news item filed as UBS $200), another firm's note filed under this one (NVDA, 2 Oct: Morgan Stanley's headline filed as Wells Fargo $210), a number the headline contradicts, another stock's note, a second copy of the same note. Targets are split-adjusted by our own splits table where FMP's adjustment lags. Not from the comps.");
+  out.push("FMP MEAN = FMP's own price-target consensus (price_target_consensus), for comparison. FMP builds it from the same notes without the check, so it moves with the junk (AMZN low $200 at FMP vs $300 checked).");
   out.push("The % beside it = the mean target against today's price (the live quote; the company payload's price when no quote is in).");
   if (c && !c.err) {
     const anchor = ptcAnchor(pt, nowMs || Date.now()), set = ptcFirmSet(c.hist || [], anchor, PTC_DAYS);
     const m = pt ? revNum(pt.target_avg) : null;
-    out.push("FIRMS = the firms whose newest split-adjusted target (analyst_target_news) is dated in the " + PTC_DAYS + " days before FMP's update of " +
+    out.push("FIRMS = the firms whose newest checked, split-adjusted target (analyst_target_news) is dated in the " + PTC_DAYS + " days before FMP's update of " +
       esc(new Date(anchor).toISOString().slice(0, 10)) + " — FMP gives no count. " + (set.n ? "On these " + set.n + " firms the mean is " + ptcPx(set.mean) + " and the median " + ptcPx(set.med) +
-      (m != null ? "; FMP's own: " + ptcPx(m) + " and " + ptcPx(pt.target_median) + (Math.abs(set.mean - m) < 0.01 ? " — the same set." : " — the gap is a firm FMP counts differently.") : ".") : "No firm note falls in that window."));
+      (m != null ? "; FMP's own: " + ptcPx(m) + " and " + ptcPx(pt.target_median) + (Math.abs(set.mean - m) < 0.01 ? " — the same set." : " — the gap is the notes the check left out (or a firm FMP counts differently).") : ".") : "No firm note falls in that window."));
   }
   return out;
 }

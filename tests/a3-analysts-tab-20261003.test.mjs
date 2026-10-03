@@ -73,7 +73,7 @@ test("the target block: mean big, median, firms, the distance from today in colo
 test("the target block's words are in PAGE SPECS: what the median is, how the firms are counted, the check against FMP", () => {
   const c = { hist: fx.notes.AMZN };
   const sp = ctx.estPtcSpecs("AMZN", fx.consensus.AMZN, c, Date.now()).join(" ");
-  assert.match(sp, /MEDIAN = the middle of the price targets published by the firms that cover \$AMZN/);
+  assert.match(sp, /MEDIAN = the middle of those targets/);   // A4: the target block now reads the firms' checked notes
   assert.match(sp, /183 days before FMP's update of 2026-10-02/);
   assert.match(sp, /On these 30 firms the mean is \$326\.83[^.]*FMP's own: \$326\.83 and \$325 — the same set\./);
 });

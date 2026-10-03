@@ -57,7 +57,7 @@ test("the R2 mirror's CSV: quoted fields, header order, as-of = the row's own up
   assert.equal(dd.length, 1);
 });
 test("the function: v2, three modes, the R2 read is GET-only and the error text hides keys", () => {
-  assert.match(fnSrc, /const VERSION = "analyst-revisions-v2"/);
+  assert.match(fnSrc, /const VERSION = "analyst-revisions-v[23]"/);   // A4 (3 Oct): v3 adds the quality check on the way in
   assert.match(fnSrc, /mode !== "pass" && mode !== "backfill" && mode !== "estimates"/);
   assert.match(fnSrc, /analyst_estimates_daily/);
   assert.ok(!/"PUT"|"DELETE"|method: "POST"/.test(fnSrc), "R2 is only read");
