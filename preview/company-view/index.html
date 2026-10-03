@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 646d9cb) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 62695db) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -19284,12 +19284,13 @@ function financialsTabHTML(data) {
   const inc = byFY(data._finhist), bal = byFY(data._balhist), cf = byFY(data._cfhist);
   const qs = finQuarters(data._finq, 8);
   const years = Array.from(new Set(Object.keys(inc).concat(Object.keys(bal), Object.keys(cf)).map(Number))).sort((a, b) => a - b).slice(-6);
-  setTimeout(() => ofCapFill(data.t, data._balq), 0);                                   /* R2 Part A (2 Oct) — CAPITAL & DILUTION */
-  if (!years.length && !qs.length) return '<div class="fn3">' + ofCapSectionHTML(data) + '</div><div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
+  const ofCap = typeof ofCapSectionHTML === "function" ? ofCapSectionHTML(data) : "";      /* R2 Part A (2 Oct) — CAPITAL & DILUTION */
+  if (ofCap && typeof setTimeout === "function") setTimeout(() => ofCapFill(data.t, data._balq), 0);
+  if (!years.length && !qs.length) return (ofCap ? '<div class="fn3">' + ofCap + "</div>" : "") + '<div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
   const fyCols = years.map((y) => "FY" + String(y).slice(2));
   const col = (m, f) => years.map((y) => f(m[y] || null, y));
   let out = '<div class="fn3"><div class="fn3-src">FMP statements stored in our tables · $ billions unless marked · (brackets) = negative</div>';
-  out += ofCapSectionHTML(data);                                                          /* R2 Part A (2 Oct) — the offering filings' home */
+  out += ofCap;                                                                           /* R2 Part A (2 Oct) — the offering filings' home */
   if (qs.length) {
     out += '<section class="fn3-sec"><h3 class="fn3-h">QUARTERS · REVENUE <span>last ' + qs.length + " reported · green = bigger than the same quarter a year before, red = smaller</span></h3>" +
       finQBarsHTML(qs) +

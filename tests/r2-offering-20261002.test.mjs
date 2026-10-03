@@ -184,9 +184,10 @@ test("Hub · the block: reading, none since the record starts, the rows newest f
 });
 
 test("Hub · its home is FINANCIALS only: the ALERTS room is still parked, the board row and the EVENTS tab are as they were", () => {
-  assert.match(page, /out \+= ofCapSectionHTML\(data\);/);
-  assert.match(page, /setTimeout\(\(\) => ofCapFill\(data\.t, data\._balq\), 0\);/);
-  assert.match(page, /return '<div class="fn3">' \+ ofCapSectionHTML\(data\) \+ '<\/div><div class="sc-senttxt">No rows in fundamentals_history/);
+  assert.match(page, /const ofCap = typeof ofCapSectionHTML === "function" \? ofCapSectionHTML\(data\) : "";/);   // guarded: the page's
+  assert.match(page, /if \(ofCap && typeof setTimeout === "function"\) setTimeout\(\(\) => ofCapFill\(data\.t, data\._balq\), 0\);/);   // own tests lift
+  assert.match(page, /out \+= ofCap;/);                                                                                       // financialsTabHTML alone
+  assert.match(page, /return \(ofCap \? '<div class="fn3">' \+ ofCap \+ "<\/div>" : ""\) \+ '<div class="sc-senttxt">No rows in fundamentals_history/);
   assert.match(page, /case "ALERTS":\s+return parkedRoomHTML\("ALERTS"\);/);
   assert.match(page, /'<span class="sc-ctk' \+ \(d\.nf \? " has-nf" : ""\) \+ '">' \+ esc\(d\.t\) \+\n/);
   assert.match(page, /return '<div class="sc-evtab">' \+ fixed \+ relScroll \+ pastScroll \+ "<\/div>";/);
