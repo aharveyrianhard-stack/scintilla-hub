@@ -4855,6 +4855,23 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .sc-tape--ernec .ecb-nm{ letter-spacing:.06em; }
 .ern-ec--later .ecb-dot, .ern-ec--later .ecb-nm{ opacity:.6; }
 .ern-later{ font-size:.9em; }
+/* R2 · 2 OCT · IPO LOCK-UPS — the card on the EARNINGS page (the rail's own ev-uptbl look, greys only) */
+.ev-uptbl.ulk-tbl{ table-layout:fixed; }
+.ulk-tbl th.d, .ulk-tbl td.d{ width:8.2em; }
+.ulk-tbl th.r, .ulk-tbl td.r{ width:5.6em; }
+.ulk-tbl tr.ulk-r td{ border-bottom:none; padding-bottom:2px; }
+.ulk-tbl tr.ulk-r td.t{ white-space:normal; overflow:hidden; }
+.ulk-tbl .ulk-co{ display:block; color:var(--dim); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ulk-tbl tr.ulk-x td{ white-space:normal; color:var(--dim); font-size:11px; line-height:1.4; padding:0 4px 8px; }
+.ulk-tbl .ulk-sent{ color:#8C8C94; font-style:italic; margin-top:3px; }
+.ulk-tbl tr.is-past td{ opacity:.5; }
+.ulk-tbl tr.ulk-h td{ color:var(--dim); letter-spacing:.1em; font-size:11px; padding:12px 4px 4px; border-bottom:.5px solid var(--line2); }
+.ulk-foot{ color:var(--dim); font-size:11px; margin-top:6px; }
+@media (max-width:560px){ .ev-uptbl.ulk-tbl th:nth-child(3), .ev-uptbl.ulk-tbl td:nth-child(3){ display:table-cell; } }   /* the days to go stay on a phone (the rail's own rule hides a 3rd column there) */
+/* …and the STATS line (ACTIVITY & DATES): the value wraps instead of being cut off */
+.st-blk > div.st-ulk, .cv-side .st1 .st-blk > div.st-ulk{ align-items:flex-start; }
+.st-blk > div.st-ulk > span, .cv-side .st1 .st-blk > div.st-ulk > span{ flex:0 0 auto; overflow:visible; }
+.st-blk > div.st-ulk > b, .cv-side .st1 .st-blk > div.st-ulk > b{ white-space:normal; flex:1 1 0; min-width:0; max-width:none; overflow:visible; overflow-wrap:anywhere; }
 .ern-roomtape .sc-toptape--ern{ height:40px; }
 /* 29 Sep — the economic room's tape, in the same frame; a High release is drawn heavier; NEXT stays visible on a phone
    in BOTH room tapes (it drops under the tape instead of disappearing) */
@@ -14138,6 +14155,9 @@ function eventsRoomHTML() {
          compact table (EPS and revenue estimates, BMO/AMC, "in 3d"); the scrollable PAST-REPORTED list goes below it. */
       '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>earnings extras</span>' + SECFS_BTN + '</div><div class="rail" id="evExtras">' +
         '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt ev-upwrap" id="evUpcoming">—</div></div>' +
+        /* R2 (2 Oct) — IPO LOCK-UPS: every Hub stock whose lock-up ends in the next 12 months, the last 6 months' dimmed */
+        (typeof unlockSectionHTML === "function" && UNLOCK_ON
+          ? '<div class="card"><h4>IPO LOCK-UPS · NEXT 12 MONTHS</h4><div class="ev-ulkwrap" id="evLockups">' + unlockSectionHTML() + "</div></div>" : "") +
         '<div class="card"><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
         '<div id="evRelPanel"></div>' +
       "</div></div></div></div>";
@@ -18717,6 +18737,9 @@ function statsActivityHTML(data, row) {   // ACTIVITY &amp; DATES — today's vo
   const sp = lastEv ? num(lastEv.surprise_pct) : null;
   if (lastEv) rows.push(stRow("last report", esc(stDate(lastEv.date, true)) + (sp != null ? " · EPS " + stSigned(sp, 1) : ""),
     "the last earnings report, " + stDate(lastEv.date) + (sp != null ? ", EPS " + stSigned(sp, 1) + " against the estimate" : "") + " · earnings_events (FMP)", sp != null && sp < 0));
+  /* R2 (2 Oct) — the IPO lock-up (ipo_lockups, read from the prospectus by unlock-watch): when it ends, or "no lock-up
+     (relisting)"; nothing for a listing whose lock-up is behind it, nothing for a fund */
+  if (!fund && typeof unlockStatsRowHTML === "function") { const ulk = unlockStatsRowHTML(data.t); if (ulk) rows.push(ulk); }
   /* H8 — the last dividend per share with its ex-date, and FMP's annualised yield at that date (company_profile, loaded from
      FMP /stable/dividends on 2 Oct 2026). "none on record" is a fact too: FMP's dividend list for the name is empty. */
   const dps = num(p.dividend_per_share), dy = num(p.dividend_yield), exd = p.ex_dividend_date || null;
@@ -23791,6 +23814,150 @@ function ernDayTapeHTML(nowSec, todayIso) {
   return '<div class="sc-tape sc-tape--top sc-tape--ernday" id="topTapeBand"><b class="sc-tape__lbl" title="' +
     esc("earnings of the names the Hub tracks, one day at a time in time order: today until today's have all reported (or 20:00 ET), then the next day that has reports · tap a ticker for its company") +
     '">EARNINGS →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+/* ============================================================================
+   R2 · 2 OCT · IPO LOCK-UPS — on the EARNINGS page and in the company view's STATS. Not on the dashboard.
+   Alan, 2 Oct: "Can we get pre-IPO unlock dates from FMP, Massive or somewhere else?" Neither provider carries them (R1);
+   the edge function unlock-watch reads each recent IPO's prospectus at the SEC and keeps one row per name in
+   public.ipo_lockups (the day count, the prospectus date it counts from, any early or staged release, the source).
+   WHERE IT LIVES — Alan, later on 2 Oct: "dashboard strips are very precious, I decide when we put a dashboard strip" ·
+   "before alerts, things need to have a home on hub":
+     · THE EARNINGS PAGE (top nav): an IPO LOCK-UPS card in its right-hand rail — every Hub stock whose lock-up ends in the
+       next 12 months, soonest first (the date, the days to go, the prospectus basis, the early-release words, the staged
+       steps still ahead, and the prospectus's early-release sentence), then the ones that ended in the last 6 months,
+       dimmed. All Hub stocks, whatever the cohort. Tap a row for the company.
+     · STATS · ACTIVITY & DATES: "lock-up ends 9 Nov 2026 (prospectus: 180 days, or 2 trading days after the Q3 report)";
+       "no lock-up (relisting)" where that applies; nothing for a listing whose lock-up is behind it.
+   THE READ: the whole table (a few rows) once per six hours, nothing written. Rollback: UNLOCK_ON = false (?unlock=off).
+   ============================================================================ */
+var UNLOCK_ON = ernSwitchFromUrl("unlock", "on", "off", true);
+var ULK_AHEAD_DAYS = 365, ULK_PAST_DAYS = 183, ULK_TTL_MS = 6 * 3600e3, ULK_RETRY_MS = 5 * 60e3;
+var ULK_ROWS = null, ULK_AT = 0, ULK_BUSY = false, ULK_FAIL_AT = 0;
+async function unlockRead() {
+  if (!UNLOCK_ON || ULK_BUSY) return;
+  ULK_BUSY = true;
+  try {
+    const rows = await pg("ipo_lockups?select=ticker,company,listing_kind,ipo_date,lockup_days,unlock_date,basis,early_rule,early_release,clause," +
+      "prospectus_date,schedule,source_url,source_form,checked_utc&order=unlock_date.asc&limit=1000", 1);
+    ULK_ROWS = Array.isArray(rows) ? rows : []; ULK_AT = Date.now(); ULK_FAIL_AT = 0;
+  } catch (_) { ULK_FAIL_AT = Date.now(); }        /* a failed read: the card says so and STATS carries no line until the retry */
+  finally { ULK_BUSY = false; }
+  try { unlockSectionPaint(); } catch (_) {}
+  try { unlockStatsRepaint(); } catch (_) {}
+}
+function unlockKick() {
+  if (!UNLOCK_ON || ULK_BUSY) return;
+  if (ULK_FAIL_AT && Date.now() - ULK_FAIL_AT < ULK_RETRY_MS) return;
+  if (!ULK_ROWS || Date.now() - ULK_AT >= ULK_TTL_MS) unlockRead();
+}
+/* PURE — one row's terms in words, shared by STATS and the EARNINGS card: the basis ("prospectus: 180 days"), the final
+   release's earlier leg ("or 2 trading days after the Q3 report") and the staged steps still ahead before the main end */
+function ulkTerms(r, todayIso) {
+  const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const sm = (iso) => MO[+iso.slice(5, 7) - 1] + " " + (+iso.slice(8, 10));
+  const sch = Array.isArray(r.schedule) ? r.schedule : [];
+  const fin = sch.find((s) => s && s.final) || null;
+  const noYear = (t) => String(t || "").replace(/the (Q\d) \d{4} report/, "the $1 report");
+  const spac = String(r.listing_kind || "") === "SPAC";
+  const basis = r.basis === "PROSPECTUS" ? (spac ? "merger prospectus: " : "prospectus: ") + r.lockup_days + " days" + (spac ? " from the closing" : "")
+    : "assumed: 180 days — the prospectus clause was not found";
+  let alt = null;
+  if (fin && fin.trigger && fin.quarter_end) alt = "or " + noYear(fin.trigger);
+  else if (!sch.length && r.early_rule && /^or /.test(r.early_rule)) alt = noYear(r.early_rule.split(" · ")[0].replace(/, if earlier$/, ""));
+  const end = r.unlock_date || "9999-12-31";
+  const steps = sch.filter((s) => s && !s.final && !s.conditional &&
+    ((s.date && s.date >= todayIso && s.date < end) || (!s.date && s.quarter_end && s.quarter_end < end &&
+      (Date.parse(todayIso + "T12:00:00Z") - Date.parse(s.quarter_end + "T12:00:00Z")) / 86400e3 < 75)))
+    .map((s) => (s.pct || String(s.shares || "").replace(/ million$/, "M").replace(/ billion$/, "B") + " sh") + " " + (s.date ? sm(s.date) : noYear(s.trigger)));
+  return { basis: basis, alt: alt, steps: steps };
+}
+/* PURE — the STATS words for one row on `todayIso`: { k, v } or null. "lock-up ends 9 Nov 2026 (prospectus: 180 days, or 2
+   trading days after the Q3 report)"; "no lock-up (relisting)"; null for a lock-up already behind the name. */
+function unlockStatsText(r, todayIso) {
+  if (!r) return null;
+  const kind = String(r.listing_kind || "");
+  if (kind === "RELISTING") return { k: "lock-up", v: "no lock-up (relisting)" };
+  if (kind === "DIRECT_LISTING") return { k: "lock-up", v: "no lock-up (direct listing)" };
+  if (kind === "SPINOFF") return { k: "lock-up", v: "no lock-up (spin-off)" };
+  if (!r.unlock_date || r.unlock_date < todayIso) return null;
+  const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const x = ulkTerms(r, todayIso);
+  const parts = [x.basis + (x.alt ? ", " + x.alt : "")];
+  if (x.steps.length) parts.push("before it: " + x.steps.join(", "));
+  return { k: "lock-up ends", v: (+r.unlock_date.slice(8, 10)) + " " + MO[+r.unlock_date.slice(5, 7) - 1] + " " + r.unlock_date.slice(0, 4) + " (" + parts.join(" · ") + ")" };
+}
+/* PURE — the EARNINGS card's list on `todayIso`: { ahead, past }. Ahead = lock-ups ending today or within `aheadDays`,
+   soonest first; past = ended within `pastDays`, newest first, plus a relisting / direct listing / spin-off that listed in
+   that time (it has no lock-up, and says so). */
+function unlockListModel(rows, todayIso, aheadDays, pastDays) {
+  const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dt = (iso) => (+iso.slice(8, 10)) + " " + MO[+iso.slice(5, 7) - 1] + " " + iso.slice(0, 4);
+  const dn = (iso) => Math.round((Date.parse(iso + "T12:00:00Z") - Date.parse(todayIso + "T12:00:00Z")) / 86400e3);
+  const A = aheadDays || 365, P = pastDays || 183, ahead = [], past = [];
+  for (const r of rows || []) {
+    if (!r || !r.ticker) continue;
+    const kind = String(r.listing_kind || ""), base = { ticker: r.ticker, company: r.company || null, source_form: r.source_form || null, source_url: r.source_url || null };
+    if (/^(RELISTING|DIRECT_LISTING|SPINOFF)$/.test(kind)) {
+      const d = r.ipo_date ? dn(r.ipo_date) : null;
+      if (d != null && d <= 0 && d >= -P) past.push(Object.assign(base, { date: r.ipo_date, dateTxt: dt(r.ipo_date), days: d, past: true, none: true,
+        basis: "no lock-up (" + kind.toLowerCase().replace("_", " ").replace("spinoff", "spin-off") + ")", alt: null, steps: [], sentence: null, dated: null }));
+      continue;
+    }
+    if (!r.unlock_date) continue;
+    const d = dn(r.unlock_date);
+    if (d > A || d < -P) continue;
+    const x = ulkTerms(r, todayIso);
+    const item = Object.assign(base, { date: r.unlock_date, dateTxt: dt(r.unlock_date), days: d, past: d < 0, none: false, basis: x.basis,
+      alt: x.alt, steps: d < 0 ? [] : x.steps, sentence: r.early_release || null, dated: r.prospectus_date ? dt(r.prospectus_date) : null });
+    (d < 0 ? past : ahead).push(item);
+  }
+  ahead.sort((a, b) => a.days - b.days || (a.ticker < b.ticker ? -1 : 1));
+  past.sort((a, b) => b.days - a.days || (a.ticker < b.ticker ? -1 : 1));
+  return { ahead: ahead, past: past };
+}
+function ulkRow(t) { return ULK_ROWS ? ULK_ROWS.find((r) => r && r.ticker === t) || null : null; }
+/* THE EARNINGS PAGE CARD — the rail's own table look (ev-uptbl): a row per name, the terms and the sentence under it */
+function unlockSectionHTML() {
+  unlockKick();
+  if (!UNLOCK_ON) return "";
+  if (!ULK_ROWS) return '<div class="sc-senttxt">' + (ULK_FAIL_AT ? "the lock-ups could not be read — another try in a few minutes" : "reading the lock-ups…") + "</div>";
+  const m = unlockListModel(ULK_ROWS, todayISO(), ULK_AHEAD_DAYS, ULK_PAST_DAYS);
+  if (!m.ahead.length && !m.past.length) return '<div class="sc-senttxt">No Hub stock has a lock-up ending in the next 12 months or one that ended in the last 6.</div>';
+  const row = (x) => {
+    const rel = x.none ? "" : x.days === 0 ? "today" : x.days > 0 ? "in " + x.days + "d" : -x.days + "d ago";
+    const title = x.ticker + (x.company ? " · " + x.company : "") + " — " + (x.none ? x.basis + ", listed " + x.dateTxt
+      : "the IPO lock-up " + (x.past ? "ended " : "ends ") + x.dateTxt + " · " + x.basis + (x.dated ? ", counted from the prospectus dated " + x.dated : "")) +
+      (x.source_form ? " · read from the " + x.source_form + " at the SEC (ipo_lockups)" : "") + " · tap for the company page";
+    const terms = [x.none ? x.basis : x.basis + (x.alt ? ", " + x.alt : ""), x.steps.length ? "before it: " + x.steps.join(", ") : null].filter(Boolean).join(" · ");
+    return '<tr class="ulk-r' + (x.past ? " is-past" : "") + '" data-act="row" data-t="' + esc(x.ticker) + '" title="' + esc(title) + '">' +
+      '<td class="t"><b>' + esc(x.ticker) + "</b>" + (x.company ? '<span class="ulk-co">' + esc(x.company) + "</span>" : "") + "</td>" +
+      '<td class="d">' + esc(x.none ? "listed " + x.dateTxt : x.dateTxt) + "</td>" +
+      '<td class="r">' + (rel ? '<span class="sc-evrel' + (x.past ? "" : " up") + '">' + esc(rel) + "</span>" : "") + "</td></tr>" +
+      '<tr class="ulk-x' + (x.past ? " is-past" : "") + '"><td colspan="3">' + esc(terms) +
+      (x.sentence ? '<div class="ulk-sent">the prospectus: “' + esc(String(x.sentence).replace(/\s+/g, " ")) + "”</div>" : "") + "</td></tr>";
+  };
+  return '<table class="ev-uptbl ulk-tbl"><thead><tr><th class="t">TICKER</th><th class="d">LOCK-UP ENDS</th><th class="r">IN</th></tr></thead><tbody>' +
+    (m.ahead.length ? m.ahead.map(row).join("") : '<tr class="ulk-x"><td colspan="3">none in the next 12 months</td></tr>') +
+    (m.past.length ? '<tr class="ulk-h"><td colspan="3">ENDED · LAST 6 MONTHS</td></tr>' + m.past.map(row).join("") : "") +
+    "</tbody></table>" +
+    '<div class="ulk-foot">every Hub stock, whatever the cohort · read from each prospectus at the SEC by unlock-watch (ipo_lockups)</div>';
+}
+function unlockSectionPaint() { const h = el("evLockups"); if (h) h.innerHTML = unlockSectionHTML(); }
+/* the STATS row (ACTIVITY & DATES) — wraps instead of cutting off, the prospectus's own sentence in its hover */
+function unlockStatsRowHTML(t) {
+  unlockKick();
+  if (!UNLOCK_ON) return "";
+  const r = ulkRow(t), x = unlockStatsText(r, todayISO());
+  if (!x) return "";
+  const title = (r.clause ? "the prospectus: “" + r.clause + "”" : "") + (r.source_url ? " · " + (r.source_form || "prospectus") + " at the SEC: " + r.source_url : "") +
+    " · ipo_lockups (unlock-watch), read " + String(r.checked_utc || "").slice(0, 10);
+  return '<div class="st-ulk" title="' + esc(title) + '"><span>' + esc(x.k) + "</span><b>" + esc(x.v) + "</b></div>";
+}
+/* the read landed after STATS was drawn: draw the tab again (only when that name has a row) */
+function unlockStatsRepaint() {
+  if (typeof S === "undefined" || !S || S.coTab !== "STATS" || !S.coData || S.coData._loading || !ulkRow(S.coData.t)) return;
+  const rc = el("coRailContent");
+  if (rc && rc.querySelector && rc.querySelector(".st1") && !rc.querySelector(".st-ulk")) rc.innerHTML = coTabHTML(S.coData);
 }
 /* THE ECONOMIC SEGMENT'S SLIDE — the count, then each release of that day in time order, then the count again */
 function ecCycItemHTML(it, st) {
