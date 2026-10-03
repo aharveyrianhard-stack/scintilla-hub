@@ -34,7 +34,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { prepareTree, layout as layoutTree, bestRows, LAYOUT } from "./layout.js";
 
-export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, onSelect, onRelease, onArea, onTree }) {
+export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar, orderValue, membersOf, onSelect, onRelease, onArea, onTree, onWalk }) {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
@@ -64,7 +64,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   const Q = new URLSearchParams(location.search);
   const qn = (k, d) => (Q.has(k) && Number.isFinite(+Q.get(k)) ? +Q.get(k) : d);
   const CLEAN_SP = qn("sp", 104), CLEAN_ROW = qn("row", 36), CLEAN_MINW = qn("minw", 120);
-  const CLEAN_L = { GAP: qn("gap", 24), LEVEL: qn("level", 70), NAMES_DROP: qn("drop", 50), ROWGAP: qn("rowgap", 110) };
+  const CLEAN_L = { GAP: qn("gap", 24), LEVEL: qn("level", 70), NAMES_DROP: qn("drop", 50), ROWGAP: qn("rowgap", 110) }; // T9 tried 18 / 56 / 42 / 84: the zoom-out is bound by the tree's WIDTH, so it bought no black back and put 4 fund-set captions on boxes — T8's distances stay
   const boxMode = () => state.detail !== "detailed"; // CLEAN draws boxes (bars with the name on them) instead of balls
   const modes = {};
   function buildMode(key) {
@@ -289,14 +289,14 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   function subtree(h) { const out = [h]; (function walk(id) { for (const c of primaryKids(id)) { out.push(c); walk(c.id); } })(h.id); if (h.kind === "cohort") out.push(...membersOf(h)); return out; }
   /* T6 · the bottom band: the framing keeps clear whatever sits at the bottom of the canvas (the KEY, open or closed, and
      the hint line — whichever reaches higher) plus the depth of a label under the lowest node, so nothing overlaps. */
-  const LABEL_DEPTH = 56;
+  const LABEL_DEPTH = 40; // T9: was 56 — the band under the lowest label was a fifth of the canvas of black
   function bottomBand() {
     const gr = graph.getBoundingClientRect(); let top = gr.bottom;
     for (const id of ["legend", "hint"]) { const el = $(id); if (el && getComputedStyle(el).display !== "none") top = Math.min(top, el.getBoundingClientRect().top); }
     return Math.max(0, gr.bottom - top) + 10 + LABEL_DEPTH;
   }
   function frameWhole(ms = 0, getPos) {
-    const to = framing(nodes, state.flat ? DIR2 : DIR3, 0.9, getPos, Math.min(0.55, bottomBand() / Math.max(1, view.h)));
+    const to = framing(nodes, state.flat ? DIR2 : DIR3, 0.94, getPos, Math.min(0.55, bottomBand() / Math.max(1, view.h))); // T9: fill 0.94 (was 0.9)
     if (!ms) { camera.position.copy(to.p); controls.target.copy(to.t); move = null; wake(); } else flyTo(to, ms);
   }
   $("legend").addEventListener("toggle", () => { if (!cluster) frameWhole(500); }); // the KEY opened or closed: keep the tree above it
@@ -423,7 +423,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   function toScreen(p) { _S.copy(p).project(camera); return [(_S.x + 1) * view.w / 2, (1 - _S.y) * view.h / 2]; } // a world point in canvas px (the camera's matrices are current inside placeLabels)
 
   /* ---- render on demand ---- */
-  let running = false, still = 0, morph = null;
+  let running = false, still = 0, morph = null, walk = null, lastWheel = 0; // walk: T9's step walk (declared here: tick reads it)
   function pauseAnimation() { running = false; state.paused = true; }
   function resumeAnimation() { if (!running) { running = true; state.paused = false; requestAnimationFrame(tick); } still = 0; }
   function wake() { resumeAnimation(); }
@@ -432,7 +432,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     if (!running) return;
     const moved = stepMove(now) | stepMorph(now) | controls.update();
     if (moved) still = 0; else still++;
-    if (still < 2 || state.dirty) { const camD = camera.position.distanceTo(controls.target); scene.fog.near = camD * 0.9; scene.fog.far = camD * 3.2; ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); placeLabels(); state.frames++; state.dirty = false; }
+    if (still < 2 || state.dirty) { const camD = camera.position.distanceTo(controls.target); if (walk) { scene.fog.near = 700; scene.fog.far = 2400; } else { scene.fog.near = camD * 0.9; scene.fog.far = camD * 3.2; } /* T9: walking, the stair ahead must not fade */ ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); placeLabels(); state.frames++; state.dirty = false; }
     if (still > 30 && !move && !morph) { pauseAnimation(); state.settled = true; return; }
     requestAnimationFrame(tick);
   }
@@ -566,7 +566,7 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     for (const n of sub) { const p = L3[n.id] || o; put(n, p[0] - o[0], p[1] - o[1], p[2] - o[2]); }
     let rad = 40; for (const n of sub) rad = Math.max(rad, Math.hypot(n.pos.x, n.pos.z));
     const depth = sub.reduce((m, n) => Math.min(m, n.pos.y), 0);
-    nbs.forEach((nb, i) => { const a = (i / nbs.length) * Math.PI * 2, r = rad + 70; put(nb, r * Math.cos(a), depth - 30, r * Math.sin(a)); });
+    nbs.forEach((nb, i) => { const a = (i / nbs.length) * Math.PI * 2, r = rad + 70; put(nb, r * Math.cos(a), depth - 30, r * Math.sin(a)); }); // T9 tried +44: one ticker landed on a box at 1680, so the ring stays where T8 put it
     const group = new THREE.Group();
     const colOf = (n) => n.kind === "index" ? HEADING : n.kind === "cohort" ? COHORT : n.g || n.sg ? LIT : HOLLOW;
     const mkBall = (n, op = 1) => { const b = new THREE.Mesh(sph, new THREE.MeshLambertMaterial({ color: colOf(n), transparent: op < 1, opacity: op })); b.position.copy(n.pos); b.scale.setScalar(n.r); b.userData.node = n; group.add(b); return b; };
@@ -587,11 +587,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     scene.add(group);
     showWhole(false);
     cluster = { c: root, group, balls, members: sub, nbs, before: { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate };
-    controls.enableRotate = true; // orbit is allowed inside an area, whatever the canvas allows
+    controls.enableRotate = true; freeOrbit(); // orbit is allowed inside an area, whatever the canvas allows; T9: no limit on the turn
     state.cluster = root.id; state.clusterCount = { members: sub.length, names: names.length, neighbours: nbs.length, waiting };
     nodes.forEach(hide);
     focusCanvas();
-    flyTo(framing([root, ...sub, ...nbs], DIR3, 0.8), 900);
+    cluster.home = framing([root, ...sub, ...nbs], DIR3, 0.8); // T9 tried 0.9 and 0.86: each put one ticker on another name's box at 1680, so T8's 0.8 stays; RESET VIEW / a double-click comes back here; RESET VIEW / a double-click comes back here
+    flyTo(cluster.home, 900);
     state.dirty = true; wake();
     if (onArea) onArea(root);
   }
@@ -627,11 +628,12 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
        the camera sits 70° up (Alan: "70 — sounds like a good angle; I'll be able to drag anyway").
        ?sa= ?sb= ?sd= ?srw= ?sh= ?sel= ?saz= tune: inner radius, radius per radian (0 = from RW), the step along the arc
        (= tread width), tread depth, H, the camera's elevation and azimuth (degrees); __mm.podiumParams() reads them back. */
-  const PARAMS = { stand: { A: qn("sa", 46), B: qn("sb", 0), D: qn("sd", 30), RW: qn("srw", 30), H: qn("sh", 260), H_MIN: 60, el: qn("sel", 70), az: qn("saz", 28) }, above: { el: qn("pel", 88), az: qn("paz", 28) } };
+  const PARAMS = { stand: { A: qn("sa", 30), B: qn("sb", 0), D: qn("sd", 30), RW: qn("srw", 30), H: qn("sh", 260), H_MIN: 60, el: qn("sel", 70), az: qn("saz", 28) }, above: { el: qn("pel", 88), az: qn("paz", 28) } };
   if (!(PARAMS.stand.B > 0)) PARAMS.stand.B = (PARAMS.stand.RW * 1.04) / (2 * Math.PI); // one turn out = one tread's depth: the turns touch
   const dirOf = (P) => { const el = (P.el * Math.PI) / 180, az = (P.az * Math.PI) / 180; return new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).normalize(); }; // the camera's direction from an elevation and an azimuth (degrees)
   state.podium = Q.get("podium") === "above" ? "above" : "3d";
   // the place of rank i along the spiral: an Archimedean spiral r = A + Bθ walked in even steps of arc length D (s ≈ Aθ + Bθ²/2); the first centre sits half a step in
+  const NONE_DROP = 0.25; // T9: a step with no reading drops a quarter tread below the one before it
   const spiralAt = (i) => { const P = PARAMS.stand, s = (i + 0.5) * P.D, th = (-P.A + Math.sqrt(P.A * P.A + 2 * P.B * s)) / P.B; return { th, r: P.A + P.B * th }; };
   const stepGeo = new THREE.BoxGeometry(1, 1, 1), Y_AXIS = new THREE.Vector3(0, 1, 0);
   // the staircase: one box per step, turned to the spiral's tangent, one tread wide (a hair more on the outer edge, so the outer edges meet too), RW deep,
@@ -662,8 +664,15 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     let maxGap = 0; for (let i = 1; i < withV.length; i++) maxGap = Math.max(maxGap, withV[i - 1].v - withV[i].v);
     const H = Math.max(P.H_MIN, Math.min(P.H, maxGap > 0 ? P.D / maxGap : P.H));
     const vLow = withV.length ? withV[withV.length - 1].v : 0, vTop = withV.length ? withV[0].v : 0;
-    const floor = Math.min(0, vLow * H) - P.D; // the common floor: one tread's width under the lowest tread, and never above zero
-    members.forEach((n, i) => { const { th, r } = spiralAt(i), v = i < withV.length ? withV[i].v : null, tread = v == null ? floor + 2 : v * H, x = r * Math.cos(th), z = r * Math.sin(th);
+    /* T9 (Alan: "Why is the coiling of the bottom different from the top? Why are you forcing it flat? The red ones have to coil
+       down the same way the green ones coil"): ONE rule for every step, above and below zero — tread = reading × H, the same H
+       on both sides, so the pitch (the drop per unit of reading) never changes where the stair crosses the zero ring. A name
+       with NO reading (grey) used to stand on a flat run at the floor; now it keeps coiling down a quarter tread per step
+       after the last red one, so the stair never flattens. The floor sits one tread under the lowest tread, never above zero. */
+    const lastTread = withV.length ? vLow * H : 0;
+    const treadOf = (i) => (i < withV.length ? withV[i].v * H : lastTread - (i - withV.length + 1) * P.D * NONE_DROP);
+    const floor = Math.min(0, members.length ? treadOf(members.length - 1) : 0) - P.D; // the common floor: one tread's width under the lowest tread, and never above zero
+    members.forEach((n, i) => { const { th, r } = spiralAt(i), v = i < withV.length ? withV[i].v : null, tread = treadOf(i), x = r * Math.cos(th), z = r * Math.sin(th);
       put(n, x, (floor + tread) / 2, z); n.podium = { foot: new THREE.Vector3(x, floor, z), tip: new THREE.Vector3(x, tread, z), v: v == null ? 0 : v, i, th, r, tread, floor, none: v == null }; });
     const top = vTop * H;
     put(root, 0, top + 110, 0); // the parent sits well above the peak so its label never lands on the top steps
@@ -681,7 +690,13 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     scene.add(group);
     showWhole(false);
     cluster = { c: root, group, balls, members, steps, nbs: [], before: opts.instant && cluster ? cluster.before : { p: camera.position.clone(), t: controls.target.clone() }, rotate: controls.enableRotate, coil: true };
-    controls.enableRotate = true;
+    controls.enableRotate = true; freeOrbit(); // T9: the full orbit — above, from the side, from below the rim
+    // T9 · the pitch rule, read by the proof: the drop per unit of reading above zero and below zero (both = H), the crossing, the no-reading run
+    state.pitchRule = () => { const fit = (list) => { let num = 0, den = 0, mn = Infinity, mx = -Infinity; for (let k = 1; k < list.length; k++) { const dv = list[k - 1].v - list[k].v, dh = list[k - 1].tread - list[k].tread; if (dv > 1e-9) { const h = dh / dv; mn = Math.min(mn, h); mx = Math.max(mx, h); } num += dh; den += dv; } return { steps: list.length, per_unit: den > 1e-9 ? +(num / den).toFixed(2) : null, per_unit_min: isFinite(mn) ? +mn.toFixed(2) : null, per_unit_max: isFinite(mx) ? +mx.toFixed(2) : null, mean_drop: list.length > 1 ? +(num / (list.length - 1)).toFixed(2) : null }; };
+      const R = members.filter((n) => !n.podium.none).map((n) => n.podium), up = R.filter((q) => q.v >= 0), dn = R.filter((q) => q.v < 0); let cross = null;
+      for (let k = 1; k < R.length; k++) if (R[k - 1].v >= 0 && R[k].v < 0) { const dv = R[k - 1].v - R[k].v, dh = R[k - 1].tread - R[k].tread; cross = { from: members[R[k - 1].i].ticker, to: members[R[k].i].ticker, dv: +dv.toFixed(4), drop: +dh.toFixed(2), per_unit: dv > 1e-9 ? +(dh / dv).toFixed(2) : null }; break; }
+      const N = members.filter((n) => n.podium.none).map((n) => n.podium);
+      return { H: +H.toFixed(2), rule: "tread = reading × H, one H above and below zero", above: fit(up), below: fit(dn), crossing: cross, no_reading: { steps: N.length, flat: N.length > 1 && N.every((q) => Math.abs(q.tread - N[0].tread) < 1e-6), drop_per_step: N.length ? +(P.D * NONE_DROP).toFixed(2) : null }, floor: +floor.toFixed(1), inner_radius: P.A }; };
     const ups = withV.filter((x) => x.v >= 0), dns = withV.filter((x) => x.v < 0);
     state.cluster = root.id; state.clusterCount = { members: all.length, names: all.length, neighbours: 0, read: withV.length, up: ups.length, down: dns.length, none: none.length, top: withV.length ? withV[0].n.ticker : null, bottom: withV.length ? withV[withV.length - 1].n.ticker : null, zero_ring_r: +outerR.toFixed(1), podium: state.podium, list: !!root.listMembers, H: +H.toFixed(1), max_gap: +maxGap.toFixed(3), max_drop: +(maxGap * H).toFixed(1), drop_cap: P.D };
     state.coilOrder = withV.map((x) => x.n.ticker);
@@ -694,11 +709,79 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     focusCanvas();
     // the frame holds every floor point and every tread, and the parent's ball
     const frameList = [root, ...members, ...members.map((n) => ({ pos: n.podium.foot })), ...members.map((n) => ({ pos: n.podium.tip }))];
-    const to = framing(frameList, dirOf(above ? PARAMS.above : PARAMS.stand), 0.8);
+    const to = framing(frameList, dirOf(above ? PARAMS.above : PARAMS.stand), 0.9); // T9: fill 0.9 (was 0.8)
+    cluster.home = to; // T9: RESET VIEW / a double-click / Esc out of the walk come back to this 70° (88° from above) view
     if (opts.instant) { camera.position.copy(to.p); controls.target.copy(to.t); move = null; } else flyTo(to, 900);
     state.dirty = true; wake();
     if (onArea) onArea(root);
   }
+  /* ---- T9 · FREE ROTATION (Alan: "I'm not able to get it into the view I want — rotating to a side seems to have weird
+     limits"). Inside the podium and a section's 3D the orbit has no pitch or yaw limit: from straight above, from the side,
+     from below the rim. The tickers are DOM labels, so they stay upright and readable whatever the angle; the zero ring is a
+     line at height 0. 70° stays the starting view; RESET VIEW on the top bar, or a double-click on the canvas, flies back. ---- */
+  // The limit Alan hit: CANVAS maps the left button and one finger to PAN (drag to pan the flat canvas) and the podium inherited
+  // that — a left drag slid the staircase sideways instead of turning it, and only the right button turned. Inside the podium and
+  // a section's 3D the left button and one finger ROTATE (the right button pans); the canvas gets its own mapping back on exit.
+  function orbitButtons(inside) { controls.mouseButtons = { LEFT: inside || !state.canvas ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: inside || !state.canvas ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE }; controls.touches = { ONE: inside || !state.canvas ? THREE.TOUCH.ROTATE : THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }; }
+  function freeOrbit() { controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI; controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity; controls.enabled = true; orbitButtons(true); }
+  function resetView(ms = 700) { if (!cluster || !cluster.home) return false; if (walk) endWalk(); flyTo(cluster.home, ms); return true; }
+  renderer.domElement.addEventListener("dblclick", (e) => { if (!cluster) return; e.preventDefault(); resetView(700); });
+  state.orbitLimits = () => ({ minPolar: controls.minPolarAngle, maxPolar: controls.maxPolarAngle, minAz: controls.minAzimuthAngle, maxAz: controls.maxAzimuthAngle, rotate: controls.enableRotate, enabled: controls.enabled, left: controls.mouseButtons.LEFT === THREE.MOUSE.ROTATE ? "rotate" : controls.mouseButtons.LEFT === THREE.MOUSE.PAN ? "pan" : String(controls.mouseButtons.LEFT), one_finger: controls.touches.ONE === THREE.TOUCH.ROTATE ? "rotate" : "pan" });
+  state.elevation = () => { const d = camera.position.clone().sub(controls.target); return { el: +((Math.asin(d.y / d.length()) * 180) / Math.PI).toFixed(1), az: +((Math.atan2(d.x, d.z) * 180) / Math.PI).toFixed(1), d: +d.length().toFixed(1) }; };
+  state.orbitTo = (el, az) => { const d = camera.position.distanceTo(controls.target); camera.position.copy(controls.target).add(dirOf({ el, az }).multiplyScalar(d)); move = null; state.dirty = true; wake(); }; // the proof's deterministic side / below-the-rim views
+  state.homeView = () => (cluster && cluster.home ? { p: cluster.home.p.toArray().map((v) => +v.toFixed(1)), t: cluster.home.t.toArray().map((v) => +v.toFixed(1)) } : null);
+
+  /* ---- T9 · WALK THE STEPS (Alan: "I should be able to walk down the steps too, navigationally"; earlier: "the winner has
+     to take a glory walk down the steps, like a king"). WALK on the top bar (or ↓) starts at the winner: the camera stands
+     just above the current step, a little back up the stair, and looks down the staircase at the steps ahead; ↓ / J / the
+     wheel / ▼ take one step down, ↑ / K / ▲ one step up, Home / End the first / last step, Esc leaves the walk and flies back
+     to the 70° view. Every step is a short eased move (WALK.ms), so it feels like walking, not teleporting. While walking the
+     orbit is parked (dragging does nothing) so the camera cannot be knocked off the stair. The HUD (#walkhud) shows the step's
+     rank, ticker and reading large, with ▲ ▼ for the phone. ?wms= ?weye= ?wback= ?wahead= tune. ---- */
+  const WALK = { ms: qn("wms", 480), eye: qn("weye", 120), back: qn("wback", 3.2), ahead: qn("wahead", 12), fov: qn("wfov", 62) }; // eye height over the tread, steps back up the stair, steps looked at ahead, the field of view while walking (the podium's is 38)
+  lastWheel = 0;
+  const hud = $("walkhud");
+  function walkPose(i) {
+    const P = PARAMS.stand, m = cluster.members, p = m[i].podium;
+    const b = spiralAt(i - WALK.back); // a fraction of a step back up the stair
+    const eye = new THREE.Vector3(b.r * Math.cos(b.th), p.tread + WALK.eye, b.r * Math.sin(b.th));
+    const j = Math.min(m.length - 1, i + WALK.ahead); let look;
+    if (j > i) { const q = m[j].podium; look = new THREE.Vector3(q.foot.x, q.tread, q.foot.z); } // the tread a few steps down
+    else look = new THREE.Vector3(p.foot.x, p.tread - P.D * 0.5, p.foot.z); // the last steps: the stair's end itself, seen from a few steps back up
+    return { p: eye, t: look };
+  }
+  function walkTo(i, ms = WALK.ms) {
+    if (!cluster || !cluster.coil || !cluster.members.length) return;
+    i = Math.max(0, Math.min(cluster.members.length - 1, i));
+    walk = { i }; state.walkAt = i; controls.enabled = false;
+    if (camera.fov !== WALK.fov) { camera.fov = WALK.fov; fit(); }
+    flyTo(walkPose(i), ms);
+    const n = cluster.members[i], p = n.podium, col = p.none ? "#8c8c8c" : p.v >= 0 ? "#35b06a" : "#d1483f";
+    if (hud) { hud.style.display = "flex"; hud.innerHTML = `<button data-walk="-1" title="a step up (↑ / K / wheel up)"${i === 0 ? " disabled" : ""}>▲</button><div class="who"><span class="rank">#${i + 1} <small>of ${cluster.members.length}</small></span><b>${esc(n.ticker || n.label)}</b><span class="v" style="color:${col}">${p.none ? "no reading" : fmtG(p.v)}</span><small>${esc(n.label && n.label !== n.ticker ? n.label : "")}</small></div><button data-walk="1" title="a step down (↓ / J / wheel down)"${i === cluster.members.length - 1 ? " disabled" : ""}>▼</button>`; }
+    if (onWalk) onWalk(n, i, cluster.members.length);
+    state.dirty = true; wake();
+  }
+  function endWalk() { walk = null; state.walkAt = null; controls.enabled = true; if (camera.fov !== 38) { camera.fov = 38; fit(); } if (hud) { hud.style.display = "none"; hud.innerHTML = ""; } if (onWalk) onWalk(null); }
+  function setWalk(on) {
+    if (on) { if (!cluster || !cluster.coil) return false; if (!walk) walkTo(0, 900); return true; }
+    if (!walk) return false;
+    endWalk(); resetView(700); return false;
+  }
+  const walkStep = (d) => { if (!walk) return false; walkTo(walk.i + d); return true; };
+  addEventListener("keydown", (e) => { // before the page's own Esc (window, capture): the walk owns the arrows, J / K, Home / End and Esc
+    if (!walk) return; const k = e.key; let used = true;
+    if (k === "ArrowDown" || k === "j" || k === "J" || k === "PageDown") walkStep(1);
+    else if (k === "ArrowUp" || k === "k" || k === "K" || k === "PageUp") walkStep(-1);
+    else if (k === "Home") walkTo(0); else if (k === "End") walkTo(cluster.members.length - 1);
+    else if (k === "Escape") setWalk(false); else used = false;
+    if (used) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  graph.addEventListener("wheel", (e) => { // while walking the wheel walks (one step per 220 ms), never zooms
+    if (!walk) return; e.preventDefault(); e.stopPropagation(); const now = performance.now(); if (now - lastWheel < 220) return; lastWheel = now; walkStep(e.deltaY > 0 ? 1 : -1);
+  }, { capture: true, passive: false });
+  if (hud) hud.addEventListener("click", (e) => { const b = e.target.closest("[data-walk]"); if (b) walkStep(+b.dataset.walk); });
+  state.walking = () => !!walk;
+
   // FROM ABOVE | PODIUM 3D: the other picture of the podium that is open (or the one the next podium opens in)
   function setPodium(mode) { if (mode !== "above" && mode !== "3d") return; if (cluster && cluster.coil) enterCoil(cluster.c, mode); else state.podium = mode; }
   function exitCluster(fly = true) {
@@ -707,8 +790,9 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
     cluster.group.traverse((o) => { if (o.geometry && o.geometry !== sph) o.geometry.dispose(); });
     for (const [id, p] of saved) state.byId.get(id).pos.copy(p); saved.clear();
     applyPositions();
-    controls.enableRotate = cluster.rotate;
+    controls.enableRotate = cluster.rotate; orbitButtons(false); // T9: the canvas's buttons back (left = pan)
     (cluster.members || []).forEach((n) => { n.podium = null; }); // T7: the standing columns' feet and tips go with the podium
+    if (walk) endWalk(); // T9: the walk ends with the podium
     const b = cluster.before, c0 = cluster.c; cluster = null; state.cluster = null; nodes.forEach(hide); hide(c0); // a list root is not in nodes: hide its label too
     showWhole(true); boxRects.length = 0;
     if (fly) flyTo(b, 700); // back to the same spot and zoom
@@ -754,5 +838,5 @@ export async function mount({ nodes, state, kids, primaryKids, readingOf, aggBar
   applyBarMode();
   frameWhole(0);
   state.canvasFocused = () => document.activeElement === renderer.domElement;
-  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, enterArea, exitArea: exitCluster, setCanvas, inCluster: () => !!cluster, inArea: () => !!cluster, inCoil: () => !!(cluster && cluster.coil), enterCoil, coilWorthy, beneathNames, setDetail, setOrder, valueOf, focusCanvas, setPodium, podiumMode: () => state.podium };
+  return { select, release, setFlat, fit, frameWhole, enterCluster, exitCluster, enterArea, exitArea: exitCluster, setCanvas, inCluster: () => !!cluster, inArea: () => !!cluster, inCoil: () => !!(cluster && cluster.coil), enterCoil, coilWorthy, beneathNames, setDetail, setOrder, valueOf, focusCanvas, setPodium, podiumMode: () => state.podium, walk: setWalk, walkStep, walking: () => !!walk, resetView };
 }
