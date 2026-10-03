@@ -82,7 +82,7 @@ const escSrc = html.slice(html.indexOf("const esc = (s) =>"), html.indexOf("cons
 const secSrc = html.slice(html.indexOf("const estSechead = (n, t, meta) =>"), html.indexOf("/* 01 FORECAST — one metric tile"));
 const ctx = { todayISO: () => "2026-10-02", pg: () => Promise.resolve([]) }; vm.createContext(ctx);
 vm.runInContext(escSrc + secSrc + html.slice(a, b) + html.slice(a3, b3) +
-  "; Object.assign(this, { revLines, revTapeItems, revTapeHTML, revHistFirms, revHistSVG, revHistBody, revEstPick, revEstHTML, revStripBody, REV_CACHE, REV_HIST_FIRM, REV_HIST_SPAN });", ctx);
+  "; Object.assign(this, { revLines, revTapeItems, revTapeHTML, revHistFirms, revHistNotesHTML, revEstPick, revEstHTML, revStripBody, REV_CACHE, REV_HIST_FIRM });", ctx);
 
 const NOW = Date.parse("2026-10-03T02:00:00Z");
 const note = (o) => ({ kind: "TARGET", firm: "", analyst: null, target: null, adj_target: null, prior_grade: null, new_grade: null, action: null, price_when_posted: null, title: "", url: "", ...o });
@@ -119,29 +119,14 @@ test("targets by firm: one step series per firm, newest mover first, split-adjus
   const split = ctx.revHistFirms([note({ published_utc: "2024-05-01T00:00:00Z", firm: "X", target: 1000, adj_target: 100 })], NOW);
   assert.equal(split[0].last.v, 100, "the split-adjusted target");
 });
-test("the step chart draws the price line day by day in green / red, a step per note, the hot firm bright", () => {
+/* A3 (3 Oct): 00b's step chart, its 12 months / 2 years switch and the firm chips gave way to one swipe of firm cards on ESTIMATES →
+   FIRMS (Alan: "36 firms… very hard to read"); the cards and the swipe are tested in tests/a3-analysts-tab-20261003.test.mjs. A firm's
+   notes still open from revHistNotesHTML. */
+test("a firm's notes, newest first, old → new in colour (opened under the A3 firm swipe)", () => {
   const firms = ctx.revHistFirms(nvRows.filter((r) => r.kind === "TARGET"), NOW);
-  const closes = [{ t: Date.parse("2026-09-30T04:00:00Z"), c: 240 }, { t: Date.parse("2026-10-01T04:00:00Z"), c: 235 }, { t: Date.parse("2026-10-02T04:00:00Z"), c: 231 }];
-  const svg = ctx.revHistSVG(closes, firms, NOW - 365 * 864e5, NOW, 960, 260, "");
-  assert.match(svg, /^<svg class="sc-rvh-svg"/);
-  assert.equal((svg.match(/<g class="px">/g) || []).length, 1);
-  assert.equal((svg.split('<g class="px">')[1].match(/class="dn"/g) || []).length, 2, "two down days, both red");
-  assert.match(svg, /<g class="fl hot" data-rvh-firm="wellsfargo">/);
-  assert.match(svg, /class="st dn"/); assert.match(svg, /class="st up"/);
-  assert.ok(!/NaN/.test(svg));
-});
-test("00b: the 12-month / 2-year switch, the firm chips, the click-open notes", () => {
-  const c = { at: NOW, rows: nvRows, hist: nvRows.filter((r) => r.kind === "TARGET"), px: [], est: [] };
-  let h = ctx.revHistBody("NVDA", c, NOW);
-  assert.match(h, /00b/); assert.match(h, /Targets by firm/);
-  assert.match(h, /data-rvh-span="1y" class="on"/);
-  assert.match(h, /data-rvh-firm="wellsfargo"/);
-  assert.match(h, /The price line could not be read/);
-  ctx.REV_HIST_FIRM.NVDA = "wellsfargo";
-  h = ctx.revHistBody("NVDA", c, NOW);
-  assert.match(h, /sc-rvh-notes/); assert.match(h, /\$265 → \$210 ▼/);
-  ctx.REV_HIST_FIRM.NVDA = "";
-  assert.match(ctx.revHistBody("NVDA", null, NOW), /Reading every firm/);
+  const h = ctx.revHistNotesHTML(firms[0], 2026);
+  assert.match(h, /sc-rvh-notes/); assert.match(h, /<b>Wells Fargo<\/b> · 2 target notes/); assert.match(h, /\$265 → \$210 ▼/);
+  assert.match(h, /class="sc-rvh-x" data-rvh-firm=""/, "the close button");
 });
 
 /* the database's rows for NVDA on 2 Oct: the 11 Aug copy rebuilt from R2 and the first daily copy */
@@ -181,8 +166,8 @@ test("the estimates box: plain numbers, the change in colour, 'history starts' w
   assert.ok(!/\b(buy|sell|should|recommend|bullish|bearish)\b/i.test(h.replace(/<[^>]+>/g, " ")));
   assert.match(ctx.revEstHTML("NVDA", { rows: [], est: [] }, "2026-10-02"), /kept once a day from 2 Oct 2026/);
 });
-test("wiring: 00b sits after 00 REVISIONS, the tape heads 05 Rating changes, the box sits beside the arrows; the R2 strip still renders alone", () => {
-  assert.match(html, /return revStripHTML\(data\) \+ \(typeof revHistHTML === "function" \? revHistHTML\(data\) : ""\) \+ estForecastHTML/);
+test("wiring: the tape heads 05 Rating changes, the box sits beside the arrows; the R2 strip still renders alone (A3: the step chart is gone)", () => {
+  assert.ok(!/function revHistSVG|function revHistBody|REV_HIST_SPAN/.test(html), "A3 removed the step chart and its switch");
   assert.match(html, /return head \+ tape \+ '<div class="sc-grsec">'/);
   assert.match(html, /<div class="sc-rvs-top">/);
   const sum = { as_of_date: "2026-10-02", last_month_count: 3, last_month_avg: 246.67, last_quarter_count: 25, last_quarter_avg: 331.72, last_year_count: 96, last_year_avg: 299.77, all_time_count: 342, all_time_avg: 152.34 };

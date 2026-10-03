@@ -164,7 +164,7 @@ test("cohortChoice: the coordinator's defaults for the four named companies, the
 
 test("the Hub: the C1 section moved to its own COMPS tab on 30 Sep (C2); ESTIMATES is what it was before C1; the C1 deliverable and its shots still exist", () => {
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+\n\s+estValuationHTML\(data\)/, "ESTIMATES as before C1");
+  assert.match(html, /case "RATINGS": return estConvictionHTML\(data\) \+ estGradesHTML\(data\);\n\s+case "EARNINGS": return estForecastHTML\(data\) \+ estConsensusGridHTML\(data\);\n\s+case "VALUATION": return estValuationHTML\(data\) \+ estScenariosHTML\(data\);/, "ESTIMATES as before C1");   // A3 (3 Oct): the same sections, now behind ESTIMATES' sub-tabs
   assert.ok(!/estCompsHTML|compsLiveMount|scCompsLive/.test(html), "the C1 section is gone from ESTIMATES");
   assert.match(html, /case "COMPS":/, "the comps are their own tab (C2)");
   assert.ok(existsSync(here("../deliverables/20260929/comps-live/COMPS-LIVE.html")));

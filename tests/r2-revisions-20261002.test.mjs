@@ -165,7 +165,9 @@ test("the three arrows (R1's Nvidia case): month $247 ▼ −26% vs the quarter'
   assert.match(body, /^<div class="sc-rvs" data-rev-t="NVDA">/);
   assert.match(body, /<span class="n">00<\/span><span class="t">Revisions<\/span>/);
   assert.match(body, /▼ −26% vs last quarter/); assert.match(body, /▲ \+11% vs last year/); assert.match(body, /▲ \+97% vs all time/);
-  assert.match(body, /Wells Fargo/); assert.match(body, /−9\.0%/, "210 / 230.86 − 1 = −9.0%");
+  /* A3 (3 Oct): the note list left the strip — the firms are the swipe on ESTIMATES → FIRMS; the line formatter still reads the note */
+  assert.ok(!/sc-rvs-row/.test(body), "no note rows in the strip");
+  assert.match(ctx.revLineHTML(ctx.revLines([db(L.targetRow(NVDA_WF, "NVDA"))])[0], 2026), /−9\.0%/, "210 / 230.86 − 1 = −9.0%");
 });
 test("honest empty, error and loading states; the tab opens with the strip", () => {
   const empty = ctx.revStripBody("ZZZ", { rows: [], sum: null, err: null }, 2026);
@@ -175,7 +177,7 @@ test("honest empty, error and loading states; the tab opens with the strip", () 
   ctx.REV_CACHE.MU = { at: Date.now(), rows: muRows, sum: null, err: null };
   assert.match(ctx.revStripHTML({ t: "MU" }), /3 notes/, "a fresh cache paints at once");
   assert.equal(ctx.revStripHTML({ t: "MU", _loading: true }), "");
-  assert.match(html, /function estimatesTabHTML\(data\) \{[^\n]*\n  return revStripHTML\(data\) \+ (\(typeof revHistHTML === "function" \? revHistHTML\(data\) : ""\) \+ )?estForecastHTML\(data\)/);   // R3 puts 00b between them
+  assert.match(html, /default: return revStripHTML\(data\);/, "A3: the strip is ESTIMATES → REVISIONS, the sub-tab that opens first");
   assert.ok(!/discounted-cash-flow|ratings-snapshot/.test(html.slice(a, b)), "FMP's DCF and letter ratings stay off the Hub");
   assert.ok(!/sc-rev\b(?!-)/.test(html.slice(a, b).replace(/\.sc-rev is the board/g, "")), "never the board's revenue-cell class .sc-rev (the first shot caught that collision)");
   for (const fn of ["revNum", "revPx", "revPct", "revLines", "revArrows", "revSay", "revLineHTML", "revStripHTML", "revStripLoad", "revStripPaint", "revStripBody"])
@@ -185,12 +187,11 @@ test("roundup headlines are set aside behind a closed fold, never in this stock'
   const rows = [db(L.targetRow(NVDA_WF, "NVDA")), db(L.gradeRow({ ...NFLX_ROUNDUP, symbol: "NVDA", gradingCompany: "Wells Fargo", previousGrade: "Overweight", newGrade: "Underweight" }, "NVDA")),
     db(L.targetRow({ ...NVDA_WF, publishedDate: "2026-09-11T18:05:10.000Z", priceTarget: 999, adjPriceTarget: 999, newsTitle: "Buy/Sell: Wall Street's top 10 stock calls this week" }, "NVDA"))];
   const body = ctx.revStripBody("NVDA", { rows, sum: null, err: null }, 2026);
-  const [main, fold] = body.split('<details class="sc-rvs-more sc-rvs-rnd">');
-  assert.ok(fold, "the fold exists");
-  assert.match(main, /1 note · 2 roundup set aside/);
-  assert.ok(!/Underweight/.test(main), "the roundup's downgrade is not in the main list");
-  assert.match(main, /<i>target<\/i> \$210/, "Wells Fargo's own 2 Oct note has no old target: the roundup's $999 is never used as one");
-  assert.match(fold, /2 roundup-headline notes set aside<\/summary>/); assert.match(fold, /Overweight → Underweight/);
+  /* A3 (3 Oct): the fold left the strip (its words are in PAGE SPECS, revStripSpecs); the count stays in the strip's header */
+  assert.match(body, /1 note · 2 roundup set aside/);
+  assert.ok(!/Underweight|sc-rvs-rnd/.test(body), "the roundup's downgrade is nowhere in the strip");
+  const own = ctx.revLines(rows.filter((r) => !/top 10/.test(r.title || "")));
+  assert.equal(own.length, 1); assert.equal(own[0].prior, null, "Wells Fargo's own 2 Oct note has no old target: the roundup's $999 is never used as one");
 });
 test("one firm, two spellings (FMP: 'D.A. Davidson' in targets, 'DA Davidson' in ratings) is one note and one firm", () => {
   const t = db(L.targetRow(MU_DAD, "MU"));

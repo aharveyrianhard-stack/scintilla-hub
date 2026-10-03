@@ -123,7 +123,7 @@ test("the Hub: COMPS is its own tab beside ESTIMATES, ESTIMATES is exactly what 
   const html = readFileSync(here("../index.html"), "utf8");
   assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);
   assert.match(html, /case "COMPS":\s+return nonOp \? nonOpTabHTML\(data\) : compsTabHTML\(data\)/);
-  assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+\n\s+estValuationHTML\(data\)/, "the ESTIMATES tab as before C1");
+  assert.match(html, /case "RATINGS": return estConvictionHTML\(data\) \+ estGradesHTML\(data\);\n\s+case "EARNINGS": return estForecastHTML\(data\) \+ estConsensusGridHTML\(data\);\n\s+case "VALUATION": return estValuationHTML\(data\) \+ estScenariosHTML\(data\);/, "the ESTIMATES tab as before C1");   // A3 (3 Oct): the same sections, now behind ESTIMATES' sub-tabs
   assert.ok(!/estCompsHTML|compsLiveMount|sc-comps-live|scCompsLive/.test(html), "no trace of the C1 section");
   assert.match(html, /import\("\/deliverables\/2026(0930\/comps-tab|1001\/comps-template|1001\/comps-table-first|1001\/comps-mechanic)\/tab\.mjs"\)/, "the COMPS tab loads the comps module (C3 → template, C3b → table-first, C4 → the mechanic, 1 Oct)");
   assert.match(html, /e\.key === "0" \? 10 : 0/);
