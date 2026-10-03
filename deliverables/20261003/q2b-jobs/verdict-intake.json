@@ -1,0 +1,19 @@
+{
+  "schema": "scintilla.q2b.verdict_intake.v1",
+  "reply_to": "deliverables/20261003/q2a-rules/verdict-format.json (Q2a, branch hub/q2a-report-20261003 @b383053)",
+  "agreed": "Q2b reads scintilla.nightly_verdict.v1 as written; no field changes requested.",
+  "one_addition_for_the_writer": {
+    "why": "The record lives in R2, which the database cannot read (R2 keys stay on Fly). The dead-man's switch and the status page need one database line per night.",
+    "call": "select public.job_heartbeat_ping('fly:nightly-verdict', true, 'VERDICT_' || verdict, summary)",
+    "when": "after the night file and latest.json are written; on a non-session night ping (true, 'SKIPPED_NOT_A_SESSION', null)",
+    "how": "services/ops/job-heartbeat.mjs on branch provider/q2b-keepalives-20261003 (pingJobHeartbeat) over MASSIVE_DATABASE_URL, never throws, never changes the exit code",
+    "ok_means": "the night watchman RAN and wrote its verdict — whatever the colour. A crash pings ok=false with a named cause.",
+    "schedule": "run it every night (Fly --schedule daily or the hourly-with-gate pattern of scout-geiger-nightly) so silence means it did not run"
+  },
+  "division_of_alarms": {
+    "Q2b heartbeat (STAGED A)": "raises job:fly:nightly-verdict LATE when no ping arrives within 1 day + 2 h (the watchman did not run)",
+    "Q1 /v1/integrity (0026_provider_integrity_alarms)": "raises the alarm on what the verdict SAYS (RED / missing), one per night",
+    "never both for the same fault": "the heartbeat row is about running on time; the verdict colour rides in last_cause only for the status page"
+  },
+  "status_page": "deliverables/20261003/status/index.html shows the verdict colour, summary and since_utc, then each part with Q2a's plain_names; until the job runs it says 'the night watchman has not reported yet'."
+}

@@ -1,0 +1,1142 @@
+{
+ "schema": "scintilla.rules_register.v1",
+ "generated_utc": "2026-10-03T15:05:00Z",
+ "code_line": "origin/provider/p11-floor-refresh-20261003 @8dc23b6 (what runs on the bar service; chart API runs p10-0496e65, same rules)",
+ "scope": "every rule that writes or gates bars, histories, closes and Geiger inputs (Q2a). Schedulers, supervisors, watchers and database collectors are Q2b's.",
+ "columns": {
+  "id": "stable id used by adopt.json and the report",
+  "where": "file:line on the code line above",
+  "does": "one plain sentence",
+  "protects": "what goes wrong without it",
+  "can_break": "what it breaks when it is wrong or meets another rule",
+  "touches": "ids of the rules it interacts with",
+  "reported_as": "how its failure is reported today (named cause, or lumped)",
+  "tests": "test files that cover it, and whether any test runs it WITH its neighbours"
+ },
+ "rules": [
+  {
+   "id": "BF1",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:437-516 getBars",
+   "does": "Fetches one width for one name from Massive and writes it to R2, serving cache-first with a 15-minute age unless forced.",
+   "protects": "Charts get provider-built bars, never a local roll-up.",
+   "can_break": "A force refresh rewrites the whole object; whatever the request window is becomes the stored history.",
+   "touches": [
+    "BF3",
+    "BF4",
+    "BF5",
+    "FL1",
+    "FL2",
+    "CA2"
+   ],
+   "reported_as": "502 'provider acquisition failed' with detail (bar service); the chart API drops the detail and counts it as ondemand_failed / daily_refresh_failed",
+   "tests": "provider-floor-refresh-20261003.test.mjs (getBars with a floor), provider-bar-refresh-write.test.mjs; no test runs it with CA2 (the chart API's forced daily refresh) end to end"
+  },
+  {
+   "id": "BF2",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:62-110 pullProvider",
+   "does": "Pages through Massive's aggregate endpoint, retries 429/5xx four times, refuses a pagination identity change.",
+   "protects": "A half-pulled or wrong-ticker page never becomes history.",
+   "can_break": "Retries exhausted → the whole refresh fails; counted as a provider error even when the request was ours.",
+   "touches": [
+    "BF1",
+    "TR1",
+    "FR1"
+   ],
+   "reported_as": "'provider http <n>' / 'provider retries exhausted' inside the 502 detail",
+   "tests": "provider-full-rebuild-write.test.mjs (ceilings); no direct test of retry classes"
+  },
+  {
+   "id": "BF3",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:469-478 window widening",
+   "does": "On a refresh, widens the request to the earliest of the caller's from, the stored first bar and the stored requested_from, so a short chart request never replaces a long history.",
+   "protects": "A chart asking for 200 bars cannot shrink a 5,000-bar object.",
+   "can_break": "requested_from survives a floor cut, so the request still starts in 2003 until the floor clamp catches it; if the clamp is missing (bar service without the floor) the earlier holder's bars are re-acquired.",
+   "touches": [
+    "BF5",
+    "FL1",
+    "FL2"
+   ],
+   "reported_as": "silent (a longer object is accepted)",
+   "tests": "provider-floor-refresh-20261003.test.mjs partly; the regrow case (image without the floor) has no test"
+  },
+  {
+   "id": "BF4",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:492-497 zero-bar pull not persisted",
+   "does": "A one-off pull that returns no bars is reported as an absence and not written.",
+   "protects": "A chart open cannot mint an empty object or cache emptiness.",
+   "can_break": "Nothing durable records that the provider published nothing for that width.",
+   "touches": [
+    "BS2",
+    "CA5"
+   ],
+   "reported_as": "404 PROVIDER_RETURNED_NO_BARS (named)",
+   "tests": "none direct"
+  },
+  {
+   "id": "BF5",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:498-500 the shorten guard",
+   "does": "Refuses to write a pull whose first bar is later, or last bar earlier, than the stored object's.",
+   "protects": "'Never let a stored history get shorter' (10 Sep).",
+   "can_break": "The P11 deadlock: with a floor clamp on the request and an uncut stored object it refuses forever (56 names, 3.5 days, 181,463 refusals counted as provider errors).",
+   "touches": [
+    "FL1",
+    "FL2",
+    "BF3",
+    "CA2",
+    "GP1"
+   ],
+   "reported_as": "502 PROVIDER_UNAVAILABLE 'provider acquisition would shorten existing history' — counted in provider_errors (wrong name)",
+   "tests": "provider-floor-refresh-20261003.test.mjs (4 tests, guard + floor cut together)"
+  },
+  {
+   "id": "BF6",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:449-453 identity check",
+   "does": "Refuses to touch a stored object whose symbol, provider symbol, multiplier or timespan differ from the request.",
+   "protects": "BRK-B vs BRK.B and a width mix-up never overwrite each other.",
+   "can_break": "A renamed provider symbol makes every refresh of that name fail by name.",
+   "touches": [
+    "SY1",
+    "BF1"
+   ],
+   "reported_as": "502 detail 'existing provider identity or interval mismatch'",
+   "tests": "none direct"
+  },
+  {
+   "id": "BF7",
+   "family": "bars/fetch",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:505-513 conditional writes",
+   "does": "Writes the full object and its tail with If-Match on the etag read, so two writers cannot overwrite each other.",
+   "protects": "The due-frame consumer and an on-demand refresh racing on the same object.",
+   "can_break": "A lost race is a 412 and the cell is reported failed (seen twice in the 2 Oct receipts).",
+   "touches": [
+    "TR3",
+    "DC1"
+   ],
+   "reported_as": "'R2 full refresh write 412' (named in the receipt; chart API sees a 502)",
+   "tests": "r2-write-verification.test.mjs (packages/r2), provider-tail-only-live.test.mjs"
+  },
+  {
+   "id": "IC1",
+   "family": "intervals",
+   "where": "services/rest-accel/interval-contract.mjs:34-65,74-81 ROUTINE + case-fold invariant",
+   "does": "One table names every width's R2 key; the process refuses to start if two labels collide under case folding (1m vs 1M).",
+   "protects": "Minutes never served as months; one key per width.",
+   "can_break": "A new width needs an entry here, in the Geiger token map and the tail-frame table at once.",
+   "touches": [
+    "GS1",
+    "TR1"
+   ],
+   "reported_as": "load-time throw (named)",
+   "tests": "putcall-contract.test.mjs, geiger-real-calculation-replay.test.mjs (imports)"
+  },
+  {
+   "id": "IC2",
+   "family": "intervals",
+   "where": "services/rest-accel/interval-contract.mjs:152-166 sourceKeys / writeKey",
+   "does": "D and W are read from the deep namespace first; every on-demand write goes to the serving namespace unless the caller says deep.",
+   "protects": "The 19-year daily chart is served, not the 4-year one.",
+   "can_break": "Two writers (serving vs deep) hold two versions of D; the chart API's daily refresh writes deep, the prewarm worker writes serving. They drift (AAPL serving D 12:47Z vs deep D 04:01Z on 3 Oct).",
+   "touches": [
+    "CA2",
+    "PW1",
+    "TR2"
+   ],
+   "reported_as": "source_namespace on every /candles answer (observable, never alarmed)",
+   "tests": "none for the drift"
+  },
+  {
+   "id": "FL1",
+   "family": "floors",
+   "where": "services/rest-accel/history-floor.mjs:38-41 clampFromToFloor",
+   "does": "A provider request for a name with a recorded floor never starts before the floor.",
+   "protects": "The earlier holder of a reused ticker string (SERV, META, T …) is never re-acquired.",
+   "can_break": "Only as good as the floors file baked into the image that runs it: a bar service without the floor regrows the old bars; one with the floor meets BF5 on an uncut object.",
+   "touches": [
+    "BF5",
+    "BF3",
+    "FL2",
+    "FL3",
+    "FR2"
+   ],
+   "reported_as": "silent",
+   "tests": "history-cut.test.mjs, provider-floor-refresh-20261003.test.mjs"
+  },
+  {
+   "id": "FL2",
+   "family": "floors",
+   "where": "services/rest-accel/history-floor.mjs:67-85 cutDocumentAtFloor; provider-bar-fetch.mjs:464-468 (P11)",
+   "does": "Before comparing, the stored object is cut at the floor and the cut is recorded on the object (history_cut).",
+   "protects": "The P11 deadlock cannot recur for a recorded floor.",
+   "can_break": "The cut does not touch requested_from, so the object still says it was requested from 2003; a storage cut and a getBars cut leave different stamps (run_id vs cut_by).",
+   "touches": [
+    "BF5",
+    "FL1",
+    "HC1"
+   ],
+   "reported_as": "history_cut on the object (observable)",
+   "tests": "provider-floor-refresh-20261003.test.mjs"
+  },
+  {
+   "id": "FL3",
+   "family": "floors",
+   "where": "services/rest-accel/history-floor.mjs:90-95 applyHistoryFloor; chart-api/server.mjs:1444-1448",
+   "does": "Bars before the floor are not served, whether or not storage was cut.",
+   "protects": "No chart or Geiger input ever shows the earlier company (held since 29 Sep).",
+   "can_break": "full_series_count arithmetic; nothing else.",
+   "touches": [
+    "FL1",
+    "TJ2",
+    "GP1"
+   ],
+   "reported_as": "history_floor receipt on /candles; counter history_floor_served",
+   "tests": "history-cleanup-h1.test.mjs"
+  },
+  {
+   "id": "FL4",
+   "family": "floors",
+   "where": "services/rest-accel/history-floor.mjs:20-30 parseHistoryFloors",
+   "does": "A floor without a stated source, or a malformed date, refuses to load.",
+   "protects": "No guessed floor.",
+   "can_break": "A bad entry stops every service that imports the file.",
+   "touches": [
+    "FL1"
+   ],
+   "reported_as": "load-time throw",
+   "tests": "history-cut.test.mjs"
+  },
+  {
+   "id": "HC1",
+   "family": "floors/storage",
+   "where": "scripts/history-cut.mjs:186-206,260-280 planForSymbol + --write",
+   "does": "Cuts stored objects at a recorded floor only when the stored history corroborates the date (a 60-day silence or a ticker join), backing each object up first.",
+   "protects": "No cut on a CHECK verdict; rollback exists.",
+   "can_break": "It cuts storage but cannot stop a floor-less image from regrowing it (29 Sep: cut at 05:49Z, regrown by the 16:15 ET refresh, refused from 00:02 ET 30 Sep).",
+   "touches": [
+    "FL1",
+    "FL2",
+    "BF3",
+    "BF5"
+   ],
+   "reported_as": "run report JSON; backups under normalized/_history_cut_backup_v1/<run>",
+   "tests": "history-cut.test.mjs, history-cleanup-h1.test.mjs, replacement-coverage-phase.test.mjs"
+  },
+  {
+   "id": "HC2",
+   "family": "floors/storage",
+   "where": "scripts/history-cut.mjs:58-77 floorFromMassive / floorFromFmp",
+   "does": "A floor is the later of the provider's list date and the date the company took the ticker (Massive ticker events by share-class FIGI, or FMP symbol changes).",
+   "protects": "Floors come from the provider, with evidence.",
+   "can_break": "Massive's own dates were wrong for 28 of 60 names (H1); a reviewed floor is never replaced automatically.",
+   "touches": [
+    "FL4",
+    "TJ1"
+   ],
+   "reported_as": "evidence block per floor",
+   "tests": "history-cut.test.mjs"
+  },
+  {
+   "id": "TJ1",
+   "family": "ticker joins",
+   "where": "services/rest-accel/ticker-join.mjs:22-53 parseTickerJoins",
+   "does": "A join is a list of dated segments ending in today's ticker, with evidence; overlaps and gaps refuse to load.",
+   "protects": "QQQQ→QQQ, FB→META served as one history.",
+   "can_break": "Nothing at run time; a bad file stops the chart API.",
+   "touches": [
+    "TJ2",
+    "TJ3",
+    "HC2"
+   ],
+   "reported_as": "load-time throw",
+   "tests": "ticker-join.test.mjs"
+  },
+  {
+   "id": "TJ2",
+   "family": "ticker joins",
+   "where": "services/rest-accel/ticker-join.mjs:73-105 applyTickerJoin; chart-api/server.mjs:1450-1463",
+   "does": "At serving time the predecessor's stored bars are read beside today's and merged; a straddling week or month bucket is combined.",
+   "protects": "The join is never written into today's objects, so a full pull cannot erase it.",
+   "can_break": "Only D, W and M are joined; every other width shows the earlier holder cut but not the predecessor (state EARLIER_HOLDER_CUT_ONLY__WIDTH_NOT_JOINED). A missing predecessor object is a named gap, not an error.",
+   "touches": [
+    "TJ1",
+    "TJ3",
+    "FL3"
+   ],
+   "reported_as": "ticker_join receipt on /candles (named)",
+   "tests": "ticker-join.test.mjs; no test with FL3 on the same series"
+  },
+  {
+   "id": "TJ3",
+   "family": "ticker joins",
+   "where": "scripts/ticker-join-acquire.mjs:44-69, ticker-join.mjs:109-127 seamCheck + splitLikeFalls",
+   "does": "Before a predecessor is acquired, the last close on one side and the first open on the other must be within 5%, and the window may hold no 45-day silence or split-shaped one-day fall.",
+   "protects": "A wrong predecessor or an unadjusted split is refused, not stored.",
+   "can_break": "A real one-day crash at a split-like ratio refuses a legitimate join (held, by name).",
+   "touches": [
+    "TJ1",
+    "AD1"
+   ],
+   "reported_as": "REFUSED_SEAM / REFUSED_PREDECESSOR_WINDOW (named)",
+   "tests": "ticker-join.test.mjs, history-cleanup-h1.test.mjs"
+  },
+  {
+   "id": "TR1",
+   "family": "tail refresh",
+   "where": "services/rest-accel/provider-tail-refresh-contract.mjs:139-171 planProviderTailRefresh",
+   "does": "Asks Massive only for a small overlapping window behind the stored tail; a gap over 45 days or a request over 120 days becomes FULL_REBUILD_REQUIRED.",
+   "protects": "No silent half-fill across a long outage; provider cost stays bounded.",
+   "can_break": "A multi-hour frame first built on another phase gets no overlap unless the request starts at the stored bucket's own millisecond (28 Sep fix).",
+   "touches": [
+    "TR2",
+    "TR3",
+    "FR1"
+   ],
+   "reported_as": "state FULL_REBUILD_REQUIRED with reason (named) in the receipt",
+   "tests": "provider-tail-refresh-contract.test.mjs, provider-currentness-correction.test.mjs"
+  },
+  {
+   "id": "TR2",
+   "family": "tail refresh",
+   "where": "services/rest-accel/provider-tail-refresh-contract.mjs:224-331 mergeProviderTail",
+   "does": "Merges exact provider timestamps only; needs at least one identical timestamp; refuses to move the newest bar backward; a revision before the trailing bucket (unless the join bar itself is unchanged) is FULL_REBUILD_REQUIRED with the changed fields classified.",
+   "protects": "Continuity is proven at the join; a split or re-adjustment is not merged as if it were a late print.",
+   "can_break": "A provider correction of one old bar sends the cell to a full rebuild or a bounded replacement; the trailing bucket can always be revised.",
+   "touches": [
+    "TR1",
+    "BR1",
+    "FR1",
+    "FIN1"
+   ],
+   "reported_as": "error.code FULL_REBUILD_REQUIRED + reason_code + delta_summary (named)",
+   "tests": "provider-tail-refresh-contract.test.mjs, provider-currentness-correction.test.mjs"
+  },
+  {
+   "id": "TR3",
+   "family": "tail refresh",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:224-290 refreshProviderTailOnly",
+   "does": "On the live path, intraday frames read and write only the ≤400-bar tail; session frames (D 3D W 2W M) always take the full path.",
+   "protects": "The live path is O(new bars); the chart API's previous-close reader never disagrees with the tail.",
+   "can_break": "The tail is 'ahead of full' until the scheduled pass reconciles; a full-object reader sees older bars meanwhile.",
+   "touches": [
+    "TR2",
+    "TR4",
+    "CA2"
+   ],
+   "reported_as": "tail_ahead_of_full on the tail object (observable)",
+   "tests": "provider-tail-only-live.test.mjs (13)"
+  },
+  {
+   "id": "TR4",
+   "family": "tail refresh",
+   "where": "services/rest-accel/provider-bar-fetch.mjs:352-434 refreshProviderTail (full path, recoverRevisions)",
+   "does": "Full-object merge; on FULL_REBUILD_REQUIRED tries a bounded replacement of the affected buckets, else rebuilds the whole frame from the authority start.",
+   "protects": "Every refusal has a recovery path on the scheduled pass.",
+   "can_break": "A rebuild re-requests 23 years for one frame; with a floor it starts at the floor (FR2).",
+   "touches": [
+    "TR2",
+    "BR1",
+    "FR1",
+    "FR2",
+    "FR3"
+   ],
+   "reported_as": "receipt failures / rebuild_required (named per cell)",
+   "tests": "provider-bounded-replacement.test.mjs, provider-full-rebuild-worker.test.mjs"
+  },
+  {
+   "id": "BR1",
+   "family": "bounded replacement",
+   "where": "services/rest-accel/provider-bounded-replacement-contract.mjs:34-75,81-160",
+   "does": "Replaces only the affected buckets plus one anchor bar either side, and only if both anchors come back byte-identical; ≤45 days.",
+   "protects": "A one-afternoon correction does not cost a 2003 rebuild.",
+   "can_break": "An anchor that moved (split) correctly falls to a full rebuild.",
+   "touches": [
+    "TR2",
+    "TR4",
+    "FR1"
+   ],
+   "reported_as": "FULL_REBUILD_REQUIRED with reason (named)",
+   "tests": "provider-bounded-replacement.test.mjs (7)"
+  },
+  {
+   "id": "FR1",
+   "family": "full rebuild",
+   "where": "services/rest-accel/provider-full-rebuild-contract.mjs:38-48,77-105 assertExactProviderSeries + planProviderFullRebuild",
+   "does": "A rebuild asks from 2003-09-10 (or the stored oldest bucket's phase), must be strictly increasing, OHLC-consistent, volume ≥ 0.",
+   "protects": "Malformed provider rows never become history.",
+   "can_break": "Nothing with neighbours; it is the strictest writer.",
+   "touches": [
+    "FR2",
+    "FR3",
+    "TR4"
+   ],
+   "reported_as": "throw with named message; receipt per cell",
+   "tests": "provider-full-rebuild-contract.test.mjs (5)"
+  },
+  {
+   "id": "FR2",
+   "family": "full rebuild",
+   "where": "services/rest-accel/provider-full-rebuild-contract.mjs:95-101 floor in the rebuild plan",
+   "does": "A rebuild of a floored name starts at the floor even if the stored object starts earlier.",
+   "protects": "A rebuild performs the cut itself.",
+   "can_break": "Together with FR3 the floor must be passed as floorT or the coverage check calls the cut 'lost history' (28 Sep fix).",
+   "touches": [
+    "FL1",
+    "FR3"
+   ],
+   "reported_as": "history_floor_et in the plan",
+   "tests": "history-cut.test.mjs, replacement-coverage-phase.test.mjs"
+  },
+  {
+   "id": "FR3",
+   "family": "full rebuild",
+   "where": "services/rest-accel/provider-full-rebuild-contract.mjs:117-124 replacementCoverageShortfall; provider-bar-fetch.mjs:132-136",
+   "does": "A replacement must cover the stored sessions: it may start up to one native bucket later than the stored oldest (phase shift) and must reach the stored newest; bars before a floor are not 'lost'.",
+   "protects": "The other 'never shorter' rule, for rebuilds.",
+   "can_break": "This is what refused the 24–28 Sep hourly cells ('full provider replacement does not cover the existing history': 64–65 cells per pass = BTDR, the RSP* funds and SERV × 5 hourly frames, 15 passes from 27 Sep 22:20 to 28 Sep 09:18 ET) before the phase tolerance and floorT were added on 28 Sep. Not the shorten guard.",
+   "touches": [
+    "FR1",
+    "FR2",
+    "TR4"
+   ],
+   "reported_as": "'full provider replacement does not cover the existing history' (named in receipts; counted as failed)",
+   "tests": "replacement-coverage-phase.test.mjs (7)"
+  },
+  {
+   "id": "FIN1",
+   "family": "finality",
+   "where": "services/rest-accel/provider-bar-finality.mjs:75-84,86-107 providerBarFinality / selectFinalProviderBars",
+   "does": "A bar is served only if its period's last possible trading close has passed AND the acquisition that captured it happened after that close; a daily bar also needs the settle rule.",
+   "protects": "A forming bar or a mid-session snapshot is never served as complete.",
+   "can_break": "An object whose acquisition stamp is missing drops its whole tail; a daily bar acquired at 15:12 ET is withheld even after the close until re-acquired (correct, but it makes the refresh mandatory).",
+   "touches": [
+    "FIN2",
+    "CA1",
+    "CA3",
+    "QC1",
+    "GS2"
+   ],
+   "reported_as": "incomplete_trailing_dropped / unsettled_trailing_dropped counts; bar_finality receipt",
+   "tests": "provider-bar-finality.test.mjs (13), geiger-wire-contract.test.mjs"
+  },
+  {
+   "id": "FIN2",
+   "family": "finality",
+   "where": "services/rest-accel/provider-bar-finality.mjs:43-51 providerValueCloseMs",
+   "does": "The value close of a bucket is the last trading close inside it (20:00 ET of the last session), not the nominal end at midnight or the weekend.",
+   "protects": "A weekly bar is final Friday evening, not Sunday.",
+   "can_break": "Depends on the NYSE calendar (MS1) being right for half days and holidays; half days are not modelled (a 13:00 close is treated as 16:00/20:00).",
+   "touches": [
+    "MS1",
+    "FIN1"
+   ],
+   "reported_as": "silent",
+   "tests": "provider-bar-finality.test.mjs"
+  },
+  {
+   "id": "FIN3",
+   "family": "finality",
+   "where": "services/rest-accel/provider-bar-finality.mjs:133-143 sessionExtensionPlan",
+   "does": "Decides which sessions (prior, today after 04:00 ET) an intraday answer must be topped up with from a live provider query; a durable object not requested through the prior session needs a catch-up first.",
+   "protects": "Today's suffix never bridges missed sessions.",
+   "can_break": "DURABLE_HISTORY_CATCHUP_REQUIRED fails the whole Geiger rung for a name whose object is behind (26 Sep: 364/364 names failed on 2h for hours).",
+   "touches": [
+    "FIN1",
+    "GS2",
+    "CA3",
+    "TR1"
+   ],
+   "reported_as": "session_extension.state (named) and the Geiger failure string",
+   "tests": "chart-session-extension-basis.test.mjs, provider-bar-finality.test.mjs"
+  },
+  {
+   "id": "FIN4",
+   "family": "finality",
+   "where": "services/rest-accel/provider-bar-finality.mjs:145-163 mergeSessionProviderBars",
+   "does": "A one-session live answer replaces that session's bars in the served copy, requires the same price basis, and refuses timestamps outside the day.",
+   "protects": "Bases are never mixed; a withdrawn bar does not linger.",
+   "can_break": "Nothing stored (served copy only).",
+   "touches": [
+    "FIN3",
+    "BS1"
+   ],
+   "reported_as": "SESSION_EXTENSION_BASIS_MISMATCH etc. (named)",
+   "tests": "chart-session-extension-basis.test.mjs, session-bars-isolation.test.mjs"
+  },
+  {
+   "id": "BS1",
+   "family": "bar service",
+   "where": "services/rest-accel/bar-service.mjs:136-187 providerSessionBars + session-bars-contract.mjs:31-57 providerJsonWithRetry",
+   "does": "Live one-session aggregates with a 20 s cache, coalescing, 3 bounded retries on 408/425/429/5xx, completed bars only.",
+   "protects": "One provider call per rung per 20 s across a 590-name pass.",
+   "can_break": "A deterministic 4xx is not retried (right); a 503 to the chart API makes Geiger retry the exact rung.",
+   "touches": [
+    "FIN3",
+    "FIN4",
+    "GS2"
+   ],
+   "reported_as": "503 PROVIDER_UNAVAILABLE with detail; counters session_provider_errors + recent failures (named)",
+   "tests": "session-bars-isolation.test.mjs (8)"
+  },
+  {
+   "id": "BS2",
+   "family": "bar service",
+   "where": "services/rest-accel/bar-service.mjs:66-76,408-411 the universe gate",
+   "does": "Only a symbol with an acquisition manifest in R2 may be acquired.",
+   "protects": "Nobody can mint objects by typing tickers.",
+   "can_break": "A newly admitted name without a manifest is 'not tracked' for 10 minutes of cache; the chart API remembers that for an hour (NOT_TRACKED_TTL).",
+   "touches": [
+    "CA5",
+    "PW1"
+   ],
+   "reported_as": "404 SYMBOL_NOT_TRACKED (named)",
+   "tests": "none direct"
+  },
+  {
+   "id": "BS3",
+   "family": "bar service",
+   "where": "services/rest-accel/bar-service.mjs:427-432 destination",
+   "does": "A deep write is allowed for D and W only.",
+   "protects": "The deep namespace carries only the two widths it is deep for.",
+   "can_break": "Nothing.",
+   "touches": [
+    "IC2"
+   ],
+   "reported_as": "400 (named)",
+   "tests": "none"
+  },
+  {
+   "id": "BS4",
+   "family": "bar service",
+   "where": "services/rest-accel/bar-service.mjs:78-88,462-465 counters",
+   "does": "Counts every /acquire failure under provider_errors and answers 502 'provider acquisition failed' with the real detail.",
+   "protects": "Nothing; it is reporting.",
+   "can_break": "Our own refusals (BF5, BF6, BF7, R2 errors, timeouts) are all 'provider errors' — 181,463 on 3 Oct were ours.",
+   "touches": [
+    "BF5",
+    "CA2"
+   ],
+   "reported_as": "LUMPED: provider_errors",
+   "tests": "none (fixed in this branch: named-cause counters, test added)"
+  },
+  {
+   "id": "CA1",
+   "family": "chart API",
+   "where": "services/chart-api/daily-refresh-policy.mjs:25-42 dailyRefreshDecision",
+   "does": "A daily object is refreshed once per ET day after midnight, again after 16:15 ET, and whenever its newest session is behind the proven settled session.",
+   "protects": "A once-present daily object is not treated as current forever.",
+   "can_break": "Every refusal of the refresh (BF5) turns into a 503 for the whole daily chart and the Geiger D rung — nothing stale is served, but nothing at all is served; the midnight trigger is why the 56 names failed from 00:02 ET each day until the post-close pass re-acquired them.",
+   "touches": [
+    "BF5",
+    "BF1",
+    "CA2",
+    "FIN1",
+    "SO3",
+    "GP1"
+   ],
+   "reported_as": "daily_refresh.before.reason (named); failure 503 DAILY_REFRESH_UNAVAILABLE",
+   "tests": "daily-refresh-policy.test.mjs (5), settled-overlay-hold.test.mjs; none with BF5"
+  },
+  {
+   "id": "CA2",
+   "family": "chart API",
+   "where": "services/chart-api/server.mjs:1360-1390 the forced deep refresh",
+   "does": "When CA1 says refresh, asks the bar service with force=1 destination=deep, re-reads R2, and refuses (503) if the refresh fails or does not converge.",
+   "protects": "NO_STALE_DAILY: no FMP or local substitute, ever.",
+   "can_break": "Every Geiger cycle (590 × D) and every chart open retries it: 30,636 attempts on one machine in 8 hours; the bar service's detail is dropped (acquisition.detail = 'provider acquisition failed').",
+   "touches": [
+    "CA1",
+    "BF1",
+    "BF5",
+    "BS4",
+    "GP1"
+   ],
+   "reported_as": "503 DAILY_REFRESH_UNAVAILABLE; counters daily_refresh_failed, on_demand_recent_failures (detail lost)",
+   "tests": "none end to end (fixed in this branch: detail passed through, counters by cause)"
+  },
+  {
+   "id": "CA3",
+   "family": "chart API",
+   "where": "services/chart-api/server.mjs:1396-1431 session extension on intraday",
+   "does": "An intraday answer is topped up with the provider's completed bars for the prior and current session; on any failure the stored tail is served and the failure is named.",
+   "protects": "Intraday charts are current without rewriting storage.",
+   "can_break": "Geiger refuses a rung whose extension failed (right), so one bar-service hiccup fails a symbol for the cycle.",
+   "touches": [
+    "FIN3",
+    "FIN4",
+    "BS1",
+    "GS2"
+   ],
+   "reported_as": "session_extension.state + detail (named)",
+   "tests": "chart-session-extension-basis.test.mjs"
+  },
+  {
+   "id": "CA4",
+   "family": "chart API",
+   "where": "services/chart-api/daily-refresh-policy.mjs:48-74 + server.mjs:1324-1358 named daily absence",
+   "does": "A name the settled-close file says had no daily bar is re-asked once for today; zero rows from Massive is a terminal 404 PROVIDER_DAILY_SESSION_ABSENT, never a retry.",
+   "protects": "EQR-type names do not poison the Geiger cycle with 503s.",
+   "can_break": "A HELD name (P9) and an OWN_CLOSE_ABSENT name are not absences and keep the ordinary path (correct).",
+   "touches": [
+    "SO1",
+    "SO2",
+    "GS2"
+   ],
+   "reported_as": "404 with absence block (named); counter daily_refresh_named_absence",
+   "tests": "settled-overlay-hold.test.mjs, settled-close-own-close.test.mjs, geiger-source-contract.test.mjs"
+  },
+  {
+   "id": "CA5",
+   "family": "chart API",
+   "where": "services/chart-api/server.mjs:1270-1289 no series",
+   "does": "A missing object is acquired on demand once; a settled absence is 404, a dependency outage is 503.",
+   "protects": "Clients retry only what can improve.",
+   "can_break": "An on-demand acquisition for a non-routine width pulls the family's depth (200 or 1,200 weeks).",
+   "touches": [
+    "BS2",
+    "BF4",
+    "BF1"
+   ],
+   "reported_as": "state (named) + on_demand block",
+   "tests": "none direct"
+  },
+  {
+   "id": "CA6",
+   "family": "chart API",
+   "where": "services/chart-api/server.mjs:1300-1307 empty series",
+   "does": "A stored zero-bar object answers 404, never 200 with no candles.",
+   "protects": "A nonexistent symbol does not look like a symbol with no data.",
+   "can_break": "Nothing.",
+   "touches": [
+    "BF4",
+    "PW1"
+   ],
+   "reported_as": "404 EMPTY_PROVIDER_SERIES (named)",
+   "tests": "none"
+  },
+  {
+   "id": "CA7",
+   "family": "chart API",
+   "where": "services/chart-api/forming-bar.mjs:50-107 buildFormingBar",
+   "does": "forming=1 appends one bar built from completed lower bars plus the live price; refused by name if a lower bar is missing or the price is inside the last completed period.",
+   "protects": "Statistics and the Geiger never see it (they never ask).",
+   "can_break": "Nothing stored.",
+   "touches": [
+    "FIN1",
+    "MS1"
+   ],
+   "reported_as": "forming.state (named)",
+   "tests": "chart-api-forming-bar.test.mjs (9)"
+  },
+  {
+   "id": "CA8",
+   "family": "chart API",
+   "where": "services/chart-api/server.mjs:1551-1575 hot-read cache policy",
+   "does": "A completed intraday answer is kept until the next bucket closes; a daily answer at most 5 minutes; anything with an on-demand or failed extension is not cached; a daily answer is invalidated when the settled binding moves.",
+   "protects": "Served bytes never outlive the rule that made them.",
+   "can_break": "A cached 503 cannot happen (errors are not cached); fine.",
+   "touches": [
+    "CA1",
+    "CA3",
+    "SO3"
+   ],
+   "reported_as": "hot header (observable)",
+   "tests": "chart-api-hot-read-cache.test.mjs, chart-api-hot-read-harness.test.mjs"
+  },
+  {
+   "id": "QC1",
+   "family": "closes",
+   "where": "services/chart-api/quote-contract.mjs:54-104 barSettledHow",
+   "does": "A daily bar is final only with full settled provenance from the settled-close file, or its own acquisition stamp after that session's 16:00 ET, or the snapshot's; a broken settled claim is never rescued.",
+   "protects": "P0-DENOM: a 15:12 snapshot never becomes a previous close.",
+   "can_break": "Nothing stale; it withholds instead.",
+   "touches": [
+    "FIN1",
+    "SO1",
+    "QC2"
+   ],
+   "reported_as": "prior_finality basis (named)",
+   "tests": "previous-close-eligibility.test.mjs, settled-close-admission.test.mjs, quote-session-contract.test.mjs"
+  },
+  {
+   "id": "QC2",
+   "family": "closes",
+   "where": "services/chart-api/quote-contract.mjs:113-180 selectSessions",
+   "does": "The previous close is the last bar whose session is strictly before the displayed price's session, chosen by date never by array position; with no calendar-proven prior session nothing serves.",
+   "protects": "After-hours moves are not measured against today's own close (CIFR, 18 Aug).",
+   "can_break": "Without a settled file the whole % column is blank by design (the 2 Oct FINX morning).",
+   "touches": [
+    "SO1",
+    "SO3",
+    "SC1"
+   ],
+   "reported_as": "PREVIOUS_CLOSE_NOT_SETTLED (named)",
+   "tests": "quote-session-contract.test.mjs (11), settled-multi-binding.test.mjs"
+  },
+  {
+   "id": "SC1",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-core.mjs:92-104,126-174 the cent rule + admitSymbol",
+   "does": "A close is admitted only when the completed daily aggregate, /prev and the condition-8 closing print agree exactly or within $0.01 or 0.05% (capped $0.05), every stamp after the 16:00 close; the admitted value is always the daily aggregate.",
+   "protects": "No negotiated number; three independent provider surfaces must agree.",
+   "can_break": "One thin ETF beyond the rule refused 590 names (24 Sep, 2 Oct) until the HOLD (SC2) existed.",
+   "touches": [
+    "SC2",
+    "SC3",
+    "SC4",
+    "SO1"
+   ],
+   "reported_as": "exception reason CROSS_CHECK_MISMATCH with the three numbers (named)",
+   "tests": "settled-close-tolerance.test.mjs (10), settled-close-publisher.test.mjs"
+  },
+  {
+   "id": "SC2",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-core.mjs:115-119,327-343 the hold ceiling",
+   "does": "A disputed name is HELD by name (shown as —) and the file still publishes, unless more than max(3, 0.5%) names are disputed, then the whole file is refused as before.",
+   "protects": "A bad data day cannot publish 580 wrong closes under a hold label.",
+   "can_break": "Four thin ETFs on one evening blank the whole board again.",
+   "touches": [
+    "SC1",
+    "SO2",
+    "QC2"
+   ],
+   "reported_as": "held list in the receipt and in /health.previous_close_publication (named)",
+   "tests": "settled-close-hold.test.mjs (8), settled-overlay-hold.test.mjs"
+  },
+  {
+   "id": "SC3",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-core.mjs:185-233 admitOwnClose (P10)",
+   "does": "At 16:05 ET the file is built from the closing print, else the preliminary daily aggregate, else our own 16:00 bar (never a cross-check source); print and daily are cross-checked by the cent rule.",
+   "protects": "The board has its previous close before Massive rolls /prev.",
+   "can_break": "A provisional file must later be re-promoted PROVIDER_CONFIRMED; the 16:00 bar is beyond the cent rule 818/3,286 times, so it is last resort only.",
+   "touches": [
+    "SC1",
+    "SC4",
+    "SC5",
+    "SO4"
+   ],
+   "reported_as": "basis OWN_CLOSE / provisional:true on the file and /health (named)",
+   "tests": "settled-close-own-close.test.mjs (16), settled-close-supervisor-p10.test.mjs"
+  },
+  {
+   "id": "SC4",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-core.mjs:284-408 buildSettledArtifact + 412-420 acceptsUniverse",
+   "does": "The file is bound to the universe by digest (sorted unique symbols), to the exact next price session from the provider's holiday calendar, and refuses to build before the session's close or on a non-trading day.",
+   "protects": "Drop-one/add-one same-count sets refused; a Friday file never binds to a Tuesday.",
+   "can_break": "A universe change anywhere (admission) makes every reader refuse the file until all pins move together (the 25 Sep half-admission).",
+   "touches": [
+    "SO3",
+    "SC5",
+    "SY2"
+   ],
+   "reported_as": "CORE_REFUSED / UNIVERSE_MISMATCH (named)",
+   "tests": "settled-close-publisher.test.mjs, universe-admit-pins.test.mjs, settled-multi-binding.test.mjs"
+  },
+  {
+   "id": "SC5",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-promote.mjs:96-121 never demote; one-shot.mjs:92-94 candidate-only writes",
+   "does": "The one-shot can only write the candidate namespace; promotion is byte-identical, read back, needs REVIEWER_GREEN, and a provisional file never overwrites a confirmed one.",
+   "protects": "Production closes are immutable once confirmed.",
+   "can_break": "Nothing stale; a wrong confirmed file needs a human.",
+   "touches": [
+    "SC3",
+    "SC4",
+    "SO4"
+   ],
+   "reported_as": "CONFIRMED_FILE_NOT_OVERWRITTEN_BY_PROVISIONAL etc. (named)",
+   "tests": "settled-close-supervisor-p10.test.mjs, settled-close-runner.test.mjs"
+  },
+  {
+   "id": "SC6",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-runner.mjs:28-39 fetchHolidays; core.mjs:51-67 nextPriceSession",
+   "does": "The holiday calendar is REQUIRED input from Massive's market-status endpoint; no calendar, no publish; an early-close day is a trading day.",
+   "protects": "valid_for is never guessed.",
+   "can_break": "If the provider's upcoming list stops, nothing publishes (named CALENDAR_UNAVAILABLE).",
+   "touches": [
+    "SC4",
+    "MS1"
+   ],
+   "reported_as": "CALENDAR_UNAVAILABLE (named)",
+   "tests": "settled-close-runner.test.mjs (13)"
+  },
+  {
+   "id": "SC7",
+   "family": "settled close",
+   "where": "services/stocks-ops/settled-close-supervisor.mjs:194-198,206-212 decideTarget + probeRolled",
+   "does": "Massive has 'rolled' when SPY's daily close equals SPY's /prev close for the session; only then is the confirmed file built; a provisional file waits for it.",
+   "protects": "The 590-name fan-out does not run before the official closes exist.",
+   "can_break": "One name (SPY) decides for 590; a SPY-only correction would mis-time everybody.",
+   "touches": [
+    "SC3",
+    "SC5"
+   ],
+   "reported_as": "WAITING_PROVIDER_CONFIRMATION with the two SPY numbers (named)",
+   "tests": "settled-close-supervisor-p10.test.mjs"
+  },
+  {
+   "id": "SO1",
+   "family": "settled overlay",
+   "where": "services/chart-api/settled-overlay.mjs:54-170 parseSettledArtifact",
+   "does": "The reader binds the complete top-level contract and every record; a missing field, a bad absence state, a basis/provisional contradiction, or an own-absence on a confirmed file refuses the whole file.",
+   "protects": "A loader can never default a field into validity.",
+   "can_break": "The reader must be deployed before any publisher that writes a new state (P9 hold, P10 own-close) or the board goes blank.",
+   "touches": [
+    "SC1",
+    "SC2",
+    "SC3",
+    "QC1"
+   ],
+   "reported_as": "settled_artifact_rejects counter + error string (named)",
+   "tests": "settled-overlay-loader.test.mjs (14)"
+  },
+  {
+   "id": "SO2",
+   "family": "settled overlay",
+   "where": "services/chart-api/settled-overlay.mjs:240-290 applySettledHold / overlayReplaceOnly",
+   "does": "The overlay replaces only an existing exact-session bar with the settled close and never appends; a held name shows no prior.",
+   "protects": "No manufactured provenance.",
+   "can_break": "A name whose deep series lacks that session gets no settled close even though the file has one (observable as absence).",
+   "touches": [
+    "SO1",
+    "QC1",
+    "QC2"
+   ],
+   "reported_as": "prior_state HELD / NOT_SETTLED (named)",
+   "tests": "settled-overlay-hold.test.mjs, settled-overlay-loader.test.mjs"
+  },
+  {
+   "id": "SO3",
+   "family": "settled overlay",
+   "where": "services/chart-api/settled-overlay.mjs:425-520 makeMultiSettledCache / quotesReadinessMulti",
+   "does": "Quotes are bound per ET price session to one settled file whose universe digest equals the configured one; a mismatch makes denominator_ready false.",
+   "protects": "A file for the wrong universe never feeds the board.",
+   "can_break": "Every admission must move this pin with the others, or the % column goes blank (25, 29 Sep).",
+   "touches": [
+    "SC4",
+    "QC2",
+    "SY2"
+   ],
+   "reported_as": "binding_state UNIVERSE_MISMATCH etc. (named)",
+   "tests": "settled-multi-binding.test.mjs (9), health-readiness.test.mjs"
+  },
+  {
+   "id": "SO4",
+   "family": "settled overlay",
+   "where": "services/chart-api/settled-overlay.mjs:368-420 previousClosePublication",
+   "does": "/health states, per price session, whether the previous-close file is PUBLISHED, provisional, confirmed, held names, and a 04:00 ET deadline note.",
+   "protects": "Alan can see the state without the machine log.",
+   "can_break": "Nothing.",
+   "touches": [
+    "SC3"
+   ],
+   "reported_as": "named",
+   "tests": "prevclose-publication-health.test.mjs (5)"
+  },
+  {
+   "id": "GS1",
+   "family": "Geiger inputs",
+   "where": "services/hot-query/geiger-source-contract.mjs:36-95 resolveGeigerTimeframeProfile",
+   "does": "The Equalizer must name all 17 rungs with finite non-negative weights and a token map that matches exactly; disabled or zero-weight rungs are excluded by name.",
+   "protects": "A saved Equalizer cannot silently drop or rename a rung.",
+   "can_break": "Nothing stale; it refuses to start.",
+   "touches": [
+    "IC1",
+    "GE1"
+   ],
+   "reported_as": "fatal INVALID_EQUALIZER_TIMEFRAME_PROFILE (named)",
+   "tests": "geiger-source-contract.test.mjs, geiger-equalizer-source.test.mjs (26)"
+  },
+  {
+   "id": "GS2",
+   "family": "Geiger inputs",
+   "where": "services/hot-query/geiger-source-contract.mjs:97-130 classifyGeigerCandleResponse",
+   "does": "A rung is admitted only from a 200 with a SPLIT_ADJUSTED non-empty series, a successful session extension, and a valid finality receipt; a 404 PROVIDER_DAILY_SESSION_ABSENT on D is a named absence; a 503 or failed extension is retried 3 times then fails the symbol.",
+   "protects": "Scoring an old base never turns a transient 503 into a believable number.",
+   "can_break": "A 503 that is really our own refusal (CA2/BF5) fails the symbol every cycle; with GP1 that holds the entire Hub Geiger.",
+   "touches": [
+    "CA2",
+    "CA3",
+    "CA4",
+    "FIN1",
+    "GP1",
+    "GS3"
+   ],
+   "reported_as": "failure string 'candles D/X 503 DAILY_REFRESH_UNAVAILABLE after 3 bounded attempts' (named per symbol, then lumped into SYMBOL_FAILURES)",
+   "tests": "geiger-source-contract.test.mjs (23), geiger-wire-contract.test.mjs"
+  },
+  {
+   "id": "GS3",
+   "family": "Geiger inputs",
+   "where": "services/hot-query/geiger-source-contract.mjs:155-195 intradayBehindDailyReference / providerFrameBehindDailyReference",
+   "does": "D is the session reference; an intraday rung whose newest bar is on an earlier ET date, or any frame not requested through the daily reference session, is excluded by name (ABSENT).",
+   "protects": "A frozen intraday object or a BRK-type mapping stuck on an old session is not scored.",
+   "can_break": "Any excluded rung makes rung_absent > 0, which with GP1 refuses the WHOLE artifact (2 Oct 16:11–20:00 ET: 52 cycles held because 1–2 rungs were absent).",
+   "touches": [
+    "GP1",
+    "GS2"
+   ],
+   "reported_as": "named_rung_absences in the artifact; degraded reason PARTICIPATING_RUNG_ABSENT",
+   "tests": "geiger-source-contract.test.mjs"
+  },
+  {
+   "id": "GP1",
+   "family": "Geiger publish",
+   "where": "services/hot-query/geiger-publication-rule.mjs:12-31 decidePublication; geiger-publish-artifact.mjs:301-345",
+   "does": "Publish only when every symbol and every cell computed; otherwise retain the previous artifact and write a _degraded record (partial publish only when GEIGER_PUBLISH_PARTIAL=1, which the supervisor never sets).",
+   "protects": "A missing symbol never looks like a symbol with no data.",
+   "can_break": "ONE failing symbol holds all 590 (56 names → 619 held cycles 30 Sep–3 Oct; 4,739 degraded records since 18 Aug; whole days held 9–21 Sep). The Hub shows the last complete reading, up to 16 hours old, with no visible age.",
+   "touches": [
+    "GS2",
+    "GS3",
+    "CA2",
+    "GR1"
+   ],
+   "reported_as": "_degraded/<ts>.json in R2 with reasons and names (named, but nobody reads it); /geiger verification label only when partial is armed",
+   "tests": "geiger-partial-publication.test.mjs (16)"
+  },
+  {
+   "id": "GP2",
+   "family": "Geiger publish",
+   "where": "services/hot-query/geiger-publish-artifact.mjs:262-272 bounded retry",
+   "does": "Failed symbols are retried in 3 rounds with linear backoff before the publication decision.",
+   "protects": "A chart API restart does not drop 4 names from a cycle.",
+   "can_break": "A deterministic refusal is retried 3 × 3 = 9 times per symbol per cycle: 56 names × 9 = the 3 req/s seen on the chart API, and the cycle stretches from 4 to ~12 minutes.",
+   "touches": [
+    "GP1",
+    "GS2",
+    "CA2"
+   ],
+   "reported_as": "retry_rounds in the degraded record",
+   "tests": "geiger-partial-publication.test.mjs"
+  },
+  {
+   "id": "GP3",
+   "family": "Geiger publish",
+   "where": "services/hot-query/boot-geiger.sh:14-33 universe identity",
+   "does": "The runner rebuilds its universe file from the instrument map and refuses to boot unless count and digest equal the pins baked into the (injected) boot file.",
+   "protects": "The Geiger never runs on a half-admitted universe.",
+   "can_break": "The boot file is injected by machine config, so an image change alone cannot move the pin (24 Sep trap).",
+   "touches": [
+    "SY2",
+    "GR1"
+   ],
+   "reported_as": "fatal 'geiger universe identity mismatch' (named, in the machine log only)",
+   "tests": "universe-admit-pins.test.mjs"
+  },
+  {
+   "id": "GR1",
+   "family": "Geiger readiness",
+   "where": "services/chart-api/geiger-readiness.mjs:55-199 assessGeigerReadiness",
+   "does": "Walks every symbol × rung and proves the provider query covered the completed session, clocks precede publication, the finality receipt is valid, and during the live session the artifact is under 15 minutes old; label-only classes never block.",
+   "protects": "/health says honestly whether the Geiger is current.",
+   "can_break": "It judges the artifact that was published; a RETAINED old artifact during a hold passes every per-cell check and fails only the 15-minute live-age check — outside 04:00–20:15 ET a 16-hour-old artifact reads GEIGER_READY.",
+   "touches": [
+    "GP1",
+    "FIN1",
+    "MS1"
+   ],
+   "reported_as": "issue_counts by code (named)",
+   "tests": "geiger-readiness.test.mjs (9), geiger-partial-publication.test.mjs"
+  },
+  {
+   "id": "GE1",
+   "family": "Geiger inputs",
+   "where": "services/hot-query/geiger-equalizer-source.mjs (loadEqualizerSnapshot) + geiger-publish-artifact.mjs:57-87",
+   "does": "The Equalizer is loaded once per run from the receipt-pinned snapshot or a schema-checked PostgREST read; its canonical digest is recorded on the artifact.",
+   "protects": "A mid-run Equalizer change cannot mix weights.",
+   "can_break": "Station pins the receipt sha; a saved Equalizer hides every Station chip until re-pinned.",
+   "touches": [
+    "GS1"
+   ],
+   "reported_as": "equalizer_receipt_sha256 on the artifact",
+   "tests": "geiger-equalizer-source.test.mjs (26)"
+  },
+  {
+   "id": "FD1",
+   "family": "fan daily",
+   "where": "services/hot-query/fan-daily-writer.mjs:73-75,118 + provider-daily-compat.mjs:74-77",
+   "does": "The equity fan rows are computed from the chart API's final daily bars (210-bar maturity gate), sessions are SPY's final daily bars, a run aborts if more than 2% of fetches fail; INSERT ONLY through one SQL function.",
+   "protects": "REWIND history is append-only and provider-built.",
+   "can_break": "A daily refresh refusal (CA2) for a name means no fan row for that session (silent per name; abort only above 2%); 56/590 = 9.5% would abort the whole session's write.",
+   "touches": [
+    "CA2",
+    "FIN1"
+   ],
+   "reported_as": "phase/abort log lines; stats per session",
+   "tests": "fan-daily-plan.test.mjs, provider-daily-compat.test.mjs"
+  },
+  {
+   "id": "SG1",
+   "family": "scout Geiger",
+   "where": "services/scout-geiger/scout-geiger-core.mjs:48-66 threeDayStart / weekStart / bucketFinal",
+   "does": "Builds 3D and W buckets from the whole-market daily files on Massive's own phase (3-day buckets where days-since-epoch mod 3 = 2; Sunday-to-Saturday weeks) and uses a bucket only when no later session can join it.",
+   "protects": "The scout agrees with the chart API's provider buckets.",
+   "can_break": "Depends on the NYSE calendar for finality (MS1).",
+   "touches": [
+    "MS1",
+    "FIN2"
+   ],
+   "reported_as": "named states in the job log",
+   "tests": "scout-geiger.test.mjs (14), scout-geiger-seven.test.mjs (12)"
+  },
+  {
+   "id": "SG2",
+   "family": "scout Geiger",
+   "where": "services/scout-geiger/scout-geiger-core.mjs:160-170 splitAdjust",
+   "does": "Whole-market daily files are unadjusted; the scout folds the split ledger itself.",
+   "protects": "A split does not become a 50% move.",
+   "can_break": "A split missing from the ledger does.",
+   "touches": [
+    "AD1"
+   ],
+   "reported_as": "silent",
+   "tests": "scout-geiger.test.mjs"
+  },
+  {
+   "id": "BV1",
+   "family": "board volume",
+   "where": "services/board-volume/board-volume-contract.mjs:129-140 writeWindow + 82-110 baseline/ratios",
+   "does": "Relative volume is written only on a session day between 04:01 and 20:00 ET, against a 20-session baseline of minute volumes.",
+   "protects": "No ratio outside a session.",
+   "can_break": "Nothing in Q2a's scope beyond the calendar (MS1).",
+   "touches": [
+    "MS1"
+   ],
+   "reported_as": "named reason",
+   "tests": "board-volume-contract.test.mjs (9)"
+  },
+  {
+   "id": "MS1",
+   "family": "calendar",
+   "where": "services/rest-accel/market-session-contract.mjs:50-86 standardNyseClosedDates / isNyseSession / priorNyseSession",
+   "does": "A computed NYSE holiday calendar (fixed rules + Easter) plus configured extra closures; no early-close model.",
+   "protects": "Sessions are not guessed from weekdays alone.",
+   "can_break": "A special closure (national day of mourning) is a session until someone sets NYSE_EXTRA_CLOSED_DATES_ET on every machine; half days (13:00 close) are treated as full days for finality and for the 16:15 refresh trigger; a second copy of the same calendar lives in provider-tail-refresh-scheduled.mjs (drift risk).",
+   "touches": [
+    "FIN2",
+    "FIN3",
+    "CA1",
+    "SC6",
+    "GR1",
+    "SG1",
+    "BV1"
+   ],
+   "reported_as": "silent",
+   "tests": "provider-bar-finality.test.mjs, fmp-macro-nyse-kind-clock.test.mjs, provider-tail-refresh-scheduled.test.mjs"
+  },
+  {
+   "id": "SY1",
+   "family": "identity",
+   "where": "services/chart-api/provider-symbol-contract.mjs:8-21 massiveProviderSymbol",
+   "does": "BRK-B is asked for as BRK.B; everything else passes through; the stream's instrument map overrides when present.",
+   "protects": "The one known provider-ticker exception.",
+   "can_break": "Any new exception must be added here AND in instrument_map; the key stays the ticker string.",
+   "touches": [
+    "BF6",
+    "SY2"
+   ],
+   "reported_as": "silent",
+   "tests": "provider-symbol-contract.test.mjs (3)"
+  },
+  {
+   "id": "SY2",
+   "family": "identity",
+   "where": "control/CANONICAL_EQUITY_UNIVERSE_20260820.json + provider-tail-refresh-universe.mjs:4-5 (590 / 116c79f2…)",
+   "does": "One digest of the sorted symbol list is the universe's identity, baked into images and machine env (frame-due scope), checked by the settled close, the Geiger boot and the readers.",
+   "protects": "Count alone never passes.",
+   "can_break": "Every admission moves ≥10 pins across 3 repos and 6 machines in one sitting; any lag splits the estate (25 Sep).",
+   "touches": [
+    "SC4",
+    "SO3",
+    "GP3"
+   ],
+   "reported_as": "UNIVERSE_MISMATCH / SCOPE_ID_MISMATCH (named, once at boot for the consumer)",
+   "tests": "universe-admit-pins.test.mjs (11), admission-v2/v3 tests"
+  },
+  {
+   "id": "PW1",
+   "family": "prewarm",
+   "where": "services/rest-accel/provider-bars-worker.mjs:84-104,133-175",
+   "does": "The prewarm worker pulls every routine width for a name from today minus the width's prewarm weeks, writes it (empty series recorded as absence) plus the manifest that is the universe gate.",
+   "protects": "A newly admitted name gets every width and its membership in one run.",
+   "can_break": "It does not read HISTORY_FLOORS: a re-pull of a floored name writes the earlier holder's bars and needs a cut after; it writes the serving namespace only, so deep D/W stay as they were.",
+   "touches": [
+    "FL1",
+    "BS2",
+    "IC2",
+    "HC1"
+   ],
+   "reported_as": "FINAL line with failures (named per width)",
+   "tests": "none"
+  },
+  {
+   "id": "AD1",
+   "family": "adjustments",
+   "where": "services/stocks-history/splits.mjs:1-8 + history.mjs:148-165 factorFor",
+   "does": "Splits are an append-only event ledger with versioned fold factors; price × f ⇔ volume ÷ f; the provider corpus itself is requested adjusted=true.",
+   "protects": "A split never edits a stored row; the factor history is auditable.",
+   "can_break": "Because provider bars are stored ALREADY adjusted, a new split changes every stored bar retroactively; the tail merge then sees HISTORICAL_OVERLAP_OHLC_CHANGED and sends the cell to a rebuild (correct but costly and silent to Alan).",
+   "touches": [
+    "TR2",
+    "BR1",
+    "FR1",
+    "SG2",
+    "TJ3"
+   ],
+   "reported_as": "reason_code HISTORICAL_OVERLAP_OHLC_CHANGED (named in receipts)",
+   "tests": "basis.test.mjs; no test that a split event leads to a rebuild"
+  },
+  {
+   "id": "DC1",
+   "family": "due-frame consumer (shared with Q2b)",
+   "where": "services/rest-accel/provider-due-consumer.mjs:50-77 + provider-tail-refresh-scheduled.mjs",
+   "does": "Every minute, refreshes the frames the stream marked due, oldest session first, under one writer lease; the scheduled post-close pass reconciles full objects after 20:15 ET.",
+   "protects": "Live currency does not depend on a scheduled machine waking.",
+   "can_break": "The 1D cells of the post-close pass rewrite deep D with a fresh acquisition stamp, which is what made CA1 say CURRENT each evening and 'cured' the 56 names until midnight.",
+   "touches": [
+    "TR3",
+    "TR4",
+    "CA1",
+    "BF7"
+   ],
+   "reported_as": "receipts per run (named per cell); Q2b owns the scheduling side",
+   "tests": "provider-frame-due-e2e.test.mjs, provider-intraday-hold.test.mjs, provider-writer-lease.test.mjs"
+  },
+  {
+   "id": "ST1",
+   "family": "stream (shared with Q2b)",
+   "where": "services/market-stream/stream-bounded.mjs:1095-1110,1349-1366 watermark; :1725-1800 producer scope",
+   "does": "One watermark row per symbol (never moved backward) and a due-frame marker per closed minute; markers are refused unless the producer's scope id equals the consumer's.",
+   "protects": "A restart reconciles from the watermark; a half-admitted estate cannot mark the wrong universe.",
+   "can_break": "A missing scope env disarms it silently (23 Sep, two days of frozen intraday).",
+   "touches": [
+    "DC1",
+    "SY2"
+   ],
+   "reported_as": "frame_due_scope_refused counter; /health PRODUCER_WATERMARK_STALE",
+   "tests": "boot-watermark-repair.test.mjs (16), provider-frame-due-cursor-scope.test.mjs"
+  },
+  {
+   "id": "RC1",
+   "family": "reconcile (legacy)",
+   "where": "services/stocks-reconcile/reconcile.mjs:15-30,80-112",
+   "does": "After a session, pulls REST 1-minute bars in both bases and compares them to the WebSocket minutes; a session is SETTLED_CLEAN or SETTLED_WITH_PRICE_MISMATCH.",
+   "protects": "The old database minute lane had a finality check.",
+   "can_break": "It feeds nothing the Hub serves today (provider bars come from R2); it is the one place a cross-source tolerance was implemented.",
+   "touches": [
+    "ST1"
+   ],
+   "reported_as": "dead_letter rows + session status (named)",
+   "tests": "none"
+  }
+ ]
+}

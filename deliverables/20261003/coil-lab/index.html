@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · COIL LAB</title>
+<style>
+:root{ --bg:#0A0A0F; --panel:#0D0D14; --surface:#0F0F1A; --line:#1A1A2A; --line2:#252538; --hair:rgba(0,212,255,.34); --glow:inset 0 0 22px rgba(0,212,255,.05);
+  --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#868AAA; --mute:#3A3A52; --crk:#00D4FF; --bull:#00FFA3; --bear:#FF2D55; --sv4:#FF8A00;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; }
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink2);font:11px/1.5 var(--mono)}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px 14px;padding:8px 12px;border-bottom:.8px solid var(--hair);background:var(--panel);flex-wrap:wrap;min-height:44px}
+header h1{font-size:13px;letter-spacing:.18em;margin:0;font-weight:600;color:var(--ink)}
+header h1 b{color:var(--crk);font-weight:600}
+.stamp{font-size:10px;color:var(--dim);letter-spacing:.04em}
+.tabs{display:inline-flex;gap:0;border:.8px solid var(--line2);margin-left:auto}
+.tabs button,.seg button,button.b{background:var(--panel);color:var(--ink3);border:0;font:600 10px/1 var(--mono);letter-spacing:.18em;padding:8px 11px;cursor:pointer;text-transform:uppercase}
+.tabs button+button,.seg button+button{border-left:.8px solid var(--line2)}
+.tabs button.on,.seg button.on{color:var(--crk);box-shadow:inset 0 -2px 0 var(--crk)}
+button.b{border:.8px solid var(--line2)} button.b:hover{color:var(--ink)}
+.seg{display:inline-flex;border:.8px solid var(--line2)} .seg .lbl{font-size:9px;letter-spacing:.14em;color:var(--mute);padding:0 8px;align-self:center}
+main{flex:1;min-height:0;position:relative}
+.pane{position:absolute;inset:0;display:none;flex-direction:column} .pane.on{display:flex}
+#bar{display:flex;gap:8px 14px;align-items:center;padding:6px 12px;border-bottom:.5px solid var(--line);background:var(--surface);box-shadow:var(--glow);flex-wrap:wrap}
+#gl{flex:1;min-height:0;position:relative;background:var(--bg)} #gl canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;left:12px;bottom:10px;font-size:10px;color:var(--dim);letter-spacing:.06em;line-height:1.7;pointer-events:none}
+#hud b{color:var(--ink);font-weight:600} #hud .fps{color:var(--crk)}
+#legend{position:absolute;right:12px;bottom:10px;font-size:10px;color:var(--dim);letter-spacing:.06em;text-align:right;pointer-events:none;line-height:1.7}
+#legend .up{color:var(--bull)} #legend .dn{color:var(--bear)}
+/* Part B */
+#tape{overflow:auto;padding:10px 12px 40px}
+.box{border:.8px solid var(--hair);background:var(--surface);box-shadow:var(--glow);margin:0 0 14px}
+.box .hd{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:.5px solid var(--line)}
+.box .hd .ttl{font-size:10px;letter-spacing:.18em;color:var(--crk);font-weight:600;text-transform:uppercase}
+.box .hd .n{font-size:10px;color:var(--ink2)} .box .hd .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.box .bd{padding:0} .box .bd.pad{padding:8px 10px}
+.t1 canvas{display:block}
+.t3{padding:8px 10px} .t3h{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.14em;padding:0 0 6px;color:var(--ink3)} .t3h .up{color:var(--bull)} .t3h .dn{color:var(--bear)} .t3h .mid{color:var(--ink)}
+.t3cols{display:grid;grid-template-columns:1fr 1px 1fr;gap:0 10px} .t3line{background:var(--crk);opacity:.6}
+.t3r{display:grid;grid-template-columns:52px 1fr 44px 52px;gap:8px;align-items:center;border-bottom:.5px solid var(--line);font-size:11px}
+.t3r.dn{grid-template-columns:52px 44px 1fr 52px}
+.t3n{color:var(--ink);font-weight:600;letter-spacing:.04em} .t3x{color:var(--ink2);text-align:right} .t3m{color:var(--ink3);text-align:right}
+.t3r.dn .t3x,.t3r.dn .t3m{text-align:left} .t3r.dn .t3n{text-align:right}
+.t3b{height:6px;background:var(--line);position:relative} .t3b i{position:absolute;top:0;bottom:0;left:0;display:block;box-shadow:0 0 6px currentColor} .t3r.dn .t3b i{left:auto;right:0}
+.t2{display:block;max-width:100%}
+.note{font-size:11px;color:var(--dim);padding:6px 10px}
+details.sc-pagespecs{margin:18px 0 0;border-top:.5px solid var(--line);padding:8px 0;color:var(--dim);font-size:10px;letter-spacing:.04em;line-height:1.6}
+details.sc-pagespecs summary{cursor:pointer;letter-spacing:.18em;color:var(--ink3);font-weight:600;font-size:10px}
+details.sc-pagespecs p{margin:6px 0;max-width:900px}
+#zoom{position:fixed;inset:0;background:var(--bg);z-index:50;display:none;flex-direction:column} #zoom.on{display:flex}
+#zoomhd{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:.8px solid var(--hair);background:var(--panel)} #zoomhd .ttl{font-size:11px;letter-spacing:.18em;color:var(--crk);font-weight:600} #zoomhd .n{font-size:10px;color:var(--ink2)} #zoomhd .r{margin-left:auto}
+#zoombd{flex:1;min-height:0;overflow:auto} #zoombd .t3{padding:10px 16px} #zoombd .t3r{font-size:13px} #zoombd .t3n{font-size:14px}
+#err{position:absolute;left:12px;top:48px;color:var(--sv4);font-size:11px;display:none;z-index:5}
+@media (max-width:760px){ header h1{font-size:12px} .tabs button,.seg button,button.b{padding:8px 8px;font-size:9px} #legend{display:none} .t3r{font-size:10px;grid-template-columns:44px 1fr 38px 44px} .t3r.dn{grid-template-columns:44px 38px 1fr 44px} }
+</style>
+</head>
+<body>
+<header><span data-scnav-slot></span>
+  <h1><b>SCINTILLA</b> · COIL LAB</h1>
+  <span class="stamp" id="stamp">reading the Geiger…</span>
+  <div class="tabs" role="tablist"><button id="tab-coil" class="on">COIL</button><button id="tab-tape">SCINTILLAS TAPE</button></div>
+</header>
+<main>
+  <div id="err"></div>
+  <section class="pane on" id="pane-coil">
+    <div id="bar">
+      <span class="seg"><span class="lbl">DIRECTION</span><button data-mode="laser" class="on">A · LASER</button><button data-mode="guide">B · LIGHT-GUIDE</button><button data-mode="holo">C · HOLOGRAM</button></span>
+      <span class="seg"><span class="lbl">LIST</span><button data-list="favorites" class="on">★ FAVORITES</button><button data-list="radar">◎ RADAR</button><button data-list="liked">♥ LIKED</button></span>
+      <button class="b" id="land">LAND AGAIN</button>
+      <button class="b" id="tick">REPLAY A TICK</button>
+      <button class="b" id="home">RESET VIEW</button>
+      <button class="b" id="measure">MEASURE FPS</button>
+    </div>
+    <div id="gl"></div>
+    <div id="hud"></div>
+    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · drag turns · double-click home</div>
+  </section>
+  <section class="pane" id="pane-tape">
+    <div id="tape">
+      <div class="box"><div class="hd"><span class="ttl">T1 · CENTRE-LINE TAPE</span><span class="n" style="color:var(--dim)">tap the strip = the bigger-screen mode (T3)</span><span class="n" id="t1n"></span><span class="r"><span class="seg" id="dayseg"><span class="lbl">DAY</span><button data-day="2026-10-02" class="on">FRI 2 OCT</button><button data-day="2026-09-24">24 SEP · 34</button><button data-day="2026-09-28">28 SEP · 32</button><button data-day="all3">ALL THREE · 78</button></span></span></div><div class="bd" id="t1"></div></div>
+      <div class="box"><div class="hd"><span class="ttl">T2 · ZOOM LEVEL — THE SPREAD</span><span class="n" id="t2n"></span></div><div class="bd" id="t2"></div></div>
+      <div class="box"><div class="hd"><span class="ttl">T3 · ZOOM LEVEL — THE LADDER</span><span class="n" id="t3n"></span><span class="r"><button class="b" id="t3open">OPEN FULL PANEL</button></span></div><div class="bd" id="t3"></div></div>
+      <details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+        <p>Source: public.scintillas, the table the Hub's SCINTILLAS line and bell read, pulled 3 Oct 2026 through the Hub's own read path (data/scintillas-20261002.json and data/scintillas-20260901-20261003.json). Every mark is a stored row; nothing is invented. Friday 2 Oct has 12 rows (9 up, 3 down), all stamped at the close (21:29 ET), because the detector ran once after the session. 24 Sep (34 rows) and 28 Sep (32 rows) are the month's busiest sessions and stand in for "when 40 fire at once"; ALL THREE puts their 78 rows on one tape.</p>
+        <p>A mark's length is how many times its usual day the move was (|z|). A fire on the raw-move rule (an index or sector ETF moving 3 % or more) has |z| below 1, so it is sized by its move at 3 % ≈ 1×, and the label prints the % instead. A move too small to draw gets a 5 px floor so its name still reads.</p>
+        <p>T1 is the strip at the Hub's tape height: 4 % of the screen (42 px at 1050 tall). It drifts right → left at 22 px/s and can be dragged. T2 and T3 are the "bigger screen mode": a full panel (here 520 px tall ≈ 50 % of the screen at 1050). T2 only has a time axis to use when the detector fires intraday (24 and 28 Sep did; Friday did not — all twelve sit on one minute, so T2 fans them by size). T3 needs no time: forty names are forty rows of 18–26 px, all on one screen.</p>
+        <p>Pass 2 (3 Oct, afternoon): one scale for both sides of the ladder (the longest bar on either side = the biggest × usual day of the day; the down side's bars had been drawn into a 44 px column by a right-to-left grid, so ICE 8.9× was a stub while TJX 9.2× filled its row); both sides sorted by × its usual day; the × column always prints × its usual day (EWY: 0.8×, then its +3.1 % move). The bigger-screen mode: a tap on the strip (a press without a drag) opens the ladder as the whole screen — BACK, Esc or OPEN FULL PANEL's twin on T3's own box — and the strip pauses while it is open.</p>
+      </details>
+    </div>
+  </section>
+</main>
+<section id="zoom" aria-label="the bigger-screen mode of the tape"><div id="zoomhd"><span class="ttl">SCINTILLAS · <span id="zoomday"></span></span><span class="n" id="zoomn"></span><span class="r"><button class="b" id="zoomback">← BACK TO THE TAPE</button></span></div><div id="zoombd"></div></section>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/" } }
+</script>
+<script type="module">
+import { mountCoil } from "./coil3d.js";
+import { marks, tapeStrip, spread, ladder } from "./tape.js";
+const $ = (id) => document.getElementById(id), Q = new URLSearchParams(location.search);
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const state = { geiger: null, geigerFrom: null, lists: null, listName: Q.get("list") || "favorites", scint: [], ready: false, fps: 0, lastMeasure: null, err3d: null };
+window.__lab = state;
+const say = (m) => { const e = $("err"); e.style.display = m ? "block" : "none"; e.textContent = m || ""; };
+async function getJSON(url, ms = 12000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
+
+/* data: the live Geiger first; if it does not answer, the snapshot taken 3 Oct — and the stamp says which */
+const [std, g, snap, lists, scint] = await Promise.all([
+  getJSON("data/tree-standard.t10-e133a81.json"),
+  getJSON(CHART_API + "/geiger").then((v) => ({ ok: true, v })).catch((e) => ({ ok: false, e: String(e) })),
+  getJSON("data/geiger-snapshot-20261003.json"),
+  getJSON("data/hub-lists-20261003.json"),
+  getJSON("data/scintillas-20260901-20261003.json"),
+]);
+state.geiger = g.ok ? g.v : snap; state.geigerFrom = g.ok ? "live" : "snapshot 3 Oct 14:36 UTC (the live Geiger did not answer: " + g.e + ")";
+state.lists = lists; state.scint = scint;
+/* the lists: the Hub mirror in this browser first (sc_lists.favorites / .radar, sc_fav = LIKED) — the same way the tree reads them; else the same lists read from the Hub's tables on 3 Oct */
+function listTickers(name) {
+  try { if (name === "liked") { const a = JSON.parse(localStorage.getItem("sc_fav") || "null"); if (Array.isArray(a) && a.length) return { tickers: a, from: "Hub mirror" }; }
+    else { const o = JSON.parse(localStorage.getItem("sc_lists") || "null"); if (o && Array.isArray(o[name]) && o[name].length) return { tickers: o[name], from: "Hub mirror" }; } } catch {}
+  return { tickers: lists[name] || [], from: "the Hub's tables, read 3 Oct" };
+}
+const GS = state.geiger.symbols || {};
+function rowsFor(name) { const { tickers, from } = listTickers(name); const seen = new Set(); const rows = tickers.map((t) => String(t).toUpperCase()).filter((t) => !seen.has(t) && seen.add(t)).map((t) => ({ t, v: GS[t] && Number.isFinite(GS[t].composite) ? GS[t].composite : null })); return { rows, from, missing: rows.filter((r) => r.v == null).map((r) => r.t) }; }
+const todayScint = new Set(scint.filter((r) => (r.detail && r.detail.session) === "2026-10-02").map((r) => r.subject));
+
+let coil;
+try { coil = mountCoil($("gl"), { standard: std, scintillas: [...todayScint], onFps: (f) => { state.fps = f; } }); state.coil = coil; }
+catch (e) { state.err3d = String(e); say("3D did not start: " + e); }
+let current = null;
+function load(name, land = true) {
+  state.listName = name; const { rows, from, missing } = rowsFor(name); current = rows; state.rows = rows; state.listFrom = from; state.missing = missing;
+  if (coil) coil.setData(rows.map((r) => ({ ...r })), { land });
+  const read = rows.filter((r) => r.v != null), up = read.filter((r) => r.v >= 0).length;
+  $("stamp").textContent = `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC (${state.geigerFrom}) · ${name.toUpperCase()} ${rows.length} names (${from}) · ${up} up · ${read.length - up} down · ${missing.length} without a reading` + (missing.length ? ` (${missing.join(" ")})` : "");
+  document.querySelectorAll("[data-list]").forEach((b) => b.classList.toggle("on", b.dataset.list === name));
+  hud();
+}
+function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); $("hud").innerHTML = `<b>${coil.mode().toUpperCase()}</b> · ${pl ? pl.steps.length + " steps · H " + pl.H.toFixed(0) + " per unit · " + pl.ups + " up / " + pl.dns + " down / " + pl.none + " none" : ""}<br>camera ${JSON.stringify(coil.elevation())} · fills ${Math.round(f.h * 100)} % of the height${state.measuring ? ' · <span class="fps">measuring fps…</span>' : state.lastMeasure ? ' · <span class="fps">' + state.lastMeasure.fps + " fps</span> over " + state.lastMeasure.seconds + " s turning (" + state.lastMeasure.render_ms_per_frame + " ms a frame)" : ""}`; }
+document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b)); coil && coil.setMode(b.dataset.mode); hud(); }));
+document.querySelectorAll("[data-list]").forEach((b) => b.addEventListener("click", () => load(b.dataset.list)));
+$("land").addEventListener("click", () => coil && coil.land());
+$("home").addEventListener("click", () => coil && coil.home());
+$("measure").addEventListener("click", async () => { if (!coil || state.measuring) return; state.measuring = true; hud(); state.lastMeasure = await coil.measure(4000); state.measuring = false; hud(); });
+$("gl").addEventListener("pointerup", () => setTimeout(hud, 50)); $("gl").addEventListener("wheel", () => setTimeout(hud, 120), { passive: true });
+/* REPLAY A TICK: the readings move as they really did between the 3 Oct snapshot and the live Geiger (or, when they are the same, the real
+   change between 2 Oct's scout close and today, scaled to the Hub's −1..1) — a value change, shown as the motion the direction gives it */
+$("tick").addEventListener("click", () => replayTick());
+function replayTick() {
+  if (!coil || !current) return;
+  const S = snap.symbols || {}, L = state.geiger.symbols || {}; let n = 0;
+  for (const r of current) { if (r.v == null) continue; const a = S[r.t] && S[r.t].composite, b = L[r.t] && L[r.t].composite; if (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) > 1e-6) { coil.change(r.t, b); n++; } }
+  if (!n) { // the two readings are the same: play a real change anyway — the fired scintillas of Friday, each nudged by its own move's sign × 0.08, then back
+    for (const r of current) if (r.v != null && todayScint.has(r.t)) { const row = scint.find((x) => x.subject === r.t && x.detail && x.detail.session === "2026-10-02"); const d = row ? Math.sign(row.direction) * 0.08 : 0.06; coil.change(r.t, Math.max(-1, Math.min(1, r.v + d))); n++; setTimeout(() => coil.change(r.t, r.v), 1400); }
+    if (!n) { const r = current.find((x) => x.v != null); if (r) { coil.change(r.t, Math.max(-1, Math.min(1, r.v + 0.08))); setTimeout(() => coil.change(r.t, r.v), 1400); n = 1; } }
+  }
+  state.lastTick = n; return n;
+}
+state.replayTick = replayTick;
+window.addEventListener("keydown", (e) => { if (e.key === "1" || e.key === "2" || e.key === "3") document.querySelectorAll("[data-mode]")[+e.key - 1].click(); });
+
+/* Part B */
+const bySession = (d) => scint.filter((r) => (r.detail && r.detail.session) === d);
+const DAYS = { "2026-10-02": bySession("2026-10-02"), "2026-09-24": bySession("2026-09-24"), "2026-09-28": bySession("2026-09-28") }; DAYS.all3 = [...DAYS["2026-09-24"], ...DAYS["2026-09-28"], ...DAYS["2026-10-02"]];
+let day = Q.get("day") || "2026-10-02", strip = null;
+function drawTape() {
+  const ms = marks(DAYS[day]); state.tape = { day, marks: ms.length, up: ms.filter((m) => m.dir > 0).length, dn: ms.filter((m) => m.dir < 0).length };
+  const H = Math.round(Math.max(36, Math.min(48, window.innerHeight * 0.04)));
+  strip = tapeStrip($("t1"), ms, { height: H, onTap: openZoom }); $("t1n").textContent = `${ms.length} scintillas · ${state.tape.up} up · ${state.tape.dn} down · ${H} px = 4 % of ${window.innerHeight} px`;
+  const PH = Math.round(Math.min(560, Math.max(380, window.innerHeight * 0.5)));
+  const s2 = spread($("t2"), ms, { height: PH }); $("t2n").textContent = `${s2.points} marks, ${s2.labels.length} names printed · time across (ET) · ${PH} px = 50 % of the screen`; state.spread = s2;
+  const s3 = ladder($("t3"), ms, { height: PH }); $("t3n").textContent = `${s3.rows} rows · ${s3.rowH} px each · ${s3.dns} down ← | → ${s3.ups} up`; state.ladder = s3;
+  document.querySelectorAll("[data-day]").forEach((b) => b.classList.toggle("on", b.dataset.day === day));
+}
+document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; drawTape(); if ($("zoom").classList.contains("on")) openZoom(); }));
+/* the bigger-screen mode (Alan: "the zoom-in level … expanding to more of a bigger screen mode"): a tap on the strip opens T3 as the whole screen; BACK, Esc or a tap on its header returns */
+function openZoom() { const ms = marks(DAYS[day]); const z = $("zoom"); z.classList.add("on"); const H = $("zoombd").clientHeight || window.innerHeight - 48; const s = ladder($("zoombd"), ms, { height: H - 40 }); $("zoomday").textContent = day === "all3" ? "24 SEP · 28 SEP · 2 OCT" : day; $("zoomn").textContent = `${s.rows} scintillas · ${s.dns} down · ${s.ups} up · ${s.rowH} px a row · the whole screen`; state.zoom = { open: true, ...s }; if (strip) strip.pause(true); }
+function closeZoom() { $("zoom").classList.remove("on"); state.zoom = { open: false }; if (strip && state.tab === "tape") strip.pause(false); }
+$("zoomback").addEventListener("click", closeZoom); $("t3open").addEventListener("click", openZoom); window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeZoom(); });
+state.openZoom = openZoom; state.closeZoom = closeZoom;
+function showTab(t) { $("pane-coil").classList.toggle("on", t === "coil"); $("pane-tape").classList.toggle("on", t === "tape"); $("tab-coil").classList.toggle("on", t === "coil"); $("tab-tape").classList.toggle("on", t === "tape"); state.tab = t; if (t === "tape" && !strip) drawTape(); if (strip) strip.pause(t !== "tape"); }
+$("tab-coil").addEventListener("click", () => showTab("coil")); $("tab-tape").addEventListener("click", () => showTab("tape"));
+state.showTab = showTab; state.setMode = (m) => document.querySelector(`[data-mode="${m}"]`).click(); state.setDay = (d) => { day = d; drawTape(); };
+
+load(state.listName, true);
+if (Q.get("mode")) state.setMode(Q.get("mode"));
+if (Q.get("tab") === "tape") showTab("tape");
+state.ready = true;
+</script>
+<!-- scnav slot: the BACK / CLOSE pair goes here when scripts/inject-scnav.py runs -->
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
