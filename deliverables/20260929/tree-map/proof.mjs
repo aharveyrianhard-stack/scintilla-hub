@@ -57,6 +57,7 @@ await settle();
 const stateNow = () => evaluate("JSON.stringify({view:__mm.view,area:__mm.cluster||null,areaCount:__mm.clusterCount||null,canvas:!!__mm.canvas,selected:__mm.selected,flat:__mm.flat,paused:__mm.paused,frames:__mm.frames,labels:__mm.labelsShown,counts:__mm.counts,geigerErr:__mm.geigerErr,scoutErr:__mm.scoutErr,err3d:__mm.err3d,card:(document.querySelector('#card h2')||{}).textContent,rows:document.querySelectorAll('#outline .row').length,detail:__mm.detail,order:__mm.order,hidden:__mm.hidden?__mm.hidden().length:null,shown:__mm.shownKinds?__mm.shownKinds():null,folds:__mm.folds?Object.keys(__mm.folds()).length:null,chips:__mm.chipsDrawn?__mm.chipsDrawn():null,sections:__mm.sectionsWithChip?__mm.sectionsWithChip():null,coil:__mm.coilOrder||null})").then(JSON.parse);
 const log = [];
 for (const s of steps) {
+  if (process.env.PROOF_TRACE) process.stderr.write(`[${new Date().toISOString().slice(11, 19)}] ${JSON.stringify(s).slice(0, 80)}\n`); // T10: a trace per step, to see where a run stalls
   if (s.wait) await sleep(s.wait);
   if (s.eval) { await evaluate(s.eval); await sleep(300); await settle(); }
   if (s.click) {
@@ -156,5 +157,7 @@ for (const s of steps) {
     log.push({ cpu: { idle, turning, paused_again_after_release: await evaluate("__mm.paused"), gl: process.env.MM_GL === "metal" ? "GPU (ANGLE/Metal)" : "software (SwiftShader)" } });
   }
 }
-const gl = await evaluate("(()=>{const c=document.querySelector('#graph canvas');if(!c)return 'no canvas';const g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'context unavailable';const e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)})()");
+if (process.env.PROOF_TRACE) process.stderr.write(`[${new Date().toISOString().slice(11, 19)}] steps done; reading the renderer\n`);
+const gl = await Promise.race([new Promise((r) => setTimeout(() => r("renderer not read in 20 s"), 20000)), evaluate("(()=>{const c=document.querySelector('#graph canvas');if(!c)return 'no canvas';const g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'context unavailable';const e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)})()")]);
+if (process.env.PROOF_TRACE) process.stderr.write(`[${new Date().toISOString().slice(11, 19)}] renderer read; writing\n`);
 process.stdout.write(JSON.stringify({ url, width, dpr: DPR, renderer: gl, log, page_errors: pageErrors }, null, 1) + "\n", () => done(0)); // flushed before exit: a big log was cut short when piped
