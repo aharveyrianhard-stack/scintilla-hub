@@ -166,7 +166,7 @@ test("Hub · cash on hand and the last four quarters of capex, plain numbers, no
   assert.match(cash, /the four together<\/td><td>\$20\.57B</);
   assert.ok(!/dilution|runway|months|project/i.test(cash));                       // C1: a plain coverage count, no model
   assert.match(cash, /cash \$6\.40B covers about 1\.2 quarters of capital spending at the last four quarters&#39; pace/);   // C1 (Alan's own example)
-  assert.match(h.ofCashHTML(null, []), /—<\/div>[\s\S]*not stored — no quarterly balance sheet \(balance_history\)[\s\S]*not stored — no quarterly cash-flow statement \(cashflow_history\)/);
+  assert.match(h.ofCashHTML(null, []), /—<\/div>[\s\S]*not stored — no quarterly balance sheet<[\s\S]*not stored — no quarterly cash-flow statement</);   // H10 — no table names on the face
   assert.match(h.ofCashHTML(BALQ, null), /CAPITAL SPENDING · LAST 4 QUARTERS<\/div><div class="of-d">reading …/);
   assert.ok(!h.ofCashHTML(BALQ, CFQ.slice(0, 2)).includes("the four together"));   // a sum only over four real quarters
   assert.equal(h.ofMoney(850000000), "$850M"); assert.equal(h.ofMoney(null), "—"); assert.equal(h.ofMoney(-2.5e11), "$250B");
@@ -188,7 +188,7 @@ test("Hub · its home is FINANCIALS only: the ALERTS room is still parked, the b
   assert.match(page, /const ofCap = typeof ofCapSectionHTML === "function" \? ofCapSectionHTML\(data\) : "";/);   // guarded: the page's
   assert.match(page, /if \(ofCap && typeof setTimeout === "function"\) setTimeout\(\(\) => ofCapFill\(data\.t, data\._balq\), 0\);/);   // own tests lift
   assert.match(page, /out \+= ofCap;/);                                                                                       // financialsTabHTML alone
-  assert.match(page, /return \(ofCap \? '<div class="fn3">' \+ ofCap \+ "<\/div>" : ""\) \+ '<div class="sc-senttxt">No rows in fundamentals_history/);
+  assert.match(page, /return \(ofCap \? '<div class="fn3">' \+ ofCap \+ "<\/div>" : ""\) \+ '<div class="sc-senttxt">No financial statements on record for/);   // H10 — plain words
   assert.match(page, /case "ALERTS":\s+return parkedRoomHTML\("ALERTS"\);/);
   assert.match(page, /'<span class="sc-ctk' \+ \(d\.nf \? " has-nf" : ""\) \+ '">' \+ esc\(d\.t\) \+\n/);
   assert.match(page, /return '<div class="sc-evtab">' \+ fixed \+ relScroll \+ pastScroll \+ "<\/div>";/);

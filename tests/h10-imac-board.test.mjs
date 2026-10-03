@@ -140,3 +140,45 @@ test("the RSI breath runs without re-laying-out the board (a filter, not a text-
   assert.equal(/text-shadow/.test(kf), false);
   assert.match(kf, /filter:drop-shadow\(0 0 3px currentColor\)/);
 });
+
+test("item 3 — the company tabs wrap instead of running past the right edge; STATS rows wrap instead of '…'", () => {
+  const rule = page.match(/^\.cv-tabs\{[^\n]*/m)[0];
+  assert.match(rule, /flex-wrap:wrap/);
+  assert.match(rule, /overflow:visible/);
+  assert.equal(/overflow-x:auto/.test(rule), false, "no hidden sideways scroller hiding READ");
+  assert.match(page, /\.cv-side \.st1 \.st-blk > div > span\{flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere\}/);
+  assert.equal(/\.cv-side \.st1 \.st-blk > div > b\{[^}]*text-overflow:ellipsis/.test(page), false);
+});
+
+test("item 4 — a '?' beside the company name in the header opens the business; Esc, ✕ and a click outside close it", () => {
+  const li = fn("leftIdentHTML");
+  assert.match(li, /head && data\.t \? '<button class="sc-bizq sc-tab" type="button" data-bizq="/, "header only, in the tab look");
+  assert.match(li, /aria-haspopup="dialog" aria-expanded="false"/);
+  assert.match(fn("identPaint"), /bizSync\(\)/, "an open panel follows the name, and closes when it changes");
+  assert.match(page, /if \(e\.key !== "Escape" \|\| !BIZ_T\) return;\n    e\.preventDefault\(\); e\.stopImmediatePropagation\(\); bizClose\(true\);/);
+  assert.match(page, /if \(tg && tg\.closest && tg\.closest\("#bizPop"\)\) return;\n    bizClose\(false\);/, "a click outside closes it");
+  /* the panel's three states, in order: READ's BUSINESS words; else the provider's description, named; else plain words */
+  const esc = (x) => String(x == null ? "" : x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const mk = (coData) => new Function("S", "esc", "readAgeHTML", "sanitize", fn("bizPopHTML") + "\nreturn bizPopHTML;")({ coData }, esc, () => '<span class="readage">DOSSIER · 2 Oct</span>', (x) => x);
+  const withRead = mk({ t: "MU", name: "Micron", read: { content: { BUSINESS: ["Micron makes memory."] }, ages: { BUSINESS: {} } }, _profile: { sector: "Technology", industry: "Semiconductors", description: "FMP text" } })("MU");
+  assert.match(withRead, /DOSSIER · 2 Oct<\/span><p>Micron makes memory\.<\/p>/);
+  assert.match(withRead, /TECHNOLOGY|Technology · Semiconductors/);
+  assert.match(withRead, /data-bizread="MU">READ › BUSINESS/);
+  const profOnly = mk({ t: "SKHY", name: "SK hynix", read: { content: { BUSINESS: [] } }, _profile: { description: "SK hynix makes DRAM." } })("SKHY");
+  assert.match(profOnly, /company profile · FMP<\/div><p>SK hynix makes DRAM\.<\/p>/);
+  const none = mk({ t: "XYZ", read: { content: {} }, _profile: {} })("XYZ");
+  assert.match(none, /Not written yet for XYZ — no company dossier yet\./);
+  assert.match(mk(null)("XYZ"), /reading XYZ …/);
+});
+
+test("item 5 — no developer text on the face: plain states, the how-it-is-made moved to PAGE SPECS", () => {
+  const gone = ["Desk narrative auto-generates", "fills from company_releases", "No estimate rows in analyst_estimates",
+    "No price_target_consensus or analyst_ratings rows", "No P/E inputs loaded", "fills from analyst_grades",
+    "no quarterly balance sheet (balance_history)", "cash-flow statement (cashflow_history)", "No rows in fundamentals_history",
+    "No earnings events in earnings_events", "live from <b>news</b> (DB)", "(from <b>company_releases</b>)", 'src: "social_sentiment source=youtube (DB)'];
+  for (const g of gone) assert.equal(page.includes(g), false, g);
+  const rt = fn("readTxtHTML");
+  assert.match(rt, /Not written yet for ' \+ esc\(data\.t \|\| "this company"\) \+ " — no company dossier yet\./);
+  assert.match(rt, /<details class="sc-pagespecs"><summary>PAGE SPECS<\/summary>/);
+  assert.match(page, /details\.sc-pagespecs\{/);
+});

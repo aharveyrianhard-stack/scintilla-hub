@@ -133,7 +133,7 @@ test("FINANCIALS draws the quarters as bars (green bigger than a year before, re
   assert.match(html, /<td>FCF as % of revenue<\/td><td>—<\/td><td class="cur">4\.5%<\/td>/, "cash flow keeps the income table's years so the columns line up; a year it lacks is a dash");
   assert.match(html, /<td>Revenue growth<\/td><td[^>]*>—<\/td><td class="cur up">\+49\.0%<\/td>/);
   const none = fin.financialsTabHTML({ t: "ZZ", _finq: [], _finhist: [], _balhist: [], _cfhist: [] });
-  assert.match(none, /No rows in fundamentals_history/);
+  assert.match(none, /No financial statements on record for/);   // H10 — plain words, no table names
 });
 
 test("FINANCIALS reads only tables the payload already reads; the extra columns and the newest quarter are the same tables", () => {

@@ -69,7 +69,7 @@ test("the age is drawn on the face of the words, and nowhere claims a date it do
   assert.match(page, /\.readage\.unknown\{ color:var\(--bear\)/, "an unprovable date is treated as badly as a dead one");
   const txt = page.match(/function readTxtHTML\(data\) \{[\s\S]*?\n\}\n/)[0];
   assert.match(txt, /paras\.length\n    \? readAgeHTML\(age\)/, "the chip rides the words…");
-  assert.doesNotMatch(txt.split("Desk narrative auto-generates")[1] || "", /readAgeHTML/, "…and no words means no date claim");
+  assert.doesNotMatch(txt.split("Not written yet for")[1] || "", /readAgeHTML/, "…and no words means no date claim");   // H10 — the plain empty state
   const basis = page.match(/const basis = rb\.basis \? String\(rb\.basis\)[\s\S]*?\);\n/)[0];
   assert.match(basis, /read-engine re-stamps the stored block on every run/);
   assert.doesNotMatch(basis, /re-stamps it every 10 minutes/, "the composite is frozen, not re-stamped — measured 2026-09-23");

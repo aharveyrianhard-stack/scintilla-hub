@@ -4528,7 +4528,10 @@ body.co-exp .cv-main{min-height:0}
 .cv-side{display:flex;flex-direction:column;flex:56 1 0;min-height:240px}
 /* a narrow panel (the collapsed desk view, a phone): the timeframes step down a size */
 @container (max-width:700px){ .cv-line .sc-cofr__tf{padding:3px 5px} .cv-line{gap:5px 8px} .cv-tfs{gap:2px} }
-.cv-tabs{display:flex;gap:0;padding:0 4px;border-bottom:.5px solid #2B2B31;overflow-x:auto;scrollbar-width:none;flex:0 0 auto}
+/* H10 (3 Oct) — the ten tabs need ~541 px and the panel gives ~500 at every screen size (the page zoom scales both), so
+   READ sat past the right edge, reachable only by an invisible sideways scroll, and EARNINGS was cut. They wrap, as the
+   phone rule below already does; nothing is cut and no label or size changes. */
+.cv-tabs{display:flex;flex-wrap:wrap;gap:0;padding:0 4px;border-bottom:.5px solid #2B2B31;overflow:visible;flex:0 0 auto}
 .cv-tabs::-webkit-scrollbar{display:none}
 .cv-tab{font:500 11px var(--mono);letter-spacing:0;padding:8px 4px 6px;background:none;border:0;border-bottom:2px solid transparent;color:#8A8A92;cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .cv-tab:hover{color:#C9C9CE}
@@ -4818,6 +4821,33 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
   background:#121216; border:.5px solid #4A4A52; border-radius:6px; box-shadow:0 10px 28px rgba(0,0,0,.55);
   font-family:var(--mono); color:#C9C9CE; transform-origin:var(--gp-ox,50%) var(--gp-oy,0); }
 .sc-gpop[hidden]{ display:none; }
+/* H10 — PAGE SPECS: how a tab is made, at its foot, closed by default (explanations never sit inside the panel) */
+details.sc-pagespecs{ margin:14px 0 4px; border-top:.5px solid #2B2B31; padding-top:6px; font:11px var(--mono); color:#6E6E76; }
+details.sc-pagespecs > summary{ cursor:pointer; letter-spacing:.08em; color:#6E6E76; list-style:none; }
+details.sc-pagespecs > summary::-webkit-details-marker{ display:none; }
+details.sc-pagespecs > summary::before{ content:"\25B8  "; }
+details.sc-pagespecs[open] > summary::before{ content:"\25BE  "; }
+details.sc-pagespecs p{ margin:6px 0 0; line-height:1.5; color:#8A8A92; }
+/* H10 — the "?" beside the company name (a tab in the Hub's tab look) and its compact BUSINESS panel */
+.sc-bizq{ font:500 11px var(--mono); line-height:1; padding:2px 5px 3px; margin:0 2px 0 -2px; background:none; border:0; border-bottom:2px solid transparent;
+  color:#8A8A92; cursor:pointer; flex:0 0 auto; align-self:center; }
+.sc-bizq:hover{ color:#C9C9CE; }
+.sc-bizq.on{ color:#CFCFD2; border-bottom-color:#8A8A92; }
+.sc-bizq:focus-visible{ outline:1px solid #8A8A92; outline-offset:1px; }
+.sc-bizpop{ width:min(400px, calc(100vw - 16px)); padding:9px 12px 8px; }
+.sc-bizpop .bz-hd{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+.sc-bizpop .bz-t{ font-size:12px; letter-spacing:.06em; color:#CFCFD2; }
+.sc-bizpop .bz-n{ font-size:11px; color:#8A8A92; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-bizpop .bz-x{ margin-left:auto; background:none; border:0; color:#8A8A92; font:11px var(--mono); cursor:pointer; padding:0 2px; }
+.sc-bizpop .bz-x:hover{ color:#CFCFD2; }
+.sc-bizpop .bz-sect{ font-size:11px; color:#8A8A92; letter-spacing:.04em; text-transform:uppercase; margin-bottom:5px; }
+.sc-bizpop .bz-src{ font-size:11px; color:#6E6E76; margin-bottom:3px; }
+.sc-bizpop .bz-body{ max-height:min(46vh, 340px); overflow-y:auto; font-size:11px; line-height:1.5; color:#B8B8BE; }
+.sc-bizpop .bz-body p{ margin:0 0 6px; }
+.sc-bizpop .bz-none{ color:#8A8A92; }
+.sc-bizpop .bz-ft{ display:flex; justify-content:flex-end; border-top:.5px solid #2B2B31; margin-top:4px; padding-top:4px; }
+.sc-bizpop .bz-more{ font:500 11px var(--mono); background:none; border:0; border-bottom:2px solid transparent; color:#8A8A92; cursor:pointer; padding:3px 4px; }
+.sc-bizpop .bz-more:hover{ color:#C9C9CE; border-bottom-color:#8A8A92; }
 .sc-gpop.is-in{ animation:scGpopIn .13s ease-out; }
 @keyframes scGpopIn{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
 @media (prefers-reduced-motion:reduce){ .sc-gpop.is-in{ animation:none; } }
@@ -7915,6 +7945,91 @@ if (typeof document !== "undefined" && document.addEventListener) {
   /* it is fixed to the window, so a scroll or a resize would leave it beside the wrong row: it closes instead */
   document.addEventListener("scroll", (e) => { if (GPOP_T && !(e.target && e.target.id === "gPop")) gpopClose(false); }, true);
   window.addEventListener("resize", () => { if (GPOP_T) gpopClose(false); });
+}
+/* H10 (3 Oct) — "?" — WHAT IS THIS BUSINESS, ONE CLICK AWAY. Alan: "When I go to READ there's a tab BUSINESS … I need to
+   study these companies at a basic level … a little question mark when you select a ticker in the top header area —
+   what's this business — so I can get to it faster." The "?" sits beside the company name in the header title and opens
+   a compact panel: READ's BUSINESS words with their source date when the dossier has them; else the provider's own
+   company description (FMP profile), named as such; else a plain "not written yet". READ › opens READ on BUSINESS.
+   Esc, ✕, a click outside, a scroll or a resize closes it; focus goes back to the "?". Same placement rules as the
+   Geiger breakdown (gpopOpen): under the button, inside the window, in the body's zoomed units. */
+let BIZ_T = null, BIZ_ANCHOR = null;
+function bizPopHTML(t) {
+  const d = S.coData && S.coData.t === t ? S.coData : null;
+  const rd = d && d.read, paras = (rd && rd.content && rd.content.BUSINESS) || [];
+  const prof = (d && d._profile) || {};
+  const desc = String(prof.description || "").trim();
+  const sect = [prof.sector, prof.industry].filter((x) => x && String(x).trim()).map((x) => esc(x)).join(" · ");
+  let body;
+  if (!d) body = '<p class="bz-none">reading ' + esc(t) + " …</p>";
+  else if (paras.length) body = (typeof readAgeHTML === "function" ? readAgeHTML(rd.ages && rd.ages.BUSINESS) : "") +
+    paras.map((x) => "<p>" + (typeof sanitize === "function" ? sanitize(x) : esc(x)) + "</p>").join("");
+  else if (desc) body = '<div class="bz-src">company profile · FMP</div>' + desc.split(/\n{2,}/).map((x) => "<p>" + esc(x) + "</p>").join("");
+  else body = '<p class="bz-none">Not written yet for ' + esc(t) + " — no company dossier yet.</p>";
+  return '<div class="bz-hd"><span class="bz-t">' + esc(t) + "</span>" + (d && d.name ? '<span class="bz-n">' + esc(d.name) + "</span>" : "") +
+    '<button class="bz-x" type="button" data-bizclose aria-label="Close the business panel">✕</button></div>' +
+    (sect ? '<div class="bz-sect">' + sect + "</div>" : "") +
+    '<div class="bz-body">' + body + "</div>" +
+    '<div class="bz-ft"><button class="bz-more sc-tab" type="button" data-bizread="' + esc(t) + '">READ › BUSINESS</button></div>';
+}
+function bizClose(focus) {
+  const p = document.getElementById("bizPop"); if (p) p.hidden = true;
+  if (BIZ_ANCHOR) { BIZ_ANCHOR.setAttribute("aria-expanded", "false"); BIZ_ANCHOR.classList.remove("on"); if (focus && BIZ_ANCHOR.isConnected) try { BIZ_ANCHOR.focus(); } catch (_) {} }
+  BIZ_T = null; BIZ_ANCHOR = null;
+}
+function bizOpen(t, anchor) {
+  if (!t || !anchor) return;
+  if (BIZ_T === t && BIZ_ANCHOR === anchor) { bizClose(true); return; }   // the same "?" again closes it
+  if (typeof gpopClose === "function" && typeof GPOP_T !== "undefined" && GPOP_T) gpopClose(false);
+  let p = document.getElementById("bizPop");
+  if (!p) { p = document.createElement("div"); p.id = "bizPop"; p.className = "sc-gpop sc-bizpop"; p.setAttribute("role", "dialog"); document.body.appendChild(p); }
+  p.setAttribute("aria-label", "What " + t + " does");
+  p.innerHTML = bizPopHTML(t);
+  p.hidden = false; p.style.visibility = "hidden"; p.style.left = "0px"; p.style.top = "0px";
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  const r = anchor.getBoundingClientRect(), pr = p.getBoundingClientRect(), w = pr.width;
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const left = Math.max(8, Math.min(r.left - 12, vw - w - 8));
+  p.style.left = (left / z).toFixed(1) + "px"; p.style.top = ((r.bottom + 6) / z).toFixed(1) + "px";
+  p.style.setProperty("--gp-ox", ((r.left + r.width / 2 - left) / z).toFixed(1) + "px"); p.style.setProperty("--gp-oy", "0");
+  p.style.visibility = "";
+  p.classList.remove("is-in"); void p.offsetWidth; p.classList.add("is-in");
+  if (BIZ_ANCHOR && BIZ_ANCHOR !== anchor) { BIZ_ANCHOR.setAttribute("aria-expanded", "false"); BIZ_ANCHOR.classList.remove("on"); }
+  anchor.setAttribute("aria-expanded", "true"); anchor.classList.add("on");
+  BIZ_T = t; BIZ_ANCHOR = anchor;
+  const x = p.querySelector("[data-bizclose]"); if (x) try { x.focus({ preventScroll: true }); } catch (_) {}
+}
+/* the header ident is repainted on every swap: an open panel follows its words, and closes when the name changes */
+function bizSync() {
+  if (!BIZ_T) return;
+  const btn = document.querySelector('#headIdent [data-bizq="' + BIZ_T + '"]');
+  if (!btn || LEFT_T !== BIZ_T) { bizClose(false); return; }
+  BIZ_ANCHOR = btn; btn.setAttribute("aria-expanded", "true"); btn.classList.add("on");
+  const p = document.getElementById("bizPop"); if (p && !p.hidden) { const h = bizPopHTML(BIZ_T); if (p.__h !== h) { p.innerHTML = h; p.__h = h; } }
+}
+if (typeof document !== "undefined" && document.addEventListener) {
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !BIZ_T) return;
+    e.preventDefault(); e.stopImmediatePropagation(); bizClose(true);
+  }, true);
+  document.addEventListener("click", (e) => {
+    const tg = e.target, q = tg && tg.closest && tg.closest("[data-bizq]");
+    if (q) { e.preventDefault(); e.stopPropagation(); bizOpen(q.getAttribute("data-bizq"), q); return; }
+    if (!BIZ_T) return;
+    if (tg && tg.closest && tg.closest("[data-bizclose]")) { e.preventDefault(); bizClose(true); return; }
+    const rd = tg && tg.closest && tg.closest("[data-bizread]");
+    if (rd) {
+      e.preventDefault(); bizClose(false);
+      S.readTab = "BUSINESS";
+      const b = document.querySelector('#cvTabs .cv-tab[data-tab="READ"], [data-act="cotab"][data-tab="READ"]');
+      if (b) b.click();
+      return;
+    }
+    if (tg && tg.closest && tg.closest("#bizPop")) return;
+    bizClose(false);
+  }, true);
+  document.addEventListener("scroll", (e) => { if (BIZ_T && !(e.target && e.target.closest && e.target.closest("#bizPop"))) bizClose(false); }, true);
+  window.addEventListener("resize", () => { if (BIZ_T) bizClose(false); });
 }
 /* Re-sort explicitly (header click) — recompute + store the frozen order, then repaint. */
 function sortBoardBy(key) {
@@ -11033,6 +11148,9 @@ function leftIdentHTML(data, opts) {
     '<span class="sc-ctkbig">' + esc(data.t || "") + "</span>" +
     (head ? '<span class="sc-cname" title="' + esc(data.name || "") + '">' + esc(scShortName(data.name)) + "</span>"
           : '<span class="sc-cname">' + esc(data.name || "") + "</span>") +
+    /* H10 — "?" what is this business (bizOpen) */
+    (head && data.t ? '<button class="sc-bizq sc-tab" type="button" data-bizq="' + esc(data.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+      ' aria-label="What does ' + esc(data.t) + ' do? The business, from READ" title="what is this business?">?</button>' : "") +
     '<span class="sc-cpx' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coPx" style="color:' + col + '">' + (data.price != null ? fmtPxIdent(data.price) : "—") + "</span>" +
     '<span class="sc-cchg' + (head && chg != null ? (chg >= 0 ? " is-up" : " is-dn") : "") + '" id="coChg" style="color:' + col + '">' + (chg != null ? (head ? fmtChgHead(chg) : fmtC(chg)) : "") + "</span>" +
     '<span class="sc-cprev" id="coPrev">' + (pc != null && pc !== 0 ? "Prev " + fmtPxIdent(pc) : "") + "</span>" +
@@ -11069,6 +11187,7 @@ function identPaint() {
   h.hidden = !on;
   if (typeof document !== "undefined" && document.body) document.body.classList.toggle("tk-pinned", on);
   if (on) coIdentLists(h);
+  if (typeof bizSync === "function") bizSync();   /* H10 — the "?" panel follows the name */
   return h;
 }
 /* repaint ONLY #leftPanel's inner content (never the board). */
@@ -11391,7 +11510,7 @@ function newsRoomHTML() {
   return '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
     '<div class="body2">' +
     '<div class="panel">' +
-      '<div class="sc-plabel sc-plabel--row"><span>headlines · live from <b>news</b> (DB)</span>' + SECFS_BTN + "</div>" +
+      '<div class="sc-plabel sc-plabel--row"><span>headlines · live</span>' + SECFS_BTN + "</div>" +
       '<div class="scroller" id="newsList"><div class="soon">loading headlines…</div></div>' +
     "</div>" +
     '<div class="panel">' +
@@ -12494,11 +12613,11 @@ function ofCashHTML(balq, cfq) {
   const cash = balq && balq.cash_and_equiv != null && isFinite(+balq.cash_and_equiv) ? +balq.cash_and_equiv : null;
   let h = '<div class="of-k">CASH ON HAND</div>' +
     '<div class="of-v">' + ofMoney(cash) + "</div>" +
-    '<div class="of-d">' + (cash != null ? "cash and equivalents · " + esc(ofFmtDay(balq.fiscal_date)) + " balance sheet" : "not stored — no quarterly balance sheet (balance_history)") + "</div>";
+    '<div class="of-d">' + (cash != null ? "cash and equivalents · " + esc(ofFmtDay(balq.fiscal_date)) + " balance sheet" : "not stored — no quarterly balance sheet") + "</div>";
   h += '<div class="of-k">CAPITAL SPENDING · LAST 4 QUARTERS</div>';
   if (!cfq) return h + '<div class="of-d">reading …</div>';
   const qs = cfq.filter((q) => q && q.capex != null && isFinite(+q.capex)).slice(0, 4);
-  if (!qs.length) return h + '<div class="of-d">not stored — no quarterly cash-flow statement (cashflow_history)</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>";
+  if (!qs.length) return h + '<div class="of-d">not stored — no quarterly cash-flow statement</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>";
   h += '<table class="of-capex"><tbody>' + qs.map((q) => "<tr><td>" + esc(String(q.period) + "·" + String(q.fiscal_year).slice(2)) + "</td><td>" +
     esc(ofFmtDay(q.fiscal_date)) + "</td><td>" + ofMoney(q.capex) + "</td></tr>").join("") +
     (qs.length === 4 ? '<tr class="of-sum"><td colspan="2">the four together</td><td>' + ofMoney(qs.reduce((a, q) => a + Math.abs(+q.capex), 0)) + "</td></tr>" : "") +
@@ -13536,7 +13655,7 @@ async function sentiComputeAllRun() {
         (M.fin(lastHead) ? " Newest headline <b>" + esc(M.ageTxt(lastHead)) + " ago</b>." : ""), why }); }
   { let score = null, val = "—", age = null, n = 0, bull = 0, bear = 0, why = yt.ok ? "" : "social_sentiment: " + yt.e, top = [];
     if (yt.ok && Array.isArray(yt.v) && yt.v.length) { const rows = yt.v.filter((r) => M.fin(+r.score)); const m = M.wmean(rows, "score", "posts"); n = rows.reduce((s, r) => s + (+r.posts || 0), 0); bull = rows.reduce((s, r) => s + (+r.bullish || 0), 0); bear = rows.reduce((s, r) => s + (+r.bearish || 0), 0); const up = Math.max(...yt.v.map((r) => Date.parse(r.updated_ts) || 0)); age = up ? now - up : null; top = rows.filter((r) => +r.posts >= 3).sort((a, b) => (+b.score) - (+a.score)); const netY = bull + bear ? (bull - bear) / (bull + bear) : null; if (M.fin(netY)) { score = M.lin(netY, 0.6); val = (netY >= 0 ? "+" : "") + netY.toFixed(2) + " net · " + bull + " bullish / " + bear + " bearish mentions · " + rows.length + " tickers · 7d"; } void m; }
-    inputs.push({ key: "youtube", name: "YouTube voice", val, score, age, fresh: 48 * 3600e3, src: "social_sentiment source=youtube (DB) · yt-lexicon-v1 · 7-day window", why });
+    inputs.push({ key: "youtube", name: "YouTube voice", val, score, age, fresh: 48 * 3600e3, src: "YouTube transcripts · 7-day window", why });
     voices.push({ key: "youtube", name: "YOUTUBE", score, age, n, split: [bull, bear], txt: "Reads <b>social_sentiment</b> source=youtube (DB): English transcripts of the subscribed channels, 7-day window, finance-keyword lexicon with negation (<b>yt-lexicon-v1</b>) — not an AI read." + (top.length >= 2 ? " Leaning most bullish: <b>" + esc(top.slice(0, 3).map((r) => r.ticker).join(" · ")) + "</b> · most bearish: <b>" + esc(top.slice(-3).reverse().map((r) => r.ticker).join(" · ")) + "</b>." : ""), why }); }
   { let score = null, val = "—", age = null, xv = null, why = x.ok ? "" : "X feed: " + x.e;
     if (x.ok) { xv = M.xVoice(x.v, now, 86400e3); age = xv.latest ? now - xv.latest : null; if (xv.n) { const hp = xv.hist.length >= 5 ? M.pct(xv.hist, xv.net) : null; score = hp == null ? M.lin(xv.net, 0.6) : hp; val = (xv.net >= 0 ? "+" : "") + xv.net.toFixed(2) + " net · " + xv.n + " posts · 24h" + (hp == null ? "" : " · ranked vs " + xv.hist.length + " earlier days"); } else val = "no posts in the last 24h"; }
@@ -15004,7 +15123,7 @@ function evFillExtras(upS, scopedTk) {
     if (scopedTk && EV_EXTRA && EV_EXTRA.t === scopedTk)
       relP.innerHTML = '<div class="card">' + releasesSectionHTML({ t: scopedTk, _releases: EV_EXTRA.releases }) + "</div>";
     else
-      relP.innerHTML = '<div class="card"><h4>RELEASES</h4><div class="sc-senttxt">Search a single ticker to see its company releases (from <b>company_releases</b>) + investor-relations link.</div></div>';
+      relP.innerHTML = '<div class="card"><h4>RELEASES</h4><div class="sc-senttxt">Search a single ticker to see its company releases and its investor-relations link.</div></div>';
   }
   const rail = el("evUpcoming");
   if (rail) rail.innerHTML = evUpTableHTML(upS);
@@ -19848,7 +19967,7 @@ function estForecastHTML(data) {
     '<b class="' + (S.estTF === "Q" ? "on" : "") + '" data-act="esttf" data-tf="Q">Quarterly</b>' +
     '<b class="' + (S.estTF === "A" ? "on" : "") + '" data-act="esttf" data-tf="A">Annual</b></span>');
   if (!estRows(data).length)
-    return head + '<div class="sc-senttxt">No estimate rows in analyst_estimates for $' + esc(data.t) + ".</div>";
+    return head + '<div class="sc-senttxt">No analyst estimates for $' + esc(data.t) + " yet.</div>";
   return head + '<div class="sc-est-zone"><div class="sc-est-mgrid">' +
     EST_METRICS.map((m) => estTileHTML(m, data)).join("") + "</div>" +
     '<div class="sc-est-hint">grey = estimate · green = beat · red = miss · <b>tap any bar</b> for its x-ray</div>' +
@@ -19861,7 +19980,7 @@ function estConvictionHTML(data) {
   const head = estSechead("02", "Conviction",
     pt && pt.num_analysts != null ? '<span class="meta">' + esc(String(pt.num_analysts)) + " analysts</span>" : "");
   if ((!pt || num(pt.target_avg) == null) && !r)
-    return head + '<div class="sc-senttxt">No price_target_consensus or analyst_ratings rows for $' + esc(data.t) + ".</div>";
+    return head + '<div class="sc-senttxt">No analyst price targets or ratings for $' + esc(data.t) + " yet.</div>";
   let body = "";
   if (pt && num(pt.target_avg) != null) {
     const med = num(pt.target_median), lo = num(pt.target_low), hi = num(pt.target_high);
@@ -19919,7 +20038,7 @@ function estValuationHTML(data) {
            : "Forward estimates on a different share/currency basis — flagged to data desk (e.g. splits).") +
       "</div></div>";
   if (trail == null && fwd == null)
-    return head + '<div class="sc-senttxt">No P/E inputs loaded — eps_ttm and forward EPS are both empty (trailing P/E is computed live from price / eps_ttm — stored trailing_pe goes stale, e.g. KLAC 682.6 pre-split).</div>';
+    return head + '<div class="sc-senttxt">No P/E yet — no earnings per share on record, trailing or forward.</div>';   /* H10 — the P/E is price ÷ trailing EPS, worked out live (a stored P/E goes stale across a split) */
   if (trail == null || fwd == null)
     return head + '<div class="sc-est-zone"><div class="sc-est-veng">' +
       (trail != null
@@ -20062,7 +20181,7 @@ function financialsTabHTML(data) {
   const years = Array.from(new Set(Object.keys(inc).concat(Object.keys(bal), Object.keys(cf)).map(Number))).sort((a, b) => a - b).slice(-6);
   const ofCap = typeof ofCapSectionHTML === "function" ? ofCapSectionHTML(data) : "";      /* R2 Part A (2 Oct) — CAPITAL & DILUTION */
   if (ofCap && typeof setTimeout === "function") setTimeout(() => ofCapFill(data.t, data._balq), 0);
-  if (!years.length && !qs.length) return (ofCap ? '<div class="fn3">' + ofCap + "</div>" : "") + '<div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
+  if (!years.length && !qs.length) return (ofCap ? '<div class="fn3">' + ofCap + "</div>" : "") + '<div class="sc-senttxt">No financial statements on record for $' + esc(data.t) + " yet.</div>";
   const fyCols = years.map((y) => "FY" + String(y).slice(2));
   const col = (m, f) => years.map((y) => f(m[y] || null, y));
   let out = '<div class="fn3"><div class="fn3-src">FMP statements stored in our tables · $ billions unless marked · (brackets) = negative</div>';
@@ -20165,7 +20284,7 @@ function estGradesHTML(data) {
     grades.length ? '<span class="meta">' + grades.length + " changes</span>" : "");
   const rows = grades.length
     ? grades.map(gradeRowHTML).join("")
-    : '<div class="sc-grempty">No rating changes yet — fills from analyst_grades (firm · upgrade/downgrade · from→to · pt · date).</div>';
+    : '<div class="sc-grempty">No rating changes yet.</div>';
   /* R3 — the rating tape on top (Alan, 2 Oct: "left-to-right scrolling like the earnings events thing; the table is still useful") */
   const t = data && data.t, rc = t && typeof REV_CACHE !== "undefined" ? REV_CACHE[t] : null;
   const tape = t && typeof revTapeHTML === "function" ? revTapeHTML(t, rc && Date.now() - rc.at < REV_TTL ? rc : null) : "";
@@ -21437,7 +21556,7 @@ function releasesSectionHTML(data, label) {
           '<span class="lbl">' + inner + "</span>" +
           '<span class="sc-reldate">' + esc(r.release_date ? fmtRelDate(r.release_date) : "") + "</span></div>";
       }).join("")
-    : '<div class="sc-relempty">No company releases yet — fills from company_releases.</div>';
+    : '<div class="sc-relempty">No company releases yet.</div>';   /* H10 — no table names on the face of a panel */
   return '<div class="sc-relsec"><div class="sc-evsec">' + (label || "RELEASES") + "</div>" + rows + "</div>";
 }
 
@@ -21587,7 +21706,7 @@ function coEventsHTML(data) {
     ? '<div class="sc-evsec">PAST EARNINGS</div>' + (pastEvs.length   // (4) — real earnings_events rows as blocks
         ? pastNoResultHTML(pastSplit.noResult) + pastEvs.map(toBlock).map(earningsBlockHTML).join("")
         : pastNoResultHTML(pastSplit.noResult) + '<div class="ev-empty">No reported earnings yet.</div>')
-    : '<div class="sc-senttxt" style="padding:6px 2px">No earnings events in earnings_events for $' + esc(data.t) + ".</div>";
+    : '<div class="sc-senttxt" style="padding:6px 2px">No earnings dates on record for $' + esc(data.t) + " yet.</div>";
   /* FIX (R52 item 3) — HEADLINES block REMOVED from the EVENTS tab. It duplicated
      the NEWS tab, which is the single home for headlines. EVENTS keeps only:
      NEXT earnings · press releases · transcript · PAST/REPORTED earnings. */
@@ -22213,11 +22332,17 @@ function readTxtHTML(data) {
   const age = data.read && data.read.ages && data.read.ages[S.readTab];
   /* M32 — the age rides ON THE FACE of the words, so a section written in June cannot pass for
      today's. No words, no date claim. */
+  /* H10 (3 Oct) — Alan saw the developer note naming read_blocks / ticker_context on screen. The face says the state in
+     plain words; how the words are made moves to PAGE SPECS. */
   let html = paras.length
     ? readAgeHTML(age) + paras.map((p) => "<p>" + sanitize(p) + "</p>").join("")
-    : "<p>Desk narrative auto-generates per ticker from <b>read_blocks</b> / <b>ticker_context</b> (DB) once its dossier is loaded.</p>";
+    : '<p class="read-none">Not written yet for ' + esc(data.t || "this company") + " — no company dossier yet.</p>";
   if (S.readTab === "VERDICT")               // GO-LIVE FIX 2 — read blocks live under VERDICT only
     html += readBlocksHTML(data.read && data.read.extras);
+  html += '<details class="sc-pagespecs"><summary>PAGE SPECS</summary><p>READ shows the words of the company\'s dossier. ' +
+    "BUSINESS, CATALYSTS and WATCH come from the dossier (stored per company in read_blocks, with ticker_context as the fallback); " +
+    "VERDICT is rewritten by the read engine every ten minutes from the live Geiger the board shows. Each section carries the date " +
+    "of its own words. A company with no dossier has no words here yet.</p></details>";
   return html;
 }
 function readPanelHTML(data) {
@@ -31220,8 +31345,10 @@ body.gwx-motion .gwx-pct{opacity:1}
 .cv-side .st1 .st-blk{min-width:0}
 .cv-side .st1 .st-blk .st1-h{margin:5px 0 1px;padding-bottom:3px;font-size:11px}
 .cv-side .st1 .st-blk > div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;line-height:1.35;color:#A8A8AE;border-bottom:.5px solid #1E1E23;padding:2px 0}
-.cv-side .st1 .st-blk > div > span{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cv-side .st1 .st-blk > div > b{flex:0 0 auto;max-width:72%;color:#CFCFD2;font-weight:400;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* H10 (3 Oct) — a label or value that does not fit takes a second line instead of ending in "…" (MEASURED: "dividends FY26"
+   cut by 9 px at every screen size, "operating margin" by 8 px at 1280) */
+.cv-side .st1 .st-blk > div > span{flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}
+.cv-side .st1 .st-blk > div > b{flex:0 1 auto;max-width:72%;color:#CFCFD2;font-weight:400;font-variant-numeric:tabular-nums;text-align:right;white-space:normal}
 .cv-side .st1 .st-blk b.neg{color:var(--bear)}
 .cv-side .st1 .st-blk b.pos{color:var(--bull)}
 .cv-side .st1 .st-blk .sc-asof{font-size:inherit !important;color:#6E6E76}
