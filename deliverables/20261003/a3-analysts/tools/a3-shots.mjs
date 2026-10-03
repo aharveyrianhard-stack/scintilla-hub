@@ -50,8 +50,8 @@ const page = await context.newPage();
 page.on("pageerror", (e) => errors.length < 20 && errors.push(String(e.message).slice(0, 200)));
 const out = { label, width: W, hubRoot, at: new Date().toISOString(), results: [], writes, errors };
 /* the tab's content, cloned and unrolled into an overlay of the same width in the same page (same CSS), shot, removed */
-async function shootTab(file) {
-  const ok = await page.evaluate(() => {
+async function shootTab(file, openSpecs) {
+  const ok = await page.evaluate((openSpecs) => {
     const rc = document.getElementById("coRailContent"); if (!rc) return false;
     const w = rc.getBoundingClientRect().width, box = document.createElement("div");
     box.id = "a3Shot"; box.className = rc.className; box.style.cssText = "position:absolute;left:0;top:0;z-index:2147483647;padding:10px 12px;background:#000;overflow:visible;height:auto;max-height:none;width:" + Math.round(w + 24) + "px";
@@ -60,8 +60,9 @@ async function shootTab(file) {
     const src = rc.querySelectorAll(".sc-fsw"), dst = box.querySelectorAll(".sc-fsw");
     document.body.appendChild(box);
     dst.forEach((d, i) => { if (src[i]) d.scrollLeft = src[i].scrollLeft; });
+    if (openSpecs) box.querySelectorAll("details.sc-pagespecs").forEach((d) => { d.open = true; });
     window.scrollTo(0, 0); return true;
-  });
+  }, !!openSpecs);
   if (!ok) return null;
   const el = await page.$("#a3Shot"); await el.screenshot({ path: file, type: "png" });
   await page.evaluate(() => { const b = document.getElementById("a3Shot"); if (b) b.remove(); });
@@ -74,7 +75,7 @@ const printed = () => page.evaluate(() => {
     hero: tx(q(".sc-ptc")), subs: [...document.querySelectorAll(".sc-esub [data-sub]")].map((b) => (b.classList.contains("on") ? "*" : "") + tx(b)),
     sections: [...document.querySelectorAll("#coRailContent .sc-est-sechead")].map((h) => tx(h.querySelector(".n")) + " " + tx(h.querySelector(".t"))),
     cards: [...document.querySelectorAll(".sc-fsw .sc-fcard")].slice(0, 6).map(tx), cardCount: document.querySelectorAll(".sc-fsw .sc-fcard").length,
-    specs: !!q("#coRailContent details.sc-pagespecs"), arrows: [...document.querySelectorAll(".sc-rvs-arr")].map(tx),
+    specs: !!q("#coRailContent details.sc-pagespecs"), descInContent: document.querySelectorAll("#coRailContent .sc-esub-body :is(.sc-rvs-note,.sc-est-note,.sc-est-hint,.sc-rvs-say,.sc-rvh-say,.sc-est-ptwhat)").length, arrows: [...document.querySelectorAll(".sc-rvs-arr")].map(tx),
     railH: rc ? Math.round(rc.getBoundingClientRect().height) : null, tabH: rc ? rc.scrollHeight : null,
   };
 });
@@ -96,7 +97,7 @@ try {
     await sleep(2500);
     r.file = path.join(shots, `${label}-${t}-${W}.png`);
     await page.screenshot({ path: r.file, type: "png" });
-    r.tab = await shootTab(path.join(shots, `${label}-${t}-${W}-tab.png`));
+    r.tab = await shootTab(path.join(shots, `${label}-${t}-${W}-tab.png`), true);   // PAGE SPECS open in this one
     r.printed = await printed();
     const subs = await page.evaluate(() => [...document.querySelectorAll(".sc-esub [data-sub]")].map((b) => b.dataset.sub));
     r.subShots = {};
@@ -107,6 +108,31 @@ try {
       await page.screenshot({ path: f, type: "png" });
       r.subShots[s] = { screen: f, tab: await shootTab(path.join(shots, `${label}-${t}-${W}-${s}-tab.png`)), printed: await printed() };
     }
+    /* the swipe, driven like a reader: a mouse wheel over it, a mouse drag, a drag that ends on a card (must not open it), a tap */
+    if (subs.includes("FIRMS")) {
+      await page.evaluate(() => { const b = document.querySelector('.sc-esub [data-sub="FIRMS"]'); if (b) b.click(); });
+      await sleep(700);
+      const sw = await page.$("#coRailContent .sc-fsw");
+      if (sw) {
+        await sw.scrollIntoViewIfNeeded();
+        const box = await sw.boundingBox(), L = () => page.evaluate(() => document.querySelector("#coRailContent .sc-fsw").scrollLeft);
+        const it = { start: await L() };
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.wheel(0, 400); await sleep(400); it.afterWheel = await L();
+        await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 - 250, box.y + box.height / 2, { steps: 8 }); await page.mouse.up(); await sleep(300);
+        it.afterDrag = await L();
+        it.openAfterDrag = await page.evaluate(() => !!document.querySelector("#coRailContent .sc-fsw-box .sc-rvh-notes"));
+        await page.evaluate(() => { const s = document.querySelector("#coRailContent .sc-fsw"); s.scrollLeft = 0; });
+        await sleep(200);
+        const card = await page.$("#coRailContent .sc-fcard"); if (card) { await card.click(); await sleep(600); }
+        it.openAfterTap = await page.evaluate(() => { const n = document.querySelector("#coRailContent .sc-rvh-nh"); return n ? n.textContent.replace(/\s+/g, " ").trim() : null; });
+        it.framed = await page.evaluate(() => !!document.querySelector("#coRailContent .sc-fcard.on"));
+        r.swipe = it;
+        await page.screenshot({ path: path.join(shots, `${label}-${t}-${W}-FIRMS-open.png`), type: "png" });
+        r.swipe.tab = await shootTab(path.join(shots, `${label}-${t}-${W}-FIRMS-open-tab.png`));
+        await page.evaluate(() => { const x = document.querySelector("#coRailContent .sc-fsw-box .sc-rvh-x"); if (x) x.click(); });
+      }
+    }
     if (subs.length) await page.evaluate((k) => { const b = document.querySelector('.sc-esub [data-sub="' + k + '"]'); if (b) b.click(); }, subs[0]);
     r.overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     out.results.push(r);
@@ -115,4 +141,4 @@ try {
 finally { await browser.close().catch(() => {}); }
 const file = path.join(shots, `${label}-${W}.json`);
 fs.writeFileSync(file, JSON.stringify(out, null, 1));
-console.log(JSON.stringify({ file, results: out.results.map((r) => ({ t: r.t, printed: r.printed, stillLoading: r.stillLoading, overflow: r.overflow, subs: Object.keys(r.subShots || {}) })), errors: out.errors, writes: out.writes.length, error: out.error }, null, 1));
+console.log(JSON.stringify({ file, results: out.results.map((r) => ({ t: r.t, printed: r.printed, stillLoading: r.stillLoading, overflow: r.overflow, subs: Object.keys(r.subShots || {}), swipe: r.swipe && { ...r.swipe, tab: undefined } })), errors: out.errors, writes: out.writes.length, error: out.error }, null, 1));
