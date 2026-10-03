@@ -5,7 +5,7 @@
 import { buildInputs, compsRead, cohortFor, row as rowOf, whoSets, peerBand, num } from "../../20260927/comps-r3/r3.mjs";
 import { COMPONENTS, components as k2Components } from "../../20260927/comps-single/comps.mjs";
 import { tsToISO } from "../../20260925/knockout/field.mjs";
-import { filerCurrency, convertSrc, ratesByCurrency } from "./fx.mjs";
+import { filerCurrency, convertSrc, ratesByCurrency, withholdSrc, usdMarketValue, epsTtmByQuarter } from "./fx.mjs";
 
 export const ROWS = ["pe_ttm", "pe_fwd", "ev_ebitda", "ev_sales", "ps", "peg"];               // the six valuation rows, Alan's order
 export const SHORT = { pe_ttm: "P/E", pe_fwd: "P/E FWD", ev_ebitda: "EV/EBITDA", ev_sales: "EV/S", ps: "P/S", peg: "PEG" };
@@ -25,7 +25,7 @@ export function cohortChoice(ticker, tags, asked) { const cohort = cohortFor(tic
 
 /** Read one cohort. pg: PostgREST GET; quotes: tickers → {quotes}; fxStandin: { CCY: [[date, rate]] } with a `source` word
     (used only for a currency fx_rates does not carry, and named as such on the row). */
-export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null, membersAsked = null, labelAsked = null }) {
+export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null, membersAsked = null, labelAsked = null, reportedCcy = null }) {
   const TICKER = String(ticker).toUpperCase(), TODAY = today;
   const [own, home] = await Promise.all([pg(`ticker_cohorts?select=ticker,cohort&ticker=eq.${encodeURIComponent(TICKER)}`), pg(`tickers?select=cohort&ticker=eq.${encodeURIComponent(TICKER)}`).catch(() => [])]);
   /* the peer set is the company's HOME cohort on our board (tickers.cohort, the one the board files it under), unless asked
@@ -74,7 +74,9 @@ export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes
       next_report: null, target: null, geiger: null, heartbeat: null,
     };
     /* the foreign filer: currency from filer_currency, rates from fx_rates; a stand-in series only where fx_rates has none */
-    let ci = filerCurrency(t, p, first(filers, t));
+    /* C5b — FMP's statement currency for every served company (reportedCcy, or the stand-in's `reported` map) outranks the
+       profile guess, so a foreign reporter without a filer_currency row (PDD) is never taken for a dollar filer */
+    let ci = filerCurrency(t, p, first(filers, t), reportedCcy || (standin && standin.reported) || null);
     if (!ci.currency && standin && standin.filers && standin.filers[t]) ci = { currency: String(standin.filers[t]).toUpperCase(), source: standin.filers_source || "stand-in filer list", known: false };
     let series = rates, standinUsed = false, impliedUsed = false;
     if (ci.currency && ci.currency !== "USD" && !(rates[ci.currency] && rates[ci.currency].length)) {
@@ -90,7 +92,19 @@ export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes
     else if (impliedUsed) { note.source_rates = "implied by FMP's own market values"; note.why = `statements in ${ci.currency}, converted at ONE rate, ${(p.market_cap / f.market_cap).toPrecision(4)} USD per ${ci.currency}, implied by FMP's USD market value over its ${ci.currency} market value (fundamentals row of ${tsToISO(f.updated_ts) || "?"}); a stand-in for every date until fx_rates carries ${ci.currency}USD`; note.implied = true; }
     else if (note.converted) note.source_rates = "fx_rates (FMP)";
     note.currency_source = ci.source;
-    fx[t] = note; src = conv;
+    /* C5b — ONE CURRENCY PER MULTIPLE. Every multiple is a ratio of two dollar figures: statements at their period-end rate,
+       estimates at today's (convertSrc), trailing EPS quarter by quarter, the market value from FMP's USD profile (the stored
+       one is in the reporting currency). A foreign figure that cannot be put in dollars is withheld, never mixed. */
+    let out = conv;
+    if (ci.currency !== "USD") {
+      if (!note.converted) { out = withholdSrc(src); note.withheld = true; note.why += " · its multiples are withheld (a figure in " + (ci.currency || "an unknown currency") + " is never divided by a dollar price)"; }
+      else {
+        const e = epsTtmByQuarter(src, conv);
+        if (e != null) { out = { ...out, fundamentals: { ...out.fundamentals, eps_ttm: e } }; note.eps_ttm_basis = "the four newest quarters, each at its own period-end rate"; }
+        const mv = usdMarketValue(out, ci.currency); out = mv.src; note.market_value = mv.from;
+      }
+    }
+    fx[t] = note; src = out;
     srcs.set(t, src);
     const g = first(gg, t);
     meta[t] = { price_from: q ? (q.live ? "the Hub's live quote" : "chart API /quotes") : (num(f.price) != null ? "fundamentals row (dated)" : null), fund_date: tsToISO(f.updated_ts), geiger: g ? num(g.composite) : null, geiger_at: g ? tsToISO(g.updated_ts) : null, sector: p.sector || null, industry: p.industry || null };

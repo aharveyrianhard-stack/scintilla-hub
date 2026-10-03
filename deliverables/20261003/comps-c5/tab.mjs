@@ -145,7 +145,9 @@ async function storeDecision(S, row) {
 }
 let INPUTS = null, INPUTS_AT = 0, STANDIN = null;
 const TTL = 10 * 60e3, CTX = new Map();
-async function standin() { if (STANDIN !== null) return STANDIN; try { STANDIN = await (await fetch("/deliverables/20261001/comps-template/fx-standin-ecb-2026-10-01.json", { cache: "no-store" })).json(); } catch (_) { STANDIN = false; } return STANDIN; }
+async function standin() { if (STANDIN !== null) return STANDIN; try { STANDIN = await (await fetch("/deliverables/20261001/comps-template/fx-standin-ecb-2026-10-01.json", { cache: "no-store" })).json(); } catch (_) { STANDIN = false; }
+  /* C5b — FMP's statement currency for every served company rides with the stand-in: a foreign reporter is never read as a dollar filer */
+  try { const r = await (await fetch("/deliverables/20261003/comps-c5b/reporting-currency-fmp-2026-10-03.json", { cache: "no-store" })).json(); if (r && r.reported) STANDIN = { ...(STANDIN || {}), reported: r.reported }; } catch (_) {} return STANDIN; }
 const fetchJson = (u) => fetch(u, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(u + " → " + r.status); return r.json(); });
 /** The segments: public.revenue_segments when the Hub serves it, else the dated fixture. */
 async function segments(pg) {

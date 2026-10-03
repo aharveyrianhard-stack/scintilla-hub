@@ -28,8 +28,13 @@ export function rateOn(rates, dateISO) {
 /** Which currency a company reports in. stored: the filer_currency row (authoritative, from FMP). Without a stored row
     nothing is assumed: USD filers are the default of the whole Hub, and a foreign filer without a row stays as it is and
     is named "currency unknown" when the profile says it is an ADR or foreign-domiciled. */
-export function filerCurrency(ticker, profile, stored) {
+export function filerCurrency(ticker, profile, stored, reported = null) {
   if (stored && stored.reported_currency) return { currency: String(stored.reported_currency).toUpperCase(), source: stored.source || "filer_currency", known: true };
+  /* C5b (3 Oct) — FMP's statement currency for every served company (reporting-currency-fmp-<date>.json): PDD has no
+     filer_currency row and a profile that does not read as foreign on our table, so it fell to the USD default and its
+     yuan EPS was divided by a dollar price (P/E 1.2×). The statements' own reportedCurrency outranks the profile guess. */
+  const r = reported && reported[String(ticker).toUpperCase()];
+  if (r && /^[A-Z]{3}$/.test(String(r).toUpperCase())) return { currency: String(r).toUpperCase(), source: "FMP income-statement reportedCurrency (sweep of every served company)", known: true };
   const p = profile || {};
   const foreign = p.is_adr === true || p.is_adr === "true" || (p.country && String(p.country).toUpperCase() !== "US");
   return { currency: foreign ? null : "USD", source: foreign ? "no filer_currency row" : "US filer (default)", known: !foreign };
@@ -73,6 +78,40 @@ export function convertSrc(src, ccyInfo, ratesByCcy, todayISO) {
     note.adr = { shares_on_statement: newest.shares_dil, shares_from_market_value: implied, ratio, basis: Math.abs(ratio - 1) < 0.15 ? "per US-listed share already (FMP serves the ADR share count)" : `per-share figures are on a different share count (ratio ${ratio.toFixed(2)}): an ADR ratio would apply` };
   } else note.adr = { basis: "share count check not possible (no diluted shares or no profile market value)" };
   return { src: out, note };
+}
+
+/** C5b (3 Oct) — a foreign figure that cannot be put in dollars is WITHHELD, never divided by a dollar price: every money
+    field of CCY_FIELDS is blanked, so each multiple built on it prints "—" with the reason ("statements in CNY: no USD rate
+    on file"). convertSrc keeps the figures as they are when it has no rate (it only converts); readCohort calls this. */
+export function withholdSrc(src) {
+  const blank = (row, fields) => { const o = { ...row }; for (const f of fields) if (f in o) o[f] = null; return o; };
+  return { ...src, fundamentals: { ...blank(src.fundamentals || {}, CCY_FIELDS.fundamentals), market_cap: null, _withheld: true },
+    incQ: (src.incQ || []).map((r) => blank(r, CCY_FIELDS.history)), incFY: (src.incFY || []).map((r) => blank(r, CCY_FIELDS.history)),
+    balance: (src.balance || []).map((r) => blank(r, CCY_FIELDS.balance)), cfQ: (src.cfQ || []).map((r) => blank(r, CCY_FIELDS.cashflow)),
+    cfFY: (src.cfFY || []).map((r) => blank(r, CCY_FIELDS.cashflow)), estimates: (src.estimates || []).map((r) => blank(r, CCY_FIELDS.estimates)) };
+}
+
+/** C5b (3 Oct) — the market value of a foreign reporter in dollars. fundamentals.market_cap is FMP key-metrics marketCap at the
+    last fiscal period end (supabase/functions/fmp-fundamentals/index.ts), which FMP states in the REPORTING currency (BABA
+    1.52 T CNY on 30 Jun 2026), while fundamentals.price is the USD quote: shares = market_cap ÷ price came out 5–7× too many
+    (BABA 13.7 B against 2.40 B ADSs) and every EV and P/S multiple with them. The dollar figure is FMP's profile: USD market
+    value and USD price taken together, so shares = the US-listed (ADR) count. Returns the src unchanged for a USD reporter. */
+export function usdMarketValue(src, ccy) {
+  if (!ccy || ccy === "USD") return { src, from: null };
+  const p = src.profile || {}, mc = Number(p.market_cap), px = Number(p.price);
+  if (mc > 0 && px > 0) return { src: { ...src, fundamentals: { ...src.fundamentals, market_cap: mc, price: px, _mcap_from_profile: true } }, from: "company_profile (FMP, USD): market value and price together" };
+  return { src: { ...src, fundamentals: { ...src.fundamentals, market_cap: null } }, from: `no USD market value on file (the stored one is in ${ccy})` };
+}
+
+/** C5b (3 Oct) — trailing EPS in dollars quarter by quarter: fundamentals.eps_ttm is the sum of the last four quarterly diluted
+    EPS (the writer's rule), so when the four newest converted quarters sum to the stored figure in the reporting currency
+    (within 1%), each quarter is taken at its own period-end rate — the statement rule — instead of one rate for the sum. */
+export function epsTtmByQuarter(rawSrc, convSrc) {
+  const raw = (rawSrc.incQ || []).slice(0, 4), conv = (convSrc.incQ || []).slice(0, 4), f = Number((rawSrc.fundamentals || {}).eps_ttm);
+  if (raw.length < 4 || conv.length < 4 || !Number.isFinite(f) || conv.some((r) => r._unconverted || r.eps_diluted == null)) return null;
+  const sum = raw.reduce((s, r) => s + Number(r.eps_diluted), 0);
+  if (!(Math.abs(sum - f) <= Math.max(0.01 * Math.abs(f), 1e-9))) return null;
+  return conv.reduce((s, r) => s + Number(r.eps_diluted), 0);
 }
 
 /** fx_rates rows → { CCY: [[date, rate]…] }. rows: { pair: 'TWDUSD', date, rate }. */
