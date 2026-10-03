@@ -1,11 +1,11 @@
-/* R2 Part B (2 Oct) — the headless walk of the UNLOCK chips on the EARNINGS → band and the STATS lock-up line. Never a
+/* R2 Part B (2 Oct) — the headless walk of the IPO LOCK-UPS card on the EARNINGS page and the STATS lock-up line, and the
+   proof that the dashboard's EARNINGS → band carries no unlock (Alan: "I decide when we put a dashboard strip"). Never a
    visible window (Alan, 24 Sep). The Hub is served from this branch under its real hostname (the P1 / H8 walks' way);
    every non-GET request is answered locally and counted, never sent; the page's own GET reads go through (anon).
-     node r2u-walk.mjs 1680   1680 × 1050 at device scale 2: the dashboard, the band held still on its UNLOCK run (zoomed),
-                              CBRS and SPCX STATS · ACTIVITY & DATES (zoomed)
-     node r2u-walk.mjs 390    the phone at 390 × 844: the band and CBRS STATS
-   The band is a marquee: for the zoomed shot its track is paused and slid so the UNLOCK run is in the window (a
-   screenshot aid only — the page itself is not changed). Shots → ../screens/, the record → ./walk-<width>.json. */
+     node r2u-walk.mjs 1680   1680 × 1050 at device scale 2: the dashboard, the EARNINGS page and its IPO LOCK-UPS card
+                              (zoomed), CBRS and SPCX STATS · ACTIVITY & DATES (zoomed), reached by tapping the card's rows
+     node r2u-walk.mjs 390    the phone at 390 × 844: the same, CBRS only
+   Shots → ../screens/, the record → ./walk-<width>.json. */
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -59,59 +59,64 @@ const shot = async (name, sel) => {
 try {
   await page.goto("https://scintillahub.ai/", { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".sc-board__row[data-t]", { timeout: 60000 });
-  try { await page.waitForFunction(() => document.querySelector("#topTapeBand .ulk-it"), null, { timeout: 60000 }); } catch (_) { out.noChips = true; }
+  try { await page.waitForFunction(() => document.querySelector("#topTapeBand .sc-tape__item"), null, { timeout: 60000 }); } catch (_) { out.noBand = true; }
   await sleep(2500);
+  /* 1 · the dashboard's EARNINGS band carries NO unlock (Alan: "dashboard strips are very precious") */
   out.band = await page.evaluate(() => {
-    const b = document.querySelector("#topTapeBand"); if (!b) return null;
-    const all = [...b.querySelectorAll(".sc-tape__item")], half = Math.floor(all.length / 2);
-    const items = all.slice(0, half).map((c) => ({ cls: c.className.replace(/sc-tape__item\s*/, ""), text: c.textContent.replace(/\s+/g, " ").trim() }));
-    const ulk = [...b.querySelectorAll(".ulk-it")].slice(0, Math.floor(b.querySelectorAll(".ulk-it").length / 2));
-    return { label: (b.querySelector(".sc-tape__lbl") || {}).textContent, items, unlockChips: ulk.map((c) => ({ text: c.textContent.replace(/\s+/g, " ").trim(), t: c.dataset.t, title: c.title,
-      colour: getComputedStyle(c.querySelector(".ulk-lbl")).color })), rows: typeof ULK_ROWS !== "undefined" && ULK_ROWS ? ULK_ROWS.length : null };
+    const b = document.querySelector("#topTapeBand");
+    return b ? { unlockChips: b.querySelectorAll(".ulk-it, .ulk-head").length, mentionsUnlock: /UNLOCK/i.test(b.textContent), label: (b.querySelector(".sc-tape__lbl") || {}).textContent } : null;
   });
   await shot("dashboard", null);
-  /* hold the marquee still with the UNLOCK run in its window, then zoom on the band */
-  out.slid = await page.evaluate((ph) => {
-    const b = document.querySelector("#topTapeBand"), tr = b && b.querySelector(".sc-tape__track");
-    const head = b && b.querySelector(ph ? ".ulk-it" : ".ulk-head");      /* the phone's window is narrow: start at the first chip */
-    if (!tr || !head) return false;
-    tr.style.animation = "none";
-    const x = head.offsetLeft - (ph ? 6 : 40);
-    tr.style.transform = "translateX(" + (-x) + "px)";
-    return x;
-  }, phone);
-  await sleep(400);
-  await shot("band-unlocks", "#topTape");
-  /* the earnings window holds about two chips at 1680: step through every chip of the run, two at a time */
-  if (!phone) {
-    const n = await page.evaluate(() => Math.floor(document.querySelectorAll("#topTapeBand .ulk-it").length / 2));
-    for (let i = 0; i < n; i += 2) {
-      await page.evaluate((k) => { const tr = document.querySelector("#topTapeBand .sc-tape__track"), c = document.querySelectorAll("#topTapeBand .ulk-it")[k];
-        if (tr && c) tr.style.transform = "translateX(" + (-(c.offsetLeft - 8)) + "px)"; }, i);
-      await sleep(250);
-      await shot("band-unlocks-" + (i / 2 + 1), "#topTape");
-    }
+  /* 2 · the EARNINGS page (top nav) and its IPO LOCK-UPS card */
+  await page.evaluate(() => { const t = document.querySelector('#mtabs [data-act="mtab"][data-sec="EVENTS"]'); if (t) t.click(); });
+  try { await page.waitForFunction(() => document.querySelector("#evLockups table, #evLockups .sc-senttxt"), null, { timeout: 30000 }); } catch (_) { out.noCard = true; }
+  try { await page.waitForFunction(() => document.querySelector("#evLockups table"), null, { timeout: 30000 }); } catch (_) { out.noTable = true; }
+  await sleep(1200);
+  out.card = await page.evaluate(() => {
+    const h = document.querySelector("#evLockups"); if (!h) return null;
+    const card = h.closest(".card"); if (card) card.id = "ulkCard";
+    return { heading: card ? (card.querySelector("h4") || {}).textContent : null,
+      rows: [...h.querySelectorAll("tr.ulk-r")].map((r) => ({ t: r.dataset.t, past: r.classList.contains("is-past"), text: r.textContent.replace(/\s+/g, " ").trim(), title: r.title.slice(0, 300) })),
+      terms: [...h.querySelectorAll("tr.ulk-x")].map((r) => r.textContent.replace(/\s+/g, " ").trim().slice(0, 400)),
+      past_header: !!h.querySelector("tr.ulk-h"), foot: (h.querySelector(".ulk-foot") || {}).textContent };
+  });
+  if (phone) {
+    /* the phone stacks the page and EARNINGS EXTRAS is a short scrolling box: open it full screen with its own ⛶ button,
+       the way a phone user would, then scroll to the card */
+    out.phoneFullscreen = await page.evaluate(() => { const b = document.querySelector("#evExtras") && document.querySelector("#evExtras").closest(".panel").querySelector('[data-act="secfs"]'); if (!b) return false; b.click(); return true; });
+    await sleep(1200);
   }
-  /* the company view: tap the CBRS chip, then STATS */
+  await page.evaluate(() => { const c = document.querySelector("#ulkCard"); if (c) c.scrollIntoView({ block: "start" }); });
+  await sleep(400);
+  await shot("earnings-lockups", phone ? null : "#ulkCard");
+  await shot("earnings-page", null);
+  /* the rail scrolls on its own: bring the dimmed ENDED part into view and shoot the card again */
+  await page.evaluate(() => { const h = document.querySelector("#evLockups tr.ulk-h"); if (h) h.scrollIntoView({ block: "center" }); });
+  await sleep(400);
+  await shot("earnings-lockups-ended", phone ? null : "#ulkCard");
+  if (phone && out.phoneFullscreen) { await page.keyboard.press("Escape"); await sleep(600); }
+  /* 3 · tap a card row → the company → STATS · ACTIVITY & DATES */
   for (const t of phone ? ["CBRS"] : ["CBRS", "SPCX"]) {
-    const ok = await page.evaluate((tt) => { const c = document.querySelector('#topTapeBand .ulk-it[data-t="' + tt + '"]'); if (!c) return false; c.click(); return true; }, t);
-    out["tapped_" + t] = ok;
+    if (t !== "CBRS") {      /* back to the EARNINGS page for the next row */
+      await page.evaluate(() => { const b = document.querySelector('#mtabs [data-act="mtab"][data-sec="EVENTS"]'); if (b) b.click(); });
+      try { await page.waitForFunction(() => document.querySelector("#evLockups table"), null, { timeout: 30000 }); } catch (_) {}
+      await sleep(800);
+    }
+    out["tapped_" + t] = await page.evaluate((tt) => { const r = document.querySelector('#evLockups tr.ulk-r[data-t="' + tt + '"]'); if (!r) return false; r.click(); return true; }, t);
     await sleep(2500);
     await page.evaluate(() => { const b = document.querySelector('[data-act="cotab"][data-tab="STATS"]'); if (b) b.click(); });
     try { await page.waitForFunction(() => document.querySelector("#coRailContent .st-ulk"), null, { timeout: 30000 }); } catch (_) { out["noStatsLine_" + t] = true; }
     await sleep(800);
     out["stats_" + t] = await page.evaluate(() => {
       const l = document.querySelector("#coRailContent .st-ulk");
-      const blk = l && l.closest(".st-blk");
-      return l ? { line: l.textContent.replace(/\s+/g, " ").trim(), title: l.title.slice(0, 400), block: blk ? blk.textContent.replace(/\s+/g, " ").trim().slice(0, 600) : null } : null;
+      return l ? { line: l.textContent.replace(/\s+/g, " ").trim(), title: l.title.slice(0, 400) } : null;
     });
     await page.evaluate(() => { const l = document.querySelector("#coRailContent .st-ulk"); const blk = l && l.closest(".st-blk"); if (blk) { blk.id = "ulkBlk"; blk.scrollIntoView({ block: "center" }); } });
     await sleep(300);
     await shot("stats-" + t, "#ulkBlk");
-    if (!phone && t === "CBRS") await shot("company-" + t, null);
   }
 } catch (e) { out.fatal = String(e && e.stack || e).slice(0, 600); }
 fs.writeFileSync(path.join(here, "walk-" + width + ".json"), JSON.stringify(out, null, 1));
 await browser.close();
-console.log(JSON.stringify({ width, chips: out.band && out.band.unlockChips && out.band.unlockChips.map((c) => c.text), rows: out.band && out.band.rows, slid: out.slid,
-  statsCBRS: out.stats_CBRS && out.stats_CBRS.line, statsSPCX: out.stats_SPCX && out.stats_SPCX.line, writes: writes.length, errors, ulkReads: ulkReads.length, fatal: out.fatal, noChips: out.noChips }, null, 1));
+console.log(JSON.stringify({ width, band: out.band, card: out.card && { heading: out.card.heading, rows: out.card.rows.map((r) => (r.past ? "(dim) " : "") + r.text), past_header: out.card.past_header },
+  statsCBRS: out.stats_CBRS && out.stats_CBRS.line, statsSPCX: out.stats_SPCX && out.stats_SPCX.line, writes: writes.length, errors, ulkReads: ulkReads.length, fatal: out.fatal, noCard: out.noCard, noTable: out.noTable }, null, 1));

@@ -97,58 +97,65 @@ test("the streamed read gives the same answer in 1 KB pieces as in one piece, an
   assert.ok(out.bytes <= bytes.length);
 });
 
-/* ---- the Hub (index.html) ---- */
+/* ---- the Hub (index.html): the EARNINGS page card and the STATS line — NOT the dashboard band (Alan, 2 Oct:
+   "dashboard strips are very precious, I decide when we put a dashboard strip") ---- */
 const html = read("index.html");
 const grab = (name) => { const s = html.indexOf("function " + name + "("); assert.ok(s > 0, name + " exists"); return html.slice(s, html.indexOf("\n}\n", s) + 3); };
 const ctx = {}; vm.createContext(ctx);
 const plain = (x) => JSON.parse(JSON.stringify(x));          // results made inside the vm carry its own prototypes
-vm.runInContext(["ulkAddTradingDays", "unlockEvents", "unlockStatsText"].map(grab).join("\n") + "; this.E = unlockEvents; this.T = unlockStatsText; this.D = ulkAddTradingDays;", ctx);
-const rowOf = (t, name, pd) => { const lk = L.findLockup(fx(name), TODAY); const u = L.unlockFrom("IPO", lk.prospectus_date, lk);
-  return { ticker: t, listing_kind: "IPO", unlock_date: u.unlock_date, lockup_days: u.lockup_days, basis: u.basis, early_rule: lk.early_rule, schedule: lk.schedule, prospectus_date: pd }; };
-const ROWS = [rowOf("CBRS", "cbrs", "2026-05-13"), rowOf("SPCX", "spcx", "2026-06-11"), rowOf("ALAB", "alab", "2024-03-19"),
-  { ticker: "NBIS", listing_kind: "RELISTING", unlock_date: null, lockup_days: null, basis: null, schedule: null }];
+vm.runInContext(["ulkTerms", "unlockStatsText", "unlockListModel"].map(grab).join("\n") + "; this.M = unlockListModel; this.T = unlockStatsText;", ctx);
+const rowOf = (t, name, extra) => { const lk = L.findLockup(fx(name), TODAY); const u = L.unlockFrom("IPO", lk.prospectus_date, lk);
+  return Object.assign({ ticker: t, company: t + " Inc.", listing_kind: "IPO", unlock_date: u.unlock_date, lockup_days: u.lockup_days, basis: u.basis, early_rule: lk.early_rule,
+    early_release: lk.early_release, schedule: lk.schedule, prospectus_date: lk.prospectus_date, source_form: "424B4" }, extra || {}); };
+const ROWS = [rowOf("CBRS", "cbrs"), rowOf("SPCX", "spcx"), rowOf("ALAB", "alab"),
+  { ticker: "SHAZ", listing_kind: "IPO", unlock_date: "2026-05-19", lockup_days: 90, basis: "PROSPECTUS", schedule: null, early_release: null, prospectus_date: "2026-02-18" },
+  { ticker: "OLD1", listing_kind: "IPO", unlock_date: "2026-03-01", lockup_days: 180, basis: "PROSPECTUS", schedule: null },
+  { ticker: "FAR1", listing_kind: "IPO", unlock_date: "2027-11-01", lockup_days: 540, basis: "PROSPECTUS", schedule: null },
+  { ticker: "NBIS", listing_kind: "RELISTING", ipo_date: "2026-07-01", unlock_date: null, lockup_days: null, basis: null, schedule: null }];
 
-test("the band's UNLOCK chips for the next 90 days, in date order (the brief's words: 'UNLOCK · CBRS · NOV … · or 2 days after Q3')", () => {
-  const chips = plain(ctx.E(ROWS, TODAY, 90, {}).map((e) => e.ticker + " · " + e.md + " · " + e.note));
-  assert.deepEqual(chips, [
-    "SPCX · OCT 9 · 7% · 328.4M sh", "CBRS · OCT 14 · 19.4M sh", "SPCX · OCT 24 · 7% · 328.4M sh", "CBRS · OCT 28 · 19.4M sh",
-    "CBRS · NOV 9 · or 2 days after Q3", "SPCX · DEC 8 · the rest of the 180-day lock-up"]);
-  assert.ok(!chips.some((c) => /^(ALAB|NBIS)/.test(c)), "a past lock-up and a relisting carry no chip");
+test("the EARNINGS page list: lock-ups ending in the next 12 months soonest first, with days to go, the basis, the early-release words and sentence", () => {
+  const m = plain(ctx.M(ROWS, TODAY, 365, 183));
+  assert.deepEqual(m.ahead.map((x) => x.ticker + " " + x.dateTxt + " " + x.days), ["CBRS 9 Nov 2026 38", "SPCX 8 Dec 2026 67"], "FAR1 (more than 12 months out) is not listed");
+  const c = m.ahead[0];
+  assert.deepEqual([c.basis, c.alt, c.steps, c.dated], ["prospectus: 180 days", "or 2 trading days after the Q3 report", ["19.4M sh Oct 14", "19.4M sh Oct 28"], "13 May 2026"]);
+  assert.match(c.sentence, /the earlier of \(i\) 6:00 a\.m\. Eastern Time on the second trading day following our release of earnings/);
+  const x = m.ahead[1];
+  assert.deepEqual([x.basis, x.alt, x.steps], ["prospectus: 180 days", null, ["7% Oct 9", "7% Oct 24", "28% 2 trading days after the Q3 report"]]);
+  assert.match(x.sentence, /^The second full trading day on Nasdaq immediately following the First Earnings Release Date/, "the staged table's heading is not part of the sentence");
 });
 
-test("a step that waits on an earnings report sits at an estimated (≈) date only when that report is dated", () => {
-  const evs = ctx.E(ROWS, TODAY, 90, { SPCX: { date: "2026-11-10" }, CBRS: { date: "2026-11-04" } });
-  const q3 = evs.find((e) => e.ticker === "SPCX" && e.est);
-  assert.deepEqual([q3.day, q3.md, q3.note], ["2026-11-12", "≈ NOV 12", "28% · 1.3B sh · 2 days after Q3"]);
-  assert.equal(evs.find((e) => e.ticker === "CBRS" && e.main).note, "or 2 days after Q3 (≈ NOV 6)", "Cerebras's Q3 trigger comes first when the report lands Nov 4");
-  assert.equal(ctx.E(ROWS, TODAY, 90, { CBRS: { date: "2026-11-12" } }).find((e) => e.ticker === "CBRS" && e.main).note, "or 2 days after Q3",
-    "a report after Nov 9 cannot bring the unlock forward, so no ≈ date");
-  assert.equal(ctx.D("2026-11-06", 2), "2026-11-10", "trading days skip the weekend");
+test("the last 6 months, dimmed: ended lock-ups newest first, and a relisting that says it has none; older ones are not listed", () => {
+  const m = plain(ctx.M(ROWS, TODAY, 365, 183));
+  assert.deepEqual(m.past.map((x) => x.ticker + " " + x.days + " " + x.past), ["NBIS -93 true", "SHAZ -136 true"], "OLD1 (215 days ago) and ALAB (2024) are not listed");
+  assert.equal(m.past[0].basis, "no lock-up (relisting)");
+  assert.equal(m.past[1].basis, "prospectus: 90 days");
 });
 
 test("the STATS line: 'lock-up ends … (prospectus: 180 days, or 2 trading days after the Q3 report)'; 'no lock-up (relisting)'; nothing once it is past", () => {
   assert.deepEqual(plain(ctx.T(ROWS[0], TODAY)), { k: "lock-up ends", v: "9 Nov 2026 (prospectus: 180 days, or 2 trading days after the Q3 report · before it: 19.4M sh Oct 14, 19.4M sh Oct 28)" });
   assert.deepEqual(plain(ctx.T(ROWS[1], TODAY)), { k: "lock-up ends", v: "8 Dec 2026 (prospectus: 180 days · before it: 7% Oct 9, 7% Oct 24, 28% 2 trading days after the Q3 report)" });
   assert.equal(ctx.T(ROWS[2], TODAY), null, "Astera's lock-up ended in 2024: nothing for an older listing");
-  assert.deepEqual(plain(ctx.T(ROWS[3], TODAY)), { k: "lock-up", v: "no lock-up (relisting)" });
+  assert.deepEqual(plain(ctx.T(ROWS[6], TODAY)), { k: "lock-up", v: "no lock-up (relisting)" });
   assert.match(ctx.T({ ticker: "X", listing_kind: "IPO", unlock_date: "2026-12-01", lockup_days: 180, basis: "ASSUMED_180", schedule: [] }, TODAY).v, /assumed: 180 days — the prospectus clause was not found/);
 });
 
-test("the hooks: the live EARNINGS band merges and appends UNLOCKs; STATS asks for its line; one switch; one read; nothing written", () => {
-  const band = grab("ernDayTapeHTML");
-  assert.match(band, /unlockMergeDay\(p\.items, p\.day, today\)/);
-  assert.match(band, /it\.ulk \? unlockChipHTML\(it\.ulk, today\) : ernEcItemHTML\(it, ernEcState\(it, now\), today\)/);
-  assert.match(band, /seg \+= unlockRunHTML\(today, shownDay\)/);
+test("the homes: an IPO LOCK-UPS card on the EARNINGS page and the STATS line — and nothing on the dashboard's EARNINGS band", () => {
+  const room = grab("eventsRoomHTML");
+  assert.match(room, /<h4>IPO LOCK-UPS · NEXT 12 MONTHS<\/h4><div class="ev-ulkwrap" id="evLockups">' \+ unlockSectionHTML\(\)/);
+  assert.ok(room.indexOf('id="evUpcoming"') < room.indexOf('id="evLockups"') && room.indexOf('id="evLockups"') < room.indexOf('id="evPastRail"'), "between UPCOMING and PAST");
   assert.match(grab("statsActivityHTML"), /if \(!fund && typeof unlockStatsRowHTML === "function"\)/);
+  assert.doesNotMatch(grab("ernDayTapeHTML"), /unlock|ulk/i, "the band is exactly the live one");
+  assert.doesNotMatch(grab("topTapeHTML"), /unlock|ulk/i);
+  for (const gone of ["unlockChipHTML", "unlockMergeDay", "unlockRunHTML", "unlockEvents", ".ulk-it", "ULK_HUE"]) assert.equal(html.indexOf(gone), -1, gone + " is gone");
   assert.match(html, /var UNLOCK_ON = ernSwitchFromUrl\("unlock", "on", "off", true\);/);
-  assert.match(html, /var ULK_HUE = "#8E9BFF";/);
-  const blk = html.slice(html.indexOf("R2 · 2 OCT · UNLOCK — IPO lock-up expiry"), html.indexOf("/* THE ECONOMIC SEGMENT'S SLIDE"));
+  const blk = html.slice(html.indexOf("R2 · 2 OCT · IPO LOCK-UPS — on the EARNINGS page"), html.indexOf("/* THE ECONOMIC SEGMENT'S SLIDE"));
   assert.match(blk, /pg\("ipo_lockups\?select=/);
-  assert.doesNotMatch(blk, /pgPatch|method:\s*"(POST|PATCH|DELETE)"/, "the Hub only reads");
+  assert.doesNotMatch(blk, /pgPatch|method:\s*"(POST|PATCH|DELETE)"|renderTopTape/, "the Hub only reads, and never repaints the band");
   assert.match(html, /\.st-blk > div\.st-ulk > b, \.cv-side \.st1 \.st-blk > div\.st-ulk > b\{ white-space:normal; flex:1 1 0; min-width:0;/);
+  assert.match(html, /@media \(max-width:560px\)\{ \.ev-uptbl\.ulk-tbl th:nth-child\(3\), \.ev-uptbl\.ulk-tbl td:nth-child\(3\)\{ display:table-cell; \} \}/, "the days to go stay on a phone");
 });
 
-test("the function: the FMP key from app_config, never printed; /stable/ routes; the SEC research User-Agent; writes only ipo_lockups", () => {
+test("the function: the FMP key from app_config, never printed; /stable/ routes; the SEC research User-Agent; writes only ipo_lockups; a refused SEC read writes nothing", () => {
   const src = read("supabase/functions/unlock-watch/index.ts");
   assert.match(src, /app_config\?select=key,value&key=eq\.FMP_KEY/);
   assert.doesNotMatch(src, /console\.(log|error|warn|info)/, "nothing is logged");
@@ -159,6 +166,9 @@ test("the function: the FMP key from app_config, never printed; /stable/ routes;
   assert.match(src, /"User-Agent": "ScintillaHub research research@scintillahub\.ai"/);
   const writes = [...src.matchAll(/rest\/v1\/([a-z_]+)[^"`]*`?,\s*\{\s*method:\s*"POST"/g)].map((m) => m[1]);
   assert.deepEqual(writes, ["ipo_lockups"]);
+  assert.match(src, /if \(pick && \(!sec \|\| sec\.status !== 200 \|\| !sec\.bytes\)\) \{[\s\S]{0,260}nothing written, the stored row is kept[\s\S]{0,40}continue;/, "a 429 / empty read never overwrites (2 Oct: the SEC refused the edge address and a run wrote assumptions)");
+  assert.match(src, /prev\.basis === "PROSPECTUS" && un\.basis === "ASSUMED_180"/, "a read clause is never traded for an assumption");
+  assert.match(src, /r\.status === 429/);
   const mig = read("supabase/migrations/20261002_ipo_lockups.sql"), rb = read("supabase/migrations/20261002_ipo_lockups_ROLLBACK.sql");
   assert.match(mig, /create policy ipo_lockups_read on public\.ipo_lockups for select to anon, authenticated using \(true\)/);
   assert.match(rb, /drop table if exists public\.ipo_lockups;/);
