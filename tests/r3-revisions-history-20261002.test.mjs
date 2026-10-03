@@ -176,7 +176,8 @@ test("the estimates box: plain numbers, the change in colour, 'history starts' w
   assert.match(h, /FY\+1 EPS/); assert.match(h, /FY\+2 Revenue/);
   assert.match(h, /\$15\.75/); assert.match(h, /\$12\.78/);
   assert.match(h, /<span class="up">\+23%<\/span>/, "FY+2 EPS 12.78 → 15.75");
-  assert.match(h, /history starts 11 Aug/);
+  assert.match(h, /90d ago<br><i>history starts 11 Aug/, "4 Jul is before the first copy");
+  assert.match(h, /30d ago<br><i>no copy near 2 Sep/, "2 Sep is after the first copy: a gap, not the start");
   assert.ok(!/\b(buy|sell|should|recommend|bullish|bearish)\b/i.test(h.replace(/<[^>]+>/g, " ")));
   assert.match(ctx.revEstHTML("NVDA", { rows: [], est: [] }, "2026-10-02"), /kept once a day from 2 Oct 2026/);
 });

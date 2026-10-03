@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 1b8c55f) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 102e60e) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -1611,12 +1611,19 @@ a.sc-rvs-row:hover{ background:rgba(0,212,255,.05); }
 /* R3 (2 Oct 2026, night) · beside the arrows: FY+1 / FY+2 EPS and revenue now vs 30 / 60 / 90 days ago (.sc-rve); 00b TARGETS
    BY FIRM (.sc-rvh): each firm's target as a step line over the daily close, raised = --bull, cut = --bear, the firms that moved
    in 30 days bright; the RATINGS → tape on top of 05 Rating changes (.sc-tape--rvt, the EARNINGS → band's frame). JS: R3-REVISIONS. */
-.sc-rvs-top{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:10px; align-items:start; margin-bottom:8px; }
-.sc-rvs-top > .sc-rvs-arrows{ grid-template-columns:1fr; margin-bottom:0; gap:6px; }
+/* beside the arrows only when the strip itself is wide (the company rail is ~740 px even on a 1680 screen): a container
+   query on the strip, not the window — under 900 px the arrows stay three across and the estimates sit right below */
+.sc-rvs{ container-type:inline-size; }
+.sc-rvs-top{ display:grid; grid-template-columns:1fr; gap:8px; align-items:start; margin-bottom:8px; }
+.sc-rvs-top > .sc-rvs-arrows{ margin-bottom:0; }
+@container (min-width:900px){
+  .sc-rvs-top{ grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:10px; }
+  .sc-rvs-top > .sc-rvs-arrows{ grid-template-columns:1fr; gap:6px; }
+}
 .sc-rve{ border:.8px solid rgba(0,212,255,.16); padding:7px 9px 6px; min-width:0; }
 .sc-rve-h{ font-family:var(--mono); font-size:7.5px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin-bottom:4px; }
 .sc-rve-t{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:9.5px; font-variant-numeric:tabular-nums; color:var(--ink2); }
-.sc-rve-t th{ font-weight:400; font-size:7.5px; letter-spacing:.08em; color:var(--dim); text-align:right; padding:2px 4px 4px; text-transform:uppercase; vertical-align:bottom; }
+.sc-rve-t th{ font-weight:400; font-size:7.5px; letter-spacing:.08em; color:var(--dim); text-align:right; padding:2px 4px 4px; text-transform:uppercase; vertical-align:bottom; white-space:nowrap; }
 .sc-rve-t th i, .sc-rve-t td i{ font-style:normal; text-transform:none; letter-spacing:.02em; color:var(--ink3); font-size:7.5px; }
 .sc-rve-t td{ text-align:right; padding:3px 4px; border-top:.5px solid rgba(255,255,255,.045); white-space:nowrap; }
 .sc-rve-t td.k{ text-align:left; color:var(--ink); }
@@ -1656,10 +1663,6 @@ a.sc-rvs-row:hover{ background:rgba(0,212,255,.05); }
 .sc-rvh-notes{ margin-top:6px; border-top:.8px solid rgba(0,212,255,.16); padding-top:4px; }
 .sc-rvh-nh{ font-family:var(--mono); font-size:9px; color:var(--ink2); padding:2px 0 4px; }
 .sc-rvh-nh b{ color:var(--ink); }
-@media (max-width:760px){
-  .sc-rvs-top{ grid-template-columns:1fr; }
-  .sc-rvs-top > .sc-rvs-arrows{ grid-template-columns:repeat(3,minmax(0,1fr)); }
-}
 @media (max-width:560px){
   .sc-rve-t{ font-size:8.5px; }
   .sc-rve-t td, .sc-rve-t th{ padding:2px 2px; }
@@ -19760,7 +19763,12 @@ function revHistSVG(closes, firms, fromMs, toMs, W, H, openKey) {
   const vis = firms.map((f) => ({ f, s: f.steps.filter((n) => n.ms <= toMs) })).filter((x) => x.s.length && (x.s[x.s.length - 1].ms >= fromMs || x.s.length));
   /* a firm whose last note is older than the window still draws a flat line from the left edge: its target was standing */
   const vals = pts.map((b) => +b.c);
-  for (const x of vis) for (const n of x.s) if (n.ms >= fromMs - 400 * REV_DAY) vals.push(n.v);
+  /* the scale holds what is drawn: the steps inside the window and, per firm, the one target standing when it opens */
+  for (const x of vis) {
+    let standing = null;
+    for (const n of x.s) { if (n.ms >= fromMs) vals.push(n.v); else standing = n; }
+    if (standing) vals.push(standing.v);
+  }
   if (!vals.length) return "";
   let lo = Math.min(...vals), hi = Math.max(...vals);
   const pad = (hi - lo) * 0.06 || hi * 0.05 || 1; lo = Math.max(0, lo - pad); hi += pad;
@@ -19838,7 +19846,7 @@ function revHistBody(t, c, nowMs) {
   const first = firms.reduce((m, f) => Math.min(m, f.steps[0].ms), Infinity);
   h += '<div class="sc-rvh-say">' + inWin.length + (inWin.length === 1 ? " firm" : " firms") + " set or kept a target on $" + esc(t) + " in this window; " +
     (hot.length ? "<b>" + hot.length + "</b> moved in the last " + REV_HOT_DAYS + " days (drawn bright)" : "none moved in the last " + REV_HOT_DAYS + " days") +
-    ". The record starts " + esc(revIsoDay(first)) + "." + (c.px && c.px.length ? "" : " <i>The price line could not be read.</i>") + "</div>";
+    ". The notes read here go back to " + esc(revDay(new Date(first).toISOString(), 0)) + " (two years at most)." + (c.px && c.px.length ? "" : " <i>The price line could not be read.</i>") + "</div>";
   h += '<div class="sc-rvh-plot">' + (svg || '<div class="sc-rvs-wait">Nothing to draw in this window.</div>') + "</div>";
   const yr = new Date(now).getFullYear();
   h += '<div class="sc-rvh-firms">' + inWin.slice(0, 40).map((f) => {
@@ -19847,7 +19855,7 @@ function revHistBody(t, c, nowMs) {
       (f.lastDir > 0 ? " ▲" : f.lastDir < 0 ? " ▼" : "") + ' <span class="dt">' + esc(revDay(new Date(f.last.ms).toISOString(), yr)) + "</span></button>";
   }).join("") + "</div>";
   if (open) h += revHistNotesHTML(firms.find((f) => f.key === open), yr);
-  h += '<div class="sc-rvs-note">Each firm\'s split-adjusted price target from FMP price-target notes (analyst_target_news, kept back to ' + esc(revIsoDay(first)) +
+  h += '<div class="sc-rvs-note">Each firm\'s split-adjusted price target from FMP price-target notes (analyst_target_news; this chart reads the last two years, from ' + esc(revIsoDay(first)) +
     ") · the line is the daily close from the chart API (Massive) · a step is drawn on the day of the note · tap a firm for its notes</div>";
   return h + "</div>";
 }
@@ -19906,8 +19914,11 @@ function revEstHTML(t, c, today) {
   let h = '<div class="sc-rve" data-rev-t="' + esc(t) + '"><div class="sc-rve-h">Earnings estimates — now vs before</div>';
   if (!c) return h + '<div class="sc-rvs-wait">reading…</div></div>';
   if (!P || !P.fy.length) return h + '<div class="sc-rvs-wait">No estimate snapshots for $' + esc(t) + " yet — they are kept once a day from 2 Oct 2026.</div></div>";
-  const colHead = (x) => x.asOf ? "<th>" + x.days + "d ago<br><i>" + esc(revDay(x.asOf + "T12:00:00Z", +String(P.newest).slice(0, 4))) + "</i></th>"
-    : "<th>" + x.days + "d ago<br><i>history starts " + esc(revDay(P.start + "T12:00:00Z", +String(P.newest).slice(0, 4))) + "</i></th>";
+  const yr0 = +String(P.newest).slice(0, 4), want = (n) => revIsoDay(Date.parse((today || todayISO()) + "T00:00:00Z") - n * REV_DAY);
+  /* no copy near that day: before the first copy → "history starts <date>"; after it → "no copy near <date>" (there is a gap) */
+  const colHead = (x) => x.asOf ? "<th>" + x.days + "d ago<br><i>" + esc(revDay(x.asOf + "T12:00:00Z", yr0)) + "</i></th>"
+    : want(x.days) < P.start ? "<th>" + x.days + "d ago<br><i>history starts " + esc(revDay(P.start + "T12:00:00Z", yr0)) + "</i></th>"
+    : "<th>" + x.days + "d ago<br><i>no copy near " + esc(revDay(want(x.days) + "T12:00:00Z", yr0)) + "</i></th>";
   const showOld = P.fy.some((f) => f.oldest) && P.cols.every((x) => x.asOf !== P.start);
   h += '<table class="sc-rve-t"><thead><tr><th></th><th>now<br><i>' + esc(revDay(P.newest + "T12:00:00Z", +String(P.newest).slice(0, 4))) + "</i></th>" + P.cols.map(colHead).join("") +
     (showOld ? "<th>oldest<br><i>" + esc(revDay(P.start + "T12:00:00Z", +String(P.newest).slice(0, 4))) + "</i></th>" : "") + "</tr></thead><tbody>";
