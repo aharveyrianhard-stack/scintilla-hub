@@ -148,3 +148,105 @@ export function slice<T>(all: T[], offset: unknown, limit: unknown): T[] {
   const l = num(limit);
   return l != null && l > 0 ? all.slice(o, o + Math.floor(l)) : all.slice(o);
 }
+
+/* ── v2 (R3, 2 Oct 2026, night) ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** The deep backfill ("fetch every page per stock back to at least 2 years"): read the next page of price-target-news /
+ *  grades-news while this page is full-ish (not empty) AND its oldest row is still newer than the cutoff. A page that
+ *  already reaches past the cutoff is the last one read; an empty page means FMP has nothing older. */
+export function deepKeepPaging(page: any[], cutoffIso: string): boolean {
+  if (!Array.isArray(page) || !page.length) return false;
+  const cutoff = new Date(cutoffIso).getTime();
+  let oldest = Infinity;
+  for (const x of page) {
+    const iso = isoUtc(x && x.publishedDate);
+    if (iso) oldest = Math.min(oldest, new Date(iso).getTime());
+  }
+  return oldest !== Infinity && oldest > cutoff;
+}
+
+/** The oldest publishedDate on a page (ISO) — what the backfill reports as "depth reached". */
+export function oldestOf(page: any[]): string | null {
+  let o: string | null = null;
+  for (const x of page || []) { const iso = isoUtc(x && x.publishedDate); if (iso && (!o || iso < o)) o = iso; }
+  return o;
+}
+
+export type EstRow = {
+  ticker: string; period: "annual" | "quarter"; fiscal_date: string; as_of_date: string;
+  revenue_avg: number | null; revenue_low: number | null; revenue_high: number | null;
+  ebitda_avg: number | null; net_income_avg: number | null;
+  eps_avg: number | null; eps_low: number | null; eps_high: number | null;
+  analysts_revenue: number | null; analysts_eps: number | null; source: string;
+};
+
+const DAY = 86400e3;
+/** Which fiscal periods a daily snapshot keeps — the ones a revision means something for: annual years that ended up to
+ *  ~13 months ago and the next 6; quarters that ended up to ~7 months ago and the next 3 years. FMP sends 40 years and
+ *  120 quarters; keeping all of them every day would be ~30,000 rows a night for no reader. */
+export function inSnapshotWindow(period: string, fiscalDate: string, today: string): boolean {
+  const f = Date.parse(fiscalDate + "T00:00:00Z"), t = Date.parse(today + "T00:00:00Z");
+  if (!isFinite(f) || !isFinite(t)) return false;
+  if (period === "annual") return f >= t - 400 * DAY && f <= t + 6 * 366 * DAY;
+  if (period === "quarter") return f >= t - 215 * DAY && f <= t + 3 * 366 * DAY;
+  return false;
+}
+
+/** One FMP analyst-estimates item → one snapshot row for the New York day asOf (null without a fiscal date). */
+export function estimateRow(x: any, ticker: string, period: "annual" | "quarter", asOf: string): EstRow | null {
+  const fd = txt(x && x.date);
+  if (!fd || !ticker || !/^\d{4}-\d\d-\d\d/.test(fd)) return null;
+  return {
+    ticker, period, fiscal_date: fd.slice(0, 10), as_of_date: asOf,
+    revenue_avg: num(x.revenueAvg), revenue_low: num(x.revenueLow), revenue_high: num(x.revenueHigh),
+    ebitda_avg: num(x.ebitdaAvg), net_income_avg: num(x.netIncomeAvg),
+    eps_avg: num(x.epsAvg), eps_low: num(x.epsLow), eps_high: num(x.epsHigh),
+    analysts_revenue: num(x.numAnalystsRevenue ?? x.numAnalystsRev), analysts_eps: num(x.numAnalystsEps), source: "fmp",
+  };
+}
+
+/** CSV text → records as objects keyed by the header row. Handles the quoting public.scin_csvq() (and Postgres COPY) produce:
+ *  a field with a quote, comma or newline is wrapped in quotes, and a quote inside it is doubled. */
+export function parseCsv(text: string): Record<string, string>[] {
+  const recs: string[][] = [];
+  let row: string[] = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(f); f = ""; if (row.length > 1 || row[0] !== "") recs.push(row); row = [];
+    } else f += c;
+  }
+  if (f !== "" || row.length) { row.push(f); recs.push(row); }
+  if (!recs.length) return [];
+  const head = recs[0].map((h) => h.trim());
+  return recs.slice(1).map((r) => { const o: Record<string, string> = {}; head.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
+}
+
+/** One row of an old public.analyst_estimates copy (the R2 mirror's CSV) → one snapshot row. The as-of date is the row's own
+ *  updated_ts (when fmp-analyst last wrote it, epoch seconds) as a New York date — not the day the copy was taken — because
+ *  in August fmp-analyst was stalled for days and a row could be older than its copy. That copy has no revenue or EPS
+ *  low/high columns, so those stay null. */
+export function mirrorEstimateRow(o: Record<string, string>, source: string): EstRow | null {
+  const ticker = txt(o.ticker), period = txt(o.period), fd = txt(o.fiscal_date), ts = num(o.updated_ts);
+  if (!ticker || (period !== "annual" && period !== "quarter") || !fd || ts == null || ts <= 0) return null;
+  return {
+    ticker, period, fiscal_date: fd.slice(0, 10), as_of_date: nyDate(new Date(ts * 1000)),
+    revenue_avg: num(o.est_revenue_avg), revenue_low: num(o.est_revenue_low), revenue_high: num(o.est_revenue_high),
+    ebitda_avg: num(o.est_ebitda_avg), net_income_avg: num(o.est_net_income_avg),
+    eps_avg: num(o.est_eps_avg), eps_low: num(o.est_eps_low), eps_high: num(o.est_eps_high),
+    analysts_revenue: num(o.num_analysts_rev), analysts_eps: num(o.num_analysts_eps), source,
+  };
+}
+
+/** One row per (ticker, period, fiscal_date, as_of_date) — the first wins (an upsert batch may not touch a key twice). */
+export function dedupeEst(rows: (EstRow | null)[]): EstRow[] {
+  const m = new Map<string, EstRow>();
+  for (const r of rows) if (r) { const k = r.ticker + "|" + r.period + "|" + r.fiscal_date + "|" + r.as_of_date; if (!m.has(k)) m.set(k, r); }
+  return [...m.values()];
+}

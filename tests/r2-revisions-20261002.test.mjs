@@ -87,7 +87,7 @@ test("the function: key from app_config like fmp-analyst, /stable/ routes only, 
   for (const r of ["price-target-latest-news", "grades-latest-news", "price-target-summary", "price-target-news", "grades-news"]) assert.ok(fnSrc.includes('"' + r), r);
   assert.ok(!/console\.(log|error|warn)/.test(fnSrc), "no logging at all — nothing that could print the key");
   const writes = [...fnSrc.matchAll(/upsert\(sb, "([a-z_]+)"/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(writes)].sort(), ["analyst_target_news", "price_target_summary_daily"]);
+  assert.deepEqual([...new Set(writes)].sort(), ["analyst_estimates_daily", "analyst_target_news", "price_target_summary_daily"]);   // R3 (v2) adds the estimate snapshots
   assert.ok(!/alert_log|\.insert\(|\.delete\(|cron/.test(fnSrc.replace(/\/\/.*$/gm, "")), "no alert rows, no deletes, no cron in code");
   assert.ok(!/apikey=[A-Za-z0-9]{8,}/.test(fnSrc + read("supabase/functions/analyst-revisions/lib.ts")), "no key value in the source");
 });
@@ -175,7 +175,7 @@ test("honest empty, error and loading states; the tab opens with the strip", () 
   ctx.REV_CACHE.MU = { at: Date.now(), rows: muRows, sum: null, err: null };
   assert.match(ctx.revStripHTML({ t: "MU" }), /3 notes/, "a fresh cache paints at once");
   assert.equal(ctx.revStripHTML({ t: "MU", _loading: true }), "");
-  assert.match(html, /function estimatesTabHTML\(data\) \{[^\n]*\n  return revStripHTML\(data\) \+ estForecastHTML\(data\)/);
+  assert.match(html, /function estimatesTabHTML\(data\) \{[^\n]*\n  return revStripHTML\(data\) \+ (\(typeof revHistHTML === "function" \? revHistHTML\(data\) : ""\) \+ )?estForecastHTML\(data\)/);   // R3 puts 00b between them
   assert.ok(!/discounted-cash-flow|ratings-snapshot/.test(html.slice(a, b)), "FMP's DCF and letter ratings stay off the Hub");
   assert.ok(!/sc-rev\b(?!-)/.test(html.slice(a, b).replace(/\.sc-rev is the board/g, "")), "never the board's revenue-cell class .sc-rev (the first shot caught that collision)");
   for (const fn of ["revNum", "revPx", "revPct", "revLines", "revArrows", "revSay", "revLineHTML", "revStripHTML", "revStripLoad", "revStripPaint", "revStripBody"])
