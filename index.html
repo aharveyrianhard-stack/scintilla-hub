@@ -2356,7 +2356,7 @@ body.tvmodal-open{ overflow:hidden; }
 .of-k2{ font:600 9px var(--mono); letter-spacing:.12em; color:#8A8A92; white-space:nowrap; }
 .of-lock{ margin:2px 0 10px; padding:7px 9px 8px; border-left:2.5px solid #6E6E76; background:#121216; font:11px var(--mono); color:#C6C6CC; }
 .of-lk-end{ color:var(--ink); font-weight:600; } .of-lk-next{ margin-top:4px; color:var(--ink); font-size:12px; } .of-lk-steps{ margin-top:3px; color:#A8A8AE; }
-.of-news{ margin-top:4px; font:11px/1.45 var(--mono); color:#A8A8AE; overflow-wrap:anywhere; }
+.of-news{ margin-top:4px; font:11px/1.45 var(--mono); color:#A8A8AE; overflow-wrap:anywhere; } .of-news .of-k2{ white-space:normal; }
 .of-firstnews{ margin:0 0 10px; padding:4px 9px 6px; border-left:2.5px solid #6E6E76; }
 .of-nt{ color:#C6C6CC; } .of-nh{ color:#C6C6CC; text-decoration:none; font-family:var(--sans); } a.of-nh:hover{ color:var(--crk); }
 .of-cover{ margin-top:2px; font:11px/1.45 var(--mono); color:#C6C6CC; }
@@ -11996,8 +11996,10 @@ function ofCapBodyHTML(t, c, balq, todayIso) {
     ", newest first</span></h3>";
   const lock = c && !c.err ? ofLockHTML(ofLockModel(c.lock || null, today)) : "";
   const nm = ofNewsModel(c && c.news);
-  const loose = nm.loose.length ? '<div class="of-firstnews">' + nm.loose.map((g) => '<div class="of-news"><span class="of-k2">FIRST SEEN IN THE NEWS · ' + esc(g.first.kind || "OFFERING") +
-    " · no SEC offering filing joined</span> " + ofNewsLineHTML(g.first, g.n - 1) + "</div>").join("") + "</div>" : "";
+  /* the 3 newest sightings not joined to a filing (a private 144A sale never files one); the rest are counted */
+  const loose = nm.loose.length ? '<div class="of-firstnews">' + nm.loose.slice(0, 3).map((g) => '<div class="of-news"><span class="of-k2">FIRST SEEN IN THE NEWS · ' + esc(g.first.kind || "OFFERING") +
+    " · no SEC offering filing joined</span> " + ofNewsLineHTML(g.first, g.n - 1) + "</div>").join("") +
+    (nm.loose.length > 3 ? '<div class="of-news of-meta">+' + (nm.loose.length - 3) + " earlier sighting" + (nm.loose.length === 4 ? "" : "s") + " not joined to a filing</div>" : "") + "</div>" : "";
   let list;
   if (!c) list = '<div class="of-empty">reading the filings …</div>';
   else if (c.err) list = '<div class="of-empty">could not read offering_filings — ' + esc(c.err) + "</div>";
