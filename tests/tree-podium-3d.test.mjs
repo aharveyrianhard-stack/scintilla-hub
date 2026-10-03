@@ -21,8 +21,8 @@ const listsOf = (r) => r.log.filter((x) => x.probe && x.value && x.value.lists).
 
 test("1 · PODIUM 3D | FROM ABOVE on the top bar, 3D the default; standing, the podium is a staircase on one floor; from above, the same steps as flat slabs", () => {
   assert.match(M3, /state\.podium = Q\.get\("podium"\) === "above" \? "above" : "3d";/, "PODIUM 3D is the default when a podium opens");
-  assert.match(M3, /const y0 = above \? p\.tread - 1\.5 : p\.floor, y1 = above \? p\.tread \+ 1\.5 : p\.tread;/, "standing: floor → tread; from above: a slab at the tread");
-  assert.match(M3, /above: \{ el: qn\("pel", 88\), az: qn\("paz", 28\) \}/, "FROM ABOVE looks from 88° up");
+  assert.match(M3, /const y0 = above \? p\.tread - 1\.5 : Math\.min\(p\.base, p\.tread\), y1 = above \? p\.tread \+ 1\.5 : Math\.max\(p\.base, p\.tread\);/, "standing: floor → tread; from above: a slab at the tread");
+  assert.match(M3, /above: \{ el: qn\("pel", SP\.camera\.above_el\), az: qn\("paz", SP\.camera\.home_az\) \}/, "FROM ABOVE looks from 88° up");
   assert.match(M3, /function setPodium\(mode\)/); assert.match(M3, /setPodium, podiumMode: \(\) => state\.podium/);
   assert.match(PAGE, /<span class="seg" id="podium-seg"[^>]*><button data-go="above"[^>]*>FROM ABOVE<\/button><button data-go="3d"[^>]*>PODIUM 3D<\/button><\/span>/, "the toggle on the top bar");
   assert.match(PAGE, /if \(b\.dataset\.go === "above" \|\| b\.dataset\.go === "3d"\) \{ if \(m3\) m3\.setPodium\(b\.dataset\.go\); return; \}/);

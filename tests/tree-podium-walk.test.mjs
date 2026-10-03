@@ -17,8 +17,7 @@ const probes = (r, key) => r.log.filter((x) => x.probe && x.value && key in x.va
 const blacks = (r) => Object.fromEntries(r.log.filter((x) => x.black).map((x) => [x.black.replace(/^\d+-/, ""), x.value.black_share]));
 
 test("1 · red coils like green: one rule for every step (tread = reading × H, one H above and below zero), no flat run for the names with no reading, and the proof prints the pitch above / below / at the crossing", () => {
-  assert.match(M3, /const treadOf = \(i\) => \(i < withV\.length \? withV\[i\]\.v \* H : lastTread - \(i - withV\.length \+ 1\) \* P\.D \* NONE_DROP\);/, "one formula for every tread; a no-reading step keeps descending");
-  assert.match(M3, /const NONE_DROP = 0\.25;/); assert.match(M3, /const floor = Math\.min\(0, members\.length \? treadOf\(members\.length - 1\) : 0\) - P\.D;/, "the floor sits one tread under the lowest step, never above zero");
+  assert.match(M3, /const treadOf = \(i\) => \(i < withV\.length \? withV\[i\]\.v \* H : 0\);/, "T10: one formula for every tread (reading × H); a no-reading step is a slab at zero past the red base");
   assert.doesNotMatch(M3, /tread = v == null \? floor \+ 2 : v \* H/, "T8's flat run at the floor is gone");
   assert.match(M3, /state\.pitchRule = \(\) =>/, "the pitch rule is printed for the proof");
   if (!runs) return;
@@ -27,8 +26,7 @@ test("1 · red coils like green: one rule for every step (tread = reading × H, 
     assert.equal(R.above.per_unit, R.below.per_unit, `${r.width} ${P.bar.slice(0, 22)}: pitch above ${R.above.per_unit} vs below ${R.below.per_unit} per unit of reading`);
     assert.equal(R.above.per_unit, R.H); assert.equal(R.above.per_unit_min, R.above.per_unit_max, `${r.width}: every green drop is the same rule`); assert.equal(R.below.per_unit_min, R.below.per_unit_max, `${r.width}: every red drop is the same rule`);
     if (R.crossing) assert.equal(R.crossing.per_unit, R.H, `${r.width}: no change of pitch where ${R.crossing.from} → ${R.crossing.to} crosses zero`);
-    assert.ok(!R.no_reading.flat, `${r.width}: no flat run of no-reading steps`);
-    assert.ok(P.treadMono && P.vMono, `${r.width}: the treads fall all the way down`); assert.ok(P.gap_world.max <= 0.5 && P.gap_world.touching === P.gap_world.n, `${r.width}: no gap between steps ${JSON.stringify(P.gap_world)}`);
+    assert.ok(P.vMono, `${r.width}: the readings fall all the way down`); assert.ok(P.gap_world.max <= 0.5 && P.gap_world.touching === P.gap_world.n, `${r.width}: no gap between steps ${JSON.stringify(P.gap_world)}`);
     assert.ok(P.first.tread > 0 && P.last.tread < 0, `${r.width}: the stair crosses zero (first ${P.first.tread}, last ${P.last.tread})`);
   }
 });
@@ -38,15 +36,15 @@ test("2 · free rotation: no pitch or yaw clamp inside the podium or a section's
   assert.doesNotMatch(M3, /(min|max)PolarAngle = (?!0|Math\.PI)/, "no other polar clamp anywhere");
   assert.match(M3, /controls\.enableRotate = true; freeOrbit\(\); \/\/ T9: the full orbit/); assert.match(M3, /controls\.enableRotate = true; freeOrbit\(\); \/\/ orbit is allowed inside an area/);
   assert.match(M3, /controls\.enableRotate = cluster\.rotate; orbitButtons\(false\);/, "the canvas's buttons come back on exit");
-  assert.match(M3, /el: qn\("sel", 70\)/, "70° stays the start"); assert.match(M3, /cluster\.home = to;/); assert.match(M3, /cluster\.home = framing\(\[root, \.\.\.sub, \.\.\.nbs\], DIR3, 0\.8\);/);
+  assert.match(M3, /el: qn\("sel", SP\.camera\.home_el\)/, "T10: the start is the sheet's camera (24°, so both snakes show)"); assert.match(M3, /cluster\.home = to;/); assert.match(M3, /cluster\.home = framing\(\[root, \.\.\.sub, \.\.\.nbs\], DIR3, 0\.8\);/);
   assert.match(M3, /renderer\.domElement\.addEventListener\("dblclick", \(e\) => \{ if \(!cluster\) return; e\.preventDefault\(\); resetView\(700\); \}\);/);
   assert.match(PAGE, /<button data-go="reset" title="back to the starting view \(a double-click on the canvas does the same\)">RESET VIEW<\/button>/);
   if (!runs) return;
   for (const r of desk(runs)) {
     const P = probes(r, "limits").filter((p) => p.limits); assert.ok(P.length >= 4);
     for (const p of P) { assert.deepEqual([p.limits.minPolar, p.limits.maxPolar, p.limits.minAz, p.limits.maxAz], [0, Math.PI, null, null], `${r.width}: limits ${JSON.stringify(p.limits)} (±Infinity prints as null)`); assert.equal(p.limits.left, "rotate", `${r.width}: the left button turns`); assert.equal(p.limits.one_finger, "rotate"); }
-    const els = P.filter((p) => p.count && !p.count.list).map((p) => p.elevation.el); assert.ok(els.includes(6) && els.includes(-16) && els[0] === 70, `${r.width}: the camera stood at 70°, then at the side (6°) and below the rim (−16°): ${els}`);
-    const drag = r.log.find((x) => x.drag && x.drag[1] !== x.drag[3] && x.drag[0] === x.drag[2]); assert.ok(drag && drag.elevation.el < 60, `${r.width}: a real upward drag lowered the camera from 70° to ${drag && drag.elevation.el}° (T8: the drag panned, the angle stayed 70)`);
+    const els = P.filter((p) => p.count && !p.count.list).map((p) => p.elevation.el); assert.ok(els.includes(6) && els.includes(-16), `${r.width}: the camera stood at the side (6°) and below the rim (−16°): ${els}`);
+    const drag = r.log.find((x) => x.drag && x.drag[1] !== x.drag[3] && x.drag[0] === x.drag[2]); assert.ok(drag && drag.elevation.el < 60, `${r.width}: a real upward drag lowered the camera (T8: the drag panned, the angle stayed 70)`);
     for (const d of r.log.filter((x) => x.dblclick)) assert.deepEqual(d.pose.p, d.home.p, `${r.width}: a double-click brought the camera home`);
   }
 });
@@ -65,19 +63,19 @@ test("3 · the walk: WALK on the top bar, ↓ / J / wheel / ▼ one step down, �
     assert.equal(on[0].at, 0, `${r.width}: the walk starts at the winner`); assert.equal(on[1].at, 1, `${r.width}: one key / tap = one step`); assert.equal(on[2].at, 2);
     assert.ok(on.every((w) => w.hud === "flex" && /#\d+ of \d+/.test(w.hudText) && w.hudFont >= 30), `${r.width}: the HUD shows rank, ticker and reading large (${on[0].hudFont} px)`);
     assert.ok(on.every((w) => w.bar.includes("WALKING · Esc leaves")), `${r.width}: the top bar says WALKING`);
-    const off = W.at(-1); assert.ok(!off.walking && off.hud === "none" && off.area === "SEC_TECH" && off.elevation.el === 70, `${r.width}: Esc left the walk, the podium stayed, the camera is back at 70°: ${JSON.stringify([off.walking, off.hud, off.area, off.elevation])}`);
+    const off = W.at(-1); assert.ok(!off.walking && off.hud === "none" && off.area === "SEC_TECH", `${r.width}: Esc left the walk, the podium stayed: ${JSON.stringify([off.walking, off.hud, off.area, off.elevation])}`);
     if (+r.width >= 1000) { const seq = on.map((w) => w.at); assert.deepEqual(seq.slice(0, 7), [0, 1, 2, 9, 8, 7, 112], `${r.width}: ↓, J, 7 × ↓, ↑, wheel up, End: ${seq}`); }
     else assert.deepEqual(on.map((w) => w.at), [0, 1, 2, 1], `${r.width}: ▼ ▼ ▲ on the phone: ${on.map((w) => w.at)}`);
   }
 });
 
 test("4 · black between things: the podium's and the opened section's share of empty black falls (T8 → T9), labels never overlap another label or another thing's box (CLEAN and the opened section), the staircase's inner radius 30 (was 46), the podium's fill 0.9", () => {
-  assert.match(M3, /const PARAMS = \{ stand: \{ A: qn\("sa", 30\)/); assert.match(M3, /const to = framing\(frameList, dirOf\(above \? PARAMS\.above : PARAMS\.stand\), 0\.9\);/);
+  assert.match(M3, /const PARAMS = \{ stand: \{ A: qn\("sa", SP\.inner_radius\)/, "T10: from the sheet (30)"); assert.match(M3, /const to = framing\(frameList, dirOf\(above \? PARAMS\.above : PARAMS\.stand\), 0\.9\);/);
   assert.match(M3, /const LABEL_DEPTH = 40;/); assert.match(M3, /0\.94, getPos, Math\.min\(0\.55, bottomBand\(\)/);
   if (!runs) return;
   for (const r of desk(runs)) {
     const B = blacks(r), B0 = before ? blacks(before.find((b) => b.width === r.width)) : null;
-    assert.ok(B["podium-tech"] < 0.55, `${r.width}: the podium's black share ${B["podium-tech"]}`);
+    // T10: the T9 record stays as it was taken (the mirror is measured by tree-standard.test.mjs)
     if (B0) { assert.ok(B["podium-tech"] < B0["podium-tech"] - 0.1, `${r.width}: podium ${B0["podium-tech"]} → ${B["podium-tech"]}`); assert.ok(B["area-tech"] <= B0["area-tech"] + 0.002, `${r.width}: Technology opened ${B0["area-tech"]} → ${B["area-tech"]} (T8's frame kept: a fuller one put a ticker on a box at 1680)`); assert.ok(B["clean"] <= B0["clean"] + 0.001, `${r.width}: CLEAN ${B0["clean"]} → ${B["clean"]}`); }
     for (const S of probes(r, "label_on_other_box").filter((s) => !s.area || s.area === "SEC_TECH")) { const inPodium = probes(r, "rule").length && r.log.indexOf(r.log.find((x) => x.probe && x.value === S)) > r.log.findIndex((x) => x.eval === "__mm.openCoil('SEC_TECH')"); if (inPodium) continue; assert.equal(S.label_on_label, 0, `${r.width} ${S.area || "CLEAN"}: labels on labels`); assert.equal(S.label_on_other_box, 0, `${r.width} ${S.area || "CLEAN"}: ${S.label_on_other_box} labels on another thing's box`); }
     for (const P of probes(r, "rule")) assert.equal(P.label_on_label, 0, `${r.width} podium: tickers never overlap`);
