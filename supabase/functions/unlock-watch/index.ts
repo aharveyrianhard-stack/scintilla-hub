@@ -17,7 +17,10 @@
 // Modes:  POST /unlock-watch?mode=backfill   the whole scan, every candidate read again (also ?months=18,
 //                                            ?tickers=A,B to check named listings, ?dry=1 to write nothing)
 //         POST /unlock-watch?mode=pass       nightly: the same scan; an SEC read only for a name with no row, a row without a
-//                                            prospectus basis, or a row older than 7 days
+//                                            prospectus basis, or a row older than 7 days (?tickers=A&force=1 reads the named
+//                                            names again even when their row is fresh — C1, to add SharonAI's sponsor step)
+// C1 (2 Oct, night): a former SPAC's sponsor lock-up (lib.ts sponsorLockup) is kept as one more schedule row
+// { sponsor: true, date, clause, price_rule } — no new column.
 // Keys: the FMP key is read from public.app_config with this function's service role (the fmp-analyst pattern) and is never
 // printed, logged or returned. SEC needs no key: a User-Agent, at most 4 requests a second.
 
@@ -25,7 +28,7 @@ import * as L from "./lib.ts";
 
 const SB = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const VERSION = "unlock-watch-v1";
+const VERSION = "unlock-watch-v2";   // v2 (C1, 2 Oct night): a former SPAC sponsor's founder-share lock-up joins the schedule
 const SEC_UA = { "User-Agent": "ScintillaHub research research@scintillahub.ai" };
 const SEC_MAX_BYTES = 16_000_000;          // a 12 MB prospectus (SpaceX) is the largest seen; past this the read stops regardless
 const sbH = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" };
@@ -109,6 +112,7 @@ async function run(req: Request) {
   const months = Math.max(1, Math.min(36, Number(u.searchParams.get("months") || 18)));
   const dry = u.searchParams.get("dry") === "1";
   const only = (u.searchParams.get("tickers") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const force = only.length > 0 && u.searchParams.get("force") === "1";
   const today = todayNY(), since = L.addMonths(today, -months);
   const K = await fmpKey();
   const uni = await universe();
@@ -149,7 +153,7 @@ async function run(req: Request) {
   const rows: any[] = [], report: any[] = [];
   for (const c of [...cands.values()].sort((a, b) => a.ticker.localeCompare(b.ticker))) {
     const prev = stored.get(c.ticker);
-    if (mode === "pass" && prev && (prev.basis === "PROSPECTUS" || ["RELISTING", "DIRECT_LISTING", "SPINOFF"].includes(prev.listing_kind)) &&
+    if (mode === "pass" && !force && prev && (prev.basis === "PROSPECTUS" || ["RELISTING", "DIRECT_LISTING", "SPINOFF"].includes(prev.listing_kind)) &&
         Date.now() - Date.parse(prev.checked_utc) < 7 * 86400e3) { report.push({ ticker: c.ticker, skipped: "fresh row" }); continue; }
     try {
       const pr = (await fmp("profile", { symbol: c.ticker }, K))?.[0] || null;
@@ -189,13 +193,13 @@ async function run(req: Request) {
         early_release: lk?.early_release || null, source_url: pick?.url || null, checked_utc: new Date().toISOString(),
         prospectus_date: kind === "SPAC" ? null : (lk?.prospectus_date || null), clause: lk?.clause || null,
         early_rule: kind === "IPO" || kind === "SPAC" ? (lk?.early_rule || null) : null,
-        schedule: lk?.schedule?.length ? lk.schedule : null, source_form: pick?.form || null,
+        schedule: (lk?.schedule?.length || lk?.sponsor) ? [...(lk?.schedule || []), ...(lk?.sponsor ? [lk.sponsor] : [])] : null, source_form: pick?.form || null,
       };
       rows.push(row);
       report.push({ ticker: c.ticker, via: c.via, kind, listing, form: pick?.form || null, filed: pick?.date || null,
         sec: sec ? { status: sec.status, bytes: sec.bytes, stopped_early: sec.stoppedEarly } : null,
         prospectus_date: row.prospectus_date, days: un.lockup_days, unlock: un.unlock_date, basis: un.basis,
-        early_rule: row.early_rule, steps: row.schedule ? row.schedule.length : 0 });
+        early_rule: row.early_rule, steps: row.schedule ? row.schedule.length : 0, sponsor: lk?.sponsor ? { date: lk.sponsor.date, price_rule: lk.sponsor.price_rule } : null });
     } catch (e) { problems.push({ ticker: c.ticker, step: "candidate", reason: String((e as Error)?.message || e).slice(0, 160) }); }
   }
 
