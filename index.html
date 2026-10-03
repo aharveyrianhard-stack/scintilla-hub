@@ -6573,7 +6573,7 @@ function coExpandOn(expanded, leftState, leftT, heat) {
   return !!(expanded && leftState === "PINNED" && leftT && !heat);
 }
 function coExpandBtnHTML() {
-  return '<button type="button" class="sc-coexp" id="coExpBtn" data-act="coexpand" aria-pressed="' + CO_EXPANDED +
+  return '<button type="button" class="sc-coexp sc-tab" id="coExpBtn" data-act="coexpand" aria-pressed="' + CO_EXPANDED +
     '" title="' + (CO_EXPANDED ? "give the board its room back" : "the company takes the full width") + '">' +
     (CO_EXPANDED ? "COLLAPSE" : "EXPAND") + "</button>";
 }
@@ -6625,7 +6625,7 @@ function cvQuote(t) {
 }
 function cvTabsHTML() {
   return '<div class="cv-tabs" id="cvTabs" role="tablist" aria-label="company tabs">' +
-    CO_TABS.map((x, i) => '<button type="button" role="tab" class="cv-tab' + (x === S.coTab ? " on" : "") + '" aria-selected="' + (x === S.coTab) +
+    CO_TABS.map((x, i) => '<button type="button" role="tab" class="cv-tab sc-tab' + (x === S.coTab ? " on" : "") + '" aria-selected="' + (x === S.coTab) +
       '" data-act="cotab" data-tab="' + x + '" title="key ' + (i === 9 ? 0 : i + 1) + '">' + coTabLabel(x) + "</button>").join("") +   /* C2 — the tenth tab is on 0 */
   "</div>";
 }
@@ -6638,12 +6638,12 @@ function cvTabsHTML() {
    ♥ ★ ◎ ride in one short line under the controls (cvFactsHTML), shown on a phone only. */
 function cvLineHTML(t) {
   const r = coRange(lsGet(CO_RANGE_KEY)), cl = coCloudsOn();
-  return '<button type="button" class="cv-back" data-act="unpin" title="back to the board (Esc)">◂ BOARD</button>' +
+  return '<button type="button" class="cv-back sc-tab" data-act="unpin" title="back to the board (Esc)">◂ BOARD</button>' +
     cohortChipHTML(t) +
     '<span class="cv-tfs" role="group" aria-label="chart timeframe">' +
-      CO_RANGES.map((x) => '<button type="button" class="sc-cofr__tf' + (x === r ? " on" : "") + '" aria-pressed="' + (x === r) +
+      CO_RANGES.map((x) => '<button type="button" class="sc-cofr__tf sc-tab' + (x === r ? " on" : "") + '" aria-pressed="' + (x === r) +
         '" data-act="corange" data-r="' + x + '">' + x + "</button>").join("") +
-      '<button type="button" class="sc-cofr__tf cv-clouds' + (cl ? " on" : "") + '" aria-pressed="' + cl + '" data-act="coclouds" title="the chart\'s 13/21 EMA and 50/200 SMA clouds: ' +
+      '<button type="button" class="sc-cofr__tf cv-clouds sc-tab' + (cl ? " on" : "") + '" aria-pressed="' + cl + '" data-act="coclouds" title="the chart\'s 13/21 EMA and 50/200 SMA clouds: ' +
         (cl ? "on (click to hide)" : "off (click to show)") + '">CLOUDS</button></span>' +
     '<button type="button" class="sc-fsico cv-fs" aria-label="Company view fullscreen (Esc closes)" title="fullscreen (Esc closes)" data-act="secfs">⛶</button>' +
     coExpandBtnHTML();
@@ -19171,7 +19171,7 @@ function cohortChipHTML(t) {
       '<div class="sc-cohopt' + (k === cur ? " on" : "") + '" data-cohopt="' + esc(k) + '"><span class="dot"></span>' + esc(k) + "</div>").join("");
   }
   return '<span class="sc-cohwrap" id="cohWrap" data-t="' + esc(t) + '">' +
-    '<span class="sc-it" id="cohChip" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">COHORT ▾</span>' +
+    '<span class="sc-it sc-tab" id="cohChip" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">COHORT ▾</span>' +
     '<span class="sc-cohsaved" id="cohSaved">saved ✓</span>' +
     '<div class="sc-cohmenu" id="cohMenu">' + opts + "</div></span>";
 }
@@ -30985,6 +30985,24 @@ body.gwx-motion .gwx-pct{opacity:1}
 .sc-mtab.sc-tab:last-child{ border-right:0 !important; }
 a.sc-mtab:link, a.sc-mtab:visited{ color:var(--sc-ink-dim); text-decoration:none; }
 a.sc-mtab:hover{ color:var(--sc-ink-2); }
+/* b. the chart toolbar (◂ BOARD · COHORT ▾ · 1h 4h 1D 3D 1W · CLOUDS · ⛶ · EXPAND) — Alan: "boxy and intrusive". Styled as the
+   company tabs are: plain uppercase words, the active one marked the same way, no boxes; same height and font. Functions unchanged. */
+.cv-line{ padding:0 4px !important; gap:0 2px !important; align-items:stretch !important; border-bottom:.5px solid var(--sc-line) !important; }
+.cv-line .sc-tab{ padding:10px 6px; }
+.cv-line .sc-cohwrap{ align-self:stretch !important; }
+.cv-line .sc-cohwrap .sc-it.sc-tab{ font:400 var(--sc-fs-2) var(--mono) !important; letter-spacing:var(--sc-ls-tab) !important; text-transform:uppercase !important;
+  padding:10px 6px !important; border:0 !important; border-radius:0 !important; color:var(--sc-ink-dim) !important; line-height:1.2 !important; }
+.cv-line .sc-cohwrap .sc-it.sc-tab:hover, .cv-line .sc-cohwrap.is-open > .sc-it.sc-tab{ color:var(--sc-ink-2) !important; }
+.cv-line .sc-cohwrap.is-open > .sc-it.sc-tab{ color:var(--sc-accent) !important; box-shadow:inset 0 -2px 0 var(--sc-accent); }
+.cv-tfs{ gap:0 !important; }
+.cv-line .cv-clouds.sc-tab{ margin-left:4px; }
+.cv-line .cv-fs{ font-size:14px !important; padding:0 6px !important; color:var(--sc-ink-dim) !important; align-self:center; }
+.cv-line .cv-fs:hover{ color:var(--sc-ink-2) !important; }
+.cv-line .sc-coexp.sc-tab{ margin-right:0 !important; }
+@media (max-width:640px){ .sc-coexp.sc-tab{ font-size:0; padding:10px 6px; letter-spacing:0; } }
+/* the company tabs carry the same class, so the row above the chart and the row under it are the one style */
+.cv-tabs{ padding:0 4px !important; border-bottom:.5px solid var(--sc-line) !important; }
+.cv-tab.sc-tab, .cv-tab.sc-tab.on{ border:0 !important; padding:10px 6px; }
 /* --sc-end-- */
 </style>
 </body>
