@@ -98,7 +98,16 @@ Deno.serve(async (req) => {
     /* ── prices: outliers of the day ─────────────────────────────────────────────── */
     const universe = await chartGet("/universe");
     const symbols: string[] = (universe.symbols || universe.universe || []).map((s: any) => (typeof s === "string" ? s : s.symbol)).filter(Boolean);
-    const quotes = await chartGet("/quotes?symbols=" + symbols.join(","));
+    /* 2 Oct: the chart API answers 400 "at most 500 symbols per request"; the universe passed 500 on
+       28 Sep (590 names) and every pass since died here — no scintilla for four days. Ask in chunks of
+       250 and merge the keyed answers into the one shape read below. */
+    const quotes: any = { quotes: {} };
+    for (let i = 0; i < symbols.length; i += 250) {
+      const part = await chartGet("/quotes?symbols=" + symbols.slice(i, i + 250).join(","));
+      const pq = part && (part.quotes ?? part.rows ?? part);
+      if (Array.isArray(pq)) for (const q of pq) { if (q && q.symbol) quotes.quotes[q.symbol] = q; }
+      else if (pq && typeof pq === "object") Object.assign(quotes.quotes, pq);
+    }
     /* 24 Sep: the chart API's /quotes answers { quotes: { AAPL: {...}, … } } — an object keyed by
        symbol, with previous_close — not a list with prev_close. The first live run died on
        "qRows.filter is not a function". Both shapes are accepted; detect.mjs keeps its contract. */
