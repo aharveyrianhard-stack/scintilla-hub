@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from a53c193) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from a389c7c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2284,6 +2284,26 @@ body.tvmodal-open{ overflow:hidden; }
 .sc-board__scroll.is-seed .sc-board__row{ opacity:.6; }
 .no-feed{ font:700 7px var(--mono); color:var(--bear); border:1px solid rgba(255,45,85,.4);
   border-radius:3px; padding:0 4px; margin-left:6px; letter-spacing:.05em; vertical-align:middle; }
+/* R2 Part A (2 Oct) · OFFERINGS — the ALERTS room section, the company EVENTS list, the board ◆ */
+.of-chip{ font:700 8px var(--mono); letter-spacing:.08em; border:1px solid currentColor; border-radius:3px; padding:1px 5px; vertical-align:middle; white-space:nowrap; }
+.of-equity{ color:var(--sv5); } .of-convertible{ color:var(--sv4); } .of-atm{ color:var(--sv3); } .of-debt{ color:var(--trend); } .of-unclassified{ color:var(--coin); }
+.of-row{ padding:7px 12px 8px; border-bottom:1px solid var(--line); }
+.of-top{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; font:11px var(--mono); color:var(--ink); }
+.of-tk{ font-weight:700; color:var(--crk); cursor:pointer; min-width:44px; }
+.of-size{ color:var(--ink); } .of-meta{ color:var(--dim); font-size:10px; }
+.of-sec{ margin-left:auto; color:var(--crk); font-size:10px; text-decoration:none; white-space:nowrap; }
+.of-sent{ margin-top:4px; font:11px/1.45 var(--sans); color:var(--ink2); overflow-wrap:anywhere; }
+.of-none{ color:var(--dim); font-style:italic; }
+.of-head{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:8px 12px; border-bottom:1px solid var(--line2); font:10px var(--mono); color:var(--ink2); }
+.of-cnt b{ color:var(--ink); margin-left:5px; }
+.of-legend{ flex-basis:100%; color:var(--dim); font-size:9px; line-height:1.5; }
+.of-empty{ padding:14px 12px; color:var(--dim); font:11px var(--mono); }
+.of-foot{ padding:10px 12px; color:var(--dim); font:9px var(--mono); }
+.of-mark{ font-size:7px; margin-left:2px; vertical-align:super; cursor:help; }
+.of-co{ margin:2px 0 8px; } .of-co .of-row{ padding:6px 2px 7px; }
+.sc-evtab > .of-co{ flex:0 1 auto; min-height:0; max-height:28%; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+  border:.8px solid var(--hair); border-left:2.5px solid var(--sv4); padding:2px 9px 6px; margin:0 0 9px; }
+.sc-evtab > .of-co .sc-evsec{ position:sticky; top:0; background:var(--bg); z-index:1; color:var(--sv4); border-bottom:.5px solid var(--line); padding-bottom:5px; margin-bottom:2px; }
 .sc-ctk.has-nf{ width:auto; white-space:nowrap; }
 @keyframes sc-newfl{ 0%{ background:rgba(0,212,255,.12); } 100%{ background:transparent; } }
 .sc-art.new{ animation:sc-newfl 1.6s; }
@@ -7702,7 +7722,7 @@ function boardRowsHTML() {
       + (d.pc != null ? ' data-sc-prev-close="' + esc(d.pc) + '"' : '')
       + (d.g != null ? ' data-sc-geiger="' + esc(d.g) + '"' : '') + '>' +
       listCtlHTML(d.t, "row") +   /* H-FRONT — ♥ LIKED (the star's mechanism) · ★ FAVORITES · ◎ RADAR */
-      '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) +
+      '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) + (typeof ofMarkHTML === "function" ? ofMarkHTML(d.t) : "") +   /* R2 Part A — ◆ dilution */
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
       '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
@@ -11710,6 +11730,121 @@ function parkedRoomHTML(sec) {
     '<div class="panel"><div class="sc-plabel">' + sec.toLowerCase() + " · parked</div>" +
     '<div class="scroller"><div class="soon"><div style="font-size:22px;color:var(--crk)">◷</div>' +
     PARKED_MSG[sec] + "</div></div></div></div>";
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   R2 Part A (2 Oct 2026) · OFFERINGS — dilution filings, from public.offering_filings
+   Alan, 2 Oct: "dilution announcements". The Supabase job offering-watch lists every 424B5 / 424B4 / S-3 /
+   S-3ASR / S-1 a Hub stock files (FMP), reads the document's first page at the SEC, and sorts it:
+     EQUITY        new shares sold now                         a dilution
+     CONVERTIBLE   notes that can turn into shares             a dilution later
+     ATM           shares sold "from time to time"             a slow dilution
+     DEBT          bonds and notes                             no new shares
+     UNCLASSIFIED  the first page did not say (a shelf, a resale, blanks) — open the SEC link
+   Three places show it: the ALERTS room (the last 30 days, newest first), the company EVENTS tab (that
+   name's filings), and the board (a ◆ beside the ticker for EQUITY / CONVERTIBLE / ATM in the last 10 days).
+   Reads only (anon key, pg). The record starts 4 Jun 2026 (the 120-day backfill).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const OF_ROOM_DAYS = 30, OF_MARK_DAYS = 10, OF_TTL_MS = 10 * 60 * 1000, OF_RECORD_FROM = "2026-06-04";
+const OF_CLASSES = ["EQUITY", "CONVERTIBLE", "ATM", "DEBT", "UNCLASSIFIED"];
+const OF_HOT = { EQUITY: true, CONVERTIBLE: true, ATM: true };
+const OF_WORD = { EQUITY: "new shares sold now", CONVERTIBLE: "notes that can turn into shares", ATM: "shares sold over time (at-the-market)",
+  DEBT: "bonds / notes — no new shares", UNCLASSIFIED: "the first page did not say — open the SEC link" };
+const OF_SEL = "ticker,form,filed_date,accepted_utc,class,sentence,size_text,url";
+var OF = { rows: null, at: 0, err: null, p: null, co: {} };
+function ofShiftDay(day, n) { const d = new Date(day + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function ofFmtDay(day) {
+  const d = new Date(String(day || "").slice(0, 10) + "T12:00:00Z");
+  return isNaN(d) ? String(day || "") : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+function ofSecUrl(u) { return /^https:\/\/www\.sec\.gov\//.test(String(u || "")) ? String(u) : ""; }
+function ofChipHTML(cls) {
+  const c = OF_WORD[cls] ? cls : "UNCLASSIFIED";
+  return '<span class="of-chip of-' + c.toLowerCase() + '" title="' + esc(OF_WORD[c]) + '">' + esc(c) + "</span>";
+}
+function ofRowHTML(r, withTicker) {
+  const u = ofSecUrl(r.url);
+  return '<div class="of-row" data-of-class="' + esc(r.class) + '">' +
+    '<div class="of-top">' +
+      (withTicker ? '<span class="of-tk" data-tkopen="' + esc(r.ticker) + '" title="open ' + esc(r.ticker) + '">' + esc(r.ticker) + "</span>" : "") +
+      ofChipHTML(r.class) +
+      '<span class="of-size">' + esc(r.size_text || "size not printed on the cover") + "</span>" +
+      '<span class="of-meta">' + esc(r.form) + " · filed " + esc(ofFmtDay(r.filed_date)) + "</span>" +
+      (u ? '<a class="of-sec" href="' + esc(u) + '" target="_blank" rel="noopener">SEC ◹</a>' : "") +
+    "</div>" +
+    (r.sentence ? '<div class="of-sent">“' + esc(r.sentence) + "”</div>"
+                : '<div class="of-sent of-none">the first page printed no deciding sentence — open the SEC link</div>') +
+  "</div>";
+}
+/* the board mark: the newest EQUITY / CONVERTIBLE / ATM filing of t in the last OF_MARK_DAYS (rows are newest first) */
+function ofMarkFor(t, rows, today) {
+  const since = ofShiftDay(today || todayISO(), -OF_MARK_DAYS);
+  for (const r of (rows || OF.rows || [])) if (r && r.ticker === t && OF_HOT[r.class] && String(r.filed_date) >= since) return r;
+  return null;
+}
+function ofMarkTitle(r) { return r.class + " · " + (r.size_text || "size not printed") + " · " + ofFmtDay(r.filed_date) + " · " + r.form + " — " + OF_WORD[r.class]; }
+function ofMarkHTML(t, rows, today) {
+  const r = ofMarkFor(t, rows, today);
+  return r ? '<span class="of-mark of-' + r.class.toLowerCase() + '" title="' + esc(ofMarkTitle(r)) + '" aria-label="' + esc(ofMarkTitle(r)) + '">◆</span>' : "";
+}
+function ofLoad(force) {
+  if (!force && OF.rows && Date.now() - OF.at < OF_TTL_MS) return Promise.resolve(OF.rows);
+  if (OF.p) return OF.p;
+  const since = ofShiftDay(todayISO(), -OF_ROOM_DAYS);
+  OF.p = pg("offering_filings?select=" + OF_SEL + "&filed_date=gte." + since + "&order=filed_date.desc,accepted_utc.desc.nullslast&limit=500")
+    .then((rows) => { OF.rows = Array.isArray(rows) ? rows : []; OF.at = Date.now(); OF.err = null; return OF.rows; })
+    .catch((e) => { OF.err = String((e && e.message) || e); return OF.rows || []; })
+    .then((x) => { OF.p = null; return x; });
+  return OF.p;
+}
+/* ALERTS room — the OFFERINGS section (the room's first live section; other alert kinds stay parked) */
+function ofRoomBodyHTML(rows, err) {
+  if (!rows) return err ? '<div class="of-empty">could not read offering_filings — ' + esc(err) + "</div>" : '<div class="of-empty">reading the filings …</div>';
+  const n = {}; for (const r of rows) n[r.class] = (n[r.class] || 0) + 1;
+  const head = '<div class="of-head">' + OF_CLASSES.map((c) => '<span class="of-cnt">' + ofChipHTML(c) + "<b>" + (n[c] || 0) + "</b></span>").join("") +
+    '<span class="of-legend">EQUITY new shares sold now · CONVERTIBLE notes that can turn into shares · ATM shares sold over time · ' +
+    "DEBT bonds, no new shares · UNCLASSIFIED the first page did not say (a shelf, a resale) — open the SEC link</span></div>";
+  if (!rows.length) return head + '<div class="of-empty">no offering filing by a Hub stock in the last ' + OF_ROOM_DAYS + " days</div>";
+  return head + rows.map((r) => ofRowHTML(r, true)).join("") +
+    '<div class="of-foot">the SEC filings FMP lists each day, the first page read at the SEC by offering-watch · newest first · other alert kinds stay parked</div>';
+}
+function ofRoomHTML() {
+  return '<div class="body2" style="grid-template-columns:1fr"><div class="panel">' +
+    '<div class="sc-plabel">alerts · offerings — dilution filings, last ' + OF_ROOM_DAYS + " days</div>" +
+    '<div class="scroller of-room" id="ofRoom">' + ofRoomBodyHTML(OF.rows, OF.err) + "</div></div></div>";
+}
+function ofRoomFill() { ofLoad().then(() => { const n = el("ofRoom"); if (n && S.sec === "ALERTS") n.innerHTML = ofRoomBodyHTML(OF.rows, OF.err); }); }
+/* the company EVENTS tab — that name's filings since the record starts */
+function ofCoBodyHTML(t, c) {
+  const head = '<div class="sc-evsec">OFFERINGS · SEC FILINGS (424B5 · 424B4 · S-3 · S-1) · newest first</div>';
+  if (!c) return head + '<div class="of-empty">reading the filings …</div>';
+  if (c.err) return head + '<div class="of-empty">could not read offering_filings — ' + esc(c.err) + "</div>";
+  if (!c.rows.length) return head + '<div class="of-empty">no offering filing by $' + esc(t) + " since " + esc(ofFmtDay(OF_RECORD_FROM)) + " (when the record starts)</div>";
+  return head + c.rows.map((r) => ofRowHTML(r, false)).join("");
+}
+function ofCoSectionHTML(t) { return '<div class="of-co" id="ofCo_' + esc(t) + '">' + ofCoBodyHTML(t, OF.co[t]) + "</div>"; }
+function ofCoFill(t) {
+  if (!t) return;
+  const paint = () => { const n = el("ofCo_" + t); if (n) n.innerHTML = ofCoBodyHTML(t, OF.co[t]); };
+  const have = OF.co[t];
+  if (have && !have.err && Date.now() - have.at < OF_TTL_MS) { paint(); return; }
+  pg("offering_filings?select=" + OF_SEL + "&ticker=eq." + encodeURIComponent(t) + "&order=filed_date.desc,accepted_utc.desc.nullslast&limit=40")
+    .then((rows) => { OF.co[t] = { rows: Array.isArray(rows) ? rows : [], at: Date.now() }; })
+    .catch((e) => { OF.co[t] = { rows: [], at: Date.now(), err: String((e && e.message) || e) }; })
+    .then(paint);
+}
+/* the board: marks for rows painted before the filings arrived (boardRowsHTML draws them on every later paint) */
+function ofBoardPass() {
+  if (typeof document === "undefined") return 0;
+  let n = 0;
+  for (const row of document.querySelectorAll(".sc-board__row[data-t]")) {
+    const cell = row.querySelector(".sc-ctk"); if (!cell) continue;
+    const old = cell.querySelector(".of-mark"); if (old) old.remove();
+    const html = ofMarkHTML(row.getAttribute("data-t")); if (!html) continue;
+    const tpl = document.createElement("template"); tpl.innerHTML = html;
+    cell.insertBefore(tpl.content, cell.firstChild ? cell.firstChild.nextSibling : null); n++;
+  }
+  return n;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -20225,7 +20360,8 @@ function coEventsHTML(data) {
      NEXT earnings · press releases · transcript · PAST/REPORTED earnings. */
   if (!head && !evs.length && !(data._releases && data._releases.length) && !data._transcript)
     return '<div class="sc-evfix">' + nextBlock + head + trBar + "</div>" +   /* SWITCH-ON — no "AI READ · coming" here either (R4 took it off the main path) */
-      '<div class="sc-senttxt" style="padding:6px 2px">No earnings events for $' + esc(data.t) + ".</div>" + releases;
+      '<div class="sc-senttxt" style="padding:6px 2px">No earnings events for $' + esc(data.t) + ".</div>" + ofCoSectionHTML(data.t) + releases +   /* R2 Part A — OFFERINGS */
+      (setTimeout(() => ofCoFill(data.t), 0), "");
   /* fixed header: NEXT EARNINGS (top) · links · transcript · AI-read.
      Then two independently-scrolling boxes: PRESS RELEASES, then PAST EARNINGS. */
   /* R4 — the earnings strip leads the tab, and the "AI READ · coming" placeholder is gone (Alan, 27 Sep, of the earnings
@@ -20236,7 +20372,8 @@ function coEventsHTML(data) {
   setTimeout(ernStripMount, 0);
   const relScroll = '<div class="sc-evrelscroll">' + releases + "</div>";
   const pastScroll = '<div class="sc-evpastscroll">' + pastHTML + "</div>";
-  return '<div class="sc-evtab">' + fixed + relScroll + pastScroll + "</div>";
+  setTimeout(() => ofCoFill(data.t), 0);                          /* R2 Part A (2 Oct) — OFFERINGS: that name's SEC offering filings */
+  return '<div class="sc-evtab">' + fixed + ofCoSectionHTML(data.t) + relScroll + pastScroll + "</div>";
 }
 
 /* ---- GO-LIVE FIX 3 — FINANCIALS TYPE-GATING -----------------------------------
@@ -22063,7 +22200,7 @@ function roomHTML() {
     case "SCENES":    return scenesRoomHTML();   // R49 §5 — the same Layer-0 renderers, full width / full height
     case "NEWS":      return newsRoomHTML();
     case "SOCIAL":    return socialRoomHTML();   // AREA A — wired to social_sentiment (honest empty)
-    case "ALERTS":    return parkedRoomHTML("ALERTS");
+    case "ALERTS":    return ofRoomHTML();   /* R2 Part A (2 Oct) — OFFERINGS, the room's first live section */
     case "SCREENER":  return parkedRoomHTML("SCREENER");
     case "EVENTS":    return eventsRoomHTML();
     case "SENTIMENT": return sentimentRoomHTML();   // one consolidated reading — see Room · SENTIMENT
@@ -22115,6 +22252,7 @@ function afterMount() {
   else if (S.sec === "ECONOMIC") { if (S.econView === "REGIME") rgMount(); else fillEcon(); }
   else if (S.sec === "FILES") filesWire();
   else if (S.sec === "USUAL") udFill();
+  else if (S.sec === "ALERTS") ofRoomFill();   /* R2 Part A (2 Oct) — the OFFERINGS section */
   /* DASHBOARD MODEL — the DASH mount (DASHBOARD or COMPANY) has a fresh #leftPanel.
      COMPANY → pin the focused ticker; DASHBOARD → (re)start the FAV auto-rotate. */
   else if (S.sec === "COMPANY" || S.sec === "DASHBOARD") {
@@ -22125,6 +22263,7 @@ function afterMount() {
     if (S.sec === "COMPANY" && S.focusT) pinLeft(S.focusT);
     else startRotate();
     try { scintStripRender(); boardScintPass(); } catch (_) {}   /* M42 — the strip and the outlier marks on a fresh mount */
+    try { ofLoad().then(ofBoardPass); } catch (_) {}            /* R2 Part A (2 Oct) — the ◆ dilution marks beside the ticker */
   }
   if (S.sec === "EVENTS") { ERN_ROOM_HTML = ""; renderErnRoomTape(); }   /* 27 Sep — the earnings room opens on its own tape */
 }
