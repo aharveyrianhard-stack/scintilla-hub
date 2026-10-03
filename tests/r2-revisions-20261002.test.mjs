@@ -138,7 +138,7 @@ test("a line says date · firm · analyst · old → new · the price that day �
   assert.match(h, /Outperform <i>kept<\/i>/);
   assert.match(h, /at \$1,097/);
   assert.match(h, /class="im up"[^>]*>\+55%</, "1700 / 1097.39 − 1 = +54.9% → +55%");
-  assert.match(h, /^<a class="sc-rev-row" href="https:\/\/www\.streetinsider\.com\//);
+  assert.match(h, /^<a class="sc-rvs-row" href="https:\/\/www\.streetinsider\.com\//);
   const dad = ctx.revLineHTML(lines[1], 2026);
   assert.match(dad, /\$2,000 → \$2,100 ▲/); assert.match(dad, /\+103%/);
   const old = ctx.revLineHTML(lines[2], 2025);
@@ -162,7 +162,7 @@ test("the three arrows (R1's Nvidia case): month $247 ▼ −26% vs the quarter'
   const say = ctx.revSay(ar);
   assert.match(say, /average <b>\$247<\/b> — 26% below the \$332 of the last quarter: analysts are revising <b class="dn">DOWN<\/b>\. Only 3 targets this month — a thin read\./);
   const body = ctx.revStripBody("NVDA", { rows: [db(L.targetRow(NVDA_WF, "NVDA"))], sum, err: null }, 2026);
-  assert.match(body, /^<div class="sc-rev" data-rev-t="NVDA">/);
+  assert.match(body, /^<div class="sc-rvs" data-rev-t="NVDA">/);
   assert.match(body, /<span class="n">00<\/span><span class="t">Revisions<\/span>/);
   assert.match(body, /▼ −26% vs last quarter/); assert.match(body, /▲ \+11% vs last year/); assert.match(body, /▲ \+97% vs all time/);
   assert.match(body, /Wells Fargo/); assert.match(body, /−9\.0%/, "210 / 230.86 − 1 = −9.0%");
@@ -170,11 +170,25 @@ test("the three arrows (R1's Nvidia case): month $247 ▼ −26% vs the quarter'
 test("honest empty, error and loading states; the tab opens with the strip", () => {
   const empty = ctx.revStripBody("ZZZ", { rows: [], sum: null, err: null }, 2026);
   assert.match(empty, /No analyst notes are stored for \$ZZZ yet/);
-  assert.ok(!/sc-rev-arrows/.test(empty), "no summary → no arrows drawn");
+  assert.ok(!/sc-rvs-arrows/.test(empty), "no summary → no arrows drawn");
   assert.match(ctx.revStripBody("ZZZ", { rows: [], sum: null, err: "pg → 500" }, 2026), /could not be read just now \(pg → 500\)/);
   ctx.REV_CACHE.MU = { at: Date.now(), rows: muRows, sum: null, err: null };
   assert.match(ctx.revStripHTML({ t: "MU" }), /3 notes/, "a fresh cache paints at once");
   assert.equal(ctx.revStripHTML({ t: "MU", _loading: true }), "");
   assert.match(html, /function estimatesTabHTML\(data\) \{[^\n]*\n  return revStripHTML\(data\) \+ estForecastHTML\(data\)/);
   assert.ok(!/discounted-cash-flow|ratings-snapshot/.test(html.slice(a, b)), "FMP's DCF and letter ratings stay off the Hub");
+  assert.ok(!/sc-rev\b(?!-)/.test(html.slice(a, b).replace(/\.sc-rev is the board/g, "")), "never the board's revenue-cell class .sc-rev (the first shot caught that collision)");
+  for (const fn of ["revNum", "revPx", "revPct", "revLines", "revArrows", "revSay", "revLineHTML", "revStripHTML", "revStripLoad", "revStripPaint", "revStripBody"])
+    assert.equal(html.split("function " + fn + "(").length - 1, 1, fn + " is declared once (a second declaration would silently replace the other)");
+});
+test("roundup headlines are set aside behind a closed fold, never in this stock's own list or its old-target lookup", () => {
+  const rows = [db(L.targetRow(NVDA_WF, "NVDA")), db(L.gradeRow({ ...NFLX_ROUNDUP, symbol: "NVDA", gradingCompany: "Wells Fargo", previousGrade: "Overweight", newGrade: "Underweight" }, "NVDA")),
+    db(L.targetRow({ ...NVDA_WF, publishedDate: "2026-09-11T18:05:10.000Z", priceTarget: 999, adjPriceTarget: 999, newsTitle: "Buy/Sell: Wall Street's top 10 stock calls this week" }, "NVDA"))];
+  const body = ctx.revStripBody("NVDA", { rows, sum: null, err: null }, 2026);
+  const [main, fold] = body.split('<details class="sc-rvs-more sc-rvs-rnd">');
+  assert.ok(fold, "the fold exists");
+  assert.match(main, /1 note · 2 roundup set aside/);
+  assert.ok(!/Underweight/.test(main), "the roundup's downgrade is not in the main list");
+  assert.match(main, /<i>target<\/i> \$210/, "Wells Fargo's own 2 Oct note has no old target: the roundup's $999 is never used as one");
+  assert.match(fold, /2 roundup-headline notes set aside<\/summary>/); assert.match(fold, /Overweight → Underweight/);
 });
