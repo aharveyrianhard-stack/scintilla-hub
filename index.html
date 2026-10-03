@@ -1559,6 +1559,51 @@ body.senti .sc-cohsearch{ display:none; }
 .sc-grrow.neu .firm b{ color:var(--ink2); font-weight:600; }
 .sc-grrow.up .dir, .sc-grrow.dn .dir{ text-shadow:0 0 5px currentColor; }
 .sc-grempty{ font-size:9px; color:var(--dim); font-style:italic; padding:5px 2px; }
+/* R2 Part C (2 Oct 2026) · ESTIMATES opens with 00 REVISIONS: three arrows (the average target set in the last month vs the
+   last quarter vs the last year) over the newest analyst notes — date · firm · analyst · old → new target or rating · the
+   price that day · what the target implies against it. Up = --bull, down = --bear. JS: the R2C-REVISIONS block. */
+.sc-rev{ margin-bottom:4px; }
+.sc-rev-arrows{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.sc-rev-arr{ border:.8px solid rgba(0,212,255,.16); padding:7px 9px 6px; min-width:0; }
+.sc-rev-arr .w{ font-family:var(--mono); font-size:7.5px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
+.sc-rev-arr .v{ font-family:var(--mono); font-size:15px; color:var(--ink); font-weight:700; margin-top:3px; font-variant-numeric:tabular-nums; }
+.sc-rev-arr .n{ font-family:var(--mono); font-size:8px; color:var(--ink3); margin-left:6px; font-weight:400; letter-spacing:.04em; }
+.sc-rev-arr .d{ font-family:var(--mono); font-size:9px; margin-top:3px; letter-spacing:.02em; color:var(--ink3); }
+.sc-rev-arr .d.up{ color:var(--bull); }
+.sc-rev-arr .d.dn{ color:var(--bear); }
+.sc-rev-say{ font-size:10px; color:var(--ink2); line-height:1.45; margin:0 0 8px; }
+.sc-rev-say b.up{ color:var(--bull); }
+.sc-rev-say b.dn{ color:var(--bear); }
+.sc-rev-row{ display:grid; grid-template-columns:46px minmax(0,1fr) auto auto 56px; align-items:baseline; column-gap:10px;
+  padding:4px 2px; border-bottom:.5px solid rgba(255,255,255,.045); font-family:var(--mono); font-size:9.5px; color:var(--ink2);
+  font-variant-numeric:tabular-nums; text-decoration:none; }
+a.sc-rev-row:hover{ background:rgba(0,212,255,.05); }
+.sc-rev-row .dt{ font-size:8.5px; color:var(--dim); letter-spacing:.04em; white-space:nowrap; }
+.sc-rev-row .who{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sc-rev-row .who b{ color:var(--ink); font-weight:700; }
+.sc-rev-row .who i{ font-style:normal; color:var(--ink3); }
+.sc-rev-row .mv{ white-space:nowrap; }
+.sc-rev-row .mv i{ font-style:normal; color:var(--ink3); }
+.sc-rev-row .px{ color:var(--ink3); white-space:nowrap; font-size:8.5px; }
+.sc-rev-row .im{ white-space:nowrap; text-align:right; }
+.sc-rev-row .up{ color:var(--bull); }
+.sc-rev-row .dn{ color:var(--bear); }
+.sc-rev-row .tag{ font-size:7px; letter-spacing:.12em; text-transform:uppercase; color:var(--sv4); border:.5px solid currentColor; padding:0 3px; margin-left:6px; }
+.sc-rev-more summary{ cursor:pointer; font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); padding:6px 0 4px; }
+.sc-rev-note{ font-family:var(--mono); font-size:7.5px; color:var(--dim); letter-spacing:.05em; margin-top:6px; line-height:1.5; }
+.sc-rev-wait{ font-size:9px; color:var(--dim); padding:6px 2px; }
+@media (max-width:560px){
+  .sc-rev-arrows{ gap:5px; }
+  .sc-rev-arr{ padding:6px 6px 5px; }
+  .sc-rev-arr .v{ font-size:13px; }
+  .sc-rev-arr .n{ display:block; margin:1px 0 0; }
+  .sc-rev-row{ grid-template-columns:40px minmax(0,1fr) auto; row-gap:2px; }
+  .sc-rev-row .dt{ grid-column:1; grid-row:1; }
+  .sc-rev-row .who{ grid-column:2; grid-row:1; }
+  .sc-rev-row .im{ grid-column:3; grid-row:1; }
+  .sc-rev-row .mv{ grid-column:2; grid-row:2; white-space:normal; }
+  .sc-rev-row .px{ grid-column:3; grid-row:2; text-align:right; }
+}
 
 /* SCINTILLA · Rooms 4/5 — deployed body2/scroller/rail/soon byte-for-byte   [APPROVED 2026-06-10] */
 .body2{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1.55fr 1fr;gap:12px;align-items:stretch}
@@ -19373,8 +19418,174 @@ function estPTGaugeHTML(data) {
     '<span class="sc-est-ptsub">' + upTxt + "</span></div>" +
     gauge + nums + "</div>";
 }
-function estimatesTabHTML(data) {   // reference order: 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 03 VALUATION → 04 SCENARIOS → 05 GRADES
-  return estForecastHTML(data) + estConsensusGridHTML(data) +
+/* R2C-REVISIONS:BEGIN — R2 Part C (2 Oct 2026). Alan, 2 Oct: "analyst price revisions". The ESTIMATES tab opens with
+   00 REVISIONS: three arrows — the average price target set in the last month against the last quarter, the quarter against
+   the year, the year against all time (FMP price-target-summary, kept once a New York day in public.price_target_summary_daily)
+   — over the newest analyst notes, newest first: date · firm · analyst · old → new target (or old → new rating) · the stock
+   price that day · what the new target implies against that price (public.analyst_target_news, both tables written nightly by
+   the analyst-revisions edge function). R1's Nvidia case: 3 targets last month averaging $247 against 25 last quarter averaging
+   $332 — a revision DOWN that the consensus number hides. The strip makes its own two reads (cached per ticker for 10 minutes)
+   so the company payload (fetchCompanyData) is untouched. FMP's own DCF number and its letter ratings stay off the Hub. */
+const REV_TTL = 10 * 60e3, REV_SHOW = 12, REV_MAX = 60;
+const REV_CACHE = {}, REV_INFLIGHT = {};
+const REV_SEL_NEWS = "published_utc,kind,firm,analyst,target,adj_target,prior_grade,new_grade,action,price_when_posted,title,url";
+const REV_SEL_SUM = "as_of_date,last_month_count,last_month_avg,last_quarter_count,last_quarter_avg,last_year_count,last_year_avg,all_time_count,all_time_avg";
+function revNum(v) { if (v == null || v === "") return null; const n = Number(v); return isFinite(n) ? n : null; }
+function revPx(v) {
+  const n = revNum(v); if (n == null) return "—";
+  return "$" + (Math.abs(n) >= 100 ? Math.round(n).toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+}
+function revPct(p) { return (p >= 0 ? "+" : "−") + Math.abs(p).toFixed(Math.abs(p) < 10 ? 1 : 0) + "%"; }
+/* the headline's own "to $X from $Y" (TheFly: "Micron price target raised to $2,100 from $2,000 at DA Davidson") */
+function revPriorFromTitle(title) {
+  const m = /\bto \$?([\d,]+(?:\.\d+)?)\s+from \$?([\d,]+(?:\.\d+)?)/i.exec(String(title || ""));
+  return m ? { to: +m[1].replace(/,/g, ""), from: +m[2].replace(/,/g, "") } : null;
+}
+/* New York date of a note: "2 Oct", with the year when it is not this year */
+function revDay(iso, nowYear) {
+  const d = new Date(iso); if (isNaN(d.getTime())) return "";
+  const p = {}; for (const x of new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", day: "numeric", month: "short", year: "numeric" }).formatToParts(d)) p[x.type] = x.value;
+  return p.day + " " + p.month + (String(p.year) !== String(nowYear) ? " " + p.year : "");
+}
+/* rows (both kinds, any order) → one line per note, newest first. A TARGET row and a GRADE row from the same firm at the
+   same minute are one note (FMP files the target and the rating of one note separately). The old target comes from the
+   headline's "to $X from $Y" when X is this note's target; else from the same firm's previous stored target. */
+function revLines(rows) {
+  const ok = (rows || []).filter((r) => r && r.published_utc && (r.kind === "TARGET" || r.kind === "GRADE"));
+  ok.sort((a, b) => new Date(b.published_utc) - new Date(a.published_utc));
+  const lines = [], byKey = new Map();
+  for (const r of ok) {
+    const k = new Date(r.published_utc).getTime() + "|" + (r.firm || "");
+    let L = byKey.get(k);
+    if (!L) {
+      L = { at: r.published_utc, firm: r.firm || "", analyst: null, target: null, adj: null, prior: null, priorSrc: null,
+            tAction: null, grFrom: null, grTo: null, action: null, px: null, title: null, url: null };
+      byKey.set(k, L); lines.push(L);
+    }
+    if (r.kind === "TARGET" && L.target == null && revNum(r.target) != null) {
+      L.target = revNum(r.target); L.adj = revNum(r.adj_target) != null ? revNum(r.adj_target) : L.target;
+      L.tAction = r.action || null; if (r.analyst) L.analyst = r.analyst;
+    }
+    if (r.kind === "GRADE" && L.grTo == null && r.new_grade) { L.grFrom = r.prior_grade || null; L.grTo = r.new_grade; L.action = r.action || null; }
+    if (L.px == null) L.px = revNum(r.price_when_posted);
+    if (!L.title && r.title) L.title = r.title;
+    if (!L.url && r.url) L.url = r.url;
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i]; if (L.target == null) continue;
+    const t = revPriorFromTitle(L.title);
+    if (t && Math.abs(t.to - L.target) <= Math.max(0.01, L.target * 0.005)) { L.prior = t.from; L.priorSrc = "headline"; continue; }
+    for (let j = i + 1; j < lines.length; j++) {
+      const P = lines[j];
+      if (P.target != null && L.firm && P.firm === L.firm) { L.prior = P.adj != null ? P.adj : P.target; L.priorSrc = "previous note"; break; }
+    }
+  }
+  return lines;
+}
+/* the three arrows: each window's average target against the next longer window's */
+function revArrows(sum) {
+  if (!sum) return [];
+  const w = [["last month", "month"], ["last quarter", "quarter"], ["last year", "year"], ["all time", "all_time"]].map(([label, k]) => {
+    const n = revNum(sum["last_" + k + "_count"] != null ? sum["last_" + k + "_count"] : sum[k + "_count"]);
+    const v = revNum(sum["last_" + k + "_avg"] != null ? sum["last_" + k + "_avg"] : sum[k + "_avg"]);
+    return { label, n, v: n != null && n > 0 ? v : null };
+  });
+  if (w.slice(0, 3).every((x) => x.v == null)) return [];
+  return w.slice(0, 3).map((x, i) => {
+    const b = w[i + 1];
+    return { label: x.label, n: x.n, v: x.v, vs: b.label, vsV: b.v, pct: x.v != null && b.v != null && b.v > 0 ? (x.v / b.v - 1) * 100 : null };
+  });
+}
+/* the month-against-quarter arrow in one plain sentence */
+function revSay(arrows) {
+  const m = arrows && arrows[0];
+  if (!m || m.pct == null) return "";
+  const dir = m.pct >= 0 ? '<b class="up">UP</b>' : '<b class="dn">DOWN</b>';
+  return "Targets set in the last month average <b>" + revPx(m.v) + "</b> — " + Math.abs(m.pct).toFixed(0) + "% " + (m.pct >= 0 ? "above" : "below") +
+    " the " + revPx(m.vsV) + " of the last quarter: analysts are revising " + dir + "." +
+    (m.n != null && m.n <= 3 ? " Only " + m.n + (m.n === 1 ? " target" : " targets") + " this month — a thin read." : "");
+}
+const REV_ROUNDUP = /top \d+ stock calls|wall street'?s top|stock calls this week/i;
+function revLineHTML(L, nowYear) {
+  const tDir = L.target != null && L.prior != null ? Math.sign(L.target - L.prior) : (L.tAction === "raise" ? 1 : L.tAction === "lower" ? -1 : 0);
+  const gDir = /upgrade/.test(L.action || "") ? 1 : /downgrade/.test(L.action || "") ? -1 : 0;
+  const cls = (d) => (d > 0 ? "up" : "dn"), gly = (d) => (d > 0 ? " ▲" : " ▼");
+  let mv = "";
+  if (L.target != null) {
+    if (L.prior != null && L.prior !== L.target) mv = '<span class="' + cls(tDir) + '">' + revPx(L.prior) + " → " + revPx(L.target) + gly(tDir) + "</span>";
+    else if (L.prior != null) mv = revPx(L.target) + " <i>kept</i>";
+    else if (tDir) mv = '<span class="' + cls(tDir) + '">' + (tDir > 0 ? "raised to " : "cut to ") + revPx(L.target) + gly(tDir) + "</span>";
+    else mv = (L.tAction === "initiate" ? "<i>starts at</i> " : "<i>target</i> ") + revPx(L.target);
+  }
+  if (L.grTo) {
+    let g;
+    if (L.grFrom && L.grFrom !== L.grTo) g = esc(L.grFrom) + " → " + esc(L.grTo);
+    else if (L.action === "initialise" || L.action === "initiate" || !L.grFrom) g = esc(L.grTo) + " <i>new</i>";
+    else g = esc(L.grTo) + (gDir ? " <i>(" + esc(L.action) + ")</i>" : " <i>kept</i>");
+    mv += (mv ? " · " : "") + (gDir ? '<span class="' + cls(gDir) + '">' + g + gly(gDir) + "</span>" : g);
+  }
+  const imp = L.target != null && L.px != null && L.px > 0 ? (L.target / L.px - 1) * 100 : null;
+  const tip = new Date(L.at).toISOString().slice(0, 16).replace("T", " ") + " UTC · " + (L.title || "") + (L.priorSrc ? " · old target from the " + L.priorSrc : "");
+  const tag = REV_ROUNDUP.test(L.title || "") ? '<span class="tag" title="a weekly roundup headline: FMP can attach a call to the wrong stock">roundup</span>' : "";
+  const inner = '<span class="dt">' + esc(revDay(L.at, nowYear)) + "</span>" +
+    '<span class="who"><b>' + esc(L.firm || "—") + "</b>" + (L.analyst ? " <i>" + esc(L.analyst) + "</i>" : "") + tag + "</span>" +
+    '<span class="mv">' + (mv || "<i>note</i>") + "</span>" +
+    '<span class="px">' + (L.px != null ? "at " + revPx(L.px) : "") + "</span>" +
+    '<span class="im' + (imp != null ? " " + (imp >= 0 ? "up" : "dn") : "") + '" title="the new target against the price that day">' + (imp != null ? revPct(imp) : "") + "</span>";
+  return /^https?:\/\//i.test(L.url || "")
+    ? '<a class="sc-rev-row" href="' + esc(L.url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(tip) + '">' + inner + "</a>"
+    : '<div class="sc-rev-row" title="' + esc(tip) + '">' + inner + "</div>";
+}
+function revArrowHTML(a) {
+  const d = a.pct == null ? '<div class="d">no ' + esc(a.vs) + " figure</div>"
+    : '<div class="d ' + (a.pct >= 0 ? "up" : "dn") + '">' + (a.pct >= 0 ? "▲ " : "▼ ") + revPct(a.pct) + " vs " + esc(a.vs) + "</div>";
+  return '<div class="sc-rev-arr"><div class="w">' + esc(a.label) + '</div><div class="v">' + (a.v != null ? revPx(a.v) : "—") +
+    '<span class="n">' + (a.n != null ? a.n + (a.n === 1 ? " target" : " targets") : "") + "</span></div>" + d + "</div>";
+}
+function revStripBody(t, c, nowYear) {
+  const lines = revLines(c.rows), arrows = revArrows(c.sum);
+  const yr = nowYear || new Date().getFullYear();
+  const meta = '<span class="meta">' + (lines.length ? lines.length + " notes" : "no notes") + (c.sum && c.sum.as_of_date ? " · averages of " + esc(c.sum.as_of_date) : "") + "</span>";
+  let h = '<div class="sc-rev" data-rev-t="' + esc(t) + '">' + estSechead("00", "Revisions", meta);
+  if (c.err) return h + '<div class="sc-rev-wait">The revisions could not be read just now (' + esc(c.err) + ") — the tab tries again in 30 seconds.</div></div>";
+  if (arrows.length) h += '<div class="sc-rev-arrows">' + arrows.map(revArrowHTML).join("") + "</div>";
+  const say = revSay(arrows);
+  if (say) h += '<div class="sc-rev-say">' + say + "</div>";
+  if (!lines.length) h += '<div class="sc-rev-wait">No analyst notes are stored for $' + esc(t) + " yet — the analyst-revisions job adds them nightly.</div>";
+  else {
+    h += lines.slice(0, REV_SHOW).map((L) => revLineHTML(L, yr)).join("");
+    if (lines.length > REV_SHOW) h += '<details class="sc-rev-more"><summary>' + (Math.min(lines.length, REV_MAX) - REV_SHOW) + " older notes</summary>" +
+      lines.slice(REV_SHOW, REV_MAX).map((L) => revLineHTML(L, yr)).join("") + "</details>";
+  }
+  h += '<div class="sc-rev-note">FMP price-target and rating notes (analyst_target_news) · the averages are FMP\'s price-target summary, kept once a day (price_target_summary_daily) · the % is the new target against the stock price when the note was published</div>';
+  return h + "</div>";
+}
+function revStripPaint(t) {
+  const c = REV_CACHE[t]; if (!c || typeof document === "undefined") return;
+  document.querySelectorAll('.sc-rev[data-rev-t="' + String(t).replace(/["\\]/g, "") + '"]').forEach((el) => { el.outerHTML = revStripBody(t, c); });
+}
+function revStripLoad(t) {
+  if (REV_INFLIGHT[t]) return REV_INFLIGHT[t];
+  const e = encodeURIComponent(t);
+  return (REV_INFLIGHT[t] = Promise.all([
+    pg("analyst_target_news?ticker=eq." + e + "&select=" + REV_SEL_NEWS + "&order=published_utc.desc&limit=160"),
+    pg("price_target_summary_daily?ticker=eq." + e + "&select=" + REV_SEL_SUM + "&order=as_of_date.desc&limit=1"),
+  ]).then(([rows, sum]) => { REV_CACHE[t] = { at: Date.now(), rows: rows || [], sum: (sum && sum[0]) || null, err: null }; },
+          (err) => { REV_CACHE[t] = { at: Date.now() - REV_TTL + 30e3, rows: [], sum: null, err: String((err && err.message) || err) }; })
+    .then(() => { delete REV_INFLIGHT[t]; revStripPaint(t); }));
+}
+function revStripHTML(data) {
+  const t = data && data.t;
+  if (!t || data._loading) return "";
+  const c = REV_CACHE[t];
+  if (c && Date.now() - c.at < REV_TTL) return revStripBody(t, c);
+  setTimeout(() => revStripLoad(t), 0);
+  return '<div class="sc-rev" data-rev-t="' + esc(t) + '">' + estSechead("00", "Revisions", '<span class="meta">reading…</span>') +
+    '<div class="sc-rev-wait">Reading the analysts\' latest moves on $' + esc(t) + "…</div></div>";
+}
+/* R2C-REVISIONS:END */
+function estimatesTabHTML(data) {   // reference order: 00 REVISIONS (R2 Part C) → 01 FORECAST → 01b GRID → 02 CONVICTION → 02b PT GAUGE → 03 VALUATION → 04 SCENARIOS → 05 GRADES
+  return revStripHTML(data) + estForecastHTML(data) + estConsensusGridHTML(data) +
     estConvictionHTML(data) + estPTGaugeHTML(data) +
     estValuationHTML(data) + estScenariosHTML(data) + estGradesHTML(data);
 }
