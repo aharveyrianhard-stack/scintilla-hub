@@ -94,8 +94,8 @@ test("the room is wired into the master tabs, the view key, the mount and the en
   const entry = (hash) => vm.runInNewContext("(function(){" + fn + "})()", { location: { hash } });
   assert.equal(entry("#sentiment"), "SENTIMENT"); assert.equal(entry("#economic"), "ECONOMIC"); assert.equal(entry(""), null);
   /* M40 — the one listener also carries the earnings tab the address asks for; it
-     still switches only to a room scEntryRoom names, and SENTIMENT is still one. */
-  assert.ok(html.includes('window.addEventListener("hashchange", () => { const r = scEntryRoom(); if (!r) return; S.ernTab = scEntryTab(); if (S.sec !== r) go(r); else if (r === "EVENTS") renderEvents(S.coh); });'));
+     still switches only to a room scEntryRoom names, and SENTIMENT is still one. P2 (2 Oct): #prediction also lands on the PREDICTION MARKETS sub-tab. */
+  assert.ok(html.includes('window.addEventListener("hashchange", () => { const r = scEntryRoom(); if (!r) return; S.ernTab = scEntryTab(); if (r === "SENTIMENT" && scEntrySentiTab() === "PREDICTION") S.sentiTab = "PREDICTION"; if (S.sec !== r) go(r); else if (r === "SENTIMENT") sync(); else if (r === "EVENTS") renderEvents(S.coh); });'));
 });
 
 test("the SOCIAL → SENTIMENT sub-tab is untouched", () => {

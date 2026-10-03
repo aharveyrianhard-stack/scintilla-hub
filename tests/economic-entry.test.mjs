@@ -21,7 +21,7 @@ test("direct entry: one hashchange listener, which switches only to a room scEnt
   /* M40 — earnings joined the vocabulary (#earnings, #past-reported), so the listener
      also carries the tab the address asks for. It still switches only to a room the
      resolver names, and there is still exactly one of it. */
-  assert.match(page, /window\.addEventListener\("hashchange", \(\) => \{ const r = scEntryRoom\(\); if \(!r\) return; S\.ernTab = scEntryTab\(\); if \(S\.sec !== r\) go\(r\); else if \(r === "EVENTS"\) renderEvents\(S\.coh\); \}\);/);
+  assert.ok(page.includes('window.addEventListener("hashchange", () => { const r = scEntryRoom(); if (!r) return; S.ernTab = scEntryTab(); if (r === "SENTIMENT" && scEntrySentiTab() === "PREDICTION") S.sentiTab = "PREDICTION"; if (S.sec !== r) go(r); else if (r === "SENTIMENT") sync(); else if (r === "EVENTS") renderEvents(S.coh); });'), "P2 (2 Oct): the one listener also lands #prediction on the PREDICTION MARKETS sub-tab of SENTIMENT");
   assert.match(page, /if \(h === "economic" \|\| h === "calendar"\) return "ECONOMIC";/, "the resolver still owns the hash vocabulary");
   assert.match(page, /if \(h === "sentiment" \|\| h === "fear-greed"\) return "SENTIMENT";/);
   assert.match(page, /if \(h === "earnings" \|\| h === "events"\) return "EVENTS";/);
