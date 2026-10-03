@@ -1,4 +1,4 @@
-// SCINTILLA · offering-watch v1 — the OFFERING alert's nightly job (R2 Part A, 2 Oct 2026).
+// SCINTILLA · offering-watch v2 — the OFFERING alert's nightly job (R2 Part A, 2 Oct 2026; C1 news step, 2 Oct night).
 //
 // Alan, 2 Oct (pasted notes): "dilution announcements". R1 found the signal (RESEARCH-SOURCES.html §02): CoreWeave filed
 // for up to 35,000,000 new shares on 17 Sep and the Hub showed nothing. Per New York day this job asks FMP for every
@@ -18,6 +18,18 @@
 //                                                                           removed (classify.mjs keeps the severity map
 //                                                                           and the message builder, not called yet).
 //         &reclassify=1 (backfill only)                                     re-read stored filings and update their class
+//         &news_days=N (pass only, 1-30, default 2)                         C1 · THE NEWS STEP (every pass): headlines of the
+//                                                                           last N days in public.news (news-feed, cron 6:
+//                                                                           FMP press releases, Google News, investing.com)
+//                                                                           for Hub stocks that name an offering and a
+//                                                                           security or amount (classify.mjs newsKind) are kept
+//                                                                           in public.offering_news, then every headline not yet
+//                                                                           joined (last N+10 days) is joined to its filing
+//                                                                           (joinFiling). Alan: "If Massive news has the press
+//                                                                           release a day earlier — why would we design this on
+//                                                                           a source that is slower?" Massive's own news is NOT
+//                                                                           in public.news and no Massive key is in app_config,
+//                                                                           so this step reads only what we already store.
 //
 // The FMP key is read from public.app_config with the service-role client, the way fmp-analyst reads it. It is never
 // logged, returned or put in an error message (FMP errors carry the route and the status only).
@@ -29,8 +41,8 @@
 // sec_refused + next_from; the next run reads them (a filing is only stored once it has been read).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { FORMS, HEAD_BYTES, HEAD_BYTES_MAX, HEAD_CHARS, VERSION, classify, cleanHtml, filingFromFmp, passDays,
-  weekdays } from "./classify.mjs";
+import { FORMS, HEAD_BYTES, HEAD_BYTES_MAX, HEAD_CHARS, NEWS_DAYS, VERSION, classify, cleanHtml, filingFromFmp, joinFiling,
+  newsFromRow, passDays, weekdays } from "./classify.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -88,7 +100,7 @@ async function secHead(url: string, out: any): Promise<{ status: number; text: s
   return { status: r.status, text: cleanHtml(html), bytes };
 }
 
-async function universe(sb: any): Promise<Set<string>> {
+async function universe(sb: any): Promise<Set<string> & { hub?: Set<string> }> {
   // The stocks the Hub serves: public.tickers, active, type 'stock' or untyped (the 90 core names — AAPL, NVDA, CRWV,
   // ZETA … — carry no type), never a fund (company_profile.is_etf) and never a crypto pair.
   const { data, error } = await sb.from("tickers").select("ticker,type,fmp_symbol").eq("active", true).or("type.eq.stock,type.is.null");
@@ -96,13 +108,59 @@ async function universe(sb: any): Promise<Set<string>> {
   const { data: etf, error: e2 } = await sb.from("company_profile").select("ticker").eq("is_etf", true);
   if (e2) throw new Error("company_profile: " + e2.message);
   const funds = new Set((etf || []).map((x: any) => String(x.ticker)));
-  const s = new Set<string>();
+  const s: Set<string> & { hub?: Set<string> } = new Set<string>(), hub = new Set<string>();
   for (const r of data || []) {
     const t = String(r.ticker || "").toUpperCase();
     if (!t || t.endsWith("USD") || funds.has(t)) continue;
     s.add(String(r.fmp_symbol || t).toUpperCase());
+    hub.add(t);                                              // the news table keys rows by the Hub's own ticker
   }
+  s.hub = hub;
   return s;
+}
+
+const NEWS_OR = ["offering", "convertible", "at-the-market", "registered direct", "private placement", "shelf", "debt sale", "notes sale", "debt raise"]
+  .map((w) => "title.ilike.*" + w + "*").join(",");
+/** C1 · the news step: offering headlines of the last `days` days → public.offering_news, then join the unjoined ones */
+async function newsStep(sb: any, uni: Set<string> & { hub?: Set<string> }, days: number, out: any) {
+  const N: any = { days, scanned: 0, matched: 0, written: 0, joined: 0, first: [] as any[] };
+  out.news = N;
+  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  const keep = new Map<string, any>();
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await sb.from("news").select("ticker,url,published_ts,title,site,feed").gte("published_ts", since).or(NEWS_OR)
+      .order("published_ts", { ascending: true }).range(page * 1000, page * 1000 + 999);
+    if (error) { out.errors.push("news read: " + error.message); return; }
+    N.scanned += (data || []).length;
+    for (const r of data || []) { const n = newsFromRow(r, uni.hub || uni); if (n) keep.set(n.ticker + "|" + n.url, n); }
+    if (!data || data.length < 1000) break;
+  }
+  const rows = [...keep.values()];
+  N.matched = rows.length;
+  if (rows.length) {
+    const { data, error } = await sb.from("offering_news").upsert(rows, { onConflict: "ticker,url", ignoreDuplicates: true }).select("ticker,url");
+    if (error) { out.errors.push("offering_news insert: " + error.message); return; }
+    N.written = (data || []).length;
+  }
+  // join: every headline not joined yet (the last days + 10), against the filings of those tickers
+  const from = new Date(Date.now() - (days + 10) * 86400e3).toISOString();
+  const { data: open, error: oe } = await sb.from("offering_news").select("ticker,url,published_utc,kind,source,title").is("filing_url", null).gte("published_utc", from).limit(2000);
+  if (oe) { out.errors.push("offering_news read: " + oe.message); return; }
+  const tks = [...new Set((open || []).map((n: any) => n.ticker))];
+  if (tks.length) {
+    const { data: fil, error: fe } = await sb.from("offering_filings").select("url,ticker,filed_date,accepted_utc,class").in("ticker", tks).gte("filed_date", from.slice(0, 10));
+    if (fe) { out.errors.push("offering_filings read (join): " + fe.message); return; }
+    for (const n of open || []) {
+      const f = joinFiling(n, fil || []);
+      if (!f) continue;
+      const { error } = await sb.from("offering_news").update({ filing_url: f.url }).eq("ticker", n.ticker).eq("url", n.url);
+      if (error) out.errors.push("offering_news join " + n.ticker + ": " + error.message); else N.joined++;
+    }
+  }
+  // the earliest headline per ticker and kind in this window, for the run report
+  const firsts = new Map<string, any>();
+  for (const n of rows) { const k = n.ticker + "|" + n.kind; if (!firsts.has(k)) firsts.set(k, n); }
+  N.first = [...firsts.values()].slice(0, 60).map((n) => ({ ticker: n.ticker, kind: n.kind, at: n.published_utc, source: n.source, title: n.title }));
 }
 
 Deno.serve(async (req) => {
@@ -114,6 +172,7 @@ Deno.serve(async (req) => {
     const mode = p("mode") || "pass";
     if (mode !== "pass" && mode !== "backfill") return J({ ok: false, version: VERSION, error: "mode must be pass or backfill" }, 400);
     const reclassify = mode === "backfill" && p("reclassify") === "1";
+    const newsDays = Math.min(Math.max(Math.round(Number(p("news_days")) || NEWS_DAYS), 1), 30);
     const budget = Math.min(Math.max(Number(p("budget_ms")) || DEFAULT_BUDGET_MS, 10_000), 140_000);
     let days: string[];
     if (mode === "pass") days = passDays(Date.now());
@@ -200,6 +259,8 @@ Deno.serve(async (req) => {
       }
       out.days_done++;
     }
+    // C1 · the news step runs on every pass, after the filings (so a filing stored this run can be joined at once)
+    if (mode === "pass") { try { await newsStep(sb, uni, newsDays, out); } catch (e) { out.errors.push("news step: " + String((e as any)?.message || e).slice(0, 160)); } }
     out.ms = Date.now() - t0;
     return J(out);
   } catch (e) {
