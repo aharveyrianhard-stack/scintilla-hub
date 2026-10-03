@@ -213,7 +213,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
    Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
 .sc-rsi.is-xt{ animation:rsi-xt 4s ease-in-out infinite; }
-@keyframes rsi-xt{ 0%,100%{ text-shadow:none; } 50%{ text-shadow:0 0 6px currentColor; } }
+/* H10 (3 Oct) — the same soft breath, drawn as a filter so the compositor runs it: a text-shadow animation restyled and
+   re-laid-out the whole board on every frame (MEASURED 6x CPU: ~800 layout invalidations in 2.5 s of scrolling ALL). */
+@keyframes rsi-xt{ 0%,100%{ filter:drop-shadow(0 0 0 transparent); } 50%{ filter:drop-shadow(0 0 3px currentColor); } }
 @media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
@@ -554,6 +556,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* DASHBOARD MODEL — the row whose ticker is shown in the LEFT panel (pinned or
    currently rotating) gets the selection wash (mock .brow.sel). Class flip only. */
 .sc-board__row.sel{ background:rgba(0,212,255,.09); }
+/* H10 (3 Oct) — rows off screen cost nothing: no style, layout, paint or hit-test work until they scroll near view, each
+   holding the height a row on screen measured (--sc-rowh, set by boardRowH). MEASURED 6x CPU, ALL: 20,872 board elements
+   were painted on every frame because 63 RSI cells breathe. A row that is sliding is always drawn. The board anchors its
+   own scroll on a re-sort (scBoardSlide), so the browser's anchoring is off here. */
+#boardScroll{ overflow-anchor:none; }
+#boardScroll > .sc-board__row{ content-visibility:auto; contain-intrinsic-size:auto var(--sc-rowh, 37px); }
+#boardScroll > .sc-board__row.is-sliding{ content-visibility:visible; }
 
 /* 1.4 · CohortTabs */
 .sc-cohrow{ display:flex; align-items:center; gap:2px;
@@ -7535,13 +7544,24 @@ function boardTMCellsHTML() {
    none to add), so the common $3.1T / $412B / $8.7B forms are byte-identical to
    before. ONE formatter — every fmtCap() call site (board MKT CAP column, FOCUS
    cell tier-3 text, TILT cards) picks the commas up for free. */
+/* H10 (3 Oct) — one Intl formatter per option set, kept. Number#toLocaleString and Date#toLocaleTimeString with options
+   build a new formatter on every call; the board builds ~546 rows a refresh, several numbers each (MEASURED at 6x CPU:
+   volCellHTML 255 ms and fmtCap 134 ms over three refreshes). Same locale, same options, so the same text. */
+const SC_NFMT = new Map();
+function scNum(v, opts) {
+  const k = opts ? JSON.stringify(opts) : "";
+  let f = SC_NFMT.get(k);
+  if (!f) { f = opts ? new Intl.NumberFormat("en-US", opts) : new Intl.NumberFormat("en-US"); SC_NFMT.set(k, f); }
+  return f.format(v);
+}
+const SC_ET_HM = (typeof Intl !== "undefined") ? new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/New_York" }) : null;
 function fmtCap(v) {
   const n = num(v);
   if (n == null || n <= 0) return "—";
   const u = n >= 1e12 ? [n / 1e12, "T"] : n >= 1e9 ? [n / 1e9, "B"] : n >= 1e6 ? [n / 1e6, "M"] : n >= 1e3 ? [n / 1e3, "K"] : [n, ""];   /* R4 — K: "$768,574" was cut to "$768,5…" in the REVENUE cell */
   const s = u[0] < 100
-    ? u[0].toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-    : Math.round(u[0]).toLocaleString("en-US");
+    ? (typeof scNum === "function" ? scNum(u[0], { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : u[0].toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }))
+    : (typeof scNum === "function" ? scNum(Math.round(u[0])) : Math.round(u[0]).toLocaleString("en-US"));
   return "$" + s + u[1];
 }
 /* H-FRONT · REVENUE on the board. Formatted like MKT CAP ($12.3B, $845M); absent is a BLANK cell, never 0.
@@ -7744,7 +7764,7 @@ function volCellHTML(at, sess, asOf) {
     esc("no reading yet — " + (asOf ? "the newest relative-volume row for this name was written " + String(asOf).slice(0, 10) + ", not this session"
       : "no relative-volume row for this name yet")) + '">' + dots(0) + '<span class="sc-vol__n">—</span></span>';
   const t = Date.parse(asOf || ""), by = isFinite(t)
-    ? new Date(t).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/New_York" }) : null;
+    ? (typeof SC_ET_HM !== "undefined" && SC_ET_HM ? SC_ET_HM.format(new Date(t)) : new Date(t).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/New_York" })) : null;
   const words = (sess != null ? "today " + Math.round(sess * 100) + "% of a usual session so far" : "no whole-session figure yet") + " · " +
     (at != null ? at.toFixed(1) + "× its usual pace" + (by ? " by " + by + " ET" : "") : "no by-this-time figure yet");
   return '<span class="sc-vol" title="' + esc(words) + '">' + dots(sess != null ? rb(sess) : 0) +
@@ -7921,17 +7941,24 @@ function orderedShownRows() {
 /* PENDING IS NOT ABSENT. A cached-layout row (state CONNECTING) has not received its first provider snapshot; its live
    cells show "…" (pending) rather than "—", which this board reserves for a value that is actually unavailable. */
 const SC_PENDING = '<span class="sc-pending" title="waiting for the first provider snapshot">…</span>';
-function boardRowsHTML() {
+function boardRowsHTML(parts) {
+  /* H10 (3 Oct) — boardRowsHTML(true) returns the board as parts: { head, rows: [{ t, html }] }, one string per row keyed by
+     ticker, so a refresh can change only the rows (and cells) whose string changed instead of rebuilding the board
+     (updateBoard → boardPatch). A state with no rows (pending, an empty list) comes back as { html }. */
   const rows = orderedShownRows();
-  if (!rows.length && S.boardPending)
-    return boardHeaderHTML() + '<div class="sc-board__pending" role="status">loading ' + esc(COH_ABBR[S.boardPending] || S.boardPending) + ' …</div>';
-  if (!rows.length && !S.tq && LIST_COHS[S.coh])   // H-FRONT — an empty (or not yet read) subset says which, and how to fill it
-    return boardHeaderHTML() + '<div class="sc-board__pending" role="status">' + (LISTS_READ
+  if (!rows.length && S.boardPending) {
+    const h = boardHeaderHTML() + '<div class="sc-board__pending" role="status">loading ' + esc(COH_ABBR[S.boardPending] || S.boardPending) + ' …</div>';
+    return parts ? { html: h } : h;
+  }
+  if (!rows.length && !S.tq && LIST_COHS[S.coh]) {  // H-FRONT — an empty (or not yet read) subset says which, and how to fill it
+    const h = boardHeaderHTML() + '<div class="sc-board__pending" role="status">' + (LISTS_READ
       ? 'nothing on ' + esc(S.coh) + ' yet — tap ' + (S.coh === "RADAR" ? "⊙" : "☆") + ' on any row or company to add it (that likes it too)'
       : 'reading ' + esc(S.coh) + ' …') + '</div>';
+    return parts ? { html: h } : h;
+  }
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
   const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));
-  return boardHeaderHTML() + sorted.map((d) => {
+  const head = boardHeaderHTML(), list = sorted.map((d) => {
     /* KEYBOARD REACHABLE. The row was a bare div: the only way to open a company page was a mouse
        click, so the whole detail surface — including the Geiger tile — was unreachable without a
        pointer. role/tabindex plus the shared Enter/Space handler make it operable without adding
@@ -7949,7 +7976,7 @@ function boardRowsHTML() {
       '<span class="sc-ctk' + (d.nf ? " has-nf" : "") + '">' + esc(d.t) +
         (d.nf ? '<span class="no-feed" title="' + esc(d.state || "PROVIDER_UNAVAILABLE") + '">' +
           (d.state === "NOT_OBSERVED_BY_STREAM" ? "NO STREAM" : "NO FEED") + '</span>' : "") + "</span>" +
-      '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
+      '<span class="sc-last" id="lp_' + esc(d.t) + '" title="' + esc(d.priceSource === "MASSIVE_PROVIDER" ? scQuoteObservationLabel(d.quoteObservation) : d.priceSource || "UNKNOWN") + '">' + (d.price != null ? (typeof scNum === "function" ? scNum(d.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : (d.state === "CONNECTING" ? SC_PENDING : "—")) + "</span>" +
       (d.c == null ? '<span class="sc-chg" id="lc_' + esc(d.t) + '"' + (typeof SC_HELD_PREV !== "undefined" && SC_HELD_PREV[d.t] ? ' data-sc-prev-close-state="HELD" title="' + esc(scHeldPrevTitle(d.t)) + '"' : "") + '>' + (d.state === "CONNECTING" ? SC_PENDING : "—") + '</span>'
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
@@ -7968,8 +7995,10 @@ function boardRowsHTML() {
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
-  }).join("");
+  });
+  return parts ? { head, rows: sorted.map((d, i) => ({ t: d.t, html: list[i] })) } : head + list.join("");
 }
+function boardRowsModel() { return boardRowsHTML(true); }
 
 /* ---- Room 2 · DASHBOARD ------------------------------------------------------ */
 /* R18 — scChart (native canvas) is the price renderer. One slim label line. */
@@ -8417,11 +8446,203 @@ function dashboardHTML() {
     "</section>" +
   "</section>";
 }
+/* H10 (3 Oct) — A REFRESH NEVER REBUILDS THE BOARD, AND A RE-SORT SLIDES.
+   Alan, on the iMac: "I'm scrolling on the cohort board and something moves … why would that re-sort steal my mouse and
+   scrolling? … I'd prefer to see the actual movement happen than a glitch." MEASURED (6x CPU, 2240 x 1260, ALL = 546 rows):
+   every refresh replaced all 20,872 board elements (bs.innerHTML), 600-700 ms of work, and the rows jumped to their new
+   places under the pointer. Now:
+     - the same set of rows → each row's string is compared with the one it was built from; only cells whose string
+       changed are replaced (TREND / MOM / READ stay with paintTM, the rank badge and the replay % with the rewind);
+     - a new order is applied with the fewest moves (the longest run already in order stays put — the keyed-list
+       method Vue 3 and Inferno use) and the rows that are or will be on screen SLIDE there (FLIP: first, last, invert, play);
+     - while the board is being scrolled or the pointer moves over it, the new order WAITS and lands BOARD_HOLD_MS after
+       the last scroll or move; when it lands, the row under the pointer stays exactly under it (the scroll position follows
+       that row), otherwise the scroll position stays where it is;
+     - a header click (a sort the reader asked for) lands at once, still sliding; a cohort switch or a search builds the
+       board as before (a different set of rows).
+   The replay (rewind) moves its rows through the same scBoardSlide(). */
+const BOARD_HOLD_MS = 1500, BOARD_SLIDE_MS = 650;
+const BOARD_UI = { actAt: 0, selfAt: 0, ptrIn: false, x: 0, y: 0, timer: null, held: false, slides: 0, flying: new Set() };
+let BOARD_TPL = null;
+function boardWire(bs) {
+  if (!bs || bs.__h10) return;
+  bs.__h10 = true;
+  const act = () => { BOARD_UI.actAt = Date.now(); };
+  bs.addEventListener("wheel", act, { passive: true });
+  bs.addEventListener("touchstart", act, { passive: true });
+  bs.addEventListener("pointerdown", act, { passive: true });
+  bs.addEventListener("keydown", act, { passive: true });
+  bs.addEventListener("scroll", () => { if (Date.now() - BOARD_UI.selfAt > 80) act(); }, { passive: true });   // our own anchor scroll is not the reader's
+  bs.addEventListener("pointermove", (e) => { BOARD_UI.ptrIn = true; BOARD_UI.x = e.clientX; BOARD_UI.y = e.clientY; act(); }, { passive: true });
+  bs.addEventListener("pointerleave", () => { BOARD_UI.ptrIn = false; act(); }, { passive: true });
+}
+/* the row height the off-screen rows reserve (content-visibility), measured from a row on screen */
+function boardRowH(bs) {
+  const r = bs.querySelector(".sc-board__row");
+  const h = r && r.getBoundingClientRect().height;
+  if (h > 8 && Math.abs(h - (bs.__rowH || 0)) > 0.05) { bs.__rowH = h; bs.style.setProperty("--sc-rowh", h.toFixed(2) + "px"); }
+}
+function boardTpl(html) {
+  if (!BOARD_TPL) BOARD_TPL = document.createElement("template");
+  BOARD_TPL.innerHTML = html;
+  return BOARD_TPL.content.firstElementChild;
+}
+/* cells another module owns inside a row: paintTM's TREND / MOM / READ, the rewind's rank badge and replay % */
+const boardOwnCell = (c) => { const k = c.classList; return k.contains("gwx-tm") || k.contains("gwx-read") || k.contains("gwx-rk") || k.contains("gwx-pct"); };
+function boardPatchRow(row, html) {
+  if (row.__h === html) return row;
+  const nw = boardTpl(html);
+  if (!nw) return row;
+  const want = [], have = [];
+  for (const c of nw.children) if (!boardOwnCell(c)) want.push(c);
+  for (const c of row.children) if (!boardOwnCell(c)) have.push(c);
+  if (want.length !== have.length) return null;   // a different row template — the caller builds the board
+  for (const a of Array.from(row.attributes)) if (a.name.indexOf("data-sc-") === 0 && !nw.hasAttribute(a.name)) row.removeAttribute(a.name);
+  for (const a of Array.from(nw.attributes)) if (a.name !== "class" && row.getAttribute(a.name) !== a.value) row.setAttribute(a.name, a.value);
+  row.classList.toggle("nofeed", nw.classList.contains("nofeed"));
+  for (let i = 0; i < want.length; i++) {
+    const w = want[i].outerHTML, h = have[i];
+    if (h.__h === w) continue;
+    if (h.__h === undefined && h.outerHTML === w) { h.__h = w; continue; }
+    want[i].__h = w;
+    if (h.classList.contains("sc-gcell")) row.__gwxCss = undefined;   // the rewind's bar cache describes the cell being replaced
+    h.replaceWith(want[i]);
+  }
+  row.__h = html;
+  return row;
+}
+/* the positions (in the old order) that form the longest run already in order — those rows never move */
+function boardLis(a) {
+  const p = new Array(a.length), m = [];
+  for (let i = 0; i < a.length; i++) {
+    let lo = 0, hi = m.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (a[m[mid]] < a[i]) lo = mid + 1; else hi = mid; }
+    p[i] = lo ? m[lo - 1] : -1; m[lo] = i;
+  }
+  const keep = new Set();
+  for (let k = m.length ? m[m.length - 1] : -1; k >= 0; k = p[k]) keep.add(k);
+  return keep;
+}
+/* MOVE the rows of #boardScroll into `want` (tickers, top to bottom) and slide what is or will be on screen.
+   opts.anchor: a ticker whose row must stay where it is on screen (the row under the pointer); without one the
+   scroll position is kept. Returns the number of rows that changed place. */
+function scBoardSlide(bs, want, opts) {
+  opts = opts || {};
+  const els = new Map(), cur = [];
+  for (const k of bs.children) { const t = k.getAttribute("data-t"); if (t && k.classList.contains("sc-board__row")) { els.set(t, k); cur.push(t); } }
+  const order = want.filter((t) => els.has(t));
+  if (order.length !== cur.length) return -1;
+  let moved = 0; for (let i = 0; i < order.length; i++) if (order[i] !== cur[i]) moved++;
+  if (!moved) return 0;
+  const box = bs.getBoundingClientRect(), vh = box.height, pad = vh;
+  const st0 = bs.scrollTop, oldTop = new Map();
+  /* FIRST — where every row is on screen now, mid-slide included (getBoundingClientRect carries the transform) */
+  for (const [t, r] of els) oldTop.set(t, r.getBoundingClientRect().top);
+  for (const r of BOARD_UI.flying) { r.style.transition = "none"; r.style.transform = ""; }
+  const anchor = opts.anchor && els.has(opts.anchor) ? opts.anchor : null;
+  /* the fewest moves: rows on the longest in-order run stay, every other row is inserted before its new neighbour */
+  const curIx = new Map(cur.map((t, i) => [t, i]));
+  const keep = boardLis(order.map((t) => curIx.get(t)));
+  let next = null;
+  for (let i = order.length - 1; i >= 0; i--) {
+    const r = els.get(order[i]);
+    if (!keep.has(i)) bs.insertBefore(r, next ? next : null);
+    next = r;
+  }
+  /* LAST — the anchor row stays under the pointer: the scroll follows it; otherwise the scroll position stays */
+  BOARD_UI.selfAt = Date.now();
+  if (anchor) bs.scrollTop = st0 + (els.get(anchor).getBoundingClientRect().top - oldTop.get(anchor));
+  else if (bs.scrollTop !== st0) bs.scrollTop = st0;
+  const lo = box.top - pad, hi = box.bottom + pad, rh = bs.__rowH || 37;
+  const anim = [];
+  for (const [t, r] of els) {
+    const o = oldTop.get(t), n = r.getBoundingClientRect().top;
+    const oIn = o > lo && o < hi, nIn = n > box.top - rh && n < box.bottom;
+    if (!(oIn || nIn) || Math.abs(o - n) < 0.5) continue;
+    /* INVERT — a row arriving from far away starts just past the edge it comes from, so its travel is seen */
+    let from = o;
+    if (!oIn) from = o < n ? box.top - rh : box.bottom;
+    anim.push([r, from - n]);
+  }
+  for (const [r, dy] of anim) { r.classList.add("is-sliding"); r.style.transition = "none"; r.style.transform = "translateY(" + dy.toFixed(1) + "px)"; }
+  if (anim.length) void bs.offsetHeight;   // the one flush: the transforms above become the starting point
+  /* PLAY */
+  const ms = opts.ms || BOARD_SLIDE_MS;
+  for (const [r] of anim) {
+    r.style.transition = "transform " + ms + "ms cubic-bezier(.33,0,.2,1)";
+    r.style.transform = "translateY(0)";
+    BOARD_UI.flying.add(r);
+    clearTimeout(r.__h10T);
+    r.__h10T = setTimeout(() => { r.style.transition = ""; r.style.transform = ""; r.classList.remove("is-sliding"); BOARD_UI.flying.delete(r); }, ms + 40);
+  }
+  BOARD_UI.slides++;
+  return moved;
+}
+window.scBoardSlide = scBoardSlide;
+/* the DOM order follows S.boardOrder — now, or once the reader stops (see above) */
+function boardSettle(force) {
+  const bs = el("boardScroll");
+  clearTimeout(BOARD_UI.timer); BOARD_UI.timer = null;
+  if (!bs || !(S.sec === "DASHBOARD" || S.sec === "COMPANY")) { BOARD_UI.held = false; return; }
+  if (scRewoundNow()) { BOARD_UI.held = false; return; }   // the replay owns the order while rewound
+  const want = orderedShownRows().map((r) => r.t);
+  const quiet = Date.now() - BOARD_UI.actAt;
+  if (!force && quiet < BOARD_HOLD_MS) {
+    let cur = 0; const kids = bs.children;
+    for (const k of kids) { const t = k.getAttribute("data-t"); if (!t) continue; if (want[cur] !== t) { cur = -1; break; } cur++; }
+    BOARD_UI.held = cur === -1;
+    if (BOARD_UI.held) BOARD_UI.timer = setTimeout(() => boardSettle(false), BOARD_HOLD_MS - quiet + 30);
+    return;
+  }
+  BOARD_UI.held = false;
+  let anchor = null;
+  if (BOARD_UI.ptrIn) {
+    const hit = document.elementFromPoint(BOARD_UI.x, BOARD_UI.y);
+    const row = hit && hit.closest && hit.closest(".sc-board__row");
+    if (row && bs.contains(row)) anchor = row.getAttribute("data-t");
+  }
+  scBoardSlide(bs, want, { anchor });
+}
+/* in place when the rows are the same set as on screen; false → the caller builds the board */
+function boardPatch(bs) {
+  const m = boardRowsModel();
+  if (m.html != null) return false;
+  const kids = bs.children, head = kids[0];
+  if (!head || !head.classList.contains("hdr") || kids.length !== m.rows.length + 1) return false;
+  const els = new Map();
+  for (let i = 1; i < kids.length; i++) {
+    const k = kids[i], t = k.getAttribute("data-t");
+    if (!t || !k.classList.contains("sc-board__row") || els.has(t)) return false;
+    els.set(t, k);
+  }
+  for (const x of m.rows) if (!els.has(x.t)) return false;
+  let sortClick = false;
+  if (bs.__hd !== m.head) {
+    if (bs.__hd !== undefined || head.outerHTML !== m.head) { const nh = boardTpl(m.head); head.replaceWith(nh); sortClick = bs.__hd !== undefined; }
+    bs.__hd = m.head;
+  }
+  for (const x of m.rows) if (!boardPatchRow(els.get(x.t), x.html)) return false;
+  boardSettle(sortClick);
+  return true;
+}
+function boardRender(bs) {
+  const m = boardRowsModel();
+  bs.innerHTML = m.html != null ? m.html : m.head + m.rows.map((x) => x.html).join("");
+  bs.__hd = m.html != null ? undefined : m.head;
+  if (m.rows) { let i = 0; for (const k of bs.children) if (k.getAttribute("data-t") && m.rows[i] && m.rows[i].t === k.getAttribute("data-t")) k.__h = m.rows[i++].html; }
+  BOARD_UI.flying.clear(); BOARD_UI.held = false;
+  if (typeof SC_ROWNODE_AT !== "undefined") SC_ROWNODE_AT = 0;   // the price tick's row index rescans after a rebuild
+}
 /* FIX 4b — sorting / stars / feed ticks repaint ONLY the board's row container.
    DASHBOARD MODEL — the board rows repaint here; the left panel is left alone. */
 function updateBoard() {
   const bs = el("boardScroll");
-  if (bs) { bs.innerHTML = boardRowsHTML(); bs.classList.toggle("is-seed", S.boardSeedAt != null); }
+  if (bs) {
+    boardWire(bs);
+    if (!boardPatch(bs)) boardRender(bs);
+    bs.classList.toggle("is-seed", S.boardSeedAt != null);
+    boardRowH(bs);
+  }
   const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
   const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
   /* R49 §2 — a cohort/scope change moves the MAP's ticker set, so re-resolve which
@@ -25949,6 +26170,35 @@ function scAuthorityReady () {
   const d = window.SC_DECLARED_SET;
   return !!(d && d.size);
 }
+/* H10 (3 Oct) — the 2 s provider tick calls patch() once per declared symbol (~364). Each call searched the whole page
+   for the row ([data-act=row][data-t=…]) and walked S.rows and ALLROWS from the top: MEASURED 245 ms of querySelector in
+   4 s of scrolling at 6x CPU. The same answers, from an index checked on every read (a stale entry is rebuilt, never used). */
+function scRowOf(arr, t) {
+  if (!arr) return undefined;
+  let ix = arr.__scIx;
+  let i = ix && ix.get(t);
+  if (i !== undefined && arr[i] && arr[i].t === t) return arr[i];
+  if (ix && i === undefined && arr.__scIxN === arr.length) return undefined;
+  ix = new Map(); for (let k = 0; k < arr.length; k++) if (arr[k] && !ix.has(arr[k].t)) ix.set(arr[k].t, k);
+  try { Object.defineProperty(arr, "__scIx", { value: ix, writable: true, configurable: true, enumerable: false });
+        Object.defineProperty(arr, "__scIxN", { value: arr.length, writable: true, configurable: true, enumerable: false }); } catch (_) {}
+  i = ix.get(t);
+  return i === undefined ? undefined : arr[i];
+}
+const SC_ROWNODE = new Map();
+let SC_ROWNODE_AT = 0;
+function scRowNode(t) {
+  const n = SC_ROWNODE.get(t);
+  if (n && n.isConnected && n.getAttribute("data-t") === t && n.getAttribute("data-act") === "row") return n;
+  /* a miss rescans the page once (first match in document order, as querySelector would), and a symbol with no row is
+     answered from that scan until it is 1 s old — a symbol off the board no longer costs a page search per tick */
+  if (!n && Date.now() - SC_ROWNODE_AT < 1000) return null;
+  SC_ROWNODE.clear(); SC_ROWNODE_AT = Date.now();
+  for (const x of document.querySelectorAll('[data-act="row"][data-t]')) { const k = x.getAttribute("data-t"); if (!SC_ROWNODE.has(k)) SC_ROWNODE.set(k, x); }
+  const q = SC_ROWNODE.get(t) || null;
+  if (!q) SC_ROWNODE.set(t, null);
+  return q;
+}
 function patch(t, price, src) {
   price = +price;
   if (!isFinite(price)) return;
@@ -25977,8 +26227,8 @@ function patch(t, price, src) {
   {
     const _pc = prevClose[t];
     const _c  = (_pc && isFinite(+_pc) && +_pc !== 0) ? (price / +_pc - 1) * 100 : null;
-    const _row = document.querySelector('[data-act="row"][data-t="' + (window.CSS && CSS.escape ? CSS.escape(t) : t) + '"]');
-    const _r = (S.rows || []).find((x) => x.t === t);
+    const _row = typeof scRowNode === "function" ? scRowNode(t) : document.querySelector('[data-act="row"][data-t="' + (window.CSS && CSS.escape ? CSS.escape(t) : t) + '"]');
+    const _r = typeof scRowOf === "function" ? scRowOf(S.rows, t) : (S.rows || []).find((x) => x.t === t);
     scStamp(_row, {
       symbol: t, price: price,
       "chg-pct": (_c != null && isFinite(_c)) ? _c : null,
@@ -25990,8 +26240,9 @@ function patch(t, price, src) {
   }
   /* FIX 2 — compare first: identical re-quotes (closed markets) never flash or repaint */
   let prev = PRICES[t];
-  const r = S.rows.find((x) => x.t === t);
-  const rAll = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
+  const byT = (a) => typeof scRowOf === "function" ? scRowOf(a, t) : (a || []).find((x) => x.t === t);   /* H10 — indexed when the page has it */
+  const r = byT(S.rows);
+  const rAll = (typeof ALLROWS !== "undefined" && ALLROWS) ? byT(ALLROWS) : null;
   if (prev == null && r) prev = r.price;
   if (prev != null && +prev === price) {
     PRICES[t] = price;
@@ -26905,12 +27156,14 @@ async function scProviderTick () {
       const priceNode = el("lp_" + t);
       if (priceNode) scSetTitle(priceNode, scQuoteObservationLabel(q));
       if (typeof LEFT_T !== "undefined" && LEFT_T === t && el("coPx")) scSetTitle(el("coPx"), scQuoteObservationLabel(q));
-      const quoteRow = document.querySelector('[data-act="row"][data-t="' + t + '"]');
+      /* H10 — the indexed lookups patch() uses, not a page search per symbol per tick (when the page has them) */
+      const quoteRow = typeof scRowNode === "function" ? scRowNode(t) : document.querySelector('[data-act="row"][data-t="' + t + '"]');
       scStamp(quoteRow, { "price-observed-utc": observation.observed_utc,
         "price-freshness": observation.state });
       const targets = [];
-      const rS = (S.rows || []).find((x) => x.t === t); if (rS) targets.push(rS);
-      const rA = (typeof ALLROWS !== "undefined" && ALLROWS) ? ALLROWS.find((x) => x.t === t) : null;
+      const byT = (a) => typeof scRowOf === "function" ? scRowOf(a, t) : (a || []).find((x) => x.t === t);
+      const rS = byT(S.rows); if (rS) targets.push(rS);
+      const rA = (typeof ALLROWS !== "undefined" && ALLROWS) ? byT(ALLROWS) : null;
       if (rA && rA !== rS) targets.push(rA);
       for (const row of targets) {
         row.quoteObservation = q; row.nf = false; row.state = "OK";
@@ -30546,7 +30799,7 @@ body.gwx-motion .gwx-pct{opacity:1}
   /* every RSI cell on the board is a way in; the nine watched readings carry a mark */
   var WATCHED = ["SPY","QQQ","IWM","DIA","VIX","US10Y","DXUSD","CLUSD","GCUSD"];
   function markCells(){
-    document.querySelectorAll(".sc-rsi[id^='lr_']").forEach(function(c){
+    document.querySelectorAll(".sc-rsi[id^='lr_']:not([data-hu])").forEach(function(c){   /* H10 — a marked cell is never rewritten */
       var t = c.id.slice(3);
       c.setAttribute("data-hu", WATCHED.indexOf(t) >= 0 ? "watch" : "1");
       c.title = WATCHED.indexOf(t) >= 0
