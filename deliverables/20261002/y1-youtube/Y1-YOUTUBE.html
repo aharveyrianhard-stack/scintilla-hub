@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube, titles first</title>
+<style>
+:root{ --bg:#0B0C10; --panel:#121318; --line:#2A2C33; --ink:#CFCFD2; --ink2:#A9AAB0; --dim:#7C7E86;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55; }
+main{ max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+h1{ font-family:var(--mono); font-size:15px; letter-spacing:.16em; text-transform:uppercase; font-weight:600; margin:8px 0 6px; }
+h2{ font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink2); font-weight:600;
+  margin:44px 0 12px; padding-top:14px; border-top:1px solid var(--line); }
+p, li{ max-width:76ch; }
+.lede{ color:var(--ink2); font-size:16px; }
+.mono{ font-family:var(--mono); font-size:13px; }
+.pair{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+.pair.phone{ grid-template-columns:repeat(4, minmax(0,1fr)); }
+figure{ margin:0; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:8px; }
+figure img{ width:100%; display:block; border-radius:2px; }
+figcaption{ font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:6px; letter-spacing:.04em; }
+table{ border-collapse:collapse; width:100%; font-size:13.5px; margin:10px 0; }
+th, td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th{ font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:500; }
+td.n{ font-family:var(--mono); white-space:nowrap; }
+.box{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:12px 16px; margin:12px 0; }
+.sum{ font-family:var(--mono); font-size:13px; }
+.sum b{ color:var(--ink); }
+ol li, ul li{ margin:5px 0; }
+code{ font-family:var(--mono); font-size:12.5px; color:var(--ink2); }
+@media(max-width:760px){ .pair, .pair.phone{ grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>SOCIAL › YouTube — titles first, the ticker count, searches from RADAR</h1>
+<p class="lede">2 Oct 2026, night. The raw table now leads with the title, at reading size; the "10 of 10 but I see 7" window is fixed; and the ticker searches now follow your RADAR list, without SPY and QQQ, spread over the day inside the YouTube limit. The page changes are on a branch; the three back-end jobs are written but <b>not deployed</b>. The coordinator deploys them.</p>
+
+<h2>1 · Is it current?</h2>
+<p>Mostly yes. These are measured from the database at 02:00 UTC on 3 Oct (22:00 ET on 2 Oct):</p>
+<table>
+<tr><th>What</th><th>Newest</th><th>Verdict</th></tr>
+<tr><td>Videos from your subscribed channels</td><td class="n">posted 00:42Z, saved 00:50Z</td><td>Current. 163 new in the last 24 h.</td></tr>
+<tr><td>Videos from the ticker searches</td><td class="n">saved 23:30Z</td><td>Current. That was the last of 9 scheduled runs that day.</td></tr>
+<tr><td>The raw table you use (YouTube › Raw)</td><td class="n">same as the two above</td><td>Current. It is worked out on the page from those videos.</td></tr>
+<tr><td>Per-video sentiment scores, the daily sentiment roll-up</td><td class="n">00:25Z</td><td>Current. The sentiment job runs every 6 hours.</td></tr>
+<tr><td><b>The SENTIMENT sub-tab's table</b> (<code>social_sentiment</code>)</td><td class="n">23 Sep</td><td><b>10 days stale.</b> The job that wrote it was a script on a Mac and it stopped. None of the YouTube jobs writes this table. See decision 2.</td></tr>
+</table>
+<p><b>Two faults found while measuring:</b></p>
+<ul>
+<li><b>YouTube's channel feeds are failing right now.</b> Each 5-minute pass normally reads about 2,364 videos. From 01:05Z it read 0 to 255. A plain request from this Mac got errors too (404 and 500). The fault is at YouTube's end. The job now tries each channel a second time and counts the ones that still fail, so a failure shows up instead of passing silently.</li>
+<li><b>All five YouTube account sign-ins have expired</b> (<code>invalid_grant</code>). The job keeps using the channel lists it saved earlier, so videos still arrive. But a channel you subscribe to after that will not be picked up until the accounts are signed in again. See decision 3.</li>
+</ul>
+<p>The section now has an <b>UPDATED</b> line under the view buttons. Today it reads: <span class="mono">newest video posted 2h ago · job run times not published yet</span>. Once the new <code>yt-config</code> is deployed, it also gives each job's last run, for example: <span class="mono">subscribed channels checked 13m ago · ticker searches ran 2h ago · sentiment scored 1h ago</span>. Any part that is overdue turns red: channels after 20 minutes, searches after 6 hours, sentiment after 7 hours. Failing channel feeds also turn it red.</p>
+
+<h2>2 · Titles first</h2>
+<p>The title now takes the width, at 14 px instead of 11 px, wrapping to two lines. Tickers, tags and lean (sentiment) are small chips in narrow columns. A tag that repeats a ticker is not shown twice. After two tags the rest are counted ("+1"), and you can hover to see them all. Clicking anywhere on a row still opens the video. On a phone the title gets the whole row, with age, channel and chips on one line under it. Before, the phone squeezed the title into a column 28 px wide, one word per line.</p>
+<div class="pair">
+<figure><img src="screens/before-1680-raw.jpg" alt="Before: raw table at 1680 wide, small titles"><figcaption>BEFORE · 1680 · title 11 px; tickers, hashtags and sentiment take 390 px</figcaption></figure>
+<figure><img src="screens/after-radar-1680-raw.jpg" alt="After: raw table at 1680 wide, larger titles, chips"><figcaption>AFTER · 1680 · title 14 px, 876 px wide; chips; UPDATED line</figcaption></figure>
+</div>
+<div class="pair phone">
+<figure><img src="screens/before-390-raw.jpg" alt="Before: phone, title one word per line"><figcaption>BEFORE · 390</figcaption></figure>
+<figure><img src="screens/after-radar-390-raw.jpg" alt="After: phone, title full width"><figcaption>AFTER · 390</figcaption></figure>
+<figure><img src="screens/before-390-edit.jpg" alt="Before: phone edit window"><figcaption>BEFORE · 390 · edit window</figcaption></figure>
+<figure><img src="screens/after-radar-390-edit.jpg" alt="After: phone RADAR window"><figcaption>AFTER · 390 · RADAR window (simulated answer*)</figcaption></figure>
+</div>
+
+<h2>3 · "10 of 10 selected but I only see 7, under 'other'"</h2>
+<p>Three causes, each one measured:</p>
+<ol>
+<li><b>Three of the ten were never drawn.</b> The searched list was GOOGL, MU, NBIS, SPY, TSM, NVDA, QQQ, DRAM, BTCUSD, IREN. SPY, QQQ and DRAM are not in your favourites, and the window only drew favourites. So it counted 10 and showed 7.</li>
+<li><b>Everything was filed under "OTHER".</b> The window asked the cohort table for a column that table does not have. That lookup failed, so all 141 favourites landed in one pile, and the 7 highlighted ones were scattered through it.</li>
+<li><b>The window ran off the screen.</b> On a 1680-wide screen the whole Hub is zoomed 1.28×, but the window's height limit did not allow for that. Its title and its Save / Cancel row were cut off, and the list scrolled with no visible end. This was the hidden scroll.</li>
+</ol>
+<p><b>The ECONOMIC misclick:</b> the Edit button sat at the right end of the sub-tab row, 12 px directly under the ECONOMIC tab, so a click a little high opened ECONOMIC. On a phone the button was off the right edge of the screen. It now sits in the YouTube view bar as <b>⚙ Searched tickers</b>, 84 px clear of ECONOMIC, and it shows on a phone. In the headless check, no master tab overlaps the button, and a click at its centre hits the button.</p>
+<div class="pair">
+<figure><img src="screens/before-1680-edit.jpg" alt="Before: edit window, title cut off, OTHER pile"><figcaption>BEFORE · 1680 · header off-screen, one "OTHER" pile, 7 of 10 visible</figcaption></figure>
+<figure><img src="screens/after-1680-edit.jpg" alt="After with today's yt-config: all 10 shown first"><figcaption>AFTER · with today's yt-config · all 10 shown first, the 3 non-favourites named, fits the screen</figcaption></figure>
+</div>
+<div class="pair">
+<figure><img src="screens/after-radar-1680-edit.jpg" alt="After with new yt-config: RADAR list read-only, grouped"><figcaption>AFTER · with the new yt-config (simulated answer*) · RADAR 17, real groups, the plan, SPY/QQQ never</figcaption></figure>
+<figure><img src="screens/after-radar-1680-cards.jpg" alt="After: cards view with the Searched tickers button in the view bar"><figcaption>AFTER · cards view · the button lives in the view bar</figcaption></figure>
+</div>
+<p class="mono">* The new yt-config is not deployed. For these pictures its answer was built by the same shared code, from the RADAR list and cohorts read on 2 Oct, and fed to the page in the test browser. Every other request went to the live database, read-only. The test browser blocked 2 writes (the watch-later sync) and sent nothing.</p>
+
+<h2>4 · The search rule, and the arithmetic</h2>
+<p><b>The rule now:</b> videos from your subscribed channels come in untouched. The ticker searches use the <b>RADAR</b> list, read-only: 17 names today (MU, NBIS, GOOGL, AMZN, IREN, AVGO, BE, VST, NVDA, BTCUSD, CRDO, CBRS, WMT, WDC, SNDK, ORCL, NFLX). SPY and QQQ are never searched, even if they are added to RADAR. To change what is searched, change RADAR. The window shows the list but does not edit it. BTCUSD is searched as "bitcoin price", because "$BTCUSD stock" is not how people title videos.</p>
+<div class="box sum">
+YouTube's price list: one search = <b>100 units</b>; one detail lookup of up to 50 videos = <b>1 unit</b>. The project's daily allowance is <b>10,000 units</b>. That is YouTube's default; this project's actual figure cannot be seen from here. The count resets at midnight Pacific time.<br><br>
+<b>Before:</b> 4 schedules (crons 168–171) = 9 runs a day × 10 names × 100 + 9 lookups = <b>9,009 units a day</b>, about 90 % of the allowance, on searches alone. SPY and QQQ took 1,800 of those units. The 5-minute subscription sweep adds roughly 300–600 a day for its detail lookups.<br><br>
+<b>After:</b> the search lane is given <b>8,000 units</b>. Each search is costed at 101 units to cover its lookup, so that is <b>79 searches a day</b>. Over 17 names, each name is searched about <b>4.6 times a day</b>, roughly every 5.2 hours. Spent at most: <b>7,979</b>. Adding the sweep gives about <b>8,300–8,600</b>, which leaves 1,400 or more spare.<br><br>
+<b>How it spreads:</b> each run may only search its share of the day so far. If 25 % of the day has passed, at most 25 % of the 79 can have been used. Names are taken in RADAR order, carrying on where the last run stopped. At one run every 20 minutes, that is 1 or 2 searches per run. A late or missed run catches up by at most 6 searches, never in one burst. The tests run two full simulated days: 78–79 searches a day, every name searched, and no name searched more than once beyond any other.
+</div>
+
+<h2>Deploying (for the coordinator; nothing was deployed)</h2>
+<ol>
+<li>Deploy <code>youtube-feed</code> and <code>yt-config</code> together. Both read the new shared file <code>supabase/functions/_shared/yt-search-plan.mjs</code>. Then deploy <code>yt-rss-sweep</code>. All three are on the branch, and each sits on top of a first commit that holds the copies currently deployed, so the diff shows only Y1's changes.</li>
+<li><b>Cron (recommended):</b> replace the four jobs 168–171 with one job every 20 minutes (<code>*/20 * * * *</code>) calling <code>youtube-feed?every=20</code>. If the four old jobs are left as they are, the new code is still safe. It would make at most 6 searches per run, so at most 54 a day, but names would be visited less evenly.</li>
+<li>Merge the Hub branch. The page works with the old yt-config and with the new one.</li>
+<li>Check after the first run: the <code>yt_feed_result</code> row should show <code>rule: RADAR list…</code>, <code>searchTickers</code> with 1–2 names, and a <code>plan.searches_today</code> that climbs through the day. The Hub's UPDATED line should show all three job times.</li>
+</ol>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>The 10,000-unit allowance is YouTube's default. If this project was given more or less, change the search share with the optional <code>yt_search_budget_units</code> setting. It does not exist yet, and without it the code uses 8,000.</li>
+<li>The channel-feed failures may outlast one retry. The count now makes them visible, but it cannot fix YouTube's side.</li>
+<li>The lean chip is the same simple word-list guess as before (not an AI read). Only its shape changed.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>I deployed nothing, and changed no cron, table, key or RADAR entry. The YouTube key stays where it was.</li>
+<li>I did not repair the 10-day-old <code>social_sentiment</code> table. Its writer is not one of these jobs (decision 2).</li>
+<li>I did not see the new yt-config answer live; it is simulated above. The full test suite: 1800 tests, the same 5 failures already known on production, none new. One of those five counts how many times the page uses its age function. It was already failing, and the new UPDATED line adds one more use of that same function.</li>
+</ul>
+
+<h2>Decisions for Alan</h2>
+<ol>
+<li><b>One search run every 20 minutes instead of the four fixed schedules?</b> Recommendation: <b>yes</b>. It spreads the 79 daily searches evenly over the 17 RADAR names, about every 5 hours each, all day.</li>
+<li><b>The SENTIMENT sub-tab reads a table that stopped on 23 Sep.</b> Recommendation: point it at the daily sentiment table the 6-hourly job already keeps current, as a small follow-up job, rather than restart the old Mac script.</li>
+<li><b>Sign the YouTube accounts in again.</b> All five sign-ins have expired, so new subscriptions are not picked up. Recommendation: reconnect SCINTILLA and Personal first. Only you can do this, and it takes about a minute each.</li>
+</ol>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
