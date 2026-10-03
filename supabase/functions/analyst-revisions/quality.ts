@@ -18,7 +18,8 @@
 //   (split_mismatch is a soft note: FMP's adj_target ≠ target ÷ the splits after the note; the row is kept, adj_target_checked carries ours)
 //   target_vs_price(xR)                  adj_target_checked / price when posted outside [1/3, 3] — [1/5, 5] when the headline
 //                                        names the firm — unless the headline states that very number
-//   jump_vs_firm_prior(xR)               adj_target_checked / the same firm's previous kept target (≤ 365 days before) outside
+//   jump_vs_firm_prior(xR)               (adj_target_checked / the same firm's previous kept target, ≤ 365 days before) ÷ (the
+//                                        stock's own move between the two notes) outside
 //                                        [1/2, 2] — [1/4, 4] when the headline names the firm — unless the headline states the number
 //   duplicate                            the same firm, stock and target (±0.5%) — or the same rating — within 3 days of a kept row:
 //                                        the same note from a second publisher; the first kept one stays
@@ -261,7 +262,9 @@ export function classify(rows: QRow[], splits: Split[] = [], nowIso = new Date()
           const pa = checkedOf.get(pj);
           const bandP = ownNamed ? BAND_PRIOR_VERIFIED : BAND_PRIOR;
           if (pa && ts - t(rows[pj].published_utc) <= PRIOR_DAYS * DAY) {
-            const x = checked / pa;
+            // the move beyond the stock's own move: MU at New Street $190 → $1,250 (×6.6) while MU went $187 → $980 (×5.2) is ×1.26
+            const pp = n(rows[pj].price_when_posted), stock = pwp != null && pp != null && pwp > 0 && pp > 0 ? pwp / pp : 1;
+            const x = checked / pa / (stock > 0 && isFinite(stock) ? stock : 1);
             if (x < bandP[0] || x > bandP[1]) hard.push("jump_vs_firm_prior(x" + x.toFixed(2) + ")");
           }
         }
