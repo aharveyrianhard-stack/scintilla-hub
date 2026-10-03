@@ -145,7 +145,7 @@ test("the hooks: the live EARNINGS band merges and appends UNLOCKs; STATS asks f
   const blk = html.slice(html.indexOf("R2 · 2 OCT · UNLOCK — IPO lock-up expiry"), html.indexOf("/* THE ECONOMIC SEGMENT'S SLIDE"));
   assert.match(blk, /pg\("ipo_lockups\?select=/);
   assert.doesNotMatch(blk, /pgPatch|method:\s*"(POST|PATCH|DELETE)"/, "the Hub only reads");
-  assert.match(html, /\.st-blk > div\.st-ulk > b\{ white-space:normal;/);
+  assert.match(html, /\.st-blk > div\.st-ulk > b, \.cv-side \.st1 \.st-blk > div\.st-ulk > b\{ white-space:normal; flex:1 1 0; min-width:0;/);
 });
 
 test("the function: the FMP key from app_config, never printed; /stable/ routes; the SEC research User-Agent; writes only ipo_lockups", () => {
