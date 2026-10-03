@@ -1,0 +1,3982 @@
+{
+ "schema": "scintilla.q2b.job_register.v1",
+ "measured_at": "2026-10-03T15:00Z",
+ "how_measured": "read-only: cron.job + job_run_details (72 h) + cron_dispatch (24 h) + net._http_response (6 h) + output-table newest rows; Fly machines list + each scheduled machine's final log line; launchctl. Commands and keys are not stored.",
+ "counts": {
+  "jobs": 150,
+  "pg_cron": 137,
+  "pg_cron_active": 109,
+  "fly": 10,
+  "macbook_launchd": 3,
+  "verdicts": {
+   "KEEP": 78,
+   "CHANGE": 42,
+   "REMOVE": 28,
+   "REPLACE": 2
+  },
+  "late_or_failing_now": [
+   "ribbon-d-3m",
+   "health-monitor-5m",
+   "stats-engine-30m",
+   "audit-engine-15m",
+   "mirror-gap-repair-daily",
+   "sentiment-news-10m",
+   "sentiment-x-2h",
+   "mac:com.alanharvey.scintilla-xfeed-collector"
+  ]
+ },
+ "references": {
+  "hc": "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+  "prom": "Prometheus instrumentation \u2014 \"The key metric of a batch job is the last time it succeeded\" (https://prometheus.io/docs/practices/instrumentation/#batch-jobs)",
+  "sre": "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)",
+  "pgnet": "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+  "pgcron": "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)",
+  "sbcron": "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)",
+  "pgtimeout": "PostgreSQL statement_timeout \u2014 applied per statement since PG13 (https://www.postgresql.org/docs/current/runtime-config-client.html)",
+  "airflow": "Airflow best practices \u2014 tasks are transactions, idempotent, never incomplete results (https://airflow.apache.org/docs/apache-airflow/stable/best-practices.html)",
+  "flysched": "Fly docs, fly machine run \u2014 --schedule starts the Machine on a \"fuzzy\" hourly/daily cycle; restart no/always/on-fail (https://docs.fly.io/machines/flyctl/fly-machine-run)",
+  "promfor": "Prometheus alerting rules \u2014 `for` (pending) and keep_firing_for (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)",
+  "dagster": "Dagster freshness checks \u2014 an asset overdue for refresh is a failed check (https://docs.dagster.io/examples/best-practices/asset-health-monitoring)"
+ },
+ "jobs": [
+  {
+   "job": "news-feed-1m",
+   "where": "Supabase pg_cron",
+   "id": 6,
+   "part": "the news wire",
+   "what": "Every minute pulls new headlines into the news table the Hub tape reads.",
+   "cadence_utc": "* * * * *",
+   "calls": "edge function news-feed",
+   "writes": "public.news",
+   "read_by": "Hub news tape",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.470688+00",
+   "last_run": "2026-10-03 14:55:00.470688+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'news-feed-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "ribbon-d-3m",
+   "where": "Supabase pg_cron",
+   "id": 7,
+   "part": "the daily ribbon painter",
+   "what": "Every 15 min recomputes the daily ribbon (trend bands) for every stock.",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "edge function ribbon-engine",
+   "writes": "public.ribbon_signals (tf=D)",
+   "read_by": "Hub ribbons / board",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:45:00.895379+00",
+   "last_run": "2026-10-03 14:45:00.895379+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-d-3m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "FAILING",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED B",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page).",
+    "Real answers 24 h: 22 of 96 OK (22.9%), 74 never connected (5 s / 120 s wait ran out at the busy quarter-hour)."
+   ]
+  },
+  {
+   "job": "health-monitor-5m",
+   "where": "Supabase pg_cron",
+   "id": 8,
+   "part": "the old health monitor",
+   "what": "Every 5 min checks feed ages and writes feed_health.",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function health-monitor",
+   "writes": "public.feed_health",
+   "read_by": "nobody alarms on it",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.530192+00",
+   "last_run": "2026-10-03 14:55:00.530192+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'health-monitor-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "FLAKY",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED B",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "Real answers 24 h: 261 of 288 OK (90.6%), 26 never connected (5 s / 120 s wait ran out at the busy quarter-hour).",
+    "One of seven overlapping watchers; fold into the heartbeat + feed_alarm route once its reader is known (Alan's call)."
+   ]
+  },
+  {
+   "job": "fmp-fundamentals-1h",
+   "where": "Supabase pg_cron",
+   "id": 10,
+   "part": null,
+   "what": "Calls edge function fmp-fundamentals on schedule 7 */6 * * * (UTC).",
+   "cadence_utc": "7 */6 * * *",
+   "calls": "edge function fmp-fundamentals",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:07:00.271072+00",
+   "last_run": "2026-10-03 12:07:00.271072+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-fundamentals-1h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "fmp-analyst-2h",
+   "where": "Supabase pg_cron",
+   "id": 11,
+   "part": null,
+   "what": "Calls edge function fmp-analyst on schedule 17 */4 * * * (UTC).",
+   "cadence_utc": "17 */4 * * *",
+   "calls": "edge function fmp-analyst",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:17:00.284375+00",
+   "last_run": "2026-10-03 12:17:00.284375+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-analyst-2h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "fmp-events-2h",
+   "where": "Supabase pg_cron",
+   "id": 12,
+   "part": null,
+   "what": "Calls edge function fmp-events on schedule 37 */6 * * * (UTC).",
+   "cadence_utc": "37 */6 * * *",
+   "calls": "edge function fmp-events",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:37:00.195982+00",
+   "last_run": "2026-10-03 12:37:00.195982+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-events-2h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "fmp-economic-12h",
+   "where": "Supabase pg_cron",
+   "id": 13,
+   "part": null,
+   "what": "Calls edge function fmp-economic on schedule 47 5,17 * * * (UTC).",
+   "cadence_utc": "47 5,17 * * *",
+   "calls": "edge function fmp-economic",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 05:47:00.247746+00",
+   "last_run": "2026-10-03 05:47:00.247746+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-economic-12h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "bf-globals",
+   "where": "Supabase pg_cron",
+   "id": 15,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=globals on schedule 15 6 * * * (UTC).",
+   "cadence_utc": "15 6 * * *",
+   "calls": "edge function fmp-backfill?job=globals",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-globals' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "bf-ratings",
+   "where": "Supabase pg_cron",
+   "id": 16,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=ratings on schedule 20 6 * * * (UTC).",
+   "cadence_utc": "20 6 * * *",
+   "calls": "edge function fmp-backfill?job=ratings",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-ratings' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "bf-targets",
+   "where": "Supabase pg_cron",
+   "id": 17,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=targets on schedule 22 6 * * * (UTC).",
+   "cadence_utc": "22 6 * * *",
+   "calls": "edge function fmp-backfill?job=targets",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-targets' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "bf-profile",
+   "where": "Supabase pg_cron",
+   "id": 18,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=profile on schedule 25 6 * * * (UTC).",
+   "cadence_utc": "25 6 * * *",
+   "calls": "edge function fmp-backfill?job=profile",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 06:25:00.481247+00",
+   "last_run": "2026-10-03 06:25:00.481247+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-profile' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "bf-earnings",
+   "where": "Supabase pg_cron",
+   "id": 19,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=earnings on schedule 28 6 * * * (UTC).",
+   "cadence_utc": "28 6 * * *",
+   "calls": "edge function fmp-backfill?job=earnings",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-earnings' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "bf-estimates",
+   "where": "Supabase pg_cron",
+   "id": 20,
+   "part": null,
+   "what": "Calls edge function fmp-backfill?job=estimates on schedule 31 6 * * * (UTC).",
+   "cadence_utc": "31 6 * * *",
+   "calls": "edge function fmp-backfill?job=estimates",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'bf-estimates' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "market-clock-1m",
+   "where": "Supabase pg_cron",
+   "id": 22,
+   "part": null,
+   "what": "Calls edge function market-clock on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function market-clock",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.490551+00",
+   "last_run": "2026-10-03 14:55:00.490551+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'market-clock-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "cohort-div-5m",
+   "where": "Supabase pg_cron",
+   "id": 25,
+   "part": null,
+   "what": "Calls SQL recompute_cohort_divergence on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL recompute_cohort_divergence",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.521201+00",
+   "last_run": "2026-10-03 14:55:00.521201+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'cohort-div-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "read-engine-10m",
+   "where": "Supabase pg_cron",
+   "id": 27,
+   "part": null,
+   "what": "Calls edge function read-engine on schedule */10 * * * * (UTC).",
+   "cadence_utc": "*/10 * * * *",
+   "calls": "edge function read-engine",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.651916+00",
+   "last_run": "2026-10-03 14:50:00.651916+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'read-engine-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "stats-engine-30m",
+   "where": "Supabase pg_cron",
+   "id": 28,
+   "part": "the statistics clerk",
+   "what": "Every 30 min recomputes z-scores and percentiles per stock.",
+   "cadence_utc": "*/30 * * * *",
+   "calls": "edge function stats-engine",
+   "writes": "public.statistics (has no time column)",
+   "read_by": "Hub STATS",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:30:01.164175+00",
+   "last_run": "2026-10-03 14:30:01.164175+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'stats-engine-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "FAILING",
+   "status": "FAILING",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED B",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "Real answers 24 h: 7 of 48 OK (14.6%), 41 never connected (5 s / 120 s wait ran out at the busy quarter-hour)."
+   ]
+  },
+  {
+   "job": "event-signals-30m",
+   "where": "Supabase pg_cron",
+   "id": 30,
+   "part": null,
+   "what": "Calls edge function event-signals on schedule 11,41 * * * * (UTC).",
+   "cadence_utc": "11,41 * * * *",
+   "calls": "edge function event-signals",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:41:00.065616+00",
+   "last_run": "2026-10-03 14:41:00.065616+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'event-signals-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "news-cohort-5m",
+   "where": "Supabase pg_cron",
+   "id": 34,
+   "part": null,
+   "what": "Calls SQL recompute_news_cohort on schedule */15 * * * * (UTC).",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "SQL recompute_news_cohort",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:45:00.931692+00",
+   "last_run": "2026-10-03 14:45:00.931692+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'news-cohort-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "stats-ladder-mtf-weekly",
+   "where": "Supabase pg_cron",
+   "id": 36,
+   "part": null,
+   "what": "Calls edge function stats-engine on schedule 50 6 * * 0 (UTC).",
+   "cadence_utc": "50 6 * * 0",
+   "calls": "edge function stats-engine",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'stats-ladder-mtf-weekly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "ribbon-series-batched",
+   "where": "Supabase pg_cron",
+   "id": 37,
+   "part": null,
+   "what": "Calls edge function ribbon-series-engine on schedule 17 */4 * * * (UTC).",
+   "cadence_utc": "17 */4 * * *",
+   "calls": "edge function ribbon-series-engine",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-series-batched' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "freshness-scan-15m",
+   "where": "Supabase pg_cron",
+   "id": 46,
+   "part": null,
+   "what": "Calls SQL refresh_ohlcv_freshness on schedule */15 * * * * (UTC).",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "SQL refresh_ohlcv_freshness",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:45:00.662521+00",
+   "last_run": "2026-10-03 14:45:00.662521+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'freshness-scan-15m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "crypto-candles-1m",
+   "where": "Supabase pg_cron",
+   "id": 53,
+   "part": null,
+   "what": "Calls edge function crypto-candles?g=60,300,900,3600 on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "edge function crypto-candles?g=60,300,900,3600",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.466004+00",
+   "last_run": "2026-10-03 14:55:00.466004+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'crypto-candles-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "crypto-candles-deep-1h",
+   "where": "Supabase pg_cron",
+   "id": 54,
+   "part": null,
+   "what": "Calls edge function crypto-candles?g=21600,86400 on schedule 23 * * * * (UTC).",
+   "cadence_utc": "23 * * * *",
+   "calls": "edge function crypto-candles?g=21600,86400",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:23:00.19833+00",
+   "last_run": "2026-10-03 14:23:00.19833+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'crypto-candles-deep-1h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "geiger-1m",
+   "where": "Supabase pg_cron",
+   "id": 57,
+   "part": "the old SQL Geiger",
+   "what": "Every minute recomputes the database-side Geiger.",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL refresh_geiger",
+   "writes": "composite tables",
+   "read_by": "legacy readers",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.542961+00",
+   "last_run": "2026-10-03 14:55:00.542961+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'geiger-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-universe-15m",
+   "where": "Supabase pg_cron",
+   "id": 58,
+   "part": null,
+   "what": "Calls edge function fmp-universe?all=1 on schedule */15 13-20 * * 1-5 (UTC).",
+   "cadence_utc": "*/15 13-20 * * 1-5",
+   "calls": "edge function fmp-universe?all=1",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-universe-15m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "eod-weekly-rebuild",
+   "where": "Supabase pg_cron",
+   "id": 60,
+   "part": null,
+   "what": "Calls SQL rebuild_weekly on schedule 0 22 * * 1-5 (UTC).",
+   "cadence_utc": "0 22 * * 1-5",
+   "calls": "SQL rebuild_weekly",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 22:00:01.41642+00",
+   "last_run": "2026-10-02 22:00:01.41642+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'eod-weekly-rebuild' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "crypto-coinbase-1m",
+   "where": "Supabase pg_cron",
+   "id": 61,
+   "part": null,
+   "what": "Calls edge function crypto-coinbase on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "edge function crypto-coinbase",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.472116+00",
+   "last_run": "2026-10-03 14:55:00.472116+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'crypto-coinbase-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "audit-engine-15m",
+   "where": "Supabase pg_cron",
+   "id": 62,
+   "part": "the old auditor",
+   "what": "Every 15 min runs the audit-engine checks.",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "edge function audit-engine",
+   "writes": "audit tables",
+   "read_by": "unclear",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:45:00.775897+00",
+   "last_run": "2026-10-03 14:45:00.775897+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'audit-engine-15m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "FLAKY",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED B",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page).",
+    "Real answers 24 h: 77 of 96 OK (80.2%), 19 never connected (5 s / 120 s wait ran out at the busy quarter-hour).",
+    "One of seven overlapping watchers; fold into the heartbeat + feed_alarm route once its reader is known (Alan's call)."
+   ]
+  },
+  {
+   "job": "databento-futures-5m",
+   "where": "Supabase pg_cron",
+   "id": 72,
+   "part": null,
+   "what": "Calls edge function databento-futures?endlagmin=720 on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function databento-futures?endlagmin=720",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'databento-futures-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "yahoo-futures-2m",
+   "where": "Supabase pg_cron",
+   "id": 74,
+   "part": null,
+   "what": "Calls edge function yahoo-futures on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "edge function yahoo-futures",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'yahoo-futures-2m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "ribbon-30m",
+   "where": "Supabase pg_cron",
+   "id": 82,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=30 on schedule 5,35 * * * * (UTC).",
+   "cadence_utc": "5,35 * * * *",
+   "calls": "edge function ribbon-engine?tf=30",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:35:00.428074+00",
+   "last_run": "2026-10-03 14:35:00.428074+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-4h",
+   "where": "Supabase pg_cron",
+   "id": 83,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=240 on schedule 6 */4 * * * (UTC).",
+   "cadence_utc": "6 */4 * * *",
+   "calls": "edge function ribbon-engine?tf=240",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:06:00.383484+00",
+   "last_run": "2026-10-03 12:06:00.383484+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-4h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-1w",
+   "where": "Supabase pg_cron",
+   "id": 84,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=W on schedule 9 3 * * * (UTC).",
+   "cadence_utc": "9 3 * * *",
+   "calls": "edge function ribbon-engine?tf=W",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 03:09:00.278094+00",
+   "last_run": "2026-10-03 03:09:00.278094+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-1w' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-5m",
+   "where": "Supabase pg_cron",
+   "id": 85,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=5 on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function ribbon-engine?tf=5",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.573911+00",
+   "last_run": "2026-10-03 14:55:00.573911+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-15m",
+   "where": "Supabase pg_cron",
+   "id": 86,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=15 on schedule 7,22,37,52 * * * * (UTC).",
+   "cadence_utc": "7,22,37,52 * * * *",
+   "calls": "edge function ribbon-engine?tf=15",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:52:00.284304+00",
+   "last_run": "2026-10-03 14:52:00.284304+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-15m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-1h",
+   "where": "Supabase pg_cron",
+   "id": 87,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=60 on schedule 11 * * * * (UTC).",
+   "cadence_utc": "11 * * * *",
+   "calls": "edge function ribbon-engine?tf=60",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:11:00.216607+00",
+   "last_run": "2026-10-03 14:11:00.216607+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-1h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "backfill-deepdaily",
+   "where": "Supabase pg_cron",
+   "id": 93,
+   "part": null,
+   "what": "Calls SQL backfill_deepdaily_run on schedule 20 7 * * * (UTC).",
+   "cadence_utc": "20 7 * * *",
+   "calls": "SQL backfill_deepdaily_run",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 07:20:00.452417+00",
+   "last_run": "2026-10-03 07:20:00.452417+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'backfill-deepdaily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "ribbon-1m",
+   "where": "Supabase pg_cron",
+   "id": 102,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=1 on schedule */2 * * * * (UTC).",
+   "cadence_utc": "*/2 * * * *",
+   "calls": "edge function ribbon-engine?tf=1",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:54:00.213744+00",
+   "last_run": "2026-10-03 14:54:00.213744+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-3m",
+   "where": "Supabase pg_cron",
+   "id": 103,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=3 on schedule */3 * * * * (UTC).",
+   "cadence_utc": "*/3 * * * *",
+   "calls": "edge function ribbon-engine?tf=3",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:54:00.253152+00",
+   "last_run": "2026-10-03 14:54:00.253152+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-3m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-10m",
+   "where": "Supabase pg_cron",
+   "id": 104,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=10 on schedule 4,14,24,34,44,54 * * * * (UTC).",
+   "cadence_utc": "4,14,24,34,44,54 * * * *",
+   "calls": "edge function ribbon-engine?tf=10",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:54:00.287891+00",
+   "last_run": "2026-10-03 14:54:00.287891+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-2h",
+   "where": "Supabase pg_cron",
+   "id": 105,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=120 on schedule 8 */2 * * * (UTC).",
+   "cadence_utc": "8 */2 * * *",
+   "calls": "edge function ribbon-engine?tf=120",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:08:00.295431+00",
+   "last_run": "2026-10-03 14:08:00.295431+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-2h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-3h",
+   "where": "Supabase pg_cron",
+   "id": 106,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=180 on schedule 12 */3 * * * (UTC).",
+   "cadence_utc": "12 */3 * * *",
+   "calls": "edge function ribbon-engine?tf=180",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:12:00.422746+00",
+   "last_run": "2026-10-03 12:12:00.422746+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-3h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-6h",
+   "where": "Supabase pg_cron",
+   "id": 107,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=6h on schedule 19 */6 * * * (UTC).",
+   "cadence_utc": "19 */6 * * *",
+   "calls": "edge function ribbon-engine?tf=6h",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:19:00.25628+00",
+   "last_run": "2026-10-03 12:19:00.25628+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-6h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-12h",
+   "where": "Supabase pg_cron",
+   "id": 108,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=12h on schedule 24 */12 * * * (UTC).",
+   "cadence_utc": "24 */12 * * *",
+   "calls": "edge function ribbon-engine?tf=12h",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 12:24:00.559244+00",
+   "last_run": "2026-10-03 12:24:00.559244+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-12h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-3d",
+   "where": "Supabase pg_cron",
+   "id": 109,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=3D on schedule 34 2 * * * (UTC).",
+   "cadence_utc": "34 2 * * *",
+   "calls": "edge function ribbon-engine?tf=3D",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 02:34:00.383932+00",
+   "last_run": "2026-10-03 02:34:00.383932+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-3d' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-2w",
+   "where": "Supabase pg_cron",
+   "id": 110,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=2W on schedule 44 4 * * 1 (UTC).",
+   "cadence_utc": "44 4 * * 1",
+   "calls": "edge function ribbon-engine?tf=2W",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-2w' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "ribbon-1mo",
+   "where": "Supabase pg_cron",
+   "id": 111,
+   "part": null,
+   "what": "Calls edge function ribbon-engine?tf=1M on schedule 54 5 1 * * (UTC).",
+   "cadence_utc": "54 5 1 * *",
+   "calls": "edge function ribbon-engine?tf=1M",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-01 05:54:00.386223+00",
+   "last_run": "2026-10-01 05:54:00.386223+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ribbon-1mo' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "news-sentiment-10m",
+   "where": "Supabase pg_cron",
+   "id": 112,
+   "part": null,
+   "what": "Calls SQL recompute_news_sentiment on schedule 3,13,23,33,43,53 * * * * (UTC).",
+   "cadence_utc": "3,13,23,33,43,53 * * * *",
+   "calls": "SQL recompute_news_sentiment",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:53:00.174252+00",
+   "last_run": "2026-10-03 14:53:00.174252+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'news-sentiment-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "overnight-audit-30m",
+   "where": "Supabase pg_cron",
+   "id": 113,
+   "part": "the overnight auditor",
+   "what": "Every 30 min appends an audit row (93,423 rows so far).",
+   "cadence_utc": "*/30 * * * *",
+   "calls": "SQL run_overnight_audit",
+   "writes": "overnight_audit",
+   "read_by": "unclear",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:30:01.015452+00",
+   "last_run": "2026-10-03 14:30:01.015452+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'overnight-audit-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": [
+    "One of seven overlapping watchers; fold into the heartbeat + feed_alarm route once its reader is known (Alan's call)."
+   ]
+  },
+  {
+   "job": "guardrail-jobhealth-30m",
+   "where": "Supabase pg_cron",
+   "id": 119,
+   "part": "the old job auditor",
+   "what": "Every 30 min looks for >= 3 failures of one job inside an hour (blind to nightly jobs); 0 rows in 7 days.",
+   "cadence_utc": "*/30 * * * *",
+   "calls": "SQL public.job_health_audit",
+   "writes": "guardrail_log",
+   "read_by": "nobody",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:30:00.858475+00",
+   "last_run": "2026-10-03 14:30:00.858475+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'guardrail-jobhealth-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "REPLACE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "A watcher nobody hears: replace with the one dead-man's switch (job-heartbeat-check-5m) + feed_alarm/ntfy."
+   ]
+  },
+  {
+   "job": "feed-alerts-5m",
+   "where": "Supabase pg_cron",
+   "id": 129,
+   "part": "the old alert writer",
+   "what": "Every 5 min writes feed_alerts rows \u2014 9,352 stored, 0 ever delivered, nothing new since 18 Sep.",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL public.check_feed_alerts",
+   "writes": "feed_alerts",
+   "read_by": "nobody",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.524518+00",
+   "last_run": "2026-10-03 14:55:00.524518+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'feed-alerts-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "REPLACE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "A watcher nobody hears: replace with the one dead-man's switch (job-heartbeat-check-5m) + feed_alarm/ntfy."
+   ]
+  },
+  {
+   "job": "fmp-breaker-2m",
+   "where": "Supabase pg_cron",
+   "id": 131,
+   "part": null,
+   "what": "Calls SQL public.fmp_breaker_tick on schedule */2 * * * * (UTC).",
+   "cadence_utc": "*/2 * * * *",
+   "calls": "SQL public.fmp_breaker_tick",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-breaker-2m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "rollup-intraday-5m",
+   "where": "Supabase pg_cron",
+   "id": 142,
+   "part": null,
+   "what": "Calls SQL call public.rollup_intraday_cron_v2() on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL call public.rollup_intraday_cron_v2()",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.548681+00",
+   "last_run": "2026-10-03 14:55:00.548681+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'rollup-intraday-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "yt-rss-sweep-5m",
+   "where": "Supabase pg_cron",
+   "id": 167,
+   "part": "the YouTube RSS sweeper",
+   "what": "Every 5 min reads subscribed channels' feeds.",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function yt-rss-sweep",
+   "writes": "youtube_videos",
+   "read_by": "Hub/Station YouTube",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.558792+00",
+   "last_run": "2026-10-03 14:55:00.558792+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'yt-rss-sweep-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "youtube-feed-a",
+   "where": "Supabase pg_cron",
+   "id": 168,
+   "part": null,
+   "what": "Calls edge function youtube-feed on schedule 0 5,10,16 * * * (UTC).",
+   "cadence_utc": "0 5,10,16 * * *",
+   "calls": "edge function youtube-feed",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": "2026-10-02 16:00:00.885169+00",
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'youtube-feed-a' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "youtube-feed-b",
+   "where": "Supabase pg_cron",
+   "id": 169,
+   "part": null,
+   "what": "Calls edge function youtube-feed on schedule 15 8 * * * (UTC).",
+   "cadence_utc": "15 8 * * *",
+   "calls": "edge function youtube-feed",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'youtube-feed-b' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "youtube-feed-c",
+   "where": "Supabase pg_cron",
+   "id": 170,
+   "part": null,
+   "what": "Calls edge function youtube-feed on schedule 45 11,20 * * * (UTC).",
+   "cadence_utc": "45 11,20 * * *",
+   "calls": "edge function youtube-feed",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": "2026-10-02 20:45:01.108318+00",
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'youtube-feed-c' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "youtube-feed-d",
+   "where": "Supabase pg_cron",
+   "id": 171,
+   "part": null,
+   "what": "Calls edge function youtube-feed on schedule 30 13,18,23 * * * (UTC).",
+   "cadence_utc": "30 13,18,23 * * *",
+   "calls": "edge function youtube-feed",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": "2026-10-02 23:30:01.073611+00",
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'youtube-feed-d' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "earnings-sweep-generic",
+   "where": "Supabase pg_cron",
+   "id": 182,
+   "part": null,
+   "what": "Calls edge function earnings-sweep on schedule */10 10-16,20-23,0-4 * * * (UTC).",
+   "cadence_utc": "*/10 10-16,20-23,0-4 * * *",
+   "calls": "edge function earnings-sweep",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.630309+00",
+   "last_run": "2026-10-03 14:50:00.630309+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'earnings-sweep-generic' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "earnings-date-verify-daily",
+   "where": "Supabase pg_cron",
+   "id": 185,
+   "part": null,
+   "what": "Calls edge function earnings-date-verify?days=10 on schedule 0 10 * * * (UTC).",
+   "cadence_utc": "0 10 * * *",
+   "calls": "edge function earnings-date-verify?days=10",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 10:00:01.68575+00",
+   "last_run": "2026-10-03 10:00:01.68575+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'earnings-date-verify-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "desk-patterns-2m",
+   "where": "Supabase pg_cron",
+   "id": 188,
+   "part": null,
+   "what": "Calls edge function tvextract?k=***&store=1&tf=D on schedule */2 * * * * (UTC).",
+   "cadence_utc": "*/2 * * * *",
+   "calls": "edge function tvextract?k=***&store=1&tf=D",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:54:00.308485+00",
+   "last_run": "2026-10-03 14:54:00.308485+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'desk-patterns-2m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "mcap-from-shares-15m",
+   "where": "Supabase pg_cron",
+   "id": 189,
+   "part": null,
+   "what": "Calls SQL public.mcap_from_shares on schedule */15 * * * * (UTC).",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "SQL public.mcap_from_shares",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mcap-from-shares-15m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "desk-tvprice-15s",
+   "where": "Supabase pg_cron",
+   "id": 190,
+   "part": null,
+   "what": "Calls edge function tvprice?k=***&store=1 on schedule 15 seconds (UTC).",
+   "cadence_utc": "15 seconds",
+   "calls": "edge function tvprice?k=***&store=1",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'desk-tvprice-15s' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "desk-geo-5m",
+   "where": "Supabase pg_cron",
+   "id": 191,
+   "part": null,
+   "what": "Calls edge function tvgeo?k=***&store=1&tf=180&days=4000&range=5000&session=extended on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function tvgeo?k=***&store=1&tf=180&days=4000&range=5000&session=extended",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.523102+00",
+   "last_run": "2026-10-03 14:55:00.523102+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'desk-geo-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "desk-tvmint-30m",
+   "where": "Supabase pg_cron",
+   "id": 195,
+   "part": null,
+   "what": "Calls edge function tvmint?k=*** on schedule */30 * * * * (UTC).",
+   "cadence_utc": "*/30 * * * *",
+   "calls": "edge function tvmint?k=***",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:30:01.03282+00",
+   "last_run": "2026-10-03 14:30:01.03282+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'desk-tvmint-30m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "sector-rankings-refresh",
+   "where": "Supabase pg_cron",
+   "id": 199,
+   "part": null,
+   "what": "Calls SQL public.refresh_sector_rankings on schedule 12 * * * * (UTC).",
+   "cadence_utc": "12 * * * *",
+   "calls": "SQL public.refresh_sector_rankings",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:12:00.350888+00",
+   "last_run": "2026-10-03 14:12:00.350888+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sector-rankings-refresh' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "proof-check-nightly",
+   "where": "Supabase pg_cron",
+   "id": 202,
+   "part": "the proof checker",
+   "what": "Nightly runs the desk proof checks.",
+   "cadence_utc": "45 7 * * *",
+   "calls": "SQL scin_proof_check",
+   "writes": "proof_checks, desk_status",
+   "read_by": "Station desk",
+   "active": true,
+   "last_success_measured": "2026-10-03 07:45:00.760987+00",
+   "last_run": "2026-10-03 07:45:00.760987+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'proof-check-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "sector-feeds-refresh-daily",
+   "where": "Supabase pg_cron",
+   "id": 203,
+   "part": null,
+   "what": "Calls edge function sector-feeds-refresh?k=***&mode=refresh&days=7 on schedule 25 7 * * 1-5 (UTC).",
+   "cadence_utc": "25 7 * * 1-5",
+   "calls": "edge function sector-feeds-refresh?k=***&mode=refresh&days=7",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sector-feeds-refresh-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "dispatch-reap-2m",
+   "where": "Supabase pg_cron",
+   "id": 207,
+   "part": "the switchboard recorder",
+   "what": "Every 2 min copies each recorded HTTP job's real answer (200/500/timeout) into cron_dispatch.",
+   "cadence_utc": "*/2 * * * *",
+   "calls": "SQL scin_dispatch_reap",
+   "writes": "public.cron_dispatch",
+   "read_by": "the heartbeat checker",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:54:00.227244+00",
+   "last_run": "2026-10-03 14:54:00.227244+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'dispatch-reap-2m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "geiger-snapshot-nightly",
+   "where": "Supabase pg_cron",
+   "id": 209,
+   "part": null,
+   "what": "Calls SQL scin_snapshot_composite on schedule 10 1 * * 2-6 (UTC).",
+   "cadence_utc": "10 1 * * 2-6",
+   "calls": "SQL scin_snapshot_composite",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 01:10:00.659537+00",
+   "last_run": "2026-10-03 01:10:00.659537+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'geiger-snapshot-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "archive-gap-check-nightly",
+   "where": "Supabase pg_cron",
+   "id": 210,
+   "part": null,
+   "what": "Calls SQL scin_check_archive_gaps on schedule 25 2 * * * (UTC).",
+   "cadence_utc": "25 2 * * *",
+   "calls": "SQL scin_check_archive_gaps",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 02:25:00.469655+00",
+   "last_run": "2026-10-03 02:25:00.469655+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'archive-gap-check-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "scin-backfill-daily",
+   "where": "Supabase pg_cron",
+   "id": 211,
+   "part": null,
+   "what": "Calls SQL scin_backfill_daily on schedule 40 7 * * * (UTC).",
+   "cadence_utc": "40 7 * * *",
+   "calls": "SQL scin_backfill_daily",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 07:40:00.63263+00",
+   "last_run": "2026-10-03 07:40:00.63263+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'scin-backfill-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "treasury-curve-daily",
+   "where": "Supabase pg_cron",
+   "id": 214,
+   "part": null,
+   "what": "Calls edge function treasury-curve?days=10 on schedule 35 8 * * 1-6 (UTC).",
+   "cadence_utc": "35 8 * * 1-6",
+   "calls": "edge function treasury-curve?days=10",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 08:35:00.424515+00",
+   "last_run": "2026-10-03 08:35:00.424515+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'treasury-curve-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "momentum-snapshot-live",
+   "where": "Supabase pg_cron",
+   "id": 216,
+   "part": null,
+   "what": "Calls SQL scin_snapshot_momentum_live on schedule 5 21 * * 1-5 (UTC).",
+   "cadence_utc": "5 21 * * 1-5",
+   "calls": "SQL scin_snapshot_momentum_live",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 21:05:00.472458+00",
+   "last_run": "2026-10-02 21:05:00.472458+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'momentum-snapshot-live' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "history-extend",
+   "where": "Supabase pg_cron",
+   "id": 218,
+   "part": "the history extender",
+   "what": "Every 2 min overnight extends stored daily history.",
+   "cadence_utc": "*/2 4-13 * * *",
+   "calls": "SQL scin_extend_history",
+   "writes": "ohlcv_history",
+   "read_by": "legacy daily reads",
+   "active": true,
+   "last_success_measured": "2026-10-03 13:58:00.362581+00",
+   "last_run": "2026-10-03 13:58:00.362581+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'history-extend' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "rebuild-thin-dates",
+   "where": "Supabase pg_cron",
+   "id": 219,
+   "part": "the thin-day fixer",
+   "what": "Hourly overnight rebuilds days with too few rows (still retrying Labor Day 7 Sep).",
+   "cadence_utc": "11 4-13 * * *",
+   "calls": "SQL scin_rebuild_thin_dates",
+   "writes": "ohlcv_history",
+   "read_by": "legacy",
+   "active": true,
+   "last_success_measured": "2026-10-03 13:11:00.255681+00",
+   "last_run": "2026-10-03 13:11:00.255681+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'rebuild-thin-dates' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": [
+    "Still retries 2026-09-07 (Labor Day) every hour overnight \u2014 calendar-blind (hand to Q2a)."
+   ]
+  },
+  {
+   "job": "mirror-tables-r2-1",
+   "where": "Supabase pg_cron",
+   "id": 220,
+   "part": "the backup clerk (1)",
+   "what": "Nightly copies database tables to the R2 backup, chunk 1.",
+   "cadence_utc": "10 2 * * *",
+   "calls": "edge function table-to-r2?chunk=2000&pause=250",
+   "writes": "R2 tables/ + mirror_progress",
+   "read_by": "disaster recovery",
+   "active": true,
+   "last_success_measured": "2026-10-03 02:10:00.55422+00",
+   "last_run": "2026-10-03 02:10:00.55422+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-tables-r2-1' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "mirror-tables-r2-2",
+   "where": "Supabase pg_cron",
+   "id": 221,
+   "part": "the backup clerk (2)",
+   "what": "Nightly copies database tables to the R2 backup, chunk 2.",
+   "cadence_utc": "10 3 * * *",
+   "calls": "edge function table-to-r2?chunk=2000&pause=250",
+   "writes": "R2 tables/ + mirror_progress",
+   "read_by": "disaster recovery",
+   "active": true,
+   "last_success_measured": "2026-10-03 03:10:00.492503+00",
+   "last_run": "2026-10-03 03:10:00.492503+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-tables-r2-2' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "mirror-tables-r2-3",
+   "where": "Supabase pg_cron",
+   "id": 222,
+   "part": "the backup clerk (3)",
+   "what": "Nightly copies database tables to the R2 backup, chunk 3.",
+   "cadence_utc": "10 4 * * *",
+   "calls": "edge function table-to-r2?chunk=2000&pause=250",
+   "writes": "R2 tables/ + mirror_progress",
+   "read_by": "disaster recovery",
+   "active": true,
+   "last_success_measured": "2026-10-03 04:10:00.615641+00",
+   "last_run": "2026-10-03 04:10:00.615641+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-tables-r2-3' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "mirror-audit-nightly",
+   "where": "Supabase pg_cron",
+   "id": 223,
+   "part": "the backup inspector",
+   "what": "Nightly compares each backed-up table with the database (rows, columns, a sample).",
+   "cadence_utc": "40 5 * * *",
+   "calls": "edge function mirror-audit?sample=300",
+   "writes": "public.mirror_audit",
+   "read_by": "nobody alarms on it",
+   "active": true,
+   "last_success_measured": "2026-10-03 05:40:00.787332+00",
+   "last_run": "2026-10-03 05:40:00.787332+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-audit-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "series-stats-refresh",
+   "where": "Supabase pg_cron",
+   "id": 224,
+   "part": null,
+   "what": "Calls SQL scin_refresh_series_stats on schedule */10 * * * * (UTC).",
+   "cadence_utc": "*/10 * * * *",
+   "calls": "SQL scin_refresh_series_stats",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'series-stats-refresh' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "macro-vix-daily",
+   "where": "Supabase pg_cron",
+   "id": 227,
+   "part": null,
+   "what": "Calls edge function macro-feeds?only=vix&days=30 on schedule 20 22 * * 1-5 (UTC).",
+   "cadence_utc": "20 22 * * 1-5",
+   "calls": "edge function macro-feeds?only=vix&days=30",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 22:20:00.904274+00",
+   "last_run": "2026-10-02 22:20:00.904274+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'macro-vix-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "macro-econ-cot-daily",
+   "where": "Supabase pg_cron",
+   "id": 228,
+   "part": null,
+   "what": "Calls edge function macro-feeds?days=120 on schedule 35 22 * * * (UTC).",
+   "cadence_utc": "35 22 * * *",
+   "calls": "edge function macro-feeds?days=120",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 22:35:00.418378+00",
+   "last_run": "2026-10-02 22:35:00.418378+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'macro-econ-cot-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "feed-watchdog-10m",
+   "where": "Supabase pg_cron",
+   "id": 229,
+   "part": "the freshness watchdog",
+   "what": "Every 10 min compares each feed table's newest row with its allowed age; writes feed_alarm.",
+   "cadence_utc": "*/10 * * * *",
+   "calls": "SQL scin_feed_watchdog",
+   "writes": "feed_alarm",
+   "read_by": "Hub alarm list",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.793209+00",
+   "last_run": "2026-10-03 14:50:00.793209+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'feed-watchdog-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "cboe-vol-daily",
+   "where": "Supabase pg_cron",
+   "id": 232,
+   "part": null,
+   "what": "Calls edge function cboe-vol?days=30 on schedule 25 22 * * 1-5 (UTC).",
+   "cadence_utc": "25 22 * * 1-5",
+   "calls": "edge function cboe-vol?days=30",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 22:25:00.45621+00",
+   "last_run": "2026-10-02 22:25:00.45621+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'cboe-vol-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "sector-rankings-daily",
+   "where": "Supabase pg_cron",
+   "id": 233,
+   "part": null,
+   "what": "Calls SQL scin_rebuild_sector_rankings on schedule 15 21 * * 1-5 (UTC).",
+   "cadence_utc": "15 21 * * 1-5",
+   "calls": "SQL scin_rebuild_sector_rankings",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 21:15:00.84249+00",
+   "last_run": "2026-10-02 21:15:00.84249+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sector-rankings-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "composite-by-tf-capture",
+   "where": "Supabase pg_cron",
+   "id": 234,
+   "part": null,
+   "what": "Calls SQL scin_snapshot_composite_by_tf on schedule 5 13,17,20,23 * * 1-5 (UTC).",
+   "cadence_utc": "5 13,17,20,23 * * 1-5",
+   "calls": "SQL scin_snapshot_composite_by_tf",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 23:05:00.476227+00",
+   "last_run": "2026-10-02 23:05:00.476227+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'composite-by-tf-capture' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "vacuum-ohlcv-hourly",
+   "where": "Supabase pg_cron",
+   "id": 236,
+   "part": "the janitor",
+   "what": "Hourly at :40 tidies the big price table (~10 s).",
+   "cadence_utc": "40 * * * *",
+   "calls": "SQL vacuum",
+   "writes": "\u2014",
+   "read_by": "\u2014",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:40:00.678508+00",
+   "last_run": "2026-10-03 14:40:00.678508+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'vacuum-ohlcv-hourly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "vacuum-small-tables",
+   "where": "Supabase pg_cron",
+   "id": 237,
+   "part": null,
+   "what": "Calls SQL vacuum on schedule 50 * * * * (UTC).",
+   "cadence_utc": "50 * * * *",
+   "calls": "SQL vacuum",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.731268+00",
+   "last_run": "2026-10-03 14:50:00.731268+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'vacuum-small-tables' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-economic-actuals-1h",
+   "where": "Supabase pg_cron",
+   "id": 238,
+   "part": null,
+   "what": "Calls edge function fmp-economic?only=recent on schedule 5 * * * * (UTC).",
+   "cadence_utc": "5 * * * *",
+   "calls": "edge function fmp-economic?only=recent",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:05:00.640461+00",
+   "last_run": "2026-10-03 14:05:00.640461+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-economic-actuals-1h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-nonequity-sunday-observer-poll",
+   "where": "Supabase pg_cron",
+   "id": 239,
+   "part": null,
+   "what": "Calls SQL fmp_control.observe_tick on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL fmp_control.observe_tick",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-nonequity-sunday-observer-poll' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-nonequity-sunday-observer-harvest",
+   "where": "Supabase pg_cron",
+   "id": 240,
+   "part": null,
+   "what": "Calls SQL fmp_control.observe_harvest on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL fmp_control.observe_harvest",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-nonequity-sunday-observer-harvest' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fan-daily-refresh",
+   "where": "Supabase pg_cron",
+   "id": 241,
+   "part": "the fan clerk (SQL side)",
+   "what": "After the close writes non-equity fan rows (equities come from the Fly fan clerk).",
+   "cadence_utc": "30 22 * * 1-5",
+   "calls": "SQL public.scin_refresh_fan_daily",
+   "writes": "geiger_trend_20260814 (fan_daily view)",
+   "read_by": "Hub REWIND",
+   "active": true,
+   "last_success_measured": "2026-10-02 22:30:01.394407+00",
+   "last_run": "2026-10-02 22:30:01.394407+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fan-daily-refresh' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-research-income",
+   "where": "Supabase pg_cron",
+   "id": 242,
+   "part": null,
+   "what": "Calls SQL fmp_control.acquire_research_slice on schedule */6 * * * * (UTC).",
+   "cadence_utc": "*/6 * * * *",
+   "calls": "SQL fmp_control.acquire_research_slice",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-income' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-research-balance",
+   "where": "Supabase pg_cron",
+   "id": 243,
+   "part": null,
+   "what": "Calls SQL fmp_control.acquire_research_slice on schedule 2-59/6 * * * * (UTC).",
+   "cadence_utc": "2-59/6 * * * *",
+   "calls": "SQL fmp_control.acquire_research_slice",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-balance' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-research-cashflow",
+   "where": "Supabase pg_cron",
+   "id": 244,
+   "part": null,
+   "what": "Calls SQL fmp_control.acquire_research_slice on schedule 4-59/6 * * * * (UTC).",
+   "cadence_utc": "4-59/6 * * * *",
+   "calls": "SQL fmp_control.acquire_research_slice",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-cashflow' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-research-keymetrics",
+   "where": "Supabase pg_cron",
+   "id": 245,
+   "part": null,
+   "what": "Calls SQL fmp_control.acquire_research_slice on schedule 1-59/6 * * * * (UTC).",
+   "cadence_utc": "1-59/6 * * * *",
+   "calls": "SQL fmp_control.acquire_research_slice",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-keymetrics' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-research-ratios",
+   "where": "Supabase pg_cron",
+   "id": 246,
+   "part": null,
+   "what": "Calls SQL fmp_control.acquire_research_slice on schedule 3-59/6 * * * * (UTC).",
+   "cadence_utc": "3-59/6 * * * *",
+   "calls": "SQL fmp_control.acquire_research_slice",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-ratios' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-research-harvest",
+   "where": "Supabase pg_cron",
+   "id": 247,
+   "part": null,
+   "what": "Calls SQL fmp_control.harvest_research on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL fmp_control.harvest_research",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-research-harvest' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "fmp-nonequity-quote-1m",
+   "where": "Supabase pg_cron",
+   "id": 248,
+   "part": null,
+   "what": "Calls SQL fmp_control.nonequity_quote_tick on schedule * * * * * (UTC).",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL fmp_control.nonequity_quote_tick",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.438544+00",
+   "last_run": "2026-10-03 14:55:00.438544+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-nonequity-quote-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-nonequity-bars-10m",
+   "where": "Supabase pg_cron",
+   "id": 249,
+   "part": null,
+   "what": "Calls SQL fmp_control.nonequity_bars_tick on schedule */10 * * * * (UTC).",
+   "cadence_utc": "*/10 * * * *",
+   "calls": "SQL fmp_control.nonequity_bars_tick",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.653764+00",
+   "last_run": "2026-10-03 14:50:00.653764+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-nonequity-bars-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fmp-ttm-incremental-daily",
+   "where": "Supabase pg_cron",
+   "id": 250,
+   "part": null,
+   "what": "Calls SQL fmp_control.ttm_incremental_tick on schedule 15 6,18 * * * (UTC).",
+   "cadence_utc": "15 6,18 * * *",
+   "calls": "SQL fmp_control.ttm_incremental_tick",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-ttm-incremental-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "plant_library_refresh",
+   "where": "Supabase pg_cron",
+   "id": 253,
+   "part": null,
+   "what": "Calls SQL public.plant_library_refresh on schedule */5 * * * * (UTC).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL public.plant_library_refresh",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.525938+00",
+   "last_run": "2026-10-03 14:55:00.525938+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'plant_library_refresh' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "purge-cron-history-daily",
+   "where": "Supabase pg_cron",
+   "id": 254,
+   "part": "the shredder",
+   "what": "Daily deletes pg_cron run history older than 14 days.",
+   "cadence_utc": "20 7 * * *",
+   "calls": "SQL delete from cron.job_run_details",
+   "writes": "cron.job_run_details",
+   "read_by": "\u2014",
+   "active": true,
+   "last_success_measured": "2026-10-03 07:20:00.619248+00",
+   "last_run": "2026-10-03 07:20:00.619248+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'purge-cron-history-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "mirror-state-tables-daily",
+   "where": "Supabase pg_cron",
+   "id": 255,
+   "part": "the state-table copier",
+   "what": "Nightly copies small live-state tables to R2.",
+   "cadence_utc": "10 5 * * *",
+   "calls": "edge function table-to-r2?table=live_quotes",
+   "writes": "R2",
+   "read_by": "disaster recovery",
+   "active": true,
+   "last_success_measured": "2026-10-03 05:10:00.652664+00",
+   "last_run": "2026-10-03 05:10:00.652664+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-state-tables-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h."
+   ]
+  },
+  {
+   "job": "mirror-gap-repair-daily",
+   "where": "Supabase pg_cron",
+   "id": 256,
+   "part": "the backup repairman",
+   "what": "Nightly 05:30 UTC should re-send ribbon_signals and ohlcv_history to the R2 backup.",
+   "cadence_utc": "30 5 * * *",
+   "calls": "edge function table-to-r2?table=ribbon_signals&pause=250",
+   "writes": "R2 backup (nothing \u2014 never runs)",
+   "read_by": "the backup",
+   "active": true,
+   "last_success_measured": null,
+   "last_run": "2026-10-03 05:30:00.817183+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'mirror-gap-repair-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "FAILING",
+   "status": "FAILING",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED C",
+   "references": [
+    "PostgreSQL statement_timeout \u2014 applied per statement since PG13 (https://www.postgresql.org/docs/current/runtime-config-client.html)",
+    "Airflow best practices \u2014 tasks are transactions, idempotent, never incomplete results (https://airflow.apache.org/docs/apache-airflow/stable/best-practices.html)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "pg_cron failed 3 of 3 runs in 72 h: ERROR:  canceling statement due to statement timeout",
+    "Failed on all 14 nights pg_cron remembers (20 Sep - 3 Oct): pg_sleep(160) > the 120 s statement limit; the rollback discards its queued requests, so nothing is ever sent."
+   ]
+  },
+  {
+   "job": "fmp-indicator-daily-tick",
+   "where": "Supabase pg_cron",
+   "id": 258,
+   "part": null,
+   "what": "Calls edge function fmp-indicator-export on schedule * 20-23,0-13 * * * (UTC).",
+   "cadence_utc": "* 20-23,0-13 * * *",
+   "calls": "edge function fmp-indicator-export",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 13:59:00.308017+00",
+   "last_run": "2026-10-03 13:59:00.308017+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'fmp-indicator-daily-tick' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "earnings-report-time-1d",
+   "where": "Supabase pg_cron",
+   "id": 259,
+   "part": null,
+   "what": "Calls edge function earnings-report-time?days=45 on schedule 23 13 * * 1-5 (UTC).",
+   "cadence_utc": "23 13 * * 1-5",
+   "calls": "edge function earnings-report-time?days=45",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 13:23:00.322483+00",
+   "last_run": "2026-10-02 13:23:00.322483+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'earnings-report-time-1d' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "treasury-curve-evening",
+   "where": "Supabase pg_cron",
+   "id": 260,
+   "part": null,
+   "what": "Calls edge function treasury-curve?days=10 on schedule 15 21-23 * * 1-5 (UTC).",
+   "cadence_utc": "15 21-23 * * 1-5",
+   "calls": "edge function treasury-curve?days=10",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-02 23:15:00.742944+00",
+   "last_run": "2026-10-02 23:15:00.742944+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'treasury-curve-evening' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "sentiment-news-10m",
+   "where": "Supabase pg_cron",
+   "id": 261,
+   "part": "the news-mood reader",
+   "what": "Every 10 min scores new headlines for mood per stock.",
+   "cadence_utc": "*/10 * * * *",
+   "calls": "edge function sentiment-news?mode=live&limit=600",
+   "writes": "news_headline_sentiment, sentiment_ticker_daily",
+   "read_by": "Hub sentiment",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:50:00.643233+00",
+   "last_run": "2026-10-03 14:50:00.643233+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sentiment-news-10m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "FLAKY",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D + B (vacuum moved)",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page).",
+    "Answered 500 \"read news\" on its :40 run in 4 of the last 6 hours (10:40 12:40 13:40 14:40Z); unrecorded until now. :40 is when the hourly vacuum runs."
+   ]
+  },
+  {
+   "job": "sentiment-news-backfill",
+   "where": "Supabase pg_cron",
+   "id": 262,
+   "part": "the news-mood back-filler",
+   "what": "Every 5 min scores older headlines (finished; answers \"finished\").",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "edge function sentiment-news?mode=backfill&limit=1500",
+   "writes": "sentiment_backfill_state",
+   "read_by": "Hub sentiment history",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.497102+00",
+   "last_run": "2026-10-03 14:55:00.497102+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sentiment-news-backfill' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "sentiment-youtube-6h",
+   "where": "Supabase pg_cron",
+   "id": 263,
+   "part": "the YouTube-mood reader",
+   "what": "Every 6 h scores YouTube videos per stock (titles; transcripts if readable).",
+   "cadence_utc": "25 */6 * * *",
+   "calls": "edge function sentiment-youtube?days=7",
+   "writes": "youtube_video_sentiment",
+   "read_by": "Hub sentiment",
+   "active": true,
+   "last_success_measured": "2026-10-03 12:25:00.347221+00",
+   "last_run": "2026-10-03 12:25:00.347221+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sentiment-youtube-6h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "sentiment-x-2h",
+   "where": "Supabase pg_cron",
+   "id": 264,
+   "part": "the X-mood reader",
+   "what": "Every 2 h scores new X posts from the X-feed collector.",
+   "cadence_utc": "40 */2 * * *",
+   "calls": "edge function sentiment-x?days=3",
+   "writes": "x_post_sentiment (last 28 Sep)",
+   "read_by": "Hub sentiment",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:40:00.744109+00",
+   "last_run": "2026-10-03 14:40:00.744109+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sentiment-x-2h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "SILENT",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page).",
+    "Answers 200 every 2 h but has had nothing to score since 28 Sep 20:40Z: its source, the MacBook X-feed collector, is dead (see mac:xfeed)."
+   ]
+  },
+  {
+   "job": "catalyst-odds-6h",
+   "where": "Supabase pg_cron",
+   "id": 265,
+   "part": null,
+   "what": "Calls edge function catalyst-odds on schedule 7 */6 * * * (UTC).",
+   "cadence_utc": "7 */6 * * *",
+   "calls": "edge function catalyst-odds",
+   "writes": null,
+   "read_by": null,
+   "active": false,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'catalyst-odds-6h' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "PAUSED",
+   "status": "SWITCHED OFF",
+   "verdict": "REMOVE",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Inactive; definition kept. Deleting it is Alan's call (destructive), so it stays listed as REMOVE-after-approval."
+   ]
+  },
+  {
+   "job": "scintillas-detect-intraday",
+   "where": "Supabase pg_cron",
+   "id": 266,
+   "part": "the spark spotter",
+   "what": "Every 10 min in session finds unusual moves (\"scintillas\").",
+   "cadence_utc": "*/10 13-20 * * 1-5",
+   "calls": "edge function scintillas-detect?mode=intraday",
+   "writes": "public.scintillas",
+   "read_by": "Hub TODAY'S SCINTILLAS tape",
+   "active": true,
+   "last_success_measured": "2026-10-02 20:50:00.747853+00",
+   "last_run": "2026-10-02 20:50:00.747853+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'scintillas-detect-intraday' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "scintillas-detect-session",
+   "where": "Supabase pg_cron",
+   "id": 267,
+   "part": "the spark spotter (close)",
+   "what": "After the close records the session's scintillas.",
+   "cadence_utc": "45 22 * * 1-5",
+   "calls": "edge function scintillas-detect?mode=session",
+   "writes": "public.scintillas",
+   "read_by": "Hub tape",
+   "active": true,
+   "last_success_measured": "2026-10-02 22:45:00.91692+00",
+   "last_run": "2026-10-02 22:45:00.91692+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'scintillas-detect-session' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "heartbeat-daily",
+   "where": "Supabase pg_cron",
+   "id": 268,
+   "part": "the ticker pulse clerk",
+   "what": "After the close writes each stock's daily pulse.",
+   "cadence_utc": "10 23 * * 1-5",
+   "calls": "edge function heartbeat-daily",
+   "writes": "ticker_heartbeat_daily",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": "2026-10-02 23:10:00.825257+00",
+   "last_run": "2026-10-02 23:10:00.825257+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'heartbeat-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "econ-calendar-drop-moved",
+   "where": "Supabase pg_cron",
+   "id": 269,
+   "part": null,
+   "what": "Calls SQL public.econ_calendar_drop_moved on schedule 10 * * * * (UTC).",
+   "cadence_utc": "10 * * * *",
+   "calls": "SQL public.econ_calendar_drop_moved",
+   "writes": null,
+   "read_by": null,
+   "active": true,
+   "last_success_measured": "2026-10-03 14:10:00.607431+00",
+   "last_run": "2026-10-03 14:10:00.607431+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'econ-calendar-drop-moved' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "putcall-aggregate-minute",
+   "where": "Supabase pg_cron",
+   "id": 270,
+   "part": "the put/call adder",
+   "what": "Every minute in session turns IBKR option volume into the put/call minute.",
+   "cadence_utc": "* 13-21 * * 1-5",
+   "calls": "edge function putcall-aggregate?minutes=15",
+   "writes": "ibkr_putcall_minute",
+   "read_by": "Hub put/call",
+   "active": true,
+   "last_success_measured": "2026-10-02 21:59:00.320755+00",
+   "last_run": "2026-10-02 21:59:00.320755+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'putcall-aggregate-minute' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "putcall-aggregate-close",
+   "where": "Supabase pg_cron",
+   "id": 271,
+   "part": "the put/call closer",
+   "what": "After the close writes the day's put/call.",
+   "cadence_utc": "10 21 * * 1-5",
+   "calls": "edge function putcall-aggregate?close=1&minutes=30",
+   "writes": "putcall_daily",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": "2026-10-02 21:10:00.547783+00",
+   "last_run": "2026-10-02 21:10:00.547783+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'putcall-aggregate-close' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "putcall-vs-cboe-morning",
+   "where": "Supabase pg_cron",
+   "id": 272,
+   "part": "the put/call cross-checker",
+   "what": "Each morning compares our put/call with Cboe's.",
+   "cadence_utc": "45 12 * * 1-5",
+   "calls": "edge function putcall-aggregate?close=1&minutes=1&session=previous",
+   "writes": "putcall_vs_cboe",
+   "read_by": "coordinator",
+   "active": true,
+   "last_success_measured": "2026-10-02 12:45:00.784324+00",
+   "last_run": "2026-10-02 12:45:00.784324+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'putcall-vs-cboe-morning' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "putcall-minute-session-check",
+   "where": "Supabase pg_cron",
+   "id": 273,
+   "part": "the put/call watch",
+   "what": "Every 5 min in session raises an alarm if no put/call minute arrived.",
+   "cadence_utc": "*/5 13-20 * * 1-5",
+   "calls": "SQL public.scin_putcall_session_check",
+   "writes": "feed_alarm ibkr_putcall_session",
+   "read_by": "alarm route",
+   "active": true,
+   "last_success_measured": "2026-10-02 20:55:00.476755+00",
+   "last_run": "2026-10-02 20:55:00.476755+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'putcall-minute-session-check' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": null,
+   "references": [
+    "Prometheus alerting rules \u2014 `for` (pending) and keep_firing_for (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)",
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Its alarm freezes RED when the session window closes and stays red all weekend (open on 3 Oct since Fri 16:05 / 16:20 ET); it should resolve or read \"unknown\" outside the window."
+   ]
+  },
+  {
+   "job": "provider-frame-currentness-check",
+   "where": "Supabase pg_cron",
+   "id": 274,
+   "part": "the intraday watch",
+   "what": "Every 5 min asks the chart API whether intraday frames are current; alarms + ntfy on change.",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL public.scin_provider_frame_currentness_check",
+   "writes": "feed_alarm provider_intraday_frames",
+   "read_by": "Alan by ntfy",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.572227+00",
+   "last_run": "2026-10-03 14:55:00.572227+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'provider-frame-currentness-check' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": null,
+   "references": [
+    "Prometheus alerting rules \u2014 `for` (pending) and keep_firing_for (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)",
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Its alarm freezes RED when the session window closes and stays red all weekend (open on 3 Oct since Fri 16:05 / 16:20 ET); it should resolve or read \"unknown\" outside the window."
+   ]
+  },
+  {
+   "job": "ibkr-gateway-watch-1m",
+   "where": "Supabase pg_cron",
+   "id": 275,
+   "part": "the gateway watch",
+   "what": "Every minute checks the IB Gateway feed is alive; ntfy on change.",
+   "cadence_utc": "* * * * *",
+   "calls": "SQL public.ibkr_gateway_watch",
+   "writes": "ibkr_gateway_watch_log",
+   "read_by": "Alan by ntfy",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.563191+00",
+   "last_run": "2026-10-03 14:55:00.563191+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'ibkr-gateway-watch-1m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "purge-cron-dispatch-daily",
+   "where": "Supabase pg_cron",
+   "id": 277,
+   "part": "the shredder (answers)",
+   "what": "Daily deletes recorded answers older than 14 days.",
+   "cadence_utc": "37 9 * * *",
+   "calls": "SQL delete from public.cron_dispatch",
+   "writes": "cron_dispatch",
+   "read_by": "\u2014",
+   "active": true,
+   "last_success_measured": "2026-10-03 09:37:00.295246+00",
+   "last_run": "2026-10-03 09:37:00.295246+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'purge-cron-dispatch-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_cron README \u2014 job_run_details status/return_message; purge it yourself (https://github.com/citusdata/pg_cron)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "prediction-markets",
+   "where": "Supabase pg_cron",
+   "id": 278,
+   "part": "the odds reader",
+   "what": "Every 15 min on weekdays (hourly otherwise) reads Polymarket odds.",
+   "cadence_utc": "*/15 * * * *",
+   "calls": "edge function prediction-markets",
+   "writes": "prediction_market_snapshots/runs",
+   "read_by": "Hub PREDICTION MARKETS",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:45:00.778879+00",
+   "last_run": "2026-10-03 14:45:00.778879+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'prediction-markets' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "sigma-daily",
+   "where": "Supabase pg_cron",
+   "id": 279,
+   "part": "the sigma counter",
+   "what": "After the close adds the day's sigma events.",
+   "cadence_utc": "20 23 * * 1-5",
+   "calls": "edge function sigma-daily",
+   "writes": "sigma_events_daily, sigma_day_counts",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": "2026-10-02 23:20:00.662903+00",
+   "last_run": "2026-10-02 23:20:00.662903+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sigma-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "sigma-daily-catchup",
+   "where": "Supabase pg_cron",
+   "id": 280,
+   "part": "the sigma counter (catch-up)",
+   "what": "Next morning fills any missed sigma day.",
+   "cadence_utc": "20 11 * * 2-6",
+   "calls": "edge function sigma-daily",
+   "writes": "sigma tables",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": "2026-10-03 11:20:00.861933+00",
+   "last_run": "2026-10-03 11:20:00.861933+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'sigma-daily-catchup' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "analyst-revisions-nightly",
+   "where": "Supabase pg_cron",
+   "id": 281,
+   "part": "the analyst-notes reader",
+   "what": "Nightly reads new analyst target/rating notes.",
+   "cadence_utc": "30 1 * * 2-6",
+   "calls": "edge function analyst-revisions?mode=pass",
+   "writes": "analyst_target_news, price_target_summary_daily",
+   "read_by": "Hub ESTIMATES",
+   "active": true,
+   "last_success_measured": "2026-10-03 01:30:01.002095+00",
+   "last_run": "2026-10-03 01:30:01.002095+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'analyst-revisions-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "analyst-revisions-morning",
+   "where": "Supabase pg_cron",
+   "id": 282,
+   "part": "the analyst-notes reader (morning)",
+   "what": "Weekday mornings reads overnight notes.",
+   "cadence_utc": "0 13 * * 1-5",
+   "calls": "edge function analyst-revisions?mode=pass&summary=0",
+   "writes": "analyst_target_news",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'analyst-revisions-morning' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "offering-watch-nightly",
+   "where": "Supabase pg_cron",
+   "id": 283,
+   "part": "the dilution watch",
+   "what": "Nightly reads new share-offering filings from the SEC.",
+   "cadence_utc": "15 3 * * 2-6",
+   "calls": "edge function offering-watch?mode=pass",
+   "writes": "offering_filings",
+   "read_by": "Hub CAPITAL & DILUTION",
+   "active": true,
+   "last_success_measured": "2026-10-03 03:15:00.71033+00",
+   "last_run": "2026-10-03 03:15:00.71033+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'offering-watch-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "offering-watch-morning",
+   "where": "Supabase pg_cron",
+   "id": 284,
+   "part": "the dilution watch (morning)",
+   "what": "Weekday mornings reads overnight filings.",
+   "cadence_utc": "15 11 * * 1-5",
+   "calls": "edge function offering-watch?mode=pass",
+   "writes": "offering_filings",
+   "read_by": "Hub",
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'offering-watch-morning' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "unlock-watch-nightly",
+   "where": "Supabase pg_cron",
+   "id": 285,
+   "part": "the lock-up watch",
+   "what": "Nightly checks IPO lock-up dates.",
+   "cadence_utc": "30 2 * * 2-6",
+   "calls": "edge function unlock-watch?mode=pass",
+   "writes": "ipo_lockups",
+   "read_by": "Hub EARNINGS",
+   "active": true,
+   "last_success_measured": "2026-10-03 02:30:01.123069+00",
+   "last_run": "2026-10-03 02:30:01.123069+00",
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'unlock-watch-nightly' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "analyst-estimates-daily",
+   "where": "Supabase pg_cron",
+   "id": 286,
+   "part": "the estimates keeper",
+   "what": "Nightly saves the day's EPS/revenue estimates so history exists.",
+   "cadence_utc": "40 1 * * 2-6",
+   "calls": "edge function analyst-revisions?mode=estimates",
+   "writes": "analyst_estimates_daily",
+   "read_by": "Hub ESTIMATES",
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "pg_cron \"succeeded\" = only queued; the answer vanishes in 6 h",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'analyst-estimates-daily' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED D",
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Its real HTTP answer is not recorded: pg_cron says \"succeeded\" when the request is only queued; the answer is deleted after 6 h.",
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "youtube-feed-20m",
+   "where": "Supabase pg_cron",
+   "id": 287,
+   "part": "the YouTube scout",
+   "what": "Every 20 min searches for new videos.",
+   "cadence_utc": "*/20 * * * *",
+   "calls": "edge function youtube-feed",
+   "writes": "youtube_videos",
+   "read_by": "Hub/Station YouTube",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:40:00.87018+00",
+   "last_run": "2026-10-03 14:40:00.87018+00",
+   "how_failure_shows_today": "cron_dispatch real answer (seen by the heartbeat)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'youtube-feed-20m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "pg_net README \u2014 requests queued, answered later in net._http_response, ttl 6 h, default timeout 5000 ms (https://github.com/supabase/pg_net)",
+    "Supabase, Scheduling Edge Functions \u2014 pg_cron + pg_net, token in Vault (https://supabase.com/docs/guides/functions/schedule-functions)"
+   ],
+   "findings": [
+    "Carries the public anon key inside the command; Supabase recommends Vault (low risk: the same key ships in the Hub page)."
+   ]
+  },
+  {
+   "job": "job-heartbeat-check-5m",
+   "where": "Supabase pg_cron",
+   "id": 288,
+   "part": "the dead-man's switch",
+   "what": "Every 5 min judges every job ON TIME / LATE / FAILING from its runs and real answers (alarms off).",
+   "cadence_utc": "*/5 * * * *",
+   "calls": "SQL public.job_heartbeat_check",
+   "writes": "job_heartbeat (+ feed_alarm when switched on)",
+   "read_by": "status page; Alan by ntfy once approved",
+   "active": true,
+   "last_success_measured": "2026-10-03 14:55:00.510451+00",
+   "last_run": "2026-10-03 14:55:00.510451+00",
+   "how_failure_shows_today": "cron.job_run_details status (14 days kept)",
+   "how_we_would_know_it_stopped": "job_heartbeat row 'job-heartbeat-check-5m' turns LATE/FAILING (alarms off until STAGED A)",
+   "heartbeat_status_now": "UP",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Prometheus instrumentation \u2014 \"The key metric of a batch job is the last time it succeeded\" (https://prometheus.io/docs/practices/instrumentation/#batch-jobs)",
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Applied live 14:48Z 3 Oct by the first Q2b run BEFORE the brief changed to staged-only; alarms off, no message sent. Its alarm path has a key bug (feed_alarm -> feed_contract) that STAGED A fixes. Needs Alan's approval to stay."
+   ]
+  },
+  {
+   "job": "fly:provider-tail-scheduled-hourly-i5",
+   "where": "Fly scintilla-massive-stocks-batch 784eee5efe2978",
+   "id": null,
+   "part": "the night copyist",
+   "what": "Hourly (fuzzy, ~:43); after 20:15 ET on session days rewrites the long (>400-bar) histories for 17 frames.",
+   "cadence_utc": "fly hourly",
+   "calls": null,
+   "writes": "R2 full intraday copies",
+   "read_by": "chart API /candles limit>400",
+   "active": true,
+   "last_success_measured": "2026-10-03T14:43:01Z SKIP_WEEKEND (fired on its minute; Friday night pass proven by the 1st Q2b run: full copies refreshed 00:43Z)",
+   "last_run": "2026-10-03T14:43:01Z SKIP_WEEKEND (fired on its minute; Friday night pass proven by the 1st Q2b run: full copies refreshed 00:43Z)",
+   "how_failure_shows_today": "only its own Fly log (last ~100 lines)",
+   "how_we_would_know_it_stopped": "job_heartbeat ping at every exit (provider branch provider/q2b-keepalives-20261003, not deployed) -> LATE after period + grace",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "provider fb7676b",
+   "references": [
+    "Fly docs, fly machine run \u2014 --schedule starts the Machine on a \"fuzzy\" hourly/daily cycle; restart no/always/on-fail (https://docs.fly.io/machines/flyctl/fly-machine-run)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "Fires on time today. Its only failure trace is a log Fly keeps for ~100 lines; 29 Sep a --skip-start update silenced it for 70 min and nobody was told."
+   ]
+  },
+  {
+   "job": "fly:provider-fan-daily-hourly-i5",
+   "where": "Fly scintilla-massive-stocks-batch 28655523f971e8",
+   "id": null,
+   "part": "the fan clerk",
+   "what": "Hourly (~:50); after 16:30 ET writes each stock's daily fan row (Hub REWIND).",
+   "cadence_utc": "fly hourly",
+   "calls": null,
+   "writes": "geiger_trend_20260814 via publish_provider_fan_daily_v1",
+   "read_by": "Hub REWIND",
+   "active": true,
+   "last_success_measured": "2026-10-03T14:50:09Z NOTHING_TO_DO",
+   "last_run": "2026-10-03T14:50:09Z NOTHING_TO_DO",
+   "how_failure_shows_today": "own log only",
+   "how_we_would_know_it_stopped": "job_heartbeat ping at every exit (provider branch provider/q2b-keepalives-20261003, not deployed) -> LATE after period + grace",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "provider fb7676b",
+   "references": [
+    "Fly docs, fly machine run \u2014 --schedule starts the Machine on a \"fuzzy\" hourly/daily cycle; restart no/always/on-fail (https://docs.fly.io/machines/flyctl/fly-machine-run)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Dagster freshness checks \u2014 an asset overdue for refresh is a failed check (https://docs.dagster.io/examples/best-practices/asset-health-monitoring)"
+   ],
+   "findings": [
+    "Accepts 586 of 590 names per session as complete (its threshold is 531): 4 names a day have no fan row since 29 Sep (rule -> Q2a)."
+   ]
+  },
+  {
+   "job": "fly:scout-geiger-nightly",
+   "where": "Fly scintilla-massive-stocks-batch 185777d7a27018",
+   "id": null,
+   "part": "the scout",
+   "what": "Hourly (~:21); after 20:15 ET computes the off-Hub Geiger for ~5,600 names once per session.",
+   "cadence_utc": "fly hourly",
+   "calls": null,
+   "writes": "massive_stocks.scout_geiger_daily + R2",
+   "read_by": "chart API /v1/scout-geiger, market map",
+   "active": true,
+   "last_success_measured": "2026-10-03T14:21:01Z NOTHING_MISSING (newest session 2026-10-02, written 00:21Z)",
+   "last_run": "2026-10-03T14:21:01Z NOTHING_MISSING (newest session 2026-10-02, written 00:21Z)",
+   "how_failure_shows_today": "own log only",
+   "how_we_would_know_it_stopped": "job_heartbeat ping at every exit (provider branch provider/q2b-keepalives-20261003, not deployed) -> LATE after period + grace",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "provider fb7676b",
+   "references": [
+    "Fly docs, fly machine run \u2014 --schedule starts the Machine on a \"fuzzy\" hourly/daily cycle; restart no/always/on-fail (https://docs.fly.io/machines/flyctl/fly-machine-run)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)"
+   ],
+   "findings": [
+    "1 Oct it was a day stale after a --skip-start update; nobody was told."
+   ]
+  },
+  {
+   "job": "fly:scout-geiger-seven-hourly",
+   "where": "Fly scintilla-massive-stocks-batch 28744406b95608",
+   "id": null,
+   "part": "the seven-rung scout",
+   "what": "Hourly (~:17); works in the 16 and 20 ET hours: the seven-rung off-Hub Geiger.",
+   "cadence_utc": "fly hourly",
+   "calls": null,
+   "writes": "massive_stocks.scout_geiger_seven + R2",
+   "read_by": "off-Hub Geiger views",
+   "active": true,
+   "last_success_measured": "2026-10-03T14:17:01Z NOT_A_SESSION_DAY (last write 00:17Z)",
+   "last_run": "2026-10-03T14:17:01Z NOT_A_SESSION_DAY (last write 00:17Z)",
+   "how_failure_shows_today": "own log only; a degraded run is skipped and still exits 0",
+   "how_we_would_know_it_stopped": "job_heartbeat ping at every exit (provider branch provider/q2b-keepalives-20261003, not deployed) -> LATE after period + grace",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "provider fb7676b",
+   "references": [
+    "Fly docs, fly machine run \u2014 --schedule starts the Machine on a \"fuzzy\" hourly/daily cycle; restart no/always/on-fail (https://docs.fly.io/machines/flyctl/fly-machine-run)",
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Airflow best practices \u2014 tasks are transactions, idempotent, never incomplete results (https://airflow.apache.org/docs/apache-airflow/stable/best-practices.html)"
+   ],
+   "findings": [
+    "A degraded run is deliberately not written but exits 0 \u2014 invisible. The ping now names it SKIPPED_DEGRADED."
+   ]
+  },
+  {
+   "job": "fly:geiger-publisher",
+   "where": "Fly scintilla-massive-stocks-batch 820229b7795798 (boot-geiger.sh)",
+   "id": null,
+   "part": "the 4-minute Geiger robot",
+   "what": "Always on; every ~4 min reads 590 names x 7 rungs from the chart API and publishes the Geiger the Hub shows.",
+   "cadence_utc": "continuous, restart always",
+   "calls": null,
+   "writes": "R2 candidate_geiger_v1",
+   "read_by": "Hub board, Station chips",
+   "active": true,
+   "last_success_measured": "chart API /geiger computed 2026-10-03T14:56:34Z, VERIFIED, 590/590, 4,130 rungs",
+   "last_run": "chart API /geiger computed 2026-10-03T14:56:34Z, VERIFIED, 590/590, 4,130 rungs",
+   "how_failure_shows_today": "refuses to publish -> the Hub silently holds the last reading (06:13-08:57 ET today, 42 cycles; Q2a owns the cause); its log is in /tmp and dies with a restart",
+   "how_we_would_know_it_stopped": "Q1 /v1/integrity (Geiger not ready / held) -> feed_alarm + ntfy",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)",
+    "Prometheus instrumentation \u2014 \"The key metric of a batch job is the last time it succeeded\" (https://prometheus.io/docs/practices/instrumentation/#batch-jobs)"
+   ],
+   "findings": [
+    "Held for 2 h 44 min this morning with no alarm. Its log was not read by this lane (a prior permission denial is respected); judged from its published output only."
+   ]
+  },
+  {
+   "job": "fly:settled-close-supervisor",
+   "where": "inside 820229b7795798 (injected files)",
+   "id": null,
+   "part": "the closing-bell clerk",
+   "what": "Always on; after 16:05 ET builds the next session's previous-close file and confirms it with Massive.",
+   "cadence_utc": "continuous",
+   "calls": null,
+   "writes": "R2 settled close artifacts",
+   "read_by": "chart API previous close",
+   "active": true,
+   "last_success_measured": "chart API /health previous_close_publication: NO_PRICE_SESSION (Saturday; correct)",
+   "last_run": "chart API /health previous_close_publication: NO_PRICE_SESSION (Saturday; correct)",
+   "how_failure_shows_today": "chart API /health only",
+   "how_we_would_know_it_stopped": "Q1 /v1/integrity (previous-close file late)",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Runs as injected files on the Geiger machine: a restart from a different image silently drops it."
+   ]
+  },
+  {
+   "job": "fly:provider-bar-service",
+   "where": "Fly scintilla-massive-stocks-batch 82d1d96a326548",
+   "id": null,
+   "part": "the gatekeeper at the bar door",
+   "what": "Always on; fetches and stores bars, refreshes intraday frames each minute, and (child process) writes relative volume.",
+   "cadence_utc": "continuous, restart always",
+   "calls": null,
+   "writes": "R2 bars + board_volume",
+   "read_by": "chart API",
+   "active": true,
+   "last_success_measured": "restarted 13:00Z (p11 image); board_volume newest 2026-10-03 00:00Z",
+   "last_run": "restarted 13:00Z (p11 image); board_volume newest 2026-10-03 00:00Z",
+   "how_failure_shows_today": "/metrics on the private network only",
+   "how_we_would_know_it_stopped": "Q1 /v1/integrity + Q2a named-cause counters",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)",
+    "Prometheus instrumentation \u2014 \"The key metric of a batch job is the last time it succeeded\" (https://prometheus.io/docs/practices/instrumentation/#batch-jobs)"
+   ],
+   "findings": [
+    "Friday 16:20-20:00 ET intraday frames were reported BEHIND for ~4 h (feed_alarm provider_intraday_frames) \u2014 hand to Q2a."
+   ]
+  },
+  {
+   "job": "fly:market-stream",
+   "where": "Fly scintilla-massive-stocks-stream 8e7eedf7719698",
+   "id": null,
+   "part": "the stream listener",
+   "what": "Always on; listens to the live trade stream and marks which minutes need new bars (frame-due producer).",
+   "cadence_utc": "continuous, restart on-failure",
+   "calls": null,
+   "writes": "R2 frame-due markers + watermark; massive_control.service_heartbeat every 30 s",
+   "read_by": "chart API",
+   "active": true,
+   "last_success_measured": "service_heartbeat 2026-10-03T15:08:39Z (120 beats in the last hour); watermark through Fri 19:59 ET",
+   "last_run": "service_heartbeat 2026-10-03T15:08:39Z (120 beats in the last hour); watermark through Fri 19:59 ET",
+   "how_failure_shows_today": "boots DISARMED silently without its two variables (23 Sep)",
+   "how_we_would_know_it_stopped": "STAGED A folds its 30-s heartbeat into job_heartbeat",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "CHANGE",
+   "staged_fix": "STAGED A",
+   "references": [
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Prometheus instrumentation \u2014 \"The key metric of a batch job is the last time it succeeded\" (https://prometheus.io/docs/practices/instrumentation/#batch-jobs)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fly:chart-api (2 machines)",
+   "where": "Fly scintilla-massive-chart-api 811d65df4e6e08, 844549b24e02e8",
+   "id": null,
+   "part": "the doorman",
+   "what": "Always on; serves bars, Geiger, previous close to the Hub and Station.",
+   "cadence_utc": "continuous, /live 15 s + /traffic-ready 30 s checks",
+   "calls": null,
+   "writes": "\u2014",
+   "read_by": "Hub, Station",
+   "active": true,
+   "last_success_measured": "/health ready=true on both 3 Oct ~15:00Z",
+   "last_run": "/health ready=true on both 3 Oct ~15:00Z",
+   "how_failure_shows_today": "Fly health checks restart it",
+   "how_we_would_know_it_stopped": "Fly checks + Q1 /v1/integrity",
+   "heartbeat_status_now": null,
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": []
+  },
+  {
+   "job": "fly:nightly-verdict",
+   "where": "Fly (Q2a, not yet scheduled)",
+   "id": null,
+   "part": "the night watchman",
+   "what": "Each night checks every close and Geiger cell against Massive and FMP; one verdict file with named causes.",
+   "cadence_utc": "nightly (to be scheduled)",
+   "calls": null,
+   "writes": "R2 control/nightly_verdict_v1/",
+   "read_by": "status page; Q1 integrity alarm",
+   "active": true,
+   "last_success_measured": null,
+   "last_run": null,
+   "how_failure_shows_today": "not running yet",
+   "how_we_would_know_it_stopped": "STAGED A seeds its heartbeat row (dead-man) \u2014 Q1 alarms on what it says",
+   "heartbeat_status_now": null,
+   "status": "NOT YET RUNNING",
+   "verdict": "KEEP",
+   "staged_fix": "STAGED A",
+   "references": [
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Dagster freshness checks \u2014 an asset overdue for refresh is a failed check (https://docs.dagster.io/examples/best-practices/asset-health-monitoring)"
+   ],
+   "findings": [
+    "Format agreed through deliverables/20261003/q2a-rules/verdict-format.json; reply in q2b-jobs/verdict-intake.json."
+   ]
+  },
+  {
+   "job": "mac:com.alanharvey.scintilla-xfeed-collector",
+   "where": "MacBook launchd",
+   "id": null,
+   "part": "the X-feed collector",
+   "what": "Nine times a day reads Alan's X timeline in a hidden browser and publishes the feed.",
+   "cadence_utc": "06:30 08:30 10:30 12:30 14:30 16:30 18:30 21:00 23:30 local",
+   "calls": null,
+   "writes": "X feed + x posts",
+   "read_by": "Hub X feed, sentiment-x",
+   "active": true,
+   "last_success_measured": "last good publish 25 Sep 20:31Z; newest captured post 27 Sep 16:29Z",
+   "last_run": "last good publish 25 Sep 20:31Z; newest captured post 27 Sep 16:29Z",
+   "how_failure_shows_today": "launchd exit 78 (its program folder _worktrees/hub-xfeed-program-20260922 was deleted 28 Sep) \u2014 nobody is told",
+   "how_we_would_know_it_stopped": "heartbeat row reads LATE since 25 Sep (alarms off)",
+   "heartbeat_status_now": "LATE",
+   "status": "DEAD 6 DAYS",
+   "verdict": "CHANGE",
+   "staged_fix": null,
+   "references": [
+    "healthchecks.io docs \u2014 period + grace, alert on state change (https://healthchecks.io/docs/)",
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Re-point the launchd job at a kept copy of xfeed-program.mjs (or retire it) \u2014 Alan's call; until then sentiment-x has nothing to read."
+   ]
+  },
+  {
+   "job": "mac:com.scintilla.ibkr-putcall",
+   "where": "MacBook launchd (KeepAlive)",
+   "id": null,
+   "part": "the put/call counter",
+   "what": "Runs all the time; counts option volume at IB and sends the put/call minute.",
+   "cadence_utc": "continuous",
+   "calls": null,
+   "writes": "ibkr_option_volume -> ibkr_putcall_minute",
+   "read_by": "Hub put/call",
+   "active": true,
+   "last_success_measured": "running (pid up 2 h 15 min at 15:05Z); last put/call minute Fri 19:59Z",
+   "last_run": "running (pid up 2 h 15 min at 15:05Z); last put/call minute Fri 19:59Z",
+   "how_failure_shows_today": "launchd restarts it (last exit 2); MOG.A asked every pass and refused",
+   "how_we_would_know_it_stopped": "cron 273 in session; heartbeat row NEW (no ping)",
+   "heartbeat_status_now": "NEW",
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": [
+    "Fri 2 Oct the in-session watch reported no put/call minute for 56 min at 16:05 ET (alarm still open)."
+   ]
+  },
+  {
+   "job": "mac:ai.scintilla.tradingview-mcp",
+   "where": "MacBook launchd (RunAtLoad)",
+   "id": null,
+   "part": "the TradingView bridge",
+   "what": "Starts TradingView with a debugging port at login.",
+   "cadence_utc": "at login",
+   "calls": null,
+   "writes": "\u2014",
+   "read_by": "desk tools",
+   "active": true,
+   "last_success_measured": "last exit 0",
+   "last_run": "last exit 0",
+   "how_failure_shows_today": "none",
+   "how_we_would_know_it_stopped": "not watched (not a data job)",
+   "heartbeat_status_now": null,
+   "status": "ON TIME",
+   "verdict": "KEEP",
+   "staged_fix": null,
+   "references": [
+    "Google SRE, Monitoring Distributed Systems \u2014 \"Every page should be actionable\" (https://sre.google/sre-book/monitoring-distributed-systems/)"
+   ],
+   "findings": []
+  }
+ ]
+}
