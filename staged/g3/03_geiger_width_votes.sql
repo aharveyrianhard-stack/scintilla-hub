@@ -1,5 +1,6 @@
 -- G3 · STAGED, NOT APPLIED · 5 Oct 2026 · the two voting rules of the non-equity Geiger (cron 57 geiger-1m)
--- RULE 1: a bar size whose newest stored bar is older than two bar-lengths does not vote; its weight leaves the sum
+-- RULE 1: a bar size whose newest stored bar is older than two bar-lengths (never less than 15 minutes, so the
+--   1-minute size does not flicker between two candle runs) does not vote; its weight leaves the sum
 --   (the remaining weights are renormalised - the formula already divides by the sum of the weights that vote) and
 --   the size is written, with its bar date and the reason, in composite_staged.tf_not_voting.
 -- RULE 2: a bar size votes from the moment its reading is made until its next bar is due, plus one bar-length of
@@ -28,7 +29,7 @@
 --   excluded; scin_snapshot_composite / composite_history (cron 209) name their columns - unaffected by the new
 --   column; vacuum job 237: unaffected; geiger_for_user() has its OWN copy of the 3-hour line and serves all names
 --   per user - not changed here, reported; X2's staged 02 (coin candles every 5 min): still inside two bar-lengths.
---   The mark is rewritten only when it changes, so no extra row rewrites per minute.
+--   The mark is written only when it changes, so the job does no second write on a normal minute.
 -- PATTERN: Prometheus - a series with no fresh sample inside the lookback window returns no value instead of its
 --   last one, and stale series are marked (prometheus.io/docs/prometheus/latest/querying/basics/#staleness).
 -- ORDER: apply 01 and 02 first, then this file AFTER the next 02:34 UTC ribbon-3d run. The guard below refuses
@@ -98,13 +99,13 @@ as $fn$
   select x.ticker, x.tf, x.tf_key, x.w, x.read, x.read_ts, x.bar_ts, x.secs, x.new_rule,
          case when not x.new_rule or x.secs is null then coalesce(x.read_ts > p_now - 10800, false)   -- the live rule, kept
               else x.read_ts is not null and x.bar_ts is not null
-                   and p_now - x.bar_ts < 2 * x.secs                       -- RULE 1: newest bar is the forming one or the one just closed
+                   and p_now - x.bar_ts < greatest(2 * x.secs, 900)       -- RULE 1: newest bar is the forming one or the one just closed
                    and p_now - x.read_ts < greatest(2 * x.secs, 900)       -- RULE 2: until the next bar is due + one bar-length of grace
          end as votes,
          case when not x.new_rule or x.secs is null then null
               when x.read_ts is null then 'no reading'
               when x.bar_ts is null then 'no bar stored'
-              when p_now - x.bar_ts >= 2 * x.secs then 'no fresh bar'
+              when p_now - x.bar_ts >= greatest(2 * x.secs, 900) then 'no fresh bar'
               when p_now - x.read_ts >= greatest(2 * x.secs, 900) then 'reading too old'
          end as why
     from x

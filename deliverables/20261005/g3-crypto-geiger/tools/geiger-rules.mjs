@@ -8,7 +8,7 @@ export const TF_KEY = { '1': '1m', '3': '3m', '5': '5m', '10': '10m', '15': '15m
 export const TF_SECONDS = { '1': 60, '3': 180, '5': 300, '10': 600, '15': 900, '30': 1800, '60': 3600, '120': 7200,
   '180': 10800, '240': 14400, '6h': 21600, '12h': 43200, 'D': 86400, '3D': 259200, 'W': 604800, '2W': 1209600, '1M': 2592000 }
 export const OLD_WINDOW_S = 10800      // the live rule: a reading counts for 3 hours after its ribbon job stamped it
-export const MIN_READING_LIFE_S = 900  // the 1-minute ribbon job runs every 2 minutes; never drop a width between two runs
+export const MIN_READING_LIFE_S = 900  // floor for both rules: the 1-minute candle and ribbon jobs run every 1-2 minutes; never drop a width between two runs
 
 // OLD rule (live on 5 Oct): only the stamp of the ribbon job matters, the bar's own date is never looked at.
 export function votesOld({ now, readTs }) { return readTs != null && readTs > now - OLD_WINDOW_S }
@@ -21,7 +21,7 @@ export function votesNew({ now, tf, readTs, barTs }) {
   if (!secs) return { votes: votesOld({ now, readTs }), why: null }
   if (readTs == null) return { votes: false, why: 'no reading' }
   if (barTs == null) return { votes: false, why: 'no bar stored' }
-  if (now - barTs >= 2 * secs) return { votes: false, why: 'no fresh bar' }
+  if (now - barTs >= Math.max(2 * secs, MIN_READING_LIFE_S)) return { votes: false, why: 'no fresh bar' }
   if (now - readTs >= Math.max(2 * secs, MIN_READING_LIFE_S)) return { votes: false, why: 'reading too old' }
   return { votes: true, why: null }
 }
