@@ -1,0 +1,46 @@
+-- SCINTILLA · Y2 (5 Oct 2026): the YouTube channels of the X accounts Alan reads ride with our own channel list.
+--
+-- Alan: "bridge the gap: subscribe to all of those, have the feed. Wolf Trading is live right now on X Spaces and
+-- on YouTube — I don't see it on our YouTube feed."
+--
+-- ADDITIVE: one new row in app_config (key yt_bridge_channels). No table, column, view or existing row is changed.
+-- yt-rss-sweep v8 reads the row on every pass and adds these channels to the SCINTILLA account's channels FOR THAT
+-- PASS ONLY; the account's own list (yt_sub_channels_scintilla) is never written with them.
+-- Until yt-rss-sweep v8 is deployed the row is read by nothing, so apply order is safe either way.
+-- UNDO: 20261005_youtube_channel_bridge_ROLLBACK.sql (read it first).
+--
+-- 29 channels, from 126 X accounts (control/YOUTUBE_CHANNEL_BRIDGE.json, built 2026-10-05T19:26:03.572Z):
+--   UCfD3rq06LaA8wc3s2m3LwRQ  Brian Shannon  ← @alphatrends (high)
+--   UCrOcsRCLkz8doOc4FGF4S4w  Traveller  ← @A_Najumi (high)
+--   UCRvqjQPSeaWn-uEx-w0XOIg  Benjamin Cowen  ← @benjamincowen (high)
+--   UCvWx0-NX-9qVLCSW9yjdX-g  Future Investing  ← @Futurenvesting (high)
+--   UCviK0XeiDS0l1deHtEVmrKw  Gossett Trading & Mentoring  ← @GossettTrading (high)
+--   UC4WdQJLdfdH4lyCV2hkt-iQ  Income Sharks  ← @IncomeSharks (high)
+--   UCnNV58dwf5X7dkrvCE18Djw  Jonah Lupton  ← @JonahLupton (high)
+--   UC6Dnuzr4uJhfU5mcSm3pJgw  KingCobraTrades  ← @kingcobratrader (high)
+--   UCgtjx1rfbCJyo8RR0XdiWww  The Kobeissi Letter  ← @KobeissiLetter (high)
+--   UCwX6kLA5qa3JsyXyxfixKAQ  ListingTrack  ← @listingtrack (high)
+--   UCsXaaMg95tCNL-tJb4j4GWQ  MANDOTRADING  ← @MandoTrading (high)
+--   UCPiroGQ17KIh6htWW0pHSIw  NEOS Investments  ← @NEOSInvestments (high)
+--   UC2DGNpUZSnFl4RRAouQ3mLw  Ripster , Tenet Trade Group  ← @ripster47 (high)
+--   UCF3YBU7CfOLrQ7u1DjaxNRQ  Saty Mahajan  ← @satymahajan (high)
+--   UCoxmJkN7QnmYF55ukvekSuA  The Chart Report  ← @TheChartReport (high)
+--   UCkDElJZEmdnswfoXK5cjDgw  TheRonnieVShow  ← @TheRonnieVShow (high)
+--   UCwqHs_qbAQzx6mQtaV7C7gg  StockWhale  ← @thestockwhale (high)
+--   UCVvdnt2An8rC7zeey6Sa7bQ  TrendSpider  ← @TrendSpider (high)
+--   UCOfLITbjjNjcIVaV9pBZuCA  Trigger Trades  ← @TriggerTrades (high)
+--   UCaqenTegMoW98A4trRofR1A  Unusual Whales  ← @unusual_whales (high)
+--   UCvTUPg9PxLq3DO72AZBygNg  WOLF Trading  ← @WOLF_TradingX (high)
+--   UCpNwmNz4Avr-mb-T_-xqllA  AstroZan  ← @alshfaw (medium)
+--   UCSA0DGhoraHLWhby7njGhoQ  Buy Hold Rant - Stocks and Investing  ← @hamids (medium)
+--   UC5fZv7bPcF5j2RsfO-9OiLA  Investor's Business Daily  ← @IBDinvestors (medium)
+--   UCzX4HLkD7eXBgzVwHMZlhmg  MicroCapClub  ← @MicroCapClub (medium)
+--   UC1WnXpKhLxm4ewfG_dWEdgw  School of Gains  ← @PaperGainsInc (medium)
+--   UCxvG6RV1YWTEKN34emXKcPA  Futurum Equities  ← @StockMarketNerd (medium)
+--   UC307gGuaTYg0FYsnA2lsvOA  WOLF Financial  ← @StocksOnSpaces (medium)
+--   UCvTUPg9PxLq3DO72AZBygNg  WOLF Trading  ← @WolfRyan (medium)
+--   UCaO9gH0HOmvXjZg_tMG0lLQ  Zero Hedge  ← @zerohedge (medium)
+
+insert into public.app_config (key, value)
+values ('yt_bridge_channels', $bridge${"ids":["UCfD3rq06LaA8wc3s2m3LwRQ","UCrOcsRCLkz8doOc4FGF4S4w","UCRvqjQPSeaWn-uEx-w0XOIg","UCvWx0-NX-9qVLCSW9yjdX-g","UCviK0XeiDS0l1deHtEVmrKw","UC4WdQJLdfdH4lyCV2hkt-iQ","UCnNV58dwf5X7dkrvCE18Djw","UC6Dnuzr4uJhfU5mcSm3pJgw","UCgtjx1rfbCJyo8RR0XdiWww","UCwX6kLA5qa3JsyXyxfixKAQ","UCsXaaMg95tCNL-tJb4j4GWQ","UCPiroGQ17KIh6htWW0pHSIw","UC2DGNpUZSnFl4RRAouQ3mLw","UCF3YBU7CfOLrQ7u1DjaxNRQ","UCoxmJkN7QnmYF55ukvekSuA","UCkDElJZEmdnswfoXK5cjDgw","UCwqHs_qbAQzx6mQtaV7C7gg","UCVvdnt2An8rC7zeey6Sa7bQ","UCOfLITbjjNjcIVaV9pBZuCA","UCaqenTegMoW98A4trRofR1A","UCvTUPg9PxLq3DO72AZBygNg","UCpNwmNz4Avr-mb-T_-xqllA","UCSA0DGhoraHLWhby7njGhoQ","UC5fZv7bPcF5j2RsfO-9OiLA","UCzX4HLkD7eXBgzVwHMZlhmg","UC1WnXpKhLxm4ewfG_dWEdgw","UCxvG6RV1YWTEKN34emXKcPA","UC307gGuaTYg0FYsnA2lsvOA","UCaO9gH0HOmvXjZg_tMG0lLQ"],"built_at":"2026-10-05T19:26:03.572Z","source":"control/YOUTUBE_CHANNEL_BRIDGE.json","accounts":126,"matched":30}$bridge$)
+on conflict (key) do update set value = excluded.value;
