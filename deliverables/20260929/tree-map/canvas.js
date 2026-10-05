@@ -63,19 +63,22 @@ export function layoutLevel(items, blocks, W, H, level, cell = CELL) {
   const prepared = blocks.map((b) => ({ ...b, items: byBlock.get(b.id) || [], groups: groupsOf(byBlock.get(b.id) || []) })).filter((b) => b.items.length).sort((a, b) => b.items.length - a.items.length);
   const ch = level >= 3 ? cell.h + cell.line2 : cell.h;
   // the rows a block needs at `cols` columns (its groups stacked, a caption each above level 0), in cell heights
-  const rowsAt = (b, cols) => b.groups.reduce((r, g) => r + (level ? cell.caption / ch : 0) + Math.ceil(g.items.length / cols), 0);
-  const colsFor = (b, R) => { for (let c = 1; c <= b.items.length + 1; c++) if (rowsAt(b, c) <= R + 1e-9) return c; return b.items.length; }; // the fewest columns that fit the band's rows
+  // the rows a block needs at c columns, for every c, once (it does not depend on the pitch): non-increasing in c, so colsFor is a binary search
+  const rowsTable = new Map(prepared.map((b) => [b.id, Array.from({ length: b.items.length + 1 }, (_, c) => (c ? b.groups.reduce((r, g) => r + (level ? cell.caption / ch : 0) + Math.ceil(g.items.length / c), 0) : Infinity))]));
+  const rowsAt = (b, cols) => rowsTable.get(b.id)[Math.min(cols, b.items.length)];
+  const colsFor = (b, R) => { const t = rowsTable.get(b.id); if (t[b.items.length] > R + 1e-9) return null; let lo = 1, hi = b.items.length; while (lo < hi) { const m = (lo + hi) >> 1; if (t[m] <= R + 1e-9) hi = m; else lo = m + 1; } return lo; }; // the fewest columns that fit the band's rows; null = no column count does (the band needs more rows)
+  const minRows = (b) => Math.ceil(rowsTable.get(b.id)[b.items.length] - 1e-9); // the rows a block needs at its widest (every group on one row)
   const pack = (k) => { // the bands at pitch scale k: the split of the sorted blocks into bands that needs the FEWEST rows in all (dynamic programming over the split points)
     const cw = cell.w * k, chh = ch * k, gap = cell.gap * k, title = cell.title * k, perRow = Math.max(1, Math.floor(W / cw)), T = title / chh + gap / chh;
     const N = prepared.length, memo = new Map();
     const bandOf = (i, j) => { // blocks i..j-1 in one band: the fewest rows R at which their columns fit the width
       const key = i + ":" + j; if (memo.has(key)) return memo.get(key);
       const S = prepared.slice(i, j), n = S.reduce((s, b) => s + b.items.length, 0); let out = null;
-      for (let R = Math.max(1, Math.ceil(n / perRow)); R <= 120 && !out; R++) { const cols = S.map((b) => colsFor(b, R)); const w = cols.reduce((s, c) => s + c * cw + 2 * gap, 0); if (w <= W + 1e-6) out = { S, R, cols, w }; }
+      for (let R = Math.max(1, Math.ceil(n / perRow), ...S.map(minRows)); R <= 160 && !out; R++) { const cols = S.map((b) => colsFor(b, R)); if (cols.some((c) => c == null)) continue; const w = cols.reduce((s, c) => s + c * cw + 2 * gap, 0); if (w <= W + 1e-6) out = { S, R, cols, w }; }
       memo.set(key, out); return out;
     };
     const best = new Array(N + 1).fill(null); best[N] = { rows: 0, next: null };
-    for (let i = N - 1; i >= 0; i--) { let bi = null; for (let j = i + 1; j <= N; j++) { const bd = bandOf(i, j); if (!bd) break; const rows = bd.R + T + best[j].rows; if (!bi || rows < bi.rows - 1e-9) bi = { rows, next: j, band: bd }; } best[i] = bi || { rows: 1e9, next: N, band: { S: prepared.slice(i), R: 1, cols: prepared.slice(i).map(() => 1), w: W } }; }
+    for (let i = N - 1; i >= 0; i--) { let bi = null; for (let j = i + 1; j <= N; j++) { const bd = bandOf(i, j); if (!bd) break; const rows = bd.R + T + best[j].rows; if (!bi || rows < bi.rows - 1e-9) bi = { rows, next: j, band: bd }; } best[i] = bi || { rows: 1e9, next: N, band: { S: prepared.slice(i), R: Math.max(...prepared.slice(i).map((b) => Math.ceil(rowsAt(b, 1)))), cols: prepared.slice(i).map(() => 1), w: W } }; } // the fallback (a block too wide for the canvas at this pitch) keeps its rows honest, so the bisection on k rejects it
     const bands = []; for (let i = 0; i < N; i = best[i].next) bands.push(best[i].band);
     const height = bands.reduce((s, bd) => s + title + bd.R * chh + gap, 0);
     return { bands, height, cw, chh, gap, title };
@@ -128,14 +131,14 @@ export function mountCanvas(host, opts) {
     const keep = new Set();
     for (const c of L.captions) { keep.add(c.id); let e = capEl.get(c.id); if (!e) { e = $("div", "caption" + (c.cohortId ? " coh" : "")); e.dataset.id = c.id; if (c.cohortId) e.dataset.coil = c.cohortId; capEl.set(c.id, e); layerC.appendChild(e); } e.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0)`; e.style.width = c.w.toFixed(1) + "px"; e.style.height = c.h.toFixed(1) + "px"; e.innerHTML = `<span>${esc(c.key)}</span><span class="cnt">${c.n}${c.cohortId ? " · PODIUM" : ""}</span>`; }
     for (const [id, e] of capEl) if (!keep.has(id)) { e.remove(); capEl.delete(id); }
-    stage.style.setProperty("--cw", L.cell.w.toFixed(1) + "px"); stage.style.setProperty("--chh", L.cell.h.toFixed(1) + "px");
-    scheduleLabels();
+    scheduleLabels(true);
   }
   function fit() { view.w = host.clientWidth || 1; view.h = host.clientHeight || 1; const L = layoutLevel(items, blocks, view.w, view.h, 0); homeLay = L; if (!lay || lay.level === 0) applyLayout(L, false); if (!fitDone) { fitDone = true; cam.s = 1; cam.tx = 0; cam.ty = 0; } applyCam(); }
-  const applyCam = () => { stage.style.transform = `translate3d(${cam.tx.toFixed(1)}px,${cam.ty.toFixed(1)}px,0) scale(${cam.s.toFixed(4)})`; const L = labelPx(1 / cam.s, 1, view.h, LABEL); stage.style.setProperty("--lpx", (L.px / cam.s).toFixed(2) + "px"); stage.style.setProperty("--s", cam.s.toFixed(4)); setLevel(levelOf(cam.s)); scheduleLabels(); };
+  let lastLpx = ""; const clampCam = () => { const L = lay || homeLay; if (!L) return; const sw = L.W * cam.s, sh = L.H * cam.s; cam.tx = sw <= view.w ? (view.w - sw) / 2 : Math.max(view.w - sw, Math.min(0, cam.tx)); cam.ty = sh <= view.h ? (view.h - sh) / 2 : Math.max(view.h - sh, Math.min(0, cam.ty)); }; // the view never leaves the stage: a smaller stage sits centred, a bigger one is clamped at its edges
+  const applyCam = () => { clampCam(); stage.style.transform = `translate3d(${cam.tx.toFixed(1)}px,${cam.ty.toFixed(1)}px,0) scale(${cam.s.toFixed(4)})`; const L = labelPx(1 / cam.s, 1, view.h, LABEL); const lpx = (Math.round((L.px / cam.s) * 2) / 2).toFixed(1) + "px"; /* half-pixel steps: a font-size change re-lays 614 cells, so not on every frame */ if (lpx !== lastLpx) { lastLpx = lpx; stage.style.setProperty("--lpx", lpx); } setLevel(levelOf(cam.s)); scheduleLabels(); };
   function setLevel(L) { if (L === level) return; level = L; applyLayout(L === 0 ? (homeLay || layoutLevel(items, blocks, view.w, view.h, 0)) : layoutLevel(items, blocks, view.w, view.h, L), true); if (opts.onLevel) opts.onLevel(L); }
   /* the ticker thins where cells would overlap it zoomed OUT (label-scale: strongest first); zoomed in every ticker prints */
-  function scheduleLabels() { thin(); } // synchronous: the proof reads the count right after a move
+  let thinS = -1; function scheduleLabels(force) { if (!force && cam.s >= 1 && thinS >= 1 && printed === (lay ? lay.cells.length : 0)) { thinS = cam.s; return; } thinS = cam.s; thin(); } // synchronous (the proof reads the count right after a move); zoomed in every ticker fits, so nothing to thin
   let printed = 0;
   function thin() {
     if (!lay) return; const s = cam.s, px = labelPx(1 / s, 1, view.h, LABEL).px, tw = (t) => px * 0.62 * t.length + 6;
@@ -163,8 +166,8 @@ export function mountCanvas(host, opts) {
   function frameRect(r, ms = 600, pad = 10, maxS = 10) { const s = Math.min(maxS, (view.w - 2 * pad) / r.w, (view.h - 2 * pad) / r.h); flyTo({ s, tx: (view.w - r.w * s) / 2 - r.x * s, ty: (view.h - r.h * s) / 2 - r.y * s }, ms); }
   function openBlock(id) { const t = (lay || homeLay).tiles.find((x) => x.id === id); if (!t) return; // a block opens at the INDUSTRY level: zoom so the block fills the view (at least 1.5 ×), then the level 1 layout places its groups
     const s = Math.max(LEVELS[1].from, Math.min(6, (view.w - 20) / t.w, (view.h - 20) / t.h)); const L1 = layoutLevel(items, blocks, view.w, view.h, 1); const t1 = L1.tiles.find((x) => x.id === id) || t;
-    flyTo({ s, tx: (view.w - t1.w * s) / 2 - t1.x * s, ty: (view.h - t1.h * s) / 2 - t1.y * s }, 700); }
-  function select(id) { if (selected) { const e = cellEl.get(selected); if (e) e.classList.remove("sel"); } selected = id; const e = id && cellEl.get(id); if (e) e.classList.add("sel"); scheduleLabels(); }
+    flyTo({ s, tx: t1.w * s > view.w ? -t1.x * s : (view.w - t1.w * s) / 2 - t1.x * s, ty: t1.h * s > view.h ? -t1.y * s : (view.h - t1.h * s) / 2 - t1.y * s }, 700); } // a block bigger than the view opens from its top-left corner (its title first), a smaller one centred
+  function select(id) { if (selected) { const e = cellEl.get(selected); if (e) e.classList.remove("sel"); } selected = id; const e = id && cellEl.get(id); if (e) e.classList.add("sel"); scheduleLabels(true); }
   function cellOf(id) { return (lay || homeLay).cells.find((c) => c.id === id) || null; }
   function screenOf(id) { const c = cellOf(id); if (c) { const r = host.getBoundingClientRect(); return [r.left + (c.x + c.w / 2) * cam.s + cam.tx, r.top + (c.y + c.h / 2) * cam.s + cam.ty]; } const t = (lay || homeLay).titles.find((x) => x.id === id); if (t) { const r = host.getBoundingClientRect(); return [r.left + (t.x + t.w / 2) * cam.s + cam.tx, r.top + (t.y + t.h / 2) * cam.s + cam.ty]; } return null; }
   const api = {

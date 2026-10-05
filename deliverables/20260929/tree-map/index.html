@@ -55,11 +55,11 @@ input[type=search]::placeholder{color:var(--mute)}
 /* ---- THE PODIUM: V3's laser coil as the 3D bow tie, over the canvas ---- */
 #podium{position:absolute;inset:0;display:none;background:var(--bg)}
 #podium-gl{position:absolute;inset:0} #podium-gl canvas{display:block;width:100%;height:100%}
-#areabar{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;max-width:calc(100% - 24px)}
+#areabar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;max-width:calc(100% - 24px)}
 #areabar .ctabs{margin:0;background:var(--bg)}
 #areabar .who{padding:7px 12px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);white-space:nowrap;border-right:.6px solid var(--line)}
 #areabar .who b{color:var(--crk);font-weight:600}
-#walkhud{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:18px;background:var(--bg);padding:8px 14px;border-top:1px solid var(--crk)}
+#walkhud{position:absolute;left:50%;bottom:58px;transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:18px;background:var(--bg);padding:8px 14px;border-top:1px solid var(--crk)}
 #walkhud .who{display:flex;flex-direction:column;align-items:center;min-width:180px;line-height:1.15}
 #walkhud .rank{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 #walkhud b{font-size:34px;letter-spacing:.08em;color:var(--ink);font-weight:700;margin:2px 0}
@@ -104,7 +104,7 @@ aside .note{font-size:11px;color:var(--dim);margin:6px 0}
 </style>
 </head>
 <body class="gsum">
-<header>
+<header><span data-scnav-slot></span>
   <h1>SCINTILLA <b>·</b> TREE</h1>
   <span class="stamp" id="stamp">loading the tree and the live Geigers…</span>
   <span id="crumbs"></span>
@@ -316,7 +316,7 @@ state.zoomTo = (s, ms) => cv.zoomTo(s, ms); state.zoomAt = (x, y, f) => cv.zoomA
 state.setView = setView; state.find = find; state.select = (id) => { const n = state.byId.get(id) || byTicker.get(id); if (n) select(n); }; state.release = release; state.openCoil = openCoil; state.openList = openList; state.closeCoil = closeCoil; state.openBlock = (id) => cv.openBlock(id);
 state.setWalk = (on) => { if (!coil || !state.cluster) return false; if (on) { if (!coil.walking()) coil.walkTo(0, 900); } else coil.endWalk(true); areabar(); return coil.walking(); }; state.walkStep = (d) => (coil ? coil.walkStep(d) : null); Object.defineProperty(state, "walkAt", { get: () => (coil ? coil.walkAt() : null) }); state.walking = () => !!(coil && coil.walking());
 state.coilApi = () => coil; state.fpsNow = () => (state.cluster && coil ? coil.fps() : null);
-state.measureFps = (ms = 2000) => new Promise((res) => { if (state.cluster && coil) return coil.measure(ms).then(res); const t0 = performance.now(); let f = 0; const p0 = cv.pose(); const step = (now) => { const k = Math.min(1, (now - t0) / ms); cv.flyTo({ s: p0.s * (1 + 0.6 * Math.sin(k * Math.PI)), tx: p0.tx - 300 * k, ty: p0.ty - 120 * k }, 0); f++; if (k < 1) requestAnimationFrame(step); else { cv.flyTo(p0, 0); res({ fps: +(f / ((performance.now() - t0) / 1000)).toFixed(1), frames: f, seconds: +((performance.now() - t0) / 1000).toFixed(2), where: "canvas pan + zoom" }); } }; requestAnimationFrame(step); });
+state.measureFps = (ms = 2000, what = "zoom") => new Promise((res) => { if (state.cluster && coil) return coil.measure(ms).then(res); const t0 = performance.now(); let f = 0; const p0 = cv.pose(); const step = (now) => { const k = Math.min(1, (now - t0) / ms); if (what === "pan") cv.flyTo({ s: p0.s, tx: p0.tx - 400 * Math.sin(k * Math.PI), ty: p0.ty - 200 * Math.sin(k * Math.PI) }, 0); else cv.flyTo({ s: p0.s * (1 + 0.4 * Math.sin(k * Math.PI)), tx: p0.tx - 200 * k, ty: p0.ty - 100 * k }, 0); f++; if (k < 1) requestAnimationFrame(step); else { cv.flyTo(p0, 0); res({ fps: +(f / ((performance.now() - t0) / 1000)).toFixed(1), frames: f, seconds: +((performance.now() - t0) / 1000).toFixed(2), where: what === "pan" ? "canvas pan (the whole stage moves)" : "canvas zoom 1 → 1.4 × (the type re-sizes under the label rule)" }); } }; requestAnimationFrame(step); });
 state.elevation = () => (coil ? coil.elevation() : null); state.orbitTo = (el, az) => coil && coil.orbitTo(el, az);
 state.dropped = ["DETAILED", "ORDER · GREEN → RED | BY SIZE", "FLAT 2D", "WHOLE MAP (→ RESET)", "the 3D whole-map view", "OPEN 3D on a section (the balls area)", "FROM ABOVE | PODIUM 3D", "KEY · what every mark means", "the hint line", "LET GO ✕", "≡ LIST as a separate crumb"];
 
@@ -325,5 +325,38 @@ paintLists(); setView(state.view); crumbs();
 const q0 = new URLSearchParams(location.search); if (q0.get("t")) find(q0.get("t"));
 state.ready = true;
 </script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
 </body>
 </html>
