@@ -18,11 +18,24 @@
    line seats cloud peers even when the retail peers outscore them), then the rest fill to N by score.
    SCORE = similarity − SIZE_WEIGHT · |log10(peer market value ÷ own)| (a 10× size gap costs 0.06; never a gate)
          + NAMED_BONUS when FMP's peers or Massive's related companies also name it (0.03: evidence, not admission).
+   K1 (5 Oct) — OWN BUSINESS SEATS FIRST, FILL-INS NEVER LEAD (Alan: MU priced at $4,479 against $1,069 because its
+   peers were chip designers; "a company's own industry peers always seat first"):
+     tier OWN        a peer that shares one of the company's lines for at least OWN_MIN (5¢) of the revenue dollar —
+                     all of them seat before anyone else (the two best per line first, as before, then by score);
+     tier NEIGHBOUR  a peer in a line declared next door (NEIGHBOURS: memory ↔ storage — both sell bits by the
+                     gigabyte into the same cycle); counted at NEIGHBOUR_SIM of the overlap;
+     tier FILL       the same family only (chip designers for a memory maker). Fill-ins are capped: never more than
+                     the own + neighbour peers less one, except to bring a thin set up to MIN_PACK (5, the fewest
+                     peers that can define a pack for the outlier test). With no own or neighbour peer at all the set
+                     is filled to N as before, and says so.
    One share class per company (GOOG / GOOGL, BRK-B / BRK.A).
    2. The reason per peer is the shared lines with both shares, the source that decided it (segments / industry / hand),
       the size ratio and who else named it. */
 
 export const SIM_MIN = 0.15, LINE_MIN = 0.15, SIZE_WEIGHT = 0.06, NAMED_BONUS = 0.03, N_DEFAULT = 12, NS = [8, 10, 12, 15, 20], SEATS_PER_LINE = 2;
+export const NEIGHBOUR_SIM = 0.75, MIN_PACK = 5, OWN_MIN = 0.05;
+/** Lines that are next door to each other: not the same business, but priced off the same cycle. */
+export const NEIGHBOURS = { memory: ["storage"], storage: ["memory"] };
 export const DUAL = { GOOG: "GOOGL", "BRK.A": "BRK-B" };   // the class dropped → the class kept
 
 /** Every served FMP industry → [line, family]. A line is a business; a family is the neighbourhood a line sits in. */
@@ -61,9 +74,11 @@ export const KEYWORDS = [
   { re: /\b(consulting|outsourcing)\b/i, line: "consulting", fam: ["SOFTWARE"] },
   { re: /\b(ai cloud|high performance computing|hosting|colocation)\b/i, line: "ai cloud & hosting", fam: ["CRYPTO", "SOFTWARE", "BANKS"] },
   { re: /\bbitcoin mining|mining segment\b/i, line: "bitcoin mining", fam: ["CRYPTO", "SOFTWARE", "BANKS"] },
-  { re: /\bdata ?cent(er|re)\b/i, line: "data-center chips", fam: ["SEMIS"] },
-  { re: /\b(dram|nand|memory|flash)\b/i, line: "memory", fam: ["SEMIS", "HARDWARE"] },
-  { re: /\bfoundry\b/i, line: "foundry", fam: ["SEMIS"] },
+  /* K1 — notDefault: an equipment maker's segments are named after its CUSTOMERS' markets (FormFactor: "DRAM", "Flash",
+     "Foundry & Logic"); they are not its business, so these three keywords never move an equipment maker's revenue */
+  { re: /\bdata ?cent(er|re)\b/i, line: "data-center chips", fam: ["SEMIS"], notDefault: ["semiconductor equipment"] },
+  { re: /\b(dram|nand|memory|flash)\b/i, line: "memory", fam: ["SEMIS", "HARDWARE"], notDefault: ["semiconductor equipment"] },
+  { re: /\bfoundry\b/i, line: "foundry", fam: ["SEMIS"], notDefault: ["semiconductor equipment"] },
   { re: /\b(consumer (&|and) community|consumer banking|retail banking|consumer and small business)/i, line: "consumer banking", fam: ["BANKS"] },
   { re: /\b(corporate (&|and) (investment|institutional)|commercial and investment bank|global banking|institutional securities|global markets|trading and investment banking|investment bank)/i, line: "investment banking & markets", fam: ["BANKS"] },
   { re: /\b(wealth|asset management|investment management|fiduciary|asset and wealth)/i, line: "wealth & asset management", fam: ["BANKS"] },
@@ -88,7 +103,8 @@ export const HAND = {
   SHOP: { lines: { "e-commerce": 0.7, "application software": 0.3 } }, ORLY: { lines: { "auto parts retail": 1 } },
   META: { lines: { advertising: 0.98, "internet platforms": 0.02 } }, DASH: { lines: { delivery: 1 } }, UBER: { lines: { mobility: 0.57, delivery: 0.33, logistics: 0.1 } },
   NFLX: { lines: { streaming: 1 } }, SPOT: { lines: { streaming: 0.88, advertising: 0.12 } },
-  SNDK: { lines: { memory: 1 } }, WDC: { lines: { storage: 1 } }, STX: { lines: { storage: 1 } }, TSM: { lines: { foundry: 1 } }, GFS: { lines: { foundry: 1 } },
+  SNDK: { lines: { memory: 1 } }, MU: { lines: { memory: 1 } }, SKHY: { lines: { memory: 1 } }, WDC: { lines: { storage: 1 } }, STX: { lines: { storage: 1 } }, TSM: { lines: { foundry: 1 } }, GFS: { lines: { foundry: 1 } },
+  FORM: { lines: { "semiconductor equipment": 1 } },   // K1: FormFactor makes probe cards (test equipment); FMP files it under "Semiconductors" and its segments are named after its customers' markets (DRAM, Flash, Foundry & Logic)
   MSTR: { lines: { "crypto treasury": 0.8, "application software": 0.2 } }, COIN: { lines: { "crypto exchange": 1 } }, HOOD: { lines: { "capital markets": 1 } },
   AAPL: { lines: { "consumer electronics": 0.75, "infrastructure software": 0.25 } }, "BRK-B": { lines: { "diversified insurance": 1 } },
   V: { lines: { payments: 1 } }, MA: { lines: { payments: 1 } }, PYPL: { lines: { payments: 1 } }, AXP: { lines: { payments: 0.6, "consumer banking": 0.4 } }, COF: { lines: { "consumer banking": 0.6, payments: 0.4 } }, SOFI: { lines: { "consumer banking": 1 } }, AFRM: { lines: { payments: 1 } }, GPN: { lines: { payments: 1 } },
@@ -110,7 +126,7 @@ export function linesOf(ticker, profile, segments) {
   if (!rows.length) return { lines: { [dflt]: 1 }, family: fam, source: "industry", from: `FMP industry: ${ind || "unknown"} (segments carry no business rows)` };
   const acc = {}, moved = [];
   for (const [name, v] of rows) {
-    const kw = KEYWORDS.find((k) => k.re.test(name) && k.fam.includes(fam));
+    const kw = KEYWORDS.find((k) => k.re.test(name) && k.fam.includes(fam) && !(k.notDefault && k.notDefault.includes(dflt)));
     const line = kw ? kw.line : dflt; acc[line] = (acc[line] || 0) + v; if (kw) moved.push(name + " → " + kw.line);
   }
   return { lines: norm(acc), family: fam, source: "segments", from: `FMP revenue segments FY${segments.product.fy}${moved.length ? " (" + moved.join(", ") + ")" : ""}`, segments: rows.map(([k, v]) => [k, v]) };
@@ -125,7 +141,10 @@ export function similarity(a, b) {
   for (const f of Object.keys(famA)) if (famB[f]) { let ex = 0; for (const [l, w] of Object.entries(a.lines)) if (FAMILY_OF(l) === f && b.lines[l]) ex += Math.min(w, b.lines[l]); fam += 0.5 * Math.max(0, Math.min(famA[f] - ex, famB[f] - ex)); }
   const shared = Object.keys(a.lines).filter((l) => b.lines[l]).map((l) => ({ line: l, own: a.lines[l], peer: b.lines[l] })).sort((x, y) => Math.min(y.own, y.peer) - Math.min(x.own, x.peer));
   const sameFamily = Object.keys(famA).filter((f) => famB[f] && !shared.some((s) => FAMILY_OF(s.line) === f));
-  return { sim: exact + fam, exact, family: fam, shared, sameFamily };
+  /* K1 — next-door lines (NEIGHBOURS): the overlap of a line of a with its neighbour line in b, at NEIGHBOUR_SIM */
+  let neighbour = 0; const next = [];
+  for (const [l, w] of Object.entries(a.lines)) for (const nb of NEIGHBOURS[l] || []) if (b.lines[nb]) { const o = Math.min(w, b.lines[nb]); neighbour += NEIGHBOUR_SIM * o; next.push({ line: l, peer_line: nb, own: w, peer: b.lines[nb] }); }
+  return { sim: Math.min(1, exact + fam + neighbour), exact, family: fam, neighbour, next, shared, sameFamily };
 }
 
 /** The set for one company. inp: { profiles, segments: { T: row }, fmpRows, srcRows } (C4's reads + the segments fixture). */
@@ -140,8 +159,8 @@ export function buildSet(ticker, inp, { n = N_DEFAULT } = {}) {
     const PL = linesOf(S, p, inp.segments && inp.segments[S]), sm = similarity(L, PL), mcap = Number(p.market_cap) || null, ratio = own > 0 && mcap > 0 ? mcap / own : null;
     const sizePenalty = ratio != null ? SIZE_WEIGHT * Math.abs(Math.log10(ratio)) : SIZE_WEIGHT * 2, src = [...(named[S] || [])].sort();
     const score = sm.sim - sizePenalty + (src.length ? NAMED_BONUS : 0);
-    const why = sm.shared.length ? sm.shared.slice(0, 2).map((s) => `${s.line} (${T} ${Math.round(s.own * 100)}% · ${S} ${Math.round(s.peer * 100)}%)`).join(", ") : sm.sameFamily.length ? `same family (${sm.sameFamily[0].toLowerCase()}): ${Object.entries(PL.lines).filter(([l]) => FAMILY_OF(l) === sm.sameFamily[0]).sort((a, b) => b[1] - a[1])[0][0]}` : `no shared business (${Object.keys(PL.lines)[0]})`;
-    rows.push({ ticker: S, sim: sm.sim, exact: sm.exact, family: sm.family, shared: sm.shared, sameFamily: sm.sameFamily, lines: PL.lines, line_source: PL.source, line_from: PL.from, market_cap: mcap, ratio, size_penalty: sizePenalty, score, sources: src, why, member: sm.sim >= SIM_MIN });
+    const why = sm.shared.length ? sm.shared.slice(0, 2).map((s) => `${s.line} (${T} ${Math.round(s.own * 100)}% · ${S} ${Math.round(s.peer * 100)}%)`).join(", ") : sm.next.length ? `next-door business: ${sm.next[0].peer_line} (${T} is ${sm.next[0].line})` : sm.sameFamily.length ? `same family (${sm.sameFamily[0].toLowerCase()}): ${Object.entries(PL.lines).filter(([l]) => FAMILY_OF(l) === sm.sameFamily[0]).sort((a, b) => b[1] - a[1])[0][0]}` : `no shared business (${Object.keys(PL.lines)[0]})`;
+    rows.push({ ticker: S, sim: sm.sim, exact: sm.exact, family: sm.family, neighbour: sm.neighbour, tier: sm.exact >= OWN_MIN ? "OWN" : sm.neighbour >= SIM_MIN ? "NEIGHBOUR" : "FILL", shared: sm.shared, sameFamily: sm.sameFamily, lines: PL.lines, line_source: PL.source, line_from: PL.from, market_cap: mcap, ratio, size_penalty: sizePenalty, score, sources: src, why, member: sm.sim >= SIM_MIN });
   }
   const members = rows.filter((r) => r.member).sort((a, b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
   /* seats: every line at ≥ LINE_MIN seats its two best peers (the peers that share THAT line, by score) */
@@ -150,15 +169,21 @@ export function buildSet(ticker, inp, { n = N_DEFAULT } = {}) {
     if (w < LINE_MIN) continue;
     let k = 0; for (const r of members) { if (k >= SEATS_PER_LINE) break; if (r.lines[line] && r.lines[line] >= LINE_MIN / 2 && !seated.includes(r.ticker)) { seated.push(r.ticker); seatWhy[r.ticker] = line; k++; } }
   }
-  const kept = [...seated.map((t) => members.find((r) => r.ticker === t)), ...members.filter((r) => !seated.includes(r.ticker))].slice(0, n).map((r, i) => ({ ...r, rank: i + 1, seat: seatWhy[r.ticker] || null }));
+  /* K1 — own business first, then next door, then the capped fill (see the method at the top) */
+  const rest = members.filter((r) => !seated.includes(r.ticker));
+  const core = [...seated.map((t) => members.find((r) => r.ticker === t)), ...rest.filter((r) => r.tier === "OWN"), ...rest.filter((r) => r.tier === "NEIGHBOUR")].slice(0, n);
+  const nCore = core.filter((r) => r.tier !== "FILL").length;
+  const fillCap = nCore === 0 ? n : Math.max(MIN_PACK - core.length, nCore - 1, 0);
+  const fill = rest.filter((r) => r.tier === "FILL").slice(0, Math.min(fillCap, n - core.length));
+  const kept = [...core, ...fill].map((r, i) => ({ ...r, rank: i + 1, seat: seatWhy[r.ticker] || null }));
   const keptT = new Set(kept.map((r) => r.ticker));
   const dropped = rows.filter((r) => !keptT.has(r.ticker)).map((r) => ({ ...r, why: r.member ? `beyond the ${n} kept (score ${r.score.toFixed(2)})` : r.why }));
   return {
     ticker: T, n, own_market_cap: own, own_industry: me.industry || null, own_lines: L, lines_source: L.source, lines_from: L.from,
-    counts: { served: rows.length, members: members.length, kept: kept.length, named: Object.keys(named).length },
+    counts: { served: rows.length, members: members.length, kept: kept.length, named: Object.keys(named).length, own: kept.filter((r) => r.tier === "OWN").length, neighbour: kept.filter((r) => r.tier === "NEIGHBOUR").length, fill: kept.filter((r) => r.tier === "FILL").length, fill_cap: fillCap },
     kept, dropped, members: members.map((r) => r.ticker),
     named_not_in: Object.keys(named).filter((p) => !keptT.has(p)).map((p) => { const r = rows.find((x) => x.ticker === p); return { ticker: p, sources: [...named[p]], why: DUAL[p] && inp.profiles[DUAL[p]] ? `the same company as ${DUAL[p]} (one share class)` : !inp.profiles[p] ? "not served on the Hub (no figures)" : r ? (r.member ? `beyond the ${n} kept (score ${r.score.toFixed(2)})` : `${r.why} · similarity ${r.sim.toFixed(2)}`) : "no profile" }; }),
-    rule: `business first: a peer is in when at least ${Math.round(SIM_MIN * 100)}¢ of each revenue dollar sits in a line it shares with ${T} (FMP revenue segments where they exist, else the FMP industry); every line ${T} has at ≥${Math.round(LINE_MIN * 100)}% seats its ${SEATS_PER_LINE} best peers; the rest by similarity less a soft size term (${SIZE_WEIGHT} per 10× of market value); the ${n} best kept`,
+    rule: `business first: a peer is in when at least ${Math.round(SIM_MIN * 100)}¢ of each revenue dollar sits in a line it shares with ${T} (FMP revenue segments where they exist, else the FMP industry); every line ${T} has at ≥${Math.round(LINE_MIN * 100)}% seats its ${SEATS_PER_LINE} best peers; ${T}'s own-business peers seat first, then next-door businesses, then same-family fill-ins — never more fill-ins than own + next-door peers less one (except to reach ${MIN_PACK}); inside a tier by similarity less a soft size term (${SIZE_WEIGHT} per 10× of market value); at most ${n} kept`,
   };
 }
 
