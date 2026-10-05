@@ -4911,6 +4911,16 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
 .pmx-prop__n{ font:600 14px var(--mono); color:var(--ink); text-align:right; font-variant-numeric:tabular-nums; } .pmx-prop__n i{ display:block; font:400 10px var(--mono); color:var(--dim); font-style:normal; }
 .pmx-prop__w{ color:var(--ink2); line-height:1.5; } .pmx-prop__w b{ color:var(--ink); }
 .pmx-foot{ color:var(--dim); font-size:10.5px; padding:8px 0 0; }
+/* K1 (5 Oct) — the resolution log's rows and the PAGE SPECS fold at the section's foot */
+.pmx-grp--closed{ padding-top:18px; }
+.pmx-crow{ display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) 52px minmax(0,150px) 96px; gap:10px; min-width:0; align-items:center; padding:5px 0; border-bottom:.6px solid var(--line); }
+.pmx-crow__h{ color:var(--ink3); font-size:11px; } .pmx-crow.is-yes .pmx-crow__h{ color:var(--bull); } .pmx-crow.is-no .pmx-crow__h{ color:var(--bear); }
+.pmx-crow__d{ color:var(--dim); font-size:11px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+details.sc-pagespecs{ margin:18px 0 4px; border-top:.6px solid var(--line2); padding-top:8px; font:400 11px/1.6 var(--mono); color:var(--dim); }
+details.sc-pagespecs > summary{ cursor:pointer; letter-spacing:.22em; color:var(--ink3); font-size:11px; list-style:none; }
+details.sc-pagespecs > summary::before{ content:"+ "; } details.sc-pagespecs[open] > summary::before{ content:"– "; }
+details.sc-pagespecs p{ margin:8px 0 0; max-width:1100px; } details.sc-pagespecs b{ color:var(--ink2); font-weight:600; }
+@media (max-width:900px){ .pmx-crow{ grid-template-columns:minmax(0,1fr) 52px 86px; } .pmx-crow .pmx-row__o, .pmx-crow__h{ display:none; } }
 @media (max-width:900px){
   .pmx-row{ grid-template-columns:minmax(0,1fr) 52px 72px; } .pmx-row__o, .pmx-row__v{ display:none; } .pmx-row__l{ grid-column:1 / -1; }
   .pmx-prop{ grid-template-columns:56px 1fr 70px; } .pmx-prop__w{ grid-column:1 / -1; }
@@ -6013,6 +6023,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      → honest empty states downstream). */
   for (const s of (socSent || [])) if (s && s.ticker) SOCSENT[String(s.ticker).toUpperCase()] = s;
   for (const d of (socDetail || [])) if (d && d.ticker && SOCSENT[String(d.ticker).toUpperCase()]) Object.assign(SOCSENT[String(d.ticker).toUpperCase()], d);   // latest mention, when migrated
+  if (typeof socDailyApply === "function") socDailyApply();   // K1 (5 Oct): the daily table, once read, replaces the stale social_sentiment rows
   for (const v of (boardVol || [])) if (v && v.ticker) BOARDVOL[String(v.ticker).toUpperCase()] = v;
   for (const r of (ntmRows || [])) if (r && r.ticker) { NTMEPS[String(r.ticker).toUpperCase()] = num(r.ntm_eps); NTMEPS_AT[String(r.ticker).toUpperCase()] = r.updated_ts; }
   /* TODO (board Vol×) — once board_volume is populated, prefer BOARDVOL[t].rvol_at_time
@@ -11279,6 +11290,8 @@ function socSourceHTML() {
   const fi = socFeedInfo(null);
   if (!fi.any) return "Reads <b>social_sentiment</b> (DB). Empty until the YouTube sentiment job (jobs/youtube-sentiment) writes its first pass.";
   const when = fi.updated ? fi.updated.toISOString().slice(0, 16).replace("T", " ") + "Z" : "—";
+  if (fi.youtube && SOCDAILY.rows && SOCDAILY.rows.length) return "<b>YouTube</b> · sentiment_ticker_daily, the last " + SOC_DAILY_DAYS + " days summed per name: videos that mention it, how many lean bullish / bearish, the mean lean. " +
+    "Finance-keyword lexicon around each mention, with negation — <b>not an AI read</b>. Updated " + esc(when) + ".";
   if (fi.youtube) return "<b>YouTube</b> · English transcripts of the channels Alan subscribes to (youtube_videos · subscription), 7-day window. " +
     "Per ticker: videos that mention it, how many lean bullish / bearish, mean lean, latest mention. " +
     "Finance-keyword lexicon around each mention, with negation — <b>not an AI read</b>. Updated " + esc(when) + ".";
@@ -11994,11 +12007,48 @@ function renderSocial() {
   const lb = el("socLabel"); if (lb) lb.innerHTML = socLabelHTML(S.tq || S.coh);
   const sc = el("socSource"); if (sc) sc.innerHTML = socSourceHTML();
 }
+/* K1 (5 Oct 2026) — SOCIAL → SENTIMENT read social_sentiment, which its job last wrote on 23 Sep (63 names). The daily
+   table (sentiment_ticker_daily, source youtube — the one the SENTIMENT room reads, written through today) is the
+   current one: the last SOC_DAILY_DAYS days are summed per name (videos, bullish, bearish; the lean weighted by the
+   videos that could be scored) and take the stale rows' place. If the daily table cannot be read the old rows stay. */
+const SOC_DAILY_DAYS = 7, SOC_DAILY_TTL = 10 * 60e3;
+const SOCDAILY = { at: 0, busy: false, rows: null, err: null };
+function socDailyFold(rows) {
+  const by = {};
+  for (const r of rows || []) {
+    if (!r || !r.ticker) continue;
+    const k = String(r.ticker).toUpperCase(), o = by[k] = by[k] || { ticker: k, bullish: 0, bearish: 0, posts: 0, _w: 0, _s: 0, updated_ts: 0, source: "youtube", window_days: SOC_DAILY_DAYS, method: r.method || null, _daily: true };
+    o.bullish += num(r.bull) || 0; o.bearish += num(r.bear) || 0; o.posts += num(r.n) || 0;
+    const w = num(r.scored) || 0, sc = num(r.score);
+    if (w > 0 && sc != null) { o._w += w; o._s += sc * w; }
+    const u = r.updated_at ? Date.parse(r.updated_at) / 1000 : 0; if (u > o.updated_ts) o.updated_ts = u;
+  }
+  for (const k of Object.keys(by)) { const o = by[k]; o.score = o._w > 0 ? o._s / o._w : null; delete o._w; delete o._s; }
+  return by;
+}
+function socDailyApply() {
+  if (!SOCDAILY.rows) return false;
+  const by = socDailyFold(SOCDAILY.rows);
+  if (!Object.keys(by).length) return false;
+  for (const k of Object.keys(SOCSENT)) if (SOCSENT[k] && SOCSENT[k].source === "youtube") delete SOCSENT[k];   // the 23 Sep rows
+  for (const k of Object.keys(by)) SOCSENT[k] = by[k];
+  return true;
+}
+function socDailyLoad() {
+  if (SOCDAILY.busy || (SOCDAILY.at && Date.now() - SOCDAILY.at < SOC_DAILY_TTL)) return;
+  SOCDAILY.busy = true;
+  const since = new Date(Date.now() - SOC_DAILY_DAYS * 86400000).toISOString().slice(0, 10);
+  pg("sentiment_ticker_daily?select=day,ticker,score,n,scored,bull,bear,method,updated_at&source=eq.youtube&day=gte." + since + "&order=day.desc&limit=5000", 1)
+    .then((rows) => { SOCDAILY.rows = Array.isArray(rows) ? rows : []; SOCDAILY.err = null; },
+          (e) => { SOCDAILY.err = String((e && e.message) || e); })
+    .then(() => { SOCDAILY.busy = false; SOCDAILY.at = Date.now(); if (socDailyApply() && S.sec === "SOCIAL" && el("socList")) renderSocial(); });
+}
 /* fill: the SOCSENT map is already populated by the board pull; render from it, and
    kick a board refresh if it hasn't run yet so the scope + map exist. */
 function fillSocial() {
   const list = el("socList");
   if (!list) return;
+  socDailyLoad();
   if (!S.rows || !S.rows.length) {
     fetchBoardRows(S.coh, favList()).then((rows) => { S.rows = rows; if (S.sec === "SOCIAL") renderSocial(); }).catch(() => {
       if (S.sec === "SOCIAL") list.innerHTML = '<div class="soon">social scope pull failed — check connection.</div>';
@@ -19829,19 +19879,48 @@ function gradeRowHTML(g) {
     (chg ? '<span class="chg">' + chg + "</span>" : "") + pt +
     '<span class="gdate">' + esc(g.date ? fmtEvDate(g.date) : "") + "</span></div>";
 }
+/* K1 (5 Oct 2026) — the table reads the NEW feed. R3 decision 1 ("switch the Rating-changes table to the nightly notes",
+   recommended yes): analyst_grades stopped on 9 Jun 2026 and holds 89 names; analyst_target_news (the nightly FMP notes,
+   the same rows the RATINGS → tape and 00b read) is current and holds 453. One row per note that carries a rating:
+   firm · action · old → new · the target filed with the same note · date. Rows A4 set aside (quality = quarantine) and
+   weekly round-up headlines are left out. The old table is the fallback only while the notes are still being read or
+   hold no rating for the name. */
+const GRADES_MAX = 12, GRADES_OLD = {};
+function gradeRowsFromNotes(c) {
+  if (!c || c.err || typeof revLines !== "function") return null;
+  const rows = (c.rows || []).filter((r) => r && r.quality !== "quarantine" && !REV_ROUNDUP.test(r.title || ""));
+  const out = [];
+  for (const L of revLines(rows)) {
+    if (!L.grTo) continue;
+    out.push({ firm: L.firm, action: L.action, from_grade: L.grFrom, to_grade: L.grTo, price_target: L.target, date: String(L.at).slice(0, 10) });
+    if (out.length >= GRADES_MAX) break;
+  }
+  return out;
+}
+function estGradesPick(t, c) {
+  const notes = gradeRowsFromNotes(c);
+  if (notes && notes.length) return { rows: notes, src: "analyst_target_news" };
+  return { rows: (t && GRADES_OLD[t]) || [], src: notes ? "analyst_grades" : "analyst_grades (the nightly notes are still being read)" };
+}
+function estGradesBodyHTML(t, c) {
+  const pick = estGradesPick(t, c);
+  const rows = pick.rows.length
+    ? pick.rows.map(gradeRowHTML).join("")
+    : '<div class="sc-grempty">No rating changes on file for $' + esc(String(t || "")) + ".</div>";
+  return '<div class="sc-grsec" data-rev-t="' + esc(String(t || "")) + '" data-gr-src="' + esc(pick.src) + '" data-gr-n="' + pick.rows.length +
+    '" title="' + esc("source: " + pick.src) + '">' + rows + "</div>";
+}
 function estGradesHTML(data) {
   /* FIX 1 — matches the other ESTIMATES section headers (01 FORECAST / 02 CONVICTION):
      numbered estSechead "05 · Rating changes" + gradient rule + a count meta. */
-  const grades = (data._grades || []).filter((g) => g && (g.firm || g.action || g.to_grade));
-  const head = estSechead("05", "Rating changes",
-    grades.length ? '<span class="meta">' + grades.length + " changes</span>" : "");
-  const rows = grades.length
-    ? grades.map(gradeRowHTML).join("")
-    : '<div class="sc-grempty">No rating changes yet — fills from analyst_grades (firm · upgrade/downgrade · from→to · pt · date).</div>';
-  /* R3 — the rating tape on top (Alan, 2 Oct: "left-to-right scrolling like the earnings events thing; the table is still useful") */
   const t = data && data.t, rc = t && typeof REV_CACHE !== "undefined" ? REV_CACHE[t] : null;
-  const tape = t && typeof revTapeHTML === "function" ? revTapeHTML(t, rc && Date.now() - rc.at < REV_TTL ? rc : null) : "";
-  return head + tape + '<div class="sc-grsec">' + rows + "</div>";
+  const live = rc && Date.now() - rc.at < REV_TTL ? rc : null;
+  if (t) GRADES_OLD[t] = (data._grades || []).filter((g) => g && (g.firm || g.action || g.to_grade));
+  const n = estGradesPick(t, live).rows.length;
+  const head = estSechead("05", "Rating changes", '<span class="meta" data-gr-meta="' + esc(String(t || "")) + '">' + (n ? n + " changes" : "") + "</span>");
+  /* R3 — the rating tape on top (Alan, 2 Oct: "left-to-right scrolling like the earnings events thing; the table is still useful") */
+  const tape = t && typeof revTapeHTML === "function" ? revTapeHTML(t, live) : "";
+  return head + tape + estGradesBodyHTML(t, live);
 }
 /* 01b FORWARD CONSENSUS GRID — next ~4 future ANNUAL fiscal years from
    analyst_estimates: FY · Revenue avg (compact $B/$M) · EPS avg · # analysts,
@@ -19951,7 +20030,7 @@ function estPTGaugeHTML(data) {
    so the company payload (fetchCompanyData) is untouched. FMP's own DCF number and its letter ratings stay off the Hub. */
 const REV_TTL = 10 * 60e3, REV_SHOW = 12, REV_MAX = 60;
 const REV_CACHE = {}, REV_INFLIGHT = {};
-const REV_SEL_NEWS = "published_utc,kind,firm,analyst,target,adj_target,prior_grade,new_grade,action,price_when_posted,title,url";
+const REV_SEL_NEWS = "published_utc,kind,firm,analyst,target,adj_target,prior_grade,new_grade,action,price_when_posted,title,url,quality";   // K1: quality (A4) so the Rating-changes table can leave the set-aside rows out
 const REV_SEL_SUM = "as_of_date,last_month_count,last_month_avg,last_quarter_count,last_quarter_avg,last_year_count,last_year_avg,all_time_count,all_time_avg";
 function revNum(v) { if (v == null || v === "") return null; const n = Number(v); return isFinite(n) ? n : null; }
 function revPx(v) {
@@ -20404,6 +20483,9 @@ function revR3Paint(t) {
   const sel = String(t).replace(/["\\]/g, "");
   document.querySelectorAll('.sc-rvt[data-rev-t="' + sel + '"]').forEach((x) => { x.outerHTML = revTapeHTML(t, c); });
   document.querySelectorAll('.sc-rvh[data-rev-t="' + sel + '"]').forEach((x) => { x.outerHTML = revHistBody(t, c); });
+  /* K1 — 05 Rating changes follows the notes once they land (it was drawn from the old table while they were read) */
+  document.querySelectorAll('.sc-grsec[data-rev-t="' + sel + '"]').forEach((x) => { x.outerHTML = estGradesBodyHTML(t, c); });
+  document.querySelectorAll('[data-gr-meta="' + sel + '"]').forEach((x) => { const n = estGradesPick(t, c).rows.length; x.textContent = n ? n + " changes" : ""; });
 }
 if (typeof document !== "undefined") document.addEventListener("click", (e) => {
   const b = e.target && e.target.closest && e.target.closest(".sc-rvh [data-rvh-firm], .sc-rvh [data-rvh-span]");
@@ -27950,7 +28032,9 @@ async function pmLoad(force) {
     ]);
     PM.latest = pmDedupe(Array.isArray(latest) ? latest : []); PM.run = (Array.isArray(runs) && runs[0]) || null; PM.err = null; PM.at = Date.now();
     pmPaint();                                                        // the band first: probabilities now, changes when the history lands
-    const heads = pmChips(PM.latest, null, Date.now()).map((c) => c.head.market_id).filter(Boolean);
+    /* K1 (5 Oct) — the WHAT THE WORLD IS BETTING ON rows read "no yesterday / no history yet" because only the tracked
+       topics' snapshots were asked for; the discover rows' favourites ride in the same one request now */
+    const heads = pmChips(PM.latest, null, Date.now()).concat(pmDiscoverChips(PM.latest, null, Date.now())).map((c) => c.head.market_id).filter(Boolean);
     PM.hist = heads.length ? await pmHistory("venue=eq.polymarket&market_id=in.(" + heads.map(encodeURIComponent).join(",") + ")") : {};
     pmPaint(); pmSectionPaint();
   } catch (e) { PM.err = String((e && e.message) || e); pmPaint(); pmSectionPaint(); }
@@ -28106,7 +28190,7 @@ const PM_PROPOSALS_FILE = "/deliverables/20261002/prediction-section/proposals-2
 const PM_GROUP_ORDER = ["The Fed", "Inflation prints", "Yields", "Stocks", "Economy", "Gold", "Oil & OPEC", "Tariffs & trade", "Washington", "Elections", "AI", "Iran", "China–Taiwan", "Russia–Ukraine", "Japan & the carry trade", "Other central banks"];
 const PM_GROUP = { "fed-2026-10": "The Fed", "fed-2026-12": "The Fed", "fed-2027-01": "The Fed", "fed-hikes-2026": "The Fed", "fed-cuts-2026": "The Fed", "ust10-2026": "Yields", "spx-2026": "Stocks", "spy-month": "Stocks", "recession-2026": "Economy", "recession-2027": "Economy", "iran-us-ceasefire": "Iran", "iran-israel-ceasefire": "Iran", "iran-blockade": "Iran", "iran-invasion": "Iran", "iran-nuclear-deal": "Iran", "ukraine-ceasefire": "Russia–Ukraine", "ukraine-talks": "Russia–Ukraine", "nato-russia": "Russia–Ukraine", "putin-out": "Russia–Ukraine", "china-tariff": "Tariffs & trade", "trade-deals": "Tariffs & trade", "effective-tariff": "Tariffs & trade", "house-2026": "Elections", "senate-2026": "Elections", "congress-2026": "Elections", "ust30-2026": "Yields", "gdp-2026": "Economy", "largest-company": "Stocks", "boj-next": "Japan & the carry trade", "boj-after": "Japan & the carry trade", "usdjpy-2026": "Japan & the carry trade", "taiwan-invade": "China–Taiwan", "taiwan-blockade": "China–Taiwan", "taiwan-clash": "China–Taiwan", "wti-month": "Oil & OPEC", "oil-ath": "Oil & OPEC", "opec-exit": "Oil & OPEC", "hormuz": "Oil & OPEC", "cpi-annual": "Inflation prints", "core-cpi": "Inflation prints", "core-pce": "Inflation prints", "inflation-peak-2026": "Inflation prints", "shutdown": "Washington", "us-debt": "Washington", "ai-bubble": "AI", "ai-regulation": "AI", "ecb-next": "Other central banks", "gold-month": "Gold" };
 const PM_RULE_SENTENCE = "a market needs at least 3 days of history before we know its usual daily move; the ◆ means today's move is bigger than the middle of its last 20 daily moves (never less than one point)";
-var PMX = { props: null, propsAt: 0, propsBusy: false, propsErr: null, propsSrc: null };
+var PMX = { props: null, propsAt: 0, propsBusy: false, propsErr: null, propsSrc: null, closed: null, closedAt: 0, closedBusy: false, closedErr: null };   // K1: closed = the resolution log
 
 function pmSectionOn() { return PM_SECTION_ON && typeof S !== "undefined" && S && S.sec === "SENTIMENT" && S.sentiTab === "PREDICTION" && !!el("snMain"); }
 function pmGroupOf(topic, reg) { return (reg && reg[topic] && reg[topic].group) || PM_GROUP[topic] || "Other"; }
@@ -28193,8 +28277,76 @@ function pmSectionHTML(latest, hist, run, reg, slugs, props, nowMs, state) {
     }
   }
   h += pmProposalsHTML(props, { busy: PMX.propsBusy, err: PMX.propsErr, src: PMX.propsSrc });
+  h += pmClosedHTML(state && state.closed, now, { err: state && state.closedErr });   // K1 — the resolution log
+  h += PM_PAGE_SPECS;                                                                // K1 — the explanations, at the foot
   return '<div class="pmx" id="pmSection">' + h + "</div>";
 }
+/* K1 (5 Oct 2026) — THE RESOLUTION LOG (ledger 2 Oct: "how/when a market resolved, when removed"). Reads the view
+   public.prediction_market_closed: every market the collector once read and no longer reads, with its last reading.
+   One line per question: the outcome that was priced highest when we last read it, what happened (ENDED YES / ENDED NO /
+   ENDED / LEFT THE LIST / DELISTED — the view's words), and when we last read it. Newest first. */
+const PM_CLOSED_SHOW = 30;
+function pmClosedFold(rows) {
+  const by = new Map();
+  for (const r of rows || []) {
+    if (!r || !r.market_id) continue;
+    const k = String(r.event_id || "") + "\u0001" + String(r.question || "").trim().toLowerCase();
+    let g = by.get(k);
+    if (!g) by.set(k, g = { question: r.question || "", topic: r.topic || "", event_id: r.event_id || null, rows: [], last: 0, first: Infinity });
+    g.rows.push(r);
+    const lt = Date.parse(r.last_ts), ft = Date.parse(r.first_ts);
+    if (isFinite(lt) && lt > g.last) g.last = lt;
+    if (isFinite(ft) && ft < g.first) g.first = ft;
+  }
+  const out = [];
+  for (const g of by.values()) {
+    g.rows.sort((a, b) => Number(b.last_probability) - Number(a.last_probability));
+    const head = g.rows.find((r) => r.how === "ENDED YES") || g.rows[0];
+    out.push({ question: g.question, topic: g.topic, event_id: g.event_id, head, how: head.how, p: Number(head.last_probability), n: g.rows.length, last: g.last, first: isFinite(g.first) ? g.first : null,
+               ends: head.end_date ? Date.parse(head.end_date) : null });
+  }
+  out.sort((a, b) => b.last - a.last);
+  return out;
+}
+const PM_HOW_WORDS = { "ENDED YES": "ended · yes", "ENDED NO": "ended · no", "ENDED": "ended", "LEFT THE LIST": "left the most-traded list", "DELISTED": "no longer listed" };
+function pmClosedDay(ms) {
+  if (!isFinite(ms) || !ms) return "—";
+  try { return new Date(ms).toLocaleString("en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/New_York" }).replace(",", ""); }
+  catch (_) { return new Date(ms).toISOString().slice(0, 16).replace("T", " "); }
+}
+function pmClosedHTML(rows, nowMs, state) {
+  const head = (n, extra) => '<div class="pmx-grp pmx-grp--closed" id="pmClosed"><div class="pmx-grp__h">RESOLUTION LOG <i>' + n + extra + "</i></div>";
+  if (state && state.err) return head("", "could not be read · " + esc(state.err)) + "</div>";
+  if (!rows) return head("", "reading the closed markets…") + "</div>";
+  const list = pmClosedFold(rows);
+  if (!list.length) return head("0", " markets have ended or left the feed yet") + "</div>";
+  const show = list.slice(0, PM_CLOSED_SHOW);
+  return head(list.length, (list.length === 1 ? " question" : " questions") + " ended or left the feed · newest first" + (list.length > show.length ? " · the newest " + show.length + " shown" : "")) +
+    show.map((c) => {
+      const out = c.head.outcome && !/^yes$/i.test(String(c.head.outcome).trim()) ? String(c.head.outcome) : "Yes";
+      const cls = c.how === "ENDED YES" ? " is-yes" : c.how === "ENDED NO" ? " is-no" : "";
+      const title = c.question + " · " + out + " · last read " + pmClosedDay(c.last) + " ET at " + (c.p * 100).toFixed(1) + "%" +
+        (c.ends ? " · its end date " + pmClosedDay(c.ends) + " ET" : "") + (c.first ? " · first read " + pmClosedDay(c.first) + " ET" : "") + " · " + c.n + (c.n === 1 ? " outcome" : " outcomes") + " on file";
+      return '<div class="pmx-crow' + cls + '" title="' + esc(title) + '">' +
+        '<span class="pmx-row__n"><b>' + esc(pmCut(String(c.question).replace(/\?\s*$/, ""), 64)) + "</b><i>" + esc(c.topic === "discover" ? "most-traded list" : pmShort(c.topic)) + "</i></span>" +
+        '<span class="pmx-row__o">' + esc(pmCut(out, 30)) + (c.n > 1 ? "<i>" + c.n + " outcomes</i>" : "") + "</span>" +
+        '<span class="pmx-row__p">' + Math.round(c.p * 100) + "%</span>" +
+        '<span class="pmx-crow__h">' + esc(PM_HOW_WORDS[c.how] || String(c.how || "").toLowerCase()) + "</span>" +
+        '<span class="pmx-crow__d">' + esc(pmClosedDay(c.last)) + "</span></div>";
+    }).join("") + "</div>";
+}
+/* K1 — Alan, 3 Oct: "explanatory sentences never sit inside a panel" → one PAGE SPECS block at the foot of the section. */
+const PM_PAGE_SPECS = '<details class="sc-pagespecs"><summary>PAGE SPECS</summary>' +
+  "<p><b>Resolution log.</b> A question lands here when our collector has not read it for 8 hours. <b>ended · yes</b> / <b>ended · no</b>: its end date has passed and the last price we read was 99% or more / 1% or less. " +
+  "<b>ended</b>: the end date has passed with the price in between. <b>left the most-traded list</b>: one of Polymarket’s busiest markets that stopped being among the busiest — it is still open. " +
+  "<b>no longer listed</b>: one of our topics’ markets Polymarket stopped listing before its end date (often listed again under a new id). The percent is the last price we read, not Polymarket’s official ruling — the collector does not store that yet.</p>" +
+  "<p><b>What the world is betting on.</b> Each row’s change and line now come from its own stored readings (kept since 28 Sep), the same maths as our topics.</p>" +
+  "<p><b>Trending sources (2 Oct research; inputs to the topic proposals, never a card by themselves).</b> " +
+  "IN USE — Polymarket’s own 24-hour volume ranking (free, no key): the WHAT THE WORLD IS BETTING ON group. " +
+  "RECOMMENDED NEXT — StockTwits trending symbols (about 30 tickers, free, display with attribution allowed; not wired yet). " +
+  "LATER — Reddit r/wallstreetbets (needs the sign-in lane). " +
+  "NOT USED — Yahoo Finance trending and investing.com trending (their terms forbid automated reading); Google Trends daily (nothing financial in it); X trends and highlights (paid API tier only — Alan’s call).</p>" +
+  "</details>";
 /* the right-hand panel: the open topic's ladder (the band's pane), else the plain-words cards */
 function pmSectionRailHTML(openTopic) {
   if (openTopic) return pmPanelNow(openTopic);
@@ -28214,7 +28366,7 @@ function pmSectionPaint() {
   if (!pmSectionOn()) return false;
   const main = el("snMain"), rail = el("snRail");
   if (!main) return false;
-  main.innerHTML = pmSectionHTML(PM.latest, PM.hist, PM.run, PM.reg, PM.slugs, PMX.props, Date.now(), { err: PM.err });
+  main.innerHTML = pmSectionHTML(PM.latest, PM.hist, PM.run, PM.reg, PM.slugs, PMX.props, Date.now(), { err: PM.err, closed: PMX.closed, closedErr: PMX.closedErr });
   try { if (typeof ernScintPaint === "function") ernScintPaint(main); } catch (_) {}
   if (rail) rail.innerHTML = pmSectionRailHTML(PM.open);
   return true;
@@ -28239,11 +28391,22 @@ async function pmProposalsLoad(force) {
   } catch (e) { PMX.propsErr = String((e && e.message) || e); PMX.props = PMX.props || []; }
   finally { PMX.propsBusy = false; pmSectionPaint(); }
 }
+/* K1 — the resolution log's rows (one GET; the view answers in ~0.2 s) */
+async function pmClosedLoad(force) {
+  if (PMX.closedBusy) return;
+  if (!force && PMX.closedAt && Date.now() - PMX.closedAt < PM_TTL_MS) return;
+  PMX.closedBusy = true;
+  try {
+    const rows = await pg("prediction_market_closed?select=topic,event_id,market_id,outcome,question,last_probability,first_ts,last_ts,end_date,how&order=last_ts.desc&limit=600", 1);
+    PMX.closed = Array.isArray(rows) ? rows : []; PMX.closedErr = null;
+  } catch (e) { PMX.closedErr = String((e && e.message) || e); }
+  finally { PMX.closedBusy = false; PMX.closedAt = Date.now(); pmSectionPaint(); }
+}
 /* the room's entry: paint what is held, read what is not, link every event to its page on polymarket.com */
 async function fillSentiPrediction() {
   if (!pmSectionOn()) return;
   pmSectionPaint();
-  pmRegistry(); pmProposalsLoad(false);
+  pmRegistry(); pmProposalsLoad(false); pmClosedLoad(false);
   if (!PM.latest || Date.now() - PM.at > PM_TTL_MS) await pmLoad(true);
   if (!pmSectionOn()) return;
   pmSectionPaint();

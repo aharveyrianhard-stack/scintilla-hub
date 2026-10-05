@@ -1,0 +1,132 @@
+/* K1 (5 Oct 2026) — the headless before/after pictures of the backlog sweep. Never a visible window (Alan, 24 Sep).
+     node k1-shots.mjs <live|local> <width> <scenario> [ticker]
+   live  = https://scintillahub.ai as deployed (the BEFORE);  local = this branch served under the same hostname (the AFTER).
+   Every non-GET request is answered locally and counted, never sent. Shots → ../shots/<scenario>-<mode>-<width>[-T].png,
+   the record (what was on the page, page errors, writes) → ../tools/rec-<scenario>-<mode>-<width>[-T].json */
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor/package.json");
+const { chromium } = require("playwright-core");
+const [mode = "local", w = "1680", scenario = "pm", ticker = ""] = process.argv.slice(2);
+const width = Number(w), phone = width < 700;
+const here = path.dirname(fileURLToPath(import.meta.url));
+const hubRoot = process.env.HUB_ROOT || path.resolve(here, "../../../..");
+const shots = path.join(here, "..", "shots");
+const tag = scenario + "-" + mode + "-" + width + (ticker ? "-" + ticker : "");
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon", ".woff2": "font/woff2" };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function localFile(root, pathname) {
+  let f = path.normalize(path.join(root, decodeURIComponent(pathname)));
+  if (!f.startsWith(root)) return null;
+  if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, "index.html");
+  if (!fs.existsSync(f) && fs.existsSync(f + ".html")) f += ".html";
+  return fs.existsSync(f) && fs.statSync(f).isFile() ? f : null;
+}
+const writes = [], errors = [];
+const browser = await chromium.launch({ headless: true, args: ["--disable-gpu", "--hide-scrollbars", "--mute-audio"] });
+const out = { tag, mode, width, scenario, ticker, at: new Date().toISOString(), writes, errors };
+try {
+  const context = await browser.newContext({ viewport: { width, height: phone ? 844 : 1050 }, deviceScaleFactor: phone ? 2 : 1, serviceWorkers: "block",
+    ...(phone ? { isMobile: true, hasTouch: true } : {}) });
+  await context.route("**/*", async (route) => {
+    const req = route.request(), u = new URL(req.url()), m = req.method();
+    if (m !== "GET" && m !== "HEAD" && m !== "OPTIONS") {
+      writes.push({ method: m, url: u.host + u.pathname });
+      return route.fulfill({ status: 201, headers: { "access-control-allow-origin": "*", "content-type": "application/json" }, body: "[]" });
+    }
+    if (mode === "local" && u.host === "scintillahub.ai") {
+      if (u.pathname.startsWith("/api/")) return route.continue();
+      const f = localFile(hubRoot, u.pathname);
+      if (!f) return route.fulfill({ status: 404, body: "not found" });
+      return route.fulfill({ status: 200, headers: { "content-type": MIME[path.extname(f)] || "application/octet-stream", "access-control-allow-origin": "*", "cache-control": "no-store" }, body: fs.readFileSync(f) });
+    }
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (e) => errors.length < 20 && errors.push(String(e.message).slice(0, 200)));
+  const shot = async (name, sel) => {
+    const file = path.join(shots, name + "-" + mode + "-" + width + (ticker ? "-" + ticker : "") + ".png");
+    if (sel) {                                 // bring the part to the top of its own scroller, then picture the screen as a person sees it
+      const ok = await page.evaluate((q) => { const e = document.querySelector(q); if (!e) return false; e.scrollIntoView({ block: "start" }); return true; }, sel);
+      if (!ok) out["missing_" + name] = sel;
+      await sleep(500);
+    }
+    await page.screenshot({ path: file, type: "png", fullPage: false });
+    return file;
+  };
+  const openCoTab = async (t, tab) => {
+    await page.goto("https://scintillahub.ai/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".sc-board__row[data-t]", { timeout: 60000 }).catch(() => { out.noBoard = true; });
+    await sleep(1500);
+    await page.evaluate((x) => openCo(x), t);
+    await page.waitForSelector('[data-act="cotab"][data-tab="' + tab + '"]', { timeout: 30000 }).catch(() => { out.noTab = tab; });
+    await page.evaluate((k) => { const b = document.querySelector('[data-act="cotab"][data-tab="' + k + '"]'); if (b) b.click(); }, tab);
+    await sleep(2500);
+  };
+  const S = {
+    /* item 1 — SENTIMENT → PREDICTION MARKETS: the world group's history, the resolution log, the PAGE SPECS fold */
+    async pm() {
+      await page.goto("https://scintillahub.ai/#prediction", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector("#pmSection", { timeout: 60000 });
+      await page.waitForFunction(() => document.querySelector("#pmSection .pmx-row") && typeof PM !== "undefined" && PM.hist && Object.keys(PM.hist).length, null, { timeout: 60000 }).catch(() => { out.noHistory = true; });
+      await page.waitForFunction(() => typeof PMX === "undefined" || !("closed" in PMX) || PMX.closed || PMX.closedErr, null, { timeout: 30000 }).catch(() => { out.noClosed = true; });
+      await sleep(3000);
+      out.pm = await page.evaluate(() => {
+        const sec = document.querySelector("#pmSection"), txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null;
+        const world = sec.querySelector(".pmx-grp--world"), wr = world ? [...world.querySelectorAll(".pmx-row")] : [];
+        const closed = sec.querySelector("#pmClosed");
+        return { status: txt(sec.querySelector(".pmx-status")).slice(0, 160),
+          world: { head: txt(world && world.querySelector(".pmx-grp__h")), rows: wr.length, noYesterday: wr.filter((r) => /no yesterday/.test(r.textContent)).length,
+                   noHistory: wr.filter((r) => /no history yet/.test(r.textContent)).length, withLine: wr.filter((r) => r.querySelector(".pmx-row__l svg")).length, first3: wr.slice(0, 3).map((r) => txt(r).slice(0, 130)) },
+          closed: closed ? { head: txt(closed.querySelector(".pmx-grp__h")), rows: closed.querySelectorAll(".pmx-crow").length, first5: [...closed.querySelectorAll(".pmx-crow")].slice(0, 5).map((r) => txt(r)) } : null,
+          pageSpecs: !!sec.querySelector("details.sc-pagespecs"), overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+      });
+      out.shots = [await shot("pm-room"), await shot("pm-world", ".pmx-grp--world")];
+      if (out.pm.closed) out.shots.push(await shot("pm-closed", "#pmClosed"));
+      if (out.pm.pageSpecs) { await page.evaluate(() => { document.querySelector("#pmSection details.sc-pagespecs").open = true; }); out.shots.push(await shot("pm-specs", "#pmSection details.sc-pagespecs")); }
+    },
+    /* item 1 — company view → ESTIMATES → 05 Rating changes: which feed the table reads */
+    async ratings() {
+      const t = ticker || "NVDA";
+      await openCoTab(t, "ESTIMATES");
+      await page.waitForSelector("#coRailContent .sc-grsec", { timeout: 30000 }).catch(() => { out.noGrades = true; });
+      await page.waitForFunction((x) => typeof REV_CACHE !== "undefined" && REV_CACHE[x], t, { timeout: 30000 }).catch(() => { out.noNotes = true; });
+      await sleep(1500);
+      out.ratings = await page.evaluate(() => {
+        const g = document.querySelector("#coRailContent .sc-grsec"), txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null;
+        const rows = g ? [...g.querySelectorAll(".sc-grrow")] : [];
+        return { src: g && g.dataset.grSrc || "analyst_grades (the page before K1 names no source)", rows: rows.length, newest: rows[0] ? txt(rows[0].querySelector(".gdate")) : null,
+                 oldest: rows.length ? txt(rows[rows.length - 1].querySelector(".gdate")) : null, first3: rows.slice(0, 3).map(txt), empty: txt(g && g.querySelector(".sc-grempty")) };
+      });
+      const h = await page.$("#coRailContent .sc-grsec");
+      if (h) { await h.scrollIntoViewIfNeeded(); await sleep(400); }
+      out.shots = [await shot("ratings", "#coRailContent .sc-grsec"), await shot("ratings-view")];
+    },
+    /* item 1 — SOCIAL → SENTIMENT: the stale table replaced by the daily one */
+    async social() {
+      await page.goto("https://scintillahub.ai/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector(".sc-board__row[data-t]", { timeout: 60000 }).catch(() => { out.noBoard = true; });
+      await sleep(1500);
+      await page.evaluate(() => { S.coh = "ALL"; S.socTab = "SENTIMENT"; go("SOCIAL"); });
+      await page.waitForSelector("#socList .sc-socrow", { timeout: 30000 }).catch(() => { out.noRows = true; });
+      await sleep(4000);
+      out.social = await page.evaluate(() => {
+        const txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null;
+        const rows = [...document.querySelectorAll("#socList .sc-socrow")], have = rows.filter((r) => !r.classList.contains("awaiting"));
+        return { rows: rows.length, withData: have.length, source: txt(document.querySelector("#socSource")), label: txt(document.querySelector("#socLabel")),
+                 first5: have.slice(0, 5).map(txt), daily: typeof SOCDAILY !== "undefined" ? { rows: SOCDAILY.rows && SOCDAILY.rows.length, err: SOCDAILY.err } : null };
+      });
+      await page.evaluate(() => { const l = document.querySelector("#socList"), r = l && l.querySelector(".sc-socrow:not(.awaiting)"); if (r) r.scrollIntoView({ block: "start" }); });
+      await sleep(400);
+      out.shots = [await shot("social")];
+    },
+  };
+  if (!S[scenario]) throw new Error("no scenario " + scenario);
+  await S[scenario]();
+} catch (e) { out.failed = String((e && e.stack) || e).slice(0, 600); }
+finally { await browser.close(); }
+fs.writeFileSync(path.join(here, "rec-" + tag + ".json"), JSON.stringify(out, null, 1));
+console.log(JSON.stringify(out, null, 1));

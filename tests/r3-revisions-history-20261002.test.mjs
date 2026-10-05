@@ -183,7 +183,7 @@ test("the estimates box: plain numbers, the change in colour, 'history starts' w
 });
 test("wiring: 00b sits after 00 REVISIONS, the tape heads 05 Rating changes, the box sits beside the arrows; the R2 strip still renders alone", () => {
   assert.match(html, /return revStripHTML\(data\) \+ \(typeof revHistHTML === "function" \? revHistHTML\(data\) : ""\) \+ estForecastHTML/);
-  assert.match(html, /return head \+ tape \+ '<div class="sc-grsec">'/);
+  assert.match(html, /return head \+ tape \+ estGradesBodyHTML\(t, live\);/);   // K1 (5 Oct): the table under the tape is its own function now (it reads the nightly notes)
   assert.match(html, /<div class="sc-rvs-top">/);
   const sum = { as_of_date: "2026-10-02", last_month_count: 3, last_month_avg: 246.67, last_quarter_count: 25, last_quarter_avg: 331.72, last_year_count: 96, last_year_avg: 299.77, all_time_count: 342, all_time_avg: 152.34 };
   const body = ctx.revStripBody("NVDA", { rows: nvRows, sum, est }, 2026);

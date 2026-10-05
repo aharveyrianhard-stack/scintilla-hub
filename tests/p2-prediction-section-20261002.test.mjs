@@ -51,6 +51,7 @@ const shared =
   grab(/function pmSectionStatusHTML\(run, chips, reg, nowMs, state\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function pmProposalsHTML\(props, state\) \{[\s\S]*?\n\}/) + "\n" +
   grab(/function pmSectionHTML\(latest, hist, run, reg, slugs, props, nowMs, state\) \{[\s\S]*?\n\}/) + "\n" +
+  grab(/const PM_CLOSED_SHOW = 30;[\s\S]*?"<\/details>";\n/) +   // K1 (5 Oct): the resolution log and the PAGE SPECS fold the section now ends with
   grab(/function pmSectionRailHTML\(openTopic\) \{[\s\S]*?\n\}/) + "\n";
 const fn = (name) => new Function(shared + "return " + name + ";")();
 const pmSectionHTML = fn("pmSectionHTML"), pmProposalsHTML = fn("pmProposalsHTML"), pmSectionRailHTML = fn("pmSectionRailHTML"),
@@ -116,7 +117,7 @@ test("the section: a status line, the rule in one sentence, rows grouped by them
   assert.ok(h.includes(PM_RULE_SENTENCE.replace(/'/g, "&#39;")) || h.includes(PM_RULE_SENTENCE), "the rule is printed in plain words");
   assert.match(PM_RULE_SENTENCE, /at least 3 days of history/);
   const groups = [...h.matchAll(/<div class="pmx-grp__h">([^<]+) /g)].map((m) => m[1]);
-  assert.deepEqual(groups, ["The Fed", "Gold", "Washington", "China–Taiwan"], "the money first, then the world; a quiet topic's group still appears");
+  assert.deepEqual(groups, ["The Fed", "Gold", "Washington", "China–Taiwan", "RESOLUTION LOG"], "the money first, then the world; a quiet topic's group still appears; K1 (5 Oct): the resolution log closes the list");
   const fed = h.match(/<div class="pmx-row is-wild" data-act="pmchip" data-topic="fed-2026-10"[\s\S]*?<\/span><\/div>/);
   assert.ok(fed, "the Fed row flashes: +3 points against a usual day of 1");
   assert.match(fed[0], /<span class="pmx-row__p">83%<\/span>/);
