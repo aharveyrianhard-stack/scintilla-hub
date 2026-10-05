@@ -89,3 +89,45 @@ test("pass 3 · the tree label demo runs the same rule", { skip: !p3 && "no proo
   const d = p3.runs.find((r) => r.item === "tree-label-demo"); assert.ok(d && d.demo); assert.equal(d.demo.home.px, 13); assert.equal(d.demo.in.px, 24); assert.equal(d.demo.out.px, 11); assert.ok(d.demo.in.hidden <= d.demo.home.hidden && d.demo.out.hidden >= d.demo.home.hidden);
   assert.match(read("label-scale-demo.html"), /from "\.\/label-scale\.mjs"/);
 });
+
+/* PASS 4 (5 Oct 2026, afternoon; Alan: "I hate these boxes … make the lasers at least as thick as the fonts … the zooming kind of snaps …
+   fonts a little smaller … balance it out"), pinned to shots/proof-p4.json */
+const p4 = existsSync(new URL("shots/proof-p4.json", D)) ? JSON.parse(read("shots/proof-p4.json")) : null;
+const p4laser = (w) => p4 && p4.runs.find((r) => r.item === "laser" && r.w === w);
+test("pass 4 · 1 no rectangles: no chip behind the type, no tread frame on a LASER step unless V2b's boxes are asked for", () => {
+  const js = read("coil3d.js"); assert.doesNotMatch(js, /fillRect\(TEX\.w/); assert.match(js, /strokeText\(txt, x, y\)/); // painted type with an outline, nothing boxed
+  assert.match(js, /if \(mode !== "laser" \|\| boxes\) part\.frame = /); assert.match(js, /if \(p\.frame\) \{ p\.frame\.position/);
+});
+test("pass 4 · 2 the beam's core is at least as wide as the ticker's cap height at every zoom, and the halo follows the reading", { skip: !p4 && "no proof-p4.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /core_over_type: 1\.15/); assert.match(js, /halo: \(v\) => 1\.5 \+ 1\.5/);
+  // the core is sized at the coil's centre depth, so a step keeps its perspective: at home even the farthest step's core ≥ the type; at every zoom the median step's core is 1.1–1.35 × the type
+  for (const w of [1920, 1680]) { const H = p4laser(w).zoom.home.beam; assert.ok(H.core_px_min >= H.type_px, `${w} home: core min ${H.core_px_min} px < type ${H.type_px} px`);
+    for (const [k, z] of Object.entries(p4laser(w).zoom)) { const b = z.beam; assert.ok(b.core_over_type >= 1.1 && b.core_over_type <= 1.35, `${w} ${k}: core/type ${b.core_over_type}`); assert.ok(b.halo_px > b.core_px * 1.4, `${w} ${k}: halo ${b.halo_px} vs core ${b.core_px}`); } }
+});
+test("pass 4 · 3 balance by zoom: 11 px ticker / 9 px value at home, ~16 zoomed in, 8 zoomed out (1920), scaled with the height at 1680; biggest readings kept first", { skip: !p4 && "no proof-p4.json" }, () => {
+  const r = p4laser(1920); assert.equal(r.zoom.home.beam.type_px, 11); assert.equal(r.zoom.home.beam.value_px, 9); assert.equal(r.zoom.in.beam.type_px, 16); assert.equal(r.zoom.out.beam.type_px, 8);
+  const m = p4laser(1680); assert.ok(Math.abs(m.zoom.home.beam.type_px - 11 * (1050 / 1080)) < 0.2, `1680 home ${m.zoom.home.beam.type_px}`); assert.equal(m.zoom.out.beam.type_px, 8);
+  for (const w of [1920, 1680]) { const z = p4laser(w).zoom; assert.ok(z.in.labels.labels > z.home.labels.labels && z.out.labels.labels < z.home.labels.labels, `${w}: shown in/home/out ${z.in.labels.labels}/${z.home.labels.labels}/${z.out.labels.labels}`); assert.ok(z.in.labels.hidden_by_thinning <= z.home.labels.hidden_by_thinning, `${w}: thinning`); }
+  assert.match(read("label-scale.mjs"), /base_px: 11, value_share: 9 \/ 11, floor_px: 8, ceil_px: 16/);
+});
+test("pass 4 · 4 smooth zoom: 20 ticks in and 20 out are one continuous motion at 60 fps, no re-fit on a tick, ≤ 2 re-flips a second, the camera back home after", { skip: !p4 && "no proof-p4.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /controls\.enableZoom = false/); assert.match(js, /tau_ms: 120/); assert.doesNotMatch(js, /wheel[\s\S]{0,400}framing\(/); // the wheel never calls the bisection fit
+  for (const w of [1920, 1680]) { const r = p4laser(w), z = r.wheel;
+    assert.equal(z.wheel_events, 40, `${w}: wheel events`); assert.equal(z.wheel_px_abs, 4800, `${w}: 40 × 120 px seen by the page`);
+    assert.ok(z.fps_while_moving >= 55, `${w}: ${z.fps_while_moving} fps while moving`); assert.ok(z.longest_gap_ms_while_moving <= 34, `${w}: longest gap ${z.longest_gap_ms_while_moving} ms`);
+    assert.ok(z.max_frame_step_share_of_travel <= 0.05, `${w}: biggest frame step ${z.max_frame_step_share_of_travel} of the travel`); // a snap would be ≥ 1/20 of it in one frame
+    assert.ok(z.reflips_per_second <= 2, `${w}: ${z.reflips_per_second} re-flips a second`); assert.ok(z.px_max <= 16.01 && z.px_min >= 8, `${w}: px ${z.px_min}–${z.px_max}`);
+    assert.ok(Math.abs(r.wheel_end.labels.distance_ratio - 1) < 0.02, `${w}: back home at ${r.wheel_end.labels.distance_ratio}× after 20 in / 20 out`); }
+});
+test("pass 4 · 5 the red half is as bright as the green (mean brightness of the lit red pixels within 10 % of the green's) and 0 labels read wrong from any angle", { skip: !p4 && "no proof-p4.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /laser: \{ s: 0\.3, r: 0\.3, t: 0 \}/);
+  for (const w of [1920, 1680]) { const r = p4laser(w), px = r.zoom.home.pixels; assert.ok(px.red_mean_brightness >= 0.9 * px.green_mean_brightness, `${w}: red ${px.red_mean_brightness} vs green ${px.green_mean_brightness}`); assert.ok(px.red > 2000, `${w}: ${px.red} red px`);
+    for (const k of ["side", "below_opposite"]) assert.equal(r[k].labels.wrong, 0, `${w} ${k}`); for (const z of Object.values(r.zoom)) assert.equal(z.labels.wrong, 0, `${w} zoom`); }
+});
+test("pass 4 · 6 the pictures, the video and the spheres with the new type; fps ≥ 60 on the Mac's GPU; 0 writes, 0 errors", { skip: !p4 && "no proof-p4.json" }, () => {
+  for (const w of [1920, 1680]) for (const k of ["home", "in", "out", "side", "spheres"]) assert.ok(existsSync(new URL(`shots/p4-${k}-${w}.png`, D)), `p4-${k}-${w}.png`);
+  assert.ok(existsSync(new URL("shots/p4-zoom-1680.webm", D)));
+  for (const r of p4.runs.filter((r) => r.measure)) assert.ok(r.measure.fps >= 55, `${r.item} ${r.w}: ${r.measure.fps}`);
+  const two = p4.runs.find((r) => r.item === "spheres" && r.w === 1920); assert.ok(two && two.sphere_px.length === 2 && two.home.beam.type_px === 11);
+  assert.equal(p4.writes.length, 0); assert.equal(p4.errors.length, 0); assert.match(String(p4.gpu), /Apple M/);
+});
