@@ -69,7 +69,7 @@ export function parseLivePage(html) {
   if (/"isLive":true/.test(text) || /"isLiveNow":true/.test(text)) {
     const viewers = first(text, /"originalViewCount":"(\d+)"/);
     return { state: "live", video_id: video, title: unjson(first(text, /"videoDetails":\{"videoId":"[A-Za-z0-9_-]{11}","title":"((?:[^"\\]|\\.)*)"/) || ""),
-      channel_title: unjson(first(text, /"ownerChannelName":"((?:[^"\\]|\\.)*)"/) || ""), viewers: viewers ? +viewers : null };
+      channel_title: unjson(first(text, /"ownerChannelName":"((?:[^"\\]|\\.)*)"/) || first(text, /"author":"((?:[^"\\]|\\.)*)"/) || ""), viewers: viewers ? +viewers : null };
   }
   return { state: "off", video_id: video };
 }
