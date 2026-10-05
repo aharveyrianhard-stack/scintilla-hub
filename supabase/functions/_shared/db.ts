@@ -11,7 +11,9 @@ export const LEXICON_URL = Deno.env.get("SENTIMENT_LEXICON_URL") ||
 
 export async function pg(path: string) {
   const r = await fetch(SB + "/rest/v1/" + path, { headers: H });
-  if (!r.ok) throw new Error("read " + path.split("?")[0] + " -> " + r.status);
+  /* 5 Oct: "read news -> 500" hid the cause for days. The database's own words (a statement
+     timeout reads `57014 canceling statement due to statement timeout`) travel with it now. */
+  if (!r.ok) throw new Error("read " + path.split("?")[0] + " -> " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200));
   return r.json();
 }
 /** PostgREST hands out 1,000 rows at a time; walk pages until a short page arrives. */
