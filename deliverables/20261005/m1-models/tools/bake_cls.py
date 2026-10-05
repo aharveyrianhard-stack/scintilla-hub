@@ -1,8 +1,9 @@
 import json,sys,time,os,re,torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, BertTokenizer, BertForSequenceClassification
+def TOK(m): return BertTokenizer.from_pretrained(m) if 'finbert-tone' in m else AutoTokenizer.from_pretrained(m)
 S=sys.argv[1]; inp=sys.argv[2]; out=sys.argv[3]; field=sys.argv[4] if len(sys.argv)>4 else 'text'
 rows=json.load(open(inp))
-MODELS=["ProsusAI/finbert","yiyanghkust/finbert-tone","cardiffnlp/twitter-roberta-base-sentiment-latest","StephanAkkerman/FinTwitBERT-sentiment","mrm8488/deberta-v3-ft-financial-news-sentiment-analysis","mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis","tabularisai/ModernFinBERT","soleimanian/financial-roberta-large-sentiment"]
+MODELS=sys.argv[5:] or ["ProsusAI/finbert","yiyanghkust/finbert-tone","cardiffnlp/twitter-roberta-base-sentiment-latest","StephanAkkerman/FinTwitBERT-sentiment","mrm8488/deberta-v3-ft-financial-news-sentiment-analysis","mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis","tabularisai/ModernFinBERT","soleimanian/financial-roberta-large-sentiment"]
 def norm(l):
     l=l.lower()
     if l.startswith('pos') or 'bull' in l: return 'B'
@@ -10,10 +11,10 @@ def norm(l):
     return 'N'
 def clean(t): return re.sub(r'https?://\S+','',t).strip()
 torch.set_num_threads(4)
-res={}
+res=json.load(open(out)) if os.path.exists(out) else {}
 for m in MODELS:
     try:
-        tok=AutoTokenizer.from_pretrained(m); mod=AutoModelForSequenceClassification.from_pretrained(m).eval()
+        tok=TOK(m); mod=(BertForSequenceClassification if 'finbert-tone' in m else AutoModelForSequenceClassification).from_pretrained(m).eval()
         id2=mod.config.id2label; nparam=sum(p.numel() for p in mod.parameters())
         preds=[]; probs=[]
         t0=time.time()
