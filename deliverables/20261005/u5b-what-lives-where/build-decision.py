@@ -151,6 +151,19 @@ close_after = after['CLOSE'] + len([j for j in joining if j['tier'] == 'CLOSE'])
 #       (measured 5 Oct 15:37:35Z → 15:41:42Z on what it publishes), the stream subscribes every name once.
 # CLOSE: the seven-rung scout: 69,378 calls · 2.63 GB · 157 s for 5,563 names, once a night (its own cost block).
 # STORAGE: R2 bytes of the FULL object per width, summed per name (U4b's read-only walk).
+# the publisher's cycle: read from what it publishes — /geiger computed_utc sampled every 20 s on 5 Oct (data/publisher-samples-20261005.txt);
+# the gaps between consecutive distinct artifacts are the cycles (two chart-API machines serve alternately, so only forward steps count)
+CYCLE_S = 247; CYCLES = []
+try:
+    seen = []
+    for ln in open(os.path.join(D, 'publisher-samples-20261005.txt')):
+        parts = ln.split()
+        if len(parts) >= 2 and parts[1].endswith('Z') and parts[1] not in seen: seen.append(parts[1])
+    import datetime as _dt
+    ts = sorted(_dt.datetime.fromisoformat(x.replace('Z', '+00:00')) for x in seen)
+    CYCLES = [round((b - a).total_seconds()) for a, b in zip(ts, ts[1:])]
+    if CYCLES: CYCLE_S = round(sum(CYCLES) / len(CYCLES))
+except FileNotFoundError: pass
 store = collections.defaultdict(int); store_daily = collections.defaultdict(int)
 for sym, width, *_, full_status, full_bytes, _m in bars['rows']:
     if full_bytes: store[sym] += full_bytes
@@ -159,9 +172,9 @@ per_name_mb = statistics.median([v for v in store.values()]) / 1e6
 daily_mb = statistics.median([v for v in store_daily.values()]) / 1e6
 sc = scout['seven']['cost']
 cost = {
-  'live': {'rungs_per_cycle': 7, 'cycle_s_measured': 247, 'cycles_per_day_if_always_on': round(86400 / 247), 'requests_per_name_per_day': round(7 * 86400 / 247),
-           'storage_mb_per_name_median_24_widths': round(per_name_mb, 1), 'cycle_s_per_name_at_conc_6': round(247 / 590, 3),
-           'cycle_s_at_recommended': round(247 / 590 * live_after)},
+  'live': {'rungs_per_cycle': 7, 'cycle_s_measured': CYCLE_S, 'cycles_measured': CYCLES, 'cycles_per_day_if_always_on': round(86400 / CYCLE_S), 'requests_per_name_per_day': round(7 * 86400 / CYCLE_S),
+           'storage_mb_per_name_median_24_widths': round(per_name_mb, 1), 'cycle_s_per_name_at_conc_6': round(CYCLE_S / 590, 3),
+           'cycle_s_at_recommended': round(CYCLE_S / 590 * live_after)},
   'close': {'calls_per_name_per_night': round(sc['calls'] / sc['names_asked'], 1), 'kb_per_name_per_night': round(sc['bytes'] / sc['names_asked'] / 1e3),
             'machine_s_per_name_per_night': round(sc['elapsed_s'] / sc['names_asked'], 3), 'storage_mb_per_name_daily_object': round(daily_mb, 2), 'names_tonight': sc['names_asked']},
   'comps': {'requests_per_name_per_day': 'fundamentals weekly, estimates nightly (two FMP /stable routes); no Geiger, no bars beyond the daily object',
