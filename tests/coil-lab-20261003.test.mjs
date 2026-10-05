@@ -53,3 +53,39 @@ test("pass 2 · the tape's ladder: one scale for both sides, sorted by × usual,
   const js = read("tape.js"); assert.match(js, /const fmtX = \(m\) => m\.z\.toFixed\(1\) \+ "×"/); assert.match(js, /sort\(\(a, b\) => b\.z - a\.z\)/);
   for (const r of p2.runs.filter((r) => r.tape && r.sides)) { if (r.sides.up_px_per_x && r.sides.dn_px_per_x) assert.ok(Math.abs(r.sides.up_px_per_x - r.sides.dn_px_per_x) / r.sides.up_px_per_x < 0.05, `${r.tape} ${r.w}: ${r.sides.up_px_per_x} vs ${r.sides.dn_px_per_x}`); assert.equal(r.sides.x_col_all_x, true, `${r.tape} ${r.w}`); assert.equal(r.zoom.open, true, `${r.tape} ${r.w} zoom`); assert.equal(r.zoom_closed, true, `${r.tape} ${r.w} back`); }
 });
+
+/* PASS 3 (5 Oct 2026, Alan: no boxes · labels that tilt with the view and scale with the zoom · the set's market cap as the sphere), pinned to shots/proof-p3.json */
+const p3 = existsSync(new URL("shots/proof-p3.json", D)) ? JSON.parse(read("shots/proof-p3.json")) : null;
+test("pass 3 · 1 a step is its light: no body, verticals, plate or footprint unless V2b's boxes are asked for", () => {
+  const js = read("coil3d.js"); assert.match(js, /if \(boxes\) \{ \/\/ V2b's column boxes/); assert.match(js, /part\.frame = new THREE\.LineSegments\(frameGeo/); assert.match(js, /part\.core = new THREE\.Mesh\(coreGeo/);
+  assert.doesNotMatch(js, /labelPlane|putLabels|orientLabel\(/); // the painted-on-the-step labels are gone
+});
+test("pass 3 · 2 labels are sprites that face the camera, drawn after the bloom; 0 read mirrored or upside down at home, side, below, after a drag, at every zoom", { skip: !p3 && "no proof-p3.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /new THREE\.Sprite\(m\)/); assert.match(js, /renderer\.render\(labelScene, camera\)/);
+  for (const r of p3.runs.filter((r) => r.home && r.home.labels)) { assert.equal(r.home.labels.wrong, 0, `${r.item} ${r.w} home`); for (const k of ["side", "below_opposite", "after_drag"]) if (r[k]) assert.equal(r[k].labels.wrong, 0, `${r.item} ${r.w} ${k}`); if (r.zoom) for (const z of Object.values(r.zoom)) assert.equal(z.wrong, 0, `${r.item} ${r.w} zoom`); }
+});
+test("pass 3 · 3 the type follows the zoom between the floor and the ceiling, and thinned labels come back zoomed in", { skip: !p3 && "no proof-p3.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /import \{ labelPx, thinLabels, worldHeightForPx, LABEL_RULE \} from "\.\/label-scale\.mjs"/);
+  for (const r of p3.runs.filter((r) => r.zoom)) {
+    const { home, in: zi, out: zo } = r.zoom; const k = Math.max(11 / 13, r.h / 1080);
+    assert.ok(Math.abs(home.ticker_px_median - 13 * k) < 1.2, `${r.w} home ${home.ticker_px_median}`); // 13 px at home on 1080, scaled with the screen's height
+    assert.ok(zi.ticker_px_median > home.ticker_px_median && zi.ticker_px_median <= 24 * k + 1, `${r.w} in ${zi.ticker_px_median}`);
+    assert.ok(zo.ticker_px_median < home.ticker_px_median && zo.ticker_px_median >= 11 - 0.6, `${r.w} out ${zo.ticker_px_median}`); // never under 11 px
+    assert.ok(zi.hidden_by_thinning <= home.hidden_by_thinning && zo.hidden_by_thinning >= home.hidden_by_thinning, `${r.w} thinning in ${zi.hidden_by_thinning} / home ${home.hidden_by_thinning} / out ${zo.hidden_by_thinning}`);
+    assert.ok(zi.labels + zi.hidden_by_thinning >= r.state.rows - 4, `${r.w} every label accounted for`);
+  }
+});
+test("pass 3 · 4 the sphere's volume is the set's market cap ($1 T = 80 U of radius) and two sets side by side keep one scale", { skip: !p3 && "no proof-p3.json" }, () => {
+  const caps = JSON.parse(read("data/market-caps-20261005.json")); assert.ok(caps.with_cap >= 140); assert.match(caps.source, /company_profile/);
+  for (const r of p3.runs.filter((r) => r.item && r.item.startsWith("sphere"))) for (const s of r.state.sets) { assert.ok(Math.abs(s.capR - 80 * Math.cbrt(s.capSumT)) < 0.5, `${s.name}: r ${s.capR} vs ${80 * Math.cbrt(s.capSumT)}`); }
+  const two = p3.runs.find((r) => r.item === "sphere-favorites-vs-radar" && r.w === 1920); assert.ok(two && two.sphere_px.length === 2);
+  const [a, b] = two.sphere_px; assert.ok(Math.abs(a.r_px / a.r_units - b.r_px / b.r_units) / (a.r_px / a.r_units) < 0.12, `one scale on screen: ${a.r_px}/${a.r_units} vs ${b.r_px}/${b.r_units}`); // perspective allows a little
+});
+test("pass 3 · 5 fps ≥ 60 on the Mac's GPU, cap off and with two spheres", { skip: !p3 && "no proof-p3.json" }, () => {
+  for (const r of p3.runs.filter((r) => r.measure)) assert.ok(r.measure.fps >= 55, `${r.item} ${r.w}: ${r.measure.fps}`);
+  assert.match(String(p3.gpu), /Apple M/);
+});
+test("pass 3 · the tree label demo runs the same rule", { skip: !p3 && "no proof-p3.json" }, () => {
+  const d = p3.runs.find((r) => r.item === "tree-label-demo"); assert.ok(d && d.demo); assert.equal(d.demo.home.px, 13); assert.equal(d.demo.in.px, 24); assert.equal(d.demo.out.px, 11); assert.ok(d.demo.in.hidden <= d.demo.home.hidden && d.demo.out.hidden >= d.demo.home.hidden);
+  assert.match(read("label-scale-demo.html"), /from "\.\/label-scale\.mjs"/);
+});
