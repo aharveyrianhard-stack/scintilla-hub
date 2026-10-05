@@ -1,0 +1,40 @@
+-- X2 (SCI-67) · PROPOSAL ONLY · DESTRUCTIVE · WAITS FOR ALAN · every statement below is commented out.
+-- Dead weight left from the August crypto backfill. Nothing writes these and nothing read them between
+-- two counter readings ten minutes apart on 5 Oct (21:26Z and 21:36Z: scans, inserts, updates, deletes
+-- all unchanged). No view depends on them, none is in a realtime publication.
+-- BEFORE ANY DROP: export each table (as on 28 Sep: copy to Google Drive "Scintilla archive/db-exports-<date>")
+-- and add it to _archive/backend-fix-20260928/db/MANIFEST.json so it can be restored.
+--
+-- 1. crypto_backfill_queue   194 rows, 104 kB  - all 'done' since 13 Aug 2026 17:56Z. The to-do list of the
+--                                               one-time 1-minute backfill. Its two helper functions go with it.
+-- drop function public.claim_crypto_months(p_n integer);
+-- drop function public.crypto_backfill_status();
+-- drop table public.crypto_backfill_queue;
+--
+-- 2. crypto_day_gaps         1,985 rows, 232 kB - last rebuilt 11 Aug 2026. Its refresh function is already
+--                                               broken: it reads bars1m_day_coverage, dropped on 28 Sep.
+-- drop function public.refresh_crypto_gaps();
+-- drop table public.crypto_day_gaps;
+--
+-- 3. crypto_depth            9 rows, 32 kB     - "how far back each coin goes", measured once on 10 Aug 2026.
+-- drop table public.crypto_depth;
+--
+-- 4. crypto_volume           412,274 rows, 108 MB - last write 18 Aug 2026 23:56Z. DESPITE THE NAME, 351,866
+--                            of its rows are MASSIVE stock volumes for 365 tickers; only 60,408 are crypto
+--                            (9 coins, Coinbase). Its only reader in the database is
+--                            massive_stocks.derive_multiday_from_massive(text[], boolean), which no
+--                            scheduled job and no other function calls. NOT VERIFIED: whether something
+--                            outside the database (a Fly script) still calls that function by hand -
+--                            check the provider repo before dropping.
+-- drop function massive_stocks.derive_multiday_from_massive(p_symbols text[], p_dry_run boolean);
+-- drop table public.crypto_volume;
+--
+-- 5. Two edge functions with no schedule and no recorded call: crypto-backfill v4 (deployed 13 Aug 2026)
+--    and coinbase-deep-daily v4 (deployed 10 Aug 2026). They were the one-time history loaders. Download the
+--    source first (supabase functions download <name>), then: supabase functions delete <name>.
+--    NOT VERIFIED: their invocation logs were not read.
+--
+-- NOT PROPOSED: nothing in ohlcv_history. The 4,462,506 crypto rows have 0 duplicate bars across sources;
+-- the old 'DRV' (21,105) and 'resampled:*' (9,285) rows are the only history for their dates.
+--
+-- ROLLBACK: restore from the export (drops cannot be undone otherwise).
