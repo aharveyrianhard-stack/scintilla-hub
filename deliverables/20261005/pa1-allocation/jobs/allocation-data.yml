@@ -1,0 +1,29 @@
+# Staged, not active: copy to .github/workflows/ on the live branch to schedule it (see ../SCHEDULE.md).
+name: allocation data file
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"      # nightly after the close (17:30 ET)
+    - cron: "5 14-20 * * 1-5"    # hourly in session (10:05 … 16:05 ET)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: allocation-data
+  cancel-in-progress: false
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: rebuild the data file (reads only; the page's public key and the chart API)
+        run: node deliverables/20261005/pa1-allocation/build.mjs > /dev/null
+      - name: commit only when the file changed
+        run: |
+          git config user.name "allocation-data"
+          git config user.email "allocation-data@users.noreply.github.com"
+          git add deliverables/20261005/pa1-allocation/data-latest.json deliverables/20261005/pa1-allocation/data-*.json
+          git diff --cached --quiet && echo "unchanged" || git commit -m "allocation data file · $(date -u +%Y-%m-%dT%H:%MZ)" && git push

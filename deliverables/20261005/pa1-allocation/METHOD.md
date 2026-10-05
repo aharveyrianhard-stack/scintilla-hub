@@ -37,3 +37,27 @@ It writes nothing (no table, no comps_decisions). It does not size positions or 
 
 ## Sources and ages
 Live: the chart API `/geiger` (the Hub's 590), `/quotes`, `/candles tf=D`. Tables (the page's public key): company_profile, ticker_industry, fmp_peers, peer_sources, fundamentals and histories, analyst_estimates, analyst_target_news (A4 columns), fx. Fixtures with their dates: C5 revenue segments (3 Oct, pulled on Fly), T12 cohorts (3 Oct), B1 market bow tie (2 Oct close). Every one is printed on the page with its date.
+
+---
+
+# PA2 · the equalizer that drives it (5 Oct 2026, afternoon)
+
+Alan, 12:30 and 12:45 ET: "I better start seeing the toggles — the portfolio-allocation equalizer that drives the decisions… pie charts… an interesting process of selecting companies with better fundamentals… I designed the equalizer probably over a month ago… Put it on my Hub… top to bottom: from the sector level down to the ticker." PA1's chain stays; PA2 puts his knobs on top of it, in his groups and his words, and reads downward.
+
+## His equalizer, found and kept
+The knobs of the September allocation page (`/allocation/`, its `KNOBS` groups) are the ones that drive this page, under their own names:
+- **HOW MUCH TO OWN** (his LAYER ONE): *What counts as the market's reading* (AVERAGE SCORE / HOW MANY RISING) · *A flat market means this much invested* (50 %) · *How hard the reading moves that number* (1.0×) · *Cash you always keep* (0 %). Wired to the Hub's live Geiger over every served company: reading = the mean Geiger (−1 … +1) or twice the share rising minus one; invested = anchor + speed × 50 × reading, never past 100 − cash floor. This is the July MODEL sheet's heat → % invested in its simplest form; the five conditions and the 100/80/50/30/15 policy are not rebuilt.
+- **WHICH SECTORS CARRY IT** (his LAYER TWO): *How many sectors carry weight* (3) · *The most any one sector may hold* (40 %) · *How far back a sector has to prove itself* (72 sessions / 16) · and *the tape against the names* opened into the four legs of PA1's heat: our names 1 · the sector funds 1 · the tape 1 · the bow tie 0 (NEW as a weight; PA1 printed it).
+- **WHICH NAMES INSIDE THEM** (his LAYER THREE): *Names held in each ring* (3) · *How the book splits inside a sector* (EQUAL / TILT TO STRENGTH) · themes that run a ring in each sector (3, NEW) · kick off the outliers (3 MAD, NEW — C5's rule).
+- **THE RING'S READINGS** (the weights; NEW where marked): the multiples against its peers 50 · growth 10 NEW · margins 10 NEW · leverage 10 NEW · the analysts' target 20 NEW · the revisions 10 NEW · the Geiger against the ring 20. Fundamentals first; ties on the score go to the Geiger against the ring, then to the target.
+- **THE DISCUSSION**: the sector's heat 1 · the name's ring score 2.
+The Hub's own OPERATOR · EQUALIZER (timeframe × family weights, saved to operator_weights) is a different instrument — it shapes the Geiger itself — and is not touched; this page's equalizer is kept in the browser only, nothing is written.
+
+## Fundamentals-first selection
+Every ring member now carries the comps field's table (comps.mjs components on the same read): the six multiples with the business-first peers' median beside each, revenue growth TTM / next FY, EPS growth next FY, gross / operating / FCF margins, net debt / EBITDA. Three readings are folded from it — growth, margins, leverage — and ranked inside the ring like the others (a blank is not a zero). The ring's table shows them first, then the multiples against the peers, then the target, the revisions and the Geiger; it scrolls left-to-right like the company tabs; the first eight rows show and the whole ring unfolds.
+
+## The book (100 %, no money)
+Invested share → the hot sectors in proportion to their heat score, none above the cap (the excess spread over the others; what cannot be placed stays in cash and is printed) → inside a sector its rings EQUAL or by the mean score of their names that hold → inside a ring the names that hold, EQUAL or by score. Two rings in one pie: sectors outside, themes inside, cash as the dark slice. A name's share is printed on its pick card as "of the book" — a share, never a size. How to deploy the purchases (sizes, timing, levels) is not built: Alan brings that.
+
+## The page, top to bottom
+NOW (the invested share, the cash, the market's reading, the sector percentages with their rings and names, the pies, the date and the Geiger's age) · EQUALIZER · HEAT (the sector name, one bar, one number, HOT / COLD) · THEMES (chips: the name, the companies, one Geiger number) · RINGS (one open, the others folded; the cold sectors folded) · PICKS (one line of plain words each; the market discussion folded under it) · PAGE SPECS (every explanatory sentence, the statistics, the sources, the previous page). Sticky section tabs; 2,983 px at 1680 × 1050 (2.8 screens), 2,861 at 1920 × 1080; phone 390 works with the tables scrolling sideways.

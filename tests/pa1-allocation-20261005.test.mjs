@@ -86,10 +86,9 @@ test("today's data file: eleven sectors with four legs, cohorts with T12's sound
   const H = C.heat(d.sectors, C.DIALS); assert.equal(H.hot.length, 3); assert.equal(H.cold.length, 3);
   const kos = d.knockouts.map((k) => ({ ...k, K: C.knockout(k.members, C.DIALS) })); assert.ok(kos.every((k) => k.K.survivors.length >= 1));
 });
-test("the page: Hub look, no sentence in a panel, PAGE SPECS at the bottom, the dials, both views, the scnav pair", () => {
+test("the page (PA2 replaced PA1's on 5 Oct): the chain import, PAGE SPECS, the equalizer, the scnav pair", () => {
   const html = readFileSync(path.join(DIR, "index.html"), "utf8");
-  assert.match(html, /import \{ DIALS, heat, knockout, dedupePicks, fullChain, reasonLine, num \} from "\.\/chain\.mjs"/);
-  assert.match(html, /details class="sc-pagespecs"/); assert.match(html, /data-view="discussion"/); assert.match(html, /f\("ko_w\.comps"/); assert.match(html, /f\("outlier_mad"/); assert.match(html, /data-dial="\$\{id\}"/);
+  assert.match(html, /from "\.\/chain\.mjs"/); assert.match(html, /details class="sc-pagespecs"/); assert.match(html, /id: "ko_w\.comps"/); assert.match(html, /id: "outlier_mad"/); assert.match(html, /data-knob/);
   assert.match(html, /scnav/, "the BACK / CLOSE pair is placed"); assert.match(html, /--crk:#00D4FF/);
   assert.ok(!/not financial advice/i.test(html), "no hedge in place of the answer");
   assert.ok(existsSync(path.join(DIR, "METHOD.md")) && existsSync(path.join(DIR, "TODAY.md")));
