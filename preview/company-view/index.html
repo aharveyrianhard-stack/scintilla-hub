@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 410fb3b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from afff294) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2413,6 +2413,23 @@ body.tvmodal-open{ overflow:hidden; }
 .of-capex td{ padding:2px 0; color:var(--ink2); } .of-capex td:last-child{ text-align:right; color:var(--ink); }
 .of-capex .of-sum td{ border-top:.5px solid var(--line2); color:var(--dim); } .of-capex .of-sum td:last-child{ color:var(--ink); }
 .of-legend{ margin-top:6px; }
+/* K1 (5 Oct) — FUNDAMENTALS for a fund: the fund's facts */
+.fdf{ font-family:var(--mono); padding:4px 2px 10px; }
+.fdf-tiles{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:12px; }
+.fdf-t{ border:.6px solid var(--line2); padding:7px 9px; min-width:0; }
+.fdf-t i{ display:block; font-style:normal; font-size:11px; letter-spacing:.14em; color:var(--dim); }
+.fdf-t b{ display:block; font-size:17px; font-weight:600; color:var(--ink); margin-top:2px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.fdf-t u{ display:block; text-decoration:none; font-size:11px; color:var(--ink3); margin-top:1px; }
+.fdf-h{ font-size:11px; letter-spacing:.2em; color:var(--ink3); padding:8px 0 4px; border-bottom:.6px solid var(--line2); }
+.fdf-h i{ font-style:normal; letter-spacing:.04em; color:var(--dim); margin-left:8px; }
+.fdf-r{ display:grid; grid-template-columns:58px minmax(0,1fr) minmax(40px,90px) 58px; gap:8px; align-items:center; padding:4px 0; border-bottom:.5px solid var(--line); font-size:11.5px; }
+.fdf-r--s{ grid-template-columns:minmax(0,1fr) minmax(40px,150px) 58px; }
+.fdf-r[data-tkopen]{ cursor:pointer; } .fdf-r[data-tkopen]:hover{ background:var(--mute); }
+.fdf-tk{ color:var(--ink); font-weight:600; } .fdf-tk.is-on{ color:var(--crk); }
+.fdf-nm{ color:var(--ink2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fdf-bar{ height:6px; background:var(--line); } .fdf-bar i{ display:block; height:100%; background:var(--ink3); }
+.fdf-w{ text-align:right; color:var(--ink); font-variant-numeric:tabular-nums; }
+.fdf-none{ color:var(--dim); font-size:11.5px; padding:8px 0; }
 /* K1 (5 Oct) — the capex-vs-cash projection line under the coverage sentence */
 .of-proj{ margin:3px 0 4px; } .of-proj svg{ display:block; width:100%; height:56px; }
 .of-proj__ax{ display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--ink2); font-variant-numeric:tabular-nums; margin-top:2px; }
@@ -10879,6 +10896,7 @@ function loadLeft(t) {
          tile is already live from the light path, so only its body is left alone;
          every other tab (which may have shown "loading…") repaints with real data. */
       if (S.coTab !== "GEIGER" && !CO_FRAME_TABS.has(S.coTab)) renderLeftPanel();   // H-FRONT — an embedded pane is not reloaded by the payload
+      else if (S.coTab === "FUNDAMENTALS" && typeof fundFactsIs === "function" && fundFactsIs(d)) renderLeftPanel();   // K1 (5 Oct) — except a fund's FUNDAMENTALS: it is the fund's facts, drawn from this payload
       else cvRepaint();   // D2 — the six numbers read the payload that just landed; the chart and the tab body are left alone
     })
     .catch(() => { if (token !== ROT_TOKEN) return; S.state = "offline"; updateLive(); });
@@ -12302,7 +12320,7 @@ function ofCashHTML(balq, cfq) {
     esc(ofFmtDay(q.fiscal_date)) + "</td><td>" + ofMoney(q.capex) + "</td></tr>").join("") +
     (qs.length === 4 ? '<tr class="of-sum"><td colspan="2">the four together</td><td>' + ofMoney(qs.reduce((a, q) => a + Math.abs(+q.capex), 0)) + "</td></tr>" : "") +
     "</tbody></table>";
-  return h + '<div class="of-d">cash spent on property and equipment · cashflow_history</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>" +
+  return h + '<div class="of-d">cash spent on property and equipment · FMP</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>" +
     ofProjHTML(ofProjModel(balq, cfq));   // K1 — the projection line
 }
 /* PURE — the company's lock-up on `todayIso` (public.ipo_lockups, read from the prospectus by unlock-watch): the end, the
@@ -12369,8 +12387,7 @@ function ofCapBodyHTML(t, c, balq, todayIso) {
   else if (!c.rows.length) list = '<div class="of-empty">no offering filing by $' + esc(t) + " since " + esc(ofFmtDay(OF_RECORD_FROM)) + " (when the record starts)</div>";
   else list = c.rows.map((r) => ofRowHTML(r, nm.byFiling[r.url])).join("");
   const legend = '<div class="fn3-note of-legend">EQUITY new shares sold now · CONVERTIBLE notes that can turn into shares · ATM shares sold over time · ' +
-    "DEBT bonds, no new shares · UNCLASSIFIED the first page did not say (a shelf, a resale) — open the SEC link · grey RESALE / PLAN: holders' or employee-plan shares, no new money · " +
-    "offering-watch reads each filing's first page at the SEC and keeps the offering headlines from our news feeds (offering_news) · lock-ups: unlock-watch reads the prospectus (ipo_lockups)</div>";
+    "DEBT bonds, no new shares · UNCLASSIFIED the first page did not say (a shelf, a resale) — open the SEC link · grey RESALE / PLAN: holders' or employee-plan shares, no new money</div>";   /* K1: the sentence naming the jobs and tables moved to PAGE SPECS */
   return head + lock + loose + '<div class="of-grid"><div class="of-list">' + list + "</div>" +
     '<div class="of-cash">' + ofCashHTML(balq, c ? c.cfq : null) + "</div></div>" + legend + OF_PAGE_SPECS;
 }
@@ -12378,7 +12395,8 @@ function ofCapBodyHTML(t, c, balq, todayIso) {
 const OF_PAGE_SPECS = '<details class="sc-pagespecs"><summary>PAGE SPECS</summary>' +
   "<p><b>Cash after spending · next 2 years at this pace.</b> We take the cash on the newest quarterly balance sheet. For each of the last four quarters we take what the business brought in from operations and what it spent on property and equipment, and average them. " +
   "The line carries the cash forward eight quarters at that pace. <b>Green</b>: operations cover the spending, cash grows. <b>Red</b>: spending outruns operations; the dot is where the cash would reach zero, and the amount is what the company would have to raise (new shares or debt) by the end of the two years. " +
-  "It is a pace, not a forecast: it knows nothing of planned spending, new contracts, debt coming due or money already raised since the balance sheet. Sources: balance_history and cashflow_history (FMP statements).</p></details>";
+  "It is a pace, not a forecast: it knows nothing of planned spending, new contracts, debt coming due or money already raised since the balance sheet. Sources: balance_history and cashflow_history (FMP statements).</p>" +
+  "<p><b>Where the filings, headlines and lock-ups come from.</b> Our job offering-watch reads each offering filing’s first page at the SEC (offering_filings) and keeps the offering headlines from our news feeds (offering_news). Lock-ups: our job unlock-watch reads the prospectus (ipo_lockups).</p></details>";
 function ofCapSectionHTML(data) {
   return '<section class="fn3-sec of-cap" id="ofCap_' + esc(data.t) + '">' + ofCapBodyHTML(data.t, OF.co[data.t], data._balq) + "</section>";
 }
@@ -19870,6 +19888,12 @@ function financialsTabHTML(data) {
   if (!years.length && !qs.length) return (ofCap ? '<div class="fn3">' + ofCap + "</div>" : "") + '<div class="sc-senttxt">No rows in fundamentals_history / balance_history / cashflow_history for $' + esc(data.t) + ".</div>";
   const fyCols = years.map((y) => "FY" + String(y).slice(2));
   const col = (m, f) => years.map((y) => f(m[y] || null, y));
+  /* K1 (5 Oct 2026) — H10's leftover: the captions that named our tables. The panel keeps a plain source ("FMP · fiscal
+     years"); the table names and the reading aids live here (Alan, 3 Oct: explanations go to PAGE SPECS at the foot). */
+  const FIN_PAGE_SPECS = '<details class="sc-pagespecs"><summary>PAGE SPECS</summary>' +
+    "<p><b>Reading the tables.</b> Q3·26 = the third quarter of fiscal 2026. A margin is that line divided by revenue. Net debt = debt − cash (negative means more cash than debt). " +
+    "Current ratio = current assets ÷ current liabilities. In the cash-flow table money going out is shown in (brackets).</p>" +
+    "<p><b>Where the numbers are kept.</b> Every number is FMP’s (Financial Modeling Prep), stored in our tables: income lines in fundamentals_history, the balance sheet in balance_history, cash flow and capital spending in cashflow_history. Nothing here is estimated.</p></details>";
   let out = '<div class="fn3"><div class="fn3-src">FMP statements stored in our tables · $ billions unless marked · (brackets) = negative</div>';
   out += ofCap;                                                                           /* R2 Part A (2 Oct) — the offering filings' home */
   if (qs.length) {
@@ -19882,7 +19906,7 @@ function financialsTabHTML(data) {
         ["Operating margin", qs.map((q) => finCell(finRatio(q.r.operating_income, q.r.revenue), finPct))],
         ["Net margin", qs.map((q) => finCell(finRatio(q.r.net_income, q.r.revenue), finPct))],
         ["Diluted EPS $", qs.map((q) => finCell(num(q.r.eps_diluted), finEPS))],
-      ], "is-q") + '<div class="fn3-note">fundamentals_history · Q3·26 = the third quarter of fiscal 2026 · margin = the line ÷ revenue</div></section>';
+      ], "is-q") + '<div class="fn3-note">FMP · fiscal quarters</div></section>';
   }
   if (Object.keys(inc).length) {
     out += '<section class="fn3-sec"><h3 class="fn3-h">FISCAL YEARS · INCOME</h3>' +
@@ -19897,7 +19921,7 @@ function financialsTabHTML(data) {
         ["Net income $B", col(inc, (r) => finCell(r ? num(r.net_income) : null, finB))],
         ["Net margin", col(inc, (r) => finCell(r ? finRatio(r.net_income, r.revenue) : null, finPct)), "sub"],
         ["Diluted EPS $", col(inc, (r) => finCell(r ? num(r.eps_diluted) : null, finEPS))],
-      ]) + '<div class="fn3-note">fundamentals_history · fiscal years</div></section>';
+      ]) + '<div class="fn3-note">FMP · fiscal years</div></section>';
   }
   if (Object.keys(bal).length || data._balq) {
     const by = Object.keys(bal).map(Number).sort((a, b) => a - b).slice(-5), q = data._balq;   /* its own years: never an empty column borrowed from the income table */
@@ -19914,7 +19938,7 @@ function financialsTabHTML(data) {
         ["Total liabilities $B", bc((r) => finCell(r ? num(r.total_liabilities) : null, finB))],
         ["Equity $B", bc((r) => finCell(r ? num(r.total_equity) : null, finB))],
         ["Current ratio", bc((r) => { const x = r ? finRatio(r.current_assets, r.current_liabilities) : null; return finCell(x == null ? null : x / 100, finX); }), "sub"],
-      ]) + '<div class="fn3-note">balance_history · net debt = debt − cash (negative = more cash than debt) · current ratio = current assets ÷ current liabilities</div></section>';
+      ]) + '<div class="fn3-note">FMP · fiscal years</div></section>';
   }
   if (Object.keys(cf).length) {
     out += '<section class="fn3-sec"><h3 class="fn3-h">CASH FLOW</h3>' +
@@ -19927,10 +19951,11 @@ function financialsTabHTML(data) {
         ["Dividends paid $B", col(cf, (r) => finCell(r ? num(r.dividends_paid) : null, finB))],
         ["Buybacks $B", col(cf, (r) => finCell(r ? num(r.buybacks) : null, finB))],
         ["Debt repaid $B", col(cf, (r) => finCell(r ? num(r.debt_repayment) : null, finB))],
-      ]) + '<div class="fn3-note">cashflow_history · fiscal years · money out is shown in (brackets)</div></section>';
+      ]) + '<div class="fn3-note">FMP · fiscal years</div></section>';
   }
-  return out + "</div>";
+  return out + FIN_PAGE_SPECS + "</div>";
 }
+
 
 /* ============================================================================
    AREA E — analyst GRADES / rating-changes sub-area, wired to analyst_grades.
@@ -21518,6 +21543,54 @@ function etfPanelHTML(data) {
   return stats + sectors + holdTable + desc + website;
 }
 
+/* K1 (5 Oct 2026) — FUNDAMENTALS FOR A FUND (H10's leftover; Alan: a fund shows the fund's facts — assets, cost, top
+   holdings — not a company sheet). A fund = company_profile.is_etf. Reads what the company open already carries:
+   etf_info (assets, yearly cost, price of one share of the fund's holdings, how many holdings, since when, who runs it,
+   the sector split) and etf_holdings (the weighted list; the ten heaviest are shown with the share of the fund they
+   make together; a holding that is on the Hub opens on click). Numbers only in the panel; the words are in PAGE SPECS. */
+const FUND_TOP_N = 10;
+function fundFactsIs(data) { return !!(data && data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")); }
+function fundFactsModel(data) {
+  const e = (data && data._etf) || null, all = ((data && data._etfh) || []).filter((r) => r && r.weight_pct != null && isFinite(+r.weight_pct));
+  const h = all.slice().sort((a, b) => (+b.weight_pct) - (+a.weight_pct));
+  const top = h.slice(0, FUND_TOP_N), topW = top.reduce((a, r) => a + (+r.weight_pct), 0);
+  const er = e && e.expense_ratio != null && isFinite(+e.expense_ratio) ? +e.expense_ratio : null;
+  let sectors = e && Array.isArray(e.sectors) ? e.sectors.filter((x) => x && isFinite(+x.exposure) && +x.exposure >= 0.05).sort((a, b) => (+b.exposure) - (+a.exposure)) : [];
+  if (sectors.length && sectors.every((x) => /^cash/i.test(String(x.industry || "")))) sectors = [];   // a gold or bitcoin trust is filed as "Cash & Others 100%": that is not a sector split
+  return { e, top, topW, n: (e && e.holdings_count != null ? +e.holdings_count : null) || h.length || null, er, per10k: er != null ? er * 100 : null, sectors, stored: h.length };
+}
+function fundFactsHTML(data) {
+  const t = data.t, m = fundFactsModel(data), e = m.e;
+  if (!e && !m.stored) return '<div class="fdf"><div class="fdf-none">The fund facts for $' + esc(t) + " are not stored yet.</div></div>";
+  const tile = (k, v, sub) => '<div class="fdf-t"><i>' + k + "</i><b>" + v + "</b>" + (sub ? "<u>" + sub + "</u>" : "") + "</div>";
+  const facts = '<div class="fdf-tiles">' +
+    tile("ASSETS", e && e.aum != null ? esc(fmtRev(e.aum)) : "—") +
+    tile("COST A YEAR", m.er != null ? m.er.toFixed(2) + "%" : "—", m.per10k != null ? "$" + (m.per10k >= 10 ? Math.round(m.per10k) : Number(m.per10k.toFixed(1))) + " per $10,000" : "") +
+    tile("HOLDINGS", m.n != null ? String(m.n) : "—", m.top.length ? "top " + m.top.length + " = " + m.topW.toFixed(1) + "%" : "") +
+    tile("NAV", e && e.nav != null ? "$" + Number(e.nav).toFixed(2) : "—") +
+    tile("SINCE", e && e.inception_date ? esc(String(e.inception_date).slice(0, 4)) : "—") +
+    tile("RUN BY", e && e.etf_company ? esc(e.etf_company) : "—") + "</div>";
+  const max = m.top.length ? +m.top[0].weight_pct : 0;
+  const hold = m.top.length ? '<div class="fdf-h">TOP ' + m.top.length + " HOLDINGS <i>" + m.topW.toFixed(1) + "% of the fund</i></div>" +
+    m.top.map((r) => {
+      const on = r.asset && typeof coBoardRow === "function" && coBoardRow(String(r.asset).toUpperCase());
+      return '<div class="fdf-r"' + (on ? ' data-tkopen="' + esc(String(r.asset).toUpperCase()) + '" title="open $' + esc(r.asset) + '"' : "") + ">" +
+        '<span class="fdf-tk' + (on ? " is-on" : "") + '">' + (r.asset ? esc(r.asset) : "—") + "</span>" +
+        '<span class="fdf-nm">' + esc(r.name || "") + "</span>" +
+        '<span class="fdf-bar"><i style="width:' + (max > 0 ? Math.max(1, (+r.weight_pct) / max * 100) : 0).toFixed(1) + '%"></i></span>' +
+        '<span class="fdf-w">' + (+r.weight_pct).toFixed(2) + "%</span></div>";
+    }).join("") : '<div class="fdf-none">The holdings of $' + esc(t) + " are not stored yet.</div>";
+  const smax = m.sectors.length ? +m.sectors[0].exposure : 0;
+  const sect = m.sectors.length ? '<div class="fdf-h">SECTORS</div>' + m.sectors.slice(0, 8).map((x) =>
+      '<div class="fdf-r fdf-r--s"><span class="fdf-nm">' + esc(x.industry || "") + '</span><span class="fdf-bar"><i style="width:' + (smax > 0 ? Math.max(1, (+x.exposure) / smax * 100) : 0).toFixed(1) + '%"></i></span>' +
+      '<span class="fdf-w">' + (+x.exposure).toFixed(1) + "%</span></div>").join("") : "";
+  return '<div class="fdf" data-fund="' + esc(t) + '">' + facts + hold + sect + FUND_PAGE_SPECS + "</div>";
+}
+const FUND_PAGE_SPECS = '<details class="sc-pagespecs"><summary>PAGE SPECS</summary>' +
+  "<p><b>Assets</b> is the money in the fund. <b>Cost a year</b> is the fund’s yearly fee (its expense ratio), also shown as dollars a year on $10,000 held. <b>NAV</b> is the value of the fund’s holdings per share. " +
+  "<b>Top holdings</b> are the ten heaviest positions and the share of the fund they make together; the bar is each weight against the heaviest. A holding in cyan is on the Hub: click it to open it. " +
+  "Sources: the fund provider’s facts and holdings as FMP publishes them (our tables etf_info and etf_holdings). The full list of holdings stays under FINANCIALS.</p></details>";
+
 /* per-tab content — wired where the table exists; honest gates where it doesn't */
 /* ── R3 (Alan, 27 Sep) · SOCIAL = KEYWORD MENTIONS ──────────────────────────────────────────────────────────────
    "keyword mentions (YouTube, X) belong here." Nothing new is collected: the X side reads the collector's published
@@ -21732,7 +21805,7 @@ function socBodyHTML(d, v) {
   const ys = v === "ALL" ? d.ys : d.ys.filter((i) => i.sub !== false);
   const hidden = v === "ALL" ? 0 : d.ys.length - ys.length;
   const all = d.xs.concat(ys).filter((i) => Date.parse(i.at) <= d.nowMs + 60e3).sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  const yFresh = d.vidsOk ? (v === "ALL" ? "youtube_videos · subscribed channels and ticker searches" : "youtube_videos · subscribed channels only" +
+  const yFresh = d.vidsOk ? (v === "ALL" ? "YouTube · subscribed channels and ticker searches" : "YouTube · subscribed channels only" +
       (hidden ? " · " + hidden + " search-found video" + (hidden === 1 ? "" : "s") + " left out" : "")) +
       (d.subOk === false ? ' · <b class="dn">the subscribed-channel check did not answer</b> — a search-found video from a channel you follow may be missing here' : "")
     : "youtube_videos did not answer";
@@ -21780,7 +21853,7 @@ function coTabHTML(data) {
   switch (S.coTab) {
     case "GEIGER":     return geigerSummaryHTML();   // full 6-tile dashboard (painted by geigerSummaryMount after mount)
     case "CHART":      return coChartTabHTML(data.t);          // H-FRONT — the Station chart pane, embedded; timeframe row local to the Hub
-    case "FUNDAMENTALS": return coFundTabHTML(data.t);         // H-FRONT — the Station fundamentals shell under one line of the Hub's own numbers
+    case "FUNDAMENTALS": return fundFactsIs(data) ? fundFactsHTML(data) : coFundTabHTML(data.t);   // H-FRONT — the Station fundamentals shell under one line of the Hub's own numbers · K1 (5 Oct): a fund shows the fund's facts, not a company sheet
     case "STATS":      return statsTabHTML(data);
     case "ESTIMATES":  return nonOp ? nonOpTabHTML(data) : estimatesTabHTML(data);
     case "COMPS":      return nonOp ? nonOpTabHTML(data) : compsTabHTML(data);   // C2 — the comps, their own tab
@@ -24784,7 +24857,7 @@ function unlockSectionHTML() {
     (m.ahead.length ? m.ahead.map(row).join("") : '<tr class="ulk-x"><td colspan="3">none in the next 12 months</td></tr>') +
     (m.past.length ? '<tr class="ulk-h"><td colspan="3">ENDED · LAST 6 MONTHS</td></tr>' + m.past.map(row).join("") : "") +
     "</tbody></table>" +
-    '<div class="ulk-foot">every Hub stock, whatever the cohort · read from each prospectus at the SEC by unlock-watch (ipo_lockups)</div>';
+    '<div class="ulk-foot">every Hub stock, whatever the cohort · read from each prospectus at the SEC</div>';
 }
 function unlockSectionPaint() { const h = el("evLockups"); if (h) h.innerHTML = unlockSectionHTML(); }
 /* THE ECONOMIC SEGMENT'S SLIDE — the count, then each release of that day in time order, then the count again */

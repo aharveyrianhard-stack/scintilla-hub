@@ -139,3 +139,42 @@ test("previous close: a provisional or provider-revised close is said on hover; 
   assert.match(cells.lc_FINX.attrs.title, /^previous close held: sources disagree/); assert.equal(cells.lc_FINX.attrs["data-sc-prev-close-state"], "HELD", "P9's held state wins");
   assert.match(html, /if \(typeof scPrevNoteSet === "function"\) scPrevNoteSet\(t, q\);/);
 });
+
+/* ── item 3 — H10's leftovers ── */
+test("FUNDAMENTALS for a fund shows the fund's facts — assets, cost, top holdings — and a company keeps its sheet", () => {
+  const src = "const esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst fmtRev = (v) => '$' + (v / 1e9).toFixed(1) + 'B';\nconst coBoardRow = (t) => (t === 'NVDA' ? { t } : null);\n" +
+    grab(/const FUND_TOP_N = 10;\n/) + grab(/function fundFactsIs\(data\) \{[^\n]*\n/) + grab(/function fundFactsModel\(data\) \{[\s\S]*?\n\}/) + "\n" + grab(/function fundFactsHTML\(data\) \{[\s\S]*?\n\}/) + "\n" + grab(/const FUND_PAGE_SPECS = [\s\S]*?<\/details>";/);
+  const { fundFactsIs, fundFactsModel, fundFactsHTML } = new Function(src + "\nreturn { fundFactsIs, fundFactsModel, fundFactsHTML };")();
+  const hold = [["NVDA", "NVIDIA CORP", 15.47], ["AAPL", "APPLE INC", 13.35], ["MSFT", "MICROSOFT CORP", 10.55]].concat(Array.from({ length: 12 }, (_, i) => ["T" + i, "NAME " + i, 5 - i * 0.3]))
+    .map(([asset, name, weight_pct]) => ({ asset, name, weight_pct: String(weight_pct) }));
+  const XLK = { t: "XLK", _profile: { is_etf: true }, _etf: { aum: 127297700000, expense_ratio: 0.08, nav: 195.67, holdings_count: 74, inception_date: "1998-12-16", etf_company: "SPDR",
+    sectors: [{ industry: "Technology", exposure: 99.84 }, { industry: "Energy", exposure: 0.12 }, { industry: "Cash & Others", exposure: 0.037 }] }, _etfh: hold.slice().reverse() };
+  assert.equal(fundFactsIs(XLK), true); assert.equal(fundFactsIs({ t: "NVDA", _profile: { is_etf: false } }), false); assert.equal(fundFactsIs({ t: "X" }), false, "no profile yet: not called a fund");
+  const m = fundFactsModel(XLK);
+  assert.equal(m.top.length, 10); assert.equal(m.top[0].asset, "NVDA", "heaviest first, whatever order the rows came in");
+  assert.equal(m.per10k, 8, "0.08% a year is $8 on $10,000"); assert.equal(m.n, 74);
+  assert.deepEqual(m.sectors.map((x) => x.industry), ["Technology", "Energy"], "a sliver under 0.05% is not a sector line");
+  const h = fundFactsHTML(XLK);
+  assert.match(h, /<i>ASSETS<\/i><b>\$127\.3B<\/b>/); assert.match(h, /<i>COST A YEAR<\/i><b>0\.08%<\/b><u>\$8 per \$10,000<\/u>/); assert.match(h, /<i>HOLDINGS<\/i><b>74<\/b><u>top 10 = /);
+  assert.match(h, /TOP 10 HOLDINGS <i>[\d.]+% of the fund<\/i>/);
+  assert.match(h, /<div class="fdf-r" data-tkopen="NVDA"/, "a holding that is on the Hub opens on click");
+  assert.match(h, /<div class="fdf-r"><span class="fdf-tk">AAPL/, "one that is not is plain");
+  assert.match(h, /<details class="sc-pagespecs">/);
+  const GLD = { t: "GLD", _profile: { is_etf: "true" }, _etf: { aum: 141.7e9, expense_ratio: 0.4, sectors: [{ industry: "Cash & Others", exposure: 100 }] }, _etfh: [] };
+  assert.equal(fundFactsModel(GLD).sectors.length, 0, "a trust filed as 100% cash carries no sector split");
+  assert.match(fundFactsHTML(GLD), /The holdings of \$GLD are not stored yet\./);
+  assert.match(fundFactsHTML({ t: "ZZZ", _profile: { is_etf: true }, _etf: null, _etfh: [] }), /The fund facts for \$ZZZ are not stored yet\./);
+  assert.match(html, /case "FUNDAMENTALS": return fundFactsIs\(data\) \? fundFactsHTML\(data\) : coFundTabHTML\(data\.t\);/);
+  assert.match(html, /else if \(S\.coTab === "FUNDAMENTALS" && typeof fundFactsIs === "function" && fundFactsIs\(d\)\) renderLeftPanel\(\);/, "the fund's tab is drawn again when its facts land");
+});
+
+test("table names left the FINANCIALS, company SOCIAL and lock-up captions; FINANCIALS carries them in PAGE SPECS", () => {
+  const fin = grab(/function financialsTabHTML\(data\) \{[\s\S]*?\n\}/);
+  assert.equal((fin.match(/<div class="fn3-note">[^<]*(fundamentals_history|balance_history|cashflow_history)/g) || []).length, 0, "no caption names a table");
+  assert.equal((fin.match(/<div class="fn3-note">FMP · fiscal (years|quarters)<\/div>/g) || []).length, 4);
+  assert.match(fin, /return out \+ FIN_PAGE_SPECS \+ "<\/div>";/);
+  const specs = grab(/const FIN_PAGE_SPECS = [\s\S]*?<\/details>";/);
+  for (const w of ["fundamentals_history", "balance_history", "cashflow_history", "Net debt = debt − cash", "Q3·26 = the third quarter of fiscal 2026"]) assert.ok(specs.includes(w), "kept in PAGE SPECS: " + w);
+  assert.ok(!html.includes('"youtube_videos · subscribed channels'), "the company SOCIAL freshness line says YouTube, not the table");
+  assert.ok(!html.includes("by unlock-watch (ipo_lockups)</div>"));
+});

@@ -152,6 +152,73 @@ try {
       return res;
     }, t);
   };
+  /* item 3 — a company tab measured for anything cut at the panel's right edge (H10's leftovers) */
+  S.cut = async () => {
+    const t = ticker || "NVDA", tab = process.env.TAB || "COMPS";
+    await openCoTab(t, tab);
+    await sleep(Number(process.env.WAIT || 6000));
+    out.cut = await page.evaluate(() => {
+      const rail = document.querySelector("#coRailContent"); if (!rail) return null;
+      const R = rail.getBoundingClientRect(), bad = [];
+      for (const e of rail.querySelectorAll("*")) {
+        const r = e.getBoundingClientRect(); if (!r.width || !r.height) continue;
+        const over = Math.round(r.right - R.right);
+        if (over > 2) { let hid = false; for (let p = e.parentElement; p && p !== rail; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o === "auto" || o === "scroll" || o === "hidden") { hid = o; break; } }
+          bad.push({ tag: e.tagName.toLowerCase() + (e.className && typeof e.className === "string" ? "." + e.className.split(" ")[0] : ""), over, clippedBy: hid, text: e.textContent.replace(/\s+/g, " ").trim().slice(0, 40) }); }
+      }
+      bad.sort((a, b) => b.over - a.over);
+      const top = {}; for (const b of bad) { if (!top[b.tag] || top[b.tag].over < b.over) top[b.tag] = b; }
+      return { railW: Math.round(R.width), railScrollW: rail.scrollWidth, railClientW: rail.clientWidth, cutElements: bad.length, worst: Object.values(top).slice(0, 12) };
+    });
+    out.shots = [await shot("cut-" + tab)];
+  };
+  /* item 3 — company view → EVENTS: the earnings strip's cards against the strip's own width */
+  S.strip = async () => {
+    const t = ticker || "NVDA";
+    if (process.env.VW) await page.setViewportSize({ width: Number(process.env.VW), height: Number(process.env.VH || 690) });
+    await openCoTab(t, "EVENTS");
+    await page.waitForSelector("#esRow .es-c", { timeout: 30000 }).catch(() => { out.noStrip = true; });
+    await sleep(1200);
+    out.strip = await page.evaluate(() => {
+      const row = document.querySelector("#esRow"); if (!row) return null;
+      const R = row.getBoundingClientRect(), cs = [...row.querySelectorAll(".es-c")].filter((c) => c.getBoundingClientRect().width > 0);
+      const vis = cs.map((c) => { const r = c.getBoundingClientRect(); return { l: Math.round(r.left - R.left), w: Math.round(r.width), whole: r.left >= R.left - 1 && r.right <= R.right + 1, part: r.right > R.left + 1 && r.left < R.right - 1 }; });
+      return { rowW: Math.round(R.width), scrollW: row.scrollWidth, clientW: row.clientWidth, cards: cs.length, cardW: vis[0] && vis[0].w, whole: vis.filter((v) => v.whole).length,
+               sliced: vis.filter((v) => v.part && !v.whole).length, scrollLeft: row.scrollLeft, display: getComputedStyle(row).display };
+    });
+    out.shots = [await shot("strip" + (process.env.VW ? "-" + process.env.VW : ""), "#esRow")];
+  };
+  /* item 3 — FUNDAMENTALS for a fund */
+  S.fund = async () => {
+    const t = ticker || "XLK";
+    await openCoTab(t, "FUNDAMENTALS");
+    await sleep(5000);
+    out.fund = await page.evaluate(() => {
+      const rail = document.querySelector("#coRailContent"), txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null, f = rail && rail.querySelector(".fdf");
+      const R = rail.getBoundingClientRect();
+      return { frame: !!(rail && rail.querySelector("#coFundFrame")), fundPanel: !!f, tiles: f ? [...f.querySelectorAll(".fdf-t")].map(txt) : null, head: f ? [...f.querySelectorAll(".fdf-h")].map(txt) : null,
+        rows: f ? f.querySelectorAll(".fdf-r").length : 0, clickable: f ? f.querySelectorAll(".fdf-r[data-tkopen]").length : 0, first3: f ? [...f.querySelectorAll(".fdf-r")].slice(0, 3).map(txt) : null,
+        cut: f ? [...f.querySelectorAll("*")].filter((e) => e.getBoundingClientRect().right > R.right + 2).length : null, specs: !!(f && f.querySelector("details.sc-pagespecs")) };
+    });
+    out.shots = [await shot("fund")];
+    if (out.fund.clickable) { await page.evaluate(() => document.querySelector(".fdf-r[data-tkopen]").click()); await sleep(2500); out.fund.afterClick = await page.evaluate(() => typeof LEFT_T !== "undefined" ? LEFT_T : null); }
+  };
+  /* item 3 — the captions that named our tables, counted in a company tab's visible text */
+  S.captions = async () => {
+    const t = ticker || "NVDA", tab = process.env.TAB || "FINANCIALS";
+    await openCoTab(t, tab);
+    await sleep(5000);
+    out.captions = await page.evaluate(() => {
+      const rail = document.querySelector("#coRailContent"), names = /\b(fundamentals_history|balance_history|cashflow_history|youtube_videos|ipo_lockups|offering_news|analyst_[a-z_]+|price_target_[a-z_]+|ratios_history)\b/g;
+      const clone = rail.cloneNode(true); clone.querySelectorAll("details.sc-pagespecs").forEach((d) => d.remove());
+      const inPanel = (clone.textContent.match(names) || []), specs = [...rail.querySelectorAll("details.sc-pagespecs")].map((d) => (d.textContent.match(names) || []).length);
+      return { tableNamesInPanel: inPanel.length, which: [...new Set(inPanel)], pageSpecsFolds: specs.length, tableNamesInPageSpecs: specs.reduce((a, b) => a + b, 0),
+               notes: [...rail.querySelectorAll(".fn3-note")].map((n) => n.textContent.trim().slice(0, 90)) };
+    });
+    await page.evaluate(() => { const d = [...document.querySelectorAll("#coRailContent details.sc-pagespecs")].pop(); if (d) { d.open = true; d.scrollIntoView({ block: "end" }); } else { const r = document.querySelector("#coRailContent"); r.scrollTop = r.scrollHeight; const sc = r.closest(".scroller") || r.parentElement; if (sc) sc.scrollTop = sc.scrollHeight; } });
+    await sleep(500);
+    out.shots = [await shot("captions-" + tab)];
+  };
   if (!S[scenario]) throw new Error("no scenario " + scenario);
   await S[scenario]();
 } catch (e) { out.failed = String((e && e.stack) || e).slice(0, 600); }
