@@ -178,3 +178,32 @@ test("table names left the FINANCIALS, company SOCIAL and lock-up captions; FINA
   assert.ok(!html.includes('"youtube_videos · subscribed channels'), "the company SOCIAL freshness line says YouTube, not the table");
   assert.ok(!html.includes("by unlock-watch (ipo_lockups)</div>"));
 });
+
+/* ── item 6 — fmp-economic: the staged unit_rule change ── */
+test("fmp-economic candidate: v12 plus the unit_rule note — no number rescaled, a safe write, the same verdicts as the detector's rule", async () => {
+  const { stripTypeScriptTypes } = await import("node:module");
+  const vm = await import("node:vm");
+  const dir = "deliverables/20261005/k1-backlog/staged/fmp-economic/";
+  const live = read(dir + "index.v12-LIVE-ROLLBACK.ts"), cand = read(dir + "index.ts");
+  assert.ok(!/eyJ[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{32,}/.test(live + cand), "no credential in either file");
+  /* the candidate with its three edits taken back out is the deployed source, byte for byte */
+  let back = cand;
+  const i = back.indexOf("/* K1 (5 Oct 2026) — unit_rule"), j = back.indexOf("const unitRule=(r:any)=>");
+  assert.ok(i > 0 && j > i); back = back.slice(0, i) + back.slice(back.indexOf("\n", j) + 1);
+  back = back.replace(".map((r:any)=>({...r,unit_rule:unitRule(r)})).filter(", ".filter(");
+  back = back.replace(/    let \{error\}=await sb\.from\('econ_calendar'\)[\s\S]*?\n    if\(error\)throw new Error\(error\.message\)/, "    const {error}=await sb.from('econ_calendar').upsert(crows,{onConflict:'event_ts,country,event'})\n    if(error)throw new Error(error.message)");
+  assert.equal(back, live, "nothing else changed");
+  const js = stripTypeScriptTypes(cand);
+  assert.doesNotThrow(() => new vm.Script(js.replace(/^import [^\n]*\n/m, "").replace("Deno.serve(", "const __serve = ("), { filename: "fmp-economic.js" }), "valid once the types are stripped");
+  const a = js.indexOf("const ECON_SCALE_STEPS"), b = js.indexOf("\n", js.indexOf("const unitRule=")) + 1;
+  const unitRule = new Function("const num=(v)=>(v==null||v===''||isNaN(+v))?null:+v\n" + js.slice(a, b) + "return unitRule;")();
+  const { econUnify } = await import("../supabase/functions/scintillas-detect/detect.mjs");
+  const verdict = (r) => { const u = econUnify(r); return u.unit_fix ? "rescaled to " + u.unit_fix.ref : u.unit_ambiguous ? "ambiguous" : "as supplied"; };
+  const cases = [{ actual: 684, previous: 607, estimate: 0.62 }, { actual: 0.684, previous: 0.643, estimate: 0.62 }, { actual: 250, previous: 0.25, estimate: null }, { actual: 3.1, previous: 3.0, estimate: 3.2 },
+    { actual: null, previous: 4.2, estimate: null }, { actual: 1200000, previous: 1.15, estimate: 1.18 }, { actual: 30, previous: 3, estimate: 3.1 }, { actual: 0, previous: 0, estimate: 0 }];
+  for (const c of cases) assert.equal(unitRule(c), verdict(c), JSON.stringify(c));
+  assert.equal(unitRule(cases[0]), "rescaled to previous"); assert.equal(unitRule(cases[1]), "as supplied"); assert.equal(unitRule(cases[2]), "ambiguous");
+  assert.equal(unitRule(cases[6]), "as supplied", "a ten-fold gap is never called a unit slip");
+  assert.match(cand, /if\(error&&\/unit_rule\/\.test\(String\(error\.message\|\|''\)\)\)/, "a missing column falls back to exactly what v12 wrote");
+  assert.match(read(dir + "STAGED.md"), /--no-verify-jwt/);
+});

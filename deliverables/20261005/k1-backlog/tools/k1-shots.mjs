@@ -219,6 +219,20 @@ try {
     await sleep(500);
     out.shots = [await shot("captions-" + tab)];
   };
+  /* item 4 — COMPS on the comps branch (HUB_ROOT points at it): the set, its tiers, the range */
+  S.comps = async () => {
+    const t = ticker || "MU";
+    await openCoTab(t, "COMPS");
+    await page.waitForSelector("#coRailContent .cm5 table.p tbody tr", { timeout: 40000 }).catch(() => { out.noSet = true; });
+    await sleep(7000);
+    out.comps = await page.evaluate(() => {
+      const c = document.querySelector("#coRailContent .cm5"); if (!c) return null; const txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null;
+      const rows = [...c.querySelectorAll("table.p tbody tr:not(.me)")].map((r) => ({ t: txt(r.querySelector(".tk")), tag: [...r.querySelectorAll(".seat")].map(txt).join("+") }));
+      const R = c.getBoundingClientRect(), tb = c.querySelector("table.p").getBoundingClientRect();
+      return { peers: rows, tableOverPanelPx: Math.round(tb.right - R.right), range: txt(c.querySelector(".rg")) ? txt(c.querySelector(".rg")).slice(0, 260) : null };
+    });
+    out.shots = [await shot("comps-set", "#coRailContent .cm5"), await shot("comps-range", "#coRailContent .cm5 .rg")];
+  };
   if (!S[scenario]) throw new Error("no scenario " + scenario);
   await S[scenario]();
 } catch (e) { out.failed = String((e && e.stack) || e).slice(0, 600); }
