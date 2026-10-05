@@ -10,6 +10,8 @@ const SB_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 //   (is_primary), so it failed and every name fell into OTHER; it now reads ticker + cohort and keeps the
 //   most specific cohort. GET ?status=1 returns only the YouTube jobs' last-run times for the Hub's
 //   "updated" line (no key, no token — times and counts only).
+// v5 (Y2, 5 Oct): ?status=1 also says how many bridged channels (the X accounts' YouTube channels) ride with the
+//   SCINTILLA list and what the last on-air check found (times, counts and video ids only).
 const MAX=10
 const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}
 const J=(o:any,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{'Content-Type':'application/json',...CORS}})
@@ -19,12 +21,13 @@ Deno.serve(async(req)=>{
   const sb=createClient(SB_URL,SB_KEY)
   const u=new URL(req.url)
   if(req.method==='GET' && u.searchParams.get('status')==='1'){
-    const {data:cfg}=await sb.from('app_config').select('key,value').in('key',['yt_rss_result','yt_feed_result','sentiment_youtube_last'])
+    const {data:cfg}=await sb.from('app_config').select('key,value').in('key',['yt_rss_result','yt_feed_result','sentiment_youtube_last','yt_bridge_live'])
     const c:Record<string,any>={}; for(const r of (cfg||[])) c[r.key]=parse(r.value)
-    const rss=c.yt_rss_result||{}, feed=c.yt_feed_result||{}, sent=c.sentiment_youtube_last||{}
+    const rss=c.yt_rss_result||{}, feed=c.yt_feed_result||{}, sent=c.sentiment_youtube_last||{}, live=c.yt_bridge_live||{}
     const fails=Object.values(rss.accounts||{}).filter((a:any)=>a&&a.error).length
     return J({jobs:{
       subscriptions:{at:rss.at||null,seen:rss.rss_seen??null,new_videos:rss.new_videos??null,rss_failed:rss.rss_failed??null,accounts_not_refreshing:fails},
+      bridge:{channels:(rss.bridge&&rss.bridge.channels)??null,added_to_scintilla:(rss.bridge&&rss.bridge.added_to_scintilla)??null,live_checked_at:live.at||null,live_checked:live.checked??null,on_air:live.on_air||[],could_not_read:live.unknown??null},
       searches:{at:feed.at||null,searched:feed.searchTickers||[],searches_today:(feed.plan&&feed.plan.searches_today)??null,error:feed.searchErr||null},
       sentiment:{at:sent.ran_utc||null,clips_read:sent.clips_read??null}}})
   }

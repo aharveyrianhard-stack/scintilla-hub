@@ -69,7 +69,7 @@ export function parseLivePage(html) {
   if (/"isLive":true/.test(text) || /"isLiveNow":true/.test(text)) {
     const viewers = first(text, /"originalViewCount":"(\d+)"/);
     return { state: "live", video_id: video, title: unjson(first(text, /"videoDetails":\{"videoId":"[A-Za-z0-9_-]{11}","title":"((?:[^"\\]|\\.)*)"/) || ""),
-      viewers: viewers ? +viewers : null };
+      channel_title: unjson(first(text, /"ownerChannelName":"((?:[^"\\]|\\.)*)"/) || ""), viewers: viewers ? +viewers : null };
   }
   return { state: "off", video_id: video };
 }
@@ -153,4 +153,20 @@ export function liveProbePick(ids, cursor, max = MAX_LIVE_PROBES) {
   const start = (((+cursor || 0) % n) + n) % n, k = Math.min(max, n), pick = [];
   for (let i = 0; i < k; i++) pick.push(list[(start + i) % n]);
   return { pick, cursor: (start + k) % n };
+}
+
+/** the request every /live read sends. The SOCS cookie is how yt-dlp answers Google's consent wall
+    (yt_dlp/extractor/youtube — _initialize_consent sets SOCS=CAI), so a data-centre address gets the page, not the wall. */
+export const LIVE_PAGE_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+  "Accept-Language": "en-US,en", "Cookie": "SOCS=CAI",
+};
+export const livePageUrl = (channelId) => "https://www.youtube.com/channel/" + channelId + "/live";
+
+/** a stream found on air → the row the sweep's own "new video" path takes (the API then fills the real times) */
+export function liveCandidateRow(channelId, live, nowSec) {
+  return { video_id: live.video_id, channel_id: channelId, channel_title: live.channel_title || "", title: live.title || "",
+    description: "", thumbnail: "https://i.ytimg.com/vi/" + live.video_id + "/mqdefault.jpg",
+    url: "https://www.youtube.com/watch?v=" + live.video_id, published_at: new Date(nowSec * 1000).toISOString(),
+    source: "subscription", ticker: null, updated_ts: nowSec };
 }
