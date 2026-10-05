@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C2 · the calendar and four small leftovers</title>
+<style>
+:root{--bg:#0b0c0e;--panel:#121416;--line:#26292d;--ink:#c4c7cb;--dim:#8f9398;--faint:#6a6e73}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace;padding:64px 16px 48px}
+main{max-width:1120px;margin:0 auto}
+h1{font-size:18px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px;font-weight:600}
+h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin:36px 0 10px;color:var(--ink);font-weight:600}
+p{margin:0 0 10px;max-width:86ch}
+.sub{color:var(--dim);font-size:12px;letter-spacing:.04em}
+.lead{border:1px solid var(--line);background:var(--panel);padding:14px 16px;margin:18px 0}
+.lead li{margin:4px 0}
+ul{margin:0;padding-left:18px}
+figure{margin:14px 0;border:1px solid var(--line);background:var(--panel);padding:10px}
+figure img{display:block;max-width:100%;height:auto}
+figcaption{color:var(--dim);font-size:12px;margin-top:8px}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.phones{display:flex;gap:10px;flex-wrap:wrap}
+.phones img{width:195px}
+.wrap{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;min-width:900px;font-size:12px}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:11px;background:var(--panel)}
+td b{color:var(--ink)}
+.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+code{color:var(--ink);background:#181b1e;padding:1px 4px;font-size:12px;word-break:break-word}
+details.sc-pagespecs{margin-top:40px;border:1px solid var(--line);background:var(--panel);padding:10px 14px}
+details.sc-pagespecs summary{cursor:pointer;letter-spacing:.16em;font-size:11px;color:var(--dim)}
+details.sc-pagespecs p,details.sc-pagespecs li{font-size:12px;color:var(--dim)}
+a{color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>C2 · the market calendar and four small leftovers</h1>
+<p class="sub">5 Oct 2026, evening · Linear SCI-57 and SCI-71 · nothing on this page is live: one staged database file, two branches, measurements</p>
+
+<div class="lead">
+<ul>
+<li><b>The calendar already has 2027.</b> It was loaded on 29 Sep and never ticked off. Every 2027 day matches the exchange's own page. The real gap is 2028; that year is staged and waits for the coordinator.</li>
+<li><b>The two tests that failed after midnight were already fixed</b> the same evening they were noted. A sweep found one more test with the same kind of fault (it failed between 3 and 4 in the morning, New York time). Fixed on a branch.</li>
+<li><b>The ALL map's colours are no longer 13 seconds late.</b> Today they land about 4 seconds after the rows on the live Hub (7 on a cold server). A small change on a branch brings that to under a second in the test rig.</li>
+<li><b>The phone and the iMac items are not small fixes.</b> Each is stated below with what it needs.</li>
+</ul>
+</div>
+
+<h2>The ALL map with its colours in · branch copy · 1680 wide</h2>
+<figure>
+<img src="evidence/map/all-map-after-1680.png" alt="The Hub with the ALL list open: 546 names in the board on the left, the market map on the right with every tile coloured green or red.">
+<figcaption>What is visible: the ALL list (546 names) on the left; on the right the map in GRID mode, every tile coloured, the header reading "COLOR = 4H %CHG · 6 BARS … ON 544/546 · SESSION %CHG ON THE REST". Two names have no 4-hour history and keep their day colour, as before.</figcaption>
+</figure>
+
+<h2>The Station on a phone · 390 × 844 · after a page change</h2>
+<figure>
+<div class="phones">
+<img src="evidence/phone-390/phone-390-rows-wkMacro-t+10023ms.png" alt="Phone-width Station: VIX and DXUSD charts stacked, each with price, clouds, lens and Geiger chip.">
+<img src="evidence/phone-390/phone-390-rows-wkIndexes-t+10036ms.png" alt="Phone-width Station: the weekly indexes page, two charts stacked.">
+</div>
+<figcaption>What is visible: two charts stacked (VIX and the dollar on the left picture), each complete with its price, clouds, the oval lens and the Geiger bar. This is ten seconds after the change, when everything has arrived. The fault is in the first half second, which a still picture cannot show: the numbers are in the table.</figcaption>
+</figure>
+
+<h2>One row per item</h2>
+<div class="wrap">
+<table>
+<thead><tr><th>What</th><th>Measured before</th><th>Fix</th><th>Measured after</th><th>What the coordinator applies</th></tr></thead>
+<tbody>
+<tr>
+<td><b>1 · Market calendar</b><br>SCI-57: "has no 2027 days"</td>
+<td>Table <code>market_calendar</code>: one row per calendar day, <span class="n">9,131 rows</span>, <span class="n">1 Jan 2003 → 31 Dec 2027</span>, no day missing. 2027 holds 251 trading days, 10 holidays and one early close (26 Nov, 13:00), all equal to the exchange's published list. So the item was already done on 29 Sep at 23:22 ET; only the ledger still said otherwise.<br><br>Who reads it: the nightly "rebuild thin dates" job (database job 219, hourly from 04:11 to 13:11 UTC) uses it to skip closed days, and the "session gaps" routine uses it when run by hand. No Hub page, Station page or provider service reads it.</td>
+<td>None needed for 2027. The next cliff is <b>1 Jan 2028</b>, so 2028 is staged: 366 days, from the same exchange page, as one file that only adds rows, with its undo file.</td>
+<td>Tried on a throw-away copy of the table (not the real database): 366 days added = 251 trading days (249 full, 2 early closes on 3 Jul and 24 Nov) + 106 weekend days + 9 holidays. Running it twice adds nothing the second time. The undo puts the table back exactly.</td>
+<td>Apply <code>staged/c2-calendar/20261005_c2_market_calendar_2028.sql</code>; write the undo (<code>…_2028_ROLLBACK.sql</code>) in the rollback log first; read back 366 / 251 / 106 / 9 / 2. Close SCI-57.</td>
+</tr>
+<tr>
+<td><b>2 · Provider tests that fail at night</b><br>SCI-71</td>
+<td>The two named on 29 Sep (chart session extension; Geiger wire contract) were fixed that same evening, at 20:37 ET, and are in the live code line. Today: <span class="n">803 of 803 pass</span> by day.<br><br>Running the whole suite with the clock moved (80 night-time runs over four days, plus every half hour across a day and a half) found one more: a health-check test fails on a weekday between <span class="n">03:00 and 04:00</span> New York time: <span class="n">802 of 803</span>.<br><br>Its clock assumption: it looks for the next 04:00 market open and insists the quiet period before it is over an hour long. Started inside that last hour, it is not.</td>
+<td>The test now looks for an open at least 61 minutes ahead, so its own assumption holds at any hour. Test file only; no service code changed.</td>
+<td><span class="n">803 of 803</span> at the real time and at nine simulated times, including the seconds either side of 04:00 and the night the clocks change (1 Nov).</td>
+<td>Merge <code>provider/c2-tests-20261005</code> into the provider line whenever the next provider change goes in. Nothing to deploy: it is a test.</td>
+</tr>
+<tr>
+<td><b>3 · Phone keeps the old Station page change</b><br>SCI-71</td>
+<td>What it means: on the big screen a Station page change now dissolves (the next page is drawn out of sight, then fades in). A phone stacks the charts and was deliberately left on the older way, where the panes empty and then fill.<br><br>Reproduced today at 390 × 844, all 21 pages in rotation order: <span class="n">19 of 21</span> changes leave a pane empty for more than a tenth of a second; typical <span class="n">0.38 s</span>, worst <span class="n">0.61 s</span>; every page complete in about half a second. On 29 Sep the worst was 4.7 s, so the faster chart server has already taken most of the sting out.</td>
+<td>None. This is not a page fault: the phone layout does not use the dissolve machinery at all. Making it dissolve is a piece of Station work of its own.</td>
+<td>—</td>
+<td>Nothing. One call for Alan below.</td>
+</tr>
+<tr>
+<td><b>4 · iMac load</b><br>SCI-71</td>
+<td>The 29 Sep note was "iMac processor load not measured" for the Station rotation. On 3 Oct the H10 lane measured the Hub's board on this MacBook slowed six times, at the iMac's screen size: scrolling ALL went from 7.9 to 24.6 pictures a second on its branch.</td>
+<td>No work, by the brief.</td>
+<td>—</td>
+<td>What remains: (a) H10's branch <code>hub/h10-imac-board-20261003</code> is still not on the live Hub; it waits for Alan's yes. (b) Nothing has ever been measured on the iMac itself, for the Hub or the Station. That needs the iMac: it cannot be reached from this MacBook, and the standing rule forbids touching it. That contradiction is already with Alan as SCI-47.</td>
+</tr>
+<tr>
+<td><b>5 · ALL map colours late</b><br>SCI-71: "13 s late"</td>
+<td>Live Hub today, from clicking ALL: rows on screen after <span class="n">0.2 s</span>; colours <span class="n">7.0 s</span>, <span class="n">4.2 s</span> and <span class="n">1.1 s</span> after the rows in three runs (the first with a cold server). So 13 s is no longer true: since 1 Oct the page asks for about 70 names per request instead of one.<br><br>The cause of what is left: the 546 names go out as 8 requests, <b>one after another</b>, and the colours wait for the last. The time is the sum of the eight.<br><br>Test rig, 9 runs: <span class="n">1.65 s</span> median (1.0–3.6).</td>
+<td>Up to four of the eight requests are out at once. Same requests, same answers, same single repaint. The old database path keeps its one-at-a-time order.</td>
+<td>Test rig, 9 runs alternating with the "before" runs: <span class="n">0.69 s</span> median (0.5–2.4). 544 of 546 names coloured, as before. Hub tests: the same 7 failures as the live line, plus 4 new tests that pass.</td>
+<td>Show Alan; if he agrees, merge <code>hub/c2-leftovers-20261005</code> (one change in <code>index.html</code>, its trial copy, one test file). Then measure once on the live Hub with a cold server.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h2>What could be wrong</h2>
+<ul>
+<li><b>Map timing.</b> The before-and-after numbers come from a test rig on this MacBook with a warm chart server, not from the live Hub. The live "cold" figure (7 s) was seen once. Four requests at once should cut it to roughly a quarter, but that is arithmetic, not a measurement.</li>
+<li><b>Calendar readers.</b> I could not read the database's own routines from here (the saved link to the database is gone, and the public key cannot see them). The two readers named are from the 28 Sep records, not from a fresh look.</li>
+<li><b>One old calendar day looks wrong:</b> 3 Jul 2025 is stored as a full day; the exchange closed at 13:00 that day. It is in the past and changing it is an overwrite, so I left it.</li>
+<li><b>Night tests.</b> The sweep covered the night hours of four days. A test that fails only on some other date (a month end, a holiday) would not have shown.</li>
+</ul>
+
+<h2>What I did not do</h2>
+<ul>
+<li>Nothing was applied to the database, nothing deployed, no schedule changed.</li>
+<li>No Station change, so no Station branch was pushed.</li>
+<li>No update to Linear: SCI-57 and SCI-71 still read "Todo".</li>
+<li>The iMac was not touched.</li>
+</ul>
+
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p>Calendar: read with the Hub's public key on 5 Oct 2026 (<code>evidence/calendar-live-read.json</code>). Source for the days: NYSE "Holidays &amp; Trading Hours", https://www.nyse.com/markets/hours-calendars, read the same day. 2028 closures: 17 Jan, 21 Feb, 14 Apr, 29 May, 19 Jun, 4 Jul, 4 Sep, 23 Nov, 25 Dec; New Year's Day 2028 is a Saturday and the exchange lists no closure for it. Dry run: <code>evidence/calendar-dryrun.mjs</code> and <code>.json</code> (PGlite, a PostgreSQL that runs inside node, loaded with the 9,131 live rows). The staged file assumes the table's key is the day; if it is not, the file fails as a whole and adds nothing.</p>
+<p>Provider: branch <code>provider/c2-tests-20261005</code> from <code>origin/provider/p9-prevclose-hold-20261002</code>. The earlier fix is commit <code>2cce315</code>. The moved clock is <code>evidence/provider-clock/shiftclock.mjs</code> (loaded with <code>NODE_OPTIONS=--import</code>); the hits are in <code>sweep-before.txt</code>. One hit at 02:17 New York time on 12 Oct did not repeat in three re-runs while the machine was busy; the 03:00–04:00 hits repeat every time.</p>
+<p>Phone: the 29 Sep rotation rig (<code>deliverables/20260929/station-rotation/harness/rotation.mjs</code> in the Station repository) run against <code>origin/station/merge-20260923</code> at 390 × 844, one lap, 21 page changes; table in <code>evidence/phone-390/phone-390-page-changes.txt</code>. The rig refused and counted 13 non-read requests, all from the embedded YouTube players.</p>
+<p>Map: rig <code>evidence/map/mapcolours.mjs</code>, headless, 1680 × 1050. "Colours in" is the moment the page holds the 4-hour result for the list on screen. Live runs: <code>live-before.json</code>. Rig runs serve the page from this MacBook and pass the chart server's answers through with the Hub's address, because that server only answers the Hub: <code>local-before-after.json</code>. No write request left any test browser. The change is in <code>l0MapLoad</code> (<code>L0_MAP_PARALLEL = 4</code>). Rules it sits beside, checked together: the page's own limit of 12 map reads at once (each request still takes one of those places), the wait behind a company chart (unchanged; it applies only when the one-request route is not offered), the 90-second refresh of the map, and the chart server's limit of 16 reads inside one request (so at most 64 at once from one Hub, against 800 names it accepts in a single request). Test: <code>tests/c2-map-parallel.test.mjs</code>. Hub suite: live line 1,876 tests, 7 fail; this branch 1,880 tests, the same 7 fail.</p>
+</details>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
