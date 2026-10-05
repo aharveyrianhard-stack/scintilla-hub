@@ -1,0 +1,41 @@
+rules:
+  - id: scintilla-ticker-as-provider-symbol-without-map
+    mode: taint
+    languages: [javascript]
+    severity: ERROR
+    message: >-
+      A canonical ticker (Hub spelling, e.g. BRK-B) reaches a Massive request path without going through
+      massiveProviderSymbol / the instrument map. Massive spells it BRK.B. This is the BRK-B class of error.
+    metadata:
+      category: correctness
+      scintilla: B1 one identity for a security
+    pattern-sources:
+      - pattern-either:
+          - pattern: symbol
+          - pattern: $O.symbol
+          - pattern: $O.station_symbol
+          - pattern: canonical
+          - pattern: canonicalSymbol
+          - pattern: ticker
+          - pattern: sym
+          - pattern: $O.sym
+    pattern-sanitizers:
+      - pattern: massiveProviderSymbol(...)
+      - pattern: providerSymbol
+      - pattern: providerSym
+      - pattern: psym
+      - pattern: msym
+      - pattern: massiveSym
+      - pattern: $O.providerSymbol
+      - pattern: $O.provider_symbol
+      - pattern: $O.massive_symbol
+      - pattern: $O.m
+      - pattern: providerSymbols[...]
+      - pattern: $M.get(...)
+      - pattern: toMassive(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: $T
+          - metavariable-regex:
+              metavariable: $T
+              regex: (?s)^`[^`]*(/v2/aggs/ticker/|/v1/indicators/|/v3/reference/tickers/|/v2/last/trade/)[^`]*\$\{
