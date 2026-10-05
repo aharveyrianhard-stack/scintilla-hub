@@ -1,0 +1,803 @@
+{
+ "schema": "scintilla.m1.models.v1",
+ "generated_utc": "2026-10-05",
+ "style": "after deliverables/20261003/q2a-rules/adopt.json: one row per candidate, a verdict, the reason, the source",
+ "rule": "Open-source only, run on our own machines or free; no paid model API was called.",
+ "verdict_counts": {
+  "ADOPT": 10,
+  "TRY": 11,
+  "NO": 26,
+  "KEEP": 1,
+  "REPLACE": 1
+ },
+ "caveat": "Accuracies come from small hand-labelled sets by one labeller (100 X posts, 100 news rows, 20 videos). Read gaps under about 10 points (20 for videos) as ties.",
+ "rows": [
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "current word list (lm-v1)",
+   "verdict": "REPLACE",
+   "why": "Reads nothing on 148 of 300 posts and called the opposite direction 15 times in 100: worse than guessing bullish every time (0.56).",
+   "source": "supabase/functions/_shared/sentiment-core.mjs + data/news-lexicon/lm-headline-v1.json",
+   "licence": "ours",
+   "needs": "nothing",
+   "runs_where": "Supabase edge function (today)",
+   "cost": "nothing",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.45,
+    "macro_f1": 0.426,
+    "opposite_calls_of_100": 15,
+    "ms_per_post": 0.04
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "tabularisai/ModernFinBERT",
+   "verdict": "ADOPT",
+   "why": "Best small classifier: 0.68, and small enough for one Fly CPU machine or the Mac. Its bullish reads are strong (F1 0.81); its neutral reads are the weak part.",
+   "source": "https://huggingface.co/tabularisai/ModernFinBERT ; ModernBERT paper https://arxiv.org/abs/2412.13663",
+   "licence": "Apache-2.0",
+   "needs": "CPU, about 1 GB RAM (150 M parameters)",
+   "runs_where": "MacBook (M-series) or Fly CPU machine",
+   "cost": "Mac: nothing. Fly: about 0.1 to 0.15 s a post (estimate) = minutes a day on a shared-cpu-2x 2 GB (13.39 dollars a month if left on; cents if started per run).",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.68,
+    "macro_f1": 0.588,
+    "opposite_calls_of_100": 6,
+    "ms_per_post": 33.0
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mlx-community/Qwen2.5-7B-Instruct-4bit (finance prompt)",
+   "verdict": "ADOPT as the second opinion",
+   "why": "Highest score, 0.73, and the only family that reads neutral and bearish posts well. Needs the Mac (5 GB, Metal). Use it to re-read the posts where ModernFinBERT is unsure.",
+   "source": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct ; https://arxiv.org/abs/2412.15115",
+   "licence": "Apache-2.0",
+   "needs": "Apple Metal, 5.0 GB peak",
+   "runs_where": "MacBook (M-series) (MLX)",
+   "cost": "nothing; 0.17 s a post",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.73,
+    "macro_f1": 0.687,
+    "opposite_calls_of_100": 4,
+    "ms_per_post": 173.0
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mlx-community/Phi-3.5-mini-instruct-4bit",
+   "verdict": "TRY",
+   "why": "0.71 with only 2 opposite calls, at 0.12 s a post and 3.8 GB: the cheapest instruct model that held up on short text. It fell apart on long text (see job 2).",
+   "source": "https://huggingface.co/microsoft/Phi-3.5-mini-instruct ; https://arxiv.org/abs/2404.14219",
+   "licence": "MIT",
+   "needs": "Apple Metal, 3.8 GB peak",
+   "runs_where": "MacBook (M-series) (MLX)",
+   "cost": "nothing",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.71,
+    "macro_f1": 0.677,
+    "opposite_calls_of_100": 2,
+    "ms_per_post": 120.7
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+   "verdict": "TRY",
+   "why": "0.71, 2 opposite calls; leans bullish (weak on neutral).",
+   "source": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3 ; https://arxiv.org/abs/2310.06825",
+   "licence": "Apache-2.0",
+   "needs": "Apple Metal, 5.1 GB peak",
+   "runs_where": "MacBook (M-series) (MLX)",
+   "cost": "nothing",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.71,
+    "macro_f1": 0.667,
+    "opposite_calls_of_100": 2,
+    "ms_per_post": 217.8
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
+   "verdict": "TRY",
+   "why": "0.69; over-calls bearish on short posts. Its strength is transcripts (job 2).",
+   "source": "https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct",
+   "licence": "Llama 3.1 Community Licence (use allowed; read the acceptable-use terms)",
+   "needs": "Apple Metal, 5.6 GB peak",
+   "runs_where": "MacBook (M-series) (MLX)",
+   "cost": "nothing",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.69,
+    "macro_f1": 0.666,
+    "opposite_calls_of_100": 5,
+    "ms_per_post": 208.2
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mlx-community/Qwen2.5-3B-Instruct-4bit",
+   "verdict": "NO",
+   "why": "0.65 and it calls 233 of 300 posts bullish. Its licence is also research-only.",
+   "source": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
+   "licence": "Qwen Research Licence (non-commercial)",
+   "needs": "Apple Metal, 2.5 GB",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.65,
+    "macro_f1": 0.519,
+    "opposite_calls_of_100": 6,
+    "ms_per_post": 87.6
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "StephanAkkerman/FinTwitBERT-sentiment",
+   "verdict": "NO",
+   "why": "0.64 but 9 opposite calls in 100: it reads 99 of 300 posts as bearish. Trained on tweets, yet the worst on direction errors among the classifiers.",
+   "source": "https://huggingface.co/StephanAkkerman/FinTwitBERT-sentiment ; https://github.com/StephanAkkerman/FinTwitBERT",
+   "licence": "MIT",
+   "needs": "CPU, under 1 GB",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.64,
+    "macro_f1": 0.521,
+    "opposite_calls_of_100": 9,
+    "ms_per_post": 24.2
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+   "verdict": "NO",
+   "why": "0.59: it knows Twitter but not markets (\"puts printing\" reads as neutral).",
+   "source": "https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest ; https://arxiv.org/abs/2202.03829",
+   "licence": "CC-BY-4.0",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.59,
+    "macro_f1": 0.566,
+    "opposite_calls_of_100": 2,
+    "ms_per_post": 24.5
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "ProsusAI/finbert (the one Grok Bot is testing)",
+   "verdict": "NO for X posts",
+   "why": "0.55 — below the always-bullish guess (0.56). It was trained on analyst-style news sentences, and calls 199 of 300 trader posts neutral. This is the finding to send back to the Grok Bot session.",
+   "source": "https://huggingface.co/ProsusAI/finbert ; https://arxiv.org/abs/1908.10063",
+   "licence": "none stated on the model card",
+   "needs": "CPU, under 1 GB",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.55,
+    "macro_f1": 0.497,
+    "opposite_calls_of_100": 5,
+    "ms_per_post": 19.2
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "yiyanghkust/finbert-tone",
+   "verdict": "NO",
+   "why": "0.47. Trained on analyst reports. Its files also need hand-loading in current libraries (no model type in its config).",
+   "source": "https://huggingface.co/yiyanghkust/finbert-tone ; Huang, Wang, Yang (2023), Contemporary Accounting Research",
+   "licence": "none stated on the model card",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.47,
+    "macro_f1": 0.456,
+    "opposite_calls_of_100": 2,
+    "ms_per_post": 22.8
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mrm8488/deberta-v3-ft-financial-news-sentiment-analysis",
+   "verdict": "NO",
+   "why": "0.53; calls 206 of 300 neutral.",
+   "source": "https://huggingface.co/mrm8488/deberta-v3-ft-financial-news-sentiment-analysis",
+   "licence": "MIT",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.53,
+    "macro_f1": 0.461,
+    "opposite_calls_of_100": 0,
+    "ms_per_post": 22.1
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis",
+   "verdict": "NO",
+   "why": "0.59; the fastest (12 ms) but no better than the Twitter model.",
+   "source": "https://huggingface.co/mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis",
+   "licence": "Apache-2.0",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.59,
+    "macro_f1": 0.561,
+    "opposite_calls_of_100": 5,
+    "ms_per_post": 12.4
+   }
+  },
+  {
+   "job": "1 · short-text finance sentiment (X posts)",
+   "candidate": "soleimanian/financial-roberta-large-sentiment",
+   "verdict": "NO",
+   "why": "0.59 at three times the cost of the small ones.",
+   "source": "https://huggingface.co/soleimanian/financial-roberta-large-sentiment",
+   "licence": "Apache-2.0",
+   "needs": "CPU, 1.5 GB",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "accuracy_on_100_hand_labels": 0.59,
+    "macro_f1": 0.541,
+    "opposite_calls_of_100": 8,
+    "ms_per_post": 76.9
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "ModernFinBERT on the stored news row (title + snippet)",
+   "verdict": "ADOPT for news rows",
+   "why": "0.71 against 0.60 for always-neutral, with no opposite call in 100, on CPU. Our news rows are short (at most 400 characters), so the short-text winner carries over.",
+   "source": "https://huggingface.co/tabularisai/ModernFinBERT",
+   "licence": "Apache-2.0",
+   "needs": "CPU, 1 GB",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "592,264 stored rows at 48 ms = about 8 hours of one Mac, once; new rows are a few hundred an hour",
+   "measured": {
+    "accuracy": 0.71,
+    "macro_f1": 0.689,
+    "opposite_calls": 0,
+    "n": 100,
+    "ms_per_item": 47.8
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "Mistral-7B-Instruct asked about the filed ticker (news row)",
+   "verdict": "TRY",
+   "why": "0.74, the top score, because it is told which ticker to judge; 4 opposite calls. Needs the Mac.",
+   "source": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
+   "licence": "Apache-2.0",
+   "needs": "Apple Metal, 6.1 GB",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing; 0.21 s a row",
+   "measured": {
+    "accuracy": 0.74,
+    "macro_f1": 0.653,
+    "opposite_calls": 4,
+    "n": 100,
+    "ms_per_item": 210.0
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "FinBERT with chunking + averaging (full article)",
+   "verdict": "NO",
+   "why": "0.62 on full articles against 0.64 for always-neutral: reading the whole article added nothing over the headline row.",
+   "source": "https://huggingface.co/ProsusAI/finbert",
+   "licence": "none stated",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "0.2 s an article",
+   "measured": {
+    "accuracy": 0.621,
+    "macro_f1": 0.603,
+    "opposite_calls": 0,
+    "n": 58,
+    "ms_per_item": 216.9
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "ModernFinBERT reading a whole article in one pass (8,192 tokens)",
+   "verdict": "NO (not proven)",
+   "why": "0.66 against 0.64 for always-neutral on 58 articles: no gain worth fetching article bodies for.",
+   "source": "https://huggingface.co/tabularisai/ModernFinBERT",
+   "licence": "Apache-2.0",
+   "needs": "CPU, 2 GB",
+   "runs_where": "MacBook (M-series)",
+   "cost": "0.4 s an article",
+   "measured": {
+    "accuracy": 0.655,
+    "macro_f1": 0.589,
+    "opposite_calls": 0,
+    "n": 58,
+    "ms_per_item": 410.6
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "Longformer / BigBird finance models",
+   "verdict": "NO",
+   "why": "They barely exist: Hugging Face lists one finance Longformer (125 downloads) and no finance BigBird. ModernBERT (8,192 tokens) has taken their place.",
+   "source": "https://arxiv.org/abs/2004.05150 ; https://arxiv.org/abs/2007.14062 ; Hugging Face model search, 5 Oct 2026",
+   "licence": "-",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "instruct model reading a WHOLE transcript (Qwen2.5-7B / Llama-3.1-8B / Mistral-7B / Phi-3.5)",
+   "verdict": "NO",
+   "why": "0.35 to 0.45 against 0.50 for always-neutral: given a whole video they call almost everything bullish or bearish and lose the neutral ones.",
+   "source": "model cards above",
+   "licence": "see job 1",
+   "needs": "Apple Metal, 5.6 to 7.2 GB",
+   "runs_where": "MacBook (M-series)",
+   "cost": "about 2 s a video",
+   "measured": {
+    "accuracy_range": "0.35-0.45",
+    "n": 20
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "name list finds the passages that mention the ticker, then Llama-3.1-8B reads only those",
+   "verdict": "TRY (best of the transcript methods)",
+   "why": "0.75 on 20 videos (Qwen2.5-7B 0.65) against 0.50 for always-neutral. This is also the answer to \"which name is the sentiment about\". Caution: 20 labels, made from the same passages, and it still missed all three bearish videos.",
+   "source": "https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct",
+   "licence": "Llama 3.1 Community Licence",
+   "needs": "Apple Metal, 6.5 GB; the ticker + company-name list",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing; 0.5 s a video",
+   "measured": {
+    "accuracy": 0.75,
+    "macro_f1": 0.555,
+    "opposite_calls": 2,
+    "n": 20,
+    "ms_per_item": 487.7
+   }
+  },
+  {
+   "job": "2 · long-form sentiment (news, YouTube transcripts) and which ticker it is about",
+   "candidate": "FinBERT-family classifiers on transcripts (first 512 tokens, all chunks averaged, or ticker passages averaged)",
+   "verdict": "NO",
+   "why": "0.30 to 0.65 with no pattern; the \"best\" one (finbert-tone, first 512 tokens, 0.65) simply calls 17 of 20 neutral.",
+   "source": "model cards above",
+   "licence": "-",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "0.1 to 1 s a video",
+   "measured": {
+    "accuracy_range": "0.30-0.65",
+    "n": 20
+   }
+  },
+  {
+   "job": "3 · YouTube transcripts",
+   "candidate": "youtube-transcript-api (captions first)",
+   "verdict": "ADOPT",
+   "why": "Free and instant: 26 of 26 sample videos answered in about 0.9 s each from this MacBook. Our youtube_transcripts table is empty today, so this is the first thing to switch on — from the Mac, because YouTube tends to refuse data-centre addresses.",
+   "source": "https://github.com/jdepoix/youtube-transcript-api",
+   "licence": "MIT",
+   "needs": "a home internet address",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing",
+   "measured": {
+    "tool": "youtube-transcript-api 1.x (MIT)",
+    "videos_tried": 26,
+    "answered": 26,
+    "auto_generated": 25,
+    "median_fetch_s": 0.95,
+    "where": "this MacBook (home connection). YouTube commonly refuses caption requests from data-centre addresses, which fits our youtube_transcripts table being empty; not re-tested from Fly in this run."
+   }
+  },
+  {
+   "job": "3 · YouTube transcripts",
+   "candidate": "mlx-whisper large-v3-turbo (videos with no captions)",
+   "verdict": "ADOPT as the fallback",
+   "why": "78 times faster than real time on Metal: one hour of video in 0.8 minutes.",
+   "source": "https://github.com/ml-explore/mlx-examples/tree/main/whisper ; https://arxiv.org/abs/2212.04356",
+   "licence": "MIT",
+   "needs": "Apple Metal, about 2 GB",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing",
+   "measured": {
+    "engine": "mlx-whisper (Metal)",
+    "model": "whisper-large-v3-turbo",
+    "seconds_for_655s_audio": 8.4,
+    "first_run_incl_download_s": 43.1,
+    "times_faster_than_real_time": 78.0,
+    "minutes_per_hour_of_video": 0.8,
+    "word_error_vs_human_captions": 0.222
+   }
+  },
+  {
+   "job": "3 · YouTube transcripts",
+   "candidate": "faster-whisper small (CPU)",
+   "verdict": "TRY for Fly",
+   "why": "On 4 Mac CPU threads: 16 times real time (3.8 minutes per hour of video). On a Fly performance-4x that is an estimated 10 to 15 minutes and 3 to 5 cents per hour of video — not measured on Fly.",
+   "source": "https://github.com/SYSTRAN/faster-whisper",
+   "licence": "MIT",
+   "needs": "CPU, 1 GB",
+   "runs_where": "Fly CPU machine (performance-4x, 8 GB)",
+   "cost": "about 3 to 5 cents per hour of video (estimate)",
+   "measured": {
+    "engine": "faster-whisper (CTranslate2, CPU int8)",
+    "model": "small",
+    "cpu_threads": 4,
+    "seconds_for_655s_audio": 41.6,
+    "times_faster_than_real_time": 15.8,
+    "minutes_per_hour_of_video": 3.8,
+    "word_error_vs_human_captions": 0.228,
+    "load_s": 8.5
+   }
+  },
+  {
+   "job": "3 · YouTube transcripts",
+   "candidate": "whisper.cpp",
+   "verdict": "NO (not needed)",
+   "why": "Same models as above through a C++ program; on this Mac mlx-whisper already does an hour in under a minute. Not timed.",
+   "source": "https://github.com/ggml-org/whisper.cpp",
+   "licence": "MIT",
+   "needs": "CPU or Metal",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing"
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "BAAI/bge-small-en-v1.5",
+   "verdict": "ADOPT",
+   "why": "Finds the full original of a cut-off repost 95% of the time, at 563 headlines a second on CPU and 384 numbers per text: cheap enough for Fly and small enough for pgvector on our plan.",
+   "source": "https://huggingface.co/BAAI/bge-small-en-v1.5 ; https://arxiv.org/abs/2309.07597",
+   "licence": "MIT",
+   "needs": "CPU; 33 M parameters; 384 numbers per text",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "cents",
+   "measured": {
+    "model": "BAAI/bge-small-en-v1.5",
+    "cpu_headlines_per_s": 563,
+    "dim": 384,
+    "mps_headlines_per_s": 2373,
+    "repost_to_original_recall_at_1": 0.952,
+    "params_m": 33
+   }
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "BAAI/bge-m3",
+   "verdict": "TRY",
+   "why": "Best match rate (98.6%) but ten times slower and 1,024 numbers per text; worth it only if we need other languages or long texts.",
+   "source": "https://huggingface.co/BAAI/bge-m3 ; https://arxiv.org/abs/2402.03216",
+   "licence": "MIT",
+   "needs": "CPU; 568 M parameters; 1024 numbers per text",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "cents",
+   "measured": {
+    "model": "BAAI/bge-m3",
+    "cpu_headlines_per_s": 57,
+    "dim": 1024,
+    "mps_headlines_per_s": 367,
+    "repost_to_original_recall_at_1": 0.986,
+    "params_m": 568
+   }
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "intfloat/e5-base-v2",
+   "verdict": "TRY",
+   "why": "97.8% and 191 a second on CPU: the middle choice.",
+   "source": "https://huggingface.co/intfloat/e5-base-v2 ; https://arxiv.org/abs/2212.03533",
+   "licence": "MIT",
+   "needs": "CPU; 109 M parameters; 768 numbers per text",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "cents",
+   "measured": {
+    "model": "intfloat/e5-base-v2",
+    "cpu_headlines_per_s": 191,
+    "dim": 768,
+    "mps_headlines_per_s": 1066,
+    "repost_to_original_recall_at_1": 0.978,
+    "params_m": 109
+   }
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "thenlper/gte-base",
+   "verdict": "NO",
+   "why": "Same match rate as e5-base but six times slower on CPU here.",
+   "source": "https://huggingface.co/thenlper/gte-base ; https://arxiv.org/abs/2308.03281",
+   "licence": "MIT",
+   "needs": "CPU; 109 M parameters; 768 numbers per text",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "cents",
+   "measured": {
+    "model": "thenlper/gte-base",
+    "cpu_headlines_per_s": 32,
+    "dim": 768,
+    "mps_headlines_per_s": 2287,
+    "repost_to_original_recall_at_1": 0.978,
+    "params_m": 109
+   }
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "Alibaba-NLP/gte-modernbert-base",
+   "verdict": "NO",
+   "why": "No better than bge-small on our test and slow on CPU here.",
+   "source": "https://huggingface.co/Alibaba-NLP/gte-modernbert-base ; https://arxiv.org/abs/2308.03281",
+   "licence": "Apache-2.0",
+   "needs": "CPU; 149 M parameters; 768 numbers per text",
+   "runs_where": "Fly CPU machine or MacBook (M-series)",
+   "cost": "cents",
+   "measured": {
+    "model": "Alibaba-NLP/gte-modernbert-base",
+    "cpu_headlines_per_s": 27,
+    "dim": 768,
+    "mps_headlines_per_s": 1209,
+    "repost_to_original_recall_at_1": 0.952,
+    "params_m": 149
+   }
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "nomic-ai/nomic-embed-text-v1.5",
+   "verdict": "NO for now",
+   "why": "Not run: it needs trust_remote_code (it executes code shipped in the model repository).",
+   "source": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5 ; https://arxiv.org/abs/2402.01613",
+   "licence": "Apache-2.0",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "pgvector in Supabase (the index)",
+   "verdict": "ADOPT",
+   "why": "Already offered by our database (version 0.8.0, not switched on). Keeps the vectors next to the news rows, so \"same story?\" is one query. Switching it on is an additive change.",
+   "source": "https://github.com/pgvector/pgvector ; https://supabase.com/docs/guides/database/extensions/pgvector",
+   "licence": "PostgreSQL licence",
+   "needs": "`create extension vector` (additive)",
+   "runs_where": "Supabase",
+   "cost": "storage only: 384 numbers per row is about 1.5 KB"
+  },
+  {
+   "job": "4 · embeddings + search (dedupe news, cluster topics, similar posts)",
+   "candidate": "a local index (FAISS / hnswlib)",
+   "verdict": "NO",
+   "why": "A second store to keep in step with the database, on a Mac that is not always on. Not measured.",
+   "source": "https://github.com/facebookresearch/faiss",
+   "licence": "MIT",
+   "needs": "-",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing"
+  },
+  {
+   "job": "5 · named-entity / ticker linking (which company is this about)",
+   "candidate": "ticker + company-name list (plain matching, no model)",
+   "verdict": "ADOPT as the first pass",
+   "why": "Free, instant, and it finds the passages for job 2. On its own it is blunt: 7 of 12 wrong tags caught, 15 good rows rejected.",
+   "source": "company_profile (544 names) in our database",
+   "licence": "ours",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "method": "ticker + company-name list (plain matching, no model)",
+    "wrong_tags_caught_of_12": 7,
+    "good_rows_wrongly_rejected_of_88": 15,
+    "ms_per_row": 0.02
+   }
+  },
+  {
+   "job": "5 · named-entity / ticker linking (which company is this about)",
+   "candidate": "spaCy en_core_web_sm entities -> name list",
+   "verdict": "NO",
+   "why": "Costs 9 ms a row and rejects more good rows (18) than plain matching.",
+   "source": "https://spacy.io/models/en",
+   "licence": "MIT",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "method": "spaCy en_core_web_sm entities -> name list",
+    "wrong_tags_caught_of_12": 9,
+    "good_rows_wrongly_rejected_of_88": 18,
+    "ms_per_row": 9.35
+   }
+  },
+  {
+   "job": "5 · named-entity / ticker linking (which company is this about)",
+   "candidate": "GLiNER medium v2.1 (company / stock ticker / fund) -> name list",
+   "verdict": "TRY as the checker",
+   "why": "Best of the three: 10 of 12 wrong tags caught, 11 good rows rejected, 55 ms a row on CPU. Use its answer to down-weight a row, not delete it.",
+   "source": "https://huggingface.co/urchade/gliner_medium-v2.1 ; https://arxiv.org/abs/2311.08526",
+   "licence": "Apache-2.0",
+   "needs": "CPU",
+   "runs_where": "Fly CPU machine",
+   "cost": "cents",
+   "measured": {
+    "method": "GLiNER medium v2.1 (company / stock ticker / fund) -> name list",
+    "wrong_tags_caught_of_12": 10,
+    "good_rows_wrongly_rejected_of_88": 11,
+    "ms_per_row": 55.15
+   }
+  },
+  {
+   "job": "5 · named-entity / ticker linking (which company is this about)",
+   "candidate": "FinNER models",
+   "verdict": "NO",
+   "why": "Hobby uploads: the most used has 269 downloads.",
+   "source": "Hugging Face model search \"FinNER\", 5 Oct 2026",
+   "licence": "-",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "ours: |move| >= 2 x stdev of last 60 moves, and >= 1%",
+   "verdict": "KEEP",
+   "why": "It flags 5.8% of name-days — what the rules file intends (about one day in twenty). Nothing public beat it on this test.",
+   "source": "supabase/functions/scintillas-detect + data/scintilla-rules.json",
+   "licence": "ours",
+   "needs": "nothing",
+   "runs_where": "Supabase edge function (today)",
+   "cost": "nothing",
+   "measured": {
+    "method": "ours: |move| >= 2 x stdev of last 60 moves, and >= 1%",
+    "share_of_name_days_flagged": 0.0577,
+    "flags_per_day_per_100_names": 5.8,
+    "flags_in_last_5_sessions": 6,
+    "overlap_with_ours_jaccard": 1.0,
+    "next_day_move_vs_normal": 1.11,
+    "ms_per_name_250_days": 8.1
+   }
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "robust: |move - median| >= 3 x (1.4826 x MAD) over last 60, and >= 1%",
+   "verdict": "TRY as a second, rarer tier",
+   "why": "Half as many flags (2.7%), and the day after one of its flags is 1.31 times a normal day against 1.11 for ours: fewer, sharper scintillas. It is ten lines of arithmetic, not a model.",
+   "source": "Hampel filter / median absolute deviation (Leys et al. 2013, https://doi.org/10.1016/j.jesp.2013.03.013)",
+   "licence": "-",
+   "needs": "nothing",
+   "runs_where": "Supabase edge function (today)",
+   "cost": "nothing",
+   "measured": {
+    "method": "robust: |move - median| >= 3 x (1.4826 x MAD) over last 60, and >= 1%",
+    "share_of_name_days_flagged": 0.027,
+    "flags_per_day_per_100_names": 2.7,
+    "flags_in_last_5_sessions": 5,
+    "overlap_with_ours_jaccard": 0.41,
+    "next_day_move_vs_normal": 1.31,
+    "ms_per_name_250_days": 1.2
+   }
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "EWMA volatility (RiskMetrics, lambda 0.94): |move| >= 2 x, and >= 1%",
+   "verdict": "NO",
+   "why": "Same flag rate and same follow-through as ours (1.11), but only 73% the same flags: a change with no gain.",
+   "source": "RiskMetrics Technical Document (1996); https://github.com/bashtage/arch",
+   "licence": "-",
+   "needs": "nothing",
+   "runs_where": "Supabase edge function (today)",
+   "cost": "nothing",
+   "measured": {
+    "method": "EWMA volatility (RiskMetrics, lambda 0.94): |move| >= 2 x, and >= 1%",
+    "share_of_name_days_flagged": 0.0563,
+    "flags_per_day_per_100_names": 5.6,
+    "flags_in_last_5_sessions": 14,
+    "overlap_with_ours_jaccard": 0.73,
+    "next_day_move_vs_normal": 1.11,
+    "ms_per_name_250_days": 0.1
+   }
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "river HalfSpaceTrees (streaming, window 60): score >= 0.9, and >= 1%",
+   "verdict": "NO as shipped",
+   "why": "Out of the box it flags 44% of name-days. It is built for many-feature streams, not one number a day.",
+   "source": "https://github.com/online-ml/river ; https://arxiv.org/abs/2012.04740",
+   "licence": "BSD-3",
+   "needs": "nothing",
+   "runs_where": "Supabase edge function (today)",
+   "cost": "nothing",
+   "measured": {
+    "method": "river HalfSpaceTrees (streaming, window 60): score >= 0.9, and >= 1%",
+    "share_of_name_days_flagged": 0.4373,
+    "flags_per_day_per_100_names": 43.7,
+    "flags_in_last_5_sessions": 167,
+    "overlap_with_ours_jaccard": 0.13,
+    "next_day_move_vs_normal": 1.16,
+    "ms_per_name_250_days": 25.1
+   }
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "Prophet",
+   "verdict": "NO",
+   "why": "Built for series with trend and seasons (sales, traffic). Daily price moves have neither; it would fit a flat line and flag on the same spread we already use. Not run.",
+   "source": "https://github.com/facebook/prophet ; Taylor & Letham (2018), https://doi.org/10.1080/00031305.2017.1380080",
+   "licence": "MIT",
+   "needs": "CPU, compiled Stan",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "Kats",
+   "verdict": "NO",
+   "why": "Prophet-based detectors with heavy, old dependencies and no recent release on PyPI. Not run.",
+   "source": "https://github.com/facebookresearch/Kats",
+   "licence": "MIT",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "6 · time-series / anomaly (the scintillas detector)",
+   "candidate": "tsfresh",
+   "verdict": "NO",
+   "why": "It turns a series into hundreds of features for a later model; it is not a detector. Not run.",
+   "source": "https://github.com/blue-yonder/tsfresh",
+   "licence": "MIT",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  },
+  {
+   "job": "7 · where it runs",
+   "candidate": "MacBook, Metal, MLX (mlx-lm, mlx-whisper)",
+   "verdict": "ADOPT for instruct models and speech",
+   "why": "Every 7 to 8 B model loaded in 3 s and used 5 to 7 GB of the 36 GB; a post takes 0.2 s, a whole transcript 2 s, an hour of video under a minute. Nothing to pay. Limit: it only runs while the MacBook is awake.",
+   "source": "https://github.com/ml-explore/mlx-lm",
+   "licence": "MIT",
+   "needs": "this MacBook (Apple M5 Max, 36 GB)",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing"
+  },
+  {
+   "job": "7 · where it runs",
+   "candidate": "Ollama / llama.cpp on the Mac",
+   "verdict": "TRY (not installed, not timed)",
+   "why": "Same models as GGUF files behind a local server; useful if several jobs must share one loaded model. Installing Ollama is a system install, which this run was not allowed to do.",
+   "source": "https://github.com/ollama/ollama ; https://github.com/ggml-org/llama.cpp",
+   "licence": "MIT",
+   "needs": "a system install",
+   "runs_where": "MacBook (M-series)",
+   "cost": "nothing"
+  },
+  {
+   "job": "7 · where it runs",
+   "candidate": "Fly CPU machine (no GPU)",
+   "verdict": "ADOPT for the small classifiers and embeddings",
+   "why": "What fits: ModernFinBERT, bge-small, GLiNER, faster-whisper small — all under 2 GB. What does not: any 7 B instruct model at useful speed. Speeds on Fly are estimates; no machine was started.",
+   "source": "https://fly.io/docs/about/pricing/ read 5 Oct 2026",
+   "licence": "-",
+   "needs": "shared-cpu-2x 2 GB or performance-2x 4 GB",
+   "runs_where": "Fly CPU machine",
+   "cost": "13.39 dollars a month (shared-cpu-2x 2 GB) if left on; billed by the second, so a job that runs 10 minutes a day costs cents a month"
+  },
+  {
+   "job": "7 · where it runs",
+   "candidate": "Fly GPU machine",
+   "verdict": "NO — not on offer",
+   "why": "`fly platform vm-sizes` lists no GPU size and Fly's GPU pages now redirect to its post \"We Were Wrong About GPUs\". There is no price per hour and no cold start to quote.",
+   "source": "https://fly.io/blog/wrong-about-gpu/ ; `fly platform vm-sizes` on 5 Oct 2026",
+   "licence": "-",
+   "needs": "-",
+   "runs_where": "-",
+   "cost": "-"
+  }
+ ]
+}
