@@ -25,6 +25,13 @@
 //     minutes. HONEST LIMIT: a name so quiet that 2 sigma is under PREFILTER_PCT is not examined
 //     until the session pass.
 //   ?mode=session — the same pass with the prefilter switched off, for once after the close.
+//   ?mode=backfill&from=&to=&symbols=&cursor=&max_symbols= — M68. The SAME price rule, walked
+//     backwards over stored daily bars, so the two years before the detector existed are in the
+//     table too. Alan, 24 Sep: "Are you capturing this going backwards for other companies?"
+//     It is batched (a slice of the universe per call), resumable (hand `next` back as `cursor`)
+//     and idempotent: the dedupe key is the same `price_outlier|SYM|DATE` the live pass writes, and
+//     the insert ignores duplicates, so a backfilled row can never displace or duplicate a live one.
+//     Every backfilled row carries detail.backfilled = true and sits at the session's own close.
 // Econ (surprise + imminent) and earnings run in BOTH modes: they cost two database reads.
 import {
   detectPriceOutliers, detectEarningsSurprises, detectEconSurprises, detectEconImminent, econEventKey,
@@ -34,6 +41,7 @@ import {
    a test pins the two together). Two families, either one fires: the move against the name's own usual
    day, and a plain percentage floor, both per asset class. */
 import { RULES } from "./rules.mjs";
+import { backfillSymbol, planBatch, perDayByClass, BACKFILL_FIRST_SESSION } from "./backfill.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -45,6 +53,8 @@ const PREFILTER_PCT = Math.min(0.5, ...Object.values(RULES.price as Record<strin
 const MAX_CANDLE_FETCH = 140;   // hard ceiling on daily-bar reads per run
 const CANDLE_DAYS = 90;         // ~60 trading days -> a 20-day volatility is comfortably covered
 const CONCURRENCY = 6;
+const BACKFILL_MAX_SYMBOLS = 25;   // names per call: a slice small enough to finish inside the budget
+const BACKFILL_INSERT_CHUNK = 500; // rows per insert
 
 const sbHeaders = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "content-type": "application/json" };
 
@@ -85,16 +95,99 @@ async function insert(rows: any[]) {
   return { inserted: Array.isArray(back) ? back.length : 0 };
 }
 
+/* ── THE BACKFILL ───────────────────────────────────────────────────────────────────────────
+   One slice of the universe, one date range, the same rules. Reads: one /candles per name and one
+   heartbeat read per name. Writes: public.scintillas only, ignore-duplicates. */
+async function runBackfill(url: URL, report: any) {
+  const from = url.searchParams.get("from") || BACKFILL_FIRST_SESSION;
+  const to = url.searchParams.get("to") || null;
+  const cursor = Number(url.searchParams.get("cursor") || 0);
+  const maxSymbols = Math.max(1, Math.min(60, Number(url.searchParams.get("max_symbols") || BACKFILL_MAX_SYMBOLS)));
+  const asked = (url.searchParams.get("symbols") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+
+  let symbols = asked;
+  if (!symbols.length) {
+    const universe = await chartGet("/universe");
+    symbols = (universe.symbols || universe.universe || []).map((s: any) => (typeof s === "string" ? s : s.symbol)).filter(Boolean);
+  }
+  const plan = planBatch(symbols, cursor, maxSymbols);
+  report.from = from; report.to = to; report.cursor = plan.start; report.next = plan.next;
+  report.universe = plan.total; report.batch = plan.batch.length;
+
+  /* enough daily bars to cover the range and the bar before it. ~252 sessions a year, plus slack. */
+  const spanDays = Math.max(1, Math.round((Date.parse((to || new Date().toISOString().slice(0, 10)) + "T00:00:00Z") -
+                                           Date.parse(from + "T00:00:00Z")) / 86400e3));
+  const barLimit = Math.min(1500, Math.ceil(spanDays * 252 / 365) + 30);
+
+  const events: any[] = [];
+  const skippedCounts: Record<string, number> = {};
+  let sessionsExamined = 0, noBars = 0, noStoredUsual = 0;
+
+  await pool(plan.batch, CONCURRENCY, async (sym: string) => {
+    let bars: any[] = [];
+    try {
+      const c = await chartGet("/candles?symbol=" + encodeURIComponent(sym) + "&tf=1d&limit=" + barLimit);
+      const raw = (c.series || c.candles || c.bars || c.rows || []) as any[];
+      const dayOf = (b: any) => { const t = b.t ?? b.time ?? b.date;
+        return typeof t === "number" ? new Date(t).toISOString().slice(0, 10) : String(t || "").slice(0, 10); };
+      bars = raw.map((b: any) => ({ d: dayOf(b), o: +(b.o ?? b.open), h: +(b.h ?? b.high), l: +(b.l ?? b.low), c: +(b.c ?? b.close) }))
+                .filter((b: any) => b.d && Number.isFinite(b.c) && b.c > 0)
+                .sort((a: any, b: any) => (a.d < b.d ? -1 : 1));
+    } catch (_) { noBars++; return; }
+    if (!bars.length) { noBars++; return; }
+
+    /* the divisor comes out of the store, one name at a time, and the module picks the row dated
+       before each session — never the session's own row. */
+    let heartbeat: any[] = [];
+    try {
+      heartbeat = await sbGet("ticker_heartbeat_daily?ticker=eq." + encodeURIComponent(sym) +
+        "&date=gte." + from + (to ? "&date=lte." + to : "") +
+        "&select=date,usual_day_60,n&order=date.asc&limit=2000");
+    } catch (_) { heartbeat = []; }
+    if (!heartbeat.length) noStoredUsual++;
+
+    const out = backfillSymbol({ detect: detectPriceOutliers, symbol: sym, bars, heartbeat, from, to, rules: RULES,
+                                 source: "chart-api:/candles?tf=1d (backfill)" });
+    sessionsExamined = Math.max(sessionsExamined, out.sessions_examined);
+    for (const s of out.skipped) skippedCounts[s.reason] = (skippedCounts[s.reason] || 0) + 1;
+    events.push(...out.events);
+  });
+
+  let inserted = 0;
+  for (let i = 0; i < events.length; i += BACKFILL_INSERT_CHUNK) {
+    const r = await insert(events.slice(i, i + BACKFILL_INSERT_CHUNK));
+    inserted += r.inserted;
+  }
+  report.sessions_per_symbol = sessionsExamined;
+  report.detected = events.length;
+  report.inserted = inserted;
+  report.already_stored = events.length - inserted;
+  report.no_bars = noBars;
+  report.names_without_stored_usual = noStoredUsual;
+  report.skipped_counts = { price: skippedCounts };
+  report.counts = perDayByClass(events, sessionsExamined);
+  report.notes.push("backfilled rows carry detail.backfilled = true and the session's own close as ts");
+  report.notes.push("idempotent: dedupe_key price_outlier|SYM|DATE with ignore-duplicates, so a live row is never displaced");
+  if (plan.next != null) report.notes.push("resume with &cursor=" + plan.next);
+  return report;
+}
+
 Deno.serve(async (req) => {
   const started = Date.now();
   const url = new URL(req.url);
-  const mode = url.searchParams.get("mode") === "session" ? "session" : "intraday";
+  const asked = url.searchParams.get("mode");
+  const mode = asked === "session" ? "session" : asked === "backfill" ? "backfill" : "intraday";
   const now = new Date();
   const session = sessionET(now);
   const report: any = { mode, session, at: iso(now), rules_version: RULES.version, kinds: {}, skipped_counts: {}, notes: [] };
   const events: any[] = [];
 
   try {
+    if (mode === "backfill") {
+      await runBackfill(url, report);
+      report.ms = Date.now() - started;
+      return json(report, 200);
+    }
     /* ── prices: outliers of the day ─────────────────────────────────────────────── */
     const universe = await chartGet("/universe");
     const symbols: string[] = (universe.symbols || universe.universe || []).map((s: any) => (typeof s === "string" ? s : s.symbol)).filter(Boolean);
