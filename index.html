@@ -9058,6 +9058,7 @@ const L0_MAP_SPAN   = { "60": "≈1 session", "240": "≈1.5 days", "D": "1 day"
 const L0_MAP_PAD    = { "60": 12, "240": 6, "D": 4, "W": 3 };            // slack bars pulled per ticker to absorb holidays / halts / thin symbols
 const L0_MAP_CUT    = { "60": 86400 * 7, "240": 86400 * 16, "D": 86400 * 18, "W": 86400 * 75 };
 const L0_MAP_BUDGET = 950;               // rows per request — unconditionally under the 1000-row cap
+const L0_MAP_PARALLEL = 4;             // C2 — map chunks out at once on the clean lane (see l0MapLoad); the legacy read stays at 1
 const L0_MAP_TTL    = 90000;             // ms a resolved (tf,cohort) result stays authoritative before it is re-pulled
 const L0_MAP_CACHE = {};                 // key → { pct:{ticker:%}, hit, n, tf, at }
 const L0_MAP_LOADING = {}, L0_MAP_ERR = {};
@@ -9208,8 +9209,17 @@ async function l0MapLoad(tf, tickers, key) {
   const cut   = Math.floor(Date.now() / 1000) - (L0_MAP_CUT[tf] || 86400 * 20);
   const series = {};                     // ticker → Map(timestamp → close), de-duped by stamp
   try {
-    for (let i = 0; i < tickers.length; i += chunk) {
-      const part = tickers.slice(i, i + chunk);
+    /* C2 (5 Oct) — THE CHUNKS NO LONGER WAIT FOR EACH OTHER on the clean lane. ALL (546 names) is 8 requests of
+       ~70 names; asked one after another the colours landed when the LAST one answered (measured 5 Oct: 4.2 s
+       median, 6.9 s on a cold server, after the rows). Now up to L0_MAP_PARALLEL of them are out at once, each
+       still through sparkPaced (one of its 12 places, and the same wait behind a company chart when the batch
+       route is not offered). The legacy database read keeps its one-at-a-time order: that is the read measured
+       at a statement timeout. */
+    const parts = [];
+    for (let i = 0; i < tickers.length; i += chunk) parts.push(tickers.slice(i, i + chunk));
+    let nextPart = 0;
+    const loadParts = async function () { while (nextPart < parts.length) {
+      const part = parts[nextPart++];
       /* values are double-quoted so a ticker carrying a reserved character
          (BRK.A, BRK-B) can never break the in.() list */
       const list = part.map((t) => '"' + String(t).replace(/"/g, "") + '"').join(",");
@@ -9244,7 +9254,8 @@ async function l0MapLoad(tf, tickers, key) {
         if (!t || !isFinite(ts) || !isFinite(cl) || cl <= 0) continue;
         (series[t] = series[t] || new Map()).set(ts, cl);
       }
-    }
+    } };
+    await Promise.all(Array.from({ length: window.SC_CLEAN_READS ? Math.min(L0_MAP_PARALLEL, parts.length) : 1 }, loadParts));
     const pct = {}; let hit = 0, newest = 0;
     for (const t in series) for (const ts of series[t].keys()) if (ts > newest) newest = ts;   // H2 — for the "last bar" stamp
     for (const t in series) {
