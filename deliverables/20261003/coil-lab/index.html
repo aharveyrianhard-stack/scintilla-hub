@@ -79,7 +79,7 @@ details.sc-pagespecs p{margin:6px 0;max-width:900px}
     </div>
     <div id="gl"></div>
     <div id="hud"></div>
-    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · the sphere's volume = the set's market cap · drag turns · scroll zooms the type · double-click home</div>
+    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · the beam is as wide as its name · the sphere's volume = the set's market cap · drag turns · scroll zooms (eased) · double-click home</div>
   </section>
   <section class="pane" id="pane-tape">
     <div id="tape">
@@ -149,9 +149,9 @@ function load(name, land = true) {
   document.querySelectorAll("[data-boxes]").forEach((b) => b.classList.toggle("on", (b.dataset.boxes === "1") === state.boxes));
   hud(); clearTimeout(state.hudT); state.hudT = setTimeout(hud, 2900); // again once the steps have landed (the label count is of the landed coil)
 }
-function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); const L = coil.labelStats(); const S = coil.sets();
+function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); const L = coil.labelStats(); const B = coil.beamPx(); const S = coil.sets();
   const sph = coil.capMode() === "sphere" ? S.map((x) => `${x.name.toUpperCase()} r ${x.capR} U = $${x.capSumT}T over ${x.nCap} of ${x.n}`).join(" · ") : coil.capMode() === "width" ? "step width = (cap ÷ the set's biggest)^⅓" : "market cap off";
-  $("hud").innerHTML = `<b>${coil.mode().toUpperCase()}</b> · ${pl ? pl.steps.length + " steps · H " + pl.H.toFixed(0) + " per unit · " + pl.ups + " up / " + pl.dns + " down / " + pl.none + " none" : ""} · boxes ${coil.boxes() ? "V2b" : "none"}<br>camera ${JSON.stringify(coil.elevation())} · fills ${Math.round(f.h * 100)} % of the height · labels ${L.px} px (${L.at}; ${L.shown} shown, ${L.hidden} thinned of ${L.total})<br>sphere: $1 T = ${coil.capScale().r1T_units} U of radius · ${sph}${state.measuring ? ' · <span class="fps">measuring fps…</span>' : state.lastMeasure ? ' · <span class="fps">' + state.lastMeasure.fps + " fps</span> over " + state.lastMeasure.seconds + " s turning (" + state.lastMeasure.render_ms_per_frame + " ms a frame)" : ""}`; }
+  $("hud").innerHTML = `<b>${coil.mode().toUpperCase()}</b> · ${pl ? pl.steps.length + " steps · H " + pl.H.toFixed(0) + " per unit · " + pl.ups + " up / " + pl.dns + " down / " + pl.none + " none" : ""} · boxes ${coil.boxes() ? "V2b" : "none"}<br>camera ${JSON.stringify(coil.elevation())} · fills ${Math.round(f.h * 100)} % of the height · labels ${L.px} px / ${L.value_px} px (${L.at}; ${L.shown} shown, ${L.hidden} thinned of ${L.total}) · beam core ${B.core_px} px, halo ${B.halo_px} px<br>sphere: $1 T = ${coil.capScale().r1T_units} U of radius · ${sph}${state.measuring ? ' · <span class="fps">measuring fps…</span>' : state.lastMeasure ? ' · <span class="fps">' + state.lastMeasure.fps + " fps</span> over " + state.lastMeasure.seconds + " s turning (" + state.lastMeasure.render_ms_per_frame + " ms a frame)" : ""}`; }
 document.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { state.compare = b.dataset.cmp; load(state.compare ? state.compare.split(",")[0] : state.listName); }));
 document.querySelectorAll("[data-cap]").forEach((b) => b.addEventListener("click", () => { state.capMode = b.dataset.cap; coil && coil.setCapMode(state.capMode); load(state.listName, false); }));
 document.querySelectorAll("[data-boxes]").forEach((b) => b.addEventListener("click", () => { state.boxes = b.dataset.boxes === "1"; coil && coil.setBoxes(state.boxes); load(state.listName, false); }));
