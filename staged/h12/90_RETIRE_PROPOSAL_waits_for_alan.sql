@@ -1,0 +1,37 @@
+-- H12 90 (5 Oct 2026) — PROPOSAL ONLY. Destructive (drops and unschedules) = Alan's decision.
+-- Nothing here has been run. Every body below is saved in current-bodies/ and restores with one paste.
+-- Each line: what it is, why nothing reads it [MEASURED 5 Oct, read-only].
+--
+-- 1. cron 199 "sector-rankings-refresh" (hourly) -> refresh_sector_rankings().
+--    Reads the 11 SPDR funds' own rows in composite_staged, but only funds listed in ticker_cohorts under
+--    'MACRO' — none is, so it has written 0 rows on every run since 10 Aug (66 rows ever, the last dated
+--    10 Aug). It succeeds 24 times a day and does nothing. If it ever matched again it would publish the
+--    funds' 24 Aug readings over the day's ranking. The Station's sector-rotation page still names it as
+--    the writer; the real writer is cron 233.
+-- select cron.unschedule('sector-rankings-refresh');
+-- drop function public.refresh_sector_rankings();
+--
+-- 2. refresh_ribbon_geiger() — no cron row, no caller in any function, Hub, Station or provider code.
+--    Its UPDATE names composite_staged.structure, a column that no longer exists: it cannot run.
+-- drop function public.refresh_ribbon_geiger();
+--
+-- 3. system_audit_run() (a procedure) — no cron row; its table system_audit_log was last written
+--    19 Aug 06:00Z. Its Geiger checks read composite_staged.
+-- drop procedure public.system_audit_run();
+--
+-- 4. onboard_scorecard(text) — no cron row and no caller found in the Hub, Station or provider repos.
+--    Its 'composite' field would return a stock's 24 Aug reading. Kept or dropped, it reaches no screen.
+-- drop function public.onboard_scorecard(text);
+--
+-- 5. publish_provider_geiger_current(jsonb) — the old door that filled composite_staged for stocks. No
+--    caller on the live provider line; it also demands Equalizer receipt f6cf97b5…, and the live Equalizer
+--    is d0da9a46…, so any call would be refused. Dropping it settles that composite_staged's stock rows
+--    will never be refreshed; the 364 frozen rows themselves are a separate decision (the Hub still uses
+--    the table for names, pinned by tests/composite-staged-readers.test.mjs).
+-- drop function public.publish_provider_geiger_current(jsonb);
+--
+-- KEEP (not proposed for retirement):
+--   refresh_geiger (cron 57, every minute) — the approved owner of the 22 non-equity rows; correct as is.
+--   run_overnight_audit (cron 113, every 30 min) — see README: its GEIGER line is a permanent FLAG
+--     ("tickers 386/22"); no screen reads overnight_audit. No SQL staged for it.
+--   scin_snapshot_composite (cron 209) — H11's 0026 already made it honest.
