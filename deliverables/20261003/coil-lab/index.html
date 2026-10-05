@@ -69,6 +69,9 @@ details.sc-pagespecs p{margin:6px 0;max-width:900px}
     <div id="bar">
       <span class="seg"><span class="lbl">DIRECTION</span><button data-mode="laser" class="on">A · LASER</button><button data-mode="guide">B · LIGHT-GUIDE</button><button data-mode="holo">C · HOLOGRAM</button></span>
       <span class="seg"><span class="lbl">LIST</span><button data-list="favorites" class="on">★ FAVORITES</button><button data-list="radar">◎ RADAR</button><button data-list="liked">♥ LIKED</button></span>
+      <span class="seg"><span class="lbl">SIDE BY SIDE</span><button data-cmp="" class="on">ONE</button><button data-cmp="favorites,radar">★ vs ◎</button><button data-cmp="radar,liked">◎ vs ♥</button><button data-cmp="favorites,liked">★ vs ♥</button></span>
+      <span class="seg"><span class="lbl">MARKET CAP</span><button data-cap="sphere" class="on">THE SPHERE</button><button data-cap="width">STEP WIDTH</button><button data-cap="off">OFF</button></span>
+      <span class="seg"><span class="lbl">BOXES</span><button data-boxes="0" class="on">NONE (PASS 3)</button><button data-boxes="1">V2b</button></span>
       <button class="b" id="land">LAND AGAIN</button>
       <button class="b" id="tick">REPLAY A TICK</button>
       <button class="b" id="home">RESET VIEW</button>
@@ -76,7 +79,7 @@ details.sc-pagespecs p{margin:6px 0;max-width:900px}
     </div>
     <div id="gl"></div>
     <div id="hud"></div>
-    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · drag turns · double-click home</div>
+    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · the sphere's volume = the set's market cap · drag turns · scroll zooms the type · double-click home</div>
   </section>
   <section class="pane" id="pane-tape">
     <div id="tape">
@@ -102,19 +105,21 @@ import { mountCoil } from "./coil3d.js";
 import { marks, tapeStrip, spread, ladder } from "./tape.js";
 const $ = (id) => document.getElementById(id), Q = new URLSearchParams(location.search);
 const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
-const state = { geiger: null, geigerFrom: null, lists: null, listName: Q.get("list") || "favorites", scint: [], ready: false, fps: 0, lastMeasure: null, err3d: null };
+const state = { geiger: null, geigerFrom: null, lists: null, listName: Q.get("list") || "favorites", compare: Q.get("compare") || "", capMode: Q.get("cap") || "sphere", boxes: Q.get("boxes") === "1", scint: [], ready: false, fps: 0, lastMeasure: null, err3d: null };
 window.__lab = state;
 const say = (m) => { const e = $("err"); e.style.display = m ? "block" : "none"; e.textContent = m || ""; };
 async function getJSON(url, ms = 12000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
 
 /* data: the live Geiger first; if it does not answer, the snapshot taken 3 Oct — and the stamp says which */
-const [std, g, snap, lists, scint] = await Promise.all([
+const [std, g, snap, lists, scint, caps] = await Promise.all([
   getJSON("data/tree-standard.t10-e133a81.json"),
   getJSON(CHART_API + "/geiger").then((v) => ({ ok: true, v })).catch((e) => ({ ok: false, e: String(e) })),
   getJSON("data/geiger-snapshot-20261003.json"),
   getJSON("data/hub-lists-20261003.json"),
   getJSON("data/scintillas-20260901-20261003.json"),
+  getJSON("data/market-caps-20261005.json"), // pass 3: company_profile.market_cap for every list name, read 5 Oct through the Hub's public read path (tools/pull-market-caps.mjs)
 ]);
+state.caps = caps; const CAPS = Object.fromEntries(Object.entries(caps.rows).map(([t, r]) => [t, Number(r.market_cap) || 0]));
 state.geiger = g.ok ? g.v : snap; state.geigerFrom = g.ok ? "live" : "snapshot 3 Oct 14:36 UTC (the live Geiger did not answer: " + g.e + ")";
 state.lists = lists; state.scint = scint;
 /* the lists: the Hub mirror in this browser first (sc_lists.favorites / .radar, sc_fav = LIKED) — the same way the tree reads them; else the same lists read from the Hub's tables on 3 Oct */
@@ -128,24 +133,35 @@ function rowsFor(name) { const { tickers, from } = listTickers(name); const seen
 const todayScint = new Set(scint.filter((r) => (r.detail && r.detail.session) === "2026-10-02").map((r) => r.subject));
 
 let coil;
-try { coil = mountCoil($("gl"), { standard: std, scintillas: [...todayScint], onFps: (f) => { state.fps = f; } }); state.coil = coil; }
+try { coil = mountCoil($("gl"), { standard: std, scintillas: [...todayScint], caps: CAPS, capMode: state.capMode, boxes: state.boxes, onFps: (f) => { state.fps = f; } }); state.coil = coil; }
 catch (e) { state.err3d = String(e); say("3D did not start: " + e); }
 let current = null;
 function load(name, land = true) {
   state.listName = name; const { rows, from, missing } = rowsFor(name); current = rows; state.rows = rows; state.listFrom = from; state.missing = missing;
-  if (coil) coil.setData(rows.map((r) => ({ ...r })), { land });
-  const read = rows.filter((r) => r.v != null), up = read.filter((r) => r.v >= 0).length;
-  $("stamp").textContent = `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC (${state.geigerFrom}) · ${name.toUpperCase()} ${rows.length} names (${from}) · ${up} up · ${read.length - up} down · ${missing.length} without a reading` + (missing.length ? ` (${missing.join(" ")})` : "");
-  document.querySelectorAll("[data-list]").forEach((b) => b.classList.toggle("on", b.dataset.list === name));
-  hud();
+  const names = state.compare ? state.compare.split(",") : [name]; // pass 3: one list, or two side by side (the first is the one the buttons name)
+  if (state.compare && names[0] !== name) { state.listName = names[0]; const r0 = rowsFor(names[0]); current = r0.rows; state.rows = r0.rows; state.listFrom = r0.from; state.missing = r0.missing; }
+  if (coil) coil.setSets(names.map((n) => ({ name: n, rows: rowsFor(n).rows })), { land });
+  const read = state.rows.filter((r) => r.v != null), up = read.filter((r) => r.v >= 0).length;
+  $("stamp").textContent = `Geiger ${state.geiger.computed_utc.replace("T", " ").slice(0, 16)} UTC (${state.geigerFrom}) · ${names.map((n) => n.toUpperCase()).join(" vs ")} · ${state.rows.length} names (${state.listFrom}) · ${up} up · ${read.length - up} down · ${state.missing.length} without a reading` + (state.missing.length ? ` (${state.missing.join(" ")})` : "") + ` · market caps ${caps.read_utc.slice(0, 10)} (${caps.with_cap} of ${caps.tickers} on file)`;
+  document.querySelectorAll("[data-list]").forEach((b) => b.classList.toggle("on", b.dataset.list === state.listName));
+  document.querySelectorAll("[data-cmp]").forEach((b) => b.classList.toggle("on", b.dataset.cmp === state.compare));
+  document.querySelectorAll("[data-cap]").forEach((b) => b.classList.toggle("on", b.dataset.cap === state.capMode));
+  document.querySelectorAll("[data-boxes]").forEach((b) => b.classList.toggle("on", (b.dataset.boxes === "1") === state.boxes));
+  hud(); clearTimeout(state.hudT); state.hudT = setTimeout(hud, 2900); // again once the steps have landed (the label count is of the landed coil)
 }
-function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); $("hud").innerHTML = `<b>${coil.mode().toUpperCase()}</b> · ${pl ? pl.steps.length + " steps · H " + pl.H.toFixed(0) + " per unit · " + pl.ups + " up / " + pl.dns + " down / " + pl.none + " none" : ""}<br>camera ${JSON.stringify(coil.elevation())} · fills ${Math.round(f.h * 100)} % of the height${state.measuring ? ' · <span class="fps">measuring fps…</span>' : state.lastMeasure ? ' · <span class="fps">' + state.lastMeasure.fps + " fps</span> over " + state.lastMeasure.seconds + " s turning (" + state.lastMeasure.render_ms_per_frame + " ms a frame)" : ""}`; }
+function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); const L = coil.labelStats(); const S = coil.sets();
+  const sph = coil.capMode() === "sphere" ? S.map((x) => `${x.name.toUpperCase()} r ${x.capR} U = $${x.capSumT}T over ${x.nCap} of ${x.n}`).join(" · ") : coil.capMode() === "width" ? "step width = (cap ÷ the set's biggest)^⅓" : "market cap off";
+  $("hud").innerHTML = `<b>${coil.mode().toUpperCase()}</b> · ${pl ? pl.steps.length + " steps · H " + pl.H.toFixed(0) + " per unit · " + pl.ups + " up / " + pl.dns + " down / " + pl.none + " none" : ""} · boxes ${coil.boxes() ? "V2b" : "none"}<br>camera ${JSON.stringify(coil.elevation())} · fills ${Math.round(f.h * 100)} % of the height · labels ${L.px} px (${L.at}; ${L.shown} shown, ${L.hidden} thinned of ${L.total})<br>sphere: $1 T = ${coil.capScale().r1T_units} U of radius · ${sph}${state.measuring ? ' · <span class="fps">measuring fps…</span>' : state.lastMeasure ? ' · <span class="fps">' + state.lastMeasure.fps + " fps</span> over " + state.lastMeasure.seconds + " s turning (" + state.lastMeasure.render_ms_per_frame + " ms a frame)" : ""}`; }
+document.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { state.compare = b.dataset.cmp; load(state.compare ? state.compare.split(",")[0] : state.listName); }));
+document.querySelectorAll("[data-cap]").forEach((b) => b.addEventListener("click", () => { state.capMode = b.dataset.cap; coil && coil.setCapMode(state.capMode); load(state.listName, false); }));
+document.querySelectorAll("[data-boxes]").forEach((b) => b.addEventListener("click", () => { state.boxes = b.dataset.boxes === "1"; coil && coil.setBoxes(state.boxes); load(state.listName, false); }));
 document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b)); coil && coil.setMode(b.dataset.mode); hud(); }));
 document.querySelectorAll("[data-list]").forEach((b) => b.addEventListener("click", () => load(b.dataset.list)));
 $("land").addEventListener("click", () => coil && coil.land());
 $("home").addEventListener("click", () => coil && coil.home());
 $("measure").addEventListener("click", async () => { if (!coil || state.measuring) return; state.measuring = true; hud(); state.lastMeasure = await coil.measure(4000); state.measuring = false; hud(); });
 $("gl").addEventListener("pointerup", () => setTimeout(hud, 50)); $("gl").addEventListener("wheel", () => setTimeout(hud, 120), { passive: true });
+state.setCompare = (c) => { state.compare = c; load(c ? c.split(",")[0] : state.listName); }; state.setCap = (m) => document.querySelector(`[data-cap="${m}"]`).click(); state.setBoxes = (b) => document.querySelector(`[data-boxes="${b ? 1 : 0}"]`).click();
 /* REPLAY A TICK: the readings move as they really did between the 3 Oct snapshot and the live Geiger (or, when they are the same, the real
    change between 2 Oct's scout close and today, scaled to the Hub's −1..1) — a value change, shown as the motion the direction gives it */
 $("tick").addEventListener("click", () => replayTick());
