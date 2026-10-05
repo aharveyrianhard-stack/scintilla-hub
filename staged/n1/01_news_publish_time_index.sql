@@ -1,0 +1,21 @@
+-- N1 · 5 Oct 2026 · STAGED — NOT APPLIED. The coordinator applies; a lane never does.
+-- Project: scintilla-live. ADDITIVE (one new index; no row, column or grant changes) — pre-approved class.
+--
+-- WHAT: the news table (594,917 rows, 478 MB) has no index on publish time. The news-mood job asks for
+--       "the newest 600 by publish time" every 10 minutes, so each run reads the whole table:
+--       3.1 s measured on a quiet database (61,228 pages read).
+--       Past 8 s the database cancels it and the job answers 500 "read news". That happened on the :40 run
+--       whenever the hourly vacuum ran beside it (1 Oct 21:40Z → 5 Oct 14:40Z; the vacuum moved to :43 at
+--       15:43Z on 5 Oct and the errors stopped — the slow read is still there).
+-- FIXES: the 500 for the function AS DEPLOYED TODAY (no deploy needed), and makes the back-fill's reads cheap.
+-- BREAKS: nothing. Cost: about 13 MB of disk and a few seconds of build; writers are not blocked (CONCURRENTLY).
+-- NEIGHBOURS CHECKED: news-feed-1m inserts (one more index to maintain, ~55 rows per 10 min);
+--       vacuum jobs 236/237 do not touch this table; no other index on news is changed.
+-- RUN OUTSIDE A TRANSACTION (CONCURRENTLY refuses to run inside one). One statement.
+create index concurrently if not exists news_published_ts_desc_idx on public.news (published_ts desc);
+
+-- CHECK AFTER (read-only): the plan must say "Index Scan using news_published_ts_desc_idx", in milliseconds.
+--   explain (analyze, buffers) select url,ticker,title,snippet,site,published_ts from public.news
+--     where published_ts is not null order by published_ts desc limit 600;
+--   select indexrelid::regclass, indisvalid from pg_index where indexrelid = 'public.news_published_ts_desc_idx'::regclass;
+-- If indisvalid is false (a build that was interrupted), run the ROLLBACK file and then this one again.

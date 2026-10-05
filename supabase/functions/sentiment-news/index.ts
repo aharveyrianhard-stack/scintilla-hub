@@ -17,13 +17,19 @@
 //     lexicon sha that produced the numbers is stored beside them.
 //
 // TWO MODES.
-//   mode=live      (default, every 10 minutes) — newest headlines first, bounded.
+//   mode=live      (default, every 10 minutes) — the newest ARRIVALS, bounded. Arrival, not
+//                    publish time: most headlines reach the table hours after their stamp,
+//                    and a "newest by publish time" slice never saw them (5 Oct, N1).
 //   mode=backfill  — walks BACKWARDS through the 490,870 in bounded slices, writing its
 //                    resume point to sentiment_backfill_state so the next call continues
-//                    instead of starting over. Nothing is scored twice.
+//                    instead of starting over. Nothing is scored twice. `since=YYYY-MM-DD`
+//                    stops the walk at that day. It is finished only when a read comes
+//                    back empty (or passes `since`), never because a page was short.
 import { pg, pgAll, upsert, cfgPut, claim, lexicon } from "../_shared/db.ts";
 // @ts-ignore  the shared stick is plain ESM, read by Deno, Node and the browser alike
 import { prepare, scoreText, dailyRollup, dayOf, dayBounds, WEIGHTING, METHOD } from "../_shared/sentiment-core.mjs";
+// @ts-ignore  the decisions of a run, plain ESM so node can test them
+import { PAGE_CAP, liveQuery, backfillQuery, boundaryQuery, needsBoundary, mergeRows, backfillNext, sinceToTs, urlInFilters, pickDays, parseDays } from "./plan.mjs";
 
 const SEP = "\t";   // key separator for the "already scored" set
 const clampInt = (v: string | null, d: number, lo: number, hi: number) =>
@@ -34,7 +40,7 @@ async function rebuildDay(day: string, sha: string, dry: boolean) {
   const b = dayBounds(day);
   const rows = await pgAll(
     `news_headline_sentiment?select=ticker,score,question,hits,published_ts` +
-    `&published_ts=gte.${b.from}&published_ts=lt.${b.to}&order=published_ts.desc`, 1000, 12,
+    `&published_ts=gte.${b.from}&published_ts=lt.${b.to}&order=published_ts.desc`, 1000, DAY_PAGES,
   );
   const items = rows.map((r: any) => ({
     ticker: r.ticker, day,
@@ -46,14 +52,18 @@ async function rebuildDay(day: string, sha: string, dry: boolean) {
   if (!dry && daily.length) {
     await upsert("sentiment_ticker_daily", daily.map((d: any) => ({ ...d, updated_at: new Date().toISOString() })), "day,ticker,source");
   }
-  return { day, read: rows.length, ticker_rows: daily.length };
+  return { day, read: rows.length, ticker_rows: daily.length, capped: rows.length >= DAY_PAGES * 1000 };
 }
+/* the busiest stored day holds 9,649 filings; 12 pages would have cut a fully scored day */
+const DAY_PAGES = 40;
 
 Deno.serve(async (req) => {
   const started = Date.now();
   const u = new URL(req.url);
   const mode = (u.searchParams.get("mode") || "live").toLowerCase();
-  const limit = clampInt(u.searchParams.get("limit"), mode === "backfill" ? 1500 : 600, 50, 3000);
+  const limit = clampInt(u.searchParams.get("limit"), mode === "backfill" ? PAGE_CAP : 600, 50, PAGE_CAP);
+  const sinceTs = sinceToTs(u.searchParams.get("since"));
+  const pendingKey = mode === "backfill" ? "sentiment_news_backfill_days_pending" : "sentiment_news_days_pending";
   const maxDays = clampInt(u.searchParams.get("max_days"), 3, 1, 10);
   const dry = u.searchParams.get("dry") === "1";
   const lockKey = mode === "backfill" ? "sentiment_news_backfill_busy" : "sentiment_news_busy";
@@ -72,27 +82,39 @@ Deno.serve(async (req) => {
       if (state?.done) return Response.json({ mode, finished: true, state });
       cursor = state?.cursor_ts ? +state.cursor_ts : null;
     }
-    const where = cursor ? `&published_ts=lt.${cursor}` : "";
-    const news = await pg(
-      `news?select=url,ticker,title,snippet,site,published_ts&published_ts=not.is.null${where}` +
-      `&order=published_ts.desc&limit=${limit}`,
-    );
+    let news = await pg(mode === "backfill" ? backfillQuery(cursor, limit) : liveQuery(limit));
+    if (mode === "backfill" && needsBoundary(news, limit)) {
+      const edge = Math.min(...news.map((r: any) => +r.published_ts));
+      news = mergeRows(news, await pgAll(boundaryQuery(edge), 1000, 10), SEP);
+    }
     if (!news.length) {
       if (mode === "backfill" && !dry) {
-        await upsert("sentiment_backfill_state", [{ source: "news", cursor_ts: cursor, done: true, note: "no rows older than the cursor", updated_at: new Date().toISOString() }], "source");
+        const end = backfillNext({ rows: news, cursor, sinceTs });
+        await upsert("sentiment_backfill_state", [{ source: "news", cursor_ts: end.cursor_ts, done: end.done, note: end.why, updated_at: new Date().toISOString() }], "source");
       }
       const empty = { ran_utc: new Date().toISOString(), mode, read: 0, note: "nothing to score" };
       await cfgPut("sentiment_news_last", JSON.stringify(empty));
       return Response.json(empty);
     }
 
-    /* ALREADY SCORED? One read over the slice's own time range, so a re-run is cheap
-       and no filing is ever scored twice. */
+    /* ALREADY SCORED? No filing is ever scored twice. The back-fill slice is one tight run
+       of publish time, so one read over that range answers it. The live slice is late
+       arrivals whose publish times span months, so it is asked by name instead. */
     const minTs = Math.min(...news.map((r: any) => +r.published_ts));
     const maxTs = Math.max(...news.map((r: any) => +r.published_ts));
-    const have = new Set((await pgAll(
-      `news_headline_sentiment?select=url,ticker&published_ts=gte.${minTs}&published_ts=lte.${maxTs}`, 1000, 12,
-    )).map((r: any) => r.url + SEP + r.ticker));
+    const haveRows: any[] = [];
+    if (mode === "backfill") {
+      haveRows.push(...await pgAll(
+        `news_headline_sentiment?select=url,ticker&published_ts=gte.${minTs}&published_ts=lte.${maxTs}`, 1000, DAY_PAGES,
+      ));
+    } else {
+      const filters = urlInFilters(news.map((r: any) => r.url));
+      for (let i = 0; i < filters.length; i += 6) {
+        const got = await Promise.all(filters.slice(i, i + 6).map((f: string) => pgAll(`news_headline_sentiment?select=url,ticker&${f}`, 1000, 5)));
+        for (const g of got) haveRows.push(...g);
+      }
+    }
+    const have = new Set(haveRows.map((r: any) => r.url + SEP + r.ticker));
 
     const out: any[] = [];
     let scored = 0, unscored = 0, questions = 0, skipped = 0;
@@ -118,24 +140,29 @@ Deno.serve(async (req) => {
     let written = 0;
     if (!dry && out.length) written = await upsert("news_headline_sentiment", out, "url,ticker");
 
-    /* THE TIMELINE ROWS. Bounded: the newest `maxDays` days this slice touched, rebuilt
-       in full from the store. Any day left over is reported, never silently dropped. */
+    /* THE TIMELINE ROWS. Bounded: `maxDays` days per run, each rebuilt in full from the
+       store. A day this run cannot afford is written to a waiting list and rebuilt by the
+       next runs — it used to be reported here and then never rebuilt. */
     const ordered = [...days].sort().reverse();
+    const waiting = parseDays((await pg(`app_config?select=value&key=eq.${pendingKey}`).catch(() => []))?.[0]?.value);
+    const plan = pickDays(ordered, waiting, maxDays);
     const rebuilt = [];
-    for (const d of ordered.slice(0, maxDays)) rebuilt.push(await rebuildDay(d, sha, dry));
-    const deferred = ordered.slice(maxDays);
+    for (const d of plan.now) rebuilt.push(await rebuildDay(d, sha, dry));
+    const deferred = plan.later;
+    if (!dry && (deferred.length || waiting.length)) await cfgPut(pendingKey, JSON.stringify(deferred.slice(0, 300)));
 
-    if (mode === "backfill" && !dry) {
+    const next = mode === "backfill" ? backfillNext({ rows: news, cursor, sinceTs }) : null;
+    if (next && !dry) {
       await upsert("sentiment_backfill_state", [{
         source: "news",
-        cursor_ts: minTs,
+        cursor_ts: next.cursor_ts,
         scanned: (+(state?.scanned || 0)) + news.length,
         scored: (+(state?.scored || 0)) + scored,
         unscored: (+(state?.unscored || 0)) + unscored,
         slices: (+(state?.slices || 0)) + 1,
         oldest_seen: minTs,
-        done: news.length < limit,
-        note: "newest-first, bounded slices; cursor is the oldest published_ts scored so far",
+        done: next.done,
+        note: "newest-first, bounded slices; cursor is the oldest published_ts scored so far · " + next.why,
         updated_at: new Date().toISOString(),
       }], "source");
     }
@@ -146,6 +173,8 @@ Deno.serve(async (req) => {
       read: news.length, already_scored: skipped, wrote_items: written,
       scored, unscored, questions,
       days_touched: ordered, days_rebuilt: rebuilt, days_deferred: deferred,
+      slice: mode === "backfill" ? "older than the cursor, by publish time" : "newest arrivals",
+      backfill: next,
       window: { from_ts: minTs, to_ts: maxTs },
     };
     await cfgPut("sentiment_news_last", JSON.stringify(receipt));
