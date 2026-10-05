@@ -233,6 +233,20 @@ try {
     });
     out.shots = [await shot("comps-set", "#coRailContent .cm5"), await shot("comps-range", "#coRailContent .cm5 .rg")];
   };
+  /* item 3 — the SENTIMENT room (HOW IT IS BUILT) and the ECONOMIC room: table names in the visible text */
+  S.rooms = async () => {
+    const names = "sentiment_ticker_daily|news_headline_sentiment|youtube_videos|social_sentiment|econ_calendar|treasury_rates|econ_history";
+    await page.goto("https://scintillahub.ai/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".sc-board__row[data-t]", { timeout: 60000 }).catch(() => {});
+    const count = (sel) => page.evaluate(([q, n]) => { const r = document.querySelector(q); if (!r) return null; const c = r.cloneNode(true); c.querySelectorAll("details.sc-pagespecs").forEach((d) => d.remove());
+      const m = c.textContent.match(new RegExp("\\b(" + n + ")\\b", "g")) || []; return { inPanel: m.length, which: [...new Set(m)], folds: r.querySelectorAll("details.sc-pagespecs").length }; }, [sel, names]);
+    out.rooms = {};
+    for (const tab of ["OVERVIEW", "ANATOMY"]) { await page.evaluate((t) => { S.sentiTab = t; go("SENTIMENT"); if (typeof sync === "function") sync(); }, tab); await sleep(6000); out.rooms["SENTIMENT_" + tab] = await count("#snMain") ; out.rooms["SENTIMENT_" + tab + "_rail"] = await count("#snRail"); }
+    out.shots = [await shot("rooms-sentiment-built")];
+    await page.evaluate(() => { go("ECONOMIC"); }); await sleep(7000);
+    out.rooms.ECONOMIC_source = await page.evaluate(() => { const e = document.querySelector("#econSource"); return e ? { text: e.textContent.replace(/\s+/g, " ").trim().slice(0, 200), hover: e.getAttribute("title") } : null; });
+    out.shots.push(await shot("rooms-economic", "#econSource"));
+  };
   if (!S[scenario]) throw new Error("no scenario " + scenario);
   await S[scenario]();
 } catch (e) { out.failed = String((e && e.stack) || e).slice(0, 600); }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from afff294) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 5af410a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -13558,7 +13558,7 @@ async function fillSentiment() {
         agg41.questions + "</b> asked a question. Once the scorers run on their schedule this line reads from the store and gains a history."
       : "No reading: nothing is stored, and no headline in the window carried a word the list knows.");
   const oneSrc = read41
-    ? "sentiment_ticker_daily · " + newsRows.length + " stored ticker-days since " + esc(store.from) + " · method " +
+    ? "stored daily readings · " + newsRows.length + " ticker-days since " + esc(store.from) + " · method " +
       esc((newsRows[0] && newsRows[0].method) || "lm-v1") + " · read " + esc(stamp)
     : "not stored yet" + (store.err ? " · " + esc(store.err) : "") + " · scored in this browser from the news table · read " + esc(stamp);
   const oneRead =
@@ -13574,7 +13574,7 @@ async function fillSentiment() {
   const SYS = oneRead +
     '<div class="sn-h2">movement in sentiment, by ticker' + (tape.stored ? "" : " · not stored yet") + "</div>" +
     '<div class="sn-sub">Pick a name, then scrub its days. The bar is that day&rsquo;s mean of the stories that carried a word; the dots are the stories themselves, bullish above and bearish below. ' +
-      (tape.stored ? "These rows come from <b>sentiment_ticker_daily</b>, so the line is a record, not a re-read."
+      (tape.stored ? "These rows come from the <b>stored daily readings</b>, so the line is a record, not a re-read."
                    : "Nothing is stored yet, so this tape is built in <b>this browser</b> from the last 24 hours of headlines &mdash; one or two columns, no history. The store fills it once the scorers run.") + "</div>" +
     pick + snTapeHTML(tape, tk41, day41) +
     (day41 ? '<div class="sn-h2">' + esc(tk41) + " &middot; the stories on " + esc(day41) + (storiesStored ? "" : " &middot; scored here, not stored") + "</div>" +
@@ -13721,7 +13721,7 @@ async function fillSentiment() {
     '<div class="sn-voice__txt" style="color:var(--dim)">news outlets &middot; last 24 hours</div>' + snVoiceChipsHTML(grp("news"), "headlines") +
     '<div class="sn-voice__txt" style="color:var(--dim)">x handles &middot; last 24 hours</div>' + snVoiceChipsHTML(grp("x"), "posts") +
     '<div class="sn-voice__txt" style="color:var(--dim)">youtube channels &middot; last 7 days</div>' + snVoiceChipsHTML(grp("youtube"), "clips") +
-    '<div class="sn-voice__txt" style="color:var(--dim)">' + (newsRows.length ? "outlet leans are stored per headline (news_headline_sentiment)." : "nothing is stored yet, so these leans are scored in this browser right now.") + "</div></div>";
+    '<div class="sn-voice__txt" style="color:var(--dim)">' + (newsRows.length ? "outlet leans are stored per headline." : "nothing is stored yet, so these leans are scored in this browser right now.") + "</div></div>";
   const saidCard = '<div class="card"><h4>KEYWORDS &middot; TAP ONE TO SEE WHERE IT WAS SAID</h4>' +
     '<div class="sn-voice__txt">' + esc(tk41) + (day41 ? " &middot; " + esc(day41) : "") +
       ". The sentence travels with the word from the moment it is scored, so this needs no second read of anything.</div>" +
@@ -13734,7 +13734,9 @@ async function fillSentiment() {
   el("snRail").innerHTML = voicesCard + saidCard + brd41 + bCard +
     '<div class="card"><h4>THE VOICES · SEEN, NOT LISTED</h4>' + ytCard + xCard + otherCard + "</div>" + kwCard + xFresh +
     '<div class="card"><h4>HOW EACH VOICE IS MEASURED</h4>' +
-      '<div class="sn-voice__txt"><b>YouTube.</b> A scheduled job collects clips from the channels Alan subscribes to and from ticker searches, and files them in <b>youtube_videos</b>. For the subscribed channels it fetches the English transcript and counts finance keywords around each ticker mention — a word list with negation (<b>yt-lexicon-v1</b>), not an AI read — and writes one pooled row per ticker into <b>social_sentiment</b> over a 7-day window. The room’s own blend above reads the ticker-tagged clips’ titles instead, because it needs the channel behind each reading and the per-video table is empty.</div>' +
+      '<div class="sn-voice__txt"><b>YouTube.</b> A scheduled job collects clips from the channels Alan subscribes to and from ticker searches, and stores them. For the subscribed channels it fetches the English transcript and counts finance keywords around each ticker mention — a word list with negation, not an AI read — and keeps one pooled row per ticker over a 7-day window. The room’s own blend above reads the ticker-tagged clips’ titles instead, because it needs the channel behind each reading and the per-video table is empty.</div>' +
+      /* K1 (5 Oct) — the table and list names that sat in these captions (H10's leftover), in the PAGE SPECS fold */
+      '<details class="sc-pagespecs"><summary>PAGE SPECS</summary><p><b>Where these readings are kept.</b> Daily readings per ticker and voice: sentiment_ticker_daily. Per-headline outlet leans: news_headline_sentiment. YouTube clips: youtube_videos; the pooled 7-day YouTube row per ticker: social_sentiment (word list yt-lexicon-v1). News word list: lm-v1.</p></details>' +
       '<div class="sn-voice__txt"><b>X.</b> A browser-side collector saves the posts on Alan’s Trading list and publishes them at <b>/api/xfeed</b>. Each post’s text is run through the same keyword list; a post is bullish, bearish or neither; the blend above averages handles.</div>' +
       '<div class="sn-voice__txt"><b>News.</b> Every headline in the last 24 hours is scored on this page against the finance dictionary shipped at ' + esc(NEWS_LEX_URL) + ' — the words that fired are kept, so any number can be opened down to them. The old per-ticker roll-up is still in the database and is shown only for comparison.</div>' +
       '<div class="sn-voice__txt"><b>What makes all three wrong.</b> A keyword list cannot hear irony or a hedge. A question is caught only when the question mark is there ("is NVDA about to crash?" is scored and then left out of the total). Titles are written to be clicked. Nobody checks whether a channel was right last month, so a reliable voice and a noisy one count the same. Coverage is whatever the collectors happened to fetch, not a sample of anything.</div></div>' +
@@ -17962,7 +17964,9 @@ async function fillEconRail() {
       (staleN ? '<span class="econ-age">' + staleN + " behind their normal release lag</span>" : "none behind their normal release lag") +
       (unknownN ? " · " + unknownN + " with no freshness claim" : "") + "</div>" + prints;
     const src = el("econSource");
-    if (src) src.innerHTML = "releases: econ_calendar (FMP economic calendar, via fmp-economic; times in ET) · treasury_rates (job treasury-curve-daily, 08:35Z Mon–Sat) · econ_history written by fmp-economic (05:47/17:47Z, FMP) and macro-feeds (22:35Z, FMP + FRED) · newest observation <b>" +
+    /* K1 (5 Oct) — H10's leftover: the panel names the sources in plain words; the table and job names ride on the hover */
+    if (src && src.setAttribute) src.setAttribute("title", "tables: econ_calendar (job fmp-economic) · treasury_rates (job treasury-curve-daily) · econ_history (jobs fmp-economic and macro-feeds)");
+    if (src) src.innerHTML = "releases: FMP economic calendar (times in ET) · Treasury rates, daily 08:35Z Mon–Sat · series history from FMP (05:47/17:47Z) and FRED (22:35Z) · newest observation <b>" +
       esc(newestPrint || "—") + "</b> · " + (staleN ? staleN + " series behind their normal release lag (see rows)" : "no series behind its normal release lag") +
       " · " + econFredNote(lastWrite) +
       (topUpFailed.length ? ' · <span class="econ-age">could not read: ' + esc(topUpFailed.join(", ")) + "</span>" : "") +
@@ -21797,7 +21801,7 @@ function coSocialHTML(data) {
 function socSourceNoteHTML(v, d) {
   const yt = v === "ALL"
     ? "<b>YOUTUBE · YOUR CHANNELS + SEARCH</b> your subscribed channels <u>plus</u> channels the collector finds by searching YouTube for the ticker (e.g. Bera Finance) — marked YT · SEARCH."
-    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to (youtube_videos, source = subscription). Search-found channels are left out. A video from a channel you follow counts as yours however the collector found it.";
+    : "<b>YOUTUBE · YOUR CHANNELS</b> only channels your YouTube accounts subscribe to. Search-found channels are left out. A video from a channel you follow counts as yours however the collector found it.";
   const x = "<b>X · YOUR LIST</b> the X list the collector reads" + (d && d.xHandles ? " (" + d.xHandles + " accounts)" : "") + ".";
   return '<span>' + yt + "</span><span>" + x + "</span>";
 }

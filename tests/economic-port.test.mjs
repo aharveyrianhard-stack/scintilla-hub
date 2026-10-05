@@ -306,7 +306,7 @@ test("the rail is production's: stored prints with freshness, writer footer, and
   const rail = fnSrc(page, "fillEconRail");
   assert.match(rail, /econ_history\?select=series,date,value,updated_ts&order=date\.desc&limit=1000/);
   assert.match(rail, /const lastWrite = econSeriesLastWrite\(eh\);/);
-  assert.match(rail, /releases: econ_calendar \(FMP economic calendar, via fmp-economic; times in ET\)/);
+  assert.match(rail, /releases: FMP economic calendar \(times in ET\)/);
   assert.match(fnSrc(page, "fillEcon"), /Promise\.all\(\[ecLoadWindow\(\), fillEconRail\(\)\]\)/);
   const clicks = page.slice(page.indexOf('case "ecctry"'), page.indexOf('/* R34 — removed orphaned case "systems"'));
   assert.doesNotMatch(clicks, /fillEcon\(\)/, "an arrow press never re-reads the rail");
@@ -336,7 +336,7 @@ test("a room mount paints both halves from EXAMPLE rows: releases left, producti
   assert.match(store.econLadder.innerHTML, /^<h4>UST ladder · 2026-09-17<\/h4>[\s\S]*UST 10Y/);
   assert.match(store.econList.innerHTML, /macro prints · <b>latest stored<\/b> · 2 series/);
   assert.match(store.econList.innerHTML, /observed 2026-08-01 · monthly/);
-  assert.match(store.econSource.innerHTML, /^releases: econ_calendar \(FMP economic calendar, via fmp-economic; times in ET\) · treasury_rates \(job treasury-curve-daily/);
+  assert.match(store.econSource.innerHTML, /^releases: FMP economic calendar \(times in ET\) · Treasury rates, daily 08:35Z/);
   assert.match(store.econSource.innerHTML, /never stored: /, "series the store has never held are named, as production does");
   assert.match(store.econCurve.innerHTML, /2s10s \+0\.27%/);
 });

@@ -80,5 +80,6 @@ test("the source footer tells the truth about the four FRED-only series from the
   assert.match(note({ M2SL: ran, WALCL: ran, WTREGEN: ran, RRPONTSYD: ran }, at("2026-09-21T22:36:00Z")), /all four last written 2026-09-18$/, "a weekend plus the evening run in flight is not an alarm");
   assert.match(note({ M2SL: ran, WALCL: ran }, now), /last write not readable for all four$/); assert.match(note(null, now), /last write not readable/);
   assert.doesNotMatch(page, /have had no writer since"|\(22:35Z\), both FMP/, "the obsolete sentences are gone");
-  assert.match(page, /macro-feeds \(22:35Z, FMP \+ FRED\)/); assert.match(page, /" · " \+ econFredNote\(lastWrite\) \+/);
+  assert.match(page, /series history from FMP \(05:47\/17:47Z\) and FRED \(22:35Z\)/);   // K1 (5 Oct): the panel says the sources in plain words; the job name macro-feeds rides on the hover
+  assert.match(page, /econ_history \(jobs fmp-economic and macro-feeds\)/); assert.match(page, /" · " \+ econFredNote\(lastWrite\) \+/);
 });

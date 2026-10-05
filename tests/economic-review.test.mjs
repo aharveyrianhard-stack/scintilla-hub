@@ -376,7 +376,7 @@ test("(g) the rail paints what a13a486's fillEcon paints, except the ladder's ca
   const prodList = A.store.econList.innerHTML.split("color:#FF5500;text-shadow:0 0 7px rgba(255,85,0,.85)").join("color:var(--sv4);text-shadow:0 0 7px rgba(255,138,0,.85)");   // C4: on-palette high dot (0ca1d0d), intended
   const card = prodList.match(/^<div class="card" style="margin:4px 0 10px">[\s\S]*?<\/div><\/div>(?=<div class="sc-plabel")/)[0];
   assert.equal(B.store.econList.innerHTML, prodList.slice(card.length), "the prints list is production's, byte for byte");
-  assert.equal(B.store.econSource.innerHTML, "releases: econ_calendar (FMP economic calendar, via fmp-economic; times in ET) · " + A.store.econSource.innerHTML);
+  assert.equal(B.store.econSource.innerHTML, "releases: FMP economic calendar (times in ET) · " + A.store.econSource.innerHTML);
   assert.equal(B.store.econCurve.innerHTML, A.store.econCurve.innerHTML);
   const rungs = (h) => [...h.matchAll(/<b>(UST [0-9]+[MY])<\/b>[\s\S]*?<span class="econ-val">([^<]*)</g)].map((m) => m[1] + "=" + m[2]).join(",");
   assert.equal(rungs(B.store.econLadder.innerHTML), rungs(card), "the same UST rungs, now in #econLadder");

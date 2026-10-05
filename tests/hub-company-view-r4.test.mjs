@@ -71,7 +71,7 @@ test("SOCIAL YouTube (review fix): the subscribed-channel check asks only for th
 test("SOCIAL: the tab defaults to YOUR CHANNELS, keeps + YOUTUBE SEARCH as a labelled second view, and prints each source", () => {
   assert.match(fn("socView"), /=== "ALL" \? "ALL" : "YOURS"/, "anything but an explicit ALL is YOURS");
   const note = fn("socSourceNoteHTML");
-  assert.match(note, /YOUTUBE · YOUR CHANNELS<\/b> only channels your YouTube accounts subscribe to \(youtube_videos, source = subscription\)\. Search-found channels are left out\./);
+  assert.match(note, /YOUTUBE · YOUR CHANNELS<\/b> only channels your YouTube accounts subscribe to\. Search-found channels are left out\./);   // K1 (5 Oct): the table name left the panel
   assert.match(note, /e\.g\. Bera Finance/);
   assert.match(note, /X · YOUR LIST/);
   const body = fn("socBodyHTML");

@@ -207,3 +207,12 @@ test("fmp-economic candidate: v12 plus the unit_rule note — no number rescaled
   assert.match(cand, /if\(error&&\/unit_rule\/\.test\(String\(error\.message\|\|''\)\)\)/, "a missing column falls back to exactly what v12 wrote");
   assert.match(read(dir + "STAGED.md"), /--no-verify-jwt/);
 });
+
+test("the SENTIMENT, ECONOMIC and company SOCIAL captions say their source in plain words; the table names are in a fold or on the hover", () => {
+  for (const gone of ['"sentiment_ticker_daily · "', "These rows come from <b>sentiment_ticker_daily</b>", "(news_headline_sentiment).\"", "files them in <b>youtube_videos</b>", "(youtube_videos, source = subscription)", '"releases: econ_calendar (FMP economic calendar, via fmp-economic'])
+    assert.ok(!html.includes(gone), "no longer printed in a panel: " + gone);
+  assert.match(html, /"stored daily readings · " \+ newsRows\.length \+ " ticker-days since "/);
+  assert.match(html, /<details class="sc-pagespecs"><summary>PAGE SPECS<\/summary><p><b>Where these readings are kept\.<\/b> Daily readings per ticker and voice: sentiment_ticker_daily\./);
+  assert.match(html, /src\.setAttribute\("title", "tables: econ_calendar \(job fmp-economic\) · treasury_rates/);
+  assert.match(html, /"releases: FMP economic calendar \(times in ET\) · Treasury rates, daily 08:35Z Mon–Sat · series history from FMP/);
+});
