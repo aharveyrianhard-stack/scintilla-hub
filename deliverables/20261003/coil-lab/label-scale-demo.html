@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · LABEL SCALE · the tree's label under the coil's zoom rule</title>
+<style>
+:root{ --bg:#0A0A0F; --panel:#0D0D14; --surface:#0F0F1A; --line:#1A1A2A; --line2:#252538; --hair:rgba(0,212,255,.34); --ink:#F2F2F8; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#868AAA; --mute:#3A3A52; --crk:#00D4FF; --bull:#00FFA3; --bear:#FF2D55; --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; }
+*{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--ink2);font:11px/1.5 var(--mono)}
+header{display:flex;align-items:center;gap:14px;padding:8px 12px;border-bottom:.8px solid var(--hair);background:var(--panel);flex-wrap:wrap}
+header h1{font-size:13px;letter-spacing:.18em;margin:0;font-weight:600;color:var(--ink)} header h1 b{color:var(--crk)}
+main{padding:12px}
+.row{border:.8px solid var(--hair);background:var(--surface);margin:0 0 12px}
+.row .hd{display:flex;gap:12px;align-items:center;padding:6px 10px;border-bottom:.5px solid var(--line);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--crk)} .row .hd span{color:var(--ink3);letter-spacing:.04em;text-transform:none}
+canvas{display:block;background:var(--bg)}
+input[type=range]{width:360px;accent-color:var(--crk)}
+details.sc-pagespecs{margin:18px 0 0;border-top:.5px solid var(--line);padding:8px 0;color:var(--dim);font-size:10px;line-height:1.6} details.sc-pagespecs summary{cursor:pointer;letter-spacing:.18em;color:var(--ink3);font-weight:600} details.sc-pagespecs p{margin:6px 0;max-width:900px}
+</style>
+</head>
+<body>
+<header><span data-scnav-slot></span><h1><b>SCINTILLA</b> · LABEL SCALE · the tree's label (T12 part 02) under the coil's zoom rule</h1><span style="color:var(--dim)">drag the slider = the camera distance as a share of home · the type follows it between 11 and 24 px · labels that would overlap thin out, strongest reading first</span></header>
+<main>
+  <div class="row"><div class="hd">LIVE <span id="live-n"></span> <input type="range" id="zoom" min="0.4" max="3" step="0.05" value="1"></div><canvas id="live"></canvas></div>
+  <div class="row"><div class="hd">ZOOMED IN · 0.5 × home <span id="in-n"></span></div><canvas id="in"></canvas></div>
+  <div class="row"><div class="hd">HOME · 1 × <span id="home-n"></span></div><canvas id="home"></canvas></div>
+  <div class="row"><div class="hd">ZOOMED OUT · 2 × home <span id="out-n"></span></div><canvas id="out"></canvas></div>
+  <details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+    <p>What this shows: twenty tree names (the FAVORITES list's first twenty, with their Hub Geiger readings from the 3 Oct snapshot) drawn the way T12's parts gallery draws part 02 — the ticker on its box, 700 weight, white, letter-spaced — but sized by label-scale.mjs instead of a fixed 15 px. The boxes sit where a zoomed tree would put them: 60 px apart at home, twice as far zoomed in, half as far zoomed out. The rule: px = 13 × (home distance ÷ distance), floor 11 px, ceiling 24 px, on a 1080-tall screen (scaled with the screen's height). When two labels' boxes would touch (4 px of air), the weaker reading gives way; zoomed in, the boxes spread and every label comes back.</p>
+    <p>Where the numbers come from: label-scale.mjs (the same file the coil lab imports), data/geiger-snapshot-20261003.json, data/hub-lists-20261003.json. Nothing here touches the live tree; it is the demonstration the brief asked for ("you could use that for the tree too").</p>
+  </details>
+</main>
+<script type="module">
+import { labelPx, thinLabels, LABEL_RULE } from "./label-scale.mjs";
+const [g, L] = await Promise.all(["data/geiger-snapshot-20261003.json", "data/hub-lists-20261003.json"].map((u) => fetch(u).then((r) => r.json())));
+const names = L.favorites.slice(0, 20).map((t) => ({ t, v: g.symbols[t] && Number.isFinite(g.symbols[t].composite) ? g.symbols[t].composite : 0 }));
+const MONO = '"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace', W = Math.min(1880, innerWidth - 26), H = 120, DPR = Math.min(2, devicePixelRatio || 1);
+const out = {};
+function draw(id, ratio) {
+  const c = document.getElementById(id); c.width = W * DPR; c.height = H * DPR; c.style.width = W + "px"; c.style.height = H + "px"; const x = c.getContext("2d"); x.scale(DPR, DPR);
+  const R = labelPx(ratio, 1, innerHeight), px = R.px, gap = 60 / ratio; // the boxes' spacing follows the zoom: closer = further apart
+  x.font = `700 ${px}px ${MONO}`; x.textBaseline = "middle"; x.textAlign = "center";
+  const items = names.map((n, i) => { const w = x.measureText(n.t).width + 10, bx = 40 + i * gap + (i % 2) * 8, by = H / 2 + (i % 3 - 1) * (px * 0.5); return { id: n.t, x: bx, y: by, w, h: px * 1.3, priority: Math.abs(n.v), n, bx, by }; });
+  const th = thinLabels(items, 4);
+  for (const it of items) { x.strokeStyle = th.shown.has(it.id) ? "rgba(0,212,255,.45)" : "rgba(58,58,82,.5)"; x.lineWidth = 1; x.strokeRect(it.bx - 8, it.by - px * 0.65, 16, px * 1.3); }
+  for (const it of items) { if (!th.shown.has(it.id)) continue; x.fillStyle = "rgba(10,10,15,.8)"; x.fillRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h); x.fillStyle = "#F2F2F8"; x.letterSpacing = ".06em"; x.fillText(it.n.t, it.x, it.y); x.font = `500 ${Math.max(9, px * 0.75)}px ${MONO}`; x.fillStyle = it.n.v >= 0 ? "#00FFA3" : "#FF2D55"; x.fillText((it.n.v >= 0 ? "+" : "") + it.n.v.toFixed(2), it.x, it.y + px * 1.05); x.font = `700 ${px}px ${MONO}`; }
+  const txt = `${px.toFixed(1)} px (${R.at}) · ${th.shown.size} of ${items.length} shown · ${th.hidden.size} thinned`; document.getElementById(id + "-n").textContent = txt;
+  out[id] = { ratio, px: +px.toFixed(1), at: R.at, shown: th.shown.size, hidden: th.hidden.size, view_h: innerHeight };
+}
+draw("in", 0.5); draw("home", 1); draw("out", 2); draw("live", 1);
+document.getElementById("zoom").addEventListener("input", (e) => draw("live", +e.target.value));
+window.__demo = { rule: LABEL_RULE, ...out };
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
