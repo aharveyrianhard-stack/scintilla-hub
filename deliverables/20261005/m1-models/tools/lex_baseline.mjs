@@ -1,0 +1,10 @@
+import fs from "node:fs";
+const [core, lexPath, inp, out] = process.argv.slice(2);
+const { prepare, scoreText } = await import(core);
+const L = prepare(JSON.parse(fs.readFileSync(lexPath, "utf8")));
+const rows = JSON.parse(fs.readFileSync(inp, "utf8"));
+const t0 = performance.now();
+const res = rows.map((r) => { const s = scoreText(r.text, L); return { i: r.i, score: s.score }; });
+const ms = (performance.now() - t0) / rows.length;
+fs.writeFileSync(out, JSON.stringify({ ms_per_item: ms, res }));
+console.log("lexicon ms/item", ms.toFixed(3), "null", res.filter((r) => r.score == null).length, "of", res.length);
