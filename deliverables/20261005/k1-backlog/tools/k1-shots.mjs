@@ -124,6 +124,34 @@ try {
       out.shots = [await shot("social")];
     },
   };
+  /* item 2 — company view → FINANCIALS → CAPITAL: the cash-after-spending projection; and the previous-close hover */
+  S.capital = async () => {
+    const t = ticker || "CRWV";
+    await openCoTab(t, "FINANCIALS");
+    await page.waitForSelector("#ofCap_" + t + " .of-cash", { timeout: 30000 }).catch(() => { out.noCap = true; });
+    await page.waitForFunction((x) => typeof OF !== "undefined" && OF.co[x], t, { timeout: 30000 }).catch(() => { out.noRead = true; });
+    await sleep(1500);
+    out.capital = await page.evaluate((x) => {
+      const c = document.querySelector("#ofCap_" + x), txt = (e) => e ? e.textContent.replace(/\s+/g, " ").trim() : null, p = c && c.querySelector(".of-proj");
+      const r = p && p.getBoundingClientRect(), box = c && c.querySelector(".of-cash").getBoundingClientRect();
+      return { cover: txt(c && c.querySelector(".of-cover")), proj: p ? { state: p.dataset.ofProj, read: txt(p.querySelector(".of-proj__r")), axis: txt(p.querySelector(".of-proj__ax")), hover: p.getAttribute("title"),
+        w: Math.round(r.width), h: Math.round(r.height), insideColumn: r.right <= box.right + 1 } : null, specs: !!(c && c.querySelector("details.sc-pagespecs")) };
+    }, t);
+    out.shots = [await shot("capital", "#ofCap_" + t + " .of-cover")];
+    /* the hover: nothing is provisional outside the minutes after the bell, so the page is handed the two cases the
+       provider can send and asked what the hover would say (the page's own functions; no request is made) */
+    out.prevHover = await page.evaluate((x) => {
+      if (typeof scPrevNoteSet !== "function") return null;
+      const res = {};
+      scPrevNoteSet(x, { previous_close: 100.02, previous_close_provisional: false, previous_close_revised: { own_close: 100, provider_close: 100.02 } }); scHeldPrevPaint(x);
+      res.revised = { header: document.querySelector("#coPrev") && document.querySelector("#coPrev").getAttribute("title"), state: document.querySelector("#coPrev") && document.querySelector("#coPrev").dataset.scPrevCloseState };
+      scPrevNoteSet(x, { previous_close: 100, previous_close_provisional: true, previous_close_revised: null }); scHeldPrevPaint(x);
+      res.provisional = { header: document.querySelector("#coPrev").getAttribute("title"), boardCell: document.querySelector("#lc_" + x) ? document.querySelector("#lc_" + x).getAttribute("title") : "(row not on this board)" };
+      scPrevNoteSet(x, { previous_close: 100, previous_close_provisional: false, previous_close_revised: null }); scHeldPrevPaint(x);
+      res.confirmed = { header: document.querySelector("#coPrev").getAttribute("title") };
+      return res;
+    }, t);
+  };
   if (!S[scenario]) throw new Error("no scenario " + scenario);
   await S[scenario]();
 } catch (e) { out.failed = String((e && e.stack) || e).slice(0, 600); }

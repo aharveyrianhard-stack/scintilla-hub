@@ -194,5 +194,5 @@ test("Hub · its home is FINANCIALS only: the ALERTS room is still parked, the b
   assert.match(page, /return '<div class="sc-evtab">' \+ fixed \+ relScroll \+ pastScroll \+ "<\/div>";/);
   for (const gone of ["ofRoomHTML", "ofMarkHTML", "ofBoardPass", "ofCoFill", "of-mark"]) assert.ok(!page.includes(gone), gone);
   assert.equal((page.match(/offering_filings\?select=/g) || []).length, 1);              // one read: this company's filings
-  assert.match(page, /cashflow_history\?ticker=eq\." \+ e \+ "&period=in\.\(Q1,Q2,Q3,Q4\)&select=period,fiscal_year,fiscal_date,capex&order=fiscal_date\.desc&limit=4"/);
+  assert.match(page, /cashflow_history\?ticker=eq\." \+ e \+ "&period=in\.\(Q1,Q2,Q3,Q4\)&select=period,fiscal_year,fiscal_date,capex,operating_cf&order=fiscal_date\.desc&limit=4"/);
 });

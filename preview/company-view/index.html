@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from d603a1f) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 410fb3b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2413,6 +2413,12 @@ body.tvmodal-open{ overflow:hidden; }
 .of-capex td{ padding:2px 0; color:var(--ink2); } .of-capex td:last-child{ text-align:right; color:var(--ink); }
 .of-capex .of-sum td{ border-top:.5px solid var(--line2); color:var(--dim); } .of-capex .of-sum td:last-child{ color:var(--ink); }
 .of-legend{ margin-top:6px; }
+/* K1 (5 Oct) — the capex-vs-cash projection line under the coverage sentence */
+.of-proj{ margin:3px 0 4px; } .of-proj svg{ display:block; width:100%; height:56px; }
+.of-proj__ax{ display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--ink2); font-variant-numeric:tabular-nums; margin-top:2px; }
+.of-proj__r{ font-size:11px; line-height:1.4; margin-top:3px; } .of-proj.is-up .of-proj__r{ color:var(--bull); } .of-proj.is-dn .of-proj__r{ color:var(--bear); }
+.of-cap details.sc-pagespecs{ margin-top:10px; }
+.of-cover + .of-k{ margin-top:12px; }
 @media (max-width:700px){ .of-grid{ grid-template-columns:1fr; } .of-list{ max-height:300px; } }
 /* C1 — RESALE / PLAN are grey (no new money): the class chip greys with them, so only real new shares keep the colour */
 .of-chip.of-muted{ color:#8A8A92; } .of-chip.of-tag{ color:#A8A8AE; margin-left:-3px; }
@@ -5481,11 +5487,36 @@ function scHeldPrevTitle (t) {
   const by = (typeof h.spread_abs === "number" && isFinite(h.spread_abs)) ? "$" + h.spread_abs.toFixed(2) : "more than a cent";
   return "previous close held: sources disagree by " + by + (parts.length ? " (" + parts.join(" · ") + ")" : "");
 }
+/* K1 (5 Oct 2026) — P10's two facts about a previous close, said on hover (shown on the branch; Alan decides):
+   PROVISIONAL — it is our own close at the bell, until the provider's official daily bar confirms it;
+   REVISED     — the provider's official close moved it beyond the cent rule: both numbers are printed.
+   ticker → { provisional, own, provider, prev } from the quote contract (previous_close_provisional /
+   previous_close_revised). The % is computed either way; nothing on screen changes but the hover and a data attribute. */
+const SC_PREV_NOTE = {};
+function scPrevNoteSet (t, q) {
+  const rv = q && q.previous_close_revised, own = rv ? Number(rv.own_close) : NaN, pro = rv ? Number(rv.provider_close) : NaN;
+  const revised = isFinite(own) && isFinite(pro) && own !== pro;
+  if (q && (q.previous_close_provisional === true || revised)) SC_PREV_NOTE[t] = { provisional: q.previous_close_provisional === true, own: revised ? own : null, provider: revised ? pro : null, prev: Number(q.previous_close) };
+  else delete SC_PREV_NOTE[t];
+}
+function scPrevNoteTitle (t) {
+  const n = SC_PREV_NOTE[t];
+  if (!n) return "";
+  const f = (v) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  if (n.own != null) return "previous close revised by the provider: " + f(n.own) + " → " + f(n.provider) + " (our close at the bell → the official close)";
+  return "previous close" + (isFinite(n.prev) ? " " + f(n.prev) : "") + " is provisional: our own close at the bell, until the provider's official close confirms it";
+}
+function scPrevNoteState (t) { const n = SC_PREV_NOTE[t]; return !n ? "" : n.own != null ? "REVISED" : "PROVISIONAL"; }
 function scHeldPrevPaint (t) {
   const cell = el("lc_" + t);
+  const note = scPrevNoteTitle(t), st = SC_HELD_PREV[t] ? "HELD" : scPrevNoteState(t);
+  if (typeof LEFT_T !== "undefined" && LEFT_T === t) {                 // the company header's "Prev $…" says the same thing
+    const cp = el("coPrev");
+    if (cp) { scSetTitle(cp, note); if (st && st !== "HELD") scSetAttr(cp, "data-sc-prev-close-state", st); else cp.removeAttribute("data-sc-prev-close-state"); }
+  }
   if (!cell) return;
-  scSetTitle(cell, scHeldPrevTitle(t));
-  if (SC_HELD_PREV[t]) scSetAttr(cell, "data-sc-prev-close-state", "HELD");
+  scSetTitle(cell, scHeldPrevTitle(t) || note);
+  if (st) scSetAttr(cell, "data-sc-prev-close-state", st);
   else cell.removeAttribute("data-sc-prev-close-state");
 }
 let RIB      = {};   // ticker → { TREND:{…}, MOMENTUM:{…} } (ribbon_signals tf=D). VOLUME deleted by Alan 2026-08-17.
@@ -12214,6 +12245,50 @@ function ofCoverText(balq, cfq) {
   const n = cash / pace;
   return "cash " + ofMoney(cash) + " covers about " + (n >= 10 ? Math.round(n) : n.toFixed(1)) + " quarter" + (n >= 0.95 && n < 1.05 ? "" : "s") + " of capital spending " + pace4;
 }
+/* K1 (5 Oct 2026) — THE CAPEX-VS-CASH PROJECTION (C1's follow-up: "the coverage counts capital spending only; it doesn't
+   subtract the cash the business makes, and it doesn't project"). PURE. Pace = the mean of the stored quarters inside the
+   year to the newest one (needs both lines of the cash-flow statement in a quarter): what the business brought in from
+   operations minus what it spent on property and equipment. The cash on the newest balance sheet is carried forward
+   OF_PROJ_Q quarters at that pace. Falling to zero inside the window → the quarter it crosses and the money it would
+   have to raise by the end of the window; otherwise it pays for its own spending. A pace, not a forecast. */
+const OF_PROJ_Q = 8;
+function ofProjModel(balq, cfq) {
+  const cash = balq && balq.cash_and_equiv != null && isFinite(+balq.cash_and_equiv) ? +balq.cash_and_equiv : null;
+  const qs0 = (cfq || []).filter((q) => q && q.fiscal_date && q.capex != null && isFinite(+q.capex) && q.operating_cf != null && isFinite(+q.operating_cf));
+  const newest = qs0.length ? qs0[0].fiscal_date : null;
+  const qs = newest ? qs0.filter((q) => ofDayDiff(q.fiscal_date, newest) < 330).slice(0, 4) : [];
+  if (cash == null || !qs.length) return null;
+  const ops = qs.reduce((a, q) => a + (+q.operating_cf), 0) / qs.length, spend = qs.reduce((a, q) => a + Math.abs(+q.capex), 0) / qs.length;
+  const net = ops - spend, pts = [];
+  for (let k = 0; k <= OF_PROJ_Q; k++) pts.push(cash + k * net);
+  const zeroQ = net < 0 ? cash / -net : null;                                    // quarters until the cash is gone, at this pace
+  const from = balq.fiscal_date || newest;
+  let zeroDay = null;
+  if (zeroQ != null && zeroQ <= OF_PROJ_Q && from) { const d = new Date(String(from).slice(0, 10) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + Math.round(zeroQ * 91.3)); zeroDay = d.toISOString().slice(0, 10); }
+  return { cash, ops, spend, net, n: qs.length, pts, zeroQ, zeroDay, from, need: Math.max(0, -pts[OF_PROJ_Q]) };
+}
+function ofProjHTML(m) {
+  if (!m) return "";
+  const W = 200, H = 56, lo = Math.min(0, ...m.pts), hi = Math.max(0, ...m.pts), span = (hi - lo) || 1;
+  const x = (k) => (k / OF_PROJ_Q) * (W - 2) + 1, y = (v) => H - 3 - ((v - lo) / span) * (H - 6);
+  const up = m.net >= 0, col = up ? "var(--bull)" : "var(--bear)";
+  const line = m.pts.map((v, k) => (k ? "L" : "M") + x(k).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+  const cross = m.zeroQ != null && m.zeroQ <= OF_PROJ_Q ? '<circle cx="' + x(m.zeroQ).toFixed(1) + '" cy="' + y(0).toFixed(1) + '" r="2.6" fill="' + col + '"/>' : "";
+  const mon = (iso) => { try { return new Date(iso + "T12:00:00Z").toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); } catch (_) { return String(iso).slice(0, 7); } };
+  const sign = (v) => (v < 0 ? "−" : "+") + ofMoney(v);
+  const read = up ? "pays for its own spending · " + sign(m.net) + " a quarter"
+    : m.zeroDay ? "cash reaches zero about " + mon(m.zeroDay) + " · " + ofMoney(m.need) + " to raise by the end of 2 years"
+    : sign(m.net) + " a quarter · cash lasts past 2 years (" + (m.zeroQ >= 10 ? Math.round(m.zeroQ) : m.zeroQ.toFixed(1)) + " quarters)";
+  const title = "cash " + ofMoney(m.cash) + " on the " + ofFmtDay(m.from) + " balance sheet · a quarter brings in " + ofMoney(m.ops) + " from operations and spends " + ofMoney(m.spend) +
+    " on property and equipment (mean of the " + (m.n === 4 ? "last four quarters" : m.n + (m.n === 1 ? " quarter" : " quarters") + " stored") + ") · carried forward " + OF_PROJ_Q + " quarters at that pace · a pace, not a forecast";
+  return '<div class="of-k">CASH AFTER SPENDING · NEXT 2 YEARS AT THIS PACE</div>' +
+    '<div class="of-proj' + (up ? " is-up" : " is-dn") + '" data-of-proj="' + (up ? "funds-itself" : m.zeroDay ? "runs-out" : "lasts") + '" title="' + esc(title) + '">' +
+      '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+        '<line x1="1" x2="' + (W - 1) + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '" stroke="' + col + '" stroke-width=".6" stroke-dasharray="2 3" opacity=".55"/>' +
+        '<path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="1.6" vector-effect="non-scaling-stroke"/>' + cross + "</svg>" +
+      '<div class="of-proj__ax"><span>now ' + ofMoney(m.cash) + "</span><span>" + (m.pts[OF_PROJ_Q] < 0 ? "−" : "") + ofMoney(m.pts[OF_PROJ_Q]) + " in 2 years</span></div>" +
+      '<div class="of-proj__r">' + esc(read) + "</div></div>";
+}
 function ofCashHTML(balq, cfq) {
   const cash = balq && balq.cash_and_equiv != null && isFinite(+balq.cash_and_equiv) ? +balq.cash_and_equiv : null;
   let h = '<div class="of-k">CASH ON HAND</div>' +
@@ -12227,7 +12302,8 @@ function ofCashHTML(balq, cfq) {
     esc(ofFmtDay(q.fiscal_date)) + "</td><td>" + ofMoney(q.capex) + "</td></tr>").join("") +
     (qs.length === 4 ? '<tr class="of-sum"><td colspan="2">the four together</td><td>' + ofMoney(qs.reduce((a, q) => a + Math.abs(+q.capex), 0)) + "</td></tr>" : "") +
     "</tbody></table>";
-  return h + '<div class="of-d">cash spent on property and equipment · cashflow_history</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>";
+  return h + '<div class="of-d">cash spent on property and equipment · cashflow_history</div>' + '<div class="of-cover">' + esc(ofCoverText(balq, cfq)) + "</div>" +
+    ofProjHTML(ofProjModel(balq, cfq));   // K1 — the projection line
 }
 /* PURE — the company's lock-up on `todayIso` (public.ipo_lockups, read from the prospectus by unlock-watch): the end, the
    staged steps still ahead, the next step and its countdown, the prospectus's sentence. A former SPAC's sponsor step
@@ -12296,8 +12372,13 @@ function ofCapBodyHTML(t, c, balq, todayIso) {
     "DEBT bonds, no new shares · UNCLASSIFIED the first page did not say (a shelf, a resale) — open the SEC link · grey RESALE / PLAN: holders' or employee-plan shares, no new money · " +
     "offering-watch reads each filing's first page at the SEC and keeps the offering headlines from our news feeds (offering_news) · lock-ups: unlock-watch reads the prospectus (ipo_lockups)</div>";
   return head + lock + loose + '<div class="of-grid"><div class="of-list">' + list + "</div>" +
-    '<div class="of-cash">' + ofCashHTML(balq, c ? c.cfq : null) + "</div></div>" + legend;
+    '<div class="of-cash">' + ofCashHTML(balq, c ? c.cfq : null) + "</div></div>" + legend + OF_PAGE_SPECS;
 }
+/* K1 — the projection's method in plain words, in the PAGE SPECS fold (Alan, 3 Oct: no explanatory sentence inside a panel) */
+const OF_PAGE_SPECS = '<details class="sc-pagespecs"><summary>PAGE SPECS</summary>' +
+  "<p><b>Cash after spending · next 2 years at this pace.</b> We take the cash on the newest quarterly balance sheet. For each of the last four quarters we take what the business brought in from operations and what it spent on property and equipment, and average them. " +
+  "The line carries the cash forward eight quarters at that pace. <b>Green</b>: operations cover the spending, cash grows. <b>Red</b>: spending outruns operations; the dot is where the cash would reach zero, and the amount is what the company would have to raise (new shares or debt) by the end of the two years. " +
+  "It is a pace, not a forecast: it knows nothing of planned spending, new contracts, debt coming due or money already raised since the balance sheet. Sources: balance_history and cashflow_history (FMP statements).</p></details>";
 function ofCapSectionHTML(data) {
   return '<section class="fn3-sec of-cap" id="ofCap_' + esc(data.t) + '">' + ofCapBodyHTML(data.t, OF.co[data.t], data._balq) + "</section>";
 }
@@ -12309,7 +12390,7 @@ function ofCapFill(t, balq) {
   const e = encodeURIComponent(t);
   Promise.all([
     pg("offering_filings?select=" + OF_SEL + "&ticker=eq." + e + "&order=filed_date.desc,accepted_utc.desc.nullslast&limit=40"),
-    pg("cashflow_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,fiscal_date,capex&order=fiscal_date.desc&limit=4").catch(() => []),
+    pg("cashflow_history?ticker=eq." + e + "&period=in.(Q1,Q2,Q3,Q4)&select=period,fiscal_year,fiscal_date,capex,operating_cf&order=fiscal_date.desc&limit=4").catch(() => []),   // K1: operating_cf for the projection
     pg("ipo_lockups?select=" + OF_LK_SEL + "&ticker=eq." + e + "&limit=1").catch(() => []),
     pg("offering_news?select=" + OF_NEWS_SEL + "&ticker=eq." + e + "&order=published_utc.asc&limit=300").catch(() => []),
   ]).then(([rows, cfq, lk, news]) => { OF.co[t] = { rows: Array.isArray(rows) ? rows : [], cfq: Array.isArray(cfq) ? cfq : [],
@@ -26972,6 +27053,7 @@ async function scProviderTick () {
          displayed provider trade against the provider's own completed daily close. */
       if (q.previous_close != null && isFinite(prev) && prev > 0) prevClose[t] = prev;
       else delete prevClose[t];
+      if (typeof scPrevNoteSet === "function") scPrevNoteSet(t, q);   // K1 — provisional / revised, for the hover
       const heldPrev = typeof SC_HELD_PREV !== "undefined" ? SC_HELD_PREV : null;
       if (heldPrev && q.previous_close_state === "PREVIOUS_CLOSE_HELD_SOURCES_DISAGREE") heldPrev[t] = q.previous_close_hold || {};
       else if (heldPrev) delete heldPrev[t];

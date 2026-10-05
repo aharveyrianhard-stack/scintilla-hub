@@ -85,3 +85,57 @@ test("the resolution log: one line per question, the winning outcome first, newe
   assert.ok(!/\b(drop|delete|update|insert|alter|truncate)\b/i.test(up.replace(/^--.*$/gm, "").replace(/'[^']*'/g, "''")), "the migration only adds a view (comments and quoted text aside)");
   assert.equal(down.replace(/^--.*$/gm, "").trim(), "drop view if exists public.prediction_market_closed;");
 });
+
+/* ── item 2 ── */
+test("CAPITAL: the projection carries the cash forward at the last four quarters' pace — operations minus spending — and names the crossing", () => {
+  const src = "const esc = (s) => String(s);\nconst ofDayDiff = (a, b) => Math.round(Math.abs(Date.parse(b) - Date.parse(a)) / 86400000);\nconst ofFmtDay = (d) => String(d);\n" +
+    grab(/function ofMoney\(v\) \{[\s\S]*?\n\}/) + "\n" + grab(/const OF_PROJ_Q = 8;\n/) + grab(/function ofProjModel\(balq, cfq\) \{[\s\S]*?\n\}/) + "\n" + grab(/function ofProjHTML\(m\) \{[\s\S]*?\n\}/) + "\n";
+  const { ofProjModel, ofProjHTML } = new Function(src + "return { ofProjModel, ofProjHTML };")();
+  const CRWV = [   // cashflow_history, read 5 Oct 2026
+    { fiscal_date: "2026-06-30", capex: -6422000000, operating_cf: 679000000 }, { fiscal_date: "2026-03-31", capex: -7695000000, operating_cf: 2984000000 },
+    { fiscal_date: "2025-12-31", capex: -4060000000, operating_cf: 1559000000 }, { fiscal_date: "2025-09-30", capex: -2388888000, operating_cf: 1689134000 } ];
+  const m = ofProjModel({ cash_and_equiv: 6397e6, fiscal_date: "2026-06-30" }, CRWV);
+  assert.equal(Math.round(m.ops / 1e6), 1728); assert.equal(Math.round(m.spend / 1e6), 5141); assert.equal(Math.round(m.net / 1e6), -3414);
+  assert.equal(m.pts.length, 9); assert.equal(m.pts[0], 6397e6);
+  assert.ok(Math.abs(m.zeroQ - 6397 / 3413.69) < 0.01, "about 1.9 quarters of cash");
+  assert.equal(m.zeroDay, "2026-12-18", "30 Jun + 1.87 quarters");
+  assert.equal(Math.round(m.need / 1e9), 21, "what eight quarters at this pace would need raised");
+  const h = ofProjHTML(m);
+  assert.match(h, /data-of-proj="runs-out"/); assert.match(h, /cash reaches zero about Dec 2026 · \$20\.91B to raise by the end of 2 years/); assert.match(h, /<circle /);
+  assert.match(h, /a pace, not a forecast/, "the method rides on the hover; the panel carries numbers only");
+  const up = ofProjModel({ cash_and_equiv: 10e9, fiscal_date: "2026-06-30" }, [{ fiscal_date: "2026-06-30", capex: -1e9, operating_cf: 3e9 }]);
+  assert.equal(up.zeroQ, null); assert.match(ofProjHTML(up), /data-of-proj="funds-itself"[\s\S]*pays for its own spending · \+\$2\.00B a quarter/);
+  const slow = ofProjModel({ cash_and_equiv: 10e9, fiscal_date: "2026-06-30" }, [{ fiscal_date: "2026-06-30", capex: -2e9, operating_cf: 1.5e9 }]);
+  assert.match(ofProjHTML(slow), /data-of-proj="lasts"[\s\S]*cash lasts past 2 years \(20 quarters\)/);
+  assert.equal(ofProjModel(null, CRWV), null, "no balance sheet: no line, the coverage sentence already says why");
+  assert.equal(ofProjModel({ cash_and_equiv: 1e9 }, [{ fiscal_date: "2026-06-30", capex: -1e9 }]), null, "a quarter without its operating line is not counted");
+  assert.equal(ofProjHTML(null), "");
+  assert.match(html, /select=period,fiscal_year,fiscal_date,capex,operating_cf&order=fiscal_date\.desc&limit=4/);
+  assert.match(grab(/const OF_PAGE_SPECS = [\s\S]*?<\/details>";/), /It is a pace, not a forecast/);
+});
+
+test("previous close: a provisional or provider-revised close is said on hover; a held close keeps its own words; a confirmed close says nothing", () => {
+  const cells = {}; const mk = (id) => (cells[id] = { attrs: {}, getAttribute(k) { return this.attrs[k] == null ? null : this.attrs[k]; }, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } });
+  mk("lc_MU"); mk("lc_NVDA"); mk("lc_FINX"); mk("coPrev");
+  const src = "const el = (id) => cells[id] || null;\nconst LEFT_T = 'MU';\n" + grab(/function scSetTitle \(node, value\) \{[\s\S]*?\n\}/) + "\n" + grab(/function scSetAttr \(node, name, value\) \{[\s\S]*?\n\}/) + "\n" +
+    grab(/const SC_HELD_PREV = \{\};\n/) + grab(/function scHeldPrevTitle \(t\) \{[\s\S]*?\n\}/) + "\n" + grab(/const SC_PREV_NOTE = \{\};\n/) + grab(/function scPrevNoteSet \(t, q\) \{[\s\S]*?\n\}/) + "\n" +
+    grab(/function scPrevNoteTitle \(t\) \{[\s\S]*?\n\}/) + "\n" + grab(/function scPrevNoteState \(t\) \{[^\n]*\n/) + grab(/function scHeldPrevPaint \(t\) \{[\s\S]*?\n\}/) + "\n";
+  const K = new Function("cells", src + "return { scPrevNoteSet, scPrevNoteTitle, scHeldPrevPaint, SC_HELD_PREV, SC_PREV_NOTE };")(cells);
+  K.scPrevNoteSet("MU", { previous_close: 1097.41, previous_close_provisional: false, previous_close_revised: { own_close: 1097.39, provider_close: 1097.41 } });
+  K.scHeldPrevPaint("MU");
+  assert.equal(cells.lc_MU.attrs.title, "previous close revised by the provider: 1,097.39 → 1,097.41 (our close at the bell → the official close)");
+  assert.equal(cells.lc_MU.attrs["data-sc-prev-close-state"], "REVISED");
+  assert.equal(cells.coPrev.attrs.title, cells.lc_MU.attrs.title, "the open company's header says the same");
+  K.scPrevNoteSet("NVDA", { previous_close: 233.95, previous_close_provisional: true, previous_close_revised: null });
+  K.scHeldPrevPaint("NVDA");
+  assert.match(cells.lc_NVDA.attrs.title, /^previous close 233\.95 is provisional: our own close at the bell/);
+  assert.equal(cells.lc_NVDA.attrs["data-sc-prev-close-state"], "PROVISIONAL");
+  K.scPrevNoteSet("NVDA", { previous_close: 233.95, previous_close_provisional: false, previous_close_revised: null });
+  K.scHeldPrevPaint("NVDA");
+  assert.equal(cells.lc_NVDA.attrs.title, ""); assert.equal(cells.lc_NVDA.attrs["data-sc-prev-close-state"], undefined, "confirmed: silent");
+  K.SC_HELD_PREV.FINX = { spread_abs: 0.02, sources: { daily: 30.10, print: 30.12 } };
+  K.scPrevNoteSet("FINX", { previous_close: 30.1, previous_close_provisional: true });
+  K.scHeldPrevPaint("FINX");
+  assert.match(cells.lc_FINX.attrs.title, /^previous close held: sources disagree/); assert.equal(cells.lc_FINX.attrs["data-sc-prev-close-state"], "HELD", "P9's held state wins");
+  assert.match(html, /if \(typeof scPrevNoteSet === "function"\) scPrevNoteSet\(t, q\);/);
+});
