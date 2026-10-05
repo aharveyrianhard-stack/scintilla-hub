@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCINTILLA · TREE</title>
+<link rel="stylesheet" href="hub-parts.css">
+<style>
+/* T13 (5 Oct 2026) · the tree rebuilt from the standard parts. Every colour, every type size and every bar on this page is the Hub's
+   (hub-parts.css, copied from the Hub page by tools/extract-hub-parts.mjs). The rules below only PLACE things — they add no colour,
+   no frame and no grey of their own. Alan, 5 Oct: "The Hub bar looks so much better… no frames, no grey." */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:11px/1.5 var(--mono)}
+body{display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 12px 6px;border-bottom:.8px solid var(--hair)}
+header h1{font-size:13px;letter-spacing:.18em;margin:0;font-weight:600;color:var(--ink)}
+header h1 b{color:var(--crk);font-weight:600}
+header .stamp{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ctrl{display:flex;gap:10px;align-items:center;margin-left:auto;flex-wrap:wrap}
+input[type=search]{background:transparent;color:var(--ink);border:0;border-bottom:.8px solid var(--hair);font:11px var(--mono);padding:5px 6px;width:220px;outline:none;letter-spacing:.04em}
+input[type=search]::placeholder{color:var(--mute)}
+.ctabs{margin:0;min-width:200px} .ct{padding:7px 10px;white-space:nowrap;background:none;border-top:0;border-bottom:0;border-left:0;font-family:var(--mono)} .ct .n{color:var(--mute);margin-left:4px} .ct.on .n{color:var(--crk)}
+.ct.empty{color:var(--mute)}
+#main{text-align:left}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 0;flex:1;min-height:0}
+.main.card{grid-template-columns:minmax(0,1fr) 400px}
+.main:not(.card) aside{display:none}
+#graph{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
+#crumbs{flex-basis:100%;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-top:-4px}
+#crumbs b{color:var(--ink);font-weight:600} #crumbs .lv{color:var(--crk)}
+/* ---- THE CANVAS: a stage of Hub cells; pan and zoom are one transform ---- */
+#canvas{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none;user-select:none}
+#canvas.dragging{cursor:grabbing}
+.stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;--lpx:12px;--s:1}
+.stage > div{position:absolute;inset:0}
+.stage.anim .cell,.stage.anim .title,.stage.anim .caption{transition:transform .45s cubic-bezier(.2,.7,.2,1),width .45s,height .45s}
+.cell{position:absolute;left:0;top:0;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto 1fr;align-items:end;column-gap:4px;padding:0 1px;overflow:hidden;cursor:pointer;contain:layout style}
+.cell .tk{font-size:var(--lpx);line-height:1;font-weight:700;letter-spacing:.06em;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.cell .val{font-size:calc(var(--lpx) * .92);line-height:1;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.cell .l2{display:none;grid-column:1/3;font-size:calc(var(--lpx) * .78);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.02em}
+.stage[data-level="3"] .cell{grid-template-rows:auto 1fr auto} .stage[data-level="3"] .cell .l2{display:block}
+.cell.nolabel .tk,.cell.nolabel .val{visibility:hidden}
+.cell.sel{outline:1px solid var(--crk);outline-offset:1px}
+.cell.fund .tk{color:var(--ink2)}
+/* the Hub's composite track (gs-cgr, hub-parts.css) stretched to the cell: only its width, margin and height are set here */
+.cell .gs-cgr{grid-column:1/3;align-self:stretch;width:100%!important;max-width:none!important;margin:1px 0 0!important;height:auto!important;min-height:7px}
+.cell .gs-cgr.none{background:transparent;border:1px dashed var(--mute)} .cell .gs-cgr.none::before{display:none}
+.up{color:var(--bull)} .dn{color:var(--bear)} .none{color:var(--mute)}
+.title{position:absolute;left:0;top:0;display:flex;align-items:flex-end;gap:10px;border-bottom:1px solid var(--crk);padding:0 0 2px;overflow:hidden;white-space:nowrap;cursor:pointer}
+.title .name{font-size:calc(var(--lpx) * 1.05);letter-spacing:.18em;font-weight:600;color:var(--ink)}
+.title .cnt{font-size:calc(var(--lpx) * .72);letter-spacing:.14em;color:var(--dim)}
+.title .go{margin-left:auto;font-size:calc(var(--lpx) * .72);letter-spacing:.14em;color:var(--crk);cursor:pointer}
+.caption{position:absolute;left:0;top:0;display:flex;align-items:flex-end;justify-content:space-between;font-size:calc(var(--lpx) * .72);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden;border-bottom:.6px solid var(--line2);padding-bottom:1px}
+.caption.coh{cursor:pointer} .caption.coh .cnt{color:var(--crk)}
+/* ---- THE PODIUM: V3's laser coil as the 3D bow tie, over the canvas ---- */
+#podium{position:absolute;inset:0;display:none;background:var(--bg)}
+#podium-gl{position:absolute;inset:0} #podium-gl canvas{display:block;width:100%;height:100%}
+#areabar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;max-width:calc(100% - 24px)}
+#areabar .ctabs{margin:0;background:var(--bg)}
+#areabar .who{padding:7px 12px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);white-space:nowrap;border-right:.6px solid var(--line)}
+#areabar .who b{color:var(--crk);font-weight:600}
+#walkhud{position:absolute;left:50%;bottom:58px;transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:18px;background:var(--bg);padding:8px 14px;border-top:1px solid var(--crk)}
+#walkhud .who{display:flex;flex-direction:column;align-items:center;min-width:180px;line-height:1.15}
+#walkhud .rank{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#walkhud b{font-size:34px;letter-spacing:.08em;color:var(--ink);font-weight:700;margin:2px 0}
+#walkhud .v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums} #walkhud small{font-size:11px;color:var(--dim);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#walkhud .ct{font-size:18px;padding:8px 14px;border:0} #walkhud .ct[disabled]{opacity:.3}
+#tip{position:absolute;pointer-events:none;background:var(--panel);border-top:1px solid var(--crk);padding:6px 9px;font-size:11px;line-height:1.5;color:var(--ink);display:none;max-width:320px;z-index:5}
+#tip b{font-weight:700;letter-spacing:.06em}
+#fallback{display:none;padding:14px;color:var(--ink2)}
+/* ---- OUTLINE: the same tree as a list — the Hub's table on every heading ---- */
+#outline{position:absolute;inset:0;display:none;overflow:auto;padding:10px 14px 40px}
+#outline .h{display:flex;align-items:baseline;gap:12px;margin:14px 0 4px;padding-bottom:3px;border-bottom:1px solid var(--crk);cursor:pointer}
+#outline .h .nm{font-size:13px;letter-spacing:.18em;font-weight:600;color:var(--ink)} #outline .h.d1 .nm{font-size:12px} #outline .h.d2 .nm,#outline .h.d3 .nm{font-size:11px;letter-spacing:.14em}
+#outline .h .cnt,#outline .h .go{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)} #outline .h .go{color:var(--crk);margin-left:auto}
+#outline .h .tg{color:var(--mute);font-size:11px;width:12px}
+#outline .kids{margin-left:14px} #outline .kids.closed{display:none}
+#outline .mytab{margin:2px 0 6px} #outline .mytab td{cursor:pointer}
+.mytab .bar{width:132px} .mytab .bar .gs-cgr{width:120px!important;max-width:none!important;margin:0!important;display:inline-block;vertical-align:middle}
+.mytab .gs-cgr.none{background:transparent;border:1px dashed var(--mute)} .mytab .gs-cgr.none::before{display:none}
+.mytab td.tk{font-weight:700;color:var(--ink);letter-spacing:.04em;font-size:13px} .mytab td.nm{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.mytab td.v{font-size:13px;font-weight:600}
+/* ---- the card: the Hub's type ---- */
+aside{border-left:.8px solid var(--hair);background:var(--bg);overflow:auto;padding:12px 14px 24px}
+aside .top{display:flex;align-items:baseline;gap:12px} aside .top b{font-size:18px;font-weight:700;letter-spacing:.06em;color:var(--ink)} aside .top span{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+aside .x{margin-left:auto;color:var(--dim);cursor:pointer;font-size:11px;letter-spacing:.14em} aside .x:hover{color:var(--crk)}
+aside .path{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:4px 0 10px;line-height:1.8}
+aside .gs-comp{margin:6px 0 10px} aside .gs-comp .gs-cgr{margin:6px 0 0!important;width:100%!important;max-width:none!important}
+aside .gs-comp .gs-big{font-weight:600;font-variant-numeric:tabular-nums} aside .gs-comp .gs-lab{display:block;text-align:left}
+aside .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;align-items:baseline;margin:8px 0}
+aside .kv .k{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)} aside .kv .v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink2)}
+aside .sec{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:14px 0 4px;padding-bottom:3px;border-bottom:.6px solid var(--line2);display:flex;gap:10px} aside .sec .go{color:var(--crk);cursor:pointer;margin-left:auto}
+aside .note{font-size:11px;color:var(--dim);margin:6px 0}
+.lnk{color:var(--crk);cursor:pointer}
+/* ---- PAGE SPECS (Alan, 3 Oct: explanations go here, never on the part he cares about) ---- */
+.sc-pagespecs{border-top:.8px solid var(--hair);padding:6px 12px 14px;color:var(--dim);font-size:11px;line-height:1.6}
+.sc-pagespecs summary{cursor:pointer;letter-spacing:.14em;text-transform:uppercase;font-size:8.5px;color:var(--dim);padding:4px 0}
+.sc-pagespecs p{margin:6px 0;max-width:1100px} .sc-pagespecs b{color:var(--ink2);font-weight:600}
+@media (max-width:760px){
+  body{display:block} .main{grid-template-columns:1fr!important;grid-template-rows:auto auto;height:auto} .main.card aside{display:block}
+  #graph{position:static;height:72vh} #canvas,#outline,#podium{position:absolute} .ctrl{margin-left:0} input[type=search]{width:150px} .ctabs{min-width:0}
+  #walkhud .ct{font-size:24px;padding:12px 18px} #walkhud b{font-size:30px} aside{border-left:0;border-top:.8px solid var(--hair)}
+}
+</style>
+</head>
+<body class="gsum">
+<header><span data-scnav-slot></span>
+  <h1>SCINTILLA <b>·</b> TREE</h1>
+  <span class="stamp" id="stamp">loading the tree and the live Geigers…</span>
+  <span id="crumbs"></span>
+  <div class="ctrl">
+    <input type="search" id="q" placeholder="find a ticker" list="tickers" autocomplete="off"><datalist id="tickers"></datalist>
+    <div class="ctabs" id="viewtabs"><button class="ct on" id="v-canvas" data-view="canvas">CANVAS</button><button class="ct" id="v-outline" data-view="outline">OUTLINE</button><button class="ct" id="reset" data-view="reset">RESET</button></div>
+    <div class="ctabs" id="listtabs"></div>
+  </div>
+</header>
+<div class="main gs-comp" id="main">
+  <div id="graph">
+    <div id="canvas"></div>
+    <div id="outline"></div>
+    <div id="podium"><div id="podium-gl"></div><div id="areabar"></div><div id="walkhud"></div></div>
+    <div id="tip"></div>
+    <div id="fallback"></div>
+  </div>
+  <aside id="card"></aside>
+</div>
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p><b>What this page shows.</b> Every tradeable instrument the Hub serves (companies and funds), one Hub cell each: the ticker, today's Geiger reading and the Hub's own Geiger track (green from the centre for a positive reading, red for a negative one; an empty dashed track = no reading yet). The cells sit in sector blocks that tile the whole canvas; inside a block they run green → red. Every cell is the same size and every ticker prints at the first view — nothing is drawn on top of anything else.</p>
+<p><b>Zoom = level.</b> Scroll to zoom toward the pointer, drag to pan, double-click the background or press RESET for the whole market. Past 1.5 × the cells regroup under their industry (FMP's industry; funds under FUNDS); past 2.5 × they split by cohort (the registry's home cohort; a cohort's caption opens its podium); past 4 × each cell shows its second line — the name, the day's move and the market cap. The type follows one rule (label-scale.mjs): 12 px at home, never under 11 px, never over 24 px on a 1080-tall screen; zoomed out, a ticker that would overlap its neighbour's thins out (strongest reading first) and comes back as you zoom in.</p>
+<p><b>The podium.</b> PODIUM on a block's title, a cohort's caption, a MY LISTS tab or the card opens the set as the 3D bow tie: V3's laser coil — the green half rising from the zero ring, first place at the centre and the top, fanned down and outwards to zero; the red half the mirror below it, down to the deepest red at the centre. The translucent sphere around the set is its total market cap ($1 T = 80 units of radius; a fund with no cap on file is listed, not counted), so two sets rank by size at a glance. Drag to turn any way, scroll to zoom, double-click or RESET VIEW = the 70° view. WALK (or ↓) walks the steps from the first place down the green half, across the ring and down the red half: ↓ ↑ J K the wheel, Home / End, Esc leaves. Click a step for its card.</p>
+<p><b>Where each number comes from.</b> The Geiger readings are read live from the chart API (/geiger for every Hub line; the nightly scout Geiger for the off-Hub names, drawn the same). The tree is tree.json (the r3 market tree with the 28 Sep cohort level); industries are industry-20261002.json (FMP, the authority); market caps are data/market-caps-20261005.json (company_profile.market_cap through the Hub's public read path, with tree.json's market value as the fallback for a company). MY LISTS read the Hub's mirror in this browser (sc_lists, sc_fav); the Hub's server copy is the source of truth.</p>
+<p><b>The parts.</b> Bar = the Hub's GEIGER tile track (gs-cgr); type, colours, the tab rows (ctabs) and the table (mytab) are the Hub's own CSS, copied by tools/extract-hub-parts.mjs into hub-parts.css — never redrawn here. 3D = V3's coil3d.js, copied whole (plus the walk and the click).</p>
+<p><b>What could be wrong.</b> A reading missing on the chart API prints as an empty track. Cells are sized to fit the screen the page opened on; a resize re-lays them out. The black share of the canvas is the Hub's black between the Hub's parts, not a layout gap.</p>
+</details>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/" } }
+</script>
+<script type="module">
+/* TREE MAP · T13 (5 Oct 2026). The data: tree.json (the r3 market tree plus the cohort level) and the live Geigers (the chart API);
+   the canvas: canvas.js (the pitch-sized Hub cells); the podium: coil3d.js (V3's laser coil, the 3D bow tie, with the sphere). */
+import { mountCanvas, LEVELS, levelOf } from "./canvas.js";
+const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
+const fmtCap = (v) => (v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + "T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + (v / 1e6).toFixed(0) + "M");
+const PHONE = matchMedia("(max-width:760px)").matches;
+async function getJSON(url, ms = 15000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
+const state = { geiger: null, geigerErr: null, scout: null, scoutErr: null, view: PHONE ? "outline" : "canvas", selected: null, byId: new Map(), children: new Map(), ready: false, cluster: null, clusterCount: null, detail: "clean", err3d: null, canvas: true, frames: 0 };
+window.__mm = state;
+
+/* ---- data ---- */
+const T = await getJSON("tree.json");
+const IND = await getJSON("industry-20261002.json").catch(() => null);
+const STD = await getJSON("data/tree-standard.json").catch(() => null);
+const CAPF = await getJSON("data/market-caps-20261005.json").catch(() => null);
+const [g, sr, ss] = await Promise.allSettled([getJSON(CHART_API + "/geiger"), getJSON(CHART_API + "/v1/scout-geiger", 20000), getJSON("scout-geiger-snapshot.json")]);
+if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
+const scoutFrom = (doc, source) => { const c = doc.row_columns || [], ix = (k) => c.indexOf(k), v = {}; for (const r of doc.rows) v[r[ix("ticker")]] = [r[ix("composite")], r[ix("trend")], r[ix("momentum")]]; return { as_of: doc.as_of, run_id: doc.run_id, computed_utc: doc.computed_utc, v, source }; };
+if (sr.status === "fulfilled" && Array.isArray(sr.value.rows)) state.scout = scoutFrom(sr.value, "chart API");
+else if (ss.status === "fulfilled" && Array.isArray(ss.value.rows)) { state.scout = scoutFrom(ss.value, "page snapshot"); state.scoutErr = sr.status === "rejected" ? String(sr.reason) : "route had no rows"; }
+else state.scoutErr = String(sr.status === "rejected" ? sr.reason : ss.reason);
+const GS = (state.geiger && state.geiger.symbols) || {}, SV = (state.scout && state.scout.v) || {};
+const scoutOf = (t) => { if (!t) return null; const r = SV[t] || SV[t.replace(/-/g, ".")]; return r && Number.isFinite(r[0]) ? { composite: r[0], trend: r[1], momentum: r[2] } : null; };
+const nodes = T.nodes.map((n, idx) => { const gg = n.ticker && GS[n.ticker] && Number.isFinite(GS[n.ticker].composite) ? GS[n.ticker] : null; return { ...n, idx, g: gg, sg: gg ? null : scoutOf(n.ticker), hollow: !!n.ticker && !gg }; });
+nodes.forEach((n) => { state.byId.set(n.id, n); n.parents.forEach((p) => { if (!state.children.has(p)) state.children.set(p, []); state.children.get(p).push(n.id); }); });
+const kids = (id) => (state.children.get(id) || []).map((k) => state.byId.get(k));
+const primaryKids = (id) => kids(id).filter((c) => c.parents[0] === id);
+const readingOf = (n) => (n.g ? { v: n.g.composite, kind: "full", trend: n.g.trend, momentum: n.g.momentum } : n.sg ? { v: n.sg.composite, kind: "scout", trend: n.sg.trend, momentum: n.sg.momentum } : null);
+const valueOf = (n) => { const r = readingOf(n); return r ? r.v : null; };
+const membersOf = (c) => [...(c.members || []), ...(c.member_funds || [])].map((t) => state.byId.get(t)).filter(Boolean);
+function beneath(id) { const out = [], seen = new Set(); (function walk(x) { for (const c of primaryKids(x)) { if (c.ticker && !seen.has(c.id)) { seen.add(c.id); out.push(c); } walk(c.id); if (c.kind === "cohort") for (const m of membersOf(c)) if (m.ticker && !seen.has(m.id)) { seen.add(m.id); out.push(m); } } })(id); const r = state.byId.get(id); if (r && r.kind === "cohort") for (const m of membersOf(r)) if (m.ticker && !seen.has(m.id)) { seen.add(m.id); out.push(m); } return out; }
+const CAPS = {}; for (const n of nodes) if (n.ticker) { const row = CAPF && CAPF.rows && CAPF.rows[n.ticker]; const c = row && Number(row.market_cap) > 0 ? Number(row.market_cap) : n.kind === "name" && n.market_value_usd > 0 ? n.market_value_usd : null; if (c) CAPS[n.ticker] = c; }
+const industryOf = (t) => (IND && IND.rows && IND.rows[t]) || null;
+state.counts = { nodes: nodes.length, tradeables: nodes.filter((n) => n.ticker).length, names: nodes.filter((n) => n.kind === "name").length, funds: nodes.filter((n) => n.kind === "fund").length, cohorts: nodes.filter((n) => n.kind === "cohort" && n.ckind === "adopted").length, proposed: nodes.filter((n) => n.kind === "cohort" && n.ckind === "proposed").length, fundsets: nodes.filter((n) => n.kind === "cohort" && n.ckind === "fundset").length, pseudo: nodes.filter((n) => n.kind === "cohort" && n.ckind === "none").length, lit: nodes.filter((n) => n.g).length, up: nodes.filter((n) => n.g && n.g.composite > 0).length, down: nodes.filter((n) => n.g && n.g.composite < 0).length, scout: nodes.filter((n) => n.sg).length, none: nodes.filter((n) => n.ticker && !n.g && !n.sg).length, caps: Object.keys(CAPS).length };
+state.tree = T; state.nodes = nodes; state.readingOf = readingOf; state.valueOf = valueOf; state.caps = () => CAPS;
+
+/* ---- the Hub's own lists (★ ♥ ◎) through the Hub mirror in this browser — settled, unchanged from T7/T8 ---- */
+const HUB_LISTS = [
+  { id: "LIST_FAVORITES", glyph: "★", name: "FAVORITES", key: "sc_lists", read: (raw) => { const o = JSON.parse(raw || "null"); return o && Array.isArray(o.favorites) ? o.favorites : null; } },
+  { id: "LIST_LIKED", glyph: "♥", name: "LIKED", key: "sc_fav", read: (raw) => { const a = JSON.parse(raw || "null"); return Array.isArray(a) ? a : null; } },
+  { id: "LIST_RADAR", glyph: "◎", name: "RADAR", key: "sc_lists", read: (raw) => { const o = JSON.parse(raw || "null"); return o && Array.isArray(o.radar) ? o.radar : null; } },
+];
+const byTicker = new Map(nodes.filter((n) => n.ticker).map((n) => [n.ticker, n]));
+const listEmptyNote = (n) => (n.name === "FAVORITES" ? "no favorites in this browser yet" : n.name === "RADAR" ? "no radar names in this browser yet" : "no liked names in this browser yet") + (n.known ? "" : " — open the Hub once in this browser and they appear here");
+function readList(def) {
+  let raw = null; try { raw = localStorage.getItem(def.key); } catch {}
+  let tickers = null; try { tickers = def.read(raw); } catch {}
+  const seen = new Set(), clean = (tickers || []).map((t) => String(t).trim().toUpperCase()).filter((t) => t && !seen.has(t) && seen.add(t));
+  const onTree = (t) => byTicker.get(t) || byTicker.get(t.replace(/\./g, "-")) || null;
+  const n = state.byId.get(def.id) || { id: def.id, kind: "list", glyph: def.glyph, name: def.name, label: `${def.glyph} ${def.name}`, parents: [], key: def.key };
+  const members = clean.map(onTree).filter(Boolean);
+  Object.assign(n, { tickers: clean, listMembers: members, missing: clean.filter((t) => !onTree(t)), known: tickers != null });
+  state.byId.set(def.id, n); return n;
+}
+const hubLists = () => HUB_LISTS.map(readList);
+hubLists();
+state.lists = () => hubLists().map((n) => ({ id: n.id, label: n.label, key: n.key, on_hub_list: n.tickers.length, on_tree: n.listMembers.length, missing: n.missing, known: n.known, note: n.listMembers.length ? null : listEmptyNote(n) }));
+function paintLists() { $("listtabs").innerHTML = `<span class="ct" style="color:var(--mute);cursor:default;flex:0">MY LISTS</span>` + hubLists().map((n) => `<button class="ct${state.cluster === n.id ? " on" : ""}${n.listMembers.length ? "" : " empty"}" data-list="${esc(n.id)}" title="${n.listMembers.length ? `the Hub's ${esc(n.name)} list as the 3D bow tie` : esc(listEmptyNote(n))}">${esc(n.glyph)} ${esc(n.name)}<span class="n">${n.tickers.length}</span></button>`).join(""); }
+addEventListener("storage", (e) => { if (e.key === "sc_lists" || e.key === "sc_fav") { paintLists(); if (state.view === "outline") renderOutline(); } });
+
+/* ---- the stamp ---- */
+const stampTxt = () => { const gAt = state.geiger && (state.geiger.as_of || state.geiger.computed_utc || state.geiger.updated_utc); const c = state.counts; return `${gAt ? "GEIGER " + String(gAt).replace("T", " ").slice(0, 16) + " UTC" : state.geigerErr ? "GEIGER: " + state.geigerErr : "GEIGER"} · ${c.lit} HUB BARS (${c.up} UP · ${c.down} DOWN) · ${c.scout} AT THE CLOSE${state.scout && state.scout.as_of ? " (" + state.scout.as_of + ")" : ""} · ${c.none} NO READING · ${c.cohorts} ADOPTED · ${c.proposed} PROPOSED · ${c.fundsets} FUND SETS`; };
+$("stamp").textContent = stampTxt();
+
+/* ---- the blocks (the sector level) and the items (every tradeable) ---- */
+const SHORT = { SEC_TECH: "TECHNOLOGY", SEC_FIN: "FINANCIALS", SEC_HLTH: "HEALTH CARE", SEC_ENGY: "ENERGY", SEC_INDU: "INDUSTRIALS", SEC_STPL: "STAPLES", SEC_DISC: "DISCRETIONARY", SEC_UTIL: "UTILITIES", SEC_MATL: "MATERIALS", SEC_REIT: "REAL ESTATE", SEC_COMM: "COMMUNICATION", US_BROAD: "BROAD MARKET", US_STYLE: "STYLE · FACTOR", INTL_DEV: "INTL DEVELOPED", EM: "EMERGING", MACRO: "DOLLAR · VOL", WORLD: "THE WORLD", BONDS: "BONDS", CMDTY: "COMMODITIES", CRYPTO: "CRYPTO", US: "US STOCKS", MARKET: "THE MARKET", US_SECTORS: "US SECTORS" };
+const BLOCK_IDS = new Set(["SEC_TECH", "SEC_FIN", "SEC_HLTH", "SEC_ENGY", "SEC_INDU", "SEC_STPL", "SEC_DISC", "SEC_UTIL", "SEC_MATL", "SEC_REIT", "SEC_COMM", "US_BROAD", "US_STYLE", "INTL_DEV", "EM", "BONDS", "CMDTY", "CRYPTO", "MACRO"]);
+const blockOf = (n) => { let c = n, last = null; while (c && c.parents && c.parents.length) { c = state.byId.get(c.parents[0]); if (!c) break; if (c.kind === "index") { if (BLOCK_IDS.has(c.id)) return c.id; last = last || c.id; } } return last || "MARKET"; };
+const pathOf = (n) => { const out = []; let c = n; while (c && c.parents && c.parents.length) { c = state.byId.get(c.parents[0]); if (c) out.unshift(c); } return out; };
+const cohortOf = (n) => { if (n.kind === "fund") return n.role === "sector" ? "SECTOR FUNDS" : n.role === "broad" ? "BROAD FUNDS" : "FUNDS"; const h = n.home_id && state.byId.get(n.home_id); return h ? (h.ckind === "fundset" ? h.cohort + " SET" : h.ckind === "none" ? "NONE YET" : h.label) : "NONE YET"; };
+const items = nodes.filter((n) => n.ticker).map((n) => { const ind = industryOf(n.ticker); return { id: n.id, t: n.ticker, kind: n.kind, v: valueOf(n), label: n.label || n.ticker, block: blockOf(n), industry: n.kind === "fund" ? "FUNDS" : (ind && ind.fmp_industry) || n.gics_industry || "OTHER", cohort: cohortOf(n), cohortId: n.kind === "name" && n.home_id && state.byId.get(n.home_id) ? n.home_id : null, cap: CAPS[n.ticker] || null, day: null, n }; });
+const blockIds = [...new Set(items.map((i) => i.block))];
+const blocks = blockIds.map((id) => { const n = state.byId.get(id); return { id, label: n ? n.label : id, short: SHORT[id] || (n ? n.label.toUpperCase() : id), path: n ? pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") : "" }; });
+state.items = items; state.blocks = blocks;
+
+/* ---- the canvas ---- */
+const cv = mountCanvas($("canvas"), { items, blocks, onPick: (id) => select(state.byId.get(id)), onOpen: (id) => { state.selected = id; crumbs(); }, onCoil: (id) => openCoil(id), onHover: hover, onLevel: () => crumbs() });
+state.cv = cv;
+function hover(id, x, y) { const tip = $("tip"); if (!id) { tip.style.display = "none"; return; } const n = state.byId.get(id) || byTicker.get(id); if (!n) { tip.style.display = "none"; return; } const r = readingOf(n), path = pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ");
+  tip.innerHTML = `<b>${esc(n.ticker)}</b> · ${esc(n.label)}<br><span class="${r ? (r.v >= 0 ? "up" : "dn") : "none"}">${r ? fmtG(r.v) : "no reading yet"}</span>${r && r.kind === "scout" ? ` <span style="color:var(--dim)">at the close</span>` : ""}${CAPS[n.ticker] ? ` · ${fmtCap(CAPS[n.ticker])}` : ""}<br><span style="color:var(--dim)">${esc(path)}</span>`;
+  const vr = $("graph").getBoundingClientRect(); tip.style.display = "block"; tip.style.left = Math.min(vr.width - 330, x - vr.left + 14) + "px"; tip.style.top = Math.min(vr.height - 80, y - vr.top + 14) + "px"; }
+
+/* ---- the card: the Hub's type, the Hub's composite tile, the Hub's table ---- */
+const track = (v, cls = "") => `<span class="gs-cgr${v == null ? " none" : ""} ${cls}">${v == null ? "" : `<i style="${v >= 0 ? "left:50%" : "right:50%"};width:${(Math.min(1, Math.abs(v)) * 50).toFixed(1)}%;background:var(${v >= 0 ? "--bull" : "--bear"});box-shadow:0 0 7px var(${v >= 0 ? "--bull" : "--bear"})"></i>`}</span>`;
+const rowFor = (n) => { const v = valueOf(n); return `<tr data-id="${esc(n.id)}"><td class="tk">${esc(n.ticker)}</td><td class="nm">${esc(n.label)}</td><td class="bar">${track(v)}</td><td class="v ${v == null ? "none" : v >= 0 ? "up" : "dn"}">${v == null ? "—" : fmtG(v)}</td></tr>`; };
+const tableOf = (list) => `<table class="mytab"><thead><tr><th>ticker</th><th>name</th><th>geiger</th><th></th></tr></thead><tbody>${list.slice().sort((a, b) => ((valueOf(b) ?? -9) - (valueOf(a) ?? -9)) || (a.ticker < b.ticker ? -1 : 1)).map(rowFor).join("")}</tbody></table>`;
+function renderCard(n) {
+  const card = $("card"); if (!n) { card.innerHTML = ""; $("main").classList.remove("card"); return; }
+  $("main").classList.add("card");
+  let h = `<div class="top"><b>${esc(n.ticker || n.label)}</b><span>${esc(n.ticker ? n.label : n.kind === "list" ? "the Hub's list" : n.kind)}</span><span class="x" data-x="1">CLOSE ✕</span></div><div class="path">${esc(pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") || "THE MARKET")}</div>`;
+  if (n.ticker) {
+    const r = readingOf(n);
+    h += `<div class="gs-comp"><span class="gs-lab">GEIGER${r && r.kind === "scout" ? " · AT THE CLOSE" : ""}</span>${track(r ? r.v : null)}<span class="gs-big ${r ? (r.v >= 0 ? "up" : "dn") : "none"}">${r ? fmtG(r.v) : "no reading yet"}</span></div>`;
+    h += `<div class="kv">${r ? `<span class="k">TREND</span><span class="v ${r.trend >= 0 ? "up" : "dn"}">${fmtG(r.trend || 0)}</span><span class="k">MOMENTUM</span><span class="v ${r.momentum >= 0 ? "up" : "dn"}">${fmtG(r.momentum || 0)}</span>` : ""}${CAPS[n.ticker] ? `<span class="k">MARKET CAP</span><span class="v">${fmtCap(CAPS[n.ticker])}</span>` : ""}${n.kind === "name" ? `<span class="k">INDUSTRY</span><span class="v" style="font-weight:400">${esc((industryOf(n.ticker) || {}).fmp_industry || n.gics_industry || "—")}</span>` : ""}${n.home_id ? `<span class="k">COHORT</span><span class="v lnk" data-coil="${esc(n.home_id)}" style="font-weight:400">${esc(cohortOf(n))} · PODIUM</span>` : ""}</div>`;
+    const held = (T.held_by && T.held_by[n.ticker]) || [];
+    if (held.length) h += `<div class="sec">HELD BY · ${held.length}</div><table class="mytab"><thead><tr><th>fund</th><th>weight</th></tr></thead><tbody>${held.map(([f, w]) => `<tr data-id="${esc(f)}"><td class="tk">${esc(f)}</td><td class="v">${(+w).toFixed(2)}%</td></tr>`).join("")}</tbody></table>`;
+    if (n.kind === "fund" && n.holdings && n.holdings.top) h += `<div class="sec">TOP HOLDINGS · ${n.holdings.count_in_fund || n.holdings.top.length}</div><table class="mytab"><thead><tr><th>ticker</th><th>name</th><th>weight</th></tr></thead><tbody>${n.holdings.top.slice(0, 15).map((x) => `<tr${byTicker.get(x.ticker) ? ` data-id="${esc(byTicker.get(x.ticker).id)}"` : ""}><td class="tk">${esc(x.ticker)}</td><td class="nm">${esc(x.name)}</td><td class="v">${(+x.weight_pct).toFixed(2)}%</td></tr>`).join("")}</tbody></table>`;
+  } else {
+    const list = n.kind === "list" ? n.listMembers : beneath(n.id); const up = list.filter((m) => valueOf(m) > 0).length, dn = list.filter((m) => valueOf(m) < 0).length, cap = list.reduce((s, m) => s + (CAPS[m.ticker] || 0), 0);
+    if (n.kind === "list") h += `<div class="note">${n.tickers.length} on the Hub's list · ${n.listMembers.length} on the tree${n.missing.length ? ` · ${n.missing.length} not served here: ${n.missing.map(esc).join(", ")}` : ""}${n.listMembers.length ? "" : `<br>${esc(listEmptyNote(n))}`}</div>`;
+    h += `<div class="kv"><span class="k">NAMES</span><span class="v">${list.length} · <span class="up">${up} UP</span> · <span class="dn">${dn} DOWN</span></span>${cap ? `<span class="k">MARKET CAP</span><span class="v">${fmtCap(cap)}</span>` : ""}</div>`;
+    if (list.length) h += `<div class="sec">NAMES · GREEN → RED<span class="go" data-coil="${esc(n.id)}">PODIUM · THE 3D BOW TIE</span></div>` + tableOf(list);
+  }
+  card.innerHTML = h;
+}
+$("card").addEventListener("click", (e) => { const x = e.target.closest("[data-x]"); if (x) { release(); return; } const c = e.target.closest("[data-coil]"); if (c) { openCoil(c.dataset.coil); return; } const tr = e.target.closest("tr[data-id]"); if (tr) { const n = state.byId.get(tr.dataset.id); if (n) { select(n); if (state.view === "canvas" && !state.cluster) cv.find(n.id); } } });
+function select(n) { if (!n) return; state.selected = n.id; renderCard(n); if (n.ticker && state.view === "canvas" && !state.cluster) cv.select(n.id); crumbs(); }
+function release() { state.selected = null; renderCard(null); cv.select(null); crumbs(); }
+function find(s) { const t = String(s || "").trim().toUpperCase(); if (!t) return null; const n = byTicker.get(t) || byTicker.get(t.replace(/\./g, "-")) || nodes.find((x) => x.kind !== "name" && String(x.label).toUpperCase() === t); if (!n) return null; if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas"); select(n); if (n.ticker) cv.find(n.id); else if (BLOCK_IDS.has(n.id)) cv.openBlock(n.id); return { id: n.id, ticker: n.ticker || null, path: pathOf(n).map((p) => p.id) }; }
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { find(e.target.value); e.target.value = ""; } });
+$("q").addEventListener("change", (e) => { if (e.target.value) { find(e.target.value); e.target.value = ""; } });
+$("tickers").innerHTML = nodes.filter((n) => n.ticker).map((n) => `<option value="${esc(n.ticker)}">${esc(n.label)}</option>`).join("");
+
+/* ---- the views: CANVAS (desktop default) · OUTLINE (the phone's default) ---- */
+function setView(v) { v = v === "outline" ? "outline" : "canvas"; state.view = v; $("canvas").style.display = v === "canvas" ? "block" : "none"; $("outline").style.display = v === "outline" ? "block" : "none"; document.querySelectorAll("#viewtabs .ct").forEach((b) => b.classList.toggle("on", b.dataset.view === v)); if (v === "outline") renderOutline(); else cv.fit(); crumbs(); }
+$("viewtabs").addEventListener("click", (e) => { const b = e.target.closest(".ct"); if (!b) return; if (b.dataset.view === "reset") { if (state.cluster) closeCoil(); release(); cv.home(600); return; } setView(b.dataset.view); });
+$("listtabs").addEventListener("click", (e) => { const b = e.target.closest("[data-list]"); if (b) openList(b.dataset.list); });
+const open = new Set(["MARKET", "US", "US_SECTORS", "WORLD"]);
+function renderOutline() {
+  const row = (n, depth) => { const ch = primaryKids(n.id), heads = ch.filter((c) => !c.ticker), lines = ch.filter((c) => !!c.ticker); const isOpen = open.has(n.id) || depth === 0; const all = beneath(n.id); const up = all.filter((m) => valueOf(m) > 0).length, dn = all.filter((m) => valueOf(m) < 0).length;
+    return `<div class="h d${Math.min(3, depth)}" data-tg="${esc(n.id)}"><span class="tg">${heads.length || lines.length ? (isOpen ? "▾" : "▸") : ""}</span><span class="nm">${esc(SHORT[n.id] || n.label)}</span><span class="cnt">${all.length} · <span class="up">${up} UP</span> · <span class="dn">${dn} DOWN</span>${n.kind === "cohort" ? " · " + esc(n.ckind) : ""}</span>${all.length ? `<span class="go" data-coil="${esc(n.id)}">PODIUM</span>` : ""}</div><div class="kids${isOpen ? "" : " closed"}">${lines.length ? tableOf(lines) : ""}${n.kind === "cohort" ? (membersOf(n).length ? tableOf(membersOf(n)) : "") : ""}${heads.map((c) => row(c, depth + 1)).join("")}</div>`; };
+  const lists = hubLists().map((n) => `<div class="h d1" data-list="${esc(n.id)}"><span class="tg"></span><span class="nm">${esc(n.label)}</span><span class="cnt">${n.tickers.length} ON THE HUB · ${n.listMembers.length} ON THE TREE${n.listMembers.length ? "" : " · " + esc(listEmptyNote(n))}</span>${n.listMembers.length ? `<span class="go" data-coil="${esc(n.id)}">PODIUM</span>` : ""}</div>`).join("");
+  $("outline").innerHTML = `<div class="h d0" style="border-color:var(--line2)"><span class="nm" style="color:var(--dim);font-size:8.5px;letter-spacing:.14em">MY LISTS · THE HUB'S OWN, APART FROM THE MARKET'S TREE</span></div>${lists}` + row(state.byId.get("MARKET"), 0);
+}
+$("outline").addEventListener("click", (e) => { const go = e.target.closest("[data-coil]"); if (go) { openCoil(go.dataset.coil); return; } const tr = e.target.closest("tr[data-id]"); if (tr) { select(state.byId.get(tr.dataset.id)); return; } const h = e.target.closest(".h[data-tg]"); if (h) { const id = h.dataset.tg; if (open.has(id)) open.delete(id); else open.add(id); renderOutline(); } });
+state.toggle = (id) => { if (open.has(id)) open.delete(id); else open.add(id); renderOutline(); };
+
+/* ---- the podium: V3's laser coil as the 3D bow tie, with the market-cap sphere ---- */
+let coil = null, coilMod = null, walkN = 0;
+async function ensureCoil() {
+  if (coil) return coil;
+  try { coilMod = coilMod || (await import("./coil3d.js")); $("podium").style.display = "block"; coil = coilMod.mountCoil($("podium-gl"), { standard: STD, caps: CAPS, capMode: "sphere", boxes: false, screenH: innerHeight, onFps: (f) => { state.fps = f; }, onWalk: walkHud, onPick: (t) => { const n = byTicker.get(t); if (n) select(n); }, onHover: (t, x, y) => hover(t ? (byTicker.get(t) || {}).id : null, x, y) }); state.coil = coil; }
+  catch (e) { state.err3d = String(e); $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the podium (${esc(String(e))}). The OUTLINE carries the same names and bars.</p>`; }
+  return coil;
+}
+const setOf = (id) => { const n = state.byId.get(id); if (!n) return null; const list = n.kind === "list" ? n.listMembers : n.ticker ? [n] : beneath(n.id); return { n, name: n.kind === "list" ? n.label : SHORT[n.id] || n.label, rows: list.map((m) => ({ t: m.ticker, v: valueOf(m) })) }; };
+async function openCoil(id) {
+  const set = setOf(id); if (!set || !set.rows.length) return false;
+  const c = await ensureCoil(); if (!c) return false;
+  if (!state.cluster) state.before = cv.pose();
+  state.cluster = id; state.clusterCount = { members: set.rows.length, read: set.rows.filter((r) => r.v != null).length, up: set.rows.filter((r) => r.v > 0).length, down: set.rows.filter((r) => r.v < 0).length, none: set.rows.filter((r) => r.v == null).length, cap: set.rows.reduce((s, r) => s + (CAPS[r.t] || 0), 0), list: set.n.kind === "list" };
+  $("podium").style.display = "block"; $("canvas").style.display = "none"; $("outline").style.display = "none";
+  c.setSets([{ name: set.name, rows: set.rows }], { land: true }); c.setMode("laser"); if (c.walking()) c.endWalk(false); c.home();
+  areabar(); paintLists(); crumbs(); select(set.n); return true;
+}
+function openList(id) { const n = state.byId.get(id); if (!n || !n.listMembers || !n.listMembers.length) { if (n) select(n); return false; } return openCoil(id); }
+function closeCoil() { if (!state.cluster) return; if (coil && coil.walking()) coil.endWalk(false); state.cluster = null; state.clusterCount = null; $("podium").style.display = "none"; $("areabar").innerHTML = ""; $("walkhud").style.display = "none"; setView(state.view); paintLists(); crumbs(); }
+function areabar() { const n = state.byId.get(state.cluster), walking = coil && coil.walking(); $("areabar").innerHTML = `<div class="ctabs"><span class="who"><b>${esc(SHORT[n.id] || n.label)}</b> · PODIUM · ${state.clusterCount.members} NAMES${state.clusterCount.cap ? " · " + fmtCap(state.clusterCount.cap) : ""}</span><button class="ct${walking ? " on" : ""}" data-go="walk">${walking ? "WALKING · ESC LEAVES" : "WALK"}</button><button class="ct" data-go="list">≡ LIST</button><button class="ct" data-go="reset">RESET VIEW</button><button class="ct" data-go="back">← BACK</button></div>`; }
+$("areabar").addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (!b || !coil) return; const go = b.dataset.go; if (go === "walk") { if (coil.walking()) coil.endWalk(true); else coil.walkTo(0, 900); areabar(); } else if (go === "list") select(state.byId.get(state.cluster)); else if (go === "reset") { if (coil.walking()) coil.endWalk(true); else coil.home(); areabar(); } else if (go === "back") closeCoil(); });
+function walkHud(s, k, n) { const hud = $("walkhud"); if (!s) { hud.style.display = "none"; hud.innerHTML = ""; areabar(); return; } walkN = n; const node = byTicker.get(s.t); hud.style.display = "flex"; hud.innerHTML = `<button class="ct" data-walk="-1"${k === 0 ? " disabled" : ""}>▲</button><div class="who"><span class="rank">#${k + 1} of ${n} · ${s.side > 0 ? "THE GREEN HALF" : s.none ? "NO READING" : "THE RED HALF"}</span><b>${esc(s.t)}</b><span class="v ${s.none ? "none" : s.v >= 0 ? "up" : "dn"}">${s.none ? "no reading" : fmtG(s.v)}</span><small>${esc(node ? node.label : "")}</small></div><button class="ct" data-walk="1"${k === n - 1 ? " disabled" : ""}>▼</button>`; areabar(); }
+$("walkhud").addEventListener("click", (e) => { const b = e.target.closest("[data-walk]"); if (b && coil) coil.walkStep(+b.dataset.walk); });
+addEventListener("keydown", (e) => {
+  if (coil && coil.walking() && state.cluster) { const k = e.key; let used = true; if (k === "ArrowDown" || k === "j" || k === "J" || k === "PageDown") coil.walkStep(1); else if (k === "ArrowUp" || k === "k" || k === "K" || k === "PageUp") coil.walkStep(-1); else if (k === "Home") coil.walkTo(0); else if (k === "End") coil.walkTo(walkN - 1); else if (k === "Escape") coil.endWalk(true); else used = false; if (used) { e.preventDefault(); e.stopPropagation(); areabar(); } return; }
+  if (e.key === "ArrowDown" && state.cluster && coil && document.activeElement === document.body) { coil.walkTo(0, 900); areabar(); e.preventDefault(); return; }
+  if (e.key === "Escape") { if (state.cluster) closeCoil(); else release(); }
+}, true);
+
+/* ---- the crumbs: where you are ---- */
+function crumbs() {
+  const el = $("crumbs"); if (state.cluster) { const n = state.byId.get(state.cluster); el.innerHTML = `${esc(pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") || "THE MARKET")} › <b>${esc(SHORT[n.id] || n.label)}</b> · <span class="lv">PODIUM${coil && coil.walking() ? " · WALK" : ""}</span>`; return; }
+  if (state.view === "outline") { el.innerHTML = `<b>THE MARKET</b> · <span class="lv">OUTLINE</span>`; return; }
+  const L = cv.level(), lv = LEVELS[L].name; const sel = state.selected && state.byId.get(state.selected); const where = sel ? pathOf(sel).map((p) => SHORT[p.id] || p.label).concat([sel.ticker || SHORT[sel.id] || sel.label]).join(" › ") : "THE MARKET";
+  el.innerHTML = `${esc(where)} · <span class="lv">${lv}</span> · ${cv.pose().s.toFixed(1)} ×`;
+}
+state.crumbs = () => $("crumbs").textContent;
+
+/* ---- the harness reads these (proof.mjs, measure.mjs, the tests) ---- */
+Object.defineProperty(state, "paused", { get: () => !cv.busy() && !(coil && coil.moving()) });
+state.sizes = () => ({ ...cv.sizes(), view: [$("graph").clientWidth, $("graph").clientHeight], ratio: devicePixelRatio });
+state.pose = () => (state.cluster && coil ? coil.pose() : cv.pose()); state.screenOf = (id) => (state.cluster && coil ? coil.screenOf((state.byId.get(id) || {}).ticker || id) : cv.screenOf(id));
+state.labelsNow = () => cv.labelsNow(); state.boxes = () => cv.boxes(); state.tickersPrinted = () => cv.tickersPrinted(); state.pitchPx = () => cv.pitchPx(); state.overlaps = () => cv.overlaps(); state.level = () => cv.level(); state.layoutAt = (L) => cv.layoutAt(L); state.labelPx = () => cv.labelPx();
+Object.defineProperty(state, "labelsShown", { get: () => cv.tickersPrinted() });
+state.zoomTo = (s, ms) => cv.zoomTo(s, ms); state.zoomAt = (x, y, f) => cv.zoomAt(x, y, f); state.panBy = (dx, dy) => { const p = cv.pose(); cv.flyTo({ s: p.s, tx: p.tx + dx, ty: p.ty + dy }, 0); }; state.homeView = () => (state.cluster && coil ? coil.homeView() : { s: 1, tx: 0, ty: 0 });
+state.setView = setView; state.find = find; state.select = (id) => { const n = state.byId.get(id) || byTicker.get(id); if (n) select(n); }; state.release = release; state.openCoil = openCoil; state.openList = openList; state.closeCoil = closeCoil; state.openBlock = (id) => cv.openBlock(id);
+state.setWalk = (on) => { if (!coil || !state.cluster) return false; if (on) { if (!coil.walking()) coil.walkTo(0, 900); } else coil.endWalk(true); areabar(); return coil.walking(); }; state.walkStep = (d) => (coil ? coil.walkStep(d) : null); Object.defineProperty(state, "walkAt", { get: () => (coil ? coil.walkAt() : null) }); state.walking = () => !!(coil && coil.walking());
+state.coilApi = () => coil; state.fpsNow = () => (state.cluster && coil ? coil.fps() : null);
+state.measureFps = (ms = 2000, what = "zoom") => new Promise((res) => { if (state.cluster && coil) return coil.measure(ms).then(res); const t0 = performance.now(); let f = 0; const p0 = cv.pose(); const step = (now) => { const k = Math.min(1, (now - t0) / ms); if (what === "pan") cv.flyTo({ s: p0.s, tx: p0.tx - 400 * Math.sin(k * Math.PI), ty: p0.ty - 200 * Math.sin(k * Math.PI) }, 0); else cv.flyTo({ s: p0.s * (1 + 0.4 * Math.sin(k * Math.PI)), tx: p0.tx - 200 * k, ty: p0.ty - 100 * k }, 0); f++; if (k < 1) requestAnimationFrame(step); else { cv.flyTo(p0, 0); res({ fps: +(f / ((performance.now() - t0) / 1000)).toFixed(1), frames: f, seconds: +((performance.now() - t0) / 1000).toFixed(2), where: what === "pan" ? "canvas pan (the whole stage moves)" : "canvas zoom 1 → 1.4 × (the type re-sizes under the label rule)" }); } }; requestAnimationFrame(step); });
+state.elevation = () => (coil ? coil.elevation() : null); state.orbitTo = (el, az) => coil && coil.orbitTo(el, az);
+state.dropped = ["DETAILED", "ORDER · GREEN → RED | BY SIZE", "FLAT 2D", "WHOLE MAP (→ RESET)", "the 3D whole-map view", "OPEN 3D on a section (the balls area)", "FROM ABOVE | PODIUM 3D", "KEY · what every mark means", "the hint line", "LET GO ✕", "≡ LIST as a separate crumb"];
+
+/* ---- start ---- */
+paintLists(); setView(state.view); crumbs();
+const q0 = new URLSearchParams(location.search); if (q0.get("t")) find(q0.get("t"));
+state.ready = true;
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
