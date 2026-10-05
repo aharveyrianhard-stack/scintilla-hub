@@ -6,15 +6,24 @@
    and the operator decides the entry level. Every judgement is a dial with a baseline (DIALS). */
 
 export const DIALS = {
-  hot_n: 3,                    // how many sectors are HOT (and how many COLD)
-  cohorts_per_sector: 3,       // the soundest K cohorts of a hot/cold sector run a knockout
-  heat_w: { names: 1, funds: 1, rotation: 1, bowtie: 0 },   // the heat rank's legs (bow tie off by default: it is printed, not ranked)
-  ko_w: { comps: 50, target: 20, revision: 10, geiger: 20 }, // the knockout's readings
-  outlier_mad: 3,              // a member whose comps upside sits beyond this many MADs from the cohort median is out of the ranking (0 = off)
-  survivors: 3,                // how many survive a knockout
+  /* HOW MUCH TO OWN — Alan's LAYER ONE knobs (the old /allocation/ page, the July MODEL sheet's heat → % invested) */
+  own: { measure: "heat", neutral: 50, speed: 1, cash_floor: 0 },   // measure: "heat" = the average Geiger of every served name · "breadth" = how many are rising; neutral = a flat market means this much invested; speed 1 = a full reading (+1) moves it 50 points; cash_floor = cash always kept
+  /* WHICH SECTORS CARRY IT — his LAYER TWO knobs, wired to the SECTOR compare */
+  hot_n: 3,                    // how many sectors carry weight (HOT) — and how many are COLD
+  max_sector: 40,              // the most any one sector may hold, % of the book; anything over is spread across the others
+  lookback: 72,                // how far back a sector has to prove itself: 72 sessions (one swing) or 16 (the short leg)
+  heat_w: { names: 1, funds: 1, rotation: 1, bowtie: 0 },   // the heat rank's legs: our names · the sector funds · the tape (rotation vs SPY) · the bow tie (off: printed, not ranked)
+  /* WHICH NAMES INSIDE THEM — his LAYER THREE knobs, wired to the knockout ring */
+  cohorts_per_sector: 3,       // the soundest K themes of a hot/cold sector run a ring
+  ko_w: { comps: 50, growth: 10, margins: 10, leverage: 10, target: 20, revision: 10, geiger: 20 },   // the ring's readings: the multiples vs peers (C5 way C) · growth · margins · leverage (NEW, the fundamentals the comps field uses) · the analyst target · the revisions · the Geiger vs the ring
+  outlier_mad: 3,              // kick off the outliers: a member whose comps upside sits beyond this many MADs from the ring's median is out (0 = off)
+  survivors: 3,                // names held in each ring (how many survive)
+  within: "equal",             // how the book splits inside a sector and a ring: "equal" or "tilt" (more to the stronger readings)
   min_firms: 3,                // fewer firms than this = no target reading (a named blank)
-  chain_w: { heat: 1, knockout: 2 },   // the discussion view's full-chain score
+  chain_w: { heat: 1, knockout: 2 },   // the discussion view's full-chain score: the sector against the name
 };
+/** A dial set with every group filled from the baselines (a saved set from an older page may lack the new keys). */
+export function fillDials(d) { const D = JSON.parse(JSON.stringify(DIALS)); if (!d || typeof d !== "object") return D; for (const k of Object.keys(D)) { if (D[k] && typeof D[k] === "object") D[k] = { ...D[k], ...((d[k] && typeof d[k] === "object") ? d[k] : {}) }; else if (d[k] != null) D[k] = d[k]; } return D; }
 export const num = (v) => (v == null || v === "" || !Number.isFinite(Number(v))) ? null : Number(v);
 export const mean = (a) => { const v = (a || []).map(num).filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
 export const median = (a) => { const v = (a || []).map(num).filter((x) => x != null).sort((x, y) => x - y); if (!v.length) return null; const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
@@ -40,7 +49,8 @@ export function logReturn(closes, h) { const c = (closes || []).map(num); if (c.
 /** HEAT. sectors: [{ key, names, funds, rotation, bowtie }] → each gets rank scores and a heat score (weighted mean of the legs it has);
     returns { ranked (hot → cold), hot: [keys], cold: [keys] }. A sector with no leg at all has heat null and is neither. */
 export function heat(sectors, dials = DIALS) {
-  const w = { ...DIALS.heat_w, ...(dials.heat_w || {}) }, n = dials.hot_n ?? DIALS.hot_n;
+  const w = { ...DIALS.heat_w, ...(dials.heat_w || {}) }, n = dials.hot_n ?? DIALS.hot_n, lb = dials.lookback ?? DIALS.lookback;
+  sectors = sectors.map((s) => (lb === 16 && "rotation_short" in s) ? { ...s, rotation_72: s.rotation, rotation: s.rotation_short } : s);   /* how far back a sector has to prove itself */
   const legs = ["names", "funds", "rotation", "bowtie"], rs = Object.fromEntries(legs.map((k) => [k, rankScores(sectors, k, "high")]));
   const out = sectors.map((s, i) => {
     let sw = 0, acc = 0; const scores = {};
@@ -95,17 +105,26 @@ export function upsideOutliers(members, k = DIALS.outlier_mad) {
   return { out: members.filter((x) => { const v = num(x.comps_upside); return v != null && (v < lo || v > hi); }).map((x) => ({ ticker: x.ticker, value: num(x.comps_upside), side: num(x.comps_upside) > hi ? "high" : "low", z: (num(x.comps_upside) - m) / mad })), median: m, mad, fence: { lo, hi } };
 }
 
-/** KNOCKOUT inside one cohort. members: [{ ticker, comps_upside, target_upside, revision, geiger }], the cohort's geiger mean is
-    taken here; returns every member with rank scores, score, verdict (SURVIVES · OUT · OUTLIER · BLANK) and the survivors. */
+/** THE FUNDAMENTALS the comps field uses, folded to three readings per member from its `fund` row (comps.mjs components):
+    growth = the mean of revenue growth TTM, revenue growth next FY, EPS growth next FY (%, the ones on file);
+    margins = the mean of gross, operating and FCF margin (%); leverage = net debt / EBITDA (years; lower is better; blank when EBITDA ≤ 0). */
+export function fundamentalsOf(m) {
+  const f = (m && m.fund) || {};
+  return { growth: mean([f.rev_g_ttm, f.rev_g_fy, f.eps_g_fy]), margins: mean([f.gm, f.om, f.fcfm]), leverage: num(f.nd_ebitda) };
+}
+/** KNOCKOUT inside one cohort (the RING). members: [{ ticker, comps_upside, target_upside, revision, geiger, fund? }]; the ring's Geiger
+    mean is taken here; returns every member with rank scores, score, verdict (SURVIVES · OUT · OUTLIER · BLANK) and the survivors.
+    Ties on the score go to the Geiger vs the ring, then to the target upside (Alan: the Geiger and the target as the tie-breakers). */
 export function knockout(members, dials = DIALS) {
   const w = { ...DIALS.ko_w, ...(dials.ko_w || {}) }, S = dials.survivors ?? DIALS.survivors, k = dials.outlier_mad ?? DIALS.outlier_mad;
   const gMean = mean(members.map((m) => m.geiger));
-  const withRel = members.map((m) => ({ ...m, geiger_rel: num(m.geiger) != null && gMean != null ? num(m.geiger) - gMean : null }));
+  const withRel = members.map((m) => ({ ...m, ...fundamentalsOf(m), geiger_rel: num(m.geiger) != null && gMean != null ? num(m.geiger) - gMean : null }));
   const ol = upsideOutliers(withRel, k), outSet = new Set(ol.out.map((o) => o.ticker));
   const inRing = withRel.filter((m) => !outSet.has(m.ticker));
-  const rs = { comps: rankScores(inRing, "comps_upside"), target: rankScores(inRing, "target_upside"), revision: rankScores(inRing, "revision"), geiger: rankScores(inRing, "geiger_rel") };
-  const scored = inRing.map((m, i) => { let acc = 0, sw = 0; const scores = {}; for (const key of Object.keys(w)) { scores[key] = rs[key][i]; if ((w[key] || 0) > 0 && rs[key][i] != null) { acc += w[key] * rs[key][i]; sw += w[key]; } } return { ...m, rank_scores: scores, score: sw > 0 ? acc / sw : null, readings: Object.values(scores).filter((x) => x != null).length }; });
-  const ranked = scored.filter((m) => m.score != null).sort((a, b) => b.score - a.score || (b.readings - a.readings) || a.ticker.localeCompare(b.ticker));
+  const rs = { comps: rankScores(inRing, "comps_upside"), growth: rankScores(inRing, "growth"), margins: rankScores(inRing, "margins"), leverage: rankScores(inRing, "leverage", "low"), target: rankScores(inRing, "target_upside"), revision: rankScores(inRing, "revision"), geiger: rankScores(inRing, "geiger_rel") };
+  const scored = inRing.map((m, i) => { let acc = 0, sw = 0; const scores = {}; for (const key of Object.keys(w)) { scores[key] = rs[key] ? rs[key][i] : null; if ((w[key] || 0) > 0 && scores[key] != null) { acc += w[key] * scores[key]; sw += w[key]; } } return { ...m, rank_scores: scores, score: sw > 0 ? acc / sw : null, readings: Object.values(scores).filter((x) => x != null).length }; });
+  const tie = (v) => (v == null ? -Infinity : v);
+  const ranked = scored.filter((m) => m.score != null).sort((a, b) => b.score - a.score || tie(b.geiger_rel) - tie(a.geiger_rel) || tie(b.target_upside) - tie(a.target_upside) || (b.readings - a.readings) || a.ticker.localeCompare(b.ticker));
   ranked.forEach((m, i) => { m.place = i + 1; m.verdict = i < S ? "SURVIVES" : "OUT"; });
   const blanks = scored.filter((m) => m.score == null).map((m) => ({ ...m, place: null, verdict: "BLANK" }));
   const outliers = withRel.filter((m) => outSet.has(m.ticker)).map((m) => ({ ...m, place: null, verdict: "OUTLIER", outlier: ol.out.find((o) => o.ticker === m.ticker) }));
@@ -134,4 +153,64 @@ export function fullChain(rows, sectorsRanked, dials = DIALS) {
   const hs = Object.fromEntries(sectorsRanked.map((s, i) => [s.key, n > 1 ? 1 - i / (n - 1) : 0.5]));
   const all = dedupePicks(rows.filter((r) => r.score != null).map((r) => { const h = hs[r.sector_key]; const chain = h == null ? r.score : (w.heat * h + w.knockout * r.score) / (w.heat + w.knockout); return { ...r, heat_score: h ?? null, chain }; }).map((r) => ({ ...r, score: r.chain, ko_score: r.score })));
   return { all, strongest: all.slice(0, 5), weakest: all.slice(-5).reverse(), weights: w };
+}
+
+/** HOW MUCH TO OWN (Alan's LAYER ONE, the July MODEL sheet's heat → % invested). sectors: the data file's eleven (names = mean Geiger of
+    the served names, names_n, up = how many read above zero). reading: "heat" = the mean Geiger over every served name (−1 … +1);
+    "breadth" = 2 × the share rising − 1 (−1 … +1). invested = neutral + speed × 50 × reading, held between 0 and 100 − cash_floor. */
+export function howMuch(sectors, dials = DIALS) {
+  const o = { ...DIALS.own, ...(dials.own || {}) };
+  let n = 0, g = 0, up = 0;
+  for (const s of sectors || []) { const k = num(s.names_n) || 0; if (k > 0 && num(s.names) != null) { n += k; g += num(s.names) * k; up += num(s.up) || 0; } }
+  const heatR = n ? g / n : null, breadthR = n ? 2 * (up / n) - 1 : null, reading = o.measure === "breadth" ? breadthR : heatR;
+  const cap = Math.max(0, 100 - (num(o.cash_floor) || 0));
+  const invested = reading == null ? null : Math.round(Math.min(cap, Math.max(0, o.neutral + o.speed * 50 * reading)));
+  return { measure: o.measure, reading: reading == null ? null : Math.round(reading * 1000) / 1000, heat_reading: heatR, breadth_reading: breadthR, names_n: n, rising: up, invested, cash: invested == null ? null : 100 - invested, neutral: o.neutral, speed: o.speed, cash_floor: o.cash_floor };
+}
+
+/** Shares with a cap: raw weights → shares of `total`, none above `cap`; the excess is spread over the uncapped in proportion; what cannot be
+    placed is returned as `left` (it stays in cash, and the page says so). */
+export function capShares(weights, total, cap) {
+  const keys = Object.keys(weights).filter((k) => (num(weights[k]) || 0) > 0);
+  if (!keys.length || !(total > 0)) return { shares: Object.fromEntries(Object.keys(weights).map((k) => [k, 0])), left: total || 0 };
+  const shares = {}, fixed = new Set(); let pool = total;
+  for (let i = 0; i < keys.length + 1; i++) {
+    const free = keys.filter((k) => !fixed.has(k)), sw = free.reduce((a, k) => a + weights[k], 0);
+    let again = false;
+    for (const k of free) { const v = sw > 0 ? pool * weights[k] / sw : 0; if (cap != null && v > cap + 1e-9) { shares[k] = cap; fixed.add(k); again = true; } else shares[k] = v; }
+    if (!again) break;
+    pool = total - [...fixed].reduce((a, k) => a + shares[k], 0);
+    if (pool <= 1e-9) { for (const k of keys) if (!fixed.has(k)) shares[k] = 0; break; }
+    if (!keys.some((k) => !fixed.has(k))) break;
+  }
+  for (const k of Object.keys(weights)) if (shares[k] == null) shares[k] = 0;
+  const placed = Object.values(shares).reduce((a, v) => a + v, 0);
+  return { shares, left: Math.max(0, total - placed) };
+}
+
+/** THE BOOK: a 100 % book, no money. The hot sectors split the invested share in proportion to their heat score (none above max_sector);
+    inside a sector its rings split EQUAL or TILT (by the mean score of their survivors); inside a ring the survivors split EQUAL or TILT
+    (by their knockout score). kos: [{ cohort, label, sector_key, K }] (K from knockout). Returns the sector ring, the cohort ring, the names. */
+export function book(H, kos, dials = DIALS, invested = null) {
+  const inv = invested == null ? howMuch(H.ranked.concat(H.unranked || []), dials).invested : invested;
+  const cap = dials.max_sector ?? DIALS.max_sector, tilt = (dials.within ?? DIALS.within) === "tilt";
+  const hot = H.ranked.filter((s) => H.hot.includes(s.key));
+  const sw = Object.fromEntries(hot.map((s) => [s.key, Math.max(s.heat ?? 0, 0.05)]));
+  const S = capShares(sw, inv ?? 0, cap);
+  const sectors = hot.map((s) => ({ key: s.key, label: s.label, heat: s.heat, heat_rank: s.heat_rank, share: S.shares[s.key] || 0, cohorts: [] }));
+  const names = {};
+  for (const sec of sectors) {
+    const rings = kos.filter((k) => k.sector_key === sec.key && k.K && k.K.survivors.length);
+    const strength = (k) => { const sv = k.K.members.filter((m) => m.verdict === "SURVIVES"); return Math.max(mean(sv.map((m) => m.score)) ?? 0, 0.05); };
+    const cw = Object.fromEntries(rings.map((k) => [k.cohort, tilt ? strength(k) : 1]));
+    const C = capShares(cw, sec.share, null);
+    for (const k of rings) {
+      const sv = k.K.members.filter((m) => m.verdict === "SURVIVES"), nw = Object.fromEntries(sv.map((m) => [m.ticker, tilt ? Math.max(m.score ?? 0, 0.05) : 1]));
+      const N = capShares(nw, C.shares[k.cohort] || 0, null);
+      sec.cohorts.push({ cohort: k.cohort, label: k.label, share: C.shares[k.cohort] || 0, names: sv.map((m) => ({ ticker: m.ticker, share: N.shares[m.ticker] || 0 })) });
+      for (const m of sv) names[m.ticker] = (names[m.ticker] || 0) + (N.shares[m.ticker] || 0);
+    }
+    if (!rings.length) sec.cohorts.push({ cohort: null, label: "no ring", share: sec.share, names: [] });
+  }
+  return { invested: inv, cash: inv == null ? null : 100 - inv + S.left, unplaced: S.left, sectors, names, within: tilt ? "tilt" : "equal", max_sector: cap };
 }

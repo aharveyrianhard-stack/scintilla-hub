@@ -10,6 +10,7 @@ import { inputs, snapshotFromCohort } from "../../20261001/comps-mechanic/read.m
 import { readCohort } from "../../20261001/comps-template/cohort.mjs";
 import { buildSet, lineWords } from "../../20261003/comps-c5/lines.mjs";
 import { conclusion } from "../../20261003/comps-c5/field.mjs";
+import { components as compsComponents } from "../../20260927/comps-single/comps.mjs";
 import { DIALS, heat, cohortSector, isSound, targetFromNotes, revisionDirection, logReturn, mean, median } from "./chain.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, "../../..");
@@ -139,6 +140,17 @@ for (const c of chosen) {
       if (C.band) { row.comps_upside = r1(C.upside.mid.pct); row.comps_centre = r2(C.band.mid); row.comps_lo = r2(C.band.lo); row.comps_hi = r2(C.band.hi); row.comps_points = C.ways.find((w) => w.way === "C")?.n ?? null; row.comps_measures = Object.entries(C.measureWeights.weights).filter(([, w]) => w > 0).map(([k, w]) => k + " " + Math.round(w * 100)).join(" · "); } else row.comps_why = C.reason || "way C not computed";
       row.comps_outliers = C.outliers.filter((o) => o.excluded).map((o) => o.ticker + " " + o.key);
     } catch (e) { row.comps_why = String(e.message || e); }
+    /* PA2 · the fundamentals the comps field uses, for the member and the median of its business-first peers (comps.mjs components: the
+       multiples, growth, margins, net debt / EBITDA); every member carries them, whatever the size of its set */
+    try {
+      const FKEYS = ["pe_ttm", "pe_fwd", "ev_ebitda", "ev_sales", "ps", "peg", "rev_g_ttm", "rev_g_fy", "eps_g_fy", "gm", "om", "fcfm", "nd_ebitda"];
+      const me = ctx.inputs.find((i) => i.ticker === t), psOf = (i) => { const rv = i.rev?.now ?? i.revenue_ttm_on_file; return (i.mcap > 0 && rv > 0) ? i.mcap / rv : null; };
+      const pick = (i) => { const v = compsComponents(i).v; v.ps = psOf(i); return Object.fromEntries(FKEYS.map((k) => [k, v[k] == null ? null : r2(v[k])])); };
+      row.fund = me ? pick(me) : null;
+      const peerRows = kept.map((p) => ctx.inputs.find((i) => i.ticker === p)).filter(Boolean).map(pick);
+      row.peers_median = peerRows.length ? Object.fromEntries(FKEYS.map((k) => [k, r2(median(peerRows.map((r) => r[k])))])) : null;
+      row.fund_date = (ctx.meta[t] || {}).fund_date || null;
+    } catch (e) { row.fund = null; row.peers_median = null; row.fund_why = String(e.message || e); }
     const tg = targetFromNotes(notes[t] || [], TODAY, { days: TARGET_DAYS, minFirms: DIALS.min_firms }), rv = revisionDirection(notes[t] || [], TODAY, { recent: REV_DAYS, days: TARGET_DAYS });
     row.target_n = tg.n; row.target_median = r2(tg.median); row.target_lo = r2(tg.lo); row.target_hi = r2(tg.hi); row.target_why = tg.why || null;
     row.target_upside = tg.median != null && row.price > 0 ? r1((tg.median / row.price - 1) * 100) : null;
@@ -151,7 +163,7 @@ for (const c of chosen) {
 
 /* ---- 7 · write --------------------------------------------------------------------------------------------------------- */
 const out = {
-  what: "PA1 portfolio allocation · the chain's inputs on today's real data: heat (11 sectors, four legs), the cohorts with T12's soundness, the knockouts' raw readings per member. chain.mjs runs heat → knockout → picks → the discussion view in the page from this file, under the dials.",
+  what: "PA2 portfolio allocation · the chain's inputs on today's real data: heat (11 sectors, four legs, the names rising), the cohorts with T12's soundness, the rings' raw readings per member (comps way C, the fundamentals the comps field uses and the peers' medians, the analyst target, the revisions, the Geiger). chain.mjs runs how much to own → heat → ring → picks → the book in the page from this file, under the equalizer.",
   today: TODAY, taken: new Date().toISOString(), dials: DIALS, elapsed_s: Math.round((Date.now() - t00) / 1000), calls: { chart_api: apiCalls, tables: pgCalls },
   sources: {
     geiger_live: { what: "the Hub's live Geiger (composite, 7 rungs) for the 590 served symbols and the 44 sector funds", url: API + "/geiger?symbols=…", as_of: liveAsOf, symbols: Object.keys(live).length },
