@@ -1,0 +1,52 @@
+{
+  "lane": "N1", "linear": "SCI-63", "project": "scintilla-live", "access": "read-only",
+  "measured_utc": "2026-10-05T21:18Z..21:32Z",
+  "news_mood_job": {
+    "crons": [
+      {"jobid": 261, "jobname": "sentiment-news-10m", "schedule": "*/10 * * * *", "calls": "edge function sentiment-news?mode=live&limit=600", "active": true},
+      {"jobid": 262, "jobname": "sentiment-news-backfill", "schedule": "*/5 * * * *", "calls": "edge function sentiment-news?mode=backfill&limit=1500", "active": true},
+      {"jobid": 112, "jobname": "news-sentiment-10m", "calls": "SQL recompute_news_sentiment -> news_sentiment (535 rows)", "active": true, "note": "older roll-up, healthy, still read by the Hub for comparison; not part of the fault"}
+    ],
+    "heartbeat": {"sentiment-news-10m": "UP · runs_ok 1699 · runs_failed 0 · last_error_at null", "sentiment-news-backfill": "UP · runs_failed 0"},
+    "recorded_answers_since_fix_D": {"first": "2026-10-05T17:10:00Z", "sentiment-news-10m": "27 dispatched, 26 answered, 26 x 200", "sentiment-news-backfill": "53 dispatched, 52 answered, 52 x 200"},
+    "last_error_receipt": {"at": "2026-10-05T14:40:11.063Z", "error": "read news -> 500"},
+    "vacuum_ohlcv_hourly": {"at_minute_40": "2026-10-01T21:40Z -> 2026-10-05T14:40Z (90 runs, avg 9.4 s, max 18.1 s)", "at_minute_43": "from 2026-10-05T15:43Z"},
+    "news_table": {"rows": 594917, "heap": "478 MB", "total": "1147 MB", "indexes": ["news_pkey (ticker,url)", "news_ticker_ts (ticker,published_ts desc)", "news_updated_ts_desc_idx (updated_ts desc)", "idx_news_ticker_ts_cover"], "index_on_published_ts_alone": false},
+    "explain_old_read": {"plan": "Parallel Seq Scan on news + top-N heapsort", "execution_ms": 3113, "pages": 61228},
+    "explain_new_read": {"plan": "Index Scan using news_updated_ts_desc_idx", "execution_ms": 1.2, "pages": 269},
+    "rest_read_ms": {"old_order_published_ts": 2762, "new_order_updated_ts": 229},
+    "statement_timeout": {"authenticator": "8s", "anon": "3s", "service_role": "none of its own"},
+    "coverage_by_publish_day_utc": [
+      {"day": "10-01", "news": 8003, "scored": 4486, "missing": 3517},
+      {"day": "10-02", "news": 8028, "scored": 4082, "missing": 3946},
+      {"day": "10-03", "news": 3065, "scored": 1755, "missing": 1310},
+      {"day": "10-04", "news": 4737, "scored": 1777, "missing": 2960},
+      {"day": "10-05", "news": 5330, "scored": 4019, "missing": 1311}
+    ],
+    "last_3_days": {"scored": 7991, "never_scored": 5754, "arrival_lag_hours_scored": {"p10": 0.13, "p50": 0.41, "p90": 6.52}, "arrival_lag_hours_never_scored": {"p10": 6.37, "p50": 21.04, "p90": 42.01}},
+    "all_time": {"news_pairs": 594917, "never_scored": 554681, "scored_rows": 40236, "oldest_scored": "2026-09-23T18:36:45Z", "published_before_23sep": 513131, "published_since_23sep": 81790},
+    "backfill_state": {"done": true, "slices": 1, "scanned": 1000, "cursor_ts": 1790188605, "updated_at": "2026-09-24T02:18:55Z"},
+    "arrivals_per_10min_3d": {"avg": 55, "p95": 143, "max": 201},
+    "largest_publish_stamp_tie": 1475,
+    "busiest_day_pairs": 9649,
+    "slice_check_2128Z": {"old_slice_unscored": 49, "new_slice_unscored": 365, "new_slice_arrival_span_min": 52, "by_name_filters": 64, "by_name_ms": 1086, "failed_filters": 0},
+    "scored_per_hour_today_utc": {"11": 145, "12": 246, "13": 327, "14": 346, "15": 263, "16": 269, "17": 357, "18": 325, "19": 243, "20": 219},
+    "readers": ["Hub index.html: sentiment_ticker_daily, news_headline_sentiment (SOCIAL -> SENTIMENT, NEWS mood)", "Hub index.html: news_sentiment (old roll-up, comparison)"],
+    "offline_run": {"live": "600 read, 100 already scored, 500 written; 16 days touched, all rebuilt within 6 runs; second run writes 0", "backfill": "2,600 headlines incl. 1,300 on one stamp: slices 2,000 + 600, then finished; 0 written twice", "since": "stops with 'reached the since floor'"},
+    "tests": {"new": "tests/sentiment-news-plan.test.mjs 9/9", "sentiment_suite": "83/83", "full_suite": "1885 tests, 7 failing (5 known + econ-builder-notes MONTH + prediction-reel REGIME; neither reads the changed files)"}
+  },
+  "old_alerts": {
+    "table": "public.feed_alerts", "rows": 9352, "ids": "1..9383", "first": "2026-06-18T13:38:53Z", "last": "2026-09-18T05:40:00Z",
+    "delivered_true": 0, "delivered_false": 9352, "channel_set": 0, "size": "1296 kB",
+    "by_month": {"2026-06": 2102, "2026-07": 1513, "2026-08": 3818, "2026-09": 1919},
+    "by_feed": {"fundamentals": 2745, "equity_price": 2507, "analysts": 1367, "news": 1065, "events": 1041, "economic": 352, "composite": 144, "ribbon": 116, "crypto_price": 15},
+    "writer": {"cron": 129, "jobname": "feed-alerts-5m", "command": "select public.check_feed_alerts()", "active": true, "runs_24h": "288 succeeded", "heartbeat": "UP · runs_failed 0", "rule": "one row per feed_health RED feed, at most one per feed per 30 min"},
+    "feed_health_now": "10 feeds: 8 GREEN, fundamentals AMBER, equity_price NA (retired 18 Aug); none RED",
+    "sets_delivered_or_channel": "nothing: the only database function that mentions feed_alerts is check_feed_alerts (insert only); no trigger, no view",
+    "readers": ["Station alerts/index.html FEED HEALTH section (prints '· undelivered' when delivered === false, STALE badge after 2 h)"],
+    "newer_alarm_route": {"feed_contract_enabled": 13, "does_not_cover_by_name": ["news", "fundamentals", "analysts", "events", "economic", "ribbon", "crypto_price"]},
+    "stop_pattern": "cron.alter_job(active := false) -> job_heartbeat PAUSED 'switched off at the source' (29 jobs already in that state)",
+    "alert_log": "separate table: per-ticker alerts behind the parked ALERTS room; no database function writes it"
+  },
+  "not_read": ["edge function logs (CLI has no functions log command)", "Linear SCI-63 itself (no Linear connection; read from L1 receipt + R1 report)", "the PostgREST error body of the 500 (the function stored only the status)"]
+}
