@@ -1,0 +1,45 @@
+{
+ "schema": "scintilla.m1.xfeed_recommendation.v1",
+ "investigated_utc": "2026-10-05",
+ "what_happened": {
+  "job": "mac:com.alanharvey.scintilla-xfeed-collector (launchd, this MacBook, nine runs a day, headless, its own Chrome profile)",
+  "timeline_utc": [
+   "25 Sep 20:31 — last pass that published (program-health.json: last_good_pass).",
+   "27 Sep 16:29 — newest post it ever captured (heartbeat.json: latest_source_event_at).",
+   "27 Sep 18:30 — first failure: \"Cannot find package '@vercel/blob' imported from …/hub-xfeed-program-20260922/scripts/xfeed-publish.mjs\". The program's dependency folder had gone while the program itself was still there. Six failures that day.",
+   "28 Sep 01:00 — last line the program ever wrote (same error).",
+   "after that — the whole folder _worktrees/hub-xfeed-program-20260922 is gone; launchd reports 'spawn failed', last exit code 78, 10 runs."
+  ],
+  "correction_to_the_job_register": "Q2b recorded 'its folder was deleted 28 Sep'. The logs show it broke a day earlier and in two steps: first the installed dependency disappeared (27 Sep, between 16:30Z and 18:30Z), then the folder. Putting the folder back is therefore not enough — the dependency has to be installed too.",
+  "what_deleted_it": "NOT IDENTIFIED. The handoff notes and wave scripts hold no `git worktree remove` or `git worktree prune` command; a search for plain delete commands was not run. Grok Bot's cached conversations (including its 'Disk Saver' agent) hold 0 mentions of _worktrees, node_modules or the folder name, so nothing points at it. The two-step shape (dependency folder first, then the worktree) fits a tidy-up of the _worktrees folder by another session, but that is an inference, not a finding.",
+  "what_survived": [
+   "the code: branch hub/xfeed-program-20260922 at 8ce83a3, on this Mac and on GitHub (origin)",
+   "the launchd job definition (~/Library/LaunchAgents/com.alanharvey.scintilla-xfeed-collector.plist), still loaded, still pointing at the missing folder",
+   "the collector's own Chrome profile (~/Library/Application Support/Scintilla/xfeed-collector-profile)",
+   "its working state (_orchestration/xfeed-live/runtime: 4,448 captures, state.json 320 MB, logs), untouched since 27 Sep 21:00 local"
+  ]
+ },
+ "options": [
+  {"option": "A — restore the MacBook collector", "evidence": "Dry run in the scratchpad today: the branch unpacked from GitHub, `npm ci` installed 31 packages in under a second, '@vercel/blob' resolves, the program passes a syntax check, and its own 118 tests pass (118/118). No capture and no publish was run; the live state folder was not touched.", "meets_never_imac": true, "meets_never_on_alans_screen": "yes while its X sign-in is still valid (it runs with --headless in its own profile). If the sign-in has expired, the program's `sign-in` step opens a visible window once — that one step must be booked with Alan, never launched by a session.", "cost": "nothing", "verdict": "RECOMMENDED"},
+  {"option": "B — replace it with Grok Bot's capture", "evidence": "The capture runs on Grok Bot's cloud computer. Today there is no way to get its posts out except a person (see grok-bot-channel.json). Its content could not be inspected. Passes may be metered.", "meets_never_imac": true, "meets_never_on_alans_screen": true, "cost": "unknown (Usage / Plan / On-demand settings exist)", "verdict": "LATER, AS A SECOND SOURCE — after the channel is proven with the bake-off job"},
+  {"option": "C — the Station's X capture", "evidence": "It is the Station X Bridge browser extension (0.7.14): it streams a live PICTURE of an X page to Station panes over WebRTC. It yields pixels, not post text, and STATION_CURRENT.md ties it to the 'iMac/X Bridge'. Turning it into a text collector is new work in a visible browser.", "meets_never_imac": false, "meets_never_on_alans_screen": false, "cost": "nothing", "verdict": "NO for this purpose"}
+ ],
+ "recommendation": {
+  "one_line": "Restore the MacBook collector from its own branch into a folder that tidy-ups do not touch, install its one dependency, and re-point the launchd job at it. Headless, its own profile, this MacBook only — never the iMac, never Alan's screen.",
+  "steps_for_the_coordinator": [
+   "1. Give the program a kept home outside _worktrees/: `git -C \"/Users/alanharvey/SCINTILLA 0.5/_VERCEL_DEPLOY\" worktree add \"/Users/alanharvey/SCINTILLA-PROVIDERS/scintilla-xfeed-program\" hub/xfeed-program-20260922` then `npm ci` inside it (installs @vercel/blob 2.8.0).",
+   "2. `node scripts/xfeed-program.mjs status` — reads the health file, starts nothing.",
+   "3. Change the two paths in the plist (ProgramArguments[1] and WorkingDirectory) to the new folder; `launchctl bootout` then `bootstrap` the job. Everything else in the plist stays (--headless, the profile, the runtime folder, the nine times).",
+   "4. One supervised pass: `node scripts/xfeed-program.mjs run --headless --catch-up --max-pages 20`. If it answers 'sign-in needed', stop and book the one visible sign-in with Alan.",
+   "5. Confirm on the live side: /api/xfeed newest post is today; two hours later x_post_sentiment has rows newer than 25 Sep."
+  ],
+  "neighbours_checked_together": [
+   "the Hub test 'xfeed-publish' that has failed on live for weeks fails for the SAME missing package (@vercel/blob) — the Hub checkout never installs it; restoring the collector does not fix that test and must not be reported as if it did",
+   "sentiment-x-2h reads only the last 3 days of the feed (?days=3): after an 8-day gap the first run must be called once with days=10 or the caught-up posts are never scored",
+   "the X-feed heartbeat row is LATE since 25 Sep and its alarm is off (Q2b STAGED A) — without the alarm the next death is again silent",
+   "the catch-up reaches only as far back as X's list timeline serves; posts between 27 Sep and the restore may be partly unrecoverable"
+  ],
+  "pattern_followed": "A scheduled program lives in a fixed install path owned by its service definition, with its dependencies installed from a lock file at deploy time — the launchd.plist(5) ProgramArguments / WorkingDirectory contract and `npm ci` (https://docs.npmjs.com/cli/commands/npm-ci)."
+ },
+ "not_done": ["Nothing was restored, re-pointed, started or published in this run: it changes what the Hub shows, which needs Alan's word.", "Whether the collector's X sign-in is still valid was not tested (that needs a browser pass)."]
+}

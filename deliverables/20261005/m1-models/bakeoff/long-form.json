@@ -1,0 +1,3288 @@
+{
+ "schema": "scintilla.m1.long_bakeoff.v1",
+ "measured_utc": "2026-10-05",
+ "machine": "MacBook Pro, Apple M5 Max, 36 GB; encoders on CPU (4 threads), instruct models on Metal through MLX (4-bit)",
+ "what_our_tables_hold": {
+  "news": "592,264 rows; title + a snippet of at most 400 characters (average 302). No article body is stored, so \"long-form news\" in our tables is short text today.",
+  "youtube_transcripts": "0 rows: the table exists and is empty. Captions for this test were fetched fresh with youtube-transcript-api (26 of 26 videos answered, about 0.9 s each, from this MacBook).",
+  "full_articles": "fetched from the stored url with trafilatura for this test only: 58 of 100 gave more than 800 characters (median 4,233); the rest are paywalled, video pages or quote lists."
+ },
+ "news_rubric": "One label per news row, for the ticker the row is filed under, from the stored title + snippet only: B = plainly good for that name's price (approval, upgrade, buy call, beat, shares up), S = plainly bad (lawsuit, downgrade, closures, shares down, 'will never recover'), N = routine, comparison pieces with no winner stated, 13F fund-holding notices, quote-list pages, mixed, or the story is not about that name. A second flag marks rows where the story is not about the filed ticker at all. One labeller (the reviewing model), labelled before any model was run on news.",
+ "youtube_rubric": "One label per video for the ticker the video is filed under: B = the speaker is plainly positive on that name (bought more, bullish deep-dive, 'undervalued', 'remain bullish'), S = plainly negative (sceptical teardown, 'downgraded', 'strong sell'), N = level maps, debates with both sides, day-trade recaps, news round-ups, 'not bearish but sold'. Labelled by one labeller (the reviewing model) from the title plus the passages that mention the name (not from watching the video), before any model ran.",
+ "gold": {
+  "news": {
+   "N": 60,
+   "B": 23,
+   "S": 17
+  },
+  "news_article_subset": {
+   "B": 12,
+   "N": 37,
+   "S": 9
+  },
+  "youtube": {
+   "N": 10,
+   "S": 3,
+   "B": 7
+  }
+ },
+ "baselines": {
+  "news_rows_always_neutral": 0.6,
+  "news_articles_always_neutral": 0.64,
+  "youtube_always_neutral": 0.5
+ },
+ "caveat": "One labeller. News: 100 labels (about plus or minus 9 points). Articles: 58, labelled from the title + snippet, not the full text. YouTube: 20 labels made from the passages naming the ticker (about plus or minus 20 points) — the passages-only arm reads the same passages the labeller read, which favours it.",
+ "news_snippet": [
+  {
+   "method": "Mistral-7B-Instruct-v0.3-4bit · asked about the ticker",
+   "ms": 210.0,
+   "n": 100,
+   "accuracy": 0.74,
+   "macro_f1": 0.653,
+   "opposite_calls": 4,
+   "calls": {
+    "N": 58,
+    "B": 36,
+    "S": 6
+   }
+  },
+  {
+   "method": "ModernFinBERT · one pass, no ticker",
+   "ms": 47.8,
+   "n": 100,
+   "accuracy": 0.71,
+   "macro_f1": 0.689,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 47,
+    "B": 37,
+    "S": 16
+   }
+  },
+  {
+   "method": "Qwen2.5-7B-Instruct-4bit · asked about the ticker",
+   "ms": 167.0,
+   "n": 100,
+   "accuracy": 0.69,
+   "macro_f1": 0.695,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 42,
+    "S": 21,
+    "N": 37
+   }
+  },
+  {
+   "method": "Meta-Llama-3.1-8B-Instruct-4bit · asked about the ticker",
+   "ms": 199.1,
+   "n": 100,
+   "accuracy": 0.69,
+   "macro_f1": 0.675,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 45,
+    "B": 29,
+    "S": 26
+   }
+  },
+  {
+   "method": "Phi-3.5-mini-instruct-4bit · asked about the ticker",
+   "ms": 122.5,
+   "n": 100,
+   "accuracy": 0.62,
+   "macro_f1": 0.618,
+   "opposite_calls": 2,
+   "calls": {
+    "N": 36,
+    "B": 45,
+    "S": 19
+   }
+  },
+  {
+   "method": "deberta-v3-ft-financial-news-sentiment-analysis · one pass, no ticker",
+   "ms": 27.3,
+   "n": 100,
+   "accuracy": 0.6,
+   "macro_f1": 0.562,
+   "opposite_calls": 3,
+   "calls": {
+    "N": 49,
+    "B": 32,
+    "S": 19
+   }
+  },
+  {
+   "method": "finbert · one pass, no ticker",
+   "ms": 23.3,
+   "n": 100,
+   "accuracy": 0.58,
+   "macro_f1": 0.541,
+   "opposite_calls": 4,
+   "calls": {
+    "N": 52,
+    "B": 29,
+    "S": 19
+   }
+  },
+  {
+   "method": "finbert-tone · one pass, no ticker",
+   "ms": 24.5,
+   "n": 100,
+   "accuracy": 0.54,
+   "macro_f1": 0.514,
+   "opposite_calls": 3,
+   "calls": {
+    "N": 45,
+    "B": 41,
+    "S": 14
+   }
+  },
+  {
+   "method": "distilroberta-finetuned-financial-news-sentiment-analysis · one pass, no ticker",
+   "ms": 23.1,
+   "n": 100,
+   "accuracy": 0.52,
+   "macro_f1": 0.495,
+   "opposite_calls": 3,
+   "calls": {
+    "N": 41,
+    "B": 41,
+    "S": 18
+   }
+  }
+ ],
+ "news_article": [
+  {
+   "method": "ModernFinBERT · whole article in one pass (8,192 tokens)",
+   "ms": 410.6,
+   "n": 58,
+   "accuracy": 0.655,
+   "macro_f1": 0.589,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 37,
+    "B": 14,
+    "S": 7
+   }
+  },
+  {
+   "method": "finbert · chunks averaged",
+   "ms": 216.9,
+   "n": 58,
+   "accuracy": 0.621,
+   "macro_f1": 0.603,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 27,
+    "B": 15,
+    "S": 16
+   }
+  },
+  {
+   "method": "Mistral-7B-Instruct-v0.3-4bit · reads whole article, asked about the ticker",
+   "ms": 798.5,
+   "n": 58,
+   "accuracy": 0.621,
+   "macro_f1": 0.676,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 33,
+    "N": 18,
+    "S": 7
+   }
+  },
+  {
+   "method": "Meta-Llama-3.1-8B-Instruct-4bit · reads whole article, asked about the ticker",
+   "ms": 713.0,
+   "n": 58,
+   "accuracy": 0.534,
+   "macro_f1": 0.539,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 23,
+    "S": 23,
+    "N": 12
+   }
+  },
+  {
+   "method": "ModernFinBERT · chunks averaged",
+   "ms": 322.7,
+   "n": 58,
+   "accuracy": 0.517,
+   "macro_f1": 0.508,
+   "opposite_calls": 2,
+   "calls": {
+    "N": 19,
+    "B": 27,
+    "S": 12
+   }
+  },
+  {
+   "method": "deberta-v3-ft-financial-news-sentiment-analysis · chunks averaged",
+   "ms": 178.7,
+   "n": 58,
+   "accuracy": 0.5,
+   "macro_f1": 0.526,
+   "opposite_calls": 2,
+   "calls": {
+    "N": 18,
+    "B": 33,
+    "S": 7
+   }
+  },
+  {
+   "method": "Qwen2.5-7B-Instruct-4bit · reads whole article, asked about the ticker",
+   "ms": 589.1,
+   "n": 58,
+   "accuracy": 0.483,
+   "macro_f1": 0.509,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 36,
+    "S": 13,
+    "N": 9
+   }
+  },
+  {
+   "method": "distilroberta-finetuned-financial-news-sentiment-analysis · chunks averaged",
+   "ms": 131.8,
+   "n": 58,
+   "accuracy": 0.448,
+   "macro_f1": 0.471,
+   "opposite_calls": 2,
+   "calls": {
+    "N": 13,
+    "B": 36,
+    "S": 9
+   }
+  },
+  {
+   "method": "finbert-tone · chunks averaged",
+   "ms": 213.4,
+   "n": 58,
+   "accuracy": 0.414,
+   "macro_f1": 0.439,
+   "opposite_calls": 1,
+   "calls": {
+    "N": 20,
+    "B": 32,
+    "S": 6
+   }
+  },
+  {
+   "method": "Phi-3.5-mini-instruct-4bit · reads whole article, asked about the ticker",
+   "ms": 475.5,
+   "n": 58,
+   "accuracy": 0.414,
+   "macro_f1": 0.467,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 42,
+    "S": 12,
+    "N": 4
+   }
+  }
+ ],
+ "youtube": [
+  {
+   "method": "Meta-Llama-3.1-8B-Instruct-4bit · reads only the passages naming the ticker (found by the name list)",
+   "ms": 487.7,
+   "n": 20,
+   "accuracy": 0.75,
+   "macro_f1": 0.555,
+   "opposite_calls": 2,
+   "calls": {
+    "N": 9,
+    "B": 10,
+    "S": 1
+   }
+  },
+  {
+   "method": "finbert-tone · first 512 tokens only",
+   "ms": 99.7,
+   "n": 20,
+   "accuracy": 0.65,
+   "macro_f1": 0.447,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 17,
+    "B": 3
+   }
+  },
+  {
+   "method": "Qwen2.5-7B-Instruct-4bit · reads only the passages naming the ticker (found by the name list)",
+   "ms": 516.1,
+   "n": 20,
+   "accuracy": 0.65,
+   "macro_f1": 0.469,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 13,
+    "N": 7
+   }
+  },
+  {
+   "method": "finbert · first 512 tokens only",
+   "ms": 91.6,
+   "n": 20,
+   "accuracy": 0.55,
+   "macro_f1": 0.371,
+   "opposite_calls": 1,
+   "calls": {
+    "N": 18,
+    "S": 2
+   }
+  },
+  {
+   "method": "deberta-v3-ft-financial-news-sentiment-analysis · first 512 tokens only",
+   "ms": 92.9,
+   "n": 20,
+   "accuracy": 0.55,
+   "macro_f1": 0.38,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 15,
+    "B": 5
+   }
+  },
+  {
+   "method": "finbert-tone · only passages naming the ticker, averaged",
+   "ms": 272.0,
+   "n": 20,
+   "accuracy": 0.55,
+   "macro_f1": 0.39,
+   "opposite_calls": 1,
+   "calls": {
+    "N": 12,
+    "B": 8
+   }
+  },
+  {
+   "method": "Mistral-7B-Instruct-v0.3-4bit · reads only the passages naming the ticker (found by the name list)",
+   "ms": 502.4,
+   "n": 20,
+   "accuracy": 0.55,
+   "macro_f1": 0.389,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 14,
+    "N": 6
+   }
+  },
+  {
+   "method": "ModernFinBERT · first 512 tokens only",
+   "ms": 137.6,
+   "n": 20,
+   "accuracy": 0.5,
+   "macro_f1": 0.376,
+   "opposite_calls": 3,
+   "calls": {
+    "N": 11,
+    "B": 6,
+    "S": 3
+   }
+  },
+  {
+   "method": "deberta-v3-ft-financial-news-sentiment-analysis · all chunks averaged",
+   "ms": 659.6,
+   "n": 20,
+   "accuracy": 0.5,
+   "macro_f1": 0.357,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 6,
+    "N": 13,
+    "S": 1
+   }
+  },
+  {
+   "method": "finbert · only passages naming the ticker, averaged",
+   "ms": 290.6,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.317,
+   "opposite_calls": 0,
+   "calls": {
+    "B": 7,
+    "N": 13
+   }
+  },
+  {
+   "method": "ModernFinBERT · only passages naming the ticker, averaged",
+   "ms": 374.8,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.46,
+   "opposite_calls": 0,
+   "calls": {
+    "N": 7,
+    "B": 12,
+    "S": 1
+   }
+  },
+  {
+   "method": "finbert · all chunks averaged",
+   "ms": 756.5,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.362,
+   "opposite_calls": 3,
+   "calls": {
+    "N": 12,
+    "S": 7,
+    "B": 1
+   }
+  },
+  {
+   "method": "finbert-tone · all chunks averaged",
+   "ms": 757.9,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.324,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 10,
+    "N": 10
+   }
+  },
+  {
+   "method": "ModernFinBERT · all chunks averaged",
+   "ms": 1080.5,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.414,
+   "opposite_calls": 3,
+   "calls": {
+    "B": 12,
+    "S": 4,
+    "N": 4
+   }
+  },
+  {
+   "method": "Qwen2.5-7B-Instruct-4bit · reads whole transcript, asked about the ticker",
+   "ms": 1893.4,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.404,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 14,
+    "S": 3,
+    "N": 3
+   }
+  },
+  {
+   "method": "Meta-Llama-3.1-8B-Instruct-4bit · reads whole transcript, asked about the ticker",
+   "ms": 2152.2,
+   "n": 20,
+   "accuracy": 0.45,
+   "macro_f1": 0.393,
+   "opposite_calls": 1,
+   "calls": {
+    "S": 11,
+    "B": 9
+   }
+  },
+  {
+   "method": "distilroberta-finetuned-financial-news-sentiment-analysis · first 512 tokens only",
+   "ms": 55.2,
+   "n": 20,
+   "accuracy": 0.4,
+   "macro_f1": 0.377,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 10,
+    "N": 6,
+    "S": 4
+   }
+  },
+  {
+   "method": "deberta-v3-ft-financial-news-sentiment-analysis · only passages naming the ticker, averaged",
+   "ms": 284.2,
+   "n": 20,
+   "accuracy": 0.4,
+   "macro_f1": 0.269,
+   "opposite_calls": 0,
+   "calls": {
+    "B": 6,
+    "N": 14
+   }
+  },
+  {
+   "method": "Mistral-7B-Instruct-v0.3-4bit · reads whole transcript, asked about the ticker",
+   "ms": 2459.6,
+   "n": 20,
+   "accuracy": 0.4,
+   "macro_f1": 0.288,
+   "opposite_calls": 1,
+   "calls": {
+    "B": 11,
+    "N": 9
+   }
+  },
+  {
+   "method": "ModernFinBERT · whole transcript in one pass (8,192 tokens)",
+   "ms": 2475.4,
+   "n": 20,
+   "accuracy": 0.4,
+   "macro_f1": 0.315,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 9,
+    "N": 8,
+    "S": 3
+   }
+  },
+  {
+   "method": "distilroberta-finetuned-financial-news-sentiment-analysis · only passages naming the ticker, averaged",
+   "ms": 148.3,
+   "n": 20,
+   "accuracy": 0.35,
+   "macro_f1": 0.252,
+   "opposite_calls": 0,
+   "calls": {
+    "B": 9,
+    "N": 11
+   }
+  },
+  {
+   "method": "Phi-3.5-mini-instruct-4bit · reads whole transcript, asked about the ticker",
+   "ms": 1506.4,
+   "n": 20,
+   "accuracy": 0.35,
+   "macro_f1": 0.187,
+   "opposite_calls": 2,
+   "calls": {
+    "B": 18,
+    "N": 1,
+    "S": 1
+   }
+  },
+  {
+   "method": "distilroberta-finetuned-financial-news-sentiment-analysis · all chunks averaged",
+   "ms": 402.2,
+   "n": 20,
+   "accuracy": 0.3,
+   "macro_f1": 0.222,
+   "opposite_calls": 3,
+   "calls": {
+    "B": 13,
+    "S": 2,
+    "N": 5
+   }
+  }
+ ],
+ "aboutness": [
+  {
+   "method": "Qwen2.5-7B-Instruct-4bit · answers UNRELATED",
+   "caught_of_12": 5,
+   "false_alarms_of_88": 10
+  },
+  {
+   "method": "Meta-Llama-3.1-8B-Instruct-4bit · answers UNRELATED",
+   "caught_of_12": 8,
+   "false_alarms_of_88": 26
+  },
+  {
+   "method": "Mistral-7B-Instruct-v0.3-4bit · answers UNRELATED",
+   "caught_of_12": 3,
+   "false_alarms_of_88": 1
+  },
+  {
+   "method": "Phi-3.5-mini-instruct-4bit · answers UNRELATED",
+   "caught_of_12": 0,
+   "false_alarms_of_88": 0
+  },
+  {
+   "method": "ticker + company-name list (exact ticker or first word of the name appears)",
+   "caught_of_12": 8,
+   "false_alarms_of_88": 16,
+   "false_alarm_rows": [
+    [
+     1,
+     "LLY",
+     "Eli"
+    ],
+    [
+     7,
+     "MU",
+     "Micron"
+    ],
+    [
+     8,
+     "NUE",
+     "Nucor"
+    ],
+    [
+     26,
+     "USO",
+     "United"
+    ],
+    [
+     29,
+     "VZ",
+     "Verizon"
+    ],
+    [
+     30,
+     "AMZN",
+     "Amazon.com"
+    ],
+    [
+     43,
+     "USO",
+     "United"
+    ],
+    [
+     46,
+     "USO",
+     "United"
+    ],
+    [
+     49,
+     "TXN",
+     "Texas"
+    ],
+    [
+     62,
+     "OMC",
+     "Omnicom"
+    ],
+    [
+     71,
+     "MSFT",
+     "Microsoft"
+    ],
+    [
+     73,
+     "ON",
+     "ON"
+    ],
+    [
+     82,
+     "TLT",
+     "iShares"
+    ],
+    [
+     84,
+     "USAR",
+     "USA"
+    ],
+    [
+     92,
+     "TSLA",
+     "Tesla"
+    ],
+    [
+     97,
+     "NOW",
+     "ServiceNow"
+    ]
+   ]
+  }
+ ],
+ "news_rows": [
+  {
+   "i": 0,
+   "ticker": "MSFT",
+   "site": "youtube.com",
+   "url": "https://www.youtube.com/watch?v=XGmMomplN4c",
+   "title": "Microsoft AI CEO, Mustafa Suleyman on Why Industry Needs a 'Red Line' for AI",
+   "article_chars_fetched": 164,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 1,
+   "ticker": "LLY",
+   "site": "prnewswire.com",
+   "url": "https://www.prnewswire.com/news-releases/fda-approves-lillys-olumiant-baricitinib-for-pediatric-patients-12-years-of-age-and-older-with-severe-alopecia-areata-302890631.html",
+   "title": "FDA approves Lilly's Olumiant (baricitinib) for pediatric patients 12 years of age and older with severe alopecia areata",
+   "article_chars_fetched": 21514,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 2,
+   "ticker": "CRWD",
+   "site": "finance.yahoo.com",
+   "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPZExwREdKWDhQb3lOX0hKblVpdXlxa0UzTFFvWWlyeHNfY0E3Z2VhM0hDeXBYU1RkdlRCMTBBTWVSUmxVRkx0ajhqdGJDOXg1ckVXNlpCc0lLMjlMcTRfNUNzV25sb2xNRENfV21JUDZqXzZaVmtveWtlb2RvX05rNHVGTy04Y2FlZmtnWFVn?oc=5",
+   "title": "S&P 500, Dow, Nasdaq End Week Higher On Chipmaker Strength, Easing Oil Amid Signs Of Easing US-Iran Conflict — META, COST, MSFT, CRWD, SKHY In Focus - finance.yahoo.com",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 3,
+   "ticker": "BABA",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/09/25/3369374/32719/en/robbins-llp-reminds-baba-stockholders-of-the-pending-october-5-2026-lead-plaintiff-deadline-in-the-securities-class-action-against-alibaba-group-holding-limited.html",
+   "title": "Robbins LLP Reminds BABA Stockholders of the Pending October 5, 2026 Lead Plaintiff Deadline in the Securities Class Action Against Alibaba Group Holding Limited",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 4,
+   "ticker": "BTSG",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxPVzZCY3lHbGJ4QkZWU0QzQWRtaHBtOTBxOFpGSzBscVczcG1FSUpSdWFMb3VqY0lFQlhadjZQb1FjVW9NRjNqMm5KdXlpMG1aYzR5ZXVkN3ExTV80V2xSb1JWZktRQU95Mm9JR1FlNXg4b1VFTEc5WUZUR3E1Ulp2ODNXNjduZGFtYl9oazNyN1BXa3F0b2lXV2xHZFpqbThHQnNKay00Z0d2cW1CbnZyLWxuU1ZoZ3YzTTdFTDdUSTBlSkFpZUFzYQ?oc=5",
+   "title": "EG,AMN,HLF,PGY,BSBK,LCNB,IMRX,CRMT,MRBK,ORN,FRST,TISI,GRNT,OVLY,TPL,GEF-B,NBBK,BTSG,HBT,BOTJ | Stock Prices | Quote Comparison - Yahoo Finance - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 5,
+   "ticker": "AMRC",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxOdGJpSzZNZHcwdTJubFRNVWNYdmdlZkZ0SEU5bEg1bTY3TTc3bWpWaW1UcndfMlZBT1E3dExIdExUVGkwMXUxMFctekhmakI0NEdCWHVDOXNobWNmRmVMU3l4M1p2a0VsRDMyOXVhWUFVWmhFRmo5WjhZMlZuRklIY1dfbzNnTlRSRzJXQ1dRVXJOYXUxS255dnRzdjVSTHBzOWhURHZieXVWaVRIcWRWLVJjdS1pamVQSDBVNnhHUmx0Ql82UXhJYURQdEFiMWoyRWRZSHBSeVc2MDNPTnlBdnVRWk9YeW8?oc=5",
+   "title": "CDNL,ANGX,CC,BCDA,IDAI,NTHI,AMRC,PRTS,CUEN,LIEN,DFH,RGCO,SELF,SPG,PSNY,TISI,REFI,EQPT,MTDR,GROV,RVSB,AFCG,SRTS,BGDE | Stock Prices | Quote Comparison - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 6,
+   "ticker": "AMZN",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/26/camarda-financial-advisors-llc-buys-17062-shares-of-amazon-com-inc-amzn.html",
+   "title": "Camarda Financial Advisors LLC Buys 17,062 Shares of Amazon.com, Inc. $AMZN",
+   "article_chars_fetched": 8113,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 7,
+   "ticker": "MU",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/09/26/goldman-sachs-says-a-7-6-trillion-ai-spending-boom-is-coming-skip-the-gpus-follow-the-money-here/",
+   "title": "Goldman Sachs Says a $7.6 Trillion AI Spending Boom Is Coming. Skip the GPUs, Follow the Money Here",
+   "article_chars_fetched": 4781,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 8,
+   "ticker": "NUE",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4949945-best-dividend-kings-september-2026",
+   "title": "Best Dividend Kings: September 2026",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 9,
+   "ticker": "SPY",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4949945-best-dividend-kings-september-2026",
+   "title": "Best Dividend Kings: September 2026",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 10,
+   "ticker": "AMZN",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/26/yukon-wealth-management-inc-buys-new-position-in-amazon-com-inc-amzn.html",
+   "title": "Yukon Wealth Management Inc. Buys New Position in Amazon.com, Inc. $AMZN",
+   "article_chars_fetched": 7677,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 11,
+   "ticker": "MELI",
+   "site": "fool.com",
+   "url": "https://www.fool.com/coverage/better-buy/2026/09/26/mercadolibre-vs-shopify-which-stock-is-a-better-buy-in-2026/",
+   "title": "MercadoLibre vs. Shopify: Which Stock Is a Better Buy in 2026?",
+   "article_chars_fetched": 5964,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 12,
+   "ticker": "AMZN",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/27/north-star-asset-management-inc-buys-new-position-in-amazon-com-inc-amzn.html",
+   "title": "North Star Asset Management Inc. Buys New Position in Amazon.com, Inc. $AMZN",
+   "article_chars_fetched": 7730,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 13,
+   "ticker": "NVDA",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/27/wim-investment-management-ltd-sells-16600-shares-of-nvidia-corporation-nvda.html",
+   "title": "WIM INVESTMENT MANAGEMENT Ltd Sells 16,600 Shares of NVIDIA Corporation $NVDA",
+   "article_chars_fetched": 7994,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 14,
+   "ticker": "MU",
+   "site": "invezz.com",
+   "url": "https://invezz.com/news/2026/09/28/samsung-sk-hynix-stocks-crash-as-foreigners-flee-why-micron-now-holds-the-next-clue/",
+   "title": "Samsung, SK Hynix stocks crash as foreigners flee: why Micron now holds the next clue",
+   "article_chars_fetched": 5013,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 15,
+   "ticker": "NKE",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/28/envestnet-portfolio-solutions-inc-acquires-22215-shares-of-nike-inc-nke.html",
+   "title": "Envestnet Portfolio Solutions Inc. Acquires 22,215 Shares of NIKE, Inc. $NKE",
+   "article_chars_fetched": 6904,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 16,
+   "ticker": "AMZN",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/28/amazon-com-inc-amzn-shares-sold-by-hollencrest-capital-management.html",
+   "title": "Amazon.com, Inc. $AMZN Shares Sold by Hollencrest Capital Management",
+   "article_chars_fetched": 7707,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 17,
+   "ticker": "META",
+   "site": "Investor's Business Daily",
+   "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxQOG1ua0pCczJCRlIwcEFUalp2MmgwdDdfcXloOTh1SnJlcU9Pbk5MelN5WnZBOXNEU1FWeVp6eXFQV3MzWTJqNlhub1BLVk1aTEFrQ0tnZnNwaFk1Z2kxaS1xcURBdVpTLWRQdUZVU3lVRFJWcngtN0UwUWRab3pXZW84NVJYemZsd1M5RmRiOU5JRDJGM283dUhHZDRtRjN5UlEwdDVKUk5LOW9nempVTkNqQWhnUFR0YXhEMXV3?oc=5",
+   "title": "Meta Stock Pulls Back After Muse-Fueled Rally. What Investors Are Watching Next. - Investor's Business Daily",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 18,
+   "ticker": "MDB",
+   "site": "marketwatch.com",
+   "url": "https://www.marketwatch.com/story/mongodbs-stock-is-down-more-than-20-as-ceo-decamps-to-meta-ad66a942",
+   "title": "MongoDB's stock is down more than 20% as CEO decamps to Meta",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 19,
+   "ticker": "DOW",
+   "site": "invezz.com",
+   "url": "https://invezz.com/news/2026/09/28/dow-slides-330-pts-as-oil-and-yields-climb-but-nvidia-jumps-on-record-150b-buyback/",
+   "title": "Dow slides 330 pts as oil and yields climb, Nvidia jumps on record $150B buyback",
+   "article_chars_fetched": 4424,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 20,
+   "ticker": "ASTS",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/09/28/3370025/3080/en/asts-upcoming-deadline-levi-korsinsky-alerts-ast-spacemobile-inc-stockholders-of-securities-class-action-contact-the-firm.html",
+   "title": "ASTS UPCOMING DEADLINE: Levi & Korsinsky Alerts AST SpaceMobile, Inc. Stockholders of Securities Class Action - Contact the Firm",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 21,
+   "ticker": "AMRC",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxNeko3YjZlTExLQnpCakpOZ281VVpoTmYzWVotUEJTOVlEcnl2MVhhVjNmd1hLd1Zic1Jla2ZwTE5EM3ZlMU1YZzFRR1N6ZGdZa2d4cFlrcndSbU1DZDlIQ0ZPcXFKeG42cU1LQ3RMTDFRczBKandXYnpFWEQ1WHN4S3lfWXJHV25maWFxbXVRQ19vcExpQkg5TEFST09EYXVqeDVTbjV2czJkZjRTN1N2Sy11aDlpYWRqdTQ4cE1PUmNaRVBXTW8yZVpiSmZSdEx5SHRRNHZRYmpWZ1RZSEJhaHpqVC02Yzg?oc=5",
+   "title": "CDNL,ANGX,CC,BCDA,IDAI,AMRC,NTHI,PRTS,CUEN,LIEN,DFH,RGCO,SELF,PSNY,SPG,TISI,EQPT,REFI,GROV,RVSB,HDSN,AFCG,SRTS,BGDE | Stock Prices | Quote Comparison - Yahoo Finance - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 22,
+   "ticker": "WMT",
+   "site": "zacks.com",
+   "url": "https://www.zacks.com/stock/news/2996925/how-tariff-refunds-could-shape-costco-s-earnings-in-fiscal-2027?cid=CS-STOCKNEWSAPI-FT-analyst_blog|quick_take-2996925",
+   "title": "How Tariff Refunds Could Shape Costco's Earnings in Fiscal 2027",
+   "article_chars_fetched": 627,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 23,
+   "ticker": "SBUX",
+   "site": "marketbeat.com",
+   "url": "https://www.marketbeat.com/articles/brewing-trouble-starbucks-spills-the-beans-on-250-store-closures/",
+   "title": "Brewing Trouble? Starbucks Spills the Beans on 250 Store Closures",
+   "article_chars_fetched": 8519,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 24,
+   "ticker": "APP",
+   "site": "newsfilecorp.com",
+   "url": "https://www.newsfilecorp.com/release/316250/Kaplan-Fox-Alerts-AppLovin-Corporation-APP-Investors-Who-Suffered-Losses-to-a-Securities-Class-Action-Deadline-is-November-16-2026",
+   "title": "Kaplan Fox Alerts AppLovin Corporation (APP) Investors Who Suffered Losses to a Securities Class Action - Deadline is November 16, 2026",
+   "article_chars_fetched": 4445,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 25,
+   "ticker": "CBRS",
+   "site": "Yahoo Finance",
+   "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxPSlJ0Y2t5ZEllVXpfUzM1QW9POHlLcF9lelowb0VJbmkyaV9ESWZhWC10TWlxMlVxNXJvRTQzYWdwSmwxUFZtbE51RHRiUXRQYUQ0anBZdVZOcTNtMzZrZm56a2x5TFRNb3FvV0V3SXhDMXFwQTdzTTJhWXBNelhtRDNNNHl3MzVneERwZF9qYw?oc=5",
+   "title": "S&P 500, Dow, Nasdaq Drop Under Pressure From Elevated Yields As Investors Shrug Off Trump’s Iran Sanction Relief — NVDA, BA, AMD, NVTS, CBRS In Focus - Yahoo Finance",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "?",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 26,
+   "ticker": "USO",
+   "site": "youtube.com",
+   "url": "https://www.youtube.com/watch?v=WGUbMvwyKVs",
+   "title": "Treasuries Selloff Stabilizes As Oil Surges",
+   "article_chars_fetched": 164,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 27,
+   "ticker": "STX",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/29/tjx-companies-nysetjx-shares-sold-by-rep-kevin-hern.html",
+   "title": "TJX Companies (NYSE:TJX) Shares Sold by Rep. Kevin Hern",
+   "article_chars_fetched": 5734,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "U",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 28,
+   "ticker": "HD",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/09/29/devon-energy-nysedvn-stock-unloaded-by-rep-kevin-hern.html",
+   "title": "Devon Energy (NYSE:DVN) Stock Unloaded by Rep. Kevin Hern",
+   "article_chars_fetched": 9177,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "U",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 29,
+   "ticker": "VZ",
+   "site": "Yahoo Finance",
+   "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxOQ0cwRFdmbnAtSzc4N0pWTHVGSm8ybHplN0lhYk5SQzNLZTBURTNKWURQYTZ2eGtMazVza0dFaTlULVZjSlFlbUlCMmRIN0FrMkdvTWFTRWtmYjR2cVFfdmlxaU5qY1JoUGJPZDBLS01NNnVjOXFidW5XQjAyTk52Y0FUTGd0OW9mdVRqelhNN0l0b0wxTkY0?oc=5",
+   "title": "If You Invest $500 a Month in This High-Yield Dividend Stock, Here's the Dividend Income It Could Produce Over 10 Years (Spoiler: It's More Than $23,000) - Yahoo Finance",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 30,
+   "ticker": "AMZN",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/09/29/billionaire-money-managers-have-chosen-2-favorite-ai-stocks-not-nvidia-or-alphabet/",
+   "title": "Billionaire Money Managers Have Chosen Their 2 Favorite AI Stocks (and It's Not Nvidia or Alphabet)",
+   "article_chars_fetched": 4026,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 31,
+   "ticker": "V",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4950256-visa-vs-mastercard-why-i-prefer-visa",
+   "title": "Visa Vs. Mastercard: Why I Prefer Visa",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 32,
+   "ticker": "AMRC",
+   "site": "ca.finance.yahoo.com",
+   "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxOR0ltbE41ZnVBTzVHVUh5STlKa1B2a2UwQTRZVmJCOXRUWG95azF2WFFENk1wNjVXWnh1Z1JnRDlNaGdLM0pGem1fNmJPOTdmLTdoajZCX3I4M3NpVTNZRklOaDZ4ZjNIZ3FadWx0cG91WDBWellnX180elN0UVJYQjVnWUNSbGpZQzhxTHRQb3hrU29JUVRRcGx2X3BzN3hCZ21MYkNVWTE2SDhsSXB6Sk0yWFQ1dGQxM2l2b0YwSWlGNm9EdE1jNkdBT1BpRTRHTWg1ZXRJSGpwWlNSVThFeDc3eG8?oc=5",
+   "title": "SUNS,BNL,BCDA,AMRC,VSH,CWBC,NEOG,SAIC,CCO,VG,FRPT,MTDR,LUCK,APLE,SEPN,EVH,AFCG,AWRE,BUSE,IRIX,VNDA,BLNE,RNXT,PRLD | Stock Prices | Quote Comparison - Yahoo Finance - ca.finance.yahoo.com",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 33,
+   "ticker": "WFC",
+   "site": "businesswire.com",
+   "url": "https://www.businesswire.com/news/home/20260929842576/en/Intercontinental-Exchange-Expands-Agreement-with-Wells-Fargo-to-Support-Full-Home-Loan-Servicing-Portfolio-on-MSP/",
+   "title": "Intercontinental Exchange Expands Agreement with Wells Fargo to Support Full Home Loan Servicing Portfolio on MSP",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 34,
+   "ticker": "HD",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/09/29/home-depot-vs-lowes-1-stock-wins/",
+   "title": "Home Depot vs. Lowe's: 1 Stock Wins",
+   "article_chars_fetched": 4064,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 35,
+   "ticker": "DELL",
+   "site": "zacks.com",
+   "url": "https://www.zacks.com/stock/news/2997311/dell-technologies-inc-dell-is-attracting-investor-attention-here-is-what-you-should-know?cid=CS-STOCKNEWSAPI-FT-fundamental_analysis|most_searched_stocks-2997311",
+   "title": "Dell Technologies Inc. (DELL) is Attracting Investor Attention: Here is What You Should Know",
+   "article_chars_fetched": 627,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 36,
+   "ticker": "CVX",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/09/29/buy-chevron-stock-without-hesitation-now-why/",
+   "title": "I'd Buy Chevron Stock Without Any Hesitation Right Now. Here's the Reason Why.",
+   "article_chars_fetched": 1996,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 37,
+   "ticker": "KO",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/09/29/dividend-stock-yield-4x-nasdaq-100-buy/",
+   "title": "This Dividend Stock Yielding More Than 4x the Nasdaq-100 Looks Like a Buy Right Now",
+   "article_chars_fetched": 3214,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 38,
+   "ticker": "SNDK",
+   "site": "finbold.com",
+   "url": "https://finbold.com/wall-street-analyst-sets-sandisk-stock-price-target-for-12-months/",
+   "title": "Wall Street analyst sets SanDisk stock price target for 12 months",
+   "article_chars_fetched": 1832,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 39,
+   "ticker": "BE",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/09/29/why-bloom-energy-stock-is-powering-higher-today/",
+   "title": "Why Bloom Energy Stock Is Powering Higher Today",
+   "article_chars_fetched": 1357,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 40,
+   "ticker": "BTSG",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxORmFDUko1ZEl1MVdVeUhNbEwtaWpRQWxfSGpPMTVXWXg2eU1uS0Q2ckNuTENENUE3TkZGdjM1NVZ0bGdtVGpUbVZIdkJRZ1ZSeTN2dW9kME4xOHk5T2RvREk0ZTR2N3dhN1NFcEpHZVJjaEl3dkJQeXBtWS0zeWItLTlTNDcxcVhTSTFkN0Y0ZXNkZWt6OXJOSGp2dnRzYzNIMnlTU3dNX0ctLVUwLV8xUUtJUzNhUVZRdkdqWTc1eExYajE5VEZaTDJBeGw2RHBqVDFEUTh5WQ?oc=5",
+   "title": "HLF,BSBK,FXNC,IMRX,MRBK,TISI,FRST,PDYN,GRNT,TPL,FTHM,VSTS,RVSB,GEF-B,SHEN,BCRX,TMCI,BTSG,NBBK,USCB,CION | Stock Prices | Quote Comparison - Yahoo Finance - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 41,
+   "ticker": "SMR",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/09/29/3371396/1087/en/investor-alert-pomerantz-law-firm-investigates-claims-on-behalf-of-investors-of-nuscale-power-corporation-smr.html",
+   "title": "INVESTOR ALERT: Pomerantz Law Firm Investigates Claims On Behalf of Investors of NuScale Power Corporation - SMR",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 42,
+   "ticker": "IBM",
+   "site": "gurufocus.com",
+   "url": "https://www.gurufocus.com/news/9102519/international-business-machines-corp-ibm-stock-down-03-now-undervalued-gf-score-78100",
+   "title": "International Business Machines Corp (IBM) Stock Down 0.3% -- Now Undervalued? GF Score: 78/100",
+   "article_chars_fetched": 4071,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 43,
+   "ticker": "USO",
+   "site": "youtube.com",
+   "url": "https://www.youtube.com/watch?v=g2XZn1g0cIo",
+   "title": "JPMorgan, Goldman See Mideast Oil Flows Near Pre-War Levels",
+   "article_chars_fetched": 164,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 44,
+   "ticker": "BA",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/personal-finance/social-security/2026/09/30/boeing-paid-him-to-learn-a-new-trade-for-15-weeks-social-security-counted-the-training-checks-as-wages/",
+   "title": "Boeing Paid Him to Learn a New Trade for 15 Weeks. Social Security Counted the Training Checks as Wages",
+   "article_chars_fetched": 5137,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 45,
+   "ticker": "GEV",
+   "site": "businesswire.com",
+   "url": "https://www.businesswire.com/news/home/20260929371534/en/GE-Vernova-Declares-Fourth-Quarter-2026-Dividend/",
+   "title": "GE Vernova Declares Fourth Quarter 2026 Dividend",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 46,
+   "ticker": "USO",
+   "site": "reuters.com",
+   "url": "https://www.reuters.com/business/energy/analysts-raise-2026-oil-forecasts-prolonged-gulf-disruption-2026-09-30/",
+   "title": "Analysts raise 2026 oil forecasts on prolonged Gulf disruption",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 47,
+   "ticker": "ABT",
+   "site": "prnewswire.com",
+   "url": "https://www.prnewswire.com/news-releases/abbott-launches-simplescreen-crc-blood-test-joining-cologuard-plus-in-its-colorectal-cancer-screening-portfolio-302893281.html",
+   "title": "Abbott launches SimpleScreen™ CRC blood test, joining Cologuard Plus® in its colorectal cancer screening portfolio",
+   "article_chars_fetched": 7758,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 48,
+   "ticker": "TGT",
+   "site": "thenewswire.com",
+   "url": "https://www.thenewswire.com/press-releases/1AD4FrR5m-windfall-geotek-advances-new-ai-driven-exploration-business-model-through-bathurst-mining-camp-claim-renewals-following-high-priority-vms-target-generation.html",
+   "title": "Windfall Geotek Advances New AI-Driven Exploration Business Model Through Bathurst Mining Camp Claim Renewals Following High-Priority VMS Target Generation",
+   "article_chars_fetched": 7816,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "U",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 49,
+   "ticker": "TXN",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/09/30/these-nasdaq-100-stocks-are-quietly-paying-real-dividends/",
+   "title": "These Nasdaq 100 Stocks Are Quietly Paying Real Dividends",
+   "article_chars_fetched": 7753,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 50,
+   "ticker": "ORLY",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/09/30/used-cars-are-the-new-luxury-vehicles-3-year-old-beaters-now-cost-over-32400/",
+   "title": "Used Cars Are the New Luxury Vehicles: 3-Year Old Beaters Now Cost Over $32,400",
+   "article_chars_fetched": 4038,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 51,
+   "ticker": "CRM",
+   "site": "proactiveinvestors.com",
+   "url": "https://www.proactiveinvestors.com/companies/news/1099393",
+   "title": "Salesforce up 3.2% after announcing Listen Labs acquisition",
+   "article_chars_fetched": 3721,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 52,
+   "ticker": "AMRC",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxOTUsyeDFVaG9lRVZoa0FvdmxlaExQOHBDaUFYblBtNEsxdTdzRTEzbU5UZGhhQjZobnFqXzh3MkJ5cWdrZEdyZXY5N291eUVtV1gwSk05M3ZCYUU2NFFTb21GOWFXWkFDTlNOVzUtbGhuc0c4U2ZpLThBWGp5X3dDTWlqVjR4OWFBbVN5SjZPdVQzUmFUdXk2Uzl5NmIwbHozdXV6c2hLMGdUeWxPdm9xRGVRSTY5NHhvZXV3N015OERsLWt4M1dGMEFwaWg4QnV3TlpDcUM3bWV1ZmFhS1RiZkU3c3hzTXM?oc=5",
+   "title": "ANGX,CDNL,CC,BCDA,IDAI,AMRC,CUEN,PRTS,LIEN,STRR,FISV,DFH,CWBC,SELF,SPG,PSNY,TISI,EQPT,REFI,MTDR,KRNY,AFCG,SRTS,BGDE | Stock Prices | Quote Comparison - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 53,
+   "ticker": "NVDA",
+   "site": "youtube.com",
+   "url": "https://www.youtube.com/watch?v=kDFWSH3hd1o",
+   "title": "The Big 3: NVDA, BE, SPCX",
+   "article_chars_fetched": 164,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 54,
+   "ticker": "BKSY",
+   "site": "marketscreener.com",
+   "url": "https://news.google.com/rss/articles/CBMi5gFBVV95cUxQNF9HeFJMV2MzT1RPMFFPR3dRWDRuZHBjb2JRaGRpRVYzUlctbjhuRktvVXlvZkFyNDdzVnJKazNvM2xQVmdVcnNVN2JqTmF5dU1CdWZrZEhJdkFzc0ZDREJLR254S0J6M3R5UDJLQXlnR0hIWEVlb3NHRVB5cHhCVldpTkx1RkJIMkdXU0lrU1JnaXZ5d29mNi15MjlKZHdtM3E1NWswX0JJSzlycVRyRXhCYUcycEhIeEZVbkZUcVcxTE4tUU96TDQ5U2pRTEUyU3U1LWtFUDJVR2tOXzQ1R0xNcDR3QQ?oc=5",
+   "title": "Blacksky Technology Inc. Is Named First Satellite Imagery Provider for Skyfi Satellite Intelligence on Robinhood Markets, Inc. Agent Apps - marketscreener.com",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 55,
+   "ticker": "APP",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4951245-applovin-why-i-think-the-bears-are-wrong",
+   "title": "AppLovin: Why I Think The Bears Are Wrong",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 56,
+   "ticker": "NVDA",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/10/01/univest-financial-corp-purchases-14092-shares-of-nvidia-corporation-nvda.html",
+   "title": "UNIVEST FINANCIAL Corp Purchases 14,092 Shares of NVIDIA Corporation $NVDA",
+   "article_chars_fetched": 8178,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 57,
+   "ticker": "MSFT",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4951344-microsoft-a-multi-year-compounder-with-seat-growth-and-azure-acceleration",
+   "title": "Microsoft: A Multi-Year Compounder With Seat Growth And Azure Acceleration",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 58,
+   "ticker": "GLW",
+   "site": "prnewswire.com",
+   "url": "https://www.prnewswire.com/news-releases/investor-alert-pomerantz-law-firm-investigates-claims-on-behalf-of-investors-of-corning-incorporated---glw-302895530.html",
+   "title": "INVESTOR ALERT: Pomerantz Law Firm Investigates Claims On Behalf of Investors of Corning Incorporated - GLW",
+   "article_chars_fetched": 1788,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 59,
+   "ticker": "TLT",
+   "site": "invezz.com",
+   "url": "https://invezz.com/news/2026/10/01/tlt-etf-analysis-us-treasury-yields-and-inflows-jump/",
+   "title": "TLT ETF analysis: US Treasury yields and inflows jump",
+   "article_chars_fetched": 4381,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "S",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 60,
+   "ticker": "MU",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/01/micron-slips-3-despite-record-quarter-and-above-consensus-guidance-western-digital-dips-sk-hynix-drifts/",
+   "title": "Micron Slips 3% Despite Record Quarter and Above-Consensus Guidance; Western Digital Dips, SK Hynix Drifts",
+   "article_chars_fetched": 3979,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 61,
+   "ticker": "TXN",
+   "site": "prnewswire.com",
+   "url": "https://www.prnewswire.com/news-releases/texas-instruments-to-webcast-q3-2026-earnings-conference-call-302896153.html",
+   "title": "Texas Instruments to webcast Q3 2026 earnings conference call",
+   "article_chars_fetched": 1353,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 62,
+   "ticker": "OMC",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/10/01/3373166/0/en/momentum-has-been-named-the-sponsorship-marketing-association-s-agency-of-the-year.html",
+   "title": "Momentum has been named the Sponsorship Marketing Association's Agency of the Year",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 63,
+   "ticker": "KRE",
+   "site": "fool.com",
+   "url": "https://www.fool.com/coverage/etfs/2026/10/01/how-do-the-invesco-kbw-bank-etf-kbwb-and-the-state-street-regional-banking-fund-etf-kre-compare-with-each-other/",
+   "title": "How Do the Invesco KBW Bank ETF (KBWB) and the State Street Regional Banking Fund ETF (KRE) Compare With Each Other?",
+   "article_chars_fetched": 3950,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 64,
+   "ticker": "RBLX",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/01/unity-software-rallies-5-as-meta-vr-support-extends-into-a-second-session-roblox-inches-higher-take-two-slides-3/",
+   "title": "Unity Software Rallies 5% as Meta VR Support Extends Into a Second Session; Roblox Inches Higher, Take-Two Slides 3%",
+   "article_chars_fetched": 4163,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 65,
+   "ticker": "AEM",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/10/01/3373302/0/en/record-gold-miner-cash-flow-puts-near-surface-discoveries-in-focus.html",
+   "title": "Record Gold Miner Cash Flow Puts Near-Surface Discoveries in Focus",
+   "article_chars_fetched": 0,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 66,
+   "ticker": "BRK-B",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/10/01/warren-buffett-just-stepped-down-as-berkshires-cha/",
+   "title": "Warren Buffett Just Stepped Down as Berkshire's Chairman After Delivering a 19.7% Annual Return Over 61 Years. Should Shareholders Be Concerned?",
+   "article_chars_fetched": 3059,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 67,
+   "ticker": "ARM",
+   "site": "fool.com",
+   "url": "https://www.fool.com/coverage/better-buy/2026/10/01/arm-vs-asml-which-semiconductor-stock-is-a-better-buy-in-2026/",
+   "title": "Arm vs. ASML: Which Semiconductor Stock Is a Better Buy in 2026?",
+   "article_chars_fetched": 5437,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 68,
+   "ticker": "SNDK",
+   "site": "youtube.com",
+   "url": "https://www.youtube.com/watch?v=QFcmeioczg4",
+   "title": "NVDA, MU, INTC & Other Names Ivan Feinseth Sees Leading Generational Tech Cycle",
+   "article_chars_fetched": 164,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 69,
+   "ticker": "QBTS",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/10/01/better-quantum-computing-stock-ionq-vs-d-wave/",
+   "title": "Better Quantum Computing Stock: IonQ vs. D-Wave",
+   "article_chars_fetched": 4125,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 70,
+   "ticker": "ASTS",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/10/02/prediction-2-space-stocks-that-could-join-spacex-i/",
+   "title": "Prediction: 2 Space Stocks That Could Join SpaceX and Rocket Lab in the Nasdaq-100 by 2030",
+   "article_chars_fetched": 3628,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 71,
+   "ticker": "MSFT",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/10/02/president-donald-trump-investment-team-sold-25-million-2-foundational-ai-stocks-in-july/",
+   "title": "President Donald Trump's Investment Team Sold Up to $25 Million in 2 Foundational AI Stocks in July",
+   "article_chars_fetched": 3811,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 72,
+   "ticker": "GLD",
+   "site": "proactiveinvestors.com",
+   "url": "https://www.proactiveinvestors.com/companies/news/1099501",
+   "title": "Bezant Resources shares rise as Hope & Gorob copper-gold mine enters commercial production",
+   "article_chars_fetched": 1950,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 73,
+   "ticker": "ON",
+   "site": "benzinga.com",
+   "url": "https://www.benzinga.com/trading-ideas/movers/26/10/62132098/synaptics-stock-rises-after-onsemi-revises-deal-to-123-per-share",
+   "title": "Synaptics Stock Rises After onsemi Revises Deal to $123 Per Share",
+   "article_chars_fetched": 2403,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 74,
+   "ticker": "BTDR",
+   "site": "benzinga.com",
+   "url": "https://www.benzinga.com/trading-ideas/movers/26/10/62132844/bitdeer-stock-jumps-as-h-c-wainwright-highlights-1-7-billion-ai-cloud-revenue-commitments",
+   "title": "Bitdeer Stock Jumps as H.C. Wainwright Highlights $1.7 Billion AI Cloud Revenue Commitments",
+   "article_chars_fetched": 1401,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 75,
+   "ticker": "NKE",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/02/nike-will-never-recover/",
+   "title": "Nike Will Never Recover",
+   "article_chars_fetched": 2558,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "U",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 76,
+   "ticker": "HOOD",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/cryptocurrency/2026/10/02/solana-perpetual-futures-are-coming-to-robinhood-will-a-new-futures-venue-impact-sols-price/",
+   "title": "Solana Perpetual Futures Are Coming to Robinhood. Will a New Futures Venue Impact SOL’s Price?",
+   "article_chars_fetched": 5692,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 77,
+   "ticker": "TSLA",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/02/tesla-surges-5-as-486532-deliveries-top-company-consensus-rivian-slides-3/",
+   "title": "Tesla Surges 5% as 486,532 Deliveries Top Company Consensus; Rivian Slides 3%",
+   "article_chars_fetched": 3980,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 78,
+   "ticker": "APP",
+   "site": "globenewswire.com",
+   "url": "https://www.globenewswire.com/news-release/2026/10/02/3373918/0/en/app-investors-have-opportunity-to-lead-applovin-corporation-securities-fraud-lawsuit-with-sbs-law.html",
+   "title": "APP Investors Have Opportunity to Lead AppLovin Corporation Securities Fraud Lawsuit with SBS Law",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 79,
+   "ticker": "SPCX",
+   "site": "zacks.com",
+   "url": "https://www.zacks.com/stock/news/2999598/vz-vs-spcx-which-stock-is-the-better-value-option?cid=CS-STOCKNEWSAPI-FT-fundamental_analysis|yseop_template_3-2999598",
+   "title": "VZ vs. SPCX: Which Stock Is the Better Value Option?",
+   "article_chars_fetched": 627,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 80,
+   "ticker": "VLO",
+   "site": "zacks.com",
+   "url": "https://www.zacks.com/stock/news/2999633/will-valero-energy-vlo-beat-estimates-again-in-its-next-earnings-report?cid=CS-STOCKNEWSAPI-FT-fundamental_analysis|yseop_template_7-2999633",
+   "title": "Will Valero Energy (VLO) Beat Estimates Again in Its Next Earnings Report?",
+   "article_chars_fetched": 627,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "B",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 81,
+   "ticker": "HIMS",
+   "site": "prnewswire.com",
+   "url": "https://www.prnewswire.com/news-releases/hims-investors-have-opportunity-to-lead-hims--hers-health-inc-securities-fraud-lawsuit-302897332.html",
+   "title": "HIMS Investors Have Opportunity to Lead Hims & Hers Health, Inc. Securities Fraud Lawsuit",
+   "article_chars_fetched": 4147,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 82,
+   "ticker": "TLT",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/etf/2026/10/02/bloombergs-etf-guru-watched-7-billion-pour-into-a-falling-treasury-fund-then-warned-buyers-to-walk-away/",
+   "title": "Bloomberg's ETF Guru Watched $7 Billion Pour Into a Falling Treasury Fund, Then Warned Buyers to Walk Away",
+   "article_chars_fetched": 4302,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 83,
+   "ticker": "AMRC",
+   "site": "ca.finance.yahoo.com",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxOdGVXRnpyZzdKMl8wbUVzNlBleFJ3SlFDV2E0MU0xV1Z5bnhSN1pESi1GNENkalo0enhucExmV1VweEVpc29nS1Vlek5hUUpSNEdpQlFxVGE1UjlsbWttbTlhb1BhSHNyNGRCQjZoQk1hNUctNjc5WlN2MHd4RkF0RDdKV3dFRjBGNHdUTmUtOWJtZE5QUm02OEp5Rk8zNTAwQy1LTTVScXZabjNmRFhLME9kVE9SVUZJSEY0M3ZYLW43QkhITVVNRGNYLVJGaWNyRDRaTWNUcDVHZmFZdzlQT3BCbXFMVFE?oc=5",
+   "title": "ANGX,CC,CDNL,IDAI,BCDA,NTHI,AMRC,PRTS,CUEN,LIEN,DFH,RGCO,SELF,SPG,PSNY,TISI,EQPT,REFI,MTDR,GROV,RVSB,AFCG,SRTS,BGDE | Stock Prices | Quote Comparison - ca.finance.yahoo.com",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 84,
+   "ticker": "USAR",
+   "site": "marketwatch.com",
+   "url": "https://www.marketwatch.com/story/these-companies-look-set-to-face-high-profile-hearings-and-other-scrutiny-if-democrats-win-the-house-513fe8e7",
+   "title": "These companies look set to face high-profile hearings and other scrutiny if Democrats win the House",
+   "article_chars_fetched": 0,
+   "hand_label": "S",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 85,
+   "ticker": "SLV",
+   "site": "seekingalpha.com",
+   "url": "https://seekingalpha.com/article/4951673-next-big-move-in-interest-rates-how-im-buying-dividend-sell-off",
+   "title": "The Next Big Move In Interest Rates: How I'm Buying The Dividend Sell-Off",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 86,
+   "ticker": "PLTR",
+   "site": "finbold.com",
+   "url": "https://finbold.com/why-you-need-to-buy-palantir-stock-before-october-31-2026/",
+   "title": "Why you need to buy Palantir stock before October 31, 2026",
+   "article_chars_fetched": 3491,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 87,
+   "ticker": "AMRC",
+   "site": "Yahoo! Finance Canada",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxOM0JkOUtmaVd1U2dIM1Vmd1lHdFN4MFBMeHFURW5XaU5rOTR1NTIyMHRPRUYtTHZ1bjEtbndham1IdGllcGhfclFFRDNDZmFiNW02bFpKN1BLS3lKQVQ1MFNjS0xZTTVSWEJjdUZWUFQzZjBMUml1dHZPanR5dVhLV1RxRHROc0NaS01ORndnNWFHbWF4VkQ4aXBjM3VNMlJQbUYtMUY3Mlg4SmNkNl81enUtdnMwSU93ZGdPZWVocjBxV2VQVGpoVEdDMXlnUHRfVTZpemdQTTFwYWs3S1l3MThjN29peUk?oc=5",
+   "title": "ANGX,CDNL,CC,BCDA,IDAI,NTHI,AMRC,CUEN,PRTS,LIEN,RGCO,DFH,SELF,PSNY,SPG,TISI,EQPT,REFI,MTDR,GROV,RVSB,AFCG,SRTS,BGDE | Stock Prices | Quote Comparison - Yahoo! Finance Canada",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 88,
+   "ticker": "VZ",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/03/t-mobile-vs-verizon-two-very-different-ways-to-own-the-same-industry/",
+   "title": "T-Mobile vs. Verizon: Two Very Different Ways to Own the Same Industry",
+   "article_chars_fetched": 2674,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 89,
+   "ticker": "USO",
+   "site": "reuters.com",
+   "url": "https://www.reuters.com/legal/government/us-supreme-court-kick-off-term-with-bid-by-big-oil-toss-climate-suits-2026-10-04/",
+   "title": "US Supreme Court to kick off term with bid by Big Oil to toss climate suits",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 90,
+   "ticker": "AMRC",
+   "site": "ca.finance.yahoo.com",
+   "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxPYjZNLVlVWmllUm5RUVJqNHBzc0RqZTUwNW16MGY3TjkzLUZKZ3RPTmJxLUFnSFBHclJnMHUzdnhZWEZfaGV2cnRabmJkdGExUVVHS19nak5JX1FsTTlJZDgxdFBtLXZsUEZWWXpURmk5OHNBVF9lLTVqZ0p6aV9zNjJiNk85cTZ1RzRSUFNRd2ZVa3UyRW5KNlFyZUtVTkl5TGZ6XzdQLXZjbDRRYlliZWt6NE8tdkptczFmT1NyNFEyTnpmVG5VQ2g3Rm5NMzFKT2E3VW4tSm9GLTdLZUZIOEUtaElaLUk?oc=5",
+   "title": "CC,ANGX,CDNL,BCDA,IDAI,AMRC,CUEN,LIEN,STRR,FISV,RSG,MSIF,SELF,CWBC,PSNY,SPG,FRST,REFI,EQPT,MTDR,AFCG,SRTS,BGDE,ACON | Stock Prices | Quote Comparison - ca.finance.yahoo.com",
+   "article_chars_fetched": 0,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 91,
+   "ticker": "COIN",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/cryptocurrency/2026/10/04/grok-dominates-coinbases-ai-trading-with-a-60-share-which-coins-are-being-purchased/",
+   "title": "Grok Dominates Coinbase’s AI Trading with a 60% Share: Which Coins Are Being Purchased?",
+   "article_chars_fetched": 5690,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 92,
+   "ticker": "TSLA",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/04/without-ai-and-robots-were-totally-screwed-elon-musk-warns-on-national-debt-crisis/",
+   "title": "\"Without AI and Robots, We’re Totally Screwed,\" Elon Musk Warns on National Debt Crisis",
+   "article_chars_fetched": 4775,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "S",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 93,
+   "ticker": "PFE",
+   "site": "fool.com",
+   "url": "https://www.fool.com/investing/2026/10/04/better-high-yield-dividend-stock-pfizer-or-novo-no/",
+   "title": "Better High-Yield Dividend Stock: Pfizer or Novo Nordisk?",
+   "article_chars_fetched": 4021,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 94,
+   "ticker": "NVDA",
+   "site": "defenseworld.net",
+   "url": "https://www.defenseworld.net/2026/10/05/trillium-asset-management-llc-sells-266278-shares-of-nvidia-corporation-nvda.html",
+   "title": "Trillium Asset Management LLC Sells 266,278 Shares of NVIDIA Corporation $NVDA",
+   "article_chars_fetched": 7711,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "S",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "S",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "S",
+    "Qwen2.5-7B-Instruct-4bit": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "S"
+   }
+  },
+  {
+   "i": 95,
+   "ticker": "GOOGL",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/05/investment-wisdom-always-says-buy-assets-so-dont-ignore-that-wisdom-as-it-relates-to-this-hyperscaler/",
+   "title": "Investment Wisdom Always Says Buy Assets, So Don't Ignore That Wisdom As It Relates To This Hyperscaler",
+   "article_chars_fetched": 3777,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 96,
+   "ticker": "KO",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/05/pepsi-vs-coke-heres-what-10000-could-be-worth-by-2031-2/",
+   "title": "Pepsi vs. Coke: Here’s What $10,000 Could Be Worth by 2031",
+   "article_chars_fetched": 4360,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "N",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 97,
+   "ticker": "NOW",
+   "site": "247wallst.com",
+   "url": "https://247wallst.com/investing/2026/10/05/the-biggest-buyers-in-cybersecurity-now-are-not-cybersecurity-companies/",
+   "title": "The Biggest Buyers in Cybersecurity Now Are Not Cybersecurity Companies",
+   "article_chars_fetched": 4777,
+   "hand_label": "N",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "N",
+    "finbert-tone": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "U",
+    "Mistral-7B-Instruct-v0.3-4bit": "N",
+    "Phi-3.5-mini-instruct-4bit": "N"
+   }
+  },
+  {
+   "i": 98,
+   "ticker": "APLD",
+   "site": "benzinga.com",
+   "url": "https://www.benzinga.com/trading-ideas/movers/26/10/62161936/we-asked-3-ai-chatbots-for-the-weeks-top-stock-picks-applied-digital-tops-the-list",
+   "title": "We Asked 3 AI Chatbots for the Week's Top Stock Picks: Applied Digital Tops the List",
+   "article_chars_fetched": 3511,
+   "hand_label": "B",
+   "not_about_filed_ticker": false,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "B",
+    "Qwen2.5-7B-Instruct-4bit": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "B",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  },
+  {
+   "i": 99,
+   "ticker": "GOOGL",
+   "site": "zacks.com",
+   "url": "https://www.zacks.com/commentary/3000177/meta-muse-sparking-the-ai-revolution?cid=CS-STOCKNEWSAPI-FT-investment_ideas-3000177",
+   "title": "Meta Muse: Sparking the AI Revolution",
+   "article_chars_fetched": 627,
+   "hand_label": "N",
+   "not_about_filed_ticker": true,
+   "calls": {
+    "finbert": "N",
+    "ModernFinBERT": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis": "B",
+    "finbert-tone": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis": "N",
+    "Qwen2.5-7B-Instruct-4bit": "U",
+    "Meta-Llama-3.1-8B-Instruct-4bit": "S",
+    "Mistral-7B-Instruct-v0.3-4bit": "B",
+    "Phi-3.5-mini-instruct-4bit": "B"
+   }
+  }
+ ],
+ "youtube_videos": [
+  {
+   "i": 0,
+   "video_id": "_4_lvPcaT_g",
+   "ticker": "GOOGL",
+   "channel": "Schwab Network",
+   "title": "Bull v. Bear: GOOGL Ups AI Reach with Gemini 4 Argon",
+   "chars": 8957,
+   "auto_captions": false,
+   "ticker_mentions": 14,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  },
+  {
+   "i": 1,
+   "video_id": "VyypgDDFbSY",
+   "ticker": "IREN",
+   "channel": "By the numbers",
+   "title": "IREN Is Still a Bitcoin Miner: The $6.6B AI Bet Behind the Numbers",
+   "chars": 8712,
+   "auto_captions": true,
+   "ticker_mentions": 19,
+   "hand_label": "S",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 2,
+   "video_id": "lRjko5Ogtcg",
+   "ticker": "IREN",
+   "channel": "Mikele X10 Stocks 4",
+   "title": "Anthropic&#39;s $518B Bill: Where&#39;s $IREN?",
+   "chars": 9942,
+   "auto_captions": true,
+   "ticker_mentions": 19,
+   "hand_label": "S",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "N",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 3,
+   "video_id": "TVBTTAjDe70",
+   "ticker": "SPY",
+   "channel": "Spicy Trade Stock Technical Analysis ",
+   "title": "State Street SPDR S&amp;P 500 ETF T ( $SPY ) SpicyTrade - Daily Stock Analysis",
+   "chars": 8159,
+   "auto_captions": true,
+   "ticker_mentions": 4,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "S",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "S",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 4,
+   "video_id": "9Hp0u9j1EJM",
+   "ticker": "MU",
+   "channel": "StockInvest.us",
+   "title": "MU Micron Stock: 5 Shock Scenarios + Monday Predicted Opening Price - Bubble or Breakout? 🔥",
+   "chars": 11685,
+   "auto_captions": true,
+   "ticker_mentions": 21,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  },
+  {
+   "i": 5,
+   "video_id": "p6GSyGYKnhU",
+   "ticker": "CBRS",
+   "channel": "Griffonomics",
+   "title": "Cerebras Systems ($CBRS): ⚡ The &quot;Decode Monopoly&quot; Cracking Open AI&#39;s Memory Wall",
+   "chars": 47810,
+   "auto_captions": true,
+   "ticker_mentions": 35,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "S",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "S"
+   }
+  },
+  {
+   "i": 6,
+   "video_id": "HWhjhJn-OrY",
+   "ticker": "NVDA",
+   "channel": "Dillon With Money",
+   "title": "PLTR-NVDA STOCK] WHAT IS ABOUT TO BREAK",
+   "chars": 30401,
+   "auto_captions": true,
+   "ticker_mentions": 19,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 7,
+   "video_id": "k8dxvU8x8sU",
+   "ticker": "NVDA",
+   "channel": "Vinc88",
+   "title": "Why NVIDIA ($NVDA) Is the Next NVIDIA! 🚀 Stock Analysis LIVE!",
+   "chars": 26168,
+   "auto_captions": true,
+   "ticker_mentions": 52,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "B",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  },
+  {
+   "i": 8,
+   "video_id": "-xgdhdMGric",
+   "ticker": "QQQ",
+   "channel": "Spicy Trade Stock Technical Analysis ",
+   "title": "Invesco QQQ Trust, Series 1 ( $QQQ ) SpicyTrade - Daily Stock Analysis",
+   "chars": 8120,
+   "auto_captions": true,
+   "ticker_mentions": 3,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "N",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 9,
+   "video_id": "itg44KXGa2I",
+   "ticker": "IREN",
+   "channel": "Options With Ryan",
+   "title": "Why I Sold IREN + 2 New Stocks I Bought &amp; My Hedge (Options With Ryan)",
+   "chars": 25248,
+   "auto_captions": true,
+   "ticker_mentions": 9,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "S",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 10,
+   "video_id": "7M7eJApizVo",
+   "ticker": "NVDA",
+   "channel": "Global Financial Markets Review By Dr. MD",
+   "title": "Viewers Selected Stocks! Breakout &amp; Reversal Levels | AAPL, NVDA, TSLA, MSFT, AMD | Sep 28–Oct 02",
+   "chars": 8044,
+   "auto_captions": true,
+   "ticker_mentions": 4,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 11,
+   "video_id": "FAF9cF1fkOU",
+   "ticker": "IREN",
+   "channel": "McNallie Money",
+   "title": "Latest CORZ, CRWV, HUT, IREN, SLNH &amp; KEEL News | Top AI Stocks to Watch | AI Stock Headlines",
+   "chars": 32177,
+   "auto_captions": true,
+   "ticker_mentions": 17,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  },
+  {
+   "i": 12,
+   "video_id": "6HFsGskqkic",
+   "ticker": "SPY",
+   "channel": "Pat Stocks",
+   "title": "SPY PUTS 200%+ &amp; CALLS 100%+ | Monday 9/28/26",
+   "chars": 11054,
+   "auto_captions": true,
+   "ticker_mentions": 17,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "N",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 13,
+   "video_id": "gUPdsqQJ3K4",
+   "ticker": "CBRS",
+   "channel": "Wall Street Psychology",
+   "title": "CBRS Stock Is Falling — Buy the Dip or Stay Away?",
+   "chars": 10311,
+   "auto_captions": true,
+   "ticker_mentions": 17,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "S",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 14,
+   "video_id": "VIvj9X0_Gvg",
+   "ticker": "QQQ",
+   "channel": "StockInvest.us",
+   "title": "QQQ Invesco QQQ: 3 Reasons It Could Surge - Tuesday Predicted Opening Price? 📈",
+   "chars": 10128,
+   "auto_captions": true,
+   "ticker_mentions": 28,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 15,
+   "video_id": "ajXnk37Q664",
+   "ticker": "NFLX",
+   "channel": "Learn Invest & Learn",
+   "title": "Is NFLX Stock Undervalued After A 50% Crash?",
+   "chars": 14452,
+   "auto_captions": true,
+   "ticker_mentions": 54,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  },
+  {
+   "i": 16,
+   "video_id": "0jZx0PgWd0k",
+   "ticker": "SPY",
+   "channel": "Tyler Wilson Investing",
+   "title": "Trump SAVED the Stock Market: Microsoft/META/MICRON boost the S&amp;P500 [SPY, Nvidia, TESLA, MUSE AI]",
+   "chars": 25353,
+   "auto_captions": true,
+   "ticker_mentions": 6,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "B",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "N",
+    "finbert-tone chunks": "N",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 17,
+   "video_id": "GMG81-ICF-w",
+   "ticker": "MU",
+   "channel": "The Progress Archive",
+   "title": "Micron Stock Is Up 500% — Here&#39;s the AI Story Behind It",
+   "chars": 8175,
+   "auto_captions": true,
+   "ticker_mentions": 19,
+   "hand_label": "B",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "B",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "B",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "S",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "N",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 18,
+   "video_id": "50lcjPT1NVQ",
+   "ticker": "IREN",
+   "channel": "StockInvest.us",
+   "title": "IREN Stock Analysis: 82% Upside? 5 Must-Know Points + Monday Predicted Opening Price 📈",
+   "chars": 11541,
+   "auto_captions": true,
+   "ticker_mentions": 24,
+   "hand_label": "S",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "B",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "B",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "S",
+    "ModernFinBERT chunks": "N",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "N",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "N"
+   }
+  },
+  {
+   "i": 19,
+   "video_id": "4HYcl8UlmH8",
+   "ticker": "IREN",
+   "channel": "Crossroads",
+   "title": "New Products and Acquisitions (NBIS, IREN, CRWV Stocks) | Data Center Weekly",
+   "chars": 25589,
+   "auto_captions": true,
+   "ticker_mentions": 11,
+   "hand_label": "N",
+   "calls": {
+    "Qwen2.5-7B-Instruct-4bit whole": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit whole": "S",
+    "Mistral-7B-Instruct-v0.3-4bit whole": "N",
+    "Phi-3.5-mini-instruct-4bit whole": "B",
+    "Qwen2.5-7B-Instruct-4bit passages": "N",
+    "Meta-Llama-3.1-8B-Instruct-4bit passages": "N",
+    "Mistral-7B-Instruct-v0.3-4bit passages": "N",
+    "finbert chunks": "N",
+    "ModernFinBERT chunks": "B",
+    "distilroberta-finetuned-financial-news-sentiment-analysis chunks": "B",
+    "finbert-tone chunks": "B",
+    "deberta-v3-ft-financial-news-sentiment-analysis chunks": "B"
+   }
+  }
+ ]
+}

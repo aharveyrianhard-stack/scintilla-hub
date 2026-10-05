@@ -1,117 +1,144 @@
 {
-  "name": "COIL · the podium staircase as one component (template v3 — pass 3, 5 Oct 2026)",
-  "part_id": "podium-coil",
-  "fits": "T12a's inventory (hub/t12a-tree-parts-cohorts-20261003, inventory.json) names the part PODIUM COIL · N NAMES (id podium-coil, KEEP: 'settled: the coil, the mirrored red staircase') and PODIUM 3D (id podium-3d, the staircase standing, 70°, free turn). This sheet is the template of podium-coil; its sub-parts keep T9/T10's names: step, zero-ring, equator-band, spine, label, hud, camera, walk. T12 (hub/t12-tree-parts-20261003) had not pushed by 11:45 ET.",
-  "settled_by_alan_do_not_reopen": [
-    "camera starts at 70° elevation",
-    "the red half is the green half mirrored in the zero plane",
-    "walking down the steps",
-    "the coil's scale comes from the data (tread = reading × H)",
-    "the lists are read through the Hub mirror"
-  ],
-  "inputs": {
-    "instruments": "an ordered list of tickers — a Hub list (★ FAVORITES, ◎ RADAR, ♥ LIKED, read from the Hub mirror: localStorage sc_lists.favorites / .radar, sc_fav) or a section's / cohort's names",
-    "values": "one reading per ticker in −1..+1: the Hub Geiger composite from the chart API /geiger (symbols[t].composite); null = no reading",
-    "scintillas": "optional: the tickers that fired today (public.scintillas, session = today) — they carry the scintilla motion",
-    "changes": "optional stream of {ticker, value}: a value change moves its step and signals the change (see motion)"
-  },
-  "geometry": {
-    "unit": "U — the tree's world unit (T10 sheet: data/tree-standard.t10-e133a81.json). A screen prints U × ppu px.",
-    "spiral": "Archimedean r = A + Bθ, walked in even steps of arc length D; A = 30 U (inner radius), D = 30 U (the step along the arc = the tread's width), RW = 30 U (tread depth), B = RW × 1.04 / 2π so the turns touch",
-    "height": "tread = reading × H; H starts at 260 U per unit and is lowered until the biggest drop between neighbours ≤ one tread (30 U), never below 60 U; the same H above and below zero",
-    "order": "green: readings ≥ 0 sorted high → low from the centre out; red: readings < 0 sorted most negative first from the centre out, on the mirrored spiral (θ → −θ), hanging under the zero plane; no reading: grey, after the last red step, a quarter tread lower each",
-    "zero_ring": "a ring at height 0 at the outer radius + RW/2 + 6 U; the equator between the two base radii is a flat band",
-    "label": "the ticker and its reading painted on the reading face (the tread of a green step, the underside of a red one) and on the outer face; it moves with the step. PASS 2: each label is turned by its facing angle every frame — mirrored (its x axis points screen-left) → flipped in x, upside down (its y axis points screen-down) → flipped in y — so it reads upright, left-to-right, from any angle; an outer-face label that faces away is hidden. The ticker spans the tread (96 of 256 texture px, white on a dark backing behind the type only), the reading under it in the direction colour; printed ≈ 22 px at home on 1920 × 1080 and 1680 × 1050 (median; the smallest outer turn ≈ 13 px).",
-    "sizes_from_T10": {
-      "step_w": 30,
-      "tread_depth": 30,
-      "inner_radius": 30,
-      "H_max": 260,
-      "H_min": 60,
-      "drop_cap": 30,
-      "label_type_u": 18,
-      "legible_min_tread_px": 30
-    }
-  },
-  "camera": {
-    "home": {
-      "el": 70,
-      "az": 28,
-      "fov": 38,
-      "fill": 0.8,
-      "rule": "PASS 2: the distance is solved (bisection) so the coil's projected height is 80 % of the view's height on any screen (its width never past 94 %), and the target is shifted so the projection sits centred — measured 82 % at 1680 × 1050 and 1920 × 1080, 73 % on the phone (its width is the limit there)"
-    },
-    "orbit": "the full sphere, left drag / one finger rotates, wheel zooms (×1.2 per notch), double-click or RESET VIEW flies home in 700 ms",
-    "walk": {
-      "eye": 120,
-      "back_steps": 3.2,
-      "ahead_steps": 12,
-      "fov": 62,
-      "ms_per_step": 480
-    }
-  },
-  "colours": {
-    "source": "the Hub's tokens (index.html :root) — not the tree page's greys",
-    "bg": "#0A0A0F",
-    "surface": "#0F0F1A",
-    "line": "#1A1A2A",
-    "chrome_cyan": "#00D4FF (the zero ring, hairlines, the LIGHT-GUIDE's edges — cyan is chrome, never a reading)",
-    "up": "#00FFA3 (--bull)",
-    "down": "#FF2D55 (--bear)",
-    "none": "#3A3A52 (--mute)",
-    "type": "#F2F2F8 (ticker, on a dark backing) · the reading in the direction colour",
-    "type_family": "SF Mono / JetBrains Mono / ui-monospace",
-    "type_px": {
-      "ticker": 15,
-      "ticker_phone": 12,
-      "reading": 11
-    }
-  },
-  "directions": {
-    "grammar": "PASS 2, shared by the three: the light IS the form. A dark translucent body (6 %), hairline verticals, a thin bright frame on the tread (its colour above 1.0 so bloom lifts it), an 8 % plate under the type, the step's footprint drawn on the zero plane in its colour, the red half's footprints filled (additive, 42 %) so the red plan reads through the green glass from 70°; UnrealBloom on every direction (threshold ≈ 0.78, so only the frames, cores and ring bloom); glow strength = 0.35 + 0.65 × |reading|. No lights, no lit slabs, no tone mapping. References: three.js webgl_postprocessing_unreal_bloom, EdgesGeometry / LineSegments wireframes, the Hub's Geiger bar glow (box-shadow 0 0 6px currentColor), Territory-Studio-style FUI (thin emissive strokes on dark glass).",
-    "A_laser": {
-      "step": "the beam is the form: a bright core (r 0.7 U, additive, 0.9 + 0.7 × glow) in a soft halo (r 3.2 U, 4–12 %) from the zero plane to the reading",
-      "post": "bloom 0.42 / radius 0.32 / threshold 0.78",
-      "reads_best": "from the side and below (one beam per instrument, the red half hanging); at 70° the treads carry every name and the red plan shows through"
-    },
-    "B_light_guide": {
-      "step": "every edge of the step a cyan hairline (40 %), the tread frame in the direction colour, no beam; a bead of light runs on a change",
-      "post": "bloom 0.34 / 0.28 / 0.80",
-      "reads_best": "from 70° — the cleanest wireframe; from the side a cyan cage"
-    },
-    "C_hologram": {
-      "step": "an additive hologram body (fresnel rim, scanlines, almost no fill) with a bright frame and an additive plate at the reading; a wipe reveals it",
-      "post": "bloom 0.38 / 0.30 / 0.76",
-      "reads_best": "at 70° the red half reads most plainly of the three (additive light adds through the green: red/green lit pixels ≈ 0.12 vs 0.01 for LASER); from the side the plates stack cleanly"
-    }
-  },
-  "motion_rules": {
-    "principle": "nothing moves unless a value does. No idle rotation, no breathing, no decoration.",
-    "land": "when the readings arrive, every step grows from the zero plane to its reading, 900 ms eased, staggered 28 ms per rank from the centre out (58 names ≈ 2.5 s) — the readings landing",
-    "change": "a value change: the step eases to its new height (≈ 600 ms, exponential ease), the label repaints, and the direction signals the change once — LASER: the beam and tread flare 320 ms; LIGHT-GUIDE: a bead of light runs from zero to the tip 420 ms; HOLOGRAM: the plate re-materialises with a 400 ms vertical wipe",
-    "scintilla": "a name that fired today: HOLOGRAM flickers its plate once every 20 s (the Hub's own 'soon' cadence); the other two directions should carry the same rule (not built in the lab)",
-    "camera": "RESET VIEW 700 ms eased; a walk step 480 ms eased (T9)",
-    "reduced_motion": "prefers-reduced-motion: land instantly, no flare / bead / wipe — the Hub's SCINT_OFF rule"
-  },
-  "performance": {
-    "measured": "PASS 2 (headless Chrome, ANGLE Metal, Apple M5 Max): 1680 × 1050 @2 and 1920 × 1080 @1, 58 steps, 4 s of turning with every frame rendered through the bloom chain: 60 fps in all three directions on both screens (vsync-capped), CPU per rendered frame ≈ 2.3 ms LASER (826 draw calls), 2.0 ms LIGHT-GUIDE (594), 1.3 ms HOLOGRAM (478) — shots/proof-p2.json",
-    "budget": "≥ 50 fps on the MacBook; the lab leaves ≥ 15 ms of headroom per frame at 58 names; at 600 names (a whole section) the per-step draw calls (≈ 4–6 each) would need instancing — a note for the tree's assembly, not a lab problem"
-  },
-  "not_in_this_template": [
-    "the hud and the walk's keyboard (T9's, unchanged)",
-    "picking a step (click → the company)",
-    "the parent's ball above the peak",
-    "instancing for > 200 steps"
-  ],
-  "hud": "fps prints only while MEASURE FPS runs ('measuring fps…'), then the measured number stays; never a live counter (pass 2, point 5)",
-  "pass3_20261005": {
-    "alan": "LASER COIL IS NICE BUT IT STILL HAS THESE COLUMN BOXES AROUND IT … THE LABELS NEED TO TILT WITH THE VIEW CHANGE, AND SMALLER, OR SOME DYNAMIC ZOOM ON THE FONT AS I ZOOM (YOU COULD USE THAT FOR THE TREE TOO) … THE SPHERE'S TOTAL IS MARKET CAP",
-    "step": "a step is its light and nothing else: the beam (a bright core in a soft halo, from the zero plane to the reading) and the tread's edge (a thin bright frame). No glass body, no hairline verticals, no plate, no footprint. opts.boxes = true puts V2b's boxes back for a side-by-side.",
-    "label": "one sprite per step at the step's tip (above a green step, under a red one): it always faces the camera and stays upright in screen space, so it can never read mirrored or upside down. Ticker (white, 700) over its reading (in the step's colour). Drawn in a second pass after the bloom chain, so the type is crisp.",
-    "label_scale": "label-scale.mjs · px = 13 × (home distance ÷ camera distance), floor 11 px, ceiling 24 px on a 1080-tall screen (the three scale with the screen's height; the floor never under 11). Labels thin out when their ink boxes (+4 px) would touch — the strongest |reading| is placed first — and all come back when zoomed in. Reusable: the tree's label (T12 part 02) runs it in label-scale-demo.html.",
-    "sphere": "the set draws a translucent sphere (a glass rim, its equator on the zero plane, one meridian) whose VOLUME is the sum of its members' market caps: r = 80 U × (Σ market cap ÷ $1 T)^⅓ — $1 T = 80 U of radius; a tread is 30 U. FAVORITES $40.5 T → r 275 U; RADAR $17.6 T → r 208 U; LIKED $46.6 T → r 288 U. A title above the sphere: NAME · Σ cap · n names · m with a cap on file. Two sets side by side (ox = ∓(r + 20 U)) sit level (camera azimuth 0) and share the scale.",
-    "sphere_alternative": "step width = (its market cap ÷ the set's biggest)^⅓, floor 0.2 of the slot — the same cube root, so widths compare like radii; the label adds the cap ($5.7T). Shown beside the sphere for the decision.",
-    "market_caps": "data/market-caps-20261005.json · company_profile.market_cap through the Hub's public read path (tools/pull-market-caps.mjs), 142 of 144 list names on file; BTCUSD and GCUSD have none and are listed, not counted.",
-    "proof": "proof-p3.mjs → shots/proof-p3.json, p3-*.png, p3-*.webm; tests/coil-lab-20261003.test.mjs pass 3 · 1–5"
+ "name": "COIL · the podium staircase as one component (template v3 — pass 3, 5 Oct 2026)",
+ "part_id": "podium-coil",
+ "fits": "T12a's inventory (hub/t12a-tree-parts-cohorts-20261003, inventory.json) names the part PODIUM COIL · N NAMES (id podium-coil, KEEP: 'settled: the coil, the mirrored red staircase') and PODIUM 3D (id podium-3d, the staircase standing, 70°, free turn). This sheet is the template of podium-coil; its sub-parts keep T9/T10's names: step, zero-ring, equator-band, spine, label, hud, camera, walk. T12 (hub/t12-tree-parts-20261003) had not pushed by 11:45 ET.",
+ "settled_by_alan_do_not_reopen": [
+  "camera starts at 70° elevation",
+  "the red half is the green half mirrored in the zero plane",
+  "walking down the steps",
+  "the coil's scale comes from the data (tread = reading × H)",
+  "the lists are read through the Hub mirror"
+ ],
+ "inputs": {
+  "instruments": "an ordered list of tickers — a Hub list (★ FAVORITES, ◎ RADAR, ♥ LIKED, read from the Hub mirror: localStorage sc_lists.favorites / .radar, sc_fav) or a section's / cohort's names",
+  "values": "one reading per ticker in −1..+1: the Hub Geiger composite from the chart API /geiger (symbols[t].composite); null = no reading",
+  "scintillas": "optional: the tickers that fired today (public.scintillas, session = today) — they carry the scintilla motion",
+  "changes": "optional stream of {ticker, value}: a value change moves its step and signals the change (see motion)"
+ },
+ "geometry": {
+  "unit": "U — the tree's world unit (T10 sheet: data/tree-standard.t10-e133a81.json). A screen prints U × ppu px.",
+  "spiral": "Archimedean r = A + Bθ, walked in even steps of arc length D; A = 30 U (inner radius), D = 30 U (the step along the arc = the tread's width), RW = 30 U (tread depth), B = RW × 1.04 / 2π so the turns touch",
+  "height": "tread = reading × H; H starts at 260 U per unit and is lowered until the biggest drop between neighbours ≤ one tread (30 U), never below 60 U; the same H above and below zero",
+  "order": "green: readings ≥ 0 sorted high → low from the centre out; red: readings < 0 sorted most negative first from the centre out, on the mirrored spiral (θ → −θ), hanging under the zero plane; no reading: grey, after the last red step, a quarter tread lower each",
+  "zero_ring": "a ring at height 0 at the outer radius + RW/2 + 6 U; the equator between the two base radii is a flat band",
+  "label": "the ticker and its reading painted on the reading face (the tread of a green step, the underside of a red one) and on the outer face; it moves with the step. PASS 2: each label is turned by its facing angle every frame — mirrored (its x axis points screen-left) → flipped in x, upside down (its y axis points screen-down) → flipped in y — so it reads upright, left-to-right, from any angle; an outer-face label that faces away is hidden. The ticker spans the tread (96 of 256 texture px, white on a dark backing behind the type only), the reading under it in the direction colour; printed ≈ 22 px at home on 1920 × 1080 and 1680 × 1050 (median; the smallest outer turn ≈ 13 px).",
+  "sizes_from_T10": {
+   "step_w": 30,
+   "tread_depth": 30,
+   "inner_radius": 30,
+   "H_max": 260,
+   "H_min": 60,
+   "drop_cap": 30,
+   "label_type_u": 18,
+   "legible_min_tread_px": 30
   }
+ },
+ "camera": {
+  "home": {
+   "el": 70,
+   "az": 28,
+   "fov": 38,
+   "fill": 0.8,
+   "rule": "PASS 2: the distance is solved (bisection) so the coil's projected height is 80 % of the view's height on any screen (its width never past 94 %), and the target is shifted so the projection sits centred — measured 82 % at 1680 × 1050 and 1920 × 1080, 73 % on the phone (its width is the limit there)"
+  },
+  "orbit": "the full sphere, left drag / one finger rotates, wheel zooms (×1.2 per notch), double-click or RESET VIEW flies home in 700 ms",
+  "walk": {
+   "eye": 120,
+   "back_steps": 3.2,
+   "ahead_steps": 12,
+   "fov": 62,
+   "ms_per_step": 480
+  }
+ },
+ "colours": {
+  "source": "the Hub's tokens (index.html :root) — not the tree page's greys",
+  "bg": "#0A0A0F",
+  "surface": "#0F0F1A",
+  "line": "#1A1A2A",
+  "chrome_cyan": "#00D4FF (the zero ring, hairlines, the LIGHT-GUIDE's edges — cyan is chrome, never a reading)",
+  "up": "#00FFA3 (--bull)",
+  "down": "#FF2D55 (--bear)",
+  "none": "#3A3A52 (--mute)",
+  "type": "#F2F2F8 (ticker, on a dark backing) · the reading in the direction colour",
+  "type_family": "SF Mono / JetBrains Mono / ui-monospace",
+  "type_px": {
+   "ticker": 15,
+   "ticker_phone": 12,
+   "reading": 11
+  }
+ },
+ "directions": {
+  "grammar": "PASS 2, shared by the three: the light IS the form. A dark translucent body (6 %), hairline verticals, a thin bright frame on the tread (its colour above 1.0 so bloom lifts it), an 8 % plate under the type, the step's footprint drawn on the zero plane in its colour, the red half's footprints filled (additive, 42 %) so the red plan reads through the green glass from 70°; UnrealBloom on every direction (threshold ≈ 0.78, so only the frames, cores and ring bloom); glow strength = 0.35 + 0.65 × |reading|. No lights, no lit slabs, no tone mapping. References: three.js webgl_postprocessing_unreal_bloom, EdgesGeometry / LineSegments wireframes, the Hub's Geiger bar glow (box-shadow 0 0 6px currentColor), Territory-Studio-style FUI (thin emissive strokes on dark glass).",
+  "A_laser": {
+   "step": "the beam is the form: a bright core (r 0.7 U, additive, 0.9 + 0.7 × glow) in a soft halo (r 3.2 U, 4–12 %) from the zero plane to the reading",
+   "post": "bloom 0.42 / radius 0.32 / threshold 0.78",
+   "reads_best": "from the side and below (one beam per instrument, the red half hanging); at 70° the treads carry every name and the red plan shows through"
+  },
+  "B_light_guide": {
+   "step": "every edge of the step a cyan hairline (40 %), the tread frame in the direction colour, no beam; a bead of light runs on a change",
+   "post": "bloom 0.34 / 0.28 / 0.80",
+   "reads_best": "from 70° — the cleanest wireframe; from the side a cyan cage"
+  },
+  "C_hologram": {
+   "step": "an additive hologram body (fresnel rim, scanlines, almost no fill) with a bright frame and an additive plate at the reading; a wipe reveals it",
+   "post": "bloom 0.38 / 0.30 / 0.76",
+   "reads_best": "at 70° the red half reads most plainly of the three (additive light adds through the green: red/green lit pixels ≈ 0.12 vs 0.01 for LASER); from the side the plates stack cleanly"
+  }
+ },
+ "motion_rules": {
+  "principle": "nothing moves unless a value does. No idle rotation, no breathing, no decoration.",
+  "land": "when the readings arrive, every step grows from the zero plane to its reading, 900 ms eased, staggered 28 ms per rank from the centre out (58 names ≈ 2.5 s) — the readings landing",
+  "change": "a value change: the step eases to its new height (≈ 600 ms, exponential ease), the label repaints, and the direction signals the change once — LASER: the beam and tread flare 320 ms; LIGHT-GUIDE: a bead of light runs from zero to the tip 420 ms; HOLOGRAM: the plate re-materialises with a 400 ms vertical wipe",
+  "scintilla": "a name that fired today: HOLOGRAM flickers its plate once every 20 s (the Hub's own 'soon' cadence); the other two directions should carry the same rule (not built in the lab)",
+  "camera": "RESET VIEW 700 ms eased; a walk step 480 ms eased (T9)",
+  "reduced_motion": "prefers-reduced-motion: land instantly, no flare / bead / wipe — the Hub's SCINT_OFF rule"
+ },
+ "performance": {
+  "measured": "PASS 2 (headless Chrome, ANGLE Metal, Apple M5 Max): 1680 × 1050 @2 and 1920 × 1080 @1, 58 steps, 4 s of turning with every frame rendered through the bloom chain: 60 fps in all three directions on both screens (vsync-capped), CPU per rendered frame ≈ 2.3 ms LASER (826 draw calls), 2.0 ms LIGHT-GUIDE (594), 1.3 ms HOLOGRAM (478) — shots/proof-p2.json",
+  "budget": "≥ 50 fps on the MacBook; the lab leaves ≥ 15 ms of headroom per frame at 58 names; at 600 names (a whole section) the per-step draw calls (≈ 4–6 each) would need instancing — a note for the tree's assembly, not a lab problem"
+ },
+ "not_in_this_template": [
+  "the hud and the walk's keyboard (T9's, unchanged)",
+  "picking a step (click → the company)",
+  "the parent's ball above the peak",
+  "instancing for > 200 steps"
+ ],
+ "hud": "fps prints only while MEASURE FPS runs ('measuring fps…'), then the measured number stays; never a live counter (pass 2, point 5)",
+ "pass3_20261005": {
+  "alan": "LASER COIL IS NICE BUT IT STILL HAS THESE COLUMN BOXES AROUND IT … THE LABELS NEED TO TILT WITH THE VIEW CHANGE, AND SMALLER, OR SOME DYNAMIC ZOOM ON THE FONT AS I ZOOM (YOU COULD USE THAT FOR THE TREE TOO) … THE SPHERE'S TOTAL IS MARKET CAP",
+  "step": "a step is its light and nothing else: the beam (a bright core in a soft halo, from the zero plane to the reading) and the tread's edge (a thin bright frame). No glass body, no hairline verticals, no plate, no footprint. opts.boxes = true puts V2b's boxes back for a side-by-side.",
+  "label": "one sprite per step at the step's tip (above a green step, under a red one): it always faces the camera and stays upright in screen space, so it can never read mirrored or upside down. Ticker (white, 700) over its reading (in the step's colour). Drawn in a second pass after the bloom chain, so the type is crisp.",
+  "label_scale": "label-scale.mjs · px = 13 × (home distance ÷ camera distance), floor 11 px, ceiling 24 px on a 1080-tall screen (the three scale with the screen's height; the floor never under 11). Labels thin out when their ink boxes (+4 px) would touch — the strongest |reading| is placed first — and all come back when zoomed in. Reusable: the tree's label (T12 part 02) runs it in label-scale-demo.html.",
+  "sphere": "the set draws a translucent sphere (a glass rim, its equator on the zero plane, one meridian) whose VOLUME is the sum of its members' market caps: r = 80 U × (Σ market cap ÷ $1 T)^⅓ — $1 T = 80 U of radius; a tread is 30 U. FAVORITES $40.5 T → r 275 U; RADAR $17.6 T → r 208 U; LIKED $46.6 T → r 288 U. A title above the sphere: NAME · Σ cap · n names · m with a cap on file. Two sets side by side (ox = ∓(r + 20 U)) sit level (camera azimuth 0) and share the scale.",
+  "sphere_alternative": "step width = (its market cap ÷ the set's biggest)^⅓, floor 0.2 of the slot — the same cube root, so widths compare like radii; the label adds the cap ($5.7T). Shown beside the sphere for the decision.",
+  "market_caps": "data/market-caps-20261005.json · company_profile.market_cap through the Hub's public read path (tools/pull-market-caps.mjs), 142 of 144 list names on file; BTCUSD and GCUSD have none and are listed, not counted.",
+  "proof": "proof-p3.mjs → shots/proof-p3.json, p3-*.png, p3-*.webm; tests/coil-lab-20261003.test.mjs pass 3 · 1–5"
+ },
+ "pass4_20261005": {
+  "alan": "5 Oct ~12:45 ET: 'What are these boxes, these rectangles at the top of the lasers? I hate these boxes. Make the lasers at least as thick as the fonts. The zooming is a little glitchy — it kind of snaps, some weird lag. Lasers thicker, fonts a little smaller — even on the zoom-out the fonts are still big; balance it out.'",
+  "1_no_rectangles": "no chip behind the type: painted type with a dark outline (16 % of the size) and a soft dark glow; the LASER step has no tread frame — a step is its beam and its type (opts.boxes = V2b's boxes for the side-by-side only)",
+  "2_beam_over_type": {
+   "core_px": "1.15 × the ticker's cap height, set in screen px every frame (never thinner than the type at any zoom)",
+   "hot_line": "0.3 of the core, white-hot (k 1.3–2.0)",
+   "halo_px": "core × (1.5 + 1.5 × |reading|) — the halo follows the reading, the core does not",
+   "at_home_1920x1080": "type 11 px · core 13.6 px · halo 29 px (median step)"
+  },
+  "3_type_by_zoom": {
+   "rule": "label-scale.mjs LABEL_RULE: ticker 11 px at home, value 9/11 of it, ceiling 16 px, floor 8 px, on 1080 tall; scaled with the view's height",
+   "at_1920": "11 / 16 / 8 px at home / ½ distance / 2× distance",
+   "at_1680": "10.7 / 15.6 / 8 px"
+  },
+  "4_smooth_zoom": {
+   "wheel": "OrbitControls' dolly off; a tick scales a TARGET distance × 0.946 per 120 px of wheel (OrbitControls' own pace at zoomSpeed 0.9); the camera eases to it each frame, time constant 120 ms; limits 0.12 × … 8 × home",
+   "no_refit": "the home fit (bisection) runs once per load and on a resize, never on a wheel tick",
+   "hysteresis": "thinning keeps the shown labels first at 4 px of pad; a hidden one needs 10 px clear to come back; a label that just went is held hidden 400 ms",
+   "measure": "api.record(): per rendered frame the distance step, the type px, labels shown, labels that popped; proof-p4.json"
+  },
+  "5_red_equals_green": "bloom threshold 0 (proportional), strength 0.3 — pass 3's threshold 0.78 was a luminance gate: green 00FFA3 has 0.76 per unit, red FF2D55 0.36; pixelShare() prints mean brightness per colour",
+  "settled_kept": [
+   "camera 70°",
+   "the separation of the two halves (not fused into the walking steps)",
+   "the sphere rule r = 80 U × (Σ cap / $1 T)^⅓"
+  ]
+ }
 }

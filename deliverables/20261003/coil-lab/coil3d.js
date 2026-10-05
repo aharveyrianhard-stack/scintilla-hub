@@ -1,4 +1,22 @@
-/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 3 (5 Oct 2026).
+/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 4 (5 Oct 2026, afternoon).
+   PASS 4 (Alan, 5 Oct ~12:45: "What are these boxes, these rectangles at the top of the lasers? I hate these boxes. Make the lasers
+   at least as thick as the fonts. The zooming is a little glitchy — it kind of snaps, some weird lag. … lasers thicker, fonts a little
+   smaller — even on the zoom-out the fonts are still big; balance it out."):
+     1 NO RECTANGLES the dark chip behind each label is gone: the ticker and the value are painted type with a dark outline and a
+                     soft glow for contrast, nothing boxed; and the LASER step has no tread frame any more (the thin polygon outline
+                     V3 left around every step) — a step is its beam and its type. V2b's boxes (opts.boxes) still bring everything back.
+     2 BEAM ≥ TYPE   the beam's core is sized in screen px each frame: core = BEAM.core_over_type × the ticker's cap height (never
+                     thinner than the type, at any zoom); the halo = core × (2 + 2.5 × |reading|) — the halo follows the reading,
+                     the core does not. api.beamPx() prints core / halo / type in px.
+     3 BALANCE       the type (label-scale.mjs, pass 4 sizes): ticker 11 px at home, value 9 px, ceiling 16 px zoomed in, floor 8 px
+                     zoomed out (on 1080 tall; scaled with the screen's height). The beam follows the type, so the ratio holds.
+     4 SMOOTH ZOOM   the wheel no longer dollies the camera itself (OrbitControls' zoom is off): each tick moves a TARGET distance
+                     (× 0.946 per 120 px of wheel) and the camera eases toward it every frame with a 120 ms time constant; the type
+                     and the thinning are laid out per frame with hysteresis (label-scale.mjs), so no label pops at a threshold.
+                     Nothing is re-fitted on a wheel tick: the home fit runs once (and on a resize), the zoom scales from it.
+                     api.record() counts, per rendered frame, the distance step and the labels that appeared or disappeared.
+     5 RED = GREEN   every step colour is normalised to the green's luminance before bloom (litEq), so a red core crosses the bloom
+                     threshold as a green one does; the red fan reads at home below the zero plane as the green fan does above it.
    PASS 3 (Alan, 5 Oct: "it still has these column boxes around it … the labels need to tilt with the view change, and smaller, or
    some dynamic zoom on the font as I zoom … the sphere's total is market cap"):
      1 NO BOXES   a step is its light — the beam (core + halo) and the tread's edge — and nothing else. No glass body, no hairline
@@ -59,8 +77,10 @@ const MONO = '"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace';
 const FILL = 0.8; // the coil's projected height = this share of the view's height at home (the coordinator's point 1)
 const CAP_R1T = 80; // pass 3 · the sphere's scale: $1 T of market cap = 80 U of radius (a tread is 30 U); volume ∝ Σ cap, so r = 80 × (Σcap / 1 T)^⅓
 const CAP_GAP = 40; // U between two spheres side by side
-const TEX = { w: 256, h: 128, tickerFs: 64, valueFs: 40, capShare: (64 * 0.72) / 128 }; // the label texture: the ticker's cap height is capShare of the sprite's height
-const BLOOM = { laser: { s: 0.42, r: 0.32, t: 0.78 }, guide: { s: 0.34, r: 0.28, t: 0.8 }, holo: { s: 0.38, r: 0.3, t: 0.76 } }; // bloom only on what is above 1: the cores, the frames, the ring
+const TEX = { w: 256, h: 128, tickerFs: 64, valueFs: Math.round(64 * LABEL_RULE.value_share), capShare: (64 * 0.72) / 128 }; // the label texture: the ticker's cap height is capShare of the sprite's height; the value is value_share (9/11) of the ticker (pass 4)
+const BEAM = { core_over_type: 1.15, hot_over_core: 0.3, halo: (v) => 1.5 + 1.5 * Math.min(1, Math.abs(v == null ? 0 : v)) }; // pass 4 · the beam's core = 1.15 × the ticker's cap height in px (≥ the type at every zoom), in the step's colour; a white-hot line 0.3 of the core down its middle (the laser); the halo = core × (1.5 … 3.0) by the reading
+const ZOOM = { per_tick: 0.946, tau_ms: 120, min_ratio: 0.12, max_ratio: 8 }; // pass 4 · the wheel: each 120 px of wheel scales the target distance by 0.946 (OrbitControls' own pace at zoomSpeed 0.9); the camera eases toward it with a 120 ms time constant
+const BLOOM = { laser: { s: 0.3, r: 0.3, t: 0 }, guide: { s: 0.3, r: 0.28, t: 0 }, holo: { s: 0.32, r: 0.3, t: 0 } }; // PASS 4: the bloom is proportional — threshold 0, so every emitter glows by its own brightness (green 00FFA3 and red FF2D55 have nearly the same length, 1.19 vs 1.07). Pass 3's threshold 0.78 was a LUMINANCE gate: the green (0.76 per unit) passed, the red (0.36 per unit) never did — that is why the red half was dim. Strength 0.3 (was 0.42) because everything now contributes
 
 export function mountCoil(host, opts) {
   const STD = opts.standard, P = STD.podium, CAM = P.camera;
@@ -78,7 +98,7 @@ export function mountCoil(host, opts) {
   const camera = new THREE.PerspectiveCamera(HOME.fov, 1, 1, 12000);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.12; controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI; // the full sphere (T9)
-  controls.zoomSpeed = 0.9; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  controls.enableZoom = false; /* pass 4: the wheel is ours (eased), see wheel() */ controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 
   // post: bloom on every direction (the light IS the form); strength per direction
   const composer = new EffectComposer(renderer);
@@ -121,10 +141,11 @@ export function mountCoil(host, opts) {
     const c = document.createElement("canvas"); c.width = TEX.w; c.height = TEX.h; const g = c.getContext("2d");
     g.clearRect(0, 0, TEX.w, TEX.h); g.textAlign = "center"; g.textBaseline = "middle";
     g.font = `700 ${TEX.tickerFs}px ${MONO}`; let tw = g.measureText(t).width; if (tw > TEX.w - 8) { g.font = `700 ${Math.floor(TEX.tickerFs * (TEX.w - 8) / tw)}px ${MONO}`; tw = TEX.w - 8; }
-    g.fillStyle = "rgba(10,10,15,0.55)"; g.fillRect(TEX.w / 2 - tw / 2 - 6, 40 - TEX.tickerFs * 0.42, tw + 12, TEX.tickerFs * 0.84); // a dark backing only behind the type
-    g.fillStyle = "#f2f2f8"; g.shadowColor = "#000"; g.shadowBlur = 6; g.fillText(t, TEX.w / 2, 40);
+    // pass 4 · NO RECTANGLES: painted type only — a dark outline (16 % of the size, round joins) under a soft dark glow gives the contrast the chip gave
+    const ink = (txt, x, y, fs, fill) => { g.lineJoin = "round"; g.lineWidth = Math.max(3, fs * 0.16); g.strokeStyle = "rgba(6,6,10,0.9)"; g.shadowColor = "rgba(0,0,0,0.9)"; g.shadowBlur = Math.max(4, fs * 0.22); g.strokeText(txt, x, y); g.shadowBlur = 0; g.fillStyle = fill; g.fillText(txt, x, y); };
+    ink(t, TEX.w / 2, 40, TEX.tickerFs, "#f2f2f8");
     let inkW = tw + 12, inkH = v != null || extra ? 118 : 56;
-    if (v != null || extra) { g.font = `500 ${TEX.valueFs}px ${MONO}`; const txt = (v != null ? (v >= 0 ? "+" : "") + v.toFixed(2) : "") + (extra ? (v != null ? " " : "") + extra : ""); let vw = g.measureText(txt).width; if (vw > TEX.w - 8) { g.font = `500 ${Math.floor(TEX.valueFs * (TEX.w - 8) / vw)}px ${MONO}`; vw = TEX.w - 8; } inkW = Math.max(inkW, vw + 12); g.shadowBlur = 0; g.fillStyle = "rgba(10,10,15,0.55)"; g.fillRect(TEX.w / 2 - vw / 2 - 6, 96 - TEX.valueFs * 0.42, vw + 12, TEX.valueFs * 0.84); g.fillStyle = hex(col); g.shadowBlur = 6; g.fillText(txt, TEX.w / 2, 96); }
+    if (v != null || extra) { g.font = `600 ${TEX.valueFs}px ${MONO}`; const txt = (v != null ? (v >= 0 ? "+" : "") + v.toFixed(2) : "") + (extra ? (v != null ? " " : "") + extra : ""); let vw = g.measureText(txt).width; if (vw > TEX.w - 8) { g.font = `600 ${Math.floor(TEX.valueFs * (TEX.w - 8) / vw)}px ${MONO}`; vw = TEX.w - 8; } inkW = Math.max(inkW, vw + 12); ink(txt, TEX.w / 2, 96, TEX.valueFs, hex(col)); }
     const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8; tex.colorSpace = THREE.SRGBColorSpace; tex.userData = { inkW: inkW / TEX.w, inkH: inkH / TEX.h }; texCache.set(k, tex); return tex;
   }
   const fmtCap = (c) => c >= 1e12 ? "$" + (c / 1e12).toFixed(c >= 1e13 ? 0 : 1) + "T" : c >= 1e9 ? "$" + (c / 1e9).toFixed(c >= 1e11 ? 0 : 1) + "B" : "$" + (c / 1e6).toFixed(0) + "M";
@@ -143,7 +164,7 @@ export function mountCoil(host, opts) {
   // the tread's frame: the four edges of the top face (a unit square in x/z at y = 0)
   const frameGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 0, -0.5), new THREE.Vector3(0.5, 0, -0.5), new THREE.Vector3(0.5, 0, 0.5), new THREE.Vector3(0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, -0.5)]);
   const vertsGeo = new THREE.BufferGeometry().setFromPoints([-0.5, 0.5].flatMap((x) => [-0.5, 0.5].flatMap((z) => [new THREE.Vector3(x, -0.5, z), new THREE.Vector3(x, 0.5, z)])));
-  const coreGeo = new THREE.CylinderGeometry(0.7, 0.7, 1, 6, 1, true), haloGeo = new THREE.CylinderGeometry(3.2, 3.2, 1, 10, 1, true);
+  const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, true), haloGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 1, true); // pass 4: unit diameter — the width is set in screen px each frame (layoutLabels)
   const plateGeo = new THREE.PlaneGeometry(1, 1);
 
   function clear() { if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry && ![boxGeo, edgesGeo, frameGeo, vertsGeo, coreGeo, haloGeo, plateGeo].includes(o.geometry)) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); }); } group = new THREE.Group(); scene.add(group); parts = []; for (const o of labelScene.children.slice()) { labelScene.remove(o); if (o.material && !o.material.map) o.material.dispose(); } spheres = []; }
@@ -151,8 +172,13 @@ export function mountCoil(host, opts) {
 
   const glow = (v) => 0.35 + 0.65 * Math.min(1, Math.abs(v == null ? 0 : v)); // the glow's strength follows the reading
   const lit = (col, k) => new THREE.Color(col).multiplyScalar(k); // a colour above 1 is what bloom picks up (toneMapped: false)
+  /* pass 4 · RED = GREEN: the bloom threshold is a luminance (Rec. 709, as UnrealBloomPass's luminosity pass); green 00FFA3 has 0.76 of it
+     per unit, red FF2D55 only 0.36 — at 0.78 the green bloomed and the red did not. The threshold is now 0.28 (BLOOM), under every core. */
+  const LUM = (col) => { const c = new THREE.Color(col); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }, LUM_GREEN = LUM(HUB.bull);
+  const EQ = () => 1, litEq = (col, k) => lit(col, k); // (tried: scaling the red to the green's luminance — it clamps to pink-white in the core; the threshold is the right lever, see BLOOM)
   const lineMat = (col, k, op = 1) => new THREE.LineBasicMaterial({ color: lit(col, k), transparent: op < 1, opacity: op, toneMapped: false });
   const basic = (col, op, blend = THREE.NormalBlending, k = 1) => new THREE.MeshBasicMaterial({ color: lit(col, k), transparent: true, opacity: op, depthWrite: false, blending: blend, toneMapped: false, side: THREE.DoubleSide });
+  const basicEq = (col, op, blend, k) => basic(col, op, blend, k * EQ(col)), lineMatEq = (col, k, op) => lineMat(col, k * EQ(col), op); // the step materials (pass 4)
 
   function zeroRing(outerR, ox = 0) {
     const pts = []; for (let i = 0; i <= 160; i++) pts.push(new THREE.Vector3(ox + outerR * Math.cos((i / 160) * Math.PI * 2), 0, outerR * Math.sin((i / 160) * Math.PI * 2)));
@@ -194,14 +220,20 @@ export function mountCoil(host, opts) {
   }
   /* ---- pass 3 · the labels: placed at the step's tip each frame, sized by the zoom rule, thinned where they would overlap ---- */
   const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(), _fwd = new THREE.Vector3();
-  const labelStats = { px: 0, raw: 0, at: "", shown: 0, hidden: 0, total: 0, home_d: 0, d: 0 };
+  const labelStats = { px: 0, value_px: 0, raw: 0, at: "", shown: 0, hidden: 0, total: 0, home_d: 0, d: 0, core_u: 0, pops: 0 };
+  let prevShown = null; // pass 4 · the labels shown last frame (the hysteresis of the thinning); null = no last frame
+  const hiddenAt = new Map(), HOLD_MS = 400; // pass 4 · a label that has just gone cannot come back for 400 ms (no overlap can follow from staying hidden) — the "out and straight back in" flicker
+  const rec = { on: false, frames: [], lastD: null, inTick: false, wheels: 0, wheelDy: 0, wheelAbs: 0, flipAt: new Map(), reflips: 0 }; // pass 4 · api.record(): per rendered frame, the distance step and the label pops
   function layoutLabels() {
     if (!parts.length) return;
     camera.updateMatrixWorld(); camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
     camera.getWorldDirection(_fwd); _right.set(1, 0, 0).applyQuaternion(camera.quaternion); _up.set(0, 1, 0).applyQuaternion(camera.quaternion);
     const d = camera.position.distanceTo(controls.target), hd = home ? home.p.distanceTo(home.t) : d;
     const L = labelPx(d, hd, opts.screenH || window.innerHeight || view.h); const spriteH_px = L.px / TEX.capShare; // the sprite's printed height (the ticker's cap height is capShare of it)
-    Object.assign(labelStats, { px: +L.px.toFixed(1), raw: +L.raw.toFixed(1), at: L.at, home_d: +hd.toFixed(0), d: +d.toFixed(0), total: parts.length });
+    // pass 4 · the beam's core in world units: core_over_type × the ticker's cap height, converted at the target's depth (px → U = 2 d tan(fov/2) / viewH)
+    const uPerPx = (2 * d * Math.tan((camera.fov * Math.PI) / 360)) / view.h, coreU = L.px * BEAM.core_over_type * uPerPx;
+    Object.assign(labelStats, { px: +L.px.toFixed(1), value_px: +L.value_px.toFixed(1), raw: +L.raw.toFixed(1), at: L.at, home_d: +hd.toFixed(0), d: +d.toFixed(0), total: parts.length, core_u: +coreU.toFixed(2) });
+    for (const p of parts) if (p.core) { const w = coreU * (p.s.wk || 1), hw = w * BEAM.halo(p.s.v); p.core.scale.x = p.core.scale.z = w; p.hot.scale.x = p.hot.scale.z = w * BEAM.hot_over_core; p.halo.scale.x = p.halo.scale.z = hw; }
     const items = [];
     for (const p of parts) {
       const sp = p.lp, s = p.s, tip = s.tip * p.h, x = (s.ox || 0) + s.r * Math.cos(s.th), z = s.r * Math.sin(s.th);
@@ -214,10 +246,15 @@ export function mountCoil(host, opts) {
       const ink = sp.material.map.userData || { inkW: 0.9, inkH: 0.9 };
       items.push({ id: s.t, x: ((_q.x + 1) / 2) * view.w, y: ((1 - _q.y) / 2) * view.h, w: spriteH_px * (TEX.w / TEX.h) * ink.inkW, h: spriteH_px * ink.inkH, priority: sp.userData.pri, sp });
     }
-    const th = thinLabels(items, 4); let shown = 0;
-    for (const it of items) { it.sp.visible = th.shown.has(it.id); it.sp.userData.shown = it.sp.visible; if (it.sp.visible) shown++; }
-    labelStats.shown = shown; labelStats.hidden = items.length - shown;
-    for (const sph of spheres) { const t = sph.title; const depth = -_p.set(sph.ox, 0, 0).applyMatrix4(camera.matrixWorldInverse).z; const hW = worldHeightForPx(Math.max(13, L.px * 1.05) / (34 * 0.72 / 96), Math.max(1, depth), camera.fov, view.h); t.scale.set(hW * (768 / 96), hW, 1); t.position.set(sph.ox, 0, 0).add(_up.clone().multiplyScalar(sph.r + hW * 0.7 + 6)); } // above the sphere's outline from wherever the camera is
+    const now = performance.now();
+    const th = thinLabels(items, 4, prevShown, 10); let shown = 0, pops = 0; // pass 4 · hysteresis: a shown label keeps its place at 4 px of pad; a hidden one needs 10 px clear to come back
+    for (const it of items) { let vis = th.shown.has(it.id); const wasShown = prevShown ? prevShown.has(it.id) : vis;
+      if (vis && !wasShown && now - (hiddenAt.get(it.id) ?? -1e9) < HOLD_MS) { vis = false; th.shown.delete(it.id); } // the hold
+      if (!vis && wasShown) hiddenAt.set(it.id, now);
+      it.sp.visible = vis; it.sp.userData.shown = vis; if (vis) shown++; if (prevShown && prevShown.has(it.id) !== it.sp.visible) { pops++; if (rec.on && rec.inTick) { const last = rec.flipAt.get(it.id); if (last != null && now - last < 500) rec.reflips++; rec.flipAt.set(it.id, now); } } } // a re-flip: the same label changing state again within 500 ms — the flicker Alan would see
+    labelStats.shown = shown; labelStats.hidden = items.length - shown; labelStats.pops = pops; prevShown = th.shown;
+    if (rec.on && rec.inTick) { rec.frames.push({ t: performance.now(), d: +d.toFixed(2), step: rec.lastD == null ? 0 : +(d - rec.lastD).toFixed(2), px: +L.px.toFixed(2), shown, pops }); rec.lastD = d; }
+    for (const sph of spheres) { const t = sph.title; const depth = -_p.set(sph.ox, 0, 0).applyMatrix4(camera.matrixWorldInverse).z; const hW = worldHeightForPx(Math.max(11, L.px * 1.1) / (34 * 0.72 / 96), Math.max(1, depth), camera.fov, view.h); t.scale.set(hW * (768 / 96), hW, 1); t.position.set(sph.ox, 0, 0).add(_up.clone().multiplyScalar(sph.r + hW * 0.7 + 6)); } // above the sphere's outline from wherever the camera is
   }
   // the probe keeps pass 2's meaning: a label is wrong when its screen x axis points left or its y axis points down. A sprite's axes
   // are the camera's right and up, so this measures what a billboard promises: 0 wrong from any angle.
@@ -240,11 +277,12 @@ export function mountCoil(host, opts) {
       for (const s of pl.steps) {
         s.ox = set.ox; s.wk = capMode === "width" ? widthShare(s.t, set) : 1;
         const col = colOf(s), k = glow(s.v), part = { s, h: 0, target: 1, flare: 0, scan: 0, wipe: 0, scint: scintSet.has(s.t), k };
-        part.frame = new THREE.LineSegments(frameGeo, lineMat(col, 0.9 + 0.5 * k)); // the tread's edge: a bright thin frame — the step's light
+        if (mode !== "laser" || boxes) part.frame = new THREE.LineSegments(frameGeo, lineMatEq(col, 0.9 + 0.5 * k)); // the tread's edge: a bright thin frame — the guide's and the hologram's light. PASS 4: the LASER step has none (Alan: "I hate these boxes") — it is its beam and its type; V2b's boxes bring it back for the side-by-side
         if (mode === "laser") {
-          part.core = new THREE.Mesh(coreGeo, basic(col, 0.9, THREE.AdditiveBlending, 0.9 + 0.7 * k)); // the laser: a bright core…
-          part.halo = new THREE.Mesh(haloGeo, basic(col, 0.04 + 0.08 * k, THREE.AdditiveBlending, 1)); // …in a soft halo
-          group.add(part.frame, part.core, part.halo);
+          part.core = new THREE.Mesh(coreGeo, basicEq(col, 0.7, THREE.AdditiveBlending, 0.65 + 0.3 * k)); // the laser (pass 4): a tube in the step's colour, as wide as the type…
+          part.hot = new THREE.Mesh(coreGeo, basicEq(col, 1, THREE.AdditiveBlending, 1.3 + 0.7 * k)); // …a white-hot line down its middle (above 1 → it burns white)…
+          part.halo = new THREE.Mesh(haloGeo, basicEq(col, 0.02 + 0.045 * k, THREE.AdditiveBlending, 1)); // …in a soft halo
+          group.add(part.halo, part.core, part.hot); if (part.frame) group.add(part.frame);
           if (boxes) { // V2b's column boxes, for the side-by-side only
             part.body = new THREE.Mesh(boxGeo, basic(col, 0.06, THREE.NormalBlending, 0.35)); part.verts = new THREE.LineSegments(vertsGeo, lineMat(col, 0.8, 0.18)); part.plate = new THREE.Mesh(plateGeo, basic(col, 0.08, THREE.NormalBlending, 0.5)); group.add(part.body, part.verts, part.plate);
           }
@@ -261,7 +299,7 @@ export function mountCoil(host, opts) {
         parts.push(part);
       }
     }
-    dirty = true; landAt = performance.now();
+    prevShown = null; hiddenAt.clear(); dirty = true; landAt = performance.now();
   }
   /* pass 3 · the alternative: a step's width = its market cap. Share of the slot = (cap ÷ the set's biggest cap)^⅓, floor 0.2 — the same
      cube root as the sphere, so widths compare like radii; a name without a cap on file gets the floor. */
@@ -298,25 +336,30 @@ export function mountCoil(host, opts) {
         const { w, tip, q } = stepMatrix(p.s, p.h, M4);
         const x = (p.s.ox || 0) + p.s.r * Math.cos(p.s.th), z = p.s.r * Math.sin(p.s.th), wk = p.s.wk || 1;
         if (p.body) setM(p.body, M4); if (p.verts) setM(p.verts, M4); if (p.edges) setM(p.edges, M4);
-        p.frame.position.set(x, tip, z); p.frame.quaternion.copy(q); p.frame.scale.set(w, 1, PAR.RW);
+        if (p.frame) { p.frame.position.set(x, tip, z); p.frame.quaternion.copy(q); p.frame.scale.set(w, 1, PAR.RW); }
         if (p.base) { p.base.position.set(x, 0, z); p.base.quaternion.copy(q); p.base.scale.set(w, 1, PAR.RW); }
         if (p.floor) { p.floor.position.set(x, -0.3, z); p.floor.quaternion.copy(q); p.floor.rotateX(-Math.PI / 2); p.floor.scale.set(w, PAR.RW, 1); }
         if (p.plate) { p.plate.position.set(x, tip + (tip >= 0 ? -0.15 : 0.15), z); p.plate.quaternion.copy(q); p.plate.rotateX(-Math.PI / 2); p.plate.scale.set(w, PAR.RW, 1); }
-        if (p.core) { p.core.position.set(x, tip / 2, z); p.core.scale.set(wk, Math.max(0.1, Math.abs(tip)), wk); p.halo.position.copy(p.core.position); p.halo.scale.copy(p.core.scale); }
+        if (p.core) { p.core.position.set(x, tip / 2, z); p.core.scale.y = Math.max(0.1, Math.abs(tip)); p.halo.position.copy(p.core.position); p.halo.scale.y = p.core.scale.y; p.hot.position.copy(p.core.position); p.hot.scale.y = p.core.scale.y; } // the width (x, z) is set in screen px each frame by layoutLabels (pass 4)
         if (mode === "holo" && p.body) p.body.material.uniforms.uH.value = Math.max(1, Math.abs(tip));
         p.moved = false; dirty = true;
       }
       // motion with a meaning: a flare / a scan / a wipe runs only when a value lands or changes
-      if (mode === "laser" && p.flare > 0) { p.flare = Math.max(0, p.flare - dt / 0.32); p.core.material.color.copy(lit(colOf(p.s), 0.9 + 0.7 * p.k + 1.6 * p.flare)); p.halo.material.opacity = 0.04 + 0.08 * p.k + 0.3 * p.flare; if (p.body) p.body.material.opacity = 0.06 + 0.25 * p.flare; busy = true; }
+      if (mode === "laser" && p.flare > 0) { p.flare = Math.max(0, p.flare - dt / 0.32); p.hot.material.color.copy(litEq(colOf(p.s), 1.3 + 0.7 * p.k + 1.6 * p.flare)); p.halo.material.opacity = 0.02 + 0.045 * p.k + 0.3 * p.flare; if (p.body) p.body.material.opacity = 0.06 + 0.25 * p.flare; busy = true; }
       if (mode === "guide" && p.scan > 0) { p.scan = Math.max(0, p.scan - dt / 0.42); const u = 1 - p.scan, tip = p.s.tip * p.h; p.bead.visible = true; p.bead.position.set((p.s.ox || 0) + p.s.r * Math.cos(p.s.th), tip * u, p.s.r * Math.sin(p.s.th)); p.edges.material.opacity = 0.4 + 0.6 * p.scan; if (p.scan <= 0) { p.bead.visible = false; p.edges.material.opacity = 0.4; } busy = true; }
       if (mode === "holo" && p.body) {
         if (p.wipe > 0) { p.wipe = Math.max(0, p.wipe - dt / 0.4); p.body.material.uniforms.uWipe.value = 1 - p.wipe; p.body.material.uniforms.uFlick.value = p.wipe * 0.6; busy = true; }
         else if (p.scint) { const ph = ((now - t0) / 1000) % 20; const f = ph < 0.5 ? Math.sin((ph / 0.5) * Math.PI) : 0; if (f !== p.body.material.uniforms.uFlick.value) { p.body.material.uniforms.uFlick.value = f * 0.35; busy = true; } } // once every 20 s, the Hub's "soon" cadence
       }
     }
+    if (zoomS.target) { // pass 4 · the eased zoom: the distance follows the wheel's target with a 120 ms time constant, every frame
+      const d = camera.position.distanceTo(controls.target), gap = zoomS.target - d;
+      if (Math.abs(gap) < 0.02) { setDistance(zoomS.target); zoomS.target = 0; } else setDistance(d + gap * (1 - Math.exp(-(dt * 1000) / ZOOM.tau_ms)));
+      busy = true;
+    }
     if (moveTo) { const k = ease(Math.min(1, (now - moveTo.t0) / moveTo.ms)); camera.position.lerpVectors(moveTo.from.p, moveTo.to.p, k); controls.target.lerpVectors(moveTo.from.t, moveTo.to.t, k); if (k >= 1) moveTo = null; busy = true; }
     if (busy || moved || dirty || measuring) {
-      camera.updateMatrixWorld(); orientAll();
+      camera.updateMatrixWorld(); rec.inTick = true; orientAll(); rec.inTick = false; // only a rendered frame counts in the record
       renderer.info.reset(); const r0 = performance.now(); composer.render(); renderer.autoClear = false; renderer.render(labelScene, camera); renderer.autoClear = true; if (measuring) { meas.ms += performance.now() - r0; meas.n++; meas.tris = renderer.info.render.triangles; meas.calls = renderer.info.render.calls; }
       dirty = false; frames.n++;
     }
@@ -327,6 +370,19 @@ export function mountCoil(host, opts) {
 
   /* ---- camera (point 1): the distance is solved so the coil's projected height = FILL of the view; 70° home; the full sphere ---- */
   let moveTo = null;
+  /* pass 4 · the wheel: no dolly on the camera itself. A tick scales the TARGET distance; tick() eases the camera to it. The home fit
+     (framing: the bisection) runs once per data load and on a resize — never on a wheel tick. */
+  const zoomS = { target: 0 };
+  const _dir = new THREE.Vector3();
+  function setDistance(nd) { _dir.copy(camera.position).sub(controls.target).normalize(); camera.position.copy(controls.target).add(_dir.multiplyScalar(nd)); dirty = true; }
+  function wheel(e) {
+    if (!home) return; e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * view.h : e.deltaY; // lines / pages → px
+    if (rec.on) { rec.wheels++; rec.wheelDy += dy; rec.wheelAbs += Math.abs(dy); }
+    const hd = home.p.distanceTo(home.t), d = zoomS.target || camera.position.distanceTo(controls.target);
+    zoomS.target = Math.max(hd * ZOOM.min_ratio, Math.min(hd * ZOOM.max_ratio, d * Math.pow(ZOOM.per_tick, -dy / 120))); moveTo = null; dirty = true;
+  }
+  renderer.domElement.addEventListener("wheel", wheel, { passive: false });
   const dirOf = (el, az) => { const e = (el * Math.PI) / 180, a = (az * Math.PI) / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)).normalize(); };
   function coilPoints() {
     const pts = []; if (!sets.length) return pts;
@@ -359,7 +415,7 @@ export function mountCoil(host, opts) {
     return { p: t.clone().add(dirOf(el, az).multiplyScalar(d)), t };
   }
   const homeAz = () => (sets.length > 1 ? 0 : HOME.az); // two sets side by side sit level: the camera looks along z (az 0); one set keeps the sheet's azimuth
-  function flyHome(ms = 700) { if (!sets.length) return; home = framing(HOME.el, homeAz()); if (!ms) { camera.position.copy(home.p); controls.target.copy(home.t); moveTo = null; dirty = true; return; } moveTo = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: home, t0: performance.now(), ms }; }
+  function flyHome(ms = 700) { if (!sets.length) return; zoomS.target = 0; home = framing(HOME.el, homeAz()); if (!ms) { camera.position.copy(home.p); controls.target.copy(home.t); moveTo = null; dirty = true; return; } moveTo = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: home, t0: performance.now(), ms }; }
   renderer.domElement.addEventListener("dblclick", () => flyHome(700));
 
   /* ---- public ---- */
@@ -398,12 +454,30 @@ export function mountCoil(host, opts) {
     },
     setMode(m) { mode = m; build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; },
     land() { build(); dirty = true; },
-    mode: () => mode, placed: () => placed, home: () => flyHome(700), orbitTo(el, az) { const h = framing(el, az); camera.position.copy(h.p); controls.target.copy(h.t); moveTo = null; dirty = true; },
+    mode: () => mode, placed: () => placed, home: () => flyHome(700), orbitTo(el, az) { const h = framing(el, az); camera.position.copy(h.p); controls.target.copy(h.t); moveTo = null; zoomS.target = 0; dirty = true; },
     // pass 3: zoom = the camera distance as a multiple of home's (0.5 = twice as close); the direction stays
-    zoom(ratio) { if (!home) return; const hd = home.p.distanceTo(home.t); const dir = camera.position.clone().sub(controls.target).normalize(); camera.position.copy(controls.target).add(dir.multiplyScalar(hd * ratio)); moveTo = null; dirty = true; camera.updateMatrixWorld(); layoutLabels(); return api.labelCheck(); },
+    zoom(ratio) { if (!home) return; const hd = home.p.distanceTo(home.t); zoomS.target = 0; setDistance(hd * ratio); moveTo = null; dirty = true; camera.updateMatrixWorld(); layoutLabels(); return api.labelCheck(); },
+    // pass 4: the same, eased — the way the wheel does it (the proof drives it both ways)
+    zoomTo(ratio) { if (!home) return; zoomS.target = home.p.distanceTo(home.t) * ratio; moveTo = null; dirty = true; },
+    zoomTarget: () => (zoomS.target ? +(zoomS.target / home.p.distanceTo(home.t)).toFixed(3) : null),
+    // pass 4: the beam in px right now — core / halo / the ticker's cap height / the value, at the median LASER step on screen (and the min / max)
+    beamPx() {
+      camera.updateMatrixWorld(); layoutLabels(); const cores = [], halos = [];
+      for (const p of parts) { if (!p.core || !p.lp.visible) continue; const depth = -_p.copy(p.core.position).applyMatrix4(camera.matrixWorldInverse).z; if (depth <= 0) continue; const uPx = (2 * depth * Math.tan((camera.fov * Math.PI) / 360)) / view.h; cores.push(p.core.scale.x / uPx); halos.push(p.halo.scale.x / uPx); }
+      const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? +s[s.length >> 1].toFixed(1) : null; }, mn = (a) => (a.length ? +Math.min(...a).toFixed(1) : null), mx = (a) => (a.length ? +Math.max(...a).toFixed(1) : null);
+      return { type_px: labelStats.px, value_px: labelStats.value_px, core_px: med(cores), core_px_min: mn(cores), core_px_max: mx(cores), halo_px: med(halos), halo_px_min: mn(halos), halo_px_max: mx(halos), core_over_type: cores.length ? +(med(cores) / labelStats.px).toFixed(2) : null, core_u: labelStats.core_u, distance_ratio: labelStats.home_d ? +(labelStats.d / labelStats.home_d).toFixed(3) : null, steps: cores.length };
+    },
+    // pass 4: record every rendered frame (distance, its step, the type px, labels shown, labels that popped in or out) → the zoom measurement
+    record(on) { if (on) { rec.on = true; rec.frames = []; rec.lastD = null; rec.wheels = 0; rec.wheelDy = 0; rec.wheelAbs = 0; rec.flipAt = new Map(); rec.reflips = 0; return; } rec.on = false; const f = rec.frames; if (f.length < 2) return { frames: f.length };
+      let net = 0; for (let i = 1; i < f.length; i++) net += Math.abs(f[i].shown - f[i - 1].shown); // the pops that are a real change of the shown count; the rest is flicker (a label out and another in, or one out and back)
+      const moving = f.filter((x) => Math.abs(x.step) > 1e-3), t0 = f[0].t, t1 = f[f.length - 1].t, secs = (t1 - t0) / 1000;
+      const travel = f.reduce((a, x) => a + Math.abs(x.step), 0), maxStep = Math.max(...f.map((x) => Math.abs(x.step))), pops = f.reduce((a, x) => a + x.pops, 0);
+      let mt = 0; for (let i = 1; i < f.length; i++) if (Math.abs(f[i].step) > 1e-3) mt += f[i].t - f[i - 1].t; // the seconds the camera was moving
+      const gaps = []; for (let i = 1; i < f.length; i++) if (Math.abs(f[i].step) > 1e-3 && Math.abs(f[i - 1].step) > 1e-3) gaps.push(f[i].t - f[i - 1].t);
+      return { wheel_events: rec.wheels, wheel_px_net: rec.wheelDy, wheel_px_abs: rec.wheelAbs, frames: f.length, seconds: +secs.toFixed(2), net_changes: net, pops_beyond_net: pops - net, reflips_within_500ms: rec.reflips, reflips_per_second: secs ? +(rec.reflips / secs).toFixed(2) : null, moving_frames: moving.length, moving_seconds: +(mt / 1000).toFixed(2), fps_while_moving: mt ? +(moving.length / (mt / 1000)).toFixed(1) : null, fps_overall: +(f.length / secs).toFixed(1), travel_u: +travel.toFixed(1), max_frame_step_u: +maxStep.toFixed(2), max_frame_step_share_of_travel: travel ? +(maxStep / travel).toFixed(3) : null, longest_gap_ms_while_moving: gaps.length ? +Math.max(...gaps).toFixed(1) : null, pops, pops_per_second: secs ? +(pops / secs).toFixed(2) : null, px_min: Math.min(...f.map((x) => x.px)), px_max: Math.max(...f.map((x) => x.px)), d_min: Math.min(...f.map((x) => x.d)), d_max: Math.max(...f.map((x) => x.d)), trace: f.filter((_, i) => i % 3 === 0).map((x) => [+((x.t - t0) / 1000).toFixed(3), x.d, x.px, x.shown]) }; },
     // pass 3: each sphere's printed radius in px right now (its centre and centre + the camera's right × r, projected)
     spherePx() { camera.updateMatrixWorld(); _right.set(1, 0, 0).applyQuaternion(camera.quaternion); return spheres.map((sp) => { const c = new THREE.Vector3(sp.ox, 0, 0), e = c.clone().add(_right.clone().multiplyScalar(sp.r)); c.project(camera); e.project(camera); return { name: sp.set.name, capSumT: +(sp.set.capSum / 1e12).toFixed(2), r_units: +sp.r.toFixed(1), r_px: +(Math.abs(e.x - c.x) * view.w / 2).toFixed(1), px_per_T_of_radius_at_this_zoom: +((Math.abs(e.x - c.x) * view.w / 2) / sp.r * CAP_R1T).toFixed(1) }; }); },
-    labelStats: () => { camera.updateMatrixWorld(); layoutLabels(); return { ...labelStats, rule: LABEL_RULE }; },
+    labelStats: () => { camera.updateMatrixWorld(); layoutLabels(); return { ...labelStats, rule: LABEL_RULE, beam: { core_over_type: BEAM.core_over_type, halo: "core × (2 + 2.5 × |reading|)" } }; },
     elevation() { const d = camera.position.clone().sub(controls.target); return { el: +((Math.asin(d.y / d.length()) * 180) / Math.PI).toFixed(1), az: +((Math.atan2(d.x, d.z) * 180) / Math.PI).toFixed(1), d: +d.length().toFixed(1) }; },
     // point 1: the share of the view's height and width the coil's projection covers right now
     fill() { camera.updateMatrixWorld(); const e = extent(coilPoints(), camera.position, controls.target); return { h: +e.h.toFixed(3), w: +e.w.toFixed(3), target: FILL, view: { w: view.w, h: view.h } }; },
@@ -417,8 +491,11 @@ export function mountCoil(host, opts) {
     pixelShare() {
       camera.updateMatrixWorld(); orientAll(); composer.render(); renderer.autoClear = false; renderer.render(labelScene, camera); renderer.autoClear = true; const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
       // a lit pixel is sorted by hue (red 330°–25°, green 110°–175°, cyan 175°–215°) when its saturation is above 0.25 — so red seen through green glass still counts as red
-      let red = 0, green = 0, cyan = 0, lit = 0; for (let i = 0; i < buf.length; i += 4) { const r = buf[i], g = buf[i + 1], b = buf[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx < 70) continue; lit++; const sat = (mx - mn) / mx; if (sat < 0.25) continue; let h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; h = ((h * 60) + 360) % 360; if (h >= 330 || h < 25) red++; else if (h >= 110 && h < 175) green++; else if (h >= 175 && h < 215) cyan++; }
-      return { px: w * h, lit, red, green, cyan, red_share_of_lit: +(red / Math.max(1, lit)).toFixed(3), green_share_of_lit: +(green / Math.max(1, lit)).toFixed(3), red_to_green: +(red / Math.max(1, green)).toFixed(3), lit_share: +(lit / (w * h)).toFixed(3) };
+      let red = 0, green = 0, cyan = 0, lit = 0, redSum = 0, greenSum = 0, redHot = 0, greenHot = 0; for (let i = 0; i < buf.length; i += 4) { const r = buf[i], g = buf[i + 1], b = buf[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx < 70) continue; lit++; const sat = (mx - mn) / mx; if (sat < 0.25) continue; let h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; h = ((h * 60) + 360) % 360; if (h >= 330 || h < 25) { red++; redSum += mx; if (mx >= 200) redHot++; } else if (h >= 110 && h < 175) { green++; greenSum += mx; if (mx >= 200) greenHot++; } else if (h >= 175 && h < 215) cyan++; }
+      const nRed = parts.filter((p) => p.s.side < 0 && !p.s.none).length, nGreen = parts.filter((p) => p.s.side > 0).length; // pass 4: per step, and the mean brightness of the lit pixels of each colour (0–255), and the share that is near white-hot
+      return { px: w * h, lit, red, green, cyan, red_share_of_lit: +(red / Math.max(1, lit)).toFixed(3), green_share_of_lit: +(green / Math.max(1, lit)).toFixed(3), red_to_green: +(red / Math.max(1, green)).toFixed(3), lit_share: +(lit / (w * h)).toFixed(3),
+        red_steps: nRed, green_steps: nGreen, red_px_per_step: nRed ? Math.round(red / nRed) : null, green_px_per_step: nGreen ? Math.round(green / nGreen) : null, red_per_step_over_green_per_step: nRed && nGreen ? +((red / nRed) / Math.max(1, green / nGreen)).toFixed(3) : null,
+        red_mean_brightness: red ? +(redSum / red).toFixed(1) : null, green_mean_brightness: green ? +(greenSum / green).toFixed(1) : null, red_hot_share: red ? +(redHot / red).toFixed(3) : null, green_hot_share: green ? +(greenHot / green).toFixed(3) : null };
     },
     async measure(ms = 4000) {
       measuring = true; meas.ms = 0; meas.n = 0; const start = performance.now(); let f = 0; const el0 = api.elevation(), d0 = camera.position.distanceTo(controls.target), t0 = controls.target.clone();

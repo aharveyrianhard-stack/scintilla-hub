@@ -1,0 +1,92 @@
+{
+ "schema": "scintilla.m1.grokbot_channel.v1",
+ "investigated_utc": "2026-10-05",
+ "how": "Read-only. A copy of /Applications/Grok Bot.app/Contents/Resources/app.asar was unpacked into the scratchpad with `npx @electron/asar` and searched; the app was not started, changed or messaged. In ~/Library/Application Support/Grok Bot/ only file names, sizes, dates, JSON key names and word COUNTS were read. No cookie, token, secret file or conversation text was opened, printed or copied.",
+ "app": {
+  "bundle": "com.anysphere.sand", "version": "0.66.0", "kind": "Electron",
+  "running_during_the_check": false,
+  "where_the_agent_works": "On Grok Bot's own cloud computer, not on this Mac. The app text says \"Runs on Grok Bot's computer\" and \"Run a command on Grok Bot's computer\"; the code speaks of a gateway, a pod and a remote screen (VNC) preview. That is the \"own browser\" Alan sees.",
+  "agents_in_the_roster_cache": ["Test Bot", "Disk Saver", "Onboarder"]
+ },
+ "answers": {
+  "1_deep_links": {
+   "found": "grokbot://app/v1/<route> (sand:// is the same; https://cursor.com/grok-bot/link/... is the web form). At most 2,048 characters.",
+   "routes": {
+    "agent?id=": "open one agent's conversation",
+    "task?id=": "open one task (10 hex characters)",
+    "sidebar?agent=&tab=&automation=&target=": "open an agent's side panel on a tab (overview, routines, media, computer, meetings, members), optionally on one routine and on its webhook URL / webhook key / Authorization header field",
+    "settings?id=": "open one settings row",
+    "open": "bring the app to the front",
+    "marketplace, plugin-add, bot-template, create-team-bot": "browse or add plugins and templates",
+    "github- / gitlab- / bitbucket- / azure-devops-connect-callback": "sign-in returns for code-host connections"
+   },
+   "can_it_open_a_thread": true,
+   "can_it_send_a_prompt": false,
+   "can_it_hand_over_a_file": false,
+   "why": "No route has a text, prompt, message or file parameter. Every parameter is an id or a fixed word, checked against a pattern. A deep link navigates; it never speaks."
+  },
+  "2_local_server_cli_mcp_watched_folder": {
+   "local_server": "None for commands. The only listeners in the code are a short-lived one for the sign-in return and a loopback one that feeds the app its own update.",
+   "cli": "None. Nothing named grokbot, grok-bot or sand is on the PATH; the bundle holds one executable and a 'Computer Use' helper app.",
+   "mcp": "The app is an MCP client, not a server: it can be GIVEN MCP servers (\"Add a custom MCP server or secret for everyone using this Bot\", \"MCP server JSON\"), which then load on Grok Bot's computer. It exposes none for us to call.",
+   "watched_folder": "None found.",
+   "what_does_exist": [
+    "ROUTINES WITH A WEBHOOK TRIGGER. The app has a trigger \"When a webhook fires\" and shows, per routine, a Webhook URL, a Webhook key and the line \"Senders authenticate with this key: include an Authorization: Bearer <key> header in the webhook request\". A routine is created by asking the bot in its chat (\"Routines are recurring tasks this Bot runs on a schedule. Ask it in chat to set one up.\"). This is a real machine channel INTO the bot. What the request body may carry is decided on xAI's side and was not verifiable from the app.",
+    "CODE-HOST CONNECTIONS (GitHub, GitLab, Bitbucket, Azure DevOps) with triggers such as pr-opened and ci-failed: the bot can read and write a repository it is connected to. Whether Alan's bot is connected to our GitHub was not checked (that is account state).",
+    "LOCAL COMMANDS, behind a switch: \"Allow Grok Bot and all Bots to run commands on your local computer?\". With it on, the bot could write a file on this Mac. Its state was not read. Not recommended as a channel: it gives every bot a shell on the MacBook.",
+    "ATTACH FILES and DOWNLOAD FILE in the chat window: the human path."
+   ]
+  },
+  "3_where_transcripts_and_outputs_live": {
+   "on_this_mac": "~/Library/Application Support/Grok Bot/sand-client-persistence/ : 13 small JSON files whose names are base32 of a key. Three are conversation copies (key ...transcript.replicas.<uuid>): 252,649 bytes / 148 entries (3 Oct 20:30Z to 4 Oct 04:54Z), 187,844 bytes / 135 entries (6 Sep to 3 Oct), 2,531 bytes / 3 entries. Entry keys: kind, id, role, content, timestampMs, seq. The whole folder is under half a megabyte.",
+   "is_the_finbert_session_there": "Yes: the 148-entry conversation holds the word finbert 64 times, sentiment 127 times and scintilla 107 times (counts only; the text was not read).",
+   "is_the_captured_x_feed_there": "No. That conversation holds 0 links of the form /status/ and 2 mentions of x.com. The posts the bot captured are on its cloud computer, not in these files.",
+   "could_our_collector_read_the_feed_from_there": false,
+   "why_not": "The local files are the app's private cache of chat text: no posts, no stable format promise (they carry a schemaVersion the app may change), and reading Alan's conversations is not a data feed."
+  }
+ },
+ "the_channel_in_one_line": "TODAY: HUMAN ONLY. Nothing can reach the bot from our side until a person types (or pastes) into its window once. AFTER ONE PASTE BY ALAN it can be machine-to-machine: a webhook in, a Git branch out.",
+ "proposed_protocol": {
+  "style": "Dispatch & Return",
+  "setup_once_by_a_person": [
+   "Alan opens the Test Bot conversation (a deep link can do the opening: grokbot://app/v1/agent?id=<its id>) and pastes DISPATCH-0 below.",
+   "The bot creates a routine with a webhook trigger. Alan copies its Webhook URL and Webhook key to the coordinator once; the key is stored as a Fly secret (keys-on-Fly rule) and is never written to a file or a page.",
+   "Alan confirms in the bot's Settings that the bot's GitHub connection reaches one repository we name for this purpose only."
+  ],
+  "dispatch_what_we_send": {
+   "transport": "HTTPS POST to the routine's Webhook URL with Authorization: Bearer <key>, sent from Fly. Until the webhook exists: the same text pasted by Alan.",
+   "DISPATCH-0_xfeed_job_spec": {
+    "job": "xfeed-capture",
+    "source": "X list 1405188850188759047 (the Trading list the dead collector read), newest first",
+    "cadence": "every 2 hours 06:30 to 23:30 New York time (the collector's own schedule)",
+    "per_post_fields": ["id", "handle", "created_at (ISO, UTC)", "kind (original | repost | quote | reply)", "text (full, untruncated)", "url", "links[]", "photos[]", "has_video", "original{ id, handle, created_at, text, url } for reposts and quotes"],
+    "rules": ["read only: never like, reply, follow or post", "never the X API, never export cookies", "one file per pass, even when empty (an empty pass is a fact, not a failure)", "no post older than the previous file's newest id, except in the first catch-up file"]
+   },
+   "DISPATCH-1_finbert_bakeoff": {
+    "job": "x-sentiment-bakeoff",
+    "input": "deliverables/20261005/m1-models/bakeoff/x-short-text.json : the 300 posts and the rubric, WITHOUT the hand labels and model calls",
+    "ask": "score all 300 with the bot's FinBERT set-up exactly as it runs it today; state the model id and revision, the text cleaning, the label mapping and the threshold"
+   }
+  },
+  "return_what_it_sends_back": {
+   "transport": "one JSON file per pass committed to branch `grokbot/inbox` of the named repository, path xfeed/<UTC timestamp>.json or bakeoff/<job>.json. A Git commit is dated, signed by its account, replayable and reviewable; nothing of ours is exposed to the bot.",
+   "xfeed_file": {"schema": "scintilla.xfeed.inbox.v1", "source": "grokbot", "list_id": "1405188850188759047", "captured_at": "ISO UTC", "pass": {"pages": 0, "newest_id": "", "oldest_id": ""}, "posts": ["the per-post fields above"]},
+   "bakeoff_file": {"schema": "scintilla.m1.x_bakeoff.return.v1", "model": "", "revision": "", "preprocessing": "", "calls": [{"i": 0, "label": "B | S | N", "p_pos": 0, "p_neg": 0, "p_neu": 0}]},
+   "return_line": "STATUS · file path + commit · posts in file · newest post time · what was not captured and why"
+  },
+  "how_its_output_enters_our_tables": [
+   "A job of ours (not the bot) reads new files on `grokbot/inbox`.",
+   "It refuses a file that fails the schema, has non-numeric ids, dates outside the last 10 days, or a newest id older than the last accepted one.",
+   "Accepted posts go through the existing scripts/xfeed-ingest.mjs path into the published feed (/api/xfeed), tagged source=grokbot, deduplicated on post id against what the collector already holds.",
+   "The existing sentiment-x-2h job then scores them into x_post_sentiment exactly as before. The bot never writes to a table and never holds a key of ours."
+  ],
+  "neighbours_this_touches": ["the restored MacBook collector (same feed: post ids must not double)", "sentiment-x-2h (reads the same published feed)", "the heartbeat row for the X feed (two sources, one clock)", "the keys-on-Fly rule (the webhook key is a new secret)", "the no-paid rule: Grok Bot has Usage, Plan and On-demand settings, so its passes may be metered"],
+  "pattern_followed": "A Git branch as the hand-off point between two automated parties, with the receiving side validating before it ingests, is the pull-request model GitHub documents (https://docs.github.com/en/pull-requests) and the 'inbox' pattern of ActivityPub (https://www.w3.org/TR/activitypub/#inbox)."
+ },
+ "not_verified": [
+  "What a routine's webhook accepts in its body, and whether the body reaches the bot as its prompt (server side).",
+  "Whether Alan's bot is connected to GitHub, and whether local commands are switched on.",
+  "What the bot's X capture actually holds (it is on its cloud computer). The 0 '/status/' count says only that the posts are not in the local chat cache.",
+  "Whether a Grok Bot pass costs money beyond Alan's plan."
+ ]
+}
