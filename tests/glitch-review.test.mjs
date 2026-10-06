@@ -96,6 +96,8 @@ test("glitch review: the report folder carries a page GitHub can show (README.md
     assert.match(md, /\| a \\\| b \| ok \|/, "a bar in a name cannot break the table");
     assert.match(md, /\(1 stall, /, "one stall is not '1 stalls'");
     for (const f of ["index.html", "WORST-FIVE.md", "ISSUE.md"]) assert.ok(fs.existsSync(path.join(out, f)), f);
+    /* the Hub's rule for every page it can open (tests/hub-nav.test.mjs): the BACK / CLOSE pair gets a slot in the page */
+    assert.match(fs.readFileSync(path.join(out, "index.html"), "utf8"), /<span data-scnav-slot><\/span>\s*<h1/);
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 

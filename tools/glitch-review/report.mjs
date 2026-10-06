@@ -155,7 +155,7 @@ export function writeReport(r, OUT, HERE) {
 <title>Glitch review · ${esc(when)}</title>
 <style>
 :root{color-scheme:dark}
-body{margin:0;padding:56px 22px 60px;background:#0a0b0d;color:#a9adb2;font:13px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+body{margin:0;padding:14px 22px 60px;background:#0a0b0d;color:#a9adb2;font:13px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 h1{font-size:15px;letter-spacing:.18em;text-transform:uppercase;color:#c8cbcf;margin:0 0 4px}
 h2{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#c8cbcf;margin:34px 0 10px;border-top:1px solid #23262a;padding-top:16px}
 p{margin:6px 0;max-width:980px} a{color:#c8cbcf} i{color:#7d8187;font-style:normal}
@@ -165,7 +165,8 @@ p{margin:6px 0;max-width:980px} a{color:#c8cbcf} i{color:#7d8187;font-style:norm
 .t-red{background:#c4c7cb;color:#0a0b0d;border-color:#c4c7cb;font-weight:700}
 .t-amber{border-color:#9a9ea3;color:#c8cbcf}
 ol.five{margin:10px 0;padding-left:22px;max-width:1100px} ol.five li{margin:5px 0;color:#c8cbcf}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+ol.five li,.card li,p{overflow-wrap:anywhere}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr));gap:16px}
 .card{margin:0;background:#101215;border:1px solid #23262a;padding:10px}
 .card img{display:block;width:100%;height:auto;border:1px solid #23262a;margin:8px 0 4px}
 .card ul{margin:6px 0 0;padding:0;list-style:none} .card li{margin:4px 0;font-size:12px}
@@ -176,7 +177,8 @@ thead th{color:#7d8187;font-size:11px;letter-spacing:.08em;text-transform:upperc
 td.c-red{background:#c4c7cb;color:#0a0b0d;font-weight:700} td.c-amber{outline:1px solid #9a9ea3;outline-offset:-2px;color:#d0d2d2}
 details{margin:8px 0;max-width:1100px} summary{cursor:pointer;color:#c8cbcf} details ul{margin:4px 0 10px;padding-left:20px} details li{font-size:12px;word-break:break-word}
 </style></head><body>
-<h1>Slowness and glitch review</h1>
+<span data-scnav-slot></span>
+<h1 style="margin-top:16px">Slowness and glitch review</h1>
 <p class="sub">${esc(when)} · ${esc(r.slot)} run · ${r.screens.length} screens · ${esc(r.ranOn)}${r.runUrl ? ' · <a href="' + esc(r.runUrl) + '">the run</a>' : ""}${r.comparedWith ? " · compared with " + esc(r.comparedWith.dateET + " " + r.comparedWith.startedET + " ET") : " · first run, nothing to compare with yet"}</p>
 <div class="verdict">${r.verdict.toUpperCase()} — ${reds} red · ${ambers} amber</div>
 <h2>Worst five</h2>
