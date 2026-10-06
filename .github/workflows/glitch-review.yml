@@ -1,0 +1,182 @@
+# PG1 — the slowness-and-glitch review of every Scintilla screen (Alan, 5 Oct 2026: "Slowness and glitchiness and
+# buggy stuff … the more reviews you give for that, the better").
+#
+# WHAT IT DOES  Opens every screen (Hub master tabs, 3 company views, Station deck + chart, allocation tool, tree) in a
+#               headless browser in GitHub's cloud, measures and pictures each one, ranks what it found. Fixes nothing.
+# WHEN          21:30 New York time every night, and 10:00 New York time on weekdays (market hours).
+#               GitHub's clock is UTC and knows no daylight saving, so each time is listed twice and the first step
+#               keeps only the one that is right for the season.
+# RESULTS       Branch `glitch-review-reports`: deliverables/glitch-review/<date>/<night|market|manual>/
+#               (index.html, glitch-review.json, WORST-FIVE.md, shots/) and deliverables/glitch-review/LATEST.md.
+#               Also on the run's own page (Summary) and as a downloadable artifact.
+#               A red result opens (or updates) ONE GitHub issue labelled `glitch-review`. No other message is sent.
+# NO KEYS       Public pages only. The only credential is the run's own short-lived GITHUB_TOKEN (commit + issue).
+# NEVER         Commits to `main` or to a Hub release branch — so it can never trigger a Hub deploy.
+#
+# SWITCH IT OFF (any one of these):
+#   · GitHub → Actions → "Glitch review" → ⋯ → Disable workflow        (or: gh workflow disable glitch-review.yml)
+#   · Settings → Secrets and variables → Actions → Variables → GLITCH_REVIEW_OFF = 1   (runs start and skip)
+#   · delete this file
+# RUN IT NOW    GitHub → Actions → "Glitch review" → Run workflow       (or: gh workflow run glitch-review.yml)
+name: Glitch review
+
+on:
+  schedule:
+    - cron: "30 1 * * *"     # 21:30 New York, summer time (EDT)
+    - cron: "30 2 * * *"     # 21:30 New York, winter time (EST)
+    - cron: "0 14 * * 1-5"   # 10:00 New York, summer time, weekdays
+    - cron: "0 15 * * 1-5"   # 10:00 New York, winter time, weekdays
+  workflow_dispatch:
+  push:                      # only while the review itself is being built on its own branch
+    branches: ["hub/pg1-glitch-review-**"]
+    paths: ["tools/glitch-review/**", ".github/workflows/glitch-review.yml"]
+
+permissions:
+  contents: write            # commit the report to the reports branch
+  issues: write              # the one issue on a red night
+
+concurrency:
+  group: glitch-review
+  cancel-in-progress: false
+
+env:
+  REPORTS_BRANCH: glitch-review-reports
+
+jobs:
+  review:
+    if: vars.GLITCH_REVIEW_OFF != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Which run is this (and is it the right clock for the season)?
+        id: when
+        run: |
+          zone=$(TZ=America/New_York date +%Z)          # EDT in summer, EST in winter
+          sched='${{ github.event.schedule }}'
+          go=yes; slot=manual
+          case "$sched" in
+            "30 1 * * *")   slot=night;  [ "$zone" = EDT ] || go=no ;;
+            "30 2 * * *")   slot=night;  [ "$zone" = EST ] || go=no ;;
+            "0 14 * * 1-5") slot=market; [ "$zone" = EDT ] || go=no ;;
+            "0 15 * * 1-5") slot=market; [ "$zone" = EST ] || go=no ;;
+          esac
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "slot=$slot" >> "$GITHUB_OUTPUT"
+          echo "date=$(TZ=America/New_York date +%F)" >> "$GITHUB_OUTPUT"
+          echo "New York zone $zone · schedule '$sched' · slot $slot · go $go"
+
+      - uses: actions/checkout@v4
+        if: steps.when.outputs.go == 'yes'
+
+      - uses: actions/setup-node@v4
+        if: steps.when.outputs.go == 'yes'
+        with:
+          node-version: 22
+
+      - name: Install the review's tools (its own folder only)
+        if: steps.when.outputs.go == 'yes'
+        working-directory: tools/glitch-review
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Fetch the last run's numbers (reports branch)
+        if: steps.when.outputs.go == 'yes'
+        run: |
+          mkdir -p "$RUNNER_TEMP/prev"
+          if git fetch --depth 1 origin "$REPORTS_BRANCH" 2>/dev/null; then
+            for f in "latest-${{ steps.when.outputs.slot }}.json" latest.json; do
+              git show "FETCH_HEAD:deliverables/glitch-review/$f" > "$RUNNER_TEMP/prev/prev.json" 2>/dev/null && break || rm -f "$RUNNER_TEMP/prev/prev.json"
+            done
+          fi
+          ls -la "$RUNNER_TEMP/prev"
+
+      - name: Fetch the last run's pictures (to see what moved)
+        if: steps.when.outputs.go == 'yes'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/pictures-last
+          key: pg1-pictures-${{ steps.when.outputs.slot }}-${{ github.run_id }}
+          restore-keys: |
+            pg1-pictures-${{ steps.when.outputs.slot }}-
+            pg1-pictures-
+
+      - name: Review every screen (headless)
+        if: steps.when.outputs.go == 'yes'
+        working-directory: tools/glitch-review
+        run: |
+          prev=""; [ -s "$RUNNER_TEMP/prev/prev.json" ] && prev="--prev $RUNNER_TEMP/prev/prev.json"
+          node review.mjs --out "$RUNNER_TEMP/out" --slot "${{ steps.when.outputs.slot }}" --baseline "$RUNNER_TEMP/pictures-last" $prev
+          cat "$RUNNER_TEMP/out/WORST-FIVE.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep this run's pictures for the next comparison
+        if: steps.when.outputs.go == 'yes'
+        run: |
+          rm -rf "$RUNNER_TEMP/pictures-last" && mv "$RUNNER_TEMP/out/pictures" "$RUNNER_TEMP/pictures-last"
+
+      - uses: actions/cache/save@v4
+        if: steps.when.outputs.go == 'yes'
+        continue-on-error: true      # a re-run of the same run cannot save twice; the report still goes out
+        with:
+          path: ${{ runner.temp }}/pictures-last
+          key: pg1-pictures-${{ steps.when.outputs.slot }}-${{ github.run_id }}
+
+      - uses: actions/upload-artifact@v4
+        if: steps.when.outputs.go == 'yes'
+        with:
+          name: glitch-review-${{ steps.when.outputs.date }}-${{ steps.when.outputs.slot }}
+          path: ${{ runner.temp }}/out
+          retention-days: 30
+
+      - name: Commit the report to the reports branch (never main, never a release branch)
+        if: steps.when.outputs.go == 'yes'
+        run: |
+          set -e
+          dest="deliverables/glitch-review/${{ steps.when.outputs.date }}/${{ steps.when.outputs.slot }}"
+          work="$RUNNER_TEMP/reports"
+          git config user.name "glitch-review[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin "$REPORTS_BRANCH" 2>/dev/null; then
+            git worktree add -q -B "$REPORTS_BRANCH" "$work" FETCH_HEAD
+          else
+            git worktree add -q --detach "$work"
+            ( cd "$work" && git checkout -q --orphan "$REPORTS_BRANCH" && git rm -rfq . )
+            # this branch holds reports only: tell the Hub's host not to build or deploy it
+            printf '{\n  "git": { "deploymentEnabled": false }\n}\n' > "$work/vercel.json"
+            printf '# Glitch review reports\n\nWritten by the "Glitch review" workflow. Newest: `deliverables/glitch-review/LATEST.md`.\nThis branch holds reports only and is never deployed.\n' > "$work/README.md"
+          fi
+          cd "$work"
+          rm -rf "$dest" && mkdir -p "$dest"
+          cp -R "$RUNNER_TEMP/out/." "$dest/"
+          cp "$dest/glitch-review.json" "deliverables/glitch-review/latest-${{ steps.when.outputs.slot }}.json"
+          cp "$dest/glitch-review.json" deliverables/glitch-review/latest.json
+          { cat "$dest/WORST-FIVE.md"; printf '\nFolder: `%s/`\n' "$dest"; } > deliverables/glitch-review/LATEST.md
+          git add -A
+          git commit -q -m "Glitch review ${{ steps.when.outputs.date }} ${{ steps.when.outputs.slot }}: $(node -p "require('./$dest/glitch-review.json').verdict")"
+          git push -q origin "HEAD:$REPORTS_BRANCH"
+          echo "Report: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$REPORTS_BRANCH/$dest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: A red result opens (or updates) the one issue; a clean result closes it
+        if: steps.when.outputs.go == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/out"
+          verdict=$(node -p "require('$out/glitch-review.json').verdict")
+          reds=$(node -p "require('$out/glitch-review.json').findings.filter(f=>f.level==='red').map(f=>f.screenId+'|'+f.key).sort().join(',')")
+          mark="<!-- reds:$(printf '%s' "$reds" | sha1sum | cut -c1-12) -->"
+          gh label create glitch-review --color 5c6066 --description "Slowness-and-glitch review (automatic)" 2>/dev/null || true
+          num=$(gh issue list --label glitch-review --state open --json number --jq '.[0].number // empty')
+          if [ "$verdict" = red ]; then
+            { cat "$out/ISSUE.md"; echo; echo "$mark"; } > "$RUNNER_TEMP/issue.md"
+            if [ -z "$num" ]; then
+              gh issue create --title "Glitch review: red" --label glitch-review --body-file "$RUNNER_TEMP/issue.md"
+            else
+              old=$(gh issue view "$num" --json body --jq .body | grep -o '<!-- reds:[0-9a-f]* -->' || true)
+              gh issue edit "$num" --body-file "$RUNNER_TEMP/issue.md"
+              # a new comment only when the set of reds changed, so the issue does not fill with repeats
+              [ "$old" = "$mark" ] || gh issue comment "$num" --body "The red list changed in the ${{ steps.when.outputs.date }} ${{ steps.when.outputs.slot }} run — see the updated description above."
+            fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --comment "No red in the ${{ steps.when.outputs.date }} ${{ steps.when.outputs.slot }} run (result: $verdict)."
+          fi
