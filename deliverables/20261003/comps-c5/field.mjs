@@ -182,9 +182,9 @@ export const WAY_WORDS = {
 };
 
 /** Everything the page draws for one company and one way. estimates: { T: { eps_ttm, est } } (may be empty). */
-export function conclusion(snap, decisions, estimates, today, way = "C") {
+export function conclusion(snap, decisions, estimates, today, way = "C", opts = {}) {
   const snap2 = estimates ? { ...snap, rows: snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) } : snap;
-  const F = applyField(snap2, decisions);
+  const F = applyField(snap2, decisions, opts);   /* C6 passes k = Infinity: no cell leaves a centre on one flag */
   const peersOn = snap.members.filter((t) => t !== snap.ticker && !(snap.excluded || []).some((e) => e.ticker === t) && !F.sel.peers.has(t));
   const mw = measureWeights(F.rows, peersOn.length, sectorClass(snap.sector, snap.industry, snap.cohort)), pw = peerWeights(snap, peersOn);
   const W = ways(F.rows, snap2, mw, pw), w = wayOf(W, way);
