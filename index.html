@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
+<!-- Q5 (5 Oct 2026) — the build stamp, in the FIRST bytes of the page. The freshness check further down used to download
+     this whole page again (2.2 MB; 716 KB on the wire) on every load and every 75 s, only to read one string near its
+     end. It now reads this line and stops the download. Must equal window.SC_BUILD (tests/q5-board-weight.test.mjs). -->
+<meta name="sc-build" content="2026-08-20T1420">
 <!-- FIX 7 — PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A0A0F">
@@ -27508,14 +27512,51 @@ async function scCleanRows (sym, tf, bars, signal) {   /* H2 — signal: the map
   } catch (e) { if (signal && signal.aborted) throw e; return []; }   /* H2 — an abort is not a failure: the pacer asks again */
 }
 window.SC_BUILD = "2026-08-20T1420";
+/* Q5 (5 Oct 2026) — WHICH BUILD IS ON THE SERVER, WITHOUT DOWNLOADING THE PAGE AGAIN. The two checks below used to fetch
+   this whole page (2.2 MB; 716 KB on the wire) on every load and every 75 s to read the one line above. The stamp is now
+   also the <meta name="sc-build"> in the first bytes of the page: this asks for the first 4 KB only and reads the stamp
+   there. A page that has no such line (one shipped before this change) is read to the end and its SC_BUILD line is
+   used, exactly as before. Resolves with the stamp, or null when there is none. */
+function scBuildStampIn(text, whole) {
+  var m = text.match(/<meta name="sc-build" content="([^"]+)">/);
+  if (m) return m[1];
+  if (!whole) return null;
+  m = text.match(/SC_BUILD\s*=\s*"([^"]+)"/);
+  return m ? m[1] : null;
+}
+function scShippedBuild() {
+  var url = "/index.html?b=" + Date.now();
+  /* the first 4 KB only: the host answers a byte range with 206 and exactly those bytes (measured on scintillahub.ai, 5 Oct) */
+  return fetch(url, { cache: "no-store", headers: { Range: "bytes=0-4095" } }).then(function (r) {
+    if (r.status === 206) return r.text().then(function (head) {
+      var stamp = scBuildStampIn(head, false);
+      if (stamp) return stamp;
+      /* a page from before this change has no stamp in its head: read it whole, as the check always did */
+      return fetch(url, { cache: "no-store" }).then(function (f) { return f.text(); }).then(function (t) { return scBuildStampIn(t, true); });
+    });
+    /* the host ignored the range and is sending the whole page: stop as soon as the stamp has gone by */
+    if (!r.body || typeof r.body.getReader !== "function" || typeof TextDecoder === "undefined")
+      return r.text().then(function (t) { return scBuildStampIn(t, true); });
+    var reader = r.body.getReader(), decoder = new TextDecoder(), text = "";
+    function more() {
+      return reader.read().then(function (part) {
+        if (part.done) return scBuildStampIn(text, true);
+        text += decoder.decode(part.value, { stream: true });
+        var stamp = scBuildStampIn(text, false);
+        if (!stamp) return more();
+        try { reader.cancel(); } catch (e) {}
+        return stamp;
+      });
+    }
+    return more();
+  });
+}
 (function () {
   try {
     if (sessionStorage.getItem("sc_build_reloaded")) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (m && m[1] && m[1] !== window.SC_BUILD) {
+    scShippedBuild()
+      .then(function (b) {
+        if (b && b !== window.SC_BUILD) {
           sessionStorage.setItem("sc_build_reloaded", "1");
           location.reload();
         }
@@ -27530,11 +27571,9 @@ window.SC_BUILD = "2026-08-20T1420";
 setInterval(function () {
   try {
     if (document.hidden) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (!m || !m[1] || m[1] === window.SC_BUILD) return;
+    scShippedBuild()
+      .then(function (b) {
+        if (!b || b === window.SC_BUILD) return;
         var ae = document.activeElement, typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
         if (typing || document.querySelector(".sc-sheet__scrim.is-open, .sc-fmodal.on, .sc-menu.is-open")) return;
         location.reload();
