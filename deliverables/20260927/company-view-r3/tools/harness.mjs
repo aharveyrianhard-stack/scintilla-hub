@@ -95,7 +95,11 @@ try {
       /* the board row if it is on screen, otherwise the same function the row calls */
       const t0 = Date.now(); openAt = t0;
       r.how = await page.evaluate((t) => { const row = document.querySelector('.sc-board__row[data-t="' + t + '"]');
-        if (row) { row.click(); return "row"; } openCo(t); return "openCo"; }, s.t);
+        if (row) { row.click(); return "row"; }
+        /* Q5 (5 Oct): openCo is the PAGE's function (index.html), reached here inside the browser. It is named through
+           globalThis so the reference is explicit, and a page that does not carry it answers by name instead of throwing. */
+        if (typeof globalThis.openCo !== "function") return "NO_OPENCO_ON_PAGE";
+        globalThis.openCo(t); return "openCo"; }, s.t);
       if (s.clouds) {
         let firstFrame = null, clouds = null, rsi = null, last = null;
         while (Date.now() - t0 < (s.ms || 40000)) {
