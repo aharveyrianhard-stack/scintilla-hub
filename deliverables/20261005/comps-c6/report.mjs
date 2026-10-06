@@ -1,0 +1,62 @@
+/* C6 · the report page, built from four-names-before-after.json and the headless shots: node report.mjs → COMPS-C6.html */
+import { readFileSync, writeFileSync } from "node:fs"; import { fileURLToPath } from "node:url"; import path from "node:path";
+const HERE = path.dirname(fileURLToPath(import.meta.url)), D = JSON.parse(readFileSync(path.join(HERE, "four-names-before-after.json"), "utf8"));
+const css = readFileSync(path.join(HERE, "../../20261003/comps-c5/COMPS-C5.html"), "utf8").match(/<style>[\s\S]*?<\/style>/)[0];
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const P = (v) => v == null ? "—" : "$" + (v >= 1000 ? Math.round(v).toLocaleString("en-US") : v >= 100 ? v.toFixed(0) : v.toFixed(2));
+const X = (v) => v == null ? "—" : (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)) + "×";
+const NAMES = ["MU", "NVDA", "CRWV", "CBRS"], KEYS = [["pe_ttm", "P/E"], ["pe_fwd", "P/E forward"], ["ev_ebitda", "EV/EBITDA"], ["ev_sales", "EV/sales"], ["ps", "P/S"], ["peg", "PEG"]];
+const PCT = new Set(["Revenue TTM", "Revenue next FY", "EPS next FY", "Gross", "Operating", "FCF", "CapEx / revenue", "CapEx growth"]);
+const fv = (f) => PCT.has(f.column) ? Math.round(f.value) + "%" : /New revenue/.test(f.column) ? "$" + f.value.toFixed(2) : X(f.value), fm = (f) => PCT.has(f.column) ? Math.round(f.group_median) + "%" : /New revenue/.test(f.column) ? "$" + f.group_median.toFixed(2) : X(f.group_median);
+const flagWords = (fs) => fs.map((f) => `${esc(f.column)} ${fv(f)} <small>(group ${fm(f)}, ${Math.abs(f.distance).toFixed(1)} spreads ${f.distance > 0 ? "above" : "below"})</small>`).join("<br>");
+const shot = (src, cap, max = "") => `<div class="shot"><div class="clip"${max ? ` style="max-width:${max}"` : ""}><img loading="lazy" src="${src}" alt="${esc(cap)}"></div><small>${cap}</small></div>`;
+const sum = NAMES.map((t) => { const n = D.names[t]; return `<tr><td class="k"><b>${t}</b><br><small>today ${P(n.price)}</small></td><td>${P(n.before.band && n.before.band.centre)}<br><small>${n.before.cells_out.length} single cells dropped</small></td><td>${P(n.with_outliers.band.centre)}</td><td class="k"><b>${P(n.without_outliers.band.centre)}</b></td><td>${n.outliers.map((o) => `<b>${o.peer}</b> <small>${o.words.replace("far from the group in ", "")}</small>`).join("<br>") || "none"}</td><td>${n.peers.length - n.outliers.length} of ${n.peers.length}</td></tr>`; }).join("");
+const medTable = (t) => { const n = D.names[t]; return `<div class="tw"><table class="t"><thead><tr><th>${t} · peers' median</th><th>before (C5b)</th><th>with outliers</th><th>without outliers</th><th>${t}'s price at that median: before → with → without</th></tr></thead><tbody>${KEYS.map(([k, l]) => { const b = n.before.medians[k], w = n.with_outliers.medians[k], o = n.without_outliers.medians[k]; return `<tr><td class="k">${l}</td><td>${X(b.median)} <small>${b.n} peers</small></td><td>${X(w.median)} <small>${w.n}</small></td><td class="k"><b>${X(o.median)}</b> <small>${o.n}</small></td><td>${b.price == null && o.price == null ? `<small>${t} cannot be priced on this row</small>` : `${P(b.price)} → ${P(w.price)} → <b>${P(o.price)}</b>`}</td></tr>`; }).join("")}<tr><td class="k">THE CENTRE (way C)</td><td>${P(n.before.band.centre)}</td><td>${P(n.with_outliers.band.centre)}</td><td class="k"><b>${P(n.without_outliers.band.centre)}</b></td><td>low ${P(n.without_outliers.band.lo)} · high ${P(n.without_outliers.band.hi)} without outliers</td></tr></tbody></table></div>`; };
+const why = (t) => { const n = D.names[t]; return `<div class="tw"><table class="t wrap"><thead><tr><th>${t}'s peer</th><th>verdict</th><th>the columns that marked it</th></tr></thead><tbody>${n.outliers.map((o) => `<tr><td class="k"><b>${o.peer}</b></td><td><b>OUTLIER</b><br><small>${o.words}</small></td><td>${flagWords(o.flags)}</td></tr>`).join("")}${n.one_or_two_flags.map((o) => `<tr><td class="k">${o.peer}</td><td>marked, still counted<br><small>${o.words}</small></td><td>${flagWords(o.flags)}</td></tr>`).join("")}</tbody></table></div>`; };
+const mo = NAMES.map((t) => { const n = D.names[t]; return `<tr><td class="k"><b>${t}</b></td><td>${n.outliers.map((o) => o.peer).join(", ") || "none"} → ${P(n.without_outliers.band.centre)}</td><td>${n.multiples_only.outliers.map((o) => `${o.peer} <small>(${o.flags.join(", ")})</small>`).join(", ") || "none"} → ${P(n.multiples_only.centre)}</td></tr>`; }).join("");
+const sect = (t, note) => `<h2>${t} <small>${note}</small></h2>
+<div class="panel"><div class="two"><div>${shot(`shots/before/${t}-set-1680.png`, "BEFORE (C5b) · the set, every peer in")}</div><div>${shot(`shots/after/${t}-set-1680.png`, "AFTER (C6) · the outliers sit at the bottom, greyed, with their count (“4 of 10” beside the name, the full words in the next column); ◇ keeps one in")}</div></div></div>
+<div class="panel"><div class="two"><div>${shot(`shots/before/${t}-range-1680.png`, "BEFORE · the range")}</div><div>${shot(`shots/after/${t}-range-1680.png`, "AFTER · the range, drawn without the outliers; the line under the title gives the centre with / without")}</div></div></div>
+<div class="panel">${shot(`shots/after/${t}-table-1680.png`, "AFTER · the table: ▲ ▼ on a cell far above / below its column (cyan), outlier rows greyed at the bottom with the count, the medians without and with them. Shown here laid over the whole window; in the Hub it sits in the company panel and scrolls sideways.")}</div>
+<div class="panel">${medTable(t)}</div><div class="panel">${why(t)}</div>`;
+const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · COMPS · C6 · OUTLIERS ACROSS THE COLUMNS · 5 OCT</title>
+${css}</head>
+<body><div class="wrap">
+<div class="top"><span class="brand"><b>SCINTILLA</b> · COMPS · C6 · OUTLIERS, ALAN'S WAY: FAR FROM THE MEDIAN IN MANY COLUMNS</span><span data-scnav-slot></span><span class="stamp">C6 · 5 Oct 2026 · branch hub/c6-comps-outliers-20261005 · on top of C5b · not deployed</span></div>
+
+<h2>The four names <small>the price the peers imply, before → after · prices of 5 Oct, the same figures on every side</small></h2>
+<div class="panel"><div class="tw" style="padding-top:10px"><table class="t"><thead><tr><th>company</th><th>before (C5b)</th><th>C6 · with outliers</th><th>C6 · without outliers</th><th>outliers · marked in</th><th>peers left in</th></tr></thead><tbody>${sum}</tbody></table></div></div>
+
+${sect("MU", "SanDisk and Nvidia leave — on growth, not on their multiples")}
+${sect("NVDA", "Arm leaves: 313× earnings, 71× sales, 95% gross margin")}
+${sect("CRWV", "the rule removes the four names most like CoreWeave")}
+${sect("CBRS", "Credo and Astera leave — on growth")}
+
+<h2>On a phone <small>390 wide</small></h2>
+<div class="panel"><div class="two"><div>${shot("shots/after/CRWV-set-390.png", "CRWV · the set: the count shortens to “4 of 10”", "390px")}</div><div>${shot("shots/after/CRWV-range-390.png", "CRWV · the range with / without", "390px")}</div></div></div>
+
+<h2>What if only the six multiples were counted <small>a what-if, not built into the tab</small></h2>
+<div class="panel"><div class="tw" style="padding-top:10px"><table class="t wrap"><thead><tr><th>company</th><th>as built: all 16 columns → centre</th><th>the six multiples only → centre</th></tr></thead><tbody>${mo}</tbody></table></div></div>
+
+<details class="sc-pagespecs" open><summary>PAGE SPECS</summary><div class="words">
+<p><b>The rule, in two sentences.</b> In every column of the comps table, each peer's distance from the column's median is measured in units of the column's typical spread (the median absolute deviation; the six multiples on a log scale, so a 300× P/E is “ten times a 30×”, not “270 further”), and a cell more than 3.5 such units away is marked. A peer marked in 3 or more columns — or in at least 40% of the columns it has figures for, and at least two — is an outlier: greyed at the bottom with its count, left out of every median and of the implied price, never deleted, and one click keeps it in; a single mark is only a coloured cell and the peer still counts.</p>
+<p><b>What changed against C5b.</b> C5b dropped a single cell from a single measure at 3 spreads (ARM's P/E out of the P/E median, ARM still in everywhere else). C6 judges the whole peer across all sixteen columns: a peer is in for every measure or out for every measure. The hollow circles at the edge of the field bars are gone with the single-cell rule; one wild cell now stays inside its bar.</p>
+<p><b>What the four names show (the weird, funky stuff).</b></p>
+<ul>
+<li><b>Nearly every outlier is caught by growth and capex, not by multiples.</b> Of the nine outliers above, only ARM (in NVDA's set) is marked on a multiple. Three of the sixteen columns say almost the same thing — revenue growth trailing, revenue growth next year, new revenue per capex dollar — so one fact (“this company is growing very fast”) easily earns three marks.</li>
+<li><b>CRWV: the rule removes the four companies most like CoreWeave</b> (NBIS, WULF, APLD, HUT — the other AI-compute builders: revenue growing or expected to grow 94–460%, and for three of them capex at 4–10 times revenue), because the group's median is set by ZS, SNPS, FTNT and TWLO. The centre falls from $140 to $78. The outlier rule cannot repair a set that is mostly the wrong business; it makes it worse.</li>
+<li><b>MU: the centre moves further from the price</b> ($4,456 → $6,194 against $1,064 today). SanDisk and Nvidia carried the lowest multiples in the set (SNDK 8× forward earnings); removing them for fast growth raises every median. Micron itself, measured against these peers, would be marked on at least revenue growth (256%) and capex (28% of revenue).</li>
+<li><b>HUT is out on 2 of 4 columns</b> — it has figures in only four judged columns, and one of the two marks is a trailing revenue growth of (102)%, which looks like a data fault rather than a business fact.</li>
+<li>At 3.5 spreads the cells C5b used to drop at 3 (SNDK's 8× forward P/E and 0.14 PEG, ARM's 71× sales in MU's set) fall just inside and are not marked.</li>
+</ul>
+<p><b>Where each number comes from.</b> The four sets are the C5 business-first sets (not K1's own-business rule, which was dropped — so MU's peers here are the chip names, not WDC and STX). Prices: the chart API, 5 Oct after the close. Figures: the Hub's fundamentals, estimates and balance tables, read with the Hub's public key, with C5b's one-currency rule. “Before” is the C5b code on the same figures. The pictures are headless (never a visible window) at 1680 and 390 wide, the Hub served from the branch under its own hostname; every write the page attempted was caught and answered locally (2 per run: the keep click and its undo — nothing reached the database).</p>
+<p><b>What could be wrong.</b> (1) Columns are counted as if independent; they are not (growth × 3, P/S with EV/sales, the two P/Es). (2) The group is measured once: if a third of a set is wild, the median itself drifts toward them. (3) A column needs five peers to judge anyone; sparse columns (P/E where half the peers lose money) judge few. (4) The company itself is not tested against its peers. (5) The what-if table changes only which columns are counted; thresholds are the same.</p>
+<p><b>Not done.</b> Nothing is deployed and index.html is untouched (the Hub's COMPS tab file changed on this branch only). No table was written. K1's own-business rule was not carried. The field bars do not yet pin a single wild cell to the edge of its bar (C5b did, for the cells it dropped). The 390 pictures cover the set and the range; the sixteen-column table on a phone scrolls sideways as before.</p>
+<p><b>Tests.</b> tests/comps-c6.test.mjs, 11 tests: the per-column distance, the log scale, thin and tied columns, a single extreme column against many moderate ones, the 40% road, NVDA/ARM, the four names, the keep click, C5 unchanged, the tab's words. Hub suite 1,884 tests, 7 failures — the same seven as the untouched release (Indicator Lab checkpoint, age function, readiness, saved review charts, xfeed-publish, MONTH, REGIME).</p>
+</div></details>
+</div></body></html>
+`;
+writeFileSync(path.join(HERE, "COMPS-C6.html"), html);
+console.log("COMPS-C6.html", html.length);
