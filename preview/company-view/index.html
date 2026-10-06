@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from bd9b918) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8de86a8) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5602,6 +5602,10 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    DB cohort key, filled from an UNSCOPED cohorts pull (every ticker's membership,
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
+/* BT1 (6 Oct) — ticker → { tr, mo } from the same chart API /geiger answer GCOMP is filled from. A FUND column on the
+   compare strip (XLK, RSPT, IYW …) reads its trend / momentum line from here, so the line under a bar describes the
+   same fund the bar does. */
+const SC_PROV_TM = {};
 const COHORT_OF = {};
 const SC_EXPECTED_EQUITY_COUNT = 590;
 const SC_EQUITY_UNIVERSE_DIGEST = "116c79f2e6f7cbdadceac1a2574595fc396d88cb283fce2932c926e86673eabe";
@@ -5956,7 +5960,9 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      pull is 17.5 s median, 30.2 s worst). Same authority, same values the end of this pull mirrors into GCOMP. */
   pGeiger.then(function (m) {
     let n = 0;
-    for (const t in (m || {})) { const c = num(m[t] && m[t].composite); if (c != null) { GCOMP[t] = c; n++; } }
+    for (const t in (m || {})) { const c = num(m[t] && m[t].composite); if (c != null) { GCOMP[t] = c; n++; }
+      /* BT1 — the same answer's own trend and momentum, kept for the compare strip's fund columns (scinStripTM) */
+      if (m[t]) SC_PROV_TM[t] = { tr: num(m[t].trend), mo: num(m[t].momentum) }; }
     if (n) { const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML(); }
   }).catch(function () {});
   const pDeclared = scDeclaredEquities();                 // same surface: the declared equity set
@@ -8299,6 +8305,10 @@ function scinGroupTickers(key) {
   /* 28 Sep (N6) — an INDEXES column is one fund, so its read is that fund's own trend and momentum */
   if (typeof window !== "undefined" && window.SC_INDEX_FUNDS && window.SECT_FAMILY === "INDEXES" && scCmpMode() === "SECTORS" &&
       window.SC_INDEX_FUNDS.some((f) => f[0] === key)) return [key];
+  /* BT1 (6 Oct) — and so is every fund-family column (SPDR, iSHARES, VANGUARD, EQUAL-WT, BOW TIE). The SPDR column is
+     keyed XLK, which the lookup below turns into OUR 70 tech names: MEASURED live 6 Oct 18:50Z, XLK's bar said +0.94
+     (the fund) over "constructive .31/.30" (our names' average; the fund's own is 1.00/.88). Only OUR NAMES is a group. */
+  if (scStripIsFund()) return [key];
   if (typeof COHSETS !== "undefined" && COHSETS) {
     const direct = COHSETS[key];
     if (direct) return Array.from(direct);
@@ -8317,6 +8327,40 @@ function scinGroupTickers(key) {
 /* H2 — the COHORTS | SECTORS mode lives inside the rewind module's closure; the strip read a global that never
    existed, so neither chip ever lit and the header always said COHORT. The module mirrors its mode here. */
 function scCmpMode() { return (typeof window !== "undefined" && window.SC_CMP_MODE) || "COHORTS"; }
+/* BT1 (6 Oct) — true when each strip column is ONE FUND's own Geiger (every SECTORS family except OUR NAMES) */
+function scStripIsFund() {
+  return scCmpMode() === "SECTORS" && typeof window !== "undefined" && !!window.SECT_FAMILY && window.SECT_FAMILY !== "MEMBERS";
+}
+/* BT1 — the trend / momentum behind one strip column. A fund column, live: the fund's own pair from the same /geiger
+   answer its bar came from. Rewound, or a cohort / OUR NAMES column: the board's store, averaged over the group. */
+function scinStripTM(key) {
+  if (scStripIsFund() && !(typeof document !== "undefined" && document.body && document.body.classList.contains("gwx-on"))) {
+    const d = SC_PROV_TM[key];
+    if (d && d.tr != null && isFinite(d.tr)) return { tr: d.tr, mo: (d.mo != null && isFinite(d.mo)) ? d.mo : null, n: 1 };
+  }
+  return scinGroupTM(scinGroupTickers(key));
+}
+/* BT1 — ONE PLAIN HOVER LINE PER BOW TIE NUMBER. Alan, 6 Oct: "Healthcare plus 55, financials plus 0.02, tech plus 0.00.
+   I don't think this bow tie is right." Every number checked out against the feed (deliverables/20261006/bt1-bowtie-check),
+   but the hover said less than it knew:
+     · the gap is a difference between two Geiger scores (each −1 … +1), not a % return — it now says "Geiger points";
+     · a gap inside ±L0_CMP_MIN_SPAN (the strip's own "flat" floor, 0.05) is called level, not "stronger" (+0.00 read as
+       "the average stock is stronger than the index");
+     · when both funds' trend prints ±1.00 the gauge has no room left, so a zero gap means "both at the limit", not "the same".
+   ewT / cwT = the two funds' trend from the same feed (null when unknown: the limit note is simply left off). */
+function scBowtieLine(name, ewSym, cwSym, ew, cw, ewT, cwT) {
+  const f2 = (v) => (v == null ? "no Geiger yet" : (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(2));
+  const head = name + " \u00b7 " + ewSym + " (equal-weight) " + f2(ew) + " \u2212 " + cwSym + " (cap-weight) " + f2(cw);
+  if (ew == null || cw == null) return head + " \u00b7 no difference: a Geiger is missing";
+  const d = ew - cw, flat = Math.abs(d) < L0_CMP_MIN_SPAN;
+  const pin = (t) => t != null && isFinite(t) && Math.abs(t) >= 0.995;
+  const atLimit = pin(ewT) && pin(cwT) && (ewT > 0) === (cwT > 0);
+  return head + " = " + f2(d) + " Geiger points (a gap between two scores, not a % return)" +
+    (flat ? " \u00b7 level: the average stock and the index read the same"
+          : d > 0 ? " \u00b7 the average stock is stronger than the index"
+                  : " \u00b7 the index is carried by its biggest names") +
+    (atLimit ? " \u00b7 both funds' trend is at the gauge's limit (" + (ewT > 0 ? "+" : "\u2212") + "1.00), so no gap can show here" : "");
+}
 function cohortCompareStripHTML() {
   const list = cohortCompareRows();
   const span = cohortCompareSpan(list);
@@ -8361,11 +8405,11 @@ function cohortCompareStripHTML() {
        So "pullback" under INDUSTRIAL means what "pullback" means on a row, and the ◆ fires
        on the identical disagreement rule. This is the strip mirroring the board, which is
        what Alan asked for and did not get. */
-    const g = scinGroupTM(scinGroupTickers(r.key));
+    const g = scinStripTM(r.key);   /* BT1 — a fund column reads the fund's own trend / momentum */
     const rd = scinRead(g.tr, g.mo);
     const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
-      : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
-        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers" +
+      : (scStripIsFund() ? "this fund's own trend " : "mean trend ") + g.tr.toFixed(2) + " (slow, daily-locked) · " + (scStripIsFund() ? "its momentum " : "mean momentum ") +
+        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + (scStripIsFund() ? "the fund itself, not our names in the sector" : g.n + " tickers") +
       /* M52 — this group's own usual day rides in the same tooltip. The strip's columns are ~45 px
          wide and Alan rejected wrapping them, so the number goes where there is room to say it
          properly rather than being squeezed into a fourth line nobody could read. */
@@ -29799,10 +29843,11 @@ body.gwx-motion .gwx-pct{opacity:1}
         if(SECT_FAMILY==="BOWTIE"){
           return BOWTIE_PAIRS.map(function(p){
             var ew=gAt(p[0]), cw=gAt(p[1]), d=(ew==null||cw==null)?null:ew-cw;
-            var f2=function(v){ return v==null?"no Geiger yet":(v>=0?"+":"\u2212")+Math.abs(v).toFixed(2); };
+            /* BT1 — the hover is scBowtieLine: Geiger points not %, "level" inside the flat floor, the limit note when
+               both trends print ±1.00 (live only: a rewound day has no per-fund trend here, so the note is left off) */
+            var tOf=function(t){ return (!ASOF && typeof SC_PROV_TM!=="undefined" && SC_PROV_TM[t]) ? SC_PROV_TM[t].tr : null; };
             return {key:p[0], label:p[2], short:p[3], pair:p[0]+" \u2212 "+p[1],
-                    full:p[2]+" \u00b7 "+p[0]+" (equal-weight) "+f2(ew)+" \u2212 "+p[1]+" (cap-weight) "+f2(cw)+
-                      (d==null?" \u00b7 no difference: a Geiger is missing":" = "+f2(d)+(d>=0?" \u00b7 the average stock is stronger than the index":" \u00b7 the index is carried by its biggest names")),
+                    full:scBowtieLine(p[2], p[0], p[1], ew, cw, tOf(p[0]), tOf(p[1])),
                     mean:d, n:2};
           }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
         }

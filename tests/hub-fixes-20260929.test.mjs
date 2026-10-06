@@ -213,7 +213,9 @@ test("BOW TIE: 14 pairs (RSP/SPY, QQQE/QQQ, EQAL/IWB and the eleven RSP* vs XL*)
   for (const p of pairs) assert.ok(p[3].length <= 4, p[3] + " fits a ~45 px column");
   const src = page.slice(page.indexOf('if(SECT_FAMILY==="BOWTIE"){'), page.indexOf('if(SECT_FAMILY==="INDEXES"){'));
   assert.match(src, /var ew=gAt\(p\[0\]\), cw=gAt\(p\[1\]\), d=\(ew==null\|\|cw==null\)\?null:ew-cw;/, "the same Geiger reader (and rewind) as every family");
-  assert.match(src, /full:p\[2\]\+" \\u00b7 "\+p\[0\]\+" \(equal-weight\) "\+f2\(ew\)\+" \\u2212 "\+p\[1\]\+" \(cap-weight\) "\+f2\(cw\)/, "the pair and both Geigers on hover");
+  /* BT1 (6 Oct) — the hover moved into scBowtieLine (Geiger points, "level" inside the flat floor, the limit note); same pair, same two Geigers */
+  assert.match(src, /full:scBowtieLine\(p\[2\], p\[0\], p\[1\], ew, cw, tOf\(p\[0\]\), tOf\(p\[1\]\)\)/, "the pair and both Geigers on hover");
+  assert.match(fnSrc("scBowtieLine"), /name \+ " \\u00b7 " \+ ewSym \+ " \(equal-weight\) " \+ f2\(ew\) \+ " \\u2212 " \+ cwSym \+ " \(cap-weight\) " \+ f2\(cw\)/);
   assert.match(src, /\.sort\(function\(a,b\)\{return \(b\.mean==null\?-99:b\.mean\)-\(a\.mean==null\?-99:a\.mean\);\}\)/, "high to low: the bow tie");
   assert.match(page, /\["BOWTIE","BOW TIE",/);
   assert.match(page, /if\(sf==="BOWTIE"\) window\.SECT_FAMILY=sf;/, "remembered like the other families");

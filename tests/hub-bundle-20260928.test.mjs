@@ -43,12 +43,13 @@ test("INDEXES builds one column per fund from the fund's own Geiger, sorted bull
 });
 test("the strip header says INDEX FUND COMPARE under INDEXES, and a column reads its own fund's trend and momentum", () => {
   assert.match(fn("cohortCompareStripHTML"), /idxFam \? "INDEX FUND" : "SECTOR"/);
-  const g = new Function("window", "scCmpMode", "COHSETS", "COHORT_OF", fn("scinGroupTickers") + "\nreturn scinGroupTickers;")(
-    { SC_INDEX_FUNDS: IDX, SECT_FAMILY: "INDEXES" }, () => "SECTORS", {}, {});
-  assert.deepEqual(g("IWM"), ["IWM"]);
-  const g2 = new Function("window", "scCmpMode", "COHSETS", "COHORT_OF", fn("scinGroupTickers") + "\nreturn scinGroupTickers;")(
-    { SC_INDEX_FUNDS: IDX, SECT_FAMILY: "SPDR" }, () => "SECTORS", {}, {});
-  assert.deepEqual(g2("IWM"), [], "other families keep their own rule");
+  /* BT1 (6 Oct) — scinGroupTickers now asks scStripIsFund(): EVERY fund family's column is its own fund (the SPDR column
+     used to resolve XLK to our 70 tech names, so the fund's bar sat over our names' trend / momentum); OUR NAMES stays a group. */
+  const mk = (fam) => new Function("window", "scCmpMode", "COHSETS", "COHORT_OF", "SPDR_TO_SECTOR", fn("scStripIsFund") + fn("scinGroupTickers") + "\nreturn scinGroupTickers;")(
+    { SC_INDEX_FUNDS: IDX, SECT_FAMILY: fam }, () => "SECTORS", { TECH: new Set(["NVDA", "MSFT"]) }, {}, { XLK: "TECH" });
+  assert.deepEqual(mk("INDEXES")("IWM"), ["IWM"]);
+  assert.deepEqual(mk("SPDR")("XLK"), ["XLK"], "a SPDR column is the fund itself");
+  assert.deepEqual(mk("MEMBERS")("XLK").sort(), ["MSFT", "NVDA"], "OUR NAMES keeps the sector's members");
 });
 
 /* ---- 4 · REACTION --------------------------------------------------------------------------------------------------- */
