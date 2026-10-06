@@ -210,8 +210,10 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 .sc-rsi{ text-align:center; font-family:var(--mono); font-size:10px;   /* FIX 4 — RSI cell, centered like FPE */
   font-variant-numeric:tabular-nums; color:var(--ink2); }
-/* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
-   Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
+/* 27 SEP — RSI at an extreme breathes: a slow glow in its own colour, no size or layout change.
+   Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event.
+   RS1 (6 Oct) — "an extreme" is now the NAME'S OWN: at or below its own 10th percentile of the last two years, or at or
+   above its own 90th (rsiOwnRead). 30 / 70 remains only for a name with under a year of history. The glow is unchanged. */
 /* SLOW1 (6 Oct 2026) — THE SAME BREATH, DRAWN ONCE. The glow used to be an animated text-shadow on the number itself.
    A text-shadow cannot be animated off the main thread, so ONE glowing number made the whole page re-lay-out and repaint
    60 times a second for as long as it was open. MEASURED on the live Hub (headless, default tab, two extreme readings):
@@ -7985,6 +7987,10 @@ function boardRowsHTML() {
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
   const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));
   return boardHeaderHTML() + sorted.map((d) => {
+    /* RS1 — the RSI cell is born in its final colour: the name's own scale when its row has landed, 30 / 70 until then */
+    const rsiRd = d.rsi == null ? { extreme: false, color: "", title: "" }
+      : typeof rsiOwnRead === "function" ? rsiOwnRead(d.t, d.rsi)
+      : { extreme: typeof rsiExtreme === "function" && rsiExtreme(d.rsi), color: rsiGradColor(d.rsi), title: "" };
     /* KEYBOARD REACHABLE. The row was a bare div: the only way to open a company page was a mouse
        click, so the whole detail surface — including the Geiger tile — was unreachable without a
        pointer. role/tabindex plus the shared Enter/Space handler make it operable without adding
@@ -8011,7 +8017,7 @@ function boardRowsHTML() {
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (rsiRd.extreme ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiRd.color + '" data-v="' + Math.round(d.rsi) + '"' + (rsiRd.title ? ' data-own="' + esc(rsiRd.title) + '" title="' + esc(rsiRd.title) + '"' : "") : "") + ">" +   /* RS1 — colour / glow / hover on the name's own scale (rsiOwnRead); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
@@ -8588,6 +8594,9 @@ async function loadBoardRsi(tickers) {
   /* M52 — the same lazy pass fills the USUAL DAY column: same tickers, its own read, never
      blocking or delaying the RSI fill (and idempotent, so extra calls cost nothing). */
   try { loadBoardHeartbeat(tickers); } catch (_) {}
+  /* RS1 — and each shown name's own RSI scale: its own read, never blocking the number (a cell paints on 30 / 70 first
+     and is recoloured when its scale lands; asked once per name per page load). */
+  try { loadBoardRsiOwn(tickers).catch(() => {}); } catch (_) {}
   const rowByT = {}; for (const r of (S.rows || [])) rowByT[r.t] = r;
   const need = [];
   const seen = new Set();
@@ -8629,7 +8638,7 @@ async function loadBoardRsi(tickers) {
    ~35% on a dark panel, which reads as "switched off". The number is now always drawn at full strength
    and the gradation moves into the HUE: a readable neutral that tints toward green (low) or red (high)
    the further RSI sits from 50. Same direction, same continuous gradient, nothing dimmed. */
-const RSI_XT_LO = 30, RSI_XT_HI = 70;            // the textbook extremes — the only cells that breathe
+const RSI_XT_LO = 30, RSI_XT_HI = 70;            // the textbook extremes — since RS1 only for a name with no own scale yet (see rsiOwnRead)
 const rsiExtreme = (v) => { const n = num(v); return n != null && (n <= RSI_XT_LO || n >= RSI_XT_HI); };
 function rsiGradColor(v) {
   const n = num(v); if (n == null) return "";
@@ -8638,6 +8647,95 @@ function rsiGradColor(v) {
   const t = 0.35 + 0.65 * Math.min(1, Math.abs(d) / 0.6);   // 35% tinted just off 50, fully coloured by 20 / 80
   const from = [178, 178, 186], to = d < 0 ? [0, 255, 163] : [255, 45, 85];
   return "rgb(" + from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",") + ")";
+}
+/* RS1 (6 Oct 2026) — RSI COLOURED BY EACH NAME'S OWN EXTREMES. Alan: "I see Netflix at 33 and I don't think that's green
+   enough." 30 / 70 is one ruler for every name; a name that has lived between 40 and 70 for two years is stretched at 38,
+   and a name that visits 20 every quarter is not. public.rsi_own_percentiles (written nightly by the rsi-own-daily
+   function) holds, per name, the RSI value at every percentile 0..100 of its own last two years of finished daily
+   sessions. The cell places the number it shows on that grid and colours by WHERE IT SITS FOR THIS NAME:
+     the same palette as before    neutral at its own middle, full green at its own 10th or lower, full red at its own 90th or higher
+     the breathing glow            at its own 10th or lower / 90th or higher, instead of 30 / 70
+     the hover                     "33 — lower than 86% of NFLX's last two years"
+   FALLS BACK to rsiGradColor / rsiExtreme (the 30 / 70 rule, untouched above) when the name has under one year of its
+   own history, when its row is older than three weeks (the same bound loadBoardHeartbeat reads by), or when the table
+   is not there at all — so this code is safe to ship before the table exists.
+   The board's number and the grid are the same measure: FMP's stored daily RSI(14) and Wilder's RSI(14) on the chart
+   API's daily bars agreed to the second decimal on 438 names for the 5 Oct close (median gap 0.00, largest 0.75).
+   The rule itself is supabase/functions/rsi-own-daily/rsi-own.mjs; tests/rsi-own-extremes.test.mjs runs these copies
+   against it value for value. Sorting the column still sorts the RSI number itself. */
+const RSI_OWN = Object.create(null);             // ticker → { eligible, grid:[101], as_of, sessions, span, rsi } — recent rows only
+const RSI_OWN_LO = 10, RSI_OWN_HI = 90;          // its own extremes: where the hue is full and the cell breathes
+const RSI_OWN_STALE_DAYS = 21;                   // an older row is not read (the heartbeat column's own bound)
+const RSI_OWN_ASKED = new Set();
+let RSI_OWN_OFF = false;                         // the table answered "not found": stop asking for this page load
+function rsiOwnPct(grid, v) {
+  const x = num(v);
+  if (!Array.isArray(grid) || grid.length !== 101 || x == null) return null;
+  if (x < grid[0]) return 0;
+  if (x >= grid[100]) return 100;
+  let k = 0;
+  for (let i = 0; i < 100; i++) if (grid[i] <= x) k = i; else break;   // the last step at or under the reading
+  const a = grid[k], b = grid[k + 1];
+  return Math.round((k + (b > a ? (x - a) / (b - a) : 0)) * 10) / 10;
+}
+function rsiOwnColor(pct) {
+  const p = num(pct); if (p == null) return "";
+  const d = (p - 50) / 50;                       // -1 (its own lowest day) .. +1 (its own highest)
+  if (Math.abs(d) < 0.04) return "var(--ink2)";  // its own middle: neutral, and readable
+  const t = 0.35 + 0.65 * Math.min(1, Math.abs(d) / 0.8);   // fully coloured at its own 10th / 90th
+  const from = [178, 178, 186], to = d < 0 ? [0, 255, 163] : [255, 45, 85];
+  return "rgb(" + from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",") + ")";
+}
+function rsiOwnSpan(windowFrom, asOf) {
+  const days = (Date.parse(asOf) - Date.parse(windowFrom)) / 864e5;
+  if (!isFinite(days) || days >= 700) return "last two years";
+  return "last " + Math.max(12, Math.round(days / 30.44)) + " months";   // a younger name says how long its own window really is
+}
+function rsiOwnTitle(t, v, pct, span) {
+  const n = Math.round(num(v));
+  if (pct == null) return n + " \u2014 " + t + " has under a year of its own history, so this is coloured on the usual 30 / 70 scale";
+  const of = t + "'s " + (span || "last two years");
+  if (pct <= 0) return n + " \u2014 the lowest reading of " + of;
+  if (pct >= 100) return n + " \u2014 the highest reading of " + of;
+  if (pct < 50) return n + " \u2014 lower than " + Math.min(99, Math.round(100 - pct)) + "% of " + of;
+  return n + " \u2014 higher than " + Math.min(99, Math.round(pct)) + "% of " + of;
+}
+function rsiOwnRead(t, v) {
+  const own = RSI_OWN[t];
+  const pct = own && own.eligible ? rsiOwnPct(own.grid, v) : null;
+  /* no own scale: the 30 / 70 rule exactly as it was. The hover says why only when we KNOW the name is too young;
+     a scale that has not landed (or no table yet) says nothing, as the cell did before RS1. */
+  if (pct == null) return { pct: null, own: false, color: rsiGradColor(v), extreme: rsiExtreme(v), title: own && !own.eligible ? rsiOwnTitle(t, v, null) : "" };
+  return { pct, own: true, color: rsiOwnColor(pct), extreme: pct <= RSI_OWN_LO || pct >= RSI_OWN_HI, title: rsiOwnTitle(t, v, pct, own.span) };
+}
+async function loadBoardRsiOwn(tickers) {
+  if (RSI_OWN_OFF) return;
+  const need = [];
+  for (const t of (tickers || [])) { if (!t || RSI_OWN_ASKED.has(t)) continue; RSI_OWN_ASKED.add(t); need.push(t); }
+  if (!need.length) return;
+  const since = new Date(Date.now() - RSI_OWN_STALE_DAYS * 86400e3).toISOString().slice(0, 10);
+  for (let i = 0; i < need.length; i += 35) {
+    const chunk = need.slice(i, i + 35);
+    let rows;
+    try {
+      /* one try (pg's second argument): pg() repeats every failure three times, and a table that is not there yet
+         should cost this page one request, not three */
+      rows = await pg("rsi_own_percentiles?ticker=in.(" + chunk.map((t) => encodeURIComponent(t)).join(",") +
+        ")&as_of=gte." + since + "&select=ticker,as_of,window_from,sessions,eligible,rsi,grid", 1);
+    } catch (e) {
+      /* no table yet (404) → stay on 30 / 70 and stop asking; anything else was a bad moment → ask again on the next pass */
+      if (/→ 404$/.test(String(e && e.message))) RSI_OWN_OFF = true;
+      for (const t of need.slice(i)) RSI_OWN_ASKED.delete(t);
+      return;
+    }
+    const rowByT = {}; for (const r of (S.rows || [])) rowByT[r.t] = r;
+    for (const r of (rows || [])) {
+      if (!Array.isArray(r.grid) || r.grid.length !== 101) continue;
+      RSI_OWN[r.ticker] = { eligible: r.eligible === true, grid: r.grid.map(Number), as_of: r.as_of, sessions: r.sessions, span: rsiOwnSpan(r.window_from, r.as_of), rsi: num(r.rsi) };
+      const row = rowByT[r.ticker];
+      if (row && row.rsi != null) paintRsiCell(r.ticker, row.rsi);   // the number is already on screen: recolour it on its own scale
+    }
+  }
 }
 /* M55 — is the board showing a past day? One reader, so every writer asks the same question. */
 /* Is the board rewound? The page's one reader of that state — shared plumbing, lifted into every
@@ -8653,8 +8751,13 @@ function paintRsiCell(t, v) {
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
   if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
-  cell.style.color = rsiGradColor(v);
-  if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
+  const rd = rsiOwnRead(t, v);                     /* RS1 — colour, glow and hover from this name's own two years (30 / 70 when it has no own scale) */
+  cell.style.color = rd.color;
+  if (cell.classList) cell.classList.toggle("is-xt", rd.extreme);   /* 27 Sep — an extreme breathes, softly */
+  /* the hover. It also rides on data-own: the "how unusual" script rewrites every RSI cell's title with its tap hint
+     (markCells) and now puts this line in front of it instead of replacing it. */
+  if (rd.title) { if (cell.setAttribute) { cell.setAttribute("data-own", rd.title); cell.setAttribute("title", rd.title); } }
+  else if (cell.removeAttribute) { cell.removeAttribute("data-own"); cell.removeAttribute("title"); }
 }
 
 /* ============================================================================
@@ -30627,9 +30730,22 @@ body.gwx-motion .gwx-pct{opacity:1}
     }).join("");
   }
 
+  /* RS1 (6 Oct) — THE NAME'S OWN TWO YEARS, IN THE TAP. A phone has no hover, and a tap on an RSI cell lands here: the
+     line the cell's hover carries ("33 — lower than 86% of NFLX's last two years") plus where the name's own bottom and
+     top tenth start. For the nine watched names it sits under the all-history sentence, each naming its own window. */
+  function ownLine(t, v){
+    if (typeof RSI_OWN === "undefined" || typeof rsiOwnRead !== "function" || v == null) return "";
+    var own = RSI_OWN[t], rd = own ? rsiOwnRead(t, v) : null;
+    if (!rd || !rd.title) return "";
+    var safe = rd.title.replace(/[&<>]/g, function(ch){ return ch === "&" ? "&amp;" : ch === "<" ? "&lt;" : "&gt;"; });
+    return '<p class="hu__say">Daily RSI <b>' + safe.replace(" \u2014 ", "</b> \u2014 ")
+      + (rd.own ? ". Its own bottom tenth is <b>" + n0(own.grid[10]) + "</b> or lower; its own top tenth is <b>" + n0(own.grid[90]) + "</b> or higher." : ".") + "</p>";
+  }
   function paint(){
     var sym = DOC.symbols.filter(function(s){ return s.t===CUR; })[0];
-    if (!sym) { el("huMain").innerHTML = '<p class="hu__say">No history has been built for this one yet. The nine on the left are the indexes and macro readings, measured from their own full daily history.</p>'; paintList(); return; }
+    if (!sym) {
+      var bRow = (typeof S !== "undefined" && S.rows || []).filter(function(r){ return r.t === CUR; })[0];
+      el("huMain").innerHTML = ownLine(CUR, bRow && bRow.rsi) + '<p class="hu__say">No history has been built for this one yet. The nine on the left are the indexes and macro readings, measured from their own full daily history.</p>'; paintList(); return; }
     var live = LIVE[sym.t] || null, now = live ? live.rsi : (sym.latest && sym.latest.rsi), asOf = live ? live.date : (sym.latest && sym.latest.date);
     var p = pctileOf(sym, now);
     var g = (GEIGER && GEIGER.symbols && GEIGER.symbols[sym.t]) || null;
@@ -30648,6 +30764,7 @@ body.gwx-motion .gwx-pct{opacity:1}
           + grp(hist.rsi_days_measured)+" days we hold ("+n1(hist.years_of_days)+" years of days), not on the full period.</p>" : "")
       + '<p class="hu__say">This reading is <b>higher than '+n0(p)+"% of all days</b> in this symbol's own history — "
       + grp(hist.rsi_days_measured)+" days measured, "+say(hist.first_day)+" to "+say(hist.last_finished_day)+".</p>"
+      + ownLine(sym.t, now)
       + '<p class="hu__say">'+levelSentence(sym, sym.levels.filter(function(L){
           return now!=null && (L.side==="below" ? now<=L.level : now>=L.level); }).sort(function(a,b){
           return Math.abs(a.level-now)-Math.abs(b.level-now); })[0] || sym.levels.filter(function(L){return L.level===40;})[0])+"</p>"
@@ -30713,9 +30830,12 @@ body.gwx-motion .gwx-pct{opacity:1}
     document.querySelectorAll(".sc-rsi[id^='lr_']").forEach(function(c){
       var t = c.id.slice(3);
       c.setAttribute("data-hu", WATCHED.indexOf(t) >= 0 ? "watch" : "1");
-      c.title = WATCHED.indexOf(t) >= 0
+      var tap = WATCHED.indexOf(t) >= 0
         ? "how unusual is this reading? — tap for " + t + "'s own history"
         : "tap: how unusual is this reading?";
+      /* RS1 (6 Oct) — the cell's own-scale line ("33 — lower than 86% of NFLX's last two years") leads; the way in follows */
+      var own = c.getAttribute("data-own");
+      c.title = own ? own + " \u00b7 " + tap : tap;
     });
   }
   /* VIX, the ten-year, the dollar, oil and gold have no RSI in the provider table, so those
@@ -30727,12 +30847,26 @@ body.gwx-motion .gwx-pct{opacity:1}
       var c = document.getElementById("lr_" + sym.t);
       if (!c) return;
       var shown = (c.textContent || "").trim();
-      if (shown && shown !== "\u2014" && shown !== "-") return;      // never overwrite the provider's own number
-      var v = (LIVE[sym.t] && LIVE[sym.t].rsi) != null ? LIVE[sym.t].rsi : (sym.latest && sym.latest.rsi);
+      /* never overwrite the provider's own number. A cell THIS function filled (data-hu-rsi) is dressed again, so it
+         takes its own-scale colour when that name's scale lands (RS1) — the text is only written when it changes,
+         because a text write wakes the observer below. */
+      if (shown && shown !== "\u2014" && shown !== "-" && c.getAttribute("data-hu-rsi") == null) return;
+      /* RS1 — the reading: the panel's live recount when it was opened, else the nightly own-scale row's close (the
+         same finished daily bars, refreshed every night), else the static file's last day as before */
+      var ownRow = typeof RSI_OWN !== "undefined" ? RSI_OWN[sym.t] : null;
+      var from = (LIVE[sym.t] && LIVE[sym.t].rsi != null) ? LIVE[sym.t]
+               : (ownRow && ownRow.rsi != null) ? { rsi: ownRow.rsi, date: ownRow.as_of }
+               : sym.latest;
+      var v = from && from.rsi;
       if (v == null) return;
-      c.textContent = Math.round(v);
-      if (typeof rsiGradColor === "function") c.style.color = rsiGradColor(v);
-      c.title = "RSI " + (Math.round(v*10)/10) + " on " + ((LIVE[sym.t]||sym.latest).date)
+      if (shown !== String(Math.round(v))) c.textContent = Math.round(v);
+      c.setAttribute("data-hu-rsi", v);
+      /* RS1 — VIX, the ten-year, the dollar, oil and gold on their own two years, like every other cell; with no own
+         scale they keep the 30 / 70 colour and, as before, do not breathe */
+      var rd = typeof rsiOwnRead === "function" ? rsiOwnRead(sym.t, v) : null;
+      if (rd) { c.style.color = rd.color; c.classList.toggle("is-xt", rd.own && rd.extreme); if (rd.own && rd.extreme) c.setAttribute("data-v", Math.round(v)); }
+      else if (typeof rsiGradColor === "function") c.style.color = rsiGradColor(v);
+      c.title = (rd && rd.title ? rd.title + " \u00b7 " : "") + "RSI " + (Math.round(v*10)/10) + " on " + from.date
               + ", from finished daily bars (" + sym.provider + ") \u2014 tap: how unusual is this reading?";
     });
   }

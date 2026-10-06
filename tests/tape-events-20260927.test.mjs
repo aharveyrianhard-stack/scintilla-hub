@@ -29,7 +29,9 @@ test("RSI is drawn at full strength: no opacity, a readable neutral at 50, the h
   assert.ok(Math.max(...ch(63)) >= 200, "an ordinary 63 is bright, not the ~35% opacity it was");
   assert.equal(rsi.rsiGradColor(null), "");
 });
-test("only a textbook extreme breathes, and it is gentle and switchable off by reduced motion", () => {
+test("only an extreme breathes, and it is gentle and switchable off by reduced motion", () => {
+  /* RS1 (6 Oct): "an extreme" is the name's own 10th / 90th percentile (tests/rsi-own-extremes.test.mjs). The textbook
+     pair below is still the rule for a name with no own scale yet, so it is still pinned here. */
   assert.equal(rsi.rsiExtreme(30), true); assert.equal(rsi.rsiExtreme(70), true);
   assert.equal(rsi.rsiExtreme(31), false); assert.equal(rsi.rsiExtreme(69), false); assert.equal(rsi.rsiExtreme(null), false);
   /* SLOW1 (6 Oct): the breath is the opacity of a fixed copy of the number, never an animated text-shadow (that one
@@ -39,7 +41,7 @@ test("only a textbook extreme breathes, and it is gentle and switchable off by r
   assert.doesNotMatch(page, /@keyframes rsi-xt\{[^@]*text-shadow/, "no keyframe animates text-shadow");
   assert.match(fn("paintRsiCell"), /setAttribute\("data-v", Math\.round\(v\)\)/, "the copy carries the number the cell shows");
   assert.match(page, /@media \(prefers-reduced-motion:reduce\)\{ \.sc-rsi\.is-xt\{ animation:none;/);
-  assert.match(fn("paintRsiCell"), /classList\.toggle\("is-xt", rsiExtreme\(v\)\)/, "the lazy fill marks it too");
+  assert.match(fn("paintRsiCell"), /classList\.toggle\("is-xt", rd\.extreme\)/, "the lazy fill marks it too (RS1: from the name's own read)");
 });
 
 /* ── the tape ────────────────────────────────────────────────────────────────────────────────────── */
