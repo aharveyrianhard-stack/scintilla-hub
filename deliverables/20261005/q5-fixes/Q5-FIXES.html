@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Q5 — the outside critique's findings, fixed worst first</title>
+<style>
+:root{--bg:#0b0b0c;--panel:#131315;--line:#2a2a2d;--text:#cfcfd2;--dim:#8d8d92;--up:#3ddc84;--down:#e5484d}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,Inter,Helvetica,Arial,sans-serif;padding:24px 16px 64px}
+main{max-width:1180px;margin:0 auto} h1{font-size:22px;margin:0 0 4px;letter-spacing:.2px} h2{font-size:16px;margin:36px 0 10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)} h3{font-size:14px;margin:18px 0 6px}
+.sub{color:var(--dim);font-family:ui-monospace,Menlo,monospace;font-size:12px} .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:12px} th,td{border-top:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left} th{color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+.wrap{overflow-x:auto} .v{font-family:ui-monospace,Menlo,monospace;font-weight:600;white-space:nowrap} .green{color:var(--up)} .red{color:var(--down)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0} .kpi div{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px} .kpi b{display:block;font-size:20px;font-family:ui-monospace,Menlo,monospace} .kpi span{color:var(--dim);font-size:11px}
+.shots{display:grid;gap:12px;margin:12px 0} .shots.two{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))} figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px} figure img{display:block;width:100%;height:auto;border:1px solid var(--line)} figure.phone img{max-width:390px;margin:0 auto} figcaption{font-size:12px;color:var(--dim);margin-top:8px} figcaption b{color:var(--text)}
+a{color:var(--text)} li{margin:4px 0} p{margin:8px 0} code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#b9b9be} details.sc-pagespecs{margin-top:40px;color:var(--dim)} details.sc-pagespecs summary{cursor:pointer;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+</style></head><body><main>
+<span data-scnav-slot></span><h1>The outside critique's findings, fixed worst first</h1>
+<div class=sub>Q5 · 5 Oct 2026 · three branches, pushed, nothing deployed · provider 864 → 881 tests green · Hub and Station: the same known failures as the live branches, no new one</div>
+
+<h2>The board on a phone, while it loads</h2>
+<div class="shots two">
+<figure class=phone><img src="shots/before-midload-390.png" alt="The board part-way through loading, before: tabs in one row, a squeezed ten-column board, the map panel on screen" loading=lazy><figcaption><b>Before · what a phone showed first.</b> Tabs in one row running off the edge, the board squeezed to ten cut-off columns, the map panel on screen. A moment later all of it jumped to the layout on the right-hand picture below.</figcaption></figure>
+<figure class=phone><img src="shots/after-midload-390.png" alt="The board part-way through loading, after: the header only" loading=lazy><figcaption><b>After · the same moment.</b> The header only. The tabs and the board appear once, already in their final place.</figcaption></figure>
+</div>
+<div class="shots two">
+<figure class=phone><img src="shots/before-390.png" alt="The finished board on a phone, before" loading=lazy><figcaption><b>Before · finished.</b> 390 wide.</figcaption></figure>
+<figure class=phone><img src="shots/after-390.png" alt="The finished board on a phone, after" loading=lazy><figcaption><b>After · finished.</b> The same page: every band has the same top and the same height (measured).</figcaption></figure>
+</div>
+<div class="shots two">
+<figure><img src="shots/before-1680.png" alt="The finished board at 1680 wide, before" loading=lazy><figcaption><b>Before · desk, 1680 wide.</b></figcaption></figure>
+<figure><img src="shots/after-1680.png" alt="The finished board at 1680 wide, after" loading=lazy><figcaption><b>After · desk, 1680 wide.</b> The same page.</figcaption></figure>
+</div>
+<p class=sub>The prices read "—" in every picture: the chart API only answers scintillahub.ai, and these were taken from a copy on this Mac. That is the same in the before and the after.</p>
+
+<h2>The board, measured</h2>
+<div class=kpi>
+<div><b><span class=red>26</span> → <span class=green>50</span></b><span>Lighthouse performance, of 100 (three runs each: 26 26 27 → 50 50 49)</span></div>
+<div><b><span class=red>0.894</span> → <span class=green>0.003</span></b><span>layout shift (good is under 0.1)</span></div>
+<div><b><span class=red>5,378</span> → <span class=green>3,221</span> KiB</b><span>weight before any data</span></div>
+<div><b><span class=red>26.9</span> → <span class=green>16.4</span> s</b><span>largest paint, on Lighthouse's slow phone</span></div>
+<div><b>2.2 MB → 4 KB</b><span>the page downloading itself again, on every load and every 75 seconds</span></div>
+</div>
+<div class=panel>
+<p><b>What the 5.4 MB was.</b> The page is 2.2 MB, and it downloaded itself a second time — on every load, and again every 75 seconds while open — to read one line near its end that says which build it is. On the live site that is 716 KB over the wire each time. It now asks for the first 4 KB, where the same line now also sits. The rest of the weight is the page itself (2.2 MB, everything in one file) and one 272 KB data file; splitting the page is a larger job and is not done here.</p>
+<p><b>What the shift was.</b> The page draws the tabs and the board the moment its main script has run, but the last six blocks of styling — including the phone layout — sit after that script in the file. On a phone or a slow line the browser painted in between, then everything jumped. Two more jumps came a moment later, when the scintilla strip and the tape's economic line arrived with their data. Now the tabs and board are held until the whole file has been read, and the two bands keep their place while their data loads.</p>
+<p><b>Not changed:</b> first paint (11.6 → 11.7 s on Lighthouse's slow phone) and accessibility (92). Performance 50 is still not good: what is left is the size of the one file.</p>
+</div>
+
+<h2>Every finding</h2>
+<div class="panel wrap"><table>
+<tr><th>Finding</th><th>Fixed?</th><th>Test</th><th>Measured before → after</th></tr>
+<tr><td colspan=4 class=sub>PROVIDER · provider/q5-fixes-20261005</td></tr>
+<tr><td>Two promise chains in the stream with no safe end</td><td>Yes. Each had a catch, but the catch itself could throw on a failure that is not an Error: an unhandled failure at boot, and a session-bars caller left with no answer</td><td>q5-detached-promise-chains: rejects both four ways</td><td class=v>3 of 6 fail on old code → 6 of 6 pass</td></tr>
+<tr><td>Certificate checking off, 9 places</td><td>One place decides now. Give it the database's certificate authority and checking is on; without it, as before, and that one line says why. Not switched on by this branch (see decisions)</td><td>q5-database-tls: the rule, no second place, a real handshake</td><td class=v>9 places → 1 · scanner 9 → 0</td></tr>
+<tr><td>One circular import</td><td>Yes. The shared calendar has its own file</td><td>q5-no-import-circle: walks every import</td><td class=v>1 → 0</td></tr>
+<tr><td>Chart API reaching into the bar service's folder, 17 places</td><td>Yes. The 16 shared contract files live in one package both import; every old path still works</td><td>q5-service-boundary + the packaging tests</td><td class=v>17 → 0</td></tr>
+<tr><td>7 dead exports</td><td>Yes. 4 removed, 3 made private</td><td>knip</td><td class=v>7 → 0</td></tr>
+<tr><td>1 unlisted dependency</td><td>Not a missing package: it is the edge function's own registry (Deno). Named as such in the tool's settings and in the file</td><td>knip</td><td class=v>1 → 0</td></tr>
+<tr><td colspan=4 class=sub>HUB · hub/q5-fixes-20261005</td></tr>
+<tr><td>The board's weight, 5.4 MB</td><td>Yes, the half that was the page re-downloading itself. Invisible</td><td>q5-board-weight (6)</td><td class=v>5,378 → 3,221 KiB</td></tr>
+<tr><td>The board's layout shift, 0.88</td><td>Yes. Visible only while loading (pictures above)</td><td>q5-board-shift (2)</td><td class=v>0.894 → 0.003</td></tr>
+<tr><td>28 places building HTML by joining strings</td><td>All 28 read. 23 already escaped everything from data. Escaped now: a timeframe label (twice) and a fiscal date in the layout prototype, plus two interface values. The scanner never read the live page's own script, so that was searched too: two places in USUAL DAY wrote names from a data file unescaped — escaped, invisible</td><td>q5-html-escape: hostile text through the real code</td><td class=v>11 places escaped · scanner 28 → 27</td></tr>
+<tr><td>openCo undefined in two harnesses</td><td>Not a crash: it runs inside the browser, where the page defines it. Made explicit, and answers by name if a page lacks it</td><td>q5-html-escape</td><td class=v>2 → 0</td></tr>
+<tr><td colspan=4 class=sub>STATION · station/q5-fixes-20261005</td></tr>
+<tr><td>Signal-level items that are real bugs</td><td>335 read, 2 real: a test fixture calling a helper that file never defined (would have crashed the first test to use that route), and a line assigning a value to itself. Fixed</td><td>station-admission-v2: walks every route of the fixture</td><td class=v>2 of 2 fixed</td></tr>
+<tr><td>The other 333</td><td>Not bugs: 303 "not defined" names are the browser's or the extension's (each checked against the Station's pages); the rest are a default before a try, or a two-handler promise. Unreachable code: none found</td><td>—</td><td class=v>0 unreachable</td></tr>
+</table></div>
+<p class=sub>The scanner's Hub count barely moves (28 → 27) because it flags the shape — any HTML built by joining strings — whether or not the values are escaped.</p>
+
+<h2>What changes on the Hub page itself</h2>
+<div class="panel wrap"><table>
+<tr><th>Change to index.html</th><th>Can you see it?</th></tr>
+<tr><td>The page stops downloading itself to read its build line</td><td>No</td></tr>
+<tr><td>Two names in USUAL DAY are escaped</td><td>No</td></tr>
+<tr><td>The tabs, the board and the bottom bands wait until the whole file has been read</td><td>Only while loading: no half-styled board first. On a very slow line the tabs appear a little later than they did (never later than 20 seconds)</td></tr>
+<tr><td>The scintilla strip keeps its line's height while its rows load</td><td>Only while loading: an empty gap where the strip is about to be, instead of the board dropping. On a phone the gap is three lines tall, so a short scintilla still moves the board a little</td></tr>
+<tr><td>Under 900 px, the tape's economic line keeps its place while the calendar loads</td><td>Only while loading. In a quiet week the empty line folds away once the calendar has answered</td></tr>
+</table></div>
+
+<h2>What the coordinator deploys, and in what order</h2>
+<div class=panel><ol>
+<li><b>Provider, chart API first, then the bar service; the stream with its next ordinary deploy, outside market hours.</b> No secret, no migration, no schedule. The order, the read-backs and the rollback are in <code>runbooks/Q5-FIXES.md</code> on the provider branch.</li>
+<li><b>Station.</b> Tests only — nothing a screen shows. Merge whenever.</li>
+<li><b>Hub, after you have looked at the pictures above.</b> The two invisible changes and the harness and prototype fixes can go at once; the three loading changes are yours to approve.</li>
+</ol>
+<p>The provider and the Hub do not depend on each other; any order between them is safe.</p></div>
+
+<h2>Not done, or not verified</h2>
+<div class=panel><ul>
+<li>Certificate checking for the database is <b>ready, not on</b>. Whether the vendor's certificate verifies was not checked from here (no credential on this Mac; a handshake-only check was tried and this Mac's tool could not do it).</li>
+<li>The board was measured on a copy served from this Mac, as in Q3, not on scintillahub.ai. Measured on the live site: the page's size (2,219,198 bytes; 715,888 on the wire) and that it answers a 4 KB request with exactly 4 KB.</li>
+<li>The page is still one 2.2 MB file. Splitting it is the remaining weight, and a larger piece of work.</li>
+<li>Left as found: 290 type-checker gaps, 9 lower-severity cross-service imports in the provider, 5 orphan scripts, and the style-level lint items in all three repos.</li>
+<li>The Station's main code sits inside its HTML pages, which the linter does not read. So "2 real bugs" is 2 in the files it does read.</li>
+<li>If Q3's provider branch is merged with this one, three files conflict; the resolutions are written in the runbook.</li>
+</ul></div>
+
+<h2>Decisions for you</h2>
+<div class=panel><ol>
+<li><b>The three loading changes on the board.</b> Recommendation: approve. The finished page is unchanged; what goes is the half-styled first frame.</li>
+<li><b>Switch certificate checking on for the database.</b> Recommendation: yes, as its own step, proved on a throw-away machine first — a wrong certificate stops the stream writing.</li>
+<li><b>Split the 2.2 MB page.</b> Recommendation: schedule it as its own job; it is what stands between performance 50 and a good score.</li>
+</ol></div>
+
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p>Branches: <code>provider/q5-fixes-20261005</code> (off provider/p12-bar-clock-20261005 @6a7fce5), <code>hub/q5-fixes-20261005</code> (off hub/release-20260923 @0761d98), <code>station/q5-fixes-20261005</code> (off station/merge-20260923 @5c77c83). Numbers beside this page: <code>q5-findings.json</code>.</p>
+<p>Lighthouse 12.6.1, its default phone profile, headless Chromium, three runs before and three after, interleaved, on one local static server that answers byte ranges as the live host does. Layout shift was also measured with a separate headless probe on a 1.6 Mbps line and on a four-times-slower processor: phone 0.88 → 0.003 and 0.81 → 0.001, desk 0.06 → 0.</p>
+<p>The two "while it loads" pictures are the page cut where its main script ends — what the browser holds at the moment it used to paint. The four finished pictures are the whole page after nine seconds. Every test browser ran headless and every request that was not a read was blocked (one per page load).</p>
+<p>Tools: ESLint 9, knip 5, dependency-cruiser, semgrep 1.179.0 (p/javascript + p/nodejs), with Q3's settings.</p>
+</details>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
