@@ -13,7 +13,7 @@ test("the template's sizes are the T10 sheet's", () => {
 test("the page sizes from the sheet and starts at the settled 70°", () => {
   const js = read("coil3d.js");
   assert.match(js, /A: P\.inner_radius, D: P\.step_w, RW: P\.tread_depth/); assert.match(js, /H: P\.H_max, H_MIN: P\.H_min/);
-  assert.match(js, /HOME = \{ el: 70/); assert.match(js, /maxPolarAngle = Math\.PI/);
+  assert.match(js, /HOME = \{ el: 70/); assert.match(js, /new TrackballControls\(camera/); // pass 5: the full sphere is a trackball now (pass 4 pinned OrbitControls' maxPolarAngle = π — it still locked at the poles)
   assert.equal(tpl.camera.home.el, 70);
 });
 test("the coil uses the Hub's tokens, not the tree page's greys", () => {
@@ -111,7 +111,7 @@ test("pass 4 · 3 balance by zoom: 11 px ticker / 9 px value at home, ~16 zoomed
   assert.match(read("label-scale.mjs"), /base_px: 11, value_share: 9 \/ 11, floor_px: 8, ceil_px: 16/);
 });
 test("pass 4 · 4 smooth zoom: 20 ticks in and 20 out are one continuous motion at 60 fps, no re-fit on a tick, ≤ 2 re-flips a second, the camera back home after", { skip: !p4 && "no proof-p4.json" }, () => {
-  const js = read("coil3d.js"); assert.match(js, /controls\.enableZoom = false/); assert.match(js, /tau_ms: 120/); assert.doesNotMatch(js, /wheel[\s\S]{0,400}framing\(/); // the wheel never calls the bisection fit
+  const js = read("coil3d.js"); assert.match(js, /controls\.noZoom = true/); /* pass 5: the trackball's own zoom is off, as OrbitControls' was */ assert.match(js, /tau_ms: 120/); assert.doesNotMatch(js, /wheel[\s\S]{0,400}framing\(/); // the wheel never calls the bisection fit
   for (const w of [1920, 1680]) { const r = p4laser(w), z = r.wheel;
     assert.equal(z.wheel_events, 40, `${w}: wheel events`); assert.equal(z.wheel_px_abs, 4800, `${w}: 40 × 120 px seen by the page`);
     assert.ok(z.fps_while_moving >= 55, `${w}: ${z.fps_while_moving} fps while moving`); assert.ok(z.longest_gap_ms_while_moving <= 34, `${w}: longest gap ${z.longest_gap_ms_while_moving} ms`);
@@ -130,4 +130,50 @@ test("pass 4 · 6 the pictures, the video and the spheres with the new type; fps
   for (const r of p4.runs.filter((r) => r.measure)) assert.ok(r.measure.fps >= 55, `${r.item} ${r.w}: ${r.measure.fps}`);
   const two = p4.runs.find((r) => r.item === "spheres" && r.w === 1920); assert.ok(two && two.sphere_px.length === 2 && two.home.beam.type_px === 11);
   assert.equal(p4.writes.length, 0); assert.equal(p4.errors.length, 0); assert.match(String(p4.gpu), /Apple M/);
+});
+
+/* ---- pass 5 (5 Oct 2026, night) · no shine, no hue, free spin — pinned to shots/proof-p5.json ---- */
+const p5 = existsSync(new URL("shots/proof-p5.json", D)) ? JSON.parse(read("shots/proof-p5.json")) : null;
+test("pass 5 · the matte bar is one opaque unlit cylinder in the Hub's own green or red: no bloom, no additive layer, no fog, no light in the matte look", () => {
+  const js = read("coil3d.js");
+  assert.match(js, /let look = opts\.look === "glow" \? "glow" : "matte"/); // matte is the default
+  assert.match(js, /part\.core = new THREE\.Mesh\(barGeo, new THREE\.MeshBasicMaterial\(\{ color: col, toneMapped: false, fog: false \}\)\)/);
+  assert.match(js, /if \(matte\(\)\) \{ renderer\.autoClear = true; renderer\.render\(scene, camera\); \} else composer\.render\(\)/); // no bloom chain
+  assert.match(js, /scene\.fog = !matte\(\) && diag\.fog \? fog : null/);
+  assert.doesNotMatch(js, /MeshStandardMaterial|MeshPhongMaterial|MeshPhysicalMaterial|MeshLambertMaterial|DirectionalLight|AmbientLight|PointLight|scene\.environment =/); // nothing that could shine
+  assert.match(js, /bull: 0x00ffa3, bear: 0xff2d55/);
+});
+test("pass 5 · the cause, measured: pass 4's page prints grey and no pixel is the true green or red; matte prints the page as 0A0A0F and the bars true at all 12 angles", { skip: !p5 && "no proof-p5.json" }, () => {
+  const v = Object.fromEntries(p5.cause.variants.map((x) => [x.name, x.sum])), m = p5.cause.matte;
+  assert.deepEqual(v["pass 4 as it is"].page_corner_rgb, [105, 105, 127]); assert.deepEqual(v["no bloom"].page_corner_rgb, [56, 56, 69]); // the post chain lifts the page; the bloom doubles it
+  assert.equal(v["pass 4 as it is"].true_share_of_lit, 0); assert.equal(v["pass 4 as it is"].lit_share_of_frame, 1);
+  assert.ok(v["no bloom"].washed_share_of_lit < v["pass 4 as it is"].washed_share_of_lit / 5, "the bloom is most of the shine");
+  assert.ok(v["no bloom, no additive"].washed_share_of_lit < 0.002, "without the bloom and the additive sum nothing washes to white");
+  assert.equal(v["no fog"].washed_share_of_lit, v["pass 4 as it is"].washed_share_of_lit); // the fog was not it
+  assert.deepEqual(m.sum.page_corner_rgb, [10, 10, 15]); assert.ok(m.sum.washed_share_of_lit < 0.002); assert.equal(m.sum.white_share_of_lit, 0); assert.ok(m.sum.veil_share_of_frame < 0.005);
+  for (const a of m.per_angle) { assert.ok(a.washed < 0.002, "angle " + a.n + " washed"); assert.ok(a.true_green_of_greenish > 0.8, "angle " + a.n + " green " + a.true_green_of_greenish); assert.ok(a.true_red_of_reddish > 0.5, "angle " + a.n + " red " + a.true_red_of_reddish); /* from above the red half is slivers between green bars, so more of it is soft edge */ }
+  assert.deepEqual([p5.cause.scene.lights, p5.cause.scene.environment, p5.cause.scene.toneMapping], [0, false, "none"]);
+});
+test("pass 5 · the 12 angles before and after, and the labels unchanged in size and upright at every one", { skip: !p5 && "no proof-p5.json" }, () => {
+  assert.equal(p5.before.shots.length, 12); assert.equal(p5.after.shots.length, 12);
+  for (const s of [...p5.before.shots, ...p5.after.shots]) assert.ok(existsSync(new URL(s.path, D)), s.path);
+  for (const s of p5.after.shots) assert.equal(s.labels.wrong, 0);
+  const p4 = JSON.parse(read("shots/proof-p4.json")).runs.find((r) => r.item === "spheres" && r.w === 1680); // pass 4's type and beam at this screen with the sphere on
+  assert.equal(p5.after.beam.type_px, p4.home.beam.type_px); assert.ok(Math.abs(p5.after.beam.core_px - p4.home.beam.core_px) <= 0.5, "the bar is as wide as pass 4's beam core");
+  assert.ok(p5.after.beam.core_px >= p5.after.beam.type_px);
+});
+test("pass 5 · free spin: a trackball — over the pole and on, three different drags, a short coast, double-click home upright, the zoom still smooth, 60 fps", { skip: !p5 && "no proof-p5.json" }, () => {
+  const s = p5.spin; assert.equal(s.controls, "TrackballControls"); assert.equal(s.over_the_pole, true);
+  for (const d of s.drags) assert.ok(d.turned_deg > 40, d.what + " turned " + d.turned_deg);
+  assert.ok(s.coast.coasted_after_release_deg > 3 && s.coast.coasted_after_release_deg < s.coast.turned_while_dragging_deg, "coasts a little: " + s.coast.coasted_after_release_deg + "°"); assert.ok(s.coast.coast_ms < 1200); assert.equal(s.coast.stopped, true);
+  assert.ok(s.home_again.dir_off_deg < 0.5); assert.equal(s.home_again.upright, true);
+  assert.equal(s.wheel.wheel_px_abs, 4800); assert.ok(s.wheel.fps_while_moving >= 58); assert.ok(s.wheel.longest_gap_ms_while_moving <= 34); assert.ok(s.wheel.max_frame_step_share_of_travel <= 0.05); assert.ok(s.wheel.reflips_per_second <= 2);
+  assert.ok(s.zoom_keeps_attitude.dir_off_deg < 0.5 && s.zoom_keeps_attitude.up_kept, "the wheel does not turn an upside-down view");
+  assert.ok(s.measure.fps >= 58);
+  assert.equal(p5.tumble.frames.length, 16); assert.ok(p5.tumble.upside_down_frames >= 4); for (const f of p5.tumble.frames) { assert.ok(existsSync(new URL(f.path, D)), f.path); assert.ok(f.audit.washed < 0.002, "tumble " + f.n); }
+  assert.ok(existsSync(new URL(p5.tumble.video, D))); assert.equal(p5.writes.length, 0); assert.equal(p5.errors.length, 0);
+});
+test("pass 5 · the page offers MATTE (the default) beside GLOW, and the report leads with pass 5", () => {
+  const html = read("index.html"); assert.match(html, /data-look="matte" class="on"/); assert.match(html, /data-look="glow"/);
+  const rep = read("COIL-LAB.html"); assert.match(rep, /id="pass5"/); for (const f of ["p5-sheet-before.png", "p5-sheet-after.png", "p5-sheet-tumble.png", "p5-tumble-1680.webm", "p5-cause-glow.png"]) assert.ok(rep.includes("shots/" + f), f);
 });

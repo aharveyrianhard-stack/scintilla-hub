@@ -72,6 +72,7 @@ details.sc-pagespecs p{margin:6px 0;max-width:900px}
       <span class="seg"><span class="lbl">SIDE BY SIDE</span><button data-cmp="" class="on">ONE</button><button data-cmp="favorites,radar">★ vs ◎</button><button data-cmp="radar,liked">◎ vs ♥</button><button data-cmp="favorites,liked">★ vs ♥</button></span>
       <span class="seg"><span class="lbl">MARKET CAP</span><button data-cap="sphere" class="on">THE SPHERE</button><button data-cap="width">STEP WIDTH</button><button data-cap="off">OFF</button></span>
       <span class="seg"><span class="lbl">BOXES</span><button data-boxes="0" class="on">NONE (PASS 3)</button><button data-boxes="1">V2b</button></span>
+      <span class="seg"><span class="lbl">LOOK</span><button data-look="matte" class="on">MATTE (PASS 5)</button><button data-look="glow">GLOW (PASS 4)</button></span>
       <button class="b" id="land">LAND AGAIN</button>
       <button class="b" id="tick">REPLAY A TICK</button>
       <button class="b" id="home">RESET VIEW</button>
@@ -79,7 +80,7 @@ details.sc-pagespecs p{margin:6px 0;max-width:900px}
     </div>
     <div id="gl"></div>
     <div id="hud"></div>
-    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · the beam is as wide as its name · the sphere's volume = the set's market cap · drag turns · scroll zooms (eased) · double-click home</div>
+    <div id="legend"><span class="up">green stands on the zero plane</span> · <span class="dn">red hangs under it</span><br>step height = the Hub Geiger × H · the bar is as wide as its name · the sphere's volume = the set's market cap · drag spins it any way (it coasts on release) · scroll zooms (eased) · double-click home</div>
   </section>
   <section class="pane" id="pane-tape">
     <div id="tape">
@@ -105,7 +106,7 @@ import { mountCoil } from "./coil3d.js";
 import { marks, tapeStrip, spread, ladder } from "./tape.js";
 const $ = (id) => document.getElementById(id), Q = new URLSearchParams(location.search);
 const CHART_API = (typeof window.SC_CHART_API === "string" && window.SC_CHART_API) || "https://scintilla-massive-chart-api.fly.dev";
-const state = { geiger: null, geigerFrom: null, lists: null, listName: Q.get("list") || "favorites", compare: Q.get("compare") || "", capMode: Q.get("cap") || "sphere", boxes: Q.get("boxes") === "1", scint: [], ready: false, fps: 0, lastMeasure: null, err3d: null };
+const state = { geiger: null, geigerFrom: null, lists: null, listName: Q.get("list") || "favorites", compare: Q.get("compare") || "", capMode: Q.get("cap") || "sphere", boxes: Q.get("boxes") === "1", look: Q.get("look") === "glow" ? "glow" : "matte", scint: [], ready: false, fps: 0, lastMeasure: null, err3d: null };
 window.__lab = state;
 const say = (m) => { const e = $("err"); e.style.display = m ? "block" : "none"; e.textContent = m || ""; };
 async function getJSON(url, ms = 12000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(url, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
@@ -133,7 +134,7 @@ function rowsFor(name) { const { tickers, from } = listTickers(name); const seen
 const todayScint = new Set(scint.filter((r) => (r.detail && r.detail.session) === "2026-10-02").map((r) => r.subject));
 
 let coil;
-try { coil = mountCoil($("gl"), { standard: std, scintillas: [...todayScint], caps: CAPS, capMode: state.capMode, boxes: state.boxes, onFps: (f) => { state.fps = f; } }); state.coil = coil; }
+try { coil = mountCoil($("gl"), { standard: std, scintillas: [...todayScint], caps: CAPS, capMode: state.capMode, boxes: state.boxes, look: state.look, onFps: (f) => { state.fps = f; } }); state.coil = coil; }
 catch (e) { state.err3d = String(e); say("3D did not start: " + e); }
 let current = null;
 function load(name, land = true) {
@@ -147,6 +148,7 @@ function load(name, land = true) {
   document.querySelectorAll("[data-cmp]").forEach((b) => b.classList.toggle("on", b.dataset.cmp === state.compare));
   document.querySelectorAll("[data-cap]").forEach((b) => b.classList.toggle("on", b.dataset.cap === state.capMode));
   document.querySelectorAll("[data-boxes]").forEach((b) => b.classList.toggle("on", (b.dataset.boxes === "1") === state.boxes));
+  document.querySelectorAll("[data-look]").forEach((b) => b.classList.toggle("on", b.dataset.look === state.look));
   hud(); clearTimeout(state.hudT); state.hudT = setTimeout(hud, 2900); // again once the steps have landed (the label count is of the landed coil)
 }
 function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fill(); const L = coil.labelStats(); const B = coil.beamPx(); const S = coil.sets();
@@ -155,6 +157,7 @@ function hud() { if (!coil) return; const pl = coil.placed(); const f = coil.fil
 document.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { state.compare = b.dataset.cmp; load(state.compare ? state.compare.split(",")[0] : state.listName); }));
 document.querySelectorAll("[data-cap]").forEach((b) => b.addEventListener("click", () => { state.capMode = b.dataset.cap; coil && coil.setCapMode(state.capMode); load(state.listName, false); }));
 document.querySelectorAll("[data-boxes]").forEach((b) => b.addEventListener("click", () => { state.boxes = b.dataset.boxes === "1"; coil && coil.setBoxes(state.boxes); load(state.listName, false); }));
+document.querySelectorAll("[data-look]").forEach((b) => b.addEventListener("click", () => { state.look = b.dataset.look; coil && coil.setLook(state.look); load(state.listName, false); }));
 document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b)); coil && coil.setMode(b.dataset.mode); hud(); }));
 document.querySelectorAll("[data-list]").forEach((b) => b.addEventListener("click", () => load(b.dataset.list)));
 $("land").addEventListener("click", () => coil && coil.land());

@@ -1,4 +1,25 @@
-/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 4 (5 Oct 2026, afternoon).
+/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 5 (5 Oct 2026, night).
+   PASS 5 (Alan, 5 Oct ~20:45: "It's this shiny at some of these angles … It has like this hue … the red bars … there's like this
+   shine … I should be able to basically spin it, all directions … it just has this green hue and I can't really see shit. The
+   proportion and the sizing of the labels and the bars seem good, but something really weird is up."):
+     THE CAUSE     pass 4's beam was three ADDITIVE layers (a tube at 0.7, a line above 1 down its middle, a halo) under a bloom
+                   with threshold 0. Additive light sums wherever beams overlap on screen: from the side the bars stack behind one
+                   another and the sum clips to white (the shine, and red bars going pink-white); the bloom then spreads that sum
+                   over the whole frame (the green-cyan haze round the coil: the hue). The same chain also lifts the PAGE: 0A0A0F
+                   prints as 56, 56, 69 through the composer and 105, 105, 127 once the bloom adds the frame to itself — a grey
+                   wash over everything. No light, no environment map, no metalness in the scene — it is the post chain and
+                   the sum. Measured layer by layer in proof-p5.mjs (shots/proof-p5.json → cause).
+     MATTE         (opts.look = "matte", the default; LASER) a bar is ONE opaque unlit cylinder in the Hub's own green 00FFA3 or
+                   red FF2D55 — the same colour at every angle, because nothing is summed and nothing is lit. No bloom, no halo,
+                   no white line, no fog, no additive ring; the sphere is its outline only (no glass over the bars). Bars that
+                   stand behind one another are told apart by a 1.25 px dark edge (the inverted hull of toon rendering: the bar's
+                   back faces, a little bigger, in the page's colour). The bar keeps pass 4's width (1.15 × the type) and the
+                   labels are untouched. A change flashes the bar itself: it swells to 1.6 × its width and settles in 320 ms.
+                   opts.look = "glow" is pass 4 as it was, for the side-by-side; api.diag() switches its layers for the proof.
+     FREE SPIN     three.js TrackballControls instead of OrbitControls: the camera's up vector turns with the drag, so there is
+                   no pole and no lock — any axis, over the top and on. Release coasts (the last turn decays by √(1 − 0.3) per
+                   frame, about half a second); double-click (or RESET VIEW) turns the whole camera back to home, upright, along the
+                   shortest arc. The wheel is pass 4's eased zoom, unchanged.
    PASS 4 (Alan, 5 Oct ~12:45: "What are these boxes, these rectangles at the top of the lasers? I hate these boxes. Make the lasers
    at least as thick as the fonts. The zooming is a little glitchy — it kind of snaps, some weird lag. … lasers thicker, fonts a little
    smaller — even on the zoom-out the fonts are still big; balance it out."):
@@ -65,7 +86,7 @@
      C · HOLOGRAM    additive plates with a fresnel rim and scanlines, the tread a bright frame; a change re-materialises the
                      plate with a vertical wipe (400 ms); a name that scintillated today flickers once every 20 s. */
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -80,6 +101,8 @@ const CAP_GAP = 40; // U between two spheres side by side
 const TEX = { w: 256, h: 128, tickerFs: 64, valueFs: Math.round(64 * LABEL_RULE.value_share), capShare: (64 * 0.72) / 128 }; // the label texture: the ticker's cap height is capShare of the sprite's height; the value is value_share (9/11) of the ticker (pass 4)
 const BEAM = { core_over_type: 1.15, hot_over_core: 0.3, halo: (v) => 1.5 + 1.5 * Math.min(1, Math.abs(v == null ? 0 : v)) }; // pass 4 · the beam's core = 1.15 × the ticker's cap height in px (≥ the type at every zoom), in the step's colour; a white-hot line 0.3 of the core down its middle (the laser); the halo = core × (1.5 … 3.0) by the reading
 const ZOOM = { per_tick: 0.946, tau_ms: 120, min_ratio: 0.12, max_ratio: 8 }; // pass 4 · the wheel: each 120 px of wheel scales the target distance by 0.946 (OrbitControls' own pace at zoomSpeed 0.9); the camera eases toward it with a 120 ms time constant
+const MATTE = { edge_px: 1.25, flare_swell: 0.6, seg: 16 }; // pass 5 · the matte bar: a dark edge of 1.25 px all round (the inverted hull), a change swells the bar by 0.6 of its width for 320 ms
+const SPIN = { rotate_speed: 2.5, coast: 0.3 }; // pass 5 · the trackball: a drag across the whole width turns the coil about 290°; on release the turn decays by √(1 − 0.3) a frame, about half a second
 const BLOOM = { laser: { s: 0.3, r: 0.3, t: 0 }, guide: { s: 0.3, r: 0.28, t: 0 }, holo: { s: 0.32, r: 0.3, t: 0 } }; // PASS 4: the bloom is proportional — threshold 0, so every emitter glows by its own brightness (green 00FFA3 and red FF2D55 have nearly the same length, 1.19 vs 1.07). Pass 3's threshold 0.78 was a LUMINANCE gate: the green (0.76 per unit) passed, the red (0.36 per unit) never did — that is why the red half was dim. Strength 0.3 (was 0.42) because everything now contributes
 
 export function mountCoil(host, opts) {
@@ -87,6 +110,8 @@ export function mountCoil(host, opts) {
   const PAR = { A: P.inner_radius, D: P.step_w, RW: P.tread_depth, B: (P.tread_depth * 1.04) / (2 * Math.PI), H: P.H_max, H_MIN: P.H_min, DROP: P.tread_depth };
   const HOME = { el: 70, az: CAM.home_az, fov: CAM.fov }; // 70° is settled (Alan); the sheet's 24° stays a note, not a choice to make again
   const CAPS = opts.caps || {}; let boxes = !!opts.boxes, capMode = opts.capMode || "sphere"; // pass 3
+  let look = opts.look === "glow" ? "glow" : "matte"; // pass 5 · matte = unlit opaque bars in their true colour (the default); glow = pass 4's additive beams and bloom
+  const diag = { bloom: true, additive: true, hot: true, halo: true, sphere: true, fog: true, labels: true }; // pass 5 · the glow look's layers, switched one at a time by the proof to name the cause
   const capOf = (t) => { const c = Number(CAPS[t]); return Number.isFinite(c) && c > 0 ? c : null; };
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -94,11 +119,12 @@ export function mountCoil(host, opts) {
   renderer.setClearColor(HUB.bg, 1); renderer.info.autoReset = false; renderer.toneMapping = THREE.NoToneMapping;
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(HUB.bg, 1800, 5200);
+  const fog = new THREE.Fog(HUB.bg, 1800, 5200); // the glow look only (pass 5: fog darkens a far bar, so the matte look has none)
   const camera = new THREE.PerspectiveCamera(HOME.fov, 1, 1, 12000);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI; // the full sphere (T9)
-  controls.enableZoom = false; /* pass 4: the wheel is ours (eased), see wheel() */ controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  // pass 5 · FREE SPIN: a trackball (three.js TrackballControls) — the camera's up turns with the drag, so there is no pole to lock on
+  const controls = new TrackballControls(camera, renderer.domElement);
+  controls.rotateSpeed = SPIN.rotate_speed; controls.staticMoving = false; controls.dynamicDampingFactor = SPIN.coast; controls.keys = ["", "", ""];
+  controls.noZoom = true; /* pass 4: the wheel is ours (eased), see wheel() */ controls.noPan = false; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 
   // post: bloom on every direction (the light IS the form); strength per direction
   const composer = new EffectComposer(renderer);
@@ -108,10 +134,11 @@ export function mountCoil(host, opts) {
 
   const view = { w: 1, h: 1 };
   let dirty = true, placed = null, home = null;
+  controls.addEventListener("change", () => { dirty = true; });
   function fit() {
     view.w = host.clientWidth || 1; view.h = host.clientHeight || 1;
     renderer.setSize(view.w, view.h, false); composer.setSize(view.w, view.h);
-    camera.aspect = view.w / view.h; camera.updateProjectionMatrix(); dirty = true;
+    camera.aspect = view.w / view.h; camera.updateProjectionMatrix(); controls.handleResize(); dirty = true;
     if (placed && home) { home = framing(HOME.el, homeAz()); }
   }
   new ResizeObserver(fit).observe(host); fit();
@@ -164,10 +191,11 @@ export function mountCoil(host, opts) {
   // the tread's frame: the four edges of the top face (a unit square in x/z at y = 0)
   const frameGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 0, -0.5), new THREE.Vector3(0.5, 0, -0.5), new THREE.Vector3(0.5, 0, 0.5), new THREE.Vector3(0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, 0.5), new THREE.Vector3(-0.5, 0, -0.5)]);
   const vertsGeo = new THREE.BufferGeometry().setFromPoints([-0.5, 0.5].flatMap((x) => [-0.5, 0.5].flatMap((z) => [new THREE.Vector3(x, -0.5, z), new THREE.Vector3(x, 0.5, z)])));
+  const barGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, MATTE.seg, 1, false); // pass 5 · the matte bar: a closed cylinder, unit diameter and height
   const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, true), haloGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 1, true); // pass 4: unit diameter — the width is set in screen px each frame (layoutLabels)
   const plateGeo = new THREE.PlaneGeometry(1, 1);
 
-  function clear() { if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry && ![boxGeo, edgesGeo, frameGeo, vertsGeo, coreGeo, haloGeo, plateGeo].includes(o.geometry)) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); }); } group = new THREE.Group(); scene.add(group); parts = []; for (const o of labelScene.children.slice()) { labelScene.remove(o); if (o.material && !o.material.map) o.material.dispose(); } spheres = []; }
+  function clear() { if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry && ![boxGeo, edgesGeo, frameGeo, vertsGeo, coreGeo, haloGeo, plateGeo, barGeo].includes(o.geometry)) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); }); } group = new THREE.Group(); scene.add(group); parts = []; for (const o of labelScene.children.slice()) { labelScene.remove(o); if (o.material && !o.material.map) o.material.dispose(); } spheres = []; }
   let sets = [], spheres = []; // pass 3: one or two placed sets, each with an x offset (ox) and, when capMode = sphere, its sphere
 
   const glow = (v) => 0.35 + 0.65 * Math.min(1, Math.abs(v == null ? 0 : v)); // the glow's strength follows the reading
@@ -175,6 +203,7 @@ export function mountCoil(host, opts) {
   /* pass 4 · RED = GREEN: the bloom threshold is a luminance (Rec. 709, as UnrealBloomPass's luminosity pass); green 00FFA3 has 0.76 of it
      per unit, red FF2D55 only 0.36 — at 0.78 the green bloomed and the red did not. The threshold is now 0.28 (BLOOM), under every core. */
   const LUM = (col) => { const c = new THREE.Color(col); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }, LUM_GREEN = LUM(HUB.bull);
+  const matte = () => look === "matte" && mode === "laser"; // pass 5
   const EQ = () => 1, litEq = (col, k) => lit(col, k); // (tried: scaling the red to the green's luminance — it clamps to pink-white in the core; the threshold is the right lever, see BLOOM)
   const lineMat = (col, k, op = 1) => new THREE.LineBasicMaterial({ color: lit(col, k), transparent: op < 1, opacity: op, toneMapped: false });
   const basic = (col, op, blend = THREE.NormalBlending, k = 1) => new THREE.MeshBasicMaterial({ color: lit(col, k), transparent: true, opacity: op, depthWrite: false, blending: blend, toneMapped: false, side: THREE.DoubleSide });
@@ -184,14 +213,14 @@ export function mountCoil(host, opts) {
     const pts = []; for (let i = 0; i <= 160; i++) pts.push(new THREE.Vector3(ox + outerR * Math.cos((i / 160) * Math.PI * 2), 0, outerR * Math.sin((i / 160) * Math.PI * 2)));
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(HUB.crk, 1.2, 0.9)));
     const band = new THREE.Mesh(new THREE.RingGeometry(PAR.A - PAR.RW / 2, PAR.A + PAR.RW / 2, 64), basic(HUB.line, 0.8)); band.rotation.x = -Math.PI / 2; band.position.x = ox; group.add(band); // the equator: the flat grey band (T10)
-    const inner = new THREE.Mesh(new THREE.RingGeometry(outerR - 0.6, outerR, 160), basic(HUB.crk, 0.18, THREE.AdditiveBlending)); inner.rotation.x = -Math.PI / 2; inner.position.x = ox; group.add(inner);
+    const inner = new THREE.Mesh(new THREE.RingGeometry(outerR - 0.6, outerR, 160), basic(HUB.crk, 0.18, matte() ? THREE.NormalBlending : THREE.AdditiveBlending)); inner.rotation.x = -Math.PI / 2; inner.position.x = ox; group.add(inner);
   }
   function spine(top, bottom, ox = 0) { group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(ox, bottom - 10, 0), new THREE.Vector3(ox, top + 60, 0)]), lineMat(HUB.crk, 1, 0.35))); }
   /* pass 3 · the set's sphere: volume = Σ market cap. A glass body (fresnel rim, additive), its equator on the zero plane, and a
      title sprite above it: NAME · Σ cap · n names (m with a cap on file). Names without a cap on file (BTCUSD, GCUSD) are listed, not counted. */
   function sphereFor(set) {
     const r = set.capR; if (!r) return null;
-    const body = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 48), sphereMat(HUB.crk)); body.position.set(set.ox, 0, 0); body.renderOrder = -1; group.add(body);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 48), matte() ? sphereRimMat(HUB.crk) : sphereMat(HUB.crk)); body.position.set(set.ox, 0, 0); body.renderOrder = -1; body.visible = matte() || diag.sphere; group.add(body);
     const eq = []; for (let i = 0; i <= 180; i++) eq.push(new THREE.Vector3(set.ox + r * Math.cos((i / 180) * Math.PI * 2), 0, r * Math.sin((i / 180) * Math.PI * 2)));
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(eq), lineMat(HUB.crk, 1, 0.4)));
     const mer = []; for (let i = 0; i <= 180; i++) mer.push(new THREE.Vector3(set.ox, r * Math.cos((i / 180) * Math.PI * 2), r * Math.sin((i / 180) * Math.PI * 2))); group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(mer), lineMat(HUB.crk, 0.8, 0.22)));
@@ -203,6 +232,15 @@ export function mountCoil(host, opts) {
       uniforms: { uCol: { value: new THREE.Color(col) } },
       vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `uniform vec3 uCol; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 3.0); gl_FragColor = vec4(uCol * (0.004 + 0.11 * f), 1.0); }` });
+  }
+  // pass 5 · the matte sphere: its outline only — a thin cyan rim where the surface turns away, nothing over the bars inside it
+  function sphereRimMat(col) {
+    return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.NormalBlending, side: THREE.FrontSide,
+      uniforms: { uCol: { value: new THREE.Color(col) } },
+      vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 uCol; varying vec3 vN; varying vec3 vV; void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(uCol, 0.5 * smoothstep(0.86, 0.985, f));
+#include <colorspace_fragment>
+}` });
   }
   function titleTex(set) {
     const c = document.createElement("canvas"); c.width = 768; c.height = 96; const g = c.getContext("2d"); g.textAlign = "center"; g.textBaseline = "middle";
@@ -233,7 +271,9 @@ export function mountCoil(host, opts) {
     // pass 4 · the beam's core in world units: core_over_type × the ticker's cap height, converted at the target's depth (px → U = 2 d tan(fov/2) / viewH)
     const uPerPx = (2 * d * Math.tan((camera.fov * Math.PI) / 360)) / view.h, coreU = L.px * BEAM.core_over_type * uPerPx;
     Object.assign(labelStats, { px: +L.px.toFixed(1), value_px: +L.value_px.toFixed(1), raw: +L.raw.toFixed(1), at: L.at, home_d: +hd.toFixed(0), d: +d.toFixed(0), total: parts.length, core_u: +coreU.toFixed(2) });
-    for (const p of parts) if (p.core) { const w = coreU * (p.s.wk || 1), hw = w * BEAM.halo(p.s.v); p.core.scale.x = p.core.scale.z = w; p.hot.scale.x = p.hot.scale.z = w * BEAM.hot_over_core; p.halo.scale.x = p.halo.scale.z = hw; }
+    for (const p of parts) if (p.core) { const w = coreU * (p.s.wk || 1), hw = w * BEAM.halo(p.s.v);
+      if (p.edge) { const wf = w * (1 + MATTE.flare_swell * (p.flare || 0)), o = 2 * MATTE.edge_px * uPerPx; p.core.scale.x = p.core.scale.z = wf; p.edge.position.copy(p.core.position); p.edge.scale.set(wf + o, p.core.scale.y + o, wf + o); p.halo_u = w; continue; } // pass 5 · matte: the bar and its dark edge, both in screen px
+      p.core.scale.x = p.core.scale.z = w; p.hot.scale.x = p.hot.scale.z = w * BEAM.hot_over_core; p.halo.scale.x = p.halo.scale.z = hw; }
     const items = [];
     for (const p of parts) {
       const sp = p.lp, s = p.s, tip = s.tip * p.h, x = (s.ox || 0) + s.r * Math.cos(s.th), z = s.r * Math.sin(s.th);
@@ -269,7 +309,8 @@ export function mountCoil(host, opts) {
 
   function build() {
     clear(); if (!sets.length) return;
-    const B = BLOOM[mode]; bloom.strength = B.s; bloom.radius = B.r; bloom.threshold = B.t;
+    const B = BLOOM[mode]; bloom.strength = B.s; bloom.radius = B.r; bloom.threshold = B.t; bloom.enabled = diag.bloom; scene.fog = !matte() && diag.fog ? fog : null;
+    const beamBlend = diag.additive ? THREE.AdditiveBlending : THREE.NormalBlending; // the proof's switch (glow look)
     for (const set of sets) {
       const pl = set.placed, top = Math.max(0, ...pl.steps.map((s) => s.tip)), bottom = Math.min(0, ...pl.steps.map((s) => s.tip));
       zeroRing(pl.outerR, set.ox); spine(top, bottom, set.ox);
@@ -279,10 +320,17 @@ export function mountCoil(host, opts) {
         const col = colOf(s), k = glow(s.v), part = { s, h: 0, target: 1, flare: 0, scan: 0, wipe: 0, scint: scintSet.has(s.t), k };
         if (mode !== "laser" || boxes) part.frame = new THREE.LineSegments(frameGeo, lineMatEq(col, 0.9 + 0.5 * k)); // the tread's edge: a bright thin frame — the guide's and the hologram's light. PASS 4: the LASER step has none (Alan: "I hate these boxes") — it is its beam and its type; V2b's boxes bring it back for the side-by-side
         if (mode === "laser") {
-          part.core = new THREE.Mesh(coreGeo, basicEq(col, 0.7, THREE.AdditiveBlending, 0.65 + 0.3 * k)); // the laser (pass 4): a tube in the step's colour, as wide as the type…
-          part.hot = new THREE.Mesh(coreGeo, basicEq(col, 1, THREE.AdditiveBlending, 1.3 + 0.7 * k)); // …a white-hot line down its middle (above 1 → it burns white)…
-          part.halo = new THREE.Mesh(haloGeo, basicEq(col, 0.02 + 0.045 * k, THREE.AdditiveBlending, 1)); // …in a soft halo
-          group.add(part.halo, part.core, part.hot); if (part.frame) group.add(part.frame);
+          if (matte()) { // pass 5 · MATTE: one opaque unlit cylinder in the step's own colour (nothing summed, nothing lit — the same green or red from every angle), and its dark edge
+            part.core = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: col, toneMapped: false, fog: false }));
+            part.edge = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: HUB.bg, side: THREE.BackSide, toneMapped: false, fog: false })); // the inverted hull: the back faces of a slightly bigger bar, in the page's colour — a 1.25 px edge against whatever stands behind
+            group.add(part.edge, part.core);
+          } else {
+          part.core = new THREE.Mesh(coreGeo, basicEq(col, 0.7, beamBlend, 0.65 + 0.3 * k)); // the laser (pass 4): a tube in the step's colour, as wide as the type…
+          part.hot = new THREE.Mesh(coreGeo, basicEq(col, 1, beamBlend, 1.3 + 0.7 * k)); part.hot.visible = diag.hot; // …a white-hot line down its middle (above 1 → it burns white)…
+          part.halo = new THREE.Mesh(haloGeo, basicEq(col, 0.02 + 0.045 * k, beamBlend, 1)); part.halo.visible = diag.halo; // …in a soft halo
+          group.add(part.halo, part.core, part.hot);
+          }
+          if (part.frame) group.add(part.frame);
           if (boxes) { // V2b's column boxes, for the side-by-side only
             part.body = new THREE.Mesh(boxGeo, basic(col, 0.06, THREE.NormalBlending, 0.35)); part.verts = new THREE.LineSegments(vertsGeo, lineMat(col, 0.8, 0.18)); part.plate = new THREE.Mesh(plateGeo, basic(col, 0.08, THREE.NormalBlending, 0.5)); group.add(part.body, part.verts, part.plate);
           }
@@ -324,7 +372,7 @@ export function mountCoil(host, opts) {
   function tick(now) {
     requestAnimationFrame(tick);
     const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
-    const moved = controls.update();
+    controls.update(); const moved = false; // pass 5: the trackball says "change" (→ dirty) when the camera has turned or is still coasting
     let busy = false;
     for (const p of parts) {
       const delay = p.s.i * 28, k = Math.min(1, Math.max(0, (now - landAt - delay) / 900));
@@ -340,12 +388,13 @@ export function mountCoil(host, opts) {
         if (p.base) { p.base.position.set(x, 0, z); p.base.quaternion.copy(q); p.base.scale.set(w, 1, PAR.RW); }
         if (p.floor) { p.floor.position.set(x, -0.3, z); p.floor.quaternion.copy(q); p.floor.rotateX(-Math.PI / 2); p.floor.scale.set(w, PAR.RW, 1); }
         if (p.plate) { p.plate.position.set(x, tip + (tip >= 0 ? -0.15 : 0.15), z); p.plate.quaternion.copy(q); p.plate.rotateX(-Math.PI / 2); p.plate.scale.set(w, PAR.RW, 1); }
-        if (p.core) { p.core.position.set(x, tip / 2, z); p.core.scale.y = Math.max(0.1, Math.abs(tip)); p.halo.position.copy(p.core.position); p.halo.scale.y = p.core.scale.y; p.hot.position.copy(p.core.position); p.hot.scale.y = p.core.scale.y; } // the width (x, z) is set in screen px each frame by layoutLabels (pass 4)
+        if (p.core) { p.core.position.set(x, tip / 2, z); p.core.scale.y = Math.max(0.1, Math.abs(tip)); if (p.halo) { p.halo.position.copy(p.core.position); p.halo.scale.y = p.core.scale.y; p.hot.position.copy(p.core.position); p.hot.scale.y = p.core.scale.y; } } // the width (x, z) is set in screen px each frame by layoutLabels (pass 4)
         if (mode === "holo" && p.body) p.body.material.uniforms.uH.value = Math.max(1, Math.abs(tip));
         p.moved = false; dirty = true;
       }
       // motion with a meaning: a flare / a scan / a wipe runs only when a value lands or changes
-      if (mode === "laser" && p.flare > 0) { p.flare = Math.max(0, p.flare - dt / 0.32); p.hot.material.color.copy(litEq(colOf(p.s), 1.3 + 0.7 * p.k + 1.6 * p.flare)); p.halo.material.opacity = 0.02 + 0.045 * p.k + 0.3 * p.flare; if (p.body) p.body.material.opacity = 0.06 + 0.25 * p.flare; busy = true; }
+      if (mode === "laser" && p.flare > 0 && p.edge) { p.flare = Math.max(0, p.flare - dt / 0.32); busy = true; } // pass 5 · matte: the bar itself flashes — it swells and settles (layoutLabels sets the width), its colour never changes
+      else if (mode === "laser" && p.flare > 0) { p.flare = Math.max(0, p.flare - dt / 0.32); p.hot.material.color.copy(litEq(colOf(p.s), 1.3 + 0.7 * p.k + 1.6 * p.flare)); p.halo.material.opacity = 0.02 + 0.045 * p.k + 0.3 * p.flare; if (p.body) p.body.material.opacity = 0.06 + 0.25 * p.flare; busy = true; }
       if (mode === "guide" && p.scan > 0) { p.scan = Math.max(0, p.scan - dt / 0.42); const u = 1 - p.scan, tip = p.s.tip * p.h; p.bead.visible = true; p.bead.position.set((p.s.ox || 0) + p.s.r * Math.cos(p.s.th), tip * u, p.s.r * Math.sin(p.s.th)); p.edges.material.opacity = 0.4 + 0.6 * p.scan; if (p.scan <= 0) { p.bead.visible = false; p.edges.material.opacity = 0.4; } busy = true; }
       if (mode === "holo" && p.body) {
         if (p.wipe > 0) { p.wipe = Math.max(0, p.wipe - dt / 0.4); p.body.material.uniforms.uWipe.value = 1 - p.wipe; p.body.material.uniforms.uFlick.value = p.wipe * 0.6; busy = true; }
@@ -355,16 +404,22 @@ export function mountCoil(host, opts) {
     if (zoomS.target) { // pass 4 · the eased zoom: the distance follows the wheel's target with a 120 ms time constant, every frame
       const d = camera.position.distanceTo(controls.target), gap = zoomS.target - d;
       if (Math.abs(gap) < 0.02) { setDistance(zoomS.target); zoomS.target = 0; } else setDistance(d + gap * (1 - Math.exp(-(dt * 1000) / ZOOM.tau_ms)));
-      busy = true;
+      camera.lookAt(controls.target); busy = true;
     }
-    if (moveTo) { const k = ease(Math.min(1, (now - moveTo.t0) / moveTo.ms)); camera.position.lerpVectors(moveTo.from.p, moveTo.to.p, k); controls.target.lerpVectors(moveTo.from.t, moveTo.to.t, k); if (k >= 1) moveTo = null; busy = true; }
+    if (moveTo) { // pass 5 · the way home turns the whole camera (its direction AND its up) along the shortest arc, so a view left upside down comes back upright without a flip
+      const k = ease(Math.min(1, (now - moveTo.t0) / moveTo.ms)); _mq.slerpQuaternions(moveTo.from.q, moveTo.to.q, k); controls.target.lerpVectors(moveTo.from.t, moveTo.to.t, k);
+      camera.up.set(0, 1, 0).applyQuaternion(_mq); camera.position.set(0, 0, 1).applyQuaternion(_mq).multiplyScalar(moveTo.from.d + (moveTo.to.d - moveTo.from.d) * k).add(controls.target); camera.lookAt(controls.target);
+      if (k >= 1) { camera.up.set(0, 1, 0); camera.position.copy(moveTo.to.p); camera.lookAt(controls.target); moveTo = null; } busy = true; }
     if (busy || moved || dirty || measuring) {
       camera.updateMatrixWorld(); rec.inTick = true; orientAll(); rec.inTick = false; // only a rendered frame counts in the record
-      renderer.info.reset(); const r0 = performance.now(); composer.render(); renderer.autoClear = false; renderer.render(labelScene, camera); renderer.autoClear = true; if (measuring) { meas.ms += performance.now() - r0; meas.n++; meas.tris = renderer.info.render.triangles; meas.calls = renderer.info.render.calls; }
+      renderer.info.reset(); const r0 = performance.now(); renderAll(); if (measuring) { meas.ms += performance.now() - r0; meas.n++; meas.tris = renderer.info.render.triangles; meas.calls = renderer.info.render.calls; }
       dirty = false; frames.n++;
     }
     if (now - frames.since >= 1000) { frames.fps = frames.n / ((now - frames.since) / 1000); frames.n = 0; frames.since = now; if (opts.onFps) opts.onFps(frames.fps); }
   }
+  // pass 5 · matte renders straight to the screen (no bloom chain: nothing glows, and the canvas' own anti-aliasing applies); glow keeps pass 4's composer
+  function renderAll() { if (matte()) { renderer.autoClear = true; renderer.render(scene, camera); } else composer.render(); if (diag.labels) { renderer.autoClear = false; renderer.render(labelScene, camera); renderer.autoClear = true; } }
+  const _mq = new THREE.Quaternion(), _m4 = new THREE.Matrix4();
   const frames = { n: 0, since: performance.now(), fps: 0 };
   requestAnimationFrame(tick);
 
@@ -415,7 +470,11 @@ export function mountCoil(host, opts) {
     return { p: t.clone().add(dirOf(el, az).multiplyScalar(d)), t };
   }
   const homeAz = () => (sets.length > 1 ? 0 : HOME.az); // two sets side by side sit level: the camera looks along z (az 0); one set keeps the sheet's azimuth
-  function flyHome(ms = 700) { if (!sets.length) return; zoomS.target = 0; home = framing(HOME.el, homeAz()); if (!ms) { camera.position.copy(home.p); controls.target.copy(home.t); moveTo = null; dirty = true; return; } moveTo = { from: { p: camera.position.clone(), t: controls.target.clone() }, to: home, t0: performance.now(), ms }; }
+  const stopSpin = () => { controls._lastAngle = 0; }; // the coast ends when the camera is sent somewhere
+  const quatOf = (p, t, up) => new THREE.Quaternion().setFromRotationMatrix(_m4.lookAt(p, t, up)); // the camera's attitude at p looking at t
+  function flyHome(ms = 700) { if (!sets.length) return; zoomS.target = 0; stopSpin(); home = framing(HOME.el, homeAz()); if (!ms) { camera.up.set(0, 1, 0); camera.position.copy(home.p); controls.target.copy(home.t); camera.lookAt(home.t); moveTo = null; dirty = true; return; }
+    camera.lookAt(controls.target); moveTo = { from: { q: camera.quaternion.clone(), t: controls.target.clone(), d: camera.position.distanceTo(controls.target) }, to: { q: quatOf(home.p, home.t, Y), t: home.t, p: home.p, d: home.p.distanceTo(home.t) }, t0: performance.now(), ms }; }
+  renderer.domElement.addEventListener("pointerdown", () => { moveTo = null; }); // a drag takes over from a flight home
   renderer.domElement.addEventListener("dblclick", () => flyHome(700));
 
   /* ---- public ---- */
@@ -454,7 +513,12 @@ export function mountCoil(host, opts) {
     },
     setMode(m) { mode = m; build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; },
     land() { build(); dirty = true; },
-    mode: () => mode, placed: () => placed, home: () => flyHome(700), orbitTo(el, az) { const h = framing(el, az); camera.position.copy(h.p); controls.target.copy(h.t); moveTo = null; zoomS.target = 0; dirty = true; },
+    mode: () => mode, placed: () => placed, home: () => flyHome(700), orbitTo(el, az) { const h = framing(el, az); stopSpin(); camera.up.set(0, 1, 0); camera.position.copy(h.p); controls.target.copy(h.t); camera.lookAt(h.t); moveTo = null; zoomS.target = 0; dirty = true; },
+    // pass 5 · the look (matte / glow), the glow look's layers for the proof, and the camera's attitude (its up and its direction — a trackball's up is free)
+    look: () => look, setLook(l) { look = l === "glow" ? "glow" : "matte"; build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; },
+    diag(o) { if (o) { Object.assign(diag, o); build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; } return { ...diag }; },
+    attitude() { const d = camera.position.clone().sub(controls.target), n = d.clone().normalize(); return { up: camera.up.toArray().map((x) => +x.toFixed(4)), dir: n.toArray().map((x) => +x.toFixed(4)), d: +d.length().toFixed(1), el: +((Math.asin(n.y) * 180) / Math.PI).toFixed(1), upside_down: camera.up.y < 0, moving: !!moveTo, coasting: Math.abs(controls._lastAngle) > 1e-4 }; },
+    look_spec: () => ({ look, matte: matte(), bar: { material: "MeshBasicMaterial (unlit), opaque, NormalBlending", bull: hex(HUB.bull), bear: hex(HUB.bear), edge_px: MATTE.edge_px }, bloom: !matte() && diag.bloom, fog: !!scene.fog, lights: scene.children.filter((o) => o.isLight).length, environment: !!scene.environment, toneMapping: renderer.toneMapping === THREE.NoToneMapping ? "none" : "on", controls: "TrackballControls", spin: SPIN }),
     // pass 3: zoom = the camera distance as a multiple of home's (0.5 = twice as close); the direction stays
     zoom(ratio) { if (!home) return; const hd = home.p.distanceTo(home.t); zoomS.target = 0; setDistance(hd * ratio); moveTo = null; dirty = true; camera.updateMatrixWorld(); layoutLabels(); return api.labelCheck(); },
     // pass 4: the same, eased — the way the wheel does it (the proof drives it both ways)
@@ -463,7 +527,7 @@ export function mountCoil(host, opts) {
     // pass 4: the beam in px right now — core / halo / the ticker's cap height / the value, at the median LASER step on screen (and the min / max)
     beamPx() {
       camera.updateMatrixWorld(); layoutLabels(); const cores = [], halos = [];
-      for (const p of parts) { if (!p.core || !p.lp.visible) continue; const depth = -_p.copy(p.core.position).applyMatrix4(camera.matrixWorldInverse).z; if (depth <= 0) continue; const uPx = (2 * depth * Math.tan((camera.fov * Math.PI) / 360)) / view.h; cores.push(p.core.scale.x / uPx); halos.push(p.halo.scale.x / uPx); }
+      for (const p of parts) { if (!p.core || !p.lp.visible) continue; const depth = -_p.copy(p.core.position).applyMatrix4(camera.matrixWorldInverse).z; if (depth <= 0) continue; const uPx = (2 * depth * Math.tan((camera.fov * Math.PI) / 360)) / view.h; cores.push(p.core.scale.x / uPx); halos.push((p.halo ? p.halo.scale.x : p.core.scale.x) / uPx); }
       const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? +s[s.length >> 1].toFixed(1) : null; }, mn = (a) => (a.length ? +Math.min(...a).toFixed(1) : null), mx = (a) => (a.length ? +Math.max(...a).toFixed(1) : null);
       return { type_px: labelStats.px, value_px: labelStats.value_px, core_px: med(cores), core_px_min: mn(cores), core_px_max: mx(cores), halo_px: med(halos), halo_px_min: mn(halos), halo_px_max: mx(halos), core_over_type: cores.length ? +(med(cores) / labelStats.px).toFixed(2) : null, core_u: labelStats.core_u, distance_ratio: labelStats.home_d ? +(labelStats.d / labelStats.home_d).toFixed(3) : null, steps: cores.length };
     },
@@ -489,7 +553,7 @@ export function mountCoil(host, opts) {
     },
     // point 4: render once and count the lit pixels by hue (red / green / cyan) — the red half must be plainly there at home
     pixelShare() {
-      camera.updateMatrixWorld(); orientAll(); composer.render(); renderer.autoClear = false; renderer.render(labelScene, camera); renderer.autoClear = true; const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      camera.updateMatrixWorld(); orientAll(); renderAll(); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
       // a lit pixel is sorted by hue (red 330°–25°, green 110°–175°, cyan 175°–215°) when its saturation is above 0.25 — so red seen through green glass still counts as red
       let red = 0, green = 0, cyan = 0, lit = 0, redSum = 0, greenSum = 0, redHot = 0, greenHot = 0; for (let i = 0; i < buf.length; i += 4) { const r = buf[i], g = buf[i + 1], b = buf[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx < 70) continue; lit++; const sat = (mx - mn) / mx; if (sat < 0.25) continue; let h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; h = ((h * 60) + 360) % 360; if (h >= 330 || h < 25) { red++; redSum += mx; if (mx >= 200) redHot++; } else if (h >= 110 && h < 175) { green++; greenSum += mx; if (mx >= 200) greenHot++; } else if (h >= 175 && h < 215) cyan++; }
       const nRed = parts.filter((p) => p.s.side < 0 && !p.s.none).length, nGreen = parts.filter((p) => p.s.side > 0).length; // pass 4: per step, and the mean brightness of the lit pixels of each colour (0–255), and the share that is near white-hot
@@ -497,9 +561,25 @@ export function mountCoil(host, opts) {
         red_steps: nRed, green_steps: nGreen, red_px_per_step: nRed ? Math.round(red / nRed) : null, green_px_per_step: nGreen ? Math.round(green / nGreen) : null, red_per_step_over_green_per_step: nRed && nGreen ? +((red / nRed) / Math.max(1, green / nGreen)).toFixed(3) : null,
         red_mean_brightness: red ? +(redSum / red).toFixed(1) : null, green_mean_brightness: green ? +(greenSum / green).toFixed(1) : null, red_hot_share: red ? +(redHot / red).toFixed(3) : null, green_hot_share: green ? +(greenHot / green).toFixed(3) : null };
     },
+    // pass 5 · the colour audit: render once and sort every lit pixel — is it the Hub's own green or red (within 24 a channel), washed toward
+    // white (bright, saturation under 0.45: the shine), or a dim veil over the page (brighter than the page, darker than a bar: the hue)?
+    pixelAudit() {
+      camera.updateMatrixWorld(); orientAll(); renderAll(); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      const near = (r, g, b, c) => Math.abs(r - (c >> 16)) <= 24 && Math.abs(g - ((c >> 8) & 255)) <= 24 && Math.abs(b - (c & 255)) <= 24;
+      let lit = 0, tg = 0, tr = 0, green = 0, red = 0, washed = 0, white = 0, haze = 0, hr = 0, hg = 0, hb = 0, fr = 0, fg = 0, fb = 0;
+      for (let i = 0; i < buf.length; i += 4) { const r = buf[i], g = buf[i + 1], b = buf[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); fr += r; fg += g; fb += b;
+        if (mx < 70) { if (mx > 46) { haze++; hr += r; hg += g; hb += b; } continue; } // the page is 0A0A0F and the zero band 1A1A2A (max 42): a veil is anything brighter than both and darker than a bar
+        lit++; if (near(r, g, b, HUB.bull)) tg++; else if (near(r, g, b, HUB.bear)) tr++;
+        const sat = (mx - mn) / mx; if (sat < 0.45 && mx >= 160) washed++; if (mn >= 200) white++;
+        if (sat >= 0.25) { let hh = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; hh = ((hh * 60) + 360) % 360; if (hh >= 330 || hh < 25) red++; else if (hh >= 110 && hh < 175) green++; } }
+      const n = w * h, sh = (a, b) => +(a / Math.max(1, b)).toFixed(4);
+      return { px: n, lit, lit_share: sh(lit, n), true_green: tg, true_red: tr, true_share_of_lit: sh(tg + tr, lit), greenish: green, reddish: red, true_green_of_greenish: sh(tg, green), true_red_of_reddish: sh(tr, red), washed, washed_share_of_lit: sh(washed, lit), white, white_share_of_lit: sh(white, lit),
+        veil: haze, veil_share_of_frame: sh(haze, n), veil_rgb: haze ? [Math.round(hr / haze), Math.round(hg / haze), Math.round(hb / haze)] : null, page_corner_rgb: [buf[(20 * w + 20) * 4], buf[(20 * w + 20) * 4 + 1], buf[(20 * w + 20) * 4 + 2]], // the page itself, 20 px in from a corner: it should print 0A0A0F = 10, 10, 15
+        frame_mean_rgb: [+(fr / n).toFixed(1), +(fg / n).toFixed(1), +(fb / n).toFixed(1)] };
+    },
     async measure(ms = 4000) {
       measuring = true; meas.ms = 0; meas.n = 0; const start = performance.now(); let f = 0; const el0 = api.elevation(), d0 = camera.position.distanceTo(controls.target), t0 = controls.target.clone();
-      await new Promise((res) => { const step = (now) => { const k = Math.min(1, (now - start) / ms); camera.position.copy(t0).add(dirOf(el0.el, el0.az + 90 * k).multiplyScalar(d0)); dirty = true; f++; if (k < 1) requestAnimationFrame(step); else res(); }; requestAnimationFrame(step); });
+      await new Promise((res) => { stopSpin(); camera.up.set(0, 1, 0); const step = (now) => { const k = Math.min(1, (now - start) / ms); camera.position.copy(t0).add(dirOf(el0.el, el0.az + 90 * k).multiplyScalar(d0)); dirty = true; f++; if (k < 1) requestAnimationFrame(step); else res(); }; requestAnimationFrame(step); });
       measuring = false; const dt = (performance.now() - start) / 1000;
       return { fps: +(f / dt).toFixed(1), frames: f, seconds: +dt.toFixed(2), rendered: meas.n, render_ms_per_frame: meas.n ? +(meas.ms / meas.n).toFixed(2) : null, dpr: renderer.getPixelRatio(), w: view.w, h: view.h, mode, steps: parts.length, triangles: meas.tris, calls: meas.calls, gpu: (() => { try { const gl = renderer.getContext(); const d = gl.getExtension("WEBGL_debug_renderer_info"); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch { return null; } })() };
     },
