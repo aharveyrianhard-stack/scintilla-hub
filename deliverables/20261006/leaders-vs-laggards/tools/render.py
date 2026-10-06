@@ -13,6 +13,7 @@ def pct(v, digits=0, frac=True, plus=True):
     """a signed percent, green up / red down; v is a fraction unless frac=False"""
     if v is None: return '<span class="na">–</span>'
     x = v * 100 if frac else v
+    if round(x, digits) == 0: x = 0.0   # never print a "minus zero"
     cls = "up" if x > 0 else "dn" if x < 0 else ""
     sign = "+" if (x > 0 and plus) else "−" if x < 0 else ""
     return f'<span class="{cls}">{sign}{abs(x):.{digits}f}%</span>'
@@ -40,14 +41,16 @@ def conc(n):
     w = {"high": '<span class="dn">few</span>', "moderate": "some", "low": '<span class="up">many</span>'}.get(lv, '<span class="na">–</span>')
     return w + (f" · top {t:.0f}%" if isinstance(t, (int, float)) else "")
 def margin(now, ago):
+    """a margin now and a year ago; a company with almost no sales can show a margin of minus thousands of percent, which is printed as 'below −999%'"""
+    m = lambda v: f"{v:.0f}%".replace("-", "−") if v > -999 else "below −999%"
     if now is None: return '<span class="na">–</span>'
-    if ago is None: return f"{now:.0f}%"
+    if ago is None: return m(now)
     cls = "up" if now > ago else "dn" if now < ago else ""
-    return f'{now:.0f}% <span class="{cls}">({"▲" if now > ago else "▼" if now < ago else "●"} from {ago:.0f}%)</span>'
+    return f'{m(now)} <span class="{cls}">({"▲" if now > ago else "▼" if now < ago else "●"} from {m(ago)})</span>'
 def vs(own, medn, n, digits=1, suf="×"):
     if own is None and medn is None: return '<span class="na">–</span>'
-    o = '<span class="na">none</span>' if own is None else f"{own:,.{digits}f}{suf}"
-    m = '<span class="na">too few</span>' if medn is None else f"{medn:,.{digits}f}{suf}"
+    o = '<span class="na">none</span>' if own is None else f"{own:,.{digits if own < 100 else 0}f}{suf}"
+    m = '<span class="na">too few</span>' if medn is None else f"{medn:,.{digits if medn < 100 else 0}f}{suf}"
     return f'{o} <span class="dimmer">vs {m}</span>'
 def geiger(v):
     if v is None: return '<span class="na">–</span>'
@@ -112,7 +115,7 @@ def bars(rows, la, lb, aria):
         o.append(f'<div class="brow"><div class="bw">{esc(words)}</div><div class="bb">'
                  f'<div class="bl"><div class="bt"><i class="upb" style="width:{ay/an*100:.1f}%"></i></div><span>{ay} of {an}</span></div>'
                  f'<div class="bl"><div class="bt"><i class="dnb" style="width:{by/bn*100:.1f}%"></i></div><span>{by} of {bn}</span></div>'
-                 f'</div><div class="bg"><b>{gap:+.0f}</b>{"" if strength == "clear" else "<br>leans"}</div></div>')
+                 f'</div><div class="bg"><b>{gap:+.0f}</b>{ {"clear": "", "leans": "<br>leans"}.get(strength, "<br>no real gap")}</div></div>')
     o.append("</div>"); return "\n".join(o)
 shown = [C[i] for i in S["conditions_sorted_ids"] if C[i]["strength"] in ("clear", "leans")]
 SVG2 = bars([(c["words"], c["leaders_yes"], c["leaders_n"], c["laggards_yes"], c["laggards_n"], c["gap_points"], c["strength"]) for c in shown], f'LEADERS ({len(G["leader"])})', f'LAGGARDS ({len(G["laggard"])})', "What separates leaders from laggards, as counts")
@@ -193,6 +196,18 @@ T_COMPS = tbl(["NAME", "ITS BUSINESS LINE", "THE COMPS SYSTEM'S COMPARABLES", "3
 named_rows = [[f'<b>{x["ticker"]}</b>', f'{x["rank"]} of {x["of"]}', {"leader": "leader", "laggard": '<span class="dn">laggard (bottom 20)</span>', "middle": "middle of the field"}[x["group"]] if x["ticker"] not in G["laggard"] or x["group"] == "laggard" else '<span class="dn">counted as a laggard (named, bottom third)</span>'] for x in S["named_in_brief"]]
 T_NAMED = tbl(["NAMED IN THE BRIEF", "RANK", "WHERE IT REALLY SITS"], named_rows)
 
+K = S["checks"]; kb = K["beat_own_comps"]; kt = K["ticks_every_box"]; ks = K["size_of_raise"]; kd = K["who_added_the_dollars"]
+CH1 = bars([(c["words"], c["a_yes"], c["a_n"], c["b_yes"], c["b_n"], c["gap_points"], "clear" if c["strength"] == "clear" else "leans" if c["strength"] == "leans" else "no real difference") for c in kb["conditions"]],
+           f'BEAT ITS OWN COMPS IN THE RUN ({len(kb["beat"])})', f'FELL BEHIND ITS COMPS ({len(kb["behind"])})', "The main conditions re-counted after taking out each name's own comps")
+tick_rows = [[f'<b>{b["ticker"]}</b>', {"leader": '<span class="up">leader</span>', "laggard": '<span class="dn">laggard</span>', "named_mid": "mid-field"}[b["group"]], f'{b["rank"]} of {S["field"]}', pct(b["r3m"]), pct(b["r_run"]), pct(b["worst_in_selloff"]),
+              pct(b["shares_change_yoy_pct"], digits=1, frac=False), "yes" if b["supply_overhang"] else "no" if b["supply_overhang"] is False else "–", pct(b["pe_vs_comps"])] for b in kt["names"]]
+T_TICK = tbl(["TICKS ALL FOUR", "GROUP", "RANK", "3 MONTHS", "THE RUN", "WORST POINT IN THE FALL", "SHARE COUNT 1 yr", "NEW SHARES COMING", "FORWARD P/E vs COMPS' MEDIAN"], tick_rows, "fig")
+size_rows = [[f'<b>{x["ticker"]}</b>', {"leader": '<span class="up">leader</span>', "laggard": '<span class="dn">laggard</span>', "named_mid": "mid-field"}[x["group"]], pct(x["eps_rev_90d_pct"], frac=False), pct(x["r_run"]), pct(x["r3m"])] for x in ks["rows"]]
+T_SIZE = tbl(["NAME", "GROUP", "EARNINGS ESTIMATE, 90 DAYS", "THE RUN", "3 MONTHS"], size_rows, "fig")
+who = {"leader": '<span class="up">leader</span>', "laggard": '<span class="dn">laggard</span>', "named_mid": "named, mid-field", "field": '<span class="dimmer">rest of the field</span>'}
+add_rows = [[f'<b>{a["ticker"]}</b>', who[a["group"]], f'{a["rank"]} of {S["field"]}', esc(a["cohort"]), usd(a["now_b"]), usd_signed(a["added_b"]), pct(a["r_run"])] for a in kd["top"]] + \
+           [['<span class="dimmer">…</span>', "", "", "", "", "", ""]] + [[f'<b>{a["ticker"]}</b>', who[a["group"]], f'{a["rank"]} of {S["field"]}', esc(a["cohort"]), usd(a["now_b"]), usd_signed(a["added_b"]), pct(a["r_run"])] for a in kd["bottom"]]
+T_ADD = tbl(["NAME", "GROUP", "RANK", "COHORT", "VALUE NOW", "ADDED IN THE RUN", "PRICE IN THE RUN"], add_rows, "caps")
 ev_rows = "".join(f'<tr><td>{esc(e["claim"])}</td><td>{esc(e["count"])}</td></tr>' for e in OP.get("evidence", []))
 OPINION = "".join(f"<p>{esc(p)}</p>" for p in OP["paragraphs"])
 AGAINST = "".join(f"<li>{esc(a)}</li>" for a in OP.get("against", []))
@@ -272,6 +287,7 @@ details.sc-pagespecs p,details.sc-pagespecs li{{max-width:980px}}details.sc-page
 {PAIRS}
 
 <h2>8 · MARKET VALUE: WHERE THE RUN PUT THEM</h2>
+<div class="kpi" style="margin-bottom:10px"><div><b>{usd(cl["run_start_b"])} → {usd(cl["now_b"])}</b><span>the 25 leaders, 15 Sep → now</span></div><div><b>{kd["top3_leaders_share_of_leader_value"]*100:.0f}%</b><span>of the leaders' value is three names: {esc(" · ".join(sorted(G["leader"], key=lambda t: -(N[t]["cap_now_b"] or 0))[:3]))}</span></div><div><b>{usd(kd["median_cap_leaders_b"])} · {usd(kd["median_cap_laggards_b"])}</b><span>the middle leader · the middle laggard</span></div></div>
 <div class="wrap">{T_CAPS}</div>
 <details class="more"><summary>THE LAGGARDS AND THE NAMED, ONE BY ONE</summary><div class="wrap">{T_CAPS_LAG}</div></details>
 <h3>EVERY COHORT IN THE FIELD</h3>
@@ -280,11 +296,23 @@ details.sc-pagespecs p,details.sc-pagespecs li{{max-width:980px}}details.sc-page
 <h2>9 · EACH NAME AGAINST ITS OWN COMPS</h2>
 <div class="wrap">{T_COMPS}</div>
 
+<h2>10 · FOUR CHECKS ON THE FINDING</h2>
+<h3>10a · TAKE OUT THE BUSINESS LINE: EACH NAME AGAINST ITS OWN COMPS IN THE RUN ({kb["leaders_that_beat"]} OF {len(G["leader"])} LEADERS AND {kb["laggards_that_beat"]} OF {len(G["laggard"])} LAGGARDS BEAT THEIR COMPS)</h3>
+<div class="panel">{CH1}</div>
+<h3>10b · WHO TICKS ALL FOUR: GUIDANCE RAISED, EARNINGS ESTIMATE RAISED, PROFITABLE, CASH-POSITIVE ({kt["leaders"]} OF {kt["leaders_total"]} LEADERS · {kt["laggards"]} OF {kt["laggards_total"]} LAGGARDS · {kt["named_mid"]} OF {kt["named_mid_total"]} NAMED MID-FIELD)</h3>
+<div class="wrap">{T_TICK}</div>
+<h3>10c · BIGGER RAISE, BIGGER MOVE? {ks["n"]} PROFITABLE NAMES WITH A THEN-AND-NOW ESTIMATE · RANK CORRELATION WITH THE RUN {ks["rank_corr_with_run"]:.2f} · WITH 3 MONTHS {ks["rank_corr_with_3m"]:.2f}</h3>
+<details class="more"><summary>THE {ks["n"]} NAMES</summary><div class="wrap">{T_SIZE}</div></details>
+<h3>10d · WHO ADDED THE DOLLARS IN THE RUN: THE FIELD {usd_signed(kd["field_added_b"])} · THE 25 LEADERS {usd_signed(kd["leaders_added_b"])} · THE LAGGARDS {usd_signed(kd["laggards_added_b"])} · THE TOP FIVE NAMES {kd["top5_share"]*100:.0f}% OF THE FIELD'S GAIN</h3>
+<div class="wrap">{T_ADD}</div>
+
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary>
 <h3>WHAT THE PAGE SHOWS</h3>
 <p>Alan, 6 Oct: "do a study with these leaders and whatever the comps system says are comparables for them, versus the ones that are doing wrong, like this CBRS one. What's the big difference between these names? Why is it that these names are the ones that bounced? In your opinion. And also what market cap did that put them at."</p>
 <p>The field is every company in the AI, chip, software-and-internet and grid cohorts of CO1's tree ({S["field"]} names, 15 cohorts). Each is ranked on three things, each as a place inside the field: its 3-month return, its 1-month return and its Hub Geiger. The score is the plain average of the three places. The 25 highest are the leaders. The 20 lowest are the laggards, plus the two names the brief asked for that sit in the bottom third (CBRS, rank 112, and IREN, rank 104): 22 in all. The other names the brief asked about (CRWV, NBIS, MU, SNDK, STX) rank in the middle and are shown apart, not counted as laggards.</p>
 <p>"The fall" is 30 June to 15 September: the Nasdaq-100 fund's high before the summer drop to its lowest close before the run. "The run" is 15 September to the last close on file (5 October). Section 1 puts every name on those two measures. Section 2 counts conditions: a bar is the share of the group that meets the condition, and the words beside it are the count, as "22 of 25". A name with no reading for a condition is left out of that count, so the second number can be below 25 or 22. "Clear" means the gap would be unusual by chance on groups this small (Fisher exact test under 5%); "leans" means under 20%; anything weaker is left out of the picture and kept in the table.</p>
+<p><b>The opinion</b> in section 3 is the lane agent's own read. {esc(OP.get("panel", ""))} Every count inside it is read from the study file when the page is built.</p>
+<p><b>Section 10</b> holds four checks a critic asked for. 10a asks whether a condition still separates once the business line is taken out, by splitting the 47 leaders and laggards into those that beat their own comps' median in the run and those that fell behind. 10b lists every studied name that has all four of: guidance raised, earnings estimate raised, a profit, positive free cash flow. 10c asks whether bigger estimate raises went with bigger moves (a rank correlation: 0 means no link, 1 a perfect one). 10d ranks every name in the field by the dollars of market value it added in the run, using the Hub profile's value and the saved closes.</p>
 <h3>WHERE EACH NUMBER COMES FROM</h3>
 <ul>
 <li><b>Prices and returns:</b> the daily closes CO1 saved from the chart API (17 Mar to 5 Oct 2026), already in this repo. No price was fetched for this page.</li>
@@ -299,6 +327,7 @@ details.sc-pagespecs p,details.sc-pagespecs li{{max-width:980px}}details.sc-page
 <h3>WHAT COULD BE WRONG</h3>
 <ul>
 <li>The public figures were transcribed from web pages by a model. The second pass caught errors, but some will remain. The counts are the finding; a single cell is not.</li>
+<li>The readers' web search allowance ran out part way through the run. After that they could still open pages they knew the address of (statistics, estimate, filing and news-index pages) but could not search freely. Records that say so: {Q["search_limit"]["first_read"]} of {Q["studied"]} first reads, {Q["search_limit"]["checked"]} checked records, {Q["search_limit"]["blind"]} blind reads. News-based fields (insider sales, lock-ups, why it moved) are the ones this thins.</li>
 <li>Estimate revisions over 90 days are the weakest column: where no then-and-now pair was found the direction rests on dated analyst notes, or reads "–". No reading for: {esc(" ".join(Q["eps_revision_unknown"]) or "none")}.</li>
 <li>Cross-check against the Hub comps tab's own saved figures (3 and 5 Oct, {xc["names"]} names): forward P/E within 25% for {xc["forward_pe_within_25pct"][0]} of {xc["forward_pe_within_25pct"][1]}, EV/sales within 25% for {xc["ev_sales_within_25pct"][0]} of {xc["ev_sales_within_25pct"][1]}, next-year sales growth within 8 points for {xc["next_year_sales_growth_within_8pts"][0]} of {xc["next_year_sales_growth_within_8pts"][1]}. Public pages and the Hub differ in how they define the forward year.</li>
 <li>Market value at an earlier date holds the share count constant. A company that sold new shares in between reads too high at the start; those rows are marked.</li>

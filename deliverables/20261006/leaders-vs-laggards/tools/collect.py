@@ -9,13 +9,14 @@ three judgement calls (EPS estimate direction, sales estimate direction, guidanc
 """
 import json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); D = os.path.join(HERE, "..", "data"); os.makedirs(D, exist_ok=True)
-research, verify, peers, blind = {}, {}, {}, {}
+research, verify, peers, blind, panel = {}, {}, {}, {}, []
 for path in sys.argv[1:]:
     for line in open(path):
         try: j = json.loads(line)
         except Exception: continue
         r = j.get("result") if j.get("type") == "result" else None
         if not isinstance(r, dict): continue
+        if r.get("role"): panel.append(r); continue   # the opinion panel: analysts, refuters, critic
         if r.get("stage") == "research" and r.get("ticker"): research[r["ticker"].upper()] = r
         elif r.get("stage") == "verify" and r.get("ticker"): verify[r["ticker"].upper()] = r
         elif r.get("stage") == "blind" and r.get("ticker"): blind[r["ticker"].upper()] = r
@@ -26,5 +27,6 @@ out = [{"ticker": t, "research": research.get(t), "verify": verify.get(t)} for t
 json.dump(out, open(os.path.join(D, "research.json"), "w"), indent=1)
 json.dump([peers[t] for t in sorted(peers)], open(os.path.join(D, "peers.json"), "w"), indent=1)
 json.dump([blind[t] for t in sorted(blind)], open(os.path.join(D, "blind.json"), "w"), indent=1)
-print(f"studied: {len(out)} (first record {len(research)}, checked {len(verify)}) · peers: {len(peers)} · blind second read: {len(blind)}")
+if panel: json.dump(panel, open(os.path.join(D, "panel.json"), "w"), indent=1)
+print(f"studied: {len(out)} (first record {len(research)}, checked {len(verify)}) · peers: {len(peers)} · blind second read: {len(blind)} · panel returns: {len(panel)}")
 print("not checked:", " ".join(t for t in sorted(research) if t not in verify) or "-")

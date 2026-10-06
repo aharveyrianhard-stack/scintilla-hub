@@ -10,7 +10,8 @@ Reads (all local files):
   CO1's closes and company profiles (deliverables/20261006/cohort-proposal/data)
 Nothing is fetched and nothing is written outside this folder.
 """
-import csv, json, math, os, statistics
+import csv, json, math, os, re, statistics
+SEARCH_LIMIT = re.compile(r"search (budget|was unavailable|unavailable)|WebSearch was unavailable|budget (was )?exhausted", re.I)   # a reader saying its web search ran out
 
 HERE = os.path.dirname(os.path.abspath(__file__)); D = os.path.abspath(os.path.join(HERE, ".."))
 ROOT = os.path.abspath(os.path.join(HERE, "../../../.."))
@@ -244,6 +245,49 @@ for f in field_caps:
     seen.add(f["ticker"]); field_now += f["now"] or 0; field_run += f["run_start"] or 0; field_sell += f["selloff_start"] or 0
 caps["field"] = {"n": len(seen), "selloff_start_b": field_sell, "run_start_b": field_run, "now_b": field_now}
 
+# ---- four checks the completeness critic asked for, all on figures already in hand
+# (1) strip out the group move: did the name beat its OWN comps in the run? then re-count the main conditions on that split
+LG = L + G
+def vs_comps(n): return None if (n["r_run"] is None or n["comps"]["peers_run_median"] is None) else n["r_run"] - n["comps"]["peers_run_median"]
+BEAT = [n for n in LG if vs_comps(n) is not None and vs_comps(n) > 0]; BEHIND = [n for n in LG if vs_comps(n) is not None and vs_comps(n) <= 0]
+KEY = ("guide_raised", "eps_rev_up", "eps_rev_down", "eps_pos", "fcf_pos", "diluting", "overhang", "rev_q_20", "rev_next_15")
+beat_cut = {"beat": [n["ticker"] for n in BEAT], "behind": [n["ticker"] for n in BEHIND],
+            "leaders_that_beat": sum(1 for n in L if (vs_comps(n) or 0) > 0), "laggards_that_beat": sum(1 for n in G if (vs_comps(n) or 0) > 0),
+            "conditions": [c for c in count_two(BEAT, BEHIND) if c["id"] in KEY]}
+# (2) ticks every box: guidance raised AND earnings estimate up AND profitable AND free cash flow above zero, across all 52
+ALL52 = L + G + M
+tick = lambda n: n["guidance_direction"] == "raised" and n["eps_rev_90d_direction"] == "up" and n["eps_ttm_positive"] is True and (num(n["fcf_ttm_usd_b"]) or 0) > 0
+boxes = sorted([{"ticker": n["ticker"], "group": n["group"], "rank": n["rank"], "r_run": n["r_run"], "r3m": n["r3m"], "shares_change_yoy_pct": n["shares_change_yoy_pct"], "supply_overhang": n["supply_overhang"],
+                 "pe_vs_comps": n["comps"]["pe_vs_comps"], "worst_in_selloff": n["worst_in_selloff"]} for n in ALL52 if tick(n)], key=lambda x: x["rank"])
+ticks = {"names": boxes, "leaders": sum(1 for b in boxes if b["group"] == "leader"), "laggards": sum(1 for b in boxes if b["group"] == "laggard"), "named_mid": sum(1 for b in boxes if b["group"] == "named_mid"),
+         "leaders_total": len(L), "laggards_total": len(G), "named_mid_total": len(M)}
+# (3) does a bigger raise go with a bigger move? profitable names with a then-and-now estimate pair; Spearman rank correlation
+def spearman(xs, ys):
+    def ranks(v):
+        o = sorted(range(len(v)), key=lambda i: v[i]); r = [0.0] * len(v); i = 0
+        while i < len(o):
+            j = i
+            while j + 1 < len(o) and v[o[j + 1]] == v[o[i]]: j += 1
+            for k in range(i, j + 1): r[o[k]] = (i + j) / 2 + 1
+            i = j + 1
+        return r
+    if len(xs) < 5: return None
+    rx, ry = ranks(xs), ranks(ys); mx, my = sum(rx) / len(rx), sum(ry) / len(ry)
+    den = (sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry)) ** 0.5
+    return None if not den else sum((a - mx) * (b - my) for a, b in zip(rx, ry)) / den
+SZ = [n for n in ALL52 if n["eps_ttm_positive"] is True and num(n["eps_rev_90d_pct"]) is not None]
+size = {"n": len(SZ), "rank_corr_with_run": spearman([n["eps_rev_90d_pct"] for n in SZ], [n["r_run"] for n in SZ]), "rank_corr_with_3m": spearman([n["eps_rev_90d_pct"] for n in SZ], [n["r3m"] for n in SZ]),
+        "rows": sorted([{"ticker": n["ticker"], "group": n["group"], "eps_rev_90d_pct": n["eps_rev_90d_pct"], "r_run": n["r_run"], "r3m": n["r3m"]} for n in SZ], key=lambda x: -x["eps_rev_90d_pct"])}
+# (4) who added the dollars in the run: the whole field, profile value x price change (15 Sep -> 5 Oct)
+adds = sorted([{"ticker": n["ticker"], "group": GROUP.get(n["ticker"], "field"), "rank": n["rank"], "cohort": n["cohort_labels"][0],
+                "now_b": (n["market_cap_profile"] or 0) / 1e9, "added_b": (n["market_cap_profile"] or 0) / 1e9 * (1 - n["close_run_start"] / n["close_last"]), "r_run": n["r_run"]} for n in sel["all"] if n["close_run_start"]], key=lambda x: -x["added_b"])
+field_added = sum(a["added_b"] for a in adds)
+dollars = {"field_added_b": field_added, "leaders_added_b": sum(a["added_b"] for a in adds if a["group"] == "leader"), "laggards_added_b": sum(a["added_b"] for a in adds if a["group"] == "laggard"),
+           "top": adds[:12], "bottom": adds[-6:], "top5_share": sum(a["added_b"] for a in adds[:5]) / field_added if field_added else None,
+           "median_cap_leaders_b": med([n["cap_now_b"] for n in L]), "median_cap_laggards_b": med([n["cap_now_b"] for n in G]),
+           "top3_leaders_share_of_leader_value": sum(sorted([n["cap_now_b"] or 0 for n in L])[-3:]) / sum(n["cap_now_b"] or 0 for n in L)}
+checks = {"beat_own_comps": beat_cut, "ticks_every_box": ticks, "size_of_raise": size, "who_added_the_dollars": dollars}
+
 # ---- same cohort, different outcome
 pairs = []
 for c in sel["by_cohort"]:
@@ -265,6 +309,8 @@ quality = {"studied": len(names), "with_record": sum(n["has_record"] for n in na
            "price_mismatch": [T for T, n in names.items() if n["has_record"] and not n["price_ok"]],
            "eps_revision_unknown": [T for T, n in names.items() if n["eps_rev_90d_direction"] in (None, "unknown")],
            "blind_read": len(BLIND),
+           "search_limit": {"first_read": sum(1 for r in RES.values() if SEARCH_LIMIT.search(json.dumps(r.get("research") or {}))), "checked": sum(1 for r in RES.values() if SEARCH_LIMIT.search(json.dumps(r.get("verify") or {}))),
+                            "blind": sum(1 for b in BLIND.values() if SEARCH_LIMIT.search(json.dumps(b)))},
            "two_readings": {k: {"agree": sum(1 for n in names.values() if n[k + "_status"] == "two readings agree"), "disagree": [T for T, n in names.items() if n[k + "_status"].startswith("two readings disagree")],
                                 "one_only": sum(1 for n in names.values() if n[k + "_status"].startswith("one reading")), "none": sum(1 for n in names.values() if n[k + "_status"] == "no reading")} for k, _ in RECON},
            "peers_wanted": len(cs["peer_only"]), "peers_read": sum(1 for t in cs["peer_only"] if t in PEERS), "peers_with_pe": sum(1 for t in cs["peer_only"] if pool.get(t, {}).get("forward_pe")),
@@ -274,7 +320,7 @@ quality = {"studied": len(names), "with_record": sum(n["has_record"] for n in na
 
 out = {"what": "LD1 · why the leaders held up and bounced, and why others did not", "closes_through": sel["closes_through"], "geiger_published_utc": sel["geiger_published_utc"],
        "run_start": sel["run_start"], "selloff_start": sel["selloff_start"], "field": sel["field"], "rule": sel["rule"], "benchmarks": sel["benchmarks"], "named_in_brief": sel["named_in_brief"],
-       "groups": cs["groups"], "names": names, "conditions": conditions, "conditions_sorted_ids": [c["id"] for c in conditions_sorted], "kinds": kinds, "bounce_cut": bounce_cut, "caps": caps,
+       "groups": cs["groups"], "names": names, "conditions": conditions, "conditions_sorted_ids": [c["id"] for c in conditions_sorted], "kinds": kinds, "bounce_cut": bounce_cut, "checks": checks, "caps": caps,
        "cohort_caps": cohort_caps, "pairs": pairs, "quality": quality,
        "field_points": [{"t": n["ticker"], "g": GROUP.get(n["ticker"], "field"), "s": n["r_selloff"], "r": n["r_run"], "c": n["cohort_labels"][0]} for n in sel["all"]]}
 json.dump(out, open(os.path.join(D, "study.json"), "w"), indent=1)
@@ -291,4 +337,9 @@ for c in conditions_sorted:
 for k in kinds: print(f" kind: {k['kind'][:58]:58s} field {k['field']:3d} · leaders {len(k['leaders']):2d} · laggards {len(k['laggards']):2d}")
 print(f"THE BOUNCE CUT: fell-then-bounced leaders {bounce_cut['bounced']} vs fell-and-stayed-down laggards {bounce_cut['stayed_down']}")
 for c in bounce_cut["conditions"][:14]: print(f" {c['gap_points']:+6.1f} pts  bounced {c['a_yes']:2d}/{c['a_n']:2d}  stayed down {c['b_yes']:2d}/{c['b_n']:2d}  p={c['p']:.3f} {c['strength']:<18s} {c['words']}")
+print(f"CHECK 1 beat own comps in the run: {len(BEAT)} beat ({beat_cut['leaders_that_beat']} leaders, {beat_cut['laggards_that_beat']} laggards) vs {len(BEHIND)} behind")
+for c in beat_cut["conditions"]: print(f"   {c['gap_points']:+6.1f} pts  beat {c['a_yes']:2d}/{c['a_n']:2d}  behind {c['b_yes']:2d}/{c['b_n']:2d}  {c['strength']:<18s} {c['words']}")
+print(f"CHECK 2 ticks every box: {ticks['leaders']}/{ticks['leaders_total']} leaders, {ticks['laggards']}/{ticks['laggards_total']} laggards, {ticks['named_mid']}/{ticks['named_mid_total']} named mid ·", [(b['ticker'], b['group'][:3], b['rank']) for b in boxes if b['group'] != 'leader'])
+print(f"CHECK 3 size of raise vs move: n {size['n']} · rank corr with the run {size['rank_corr_with_run']} · with 3 months {size['rank_corr_with_3m']}")
+print(f"CHECK 4 dollars added in the run: field {field_added:,.0f}B · leaders {dollars['leaders_added_b']:,.0f}B · laggards {dollars['laggards_added_b']:,.0f}B · top5 share {dollars['top5_share']:.2f} ·", [(a['ticker'], a['group'][:3], round(a['added_b'])) for a in adds[:12]])
 print("caps $B:", {g: {k: round(v) for k, v in d.items() if v} for g, d in caps.items()})

@@ -7,6 +7,7 @@ T=deliverables/20261006/leaders-vs-laggards/tools
 [ "$#" -gt 0 ] && python3 $T/collect.py "$@"
 python3 $T/build.py
 python3 $T/digest.py
+python3 $T/opinion.py > /dev/null
 python3 $T/render.py
 # the BACK / CLOSE pair: the tool rewrites older pages too, so every other page it touched is put back
 python3 scripts/inject-scnav.py | grep leaders-vs-laggards || true
