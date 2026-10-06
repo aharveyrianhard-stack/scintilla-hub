@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from b027c14) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 18f0272) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5990,16 +5990,25 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      ranked. The first computeBoardOrder() after this flips the order exactly once. */
   const qOverlay = window.SC_LAST_QUOTE_OVERLAY || {};
   const gOverlay = window.SC_LAST_GEIGER_OVERLAY || {};
+  /* 6 Oct (coordinator; Alan: "the re-ranking of the columns in the cohort board and dashboard doesn't work") — A NAMED
+     ABSENCE NO LONGER FREEZES THE BOARD. Skyworks closed its Qorvo takeover on 5 Oct, QRVO stopped trading, its 7 Geiger
+     cells became named absences, and the demand for complete coverage switched off every sort but TICKER for all 590
+     names. Liveness over completeness: the snapshot is still authoritative when every missing cell is NAMED (failed 0,
+     unexplained 0, computed + named = expected) and the missing names are few; those rows carry a null Geiger and sort
+     last (S7, empty last). */
+  const SC_RANK_MAX_NAMED_ABSENT_SYMBOLS = 6;   // about 1% of the 590
+  const cgAcc = SC_CG.meta && SC_CG.meta.accounting, cgCov = SC_CG.meta && SC_CG.meta.coverage;
+  const cgMissing = cgCov && Array.isArray(cgCov.incomplete_symbols) ? cgCov.incomplete_symbols.length : null;
   window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
     (num(qOverlay.applied) || 0) + (num(qOverlay.blanked) || 0) === declaredSet.size &&
     (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size &&
     !!(SC_CG.meta && SC_CG.meta.current_equalizer_validated === true &&
        SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
-       SC_CG.meta.accounting && SC_CG.meta.accounting.failed === 0 &&
-       SC_CG.meta.accounting.unexplained === 0 &&
-       SC_CG.meta.accounting.named_absent === 0 &&
-       SC_CG.meta.accounting.computed === SC_CG.meta.accounting.expected_cells &&
-       SC_CG.meta.coverage && SC_CG.meta.coverage.complete === true);
+       cgAcc && cgAcc.failed === 0 &&
+       cgAcc.unexplained === 0 &&
+       cgAcc.computed + cgAcc.named_absent === cgAcc.expected_cells &&
+       cgCov && (cgCov.complete === true ||
+         (cgAcc.named_absent > 0 && cgMissing != null && cgMissing <= SC_RANK_MAX_NAMED_ABSENT_SYMBOLS)));
   try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
