@@ -212,9 +212,17 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 /* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
    Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
-.sc-rsi.is-xt{ animation:rsi-xt 4s ease-in-out infinite; }
-@keyframes rsi-xt{ 0%,100%{ text-shadow:none; } 50%{ text-shadow:0 0 6px currentColor; } }
-@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } }
+/* SLOW1 (6 Oct 2026) — THE SAME BREATH, DRAWN ONCE. The glow used to be an animated text-shadow on the number itself.
+   A text-shadow cannot be animated off the main thread, so ONE glowing number made the whole page re-lay-out and repaint
+   60 times a second for as long as it was open. MEASURED on the live Hub (headless, default tab, two extreme readings):
+   the main thread was 17–19% busy doing nothing but that; with the glow off 3–4%. Alan's iMac paid this all day.
+   Now the glow is a fixed copy of the number (::after, same text from data-v, same colour, same 6px shadow) and only its
+   OPACITY breathes — which the compositor does alone. Same 4 s, same curve, same peak. Measured after: 3.1%. */
+.sc-rsi.is-xt{ position:relative; }
+.sc-rsi.is-xt::after{ content:attr(data-v); position:absolute; inset:0; text-align:center; pointer-events:none;
+  text-shadow:0 0 6px currentColor; opacity:0; animation:rsi-xt 4s ease-in-out infinite; }
+@keyframes rsi-xt{ 0%,100%{ opacity:0; } 50%{ opacity:1; } }
+@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } .sc-rsi.is-xt::after{ animation:none; opacity:0; } }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
   font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
@@ -7967,7 +7975,7 @@ function boardRowsHTML() {
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
@@ -8570,6 +8578,7 @@ function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
+  if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
   cell.style.color = rsiGradColor(v);
   if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
 }
@@ -27517,39 +27526,13 @@ async function scCleanRows (sym, tf, bars, signal) {   /* H2 — signal: the map
   } catch (e) { if (signal && signal.aborted) throw e; return []; }   /* H2 — an abort is not a failure: the pacer asks again */
 }
 window.SC_BUILD = "2026-08-20T1420";
-(function () {
-  try {
-    if (sessionStorage.getItem("sc_build_reloaded")) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (m && m[1] && m[1] !== window.SC_BUILD) {
-          sessionStorage.setItem("sc_build_reloaded", "1");
-          location.reload();
-        }
-      }).catch(function () {});
-  } catch (e) {}
-})();
-/* R58 — LIVE POLL (3rd freshness layer). While the app is open + visible, check the
-   shipped build every 75s; a newer build → reload — but DEFER if a sheet/menu is open
-   or an input is focused, so it never interrupts a mid-edit. Self-guards: after reload,
-   window.SC_BUILD equals the new build so it won't loop. This is what makes the dock/
-   home-screen app reliably "live" without going native. */
-setInterval(function () {
-  try {
-    if (document.hidden) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (!m || !m[1] || m[1] === window.SC_BUILD) return;
-        var ae = document.activeElement, typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-        if (typing || document.querySelector(".sc-sheet__scrim.is-open, .sc-fmodal.on, .sc-menu.is-open")) return;
-        location.reload();
-      }).catch(function () {});
-  } catch (e) {}
-}, 75000);
+/* SLOW1 (6 Oct 2026) — THE BUILD-STAMP POLL IS GONE. Alan: "it's being very slow on the iMac … I get the loading button
+   a million times". Two checks lived here: one at load and one every 75 s (R58), each fetching "/index.html?b=<now>"
+   with no-store and reading the WHOLE page as text to regex one line out of it. MEASURED 6 Oct: the page is 2.2 MB
+   (716 KB on the wire), so an open Hub pulled 716 KB and built a 2.2 MB string every 75 s — 34 MB an hour — and the
+   stamp it compared has read "2026-08-20T1420" since August, so the check could never come out "newer".
+   Its neighbours do the real work and are untouched: R19 (resume from hidden) and K3 (quiet-time, every 180 s) both
+   ask for the etag of "/" with a HEAD, which carries no body. SC_BUILD stays for the diagnostics that print it. */
 /* K3 — quiet-time self-update: the etag sample is shared between R19's resume
    check and the quiet poller; hubSelfUpdatePlan is the pure decision (tests slice
    it and the two consts out of the page). */
