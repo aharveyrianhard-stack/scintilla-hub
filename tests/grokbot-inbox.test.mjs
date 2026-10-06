@@ -294,3 +294,32 @@ test('GB1 · the migration is additive, locks every new table, and the rollback 
   const core = read('supabase/functions/grokbot-inbox/core.mjs');
   for (const [, t] of core.matchAll(/table: "(\w+)"/g)) assert.ok(created.includes(t), t);
 });
+
+test('GB1 · every example in the contract is accepted by the function as written, and the HTML twin says the same', async () => {
+  const md = read('deliverables/20261005/gb1-grokbot-inbox/CONTRACT.md'), page = read('deliverables/20261005/gb1-grokbot-inbox/CONTRACT.html');
+  const examples = [...md.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => JSON.parse(m[1])).filter((e) => KINDS.includes(e.kind));
+  assert.deepEqual(examples.map((e) => e.kind), KINDS, 'one example per kind, in the order the function lists them');
+  const { post, db } = inbox();
+  for (const example of examples) {
+    const r = await post(example); const out = await r.json();
+    assert.equal(r.status, 200, example.kind);
+    assert.deepEqual(out.rejected, [], example.kind + ': ' + JSON.stringify(out.rejected));
+    assert.equal(out.accepted, (example.items || []).length, example.kind);
+    assert.equal(out.warnings, undefined, example.kind + ' example sends nothing we would drop');
+  }
+  assert.deepEqual([db.rows('x_posts').length, db.rows('youtube_chunks').length, db.rows('x_youtube_channel_map').length, db.rows('x_following').length, db.rows('grokbot_news_scores').length], [2, 2, 1, 2, 1]);
+  /* the limits and the address the page states are the ones the code enforces */
+  assert.match(md, /at most 1 MB per POST and at most 2,000 items/); assert.equal(MAX_BYTES, 1048576);
+  assert.match(md, /https:\/\/wadinxqplrggagkvrdag\.supabase\.co\/functions\/v1\/grokbot-inbox/);
+  assert.doesNotMatch(md + page, /eyJ[A-Za-z0-9_-]{20,}|sb_secret_|Bearer [A-Za-z0-9_-]{24,}/, 'no token on the page — only the placeholder <token>');
+  /* the twin: built from this exact text, with the way back, monochrome and no white */
+  const { createHash } = await import('node:crypto');
+  assert.equal(/data-contract-sha>([a-f0-9]{64})</.exec(page)?.[1], createHash('sha256').update(md).digest('hex'), 'run tools/build-contract-html.py, then scripts/inject-scnav.py');
+  assert.match(page, /<!-- scnav · /); assert.match(page, /data-scnav-slot/);
+  const own = page.slice(0, page.indexOf('<!-- scnav · '));
+  for (const [, hex] of own.matchAll(/#([0-9a-fA-F]{6})\b/g)) {
+    const c = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    assert.ok(Math.max(...c) <= 210 && Math.max(...c) - Math.min(...c) <= 24, '#' + hex + ' is a quiet grey');
+  }
+  for (const [, px] of own.matchAll(/font(?:-size)?:\s*(\d+)px/g)) assert.ok(+px >= 11, px + 'px text');
+});

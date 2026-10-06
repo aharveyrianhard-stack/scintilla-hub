@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GB1 · Grok Bot inbox contract · 5 Oct 2026</title>
+<style>
+  :root{ --bg:#0b0b0e; --panel:#121216; --line:#2a2a30; --ink:#d2d2d2; --ink2:#b4b4b8; --ink3:#8c8c92; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink2); font:14px/1.6 "SF Mono", Menlo, Consolas, monospace; }
+  main{ max-width:1100px; margin:0 auto; padding:56px 16px 80px; }
+  h1{ font-size:15px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink); margin:10px 0 10px; }
+  h2{ font-size:13px; letter-spacing:.2em; text-transform:uppercase; margin:26px 0 8px; color:var(--ink); font-weight:600; border-top:1px solid var(--line); padding-top:16px; }
+  h3{ font-size:14px; margin:20px 0 6px; color:var(--ink); font-weight:600; }
+  p, li{ max-width:900px; } ul{ padding-left:18px; margin:8px 0; } li{ margin:4px 0; }
+  b, strong{ color:var(--ink); font-weight:600; }
+  code{ color:var(--ink); background:#18181d; padding:1px 4px; font-size:13px; overflow-wrap:anywhere; }
+  pre{ background:var(--panel); border:1px solid var(--line); padding:12px 14px; overflow-x:auto; font-size:12px; line-height:1.5; color:var(--ink); margin:8px 0 10px; }
+  pre code{ background:none; padding:0; font-size:12px; overflow-wrap:normal; }
+  .tw{ overflow-x:auto; } table{ border-collapse:collapse; width:100%; min-width:640px; font-size:12px; margin:8px 0; }
+  th, td{ border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th{ color:var(--ink3); letter-spacing:.12em; text-transform:uppercase; font-weight:600; font-size:11px; background:var(--panel); }
+  .src{ color:var(--ink3); font-size:12px; margin-top:28px; border-top:1px solid var(--line); padding-top:10px; overflow-wrap:anywhere; }
+  h1, h3{ overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>Grok Bot inbox — what to post, and what comes back</h1>
+<p>For Grok Bot, from the Scintilla coordinator, with Alan's approval (5 Oct 2026). One page. Everything you send goes to one address as JSON over HTTPS. Nothing here asks you to push to a repo or to open anything on our side.</p>
+<h2>1. Where and how</h2>
+<ul><li><b>Address:</b> <code>https://wadinxqplrggagkvrdag.supabase.co/functions/v1/grokbot-inbox</code></li><li><b>Method:</b> <code>POST</code> to send, <code>GET</code> to ask what we have and which YouTube channels we follow.</li><li><b>Header:</b> <code>Authorization: Bearer &lt;token&gt;</code> and <code>Content-Type: application/json</code>.</li><li><b>The token</b> is given to you by Alan through your secure prompt. It never goes through chat, a file, a repo or a log. If you ever see it in a chat, tell Alan and we replace it.</li><li><b>Size:</b> at most 1 MB per POST and at most 2,000 items per POST. Split anything bigger.</li><li><b>Sending twice is safe.</b> Every item has a natural key (shown per kind below). The same key again updates the same row; it never makes a second one.</li></ul>
+<h2>2. The envelope (the same for every kind)</h2>
+<pre><code>{ "kind": "&lt;one of the six kinds&gt;", "sent_at": "2026-10-06T13:45:00Z", "items": [ ] }</code></pre>
+<ul><li><code>kind</code> — <code>x_posts</code>, <code>youtube_chunks</code>, <code>youtube_channel_map</code>, <code>x_following</code>, <code>news_scores</code> or <code>heartbeat</code>.</li><li><code>sent_at</code> — your clock when you send, ISO 8601 <b>with a zone</b> (<code>Z</code> or <code>-04:00</code>). No zone = refused.</li><li><code>items</code> — a list. One kind per POST.</li></ul>
+<h2>3. What comes back</h2>
+<div class="tw"><table><tr><th>Answer</th><th>Meaning</th><th>What you do</th></tr><tr><td><code>200</code> <code>{"ok":true,"kind":…,"accepted":N,"rejected":[{"i":3,"reason":"…"}]}</code></td><td>Read and filed. <code>i</code> is the position in your <code>items</code> (first = 0). <code>warnings</code> may be added.</td><td>Fix rejected items before resending them; do not resend them unchanged.</td></tr><tr><td><code>400</code> <code>{"error":"bad_envelope","reason":"…"}</code></td><td>The envelope itself is wrong (not JSON, unknown kind, no zone, too many items).</td><td>Fix it. Do not retry unchanged.</td></tr><tr><td><code>401</code></td><td>Token missing or wrong.</td><td>Stop and tell Alan. Do not retry in a loop.</td></tr><tr><td><code>413</code></td><td>Over 1 MB.</td><td>Split and resend.</td></tr><tr><td><code>503</code> with <code>"retry":true</code>, or any other <code>5xx</code>, or no answer</td><td>Our side could not store it. Nothing was half-accepted.</td><td>Send the same POST again after 60 seconds, then 5 minutes, then 15.</td></tr></table></div>
+<h2>4. The six kinds, one example each</h2>
+<h3><code>x_posts</code> — the tape (key: the post id; a repost: who reposted + the id)</h3>
+<pre><code>{
+  "kind": "x_posts",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "items": [
+    {
+      "id": "1975000000000000001",
+      "handle": "alphatrends",
+      "kind": "original",
+      "created_at": "2026-10-06T13:31:07Z",
+      "text": "$NVDA holding the 5-day. $AMD lagging.",
+      "url": "https://x.com/alphatrends/status/1975000000000000001",
+      "list": "tracked",
+      "photos": ["https://pbs.twimg.com/media/example.jpg"],
+      "links": [{ "url": "https://youtu.be/dQw4w9WgXcQ", "title": "Morning video" }]
+    },
+    {
+      "id": "1975000000000000002",
+      "handle": "ripster47",
+      "kind": "repost",
+      "created_at": "2026-10-06T13:40:00Z",
+      "text": "",
+      "url": "https://x.com/ripster47/status/1975000000000000002",
+      "list": "bell",
+      "original": {
+        "id": "1975000000000000001",
+        "handle": "alphatrends",
+        "text": "$NVDA holding the 5-day. $AMD lagging.",
+        "url": "https://x.com/alphatrends/status/1975000000000000001",
+        "created_at": "2026-10-06T13:31:07Z"
+      }
+    }
+  ]
+}</code></pre>
+<ul><li><b>Required:</b> <code>id</code> (a <b>string</b> of digits, never a number — the ids do not fit a JavaScript number), <code>handle</code> (no <code>@</code>), <code>kind</code> (<code>original</code>, <code>reply</code>, <code>quote</code> or <code>repost</code>), <code>created_at</code> (when X says it was posted, with a zone), <code>text</code> (a string; <code>""</code> for a media-only post), <code>url</code> (the <code>x.com</code> or <code>twitter.com</code> status address; it must carry the same id and the same handle).</li><li><b>Optional:</b> <code>list</code> (<code>tracked</code>, <code>bell</code>, <code>bell_only</code> — lower-case, digits, underscore), <code>photos</code>, <code>videos</code>, <code>links</code>, <code>youtube_id</code>, <code>original</code> (the post it quotes, reposts or replies to — a <code>repost</code> must carry it).</li><li><b>Replies:</b> send them, marked <code>"kind": "reply"</code>. We keep them and hide them from the views, as you do.</li><li>We read the <code>$TICKERS</code> out of the text ourselves; you do not need to send them.</li></ul>
+<h3><code>youtube_chunks</code> — one scored piece of a video (key: video + start second + ticker + model)</h3>
+<pre><code>{
+  "kind": "youtube_chunks",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "items": [
+    {
+      "video_id": "dQw4w9WgXcQ",
+      "t_start": 754,
+      "t_end": 812,
+      "tickers": ["MU", "NVDA"],
+      "score": 0.62,
+      "model": "finbert-tone-v1",
+      "preview": "Micron revenue 54 billion versus 51 estimate",
+      "channel_id": "UCvTUPg9PxLq3DO72AZBygNg"
+    }
+  ]
+}</code></pre>
+<ul><li><b>Required:</b> <code>video_id</code> (the 11 characters), <code>t_start</code> (whole seconds from the start), <code>model</code> (the name of what scored it — when you switch model, change this name and both scores are kept side by side).</li><li><b>Optional:</b> <code>t_end</code>, <code>ticker</code> (one) <b>or</b> <code>tickers</code> (up to 20; one row each), <code>score</code> (−1 bearish … +1 bullish, or <code>null</code> for "no reading"), <code>preview</code> (<b>at most 200 characters</b>), <code>channel_id</code>.</li><li><b>Transcript text: do not send it yet.</b> Alan has not OK'd storing it. If a <code>text</code> field arrives before he does, we drop it (from the table and from our log), keep the rest of the item, and answer with a <code>warnings</code> line saying so. When Alan says yes, add <code>"text": "…"</code> (up to 20,000 characters) to the same item — nothing else changes.</li></ul>
+<h3><code>youtube_channel_map</code> — which X account has which YouTube channel (key: X handle + channel id)</h3>
+<pre><code>{
+  "kind": "youtube_channel_map",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "items": [
+    {
+      "x_handle": "WOLF_TradingX",
+      "channel_id": "UCvTUPg9PxLq3DO72AZBygNg",
+      "channel_title": "WOLF Trading",
+      "channel_handle": "WOLFTrading",
+      "confidence": "high",
+      "evidence": "YouTube link in the X bio"
+    }
+  ]
+}</code></pre>
+<ul><li><b>Required:</b> <code>x_handle</code>, <code>channel_id</code> (the <code>UC…</code> id, 24 characters — not the <code>@name</code>).</li><li><b>Optional:</b> <code>channel_title</code>, <code>channel_handle</code>, <code>confidence</code> (<code>high</code>, <code>medium</code> or <code>low</code>), <code>evidence</code> (how you know, up to 500 characters), <code>seen_at</code>.</li><li>This is kept as your map. It does not by itself change which channels our YouTube feed follows.</li></ul>
+<h3><code>x_following</code> — who Alan follows, per list (key: handle + list)</h3>
+<pre><code>{
+  "kind": "x_following",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "items": [
+    { "handle": "alphatrends", "list": "following", "name": "Brian Shannon" },
+    { "handle": "alphatrends", "list": "trading", "seen_at": "2026-10-06T09:00:00-04:00" }
+  ]
+}</code></pre>
+<ul><li><b>Required:</b> <code>handle</code>, <code>list</code> (<code>following</code>, <code>trading</code>, <code>tracked</code>, <code>bell</code>, <code>bell_only</code> — lower-case, digits, underscore).</li><li><b>Optional:</b> <code>name</code>, <code>seen_at</code> (when you last saw the account on that list; left out = <code>sent_at</code>).</li><li>Send the whole list each time you read it; an account you no longer see simply keeps its old <code>seen_at</code>.</li></ul>
+<h3><code>news_scores</code> — your score for a news item (key: address + ticker + model)</h3>
+<pre><code>{
+  "kind": "news_scores",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "items": [
+    {
+      "url": "https://www.tipranks.com/news/micron-beats-estimates",
+      "tickers": ["MU"],
+      "score": 0.4,
+      "model": "finbert-tone-v1",
+      "title": "Micron beats estimates",
+      "published_at": "2026-10-06T12:00:00Z"
+    }
+  ]
+}</code></pre>
+<ul><li><b>Required:</b> <code>url</code> (the article's address), <code>model</code>.</li><li><b>Optional:</b> <code>ticker</code> or <code>tickers</code>, <code>score</code> (−1 … +1 or <code>null</code>), <code>title</code> (up to 300 characters — the headline only, not the article), <code>published_at</code>, <code>scored_at</code> (left out = <code>sent_at</code>).</li></ul>
+<h3><code>heartbeat</code> — "I am running, nothing new"</h3>
+<pre><code>{
+  "kind": "heartbeat",
+  "sent_at": "2026-10-06T13:45:00Z",
+  "status": { "ledger_accounts": 129, "last_pass_at": "2026-10-06T13:44:10Z", "note": "quiet hour" }
+}</code></pre>
+<ul><li><code>items</code> may be left out. <code>status</code> is free-form and optional; keep it small and put no secret in it.</li><li><b>Every POST of any kind counts as a heartbeat.</b> Send this one only when an hour has passed with nothing else to send. If we hear nothing from you for <b>2 hours</b>, our status page marks you LATE.</li></ul>
+<h2>5. Asking us: <code>GET</code></h2>
+<p><code>GET</code> the same address with the same header. The answer:</p>
+<pre><code>{
+  "ok": true,
+  "kinds": ["x_posts", "youtube_chunks", "youtube_channel_map", "x_following", "news_scores", "heartbeat"],
+  "limits": { "max_bytes": 1048576, "max_items": 2000 },
+  "transcript_text_stored": false,
+  "last_received_per_kind": { "x_posts": "2026-10-06T13:45:01.000Z", "youtube_chunks": null, … },
+  "channels_from": ["bridge", "subscription:scintilla"],
+  "channels": [
+    { "channel_id": "UCvTUPg9PxLq3DO72AZBygNg", "from": ["bridge"],
+      "rss": "https://www.youtube.com/feeds/videos.xml?channel_id=UCvTUPg9PxLq3DO72AZBygNg" }
+  ]
+}</code></pre>
+<ul><li><code>channels</code> is the YouTube channel list you asked for: the channels of the X accounts Alan reads (<code>bridge</code>) plus the channels our Scintilla YouTube account subscribes to. Each has its public RSS address, which lists the newest videos without a key.</li><li><code>last_received_per_kind</code> tells you what reached us, so after a break you know where to resume.</li><li><code>transcript_text_stored</code> turns <code>true</code> the day Alan allows transcript text.</li></ul>
+<h2>6. Suggested rhythm</h2>
+<ul><li><code>x_posts</code>: after each ledger pass (every 15 minutes in market hours, hourly otherwise) — the posts that are new or changed since your last accepted POST.</li><li><code>youtube_chunks</code>: as each video is scored.</li><li><code>youtube_channel_map</code>, <code>x_following</code>: when they change, and once a day in full.</li><li><code>news_scores</code>: as scored.</li><li><code>heartbeat</code>: hourly when nothing else went out.</li></ul>
+<p class="src">Built from CONTRACT.md (the text the coordinator pastes to Grok Bot) · source sha256 <span data-contract-sha>dc288de1a100ed1a06f3d045ebf01e6b3871da58756815051c2d2fd0cec5de35</span> · every example on this page is run through the function in the tests.</p>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

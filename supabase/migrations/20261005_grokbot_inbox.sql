@@ -189,7 +189,7 @@ end $$;
 --    03:17 UTC daily. Skipped cleanly where pg_cron is not installed.
 -- ---------------------------------------------------------------------------------------------------------------
 do $$ begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+  if to_regnamespace('cron') is not null then
     perform cron.unschedule('grokbot-inbox-retention') where exists (select 1 from cron.job where jobname = 'grokbot-inbox-retention');
     perform cron.schedule('grokbot-inbox-retention', '17 3 * * *',
       $cmd$delete from public.grokbot_inbox where received_at < now() - interval '30 days'$cmd$);

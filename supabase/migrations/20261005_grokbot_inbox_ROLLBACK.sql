@@ -8,7 +8,7 @@
 -- Nothing that existed before the migration is touched: no other table, view, policy, cron job or app_config row.
 
 do $$ begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+  if to_regnamespace('cron') is not null then
     perform cron.unschedule('grokbot-inbox-retention') where exists (select 1 from cron.job where jobname = 'grokbot-inbox-retention');
   end if;
 end $$;
