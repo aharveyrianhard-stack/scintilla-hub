@@ -1,4 +1,20 @@
-/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 5 (5 Oct 2026, night).
+/* COIL LAB (3 Oct 2026) · the coil alone, as a component, in 3D — three visual directions on one scene. PASS 6 (6 Oct 2026).
+   PASS 6 (Alan, 6 Oct ~09:05: "I like it … it's sensitive … the black background on these boxes lost the laser feel. I like the
+   laser, but without hue, without shine outside of its container … labels sometimes appear and sometimes disappear at some angles …
+   at least the ones in the frontal row have to appear … a numbered ordered list that occupies the same top-to-bottom space at the
+   right will help."):
+     LASER, CONTAINED (opts.look = "laser", the default) a bar is ONE flat ribbon drawn in screen space along the bar (a capsule: the
+                   fat-line technique of three.js Line2 / LineMaterial, with a soft profile): full colour down the middle (the hot
+                   line, LASER.hot of the half width), a softer body round it, fading to NOTHING at the bar's own edge. The glow is that fade — it lives inside
+                   the bar's footprint and its alpha is exactly 0 on the outline, so no pixel outside a bar is touched. Normal
+                   (not additive) blending: where bars overlap the colour is mixed, never summed, so it cannot burn to white.
+                   No bloom, no composer, no fog, no dark fill, no dark edge. api.spill() proves it per frame: every pixel the bars
+                   change lies inside a bar's footprint, and the page prints 0A0A0F.
+     CALMER SPIN   SPIN.rotate_speed 2.5 → 1.25: half the turn for the same drag. Free in every direction, the short coast, and
+                   double-click home are pass 5's.
+     FRONT ROW     label-scale.mjs · layoutFront(): the bars nearest the camera always carry their ticker (they slide along their
+                   own bar rather than hide); the rest show when clear; nothing changes twice within 500 ms.
+     THE LIST      index.html draws the numbered list; here: api.order() (the order rule), api.highlight(t) and opts.onHover(t).
    PASS 5 (Alan, 5 Oct ~20:45: "It's this shiny at some of these angles … It has like this hue … the red bars … there's like this
    shine … I should be able to basically spin it, all directions … it just has this green hue and I can't really see shit. The
    proportion and the sizing of the labels and the bars seem good, but something really weird is up."):
@@ -92,6 +108,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { labelPx, thinLabels, worldHeightForPx, LABEL_RULE } from "./label-scale.mjs";
+import { layoutFront, makeFrontState, FRONT_RULE } from "./label-scale.mjs"; // pass 6
 
 const HUB = { bg: 0x0a0a0f, bull: 0x00ffa3, bear: 0xff2d55, crk: 0x00d4ff, ink: 0xf2f2f8, ink2: 0xc6c8de, dim: 0x868aaa, mute: 0x3a3a52, line: 0x1a1a2a, none: 0x3a3a52 };
 const MONO = '"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace';
@@ -102,7 +119,8 @@ const TEX = { w: 256, h: 128, tickerFs: 64, valueFs: Math.round(64 * LABEL_RULE.
 const BEAM = { core_over_type: 1.15, hot_over_core: 0.3, halo: (v) => 1.5 + 1.5 * Math.min(1, Math.abs(v == null ? 0 : v)) }; // pass 4 · the beam's core = 1.15 × the ticker's cap height in px (≥ the type at every zoom), in the step's colour; a white-hot line 0.3 of the core down its middle (the laser); the halo = core × (1.5 … 3.0) by the reading
 const ZOOM = { per_tick: 0.946, tau_ms: 120, min_ratio: 0.12, max_ratio: 8 }; // pass 4 · the wheel: each 120 px of wheel scales the target distance by 0.946 (OrbitControls' own pace at zoomSpeed 0.9); the camera eases toward it with a 120 ms time constant
 const MATTE = { edge_px: 1.25, flare_swell: 0.6, seg: 16 }; // pass 5 · the matte bar: a dark edge of 1.25 px all round (the inverted hull), a change swells the bar by 0.6 of its width for 320 ms
-const SPIN = { rotate_speed: 2.5, coast: 0.3 }; // pass 5 · the trackball: a drag across the whole width turns the coil about 290°; on release the turn decays by √(1 − 0.3) a frame, about half a second
+const SPIN = { rotate_speed: 1.25, was: 2.5, coast: 0.3 }; // pass 6 · HALF of pass 5's 2.5 (Alan: "it's sensitive"): the same drag turns the coil half as far; on release the turn still decays by √(1 − 0.3) a frame, about half a second
+const LASER = { foot: 1.5, hot: 0.2, body: 0.55, body_to: 0.55, dim: 0.28, dim_hover: 0.62, lift: 1.35 }; // pass 6 · the contained laser. The footprint = 1.5 × pass 5's bar. Across it (d = 0 on the axis, 1 on the outline): the hot line — full colour — out to d = 0.2 (pass 4's 0.3 of the beam); the body at 0.55 out to d = 0.55, then fading to exactly 0 at d = 1. A hovered bar is 1.35 × as wide and the others drop to 0.28 when a row of the list points at it (0.62 when the mouse is on the bar itself, so the coil does not go dark under the hand)
 const BLOOM = { laser: { s: 0.3, r: 0.3, t: 0 }, guide: { s: 0.3, r: 0.28, t: 0 }, holo: { s: 0.32, r: 0.3, t: 0 } }; // PASS 4: the bloom is proportional — threshold 0, so every emitter glows by its own brightness (green 00FFA3 and red FF2D55 have nearly the same length, 1.19 vs 1.07). Pass 3's threshold 0.78 was a LUMINANCE gate: the green (0.76 per unit) passed, the red (0.36 per unit) never did — that is why the red half was dim. Strength 0.3 (was 0.42) because everything now contributes
 
 export function mountCoil(host, opts) {
@@ -110,7 +128,7 @@ export function mountCoil(host, opts) {
   const PAR = { A: P.inner_radius, D: P.step_w, RW: P.tread_depth, B: (P.tread_depth * 1.04) / (2 * Math.PI), H: P.H_max, H_MIN: P.H_min, DROP: P.tread_depth };
   const HOME = { el: 70, az: CAM.home_az, fov: CAM.fov }; // 70° is settled (Alan); the sheet's 24° stays a note, not a choice to make again
   const CAPS = opts.caps || {}; let boxes = !!opts.boxes, capMode = opts.capMode || "sphere"; // pass 3
-  let look = opts.look === "glow" ? "glow" : "matte"; // pass 5 · matte = unlit opaque bars in their true colour (the default); glow = pass 4's additive beams and bloom
+  let look = opts.look === "glow" ? "glow" : opts.look === "matte" ? "matte" : "laser"; // pass 6 · laser = the contained laser (the default); matte = pass 5's opaque bars with a dark edge; glow = pass 4's additive beams and bloom
   const diag = { bloom: true, additive: true, hot: true, halo: true, sphere: true, fog: true, labels: true }; // pass 5 · the glow look's layers, switched one at a time by the proof to name the cause
   const capOf = (t) => { const c = Number(CAPS[t]); return Number.isFinite(c) && c > 0 ? c : null; };
 
@@ -132,13 +150,14 @@ export function mountCoil(host, opts) {
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.32, 0.78); composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
-  const view = { w: 1, h: 1 };
+  const view = { w: 1, h: 1 }, uView = { value: new THREE.Vector2(1, 1) }, uSolid = { value: 0 }; // pass 6 · the beam shader's view size (px) and the proof's switch (footprints drawn solid)
   let dirty = true, placed = null, home = null;
   controls.addEventListener("change", () => { dirty = true; });
   function fit() {
     view.w = host.clientWidth || 1; view.h = host.clientHeight || 1;
     renderer.setSize(view.w, view.h, false); composer.setSize(view.w, view.h);
-    camera.aspect = view.w / view.h; camera.updateProjectionMatrix(); controls.handleResize(); dirty = true;
+    camera.aspect = view.w / view.h; camera.updateProjectionMatrix(); controls.handleResize(); dirty = true; uView.value.set(view.w, view.h);
+    controls.rotateSpeed = SPIN.rotate_speed * (view.w / Math.max(view.w, opts.spinWidth ? opts.spinWidth() || 0 : 0)); // pass 6 · the trackball measures a drag as a share of ITS pane's width; the list made the pane narrower, so the speed is scaled back to the full stage — a px of drag is exactly half of pass 5's on the same screen
     if (placed && home) { home = framing(HOME.el, homeAz()); }
   }
   new ResizeObserver(fit).observe(host); fit();
@@ -194,8 +213,36 @@ export function mountCoil(host, opts) {
   const barGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, MATTE.seg, 1, false); // pass 5 · the matte bar: a closed cylinder, unit diameter and height
   const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, true), haloGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 1, true); // pass 4: unit diameter — the width is set in screen px each frame (layoutLabels)
   const plateGeo = new THREE.PlaneGeometry(1, 1);
+  /* pass 6 · THE CONTAINED LASER. One quad per bar; the vertex shader projects the bar's two ends (local 0, ±0.5, 0 through the same
+     matrix a cylinder would have), and lays the quad out in SCREEN space as a capsule round that segment, half as wide as the bar's
+     world width prints at each end. The fragment's d is the distance to the segment in half-widths: 0 on the axis, 1 on the outline.
+     alpha(d) = body × (1 − smoothstep(body_to, 1, d)) + (1 − body) × (hot line), which is 0 at d = 1 — nothing is drawn on or past the outline. */
+  const beamGeo = new THREE.BufferGeometry(); beamGeo.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3)); beamGeo.setIndex([0, 1, 2, 0, 2, 3]);
+  function beamMat(col) {
+    return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+      uniforms: { uCol: { value: new THREE.Color(col) }, uOp: { value: 1 }, uView, uSolid, uHot: { value: LASER.hot }, uBody: { value: LASER.body }, uBodyTo: { value: LASER.body_to } },
+      vertexShader: `uniform vec2 uView; varying vec2 vQ; varying float vL;
+        void main(){
+          vec4 a = modelViewMatrix * vec4(0.0, -0.5, 0.0, 1.0), b = modelViewMatrix * vec4(0.0, 0.5, 0.0, 1.0); float rW = 0.5 * length(modelMatrix[0].xyz), nz = -2.0;
+          if (a.z > nz && b.z > nz) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vQ = vec2(0.0); vL = 0.0; return; } // wholly behind the camera
+          if (a.z > nz) a = mix(b, a, (nz - b.z) / (a.z - b.z)); else if (b.z > nz) b = mix(a, b, (nz - a.z) / (b.z - a.z));
+          vec4 ca = projectionMatrix * a, cb = projectionMatrix * b; vec2 hv = 0.5 * uView;
+          vec2 sa = ca.xy / ca.w * hv, sb = cb.xy / cb.w * hv; float pa = rW * projectionMatrix[1][1] / ca.w * hv.y, pb = rW * projectionMatrix[1][1] / cb.w * hv.y;
+          vec2 dir = sb - sa; float len = length(dir); dir = len > 1e-4 ? dir / len : vec2(0.0, 1.0); vec2 nrm = vec2(-dir.y, dir.x);
+          float e = position.y; vec2 s = e < 0.0 ? sa : sb; float r = e < 0.0 ? pa : pb, z = e < 0.0 ? ca.z / ca.w : cb.z / cb.w;
+          vL = len / (0.5 * (pa + pb)); vQ = vec2(position.x, e < 0.0 ? -1.0 : vL + 1.0);
+          gl_Position = vec4((s + dir * e * r + nrm * position.x * r) / hv, z, 1.0);
+        }`,
+      fragmentShader: `uniform vec3 uCol; uniform float uOp; uniform float uSolid; uniform float uHot; uniform float uBody; uniform float uBodyTo; varying vec2 vQ; varying float vL;
+        void main(){
+          float d = length(vec2(vQ.x, max(max(-vQ.y, vQ.y - vL), 0.0))); if (d >= 1.0) discard;
+          float a = uSolid > 0.5 ? 1.0 : (uBody * (1.0 - smoothstep(uBodyTo, 1.0, d)) + (1.0 - uBody) * (1.0 - smoothstep(uHot - 0.06, uHot + 0.06, d))) * uOp;
+          gl_FragColor = vec4(uCol, a);
+          #include <colorspace_fragment>
+        }` });
+  }
 
-  function clear() { if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry && ![boxGeo, edgesGeo, frameGeo, vertsGeo, coreGeo, haloGeo, plateGeo, barGeo].includes(o.geometry)) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); }); } group = new THREE.Group(); scene.add(group); parts = []; for (const o of labelScene.children.slice()) { labelScene.remove(o); if (o.material && !o.material.map) o.material.dispose(); } spheres = []; }
+  function clear() { if (group) { scene.remove(group); group.traverse((o) => { if (o.geometry && ![boxGeo, edgesGeo, frameGeo, vertsGeo, coreGeo, haloGeo, plateGeo, barGeo, beamGeo].includes(o.geometry)) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); }); } group = new THREE.Group(); scene.add(group); parts = []; for (const o of labelScene.children.slice()) { labelScene.remove(o); if (o.material && !o.material.map) o.material.dispose(); } spheres = []; }
   let sets = [], spheres = []; // pass 3: one or two placed sets, each with an x offset (ox) and, when capMode = sphere, its sphere
 
   const glow = (v) => 0.35 + 0.65 * Math.min(1, Math.abs(v == null ? 0 : v)); // the glow's strength follows the reading
@@ -203,7 +250,8 @@ export function mountCoil(host, opts) {
   /* pass 4 · RED = GREEN: the bloom threshold is a luminance (Rec. 709, as UnrealBloomPass's luminosity pass); green 00FFA3 has 0.76 of it
      per unit, red FF2D55 only 0.36 — at 0.78 the green bloomed and the red did not. The threshold is now 0.28 (BLOOM), under every core. */
   const LUM = (col) => { const c = new THREE.Color(col); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }, LUM_GREEN = LUM(HUB.bull);
-  const matte = () => look === "matte" && mode === "laser"; // pass 5
+  const matte = () => look !== "glow" && mode === "laser"; // pass 5 · the flat pipeline (no composer, no fog): pass 5's matte bar and pass 6's contained laser
+  const contained = () => look === "laser" && mode === "laser"; // pass 6
   const EQ = () => 1, litEq = (col, k) => lit(col, k); // (tried: scaling the red to the green's luminance — it clamps to pink-white in the core; the threshold is the right lever, see BLOOM)
   const lineMat = (col, k, op = 1) => new THREE.LineBasicMaterial({ color: lit(col, k), transparent: op < 1, opacity: op, toneMapped: false });
   const basic = (col, op, blend = THREE.NormalBlending, k = 1) => new THREE.MeshBasicMaterial({ color: lit(col, k), transparent: true, opacity: op, depthWrite: false, blending: blend, toneMapped: false, side: THREE.DoubleSide });
@@ -259,6 +307,7 @@ export function mountCoil(host, opts) {
   /* ---- pass 3 · the labels: placed at the step's tip each frame, sized by the zoom rule, thinned where they would overlap ---- */
   const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(), _fwd = new THREE.Vector3();
   const labelStats = { px: 0, value_px: 0, raw: 0, at: "", shown: 0, hidden: 0, total: 0, home_d: 0, d: 0, core_u: 0, pops: 0 };
+  let frontSt = makeFrontState(), lastLayout = performance.now(), relayout = false, hiT = null, hiStrong = false; // pass 6 · the front-row rule's memory; a layout owed next frame (a dwell is running or a slide is easing); the hovered ticker
   let prevShown = null; // pass 4 · the labels shown last frame (the hysteresis of the thinning); null = no last frame
   const hiddenAt = new Map(), HOLD_MS = 400; // pass 4 · a label that has just gone cannot come back for 400 ms (no overlap can follow from staying hidden) — the "out and straight back in" flicker
   const rec = { on: false, frames: [], lastD: null, inTick: false, wheels: 0, wheelDy: 0, wheelAbs: 0, flipAt: new Map(), reflips: 0 }; // pass 4 · api.record(): per rendered frame, the distance step and the label pops
@@ -272,27 +321,33 @@ export function mountCoil(host, opts) {
     const uPerPx = (2 * d * Math.tan((camera.fov * Math.PI) / 360)) / view.h, coreU = L.px * BEAM.core_over_type * uPerPx;
     Object.assign(labelStats, { px: +L.px.toFixed(1), value_px: +L.value_px.toFixed(1), raw: +L.raw.toFixed(1), at: L.at, home_d: +hd.toFixed(0), d: +d.toFixed(0), total: parts.length, core_u: +coreU.toFixed(2) });
     for (const p of parts) if (p.core) { const w = coreU * (p.s.wk || 1), hw = w * BEAM.halo(p.s.v);
+      if (p.beam) { const lift = p.hi || 0; p.core.scale.x = p.core.scale.z = w * LASER.foot * (1 + MATTE.flare_swell * (p.flare || 0)) * (1 + (LASER.lift - 1) * lift); p.halo_u = w * LASER.foot; continue; } // pass 6 · the footprint; a hovered bar is wider
       if (p.edge) { const wf = w * (1 + MATTE.flare_swell * (p.flare || 0)), o = 2 * MATTE.edge_px * uPerPx; p.core.scale.x = p.core.scale.z = wf; p.edge.position.copy(p.core.position); p.edge.scale.set(wf + o, p.core.scale.y + o, wf + o); p.halo_u = w; continue; } // pass 5 · matte: the bar and its dark edge, both in screen px
       p.core.scale.x = p.core.scale.z = w; p.hot.scale.x = p.hot.scale.z = w * BEAM.hot_over_core; p.halo.scale.x = p.halo.scale.z = hw; }
-    const items = [];
+    const items = [], uAt = (depth) => (2 * depth * Math.tan((camera.fov * Math.PI) / 360)) / view.h; // world units a px covers at that depth
     for (const p of parts) {
       const sp = p.lp, s = p.s, tip = s.tip * p.h, x = (s.ox || 0) + s.r * Math.cos(s.th), z = s.r * Math.sin(s.th);
       _p.set(x, tip, z); const depth = -_p.clone().applyMatrix4(camera.matrixWorldInverse).z; // the camera-space depth of the tip
       const hW = worldHeightForPx(spriteH_px, Math.max(1, depth), camera.fov, view.h); // the world height that prints spriteH_px here
       sp.scale.set(hW * (TEX.w / TEX.h), hW, 1);
-      sp.position.set(x, tip + (s.tip >= 0 ? 1 : -1) * (hW * 0.5 + 1.5), z); // just past the step's end, above a green step, under a red one
+      const by0 = tip + (s.tip >= 0 ? 1 : -1) * (hW * 0.5 + 1.5); // just past the step's end, above a green step, under a red one
       sp.userData.px = L.px; sp.userData.depth = depth;
-      _q.copy(sp.position).project(camera); if (_q.z >= 1 || depth <= 0) { sp.visible = false; continue; }
+      _q.set(x, by0, z).project(camera); if (_q.z >= 1 || depth <= 0) { sp.visible = false; continue; }
+      const bx = ((_q.x + 1) / 2) * view.w, by = ((1 - _q.y) / 2) * view.h;
+      _q.set(x, tip, z).project(camera); let ux = bx - ((_q.x + 1) / 2) * view.w, uy = by - ((1 - _q.y) / 2) * view.h; const ul = Math.hypot(ux, uy); if (ul < 2) { ux = 0; uy = -1; } else { ux /= ul; uy /= ul; } // the screen direction from the tip to its label: the way a front-row label slides (pass 6)
       const ink = sp.material.map.userData || { inkW: 0.9, inkH: 0.9 };
-      items.push({ id: s.t, x: ((_q.x + 1) / 2) * view.w, y: ((1 - _q.y) / 2) * view.h, w: spriteH_px * (TEX.w / TEX.h) * ink.inkW, h: spriteH_px * ink.inkH, priority: sp.userData.pri, sp });
+      items.push({ id: s.t + "|" + (s.ox || 0), x: bx, y: by, w: spriteH_px * (TEX.w / TEX.h) * ink.inkW, h: spriteH_px * ink.inkH, priority: sp.userData.pri, depth: -_q.set(x, 0, z).applyMatrix4(camera.matrixWorldInverse).z, tipDepth: depth, ux, uy, sp, wx: x, wy: by0, wz: z }); // depth = the bar's FOOT on the zero plane: the front row is the near edge of the coil's footprint, whatever the bars' heights
     }
-    const now = performance.now();
-    const th = thinLabels(items, 4, prevShown, 10); let shown = 0, pops = 0; // pass 4 · hysteresis: a shown label keeps its place at 4 px of pad; a hidden one needs 10 px clear to come back
-    for (const it of items) { let vis = th.shown.has(it.id); const wasShown = prevShown ? prevShown.has(it.id) : vis;
-      if (vis && !wasShown && now - (hiddenAt.get(it.id) ?? -1e9) < HOLD_MS) { vis = false; th.shown.delete(it.id); } // the hold
-      if (!vis && wasShown) hiddenAt.set(it.id, now);
-      it.sp.visible = vis; it.sp.userData.shown = vis; if (vis) shown++; if (prevShown && prevShown.has(it.id) !== it.sp.visible) { pops++; if (rec.on && rec.inTick) { const last = rec.flipAt.get(it.id); if (last != null && now - last < 500) rec.reflips++; rec.flipAt.set(it.id, now); } } } // a re-flip: the same label changing state again within 500 ms — the flicker Alan would see
-    labelStats.shown = shown; labelStats.hidden = items.length - shown; labelStats.pops = pops; prevShown = th.shown;
+    const now = performance.now(), dtL = Math.min(0.1, (now - lastLayout) / 1000); lastLayout = now;
+    /* pass 6 · the front row always shows; the rest when clear; nothing changes twice within the dwell (label-scale.mjs · layoutFront) */
+    const th = layoutFront(items, frontSt, now, FRONT_RULE, hiT ? hiT + "|" + (sets[0] ? sets[0].ox : 0) : null); let shown = 0, pops = 0; if (th.held) relayout = true;
+    for (const it of items) { const vis = th.shown.has(it.id), sp = it.sp;
+      const k = vis ? th.slot.get(it.id) || 0 : 0; let off = sp.userData.off ?? k; off += (k - off) * Math.min(1, dtL * 12); if (Math.abs(k - off) < 0.01) off = k; else relayout = true; sp.userData.off = off; // a slide is eased, never a jump
+      const u = uAt(Math.max(1, it.tipDepth)) * off * (it.h + FRONT_RULE.slot_gap_px);
+      sp.position.set(it.wx, it.wy, it.wz).addScaledVector(_right, it.ux * u).addScaledVector(_up, -it.uy * u);
+      sp.visible = vis; sp.userData.shown = vis; sp.userData.front = th.front.has(it.id); if (vis) shown++;
+      if (prevShown && prevShown.has(it.id) !== vis) { pops++; if (rec.on && rec.inTick) { const last = rec.flipAt.get(it.id); if (last != null && now - last < 500) rec.reflips++; rec.flipAt.set(it.id, now); } } } // a re-flip: the same label changing state again within 500 ms — the flicker Alan would see
+    labelStats.shown = shown; labelStats.hidden = items.length - shown; labelStats.pops = pops; labelStats.front = th.n_front; labelStats.front_overlaps = th.overlaps; prevShown = th.shown;
     if (rec.on && rec.inTick) { rec.frames.push({ t: performance.now(), d: +d.toFixed(2), step: rec.lastD == null ? 0 : +(d - rec.lastD).toFixed(2), px: +L.px.toFixed(2), shown, pops }); rec.lastD = d; }
     for (const sph of spheres) { const t = sph.title; const depth = -_p.set(sph.ox, 0, 0).applyMatrix4(camera.matrixWorldInverse).z; const hW = worldHeightForPx(Math.max(11, L.px * 1.1) / (34 * 0.72 / 96), Math.max(1, depth), camera.fov, view.h); t.scale.set(hW * (768 / 96), hW, 1); t.position.set(sph.ox, 0, 0).add(_up.clone().multiplyScalar(sph.r + hW * 0.7 + 6)); } // above the sphere's outline from wherever the camera is
   }
@@ -320,7 +375,9 @@ export function mountCoil(host, opts) {
         const col = colOf(s), k = glow(s.v), part = { s, h: 0, target: 1, flare: 0, scan: 0, wipe: 0, scint: scintSet.has(s.t), k };
         if (mode !== "laser" || boxes) part.frame = new THREE.LineSegments(frameGeo, lineMatEq(col, 0.9 + 0.5 * k)); // the tread's edge: a bright thin frame — the guide's and the hologram's light. PASS 4: the LASER step has none (Alan: "I hate these boxes") — it is its beam and its type; V2b's boxes bring it back for the side-by-side
         if (mode === "laser") {
-          if (matte()) { // pass 5 · MATTE: one opaque unlit cylinder in the step's own colour (nothing summed, nothing lit — the same green or red from every angle), and its dark edge
+          if (contained()) { // pass 6 · the contained laser: one screen-space capsule in the step's own colour, its glow inside its own outline
+            part.core = new THREE.Mesh(beamGeo, beamMat(col)); part.core.frustumCulled = false; part.core.renderOrder = 2; part.beam = true; group.add(part.core);
+          } else if (matte()) { // pass 5 · MATTE: one opaque unlit cylinder in the step's own colour (nothing summed, nothing lit — the same green or red from every angle), and its dark edge
             part.core = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: col, toneMapped: false, fog: false }));
             part.edge = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: HUB.bg, side: THREE.BackSide, toneMapped: false, fog: false })); // the inverted hull: the back faces of a slightly bigger bar, in the page's colour — a 1.25 px edge against whatever stands behind
             group.add(part.edge, part.core);
@@ -347,7 +404,7 @@ export function mountCoil(host, opts) {
         parts.push(part);
       }
     }
-    prevShown = null; hiddenAt.clear(); dirty = true; landAt = performance.now();
+    prevShown = null; hiddenAt.clear(); frontSt = makeFrontState(); applyHi(); dirty = true; landAt = performance.now();
   }
   /* pass 3 · the alternative: a step's width = its market cap. Share of the slot = (cap ÷ the set's biggest cap)^⅓, floor 0.2 — the same
      cube root as the sphere, so widths compare like radii; a name without a cap on file gets the floor. */
@@ -393,7 +450,7 @@ export function mountCoil(host, opts) {
         p.moved = false; dirty = true;
       }
       // motion with a meaning: a flare / a scan / a wipe runs only when a value lands or changes
-      if (mode === "laser" && p.flare > 0 && p.edge) { p.flare = Math.max(0, p.flare - dt / 0.32); busy = true; } // pass 5 · matte: the bar itself flashes — it swells and settles (layoutLabels sets the width), its colour never changes
+      if (mode === "laser" && p.flare > 0 && (p.edge || p.beam)) { p.flare = Math.max(0, p.flare - dt / 0.32); busy = true; } // pass 5 · matte: the bar itself flashes — it swells and settles (layoutLabels sets the width), its colour never changes
       else if (mode === "laser" && p.flare > 0) { p.flare = Math.max(0, p.flare - dt / 0.32); p.hot.material.color.copy(litEq(colOf(p.s), 1.3 + 0.7 * p.k + 1.6 * p.flare)); p.halo.material.opacity = 0.02 + 0.045 * p.k + 0.3 * p.flare; if (p.body) p.body.material.opacity = 0.06 + 0.25 * p.flare; busy = true; }
       if (mode === "guide" && p.scan > 0) { p.scan = Math.max(0, p.scan - dt / 0.42); const u = 1 - p.scan, tip = p.s.tip * p.h; p.bead.visible = true; p.bead.position.set((p.s.ox || 0) + p.s.r * Math.cos(p.s.th), tip * u, p.s.r * Math.sin(p.s.th)); p.edges.material.opacity = 0.4 + 0.6 * p.scan; if (p.scan <= 0) { p.bead.visible = false; p.edges.material.opacity = 0.4; } busy = true; }
       if (mode === "holo" && p.body) {
@@ -413,7 +470,7 @@ export function mountCoil(host, opts) {
     if (busy || moved || dirty || measuring) {
       camera.updateMatrixWorld(); rec.inTick = true; orientAll(); rec.inTick = false; // only a rendered frame counts in the record
       renderer.info.reset(); const r0 = performance.now(); renderAll(); if (measuring) { meas.ms += performance.now() - r0; meas.n++; meas.tris = renderer.info.render.triangles; meas.calls = renderer.info.render.calls; }
-      dirty = false; frames.n++;
+      dirty = false; frames.n++; if (relayout) { relayout = false; dirty = true; }
     }
     if (now - frames.since >= 1000) { frames.fps = frames.n / ((now - frames.since) / 1000); frames.n = 0; frames.since = now; if (opts.onFps) opts.onFps(frames.fps); }
   }
@@ -477,6 +534,22 @@ export function mountCoil(host, opts) {
   renderer.domElement.addEventListener("pointerdown", () => { moveTo = null; }); // a drag takes over from a flight home
   renderer.domElement.addEventListener("dblclick", () => flyHome(700));
 
+  /* ---- pass 6 · the hovered bar: it and its label stay full, the others step back; the list on the right drives it and is driven by it ---- */
+  function applyHi() { for (const p of parts) { const me = hiT && p.s.t === hiT, other = hiT && !me; p.hi = me ? 1 : 0; if (p.beam) p.core.material.uniforms.uOp.value = other ? (hiStrong ? LASER.dim : LASER.dim_hover) : 1; if (p.lp) p.lp.material.opacity = other ? (hiStrong ? 0.35 : 0.75) : 1; } dirty = true; }
+  function barAt(mx, my) { // the bar under a point (px in the view): the nearest to the camera whose footprint covers it
+    camera.updateMatrixWorld(); let best = null, bd = Infinity; const f = (camera.projectionMatrix.elements[5] * view.h) / 2;
+    for (const p of parts) { if (!p.core) continue; const x = (p.s.ox || 0) + p.s.r * Math.cos(p.s.th), z = p.s.r * Math.sin(p.s.th), tip = p.s.tip * p.h;
+      const a = _p.set(x, 0, z).project(camera).clone(), b = _q.set(x, tip, z).project(camera); if (a.z >= 1 || b.z >= 1) continue;
+      const ax = ((a.x + 1) / 2) * view.w, ay = ((1 - a.y) / 2) * view.h, bx = ((b.x + 1) / 2) * view.w, by = ((1 - b.y) / 2) * view.h, dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      const k = l2 > 1e-6 ? Math.max(0, Math.min(1, ((mx - ax) * dx + (my - ay) * dy) / l2)) : 0, dist = Math.hypot(mx - ax - k * dx, my - ay - k * dy);
+      const depth = -_v.set(x, tip / 2, z).applyMatrix4(camera.matrixWorldInverse).z; if (depth <= 0) continue; const rpx = Math.max(4, ((p.core.scale.x / 2) * f) / depth);
+      if (dist <= rpx && depth < bd) { bd = depth; best = p.s.t; } }
+    return best; }
+  let hoverRaf = 0, dragging = false;
+  renderer.domElement.addEventListener("pointerdown", () => { dragging = true; }); window.addEventListener("pointerup", () => { dragging = false; });
+  renderer.domElement.addEventListener("pointermove", (e) => { if (dragging || hoverRaf) return; const r = renderer.domElement.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; hoverRaf = requestAnimationFrame(() => { hoverRaf = 0; const t = barAt(mx, my); if (t !== hiT) { hiT = t; hiStrong = false; applyHi(); if (opts.onHover) opts.onHover(t); } }); });
+  renderer.domElement.addEventListener("pointerleave", () => { if (hiT) { hiT = null; applyHi(); if (opts.onHover) opts.onHover(null); } });
+
   /* ---- public ---- */
   let measuring = false; const meas = { ms: 0, n: 0, tris: 0, calls: 0 };
   /* pass 3 · a set = { name, rows }; its market-cap sum, its sphere radius (CAP_R1T × (Σ / 1 T)^⅓), its x offset when two sit side by side */
@@ -515,10 +588,10 @@ export function mountCoil(host, opts) {
     land() { build(); dirty = true; },
     mode: () => mode, placed: () => placed, home: () => flyHome(700), orbitTo(el, az) { const h = framing(el, az); stopSpin(); camera.up.set(0, 1, 0); camera.position.copy(h.p); controls.target.copy(h.t); camera.lookAt(h.t); moveTo = null; zoomS.target = 0; dirty = true; },
     // pass 5 · the look (matte / glow), the glow look's layers for the proof, and the camera's attitude (its up and its direction — a trackball's up is free)
-    look: () => look, setLook(l) { look = l === "glow" ? "glow" : "matte"; build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; },
+    look: () => look, setLook(l) { look = l === "glow" ? "glow" : l === "matte" ? "matte" : "laser"; build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; },
     diag(o) { if (o) { Object.assign(diag, o); build(); for (const p of parts) { p.landing = false; p.h = 1; p.moved = true; } dirty = true; } return { ...diag }; },
     attitude() { const d = camera.position.clone().sub(controls.target), n = d.clone().normalize(); return { up: camera.up.toArray().map((x) => +x.toFixed(4)), dir: n.toArray().map((x) => +x.toFixed(4)), d: +d.length().toFixed(1), el: +((Math.asin(n.y) * 180) / Math.PI).toFixed(1), upside_down: camera.up.y < 0, moving: !!moveTo, coasting: Math.abs(controls._lastAngle) > 1e-4 }; },
-    look_spec: () => ({ look, matte: matte(), bar: { material: "MeshBasicMaterial (unlit), opaque, NormalBlending", bull: hex(HUB.bull), bear: hex(HUB.bear), edge_px: MATTE.edge_px }, bloom: !matte() && diag.bloom, fog: !!scene.fog, lights: scene.children.filter((o) => o.isLight).length, environment: !!scene.environment, toneMapping: renderer.toneMapping === THREE.NoToneMapping ? "none" : "on", controls: "TrackballControls", spin: SPIN }),
+    look_spec: () => ({ look, contained: contained(), laser: { ...LASER, blending: "NormalBlending (mixed, never summed)", alpha_at_the_outline: 0, depth: "no depth write, no depth test" }, front_rule: FRONT_RULE, matte: matte(), bar: { material: "MeshBasicMaterial (unlit), opaque, NormalBlending", bull: hex(HUB.bull), bear: hex(HUB.bear), edge_px: MATTE.edge_px }, bloom: !matte() && diag.bloom, fog: !!scene.fog, lights: scene.children.filter((o) => o.isLight).length, environment: !!scene.environment, toneMapping: renderer.toneMapping === THREE.NoToneMapping ? "none" : "on", controls: "TrackballControls", spin: { ...SPIN, in_use: +controls.rotateSpeed.toFixed(4) } }),
     // pass 3: zoom = the camera distance as a multiple of home's (0.5 = twice as close); the direction stays
     zoom(ratio) { if (!home) return; const hd = home.p.distanceTo(home.t); zoomS.target = 0; setDistance(hd * ratio); moveTo = null; dirty = true; camera.updateMatrixWorld(); layoutLabels(); return api.labelCheck(); },
     // pass 4: the same, eased — the way the wheel does it (the proof drives it both ways)
@@ -583,7 +656,30 @@ export function mountCoil(host, opts) {
       measuring = false; const dt = (performance.now() - start) / 1000;
       return { fps: +(f / dt).toFixed(1), frames: f, seconds: +dt.toFixed(2), rendered: meas.n, render_ms_per_frame: meas.n ? +(meas.ms / meas.n).toFixed(2) : null, dpr: renderer.getPixelRatio(), w: view.w, h: view.h, mode, steps: parts.length, triangles: meas.tris, calls: meas.calls, gpu: (() => { try { const gl = renderer.getContext(); const d = gl.getExtension("WEBGL_debug_renderer_info"); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch { return null; } })() };
     },
-    canvas: renderer.domElement, fps: () => frames.fps, labels: () => parts.map((p) => ({ t: p.s.t, v: p.s.v, side: p.s.side, tip: +p.s.tip.toFixed(1), r: +p.s.r.toFixed(1), shown: p.lp.visible, px: +p.lp.userData.px.toFixed(1), wk: +(p.s.wk || 1).toFixed(2) })),
+    /* pass 6 · THE LIST's order — the order the bars stand in from top to bottom: the highest reading first (the green spiral from its
+       centre out), down through zero, the lowest last (the red spiral from its rim in), then the names without a reading. Ties by ticker. */
+    order() { const pl = sets[0] && sets[0].placed; if (!pl) return []; const read = pl.steps.filter((s) => !s.none).sort((a, b) => b.v - a.v || (a.t < b.t ? -1 : 1)), none = pl.steps.filter((s) => s.none).sort((a, b) => a.i - b.i);
+      return [...read, ...none].map((s, k) => ({ rank: k + 1, t: s.t, v: s.none ? null : s.v, side: s.none ? 0 : s.v >= 0 ? 1 : -1 })); },
+    order_rule: "top to bottom as the bars stand: the highest reading first, down through zero, the lowest last; names without a reading at the end; ties by ticker",
+    labelsOn(on) { diag.labels = !!on; dirty = true; }, // the type on or off without rebuilding the scene (the proof's audits count the 3D alone)
+    highlight(t) { hiT = t || null; hiStrong = true; applyHi(); }, highlighted: () => hiT, barAt,
+    // where a bar prints (the middle of it), for the proof's mouse
+    barPx(t) { camera.updateMatrixWorld(); const p = parts.find((q) => q.s.t === t); if (!p) return null; const x = (p.s.ox || 0) + p.s.r * Math.cos(p.s.th), z = p.s.r * Math.sin(p.s.th); const out = []; for (const k of [0.15, 0.3, 0.5, 0.7, 0.85]) { _p.set(x, p.s.tip * p.h * k, z).project(camera); out.push([((_p.x + 1) / 2) * view.w, ((1 - _p.y) / 2) * view.h]); } return out; },
+    /* pass 6 · THE SPILL CHECK. Three renders of the same frame, type off: A as it is; B without the bars; C with every bar's footprint
+       drawn solid. A pixel the bars changed (A ≠ B) must be inside a footprint (C ≠ B) — `outside` counts the ones that are not (must be 0).
+       And the page: the four corners and the share of the frame that prints exactly 0A0A0F. */
+    spill() {
+      if (!contained()) return null; camera.updateMatrixWorld(); orientAll(); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      const grab = () => { renderer.autoClear = true; renderer.render(scene, camera); const b = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+      const A = grab(); for (const p of parts) if (p.beam) p.core.visible = false; const B = grab(); for (const p of parts) if (p.beam) p.core.visible = true; uSolid.value = 1; const C = grab(); uSolid.value = 0; dirty = true;
+      let lit = 0, foot = 0, outside = 0, worst = 0, page = 0; const bg = [(HUB.bg >> 16) & 255, (HUB.bg >> 8) & 255, HUB.bg & 255];
+      for (let i = 0; i < A.length; i += 4) { const dA = Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])), inF = C[i] !== B[i] || C[i + 1] !== B[i + 1] || C[i + 2] !== B[i + 2];
+        if (inF) foot++; if (dA > 0) { lit++; if (!inF) { outside++; worst = Math.max(worst, dA); } }
+        if (A[i] === bg[0] && A[i + 1] === bg[1] && A[i + 2] === bg[2]) page++; }
+      const at = (x, y) => { const k = (y * w + x) * 4; return [A[k], A[k + 1], A[k + 2]]; };
+      return { px: w * h, bar_footprint_px: foot, px_the_bars_changed: lit, outside_a_footprint: outside, worst_step_outside: worst, page_rgb: bg, corners: [at(20, 20), at(w - 21, 20), at(20, h - 21), at(w - 21, h - 21)], page_exact_px: page, page_exact_share: +(page / (w * h)).toFixed(4) };
+    },
+    canvas: renderer.domElement, fps: () => frames.fps, labels: () => parts.map((p) => ({ t: p.s.t, v: p.s.v, side: p.s.side, tip: +p.s.tip.toFixed(1), r: +p.s.r.toFixed(1), shown: p.lp.visible, front: !!p.lp.userData.front, slot: +(p.lp.userData.off || 0).toFixed(2), px: +p.lp.userData.px.toFixed(1), wk: +(p.s.wk || 1).toFixed(2) })),
   };
   return api;
 }

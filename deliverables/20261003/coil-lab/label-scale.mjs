@@ -55,3 +55,52 @@ export function worldHeightForPx(px, depth, fovDeg, viewH) { return (px * 2 * de
 
 /* the whole rule for a given zoom, as a table the report prints: distance ratios → px */
 export function rulePoints(viewH = 1080, rule = LABEL_RULE) { return [0.5, 0.75, 1, 1.5, 2, 3].map((r) => ({ distance: r + "× home", px: +labelPx(r, 1, viewH, rule).px.toFixed(1), value_px: +labelPx(r, 1, viewH, rule).value_px.toFixed(1), at: labelPx(r, 1, viewH, rule).at })); }
+
+/* PASS 6 (6 Oct 2026) · THE FRONT ROW. Alan: "labels sometimes appear and sometimes disappear at some angles … at least the ones in
+   the frontal row have to appear." Pass 4/5 gave the room to the strongest reading first, so a near bar lost its ticker to a strong
+   one standing behind it. The rule now, in three steps:
+     1 FRONT ROW  the bars that stand nearest the camera (by where each bar meets the zero plane — the near edge of the coil): the nearest `share` of the set (never fewer than `min`). They ALWAYS
+                  carry their ticker. Two of them that would print on each other do not hide: the farther one slides outward along
+                  its own bar, one label height at a time (up to `slots`), and stays in that slot while it is free.
+     2 THE REST   as before: shown ones keep their place (pad), hidden ones need more room to come back (padShow), strongest first —
+                  but never on top of a front-row label.
+     3 NO FLICKER two Schmitt triggers and a dwell: a bar joins the front row at rank ≤ n and leaves only past 1.5 n; and nothing —
+                  membership, shown / hidden, the slot — may change twice within `dwell_ms`. So a label cannot blink as the coil turns.
+   Pure: the caller keeps `st` (makeFrontState()) between frames and passes the clock. Pattern: the collision pass of Mapbox GL /
+   deck.gl (priority order, greedy box test) with their symbol fade hold — a placed symbol stays placed for the fade duration. */
+export const FRONT_RULE = { share: 0.2, min: 8, leave_over: 1.5, slots: 6, dwell_ms: 500, pad_px: 4, pad_show_px: 10, slot_gap_px: 2 };
+export const makeFrontState = () => ({ first: true, front: new Set(), shown: new Set(), slot: new Map(), at: new Map() });
+/* items: [{ id, x, y, w, h, priority, depth, ux, uy }] — x, y the label's centre in screen px with no slide; depth = the distance from the camera, along the view,
+   of the bar's foot on the zero plane; (ux, uy) the unit screen direction from the bar's tip to its label (the way a slide goes).
+   pinned: an id that must show whatever happens (the hovered bar). Returns { shown:Set, front:Set, slot:Map(id → n), overlaps, held }. */
+export function layoutFront(items, st, now, rule = FRONT_RULE, pinned = null) {
+  const n = items.length, nIn = Math.min(n, Math.max(rule.min, Math.ceil(n * rule.share))), nOut = Math.ceil(nIn * rule.leave_over);
+  const free = (id) => st.first || now - (st.at.get(id) ?? -1e12) >= rule.dwell_ms; // may this label change state now?
+  let held = false;
+  const byDepth = items.slice().sort((a, b) => a.depth - b.depth || String(a.id).localeCompare(String(b.id)));
+  const front = new Set();
+  byDepth.forEach((it, rank) => { const was = st.front.has(it.id), want = it.id === pinned || (was ? rank < nOut : rank < nIn);
+    if (want !== was && !free(it.id) && it.id !== pinned) { held = true; if (was) front.add(it.id); return; }
+    if (want) front.add(it.id); });
+  const kept = [], shown = new Set(), slot = new Map(); let overlaps = 0;
+  const boxAt = (it, k, p) => { const dx = it.ux * k * (it.h + rule.slot_gap_px), dy = it.uy * k * (it.h + rule.slot_gap_px); return { x0: it.x + dx - it.w / 2 - p, x1: it.x + dx + it.w / 2 + p, y0: it.y + dy - it.h / 2 - p, y1: it.y + dy + it.h / 2 + p }; };
+  const hits = (b) => { for (const k of kept) if (b.x0 < k.x1 && b.x1 > k.x0 && b.y0 < k.y1 && b.y1 > k.y0) return true; return false; };
+  // 1 · the front row, nearest first (the pinned one before all): its own slot if still free, else the first free one, else slot 0 anyway
+  for (const it of byDepth.filter((x) => front.has(x.id)).sort((a, b) => (b.id === pinned) - (a.id === pinned))) {
+    const prev = st.slot.get(it.id) ?? 0; let k = -1;
+    if (!hits(boxAt(it, prev, 0))) k = prev; else if (!free(it.id)) { k = prev; held = true; overlaps++; }
+    else { for (let j = 0; j <= rule.slots; j++) if (!hits(boxAt(it, j, 0))) { k = j; break; } if (k < 0) { k = 0; overlaps++; } }
+    slot.set(it.id, k); shown.add(it.id); kept.push(boxAt(it, k, rule.pad_px));
+  }
+  // 2 · the rest: the ones on screen first, then the strongest
+  const was = (it) => (st.shown.has(it.id) ? 1 : 0);
+  for (const it of items.filter((x) => !front.has(x.id)).sort((a, b) => was(b) - was(a) || (b.priority ?? 0) - (a.priority ?? 0) || String(a.id).localeCompare(String(b.id)))) {
+    const w = st.shown.has(it.id), clear = !hits(boxAt(it, 0, st.first || w ? rule.pad_px : rule.pad_show_px)); let vis = clear;
+    if (vis !== w && !free(it.id)) { vis = w; held = true; }
+    if (vis) { shown.add(it.id); kept.push(boxAt(it, 0, rule.pad_px)); slot.set(it.id, 0); }
+  }
+  // the clock of the last change (shown / hidden, the slot, the membership), then the state for the next frame
+  for (const it of items) { const id = it.id; if (!st.first && (shown.has(id) !== st.shown.has(id) || front.has(id) !== st.front.has(id) || (shown.has(id) && (slot.get(id) ?? 0) !== (st.slot.get(id) ?? 0)))) st.at.set(id, now); }
+  st.front = front; st.shown = shown; st.slot = slot; st.first = false;
+  return { shown, front, slot, overlaps, held, n_front: front.size, n_in: nIn, n_out: nOut };
+}

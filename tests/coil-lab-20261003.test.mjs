@@ -136,7 +136,7 @@ test("pass 4 · 6 the pictures, the video and the spheres with the new type; fps
 const p5 = existsSync(new URL("shots/proof-p5.json", D)) ? JSON.parse(read("shots/proof-p5.json")) : null;
 test("pass 5 · the matte bar is one opaque unlit cylinder in the Hub's own green or red: no bloom, no additive layer, no fog, no light in the matte look", () => {
   const js = read("coil3d.js");
-  assert.match(js, /let look = opts\.look === "glow" \? "glow" : "matte"/); // matte is the default
+  assert.match(js, /let look = opts\.look === "glow" \? "glow" : opts\.look === "matte" \? "matte" : "laser"/); // pass 6: matte is still offered; the contained laser is the default now
   assert.match(js, /part\.core = new THREE\.Mesh\(barGeo, new THREE\.MeshBasicMaterial\(\{ color: col, toneMapped: false, fog: false \}\)\)/);
   assert.match(js, /if \(matte\(\)\) \{ renderer\.autoClear = true; renderer\.render\(scene, camera\); \} else composer\.render\(\)/); // no bloom chain
   assert.match(js, /scene\.fog = !matte\(\) && diag\.fog \? fog : null/);
@@ -174,6 +174,82 @@ test("pass 5 · free spin: a trackball — over the pole and on, three different
   assert.ok(existsSync(new URL(p5.tumble.video, D))); assert.equal(p5.writes.length, 0); assert.equal(p5.errors.length, 0);
 });
 test("pass 5 · the page offers MATTE (the default) beside GLOW, and the report leads with pass 5", () => {
-  const html = read("index.html"); assert.match(html, /data-look="matte" class="on"/); assert.match(html, /data-look="glow"/);
+  const html = read("index.html"); assert.match(html, /data-look="matte"/); /* pass 6: MATTE is still there, LASER (PASS 6) is the one that opens */ assert.match(html, /data-look="glow"/);
   const rep = read("COIL-LAB.html"); assert.match(rep, /id="pass5"/); for (const f of ["p5-sheet-before.png", "p5-sheet-after.png", "p5-sheet-tumble.png", "p5-tumble-1680.webm", "p5-cause-glow.png"]) assert.ok(rep.includes("shots/" + f), f);
+});
+
+/* ---- pass 6 (6 Oct 2026) · the laser back without the spill, a calmer spin, the front row always labelled, the numbered list — pinned to shots/proof-p6.json ---- */
+const p6 = existsSync(new URL("shots/proof-p6.json", D)) ? JSON.parse(read("shots/proof-p6.json")) : null;
+const { layoutFront, makeFrontState, FRONT_RULE } = await import(new URL("label-scale.mjs", D));
+test("pass 6 · the contained laser: one mixed (never summed) ribbon per bar whose alpha is 0 on the bar's own outline; no bloom, no fog, no dark fill; it is the default", () => {
+  const js = read("coil3d.js"), mat = js.slice(js.indexOf("function beamMat("), js.indexOf("[boxGeo, edgesGeo")); // (the slice ends well past the material)
+  const m = mat.slice(0, mat.indexOf("  function clear()"));
+  assert.match(m, /blending: THREE\.NormalBlending/); assert.doesNotMatch(m, /AdditiveBlending/); assert.match(m, /if \(d >= 1\.0\) discard;/); assert.match(m, /depthWrite: false/);
+  assert.match(js, /const contained = \(\) => look === "laser" && mode === "laser"/); assert.match(js, /const matte = \(\) => look !== "glow" && mode === "laser"/); // the flat pipeline: no composer, no fog
+  assert.match(js, /if \(contained\(\)\) \{[^\n]*\n\s*part\.core = new THREE\.Mesh\(beamGeo, beamMat\(col\)\)/);
+  const L = Function("return " + js.match(/const LASER = (\{[^}]+\})/)[1])(), ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const alpha = (d) => L.body * (1 - ss(L.body_to, 1, d)) + (1 - L.body) * (1 - ss(L.hot - 0.06, L.hot + 0.06, d));
+  assert.equal(alpha(0), 1); assert.equal(alpha(1), 0); assert.ok(alpha(0.99) < 0.01, "nothing left at the outline"); for (let d = 0; d < 1; d += 0.01) assert.ok(alpha(d + 0.01) <= alpha(d) + 1e-9, "the light only falls off toward the edge");
+  assert.match(read("index.html"), /data-look="laser" class="on"/);
+});
+test("pass 6 · no light outside a bar: at the 12 angles, both zooms, two spheres, the phone and the tumble, every pixel the bars change is inside a bar's footprint and the page prints 0A0A0F", { skip: !p6 && "no proof-p6.json" }, () => {
+  assert.equal(p6.after.shots.length, 12); assert.equal(p6.before.shots.length, 12); const page = (c) => assert.deepEqual(c, [10, 10, 15]);
+  for (const s of p6.after.shots) { assert.ok(existsSync(new URL(s.path, D)), s.path); assert.equal(s.spill.outside_a_footprint, 0, "angle " + s.n); assert.ok(s.spill.px_the_bars_changed > 20000, "angle " + s.n + ": the bars are really drawn (" + s.spill.px_the_bars_changed + " px)"); assert.ok(s.spill.px_the_bars_changed <= s.spill.bar_footprint_px);
+    s.spill.corners.forEach(page); s.picture.points.forEach(page); page(s.audit.page_corner_rgb); assert.equal(s.audit.white_share_of_lit, 0, "angle " + s.n + ": nothing burns to white"); assert.ok(s.audit.washed_share_of_lit < 0.03, "angle " + s.n + " washed " + s.audit.washed_share_of_lit); }
+  for (const s of p6.before.shots) assert.ok(existsSync(new URL(s.path, D)), s.path);
+  for (const k of ["zoom_in", "zoom_out", "spheres"]) { assert.equal(p6.after[k].outside_a_footprint, 0, k); p6.after[k].corners.forEach(page); }
+  assert.equal(p6.list.phone.outside_a_footprint, 0); p6.list.phone.corners.forEach(page); assert.equal(p6.list.row_to_bar.spill_while_lit.outside_a_footprint, 0, "a lit bar does not spill either");
+  for (const f of p6.tumble.frames) { assert.equal(f.outside_a_footprint, 0, "tumble " + f.n); assert.equal(f.corners_page, true, "tumble " + f.n); }
+  assert.deepEqual([p6.after.spec.look, p6.after.spec.contained, p6.after.spec.bloom, p6.after.spec.fog, p6.after.spec.lights], ["laser", true, false, false, 0]);
+  assert.ok(p6.after.beam.core_px >= p6.after.beam.type_px, "the bar's footprint is at least as wide as the type");
+});
+test("pass 6 · the calmer spin: 1.25 against pass 5's 2.5 — the same 200 px drag turns the coil half as far; still free over the top, a short coast, double-click home", { skip: !p6 && "no proof-p6.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /const SPIN = \{ rotate_speed: 1\.25, was: 2\.5, coast: 0\.3 \}/); assert.match(js, /new TrackballControls\(camera/); assert.match(js, /addEventListener\("dblclick", \(\) => flyHome\(700\)\)/);
+  const s = p6.spin; assert.equal(s.pass5.rotate_speed, 2.5); assert.equal(s.pass6.rotate_speed, 1.25); assert.ok(s.ratio >= 0.47 && s.ratio <= 0.53, "measured ratio " + s.ratio);
+  assert.equal(s.over_the_pole, true); for (const d of s.drags) assert.ok(d.turned_deg > 20, d.what + " turned " + d.turned_deg);
+  assert.ok(s.coast.coasted_after_release_deg > 2 && s.coast.coasted_after_release_deg < s.coast.turned_while_dragging_deg); assert.ok(s.coast.coast_ms < 1200); assert.equal(s.coast.stopped, true);
+  assert.ok(s.home_again.dir_off_deg < 0.5); assert.equal(s.home_again.upright, true); assert.ok(s.wheel.fps_while_moving >= 58); assert.ok(s.measure.fps >= 58);
+});
+test("pass 6 · the front-row rule (pure): the nearest always show and slide rather than hide; nothing changes twice within the dwell; a pinned label always shows", () => {
+  const R = { ...FRONT_RULE, min: 2, share: 0.2 }, mk = (id, x, y, depth, priority = 0) => ({ id, x, y, w: 40, h: 20, depth, priority, ux: 0, uy: -1 });
+  const st = makeFrontState(); let r = layoutFront([mk("A", 0, 0, 1), mk("B", 5, 0, 2, 9), mk("C", 6, 2, 30, 5), mk("D", 300, 0, 40, 1)], st, 0, R);
+  assert.deepEqual([...r.front].sort(), ["A", "B"]); assert.ok(r.shown.has("A") && r.shown.has("B"), "both front labels show though they would print on each other"); assert.ok(r.slot.get("B") > 0, "the farther one slid"); assert.equal(r.overlaps, 0);
+  assert.ok(!r.shown.has("C"), "a label behind does not print over the front row"); assert.ok(r.shown.has("D"));
+  // the coil turns: C comes to the front at t = 100 — it joins at once (first change), then cannot change again before t = 600
+  const turned = [mk("A", 0, 0, 50), mk("B", 5, 0, 2, 9), mk("C", 200, 2, 1, 5), mk("D", 300, 0, 40, 1)];
+  r = layoutFront(turned, st, 100, R); assert.ok(r.front.has("C") && r.shown.has("C"));
+  const back = [mk("A", 0, 0, 1), mk("B", 5, 0, 2, 9), mk("C", 6, 2, 30, 5), mk("D", 300, 0, 3, 1)]; // C is now fourth: past the leaving rank (1.5 × 2 = 3)
+  r = layoutFront(back, st, 300, R); assert.ok(r.shown.has("C"), "200 ms later C may not flip back yet"); assert.equal(r.held, true);
+  r = layoutFront(back, st, 700, R); assert.ok(!r.shown.has("C"), "after the dwell it goes");
+  r = layoutFront(back, st, 5000, R, "C"); assert.ok(r.shown.has("C") && r.front.has("C"), "the hovered bar's label always shows");
+  // a random walk: no id ever changes shown-state twice within the dwell, and the front row is always all shown
+  const N = 40, items = Array.from({ length: N }, (_, i) => mk("T" + i, 0, 0, 0, (i * 7) % 11)), s2 = makeFrontState(), last = new Map(), was = new Map(); let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let f = 0; f < 600; f++) { const now = f * 16, a = f * 0.02; items.forEach((it, i) => { const th = a + (i / N) * Math.PI * 2, rad = 40 + (i % 5) * 25; it.x = 400 + Math.cos(th) * rad * 1.6 + rnd(); it.y = 300 + Math.sin(th) * rad * 0.5; it.depth = 500 - Math.sin(th) * rad; });
+    const o = layoutFront(items, s2, now, FRONT_RULE); for (const id of o.front) assert.ok(o.shown.has(id), "front label hidden: " + id);
+    for (const it of items) { const v = o.shown.has(it.id); if (was.has(it.id) && was.get(it.id) !== v) { if (last.has(it.id)) assert.ok(now - last.get(it.id) >= FRONT_RULE.dwell_ms, it.id + " flipped twice within " + (now - last.get(it.id)) + " ms"); last.set(it.id, now); } was.set(it.id, v); } }
+  assert.ok(last.size > 5, "the walk did change labels");
+});
+test("pass 6 · labels on the real page: the front row carries its ticker at all 12 angles, through 16 tumble frames and 19 s of turning; no label blinks; none reads mirrored", { skip: !p6 && "no proof-p6.json" }, () => {
+  const js = read("coil3d.js"); assert.match(js, /layoutFront\(items, frontSt, now, FRONT_RULE/);
+  for (const s of p6.after.shots) { assert.ok(s.labels.front >= FRONT_RULE.min, "angle " + s.n); assert.equal(s.labels.front_shown, s.labels.front, "angle " + s.n); assert.equal(s.labels.wrong, 0); }
+  for (const f of p6.tumble.frames) assert.equal(f.front_shown, f.front, "tumble " + f.n);
+  const L = p6.labels; assert.ok(L.seconds > 10 && L.frames > 500); assert.ok(L.changes > 20, "labels did come and go as it turned"); assert.equal(L.reflips_within_500ms, 0); assert.ok(L.front_samples > 100); assert.equal(L.front_labels_missing, 0);
+  assert.equal(p6.spin.wheel.reflips_per_second, 0);
+});
+test("pass 6 · the numbered list: at the right, the coil's own height, rank · ticker · value in the bars' order; a row lights its bar and a bar lights its row", { skip: !p6 && "no proof-p6.json" }, () => {
+  const html = read("index.html"); assert.match(html, /<aside id="rank"[^>]*><div class="hd" id="rkhd"><\/div><ol id="rk"><\/ol><\/aside>/); assert.match(html, /<div id="stage">\s*<div id="gl">/);
+  const F = p6.list.favorites; assert.equal(F.coil_pane_h, F.list_panel_h); assert.equal(F.list_top_minus_coil_top, 0); assert.equal(F.list_bottom_minus_coil_bottom, 0); assert.equal(F.scrolls, false); assert.ok(F.font_px >= 11);
+  assert.equal(F.rows, 58); assert.equal(F.numbered_1_to_n, true); assert.equal(F.order_is_reading_desc, true); assert.equal(F.bar_tips_descend_down_the_list, true); assert.ok(F.width_share_of_screen < 0.11);
+  assert.deepEqual([p6.list.row_to_bar.bar_lit, p6.list.row_to_bar.row_on, p6.list.row_to_bar.label_shown], ["NVDA", true, true]);
+  const reach = p6.list.bar_to_row.filter((b) => b.reachable); assert.ok(reach.length >= 3); for (const b of reach) { assert.deepEqual(b.row_on, [b.t]); assert.equal(b.bar_lit, b.t); }
+  assert.deepEqual(p6.list.after_leaving, { bar_lit: null, rows_on: 0 });
+  assert.equal(p6.list.liked.rank.rows, 144); assert.equal(p6.list.liked.scrolls, false); assert.ok(p6.list.liked.font_px >= 11); assert.equal(p6.list.liked.list_panel_h, p6.list.liked.coil_pane_h); assert.equal(p6.list.radar.rank.rows, 17);
+  assert.equal(p6.list.phone.page_scrolls_sideways, false); assert.ok(p6.list.phone.font_px >= 11);
+  assert.match(read("coil3d.js"), /order_rule: "top to bottom as the bars stand: the highest reading first/);
+});
+test("pass 6 · the proof wrote nothing and logged no error; the report leads with pass 6 and carries its pictures", { skip: !p6 && "no proof-p6.json" }, () => {
+  assert.equal(p6.writes.length, 0); assert.equal(p6.errors.length, 0); assert.equal(p6.tumble.frames.length, 16); assert.ok(p6.tumble.upside_down_frames >= 3); assert.ok(existsSync(new URL(p6.tumble.video, D)));
+  const rep = read("COIL-LAB.html"); assert.match(rep, /id="pass6"/); assert.ok(rep.indexOf('id="pass6"') < rep.indexOf('id="pass5"'));
+  for (const f of ["p6-sheet-before.jpg", "p6-sheet-after.jpg", "p6-sheet-tumble.jpg", "p6-tumble-1680.webm", "p6-list-row-lights-bar.jpg", "p6-after-04.jpg", "p6-before-04.jpg"]) { assert.ok(rep.includes("shots/" + f), f); assert.ok(existsSync(new URL("shots/" + f, D)), f); }
+  assert.equal(JSON.parse(read("coil.template.json")).pass6.spin.rotate_speed, 1.25);
 });
