@@ -105,7 +105,7 @@
       return '<div data-t="' + esc(r.t) + '" style="cursor:pointer;padding:8px 6px;text-align:center;background:' + (c == null ? "var(--panel2)" : (c >= 0 ? "rgba(0,255,163," : "rgba(255,45,85,") + a.toFixed(2) + ")") + '"><b style="color:var(--bg);background:rgba(10,10,15,.75);padding:1px 4px;color:var(--ink)">' + esc(r.t) + '</b><div class="num" style="font-size:var(--t-label);margin-top:3px;color:var(--ink)">' + D.pct(c) + "</div></div>"; }).join("");
     return '<section class="d1-panel d1-side" id="side"><div class="d1-bar"><div class="d1-tabs">' + ["COHORT COMPARE", "MAP", "ROTATION", "RELATIVE"].map((k) => '<button class="d1-tab' + (S.l0 === k ? " is-on" : "") + '" data-l0="' + k + '">' + k + "</button>").join("") + "</div></div>" +
       (S.l0 === "MAP" ? '<div class="d1-pane" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:4px;align-content:start">' + tiles + "</div>"
-        : '<div class="d1-note">' + S.l0 + " stays as it is today. Only its place and its tab style change in this proposal.</div>") +
+        : '<div class="d1-note">' + esc(S.l0) + " stays as it is today. Only its place and its tab style change in this proposal.</div>") +
       '<div class="d1-src">nothing picked · pick a row, or a tile, and the company takes this panel</div></section>';
   }
   function coLineHTML(t) {
@@ -122,7 +122,7 @@
  "</div>";
   }
   function companyHTML() {
-    const t = S.sel, chart = '<div class="d1-chart" id="chartBox">' + (L === "A" && !S.expanded ? '<span class="d1-seg" id="tfSeg">' + TF.map(([l]) => '<button class="' + (S.tf === l ? "is-on" : "") + '" data-tf="' + l + '">' + l + "</button>").join("") + "</span>" : "") + '<div id="chart" style="position:absolute;inset:0"><div class="d1-note">reading ' + esc(t) + " " + S.tf + " candles…</div></div></div>";
+    const t = S.sel, chart = '<div class="d1-chart" id="chartBox">' + (L === "A" && !S.expanded ? '<span class="d1-seg" id="tfSeg">' + TF.map(([l]) => '<button class="' + (S.tf === l ? "is-on" : "") + '" data-tf="' + l + '">' + l + "</button>").join("") + "</span>" : "") + '<div id="chart" style="position:absolute;inset:0"><div class="d1-note">reading ' + esc(t) + " " + esc(S.tf) + " candles…</div></div></div>";
     const paneTabs = TABS.filter((k) => k !== "CHART");
     if (S.expanded) {           // chart always, the tabs beside it
       if (S.tab === "CHART") S.tab = "GEIGER";
@@ -161,7 +161,7 @@
     const box = $("#chart"); if (!box || !S.sel) return; const t = S.sel, tf = (TF.find((x) => x[0] === S.tf) || TF[2])[1];
     let c; try { c = await D.candles(t, tf, 240); } catch (e) { box.innerHTML = '<div class="d1-note">no candles: ' + esc(e.message) + "</div>"; return; }
     if (S.sel !== t || !$("#chart")) return;
-    const bars = c.bars; if (bars.length < 2) { box.innerHTML = '<div class="d1-note">no candles for ' + esc(t) + " on " + S.tf + "</div>"; return; }
+    const bars = c.bars; if (bars.length < 2) { box.innerHTML = '<div class="d1-note">no candles for ' + esc(t) + " on " + esc(S.tf) + "</div>"; return; }
     const W = Math.max(200, box.clientWidth), H = Math.max(140, box.clientHeight), lo = Math.min(...bars.map((b) => b.l)), hi = Math.max(...bars.map((b) => b.h)), sp = hi - lo || 1;
     const x = (i) => (i / (bars.length - 1)) * (W - 60), y = (v) => 40 + (1 - (v - lo) / sp) * (H - 68);
     const q = S.q[t] || {}; const up = q.chg != null ? q.chg >= 0 : bars[bars.length - 1].c >= bars[bars.length - 2].c;
@@ -169,7 +169,7 @@
     const ticks = [hi, (hi + lo) / 2, lo].map((v) => '<text x="' + (W - 54) + '" y="' + (y(v) + 4) + '" fill="var(--dim)" font-size="11">' + D.price(v) + "</text>").join("");
     const dates = [0, 0.33, 0.66, 1].map((f) => { const i = Math.round(f * (bars.length - 1)); const d = new Date(bars[i].t);
       return '<text x="' + Math.min(W - 110, x(i)) + '" y="' + (H - 6) + '" fill="var(--dim)" font-size="11">' + d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: tf === "1d" || tf === "3d" || tf === "1w" ? "2-digit" : undefined, timeZone: "America/New_York" }) + "</text>"; }).join("");
-    box.innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(t) + " " + S.tf + ' chart">' +
+    box.innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(t) + " " + esc(S.tf) + ' chart">' +
       [0.25, 0.5, 0.75].map((f) => '<line x1="0" x2="' + (W - 60) + '" y1="' + (12 + f * (H - 40)) + '" y2="' + (12 + f * (H - 40)) + '" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>').join("") +
       '<polyline fill="none" stroke="' + (up ? "var(--bull)" : "var(--bear)") + '" stroke-width="1.6" vector-effect="non-scaling-stroke" points="' + pts + '"/>' + ticks + dates + "</svg>";
     const s = $("#src"); if (s) s.textContent = "chart · " + bars.length + " " + (c.display || S.tf) + " bars from the chart API /candles, newest " + (c.newest || "").slice(0, 16).replace("T", " ") + "Z · the build uses the Station chart pane (bare), not this line";
@@ -197,7 +197,7 @@
       '<div class="gz-fam"><span class="lab">TREND</span>' + D.sbar(d.tr) + '<b class="num r ' + D.dirCls(d.tr) + '">' + D.signed(d.tr) + '</b><span class="lab">MOMENTUM</span>' + D.sbar(d.mo) + '<b class="num r ' + D.dirCls(d.mo) + '">' + D.signed(d.mo) + "</b></div></div>" +
       '<div><div class="lab" style="margin-bottom:8px">BY TIMEFRAME · short to long · the bar under each label is its weight in the composite</div><div class="gz-lad">' +
         '<span class="h">TF</span><span class="h xw">WEIGHT</span><span class="h">TREND</span><span class="h">MOMENTUM</span><span class="h r">TF</span><span class="h r xr">RSI</span><span class="h r xr">W%R</span>' +
-        d.rungs.map((r) => '<b>' + r.lbl + '</b><span class="xw"><div class="gz-w" style="width:' + ((r.w || 0) / wmax * 100).toFixed(0) + '%"></div></span>' + D.sbar(r.tr) + D.sbar(r.mo) +
+        d.rungs.map((r) => '<b>' + esc(r.lbl) + '</b><span class="xw"><div class="gz-w" style="width:' + ((r.w || 0) / wmax * 100).toFixed(0) + '%"></div></span>' + D.sbar(r.tr) + D.sbar(r.mo) +
           '<span class="num r ' + D.dirCls(r.tfc) + '">' + D.signed(r.tfc) + '</span><span class="num r dim xr">' + (r.rsi != null ? Math.round(r.rsi) : "—") + '</span><span class="num r dim xr">' + (r.wr != null ? Math.round(r.wr) : "—") + "</span>").join("") +
       "</div></div></div>";
     const s = $("#src"); if (s) s.textContent = "Geiger · chart API /geiger?detail=1 · computed " + (d.at || "").slice(0, 16).replace("T", " ") + "Z · equalizer " + (d.receipt || "").slice(0, 8) + " · families: trend + momentum (" + (d.absent || []).join(", ") + ")";
@@ -214,7 +214,7 @@
     const bw = 100 / Math.max(bars.length, 1);
     const svg = bars.length ? '<svg viewBox="0 0 100 44" preserveAspectRatio="none" style="width:100%;height:140px;display:block">' + bars.map((x, i) => { const h = x.revenue / mx * 36, up = i === 0 || x.revenue >= bars[i - 1].revenue;
       return '<rect x="' + (i * bw + bw * 0.18).toFixed(2) + '" y="' + (40 - h).toFixed(2) + '" width="' + (bw * 0.64).toFixed(2) + '" height="' + h.toFixed(2) + '" fill="' + (up ? "var(--bull)" : "var(--bear)") + '" opacity=".75"/>'; }).join("") + "</svg>" +
-      '<div style="display:grid;grid-template-columns:repeat(' + bars.length + ',1fr);font-size:var(--t-micro);color:var(--dim);text-align:center">' + bars.map((x) => "<span>" + x.fiscal_date.slice(2, 7) + "<br>" + D.cap(x.revenue).replace("$", "") + "</span>").join("") + "</div>" : '<div class="d1-note">no stored quarters</div>';
+      '<div style="display:grid;grid-template-columns:repeat(' + bars.length + ',1fr);font-size:var(--t-micro);color:var(--dim);text-align:center">' + bars.map((x) => "<span>" + esc(String(x.fiscal_date).slice(2, 7)) + "<br>" + D.cap(x.revenue).replace("$", "") + "</span>").join("") + "</div>" : '<div class="d1-note">no stored quarters</div>';
     p.innerHTML = '<div class="kv">' + tile("MKT CAP", D.cap(pf.market_cap), "company_profile · " + pd(pf.updated_ts)) + tile("P/E TRAILING", fu.trailing_pe ? fu.trailing_pe.toFixed(1) + "×" : "—", "fundamentals · " + pd(fu.updated_ts)) +
       tile("P/E FORWARD", fpe, "price ÷ next-12-month EPS") + tile("REVENUE TTM", D.cap(fu.revenue_ttm), "fundamentals · " + pd(fu.updated_ts)) +
       tile("GROSS MARGIN", r.gross_margin != null ? (r.gross_margin * 100).toFixed(1) + "%" : "—", "ratios_history · " + (r.fiscal_date || "—")) + tile("NET MARGIN", r.net_margin != null ? (r.net_margin * 100).toFixed(1) + "%" : "—", "ratios_history · " + (r.fiscal_date || "—")) + "</div>" +

@@ -187,7 +187,7 @@
   }
   function rungCells(rungs) {
     if (!rungs || !rungs.length) return '<div class="rungs"></div>';
-    return '<div class="rungs" title="' + rungs.map((r) => r.lbl + " " + signed(r.tfc)).join(" · ") + '">' + rungs.map((r) => { const v = num(r.tfc) || 0;
+    return '<div class="rungs" title="' + esc(rungs.map((r) => r.lbl + " " + signed(r.tfc)).join(" · ")) + '">' + rungs.map((r) => { const v = num(r.tfc) || 0;
       return '<i style="background:' + (v >= 0 ? "var(--bull)" : "var(--bear)") + ";opacity:" + (0.12 + Math.min(1, Math.abs(v)) * 0.8).toFixed(2) + '"></i>'; }).join("") + "</div>";
   }
   function spark(vals, w, h, up) {

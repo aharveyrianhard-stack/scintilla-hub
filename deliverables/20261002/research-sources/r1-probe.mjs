@@ -8,7 +8,7 @@ let FMP = process.env.FMP_KEY || process.env.FMP_API_KEY || "", FMP_SOURCE = pro
 const MAS = process.env.MASSIVE_KEY || "";
 if (!FMP && process.env.MASSIVE_DATABASE_URL) {
   // the provider's own pattern (services/fmp-lane/pre2003-daily.mjs): the FMP key lives in app_config; read it once, never log it
-  try { const { default: pg } = await import("pg"); const c = new pg.Client({ connectionString: process.env.MASSIVE_DATABASE_URL, ssl: { rejectUnauthorized: false } }); await c.connect();
+  try { const { default: pg } = await import("pg"); const c = new pg.Client({ connectionString: process.env.MASSIVE_DATABASE_URL, ssl: process.env.MASSIVE_DATABASE_CA ? { rejectUnauthorized: true, ca: process.env.MASSIVE_DATABASE_CA.replaceAll(String.raw`\n`, "\n") } : { rejectUnauthorized: false } }); await c.connect();   // Q5 (5 Oct): the certificate is checked when the database's authority is supplied — the provider repo's packages/db/tls.mjs is the one documented home of this rule
     const { rows } = await c.query("select value from public.app_config where key='FMP_KEY' limit 1"); await c.end();
     FMP = (rows?.[0]?.value || "").trim(); if (FMP) FMP_SOURCE = "app_config.FMP_KEY via MASSIVE_DATABASE_URL"; } catch (e) { FMP_SOURCE = "app_config read failed: " + String(e).slice(0, 120); }
 }
