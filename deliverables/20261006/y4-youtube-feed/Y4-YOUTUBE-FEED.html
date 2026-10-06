@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station YouTube feed</title>
+<style>
+:root{ --bg:#0B0C10; --panel:#121318; --line:#2A2C33; --ink:#CFCFD2; --ink2:#A9AAB0; --dim:#7C7E86;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55; }
+main{ max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+h1{ font-family:var(--mono); font-size:15px; letter-spacing:.16em; text-transform:uppercase; font-weight:600; margin:8px 0 6px; }
+h2{ font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink2); font-weight:600;
+  margin:44px 0 12px; padding-top:14px; border-top:1px solid var(--line); }
+p, li{ max-width:76ch; }
+a{ color:var(--ink); }
+.lede{ color:var(--ink2); font-size:16px; }
+.pair{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+.pair.stack{ grid-template-columns:1fr; }
+.pair.narrow{ grid-template-columns:repeat(4, minmax(0,1fr)); max-width:1000px; }
+figure{ margin:0; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:8px; }
+figure.wide{ margin:14px 0; }
+figure img{ width:100%; display:block; border-radius:2px; }
+figcaption{ font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:6px; letter-spacing:.04em; line-height:1.5; }
+.wrap{ overflow-x:auto; }
+table{ border-collapse:collapse; width:100%; font-size:13.5px; margin:10px 0; }
+th, td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th{ font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:500; }
+td.n{ font-family:var(--mono); white-space:nowrap; font-size:12.5px; }
+.box{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:12px 16px; margin:12px 0; }
+ol li, ul li{ margin:5px 0; }
+code{ font-family:var(--mono); font-size:12.5px; color:var(--ink2); }
+details{ margin:10px 0; } summary{ cursor:pointer; font-family:var(--mono); font-size:12px; letter-spacing:.08em; color:var(--ink2); }
+@media(max-width:760px){ .pair, .pair.narrow{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>The Station's YouTube feed — in time order, live when it starts, and a Watch Later that saves</h1>
+<p class="lede">6 Oct 2026. Nothing here is switched on yet: it is on two branches for you to look at. The pictures are from a test browser with no window, 1680 × 1050, reading the real feed at about 9:35 am New York time.</p>
+
+<h2>The grid, before and after</h2>
+<div class="pair stack">
+  <figure><a href="screens/before-grid-1680x1050.jpg"><img src="screens/before-grid-1680x1050.jpg" alt="The grid as it is live today" loading="lazy"></a><figcaption>BEFORE — live today. Tiles 3 to 8 are six streams that have not started yet (three of them are tomorrow's). The age is the small dim text at the right of each channel line. The Watch Later star is a faint outline in the top-right corner of each picture.</figcaption></figure>
+  <figure><a href="screens/after-grid-1680x1050.jpg"><img src="screens/after-grid-1680x1050.jpg" alt="The grid on the branch" loading="lazy"></a><figcaption>AFTER — the branch. The two streams on air are first and read "LIVE · started 7m ago". Everything after them runs newest first by the minute it became watchable. No stream is shown before it starts. Each tile has a cyan LATER plate and a small mark in the lower-left corner: a bell for a subscribed channel, a cyan magnifier for a ticker-search result.</figcaption></figure>
+</div>
+
+<h2>Watch Later, before and after</h2>
+<div class="pair stack">
+  <figure><a href="screens/before-watch-watch-1680x1050.jpg"><img src="screens/before-watch-watch-1680x1050.jpg" alt="Watch Later failing" loading="lazy"></a><figcaption>BEFORE — one tap on a star. The message at the bottom reads "★ not saved — the shared watch-later write failed · try again". Nothing was saved.</figcaption></figure>
+  <figure><a href="screens/after-watch-watch-1680x1050.jpg"><img src="screens/after-watch-watch-1680x1050.jpg" alt="Watch Later saving" loading="lazy"></a><figcaption>AFTER — one tap on the third tile's plate. It turns into a filled cyan "★ SAVED", a cyan line appears under that picture, and the clock button on the bar fills in. No error. The test browser never writes to the real list: the save's answer here is the one the new function gives in its tests.</figcaption></figure>
+</div>
+
+<h2>The four cases you named</h2>
+<div class="wrap"><table>
+<tr><th>Case</th><th>Why it was missing</th><th>Now</th></tr>
+<tr><td><b>Tyler Wilson</b>, live this morning</td><td>His stream started at 8:01:43 am. It reached our list at 8:10:04 am, 8 minutes 21 seconds late. The "is this channel on air?" check only looked at the 37 channels bridged from X, and his channel is a subscription, so it waited for YouTube's own channel feed, which was slow. From 8:10 to 8:58 it was in the list marked live; whether your screen showed it in that window cannot be reconstructed.</td><td>On the branch every subscribed channel that streams is asked every 20 minutes, alongside the channel feed every 5 minutes. Today his finished stream is tile 16, "1h ago".</td></tr>
+<tr><td><b>Verified Investing</b></td><td>Its streams are created the day before. The grid filed a stream under its scheduled time, so it sat at the top as a "not started" tile for 17 hours and then jumped when it began. One of its cancelled streams (2 Oct) is still stored as "upcoming". Separately, a stream scheduled more than three days ahead stopped being re-checked and never turned live: 17 stored rows are in that state.</td><td>A stream appears when it starts and is placed by its real start time. Today's "My Trading Game Plan" is tile 6, "34m ago". Scheduled streams are re-checked by their start time, however early they were created.</td></tr>
+<tr><td><b>Market Signal</b>, Micron / WDC / Seagate</td><td>The channel has not been collected since 10 September. YouTube's public feed for it lists 15 videos since 18 September, including this one (posted 9:43 pm on 5 Oct New York time); none is in our list. The channel is on no list the collector reads.</td><td>Not fixed until one list change is applied (staged, with its undo). The picture below shows the grid with those videos added by hand to the test browser.</td></tr>
+<tr><td><b>Watch Later</b></td><td>The Google sign-in for your personal YouTube account has expired. The save asked Google first and stopped there, before writing our own list. The last save that landed was 29 September. It was not last night's access rules.</td><td>On the branch a save is written to our own list first and shows as saved. YouTube's own playlist is brought up to date when the sign-in works again.</td></tr>
+</table></div>
+
+<figure class="wide"><a href="screens/after-market-signal-grid-1680x1050.jpg"><img src="screens/after-market-signal-grid-1680x1050.jpg" alt="Market Signal on the grid, simulated" loading="lazy"></a><figcaption>SIMULATED — the branch's grid scrolled to 11 hours ago, with Market Signal's videos added to the test browser from YouTube's public feed. Top right: "Micron, WDC &amp; Seagate – Wall Street May Be Getting This Wrong · Market Signal · 11h ago". These rows are not in the real list yet, and the tile has no length because the collector has not asked YouTube for it.</figcaption></figure>
+<figure class="wide"><a href="screens/after-tyler-grid-1680x1050.jpg"><img src="screens/after-tyler-grid-1680x1050.jpg" alt="Tyler Wilson's stream in time order" loading="lazy"></a><figcaption>REAL DATA — the branch's grid scrolled to Tyler Wilson's stream of this morning (first tile of the row shown), sitting among the other videos of an hour ago.</figcaption></figure>
+
+<h2>The Station's own pane width, and a phone</h2>
+<div class="pair narrow">
+  <figure><a href="screens/before-pane-403x760.jpg"><img src="screens/before-pane-403x760.jpg" alt="Pane before" loading="lazy"></a><figcaption>BEFORE — the Station's YouTube column is 403 px wide on a 1680 screen.</figcaption></figure>
+  <figure><a href="screens/after-pane-403x760.jpg"><img src="screens/after-pane-403x760.jpg" alt="Pane after" loading="lazy"></a><figcaption>AFTER — same width.</figcaption></figure>
+  <figure><a href="screens/before-phone-390.jpg"><img src="screens/before-phone-390.jpg" alt="Phone before" loading="lazy"></a><figcaption>BEFORE — phone, 390 wide.</figcaption></figure>
+  <figure><a href="screens/after-phone-390.jpg"><img src="screens/after-phone-390.jpg" alt="Phone after" loading="lazy"></a><figcaption>AFTER — phone, 390 wide.</figcaption></figure>
+</div>
+<figure class="wide"><a href="screens/after-deck-1680x1050.jpg"><img src="screens/after-deck-1680x1050.jpg" alt="The whole Station" loading="lazy"></a><figcaption>The whole Station on the branch, 1680 × 1050. The test browser has no saved layout, so the YouTube pane opens on PERSONAL; the charts say "data delayed" because the price service only answers the real site. The YouTube pane is the lower-left block: about one and a half rows of tiles are visible at this size.</figcaption></figure>
+
+<h2>The order, in one sentence</h2>
+<div class="box">Streams on air come first, newest start first; after them every video is placed by the minute it became watchable — the publish time for an upload, the real start for a stream — newest first, and a stream that has not started is not shown.</div>
+
+<h2>Where each thing on a tile comes from</h2>
+<ul>
+<li><b>"34m ago"</b> — the time since the video became watchable, from YouTube's own times. It is never the time we collected it.</li>
+<li><b>"LIVE · started 7m ago"</b> — YouTube says the stream is on air; the minutes count from YouTube's start time. If YouTube gives no start time, the first minute we saw it live is used and kept.</li>
+<li><b>Bell</b> — the video's channel is on one of your saved subscription lists, or is one of the 37 channels bridged from X. <b>Cyan magnifier</b> — the video is there only because a ticker search found it.</li>
+<li><b>LATER / SAVED</b> — from the shared Watch Later list in our own database, the same list the Hub reads.</li>
+</ul>
+
+<h2>What could be wrong</h2>
+<ul>
+<li>A stream can still appear up to about 20 minutes after it starts when YouTube's channel feed is slow, because the on-air check runs every 20 minutes. You asked for 10 at most; that needs the check to run twice as often (decision 1).</li>
+<li>The wider on-air check has only been run in tests. From the collector's data centre YouTube may slow down or wall some of the page reads; the collector records which channels it could not read.</li>
+<li>Your six YouTube sign-ins are still expired. A channel you subscribe to on YouTube today does not reach the Station until SCINTILLA and PERSONAL are connected again.</li>
+<li>Two other channels also stopped being collected, both on the PERSONAL list on 12 August: Megyn Kelly and Mario Nawfal. They may be channels you unsubscribed from, so they are not restored.</li>
+<li>Saved videos made while the sign-in is down are in our list at once but reach YouTube's own playlist only after the sign-in is back.</li>
+</ul>
+
+<h2>What was not done</h2>
+<ul>
+<li>Nothing was deployed and no table was written. The Watch Later failure was reproduced with a request that carries no video, so it could not save anything.</li>
+<li>The ticker-search collector was left alone. The copy in the code line is two versions behind the one running, so it was not safe to edit.</li>
+<li>The age still reads "34m ago" and "3h ago" rather than "34 min ago". It is the wording the rest of the Station uses; changing it is a one-line change if you prefer the longer form.</li>
+<li>The PERSONAL pane's tiles do not carry the LATER plate (only the SCINTILLA grid does, as before); on PERSONAL the clock button on the bar saves.</li>
+<li>Tyler Wilson's tile during his broadcast could not be pictured: the stream had ended before this work began.</li>
+</ul>
+
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p>Branches: Hub <code>hub/y4-youtube-feed-20261006</code> (collector <code>yt-rss-sweep</code> v10, staged list change, this page); Station <code>station/y4-youtube-grid-20261006</code> (the two video shells, the Watch Later function <code>yt-act</code>, the picture tools).</p>
+<p>What the coordinator deploys, in this order: (1) <code>yt-act</code> from the Station branch; (2) <code>yt-rss-sweep</code> from the Hub branch, with <code>_shared/yt-bridge.mjs</code>; (3) the Station; (4) apply <code>staged/y4-youtube/01_market_signal_back_on_the_scintilla_list.sql</code> (expect UPDATE 1; undo file beside it). No table, column or access-rule change is needed.</p>
+<p>Measurements behind this page: <code>data/picture-facts.txt</code> (what each picture run counted), <code>data/lost-channels.json</code> (164 channels compared with YouTube's public feeds). Read at 13:17–13:40 UTC on 6 Oct with the pages' own public key; the Watch Later answer was <code>personal YouTube authorization unavailable · invalid_grant</code>.</p>
+<p>Tests: Hub 1,969 → 1,982 with the same 7 failures. Station 987 → 1,012 with the same 18 failures. Six older assertions that pinned "only bridged channels are asked" now count the carried channel too.</p>
+<p>Patterns followed: the on-air read is the one yt-dlp's channel-tab extractor uses (follow <code>/live</code> to the watch page, read the player's live flag); Watch Later is the "outbox" pattern (write your own record first, deliver to the outside service afterwards and retry) as described at microservices.io/patterns/data/transactional-outbox.html.</p>
+<p>Neighbours checked: the on-air pass still ends inside its 45 seconds, the schedule's 120-second wait and the collector's 180-second lock; the number of stored rows re-asked per pass is still capped at 200, so no extra YouTube allowance is spent; the playlist copy sends at most 8 videos per save (50 units each of a 10,000-unit day).</p>
+</details>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
