@@ -22,9 +22,30 @@ input[type=search]::placeholder{color:var(--mute)}
 .ctabs{margin:0;min-width:200px} .ct{padding:7px 10px;white-space:nowrap;background:none;border-top:0;border-bottom:0;border-left:0;font-family:var(--mono)} .ct .n{color:var(--mute);margin-left:4px} .ct.on .n{color:var(--crk)}
 .ct.empty{color:var(--mute)}
 #main{text-align:left}
-.main{display:grid;grid-template-columns:minmax(0,1fr) 0;flex:1;min-height:0}
-.main.card{grid-template-columns:minmax(0,1fr) 400px}
+.main{display:grid;grid-template-columns:210px minmax(0,1fr) 0;flex:1;min-height:0}
+.main.card{grid-template-columns:210px minmax(0,1fr) 400px}
+.main.nonav{grid-template-columns:0 minmax(0,1fr) 0} .main.nonav.card{grid-template-columns:0 minmax(0,1fr) 400px} .main.nonav nav{padding:0;border:0;overflow:hidden;visibility:hidden}
 .main:not(.card) aside{display:none}
+/* ---- T14 · the left-hand outline: Market → Indexes → Sectors → Cohorts → Names, in step with the canvas ---- */
+nav#tree{border-right:.8px solid var(--hair);overflow:auto;padding:8px 8px 30px;font-size:11px;line-height:1.5;min-width:0}
+nav#tree .lg{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;padding-bottom:3px;border-bottom:.6px solid var(--line2)}
+nav#tree .lg i{font-style:normal} nav#tree .lg .on{color:var(--bull)} nav#tree .lg .cl{color:var(--crk)}
+nav#tree .r{display:flex;align-items:baseline;gap:5px;padding:1px 4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid transparent}
+nav#tree .r:hover{color:var(--ink)} nav#tree .r.cur{border-left-color:var(--crk);color:var(--ink)} nav#tree .r.cur .nm{color:var(--crk)}
+nav#tree .r .tg{color:var(--mute);width:10px;flex:0 0 10px} nav#tree .r .nm{overflow:hidden;text-overflow:ellipsis} nav#tree .r .n{color:var(--dim);font-size:9px;margin-left:auto;font-variant-numeric:tabular-nums}
+nav#tree .r.d0 .nm{font-size:12px;letter-spacing:.16em;font-weight:600;color:var(--ink)} nav#tree .r.d1 .nm{letter-spacing:.14em;font-weight:600;text-transform:uppercase;color:var(--ink2)} nav#tree .r.d2 .nm{letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)} nav#tree .r.d3 .nm{color:var(--dim);letter-spacing:.06em;text-transform:uppercase} nav#tree .r.d4 .nm{font-weight:700;letter-spacing:.04em}
+nav#tree .k{margin-left:11px} nav#tree .k.closed{display:none}
+nav#tree .m{width:9px;flex:0 0 9px;text-align:center;font-size:9px} nav#tree .m.on{color:var(--bull)} nav#tree .m.cl{color:var(--crk)} nav#tree .m.no{color:var(--mute)}
+nav#tree .r .v{font-variant-numeric:tabular-nums;font-size:10px;margin-left:auto}
+/* ---- T14 · the links: quiet until hovered. Only Hub tokens: cyan for an index or fund line, the second ink for a peer or cohort line ---- */
+.links{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.links .ln{fill:none;stroke:var(--crk);stroke-opacity:.07;stroke-width:calc(var(--sw, 1) * 1px * var(--ls, 1));stroke-linecap:round;transition:stroke-opacity .15s}
+.links .ln.peer,.links .ln.coh{stroke:var(--ink2)} .links .ln.sector{stroke-dasharray:4 3}
+.links .ln.lit{stroke-opacity:.42} .links .ln.hot{stroke-opacity:1;stroke-width:calc((var(--sw, 1) + 1) * 1px * var(--ls, 1))}
+.links .lb{display:none;fill:var(--ink);font:600 calc(var(--lpx) * .78) var(--mono);letter-spacing:.06em;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round;text-anchor:middle}
+.links .lb.hot{display:block}
+.stage.showlb .links .lb.index{display:block;fill:var(--dim)}
+.cell.ring .tk{color:var(--crk)}
 #graph{position:relative;min-width:0;overflow:hidden;background:var(--bg)}
 #crumbs{flex-basis:100%;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-top:-4px}
 #crumbs b{color:var(--ink);font-weight:600} #crumbs .lv{color:var(--crk)}
@@ -112,9 +133,11 @@ aside .note{font-size:11px;color:var(--dim);margin:6px 0}
     <input type="search" id="q" placeholder="find a ticker" list="tickers" autocomplete="off"><datalist id="tickers"></datalist>
     <div class="ctabs" id="viewtabs"><button class="ct on" id="v-canvas" data-view="canvas">CANVAS</button><button class="ct" id="v-outline" data-view="outline">OUTLINE</button><button class="ct" id="reset" data-view="reset">RESET</button></div>
     <div class="ctabs" id="listtabs"></div>
+    <div class="ctabs" id="linktabs"><span class="ct" style="color:var(--mute);cursor:default;flex:0">LINKS</span><button class="ct on" data-links="top">TOP 40</button><button class="ct" data-links="all">ALL</button><button class="ct" data-links="off">OFF</button><button class="ct" data-nav="1" id="navbtn">OUTLINE ◧</button></div>
   </div>
 </header>
 <div class="main gs-comp" id="main">
+  <nav id="tree"></nav>
   <div id="graph">
     <div id="canvas"></div>
     <div id="outline"></div>
@@ -130,6 +153,11 @@ aside .note{font-size:11px;color:var(--dim);margin:6px 0}
 <p><b>The podium.</b> PODIUM on a block's title, a cohort's caption, a MY LISTS tab or the card opens the set as the 3D bow tie: V3's laser coil — the green half rising from the zero ring, first place at the centre and the top, fanned down and outwards to zero; the red half the mirror below it, down to the deepest red at the centre. The translucent sphere around the set is its total market cap ($1 T = 80 units of radius; a fund with no cap on file is listed, not counted), so two sets rank by size at a glance. Drag to turn any way, scroll to zoom, double-click or RESET VIEW = the 70° view. WALK (or ↓) walks the steps from the first place down the green half, across the ring and down the red half: ↓ ↑ J K the wheel, Home / End, Esc leaves. Click a step for its card.</p>
 <p><b>Where each number comes from.</b> The Geiger readings are read live from the chart API (/geiger for every Hub line; the nightly scout Geiger for the off-Hub names, drawn the same). The tree is tree.json (the r3 market tree with the 28 Sep cohort level); industries are industry-20261002.json (FMP, the authority); market caps are data/market-caps-20261005.json (company_profile.market_cap through the Hub's public read path, with tree.json's market value as the fallback for a company). MY LISTS read the Hub's mirror in this browser (sc_lists, sc_fav); the Hub's server copy is the source of truth.</p>
 <p><b>The parts.</b> Bar = the Hub's GEIGER tile track (gs-cgr); type, colours, the tab rows (ctabs) and the table (mytab) are the Hub's own CSS, copied by tools/extract-hub-parts.mjs into hub-parts.css — never redrawn here. 3D = V3's coil3d.js, copied whole (plus the walk and the click).</p>
+<p><b>T14 · one connected market (5 Oct, night).</b> The first band is the market's indexes: the broad five (SPY QQQ DIA IWM RSP) and the eleven sector SPDRs, one Hub cell each, cyan tickers. A line runs from each index to every sector it holds, as thick as the weight (the label is the weight: SPY → TECHNOLOGY 39 %), quiet until you hover the index or the sector. The weight is the share of the WHOLE fund; what the Hub cannot place by sector is "unclassified" and printed on the index's card (IWM: 89 % of its 1,988 small caps are off the Hub's sector map, so its lines are thin and honest).</p>
+<p><b>A ticker's connections.</b> Click a name: lines run from its cell to every place it lives — its sector (dashed), its home cohort, every index and fund that holds it (cyan, the label is the weight), its comps peers in other sectors (the second ink). The card lists the same with the weights, every cohort it belongs to, and each peer's sector and whether it is on the Hub live (●) or at the close tier (○). Suppliers and customers: no data exists on the Hub — no table holds them and the FMP supply-chain route is not loaded — so the card says so instead of guessing.</p>
+<p><b>Cohorts across sectors.</b> Two cohorts in different sectors are linked when they share members, comps peers or a narrow fund (a sector or industry fund — the broad and style funds hold everything and would link everything). One line per link, its count in the label (members + peer pairs + funds), between the cohorts' captions at the COHORT level and between the middle of their cells before that. LINKS shows the top 40 by count, all 310, or none; hover a cohort's caption or any of its cells to light its links. Example: AI HARDWARE (Technology) ↔ AI POWER (Utilities): 9 = ETN in both, 5 peer pairs, 3 funds (AGIX, PAVE, XLI).</p>
+<p><b>The outline.</b> The left column is the same tree as a list — Market → Indexes → Sectors → Cohorts → Names — and it follows the canvas: the row you are on is marked cyan, its branch opens, and clicking a row moves the canvas there. Every name carries its mark: ● on the Hub live (a Geiger bar on the chart API), ○ at the close tier (the nightly scout Geiger), · no reading. OUTLINE ◧ hides the column to give the canvas the width back.</p>
+<p><b>Where these come from.</b> data/connections-20261005.json, built by build-connections.mjs from four dated read-only exports (data/raw-20261005/: etf_holdings — 62 funds, 12,795 rows; company_profile sectors; peer_sources — FMP ∪ Massive, loaded 1 Oct; ticker_cohorts) and tree.json. Nothing is written anywhere.</p>
 <p><b>What could be wrong.</b> A reading missing on the chart API prints as an empty track. Cells are sized to fit the screen the page opened on; a resize re-lays them out. The black share of the canvas is the Hub's black between the Hub's parts, not a layout gap.</p>
 </details>
 <script type="importmap">
@@ -155,6 +183,8 @@ const T = await getJSON("tree.json");
 const IND = await getJSON("industry-20261002.json").catch(() => null);
 const STD = await getJSON("data/tree-standard.json").catch(() => null);
 const CAPF = await getJSON("data/market-caps-20261005.json").catch(() => null);
+const CONN = await getJSON("data/connections-20261005.json").catch(() => null); // T14: the indexes' sector weights, held-by, peers, cohort links
+state.connErr = CONN ? null : "data/connections-20261005.json did not load";
 const [g, sr, ss] = await Promise.allSettled([getJSON(CHART_API + "/geiger"), getJSON(CHART_API + "/v1/scout-geiger", 20000), getJSON("scout-geiger-snapshot.json")]);
 if (g.status === "fulfilled") state.geiger = g.value; else state.geigerErr = String(g.reason);
 const scoutFrom = (doc, source) => { const c = doc.row_columns || [], ix = (k) => c.indexOf(k), v = {}; for (const r of doc.rows) v[r[ix("ticker")]] = [r[ix("composite")], r[ix("trend")], r[ix("momentum")]]; return { as_of: doc.as_of, run_id: doc.run_id, computed_utc: doc.computed_utc, v, source }; };
@@ -198,26 +228,70 @@ const hubLists = () => HUB_LISTS.map(readList);
 hubLists();
 state.lists = () => hubLists().map((n) => ({ id: n.id, label: n.label, key: n.key, on_hub_list: n.tickers.length, on_tree: n.listMembers.length, missing: n.missing, known: n.known, note: n.listMembers.length ? null : listEmptyNote(n) }));
 function paintLists() { $("listtabs").innerHTML = `<span class="ct" style="color:var(--mute);cursor:default;flex:0">MY LISTS</span>` + hubLists().map((n) => `<button class="ct${state.cluster === n.id ? " on" : ""}${n.listMembers.length ? "" : " empty"}" data-list="${esc(n.id)}" title="${n.listMembers.length ? `the Hub's ${esc(n.name)} list as the 3D bow tie` : esc(listEmptyNote(n))}">${esc(n.glyph)} ${esc(n.name)}<span class="n">${n.tickers.length}</span></button>`).join(""); }
-addEventListener("storage", (e) => { if (e.key === "sc_lists" || e.key === "sc_fav") { paintLists(); if (state.view === "outline") renderOutline(); } });
+addEventListener("storage", (e) => { if (e.key === "sc_lists" || e.key === "sc_fav") { paintLists(); if (state.view === "outline") renderOutline(); if (typeof renderNav === "function") renderNav(); } });
 
 /* ---- the stamp ---- */
 const stampTxt = () => { const gAt = state.geiger && (state.geiger.as_of || state.geiger.computed_utc || state.geiger.updated_utc); const c = state.counts; return `${gAt ? "GEIGER " + String(gAt).replace("T", " ").slice(0, 16) + " UTC" : state.geigerErr ? "GEIGER: " + state.geigerErr : "GEIGER"} · ${c.lit} HUB BARS (${c.up} UP · ${c.down} DOWN) · ${c.scout} AT THE CLOSE${state.scout && state.scout.as_of ? " (" + state.scout.as_of + ")" : ""} · ${c.none} NO READING · ${c.cohorts} ADOPTED · ${c.proposed} PROPOSED · ${c.fundsets} FUND SETS`; };
 $("stamp").textContent = stampTxt();
 
 /* ---- the blocks (the sector level) and the items (every tradeable) ---- */
-const SHORT = { SEC_TECH: "TECHNOLOGY", SEC_FIN: "FINANCIALS", SEC_HLTH: "HEALTH CARE", SEC_ENGY: "ENERGY", SEC_INDU: "INDUSTRIALS", SEC_STPL: "STAPLES", SEC_DISC: "DISCRETIONARY", SEC_UTIL: "UTILITIES", SEC_MATL: "MATERIALS", SEC_REIT: "REAL ESTATE", SEC_COMM: "COMMUNICATION", US_BROAD: "BROAD MARKET", US_STYLE: "STYLE · FACTOR", INTL_DEV: "INTL DEVELOPED", EM: "EMERGING", MACRO: "DOLLAR · VOL", WORLD: "THE WORLD", BONDS: "BONDS", CMDTY: "COMMODITIES", CRYPTO: "CRYPTO", US: "US STOCKS", MARKET: "THE MARKET", US_SECTORS: "US SECTORS" };
+const SHORT = { RING: "THE MARKET · INDEXES", SEC_TECH: "TECHNOLOGY", SEC_FIN: "FINANCIALS", SEC_HLTH: "HEALTH CARE", SEC_ENGY: "ENERGY", SEC_INDU: "INDUSTRIALS", SEC_STPL: "STAPLES", SEC_DISC: "DISCRETIONARY", SEC_UTIL: "UTILITIES", SEC_MATL: "MATERIALS", SEC_REIT: "REAL ESTATE", SEC_COMM: "COMMUNICATION", US_BROAD: "BROAD MARKET", US_STYLE: "STYLE · FACTOR", INTL_DEV: "INTL DEVELOPED", EM: "EMERGING", MACRO: "DOLLAR · VOL", WORLD: "THE WORLD", BONDS: "BONDS", CMDTY: "COMMODITIES", CRYPTO: "CRYPTO", US: "US STOCKS", MARKET: "THE MARKET", US_SECTORS: "US SECTORS" };
 const BLOCK_IDS = new Set(["SEC_TECH", "SEC_FIN", "SEC_HLTH", "SEC_ENGY", "SEC_INDU", "SEC_STPL", "SEC_DISC", "SEC_UTIL", "SEC_MATL", "SEC_REIT", "SEC_COMM", "US_BROAD", "US_STYLE", "INTL_DEV", "EM", "BONDS", "CMDTY", "CRYPTO", "MACRO"]);
 const blockOf = (n) => { let c = n, last = null; while (c && c.parents && c.parents.length) { c = state.byId.get(c.parents[0]); if (!c) break; if (c.kind === "index") { if (BLOCK_IDS.has(c.id)) return c.id; last = last || c.id; } } return last || "MARKET"; };
 const pathOf = (n) => { const out = []; let c = n; while (c && c.parents && c.parents.length) { c = state.byId.get(c.parents[0]); if (c) out.unshift(c); } return out; };
 const cohortOf = (n) => { if (n.kind === "fund") return n.role === "sector" ? "SECTOR FUNDS" : n.role === "broad" ? "BROAD FUNDS" : "FUNDS"; const h = n.home_id && state.byId.get(n.home_id); return h ? (h.ckind === "fundset" ? h.cohort + " SET" : h.ckind === "none" ? "NONE YET" : h.label) : "NONE YET"; };
-const items = nodes.filter((n) => n.ticker).map((n) => { const ind = industryOf(n.ticker); return { id: n.id, t: n.ticker, kind: n.kind, v: valueOf(n), label: n.label || n.ticker, block: blockOf(n), industry: n.kind === "fund" ? "FUNDS" : (ind && ind.fmp_industry) || n.gics_industry || "OTHER", cohort: cohortOf(n), cohortId: n.kind === "name" && n.home_id && state.byId.get(n.home_id) ? n.home_id : null, cap: CAPS[n.ticker] || null, day: null, n }; });
-const blockIds = [...new Set(items.map((i) => i.block))];
-const blocks = blockIds.map((id) => { const n = state.byId.get(id); return { id, label: n ? n.label : id, short: SHORT[id] || (n ? n.label.toUpperCase() : id), path: n ? pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") : "" }; });
+/* T14: the ring — the market's indexes leave their blocks and sit in the first band (BROAD INDEXES, then SECTOR FUNDS) */
+const RING = new Set(CONN ? CONN.indexes.on_tree : []), RING_BROAD = new Set(CONN ? CONN.indexes.broad : []);
+const items = nodes.filter((n) => n.ticker).map((n) => { const ind = industryOf(n.ticker); const ring = RING.has(n.ticker); return { id: n.id, t: n.ticker, kind: n.kind, v: valueOf(n), label: n.label || n.ticker, block: ring ? "RING" : blockOf(n), homeBlock: blockOf(n), industry: ring ? (RING_BROAD.has(n.ticker) ? "BROAD INDEXES" : "SECTOR FUNDS") : n.kind === "fund" ? "FUNDS" : (ind && ind.fmp_industry) || n.gics_industry || "OTHER", cohort: cohortOf(n), cohortId: n.kind === "name" && n.home_id && state.byId.get(n.home_id) ? n.home_id : null, cap: CAPS[n.ticker] || null, day: null, n }; });
+const blockIds = [...new Set(items.map((i) => i.block))].sort((a, b) => (a === "RING" ? -1 : b === "RING" ? 1 : 0));
+const blocks = blockIds.map((id) => { const n = state.byId.get(id); return { id, label: id === "RING" ? SHORT.RING : n ? n.label : id, short: SHORT[id] || (n ? n.label.toUpperCase() : id), path: n ? pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") : "" }; });
+const itemOf = new Map(items.map((i) => [i.id, i]));
+const sectorOfTicker = (t) => { const n = byTickerNode(t); return n ? (n.sector && BLOCK_IDS.has(n.sector) ? n.sector : (itemOf.get(n.id) || {}).homeBlock || blockOf(n)) : null; };
+function byTickerNode(t) { return nodes.find((n) => n.ticker === t || n.ticker === String(t || "").replace(/\./g, "-")) || null; }
 state.items = items; state.blocks = blocks;
 
 /* ---- the canvas ---- */
-const cv = mountCanvas($("canvas"), { items, blocks, onPick: (id) => select(state.byId.get(id)), onOpen: (id) => { state.selected = id; crumbs(); }, onCoil: (id) => openCoil(id), onHover: hover, onLevel: () => crumbs() });
+const cv = mountCanvas($("canvas"), { items, blocks, onPick: (id) => select(state.byId.get(id)), onOpen: (id) => { state.selected = id; crumbs(); }, onCoil: (id) => openCoil(id), onHover: hover, onLevel: () => crumbs(), onLayout: () => { if (state.cv) drawAllLinks(); } });
 state.cv = cv;
+
+/* ---- T14 · the links: index → sector (weights), the selected ticker → every place it lives, cohort ↔ cohort across sectors ---- */
+const heldOf = (t) => (CONN && CONN.held_by && (CONN.held_by[t] || CONN.held_by[String(t).replace(/\./g, "-")])) || (T.held_by && T.held_by[t]) || [];
+const peersOfT = (t) => (CONN && CONN.peers && CONN.peers[t]) || [];
+const cohortNode = (id) => state.byId.get(id);
+let linksMode = "top"; const TOP_N = 40;
+const cohortLinksNow = () => { if (!CONN || linksMode === "off") return []; const L = CONN.cohort_links.filter((l) => cohortNode(l.a) && cohortNode(l.b)); return linksMode === "all" ? L : L.slice(0, TOP_N); };
+function drawIndexLinks() {
+  if (!CONN) return cv.setLinks("index", []);
+  const lines = [];
+  for (const f of CONN.indexes.on_tree) { const n = byTicker.get(f); const from = n && cv.anchor(n.id); const IS = CONN.index_sectors[f]; if (!from || !IS) continue;
+    for (const [sec, w] of Object.entries(IS.shares)) { if (w < 1 || !BLOCK_IDS.has(sec)) continue; const to = cv.anchor(sec); if (!to) continue; lines.push({ a: n.id, b: sec, from, to: { x: to.x, y: to.y }, w: 0.5 + Math.min(3, w / 15), cls: "index", label: w.toFixed(0) + "%", bow: RING_BROAD.has(f) ? 0.1 : 0.04 }); } }
+  cv.setLinks("index", lines);
+}
+function drawTickerLinks() {
+  const sel = state.selected && state.byId.get(state.selected); const it = sel && itemOf.get(sel.id);
+  if (!sel || !sel.ticker || !it) return cv.setLinks("ticker", []);
+  const from = cv.anchor(sel.id); if (!from) return cv.setLinks("ticker", []);
+  const lines = [], seen = new Set();
+  const add = (id, cls, label, w = 1, lit = true) => { if (!id || id === sel.id || seen.has(cls + id)) return; const to = cls === "cohort" ? cv.cohortAnchor(id) : cv.anchor(id); if (!to) return; seen.add(cls + id); lines.push({ a: sel.id, b: id, from, to: { x: to.x, y: to.y }, w, cls, label, lit, bow: 0.08 }); };
+  const mySec = sectorOfTicker(sel.ticker);
+  if (mySec && mySec !== "RING" && BLOCK_IDS.has(mySec)) add(mySec, "sector", SHORT[mySec] || mySec, 1);
+  if (it.cohortId) add(it.cohortId, "cohort", cohortOf(sel), 1);
+  for (const [f, w] of heldOf(sel.ticker)) { const fn = byTicker.get(f); if (fn) add(fn.id, "fund", f + " " + (+w).toFixed(1) + "%", 0.5 + Math.min(2.5, w / 8)); }
+  for (const p of peersOfT(sel.ticker)) { const pn = byTickerNode(p.t); if (!pn) continue; const ps = sectorOfTicker(p.t); if (ps && mySec && ps !== mySec) add(pn.id, "peer", "PEER · " + (SHORT[ps] || ps), 1); }
+  cv.setLinks("ticker", lines);
+}
+function drawCohortLinks() {
+  const lines = [];
+  for (const l of cohortLinksNow()) { const A = cv.cohortAnchor(l.a), B = cv.cohortAnchor(l.b); if (!A || !B) continue; lines.push({ a: l.a, b: l.b, from: { x: A.x, y: A.y }, to: { x: B.x, y: B.y }, w: 0.5 + Math.min(2, l.count / 30), cls: "coh", label: String(l.count), bow: 0.16 }); }
+  cv.setLinks("cohort", lines);
+}
+function drawAllLinks() { drawIndexLinks(); drawCohortLinks(); drawTickerLinks(); }
+$("linktabs").addEventListener("click", (e) => { const b = e.target.closest("[data-links]"); if (b) { linksMode = b.dataset.links; document.querySelectorAll("#linktabs [data-links]").forEach((x) => x.classList.toggle("on", x.dataset.links === linksMode)); drawCohortLinks(); return; } const n = e.target.closest("[data-nav]"); if (n) { $("main").classList.toggle("nonav"); $("navbtn").classList.toggle("on", !$("main").classList.contains("nonav")); cv.fit(); } });
+$("navbtn").classList.add("on");
+state.links = () => ({ mode: linksMode, index: cv.linkCount("index"), ticker: cv.linkCount("ticker"), cohort: cv.linkCount("cohort"), total: cv.linkCount(), cohort_links_in_data: CONN ? CONN.cohort_links.length : 0, funds_in_data: CONN ? CONN.counts.funds_in_file : 0, indexes: CONN ? CONN.indexes.on_tree.length : 0 });
+state.setLinksMode = (m) => { linksMode = m; document.querySelectorAll("#linktabs [data-links]").forEach((x) => x.classList.toggle("on", x.dataset.links === m)); drawCohortLinks(); return state.links(); };
+state.hot = (ids) => cv.hot(ids); state.hotLink = (a, b) => cv.hot([a + "↔" + b]);
+state.setNav = (on) => { $("main").classList.toggle("nonav", !on); cv.fit(); };
 function hover(id, x, y) { const tip = $("tip"); if (!id) { tip.style.display = "none"; return; } const n = state.byId.get(id) || byTicker.get(id); if (!n) { tip.style.display = "none"; return; } const r = readingOf(n), path = pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ");
   tip.innerHTML = `<b>${esc(n.ticker)}</b> · ${esc(n.label)}<br><span class="${r ? (r.v >= 0 ? "up" : "dn") : "none"}">${r ? fmtG(r.v) : "no reading yet"}</span>${r && r.kind === "scout" ? ` <span style="color:var(--dim)">at the close</span>` : ""}${CAPS[n.ticker] ? ` · ${fmtCap(CAPS[n.ticker])}` : ""}<br><span style="color:var(--dim)">${esc(path)}</span>`;
   const vr = $("graph").getBoundingClientRect(); tip.style.display = "block"; tip.style.left = Math.min(vr.width - 330, x - vr.left + 14) + "px"; tip.style.top = Math.min(vr.height - 80, y - vr.top + 14) + "px"; }
@@ -234,8 +308,21 @@ function renderCard(n) {
     const r = readingOf(n);
     h += `<div class="gs-comp"><span class="gs-lab">GEIGER${r && r.kind === "scout" ? " · AT THE CLOSE" : ""}</span>${track(r ? r.v : null)}<span class="gs-big ${r ? (r.v >= 0 ? "up" : "dn") : "none"}">${r ? fmtG(r.v) : "no reading yet"}</span></div>`;
     h += `<div class="kv">${r ? `<span class="k">TREND</span><span class="v ${r.trend >= 0 ? "up" : "dn"}">${fmtG(r.trend || 0)}</span><span class="k">MOMENTUM</span><span class="v ${r.momentum >= 0 ? "up" : "dn"}">${fmtG(r.momentum || 0)}</span>` : ""}${CAPS[n.ticker] ? `<span class="k">MARKET CAP</span><span class="v">${fmtCap(CAPS[n.ticker])}</span>` : ""}${n.kind === "name" ? `<span class="k">INDUSTRY</span><span class="v" style="font-weight:400">${esc((industryOf(n.ticker) || {}).fmp_industry || n.gics_industry || "—")}</span>` : ""}${n.home_id ? `<span class="k">COHORT</span><span class="v lnk" data-coil="${esc(n.home_id)}" style="font-weight:400">${esc(cohortOf(n))} · PODIUM</span>` : ""}</div>`;
-    const held = (T.held_by && T.held_by[n.ticker]) || [];
-    if (held.length) h += `<div class="sec">HELD BY · ${held.length}</div><table class="mytab"><thead><tr><th>fund</th><th>weight</th></tr></thead><tbody>${held.map(([f, w]) => `<tr data-id="${esc(f)}"><td class="tk">${esc(f)}</td><td class="v">${(+w).toFixed(2)}%</td></tr>`).join("")}</tbody></table>`;
+    /* T14 · WHERE IT LIVES: sector · cohorts · every index and fund that holds it · comps peers · suppliers / customers (no data) */
+    const it = itemOf.get(n.id); const mySec = sectorOfTicker(n.ticker) || (it ? it.homeBlock : blockOf(n));
+    if (RING.has(n.ticker) && CONN && CONN.index_sectors[n.ticker]) { const IS = CONN.index_sectors[n.ticker]; const rows = Object.entries(IS.shares).sort((a, b) => b[1] - a[1]);
+      h += `<div class="sec">HOLDS · BY SECTOR · ${rows.length}</div><table class="mytab"><thead><tr><th>sector</th><th>weight</th></tr></thead><tbody>${rows.map(([sec, w]) => `<tr data-block="${esc(sec)}"><td class="tk" style="font-size:11px">${esc(SHORT[sec] || sec)}</td><td class="v">${w.toFixed(1)}%</td></tr>`).join("")}</tbody></table><div class="note">${IS.rows} holdings in the file · ${IS.classified_pct.toFixed(1)}% placed by sector · ${IS.unclassified_pct.toFixed(1)}% the Hub cannot place (names off its sector map)</div>`; }
+    else {
+      const seenC = new Set(), cohs = []; for (const c of [n.home_id ? cohortOf(n) : null, ...(n.also_in || []).map((a) => (state.byId.get(a.id) || {}).label || a.cohort), ...((CONN && CONN.ticker_cohorts && CONN.ticker_cohorts[n.ticker]) || []).map((c) => String(c).replace(/_+/g, " "))].filter(Boolean)) { const k = String(c).toUpperCase().replace(/[^A-Z0-9]/g, ""); if (!seenC.has(k)) { seenC.add(k); cohs.push(c); } }
+      h += `<div class="sec">WHERE IT LIVES</div><div class="kv"><span class="k">SECTOR</span><span class="v lnk" data-block="${esc(mySec)}" style="font-weight:400">${esc(SHORT[mySec] || mySec)}</span><span class="k">COHORTS</span><span class="v" style="font-weight:400">${cohs.length ? cohs.map(esc).join(" · ") : "none yet"}</span></div>`;
+    }
+    const held = heldOf(n.ticker);
+    if (held.length) h += `<div class="sec">INDEXES &amp; FUNDS HOLDING IT · ${held.length}${CONN ? ` <span style="color:var(--mute)">· etf_holdings ${esc(String(CONN.read_utc).slice(0, 10))}</span>` : ""}</div><table class="mytab"><thead><tr><th>fund</th><th>weight</th><th></th></tr></thead><tbody>${held.map(([f, w]) => { const fn = byTicker.get(f); return `<tr${fn ? ` data-id="${esc(fn.id)}"` : ""}><td class="tk">${esc(f)}</td><td class="v">${(+w).toFixed(2)}%</td><td class="nm">${fn ? (RING.has(f) ? "index" : (fn.role || "fund")) : "off the tree"}</td></tr>`; }).join("")}</tbody></table>`;
+    else if (n.kind === "name") h += `<div class="sec">INDEXES &amp; FUNDS HOLDING IT</div><div class="note">no fund on file holds it (etf_holdings, 62 funds)</div>`;
+    const peers = peersOfT(n.ticker);
+    if (peers.length) h += `<div class="sec">COMPS PEERS · ${peers.length}</div><table class="mytab"><thead><tr><th>peer</th><th>sector</th><th>hub</th><th>src</th></tr></thead><tbody>${peers.map((p) => { const pn = byTickerNode(p.t); const ps = pn ? sectorOfTicker(p.t) : null; const r = pn ? readingOf(pn) : null; const mark = pn ? (r ? (r.kind === "scout" ? "○" : "●") : "·") : SV[p.t] ? "○" : "·"; return `<tr${pn ? ` data-id="${esc(pn.id)}"` : ""}><td class="tk">${esc(p.t)}</td><td class="nm">${pn ? esc(SHORT[ps] || ps || "") + (ps && ps !== mySec ? " ↗" : "") : "not on the tree"}</td><td class="v ${mark === "●" ? "up" : mark === "○" ? "" : "none"}" style="${mark === "○" ? "color:var(--crk)" : ""}">${mark}</td><td class="nm">${esc(p.src.join("+"))}</td></tr>`; }).join("")}</tbody></table><div class="note">↗ = a peer in another sector (drawn as a line) · ● on the Hub live · ○ at the close tier · · no reading</div>`;
+    else if (n.kind === "name") h += `<div class="sec">COMPS PEERS</div><div class="note">no peer list on file (peer_sources)</div>`;
+    if (n.kind === "name") h += `<div class="sec">SUPPLIERS &amp; CUSTOMERS</div><div class="note">no data on the Hub: no table holds supplier or customer links and the FMP supply-chain route is not loaded. Nothing is drawn for them.</div>`;
     if (n.kind === "fund" && n.holdings && n.holdings.top) h += `<div class="sec">TOP HOLDINGS · ${n.holdings.count_in_fund || n.holdings.top.length}</div><table class="mytab"><thead><tr><th>ticker</th><th>name</th><th>weight</th></tr></thead><tbody>${n.holdings.top.slice(0, 15).map((x) => `<tr${byTicker.get(x.ticker) ? ` data-id="${esc(byTicker.get(x.ticker).id)}"` : ""}><td class="tk">${esc(x.ticker)}</td><td class="nm">${esc(x.name)}</td><td class="v">${(+x.weight_pct).toFixed(2)}%</td></tr>`).join("")}</tbody></table>`;
   } else {
     const list = n.kind === "list" ? n.listMembers : beneath(n.id); const up = list.filter((m) => valueOf(m) > 0).length, dn = list.filter((m) => valueOf(m) < 0).length, cap = list.reduce((s, m) => s + (CAPS[m.ticker] || 0), 0);
@@ -245,10 +332,10 @@ function renderCard(n) {
   }
   card.innerHTML = h;
 }
-$("card").addEventListener("click", (e) => { const x = e.target.closest("[data-x]"); if (x) { release(); return; } const c = e.target.closest("[data-coil]"); if (c) { openCoil(c.dataset.coil); return; } const tr = e.target.closest("tr[data-id]"); if (tr) { const n = state.byId.get(tr.dataset.id); if (n) { select(n); if (state.view === "canvas" && !state.cluster) cv.find(n.id); } } });
-function select(n) { if (!n) return; state.selected = n.id; renderCard(n); if (n.ticker && state.view === "canvas" && !state.cluster) cv.select(n.id); crumbs(); }
-function release() { state.selected = null; renderCard(null); cv.select(null); crumbs(); }
-function find(s) { const t = String(s || "").trim().toUpperCase(); if (!t) return null; const n = byTicker.get(t) || byTicker.get(t.replace(/\./g, "-")) || nodes.find((x) => x.kind !== "name" && String(x.label).toUpperCase() === t); if (!n) return null; if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas"); select(n); if (n.ticker) cv.find(n.id); else if (BLOCK_IDS.has(n.id)) cv.openBlock(n.id); return { id: n.id, ticker: n.ticker || null, path: pathOf(n).map((p) => p.id) }; }
+$("card").addEventListener("click", (e) => { const x = e.target.closest("[data-x]"); if (x) { release(); return; } const c = e.target.closest("[data-coil]"); if (c) { openCoil(c.dataset.coil); return; } const bk = e.target.closest("[data-block]"); if (bk) { if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas"); cv.openBlock(bk.dataset.block); return; } const tr = e.target.closest("tr[data-id]"); if (tr) { const n = state.byId.get(tr.dataset.id); if (n) { select(n); if (state.view === "canvas" && !state.cluster) cv.find(n.id); } } });
+function select(n) { if (!n) return; state.selected = n.id; renderCard(n); if (n.ticker && state.view === "canvas" && !state.cluster) cv.select(n.id); drawTickerLinks(); crumbs(); }
+function release() { state.selected = null; renderCard(null); cv.select(null); drawTickerLinks(); crumbs(); }
+function find(s) { const t = String(s || "").trim().toUpperCase(); if (!t) return null; const n = byTicker.get(t) || byTicker.get(t.replace(/\./g, "-")) || nodes.find((x) => x.kind !== "name" && String(x.label).toUpperCase() === t); if (!n) return null; if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas"); const hadCard = $("main").classList.contains("card"); select(n); const go = () => { if (n.ticker) cv.find(n.id); else if (BLOCK_IDS.has(n.id)) cv.openBlock(n.id); }; if (hadCard) go(); else setTimeout(go, 60); return { id: n.id, ticker: n.ticker || null, path: pathOf(n).map((p) => p.id) }; }
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { find(e.target.value); e.target.value = ""; } });
 $("q").addEventListener("change", (e) => { if (e.target.value) { find(e.target.value); e.target.value = ""; } });
 $("tickers").innerHTML = nodes.filter((n) => n.ticker).map((n) => `<option value="${esc(n.ticker)}">${esc(n.label)}</option>`).join("");
@@ -275,7 +362,7 @@ async function ensureCoil() {
   catch (e) { state.err3d = String(e); $("fallback").style.display = "block"; $("fallback").innerHTML = `<p>This browser could not draw the podium (${esc(String(e))}). The OUTLINE carries the same names and bars.</p>`; }
   return coil;
 }
-const setOf = (id) => { const n = state.byId.get(id); if (!n) return null; const list = n.kind === "list" ? n.listMembers : n.ticker ? [n] : beneath(n.id); return { n, name: n.kind === "list" ? n.label : SHORT[n.id] || n.label, rows: list.map((m) => ({ t: m.ticker, v: valueOf(m) })) }; };
+const setOf = (id) => { if (id === "RING") return { n: { id: "RING", kind: "ring", label: SHORT.RING }, name: SHORT.RING, rows: items.filter((i) => i.block === "RING").map((m) => ({ t: m.t, v: m.v })) }; const n = state.byId.get(id); if (!n) return null; const list = n.kind === "list" ? n.listMembers : n.ticker ? [n] : beneath(n.id); return { n, name: n.kind === "list" ? n.label : SHORT[n.id] || n.label, rows: list.map((m) => ({ t: m.ticker, v: valueOf(m) })) }; };
 async function openCoil(id) {
   const set = setOf(id); if (!set || !set.rows.length) return false;
   const c = await ensureCoil(); if (!c) return false;
@@ -283,11 +370,11 @@ async function openCoil(id) {
   state.cluster = id; state.clusterCount = { members: set.rows.length, read: set.rows.filter((r) => r.v != null).length, up: set.rows.filter((r) => r.v > 0).length, down: set.rows.filter((r) => r.v < 0).length, none: set.rows.filter((r) => r.v == null).length, cap: set.rows.reduce((s, r) => s + (CAPS[r.t] || 0), 0), list: set.n.kind === "list" };
   $("podium").style.display = "block"; $("canvas").style.display = "none"; $("outline").style.display = "none";
   c.setSets([{ name: set.name, rows: set.rows }], { land: true }); c.setMode("laser"); if (c.walking()) c.endWalk(false); c.home();
-  areabar(); paintLists(); crumbs(); select(set.n); return true;
+  areabar(); paintLists(); crumbs(); if (set.n.kind !== "ring") select(set.n); return true;
 }
 function openList(id) { const n = state.byId.get(id); if (!n || !n.listMembers || !n.listMembers.length) { if (n) select(n); return false; } return openCoil(id); }
 function closeCoil() { if (!state.cluster) return; if (coil && coil.walking()) coil.endWalk(false); state.cluster = null; state.clusterCount = null; $("podium").style.display = "none"; $("areabar").innerHTML = ""; $("walkhud").style.display = "none"; setView(state.view); paintLists(); crumbs(); }
-function areabar() { const n = state.byId.get(state.cluster), walking = coil && coil.walking(); $("areabar").innerHTML = `<div class="ctabs"><span class="who"><b>${esc(SHORT[n.id] || n.label)}</b> · PODIUM · ${state.clusterCount.members} NAMES${state.clusterCount.cap ? " · " + fmtCap(state.clusterCount.cap) : ""}</span><button class="ct${walking ? " on" : ""}" data-go="walk">${walking ? "WALKING · ESC LEAVES" : "WALK"}</button><button class="ct" data-go="list">≡ LIST</button><button class="ct" data-go="reset">RESET VIEW</button><button class="ct" data-go="back">← BACK</button></div>`; }
+function areabar() { const n = state.byId.get(state.cluster) || { id: state.cluster, label: SHORT[state.cluster] || state.cluster }, walking = coil && coil.walking(); $("areabar").innerHTML = `<div class="ctabs"><span class="who"><b>${esc(SHORT[n.id] || n.label)}</b> · PODIUM · ${state.clusterCount.members} NAMES${state.clusterCount.cap ? " · " + fmtCap(state.clusterCount.cap) : ""}</span><button class="ct${walking ? " on" : ""}" data-go="walk">${walking ? "WALKING · ESC LEAVES" : "WALK"}</button><button class="ct" data-go="list">≡ LIST</button><button class="ct" data-go="reset">RESET VIEW</button><button class="ct" data-go="back">← BACK</button></div>`; }
 $("areabar").addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (!b || !coil) return; const go = b.dataset.go; if (go === "walk") { if (coil.walking()) coil.endWalk(true); else coil.walkTo(0, 900); areabar(); } else if (go === "list") select(state.byId.get(state.cluster)); else if (go === "reset") { if (coil.walking()) coil.endWalk(true); else coil.home(); areabar(); } else if (go === "back") closeCoil(); });
 function walkHud(s, k, n) { const hud = $("walkhud"); if (!s) { hud.style.display = "none"; hud.innerHTML = ""; areabar(); return; } walkN = n; const node = byTicker.get(s.t); hud.style.display = "flex"; hud.innerHTML = `<button class="ct" data-walk="-1"${k === 0 ? " disabled" : ""}>▲</button><div class="who"><span class="rank">#${k + 1} of ${n} · ${s.side > 0 ? "THE GREEN HALF" : s.none ? "NO READING" : "THE RED HALF"}</span><b>${esc(s.t)}</b><span class="v ${s.none ? "none" : s.v >= 0 ? "up" : "dn"}">${s.none ? "no reading" : fmtG(s.v)}</span><small>${esc(node ? node.label : "")}</small></div><button class="ct" data-walk="1"${k === n - 1 ? " disabled" : ""}>▼</button>`; areabar(); }
 $("walkhud").addEventListener("click", (e) => { const b = e.target.closest("[data-walk]"); if (b && coil) coil.walkStep(+b.dataset.walk); });
@@ -297,9 +384,51 @@ addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if (state.cluster) closeCoil(); else release(); }
 }, true);
 
+/* ---- T14 · the left-hand outline: Market → Indexes → Sectors → Cohorts → Names, in step with the canvas ---- */
+const navOpen = new Set(["MARKET", "INDEXES", "SECTORS"]);
+const markOf = (n) => { const r = readingOf(n); return r ? (r.kind === "scout" ? "○" : "●") : "·"; };
+const markCls = (m) => (m === "●" ? "on" : m === "○" ? "cl" : "no");
+const nameRow = (n) => { const v = valueOf(n), m = markOf(n); return `<div class="r d4" data-nav="${esc(n.id)}" data-kind="name" title="${esc(n.label)} · ${m === "●" ? "on the Hub live" : m === "○" ? "at the close tier" : "no reading"}"><span class="m ${markCls(m)}">${m}</span><span class="nm">${esc(n.ticker)}</span><span class="v ${v == null ? "none" : v >= 0 ? "up" : "dn"}">${v == null ? "—" : fmtG(v)}</span></div>`; };
+const byReadingNode = (a, b) => ((valueOf(b) ?? -9) - (valueOf(a) ?? -9)) || (a.ticker < b.ticker ? -1 : 1);
+function renderNav() {
+  const nav = $("tree"); const row = (id, depth, label, n, kids, kind) => { const isOpen = navOpen.has(id); return `<div class="r d${depth}" data-nav="${esc(id)}" data-kind="${kind}"><span class="tg">${kids ? (isOpen ? "▾" : "▸") : ""}</span><span class="nm">${esc(label)}</span>${n != null ? `<span class="n">${n}</span>` : ""}</div>${kids ? `<div class="k${isOpen ? "" : " closed"}" data-kids="${esc(id)}">${kids}</div>` : ""}`; };
+  const ringItems = items.filter((i) => i.block === "RING");
+  const ringRows = ["BROAD INDEXES", "SECTOR FUNDS"].map((key) => { const list = ringItems.filter((i) => i.industry === key).map((i) => i.n).sort(byReadingNode); return row("RING|" + key, 2, key, list.length, list.map(nameRow).join(""), "ringrow"); }).join("");
+  const sectorBlocks = blocks.filter((b) => b.id !== "RING").slice().sort((a, b) => (BLOCK_IDS.has(a.id) && a.id.startsWith("SEC_") ? 0 : 1) - (BLOCK_IDS.has(b.id) && b.id.startsWith("SEC_") ? 0 : 1) || items.filter((i) => i.block === b.id).length - items.filter((i) => i.block === a.id).length);
+  const sectors = sectorBlocks.map((b) => { const mine = items.filter((i) => i.block === b.id); const groups = new Map(); for (const i of mine) { const k = i.kind === "fund" ? "FUNDS" : i.cohortId || "NONE YET"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
+    const cohorts = [...groups.entries()].map(([k, list]) => ({ k, list, label: k === "FUNDS" ? "FUNDS" : k === "NONE YET" ? "NONE YET" : (state.byId.get(k) || {}).label || k, mean: list.filter((x) => x.v != null).reduce((s, x) => s + x.v, 0) / Math.max(1, list.filter((x) => x.v != null).length) })).sort((a, b) => (a.k === "FUNDS" ? 1 : b.k === "FUNDS" ? -1 : 0) || b.mean - a.mean);
+    return row(b.id, 2, b.short, mine.length, cohorts.map((c) => row(b.id + "|" + c.k, 3, c.label, c.list.length, c.list.map((i) => i.n).sort(byReadingNode).map(nameRow).join(""), c.k === "FUNDS" || c.k === "NONE YET" ? "group" : "cohort")).join(""), "block"); }).join("");
+  const lists = hubLists().filter((n) => n.listMembers.length).map((n) => row(n.id, 2, n.label, n.listMembers.length, n.listMembers.slice().sort(byReadingNode).map(nameRow).join(""), "list")).join("");
+  nav.innerHTML = `<div class="lg"><i class="on">●</i> ON THE HUB LIVE · <i class="cl">○</i> AT THE CLOSE · · NO READING</div>` + row("MARKET", 0, "THE MARKET", items.length, row("INDEXES", 1, "INDEXES", ringItems.length, ringRows, "ring") + row("SECTORS", 1, "SECTORS · AREAS", sectorBlocks.length, sectors, "sectors") + (lists ? row("LISTS", 1, "MY LISTS", hubLists().filter((n) => n.listMembers.length).length, lists, "lists") : ""), "market");
+  syncNav();
+}
+function navChainOf(id) { // the rows that must be open for `id` to show
+  const n = state.byId.get(id); const it = n && itemOf.get(n.id); const out = ["MARKET"];
+  if (id === "RING") out.push("INDEXES"); else if (it && it.block === "RING") out.push("INDEXES", "RING|" + it.industry); else if (it) out.push("SECTORS", it.block, it.block + "|" + (it.kind === "fund" ? "FUNDS" : it.cohortId || "NONE YET")); else if (n && n.kind === "cohort") { const b = blockOf(n); out.push("SECTORS", b, b + "|" + n.id); } else if (n && n.kind === "list") out.push("LISTS"); else if (id && (BLOCK_IDS.has(id) || blocks.some((b) => b.id === id))) out.push("SECTORS", id); else if (n && n.kind === "index") { const kid = items.find((i) => i.homeBlock === id) || null; out.push("SECTORS"); if (kid) out.push(kid.block); }
+  return out;
+}
+function navRowId(id) { const n = state.byId.get(id); const it = n && itemOf.get(n.id); if (n && n.kind === "cohort") return blockOf(n) + "|" + n.id; if (n && n.kind === "list") return n.id; return id; }
+function syncNav() {
+  const nav = $("tree"); if (!nav.firstChild) return;
+  const cur = state.cluster || state.selected || null; let changed = false;
+  if (cur) for (const id of navChainOf(cur)) if (!navOpen.has(id)) { navOpen.add(id); changed = true; }
+  if (changed) { renderNav(); return; }
+  nav.querySelectorAll(".r.cur").forEach((e) => e.classList.remove("cur"));
+  const rid = cur ? navRowId(cur) : null; const el = rid && nav.querySelector(`.r[data-nav="${CSS.escape(rid)}"]`); if (el) { el.classList.add("cur"); el.scrollIntoView({ block: "nearest" }); }
+}
+$("tree").addEventListener("click", (e) => { const r = e.target.closest(".r[data-nav]"); if (!r) return; const id = r.dataset.nav, kind = r.dataset.kind; const onToggle = e.target.closest(".tg");
+  if (onToggle || kind === "ring" || kind === "sectors" || kind === "lists" || kind === "ringrow" || kind === "group" || kind === "market") { if (navOpen.has(id)) navOpen.delete(id); else navOpen.add(id); renderNav(); if (kind === "market") { if (state.cluster) closeCoil(); release(); cv.home(600); } if (kind === "ring") { if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas"); cv.openBlock("RING"); } return; }
+  if (state.cluster) closeCoil(); if (state.view !== "canvas") setView("canvas");
+  if (kind === "name") { const n = state.byId.get(id); if (n) { select(n); cv.find(n.id); } return; }
+  if (kind === "block") { navOpen.add(id); renderNav(); const n = state.byId.get(id); if (n) select(n); cv.openBlock(id); return; }
+  if (kind === "cohort") { const [, cid] = id.split("|"); navOpen.add(id); renderNav(); const n = state.byId.get(cid); if (n) select(n); cv.frameCohort(cid); return; }
+  if (kind === "list") { openList(id); }
+});
+state.nav = () => ({ rows: $("tree").querySelectorAll(".r").length, names: $("tree").querySelectorAll(".r.d4").length, cur: ($("tree").querySelector(".r.cur") || {}).dataset ? $("tree").querySelector(".r.cur").dataset.nav : null, open: [...navOpen], marks: { live: $("tree").querySelectorAll(".m.on").length, close: $("tree").querySelectorAll(".m.cl").length, none: $("tree").querySelectorAll(".m.no").length }, shown: !$("main").classList.contains("nonav") });
+
 /* ---- the crumbs: where you are ---- */
 function crumbs() {
-  const el = $("crumbs"); if (state.cluster) { const n = state.byId.get(state.cluster); el.innerHTML = `${esc(pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") || "THE MARKET")} › <b>${esc(SHORT[n.id] || n.label)}</b> · <span class="lv">PODIUM${coil && coil.walking() ? " · WALK" : ""}</span>`; return; }
+  const el = $("crumbs"); syncNav(); if (state.cluster) { const n = state.byId.get(state.cluster) || { id: state.cluster, label: SHORT[state.cluster] || state.cluster, parents: [] }; el.innerHTML = `${esc(pathOf(n).map((p) => SHORT[p.id] || p.label).join(" › ") || "THE MARKET")} › <b>${esc(SHORT[n.id] || n.label)}</b> · <span class="lv">PODIUM${coil && coil.walking() ? " · WALK" : ""}</span>`; return; }
   if (state.view === "outline") { el.innerHTML = `<b>THE MARKET</b> · <span class="lv">OUTLINE</span>`; return; }
   const L = cv.level(), lv = LEVELS[L].name; const sel = state.selected && state.byId.get(state.selected); const where = sel ? pathOf(sel).map((p) => SHORT[p.id] || p.label).concat([sel.ticker || SHORT[sel.id] || sel.label]).join(" › ") : "THE MARKET";
   el.innerHTML = `${esc(where)} · <span class="lv">${lv}</span> · ${cv.pose().s.toFixed(1)} ×`;
@@ -321,7 +450,7 @@ state.elevation = () => (coil ? coil.elevation() : null); state.orbitTo = (el, a
 state.dropped = ["DETAILED", "ORDER · GREEN → RED | BY SIZE", "FLAT 2D", "WHOLE MAP (→ RESET)", "the 3D whole-map view", "OPEN 3D on a section (the balls area)", "FROM ABOVE | PODIUM 3D", "KEY · what every mark means", "the hint line", "LET GO ✕", "≡ LIST as a separate crumb"];
 
 /* ---- start ---- */
-paintLists(); setView(state.view); crumbs();
+paintLists(); renderNav(); setView(state.view); crumbs(); drawAllLinks();
 const q0 = new URLSearchParams(location.search); if (q0.get("t")) find(q0.get("t"));
 state.ready = true;
 </script>

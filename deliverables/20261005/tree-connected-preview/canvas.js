@@ -20,9 +20,18 @@
    base 12 px at home, floor 11, ceiling 24 on 1080 tall; the ticker thins where cells would overlap it when zoomed OUT, strongest
    reading first, and comes back zoomed in).
 
-   mountCanvas(host, { items, blocks, hub, onPick, onOpen, onCoil, onHover }) → api
+   T14 (5 Oct 2026, night) — THE RING AND THE LINKS. Alan: "everything feels so separate… I don't see the connection of things that
+   are under technology to other areas of the market. Like the indexes." Two additions, nothing else moved:
+     · the block whose id is "RING" is the top level above the sectors: the market's indexes (the broad five and the sector SPDRs),
+       one Hub cell each, in rows by their `industry` (BROAD INDEXES / SECTOR FUNDS), centred, title first — laid out as the first
+       band at every level, inside the same bisection on k, so it is always the same pitch as the sectors beneath it
+     · an SVG layer inside the stage (so it pans and zooms with the cells) that draws lines between anchors: index → sector (its
+       weight), a ticker → every place it lives, cohort ↔ cohort across sectors. Quiet until hovered (the page sets the classes;
+       the colours are the Hub's tokens, in the page's CSS). setLinks(group, lines) · anchor(id) · cohortAnchor(cohortId) · hot(ids)
+
+   mountCanvas(host, { items, blocks, hub, onPick, onOpen, onCoil, onHover, onLayout }) → api
      items:  [{ id, t, kind: "name" | "fund", v, label, block, industry, cohort, cohortId, cap, day }]
-     blocks: [{ id, label, short, path }] in the order they tile */
+     blocks: [{ id, label, short, path }] in the order they tile — "RING", when present, is the top band */
 import { labelPx, thinLabels } from "./label-scale.mjs";
 
 export const CELL = { w: 88, h: 28, gap: 3, title: 20, caption: 14, ratio: 88 / 28, line2: 14 }; // the home pitch at k = 1 (px on the 1920 × 1080 Apple TV); the cell's shape = the Hub bar's 3.2 : 1
@@ -60,7 +69,10 @@ export function layoutLevel(items, blocks, W, H, level, cell = CELL) {
   for (const it of items) if (byBlock.has(it.block)) byBlock.get(it.block).push(it);
   const groupsOf = (list) => { const g = new Map(); for (const it of list.slice().sort(byReading)) { const k = groupKey(it, level); if (!g.has(k)) g.set(k, []); g.get(k).push(it); } // groups ordered by their mean reading, green → red
     return [...g.entries()].map(([k, v]) => ({ key: k, items: v, mean: v.filter((x) => x.v != null).reduce((s, x) => s + x.v, 0) / Math.max(1, v.filter((x) => x.v != null).length) })).sort((a, b) => b.mean - a.mean); };
-  const prepared = blocks.map((b) => ({ ...b, items: byBlock.get(b.id) || [], groups: groupsOf(byBlock.get(b.id) || []) })).filter((b) => b.items.length).sort((a, b) => b.items.length - a.items.length);
+  const ringBlock = blocks.find((b) => b.id === "RING"), ringItems = ringBlock ? byBlock.get("RING") || [] : [];
+  // T14: the ring's rows are its `industry` groups (BROAD INDEXES first), each row green → red, at every level
+  const ringRows = (() => { const g = new Map(); for (const it of ringItems.slice().sort(byReading)) { if (!g.has(it.industry)) g.set(it.industry, []); g.get(it.industry).push(it); } return [...g.entries()].map(([key, v]) => ({ key, items: v })).sort((a, b) => (a.key === "BROAD INDEXES" ? -1 : b.key === "BROAD INDEXES" ? 1 : 0)); })();
+  const prepared = blocks.filter((b) => b.id !== "RING").map((b) => ({ ...b, items: byBlock.get(b.id) || [], groups: groupsOf(byBlock.get(b.id) || []) })).filter((b) => b.items.length).sort((a, b) => b.items.length - a.items.length);
   const ch = level >= 3 ? cell.h + cell.line2 : cell.h;
   // the rows a block needs at `cols` columns (its groups stacked, a caption each above level 0), in cell heights
   // the rows a block needs at c columns, for every c, once (it does not depend on the pitch): non-increasing in c, so colsFor is a binary search
@@ -80,12 +92,21 @@ export function layoutLevel(items, blocks, W, H, level, cell = CELL) {
     const best = new Array(N + 1).fill(null); best[N] = { rows: 0, next: null };
     for (let i = N - 1; i >= 0; i--) { let bi = null; for (let j = i + 1; j <= N; j++) { const bd = bandOf(i, j); if (!bd) break; const rows = bd.R + T + best[j].rows; if (!bi || rows < bi.rows - 1e-9) bi = { rows, next: j, band: bd }; } best[i] = bi || { rows: 1e9, next: N, band: { S: prepared.slice(i), R: Math.max(...prepared.slice(i).map((b) => Math.ceil(rowsAt(b, 1)))), cols: prepared.slice(i).map(() => 1), w: W } }; } // the fallback (a block too wide for the canvas at this pitch) keeps its rows honest, so the bisection on k rejects it
     const bands = []; for (let i = 0; i < N; i = best[i].next) bands.push(best[i].band);
-    const height = bands.reduce((s, bd) => s + title + bd.R * chh + gap, 0);
-    return { bands, height, cw, chh, gap, title };
+    const ringH = ringItems.length ? title + ringRows.length * (cell.caption * k + chh) + gap : 0; // T14: the ring is the first band
+    const height = ringH + bands.reduce((s, bd) => s + title + bd.R * chh + gap, 0);
+    return { bands, height, cw, chh, gap, title, ringH };
   };
   let lo = 0.05, hi = 3; for (let n = 0; n < 40; n++) { const k = (lo + hi) / 2; if (pack(k).height <= H) lo = k; else hi = k; }
   const k = lo, P = pack(k), { cw, chh, gap, title } = P;
   const cells = [], titles = [], captions = [], tiles = []; let y = 0;
+  if (ringItems.length) { // T14: the market's indexes, centred, one row per kind, the same pitch as every sector cell beneath
+    const widest = Math.max(...ringRows.map((r) => r.items.length)) * cw; const tw = Math.min(W, Math.max(widest + 2 * gap, W)); let yy = y;
+    tiles.push({ id: "RING", x: 0, y, w: tw, h: P.ringH, n: ringItems.length });
+    titles.push({ id: "RING", label: ringBlock.label, short: ringBlock.short, x: gap, y: yy, w: tw - 2 * gap, h: title, n: ringItems.length, up: ringItems.filter((i) => i.v > 0).length, down: ringItems.filter((i) => i.v < 0).length, tile: { x: 0, y, w: tw, h: P.ringH } });
+    yy += title;
+    for (const r of ringRows) { const x0 = Math.max(gap, (W - r.items.length * cw) / 2); captions.push({ id: `RING|${r.key}`, block: "RING", key: r.key, cohortId: null, cohort: null, industry: r.key, x: x0, y: yy, w: r.items.length * cw, h: cell.caption * k, n: r.items.length, mean: 0 }); yy += cell.caption * k; r.items.forEach((it, i) => cells.push({ id: it.id, it, x: x0 + i * cw, y: yy, w: cw - gap, h: chh - gap })); yy += chh; }
+    y += P.ringH;
+  }
   for (const bd of P.bands) {
     const spare = Math.max(0, W - bd.w), add = spare / bd.S.length; let x = 0; // the band's leftover width is shared between its blocks' tiles (the cells stay the pitch)
     bd.S.forEach((b, j) => {
@@ -113,6 +134,9 @@ export function mountCanvas(host, opts) {
   const fmtG = (g) => (g > 0 ? "+" : "") + g.toFixed(2);
   const fmtCap = (v) => (v >= 1e12 ? "$" + (v / 1e12).toFixed(2) + "T" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : v > 0 ? "$" + (v / 1e6).toFixed(0) + "M" : "");
   const stage = $("div", "stage"); const layerT = $("div", "titles"), layerC = $("div", "captions"), layerX = $("div", "cells"); stage.append(layerT, layerC, layerX); host.appendChild(stage);
+  // T14: the link layer — SVG inside the stage, so every line pans and zooms with the cells it joins; strokes never scale
+  const SVG = "http://www.w3.org/2000/svg"; const layerL = document.createElementNS(SVG, "svg"); layerL.setAttribute("class", "links"); layerL.setAttribute("overflow", "visible"); stage.insertBefore(layerL, layerT); // under the cells: a line never crosses a ticker
+  const linkGroups = new Map(), linkEls = [];
   const view = { w: 1, h: 1 }, cam = { s: 1, tx: 0, ty: 0 }; let lay = null, level = 0, homeLay = null, selected = null, raf = 0, busy = false, fitDone = false;
   const cellEl = new Map(), titleEl = new Map(), capEl = new Map();
   /* the Hub cell: ticker (the Hub's ticker type) · the value (bull / bear, tabular) · the Hub's composite track under them (gs-cgr —
@@ -131,11 +155,32 @@ export function mountCanvas(host, opts) {
     const keep = new Set();
     for (const c of L.captions) { keep.add(c.id); let e = capEl.get(c.id); if (!e) { e = $("div", "caption" + (c.cohortId ? " coh" : "")); e.dataset.id = c.id; if (c.cohortId) e.dataset.coil = c.cohortId; capEl.set(c.id, e); layerC.appendChild(e); } e.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0)`; e.style.width = c.w.toFixed(1) + "px"; e.style.height = c.h.toFixed(1) + "px"; e.innerHTML = `<span>${esc(c.key)}</span><span class="cnt">${c.n}${c.cohortId ? " · PODIUM" : ""}</span>`; }
     for (const [id, e] of capEl) if (!keep.has(id)) { e.remove(); capEl.delete(id); }
+    layerL.setAttribute("width", L.W); layerL.setAttribute("height", L.H); layerL.setAttribute("viewBox", `0 0 ${L.W} ${L.H}`);
     scheduleLabels(true);
+    if (opts.onLayout) opts.onLayout(L); // T14: the page redraws its lines on the new anchors
   }
+  /* T14: anchors (stage px) and the lines between them */
+  function anchor(id) { const L = lay || homeLay; if (!L) return null; const c = L.cells.find((x) => x.id === id); if (c) return { x: c.x + c.w / 2, y: c.y + c.h / 2, kind: "cell" }; const t = L.titles.find((x) => x.id === id); if (t) return { x: t.x + t.w / 2, y: t.y + t.h / 2, kind: "title" }; const cp = L.captions.find((x) => x.id === id); if (cp) return { x: cp.x + cp.w / 2, y: cp.y + cp.h / 2, kind: "caption" }; return null; }
+  function cohortAnchor(cohortId) { const L = lay || homeLay; if (!L) return null; const cp = L.captions.find((x) => x.cohortId === cohortId); if (cp) return { x: cp.x + cp.w / 2, y: cp.y + cp.h / 2, kind: "caption", n: cp.n }; const cs = L.cells.filter((c) => c.it.cohortId === cohortId); if (!cs.length) return null; return { x: cs.reduce((s, c) => s + c.x + c.w / 2, 0) / cs.length, y: cs.reduce((s, c) => s + c.y + c.h / 2, 0) / cs.length, kind: "centroid", n: cs.length }; }
+  function setLinks(group, lines) {
+    let g = linkGroups.get(group); if (!g) { g = document.createElementNS(SVG, "g"); g.dataset.group = group; layerL.appendChild(g); linkGroups.set(group, g); }
+    while (g.firstChild) g.removeChild(g.firstChild);
+    for (let i = linkEls.length - 1; i >= 0; i--) if (linkEls[i].group === group) linkEls.splice(i, 1);
+    for (const l of lines || []) {
+      if (!l.from || !l.to) continue;
+      const p = document.createElementNS(SVG, "path"); const dx = l.to.x - l.from.x, dy = l.to.y - l.from.y, mx = (l.from.x + l.to.x) / 2, my = (l.from.y + l.to.y) / 2;
+      const bow = l.bow == null ? 0.12 : l.bow; const cx = mx - dy * bow, cy = my + dx * bow; // a shallow arc: two lines between the same pair never lie on each other
+      p.setAttribute("d", `M${l.from.x.toFixed(1)},${l.from.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${l.to.x.toFixed(1)},${l.to.y.toFixed(1)}`);
+      p.setAttribute("class", "ln " + (l.cls || "") + (l.lit ? " lit" : "")); p.style.setProperty("--sw", (l.w || 1).toFixed(2)); p.dataset.a = l.a; p.dataset.b = l.b; g.appendChild(p);
+      let t = null; if (l.label) { t = document.createElementNS(SVG, "text"); const u = 0.78, q = (a, b, c) => (1 - u) * (1 - u) * a + 2 * (1 - u) * u * b + u * u * c; t.setAttribute("x", q(l.from.x, cx, l.to.x).toFixed(1)); t.setAttribute("y", (q(l.from.y, cy, l.to.y) - 3).toFixed(1)); /* the label sits near the far end, where the line lands */ t.setAttribute("class", "lb " + (l.cls || "")); t.textContent = l.label; g.appendChild(t); }
+      linkEls.push({ group, a: l.a, b: l.b, p, t });
+    }
+  }
+  function hot(ids) { const S = new Set(ids || []); for (const e of linkEls) { const on = S.has(e.a) || S.has(e.b) || S.has(e.a + "↔" + e.b); e.p.classList.toggle("hot", on); if (e.t) e.t.classList.toggle("hot", on); } }
+  const linkCount = (group) => (group ? linkEls.filter((e) => e.group === group).length : linkEls.length);
   function fit() { view.w = host.clientWidth || 1; view.h = host.clientHeight || 1; const L = layoutLevel(items, blocks, view.w, view.h, 0); homeLay = L; if (!lay || lay.level === 0) applyLayout(L, false); if (!fitDone) { fitDone = true; cam.s = 1; cam.tx = 0; cam.ty = 0; } applyCam(); }
   let lastLpx = ""; const clampCam = () => { const L = lay || homeLay; if (!L) return; const sw = L.W * cam.s, sh = L.H * cam.s; cam.tx = sw <= view.w ? (view.w - sw) / 2 : Math.max(view.w - sw, Math.min(0, cam.tx)); cam.ty = sh <= view.h ? (view.h - sh) / 2 : Math.max(view.h - sh, Math.min(0, cam.ty)); }; // the view never leaves the stage: a smaller stage sits centred, a bigger one is clamped at its edges
-  const applyCam = () => { clampCam(); stage.style.transform = `translate3d(${cam.tx.toFixed(1)}px,${cam.ty.toFixed(1)}px,0) scale(${cam.s.toFixed(4)})`; const L = labelPx(1 / cam.s, 1, view.h, LABEL); const lpx = (Math.round((L.px / cam.s) * 2) / 2).toFixed(1) + "px"; /* half-pixel steps: a font-size change re-lays 614 cells, so not on every frame */ if (lpx !== lastLpx) { lastLpx = lpx; stage.style.setProperty("--lpx", lpx); } setLevel(levelOf(cam.s)); scheduleLabels(); };
+  const applyCam = () => { clampCam(); stage.style.transform = `translate3d(${cam.tx.toFixed(1)}px,${cam.ty.toFixed(1)}px,0) scale(${cam.s.toFixed(4)})`; const L = labelPx(1 / cam.s, 1, view.h, LABEL); const lpx = (Math.round((L.px / cam.s) * 2) / 2).toFixed(1) + "px"; /* half-pixel steps: a font-size change re-lays 614 cells, so not on every frame */ if (lpx !== lastLpx) { lastLpx = lpx; stage.style.setProperty("--lpx", lpx); stage.style.setProperty("--ls", (1 / cam.s).toFixed(4)); } /* T14: --ls = 1 / zoom, so a line keeps its screen width (vector-effect cannot see the stage's CSS transform) */ setLevel(levelOf(cam.s)); scheduleLabels(); };
   function setLevel(L) { if (L === level) return; level = L; applyLayout(L === 0 ? (homeLay || layoutLevel(items, blocks, view.w, view.h, 0)) : layoutLevel(items, blocks, view.w, view.h, L), true); if (opts.onLevel) opts.onLevel(L); }
   /* the ticker thins where cells would overlap it zoomed OUT (label-scale: strongest first); zoomed in every ticker prints */
   let thinS = -1; function scheduleLabels(force) { if (!force && cam.s >= 1 && thinS >= 1 && printed === (lay ? lay.cells.length : 0)) { thinS = cam.s; return; } thinS = cam.s; thin(); } // synchronous (the proof reads the count right after a move); zoomed in every ticker fits, so nothing to thin
@@ -150,7 +195,8 @@ export function mountCanvas(host, opts) {
   /* pan: drag · zoom: the wheel, toward the pointer · pinch on touch */
   let drag = null;
   host.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, tx: cam.tx, ty: cam.ty, moved: false, t: performance.now() }; host.setPointerCapture(e.pointerId); });
-  host.addEventListener("pointermove", (e) => { if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 4) drag.moved = true; if (drag.moved) { cam.tx = drag.tx + dx; cam.ty = drag.ty + dy; applyCam(); host.classList.add("dragging"); } return; } if (opts.onHover) { const c = e.target.closest(".cell"); opts.onHover(c ? c.dataset.id : null, e.clientX, e.clientY); } });
+  host.addEventListener("pointermove", (e) => { if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 4) drag.moved = true; if (drag.moved) { cam.tx = drag.tx + dx; cam.ty = drag.ty + dy; applyCam(); host.classList.add("dragging"); } return; } if (opts.onHover) { const c = e.target.closest(".cell"); opts.onHover(c ? c.dataset.id : null, e.clientX, e.clientY); } // T14: hovering a cell, a title or a caption lights every line that touches it
+    const el = e.target.closest(".cell,.title,.caption"); const ids = []; if (el) { ids.push(el.dataset.id); if (el.dataset.coil) ids.push(el.dataset.coil); const c = el.classList.contains("cell") && (lay || homeLay).cells.find((x) => x.id === el.dataset.id); if (c && c.it.cohortId) ids.push(c.it.cohortId); } hot(ids); /* a cell lights its own lines and its cohort's; a title lights its block's */ if (opts.onHoverAny) opts.onHoverAny(ids); });
   host.addEventListener("pointerup", (e) => { const d = drag; drag = null; host.classList.remove("dragging"); if (!d || d.moved) return; const t = e.target; const coil = t.closest("[data-coil]"); if (coil) { if (opts.onCoil) opts.onCoil(coil.dataset.coil); return; } const c = t.closest(".cell"); if (c) { select(c.dataset.id); if (opts.onPick) opts.onPick(c.dataset.id); return; } const ti = t.closest(".title"); if (ti) { openBlock(ti.dataset.id); if (opts.onOpen) opts.onOpen(ti.dataset.id); return; } });
   host.addEventListener("wheel", (e) => { e.preventDefault(); const f = Math.exp(-e.deltaY * 0.0015); zoomAt(e.clientX, e.clientY, f); }, { passive: false });
   host.addEventListener("dblclick", (e) => { if (e.target.closest(".cell,.title,.caption")) return; home(600); });
@@ -183,6 +229,9 @@ export function mountCanvas(host, opts) {
     // boxes never overlap and never leave their tile: the test and the proof read it
     overlaps: () => { const c = lay.cells; let n = 0; for (let i = 0; i < c.length; i++) for (let j = i + 1; j < c.length; j++) { const a = c[i], b = c[j]; if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) n++; } return n; },
     stage, refresh(itemsNow) { for (const it of itemsNow || items) { const e = cellEl.get(it.id); if (e) { e.innerHTML = cellHTML(it); e.classList.toggle("hollow", it.v == null); } } },
+    // T14: the links
+    anchor, cohortAnchor, setLinks, hot, linkCount, frameRect, viewSize: () => ({ w: view.w, h: view.h }),
+    frameCohort(cohortId, ms = 700) { const L = lay || homeLay; const cs = L.cells.filter((c) => c.it.cohortId === cohortId); if (!cs.length) return false; const x0 = Math.min(...cs.map((c) => c.x)), y0 = Math.min(...cs.map((c) => c.y)), x1 = Math.max(...cs.map((c) => c.x + c.w)), y1 = Math.max(...cs.map((c) => c.y + c.h)); frameRect({ x: x0 - 20, y: y0 - 30, w: x1 - x0 + 40, h: y1 - y0 + 60 }, ms, 10, 6); return true; },
   };
   return api;
 }
