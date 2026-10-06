@@ -13,9 +13,17 @@
 // channel's Live tab when the /live read could not be read, and stores one line per channel. Two read-only doors,
 // neither touching a table or the YouTube API:  ?probe=live&channel=UC…[&video=…]  what each way of asking looks
 // like from here;  ?dry=live[&also=UC…][&ways=both]  the whole on-air pass, reported, nothing written.
+// v10 (Y4, 6 Oct): "Tyler Wilson … is on a live video. The live video is not on my grid at all … Verified Investing
+// slips through the cracks … it depended on when the video was scheduled or released … Everything subscribed."
+// (the Y4 rules at the end of _shared/yt-bridge.mjs)  1. the on-air check asks every carried channel that streams, not only the bridged
+// ones, and the rest in turn;  2. a scheduled stream is re-asked about by its START time, whatever its publish
+// date;  3. a stream YouTube calls live without a start time takes the first moment we saw it live;  4. a
+// subscribed video is never dropped for its language tag or its title's script.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore  plain ESM shared with the resolver and the Node tests
-import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN } from "../_shared/yt-bridge.mjs";
+// @ts-ignore  plain ESM shared with the resolver and the Node tests
+import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN,
+  onAirPlan, watchableStart, refreshOrder, keepSubscribed, STREAMER_DAYS, UPCOMING_BACK_DAYS, UPCOMING_MAX } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -311,9 +319,24 @@ Deno.serve(async (req?: Request) => {
   try { liveState = JSON.parse(c.yt_bridge_live || "{}") || {}; } catch (_) {}
   const liveProbe: Record<string, any> = { ran: false, checked: 0, on_air: [] as string[], unknown: 0 };
   const forceRefresh: string[] = [];
-  if (bridgeIds.length && liveProbeDue(now * 1000, +liveState.last_ms || 0, LIVE_EVERY_MIN)) {
-    const { pick, cursor } = liveProbePick(bridgeIds, liveState.cursor);
+  /* Y4: which accounts carry a channel — a stream found on air is filed under the accounts that carry its channel */
+  const channelAccounts = new Map<string, Set<Account>>();
+  for (const account of ACCOUNTS) for (const id of accountChannels[account]) {
+    if (!channelAccounts.has(id)) channelAccounts.set(id, new Set<Account>());
+    channelAccounts.get(id)!.add(account);
+  }
+  if (channelAccounts.size && liveProbeDue(now * 1000, +liveState.last_ms || 0, LIVE_EVERY_MIN)) {
+    /* the carried channels that have streamed lately are asked EVERY check; the others take turns */
+    let streamers: string[] = [];
+    try {
+      const { data: streamRows } = await sb.from("youtube_videos").select("channel_id")
+        .gte("live_started_at", new Date((now - STREAMER_DAYS * 86400) * 1000).toISOString()).limit(3000);
+      streamers = [...new Set((streamRows || []).map((row: Record<string, any>) => row.channel_id as string))];
+    } catch (_) {}
+    const plan = onAirPlan({ bridgeIds, carried: [...channelAccounts.keys()], streamers, cursor: liveState.turn_cursor });
+    const pick: string[] = plan.pick, cursor = liveProbePick(bridgeIds, liveState.cursor).cursor;
     liveProbe.ran = true;
+    liveProbe.asked = { always: plan.always, in_turn: plan.in_turn, waiting: plan.waiting, full_round_checks: plan.full_round_checks };
     const lines: Record<string, any>[] = await onAirPass(pick, fetch);
     for (const line of lines) {
       liveProbe.checked++;
@@ -322,13 +345,14 @@ Deno.serve(async (req?: Request) => {
       liveProbe.on_air.push(line.video);
       forceRefresh.push(line.video);
       const current = candidates.get(line.video);
-      if (current) current.accounts.add("scintilla");
-      else candidates.set(line.video, { ...liveCandidateRow(line.id, line.live, now), accounts: new Set<Account>(["scintilla"]) });
+      const carriers = channelAccounts.get(line.id) || new Set<Account>(["scintilla"]);
+      if (current) for (const account of carriers) current.accounts.add(account);
+      else candidates.set(line.video, { ...liveCandidateRow(line.id, line.live, now), accounts: new Set<Account>(carriers) });
     }
     /* one line per channel read this pass (id · outcome · marker · way · video · where the read ended), so the next
        miss can be read off the row instead of guessed at */
     await sb.from("app_config").upsert({ key: "yt_bridge_live", value: JSON.stringify({
-      last_ms: now * 1000, cursor, checked: liveProbe.checked, on_air: liveProbe.on_air, unknown: liveProbe.unknown,
+      last_ms: now * 1000, cursor, turn_cursor: plan.cursor, asked: liveProbe.asked, checked: liveProbe.checked, on_air: liveProbe.on_air, unknown: liveProbe.unknown,
       at: new Date(now * 1000).toISOString(), channels: lines.map(onAirLine) }) });
   }
 
@@ -361,7 +385,7 @@ Deno.serve(async (req?: Request) => {
   const seen = new Set<string>();
   const fresh = [...candidates.values()].filter((candidate) => {
     if (known.has(candidate.video_id)) return false;
-    if (FOREIGN.test(String(candidate.title || ""))) return false;
+    if (!keepSubscribed(candidate) && FOREIGN.test(String(candidate.title || ""))) return false;
     if (seen.has(candidate.video_id)) return false;
     seen.add(candidate.video_id);
     return true;
@@ -390,7 +414,8 @@ Deno.serve(async (req?: Request) => {
        appear once some later pass happened to catch it after it went on air. */
     const keep = fresh.filter((row) => {
       const lang = language[row.video_id] || "";
-      if (lang && lang.slice(0, 2) !== "en") { dropped++; return false; }
+      /* Y4: "Everything subscribed." A carried channel's video is kept whatever its language tag says. */
+      if (lang && lang.slice(0, 2) !== "en" && !keepSubscribed(row, lang)) { dropped++; return false; }
       return true;
     });
     for (let i = 0; i < keep.length; i += 16) {
@@ -401,10 +426,14 @@ Deno.serve(async (req?: Request) => {
     const rows = keep.map((row) => {
       const accounts = [...row.accounts].sort();
       const { accounts: _, ...plain } = row;
+      const fields = detail[row.video_id] || { duration_sec: null, live_broadcast: null, live_started_at: null,
+        live_ended_at: null, live_scheduled_at: null, live_checked_ts: now };
       return {
         ...plain,
-        ...(detail[row.video_id] || { duration_sec: null, live_broadcast: null, live_started_at: null,
-          live_ended_at: null, live_scheduled_at: null, live_checked_ts: now }),
+        ...fields,
+        /* a stream YouTube calls live without a start time: the first moment we saw it live */
+        live_started_at: watchableStart({ broadcast: fields.live_broadcast, actualStart: fields.live_started_at,
+          storedStart: null, nowIso: new Date(now * 1000).toISOString() }),
         is_short: row.is_short === true,
         subscription_accounts: accounts,
       };
@@ -442,8 +471,23 @@ Deno.serve(async (req?: Request) => {
       .select("video_id").eq("live_broadcast", "live")
       .order("live_checked_ts", { ascending: true, nullsFirst: true }).limit(50);
     const liveSaid = new Set((stillLive || []).map((row) => row.video_id as string));
-    const watchIds = [...new Set([...forceRefresh, ...(stillLive || []).map((row) => row.video_id as string),
-      ...(watching || []).map((row) => row.video_id as string)])].slice(0, REFRESH_MAX);
+    /* Y4: a scheduled stream is re-asked about by its START time. The window above is on the publish date, and a
+       stream is "published" the day it is scheduled — one scheduled more than three days ahead was never asked
+       about again and stayed "upcoming" through its own broadcast (17 such rows on 6 Oct). */
+    const { data: scheduled } = await sb.from("youtube_videos")
+      .select("video_id").eq("live_broadcast", "upcoming")
+      .gte("live_scheduled_at", new Date((now - UPCOMING_BACK_DAYS * 86400) * 1000).toISOString())
+      .order("live_scheduled_at", { ascending: true }).limit(UPCOMING_MAX);
+    const watchIds: string[] = refreshOrder({ found: forceRefresh,
+      stillLive: (stillLive || []).map((row) => row.video_id as string),
+      upcoming: (scheduled || []).map((row) => row.video_id as string),
+      recent: (watching || []).map((row) => row.video_id as string) }).slice(0, REFRESH_MAX);
+    /* the start time we already hold, so "the first moment we saw it live" is written once and never moved */
+    const heldStart = new Map<string, string | null>();
+    for (let i = 0; i < watchIds.length; i += 200) {
+      const { data: held } = await sb.from("youtube_videos").select("video_id,live_started_at").in("video_id", watchIds.slice(i, i + 200));
+      for (const row of held || []) heldStart.set(row.video_id as string, (row.live_started_at as string) || null);
+    }
     for (let i = 0; i < watchIds.length; i += 50) {
       const r = await apiKeyRequest(
         "videos?part=" + LIVE_PART + "&id=" + watchIds.slice(i, i + 50).join(",") + "&maxResults=50",
@@ -463,8 +507,11 @@ Deno.serve(async (req?: Request) => {
       }
       for (let j = 0; j < items.length; j += 16) {
         await Promise.all(items.slice(j, j + 16).map(async (item: Record<string, any>) => {
+          const fields = liveFields(item, now);
+          fields.live_started_at = watchableStart({ broadcast: fields.live_broadcast, actualStart: fields.live_started_at,
+            storedStart: heldStart.get(item.id) || null, nowIso: new Date(now * 1000).toISOString() });
           const { error } = await sb.from("youtube_videos")
-            .update(liveFields(item, now)).eq("video_id", item.id);
+            .update(fields).eq("video_id", item.id);
           if (error) refreshError = error.message;
           else refreshed++;
         }));

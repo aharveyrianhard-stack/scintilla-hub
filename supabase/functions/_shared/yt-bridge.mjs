@@ -342,3 +342,69 @@ export function liveCandidateRow(channelId, live, nowSec) {
     url: "https://www.youtube.com/watch?v=" + live.video_id, published_at: new Date(nowSec * 1000).toISOString(),
     source: "subscription", ticker: null, updated_ts: nowSec };
 }
+
+/* ================================================================================================================
+   Y4 · the rules the Station's YouTube grid is collected by (Y4, 6 Oct 2026).
+   
+   Alan, 6 Oct: "Tyler Wilson … he's on a live video. The live video is not on my grid at all … Verified Investing
+   slips through the cracks as well … it depended on when the video was scheduled or released … I need to see it
+   when it starts … I absolutely need it in chronological order. Everything subscribed."
+   
+   Measured that morning (deliverables/20261006/y4-youtube-feed):
+   · the on-air page check asked only the 37 BRIDGED channels; Tyler Wilson is a subscribed channel, so his
+   stream waited for YouTube's channel feed and reached the table 8 min 21 s after it started;
+   · a stored stream was re-asked about only while its PUBLISH date was under three days old, and a stream is
+   "published" when it is scheduled — 17 rows said "upcoming" after their start had passed (Arete Trading,
+   scheduled 5½ days ahead, was last asked about three days after it was created and never again);
+   · a subscribed video whose language tag was not English was dropped at the door.
+   Pure functions (no network, no table).
+   ================================================================================================================ */
+
+/* ---- WHO IS ASKED "ARE YOU ON AIR?" ----
+   Every check asks the channels that are likely to be streaming: the bridged ones (as before) and every carried
+   channel that has streamed in the last STREAMER_DAYS days. The rest of the carried channels take turns in what
+   is left of the pass, so a channel that has never streamed for us is still asked within a few checks.
+   ON_AIR_ALWAYS_MAX keeps the "always" set inside the pass's time budget (yt-bridge ON_AIR_BUDGET_MS, 45 s:
+   37 pages took 2.8 s on 5 Oct); ON_AIR_PER_PASS is the whole pass. */
+export const STREAMER_DAYS = 30;
+export const ON_AIR_ALWAYS_MAX = 90;
+export const ON_AIR_PER_PASS = 120;
+export function onAirPlan({ bridgeIds = [], carried = [], streamers = [], cursor = 0, perPass = ON_AIR_PER_PASS, alwaysMax = ON_AIR_ALWAYS_MAX } = {}) {
+  const carriedSet = new Set([...(bridgeIds || []), ...(carried || [])].filter(isChannelId));
+  const always = [];
+  for (const id of [...(bridgeIds || []), ...(streamers || [])]) {
+    if (carriedSet.has(id) && !always.includes(id) && always.length < alwaysMax) always.push(id);
+  }
+  const rest = [...carriedSet].filter((id) => !always.includes(id)).sort();
+  const room = Math.max(0, perPass - always.length), n = rest.length, turn = [];
+  const start = n ? (((+cursor || 0) % n) + n) % n : 0, k = Math.min(room, n);
+  for (let i = 0; i < k; i++) turn.push(rest[(start + i) % n]);
+  return { pick: [...always, ...turn], always: always.length, in_turn: turn.length, waiting: n - k,
+    cursor: n ? (start + k) % n : 0,
+    /* how many checks until every carried channel has been asked once */
+    full_round_checks: k >= n ? 1 : Math.ceil(n / Math.max(1, k)) };
+}
+
+/* ---- WHEN DID IT BECOME WATCHABLE ----
+   An upload: its publish time. A stream: YouTube's actual start. When YouTube says "live" and gives no start
+   time, the first moment WE saw it live stands in — written once and never moved by a later pass. */
+export function watchableStart({ broadcast, actualStart, storedStart, nowIso }) {
+  if (actualStart) return actualStart;
+  if (storedStart) return storedStart;
+  return broadcast === "live" ? nowIso : null;
+}
+
+/* ---- WHICH STORED ROWS ARE RE-ASKED ABOUT ----
+   A scheduled stream is re-asked about by its START time, not its publish date: from UPCOMING_BACK_DAYS before
+   now (a late or re-timed start) onwards, soonest first. The old three-day window on the publish date stays for
+   everything else. */
+export const UPCOMING_BACK_DAYS = 3;
+export const UPCOMING_MAX = 60;
+export function refreshOrder({ found = [], stillLive = [], upcoming = [], recent = [], max = 200 } = {}) {
+  return [...new Set([...found, ...stillLive, ...upcoming, ...recent].filter(Boolean))].slice(0, max);
+}
+
+/* ---- WHAT IS KEPT ----
+   Everything a carried channel posts. The language and script filters belong to the ticker SEARCH (strangers'
+   videos); a channel Alan subscribed to is his choice, whatever language its tag says. */
+export function keepSubscribed(_row, _language) { return true; }

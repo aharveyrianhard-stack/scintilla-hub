@@ -267,12 +267,13 @@ test("the data-centre case: /live shows WOLF's stream behind a wall, the Live ta
   const { result, tables } = await runSweep({
     config: cfg(bridge([WOLF, OTHER])), live: { [WOLF]: walledPage() }, streams: { [WOLF]: streamsPage(WOLF, [tile(VID, "RISK ON MARKET?", true)]) }, api: { [VID]: liveItem },
   });
-  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.on_air, result.bridge.live_check.unknown], [2, [VID], 0]);
+  /* Y4 (6 Oct): the channel we carry ourselves is asked too, so every count of channels asked is one higher */
+  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.on_air, result.bridge.live_check.unknown], [3, [VID], 0]);
   const row = tables.youtube_videos.find((r) => r.video_id === VID);
   assert.deepEqual([row.channel_id, row.title, row.channel_title, row.live_broadcast, row.live_started_at, row.subscription_accounts], [WOLF, "RISK ON MARKET?", "WOLF Trading", "live", "2026-10-05T13:25:03Z", ["scintilla"]]);
   const stored = JSON.parse(tables.app_config.find((r) => r.key === "yt_bridge_live").value);
-  assert.deepEqual([stored.checked, stored.on_air, stored.unknown], [2, [VID], 0], "the fields the status line reads are what they were");
-  assert.equal(stored.channels.length, 2, "one line per channel");
+  assert.deepEqual([stored.checked, stored.on_air, stored.unknown], [3, [VID], 0], "the fields the status line reads are what they were");
+  assert.equal(stored.channels.length, 3, "one line per channel");
   const wolf = stored.channels.find((l) => l.id === WOLF), other = stored.channels.find((l) => l.id === OTHER);
   assert.deepEqual([wolf.outcome, wolf.marker, wolf.way, wolf.video, wolf.url, wolf.live_page, wolf.live_page_video], ["on_air", "streams.badge_live", "streams_tab", VID, "/channel/" + WOLF + "/streams", "watch_page_unreadable", VID]);
   assert.deepEqual([other.outcome, other.marker, other.way, other.url, other.status], ["channel_page", null, "live_page", "/channel/" + OTHER + "/live", 200]);
@@ -281,7 +282,7 @@ test("the data-centre case: /live shows WOLF's stream behind a wall, the Live ta
 
 test("could not read stays honest: a wall on both ways is counted, named in the row, and writes no video", async () => {
   const { result, tables } = await runSweep({ config: cfg(bridge([WOLF])), live: { [WOLF]: [429, "x"] }, streams: { [WOLF]: CONSENT } });
-  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.unknown, result.bridge.live_check.on_air], [1, 1, []]);
+  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.unknown, result.bridge.live_check.on_air], [2, 1, []]);
   assert.equal(tables.youtube_videos.length, 0);
   const line = JSON.parse(tables.app_config.find((r) => r.key === "yt_bridge_live").value).channels[0];
   assert.deepEqual([line.id, line.state, line.outcome, line.streams_tab, line.status], [WOLF, "unknown", "http_429", "consent_page", 429]);

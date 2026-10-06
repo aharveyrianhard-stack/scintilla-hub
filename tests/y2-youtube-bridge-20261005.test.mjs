@@ -233,7 +233,8 @@ test("WOLF Trading on air, not subscribed anywhere: the next pass puts the strea
   assert.deepEqual(result.bridge.channels, 2);
   assert.equal(result.bridge.added_to_scintilla, 2);
   assert.deepEqual(result.bridge.live_check.on_air, ["MqOnx6420No"]);
-  assert.equal(result.bridge.live_check.checked, 2);
+  /* Y4 (6 Oct): our own carried channel is asked too — "Tyler Wilson … is on a live video … not on my grid" */
+  assert.equal(result.bridge.live_check.checked, 3);
   const row = tables.youtube_videos.find((r) => r.video_id === "MqOnx6420No");
   assert.ok(row, "the stream has a row");
   assert.deepEqual([row.channel_id, row.live_broadcast, row.live_started_at, row.subscription_accounts], [WOLF, "live", "2026-10-05T17:48:00Z", ["scintilla"]]);
@@ -245,12 +246,12 @@ test("WOLF Trading on air, not subscribed anywhere: the next pass puts the strea
   assert.doesNotMatch(JSON.stringify(result) + JSON.stringify(log.fetched), /test-key/, "the key is in no output");
 });
 
-test("no bridge row: the sweep reads no /live page and its channel list is what it was", async () => {
+test("no bridge row: the channel list is what it was — and (Y4) the channel we carry ourselves is still asked whether it is on air", async () => {
   const { result, log } = await runSweep({ config: cfg(), videos: [], pages: { rss: {}, live: {} }, api: {} });
   assert.equal(result.bridge.channels, 0);
-  assert.equal(result.bridge.live_check.ran, false);
+  assert.equal(result.bridge.live_check.ran, true);
   assert.equal(result.accounts.scintilla.channels, 1);
-  assert.equal(log.fetched.filter((u) => u.endsWith("/live")).length, 0);
+  assert.deepEqual(log.fetched.filter((u) => u.endsWith("/live")), ["https://www.youtube.com/channel/" + OWN + "/live"]);
 });
 
 test("checked five minutes ago: this pass does not read the /live pages again", async () => {
@@ -290,7 +291,7 @@ test("a /live page we could not read is counted, and nothing is written from it"
     config: cfg({ yt_bridge_channels: JSON.stringify({ ids: [WOLF] }) }), videos: [],
     pages: { rss: {}, live: { [WOLF]: "<html>Before you continue to YouTube consent.youtube.com</html>" } }, api: {},
   });
-  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.unknown, result.bridge.live_check.on_air.length], [1, 1, 0]);
+  assert.deepEqual([result.bridge.live_check.checked, result.bridge.live_check.unknown, result.bridge.live_check.on_air.length], [2, 2, 0], "Y4: the bridged channel and our own, both unreadable here");
   assert.equal(tables.youtube_videos.length, 0);
 });
 
