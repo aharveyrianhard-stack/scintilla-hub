@@ -18,7 +18,8 @@ Deno.serve(async (req)=>{
   // ?sym=X single-ticker mode: restrict the whole run (and its per-ticker deletes) to one symbol.
   const symParam=(new URL(req.url).searchParams.get('sym')||'').toUpperCase().trim()
   let eq
-  if(symParam){eq=[symParam]}
+  // D2 (6 Oct 2026): ?sym= also takes a comma list (A,B,C) so a group of names can be loaded in one call; one name behaves as before.
+  if(symParam){eq=symParam.split(',').map((x)=>x.trim()).filter(Boolean)}
   // ADMISSION V2 (27 Sep): the full-treatment list, not composite_staged (frozen at 386 names since 24 Aug).
   else{const {data:tk}=await sb.from('fmp_full_universe').select('ticker');eq=((tk||[]).map((x)=>x.ticker)).filter((t)=>!(''+t).endsWith('USD'))}
   const out={job,sym:symParam||null,wrote:0,errors:[]}
@@ -85,6 +86,35 @@ Deno.serve(async (req)=>{
     // are written grouped by key-set (a handful of groups), never padded with nulls.
     const groups={};for(const r of fr){const k=Object.keys(r).sort().join(',');(groups[k]=groups[k]||[]).push(r)}
     for(const k of Object.keys(groups)){const {error}=await sb.from('company_profile').upsert(groups[k],{onConflict:'ticker'});if(error)out.errors.push('profile:'+error.message);else out.wrote+=groups[k].length}
+  }
+  if(job==='etf'){
+    // F1 (3 Oct 2026) — FUND HOLDINGS. No job wrote etf_holdings after 22 Jul, so every served fund opened FINANCIALS → HOLDINGS on
+    // "No etf_holdings rows … yet" (measured 3 Oct: 69 of 70 full-treatment funds). For each fund in the list (tickers.type = 'etf'):
+    // the holdings are REPLACED only when FMP answered with at least one line (a failed or empty answer leaves the stored list as it
+    // was), and etf_info is upserted with only the columns FMP supplied (the H8 facts other jobs own are never blanked).
+    // D2 (6 Oct 2026) — EVERY ACTIVE FUND. The list above is fmp_full_universe, so the 66 funds admitted 27 Sep as geiger_only were never
+    // asked for: 64 of them had no etf_info and no holdings, and READ had nothing to say about them. With no ?sym=, this job now
+    // walks every tickers row with type = 'etf' and active = true (136 on 6 Oct: 2 provider calls each, once a week). The other jobs
+    // of this function keep the full-treatment list; nothing else about a geiger_only name changes.
+    const {data:ty}=symParam?await sb.from('tickers').select('ticker,type,fmp_symbol').in('ticker',eq):await sb.from('tickers').select('ticker,type,fmp_symbol').eq('type','etf').eq('active',true).limit(5000)
+    const funds=(ty||[]).filter((r)=>r.type==='etf'),FS={};for(const r of funds)if(r.fmp_symbol)FS[r.ticker]=r.fmp_symbol
+    const done={replaced:0,lines:0,no_answer:[]}
+    await chunked(funds.map((r)=>r.ticker),4,async(t)=>{
+      const sym=encodeURIComponent(FS[t]||t)
+      const [h,i]=await Promise.all([fj(base+'/etf/holdings?symbol='+sym+'&apikey='+K,st),fj(base+'/etf/info?symbol='+sym+'&apikey='+K,st)])
+      const seen=new Set(),rows=[]
+      for(const x of (Array.isArray(h)?h:[])){const name=String(x.name||x.asset||'');if(!x.asset||!name||seen.has(name))continue;seen.add(name)
+        rows.push({ticker:t,asset:x.asset,name,shares:N(x.sharesNumber),weight_pct:N(x.weightPercentage),market_value:N(x.marketValue),updated_ts:new Date().toISOString()})}
+      if(rows.length){await sb.from('etf_holdings').delete().eq('ticker',t);const {error}=await sb.from('etf_holdings').insert(rows);if(error)out.errors.push('etf_holdings '+t+':'+error.message);else{done.replaced++;done.lines+=rows.length}}
+      else done.no_answer.push(t)
+      const d=Array.isArray(i)?i[0]:null
+      if(d&&d.symbol){const row={ticker:t,updated_ts:new Date().toISOString()};const put=(k,v)=>{if(v!=null&&v!=='')row[k]=v}
+        put('name',d.name);put('description',d.description);put('website',d.website);put('etf_company',d.etfCompany);put('expense_ratio',d.expenseRatio==null?null:N(d.expenseRatio))
+        put('aum',d.assetsUnderManagement==null?null:N(d.assetsUnderManagement));put('avg_volume',d.avgVolume==null?null:N(d.avgVolume));put('inception_date',d.inceptionDate);put('nav',d.nav==null?null:N(d.nav))
+        put('holdings_count',d.holdingsCount==null?null:N(d.holdingsCount));if(Array.isArray(d.sectorsList))row.sectors=d.sectorsList
+        const {error}=await sb.from('etf_info').upsert(row,{onConflict:'ticker'});if(error)out.errors.push('etf_info '+t+':'+error.message)}
+    })
+    out.etf=done;out.wrote+=done.lines
   }
   if(job==='earnings'){
     const rows=[]
