@@ -52,26 +52,101 @@ export function parseWatchPage(html) {
   return { channel_id: id, title: unjson(first(html, /"ownerChannelName":"((?:[^"\\]|\\.)*)"/) || first(html, /"author":"((?:[^"\\]|\\.)*)"/) || "") };
 }
 
+/* Y2b (5 Oct, evening): the first pass from the collector's data centre read 29 channels, found nobody on air and
+   could not read one — while WOLF Trading was on air in a browser. The answer stored was three counts, so nobody
+   could say which channel, or what came back. Every read now names its OUTCOME and the MARKER it went by:
+     on_air                 a watch page whose player or view counter says live
+     upcoming               a watch page for a stream still to come (isUpcoming, or the player says LIVE_STREAM_OFFLINE)
+     channel_page           not streaming: the channel page came back
+     watch_page_not_live    a watch page the player could be read on, and it is not live
+     watch_page_unreadable  a watch page with no player facts ("Sign in to confirm you're not a bot") — could not read
+     consent_page · bot_check · empty · unrecognised_page — could not read
+   The live markers are scoped: a stream still to come carries "isLive":true in its waiting counter, and a watch
+   page's side column carries LIVE badges of other channels, so neither is read on its own. */
+const WATCH_ID = [/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})"/,
+  /<meta property="og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})"/];
+const CHANNEL_PAGE = /<(?:link rel="canonical" href|meta property="og:url" content)="https:\/\/www\.youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})"/;
+const pageTitle = (text) => unesc(first(text, /<title>([^<]*)<\/title>/) || "").replace(/\s+/g, " ").trim();
+/** a page that is not YouTube's answer at all: Google's consent wall, or its "unusual traffic" check */
+export function wallKind(html, finalUrl) {
+  const text = String(html || ""), head = text.slice(0, 20000), url = String(finalUrl || "");
+  if (/google\.com\/sorry\//.test(url) || /unusual traffic from your computer network|\/sorry\/index/i.test(head)) return "bot_check";
+  if (/consent\.(youtube|google)\.com/.test(url)) return "consent_page";
+  if (/consent\.youtube\.com|before you continue to youtube/i.test(head) && !/"videoDetails"/.test(text)) return "consent_page";
+  return null;
+}
+/** which live marker a watch page carries, strongest first; null when none */
+export function liveMarker(html) {
+  const text = String(html || "");
+  const at = text.indexOf('"videoDetails":{');
+  if (at >= 0) {
+    const rest = text.slice(at, at + 20000), end = rest.indexOf('"channelId"');
+    if (/"isLive":true/.test(end > 0 ? rest.slice(0, end) : rest.slice(0, 2000))) return "player.isLive";
+  }
+  if (/"videoViewCountRenderer":\{[^]{0,600}?"isLive":true/.test(text)) return "page.viewCount.isLive";
+  if (/"isLiveNow":true/.test(text)) return "microformat.isLiveNow";
+  if (/"isLive":true/.test(text)) return "isLive";
+  return null;
+}
+export const playerStatus = (html) => first(html, /"playabilityStatus":\{"status":"([A-Z_]+)"/);
+
 /** what youtube.com/channel/<id>/live answered. On air: the page IS a watch page (canonical /watch?v=…) and the
     player says isLive. A stream still to come lands on a watch page too, but says isUpcoming — that is not on air.
-    Not streaming: the channel page comes back. A consent or error page reads as "unknown", never as "not live". */
-export function parseLivePage(html) {
+    Not streaming: the channel page comes back. A consent, bot-check or error page reads as "unknown", never as
+    "not live". state is live · upcoming · off · unknown; outcome says why (the list above). */
+export function parseLivePage(html, finalUrl) {
   const text = String(html || "");
-  if (!text || /consent\.youtube\.com|before you continue to youtube/i.test(text.slice(0, 20000)) && !/"videoDetails"/.test(text)) {
-    return { state: "unknown", video_id: null };
-  }
-  const video = first(text, /<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})"/);
+  if (!text) return { state: "unknown", video_id: null, outcome: "empty", marker: null };
+  const wall = wallKind(text, finalUrl);
+  if (wall) return { state: "unknown", video_id: null, outcome: wall, marker: null };
+  const video = first(text, WATCH_ID[0]) || first(text, WATCH_ID[1]);
   if (!video) {
-    return /<link rel="canonical" href="https:\/\/www\.youtube\.com\/channel\/UC/.test(text)
-      ? { state: "off", video_id: null } : { state: "unknown", video_id: null };
+    return CHANNEL_PAGE.test(text)
+      ? { state: "off", video_id: null, outcome: "channel_page", marker: null }
+      : { state: "unknown", video_id: null, outcome: "unrecognised_page", marker: null };
   }
-  if (/"isUpcoming":true/.test(text)) return { state: "upcoming", video_id: video };
-  if (/"isLive":true/.test(text) || /"isLiveNow":true/.test(text)) {
+  const status = playerStatus(text);
+  if (/"isUpcoming":true/.test(text) || status === "LIVE_STREAM_OFFLINE") {
+    return { state: "upcoming", video_id: video, outcome: "upcoming", marker: /"isUpcoming":true/.test(text) ? "isUpcoming" : "player.LIVE_STREAM_OFFLINE" };
+  }
+  const marker = liveMarker(text);
+  if (marker) {
     const viewers = first(text, /"originalViewCount":"(\d+)"/);
-    return { state: "live", video_id: video, title: unjson(first(text, /"videoDetails":\{"videoId":"[A-Za-z0-9_-]{11}","title":"((?:[^"\\]|\\.)*)"/) || ""),
+    return { state: "live", video_id: video, outcome: "on_air", marker,
+      title: unjson(first(text, /"videoDetails":\{"videoId":"[A-Za-z0-9_-]{11}","title":"((?:[^"\\]|\\.)*)"/) || "") || pageTitle(text).replace(/ - YouTube$/, ""),
       channel_title: unjson(first(text, /"ownerChannelName":"((?:[^"\\]|\\.)*)"/) || first(text, /"author":"((?:[^"\\]|\\.)*)"/) || ""), viewers: viewers ? +viewers : null };
   }
-  return { state: "off", video_id: video };
+  /* a watch page with no player facts is a page we were not shown, not a stream that is off */
+  if (status === "LOGIN_REQUIRED" || !/"videoDetails"/.test(text)) {
+    return { state: "unknown", video_id: video, outcome: "watch_page_unreadable", marker: status ? "player." + status : null };
+  }
+  return { state: "off", video_id: video, outcome: "watch_page_not_live", marker: status ? "player." + status : null };
+}
+
+/** the SECOND WAY, asked only when the /live read could not be read: the channel's own Live tab
+    (youtube.com/channel/<id>/streams). A stream on air is the tile with the LIVE badge; the tab lists only this
+    channel's streams, so the badge is the channel's own (yt-dlp's youtube:tab reads the same tiles). */
+export function parseStreamsPage(html, channelId, finalUrl) {
+  const text = String(html || "");
+  if (!text) return { state: "unknown", video_id: null, outcome: "empty", marker: null };
+  const wall = wallKind(text, finalUrl);
+  if (wall) return { state: "unknown", video_id: null, outcome: wall, marker: null };
+  const page = first(text, CHANNEL_PAGE);
+  if (!page || (channelId && page !== channelId)) return { state: "unknown", video_id: null, outcome: "unrecognised_page", marker: null };
+  if (!/"title":"Live","selected":true/.test(text)) return { state: "off", video_id: null, outcome: "no_live_tab", marker: null };
+  for (const [re, marker] of [[/"badgeStyle":"THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE"/g, "streams.badge_live"], [/"thumbnailOverlayTimeStatusRenderer":\{[^]{0,400}?"style":"(?:LIVE|[A-Z]+)"/g, "streams.style_live"]]) {
+    for (const m of text.matchAll(re)) {
+      if (marker === "streams.style_live" && !m[0].endsWith('"style":"LIVE"')) continue;   // DEFAULT / UPCOMING: this tile's own style, not on air
+      const before = [...text.slice(Math.max(0, m.index - 5000), m.index).matchAll(/i\.ytimg\.com\/vi\/([A-Za-z0-9_-]{11})\//g)];
+      const video = first(text.slice(m.index, m.index + 600), /"animationActivationTargetId":"([A-Za-z0-9_-]{11})"/) || (before.length ? before[before.length - 1][1] : null);
+      if (!isVideoId(video)) continue;
+      const after = text.slice(m.index, m.index + 8000);
+      return { state: "live", video_id: video, outcome: "on_air", marker,
+        title: unjson(first(after, /"lockupMetadataViewModel":\{"title":\{"content":"((?:[^"\\]|\\.)*)"/) || first(after, /"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || ""),
+        channel_title: unesc(first(text, /<meta property="og:title" content="([^"]*)"/) || ""), viewers: null };
+    }
+  }
+  return { state: "off", video_id: null, outcome: "live_tab_no_stream", marker: null };
 }
 
 /** every YouTube reference in a piece of text or a link list: channel addresses and video ids */
@@ -155,13 +230,110 @@ export function liveProbePick(ids, cursor, max = MAX_LIVE_PROBES) {
   return { pick, cursor: (start + k) % n };
 }
 
-/** the request every /live read sends. The SOCS cookie is how yt-dlp answers Google's consent wall
-    (yt_dlp/extractor/youtube — _initialize_consent sets SOCS=CAI), so a data-centre address gets the page, not the wall. */
+/** the request every page read sends. SOCS / CONSENT are how yt-dlp answers Google's consent wall
+    (yt_dlp/extractor/youtube — _initialize_consent sets SOCS=CAI; older walls took CONSENT=YES+), and PREF pins the
+    page to English / US so the markers read the same wherever the data centre is. */
+export const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 export const LIVE_PAGE_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-  "Accept-Language": "en-US,en", "Cookie": "SOCS=CAI",
+  "User-Agent": BROWSER_UA, "Accept-Language": "en-US,en;q=0.9", "Cookie": "SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US",
 };
 export const livePageUrl = (channelId) => "https://www.youtube.com/channel/" + channelId + "/live";
+export const streamsPageUrl = (channelId) => "https://www.youtube.com/channel/" + channelId + "/streams";
+
+/** one page read that never throws: { status, url (where it ended), html, error }. A page that does not answer in
+    PAGE_TIMEOUT_MS is "timeout" — bounded so 60 channels × two ways stay inside the sweep's two-minute call. */
+export const PAGE_TIMEOUT_MS = 12000;
+export async function readPage(url, headers, fetchFn = globalThis.fetch) {
+  try {
+    const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(PAGE_TIMEOUT_MS) : undefined;
+    const r = await fetchFn(url, { headers: headers || {}, signal });
+    const html = await r.text().catch(() => "");
+    return { status: r.status, url: r.url || url, html: r.ok ? html : "", body: html, error: r.ok ? null : "http_" + r.status };
+  } catch (e) {
+    return { status: 0, url, html: "", body: "", error: e && (e.name === "TimeoutError" || e.name === "AbortError") ? "timeout" : "fetch_error" };
+  }
+}
+const shortUrl = (u) => String(u || "").replace(/^https:\/\/www\.youtube\.com/, "").slice(0, 160);
+
+/** IS THIS CHANNEL ON AIR — the whole check for one channel, the same code in the sweep, its dry pass and the tests.
+    Way 1 the /live address; way 2 (only when way 1 could not be read) the channel's Live tab. The answer is one
+    line a person can read later: id · state · outcome · marker · way · video · status · where the read ended. */
+export async function checkOnAir(channelId, fetchFn = globalThis.fetch, opts = {}) {
+  const a = await readPage(livePageUrl(channelId), LIVE_PAGE_HEADERS, fetchFn);
+  const one = a.error ? { state: "unknown", video_id: null, outcome: a.error, marker: null } : parseLivePage(a.html, a.url);
+  const line = (way, p, page, extra = {}) => ({ id: channelId, state: p.state, outcome: p.outcome, marker: p.marker || null, way,
+    video: p.video_id || null, status: page.status, url: shortUrl(page.url), bytes: page.html.length, ...extra });
+  /* opts.both (the dry pass's ?ways=both) asks the Live tab even when /live answered, to show the two side by side */
+  if (one.state === "live" || (one.state !== "unknown" && !opts.both)) return { ...line("live_page", one, a), live: one.state === "live" ? one : null };
+  const b = await readPage(streamsPageUrl(channelId), LIVE_PAGE_HEADERS, fetchFn);
+  const two = b.error ? { state: "unknown", video_id: null, outcome: b.error, marker: null } : parseStreamsPage(b.html, channelId, b.url);
+  const firstWay = { live_page: one.outcome, live_page_status: a.status, live_page_url: shortUrl(a.url), live_page_video: one.video_id || null };
+  if (two.state === "live" || (one.state === "unknown" && two.state !== "unknown")) return { ...line("streams_tab", two, b, firstWay), live: two.state === "live" ? two : null };
+  if (one.state !== "unknown") return { ...line("live_page", one, a, { streams_tab: two.outcome, streams_tab_status: b.status }), live: null };
+  return { ...line("none", one, a, { ...firstWay, streams_tab: two.outcome, streams_tab_status: b.status }), live: null };
+}
+/** a whole pass: eight channels at a time. THE NEIGHBOURS: the schedule waits 120 s for the sweep and the sweep's
+    own "busy" lock lasts 180 s; a pass normally takes about four seconds, but 60 channels × two ways × a 12 s
+    time-out would not fit. So the pass has a budget — once it is spent the channels not reached are written down
+    as "not_reached" (could not read) and the rotating cursor brings them round next time. */
+export const ON_AIR_BUDGET_MS = 45000;
+export async function onAirPass(channelIds, fetchFn = globalThis.fetch, opts = {}) {
+  const lines = [], started = Date.now(), budget = opts.budgetMs ?? ON_AIR_BUDGET_MS;
+  for (let i = 0; i < channelIds.length; i += 8) {
+    const batch = channelIds.slice(i, i + 8);
+    if (i > 0 && Date.now() - started >= budget) {
+      lines.push(...batch.map((id) => ({ id, state: "unknown", outcome: "not_reached", marker: null, way: "none", video: null, status: 0, url: "", bytes: 0, live: null })));
+      continue;
+    }
+    lines.push(...await Promise.all(batch.map((id) => checkOnAir(id, fetchFn, opts))));
+  }
+  return lines;
+}
+/** the stored / reported form of a pass: the lines without the page facts used to build a feed row */
+export const onAirLine = ({ live: _live, ...line }) => line;
+
+/** THE PROBE (read-only, no table): what one page looks like from wherever this runs — status, where it ended,
+    size, which markers are in it, whether it is a wall, its title and first 300 characters. */
+export function describePage(page) {
+  const text = String(page.body || page.html || ""), count = (re) => (text.match(re) || []).length;
+  const watch = first(text, WATCH_ID[0]) || first(text, WATCH_ID[1]);
+  return { status: page.status, final_url: String(page.url || "").slice(0, 200), bytes: text.length, error: page.error || null,
+    kind: wallKind(text, page.url) || (watch ? "watch_page" : CHANNEL_PAGE.test(text) ? "channel_page" : text ? "other" : "empty"),
+    watch_video: watch || null, player_status: playerStatus(text),
+    markers: { isLive: count(/"isLive":true/g), isLiveNow: count(/"isLiveNow":true/g), status_LIVE: count(/"status":"LIVE"/g),
+      hqdefault_live: count(/hqdefault_live/g), isUpcoming: count(/"isUpcoming":true/g), style_LIVE: count(/"style":"LIVE"/g),
+      badge_live: count(/THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE/g), videoDetails: count(/"videoDetails":\{/g), live_marker: liveMarker(text) },
+    title: pageTitle(text).slice(0, 140), first_300: text.slice(0, 300).replace(/\s+/g, " ") };
+}
+export async function probeLive(channelId, videoId, fetchFn = globalThis.fetch) {
+  const base = "https://www.youtube.com/channel/" + channelId;
+  const cookies = { "User-Agent": BROWSER_UA, "Accept-Language": "en-US,en;q=0.9", "Cookie": "SOCS=CAI; CONSENT=YES+cb" };
+  const ways = [
+    ["live_as_the_check_sends_it", livePageUrl(channelId), LIVE_PAGE_HEADERS],
+    ["live_as_v8_sent_it", livePageUrl(channelId), { "User-Agent": BROWSER_UA, "Accept-Language": "en-US,en", "Cookie": "SOCS=CAI" }],
+    ["live_plain_get", livePageUrl(channelId), {}],
+    ["live_consent_cookies_hl_gl", base + "/live?hl=en&gl=US", cookies],
+    ["streams_tab", streamsPageUrl(channelId), LIVE_PAGE_HEADERS],
+    ["videos_live_view_501", base + "/videos?view=2&live_view=501&hl=en&gl=US", cookies],
+  ];
+  const out = { channel: channelId, at: new Date().toISOString(), ways: {}, sees_live: [] };
+  for (const [name, url, headers] of ways) {
+    const page = await readPage(url, headers, fetchFn);
+    const verdict = name.startsWith("live") ? parseLivePage(page.html, page.url) : parseStreamsPage(page.html, name === "streams_tab" ? channelId : null, page.url);
+    out.ways[name] = { ...describePage(page), verdict: page.error || verdict.outcome, verdict_marker: verdict.marker || null, verdict_video: verdict.video_id || null };
+    if (verdict.state === "live") out.sees_live.push(name);
+    if (!videoId && isVideoId(verdict.video_id)) videoId = verdict.video_id;
+  }
+  if (isVideoId(videoId)) {
+    const page = await readPage("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + videoId), {}, fetchFn);
+    let body = null; try { body = JSON.parse(page.body); } catch (_) {}
+    out.ways.oembed = { video: videoId, status: page.status, bytes: page.body.length, error: page.error || null,
+      title: body ? String(body.title || "").slice(0, 140) : null, author: body ? body.author_name || null : null,
+      note: "oembed says the video exists and who owns it; it carries no live flag" };
+  }
+  out.check = onAirLine(await checkOnAir(channelId, fetchFn));
+  return out;
+}
 
 /** a stream found on air → the row the sweep's own "new video" path takes (the API then fills the real times) */
 export function liveCandidateRow(channelId, live, nowSec) {
