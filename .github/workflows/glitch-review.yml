@@ -7,7 +7,8 @@
 #               GitHub's clock is UTC and knows no daylight saving, so each time is listed twice and the first step
 #               keeps only the one that is right for the season.
 # RESULTS       Branch `glitch-review-reports`: deliverables/glitch-review/<date>/<night|market|manual>/
-#               (index.html, glitch-review.json, WORST-FIVE.md, shots/) and deliverables/glitch-review/LATEST.md.
+#               (README.md — GitHub shows it as a page with the pictures —, index.html, glitch-review.json,
+#               WORST-FIVE.md, shots/) and deliverables/glitch-review/LATEST.md.
 #               Also on the run's own page (Summary) and as a downloadable artifact.
 #               A red result opens (or updates) ONE GitHub issue labelled `glitch-review`. No other message is sent.
 # NO KEYS       Public pages only. The only credential is the run's own short-lived GITHUB_TOKEN (commit + issue).
@@ -17,6 +18,8 @@
 #   · GitHub → Actions → "Glitch review" → ⋯ → Disable workflow        (or: gh workflow disable glitch-review.yml)
 #   · Settings → Secrets and variables → Actions → Variables → GLITCH_REVIEW_OFF = 1   (runs start and skip)
 #   · delete this file
+# THE CLOCK     GitHub starts a scheduled run only from the repository's default branch (`main`). Until this file and
+#               tools/glitch-review/ are on `main`, it runs only when asked (Run workflow) or on a push to the PG1 branch.
 # RUN IT NOW    GitHub → Actions → "Glitch review" → Run workflow       (or: gh workflow run glitch-review.yml)
 name: Glitch review
 
@@ -150,7 +153,7 @@ jobs:
           cp -R "$RUNNER_TEMP/out/." "$dest/"
           cp "$dest/glitch-review.json" "deliverables/glitch-review/latest-${{ steps.when.outputs.slot }}.json"
           cp "$dest/glitch-review.json" deliverables/glitch-review/latest.json
-          { cat "$dest/WORST-FIVE.md"; printf '\nFolder: `%s/`\n' "$dest"; } > deliverables/glitch-review/LATEST.md
+          { cat "$dest/WORST-FIVE.md"; printf '\nThe whole report, with the pictures: [%s](%s/README.md)\n' "$dest" "${dest#deliverables/glitch-review/}"; } > deliverables/glitch-review/LATEST.md
           git add -A
           git commit -q -m "Glitch review ${{ steps.when.outputs.date }} ${{ steps.when.outputs.slot }}: $(node -p "require('./$dest/glitch-review.json').verdict")"
           git push -q origin "HEAD:$REPORTS_BRANCH"

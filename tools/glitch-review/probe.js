@@ -116,7 +116,7 @@
     };
     const onScreen = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    const FLAG = /\b(fallback|stale|degraded|unavailable|offline|no data)\b/i;
+    const FLAG = /\b(fallback|stale|degraded|unavailable|offline|no data|not answering|not responding)\b/i;
     const AGE = /(?<![\d.])(\d{1,4})\s*(s|sec|secs|m|min|mins|h|hr|hrs|d|day|days|w|wk|wks)\b\s*(ago|old|late|stale)\b/i;
     const UNIT = { s: 1 / 60, sec: 1 / 60, secs: 1 / 60, m: 1, min: 1, mins: 1, h: 60, hr: 60, hrs: 60, d: 1440, day: 1440, days: 1440, w: 10080, wk: 10080, wks: 10080 };
     while (w.nextNode()) {
@@ -125,7 +125,8 @@
       const el = w.currentNode.parentElement;
       if (!el || el.tagName === "SCRIPT" || el.tagName === "STYLE" || !onScreen(el)) continue;
       if (s.length <= 12 && PH.test(s)) { if (out.placeholders.length < 400) out.placeholders.push(where(el)); continue; }
-      /* the page saying so in words: "market_breadth · FALLBACK", "500 STALE TRADES", "UNAVAILABLE" */
+      /* the page saying so in words: "market_breadth · FALLBACK", "500 STALE TRADES", "UNAVAILABLE",
+         "194 channel feeds not answering" */
       if (s.length <= 60 && FLAG.test(s) && out.stale.length < 60) { out.stale.push({ text: s.slice(0, 60), minutes: null, where: where(el), flag: true }); continue; }
       if (s.length <= 80) {
         const m = AGE.exec(s);

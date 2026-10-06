@@ -1,6 +1,7 @@
 /* PG1 — turns the measurements into a ranked list and a page a non-technical reader can use.
    rank(): every number past its limit becomes one finding; red first, then by how far past the limit it is.
-   writeReport(): index.html (pictures first), WORST-FIVE.md, ISSUE.md (the text of the GitHub issue on a red night). */
+   writeReport(): index.html (pictures first), README.md (the same report in a form GitHub shows as a page when the
+   folder is opened — a branch cannot show an HTML file), WORST-FIVE.md, ISSUE.md (the GitHub issue on a red night). */
 import fs from "node:fs";
 import path from "node:path";
 
@@ -14,9 +15,9 @@ const CHECKS = [
   { key: "firstDataMs", problem: "slow to show its numbers", number: (v) => secs(v) + " until the first numbers appeared", was: secs },
   { key: "weightKB", problem: "heavy to download", number: (v) => mb(v) + " downloaded", was: mb },
   { key: "layoutShift", problem: "things jump around while it loads", number: (v) => "layout shift " + v.toFixed(2) + " (good is under 0.10)", was: (v) => v.toFixed(2) },
-  { key: "longestFreezeMs", problem: "the screen freezes", number: (v, s) => "longest freeze " + secs(v) + " (" + s.longTasks + " stalls, " + secs(s.frozenMs) + " frozen in all)", was: secs },
-  { key: "consoleErrors", problem: "errors in the browser's log", number: (v, s) => v + " errors" + (s.pageErrors ? ", " + s.pageErrors + " of them script crashes" : ""), was: (v) => v + "" },
-  { key: "failedCalls", problem: "data calls that failed", number: (v, s) => v + " failed calls" + (s.failedCallSamples && s.failedCallSamples[0] ? " (most often: " + s.failedCallSamples[0].text + ")" : ""), was: (v) => v + "" },
+  { key: "longestFreezeMs", problem: "the screen freezes", number: (v, s) => "longest freeze " + secs(v) + " (" + s.longTasks + " stall" + (s.longTasks === 1 ? "" : "s") + ", " + secs(s.frozenMs) + " frozen in all)", was: secs },
+  { key: "consoleErrors", problem: "errors in the browser's log", number: (v, s) => v + " error" + (v === 1 ? "" : "s") + (s.pageErrors ? ", " + s.pageErrors + " of them script crashes" : ""), was: (v) => v + "" },
+  { key: "failedCalls", problem: "data calls that failed", number: (v, s) => v + " failed call" + (v === 1 ? "" : "s") + (s.failedCallSamples && s.failedCallSamples[0] ? " (most often: " + s.failedCallSamples[0].text + ")" : ""), was: (v) => v + "" },
   { key: "placeholders", problem: "dashes where numbers should be", number: (v) => v + " empty readouts (“—”) on screen", was: (v) => v + "" },
   { key: "blankPanels", problem: "blank panels", number: (v, s) => v + " empty box" + (v === 1 ? "" : "es") + (s.blankPanelSamples && s.blankPanelSamples[0] ? " (largest " + s.blankPanelSamples[0].w + "×" + s.blankPanelSamples[0].h + " px)" : ""), was: (v) => v + "" },
   { key: "staleBadges", problem: "old, stale or fallback data on show", number: (v, s) => {
@@ -96,6 +97,24 @@ export function writeReport(r, OUT, HERE) {
     "**Worst five (screen · problem · number)**\n\n" + (five || "Nothing past its limit.") + "\n\n" +
     "**Every red**\n\n" + (r.findings.filter((f) => f.level === "red").map((f) => "- " + f.screen + " · " + f.problem + " · " + f.number).join("\n") || "- none") + "\n\n" +
     (r.runUrl ? "Run: " + r.runUrl + "\n" : "") + "This review only measures and ranks; it fixes nothing. Switch it off: Actions → “Glitch review” → ⋯ → Disable workflow.\n");
+
+  /* README.md — GitHub renders it, pictures and all, when the report folder is opened in the browser */
+  const cellMd = (x) => String(x == null ? "" : x).replace(/\|/g, "\\|").replace(/\n/g, " ");
+  const lvlMd = (s) => (r.findings.some((f) => f.screenId === s.id && f.level === "red") ? "RED" : r.findings.some((f) => f.screenId === s.id) ? "amber" : "ok");
+  const numMd = (v, f) => (typeof v === "number" ? f(v) : "·");
+  fs.writeFileSync(path.join(OUT, "README.md"),
+    "# Slowness and glitch review — " + when + " (" + r.slot + " run)\n\n" +
+    "**" + r.verdict.toUpperCase() + " — " + reds + " red · " + ambers + " amber** across " + r.screens.length + " screens · " + r.ranOn + (r.runUrl ? " · [the run](" + r.runUrl + ")" : "") +
+    (r.comparedWith ? " · compared with " + r.comparedWith.dateET + " " + r.comparedWith.startedET + " ET" : " · first run, nothing to compare with yet") + "\n\n" +
+    "It measures and ranks; it fixes nothing. What each number means and when it is listed: PAGE SPECS at the foot of `index.html` (same folder).\n\n" +
+    "## Worst five\n\n" + (five || "Nothing past its limit.") + "\n\n" +
+    "## The numbers\n\n| screen | result | first numbers | weight | layout shift | longest freeze | log errors | failed calls | dashes | blank boxes | old labels | picture changed | Lighthouse speed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n" +
+    r.screens.map((s) => "| " + [cellMd(s.name), lvlMd(s), s.ok ? (typeof s.firstDataMs === "number" ? secs(s.firstDataMs) : "never") : "failed", numMd(s.weightKB, mb), numMd(s.layoutShift, (v) => v.toFixed(2)), numMd(s.longestFreezeMs, secs), numMd(s.consoleErrors, String), numMd(s.failedCalls, String), numMd(s.placeholders, String), numMd(s.blankPanels, String), numMd(s.staleBadges, String), numMd(s.picChangedPct, (v) => v.toFixed(0) + " %"), s.lighthouse && typeof s.lighthouse.performance === "number" ? String(s.lighthouse.performance) : "·"].join(" | ") + " |").join("\n") + "\n\n" +
+    "## The full ranked list (" + r.findings.length + ")\n\n" + (r.findings.map((f, i) => (i + 1) + ". " + (f.level === "red" ? "**RED** " : "amber ") + f.screen + " · " + f.problem + " · " + f.number + (wasText(f) ? " · " + wasText(f) : "")).join("\n") || "Nothing past its limit.") + "\n\n" +
+    "## Every screen, as the review saw it\n\n" +
+    r.screens.map((s) => "### " + s.name + " — " + lvlMd(s) + "\n\n" + (s.shot ? "![" + s.name + "](" + s.shot + ")\n\n" : "No picture — " + s.notes.join("; ") + "\n\n") +
+      (r.findings.filter((f) => f.screenId === s.id).map((f) => "- " + (f.level === "red" ? "**RED** " : "amber ") + f.problem + " — " + f.number + (wasText(f) ? " (" + wasText(f) + ")" : "")).join("\n") || "- nothing past its limit") +
+      (s.moved ? "\n- what moved since the last run: " + (s.picChangedPct == null ? "·" : s.picChangedPct.toFixed(1) + " % of the screen") + " — [the difference picture](" + s.moved + ")" : "") + "\n").join("\n"));
 
   const tag = (lvl) => '<span class="t t-' + lvl + '">' + (lvl === "red" ? "RED" : lvl === "amber" ? "AMBER" : "OK") + "</span>";
   const lvlOf = (s) => (r.findings.some((f) => f.screenId === s.id && f.level === "red") ? "red" : r.findings.some((f) => f.screenId === s.id) ? "amber" : "ok");

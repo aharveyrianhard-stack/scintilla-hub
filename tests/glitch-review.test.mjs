@@ -3,7 +3,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { rank } from "../tools/glitch-review/report.mjs";
+import os from "node:os";
+import path from "node:path";
+import { rank, writeReport } from "../tools/glitch-review/report.mjs";
 import { SCREENS, LIMITS, HUB_TABS, COMPANIES } from "../tools/glitch-review/screens.mjs";
 
 const read = (p) => fs.readFileSync(new URL("../" + p, import.meta.url), "utf8");
@@ -78,4 +80,28 @@ test("glitch review: a page that only jumps on Lighthouse's slow phone is still 
   assert.equal(r.findings[0].key, "lighthouse.layoutShift");
   assert.equal(r.findings[0].level, "red");
   assert.equal(r.findings[0].lastRun, 0.5);
+});
+
+test("glitch review: the report folder carries a page GitHub can show (README.md) with the worst five, the numbers and the pictures", () => {
+  const result = { limits: LIMITS, slot: "night", dateET: "2026-10-05", startedET: "21:30", ranOn: "test", runUrl: null, comparedWith: null,
+    screens: [screen("board", { name: "Hub · board", layoutShift: 0.9, shot: "shots/board.jpg", longestFreezeMs: 300, longTasks: 1, frozenMs: 250 }), screen("calm", { name: "a | b", shot: "shots/calm.jpg" })] };
+  Object.assign(result, rank(result, null));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "pg1-"));
+  try {
+    writeReport(result, out, path.join(out, "x", "y"));
+    const md = fs.readFileSync(path.join(out, "README.md"), "utf8");
+    assert.match(md, /\*\*RED — 1 red · 1 amber\*\*/);
+    assert.match(md, /## Worst five\n\n1\. Hub · board · things jump around while it loads · layout shift 0\.90/);
+    assert.match(md, /!\[Hub · board\]\(shots\/board\.jpg\)/);
+    assert.match(md, /\| a \\\| b \| ok \|/, "a bar in a name cannot break the table");
+    assert.match(md, /\(1 stall, /, "one stall is not '1 stalls'");
+    for (const f of ["index.html", "WORST-FIVE.md", "ISSUE.md"]) assert.ok(fs.existsSync(path.join(out, f)), f);
+  } finally { fs.rmSync(out, { recursive: true, force: true }); }
+});
+
+test("glitch review: a page that says a source is not answering is counted with the stale and fallback labels", () => {
+  const src = read("tools/glitch-review/probe.js");
+  const flag = new RegExp(/const FLAG = \/(.+)\/i;/.exec(src)[1], "i");
+  for (const t of ["· 194 channel feeds not answering", "market_breadth · FALLBACK", "X source is offline", "500 STALE TRADES"]) assert.ok(flag.test(t), t);
+  for (const t of ["subscribed channels checked 4m ago", "LIVE"]) assert.ok(!flag.test(t), t);
 });
