@@ -142,7 +142,8 @@
       if (!onScreen(el)) continue;
       const cls = String(el.className && el.className.baseVal != null ? el.className.baseVal : el.className);
       if (/(^|[\s_-])(not|no|un)[_-]?stale|stale[_-]?(ok|false|0)\b/i.test(cls)) continue;
-      const t = (el.textContent || "").trim().slice(0, 60);
+      const tip = String(el.getAttribute("title") || "").trim().split("\n").pop();   // the page's own note, e.g. "computed … · 14 min old"
+      const t = ((el.textContent || "").trim() + (tip ? " — " + tip : "")).slice(0, 90);
       if (out.stale.length < 60) out.stale.push({ text: t || "(marked stale)", minutes: null, where: where(el), marked: true });
     }
     /* a blank panel: a box of real size on screen with no words, no picture and no drawn canvas */

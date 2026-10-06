@@ -71,3 +71,11 @@ test("glitch review workflow: both seasons' clocks, a switch, and no commit to m
   assert.doesNotMatch(y, /secrets\./, "no stored key is used");
   assert.doesNotMatch(y, /pull_request/);
 });
+
+test("glitch review: a page that only jumps on Lighthouse's slow phone is still listed", () => {
+  const r = rank({ limits: LIMITS, screens: [screen("board", { lighthouse: { performance: 95, layoutShift: 0.91 } })] }, { screens: [screen("board", { lighthouse: { performance: 95, layoutShift: 0.5 } })] });
+  assert.equal(r.findings.length, 1);
+  assert.equal(r.findings[0].key, "lighthouse.layoutShift");
+  assert.equal(r.findings[0].level, "red");
+  assert.equal(r.findings[0].lastRun, 0.5);
+});
