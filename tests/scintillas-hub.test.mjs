@@ -301,8 +301,11 @@ test("nothing that already scintillated was touched, and the strip cannot move t
     assert.match(page, re, "a surface that scintillated before must still do it");
   assert.match(page, /const ECON_TAPE_ON = true;/);
   assert.match(page, /const ECON_BAND_ON = true;/);
-  /* the strip is a fixed-height element that scrolls inside itself, and is hidden when empty */
-  assert.match(page, /\.sc-scintstrip:empty\{ display:none; \}/);
+  /* the strip is a fixed-height element that scrolls inside itself. 5 Oct 2026 (Q5): it used to be display:none while
+     empty — but it is empty only while its rows load, and appearing a moment later is exactly what moved the page (measured:
+     the board dropped 80 px on a phone). It now keeps its line's height from the first frame (tests/q5-board-shift.test.mjs). */
+  assert.doesNotMatch(page, /\.sc-scintstrip:empty\{ display:none; \}/);
+  assert.match(page, /\.sc-scintstrip:empty\{ min-height:32px; \}/);
   assert.match(page, /\.ec-ev\.is-scint \.nm/, "the month grid carries the mark as well as the table");
   assert.match(page, /\.sc-ss__rows\{ max-height:66px; overflow:auto;/);
   /* the marks are colour only — no border, size, background or position in any is-scint rule */

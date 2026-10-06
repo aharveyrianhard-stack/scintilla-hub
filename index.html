@@ -8,6 +8,15 @@
      this whole page again (2.2 MB; 716 KB on the wire) on every load and every 75 s, only to read one string near its
      end. It now reads this line and stops the download. Must equal window.SC_BUILD (tests/q5-board-weight.test.mjs). -->
 <meta name="sc-build" content="2026-08-20T1420">
+<!-- Q5 (5 Oct 2026) — HOLD THE BOARD UNTIL ITS STYLES HAVE ARRIVED. The main script draws the tabs and the board as soon
+     as it has run, but six style sheets sit AFTER it in this document (the last, r4-fit, carries the phone layout). On a
+     phone or a slow line the browser painted in between: tabs in two rows, a short board, the left panel on screen — and
+     then everything jumped (layout shift 0.72 of the 0.88 Lighthouse measured). The tabs, the board and the bottom bands
+     stay hidden — their space is kept, the header is untouched — until the document has been read to the end. They are empty
+     until that script runs anyway (it is nine tenths of the way down), so nothing that was readable is held back. If the
+     end never comes they are shown after 20 s regardless. Nothing about the finished page changes. -->
+<style id="q5-parse-gate">html.sc-parsing #mtabs, html.sc-parsing #main, html.sc-parsing #bands{ visibility:hidden; }</style>
+<script>(function(){var d=document.documentElement,done=function(){d.classList.remove("sc-parsing");};d.classList.add("sc-parsing");document.addEventListener("DOMContentLoaded",done);window.addEventListener("load",done);setTimeout(done,20000);})();</script>
 <!-- FIX 7 — PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A0A0F">
@@ -634,7 +643,13 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    thing. It has a fixed height and scrolls INSIDE itself, so a landing event never moves the board
    below it. Empty means gone, not an empty box. */
 .sc-scintstrip{ flex:0 0 auto; width:100%; }
-.sc-scintstrip:empty{ display:none; }
+/* Q5 (5 Oct 2026) — once its rows have been read the strip is ALWAYS one line (a scintilla, the last session, a 0, or
+   "could not be read"); it is empty only while they load. It used to be display:none for that moment and then pushed the
+   whole board down by its own height. The space is held from the first frame instead: the 28px line + its 4px margin
+   (26 + 4 under 700px, where the label is smaller; 64 + 4 under 560px, where r4-fit lets the line wrap to three). */
+.sc-scintstrip:empty{ min-height:32px; }
+@media(max-width:700px){ .sc-scintstrip:empty{ min-height:30px; } }
+@media(max-width:560px){ .sc-scintstrip:empty{ min-height:68px; } }
 .sc-ss{ border:.5px solid var(--line); border-radius:6px; background:var(--panel);
   padding:5px 8px 6px; margin:4px 0 0; }
 .sc-ss__hd{ display:flex; align-items:center; gap:8px; }
@@ -4972,6 +4987,9 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
     padding:0 8px; height:32px; flex-wrap:nowrap; overflow:hidden; white-space:nowrap; }
   .sc-toptape--h3 .sc-toptape__next .mn-lbl, .sc-toptape--h3 .sc-toptape__next .mn-it, .sc-toptape--h3 .sc-toptape__next .mn-swarm{ height:32px; }
   .sc-toptape--h3 .sc-toptape__next.sc-macronext:empty{ display:none; }
+  /* Q5 (5 Oct 2026) — while the calendar is still being read the line keeps its place (it used to appear a moment later and
+     push the board down 33px). A quiet week still shows nothing: is-wait comes off as soon as the read answers. */
+  .sc-toptape--h3 .sc-toptape__next.sc-macronext.is-wait:empty{ display:flex; }
 }
 @media (max-width:560px){ .sc-toptape--h3 .sc-tape__lbl{ flex-basis:96px; width:96px; } .sc-toptape--h3 .mn-lbl--econ{ letter-spacing:.1em; margin-right:8px; } }
 
@@ -17477,6 +17495,7 @@ function ecRoomModel(nowSec) {
 }
 function ecNudgePaintBox(box, nowSec, modelIn) {
   if (!ECON_TAPE_ON || !box) return;
+  if ((MACRO_NEXT || MACRO_NEXT_FAIL_AT) && box.classList) box.classList.remove("is-wait");   /* Q5 — the calendar answered: an empty line may fold away again */
   const now = Number.isFinite(nowSec) ? nowSec : Math.floor(Date.now() / 1000);
   const model = modelIn || ecNudgeModel(now);
   const live = typeof box.querySelectorAll === "function" && typeof document !== "undefined" && typeof document.createElement === "function";
@@ -22251,7 +22270,7 @@ function topTapeHTML(nowSec, todayIso) {
 }
 function topTapeWrapHTML() {
   return '<div class="sc-toptape' + (typeof H3_TAPES_ON !== "undefined" && H3_TAPES_ON ? " sc-toptape--h3" : "") + '" id="topTape"><div class="sc-toptape__slot" id="topTapeSlot"></div>' +
-    '<span class="sc-macronext sc-toptape__next" id="macroNext">' + (ECON_TAPE_ON ? macroNextHTML() : "") + "</span></div>";
+    '<span class="sc-macronext sc-toptape__next' + (ECON_TAPE_ON && !MACRO_NEXT && !MACRO_NEXT_FAIL_AT ? " is-wait" : "") + '" id="macroNext">' + (ECON_TAPE_ON ? macroNextHTML() : "") + "</span></div>";   /* Q5 — is-wait: the calendar has not answered yet, keep the line's place */
 }
 function renderTopTape(nowSec) {
   const slot = el("topTapeSlot");
