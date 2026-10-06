@@ -50,7 +50,7 @@ test("the tickers rows are generated, additive, source-marked, and count-checked
 
 test("the Hub's reported and pinned identities agree with the generated rows", () => {
   // the NEWEST generated tickers migration (v2 on 27 Sep, v3 on 28 Sep, ...): the builder writes it in the same run as the pins
-  const newest = fs.readdirSync(new URL("../" + MIG, import.meta.url)).filter((f) => /^\d{8}_admission_v\d+_tickers\.sql$/.test(f)).sort().at(-1);
+  const newest = fs.readdirSync(new URL("../" + MIG, import.meta.url)).filter((f) => /^\d{8}_admission_(v\d+|[a-z0-9]+(_[a-z0-9]+)*)_tickers\.sql$/.test(f)).sort().at(-1);   // 6 Oct: TR1 names its file admission_tr1_index_tickers
   const sql = read(MIG + newest);
   const digest = sql.match(/for the set ([a-f0-9]{64})/)[1];
   const count = Number(sql.match(/-- \((\d+) names\)/)[1]);
