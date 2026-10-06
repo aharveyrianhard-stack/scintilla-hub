@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A5 · SK Hynix admission — stopped before anything visible changed</title>
+<style>
+:root{--bg:#0b0c0e;--panel:#121416;--line:#26292d;--ink:#c4c7cb;--dim:#8f9398;--faint:#6a6e73}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace;padding:64px 16px 48px}
+main{max-width:1180px;margin:0 auto}
+h1{font-size:18px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px;font-weight:600}
+h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin:36px 0 10px;color:var(--ink);font-weight:600}
+p{margin:0 0 10px;max-width:92ch}
+.sub{color:var(--dim);font-size:12px;letter-spacing:.04em}
+.lead{border:1px solid var(--line);background:var(--panel);padding:14px 16px;margin:18px 0}
+.lead li{margin:6px 0}
+ul,ol{margin:0;padding-left:20px}
+li{margin:6px 0;max-width:92ch}
+.wrap{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;min-width:940px;font-size:12px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:11px;background:var(--panel)}
+.n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--dim)}
+.s{white-space:nowrap;letter-spacing:.08em;font-size:11px;color:var(--dim)}
+.s-OK{color:var(--ink);font-weight:700}
+code{color:var(--ink);background:#181b1e;padding:1px 4px;font-size:12px;word-break:break-word}
+details.sc-pagespecs{margin-top:40px;border:1px solid var(--line);background:var(--panel);padding:10px 14px}
+details.sc-pagespecs summary{cursor:pointer;letter-spacing:.16em;font-size:11px;color:var(--dim)}
+details.sc-pagespecs p,details.sc-pagespecs li{font-size:12px;color:var(--dim)}
+i{color:var(--dim)}
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>A5 · SK Hynix (SKHY) admission</h1>
+<p class="sub">Monday 5 October 2026, 20:30–20:40 New York time · lane A5 · status: NOT ADMITTED — stopped at the second preparation step</p>
+
+<div class="lead">
+<ul>
+<li><b>SK Hynix is not on the Hub tonight.</b> The sitting stopped at the step that downloads its price history. The session's own safety layer refused that command, and I did not go around it.</li>
+<li><b>Nothing you can see was changed.</b> The board still serves 590 names, the Geiger is publishing (590 of 590 fresh at 20:37), and every machine runs what it ran before.</li>
+<li><b>One invisible thing was added:</b> a switched-off bookkeeping row for SKHY in the price database. No screen, job or count reads it. It is the first step of the admission, already done for whoever sits next.</li>
+<li><b>The read-in found a trap that would have blanked the % column all of Tuesday</b> had the sitting gone ahead as written. It is described below with its fix.</li>
+<li><b>There are no pictures.</b> SKHY has no board row or company view to photograph yet.</li>
+</ul>
+</div>
+
+<h2>What was done, step by step</h2>
+<div class="wrap"><table>
+<tr><th>step</th><th>what</th><th>read-back</th><th>how to undo</th></tr>
+<tr><td class="n">read-in</td><td>Live state before touching anything</td><td>590 names · digest <code>116c79f2…</code> · bar-timing scope matches on all carriers. The health page was already answering "not ready": QRVO is one session behind on five Geiger cells. That was there before this lane started.</td><td>—</td></tr>
+<tr><td class="n">before</td><td>The 31-surface checklist for SKHY</td><td>1 of 31 OK (the trading-state dot). All 24 chart widths missing.</td><td>—</td></tr>
+<tr><td class="n">P0</td><td>A throw-away work machine in the data centre</td><td>Started 20:35, stopped 20:38, removed itself. Not in the machine list afterwards.</td><td>nothing left</td></tr>
+<tr><td class="n">P1</td><td>The hidden row for SKHY (switched off)</td><td><code>active=false</code>, status <code>EXPLICIT_UNRESOLVED</code>. Not in <code>/universe</code>.</td><td><code>SYMBOLS=SKHY node scripts/expansion-sql.mjs shelve</code> on a throw-away machine — only if the admission is abandoned</td></tr>
+<tr><td class="n">P2</td><td>Download SKHY's price history while hidden</td><td><b>Refused</b> by the session's permission layer ("remote shell writes"), 20:37. Not run.</td><td>—</td></tr>
+<tr><td class="n">P3 → S11</td><td>Everything else: the pass/hold report, the new count and digest, the images, the eight places the count is pinned, the Hub rows, the won-to-dollar series, the loaders</td><td>Not started.</td><td>—</td></tr>
+<tr><td class="n">after</td><td>Live state re-read at 20:38</td><td>Identical to the read-in: 590 · <code>116c79f2…</code>, same images, Geiger computed 20:37:30 with 590 fresh and 0 carried.</td><td>—</td></tr>
+</table></div>
+<p class="sub" style="margin-top:8px">Rollback file: <code>/Users/alanharvey/SCINTILLA 0.5/_archive/backend-fix-20260928/ROLLBACK-skhy-admission-20261005.txt</code></p>
+
+<h2>The checklist: before → after (31 surfaces)</h2>
+<p>The "after" column says "not run" on every line because the admission did not happen. The before column is the real reading at 20:35.</p>
+<div class="wrap"><table>
+<tr><th>#</th><th>surface</th><th>before</th><th>why</th><th>after</th><th>what fills it</th></tr>
+<tr><td class="n">1</td><td>the name has a row on its cohort board</td><td class="s s-EMPTY">EMPTY</td><td>not in the served universe (/universe 590)</td><td class="s">not run</td><td>admission sitting (builder + S1–S11)</td></tr>
+<tr><td class="n">2</td><td>LAST</td><td class="s s-ERROR">ERROR</td><td>quote state NOT_OBSERVED_BY_STREAM</td><td class="s">not run</td><td>bar service quotes (automatic once served)</td></tr>
+<tr><td class="n">3</td><td>CHG % and the previous close</td><td class="s s-ERROR">ERROR</td><td>previous close PREVIOUS_CLOSE_NOT_SETTLED</td><td class="s">not run</td><td>geiger-publisher settled close</td></tr>
+<tr><td class="n">4</td><td>F P/E</td><td class="s s-EMPTY">EMPTY</td><td>no forward EPS (analyst_estimates future rows: 0)</td><td class="s">not run</td><td>fmp-analyst</td></tr>
+<tr><td class="n">5</td><td>MKT CAP</td><td class="s s-EMPTY">EMPTY</td><td>no company_profile row</td><td class="s">not run</td><td>fmp-backfill?job=profile</td></tr>
+<tr><td class="n">6</td><td>REVENUE</td><td class="s s-EMPTY">EMPTY</td><td>no fundamentals row</td><td class="s">not run</td><td>fmp-fundamentals</td></tr>
+<tr><td class="n">7</td><td>RSI</td><td class="s s-EMPTY">EMPTY</td><td>no FMP RSI row</td><td class="s">not run</td><td>fmp-indicator-export</td></tr>
+<tr><td class="n">8</td><td>GEIGER</td><td class="s s-EMPTY">EMPTY</td><td>not in /geiger</td><td class="s">not run</td><td>admission sitting (S2 Geiger runner)</td></tr>
+<tr><td class="n">9</td><td>RVOL</td><td class="s s-EMPTY">EMPTY</td><td>no board_volume row</td><td class="s">not run</td><td>minute-bar writer</td></tr>
+<tr><td class="n">10</td><td>MKT (trading-state dot)</td><td class="s s-OK">OK</td><td>clock</td><td class="s">not run</td><td></td></tr>
+<tr><td class="n">11</td><td>the chart on all 24 widths (1m … 12M)</td><td class="s s-EMPTY">EMPTY</td><td>24 of 24 widths missing: 1m 2m 3m 5m 10m 15 30 45 60 120 180 240 6h 8h 12h D 2D 3D W 2W M 3mo 6mo 12mo</td><td class="s">not run</td><td>admission P2 pull</td></tr>
+<tr><td class="n">12</td><td>Geiger 7 rungs</td><td class="s s-EMPTY">EMPTY</td><td>not in /geiger</td><td class="s">not run</td><td>admission sitting (S2 Geiger runner)</td></tr>
+<tr><td class="n">13</td><td>previous close</td><td class="s s-ERROR">ERROR</td><td>previous close PREVIOUS_CLOSE_NOT_SETTLED / ?</td><td class="s">not run</td><td>geiger-publisher settled close</td></tr>
+<tr><td class="n">14</td><td>GEIGER tab</td><td class="s s-EMPTY">EMPTY</td><td>not in /geiger</td><td class="s">not run</td><td>admission sitting (S2 Geiger runner)</td></tr>
+<tr><td class="n">15</td><td>FUNDAMENTALS tab (Station fundamentals shell)</td><td class="s s-EMPTY">EMPTY</td><td>fundamentals_history: 0 FY, 0 quarters</td><td class="s">not run</td><td>fmp-fundamentals</td></tr>
+<tr><td class="n">16</td><td>ESTIMATES tab (analysts)</td><td class="s s-EMPTY">EMPTY</td><td>future estimates 0, price target none, ratings none</td><td class="s">not run</td><td>fmp-analyst</td></tr>
+<tr><td class="n">17</td><td>COMPS tab</td><td class="s s-ERROR">ERROR</td><td>the tab prints "the comparable set could not be built" — SKHY has no profile (no company_profile row)</td><td class="s">not run</td><td>fmp-backfill?job=profile</td></tr>
+<tr><td class="n">18</td><td>FINANCIALS tab (HOLDINGS for a fund)</td><td class="s s-EMPTY">EMPTY</td><td>FY income 0, balance 0, cash flow 0</td><td class="s">not run</td><td>fmp-fundamentals</td></tr>
+<tr><td class="n">19</td><td>FINANCIALS → CAPITAL</td><td class="s s-EMPTY">EMPTY</td><td>no quarterly cash flow</td><td class="s">not run</td><td>fmp-fundamentals</td></tr>
+<tr><td class="n">20</td><td>STATS tab</td><td class="s s-EMPTY">EMPTY</td><td>no company_profile row</td><td class="s">not run</td><td>fmp-backfill?job=profile</td></tr>
+<tr><td class="n">21</td><td>NEWS tab</td><td class="s s-EMPTY">EMPTY</td><td>no headline in 30 days: "No recent headlines"</td><td class="s">not run</td><td>news-feed</td></tr>
+<tr><td class="n">22</td><td>SOCIAL tab</td><td class="s s-ERROR">ERROR</td><td>the page prints STALE: the X feed's newest post is 2026-09-25 22:29Z (132 X posts · 0 YouTube videos / 30 d)</td><td class="s">not run</td><td>X collector (stopped) <i>(no job fills this)</i></td></tr>
+<tr><td class="n">23</td><td>EARNINGS tab (company)</td><td class="s s-EMPTY">EMPTY</td><td>reported 0, next none</td><td class="s">not run</td><td>fmp-events</td></tr>
+<tr><td class="n">24</td><td>READ → BUSINESS</td><td class="s s-PLACEHOLDER">PLACEHOLDER</td><td>the developer line "Desk narrative auto-generates per ticker from read_blocks / ticker_context (DB) once its dossier is loaded." (no read_blocks row and no dossier)</td><td class="s">not run</td><td>dossier (ticker_context) → read-engine</td></tr>
+<tr><td class="n">25</td><td>READ → VERDICT</td><td class="s s-PLACEHOLDER">PLACEHOLDER</td><td>the developer line "Desk narrative auto-generates per ticker from read_blocks / ticker_context (DB) once its dossier is loaded." (no read_blocks row and no dossier)</td><td class="s">not run</td><td>read-engine (writes a verdict only for a name that has read_blocks or a dossier)</td></tr>
+<tr><td class="n">26</td><td>READ → CATALYSTS</td><td class="s s-PLACEHOLDER">PLACEHOLDER</td><td>the developer line "Desk narrative auto-generates per ticker from read_blocks / ticker_context (DB) once its dossier is loaded." (no read_blocks row and no dossier)</td><td class="s">not run</td><td>dossier (ticker_context) → read-engine</td></tr>
+<tr><td class="n">27</td><td>READ → WATCH</td><td class="s s-PLACEHOLDER">PLACEHOLDER</td><td>the developer line "Desk narrative auto-generates per ticker from read_blocks / ticker_context (DB) once its dossier is loaded." (no read_blocks row and no dossier)</td><td class="s">not run</td><td>dossier (ticker_context) → read-engine</td></tr>
+<tr><td class="n">28</td><td>READ → the dossier and its date</td><td class="s s-EMPTY">EMPTY</td><td>no ticker_context row (no dossier)</td><td class="s">not run</td><td>no dossier writer runs (draft protocol, paid model API) <i>(no job fills this)</i></td></tr>
+<tr><td class="n">29</td><td>EARNINGS room (the calendar)</td><td class="s s-ERROR">ERROR</td><td>not in public.cohorts: the calendar drops its rows</td><td class="s">not run</td><td>cohorts row (admission)</td></tr>
+<tr><td class="n">30</td><td>NEWS room (the name's cohort tab)</td><td class="s s-EMPTY">EMPTY</td><td>no headline in 30 days</td><td class="s">not run</td><td>news-feed</td></tr>
+<tr><td class="n">31</td><td>ALERTS room</td><td class="s s-PLACEHOLDER">PLACEHOLDER</td><td>ALERTS is a parked room for every name</td><td class="s">not run</td><td>product decision <i>(no job fills this)</i></td></tr></table></div>
+<p class="sub" style="margin-top:8px">Counts before: 1 OK · 19 empty · 6 error · 5 placeholder. Raw output: <code>data/checklist-before-20261005-2035ET.json</code></p>
+
+<h2>What the read-in found — the plan as written did not match what is running</h2>
+<ol>
+<li><b>Tuesday's previous-close file is already final, and it is built on 590 names.</b> The robot that builds it decides by "does the file exist and is it confirmed" and never checks which list of names it was built for. After a move to 591 the price service would reject that file, and the % column would be blank for every stock for the whole session — with nothing set to repair it. The fix inside a sitting is one extra step: rebuild that file on the 591 list by hand, right before the price service moves. The lasting fix is a small rule change that needs its own tests.</li>
+<li><b>On a weekday evening the visible steps belong just after midnight New York time,</b> not at 20:30. Before midnight the board is still bound to today's file, which cannot be rebuilt for a new list. The preparation runbook already said this; tonight's instruction did not.</li>
+<li><b>The price-bar service and the hourly refresh run a newer version than the instruction named</b> (the New York-clock fix from this afternoon), and the off-Hub scanners run another. An image cut from the named line would have silently removed both. The A5 branch now carries all three, so one image from it is safe.</li>
+<li><b>The Geiger machine carries 17 hand-placed files,</b> not 18 or 8. All 17 match the reviewed code line byte for byte.</li>
+<li><b>The off-Hub scanners no longer need moving</b> — since this afternoon they read the list of names at run time.</li>
+<li><b>The "is Tuesday's file published" gate cannot be read from the health page before midnight;</b> it only reports the session in force. I read the file itself instead.</li>
+<li><b>The hourly refresh takes a two-hour lock after 20:15,</b> and updating a sleeping scheduled machine starts it. It has to be moved only after its night pass has ended.</li>
+</ol>
+
+<h2>What remains, and when it can fill</h2>
+<ul>
+<li><b>The whole admission.</b> It needs a session that is allowed to run the download step on the data-centre machine — the coordinator's own session has been. Earliest clean windows: after midnight on any weekday night, or the weekend of 10 October.</li>
+<li><b>SKHY now has its 60 stored sessions</b> as of today's close, so the pass/hold report is expected to pass once the history is downloaded.</li>
+<li><b>After the admission,</b> the loaders fill statements, estimates and earnings on their next runs; the won-to-dollar series and SKHY's currency row must exist before the comps and fundamentals tabs are read; the dossier is built by hand from facts if its loader is not deployed.</li>
+</ul>
+
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p>Sources: chart API <code>/universe</code>, <code>/health</code>, <code>/geiger</code> (read 20:31 and 20:38 ET); <code>fly machine list</code> for the three apps; <code>scripts/admission-checklist.mjs SKHY</code> (provider branch <code>provider/a5-skhy-20261005</code>); the previous-close file header read with <code>settled-close-inspect.mjs</code> on the throw-away machine. The corrected sitting order and the exact commands are in <code>runbooks/A5_SKHY_ADMISSION_20261005.md</code> on that branch.</p>
+<p>What could be wrong: the QRVO lag was read, not diagnosed. The "blank all Tuesday" consequence is read from the robot's decision code and the file's header, not reproduced. No pictures were taken, so nothing on this page was checked by eye in a browser other than this page itself.</p>
+<p>Not done: steps P2 to S11, the Hub and Station count pins, the after-checklist, the board and company-view pictures.</p>
+</details>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>
