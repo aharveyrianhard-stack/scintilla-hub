@@ -35,7 +35,7 @@ function parseDD(dd:string){
 //                 replaces a ten-minute-old provider reading, and never appears as a fresh unqualified read.
 // Every supporting claim carries THIS TICKER's own source dates (never a newer peer's): regime_state rows by ticker,
 // ribbon_signals TREND rows by ticker for the multi-timeframe summary (mtf_summary has no timestamp column), and the
-// legacy daily composite date for the cohort comparison (recompute_cohort_divergence reads composite_staged tf D).
+// cohort comparison by the age columns of its OWN row (R2 2026-10-05, see peersAge below).
 // ath_state/sr_tiers have no scheduled writer and a stale price basis (AAPL 305.26 vs 336 live) - that sentence is no
 // longer written and those tables are no longer read. A 'basis' section records all of the above per ticker.
 const GEIGER_URL='https://scintilla-massive-chart-api.fly.dev/geiger'
@@ -155,6 +155,24 @@ const day=(ms:number|null)=>ms==null||!Number.isFinite(ms)||Math.abs(ms)>8.64e15
 const ageWords=(ms:number|null,nowMs:number)=>{if(ms==null)return 'age unknown';const d=Math.max(0,nowMs-ms);return d<90*60000?Math.round(d/60000)+'m old':d<48*3600000?Math.round(d/3600000)+'h old':Math.round(d/86400000)+'d old'}
 const CONTROL_CHARS=new RegExp('['+String.fromCharCode(0)+'-'+String.fromCharCode(31)+']','g')   // Postgres text cannot hold U+0000: one such byte in a body fails the whole upsert batch
 const isStale=(ms:number|null,nowMs:number,limit:number)=>ms==null||nowMs-ms>limit
+// ===== R2 2026-10-05: THE PEERS SENTENCE PRINTS THE AGE OF ITS OWN INPUTS =====
+// The sentence "Against its <cohort> peers it is ..." was dated by composite_staged's row for the ticker ("compared on the
+// legacy daily composite of 2026-08-24") because recompute_cohort_divergence read that table. H12's staged 04 moves that
+// function to scin_geiger_latest_d(), and H12 02 (applied 5 Oct) gave cohort_divergence the columns that say how old a
+// row's inputs are: as_of (this name's reading) and cohort_as_of_oldest (the oldest reading inside its cohort's mean).
+// A comparison is as old as the OLDEST reading it rests on, so the sentence prints that date and, when the group spans
+// more than a day, the range. A row with NEITHER column filled was written by the old function body (every row before 04
+// is applied; AVB/BRK.A/EQR-style rows it never refreshes afterwards): for those the old wording is kept WORD FOR WORD,
+// because it is still the true description of that row - so this deploy changes no stored verdict until 04 runs.
+const peersAge=(co:any,lMs:number|null,nowMs:number)=>{
+  const own=co?toMs(co.as_of,nowMs):null, grp=co?toMs(co.cohort_as_of_oldest,nowMs):null
+  if(own==null&&grp==null)return {dated:false,oldest:lMs,newest:lMs,words:`the legacy daily composite of ${day(lMs)}, ${ageWords(lMs,nowMs)}`,basis:`legacy daily composite of ${day(lMs)} (${ageWords(lMs,nowMs)})`}
+  const oldest=own==null?grp as number:grp==null?own:Math.min(own,grp), newest=own==null?oldest:Math.max(own,oldest)
+  const oneDay=day(oldest)===day(newest), span=oneDay?day(oldest):day(oldest)+' to '+day(newest)
+  const old=(oneDay?'':'oldest ')+ageWords(oldest,nowMs)
+  return {dated:true,oldest,newest,words:`daily Geiger readings of ${span}, ${old}`,
+    basis:`daily Geiger readings of ${span} (${old}); this name's own reading ${own==null?'of unknown date':day(own)+(co.source?' from '+String(co.source).replace(CONTROL_CHARS,' ').slice(0,40):'')}, oldest reading in its group ${grp==null?'of unknown date':day(grp)}`}
+}
 const unit=(v:any)=>typeof v==='number'&&Number.isFinite(v)&&v>=-1&&v<=1
 const finiteNum=(v:any)=>v!=null&&v!==''&&Number.isFinite(+v)
 // PostgREST serves at most 1,000 rows per request; pages are only a partition of the table under a STABLE order
@@ -219,7 +237,9 @@ Deno.serve(async()=>{
     pageAll(sb,'regime_state','ticker,term,state,updated_ts',null,['ticker','term'],4),
     sb.from('mtf_summary').select('ticker,n_bull,n_bear,n_tf,aligned,cascade'),
     Promise.resolve({data:[]} as any),
-    sb.from('cohort_divergence').select('ticker,cohort,geiger,cohort_mean,flag'),
+    // R2: the age columns ride along; if they cannot be read (H12 02 rolled back) the five original columns still are, and
+    // every row then counts as undated - the sentence falls back to the old wording instead of losing the comparison
+    sb.from('cohort_divergence').select('ticker,cohort,geiger,cohort_mean,flag,as_of,source,cohort_as_of_oldest').then((w:any)=>w.error?sb.from('cohort_divergence').select('ticker,cohort,geiger,cohort_mean,flag'):w),
     sb.from('ticker_context').select('ticker,business_now,catalysts,watch_notes,narrative,deep_dive'),
     pageAll(sb,'ribbon_signals','ticker,tf,updated_ts',['family','TREND'],['ticker','tf'],12),
     sb.from('read_blocks').select('ticker,body,updated_ts').eq('section','verdict'),
@@ -257,9 +277,10 @@ Deno.serve(async()=>{
     const absent=!expected&&!gValid
     const providerIssue=gValid||absent?null:!accepted?`provider Geiger unavailable (${G.reason})`:`provider Geiger reading for ${t} is malformed (composite/trend/momentum not all finite numbers in [-1,+1])`
     const regAt=RAT[t]||null, ribAt=RIB[t]||null
+    const pa=peersAge(co,lMs,nowMs); if(co)tally[pa.dated?'peers_dated':'peers_undated']=(tally[pa.dated?'peers_dated':'peers_undated']||0)+1
     const supportBasis=`Regime: ${regAt?('this ticker\'s rows last updated '+(day(regAt.min)===day(regAt.max)?day(regAt.max):day(regAt.min)+' to '+day(regAt.max))+' (oldest '+ageWords(regAt.min,nowMs)+')'):'no dated rows for this ticker'}. `+
       `Multi-timeframe: ${ribAt?('ribbon inputs for this ticker last updated '+(day(ribAt.min)===day(ribAt.max)?day(ribAt.max):day(ribAt.min)+' to '+day(ribAt.max))+' (oldest '+ageWords(ribAt.min,nowMs)+')'):'source age unknown'}; the summary table carries no timestamp. `+
-      `Cohort comparison: legacy daily composite of ${day(lMs)} (${ageWords(lMs,nowMs)}). `+
+      `Cohort comparison: ${co?pa.basis:'no comparison row for this ticker'}. `+
       `Levels/all-time-high: omitted (engine unscheduled, stale price basis). Structure: omitted (lane retired 2026-08-19).`
     // RETAIN the last provider-based verdict through a provider problem whenever it is newer than the legacy row
     if(providerIssue&&prevComputed!=null&&PV[t]&&typeof PV[t].body==='string'&&PV[t].body.trim()&&(lMs==null||prevComputed>lMs)){
@@ -294,7 +315,7 @@ Deno.serve(async()=>{
     let para2=''
     if(m)para2+= (m.aligned?`All ${m.n_tf} timeframes are aligned ${m.cascade}`:`Across ${m.n_tf} timeframes the signals are split (${m.n_bull} up, ${m.n_bear} down) — no clean alignment, consistent with consolidation`)+staleNote(ribAt,'legacy ribbon inputs')+'. '
     if(s){const sw=(+s.state>0)?'a higher-high bias':((+s.state<0)?'a lower-low bias':'no clear bias'); para2+=`Daily structure shows ${sw} (${s.n_up} higher highs vs ${s.n_down} lower lows). `}
-    if(co)para2+=`Against its ${co.cohort} peers it is ${co.flag==='DIVERGENT'?'diverging from the group':'roughly in line'}${gValid||isStale(lMs,nowMs,SOURCE_STALE_MS)?` (compared on the legacy daily composite of ${day(lMs)}, ${ageWords(lMs,nowMs)})`:''}.`
+    if(co)para2+=`Against its ${co.cohort} peers it is ${co.flag==='DIVERGENT'?'diverging from the group':'roughly in line'}${pa.dated||gValid||isStale(lMs,nowMs,SOURCE_STALE_MS)?` (compared on ${pa.words})`:''}.`
     b.verdict=(para1+'\n\n'+para2.trim()).trim()
     b.basis=(gValid?`Geiger: provider artifact computed ${G.computed} (${G.stale?'STALE, '+ageWords(G.computedMs,nowMs):'current'}; accepted under equalizer ${String(G.receipt).slice(0,12)}, ${Number.isInteger(g.tf_contributors)?g.tf_contributors:'?'} of ${G.rungs} timeframes contributing). `
       :`Geiger: legacy daily composite as of ${day(lMs)} (${ageWords(lMs,nowMs)}) — ${absent?t+' is not in the provider equity universe':providerIssue+' at '+now}. `)+supportBasis
