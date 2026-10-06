@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8001803) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from a8c5269) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -8662,7 +8662,8 @@ function rsiGradColor(v) {
    own history, when its row is older than three weeks (the same bound loadBoardHeartbeat reads by), or when the table
    is not there at all — so this code is safe to ship before the table exists.
    The board's number and the grid are the same measure: FMP's stored daily RSI(14) and Wilder's RSI(14) on the chart
-   API's daily bars agreed to the second decimal on 438 names for the 5 Oct close (median gap 0.00, largest 0.75).
+   API's daily bars were compared on the 492 names both described for the 5 Oct close: 483 within 0.05, median gap 0.00,
+   largest 0.75 (deliverables/20261006/rs1-rsi-own-extremes/data/fmp-vs-own.json; tools/compare-fmp.mjs repeats it).
    The rule itself is supabase/functions/rsi-own-daily/rsi-own.mjs; tests/rsi-own-extremes.test.mjs runs these copies
    against it value for value. Sorting the column still sorts the RSI number itself. */
 const RSI_OWN = Object.create(null);             // ticker → { eligible, grid:[101], as_of, sessions, span, rsi } — recent rows only
@@ -8753,6 +8754,9 @@ function paintRsiCell(t, v) {
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
   if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
+  /* the provider's own number now stands here: the "how unusual" fill (fillWatchedRsi), which may have put its own
+     reading in this cell while it was empty, lets go of it and never writes over this number */
+  if (cell.removeAttribute) cell.removeAttribute("data-hu-rsi");
   const rd = rsiOwnRead(t, v);                     /* RS1 — colour, glow and hover from this name's own two years (30 / 70 when it has no own scale) */
   cell.style.color = rd.color;
   if (cell.classList) cell.classList.toggle("is-xt", rd.extreme);   /* 27 Sep — an extreme breathes, softly */

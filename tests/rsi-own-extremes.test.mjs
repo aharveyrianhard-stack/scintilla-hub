@@ -223,6 +223,7 @@ test("the Hub's inline rule and the shared module agree on every reading, for ev
 test("the board cell is painted from the name's own read: colour, glow and hover — and the glow itself is untouched", () => {
   const paint = fn("paintRsiCell");
   assert.match(paint, /const rd = rsiOwnRead\(t, v\);/);
+  assert.match(paint, /cell\.removeAttribute\("data-hu-rsi"\);/, "once the provider's number is painted the how-unusual fill lets go of the cell");
   assert.match(paint, /cell\.style\.color = rd\.color;/);
   assert.match(paint, /classList\.toggle\("is-xt", rd\.extreme\)/);
   assert.match(paint, /setAttribute\("title", rd\.title\)/);
@@ -399,6 +400,16 @@ test("VIX, the ten-year, the dollar, oil and gold are dressed on their own scale
   /* the provider's own number is never overwritten */
   c = mk("61"); run(c, { own: true });
   assert.equal(c.textContent, "61"); assert.equal(c.writes, 0);
+  /* …not even in a cell this function filled first (SPY, QQQ, IWM, DIA are filled while empty, then the provider's
+     number lands): paintRsiCell takes the marker off, and from then on the cell is the provider's */
+  c = mk("—"); fill = run(c, { own: true });
+  assert.equal(c.attrs["data-hu-rsi"], String(fx.rows.VIX.rsi), "filled here: marked as this function's");
+  const paintFn = new Function("el", "rsiOwnRead", fn("paintRsiCell") + "\nreturn paintRsiCell;")(() => Object.assign(c, { removeAttribute(k) { delete c.attrs[k]; } }), () => ({ color: "rgb(1,2,3)", extreme: false, title: "" }));
+  paintFn("VIX", 52.2);                                          // the provider's number arrives
+  assert.equal(c.textContent, "52"); assert.equal("data-hu-rsi" in c.attrs, false);
+  const w2 = c.writes; fill(); fill();
+  assert.equal(c.textContent, "52", "the provider's 52 stands; the nightly row's 49 is not written over it"); assert.equal(c.writes, w2);
+  assert.equal(c.style.color, "rgb(1,2,3)", "and its colour is left as the board painted it");
   /* the panel's live recount still wins when it exists */
   c = mk("—"); run(c, { own: true, live: { rsi: 52.4, date: "2026-10-06" } });
   assert.equal(c.textContent, "52"); assert.match(c.title, /RSI 52\.4 on 2026-10-06/);
