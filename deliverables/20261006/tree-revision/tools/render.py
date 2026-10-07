@@ -327,7 +327,7 @@ if SIT:
     fr_, to_ = (SIT.get("from") or {}), (SIT.get("to") or {}); fn = SIT.get("funds"); nfn = len(fn) if isinstance(fn, (list, dict)) else fn
     cb = SIT.get("count_before", fr_.get("count", "—")); ca = SIT.get("count_after", to_.get("count", "—")); dg = str(SIT.get("digest_after", to_.get("digest", "")))
     hid = f" · all computed-but-not-shown funds: {fr_['geiger_only']} → {to_['geiger_only']}" if "geiger_only" in fr_ and "geiger_only" in to_ else ""
-    SITTING = f"<div class='kpi'><div><b>{cb} → {ca}</b><span>names after the next sitting · rehearsed on throw-away copies, not applied</span></div><div><b>{e(dg[:8])}…</b><span>the new digest (rehearsal)</span></div><div><b>{nfn}</b><span>computed, not shown: no row on the board{hid}</span></div><div><b>{e(str(SIT.get('status', '—')).replace('_', ' ').lower())}</b><span>not for tonight: tonight is TR1's sitting</span></div></div>"
+    SITTING = f"<div class='kpi'><div><b>{cb} → {ca}</b><span>names before → after this batch's sitting · rehearsed on throw-away copies, not applied</span></div><div><b>{e(dg[:8])}…</b><span>the new digest (rehearsal)</span></div><div><b>{nfn}</b><span>computed, not shown: no row on the board{hid}</span></div><div><b>{e(str(SIT.get('status', '—')).replace('_', ' ').lower())}</b><span>not for the coming sitting: that is the 7 → 8 Oct night ({e(str(fr_.get('count', '')))} is what it leaves)</span></div></div>" + (f"<p class='cap'>{e(SIT['rebased']['why'])} First rehearsal, not to be used: {SIT['rebased']['superseded_first_rehearsal']['from']} → {SIT['rebased']['superseded_first_rehearsal']['to']}. {e(SIT['rebased']['rule'])}</p>" if SIT.get('rebased') else "")
 else: SITTING = NOTRUN.replace("not run yet", "the next sitting's dry run: not run yet (next-sitting.json)")
 
 # ── 8 · real estate ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -671,6 +671,36 @@ page = f"""<!doctype html>
 </main>
 </body></html>
 """
+
+# ── plain words: no helper codes on a page for Alan (7 Oct: "what the fuck is R4? … Please be clear"). ─────────────
+# The data files and scenario names carry the lanes' own codes (TR1, TR2, CO1). They are said in words here, in the
+# text between tags only; file and branch names keep their spelling, because they are names of things on disk.
+CODE_WORDS = [
+    (r"TR2 · The tree revised on your notes", "The tree, revised on your notes"), (r"TR2 · THE TREE REVISED ON YOUR NOTES", "THE TREE, REVISED ON YOUR NOTES"),
+    (r"BEFORE · TR1\b", "BEFORE · THE TREE AS ADOPTED EARLIER ON 6 OCT"), (r"TR1 skip, kept: ", "left out on 6 Oct, still out: "),
+    (r"once TR1 lands", "once the ten index funds are admitted"), (r"TR1 has just admitted SPYG/SPYV", "SPYG and SPYV are among the ten funds about to be admitted"),
+    (r"TR1 AFTER_ADMISSION", "its after-admission step"), (r"\(TR1 load \+ AFTER_ADMISSION\)", "(the first tree load + its after-admission step)"),
+    (r"TR1's BLANKET after-admission step", "the first tree load's BLANKET after-admission step"), (r"TR1's after-admission step", "the first tree load's after-admission step"),
+    (r"\bTR1 loaded\b", "the first tree load"), (r"\bTR1 load\b", "the first tree load"), (r"tr1 load after tr2", "the first tree's load file, run after this revision"),
+    (r"tr1 rollback after tr2", "the first tree's way-back file, run after this revision"), (r"with TR2 applied", "with this revision applied"),
+    (r"the tree TR1 loaded", "the tree adopted earlier on 6 Oct"), (r"what TR1 loaded", "what the first tree load left"), (r"CO1's", "the cohort study's"),
+    (r"(?<![\w/.-])TR1's(?![\w-])", "the first tree's"), (r"(?<![\w/.-])TR1(?![\w-])", "the first tree load"), (r"(?<![\w/.-])TR2(?![\w-])", "this revision"), (r"(?<![\w/.-])CO1(?![\w-])", "the cohort study"),
+    (r"(?<![\w/.-])tr1(?![\w-])", "the first tree"), (r"(?<![\w/.-])tr2(?![\w-])", "this revision")]
+def plain(doc):
+    out = []; skip = 0
+    for part in re.split(r"(<[^>]+>)", doc):
+        if part.startswith("<"):
+            if re.match(r"<(style|script|code)\b", part): skip += 1
+            elif re.match(r"</(style|script|code)>", part): skip -= 1
+            out.append(part); continue
+        if not skip:
+            for a, b in CODE_WORDS: part = re.sub(a, b, part)
+        out.append(part)
+    doc = "".join(out)
+    left = sorted(set(re.findall(r"(?<![\w/.-])(?:TR\d|CO\d|NQ\d|NP\d|HB\d|LB\d|CP\d|ER\d|PF\d|CF\d|SG\d|BT\d)(?![\w-])", re.sub(r"<(style|script|code)\b.*?</\1>|<[^>]+>", " ", doc, flags=re.S))))
+    if left: sys.exit("A helper code is still on the page: " + ", ".join(left))
+    return doc
+page = plain(page)
 
 # ── the colour rule: every colour a grey (channels within 24, none above 210). Fail loudly. ────────────────────────
 def colour_check(doc):
