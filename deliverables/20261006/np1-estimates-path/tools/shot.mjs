@@ -20,11 +20,16 @@ try {
     await p.goto(page, { waitUntil: "load" }); await p.waitForTimeout(500)
     await p.screenshot({ path: join(root, "shots", `np1-${name}-top.png`) })
     await p.screenshot({ path: join(root, "shots", `np1-${name}-full.png`), fullPage: true })
+    await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true }))
+    await p.screenshot({ path: join(root, "shots", `np1-${name}-open.png`), fullPage: true })
+    await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = false }))
     const m = await p.evaluate(() => {
       const de = document.documentElement
       const small = [...document.querySelectorAll("body *")].filter((el) => el.children.length === 0 && el.textContent.trim() && parseFloat(getComputedStyle(el).fontSize) < 11).length
       const wide = [...document.querySelectorAll("main *")].filter((el) => !el.closest(".wrap,.scroll") && el.getBoundingClientRect().right > de.clientWidth + 1).map((el) => el.className || el.tagName).slice(0, 5)
-      return { scrollW: de.scrollWidth, clientW: de.clientWidth, height: de.scrollHeight, textUnder11px: small, spillsRight: wide, rows: document.querySelectorAll("#list tbody tr").length }
+      // a table that needs sideways scrolling inside its own box (wanted on a phone, not on a desk)
+      const sideways = [...document.querySelectorAll(".wrap,.scroll")].filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => (el.previousElementSibling?.textContent || el.parentElement.querySelector("h3")?.textContent || "").slice(0, 40))
+      return { scrollW: de.scrollWidth, clientW: de.clientWidth, height: de.scrollHeight, textUnder11px: small, spillsRight: wide, tablesScrollingSideways: sideways, rows: document.querySelectorAll("#list tbody tr").length }
     })
     // the filter chips: press "listed under 2 years" and count the rows left showing
     await p.click('#chips button[data-k="NEW_LISTING"]')

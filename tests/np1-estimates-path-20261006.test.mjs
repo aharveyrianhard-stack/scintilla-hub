@@ -1,4 +1,4 @@
-// NP1 (6 Oct 2026) — the page "names comps cannot price" and the data it is built from.
+// NP1 (6 Oct 2026, re-run and finished 7 Oct) — the page "names comps cannot price" and the data it is built from.
 // The page is a static report under deliverables/: it fetches nothing, so everything it says can be checked against the files beside it.
 import test from "node:test"
 import assert from "node:assert/strict"
@@ -60,7 +60,7 @@ test("NP1 data: the list is what the rules say", () => {
 })
 
 test("NP1 data: CBRS, the worked example, end to end", () => {
-  assert.deepEqual(cbrs.reasons, ["NEW_LISTING", "IPO_18M", "NO_TRAILING_EARNINGS", "FORWARD_PE_ABOVE_CUT"])
+  assert.deepEqual(cbrs.reasons, ["NEW_LISTING", "IPO_18M", "NO_TRAILING_EARNINGS", "PROFIT_NOT_FROM_OPERATIONS", "FORWARD_PE_ABOVE_CUT"])
   assert.equal(cbrs.rung, "ESTIMATES_AND_PROSPECTUS"); assert.equal(cbrs.estimates_weak, false)
   assert.equal(cbrs.price.d, "2026-10-06")
   assert.ok(Math.abs(cbrs.mcap - cbrs.price.v * cbrs.shares) < 1); assert.ok(Math.abs(cbrs.ev - (cbrs.mcap + cbrs.net_debt)) < 1)
@@ -100,11 +100,20 @@ test("NP1 page: the numbers printed are the numbers in the files", () => {
 test("NP1 models: open models only, every section read by both levels, timings kept, passages kept for audit", () => {
   const dir = join(root, "data", "models")
   const done = readdirSync(dir).filter((f) => f.endsWith(".models.json"))
-  assert.ok(done.includes("CBRS.models.json")); assert.ok(done.length >= 5, "the new listings were read")
+  // every new listing and every name whose estimates are too thin was read: the two groups Alan's ladder sends past the estimates
+  const carried = path.path.filter((p) => p.reasons.includes("NEW_LISTING") || p.rung === "MODELS_AND_QUARTERLIES").map((p) => p.ticker)
+  assert.deepEqual(done.map((f) => f.split(".")[0]).sort(), [...carried].sort(), "one model file per carried name, no other")
+  for (const t of carried) assert.ok(existsSync(join(root, "data", "filings", t + ".filings.json")), t + " has its filings read")
   for (const file of done) {
     const m = json("models", file)
     assert.match(m.models.long_text, /Qwen2\.5-7B-Instruct.*llama\.cpp/); assert.equal(m.models.short_text, "ProsusAI/finbert")
     assert.ok(m.took.total_s > 0 && m.took.qwen_passages > 0 && m.took.finbert_sentences > 0, file)
+    assert.ok(m.sections.length >= 1, file + " has at least one section read")
+    assert.equal(m.models.gguf, "qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf")
+    assert.ok(!/gpt|claude|anthropic|openai|gemini|grok/i.test(JSON.stringify(m.models)), "no paid model named as a reader in " + file)
+    // a call is read only when it is the latest one: a stale call is named and left out
+    const callSections = m.sections.filter((s) => s.section.startsWith("Earnings call"))
+    if (m.call && m.call.read) { assert.ok(callSections.length >= 1 && m.call.age_days <= 200, file) } else assert.equal(callSections.length, 0, file + " has no call section")
     for (const s of m.sections) {
       assert.equal(s.finbert.pos + s.finbert.neg + s.finbert.neu, s.finbert.n, file + " " + s.section)
       assert.equal(s.qwen.positive + s.qwen.negative + s.qwen.mixed + s.qwen.factual, s.qwen.read, file + " " + s.section)
@@ -113,8 +122,56 @@ test("NP1 models: open models only, every section read by both levels, timings k
     const audit = join(dir, file.replace(".models.json", ".passages.ndjson"))
     assert.ok(existsSync(audit)); assert.equal(readFileSync(audit, "utf8").trim().split("\n").length, m.took.qwen_passages, file + ": one audit line per passage")
   }
-  const all = readdirSync(dir).map((f) => readFileSync(join(dir, f), "utf8")).join("\n")
-  assert.ok(!/gpt-|claude|anthropic|openai\.com|api\.openai|gemini/i.test(all.replace(/OpenAI/g, "")), "no paid model named as a reader")   // "OpenAI" is Cerebras's customer
+  const lac = json("models", "LAC.models.json")
+  assert.equal(lac.call.read, false); assert.ok(lac.call.age_days > 200, "Lithium Americas' newest call on FMP is May 2024: named, not read")
+})
+
+test("NP1 data: the price is one settled day, and the operations test finds what the others miss", () => {
+  const otherDay = path.path.filter((p) => p.price.d !== path.as_of).map((p) => p.ticker)
+  assert.ok(otherDay.length <= 2, "nearly every name carries the 6 Oct close: " + otherDay.join(" "))
+  for (const t of otherDay) assert.ok(text.includes(t), "a name priced a day earlier is named in the page specs")
+  const flagged = path.path.filter((p) => p.reasons.includes("PROFIT_NOT_FROM_OPERATIONS"))
+  assert.equal(flagged.length, path.reasons.PROFIT_NOT_FROM_OPERATIONS)
+  for (const p of flagged) assert.ok(p.trailing.not_from_operations.length > 0 && p.trailing.not_from_operations.every((x) => x.ni > 0 && x.oi < 0), p.ticker)
+  const lyft = path.path.find((p) => p.ticker === "LYFT")
+  assert.deepEqual(lyft.reasons, ["PROFIT_NOT_FROM_OPERATIONS"]); assert.ok(lyft.trailing.pe < 5, "a trailing P/E that looks cheap and is not")
+  assert.deepEqual(cbrs.trailing.not_from_operations.map((x) => x.period), ["FY2025"])
+})
+
+test("NP1 worked example: the company's guidance against the analysts, the reads and the line-by-line check", () => {
+  const call = json("calls", "CBRS.call.json")
+  assert.equal(call.source, "FMP earning-call-transcript"); assert.equal(call.call_date, "2026-08-12")
+  const vs = call.against_consensus
+  assert.deepEqual(vs.map((x) => x.period).sort(), ["FY 2026", "Q3 2026"])
+  for (const x of vs) { assert.ok(x.low <= x.value && x.value <= x.high); assert.equal(x.consensus_is, "inside the range"); assert.equal(x.guided_as, "core revenue") }
+  assert.equal(vs.find((x) => x.period === "FY 2026").value, cbrs.fy.find((f) => f.fy === "2026-12-31").rev, "the analysts' figure is the one on the estimates table")
+  assert.ok(text.includes("inside the range")); assert.ok(text.includes("$880M – $890M")); assert.ok(text.includes("$214M – $216M"))
+  // the reads: every quote was found word for word in the document it names when the data was assembled
+  const reads = json("CBRS.read.json").reads
+  assert.ok(reads.length >= 6)
+  for (const r of reads) { assert.ok(text.includes(r.topic.toUpperCase()), r.topic); for (const q of r.quotes) assert.equal(q.found_in_source, true, q.text.slice(0, 60)) }
+  assert.ok(!text.includes("NOT FOUND IN THE TEXT"))
+  // the check covers every line the model wrote for the example, and the page strikes exactly the ones the text does not support
+  const m = json("models", "CBRS.models.json")
+  const lines = m.sections.flatMap((s) => [...s.growth_drivers, ...s.risks])
+  const checks = json("CBRS.checks.json").claims
+  assert.deepEqual(checks.map((c) => c.claim).sort(), [...lines].sort(), "one check per line, for this run's lines")
+  assert.ok(checks.every((c) => c.checked_against && c.evidence_found_word_for_word !== false))
+  const bad = checks.filter((c) => !c.supported)
+  assert.equal((own.match(/not in the text<\/em>/g) || []).length, bad.length); assert.ok(bad.length >= 1 && bad.length <= 4)
+  assert.ok(text.includes(`${checks.length - bad.length} of ${checks.length} are supported by the text`))
+})
+
+test("NP1 page: the thin-estimate names are carried to the last rung, each with what was read", () => {
+  const thin = path.path.filter((p) => p.rung === "MODELS_AND_QUARTERLIES")
+  assert.ok(text.includes(`THE ${thin.length} WITH ESTIMATES TOO THIN`))
+  const section = own.slice(own.indexOf("WITH ESTIMATES TOO THIN"), own.indexOf("PROPOSED TABLES"))
+  for (const p of thin) assert.ok(section.includes(`<td class="tk">${p.ticker}</td>`), p.ticker + " has a row")
+  assert.ok(thin.every((p) => p.estimates_weak))
+  const q = json("quarters.json")
+  for (const p of thin) assert.ok(Array.isArray(q[p.ticker]) && q[p.ticker].length >= 4, p.ticker + " has its quarterly reports")
+  assert.ok(section.includes("too old, not read"), "the stale call is said, not hidden")
+  assert.ok(section.includes("none held"), "a company with no call on FMP says so")
 })
 
 test("NP1 folder: no key, and the keyed pull's proof holds only counts and public links", () => {
@@ -125,5 +182,9 @@ test("NP1 folder: no key, and the keyed pull's proof holds only counts and publi
   }
   const leg = json("fmp-leg-proof.json")
   assert.ok(leg.names.every((n) => n.errors.length === 0 && n.estimate_rows > 0 && n.transcript === undefined && n.headlines === undefined))
+  assert.equal(leg.names.length, 19)
+  // the documents the reader picked from EDGAR's own index are in FMP's list too, except where FMP's 1,000-row page no longer reaches them
+  const missing = leg.names.flatMap((n) => Object.entries(n.picked_in_fmp_list).filter(([, ok]) => !ok).map(([doc]) => n.ticker + " " + doc))
+  assert.ok(missing.length <= 3, "picked documents missing from FMP's list: " + missing.join(", "))
   assert.ok(leg.names.flatMap((n) => n.filings_kept).every((f) => f.url.startsWith("https://www.sec.gov/")))
 })
