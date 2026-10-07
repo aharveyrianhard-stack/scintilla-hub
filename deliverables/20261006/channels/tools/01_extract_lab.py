@@ -117,6 +117,16 @@ for sym in ("SPY", "QQQ"):
         out["sources"]["evidence"][f"{sym} {tf}"] = {"file": f, "sha256": sha(p), "captured_at": d["capture"]["snapshot"]["capturedAt"], "bars": len(rows),
                                                       "first_bar": iso(rows[0][0]), "last_bar": iso(rows[-1][0]), "session": ch["session"], "dividends_adjustment": ch["dividendsAdjustment"]}
         bars_out["symbols"][sym][tf] = {"columns": ["t_ms", "o", "h", "l", "c"], "rows": rows}
+        if tf == "1D":
+            # The Lab's own daily indicator values, saved in the same capture: its 200-day (first plot of its Clouds study) and its daily
+            # RSI and Williams+100 (the D columns of "SCINTILLA RSI + Williams MTF REVIEW V2"). Plot titles are not stored in the capture,
+            # so the columns are named here by position and PROVED in step 3 by matching our own numbers day for day.
+            st = {x["name"]: x for x in ch["studies"]}
+            clouds = next(v for k, v in st.items() if "Clouds Numeric Labels" in k); osc = next(v for k, v in st.items() if "RSI + Williams" in k)
+            cr = {int(r["values"][0]) * 1000: r["values"] for r in clouds["plotRows"]}; orr = {int(r["values"][0]) * 1000: r["values"] for r in osc["plotRows"]}
+            bars_out["symbols"][sym]["1D_lab_indicators"] = {
+                "columns": ["t_ms", "sma200", "rsi_d", "williams_plus100_d"], "studies": {"sma200": clouds["name"], "oscillators": osc["name"]},
+                "rows": [[t, cr.get(t, [None] * 2)[1], orr.get(t, [None] * 31)[30], orr.get(t, [None] * 31)[16]] for t in [x[0] for x in rows]]}
 
 os.makedirs(DATA, exist_ok=True)
 json.dump(out, open(os.path.join(DATA, "lab-channels.json"), "w"), indent=1)

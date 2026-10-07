@@ -6,7 +6,12 @@
 # ex-dividend day. After the conversion the chart API bars must reproduce the Lab's own bars - that parity is checked and written out.
 #
 # Clocks. Each rail advances once per SOURCE bar (the Lab's native rule): level = price_at_snapshot + slope x n, n = source bars after the
-# snapshot bar. 1W: n counts calendar weeks. 2W: n counts the Lab's actual two-week bars (one of them, 30 Dec 2024, is a single week).
+# snapshot bar. 1W: n counts calendar weeks. 2W: n counts the Lab's actual two-week bars. TradingView restarts the two-week count on the
+# first Monday of every year, so a year with 53 Mondays ends on a single-week bar (31 Dec 2018, 30 Dec 2024). 2026 has 52 Mondays, so the
+# bars after the newest saved one (28 Sep 2026) simply follow every 14 days through the look-ahead used here (to Feb 2027).
+#
+# Checks written into results.json, not assumed: the converted bars against the Lab's own daily and weekly bars; our 200-day, RSI and
+# Williams against the values the Lab saved in its own daily capture; the two source clocks against the Lab's bar counts.
 import json, os, bisect, math, statistics, datetime as dt
 from collections import OrderedDict
 
@@ -16,7 +21,7 @@ LAB = json.load(open(os.path.join(DATA, "lab-channels.json")))
 MERGE_GAP = 20          # pierces fewer than this many sessions apart are one episode (one trading month)
 RSI_N = 14; WPR_N = 14  # the Lab's own oscillator: ta.rsi(close,14), ta.wpr(14)
 MONTH_DAYS = 365.25 / 12
-HOLIDAYS = {dt.date(2026, 11, 26), dt.date(2026, 12, 25), dt.date(2027, 1, 1), dt.date(2027, 1, 18), dt.date(2027, 2, 15), dt.date(2027, 4, 2 - 7 + 7)}
+HOLIDAYS = {dt.date(2026, 11, 26), dt.date(2026, 12, 25), dt.date(2027, 1, 1), dt.date(2027, 1, 18), dt.date(2027, 2, 15), dt.date(2027, 3, 26)}  # NYSE full closes ahead
 
 def day(ms): return dt.datetime.utcfromtimestamp(ms / 1000).date()
 def monday(d): return d - dt.timedelta(days=d.weekday())
@@ -94,6 +99,19 @@ def study(sym):
     ma = sma(aC, 200); ma_raw = sma(C, 200)
     rsi = rsi_wilder(aC, RSI_N); wp = wpr(aH, aL, aC, WPR_N)
 
+    # parity: our 200-day, RSI and Williams against the Lab's own saved daily values. The Lab's multi-timeframe oscillator prints, on each
+    # daily bar, the value of the last COMPLETED day, so its RSI / Williams columns are compared with ours one session earlier.
+    LI = LABBARS[sym]["1D_lab_indicators"]["rows"][:-1]
+    e_ma = [abs(v[1] - ma[idx[day(v[0])]]) for v in LI if v[1] is not None]
+    def osc_err(col, mine, shift):
+        return [abs(v[col] - mine[idx[day(v[0])] - shift]) for v in LI if v[col] is not None and mine[idx[day(v[0])] - shift] is not None]
+    wp100 = [None if x is None else x + 100 for x in wp]
+    parity["sma200_vs_lab_saved_daily"] = {"days": len(e_ma), "max_abs_error_usd": r(max(e_ma), 6), "lab_study": LABBARS[sym]["1D_lab_indicators"]["studies"]["sma200"]}
+    parity["rsi14_vs_lab_saved_daily"] = {"days": len(osc_err(2, rsi, 1)), "max_abs_error_points_lab_bar_vs_our_previous_session": r(max(osc_err(2, rsi, 1)), 6),
+                                          "max_abs_error_points_same_day_for_contrast": r(max(osc_err(2, rsi, 0)), 3), "lab_study": LABBARS[sym]["1D_lab_indicators"]["studies"]["oscillators"]}
+    parity["williams14_plus100_vs_lab_saved_daily"] = {"days": len(osc_err(3, wp100, 1)), "max_abs_error_points_lab_bar_vs_our_previous_session": r(max(osc_err(3, wp100, 1)), 6),
+                                                       "max_abs_error_points_same_day_for_contrast": r(max(osc_err(3, wp100, 0)), 3)}
+
     # ---- the two source clocks and the rails -----------------------------------------------------------------------------
     ch = LAB["symbols"][sym]["channels"]; c1, c2 = ch["1W B"], ch["2W B"]
     snap1 = monday(day(c1["snapshot_bar_ms"])); T2 = [monday(day(x[0])) for x in LABBARS[sym]["2W"]["rows"]]; i2s = T2.index(monday(day(c2["snapshot_bar_ms"])))
@@ -101,7 +119,7 @@ def study(sym):
     def n2(d):
         m = monday(d)
         if m <= T2[-1]: return bisect.bisect_right(T2, m) - 1 - i2s
-        return (m - T2[-1]).days // 14       # after the newest saved bar: two-week steps (no year turn inside the look-ahead used here)
+        return len(T2) - 1 - i2s + (m - T2[-1]).days // 14   # after the newest saved bar: one step every 14 days (see the note on clocks above)
     clock = {"1W": {"n_at_origin": n1(day(c1["origin_ms"])), "lab_base_offset": c1["base_offset_bars"], "span_origin_to_endpoint": n1(day(c1["endpoint_ms"])) - n1(day(c1["origin_ms"])), "lab_span": c1["anchor_span_bars"]},
              "2W": {"n_at_origin": n2(day(c2["origin_ms"])), "lab_base_offset": c2["base_offset_bars"], "span_origin_to_endpoint": n2(day(c2["endpoint_ms"])) - n2(day(c2["origin_ms"])), "lab_span": c2["anchor_span_bars"],
                     "single_week_bars": [str(T2[i - 1]) for i in range(1, len(T2)) if (T2[i] - T2[i - 1]).days == 7 and T2[i] >= dt.date(2021, 1, 1)]}}
@@ -130,14 +148,21 @@ def study(sym):
                 "height_usd": r(U0 - L0, 4),
                 "slope": {"lab_native": r(c["slope_per_source_bar"], 10), "lab_native_unit": c["slope_unit"], "usd_per_7d": r(susd, 6),
                           "pct_of_close_per_7d": r(100 * susd / px, 4), "lab_strip_reads": f"{100 * susd / px:+.2f}% / 7d",
+                          "native_usd_per_calendar_week": r(c["slope_per_source_bar"] / (1 if c["source_timeframe"] == "1W" else 2), 10),
                           "usd_per_month": r(susd * MONTH_DAYS / 7, 4), "pct_of_close_per_month": r(100 * susd * MONTH_DAYS / 7 / px, 4), "pct_of_mid_per_month": r(100 * susd * MONTH_DAYS / 7 / M, 4),
                           "usd_per_year": r(susd * 365.25 / 7, 3), "pct_of_close_per_year": r(100 * susd * 365.25 / 7 / px, 3)},
                 "today": {"session": str(D[last]), "close": px, "upper": r(U), "mid": r(M), "lower": r(Lo),
-                          "position_pct_of_height": r((px - Lo) / (U - Lo) * 100, 2), "pct_above_lower": r((px / Lo - 1) * 100, 3), "pct_below_upper": r((U / px - 1) * 100, 3),
-                          "usd_below_upper": r(U - px, 3), "pct_vs_mid": r((px / M - 1) * 100, 3), "usd_vs_mid": r(px - M, 3),
+                          "position_pct_of_height": r((px - Lo) / (U - Lo) * 100, 2),
+                          # every distance below is the move the PRICE would have to make from today's close to stand on that line
+                          "move_to_upper_pct": r((U / px - 1) * 100, 3), "move_to_upper_usd": r(U - px, 3),
+                          "move_to_mid_pct": r((M / px - 1) * 100, 3), "move_to_mid_usd": r(M - px, 3),
+                          "move_to_lower_pct": r((Lo / px - 1) * 100, 3), "move_to_lower_usd": r(Lo - px, 3),
+                          "close_above_mid_pct_of_mid": r((px / M - 1) * 100, 3), "close_above_lower_pct_of_lower": r((px / Lo - 1) * 100, 3),
                           "sma200_position_pct_of_height": r((ma[last] - Lo) / (U - Lo) * 100, 2)},
                 "life": {"from": str(D[life0]), "sessions": N - life0, "closes_inside": inside, "closes_below_lower": below, "closes_above_upper": above,
                          "share_inside_pct": r(100 * inside / (N - life0), 1),
+                         "share_of_closes_above_the_midline_pct": r(100 * sum(1 for p in pos if p > 50) / len(pos), 1), "median_position_pct": r(med(pos), 1),
+                         "slope_pct_of_close_per_month_at_the_start": r(100 * susd * MONTH_DAYS / 7 / aC[life0], 3),
                          "lowest_position": {"date": str(D[life0 + imin]), "pct": r(pos[imin], 1)}, "highest_position": {"date": str(D[life0 + imax]), "pct": r(pos[imax], 1)},
                          "sessions_closed_above_upper": [str(D[life0 + k]) for k, p in enumerate(pos) if p > 100]}}
     def n_end(c):
@@ -210,6 +235,94 @@ def study(sym):
         e["_k"] = k; e["_a0"] = a0; e["_b1"] = b1
         episodes.append(e)
 
+    # ---- the same pierce test on the Hub's own prices (split-adjusted, dividends NOT taken out), to show what depends on the basis ----
+    below_raw = [(ma_raw[i] is not None and C[i] < ma_raw[i]) for i in range(N)]
+    raw_dips = []; i = life0
+    while i < N:
+        if below_raw[i] and not below_raw[i - 1]:
+            j = i
+            while j + 1 < N and below_raw[j + 1]: j += 1
+            raw_dips.append((i, j)); i = j + 1
+        else: i += 1
+    adj_days = {q for a, b in dips for q in range(a, b + 1)}; raw_days = {q for a, b in raw_dips for q in range(a, b + 1)}
+    raw_groups = []
+    for a, b in raw_dips:
+        if raw_groups and a - raw_groups[-1][-1][1] - 1 < MERGE_GAP: raw_groups[-1].append((a, b))
+        else: raw_groups.append([(a, b)])
+    raw_basis = {"what": "the same test on the chart API's own split-adjusted closes and their own 200-day (what the Hub and Station charts show)",
+                 "count_pierces": len(raw_dips), "count_episodes": len(raw_groups), "sessions_closed_below": len(raw_days),
+                 "sessions_below_on_the_lab_basis": len(adj_days),
+                 "below_only_on_the_hub_basis": [str(D[q]) for q in sorted(raw_days - adj_days)], "below_only_on_the_lab_basis": [str(D[q]) for q in sorted(adj_days - raw_days)],
+                 "episodes_first_pierce": [str(D[g[0][0]]) for g in raw_groups], "episodes_low_close_date": [str(D[min((q for a, b in g for q in range(a, b + 1)), key=lambda q: C[q])]) for g in raw_groups]}
+
+    # ---- closes above the upper rail (1W B2 = 2W B2), and what followed each stretch ----------------------------------------------------
+    over = [aC[i] > R1[i][0] for i in range(N)]; runs = []; i = life0
+    while i < N:
+        if over[i]:
+            j = i
+            while j + 1 < N and over[j + 1]: j += 1
+            runs.append((i, j)); i = j + 1
+        else: i += 1
+    stretches = []; OVER_GAP = 10          # closes above the rail fewer than 10 sessions apart are one stretch
+    for a, b in runs:
+        if stretches and a - stretches[-1][-1][1] - 1 < OVER_GAP: stretches[-1].append((a, b))
+        else: stretches.append([(a, b)])
+    above_upper = []
+    for gi, g in enumerate(stretches):
+        a0, b1 = g[0][0], g[-1][1]; days_over = [q for a, b in g for q in range(a, b + 1)]
+        kp = max(range(a0, b1 + 1), key=lambda q: aC[q]); kx = max(days_over, key=lambda q: aC[q] / R1[q][0])
+        e = {"first_close_above": str(D[a0]), "last_close_above": str(D[b1]), "sessions_closed_above": len(days_over), "still_above_at_the_last_close": b1 == last,
+             "furthest_above_pct": r((aC[kx] / R1[kx][0] - 1) * 100, 2), "furthest_above_date": str(D[kx]), "furthest_position_1W_B_pct": r((aC[kx] - R1[kx][2]) / (R1[kx][0] - R1[kx][2]) * 100, 1),
+             "peak_close": r(aC[kp], 2), "peak_close_date": str(D[kp]), "peak_intraday_high": r(max(aH[a0:b1 + 1]), 2)}
+        if b1 < last:
+            end = stretches[gi + 1][0][0] - 1 if gi + 1 < len(stretches) else last
+            kl = min(range(b1 + 1, end + 1), key=lambda q: aC[q]); kw = min(range(b1 + 1, end + 1), key=lambda q: aL[q])
+            e["afterwards"] = {"window": f"{D[b1 + 1]} to {D[end]}", "lowest_close": r(aC[kl], 2), "lowest_close_date": str(D[kl]),
+                               "fall_from_peak_close_pct": r((aC[kl] / aC[kp] - 1) * 100, 2), "sessions_peak_to_low": kl - kp,
+                               "lowest_intraday": r(aL[kw], 2), "lowest_intraday_date": str(D[kw]), "fall_peak_high_to_low_pct": r((aL[kw] / max(aH[a0:b1 + 1]) - 1) * 100, 2),
+                               "position_1W_B_at_low_pct": r((aC[kl] - R1[kl][2]) / (R1[kl][0] - R1[kl][2]) * 100, 1), "position_2W_B_at_low_pct": r((aC[kl] - R2[kl][2]) / (R2[kl][0] - R2[kl][2]) * 100, 1),
+                               "low_vs_sma200_pct": r((aC[kl] / ma[kl] - 1) * 100, 2), "closed_below_sma200_in_window": any(below[q] for q in range(b1 + 1, end + 1)),
+                               "sessions_low_back_to_the_rail": next((q - kl for q in range(kl + 1, N) if aC[q] > R1[q][0]), None)}
+        above_upper.append(e)
+    touched = [i for i in range(life0, N) if aH[i] >= R1[i][0]]
+    posU = [(aC[i] - R1[i][2]) / (R1[i][0] - R1[i][2]) * 100 for i in range(N)]
+    kn = max(range(life0, N), key=lambda q: posU[q])
+    nearest = {"highest_close_position_1W_B_pct": r(posU[kn], 1), "date": str(D[kn]), "close": r(aC[kn], 2), "gap_to_rail_pct": r((R1[kn][0] / aC[kn] - 1) * 100, 2)}
+    if kn < last:
+        kl = min(range(kn + 1, N), key=lambda q: aC[q])
+        nearest["afterwards"] = {"lowest_close": r(aC[kl], 2), "lowest_close_date": str(D[kl]), "fall_pct": r((aC[kl] / aC[kn] - 1) * 100, 2), "sessions": kl - kn,
+                                 "position_1W_B_at_low_pct": r(posU[kl], 1), "low_vs_sma200_pct": r((aC[kl] / ma[kl] - 1) * 100, 2)}
+    upper_rail = {"rail": "1W B2 = 2W B2", "stretches_of_closes_above": above_upper, "sessions_closed_above_total": sum(over[life0:]),
+                  "sessions_the_high_reached_it": len(touched), "first_session_the_high_reached_it": str(D[touched[0]]) if touched else None,
+                  "last_session_the_high_reached_it": str(D[touched[-1]]) if touched else None, "nearest_close": nearest}
+
+    # ---- the 200-day's own pace (the Lab's strip cell uses two daily values only, so it swings with weekends) ----------------------------
+    def ma_pace(n): return (ma[last] - ma[last - n]) / ((D[last] - D[last - n]).days / 7)
+    ma_pace_out = {"last_5_sessions_usd_per_7d": r(ma_pace(5), 3), "last_20_sessions_usd_per_7d": r(ma_pace(20), 3), "last_60_sessions_usd_per_7d": r(ma_pace(60), 3),
+                   "last_20_sessions_pct_of_close_per_7d": r(100 * ma_pace(20) / aC[last], 3), "last_20_sessions_multiple_of_channel_slope": r(ma_pace(20) / s1w, 2),
+                   "lab_strip_cell_last_10_pairs_pct_per_7d": [{"through": str(D[i]), "days_between_the_two_values": (D[i] - D[i - 1]).days, "reads": f"{100 * ma_week(i) / aC[i]:+.2f}"} for i in range(last - 9, last + 1)]}
+
+    # ---- the rebounds, summed up (small samples: every value is listed beside its median) ---------------------------------------------
+    def col(key, field, clean=False):
+        out = []
+        for e in episodes:
+            v = e["rebound"][key]
+            if v is None or (clean and v["later_pierces_on_the_way"] > 0): continue
+            out.append(v[field])
+        return out
+    def stat(vals, nd=2):
+        vals = [v for v in vals if v is not None]
+        return {"n": len(vals), "median": r(med(vals), nd), "min": r(min(vals), nd) if vals else None, "max": r(max(vals), nd) if vals else None, "values": [r(v, nd) for v in vals]}
+    summary = {"episodes": len(episodes),
+               "sessions_closed_below": stat([e["sessions_closed_below"] for e in episodes], 0),
+               "max_depth_by_close_pct": stat([e["max_depth"]["by_close_pct"] for e in episodes]),
+               "sessions_low_to_reclaim": stat([e["low"]["sessions_to_reclaim"] for e in episodes], 0),
+               "rsi14_at_low": stat([e["oscillators_at_low"]["rsi14"] for e in episodes], 1), "williams14_at_low": stat([e["oscillators_at_low"]["williams14"] for e in episodes], 1)}
+    for key in ("to_2W_B4_mid", "to_1W_B4_mid", "to_upper_touch", "first_20_sessions", "first_60_sessions"):
+        summary[key] = {"sessions": stat(col(key, "sessions"), 0), "multiple_of_channel_slope": stat(col(key, "multiple_of_channel_slope")),
+                        "usd_per_7d": stat(col(key, "usd_per_7d"), 3), "pct_per_month": stat(col(key, "pct_per_month")), "gain_pct": stat(col(key, "gain_pct")),
+                        "uninterrupted_only": {"sessions": stat(col(key, "sessions", True), 0), "multiple_of_channel_slope": stat(col(key, "multiple_of_channel_slope", True))}}
+
     # ---- today's read ------------------------------------------------------------------------------------------------------
     px = aC[last]; U_now = R1[last][0]; room_usd = U_now - px; room_pct = (U_now / px - 1) * 100
     def sessions_at(pace_usd_7d):     # walk the calendar forward: price rises at the pace, the rail steps up once a week
@@ -222,22 +335,39 @@ def study(sym):
             n += 1
             if px + pace_usd_7d * (d - D[last]).days / 7 >= rails(c1, n1(d))[0]: return n
         return None
-    mids = [e["rebound"]["to_2W_B4_mid"]["usd_per_7d"] for e in episodes if e["rebound"]["to_2W_B4_mid"]]
+    def rail_catches_flat_price():   # price stands still at today's close; the rail steps up once a week
+        if room_usd > 0: return None
+        d = D[last]; n = 0
+        for _ in range(2000):
+            d += dt.timedelta(days=1)
+            if d.weekday() >= 5 or d in HOLIDAYS: continue
+            n += 1
+            if rails(c1, n1(d))[0] > px: return {"sessions": n, "date": str(d), "rail_then": r(rails(c1, n1(d))[0], 2)}
+        return None
+    # the paces are MULTIPLES of the channel's own slope (a rebound at 340 and one at 630 are compared on the same footing), turned into
+    # today's dollars with today's channel slope
     mults = [e["rebound"]["to_2W_B4_mid"]["multiple_of_channel_slope"] for e in episodes if e["rebound"]["to_2W_B4_mid"]]
-    f60 = [e["rebound"]["first_60_sessions"]["usd_per_7d"] for e in episodes if e["rebound"]["first_60_sessions"]]
+    def mm(key): return med(col(key, "multiple_of_channel_slope"))
     cur = episodes[-1]["rebound"]["low_to_today"]
     paces = OrderedDict()
-    paces["median rebound slope (low to the 2W B4 midline)"] = med(mids)
-    paces["median slope of the first 60 sessions off the low"] = med(f60)
+    paces["median rebound, low to the 2W B4 midline"] = mm("to_2W_B4_mid") * s1w
+    paces["median rebound, low to the 1W B4 midline"] = mm("to_1W_B4_mid") * s1w
+    paces["median rebound, first 60 sessions off the low"] = mm("first_60_sessions") * s1w
+    paces["median rebound, low to the upper rail"] = mm("to_upper_touch") * s1w
     paces["this rebound's own pace since its low"] = cur["usd_per_7d"]
-    paces["slowest rebound on record"] = min(mids) if mids else None
-    paces["fastest rebound on record"] = max(mids) if mids else None
+    paces["the last 20 sessions"] = (aC[last] - aC[last - 20]) / ((D[last] - D[last - 20]).days / 7)
+    paces["slowest rebound to the 2W B4 midline"] = min(mults) * s1w
+    paces["fastest rebound to the 2W B4 midline"] = max(mults) * s1w
     today = {"session": str(D[last]), "close": px, "sma200": r(ma[last], 3), "sma200_unadjusted_basis": r(ma_raw[last], 3), "pct_above_sma200": r((px / ma[last] - 1) * 100, 2),
              "pct_drop_to_sma200": r((ma[last] / px - 1) * 100, 2), "rsi14": r(rsi[last], 1), "rsi14_own_percentile": r(pct_rank(S_RSI, rsi[last]), 1),
              "williams14": r(wp[last], 1), "williams14_own_percentile": r(pct_rank(S_WPR, wp[last]), 1),
              "upper_rail": {"ids": "1W B2 / 2W B2 (coincide)", "level": r(U_now, 4), "room_pct": r(room_pct, 3), "room_usd": r(room_usd, 3), "rail_rises_usd_per_7d": r(s1w, 4)},
              "sessions_to_upper_rail": [{"pace": name, "usd_per_7d": r(v, 3), "multiple_of_channel_slope": r(v / s1w, 2) if v else None, "sessions": sessions_at(v)} for name, v in paces.items()],
-             "if_price_goes_flat_rail_catches_up_in_sessions": (None if room_usd > 0 else math.ceil(-room_usd / s1w * 7 * 5 / 7)),
+             "if_price_stands_still_the_rail_passes_it": rail_catches_flat_price(),
+             "distances_from_close_pct": {"to 1W B2 / 2W B2 (upper)": r(room_pct, 2), "to 1W B4 (mid)": r((R1[last][1] / px - 1) * 100, 2), "to 2W B4 (mid)": r((R2[last][1] / px - 1) * 100, 2),
+                                          "to the 200-day": r((ma[last] / px - 1) * 100, 2), "to 1W B6 (lower)": r((R1[last][2] / px - 1) * 100, 2), "to 2W B6 (lower)": r((R2[last][2] / px - 1) * 100, 2)},
+             "position_pct": {"1W B": r((px - R1[last][2]) / (R1[last][0] - R1[last][2]) * 100, 1), "2W B": r((px - R2[last][2]) / (R2[last][0] - R2[last][2]) * 100, 1)},
+             "sessions_since_last_close_below_sma200": last - max(i for i in range(N) if below[i]),
              "median_rebound_multiple": r(med(mults), 2), "episodes_in_median": len(mults),
              "current_rebound": {"low_date": episodes[-1]["low"]["date"], "low_close": episodes[-1]["low"]["close"], **cur}}
 
@@ -262,8 +392,8 @@ def study(sym):
                                                      "factor_before_first_step": r(seg[0]["factor"], 6), "parity_with_lab_bars": parity},
             "clock_check": clock, "channels": channels, "lab_slope_strip_reproduced": strip,
             "pierces": {"definition": f"a session whose close is under the 200-day average after a close at or above it; pierces fewer than {MERGE_GAP} sessions apart form one episode",
-                        "count_pierces": len(dips), "count_episodes": len(episodes), "wick_only_sessions_not_counted": wick_only},
-            "episodes": episodes, "today": today,
+                        "count_pierces": len(dips), "count_episodes": len(episodes), "wick_only_sessions_not_counted": wick_only, "on_the_hub_price_basis": raw_basis},
+            "episodes": episodes, "rebound_summary": summary, "upper_rail": upper_rail, "sma200_pace": ma_pace_out, "today": today,
             "oscillator_reference": {"rsi": f"Wilder RSI {RSI_N} of the close", "williams": f"Williams %R {WPR_N} (0 = at the 14-session high, -100 = at the 14-session low)",
                                      "own_percentile_over": {"sessions": len(S_RSI), "from": str(D[RSI_N]), "to": str(D[last])}, "channel_life_sessions": len(S_RSI_L)}}
 
@@ -274,13 +404,13 @@ json.dump(out, open(os.path.join(DATA, "results.json"), "w"), indent=1)
 
 # ---- a readable dump -----------------------------------------------------------------------------------------------------------
 for sym, S in out["symbols"].items():
-    print("=" * 110); print(sym, "| parity", S["basis"]["parity_with_lab_bars"], "| clocks ok:", S["clock_check"]["ok"])
+    print("=" * 110); print(sym, "| parity", json.dumps(S["basis"]["parity_with_lab_bars"]), "| clocks ok:", S["clock_check"]["ok"])
     print(" strip:", S["lab_slope_strip_reproduced"]["B_2W_retained"]["reads"], S["lab_slope_strip_reproduced"]["B_1W_retained"]["reads"], S["lab_slope_strip_reproduced"]["SMA200_1D_live"]["reads"],
-          "| prev pair:", S["lab_slope_strip_reproduced"]["SMA200_1D_live"]["previous_pair"]["reads_at_that_close"])
+          "| prev pair:", S["lab_slope_strip_reproduced"]["SMA200_1D_live"]["previous_pair"]["reads_at_that_close"], "| 200-day pace:", json.dumps(S["sma200_pace"]))
     for c in S["channels"]:
-        t = c["today"]; print(f" {c['name']}: U {t['upper']} M {t['mid']} L {t['lower']} | pos {t['position_pct_of_height']}% | +{t['pct_above_lower']}% over lower | {t['pct_below_upper']}% to upper | vs mid {t['pct_vs_mid']}% |"
-                              f" slope {c['slope']['usd_per_7d']} USD/7d = {c['slope']['pct_of_close_per_7d']}%/7d = {c['slope']['pct_of_close_per_month']}%/mo ({c['slope']['pct_of_close_per_year']}%/yr) | life inside {c['life']['share_inside_pct']}% below {c['life']['closes_below_lower']} above {c['life']['closes_above_upper']} {c['life']['sessions_closed_above_upper'][-4:]} | lowest {c['life']['lowest_position']} highest {c['life']['highest_position']}")
-    print(" pierces:", S["pierces"]["count_pierces"], "episodes:", S["pierces"]["count_episodes"])
+        t = c["today"]; print(f" {c['name']}: U {t['upper']} M {t['mid']} L {t['lower']} | pos {t['position_pct_of_height']}% | to upper {t['move_to_upper_pct']}% | to mid {t['move_to_mid_pct']}% | to lower {t['move_to_lower_pct']}% |"
+                              f" slope {c['slope']['usd_per_7d']} USD/7d = {c['slope']['pct_of_close_per_7d']}%/7d = {c['slope']['pct_of_close_per_month']}%/mo of close, {c['slope']['pct_of_mid_per_month']}%/mo of mid ({c['slope']['pct_of_close_per_year']}%/yr) | life {json.dumps(c['life'])}")
+    print(" pierces:", S["pierces"]["count_pierces"], "episodes:", S["pierces"]["count_episodes"], "| hub basis:", json.dumps(S["pierces"]["on_the_hub_price_basis"]))
     for e in S["episodes"]:
         lo = e["low"]; o = e["oscillators_at_low"]; rb = e["rebound"]
         print(f"  [{e['label']}] first pierce {e['first_pierce']} · {len(e['pierces'])} pierces · {e['sessions_closed_below']} sessions below · reclaimed {e['back_above_for_good']}")
@@ -288,6 +418,8 @@ for sym, S in out["symbols"].items():
               f" | RSI {o['rsi14']} (p{o['rsi14_own_percentile']}, life p{o['rsi14_percentile_channel_life']}) W%R {o['williams14']} (p{o['williams14_own_percentile']}) minRSI {o['lowest_rsi14_in_episode']} {o['lowest_rsi14_date']}")
         for k2 in ("to_2W_B4_mid", "to_1W_B4_mid", "to_upper_touch", "to_upper_close", "first_20_sessions", "first_60_sessions", "low_to_today"):
             v = rb[k2]; print(f"       {k2:<18}", "not reached" if v is None else f"{v['date']} · {v['sessions']} sessions · {v['gain_pct']:+}% · {v['usd_per_7d']} USD/7d = {v['multiple_of_channel_slope']}x · {v['pct_per_month']}%/mo · later pierces on the way {v['later_pierces_on_the_way']}")
+    print(" SUMMARY", json.dumps(S["rebound_summary"]))
+    print(" UPPER RAIL", json.dumps(S["upper_rail"]))
     t = S["today"]; print(" TODAY", json.dumps({k: v for k, v in t.items() if k not in ("sessions_to_upper_rail", "current_rebound")}))
     for p in t["sessions_to_upper_rail"]: print("    ", p)
     print("   wick-only:", S["pierces"]["wick_only_sessions_not_counted"])
