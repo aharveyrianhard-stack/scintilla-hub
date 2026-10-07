@@ -16,6 +16,8 @@ const pct = (f, d = 0) => (f == null ? "—" : sgn(f * 100, d)), x1 = (v, d = 1)
 const up = (x) => (x && x.no_peer_set ? "no peer set" : x && x.upside_pct != null ? sgn(x.upside_pct, 0) : "—");
 const day = (iso) => { const d = new Date(String(iso).slice(0, 10) + "T12:00:00Z"); return d.getUTCDate() + " " + d.toLocaleString("en-US", { month: "short", timeZone: "UTC" }); };
 const B = KO.before, A = KO.after;
+/* the minute the live tool was read, in New York time (7 Oct is daylight time: UTC − 4) */
+const ET = (iso) => { const d = new Date(Date.parse(iso) - 4 * 3600e3); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + " ET"; }, TAKEN = ET(B.taken_utc);
 const entrants = (R) => { const d = {}; for (const l of R.lines) for (const e of [...l.entrants, ...l.sitOut]) d[e.sym] = { ...e, champion: l.champion === e.sym, line: l.line }; return d; };
 const EB = entrants(B), EA = entrants(A);
 
@@ -141,7 +143,7 @@ ${fact("Stored market value more than 10% from today's", `${MV.stored_over_today
 </div>
 <div class="grid2">
 <div class="panel"><div class="ph">ALAN'S EIGHTEEN · SALES GROWTH, A YEAR ON A YEAR</div>
-${legend([["was", "as the live tool was told, 7 Oct 02:29 ET"], ["now", "what the same rows say, on the fixed feed"]])}
+${legend([["was", `as the live tool was told, 7 Oct ${TAKEN}`], ["now", "what the same rows say, on the fixed feed"]])}
 <div class="ch">${axis(G.ticks, G.lo, G.hi, (t) => (t > 0 ? "+" : "") + t + "%", "odd")}${growthRows}</div></div>
 <div class="panel"><div class="ph">ALAN'S EIGHTEEN · THE KNOCKOUT'S FUNDAMENTALS SCORE</div>
 ${legend([["was", "the live tool, live feed"], ["now", "the same tool, fixed feed"]])}
@@ -235,7 +237,7 @@ document.querySelectorAll("[data-tip]").forEach(function(el){el.addEventListener
 </body></html>`;
 /* the BACK / CLOSE pair, carried by the builder exactly as scripts/inject-scnav.py places it (so that script finds it
    already in place and rewrites nothing) */
-const specs = readFileSync(HERE + "/page-specs.fragment", "utf8"), scnav = readFileSync(WT + "/scripts/scnav-snippet.html", "utf8").trim();
+const specs = readFileSync(HERE + "/page-specs.fragment", "utf8").replace(/@@TAKEN@@/g, TAKEN), scnav = readFileSync(WT + "/scripts/scnav-snippet.html", "utf8").trim();
 const tests = existsSync(ROOT + "/data/tests.json") ? J(ROOT + "/data/tests.json").words : "The test counts are written here after the last run.";
 writeFileSync(ROOT + "/FEED-FIX.html", html.replace("@@SPECS@@", specs.replace("@@TESTS@@", tests)).replace("</body>", scnav + "\n</body>"));
 console.log("FEED-FIX.html", (html.length + specs.length) + " chars · eighteen", KO.eighteen.length, "· cards", KO.cards.length, "· Micron on today's market values", mv.upside_pct, "· Lilly", L.cp1.upside_pct, "→", L.fd1.upside_pct);

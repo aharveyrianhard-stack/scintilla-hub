@@ -89,6 +89,6 @@ for (const T of syms) {
     const f = (x) => (x && x.band ? `${x.band.centre} (${x.upside_pct >= 0 ? "+" : ""}${x.upside_pct}%)${x.priced_on === "business" ? "[biz " + (x.business_peers || []).join(" ") + "]" : ""}` : x && x.no_peer_set ? "NO PEER SET" : "—");
     console.log(`${T.padEnd(5)} $${before.price} · C6b ${f(before)} · CP1 ${f(cp1)} · on today's market values: C6b ${f(before_mv)} CP1 ${f(cp1_mv)} (shares stored ÷ today's ${out.names[T].market_value.stored_over_today}) · FD1 ${f(fd1)} · LAST ${f(last)} (${last.growth_credit ? last.growth_credit.own + " vs " + last.growth_credit.peers + " ×" + last.growth_credit.credit : "—"}) · credit CP1 ${cp1.growth_credit ? cp1.growth_credit.own + " vs " + cp1.growth_credit.peers + " ×" + cp1.growth_credit.credit : "—"} → FD1 ${fd1.growth_credit ? fd1.growth_credit.own + " vs " + fd1.growth_credit.peers + " ×" + fd1.growth_credit.credit : "—"}${(set1.reference || []).length ? " · ref " + set1.kept.filter((r) => r.reference).map((r) => r.ticker + (r.has_figures ? "✓" : "∅")).join(" ") : ""}`);
   } catch (e) { out.names[T] = { ok: false, error: String((e && e.stack) || e).slice(0, 900) }; console.log(`${T.padEnd(5)} FAILED ${out.names[T].error}`); }
-  writeFileSync(OUT, JSON.stringify(out, null, 1));
+  writeFileSync(OUT, JSON.stringify(out));
 }
 console.log("DONE →", OUT);

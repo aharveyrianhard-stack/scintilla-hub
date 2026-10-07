@@ -1,5 +1,5 @@
 // SCINTILLA · comps-feed v6 (FD1, 7 Oct 2026) — the pure part: no network, no key, no clock.
-// Shared by ./index.ts (the edge function) and deliverables/20261007/feed-fix/tools/feed-dry-run.mjs (the rehearsal),
+// Shared by ./index.ts (the edge function) and deliverables/20261007/feed-fix/tools/fixed-feed.mjs (the rehearsal),
 // tested by tests/fd1-comps-feed.test.mjs.
 //
 // WHAT THE FEED IS. One CSV line per symbol for the allocation tool's value layer (THE KNOCKOUT, COMPARABLES, the
@@ -12,8 +12,8 @@
 //      them in no fixed order, so Micron read 54.2bn ÷ 133.2bn − 1 = −59% (or, the other way round, +146%); any other
 //      week it was one quarter over the quarter before. It was never a year over a year.
 //   2. FORWARD P/E read analyst_estimates without asking for annual rows (the table also holds quarters: a quarter's EPS
-//      made Micron 27.8× instead of 6.1×), oldest row first, and the API serves 1,000 rows a request. A 60-name batch
-//      holds about 6,900 estimate rows, so only rows from the 1990s arrived, no future year was ever seen, and …
+//      made Micron 27.8× instead of 6.0×), oldest row first, and the API serves 1,000 rows a request. A 60-name batch
+//      holds about 7,100 estimate rows and the first 1,000 end in 2005, so no future year was ever seen, and …
 //   3. … A BLANK WAS PRINTED AS 0: n('') ran Number(''), which is 0. Every name's forward P/E read 0.
 //   4. P/S, MARGINS and the DIVIDEND came from the newest ratios_history row, again whatever its period: a single
 //      quarter's sales under a full market value (WDC 49.6×, NVDA 49.4×) and a single quarter's margin (GOOGL 94%).
@@ -34,16 +34,18 @@
 //     drives business alone, 9.5bn, while its December 2024 quarter still carries SanDisk, so the quarters add to
 //     11.4bn. Those quarters are not like for like, so they are not summed: the fiscal-year rows are used instead.
 //   · PRICE AND MARKET VALUE ARE TODAY'S, TOGETHER: company_profile's price and market_cap (the profile is refreshed
-//     every day; its market value is its price × its shares), the rule C5b already uses for a foreign reporter. Only
-//     when a company has no profile figures does the fundamentals row stand in, and the basis says so.
+//     every day at 06:25Z by fmp-backfill; its market value is its price × its shares), the rule C5b already uses
+//     for a foreign reporter. Only when a company has no profile figures, or its profile row is more than
+//     PROFILE_FRESH_DAYS old, does the fundamentals row stand in, and the basis says so.
 //   · pe          = that price ÷ EPS of the last twelve months (the fundamentals row's, the four newest quarters).
 //   · fwd_pe      = that price ÷ the consensus EPS of the nearest FISCAL YEAR ending today or later (annual rows only).
 //   · ps          = that market value ÷ sales of those twelve months, both in dollars.
 //   · gross_m, net_m = gross profit, net income ÷ sales, the same twelve months.
 //   · pb, de      = the newest balance on file (a balance is a moment, so the newest row of either kind is right).
 //   · div_yld     = the last fiscal year's (the only row that holds a year of dividends).
-//   · ONE CURRENCY PER MULTIPLE (C5b): a company reporting outside dollars has its EPS and market value put in dollars
-//     at the newest stored rate; when no rate is on file the multiple is WITHHELD — blank, never mixed.
+//   · ONE CURRENCY PER MULTIPLE (C5b): a company reporting outside dollars has its EPS, its estimates and its sales put
+//     in dollars at the newest stored rate (its profile's price and market value are the US listing's, already in
+//     dollars); when no rate is on file the multiple is WITHHELD — blank, never mixed.
 //   · A MISSING FIGURE IS BLANK, NEVER 0. The pages already read a blank as "not held".
 //   · Every read names its period, carries a total order and is paged, so the answer does not depend on how many
 //     names are asked for or on the order the database happens to return ties in.
@@ -54,6 +56,7 @@ export const MAX_SYMS = 60;          // as v5: the pages ask in batches of 60
 export const PAGE = 1000;            // PostgREST serves at most 1,000 rows a request: every read here is paged
 export const HISTORY_DAYS = 1100;    // three years of statements: eight quarters and two fiscal years with room
 export const Q_GAP = [80, 100];      // consecutive quarters, in days (the comps tab's rule)
+export const PROFILE_FRESH_DAYS = 7; // a profile row older than this is not "today's": a week covers a holiday or a missed run
 
 /* The served companies whose statements are not in dollars, from the C5b sweep (FMP income-statement reportedCurrency
    for all 455 served companies, 3 Oct 2026: deliverables/20261003/comps-c5b/reporting-currency-fmp-2026-10-03.json).
@@ -174,7 +177,8 @@ export function feedRow(sym, t, today, rates = []) {
   const nz = (x) => { const n = num(x); return n == null || n === 0 ? null : n; };
   /* today's price and market value, together, from the profile (always dollars: the US listing's); else the fundamentals
      row's — its price as it is, its market value only for a dollar reporter (a foreign one is in its own currency: × rate) */
-  const today$ = num(p.price) > 0 && num(p.market_cap) > 0;
+  const pDay = num(p.updated_ts) != null ? new Date(num(p.updated_ts) * 1000).toISOString().slice(0, 10) : null, fresh = pDay != null && daysBetween(today, pDay) <= PROFILE_FRESH_DAYS;
+  const today$ = fresh && num(p.price) > 0 && num(p.market_cap) > 0;
   const price = today$ ? num(p.price) : num(f.price);
   const mcap = today$ ? num(p.market_cap) : num(f.market_cap) == null ? null : dollars ? num(f.market_cap) : usd != null ? num(f.market_cap) * usd : null;
   const epsTtm = nz(f.eps_ttm), eps$ = epsTtm == null ? null : dollars ? epsTtm : usd != null ? epsTtm * usd : null;
@@ -196,7 +200,7 @@ export function feedRow(sym, t, today, rates = []) {
     rev_growth: g.value,
     updated: num(f.updated_ts) != null ? new Date(num(f.updated_ts) * 1000).toISOString() : null,
     basis: { currency: ccy, rate: fx && !dollars ? fx : null, withheld: !dollars && usd == null, price_from: price == null ? null : today$ ? "company_profile (today's price and market value together)" : "fundamentals row", market_value_from: mcap == null ? null : today$ ? "company_profile (today's price × shares)" : "fundamentals row (the last fiscal period end's)",
-      price_at: today$ && num(p.updated_ts) != null ? new Date(num(p.updated_ts) * 1000).toISOString().slice(0, 10) : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
+      price_at: today$ ? pDay : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
   };
 }
 

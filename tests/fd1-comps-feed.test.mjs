@@ -170,8 +170,12 @@ test("the market value is today's: the stored one is the last fiscal period end'
   /* a company with no profile figures: the fundamentals row stands in, and the basis says which */
   const bare = rowOf("MU", { ...T, profiles: [] });
   assert.equal(bare.mktcap, 1082720800000); near(bare.pe, 1058.74 / 74.22, 1e-9); assert.match(bare.basis.market_value_from, /fundamentals row \(the last fiscal period end's\)/); assert.equal(bare.basis.price_at, null);
-  const half = rowOf("MU", { ...T, profiles: [{ ticker: "MU", price: 1045.56, market_cap: null }] });
+  const pr = of(T.profiles, "MU")[0], half = rowOf("MU", { ...T, profiles: [{ ...pr, market_cap: null }] });
   assert.equal(half.mktcap, 1082720800000, "price and market value are taken together or not at all"); near(half.pe, 1058.74 / 74.22, 1e-9);
+  /* a profile row that was not refreshed is not "today's": a week old it still stands, older or undated it does not */
+  const at = (iso) => Math.floor(Date.parse(iso) / 1000), with_ = (ts) => rowOf("MU", { ...T, profiles: [{ ...pr, updated_ts: ts }] });
+  assert.equal(with_(at("2026-09-30T06:25:00Z")).mktcap, pr.market_cap); assert.equal(with_(at("2026-09-29T06:25:00Z")).mktcap, 1082720800000, "eight days old");
+  assert.equal(with_(at("2026-08-10T06:25:00Z")).basis.price_at, null); assert.equal(with_(null).mktcap, 1082720800000, "no date on the row"); assert.equal(F.PROFILE_FRESH_DAYS, 7);
 });
 test("a name with nothing on file is a line of blanks, and the page reads each as not held", () => {
   const csv = feed(["ZZZZ", "MU"]).csv, p = pageParse(csv);
