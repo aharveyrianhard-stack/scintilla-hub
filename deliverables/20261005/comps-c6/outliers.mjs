@@ -264,7 +264,8 @@ export const CP4_ALL = Object.freeze({ memoryStorage: true, dcReit: true, comple
    The tab (comps-c5/tab.mjs) reads its switches from here and from nowhere else, so the tab, the card, the knockout and the
    tool price a name on one configuration. The way back is this line: CP1_NONE is the tab exactly as C6b left it. Callers
    that pass their own switches (the reports, the tools, the tests) are not touched by it. */
-export const LIVE_FX = CP3_ALL;   /* CP4: the in-browser fallback (a name the engine's artifact does not carry) stays on this configuration; the artifact itself is priced on CP4_ALL — one line to change if Alan wants the fallback on the same footing */
+/* CP4: the in-browser fallback (a name the engine's artifact does not carry) stays on this configuration; the artifact itself is priced on CP4_ALL — one line to change if Alan wants the fallback on the same footing */
+export const LIVE_FX = CP3_ALL;
 /** The proposal beside it: growth from the fiscal year just reported, on the analysts' basis (field.mjs growthFromLastYear). */
 export const FD1_ALL_LAST = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_LAST, ...CP1_OUT_ON });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);
