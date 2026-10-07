@@ -434,23 +434,39 @@ export function cardHTML(card, all, doc, W, source) {
     businessHTML(card, all) + fundamentalsHTML(card, Math.max(300, W - 24)) + technicalsHTML(card) + levelsHTML(card, W) + riskHTML(card) + planHTML(card) + specsHTML(doc, source) + "</div>";
 }
 
+/** the cards, from the dated file — or, with the switch on, the newest row per name from public.decision_cards; a name the
+    table does not hold falls back to the file, and `source` says which it was */
+async function readCards(t, opts) {
+  const fetchJSON = opts.fetchJSON || ((u) => fetch(u).then((r) => { if (!r.ok) throw new Error("cards file → " + r.status); return r.json(); }));
+  const doc = await loadFile(fetchJSON);
+  let all = doc.cards || {}, source = "Read from the dated file";
+  if (opts.fromTable && typeof opts.read === "function") {
+    const want = [t, ...(((all[t] || {}).business || {}).side_by_side || [])].filter((x, i, a) => a.indexOf(x) === i);
+    const got = newestPerName(await opts.read(TABLE_PATH(want)));
+    if (got[t]) { all = { ...all, ...got }; source = "Read from the table decision_cards"; } else source = "The table holds no card for " + t + ": read from the dated file";
+  }
+  return { doc, all, source };
+}
+
+/** The same flag line, alone, for the top of the ESTIMATES tab (where the estimates study first drew it). The Hub mounts it
+    only when its own switch is on. A name that has not been checked gets NOTHING: the tab stays exactly as it was. */
+export async function mountEstimatesFlag(root, opts) {
+  ensureCSS();
+  try {
+    const { all } = await readCards(opts.ticker, opts), fl = (all[opts.ticker] || {}).estimates_flag;
+    root.innerHTML = fl && fl.checked ? flagHTML(fl) : "";
+    if (fl && fl.checked) root.classList.add("cd");
+  } catch (_) { root.innerHTML = ""; }   // an extra line: when it cannot be read the tab is simply as before
+}
+
 export async function mountCardsTab(root, opts) {
   ensureCSS();
   const t = opts.ticker;
   root.classList.add("cd");
   root.innerHTML = '<div class="loading">READING THE CARD OF ' + esc(t) + "…</div>";
-  const fetchJSON = opts.fetchJSON || ((u) => fetch(u).then((r) => { if (!r.ok) throw new Error("cards file → " + r.status); return r.json(); }));
   let doc, all, source;
-  try {
-    doc = await loadFile(fetchJSON); all = doc.cards || {}; source = "Read from the dated file";
-    if (opts.fromTable && typeof opts.read === "function") {
-      /* the switch: the newest row per name from public.decision_cards; a name the table does not hold falls back to the file, and the card says which it is */
-      const want = [t, ...(((all[t] || {}).business || {}).side_by_side || [])].filter((x, i, a) => a.indexOf(x) === i);
-      const rows = await opts.read(TABLE_PATH(want));
-      const got = newestPerName(rows);
-      if (got[t]) { all = { ...all, ...got }; source = "Read from the table decision_cards"; } else source = "The table holds no card for " + t + ": read from the dated file";
-    }
-  } catch (e) {
+  try { ({ doc, all, source } = await readCards(t, opts)); }
+  catch (e) {
     root.innerHTML = '<div class="cd-err">The card could not be read: ' + esc(String((e && e.message) || e)) + "</div>";
     return;
   }

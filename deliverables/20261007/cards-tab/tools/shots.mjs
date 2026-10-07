@@ -1,16 +1,17 @@
 /* CP2 (7 Oct 2026) · headless proof for the CARDS tab. NEVER a visible window. A Hub checkout is served under the real
    hostname (files from --root, default this branch), with the live database through the public key and the live chart
    API; every request that is not a GET is answered locally and counted. The browser is closed before the script ends.
-     node shots.mjs <width> <ticker> [--root <hub checkout>] [--tab CARDS] [--name <prefix>] [--expand]
+     node shots.mjs <width> <ticker> [--root <hub checkout>] [--tab CARDS] [--name <prefix>] [--expand] [--estflag]
+   --estflag turns on the page's own switch for the flag line at the top of the ESTIMATES tab (it is off in the page).
    Writes shots/<prefix>-<ticker>-<width>.png (the screen as it opens), …-full-… (the whole tab, unclipped) and, for the
    CARDS tab, one picture per block; prints one JSON line of what the page really holds. */
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { createRequire } from "node:module";
 const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor/package.json");
 const { chromium } = require("playwright-core");
 const argv = process.argv.slice(2), flag = (k, d) => { const i = argv.indexOf("--" + k); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : true); };
-const [widthS, ticker = "MU"] = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && !["--expand"].includes(argv[i - 1])));
+const [widthS, ticker = "MU"] = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--") && !["--expand", "--estflag"].includes(argv[i - 1])));
 const HERE = path.dirname(fileURLToPath(import.meta.url)), HUB_ROOT = path.resolve(String(flag("root", path.resolve(HERE, "../../../.."))));
-const OUT = path.join(HERE, "..", "shots"), tab = String(flag("tab", "CARDS")), name = String(flag("name", tab.toLowerCase())), expand = !!flag("expand", false);
+const OUT = path.join(HERE, "..", "shots"), tab = String(flag("tab", "CARDS")), name = String(flag("name", tab.toLowerCase())), expand = !!flag("expand", false), estflag = !!flag("estflag", false);
 const width = +widthS, mobile = width < 500, height = mobile ? 844 : 1050;
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon", ".woff2": "font/woff2" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -30,6 +31,7 @@ try {
     }
     return route.continue();
   });
+  if (estflag) await context.addInitScript(() => { window.SC_EST_FLAG_LINE = true; });
   const page = await context.newPage();
   page.on("pageerror", (e) => errors.length < 20 && errors.push(String(e.message).slice(0, 200)));
   page.on("response", (r) => { if (/massive-chart-api/.test(r.url()) && r.status() >= 400) apiFail.push(new URL(r.url()).pathname + " " + r.status()); });
@@ -42,8 +44,10 @@ try {
   const clicked = await page.evaluate((t) => { const b = document.querySelector('#cvTabs [data-act="cotab"][data-tab="' + t + '"]') || document.querySelector('[data-act="cotab"][data-tab="' + t + '"]'); if (b) { b.click(); return true; } return false; }, tab);
   out.clicked = clicked;
   if (tab === "CARDS" && clicked) { try { await page.waitForSelector("#scCardsTab .cd-card, #scCardsTab .cd-none, #scCardsTab .cd-err", { timeout: 60000 }); } catch (_) { out.timeout = true; } }
+  else if (tab === "ESTIMATES" && estflag) { try { await page.waitForSelector("#scEstFlag .cd-flag", { timeout: 30000 }); } catch (_) { out.timeout = true; } await sleep(4000); }
   else await sleep(6000);
   await sleep(1800);
+  if (tab === "ESTIMATES") out.estFlag = await page.evaluate(() => { const e = document.getElementById("scEstFlag"); return e ? { text: e.innerText.replace(/\s+/g, " ").trim(), firstInTab: !!(e.parentElement && e.parentElement.firstElementChild === e), next: e.nextElementSibling ? (e.nextElementSibling.className || "").toString().slice(0, 30) : null } : null; });
   const shot = async (suffix, sel) => { if (sel) { const ok = await page.evaluate((s) => { const e = document.querySelector(s); if (e) { e.scrollIntoView({ block: "start" }); return true; } return false; }, sel); if (!ok) return false; await sleep(450); } await page.screenshot({ path: path.join(OUT, `${name}-${ticker}${suffix ? "-" + suffix : ""}-${width}.png`) }); return true; };
   await shot("");
   out.layout = await page.evaluate(() => { const r = document.getElementById("coRailContent"), c = document.getElementById("cv"); const b = (e) => e ? (({ x, y, width, height }) => ({ x: Math.round(x), y: Math.round(y), w: Math.round(width), h: Math.round(height) }))(e.getBoundingClientRect()) : null; return { rail: b(r), cv: b(c), vw: innerWidth, vh: innerHeight, pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }; });

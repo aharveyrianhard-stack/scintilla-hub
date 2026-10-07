@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { RULES, DC_WORD, DC_HAND, plainLabel, pie, period, margins, freeCashFlow, dcLabelsFor, dataCentre, blend, businessOf, notItsYardstick } from "../deliverables/20261007/cards-tab/business.mjs";
 import { zonesNearestFirst, flagLine, sideBySide, THIN_BELOW } from "../deliverables/20261007/cards-tab/card-parts.mjs";
-import { CARDS_URL, TABLE_PATH, NARROW_BELOW, WIDE_FROM, money, pctPlain, cents, wedgePath, sliceClasses, cardHTML, flagHTML, zoneRowHTML, footballSVG, newestPerName, mountCardsTab, dcTitle, cashTitle, blendTitles, CSS } from "../deliverables/20261007/cards-tab/tab.mjs";
+import { CARDS_URL, TABLE_PATH, NARROW_BELOW, WIDE_FROM, money, pctPlain, cents, wedgePath, sliceClasses, cardHTML, flagHTML, zoneRowHTML, footballSVG, newestPerName, mountCardsTab, mountEstimatesFlag, dcTitle, cashTitle, blendTitles, CSS } from "../deliverables/20261007/cards-tab/tab.mjs";
 
 const here = (p) => new URL(p, import.meta.url);
 const J = (p) => JSON.parse(readFileSync(here(p), "utf8"));
@@ -399,6 +399,24 @@ test("the switch for the table reader is OFF: the migration is proposed, not app
   const sql = readFileSync(here("../supabase/migrations/20261007_cp1_decision_cards.sql"), "utf8");
   assert.match(sql, /PROPOSED, NOT APPLIED/); assert.match(sql, /card\s+jsonb\s+not null/, "the three new parts ride in the card's own jsonb: no new column is needed");
   assert.ok(existsSync(here("../supabase/migrations/20261007_cp1_decision_cards_ROLLBACK.sql")));
+});
+
+test("the same flag line for the top of the ESTIMATES tab is built and OFF: the tab is exactly as it was", async () => {
+  assert.match(page, /^const EST_FLAG_LINE = \(typeof window !== "undefined" && window\.SC_EST_FLAG_LINE === true\);/m);
+  assert.ok(!/SC_EST_FLAG_LINE\s*=\s*true/.test(page), "nothing in the page turns it on");
+  assert.match(page, /case "ESTIMATES":\s+return nonOp \? nonOpTabHTML\(data\) : \(EST_FLAG_LINE \? estFlagHTML\(data\) : ""\) \+ estimatesTabHTML\(data\);/, "off: the empty string in front of the tab as it was");
+  assert.match(page, /function estimatesTabHTML\(data\) \{[^\n]*\n  return revStripHTML\(data\) \+/, "estimatesTabHTML itself is untouched");
+  /* on: the line for a name that has been checked, nothing at all for one that has not, nothing if the read fails */
+  const g = fakeRoot();
+  await mountEstimatesFlag(g, { ticker: "GOOGL", fromTable: false, fetchJSON: async () => DOC });
+  assert.match(g.innerHTML, /^<div class="cd-flag"><div class="fc"><span class="f warn">ONE-OFF IN THIS YEAR<\/span>/); assert.ok(g.classList.has("cd"));
+  assert.equal(g.innerHTML, flagHTML(CARDS.GOOGL.estimates_flag), "the very line the card shows");
+  const n = fakeRoot();
+  await mountEstimatesFlag(n, { ticker: "NVDA", fromTable: false, fetchJSON: async () => DOC });
+  assert.equal(n.innerHTML, "", "not checked: nothing added, not even a 'not checked' line"); assert.ok(!n.classList.has("cd"));
+  const x = fakeRoot();
+  await mountEstimatesFlag(x, { ticker: "TSLA", fromTable: true, read: async () => { throw new Error("down"); }, fetchJSON: async () => DOC });
+  assert.equal(x.innerHTML, "");
 });
 
 test("the FMP job prints facts and never a key; the tools read the other branches without merging them", () => {

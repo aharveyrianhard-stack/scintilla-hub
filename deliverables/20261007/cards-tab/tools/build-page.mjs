@@ -107,7 +107,7 @@ const SPECS = `<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
 
 <h4>WHAT COULD BE WRONG</h4>
 <ul>
-<li><b>Free cash flow has two answers at FMP for three of the four names, and the card differs from what you were quoted for two of them (Western Digital and Seagate).</b> The figures quoted to you were FMP's four quarters added. FMP's filed full-year statement for the same twelve months disagrees for Western Digital (${money(facts.companies.WDC.cash[0].freeCashFlow)} against ${money(facts.companies.WDC.cash_ttm.freeCashFlow)}), Micron and Seagate. The card uses the filed full-year statement, except where that row is incomplete: Micron's has no capital-spending line yet, so its four quarters are used (${money(M.cash.fcf)}, the figure you were given). For Seagate one quarter files capital spending with the wrong sign, which makes the four quarters too high (${money(facts.companies.STX.cash_ttm.freeCashFlow)}); the statement's ${money(X.cash.fcf)} is used. Where the two disagree by more than 5% the card shows a ≠ and both numbers. I could not check either against the companies' own filings.</li>
+<li><b>Free cash flow has two answers at FMP for three of the four names, and the card differs from what you were quoted for two of them (Western Digital and Seagate).</b> The figures quoted to you were FMP's four quarters added. FMP's filed full-year statement for the same twelve months disagrees for Western Digital (${money(facts.companies.WDC.cash[0].freeCashFlow)} against ${money(facts.companies.WDC.cash_ttm.freeCashFlow)}), Micron and Seagate. The card uses the filed full-year statement, except where that row is incomplete: Micron's has no capital-spending line yet, so its four quarters are used (${money(M.cash.fcf)}, the figure you were given). For Seagate one quarter files capital spending with the wrong sign, which makes the four quarters too high (${money(facts.companies.STX.cash_ttm.freeCashFlow)}); the statement's ${money(X.cash.fcf)} is used. Where the two disagree by more than 5% the card shows a ≠ and both numbers. I could not check either against the companies' own filings. If you would rather have the four quarters throughout, as you were quoted, it is one rule to change.</li>
 <li><b>The Hub's own financials table has Micron's newest year without its capital spending</b>, so it shows free cash flow of ${money(hub.MU.free_cf)} — the whole cash from operations. The card does not use that table, but the FINANCIALS tab does. Not fixed here.</li>
 <li><b>Micron's pies are a year behind.</b> FMP has not yet split fiscal 2026 (the year to 3 Sep); the pies show fiscal 2025 and say so, while the margins and cash are fiscal 2026.</li>
 <li><b>The ≈ shares are a quarter's statement applied to a year.</b> Micron's "a little over 60%" is for the quarter to ${E(mu.covers)}; its last quarter's call, as stored, is questions and answers only and gives no figure. Seagate's 80% is for the quarter to ${E(stx.covers)}; the Hub does not hold its July call.</li>
@@ -122,7 +122,7 @@ const SPECS = `<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
 <li>Nothing was deployed and no table was written. The reader for the cards table is in place behind a switch that is off; the table itself is still only a proposal.</li>
 <li>Only the 26 names that already had a decision card have one. Any other name shows "no decision card yet" and the list of names that do.</li>
 <li>The estimates flag covers six names; the other twenty say "not yet checked".</li>
-<li>The flag line is on the card only. It was not added to the ESTIMATES tab.</li>
+<li>The flag line shows on the card. The study that produced it drew it at the top of the ESTIMATES tab; that is built too, behind a switch that is <b>off</b>, so the ESTIMATES tab on this branch is exactly as it was. The picture above shows it switched on.</li>
 <li>Fourteen of the 26 names have no reviewed lines, so they have no zones.</li>
 <li>The plan fields cannot be typed into yet; they show what you said on 6 Oct for Micron and are empty elsewhere.</li>
 <li>One side effect to know: adding a tab moves the number keys. CARDS takes 5; FINANCIALS, STATS, NEWS and SOCIAL each move up one; EARNINGS moves from 9 to 0 and READ from 0 to the minus key. On a wide screen READ now sits just past the right edge of the tab row, which scrolls.</li>
@@ -135,7 +135,7 @@ const SPECS = `<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
 <ol>
 <li><b>Put the CARDS tab on the Hub?</b> Recommendation: yes, as it is, beside COMPS — it is read-only and changes nothing else.</li>
 <li><b>Keep the ≈ figures for Micron and Seagate (the companies' own words), or leave them blank until FMP splits them?</b> Recommendation: keep them, marked as they are — a blank would hide the name you care about most.</li>
-<li><b>Free cash flow: the filed full-year statement (as built) or the four quarters added (as you were quoted)?</b> Recommendation: as built, with the ≠ mark — it is right for Seagate, where the quarters are provably off.</li>
+<li><b>Show the estimates flag line at the top of the ESTIMATES tab as well?</b> Recommendation: yes, switch it on with the tab — that is the screen where Alphabet's "(26%)" is read, and the line says on the spot that it is +30% on the clean base.</li>
 </ol>
 </details>`;
 
@@ -164,6 +164,9 @@ const html = `<!DOCTYPE html>
 <h2>PART BY PART</h2>
 <div class="pair">${pic("after-MU-levels-1680.png", "LEVELS · MICRON'S ZONES, NEAREST FIRST, BY THE LAB'S LABELS")}${pic("after-GOOGL-fundamentals-1680.png", "THE ESTIMATES FLAG LINE · ALPHABET · ONE-OFF IN THIS YEAR")}</div>
 <div class="trio">${pic("afterdefault-WDC-1680.png", "BEFORE YOU PRESS EXPAND · THE CARD IN THE SMALL PANEL")}${pic("after-JPM-1680.png", "A BANK · PIES, NO MARGIN OR CASH FIGURES")}${pic("after-TSLA-1680.png", "A NAME WITH NO CARD YET")}</div>
+
+<h2>AN OPTION, BUILT AND SWITCHED OFF · THE SAME FLAG LINE ON THE ESTIMATES TAB</h2>
+<div class="pair">${pic("option-GOOGL-estimates-flag-1680.png", "THE ESTIMATES TAB WITH THE LINE ON · ALPHABET · OFF ON THE BRANCH")}<div class="panel"><div class="ph">AS THE BRANCH STANDS</div><table class="t"><tbody><tr><td class="lab">ON THE CARD</td><td><b>ON</b></td></tr><tr><td class="lab">ON THE ESTIMATES TAB</td><td><b>OFF</b> · ONE SWITCH</td></tr><tr><td class="lab">NAMES IT WOULD SHOW FOR</td><td>6 · GOOGL AMZN WDC STX MU LRCX</td></tr><tr><td class="lab">EVERY OTHER NAME</td><td>NOTHING ADDED</td></tr></tbody></table></div></div>
 
 <h2>BEFORE → AFTER · PHONE, 390 WIDE</h2>
 <div class="phones">${pic("before-WDC-390.png", "BEFORE")}${pic("after-WDC-390.png", "AFTER · AS IT OPENS")}${pic("after-WDC-full-390.png", "AFTER · THE WHOLE CARD")}${pic("after-MU-full-390.png", "MICRON · THE WHOLE CARD")}</div>
