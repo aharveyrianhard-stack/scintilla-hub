@@ -1,0 +1,51 @@
+--- SCINTILLA-GEIGER-OSCILLATOR-v3.pine (saved version 3, 13:32 ET)
++++ SCINTILLA-GEIGER-OSCILLATOR-v4.pine (GL1, not installed)
+@@ -2,3 +2,3 @@
+ // ═══════════════════════════════════════════════════════════════════════════════════════════════
+-// SCINTILLA · GEIGER OSCILLATOR  ·  v3 · 7 Oct 2026 · lane GH1
++// SCINTILLA · GEIGER OSCILLATOR  ·  v4 · 7 Oct 2026 · lanes GH1 + GL1
+ // PLOTS 5/64   (Geiger columns with a sign colour = 2 · TREND = 1 · MOMENTUM = 1 · the Data Window
+@@ -28,2 +28,11 @@
+ //   · A 3-day or weekly bar counts only from the evening of the last session inside it.
++//
++// v4 — THE LAST BAR IS LIVE ON EVERY RUNG (GL1, 7 Oct 2026; Alan: "We don't wait for candle closes").
++//   Since GL1 the Hub's LIVE reading counts the bar each rung is still building — the 3-day and weekly rungs
++//   included (the days the bar has so far, today's price as its close). v1–v3 held those two rungs on finished
++//   bars until the last trading day inside the bar, so mid-bar the Hub and this pane differed (7 Oct, 20 names:
++//   by 0.01 at the median, 0.13 at the most). With "Last bar: 3D and W count their forming bar" ON (the default)
++//   the chart's LAST bar on a daily or longer chart reads what the Hub's live Geiger reads. Every earlier bar is
++//   unchanged: it still shows that day's EVENING reading, the Hub's stored settled Geiger. Switch it OFF for v3's
++//   behaviour. Nothing else changed: same maths, same plots (5/64), same three requests.
+ //
+@@ -113,2 +122,4 @@
+ bool   showTag  = input.bool(true,  "Value label on the last bar", group = G_LOOK)
++bool   liveSlow = input.bool(true,  "Last bar: 3D and W count their forming bar", group = G_LOOK,
++     tooltip = "On: on a daily or longer chart the last bar counts the 3-day and weekly bars being built, as the Hub's live Geiger does (GL1). Off: those two rungs wait for the last trading day inside their bar (v3).")
+ bool   waitFull = input.bool(true,  "Wait for 200 bars on every intraday rung", group = G_LOOK,
+@@ -358,3 +369,4 @@
+     [yT0, yM0, yT, yM, nY]  = rung(kw, doneW)
+-    [dT, dM, xT, xM, yT, yM, dT[1], dM[1], xT[1], xM[1], yT[1], yM[1], ed]
++    // xT0 / xM0 / yT0 / yM0: the 3-day and weekly rungs counting the bar being built (v4)
++    [dT, dM, xT, xM, yT, yM, dT[1], dM[1], xT[1], xM[1], yT[1], yM[1], ed, xT0, xM0, yT0, yM0]
+ 
+@@ -364,5 +376,5 @@
+ // charts up to one day: today's evening values and yesterday's, the same on finished and live bars
+-[dT, dM, xT, xM, yT, yM, dTp, dMp, xTp, xMp, yTp, yMp, dDay] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_on)
++[dT, dM, xT, xM, yT, yM, dTp, dMp, xTp, xMp, yTp, yMp, dDay, xTf, xMf, yTf, yMf] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_on)
+ // charts longer than one day: the last daily bar inside each chart bar
+-[eT, eM, fT, fM, hT, hM, eTp, eMp, fTp, fMp, hTp, hMp, eDay] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_off)
++[eT, eM, fT, fM, hT, hM, eTp, eMp, fTp, fMp, hTp, hMp, eDay, fTf, fMf, hTf, hMf] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_off)
+ 
+@@ -388,6 +400,8 @@
+ float mD   = longBars ? eM : nowD ? dM : dMp
+-float t3D  = longBars ? fT : nowSlow ? xT : xTp
+-float m3D  = longBars ? fM : nowSlow ? xM : xMp
+-float tW   = longBars ? hT : nowSlow ? yT : yTp
+-float mW   = longBars ? hM : nowSlow ? yM : yMp
++// v4: on the chart's last bar of a daily or longer chart the two slow rungs count the bar being built
++bool  liveBar = liveSlow and barstate.islast and timeframe.isdwm
++float t3D  = longBars ? (liveBar ? fTf : fT) : nowSlow ? (liveBar ? xTf : xT) : xTp
++float m3D  = longBars ? (liveBar ? fMf : fM) : nowSlow ? (liveBar ? xMf : xM) : xMp
++float tW   = longBars ? (liveBar ? hTf : hT) : nowSlow ? (liveBar ? yTf : yT) : yTp
++float mW   = longBars ? (liveBar ? hMf : hM) : nowSlow ? (liveBar ? yMf : yM) : yMp
+ 

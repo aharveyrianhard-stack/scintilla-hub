@@ -1,0 +1,197 @@
+{
+ "made_utc": "2026-10-07T18:00:37.792Z",
+ "engine": "PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit",
+ "steps": [
+  {
+   "step": "migration 0027 applies, and applies again without error",
+   "objects": {
+    "table": 1,
+    "view": 1,
+    "functions": [
+     "geiger_log_retain_v1",
+     "geiger_log_unit",
+     "publish_geiger_log_v1"
+    ],
+    "policy": [
+     {
+      "policyname": "geiger_log_public_read",
+      "cmd": "SELECT",
+      "roles": "{anon,authenticated}"
+     }
+    ],
+    "rls": true
+   }
+  },
+  {
+   "step": "the writer: minute cadence for FAVORITES + RADAR + SPY + QQQ, five-minute cadence for the rest, append-only",
+   "between_marks": {
+    "at": "2026-10-07T12:59:00-05:00",
+    "not_due": 2,
+    "skipped": 0,
+    "written": 5,
+    "minute_names": [
+     "BTCUSD",
+     "MU",
+     "NVDA",
+     "VST",
+     "SPY",
+     "QQQ"
+    ],
+    "already_there": 0,
+    "five_minute_mark": false
+   },
+   "on_the_mark": {
+    "at": "2026-10-07T13:00:00-05:00",
+    "not_due": 0,
+    "skipped": 0,
+    "written": 7,
+    "minute_names": [
+     "BTCUSD",
+     "MU",
+     "NVDA",
+     "VST",
+     "SPY",
+     "QQQ"
+    ],
+    "already_there": 0,
+    "five_minute_mark": true
+   },
+   "offered_again": {
+    "at": "2026-10-07T13:00:00-05:00",
+    "not_due": 0,
+    "skipped": 0,
+    "written": 0,
+    "minute_names": [
+     "BTCUSD",
+     "MU",
+     "NVDA",
+     "VST",
+     "SPY",
+     "QQQ"
+    ],
+    "already_there": 7,
+    "five_minute_mark": true
+   }
+  },
+  {
+   "step": "the writer refuses: another source, a minute that is not now (past or future), an oversized call; skips a malformed row",
+   "mixed": {
+    "at": "2026-10-07T13:00:00-05:00",
+    "not_due": 0,
+    "skipped": 3,
+    "written": 2,
+    "minute_names": [
+     "BTCUSD",
+     "MU",
+     "NVDA",
+     "VST",
+     "SPY",
+     "QQQ"
+    ],
+    "already_there": 0,
+    "five_minute_mark": true
+   }
+  },
+  {
+   "step": "stored as ten-thousandths, read back as decimals through geiger_log_readable; a rung that is not taking part is empty",
+   "stored": {
+    "live": true,
+    "composite": 3934,
+    "trend": 4829,
+    "momentum": 3039,
+    "s_composite": 1103,
+    "s_trend": 4351,
+    "s_momentum": -2146,
+    "price_age_s": 65,
+    "rungs_live": 7,
+    "t_3h": -2500,
+    "m_3h": 4847,
+    "t_1w": 10000,
+    "m_1w": 7187,
+    "t_2h": null,
+    "m_1mo": null
+   },
+   "shown": {
+    "reading": "live",
+    "c": 0.3934,
+    "t": 0.4829,
+    "m": 0.3039,
+    "sc": 0.1103,
+    "t3": -0.25,
+    "m3": 0.4847
+   }
+  },
+  {
+   "step": "rights: the Hub's key reads and nothing else; the publisher writes only through its one function",
+   "denied": {
+    "anon: insert": "permission denied",
+    "anon: update": "permission denied",
+    "anon: delete": "permission denied",
+    "anon: the writer function": "permission denied",
+    "anon: the retention function": "permission denied",
+    "massive_writer: a direct insert": "permission denied",
+    "massive_writer: the retention function": "permission denied"
+   }
+  },
+  {
+   "step": "one session day at the production cadence, weighed",
+   "rows_per_session_day": 167808,
+   "minute_names": 71,
+   "other_names": 519,
+   "minutes_per_day": 960,
+   "minute_rows": 68160,
+   "five_minute_rows": 99648,
+   "heap_mb": 16.19,
+   "index_mb": 5.09,
+   "total_mb_per_session_day": 21.32,
+   "bytes_per_row_with_index": 133.2,
+   "steady_state": {
+    "rule": "minute rows 60 days, five-minute rows 400 days",
+    "rows": 33500928,
+    "gb": 4.16,
+    "without_any_retention_gb_per_year": 5.25
+   }
+  },
+  {
+   "step": "retention removes exactly what the stated rule says, and refuses a window shorter than a week",
+   "result": {
+    "more_to_do": false,
+    "minute_days": 60,
+    "five_minute_days": 400,
+    "minute_rows_removed": 768,
+    "rows_past_the_long_limit_removed": 192
+   },
+   "rows_before": 167808,
+   "rows_after": 166848
+  },
+  {
+   "step": "the rollback removes exactly the five objects (and runs twice without error); station_lists is as it was",
+   "left": {
+    "table": 0,
+    "view": 0,
+    "functions": 0
+   }
+  },
+  {
+   "step": "and the migration applies again after a rollback"
+  }
+ ],
+ "size": {
+  "rows_per_session_day": 167808,
+  "minute_names": 71,
+  "other_names": 519,
+  "minutes_per_day": 960,
+  "minute_rows": 68160,
+  "five_minute_rows": 99648,
+  "heap_mb": 16.19,
+  "index_mb": 5.09,
+  "total_mb_per_session_day": 21.32,
+  "bytes_per_row_with_index": 133.2,
+  "steady_state": {
+   "rule": "minute rows 60 days, five-minute rows 400 days",
+   "rows": 33500928,
+   "gb": 4.16,
+   "without_any_retention_gb_per_year": 5.25
+  }
+ }
+}

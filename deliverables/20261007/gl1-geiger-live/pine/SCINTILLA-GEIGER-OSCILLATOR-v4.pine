@@ -1,0 +1,457 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// SCINTILLA · GEIGER OSCILLATOR  ·  v4 · 7 Oct 2026 · lanes GH1 + GL1
+// PLOTS 5/64   (Geiger columns with a sign colour = 2 · TREND = 1 · MOMENTUM = 1 · the Data Window
+//              clock = 1 · the five level lines and the value label are outside the plot budget)
+// REQUESTS 3/40  (one extended-hours 30-minute call for the four intraday rungs, two daily calls)
+//
+// WHAT IT IS. The Hub's Geiger (chart API /geiger) drawn as columns in its own pane, from −1 to +1,
+// with its history. A column is green when the Geiger is at or above zero and red below it, so the
+// colour switches exactly at zero. TREND and MOMENTUM are drawn beside it as two teal lines, on by default.
+//
+// THE MATHS (the publisher's services/hot-query/geiger-rung-math.mjs, behaviour unchanged):
+//   · Seven rungs with today's saved Equalizer weights: 3h 1.235817 · 4h 2.278755 · 6h 3.178477 ·
+//     12h 3.172702 · D 3.178477 · 3D 2.576738 · W 0.987499 (the weights /geiger published 6 Oct 2026).
+//   · TREND per rung: the 9-line fan EMA 5/8/13/21/34 + SMA 50/100/150/200 (a line exists only when
+//     the rung has that many bars). trend = (2 × pairs in order − pairs) / pairs, −1 … +1.
+//   · MOMENTUM per rung: RSI(14) mapped 23→−1 … 77→+1 and Williams %R(14) mapped −90→−1 … −10→+1,
+//     each clamped, mixed RSI 0.6 / Williams 0.4.
+//   · Rung value = 0.5 × TREND + 0.5 × MOMENTUM (TREND alone while momentum cannot be computed).
+//   · GEIGER = the weighted mean of the seven rung values.
+//
+// WHICH BARS COUNT (the publisher's rule, read from its code):
+//   · Only FINISHED bars. During the session a rung waits for its bar to finish.
+//   · After the day's last bar everything from that day counts (the Hub treats every intraday bar as
+//     final once the 20:00 New York close has passed), so the last bar of each session — and every
+//     bar on a daily or longer chart — shows the EVENING reading: the same number as the Hub's
+//     stored daily Geiger.
+//   · A 3-day or weekly bar counts only from the evening of the last session inside it.
+//
+// v4 — THE LAST BAR IS LIVE ON EVERY RUNG (GL1, 7 Oct 2026; Alan: "We don't wait for candle closes").
+//   Since GL1 the Hub's LIVE reading counts the bar each rung is still building — the 3-day and weekly rungs
+//   included (the days the bar has so far, today's price as its close). v1–v3 held those two rungs on finished
+//   bars until the last trading day inside the bar, so mid-bar the Hub and this pane differed (7 Oct, 20 names:
+//   by 0.01 at the median, 0.13 at the most). With "Last bar: 3D and W count their forming bar" ON (the default)
+//   the chart's LAST bar on a daily or longer chart reads what the Hub's live Geiger reads. Every earlier bar is
+//   unchanged: it still shows that day's EVENING reading, the Hub's stored settled Geiger. Switch it OFF for v3's
+//   behaviour. Nothing else changed: same maths, same plots (5/64), same three requests.
+//
+// HOW THE RUNGS ARE BUILT.
+//   · 3h 4h 6h 12h are rolled up here from 30-minute EXTENDED-HOURS bars onto the provider's own
+//     grid, which is fixed to UTC all year: bars start at 04:00 UTC and every 3 / 4 / 6 / 12 hours
+//     after. (In summer that is 00:00, 03:00, 04:00 … New York; in winter it is one hour earlier.
+//     TradingView's own 3h / 6h / 12h bars start at the session open instead and would not match.)
+//   · D is TradingView's regular-session daily bar. W is rolled up from D into Sunday-anchored weeks.
+//   · 3D is rolled up from D into the provider's calendar 3-day bars. The provider keeps those on one
+//     of two calendars depending on the name: GRID A for most (486 of the Hub's 590 names: the bars
+//     start on day numbers ≡ 2 mod 3, counted from 1 Jan 1970) and GRID B, one day earlier, for 104
+//     names. The 104 are listed in GRID_B below (read off the chart API on 6 Oct 2026) and picked
+//     automatically by ticker; the input "3-day bars start on" overrides it.
+//
+// KNOWN DIFFERENCES FROM THE HUB (the page beside this file has the measured numbers):
+//   1. Prices come from TradingView's feed, not Massive's. A cent here or there can flip one pair in
+//      a fan or nudge Williams %R.
+//   2. The fan's EMAs and the RSI run from the first bar TradingView has; the Hub restarts them every
+//      230 bars. After 230 bars the two agree to the sixth decimal.
+//   3. Intraday history is limited by the TradingView plan. The line is drawn only where all four
+//      intraday rungs have 200 finished bars (switch "Wait for 200 bars" off for a new listing).
+//   4. Market holidays are worked out from the calendar rules (New Year, MLK, Presidents, Good Friday,
+//      Memorial, Juneteenth, 4 July, Labor, Thanksgiving, Christmas). A one-off closure is not known,
+//      so around it a 3-day or weekly bar can count one session late.
+//   5. Made for US stocks and funds. Crypto and futures trade on other calendars and are not covered.
+//   6. ON A DAILY CHART the reading uses the last 30-minute bar TradingView hands to each daily bar.
+//      If that is the day's last after-hours bar (19:30 New York) the line is the Hub's evening
+//      Geiger exactly. If it is the last bar before the 16:00 close, the line is the Geiger at the
+//      close: typically 0.02–0.04 away, more on an evening with earnings. The Data Window shows which:
+//      hover a daily bar and read "intraday bars through" (19.5 = 19:30, 15.5 = 15:30).
+//      On a 30-minute chart with extended hours on, the last bar of each day is always the evening reading.
+//   7. Between 16:00 and 20:00 New York in winter the Hub leaves its 12h rung out (that rung's newest
+//      finished bar began the evening before); this script keeps it. Those few after-hours bars can
+//      differ; the last bar of the day agrees again.
+//
+// PASTE: Pine Editor → new indicator → select all → paste → Save → Add to chart. Works on any chart
+// timeframe; a daily chart shows the longest history.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+indicator("SCINTILLA · GEIGER OSCILLATOR", shorttitle = "GEIGER OSC", overlay = false, precision = 2, max_labels_count = 50)
+
+// ── constants ──────────────────────────────────────────────────────────────────────────────────
+const string TZ       = "America/New_York"
+const int    DAY_MS   = 86400000
+const int    HOUR_MS  = 3600000
+const int    GRID_MS  = 4 * 3600000        // the provider's intraday bars start at 04:00 UTC, then every N hours
+const int    WINDOW   = 230
+const int    MATURE   = 200
+const float  RSI_OS   = 23.0
+const float  RSI_OB   = 77.0
+const float  W_OS     = -90.0
+const float  W_OB     = -10.0
+const float  K5       = 2.0 / 6.0
+const float  K8       = 2.0 / 9.0
+const float  K13      = 2.0 / 14.0
+const float  K21      = 2.0 / 22.0
+const float  K34      = 2.0 / 35.0
+// the Hub names whose provider 3-day bars sit on GRID B (start day ≡ 1 mod 3), as served on 6 Oct 2026
+const string GRID_B   = ",ACMR,ACN,ALNY,AMRC,ARGX,ATI,AXON,BIIB,BTSG,CATY,CI,CIEN,CLF,CNP,CVBF,DHI,DXCM,EAT,ENPH,ENTG,EVRG,EW,FE,FIS,FN,FORM,FROG,FTI,FTNT,FULT,GDS,GEHC,GFS,GKOS,GPN,HALO,HCA,HEI,HUM,HUT,HWC,IDXX,ILMN,KRYS,LDOS,LNT,MARA,MCHP,MOG.A,MPWR,MRNA,MTCH,NET,NI,NRG,NTNX,NTRA,NU,NVT,NXPI,NXT,ODFL,OKTA,ON,ONTO,PAYC,PINS,PNW,PPL,PTGX,PYPL,QRVO,RDDT,RHP,RIVN,RMD,RS,RUN,RVMD,S,SEDG,SFNC,SM,SNAP,SNX,SWKS,SYF,TER,TGTX,TLN,TOST,TRMK,TWLO,TWST,TXG,UAL,UCTT,UI,UMBF,USFD,VSAT,XPEV,XPO,XYZ,"
+
+// colours — the Hub's bull / bear, two tones of one teal family for the two lines, greys with no white
+const color C_BULL  = #00FFA3
+const color C_BEAR  = #FF2D55
+const color C_TREND = #2FB5A8
+const color C_MOM   = #9BE7DF
+const color C_AXIS  = #3A3A52
+const color C_EDGE  = #252538
+const color C_PANEL = #0D0D14
+
+// ── inputs ─────────────────────────────────────────────────────────────────────────────────────
+const string G_EQ = "Equalizer (the saved weights, 6 Oct 2026)"
+float w3h  = input.float(1.235817, "3h",  minval = 0, group = G_EQ, inline = "e1")
+float w4h  = input.float(2.278755, "4h",  minval = 0, group = G_EQ, inline = "e1")
+float w6h  = input.float(3.178477, "6h",  minval = 0, group = G_EQ, inline = "e2")
+float w12h = input.float(3.172702, "12h", minval = 0, group = G_EQ, inline = "e2")
+float w1d  = input.float(3.178477, "D",   minval = 0, group = G_EQ, inline = "e3")
+float w3d  = input.float(2.576738, "3D",  minval = 0, group = G_EQ, inline = "e3")
+float w1w  = input.float(0.987499, "W",   minval = 0, group = G_EQ, inline = "e4")
+float famT = input.float(0.5, "TREND",    minval = 0, group = G_EQ, inline = "f1")
+float famM = input.float(0.5, "MOMENTUM", minval = 0, group = G_EQ, inline = "f1")
+float mixR = input.float(0.6, "RSI",      minval = 0, group = G_EQ, inline = "f2")
+float mixW = input.float(0.4, "Williams", minval = 0, group = G_EQ, inline = "f2")
+
+const string G_LOOK = "Look"
+bool   showT    = input.bool(true,  "Show TREND",    group = G_LOOK, inline = "s1")
+bool   showM    = input.bool(true,  "Show MOMENTUM", group = G_LOOK, inline = "s1")
+bool   showTag  = input.bool(true,  "Value label on the last bar", group = G_LOOK)
+bool   liveSlow = input.bool(true,  "Last bar: 3D and W count their forming bar", group = G_LOOK,
+     tooltip = "On: on a daily or longer chart the last bar counts the 3-day and weekly bars being built, as the Hub's live Geiger does (GL1). Off: those two rungs wait for the last trading day inside their bar (v3).")
+bool   waitFull = input.bool(true,  "Wait for 200 bars on every intraday rung", group = G_LOOK,
+     tooltip = "On: the columns start only where the 3h, 4h, 6h and 12h rungs each have 200 finished bars, so their early part is not drawn from a half-built fan. Switch off for a listing younger than about five months.")
+string grid3In  = input.string("Auto", "3-day bars start on", options = ["Auto", "Grid A", "Grid B", "Grid C"], group = G_LOOK,
+     tooltip = "The Hub's provider keeps each name's 3-day bars on one of two calendars. Auto picks Grid B for the 104 names known to use it and Grid A for the rest. Change it only if a name was added to the Hub after 6 Oct 2026 and the line disagrees with the Hub.")
+string baseTf   = input.string("30", "Intraday base bars", options = ["30", "60"], group = G_LOOK,
+     tooltip = "30 minutes always lines up with the provider's grid. 60 only lines up when the hourly bars start on the hour (24-hour symbols).")
+
+// the 3-day calendar for this symbol: the day-number remainder its 3-day bars start on
+int phase3 = grid3In == "Grid A" ? 2 : grid3In == "Grid B" ? 1 : grid3In == "Grid C" ? 0 : str.contains(GRID_B, "," + syminfo.ticker + ",") ? 1 : 2
+
+// ── calendar: New York date as a day number, the next session, NYSE holidays by rule ───────────
+epochDay(int t) => int(math.floor(timestamp("UTC", year(t, TZ), month(t, TZ), dayofmonth(t, TZ), 0, 0) / DAY_MS))
+
+easterDay(int y) =>
+    int a  = y % 19
+    int b  = int(math.floor(y / 100.0))
+    int c  = y % 100
+    int d  = int(math.floor(b / 4.0))
+    int e  = b % 4
+    int f  = int(math.floor((b + 8) / 25.0))
+    int g  = int(math.floor((b - f + 1) / 3.0))
+    int h  = (19 * a + b - d - g + 15) % 30
+    int i  = int(math.floor(c / 4.0))
+    int k  = c % 4
+    int l  = (32 + 2 * e + 2 * i - h - k) % 7
+    int m  = int(math.floor((a + 11 * h + 22 * l) / 451.0))
+    int mo = int(math.floor((h + l - 7 * m + 114) / 31.0))
+    int dd = (h + l - 7 * m + 114) % 31 + 1
+    int(math.floor(timestamp("UTC", y, mo, dd, 0, 0) / DAY_MS))
+
+isHoliday(int ed) =>
+    int  t  = ed * DAY_MS + 12 * HOUR_MS
+    int  y  = year(t, "UTC")
+    int  mo = month(t, "UTC")
+    int  d  = dayofmonth(t, "UTC")
+    int  wd = (ed + 4) % 7                 // 0 Sunday … 6 Saturday (1 Jan 1970 was a Thursday)
+    bool newYear  = mo == 1 and (d == 1 or (d == 2 and wd == 1))
+    bool mlk      = mo == 1 and wd == 1 and d >= 15 and d <= 21
+    bool pres     = mo == 2 and wd == 1 and d >= 15 and d <= 21
+    bool goodFri  = ed == easterDay(y) - 2
+    bool memorial = mo == 5 and wd == 1 and d >= 25
+    bool june     = y >= 2022 and mo == 6 and (d == 19 or (d == 18 and wd == 5) or (d == 20 and wd == 1))
+    bool july4    = mo == 7 and (d == 4 or (d == 3 and wd == 5) or (d == 5 and wd == 1))
+    bool labor    = mo == 9 and wd == 1 and d <= 7
+    bool thanks   = mo == 11 and wd == 4 and d >= 22 and d <= 28
+    bool xmas     = mo == 12 and (d == 25 or (d == 24 and wd == 5) or (d == 26 and wd == 1))
+    newYear or mlk or pres or goodFri or memorial or june or july4 or labor or thanks or xmas
+
+nextSession(int ed) =>
+    int nx = ed + 1
+    for i = 1 to 8
+        int wd = (nx + 4) % 7
+        if wd == 0 or wd == 6 or isHoliday(nx)
+            nx += 1
+        else
+            break
+    nx
+
+// ── one rung's reading from the finished bars held in state, optionally with one more bar after them
+clamp1(float x) => math.max(-1.0, math.min(1.0, x))
+
+rungRead(int n, bool plus, float h, float l, float c, array<float> cl, array<float> hi, array<float> lo, float e5, float e8, float e13, float e21, float e34, float s50, float s100, float s150, float s200, float ag, float al, float sumG, float sumL, float prevC) =>
+    int   m     = math.min(n + (plus ? 1 : 0), WINDOW)
+    float trend = na
+    float mom   = na
+    if m >= 8
+        int   sz   = array.size(cl)
+        float x5   = plus ? c * K5  + e5  * (1.0 - K5)  : e5
+        float x8   = plus ? c * K8  + e8  * (1.0 - K8)  : e8
+        float x13  = plus ? c * K13 + e13 * (1.0 - K13) : e13
+        float x21  = plus ? c * K21 + e21 * (1.0 - K21) : e21
+        float x34  = plus ? c * K34 + e34 * (1.0 - K34) : e34
+        int   pairs = 1
+        int   inOrd = x5 > x8 ? 1 : 0
+        float prev  = x8
+        if m >= 13
+            pairs += 1
+            inOrd += prev > x13 ? 1 : 0
+            prev  := x13
+        if m >= 21
+            pairs += 1
+            inOrd += prev > x21 ? 1 : 0
+            prev  := x21
+        if m >= 34
+            pairs += 1
+            inOrd += prev > x34 ? 1 : 0
+            prev  := x34
+        if m >= 50
+            float a50 = plus ? (s50 - (n >= 50 ? array.get(cl, sz - 50) : 0.0) + c) / 50.0 : s50 / 50.0
+            pairs += 1
+            inOrd += prev > a50 ? 1 : 0
+            prev  := a50
+        if m >= 100
+            float a100 = plus ? (s100 - (n >= 100 ? array.get(cl, sz - 100) : 0.0) + c) / 100.0 : s100 / 100.0
+            pairs += 1
+            inOrd += prev > a100 ? 1 : 0
+            prev  := a100
+        if m >= 150
+            float a150 = plus ? (s150 - (n >= 150 ? array.get(cl, sz - 150) : 0.0) + c) / 150.0 : s150 / 150.0
+            pairs += 1
+            inOrd += prev > a150 ? 1 : 0
+            prev  := a150
+        if m >= 200
+            float a200 = plus ? (s200 - (n >= 200 ? array.get(cl, sz - 200) : 0.0) + c) / 200.0 : s200 / 200.0
+            pairs += 1
+            inOrd += prev > a200 ? 1 : 0
+            prev  := a200
+        trend := (2.0 * inOrd - pairs) / pairs
+        if m >= 15
+            // RSI(14), Wilder
+            float g  = ag
+            float ls = al
+            if plus
+                float dlt = c - prevC
+                float up  = dlt > 0 ? dlt : 0.0
+                float dn  = dlt < 0 ? -dlt : 0.0
+                if n >= 15
+                    g  := (ag * 13.0 + up) / 14.0
+                    ls := (al * 13.0 + dn) / 14.0
+                else
+                    g  := (sumG + up) / 14.0
+                    ls := (sumL + dn) / 14.0
+            float rsi = 100.0 - 100.0 / (1.0 + (ls == 0 ? 1e9 : g / ls))
+            // Williams %R(14)
+            float hh = plus ? h : -1e18
+            float ll = plus ? l : 1e18
+            int   kk = plus ? 13 : 14
+            int   hs = array.size(hi)
+            for j = 0 to kk - 1
+                hh := math.max(hh, array.get(hi, hs - 1 - j))
+                ll := math.min(ll, array.get(lo, hs - 1 - j))
+            float last = plus ? c : prevC
+            float wr   = hh > ll ? (hh - last) / (hh - ll) * -100.0 : -50.0
+            float mw   = mixR + mixW > 0 ? mixR + mixW : 1.0
+            mom := (clamp1((rsi - RSI_OS) / (RSI_OB - RSI_OS) * 2.0 - 1.0) * mixR + clamp1((wr - W_OS) / (W_OB - W_OS) * 2.0 - 1.0) * mixW) / mw
+    [trend, mom]
+
+// ── roll incoming bars into this rung's bars and keep the running state ────────────────────────
+// bid     : this bar's rung-bar id (changes when a new rung bar starts)
+// doneNow : the rung bar this bar sits in is finished at this bar's close
+// returns : TREND / MOMENTUM counting the bar being built · TREND / MOMENTUM from finished bars only · finished bars
+rung(int bid, bool doneNow) =>
+    var array<float> cl = array.new<float>()
+    var array<float> hi = array.new<float>()
+    var array<float> lo = array.new<float>()
+    var int   n     = 0
+    var float e5    = na
+    var float e8    = na
+    var float e13   = na
+    var float e21   = na
+    var float e34   = na
+    var float s50   = 0.0
+    var float s100  = 0.0
+    var float s150  = 0.0
+    var float s200  = 0.0
+    var float ag    = na
+    var float al    = na
+    var float sumG  = 0.0
+    var float sumL  = 0.0
+    var float prevC = na
+    var int   curId = na
+    var float curH  = na
+    var float curL  = na
+    var float curC  = na
+    if na(curId) or bid != curId
+        if not na(curId)
+            // the rung bar that was being built is finished: fold it into the state
+            float c = curC
+            if n == 0
+                e5  := c
+                e8  := c
+                e13 := c
+                e21 := c
+                e34 := c
+            else
+                e5  := c * K5  + e5  * (1.0 - K5)
+                e8  := c * K8  + e8  * (1.0 - K8)
+                e13 := c * K13 + e13 * (1.0 - K13)
+                e21 := c * K21 + e21 * (1.0 - K21)
+                e34 := c * K34 + e34 * (1.0 - K34)
+            int sz = array.size(cl)
+            s50  += c - (n >= 50  ? array.get(cl, sz - 50)  : 0.0)
+            s100 += c - (n >= 100 ? array.get(cl, sz - 100) : 0.0)
+            s150 += c - (n >= 150 ? array.get(cl, sz - 150) : 0.0)
+            s200 += c - (n >= 200 ? array.get(cl, sz - 200) : 0.0)
+            array.push(cl, c)
+            if array.size(cl) > 200
+                array.shift(cl)
+            if n >= 1
+                float dlt = c - prevC
+                float up  = dlt > 0 ? dlt : 0.0
+                float dn  = dlt < 0 ? -dlt : 0.0
+                if n <= 13
+                    sumG += up
+                    sumL += dn
+                else if n == 14
+                    ag := (sumG + up) / 14.0
+                    al := (sumL + dn) / 14.0
+                else
+                    ag := (ag * 13.0 + up) / 14.0
+                    al := (al * 13.0 + dn) / 14.0
+            prevC := c
+            array.push(hi, curH)
+            array.push(lo, curL)
+            if array.size(hi) > 14
+                array.shift(hi)
+                array.shift(lo)
+            n += 1
+        curId := bid
+        curH  := high
+        curL  := low
+        curC  := close
+    else
+        curH := math.max(curH, high)
+        curL := math.min(curL, low)
+        curC := close
+    [tDev, mDev] = rungRead(n, true,  curH, curL, curC, cl, hi, lo, e5, e8, e13, e21, e34, s50, s100, s150, s200, ag, al, sumG, sumL, prevC)
+    [tFin, mFin] = rungRead(n, false, curH, curL, curC, cl, hi, lo, e5, e8, e13, e21, e34, s50, s100, s150, s200, ag, al, sumG, sumL, prevC)
+    float tCmp = doneNow ? tDev : tFin
+    float mCmp = doneNow ? mDev : mFin
+    [tDev, mDev, tCmp, mCmp, n]
+
+// ── the four intraday rungs, evaluated on extended-hours base bars ─────────────────────────────
+gridId(int nh) => int(math.floor((time - GRID_MS) / (nh * 3600000.0)))
+gridDone(int nh) => time_close >= (gridId(nh) + 1) * nh * HOUR_MS + GRID_MS
+
+intraRungs() =>
+    [aT3, aM3, bT3, bM3, n3]      = rung(gridId(3),  gridDone(3))
+    [aT4, aM4, bT4, bM4, n4]      = rung(gridId(4),  gridDone(4))
+    [aT6, aM6, bT6, bM6, n6]      = rung(gridId(6),  gridDone(6))
+    [aT12, aM12, bT12, bM12, n12] = rung(gridId(12), gridDone(12))
+    [aT3, aM3, bT3, bM3, n3, aT4, aM4, bT4, bM4, n4, aT6, aM6, bT6, bM6, n6, aT12, aM12, bT12, bM12, n12, time]
+
+// ── the three slow rungs, evaluated on regular-session daily bars ──────────────────────────────
+// each value is the EVENING reading of its daily bar; the [1] copies are the evening before
+dailyRungs() =>
+    int  ed    = epochDay(time)
+    int  nx    = nextSession(ed)
+    int  k3    = int(math.floor((ed - phase3) / 3.0))
+    int  kw    = int(math.floor((ed + 4) / 7.0))
+    bool done3 = int(math.floor((nx - phase3) / 3.0)) != k3
+    bool doneW = int(math.floor((nx + 4) / 7.0)) != kw
+    [dT0, dM0, dT, dM, nD]  = rung(ed, true)
+    [xT0, xM0, xT, xM, nX]  = rung(k3, done3)
+    [yT0, yM0, yT, yM, nY]  = rung(kw, doneW)
+    // xT0 / xM0 / yT0 / yM0: the 3-day and weekly rungs counting the bar being built (v4)
+    [dT, dM, xT, xM, yT, yM, dT[1], dM[1], xT[1], xM[1], yT[1], yM[1], ed, xT0, xM0, yT0, yM0]
+
+// ── requests ───────────────────────────────────────────────────────────────────────────────────
+string symExt = ticker.modify(syminfo.tickerid, session.extended)
+[aT3, aM3, bT3, bM3, n3, aT4, aM4, bT4, bM4, n4, aT6, aM6, bT6, bM6, n6, aT12, aM12, bT12, bM12, n12, baseT] = request.security(symExt, baseTf, intraRungs(), lookahead = barmerge.lookahead_off)
+// charts up to one day: today's evening values and yesterday's, the same on finished and live bars
+[dT, dM, xT, xM, yT, yM, dTp, dMp, xTp, xMp, yTp, yMp, dDay, xTf, xMf, yTf, yMf] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_on)
+// charts longer than one day: the last daily bar inside each chart bar
+[eT, eM, fT, fM, hT, hM, eTp, eMp, fTp, fMp, hTp, hMp, eDay, fTf, fMf, hTf, hMf] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_off)
+
+// ── which reading this chart bar shows ─────────────────────────────────────────────────────────
+bool longBars  = timeframe.in_seconds() > 86400
+bool dayEnd    = timeframe.isdwm or session.islastbar                  // the evening reading
+bool afterCash = not timeframe.isdwm and hour(time, TZ) >= 16          // the daily bar is final once 16:00 has printed
+// Before the open the daily series may still sit on yesterday's bar (already finished) or already on today's (not started):
+// compare dates so the pre-market reading uses yesterday's evening values either way.
+bool dailyOld  = not timeframe.isdwm and dDay < epochDay(time)
+bool nowD      = dayEnd or afterCash or dailyOld                       // the daily rung may read the daily series' current bar
+bool nowSlow   = dayEnd or dailyOld                                    // the 3-day and weekly rungs may read it
+
+float t3h  = dayEnd ? aT3  : bT3
+float m3h  = dayEnd ? aM3  : bM3
+float t4h  = dayEnd ? aT4  : bT4
+float m4h  = dayEnd ? aM4  : bM4
+float t6h  = dayEnd ? aT6  : bT6
+float m6h  = dayEnd ? aM6  : bM6
+float t12h = dayEnd ? aT12 : bT12
+float m12h = dayEnd ? aM12 : bM12
+float tD   = longBars ? eT : nowD ? dT : dTp
+float mD   = longBars ? eM : nowD ? dM : dMp
+// v4: on the chart's last bar of a daily or longer chart the two slow rungs count the bar being built
+bool  liveBar = liveSlow and barstate.islast and timeframe.isdwm
+float t3D  = longBars ? (liveBar ? fTf : fT) : nowSlow ? (liveBar ? xTf : xT) : xTp
+float m3D  = longBars ? (liveBar ? fMf : fM) : nowSlow ? (liveBar ? xMf : xM) : xMp
+float tW   = longBars ? (liveBar ? hTf : hT) : nowSlow ? (liveBar ? yTf : yT) : yTp
+float mW   = longBars ? (liveBar ? hMf : hM) : nowSlow ? (liveBar ? yMf : yM) : yMp
+
+// ── the Equalizer-weighted mean ────────────────────────────────────────────────────────────────
+rungVal(float t, float m) =>
+    float fw = famT + famM > 0 ? famT + famM : 1.0
+    na(t) ? na : na(m) ? t : (famT * t + famM * m) / fw
+addW(float w, float v) => w > 0 and not na(v) ? w : 0.0
+addV(float w, float v) => w > 0 and not na(v) ? w * v : 0.0
+
+float r3h  = rungVal(t3h, m3h)
+float r4h  = rungVal(t4h, m4h)
+float r6h  = rungVal(t6h, m6h)
+float r12h = rungVal(t12h, m12h)
+float rD   = rungVal(tD, mD)
+float r3D  = rungVal(t3D, m3D)
+float rW   = rungVal(tW, mW)
+
+float ws = addW(w3h, r3h) + addW(w4h, r4h) + addW(w6h, r6h) + addW(w12h, r12h) + addW(w1d, rD) + addW(w3d, r3D) + addW(w1w, rW)
+float gc = addV(w3h, r3h) + addV(w4h, r4h) + addV(w6h, r6h) + addV(w12h, r12h) + addV(w1d, rD) + addV(w3d, r3D) + addV(w1w, rW)
+float gt = addV(w3h, t3h) + addV(w4h, t4h) + addV(w6h, t6h) + addV(w12h, t12h) + addV(w1d, tD) + addV(w3d, t3D) + addV(w1w, tW)
+float wm = addW(w3h, m3h) + addW(w4h, m4h) + addW(w6h, m6h) + addW(w12h, m12h) + addW(w1d, mD) + addW(w3d, m3D) + addW(w1w, mW)
+float gm = addV(w3h, m3h) + addV(w4h, m4h) + addV(w6h, m6h) + addV(w12h, m12h) + addV(w1d, mD) + addV(w3d, m3D) + addV(w1w, mW)
+int   nr = (na(r3h) ? 0 : 1) + (na(r4h) ? 0 : 1) + (na(r6h) ? 0 : 1) + (na(r12h) ? 0 : 1) + (na(rD) ? 0 : 1) + (na(r3D) ? 0 : 1) + (na(rW) ? 0 : 1)
+
+bool  ripe   = not waitFull or (n3 >= MATURE and n4 >= MATURE and n6 >= MATURE and n12 >= MATURE)
+bool  whole  = nr == 7 and ws > 0 and ripe
+float geiger = whole ? gc / ws : na
+float trendG = whole ? gt / ws : na
+float momG   = whole and wm > 0 ? gm / wm : na
+
+// ── the pane ───────────────────────────────────────────────────────────────────────────────────
+color gCol = geiger >= 0 ? C_BULL : C_BEAR
+plot(geiger, "GEIGER", color = color.new(gCol, 35), style = plot.style_columns)
+plot(showT ? trendG : na, "TREND",    color = C_TREND, linewidth = 2)
+plot(showM ? momG   : na, "MOMENTUM", color = C_MOM,   linewidth = 1)
+// which intraday bar this chart bar was given (New York clock of that bar's start, e.g. 19.5 = 19:30) — Data Window only
+plot(na(baseT) ? na : hour(baseT, TZ) + minute(baseT, TZ) / 60.0, "intraday bars through", color = C_AXIS, display = display.data_window)
+
+hline(1.0,  "+1",   color = C_EDGE, linestyle = hline.style_solid)
+hline(0.5,  "+0.5", color = C_EDGE, linestyle = hline.style_dotted)
+hline(0.0,  "0",    color = C_AXIS, linestyle = hline.style_solid)
+hline(-0.5, "−0.5", color = C_EDGE, linestyle = hline.style_dotted)
+hline(-1.0, "−1",   color = C_EDGE, linestyle = hline.style_solid)
+
+fmt(float v) => na(v) ? "n/a" : (v >= 0 ? "+" : "") + str.tostring(v, "0.00")
+
+var label tag = na
+if barstate.islast and showTag
+    if not na(tag)
+        label.delete(tag)
+    string txt = na(geiger) ? "GEIGER n/a · " + str.tostring(nr) + "/7 rungs" : "GEIGER " + fmt(geiger) + " · TREND " + fmt(trendG) + " · MOM " + fmt(momG)
+    tag := label.new(bar_index + 2, na(geiger) ? 0.0 : geiger, txt, style = label.style_label_left, color = C_PANEL, textcolor = na(geiger) ? C_AXIS : gCol, size = size.small)
