@@ -117,6 +117,7 @@ table.t th{font-size:11px;font-weight:400;letter-spacing:.08em;color:#5a5a60;tex
 table.t td{text-align:right;padding:4px 8px;border-bottom:1px solid #1a1a1e;font-size:12px;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums}
 table.t th:first-child,table.t td:first-child{text-align:left;padding-left:0}table.t td.wrap{white-space:normal;text-align:left}
 tr.own td{border-bottom:1px solid #5a5a60}
+table.t.w1 td:first-child,table.t.w1 th:first-child{white-space:normal}table.t.w1 td,table.t.w1 th{padding-left:6px;padding-right:6px}
 details.tv2{margin-top:10px}details.tv2 summary{cursor:pointer;font-size:11px;letter-spacing:.16em;color:#8c8c92}
 .cmd{background:#0a0a0c;border:1px solid #26262b;border-radius:4px;padding:10px 12px;font-size:12px;white-space:pre-wrap;word-break:break-word;color:#c8c8cc;margin:6px 0 0}
 #tip{position:fixed;z-index:50;max-width:min(420px,calc(100vw - 24px));background:#1a1a1e;border:1px solid #5a5a60;border-radius:4px;padding:8px 10px;font-size:12px;line-height:1.45;color:#c8c8cc;pointer-events:none;display:none}
@@ -154,11 +155,11 @@ ${legend([["was", "the live tool, live feed"], ["now", "the same tool, fixed fee
 <table class="t"><tr><th>name</th><th>sales growth</th><th>forward P/E</th><th>trailing P/E</th><th>P/S</th><th>net margin</th><th>knockout score</th></tr>${cardRows}</table></div>
 <div class="grid2">
 <div class="panel scroll"><div class="ph">THE CAUSE, ON MICRON'S OWN ROWS · SALES</div>
-<table class="t"><tr><th>row in the statements table</th><th>dated</th><th>sales</th></tr>
+<table class="t w1"><tr><th>row in the statements table</th><th>dated</th><th>sales</th></tr>
 <tr><td>the quarter (Q4)</td><td>3 Sep 2026</td><td>${bn(q4)}</td></tr><tr><td>the fiscal year (FY2026)</td><td>3 Sep 2026</td><td>${bn(fy26)}</td></tr><tr><td>the fiscal year before (FY2025)</td><td>28 Aug 2025</td><td>${bn(fy25)}</td></tr>
 <tr><td class="was">the feed: the quarter ÷ the year</td><td></td><td class="was">${sgn((q4 / fy26 - 1) * 100)}</td></tr><tr><td class="was">the feed, the other way round</td><td></td><td class="was">${sgn((fy26 / q4 - 1) * 100)}</td></tr><tr class="own"><td><b>a year on a year</b></td><td></td><td><b>${sgn((fy26 / fy25 - 1) * 100)}</b></td></tr></table></div>
 <div class="panel scroll"><div class="ph">THE CAUSE, ON MICRON'S OWN ROWS · FORWARD P/E</div>
-<table class="t"><tr><th>row in the estimates table</th><th>for</th><th>EPS</th><th>price ÷ EPS</th></tr>
+<table class="t w1"><tr><th>row in the estimates table</th><th>for</th><th>EPS</th><th>price ÷ EPS</th></tr>
 <tr><td class="was">the next QUARTER — what the feed took</td><td class="was">${day(firstQ.fiscal_date)} 2026</td><td class="was">${firstQ.est_eps_avg.toFixed(2)}</td><td class="was">${x1(muF.price / firstQ.est_eps_avg)}</td></tr>
 <tr class="own"><td><b>the fiscal YEAR in progress</b></td><td>${day(firstY.fiscal_date)} 2027</td><td>${firstY.est_eps_avg.toFixed(2)}</td><td><b>${x1(muP.price / firstY.est_eps_avg)}</b></td></tr>
 <tr><td>estimate rows in one batch of 60 names</td><td></td><td></td><td>${num(FX.v5.estimate_rows_in_batch60)}</td></tr><tr><td>rows the database serves a request</td><td></td><td></td><td>${num(FX.v5.first_page.rows)}</td></tr>
