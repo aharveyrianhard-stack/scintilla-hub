@@ -5,7 +5,7 @@
 import { createRequire } from "node:module"; import fs from "node:fs"; import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url";
 const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor/package.json"), { chromium } = require("playwright-core");
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, ".."), OUT = path.join(ROOT, "shots"); fs.mkdirSync(OUT, { recursive: true });
-const SECTIONS = ["four", "shelf", "map", "money", "dilution", "quality", "history", "knockout", "loads", "off"], facts = {};
+const SECTIONS = ["four", "shelf", "map", "margin", "money", "dilution", "quality", "history", "knockout", "loads", "off"], facts = {};
 const browser = await chromium.launch({ headless: true, args: ["--hide-scrollbars", "--mute-audio"] });
 try {
   for (const [w, h] of [[1680, 1050], [390, 844]]) {

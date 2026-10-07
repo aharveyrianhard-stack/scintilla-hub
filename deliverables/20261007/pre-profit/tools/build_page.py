@@ -63,7 +63,7 @@ def four_card(r):
     lev = (f'{times(b["nd_ebitda"])} EBITDA · ' if b["nd_ebitda"] is not None else "") + (f'{times(b["nd_sales"], 2)} next year\'s sales' if b["nd_sales"] is not None and (b["net_debt"] or 0) > 0 else "") if (b["net_debt"] or 0) > 0 else "net cash"
     rows = [("SALES REPORTED, LAST 4 QUARTERS", f'{usd(s.get("booked"))} <span class="dim">· to {month(s["booked_to"])}</span>'), ("THE 12 MONTHS TO TODAY", f'{usd(s.get("last"))} <span class="dim">· part reported, part estimate</span>'),
             ("NEXT 12 MONTHS", f'{usd(s.get("next"))} <span class="dim">· {pct(s.get("g1"))}</span>'), ("THE 12 AFTER", f'{usd(s.get("after"))} <span class="dim">· {pct(s.get("g2"))}</span>'),
-            ("EV ÷ NEXT YEAR\'S SALES", f'{times(r["ev_sales"])} <span class="dim">· the whole company {usd(r["ev"])}</span>'), ("GROSS MARGIN", f'{pct(r["margin"]["now"], False)} <span class="dim">· {pct(r["margin"]["change"])} pts in a year</span>' if r["margin"]["now"] is not None else "—"),
+            ("EV ÷ NEXT YEAR\'S SALES", f'{times(r["ev_sales"])} <span class="dim">· the whole company {usd(r["ev"])}</span>'), ("GROSS MARGIN · 8 QUARTERS", f'{spark(r["margin"]["quarters"], 120, 22)}{pct(r["margin"]["now"], False)} <span class="dim">· {pct(r["margin"]["change"])} pts in a year</span>' if r["margin"]["now"] is not None else "—"),
             ("CASH + SHORT-TERM", usd(r["cash"]["cash_sti"])), ("AT THIS PACE IT LASTS", run), ("BUILD-OUT PLANNED", plan), ("AGAINST CASH", gap),
             ("SHARES, 1 YEAR · 2 YEARS", f'{pct(d["change_1y"])} · {pct(d["change_2y"])}'), ("STILL TO COME", f'{pct(d["overhang_pct"], False)} more shares <span class="dim">· convertibles, options, awards</span>' if d["overhang_pct"] is not None else "—"),
             ("NET DEBT", f'{usd(b["net_debt"])} <span class="dim">· {lev}</span>'), ("ANALYSTS · THEIR RANGE", f'{q["analysts"] if q["analysts"] is not None else "—"} · {pct(q["spread_sales"], False)} of the average on sales')]
@@ -145,6 +145,31 @@ def sec_map():
     corners = "".join(f'<div class="corner"><div class="seglab">{k} · {len(v)}</div><div class="chips">' + "".join(f'<span class="chip{" mine" if r.get("lists") else ""}">{e(r["t"])} <span class="dim">{round(r["score"] * 100)}</span></span>' for r in v) + "</div></div>" for k, v in q.items())
     return (f'<section id="map"><h2>PROMISE AGAINST FOOTING</h2><div class="panel"><div class="ph">PROMISE = GROWTH, PRICE, MARGIN ({sum(W[k] for k in ("growth", "price", "margin"))} OF THE 100) · FOOTING = CASH & CAPEX, DILUTION, DEBT, ESTIMATES ({sum(W[k] for k in ("money", "dilution", "debt", "quality"))}) · RING IN CYAN = ON YOUR LISTS</div>'
             f'<div class="mapgrid"><div><div class="wide">{scatter(1120, 520, True)}</div><div class="narrow">{scatter(326, 380, False)}</div></div><div class="corners">{corners}</div></div></div></section>')
+# ---------------------------------------------------------------------------------------------------- 3b · gross margin, quarter by quarter
+def spark(qs, w=150, h=26):
+    """Eight quarters of gross margin as one line: green when it ends above where it began, red when below (the Hub's rule
+    for a line: up green, down red). The line carries direction; the figures beside it carry the level."""
+    v = [(i, q["gm"]) for i, q in enumerate(qs) if q.get("gm") is not None]
+    if len(v) < 3: return f'<svg class="bar" width="{w}" height="{h}" role="img" aria-label="too few quarters"><rect y="{h / 2 - 1}" width="{w}" height="2" rx="1" fill="{TRACK}"/></svg>'
+    lo, hi = min(x for _, x in v), max(x for _, x in v); span = (hi - lo) or 1.0; n = max(len(qs) - 1, 1)
+    X = lambda i: 3 + i / n * (w - 6); Y = lambda x: 3 + (1 - (x - lo) / span) * (h - 6)
+    up = v[-1][1] >= v[0][1]; col = UP if up else DN
+    pts_ = " ".join(f"{X(i):.1f},{Y(x):.1f}" for i, x in v)
+    tip = " · ".join(f'{month(qs[i]["end"])} {x:.0f}%' for i, x in v)
+    return (f'<svg class="bar" width="{w}" height="{h}" role="img" aria-label="gross margin, {len(v)} quarters, {"up" if up else "down"}"><title>{e(tip)}</title><polyline points="{pts_}" fill="none" stroke="{col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{X(v[-1][0]):.1f}" cy="{Y(v[-1][1]):.1f}" r="3" fill="{col}" stroke="#111114" stroke-width="2"/></svg>')
+def sec_margin():
+    rs = sorted([r for r in RANKED + COMPARE + UNRANKED if r["margin"]["now"] is not None], key=lambda r: -(r["margin"]["change"] if r["margin"]["change"] is not None else -1e9)); rows = ""
+    for r in rs:
+        m = r["margin"]; q = [x for x in m["quarters"] if x.get("gm") is not None]
+        first = f'{q[0]["gm"]:.0f}% <span class="dim">{month(q[0]["end"])}</span>' if q else "—"; last = f'{q[-1]["gm"]:.0f}% <span class="dim">{month(q[-1]["end"])}</span>' if q else "—"
+        ch = m["change"]; arrow = "" if ch is None else (f' <span class="up">↑</span>' if ch > 0.5 else f' <span class="dn">↓</span>' if ch < -0.5 else "")
+        rows += (f'<tr><td data-l="">{tk(r)}</td><td data-l="8 QUARTERS">{spark(m["quarters"])}</td><td class="n" data-l="FIRST OF THEM">{first}</td><td class="n" data-l="LATEST">{last}</td><td class="n" data-l="LAST 4 QUARTERS">{pct(m["now"], False)}</td><td class="n" data-l="THE 4 BEFORE">{pct(m["year_ago"], False)}</td>'
+                 f'<td class="n" data-l="CHANGE, POINTS">{num(ch, 0) if ch is None else ("+" if ch > 0 else "−" if ch < 0 else "") + format(abs(ch), ".0f")}{arrow}</td><td class="n" data-l="SALES, LAST 4 QUARTERS">{usd(r["sales"].get("booked"))}</td></tr>')
+    none = [r for r in RANKED + UNRANKED if r["margin"]["now"] is None]
+    foot = f'<div class="small pf">NOT READ · SALES UNDER $25M OVER FOUR QUARTERS: {" · ".join(r["t"] for r in none)}</div>' if none else ""
+    return (f'<section id="margin"><h2>GROSS MARGIN, QUARTER BY QUARTER</h2><div class="panel"><div class="ph">WHAT IS LEFT OF EACH DOLLAR OF SALES AFTER THE DIRECT COST OF DELIVERING IT · LINE GREEN = ENDS HIGHER THAN IT BEGAN, RED = LOWER · MOST IMPROVED FIRST</div>'
+            f'<div class="tw tall"><table class="r"><thead><tr><th></th><th>8 QUARTERS</th><th class="n">FIRST OF THEM</th><th class="n">LATEST</th><th class="n">LAST 4 QUARTERS</th><th class="n">THE 4 BEFORE</th><th class="n">CHANGE, POINTS</th><th class="n">SALES, LAST 4 QUARTERS</th></tr></thead><tbody>{rows}</tbody></table></div>{foot}</div></section>')
 # ---------------------------------------------------------------------------------------------------- 4 · the build-out
 def sec_money():
     rows = ""
@@ -260,14 +285,19 @@ def sec_loads():
                  f'<td class="n" data-l="NET DEBT">{usd(x["net_debt"])}</td><td class="n" data-l="÷ EBITDA">{times(x["nd_ebitda"])}</td><td class="n" data-l="EBITDA ÷ INTEREST">{times(x["cover"])}</td><td class="n" data-l="÷ NEXT YEAR\'S SALES">{times(x["nd_sales"], 2) if x.get("pre_profit") or x["nd_ebitda"] is None else "—"}</td><td data-l="NOTE"><span class="small">{e(x["words"] if x["load"] is None or x["basis"] == "net cash" else "")}</span></td></tr>')
     return (f'<section id="loads"><h2>EVERY COMPANY\'S LEVERAGE READING</h2><div class="panel"><input class="find" id="find2" placeholder="find a name or a branch" aria-label="find a name or a branch"><div class="tw scrolly"><table class="r" id="loadtable"><thead><tr><th>NAME</th><th>BRANCH</th><th>DEBT LOAD</th><th class="n">NET DEBT</th><th class="n">÷ EBITDA</th><th class="n">EBITDA ÷ INTEREST</th><th class="n">÷ NEXT YEAR\'S SALES</th><th>NOTE</th></tr></thead><tbody>{rows}</tbody></table></div></div></section>')
 def sec_off():
-    def lst(kind, extra):
-        xs = [x for x in D["off_shelf"] if x["kind"] == kind]
-        return "".join(f'<div class="listrow"><div><span class="tk">{e(x["t"])}</span> <span class="small">{e((x.get("name") or "")[:24])}</span></div><div class="small">{extra(x)}</div></div>' for x in xs), len(xs)
-    a, na = lst("slow", lambda x: f'sales expected to grow {pct(x.get("growth"))} over the next twelve months · loss over four quarters: {usd(min(x["oi4"] or 0, x["ni4"] or 0))}')
-    b, nb = lst("expected", lambda x: f'the analysts expect {num(x.get("eps_this_year"), 2)} a share this fiscal year · on the filed figures the last four quarters lost {usd(min(x["oi4"] or 0, x["ni4"] or 0))}')
-    c_, nc = lst("lost", lambda x: e(x["why"]))
-    return (f'<section id="off"><h2>NOT ON THE SHELF, AND WHY</h2><div class="grid3"><div class="panel"><div class="ph">PRE-PROFIT, BUT SALES GROWING UNDER {RU["growth_gate"]:.0f}% ({na})</div><div class="scrolly">{a}</div></div>'
-            f'<div class="panel"><div class="ph">A LOSS AS FILED, A PROFIT EXPECTED THIS YEAR ({nb})</div><div class="scrolly">{b}</div></div><div class="panel"><div class="ph">HAD STEADY PROFITS AND LOST THEM ({nc})</div><div class="scrolly">{c_}</div></div></div></section>')
+    title = {"slow": f'PRE-PROFIT, BUT SALES GROWING UNDER {RU["growth_gate"]:.0f}%', "expected": "A LOSS AS FILED, A PROFIT EXPECTED THIS YEAR", "lost": "HAD STEADY PROFITS AND LOST THEM"}; body = ""
+    for kind in ("slow", "expected", "lost"):
+        xs = sorted([x for x in D["off_shelf"] if x["kind"] == kind], key=lambda x: -(x.get("sales_next") or 0))
+        body += f'<tr class="sec"><td colspan="12">{title[kind]} · {len(xs)}</td></tr>'
+        for x in xs:
+            why = (f'the analysts expect {num(x.get("eps_this_year"), 2)} a share this fiscal year' if kind == "expected" else e(x["why"].split(": ", 1)[-1]) if kind == "lost" else f'a loss of {usd(-min(x["oi4"] or 0, x["ni4"] or 0))} over four quarters')
+            run = "in" if x.get("burn_basis") == "not burning" else (num(x.get("runway_q")) + "q" if x.get("runway_q") is not None else "—")
+            nd = "net cash" if (x.get("net_debt") is not None and x["net_debt"] <= 0) else (times(x.get("nd_ebitda")) + " EBITDA" if x.get("nd_ebitda") is not None else times(x.get("nd_sales"), 2) + " sales" if x.get("nd_sales") is not None else "—")
+            body += (f'<tr data-find="{e((x["t"] + " " + (x.get("name") or "")).lower())}"><td data-l=""><span class="el"><span class="tk{" mine" if x.get("lists") else ""}">{e(x["t"])}</span> <span class="dim">{e((x.get("name") or "")[:24])}</span></span></td><td data-l="WHY NOT ON THE SHELF"><span class="small">{why}</span></td>'
+                     f'<td class="n" data-l="SALES NEXT 12M">{usd(x.get("sales_next"))}</td><td class="n" data-l="GROWTH">{pct(x.get("growth"))}</td><td class="n" data-l="EV ÷ SALES">{times(x.get("ev_sales"))}</td><td class="n" data-l="GROSS MARGIN">{pct(x.get("gm"), False)}</td>'
+                     f'<td class="n" data-l="CASH + SHORT-TERM">{usd(x.get("cash_sti"))}</td><td class="n" data-l="CASH LASTS">{run}</td><td class="n" data-l="GAP ÷ VALUE">{"none" if (x.get("gap_pct") is not None and x["gap_pct"] <= 0) else pct(x.get("gap_pct"), False)}</td>'
+                     f'<td class="n" data-l="SHARES 1Y">{pct(x.get("shares_1y"))}</td><td class="n" data-l="NET DEBT">{nd}</td><td class="n" data-l="ANALYSTS">{x["analysts"] if x.get("analysts") is not None else "—"}</td></tr>')
+    return (f'<section id="off"><h2>NOT ON THE SHELF, AND WHY · MEASURED THE SAME WAY, NOT RANKED</h2><div class="panel"><div class="tw tall"><table class="r"><thead><tr><th>NAME</th><th>WHY NOT ON THE SHELF</th><th class="n">SALES NEXT 12M</th><th class="n">GROWTH</th><th class="n">EV ÷ SALES</th><th class="n">GROSS MARGIN</th><th class="n">CASH + SHORT-TERM</th><th class="n">CASH LASTS</th><th class="n">GAP ÷ VALUE</th><th class="n">SHARES 1Y</th><th class="n">NET DEBT</th><th class="n">ANALYSTS</th></tr></thead><tbody>{body}</tbody></table></div></div></section>')
 SPECS = open(os.path.join(HERE, "page-specs.frag")).read()                                 # a fragment, not a page: kept out of the BACK / CLOSE injector's way by its name
 SCNAV = open(os.path.join(WT, "scripts", "scnav-snippet.html"), encoding="utf-8").read().strip()  # the pair, placed exactly as scripts/inject-scnav.py places it (a slot in the header, the snippet before </body>)
 def fill(s):
@@ -320,6 +350,6 @@ def one_value(html_):
     return re.sub(r'(<td\b[^>]*\bdata-l="[^"]+"[^>]*>)(.*?)(</td>)', lambda m: m.group(1) + '<span class="v">' + m.group(2) + "</span>" + m.group(3), html_, flags=re.S)
 page = (f'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<title>Pre-profit · the shelf measured, and debt in the knockout · 6 Oct 2026</title>\n<style>{CSS}</style></head><body>\n'
         f'<header class="top"><span data-scnav-slot></span><div class="ttl">PRE-PROFIT</div><div class="sub">THE SHELF MEASURED AND RANKED · DEBT IN THE KNOCKOUT · PRICES: THE 6 OCT 2026 CLOSE · FIGURES AS FILED TO 7 OCT</div></header>\n'
-        + one_value(sec_four() + sec_shelf() + sec_map() + sec_money() + sec_dilution() + sec_quality() + sec_history() + sec_knockout() + sec_loads() + sec_off()) + fill(SPECS) + JS + "\n" + SCNAV + "\n</body></html>\n")
+        + one_value(sec_four() + sec_shelf() + sec_map() + sec_margin() + sec_money() + sec_dilution() + sec_quality() + sec_history() + sec_knockout() + sec_loads() + sec_off()) + fill(SPECS) + JS + "\n" + SCNAV + "\n</body></html>\n")
 open(os.path.join(ROOT, "PRE-PROFIT.html"), "w").write(page)
 print("wrote PRE-PROFIT.html", len(page), "bytes · ranked", N_RANKED, "· beside", len(COMPARE), "· listed", len(UNRANKED))

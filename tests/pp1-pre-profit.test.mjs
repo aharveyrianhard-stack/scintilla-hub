@@ -264,8 +264,8 @@ test("the history test is reported as it came out: four Octobers, no part confir
 /* ---- the page ----------------------------------------------------------------------------------------------------- */
 test("the page: pictures first, the numbers the data holds, no internal codes, the house greys, BACK / CLOSE in place", () => {
   const html = T(DIR + "PRE-PROFIT.html"), body = html.slice(html.indexOf("<body")), specsAt = body.indexOf('<details class="sc-pagespecs">');
-  const order = ["four", "shelf", "map", "money", "dilution", "quality", "history", "knockout", "loads", "off"].map((id) => body.indexOf(`<section id="${id}"`));
-  assert.ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && specsAt > order[order.length - 1], "ten sections in order, the words after the pictures");
+  const order = ["four", "shelf", "map", "margin", "money", "dilution", "quality", "history", "knockout", "loads", "off"].map((id) => body.indexOf(`<section id="${id}"`));
+  assert.ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && specsAt > order[order.length - 1], "eleven sections in order, the words after the pictures");
   assert.equal((body.slice(0, specsAt).match(/<p[ >]/g) || []).length, 0, "no paragraph of explanation above PAGE SPECS");
   assert.equal((html.match(/<\/body>/g) || []).length, 1); assert.match(html, /data-scnav-slot/); assert.match(html, /<!-- scnav · [\s\S]*<!-- \/scnav -->\s*<\/body>/, "the pair, placed as the injector places it");
   const text = body.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<style[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ");
@@ -279,6 +279,13 @@ test("the page: pictures first, the numbers the data holds, no internal codes, t
   /* the numbers on the page are the data's */
   const ranked = SHELF.filter((r) => r.ranked);
   assert.equal((body.match(/<tr data-find="[^"]*"><td class="rk"/g) || []).length, SHELF.length, "one row a name on the shelf table"); assert.equal((body.match(/class="panel card"/g) || []).length, 4);
+  /* every company without steady profits is measured: the shelf, and the names left off it with their reason and the same readings */
+  const off = body.slice(body.indexOf('<section id="off"'), specsAt); assert.equal((off.match(/<tr data-find=/g) || []).length, D.off_shelf.length); assert.equal((off.match(/<tr class="sec">/g) || []).length, 3);
+  for (const x of D.off_shelf) { assert.ok(["slow", "expected", "lost"].includes(x.kind), x.t); assert.ok("ev_sales" in x && "runway_q" in x && "shares_1y" in x && "net_debt" in x && "gap_pct" in x, x.t + " carries its readings"); }
+  /* the margin path: a line a name with a margin to read, green when it ends higher than it began, red when lower — never grey */
+  const mg = body.slice(body.indexOf('<section id="margin"'), body.indexOf('<section id="money"')), lines = mg.match(/<polyline [^>]*stroke="(#[0-9a-f]{6})"/g) || [];
+  assert.equal(lines.length, SHELF.filter((r) => r.margin.now != null && r.margin.quarters.filter((q) => q.gm != null).length >= 3).length); assert.ok(lines.every((l) => /#3caa6e|#c85050/.test(l)), "up green, down red");
+  for (const r of SHELF) if (r.margin.now == null && !r.compare) assert.ok(r.sales.booked == null || r.sales.booked < 25e6, r.t + ": a margin is left unread only where sales are too small to read one");
   for (const r of ranked.slice(0, 5)) assert.ok(body.includes(`>${r.rank} of ${ranked.length}`) || body.includes(`data-l="PLACE"><span class="v">${r.rank}</span>`), r.t + " rank on the page");
   assert.ok(body.includes(`${BY.BE.would_rank} OF ${ranked.length}`), "Bloom: where it would stand");
   assert.ok(body.includes("AEP</span>") && body.includes("PNW</span>") && body.includes("TDG</span>") && body.includes("HWM</span>"));

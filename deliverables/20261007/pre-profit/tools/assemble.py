@@ -212,7 +212,13 @@ shelf_in = []; off_shelf = []
 for t, o in READ.items():
     if "sales" not in o: continue
     if o["tier"] is None:
-        if o.get("why_not") and not o["why_not"].startswith("made a profit"): off_shelf.append({"t": t, "name": o["name"], "why": o["why_not"], "kind": "lost" if o["why_not"].startswith("had steady") else "slow" if o["why_not"].startswith("pre-profit") else "expected", "oi4": o["oi4"], "ni4": o["ni4"], "eps_this_year": o.get("eps_this_year"), "growth": r1(o["sales"].get("g1")), "sales_next": ri(o["sales"].get("next")), "branches": [label(c) for c in branches_of(t)]})
+        if o.get("why_not") and not o["why_not"].startswith("made a profit"):
+            off_shelf.append({"t": t, "name": o["name"], "why": o["why_not"], "kind": "lost" if o["why_not"].startswith("had steady") else "slow" if o["why_not"].startswith("pre-profit") else "expected", "oi4": o["oi4"], "ni4": o["ni4"], "eps_this_year": o.get("eps_this_year"),
+                              "growth": r1(o["sales"].get("g1")), "sales_next": ri(o["sales"].get("next")), "branches": [label(c) for c in branches_of(t)], "lists": (KN.get(t) or {}).get("lists", []),
+                              # measured the same way, though not ranked here
+                              "ev_sales": r2(o["ev_sales"]), "gm": r1(o["margin"]["now"]), "gm_change": r1(o["margin"]["change"]), "cash_sti": ri(o["cash"]["cash_sti"]), "runway_q": r1(o["burn"]["quarters"]), "burn_basis": o["burn"]["basis"], "gap_pct": r1(o["gap"]["pct_of_value"]),
+                              "shares_1y": r1(o["dilution"]["change_1y"]), "shares_2y": r1(o["dilution"]["change_2y"]), "overhang_pct": r1(o["dilution"]["overhang_pct"]), "net_debt": ri(o["debt"]["net_debt"]), "nd_sales": r2(o["debt"]["nd_sales"]), "nd_ebitda": r2(o["debt"]["nd_ebitda"]), "cover": r2(o["debt"]["cover"]),
+                              "analysts": o["quality"]["analysts"], "spread_sales": r1(o["quality"]["spread_sales"]), "value_source": o["shares"]["source"]})
         if t not in COMPARE: continue
     s = o["sales"]; d = o["dilution"]; g = o["gap"]
     shelf_in.append({"t": t, "venture": o["tier"] == "V", "g1": s.get("g1"), "g2": s.get("g2"), "sales_next": s.get("next"), "ev_sales": o["ev_sales"], "gm": o["margin"]["now"], "gm_change": o["margin"]["change"],
