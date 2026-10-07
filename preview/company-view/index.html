@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from a8c5269) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 0cad2f8) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -222,8 +222,12 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
    the main thread was 17–19% busy doing nothing but that; with the glow off 3–4%. Alan's iMac paid this all day.
    Now the glow is a fixed copy of the number (::after, same text from data-v, same colour, same 6px shadow) and only its
    OPACITY breathes — which the compositor does alone. Same 4 s, same curve, same peak. Measured after: 3.1%. */
+/* RS1 (7 Oct) — THE COPY FOLLOWS THE NUMBER. The copy was centred in the cell whatever the cell did. In the board's
+   full-screen mode the RSI cell is right-aligned, so the glowing copy sat 22 px LEFT of its number and a breathing
+   cell read "72 72" (measured headless at 1680: cell 60 px wide, number at its right edge, copy at its centre). It
+   now takes the cell's own alignment (inherit): centred where the cell is centred, right where it is right. */
 .sc-rsi.is-xt{ position:relative; }
-.sc-rsi.is-xt::after{ content:attr(data-v); position:absolute; inset:0; text-align:center; pointer-events:none;
+.sc-rsi.is-xt::after{ content:attr(data-v); position:absolute; inset:0; text-align:inherit; pointer-events:none;
   text-shadow:0 0 6px currentColor; opacity:0; animation:rsi-xt 4s ease-in-out infinite; }
 @keyframes rsi-xt{ 0%,100%{ opacity:0; } 50%{ opacity:1; } }
 @media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } .sc-rsi.is-xt::after{ animation:none; opacity:0; } }
@@ -8673,13 +8677,16 @@ const RSI_OWN_ASKED = new Set();
 let RSI_OWN_OFF = false;                         // the table answered "not found": stop asking for this page load
 function rsiOwnPct(grid, v) {
   const x = num(v);
-  if (!Array.isArray(grid) || grid.length !== 101 || x == null) return null;
+  if (!Array.isArray(grid) || grid.length !== 101 || x == null || !isFinite(x)) return null;   // not a number: no place on the scale
   if (x < grid[0]) return 0;
   if (x >= grid[100]) return 100;
   let k = 0;
   for (let i = 0; i < 100; i++) if (grid[i] <= x) k = i; else break;   // the last step at or under the reading
   const a = grid[k], b = grid[k + 1];
-  return Math.round((k + (b > a ? (x - a) / (b - a) : 0)) * 10) / 10;
+  /* 0 and 100 are the true ends only (at or under its lowest day, at or over its highest): a reading a hair inside the
+     range reads 0.1 / 99.9, so the hover never says "the lowest reading" of a name that has been lower */
+  const p = Math.round((k + (b > a ? (x - a) / (b - a) : 0)) * 10) / 10;
+  return Math.min(99.9, x > grid[0] ? Math.max(0.1, p) : p);
 }
 function rsiOwnColor(pct) {
   const p = num(pct); if (p == null) return "";
@@ -8735,8 +8742,11 @@ async function loadBoardRsiOwn(tickers) {
     for (const r of (rows || [])) {
       if (!Array.isArray(r.grid) || r.grid.length !== 101) continue;
       RSI_OWN[r.ticker] = { eligible: r.eligible === true, grid: r.grid.map(Number), as_of: r.as_of, sessions: r.sessions, span: rsiOwnSpan(r.window_from, r.as_of), rsi: num(r.rsi) };
-      const row = rowByT[r.ticker];
-      if (row && row.rsi != null) paintRsiCell(r.ticker, row.rsi);   // the number is already on screen: recolour it on its own scale
+      /* the number is already on screen: recolour it on its own scale. A search hit outside the active list has no
+         row in S.rows to stash its number on, so the cell itself carries it (data-rsi, written by paintRsiCell). */
+      const row = rowByT[r.ticker], cell = row && row.rsi != null ? null : el("lr_" + r.ticker);
+      const shown = row && row.rsi != null ? row.rsi : num(cell && cell.getAttribute ? cell.getAttribute("data-rsi") : null);
+      if (shown != null && isFinite(shown)) paintRsiCell(r.ticker, shown);
     }
   }
 }
@@ -8754,6 +8764,7 @@ function paintRsiCell(t, v) {
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
   if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
+  if (cell.setAttribute) cell.setAttribute("data-rsi", v);             /* RS1 — the exact number, for a scale that lands after it (loadBoardRsiOwn) */
   /* the provider's own number now stands here: the "how unusual" fill (fillWatchedRsi), which may have put its own
      reading in this cell while it was empty, lets go of it and never writes over this number */
   if (cell.removeAttribute) cell.removeAttribute("data-hu-rsi");

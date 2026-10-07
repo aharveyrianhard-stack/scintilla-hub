@@ -5,11 +5,11 @@
    for value, the wiring, and that the table is additive and the loader's dry run needs no key. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import {
   wilderRsi, percentileGrid, percentileOf, rsiOwnRow, rsiOwnRead, rsiOwnColor, rsiFixedColor, rsiOwnExtreme,
   rsiFixedExtreme, rsiOwnTitle, rsiOwnSpan, WINDOW_DAYS, MIN_SPAN_DAYS, MIN_SESSIONS, OWN_LO, OWN_HI, RSI_OWN_VERSION,
-  MACRO_SYMBOLS, SEVEN_DAY,
+  MACRO_SYMBOLS, SEVEN_DAY, DAILY_BARS, NIGHT_SHARES, shareOf,
 } from "../supabase/functions/rsi-own-daily/rsi-own.mjs";
 
 const here = (p) => new URL(p, import.meta.url);
@@ -59,7 +59,39 @@ test("the percentile grid is 101 rising numbers and a reading is placed back on 
   const s = [...vals].sort((a, b) => a - b);
   for (const v of [25, 33.3, 47, 61.5, 77]) assert.ok(Math.abs(percentileOf(g, v) - 100 * s.filter((x) => x <= v).length / s.length) < 1, "count at " + v);
   const flat = percentileGrid(new Array(300).fill(42));
-  assert.equal(percentileOf(flat, 42), 100, "a reading inside a flat run takes the run's top");
+  assert.equal(percentileOf(flat, 42), 100, "an all-flat window: at its highest day");
+  /* A FLAT RUN INSIDE THE RANGE takes the run's top. 100 days rising 10..39.7, then 40 days at exactly 42, then 160
+     days rising 50..65.9: the run fills grid steps 34..46 (the all-flat grid above never reaches this branch — it
+     returns through the top-end exit — so a rule that took the run's BOTTOM would have passed, saying 34). */
+  const g2 = percentileGrid([...Array.from({ length: 100 }, (_, i) => 10 + i * 0.3), ...new Array(40).fill(42), ...Array.from({ length: 160 }, (_, i) => 50 + i * 0.1)]);
+  assert.equal(g2[34], 42); assert.equal(g2[46], 42); assert.ok(g2[33] < 42 && g2[47] > 42, "the run sits at steps 34..46");
+  assert.equal(percentileOf(g2, 42), 46, "a reading inside a flat run takes the run's top");
+});
+
+test("0 and 100 are the true ends only: a reading a hair inside the range is never called the lowest or the highest", () => {
+  const vals = []; for (let i = 0; i < 500; i++) vals.push(20 + 60 * ((i * 7919) % 500) / 499);
+  const g = percentileGrid(vals);                              // lowest day 20, highest day 80
+  assert.equal(percentileOf(g, 19.99), 0, "under its lowest day");
+  assert.equal(percentileOf(g, 20), 0, "exactly its lowest day");
+  assert.equal(percentileOf(g, 20.0001), 0.1, "a hair above its lowest day is not the lowest");
+  assert.equal(percentileOf(g, 79.9999), 99.9, "a hair under its highest day is not the highest");
+  assert.equal(percentileOf(g, 80), 100, "exactly its highest day");
+  assert.equal(percentileOf(g, 80.01), 100, "over its highest day");
+  /* the case that showed it: the 5 Oct dry run stored CTVA's 6.38 as 0 and the hover said "the lowest reading of
+     CTVA's last two years", while its window's lowest day was 5.73 */
+  const ctva = [5.73, 30.53, ...Array.from({ length: 99 }, (_, i) => 31 + i * 0.4)];
+  assert.equal(ctva.length, 101);
+  assert.equal(percentileOf(ctva, 6.38), 0.1);
+  assert.equal(rsiOwnTitle("CTVA", 6.38, percentileOf(ctva, 6.38)), "6 — lower than 99% of CTVA's last two years");
+  assert.equal(rsiOwnTitle("CTVA", 5.73, percentileOf(ctva, 5.73)), "6 — the lowest reading of CTVA's last two years");
+  /* nothing between the ends ever lands on them, at any step */
+  for (let v = 20.001; v < 80; v += 0.0437) { const p = percentileOf(g, v); assert.ok(p >= 0.1 && p <= 99.9, v + " → " + p); }
+  /* every row of the live dry run: the stored percentile is 0 or 100 only at a true end */
+  for (const t of Object.keys(fx.rows)) {
+    const r = fx.rows[t], p = percentileOf(r.grid, r.rsi);
+    if (p === 0) assert.ok(r.rsi <= r.grid[0], t + " reads 0 only at or under its lowest day");
+    if (p === 100) assert.ok(r.rsi >= r.grid[100], t + " reads 100 only at or over its highest day");
+  }
 });
 
 /* ── a row ───────────────────────────────────────────────────────────────────────────────────────── */
@@ -224,6 +256,7 @@ test("the board cell is painted from the name's own read: colour, glow and hover
   const paint = fn("paintRsiCell");
   assert.match(paint, /const rd = rsiOwnRead\(t, v\);/);
   assert.match(paint, /cell\.removeAttribute\("data-hu-rsi"\);/, "once the provider's number is painted the how-unusual fill lets go of the cell");
+  assert.match(paint, /cell\.setAttribute\("data-rsi", v\);/, "the cell carries the exact number it shows, for a scale that lands after it");
   assert.match(paint, /cell\.style\.color = rd\.color;/);
   assert.match(paint, /classList\.toggle\("is-xt", rd\.extreme\)/);
   assert.match(paint, /setAttribute\("title", rd\.title\)/);
@@ -237,6 +270,11 @@ test("the board cell is painted from the name's own read: colour, glow and hover
   /* SLOW1's cheap breath is exactly as it was */
   assert.match(page, /\.sc-rsi\.is-xt::after\{ content:attr\(data-v\);[^}]*opacity:0; animation:rsi-xt 4s ease-in-out infinite; \}/);
   assert.match(page, /@keyframes rsi-xt\{ 0%,100%\{ opacity:0; \} 50%\{ opacity:1; \} \}/);
+  /* …except where it sits: the copy takes the cell's own alignment. Centred whatever the cell did, it drew a second
+     number 22 px left of the real one in the board's full-screen mode, where the RSI cell is right-aligned ("72 72"). */
+  const glowCopy = line(/\.sc-rsi\.is-xt::after\{[^}]*\}/);
+  assert.match(glowCopy, /position:absolute; inset:0; text-align:inherit;/, "the copy follows the number");
+  assert.doesNotMatch(glowCopy, /text-align:center/, "never centred regardless of the cell");
   /* painting a cell end to end */
   const cell = { textContent: "", style: {}, attrs: {}, cls: new Set(),
     setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
@@ -244,6 +282,7 @@ test("the board cell is painted from the name's own read: colour, glow and hover
   const paintFn = new Function("el", "rsiOwnRead", paint + "\nreturn paintRsiCell;")(() => cell, (t, v) => rsiOwnRead(t, v, fx.rows[t] || null));
   paintFn("TLT", fx.rows.TLT.rsi);
   assert.equal(cell.textContent, 22); assert.equal(cell.attrs["data-v"], "22"); assert.equal(cell.style.color, "rgb(0,255,163)");
+  assert.equal(Number(cell.attrs["data-rsi"]), fx.rows.TLT.rsi, "the exact number, not the rounded one");
   assert.ok(cell.cls.has("is-xt")); assert.equal(cell.attrs.title, "22 — the lowest reading of TLT's last two years");
   assert.equal(cell.attrs["data-own"], cell.attrs.title);
   paintFn("UNKNOWN", 55);
@@ -260,11 +299,13 @@ test("reading the own scales: one bounded read per chunk, three weeks at most, o
   const make = (pgImpl) => {
     const calls = [], painted = [];
     const S = { rows: [{ t: "NFLX", rsi: 32.79 }, { t: "SPY", rsi: null }, { t: "CBRS", rsi: 61 }] };
-    const api = new Function("pg", "S", "paintRsiCell", "num", "rsiOwnSpan",
+    const cells = {};                                          // id → the data-rsi a painted cell carries (or absent)
+    const api = new Function("pg", "S", "paintRsiCell", "num", "rsiOwnSpan", "el",
       "const RSI_OWN = Object.create(null); const RSI_OWN_STALE_DAYS = 21; const RSI_OWN_ASKED = new Set(); let RSI_OWN_OFF = false;\n" +
       src + "\nreturn { load: loadBoardRsiOwn, RSI_OWN, off: () => RSI_OWN_OFF };")(
-      (path, tries) => { calls.push(path); assert.equal(tries, 1); return pgImpl(path, calls.length); }, S, (t, v) => painted.push([t, v]), num, rsiOwnSpan);
-    return { api, calls, painted };
+      (path, tries) => { calls.push(path); assert.equal(tries, 1); return pgImpl(path, calls.length); }, S, (t, v) => painted.push([t, v]), num, rsiOwnSpan,
+      (id) => (id in cells ? { getAttribute: (k) => (k === "data-rsi" ? cells[id] : null) } : null));
+    return { api, calls, painted, cells };
   };
   /* rows land: stored, and a number already on screen is recoloured */
   let h = make(async () => [fx.rows.NFLX, fx.rows.SPY, fx.rows.CBRS, { ticker: "BAD", eligible: true, grid: [1, 2] }]);
@@ -276,6 +317,17 @@ test("reading the own scales: one bounded read per chunk, three weeks at most, o
   assert.deepEqual(h.painted, [["NFLX", 32.79], ["CBRS", 61]], "only cells that already show a number are repainted");
   await h.api.load(["NFLX", "SPY", "CBRS"]);
   assert.equal(h.calls.length, 1, "asked once per name per page load");
+  /* A SEARCH HIT OUTSIDE THE ACTIVE LIST has no row in S.rows to stash its number on. Its number was painted first
+     (on 30 / 70); when its scale lands the cell itself says what it shows (data-rsi) and is recoloured. A cell that
+     shows no number (no data-rsi: a dash, or one the how-unusual script filled) is left alone. */
+  h = make(async () => [fx.rows.TLT, fx.rows.TSM, fx.rows.NFLX]);
+  h.cells.lr_TLT = "22.04"; h.cells.lr_TSM = null;             // TLT painted earlier; TSM's cell is still a dash
+  await h.api.load(["TLT", "TSM", "NFLX"]);
+  assert.deepEqual(h.painted, [["TLT", 22.04], ["NFLX", 32.79]], "the out-of-list cell is recoloured from its own number; the in-list one from its row");
+  h = make(async () => [fx.rows.TLT]);
+  h.cells.lr_TLT = "NaN";
+  await h.api.load(["TLT"]);
+  assert.deepEqual(h.painted, [], "a cell that carries no real number is not painted");
   /* 36 names → two reads of at most 35 */
   h = make(async () => []);
   await h.api.load(Array.from({ length: 36 }, (_, i) => "T" + i));
@@ -314,15 +366,62 @@ test("the table is additive, publicly readable, written only by the service role
   for (const k of Object.keys(row)) assert.match(code, new RegExp("\\n\\s+" + k + "\\s"), "writer field " + k + " is a column");
 });
 
-test("the nightly job runs after the two jobs that read the same bars, carries no key, and has an exact rollback", () => {
+test("the night is read in six calls a minute apart, after the two jobs that read the same bars; no key; an exact rollback", () => {
   const cron = readFileSync(here("../supabase/migrations/20261006_rsi_own_daily_cron.sql"), "utf8");
-  assert.match(cron, /cron\.schedule\('rsi-own-daily', '30 23 \* \* 1-5', body\)/, "23:30 UTC, after heartbeat-daily 23:10 and sigma-daily 23:20");
-  assert.match(cron, /cron\.schedule\('rsi-own-daily-catchup', '30 11 \* \* 2-6', body\)/);
-  assert.match(readFileSync(here("../supabase/migrations/20260928_sigma_daily_cron.sql"), "utf8"), /cron\.schedule\('sigma-daily', '20 23 \* \* 1-5', body\)/, "the neighbour is where this file says it is");
+  /* SIX SHARES. One call for the whole night used between 0.8 and 1.8 s of CPU on an Apple M5 Max against the
+     platform's 2-second allowance per call, so the schedule asks for a sixth of the names at a time. */
+  assert.equal(NIGHT_SHARES, 6);
+  assert.match(cron, new RegExp("parts  constant integer := " + NIGHT_SHARES + ";"), "the schedule file and the maths file agree on how many shares");
+  assert.match(cron, /for k in 1\.\.parts loop/);
+  assert.match(cron, /functions\/v1\/rsi-own-daily\?part=%s&of=%s',/, "each job asks for its own share");
+  assert.match(cron, /\$cmd\$, k, parts, 'Bearer ' \|\| bearer\);/, "share number, share count, bearer: in that order");
+  assert.match(cron, /cron\.schedule\('rsi-own-daily-' \|\| k, format\('%s 23 \* \* 1-5', 29 \+ k\), body\);/, "23:30 to 23:35 UTC — after heartbeat-daily 23:10 and sigma-daily 23:20");
+  assert.match(cron, /cron\.schedule\('rsi-own-daily-catchup-' \|\| k, format\('%s 11 \* \* 2-6', 29 \+ k\), body\);/, "11:30 to 11:35 UTC — after sigma-daily-catchup 11:20");
+  assert.equal((cron.match(/perform cron\.schedule\(/g) || []).length, 2, "two schedule lines inside the loop, nothing else scheduled");
+  assert.doesNotMatch(cron, /cron\.schedule\('rsi-own-daily',/, "never one call for the whole night");
+  assert.match(cron, /perform cron\.unschedule\('rsi-own-daily'\) where exists/, "the 6 Oct single-call job is removed if it was ever scheduled");
+  /* the neighbours are where this file says they are, and nothing else in the repo is scheduled beside these minutes */
+  assert.match(readFileSync(here("../supabase/migrations/20260928_sigma_daily_cron.sql"), "utf8"), /cron\.schedule\('sigma-daily', '20 23 \* \* 1-5', body\)/);
+  assert.match(readFileSync(here("../supabase/migrations/20260928_sigma_daily_cron.sql"), "utf8"), /cron\.schedule\('sigma-daily-catchup', '20 11 \* \* 2-6', body\)/);
+  assert.match(readFileSync(here("../supabase/migrations/20260924_heartbeat_cron.sql"), "utf8"), /cron\.schedule\('heartbeat-daily', '10 23 \* \* 1-5'/);
+  const dir = here("../supabase/migrations/");
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".sql") || f.startsWith("20261006_rsi_own_daily_cron")) continue;
+    for (const m of readFileSync(new URL(f, dir), "utf8").matchAll(/cron\.schedule\('([^']+)',\s*'(\d+) (\d+) /g))
+      assert.ok(!((m[3] === "23" || m[3] === "11") && +m[2] >= 25 && +m[2] <= 40), f + " schedules " + m[1] + " at " + m[3] + ":" + m[2] + " UTC, beside the RSI shares");
+  }
   assert.doesNotMatch(cron, /eyJ[A-Za-z0-9_-]{20,}|sb_secret_|service_role key/i, "no key in the file");
+  /* the rollback removes every job this file can have created — however many shares — and nothing else */
   const rb = readFileSync(here("../supabase/migrations/20261006_rsi_own_daily_cron_ROLLBACK.sql"), "utf8");
-  assert.match(rb, /cron\.unschedule\('rsi-own-daily'\)/); assert.match(rb, /cron\.unschedule\('rsi-own-daily-catchup'\)/);
+  const rule = rb.match(/where jobname ~ '([^']+)'/);
+  assert.ok(rule, "one rule, by name"); assert.match(rb, /select cron\.unschedule\(jobname\) from cron\.job/);
+  const mine = new RegExp(rule[1]);
+  for (const j of ["rsi-own-daily", "rsi-own-daily-catchup", "rsi-own-daily-1", "rsi-own-daily-4", "rsi-own-daily-catchup-1", "rsi-own-daily-catchup-4", "rsi-own-daily-8", "rsi-own-daily-catchup-12"]) assert.ok(mine.test(j), "removes " + j);
+  for (const j of ["sigma-daily", "sigma-daily-catchup", "heartbeat-daily", "catalyst-odds-6h", "rsi-own-daily-x", "xrsi-own-daily-1", "rsi-own-daily-1-old", "rsi-own-dailyy"]) assert.ok(!mine.test(j), "leaves " + j);
   assert.doesNotMatch(rb.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n"), /drop table|delete from/i, "stopping the job leaves the rows");
+});
+
+test("a share of the night: the same every call, never overlapping, together the whole list", () => {
+  const names = ["SPY", "NFLX", "VIX", "AAPL", "BRK-B", "MOG.A", "US10Y", "BTCUSD", "QQQ", "TLT", "A", "ZTS", "MU"];
+  for (const of of [1, 2, 3, 4, 5, 8, 13, 20]) {
+    const parts = Array.from({ length: of }, (_, i) => shareOf(names, i + 1, of));
+    assert.deepEqual(parts.flat(), [...names].sort(), of + " shares together are the whole list, in order");
+    assert.equal(new Set(parts.flat()).size, names.length, "no name twice");
+    assert.ok(Math.max(...parts.map((p) => p.length)) - Math.min(...parts.map((p) => p.length)) <= 1, "equal shares, to within one name");
+  }
+  /* the order the names arrive in does not move a name to another share */
+  assert.deepEqual(shareOf([...names].reverse(), 2, 4), shareOf(names, 2, 4));
+  /* out-of-range and missing values are held to the nearest share; one share is everything */
+  assert.deepEqual(shareOf(names, 0, 4), shareOf(names, 1, 4)); assert.deepEqual(shareOf(names, 9, 4), shareOf(names, 4, 4));
+  assert.deepEqual(shareOf(names, "3", "4"), shareOf(names, 3, 4)); assert.deepEqual(shareOf(names, 1, 1), [...names].sort());
+  assert.deepEqual(shareOf(names, null, null), [...names].sort()); assert.deepEqual(shareOf([], 1, 4), []);
+  /* at the size of the night as it is (603 names) and as it may grow (1,200): shares of at most 101 and 200 names —
+     90,900 and 180,000 bars a call at DAILY_BARS, against the 177,000 the heartbeat job reads in one call today */
+  const night = (n) => Array.from({ length: n }, (_, i) => "N" + String(i).padStart(4, "0"));
+  const sizes = Array.from({ length: NIGHT_SHARES }, (_, i) => shareOf(night(603), i + 1, NIGHT_SHARES).length);
+  assert.deepEqual(sizes, [100, 101, 100, 101, 100, 101]);
+  assert.ok(Math.max(...sizes) * DAILY_BARS <= 177000 / 1.9, "a share is about half of a call that already runs clean");
+  assert.equal(shareOf(night(1200), NIGHT_SHARES, NIGHT_SHARES).length, 200);
 });
 
 test("the function and the Mac loader share one maths file, write one table, and the dry run needs no key", () => {
@@ -340,7 +439,27 @@ test("the function and the Mac loader share one maths file, write one table, and
   assert.match(load, /rows\.push\(\{ \.\.\.got\.row, computed_at: computedAt \}\)/, "computed_at travels with the row");
   assert.match(load, /if \(!DRY && \(!SB \|\| !SERVICE\)\)/, "--dry asks for no key");
   assert.match(load, /if \(DRY \|\| !rows\.length\) return 0;/, "--dry writes nothing");
-  assert.match(edge, /const written = dry \? 0 : await upsert\(rows\);/);
+  /* THE NIGHT SAVES AS IT GOES: every 40 finished names, then the rest — a pass cut short keeps what it finished,
+     and a dry run reaches neither write */
+  assert.match(edge, /if \(!dry && pending\.length >= UPSERT_ROWS\) \{ written \+= await upsert\(pending\); pending = \[\]; \}/);
+  assert.match(edge, /if \(!dry\) written \+= await upsert\(pending\);/);
+  assert.equal((edge.match(/await upsert\(/g) || []).length, 2, "no third write path");
+  assert.doesNotMatch(edge, /await upsert\(rows\)/, "never one write after the last name");
+  assert.match(edge, /const UPSERT_ROWS = 40;/, "a share of about 100 names is saved in three writes, so a cut call keeps most of its work");
+  /* a name typed twice must not put two rows with one key in the same write (Postgres refuses the whole write) */
+  assert.match(edge, /const only = \[\.\.\.new Set\(\(u\.searchParams\.get\("symbols"\)/);
+  assert.match(load, /const ONLY = \[\.\.\.new Set\(\(arg\("symbols", ""\)/);
+  /* one stated bar count for both: the two-year window of a 7-day series (731) plus a run-in */
+  assert.equal(DAILY_BARS, 900);
+  assert.ok(DAILY_BARS >= Math.ceil(WINDOW_DAYS) + 1 + 150, "window + at least 150 bars of run-in");
+  assert.match(edge, /const BARS = DAILY_BARS;/); assert.match(load, /parseInt\(arg\("bars", String\(DAILY_BARS\)\), 10\) \|\| DAILY_BARS/);
+  /* the function takes any number of shares of the night (the schedule asks for six) */
+  assert.match(edge, /import \{[^}]*\bshareOf\b[^}]*\} from "\.\/rsi-own\.mjs";/);
+  assert.match(edge, /if \(of > 1\) symbols = shareOf\(symbols, part, of\);/);
+  assert.match(edge, /const of = Math\.max\(1, Math\.min\(24, parseInt\(u\.searchParams\.get\("of"\)/, "at most 24 shares; none asked = the whole list");
+  /* an empty load is a failed load */
+  assert.match(load, /if \(!rows\.length\) \{\s*console\.error\("FAILED: no rows computed"[\s\S]{0,260}process\.exit\(1\);/);
+  assert.ok(load.indexOf("if (!rows.length) {") < load.indexOf("const written = await upsert(rows);"), "…decided before anything is written or saved");
   assert.ok(existsSync(here("../supabase/functions/heartbeat-daily/heartbeat.mjs")), "the join cut is the heartbeat's own");
   assert.match(readFileSync(here("../supabase/functions/rsi-own-daily/rsi-own.mjs"), "utf8"), /import \{ sinceLastJoin \} from "\.\.\/heartbeat-daily\/heartbeat\.mjs";/);
 });

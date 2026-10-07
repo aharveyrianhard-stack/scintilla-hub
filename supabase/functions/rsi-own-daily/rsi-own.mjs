@@ -35,6 +35,27 @@ export const RSI_PERIOD = 14;
 export const WINDOW_DAYS = 730;            // two calendar years
 export const MIN_SPAN_DAYS = 365;          // under one year of its own RSI → not eligible (the brief's fallback)
 export const MIN_SESSIONS = 200;           // and a year that is mostly holes is not a year
+/* How many finished daily bars one name's scale is built from: the two-year window (at most 731 bars, for a 7-day
+   series) plus a run-in so Wilder's average has settled before the window's first day — 169 bars at the least, where
+   the seed's weight is (13/14)^169, about 4 in a million. The Station asks for the same 900 (DAILY_NEED in its
+   _indicators/station-rsi-own.js), so the nightly table and the Station's own scale are built from the same bars.
+   It was 1,300 on 6 Oct: a third more bytes to read and parse every night for no change in any stored number. */
+export const DAILY_BARS = 900;
+/* THE NIGHT IS READ IN SIX CALLS, NOT ONE. The platform allows one call 2 seconds of CPU (Supabase, Edge Functions
+   limits: "Maximum CPU Time: 2s"). Measured on 7 Oct (tools/night-shares-check.mjs runs the function's own handler),
+   one call for all 603 names used between 0.8 and 1.8 s of CPU over six runs on an Apple M5 Max, a much faster core than the
+   platform's — so one call would very likely be cut off every night. A sixth of the names is about 100 names x 900
+   bars = 90,000 bars: HALF of the 177,000 the heartbeat job (590 names x 300 bars) is known to manage in one call, so
+   the served list can double before a share is as heavy as a call that already runs clean. The schedule file calls
+   the six shares a minute apart. */
+export const NIGHT_SHARES = 6;
+/** The K-th of N equal shares of a list of names (K counts from 1). The list is sorted first, so the shares are the
+    same on every call, never overlap, and together are the whole list. */
+export function shareOf(names, part, of) {
+  const n = Math.max(1, Math.floor(Number(of)) || 1), k = Math.min(n, Math.max(1, Math.floor(Number(part)) || 1));
+  const sorted = [...(names || [])].sort();
+  return sorted.slice(Math.floor(sorted.length * (k - 1) / n), Math.floor(sorted.length * k / n));
+}
 export const OWN_LO = 10, OWN_HI = 90;     // its own extremes — where the cell goes deep and breathes
 export const FALLBACK_LO = 30, FALLBACK_HI = 70;   // the textbook pair, kept ONLY for names with no own scale
 /* The chart API's /universe lists the 590 stocks and funds. These thirteen are the macro series it also serves daily
@@ -79,7 +100,10 @@ export function percentileGrid(values) {
   return grid;
 }
 
-/** Where `v` sits on a stored grid: 0..100 (one decimal). A reading inside a flat run takes the run's top. */
+/** Where `v` sits on a stored grid: 0..100 (one decimal). A reading inside a flat run takes the run's top.
+    0 and 100 are kept for the TRUE ends — at or under its lowest day, at or over its highest. A reading a hair inside
+    the range used to round to exactly 0 or 100 and the hover then called it "the lowest reading of X's last two years"
+    when it was not (CTVA, 5 Oct: 6.38 against a lowest day of 5.73); it now reads 0.1 / 99.9. */
 export function percentileOf(grid, v) {
   const x = v == null || v === "" ? NaN : Number(v);          // an empty reading has no place on the scale (it is not 0)
   if (!Array.isArray(grid) || grid.length !== 101 || !Number.isFinite(x)) return null;
@@ -88,7 +112,8 @@ export function percentileOf(grid, v) {
   let k = 0;
   for (let i = 0; i < 100; i++) if (grid[i] <= x) k = i; else break;      // the last step at or under the reading
   const a = grid[k], b = grid[k + 1];
-  return Math.round((k + (b > a ? (x - a) / (b - a) : 0)) * 10) / 10;
+  const p = Math.round((k + (b > a ? (x - a) / (b - a) : 0)) * 10) / 10;
+  return Math.min(99.9, x > grid[0] ? Math.max(0.1, p) : p);
 }
 
 /** One name's row for public.rsi_own_percentiles, or a counted reason for none.

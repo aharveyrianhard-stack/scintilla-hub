@@ -17,23 +17,37 @@
 //      a name with under one year gets a row marked eligible=false, and the page keeps 30 / 70 for it.
 //   4. Keys are read from the environment and never printed.
 //   5. Bandwidth is bounded and stated: one /universe call plus one /candles call per name, in chunks, with a cap.
+//   6. A pass that is cut short keeps what it finished: rows are written as the pass goes (every 40 names), not in
+//      one write after the last name. A name's row is whole and independent, so a half-finished night is a night
+//      where some names carry yesterday's scale — never a night with nothing.
 //
 // MODES.
 //   (no query)                  — every served name.
 //   ?symbols=NFLX,SPY           — only these names (a repair, or a new listing).
 //   ?dry=1                      — compute and report, write nothing.
-import { rsiOwnRow, RSI_OWN_VERSION, MACRO_SYMBOLS } from "./rsi-own.mjs";
+//   ?part=2&of=6                — the 2nd of 6 equal shares of the night's list (sorted first, so the shares are the
+//                                 same on every call and never overlap). THIS IS HOW THE SCHEDULE CALLS IT: six
+//                                 shares, a minute apart. With no ?of the call takes the whole list.
+//
+// WHY SIX CALLS (measured 7 Oct 2026). The platform allows one call 2 seconds of CPU ("Maximum CPU Time: 2s",
+// supabase.com/docs/guides/functions/limits). One call for all 603 names x 900 bars reads and parses 53 MB of JSON and
+// used between 0.8 and 1.8 s of CPU over six runs on an Apple M5 Max — a much faster core than the platform's. The two sibling
+// nightly jobs read about a third of that in one call (heartbeat-daily about 300 bars a name), so their clean record
+// does not vouch for a whole night in one call here. A sixth of the night is half of what they read in one call.
+// This function has NOT yet run on the platform: after deploying, call ?dry=1&part=1&of=6 once and expect a 200.
+import { rsiOwnRow, RSI_OWN_VERSION, MACRO_SYMBOLS, DAILY_BARS, shareOf } from "./rsi-own.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CHART = Deno.env.get("SC_CHART_API") || "https://scintilla-massive-chart-api.fly.dev";
 
-// Two calendar years is at most 731 bars (a 7-day series); Wilder's smoothing wants a long run-in before the window
-// so the first day of the window is already settled. 1,300 bars is the window plus about 1.5 years of run-in.
-const BARS = 1300;
+// Two calendar years is at most 731 bars (a 7-day series); Wilder's smoothing wants a run-in before the window so the
+// first day of the window is already settled. DAILY_BARS (900) is the window plus that run-in — stated once, in
+// rsi-own.mjs, and read by the Mac loader too.
+const BARS = DAILY_BARS;
 const MAX_SYMBOLS = 1200;          // the served universe is ~590 + 13 macro; the cap is a stop, not a target
 const CHUNK = 20;                  // names fetched in parallel
-const UPSERT_ROWS = 200;           // rows per PostgREST write (each row carries a 101-number grid)
+const UPSERT_ROWS = 40;            // rows per PostgREST write (each row carries a 101-number grid) — and how often the pass saves
 
 const sbHeaders = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "content-type": "application/json" };
 
@@ -64,8 +78,11 @@ const barsOf = (c: any) => (c.series || c.candles || c.bars || c.rows || []) as 
 Deno.serve(async (req) => {
   const t0 = Date.now();
   const u = new URL(req.url);
-  const only = (u.searchParams.get("symbols") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  /* a name typed twice would put two rows with one key in the same write, and Postgres refuses the whole write */
+  const only = [...new Set((u.searchParams.get("symbols") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
   const dry = u.searchParams.get("dry") === "1";
+  const of = Math.max(1, Math.min(24, parseInt(u.searchParams.get("of") || "1", 10) || 1));
+  const part = Math.max(1, Math.min(of, parseInt(u.searchParams.get("part") || "1", 10) || 1));
 
   try {
     let symbols: string[] = only;
@@ -77,8 +94,11 @@ Deno.serve(async (req) => {
       symbols = [...new Set([...symbols, ...MACRO_SYMBOLS])];
     }
     symbols = symbols.slice(0, MAX_SYMBOLS);
+    const listed = symbols.length;
+    if (of > 1) symbols = shareOf(symbols, part, of);
 
     const rows: any[] = [];
+    let pending: any[] = [], written = 0;
     const skipped: any[] = [];
     let short = 0, failed = 0, young = 0;
     const computedAt = new Date().toISOString();
@@ -94,15 +114,17 @@ Deno.serve(async (req) => {
         const got = rsiOwnRow(sym, bars);
         if (!got.row) { short++; skipped.push({ symbol: sym, reason: got.reason, bars: got.bars }); return; }
         if (!got.row.eligible) young++;
-        rows.push({ ...got.row, computed_at: computedAt });
+        const row = { ...got.row, computed_at: computedAt };
+        rows.push(row); pending.push(row);
       }));
+      /* saved as the pass goes (rule 6): what is finished is kept if the pass is cut short */
+      if (!dry && pending.length >= UPSERT_ROWS) { written += await upsert(pending); pending = []; }
     }
-
-    const written = dry ? 0 : await upsert(rows);
+    if (!dry) written += await upsert(pending);
     const asOf: Record<string, number> = {};
     for (const r of rows) asOf[r.as_of] = (asOf[r.as_of] || 0) + 1;
     return new Response(JSON.stringify({
-      ok: true, dry, version: RSI_OWN_VERSION, symbols: symbols.length, rows: rows.length, written,
+      ok: true, dry, version: RSI_OWN_VERSION, symbols: symbols.length, listed, part, of, bars_per_name: BARS, rows: rows.length, written,
       eligible: rows.length - young, under_one_year: young, short_history: short, candle_failures: failed,
       as_of: asOf, skipped: skipped.slice(0, 40), ms: Date.now() - t0,
     }), { headers: { "content-type": "application/json" } });

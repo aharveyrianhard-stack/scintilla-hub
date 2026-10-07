@@ -18,12 +18,16 @@
    --as-of DATE     compute every name as of that session's close (bars after it are ignored). Minutes after a close
                     the chart API has today's finished bar for some names and not yet for others; this keeps one load
                     on one day. Without it each name uses its newest finished bar.
-   --bars N         daily bars read per name (default 1300 = the two-year window plus about 1.5 years of run-in)
+   --bars N         daily bars read per name (default 900 = DAILY_BARS in rsi-own.mjs: the two-year window plus a
+                    run-in; the nightly function reads the same number)
+
+   EXIT STATUS. 0 when rows were computed; 1 when not one row was (the chart API refusing every name, or a mistyped
+   --symbols) — so a wrapper that chains on the status never takes an empty load for a finished one; 2 for bad arguments.
 
    NAMES. The chart API's /universe (the stocks and funds) plus the thirteen macro series it serves outside that list
    (MACRO_SYMBOLS in rsi-own.mjs: VIX, the yields, the dollar, oil, gold, silver, Bitcoin, the index futures). */
 import fs from "node:fs";
-import { rsiOwnRow, RSI_OWN_VERSION, MACRO_SYMBOLS } from "../supabase/functions/rsi-own-daily/rsi-own.mjs";
+import { rsiOwnRow, RSI_OWN_VERSION, MACRO_SYMBOLS, DAILY_BARS } from "../supabase/functions/rsi-own-daily/rsi-own.mjs";
 
 const arg = (k, d = null) => { const i = process.argv.indexOf("--" + k); return i > 0 ? process.argv[i + 1] : d; };
 const has = (k) => process.argv.includes("--" + k);
@@ -33,10 +37,11 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DRY = has("dry");
 const OUT = arg("out", null);
 const SQL = arg("sql", null);
-const BARS = Math.max(300, parseInt(arg("bars", "1300"), 10) || 1300);
+const BARS = Math.max(300, parseInt(arg("bars", String(DAILY_BARS)), 10) || DAILY_BARS);
 const AS_OF = arg("as-of", null);
 if (AS_OF && !/^\d{4}-\d{2}-\d{2}$/.test(AS_OF)) { console.error("--as-of wants a date like 2026-10-05"); process.exit(2); }
-const ONLY = (arg("symbols", "") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+/* a name typed twice would put two rows with one key in the same write, and Postgres refuses the whole write */
+const ONLY = [...new Set((arg("symbols", "") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
 const PAR = 6;                                  // names read at once — bounded, stated
 if (!DRY && (!SB || !SERVICE)) { console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (or pass --dry)."); process.exit(2); }
 
@@ -102,6 +107,11 @@ const main = async () => {
     }));
   }
   rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
+  /* not one row: nothing to load and nothing worth saving — say so and fail, before any file is written */
+  if (!rows.length) {
+    console.error("FAILED: no rows computed" + (skipped.length ? " (" + skipped.slice(0, 8).map((s) => s.symbol + " " + s.reason).join(", ") + (skipped.length > 8 ? ", …" : "") + ")" : ""));
+    process.exit(1);
+  }
   const written = await upsert(rows);
 
   const young = rows.filter((r) => !r.eligible);
