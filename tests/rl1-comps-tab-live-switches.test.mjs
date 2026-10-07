@@ -39,7 +39,7 @@ test("the foreign memory makers reach the tab the way they reach a card: the new
 });
 
 test("the tab says what it does: priced on the same-business peers, the others shown; a reference peer by its name", () => {
-  assert.match(CODE, /c6\.pricedOn === "business"/); assert.match(CODE, /priced on the \$\{c6\.businessPeers\.length\} peers that share/); assert.match(CODE, /more shown, not priced/);
+  assert.match(CODE, /c6\.pricedOn === "business"/); assert.match(CODE, /the \$\{c6\.businessPeers\.length\} peers that price it/); assert.match(CODE, /more shown, not priced/);
   assert.match(CODE, /const peerName = \(t\) => \(REFERENCE_PEERS\[t\] && REFERENCE_PEERS\[t\]\.name\) \|\| t;/);
   assert.equal(REFERENCE_PEERS["000660.KS"].name, "SK hynix");
 });

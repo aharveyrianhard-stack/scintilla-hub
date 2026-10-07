@@ -257,7 +257,7 @@ const peerName = (t) => (REFERENCE_PEERS[t] && REFERENCE_PEERS[t].name) || t;
 function bizHTML(b, c6) {
   if (!b) return "";
   /* RL1: when the price comes from the peers that share the business (LIVE_FX), the line says that — the others are shown, not priced */
-  if (c6 && c6.pricedOn === "business") return `<div class="biz" id="cm5Biz"><span><b>priced on the ${c6.businessPeers.length} peers that share ${esc(b.line || "the business")}</b></span><span>${c6.notPriced.length} more shown, not priced</span></div>`;
+  if (c6 && c6.pricedOn === "business") return `<div class="biz" id="cm5Biz"><span><b>the ${c6.businessPeers.length} peers that price it</b> — ${esc(b.line || "the same business")}</span><span>${c6.notPriced.length} more shown, not priced</span></div>`;   /* the allocation tool's own words for the same line (step 5b) */
   const n = `<span><b>${b.same.length} of ${b.n}</b> peers share ${esc(b.line || "the business")}</span>`;
   return b.mostlyDifferent ? `<div class="biz warn" id="cm5Biz"><span><b>peer set mostly different business</b></span>${n}<span>fix the peers, not the outliers</span></div>` : `<div class="biz" id="cm5Biz">${n}</div>`;
 }
