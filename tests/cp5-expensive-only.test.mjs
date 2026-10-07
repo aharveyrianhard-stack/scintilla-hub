@@ -112,8 +112,8 @@ test("neighbour: a seated peer counts in full only when 15 cents of the dollar i
 /* ---- 6 · "not a target" ---- */
 test("not a target: Oracle for growth, Nvidia and TSMC for the size of their peers — each in its own plain words, each well above its price", SIX_OCT, () => {
   const o = name("ORCL").not_a_target, n = name("NVDA").not_a_target, t = name("TSM").not_a_target;
-  assert.deepEqual(o.reasons, ["growth"]); assert.match(o.words, /^Not a target\. .* of the gap between today's price and the centre comes from the growth yardstick/);
-  assert.deepEqual(n.reasons, ["size"]); assert.match(n.words, /^Not a target\. Every company that shares Nvidia's business here is a fraction of its size/); assert.deepEqual(t.reasons, ["size"]);
+  assert.deepEqual(o.reasons, ["growth"]); assert.match(o.words, /^Not a target\. .* of the gap between the price and the centre comes from the growth yardstick/);
+  assert.deepEqual(n.reasons, ["size"]); assert.match(n.words, /^Not a target\. Every company that shares Nvidia's business here is a fraction of its size/); assert.match(name("AVGO").outlier_note, /^Under the earlier two-sided rule, which also left out cheap peers, this would read \+7\d% .* it reads \+5\d%\.$/); assert.deepEqual(t.reasons, ["size"]);
   assert.ok(n.growth_share_of_gap < 0.2, "Nvidia's centre does not rest on the growth yardstick: " + n.growth_share_of_gap);
   for (const [tk, s] of OK) { const r = s.not_a_target ? name(tk) : null; if (!r) continue; const x = r.not_a_target; assert.ok(x.upside_pct >= 25, tk + " is well above its price: " + x.upside_pct);
     if (x.reasons.includes("growth")) assert.ok(x.growth_share_of_gap > 0.5, tk); if (x.reasons.includes("size")) assert.ok(x.largest_peer.ratio < 0.25 && x.upside_pct >= 50, tk); assert.equal(r.flags[0], x.words, tk + ": it is the first flag every screen reads"); }
