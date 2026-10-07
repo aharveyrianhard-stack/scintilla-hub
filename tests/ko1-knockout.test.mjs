@@ -14,6 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { localPg } from "../deliverables/20261007/knockout/tools/local-pg.mjs";
 import { CP1_DEFAULT, CP1_LINES_OFF } from "../deliverables/20261003/comps-c5/lines.mjs";
+import { LIVE_FX } from "../deliverables/20261005/comps-c6/outliers.mjs";   /* RL1 (7 Oct): the switches the Hub's COMPS tab prices on */
 
 const here = (p) => new URL(p, import.meta.url), J = (p) => JSON.parse(readFileSync(here(p), "utf8"));
 const DIR = "../deliverables/20261007/knockout/", K = J(DIR + "data/knockout.json"), N = K.names, B = K.branches, F = K.funnel;
@@ -42,16 +43,25 @@ test("the stand-in answers the comps reader's query shapes and refuses what it c
 });
 
 /* ---- the comps run: the comps fix, switched on for the run only, nothing dropped --------------------------- */
-test("the comps system is still switched off for the Hub: the knockout turns the fixes on for its own run only", () => {
-  assert.equal(CP1_DEFAULT, CP1_LINES_OFF);
-  assert.ok(Object.values(K.checks.comps_switches).every((v) => v === true) && Object.keys(K.checks.comps_switches).length === 12, "all twelve switches on for the run");
+/* RL1 (7 Oct) — re-pinned on purpose. Alan approved the same-business pricing and the debt steps; the knockout was re-run on
+   them (KO1_FX=cp3, the one forward basis, KO1_DEBT=1) and the Hub's COMPS tab now prices on the same switches (LIVE_FX).
+   As first published this test read: "the comps system is still switched off for the Hub", twelve switches. */
+test("the knockout's comps run and the Hub's COMPS tab are on the same switches: every one on, the fourteen of LIVE_FX; a caller that passes nothing still gets them off", () => {
+  assert.equal(CP1_DEFAULT, CP1_LINES_OFF, "the bare default line is untouched: the reports, the tools and the older tests answer as before");
+  assert.ok(Object.values(K.checks.comps_switches).every((v) => v === true), "every switch on for the run");
+  assert.deepEqual(Object.keys(K.checks.comps_switches).sort(), Object.keys(LIVE_FX).sort(), "the run's switches are the tab's");
+  assert.equal(Object.keys(K.checks.comps_switches).length, 14);
 });
-test("the comps numbers are the comps fix's own: its 26 names come out the same, and Micron's stays thin on three memory and storage peers", () => {
-  const cp = J("../deliverables/20261006/decision-cards/data/comps-before-after.json");
+/* RL1 (7 Oct) — re-pinned on purpose: the knockout's comps are the RE-PRICED CARDS' own (one forward basis, same-business
+   peers), no longer the 6 Oct comps fix's (Micron +98.8% on three US-listed peers, which CP3 showed does not stand). */
+test("the comps numbers are the re-priced cards' own: all 27 come out the same — forward P/E, centre and upside — and Micron is priced on six memory and storage makers", () => {
+  const cards = J("../deliverables/20261007/one-basis/data/cards.json").cards;
   let same = 0; const off = [];
-  for (const [t, c] of Object.entries(cp)) { const n = N[t]; assert.ok(n, t + " was run"); const a = c.after.band ? c.after.upside_pct : null; if (n.comps === a && n.comps_no_peer_set === !!c.after.no_peer_set) same++; else off.push(t); }
-  assert.equal(same, 26, "not equal: " + off.join(" "));
-  assert.equal(N.MU.comps, 98.8); assert.equal(N.MU.comps_peers, 3); assert.equal(N.MU.comps_thin, true); assert.equal(N.MU.comps_priced_on, "business");
+  for (const [t, c] of Object.entries(cards)) { const n = N[t]; assert.ok(n, t + " was run"); const a = c.comps.centre != null ? c.comps.upside_pct : null;
+    const centre = (n.comps_band || {}).centre ?? null, pe = c.fundamentals.fwd_pe != null ? Math.round(c.fundamentals.fwd_pe * 100) / 100 : null;
+    if (n.comps === a && centre === (c.comps.centre ?? null) && n.comps_no_peer_set === (c.comps.centre == null) && (n.pe_fwd ?? null) === pe) same++; else off.push(t); }
+  assert.equal(same, 27, "not equal: " + off.join(" "));
+  assert.equal(N.MU.comps, 12.6); assert.equal(N.MU.comps_peers, 6); assert.equal(N.MU.comps_thin, false); assert.equal(N.MU.comps_priced_on, "business"); assert.equal(N.MU.comps_band.centre, 1177.05);
   assert.equal(N.BE.comps_no_peer_set, true); assert.equal(N.BE.comps, null);
   for (const t of ["EQIX", "DLR", "IRM"]) assert.equal(N[t].comps_peers, 2, t + " is priced on the other two data-centre landlords");
 });
@@ -104,10 +114,14 @@ test("inside a branch: the upper half passes, a missing reading is the middle, a
   assert.equal(S4.judged, 2); assert.deepEqual(S4.order, ["A", "B"], "the venture name's +900% does not enter the order"); assert.equal(S4.rows.find((r) => r.t === "Z").n, 2);
 });
 test("never across branches: a branch's scores are a function of that branch's own readings, and the saved result re-derives from them", PY, () => {
-  const rowOf = (t) => ({ t, g1_rev: N[t].g1_rev, g1_eps: N[t].g1_eps, g2_rev: N[t].g2_rev, g2_eps: N[t].g2_eps, comps: N[t].comps, comps_strength: N[t].comps_strength, revisions: N[t].revisions, cash: N[t].cash, pctl: N[t].pctl, venture: N[t].venture });
-  const ids = Object.keys(B), out = py(...ids.map((c) => ["score_branch", [B[c].run.map(rowOf)]]));
-  ids.forEach((c, i) => { assert.deepEqual(out[i].order, B[c].order, B[c].label); assert.deepEqual(out[i].finalists, B[c].finalists, B[c].label); });
-  assert.equal(ids.length, 63);
+  /* RL1 (7 Oct): the saved result is the run WITH the debt steps (2.5 / 4 / 6 times, approved), so it is re-derived with them on;
+     the row carries the debt readings the step takes. Without them the same names pass — debt never decides who passes. */
+  const rowOf = (t) => ({ t, g1_rev: N[t].g1_rev, g1_eps: N[t].g1_eps, g2_rev: N[t].g2_rev, g2_eps: N[t].g2_eps, comps: N[t].comps, comps_strength: N[t].comps_strength, revisions: N[t].revisions, cash: N[t].cash, pctl: N[t].pctl, venture: N[t].venture,
+    nd_ebitda: N[t].nd_ebitda, net_debt: N[t].net_debt, ebitda_ttm: N[t].ebitda_ttm, financial: N[t].financial });
+  const ids = Object.keys(B), out = py(...ids.map((c) => ["score_branch", [B[c].run.map(rowOf), true]])), plain = py(...ids.map((c) => ["score_branch", [B[c].run.map(rowOf)]]));
+  ids.forEach((c, i) => { assert.deepEqual(out[i].order, B[c].order, B[c].label); assert.deepEqual(out[i].finalists, B[c].finalists, B[c].label); assert.deepEqual(out[i].debt_moved || [], B[c].debt_moved || [], B[c].label + ": who debt moved");
+    assert.deepEqual(out[i].rows.filter((r) => r.passes).map((r) => r.t).sort(), plain[i].rows.filter((r) => r.passes).map((r) => r.t).sort(), B[c].label + ": debt never decides who passes"); });
+  assert.equal(ids.length, 63); assert.equal(ids.filter((c) => (B[c].debt_moved || []).length).length, 17, "debt reorders 17 of the 63 branches");
   /* the lists are not an input: no reading the score takes is a list, and re-scoring without them gives the same result (above) */
   assert.ok(!Object.keys(rowOf("MU")).some((k) => /list/i.test(k)));
 });
@@ -232,7 +246,7 @@ test("the loop is open: blind spots are on none of the lists, tunnel vision is o
   assert.ok(last4 >= 12 && first4 <= 2, `the radar's tunnel: ${last4} of its companies in the four sectors ranked last, ${first4} in the four ranked first`);
   assert.deepEqual(K.lists_by_sector.find((r) => r.RADAR.includes("VST")).label, "ENERGY & POWER", "a name is counted in the sector of the branch where it stands best: Vistra with the power producers");
   for (const k of ["RADAR", "FAVORITES", "LIKED"]) { const r = K.list_read[k]; assert.equal(r.n, K.lists[k].length); assert.equal(r.companies_scored + r.not_scored.length, r.n, k); }
-  assert.deepEqual(K.list_read.RADAR.fail_r2.sort(), ["NFLX", "WDC", "WMT"], "the three radar names the fundamentals round does not support");
+  assert.deepEqual(K.list_read.RADAR.fail_r2.sort(), ["GOOGL", "NFLX", "WDC", "WMT"], "the four radar names the fundamentals round does not support (RL1, 7 Oct: Alphabet joins them on the one basis — priced like its peers, growing half as fast)");
   assert.ok(K.list_read.RADAR.pass_both.includes("MU") && K.list_read.RADAR.pass_wait.includes("NVDA"));
 });
 
