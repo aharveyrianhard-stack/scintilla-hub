@@ -3,6 +3,39 @@
 .bars{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow:hidden}.nm{min-width:0}.nm{padding:4px 0 8px;border-bottom:1px solid #1e1e26}.nh{margin-bottom:3px}.bl{display:flex;align-items:center;gap:8px;height:19px}.bl .lt{width:12px;color:var(--dim);font-size:11px}.bl.strong .lt{color:var(--txt);font-weight:700}.trk{position:relative;flex:1;height:19px}.trk i{position:absolute;top:5px;height:9px;display:block}.trk i.zero{top:0;height:19px;width:1px;background:#4a4a56}.trk i.b.up{background:var(--up)}.trk i.b.dn{background:var(--dn)}.bl:not(.strong) .trk i.b{opacity:.5}.trk em{position:absolute;top:0;font-style:normal;font-size:11px;line-height:19px;white-space:nowrap}.bl.strong .trk em{font-weight:700;font-size:12px}
 details{margin:10px 0}details summary{cursor:pointer;color:var(--dim);letter-spacing:.1em;font-size:11px}details.sc-pagespecs{margin-top:30px}code{color:#a8a8b4}a{color:#a8a8b4}
 @media (max-width:900px){.grid{grid-template-columns:1fr 1fr}.bars{grid-template-columns:1fr}}@media (max-width:560px){.grid{grid-template-columns:1fr}main{padding:12px 16px}td,th{padding:5px 6px}.trk em small{display:none}}</style></head><body><main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
 <div data-scnav-slot style="display:flex;gap:8px;min-height:40px;margin:0 0 6px"></div>
 <h1>COMPS — THE DEFAULT TO ROLL WITH</h1><p><small>7 October 2026 · every reading on the 6 October close · 451 companies priced by the one comps engine, built at 16:35 New York time · the live Hub read at 16:00–16:01 New York time · nothing on this page is live: it is a branch, for Alan's go.</small></p>
 <div class="rec"><b>THE RECOMMENDATION — TAKE COLUMN C.</b><ol><li><b>Outliers: only the expensive ones.</b> A peer is left out only when it is priced far above its group. A cheap peer always stays.</li><li><b>The growth yardstick counts growth up to 30% a year</b>, for the company and for every peer alike.</li><li><b>A business with no peer of its own in the set gets its two best.</b> Alphabet's cloud now has Amazon and Microsoft beside Meta.</li><li><b>A centre that is not a target says so</b>, in one line, with the reason.</li></ol></div>
@@ -29,7 +62,7 @@ details{margin:10px 0}details summary{cursor:pointer;color:var(--dim);letter-spa
 <p>The rule Alan approved on 5 October is kept — far from the group on a log scale, and far on three or more of the five yardsticks to be left out everywhere — and is now one-sided. A peer or a single multiple is left out only when it sits far <b>above</b> the group. One that sits far below stays in and counts. Leaving a cheap peer out lifts the centre, so keeping it is the conservative choice.</p>
 <p><b>Broadcom's set shows both cases:</b></p><div class="case out"><i>LEFT OUT</i>Arm is left out: it is priced far above the group on 4 of the 5 yardsticks it has (forward P/E 117× against the group's 32.0×, EV/sales 71.2× against the group's 17.0×, P/S 71.7× against the group's 17.0×, PEG (on growth counted to 30%) 3.91 against the group's 1.51). It stays on the page, greyed.</div><div class="case out"><i>ONE YARDSTICK</i>AMD's trailing P/E (167× against the group's 55.6×) is left out of that yardstick only: far above the group. AMD still counts on the others.</div><div class="case out"><i>ONE YARDSTICK</i>Intel's forward P/E (59.4× against the group's 31.0×) is left out of that yardstick only: far above the group. Intel still counts on the others.</div><div class="case out"><i>ONE YARDSTICK</i>Palantir's trailing P/E (163× against the group's 55.6×) and forward P/E (92.3× against the group's 31.0×) are left out of those yardsticks only: far above the group. Palantir still counts on the others.</div><div class="case kept"><i>KEPT</i>Qualcomm stays in: it is priced far below the group on 4 of the 5 yardsticks it has (trailing P/E 20.7× against the group's 57.4×, EV/sales 4.67× against the group's 17.0×, P/S 4.43× against the group's 17.0×, PEG (on growth counted to 30%) 0.63 against the group's 1.51). The earlier two-sided rule left it out; a cheap peer is never left out now.</div><div class="case"><small>Under the earlier two-sided rule, which also left out cheap peers, this would read +74% (centre 655); with only the expensive ones left out it reads +56%.</small></div>
 <div class="scroll" style="margin-top:10px"><table><thead><tr><th>name</th><th>left out of every yardstick<br>(priced far above the group)</th><th>one multiple left out<br>of its own yardstick</th><th>cheap peer that now stays<br>(the old rule left it out)</th><th>cheap multiple that stays</th></tr></thead><tbody><tr><td><b>GOOGL</b></td><td><small>—</small></td><td><span class="chip">Live Nation Entertainment <small>forward P/E</small></span></td><td><small>—</small></td><td><small>—</small></td></tr><tr><td><b>AMZN</b></td><td><small>—</small></td><td><small>—</small></td><td><small>—</small></td><td><span class="chip">JD.com <small>EV/sales, P/S, PEG</small></span></td></tr><tr><td><b>AVGO</b></td><td><span class="chip">Arm</span></td><td><span class="chip">AMD <small>trailing P/E</small></span><span class="chip">Intel <small>forward P/E</small></span><span class="chip">Palantir <small>trailing P/E, forward P/E</small></span></td><td><span class="chip">Qualcomm</span></td><td><small>—</small></td></tr><tr><td><b>NVDA</b></td><td><span class="chip">Arm</span></td><td><span class="chip">AMD <small>trailing P/E</small></span></td><td><small>—</small></td><td><span class="chip">TSMC <small>PEG</small></span></td></tr><tr><td><b>TSM</b></td><td><span class="chip">Arm</span></td><td><span class="chip">AMD <small>trailing P/E</small></span></td><td><small>—</small></td><td><span class="chip">Micron <small>forward P/E, PEG</small></span></td></tr><tr><td><b>VST</b></td><td><small>—</small></td><td><span class="chip">Oklo <small>EV/sales, P/S</small></span><span class="chip">Talen Energy <small>EV/EBITDA</small></span></td><td><small>—</small></td><td><span class="chip">Duke Energy <small>EV/EBITDA</small></span><span class="chip">Exelon <small>EV/EBITDA</small></span><span class="chip">NRG Energy <small>forward P/E, EV/sales, P/S</small></span></td></tr><tr><td><b>MU</b></td><td><small>—</small></td><td><span class="chip">Arm <small>EV/sales, P/S</small></span></td><td><small>—</small></td><td><small>—</small></td></tr><tr><td><b>ORCL</b></td><td><small>—</small></td><td><span class="chip">CrowdStrike <small>trailing P/E</small></span></td><td><small>—</small></td><td><small>—</small></td></tr><tr><td><b>DLR</b></td><td><small>—</small></td><td><span class="chip">Welltower <small>EV/EBITDA</small></span></td><td><small>—</small></td><td><span class="chip">CBRE <small>EV/sales, P/S</small></span><span class="chip">Iron Mountain <small>EV/sales</small></span></td></tr><tr><td><b>EQIX</b></td><td><small>—</small></td><td><span class="chip">Welltower <small>EV/EBITDA</small></span></td><td><small>—</small></td><td><span class="chip">CBRE <small>EV/sales, P/S</small></span></td></tr><tr><td><b>SNDK</b></td><td><small>—</small></td><td><small>—</small></td><td><small>—</small></td><td><small>—</small></td></tr><tr><td><b>WDC</b></td><td><small>—</small></td><td><small>—</small></td><td><small>—</small></td><td><span class="chip">Super Micro Computer <small>EV/sales, P/S</small></span></td></tr></tbody></table></div>
-<p>Across all 438 companies priced: 108 have at least one peer or multiple left out for being dear, and 35 have a cheap peer that the two-sided rule used to leave out and that now stays. Against the two-sided rule on the same peers, the reading is lower on 65 names and higher on 11. The 11 are names where the peer that stays is cheap on some yardsticks and ordinary or dear on others.</p>
+<p>Across all 438 companies priced: 107 have a peer left out of every yardstick for being priced far above its group, 270 have at least a single multiple left out, and 35 have a cheap peer that the two-sided rule used to leave out and that now stays. Against the two-sided rule on the same peers, the reading is lower on 65 names and higher on 11. The 11 are names where the peer that stays is cheap on some yardsticks and ordinary or dear on others.</p>
 
 <h2>2 · THE GROWTH YARDSTICK'S CAP: 30, 40 OR NONE</h2>
 <p><b>Recommendation: 30.</b> It is the only one of the three that takes Broadcom out of “double the price” territory, and it keeps Micron's credit whole.</p>
@@ -91,37 +124,4 @@ details{margin:10px 0}details summary{cursor:pointer;color:var(--dim);letter-spa
 <p>Weights: the growth yardstick 2.0, forward P/E 1.5, EV/EBITDA 1.0, trailing P/E 0.6, EV/sales 0.5, P/S 0.4 (P/FFO 2.0 leads for a property trust), each × the share of peers carrying it × how well it prices the peers themselves, then cut where its price sits more than 1.5× from the other yardsticks'. The centre is the weighted middle of every peer's price on every yardstick; low and high are the weighted quarter marks; the debt discount comes off last.</p>
 <p>The switches, one line each, and what is live: <code>expensiveOnly</code>, <code>pegCap</code> and <code>lineSeats</code> in <code>deliverables/20261005/comps-c6/outliers.mjs</code> and <code>deliverables/20261003/comps-c5/lines.mjs</code>. The configuration the live Hub reads carries none of them, and its answers are unchanged on all 451 companies.</p>
 </div></details>
-</main><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
-     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
-     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
-     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
-<style id="scnav-css">
-.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
-.scnav.is-inline{position:static;z-index:auto}
-.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
-.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
-.scnav i{font-style:normal;color:#c4c7cb}
-@media print{.scnav{display:none}}
-</style>
-<script>
-/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
-   CLOSE: the Hub. Nothing is stored and nothing is requested. */
-(function () {
-  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
-  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
-  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
-  var n = document.createElement("nav");
-  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
-  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
-                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
-  n.addEventListener("click", function (e) {
-    var b = e.target.closest("button"); if (!b) return;
-    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
-    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
-  });
-  var slot = document.querySelector("[data-scnav-slot]");
-  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
-})();
-</script>
-<!-- /scnav -->
-</body></html>
+</main></body></html>
