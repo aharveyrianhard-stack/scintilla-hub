@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from e02530d) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from f171544) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -28385,15 +28385,28 @@ function hubRestorePlace() {
     }
   ];
   steps.forEach((step, i) => setTimeout(() => { try { step(); } catch (_) {} }, 350 * i));
-  /* a panel is as long as its rows: wait for each to fill, up to 20 s, then leave it where it is */
-  const left = kept.scroll.slice(); let pageY = kept.pageY, tries = 0;
+  /* A panel is as long as its rows, and a slow first read repaints it from the top: each panel is put back as soon as it
+     is long enough, and put back again if a late repaint moves it - until it has held for 8 s, a minute has passed, or
+     a hand touches the page (then it is Alan's, and nothing here moves it again). */
+  const left = kept.scroll.map((row) => ({ path: row[0], top: row[1], x: row[2], heldAt: 0 }));
+  if (kept.pageY > 0) left.push({ page: true, top: kept.pageY, x: 0, heldAt: 0 });
+  if (!left.length) return;
+  let touched = false, tries = 0;
+  const touch = () => { touched = true; };
+  const kinds = ["pointerdown", "wheel", "keydown", "touchstart"];
+  kinds.forEach((kind) => { try { window.addEventListener(kind, touch, { passive: true, capture: true }); } catch (_) {} });
   const timer = setInterval(() => {
-    for (let i = left.length - 1; i >= 0; i--) {
-      let n = null; try { n = document.querySelector(left[i][0]); } catch (_) {}
-      if (n && n.scrollHeight - n.clientHeight >= left[i][1] && n.scrollWidth - n.clientWidth >= left[i][2]) { n.scrollTop = left[i][1]; n.scrollLeft = left[i][2]; left.splice(i, 1); }
+    const now = Date.now();
+    for (const it of left) {
+      let n = null; try { n = it.page ? document.scrollingElement : document.querySelector(it.path); } catch (_) {}
+      if (touched || !n || !(n.scrollHeight - n.clientHeight >= it.top && n.scrollWidth - n.clientWidth >= it.x)) continue;
+      if (Math.abs(n.scrollTop - it.top) > 2 || Math.abs(n.scrollLeft - it.x) > 2) { n.scrollTop = it.top; n.scrollLeft = it.x; it.heldAt = now; }
+      else if (!it.heldAt) it.heldAt = now;
     }
-    if (pageY > 0 && document.documentElement.scrollHeight - window.innerHeight >= pageY) { window.scrollTo(0, pageY); pageY = 0; }
-    if ((!left.length && !pageY) || ++tries >= 40) clearInterval(timer);
+    if (touched || ++tries >= 120 || left.every((it) => it.heldAt && now - it.heldAt >= 8000)) {
+      clearInterval(timer);
+      kinds.forEach((kind) => { try { window.removeEventListener(kind, touch, { capture: true }); } catch (_) {} });
+    }
   }, 500);
 }
 try { setTimeout(hubRestorePlace, 1200); } catch (_) {}
