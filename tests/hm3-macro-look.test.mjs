@@ -84,8 +84,11 @@ test("the sheet styles only the layer's own classes, its text is 11 px or more, 
   for (const sel of rules) for (const one of sel.split(",")) assert.match(one, /\.hm3-/, "“" + one.trim() + "” reaches only what the layer draws: with HM3_ON = false HM2's cards are as they were");
   const sizes = [...css.matchAll(/font-size:([\d.]+)px/g)].map((m) => +m[1]);
   assert.ok(sizes.length > 12); assert.ok(Math.min(...sizes) >= 11, "smallest is " + Math.min(...sizes));
-  /* flat: the only rule that draws all four sides is the one that takes the rail card's own box away */
-  assert.deepEqual(css.replace(/\/\*[\s\S]*?\*\//g, "").match(/[;{ ]border:[^;]+;/g), [" border:0 !important;"]);
+  /* flat: the only rules that name all four sides are the two that take the rail card's own box away (the three cards; the event card's host) */
+  assert.deepEqual(css.replace(/\/\*[\s\S]*?\*\//g, "").match(/[;{ ]border:[^;]+;/g), [" border:0 !important;", " border:0 !important;"]);
+  /* :has() is in a rule of its own: a browser that does not know it drops that one line, not the flat frames of the three cards */
+  for (const sel of rules.filter((r) => r.includes(":has("))) assert.doesNotMatch(sel, /,/, "“" + sel + "” shares its rule with nothing");
+  assert.equal(rules.filter((r) => r.includes(":has(")).length, 1);
   assert.doesNotMatch(css, /border-radius:[3-9]px|box-shadow/);
   for (const [lbl, , col] of load().HM3_THEN) {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(col.slice(i, i + 2), 16));
