@@ -137,6 +137,18 @@ test("the recorded check on the names: exact on liquid names when the daily bar 
   assert.deepEqual(data.pine_compile_check, { errors: [], warnings: [] });
 });
 
+test("on an intraday chart the script follows the Hub's live rule; pre-market reads yesterday's evening either way", () => {
+  assert.match(code, /bool dailyOld\s+= not timeframe\.isdwm and dDay < epochDay\(time\)/);
+  assert.match(code, /bool nowD\s+= dayEnd or afterCash or dailyOld/); assert.match(code, /bool nowSlow\s+= dayEnd or dailyOld/);
+  const pi = data.pine_check_intraday; assert.deepEqual(Object.keys(pi), ["MU", "NVDA", "SPY"]);
+  for (const [s, v] of Object.entries(pi)) {
+    assert.equal(v.premarket_mapping_max_difference, 0, s); assert.equal(v.bars_drawn_under_one_mapping_only, 0, s);
+    for (const k of ["pre-market", "regular hours", "after hours, 12h rung present at the Hub"]) { assert.ok(v[k].bars > 1000, `${s} ${k}`); assert.equal(v[k].exact_pct, 100, `${s} ${k}`); }
+    assert.ok(v["last bar of the day"].bars > 250 && v["last bar of the day"].max_gap < 0.02, s);
+    assert.ok(v["after hours, Hub leaves its 12h rung out (winter)"].mean_gap > 0.01, s);      // the one named difference
+  }
+});
+
 test("the replay agrees with the Hub's own numbers on two evenings", () => {
   const v = data.validation, s = data.validation_against_stored_rows;
   assert.ok(v.exact_1e5 / v.names > 0.95); assert.ok(v.max < 0.03);

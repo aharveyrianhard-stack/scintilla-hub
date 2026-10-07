@@ -56,6 +56,9 @@
 //      close: typically 0.02–0.04 away, more on an evening with earnings. The Data Window shows which:
 //      hover a daily bar and read "intraday bars through" (19.5 = 19:30, 15.5 = 15:30).
 //      On a 30-minute chart with extended hours on, the last bar of each day is always the evening reading.
+//   7. Between 16:00 and 20:00 New York in winter the Hub leaves its 12h rung out (that rung's newest
+//      finished bar began the evening before); this script keeps it. Those few after-hours bars can
+//      differ; the last bar of the day agrees again.
 //
 // PASTE: Pine Editor → new indicator → select all → paste → Save → Add to chart. Works on any chart
 // timeframe; a daily chart shows the longest history.
@@ -353,20 +356,25 @@ dailyRungs() =>
     [dT0, dM0, dT, dM, nD]  = rung(ed, true)
     [xT0, xM0, xT, xM, nX]  = rung(k3, done3)
     [yT0, yM0, yT, yM, nY]  = rung(kw, doneW)
-    [dT, dM, xT, xM, yT, yM, dT[1], dM[1], xT[1], xM[1], yT[1], yM[1]]
+    [dT, dM, xT, xM, yT, yM, dT[1], dM[1], xT[1], xM[1], yT[1], yM[1], ed]
 
 // ── requests ───────────────────────────────────────────────────────────────────────────────────
 string symExt = ticker.modify(syminfo.tickerid, session.extended)
 [aT3, aM3, bT3, bM3, n3, aT4, aM4, bT4, bM4, n4, aT6, aM6, bT6, bM6, n6, aT12, aM12, bT12, bM12, n12, baseT] = request.security(symExt, baseTf, intraRungs(), lookahead = barmerge.lookahead_off)
 // charts up to one day: today's evening values and yesterday's, the same on finished and live bars
-[dT, dM, xT, xM, yT, yM, dTp, dMp, xTp, xMp, yTp, yMp] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_on)
+[dT, dM, xT, xM, yT, yM, dTp, dMp, xTp, xMp, yTp, yMp, dDay] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_on)
 // charts longer than one day: the last daily bar inside each chart bar
-[eT, eM, fT, fM, hT, hM, eTp, eMp, fTp, fMp, hTp, hMp] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_off)
+[eT, eM, fT, fM, hT, hM, eTp, eMp, fTp, fMp, hTp, hMp, eDay] = request.security(syminfo.tickerid, "D", dailyRungs(), lookahead = barmerge.lookahead_off)
 
 // ── which reading this chart bar shows ─────────────────────────────────────────────────────────
 bool longBars  = timeframe.in_seconds() > 86400
 bool dayEnd    = timeframe.isdwm or session.islastbar                  // the evening reading
 bool afterCash = not timeframe.isdwm and hour(time, TZ) >= 16          // the daily bar is final once 16:00 has printed
+// Before the open the daily series may still sit on yesterday's bar (already finished) or already on today's (not started):
+// compare dates so the pre-market reading uses yesterday's evening values either way.
+bool dailyOld  = not timeframe.isdwm and dDay < epochDay(time)
+bool nowD      = dayEnd or afterCash or dailyOld                       // the daily rung may read the daily series' current bar
+bool nowSlow   = dayEnd or dailyOld                                    // the 3-day and weekly rungs may read it
 
 float t3h  = dayEnd ? aT3  : bT3
 float m3h  = dayEnd ? aM3  : bM3
@@ -376,12 +384,12 @@ float t6h  = dayEnd ? aT6  : bT6
 float m6h  = dayEnd ? aM6  : bM6
 float t12h = dayEnd ? aT12 : bT12
 float m12h = dayEnd ? aM12 : bM12
-float tD   = longBars ? eT : dayEnd or afterCash ? dT : dTp
-float mD   = longBars ? eM : dayEnd or afterCash ? dM : dMp
-float t3D  = longBars ? fT : dayEnd ? xT : xTp
-float m3D  = longBars ? fM : dayEnd ? xM : xMp
-float tW   = longBars ? hT : dayEnd ? yT : yTp
-float mW   = longBars ? hM : dayEnd ? yM : yMp
+float tD   = longBars ? eT : nowD ? dT : dTp
+float mD   = longBars ? eM : nowD ? dM : dMp
+float t3D  = longBars ? fT : nowSlow ? xT : xTp
+float m3D  = longBars ? fM : nowSlow ? xM : xMp
+float tW   = longBars ? hT : nowSlow ? yT : yTp
+float mW   = longBars ? hM : nowSlow ? yM : yMp
 
 // ── the Equalizer-weighted mean ────────────────────────────────────────────────────────────────
 rungVal(float t, float m) =>

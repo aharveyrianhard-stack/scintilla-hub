@@ -140,3 +140,27 @@ def daily_chart(d, base, mapping="session_end", waitFull=True, phase3=2):
         if not ok or any(isna(v) for v in vals.values()): continue
         g[i] = sum(W[r] * vals[r] for r in W) / sum(W.values())
     return g
+
+def intraday_chart(d, base, phase3=2, premarket="prev", waitFull=True, base_minutes=30):
+    """What the script plots on a 30-MINUTE EXTENDED-HOURS chart, one value per bar (the Hub rule: finished bars only; the
+       day's last bar = the evening reading). premarket: which daily bar TradingView calls current before the open —
+       'prev' = yesterday's (already finished), 'same' = today's (not started). The script must give the same answer for both."""
+    ic = intra_context(base, base_minutes); dc = daily_context(d, phase3); dt = d[:, 0]; n = len(base); g = np.full(n, NA); flag = np.zeros(n, dtype=np.int8)
+    for j in range(n):
+        t = base[j, 0]; i = int(np.searchsorted(dt, t, side="right")) - 1
+        if i < 1 or t >= dt[i] + 24 * HOUR_MS: continue                    # no daily bar for that date
+        dayEnd = (t + base_minutes * 60000) >= dt[i] + 20 * HOUR_MS       # session.islastbar on an extended-hours chart
+        afterCash = t >= dt[i] + 16 * HOUR_MS
+        pre = t < dt[i] + 9.5 * HOUR_MS
+        k = i - 1 if (pre and premarket == "prev") else i               # the daily series' current bar (lookahead on)
+        dailyOld = k < i
+        nowD = dayEnd or afterCash or dailyOld; nowSlow = dayEnd or dailyOld
+        row = ic[j]; vals = {}; ok = True
+        for r, q in (("3h", 0), ("4h", 5), ("6h", 10), ("12h", 15)):
+            vals[r] = rungVal(row[q], row[q + 1]) if dayEnd else rungVal(row[q + 2], row[q + 3])
+            if waitFull and not (row[q + 4] >= MATURE): ok = False
+        a = dc[k] if nowD else dc[k - 1]; b = dc[k] if nowSlow else dc[k - 1]
+        vals["1d"] = rungVal(a[0], a[1]); vals["3d"] = rungVal(b[2], b[3]); vals["1w"] = rungVal(b[4], b[5])
+        if not ok or any(isna(v) for v in vals.values()): continue
+        g[j] = sum(W[r] * vals[r] for r in W) / sum(W.values()); flag[j] = 3 if dayEnd else (2 if afterCash else (1 if pre else 0))
+    return g, flag
