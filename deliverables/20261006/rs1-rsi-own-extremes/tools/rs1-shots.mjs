@@ -27,7 +27,7 @@ const dryBy = new Map(dry.map((r) => [r.ticker, r]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WATCH = ["NFLX", "SPY", "QQQ", "IWM", "RSP", "SMH", "TLT", "TSM", "MU", "NVDA", "CBRS", "VIX", "US10Y", "DXUSD", "GCUSD"];
 const writes = [], errors = [];
-const out = { mode, width, at: new Date().toISOString(), page: path.relative(hubRoot, indexFile), writes, errors, own_table_reads_answered_from_dry_run: 0, own_table_rows_sent: 0 };
+const out = { mode, width, at: new Date().toISOString(), page: mode === "before" ? "the live page: " + path.basename(indexFile) : path.relative(hubRoot, indexFile), writes, errors, own_table_reads_answered_from_dry_run: 0, own_table_rows_sent: 0 };
 const browser = await chromium.launch({ headless: true, args: ["--disable-gpu", "--hide-scrollbars", "--mute-audio"] });
 try {
   const context = await browser.newContext({ viewport: { width, height: phone ? 844 : 1050 }, deviceScaleFactor: phone ? 2 : 1, serviceWorkers: "block",
