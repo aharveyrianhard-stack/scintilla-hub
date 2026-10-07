@@ -11,7 +11,7 @@ const x1 = (v) => (v == null || !Number.isFinite(+v) ? "—" : (+v).toFixed(1) +
 const pc = (v, d = 0) => (v == null || !Number.isFinite(+v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(+v).toFixed(d) + "%");
 const sg = (v, d = 0) => (v == null || !Number.isFinite(+v) ? '<span class="dim">—</span>' : `<span class="${v > 0 ? "up" : v < 0 ? "dn" : ""}">${pc(v, d)}</span>`);
 const px = (v) => (v == null ? "—" : (+v >= 1000 ? Math.round(+v).toLocaleString("en-US") : (+v).toFixed(2)));
-const SHORT = { "Taiwan Semiconductor Manufacturing Company Limited": "TSMC", "Amazon.com, Inc.": "Amazon", "Digital Realty Trust, Inc.": "Digital Realty", "Samsung Electronics Co., Ltd.": "Samsung", "SK hynix Inc.": "SK hynix" };
+const SHORT = { "Taiwan Semiconductor Manufacturing Company Limited": "TSMC", "Amazon.com, Inc.": "Amazon", "Digital Realty Trust, Inc.": "Digital Realty", "Samsung Electronics Co., Ltd.": "Samsung", "SK hynix Inc.": "SK hynix", "Eli Lilly and Company": "Eli Lilly" };
 const short = (name) => SHORT[name] || String(name || "").replace(/,? (Inc\.?|Corporation|Corp\.?|Incorporated|Company|Co\.|plc|Limited|Ltd\.?|N\.V\.|Holdings?|Technologies|Technology|Platforms|\.com)\b.*$/i, "").replace(/ Semiconductor Manufacturing.*$/, "").trim();
 /* every cell's content is ONE box: on a phone a cell is a two-column grid (its label, its value), and a value made of two pieces would otherwise fall into two rows */
 const td = (label, html, cls = "") => `<td data-l="${esc(label)}"${cls ? ` class="${cls}"` : ""}><div class="cv">${html}</div></td>`;
