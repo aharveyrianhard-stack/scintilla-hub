@@ -47,13 +47,13 @@ WANT = {"trend_and_breadth": ~(below & weak), "trend_only": ~below, "trend_month
 WANT["trend_and_breadth_3day"] = confirmed(WANT["trend_and_breadth"], 3)
 
 
-def run(want, name, start=L.FULL[0], end=L.FULL[1], initial=None):
+def run(want, name, start=L.FULL[0], end=L.FULL[1], initial=None, lag=1):
     """All SPY or all bills. The opening position is what the rule says on the start date (unless `initial` is given)."""
     def decide(i, d, w):
         x = bool(want[i]); have = w.get("SPY", 0.0) > 0.5
         return None if x == have else ({"SPY": 1.0} if x else {})
     if initial is None: initial = {"SPY": 1.0} if want[D.ix[start]] else {}
-    return L.simulate(D, decide, start, end, initial=initial, name=name)
+    return L.simulate(D, decide, start, end, initial=initial, name=name, lag=lag)
 
 
 TR = D.tr["SPY"]; CG = (1.0 + D.cash_ret).cumprod()
@@ -140,11 +140,16 @@ vs_hold = {"full": brief(bh, *L.FULL), "last2": brief(bh, *L.LAST2), "stress": L
 # self-checks: the same machinery with the switch held ON must be buy-and-hold SPY; held OFF must be Treasury bills
 on = run(np.ones(N, bool), "always in"); off = run(np.zeros(N, bool), "always out"); i0 = D.ix[L.FULL[0]]
 checks = {"always_in": {"full_cagr_pct": L.metrics(on, *L.FULL)["cagr_pct"], "full_max_dd_pct": L.metrics(on, *L.FULL)["max_dd_pct"], "last2_total_return_pct": L.metrics(on, *L.LAST2)["total_return_pct"],
-                        "expected": [10.96, -55.2, 39.6]},
-          "always_out": {"full_cagr_pct": L.metrics(off, *L.FULL)["cagr_pct"], "last2_total_return_pct": L.metrics(off, *L.LAST2)["total_return_pct"], "expected": [1.77, 8.2]},
+                        "expected": [vs_hold["full"]["cagr_pct"], vs_hold["full"]["max_dd_pct"], vs_hold["last2"]["total_return_pct"]]},
+          "always_out": {"full_cagr_pct": L.metrics(off, *L.FULL)["cagr_pct"], "last2_total_return_pct": L.metrics(off, *L.LAST2)["total_return_pct"], "expected": "Treasury bills alone (see s0_baselines.json)"},
           "start_state_same_one_close_earlier": {k: bool(WANT[k][i0] == WANT[k][i0 - 1]) for k, _, _ in SPEC},
           "sector_funds_first_counted": joined, "spy_200day_first_exists": D.dates[FIRST]}
 
+# how much the daily rule's result hangs on WHICH close the switch lands on: the same rule filled one session later
+late = run(WANT["trend_and_breadth"], "filled one session later", lag=2); lf, ll = L.metrics(late, *L.FULL), L.metrics(late, *L.LAST2)
+fill_day = {"what": "the headline rule with every switch filled two closes after the reading instead of one",
+            "full_cagr_pct": lf["cagr_pct"], "full_max_dd_pct": lf["max_dd_pct"], "last2_total_return_pct": ll["total_return_pct"], "last2_max_dd_pct": ll["max_dd_pct"]}
+assert (checks["always_in"]["full_cagr_pct"], checks["always_in"]["full_max_dd_pct"], checks["always_in"]["last2_total_return_pct"]) == tuple(checks["always_in"]["expected"]), "switch held ON must equal buy-and-hold SPY"
 H = outs["trend_and_breadth"]; T = outs["trend_only"]; ww = H["worst_whipsaw"]; f0 = variants[0]["full"]; f1 = variants[1]["full"]; v3 = variants[3]
 l2r = [v["last2"]["total_return_pct"] for v in variants]; l2n = sum(len(o["last2_spells"]) for o in outs.values()); l2c = sum(o["last2_cost"] for o in outs.values())
 last2_exits = {"exits_all_five_rules": l2n, "bought_back_higher": l2c, "bought_back_lower": sum(o["last2_saved"] for o in outs.values()),
@@ -159,12 +164,13 @@ out = {"structure": "s2_trend_core", "title": "Trend-filtered core — invested 
            "The rule is read at each close and acted on at the next session's close. Each switch costs 0.05% of the amount moved.",
            "Four other ways of writing it are shown beside it: trend alone; a once-a-month check; the headline rule with a 3-day wait; and the headline rule using the Hub's own company breadth (last two years only)."],
        "variants": variants,
-       "extras": {"outs": outs, "breadth_today": breadth_today, "time_in_cash_compare": cash_compare, "last2_exits": last2_exits, "since_2010": since_2010, "buy_and_hold_spy": vs_hold, "checks": checks},
+       "extras": {"outs": outs, "breadth_today": breadth_today, "time_in_cash_compare": cash_compare, "last2_exits": last2_exits, "since_2010": since_2010, "buy_and_hold_spy": vs_hold, "checks": checks, "fill_one_session_later": fill_day},
        "caveats": [
            f"The rule did not make more money than simply holding SPY: {f0['cagr_pct']}% a year against {vs_hold['full']['cagr_pct']}% over the whole history. What it bought was a shallower worst fall ({f0['max_dd_pct']}% against {vs_hold['full']['max_dd_pct']}%), and the big saving was one event, 2008. Measured from January 2010 it made {since_2010['trend_and_breadth']['cagr_pct']}% a year against {since_2010['buy_and_hold_spy']['cagr_pct']}% for holding, with a worst fall of {since_2010['trend_and_breadth']['max_dd_pct']}% against {since_2010['buy_and_hold_spy']['max_dd_pct']}%.",
            f"The rule is often wrong in a small way. Of the headline rule's {H['closed']} completed exits, {H['saved']} were followed by SPY being lower at the buy-back (the exit saved money) and {H['cost']} by SPY being higher (it cost money)." + (f" The worst single one missed a {ww['spy_change_pct']}% rise in SPY (sold {ww['out']}, bought back {ww['back_in']})." if ww else ""),
            f"Adding the breadth test to the trend test {verdict} in this history. It switched more often ({H['count']} exits against {T['count']} for trend alone), made {f0['cagr_pct']}% a year against {f1['cagr_pct']}%, and its worst fall was {f0['max_dd_pct']}% against {f1['max_dd_pct']}%. When breadth hovers near half, the rule flips in and out.",
-           f"Over the last two years the five rules made between {min(l2r)}% and {max(l2r)}%, against {vs_hold['last2']['total_return_pct']}% for holding SPY. Of the {l2n} exits they made in that window, {l2c} were bought back at a higher price.",
+           f"Over the last two years the five rules made between {min(l2r)}% and {max(l2r)}%, against {vs_hold['last2']['total_return_pct']}% for holding SPY. All five reacted to the same two sell-offs (March to May 2025 and March to April 2026), so their exits are not separate tests: the headline rule alone left the market {len(H['last2_spells'])} times in that window and bought back higher in {H['last2_cost']} of them.",
+           f"The daily rule's result hangs on which close the switch lands on. It left the market {H['count']} times and {H['round_trips_of_10_sessions_or_fewer']} of those round trips lasted 10 sessions or fewer. Filled one session later, the very same rule made {fill_day['full_cagr_pct']}% a year (worst fall {fill_day['full_max_dd_pct']}%) and {fill_day['last2_total_return_pct']}% over the last two years, against {f0['cagr_pct']}%, {f0['max_dd_pct']}% and {variants[0]['last2']['total_return_pct']}%. Read its figures as rough.",
            f"The 3-day wait has the best numbers of the four long-history rules, but it is being picked out after seeing the results, and 3 days is one untested choice. It was slower in the fast falls: {v3['stress'].get('2008 crash')}% in the 2008 crash and {v3['stress'].get('2020 crash')}% in the 2020 crash, against {variants[0]['stress'].get('2008 crash')}% and {variants[0]['stress'].get('2020 crash')}% for the headline rule.",
            "A switch fills one session after the signal, at the close. In a fast fall much of the damage is done before the rule can act, and it usually buys back above where it sold.",
            f"Breadth here is {int(counted.iloc[i])} sector funds today but only 9 before {joined['XLRE']} (the real-estate fund is counted from then, the communications fund from {joined['XLC']}). It is a coarse reading of breadth, chosen because it has a long history with no hindsight.",

@@ -25,10 +25,10 @@ def make(S0, S, HEAD):
     s2h, s2slow, s2mo, s2only = var(s2, "trend_and_breadth"), var(s2, "trend_and_breadth_3day"), var(s2, "trend_monthly"), var(s2, "trend_only")
     o2, o2s = s2["extras"]["outs"]["trend_and_breadth"], s2["extras"]["outs"]["trend_and_breadth_3day"]
     s3h, s3c = var(s3, "dm_spy_qqq"), var(s3, "dm_classic"); tl = s3["extras"]["timing_luck"]; bv3 = s3["extras"]["by_variant"]["dm_spy_qqq"]
-    last3 = o2s["spells"][-1]
+    last3 = o2s["spells"][-1]; fd = s2["extras"]["fill_one_session_later"]
     luck = [tl["month_end_run"]["full_cagr_pct"]] + [r["full_cagr_pct"] for r in tl["runs"]]; luck2 = [tl["month_end_run"]["last2_total_return_pct"]] + [r["last2_total_return_pct"] for r in tl["runs"]]
     s4r, s4d, s4v = var(s4, "sectors_equal_risk"), var(s4, "sectors_equal_dollar"), var(s4, "spy_vol_target_15"); lw = s4["extras"]["baskets"]["leaders"]
-    s4lr, s4ld = var(s4, "leaders_equal_risk"), var(s4, "leaders_equal_dollar")
+    s4lr, s4ld = var(s4, "leaders_equal_risk"), var(s4, "leaders_equal_dollar"); b15 = s4["extras"]["spy_vol_target"]["15"]
     x5 = s5["extras"]["entry_experiment"]; r5 = {r["method"]: r for r in x5["tables"]["all"] if r["asset"] == "SPY" and r["horizon"] == 252}
     s5t, s5o = var(s5, "reenter_in_thirds"), var(s5, "reenter_at_once")
     put, bxm, bxy = var(M, "put_measured"), var(M, "bxm_measured"), var(M, "bxy_measured"); x6 = s6["extras"]["entry_experiment"]["full"]["methods"]; cs = s6["extras"]["contract_size_today"]
@@ -40,7 +40,7 @@ def make(S0, S, HEAD):
     T = {"best_fit_keys": ["s1_core_satellite", "s2_trend_core"]}
 
     T["lead"] = (f"<b>The calls were not the problem. The default was.</b> Over the last two years the allocation tool's own ladder kept {L2(lad)['avg_stock_pct']:.0f}% of the money in stocks on average while SPY made {P(L2(spy)['total_return_pct'])}. "
-                 f"The ladder made {P(L2(lad)['total_return_pct'])}. Its timing was good — it beat a flat {flat['flat_share_pct']:.0f}% holding by {pts(timing)} points — but being that light cost {share_cost:.0f} points against simply holding the index. "
+                 f"The ladder made {P(L2(lad)['total_return_pct'])}: {left:.0f} points behind. Its timing was not the reason. The timing was good — worth {pts(timing)} points over simply holding that same {flat['flat_share_pct']:.0f}% the whole way. Being that light is what cost: {share_cost:.0f} points against holding the index. "
                  f"So the fix is not better timing. It is changing where money sits when there is no trade on: in an index core, not in cash.")
     T["sub"] = ("Educational research for your own decision process, on our own daily bars from 3 Jan 2005 to 5 Oct 2026 (dividends added back, trading costs charged, every rule acting one day after its signal). "
                 "It presents structures and evidence, not orders: I am not a licensed adviser and nothing here sizes a real position. The ladder figures are the tool's template replayed, not your account.")
@@ -114,6 +114,7 @@ def make(S0, S, HEAD):
                       "<li><b>Breadth:</b> the test used sector funds so it could run 21 years. Over the last two years our own served-company breadth gave a similar answer (the last row of the table).</li></ul>"),
             "wrong": (f"<ul><li>The three-close wait was one of five versions set before the test, but it is still the best of five. Expect less from it than the table shows.</li>"
                       f"<li>Trend rules have had a poor run since 2009 because falls have been short and sharp. April 2025 is the example: out near the low, back in {P(o2['worst_whipsaw']['spy_change_pct'])} higher.</li>"
+                      f"<li>The daily version hangs on one day's timing: with every switch filled one session later the same rule made {P(fd['full_cagr_pct'])} a year and {P(fd['last2_total_return_pct'])} over the last two years, not {P(F(s2h)['cagr_pct'])} and {P(L2(s2h)['total_return_pct'])}. Read its figures as rough; the slow version moves far less often.</li>"
                       "<li>No taxes are counted. Every exit from a winning position would realise a gain.</li></ul>")},
         "s3_dual_momentum": {"lit": "dual-momentum",
             "verdict": (f"<b>The best numbers on the page, for the least work — and the least trustworthy.</b> Holding whichever of SPY and QQQ was stronger over the past year, or bonds when even that trailed Treasury bills, made {P(F(s3h)['cagr_pct'])} a year with a worst fall of {Fl(F(s3h)['max_dd_pct'])}, "
@@ -121,18 +122,18 @@ def make(S0, S, HEAD):
             "tools": ("<ul><li><b>Where it could help:</b> as a once-a-month check on what the core holds (SPY, QQQ, equal-weight, small caps) — not as the whole plan.</li>"
                       "<li><b>What the tool lacks for it:</b> a one-year return for each index (nothing longer than 63 sessions is computed today) and a Treasury-bill yardstick (the chart API carries the 3-month yield).</li>"
                       "<li><b>A conflict to settle first:</b> the tool's sector step pays more to oversold sectors. Momentum pays more to the strongest. Both cannot steer the same money.</li></ul>"),
-            "wrong": (f"<ul><li><b>Timing luck:</b> the same rule read on a different day of the month made {P(min(luck))} to {P(max(luck))} a year, and {P(min(luck2))} to {P(max(luck2))} over the last two years.</li>"
+            "wrong": (f"<ul><li><b>Timing luck:</b> the same rule read every 21 sessions, starting on a different day, made {P(min(luck))} to {P(max(luck))} a year, and {P(min(luck2))} to {P(max(luck2))} over the last two years.</li>"
                       f"<li>Its exit is slow: it waits for a whole year's return to fall behind cash. It fell {Fl(s3h['stress'].get('2020 crash'))} in the 2020 crash and {Fl(s3h['stress'].get('2022 bear'))} in the 2022 bear market.</li>"
-                      "<li>“Bonds” was not a safe place in 2022, when shares and bonds fell together.</li><li>One overseas fund's 2005 share split is unadjusted in our stored prices; the test corrects it in memory (see page specs).</li></ul>")},
+                      "<li>“Bonds” was not a safe place in 2022, when shares and bonds fell together.</li><li>The published version rests on a repaired price series: the overseas fund's 2005 share split was unadjusted in our stored prices (see page specs).</li></ul>")},
         "s4_vol_sizing": {"lit": "volatility-targeted-sizing",
             "verdict": (f"<b>A sizing rule, not a structure — and it changes the ride more than the result.</b> Across the sector funds, equal risk made {P(F(s4r)['cagr_pct'])} a year against {P(F(s4d)['cagr_pct'])} for equal money, with a slightly smaller worst fall ({Fl(F(s4r)['max_dd_pct'])} against {Fl(F(s4d)['max_dd_pct'])}). "
                         f"Where it bites is single stocks: on today's leaders it would hold {lw['largest']['equal_risk_pct']:.0f}% in {esc(lw['largest']['sym'])} and {lw['smallest']['equal_risk_pct']:.0f}% in {esc(lw['smallest']['sym'])}, where equal money gives each {lw['largest']['equal_dollar_pct']:.0f}%. "
-                        f"Holding SPY at a steady risk level made {P(F(s4v)['cagr_pct'])} a year with a worst fall of {Fl(F(s4v)['max_dd_pct'])} and {F(s4v)['avg_stock_pct']:.0f}% in stocks on average."),
+                        f"Sizing SPY to aim at a 15% yearly swing, never above 100%, made {P(F(s4v)['cagr_pct'])} a year with a worst fall of {Fl(F(s4v)['max_dd_pct'])} and {F(s4v)['avg_stock_pct']:.0f}% in stocks on average."),
             "tools": ("<ul><li><b>Where it goes:</b> the allocation tool's step 6, “the picks and their %”. Today a pick's weight is washed-out reading × regime fit × cheapness, with nothing for how jumpy the name is. Your own default in the PA5 brief — more weight to less risky names — is not in the code yet.</li>"
                       "<li><b>What it needs:</b> each name's recent daily swing. Daily bars for all served names are already on the chart API; nothing computes the swing today.</li>"
                       "<li><b>The portfolio-level cousin:</b> STRETCH's VIX reading (the VIX against its own 60-session normal).</li></ul>"),
             "wrong": (f"<ul><li>The leaders rows are hindsight, and there equal risk made LESS than equal money ({P(F(s4lr)['cagr_pct'])} against {P(F(s4ld)['cagr_pct'])} a year) because it held less of the jumpiest winners. Sizing by risk caps the pain and the windfall alike.</li>"
-                      "<li>The steady-risk version cuts after the market turns jumpy, which is usually after the first leg down, and adds back late.</li></ul>")},
+                      f"<li>The risk-level version cuts after the market turns jumpy, which is usually after the first leg down, and adds back late. It does not deliver a steady level either: capped at 100%, its own yearly swing came out at {b15['realised_yearly_vol_full_pct']}%, not 15%.</li></ul>")},
         "s5_level_scaling": {"lit": "level-based-scaling-in",
             "verdict": (f"<b>Buying at levels is cheap insurance — as long as the levels are near.</b> Across {r5['M1']['starts']} monthly starts since 2005, putting money into SPY in thirds at the 21-day and 50-day averages ended a year later {side(r5['M3']['mean_gap_pts'])} buying it all at once on average. "
                         f"Waiting with everything for the 50-day ended {side(r5['M5']['mean_gap_pts'])} it. Buying in thirds by the calendar was the worst of the lot, {side(r5['M2']['mean_gap_pts'])} it. Buying at once still won on average; waiting at a near level simply did not cost much, because the 21-day and 50-day come back often."),
@@ -142,6 +143,7 @@ def make(S0, S, HEAD):
                       "<li><b>Fundamentals overrule:</b> a broken growth story cancels the plan whatever the chart says.</li></ul>"),
             "wrong": ("<ul><li>These are index funds. A single stock can run from a level and not return for a year; the deadline matters far more there, and that was not tested.</li>"
                       f"<li>On the comparison table this structure's row is the trend rule re-entered in thirds ({P(F(s5t)['cagr_pct'])} a year) against re-entered at once ({P(F(s5o)['cagr_pct'])}). After a real break the market tends to run, so thirds bought back less.</li>"
+                      f"<li>Over the last two years thirds and at-once finished almost level ({P(L2(s5t)['total_return_pct'])} and {P(L2(s5o)['total_return_pct'])}). That gap is noise: it flips with small changes in how the rule is read.</li>"
                       "<li>Ten breakouts in two years is too few to judge buying the retest of a broken line.</li></ul>")},
         "s6_paid_to_wait": {"lit": ["paid-to-wait-options", "ibkr-options-mechanics"],
             "verdict": (f"<b>In plain words:</b> you sell someone the right to make you buy SPY at a price below today's (a cash-secured put — the cash to buy is set aside). You are paid a premium now. If SPY is above that price at the end of the month you keep the premium and repeat. If it is below, you buy at your price, however far it has fallen. "
@@ -187,13 +189,18 @@ def make(S0, S, HEAD):
         "<li><b>Dividends:</b> added back on the ex-date [the first day a buyer no longer receives the dividend] from the Hub's dividends table, so every return is a total return.</li>"
         "<li><b>Cash:</b> earns the 3-month Treasury bill yield from the chart API, day by day.</li>"
         "<li><b>No hindsight in the rules:</b> a rule reads only what was known at a close and its orders fill at the next session's close.</li>"
-        "<li><b>Costs:</b> 5 hundredths of a percent of every amount traded for funds, 10 for single stocks. No taxes, no leverage, no shorting.</li>"
+        "<li><b>Costs:</b> 5 hundredths of a percent of every amount traded for funds, 10 for single stocks. No taxes, no leverage, no shorting. The one-off cost of the very first purchase is left out of every return.</li>"
         "<li><b>Cash by default</b> is the allocation tool's July heat ladder as HEAT1 replayed it (20 of 21 voters, default weights), applied to SPY with the rest in bills. It is the template's answer, not a record of your account.</li>"
         "<li><b>AI leaders</b> are the Hub's Magnificent 7 cohort plus the AI names the Lab has reviewed lines for (NVDA, MSFT, AAPL, GOOGL, AMZN, META, TSLA, AVGO, MU, VST, BE, NBIS, CRWV). The list was chosen today, so every row that uses it carries hindsight and says so.</li>"
-        "<li><b>Structure 6:</b> the measured rows are Cboe's public daily index histories (PUT, BXM, BXY), measured with this study's own yardsticks. Our own option figures are Black-Scholes prices with the VIX as the volatility input; they are a model and run too rich against the measured indexes.</li></ul>"
-        "<h3>Found in our data, not changed</h3><ul>"
-        "<li>EFA's 3-for-1 share split of 9 Jun 2005 is not adjusted in the stored bars (a 66% one-day “fall”). Only the published-form dual momentum uses EFA; that test corrects it in memory.</li>"
-        "<li>SMH before December 2011 was a different vehicle (a HOLDRS trust) with irregular payouts. XLRE has seven sessions with no bar in its first months. AGG has no dividend history in our table, so bonds here are IEF.</li></ul>"
+        "<li><b>Structure 6:</b> the measured rows are Cboe's public daily index histories (PUT, BXM, BXY), measured with this study's own yardsticks. Our own option figures are Black-Scholes prices with the VIX as the volatility input; they are a model and run too rich against the measured indexes.</li>"
+        "<li><b>A year</b> in every yearly rate is 252 trading sessions. By the calendar the 21 years are 21.75 against 21.71 counted this way, so each yearly rate here is about 0.02 points high at 10% a year. Total returns are exact.</li>"
+        "<li><b>The first and last columns of any year-by-year figure are part years:</b> 2005 runs from 3 Jan, 2026 stops on 5 Oct.</li></ul>"
+        "<h3>Faults found in the stored data, repaired on this study's own copy</h3>"
+        "<p>The provider's bars and the Hub's dividend table were not touched. Each repair below is made by the download script on the study's copy and is proved by a number.</p>" + "{CORRECTIONS}" +
+        "<h3>Found and left as it is</h3><ul>"
+        "<li>SMH before December 2011 was a different vehicle (a HOLDRS trust) that passed its companies' dividends straight through. Besides being in old-share dollars (repaired above), the stored payout list looks incomplete for 2010–2011, so SMH's return before 2012 is probably a little understated. Nothing in the last two years is affected.</li>"
+        "<li>RSP's close on 24 Aug 2015 (the flash-crash morning) is 12% down on a day SPY fell 4%, and reverses the next day. No structure here trades RSP, so it changes nothing.</li>"
+        "<li>AGG has no dividend history in our table, so “bonds” here are IEF (7–10 year Treasuries).</li></ul>"
         "<h3>What was not done</h3><ul>"
         "<li>Reviewed lines were not back-tested: they were drawn this autumn with all history in view. The knockout was not back-tested: it keeps no history.</li>"
         "<li>No taxes, no intraday fills, no single-stock entry experiment, no option chains.</li>"

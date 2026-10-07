@@ -26,6 +26,9 @@ def s1(S):
         tr(["<b>What sending a sold position back to the index, not to cash, was worth</b>", f'<b>{pts(g["full_cagr_pts"])} points a year</b>', f'<b>{pts(g["last2_total_return_pts"])} points in total</b>'], "hl")])
     b = tbl(["same rule, other settings (sector stand-in)", "return a year 2005–2026", "worst fall", "last 2 years"], [
         tr([f'{x["budget_pct"]}% satellite · sold under its {esc(x["exit_average_plain"]).split(" (")[0]}', cell(x["full_cagr_pct"]), cell(x["full_max_dd_pct"], signed=False), cell(x["last2_total_return_pct"])], "hl" if x.get("is_headline") else "") for x in e["sensitivity"]])
+    behind = sum(1 for x in e["sensitivity"] if x["full_cagr_minus_spy_pts"] < 0)
+    a += '<p class="cap">The last-two-years column counts positions opened and closed inside those two years.</p>'
+    b += f'<p class="cap">In the 21-day rows only the selling line changes; a new pick is still judged on its 50-day average, as the rule is written. {behind} of the {len(e["sensitivity"])} settings finished behind buy-and-hold SPY over 2005–2026.</p>'
     return f'<div class="two"><div>{a}</div><div>{b}</div></div>'
 
 
@@ -41,7 +44,7 @@ def s2(S, S0):
         o = e["outs"].get(v["key"]);
         if not o: continue
         w, b = o.get("worst_whipsaw") or {}, o.get("biggest_save") or {}
-        rows.append(tr([esc(v["label"].split(":")[0]), f'{o["count"]}', f'{o["saved"]} / {o["cost"]}', f'{o.get("round_trips_of_10_sessions_or_fewer", "—")}', f'{o.get("sessions_out_pct", "—")}%',
+        rows.append(tr([esc(v["label"].split(":")[0]), f'{o["count"]}', f'{o["saved"]} / {o["cost"]}', f'{o.get("round_trips_of_10_sessions_or_fewer", "—")}', (f'{o["sessions_out_pct"]}%' if o.get("sessions_out_pct") is not None else f'{o.get("last2_sessions_out_pct", "—")}% <span class=src>(2 years)</span>'),
                         (f'{dmy(b["out"])} → {dmy(b["back_in"])}: SPY {pct(b["spy_change_pct"])}' if b else "—"), (f'{dmy(w["out"])} → {dmy(w["back_in"])}: SPY {pct(w["spy_change_pct"])}' if w else "—")], "hl" if v is h else ""))
     t = tbl(["version", "times it left<br>the market", "saved money /<br>cost money", "back within<br>10 sessions", "share of days<br>in cash", "its best exit (SPY while it was out)", "its worst exit (SPY while it was out)"], rows, 1100)
     bt = e["breadth_today"]
@@ -58,7 +61,7 @@ def s3(S):
     hold = "<p class='cap'>Share of days in each fund, 2005–2026: " + " · ".join(f"{esc(k)} {v:.0f}%" for k, v in sh.items()) + f'. Switches: {bv[h]["switches_full"]} in the whole period, about {bv[h]["switches_per_year_full"]:.1f} a year.</p>'
     rows = [tr([f'look on the month\'s last day (the main version)', cell(tl["month_end_run"]["full_cagr_pct"]), cell(tl["month_end_run"]["full_max_dd_pct"], signed=False), cell(tl["month_end_run"]["last2_total_return_pct"])], "hl")]
     rows += [tr([f'look every 21 sessions, starting {x["offset_sessions"]} sessions later', cell(x["full_cagr_pct"]), cell(x["full_max_dd_pct"], signed=False), cell(x["last2_total_return_pct"])]) for x in tl["runs"]]
-    b = tbl(["same rule, a different day of the month", "return a year 2005–2026", "worst fall", "last 2 years"], rows, 620)
+    b = tbl(["same rule, read on a different day", "return a year 2005–2026", "worst fall", "last 2 years"], rows, 620)
     return f'<div class="two"><div>{a}{hold}</div><div>{b}</div></div>'
 
 
@@ -67,9 +70,9 @@ def s4(S):
     a = tbl(["today's leaders, sized by jumpiness", "how jumpy (yearly swing)", "equal risk", "equal money"], [tr([esc(x["sym"]), f'{x["vol_63d_yearly_pct"]:.0f}%', f'<b>{x["equal_risk_pct"]:.1f}%</b>', f'{x["equal_dollar_pct"]:.1f}%']) for x in lw], 520)
     v15 = e["spy_vol_target"]["15"]; hs = v15["held_share"]
     rows = [tr([f'{dmy(p["peak"])} → {dmy(p["trough"])} (SPY {pct(p["depth_pct"], signed=False)})', f'{p["held_at_peak_pct"]:.0f}% → {p["held_at_trough_pct"]:.0f}%', f'{p["average_held_share_pct"]:.0f}%',
-                f'{dmy(p["first_cut_filled"])} — SPY already {pct(p["spy_already_down_at_first_cut_pct"], signed=False)} off its high' if p.get("first_cut_filled") else "never cut"]) for p in v15["pullbacks_last2"]]
-    b = tbl(["SPY at a steady 15% risk level — the last two years' pullbacks", "share in SPY, top → low", "average share", "first cut"], rows, 620)
-    cap = (f'<p class="cap">Over 2005–2026 the steady-risk version sat at 100% in SPY on {hs["full"]["at_100_pct_of_sessions"]:.0f}% of days, under 75% on {hs["full"]["under_75_pct_of_sessions"]:.0f}% and under 50% on {hs["full"]["under_50_pct_of_sessions"]:.0f}%. '
+                f'{dmy(p["first_cut_filled"])} — SPY already {pct(p["spy_already_down_at_first_cut_pct"], signed=False)} off its high' if p.get("first_cut_filled") else ("no cut before the low; first sale came after it, down to " + f'{p["lowest_share_through_rebound_pct"]:.0f}% on {dmy(p["lowest_share_date"])}' if p.get("sells_in_10_sessions_after_trough") else "never cut")]) for p in v15["pullbacks_last2"]]
+    b = tbl(["SPY sized to aim at 15% yearly risk — the last two years' pullbacks", "share in SPY, top → low", "average share", "first cut"], rows, 620)
+    cap = (f'<p class="cap">Over 2005–2026 the 15% version sat at 100% in SPY on {hs["full"]["at_100_pct_of_sessions"]:.0f}% of days, under 75% on {hs["full"]["under_75_pct_of_sessions"]:.0f}% and under 50% on {hs["full"]["under_50_pct_of_sessions"]:.0f}%. '
            f'It cuts AFTER the market has turned jumpy, which is usually after the first leg down.</p>')
     return f'<div class="two"><div>{a}</div><div>{b}{cap}</div></div>'
 
@@ -159,13 +162,24 @@ def checks(S0, S, LIT):
     yc = S0["spy_year_check"]; out.append("<li>SPY's calendar-year total return built from our bars plus our dividend table, against the published figure: " + " · ".join(f'{r["year"]} {pct(r["ours"])} vs {pct(r["published"])}' for r in yc) + f'. Largest gap {max(abs(r["gap"]) for r in yc):.1f} points.</li>')
     Vf = J("verification.json")
     if Vf:
-        for v in Vf["structures"]: out.append(f'<li>{esc(v["name"])}: {esc(v["verdict"])}</li>')
-        out.append(f'<li>The shared library: {esc(Vf["lib"])}</li>')
+        out.append(f'<li><b>Independent re-builds, {esc(Vf["earlier"]["when"])}:</b> {esc(Vf["earlier"]["how"])}<ul>' + "".join(f'<li>{esc(v["name"])}: {esc(v["verdict"])}</li>' for v in Vf["earlier"]["structures"]) + f'<li>The shared library: {esc(Vf["earlier"]["lib"])}</li></ul></li>')
+        out.append(f'<li><b>After the data repairs, {esc(Vf["rerun"]["when"])}:</b> {esc(Vf["rerun"]["what"])}</li>')
+    Vi = J("verify_independent.json")
+    if Vi:
+        n = len(Vi["comparisons"]); bad = Vi["outside_tolerance"]
+        out.append(f'<li><b>A second from-scratch re-computation on the repaired data</b> (tools/verify_independent.py — its own accounting, none of the study\'s simulator): buy-and-hold SPY and QQQ, the three trend rules, dual momentum, the ladder and the ladder with a 60% floor. '
+                   f'{n} figures compared with the files, {"every one agrees to the printed digit" if bad == 0 else str(bad) + " OUTSIDE TOLERANCE"}.</li>')
     M = J("s6b_cboe_measured.json")
     if M:
         p = var(M, "put_measured")["years"]; out.append("<li>Cboe PUT index calendar years as read from Cboe's file: " + " · ".join(f"{y} {pct(p[y])}" for y in ["2008", "2009", "2018", "2020", "2021", "2022", "2023"] if y in p) + ".</li>")
     C = J("s7_combined.json")
     if C: out.append(f'<li>A second, from-scratch core + satellite (in s7_combined.py) against structure 1\'s headline: {"agrees on every number" if C["extras"]["check_against_structure_1"]["agree"] else "DISAGREES"}.</li>')
     lit = LIT.get("literature", []); n = sum(len((x.get("check") or {}).get("findings") or []) for x in lit); ok = sum(1 for x in lit for f in ((x.get("check") or {}).get("findings") or []) if f["status"] in ("verified", "corrected"))
-    if n: out.append(f"<li>Public literature: {n} findings from the researchers went to an independent fact-checker who re-opened every source; {ok} survived (verified or corrected) and are the only ones printed. {n - ok} were dropped as unverifiable or wrong.</li>")
+    if n: out.append(f"<li>Public literature: {n} findings from the researchers went to an independent fact-checker who re-opened the sources; {ok} survived (verified, or corrected to what the source says) and are the only ones printed. {n - ok} were dropped as unverifiable or wrong.</li>")
     out.append("</ul>"); return "".join(out)
+
+
+def corrections():
+    """The repairs made to the study's own copy of the data, straight from data/corrections.json."""
+    C = J("corrections.json") or []
+    return "<ul>" + "".join(f'<li><b>{esc(c["symbol"])}:</b> {esc(c["what"])}. Evidence: {esc(c["evidence"])}. Repair: {esc(c["repair"])}.</li>' for c in C) + "</ul>"

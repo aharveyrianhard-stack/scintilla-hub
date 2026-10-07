@@ -66,8 +66,8 @@ SPEC = [("sectors_equal_risk", "Sector funds, equal risk (calm sectors get more 
         ("sectors_equal_dollar", "Sector funds, equal money in each", "the same sector funds with the same amount in each (1/N), reset at each month end, always fully invested"),
         ("leaders_equal_risk", "Today's leading stocks, equal risk (hindsight basket)", "weighted by 1 ÷ jumpiness over the last 63 sessions, reset at each month end, always fully invested. " + HINDSIGHT),
         ("leaders_equal_dollar", "Today's leading stocks, equal money in each (hindsight basket)", "the same amount in each stock (1/N), reset at each month end, always fully invested. " + HINDSIGHT),
-        ("spy_vol_target_15", "SPY held at a steady 15% risk level, rest in cash", "SPY share = 15% ÷ SPY's yearly jumpiness over the last 20 sessions, capped at 100%; an order only when the wanted share is 10 points or more from the held share"),
-        ("spy_vol_target_12", "SPY held at a steady 12% risk level, rest in cash", "SPY share = 12% ÷ SPY's yearly jumpiness over the last 20 sessions, capped at 100%; an order only when the wanted share is 10 points or more from the held share")]
+        ("spy_vol_target_15", "SPY sized to aim at 15% yearly risk (never above 100%), rest in cash", "SPY share = 15% ÷ SPY's yearly jumpiness over the last 20 sessions, capped at 100%; an order only when the wanted share is 10 points or more from the held share"),
+        ("spy_vol_target_12", "SPY sized to aim at 12% yearly risk (never above 100%), rest in cash", "SPY share = 12% ÷ SPY's yearly jumpiness over the last 20 sessions, capped at 100%; an order only when the wanted share is 10 points or more from the held share")]
 variants = [dict(L.report(sims[k], D, label, note), key=k) for k, label, note in SPEC]; V = {v["key"]: v for v in variants}
 
 
@@ -100,8 +100,9 @@ def basket_extras(basket):
 
 
 # ---------------------------------------------------------------- extras, part B: how much SPY the rule held, and when
-def share_stats(x):
-    return {"sessions": int(len(x)), "average_share_pct": pct(x.mean()), "at_100_pct_of_sessions": pct((x >= 0.995).mean()),
+def share_stats(x, full=0.995):
+    """`full` = the share that counts as 'at 100%': 99.5% for the share actually HELD (orders under a quarter-point are skipped), exactly 100% for the share the formula WANTS (it is capped there)."""
+    return {"sessions": int(len(x)), "average_share_pct": pct(x.mean()), "at_100_pct_of_sessions": pct((x >= full).mean()),
             "under_75_pct_of_sessions": pct((x < 0.75).mean()), "under_50_pct_of_sessions": pct((x < 0.50).mean()), "lowest_share_pct": pct(x.min())}
 
 
@@ -122,7 +123,7 @@ def spy_extras(tgt):
     f = V[f"spy_vol_target_{tgt}"]["full"]
     return {"target_yearly_vol_pct": tgt, "realised_yearly_vol_full_pct": f["vol_pct"], "wanted_share_now_pct": pct(w.iat[-1]), "held_share_now_pct": pct(held.iloc[-1]),
             "held_share": {"full": share_stats(held.loc[L.FULL[0]:L.FULL[1]]), "last2": share_stats(held.loc[L.LAST2[0]:L.LAST2[1]])},
-            "wanted_share": {"full": share_stats(w.loc[L.FULL[0]:L.FULL[1]]), "last2": share_stats(w.loc[L.LAST2[0]:L.LAST2[1]])},
+            "wanted_share": {"full": share_stats(w.loc[L.FULL[0]:L.FULL[1]], 1.0 - 1e-12), "last2": share_stats(w.loc[L.LAST2[0]:L.LAST2[1]], 1.0 - 1e-12)},
             "pullbacks_last2": pbs}
 
 
@@ -193,10 +194,9 @@ caveats = [
     f"The 10-point no-trade band means the held share can sit up to 10 points away from the wanted share for long stretches: over the full window the 15% formula wanted 100% on {b15['wanted_share']['full']['at_100_pct_of_sessions']}% of sessions but the portfolio was at 100% on {b15['held_share']['full']['at_100_pct_of_sessions']}%. That idle sliver of cash is part of the result: letting the 15% rule always step up to 100% when the formula says so would have made {bs15[1]['full_cagr_pct']}% a year instead of {bs15[0]['full_cagr_pct']}%, and {bs15[1]['last2_total_return_pct']}% instead of {bs15[0]['last2_total_return_pct']}% over the last two years.",
     f"The 15% and 12% targets, the 20- and 63-session windows and the 10-point band are the brief's round numbers. Nothing was tuned, but other choices would give different results, and a single 22-year history has only three big falls to learn from. In the last two years the 15% rule sold on the way down in only {ncut} of the {len(b15['pullbacks_last2'])} SPY pullbacks of 5% or more, so the recent scorecard rests on very few events.",
     "The sector funds changed shape during the test: real estate was carved out of financials in 2016 and communications was built partly from technology and consumer discretionary in 2018, so the basket of 2005 is not the basket of today.",
-    f"A data blemish: XLF's price series falls {abs(flag['our_one_day_return_pct'])}% on {flag['date']}, the day the real-estate fund was spun out of it, while SPY moved {flag['spy_same_day_pct']}%. That looks like a spin-off the source prices only partly adjust for. It takes about {abs(flag['one_off_hit_to_basket_pct']['equal_risk'])}% off the equal-risk sector basket and {abs(flag['one_off_hit_to_basket_pct']['equal_dollar'])}% off the equal-money one, once; too small to change any conclusion.",
     "No taxes are counted. Monthly resets and the Part B orders would create taxable sales in a normal account."]
 
-out = {"structure": "s4_vol_sizing", "title": "Size by jumpiness: equal risk across holdings, and SPY held at a steady risk level",
+out = {"structure": "s4_vol_sizing", "title": "Size by jumpiness: equal risk across holdings, and SPY sized to aim at a risk level",
        "rule_plain": rule_plain, "variants": variants, "extras": extras, "caveats": caveats}
 
 

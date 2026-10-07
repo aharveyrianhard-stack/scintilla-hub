@@ -148,6 +148,7 @@ def structure_section(k, extra_html=""):
             f'<details><summary>THE EXACT RULE TESTED</summary><ul>{"".join("<li>" + esc(r) + "</li>" for r in sj["rule_plain"])}</ul><ul>{"".join("<li>" + esc(r) + "</li>" for r in sj.get("caveats", []))}</ul></details></section>')
 
 TEXT["read_after"] = TEXT["read_after"].replace("{S7_TABLE}", X.s7_table(S0))
+TEXT["specs"] = TEXT["specs"].replace("{CORRECTIONS}", X.corrections())
 page = f"""<!doctype html>
 <html lang="en">
 <head>
