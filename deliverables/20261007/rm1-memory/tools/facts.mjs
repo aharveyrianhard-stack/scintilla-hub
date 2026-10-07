@@ -31,12 +31,16 @@ const vhh = passes("evidence/verify-night-reload-hub-hold.txt"), vsh = passes("e
 const chimeTxt = text("evidence/chime-experiment.txt");
 const chimeEnd = /after (\d+) minutes: the live page opened (\d+) sound channels, closed (\d+), and (\d+) are still alive; the branch opened (\d+), closed (\d+), and (\d+) are still alive/.exec(chimeTxt) || [];
 const firstAt = (d) => { const r = rows(d); return r.length ? Date.parse(r[0].at) : NaN; };
+const probeLines = text("evidence/quotes-route-probe.txt").split("\n").map((l) => /^(\d\d):(\d\d):\d\d\s+HTTP (\d+) in ([\d.]+)s/.exec(l)).filter(Boolean);
+const probe = { reads: String(probeLines.length), slow: String(probeLines.filter((m) => +m[4] > 1).length), failed: String(probeLines.filter((m) => m[3] !== "200").length),
+  until: probeLines.length ? String((+probeLines[probeLines.length - 1][1] + 20) % 24).padStart(2, "0") + ":" + probeLines[probeLines.length - 1][2] : "?" };
 const startLag = Number.isFinite(firstAt("after-hub") - firstAt("before-hub")) ? Math.round((firstAt("after-hub") - firstAt("before-hub")) / 60000) : 39;
 const facts = {
   audio: { n: am[1] || "40", cpuPct: "10–11", mbEach: "1–2", threadsEach: "1.1–1.2", aliveAfter: alive[1] || "", perDay: hb == null ? "?" : String(Math.round(hb / 1.5 * 24 / 10) * 10), lastRun: am.slice(1).join(" / ") },
   threads: { hubBeforeLast: tHB.last == null ? "?" : String(tHB.last), hubAfterFirst: tHA.first == null ? "?" : String(tHA.first), hubAfterLast: tHA.last == null ? "?" : String(tHA.last), hubcoBeforeLast: tCB.last == null ? "?" : String(tCB.last), hubcoAfterLast: tCA.last == null ? "?" : String(tCA.last) },
   newsRoom: { minutes: newsEnd[1] || "?", liveKept: newsEnd[3] || "?", perHour: newsEnd[4] || "?", branchKept: newsEnd[6] || "?", livePieces0: newsRows.length ? newsRows[0][3].toLocaleString("en-US") : "?", livePieces1: newsRows.length ? newsRows[newsRows.length - 1][3].toLocaleString("en-US") : "?" },
   chime: { minutes: chimeEnd[1] || "?", liveOpened: chimeEnd[2] || "?", liveClosed: chimeEnd[3] || "?", liveAlive: chimeEnd[4] || "?", branchOpened: chimeEnd[5] || "?", branchClosed: chimeEnd[6] || "?", branchAlive: chimeEnd[7] || "?" },
+  probe,
   contexts: { hubBefore: hb == null ? "?" : String(hb), hubAfter: ha == null ? "not counted (run stopped early)" : String(ha), hubcoBefore: cb == null ? "?" : String(cb), hubcoAfter: ca == null ? "?" : String(ca) },
   news: { day1: "5,788", day2: "8,726", fav1: "1,765", fav2: "2,554", hour: "189" },
   pixel: { heldMB: "53.7", totalMB: "54.9", bigMB: "9.8", smallMB: "2.4", beforeMean: bS.length ? mean(bS.map((s) => s.heap.backingStores / 1048576)).toFixed(0) : "?", afterMean: aS.length ? mean(aS.map((s) => s.heap.backingStores / 1048576)).toFixed(0) : "?",
@@ -47,7 +51,8 @@ const facts = {
     hub: vh.ok && vho.ok ? `Run end to end with no window, the page's clock moved from 22:00 to 03:10: it reloaded once, came back in the same room, on the same list, with the same company open and the board scrolled where it was; not again that night, not in the day, once the next night (${vh.p} of ${vh.p + vh.x} checks). With ?nightreload=0: no reload.` : "NOT PROVED — see data/",
     stationShort: vs.ok && vso.ok && vsh.ok ? `${vs.p} of ${vs.p + vs.x} checks on the reload itself, ${vsh.p} of ${vsh.p + vsh.x} on waiting for full screen, and no reload with ?nightreload=0.` : "NOT PROVED",
     station: vs.ok && vso.ok ? `Run end to end with no window, the page's clock moved from 22:00 to 03:10: it reloaded once, came back on the same scene, timeframe, chart count and feed, with the expanded chart expanded again, the video list scrolled where it was and the X pane mounted again; not again that night, not in the day, once the next night (${vs.p} of ${vs.p + vs.x} checks). With ?nightreload=0: no reload.` : "NOT PROVED — see data/" },
-  sha: { hubBranch: "hub/rm1-memory-20261007", hub: git(W + "/hub-rm1-memory-20261007", "rev-parse", "--short", "HEAD"), stationBranch: "station/rm1-memory-20261007", station: git(W + "/station-rm1-memory-20261007", "rev-parse", "--short", "HEAD"), hubCode: "780a3cb", stationCode: "afecf96" },
+  /* hub / station = the last commit that changed code; hubCode / stationCode = the commits the "after" soaks ran on */
+  sha: { hubBranch: "hub/rm1-memory-20261007", hub: "cc65930", stationBranch: "station/rm1-memory-20261007", station: "e577fd7", hubCode: "780a3cb", stationCode: "afecf96" },
   station: { candleMB: "21.5" }, times: { afterLag: String(startLag) },
   blocked: { summary: Object.entries(blocked).map(([k, v]) => v + " " + k).join("; ") || "none" },
   tests: JSON.parse(text("evidence/tests.json") || '{"hub":"?","station":"?"}')
