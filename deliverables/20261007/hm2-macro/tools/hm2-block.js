@@ -24,6 +24,10 @@ var HM2_ON = true;                      /* var, not const: a builder that runs b
 var HM2_PC_ON = true;                   /* the put/call tape on the dashboard, on its own switch */
 const HM2_PC_FLASH_X = 1.5;             /* Alan: a name flashes when its ratio reaches 1.5× its own usual */
 const HM2_PC_REFRESH_MS = 60000, HM2_PC_FLASH_MS = 6000;
+/* A HOST IS A REAL ELEMENT OR IT IS NOTHING. Every part below paints into an element its own HTML drew; anything
+   else (no element, or a stand-in that is not a DOM node) means the room on screen is not this one, and the part
+   neither reads nor paints. So the room's own mount and its own reads never wait on, or share a queue with, these. */
+const hm2Host = (id) => { const h = el(id); return h && h.nodeType === 1 ? h : null; };
 const hm2Fix = (v, d) => (v == null || !isFinite(+v) ? "—" : (+v).toFixed(d == null ? 2 : d));
 const hm2Sign = (v, d) => (v == null || !isFinite(+v) ? "—" : (+v > 0 ? "+" : +v < 0 ? "−" : "") + Math.abs(+v).toFixed(d == null ? 2 : d));
 const hm2Tone = (v) => (v == null || !isFinite(+v) || +v === 0 ? "" : +v > 0 ? "up" : "dn");
@@ -71,27 +75,20 @@ function hm2Buckets(from, to, z, dated) {
   return out;
 }
 function hm2TlKey(z) { const s = hm2TlSpan(z); return (S.econCty || "US") + "|" + z + "|" + s.from + "|" + s.to; }
-/* one light read per region and zoom: four columns, keyset pages (the room's own paging rule), kept until the zoom,
-   the region or the day changes; a failed read says so and asks again on the next paint after 20 seconds */
+/* THE SLIDER OPENS NO CALENDAR READ OF ITS OWN: it asks through ecFetchWindow, the room's one window reader (the same
+   select, the same keyset pages, the same unit rule), for its own stretch. One ask per region and zoom, kept until
+   the zoom, the region or the day changes; a failed ask says so and is made again on the next paint after 20 seconds. */
 async function hm2TlLoad(z) {
   const key = hm2TlKey(z), s = hm2TlSpan(z);
   if (HM2_TL.busy === key || (HM2_TL.key === key && HM2_TL.rows)) return;
   if (HM2_TL.failAt && Date.now() - HM2_TL.failAt < 20000) return;
   HM2_TL.busy = key;
   try {
-    const from = Math.floor(ecAnchor(s.from) - 86400), to = Math.floor(ecAnchor(s.to) + 86400), out = [];
-    let after = "", full = false;
-    for (let n = 0; n < 30; n++) {
-      if (n === 29) full = true;
-      const page = await pg("econ_calendar?select=event_ts,country,event,impact" + ecCountryFilter() +
-        "&event_ts=gte." + from + "&event_ts=lte." + to + after + "&order=event_ts.asc,country.asc,event.asc&limit=1000");
-      if (!page || !page.length) break;
-      for (const r of page) out.push(r);
-      after = ecKeysetAfter(page[page.length - 1]);
-      if (page.length < 1000) { full = false; break; }
-    }
+    const from = Math.floor(ecAnchor(s.from) - 86400), to = Math.floor(ecAnchor(s.to) + 86400);
+    const out = await ecFetchWindow(from, to);
     if (hm2TlKey(HM2_TL.z) !== key) return;                 /* the reader moved on while this was in flight */
-    HM2_TL.key = key; HM2_TL.rows = out; HM2_TL.failAt = 0; HM2_TL.trunc = full;
+    /* ecFetchWindow stops after 20 pages of 1,000: a stretch that large is said, not shown as if it were whole */
+    HM2_TL.key = key; HM2_TL.rows = out || []; HM2_TL.failAt = 0; HM2_TL.trunc = (out || []).length >= 20000;
   } catch (_) { HM2_TL.failAt = Date.now(); }
   finally { if (HM2_TL.busy === key) HM2_TL.busy = ""; }
   hm2EcTapePaint();
@@ -178,7 +175,7 @@ function hm2EcTapeHTML() {
 }
 /* the TODAY line sits at today's own place inside its bar (noon-ish for a day; the day's share of a week or a month) */
 function hm2TlPlaceToday(sc) {
-  const line = el("hm2TlToday"); if (!sc || !line) return;
+  const line = hm2Host("hm2TlToday"); if (!sc || !line) return;
   const bar = sc.querySelector(".se-tlday.is-today");
   if (!bar) { line.hidden = true; return; }
   const z = HM2_TL.z, b = bar.dataset.d, today = ecToday();
@@ -194,9 +191,9 @@ function hm2TlToToday(sc, smooth) {
   if (smooth && typeof sc.scrollTo === "function") sc.scrollTo({ left: to, behavior: "smooth" }); else sc.scrollLeft = to;
 }
 function hm2EcTapePaint() {
-  const host = el("hm2EcTape"); if (!host || !HM2_ON) return;
+  const host = hm2Host("hm2EcTape"); if (!host || !HM2_ON) return;
   if (HM2_TL.key !== hm2TlKey(HM2_TL.z) || !HM2_TL.rows) hm2TlLoad(HM2_TL.z);
-  const html = hm2EcTapeHTML(), old = el("hm2TlScroll");
+  const html = hm2EcTapeHTML(), old = hm2Host("hm2TlScroll");
   /* same stretch on screen: only the bars are swapped, so a filter chip never throws the slider back to its start */
   if (old && host.contains(old) && old.dataset.key === HM2_TL.key && typeof document !== "undefined") {
     const box = document.createElement("div"); box.innerHTML = html;
@@ -210,7 +207,7 @@ function hm2EcTapePaint() {
     }
   }
   host.innerHTML = html;
-  const sc = el("hm2TlScroll");
+  const sc = hm2Host("hm2TlScroll");
   if (sc) { hm2TlToToday(sc, false); hm2TlPlaceToday(sc); hm2TlDragArm(sc); }
 }
 function hm2TlDragArm(sc) {
@@ -292,13 +289,13 @@ function hm2CurveHTML(rows, width) {
     tile("3m10y", "y10", "m3", "the 10-year yield minus the 3-month bill, in percentage points") + "</div>" + tbl;
 }
 async function hm2CurveFill() {
-  const host = el("hm2Curve"); if (!host) return;
+  const host = hm2Host("hm2Curve"); if (!host || !HM2_ON) return;
   try {
     const rows = await pg("treasury_rates?select=*&order=date.desc&limit=270");
-    if (!el("hm2Curve")) return;
+    if (hm2Host("hm2Curve") !== host) return;
     /* a year back must be inside the read; if a short table cannot reach it, the 1Y line is simply not drawn */
     host.innerHTML = hm2CurveHTML(rows || [], host.clientWidth);
-    const h = el("hm2CurveAsOf"); if (h && rows && rows[0]) h.textContent = "as of " + rows[0].date;
+    const h = hm2Host("hm2CurveAsOf"); if (h && rows && rows[0]) h.textContent = "as of " + rows[0].date;
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">the curve could not be read</div>'; }
 }
 
@@ -370,10 +367,10 @@ function hm2AuctionsHTML(rows) {
   return html;
 }
 async function hm2AuctionsFill() {
-  const host = el("hm2Auctions"); if (!host) return;
+  const host = hm2Host("hm2Auctions"); if (!host || !HM2_ON) return;
   try {
     const rows = await pg("treasury_auctions?select=cusip,auction_date,term,reopening,closing_time_et,offering_amount,high_yield,median_yield,bid_to_cover,indirect_pct,direct_pct,dealer_pct,status&order=auction_date.desc&limit=160", 1);
-    if (!el("hm2Auctions")) return;
+    if (hm2Host("hm2Auctions") !== host) return;
     host.innerHTML = hm2AuctionsHTML(rows || []);
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">auction results are not stored yet</div>'; }
 }
@@ -425,9 +422,12 @@ function hm2StripHTML(base, rows) {
     '<span class="hm2-st__v ' + tone + '"><b>' + esc(String(last.r.actual)) + "</b> vs " + esc(String(last.r.estimate)) + "</span></div>";
 }
 async function hm2StripsFill() {
-  const host = el("hm2Strips"); if (!host) return;
+  const host = hm2Host("hm2Strips"); if (!host || !HM2_ON) return;
   try {
-    /* the named families only, both numbers present: PostgREST or() over the release names, two pages at most */
+    /* THE STRIPS' ONE READ, and the page's third calendar read (after the room's window read and the click-only
+       history behind a landed number): the eighteen named families only, both numbers present — about 900 rows in
+       one page — instead of the whole US calendar through the window reader (9,000 rows, ten pages). It is behind
+       HM2_ON, never the tape's switch, and it runs once per room mount. */
     const names = HM2_STRIPS.map((n) => "event.ilike." + encodeURIComponent(n.replace(/[(),]/g, " ") + "*")).join(",");
     let all = [], after = "";
     const seen = new Set();
@@ -439,13 +439,13 @@ async function hm2StripsFill() {
       after = page[page.length - 1].event_ts;
       if (page.length < 1000) break;
     }
-    if (!el("hm2Strips")) return;
+    if (hm2Host("hm2Strips") !== host) return;
     const by = hm2StripRows(all), have = HM2_STRIPS.filter((b) => by[b] && by[b].length >= 2);
     if (!have.length) { host.innerHTML = '<div class="sc-senttxt">no print with a consensus is stored yet</div>'; return; }
     const first = Math.min.apply(null, have.map((b) => +by[b][0].event_ts));
     host.innerHTML = have.map((b) => hm2StripHTML(b, by[b])).join("");
     host.querySelectorAll(".hm2-st__b").forEach((b) => { b.scrollLeft = b.scrollWidth; });
-    const h = el("hm2StripsSince"); if (h) h.textContent = "since " + HM2_MON[+ecDateKey(first).slice(5, 7) - 1].toUpperCase() + " " + ecDateKey(first).slice(0, 4);
+    const h = hm2Host("hm2StripsSince"); if (h) h.textContent = "since " + HM2_MON[+ecDateKey(first).slice(5, 7) - 1].toUpperCase() + " " + ecDateKey(first).slice(0, 4);
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">the prints could not be read</div>'; }
 }
 
@@ -501,11 +501,12 @@ async function hm2PcNames() {
   HM2_PC.names = s; return s;
 }
 async function hm2PcFill() {
-  const host = el("hm2PcStrip"); if (!host || !HM2_ON || !HM2_PC_ON) return;
+  const host = hm2Host("hm2PcStrip"); if (!host || !HM2_ON || !HM2_PC_ON) return;
   let rows;
   try { rows = await pg("putcall_names_now?select=*&limit=1000", 1); } catch (_) { host.innerHTML = ""; return; }   /* not stored yet: the strip is absent, the dashboard is as it was */
-  if (!el("hm2PcStrip")) return;
+  if (hm2Host("hm2PcStrip") !== host) return;
   const list = hm2PcOrder(rows || [], await hm2PcNames());
+  if (hm2Host("hm2PcStrip") !== host) return;
   HM2_PC.rows = list; HM2_PC.at = Date.now();
   if (!list.length) { host.innerHTML = ""; return; }
   const sig = list.map((r) => r.ticker + ":" + r.calls_x + ":" + r.puts_x).join(",");
@@ -518,7 +519,7 @@ async function hm2PcFill() {
 }
 /* the flash: every name at 1.5× or more glows on the tape's own clock, never a second animation */
 function hm2PcFlash() {
-  const host = el("hm2PcStrip"); if (!host || typeof scScint !== "function") return 0;
+  const host = hm2Host("hm2PcStrip"); if (!host || typeof scScint !== "function") return 0;
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return 0;
   const now = Date.now(); let n = 0;
   host.querySelectorAll(".hm2-pc.is-hot").forEach((node) => {
@@ -531,7 +532,7 @@ function hm2PcFlash() {
 function hm2PcArm() {
   if (HM2_PC.timer != null || typeof setInterval !== "function") return;
   HM2_PC.timer = setInterval(() => {
-    if (!el("hm2PcStrip")) return;
+    if (!hm2Host("hm2PcStrip")) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (Date.now() - HM2_PC.at >= HM2_PC_REFRESH_MS) hm2PcFill(); else hm2PcFlash();
   }, 2000);
@@ -549,10 +550,11 @@ const HM2_SPECS = '<details class="sc-pagespecs hm2-specs"><summary>PAGE SPECS</
   "<p><b>Treasury auctions.</b> An r beside a term is a reopening: more of a bond that already trades. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. STOPPED AT is the highest yield accepted. COVER is dollars bid per dollar sold. INDIRECT, DIRECT and DEALERS are each bidder class’s share of what competitive bidders were awarded. Each is compared with the average of the six auctions of the same term before it: green is more demand than usual, red less (for DEALERS a smaller share is the stronger auction). The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
   "<p><b>Macro prints.</b> econ_calendar (FMP’s economic calendar), every US print stored with a consensus, oldest on the left. Up and green is better than expected, down and red is worse; for inflation, unemployment and jobless claims a lower number is the better one. A yellow dot is a print exactly on consensus. Indicators nobody forecasts (money supply, the Fed’s balance sheet, mortgage rates) have no strip.</p>" +
   "</div></details>";
-async function hm2Mount() {
+/* called beside the room's mount and NOT awaited by it: the calendar and the rail are ready exactly when they were */
+function hm2Mount() {
   if (!HM2_ON) return;
-  hm2EcTapePaint();
-  await Promise.all([hm2CurveFill(), hm2AuctionsFill(), hm2StripsFill()]);
+  try { hm2EcTapePaint(); } catch (_) {}
+  Promise.all([hm2CurveFill(), hm2AuctionsFill(), hm2StripsFill()]).catch(() => {});
 }
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
   document.addEventListener("click", (e) => {
@@ -561,7 +563,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
     const k = a.dataset.hm2;
     if (k === "bar") { if (HM2_TL.moved) { HM2_TL.moved = false; return; } hm2TlOpen(a.dataset.d); }
     else if (k === "zoom") { if (HM2_ZOOM[a.dataset.z] && a.dataset.z !== HM2_TL.z) { HM2_TL.z = a.dataset.z; hm2EcTapePaint(); } }
-    else if (k === "now") { const sc = el("hm2TlScroll"); if (sc) hm2TlToToday(sc, true); }
+    else if (k === "now") { const sc = hm2Host("hm2TlScroll"); if (sc) hm2TlToToday(sc, true); }
     else if (k === "strip") { S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US"; S.econCat = "ALL"; S.econOpen = {}; S.econFocus = null;
       document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((x) => x.classList.toggle("on", x.dataset.s === S.econSpan)); ecLoadWindow(); }
     else if (k === "pc") { if (typeof openCo === "function") openCo(a.dataset.t); }

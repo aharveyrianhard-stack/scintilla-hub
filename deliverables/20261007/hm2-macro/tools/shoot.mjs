@@ -1,5 +1,5 @@
 // HM2 — one headless picture of one page. Never a visible window; every non-GET request is blocked and counted.
-// usage: node shoot.mjs <url> <out.jpg> [width=1680] [height=1050] [waitMs=20000] [--full] [--map=overrides.json] [--eval=file.js] [--clip=selector]
+// usage: node shoot.mjs <url> <out.jpg> [width=1680] [height=1050] [waitMs=20000] [--full] [--map=overrides.json] [--data=reads.json] [--init=file.js] [--eval=file.js] [--evalwait=ms] [--clip=selector] [--clips=name=selector;;name=selector]
 //   --map   JSON { "<host+path>": "<local file>" }  → that address is answered from the local file (the branch's page on the live address)
 //   --data  JSON { "<substring of a GET url>": "<local json file>" } → that read is answered from the local file (a table not created yet)
 import fs from "node:fs";
@@ -24,6 +24,7 @@ try {
     if (d) { served.push("data:" + d[0]); return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*", "cache-control": "no-store", "content-range": "0-0/*" }, body: fs.readFileSync(d[1]) }); }
     return route.continue();
   });
+  if (flag("init")) await context.addInitScript(fs.readFileSync(flag("init"), "utf8"));   // e.g. a browser setting the page reads at start
   const page = await context.newPage(); const errors = [];
   page.on("pageerror", (e) => errors.push(String(e.message).slice(0, 160)));
   await page.goto(url, { waitUntil: "load", timeout: 120000 });
@@ -31,9 +32,19 @@ try {
   let facts = null;
   if (flag("eval")) facts = await page.evaluate(fs.readFileSync(flag("eval"), "utf8"));
   if (flag("evalwait")) await page.waitForTimeout(+flag("evalwait"));
+  /* the whole-screen picture is taken FIRST, as the page stands after --eval; the pieces after it scroll things about */
+  if (!flag("clip")) await page.screenshot({ path: out, type: "jpeg", quality: 78, fullPage: flags.includes("--full") });
+  /* --clips=name=selector;;name=selector : several pieces of ONE page load, each saved as <out minus .jpg>-<name>.jpg */
+  const pieces = [];
+  for (const part of (flag("clips") || "").split(";;").filter(Boolean)) {
+    const i = part.indexOf("="), name = part.slice(0, i), sel = part.slice(i + 1), el = await page.$(sel);
+    if (!el) { pieces.push(name + ":NOT FOUND"); continue; }
+    await el.scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
+    await el.screenshot({ path: out.replace(/\.jpg$/, "") + "-" + name + ".jpg", type: "jpeg", quality: 84 }); pieces.push(name);
+  }
+  if (pieces.length) console.log("pieces: " + pieces.join(", "));
   const clip = flag("clip");
   if (clip) { const el = await page.$(clip); if (!el) console.log("CLIP NOT FOUND", clip); else await el.screenshot({ path: out, type: "jpeg", quality: 80 }); }
-  else await page.screenshot({ path: out, type: "jpeg", quality: 78, fullPage: flags.includes("--full") });
   console.log(JSON.stringify({ out, w: +w, title: await page.title(), blockedNonGet: blocked, served: [...new Set(served)], pageErrors: errors, facts }));
   await context.close();
 } finally { await browser.close(); }

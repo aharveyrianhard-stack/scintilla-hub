@@ -4,8 +4,9 @@
    python3 deliverables/20261007/hm2-macro/tools/inject-hm2.py          # inject (safe to run twice)
    python3 deliverables/20261007/hm2-macro/tools/inject-hm2.py --remove # the page exactly as it was
 
-The block and its stylesheet live beside this file (hm2-block.js, hm2-style.css). Six one-line hooks connect them
-to the page; each is anchored on a line that exists once, and the script stops rather than guess when one is missing
+The block and its stylesheet live beside this file (hm2-block.js, hm2-style.css). One-line hooks connect them
+to the page (seven of them, each reading the switch as `typeof HM2_ON !== "undefined" && HM2_ON`, so a context
+that does not carry the block draws the room exactly as before); each is anchored on a line that exists once, and the script stops rather than guess when one is missing
 (a release that moved an anchor is a merge to do by hand, not something to paper over). After a merge that touches
 index.html, run --remove on the merged file, then inject again, then build-trial.py."""
 import re, sys, pathlib
@@ -24,26 +25,28 @@ BLOCK_START = block[: block.index("\n") + 1]
 OLD_CARDS = ("      '<div class=\"card\"><h4>Treasury curve</h4><div class=\"sc-senttxt\" id=\"econCurve\">—</div></div>' +\n"
              "      '<div class=\"card\" id=\"econLadder\"><h4>UST ladder</h4><div class=\"sc-senttxt\">—</div></div>' +\n")
 NEW_CARDS = ("      /* HM2 — the curve as a picture, the auctions and the surprise strips stand where the one-line curve and the\n"
-             "         UST ladder stood; with HM2_ON = false the two original cards below are what is drawn. */\n"
-             "      (HM2_ON ? hm2RailCardsHTML() :\n"
+             "         UST ladder stood; with HM2_ON = false (or the HM2 block not loaded) the two original cards below are what is drawn. */\n"
+             "      (typeof HM2_ON !== \"undefined\" && HM2_ON ? hm2RailCardsHTML() :\n"
              "      '<div class=\"card\"><h4>Treasury curve</h4><div class=\"sc-senttxt\" id=\"econCurve\">—</div></div>' +\n"
              "      '<div class=\"card\" id=\"econLadder\"><h4>UST ladder</h4><div class=\"sc-senttxt\">—</div></div>') +\n")
 HOOKS = [
     ("      /* M55 — THE ROOM CARRIES THE SAME QUEUE THE TOP TAPE CARRIES. Alan: \"this thing is telling me\n",
-     "      (HM2_ON ? '<div id=\"hm2EcTape\"></div>' : \"\") +   /* HM2 — the left-to-right slider, under the day bar as in EARNINGS */\n", "before"),
+     "      (typeof HM2_ON !== \"undefined\" && HM2_ON ? '<div id=\"hm2EcTape\"></div>' : \"\") +   /* HM2 — the left-to-right slider, under the day bar as in EARNINGS */\n", "before"),
     (OLD_CARDS, NEW_CARDS, "replace"),
     ("    \"</div></div></div>\";\n}\n/* R52b — the REGION tabs carry their counts for the day on screen, exactly as the\n",
-     "      (HM2_ON ? HM2_SPECS : \"\") +   /* HM2 — the rules, at the bottom of the rail */\n", "before"),
+     "      (typeof HM2_ON !== \"undefined\" && HM2_ON ? HM2_SPECS : \"\") +   /* HM2 — the rules, at the bottom of the rail */\n", "before"),
     ("  await Promise.all([ecLoadWindow(), fillEconRail()]);\n",
-     "  await Promise.all([ecLoadWindow(), fillEconRail(), hm2Mount()]);   /* HM2 — the curve, the auctions and the strips fill beside the rail */\n", "replace"),
+     "  try { hm2Mount(); } catch (_) {}   /* HM2 — the slider, the curve, the auctions and the strips; NOT awaited: the room's own mount never waits on them */\n", "before"),
     ("function renderEconTable() {\n",
      "  try { hm2EcTapePaint(); } catch (_) {}   /* HM2 — the slider follows every filter the table follows */\n", "after"),
     ("    (SCINT_FEED_ON ? '<div class=\"sc-scintstrip\" id=\"scintStrip\"></div>' : \"\") +\n",
-     "    (HM2_ON && HM2_PC_ON ? '<div class=\"sc-scintstrip\" id=\"hm2PcStrip\"></div>' : \"\") +   /* HM2 — the put/call tape, under TODAY'S SCINTILLAS */\n", "after"),
+     "    (typeof HM2_ON !== \"undefined\" && HM2_ON && HM2_PC_ON ? '<div class=\"sc-scintstrip\" id=\"hm2PcStrip\"></div>' : \"\") +   /* HM2 — the put/call tape, under TODAY'S SCINTILLAS */\n", "after"),
     ("    try { scintStripRender(); boardScintPass(); } catch (_) {}   /* M42 — the strip and the outlier marks on a fresh mount */\n",
      "    try { hm2PcFill(); hm2PcArm(); } catch (_) {}   /* HM2 — the put/call tape on a fresh mount */\n", "after"),
 ]
-JS_ANCHOR = "/* PORT — one room mount, two independent reads: the releases window (left) and production's rail (right). */\n"
+# The block goes just ABOVE the economic room's own module (Room 9 … Room 9b), never inside it: that module is pinned to
+# three tables, two calendar reads and no fetch (tests/economic-port, economic-review), and those stay true of it.
+JS_ANCHOR = "/* ---- Room 9 · ECONOMIC (wired: treasury_rates curve + econ_history latest prints) */\n"
 
 def remove(s):
     i = s.find(STYLE_OPEN)

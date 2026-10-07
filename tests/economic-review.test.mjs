@@ -81,7 +81,17 @@ test("(a) the kill switch: with ECON_TAPE_ON off the tape makes zero requests an
   assert.match(page, /\n    if \(ECON_TAPE_ON\) fillMacroNext\(\);/);
   /* TWO calendar reads in the page and no more: the room's window read, which the tape and the band share, and the
      two-year history behind a landed number — click-driven, and behind the same kill switch. */
-  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 2, "the shared window read, plus the click-only history");
+  /* 7 Oct (HM2): a THIRD, deliberate, and it is not the tape's. The surprise strips on the rail read the eighteen
+     named US families that carry both an actual and a consensus (about 900 rows, one page) once per room mount.
+     NEIGHBOURS, checked together: the ECONOMIC module itself still holds exactly two (economic-port pins `mod`, and
+     the HM2 block sits ABOVE Room 9, outside it); the slider opens none — it asks through ecFetchWindow, the shared
+     window reader; the tape's kill switch is untouched (the asserts around this one); and the strips' read is behind
+     its own switch, HM2_ON, and only ever paints into a real element of its own. */
+  assert.equal((page.match(/econ_calendar\?select=/g) || []).length, 3, "the shared window read, the click-only history, and the surprise strips' one read");
+  assert.equal((slice(page).match(/econ_calendar\?select=/g) || []).length, 2, "inside the room's own module: still the two");
+  assert.match(fnSrc(page, "hm2StripsFill"), /^function hm2StripsFill\(\) \{\n  const host = hm2Host\("hm2Strips"\); if \(!host \|\| !HM2_ON\) return;/, "the third read stops with ITS switch, and without its own element");
+  assert.doesNotMatch(fnSrc(page, "hm2TlLoad"), /econ_calendar\?select=/, "the slider asks through the shared window reader");
+  assert.match(fnSrc(page, "hm2TlLoad"), /await ecFetchWindow\(from, to\);/);
   assert.match(fnSrc(page, "ecHistShow"), /if \(!ECON_TAPE_ON \|\|/, "the history read stops with the flag as well");
   assert.match(fnSrc(page, "fillMacroNext"), /^function fillMacroNext\(\) \{\n  if \(!ECON_TAPE_ON\) return;/, "first statement returns while the flag is off");
   assert.equal((page.match(/^ecTapeStart\(\);/gm) || []).length, 1, "the band starts from exactly one place: boot");
