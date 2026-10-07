@@ -62,7 +62,7 @@ HEALTH_PAGE="${HEALTH_PAGE:-https://station.scintillahub.ai/x-health/}"
 LOG="${NIGHT_RELOAD_LOG:-$HOME/Library/Logs/scintilla-night-reload.log}"
 GUI="${SCINTILLA_NIGHT_RELOAD_GUI:-osascript}" # osascript | none | /path/to/a/stand-in (tests)
 
-NOTE_TEXT=""; OWN_TIMES=""; OWN_R=""; MOVED=0; T_BEGIN=0; HKEY=""; HURL=""; HKNOWN=""
+NOTE_TEXT=""; OWN_SPANS=""; OWN_R=""; MOVED=0; KEEP_NIGHT_OPEN=0; T_BEGIN=0; HKEY=""; HURL=""; HKNOWN=""
 HUB_BIDS=""; STATION_BID=""; X_BID=""; STATION_WINDOWS=0; X_WINDOWS=0; FAMILY=""
 VERBOSE=0; [ "$MODE" = run ] || VERBOSE=1
 
@@ -116,14 +116,15 @@ gui() {
 }
 own() {             # a window action of ours. The answer is left in OWN_R (NOT printed: this must run in this shell, not in a
                     # $(...) copy of it, or the times below are lost). The times are how our own key press is told from Alan's.
-  OWN_TIMES="$OWN_TIMES $(date +%s)"; OWN_R="$(gui "$@")"; OWN_TIMES="$OWN_TIMES $(date +%s)"; MOVED=1
+  local b; b="$(date +%s)"; OWN_R="$(gui "$@")"; OWN_SPANS="$OWN_SPANS $b:$(date +%s)"; MOVED=1
 }
 alan_is_back() {    # true when somebody touched the keyboard or mouse after the job began and it was not the job's own key press
   [ "$MODE" = test ] && return 1
-  local idle now last t d
+  local idle now last t
   idle="$(idle_seconds)"; now="$(date +%s)"; last=$(( now - idle ))
   [ "$last" -gt "$T_BEGIN" ] || return 1
-  for t in $OWN_TIMES; do d=$(( last - t )); [ "${d#-}" -le 3 ] && return 1; done
+  # an input that falls inside one of our own actions (one second before it began to three after it ended) is ours
+  for t in $OWN_SPANS; do [ "$last" -ge $(( ${t%%:*} - 1 )) ] && [ "$last" -le $(( ${t##*:} + 3 )) ] && return 1; done
   return 0
 }
 
@@ -235,7 +236,10 @@ reload_app() {      # $1 = bundle id, $2 = how many windows, $3 = what to call i
 }
 connect_x() {       # reload X, wait, press the shortcut in X, bring the Station forward, wait for a working report
   local r t
-  [ "$RELOAD_X" = yes ] && { reload_app "$X_BID" 1 X || return 1; }
+  XR="X not reloaded (switched off in config.env)"
+  if [ "$RELOAD_X" = yes ]; then
+    if reload_app "$X_BID" 1 X; then XR="X reloaded"; else XR="X NOT reloaded"; say "  X was not reloaded; going on to the shortcut, which is what reconnects it"; fi
+  fi
   say "  waiting ${LOAD_WAIT}s for the pages to load"; nap "$LOAD_WAIT"
   alan_is_back && { STOPPED=1; return 1; }
   own activate "$X_BID"; r="$OWN_R"; [ "$r" = ok ] || { say "  could not bring X to the front for the shortcut ($r)"; return 1; }
@@ -281,6 +285,7 @@ LOCKED="$(screen_locked)"
 if [ "$LOCKED" = yes ]; then
   say "the screen is locked (or the screen saver is up): a key press would go to the lock screen, so nothing can be reloaded safely"
   if [ "$MODE" = run ]; then last_slot && { note "nothing was reloaded because the screen stayed locked until $(clock "$WINDOW_END")."; done_for_tonight; }; finish; fi
+  [ "$MODE" = test ] && finish
 fi
 
 discover
@@ -297,7 +302,7 @@ case "$TRUSTED" in
   no-gui) say "permission: not checked (window helper switched off for this run)" ;;
   *) say "permission: MISSING - System Settings > Privacy & Security > Accessibility > switch on 'Scintilla Night Reload' ($TRUSTED)"
      if [ "$MODE" != dry-run ]; then
-       note "nothing was reloaded: 'Scintilla Night Reload' is switched off in System Settings > Privacy & Security > Accessibility."; done_for_tonight; finish
+       note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Accessibility (and under Automation, 'System Events')."; done_for_tonight; finish
      fi ;;
 esac
 
@@ -317,10 +322,10 @@ if [ "$RELOAD_STATION" != yes ]; then PLAN=none; WHY="the Station reload is swit
 elif [ -z "$STATION_BID" ] && [ -z "$X_BID" ]; then PLAN=none; WHY="neither the Station nor X is open as a web app"
 elif [ -z "$STATION_BID" ]; then PLAN=x-only; WHY="the Station is not open here, so X is reloaded and there is nothing to connect it to"
 elif [ -z "$X_BID" ] && [ "$BEFORE" = working ]; then PLAN=none; WHY="X is working but not from an X web-app window I can find; reloading the Station could leave it unconnected"
+elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station has no open window (it is minimised or closed)"
 elif [ -z "$X_BID" ]; then PLAN=station-only; WHY="X is not open as a web app and is not working now, so only the Station is reloaded"
 elif [ "$GUI" != none ] && [ "$X_WINDOWS" -ne 1 ]; then PLAN=none; WHY="X has $X_WINDOWS windows open and I cannot tell which one feeds the Station"
 elif [ "$GUI" != none ] && [ "${X_MIN:-0}" -gt 0 ]; then PLAN=none; WHY="the X window is minimised, so the shortcut cannot reach it"
-elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station window is minimised"
 else PLAN=full; WHY="the Station and X are both open as web apps"; fi
 [ "$GUI" = none ] && [ "$STATION_WINDOWS" -eq 0 ] && STATION_WINDOWS=1
 
@@ -345,7 +350,7 @@ fi
 
 # ---- the real thing -----------------------------------------------------------------------------------------------------------------
 if [ "$MODE" = run ] && [ "$(idle_seconds)" -lt "$NEED" ]; then say "somebody touched the Mac while I was looking - nothing done; next try in ${SLOT_MINUTES} min"; finish; fi
-T_BEGIN="$(date +%s)"; STOPPED=0; LAST_HEALTH=""; DID=""
+T_BEGIN="$(date +%s)"; STOPPED=0; LAST_HEALTH=""; DID=""; XR=""
 FRONT="$(gui front)"; say "in front before: $FRONT"
 
 if [ "$RELOAD_HUB" = yes ]; then
@@ -355,19 +360,19 @@ fi
 case "$PLAN" in
   none) [ -z "$DID" ] && DID=" nothing reloaded:"; OUTCOME="$DID $WHY"
         case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
-  x-only) reload_app "$X_BID" 1 X && DID="$DID X reloaded;"; result "$DID $WHY" ;;
-  station-only) reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station" && DID="$DID the Station reloaded;"; result "$DID $WHY" ;;
+  x-only) if reload_app "$X_BID" 1 X; then result "$DID X reloaded; $WHY"; else result "$DID X could not be reloaded (see the log); $WHY"; fi ;;
+  station-only) if reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then result "$DID the Station reloaded; $WHY"; else result "$DID the Station could not be reloaded (see the log); $WHY"; fi ;;
   full)
     # reach both BEFORE reloading either: after this point the Station is reloaded and X must be reconnected
     own activate "$X_BID"; R1="$OWN_R"; own activate "$STATION_BID"; R2="$OWN_R"
     if [ "$R1" != ok ] || [ "$R2" != ok ]; then
       note "the Station and X were not reloaded: I could not bring them to the front (X: $R1, Station: $R2)."
-    elif alan_is_back; then say "somebody came back before anything was reloaded - stopping"; result "$DID stopped before reloading the Station: somebody came back"
+    elif alan_is_back; then say "somebody came back before anything was reloaded - stopping; next try in ${SLOT_MINUTES} min"; KEEP_NIGHT_OPEN=1; result "$DID stopped before reloading the Station: somebody came back"
     elif ! reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then
       note "the Station could not be reloaded; X was left as it was."
     else
       DID="$DID the Station reloaded;"
-      if connect_x; then result "$DID X reloaded, the extension run, X confirmed working (first try)"
+      if connect_x; then result "$DID $XR, the extension run, X confirmed working (first try)"
       elif [ "$STOPPED" = 1 ]; then
         say "somebody came back after the Station was reloaded - no more key presses; watching whether X returns by itself"
         if wait_for_x "$(date -u -r "$T_BEGIN" +%Y-%m-%dT%H:%M:%SZ)"; then result "$DID stopped when somebody came back; X is working"
@@ -375,7 +380,7 @@ case "$PLAN" in
       else
         say "X did not come back - one retry of the X half"
         if alan_is_back; then note "the Station was reloaded but X did not come back, and I did not retry because somebody was at the Mac. Click the X window and press Option+Shift+S."
-        elif connect_x; then result "$DID X reloaded, the extension run, X confirmed working (second try)"
+        elif connect_x; then result "$DID $XR, the extension run, X confirmed working (second try)"
         else note "the Station and X were reloaded but X did not come back after two tries (${LAST_HEALTH:-no report}). Click the X window and press Option+Shift+S."; fi
       fi
     fi ;;
@@ -385,5 +390,5 @@ esac
 if [ "$MOVED" = 1 ] && [ -n "$FRONT" ] && [ "$STOPPED" != 1 ] && ! alan_is_back; then
   case "$FRONT" in no-gui|dry|error:*) ;; *) own activate "$FRONT"; R="$OWN_R"; say "put back in front: $FRONT ($R)" ;; esac
 fi
-done_for_tonight
+[ "$KEEP_NIGHT_OPEN" = 1 ] || done_for_tonight
 finish

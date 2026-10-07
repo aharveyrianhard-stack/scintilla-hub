@@ -5,7 +5,7 @@
 --   osascript gui.applescript windows <bundle id>     one line per ordinary window: title <tab> min|open
 --   osascript gui.applescript find-reload <bundle id> found:<menu> > <item>:enabled|disabled | none     (looks only)
 --   osascript gui.applescript activate <bundle id>    ok | not-front    brings that ONE app to the front and checks that it is
---   osascript gui.applescript raise <bundle id> <n>   ok                brings that app's n-th window to the top of its own windows
+--   osascript gui.applescript raise <bundle id> <n>   ok | skipped:minimised   brings that app's n-th window to the top of its own windows
 --   osascript gui.applescript reload <bundle id>      ok:menu | ok:key | refused:<why>
 --   osascript gui.applescript shortcut <bundle id>    sent | refused:<why>   Option+Shift+S, the X extension's shortcut
 --
@@ -51,6 +51,9 @@ on run argv
 				tell application "System Events"
 					set ws to (windows of p whose subrole is "AXStandardWindow")
 					if n > (count of ws) then return "error:no such window"
+					try
+						if (value of attribute "AXMinimized" of (item n of ws)) is true then return "skipped:minimised"
+					end try
 					perform action "AXRaise" of (item n of ws)
 				end tell
 				return "ok"

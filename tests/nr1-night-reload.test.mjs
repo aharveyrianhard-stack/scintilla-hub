@@ -35,7 +35,7 @@ case "$1" in
   find-reload) echo "found:Reload This Page:enabled" ;;
   activate) case "$2" in ${X}) echo "\${FAKE_ACTIVATE_X:-ok}" ;; *) echo ok ;; esac ;;
   raise) echo ok ;;
-  reload) echo ok:menu ;;
+  reload) case "$2" in ${X}) echo "\${FAKE_RELOAD_X:-ok:menu}" ;; *) echo ok:menu ;; esac ;;
   shortcut) echo "\${FAKE_SHORTCUT:-sent}" ;;
 esac
 `);
@@ -182,6 +182,27 @@ test("the job's own key press is not mistaken for Alan coming back: the retry st
   assert.match(n.last, /second try/);
   assert.equal(n.note, "");
   assert.equal(n.changed[n.changed.length - 1], "activate com.apple.finder", "and put the front app back");
+});
+
+test("somebody comes back before anything was reloaded: nothing is reloaded, and the night stays open for the next try", () => {
+  /* idle answers: the window check, the look-again check, then - four real seconds after X and the Station were brought forward - a touch */
+  const first = night({ idle: ["900", "900", "sleep4", "0"] });
+  assert.equal(first.changed.filter((c) => /^(reload|shortcut)/.test(c)).length, 0);
+  assert.equal(first.stamped, false, "a later try may still do the job");
+  assert.equal(first.note, "");
+  const later = night({ dir: first.dir, hhmm: "0410" });
+  assert.match(later.last, /X confirmed working \(first try\)/);
+});
+
+test("a locked screen stops the supervised test as well", () => {
+  const n = night({ mode: "test", locked: "yes", env: { TEST_IDLE_SECONDS: "0" } });
+  assert.deepEqual(n.changed, []);
+});
+
+test("if X itself cannot be reloaded the shortcut is still pressed: it is the shortcut that reconnects X", () => {
+  const n = night({ env: { FAKE_RELOAD_X: "refused:the reload menu item is switched off" } });
+  assert.equal(n.changed.filter((c) => c.startsWith("shortcut")).length, 1);
+  assert.match(n.last, /X NOT reloaded, the extension run, X confirmed working \(first try\)/, "and the morning line does not claim a reload that did not happen");
 });
 
 test("the Hub is left to its own night reload unless RELOAD_HUB=yes", () => {
