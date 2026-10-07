@@ -172,6 +172,14 @@ test("timing: the confluence study's 1% zone on the averages, the allocation too
   assert.equal(p, 60); assert.deepEqual([lead.kind, pull.kind, bounce.kind, down.kind], ["go", "buy", "improve", "avoid"]);
   assert.match(w0, /wait/); assert.match(w1, /usual/, "the 70th itself is not above the 70th"); assert.match(w2, /washed out/); assert.match(w3, /no place/);
 });
+test("one more session ending at a chosen close: a daily bar from the last close, the intraday rungs walked there in as many bars as the last session had", PY, () => {
+  const H = 3600e3, D = 86400e3, mon = Date.UTC(2026, 9, 5, 4), day = (i, c) => [mon + i * D, c, c + 1, c - 1, c];          // Mon 5 Oct 2026, stamped at midnight New York
+  const daily = [day(0, 100), day(1, 102)], bars = (n, step) => Array.from({ length: n }, (_, i) => [mon + D + (4 + i * step) * H, 101, 103, 100, 102]);
+  const [down, fri] = py(["sim_shape", [daily, { "180": bars(5, 3), "12h": bars(2, 6) }, 96.9]], ["sim_shape", [[day(3, 100), day(4, 102)], { "180": [[mon + 4 * D + 6 * H, 101, 103, 100, 102]] }, 110]]);
+  assert.equal(down.D.added, 1); assert.equal(down.D.last_t, mon + 2 * D, "the next day"); assert.equal(down.D.last_close, 96.9); assert.equal(down.D.high, 102, "it opens at the last close"); assert.equal(down.D.low, 96.9);
+  assert.equal(down["180"].added, 5); assert.equal(down["12h"].added, 2, "as many bars as the last session had"); assert.equal(down["180"].last_close, 96.9); assert.equal(down["180"].first_open, 102);
+  assert.equal(fri.D.last_t, mon + 7 * D, "after a Friday the next session is Monday"); assert.equal(fri.D.high, 110); assert.equal(fri["180"].added, 1);
+});
 test("the replay behind every percentile equals the live Geiger, and the one-session cool-down is checked against what really happened", () => {
   const r = K.checks.replay, c = K.checks.cool;
   assert.ok(r.names >= 500 && r.equal_4dp / r.names > 0.9, `${r.equal_4dp} of ${r.names} names equal to four decimals`); assert.ok(r.max < 0.05, "largest gap " + r.max);
@@ -221,7 +229,8 @@ test("the loop is open: blind spots are on none of the lists, tunnel vision is o
   assert.deepEqual(K.lists_by_sector.map((r) => r.rank), Array.from({ length: 14 }, (_, i) => i + 1));
   for (const k of ["RADAR", "FAVORITES", "LIKED"]) { const all = K.lists_by_sector.flatMap((r) => r[k]); assert.equal(new Set(all).size, all.length, k); assert.equal(all.length, K.list_read[k].companies_scored, k + ": every scored company has its sector"); }
   const last4 = K.lists_by_sector.slice(-4).reduce((a, r) => a + r.RADAR.length, 0), first4 = K.lists_by_sector.slice(0, 4).reduce((a, r) => a + r.RADAR.length, 0);
-  assert.ok(last4 >= 12 && first4 === 0, `the radar's tunnel: ${last4} of its companies in the four sectors ranked last, ${first4} in the four ranked first`);
+  assert.ok(last4 >= 12 && first4 <= 2, `the radar's tunnel: ${last4} of its companies in the four sectors ranked last, ${first4} in the four ranked first`);
+  assert.deepEqual(K.lists_by_sector.find((r) => r.RADAR.includes("VST")).label, "ENERGY & POWER", "a name is counted in the sector of the branch where it stands best: Vistra with the power producers");
   for (const k of ["RADAR", "FAVORITES", "LIKED"]) { const r = K.list_read[k]; assert.equal(r.n, K.lists[k].length); assert.equal(r.companies_scored + r.not_scored.length, r.n, k); }
   assert.deepEqual(K.list_read.RADAR.fail_r2.sort(), ["NFLX", "WDC", "WMT"], "the three radar names the fundamentals round does not support");
   assert.ok(K.list_read.RADAR.pass_both.includes("MU") && K.list_read.RADAR.pass_wait.includes("NVDA"));

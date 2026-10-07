@@ -239,7 +239,7 @@ def list_read(k):
     ts = lists[k]; sc = [t for t in ts if t in NAMES]
     return {"n": len(ts), "companies_scored": len(sc), "not_scored": [t for t in ts if t not in NAMES], "pass_both": [t for t in sc if NAMES[t]["r2"] and not NAMES[t]["hot"]], "pass_wait": [t for t in sc if NAMES[t]["r2"] and NAMES[t]["hot"]], "fail_r2": [t for t in sc if NAMES[t]["r2"] is False],
             "finalists": [t for t in sc if NAMES[t]["finalist_in"]], "champions": [t for t in sc if NAMES[t]["champion_in"]]}
-sec_of = {t: BR[(n["verdict_branches"] or anyc(t))[0]]["sector"] for t, n in NAMES.items() if (n["verdict_branches"] or anyc(t))}
+sec_of = {t: BR[n["home"] or (n["verdict_branches"] or anyc(t))[0]]["sector"] for t, n in NAMES.items() if (n["home"] or n["verdict_branches"] or anyc(t))}   # the sector of the branch where it stands best
 lists_by_sector = [{"sector": s, "label": SR[s]["label"], "rank": SR[s]["rank"], "heat": SR[s].get("heat"), "pctl": SR[s].get("pctl"), "read": SR[s].get("read"), "names": len(SR[s]["run"]),
                     **{k: [t for t in lists[k] if sec_of.get(t) == s] for k in ("RADAR", "FAVORITES", "LIKED")}} for s in sorted(SR, key=lambda s: SR[s]["rank"])]
 out = {"today": TODAY, "built_utc": dtm.datetime.utcnow().isoformat() + "Z", "price_is": CU["meta"]["price_is"], "geiger_published_utc": TM.get("geiger_published_utc"),

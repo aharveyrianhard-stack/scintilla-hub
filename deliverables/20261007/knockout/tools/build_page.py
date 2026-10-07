@@ -285,7 +285,7 @@ specs = f"""
 <li><b>Venture names are not judged, which is not a verdict.</b> The {len(vent)} companies with sales under 1% of their market value are left out of round 2. That says the process has nothing to measure, not that they are wrong to hold. Quantum has no champion for that reason.</li>
 <li><b>A company with no earnings can still win a branch.</b> Its comps number is not used, so it stands on growth, revisions and cash against companies that are also judged on their price. Lucid leads autos that way. The comps column says "no earnings" where this applies.</li>
 <li><b>The one-session cool-down.</b> Replayed on the last 20 sessions of each green name, the one-session read missed the real next-day Geiger by {ck["cool"]["median_gap"]} at the median and {ck["cool"]["p90_gap"]} nine times in ten ({ck["cool"]["sessions"]:,} sessions).</li>
-<li><b>The Lab's installed line packs</b> are marked not yet approved by you in the Lab's own registry.</li>
+{"<li><b>The Lab's installed line packs</b> are marked not yet approved by you in the Lab's own registry.</li>" if ck["confluence"].get("approved_by_alan") is False else ""}
 <li><b>Foreign reporters.</b> For the sixteen that report in another currency the one-off rule is not applied, and their filed earnings are not always on the analysts' footing.</li>
 </ul>
 <h4>WHAT WAS NOT DONE</h4>
