@@ -121,12 +121,12 @@ test("cohortChoice keeps the round-3 rule", () => {
 
 test("the Hub: COMPS is its own tab beside ESTIMATES, ESTIMATES is exactly what it was before C1, keys 1–9 and 0, the migration and its rollback exist", () => {
   const html = readFileSync(here("../index.html"), "utf8");
-  assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);
+  assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS",(?:"CARDS",)?"FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);   /* CP2 (7 Oct): CARDS, the decision card, sits beside COMPS */
   assert.match(html, /case "COMPS":\s+return nonOp \? nonOpTabHTML\(data\) : compsTabHTML\(data\)/);
   assert.match(html, /estConvictionHTML\(data\) \+ estPTGaugeHTML\(data\) \+\n\s+estValuationHTML\(data\)/, "the ESTIMATES tab as before C1");
   assert.ok(!/estCompsHTML|compsLiveMount|sc-comps-live|scCompsLive/.test(html), "no trace of the C1 section");
   assert.match(html, /import\("\/deliverables\/2026(0930\/comps-tab|1001\/comps-template|1001\/comps-table-first|1001\/comps-mechanic|1003\/comps-c5)\/tab\.mjs"\)/, "the COMPS tab loads the comps module (C3 → template, C3b → table-first, C4 → the mechanic, 1 Oct)");
-  assert.match(html, /e\.key === "0" \? 10 : 0/);
+  assert.match(html, /e\.key === "0" \? 10 : (?:e\.key === "-" \? 11 : )?0/);   /* CP2 (7 Oct): the eleventh tab is on − */
   for (const f of ["../supabase/migrations/20260930_comps_decisions.sql", "../supabase/migrations/20260930_comps_decisions_ROLLBACK.sql"]) assert.ok(existsSync(here(f)), f);
   const mig = readFileSync(here("../supabase/migrations/20260930_comps_decisions.sql"), "utf8");
   assert.match(mig, /create table if not exists public\.comps_decisions/); assert.match(mig, /measure in \('ALL', 'pe_ttm', 'pe_fwd', 'ev_sales', 'ev_ebitda', 'ps', 'peg'\)/);

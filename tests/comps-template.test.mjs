@@ -121,7 +121,7 @@ test("the cohort table on the chosen way: every member, price, Geiger, both sets
 test("the Hub: the COMPS tab loads the C3 module; migration, rollback and Fly job exist; the C2 tab list and ESTIMATES untouched", () => {
   const html = readFileSync(here("../index.html"), "utf8");
   assert.match(html, /import\("\/deliverables\/2026(1001\/comps-(template|table-first|mechanic)|1003\/comps-c5)\/tab\.mjs"\)/, "the COMPS tab loads the C3 template or a module built on it (C3b, C4, C5)");
-  assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);
+  assert.match(html, /const CO_TABS = \["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS",(?:"CARDS",)?"FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"\]/);   /* CP2 (7 Oct): CARDS, the decision card, sits beside COMPS */
   assert.ok(!/estCompsHTML|scCompsLive/.test(html));
   for (const f of ["../supabase/migrations/20261001_fx_filer.sql", "../supabase/migrations/20261001_fx_filer_ROLLBACK.sql", "../scripts/fx-filer-sync.mjs", "../deliverables/20261001/comps-template/fx-standin-ecb-2026-10-01.json", "../deliverables/20261001/comps-template/COMPS-TEMPLATE.html"]) assert.ok(existsSync(here(f)), f);
   const job = readFileSync(here("../scripts/fx-filer-sync.mjs"), "utf8"); assert.match(job, /reportedCurrency/); assert.match(job, /historical-price-full/); assert.ok(!/apikey=[A-Za-z0-9]{10,}/.test(job), "no key in the script");

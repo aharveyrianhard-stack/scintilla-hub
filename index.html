@@ -6398,7 +6398,7 @@ const COHORTS = [
    of that toggle, which is a real upgrade: the sector read is computed from its actual
    constituents instead of from the ETF's own price. Cohorts are Alan's, sectors are fact,
    and each has its own strip. */   /* R38: strip now matches the DB cohort set — BLUE_CHIP + GROWTH added, phantom ASIA removed */
-const CO_TABS = ["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"];   /* C2 (Alan, 30 Sep): COMPS is its own tab, beside ESTIMATES; ten tabs, keys 1–9 and 0 */   /* R3 (Alan, 27 Sep: "use what exists: all the tabs") — every tab in one row, keys 1–9, no MORE; SOCIAL = keyword mentions on X and YouTube (coSocialHTML). D2: the chart is always on screen (no CHART tab) */
+const CO_TABS = ["GEIGER","FUNDAMENTALS","ESTIMATES","COMPS","CARDS","FINANCIALS","STATS","NEWS","SOCIAL","EVENTS","READ"];   /* CP2 (7 Oct, branch only until Alan has seen it): CARDS, the decision card of the name, beside COMPS; eleven tabs, keys 1–9, 0 and − */   /* C2 (Alan, 30 Sep): COMPS is its own tab, beside ESTIMATES; ten tabs, keys 1–9 and 0 */   /* R3 (Alan, 27 Sep: "use what exists: all the tabs") — every tab in one row, keys 1–9, no MORE; SOCIAL = keyword mentions on X and YouTube (coSocialHTML). D2: the chart is always on screen (no CHART tab) */
 /* 28 Sep (N6) — the company view's EVENTS tab reads EARNINGS, like the master tab (MTAB_LABEL). The key stays EVENTS so
    saved state, keys 1–9 and every handler keep working; only the word on the tab changes. */
 const CO_TAB_LABEL = { EVENTS: "EARNINGS" };
@@ -6629,7 +6629,7 @@ function cvQuote(t) {
 function cvTabsHTML() {
   return '<div class="cv-tabs" id="cvTabs" role="tablist" aria-label="company tabs">' +
     CO_TABS.map((x, i) => '<button type="button" role="tab" class="cv-tab' + (x === S.coTab ? " on" : "") + '" aria-selected="' + (x === S.coTab) +
-      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i === 9 ? 0 : i + 1) + '">' + coTabLabel(x) + "</button>").join("") +   /* C2 — the tenth tab is on 0 */
+      '" data-act="cotab" data-tab="' + x + '" title="key ' + (i === 9 ? 0 : i === 10 ? "−" : i + 1) + '">' + coTabLabel(x) + "</button>").join("") +   /* C2 — the tenth tab is on 0 · CP2 — the eleventh on − */
   "</div>";
 }
 /* SWITCH-ON (28 Sep, Alan: "switch it on… just confirm I'm not losing anything") — the name is shown ONCE: the header title
@@ -6787,7 +6787,7 @@ window.addEventListener("keydown", (e) => {
   if (cvKeysBlocked(e)) return;
   if (e.key === "Escape") { e.preventDefault(); S.sec = "DASHBOARD"; updateMtabs(); startRotate(); return; }
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); cvStep(e.key === "ArrowDown" ? 1 : -1); return; }
-  const k = /^[1-9]$/.test(e.key) ? +e.key : e.key === "0" ? 10 : 0;   /* C2 — the tenth tab on 0 */
+  const k = /^[1-9]$/.test(e.key) ? +e.key : e.key === "0" ? 10 : e.key === "-" ? 11 : 0;   /* C2 — the tenth tab on 0 · CP2 — the eleventh on − */
   if (k && k <= CO_TABS.length) { e.preventDefault(); const b = document.querySelector('#cvTabs [data-tab="' + CO_TABS[k - 1] + '"]'); if (b) b.click(); }
 }, true);
 
@@ -20479,6 +20479,44 @@ function compsTabMount() {
     COMPS_TAB_MOD = null;
   });
 }
+/* ── CP2 · THE CARDS TAB (7 Oct 2026) ───────────────────────────────────────────────────────────────
+   Alan, 6 Oct: "the system stops being a dashboard and starts being the way we actually make decisions." 7 Oct: "FMP
+   segment and margin data, data-centre share of revenue — we should express it somewhere, when we expand the ticker
+   selection on the dashboard, in pie charts … One has a higher percentage of data-centre revenue, the other one has
+   higher margin. How would you blend that?"
+   The tab is an empty box here; deliverables/20261007/cards-tab/tab.mjs fills it with the decision card of the name:
+   THE BUSINESS (revenue by business line and by region as two pies; data-centre share, gross margin, operating margin,
+   free-cash-flow margin and yield; the blend: data-centre profit per dollar of stock beside cash per dollar of stock;
+   the same business side by side) · FUNDAMENTALS (growth, the estimates block with the flag line on top, the comps
+   range) · TECHNICALS · LEVELS (the confluence zones, nearest first, members by the Lab's labels) · RISK · THE PLAN.
+   WHERE THE CARD COMES FROM. Today: the dated file deliverables/20261007/cards-tab/data/cards.json (one record per
+   name). CARDS_FROM_TABLE is the switch for the table reader: public.decision_cards, newest row per name — the same
+   record in its `card` column (supabase/migrations/20261007_cp1_decision_cards.sql: proposed, NOT applied, so the
+   switch stays false until the coordinator has applied it and the daily job writes rows). The tab writes nothing. */
+const CARDS_FROM_TABLE = (typeof window !== "undefined" && window.SC_CARDS_FROM_TABLE === true);   // ← false: the card is read from the dated file
+function cardsTabHTML(data) {
+  if (!data || !data.t || data._loading) return '<div class="sc-senttxt" style="padding:10px 4px">loading ' + esc((data && data.t) || "") + "…</div>";
+  setTimeout(cardsTabMount, 0);   // the box is in the DOM by then
+  return '<div class="sc-cards-tab" id="scCardsTab" data-t="' + esc(data.t) + '"><div class="sc-senttxt" style="letter-spacing:.2em">READING THE CARD OF ' + esc(data.t) + "…</div></div>";
+}
+let CARDS_TAB_MOD = null;
+function cardsTabMount() {
+  const box = document.getElementById("scCardsTab");
+  if (!box || !box.isConnected) return;
+  const t = box.dataset.t;
+  if (!t || box.dataset.mounted === t) return;
+  box.dataset.mounted = t;
+  const load = CARDS_TAB_MOD || (CARDS_TAB_MOD = import("/deliverables/20261007/cards-tab/tab.mjs"));
+  load.then((m) => {
+    const live = document.getElementById("scCardsTab");
+    if (!live || live.dataset.t !== t) return;
+    return m.mountCardsTab(live, { ticker: t, fromTable: CARDS_FROM_TABLE, read: (path) => pg(path, 1), open: (x) => openCo(x) });
+  }).catch((e) => {
+    const live = document.getElementById("scCardsTab");
+    if (live && live.dataset.t === t) live.innerHTML = '<div class="sc-senttxt">The cards tab could not be loaded: ' + esc(String(e && e.message || e)) + "</div>";
+    CARDS_TAB_MOD = null;
+  });
+}
 
 /* NEWS article — DB row → .sc-art (also used by the NEWS room) */
 /* FIX 3 — every row shows its time: ET "HH:MM" for today, else "Jun 10 · HH:MM" */
@@ -21627,6 +21665,7 @@ function coTabHTML(data) {
     case "STATS":      return statsTabHTML(data);
     case "ESTIMATES":  return nonOp ? nonOpTabHTML(data) : estimatesTabHTML(data);
     case "COMPS":      return nonOp ? nonOpTabHTML(data) : compsTabHTML(data);   // C2 — the comps, their own tab
+    case "CARDS":      return nonOp ? nonOpTabHTML(data) : cardsTabHTML(data);   // CP2 — the decision card of the name
     case "FINANCIALS": return (data._profile && (data._profile.is_etf === true || data._profile.is_etf === "true")) ? etfPanelHTML(data) : (nonOp ? nonOpTabHTML(data) : financialsTabHTML(data));   // FIX 4 — wired from fundamentals_history; ETF/fund → real holdings+AUM panel, not the honest-empty stub
     case "NEWS":       return (data.news && data.news.length)
                          ? dedupeNews(data.news).map((n) => newsArtHTML(n)).join("")   // R21 FIX 5 — company tab deduped too
