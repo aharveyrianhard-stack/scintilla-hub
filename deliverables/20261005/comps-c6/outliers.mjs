@@ -259,6 +259,12 @@ export const CP3_ALL = Object.freeze({ ...CP1_LINES_ON, stated: true, ...CP1_FIE
 /* CP4 (7 Oct 13:20): the method's sets (no stated set; equipment makers their own line), the growth-first prior, closeness
    weights, and the adjacent blend in place of "shown, not priced". */
 export const CP4_ALL = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: false, equipment: true, growthCredit: true, reitYardstick: true, marginGate: true, growthForward: true, cp4Prior: true, closeness: true, pegCap: true, cellRule: true, consistency: true, influence: true, selfOutlier: true, priceOnBusiness: false, adjacentBlend: true });
+/* RL1 (7 Oct) · THE ONE LINE THAT SAYS WHAT IS LIVE ON THE HUB'S COMPS TAB. Alan, 7 Oct ~12:50 ET, approved the same-business
+   pricing ("always go"); the decision cards, the universe knockout and the allocation tool were already built on CP3_ALL.
+   The tab (comps-c5/tab.mjs) reads its switches from here and from nowhere else, so the tab, the card, the knockout and the
+   tool price a name on one configuration. The way back is this line: CP1_NONE is the tab exactly as C6b left it. Callers
+   that pass their own switches (the reports, the tools, the tests) are not touched by it. */
+export const LIVE_FX = CP3_ALL;   /* CP4: the in-browser fallback (a name the engine's artifact does not carry) stays on this configuration; the artifact itself is priced on CP4_ALL — one line to change if Alan wants the fallback on the same footing */
 /** The proposal beside it: growth from the fiscal year just reported, on the analysts' basis (field.mjs growthFromLastYear). */
 export const FD1_ALL_LAST = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_LAST, ...CP1_OUT_ON });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);

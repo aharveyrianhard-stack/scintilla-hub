@@ -107,7 +107,7 @@ test("C5's own conclusion is unchanged when no option is passed (its per-measure
 test("the tab: marks on flagged cells, outlier rows last and greyed with the count, the centre with / without outliers, the rule in one sentence in PAGE SPECS, no sentence in the content", () => {
   const src = readFileSync(here("../deliverables/20261003/comps-c5/tab.mjs"), "utf8"), code = src.replace(/\/\*[\s\S]*?\*\//g, "");
   const specsStart = code.indexOf("function pageSpecsHTML"), specsEnd = code.indexOf("/* ---- events", src.indexOf("function pageSpecsHTML")) > 0 ? code.indexOf("function wire") : code.length, specs = code.slice(specsStart, specsEnd), content = code.slice(0, specsStart) + code.slice(specsEnd);
-  assert.match(code, /conclusion6\(S\.snap, S\.decisions, S\.estimates, S\.opts\.today, S\.way, \{ set: S\.set \}\)/); assert.match(code, /comps-c6\/outliers\.mjs/);
+  assert.match(code, /conclusion6\(S\.snap, S\.decisions, S\.estimates, S\.opts\.today, S\.way, \{ set: S\.set, fx: LIVE_FX \}\)/);   /* RL1 (7 Oct): the tab prices on the live switches (outliers.mjs LIVE_FX) — tests/rl1-comps-tab-live-switches.test.mjs */ assert.match(code, /comps-c6\/outliers\.mjs/);
   assert.match(content, /with outliers <b>/); assert.match(content, /without outliers <b>/); assert.match(content, /data-cm="keeppeer"/); assert.match(content, /class="\$\{o6 \? "o6"/); assert.match(content, /▲/);
   assert.match(content, /set\.kept\.filter\(\(r\) => !c6\.ruleOff\.has\(r\.ticker\)\), \.\.\.c6\.outliers/, "outlier rows sit at the bottom of the set");
   assert.match(specs, /Outliers, on price only\./); assert.match(specs, /median absolute deviation/); assert.match(specs, /log scale/); assert.match(specs, /never deleted/);

@@ -36,8 +36,11 @@ test('the cohort fan is a tab body, not a band stacked above the tabs', () => {
   const layer0 = fn('layer0HTML');
   assert.doesNotMatch(layer0, /id="cohCompare"/, 'the fan is no longer a sibling of the tab row');
   assert.match(layer0, /l0TabsHTML\(\)/);
-  assert.match(fn('l0BodyHTML'), /LAYER0_TAB === "COHORT"[\s\S]{0,200}id="cohCompare"[\s\S]{0,80}cohortCompareStripHTML\(\)/,
-    'the COHORT tab renders the SAME strip renderer into the body');
+  /* HC1 (6 Oct) — the tab body is the one-screen compare: every view as a card, each card drawn by the strip's own column renderer */
+  assert.match(fn('l0BodyHTML'), /LAYER0_TAB === "COHORT"[\s\S]{0,200}id="cohCompare"[\s\S]{0,80}cohCompareScreenHTML\(\)/,
+    'the COHORT tab renders the compare into the body');
+  assert.match(fn('cmpxCardHTML'), /cohStripColsHTML\(list, span, !exp\)/, 'a card draws the SAME columns the single strip draws');
+  assert.match(fn('cohortCompareStripHTML'), /const cols = cohStripColsHTML\(list, span\);/);
 });
 
 test('every view keeps its own controls, and the cohort tab is not given a timeframe row it does not use', () => {

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SCINTILLA · PORTFOLIO ALLOCATION · PA1</title>
+<meta name="robots" content="noindex">
+<style>
+/* PA1 · portfolio allocation (5 Oct 2026). The Hub's look: the company tabs are the reference — dark panels, mono labels, cyan as
+   chrome only, direction in green/red, no sentence inside a panel (they live in PAGE SPECS at the bottom). */
+:root{ --bg:#0A0A0F; --panel:#0D0D14; --panel2:#0F0F1A; --line:#1A1A2A; --line2:#252538; --hair:rgba(0,212,255,.34);
+  --ink:#C6C8DE; --ink2:#C6C8DE; --ink3:#9A9AB6; --dim:#868AAA; --mute:#3A3A52; --crk:#00D4FF; --bull:#00FFA3; --bear:#FF2D55; --warn:#e0a24a;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace; --sans:ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif; }
+*{ box-sizing:border-box; min-width:0 }
+html,body{ margin:0; background:var(--bg); color:var(--ink) }
+body{ font:12px/1.45 var(--sans); padding:0 0 60px }
+a{ color:var(--ink); text-decoration:none }
+.wrap{ max-width:1880px; margin:0 auto; padding:0 16px }
+header{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; padding:12px 16px 10px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5 }
+header .brand{ font:700 11px var(--mono); letter-spacing:.18em; color:var(--crk); text-transform:uppercase }
+header .brand span{ color:var(--ink3) }
+header .meta{ margin-left:auto; font:10px var(--mono); letter-spacing:.06em; color:var(--dim); text-transform:uppercase; white-space:nowrap }
+header .meta b{ color:var(--ink); font-weight:600 }
+.views{ display:flex; gap:2px }
+.views a{ font:600 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; padding:6px 12px; border:1px solid var(--line2); color:var(--ink3); border-radius:3px }
+.views a.on{ color:var(--crk); border-color:var(--hair) }
+h2{ font:600 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink3); margin:22px 0 8px; display:flex; align-items:baseline; gap:12px }
+h2 small{ font-weight:400; letter-spacing:.06em; color:var(--dim); text-transform:none }
+h2 .n{ color:var(--crk) }
+.panel{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:10px }
+/* HEAT strip */
+.heat{ display:grid; grid-template-columns:repeat(11,minmax(0,1fr)); gap:2px } .panel.heatp{ overflow-x:auto }
+.heat .col{ background:var(--panel2); border:1px solid var(--line); border-radius:3px; padding:8px 6px 6px; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative }
+.heat .col.hot{ border-color:rgba(0,255,163,.35) } .heat .col.cold{ border-color:rgba(255,45,85,.35) }
+.heat .tag{ position:absolute; top:4px; right:5px; font:700 8px var(--mono); letter-spacing:.12em }
+.heat .hot .tag{ color:var(--bull) } .heat .cold .tag{ color:var(--bear) }
+.heat .rank{ font:700 16px var(--mono); color:var(--ink) }
+.heat .lbl{ font:600 9px var(--mono); letter-spacing:.08em; color:var(--ink3); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100% }
+.heat .bar{ width:100%; height:5px; background:var(--line); border-radius:2px; overflow:hidden }
+.heat .bar i{ display:block; height:100%; background:var(--crk); opacity:.8 }
+.heat .legs{ display:grid; grid-template-columns:1fr 1fr; gap:1px 8px; width:100%; margin-top:3px }
+.heat .legs div{ display:flex; justify-content:space-between; font:9px var(--mono); color:var(--dim) }
+.heat .legs b{ font-weight:600 }
+.up{ color:var(--bull) } .dn{ color:var(--bear) } .flat{ color:var(--ink3) }
+.heat .b1{ font:9px var(--mono); color:var(--dim); margin-top:2px } .heat .b1 i{ font-style:normal; color:var(--ink3) }
+.age{ font:9px var(--mono); letter-spacing:.06em; color:var(--dim); text-transform:uppercase; margin-top:6px; display:flex; gap:16px; flex-wrap:wrap }
+/* THEMES */
+.themes{ display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:8px }
+.theme{ background:var(--panel2); border:1px solid var(--line); border-radius:3px; padding:8px 10px }
+.theme .sec{ font:600 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink); display:flex; justify-content:space-between }
+.theme .sec span{ color:var(--dim); font-weight:400; letter-spacing:.06em }
+.chips{ display:flex; flex-wrap:wrap; gap:4px; margin-top:6px }
+.chip{ border:1px solid var(--line2); border-radius:3px; padding:4px 7px; font:10px var(--mono); color:var(--ink3); display:flex; gap:8px; align-items:baseline }
+.chip.on{ border-color:var(--hair); color:var(--ink) } .chip.off{ opacity:.55 } .chip.fb{ border-style:dashed }
+.chip b{ font-weight:600 } .chip .k{ color:var(--dim) }
+/* KNOCKOUT tables */
+table{ width:100%; border-collapse:collapse; font:11px var(--mono) }
+th{ font:600 9px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--dim); text-align:right; padding:4px 6px; border-bottom:1px solid var(--line2); white-space:nowrap }
+td{ padding:4px 6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums }
+th:nth-child(2),td:nth-child(2),th:nth-child(3),td:nth-child(3){ text-align:left }
+td.tk{ font-weight:700; color:var(--ink) } td.nm{ color:var(--ink3); max-width:220px; overflow:hidden; text-overflow:ellipsis }
+tr.surv td{ background:rgba(0,212,255,.045) } tr.surv td.v{ color:var(--crk); font-weight:700 }
+tr.outl td{ color:var(--dim) } tr.outl td.tk{ color:var(--dim); font-weight:400 } tr.outl td.v{ color:var(--warn) }
+tr.blank td{ color:var(--mute) } tr.blank td.v{ color:var(--dim) }
+td .rs{ display:inline-block; width:34px; height:4px; background:var(--line); vertical-align:middle; margin-left:6px; border-radius:2px; overflow:hidden } td .rs i{ display:block; height:100%; background:var(--ink3) }
+.ko{ margin-top:8px } .ko .panel{ overflow-x:auto } .ko .hd{ display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline; font:10px var(--mono); color:var(--dim); letter-spacing:.06em; text-transform:uppercase; margin:0 0 4px } .ko .hd b{ color:var(--ink); font-size:11px; letter-spacing:.14em } .ko .hd .fb{ color:var(--warn) }
+details.cold>summary{ cursor:pointer; font:600 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); padding:8px 0 }
+/* PICKS */
+.picks{ display:grid; grid-template-columns:repeat(auto-fill,minmax(440px,1fr)); gap:6px }
+.pick{ background:var(--panel2); border:1px solid var(--line); border-left:2px solid var(--crk); border-radius:3px; padding:8px 10px }
+.pick .t{ display:flex; align-items:baseline; gap:10px } .pick .t b{ font:700 15px var(--mono); color:var(--ink) } .pick .t span{ font:10px var(--mono); color:var(--ink3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pick .why{ font:10px/1.5 var(--mono); color:var(--ink3); margin-top:3px }
+.pick .lv{ display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:6px } .pick .lv div{ font:10px var(--mono); color:var(--dim); white-space:nowrap } .pick .lv b{ display:block; color:var(--ink); font-weight:600; font-size:11px }
+.pick .lv .op b{ color:var(--warn) }
+/* DIALS */
+.dials{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:6px 12px; align-items:end }
+.dial{ display:flex; flex-direction:column; gap:3px } .dial label{ font:600 9px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--dim) }
+.dial input{ width:100%; background:var(--bg); color:var(--ink); border:1px solid var(--line2); border-radius:3px; font:12px var(--mono); padding:4px 6px }
+.dial .base{ font:9px var(--mono); color:var(--mute) }
+.dials button{ background:var(--panel2); color:var(--ink3); border:1px solid var(--line2); border-radius:3px; font:600 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; padding:7px 10px; cursor:pointer } .dials button:hover{ color:var(--crk); border-color:var(--hair) }
+/* DISCUSSION */
+.disc{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px } .disc .row .why{ overflow-wrap:anywhere }
+.disc .side h3{ font:600 11px var(--mono); letter-spacing:.18em; text-transform:uppercase; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid var(--line2) }
+.disc .side.s h3{ color:var(--bull) } .disc .side.w h3{ color:var(--bear) }
+.disc .row{ display:grid; grid-template-columns:34px 80px 1fr; gap:12px; align-items:start; padding:10px 8px; border-bottom:1px solid var(--line) }
+.disc .row .no{ font:700 22px var(--mono); color:var(--mute) } .disc .row .tk{ font:700 20px var(--mono); color:var(--ink) } .disc .row .tk small{ display:block; font:10px var(--mono); color:var(--dim); font-weight:400; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.disc .row .why{ font:12px/1.55 var(--mono); color:var(--ink3) } .disc .row .why b{ color:var(--ink); font-weight:600 }
+.disc .row .sc{ font:10px var(--mono); color:var(--dim); margin-top:3px }
+.disc-heat{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px } .disc-heat span{ font:10px var(--mono); letter-spacing:.06em; border:1px solid var(--line2); border-radius:3px; padding:3px 7px; color:var(--ink3) } .disc-heat span.hot{ color:var(--bull); border-color:rgba(0,255,163,.35) } .disc-heat span.cold{ color:var(--bear); border-color:rgba(255,45,85,.35) }
+/* PAGE SPECS */
+details.sc-pagespecs{ margin-top:26px; border-top:1px solid var(--line2); padding-top:8px; color:var(--ink3); font:12px/1.55 var(--sans) }
+details.sc-pagespecs>summary{ cursor:pointer; font:600 10px var(--mono); letter-spacing:.18em; text-transform:uppercase; color:var(--dim); padding:6px 0 }
+details.sc-pagespecs h4{ font:600 10px var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); margin:14px 0 4px }
+details.sc-pagespecs p{ margin:4px 0; max-width:1100px } details.sc-pagespecs code{ font:11px var(--mono); color:var(--ink) }
+.err{ color:var(--bear); font:11px var(--mono); padding:12px }
+@media(max-width:1100px){ .heat{ grid-template-columns:repeat(6,1fr) } .disc{ grid-template-columns:1fr } }
+@media(max-width:600px){ .heat{ grid-template-columns:repeat(3,minmax(0,1fr)) } .picks,.themes{ grid-template-columns:minmax(0,1fr) } body{ font-size:11px } header .meta{ white-space:normal; margin-left:0 } .disc .row{ grid-template-columns:28px 64px minmax(0,1fr) } .pick .lv div{ white-space:normal } }
+</style>
+</head>
+<body>
+<header>
+  <span data-scnav-slot></span>
+  <span class="brand">SCINTILLA <span>· PORTFOLIO ALLOCATION · PA1</span></span>
+  <nav class="views" aria-label="view"><a href="?view=chain" data-view="chain">THE CHAIN</a><a href="?view=discussion" data-view="discussion">MARKET DISCUSSION</a></nav>
+  <span class="meta" id="meta">reading…</span>
+</header>
+<div class="wrap" id="app"><div class="err" id="err" hidden></div></div>
+<script type="module">
+import { DIALS, heat, knockout, dedupePicks, fullChain, reasonLine, num } from "./chain.mjs";
+const Q = new URLSearchParams(location.search), VIEW = Q.get("view") === "discussion" ? "discussion" : "chain";
+document.querySelectorAll(".views a").forEach((a) => a.classList.toggle("on", a.dataset.view === VIEW));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const sg = (v, d = 2) => v == null ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d);
+const pc = (v, d = 0) => v == null ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d) + "%";
+const px = (v) => v == null ? "—" : Math.abs(v) >= 1000 ? "$" + Math.round(v).toLocaleString("en-US") : "$" + (+v).toFixed(2);
+const cls = (v) => v == null ? "flat" : v > 0 ? "up" : v < 0 ? "dn" : "flat";
+const age = (iso) => { if (!iso) return "—"; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 90 ? m + " min" : m < 2880 ? Math.round(m / 60) + " h" : Math.round(m / 1440) + " d"; };
+const rsBar = (v) => v == null ? "" : `<span class="rs"><i style="width:${Math.round(v * 100)}%"></i></span>`;
+let DATA = null, D = JSON.parse(JSON.stringify(DIALS));
+try { const saved = JSON.parse(localStorage.getItem("pa1.dials") || "null"); if (saved && typeof saved === "object") D = { ...D, ...saved, heat_w: { ...D.heat_w, ...(saved.heat_w || {}) }, ko_w: { ...D.ko_w, ...(saved.ko_w || {}) }, chain_w: { ...D.chain_w, ...(saved.chain_w || {}) } }; } catch (_) {}
+
+function run() {
+  const H = heat(DATA.sectors, D), bySec = Object.fromEntries(H.ranked.map((s) => [s.key, s]));
+  const kos = DATA.knockouts.filter((k) => !k.error).map((k) => { const c = DATA.cohorts.find((x) => x.id === k.cohort) || {}; const K = knockout(k.members, D); return { ...k, cohortRow: c, K }; });
+  const rows = kos.flatMap((k) => k.K.members.filter((m) => m.score != null).map((m) => ({ ...m, score: m.score, cohort: k.cohortRow, sector_key: k.sector_key, sector: bySec[k.sector_key] || null, ko_label: k.label })));
+  const picks = dedupePicks(rows.filter((r) => H.hot.includes(r.sector_key) && r.verdict === "SURVIVES"));
+  const FC = fullChain(rows, H.ranked, D);
+  return { H, kos, rows, picks, FC };
+}
+
+function heatHTML(H) {
+  const cols = [...H.ranked, ...H.unranked].map((s) => {
+    const tag = H.hot.includes(s.key) ? "hot" : H.cold.includes(s.key) ? "cold" : "";
+    return `<div class="col ${tag}" title="${esc(s.key)}">${tag ? `<span class="tag">${tag.toUpperCase()}</span>` : ""}<span class="rank">${s.heat_rank ?? "—"}</span><span class="lbl">${esc(s.label)}</span>
+      <span class="bar"><i style="width:${Math.round((s.heat ?? 0) * 100)}%"></i></span>
+      <div class="legs"><div>names<b class="${cls(s.names)}">${sg(s.names)}</b></div><div>funds<b class="${cls(s.funds)}">${sg(s.funds)}</b></div><div>bow tie<b class="${cls(s.bowtie)}">${sg(s.bowtie)}</b></div><div>rot 72<b class="${cls(s.rotation)}">${sg(s.rotation, 1)}</b></div></div>
+      <span class="b1">B1 <i>${s.b1 ? (s.b1.verdict || "—").toUpperCase() : "—"}</i> ${s.b1 ? sg(s.b1.ew) + "/" + sg(s.b1.cw) : ""}</span></div>`;
+  }).join("");
+  const src = DATA.sources;
+  return `<h2>HEAT <small>sectors, hot → cold</small> <span class="n">${H.hot.length} hot · ${H.cold.length} cold</span></h2><div class="panel heatp"><div class="heat">${cols}</div>
+    <div class="age"><span>Geiger live · ${age(src.geiger_live.as_of)} ago</span><span>bars to ${src.bars.to} · SPY 72s ${sg(src.bars.spy_medium_pct, 1)}%</span><span>B1 market read · ${src.b1.as_of} close</span><span>weights names ${D.heat_w.names} · funds ${D.heat_w.funds} · rotation ${D.heat_w.rotation} · bow tie ${D.heat_w.bowtie}</span></div></div>`;
+}
+function themesHTML(H, kos) {
+  const sec = (key, kind) => {
+    const s = H.ranked.find((x) => x.key === key), all = DATA.cohorts.filter((c) => c.sector_key === key), ran = new Set(kos.map((k) => k.cohort));
+    const on = all.filter((c) => ran.has(c.id)), off = all.filter((c) => !ran.has(c.id));
+    const chip = (c, isOn) => `<span class="chip ${isOn ? "on" : "off"} ${c.fallback ? "fb" : ""}" title="${esc(c.why_not || c.note || (c.sound ? "sound (T12)" : ""))}"><b>${esc(c.label)}</b><span class="k">${c.companies} · se ${c.se ?? "—"}</span><span class="${cls(c.geiger)}">${sg(c.geiger)}</span>${c.rotation != null ? `<span class="${cls(c.rotation)}">rot ${sg(c.rotation, 1)}</span>` : ""}${!isOn ? `<span class="k">${c.sound ? "not run (K)" : c.mixed ? "mixed" : c.why_not && /not a company/.test(c.why_not) ? "not companies" : "thin"}</span>` : c.fallback ? `<span class="k">fallback</span>` : ""}</span>`;
+    return `<div class="theme"><div class="sec">${esc(s ? s.label : key)} <span>${kind} · heat #${s ? s.heat_rank : "—"} · ${on.length} run · ${off.length} listed</span></div><div class="chips">${on.map((c) => chip(c, true)).join("")}${off.sort((a, b) => (b.sound - a.sound) || (a.se ?? 9) - (b.se ?? 9)).map((c) => chip(c, false)).join("")}</div></div>`;
+  };
+  return `<h2>THEMES × ROTATION <small>the cohorts inside the hot sectors · T12-sound only run</small></h2><div class="themes">${H.hot.map((k) => sec(k, "HOT")).join("")}</div>
+    <details class="cold"><summary>the cold sectors' cohorts</summary><div class="themes">${H.cold.map((k) => sec(k, "COLD")).join("")}</div></details>`;
+}
+function koTable(k) {
+  const K = k.K, w = K.weights, row = (m) => {
+    const vc = m.verdict === "SURVIVES" ? "surv" : m.verdict === "OUTLIER" ? "outl" : m.verdict === "BLANK" ? "blank" : "";
+    const rs = m.rank_scores || {};
+    return `<tr class="${vc}" data-t="${esc(m.ticker)}"><td>${m.place ?? "—"}</td><td class="tk">${esc(m.ticker)}</td><td class="nm" title="${esc(m.name)}">${esc(m.name)}</td><td>${px(m.price)}</td>
+      <td title="${esc(m.comps_why || "")}">${m.comps_upside == null ? "—" : pc(m.comps_upside)}${m.verdict === "OUTLIER" ? " ◌" : ""}</td><td>${px(m.comps_centre)}</td><td>${rs.comps == null ? "—" : rs.comps.toFixed(2)}${rsBar(rs.comps)}</td>
+      <td title="${esc(m.target_why || "")}">${m.target_upside == null ? "—" : pc(m.target_upside)}</td><td>${m.target_median == null ? "—" : px(m.target_median)}</td><td>${m.target_n ?? "—"}</td><td>${m.revision == null ? "—" : `<span class="${cls(m.revision)}">${m.rev_up}↑ ${m.rev_down}↓</span>`}</td>
+      <td class="${cls(m.geiger)}">${sg(m.geiger)}</td><td class="${cls(m.geiger_rel)}">${sg(m.geiger_rel)}</td><td>${m.score == null ? "—" : m.score.toFixed(2)}${rsBar(m.score)}</td><td class="v">${m.verdict}</td></tr>`;
+  };
+  const fence = K.outliers.fence ? `fence ${pc(K.outliers.fence.lo)} … ${pc(K.outliers.fence.hi)} (${D.outlier_mad} MAD)` : D.outlier_mad > 0 ? "fence —" : "fence off";
+  return `<div class="ko" id="ko-${esc(k.cohort)}"><div class="hd"><b>${esc(k.label)}</b><span>${esc(k.where)}${k.cohortRow.fallback ? ` · <span class="fb">fallback · sector's own names</span>` : ""}</span><span>${k.members.length} names</span><span>cohort Geiger <span class="${cls(K.geiger_mean)}">${sg(K.geiger_mean)}</span></span><span>rot 72 <span class="${cls(k.rotation)}">${sg(k.rotation, 1)}</span></span><span>se ${k.se ?? "—"}</span><span>${fence}</span><span>weights comps ${w.comps} · target ${w.target} · revisions ${w.revision} · Geiger ${w.geiger}</span><span>${K.survivors.length} survive</span></div>
+    <div class="panel" style="padding:0 6px 4px"><table><thead><tr><th>#</th><th>name</th><th></th><th>price</th><th>comps C</th><th>centre</th><th>rank</th><th>target</th><th>median</th><th>firms</th><th>30-d revisions</th><th>Geiger</th><th>vs cohort</th><th>score</th><th>verdict</th></tr></thead><tbody>${K.members.map(row).join("")}</tbody></table></div></div>`;
+}
+function picksHTML(R) {
+  const card = (p) => `<div class="pick"><div class="t"><b>${esc(p.ticker)}</b><span>${esc(p.name)} · ${esc(p.ko_label)}</span></div><div class="why">${esc(reasonLine(p, p.cohort, p.sector))}</div>
+    <div class="lv"><div>price<b>${px(p.price)}</b></div><div>comps C · low · centre · high<b>${px(p.comps_lo)} · ${px(p.comps_centre)} · ${px(p.comps_hi)}</b></div><div>target · low · median · high<b>${px(p.target_lo)} · ${px(p.target_median)} · ${px(p.target_hi)}</b></div><div class="op">entry level<b>operator</b></div></div></div>`;
+  return `<h2>PICKS <small>the survivors of the hot sectors' knockouts · one line each · the level is the operator's</small> <span class="n">${R.picks.length}</span></h2><div class="picks">${R.picks.map(card).join("") || '<div class="panel">no survivor</div>'}</div>`;
+}
+function dialsHTML() {
+  const f = (id, label, val, base, step = 1) => `<div class="dial"><label for="d-${id}">${label}</label><input id="d-${id}" data-dial="${id}" type="number" step="${step}" value="${val}"><span class="base">baseline ${base}</span></div>`;
+  return `<h2>DIALS <small>the assumptions · the answer above is under these</small></h2><div class="panel dials">
+    ${f("hot_n", "hot / cold sectors", D.hot_n, DIALS.hot_n)}${f("cohorts_per_sector", "cohorts per sector", D.cohorts_per_sector, DIALS.cohorts_per_sector)}
+    ${f("heat_w.names", "heat · our names", D.heat_w.names, DIALS.heat_w.names)}${f("heat_w.funds", "heat · cap-weight funds", D.heat_w.funds, DIALS.heat_w.funds)}${f("heat_w.rotation", "heat · rotation 72", D.heat_w.rotation, DIALS.heat_w.rotation)}${f("heat_w.bowtie", "heat · bow tie", D.heat_w.bowtie, DIALS.heat_w.bowtie)}
+    ${f("ko_w.comps", "knockout · comps C", D.ko_w.comps, DIALS.ko_w.comps)}${f("ko_w.target", "knockout · target upside", D.ko_w.target, DIALS.ko_w.target)}${f("ko_w.revision", "knockout · revisions", D.ko_w.revision, DIALS.ko_w.revision)}${f("ko_w.geiger", "knockout · Geiger vs cohort", D.ko_w.geiger, DIALS.ko_w.geiger)}
+    ${f("outlier_mad", "outlier fence (MAD)", D.outlier_mad, DIALS.outlier_mad, 0.5)}${f("survivors", "survivors per cohort", D.survivors, DIALS.survivors)}${f("chain_w.heat", "chain · sector heat", D.chain_w.heat, DIALS.chain_w.heat)}${f("chain_w.knockout", "chain · knockout", D.chain_w.knockout, DIALS.chain_w.knockout)}
+    <button type="button" id="reset">RESET TO BASELINES</button></div>`;
+}
+function discussionHTML(R) {
+  const row = (r, i) => `<div class="row"><span class="no">${i + 1}</span><span class="tk">${esc(r.ticker)}<small>${esc(r.name)}</small></span><div><div class="why"><b>${esc(r.sector ? r.sector.label : r.sector_key)}</b> heat #${r.sector ? r.sector.heat_rank : "—"} · <b>${esc(r.ko_label)}</b> ${r.cohort && r.cohort.fallback ? "(sector's own names)" : "(sound)"} · comps #${r.place} way C ${pc(r.comps_upside)} to ${px(r.comps_centre)} · target ${r.target_upside == null ? "—" : pc(r.target_upside) + " (" + r.target_n + " firms)"} · revisions ${r.revision == null ? "—" : r.revision > 0 ? "up" : r.revision < 0 ? "down" : "flat"} · Geiger ${sg(r.geiger)} (${sg(r.geiger_rel)} vs cohort)</div><div class="sc">chain ${r.chain.toFixed(2)} = heat ${r.heat_score == null ? "—" : r.heat_score.toFixed(2)} × ${R.FC.weights.heat} + knockout ${r.ko_score.toFixed(2)} × ${R.FC.weights.knockout}</div></div></div>`;
+  const hs = R.H.ranked.map((s) => `<span class="${R.H.hot.includes(s.key) ? "hot" : R.H.cold.includes(s.key) ? "cold" : ""}">${s.heat_rank} ${esc(s.label)} ${sg(s.names)}</span>`).join("");
+  return `<h2>MARKET DISCUSSION <small>the five strongest and five weakest names by the full chain · ${R.FC.all.length} names ran a knockout today</small></h2><div class="disc-heat">${hs}</div>
+    <div class="disc"><div class="side s"><h3>STRONGEST</h3>${R.FC.strongest.map(row).join("")}</div><div class="side w"><h3>WEAKEST</h3>${R.FC.weakest.map(row).join("")}</div></div>`;
+}
+function specsHTML() {
+  const s = DATA.sources;
+  return `<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+  <h4>What this page is</h4><p>Alan's chain, 25 Sep 2026: heat → themes × rotation → knockout in a cohort → picks. Everything on it is what the Hub already has, put in that order: the SECTOR compare for heat, T12's cohort soundness for the themes, the C5 comps (business-first peers, outliers out, the price from the whole field) and A4's cleaned analyst targets for the knockouts. It writes nothing. The level is the operator's: no line calls anything oversold, extended or a buy.</p>
+  <h4>HEAT</h4><p>Eleven FMP sectors. <code>names</code> = the equal-weight mean of the Hub's live Geiger over the sector's served companies (the compare strip's OUR NAMES). <code>funds</code> = the mean of three cap-weight sector funds (State Street, iShares, Vanguard). <code>bow tie</code> = the Invesco equal-weight fund minus that cap-weight mean; below zero the giants carry the sector. <code>rot 72</code> = the State Street fund's 72-session log return minus SPY's, in points. The heat score is the weighted mean of the sector's rank scores on names, funds and rotation (bow tie weight 0 by default: printed, not ranked). HOT = the top N, COLD = the bottom N. <code>B1</code> prints B1's market-wide read (every computed name at the ${s.b1.as_of} close: equal-weight / cap-weight) and its soundness verdict; THIN sectors are shown, not used.</p>
+  <h4>THEMES × ROTATION</h4><p>The cohorts are the Hub's tabs, the registry and T12's candidates as T12 measured them on 3 Oct, with T12's rule: ${esc(s.t12.rule)}. A cohort belongs to the sector that holds at least half of its companies; otherwise it is MIXED and listed only. FUNDS, INDEXES, MACRO, INTL/WORLD and CRYPTO are not company cohorts. The K soundest (lowest standard error) sound cohorts of each hot and cold sector run a knockout. When a sector has no sound theme, its own served names run as one cohort, marked FALLBACK, with the live standard error (the six-close test is not run on it). A cohort's rotation is its median member's 72-session return minus SPY's.</p>
+  <h4>KNOCKOUT</h4><p>Four readings per member, each turned into a rank score inside the cohort (0 = worst, 1 = best, the share of the other members it beats) — no universal thresholds. <code>comps C</code>: C5's business-first set (≥ 15¢ of every revenue dollar in a shared line; size a soft weight; revenue segments pulled on Fly 3 Oct), the field with the MAD-3 outliers out per measure, PEG from forward growth, and the way-C centre (the weighted median of every peer's implied price on every priced measure); the reading is the upside from today's price to that centre. <code>target</code>: analyst_target_news, A4-cleaned (quality not quarantine; the split-checked target), the firms' newest note inside 183 days → median, low, high, count; fewer than ${DIALS.min_firms} firms is a named blank. <code>30-d revisions</code>: among firms with a note in the last 30 days, raised minus lowered against the same firm's previous note, over the firms that moved. <code>Geiger vs cohort</code>: the member's live Geiger minus the cohort's mean (Alan: "oversold, but less than the others"). The score is the weighted mean of the rank scores the member has (a blank is not a zero). OUTLIER (◌): a member whose comps upside sits more than the fence (3 MAD, log-free) from the cohort's median upside is a candidate for elimination and sits out of the ranking — the same rule C5 uses inside the field. SURVIVES = the top S by score.</p>
+  <h4>PICKS</h4><p>The survivors of the hot sectors' knockouts, one card each, a name kept once with its best line. The levels printed — today's price, the way-C low · centre · high, the target low · median · high — are the operator's inputs for the entry; the page draws no line.</p>
+  <h4>MARKET DISCUSSION</h4><p>The full chain over every name that ran a knockout (hot and cold sectors): chain = (sector heat rank score × ${DIALS.chain_w.heat} + knockout score × ${DIALS.chain_w.knockout}) ÷ ${DIALS.chain_w.heat + DIALS.chain_w.knockout}. Five strongest, five weakest, with the one-line reasons.</p>
+  <h4>Dials</h4><p>Every number above is an assumption with a baseline; the page shows the model's answer under the baselines and re-runs when a dial changes (saved in this browser only). Dials that need a new read (more sectors or cohorts than were read today) show what was read and say so.</p>
+  <h4>Sources and ages</h4><p>Data file ${esc(DATA.today)} taken ${esc(DATA.taken)} (${DATA.elapsed_s}s, ${DATA.calls.chart_api} chart API calls, ${DATA.calls.tables} table reads). Geiger live: ${esc(s.geiger_live.as_of)} for ${s.geiger_live.symbols} symbols. Bars: ${esc(s.bars.what)}, to ${esc(s.bars.to)}. Funds: ${esc(s.funds.what)}. B1: ${esc(s.b1.what)}. T12: ${esc(s.t12.what)}. Comps: ${esc(s.comps.what)}. Targets: ${esc(s.targets.what)} — ${s.targets.rows} clean rows for ${s.targets.names} names. Universe: ${s.universe.count} served symbols, ${s.universe.companies} companies.</p>
+  <h4>What could be wrong</h4><p>The seven-rung close reading is not used here; the Hub's live Geiger is, so the heat moves during the session. Daily bars end at the last finished session, so rotation is as of that close. A cohort's rotation is a median of members, a sector's is its cap-weight fund's. B1's read is from the ${esc(s.b1.as_of)} close and T12's soundness from 3 Oct; both are dated on the page. The comps upside depends on the set the business-first rule builds; a set under 2 peers is a named blank. A target consensus with few firms is a blank below ${DIALS.min_firms}. Nothing here is a position size or a cash level: the July MODEL sheet's heat → condition → % invested is Alan's step 1 and is not re-invented here.</p>
+  <h4>Branch</h4><p>hub/pa1-allocation-20261005 · deliverables/20261005/pa1-allocation/ · METHOD.md beside this page · not deployed.</p></details>`;
+}
+function render() {
+  const R = run(), app = document.getElementById("app");
+  const miss = D.hot_n > DIALS.hot_n ? `<div class="age" style="margin:8px 0 0">sectors beyond the ${DIALS.hot_n} hot / ${DIALS.hot_n} cold read today show no knockout (a new read is needed)</div>` : "";
+  if (VIEW === "discussion") app.innerHTML = discussionHTML(R) + dialsHTML() + specsHTML();
+  else app.innerHTML = heatHTML(R.H) + miss + themesHTML(R.H, R.kos) + `<h2>KNOCKOUTS <small>inside each cohort · members, comps rank, target upside, Geiger, verdict</small></h2>` + R.kos.filter((k) => R.H.hot.includes(k.sector_key)).map(koTable).join("") +
+    `<details class="cold"><summary>the cold sectors' knockouts</summary>${R.kos.filter((k) => !R.H.hot.includes(k.sector_key)).map(koTable).join("")}</details>` + picksHTML(R) + dialsHTML() + specsHTML();
+  document.getElementById("meta").innerHTML = `${esc(DATA.today)} · Geiger live <b>${age(DATA.sources.geiger_live.as_of)}</b> ago · bars to <b>${esc(DATA.sources.bars.to)}</b> · hot <b>${R.H.ranked.filter((s) => R.H.hot.includes(s.key)).map((s) => s.label).join(" · ")}</b>`;
+  app.querySelectorAll("[data-dial]").forEach((el) => el.addEventListener("change", () => { const v = num(el.value); if (v == null) return; const [a, b] = el.dataset.dial.split("."); if (b) D[a][b] = v; else D[a] = v; try { localStorage.setItem("pa1.dials", JSON.stringify(D)); } catch (_) {} render(); }));
+  const rb = document.getElementById("reset"); if (rb) rb.addEventListener("click", () => { D = JSON.parse(JSON.stringify(DIALS)); try { localStorage.removeItem("pa1.dials"); } catch (_) {} render(); });
+  window.PA1 = { data: DATA, dials: D, result: R };
+}
+try { DATA = await (await fetch("./data-latest.json", { cache: "no-store" })).json(); render(); }
+catch (e) { const el = document.getElementById("err"); el.hidden = false; el.textContent = "the data file could not be read: " + e.message; document.getElementById("meta").textContent = "no data"; }
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

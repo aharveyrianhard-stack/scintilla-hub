@@ -1,0 +1,755 @@
+{
+ "schema": "scintilla.rules_adopt.v1",
+ "generated_utc": "2026-10-03T15:20:00Z",
+ "verdict_counts": {
+  "KEEP": 54,
+  "CHANGE": 17,
+  "REPLACE": 3,
+  "REMOVE": 2,
+  "total": 76,
+  "register_rules": 75
+ },
+ "references": {
+  "crsp_permno": {
+   "what": "CRSP's PERMNO: a permanent number per security that never changes on a name change, ticker change, relisting or delisting; tickers are reused, so a ticker never identifies a security on its own.",
+   "url": "https://indexes.morningstar.com/research-data-products/permno"
+  },
+  "openfigi": {
+   "what": "FIGI (venue) < composite FIGI (country) < share-class FIGI (global). 'FIGIs never change, are never reused, and are permanent' across corporate actions; tickers 'can change … which often results in the need to remap content'.",
+   "url": "https://www.openfigi.com/assets/local/figi-allocation-rules.pdf"
+  },
+  "massive_ticker_events": {
+   "what": "Massive's ticker details carry composite_figi and share_class_figi; /vX/reference/tickers/{id}/events?types=ticker_change lists when a company took a ticker (what scripts/history-cut.mjs already reads).",
+   "url": "https://massive.com/docs/rest/stocks/tickers/ticker-events"
+  },
+  "lean_map_files": {
+   "what": "LEAN map files: a CSV per security 'ordered as {date, mapped symbol}'; FirstDate is the listing, 'the last date in the map file is indicative of a delisting event'; GetMappedSymbol(date) resolves which ticker the security had on a date. Factor files: date, price factor, split factor per corporate action.",
+   "url": "https://www.lean.io/docs/v2/lean-engine/class-reference/classQuantConnect_1_1Data_1_1Auxiliary_1_1MapFile.html"
+  },
+  "zipline_assets": {
+   "what": "zipline-reloaded's asset database records 'asset lifetimes and the symbol to asset id (sid) mapping'; 'symbols may map to different firms or underlying assets at different times', so symbol() resolves 'the equity that held the ticker symbol on the current symbol lookup date'; adjustments (splits, mergers, dividends) are a separate writer applied at read time.",
+   "url": "https://zipline.ml4trading.io/api-reference.html"
+  },
+  "nautilus_timestamps": {
+   "what": "NautilusTrader keeps two clocks on every bar: ts_event ('when the event occurred') and ts_init ('when NautilusTrader initialized the object'); time bars default to ts_event = bar close with LEFT_OPEN intervals.",
+   "url": "https://nautilustrader.io/docs/latest/concepts/data/"
+  },
+  "massive_finality": {
+   "what": "Massive: per-day bars are 'continuously recalculated through the session, so it absorbs even very late trades'; bars are 'revised for about 15 minutes on the stream and again at the end of the day'; since 16 Sep 2025 'aggregates that should have included the official close price' land '15 minutes after market close' (they 'were delayed until midnight' before). Cancellation/correction marks 'appear days after the session'; 'for settled history, check again a few days after the session'. Whole market in one call: /v2/aggs/grouped/locale/us/market/stocks/{date}; adjusted=true 'change[s] retroactively when a ticker splits' — store unadjusted for a permanent record.",
+   "url": "https://massive.com/knowledge-base/article/how-does-massive-create-aggregate-bars"
+  },
+  "massive_changelog": {
+   "url": "https://massive.com/changelog"
+  },
+  "massive_cancels": {
+   "url": "https://massive.com/knowledge-base/article/how-much-does-massives-feeds-handle-canceled-trades"
+  },
+  "massive_grouped": {
+   "url": "https://massive.com/knowledge-base/article/how-can-i-get-the-daily-prices-for-all-stocks-using-massives-market-data"
+  },
+  "massive_splits": {
+   "what": "Splits endpoint: execution_date ('the adjustment is applied overnight'), split_from/split_to, historical_adjustment_factor: 'for a price on date D, find the first split whose execution_date is after date D and multiply the unadjusted price by the historical_adjustment_factor'.",
+   "url": "https://massive.com/docs/rest/stocks/corporate-actions/splits"
+  },
+  "exchange_calendars": {
+   "what": "exchange_calendars (XNYS): is_session, previous_session, session_close, early closes flagged per session (the day after Thanksgiving, Christmas Eve); 'an exchange [is] open only during periods of regular trading'.",
+   "url": "https://github.com/gerrymanoim/exchange_calendars"
+  },
+  "arcticdb": {
+   "what": "ArcticDB: 'write, append and update increment the version number'; append 'only accepts data for which the index of the first row is equal to or greater than the index of the last row in the existing data'; update replaces a date range in its entirety; by default older versions are NOT removed (prune_previous_versions opt-in); snapshots pin a state; read as_of a version or a datetime; delete_data_in_range creates a new version.",
+   "url": "https://docs.arcticdb.io/latest/api/library/"
+  },
+  "dbt_tests": {
+   "what": "dbt: not_null, unique, accepted_values, relationships by name per column; dbt-utils: accepted_range, sequential_values, recency ('a timestamp column contains data at least as recent as a defined date interval'), expression_is_true, equal_rowcount; each test fails by NAME with a severity.",
+   "url": "https://github.com/dbt-labs/dbt-utils"
+  },
+  "great_expectations": {
+   "what": "Great Expectations: expectations named per check (expect_column_values_to_be_between, …_to_be_increasing, …_to_not_be_null, expect_table_row_count_to_be_between, expect_column_pair_values_A_to_be_greater_than_B) with a validation result per expectation.",
+   "url": "https://greatexpectations.io/expectations/"
+  }
+ },
+ "families": {
+  "one_security_many_tickers": {
+   "finding": "Every public store keys history on a PERMANENT id (PERMNO, sid, FIGI) and keeps the ticker-to-id mapping as DATED ROWS. We key on the ticker string and bolt two side tables onto it (floors, joins) that only work if every image carries them. The 29 Sep regrow and the 30 Sep deadlock are both consequences of the id living in images instead of in the data.",
+   "answer_to_alan": "Yes, the store should key on a permanent id. The cheapest permanent id we already have is Massive's share_class_figi (scripts/history-cut.mjs reads it today). Plan: (1) every stored object carries identity { share_class_figi, ticker_segments:[{ticker, from_et, through_et}] } written by the one writer; (2) floors and joins become rows of that identity, derived from Massive's ticker events, with the reviewed overrides kept; (3) R2 keys stay by ticker for now (the readers address tickers), but a writer refuses to touch an object whose stored FIGI differs from the request's — the identity check (BF6) then catches a reused string without any floor file. This is LEAN's map file / zipline's sid, done inside the object."
+  },
+  "when_a_bar_is_final": {
+   "finding": "Massive says the daily bar is recalculated through the session and revised about 15 minutes after the close and again at end of day; the official close lands ~16:15 ET since Sep 2025 (before that, midnight — which is the 'why so late' Alan asked about: the midnight wait was Massive's old behaviour, and our 04:00 deadline and P10's own-close-first were built around it). Corrections can land DAYS later, so 'final' is a label with a date, never a flag.",
+   "answer_to_alan": "Our FIN1 (values captured after the close) matches Nautilus's two-clock idea and Massive's advice. What we lack is the 'check again a few days later' part: a settled close is confirmed once and never re-read. The night watchman re-reads yesterday AND the four sessions before it (REPLACE verdict on 'confirm once')."
+  },
+  "adjustments": {
+   "finding": "LEAN and zipline store UNADJUSTED prices plus factor files and adjust at read time; Massive's own advice is the same ('store unadjusted … your history will quietly change under you'). We store ADJUSTED bars, so a split rewrites 23 years of history and the tail merge correctly refuses the overlap and sends the cell to a full rebuild — right, expensive, and invisible.",
+   "answer_to_alan": "Not changed today (every reader expects adjusted). Plan: pull adjusted=false into a sibling namespace for D only, keep the split ledger we already have (AD1), and let the night watchman name every name whose adjusted history changed shape (a split happened) so a rebuild is expected, not a mystery."
+  },
+  "history_storage_and_replacement": {
+   "finding": "ArcticDB never shortens in place: append must start after the last row, update replaces a stated range, every write is a new VERSION and the old one stays unless pruned, snapshots pin states. Our 'never shorter' is a GUARD ON A REWRITE; theirs is a property of the storage.",
+   "answer_to_alan": "Replace the guard with versions: write the new object to a versioned key (…/<name>.json.gz is the pointer, …/_v/<name>/<acquired_utc>.json.gz the version), keep the last 3 versions, and let a writer SHORTEN on purpose when it says why (history_cut) — the cut becomes a version with a reason, not a fight with a guard. Until that lands, the P11 cut-before-compare stays (KEEP) and the object's requested_from is corrected by the cut (CHANGE, done)."
+  },
+  "data_quality_tests": {
+   "finding": "dbt/Great Expectations run named checks on a schedule and fail by name with a severity; Soda adds freshness. We have the checks scattered inside writers (assertStrictSeries, validBar, finality) and no nightly run that reads what we SERVE against an outside source.",
+   "answer_to_alan": "Built: the night watchman (services/stocks-ops/nightly-verdict.mjs) — Massive's whole-market file and FMP's end-of-day vs our daily close and the board's previous close for all 590 names, every Geiger cell, every rung's freshness, every floor — one JSON per night with named causes and one alarm. First run on 2 Oct's session: 590/590 closes exactly equal to Massive's file."
+  }
+ },
+ "verdicts": [
+  {
+   "id": "BF1",
+   "verdict": "KEEP",
+   "follows": "Massive: bars revised ~15 min after close and at end of day — a forced refresh after 16:15 is right",
+   "with": [
+    "CA1",
+    "BF5",
+    "FL2"
+   ],
+   "note": "The 15-minute cache (maxAgeSec 900) is fine for charts."
+  },
+  {
+   "id": "BF2",
+   "verdict": "CHANGE",
+   "follows": "providerJsonWithRetry: deterministic 4xx not retried, 429/5xx retried",
+   "with": [
+    "BS4"
+   ],
+   "note": "Report the retry classes by name (done through the cause ledger: provider http <n>, retries exhausted)."
+  },
+  {
+   "id": "BF3",
+   "verdict": "CHANGE",
+   "follows": "ArcticDB append/update: the request window comes from the stored object's OWN truth",
+   "with": [
+    "FL2",
+    "FL1"
+   ],
+   "note": "DONE: cutDocumentAtFloor now rewrites requested_from to the floor, so the widening can never reach back before it. PLAN: the window should come from the object's identity rows, not from requested_from at all."
+  },
+  {
+   "id": "BF4",
+   "verdict": "KEEP",
+   "follows": "dbt not_null by name: an absence is reported, never cached",
+   "with": [
+    "CA5"
+   ]
+  },
+  {
+   "id": "BF5",
+   "verdict": "REPLACE",
+   "follows": "ArcticDB versioned writes (never shorten in place; a shorter write is a new version with a reason)",
+   "with": [
+    "FL2",
+    "BF3",
+    "CA2",
+    "GP1"
+   ],
+   "note": "Keep until versions land; it is the only thing standing between a short chart request and a lost history. Its failure is now named OUR_GUARD_REFUSED (done)."
+  },
+  {
+   "id": "BF6",
+   "verdict": "CHANGE",
+   "follows": "CRSP PERMNO / FIGI: compare the permanent id, not only the ticker string",
+   "with": [
+    "SY1",
+    "FL1"
+   ],
+   "note": "PLAN: store share_class_figi on the object and refuse a request whose FIGI differs."
+  },
+  {
+   "id": "BF7",
+   "verdict": "KEEP",
+   "follows": "conditional writes = optimistic concurrency (S3/R2 If-Match)",
+   "with": [
+    "DC1"
+   ],
+   "note": "A 412 is named R2_CONCURRENCY now, not a provider error (done)."
+  },
+  {
+   "id": "IC1",
+   "verdict": "KEEP",
+   "follows": "one interval vocabulary, asserted at load",
+   "with": [
+    "GS1"
+   ]
+  },
+  {
+   "id": "IC2",
+   "verdict": "CHANGE",
+   "follows": "one writer per object (ArcticDB: one symbol, one version chain)",
+   "with": [
+    "CA2",
+    "PW1"
+   ],
+   "note": "PLAN: D and W have two writers (deep via refresh, serving via prewarm) and drift; the night watchman flags the drift; long term the serving D/W become pointers to deep."
+  },
+  {
+   "id": "FL1",
+   "verdict": "CHANGE",
+   "follows": "LEAN map file / zipline sid: the floor is a dated row of the security's identity",
+   "with": [
+    "FL2",
+    "FL3",
+    "BF3",
+    "PW1"
+   ],
+   "note": "PLAN: floors move into the object's identity block; every writer (prewarm included) reads them from the object, not from a file in its image."
+  },
+  {
+   "id": "FL2",
+   "verdict": "KEEP",
+   "follows": "P11 cut-before-compare (= ArcticDB update of a range with a stated reason)",
+   "with": [
+    "BF5",
+    "HC1"
+   ],
+   "note": "DONE: now also corrects requested_from."
+  },
+  {
+   "id": "FL3",
+   "verdict": "KEEP",
+   "follows": "zipline symbol lookup as-of date at READ time",
+   "with": [
+    "TJ2"
+   ]
+  },
+  {
+   "id": "FL4",
+   "verdict": "KEEP",
+   "follows": "no guessed identity (CRSP)",
+   "with": [
+    "FL1"
+   ]
+  },
+  {
+   "id": "HC1",
+   "verdict": "CHANGE",
+   "follows": "ArcticDB: a cut is a version; the pointer moves last",
+   "with": [
+    "FL2",
+    "BF3"
+   ],
+   "note": "PLAN: write the cut as a version and record the cut in the identity block, so a floor-less writer cannot regrow it (it would see the identity, not a file)."
+  },
+  {
+   "id": "HC2",
+   "verdict": "KEEP",
+   "follows": "Massive ticker events by share-class FIGI + FMP symbol changes, reviewed",
+   "with": [
+    "TJ1"
+   ]
+  },
+  {
+   "id": "TJ1",
+   "verdict": "KEEP",
+   "follows": "LEAN map file rows (date → ticker)",
+   "with": [
+    "TJ2"
+   ]
+  },
+  {
+   "id": "TJ2",
+   "verdict": "CHANGE",
+   "follows": "LEAN: every resolution goes through the map; here only D, W, M are joined",
+   "with": [
+    "FL3",
+    "TR1"
+   ],
+   "note": "PLAN: join the intraday and 2D/3D/2W widths too, from the predecessor's own objects (one acquisition per predecessor per width)."
+  },
+  {
+   "id": "TJ3",
+   "verdict": "KEEP",
+   "follows": "LEAN factor-file reference price at the seam; our 5% seam + split-shaped fall check",
+   "with": [
+    "AD1"
+   ]
+  },
+  {
+   "id": "TR1",
+   "verdict": "KEEP",
+   "follows": "ArcticDB append requires continuity; bounded request",
+   "with": [
+    "TR2"
+   ]
+  },
+  {
+   "id": "TR2",
+   "verdict": "KEEP",
+   "follows": "exact-timestamp merge; a changed overlap is a re-adjustment (LEAN factor change)",
+   "with": [
+    "AD1",
+    "BR1"
+   ],
+   "note": "Its named reason codes are the model for the rest."
+  },
+  {
+   "id": "TR3",
+   "verdict": "KEEP",
+   "follows": "tail object = hot partition",
+   "with": [
+    "TR4"
+   ]
+  },
+  {
+   "id": "TR4",
+   "verdict": "KEEP",
+   "follows": "recovery path with bounded replacement first",
+   "with": [
+    "BR1",
+    "FR1"
+   ]
+  },
+  {
+   "id": "BR1",
+   "verdict": "KEEP",
+   "follows": "ArcticDB update(date_range) with anchors proven",
+   "with": [
+    "TR2"
+   ]
+  },
+  {
+   "id": "FR1",
+   "verdict": "KEEP",
+   "follows": "Great Expectations: strictly increasing time, OHLC consistency, volume ≥ 0",
+   "with": [
+    "TR2"
+   ]
+  },
+  {
+   "id": "FR2",
+   "verdict": "KEEP",
+   "follows": "floor applied in the rebuild plan",
+   "with": [
+    "FR3"
+   ]
+  },
+  {
+   "id": "FR3",
+   "verdict": "KEEP",
+   "follows": "coverage judged by sessions (exchange_calendars), one-bucket phase tolerance",
+   "with": [
+    "FR2"
+   ],
+   "note": "This was the 24–28 Sep '64 failed'; fixed 28 Sep; named in receipts."
+  },
+  {
+   "id": "FIN1",
+   "verdict": "KEEP",
+   "follows": "Nautilus ts_event vs ts_init; Massive 'revised 15 min after close'",
+   "with": [
+    "CA1",
+    "QC1"
+   ]
+  },
+  {
+   "id": "FIN2",
+   "verdict": "CHANGE",
+   "follows": "exchange_calendars early closes",
+   "with": [
+    "MS1"
+   ],
+   "note": "PLAN: model the 13:00 early closes (26 Nov, 24 Dec) in MS1 so the value close and the 16:15 trigger move with them."
+  },
+  {
+   "id": "FIN3",
+   "verdict": "KEEP",
+   "follows": "no suffix across missed sessions",
+   "with": [
+    "GS2"
+   ]
+  },
+  {
+   "id": "FIN4",
+   "verdict": "KEEP",
+   "follows": "same basis or refuse",
+   "with": [
+    "BS1"
+   ]
+  },
+  {
+   "id": "BS1",
+   "verdict": "KEEP",
+   "follows": "bounded retry at the credential boundary",
+   "with": [
+    "CA3"
+   ]
+  },
+  {
+   "id": "BS2",
+   "verdict": "KEEP",
+   "follows": "membership by manifest = universe gate",
+   "with": [
+    "PW1"
+   ]
+  },
+  {
+   "id": "BS3",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": []
+  },
+  {
+   "id": "BS4",
+   "verdict": "REPLACE",
+   "follows": "Prometheus/SRE: failures counted by a bounded cause label",
+   "with": [
+    "CA2"
+   ],
+   "note": "DONE on this branch: acquisition-cause.mjs, counters refused_by_our_rules / provider_errors / storage_errors / timeouts, /metrics acquire_failures_by_cause + the last 20 named; 502 carries cause."
+  },
+  {
+   "id": "CA1",
+   "verdict": "KEEP",
+   "follows": "Massive: official close ~16:15; re-ask after it",
+   "with": [
+    "CA2",
+    "SO3"
+   ],
+   "note": "The midnight trigger is right; what was wrong was the refusal behind it."
+  },
+  {
+   "id": "CA2",
+   "verdict": "CHANGE",
+   "follows": "SRE: relay the real reason; dbt severity",
+   "with": [
+    "BF5",
+    "GP1"
+   ],
+   "note": "DONE: detail and cause relayed, counters by cause. PLAN: when the cause is OUR_GUARD_REFUSED, serve the stored completed bars with a named STALE label instead of a 503 (the chart has the bars; the Geiger decides for itself) — needs GP1's change alongside."
+  },
+  {
+   "id": "CA3",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": [
+    "FIN3"
+   ]
+  },
+  {
+   "id": "CA4",
+   "verdict": "KEEP",
+   "follows": "absence is data (dbt not_null by name)",
+   "with": [
+    "SO1"
+   ]
+  },
+  {
+   "id": "CA5",
+   "verdict": "KEEP",
+   "follows": "404 vs 503 by whose problem it is",
+   "with": [
+    "BS2"
+   ]
+  },
+  {
+   "id": "CA6",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": []
+  },
+  {
+   "id": "CA7",
+   "verdict": "KEEP",
+   "follows": "Nautilus partial bar = separate object",
+   "with": [
+    "FIN1"
+   ]
+  },
+  {
+   "id": "CA8",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": []
+  },
+  {
+   "id": "QC1",
+   "verdict": "KEEP",
+   "follows": "two clocks (Nautilus)",
+   "with": [
+    "SO1"
+   ]
+  },
+  {
+   "id": "QC2",
+   "verdict": "KEEP",
+   "follows": "exchange_calendars previous_session, never array position",
+   "with": [
+    "SO3"
+   ]
+  },
+  {
+   "id": "SC1",
+   "verdict": "KEEP",
+   "follows": "cross-source tolerance (dbt accepted_range on the diff)",
+   "with": [
+    "SC2"
+   ]
+  },
+  {
+   "id": "SC2",
+   "verdict": "KEEP",
+   "follows": "dbt warn_if/error_if thresholds",
+   "with": [
+    "SC1"
+   ]
+  },
+  {
+   "id": "SC3",
+   "verdict": "KEEP",
+   "follows": "Massive: official close lands ~16:15 (changelog 16 Sep 2025); own close first is right",
+   "with": [
+    "SC5",
+    "SC7"
+   ]
+  },
+  {
+   "id": "SC4",
+   "verdict": "KEEP",
+   "follows": "identity by digest (CRSP never by count)",
+   "with": [
+    "SY2"
+   ]
+  },
+  {
+   "id": "SC5",
+   "verdict": "KEEP",
+   "follows": "ArcticDB snapshot semantics: confirmed is immutable",
+   "with": [
+    "SC3"
+   ]
+  },
+  {
+   "id": "SC6",
+   "verdict": "KEEP",
+   "follows": "exchange_calendars: the calendar is input, never guessed",
+   "with": [
+    "MS1"
+   ]
+  },
+  {
+   "id": "SC7",
+   "verdict": "CHANGE",
+   "follows": "Massive: official close at ~16:15 for ALL names; one probe name is a proxy",
+   "with": [
+    "SC3"
+   ],
+   "note": "PLAN: probe three names (SPY, QQQ, IWM) and require two of three rolled."
+  },
+  {
+   "id": "SO1",
+   "verdict": "KEEP",
+   "follows": "strict reader contract",
+   "with": [
+    "SC1"
+   ]
+  },
+  {
+   "id": "SO2",
+   "verdict": "KEEP",
+   "follows": "replace only, never append",
+   "with": [
+    "QC1"
+   ]
+  },
+  {
+   "id": "SO3",
+   "verdict": "KEEP",
+   "follows": "identity by digest",
+   "with": [
+    "SY2"
+   ]
+  },
+  {
+   "id": "SO4",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": []
+  },
+  {
+   "id": "GS1",
+   "verdict": "KEEP",
+   "follows": "schema-checked configuration",
+   "with": [
+    "GE1"
+   ]
+  },
+  {
+   "id": "GS2",
+   "verdict": "CHANGE",
+   "follows": "dbt severity: a transient 503 and our own refusal are different severities",
+   "with": [
+    "GP1",
+    "CA2"
+   ],
+   "note": "PLAN: read the relayed cause; OUR_GUARD_REFUSED is not retried 9 times (one attempt, named), freeing the cycle."
+  },
+  {
+   "id": "GS3",
+   "verdict": "KEEP",
+   "follows": "intraday behind daily reference = stale by name",
+   "with": [
+    "GP1"
+   ]
+  },
+  {
+   "id": "GP1",
+   "verdict": "REPLACE",
+   "follows": "dbt/GE: a failed check names the rows; the dataset still publishes with its result attached (severity)",
+   "with": [
+    "GS2",
+    "GS3",
+    "GR1"
+   ],
+   "note": "PLAN (Alan's 21 Sep ruling already allows it): arm GEIGER_PUBLISH_PARTIAL=1 on the publisher so a cycle with named failures publishes 534 names with the 56 NAMED and the Hub shows the age and the names, instead of holding a 16-hour-old reading silently. Needs the Hub to show the PARTIAL label and age (Q1/Hub lane)."
+  },
+  {
+   "id": "GP2",
+   "verdict": "CHANGE",
+   "follows": "retry only retryable causes (BS1 does this already at the bar service)",
+   "with": [
+    "GS2"
+   ],
+   "note": "PLAN as GS2."
+  },
+  {
+   "id": "GP3",
+   "verdict": "KEEP",
+   "follows": "identity by digest",
+   "with": [
+    "SY2"
+   ]
+  },
+  {
+   "id": "GR1",
+   "verdict": "CHANGE",
+   "follows": "Soda freshness: age of the artifact is a check at every hour, not only 04:00–20:15",
+   "with": [
+    "GP1"
+   ],
+   "note": "PLAN: add PUBLICATION_STALE_OUTSIDE_SESSION when computed_utc is older than the last completed session's close + 60 min."
+  },
+  {
+   "id": "GE1",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": []
+  },
+  {
+   "id": "FD1",
+   "verdict": "KEEP",
+   "follows": "append-only table + maturity gate",
+   "with": [
+    "CA2"
+   ],
+   "note": "The 2% abort would have blocked a session's rows during this incident (56/590 = 9.5%); the night watchman now says so by name."
+  },
+  {
+   "id": "SG1",
+   "verdict": "KEEP",
+   "follows": "Massive's own bucket phase, measured",
+   "with": [
+    "MS1"
+   ]
+  },
+  {
+   "id": "SG2",
+   "verdict": "KEEP",
+   "follows": "LEAN factor file applied at read",
+   "with": [
+    "AD1"
+   ]
+  },
+  {
+   "id": "BV1",
+   "verdict": "KEEP",
+   "follows": "—",
+   "with": [
+    "MS1"
+   ]
+  },
+  {
+   "id": "MS1",
+   "verdict": "CHANGE",
+   "follows": "exchange_calendars XNYS: early closes, one calendar",
+   "with": [
+    "FIN2",
+    "SC6",
+    "CA1"
+   ],
+   "note": "PLAN: one calendar module (the scheduled runner has a second copy), early closes modelled, and the night watchman compares it with Massive's market status every night (cause CALENDAR_DISAGREES)."
+  },
+  {
+   "id": "SY1",
+   "verdict": "CHANGE",
+   "follows": "FIGI",
+   "with": [
+    "BF6"
+   ],
+   "note": "PLAN: provider ticker from instrument_map/FIGI on the object, not a frozen one-entry table."
+  },
+  {
+   "id": "SY2",
+   "verdict": "KEEP",
+   "follows": "digest identity",
+   "with": [
+    "GP3",
+    "SO3"
+   ]
+  },
+  {
+   "id": "PW1",
+   "verdict": "CHANGE",
+   "follows": "one writer honours one identity",
+   "with": [
+    "FL1",
+    "IC2"
+   ],
+   "note": "PLAN: the prewarm worker reads the floors (today it ignores them) and writes deep D/W too, so D/W have one shape."
+  },
+  {
+   "id": "AD1",
+   "verdict": "CHANGE",
+   "follows": "LEAN/zipline/Massive: unadjusted + factors",
+   "with": [
+    "TR2",
+    "SG2"
+   ],
+   "note": "PLAN: unadjusted D sibling namespace; night watchman names re-adjusted histories."
+  },
+  {
+   "id": "DC1",
+   "verdict": "KEEP",
+   "follows": "Q2b's domain",
+   "with": [
+    "CA1"
+   ],
+   "note": "Hand to Q2b: the 1D cells of the post-close pass mask a refused on-demand refresh; the status page should show both counters side by side."
+  },
+  {
+   "id": "ST1",
+   "verdict": "KEEP",
+   "follows": "Q2b's domain",
+   "with": []
+  },
+  {
+   "id": "RC1",
+   "verdict": "REMOVE",
+   "follows": "superseded by the night watchman (cross-source tolerance on what we SERVE, not on a retired minute table)",
+   "with": [],
+   "note": "Retire with its tables once the night watchman has run a week green."
+  },
+  {
+   "id": "legacy_geiger_from_massive",
+   "verdict": "REMOVE",
+   "follows": "the publisher is the one Geiger writer",
+   "with": [
+    "GP1"
+   ],
+   "note": "services/hot-query/geiger-from-massive.mjs writes public.ribbon_signals from the retired hub_chart_v1 corpus; nothing on the Hub reads it. Confirm with Q2b's job register before deleting."
+  }
+ ],
+ "built_on_this_branch": [
+  "services/rest-accel/acquisition-cause.mjs — one named cause per acquisition failure, shared by the bar service and the chart API",
+  "services/rest-accel/bar-service.mjs — counters refused_by_our_rules / provider_errors (provider only) / storage_errors / timeouts / acquire_failures; /metrics acquire_failures_by_cause + last 20 named; the 502 carries cause and state REFUSED_BY_OUR_RULES",
+  "services/chart-api/server.mjs — acquireOnDemand keeps the bar service's detail and cause; counters ondemand_* by cause; /health and /metrics carry ondemand_failures_by_cause and the last 20 named; the 503 DAILY_REFRESH_UNAVAILABLE now says why",
+  "services/rest-accel/history-floor.mjs — cutDocumentAtFloor corrects requested_from to the floor",
+  "services/stocks-ops/nightly-verdict-core.mjs + nightly-verdict.mjs — the night watchman (dry run by default; WRITE=1 writes control/nightly_verdict_v1/<session>.json + latest.json)",
+  "tests/q2a-rules-audit-20261003.test.mjs — 11 tests, each with the rule's neighbours"
+ ]
+}

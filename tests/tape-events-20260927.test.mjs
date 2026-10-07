@@ -32,7 +32,12 @@ test("RSI is drawn at full strength: no opacity, a readable neutral at 50, the h
 test("only a textbook extreme breathes, and it is gentle and switchable off by reduced motion", () => {
   assert.equal(rsi.rsiExtreme(30), true); assert.equal(rsi.rsiExtreme(70), true);
   assert.equal(rsi.rsiExtreme(31), false); assert.equal(rsi.rsiExtreme(69), false); assert.equal(rsi.rsiExtreme(null), false);
-  assert.match(page, /\.sc-rsi\.is-xt\{ animation:rsi-xt 4s ease-in-out infinite; \}/);
+  /* SLOW1 (6 Oct): the breath is the opacity of a fixed copy of the number, never an animated text-shadow (that one
+     property kept the whole page re-laying-out 60 times a second) */
+  assert.match(page, /\.sc-rsi\.is-xt::after\{ content:attr\(data-v\);[^}]*opacity:0; animation:rsi-xt 4s ease-in-out infinite; \}/);
+  assert.match(page, /@keyframes rsi-xt\{ 0%,100%\{ opacity:0; \} 50%\{ opacity:1; \} \}/);
+  assert.doesNotMatch(page, /@keyframes rsi-xt\{[^@]*text-shadow/, "no keyframe animates text-shadow");
+  assert.match(fn("paintRsiCell"), /setAttribute\("data-v", Math\.round\(v\)\)/, "the copy carries the number the cell shows");
   assert.match(page, /@media \(prefers-reduced-motion:reduce\)\{ \.sc-rsi\.is-xt\{ animation:none;/);
   assert.match(fn("paintRsiCell"), /classList\.toggle\("is-xt", rsiExtreme\(v\)\)/, "the lazy fill marks it too");
 });

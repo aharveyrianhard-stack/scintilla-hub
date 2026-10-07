@@ -1,0 +1,143 @@
+{
+ "schema": "scintilla.m1.extras.v1",
+ "measured_utc": "2026-10-05",
+ "machine": "MacBook Pro, Apple M5 Max, 36 GB",
+ "embeddings": {
+  "test": "500 real reposts from the X feed: the cut-off \"RT @x: \u2026\" text (first 110 characters) must find its full original among 5,500 posts. Speed on 3,000 real news headlines (CPU, 4 threads, re-timed in a clean process; Metal).",
+  "vector_index": "pgvector 0.8.0 is offered by our Supabase project and not switched on (pg_available_extensions). Switching it on is an additive change.",
+  "results": [
+   {
+    "model": "BAAI/bge-small-en-v1.5",
+    "cpu_headlines_per_s": 563,
+    "dim": 384,
+    "mps_headlines_per_s": 2373,
+    "repost_to_original_recall_at_1": 0.952,
+    "params_m": 33
+   },
+   {
+    "model": "BAAI/bge-m3",
+    "cpu_headlines_per_s": 57,
+    "dim": 1024,
+    "mps_headlines_per_s": 367,
+    "repost_to_original_recall_at_1": 0.986,
+    "params_m": 568
+   },
+   {
+    "model": "intfloat/e5-base-v2",
+    "cpu_headlines_per_s": 191,
+    "dim": 768,
+    "mps_headlines_per_s": 1066,
+    "repost_to_original_recall_at_1": 0.978,
+    "params_m": 109
+   },
+   {
+    "model": "thenlper/gte-base",
+    "cpu_headlines_per_s": 32,
+    "dim": 768,
+    "mps_headlines_per_s": 2287,
+    "repost_to_original_recall_at_1": 0.978,
+    "params_m": 109
+   },
+   {
+    "model": "Alibaba-NLP/gte-modernbert-base",
+    "cpu_headlines_per_s": 27,
+    "dim": 768,
+    "mps_headlines_per_s": 1209,
+    "repost_to_original_recall_at_1": 0.952,
+    "params_m": 149
+   },
+   {
+    "model": "nomic-ai/nomic-embed-text-v1.5",
+    "skipped": "needs trust_remote_code (runs code from the model repo); not executed in this run"
+   }
+  ],
+  "note": "gte-base and gte-modernbert were unexpectedly slow on CPU here (about 30 headlines a second, twice) although they are the same size as e5-base; on Metal they are fast. nomic-embed-text-v1.5 was not run: it needs trust_remote_code (it executes code from the model repository)."
+ },
+ "ticker_linking": {
+  "test": "the 100 hand-flagged news rows: 12 are filed under a ticker the story is not about (examples: TGT on \"Target Generation\", STX on a TJX story, HD on a Devon Energy story, KO on Coca-Cola Europacific Partners, DOW on the Dow Jones index).",
+  "results": [
+   {
+    "method": "ticker + company-name list (plain matching, no model)",
+    "wrong_tags_caught_of_12": 7,
+    "good_rows_wrongly_rejected_of_88": 15,
+    "ms_per_row": 0.02
+   },
+   {
+    "method": "spaCy en_core_web_sm entities -> name list",
+    "wrong_tags_caught_of_12": 9,
+    "good_rows_wrongly_rejected_of_88": 18,
+    "ms_per_row": 9.35
+   },
+   {
+    "method": "GLiNER medium v2.1 (company / stock ticker / fund) -> name list",
+    "wrong_tags_caught_of_12": 10,
+    "good_rows_wrongly_rejected_of_88": 11,
+    "ms_per_row": 55.15
+   }
+  ],
+  "note": "Several \"good rows wrongly rejected\" are rows whose stored snippet never names the company (quote-list pages, \"2 AI stocks\" teasers, oil stories filed under USO), so the flag should mark a row for a lower weight, not delete it."
+ },
+ "anomaly": {
+  "test": "89 names, the last 250 daily moves each, daily closes from our chart service (read-only). \"next_day_move_vs_normal\" = the average size of the day after a flag, divided by the average day: above 1 means the flag marked a name that kept moving.",
+  "what_the_rules_file_intends": "data/scintilla-rules.json: 2x the usual day is \"about one day in twenty\" = 5% of days.",
+  "names": 89,
+  "sessions_evaluated": 250,
+  "source": "scintilla-massive-chart-api /candles tf=1d (split-adjusted daily closes)",
+  "results": [
+   {
+    "method": "ours: |move| >= 2 x stdev of last 60 moves, and >= 1%",
+    "share_of_name_days_flagged": 0.0577,
+    "flags_per_day_per_100_names": 5.8,
+    "flags_in_last_5_sessions": 6,
+    "overlap_with_ours_jaccard": 1.0,
+    "next_day_move_vs_normal": 1.11,
+    "ms_per_name_250_days": 8.1
+   },
+   {
+    "method": "robust: |move - median| >= 3 x (1.4826 x MAD) over last 60, and >= 1%",
+    "share_of_name_days_flagged": 0.027,
+    "flags_per_day_per_100_names": 2.7,
+    "flags_in_last_5_sessions": 5,
+    "overlap_with_ours_jaccard": 0.41,
+    "next_day_move_vs_normal": 1.31,
+    "ms_per_name_250_days": 1.2
+   },
+   {
+    "method": "EWMA volatility (RiskMetrics, lambda 0.94): |move| >= 2 x, and >= 1%",
+    "share_of_name_days_flagged": 0.0563,
+    "flags_per_day_per_100_names": 5.6,
+    "flags_in_last_5_sessions": 14,
+    "overlap_with_ours_jaccard": 0.73,
+    "next_day_move_vs_normal": 1.11,
+    "ms_per_name_250_days": 0.1
+   },
+   {
+    "method": "river HalfSpaceTrees (streaming, window 60): score >= 0.9, and >= 1%",
+    "share_of_name_days_flagged": 0.4373,
+    "flags_per_day_per_100_names": 43.7,
+    "flags_in_last_5_sessions": 167,
+    "overlap_with_ours_jaccard": 0.13,
+    "next_day_move_vs_normal": 1.16,
+    "ms_per_name_250_days": 25.1
+   }
+  ]
+ },
+ "hugging_face_searches": {
+  "longformer financial": "1 model, 125 downloads (SeanD103/Longformer_for_financial_sentiment_analysis)",
+  "bigbird financial / finance": "0 models",
+  "FinNER": "5 models, the most used has 269 downloads"
+ },
+ "fly": {
+  "gpu": "Not on offer. `fly platform vm-sizes` lists only shared-cpu-1x\u20268x and performance-1x\u202616x; fly.io/docs/gpus now redirects to the blog post \"We Were Wrong About GPUs\" (https://fly.io/blog/wrong-about-gpu/); the pricing page lists no GPU price.",
+  "cpu_prices_from_pricing_page": {
+   "shared-cpu-1x 1GB": "6.70 dollars/month",
+   "shared-cpu-2x 2GB": "13.39 dollars/month (about 0.019 dollars/hour)",
+   "performance-1x 2GB": "33.00 dollars/month",
+   "performance-2x 4GB": "66.00 dollars/month (about 0.09 dollars/hour)",
+   "extra RAM": "6.00 dollars per GB per month",
+   "billing": "by the second while running; a stopped machine costs 0.15 dollars per GB of disk per month"
+  },
+  "source": "https://fly.io/docs/about/pricing/ read 5 Oct 2026",
+  "not_measured": "No Fly machine was started in this run: the only existing app that could host one copies the provider keys into the machine, and installing Python packages next to those keys is a risk not worth a timing number. Fly CPU speeds below are estimates from the Mac CPU timings (a Fly core taken as 2.5 to 4 times slower than an M5 Max core)."
+ }
+}

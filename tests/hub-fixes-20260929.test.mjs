@@ -187,7 +187,7 @@ test("TSM: the supplier's own paired rate is used only when the EPS and revenue 
 test("board v2 is folded away (H4, 1 Oct): one board, no ?board switch; the Geiger number now rides in full screen", () => {
   assert.doesNotMatch(page, /BOARD_V2_ON|READ_ICON|brd-v2|<style id="board-v2-20260929">/);
   assert.match(page, /localStorage\.removeItem\("sc_board_v2"\)/, "a device that tried v2 forgets it");
-  assert.match(page, /geigerMiniHTML\(d\.g, gMax, true\)\)/);
+  assert.match(page, /geigerMiniHTML\(d\.g, 1, true\)\)/);   /* HC1 (6 Oct) — the bar is on the Geiger's fixed −1 … +1, no longer on the strongest row on screen */
   assert.match(page, /var gn=cell\.querySelector\("\.sc-gnum"\);/, "the number follows the bar in a rewind");
   assert.ok(page.indexOf('<style id="r4-fit">') > page.indexOf('<style id="board-h4-20261001">'), "r4-fit stays last");
 });
@@ -212,10 +212,12 @@ test("BOW TIE: 14 pairs (RSP/SPY, QQQE/QQQ, EQAL/IWB and the eleven RSP* vs XL*)
   for (const p of pairs.slice(3)) assert.equal(spdr.indexOf(p[1]), eqwt.indexOf(p[0]), p[0] + " pairs with its own sector's XL*");
   for (const p of pairs) assert.ok(p[3].length <= 4, p[3] + " fits a ~45 px column");
   const src = page.slice(page.indexOf('if(SECT_FAMILY==="BOWTIE"){'), page.indexOf('if(SECT_FAMILY==="INDEXES"){'));
-  assert.match(src, /var ew=gAt\(p\[0\]\), cw=gAt\(p\[1\]\), d=\(ew==null\|\|cw==null\)\?null:ew-cw;/, "the same Geiger reader (and rewind) as every family");
-  assert.match(src, /full:p\[2\]\+" \\u00b7 "\+p\[0\]\+" \(equal-weight\) "\+f2\(ew\)\+" \\u2212 "\+p\[1\]\+" \(cap-weight\) "\+f2\(cw\)/, "the pair and both Geigers on hover");
+  assert.match(src, /var ew=gAt\(p\[0\]\), cw=gAt\(p\[1\]\), tOnly=false;[\s\S]{0,260}var d=\(ew==null\|\|cw==null\)\?null:ew-cw;/, "the same Geiger reader (and rewind) as every family");
+  /* BT1 (6 Oct) — the hover moved into scBowtieLine (Geiger points, "level" inside the flat floor, the limit note); same pair, same two Geigers */
+  assert.match(src, /full:scBowtieLine\(p\[2\], p\[0\], p\[1\], ew, cw, tOf\(p\[0\]\), tOf\(p\[1\]\)\)/, "the pair and both Geigers on hover");   /* HC1 (6 Oct) — on a replayed day with no stored momentum for a fund, both are read on trend (like for like) and the hover says so */
+  assert.match(fnSrc("scBowtieLine"), /name \+ " \\u00b7 " \+ ewSym \+ " \(equal-weight\) " \+ f2\(ew\) \+ " \\u2212 " \+ cwSym \+ " \(cap-weight\) " \+ f2\(cw\)/);
   assert.match(src, /\.sort\(function\(a,b\)\{return \(b\.mean==null\?-99:b\.mean\)-\(a\.mean==null\?-99:a\.mean\);\}\)/, "high to low: the bow tie");
-  assert.match(page, /\["BOWTIE","BOW TIE",/);
+  assert.match(page, /\["BOWTIE","BREADTH",/);   /* HC1 (6 Oct) — Alan: "change the title from bow tie to breadth"; the key and the number stay */
   assert.match(page, /if\(sf==="BOWTIE"\) window\.SECT_FAMILY=sf;/, "remembered like the other families");
-  assert.match(fnSrc("cohortCompareStripHTML"), /if \(bowTie\) return '<div class="sc-cohstrip__hd">BOW TIE · equal-weight Geiger minus cap-weight/);
+  assert.match(fnSrc("cohortCompareStripHTML"), /if \(bowTie\) return '<div class="sc-cohstrip__hd">BREADTH · equal-weight Geiger minus cap-weight/);
 });

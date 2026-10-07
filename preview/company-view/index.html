@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8c8dd6a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9b3eaf6) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -214,9 +214,17 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
   font-variant-numeric:tabular-nums; color:var(--ink2); }
 /* 27 SEP — RSI at an extreme (≤30 or ≥70) breathes: a slow glow in its own colour, no size or layout change.
    Deliberately gentler than a scintillation (4 s, shadow only) — it is a standing condition, not an event. */
-.sc-rsi.is-xt{ animation:rsi-xt 4s ease-in-out infinite; }
-@keyframes rsi-xt{ 0%,100%{ text-shadow:none; } 50%{ text-shadow:0 0 6px currentColor; } }
-@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } }
+/* SLOW1 (6 Oct 2026) — THE SAME BREATH, DRAWN ONCE. The glow used to be an animated text-shadow on the number itself.
+   A text-shadow cannot be animated off the main thread, so ONE glowing number made the whole page re-lay-out and repaint
+   60 times a second for as long as it was open. MEASURED on the live Hub (headless, default tab, two extreme readings):
+   the main thread was 17–19% busy doing nothing but that; with the glow off 3–4%. Alan's iMac paid this all day.
+   Now the glow is a fixed copy of the number (::after, same text from data-v, same colour, same 6px shadow) and only its
+   OPACITY breathes — which the compositor does alone. Same 4 s, same curve, same peak. Measured after: 3.1%. */
+.sc-rsi.is-xt{ position:relative; }
+.sc-rsi.is-xt::after{ content:attr(data-v); position:absolute; inset:0; text-align:center; pointer-events:none;
+  text-shadow:0 0 6px currentColor; opacity:0; animation:rsi-xt 4s ease-in-out infinite; }
+@keyframes rsi-xt{ 0%,100%{ opacity:0; } 50%{ opacity:1; } }
+@media (prefers-reduced-motion:reduce){ .sc-rsi.is-xt{ animation:none; text-shadow:0 0 4px currentColor; } .sc-rsi.is-xt::after{ animation:none; opacity:0; } }
 /* R42 §3 — MKT CAP cell, centered mono like FPE/RSI */
 .sc-mcap{ text-align:center; font-family:var(--mono); font-size:10px;
   font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
@@ -676,6 +684,36 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-ss__one.cool .sc-ss__d{ color:var(--sv1); }
 .sc-ss__go{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); white-space:nowrap; }
 .sc-ss--one .sc-ss__spark{ flex:0 0 auto; }
+/* ── ST2 (6 Oct) · THE STRIP IS A TAPE ───────────────────────────────────────────────────────────
+   Alan: "there needs to be a tape of this… it needs to move… it's very wordy." Same box and same height as the one
+   line (so the board under it does not move); inside it, the Hub's own tape window and track — the same keyframes
+   and the same 45 px/s law (tapeSpeed) as every other band — carrying ALL of today's, newest first, each one as
+   "NBIS +8.3% 3.1×". Hover pauses it, as on the other tapes. */
+.sc-ss--tape .sc-tape__win{ flex:1 1 0; min-width:0; overflow:hidden; align-self:stretch; margin-left:6px; }
+.sc-ss--tape .sc-tape__track{ display:inline-block; white-space:nowrap; padding:0; line-height:18px;
+  animation-name:sc-tape-move; animation-timing-function:linear; animation-iteration-count:infinite; }
+.sc-ss--tape:hover .sc-tape__track{ animation-play-state:paused; }
+.sc-ss__it{ display:inline-block; margin:0 22px 0 0; padding:0; background:none; border:0; cursor:pointer;
+  font-family:var(--mono); font-size:11px; letter-spacing:.04em; line-height:18px; color:var(--ink2); white-space:nowrap; }
+.sc-ss__it .sc-ss__tk{ font-weight:700; color:var(--ink); }
+/* the flash prints the same text over the number (scScint's overlay): a box of its own keeps that copy exactly on it */
+.sc-ss__it .sc-ss__mv, .sc-ss__it .sc-ss__tk{ display:inline-block; }
+.sc-ss__it:hover .sc-ss__tk{ color:var(--crk); }
+.sc-ss__it.up .sc-ss__mv, .sc-ss__it.up .sc-ss__x{ color:var(--bull); }
+.sc-ss__it.dn .sc-ss__mv, .sc-ss__it.dn .sc-ss__x{ color:var(--bear); }
+.sc-ss__it.hot .sc-ss__mv, .sc-ss__it.hot .sc-ss__x{ color:var(--sv5); }
+.sc-ss__it.cool .sc-ss__mv, .sc-ss__it.cool .sc-ss__x{ color:var(--sv1); }
+@media(max-width:700px){
+  /* MEASURED at 390: beside the label and the count the window was 200 px, one and a half names. On a phone the tape
+     takes its own full line under them (two names and the start of a third), and the strip is still shorter than the
+     wrapped sentence it replaces (51 px against 64). */
+  .sc-ss--tape{ flex-wrap:wrap; row-gap:2px; }
+  .sc-ss--tape .sc-tape__win{ flex:1 1 100%; margin-left:0; }
+}
+@media (any-pointer:coarse){
+  .sc-ss--tape .sc-tape__win{ overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .sc-ss--tape:active .sc-tape__track{ animation-play-state:paused; }
+}
 /* 28 Sep — no session has run today: the line says why, then the last session's count and its newest one */
 .sc-ss__why{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--sv4); }
 .sc-ss__last .sc-ss__n{ color:var(--ink); }
@@ -4457,6 +4495,15 @@ body.co-exp #boardPanel{display:none !important}
 .sc-lists .sc-star{color:var(--ink-liked)}
 .sc-lists .sc-star:not(.is-fav):hover .sc-star__off{color:var(--ink-liked)}
 .sc-lists--co{gap:5px;margin:0 8px 0 0;flex:none}
+/* HC1 (6 Oct) — a list that refuses a name says so, in one line at the foot of the screen. The same honesty rule as the
+   cohort editor's "save failed" (R22 FIX 5): bear ink, and it stays until it is dismissed or the next list tap. */
+.sc-listnote{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9100;display:flex;align-items:flex-start;gap:10px;
+  box-sizing:border-box;width:max-content;max-width:min(640px,calc(100vw - 24px));padding:9px 10px 9px 12px;background:var(--panel2);
+  border:.8px solid var(--bear);box-shadow:0 6px 24px rgba(0,0,0,.6);font-family:var(--mono);font-size:11px;line-height:1.45;
+  letter-spacing:.03em;color:#C9C9CE}
+.sc-listnote[hidden]{display:none}
+.sc-listnote__x{flex:none;padding:0 2px;background:none;border:0;cursor:pointer;font:inherit;color:#8A8A92}
+.sc-listnote__x:hover{color:#C9C9CE}
 .sc-lists--co .sc-star,.sc-lists--co .sc-lst{font-size:13px;width:15px}
 /* the 60px these take comes out of the news queue on the right (built to clip its furthest item), never out of the
    usual-day readout, which had no flex rule and was squashed under LIVE */
@@ -4754,6 +4801,100 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 .sc-gnum{ display:none; }
 /* a difference of two funds has no trend/momentum read of its own: the rows keep their height (the zero line stays level) */
 .sc-cohstrip--bowtie .sc-cohstrip__read, .sc-cohstrip--bowtie .sc-cohstrip__tm{ visibility:hidden; }
+/* ── HC1 (6 Oct) → HC2 (7 Oct) — EVERY COMPARE VIEW ON ONE SCREEN, ONE ABOVE THE OTHER. HC1 laid the nine cards in one
+   row that scrolled sideways (Alan, 6 Oct: "instead of seeing them as tabs, we show them all horizontally with scrolling").
+   Alan, 7 Oct ~09:15 ET, on that row live: "No, that's gonna make me swipe left to right. No, no, no, bro. Let's organize
+   them one above each other, don't you think? They can be thinner. Think of the proportions of things, try and make it
+   work. I don't want to swipe left to right — scrolling up to down."
+   So the cards are ONE COLUMN. The list scrolls up and down inside the panel; the replay handle sits above the list, not
+   in it, so it and LIVE stay at the top; nothing here can scroll sideways (overflow-x:hidden, and no card is wider than
+   the list). A card is as wide as the panel and its columns share that width (they were a fixed 30 px and the row
+   scrolled instead). It is THIN and never thinner than a readable bar: a card takes a third of the list (--cmpx-rows:3
+   — three views at once and the nine in three screens of three: the consolidated reading, BREADTH and State Street; the
+   three other fund families; our cohorts, our names and the index funds). Where a third would squeeze the bar's track
+   under --cmpx-track the card keeps that track and the list shows a little less than three. Only the track stretches;
+   the labels keep their size. A card that needs more (unfolded in a short window, or two rows of bars on a phone) takes
+   what it needs. The bars keep the strip's own look (.sc-cohstrip, .sc-vmini): still green up and red down from one
+   zero line, hot to cold from the left — the fan, a third of the height it was. (Four to a list was tried and measured:
+   at 1680 × 1050 the tallest bar is 32 px a side against 59, and in a browser window of ordinary height, 1680 × 940,
+   the fourth card no longer fits whole.)
+   Rows of horizontal bars were weighed and left out: eleven rows to a card is taller, not thinner, and it is the layout
+   Alan took off this pane in R43 ("the compare fan eats too much vertical height — it should read left-to-right"). */
+.sc-cmpx{ min-width:0; }
+.sc-cmpx__bar{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:6px 8px 5px; min-width:0; border-bottom:.6px solid var(--line2); }
+.sc-cmpx__rep{ display:flex; align-items:center; gap:5px; flex:1 1 auto; min-width:0; flex-wrap:wrap; }
+.sc-cmpx__bar.is-off .sc-cmpx__rep{ visibility:hidden; }   /* no board on this screen, so no REWIND bar to hold a second handle on */
+.sc-cmpx__bar .sc-fsico{ margin-left:auto; }
+.sc-cmpx__rng{ flex:1 1 80px; min-width:60px; max-width:260px; }   /* the REWIND bar's own track and thumb, at this row's width */
+/* the list: --cmpx-cols cards to a line (one), each line a third of the list's own height or what its card needs,
+   whichever is more. A wrapping flex row rather than a grid: a grid row sized minmax(a third, auto) does not grow for a
+   card that needs more once the list overflows (MEASURED: on a phone BREADTH's second row of bars ran over the next card). */
+.sc-cmpx__scroll{ --cmpx-rows:3; --cmpx-cols:1; --cmpx-gap:6px; --cmpx-track:44px; flex:1 1 auto; min-height:0; min-width:0; box-sizing:border-box;
+  display:flex; flex-flow:row wrap; align-content:flex-start; align-items:stretch; gap:var(--cmpx-gap); padding:6px;
+  overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scroll-snap-type:y proximity; scroll-padding-top:6px; }
+.sc-cmpx__scroll::-webkit-scrollbar{ width:5px; }
+.sc-cmpx__scroll::-webkit-scrollbar-thumb{ background:var(--line2); }
+/* a card's width is its share of the line (it grows into the last pixel and never past its share); its height is at
+   least its share of the list — where the list's height is not known the share counts as nothing and the card is as
+   tall as its content, which is the thin end of the same design */
+.sc-cmpx__card{ flex:1 1 calc(100% / var(--cmpx-cols) - var(--cmpx-gap)); max-width:calc((100% - (var(--cmpx-cols) - 1) * var(--cmpx-gap)) / var(--cmpx-cols));
+  min-height:calc((100% - (var(--cmpx-rows) - 1) * var(--cmpx-gap)) / var(--cmpx-rows));
+  display:flex; flex-direction:column; min-width:0; box-sizing:border-box; border:.6px solid var(--line2); scroll-snap-align:start; }
+.sc-cmpx__hd{ flex:0 0 18px; height:18px; box-sizing:border-box; display:flex; align-items:center; gap:6px; padding:2px 6px 0; font-family:var(--mono); min-width:0; }   /* one height, with or without ⤢ */
+.sc-cmpx__ttl{ font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink2); white-space:nowrap; }
+.sc-cmpx__card[data-cmpx="BLEND"] .sc-cmpx__ttl{ color:var(--crk); }
+.sc-cmpx__sub{ font-size:8px; letter-spacing:.04em; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.sc-cmpx__x{ margin-left:auto; background:none; border:0; padding:0 3px; cursor:pointer; font-family:inherit; font-size:13px; line-height:1; color:var(--ink3); }
+.sc-cmpx__x:hover, .sc-cmpx__x[aria-pressed="true"]{ color:var(--crk); }
+.sc-cmpx__none{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; padding:10px 8px; text-align:center;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.04em; line-height:1.5; color:var(--dim); }
+/* inside a card the strip is tight: the name and the value sit against the bar, and the track takes every pixel left.
+   min-height:auto (the tab's own strip has 0, to fit a pane) — a card is never squeezed under its content: the slots and
+   the track's floor count, so a row of the list is a third of it or what the card needs, whichever is more */
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip{ min-height:auto; padding:1px 3px 3px !important; row-gap:8px !important; }   /* row-gap: where a card's bars take two rows, the names under the first row do not sit on the names over the second */
+/* no padding beside a column: a name has the whole column. MEASURED (Arial 8 px): GROWTH is 36.4 px and a cohort column
+   37.4 in the narrowest pane there is (a window 1400 px wide, where the page's zoom steps up); INDUSTRY, on OUR NAMES
+   unfolded, is 40.8 in a column of 40.9. With 1 px each side both were cut. */
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip__col{ min-height:auto; gap:2px; padding:1px 0 2px; }
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip__slot{ height:20px; flex:0 0 20px; gap:0; }
+/* the bar is a share of its column, so it keeps its proportion in every card and on every screen (11, 12 or 14 columns);
+   never wider than it is in the pane (16 px), so a card with two rows of wide columns does not turn its bars into blocks */
+.sc-cohtabwrap.sc-cmpx .sc-vmini{ height:auto; flex:1 1 auto; min-height:var(--cmpx-track); width:38%; min-width:10px; max-width:16px; }
+/* a compact card is label, value, bar: the word, the trend / momentum pair and the names count are folded away until ⤢ */
+.sc-cmpx__card:not(.is-exp) .sc-cohstrip__read, .sc-cmpx__card:not(.is-exp) .sc-cohstrip__tm,
+.sc-cmpx__card:not(.is-exp) .sc-cohstrip__n:not(.sc-cohstrip__n--of){ display:none; }
+.sc-cohstrip__n--of{ font-size:7.5px; }
+.sc-cohstrip__n--of.is-miss, .sc-cmpx__of.is-miss{ color:var(--warn,#e0a24a); }
+.sc-pagespecs{ flex:0 0 auto; margin:0; padding:0 8px 6px; font-family:var(--mono); font-size:9px; color:var(--dim); }
+.sc-pagespecs > summary{ cursor:pointer; letter-spacing:.14em; font-size:8px; padding:3px 0; }
+.sc-pagespecs > div{ max-height:38vh; overflow:auto; padding:2px 0 4px; line-height:1.55; letter-spacing:.02em; color:var(--ink3); }
+.sc-pagespecs p{ margin:0 0 6px; max-width:92ch; }
+.sc-pagespecs b{ color:var(--ink2); font-weight:600; }
+/* HOW MANY BARS TO A ROW. A card's columns share its width, so what a column can hold depends on how wide the pane is:
+     · a window 1280 px wide or more — the pane is then about 500 px at every size, because the page scales itself:
+       one row. Only an unfolded card of more than eleven columns (COHORTS) takes two rows: its words need 40 px a
+       column and it has 38.
+     · a narrower window, down to a phone: a card of up to eleven columns is one row; more columns, or an unfolded
+       card, take two rows (--coh-half, from the render).
+   Nothing is cut and nothing scrolls sideways: a card that needs the room gets taller instead. */
+@media(max-width:1279px){
+  .sc-cohtabwrap.sc-cmpx .sc-cmpx__card .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+}
+@media(min-width:1280px){
+  .sc-cohtabwrap.sc-cmpx .sc-cmpx__card.is-exp.is-wide .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+  /* FULL SCREEN (the panel's own ⛶) is three times as wide as the pane: the same cards sit three across and three
+     down, so all nine show at once and there is nothing to scroll — still no sideways scroll. A card's share of its
+     line is its share of the line's columns (--cmpx-f, from the render; 1 = an even third). An unfolded card there
+     shows its columns in two rows (three across leaves a column about 32 px, and the words need 40) and its line grows */
+  .sc-layer0.sc-secfs .sc-cmpx__scroll{ --cmpx-cols:3; }
+  .sc-layer0.sc-secfs .sc-cmpx__card{ flex-basis:calc((100% / var(--cmpx-cols) - var(--cmpx-gap)) * var(--cmpx-f,1));
+    max-width:calc((100% - (var(--cmpx-cols) - 1) * var(--cmpx-gap)) / var(--cmpx-cols) * var(--cmpx-f,1)); }
+  .sc-layer0.sc-secfs .sc-cmpx__card.is-exp .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+}
+@media(min-width:821px) and (max-width:1279px){
+  /* full screen in a window this size is one column as wide as the screen: every card is one row of bars there */
+  .sc-layer0.sc-secfs .sc-cmpx__card .sc-cohstrip{ grid-template-columns:repeat(var(--coh-n,11),minmax(0,1fr)) !important; }
+}
 /* the Geiger cell is the button that opens the breakdown; the bar inside it fills the cell */
 .sc-gcell{ display:flex; align-items:center; min-width:0; cursor:pointer; border-radius:2px; }
 .sc-gcell > .sc-gmini{ display:block; flex:1 1 auto; min-width:0; }
@@ -5564,6 +5705,10 @@ const NTMEPS = {};   // ticker → next-12-month (NTM) consensus EPS (fwd_eps_nt
    DB cohort key, filled from an UNSCOPED cohorts pull (every ticker's membership,
    regardless of which single cohort tab is active) — cheap, small table. */
 const GCOMP = {};
+/* BT1 (6 Oct) — ticker → { tr, mo } from the same chart API /geiger answer GCOMP is filled from. A FUND column on the
+   compare strip (XLK, RSPT, IYW …) reads its trend / momentum line from here, so the line under a bar describes the
+   same fund the bar does. */
+const SC_PROV_TM = {};
 const COHORT_OF = {};
 const SC_EXPECTED_EQUITY_COUNT = 590;
 const SC_EQUITY_UNIVERSE_DIGEST = "116c79f2e6f7cbdadceac1a2574595fc396d88cb283fce2932c926e86673eabe";
@@ -5928,8 +6073,10 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      pull is 17.5 s median, 30.2 s worst). Same authority, same values the end of this pull mirrors into GCOMP. */
   pGeiger.then(function (m) {
     let n = 0;
-    for (const t in (m || {})) { const c = num(m[t] && m[t].composite); if (c != null) { GCOMP[t] = c; n++; } }
-    if (n) { const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML(); }
+    for (const t in (m || {})) { const c = num(m[t] && m[t].composite); if (c != null) { GCOMP[t] = c; n++; }
+      /* BT1 — the same answer's own trend and momentum, kept for the compare strip's fund columns (scinStripTM) */
+      if (m[t]) SC_PROV_TM[t] = { tr: num(m[t].trend), mo: num(m[t].momentum) }; }
+    if (n) cohComparePaint();
   }).catch(function () {});
   const pDeclared = scDeclaredEquities();                 // same surface: the declared equity set
 
@@ -6000,16 +6147,25 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      ranked. The first computeBoardOrder() after this flips the order exactly once. */
   const qOverlay = window.SC_LAST_QUOTE_OVERLAY || {};
   const gOverlay = window.SC_LAST_GEIGER_OVERLAY || {};
+  /* 6 Oct (coordinator; Alan: "the re-ranking of the columns in the cohort board and dashboard doesn't work") — A NAMED
+     ABSENCE NO LONGER FREEZES THE BOARD. Skyworks closed its Qorvo takeover on 5 Oct, QRVO stopped trading, its 7 Geiger
+     cells became named absences, and the demand for complete coverage switched off every sort but TICKER for all 590
+     names. Liveness over completeness: the snapshot is still authoritative when every missing cell is NAMED (failed 0,
+     unexplained 0, computed + named = expected) and the missing names are few; those rows carry a null Geiger and sort
+     last (S7, empty last). */
+  const SC_RANK_MAX_NAMED_ABSENT_SYMBOLS = 6;   // about 1% of the 590
+  const cgAcc = SC_CG.meta && SC_CG.meta.accounting, cgCov = SC_CG.meta && SC_CG.meta.coverage;
+  const cgMissing = cgCov && Array.isArray(cgCov.incomplete_symbols) ? cgCov.incomplete_symbols.length : null;
   window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
     (num(qOverlay.applied) || 0) + (num(qOverlay.blanked) || 0) === declaredSet.size &&
     (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size &&
     !!(SC_CG.meta && SC_CG.meta.current_equalizer_validated === true &&
        SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
-       SC_CG.meta.accounting && SC_CG.meta.accounting.failed === 0 &&
-       SC_CG.meta.accounting.unexplained === 0 &&
-       SC_CG.meta.accounting.named_absent === 0 &&
-       SC_CG.meta.accounting.computed === SC_CG.meta.accounting.expected_cells &&
-       SC_CG.meta.coverage && SC_CG.meta.coverage.complete === true);
+       cgAcc && cgAcc.failed === 0 &&
+       cgAcc.unexplained === 0 &&
+       cgAcc.computed + cgAcc.named_absent === cgAcc.expected_cells &&
+       cgCov && (cgCov.complete === true ||
+         (cgAcc.named_absent > 0 && cgMissing != null && cgMissing <= SC_RANK_MAX_NAMED_ABSENT_SYMBOLS)));
   try { scStampRoot(); } catch (_) {}
   /* R39 — feed the global COMPARE stores every board load, regardless of which
      single cohort is active, so cohortCompareRows() always has the full picture.
@@ -6370,7 +6526,7 @@ const STATION_PUBLIC_URL = "https://station.scintillahub.ai/";
 /* H3 (Alan, 1 Oct: "the tree map looks great… Is there a path to get to it somehow, somewhere?") — the market → cohorts tree
    (T1 29 Sep, T1b and T2 30 Sep) opens in this tab, so its grey BACK returns here and CLOSE goes home */
 const TREE_MAP_URL = "/deliverables/20260929/tree-map/";
-const ALLOCATION_PUBLIC_URL = "/allocation/";   /* ALLOCATION is a master tab of its own, sitting between DASHBOARD and STATION (Alan, 22 Sep: "I would put portfolio allocation even before STATION"). */
+const ALLOCATION_PUBLIC_URL = "https://allocation.scintillahub.ai/";   /* 5 Oct 2026 13:20 ET, Alan: "why doesn't it look at all like my original portfolio allocation prototype?" — the tab opens his original tool (the MODEL lineage: MACRO HEAT voters → INPUTS → TARGET MIX → MOVES → MOVE OPTIONS → COMPARABLES) until PA3 strengthens that page in place; PA1's chain page stays at /deliverables/20261005/pa1-allocation/ */
 const COHORTS = [
   ["AI HW", "AI_HARDWARE"], ["AI SW", "AI_SOFTWARE"], ["MEGACAP", "MEGACAP"],
   ["BLUE CHIP", "BLUE_CHIP"], ["GROWTH", "GROWTH"], ["CRYPTO", "CRYPTO"], ["INTL", "INTL"],
@@ -6913,6 +7069,50 @@ async function listsLoad() {
     if (changed.length || (first && LIST_COHS[S.coh])) listsRepaint(changed.some((l) => LIST_COHS[S.coh] === l) || (first && !!LIST_COHS[S.coh]));
   } catch (e) { console.error("station_lists read failed", e); }
 }
+/* HC1 (6 Oct) — A LIST THAT REFUSES A NAME SAYS SO. Alan: "I can't add favorites … Reload it. Nope … CrowdStrike …
+   NET … OKTA … still nope." public.station_lists allowed positions 1–64 (station_lists_position_check). His FAVORITES
+   reached 64 at 16:51 ET; from then on every add asked for position 65, the database refused the whole write
+   (HTTP 400, SQLSTATE 23514), and this page re-read the stored 64 and un-starred the name without a word. The cap is
+   the database's, and the coordinator raised it there the same evening (64 → 256); what was wrong HERE is the
+   silence. So: the refusal carries the database's own reason, the screen goes straight back to what is stored, and
+   one plain line says what happened. No cap is written into this page — the server's answer is the only authority,
+   so a cap that moves needs no change here. */
+/* a refused write as an Error that keeps the server's answer: status, SQLSTATE and message (never thrown away) */
+async function listRefused(r, step, list) {
+  let b = null;
+  try { b = await r.json(); } catch (_) {}
+  const e = new Error("station_lists " + step + " " + list + " → " + r.status + (b && b.message ? " · " + b.message : ""));
+  e.step = step; e.status = r.status; e.pgCode = String((b && b.code) || ""); e.pgMessage = String((b && b.message) || "");
+  return e;
+}
+/* why a list write failed, from the server's answer alone (pure): "full" · "ticker" · "other" */
+function listFailKind(e) {
+  const m = String((e && e.pgMessage) || "");
+  if (e && e.pgCode === "23514" && /position_check/.test(m)) return "full";
+  if (e && e.pgCode === "23514" && /ticker_check/.test(m)) return "ticker";
+  return "other";
+}
+/* the one line shown for a failed toggle (pure). storedN = how many names the list holds now; liked = the name is on LIKED */
+function listFailLine(list, t, on, e, storedN, liked) {
+  const L = String(list).toUpperCase(), T = String(t).toUpperCase(), kind = listFailKind(e);
+  const not = T + (on ? " was not added" : " was not taken off");
+  if (kind === "full") return L + " is full: it holds " + storedN + " names and cannot take more. " + not +
+    (on && liked ? " (it is on LIKED)" : "") + ". Take a name off " + L + " to make room.";
+  if (kind === "ticker") return L + " cannot store the ticker " + T + ". " + not + ".";
+  return L + " was not saved" + (e && e.status ? " (the server answered " + e.status + ")" : "") + ". " + not + ". Try again.";
+}
+function listNoteShow(text) {
+  let n = el("listNote");
+  if (!n) {
+    n = document.createElement("div");
+    n.id = "listNote"; n.className = "sc-listnote"; n.setAttribute("role", "status"); n.setAttribute("aria-live", "polite");
+    document.body.appendChild(n);
+  }
+  n.innerHTML = '<span class="sc-listnote__t">' + esc(text) + '</span>' +
+    '<button type="button" class="sc-listnote__x" data-act="listnote-x" aria-label="Dismiss">✕</button>';
+  n.hidden = false;
+}
+function listNoteClear() { const n = el("listNote"); if (n) n.hidden = true; }
 /* upsert positions 1..n, THEN trim the tail: the list is never empty mid-write, and a reader that lands
    between the two sees at most one name twice (listsFromRows counts it once) */
 async function listStore(list, tickers) {
@@ -6921,11 +7121,11 @@ async function listStore(list, tickers) {
   if (rows.length) {
     const r = await fetch(SB + "/rest/v1/station_lists?on_conflict=list,position", { method: "POST",
       headers: Object.assign({ Prefer: "resolution=merge-duplicates,return=minimal" }, H), body: JSON.stringify(rows) });
-    if (!r.ok) throw new Error("station_lists write " + list + " → " + r.status);
+    if (!r.ok) throw await listRefused(r, "write", list);
   }
   const d = await fetch(SB + "/rest/v1/station_lists?list=eq." + encodeURIComponent(list) + "&position=gt." + rows.length,
     { method: "DELETE", headers: H });
-  if (!d.ok) throw new Error("station_lists trim " + list + " → " + d.status);
+  if (!d.ok) throw await listRefused(d, "trim", list);
 }
 let LIST_WRITES = Promise.resolve();          // one write at a time, in click order
 /* A toggle is an INTENT (put T on / take T off), applied to what is stored NOW — re-read just before the
@@ -6934,14 +7134,27 @@ function listIntent(list, t, on) {
   const T = String(t).toUpperCase();
   LISTS[list] = listApply(LISTS[list], T, on);                  // the screen moves now
   listsRemember();
+  listNoteClear();                                              // a new tap answers for itself
   listsRepaint(LIST_COHS[S.coh] === list);
   LIST_WRITES = LIST_WRITES.then(async () => {
+    let stored = null;
     try {
-      const stored = listsFromRows(await pg(LISTS_SEL, 1))[list];
+      stored = listsFromRows(await pg(LISTS_SEL, 1))[list];
       const want = listApply(stored, T, on);
       await listStore(list, want);
       if (LISTS[list].join(",") !== want.join(",")) { LISTS[list] = want; listsRepaint(LIST_COHS[S.coh] === list); }
-    } catch (e) { console.error("list write failed", list, T, e); listsLoad(); }   // say so, then show what is really stored
+    } catch (e) {
+      console.error("list write failed", list, T, e);
+      /* the names are written in ONE statement, so a refused write stored nothing: the list is what was read just before
+         it (or, when that read failed too, the screen's list without this tap). A failed TRIM is different — the names
+         are already stored and only a stale tail row is left, which the next write removes — so the screen stays. */
+      if (!(e && e.step === "trim")) {
+        const back = stored || listApply(LISTS[list], T, !on);
+        if (LISTS[list].join(",") !== back.join(",")) { LISTS[list] = back; listsRemember(); listsRepaint(LIST_COHS[S.coh] === list); }
+        listNoteShow(listFailLine(list, T, on, e, back.length, S.fav.includes(T)));
+      }
+      listsLoad();                                              // then confirm against what is really stored
+    }
   });
   return LIST_WRITES;
 }
@@ -7464,7 +7677,7 @@ document.addEventListener("input", (e) => {
      out from under the keystroke. */
   if (S.sec === "SCENES") {
     mountedKey = viewKey();
-    const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+    cohComparePaint();
     paintL0Body();
     return;
   }
@@ -7956,7 +8169,11 @@ function boardRowsHTML() {
       ? 'nothing on ' + esc(S.coh) + ' yet — tap ' + (S.coh === "RADAR" ? "⊙" : "☆") + ' on any row or company to add it (that likes it too)'
       : 'reading ' + esc(S.coh) + ' …') + '</div>';
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
-  const gMax = Math.max.apply(null, rows.map((r) => Math.abs(r.g == null ? 0 : r.g)).concat([0.0001]));
+  /* HC1 (6 Oct) — ONE SCALE FOR A NAME'S BAR, WHEREVER IT IS LISTED. Alan: EQIX looked "all the way green" in search and
+     "just past the midline" in LIKED. The bar was drawn against the strongest reading AMONG THE ROWS ON SCREEN, so a
+     search that found one name always filled its bar (+0.29 drawn as the maximum), and the same name was shorter in a
+     list that held a +0.95. Every row is now drawn on the Geiger's own fixed −1 … +1, the scale the cohort line above
+     the board, the breakdown and the company view's rail already use (R40, R49: "must not breathe"). */
   return boardHeaderHTML() + sorted.map((d) => {
     /* KEYBOARD REACHABLE. The row was a bare div: the only way to open a company page was a mouse
        click, so the whole detail surface — including the Geiger tile — was unreachable without a
@@ -7984,13 +8201,13 @@ function boardRowsHTML() {
       mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
       '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
         ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
-        (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, gMax, true)) + "</span>" +
+        (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, 1, true)) + "</span>" +
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
@@ -8276,6 +8493,10 @@ function scinGroupTickers(key) {
   /* 28 Sep (N6) — an INDEXES column is one fund, so its read is that fund's own trend and momentum */
   if (typeof window !== "undefined" && window.SC_INDEX_FUNDS && window.SECT_FAMILY === "INDEXES" && scCmpMode() === "SECTORS" &&
       window.SC_INDEX_FUNDS.some((f) => f[0] === key)) return [key];
+  /* BT1 (6 Oct) — and so is every fund-family column (SPDR, iSHARES, VANGUARD, EQUAL-WT, BOW TIE). The SPDR column is
+     keyed XLK, which the lookup below turns into OUR 70 tech names: MEASURED live 6 Oct 18:50Z, XLK's bar said +0.94
+     (the fund) over "constructive .31/.30" (our names' average; the fund's own is 1.00/.88). Only OUR NAMES is a group. */
+  if (scStripIsFund()) return [key];
   if (typeof COHSETS !== "undefined" && COHSETS) {
     const direct = COHSETS[key];
     if (direct) return Array.from(direct);
@@ -8294,16 +8515,55 @@ function scinGroupTickers(key) {
 /* H2 — the COHORTS | SECTORS mode lives inside the rewind module's closure; the strip read a global that never
    existed, so neither chip ever lit and the header always said COHORT. The module mirrors its mode here. */
 function scCmpMode() { return (typeof window !== "undefined" && window.SC_CMP_MODE) || "COHORTS"; }
-function cohortCompareStripHTML() {
-  const list = cohortCompareRows();
-  const span = cohortCompareSpan(list);
-  const cols = list.map((r) => {
+/* BT1 (6 Oct) — true when each strip column is ONE FUND's own Geiger (every SECTORS family except OUR NAMES) */
+function scStripIsFund() {
+  return scCmpMode() === "SECTORS" && typeof window !== "undefined" && !!window.SECT_FAMILY && window.SECT_FAMILY !== "MEMBERS";
+}
+/* BT1 — the trend / momentum behind one strip column. A fund column, live: the fund's own pair from the same /geiger
+   answer its bar came from. Rewound, or a cohort / OUR NAMES column: the board's store, averaged over the group. */
+function scinStripTM(key) {
+  if (scStripIsFund() && !(typeof document !== "undefined" && document.body && document.body.classList.contains("gwx-on"))) {
+    const d = SC_PROV_TM[key];
+    if (d && d.tr != null && isFinite(d.tr)) return { tr: d.tr, mo: (d.mo != null && isFinite(d.mo)) ? d.mo : null, n: 1 };
+  }
+  return scinGroupTM(scinGroupTickers(key));
+}
+/* BT1 — ONE PLAIN HOVER LINE PER BOW TIE NUMBER. Alan, 6 Oct: "Healthcare plus 55, financials plus 0.02, tech plus 0.00.
+   I don't think this bow tie is right." Every number checked out against the feed (deliverables/20261006/bt1-bowtie-check),
+   but the hover said less than it knew:
+     · the gap is a difference between two Geiger scores (each −1 … +1), not a % return — it now says "Geiger points";
+     · a gap inside ±L0_CMP_MIN_SPAN (the strip's own "flat" floor, 0.05) is called level, not "stronger" (+0.00 read as
+       "the average stock is stronger than the index");
+     · when both funds' trend prints ±1.00 the gauge has no room left, so a zero gap means "both at the limit", not "the same".
+   ewT / cwT = the two funds' trend from the same feed (null when unknown: the limit note is simply left off). */
+function scBowtieLine(name, ewSym, cwSym, ew, cw, ewT, cwT) {
+  const f2 = (v) => (v == null ? "no Geiger yet" : (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(2));
+  const head = name + " \u00b7 " + ewSym + " (equal-weight) " + f2(ew) + " \u2212 " + cwSym + " (cap-weight) " + f2(cw);
+  if (ew == null || cw == null) return head + " \u00b7 no difference: a Geiger is missing";
+  const d = ew - cw, flat = Math.abs(d) < L0_CMP_MIN_SPAN;
+  const pin = (t) => t != null && isFinite(t) && Math.abs(t) >= 0.995;
+  const atLimit = pin(ewT) && pin(cwT) && (ewT > 0) === (cwT > 0);
+  return head + " = " + f2(d) + " Geiger points (a gap between two scores, not a % return)" +
+    (flat ? " \u00b7 level: the average stock and the index read the same"
+          : d > 0 ? " \u00b7 the average stock is stronger than the index"
+                  : " \u00b7 the index is carried by its biggest names") +
+    (atLimit ? " \u00b7 both funds' trend is at the gauge's limit (" + (ewT > 0 ? "+" : "\u2212") + "1.00), so no gap can show here" : "");
+}
+/* HC1 (6 Oct) — the columns of one strip, on their own: the single strip below and every card of the one-screen compare
+   draw through here, so a column is the same column wherever it is shown. lean = leave the usual-day figure out of the
+   hover (a compact card hides the line that carries it, and a replay redraws nine cards a tick). */
+function cohStripColsHTML(list, span, lean) {
+  return list.map((r) => {
     const lbl = r.short || COH_ABBR[r.key] || r.label;   /* r.short = SPDR ticker in SECTORS mode */
     const ttl = r.full || r.label;
     /* SWITCH-ON — OUR NAMES columns end with how many of our names the bar averages ("96 names"); every column carries the
        row, so the bars and their zero line stay level across the strip */
     /* 29 Sep — a BOW TIE column: the sector's name on the column, the pair and both Geigers in its hover (r.full) */
-    const nTag = r.pair ? "" : (r.names != null ? '<span class="sc-cohstrip__n" title="' + (r.names ? r.names + " of our names averaged in this column" : "none of our names has a Geiger yet: the fund") + '">' + (r.names ? r.names : "fund") + "</span>" : "");
+    /* HC1 — a consolidated column ends with how many of its five readings were read ("5/5"); fewer is said in warm ink */
+    const nTag = r.blend ? (r.blendTag === false ? "" : '<span class="sc-cohstrip__n sc-cohstrip__n--of' + (r.blend.missing.length ? " is-miss" : "") + '" title="' +
+        esc(r.blend.used.length + " of " + (r.blend.used.length + r.blend.missing.length) + " readings went into this bar") + '">' +
+        r.blend.used.length + "/" + (r.blend.used.length + r.blend.missing.length) + "</span>")
+      : r.pair ? "" : (r.names != null ? '<span class="sc-cohstrip__n" title="' + (r.names ? r.names + " of our names averaged in this column" : "none of our names has a Geiger yet: the fund") + '">' + (r.names ? r.names : "fund") + "</span>" : "");
     if (r.mean == null) {
       /* same three-part skeleton, so a column with no data does not shift its neighbours' bars */
       return '<button class="sc-cohstrip__col is-empty' + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + ' — no data">' +
@@ -8338,15 +8598,15 @@ function cohortCompareStripHTML() {
        So "pullback" under INDUSTRIAL means what "pullback" means on a row, and the ◆ fires
        on the identical disagreement rule. This is the strip mirroring the board, which is
        what Alan asked for and did not get. */
-    const g = scinGroupTM(scinGroupTickers(r.key));
+    const g = r.blend ? { tr: null, mo: null, n: 0 } : scinStripTM(r.key);   /* BT1 — a fund column reads the fund's own trend / momentum (HC1: a consolidated bar has no single pair) */
     const rd = scinRead(g.tr, g.mo);
     const tmTitle = (g.tr == null) ? "trend/momentum not loaded yet"
-      : "mean trend " + g.tr.toFixed(2) + " (slow, daily-locked) · mean momentum " +
-        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + g.n + " tickers" +
+      : (scStripIsFund() ? "this fund's own trend " : "mean trend ") + g.tr.toFixed(2) + " (slow, daily-locked) · " + (scStripIsFund() ? "its momentum " : "mean momentum ") +
+        (g.mo == null ? "—" : g.mo.toFixed(2)) + " (fast, 6h/12h/1D) · " + (scStripIsFund() ? "the fund itself, not our names in the sector" : g.n + " tickers") +
       /* M52 — this group's own usual day rides in the same tooltip. The strip's columns are ~45 px
          wide and Alan rejected wrapping them, so the number goes where there is room to say it
          properly rather than being squeezed into a fourth line nobody could read. */
-      ((() => { const hbRows = scinGroupTickers(r.key).map((t) => ({ hb: hbRowFor(t) }));
+      (lean ? "" : (() => { const hbRows = scinGroupTickers(r.key).map((t) => ({ hb: hbRowFor(t) }));
                 const lbl = hbGroupLabel(hbRows, hbRows.length);
                 return lbl ? " · " + lbl : ""; })());
     const readTag = '<span class="sc-cohstrip__read" style="color:' + rd.col + '" title="' + esc(tmTitle) + '">' +
@@ -8361,13 +8621,18 @@ function cohortCompareStripHTML() {
       '<i>/</i>' +
       '<b style="color:' + ((g.mo ?? 0) >= 0 ? "var(--bull)" : "var(--bear)") + '">' + tmNum(g.mo) + "</b></span>";
 
-    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + (r.pair ? "" : " · " + r.n + " tickers") + " · scale ±" + span.toFixed(2) + '">' +
+    return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + (r.pair || r.blend ? "" : " · " + r.n + " tickers") + " · scale ±" + span.toFixed(2) + '">' +
       '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
       vminiHTML(r.mean, span) +
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
       readTag + tmTag + nTag +
     "</button>";
   }).join("");
+}
+function cohortCompareStripHTML() {
+  const list = cohortCompareRows();
+  const span = cohortCompareSpan(list);
+  const cols = cohStripColsHTML(list, span);
   /* ★ THE TOGGLE IS PART OF THE RENDER NOW. It used to be appended afterwards by cmpToggle()
      and restored by a MutationObserver, so every time the page rebuilt this strip the
      COHORTS|SECTORS control VANISHED until the next housekeeping tick - a navigation control
@@ -8390,13 +8655,406 @@ function cohortCompareStripHTML() {
   const ourNames = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "MEMBERS";
   const idxFam = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "INDEXES";
   const bowTie = scCmpMode() === "SECTORS" && typeof SECT_FAMILY !== "undefined" && SECT_FAMILY === "BOWTIE";   /* 29 Sep */
-  if (bowTie) return '<div class="sc-cohstrip__hd">BOW TIE · equal-weight Geiger minus cap-weight · above zero = the average stock is stronger than the index · below = carried by the biggest names · scale ±' +
+  if (bowTie) return '<div class="sc-cohstrip__hd">BREADTH · equal-weight Geiger minus cap-weight · above zero = the average stock is stronger than the index · below = carried by the biggest names · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip sc-cohstrip--bowtie" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
   return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? (idxFam ? "INDEX FUND" : "SECTOR") : "COHORT") + ' COMPARE · geiger composite · ' +
            (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · the number under each column = how many of our names · " : "") + 'bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
          '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
+}
+/* ══ HC1 (6 Oct) — EVERY COMPARE VIEW ON ONE SCREEN ══════════════════════════════════════════════════════════════════
+   Alan, 6 Oct ~17:20 ET: "these cohort and sector compare tabs — instead of seeing them as tabs, we show them all
+   horizontally with scrolling. And then maybe a replay, see how it moves … how are we doing on that consolidated sector
+   compare? We could present that instead of all these individual methods … we could always expand to the State Street
+   ones." And: "this bow tie thing is more the breadth compare? We can change the title from bow tie to breadth."
+   So COHORT COMPARE is every view at once, as cards: the consolidated sector reading first, then BREADTH (the view that
+   was BOW TIE: the name changed, the number did not), then each view that used to be a tab.
+   HC2 (7 Oct) — the cards were one row scrolling sideways; Alan, on it live: "that's gonna make me swipe left to right …
+   Let's organize them one above each other … They can be thinner … scrolling up to down." They are one column now, each a
+   third of the list, scrolling up and down under the replay handle (the sheet above says how). What a card draws did
+   not change: the same rows, the same columns, the same hovers.
+   Nothing is recomputed: a card draws the rows cohortCompareRows() gives for its own [mode, family] with the columns
+   cohStripColsHTML() draws for the single strip, so a bar here is the bar that tab showed. Cards are compact (label,
+   value, bar); a card's ⤢ unfolds the word and the trend / momentum pair, as the full strip had them.
+   The keys stay BOWTIE and MEMBERS (stored choices, tests), as MEMBERS did when it became OUR NAMES. */
+const CMPX_VIEWS = [
+  ["BLEND",    "SECTORS · BLENDED", null,                    "one reading per sector: five ways of reading it, averaged (the allocation tool's method)"],
+  ["BOWTIE",   "BREADTH",           ["SECTORS", "BOWTIE"],   "the equal-weight fund's Geiger minus its cap-weight twin's: above zero the average stock is stronger than the index, below it the biggest names carry it"],
+  ["SPDR",     "STATE STREET",      ["SECTORS", "SPDR"],     "State Street Select Sector SPDR funds, each fund's own Geiger"],
+  ["ISHARES",  "iSHARES",           ["SECTORS", "ISHARES"],  "iShares US sector funds, each fund's own Geiger"],
+  ["VANGUARD", "VANGUARD",          ["SECTORS", "VANGUARD"], "Vanguard sector funds, each fund's own Geiger"],
+  ["EQWT",     "EQUAL-WEIGHT",      ["SECTORS", "EQWT"],     "Invesco S&P 500 equal-weight sector funds, each fund's own Geiger"],
+  ["COHORTS",  "COHORTS",           ["COHORTS", null],       "our cohorts: the average Geiger of each cohort's names"],
+  ["MEMBERS",  "OUR NAMES",         ["SECTORS", "MEMBERS"],  "the names on our list in each sector, averaged: not a fund"],
+  ["INDEXES",  "INDEX FUNDS",       ["SECTORS", "INDEXES"],  "the broad index funds side by side, each fund's own Geiger"],
+];
+/* the four letters BREADTH already prints for a sector: a compact column is 30 px wide, and "UTILITIES" is not */
+const CMPX_SHORT = { MATERIALS: "MATL", ENERGY: "ENRG", FINANCIALS: "FINL", INDUSTRIAL: "INDU", TECH: "TECH", STAPLES: "STPL",
+  "REAL EST": "REAL", UTILITIES: "UTIL", HEALTH: "HLTH", DISCRET: "DISC", COMMS: "COMM" };
+/* HC2 — a card is as wide as the panel, so where the panel is narrow (a phone, a small window) eleven columns fit one
+   row (30 px each) and no more: a card with more columns (is-wide), or an unfolded one (its words need 40 px), shows
+   them in two rows there. This is the count per row; the sheet decides where it applies. */
+const CMPX_ROW_MAX = 11;
+function cmpxPerRow(n, exp) { return (n > CMPX_ROW_MAX || exp) ? Math.ceil(n / 2) : n; }
+/* HC2 — FULL SCREEN lays the cards three to a line (the pane: one). There a card's share of its line is its share of
+   that line's columns, so a column is as wide in one card of a line as in the next and the view with the most columns
+   gets the most room (BREADTH's fourteen beside two elevens). A cohort column counts 1.4: cohort names run to six
+   letters (HC1 gave them 42 px against 30). CMPX_W is each card's weighted columns as last drawn; --cmpx-f its share,
+   1 = an even third. The pane does not read either. */
+const CMPX_PER_LINE = 3, CMPX_W = {};
+function cmpxColWeight(id) { return id === "COHORTS" ? 1.4 : 1; }
+function cmpxLineShare(ids, id) {
+  const i = ids.indexOf(id), line = ids.slice(i - i % CMPX_PER_LINE, i - i % CMPX_PER_LINE + CMPX_PER_LINE);
+  const sum = line.reduce((t, k) => t + (CMPX_W[k] || 0), 0);
+  return sum > 0 && CMPX_W[id] ? CMPX_W[id] * line.length / sum : 1;
+}
+const CMPX_EXP_KEY = "hub.compare.expanded";      // which cards are unfolded, remembered per browser
+const CMPX_EXP = new Set(String(lsGet(CMPX_EXP_KEY) || "").split(",").filter(Boolean));
+function cmpxCanExpand(id) { return id !== "BLEND" && id !== "BOWTIE"; }   // those two have no word or pair to unfold
+/* one view's rows whatever the stored tab says: the mode and the family are set for the length of the call, then put back */
+function cmpxWith(view, fn) {
+  if (!view || typeof window === "undefined") return fn();
+  const m0 = window.SC_CMP_MODE, f0 = window.SECT_FAMILY;
+  window.SC_CMP_MODE = view[0]; if (view[1]) window.SECT_FAMILY = view[1];
+  try { return fn(); } finally { window.SC_CMP_MODE = m0; window.SECT_FAMILY = f0; }
+}
+/* the REWIND bar's as-of day (null = live) and a name's Geiger on it — the rewind module's own, published by it */
+function scRewindAsof() { return (typeof window !== "undefined" && typeof window.SC_ASOF === "function") ? window.SC_ASOF() : null; }
+function scGeigerNow(t) {
+  if (typeof window !== "undefined" && typeof window.SC_GAT === "function") return window.SC_GAT(t);
+  return GCOMP[t] != null ? GCOMP[t] : null;
+}
+function cmpxRows(id) {
+  const v = CMPX_VIEWS.find((x) => x[0] === id);
+  if (!v) return [];
+  return id === "BLEND" ? scBlendRows() : cmpxWith(v[2], () => cohortCompareRows());
+}
+function cmpxNoneText(id, asof) {
+  if (id === "BLEND" && !SC_BLEND.at) return "reading the five sources …";
+  return asof ? "no stored reading for " + asof + " — this history starts later" : "no reading yet";
+}
+function cmpxCardHTML(v) {
+  const id = v[0], exp = cmpxCanExpand(id) && CMPX_EXP.has(id);
+  /* the consolidated card's columns are keyed by the State Street fund, so its columns are drawn as that family's */
+  return cmpxWith(id === "BLEND" ? ["SECTORS", "SPDR"] : v[2], () => {
+    let list = id === "BLEND" ? scBlendRows() : cohortCompareRows();
+    if (!exp && id === "MEMBERS") list = list.map((r) => Object.assign({}, r, { short: CMPX_SHORT[r.label] || r.short }));
+    const span = cohortCompareSpan(list), have = list.filter((r) => r.mean != null).length;
+    const wait = id === "BLEND" && !SC_BLEND.at;
+    CMPX_W[id] = Math.max(1, list.length) * cmpxColWeight(id);
+    /* how many of the five readings were read: said once beside the card's name when every sector has the same count (the
+       usual case: 5/5 live, fewer on a replayed day), so the bars keep the height — and the zero line — of the cards beside
+       them; under each bar only when the sectors differ */
+    let of = "";
+    if (id === "BLEND" && have && !wait) {
+      const counts = Array.from(new Set(list.map((r) => r.blend.used.length)));
+      if (counts.length === 1) {
+        of = ' · <span class="sc-cmpx__of' + (counts[0] < SC_BLEND_SRC.length ? " is-miss" : "") + '">' + counts[0] + "/" + SC_BLEND_SRC.length + " read</span>";
+        list = list.map((r) => Object.assign({}, r, { blendTag: false }));
+      }
+    }
+    /* a replayed day on which this card's funds have no stored momentum: its bars are their trend, and the card says so */
+    const tOnly = list.filter((r) => r.tOnly).length;
+    if (tOnly) of += ' · <span class="sc-cmpx__of is-miss" title="' + esc(id === "BOWTIE"
+      ? "on this replayed day " + tOnly + " of these pairs are read on trend alone, both funds alike: one of them has no stored momentum"
+      : "on this replayed day " + tOnly + " of these funds have no stored momentum: their bars are the trend alone") + '">trend only</span>';
+    return '<section class="sc-cmpx__card' + (exp ? " is-exp" : "") + (list.length > CMPX_ROW_MAX ? " is-wide" : "") + '" data-cmpx="' + id + '" style="--cmpx-n:' + Math.max(1, list.length) + '">' +
+      '<header class="sc-cmpx__hd" title="' + esc(v[3]) + '"><span class="sc-cmpx__ttl">' + esc(v[1]) + "</span>" +
+        '<span class="sc-cmpx__sub">' + (have && !wait ? "±" + span.toFixed(2) + of : "") + "</span>" +
+        (cmpxCanExpand(id) ? '<button type="button" class="sc-cmpx__x" data-act="cmpxexp" data-v="' + id + '" aria-pressed="' + exp + '" title="' +
+          (exp ? "fold back to the bars" : "unfold: the word and the trend / momentum pair under each bar") + '">' + (exp ? "⤡" : "⤢") + "</button>" : "") +
+      "</header>" +
+      (have && !wait
+        ? '<div class="sc-cohstrip' + (id === "BOWTIE" ? " sc-cohstrip--bowtie" : "") + '" style="--coh-n:' + list.length + ";--coh-half:" + cmpxPerRow(list.length, exp) + '">' +
+            cohStripColsHTML(list, span, !exp) + "</div>"
+        : '<div class="sc-cmpx__none">' + esc(cmpxNoneText(id, scRewindAsof())) + "</div>") +
+    "</section>";
+  });
+}
+function cmpxCardsHTML() {
+  const ids = CMPX_VIEWS.map((v) => v[0]), cards = CMPX_VIEWS.map(cmpxCardHTML);   // every card is drawn first: a share needs its line's columns
+  return cards.map((html, i) => html.replace('" style="--cmpx-n:', '" style="--cmpx-f:' + cmpxLineShare(ids, ids[i]).toFixed(3) + ";--cmpx-n:")).join("");
+}
+/* REPLAY — a second handle on the REWIND bar, not a second clock. Every control here presses the bar's own control
+   (#gwxPlay, #gwxSpeed, #gwxBack, #gwxSc, #gwxLive) and shows what that control shows; the days are the bar's stored days.
+   It is here because the bar lives on the board, which this screen covers when it is full screen and which sits far above
+   it on a phone. Where there is no board (no bar), the handle is not drawn. */
+function cmpxBarState() {
+  const p = el("gwxPlay"), s = el("gwxSc"), sp = el("gwxSpeed"), bk = el("gwxBack"), dt = el("gwxDt"), fl = el("gwxFill");
+  return { on: !!(p && s), fill: fl ? "left:" + (fl.style.left || "0%") + ";width:" + (fl.style.width || "0%") : "left:0%;width:0%", playing: !!(p && p.classList.contains("is-on")), speed: sp ? sp.textContent : "1×", back: bk ? bk.textContent : "1Y",
+    min: s ? +s.min || 0 : 0, max: s ? +s.max || 0 : 0, value: s ? +s.value || 0 : 0, disabled: !s || s.disabled, dt: dt ? dt.textContent : "live",
+    rewound: !!scRewindAsof() };
+}
+function cmpxBarHTML() {
+  const st = cmpxBarState();
+  return '<div class="sc-cmpx__bar' + (st.on ? "" : " is-off") + '" id="cmpxBar">' +
+    '<span class="sc-cmpx__rep"><span class="sc-l0rng__lbl">Replay</span>' +
+    '<button class="sc-l0chip' + (st.playing ? " is-on" : "") + '" data-act="cmpxplay" id="cmpxPlay" title="play the stored days on every view here and on the board: the REWIND bar\'s own clock">' +
+      (st.playing ? "❙❙ PAUSE" : "▶ PLAY") + "</button>" +
+    '<button class="sc-l0chip" data-act="cmpxspeed" id="cmpxSpeed" title="replay speed">' + esc(st.speed) + "</button>" +
+    '<button class="sc-l0chip" data-act="cmpxback" id="cmpxBack" title="how far back the replay reaches">' + esc(st.back) + "</button>" +
+    /* the bar's own track and thumb (.gwx__rng, .gwx__h): the same control to the eye and the hand */
+    '<span class="gwx__rng sc-cmpx__rng"><span class="gwx__rngfill" id="cmpxFill" style="' + esc(st.fill) + '"></span>' +
+    '<input type="range" class="gwx__h gwx__h--b" id="cmpxSc" min="' + st.min + '" max="' + st.max + '" value="' + st.value + '"' + (st.disabled ? " disabled" : "") +
+      ' title="scrub: the same day on the board and on every view here" aria-label="Replay day"></span>' +
+    '<button class="sc-l0chip" data-act="cmpxlive" id="cmpxLive"' + (st.rewound ? "" : " hidden") + ' title="back to the newest reading">↻ LIVE</button>' +
+    '<span class="sc-l0asof" id="cmpxDt">' + esc(st.dt) + "</span></span>" +
+    SECFS_BTN + "</div>";
+}
+/* write-only: what the REWIND bar says, copied onto its second handle */
+function cmpxBarSync() {
+  const bar = el("cmpxBar"); if (!bar) return;
+  const st = cmpxBarState();
+  bar.classList.toggle("is-off", !st.on);
+  const p = el("cmpxPlay"), sp = el("cmpxSpeed"), bk = el("cmpxBack"), sc = el("cmpxSc"), dt = el("cmpxDt"), lv = el("cmpxLive"), fl = el("cmpxFill");
+  if (fl && fl.getAttribute("style") !== st.fill) fl.setAttribute("style", st.fill);
+  if (p) { const t = st.playing ? "❙❙ PAUSE" : "▶ PLAY"; if (p.textContent !== t) p.textContent = t; p.classList.toggle("is-on", st.playing); }
+  if (sp && sp.textContent !== st.speed) sp.textContent = st.speed;
+  if (bk && bk.textContent !== st.back) bk.textContent = st.back;
+  if (sc) { sc.min = st.min; sc.max = st.max; sc.disabled = st.disabled; if (document.activeElement !== sc || st.playing) sc.value = st.value; }
+  if (dt && dt.textContent !== st.dt) dt.textContent = st.dt;
+  if (lv) lv.hidden = !st.rewound;
+}
+/* while the bar plays, its thumb slides every frame; the second handle follows it and stops when the play does */
+let CMPX_RAF = 0;
+function cmpxFollow() {
+  if (CMPX_RAF || typeof requestAnimationFrame !== "function") return;
+  const step = () => {
+    CMPX_RAF = 0; cmpxBarSync();
+    const p = el("gwxPlay");
+    if (p && p.classList.contains("is-on") && el("cmpxBar")) CMPX_RAF = requestAnimationFrame(step);
+  };
+  CMPX_RAF = requestAnimationFrame(step);
+}
+function cmpxPress(id) { const b = el(id); if (b) b.click(); cmpxBarSync(); return !!b; }
+function cmpxScrub(v) {
+  const s = el("gwxSc"); if (!s || s.disabled) return;
+  s.value = v; s.dispatchEvent(new Event("input"));   // the bar's own scrub: its date stamp, its coalesced seek, its 45 s way back to live
+  cmpxBarSync();
+}
+if (typeof document !== "undefined") {
+  document.addEventListener("input", (e) => { if (e.target && e.target.id === "cmpxSc") cmpxScrub(e.target.value); });
+  document.addEventListener("change", (e) => { if (e.target && e.target.id === "cmpxSc") e.target.blur(); });   // let go: the thumb follows the bar again
+}
+const CMPX_SPECS = '<details class="sc-pagespecs sc-cmpx__specs"><summary>PAGE SPECS</summary><div>' +
+  "<p>Every compare view sits one above the other: scroll down. Nothing here scrolls sideways. A card takes a third of the list, so three views show at once and the nine are three screens of three; in full screen the nine sit three across and all show. A bar is a Geiger reading, from −1 (washed out) to +1 (stretched). Each card stretches its own tallest bar to the top and prints that scale (±) beside its name, so compare heights inside a card and numbers across cards.</p>" +
+  "<p><b>SECTORS · BLENDED</b> is one reading per sector: the average of five readings, each counting a fifth — the State Street fund's Geiger · that fund and its equal-weight twin, averaged · our names in the sector, equal-weighted · the tree's close tier for the sector · the sector ranking table. The small count under a bar says how many of the five were read (5/5); a missing one is named in the hover and the others carry its share. It is the allocation tool's method, with its default weights.</p>" +
+  "<p><b>BREADTH</b> is the equal-weight fund's Geiger minus the cap-weight fund's — the view that was called BOW TIE; only the name changed. Above zero the average stock is stronger than the index; below, the biggest names carry it. Geiger points, not percent.</p>" +
+  "<p><b>STATE STREET, iSHARES, VANGUARD, EQUAL-WEIGHT, INDEX FUNDS</b>: each bar is that fund's own Geiger. <b>COHORTS</b> and <b>OUR NAMES</b> average our names. ⤢ on a card unfolds the word and the trend / momentum pair under each bar.</p>" +
+  "<p><b>REPLAY</b> is the REWIND bar's own clock: the same stored days, the same controls, and the board moves with it. What the stored days hold decides what a replayed day can show, and the cards say it: the tree's close tier has no stored past and the ranking table counts only from 5 Oct 2026 (the consolidated card reads 3/5); the iShares, Vanguard and equal-weight funds have stored trend from 18 Aug 2026 and no stored momentum, so their replayed bars are the trend alone (&ldquo;trend only&rdquo;), and replayed BREADTH is read trend against trend so the gap is like for like; before a fund's first stored day its card is empty and says why.</p>" +
+  "</div></details>";
+function cohCompareScreenHTML() {
+  return cmpxBarHTML() + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + CMPX_SPECS;
+}
+/* THE ONE PAINTER of #cohCompare. Only the cards are redrawn, and the list keeps where it was scrolled to: a feed tick
+   must not throw the reader back to the first card. The replay handle and PAGE SPECS are left standing (a scrub in
+   progress and an open note survive the tick). */
+/* …and a REBUILD of the pane starts a new list at 0 — a click on a cohort's bar remounts it (MEASURED in HC1: clicking
+   METALS in the COHORTS card threw the reader back to the first card). So the place is remembered here as the reader
+   scrolls, and put back whenever the list is drawn anew: the same cards are in front of them after the click, or after
+   a visit to MAP. HC2 — the list scrolls up and down now, so the place is how far DOWN it is (it was how far across). */
+let CMPX_Y = 0;
+if (typeof document !== "undefined") document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "cmpxScroll") CMPX_Y = e.target.scrollTop; }, true);
+function cmpxRestoreScroll() { const sc = el("cmpxScroll"); if (sc && CMPX_Y > 0 && Math.abs(sc.scrollTop - CMPX_Y) > 1) sc.scrollTop = CMPX_Y; }
+function cohComparePaint() {
+  const cc = el("cohCompare"); if (!cc) return;
+  const sc = el("cmpxScroll");
+  if (!sc) { cc.classList.add("sc-cmpx"); cc.innerHTML = cohCompareScreenHTML(); cmpxRestoreScroll(); }
+  else { const y = sc.scrollTop; sc.innerHTML = cmpxCardsHTML(); if (y) sc.scrollTop = y; }
+  cmpxBarSync();
+  scBlendLoad();
+}
+
+/* ── HC1 — THE CONSOLIDATED SECTOR READING (the first card). PA5's method, the allocation tool's own: five readings per
+   sector, each already on the Geiger scale, averaged with equal weights; a reading that is missing is named and the
+   others carry its share (scBlendFrom is that tool's blendFrom, scBlendSides its bowSides).
+     SPDR    the State Street sector fund's own Geiger                                          (the index names)
+     HUBCMP  that fund and its Invesco equal-weight twin, averaged                               (both sides)
+     MKTBOW  our served names in the sector that carry a market value: their equal-weight
+             average (and their cap-weighted one, for the index side)                            (both sides)
+     TREE    the tree's close tier (/v1/scout-geiger: every listed common stock and ADR with
+             a close) rolled up by sector, equal-weight                                          (the average stock)
+     RANK    the sector_rankings row, not used when older than three days                        (the average stock)
+   What the page does not already hold is read when COHORT COMPARE is first drawn, and again when a draw finds it older
+   than 15 minutes: no timer of its own. While REWIND is on, the funds and our names are read as of that day (the stored
+   days the board replays) and the ranking row is that day's; the tree's close tier has no stored past and is named as
+   missing. A ranking row counts for a past day only when it says which day's readings it averaged ("… readings
+   2026-10-06", written since 5 Oct): the older rows came from a staged table that carried 24 Aug readings under each
+   day's date (H12), and are never drawn as that day's reading. */
+const SC_BLEND_SRC = [["SPDR", "State Street fund"], ["HUBCMP", "fund and its equal-weight twin"], ["MKTBOW", "our names in the sector"],
+  ["TREE", "the tree's close tier"], ["RANK", "sector ranking"]];
+const SC_BLEND_W = { SPDR: 20, HUBCMP: 20, MKTBOW: 20, TREE: 20, RANK: 20 };   // the allocation tool's default: equal
+const SC_BLEND_TTL_MS = 15 * 60e3, SC_BLEND_RANK_MAX_DAYS = 3;
+const SC_FMP_SECTOR_KEY = { "Technology": "TECH", "Healthcare": "HEALTH", "Financial Services": "FINANCIALS", "Consumer Cyclical": "DISCRET",
+  "Industrials": "INDUSTRIAL", "Basic Materials": "MATERIALS", "Energy": "ENERGY", "Consumer Defensive": "STAPLES", "Utilities": "UTILITIES",
+  "Real Estate": "REAL_ESTATE", "Communication Services": "COMMS" };
+const SC_BLEND = { at: 0, flight: null, prof: null, secMap: null, scout: null, tree: null, treeFor: null, rankDays: null, why: {} };
+/* the eleven sectors, from the BREADTH pairs: membership key, State Street fund, its equal-weight twin, four letters, name */
+function scBlendSectors() {
+  const pairs = (typeof window !== "undefined" && window.SC_BOWTIE_PAIRS) || [];
+  return pairs.filter((p) => SPDR_TO_SECTOR[p[1]]).map((p) => ({ key: SPDR_TO_SECTOR[p[1]], cw: p[1], ew: p[0], short: p[3], name: p[2] }));
+}
+/* a name's sector, in the allocation tool's order: our own membership, then the industry table and the State Street
+   funds' holdings, then the profile's sector */
+function scBlendSectorOf(sym) {
+  if (COHSETS) for (const fund in SPDR_TO_SECTOR) { const k = SPDR_TO_SECTOR[fund], s = COHSETS[k]; if (s && s.has(sym)) return k; }
+  const m = SC_BLEND.secMap; if (m && m[sym]) return m[sym];
+  const p = SC_BLEND.prof && SC_BLEND.prof[sym];
+  return (p && SC_FMP_SECTOR_KEY[p.sector]) || null;
+}
+function scBlendIndex(ind, hold) {
+  const m = {};
+  for (const r of ind || []) { const k = SC_FMP_SECTOR_KEY[r.fmp_sector]; if (k && !m[r.ticker]) m[r.ticker] = k; }
+  if (hold && hold.data) for (const fund in SPDR_TO_SECTOR) {
+    const f = hold.data[fund]; if (!f || !Array.isArray(f.h)) continue;
+    for (const row of f.h) if (row && row[0] && !m[row[0]]) m[row[0]] = SPDR_TO_SECTOR[fund];
+  }
+  return m;
+}
+/* the tree's close tier by sector (pure): common stocks and ADRs with a reading, at least three to a sector */
+function scBlendTreeRoll(scout, sectorOf) {
+  if (!scout || !Array.isArray(scout.rows)) return null;
+  const col = {}; (scout.row_columns || []).forEach((c, i) => { col[c] = i; });
+  const by = {};
+  for (const r of scout.rows) {
+    const c = r[col.composite], kind = r[col.kind];
+    if (c == null || (kind !== "CS" && kind !== "ADR")) continue;
+    const k = sectorOf(r[col.ticker]); if (!k) continue;
+    (by[k] = by[k] || []).push(+c);
+  }
+  const sectors = {};
+  for (const k in by) if (by[k].length >= 3) sectors[k] = { n: by[k].length, score: by[k].reduce((a, b) => a + b, 0) / by[k].length };
+  return { asof: scout.as_of || null, computed: scout.computed_utc || null, sectors };
+}
+/* our names by sector (pure): gOf(name) = its Geiger now, or on the rewound day; at least three names to a sector */
+function scBlendMkt(prof, gOf, sectorOf) {
+  const by = {}, out = {};
+  for (const sym in prof || {}) {
+    const p = prof[sym]; if (!p || p.is_etf || !(+p.market_cap > 0)) continue;
+    const c = gOf(sym); if (c == null || !isFinite(c)) continue;
+    const k = sectorOf(sym); if (!k) continue;
+    (by[k] = by[k] || []).push({ c: +c, cap: +p.market_cap });
+  }
+  for (const k in by) {
+    const rows = by[k]; if (rows.length < 3) continue;
+    const tot = rows.reduce((t, r) => t + r.cap, 0);
+    out[k] = { n: rows.length, ew: rows.reduce((t, r) => t + r.c, 0) / rows.length, cw: rows.reduce((t, r) => t + r.c * r.cap / tot, 0) };
+  }
+  return out;
+}
+function scBlendRankDays(rows) {
+  const days = {}; for (const r of rows || []) (days[r.date] = days[r.date] || {})[r.sector] = r;
+  return { days, dates: Object.keys(days).sort().reverse() };
+}
+function scBlendRankReadDay(row) { const m = /readings (\d{4}-\d{2}-\d{2})/.exec(String((row && row.method) || "")); return m ? m[1] : null; }
+/* the ranking row for a fund (pure): live = the newest day's, written within three days of `now`; rewound = the newest
+   row at or before that day whose own readings are of a day within three days of it */
+function scBlendRank(R, fund, asof, now) {
+  if (!R || !R.dates.length) return null;
+  if (!asof) {
+    const row = R.days[R.dates[0]][fund]; if (!row) return null;
+    return (now - Date.parse(row.updated_at)) / 864e5 <= SC_BLEND_RANK_MAX_DAYS ? row : null;
+  }
+  for (const d of R.dates) {
+    if (d > asof) continue;
+    const row = R.days[d][fund], read = scBlendRankReadDay(row);
+    if (!row || !read || read > asof) return null;
+    return (Date.parse(asof) - Date.parse(read)) / 864e5 <= SC_BLEND_RANK_MAX_DAYS ? row : null;
+  }
+  return null;
+}
+/* the arithmetic, on its own (the allocation tool's blendFrom): the weighted average of the readings present, the
+   missing ones named, the weights shared out again over the ones present */
+function scBlendFrom(parts, w) {
+  const used = [], missing = []; let ws = 0, sc = 0;
+  for (const [src] of SC_BLEND_SRC) {
+    const p = parts[src], wt = +(w[src] || 0);
+    if (!p || p.score == null || !isFinite(p.score)) { missing.push(src); continue; }
+    if (!(wt > 0)) continue;
+    used.push(src); ws += wt; sc += wt * p.score;
+  }
+  if (!ws) return { score: null, used, missing, weights: {} };
+  const weights = {}; for (const src of used) weights[src] = +(100 * w[src] / ws).toFixed(1);
+  return { score: sc / ws, used, missing, weights };
+}
+/* the two sides (the allocation tool's bowSides): the index names' readings and the average stock's, each averaged with
+   the same weights; their gap is the sector's breadth */
+function scBlendSides(parts, w) {
+  let cw = 0, cs = 0, ew = 0, es = 0;
+  const add = (side, v, wt) => { if (v == null || !isFinite(v) || !(wt > 0)) return; if (side === "cap") { cw += wt; cs += wt * v; } else { ew += wt; es += wt * v; } };
+  if (parts.SPDR) add("cap", parts.SPDR.score, w.SPDR);
+  if (parts.HUBCMP) { add("cap", parts.HUBCMP.cap, w.HUBCMP); add("eq", parts.HUBCMP.eq, w.HUBCMP); }
+  if (parts.MKTBOW) { add("cap", parts.MKTBOW.cap, w.MKTBOW); add("eq", parts.MKTBOW.eq, w.MKTBOW); }
+  if (parts.TREE) add("eq", parts.TREE.score, w.TREE);
+  if (parts.RANK) add("eq", parts.RANK.score, w.RANK);
+  const cap = cw ? cs / cw : null, eq = ew ? es / ew : null;
+  return { cap, eq, gap: (cap != null && eq != null) ? eq - cap : null };
+}
+function scBlendTree() {
+  if (!SC_BLEND.scout) return null;
+  if (!SC_BLEND.tree || SC_BLEND.treeFor !== COHSETS) { SC_BLEND.tree = scBlendTreeRoll(SC_BLEND.scout, scBlendSectorOf); SC_BLEND.treeFor = COHSETS; }
+  return SC_BLEND.tree;
+}
+/* one sector's five readings; null where a source has nothing for it */
+function scBlendParts(s, mkt, tree, asof) {
+  const cw = scGeigerNow(s.cw), ew = scGeigerNow(s.ew), P = {};
+  P.SPDR = cw != null ? { score: cw, label: s.cw } : null;
+  const twinTrend = !!asof && typeof window !== "undefined" && typeof window.SC_TREND_ONLY === "function" && window.SC_TREND_ONLY(s.ew);
+  P.HUBCMP = (cw != null && ew != null) ? { score: (cw + ew) / 2, cap: cw, eq: ew, label: s.cw + " + " + s.ew + (twinTrend ? ", the twin on trend alone" : ""), twinTrend } : null;
+  const m = mkt[s.key];
+  P.MKTBOW = m ? { score: m.ew, cap: m.cw, eq: m.ew, label: m.n + " names" } : null;
+  const t = !asof && tree ? tree.sectors[s.key] : null;
+  P.TREE = t ? { score: t.score, label: t.n + " names" + (tree.asof ? ", " + tree.asof : "") } : null;
+  const rk = scBlendRank(SC_BLEND.rankDays, s.cw, asof, Date.now());
+  P.RANK = rk && rk.score != null ? { score: +rk.score, label: "#" + rk.rank + " on " + rk.date } : null;
+  return P;
+}
+/* the hover of one consolidated bar, in plain words: the blend, each reading, what was not read and why */
+function scBlendLine(s, parts, b, sides, asof) {
+  const f2 = (v) => (v == null ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2));
+  const why = { TREE: asof ? "no stored past" : (SC_BLEND.why.TREE || "not read"), RANK: asof ? "no row that reads this day" : (SC_BLEND.why.RANK || "no row within three days"),
+    MKTBOW: SC_BLEND.why.MKTBOW || "fewer than three of our names here", HUBCMP: "the equal-weight twin has no reading" + (asof ? " on this day" : ""), SPDR: "the fund has no reading" + (asof ? " on this day" : "") };
+  return s.name + (asof ? " on " + asof : "") + " · blended " + f2(b.score) + " from " + b.used.length + " of " + SC_BLEND_SRC.length + " readings, each counting the same" +
+    SC_BLEND_SRC.filter(([k]) => parts[k]).map(([k, n]) => " · " + n + " " + f2(parts[k].score) + " (" + parts[k].label + ")").join("") +
+    (b.missing.length ? " · not read: " + b.missing.map((k) => SC_BLEND_SRC.find((x) => x[0] === k)[1] + " (" + why[k] + ")").join(", ") + " — the others carry the share" : "") +
+    /* the two sides are set against each other only when they are alike: not on a replayed day where the twin is its trend alone */
+    (sides.gap != null && !(parts.HUBCMP && parts.HUBCMP.twinTrend) ? " · index names " + f2(sides.cap) + ", average stock " + f2(sides.eq) + ": breadth " + f2(sides.gap) : "");
+}
+function scBlendRows() {
+  const asof = scRewindAsof();
+  const mkt = scBlendMkt(SC_BLEND.prof, scGeigerNow, scBlendSectorOf), tree = scBlendTree();
+  return scBlendSectors().map((s) => {
+    const parts = scBlendParts(s, mkt, tree, asof), b = scBlendFrom(parts, SC_BLEND_W), sides = scBlendSides(parts, SC_BLEND_W);
+    return { key: s.cw, label: s.name, short: s.short, mean: b.score, n: b.used.length, blend: { parts, used: b.used, missing: b.missing, cap: sides.cap, eq: sides.eq },
+      full: scBlendLine(s, parts, b, sides, asof) };
+  }).sort((a, b) => (b.mean == null ? -99 : b.mean) - (a.mean == null ? -99 : a.mean));
+}
+/* read what the consolidated card needs and the page does not hold; one flight at a time, then one repaint */
+function scBlendLoad() {
+  if (SC_BLEND.flight) return SC_BLEND.flight;
+  if (SC_BLEND.at && Date.now() - SC_BLEND.at < SC_BLEND_TTL_MS) return null;
+  if (typeof fetch !== "function") return null;
+  const first = !SC_BLEND.prof, why = {};
+  const base = (typeof SC_CHART_API !== "undefined" && SC_CHART_API) ? SC_CHART_API : "";
+  let ind = null, hold = null;
+  const jobs = [
+    fetch(base + "/v1/scout-geiger").then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+      .then((j) => { SC_BLEND.scout = j; SC_BLEND.tree = null; }).catch(() => { why.TREE = "could not be read just now"; }),
+    pg("sector_rankings?select=date,sector,rank,score,method,updated_at&order=date.desc,rank.asc&limit=1000")
+      .then((rows) => { SC_BLEND.rankDays = scBlendRankDays(rows); }).catch(() => { why.RANK = "could not be read just now"; }),
+  ];
+  if (first) jobs.push(
+    pg("company_profile?select=ticker,sector,market_cap,is_etf&limit=1000")
+      .then((rows) => { const m = {}; for (const r of rows) m[r.ticker] = r; SC_BLEND.prof = m; }).catch(() => { why.MKTBOW = "the market values could not be read just now"; }),
+    pg("ticker_industry?select=ticker,fmp_sector&order=ticker.asc&limit=1000").then((rows) => { ind = rows; }).catch(() => {}),
+    fetch("/deliverables/20260928/coverage-tree/data/holdings.json").then((r) => (r.ok ? r.json() : null)).then((j) => { hold = j; }).catch(() => {}));
+  SC_BLEND.flight = Promise.all(jobs).then(() => {
+    if (first) { SC_BLEND.secMap = scBlendIndex(ind, hold); SC_BLEND.tree = null; }
+    SC_BLEND.why = why; SC_BLEND.at = Date.now(); SC_BLEND.flight = null;
+    cohComparePaint();
+  });
+  return SC_BLEND.flight;
 }
 function boardPanelHTML() {
   return '<div class="sc-board" id="boardPanel">' +
@@ -8449,7 +9107,7 @@ function updateBoard() {
   const bs = el("boardScroll");
   if (bs) { bs.innerHTML = boardRowsHTML(); bs.classList.toggle("is-seed", S.boardSeedAt != null); }
   const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
-  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 §2 — the horizontal strip is what lives in Layer 0 now
+  cohComparePaint();   // R43 §2 — the compare lives in Layer 0 (HC1: every view at once, one painter; HC2: one above the other)
   /* R49 §2 — a cohort/scope change moves the MAP's ticker set, so re-resolve which
      batched (tf, cohort) series is on screen BEFORE the grid is rebuilt. Inside
      Layer 0 the tiles read through l0MapChg (TF-aware); the standalone #133 heat
@@ -8587,6 +9245,7 @@ function paintRsiCell(t, v) {
   const cell = el("lr_" + t);
   if (!cell || v == null) return;
   cell.textContent = Math.round(v);
+  if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
   cell.style.color = rsiGradColor(v);
   if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
 }
@@ -10471,7 +11130,7 @@ function l0Stamp(sec) {
 function l0BodyHTML() {
   /* M19 §A — COHORT COMPARE, unchanged markup, now claiming the full height of the pane
      (the bars stretch; see .sc-l0body--coh). Same renderer, same click targets. */
-  if (LAYER0_TAB === "COHORT") return '<div id="cohCompare" class="sc-cohtabwrap">' + cohortCompareStripHTML() + "</div>";
+  if (LAYER0_TAB === "COHORT") return '<div id="cohCompare" class="sc-cohtabwrap sc-cmpx">' + cohCompareScreenHTML() + "</div>";   /* HC1 — every view on one screen */
   const head = (lbl) => '<div class="sc-heathead"><span class="sc-heathead__lbl">' + lbl + "</span>" +
     '<span class="sc-heathead__ctrls">' + SECFS_BTN0 + "</span></div>";
   /* R49 §1 — MAP. One room, five ways of drawing the SAME cohort: GRID is the
@@ -10553,8 +11212,11 @@ function mountL0Body() {
   if (LAYER0_TAB !== "ROTATION") { l0PlayStop(); L0_RRG_AT = null; }
   if (L0_FIX) { clearInterval(L0_FIX); L0_FIX = null; }        // R45b — never stack watchdogs
   /* M19 §A — COHORT COMPARE draws no canvas and needs no per-sector ohlcv pull: it is
-     built from the board rows already in memory, so it mounts with zero network. */
-  if (LAYER0_TAB === "COHORT") return;
+     built from the board rows already in memory, so it mounts with zero network.
+     HC1 (6 Oct) — except the consolidated card: three of its five readings are not in memory, and are read when the tab is
+     drawn (once, then again only when a draw finds them older than 15 minutes — scBlendLoad). A pane drawn anew also gets
+     its list of cards back where the reader had scrolled it (cmpxRestoreScroll). */
+  if (LAYER0_TAB === "COHORT") { cmpxRestoreScroll(); cmpxBarSync(); scBlendLoad(); return; }
   if (LAYER0_TAB === "MAP") {
     l0MapSync();                                                          // R49 §2 — resolve/kick the batched TF series for this cohort
     if (L0_MAP_MODE === "GRID") { wireHeatSizing(); return; }             // R49 §1 — the heat path, unchanged
@@ -10673,7 +11335,7 @@ function scenesRoomHTML() {
 /* the SCENES room's live tick — the job updateBoard() does for the dashboard pane,
    minus the board (there isn't one here). */
 function scenesTick() {
-  const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();
+  cohComparePaint();
   if (LAYER0_TAB !== "MAP") return;
   l0MapSync();
   const hg = el("heatGrid"); if (hg) { hg.outerHTML = heatmapHTML(l0MapChg); wireHeatSizing(); }
@@ -11081,6 +11743,18 @@ function renderNews(cohort) {                            // paints from the per-
   if (sl) sl.textContent = S.tq || cohort;
 }
 const newsInScope = (n) => scopeItems([n], S.coh, S.tq, S.fav, COHSETS).length > 0;   // realtime gate
+/* RM1 (7 Oct 2026) — A LIVE HEADLINE JOINS A LIST THE WAY A PULL WOULD HAVE DELIVERED IT: in date order, and the list
+   stays the newest NEWS_LIMIT. Every arriving headline was pushed onto every list that had ever been opened and nothing
+   was ever taken off: a pull holds 120, but the table gains 5,800 to 8,700 headlines a day (MEASURED 7 Oct; 1,800 to
+   2,600 of them for the FAVORITES names), each arrival re-sorted the whole list, and with the NEWS room on screen each
+   one repainted every headline in it. A list read fresh already holds exactly these rows, so nothing shown changes on
+   the day; only a list left open no longer grows without end. */
+function newsCachePush(items, row, order, limit) {
+  items.push(row);
+  items.sort(order);
+  if (items.length > limit) items.length = limit;
+  return items;
+}
 function newsRoomHTML() {
   /* FIX 5 (R37) — restore the cohort tabs in NEWS so headlines can be scoped by
      cohort (FAV/ALL/AI HW/…). Same shared strip + data-act="coh" wiring the board
@@ -23677,7 +24351,7 @@ document.addEventListener("click", (e) => {
     }
     case "cohcmptoggle": {   // R39 — expand the cross-cohort compare fan (R41: fan is always open in Layer 0; nothing dispatches this any more — kept harmless)
       S.cohCompareOpen = !S.cohCompareOpen;
-      const cc = el("cohCompare"); if (cc) cc.innerHTML = cohortCompareStripHTML();   // R43 — #cohCompare holds the horizontal strip now
+      cohComparePaint();   // R43 — #cohCompare holds the compare (HC1: its one painter)
       break;
     }
     /* D2 (27 Sep) — the GEIGER tab's old toggles (family stack, RSI/Williams ladders, MACD, compact ladder) went with those tiles */
@@ -23906,6 +24580,18 @@ document.addEventListener("click", (e) => {
     }
     case "star":       e.preventDefault(); e.stopPropagation(); toggleFav(a.dataset.t); break;   // FIX F — never opens the company page
     case "lst":        e.preventDefault(); e.stopPropagation(); toggleList(a.dataset.l, a.dataset.t); break;   // H-FRONT — ★ FAVORITES / ◎ RADAR, never opens the company page
+    case "listnote-x": e.preventDefault(); e.stopPropagation(); listNoteClear(); break;                        // HC1 — dismiss "FAVORITES is full …"
+    /* HC1 — the one-screen compare: a card's ⤢, and the second handle on the REWIND bar (each presses the bar's own control) */
+    case "cmpxexp": {
+      e.preventDefault(); e.stopPropagation();
+      const v = a.dataset.v; if (CMPX_EXP.has(v)) CMPX_EXP.delete(v); else CMPX_EXP.add(v);
+      lsSet(CMPX_EXP_KEY, Array.from(CMPX_EXP).join(",")); cohComparePaint();
+      break;
+    }
+    case "cmpxplay":  e.preventDefault(); e.stopPropagation(); if (cmpxPress("gwxPlay")) cmpxFollow(); break;
+    case "cmpxspeed": e.preventDefault(); e.stopPropagation(); cmpxPress("gwxSpeed"); break;
+    case "cmpxback":  e.preventDefault(); e.stopPropagation(); cmpxPress("gwxBack"); setTimeout(cmpxBarSync, 1500); break;   // the new window's days land a moment later
+    case "cmpxlive":  e.preventDefault(); e.stopPropagation(); if (!cmpxPress("gwxLive")) cmpxPress("gwxLiveFab"); break;
     case "corange": {  // H-FRONT — the timeframe row changes ONLY the embedded pane's range, remembered per browser
       e.preventDefault(); e.stopPropagation();
       const r = coRange(a.dataset.r);
@@ -25577,6 +26263,7 @@ function scintStripHTML() {
     return scintOneLineHTML('<span class="sc-ss__n">0</span><span class="sc-ss__empty">nothing has moved further than its own history today.</span>' +
       scintSpark(crit), scintUsualNote());
   }
+  if (SCINT_TAPE_ON) return scintTapeHTML(rows, cohHTML, crit);                /* ST2 — a moving tape of all of today's, short words */
   const ev = rows[0], d = ev.detail || {};
   const when = (() => { try { return ET_HM.format(new Date(ev.ts)); } catch (_) { return ""; } })();
   const line = '<button class="sc-ss__one ' + scintClass(ev) + '" data-act="scintbell" data-kind="' + esc(ev.kind) +
@@ -25646,6 +26333,7 @@ function scintStripRender() {
   const host = el("scintStrip");
   if (!host) return;
   const html = scintStripHTML();
+  if (SCINT_TAPE_ON && scintTapeRender(host, html)) return;                    /* ST2 */
   if (html !== SCINT_HTML || host.innerHTML === "") { SCINT_HTML = html; host.innerHTML = html; }
   if (!host.querySelectorAll) return;
   let n = 0;
@@ -25653,6 +26341,101 @@ function scintStripRender() {
     const ev = scintBy().get(scintKey(row.dataset.kind, row.dataset.sub));
     if (ev && n < SCINT_GLOW_CAP && scintGlow("strip", ev, row.querySelector(".sc-ss__d") || row)) n++;
   }
+}
+/* ── ST2 (6 Oct) · TODAY'S SCINTILLAS IS A TAPE, IN SHORT WORDS ───────────────────────────────────────
+   Alan, 6 Oct: "there needs to be a tape of this… Don't you think it needs to move? It says 28 scintillas today. Like,
+   I need to move off of the screen to see them. And it's very wordy. I get the multiple. It's a multiple of usual day.
+   It's clear. Doesn't need to be explained a bazillion times."
+   WHAT CHANGES. With rows today the strip is no longer one sentence about the newest: it is every one of today's,
+   newest first, moving at the tapes' one speed (tapeSpeed, 45 px/s), each as  TICKER  MOVE  MULTIPLE  in the day's
+   green or red. The numbers are the stored ones — the move and the multiple at the first spike — so an item never
+   changes under the reader and the tape never restarts because a price ticked.
+   WHAT DOES NOT. The label, the count (still the way into USUAL DAY), the cohort chip and the spark; the box and its
+   height; the "usual day" sentence, which is said ONCE, as the strip's hover text, and never per item; the closed-day
+   line (scintLastSessionHTML) and the empty states. A click goes where the scintilla is (scintgo: a ticker opens its
+   company, a release opens its day in ECONOMIC). An item's own hover says only when it first spiked.
+   THE FLASH. One primitive, scScint, once per event per surface (SCINT_SEEN), as everywhere else. A NEW scintilla
+   restarts the tape at its start, so the newcomer is the first thing in the window, and it flashes there once.
+   SCINT_TAPE_ON = false puts the one line back exactly as it was. */
+const SCINT_TAPE_ON = true;
+const scintPct1 = (v) => (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(1) + "%";
+/* the short words for one scintilla: who, how far, how many of its usual days — and, for the hover only, when */
+function scintItemShort(ev) {
+  const d = (ev && ev.detail) || {}, x = scintMult(ev);
+  const hm = (ts) => { try { return ET_HM.format(new Date(ts)); } catch (_) { return ""; } };
+  const at = hm(ev.ts);
+  if (ev.kind === "price_outlier") {
+    const f = scintFlashAt(ev);
+    return { w: ev.subject, mv: d.move_pct != null && isFinite(+d.move_pct) ? scintPct1(+d.move_pct) : "", x: x,
+             tip: "first spike " + (f ? f.hm + " ET" + (f.off ? ", " + f.off : "") : at + " ET") };
+  }
+  if (ev.kind === "earnings_surprise") {
+    const m = (d.measures || []).find((q) => q && q.name === d.measure) || {};
+    const what = /rev/i.test(d.measure || "") ? "REV" : /eps|earn/i.test(d.measure || "") ? "EPS" : "";
+    return { w: ev.subject, mv: [what, m.surprise_pct != null && isFinite(+m.surprise_pct) ? scintPct1(+m.surprise_pct) : ""].filter(Boolean).join(" "),
+             x: x, tip: "earnings surprise, reported " + at + " ET" };
+  }
+  if (ev.kind === "econ_surprise")
+    return { w: ev.subject, mv: d.actual != null ? String(d.actual) : "", x: x, tip: "surprise print " + at + " ET" };
+  if (ev.kind === "econ_imminent")       /* nothing has printed, so there is no move and no multiple: the time IS the news */
+    return { w: ev.subject, mv: d.event_ts ? hm(d.event_ts) + " ET" : "soon", x: "", tip: "about to print" };
+  return { w: ev.subject, mv: "", x: x, tip: scintWhat(ev) + " " + at + " ET" };
+}
+function scintTapeItemHTML(ev) {
+  const d = ev.detail || {}, s = scintItemShort(ev);
+  return '<button class="sc-ss__it ' + scintClass(ev) + '" data-act="scintgo" data-kind="' + esc(ev.kind) +
+    '" data-sub="' + esc(ev.subject) + '" data-cty="' + esc(d.country || "") + '" data-day="' +
+    esc(d.event_ts ? scintDayET(d.event_ts) : "") + '" data-ts="' + esc(ev.ts) + '" title="' + esc(s.tip) + '">' +
+    '<b class="sc-ss__tk">' + esc(s.w) + "</b>" + (s.mv ? ' <span class="sc-ss__mv">' + esc(s.mv) + "</span>" : "") +
+    (s.x ? ' <span class="sc-ss__x">' + esc(s.x) + "</span>" : "") + "</button>";
+}
+function scintTapeHTML(rows, cohHTML, crit) {
+  const seg = rows.map(scintTapeItemHTML).join("");
+  /* the one explanation, once: the strip's own hover. Its last clause used to send the reader to the bell for the list;
+     the list is now the tape itself, so that clause says what a click does here. */
+  const note = scintUsualNote().replace(/ · tap to open the notifications[^]*$/, "") +
+    " · each item is the name, its move at the first spike, and how many of its usual days that was; hover one for the time, click it to open it.";
+  return scintOneLineHTML('<button class="sc-ss__n sc-ss__n--go" data-act="scintlast" data-day="' + esc(todayISO()) +
+      '" title="open USUAL DAY on today: all ' + rows.length + ' listed, and where today sits in its own history">' + rows.length + "</button>" +
+      (cohHTML || "") + '<div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div>" + scintSpark(crit),
+    note).replace('class="sc-ss sc-ss--one"', 'class="sc-ss sc-ss--one sc-ss--tape"');
+}
+/* which scintillas the tape is carrying — when this is unchanged, a repaint (the spark turns over on the hour) must
+   not send the tape back to its start */
+let SCINT_TAPE_SIG = "";
+function scintTapeRender(host, html) {
+  if (html.indexOf("sc-ss--tape") < 0) return false;                 /* a closed day, an empty day, a failed read: the one line */
+  const q = (root, sel) => (root && typeof root.querySelector === "function" ? root.querySelector(sel) : null);
+  if (html !== SCINT_HTML || host.innerHTML === "") {
+    const sig = scintToday().map((r) => r.kind + "|" + r.subject + "|" + r.ts).join(",");
+    let at = null;
+    if (sig === SCINT_TAPE_SIG) {
+      try { const a = q(host, ".sc-tape__track").getAnimations()[0]; at = a && a.currentTime != null ? +a.currentTime : null; } catch (_) {}
+    }
+    SCINT_TAPE_SIG = sig; SCINT_HTML = html; host.innerHTML = html;
+    const track = q(host, ".sc-ss--tape .sc-tape__track");
+    if (track && typeof tapeSpeed === "function") {
+      tapeSpeed(track);                                               /* the one speed law: 45 px/s, repeated to fill a wide window */
+      const dur = parseFloat(track.style.animationDuration);
+      if (at != null && dur > 0) track.style.animationDelay = -((at / 1000) % dur) + "s";   /* same items: carry on from where it was */
+    }
+  }
+  if (typeof host.querySelectorAll !== "function") return true;
+  /* the flash: the newest row of each subject, once (SCINT_SEEN), on every copy of it the loop carries */
+  const by = scintBy(), lit = new Map();
+  let n = 0;
+  for (const it of host.querySelectorAll(".sc-ss__it[data-kind]")) {
+    const k = scintKey(it.dataset.kind, it.dataset.sub), ev = by.get(k);
+    if (!ev || String(ev.ts) !== it.dataset.ts) continue;
+    const node = q(it, ".sc-ss__mv") || q(it, ".sc-ss__tk") || it;
+    if (lit.has(k)) { if (lit.get(k)) scScint(node, scintTone(ev)); continue; }
+    /* past the cap (opening the page with 28 on the tape) the rest are marked as seen WITHOUT a flash: otherwise the
+       next tick would flash the next dozen, and the one after that the next, and a flash would stop meaning "new" */
+    const go = n < SCINT_GLOW_CAP ? scintGlow("strip", ev, node) : (SCINT_SEEN.set("strip|" + k, ev.ts), false);
+    lit.set(k, go);
+    if (go) n++;
+  }
+  return true;
 }
 /* ── M55 · EVERY SCINTILLA LANDS IN THE HUB'S OWN NOTIFICATIONS ───────────────────────────────
    The bell already exists, already keeps a rolling list in local storage, already carries an unread
@@ -26288,7 +27071,7 @@ if (sb) {
       return ta < tb ? 1 : -1;                              // newest first
     };
     for (const [key, ent] of NEWS_CACHE)                    // FIX A3 — feed every cached scope the item belongs to
-      if (newsItemInKey(p.new, key)) { ent.items.push(p.new); ent.items.sort(tsDesc); }
+      if (newsItemInKey(p.new, key)) newsCachePush(ent.items, p.new, tsDesc, NEWS_LIMIT);   // RM1 — and keep it the newest NEWS_LIMIT
     if (el("newsList") && S.sec === "NEWS" && newsInScope(p.new))
       renderNews(S.coh);                                    // re-render in true order (list + rail + dedupe)
   }).subscribe();
@@ -26452,6 +27235,7 @@ loadSentiment(); setInterval(loadSentiment, 300000);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.32);
       o.connect(g); g.connect(ac.destination);
       o.start(ac.currentTime); o.stop(ac.currentTime+0.34);
+      scAudioDone(ac, o, 1500);   /* RM1 — the sound channel is closed when the note ends (see scAudioDone) */
     }catch(e){}
   }
 
@@ -26727,11 +27511,32 @@ function updateLive(){
     }
   }catch(e){}
 }
+/* RM1 (7 Oct 2026) — A SOUND CHANNEL THAT IS OPENED IS CLOSED. The news chime and the feed-down alarm each opened a
+   new AudioContext and left it open. A browser never takes an open one back: it keeps its own real-time thread and
+   its buffers until the page goes away. MEASURED headless (deliverables/20261007/rm1-memory): 40 chimes left 40
+   contexts alive after a forced collection - about 1.2 threads and 1 to 2 MB each, and together 11% of one core
+   while silent - and closing each as its note ended gave all of it back. The chime can ring every four minutes
+   all day, so an open Hub gathered them by the hundred.
+   The channel is closed when the last note ends, or after `afterMs` if it never plays (a browser that has not been
+   clicked yet holds sound back; the old code would then ring minutes late, on the first click). Once only. */
+function scAudioDone(ac, lastNote, afterMs) {
+  var closed = false;
+  var close = function () {
+    if (closed) return;
+    closed = true;
+    try { if (ac && ac.state !== "closed" && typeof ac.close === "function") ac.close(); } catch (e) {}
+  };
+  try { if (lastNote) lastNote.onended = close; } catch (e) {}
+  setTimeout(close, afterMs);
+  return close;
+}
 function scAlert(msg){
   try{
     var ac = new (window.AudioContext||window.webkitAudioContext)();
     if(ac.state==="suspended" && ac.resume){ ac.resume(); }
-    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); });
+    var last = null;
+    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); last = o; });
+    scAudioDone(ac, last, 2500);   /* RM1 — closed after the third beep */
   }catch(e){}
   try{ document.title = "🔴 FEED DOWN · SCINTILLA"; }catch(e){}
   try{ console.warn("SCINTILLA ALERT:", msg); }catch(e){}
@@ -27539,39 +28344,13 @@ async function scCleanRows (sym, tf, bars, signal) {   /* H2 — signal: the map
   } catch (e) { if (signal && signal.aborted) throw e; return []; }   /* H2 — an abort is not a failure: the pacer asks again */
 }
 window.SC_BUILD = "2026-08-20T1420";
-(function () {
-  try {
-    if (sessionStorage.getItem("sc_build_reloaded")) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (m && m[1] && m[1] !== window.SC_BUILD) {
-          sessionStorage.setItem("sc_build_reloaded", "1");
-          location.reload();
-        }
-      }).catch(function () {});
-  } catch (e) {}
-})();
-/* R58 — LIVE POLL (3rd freshness layer). While the app is open + visible, check the
-   shipped build every 75s; a newer build → reload — but DEFER if a sheet/menu is open
-   or an input is focused, so it never interrupts a mid-edit. Self-guards: after reload,
-   window.SC_BUILD equals the new build so it won't loop. This is what makes the dock/
-   home-screen app reliably "live" without going native. */
-setInterval(function () {
-  try {
-    if (document.hidden) return;
-    fetch("/index.html?b=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        var m = t.match(/SC_BUILD\s*=\s*"([^"]+)"/);
-        if (!m || !m[1] || m[1] === window.SC_BUILD) return;
-        var ae = document.activeElement, typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-        if (typing || document.querySelector(".sc-sheet__scrim.is-open, .sc-fmodal.on, .sc-menu.is-open")) return;
-        location.reload();
-      }).catch(function () {});
-  } catch (e) {}
-}, 75000);
+/* SLOW1 (6 Oct 2026) — THE BUILD-STAMP POLL IS GONE. Alan: "it's being very slow on the iMac … I get the loading button
+   a million times". Two checks lived here: one at load and one every 75 s (R58), each fetching "/index.html?b=<now>"
+   with no-store and reading the WHOLE page as text to regex one line out of it. MEASURED 6 Oct: the page is 2.2 MB
+   (716 KB on the wire), so an open Hub pulled 716 KB and built a 2.2 MB string every 75 s — 34 MB an hour — and the
+   stamp it compared has read "2026-08-20T1420" since August, so the check could never come out "newer".
+   Its neighbours do the real work and are untouched: R19 (resume from hidden) and K3 (quiet-time, every 180 s) both
+   ask for the etag of "/" with a HEAD, which carries no body. SC_BUILD stays for the diagnostics that print it. */
 /* K3 — quiet-time self-update: the etag sample is shared between R19's resume
    check and the quiet poller; hubSelfUpdatePlan is the pure decision (tests slice
    it and the two consts out of the page). */
@@ -27588,6 +28367,159 @@ function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
   if (idleMs < HUB_SELF_UPDATE_IDLE_MS) return { reload: false, adopt: false, reason: "in use" };
   return { reload: true, adopt: false, reason: "reload" };
 }
+/* RM1 (7 Oct 2026) — THE NIGHT RELOAD: a stopgap, and how to switch it off.
+   Alan, 7 Oct: "When I leave Scintilla open and the Station open, it takes a lot of RAM in Activity Monitor after a
+   while. When I quit and come back, it's perfectly fine... at least a calendar of overnight quitting and restarting
+   would be nice." The leaks found are fixed on this branch; whatever a browser still gathers over days is cleared by
+   loading the page again, which is all a quit-and-reopen does for the Hub.
+   THE RULE: between 3 and 5 in the morning, this computer's clock, a Hub that has been open four hours or more loads
+   itself again - once, because a page that has just loaded is not four hours old. A Hub that has been open thirty
+   hours (the Mac slept through its night) does the same at its next quiet moment.
+   ITS NEIGHBOURS, kept exactly: it rides K3's own three-minute check and happens only when K3 would be allowed to
+   reload for a new build at that moment (hubSelfUpdatePlan: two minutes without a hand on the page, no video
+   playing, nobody typing), and only when the server has just answered that check - so the page is never reloaded
+   into an error page. It also waits while the Hub's own video player, a full-screen section or anything open over
+   the page is up (hubNightHold). R19 and K3 themselves are untouched.
+   WHAT IS KEPT: the lists and stars live on the server; the company tab and the compare tab are remembered on this
+   browser already; the room, its sub-tab, the board's list, the company that was open (and EXPAND), and where each
+   panel was scrolled to are carried over the one reload in this window's session store (hubKeepPlace, two minutes).
+   OFF: open the Hub once with ?nightreload=0 (remembered on that browser; ?nightreload=1 turns it back on), or set
+   HUB_NIGHT_RELOAD_DEFAULT_ON to false for every browser. */
+const HUB_NIGHT_RELOAD_DEFAULT_ON = true;
+const HUB_NIGHT_RELOAD_RULE = Object.freeze({ fromHour: 3, toHour: 5, minOpenMs: 4 * 3600000, overdueMs: 30 * 3600000 });
+const HUB_KEEP_PLACE_MAX_MS = 120000;
+function hubNightReloadDue(on, openMs, hour, rule) {
+  if (!on) return { due: false, why: "switched off" };
+  if (!(openMs >= rule.minOpenMs)) return { due: false, why: "open less than four hours" };
+  if (hour >= rule.fromHour && hour < rule.toHour) return { due: true, why: "the night hour" };
+  if (openMs >= rule.overdueMs) return { due: true, why: "open through a night it slept through" };
+  return { due: false, why: "not the night hour" };
+}
+/* the switch: the address says so once, and this browser remembers it */
+function hubNightReloadSwitch(search, remembered, fallback) {
+  const m = /[?&]nightreload=([^&#]*)/.exec(String(search || ""));
+  if (m) return { on: m[1] !== "0", remember: m[1] !== "0" ? "1" : "0" };
+  return { on: remembered === "1" ? true : remembered === "0" ? false : !!fallback, remember: null };
+}
+/* what a kept place may contain, read back defensively: a snapshot from another build or an old one is dropped */
+function hubPlaceKept(saved, now) {
+  if (!saved || typeof saved !== "object" || !(now - Number(saved.at) < HUB_KEEP_PLACE_MAX_MS)) return null;
+  const word = (v) => (typeof v === "string" && /^[A-Za-z0-9_.-]{1,24}$/.test(v) ? v : null);
+  const scroll = [];
+  for (const row of Array.isArray(saved.scroll) ? saved.scroll.slice(0, 16) : [])
+    if (Array.isArray(row) && typeof row[0] === "string" && row[0].length < 300 && (Number(row[1]) > 0 || Number(row[2]) > 0))
+      scroll.push([row[0], Math.max(0, Number(row[1]) || 0), Math.max(0, Number(row[2]) || 0)]);
+  return { sec: word(saved.sec), coh: word(saved.coh), pinned: word(saved.pinned), expanded: saved.expanded === true,
+    socTab: word(saved.socTab), sentiTab: word(saved.sentiTab), econView: word(saved.econView),
+    pageY: Math.max(0, Number(saved.pageY) || 0), scroll };
+}
+/* WHAT THE NIGHT RELOAD WAITS FOR, BEYOND K3'S RULE. K3 looks for a playing <video> in this page, and the Hub's own
+   video player is another page inside this one, so K3 cannot see it; and nothing in K3 knows about a section opened
+   full screen or a panel open over the page. A new build may still load under those by K3's rule, as before - Alan is
+   usually there to see it. At 3 in the morning nobody is, so the night reload simply waits for them to be closed. */
+function hubNightHold(s) {
+  if (s.playerOpen || s.playerState === 1 || s.playerState === 3) return "the video player is open";
+  if (s.sectionFull || s.browserFull) return "something is full screen";
+  if (s.overlay) return "something is open over the page";
+  return "";
+}
+function hubNightHoldNow() {
+  let playerState = -1, overlay = false;
+  try { if (YT_PLYR && typeof YT_PLYR.getPlayerState === "function") playerState = YT_PLYR.getPlayerState(); } catch (_) {}
+  try {
+    const open = (id, c) => { const n = el(id); return !!(n && (c ? n.classList.contains(c) : n.firstChild)); };
+    overlay = document.body.classList.contains("focus") || document.body.classList.contains("tvmodal-open") ||
+      (typeof GPOP_T !== "undefined" && !!GPOP_T) || open("trFullHost") || open("ernSumHost") || open("chatPop", "open") ||
+      open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal") || !!document.querySelector(".sc-cohwrap.is-open");
+  } catch (_) {}
+  let playerOpen = false, sectionFull = false;
+  try { playerOpen = YT_IDX >= 0; } catch (_) {}
+  try { sectionFull = !!SECFS; } catch (_) {}
+  return hubNightHold({ playerOpen, playerState, sectionFull, browserFull: !!document.fullscreenElement, overlay });
+}
+const HUB_LOADED_AT = Date.now();
+const HUB_KEEP_PLACE_KEY = "hub.nightreload.place";
+let HUB_NIGHT_RELOAD_ON = HUB_NIGHT_RELOAD_DEFAULT_ON;
+try {
+  let kept = null; try { kept = localStorage.getItem("hub.nightreload"); } catch (_) {}
+  const sw = hubNightReloadSwitch(typeof location !== "undefined" ? location.search : "", kept, HUB_NIGHT_RELOAD_DEFAULT_ON);
+  HUB_NIGHT_RELOAD_ON = sw.on;
+  if (sw.remember != null) { try { localStorage.setItem("hub.nightreload", sw.remember); } catch (_) {} }
+} catch (_) {}
+/* a short address for a scrolled panel: its id, or its place under the nearest ancestor that has one */
+function hubScrollPath(node) {
+  const parts = [];
+  for (let n = node; n && n.nodeType === 1 && n !== document.body && parts.length < 8; n = n.parentElement) {
+    if (n.id) { parts.unshift("#" + (window.CSS && CSS.escape ? CSS.escape(n.id) : n.id)); return parts.join(" > "); }
+    let i = 1; for (let p = n.previousElementSibling; p; p = p.previousElementSibling) if (p.tagName === n.tagName) i++;
+    parts.unshift(n.tagName.toLowerCase() + ":nth-of-type(" + i + ")");
+  }
+  return null;
+}
+function hubKeepPlace() {
+  try {
+    const scroll = [];
+    const all = document.querySelectorAll("body *");
+    for (let i = 0; i < all.length && scroll.length < 16; i++) {
+      const n = all[i];
+      if (!(n.scrollTop > 0 || n.scrollLeft > 0) || n.tagName === "IFRAME") continue;
+      const path = hubScrollPath(n);
+      if (path && !scroll.some((row) => row[0] === path)) scroll.push([path, Math.round(n.scrollTop), Math.round(n.scrollLeft)]);
+    }
+    sessionStorage.setItem(HUB_KEEP_PLACE_KEY, JSON.stringify({ at: Date.now(), sec: S.sec, coh: S.coh,
+      pinned: LEFT_STATE === "PINNED" && LEFT_T ? LEFT_T : null, expanded: CO_EXPANDED === true,
+      socTab: S.socTab, sentiTab: S.sentiTab, econView: S.econView || null,
+      pageY: Math.round(window.scrollY || 0), scroll }));
+  } catch (_) {}
+}
+/* After the reload: the same buttons Alan would press, pressed for him - so every room opens by its own rules. */
+function hubRestorePlace() {
+  let kept = null;
+  try { kept = hubPlaceKept(JSON.parse(sessionStorage.getItem(HUB_KEEP_PLACE_KEY) || "null"), Date.now()); sessionStorage.removeItem(HUB_KEEP_PLACE_KEY); } catch (_) {}
+  if (!kept) return;
+  const press = (sel) => { try { const n = document.querySelector(sel); if (n) { n.click(); return true; } } catch (_) {} return false; };
+  const steps = [
+    () => { if (kept.coh && kept.coh !== S.coh) press('[data-act="coh"][data-key="' + kept.coh + '"]'); },
+    () => {
+      const home = kept.sec === "DASHBOARD" || kept.sec === "COMPANY";
+      /* a #room in the address opens that room on every load: if the dashboard was up, it is put back */
+      if (home && S.sec !== "DASHBOARD" && S.sec !== "COMPANY") press('[data-act="mtab"][data-sec="DASHBOARD"]');
+      if (kept.sec === "COMPANY" && kept.pinned) { try { openCo(kept.pinned); } catch (_) {} return; }
+      if (kept.sec && !home && kept.sec !== S.sec) press('[data-act="mtab"][data-sec="' + kept.sec + '"]');
+    },
+    () => {
+      if (kept.sec === "COMPANY" && kept.expanded && !CO_EXPANDED) press('[data-act="coexpand"]');
+      if (kept.sec === "SOCIAL" && kept.socTab && kept.socTab !== S.socTab) press('[data-act="soctab"][data-tab="' + kept.socTab + '"]');
+      if (kept.sec === "SENTIMENT" && kept.sentiTab && kept.sentiTab !== S.sentiTab) press('[data-act="sentitab"][data-tab="' + kept.sentiTab + '"]');
+      if (kept.sec === "ECONOMIC" && kept.econView && kept.econView !== (S.econView || "RELEASES")) press('[data-act="ecview"][data-v="' + kept.econView + '"]');
+    }
+  ];
+  steps.forEach((step, i) => setTimeout(() => { try { step(); } catch (_) {} }, 350 * i));
+  /* A panel is as long as its rows, and a slow first read repaints it from the top: each panel is put back as soon as it
+     is long enough, and put back again if a late repaint moves it - until it has held for 8 s, a minute has passed, or
+     a hand touches the page (then it is Alan's, and nothing here moves it again). */
+  const left = kept.scroll.map((row) => ({ path: row[0], top: row[1], x: row[2], heldAt: 0 }));
+  if (kept.pageY > 0) left.push({ page: true, top: kept.pageY, x: 0, heldAt: 0 });
+  if (!left.length) return;
+  let touched = false, tries = 0;
+  const touch = () => { touched = true; };
+  const kinds = ["pointerdown", "wheel", "keydown", "touchstart"];
+  kinds.forEach((kind) => { try { window.addEventListener(kind, touch, { passive: true, capture: true }); } catch (_) {} });
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const it of left) {
+      let n = null; try { n = it.page ? document.scrollingElement : document.querySelector(it.path); } catch (_) {}
+      if (touched || !n || !(n.scrollHeight - n.clientHeight >= it.top && n.scrollWidth - n.clientWidth >= it.x)) continue;
+      if (Math.abs(n.scrollTop - it.top) > 2 || Math.abs(n.scrollLeft - it.x) > 2) { n.scrollTop = it.top; n.scrollLeft = it.x; it.heldAt = now; }
+      else if (!it.heldAt) it.heldAt = now;
+    }
+    if (touched || ++tries >= 120 || left.every((it) => it.heldAt && now - it.heldAt >= 8000)) {
+      clearInterval(timer);
+      kinds.forEach((kind) => { try { window.removeEventListener(kind, touch, { capture: true }); } catch (_) {} });
+    }
+  }, 500);
+}
+try { setTimeout(hubRestorePlace, 1200); } catch (_) {}
 /* R19 — PWA SELF-UPDATE (Alan: installed home-screen app doesn't update).
    ETag of "/" sampled on load; on resume (visibilitychange → visible after a
    hidden spell, ≤ once per 5 min) re-sample — a changed etag means a fresh build
@@ -27645,6 +28577,12 @@ function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
           const plan = hubSelfUpdatePlan(SC_ETAG_SEEN, etag, Date.now() - lastActive, videoPlaying, typing);
           if (plan.adopt) SC_ETAG_SEEN = etag;
           else if (plan.reload) location.reload();
+          /* RM1 — the night reload: due by the clock, the server just answered, and K3's own rule would let a new
+             build reload this page at this moment. Then, and only then; nothing is remembered for a later round. */
+          else if (r.ok && hubNightReloadDue(HUB_NIGHT_RELOAD_ON, Date.now() - HUB_LOADED_AT, new Date().getHours(), HUB_NIGHT_RELOAD_RULE).due &&
+                   hubSelfUpdatePlan("open", "night", Date.now() - lastActive, videoPlaying, typing).reload && !hubNightHoldNow()) {
+            hubKeepPlace(); location.reload();
+          }
         } catch (err) {}
       }).catch(() => {});
     } catch (err) {}
@@ -29451,7 +30389,7 @@ body.gwx-motion .gwx-pct{opacity:1}
       var tr=MD?("transition:left "+MD.v+"ms ease-out,right "+MD.v+"ms ease-out,width "+MD.v+
                  "ms ease-out,background "+Math.round(MD.v*0.4)+"ms linear;"):"";
       var vals={}; (S.rows||[]).forEach(function(x){ vals[x.t]=x.g; });
-      var mx=0.0001; for(var k in vals) if(vals[k]!=null) mx=Math.max(mx,Math.abs(vals[k]));
+      var mx=1;   /* HC1 — the Geiger's own fixed scale, as boardRowsHTML draws it: a replay must not change a bar's scale */
       var byT={};
       for(i=0;i<rows.length;i++){
         r=rows[i]; t=r.getAttribute("data-t"); byT[t]=r;
@@ -29538,9 +30476,7 @@ body.gwx-motion .gwx-pct{opacity:1}
         }
 
         var cg=E("cohGeiger"); if(cg&&typeof cohortGeigerHTML==="function") cg.innerHTML=cohortGeigerHTML();
-        var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
-          cc.innerHTML=cohortCompareStripHTML(); cmpToggle();   /* the strip rewinds with the board */
-        }
+        if(typeof cohComparePaint==="function") cohComparePaint();   /* the compare rewinds with the board (HC1: every view of it) */
         /* M61 - the component columns are HIDDEN in motion mode, so they are not painted
            either: a hidden cell is work nobody can see. LIVE repaints them in its own frame. */
         if(!MOTION) paintTM();
@@ -29647,7 +30583,7 @@ body.gwx-motion .gwx-pct{opacity:1}
   window.SECT_FAMILIES=[["SPDR","SPDR","State Street Select Sector SPDR funds, each fund's own Geiger"],["ISHARES","iSHARES","iShares US sector funds"],
     ["VANGUARD","VANGUARD","Vanguard sector funds"],["EQWT","EQUAL-WT","Invesco S&P 500 equal-weight sector funds"],
     ["INDEXES","INDEXES","the broad index funds side by side, each fund's own Geiger: cap-weight against equal-weight, large against small"],
-    ["BOWTIE","BOW TIE","equal-weight minus cap-weight: each bar is the equal-weight fund's Geiger minus its cap-weight twin's (above zero = the average stock is stronger than the index)"],
+    ["BOWTIE","BREADTH","equal-weight minus cap-weight: each bar is the equal-weight fund's Geiger minus its cap-weight twin's (above zero = the average stock is stronger than the index)"],   /* HC1 — was BOW TIE; the key and the number are unchanged */
     ["MEMBERS","OUR NAMES","the names on OUR list in each sector, averaged: not a fund (the count under each column)"]];
   /* 28 Sep (N6) — Alan: "index-funds bow tie tab". INDEXES is not eleven sector slots, so it carries its own labels.
      The brief's list, kept to the funds the chart API serves a Geiger for (measured 28 Sep 17:33Z, 486-name /geiger):
@@ -29692,8 +30628,25 @@ body.gwx-motion .gwx-pct{opacity:1}
       var wt=(GWX_W&&GWX_W.trend!=null)?GWX_W.trend:0.5, wm=(GWX_W&&GWX_W.mom!=null)?GWX_W.mom:0.5;
       return (wt*tr + wm*mm)/((wt+wm)||1);
     }
+    /* HC1 — ON A REPLAYED DAY, WHICH READINGS ARE THE TREND ALONE. gAt() above gives the trend by itself for a name with no
+       stored momentum on that day (the board's own rule). MEASURED 6 Oct: the iShares, Vanguard and equal-weight sector
+       funds have stored trend from 18 Aug 2026 and no stored momentum at all, while the State Street funds have both.
+       So a replayed card of those funds is their trend, and it says so; and a replayed BREADTH bar was a trend minus a
+       blend — two different things subtracted. BREADTH on a replayed day is now like with like: when either fund of a
+       pair has no momentum that day, both are read on trend, and the hover says it. Live is untouched: both funds'
+       Geiger, as always. */
+    function trendOnly(t){
+      if(!ASOF) return false;
+      var cd=CACHE[ASOF]||{};
+      return cd[t]!=null && (cd.__mom||{})[t]==null;
+    }
+    /* HC1 — the one-screen compare reads the clock and a name's reading on it from here: one clock, never a copy */
+    window.SC_ASOF=function(){ return ASOF; };
+    window.SC_GAT=gAt;
+    window.SC_TREND_ONLY=trendOnly;
     window.cohortCompareRows=function(){
-      if(CMP_MODE==="SECTORS"){
+      /* HC1 — the mode is read from its public mirror (always equal to CMP_MODE), so one card can ask for its own view */
+      if((window.SC_CMP_MODE||CMP_MODE)==="SECTORS"){
         /* Alan: "I don't like the cropping of the health care energy, this stuff. Just use
            the State Street thingies, and maybe a hover that expands and says the full name."
            So the column shows the SPDR ticker - which never crops - and the title carries
@@ -29708,20 +30661,24 @@ body.gwx-motion .gwx-pct{opacity:1}
            blank strip. */
         if(SECT_FAMILY==="BOWTIE"){
           return BOWTIE_PAIRS.map(function(p){
-            var ew=gAt(p[0]), cw=gAt(p[1]), d=(ew==null||cw==null)?null:ew-cw;
-            var f2=function(v){ return v==null?"no Geiger yet":(v>=0?"+":"\u2212")+Math.abs(v).toFixed(2); };
+            var ew=gAt(p[0]), cw=gAt(p[1]), tOnly=false;
+            if(ASOF && ew!=null && cw!=null && (trendOnly(p[0])||trendOnly(p[1]))){ ew=CACHE[ASOF][p[0]]; cw=CACHE[ASOF][p[1]]; tOnly=true; }   /* HC1 — like with like (see trendOnly) */
+            var d=(ew==null||cw==null)?null:ew-cw;
+            /* BT1 — the hover is scBowtieLine: Geiger points not %, "level" inside the flat floor, the limit note when
+               both trends print ±1.00 (live only: a rewound day has no per-fund trend here, so the note is left off) */
+            var tOf=function(t){ return (!ASOF && typeof SC_PROV_TM!=="undefined" && SC_PROV_TM[t]) ? SC_PROV_TM[t].tr : null; };
             return {key:p[0], label:p[2], short:p[3], pair:p[0]+" \u2212 "+p[1],
-                    full:p[2]+" \u00b7 "+p[0]+" (equal-weight) "+f2(ew)+" \u2212 "+p[1]+" (cap-weight) "+f2(cw)+
-                      (d==null?" \u00b7 no difference: a Geiger is missing":" = "+f2(d)+(d>=0?" \u00b7 the average stock is stronger than the index":" \u00b7 the index is carried by its biggest names")),
-                    mean:d, n:2};
+                    full:scBowtieLine(p[2], p[0], p[1], ew, cw, tOf(p[0]), tOf(p[1]))+
+                      (tOnly?" \u00b7 on this replayed day both funds are read on trend alone (no stored momentum for one of them), so the gap is like for like":""),
+                    mean:d, n:2, tOnly:tOnly};
           }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
         }
         if(SECT_FAMILY==="INDEXES"){
           return INDEX_FUNDS.map(function(p){
             var g=gAt(p[0]);
             return {key:p[0], label:p[1], short:p[0],
-                    full:p[1]+" \u00b7 "+p[0]+(g==null?" \u00b7 no Geiger yet":" \u00b7 the fund's own Geiger"),
-                    mean:g, n:1};
+                    full:p[1]+" \u00b7 "+p[0]+(g==null?" \u00b7 no Geiger yet":trendOnly(p[0])?" \u00b7 the fund's trend alone: it has no stored momentum on this replayed day":" \u00b7 the fund's own Geiger"),
+                    mean:g, n:1, tOnly:g!=null&&trendOnly(p[0])};
           }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
         }
         if(SECT_FAMILY!=="MEMBERS" && SECT_FAMILY_FUNDS[SECT_FAMILY]){
@@ -29729,8 +30686,8 @@ body.gwx-motion .gwx-pct{opacity:1}
           return SECT.map(function(p,i){
             var fund=fam[i], g=gAt(fund);
             return {key:fund, label:p[0], short:fund,
-                    full:p[0]+" \u00b7 "+fund+(g==null?" \u00b7 no Geiger yet (waiting for admission)":" \u00b7 the fund's own Geiger"),
-                    mean:g, n:1};
+                    full:p[0]+" \u00b7 "+fund+(g==null?" \u00b7 no Geiger yet (waiting for admission)":trendOnly(fund)?" \u00b7 the fund's trend alone: it has no stored momentum on this replayed day":" \u00b7 the fund's own Geiger"),
+                    mean:g, n:1, tOnly:g!=null&&trendOnly(fund)};
           }).sort(function(a,b){return (b.mean==null?-99:b.mean)-(a.mean==null?-99:a.mean);});
         }
         return SECT.map(function(p){
@@ -29781,13 +30738,12 @@ body.gwx-motion .gwx-pct{opacity:1}
       var fb=ev.target.closest && ev.target.closest("[data-gwxfam]");
       if(fb){ ev.stopPropagation(); window.SECT_FAMILY=fb.getAttribute("data-gwxfam");
         try { localStorage.setItem("hub.sector.family", window.SECT_FAMILY); } catch(e) {}
-        var c2=E("cohCompare"); if(c2&&typeof cohortCompareStripHTML==="function") c2.innerHTML=cohortCompareStripHTML();
+        if(typeof cohComparePaint==="function") cohComparePaint();
         return; }
       var b=ev.target.closest && ev.target.closest("[data-gwxcmp]"); if(!b) return;
       ev.stopPropagation();
       CMP_MODE=b.getAttribute("data-gwxcmp"); window.SC_CMP_MODE=CMP_MODE; window.CMP_MODE_PUBLIC=CMP_MODE;
-      var cc=E("cohCompare");
-      if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+      if(typeof cohComparePaint==="function") cohComparePaint();
     }, true);
   }
   /* kept as a harmless no-op: the toggle is rendered inline now, so there is nothing to restore */
@@ -29801,9 +30757,7 @@ body.gwx-motion .gwx-pct{opacity:1}
     [].forEach.call(w.querySelectorAll("[data-gwxcmp]"),function(b){
       b.onclick=function(ev){ ev.stopPropagation();
         CMP_MODE=b.getAttribute("data-gwxcmp"); window.SC_CMP_MODE=CMP_MODE; window.CMP_MODE_PUBLIC=CMP_MODE;
-        var cc=E("cohCompare"); if(cc&&typeof cohortCompareStripHTML==="function"){
-          cc.innerHTML=cohortCompareStripHTML(); cmpToggle();
-        }
+        if(typeof cohComparePaint==="function") cohComparePaint();
       };
     });
   }
@@ -30011,8 +30965,7 @@ body.gwx-motion .gwx-pct{opacity:1}
       TM_LOADED=true;
       if(!ASOF){
         paintTM();
-        var cc=E("cohCompare");
-        if(cc&&typeof cohortCompareStripHTML==="function") cc.innerHTML=cohortCompareStripHTML();
+        if(typeof cohComparePaint==="function") cohComparePaint();
       }
     } finally { TM_FLIGHT=false; }
   }

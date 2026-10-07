@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X2 · crypto waste, measured · 5 Oct 2026</title>
+<style>
+  :root{ --bg:#0b0b0e; --panel:#121216; --line:#2a2a30; --ink:#d2d2d2; --ink2:#b4b4b8; --ink3:#8c8c92; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink2); font:14px/1.6 "SF Mono", Menlo, Consolas, monospace; }
+  main{ max-width:1560px; margin:0 auto; padding:56px 16px 80px; }
+  h1{ font-size:15px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink); margin:10px 0 4px; }
+  .lead{ color:var(--ink); font-size:15px; margin:8px 0 6px; max-width:1100px; }
+  .sub{ color:var(--ink3); margin-bottom:16px; max-width:1100px; font-size:12px; }
+  .k{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; margin:12px 0 18px; }
+  .k div{ border:1px solid var(--line); background:var(--panel); padding:10px 12px; font-size:12px; letter-spacing:.08em; color:var(--ink3); }
+  .k b{ display:block; font-size:24px; letter-spacing:0; color:var(--ink); font-weight:600; }
+  section{ background:var(--panel); border:1px solid var(--line); margin:0 0 14px; padding:14px 16px; }
+  h2{ font-size:13px; letter-spacing:.2em; text-transform:uppercase; margin:0 0 8px; color:var(--ink); font-weight:600; }
+  h3{ font-size:14px; margin:0 0 6px; color:var(--ink); font-weight:600; }
+  p{ margin:6px 0; max-width:1100px; } code{ color:var(--ink); font-size:12px; overflow-wrap:anywhere; } b{ color:var(--ink); }
+  .tw{ overflow-x:auto; }
+  table{ border-collapse:collapse; width:100%; min-width:1080px; font-size:12px; }
+  th{ text-align:left; color:var(--ink3); font-weight:400; letter-spacing:.1em; font-size:11px; text-transform:uppercase; padding:6px 10px 6px 0; border-bottom:1px solid var(--line); }
+  td{ vertical-align:top; padding:8px 10px 8px 0; border-bottom:1px solid var(--line); }
+  tr.grp td{ color:var(--ink3); letter-spacing:.16em; font-size:11px; padding-top:16px; }
+  .st{ display:inline-block; font-size:11px; letter-spacing:.08em; padding:1px 6px; border:1px solid var(--line); }
+  .s-k{ color:var(--ink3); } .s-d{ color:var(--ink); border-color:#6e6e74; }
+  .card{ display:flex; gap:14px; border-top:1px solid var(--line); padding:14px 0; } .card:first-of-type{ border-top:0; }
+  .rk{ flex:0 0 38px; font-size:28px; color:var(--ink3); line-height:1; padding-top:2px; } .cb{ flex:1; min-width:0; }
+  ul{ margin:6px 0; padding-left:18px; max-width:1100px; } li{ margin:6px 0; } .cb, li, p{ overflow-wrap:anywhere; }
+  details{ border:1px solid var(--line); background:var(--panel); padding:10px 16px; } summary{ cursor:pointer; color:var(--ink3); letter-spacing:.2em; font-size:12px; }
+  @media (max-width:600px){ main{ padding:56px 10px 60px; } .k b{ font-size:20px; } .card{ gap:8px; } .rk{ flex-basis:24px; font-size:20px; } }
+</style>
+</head>
+<body>
+<main>
+<span data-scnav-slot></span><h1>X2 · crypto waste, measured</h1>
+<p class="lead">Alan, 28 Sep: "The crypto still has wasteful shit we never fixed - obviously fix that. You can delete whatever you want if it's safe to delete."</p>
+<p class="lead"><b>Answer.</b> The running crypto jobs are clean: the 28 Sep fix holds (20,427 row rewrites a minute then, 286 now; 0 failed runs in 24 hours). What is left is not running cost, it is left-overs: four tables, four database functions and two functions from the August backfill that nothing has touched since, plus two small inefficiencies in the minute jobs. Nothing was changed, stopped or deleted by this lane.</p>
+<p class="sub">Read on 5 Oct 2026, 17:19-17:40 ET (21:19-21:40 UTC), read-only. [M] measured on the live database · [D] arithmetic on measured numbers · [C] read in the code · [N] not measured.</p>
+<div class="k">
+  <div><b>22</b>jobs touch crypto · 3 only for crypto</div>
+  <div><b>10</b>tables · 4 only for crypto</div>
+  <div><b>78,192</b>Coinbase calls a day [D]</div>
+  <div><b>415,824</b>bar rows written a day [D]</div>
+  <div><b>0</b>failed runs in 24 h [M]</div>
+  <div><b>110 MB</b>left-overs nothing reads [M]</div>
+</div>
+
+<section>
+<h2>1 · Everything that exists for crypto</h2>
+<div class="tw"><table>
+<tr><th>What</th><th>What it is for</th><th>Who writes it</th><th>Who reads it</th><th>How often</th><th>What it costs</th><th>Verdict</th></tr>
+<tr class="grp"><td colspan="7">JOBS THAT EXIST ONLY FOR CRYPTO</td></tr><tr><td><b>Job 53 · crypto-candles-1m</b></td><td>Every minute it asks Coinbase for the latest candles of the 9 coins in four sizes (1 min, 5 min, 15 min, 1 hour) and builds six more sizes from them.</td><td>The function crypto-candles (version 10, the 28 Sep fix) writes price bars into the old price table.</td><td>The ribbon jobs, which feed the crypto rows of the Geiger. The Hub board (1-hour and 4-hour % change).</td><td>Every minute · 1,440 runs in 24 h, 0 failed [M]</td><td>36 Coinbase calls a run = 51,840 a day [D]. Downloads 20,218 candles, writes 286 rows a run = 411,840 rows a day [M].</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>Job 54 · crypto-candles-deep-1h</b></td><td>Once an hour it asks for the 6-hour and daily candles and builds the 12-hour ones.</td><td>The same function, with the two big sizes.</td><td>The 6-hour, 12-hour and daily ribbons - the three heaviest weights in the Geiger. The Hub company view (daily).</td><td>Hourly at :23 · 24 runs, 0 failed [M]</td><td>18 calls a run = 432 a day [D]. Downloads 7,875 candles, writes 83 rows a run = 1,992 a day [M].</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>Job 61 · crypto-coinbase-1m</b></td><td>Every minute it reads each coin's spot price and yesterday's close and stores them as the coin's quote.</td><td>The function crypto-coinbase (version 8) updates 9 rows of the quotes table.</td><td>The Hub's first paint and its % change (yesterday's close). The ribbon job (it patches the newest bar with this price). The overnight audit.</td><td>Every minute · 1,440 runs, 1,435 answered OK, 4 marked timeout, 1 not yet answered when read [M]</td><td>18 calls a run = 25,920 a day [D]. 12,960 row updates a day [D]. It also downloads 3,150 daily candles a run that it no longer stores [M].</td><td><span class="st s-k">KEEP · fix the false timeouts (staged 01)</span></td></tr><tr class="grp"><td colspan="7">JOBS SHARED WITH EVERYTHING ELSE THAT TOUCH CRYPTO</td></tr><tr><td><b>Job 57 · geiger-1m (refresh_geiger)</b></td><td>Every minute it turns the ribbon readings into one Geiger number for the 22 names that are not stocks, the 9 coins among them.</td><td>A database function writes the Geiger rows (9 of them crypto).</td><td>The Hub and the Station, for every crypto, futures and rates row.</td><td>Every minute · 1,440 runs, 0 failed, 0.12 s each [M]</td><td>No outside call. 22 row updates a minute.</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>17 ribbon jobs (ribbon-1m … ribbon-1mo)</b></td><td>Each one recomputes the trend and momentum reading of one bar size for every active name.</td><td>The function ribbon-engine writes the ribbon table (297 crypto rows: 9 coins x 17 sizes x 2 readings, less 9).</td><td>Job 57 above. The Hub reads the daily ones directly.</td><td>From every 2 minutes (1 min bars) to monthly · 0 failed in 24 h [M]</td><td>No outside call for crypto. They read the bars the three jobs above wrote.</td><td><span class="st s-k">KEEP · see "found on the way"</span></td></tr><tr><td><b>Job 60 · eod-weekly-rebuild</b></td><td>On weekday evenings it rebuilds the weekly bars from the daily ones.</td><td>A database function (153 crypto weekly rows so far).</td><td>The weekly ribbon; the Hub board (1W).</td><td>Weekdays 22:00 UTC</td><td>No outside call.</td><td><span class="st s-k">KEEP</span></td></tr><tr class="grp"><td colspan="7">OUTSIDE THE DATABASE</td></tr><tr><td><b>The Hub and Station pages themselves</b></td><td>While a page is open it listens to Coinbase's live price feed directly, so crypto prices tick without going through our servers.</td><td>Nobody - it is a read in the browser.</td><td>Whoever has the page open.</td><td>Continuous while a page is open [C]</td><td>Nothing on our side.</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>Chart service on Fly · BTCUSD only</b></td><td>The charts draw Bitcoin from FMP, not Coinbase. The other 8 coins have no chart there (ETHUSD answers "not tracked") [M].</td><td>The bar service on Fly, from FMP.</td><td>Every Bitcoin chart on the Hub and the Station.</td><td>Refreshed when a chart is read [C]</td><td>FMP calls a day: not measured [N] - this lane does not touch the Fly machines.</td><td><span class="st s-k">KEEP</span></td></tr><tr class="grp"><td colspan="7">TABLES</td></tr><tr><td><b>Old price table · the crypto part</b></td><td>Every crypto bar we hold: 4,462,506 rows, of which 3,555,554 are 1-minute bars. That is about 72 % of that table's rows [D].</td><td>Jobs 53 and 54 (newest bars). Older bars came from the August backfill.</td><td>The ribbons (newest 230 bars per size), the Hub board and company view.</td><td>561 one-minute rows touched in the last hour [M]</td><td>About 1 GB of the 1,386 MB table [D]. 0 duplicate bars between sources [M].</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>Quotes, ribbon, Geiger, ticker list · the crypto rows</b></td><td>9 quote rows, 297 ribbon rows, 9 Geiger rows, 9 names in the ticker list.</td><td>Jobs 61, the ribbons, 57.</td><td>The Hub and the Station.</td><td>Every minute</td><td>A few kB.</td><td><span class="st s-k">KEEP</span></td></tr><tr><td><b>crypto_volume</b></td><td>A volume table from August. Despite its name, 351,866 of its 412,274 rows are stock volumes for 365 tickers; 60,408 are crypto.</td><td>Nobody since 18 Aug 2026 23:56 UTC [M].</td><td>One database function that no job and no other function calls [M].</td><td>Not running</td><td>108 MB [M].</td><td><span class="st s-d">DELETE DATA - Alan</span></td></tr><tr><td><b>crypto_backfill_queue</b></td><td>The to-do list of the one-time August history backfill: 194 lines, all marked done on 13 Aug 2026.</td><td>Nobody since 13 Aug [M].</td><td>Nobody [M].</td><td>Not running</td><td>104 kB.</td><td><span class="st s-d">DELETE DATA - Alan</span></td></tr><tr><td><b>crypto_day_gaps</b></td><td>A list of days with missing 1-minute bars, last rebuilt 11 Aug 2026: 1,985 lines.</td><td>Nobody. Its rebuild function is broken (it reads a table that was dropped on 28 Sep) [M].</td><td>Nobody [M].</td><td>Not running</td><td>232 kB.</td><td><span class="st s-d">DELETE DATA - Alan</span></td></tr><tr><td><b>crypto_depth</b></td><td>"How far back each coin goes", measured once on 10 Aug 2026: 9 lines.</td><td>Nobody since 10 Aug [M].</td><td>Nobody [M].</td><td>Not running</td><td>32 kB.</td><td><span class="st s-d">DELETE DATA - Alan</span></td></tr><tr><td><b>News · crypto group</b></td><td>7,748 news lines tagged CRYPTO, inside the shared news table.</td><td>The shared news jobs.</td><td>The Hub news room.</td><td>Shared cadence</td><td>Part of the shared table.</td><td><span class="st s-k">KEEP</span></td></tr><tr class="grp"><td colspan="7">FUNCTIONS WITH NO SCHEDULE</td></tr><tr><td><b>crypto-backfill (v4) and coinbase-deep-daily (v4)</b></td><td>The two one-time history loaders, deployed 13 Aug and 10 Aug 2026.</td><td>-</td><td>-</td><td>No job calls them; no call is on record [M]. Their logs were not read [N].</td><td>Nothing while idle.</td><td><span class="st s-d">DELETE - Alan</span></td></tr><tr><td><b>Four database functions</b></td><td>claim_crypto_months, crypto_backfill_status, refresh_crypto_gaps (broken), derive_multiday_from_massive.</td><td>-</td><td>-</td><td>No job and no other function calls them [M].</td><td>Nothing while idle.</td><td><span class="st s-d">DELETE - Alan</span></td></tr><tr class="grp"><td colspan="7">STORAGE AND FEEDS</td></tr><tr><td><b>Supabase storage buckets</b></td><td>5 buckets, 1,532 files. None holds a crypto file [M].</td><td>-</td><td>-</td><td>-</td><td>0</td><td><span class="st s-k">CLEAN</span></td></tr><tr><td><b>YouTube and X feeds · Station crypto pages</b></td><td>There is no crypto-only feed job, table or page job. Crypto videos and posts ride the shared sentiment jobs (263, 264, 287) [C].</td><td>Shared jobs.</td><td>The Hub social and sentiment rooms.</td><td>Shared cadence</td><td>Nothing crypto-specific.</td><td><span class="st s-k">CLEAN</span></td></tr>
+</table></div>
+</section>
+
+<section>
+<h2>2 · The waste, with numbers</h2>
+<div class="card"><div class="rk">1</div><div class="cb"><h3>Left-overs from the August backfill that nothing touches</h3><p>4 tables (414,462 rows, 110 MB), 4 database functions and 2 edge functions. Last writes between 10 and 18 Aug 2026. Two readings of the database's own counters ten minutes apart (21:26 and 21:36 UTC) show 0 reads and 0 writes on all four tables. One of the functions has been broken since 28 Sep and nobody noticed, because nobody calls it.</p><p class="vd"><b>What to do.</b> DELETE DATA - Alan. Proposal with counts: staged/x2/90_DELETE_PROPOSAL__WAITS_FOR_ALAN.sql. One caution: crypto_volume is mostly stock volume, and one function reads it - check nothing on Fly calls that function by hand before dropping.</p></div></div><div class="card"><div class="rk">2</div><div class="cb"><h3>The quote job downloads a year of daily candles every minute for a number that changes once a day</h3><p>Job 61 downloads 3,150 daily candles a run - 4,536,000 a day in 12,960 Coinbase calls - only to read yesterday's close for 9 coins. Until 28 Sep it also tried to save them and failed every time; that save is gone (0 errors in 299 runs), the download stayed. The same daily candles are fetched again every hour by job 54. Separately, 104 of its 10,080 runs in 7 days (1.03 %) are marked "timeout" although they finished: the job waits 5 seconds for an answer that takes 3 to 4.</p><p class="vd"><b>What to do.</b> KEEP the job (the Hub and the ribbons read its prices every minute). Timeout: staged 01, safe now. The download: a small code change to the function (read yesterday's close from the daily bars we already store) - not staged here because it is a function deploy, not a schedule.</p></div></div><div class="card"><div class="rk">3</div><div class="cb"><h3>The candle job asks every minute for sizes that are only read every 5 minutes or slower</h3><p>27 of job 53's 36 Coinbase calls a minute fetch 5-minute, 15-minute and hourly candles. It downloads 20,218 candles to write 286 rows (1.4 %). Of those 286, about 100 are bars that can really still change; the rest are the two previous bars written again as a safety margin [D].</p><p class="vd"><b>What to do.</b> SAFE TO SLOW, optional: staged 02 moves those three sizes to every 5 minutes (Coinbase calls 51,840 -&gt; 20,736 a day, row writes about 286 -&gt; 104 a minute). Recommendation: do not apply now - it costs no money, the load is already small, and it would make eight crypto bar sizes up to 5 minutes old.</p></div></div>
+<p class="sub">Checked and found clean: repeating errors (none besides the false timeouts above) · duplicate bars (0 across 4,462,506 rows) · stale tables still being refreshed (none - the stale ones are simply idle) · storage buckets (0 crypto files).</p>
+</section>
+
+<section>
+<h2>3 · What is staged</h2>
+<div class="tw"><table>
+<tr><th>File</th><th>What it does</th><th>Way back</th><th>Who</th></tr>
+<tr><td><code>staged/x2/01_cron61_quote_timeout_15s.sql</code></td><td>Gives job 61 fifteen seconds to hear its answer instead of five. Same job, same minute, same rows - only the false "timeout" marks stop.</td><td><code>01_cron61_quote_timeout_15s_ROLLBACK.sql</code></td><td><span class="st s-d">COORDINATOR can apply - it changes nothing the Hub shows</span></td></tr><tr><td><code>staged/x2/02_candles_split_slow_widths__WAITS_FOR_ALAN.sql</code></td><td>Splits job 53: 1-minute candles stay every minute; the 5-minute, 15-minute and hourly candles move to a new job every 5 minutes.</td><td><code>02_candles_split_slow_widths_ROLLBACK.sql</code></td><td><span class="st s-d">WAITS FOR ALAN - recommendation: leave as is</span></td></tr><tr><td><code>staged/x2/90_DELETE_PROPOSAL__WAITS_FOR_ALAN.sql</code></td><td>The left-overs of item 1, with counts. Every statement is commented out; running the file changes nothing.</td><td><code>restore from the export taken first</code></td><td><span class="st s-d">WAITS FOR ALAN - recommendation: yes, after an export</span></td></tr>
+</table></div>
+<p>Files 01 and 02 and their rollbacks were run against a throw-away test database with stand-in jobs: apply, apply twice (refused), roll back (byte-identical to before), both together - 10 of 10 checks pass (<code>sqltest/run.mjs</code>). Their text-matching was also checked read-only against the two live job commands. They were not run on the live database.</p>
+</section>
+
+<section>
+<h2>4 · Found on the way - not waste, but the crypto Geiger is built from uneven inputs</h2>
+<ul><li>The crypto 3-day bars stop on 8 Aug 2026, the 2-week bars on 29 Jun and the monthly bars on 1 Jun [M]. Nothing has rebuilt them since. The 3-day ribbon job still runs every night (02:34 UTC) and stamps a reading made from those 58-day-old bars with today's date; the 3-day size carries the fourth-heaviest weight in the Geiger (2.58).</li><li>The Geiger job counts a bar size only during the 3 hours after that size's ribbon job ran. So for the coins the 6-hour reading (weight 3.18) is in for 3 hours of every 6, the 12-hour reading (3.17) for 3 of every 12, the weekly (0.99) for 3 hours a day, and the stale 3-day reading enters from 02:34 to 05:34 UTC. At 21:29 UTC today each coin's Geiger was built from 11 sizes, 8 of which have weight zero: in effect the 3-hour, 4-hour and daily readings only [M].</li><li>The anon and signed-in roles hold full write rights (insert, update, delete, truncate) on the four left-over crypto tables [M]. That belongs to the access audit (Q4), not to this lane.</li></ul>
+<p>None of this is changed here. It is the same family as the H12 finding (old readings filed under today's date) and belongs with the Geiger work.</p>
+</section>
+
+<section>
+<h2>5 · Not done, not verified</h2>
+<ul>
+<li>Linear SCI-67 was not read or updated: this session has no Linear connection. The source note and the backlog line (item 41) were read from the workspace files.</li>
+<li>FMP calls a day for the Bitcoin charts on Fly: not measured (no Fly machine was touched).</li>
+<li>Whether anything outside the database calls <code>derive_multiday_from_massive</code> or the two idle edge functions by hand: not verified (function logs were not read).</li>
+<li>The ribbon function was read from the copy saved on disk, not downloaded fresh; the deployed version is 21 (19 Aug).</li>
+<li>The Hub test suite was not run: no Hub file was changed.</li>
+</ul>
+</section>
+
+<details class="sc-pagespecs"><summary>PAGE SPECS</summary>
+<p>Sources: <code>cron.job</code>, <code>cron.job_run_details</code>, <code>cron_dispatch</code> joined to <code>net._http_response</code> (the functions' own answers: fetched / written), <code>pg_stat_user_tables</code> read twice, <code>pg_proc</code>, <code>pg_publication_tables</code>, <code>storage.objects</code>, <code>supabase functions list</code>, <code>GET /candles</code> on the chart API for BTCUSD and ETHUSD, and the function sources in <code>_archive/backend-fix-20260928/</code>. Coinbase calls a day = calls per run counted in the source x runs counted in the database. The machine-readable copy is <code>x2-inventory.json</code>; this page is written by <code>build_report.py</code>.</p>
+</details>
+</main>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body>
+</html>

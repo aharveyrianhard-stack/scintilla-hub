@@ -12,7 +12,10 @@ const LAYER = (() => {
   const a = page.indexOf("/* ── M42 SCINTILLAS — the glow becomes a signal");
   const b = page.indexOf("function scSetTitle (node, value) {", a);
   assert.ok(a > 0 && b > a, "the M42 layer is where the test expects it");
-  return page.slice(a, b);
+  /* ST2 (6 Oct) — with rows today the strip becomes a tape of short items (tests/scintillas-tape-st2-20261006.test.mjs).
+     The sentence pinned below is still the page's own — the bell, the hovers, and the strip itself when SCINT_TAPE_ON
+     is false — so these tests read it with the tape switched off. Before the ST2 diff is applied this changes nothing. */
+  return page.slice(a, b).replace("const SCINT_TAPE_ON = true;", "const SCINT_TAPE_ON = false;");
 })();
 
 function node(opts = {}) {

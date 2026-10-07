@@ -1,7 +1,15 @@
 // SCINTILLA · yt-rss-sweep v2 — dual-identity subscription collector.
 // Personal and SCINTILLA subscriptions are authorized independently, then
 // polled through free channel RSS. One video row can belong to both accounts.
+// v8 (Y2, 5 Oct): the BRIDGE. Alan: "bridge the gap: subscribe to all of those, have the feed. Wolf Trading is live
+// right now … I don't see it on our YouTube feed." The channels of the X accounts he reads (app_config
+// yt_bridge_channels, built by scripts/yt-bridge-resolve.mjs) ride with the SCINTILLA account's own channels —
+// nobody has to subscribe. Every 20 minutes each bridged channel's /live address is read (free, no quota) and a
+// stream found on air enters the feed at once instead of waiting for YouTube's RSS. A stored row that says "live"
+// is re-asked about however old it is, so a stream that ended days ago stops saying LIVE.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-ignore  plain ESM shared with the resolver and the Node tests
+import { bridgeChannelIds, withBridge, parseLivePage, liveProbeDue, liveProbePick, liveCandidateRow, livePageUrl, LIVE_PAGE_HEADERS, LIVE_EVERY_MIN } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -123,6 +131,8 @@ Deno.serve(async () => {
     ...ACCOUNTS.map((account) => "yt_sub_channels_" + account),
     "yt_sub_channels",
     "yt_rss_running",
+    "yt_bridge_channels",
+    "yt_bridge_live",
   ];
   const { data: cfg } = await sb.from("app_config").select("key,value").in("key", configKeys);
   const c: Record<string, string> = {};
@@ -201,6 +211,15 @@ Deno.serve(async () => {
     accountChannels[account] = channels;
   }
 
+  /* ---- THE BRIDGE: the X accounts' channels ride with our own list ----
+     Added to this pass only — the SCINTILLA account's own cache (yt_sub_channels_scintilla) is never written
+     with them, so removing the yt_bridge_channels row takes them out again on the next pass. */
+  let bridgeIds: string[] = [];
+  try { bridgeIds = bridgeChannelIds(JSON.parse(c.yt_bridge_channels || "null")); } catch (_) {}
+  const ownScintilla = accountChannels.scintilla.length;
+  accountChannels.scintilla = withBridge(accountChannels.scintilla, bridgeIds);
+  const bridgeAdded = accountChannels.scintilla.length - ownScintilla;
+
   type Candidate = Record<string, unknown> & { video_id: string; accounts: Set<Account> };
   const candidates = new Map<string, Candidate>();
   /* Y1 (2 Oct): YouTube's channel RSS answers 404 / 500 for a share of channels at a time (measured: a pass that
@@ -250,6 +269,41 @@ Deno.serve(async () => {
       }
     } catch (_) {}
   })));
+
+  /* ---- ON AIR NOW, WITHOUT WAITING FOR RSS ----
+     youtube.com/channel/<id>/live lands on the stream when the channel is on air and on the channel page when it
+     is not. Free (no quota), bounded (MAX_LIVE_PROBES a pass, a rotating cursor), every LIVE_EVERY_MIN minutes.
+     A stream found here goes down the same path as a new RSS entry, so the YouTube API — not the page — is what
+     finally says "live" and gives the real start time. A page we could not read is counted as unknown. */
+  let liveState: Record<string, any> = {};
+  try { liveState = JSON.parse(c.yt_bridge_live || "{}") || {}; } catch (_) {}
+  const liveProbe: Record<string, any> = { ran: false, checked: 0, on_air: [] as string[], unknown: 0 };
+  const forceRefresh: string[] = [];
+  if (bridgeIds.length && liveProbeDue(now * 1000, +liveState.last_ms || 0, LIVE_EVERY_MIN)) {
+    const { pick, cursor } = liveProbePick(bridgeIds, liveState.cursor);
+    liveProbe.ran = true;
+    for (let i = 0; i < pick.length; i += 8) {
+      await Promise.all(pick.slice(i, i + 8).map(async (channelId: string) => {
+        let html = "";
+        try {
+          const r = await fetch(livePageUrl(channelId), { headers: LIVE_PAGE_HEADERS });
+          if (r.ok) html = await r.text();
+        } catch (_) {}
+        const live = parseLivePage(html);
+        liveProbe.checked++;
+        if (live.state === "unknown") { liveProbe.unknown++; return; }
+        if (live.state !== "live" || !live.video_id) return;
+        liveProbe.on_air.push(live.video_id);
+        forceRefresh.push(live.video_id);
+        const current = candidates.get(live.video_id);
+        if (current) current.accounts.add("scintilla");
+        else candidates.set(live.video_id, { ...liveCandidateRow(channelId, live, now), accounts: new Set<Account>(["scintilla"]) });
+      }));
+    }
+    await sb.from("app_config").upsert({ key: "yt_bridge_live", value: JSON.stringify({
+      last_ms: now * 1000, cursor, checked: liveProbe.checked, on_air: liveProbe.on_air, unknown: liveProbe.unknown,
+      at: new Date(now * 1000).toISOString() }) });
+  }
 
   const ids = [...candidates.keys()];
   const known = new Map<string, string[]>();
@@ -343,6 +397,7 @@ Deno.serve(async () => {
      about the recent rows that are still moving: on air, still to come, or with
      no length yet. Bounded to REFRESH_MAX rows over REFRESH_DAYS days. */
   let refreshed = 0;
+  let liveGone = 0;
   let refreshError: string | null = null;
   try {
     const since = new Date((now - REFRESH_DAYS * 86400) * 1000).toISOString();
@@ -353,13 +408,32 @@ Deno.serve(async () => {
       .order("published_at", { ascending: false })
       .limit(REFRESH_MAX);
     if (watchError) refreshError = watchError.message;
-    const watchIds = (watching || []).map((row) => row.video_id as string);
+    /* Y2: a row that says "live" is re-asked about whatever its age — the three-day window above left streams
+       that ended weeks ago still marked LIVE (measured 5 Oct: 13 rows said live, the oldest from 21 Sep). They
+       and the streams the /live read just found go FIRST, inside the same REFRESH_MAX, so this costs no extra call. */
+    const { data: stillLive } = await sb.from("youtube_videos")
+      .select("video_id").eq("live_broadcast", "live")
+      .order("live_checked_ts", { ascending: true, nullsFirst: true }).limit(50);
+    const liveSaid = new Set((stillLive || []).map((row) => row.video_id as string));
+    const watchIds = [...new Set([...forceRefresh, ...(stillLive || []).map((row) => row.video_id as string),
+      ...(watching || []).map((row) => row.video_id as string)])].slice(0, REFRESH_MAX);
     for (let i = 0; i < watchIds.length; i += 50) {
       const r = await apiKeyRequest(
         "videos?part=" + LIVE_PART + "&id=" + watchIds.slice(i, i + 50).join(",") + "&maxResults=50",
         apiKey,
       );
       const items = r.body?.items || [];
+      /* YouTube answered, and a row we hold as "live" is not in the answer: the video was removed or made
+         private. It is not on air. Only on a clean answer — a failed call must never end a stream. */
+      if (r.status === 200 && Array.isArray(r.body?.items)) {
+        const answered = new Set(items.map((item: Record<string, any>) => item.id));
+        const gone = watchIds.slice(i, i + 50).filter((id) => liveSaid.has(id) && !answered.has(id));
+        if (gone.length) {
+          const { error } = await sb.from("youtube_videos")
+            .update({ live_broadcast: "none", live_checked_ts: now }).in("video_id", gone);
+          if (error) refreshError = error.message; else liveGone += gone.length;
+        }
+      }
       for (let j = 0; j < items.length; j += 16) {
         await Promise.all(items.slice(j, j + 16).map(async (item: Record<string, any>) => {
           const { error } = await sb.from("youtube_videos")
@@ -381,9 +455,11 @@ Deno.serve(async () => {
     rss_seen: ids.length,
     rss_failed: rssFailed,
     rss_channels: ACCOUNTS.reduce((n, account) => n + accountChannels[account].length, 0),
+    bridge: { channels: bridgeIds.length, added_to_scintilla: bridgeAdded, live_check: liveProbe },
     new_videos: wrote,
     membership_updates: membershipUpdates,
     live_refreshed: refreshed,
+    live_gone: liveGone,
     refresh_error: refreshError,
     dropped,
     write_error: writeError,

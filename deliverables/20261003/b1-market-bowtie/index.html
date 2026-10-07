@@ -1,0 +1,179 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>SCINTILLA · MARKET BOW TIE · proposal (B1, 3 Oct 2026)</title>
+<style>
+:root{--bg:#0A0A0F;--panel:#0D0D14;--line:#1A1A2A;--line2:#252538;--ink:#F2F2F8;--ink2:#C6C8DE;--ink3:#9A9AB6;--dim:#868AAA;--mute:#3A3A52;--crk:#00D4FF;--bull:#00FFA3;--bear:#FF2D55;--warn:#e0a24a;
+--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink2);font:12px/1.5 var(--mono)}
+a{color:var(--crk);text-decoration:none}
+.hd{display:flex;align-items:center;gap:18px;padding:12px 18px 8px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.hd h1{margin:0;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink);font-weight:600}
+.hd .sub{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.chips{display:inline-flex;gap:4px;align-items:center;margin-left:6px}
+.chips .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-right:4px}
+.chip{appearance:none;background:transparent;border:1px solid var(--line2);color:var(--dim);font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;cursor:pointer;border-radius:2px}
+.chip.is-on{color:var(--ink);border-color:var(--crk)}
+.chip:hover{color:var(--ink2)}
+.strip-hd{padding:10px 18px 2px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.strip-hd b{color:var(--ink2);font-weight:600}
+.fan{display:grid;grid-template-columns:repeat(var(--n,11),minmax(0,1fr));gap:2px;padding:6px 14px 10px}
+.col{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px;cursor:pointer;min-width:0;border-radius:2px}
+.col:hover{background:rgba(0,212,255,.05)}.col.is-active{outline:1px solid var(--crk)}
+.slot{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:38px;width:100%}
+.col.is-bear .slot:last-of-type{justify-content:flex-start}
+.lbl{font-size:11px;letter-spacing:.06em;color:var(--dim);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.col.is-active .lbl{color:var(--ink2)}
+.val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.bar{position:relative;width:100%;height:var(--bh,150px)}
+.bar::before{content:"";position:absolute;left:8%;right:8%;top:50%;border-top:1px solid var(--line2)}
+.bar i{position:absolute;left:30%;right:30%;display:block}
+.bar i.up{bottom:50%;background:var(--bull)}.bar i.dn{top:50%;background:var(--bear)}
+.meta{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;letter-spacing:.02em;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.meta .mv{color:var(--dim)}
+.verd{font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.verd.sound{color:var(--ink3)}.verd.thin{color:var(--warn)}.verd.notyet{color:var(--mute)}
+.sub-hd{display:flex;align-items:baseline;gap:14px;padding:14px 18px 0;border-top:1px solid var(--line);margin-top:4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.sub-hd b{color:var(--ink);font-weight:600;letter-spacing:.2em}
+.small{padding:2px 18px 12px;font-size:11px;color:var(--mute);letter-spacing:.02em}
+.small b{color:var(--dim);font-weight:500}
+.fan.sm{--bh:96px}.fan.narrow{grid-template-columns:repeat(var(--n,2),150px);justify-content:start}.fan.sm .slot{height:30px}
+.strip .fan{--bh:72px;padding:2px 10px 6px}.strip .slot{height:26px}.strip .lbl{font-size:11px}.strip .val{font-size:11px}
+.frame{margin:18px;border:1px dashed var(--line2);position:relative}
+.frame .tag{position:absolute;right:10px;top:-8px;background:var(--bg);padding:0 6px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+.ghost{padding:10px 18px;font-size:11px;align-items:center;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);display:flex;gap:26px;border-bottom:1px solid var(--line)}
+.ghost .on{color:var(--dim);border-bottom:1px solid var(--dim)}
+.ghost-board{height:160px;margin:0 18px;background:repeating-linear-gradient(180deg,transparent 0 23px,var(--line) 23px 24px);opacity:.7}
+.sc-pagespecs{margin:30px 18px 50px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:12px;max-width:1100px}
+.sc-pagespecs summary{cursor:pointer;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-size:11px}
+.sc-pagespecs p,.sc-pagespecs li{line-height:1.6}
+@media(max-width:900px){.fan{grid-template-columns:repeat(6,minmax(0,1fr))}}
+</style></head><body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script>
+(function(){
+var B=window.B1, q=new URLSearchParams(location.search);
+var S={look:q.get("look")||"fan", read:q.get("read")||"heat", src:q.get("src")||"blend", sector:q.get("sector")||null};
+var M=function(){ return B.modes[S.src]; };
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function f2(v){ return v==null?"—":(v>=0?"+":"−")+Math.abs(v).toFixed(2); }
+function pct(v){ return v==null?"—":Math.round(v*100)+"%"; }
+function verdCls(v){ return v==="sound"?"sound":v==="thin"?"thin":"notyet"; }
+var READ=null; function readOf(c){ var r=READ||S.read; return r==="heat"?c.ew:r==="bowtie"?c.bowtie:(c.pair!=null?c.pair:null); }
+function readName(){ return S.read==="heat"?"HEAT · equal-weight Geiger of every name we read":S.read==="bowtie"?"BOW TIE · equal-weight minus cap-weight, every name · above zero = the average name is stronger than its giants":"FUND PAIR · the Hub's bow tie today: equal-weight fund minus cap-weight fund (RSPT − XLK …)"; }
+function title(c){
+  var t=c.label+" · "+(c.kind==="sector"?c.spdr+" · ":"")+c.n_read+" names read of "+c.n_exist+" that exist";
+  if(c.mv_share!=null) t+=" · "+pct(c.mv_share)+" of the market value";
+  t+=" · equal-weight "+f2(c.ew)+" · cap-weight "+f2(c.cw)+" · bow tie "+f2(c.bowtie);
+  if(c.pair!=null) t+=" · fund pair "+f2(c.pair);
+  t+=" · live "+c.n_live+" / close "+c.n_close+" · standard error "+(c.se==null?"—":c.se)+" · held on "+c.closes_pass+" of 6 closes · swing "+c.swing;
+  t+=" · "+c.verdict.toUpperCase()+(c.weak.length?" · "+c.weak.join(" · "):"");
+  if(c.top&&c.top.length) t+=" · biggest: "+c.top.map(function(x){return x.t+" "+f2(x.g);}).join(", ");
+  return t;
+}
+function fanHTML(cols, opts){
+  opts=opts||{}; var vals=cols.map(readOf).filter(function(v){return v!=null;});
+  var span=Math.max(0.1, Math.ceil(Math.max.apply(null, vals.map(Math.abs).concat([0.05]))*10)/10);
+  var sorted=cols.slice().sort(function(a,b){ var x=readOf(a), y=readOf(b); return (y==null?-99:y)-(x==null?-99:x); });
+  return '<div class="fan'+(opts.cls?" "+opts.cls:"")+'" style="--n:'+sorted.length+'">'+sorted.map(function(c){
+    var v=readOf(c), bull=v!=null&&v>=0, color=bull?"var(--bull)":"var(--bear)";
+    var h=v==null?0:Math.min(50, Math.abs(v)/span*50);
+    var name='<span class="lbl">'+esc(opts.short?(c.short||c.label):c.label)+'</span>';
+    var val='<span class="val" style="color:'+color+'">'+(v==null?"—":f2(v))+'</span>';
+    var meta=opts.nometa?"":'<span class="meta"><span>'+c.n_read+(c.kind==="cohort"?" / "+c.n_compute:" / "+c.n_exist)+'</span>'+(c.mv_share!=null?'<span class="mv">'+pct(c.mv_share)+' of value</span>':'<span class="mv">'+(c.kind==="cohort"?"members read":"")+'</span>')+'<span class="verd '+verdCls(c.verdict)+'">'+esc(c.verdict)+'</span></span>';
+    return '<div class="col'+(bull?"":" is-bear")+(S.sector===c.label?" is-active":"")+'" data-key="'+esc(c.label)+'" data-kind="'+c.kind+'" title="'+esc(title(c))+'">'+
+      '<span class="slot">'+(bull?name+val:"")+'</span>'+
+      '<span class="bar"><i class="'+(bull?"up":"dn")+'" style="height:'+h+'%"></i></span>'+
+      '<span class="slot">'+(bull?"":val+name)+'</span>'+meta+'</div>';
+  }).join("")+'</div>';
+}
+function chips(){
+  var c=function(k,items,cur){ return '<span class="chips"><span class="k">'+k+'</span>'+items.map(function(i){return '<button class="chip'+(cur===i[0]?" is-on":"")+'" data-set="'+k+'" data-v="'+i[0]+'" title="'+esc(i[2]||"")+'">'+i[1]+'</button>';}).join("")+'</span>'; };
+  return c("look",[["strip","STRIP","Look 1: the dashboard strip, in the slot SECTOR COMPARE uses today"],["fan","FAN","Look 2: sectors, and the industries of one sector fanned beneath"],["cohorts","COHORTS","Look 3: Alan's cohorts, fanned, with their soundness"]],S.look)+
+         c("read",[["heat","HEAT","equal-weight Geiger of every name read"],["bowtie","BOW TIE","equal-weight minus cap-weight, every name"],["pair","FUND PAIR","the Hub's pairs: RSPT − XLK …"]],S.read)+
+         c("src",[["blend","LIVE + CLOSE","the Hub's live Geiger where a name is served (590), the 2 Oct close for the rest"],["close","CLOSE ONLY","the 2 Oct close for every name, the Hub's included"]],S.src);
+}
+function sectorsWithPair(){
+  var m=M(); return m.sectors.map(function(s){ var p=m.pairs.filter(function(p){return p.label===s.label||(p.label==="DISCRETIONARY"&&s.label==="DISCRET");})[0]; var o=Object.assign({},s); o.pair=p?p.diff:null; o.pairTxt=p?(p.ew_fund+" − "+p.cw_fund):""; return o; });
+}
+function render(){
+  var m=M(), a=document.getElementById("app"), html="";
+  var asof="2 OCT CLOSE"+(S.src==="blend"?" + LIVE HUB":"")+" · "+B.counts.computed_stocks.toLocaleString()+" names computed · "+B.counts.exist_common.toLocaleString()+" exist";
+  if(S.look==="strip"){
+    html+='<div class="ghost"><span data-scnav-slot></span><span class="on">BOARD</span><span>ALLOCATION</span><span>STATION</span><span>TREE</span><span style="margin-left:auto">1680 / 1920 · where SECTOR COMPARE sits today</span></div>';
+    html+='<div class="frame"><span class="tag">the compare strip · a MARKET family beside SPDR · iSHARES · VANGUARD · EQUAL-WT · INDEXES · BOW TIE · OUR NAMES</span><div class="strip">';
+    html+='<div class="strip-hd"><b>MARKET</b> COMPARE · '+esc(readName().split(" · ")[0])+' · every name we compute · '+asof.toLowerCase()+' · scale ±'+(function(){var v=sectorsWithPair().map(readOf).filter(function(x){return x!=null;});return Math.max(0.1,Math.ceil(Math.max.apply(null,v.map(Math.abs))*10)/10).toFixed(2);})()+'</div>';
+    html+=fanHTML(sectorsWithPair(),{short:true});
+    html+='</div></div><div class="small" style="padding-top:8px">the board below, as today</div><div class="ghost-board"></div>';
+    html+='<div class="hd" style="border-top:1px solid var(--line);border-bottom:0">'+chips()+'</div>';
+  } else {
+    html+='<div class="hd"><span data-scnav-slot></span><h1>Market bow tie</h1><span class="sub">'+asof+'</span>'+chips()+'</div>';
+    if(S.look==="cohorts"){
+      html+='<div class="strip-hd"><b>COHORTS</b> · Alan\'s cohorts, fanned strongest to weakest · '+esc(readName())+' · under each: names read / members · verdict</div>';
+      html+=fanHTML(m.cohorts.filter(function(c){return !c.funds_or_macro;}),{});
+      html+='<div class="sub-hd"><b>FUNDS · MACRO</b><span>not stock cohorts: shown for completeness, no market value</span></div>';
+      html+=fanHTML(m.cohorts.filter(function(c){return c.funds_or_macro;}),{cls:"sm narrow"});
+    } else {
+      var sw=sectorsWithPair();
+      html+='<div class="strip-hd"><b>SECTORS</b> · '+esc(readName())+' · under each: names read / names that exist · share of the sector\'s market value · verdict</div>';
+      html+=fanHTML(sw,{});
+      var sec=sw.filter(function(s){return s.label===S.sector;})[0]||sw.slice().sort(function(a,b){return (readOf(b)==null?-99:readOf(b))-(readOf(a)==null?-99:readOf(a));})[0];
+      S.sector=sec.label;
+      var inds=sec.industries.map(function(i){var o=Object.assign({},i);o.pair=null;return o;});
+      READ=(S.read==="pair")?"heat":null;   /* no fund pair exists one level down: the industries read HEAT */
+      html+='<div class="sub-hd"><b>'+esc(sec.label)+'</b><span>one level down · '+inds.length+' industries with 8+ names read · '+sec.industries_small.length+' smaller ones below'+(S.read==="pair"?" · heat (there is no fund pair for an industry)":"")+'</span></div>';
+      html+=inds.length?fanHTML(inds,{cls:"sm"}):'<div class="small">no industry with 8 names read</div>';
+      READ=null;
+      if(sec.industries_small.length) html+='<div class="small">too small for a verdict: '+sec.industries_small.map(function(i){return '<b>'+esc(i.label)+'</b> '+i.n_read+'/'+i.n_exist+' '+f2(i.ew);}).join(' · ')+'</div>';
+    }
+    html+='<details class="sc-pagespecs"><summary>Page specs</summary>'+
+      '<p><b>What it is.</b> The Hub\'s bow tie, taken to the whole market. Every column is an aggregate of every instrument we compute a Geiger for: the 590 names the Hub reads live plus the 2 Oct close Geiger of every other listed name (chart API /v1/scout-geiger, 5,642 rows). Columns fan from strongest to weakest, bars rise or fall from a shared zero, green above, red below, exactly as the strip on the dashboard.</p>'+
+      '<p><b>Three readings.</b> HEAT = the equal-weight average Geiger of every name read in the group (the market\'s temperature). BOW TIE = that equal-weight average minus the market-value-weighted average of the same names: above zero the average name is stronger than the group\'s giants, below zero the giants carry it. FUND PAIR = the Hub\'s bow tie today (the equal-weight fund\'s Geiger minus its cap-weight twin\'s, RSPT − XLK, …). The two bow ties do not agree at market scale (same sign in '+B.bowtie_agreement.same_sign+' of '+B.bowtie_agreement.pairs_compared+' sectors, correlation '+B.bowtie_agreement.correlation+'): the fund pair weighs only the S&P 500\'s members of a sector (about 20 to 80 names), the market bow tie weighs every listed name (100 to 900), so they answer different questions. Both are kept; the chip says which is on.</p>'+
+      '<p><b>Under each column.</b> Names read / names that exist (FMP\'s screener of active common stocks on NASDAQ, NYSE and AMEX, read 3 Oct on Fly; preferreds, notes, warrants, SPAC shells and second share classes removed, so one company counts once) · the share of the group\'s market value those names carry · the verdict. SOUND = 8+ names read, standard error ≤ 0.10, that held on each of the six closes 25 Sep to 2 Oct (T12\'s rule), and ≥ 90 % of the market value covered (B1\'s one added neighbour). THIN = enough and steady, but under-covered or disagreeing. NOT YET = too few names or not steady. Hover a column for every number behind it.</p>'+
+      '<p><b>Source chip.</b> LIVE + CLOSE follows Alan (3 Oct): a little wrong beats a little old, so a served name uses the Hub\'s live Geiger and the rest use the close. CLOSE ONLY reads every name at the same 2 Oct close. On a Saturday the two agree almost everywhere.</p>'+
+      '<p><b>Where it sits.</b> Look 1 (STRIP): one more family chip, MARKET, in the compare strip at the top of the dashboard, beside SPDR, iSHARES, VANGUARD, EQUAL-WT, INDEXES, BOW TIE and OUR NAMES; the columns and bars are the strip\'s own, only the numbers under them are new. Look 2 (FAN): the same strip with the chosen sector\'s industries fanned beneath, as a tab of its own. Look 3 (COHORTS): Alan\'s cohorts fanned with their verdicts, in COHORT COMPARE.</p>'+
+      '<p><b>Built from.</b> '+esc(B.as_of.close_run)+' (close, computed '+esc(B.as_of.close_computed_utc)+') · Hub live computed '+esc(B.as_of.live_computed_utc)+' · six closes '+B.as_of.six_closes.join(", ")+' · screener fetched '+esc(B.as_of.screener_fetched_utc)+' · equalizer receipt '+esc(B.as_of.equalizer_receipt.slice(0,12))+'… · data.js beside this page; nothing is requested at view time and nothing was written to a table.</p></details>';
+  }
+  a.innerHTML=html;
+}
+document.addEventListener("click",function(e){
+  var b=e.target.closest(".chip"); if(b){ S[b.getAttribute("data-set")]=b.getAttribute("data-v"); if(S.look==="cohorts"&&S.read==="pair") S.read="heat"; push(); render(); return; }
+  var c=e.target.closest(".col"); if(c&&c.getAttribute("data-kind")==="sector"){ S.sector=c.getAttribute("data-key"); if(S.look==="strip") S.look="fan"; push(); render(); }
+});
+function push(){ var p=new URLSearchParams(); Object.keys(S).forEach(function(k){ if(S[k]) p.set(k,S[k]); }); history.replaceState(null,"","?"+p.toString()); }
+render();
+})();
+</script>
+<!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by
+     scripts/inject-scnav.py (and by build-prototypes-index.py for the library itself). Inline on purpose: the library pages
+     must stay self-contained, and it is monochrome like the rest of Scintilla. 23 Sep, Alan: "I don't have a back button. I don't have a close button. I'm stuck." The Hub
+     runs as an installed app with no browser toolbar, so every page it opens has to carry its own way out. -->
+<style id="scnav-css">
+.scnav{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:99999;display:flex;gap:6px;font:600 11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.scnav.is-inline{position:static;z-index:auto}
+.scnav button{-webkit-appearance:none;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:30px;margin:0;padding:0 12px;background:rgba(10,11,13,.92);color:#9a9ea3;border:1px solid rgba(150,154,160,.35);border-radius:3px;box-shadow:0 2px 14px rgba(0,0,0,.45);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.scnav button:hover,.scnav button:focus-visible{color:#c4c7cb;border-color:rgba(190,194,198,.75);outline:none}
+.scnav i{font-style:normal;color:#c4c7cb}
+@media print{.scnav{display:none}}
+</style>
+<script>
+/* BACK: the page you came from on this site; with none, the Prototypes library (library pages) or the Hub.
+   CLOSE: the Hub. Nothing is stored and nothing is requested. */
+(function () {
+  if (window.top !== window || document.querySelector(".scnav")) return;   // inside another page, or already drawn
+  var p = location.pathname, lib = !!p.match(/^\/(deliverables|prototypes)\//) && !p.match(/^\/prototypes\/(index\.html)?$/);
+  function cameFromHere() { try { var r = new URL(document.referrer); return r.origin === location.origin && r.pathname !== p; } catch (e) { return false; } }
+  var n = document.createElement("nav");
+  n.className = "scnav"; n.setAttribute("aria-label", "Leave this page");
+  n.innerHTML = '<button type="button" data-go="back" title="Back to the page you came from"><i>←</i>BACK</button>' +
+                '<button type="button" data-go="close" title="Close this page and return to the Hub"><i>✕</i>CLOSE</button>';
+  n.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.getAttribute("data-go") === "back" && history.length > 1 && cameFromHere()) { history.back(); return; }
+    location.href = b.getAttribute("data-go") === "back" && lib ? "/prototypes/" : "/";
+  });
+  var slot = document.querySelector("[data-scnav-slot]");
+  if (slot) { n.className += " is-inline"; slot.appendChild(n); } else document.body.appendChild(n);
+})();
+</script>
+<!-- /scnav -->
+</body></html>
